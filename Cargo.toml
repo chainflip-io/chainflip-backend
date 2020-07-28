@@ -8,18 +8,17 @@ edition = "2018"
 
 [dependencies]
 clap = "^2"
+tokio = { version = "*", features = ["full"] }
+warp = "*"
 
 [lib]
 name = "blockswap"
 path = "src/lib.rs"
 
 [[bin]]
-name = "witness"
-path = "src/bin/witness/main.rs"
+name = "vault"
+path = "src/bin/vault/main.rs"
 
-[[bin]]
-name = "processor"
-path = "src/bin/processor/main.rs"
 
 [[bin]]
 name = "quoter"

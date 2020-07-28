@@ -1,3 +1,6 @@
+pub mod quoter;
+pub mod vault;
+
 /// Temporary funciton to demostrate how to use
 /// unit/integration tests
 pub fn add(a: i32, b: i32) -> i32 {

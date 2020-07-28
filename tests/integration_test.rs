@@ -1,4 +1,3 @@
-
 /// Just a sample integration test (testing across modules)
 /// until we have real integration tests
 #[test]
