@@ -1,5 +1,7 @@
 pub mod quoter;
 pub mod vault;
+pub mod transactions;
+pub mod common;
 
 /// Temporary funciton to demostrate how to use
 /// unit/integration tests
