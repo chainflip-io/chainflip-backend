@@ -29,6 +29,9 @@ mod Tests {
         // - add a corresponding coin tx onto the main chain
         // - test that there is witness transaction shortly after
 
+        // Tests use a simpler logger
+        env_logger::init();
+
         let timeout = std::time::Duration::from_millis(1000);
 
         let s_chain = SideChain::new();

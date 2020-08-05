@@ -25,10 +25,10 @@ impl LokiConnection {
     
                 let b = Block { txs: vec![] };
     
-                println!("Loki connection: {:?}", &b);
+                debug!("Loki connection: {:?}", &b);
     
                 if tx.send(b).is_err() {
-                    eprintln!("Could not send block");
+                    error!("Could not send block");
                 }
     
                 std::thread::sleep(std::time::Duration::from_millis(2000));

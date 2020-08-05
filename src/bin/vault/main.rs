@@ -1,13 +1,23 @@
+#[macro_use]
+extern crate log;
+
 use std::sync::{Arc, Mutex};
 use blockswap::vault::{SideChain};
 use blockswap::vault::witness::Witness;
 use blockswap::vault::blockchain_connection::LokiConnection;
+
+use blockswap::logging;
 
 /// Entry point for the Quoter binary. We should try to keep it as small as posible
 /// and implement most of the core logic as part of the library (src/lib.rs). This way
 /// of organising code works better with integration tests.
 /// Ideally we would just parse commad line arguments here and call into the library.
 fn main() {
+
+
+    logging::init("vault");
+
+    info!("Starting a Blockswap Vault node");
 
     let s_chain = SideChain::new();
     let s_chain = Arc::new(Mutex::new(s_chain));

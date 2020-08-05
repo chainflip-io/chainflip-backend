@@ -45,7 +45,7 @@ impl Witness {
         while let Some(block) = side_chain.get_block(self.next_block_idx) {
             for tx in &block.txs {
                 if let SideChainTx::QuoteTx(tx) = tx {
-                    println!("Registered quote tx: {:?}", tx.id);
+                    debug!("Registered quote tx: {:?}", tx.id);
                     quote_txs.push(tx.clone());
                 }
             }
@@ -60,11 +60,11 @@ impl Witness {
         loop {
             match self.loki_connection.try_recv() {
                 Ok(block) => {
-                    println!("Received message from loki blockchain: {:?}", block);
+                    debug!("Received message from loki blockchain: {:?}", block);
                     self.process_main_chain_block(block);
                 }
                 Err(crossbeam_channel::TryRecvError::Disconnected) => {
-                    eprintln!("Failed to receive message: Disconnected");
+                    error!("Failed to receive message: Disconnected");
                     break;
                 }
                 Err(crossbeam_channel::TryRecvError::Empty) => {
@@ -102,7 +102,7 @@ impl Witness {
 
     /// Publish witness tx for `quote`
     fn publish_witness_tx(&self, quote: &QuoteTx) {
-        println!("Publishing witness transaction for quote: {:?}", &quote);
+        debug!("Publishing witness transaction for quote: {:?}", &quote);
 
         let mut side_chain = self.side_chain.lock().unwrap();
 

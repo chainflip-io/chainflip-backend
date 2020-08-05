@@ -3,6 +3,11 @@ pub mod vault;
 pub mod transactions;
 pub mod common;
 
+pub mod logging;
+
+#[macro_use]
+extern crate log;
+
 /// Temporary funciton to demostrate how to use
 /// unit/integration tests
 pub fn add(a: i32, b: i32) -> i32 {
