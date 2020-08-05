@@ -1,10 +1,10 @@
 #[macro_use]
 extern crate log;
 
-use std::sync::{Arc, Mutex};
-use blockswap::vault::{SideChain};
-use blockswap::vault::witness::Witness;
 use blockswap::vault::blockchain_connection::LokiConnection;
+use blockswap::vault::witness::Witness;
+use blockswap::vault::SideChain;
+use std::sync::{Arc, Mutex};
 
 use blockswap::logging;
 
@@ -13,8 +13,6 @@ use blockswap::logging;
 /// of organising code works better with integration tests.
 /// Ideally we would just parse commad line arguments here and call into the library.
 fn main() {
-
-
     logging::init("vault");
 
     info!("Starting a Blockswap Vault node");
@@ -32,6 +30,4 @@ fn main() {
         // let other thread do the work
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
-
-
 }

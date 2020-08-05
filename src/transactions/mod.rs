@@ -4,9 +4,8 @@ use crate::common::{Timestamp, WalletAddress};
 pub struct QuoteId(u64);
 
 impl QuoteId {
-
-    pub fn new(id : u64) -> Self {
-        QuoteId {0: id}
+    pub fn new(id: u64) -> Self {
+        QuoteId { 0: id }
     }
 }
 
@@ -22,7 +21,6 @@ pub struct QuoteTx {
 
 #[derive(Debug)]
 pub struct CoinTx {
-
     pub id: u64,
     pub timestamp: Timestamp,
     pub deposit_address: WalletAddress,
@@ -31,13 +29,11 @@ pub struct CoinTx {
 
 #[derive(Debug, Clone, Copy)]
 pub struct WitnessTx {
-    pub quote_id: QuoteId
+    pub quote_id: QuoteId,
 }
 
 impl WitnessTx {
-
     pub fn new(id: QuoteId) -> Self {
         WitnessTx { quote_id: id }
     }
-
 }

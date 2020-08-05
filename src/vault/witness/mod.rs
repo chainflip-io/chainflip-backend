@@ -7,7 +7,7 @@
 use crate::vault::ISideChain;
 
 use crate::transactions::{CoinTx, QuoteTx, WitnessTx};
-use crossbeam_channel::{Receiver};
+use crossbeam_channel::Receiver;
 
 use std::sync::{Arc, Mutex};
 
@@ -75,7 +75,6 @@ impl Witness {
     }
 
     fn event_loop(mut self) {
-
         loop {
             // Check the blockchain for quote tx on the side chain
             self.poll_side_chain();
@@ -87,7 +86,6 @@ impl Witness {
     }
 
     pub fn start(self) {
-
         std::thread::spawn(move || {
             self.event_loop();
         });

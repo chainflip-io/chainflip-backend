@@ -1,7 +1,7 @@
-pub mod quoter;
-pub mod vault;
-pub mod transactions;
 pub mod common;
+pub mod quoter;
+pub mod transactions;
+pub mod vault;
 
 pub mod logging;
 

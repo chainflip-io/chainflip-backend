@@ -27,7 +27,7 @@ pub fn init(base_name: &str) {
     // Rotate log files every ~50MB keeping 1 archived
     let size_trigger = compound::trigger::size::SizeTrigger::new(50_000_000);
     let roller = compound::roll::fixed_window::FixedWindowRoller::builder()
-    .build(&format!("{}-archive.{{}}.log", &base_name), 1)
+        .build(&format!("{}-archive.{{}}.log", &base_name), 1)
         .unwrap();
     let roll_policy = compound::CompoundPolicy::new(Box::new(size_trigger), Box::new(roller));
 

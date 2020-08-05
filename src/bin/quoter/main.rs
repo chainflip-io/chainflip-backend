@@ -1,11 +1,10 @@
-
 #[macro_use]
 extern crate log;
 
 use clap::{App, Arg};
 
-use blockswap::quoter;
 use blockswap::logging;
+use blockswap::quoter;
 
 /*
 Entry point for the Quoter binary. We should try to keep it as small as posible
@@ -33,7 +32,6 @@ async fn main() {
     let port = matches.value_of("port").unwrap_or("3033");
 
     if let Ok(port) = port.parse::<u16>() {
-
         info!("Starting the Blockswap Quoter");
 
         quoter::serve(port).await;
