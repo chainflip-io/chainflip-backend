@@ -13,6 +13,8 @@ log4rs = "*"
 tokio = { version = "*", features = ["full"] }
 warp = "*"
 crossbeam-channel = "^0.4"
+strum = "0.19"
+strum_macros = "0.19"
 
 [lib]
 name = "blockswap"

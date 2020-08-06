@@ -1,6 +1,8 @@
 use crate::transactions::CoinTx;
 use std::time::SystemTime;
 
+pub mod coins;
+
 // Note: time is not reliable in a distributed environment,
 // so it should probably be replaced by block_id when we
 // go distributed
