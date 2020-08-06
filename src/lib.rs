@@ -1,5 +1,6 @@
 pub mod common;
 pub mod quoter;
+pub mod side_chain;
 pub mod transactions;
 pub mod utils;
 pub mod vault;

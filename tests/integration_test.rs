@@ -1,12 +1,12 @@
 #[cfg(test)]
-mod Tests {
+mod tests {
 
     use std::sync::{Arc, Mutex};
 
     use blockswap::common::{Block, Timestamp};
+    use blockswap::side_chain::{ISideChain, SideChain, SideChainTx};
     use blockswap::transactions::CoinTx;
     use blockswap::utils::test_utils;
-    use blockswap::vault::side_chain::{ISideChain, SideChain, SideChainTx};
     use blockswap::vault::witness::Witness;
 
     #[test]

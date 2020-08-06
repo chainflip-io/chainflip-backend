@@ -52,7 +52,7 @@ fn read_rows(db: &DB) -> Result<Vec<SideChainBlock>, String> {
             return Err(format!(
                 "Unexpected last block index: {} (expected {})",
                 last.0,
-                block_tuples.len()
+                block_tuples.len() - 1
             ));
         }
     }

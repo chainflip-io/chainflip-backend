@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::common::Block;
 
-use crate::vault::side_chain::{ISideChain, SideChainTx};
+use crate::side_chain::{ISideChain, SideChainTx};
 
 /// Witness Mock
 pub struct Witness<T>

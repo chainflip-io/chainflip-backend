@@ -1,8 +1,8 @@
 #[macro_use]
 extern crate log;
 
+use blockswap::side_chain::{ISideChain, PeristentSideChain, SideChainTx};
 use blockswap::vault::blockchain_connection::LokiConnection;
-use blockswap::vault::side_chain::{ISideChain, PeristentSideChain, SideChainTx};
 use blockswap::vault::witness::Witness;
 use std::sync::{Arc, Mutex};
 
