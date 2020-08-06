@@ -1,13 +1,13 @@
 use strum_macros::{EnumIter, EnumString, ToString};
 
 pub struct CoinInfo {
-    pub name: String,
+    pub name: &'static str,
     pub symbol: Coin,
     pub decimals: u32,
     pub requires_return_address: bool,
 }
 
-#[derive(Debug, Copy, Clone, EnumString, ToString, EnumIter)]
+#[derive(Debug, EnumString, ToString, EnumIter)]
 pub enum Coin {
     ETH,
     LOKI,
@@ -17,14 +17,14 @@ impl Coin {
     pub fn get_info(&self) -> CoinInfo {
         match self {
             Coin::LOKI => CoinInfo {
-                name: String::from("Loki Network"),
-                symbol: (*self),
+                name: "Loki Network",
+                symbol: Coin::LOKI,
                 decimals: 8,
                 requires_return_address: true,
             },
             Coin::ETH => CoinInfo {
-                name: String::from("Ethereum"),
-                symbol: (*self),
+                name: "Ethereum",
+                symbol: Coin::ETH,
                 decimals: 18,
                 requires_return_address: true,
             },
