@@ -4,8 +4,6 @@
 
 // Events: Lokid transaction, Ether transaction, Swap transaction from Side Chain
 
-use crate::vault::ISideChain;
-
 use crate::transactions::{CoinTx, QuoteTx, WitnessTx};
 use crossbeam_channel::Receiver;
 
@@ -13,20 +11,26 @@ use std::sync::{Arc, Mutex};
 
 use crate::common::Block;
 
-use crate::vault::{SideChain, SideChainTx};
+use crate::vault::side_chain::{ISideChain, SideChainTx};
 
 /// Witness Mock
-pub struct Witness {
+pub struct Witness<T>
+where
+    T: ISideChain + Send,
+{
     /// Outstanding quotes (make sure this stays synced)
     quotes: Vec<QuoteTx>,
     loki_connection: Receiver<Block>,
-    side_chain: Arc<Mutex<SideChain>>,
+    side_chain: Arc<Mutex<T>>,
     // We should save this to a DB (maybe not, because when we restart, we might want to rescan the db for all quotes?)
-    next_block_idx: u64, // block from the side chain
+    next_block_idx: u32, // block from the side chain
 }
 
-impl Witness {
-    pub fn new(bc: Receiver<Block>, side_chain: Arc<Mutex<SideChain>>) -> Witness {
+impl<T> Witness<T>
+where
+    T: ISideChain + Send + 'static,
+{
+    pub fn new(bc: Receiver<Block>, side_chain: Arc<Mutex<T>>) -> Witness<T> {
         let next_block_idx = 0;
 
         Witness {
@@ -107,7 +111,7 @@ impl Witness {
         let tx = WitnessTx::new(quote.id);
         let tx = SideChainTx::WitnessTx(tx);
 
-        side_chain.add_tx(tx);
+        side_chain.add_tx(tx).expect("Could not publish witness tx");
 
         // Do we remove the quote here?
     }

@@ -2,8 +2,8 @@
 extern crate log;
 
 use blockswap::vault::blockchain_connection::LokiConnection;
+use blockswap::vault::side_chain::{ISideChain, PeristentSideChain, SideChainTx};
 use blockswap::vault::witness::Witness;
-use blockswap::vault::SideChain;
 use std::sync::{Arc, Mutex};
 
 use blockswap::logging;
@@ -17,13 +17,21 @@ fn main() {
 
     info!("Starting a Blockswap Vault node");
 
-    let s_chain = SideChain::new();
+    let s_chain = PeristentSideChain::open("blocks.db");
     let s_chain = Arc::new(Mutex::new(s_chain));
 
     let loki_connection = LokiConnection::new();
     let loki_block_receiver = loki_connection.start();
 
-    let witness = Witness::new(loki_block_receiver, s_chain.clone());
+    let _witness = Witness::new(loki_block_receiver, s_chain.clone());
+
+    // This code is temporary, for now just used to test the implementation
+    let tx = blockswap::utils::test_utils::create_fake_quote_tx();
+    s_chain
+        .lock()
+        .unwrap()
+        .add_tx(SideChainTx::QuoteTx(tx))
+        .expect("Could not add a Quote TX");
 
     // TODO: processor should run in this thread
     loop {

@@ -3,25 +3,11 @@ mod Tests {
 
     use std::sync::{Arc, Mutex};
 
-    use blockswap::common::{Block, Timestamp, WalletAddress};
-    use blockswap::transactions::{CoinTx, QuoteId, QuoteTx};
+    use blockswap::common::{Block, Timestamp};
+    use blockswap::transactions::CoinTx;
+    use blockswap::utils::test_utils;
+    use blockswap::vault::side_chain::{ISideChain, SideChain, SideChainTx};
     use blockswap::vault::witness::Witness;
-    use blockswap::vault::{ISideChain, SideChain, SideChainTx};
-
-    fn make_quote() -> QuoteTx {
-        let return_address = WalletAddress::new("Alice");
-        let deposit_address = WalletAddress::new("Bob");
-        let timestamp = Timestamp::new(std::time::SystemTime::now());
-
-        let quote = QuoteTx {
-            id: QuoteId::new(0),
-            timestamp,
-            deposit_address,
-            return_address,
-        };
-
-        quote
-    }
 
     #[test]
     fn test_witness_tx_is_made() {
@@ -42,11 +28,12 @@ mod Tests {
         let witness = Witness::new(loki_block_receiver, s_chain.clone());
         witness.start();
 
-        let quote_tx = make_quote();
+        let quote_tx = test_utils::create_fake_quote_tx();
         s_chain
             .lock()
             .unwrap()
-            .add_tx(SideChainTx::QuoteTx(quote_tx.clone()));
+            .add_tx(SideChainTx::QuoteTx(quote_tx.clone()))
+            .expect("Could not add TX");
 
         // TODO: wait until witness acknowledged the quote (there must be
         //  a better way to do it than simply waiting)
