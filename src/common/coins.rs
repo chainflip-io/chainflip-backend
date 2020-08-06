@@ -1,6 +1,4 @@
-use std::fmt;
-use std::result::Result;
-use std::str;
+use strum_macros::{EnumIter, EnumString, ToString};
 
 pub struct Coin {
     pub name: String,
@@ -9,8 +7,7 @@ pub struct Coin {
     pub requires_return_address: bool,
 }
 
-// TODO: Do we want to create an iterator for this?
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, EnumString, ToString, EnumIter)]
 pub enum CoinSymbol {
     ETH,
     LOKI,
@@ -31,25 +28,6 @@ impl CoinSymbol {
                 decimals: 18,
                 requires_return_address: true,
             },
-        }
-    }
-}
-
-impl fmt::Display for CoinSymbol {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl str::FromStr for CoinSymbol {
-    type Err = String;
-
-    fn from_str(string: &str) -> Result<CoinSymbol, String> {
-        let symbol = string.to_lowercase();
-        match symbol.as_str() {
-            "eth" => Ok(CoinSymbol::ETH),
-            "loki" => Ok(CoinSymbol::LOKI),
-            _ => Err(String::from("Invalid coin symbol!")),
         }
     }
 }
