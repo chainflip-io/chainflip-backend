@@ -15,6 +15,16 @@ warp = "*"
 crossbeam-channel = "^0.4"
 strum = "0.19"
 strum_macros = "0.19"
+serde = { version = "1.0", features = ["derive"]}
+serde_json = "*"
+rand = "*"
+
+[dependencies.rusqlite]
+version = "0.21.0"
+features = ["bundled"]
+
+[dev-dependencies]
+env_logger="*"
 
 [lib]
 name = "blockswap"
@@ -29,5 +39,3 @@ path = "src/bin/vault/main.rs"
 name = "quoter"
 path = "src/bin/quoter/main.rs"
 
-[dev-dependencies]
-env_logger="*"

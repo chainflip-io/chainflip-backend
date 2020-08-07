@@ -1,6 +1,8 @@
 use crate::common::{Timestamp, WalletAddress};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
 pub struct QuoteId(u64);
 
 impl QuoteId {
@@ -9,7 +11,7 @@ impl QuoteId {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct QuoteTx {
     pub id: QuoteId,
     pub timestamp: Timestamp,
@@ -27,7 +29,7 @@ pub struct CoinTx {
     pub return_address: WalletAddress,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
 pub struct WitnessTx {
     pub quote_id: QuoteId,
 }
