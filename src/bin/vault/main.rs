@@ -6,6 +6,8 @@ use blockswap::vault::blockchain_connection::LokiConnection;
 use blockswap::vault::witness::Witness;
 use std::sync::{Arc, Mutex};
 
+use blockswap::vault::api::APIServer;
+
 use blockswap::logging;
 
 /// Entry point for the Quoter binary. We should try to keep it as small as posible
@@ -33,9 +35,5 @@ fn main() {
         .add_tx(SideChainTx::QuoteTx(tx))
         .expect("Could not add a Quote TX");
 
-    // TODO: processor should run in this thread
-    loop {
-        // let other thread do the work
-        std::thread::sleep(std::time::Duration::from_secs(1));
-    }
+    APIServer::serve();
 }

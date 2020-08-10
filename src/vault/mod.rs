@@ -1,3 +1,4 @@
+pub mod api;
 pub mod blockchain_connection;
 pub mod witness;
 

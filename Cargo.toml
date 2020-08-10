@@ -11,7 +11,7 @@ clap = "^2"
 log = "0.4.0"
 log4rs = "*"
 tokio = { version = "*", features = ["full"] }
-warp = "*"
+warp = { version = "*", features = ["tls"] }
 crossbeam-channel = "^0.4"
 strum = "0.19"
 strum_macros = "0.19"
