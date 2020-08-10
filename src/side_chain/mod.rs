@@ -14,6 +14,7 @@ pub enum SideChainTx {
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct SideChainBlock {
+    pub number: u32,
     pub txs: Vec<SideChainTx>,
 }
 
@@ -77,7 +78,10 @@ impl SideChain {
 impl ISideChain for SideChain {
     fn add_tx(&mut self, tx: SideChainTx) -> Result<(), String> {
         // For now all transactions live in their own block
-        let block = SideChainBlock { txs: vec![tx] };
+        let block = SideChainBlock {
+            number: self.blocks.len() as u32,
+            txs: vec![tx],
+        };
         self.blocks.push(block);
         Ok(())
     }

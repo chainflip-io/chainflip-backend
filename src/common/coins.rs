@@ -19,7 +19,7 @@ impl Coin {
             Coin::LOKI => CoinInfo {
                 name: "Loki Network",
                 symbol: Coin::LOKI,
-                decimals: 8,
+                decimals: 9,
                 requires_return_address: true,
             },
             Coin::ETH => CoinInfo {

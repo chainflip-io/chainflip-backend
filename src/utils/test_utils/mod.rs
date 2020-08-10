@@ -1,6 +1,9 @@
 use crate::common::{Timestamp, WalletAddress};
 use crate::transactions::{QuoteId, QuoteTx};
 
+pub mod block_processor;
+pub mod vault_node_api;
+
 pub fn create_fake_quote_tx() -> QuoteTx {
     let return_address = WalletAddress::new("Alice");
     let deposit_address = WalletAddress::new("Bob");
