@@ -1,11 +1,21 @@
-pub mod common;
-pub mod quoter;
-pub mod side_chain;
-pub mod transactions;
-pub mod utils;
-pub mod vault;
+#![warn(missing_docs)]
 
+//! Main blockswap library shared between Vault and Quoter
+
+/// Code that is commonly used by other modules
+pub mod common;
+/// Logging set up
 pub mod logging;
+/// Quoter implementation
+pub mod quoter;
+/// Side Chain implementation
+pub mod side_chain;
+/// Various transaction types commonly used by other modules
+pub mod transactions;
+/// Helper functions (including helper functions for tests)
+pub mod utils;
+/// Vault implementation
+pub mod vault;
 
 #[macro_use]
 extern crate log;

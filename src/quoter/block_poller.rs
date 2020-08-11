@@ -58,7 +58,7 @@ where
                         return Ok(());
                     }
 
-                    let last_block_number = blocks.iter().map(|b| b.number).max();
+                    let last_block_number = blocks.iter().map(|b| b.id).max();
 
                     // Validate the returned block numbers to make sure we didn't skip
                     let expected_last_block_number = next_block_number + (blocks.len() as u32) - 1; // assumption: getBlock(2, 4) will get us blocks 2,3,4,5
@@ -153,11 +153,11 @@ mod test {
         let state = setup();
         state.api.add_blocks(vec![
             SideChainBlock {
-                number: 1,
+                id: 1,
                 txs: vec![],
             },
             SideChainBlock {
-                number: 100,
+                id: 100,
                 txs: vec![],
             },
         ]);
@@ -170,11 +170,11 @@ mod test {
         let state = setup();
         state.api.add_blocks(vec![
             SideChainBlock {
-                number: 0,
+                id: 0,
                 txs: vec![],
             },
             SideChainBlock {
-                number: 1,
+                id: 1,
                 txs: vec![],
             },
         ]);
@@ -189,16 +189,16 @@ mod test {
         let state = setup();
         state.api.add_blocks(vec![
             SideChainBlock {
-                number: 0,
+                id: 0,
                 txs: vec![],
             },
             SideChainBlock {
-                number: 1,
+                id: 1,
                 txs: vec![],
             },
         ]);
         state.api.add_blocks(vec![SideChainBlock {
-            number: 2,
+            id: 2,
             txs: vec![],
         }]);
 
@@ -212,7 +212,7 @@ mod test {
     fn test_sync_passes_blocks_to_processor() -> Result<(), String> {
         let state = setup();
         state.api.add_blocks(vec![SideChainBlock {
-            number: 0,
+            id: 0,
             txs: vec![],
         }]);
         state.poller.sync()?;
@@ -225,7 +225,7 @@ mod test {
                 .recieved_blocks
                 .get(0)
                 .unwrap()
-                .number,
+                .id,
             0
         );
         Ok(())
@@ -237,7 +237,7 @@ mod test {
         let state = setup();
 
         state.api.add_blocks(vec![SideChainBlock {
-            number: 0,
+            id: 0,
             txs: vec![],
         }]);
         state

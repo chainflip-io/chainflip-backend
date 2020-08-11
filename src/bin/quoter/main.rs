@@ -16,6 +16,11 @@ of organising code works better with integration tests.
 
 #[tokio::main]
 async fn main() {
+    std::panic::set_hook(Box::new(|msg| {
+        error!("Panicked with: {}", msg);
+        std::process::exit(101); // Rust's panics use 101 by default
+    }));
+
     let matches = App::new("Blockswap Quoter")
         .version("0.1")
         .about("A web server that provides swap quotes")

@@ -4,14 +4,14 @@
 
 // Events: Lokid transaction, Ether transaction, Swap transaction from Side Chain
 
-use crate::transactions::{CoinTx, QuoteTx, WitnessTx};
-use crossbeam_channel::Receiver;
-
 use std::sync::{Arc, Mutex};
 
-use crate::common::Block;
+use crossbeam_channel::Receiver;
 
+use crate::transactions::{CoinTx, QuoteTx, WitnessTx};
+use crate::common::Block;
 use crate::side_chain::{ISideChain, SideChainTx};
+
 
 /// Witness Mock
 pub struct Witness<T>
@@ -111,7 +111,9 @@ where
         let tx = WitnessTx::new(quote.id);
         let tx = SideChainTx::WitnessTx(tx);
 
-        side_chain.add_tx(tx).expect("Could not publish witness tx");
+        side_chain
+            .add_block(vec![tx])
+            .expect("Could not publish witness tx");
 
         // Do we remove the quote here?
     }

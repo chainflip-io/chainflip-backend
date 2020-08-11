@@ -3,11 +3,13 @@ mod tests {
 
     use std::sync::{Arc, Mutex};
 
-    use blockswap::common::{Block, Timestamp};
-    use blockswap::side_chain::{ISideChain, SideChain, SideChainTx};
-    use blockswap::transactions::CoinTx;
-    use blockswap::utils::test_utils;
-    use blockswap::vault::witness::Witness;
+    use blockswap::{
+        common::{Block, Timestamp},
+        side_chain::{FakeSideChain, ISideChain, SideChainTx},
+        transactions::CoinTx,
+        utils::test_utils,
+        vault::witness::Witness,
+    };
 
     #[test]
     fn test_witness_tx_is_made() {
@@ -20,7 +22,7 @@ mod tests {
 
         let timeout = std::time::Duration::from_millis(1000);
 
-        let s_chain = SideChain::new();
+        let s_chain = FakeSideChain::new();
         let s_chain = Arc::new(Mutex::new(s_chain));
 
         let (loki_block_sender, loki_block_receiver) = crossbeam_channel::unbounded();
@@ -29,10 +31,11 @@ mod tests {
         witness.start();
 
         let quote_tx = test_utils::create_fake_quote_tx();
+
         s_chain
             .lock()
             .unwrap()
-            .add_tx(SideChainTx::QuoteTx(quote_tx.clone()))
+            .add_block(vec![SideChainTx::QuoteTx(quote_tx.clone())])
             .expect("Could not add TX");
 
         // TODO: wait until witness acknowledged the quote (there must be
