@@ -5,30 +5,26 @@ use rusqlite;
 use rusqlite::params;
 
 use rusqlite::Connection;
-use std::sync::Mutex;
 
 mod migration;
 
 /// A database for storing and accessing local state
 #[derive(Debug)]
 pub struct Database {
-    db: Mutex<Connection>,
+    db: Connection,
 }
 
 impl Database {
     /// Returns a database instance from the given path.
     pub fn open(file: &str) -> Self {
         let connection = Connection::open(file).expect("Could not open the database");
-        return Database::new(connection);
+        Database::new(connection)
     }
 
     /// Returns a database instance with the given connection.
     pub fn new(mut connection: Connection) -> Self {
         migration::migrate_database(&mut connection);
-
-        Database {
-            db: Mutex::new(connection),
-        }
+        Database { db: connection }
     }
 
     /// Get key value data
@@ -36,8 +32,7 @@ impl Database {
     where
         T: rusqlite::types::FromSql,
     {
-        let db = self.db.lock().unwrap();
-        let mut statement = match db.prepare("SELECT value from data WHERE key = ?1;") {
+        let mut statement = match self.db.prepare("SELECT value from data WHERE key = ?1;") {
             Ok(statement) => statement,
             Err(_) => return None,
         };
@@ -53,8 +48,7 @@ impl Database {
     where
         T: rusqlite::types::ToSql,
     {
-        let db = self.db.lock().unwrap();
-        match db.execute(
+        match self.db.execute(
             "INSERT OR REPLACE INTO data (key, value) VALUES (?1, ?2)",
             params![key, value],
         ) {
@@ -67,7 +61,7 @@ impl Database {
     }
 
     fn set_last_processed_block_number(&self, block_number: u32) -> Result<(), String> {
-        return self.set_data("last_processed_block_number", Some(block_number));
+        self.set_data("last_processed_block_number", Some(block_number))
     }
 }
 
@@ -76,9 +70,8 @@ impl BlockProcessor for Database {
         self.get_data("last_processed_block_number")
     }
 
-    fn process_blocks(&self, blocks: Vec<SideChainBlock>) -> Result<(), String> {
-        let mut db = self.db.lock().unwrap();
-        let tx = match db.transaction() {
+    fn process_blocks(&mut self, blocks: Vec<SideChainBlock>) -> Result<(), String> {
+        let tx = match self.db.transaction() {
             Ok(transaction) => transaction,
             Err(err) => {
                 error!("Failed to open database transaction: {}", err);
@@ -86,22 +79,25 @@ impl BlockProcessor for Database {
             }
         };
 
-        for block in blocks.iter() {
+        for _block in blocks.iter() {
             // TODO: Do stuff here
         }
 
-        tx.commit().or_else(|err| {
+        if let Err(err) = tx.commit() {
             error!("Failed to commit process block changes: {}", err);
-            return Err("Failed to commit process block changes.");
-        })?;
+            return Err("Failed to commit process block changes".to_owned());
+        };
 
         let last_block_number = blocks.iter().map(|b| b.number).max();
         if let Some(last_block_number) = last_block_number {
             self.set_last_processed_block_number(last_block_number)?;
         }
 
-        return Ok(());
+        Ok(())
     }
 }
 
 impl StateProvider for Database {}
+
+#[cfg(test)]
+mod test {}

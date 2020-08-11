@@ -36,7 +36,7 @@ where
     tx.commit()?;
     info!("Migrated succefully");
 
-    return Ok(());
+    Ok(())
 }
 
 fn migrate_to_version_1(connection: &mut Connection) {
@@ -46,7 +46,7 @@ fn migrate_to_version_1(connection: &mut Connection) {
             NO_PARAMS,
         )?;
 
-        return Ok(());
+        Ok(())
     })
     .expect("Failed to migrate database to version 1");
 }

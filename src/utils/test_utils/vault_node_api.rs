@@ -35,7 +35,7 @@ impl VaultNodeInterface for TestVaultNodeAPI {
             Some(blocks) => blocks,
             _ => vec![],
         };
-        return Ok(blocks);
+        Ok(blocks)
     }
     fn submit_quote(&self) -> Result<crate::transactions::QuoteTx, String> {
         todo!()

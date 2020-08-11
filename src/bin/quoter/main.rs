@@ -5,7 +5,7 @@ use clap::{App, Arg};
 
 use blockswap::logging;
 use blockswap::quoter::{database, vault_node, Quoter};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /*
 Entry point for the Quoter binary. We should try to keep it as small as posible
@@ -36,7 +36,7 @@ async fn main() {
         info!("Starting the Blockswap Quoter");
 
         let database = database::Database::open("quoter.db");
-        let database = Arc::new(database);
+        let database = Arc::new(Mutex::new(database));
 
         let vault_node_api = vault_node::VaultNodeAPI::new(vault_node::Config {});
         let vault_node_api = Arc::new(vault_node_api);
