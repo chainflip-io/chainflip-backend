@@ -35,7 +35,7 @@ async fn main() {
     if let Ok(port) = port.parse::<u16>() {
         info!("Starting the Blockswap Quoter");
 
-        let database = database::Database::new(database::Config {});
+        let database = database::Database::open("quoter.db");
         let database = Arc::new(database);
 
         let vault_node_api = vault_node::VaultNodeAPI::new(vault_node::Config {});

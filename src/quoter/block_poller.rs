@@ -141,11 +141,10 @@ mod test {
 
     #[test]
     fn test_sync_returns_error_if_api_failed() {
+        let error = "APITestError".to_owned();
         let state = setup();
-        state
-            .api
-            .set_get_blocks_error(Some(String::from("TestError")));
-        assert_eq!(state.poller.sync().unwrap_err(), String::from("TestError"));
+        state.api.set_get_blocks_error(Some(error.clone()));
+        assert_eq!(state.poller.sync().unwrap_err(), error);
     }
 
     #[test]
@@ -234,7 +233,7 @@ mod test {
 
     #[test]
     fn test_sync_returns_error_if_processor_failed() {
-        let error = String::from("ProcessorTestError");
+        let error = "ProcessorTestError".to_owned();
         let state = setup();
 
         state.api.add_blocks(vec![SideChainBlock {
