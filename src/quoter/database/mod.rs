@@ -49,17 +49,17 @@ impl Database {
     where
         T: ToString,
     {
-        let string_value = value.map(|value| value.to_string());
-        match self.conn.execute(
-            "INSERT OR REPLACE INTO data (key, value) VALUES (?1, ?2)",
-            params![key, string_value],
-        ) {
-            Ok(_) => Ok(()),
-            Err(err) => {
-                error!("Error inserting key values into data table: {}", err);
-                return Err("Failed to set data.".to_owned());
-            }
-        }
+        let result = match value {
+            Some(value) => self.conn.execute(
+                "INSERT OR REPLACE INTO data (key, value) VALUES (?1, ?2)",
+                params![key, value.to_string()],
+            ),
+            None => self
+                .conn
+                .execute("DELETE FROM data WHERE key = ?", params![key]),
+        };
+
+        result.map(|_| ()).map_err(|error| error.to_string())
     }
 
     fn set_last_processed_block_number(&self, block_number: u32) -> Result<(), String> {
@@ -111,64 +111,25 @@ mod test {
     }
 
     #[test]
-    fn test_set_data_stores_value_correctly() {
+    fn test_get_and_set_data() {
         let database = setup();
-        let key = "some_data";
+
+        // Test we can get correctly
         database
-            .set_data(key, Some(1))
-            .expect("Failed to set data.");
+            .set_data("number", Some(1))
+            .expect("Failed to set number");
+        assert_eq!(database.get_data("number"), Some(1));
 
-        let mut statement = database
-            .conn
-            .prepare("SELECT value from data WHERE key = ?1;")
-            .unwrap();
-        let val: String = statement
-            .query_row(params![key], |row| row.get(0))
-            .expect("Expected data to be set");
-
-        assert_eq!(val, "1");
-    }
-
-    #[test]
-    fn test_get_data_should_return_data() {
-        let database = setup();
-
-        let key = "number";
-        let value = 2;
+        // Test unset
         database
-            .conn
-            .execute(
-                "INSERT OR REPLACE INTO data (key, value) VALUES (?1, ?2)",
-                params![key, value.to_string()],
-            )
-            .expect("Failed to insert data");
+            .set_data::<u32>("number", None)
+            .expect("Failed to set null number");
+        assert_eq!(database.get_data::<u32>("number"), None);
 
-        let returned_value: Option<u32> = database.get_data(key);
-        assert_eq!(returned_value, Some(value));
-    }
-
-    #[test]
-    fn test_get_data_returns_none_if_not_set() {
-        let database = setup();
-        let returned_value: Option<String> = database.get_data("not_set");
-        assert_eq!(returned_value, None);
-    }
-
-    #[test]
-    fn test_get_data_returns_none_if_invalid_type() {
-        let database = setup();
-
-        let key = "number";
-        let value = "i_am_a_string";
+        // Test value conversion
         database
-            .conn
-            .execute(
-                "INSERT OR REPLACE INTO data (key, value) VALUES (?1, ?2)",
-                params![key, value],
-            )
-            .expect("Failed to insert data");
-
-        let returned_value: Option<u32> = database.get_data(key);
-        assert_eq!(returned_value, None);
+            .set_data("string", Some("i_am_a_string"))
+            .expect("Failed to set string");
+        assert_eq!(database.get_data::<u32>("string"), None);
     }
 }
