@@ -1,28 +1,28 @@
 use super::vault_node::VaultNodeInterface;
 use super::BlockProcessor;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::{thread, time};
 
 /// A struct which can poll for blocks
 pub struct BlockPoller<V, P>
 where
     V: VaultNodeInterface + Send + Sync,
-    P: BlockProcessor + Send + Sync,
+    P: BlockProcessor + Send,
 {
     api: Arc<V>,
-    processor: Arc<P>,
+    processor: Arc<Mutex<P>>,
     next_block_number: AtomicU32,
 }
 
 impl<V, P> BlockPoller<V, P>
 where
     V: VaultNodeInterface + Send + Sync + 'static,
-    P: BlockProcessor + Send + Sync + 'static,
+    P: BlockProcessor + Send + 'static,
 {
     /// Create a new block poller
-    pub fn new(api: Arc<V>, processor: Arc<P>) -> Self {
-        let last_block_number = processor.get_last_processed_block_number();
+    pub fn new(api: Arc<V>, processor: Arc<Mutex<P>>) -> Self {
+        let last_block_number = processor.lock().unwrap().get_last_processed_block_number();
         let next_block_number = if let Some(number) = last_block_number {
             number + 1
         } else {
@@ -70,7 +70,7 @@ where
                     }
 
                     // Pass blocks off to processor
-                    self.processor.process_blocks(blocks)?;
+                    self.processor.lock().unwrap().process_blocks(blocks)?;
 
                     // Update our local value
                     if let Some(last_block_number) = last_block_number {
@@ -96,14 +96,14 @@ where
     /// Start polling indefinately.
     /// This will consume the BlockPoller.
     pub fn poll(self) -> thread::JoinHandle<()> {
-        return thread::spawn(move || loop {
+        thread::spawn(move || loop {
             if let Err(e) = self.sync() {
                 info!("Block Poller ran into an error while polling: {}", e);
             }
 
             // Wait for a while before fetching again
             thread::sleep(time::Duration::from_secs(1));
-        });
+        })
     }
 }
 
@@ -117,19 +117,19 @@ mod test {
     struct TestVariables {
         poller: BlockPoller<TestVaultNodeAPI, TestBlockProcessor>,
         api: Arc<TestVaultNodeAPI>,
-        processor: Arc<TestBlockProcessor>,
+        processor: Arc<Mutex<TestBlockProcessor>>,
     }
 
     fn setup() -> TestVariables {
         let api = Arc::new(TestVaultNodeAPI::new());
-        let processor = Arc::new(TestBlockProcessor::new());
+        let processor = Arc::new(Mutex::new(TestBlockProcessor::new()));
         let poller = BlockPoller::new(api.clone(), processor.clone());
 
-        return TestVariables {
+        TestVariables {
             poller,
             api,
             processor,
-        };
+        }
     }
 
     #[test]
@@ -141,11 +141,10 @@ mod test {
 
     #[test]
     fn test_sync_returns_error_if_api_failed() {
+        let error = "APITestError".to_owned();
         let state = setup();
-        state
-            .api
-            .set_get_blocks_error(Some(String::from("TestError")));
-        assert_eq!(state.poller.sync().unwrap_err(), String::from("TestError"));
+        state.api.set_get_blocks_error(Some(error.clone()));
+        assert_eq!(state.poller.sync().unwrap_err(), error);
     }
 
     #[test]
@@ -182,7 +181,7 @@ mod test {
 
         state.poller.sync()?;
         assert_eq!(state.poller.next_block_number.load(Ordering::SeqCst), 2);
-        return Ok(());
+        Ok(())
     }
 
     #[test]
@@ -205,8 +204,8 @@ mod test {
 
         state.poller.sync()?;
         assert_eq!(state.poller.next_block_number.load(Ordering::SeqCst), 3);
-        assert_eq!(state.processor.recieved_blocks.lock().unwrap().len(), 3);
-        return Ok(());
+        assert_eq!(state.processor.lock().unwrap().recieved_blocks.len(), 3);
+        Ok(())
     }
 
     #[test]
@@ -217,24 +216,24 @@ mod test {
             txs: vec![],
         }]);
         state.poller.sync()?;
-        assert_eq!(state.processor.recieved_blocks.lock().unwrap().len(), 1);
+        assert_eq!(state.processor.lock().unwrap().recieved_blocks.len(), 1);
         assert_eq!(
             state
                 .processor
-                .recieved_blocks
                 .lock()
                 .unwrap()
+                .recieved_blocks
                 .get(0)
                 .unwrap()
                 .number,
             0
         );
-        return Ok(());
+        Ok(())
     }
 
     #[test]
     fn test_sync_returns_error_if_processor_failed() {
-        let error = String::from("ProcessorTestError");
+        let error = "ProcessorTestError".to_owned();
         let state = setup();
 
         state.api.add_blocks(vec![SideChainBlock {
@@ -243,6 +242,8 @@ mod test {
         }]);
         state
             .processor
+            .lock()
+            .unwrap()
             .set_process_blocks_error(Some(error.clone()));
 
         assert_eq!(state.poller.sync().unwrap_err(), error);

@@ -1,6 +1,6 @@
 use super::vault_node::VaultNodeInterface;
 use super::StateProvider;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// An api server for the quoter
 pub struct Server<V, S>
@@ -9,7 +9,7 @@ where
     S: StateProvider,
 {
     api: Arc<V>,
-    state: Arc<S>,
+    state: Arc<Mutex<S>>,
 }
 
 impl<V, S> Server<V, S>
@@ -18,7 +18,7 @@ where
     S: StateProvider,
 {
     /// Create a new API server.
-    pub fn new(api: Arc<V>, state: Arc<S>) -> Self {
+    pub fn new(api: Arc<V>, state: Arc<Mutex<S>>) -> Self {
         Server { api, state }
     }
 
