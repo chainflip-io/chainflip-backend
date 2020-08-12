@@ -50,3 +50,23 @@ fn migrate_to_version_1(connection: &mut Connection) {
     })
     .expect("Failed to migrate database to version 1");
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_migrate_database_should_update_to_latest_version() {
+        let latest_version = 1;
+
+        let mut connection =
+            Connection::open_in_memory().expect("Expected connection to be opened.");
+        migrate_database(&mut connection);
+
+        let database_version: u32 = connection
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .expect("Failed to query user_version.");
+
+        assert_eq!(database_version, latest_version);
+    }
+}
