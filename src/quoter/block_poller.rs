@@ -93,17 +93,20 @@ where
         }
     }
 
-    /// Start polling indefinately.
-    /// This will consume the BlockPoller.
-    pub fn poll(self) -> thread::JoinHandle<()> {
-        thread::spawn(move || loop {
+    /// Poll every `interval` seconds.
+    ///
+    /// # Blocking
+    ///
+    /// This operation will block the thread it is called on.
+    pub fn poll(&self, interval: u64) {
+        loop {
             if let Err(e) = self.sync() {
                 info!("Block Poller ran into an error while polling: {}", e);
             }
 
             // Wait for a while before fetching again
-            thread::sleep(time::Duration::from_secs(1));
-        })
+            thread::sleep(time::Duration::from_secs(interval));
+        }
     }
 }
 
@@ -152,10 +155,7 @@ mod test {
     fn test_sync_panics_when_blocks_are_skipped() {
         let state = setup();
         state.api.add_blocks(vec![
-            SideChainBlock {
-                id: 1,
-                txs: vec![],
-            },
+            SideChainBlock { id: 1, txs: vec![] },
             SideChainBlock {
                 id: 100,
                 txs: vec![],
@@ -169,14 +169,8 @@ mod test {
     fn test_sync_updates_next_block_number_only_if_larger() -> Result<(), String> {
         let state = setup();
         state.api.add_blocks(vec![
-            SideChainBlock {
-                id: 0,
-                txs: vec![],
-            },
-            SideChainBlock {
-                id: 1,
-                txs: vec![],
-            },
+            SideChainBlock { id: 0, txs: vec![] },
+            SideChainBlock { id: 1, txs: vec![] },
         ]);
 
         state.poller.sync()?;
@@ -188,19 +182,12 @@ mod test {
     fn test_sync_loops_through_all_blocks() -> Result<(), String> {
         let state = setup();
         state.api.add_blocks(vec![
-            SideChainBlock {
-                id: 0,
-                txs: vec![],
-            },
-            SideChainBlock {
-                id: 1,
-                txs: vec![],
-            },
+            SideChainBlock { id: 0, txs: vec![] },
+            SideChainBlock { id: 1, txs: vec![] },
         ]);
-        state.api.add_blocks(vec![SideChainBlock {
-            id: 2,
-            txs: vec![],
-        }]);
+        state
+            .api
+            .add_blocks(vec![SideChainBlock { id: 2, txs: vec![] }]);
 
         state.poller.sync()?;
         assert_eq!(state.poller.next_block_number.load(Ordering::SeqCst), 3);
@@ -211,10 +198,9 @@ mod test {
     #[test]
     fn test_sync_passes_blocks_to_processor() -> Result<(), String> {
         let state = setup();
-        state.api.add_blocks(vec![SideChainBlock {
-            id: 0,
-            txs: vec![],
-        }]);
+        state
+            .api
+            .add_blocks(vec![SideChainBlock { id: 0, txs: vec![] }]);
         state.poller.sync()?;
         assert_eq!(state.processor.lock().unwrap().recieved_blocks.len(), 1);
         assert_eq!(
@@ -236,10 +222,9 @@ mod test {
         let error = "ProcessorTestError".to_owned();
         let state = setup();
 
-        state.api.add_blocks(vec![SideChainBlock {
-            id: 0,
-            txs: vec![],
-        }]);
+        state
+            .api
+            .add_blocks(vec![SideChainBlock { id: 0, txs: vec![] }]);
         state
             .processor
             .lock()

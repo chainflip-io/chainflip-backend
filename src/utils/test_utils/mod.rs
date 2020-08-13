@@ -31,7 +31,6 @@ pub struct TempRandomFile {
 }
 
 impl TempRandomFile {
-
     /// Creates a random file name
     pub fn new() -> Self {
         use rand::Rng;

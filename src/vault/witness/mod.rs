@@ -8,10 +8,9 @@ use std::sync::{Arc, Mutex};
 
 use crossbeam_channel::Receiver;
 
-use crate::transactions::{CoinTx, QuoteTx, WitnessTx};
 use crate::common::Block;
 use crate::side_chain::{ISideChain, SideChainTx};
-
+use crate::transactions::{CoinTx, QuoteTx, WitnessTx};
 
 /// Witness Mock
 pub struct Witness<T>
