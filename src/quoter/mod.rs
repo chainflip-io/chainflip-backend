@@ -36,7 +36,7 @@ impl Quoter {
 
         // Start loops
         let poller_thread = std::thread::spawn(move || {
-            poller.poll(1);
+            poller.poll(std::time::Duration::from_secs(1));
         });
 
         server.serve(port); // This will block the current thread

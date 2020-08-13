@@ -93,19 +93,19 @@ where
         }
     }
 
-    /// Poll every `interval` seconds.
+    /// Poll with a delay of `interval` each time.
     ///
     /// # Blocking
     ///
     /// This operation will block the thread it is called on.
-    pub fn poll(&self, interval: u64) {
+    pub fn poll(self, interval: time::Duration) {
         loop {
             if let Err(e) = self.sync() {
                 info!("Block Poller ran into an error while polling: {}", e);
             }
 
             // Wait for a while before fetching again
-            thread::sleep(time::Duration::from_secs(interval));
+            thread::sleep(interval);
         }
     }
 }

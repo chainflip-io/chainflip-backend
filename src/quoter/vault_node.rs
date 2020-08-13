@@ -12,7 +12,8 @@ pub trait VaultNodeInterface {
     /// This will return all block indexes from `start` to `start + limit - 1`.
     ///
     /// # Example
-    /// ```rust
+    ///
+    /// ```ignore
     ///     let blocks = VaultNodeInterface.get_blocks(0, 50)?;
     /// ```
     /// The above code will return blocks 0 to 49.
