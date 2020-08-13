@@ -4,6 +4,8 @@ use rusqlite::{params, NO_PARAMS};
 
 use rusqlite::Connection as DB;
 
+/// Implementation of ISideChain that uses sqlite to
+/// persist between restarts
 pub struct PeristentSideChain {
     blocks: Vec<SideChainBlock>,
     db: DB,
@@ -63,6 +65,9 @@ fn read_rows(db: &DB) -> Result<Vec<SideChainBlock>, String> {
 }
 
 impl PeristentSideChain {
+    /// Create a instance of PeristentSideChain associated with a database file
+    /// with name `file`. The file is created if does not exist. The database tables
+    /// are created they don't already exist.
     pub fn open(file: &str) -> Self {
         let db = DB::open(file).expect("Could not open the database");
 
@@ -107,11 +112,11 @@ fn get_block_from_db(db: &DB, block_idx: u32) -> Option<SideChainBlock> {
 }
 
 impl ISideChain for PeristentSideChain {
-    fn add_tx(&mut self, tx: SideChainTx) -> Result<(), String> {
+    fn add_block(&mut self, txs: Vec<SideChainTx>) -> Result<(), String> {
         let block_idx = self.blocks.len() as u32;
         let block = SideChainBlock {
-            number: block_idx,
-            txs: vec![tx],
+            id: block_idx,
+            txs,
         };
 
         let blob = serde_json::to_string(&block).unwrap();
@@ -136,8 +141,8 @@ impl ISideChain for PeristentSideChain {
         self.blocks.get(block_idx as usize)
     }
 
-    fn last_block(&self) -> Option<&SideChainBlock> {
-        self.blocks.last()
+    fn total_blocks(&self) -> u32 {
+        self.blocks.len() as u32
     }
 }
 
@@ -152,10 +157,9 @@ fn should_read_block_after_reopen() {
     let mut db = PeristentSideChain::open(temp_file.path());
 
     let tx = test_utils::create_fake_quote_tx();
+    let tx = SideChainTx::from(tx);
 
-    let tx = SideChainTx::QuoteTx(tx);
-
-    db.add_tx(tx.clone())
+    db.add_block(vec![tx.clone()])
         .expect("Error adding a transaction to the database");
 
     // Close the database
@@ -163,7 +167,11 @@ fn should_read_block_after_reopen() {
 
     let db = PeristentSideChain::open(temp_file.path());
 
-    let last_block = db.last_block().expect("Could not get last block");
+    let total_blocks = db.total_blocks();
+    let last_block_idx = total_blocks.checked_sub(1).expect("Unexpected block count");
+    let last_block = db
+        .get_block(last_block_idx)
+        .expect("Could not get last block");
 
     assert_eq!(tx, last_block.txs[0]);
 }

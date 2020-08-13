@@ -1,18 +1,23 @@
 #[macro_use]
 extern crate log;
 
-use blockswap::side_chain::{ISideChain, PeristentSideChain, SideChainTx};
-use blockswap::vault::blockchain_connection::LokiConnection;
-use blockswap::vault::witness::Witness;
+use blockswap::{
+    logging,
+    side_chain::{ISideChain, PeristentSideChain},
+    vault::{api::APIServer, blockchain_connection::LokiConnection, witness::Witness},
+};
 use std::sync::{Arc, Mutex};
-
-use blockswap::logging;
 
 /// Entry point for the Quoter binary. We should try to keep it as small as posible
 /// and implement most of the core logic as part of the library (src/lib.rs). This way
 /// of organising code works better with integration tests.
 /// Ideally we would just parse commad line arguments here and call into the library.
 fn main() {
+    std::panic::set_hook(Box::new(|msg| {
+        error!("Panicked with: {}", msg);
+        std::process::exit(101); // Rust's panics use 101 by default
+    }));
+
     logging::init("vault");
 
     info!("Starting a Blockswap Vault node");
@@ -27,15 +32,12 @@ fn main() {
 
     // This code is temporary, for now just used to test the implementation
     let tx = blockswap::utils::test_utils::create_fake_quote_tx();
+
     s_chain
         .lock()
         .unwrap()
-        .add_tx(SideChainTx::QuoteTx(tx))
+        .add_block(vec![tx.into()])
         .expect("Could not add a Quote TX");
 
-    // TODO: processor should run in this thread
-    loop {
-        // let other thread do the work
-        std::thread::sleep(std::time::Duration::from_secs(1));
-    }
+    APIServer::serve(s_chain);
 }

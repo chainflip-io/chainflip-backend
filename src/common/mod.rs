@@ -1,20 +1,25 @@
 use crate::transactions::CoinTx;
 use std::time::SystemTime;
 
+/// Definitions for various coins
 pub mod coins;
 use serde::{Deserialize, Serialize};
 
 // Note: time is not reliable in a distributed environment,
 // so it should probably be replaced by block_id when we
 // go distributed
+
+/// SystemTime wrapper
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Timestamp(SystemTime);
 
 impl Timestamp {
+    /// Create an instance from `SystemTime` (should we implement `From` trait instead?)
     pub fn new(ts: SystemTime) -> Self {
         Timestamp { 0: ts }
     }
 
+    /// Create an instance from current time
     pub fn now() -> Self {
         Timestamp {
             0: SystemTime::now(),
@@ -22,10 +27,14 @@ impl Timestamp {
     }
 }
 
+/// A wrapper around String to be used as wallet address.
+/// We might want to use separate type for each type of
+/// wallet/blockchain
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct WalletAddress(String);
 
 impl WalletAddress {
+    /// Create address from string
     pub fn new(address: &str) -> Self {
         WalletAddress {
             0: address.to_owned(),
@@ -33,7 +42,9 @@ impl WalletAddress {
     }
 }
 
+/// A representation of a block on some blockchain
 #[derive(Debug)]
 pub struct Block {
+    /// Transactions that belong to this block
     pub txs: Vec<CoinTx>,
 }

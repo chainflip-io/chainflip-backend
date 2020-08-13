@@ -1,9 +1,14 @@
-use crate::common::{Timestamp, WalletAddress};
-use crate::transactions::{QuoteId, QuoteTx};
+use crate::{
+    common::{Timestamp, WalletAddress},
+    transactions::{QuoteId, QuoteTx},
+};
 
+/// Test helpers for Block Processor
 pub mod block_processor;
+/// Test helpers for Vault Node API
 pub mod vault_node_api;
 
+/// Create a dummy quote transaction to be used for tests
 pub fn create_fake_quote_tx() -> QuoteTx {
     let return_address = WalletAddress::new("Alice");
     let deposit_address = WalletAddress::new("Bob");
@@ -19,13 +24,15 @@ pub fn create_fake_quote_tx() -> QuoteTx {
     quote
 }
 
-/// Creates a new random file that gets removed
-/// when this object is destructed
+/// Creates a new random file name that (if created)
+/// gets removed when this object is destructed
 pub struct TempRandomFile {
     path: String,
 }
 
 impl TempRandomFile {
+
+    /// Creates a random file name
     pub fn new() -> Self {
         use rand::Rng;
 
@@ -36,6 +43,7 @@ impl TempRandomFile {
         }
     }
 
+    /// Get the internal file name
     pub fn path(&self) -> &str {
         &self.path
     }

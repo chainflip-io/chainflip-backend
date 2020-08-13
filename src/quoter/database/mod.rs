@@ -90,7 +90,7 @@ impl BlockProcessor for Database {
             return Err("Failed to commit process block changes".to_owned());
         };
 
-        let last_block_number = blocks.iter().map(|b| b.number).max();
+        let last_block_number = blocks.iter().map(|b| b.id).max();
         if let Some(last_block_number) = last_block_number {
             self.set_last_processed_block_number(last_block_number)?;
         }
