@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
-use strum_macros::{EnumIter, EnumString, ToString};
+use strum_macros::{EnumIter, ToString};
 
-use std::convert::TryFrom;
+use std::str::FromStr;
 
 /// Coin-specific info
 pub struct CoinInfo {
@@ -17,7 +17,7 @@ pub struct CoinInfo {
 }
 
 /// Enum for supported coin types
-#[derive(Debug, EnumString, ToString, EnumIter, Serialize, Deserialize)]
+#[derive(Debug, ToString, EnumIter, Serialize, Deserialize)]
 pub enum Coin {
     /// Bitcoin
     BTC,
@@ -27,15 +27,18 @@ pub enum Coin {
     LOKI,
 }
 
-impl TryFrom<&str> for Coin {
-    type Error = &'static str;
+/// Invalid coin literal error
+pub const COIN_PARSING_ERROR: &'static str = "failed to parse coin";
 
-    fn try_from(name: &str) -> Result<Self, Self::Error> {
-        match name {
+impl FromStr for Coin {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
             "LOKI" | "Loki" | "loki" => Ok(Coin::LOKI),
             "BTC" | "btc" => Ok(Coin::BTC),
             "ETH" | "eth" => Ok(Coin::ETH),
-            _ => Err("failed to parse coin"),
+            _ => Err(COIN_PARSING_ERROR),
         }
     }
 }

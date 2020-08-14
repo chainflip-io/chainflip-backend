@@ -7,7 +7,7 @@ use crate::side_chain::{ISideChain, SideChainTx};
 
 use crate::common::coins::Coin;
 
-use std::convert::TryFrom;
+use std::str::FromStr;
 
 #[cfg(test)]
 mod tests;
@@ -119,8 +119,6 @@ where
     warp::any().map(move || side_chain.clone())
 }
 
-enum QuoteError {}
-
 macro_rules! parse_field {
     ($v:ident, $field:literal) => {
         $v.get($field).ok_or(concat!("field missing: ", $field))
@@ -148,8 +146,8 @@ fn parse_quote_request(raw: serde_json::Value) -> Result<QuoteQueryRequest, &'st
         .as_f64()
         .ok_or("field must be of type float: slippageLimit")?;
 
-    let input_coin = Coin::try_from(&input_coin[..])?;
-    let output_coin = Coin::try_from(&output_coin[..])?;
+    let input_coin = Coin::from_str(&input_coin[..])?;
+    let output_coin = Coin::from_str(&output_coin[..])?;
 
     Ok(QuoteQueryRequest {
         input_coin,
@@ -160,6 +158,27 @@ fn parse_quote_request(raw: serde_json::Value) -> Result<QuoteQueryRequest, &'st
         output_address,
         slippage_limit,
     })
+}
+
+fn wrap_response<T>(res: Result<T, ResponseError>) -> VaultResponseWrapper
+where
+    T: Serialize,
+{
+    match res {
+        Ok(res) => VaultResponseWrapper {
+            success: true,
+            data: serde_json::to_value(&res).expect("Could not construct json value"),
+            error: None,
+        },
+        Err(err) => VaultResponseWrapper {
+            success: true,
+            data: serde_json::Value::Null,
+            error: Some(ResponseError {
+                code: err.code,
+                message: err.message,
+            }),
+        },
+    }
 }
 
 impl<S> APIServer<S>
@@ -237,17 +256,13 @@ where
         let res = APIServer::get_blocks_inner(side_chain, params).await;
 
         // /v1/blocks cannot fail
-        VaultResponseWrapper {
-            success: true,
-            data: serde_json::to_value(&res).expect("Could not construct json value"),
-            error: None,
-        }
+        wrap_response(Ok(res))
     }
 
     fn post_quote_inner(
         _side_chain: Arc<Mutex<S>>,
         params: QuoteQueryRequest,
-    ) -> Result<QuoteQueryResponse, QuoteError> {
+    ) -> Result<QuoteQueryResponse, ResponseError> {
         Ok(QuoteQueryResponse {
             id: "TODO".to_owned(),
             created_at: 0,
@@ -272,32 +287,17 @@ where
         let params = match params {
             Ok(params) => params,
             Err(err) => {
-                return VaultResponseWrapper {
-                    success: false,
-                    data: serde_json::Value::Null,
-                    error: Some(ResponseError {
-                        code: 400, // which code to use?
-                        message: err,
-                    }),
+                let res_error = ResponseError {
+                    code: 400,
+                    message: err,
                 };
+                return wrap_response::<()>(Err(res_error));
             }
         };
 
-        match APIServer::post_quote_inner(side_chain, params) {
-            Ok(res) => VaultResponseWrapper {
-                success: true,
-                data: serde_json::to_value(&res).expect("Could not construct json value"),
-                error: None,
-            },
-            Err(_err) => VaultResponseWrapper {
-                success: false,
-                data: serde_json::Value::Null,
-                error: Some(ResponseError {
-                    code: 400, // which code to use?
-                    message: "",
-                }),
-            },
-        }
+        let res = APIServer::post_quote_inner(side_chain, params);
+
+        wrap_response(res)
     }
 
     /// Top-level handler for quote (post) requests
