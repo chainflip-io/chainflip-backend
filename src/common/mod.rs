@@ -1,9 +1,12 @@
 use crate::transactions::CoinTx;
+use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
 /// Definitions for various coins
 pub mod coins;
-use serde::{Deserialize, Serialize};
+
+/// Definitions for common API functionality
+pub mod api;
 
 // Note: time is not reliable in a distributed environment,
 // so it should probably be replaced by block_id when we
