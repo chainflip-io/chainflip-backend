@@ -128,9 +128,8 @@ fn post_quote() {
     let _res = APIServer::post_quote_inner(side_chain, params);
 }
 
-#[test]
-fn test_quote_request_parsing() {
-    let req = serde_json::json!({
+fn make_valid_quote_request() -> serde_json::Value {
+    serde_json::json!({
         "inputCoin": "BTC",
         "inputReturnAddress": "TODO",
         "inputAddressID": "0",
@@ -138,7 +137,37 @@ fn test_quote_request_parsing() {
         "outputCoin": "LOKI",
         "outputAddress": "TODO",
         "slippageLimit": 0.5,
-    });
+    })
+}
 
-    let _req = parse_quote_request(req);
+#[test]
+fn valid_quote_request() {
+    let req = make_valid_quote_request();
+
+    assert!(parse_quote_request(req).is_ok());
+}
+
+use crate::common::coins::COIN_PARSING_ERROR;
+
+#[test]
+fn quote_request_invalid_coin() {
+    let valid_req = make_valid_quote_request();
+
+    let mut req = valid_req.clone();
+    req["inputCoin"] = serde_json::to_value("LOKKI").unwrap();
+    let res = parse_quote_request(req);
+    let res = res.unwrap_err();
+    assert_eq!(res, COIN_PARSING_ERROR);
+}
+
+#[test]
+fn valid_coin_literal_parsing() {
+    assert!(Coin::from_str("ETH").is_ok());
+    assert!(Coin::from_str("eth").is_ok());
+
+    assert!(Coin::from_str("BTC").is_ok());
+    assert!(Coin::from_str("btc").is_ok());
+
+    assert!(Coin::from_str("LOKI").is_ok());
+    assert!(Coin::from_str("loki").is_ok());
 }
