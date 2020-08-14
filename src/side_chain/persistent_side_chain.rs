@@ -114,10 +114,7 @@ fn get_block_from_db(db: &DB, block_idx: u32) -> Option<SideChainBlock> {
 impl ISideChain for PeristentSideChain {
     fn add_block(&mut self, txs: Vec<SideChainTx>) -> Result<(), String> {
         let block_idx = self.blocks.len() as u32;
-        let block = SideChainBlock {
-            id: block_idx,
-            txs,
-        };
+        let block = SideChainBlock { id: block_idx, txs };
 
         let blob = serde_json::to_string(&block).unwrap();
 

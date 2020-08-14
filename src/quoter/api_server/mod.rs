@@ -22,7 +22,7 @@ where
         Server { api, state }
     }
 
-    pub async fn serve(&self, port: u16) {
+    pub fn serve(&self, port: u16) {
         info!("Quoter API Server listening on port {}", port);
     }
 }

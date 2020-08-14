@@ -4,12 +4,22 @@ use vault_node::VaultNodeInterface;
 
 mod api_server;
 mod block_poller;
+
+/// The quoter database
 pub mod database;
+
+/// The vault node api consumer
 pub mod vault_node;
 
+/// Quoter
 pub struct Quoter {}
 
 impl Quoter {
+    /// Run the Quoter logic.
+    ///
+    /// # Blocking
+    ///
+    /// This will block the thread it is run on.
     pub async fn run<V, D>(
         port: u16,
         vault_node_api: Arc<V>,
@@ -25,15 +35,28 @@ impl Quoter {
         poller.sync()?; // Make sure we have all the latest blocks
 
         // Start loops
-        poller.poll();
-        server.serve(port).await;
+        let poller_thread = std::thread::spawn(move || {
+            poller.poll(std::time::Duration::from_secs(1));
+        });
+
+        server.serve(port); // This will block the current thread
+
+        poller_thread
+            .join()
+            .map_err(|_| "An error occurred while polling".to_owned())?;
+
         Ok(())
     }
 }
 
+/// A trait for processing side chain blocks received from the vault node.
 pub trait BlockProcessor {
+    /// Get the block number that was last processed.
     fn get_last_processed_block_number(&self) -> Option<u32>;
+
+    /// Process a list of blocks
     fn process_blocks(&mut self, blocks: Vec<SideChainBlock>) -> Result<(), String>;
 }
 
+/// A trait for providing quoter state
 pub trait StateProvider {}
