@@ -1,7 +1,7 @@
 use crate::{
     common::{
         api,
-        api::ResponseError,
+        api::APIError,
         coins::{Coin, CoinInfo},
     },
     quoter::{vault_node::VaultNodeInterface, StateProvider},
@@ -46,7 +46,7 @@ where
 /// # Example Query
 ///
 /// > GET /v1/coins?symbols=BTC,loki
-pub async fn get_coins(params: CoinsParams) -> Result<Vec<CoinInfo>, ResponseError> {
+pub async fn get_coins(params: CoinsParams) -> Result<Vec<CoinInfo>, APIError> {
     // Return all coins if no params were passed
     if params.symbols.is_none() {
         return Ok(Coin::ALL.iter().map(|coin| coin.get_info()).collect());

@@ -5,32 +5,38 @@ use std::fmt;
 use std::future::Future;
 use warp::reject::Reject;
 
-/// A representation of a response error
-#[derive(Debug, Deserialize, Serialize, Copy, Clone)]
-pub struct ResponseError {
-    code: u16,
+/// An representation of an API error.
+///
+/// This is different from a `ResponseError`.
+#[derive(Debug)]
+pub struct APIError {
+    code: warp::http::StatusCode,
     message: &'static str,
 }
 
-impl ResponseError {
-    /// Create a new response error
+impl APIError {
+    /// Create an API Error
     pub fn new(code: warp::http::StatusCode, message: &'static str) -> Self {
-        ResponseError {
-            code: code.as_u16(),
-            message,
-        }
+        APIError { code, message }
     }
 }
 
-impl std::error::Error for ResponseError {}
+impl std::error::Error for APIError {}
 
-impl fmt::Display for ResponseError {
+impl fmt::Display for APIError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}: {}", self.code, self.message)
     }
 }
 
-impl Reject for ResponseError {}
+impl Reject for APIError {}
+
+/// A representation of a response error which can be found inside the API response.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ResponseError {
+    code: u16,
+    message: String,
+}
 
 /// A representation of the API response
 #[derive(Debug, Serialize)]
@@ -68,8 +74,8 @@ where
     }
 }
 
-/// Alias for returning response
-type ResponseReturn<T> = Result<T, ResponseError>;
+/// Alias for api return value
+type APIReturn<T> = Result<T, APIError>;
 
 /// Convert an API result into a warp response.
 ///
@@ -78,16 +84,16 @@ type ResponseReturn<T> = Result<T, ResponseError>;
 /// # Example
 ///
 /// ```
-/// use blockswap::common::api::{respond, ResponseError, handle_rejection};
+/// use blockswap::common::api::{respond, APIError, handle_rejection};
 /// use warp::Filter;
 /// use std::future::Future;
 ///
-/// async fn hello_world() -> Result<String, ResponseError> {
+/// async fn hello_world() -> Result<String, APIError> {
 ///     Ok("Hello world".to_owned())
 /// }
 ///
-/// async fn return_error() -> Result<String, ResponseError> {
-///     Err(ResponseError::new(warp::http::StatusCode::NOT_FOUND, "Page not found"))
+/// async fn return_error() -> Result<String, APIError> {
+///     Err(APIError::new(warp::http::StatusCode::NOT_FOUND, "Page not found"))
 /// }
 ///
 /// let example_route = warp::get()
@@ -109,7 +115,7 @@ type ResponseReturn<T> = Result<T, ResponseError>;
 pub async fn respond<T, F>(result: F) -> Result<impl warp::Reply, warp::Rejection>
 where
     T: Serialize,
-    F: Future<Output = ResponseReturn<T>>,
+    F: Future<Output = APIReturn<T>>,
 {
     let result = result.await;
     match result {
@@ -131,16 +137,16 @@ where
 /// # Example
 ///
 /// ```
-/// use blockswap::common::api::{respond, ResponseError, handle_rejection};
+/// use blockswap::common::api::{respond, APIError, handle_rejection};
 /// use warp::Filter;
 /// use std::future::Future;
 ///
-/// async fn hello_world() -> Result<String, ResponseError> {
+/// async fn hello_world() -> Result<String, APIError> {
 ///     Ok("Hello world".to_owned())
 /// }
 ///
-/// async fn return_error() -> Result<String, ResponseError> {
-///     Err(ResponseError::new(warp::http::StatusCode::NOT_FOUND, "Page not found"))
+/// async fn return_error() -> Result<String, APIError> {
+///     Err(APIError::new(warp::http::StatusCode::NOT_FOUND, "Page not found"))
 /// }
 ///
 /// let example_route = warp::get()
@@ -160,31 +166,32 @@ where
 /// warp::serve(routes).run(([127, 0, 0, 1], 3030));
 /// ```
 pub async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, Infallible> {
-    let response_error;
+    let code;
+    let message;
 
     if err.is_not_found() {
-        response_error = ResponseError::new(warp::http::StatusCode::NOT_FOUND, "Not Found");
-    } else if let Some(error) = err.find::<ResponseError>() {
-        response_error = error.clone();
+        code = warp::http::StatusCode::NOT_FOUND;
+        message = "Not found";
+    } else if let Some(error) = err.find::<APIError>() {
+        code = error.code;
+        message = error.message;
     } else if let Some(_) = err.find::<warp::filters::body::BodyDeserializeError>() {
-        response_error = ResponseError::new(warp::http::StatusCode::BAD_REQUEST, "Invalid Body");
+        code = warp::http::StatusCode::BAD_REQUEST;
+        message = "Invalid Body";
     } else if let Some(_) = err.find::<warp::reject::MethodNotAllowed>() {
-        response_error = ResponseError::new(
-            warp::http::StatusCode::METHOD_NOT_ALLOWED,
-            "Method Not Allowed",
-        );
+        code = warp::http::StatusCode::METHOD_NOT_ALLOWED;
+        message = "Method Not Allowed";
     } else {
         // In case we missed something - log and respond with 500
         error!("unhandled rejection: {:?}", err);
-        response_error = ResponseError::new(
-            warp::http::StatusCode::INTERNAL_SERVER_ERROR,
-            "Something went wrong",
-        );
+        code = warp::http::StatusCode::INTERNAL_SERVER_ERROR;
+        message = "Something went wrong";
     }
 
-    let response = Response::<String>::failure(response_error);
-    let code = warp::http::StatusCode::from_u16(response_error.code)
-        .expect("Expected a valid HTTP status code");
+    let response = Response::<String>::failure(ResponseError {
+        code: code.as_u16(),
+        message: message.to_string(),
+    });
     let json = warp::reply::json(&response);
 
     Ok(warp::reply::with_status(json, code))
