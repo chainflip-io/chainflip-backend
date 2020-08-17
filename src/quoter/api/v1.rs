@@ -60,11 +60,7 @@ pub fn get_coins(params: CoinsParams) -> Result<Vec<CoinInfo>, ResponseError> {
         .filter_map(|symbol| symbol.parse::<Coin>().ok())
         .collect();
 
-    let mut info: Vec<CoinInfo> = vec![];
-
-    for coin in valid_coins {
-        info.push(coin.get_info());
-    }
+    let info = valid_coins.iter().map(|coin| coin.get_info()).collect();
 
     return Ok(info);
 }
