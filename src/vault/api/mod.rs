@@ -1,14 +1,36 @@
 use std::sync::{Arc, Mutex};
 
-use serde::{Deserialize, Serialize};
-use warp::Filter;
-
 use crate::side_chain::{ISideChain, SideChainTx};
+use serde::{Deserialize, Serialize};
 
+use crate::common::{self, api::ResponseError, coins::Coin, Timestamp, WalletAddress};
+
+use crate::transactions::{QuoteId, QuoteTx};
+
+use tokio::sync::oneshot;
+
+use std::str::FromStr;
+
+use warp::{http, Filter};
+
+#[cfg(test)]
+mod tests;
+
+/// Parameters for GET /v1/blocks request
 #[derive(Debug, Deserialize, Serialize)]
 struct BlocksQueryParams {
-    number: u32,
-    limit: u32,
+    number: Option<u32>,
+    limit: Option<u32>,
+}
+
+impl BlocksQueryParams {
+    /// Construct params from values
+    pub fn new(number: u32, limit: u32) -> Self {
+        BlocksQueryParams {
+            number: Some(number),
+            limit: Some(limit),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -18,6 +40,7 @@ struct TransactionInfo {}
 struct TransactionResponseEntry {
     id: u32,
     timestamp: u64, // TODO: milliseconds since epoch (the actual values should be within the safe range for javascript)
+    #[serde(rename(serialize = "type"))]
     tx_type: String, // NOTE: can we use enum here?
     info: TransactionInfo,
 }
@@ -48,20 +71,21 @@ pub struct BlocksQueryResponse {
 }
 
 #[serde(rename_all = "camelCase")]
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Serialize)]
 struct QuoteQueryRequest {
-    input_coin: String,           // TODO
+    input_coin: Coin,
     input_return_address: String, // TODO
+    #[serde(rename = "inputAddressID")]
     input_address_id: String,
     input_amount: String, // Amounts are strings,
-    output_coin: String,  // TODO
+    output_coin: Coin,    // TODO
     output_address: String,
-    slippage_limit: f32,
+    slippage_limit: f64,
 }
 
 #[serde(rename_all = "camelCase")]
 #[derive(Debug, Deserialize, Serialize)]
-struct QuoteQueryResponse {
+pub struct QuoteQueryResponse {
     id: String,      // unique id
     created_at: u64, // milliseconds from epoch
     expires_at: u64, // milliseconds from epoch
@@ -72,9 +96,10 @@ struct QuoteQueryResponse {
     output_coin: String,
     output_address: String,
     estimated_output_amount: String, // Generated on the server. Quoted amount.
-    slippage_limit: f32,
+    slippage_limit: f64,
 }
 
+const DEFAULT_BLOCK_NUMBER: u32 = 0;
 /// Clients can request up to this number of blocks in one request
 const MAX_BLOCKS_IN_RESPONSE: u32 = 50;
 
@@ -96,25 +121,77 @@ where
     warp::any().map(move || side_chain.clone())
 }
 
+macro_rules! parse_field {
+    ($v:ident, $field:literal) => {
+        $v.get($field).ok_or(concat!("field missing: ", $field))
+    };
+}
+
+macro_rules! parse_string_field {
+    ($v:ident, $field:literal) => {
+        parse_field!($v, $field)?
+            .as_str()
+            .ok_or(concat!("field must be a string: ", $field))
+            .map(|x| x.to_owned())
+    };
+}
+
+fn parse_quote_request(raw: serde_json::Value) -> Result<QuoteQueryRequest, &'static str> {
+    let input_coin = parse_string_field!(raw, "inputCoin")?;
+    let input_return_address = parse_string_field!(raw, "inputReturnAddress")?;
+    let input_address_id = parse_string_field!(raw, "inputAddressID")?;
+    let input_amount = parse_string_field!(raw, "inputAmount")?;
+    let output_coin = parse_string_field!(raw, "outputCoin")?;
+    let output_address = parse_string_field!(raw, "outputAddress")?;
+    let slippage_limit = parse_field!(raw, "slippageLimit")?;
+    let slippage_limit = slippage_limit
+        .as_f64()
+        .ok_or("field must be of type float: slippageLimit")?;
+
+    let input_coin = Coin::from_str(&input_coin[..])?;
+    let output_coin = Coin::from_str(&output_coin[..])?;
+
+    Ok(QuoteQueryRequest {
+        input_coin,
+        input_return_address,
+        input_address_id,
+        input_amount,
+        output_coin,
+        output_address,
+        slippage_limit,
+    })
+}
+
 impl<S> APIServer<S>
 where
     S: ISideChain + Send + 'static,
 {
-    /// GET /v1/blocks?number=1&limit=50
-    fn get_blocks(side_chain: Arc<Mutex<S>>, params: BlocksQueryParams) -> BlocksQueryResponse {
-        println!("Hello! Params: {:?}", &params);
+    /// Does the actual work for getting blocks from the
+    /// database. (Does not actualy need to be async, but
+    /// this way it will be easier to add async functions
+    /// in the future).
+    ///
+    /// # Example Query
+    /// `GET /v1/blocks?number=1&limit=50`.
+    async fn get_blocks_inner(
+        side_chain: Arc<Mutex<S>>,
+        params: BlocksQueryParams,
+    ) -> BlocksQueryResponse {
+        let BlocksQueryParams { number, limit } = params;
+
+        let number = number.unwrap_or(DEFAULT_BLOCK_NUMBER);
+        let limit = limit.unwrap_or(MAX_BLOCKS_IN_RESPONSE);
 
         let side_chain = side_chain.lock().unwrap();
         let total_blocks = side_chain.total_blocks();
 
-        let BlocksQueryParams { number, limit } = params;
-
         if total_blocks == 0 || number >= total_blocks || limit == 0 {
             // Return an mpty response
-            return BlocksQueryResponse {
+            let res = BlocksQueryResponse {
                 total_blocks,
                 blocks: vec![],
             };
+            return res;
         }
 
         let limit = std::cmp::min(limit, MAX_BLOCKS_IN_RESPONSE);
@@ -145,184 +222,94 @@ where
             blocks.push(block);
         }
 
-        BlocksQueryResponse {
+        let res = BlocksQueryResponse {
             total_blocks,
             blocks,
-        }
+        };
+
+        res
     }
 
-    // serde_json::to_string(&res).unwrap()
+    /// Wrap get blocks response into a generic response object
+    async fn get_blocks(
+        params: BlocksQueryParams,
+        side_chain: Arc<Mutex<S>>,
+    ) -> Result<BlocksQueryResponse, ResponseError> {
+        let res = APIServer::get_blocks_inner(side_chain, params).await;
 
-    fn post_quote(_side_chain: Arc<Mutex<S>>, _params: QuoteQueryRequest) -> QuoteQueryResponse {
-        todo!();
+        // /v1/blocks cannot fail
+        Ok(res)
     }
 
-    /// Starts an http server in the current thread and blocks
-    pub fn serve(side_chain: Arc<Mutex<S>>) {
+    fn post_quote_inner(
+        _side_chain: Arc<Mutex<S>>,
+        params: QuoteQueryRequest,
+    ) -> Result<QuoteQueryResponse, ResponseError> {
+        Ok(QuoteQueryResponse {
+            id: "TODO".to_owned(),
+            created_at: 0,
+            expires_at: 0,
+            input_coin: params.input_coin.to_string(),
+            input_address: "TODO".to_owned(),
+            input_return_address: params.input_return_address,
+            input_amount: params.input_amount,
+            output_coin: params.output_coin.to_string(),
+            output_address: params.output_address,
+            estimated_output_amount: "TODO".to_owned(),
+            slippage_limit: 0.0,
+        })
+    }
+
+    async fn post_quote(
+        params: serde_json::Value,
+        side_chain: Arc<Mutex<S>>,
+    ) -> Result<QuoteQueryResponse, ResponseError> {
+        let params = parse_quote_request(params);
+
+        let params = match params {
+            Ok(params) => params,
+            Err(err) => {
+                let res_error = ResponseError::new(http::StatusCode::BAD_REQUEST, err);
+                return Err(res_error);
+            }
+        };
+
+        let res = APIServer::post_quote_inner(side_chain, params);
+
+        res
+    }
+
+    /// Starts an http server in the current thread and blocks. Gracefully shutdowns
+    /// when `shotdown_receiver` receives a signal (i.e. `send()` is called).
+    pub fn serve(side_chain: Arc<Mutex<S>>, shutdown_receiver: oneshot::Receiver<()>) {
         let blocks = warp::path!("v1" / "blocks")
             .and(warp::query::<BlocksQueryParams>())
             .and(with_state(side_chain.clone()))
-            .map(|params, side_chain| {
-                let server = Arc::clone(&side_chain);
-                APIServer::get_blocks(server, params)
-            })
-            .map(|res| serde_json::to_string(&res).unwrap());
+            .map(APIServer::get_blocks);
 
         let quotes = warp::path!("v1" / "quote")
             .and(warp::body::json())
             .and(with_state(side_chain.clone()))
-            .map(|params, side_chain| {
-                let server = Arc::clone(&side_chain);
-                APIServer::post_quote(server, params)
-            })
-            .map(|res| serde_json::to_string(&res).unwrap());
+            .map(APIServer::post_quote);
 
-        let get = warp::get().and(blocks);
-        let post = warp::post().and(quotes);
+        let get = warp::get().and(blocks).and_then(common::api::respond);
+        let post = warp::post().and(quotes).and_then(common::api::respond);
 
-        let routes = get.or(post);
+        use common::api::handle_rejection;
 
-        let future = async { warp::serve(routes).run(([127, 0, 0, 1], 3030)).await };
+        let routes = get.or(post).recover(handle_rejection);
 
         let mut rt = tokio::runtime::Runtime::new().unwrap();
 
+        let future = async {
+            let (_addr, server) =
+                warp::serve(routes).bind_with_graceful_shutdown(([127, 0, 0, 1], 3030), async {
+                    shutdown_receiver.await.ok();
+                });
+
+            server.await;
+        };
+
         rt.block_on(future);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-
-    use crate::side_chain::FakeSideChain;
-
-    #[test]
-    /// Populate the chain with 2 blocks, request all 2
-    fn get_all_two_blocks() {
-        let params = BlocksQueryParams {
-            number: 0,
-            limit: 2,
-        };
-
-        let mut side_chain = FakeSideChain::new();
-
-        side_chain.add_block(vec![]).unwrap();
-        side_chain.add_block(vec![]).unwrap();
-
-        let side_chain = Arc::new(Mutex::new(side_chain));
-
-        let res = APIServer::get_blocks(side_chain, params);
-
-        assert_eq!(res.blocks.len(), 2);
-        assert_eq!(res.total_blocks, 2);
-    }
-
-    #[test]
-    fn get_two_blocks_out_of_three() {
-        use crate::utils::test_utils;
-
-        let params = BlocksQueryParams {
-            number: 0,
-            limit: 2,
-        };
-
-        let mut side_chain = FakeSideChain::new();
-
-        side_chain.add_block(vec![]).unwrap();
-
-        let tx = test_utils::create_fake_quote_tx();
-
-        side_chain.add_block(vec![tx.clone().into()]).unwrap();
-        side_chain.add_block(vec![]).unwrap();
-
-        let side_chain = Arc::new(Mutex::new(side_chain));
-
-        let res = APIServer::get_blocks(side_chain, params);
-
-        assert_eq!(res.blocks.len(), 2);
-        assert_eq!(res.blocks[1].transactions.len(), 1);
-        assert_eq!(res.total_blocks, 3);
-    }
-
-    #[test]
-    fn cap_too_big_limit() {
-        let params = BlocksQueryParams {
-            number: 1,
-            limit: 100,
-        };
-
-        let mut side_chain = FakeSideChain::new();
-
-        side_chain.add_block(vec![]).unwrap();
-        side_chain.add_block(vec![]).unwrap();
-
-        let side_chain = Arc::new(Mutex::new(side_chain));
-
-        let res = APIServer::get_blocks(side_chain, params);
-
-        assert_eq!(res.blocks.len(), 1);
-        assert_eq!(res.total_blocks, 2);
-    }
-
-    #[test]
-    fn zero_limit() {
-        let params = BlocksQueryParams {
-            number: 1,
-            limit: 0,
-        };
-
-        let mut side_chain = FakeSideChain::new();
-
-        side_chain.add_block(vec![]).unwrap();
-        side_chain.add_block(vec![]).unwrap();
-
-        let side_chain = Arc::new(Mutex::new(side_chain));
-
-        let res = APIServer::get_blocks(side_chain, params);
-
-        assert_eq!(res.blocks.len(), 0);
-        assert_eq!(res.total_blocks, 2);
-    }
-
-    #[test]
-    fn blocks_do_not_exist() {
-        let params = BlocksQueryParams {
-            number: 100,
-            limit: 2,
-        };
-
-        let mut side_chain = FakeSideChain::new();
-
-        side_chain.add_block(vec![]).unwrap();
-        side_chain.add_block(vec![]).unwrap();
-
-        let side_chain = Arc::new(Mutex::new(side_chain));
-
-        let res = APIServer::get_blocks(side_chain, params);
-
-        assert_eq!(res.blocks.len(), 0);
-        assert_eq!(res.total_blocks, 2);
-    }
-
-    #[ignore]
-    #[test]
-    fn post_quote() {
-        let params = QuoteQueryRequest {
-            input_coin: String::from("LOKI"),
-            input_return_address: String::from("Some address"),
-            input_address_id: "0".to_owned(),
-            input_amount: String::from("100000"),
-            output_coin: String::from("BTC"),
-            output_address: String::from("Some other Address"),
-            slippage_limit: 1.0,
-        };
-
-        let side_chain = FakeSideChain::new();
-        let side_chain = Arc::new(Mutex::new(side_chain));
-
-        let _res = APIServer::post_quote(side_chain, params);
-
-        todo!();
     }
 }

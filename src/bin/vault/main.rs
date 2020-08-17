@@ -39,5 +39,8 @@ fn main() {
         .add_block(vec![tx.into()])
         .expect("Could not add a Quote TX");
 
-    APIServer::serve(s_chain);
+    // can be used to shutdown the server
+    let (_tx, rx) = tokio::sync::oneshot::channel();
+
+    APIServer::serve(s_chain, rx);
 }
