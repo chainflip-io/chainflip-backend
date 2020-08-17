@@ -37,7 +37,7 @@ impl Reject for ResponseError {}
 /// A representation of the API response
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Response<T> {
-    /// Wether this response was a success
+    /// Whether this response was a success
     pub success: bool,
     /// The data associated with this response if successful.
     #[serde(skip_serializing_if = "Option::is_none")]

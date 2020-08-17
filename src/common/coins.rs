@@ -11,7 +11,7 @@ pub struct CoinInfo {
     pub symbol: Coin,
     /// The amount of decimals the coin uses.
     pub decimals: u32,
-    /// Wether this coin requires a return address
+    /// Whether this coin requires a return address
     /// (so it could be refunded in necessary)
     pub requires_return_address: bool,
 }
