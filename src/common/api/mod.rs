@@ -83,7 +83,7 @@ impl<T> Response<T> {
 /// }
 ///
 /// async fn return_error() -> Result<String, ResponseError> {
-///     Err(ResponseError::new(warp::http::StatusCode::NOT_FOUND, "Page not found".to_owned()))
+///     Err(ResponseError::new(warp::http::StatusCode::NOT_FOUND, "Page not found"))
 /// }
 ///
 /// let example_route = warp::get()
@@ -136,7 +136,7 @@ where
 /// }
 ///
 /// async fn return_error() -> Result<String, ResponseError> {
-///     Err(ResponseError::new(warp::http::StatusCode::NOT_FOUND, "Page not found".to_owned()))
+///     Err(ResponseError::new(warp::http::StatusCode::NOT_FOUND, "Page not found"))
 /// }
 ///
 /// let example_route = warp::get()

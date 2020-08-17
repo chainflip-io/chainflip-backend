@@ -3,7 +3,9 @@ use std::sync::{Arc, Mutex};
 use crate::side_chain::{ISideChain, SideChainTx};
 use serde::{Deserialize, Serialize};
 
-use crate::common::{self, api::ResponseError, coins::Coin};
+use crate::common::{self, api::ResponseError, coins::Coin, Timestamp, WalletAddress};
+
+use crate::transactions::{QuoteId, QuoteTx};
 
 use tokio::sync::oneshot;
 
@@ -83,7 +85,7 @@ struct QuoteQueryRequest {
 
 #[serde(rename_all = "camelCase")]
 #[derive(Debug, Deserialize, Serialize)]
-struct QuoteQueryResponse {
+pub struct QuoteQueryResponse {
     id: String,      // unique id
     created_at: u64, // milliseconds from epoch
     expires_at: u64, // milliseconds from epoch
@@ -175,8 +177,6 @@ where
         side_chain: Arc<Mutex<S>>,
         params: BlocksQueryParams,
     ) -> BlocksQueryResponse {
-        println!("Hello! Params: {:?}", &params);
-
         let BlocksQueryParams { number, limit } = params;
 
         let number = number.unwrap_or(DEFAULT_BLOCK_NUMBER);
