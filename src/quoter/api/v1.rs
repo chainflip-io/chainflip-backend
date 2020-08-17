@@ -46,7 +46,7 @@ where
 /// # Example Query
 ///
 /// > GET /v1/coins?symbols=BTC,loki
-pub fn get_coins(params: CoinsParams) -> Result<Vec<CoinInfo>, ResponseError> {
+pub async fn get_coins(params: CoinsParams) -> Result<Vec<CoinInfo>, ResponseError> {
     // Return all coins if no params were passed
     if params.symbols.is_none() {
         return Ok(Coin::ALL.iter().map(|coin| coin.get_info()).collect());
@@ -70,15 +70,15 @@ mod test {
 
     use super::*;
 
-    #[test]
-    pub fn get_coins_returns_all_coins() {
+    #[tokio::test]
+    pub async fn get_coins_returns_all_coins() {
         let params = CoinsParams { symbols: None };
-        let result = get_coins(params).expect("Expected result to be Ok.");
+        let result = get_coins(params).await.expect("Expected result to be Ok.");
         assert_eq!(result.len(), Coin::ALL.len());
     }
 
-    #[test]
-    pub fn get_coins_returns_coin_information() {
+    #[tokio::test]
+    pub async fn get_coins_returns_coin_information() {
         let params = CoinsParams {
             symbols: Some(vec![
                 "eth".to_owned(),
@@ -86,7 +86,7 @@ mod test {
                 "invalid_coin".to_owned(),
             ]),
         };
-        let result = get_coins(params).expect("Expected result to be Ok.");
+        let result = get_coins(params).await.expect("Expected result to be Ok.");
 
         assert_eq!(result.len(), 2, "Expected get_coins to return 2 CoinInfo");
 
