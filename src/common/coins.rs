@@ -1,27 +1,27 @@
 use serde::{Deserialize, Serialize};
-use strum_macros::{EnumIter, ToString};
+use std::{fmt::Display, str::FromStr};
 
-use std::str::FromStr;
-
-/// Coin-specific info
+/// Information about a coin
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct CoinInfo {
-    /// Full name
+    /// The full name of the coin
     pub name: &'static str,
-    /// Representation in enum
+    /// The coin symbol
     pub symbol: Coin,
-    /// Number of decimal places
+    /// The amount of decimals the coin uses.
     pub decimals: u32,
-    /// Whether depositing this coin requires a return address
+    /// Whether this coin requires a return address
     /// (so it could be refunded in necessary)
     pub requires_return_address: bool,
 }
 
 /// Enum for supported coin types
-#[derive(Debug, ToString, EnumIter, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq)]
 pub enum Coin {
     /// Bitcoin
     BTC,
-    /// Etherium
+    /// Ethereum
     ETH,
     /// Loki
     LOKI,
@@ -44,7 +44,10 @@ impl FromStr for Coin {
 }
 
 impl Coin {
-    /// Get coin info
+    /// Get all the coins
+    pub const ALL: &'static [Coin] = &[Coin::ETH, Coin::LOKI, Coin::BTC]; // There might be a better way to dynamically generate this.
+
+    /// Get information about this coin
     pub fn get_info(&self) -> CoinInfo {
         match self {
             Coin::LOKI => CoinInfo {
@@ -57,20 +60,21 @@ impl Coin {
                 name: "Ethereum",
                 symbol: Coin::ETH,
                 decimals: 18,
-                requires_return_address: true,
+                requires_return_address: false,
             },
             Coin::BTC => CoinInfo {
                 name: "Bitcoin",
                 symbol: Coin::BTC,
                 decimals: 8,
-                requires_return_address: true,
+                requires_return_address: false,
             },
         }
     }
+}
 
-    /// Get the number of decimal places for a coin
-    pub fn get_decimals(&self) -> u32 {
-        self.get_info().decimals
+impl Display for Coin {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 

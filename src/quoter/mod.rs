@@ -2,8 +2,10 @@ use crate::side_chain::SideChainBlock;
 use std::sync::{Arc, Mutex};
 use vault_node::VaultNodeInterface;
 
-mod api_server;
+mod api;
 mod block_poller;
+
+use api::API;
 
 /// The quoter database
 pub mod database;
@@ -30,8 +32,6 @@ impl Quoter {
         D: BlockProcessor + StateProvider + Send + 'static,
     {
         let poller = block_poller::BlockPoller::new(vault_node_api.clone(), database.clone());
-        let server = api_server::Server::new(vault_node_api.clone(), database.clone());
-
         poller.sync()?; // Make sure we have all the latest blocks
 
         // Start loops
@@ -39,7 +39,7 @@ impl Quoter {
             poller.poll(std::time::Duration::from_secs(1));
         });
 
-        server.serve(port); // This will block the current thread
+        API::serve(port, vault_node_api.clone(), database.clone());
 
         poller_thread
             .join()
