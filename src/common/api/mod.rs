@@ -67,11 +67,37 @@ where
     }
 }
 
-/// Convert an API result into a warp response
-pub fn respond<T>(result: Result<T, ResponseError>) -> Result<impl warp::Reply, warp::Rejection>
-where
-    T: Serialize,
-{
+/// Convert an API result into a warp response.
+///
+/// Should be used in conjunction with `handle_rejection`.
+///
+/// # Example
+///
+/// ```
+/// use blockswap::common::api::{respond, ResponseError, handle_rejection};
+/// use warp::Filter;
+///
+/// let example_route = warp::get()
+///     .and(warp::path("example"))
+///     .map(|| Ok("Hello world".to_owned()))
+///     .and_then(respond);
+///
+/// let error_route = warp::get()
+///     .and(warp::path("error"))
+///     .map(|| -> Result<String, ResponseError>  {
+///         Err(ResponseError::new(warp::http::StatusCode::NOT_FOUND, "Page not found"))
+///     })
+///     .and_then(respond);
+///
+/// let routes = example_route
+///     .or(error_route)
+///     .recover(handle_rejection);
+///
+/// warp::serve(routes).run(([127, 0, 0, 1], 3030));
+/// ```
+pub async fn respond<T: Serialize>(
+    result: Result<T, ResponseError>,
+) -> Result<impl warp::Reply, warp::Rejection> {
     match result {
         Ok(data) => {
             let response = Response::success(data);
@@ -84,7 +110,34 @@ where
     }
 }
 
-/// Warp rejection handler
+/// Warp custom rejection handler.
+///
+/// Should be used in conjunction with `respond`.
+///
+/// # Example
+///
+/// ```
+/// use blockswap::common::api::{respond, ResponseError, handle_rejection};
+/// use warp::Filter;
+///
+/// let example_route = warp::get()
+///     .and(warp::path("example"))
+///     .map(|| Ok("Hello world".to_owned()))
+///     .and_then(respond);
+///
+/// let error_route = warp::get()
+///     .and(warp::path("error"))
+///     .map(|| -> Result<String, ResponseError>  {
+///         Err(ResponseError::new(warp::http::StatusCode::NOT_FOUND, "Page not found"))
+///     })
+///     .and_then(respond);
+///
+/// let routes = example_route
+///     .or(error_route)
+///     .recover(handle_rejection);
+///
+/// warp::serve(routes).run(([127, 0, 0, 1], 3030));
+/// ```
 pub async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, Infallible> {
     let response_error;
 
