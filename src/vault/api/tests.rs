@@ -5,10 +5,7 @@ use crate::side_chain::FakeSideChain;
 /// Populate the chain with 2 blocks, request all 2
 #[tokio::test]
 async fn get_all_two_blocks() {
-    let params = BlocksQueryParams {
-        number: 0,
-        limit: 2,
-    };
+    let params = BlocksQueryParams::new(0, 2);
 
     let mut side_chain = FakeSideChain::new();
 
@@ -27,10 +24,7 @@ async fn get_all_two_blocks() {
 async fn get_two_blocks_out_of_three() {
     use crate::utils::test_utils;
 
-    let params = BlocksQueryParams {
-        number: 0,
-        limit: 2,
-    };
+    let params = BlocksQueryParams::new(0, 2);
 
     let mut side_chain = FakeSideChain::new();
 
@@ -52,10 +46,7 @@ async fn get_two_blocks_out_of_three() {
 
 #[tokio::test]
 async fn cap_too_big_limit() {
-    let params = BlocksQueryParams {
-        number: 1,
-        limit: 100,
-    };
+    let params = BlocksQueryParams::new(1, 100);
 
     let mut side_chain = FakeSideChain::new();
 
@@ -72,11 +63,7 @@ async fn cap_too_big_limit() {
 
 #[tokio::test]
 async fn zero_limit() {
-    let params = BlocksQueryParams {
-        number: 1,
-        limit: 0,
-    };
-
+    let params = BlocksQueryParams::new(1, 0);
     let mut side_chain = FakeSideChain::new();
 
     side_chain.add_block(vec![]).unwrap();
@@ -92,10 +79,7 @@ async fn zero_limit() {
 
 #[tokio::test]
 async fn blocks_do_not_exist() {
-    let params = BlocksQueryParams {
-        number: 100,
-        limit: 2,
-    };
+    let params = BlocksQueryParams::new(100, 2);
 
     let mut side_chain = FakeSideChain::new();
 
@@ -161,13 +145,64 @@ fn quote_request_invalid_coin() {
 }
 
 #[test]
-fn valid_coin_literal_parsing() {
-    assert!(Coin::from_str("ETH").is_ok());
-    assert!(Coin::from_str("eth").is_ok());
+fn test_with_warp() {}
 
-    assert!(Coin::from_str("BTC").is_ok());
-    assert!(Coin::from_str("btc").is_ok());
+#[tokio::test]
+async fn vault_http_server_tests() {
+    env_logger::init();
 
-    assert!(Coin::from_str("LOKI").is_ok());
-    assert!(Coin::from_str("loki").is_ok());
+    let side_chain = FakeSideChain::new();
+    let side_chain = Arc::new(Mutex::new(side_chain));
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+
+    let thread_handle = std::thread::spawn(move || {
+        APIServer::serve(side_chain, rx);
+    });
+
+    let client = reqwest::Client::new();
+
+    let res = client
+        .get("http://localhost:3030/v1/blocks?number=0&limit=1")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), reqwest::StatusCode::OK);
+
+    let res = client
+        .get("http://localhost:3030/v1/blocks")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), reqwest::StatusCode::OK);
+
+    // POST requests
+
+    // Missing fields
+    let req_body = serde_json::json!({
+        "inputCoin": "Loki",
+        "inputReturnAddress": "TODO"
+    });
+
+    let res = client
+        .post("http://localhost:3030/v1/quote")
+        .body(req_body.to_string())
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), reqwest::StatusCode::BAD_REQUEST);
+
+    let res = res
+        .json::<common::api::Response<QuoteQueryResponse>>()
+        .await
+        .unwrap();
+
+    assert_eq!(res.success, false);
+    assert_eq!(&res.error.unwrap().message, "field missing: inputAddressID");
+
+    // shutdown the server
+    let _ = tx.send(());
+
+    thread_handle.join().unwrap();
 }

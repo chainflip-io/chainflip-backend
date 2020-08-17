@@ -73,3 +73,21 @@ impl Coin {
         self.get_info().decimals
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn valid_coin_literal_parsing() {
+        assert!(Coin::from_str("ETH").is_ok());
+        assert!(Coin::from_str("eth").is_ok());
+
+        assert!(Coin::from_str("BTC").is_ok());
+        assert!(Coin::from_str("btc").is_ok());
+
+        assert!(Coin::from_str("LOKI").is_ok());
+        assert!(Coin::from_str("loki").is_ok());
+    }
+}

@@ -1,21 +1,34 @@
 use std::sync::{Arc, Mutex};
 
-use serde::{Deserialize, Serialize};
-use warp::Filter;
-
 use crate::side_chain::{ISideChain, SideChainTx};
+use serde::{Deserialize, Serialize};
 
-use crate::common::coins::Coin;
+use crate::common::{self, api::ResponseError, coins::Coin};
+
+use tokio::sync::oneshot;
 
 use std::str::FromStr;
+
+use warp::{http, Filter};
 
 #[cfg(test)]
 mod tests;
 
+/// Parameters for GET /v1/blocks request
 #[derive(Debug, Deserialize, Serialize)]
 struct BlocksQueryParams {
-    number: u32,
-    limit: u32,
+    number: Option<u32>,
+    limit: Option<u32>,
+}
+
+impl BlocksQueryParams {
+    /// Construct params from values
+    pub fn new(number: u32, limit: u32) -> Self {
+        BlocksQueryParams {
+            number: Some(number),
+            limit: Some(limit),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -84,20 +97,7 @@ struct QuoteQueryResponse {
     slippage_limit: f64,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-struct ResponseError {
-    code: u16,
-    message: &'static str,
-}
-
-#[derive(Debug, Serialize)]
-struct VaultResponseWrapper {
-    success: bool,
-    data: serde_json::Value,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<ResponseError>,
-}
-
+const DEFAULT_BLOCK_NUMBER: u32 = 0;
 /// Clients can request up to this number of blocks in one request
 const MAX_BLOCKS_IN_RESPONSE: u32 = 50;
 
@@ -160,27 +160,6 @@ fn parse_quote_request(raw: serde_json::Value) -> Result<QuoteQueryRequest, &'st
     })
 }
 
-fn wrap_response<T>(res: Result<T, ResponseError>) -> VaultResponseWrapper
-where
-    T: Serialize,
-{
-    match res {
-        Ok(res) => VaultResponseWrapper {
-            success: true,
-            data: serde_json::to_value(&res).expect("Could not construct json value"),
-            error: None,
-        },
-        Err(err) => VaultResponseWrapper {
-            success: true,
-            data: serde_json::Value::Null,
-            error: Some(ResponseError {
-                code: err.code,
-                message: err.message,
-            }),
-        },
-    }
-}
-
 impl<S> APIServer<S>
 where
     S: ISideChain + Send + 'static,
@@ -198,10 +177,13 @@ where
     ) -> BlocksQueryResponse {
         println!("Hello! Params: {:?}", &params);
 
+        let BlocksQueryParams { number, limit } = params;
+
+        let number = number.unwrap_or(DEFAULT_BLOCK_NUMBER);
+        let limit = limit.unwrap_or(MAX_BLOCKS_IN_RESPONSE);
+
         let side_chain = side_chain.lock().unwrap();
         let total_blocks = side_chain.total_blocks();
-
-        let BlocksQueryParams { number, limit } = params;
 
         if total_blocks == 0 || number >= total_blocks || limit == 0 {
             // Return an mpty response
@@ -250,13 +232,13 @@ where
 
     /// Wrap get blocks response into a generic response object
     async fn get_blocks(
-        side_chain: Arc<Mutex<S>>,
         params: BlocksQueryParams,
-    ) -> VaultResponseWrapper {
+        side_chain: Arc<Mutex<S>>,
+    ) -> Result<BlocksQueryResponse, ResponseError> {
         let res = APIServer::get_blocks_inner(side_chain, params).await;
 
         // /v1/blocks cannot fail
-        wrap_response(Ok(res))
+        Ok(res)
     }
 
     fn post_quote_inner(
@@ -279,67 +261,54 @@ where
     }
 
     async fn post_quote(
-        side_chain: Arc<Mutex<S>>,
         params: serde_json::Value,
-    ) -> VaultResponseWrapper {
+        side_chain: Arc<Mutex<S>>,
+    ) -> Result<QuoteQueryResponse, ResponseError> {
         let params = parse_quote_request(params);
 
         let params = match params {
             Ok(params) => params,
             Err(err) => {
-                let res_error = ResponseError {
-                    code: 400,
-                    message: err,
-                };
-                return wrap_response::<()>(Err(res_error));
+                let res_error = ResponseError::new(http::StatusCode::BAD_REQUEST, err);
+                return Err(res_error);
             }
         };
 
         let res = APIServer::post_quote_inner(side_chain, params);
 
-        wrap_response(res)
+        res
     }
 
-    /// Top-level handler for quote (post) requests
-    async fn process_quote(
-        params: serde_json::Value,
-        side_chain: Arc<Mutex<S>>,
-    ) -> Result<impl warp::Reply, warp::Rejection> {
-        let server = Arc::clone(&side_chain);
-        let res = APIServer::post_quote(server, params).await;
-        Ok(serde_json::to_string_pretty(&res).unwrap())
-    }
-
-    /// Top-level handler for block (get) requests
-    async fn process_blocks(
-        params: BlocksQueryParams,
-        side_chain: Arc<Mutex<S>>,
-    ) -> Result<impl warp::Reply, warp::Rejection> {
-        let server = Arc::clone(&side_chain);
-        let res = APIServer::get_blocks(server, params).await;
-        Ok(serde_json::to_string_pretty(&res).unwrap())
-    }
-
-    /// Starts an http server in the current thread and blocks
-    pub fn serve(side_chain: Arc<Mutex<S>>) {
+    /// Starts an http server in the current thread and blocks. Gracefully shutdowns
+    /// when `shotdown_receiver` receives a signal (i.e. `send()` is called).
+    pub fn serve(side_chain: Arc<Mutex<S>>, shutdown_receiver: oneshot::Receiver<()>) {
         let blocks = warp::path!("v1" / "blocks")
             .and(warp::query::<BlocksQueryParams>())
             .and(with_state(side_chain.clone()))
-            .and_then(APIServer::process_blocks);
+            .map(APIServer::get_blocks);
 
         let quotes = warp::path!("v1" / "quote")
             .and(warp::body::json())
             .and(with_state(side_chain.clone()))
-            .and_then(APIServer::process_quote);
+            .map(APIServer::post_quote);
 
-        let get = warp::get().and(blocks);
-        let post = warp::post().and(quotes);
+        let get = warp::get().and(blocks).and_then(common::api::respond);
+        let post = warp::post().and(quotes).and_then(common::api::respond);
 
-        let routes = get.or(post);
+        use common::api::handle_rejection;
 
-        let future = async { warp::serve(routes).run(([127, 0, 0, 1], 3030)).await };
+        let routes = get.or(post).recover(handle_rejection);
 
         let mut rt = tokio::runtime::Runtime::new().unwrap();
+
+        let future = async {
+            let (_addr, server) =
+                warp::serve(routes).bind_with_graceful_shutdown(([127, 0, 0, 1], 3030), async {
+                    shutdown_receiver.await.ok();
+                });
+
+            server.await;
+        };
 
         rt.block_on(future);
     }
