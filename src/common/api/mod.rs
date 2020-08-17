@@ -73,14 +73,25 @@ where
 ///
 /// # Example
 ///
-/// ```ignore
-/// let example_route = warp::get("example")
-///     .map(|| "Hello world".to_owned())
-///     .and_then(api::respond);
+/// ```
+/// use blockswap::common::api::{respond, ResponseError, handle_rejection};
+/// use warp::Filter;
+///
+/// let example_route = warp::get()
+///     .and(warp::path("example"))
+///     .map(|| Ok("Hello world".to_owned()))
+///     .and_then(respond);
+///
+/// let error_route = warp::get()
+///     .and(warp::path("error"))
+///     .map(|| -> Result<String, ResponseError>  {
+///         Err(ResponseError::new(warp::http::StatusCode::NOT_FOUND, "Page not found"))
+///     })
+///     .and_then(respond);
 ///
 /// let routes = example_route
-///     .or(some_other_route)
-///     .recover(api::handle_rejection);
+///     .or(error_route)
+///     .recover(handle_rejection);
 ///
 /// warp::serve(routes).run(([127, 0, 0, 1], 3030));
 /// ```
@@ -105,14 +116,25 @@ pub async fn respond<T: Serialize>(
 ///
 /// # Example
 ///
-/// ```ignore
-/// let example_route = warp::get("example")
-///     .map(|| "Hello world".to_owned())
-///     .and_then(api::respond);
+/// ```
+/// use blockswap::common::api::{respond, ResponseError, handle_rejection};
+/// use warp::Filter;
+///
+/// let example_route = warp::get()
+///     .and(warp::path("example"))
+///     .map(|| Ok("Hello world".to_owned()))
+///     .and_then(respond);
+///
+/// let error_route = warp::get()
+///     .and(warp::path("error"))
+///     .map(|| -> Result<String, ResponseError>  {
+///         Err(ResponseError::new(warp::http::StatusCode::NOT_FOUND, "Page not found"))
+///     })
+///     .and_then(respond);
 ///
 /// let routes = example_route
-///     .or(some_other_route)
-///     .recover(api::handle_rejection);
+///     .or(error_route)
+///     .recover(handle_rejection);
 ///
 /// warp::serve(routes).run(([127, 0, 0, 1], 3030));
 /// ```
