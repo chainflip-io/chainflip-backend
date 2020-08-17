@@ -1,7 +1,7 @@
 use crate::{
     common::{
         api,
-        api::APIError,
+        api::ResponseError,
         coins::{Coin, CoinInfo},
     },
     quoter::{vault_node::VaultNodeInterface, StateProvider},
@@ -34,7 +34,7 @@ where
         .map(get_coins)
         .and_then(api::respond);
 
-    warp::path!("api" / "v1" / ..) // Add path prefix /api/v1 to all our routes
+    warp::path!("v1" / ..) // Add path prefix /v1 to all our routes
         .and(coins) // .and(coins.or(another).or(yet_another))
 }
 
@@ -46,7 +46,7 @@ where
 /// # Example Query
 ///
 /// > GET /v1/coins?symbols=BTC,loki
-pub async fn get_coins(params: CoinsParams) -> Result<Vec<CoinInfo>, APIError> {
+pub async fn get_coins(params: CoinsParams) -> Result<Vec<CoinInfo>, ResponseError> {
     // Return all coins if no params were passed
     if params.symbols.is_none() {
         return Ok(Coin::ALL.iter().map(|coin| coin.get_info()).collect());
