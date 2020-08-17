@@ -5,13 +5,14 @@ use std::{fmt::Display, str::FromStr};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CoinInfo {
-    /// The name of the coin
+    /// The full name of the coin
     pub name: &'static str,
-    /// The coin
+    /// The coin symbol
     pub symbol: Coin,
-    /// The amount of decimals this coin uses.
+    /// The amount of decimals the coin uses.
     pub decimals: u32,
     /// Wether this coin requires a return address
+    /// (so it could be refunded in necessary)
     pub requires_return_address: bool,
 }
 
