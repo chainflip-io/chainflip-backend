@@ -16,6 +16,7 @@ crossbeam-channel = "^0.4"
 serde = { version = "1.0", features = ["derive"]}
 serde_json = "*"
 rand = "*"
+lazy_static = "*"
 
 [dependencies.rusqlite]
 version = "0.21.0"

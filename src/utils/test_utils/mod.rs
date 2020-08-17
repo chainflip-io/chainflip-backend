@@ -24,6 +24,19 @@ pub fn create_fake_quote_tx() -> QuoteTx {
     quote
 }
 
+/// Create a fake but a valid looking quote request
+pub fn make_valid_quote_request() -> serde_json::Value {
+    serde_json::json!({
+        "inputCoin": "BTC",
+        "inputReturnAddress": "TODO",
+        "inputAddressID": "0",
+        "inputAmount": "0.5",
+        "outputCoin": "LOKI",
+        "outputAddress": "TODO",
+        "slippageLimit": 0.5,
+    })
+}
+
 /// Creates a new random file name that (if created)
 /// gets removed when this object is destructed
 pub struct TempRandomFile {
