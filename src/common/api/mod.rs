@@ -2,6 +2,7 @@ use serde;
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::fmt;
+use std::future::Future;
 use warp::reject::Reject;
 
 /// A representation of a response error
@@ -67,6 +68,9 @@ where
     }
 }
 
+/// Alias for returning response
+type ResponseReturn<T> = Result<T, ResponseError>;
+
 /// Convert an API result into a warp response.
 ///
 /// Should be used in conjunction with `handle_rejection`.
@@ -76,17 +80,24 @@ where
 /// ```
 /// use blockswap::common::api::{respond, ResponseError, handle_rejection};
 /// use warp::Filter;
+/// use std::future::Future;
+///
+/// async fn hello_world() -> Result<String, ResponseError> {
+///     Ok("Hello world".to_owned())
+/// }
+///
+/// async fn return_error() -> Result<String, ResponseError> {
+///     Err(ResponseError::new(warp::http::StatusCode::NOT_FOUND, "Page not found"))
+/// }
 ///
 /// let example_route = warp::get()
 ///     .and(warp::path("example"))
-///     .map(|| Ok("Hello world".to_owned()))
+///     .map(hello_world)
 ///     .and_then(respond);
 ///
 /// let error_route = warp::get()
 ///     .and(warp::path("error"))
-///     .map(|| -> Result<String, ResponseError>  {
-///         Err(ResponseError::new(warp::http::StatusCode::NOT_FOUND, "Page not found"))
-///     })
+///     .map(return_error)
 ///     .and_then(respond);
 ///
 /// let routes = example_route
@@ -95,9 +106,12 @@ where
 ///
 /// warp::serve(routes).run(([127, 0, 0, 1], 3030));
 /// ```
-pub async fn respond<T: Serialize>(
-    result: Result<T, ResponseError>,
-) -> Result<impl warp::Reply, warp::Rejection> {
+pub async fn respond<T, F>(result: F) -> Result<impl warp::Reply, warp::Rejection>
+where
+    T: Serialize,
+    F: Future<Output = ResponseReturn<T>>,
+{
+    let result = result.await;
     match result {
         Ok(data) => {
             let response = Response::success(data);
@@ -119,17 +133,24 @@ pub async fn respond<T: Serialize>(
 /// ```
 /// use blockswap::common::api::{respond, ResponseError, handle_rejection};
 /// use warp::Filter;
+/// use std::future::Future;
+///
+/// async fn hello_world() -> Result<String, ResponseError> {
+///     Ok("Hello world".to_owned())
+/// }
+///
+/// async fn return_error() -> Result<String, ResponseError> {
+///     Err(ResponseError::new(warp::http::StatusCode::NOT_FOUND, "Page not found"))
+/// }
 ///
 /// let example_route = warp::get()
 ///     .and(warp::path("example"))
-///     .map(|| Ok("Hello world".to_owned()))
+///     .map(hello_world)
 ///     .and_then(respond);
 ///
 /// let error_route = warp::get()
 ///     .and(warp::path("error"))
-///     .map(|| -> Result<String, ResponseError>  {
-///         Err(ResponseError::new(warp::http::StatusCode::NOT_FOUND, "Page not found"))
-///     })
+///     .map(return_error)
 ///     .and_then(respond);
 ///
 /// let routes = example_route
