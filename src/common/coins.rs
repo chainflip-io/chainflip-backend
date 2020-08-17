@@ -16,18 +16,36 @@ pub struct CoinInfo {
     pub requires_return_address: bool,
 }
 
-/// The list of coins we support
+/// Enum for supported coin types
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq)]
 pub enum Coin {
+    /// Bitcoin
+    BTC,
     /// Ethereum
     ETH,
     /// Loki
     LOKI,
 }
 
+/// Invalid coin literal error
+pub const COIN_PARSING_ERROR: &'static str = "failed to parse coin";
+
+impl FromStr for Coin {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "LOKI" | "Loki" | "loki" => Ok(Coin::LOKI),
+            "BTC" | "btc" => Ok(Coin::BTC),
+            "ETH" | "eth" => Ok(Coin::ETH),
+            _ => Err(COIN_PARSING_ERROR),
+        }
+    }
+}
+
 impl Coin {
     /// Get all the coins
-    pub const ALL: &'static [Coin] = &[Coin::ETH, Coin::LOKI]; // There might be a better way to dynamically generate this.
+    pub const ALL: &'static [Coin] = &[Coin::ETH, Coin::LOKI, Coin::BTC]; // There might be a better way to dynamically generate this.
 
     /// Get information about this coin
     pub fn get_info(&self) -> CoinInfo {
@@ -42,21 +60,14 @@ impl Coin {
                 name: "Ethereum",
                 symbol: Coin::ETH,
                 decimals: 18,
-                requires_return_address: true,
+                requires_return_address: false,
             },
-        }
-    }
-}
-
-impl FromStr for Coin {
-    type Err = &'static str;
-
-    fn from_str(symbol: &str) -> Result<Self, Self::Err> {
-        let uppercased = &symbol.trim().to_uppercase()[..];
-        match uppercased {
-            "LOKI" => Ok(Coin::LOKI),
-            "ETH" => Ok(Coin::ETH),
-            _ => Err("Invalid coin"),
+            Coin::BTC => CoinInfo {
+                name: "Bitcoin",
+                symbol: Coin::BTC,
+                decimals: 8,
+                requires_return_address: false,
+            },
         }
     }
 }
@@ -64,5 +75,23 @@ impl FromStr for Coin {
 impl Display for Coin {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn valid_coin_literal_parsing() {
+        assert!(Coin::from_str("ETH").is_ok());
+        assert!(Coin::from_str("eth").is_ok());
+
+        assert!(Coin::from_str("BTC").is_ok());
+        assert!(Coin::from_str("btc").is_ok());
+
+        assert!(Coin::from_str("LOKI").is_ok());
+        assert!(Coin::from_str("loki").is_ok());
     }
 }

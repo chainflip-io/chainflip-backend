@@ -16,10 +16,10 @@ pub struct ResponseError {
 
 impl ResponseError {
     /// Create an API Error from a warp http status code
-    pub fn new(code: warp::http::StatusCode, message: String) -> Self {
+    pub fn new(code: warp::http::StatusCode, message: &str) -> Self {
         ResponseError {
             code: code.as_u16(),
-            message,
+            message: message.to_owned(),
         }
     }
 }
@@ -83,7 +83,7 @@ impl<T> Response<T> {
 /// }
 ///
 /// async fn return_error() -> Result<String, ResponseError> {
-///     Err(ResponseError::new(warp::http::StatusCode::NOT_FOUND, "Page not found".to_owned()))
+///     Err(ResponseError::new(warp::http::StatusCode::NOT_FOUND, "Page not found"))
 /// }
 ///
 /// let example_route = warp::get()
@@ -136,7 +136,7 @@ where
 /// }
 ///
 /// async fn return_error() -> Result<String, ResponseError> {
-///     Err(ResponseError::new(warp::http::StatusCode::NOT_FOUND, "Page not found".to_owned()))
+///     Err(ResponseError::new(warp::http::StatusCode::NOT_FOUND, "Page not found"))
 /// }
 ///
 /// let example_route = warp::get()
@@ -159,26 +159,22 @@ pub async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, 
     let response_error;
 
     if err.is_not_found() {
-        response_error =
-            ResponseError::new(warp::http::StatusCode::NOT_FOUND, "Not Found".to_owned());
+        response_error = ResponseError::new(warp::http::StatusCode::NOT_FOUND, "Not Found");
     } else if let Some(error) = err.find::<ResponseError>() {
         response_error = error.clone();
     } else if let Some(_) = err.find::<warp::filters::body::BodyDeserializeError>() {
-        response_error = ResponseError::new(
-            warp::http::StatusCode::BAD_REQUEST,
-            "Invalid Body".to_owned(),
-        );
+        response_error = ResponseError::new(warp::http::StatusCode::BAD_REQUEST, "Invalid Body");
     } else if let Some(_) = err.find::<warp::reject::MethodNotAllowed>() {
         response_error = ResponseError::new(
             warp::http::StatusCode::METHOD_NOT_ALLOWED,
-            "Method Not Allowed".to_owned(),
+            "Method Not Allowed",
         );
     } else {
         // In case we missed something - log and respond with 500
         error!("unhandled rejection: {:?}", err);
         response_error = ResponseError::new(
             warp::http::StatusCode::INTERNAL_SERVER_ERROR,
-            "Something went wrong".to_owned(),
+            "Something went wrong",
         );
     }
 

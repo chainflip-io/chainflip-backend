@@ -23,6 +23,7 @@ features = ["bundled"]
 
 [dev-dependencies]
 env_logger="*"
+reqwest= { version = "^0.10", features = ["json"]}
 
 [lib]
 name = "blockswap"
