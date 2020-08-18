@@ -99,6 +99,7 @@ dependencies = [
  "clap",
  "crossbeam-channel",
  "env_logger",
+ "lazy_static",
  "log 0.4.11",
  "log4rs",
  "rand 0.7.3",

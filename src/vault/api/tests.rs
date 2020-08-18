@@ -1,6 +1,7 @@
 use super::*;
 
 use crate::side_chain::FakeSideChain;
+use crate::utils::test_utils::make_valid_quote_request;
 
 /// Populate the chain with 2 blocks, request all 2
 #[tokio::test]
@@ -110,18 +111,6 @@ fn post_quote() {
     let side_chain = Arc::new(Mutex::new(side_chain));
 
     let _res = APIServer::post_quote_inner(side_chain, params);
-}
-
-fn make_valid_quote_request() -> serde_json::Value {
-    serde_json::json!({
-        "inputCoin": "BTC",
-        "inputReturnAddress": "TODO",
-        "inputAddressID": "0",
-        "inputAmount": "0.5",
-        "outputCoin": "LOKI",
-        "outputAddress": "TODO",
-        "slippageLimit": 0.5,
-    })
 }
 
 #[test]
