@@ -47,7 +47,7 @@ pub async fn get_estimate_validates_params() {
         .await
         .expect_err("Expected an error");
 
-    assert_eq!(error.message, "Invalid input coin".to_owned());
+    assert_eq!(error.message, "Invalid input coin");
 
     // =============
 
@@ -61,7 +61,7 @@ pub async fn get_estimate_validates_params() {
         .await
         .expect_err("Expected an error");
 
-    assert_eq!(error.message, "Invalid output coin".to_owned());
+    assert_eq!(error.message, "Invalid output coin");
 
     // =============
 
@@ -77,7 +77,7 @@ pub async fn get_estimate_validates_params() {
 
     assert_eq!(
         error.message,
-        "Input coin must be different from output coin".to_owned()
+        "Input coin must be different from output coin"
     );
 
     // =============
@@ -92,10 +92,7 @@ pub async fn get_estimate_validates_params() {
         .await
         .expect_err("Expected an error");
 
-    assert_eq!(
-        error.message,
-        "Input amount must be greater than 0".to_owned()
-    );
+    assert_eq!(error.message, "Input amount must be greater than 0");
 
     // =============
 

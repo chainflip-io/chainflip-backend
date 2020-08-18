@@ -185,7 +185,7 @@ pub struct PoolDepth {
 pub struct PoolsResponse {
     /// The timestamp of when the response was generated
     pub timestamp: Timestamp,
-    /// The depth of the loki side of the pool in atomic units
+    /// A map of a coin and its pool depth
     pub pools: HashMap<Coin, PoolDepth>,
 }
 
