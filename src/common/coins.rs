@@ -17,7 +17,7 @@ pub struct CoinInfo {
 }
 
 /// Enum for supported coin types
-#[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub enum Coin {
     /// Bitcoin
     BTC,

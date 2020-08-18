@@ -14,7 +14,7 @@ impl API {
     pub fn serve<V, S>(port: u16, vault_node: Arc<V>, state: Arc<Mutex<S>>)
     where
         V: VaultNodeInterface + 'static,
-        S: StateProvider + 'static,
+        S: StateProvider + Send + 'static,
     {
         let routes = v1::endpoints(vault_node, state).recover(api::handle_rejection);
 

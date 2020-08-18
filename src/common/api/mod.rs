@@ -2,8 +2,8 @@ use serde;
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::fmt;
-use std::future::Future;
-use warp::reject::Reject;
+use std::{future::Future, sync::Arc};
+use warp::{reject::Reject, Filter};
 
 /// A representation of a response error.
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -184,4 +184,37 @@ pub async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, 
     let json = warp::reply::json(&response);
 
     Ok(warp::reply::with_status(json, status))
+}
+
+/// Use a custom param in warp
+///
+/// # Example
+///
+/// ```
+/// use blockswap::common::api::{respond, ResponseError, handle_rejection, using};
+/// use warp::Filter;
+/// use std::sync::Arc;
+///
+/// async fn hello(string: Arc<String>) -> Result<String, ResponseError> {
+///     Ok(format!("Hello {}", string))
+/// }
+///
+/// let string = Arc::new(String::from("world"));
+///
+/// let hello = warp::get()
+///     .and(warp::path("hello"))
+///     .and(using(string.clone()))
+///     .map(hello)
+///     .and_then(respond)
+///     .recover(handle_rejection);
+///
+/// warp::serve(hello).run(([127, 0, 0, 1], 3030));
+/// ```
+pub fn using<S>(
+    param: Arc<S>,
+) -> impl Filter<Extract = (Arc<S>,), Error = std::convert::Infallible> + Clone
+where
+    S: Send + Sync,
+{
+    warp::any().map(move || param.clone())
 }
