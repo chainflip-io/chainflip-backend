@@ -3,11 +3,13 @@ use crate::{
         api,
         api::{using, ResponseError},
         coins::{Coin, CoinInfo},
+        Timestamp,
     },
     quoter::{vault_node::VaultNodeInterface, StateProvider},
 };
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     str::FromStr,
     sync::{Arc, Mutex},
 };
@@ -39,8 +41,15 @@ where
         .map(get_estimate)
         .and_then(api::respond);
 
+    let pools = warp::path!("pools")
+        .and(warp::get())
+        .and(warp::query::<PoolsParams>())
+        .and(using(state.clone()))
+        .map(get_pools)
+        .and_then(api::respond);
+
     warp::path!("v1" / ..) // Add path prefix /v1 to all our routes
-        .and(coins.or(estimate)) // .and(coins.or(another).or(yet_another))
+        .and(coins.or(estimate).or(pools))
 }
 
 /// Parameters for `coins` endpoint
@@ -64,15 +73,15 @@ pub async fn get_coins(params: CoinsParams) -> Result<Vec<CoinInfo>, ResponseErr
         return Ok(Coin::ALL.iter().map(|coin| coin.get_info()).collect());
     }
 
-    // Filter out invalid coins
-    let valid_coins: Vec<Coin> = params
+    // Filter out invalid symbols
+    let valid_symbols: Vec<Coin> = params
         .symbols
         .unwrap()
         .iter()
         .filter_map(|symbol| symbol.parse::<Coin>().ok())
         .collect();
 
-    let info = valid_coins.iter().map(|coin| coin.get_info()).collect();
+    let info = valid_symbols.iter().map(|coin| coin.get_info()).collect();
 
     return Ok(info);
 }
@@ -151,4 +160,71 @@ where
         output_amount: "0".to_owned(),
         loki_fee: "0".to_owned(),
     })
+}
+
+/// Parameters for `pools` endpoint
+#[derive(Debug, Deserialize)]
+pub struct PoolsParams {
+    /// The list of coin symbols
+    pub symbols: Option<Vec<String>>,
+}
+
+/// A representation of pool depth for `PoolsResponse`
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PoolDepth {
+    /// The depth of one side of the pool in atomic units
+    pub depth: String,
+    /// The depth of the loki side of the pool in atomic units
+    pub loki_depth: String,
+}
+
+/// Response for `pools` endpoint
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PoolsResponse {
+    /// The timestamp of when the response was generated
+    pub timestamp: Timestamp,
+    /// The depth of the loki side of the pool in atomic units
+    pub pools: HashMap<Coin, PoolDepth>,
+}
+
+/// Get the current pools
+///
+/// If `symbols` is empty then all pools will be returned.
+/// If `symbols` is not empty then only information for valid symbols will be returned.
+///
+/// # Example Query
+///
+/// > GET /v1/pools?symbols=BTC,eth
+pub async fn get_pools<S>(
+    params: PoolsParams,
+    _state: Arc<Mutex<S>>,
+) -> Result<PoolsResponse, ResponseError>
+where
+    S: StateProvider,
+{
+    // Return all pools if no params were passed
+    if params.symbols.is_none() {
+        return Ok(PoolsResponse {
+            timestamp: Timestamp::now(),
+            pools: HashMap::new(),
+        });
+    }
+
+    // Filter out invalid symbols
+    let _valid_symbols: Vec<Coin> = params
+        .symbols
+        .unwrap()
+        .iter()
+        .filter_map(|symbol| symbol.parse::<Coin>().ok())
+        .filter(|symbol| symbol.clone() != Coin::LOKI)
+        .collect();
+
+    // TODO: Add logic here
+
+    return Ok(PoolsResponse {
+        timestamp: Timestamp::now(),
+        pools: HashMap::new(),
+    });
 }
