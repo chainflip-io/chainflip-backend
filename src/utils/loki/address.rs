@@ -43,7 +43,7 @@ fn get_integrated_address_tag(from: u8) -> Result<u8, &'static str> {
         // Loki - stage net (main, integrated, subaddress)
         24 | 25 | 36 => Ok(25),
         // Loki - test net (main, integrated, subaddress)
-        156 | 157 | 158 => Ok(156),
+        156 | 157 | 158 => Ok(157),
         // Monero - main net (main, integrated, subaddress)
         18 | 19 | 42 => Ok(19),
         // Monero - test net (main, integrated, subaddress)
