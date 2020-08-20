@@ -1,10 +1,12 @@
-use super::StaticError;
 use crate::utils::clone_into_array;
 use bs58;
 use hdwallet::{ExtendedPrivKey, ExtendedPubKey};
 
 const INVALID_KEY: &str = "Invalid key";
 const INVALID_KEY_LENGTH: &str = "Invalid key length";
+
+/// Type alias for an error which returns a static string
+type StaticError = &'static str;
 
 /// A small util enum to help identify key types
 #[derive(Debug, PartialEq, Eq)]
@@ -51,11 +53,11 @@ impl RawKey {
     /// # Example
     ///
     /// ```
-    /// use blockswap::utils::bip32::RawKey;
+    /// use blockswap::utils::bip44::RawKey;
     ///
     /// let key = "xpub661MyMwAqRbcG8Zah6TcX3QpP5yJApaXcyLK8CJcZkuYjczivsHxVL5qm9cw8BYLYehgFeddK5WrxhntpcvqJKTVg96dUVL9P7hZ7Kcvqvd";
     /// let raw_key = RawKey::decode(key);
-    /// assert!(extended_key.is_ok());
+    /// assert!(raw_key.is_ok());
     /// ```
     pub fn decode(key: &str) -> Result<Self, StaticError> {
         let bytes = bs58::decode(key)
@@ -85,23 +87,23 @@ impl RawKey {
     /// ## Successful conversion
     ///
     /// ```
-    /// use blockswap::utils::bip32::RawKey;
+    /// use blockswap::utils::bip44::RawKey;
     ///
     /// let key = "xpub661MyMwAqRbcG8Zah6TcX3QpP5yJApaXcyLK8CJcZkuYjczivsHxVL5qm9cw8BYLYehgFeddK5WrxhntpcvqJKTVg96dUVL9P7hZ7Kcvqvd";
-    /// let extended_key = RawKey::decode(key).unwrap();
+    /// let raw_key = RawKey::decode(key).unwrap();
     ///
-    /// assert!(extended_key.to_public_key().is_some());
+    /// assert!(raw_key.to_public_key().is_some());
     /// ```
     ///
     /// ## Failed conversion
     ///
     /// ```
-    /// use blockswap::utils::bip32::RawKey;
+    /// use blockswap::utils::bip44::RawKey;
     ///
     /// let key = "xprv9zkiHpWM7sSAmi9iU8dSNnQ5dVb4J54zFcd137js4yykpxHrzjTXHQThjGHkCVjPCYxKo5AZKon4KRAXC4ZsR4prRtGTBPqNivjDgFdSnCc";
-    /// let extended_key = RawKey::decode(key).unwrap();
+    /// let raw_key = RawKey::decode(key).unwrap();
     ///
-    /// assert!(extended_key.to_public_key().is_none());
+    /// assert!(raw_key.to_public_key().is_none());
     /// ```
     pub fn to_public_key(&self) -> Option<ExtendedPubKey> {
         if self.data.len() != 33 {
@@ -133,23 +135,23 @@ impl RawKey {
     /// ## Successful conversion
     ///
     /// ```
-    /// use blockswap::utils::bip32::RawKey;
+    /// use blockswap::utils::bip44::RawKey;
     ///
     /// let key = "xprv9zkiHpWM7sSAmi9iU8dSNnQ5dVb4J54zFcd137js4yykpxHrzjTXHQThjGHkCVjPCYxKo5AZKon4KRAXC4ZsR4prRtGTBPqNivjDgFdSnCc";
-    /// let extended_key = RawKey::decode(key).unwrap();
+    /// let raw_key = RawKey::decode(key).unwrap();
     ///
-    /// assert!(extended_key.to_private_key().is_some());
+    /// assert!(raw_key.to_private_key().is_some());
     /// ```
     ///
     /// ## Failed conversion
     ///
     /// ```
-    /// use blockswap::utils::bip32::RawKey;
+    /// use blockswap::utils::bip44::RawKey;
     ///
     /// let key = "xpub661MyMwAqRbcG8Zah6TcX3QpP5yJApaXcyLK8CJcZkuYjczivsHxVL5qm9cw8BYLYehgFeddK5WrxhntpcvqJKTVg96dUVL9P7hZ7Kcvqvd";
-    /// let extended_key = RawKey::decode(key).unwrap();
+    /// let raw_key = RawKey::decode(key).unwrap();
     ///
-    /// assert!(extended_key.to_private_key().is_none());
+    /// assert!(raw_key.to_private_key().is_none());
     /// ```
     pub fn to_private_key(&self) -> Option<ExtendedPrivKey> {
         if self.data.len() != 33 {

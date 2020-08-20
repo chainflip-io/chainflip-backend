@@ -6,8 +6,8 @@ pub mod test_utils;
 /// Loki utils
 pub mod loki;
 
-/// BIP32/BIP44 utils
-pub mod bip32;
+/// Utils for generating HD wallets (bip32/bip44)
+pub mod bip44;
 
 /// Clone slice values into an array
 ///
