@@ -114,13 +114,7 @@ impl RawKey {
             return None;
         }
 
-        let public_key = match hdwallet::secp256k1::PublicKey::from_slice(&self.data) {
-            Ok(key) => key,
-            Err(error) => {
-                debug!("Failed to generate HDWallet Public Key: {}", error);
-                return None;
-            }
-        };
+        let public_key = hdwallet::secp256k1::PublicKey::from_slice(&self.data).ok()?;
 
         Some(ExtendedPubKey {
             chain_code: self.chain_code.to_vec(),
@@ -162,13 +156,7 @@ impl RawKey {
             return None;
         }
 
-        let private_key = match hdwallet::secp256k1::SecretKey::from_slice(&self.data[1..]) {
-            Ok(key) => key,
-            Err(error) => {
-                debug!("Failed to generate HDWallet Secret Key: {}", error);
-                return None;
-            }
-        };
+        let private_key = hdwallet::secp256k1::SecretKey::from_slice(&self.data[1..]).ok()?;
 
         Some(ExtendedPrivKey {
             chain_code: self.chain_code.to_vec(),
