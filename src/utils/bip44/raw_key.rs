@@ -17,7 +17,7 @@ enum KeyType {
 
 impl KeyType {
     /// Get the key type from version bytes
-    fn from(bytes: [u8; 4]) -> Option<Self> {
+    fn from(bytes: &[u8]) -> Option<Self> {
         match bytes {
             // 0x0488B21E | 0x043587CF
             [4, 136, 178, 30] | [4, 53, 135, 207] => Some(KeyType::Public),
@@ -110,7 +110,7 @@ impl RawKey {
             return None;
         }
 
-        if KeyType::from(self.version) != Some(KeyType::Public) {
+        if KeyType::from(&self.version) != Some(KeyType::Public) {
             return None;
         }
 
@@ -158,7 +158,7 @@ impl RawKey {
             return None;
         }
 
-        if KeyType::from(self.version) != Some(KeyType::Private) {
+        if KeyType::from(&self.version) != Some(KeyType::Private) {
             return None;
         }
 

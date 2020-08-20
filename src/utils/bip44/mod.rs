@@ -3,6 +3,7 @@ use hdwallet::{
     secp256k1::{PublicKey, SecretKey},
     DefaultKeyChain, ExtendedPrivKey, ExtendedPubKey, KeyChain,
 };
+use std::convert::TryFrom;
 
 /// Utils for decoding xpriv and xpub strings
 mod raw_key;
@@ -17,20 +18,24 @@ pub enum CoinType {
 }
 
 impl CoinType {
-    /// Convert a coin to a bip44 coin type
-    fn from(coin: Coin) -> Option<Self> {
-        match coin {
-            Coin::BTC => Some(CoinType::BTC),
-            Coin::ETH => Some(CoinType::ETH),
-            _ => None,
-        }
-    }
     /// The coin index for bip44
     /// See: https://github.com/satoshilabs/slips/blob/master/slip-0044.md
     fn index(&self) -> u32 {
         match self {
             CoinType::BTC => 0,
             CoinType::ETH => 60,
+        }
+    }
+}
+
+impl TryFrom<Coin> for CoinType {
+    type Error = &'static str;
+
+    fn try_from(value: Coin) -> Result<Self, Self::Error> {
+        match value {
+            Coin::BTC => Ok(CoinType::BTC),
+            Coin::ETH => Ok(CoinType::ETH),
+            _ => Err("Cannot convert the given coin into a bip44 coin type"),
         }
     }
 }
