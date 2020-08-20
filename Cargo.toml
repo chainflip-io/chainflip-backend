@@ -18,6 +18,8 @@ serde_json = "*"
 rand = "*"
 lazy_static = "*"
 base58-monero = "*"
+bs58 = "0.3.1"
+hdwallet = "0.2.5"
 
 [dependencies.rusqlite]
 version = "0.21.0"
