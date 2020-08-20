@@ -7,13 +7,17 @@ use log4rs::filter::threshold::ThresholdFilter;
 
 use log4rs::append::rolling_file::policy::compound;
 
-pub fn init(base_name: &str) {
+/// Initialize the logging framework. The logger will write to the file `base_name`.
+/// Logging events will be printed to the console according to `console_level` filter.
+pub fn init(base_name: &str, console_level: Option<LevelFilter>) {
     // Print to the console at Info in debug builds (at Warn level in release builds)
-    let console_level = if cfg!(debug_assertions) {
+    let default_level = if cfg!(debug_assertions) {
         LevelFilter::Debug
     } else {
         LevelFilter::Info
     };
+
+    let console_level = console_level.unwrap_or(default_level);
 
     let file_level = LevelFilter::Debug;
 

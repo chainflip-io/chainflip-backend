@@ -18,7 +18,7 @@ fn main() {
         std::process::exit(101); // Rust's panics use 101 by default
     }));
 
-    logging::init("vault");
+    logging::init("vault", None);
 
     info!("Starting a Blockswap Vault node");
 

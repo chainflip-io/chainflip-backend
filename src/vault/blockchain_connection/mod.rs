@@ -1,14 +1,19 @@
 use crate::common::Block;
 use crossbeam_channel::Receiver;
 
+/// Loki RPC wallet API
+pub mod loki_rpc;
+
 // Connects to lokid can pushes tx to the witness
 pub struct LokiConnection {}
 
 impl LokiConnection {
+    /// Default implementation
     pub fn new() -> LokiConnection {
         LokiConnection {}
     }
 
+    /// Start polling the blockchain in a separate thread
     pub fn start(self) -> Receiver<Block> {
         let (tx, rx) = crossbeam_channel::unbounded::<Block>();
 
