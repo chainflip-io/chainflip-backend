@@ -20,6 +20,7 @@ lazy_static = "*"
 base58-monero = "*"
 bs58 = "0.3.1"
 hdwallet = "0.2.5"
+reqwest= { version = "^0.10", features = ["json"]}
 
 [dependencies.rusqlite]
 version = "0.21.0"
@@ -27,7 +28,6 @@ features = ["bundled"]
 
 [dev-dependencies]
 env_logger="*"
-reqwest= { version = "^0.10", features = ["json"]}
 
 [lib]
 name = "blockswap"
@@ -41,4 +41,3 @@ path = "src/bin/vault/main.rs"
 [[bin]]
 name = "quoter"
 path = "src/bin/quoter/main.rs"
-

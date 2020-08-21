@@ -33,7 +33,7 @@ async fn main() {
         )
         .get_matches();
 
-    logging::init("quoter");
+    logging::init("quoter", None);
 
     let port = matches.value_of("port").unwrap_or("3033");
 
