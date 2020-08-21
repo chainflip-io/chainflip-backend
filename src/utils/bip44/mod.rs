@@ -1,9 +1,9 @@
 use crate::common::coins::Coin;
 use hdwallet::{
-    secp256k1::{PublicKey, SecretKey},
+    secp256k1::{PublicKey, Secp256k1, SecretKey},
     DefaultKeyChain, ExtendedPrivKey, ExtendedPubKey, KeyChain,
 };
-use std::convert::TryFrom;
+use std::{convert::TryFrom, str::FromStr};
 
 /// Utils for decoding xpriv and xpub strings
 mod raw_key;
@@ -41,11 +41,44 @@ impl TryFrom<Coin> for CoinType {
 }
 
 /// A representation of a Keypair
+#[derive(Debug)]
 pub struct KeyPair {
     /// The ECDSA public key
     pub public_key: PublicKey,
     /// The ECDSA private key
     pub private_key: SecretKey,
+}
+
+impl KeyPair {
+    /// Construct a key pair from a hex private key
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use blockswap::utils::bip44::KeyPair;
+    ///
+    /// let private_key = "58a99f6e6f89cbbb7fc8c86ea95e6012b68a9cd9a41c4ffa7c8f20c201d0667f";
+    /// let key_pair = KeyPair::from_private_key(private_key).unwrap();
+    ///
+    /// assert_eq!(
+    ///     format!("{:x}", key_pair.public_key),
+    ///     "034ac1bb1bc5fd7a9b173f6a136a40e4be64841c77d7f66ead444e101e01348127"
+    /// );
+    ///
+    /// assert_eq!(
+    ///     format!("{:x}", key_pair.private_key),
+    ///     "58a99f6e6f89cbbb7fc8c86ea95e6012b68a9cd9a41c4ffa7c8f20c201d0667f"
+    /// );
+    /// ```
+    pub fn from_private_key(hex: &str) -> Result<KeyPair, String> {
+        let secp = Secp256k1::signing_only();
+        let private_key = SecretKey::from_str(hex).map_err(|error| error.to_string())?;
+        let public_key = PublicKey::from_secret_key(&secp, &private_key);
+        Ok(KeyPair {
+            private_key,
+            public_key,
+        })
+    }
 }
 
 /// Derive a key pair from the given `master_key`
