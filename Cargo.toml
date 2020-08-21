@@ -21,6 +21,8 @@ base58-monero = "*"
 bs58 = "0.3.1"
 hdwallet = "0.2.5"
 reqwest= { version = "^0.10", features = ["json"]}
+tiny-keccak = "*"
+hex = "*"
 
 [dependencies.rusqlite]
 version = "0.21.0"
