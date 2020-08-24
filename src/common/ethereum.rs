@@ -6,7 +6,7 @@ use tiny_keccak::{Hasher, Keccak};
 
 /// A structure for etherum hashes
 #[derive(Debug, Clone)]
-pub struct Hash([u8; 32]);
+pub struct Hash(pub [u8; 32]);
 
 impl Display for Hash {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -14,16 +14,9 @@ impl Display for Hash {
     }
 }
 
-impl Hash {
-    /// Construct a hash from bytes
-    pub fn new(bytes: [u8; 32]) -> Self {
-        Hash(bytes)
-    }
-}
-
 /// A structure for ethereum address
 #[derive(Debug, Clone)]
-pub struct Address([u8; 20]);
+pub struct Address(pub [u8; 20]);
 
 impl Display for Address {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -51,11 +44,6 @@ impl FromStr for Address {
 }
 
 impl Address {
-    /// Construct an ethereum address from bytes
-    pub fn new(bytes: [u8; 20]) -> Self {
-        Address(bytes)
-    }
-
     /// Get the ethereum address from a ECDSA public key
     ///
     /// # Example

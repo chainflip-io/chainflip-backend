@@ -37,7 +37,7 @@ impl Timestamp {
 /// We might want to use separate type for each type of
 /// wallet/blockchain
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-pub struct WalletAddress(String);
+pub struct WalletAddress(pub String);
 
 impl Display for WalletAddress {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

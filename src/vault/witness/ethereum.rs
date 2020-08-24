@@ -88,10 +88,11 @@ where
     /// Publish witness tx for `quote`
     fn publish_witness_tx(&self, quote: &QuoteTx, transaction: &EtherumTransaction) {
         // Ensure that a witness transaction doesn't exist with the given transaction id and quote id
+        let hash = transaction.hash.to_string();
         if self
             .witness_txs
             .iter()
-            .find(|tx| tx.quote_id == quote.id && tx.transaction_id == transaction.hash.to_string())
+            .find(|tx| tx.quote_id == quote.id && tx.transaction_id == hash)
             .is_some()
         {
             return;
@@ -103,7 +104,7 @@ where
 
         let tx = WitnessTx {
             quote_id: quote.id,
-            transaction_id: transaction.hash.to_string(),
+            transaction_id: hash,
             transaction_block_number: transaction.block_number,
             transaction_index: transaction.index,
             amount: transaction.value,
@@ -125,9 +126,13 @@ where
                 continue;
             }
 
-            if let Some(quote) = self.quotes.iter().find(|quote| {
-                quote.input_address.to_string() == tx.to.as_ref().unwrap().to_string()
-            }) {
+            let recipient = tx.to.as_ref().unwrap().to_string();
+
+            if let Some(quote) = self
+                .quotes
+                .iter()
+                .find(|quote| quote.input_address.0 == recipient)
+            {
                 self.publish_witness_tx(quote, tx);
             }
         }
