@@ -16,8 +16,8 @@ where
     witness_txs: Vec<WitnessTx>,
     side_chain: Arc<Mutex<S>>,
     client: Arc<C>,
-    last_ethereum_block: u64,
-    last_side_chain_block: u32,
+    next_ethereum_block: u64,
+    next_side_chain_block: u32,
 }
 
 impl<S, C> EthereumWitness<S, C>
@@ -32,8 +32,8 @@ where
             side_chain,
             quotes: vec![],
             witness_txs: vec![],
-            last_ethereum_block: 0, // TODO: Maybe load this in from somewhere so that we don't rescan the whole eth chain
-            last_side_chain_block: 0,
+            next_ethereum_block: 0, // TODO: Maybe load this in from somewhere so that we don't rescan the whole eth chain
+            next_side_chain_block: 0,
         }
     }
 
@@ -45,7 +45,7 @@ where
             // Check the blockchain for quote tx on the side chain
             self.poll_side_chain();
 
-            self.poll_main_chain().await;
+            self.poll_next_main_chain_block().await;
 
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
@@ -57,7 +57,7 @@ where
 
         let side_chain = self.side_chain.lock().unwrap();
 
-        while let Some(block) = side_chain.get_block(self.last_side_chain_block) {
+        while let Some(block) = side_chain.get_block(self.next_side_chain_block) {
             for tx in &block.txs {
                 match tx {
                     SideChainTx::QuoteTx(tx) => {
@@ -71,18 +71,17 @@ where
                 }
             }
 
-            self.last_side_chain_block = self.last_side_chain_block + 1;
+            self.next_side_chain_block = self.next_side_chain_block + 1;
         }
 
         self.quotes.append(&mut quote_txs);
     }
 
-    async fn poll_main_chain(&mut self) {
-        while let Some(transactions) = self.client.get_transactions(self.last_ethereum_block).await
-        {
+    async fn poll_next_main_chain_block(&mut self) {
+        if let Some(transactions) = self.client.get_transactions(self.next_ethereum_block).await {
             self.process_ethereum_transactions(&transactions);
 
-            self.last_ethereum_block = self.last_ethereum_block + 1;
+            self.next_ethereum_block = self.next_ethereum_block + 1;
         }
     }
 
