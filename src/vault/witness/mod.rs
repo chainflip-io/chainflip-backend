@@ -2,6 +2,9 @@
 //! - It is subscribed to the side chain for *quote transactions*
 //! - It monitors foreign blockchains for *incoming transactions*
 
+/// Ethereum witness
+pub mod ethereum;
+
 // Events: Lokid transaction, Ether transaction, Swap transaction from Side Chain
 
 use std::sync::{Arc, Mutex};
@@ -98,7 +101,7 @@ where
     fn find_quote(&self, tx: &CoinTx) -> Option<&QuoteTx> {
         self.quotes
             .iter()
-            .find(|quote| tx.deposit_address == quote.deposit_address)
+            .find(|quote| tx.deposit_address == quote.input_address)
     }
 
     /// Publish witness tx for `quote`
@@ -107,7 +110,15 @@ where
 
         let mut side_chain = self.side_chain.lock().unwrap();
 
-        let tx = WitnessTx::new(quote.id);
+        let tx = WitnessTx {
+            quote_id: quote.id,
+            transaction_id: "0".to_owned(),
+            transaction_block_number: 0,
+            transaction_index: 0,
+            amount: 0,
+            sender: None,
+        };
+
         let tx = SideChainTx::WitnessTx(tx);
 
         side_chain

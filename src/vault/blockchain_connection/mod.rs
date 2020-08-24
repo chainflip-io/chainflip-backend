@@ -4,6 +4,9 @@ use crossbeam_channel::Receiver;
 /// Loki RPC wallet API
 pub mod loki_rpc;
 
+/// Ethereum API
+pub mod ethereum;
+
 // Connects to lokid can pushes tx to the witness
 pub struct LokiConnection {}
 
