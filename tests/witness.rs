@@ -5,7 +5,7 @@ use blockswap::{
     side_chain::{FakeSideChain, ISideChain, SideChainTx},
     transactions::CoinTx,
     utils::test_utils,
-    vault::witness::Witness,
+    vault::witness::FakeWitness,
 };
 
 #[test]
@@ -24,7 +24,7 @@ fn test_witness_tx_is_made() {
 
     let (loki_block_sender, loki_block_receiver) = crossbeam_channel::unbounded();
 
-    let witness = Witness::new(loki_block_receiver, s_chain.clone());
+    let witness = FakeWitness::new(loki_block_receiver, s_chain.clone());
     witness.start();
 
     let quote_tx = test_utils::create_fake_quote_tx();
