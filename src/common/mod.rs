@@ -50,16 +50,13 @@ impl WalletAddress {
 pub struct LokiWalletAddress {
     /// base58 (monero flavor) representation
     address: String,
-    // Mainnet 95 chars long (69 bytes):
-    // LAXk6eS3Ng98QxDTdC47eNdfCXttJycKraXxfsw9cMVngGUqP3kiSE6cwXoApU6gjzSXVX1ASAPAi1MSXA935XUs1MWEcv9
-
-    // Integrated address is 106 chars long (77 bytes):
-    // LLhSDqBZdjLQWajr4pBcFkdjL8oGY7MDvfJkKfrQVaokfDMxU6bDVb6h8tsD1jpKpSXbbB1p8RxPbA7fmjvLGjicKLBdQvDMbHA7TWVCUQ
 }
 
-impl LokiWalletAddress {
+impl std::str::FromStr for LokiWalletAddress {
+    type Err = String;
+
     /// Construct from string, validating address length
-    pub fn from_str(addr: &str) -> Result<Self, String> {
+    fn from_str(addr: &str) -> Result<Self, Self::Err> {
         match addr.len() {
             97 | 108 => Ok(LokiWalletAddress {
                 address: addr.to_owned(),
@@ -67,7 +64,9 @@ impl LokiWalletAddress {
             x @ _ => Err(format!("Invalid address length: {}", x)),
         }
     }
+}
 
+impl LokiWalletAddress {
     /// Get internal string representation
     pub fn to_str(&self) -> &str {
         &self.address
@@ -86,9 +85,13 @@ impl LokiPaymentId {
     pub fn to_str(&self) -> &str {
         &self.long_pid
     }
+}
+
+impl std::str::FromStr for LokiPaymentId {
+    type Err = String;
 
     /// Construct loki payment id from a short (long) 16 (64) hex character string
-    pub fn from_str(pid: &str) -> Result<Self, String> {
+    fn from_str(pid: &str) -> Result<Self, String> {
         match pid.len() {
             16 => {
                 // There is a bug in the wallet that requires trailing zero. Apparently

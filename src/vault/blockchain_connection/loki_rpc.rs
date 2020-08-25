@@ -7,6 +7,8 @@ use crate::common::{
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 
+use std::str::FromStr;
+
 use serde::{Deserialize, Serialize};
 
 // get_bulk_payments
