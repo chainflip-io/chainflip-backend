@@ -4,7 +4,11 @@ extern crate log;
 use blockswap::{
     logging,
     side_chain::{ISideChain, PeristentSideChain},
-    vault::{api::APIServer, blockchain_connection::LokiConnection, witness::Witness},
+    vault::{
+        api::APIServer,
+        blockchain_connection::{LokiConnection, LokiConnectionConfig},
+        witness::FakeWitness,
+    },
 };
 use std::sync::{Arc, Mutex};
 
@@ -25,10 +29,14 @@ fn main() {
     let s_chain = PeristentSideChain::open("blocks.db");
     let s_chain = Arc::new(Mutex::new(s_chain));
 
-    let loki_connection = LokiConnection::new();
+    let config = LokiConnectionConfig {
+        rpc_wallet_port: 6934,
+    };
+
+    let loki_connection = LokiConnection::new(config);
     let loki_block_receiver = loki_connection.start();
 
-    let _witness = Witness::new(loki_block_receiver, s_chain.clone());
+    let _witness = FakeWitness::new(loki_block_receiver, s_chain.clone());
 
     // This code is temporary, for now just used to test the implementation
     let tx = blockswap::utils::test_utils::create_fake_quote_tx();
