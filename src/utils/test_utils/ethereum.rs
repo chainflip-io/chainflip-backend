@@ -24,11 +24,11 @@ impl TestEthereumClient {
 
 #[async_trait]
 impl EthereumClient for TestEthereumClient {
-    async fn get_latest_block_number(&self) -> u64 {
-        0
+    async fn get_latest_block_number(&self) -> Result<u64, String> {
+        Ok(0)
     }
 
-    async fn get_transactions(&self, block_number: u64) -> Option<Vec<Transaction>> {
+    async fn get_transactions(&self, _block_number: u64) -> Option<Vec<Transaction>> {
         self.blocks.lock().unwrap().pop_front()
     }
 }
