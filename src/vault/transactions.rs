@@ -27,7 +27,7 @@ pub(crate) struct MemoryTransactionsProvider<S: ISideChain> {
     next_block_idx: u32,
 }
 
-impl<S: ISideChain + 'static> MemoryTransactionsProvider<S> {
+impl<S: ISideChain> MemoryTransactionsProvider<S> {
     /// Create an in-memory transaction provider
     pub fn new(side_chain: Arc<Mutex<S>>) -> Self {
         MemoryTransactionsProvider {
