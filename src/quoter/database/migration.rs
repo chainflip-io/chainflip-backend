@@ -41,10 +41,7 @@ where
 
 fn migrate_to_version_1(connection: &mut Connection) {
     apply_changes(connection, 1, |tx| {
-        tx.execute(
-            "CREATE TABLE IF NOT EXISTS data (key TEXT PRIMARY KEY, value TEXT);",
-            NO_PARAMS,
-        )?;
+        // TODO: Add changes here
 
         Ok(())
     })
