@@ -6,8 +6,6 @@ pub mod utils;
 use utils::SQLite;
 
 /// An interface for key value stores
-///
-/// Call `create_kvs_tables()` to setup the correct tables
 pub(crate) trait KeyValueStore {
     /// Get the data associated with a key
     fn get_data<T: FromStr>(&self, key: &str) -> Option<T>;
