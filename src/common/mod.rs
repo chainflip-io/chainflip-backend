@@ -11,6 +11,9 @@ pub mod api;
 /// Definitions for Ethereum
 pub mod ethereum;
 
+/// Key value store definitions
+pub mod store;
+
 // Note: time is not reliable in a distributed environment,
 // so it should probably be replaced by block_id when we
 // go distributed

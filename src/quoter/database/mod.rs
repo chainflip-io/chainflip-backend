@@ -1,17 +1,14 @@
 use super::{BlockProcessor, StateProvider};
-use crate::side_chain::SideChainBlock;
+use crate::{common::store::utils::SQLite as KVS, side_chain::SideChainBlock};
 use rusqlite;
-use rusqlite::params;
 use rusqlite::Connection;
-use std::str::FromStr;
-use std::string::ToString;
 
 mod migration;
 
 /// A database for storing and accessing local state
 #[derive(Debug)]
 pub struct Database {
-    conn: Connection,
+    connection: Connection,
 }
 
 impl Database {
@@ -24,56 +21,26 @@ impl Database {
     /// Returns a database instance with the given connection.
     pub fn new(mut connection: Connection) -> Self {
         migration::migrate_database(&mut connection);
-        Database { conn: connection }
-    }
-
-    /// Get key value data
-    fn get_data<T>(&self, key: &str) -> Option<T>
-    where
-        T: FromStr,
-    {
-        let mut statement = match self.conn.prepare("SELECT value from data WHERE key = ?1;") {
-            Ok(statement) => statement,
-            Err(_) => return None,
-        };
-        let string_val: String = match statement.query_row(params![key], |row| row.get(0)) {
-            Ok(result) => result,
-            Err(_) => return None,
-        };
-
-        string_val.parse().ok()
-    }
-
-    /// Set key value data
-    fn set_data<T>(&self, key: &str, value: Option<T>) -> Result<(), String>
-    where
-        T: ToString,
-    {
-        let result = match value {
-            Some(value) => self.conn.execute(
-                "INSERT OR REPLACE INTO data (key, value) VALUES (?1, ?2)",
-                params![key, value.to_string()],
-            ),
-            None => self
-                .conn
-                .execute("DELETE FROM data WHERE key = ?", params![key]),
-        };
-
-        result.map(|_| ()).map_err(|error| error.to_string())
+        KVS::create_kvs_table(&connection);
+        Database { connection }
     }
 
     fn set_last_processed_block_number(&self, block_number: u32) -> Result<(), String> {
-        self.set_data("last_processed_block_number", Some(block_number))
+        KVS::set_data(
+            &self.connection,
+            "last_processed_block_number",
+            Some(block_number),
+        )
     }
 }
 
 impl BlockProcessor for Database {
     fn get_last_processed_block_number(&self) -> Option<u32> {
-        self.get_data("last_processed_block_number")
+        KVS::get_data(&self.connection, "last_processed_block_number")
     }
 
     fn process_blocks(&mut self, blocks: Vec<SideChainBlock>) -> Result<(), String> {
-        let tx = match self.conn.transaction() {
+        let tx = match self.connection.transaction() {
             Ok(transaction) => transaction,
             Err(err) => {
                 error!("Failed to open database transaction: {}", err);
@@ -105,31 +72,8 @@ impl StateProvider for Database {}
 mod test {
     use super::*;
 
-    fn setup() -> Database {
+    fn _setup() -> Database {
         let connection = Connection::open_in_memory().expect("Failed to open connection");
         Database::new(connection)
-    }
-
-    #[test]
-    fn test_get_and_set_data() {
-        let database = setup();
-
-        // Test we can get correctly
-        database
-            .set_data("number", Some(1))
-            .expect("Failed to set number");
-        assert_eq!(database.get_data("number"), Some(1));
-
-        // Test unset
-        database
-            .set_data::<u32>("number", None)
-            .expect("Failed to set null number");
-        assert_eq!(database.get_data::<u32>("number"), None);
-
-        // Test value conversion
-        database
-            .set_data("string", Some("i_am_a_string"))
-            .expect("Failed to set string");
-        assert_eq!(database.get_data::<u32>("string"), None);
     }
 }
