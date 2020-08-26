@@ -38,13 +38,15 @@ where
         }
     }
 
-    /// Start witnessing the ethereum chain.
+    /// Start witnessing the ethereum chain on a new thread
     pub async fn start(mut self) {
-        let mut rt = tokio::runtime::Runtime::new().unwrap();
+        std::thread::spawn(move || {
+            let mut rt = tokio::runtime::Runtime::new().unwrap();
 
-        rt.block_on(async {
-            self.event_loop().await;
-        });
+            rt.block_on(async {
+                self.event_loop().await;
+            });
+        })
     }
 
     async fn poll_next_main_chain(&mut self) {
