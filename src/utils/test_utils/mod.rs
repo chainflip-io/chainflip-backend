@@ -8,6 +8,12 @@ pub mod block_processor;
 /// Test helpers for Vault Node API
 pub mod vault_node_api;
 
+/// Test helper for transaction provider
+pub mod transaction_provider;
+
+/// Test helper for ethereum
+pub mod ethereum;
+
 /// Create a dummy quote transaction to be used for tests
 pub fn create_fake_quote_tx() -> QuoteTx {
     let return_address = WalletAddress::new("Alice");

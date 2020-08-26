@@ -3,7 +3,7 @@ use crate::common::{coins::Coin, Timestamp, WalletAddress};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
-pub struct QuoteId(u64);
+pub struct QuoteId(pub u64);
 
 impl QuoteId {
     pub fn new(id: u64) -> Self {
