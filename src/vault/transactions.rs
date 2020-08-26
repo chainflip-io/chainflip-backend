@@ -31,7 +31,7 @@ impl<S: ISideChain> MemoryTransactionsProvider<S> {
     /// Create an in-memory transaction provider
     pub fn new(side_chain: Arc<Mutex<S>>) -> Self {
         MemoryTransactionsProvider {
-            side_chain: side_chain.clone(),
+            side_chain: side_chain,
             quote_txs: vec![],
             witness_txs: vec![],
             next_block_idx: 0,
@@ -60,10 +60,7 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
             .into_iter()
             .filter(|tx| {
                 if let SideChainTx::WitnessTx(tx) = tx {
-                    return !self.witness_txs.iter().any(|witness| {
-                        witness.quote_id == tx.quote_id
-                            && witness.transaction_id == tx.transaction_id
-                    });
+                    return !self.witness_txs.iter().any(|witness| tx == witness);
                 }
 
                 true

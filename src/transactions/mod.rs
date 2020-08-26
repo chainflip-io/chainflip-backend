@@ -39,7 +39,7 @@ pub struct CoinTx {
 }
 
 /// Witness transaction stored on the Side Chain
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct WitnessTx {
     /// The quote that this witness tx is linked to
     pub quote_id: QuoteId,
@@ -53,4 +53,10 @@ pub struct WitnessTx {
     pub amount: u128,
     /// The sender of the transaction
     pub sender: Option<String>,
+}
+
+impl PartialEq<WitnessTx> for WitnessTx {
+    fn eq(&self, other: &WitnessTx) -> bool {
+        self.quote_id == other.quote_id && self.transaction_id == other.transaction_id
+    }
 }
