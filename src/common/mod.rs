@@ -1,12 +1,15 @@
 use crate::transactions::CoinTx;
 use serde::{Deserialize, Serialize};
-use std::time::SystemTime;
+use std::{fmt::Display, time::SystemTime};
 
 /// Definitions for various coins
 pub mod coins;
 
 /// Definitions for common API functionality
 pub mod api;
+
+/// Definitions for Ethereum
+pub mod ethereum;
 
 // Note: time is not reliable in a distributed environment,
 // so it should probably be replaced by block_id when we
@@ -34,7 +37,13 @@ impl Timestamp {
 /// We might want to use separate type for each type of
 /// wallet/blockchain
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-pub struct WalletAddress(String);
+pub struct WalletAddress(pub String);
+
+impl Display for WalletAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 impl WalletAddress {
     /// Create address from string

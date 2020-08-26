@@ -43,7 +43,7 @@ fn test_witness_tx_is_made() {
     let coin_tx = CoinTx {
         id: 0,
         timestamp: Timestamp::now(),
-        deposit_address: quote_tx.deposit_address.clone(),
+        deposit_address: quote_tx.input_address.clone(),
         return_address: quote_tx.return_address.clone(),
     };
 

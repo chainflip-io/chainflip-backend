@@ -52,6 +52,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-trait"
+version = "0.1.38"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e1a4a2f97ce50c9d0282c1468816208588441492b40d813b2e0419c22c05e7f"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -129,6 +140,7 @@ dependencies = [
 name = "blockswap"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "base58-monero",
  "bs58",
  "clap",
@@ -140,6 +152,7 @@ dependencies = [
  "log 0.4.11",
  "log4rs",
  "rand 0.7.3",
+ "regex",
  "reqwest",
  "rusqlite",
  "serde",

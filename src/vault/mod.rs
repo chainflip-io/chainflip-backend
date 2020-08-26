@@ -2,5 +2,9 @@
 pub mod api;
 /// Module for connecting to blockchains (Loki, BTC, Ether)
 pub mod blockchain_connection;
+/// Key value store
+pub mod kv_store;
+/// Utils for managing transactions
+pub mod transactions;
 /// Witness module for processing blockchain connections
 pub mod witness;

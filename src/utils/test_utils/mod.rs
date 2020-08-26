@@ -1,5 +1,5 @@
 use crate::{
-    common::{Timestamp, WalletAddress},
+    common::{coins::Coin, Timestamp, WalletAddress},
     transactions::{QuoteId, QuoteTx},
 };
 
@@ -8,16 +8,24 @@ pub mod block_processor;
 /// Test helpers for Vault Node API
 pub mod vault_node_api;
 
+/// Test helper for transaction provider
+pub mod transaction_provider;
+
+/// Test helper for ethereum
+pub mod ethereum;
+
 /// Create a dummy quote transaction to be used for tests
 pub fn create_fake_quote_tx() -> QuoteTx {
     let return_address = WalletAddress::new("Alice");
-    let deposit_address = WalletAddress::new("Bob");
+    let input_address = WalletAddress::new("Bob");
     let timestamp = Timestamp::now();
 
     let quote = QuoteTx {
         id: QuoteId::new(0),
         timestamp,
-        deposit_address,
+        input: Coin::LOKI,
+        output: Coin::BTC,
+        input_address,
         return_address,
     };
 
