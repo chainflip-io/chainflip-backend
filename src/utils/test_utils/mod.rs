@@ -1,5 +1,5 @@
 use crate::{
-    common::{coins::Coin, Timestamp, WalletAddress},
+    common::{Coin, Timestamp, WalletAddress},
     transactions::{QuoteId, QuoteTx},
 };
 
@@ -25,6 +25,7 @@ pub fn create_fake_quote_tx() -> QuoteTx {
         timestamp,
         input: Coin::LOKI,
         output: Coin::BTC,
+        input_address_id: "".to_owned(),
         input_address,
         return_address,
     };

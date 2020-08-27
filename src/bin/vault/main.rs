@@ -7,7 +7,7 @@ use blockswap::{
     vault::{
         api::APIServer,
         blockchain_connection::{LokiConnection, LokiConnectionConfig},
-        witness::FakeWitness,
+        witness::LokiWitness,
     },
 };
 use std::sync::{Arc, Mutex};
@@ -36,7 +36,7 @@ fn main() {
     let loki_connection = LokiConnection::new(config);
     let loki_block_receiver = loki_connection.start();
 
-    let _witness = FakeWitness::new(loki_block_receiver, s_chain.clone());
+    let _witness = LokiWitness::new(loki_block_receiver, s_chain.clone());
 
     // This code is temporary, for now just used to test the implementation
     let tx = blockswap::utils::test_utils::create_fake_quote_tx();

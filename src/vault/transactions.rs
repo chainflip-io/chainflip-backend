@@ -1,4 +1,5 @@
 use crate::{
+    common::Coin,
     side_chain::{ISideChain, SideChainTx},
     transactions::{QuoteTx, WitnessTx},
 };
@@ -113,6 +114,7 @@ mod test {
                 transaction_block_number: 0,
                 transaction_index: 1,
                 amount: 100,
+                coin_type: Coin::ETH,
                 sender: None,
             };
 
@@ -149,6 +151,7 @@ mod test {
             transaction_block_number: 0,
             transaction_index: 1,
             amount: 100,
+            coin_type: Coin::ETH,
             sender: None,
         };
 

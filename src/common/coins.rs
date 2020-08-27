@@ -95,7 +95,7 @@ pub trait CoinAmount {
     /// Default implementation for user facing representation of the amount
     fn to_string_pretty(&self) -> String {
         let atomic_amount = self.to_atomic();
-        let decimals = LokiAmount::coin_info().decimals;
+        let decimals = Self::coin_info().decimals;
 
         let mut atomic_str = atomic_amount.to_string();
 

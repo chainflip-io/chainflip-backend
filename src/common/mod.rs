@@ -14,12 +14,14 @@ pub mod ethereum;
 /// Key value store definitions
 pub mod store;
 
+pub use coins::Coin;
+
 // Note: time is not reliable in a distributed environment,
 // so it should probably be replaced by block_id when we
 // go distributed
 
 /// SystemTime wrapper
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Timestamp(SystemTime);
 
 impl Timestamp {
@@ -39,7 +41,7 @@ impl Timestamp {
 /// A wrapper around String to be used as wallet address.
 /// We might want to use separate type for each type of
 /// wallet/blockchain
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct WalletAddress(pub String);
 
 impl Display for WalletAddress {
@@ -118,6 +120,12 @@ impl std::str::FromStr for LokiPaymentId {
             }),
             x @ _ => Err(format!("Incorect size for short payment id: {}", x)),
         }
+    }
+}
+
+impl std::fmt::Display for LokiPaymentId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", &self.long_pid[0..16])
     }
 }
 

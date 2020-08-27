@@ -3,9 +3,7 @@ use std::sync::{Arc, Mutex};
 use crate::side_chain::{ISideChain, SideChainTx};
 use serde::{Deserialize, Serialize};
 
-use crate::common::{self, api::ResponseError, coins::Coin, Timestamp, WalletAddress};
-
-use crate::transactions::{QuoteId, QuoteTx};
+use crate::common::{self, api::ResponseError, Coin};
 
 use tokio::sync::oneshot;
 

@@ -1,5 +1,5 @@
 use crate::{
-    common::coins::Coin,
+    common::Coin,
     side_chain::SideChainTx,
     transactions::WitnessTx,
     vault::{blockchain_connection::ethereum::EthereumClient, transactions::TransactionProvider},
@@ -81,6 +81,7 @@ where
                         transaction_block_number: transaction.block_number,
                         transaction_index: transaction.index,
                         amount: transaction.value,
+                        coin_type: Coin::ETH,
                         sender: Some(transaction.from.to_string()),
                     };
 
@@ -143,6 +144,7 @@ mod test {
             input,
             output: Coin::BTC,
             input_address: WalletAddress::new(input_address),
+            input_address_id: "".to_owned(),
             return_address: WalletAddress::new("return"),
         }
     }

@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use crossbeam_channel::Receiver;
 
-use crate::common::Block;
+use crate::common::{Block, Coin};
 use crate::side_chain::{ISideChain, SideChainTx};
 use crate::transactions::{CoinTx, QuoteTx, WitnessTx};
 
@@ -107,6 +107,7 @@ where
             transaction_block_number: 0,
             transaction_index: 0,
             amount: 0,
+            coin_type: Coin::LOKI,
             sender: None,
         };
 
