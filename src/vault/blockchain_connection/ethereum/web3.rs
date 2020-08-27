@@ -108,16 +108,16 @@ mod test {
         assert_eq!(first.index, 0);
         assert_eq!(first.block_number, 10739404);
         assert_eq!(
-            first.hash.to_string(),
-            "0x9fa1d1918e486e36f0066b76e812a6c8f8a2948d3055716e6e8c820f18e9e575".to_string()
+            &first.hash.to_string(),
+            "0x9fa1d1918e486e36f0066b76e812a6c8f8a2948d3055716e6e8c820f18e9e575"
         );
         assert_eq!(
-            first.from.to_string(),
-            "0x6b17141d06d70b50aa4e8c263c0b4ba598c4b8a0".to_string()
+            &first.from.to_string(),
+            "0x6b17141d06d70b50aa4e8c263c0b4ba598c4b8a0"
         );
         assert_eq!(
-            first.to.as_ref().unwrap().to_string(),
-            "0xdb50dba4f9a046bfbe3d0d80e42308108a8dc70a".to_string()
+            &first.to.as_ref().unwrap().to_string(),
+            "0xdb50dba4f9a046bfbe3d0d80e42308108a8dc70a"
         );
         assert_eq!(first.value, 105403140000000000);
     }
