@@ -81,3 +81,44 @@ impl Into<ethereum::Address> for types::H160 {
         ethereum::Address(self.to_fixed_bytes())
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    static WEB3_URL: &str = "https://api.myetherwallet.com/eth";
+
+    #[tokio::test]
+    async fn returns_transactions() {
+        let client = Web3Client::url(WEB3_URL).expect("Failed to create web3 client");
+
+        // https://etherscan.io/block/10739404
+        let transactions = client
+            .get_transactions(10739404)
+            .await
+            .expect("Expected to get valid transactions");
+
+        assert_eq!(transactions.len(), 179);
+
+        // https://etherscan.io/tx/0x9fa1d1918e486e36f0066b76e812a6c8f8a2948d3055716e6e8c820f18e9e575
+        let first = transactions
+            .first()
+            .expect("Expected to get a valid transaction");
+
+        assert_eq!(first.index, 0);
+        assert_eq!(first.block_number, 10739404);
+        assert_eq!(
+            first.hash.to_string(),
+            "0x9fa1d1918e486e36f0066b76e812a6c8f8a2948d3055716e6e8c820f18e9e575".to_string()
+        );
+        assert_eq!(
+            first.from.to_string(),
+            "0x6b17141d06d70b50aa4e8c263c0b4ba598c4b8a0".to_string()
+        );
+        assert_eq!(
+            first.to.as_ref().unwrap().to_string(),
+            "0xdb50dba4f9a046bfbe3d0d80e42308108a8dc70a".to_string()
+        );
+        assert_eq!(first.value, 105403140000000000);
+    }
+}

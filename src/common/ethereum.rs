@@ -5,7 +5,7 @@ use std::{fmt::Display, str::FromStr};
 use tiny_keccak::{Hasher, Keccak};
 
 /// A structure for etherum hashes
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Hash(pub [u8; 32]);
 
 impl Display for Hash {
@@ -15,7 +15,7 @@ impl Display for Hash {
 }
 
 /// A structure for ethereum address
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Address(pub [u8; 20]);
 
 impl Display for Address {
@@ -73,7 +73,7 @@ impl Address {
 }
 
 /// A structure for ethereum transactions
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Transaction {
     /// The transaction hash
     pub hash: Hash,
@@ -87,4 +87,16 @@ pub struct Transaction {
     pub to: Option<Address>,
     /// The transferred value
     pub value: u128,
+}
+
+impl Ord for Transaction {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (self.block_number, self.index).cmp(&(other.block_number, other.index))
+    }
+}
+
+impl PartialOrd for Transaction {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
