@@ -89,6 +89,12 @@ mod test {
     static WEB3_URL: &str = "https://api.myetherwallet.com/eth";
 
     #[tokio::test]
+    async fn returns_latest_block_number() {
+        let client = Web3Client::url(WEB3_URL).expect("Failed to create web3 client");
+        assert!(client.get_latest_block_number().await.is_ok());
+    }
+
+    #[tokio::test]
     async fn returns_transactions() {
         let client = Web3Client::url(WEB3_URL).expect("Failed to create web3 client");
 
