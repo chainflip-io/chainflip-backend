@@ -25,6 +25,7 @@ tiny-keccak = "*"
 hex = "*"
 async-trait="*"
 regex="*"
+web3 = { version = "^0.13.0", default-features = false, features = ["http-tls"] }
 
 [dependencies.rusqlite]
 version = "0.21.0"
