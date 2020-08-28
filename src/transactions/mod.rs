@@ -1,18 +1,20 @@
-use crate::common::{coins::Coin, Timestamp, WalletAddress};
+use crate::common::{Coin, Timestamp, WalletAddress};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
+/// Quote identifier
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 pub struct QuoteId(pub u64);
 
 impl QuoteId {
+    /// Create quote identifier from numeric representation
     pub fn new(id: u64) -> Self {
         QuoteId { 0: id }
     }
 }
 
 /// Quote transaction stored on the Side Chain
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct QuoteTx {
     /// Quote id generated on the server (same as tx id?)
     pub id: QuoteId,
@@ -24,10 +26,18 @@ pub struct QuoteTx {
     pub output: Coin,
     /// The wallet in which the user will deposit coins
     pub input_address: WalletAddress,
+    /// Info used to derive unique deposit addresses
+    pub input_address_id: String,
     /// The wallet used to refund coins in case of a failed swap
     pub return_address: WalletAddress,
     // There are more fields, but I will add them
     // when I have actually start using them
+}
+
+impl std::hash::Hash for QuoteTx {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.0.hash(state);
+    }
 }
 
 #[derive(Debug)]
@@ -51,6 +61,8 @@ pub struct WitnessTx {
     pub transaction_index: u64,
     /// The atomic input amount
     pub amount: u128,
+    /// The coin type in which the transaction was made
+    pub coin_type: Coin,
     /// The sender of the transaction
     pub sender: Option<String>,
 }

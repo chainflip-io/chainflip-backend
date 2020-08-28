@@ -37,12 +37,13 @@ struct BalanceResponse {
 }
 
 async fn send_req_inner(
+    port: u16,
     method: &str,
     params: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
     let client = reqwest::Client::new();
 
-    let url = "http://localhost:6934/json_rpc";
+    let url = format!("http://localhost:{}/json_rpc", port);
 
     debug!(
         "Loki wallet rpc: /{}. Sending params: {}",
@@ -58,7 +59,7 @@ async fn send_req_inner(
     });
 
     let res = client
-        .post(url)
+        .post(&url)
         .json(&req)
         .send()
         .await
@@ -69,7 +70,7 @@ async fn send_req_inner(
     let res: LokiResponse = serde_json::from_str(&text).map_err(|err| err.to_string())?;
 
     if let Some(err) = res.error {
-        error!("Loki wallet rcp error");
+        error!("Loki wallet rpc error");
         return Err(err.message.to_owned());
     }
 
@@ -83,13 +84,16 @@ async fn send_req_inner(
 /// Response for endpoint: `make_integrated_address`
 #[derive(Debug, Deserialize)]
 pub struct IntegratedAddressResponse {
-    integrated_address: String,
-    payment_id: String,
+    /// The address that can be used to transfer loki to
+    pub integrated_address: String,
+    /// Payment identifier
+    pub payment_id: String,
 }
 
 /// Make an integrated address from an optional `payment_id`. If `payment_id` is not specified,
 /// a random one should be created by the wallet.
 pub async fn make_integrated_address(
+    port: u16,
     payment_id: Option<&str>,
 ) -> Result<IntegratedAddressResponse, String> {
     let mut params = serde_json::json!({});
@@ -98,7 +102,7 @@ pub async fn make_integrated_address(
         params["payment_id"] = payment_id.to_string().into();
     }
 
-    let res = send_req_inner("make_integrated_address", params)
+    let res = send_req_inner(port, "make_integrated_address", params)
         .await
         .map_err(|err| err.to_string())?;
 
@@ -109,13 +113,13 @@ pub async fn make_integrated_address(
 }
 
 /// Make `get_transfers` call
-pub async fn get_all_transfers() -> Result<serde_json::Value, String> {
+pub async fn get_all_transfers(port: u16) -> Result<serde_json::Value, String> {
     let params = serde_json::json!({
         "in": true,
         "all_accounts": true
     });
 
-    let res = send_req_inner("get_transfers", params).await;
+    let res = send_req_inner(port, "get_transfers", params).await;
 
     return res;
 }
@@ -193,11 +197,11 @@ impl TryFrom<BulkPaymentResponseRaw> for BulkPaymentResponse {
 #[derive(Debug)]
 pub struct BulkPaymentResponseEntry {
     /// Payment Id matching the input parameter
-    payment_id: LokiPaymentId,
+    pub payment_id: LokiPaymentId,
     /// Transaction hash used as the transaction Id
     tx_hash: String,
     // Amount for this payment
-    amount: LokiAmount,
+    pub amount: LokiAmount,
     /// Height of the block that first confirmed this payment
     block_height: u64,
     /// Time (in blocks) until this payment is safe to spend
@@ -228,6 +232,7 @@ fn is_empty_object(v: &serde_json::Value) -> bool {
 
 /// Get all payments for given payment ids (Uses `get_bulk_payments` endpoint)
 pub async fn get_bulk_payments(
+    port: u16,
     payment_ids: Vec<LokiPaymentId>,
     min_block_height: u64,
 ) -> Result<BulkPaymentResponse, String> {
@@ -238,7 +243,7 @@ pub async fn get_bulk_payments(
         "min_block_height": min_block_height
     });
 
-    let res = send_req_inner("get_bulk_payments", params).await?;
+    let res = send_req_inner(port, "get_bulk_payments", params).await?;
 
     // Instead of reponding with an empty list, loki gives an empty response...
 
@@ -279,10 +284,10 @@ struct HeightResponse {
 }
 
 /// Request blockchain height from wallet
-pub async fn get_height() -> Result<u64, String> {
+pub async fn get_height(port: u16) -> Result<u64, String> {
     let params = serde_json::json!({});
 
-    let res = send_req_inner("get_height", params).await?;
+    let res = send_req_inner(port, "get_height", params).await?;
 
     let res: HeightResponse = serde_json::from_value(res).map_err(|err| err.to_string())?;
 
@@ -290,12 +295,12 @@ pub async fn get_height() -> Result<u64, String> {
 }
 
 /// Request balance in the default account
-pub async fn get_balance() -> Result<LokiBalance, String> {
+pub async fn get_balance(port: u16) -> Result<LokiBalance, String> {
     let params = serde_json::json!({
         "account_index": 0,
     });
 
-    let res = send_req_inner("get_balance", params)
+    let res = send_req_inner(port, "get_balance", params)
         .await
         .map_err(|err| err.to_string())?;
 
@@ -364,6 +369,7 @@ pub struct TransferResponse {
 
 /// Make an rpc command to transfer `amount` of loki to `address`
 pub async fn transfer(
+    port: u16,
     amount: &LokiAmount,
     address: &LokiWalletAddress,
     payment_id: Option<&str>,
@@ -389,7 +395,7 @@ pub async fn transfer(
 
     info!("Params: {}", serde_json::to_string_pretty(&params).unwrap());
 
-    let res = send_req_inner("transfer", params)
+    let res = send_req_inner(port, "transfer", params)
         .await
         .map_err(|err| err.to_string())?;
 

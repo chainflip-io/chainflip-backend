@@ -46,3 +46,8 @@ path = "src/bin/vault/main.rs"
 [[bin]]
 name = "quoter"
 path = "src/bin/quoter/main.rs"
+
+[[bin]]
+name = "loki-playground"
+path = "src/bin/loki.rs"
+

@@ -4,22 +4,26 @@
 
 // Events: Lokid transaction, Ether transaction, Swap transaction from Side Chain
 
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 use crossbeam_channel::Receiver;
 
-use crate::common::Block;
 use crate::side_chain::{ISideChain, SideChainTx};
-use crate::transactions::{CoinTx, QuoteTx, WitnessTx};
+use crate::transactions::{QuoteTx, WitnessTx};
+use crate::vault::blockchain_connection::{Payment, Payments};
+
+use crate::common::coins::{Coin, CoinAmount};
 
 /// Witness Mock
 pub struct LokiWitness<T>
 where
     T: ISideChain + Send,
 {
+    // TODO: need to make sure we keep track of which quotes have been witnessed
     /// Outstanding quotes (make sure this stays synced)
-    quotes: Vec<QuoteTx>,
-    loki_connection: Receiver<Block>,
+    quotes: HashSet<QuoteTx>,
+    loki_connection: Receiver<Payments>,
     side_chain: Arc<Mutex<T>>,
     // We should save this to a DB (maybe not, because when we restart, we might want to rescan the db for all quotes?)
     next_block_idx: u32, // block from the side chain
@@ -29,11 +33,12 @@ impl<T> LokiWitness<T>
 where
     T: ISideChain + Send + 'static,
 {
-    pub fn new(bc: Receiver<Block>, side_chain: Arc<Mutex<T>>) -> LokiWitness<T> {
+    /// Create Loki witness
+    pub fn new(bc: Receiver<Payments>, side_chain: Arc<Mutex<T>>) -> LokiWitness<T> {
         let next_block_idx = 0;
 
         LokiWitness {
-            quotes: vec![],
+            quotes: HashSet::new(),
             loki_connection: bc,
             side_chain,
             next_block_idx,
@@ -41,30 +46,29 @@ where
     }
 
     fn poll_side_chain(&mut self) {
-        let mut quote_txs = vec![];
-
         let side_chain = self.side_chain.lock().unwrap();
 
         while let Some(block) = side_chain.get_block(self.next_block_idx) {
             for tx in &block.txs {
                 if let SideChainTx::QuoteTx(tx) = tx {
                     debug!("Registered quote tx: {:?}", tx.id);
-                    quote_txs.push(tx.clone());
+                    self.quotes.insert(tx.clone());
                 }
             }
 
             self.next_block_idx = self.next_block_idx + 1;
         }
-
-        self.quotes.append(&mut quote_txs);
     }
 
-    fn poll_main_chain(&self) {
+    fn poll_main_chain(&mut self) {
         loop {
             match self.loki_connection.try_recv() {
-                Ok(block) => {
-                    debug!("Received message from loki blockchain: {:?}", block);
-                    self.process_main_chain_block(block);
+                Ok(payments) => {
+                    debug!(
+                        "Received payments from loki wallet (count: {})",
+                        payments.len()
+                    );
+                    self.process_main_chain_payments(payments);
                 }
                 Err(crossbeam_channel::TryRecvError::Disconnected) => {
                     error!("Failed to receive message: Disconnected");
@@ -94,15 +98,32 @@ where
         });
     }
 
-    /// Check whether `tx` matches any outstanding qoute
-    fn find_quote(&self, tx: &CoinTx) -> Option<&QuoteTx> {
-        self.quotes
+    /// Check whether `tx` matches any outstanding qoute and take the value from the set
+    fn find_and_take_matching_quote(&mut self, payment: &Payment) -> Option<QuoteTx> {
+        debug!(
+            "Looking for a matching quote for payment id: {} amount: {}",
+            payment.payment_id, payment.amount
+        );
+
+        let res = self
+            .quotes
             .iter()
-            .find(|quote| tx.deposit_address == quote.input_address)
+            .find(|quote| payment.payment_id.to_str()[0..16] == quote.input_address_id);
+
+        match res {
+            Some(ref quote) => {
+                // Annoyngly I have to clone here, because otherwise I'm holding a reference
+                // into an object that I'm trying to modify at the same time...
+                let quote = (*quote).clone();
+
+                self.quotes.take(&quote)
+            }
+            None => None,
+        }
     }
 
     /// Publish witness tx for `quote`
-    fn publish_witness_tx(&self, quote: &QuoteTx) {
+    fn publish_witness_tx(&self, quote: &QuoteTx, payment: &Payment) {
         debug!("Publishing witness transaction for quote: {:?}", &quote);
 
         let mut side_chain = self.side_chain.lock().unwrap();
@@ -112,9 +133,12 @@ where
             transaction_id: "0".to_owned(),
             transaction_block_number: 0,
             transaction_index: 0,
-            amount: 0,
+            amount: payment.amount.to_atomic(),
+            coin_type: Coin::LOKI,
             sender: None,
         };
+
+        debug!("Adding witness tx: {:?}", &tx);
 
         let tx = SideChainTx::WitnessTx(tx);
 
@@ -127,10 +151,12 @@ where
 
     /// Stuff to do whenever we receive a new block from
     /// a foreign chain
-    fn process_main_chain_block(&self, block: Block) {
-        for tx in &block.txs {
-            if let Some(quote) = self.find_quote(tx) {
-                self.publish_witness_tx(quote);
+    fn process_main_chain_payments(&mut self, payments: Payments) {
+        for payment in &payments {
+            if let Some(quote) = self.find_and_take_matching_quote(payment) {
+                debug!("Found a matching transaction!");
+
+                self.publish_witness_tx(&quote, payment);
             }
         }
     }

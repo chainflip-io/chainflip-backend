@@ -1,4 +1,4 @@
-use crate::common::coins::Coin;
+use crate::common::Coin;
 use hdwallet::{
     secp256k1::{PublicKey, Secp256k1, SecretKey},
     DefaultKeyChain, ExtendedPrivKey, ExtendedPubKey, KeyChain,
@@ -87,7 +87,7 @@ impl KeyPair {
 ///
 /// ```
 /// use blockswap::utils::bip44::{get_key_pair, RawKey, CoinType};
-/// use blockswap::common::coins::Coin;
+/// use blockswap::common::Coin;
 ///
 /// let xpriv = "xprv9s21ZrQH143K2h2Jo5HX95FFUbu8QYXRDvmpStejFQQXSYw7LnsuczMXvfh9mVFCukNz6bXoYDSZhMzwQqtoDeMFkjG8PqzHCf4kDHYwYqK";
 /// let root_key = RawKey::decode(xpriv).unwrap().to_private_key().unwrap();
