@@ -1,4 +1,11 @@
+//! Loki payments don't always appear in the latest block,
+//! so we poll for a sliding window of size SLIDING_WINDOW_SIZE with
+//! `last_processed_block` being the latest block that
+//! will not be requested again
+
 use crossbeam_channel::Receiver;
+
+use crate::common::store::{KeyValueStore, PersistentKVS};
 
 /// Loki RPC wallet API
 pub mod loki_rpc;
@@ -9,7 +16,9 @@ pub mod ethereum;
 /// Connects to loki rpc wallet and pushes payments to the witness
 pub struct LokiConnection {
     config: LokiConnectionConfig,
-    last_block: u64,
+    /// database for persistent state
+    db: PersistentKVS,
+    last_processed_block: u64,
 }
 
 /// Configuration for loki wallet connection
@@ -26,53 +35,105 @@ pub type Payment = loki_rpc::BulkPaymentResponseEntry;
 /// Convenience alias for a vector of payments
 pub type Payments = Vec<Payment>;
 
+/// Loki connection start scanning from this block if no can't
+/// find existing database records. (There is no reason to scan
+/// blocks that came before blockswap launch)
+const FIRST_BLOCKSWAP_BLOCK: u64 = 363680;
+
+/// Loki connection requests payments for a sliding window of blocks
+/// because the wallet does not (always) acknowledge payments right away
+const SLIDING_WINDOW_SIZE: u64 = 2;
+
+const LAST_PROCESSED_DB_KEY: &'static str = "last_processed_block";
+
 impl LokiConnection {
     /// Default implementation
     pub fn new(config: LokiConnectionConfig) -> LokiConnection {
         // Use some recent block hieght for now
-        let last_block = 363680;
-        LokiConnection { config, last_block }
+
+        let connection =
+            rusqlite::Connection::open("loki_connection").expect("Failed to open connection");
+
+        let db = PersistentKVS::new(connection);
+
+        let last_processed_block = match db.get_data::<u64>(LAST_PROCESSED_DB_KEY) {
+            Some(last_block) => {
+                info!(
+                    "Loaded last block record for Loki Connection from DB: {}",
+                    last_block
+                );
+                last_block
+            }
+            None => {
+                warn!(
+                    "Last block record not found for Loki Connection, using default: {}",
+                    FIRST_BLOCKSWAP_BLOCK
+                );
+                FIRST_BLOCKSWAP_BLOCK
+            }
+        };
+
+        LokiConnection {
+            config,
+            db,
+            last_processed_block,
+        }
     }
 
     /// Poll loki rpc wallet
     async fn poll_once(&mut self) -> Result<Payments, String> {
         let cur_height = loki_rpc::get_height(self.config.rpc_wallet_port).await?;
 
-        // We only start looking at blocks when the are 1 block old,
-        // i.e. the invariant is self.last_block <= cur_height - 1
+        // We only request payments when the blockchain made progress,
+        // i.e. cur_height >= last_processed_block + SLIDING_WINDOW_SIZE
 
-        if cur_height == self.last_block + 1 {
+        // We can safely assume that the blockchain has more than SLIDING_WINDOW_SIZE,
+        // blocks, so we can maintain the invariant that the first block that we
+        // haven't requested yet is self.last_processed_block + SLIDING_WINDOW_SIZE.
+        let first_unseen = self.last_processed_block + SLIDING_WINDOW_SIZE;
+
+        let start_block = self.last_processed_block + 1;
+
+        if cur_height < first_unseen {
             return Ok(vec![]);
         }
 
-        let next_block = self.last_block + 1;
-
-        info!("Current height is {}", cur_height);
+        info!("New loki blockchain height is {}", cur_height);
 
         info!(
             "Requesting payments from blocks in [{}; {}] ({} blocks)",
-            next_block,
+            start_block,
             cur_height,
-            (cur_height - next_block + 1)
+            (cur_height - start_block + 1)
         );
 
         let res =
-            loki_rpc::get_bulk_payments(self.config.rpc_wallet_port, vec![], next_block).await?;
+            loki_rpc::get_bulk_payments(self.config.rpc_wallet_port, vec![], start_block).await?;
 
-        // For now we only update when we see a new block
-        // (since the response does not give us the lastest block height)
-        // (TODO: use another endpoint `get_height`)
-        self.last_block = cur_height.saturating_sub(1);
+        // IMPORTANT: it might be too early to mark the block as processed (since the
+        // program can be interrupted before the handler had the chance
+        // to process them), so we might need to wait for an acknowledgement
+        // from the witness. (Although our sliding window processing can mitigate that.)
+
+        self.last_processed_block = cur_height.saturating_sub(SLIDING_WINDOW_SIZE - 1);
+        self.db
+            .set_data(LAST_PROCESSED_DB_KEY, Some(self.last_processed_block))
+            .expect("Could not update last processed block entry in the database");
+
+        info!("Last processed block is now: {}", self.last_processed_block);
 
         Ok(res.payments)
     }
 
-    async fn poll_loop(mut self, tx: crossbeam_channel::Sender<Payments>) {
+    async fn poll_loop(mut self, channel: crossbeam_channel::Sender<Payments>) {
         loop {
             // Simply wait for next iteration in case of errors
             if let Ok(payments) = self.poll_once().await {
+                // TODO: if SLIDING_WINDOW_SIZE > 2, we need to make sure that we don't
+                // send payments that we have seen already
+
                 if payments.len() > 0 {
-                    tx.send(payments).unwrap();
+                    channel.send(payments).unwrap();
                 }
             }
 

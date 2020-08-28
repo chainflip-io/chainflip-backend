@@ -200,12 +200,12 @@ pub struct BulkPaymentResponseEntry {
     pub payment_id: LokiPaymentId,
     /// Transaction hash used as the transaction Id
     tx_hash: String,
-    // Amount for this payment
+    /// Amount for this payment
     pub amount: LokiAmount,
     /// Height of the block that first confirmed this payment
-    block_height: u64,
+    pub block_height: u64,
     /// Time (in blocks) until this payment is safe to spend
-    unlock_time: u64,
+    pub unlock_time: u64,
     /// Account and subaddress indexes
     subaddr_index: SubaddressIndex,
     /// Address receiving the payment
