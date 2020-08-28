@@ -62,7 +62,7 @@ impl LokiConnection {
                     "Loaded last block record for Loki Connection from DB: {}",
                     last_block
                 );
-                FIRST_BLOCKSWAP_BLOCK
+                last_block
             }
             None => {
                 warn!(
