@@ -1,33 +1,55 @@
 use crate::{
-    common::Coin,
+    common::{store::KeyValueStore, Coin},
     side_chain::SideChainTx,
     transactions::WitnessTx,
     vault::{blockchain_connection::ethereum::EthereumClient, transactions::TransactionProvider},
 };
 use std::sync::{Arc, Mutex};
 
+/// The block that we should start scanning from if we're starting the witness from scratch.
+/// There's no reason to scan from a block before blockswap launch.
+const START_BLOCK: u64 = 10746801;
+
+/// The db key for fetching and storing the next eth block
+const NEXT_ETH_BLOCK_KEY: &'static str = "next_eth_block";
+
 /// A ethereum transaction witness
-pub struct EthereumWitness<T, C>
+pub struct EthereumWitness<T, C, S>
 where
     T: TransactionProvider,
     C: EthereumClient,
+    S: KeyValueStore,
 {
     transaction_provider: Arc<Mutex<T>>,
     client: Arc<C>,
+    store: Arc<Mutex<S>>,
     next_ethereum_block: u64,
 }
 
-impl<T, C> EthereumWitness<T, C>
+impl<T, C, S> EthereumWitness<T, C, S>
 where
     T: TransactionProvider + Send + 'static,
     C: EthereumClient + Send + Sync + 'static,
+    S: KeyValueStore + Send + 'static,
 {
     /// Create a new ethereum chain witness
-    pub fn new(client: Arc<C>, transaction_provider: Arc<Mutex<T>>) -> Self {
+    pub fn new(client: Arc<C>, transaction_provider: Arc<Mutex<T>>, store: Arc<Mutex<S>>) -> Self {
+        let next_ethereum_block = match store.lock().unwrap().get_data::<u64>(NEXT_ETH_BLOCK_KEY) {
+            Some(next_block) => next_block,
+            None => {
+                warn!(
+                    "Last block record not found for Eth witness, using default: {}",
+                    START_BLOCK
+                );
+                START_BLOCK
+            }
+        };
+
         EthereumWitness {
             client,
             transaction_provider,
-            next_ethereum_block: 0, // TODO: Maybe load this in from somewhere so that we don't rescan the whole eth chain
+            store,
+            next_ethereum_block,
         }
     }
 
@@ -101,6 +123,11 @@ where
             }
 
             self.next_ethereum_block = self.next_ethereum_block + 1;
+            self.store
+                .lock()
+                .unwrap()
+                .set_data(NEXT_ETH_BLOCK_KEY, Some(self.next_ethereum_block))
+                .expect("Failed to store next ethereum block");
         }
     }
 }
@@ -115,24 +142,27 @@ mod test {
             Timestamp, WalletAddress,
         },
         transactions::{QuoteId, QuoteTx},
-        utils::test_utils::transaction_provider::TestTransactionProvider,
+        utils::test_utils::{store::MemoryKVS, transaction_provider::TestTransactionProvider},
     };
     use rand::Rng;
 
     struct TestObjects {
         client: Arc<TestEthereumClient>,
         provider: Arc<Mutex<TestTransactionProvider>>,
-        witness: EthereumWitness<TestTransactionProvider, TestEthereumClient>,
+        store: Arc<Mutex<MemoryKVS>>,
+        witness: EthereumWitness<TestTransactionProvider, TestEthereumClient, MemoryKVS>,
     }
 
     fn setup() -> TestObjects {
         let client = Arc::new(TestEthereumClient::new());
         let provider = Arc::new(Mutex::new(TestTransactionProvider::new()));
-        let witness = EthereumWitness::new(client.clone(), provider.clone());
+        let store = Arc::new(Mutex::new(MemoryKVS::new()));
+        let witness = EthereumWitness::new(client.clone(), provider.clone(), store.clone());
 
         TestObjects {
             client,
             provider,
+            store,
             witness,
         }
     }
@@ -155,11 +185,10 @@ mod test {
 
     #[tokio::test]
     async fn adds_witness_transaction_correctly() {
-        let TestObjects {
-            client,
-            provider,
-            mut witness,
-        } = setup();
+        let params = setup();
+        let client = params.client;
+        let provider = params.provider;
+        let mut witness = params.witness;
 
         let input_address = generate_eth_address();
 
@@ -204,6 +233,7 @@ mod test {
         // Poll!
         witness.poll_next_main_chain().await;
 
+        // Check that transactions were added correctly
         let provider = provider.lock().unwrap();
 
         assert_eq!(provider.get_quote_txs().len(), 2);
@@ -227,5 +257,41 @@ mod test {
         );
         assert_eq!(witness_tx.amount, eth_transaction.value);
         assert_eq!(witness_tx.sender, Some(eth_transaction.from.to_string()));
+    }
+
+    #[tokio::test]
+    async fn adds_witness_saves_next_ethereum_block() {
+        let params = setup();
+        let client = params.client;
+        let store = params.store;
+        let mut witness = params.witness;
+
+        // Create the main chain transactions
+        let eth_transaction = Transaction {
+            hash: Hash(rand::thread_rng().gen::<[u8; 32]>()),
+            index: 0,
+            block_number: 0,
+            from: generate_eth_address(),
+            to: Some(generate_eth_address()),
+            value: 100,
+        };
+
+        client.add_block(vec![eth_transaction]);
+
+        // Pre conditions
+        assert_eq!(witness.next_ethereum_block, START_BLOCK);
+        assert!(store
+            .lock()
+            .unwrap()
+            .get_data::<u64>(NEXT_ETH_BLOCK_KEY)
+            .is_none());
+
+        // Poll!
+        witness.poll_next_main_chain().await;
+
+        // Check that we correctly store the next ethereum block
+        let next_block_key = store.lock().unwrap().get_data::<u64>(NEXT_ETH_BLOCK_KEY);
+        assert_eq!(next_block_key, Some(witness.next_ethereum_block));
+        assert_ne!(next_block_key, Some(START_BLOCK));
     }
 }

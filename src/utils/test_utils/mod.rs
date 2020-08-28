@@ -14,6 +14,9 @@ pub mod transaction_provider;
 /// Test helper for ethereum
 pub mod ethereum;
 
+/// Test helper for key value store
+pub mod store;
+
 /// Create a dummy quote transaction to be used for tests
 pub fn create_fake_quote_tx() -> QuoteTx {
     let return_address = WalletAddress::new("Alice");
