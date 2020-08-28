@@ -78,15 +78,18 @@ async fn test_loki_witness() {
 
     // Send some money to integrated address
     {
-        // This test requires another wallet to do the payment
-        let port_other = 6935;
+        let res = loki_rpc::get_balance(PORT).await.expect("Req is Err");
+        info!("Balance before: {}", res);
 
         let amount = LokiAmount::from_atomic(50_000_000);
         let address = LokiWalletAddress::from_str(&int_address.integrated_address)
             .expect("Incorrect wallet address");
-        let res = loki_rpc::transfer(port_other, &amount, &address, None).await;
+        let res = loki_rpc::transfer(PORT, &amount, &address, None).await;
 
         info!("Transfer response: {:?}", &res);
+
+        let res = loki_rpc::get_balance(PORT).await.expect("Req is Err");
+        info!("Balance after: {}", res);
     }
 
     let tx = crate::side_chain::SideChainTx::from(tx);

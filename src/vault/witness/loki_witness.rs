@@ -68,11 +68,20 @@ where
                         "Received payments from loki wallet (count: {})",
                         payments.len()
                     );
+
+                    for p in &payments {
+                        debug!(
+                            "     [{}] unlock: {}, amount: {}",
+                            p.block_height, p.unlock_time, p.amount
+                        );
+                    }
                     self.process_main_chain_payments(payments);
                 }
                 Err(crossbeam_channel::TryRecvError::Disconnected) => {
                     error!("Failed to receive message: Disconnected");
-                    break;
+                    // Something must have gone wrong if the channel is closed,
+                    // so it is bette to abort the program here
+                    panic!("Loki connection has been severed");
                 }
                 Err(crossbeam_channel::TryRecvError::Empty) => {
                     break;
