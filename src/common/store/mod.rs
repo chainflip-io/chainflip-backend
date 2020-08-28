@@ -6,12 +6,12 @@ pub mod utils;
 use utils::SQLite;
 
 /// An interface for key value stores
-pub(crate) trait KeyValueStore {
+pub trait KeyValueStore {
     /// Get the data associated with a key
     fn get_data<T: FromStr>(&self, key: &str) -> Option<T>;
 
     /// Set the data
-    fn set_data<T: ToString>(&self, key: &str, value: Option<T>) -> Result<(), String>;
+    fn set_data<T: ToString>(&mut self, key: &str, value: Option<T>) -> Result<(), String>;
 }
 
 /// A key value store which uses SQLite
@@ -35,7 +35,7 @@ impl KeyValueStore for PersistentKVS {
         SQLite::get_data(&self.connection, key)
     }
 
-    fn set_data<T: ToString>(&self, key: &str, value: Option<T>) -> Result<(), String> {
+    fn set_data<T: ToString>(&mut self, key: &str, value: Option<T>) -> Result<(), String> {
         SQLite::set_data(&self.connection, key, value)
     }
 }
