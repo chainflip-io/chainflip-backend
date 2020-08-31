@@ -126,19 +126,24 @@ mod tests {
 
     use super::*;
 
-    struct Amount(u128);
+    struct TestAmount(u128);
 
-    impl CoinAmount for Amount {
+    impl CoinAmount for TestAmount {
         fn to_atomic(&self) -> u128 {
             self.0
         }
 
         fn from_atomic(n: u128) -> Self {
-            Amount(n)
+            TestAmount(n)
         }
 
         fn coin_info() -> CoinInfo {
-            Coin::ETH.get_info()
+            CoinInfo {
+                name: "TEST",
+                symbol: Coin::ETH,
+                decimals: 18,
+                requires_return_address: false,
+            }
         }
     }
 
@@ -156,22 +161,22 @@ mod tests {
 
     #[test]
     fn test_coin_pretty_printing() {
-        let amount = Amount(100_000_000_000_000_000_000);
+        let amount = TestAmount(100_000_000_000_000_000_000);
 
         assert_eq!(&amount.to_string_pretty(), "100.000000000000000000");
 
-        let amount = Amount(123_456_789_987_000_000_000);
+        let amount = TestAmount(123_456_789_987_000_000_000);
 
         assert_eq!(&amount.to_string_pretty(), "123.456789987000000000");
 
-        let amount = Amount(23_456_789_000_000_000);
+        let amount = TestAmount(23_456_789_000_000_000);
 
         assert_eq!(&amount.to_string_pretty(), "0.023456789000000000");
     }
 
     #[test]
     fn test_coin_to_decimal() {
-        let amount = Amount(105_403_140_000_000_000);
+        let amount = TestAmount(105_403_140_000_000_000);
 
         assert_eq!(amount.to_decimal(), 0.10540314);
     }
