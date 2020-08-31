@@ -10,6 +10,9 @@ pub mod loki;
 /// Utils for generating HD wallets (bip32/bip44)
 pub mod bip44;
 
+/// Utils for asymmetric swapping
+pub mod autoswap;
+
 /// Clone slice values into an array
 ///
 /// # Example
