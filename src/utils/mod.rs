@@ -49,11 +49,10 @@ pub fn calculate_output_amount(
     let input_fee = input_fee.max(0.0);
     let output_fee = output_fee.max(0.0);
 
-    // (input amount - 0.5) * input liquidity depth * output liquidity depth / (input amount + input liquidity depth) ^2
     let output_amount = (input_amount - input_fee) * input_depth * output_depth
         / (input_amount + input_depth).powi(2);
 
-    output_amount - output_fee
+    (output_amount - output_fee).max(0.0)
 }
 #[cfg(test)]
 mod test {
@@ -103,6 +102,7 @@ mod test {
             CalculateOutputValues::new(0.0, 1.0, 0.0, 2.0, 0.0, 0.0),
             CalculateOutputValues::new(1.0, 0.0, 0.0, 2.0, 0.0, 0.0),
             CalculateOutputValues::new(1.0, 1.0, 0.0, 0.0, 0.0, 0.0),
+            CalculateOutputValues::new(1000.0, 10000.0, 0.0, 20000.0, 1000000000.0, 0.0),
         ];
 
         for value in values.iter() {
