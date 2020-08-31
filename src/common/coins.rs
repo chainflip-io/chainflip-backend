@@ -1,8 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{
-    fmt::{self, Display},
-    str::FromStr,
-};
+use std::{fmt::Display, str::FromStr};
 
 /// Information about a coin
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -89,6 +86,13 @@ pub trait CoinAmount {
     /// Create an instance from atomic coin amount
     fn from_atomic(n: u128) -> Self;
 
+    /// Get the decimal representation of the amount
+    fn to_decimal(&self) -> f64 {
+        let atomic_amount = self.to_atomic() as f64;
+        let decimals = Self::coin_info().decimals as i32;
+        atomic_amount / 10f64.powi(decimals)
+    }
+
     /// Get coin info for current coin type
     fn coin_info() -> CoinInfo;
 
@@ -117,36 +121,26 @@ pub trait CoinAmount {
     }
 }
 
-/// Loki coin amount
-#[derive(Debug)]
-pub struct LokiAmount {
-    atomic_amount: u128,
-}
-
-impl Display for LokiAmount {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} LOKI", self.to_string_pretty())
-    }
-}
-
-impl CoinAmount for LokiAmount {
-    fn to_atomic(&self) -> u128 {
-        self.atomic_amount
-    }
-
-    fn from_atomic(n: u128) -> Self {
-        LokiAmount { atomic_amount: n }
-    }
-
-    fn coin_info() -> CoinInfo {
-        Coin::LOKI.get_info()
-    }
-}
-
 #[cfg(test)]
 mod tests {
 
     use super::*;
+
+    struct Amount(u128);
+
+    impl CoinAmount for Amount {
+        fn to_atomic(&self) -> u128 {
+            self.0
+        }
+
+        fn from_atomic(n: u128) -> Self {
+            Amount(n)
+        }
+
+        fn coin_info() -> CoinInfo {
+            Coin::ETH.get_info()
+        }
+    }
 
     #[test]
     fn valid_coin_literal_parsing() {
@@ -162,22 +156,23 @@ mod tests {
 
     #[test]
     fn test_coin_pretty_printing() {
-        let amount = LokiAmount {
-            atomic_amount: 100_000_000_000,
-        };
+        let amount = Amount(100_000_000_000_000_000_000);
 
-        assert_eq!(&amount.to_string_pretty(), "100.000000000");
+        assert_eq!(&amount.to_string_pretty(), "100.000000000000000000");
 
-        let amount = LokiAmount {
-            atomic_amount: 123_456_789_987,
-        };
+        let amount = Amount(123_456_789_987_000_000_000);
 
-        assert_eq!(&amount.to_string_pretty(), "123.456789987");
+        assert_eq!(&amount.to_string_pretty(), "123.456789987000000000");
 
-        let amount = LokiAmount {
-            atomic_amount: 23_456_789,
-        };
+        let amount = Amount(23_456_789_000_000_000);
 
-        assert_eq!(&amount.to_string_pretty(), "0.023456789");
+        assert_eq!(&amount.to_string_pretty(), "0.023456789000000000");
+    }
+
+    #[test]
+    fn test_coin_to_decimal() {
+        let amount = Amount(105_403_140_000_000_000);
+
+        assert_eq!(amount.to_decimal(), 0.10540314);
     }
 }

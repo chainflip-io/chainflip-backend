@@ -9,10 +9,6 @@ pub mod loki;
 /// Utils for generating HD wallets (bip32/bip44)
 pub mod bip44;
 
-use hdwallet::secp256k1::PublicKey;
-use hex;
-use tiny_keccak::{Hasher, Keccak};
-
 /// Clone slice values into an array
 ///
 /// # Example
