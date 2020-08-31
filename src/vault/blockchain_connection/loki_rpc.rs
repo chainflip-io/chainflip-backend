@@ -1,9 +1,6 @@
 //! Bindings to some commonly used methods exposed by Loki RPC Wallet
 
-use crate::common::{
-    coins::{CoinAmount, LokiAmount},
-    LokiPaymentId, LokiWalletAddress,
-};
+use crate::common::{coins::CoinAmount, LokiAmount, LokiPaymentId, LokiWalletAddress};
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 

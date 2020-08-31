@@ -10,10 +10,7 @@ use vault::blockchain_connection::loki_rpc;
 
 use crate::side_chain::ISideChain;
 
-use crate::common::{
-    coins::{CoinAmount, LokiAmount},
-    LokiPaymentId, LokiWalletAddress,
-};
+use crate::common::{coins::CoinAmount, LokiAmount, LokiPaymentId, LokiWalletAddress};
 
 const PORT: u16 = 6934;
 

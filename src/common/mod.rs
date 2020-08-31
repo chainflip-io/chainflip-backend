@@ -14,7 +14,7 @@ pub mod ethereum;
 /// Definitions for Loki
 pub mod loki;
 
-pub use loki::{LokiPaymentId, LokiWalletAddress};
+pub use loki::{LokiAmount, LokiPaymentId, LokiWalletAddress};
 
 /// Key value store definitions
 pub mod store;

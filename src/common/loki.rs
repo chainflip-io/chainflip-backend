@@ -1,3 +1,9 @@
+use super::{
+    coins::{CoinAmount, CoinInfo},
+    Coin,
+};
+use std::fmt::{self, Display};
+
 /// Represents regular and integrated wallet addresses for Loki
 #[derive(Debug)]
 pub struct LokiWalletAddress {
@@ -76,5 +82,31 @@ impl serde::Serialize for LokiPaymentId {
         S: serde::Serializer,
     {
         serializer.serialize_str(&self.long_pid)
+    }
+}
+
+/// Loki coin amount
+#[derive(Debug)]
+pub struct LokiAmount {
+    atomic_amount: u128,
+}
+
+impl Display for LokiAmount {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} LOKI", self.to_string_pretty())
+    }
+}
+
+impl CoinAmount for LokiAmount {
+    fn to_atomic(&self) -> u128 {
+        self.atomic_amount
+    }
+
+    fn from_atomic(n: u128) -> Self {
+        LokiAmount { atomic_amount: n }
+    }
+
+    fn coin_info() -> CoinInfo {
+        Coin::LOKI.get_info()
     }
 }
