@@ -7,6 +7,7 @@ use blockswap::{
     utils::test_utils,
     vault::witness::FakeWitness,
 };
+use uuid::Uuid;
 
 #[test]
 fn test_witness_tx_is_made() {
@@ -41,7 +42,7 @@ fn test_witness_tx_is_made() {
     std::thread::sleep(std::time::Duration::from_millis(100));
 
     let coin_tx = CoinTx {
-        id: 0,
+        id: Uuid::new_v4(),
         timestamp: Timestamp::now(),
         deposit_address: quote_tx.input_address.clone(),
         return_address: quote_tx.return_address.clone(),

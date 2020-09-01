@@ -1,5 +1,5 @@
 use crate::{
-    common::Coin,
+    common::{coins::PoolCoin, Coin},
     side_chain::SideChainTx,
     transactions::{QuoteTx, WitnessTx},
 };
@@ -38,7 +38,7 @@ pub trait TransactionProvider {
     fn get_witness_txs(&self) -> &[WitnessTx];
 
     /// Get the liquidity for a given pool
-    fn get_liquidity(&self, pool: Coin) -> Option<Liquidity>;
+    fn get_liquidity(&self, pool: PoolCoin) -> Option<Liquidity>;
 }
 
 /// Memory transaction provider

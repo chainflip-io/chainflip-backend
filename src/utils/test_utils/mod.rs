@@ -1,7 +1,8 @@
 use crate::{
     common::{Coin, Timestamp, WalletAddress},
-    transactions::{QuoteId, QuoteTx},
+    transactions::QuoteTx,
 };
+use uuid::Uuid;
 
 /// Test helpers for Block Processor
 pub mod block_processor;
@@ -24,7 +25,7 @@ pub fn create_fake_quote_tx() -> QuoteTx {
     let timestamp = Timestamp::now();
 
     let quote = QuoteTx {
-        id: QuoteId::new(0),
+        id: Uuid::new_v4(),
         timestamp,
         input: Coin::LOKI,
         output: Coin::BTC,

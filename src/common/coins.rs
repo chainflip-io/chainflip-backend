@@ -1,6 +1,26 @@
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, str::FromStr};
 
+/// A representation of a valid pool coin
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct PoolCoin(Coin);
+
+impl PoolCoin {
+    /// Construct a PoolCoin from a Coin
+    pub fn from(coin: Coin) -> Result<Self, &'static str> {
+        if coin == Coin::LOKI {
+            Err("Cannot have a LOKI coin pool")
+        } else {
+            Ok(PoolCoin(coin))
+        }
+    }
+
+    /// Get the coin associated with this pool coin
+    pub fn get_coin(&self) -> Coin {
+        self.0
+    }
+}
+
 /// Information about a coin
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]

@@ -5,6 +5,7 @@ use crate::{
     vault::{blockchain_connection::ethereum::EthereumClient, transactions::TransactionProvider},
 };
 use std::sync::{Arc, Mutex};
+use uuid::Uuid;
 
 /// The block that we should start scanning from if we're starting the witness from scratch.
 /// There's no reason to scan from a block before blockswap launch.
@@ -98,6 +99,7 @@ where
                     debug!("Publishing witness transaction for quote: {:?}", &quote);
 
                     let tx = WitnessTx {
+                        id: Uuid::new_v4(),
                         quote_id: quote.id,
                         transaction_id: transaction.hash.to_string(),
                         transaction_block_number: transaction.block_number,
@@ -141,7 +143,7 @@ mod test {
             ethereum::{Address, Hash, Transaction},
             Timestamp, WalletAddress,
         },
-        transactions::{QuoteId, QuoteTx},
+        transactions::QuoteTx,
         utils::test_utils::{store::MemoryKVS, transaction_provider::TestTransactionProvider},
     };
     use rand::Rng;
@@ -169,7 +171,7 @@ mod test {
 
     fn get_quote(id: u64, input: Coin, input_address: &str) -> QuoteTx {
         QuoteTx {
-            id: QuoteId::new(id),
+            id: Uuid::new_v4(),
             timestamp: Timestamp::now(),
             input,
             output: Coin::BTC,
