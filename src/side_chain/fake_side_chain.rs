@@ -39,7 +39,7 @@ impl FakeSideChain {
                     SideChainTx::WitnessTx(tx) => {
                         quotes.push(tx.clone());
                     }
-                    SideChainTx::QuoteTx(_tx) => {
+                    _ => {
                         // skip
                     }
                 }

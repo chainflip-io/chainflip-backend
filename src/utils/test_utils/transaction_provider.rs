@@ -42,4 +42,11 @@ impl TransactionProvider for TestTransactionProvider {
     fn get_witness_txs(&self) -> &[WitnessTx] {
         &self.witness_txs
     }
+
+    fn get_liquidity(
+        &self,
+        pool: crate::common::Coin,
+    ) -> Option<crate::vault::transactions::Liquidity> {
+        None
+    }
 }

@@ -72,3 +72,31 @@ impl PartialEq<WitnessTx> for WitnessTx {
         self.quote_id == other.quote_id && self.transaction_id == other.transaction_id
     }
 }
+
+/// Pool change transaction stored on the Side Chain
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct PoolChangeTx {
+    /// A unique transaction id
+    pub id: u64, // TODO: use uuid
+    /// The coin associated with this pool
+    pub coin: Coin,
+    /// The depth change in atomic value of the `coin` in the pool
+    pub depth_change: i128,
+    /// The depth change in atomic value of the LOKI in the pool
+    pub loki_depth_change: i128,
+}
+
+impl PoolChangeTx {
+    pub fn new(coin: Coin, depth_change: i128, loki_depth_change: i128) -> Self {
+        if coin == Coin::LOKI {
+            panic!("Tried to create a LOKI pool!")
+        }
+
+        PoolChangeTx {
+            id: 0,
+            coin,
+            depth_change,
+            loki_depth_change,
+        }
+    }
+}

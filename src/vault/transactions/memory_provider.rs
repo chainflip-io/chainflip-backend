@@ -1,30 +1,20 @@
+use super::{Liquidity, TransactionProvider};
 use crate::{
     common::Coin,
     side_chain::{ISideChain, SideChainTx},
     transactions::{QuoteTx, WitnessTx},
 };
-use std::sync::{Arc, Mutex};
-
-/// An interface for providing transactions
-pub trait TransactionProvider {
-    /// Sync new transactions
-    fn sync(&mut self);
-
-    /// Add transactions
-    fn add_transactions(&mut self, txs: Vec<SideChainTx>) -> Result<(), String>;
-
-    /// Get all the quote transactions
-    fn get_quote_txs(&self) -> &[QuoteTx];
-
-    /// Get all the witness transactions
-    fn get_witness_txs(&self) -> &[WitnessTx];
-}
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 /// An in-memory transaction provider
-pub(crate) struct MemoryTransactionsProvider<S: ISideChain> {
+pub struct MemoryTransactionsProvider<S: ISideChain> {
     side_chain: Arc<Mutex<S>>,
     quote_txs: Vec<QuoteTx>,
     witness_txs: Vec<WitnessTx>,
+    pools: HashMap<Coin, Liquidity>,
     next_block_idx: u32,
 }
 
@@ -35,6 +25,7 @@ impl<S: ISideChain> MemoryTransactionsProvider<S> {
             side_chain: side_chain,
             quote_txs: vec![],
             witness_txs: vec![],
+            pools: HashMap::new(),
             next_block_idx: 0,
         }
     }
@@ -48,6 +39,27 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
                 match tx {
                     SideChainTx::QuoteTx(tx) => self.quote_txs.push(tx),
                     SideChainTx::WitnessTx(tx) => self.witness_txs.push(tx),
+                    SideChainTx::PoolChangeTx(tx) => {
+                        let mut liquidity = self
+                            .pools
+                            .get(&tx.coin)
+                            .cloned()
+                            .unwrap_or(Liquidity::new());
+
+                        let depth = liquidity.depth as i128 + tx.depth_change;
+                        let loki_depth = liquidity.loki_depth as i128 + tx.loki_depth_change;
+                        if depth < 0 || loki_depth < 0 {
+                            error!(
+                                "Negative liquidity depth found for tx: {:?}. Current: {:?}",
+                                tx, liquidity
+                            );
+                            panic!("Negative liquidity depth found");
+                        }
+
+                        liquidity.depth = depth as u128;
+                        liquidity.loki_depth = loki_depth as u128;
+                        self.pools.insert(tx.coin, liquidity);
+                    }
                     _ => continue,
                 }
             }
@@ -83,13 +95,21 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
     fn get_witness_txs(&self) -> &[WitnessTx] {
         &self.witness_txs
     }
+
+    fn get_liquidity(&self, pool: Coin) -> Option<Liquidity> {
+        if pool == Coin::LOKI {
+            None
+        } else {
+            self.pools.get(&pool).cloned()
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::side_chain::FakeSideChain;
-    use crate::utils::test_utils::create_fake_quote_tx;
+    use crate::{transactions::PoolChangeTx, utils::test_utils::create_fake_quote_tx};
 
     fn setup() -> MemoryTransactionsProvider<FakeSideChain> {
         let side_chain = Arc::new(Mutex::new(FakeSideChain::new()));
@@ -177,5 +197,50 @@ mod test {
 
         assert_eq!(provider.get_witness_txs().len(), 1);
         assert_eq!(provider.next_block_idx, 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "Negative liquidity depth found")]
+    fn test_provider_panics_on_negative_liquidity() {
+        let mut provider = setup();
+        {
+            let change_tx = PoolChangeTx::new(Coin::ETH, -100, -100);
+            let mut side_chain = provider.side_chain.lock().unwrap();
+
+            side_chain
+                .add_block(vec![SideChainTx::PoolChangeTx(change_tx)])
+                .unwrap();
+        }
+
+        // Pre condition check
+        assert!(provider.get_liquidity(Coin::ETH).is_none());
+
+        provider.sync();
+    }
+
+    #[test]
+    fn test_provider_tallies_liquidity() {
+        let mut provider = setup();
+        {
+            let mut side_chain = provider.side_chain.lock().unwrap();
+
+            side_chain
+                .add_block(vec![
+                    SideChainTx::PoolChangeTx(PoolChangeTx::new(Coin::ETH, 100, 100)),
+                    SideChainTx::PoolChangeTx(PoolChangeTx::new(Coin::ETH, 100, -50)),
+                ])
+                .unwrap();
+        }
+
+        assert!(provider.get_liquidity(Coin::ETH).is_none());
+
+        provider.sync();
+
+        let liquidity = provider
+            .get_liquidity(Coin::ETH)
+            .expect("Expected liquidity to exist");
+
+        assert_eq!(liquidity.depth, 200);
+        assert_eq!(liquidity.loki_depth, 50);
     }
 }
