@@ -1,8 +1,4 @@
-fn calc_swap_output(l: f64, dl: f64, de: f64, lfee: f64) -> f64 {
-    let dl_ext = l + dl;
-    let y = (l - lfee) * dl * de / (dl_ext * dl_ext);
-    y
-}
+use crate::utils;
 
 /// Calculate the amount `x` of coin L to auto-swap for amount `y` of coin E such that
 /// such that the amount of X and Y provisioned into the pool matches the current ratio
@@ -12,12 +8,18 @@ fn calc_swap_output(l: f64, dl: f64, de: f64, lfee: f64) -> f64 {
 ///
 /// Current limitation: coin L must be provided in excess, i.e. we will be auto-swapping it
 /// for L, otherwise returns an error.
-pub fn calc_autoswap_amount(l: u128, e: u128, dl: u128, de: u128) -> Result<(u128, u128), ()> {
+pub fn calc_autoswap_amount(
+    l: u128,
+    e: u128,
+    dl: u128,
+    de: u128,
+    input_fee: u128,
+) -> Result<(u128, u128), ()> {
     let l = l as f64;
     let e = e as f64;
     let dl = dl as f64;
     let de = de as f64;
-    let fee = 0.0; // swap fee in loki
+    let i_fee = input_fee as f64;
 
     let gamma = l - (e * dl / de);
 
@@ -30,7 +32,7 @@ pub fn calc_autoswap_amount(l: u128, e: u128, dl: u128, de: u128) -> Result<(u12
 
     let b = 2.0 * dl - gamma;
     let c = 2.0 * dl * (dl - gamma);
-    let d = -dl * dl * (gamma + fee);
+    let d = -dl * dl * (gamma + i_fee);
 
     let delta0 = b * b - 3.0 * c;
     let delta1 = 2.0 * b * b * b - 9.0 * b * c + 27.0 * d;
@@ -46,7 +48,11 @@ pub fn calc_autoswap_amount(l: u128, e: u128, dl: u128, de: u128) -> Result<(u12
         return Err(());
     }
 
-    let y = calc_swap_output(x, dl, de, fee);
+    // For now we assume that the first coin (L) is Loki, so
+    // there is no output fee
+    let output_fee = 0.0;
+
+    let y = utils::calculate_output_amount(x, dl, i_fee, de, output_fee);
 
     // should be as close to 0 as possible
     let error = 1.0 - ((l - x) / (e + y)) * de / dl;
@@ -74,23 +80,27 @@ mod tests {
         use super::*;
         use rand::prelude::*;
 
-        let l = loki(1);
-        let e = eth(1);
-        let dl = loki(9);
-        let de = eth(18);
+        let fee = loki(1);
 
-        let res = calc_autoswap_amount(l, e, dl, de);
+        let l = loki(10);
+        let e = eth(10);
+        let dl = loki(90);
+        let de = eth(180);
+
+        let res = calc_autoswap_amount(l, e, dl, de, fee);
         assert!(res.is_ok());
 
-        let res = calc_autoswap_amount(loki(10), 0, dl, de);
+        dbg!(&res);
+
+        let res = calc_autoswap_amount(loki(100), 0, dl, de, fee);
         assert!(res.is_ok());
 
         // At the moment, it is expected that there is excess of coin on the left,
         // which isn't the case for the following parameters:
-        let res = calc_autoswap_amount(loki(1), eth(3), dl, de);
+        let res = calc_autoswap_amount(loki(10), eth(30), dl, de, fee);
         assert!(res.is_err());
 
-        let res = calc_autoswap_amount(loki(1), eth(1), loki(1), de);
+        let res = calc_autoswap_amount(loki(10), eth(10), loki(10), de, fee);
         assert!(res.is_ok());
 
         let mut rng = StdRng::seed_from_u64(0);
@@ -102,9 +112,12 @@ mod tests {
             let dl = rng.gen::<u128>();
             let de = rng.gen::<u128>();
 
+            // TODO: add randomised fee
+            let fee = 0;
+
             let gamma = l as f64 - (e as f64 * dl as f64 / de as f64);
 
-            let res = calc_autoswap_amount(l, e, dl, de);
+            let res = calc_autoswap_amount(l, e, dl, de, fee);
 
             if gamma <= 0.0 {
                 assert!(res.is_err());
