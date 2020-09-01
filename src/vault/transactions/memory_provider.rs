@@ -49,10 +49,11 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
                         let depth = liquidity.depth as i128 + tx.depth_change;
                         let loki_depth = liquidity.loki_depth as i128 + tx.loki_depth_change;
                         if depth < 0 || loki_depth < 0 {
-                            panic!(
+                            error!(
                                 "Negative liquidity depth found for tx: {:?}. Current: {:?}",
                                 tx, liquidity
                             );
+                            panic!("Negative liquidity depth found");
                         }
 
                         liquidity.depth = depth as u128;
@@ -199,7 +200,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "Negative liquidity depth found")]
     fn test_provider_panics_on_negative_liquidity() {
         let mut provider = setup();
         {
@@ -211,6 +212,7 @@ mod test {
                 .unwrap();
         }
 
+        // Pre condition check
         assert!(provider.get_liquidity(Coin::ETH).is_none());
 
         provider.sync();
