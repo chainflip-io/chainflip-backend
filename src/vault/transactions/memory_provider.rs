@@ -1,3 +1,4 @@
+use super::{Liquidity, TransactionProvider};
 use crate::{
     common::Coin,
     side_chain::{ISideChain, SideChainTx},
@@ -8,45 +9,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-/// A simple representation of a pool liquidity
-#[derive(Debug, Copy, Clone)]
-pub struct Liquidity {
-    /// The depth of the coin staked against LOKI in the pool
-    pub depth: u128,
-    /// The depth of LOKI in the pool
-    pub loki_depth: u128,
-}
-
-impl Liquidity {
-    /// Create a new liquidity
-    fn new() -> Self {
-        Liquidity {
-            depth: 0,
-            loki_depth: 0,
-        }
-    }
-}
-
-/// An interface for providing transactions
-pub trait TransactionProvider {
-    /// Sync new transactions
-    fn sync(&mut self);
-
-    /// Add transactions
-    fn add_transactions(&mut self, txs: Vec<SideChainTx>) -> Result<(), String>;
-
-    /// Get all the quote transactions
-    fn get_quote_txs(&self) -> &[QuoteTx];
-
-    /// Get all the witness transactions
-    fn get_witness_txs(&self) -> &[WitnessTx];
-
-    /// Get the liquidity for a given pool
-    fn get_liquidity(&self, pool: Coin) -> Option<Liquidity>;
-}
-
 /// An in-memory transaction provider
-pub(crate) struct MemoryTransactionsProvider<S: ISideChain> {
+pub struct MemoryTransactionsProvider<S: ISideChain> {
     side_chain: Arc<Mutex<S>>,
     quote_txs: Vec<QuoteTx>,
     witness_txs: Vec<WitnessTx>,
