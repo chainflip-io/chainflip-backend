@@ -41,5 +41,6 @@ pub trait TransactionProvider {
     fn get_liquidity(&self, pool: Coin) -> Option<Liquidity>;
 }
 
+/// Memory transaction provider
 pub mod memory_provider;
 pub use memory_provider::MemoryTransactionsProvider;
