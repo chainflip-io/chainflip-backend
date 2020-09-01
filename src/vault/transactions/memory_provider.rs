@@ -1,6 +1,6 @@
 use super::{Liquidity, TransactionProvider};
 use crate::{
-    common::Coin,
+    common::{coins::PoolCoin, Coin},
     side_chain::{ISideChain, SideChainTx},
     transactions::{QuoteTx, WitnessTx},
 };
@@ -42,7 +42,7 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
                     SideChainTx::PoolChangeTx(tx) => {
                         let mut liquidity = self
                             .pools
-                            .get(&tx.coin)
+                            .get(&tx.coin.get_coin())
                             .cloned()
                             .unwrap_or(Liquidity::new());
 
@@ -58,7 +58,7 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
 
                         liquidity.depth = depth as u128;
                         liquidity.loki_depth = loki_depth as u128;
-                        self.pools.insert(tx.coin, liquidity);
+                        self.pools.insert(tx.coin.get_coin(), liquidity);
                     }
                     _ => continue,
                 }
@@ -96,12 +96,8 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
         &self.witness_txs
     }
 
-    fn get_liquidity(&self, pool: Coin) -> Option<Liquidity> {
-        if pool == Coin::LOKI {
-            None
-        } else {
-            self.pools.get(&pool).cloned()
-        }
+    fn get_liquidity(&self, pool: PoolCoin) -> Option<Liquidity> {
+        self.pools.get(&pool.get_coin()).cloned()
     }
 }
 
@@ -202,9 +198,16 @@ mod test {
     #[test]
     #[should_panic(expected = "Negative liquidity depth found")]
     fn test_provider_panics_on_negative_liquidity() {
+        let coin = PoolCoin::from(Coin::ETH).expect("Expected valid pool coin");
         let mut provider = setup();
         {
-            let change_tx = PoolChangeTx::new(Coin::ETH, -100, -100);
+            let change_tx = PoolChangeTx {
+                id: 0,
+                coin,
+                depth_change: -100,
+                loki_depth_change: -100,
+            };
+
             let mut side_chain = provider.side_chain.lock().unwrap();
 
             side_chain
@@ -213,31 +216,42 @@ mod test {
         }
 
         // Pre condition check
-        assert!(provider.get_liquidity(Coin::ETH).is_none());
+        assert!(provider.get_liquidity(coin).is_none());
 
         provider.sync();
     }
 
     #[test]
     fn test_provider_tallies_liquidity() {
+        let coin = PoolCoin::from(Coin::ETH).expect("Expected valid pool coin");
         let mut provider = setup();
         {
             let mut side_chain = provider.side_chain.lock().unwrap();
 
             side_chain
                 .add_block(vec![
-                    SideChainTx::PoolChangeTx(PoolChangeTx::new(Coin::ETH, 100, 100)),
-                    SideChainTx::PoolChangeTx(PoolChangeTx::new(Coin::ETH, 100, -50)),
+                    SideChainTx::PoolChangeTx(PoolChangeTx {
+                        id: 0,
+                        coin,
+                        depth_change: 100,
+                        loki_depth_change: 100,
+                    }),
+                    SideChainTx::PoolChangeTx(PoolChangeTx {
+                        id: 1,
+                        coin,
+                        depth_change: 100,
+                        loki_depth_change: 50,
+                    }),
                 ])
                 .unwrap();
         }
 
-        assert!(provider.get_liquidity(Coin::ETH).is_none());
+        assert!(provider.get_liquidity(coin).is_none());
 
         provider.sync();
 
         let liquidity = provider
-            .get_liquidity(Coin::ETH)
+            .get_liquidity(coin)
             .expect("Expected liquidity to exist");
 
         assert_eq!(liquidity.depth, 200);
