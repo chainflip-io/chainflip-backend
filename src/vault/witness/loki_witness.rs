@@ -14,6 +14,7 @@ use crate::transactions::{QuoteTx, WitnessTx};
 use crate::vault::blockchain_connection::{Payment, Payments};
 
 use crate::common::coins::{Coin, CoinAmount};
+use uuid::Uuid;
 
 /// Witness Mock
 pub struct LokiWitness<T>
@@ -138,6 +139,7 @@ where
         let mut side_chain = self.side_chain.lock().unwrap();
 
         let tx = WitnessTx {
+            id: Uuid::new_v4(),
             quote_id: quote.id,
             transaction_id: "0".to_owned(),
             transaction_block_number: 0,

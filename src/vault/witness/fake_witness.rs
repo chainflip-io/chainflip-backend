@@ -5,6 +5,7 @@ use crossbeam_channel::Receiver;
 use crate::common::{Block, Coin};
 use crate::side_chain::{ISideChain, SideChainTx};
 use crate::transactions::{CoinTx, QuoteTx, WitnessTx};
+use uuid::Uuid;
 
 /// Witness Fake
 pub struct FakeWitness<T>
@@ -102,6 +103,7 @@ where
         let mut side_chain = self.side_chain.lock().unwrap();
 
         let tx = WitnessTx {
+            id: Uuid::new_v4(),
             quote_id: quote.id,
             transaction_id: "0".to_owned(),
             transaction_block_number: 0,

@@ -1,23 +1,13 @@
 use crate::common::{coins::PoolCoin, Coin, Timestamp, WalletAddress};
 
 use serde::{Deserialize, Serialize};
-
-/// Quote identifier
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
-pub struct QuoteId(pub u64);
-
-impl QuoteId {
-    /// Create quote identifier from numeric representation
-    pub fn new(id: u64) -> Self {
-        QuoteId { 0: id }
-    }
-}
+use uuid::Uuid;
 
 /// Quote transaction stored on the Side Chain
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct QuoteTx {
-    /// Quote id generated on the server (same as tx id?)
-    pub id: QuoteId,
+    /// A uniquie identifier
+    pub id: Uuid,
     /// Timestamp for when the transaction was added onto the side chain
     pub timestamp: Timestamp,
     /// The input coin for the quote
@@ -36,13 +26,13 @@ pub struct QuoteTx {
 
 impl std::hash::Hash for QuoteTx {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.id.0.hash(state);
+        self.id.hash(state);
     }
 }
 
 #[derive(Debug)]
 pub struct CoinTx {
-    pub id: u64,
+    pub id: Uuid,
     pub timestamp: Timestamp,
     pub deposit_address: WalletAddress,
     pub return_address: WalletAddress,
@@ -51,8 +41,10 @@ pub struct CoinTx {
 /// Witness transaction stored on the Side Chain
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct WitnessTx {
+    // A unique identifier
+    pub id: Uuid,
     /// The quote that this witness tx is linked to
-    pub quote_id: QuoteId,
+    pub quote_id: Uuid,
     /// The input transaction id or hash
     pub transaction_id: String,
     /// The input transaction block number
@@ -76,8 +68,8 @@ impl PartialEq<WitnessTx> for WitnessTx {
 /// Pool change transaction stored on the Side Chain
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct PoolChangeTx {
-    /// A unique transaction id
-    pub id: u64, // TODO: use uuid
+    /// A unique identifier
+    pub id: Uuid,
     /// The coin associated with this pool
     pub coin: PoolCoin,
     /// The depth change in atomic value of the `coin` in the pool

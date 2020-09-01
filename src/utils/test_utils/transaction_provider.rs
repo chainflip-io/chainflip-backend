@@ -45,7 +45,7 @@ impl TransactionProvider for TestTransactionProvider {
 
     fn get_liquidity(
         &self,
-        pool: crate::common::Coin,
+        pool: crate::common::coins::PoolCoin,
     ) -> Option<crate::vault::transactions::Liquidity> {
         None
     }

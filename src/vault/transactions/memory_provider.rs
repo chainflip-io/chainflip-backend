@@ -106,6 +106,7 @@ mod test {
     use super::*;
     use crate::side_chain::FakeSideChain;
     use crate::{transactions::PoolChangeTx, utils::test_utils::create_fake_quote_tx};
+    use uuid::Uuid;
 
     fn setup() -> MemoryTransactionsProvider<FakeSideChain> {
         let side_chain = Arc::new(Mutex::new(FakeSideChain::new()));
@@ -125,6 +126,7 @@ mod test {
 
             let quote = create_fake_quote_tx();
             let witness = WitnessTx {
+                id: Uuid::new_v4(),
                 quote_id: quote.id,
                 transaction_id: "0".to_owned(),
                 transaction_block_number: 0,
@@ -162,6 +164,7 @@ mod test {
 
         let quote = create_fake_quote_tx();
         let witness = WitnessTx {
+            id: Uuid::new_v4(),
             quote_id: quote.id,
             transaction_id: "0".to_owned(),
             transaction_block_number: 0,
@@ -202,7 +205,7 @@ mod test {
         let mut provider = setup();
         {
             let change_tx = PoolChangeTx {
-                id: 0,
+                id: Uuid::new_v4(),
                 coin,
                 depth_change: -100,
                 loki_depth_change: -100,
@@ -231,16 +234,16 @@ mod test {
             side_chain
                 .add_block(vec![
                     SideChainTx::PoolChangeTx(PoolChangeTx {
-                        id: 0,
+                        id: Uuid::new_v4(),
                         coin,
                         depth_change: 100,
                         loki_depth_change: 100,
                     }),
                     SideChainTx::PoolChangeTx(PoolChangeTx {
-                        id: 1,
+                        id: Uuid::new_v4(),
                         coin,
                         depth_change: 100,
-                        loki_depth_change: 50,
+                        loki_depth_change: -50,
                     }),
                 ])
                 .unwrap();
