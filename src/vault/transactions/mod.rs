@@ -15,7 +15,7 @@ pub struct Liquidity {
 
 impl Liquidity {
     /// Create a new liquidity
-    fn new() -> Self {
+    pub fn new() -> Self {
         Liquidity {
             depth: 0,
             loki_depth: 0,

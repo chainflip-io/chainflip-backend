@@ -137,23 +137,20 @@ pub trait CoinAmount {
     /// Get the internal representation of the amount in atomic values
     fn to_atomic(&self) -> u128;
 
-    /// Create an instance from atomic coin amount
-    fn from_atomic(n: u128) -> Self;
-
     /// Get the decimal representation of the amount
     fn to_decimal(&self) -> f64 {
         let atomic_amount = self.to_atomic() as f64;
-        let decimals = Self::coin_info().decimals as i32;
+        let decimals = self.coin_info().decimals as i32;
         atomic_amount / 10f64.powi(decimals)
     }
 
     /// Get coin info for current coin type
-    fn coin_info() -> CoinInfo;
+    fn coin_info(&self) -> CoinInfo;
 
     /// Default implementation for user facing representation of the amount
     fn to_string_pretty(&self) -> String {
         let atomic_amount = self.to_atomic();
-        let decimals = Self::coin_info().decimals;
+        let decimals = self.coin_info().decimals;
 
         let mut atomic_str = atomic_amount.to_string();
 
@@ -175,6 +172,42 @@ pub trait CoinAmount {
     }
 }
 
+/// A generic coin amount
+pub struct GenericCoinAmount {
+    coin: Coin,
+    atomic_amount: u128,
+}
+
+impl GenericCoinAmount {
+    /// Create a coin amount from atomic value
+    pub fn atmoic(coin: Coin, atomic_amount: u128) -> Self {
+        GenericCoinAmount {
+            coin,
+            atomic_amount,
+        }
+    }
+
+    /// Create a coin amount from a decimal value
+    pub fn decimal(coin: Coin, decimal_amount: f64) -> Self {
+        let decimals = coin.get_info().decimals as i32;
+        let atomic_amount = (decimal_amount * 10f64.powi(decimals)).round() as u128;
+        GenericCoinAmount {
+            coin,
+            atomic_amount,
+        }
+    }
+}
+
+impl CoinAmount for GenericCoinAmount {
+    fn to_atomic(&self) -> u128 {
+        self.atomic_amount
+    }
+
+    fn coin_info(&self) -> CoinInfo {
+        self.coin.get_info()
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -187,11 +220,7 @@ mod tests {
             self.0
         }
 
-        fn from_atomic(n: u128) -> Self {
-            TestAmount(n)
-        }
-
-        fn coin_info() -> CoinInfo {
+        fn coin_info(&self) -> CoinInfo {
             CoinInfo {
                 name: "TEST",
                 symbol: Coin::ETH,

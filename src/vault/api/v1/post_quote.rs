@@ -5,6 +5,7 @@ use crate::{
     },
     side_chain::SideChainTx,
     transactions::QuoteTx,
+    utils::price::get_output_amount,
     vault::transactions::TransactionProvider,
 };
 use reqwest::StatusCode;
@@ -153,9 +154,20 @@ pub async fn post_quote<T: TransactionProvider>(
         return Err(bad_request("Quote already exists for input address id"));
     }
 
-    // TODO: Calculate price
-    let estimated_output_amount = 0.0;
-    if estimated_output_amount <= 0.0 {
+    // Calculate the output amount
+    let estimated_output_amount =
+        get_output_amount(input_coin, input_amount, output_coin, |pool_coin| {
+            provider.get_liquidity(pool_coin)
+        })
+        .map(|vec| {
+            if let Some(value) = vec.last() {
+                value.1
+            } else {
+                0u128
+            }
+        })
+        .unwrap_or(0);
+    if estimated_output_amount == 0 {
         return Err(bad_request("Not enough liquidity"));
     }
 
