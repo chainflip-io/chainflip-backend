@@ -6,8 +6,19 @@ use crate::{
     vault::transactions::{Liquidity, TransactionProvider},
 };
 
-/// Input, Output, Fee
-pub type Output = (u128, u128, u128);
+/// A simple output
+pub struct Output {
+    /// The input coin
+    pub input: Coin,
+    /// The input amount
+    pub input_amount: u128,
+    /// The output coin
+    pub output: Coin,
+    /// The output amount
+    pub output_amount: u128,
+    /// The fee paid in loki
+    pub loki_fee: u128,
+}
 
 /// The loki fee
 pub const LOKI_FEE_DECIMAL: f64 = 0.5;
@@ -21,46 +32,37 @@ pub const LOKI_FEE_DECIMAL: f64 = 0.5;
 /// If `input` or `output` is `LOKI` then only 1 tuple is returned.
 ///
 /// If `input` or `output` is *NOT* `LOKI` then 2 tuples are returned: `[(input, LOKI, fee), (LOKI, output, fee)]`
-pub fn get_output_amount<F>(
+pub fn get_output<T: TransactionProvider>(
+    provider: &T,
     input: Coin,
     input_amount: u128,
     output: Coin,
-    get_liquidity: F,
-) -> Result<Vec<Output>, &'static str>
-where
-    F: FnOnce(PoolCoin) -> Option<Liquidity> + Copy,
-{
+) -> Result<Vec<Output>, &'static str> {
     if input == output {
         return Err("Cannot get output amount for the same coin");
     }
 
     if input == Coin::LOKI || output == Coin::LOKI {
-        get_output_amount_inner(input, input_amount, output, LOKI_FEE_DECIMAL, get_liquidity)
+        get_output_amount_inner(provider, input, input_amount, output, LOKI_FEE_DECIMAL)
             .map(|result| vec![result])
     } else {
-        let first = get_output_amount_inner(
-            input,
-            input_amount,
-            Coin::LOKI,
-            LOKI_FEE_DECIMAL,
-            get_liquidity,
-        )?;
-        let second = get_output_amount_inner(Coin::LOKI, first.1, output, 0.0, get_liquidity)?;
+        let first =
+            get_output_amount_inner(provider, input, input_amount, Coin::LOKI, LOKI_FEE_DECIMAL)?;
+
+        let second =
+            get_output_amount_inner(provider, Coin::LOKI, first.output_amount, output, 0.0)?;
         Ok(vec![first, second])
     }
 }
 
 // Inner calculation
-fn get_output_amount_inner<F>(
+fn get_output_amount_inner<T: TransactionProvider>(
+    provider: &T,
     input: Coin,
     input_amount: u128,
     output: Coin,
     loki_fee: f64,
-    get_liquidity: F,
-) -> Result<Output, &'static str>
-where
-    F: FnOnce(PoolCoin) -> Option<Liquidity>,
-{
+) -> Result<Output, &'static str> {
     if input == output {
         return Err("Cannot get output amount for the same coin");
     }
@@ -69,7 +71,9 @@ where
 
     if input == Coin::LOKI {
         let pool_coin = PoolCoin::from(output).expect("Expected output to be a valid pool coin");
-        let liquidity = get_liquidity(pool_coin).unwrap_or(Liquidity::new());
+        let liquidity = provider
+            .get_liquidity(pool_coin)
+            .unwrap_or(Liquidity::new());
 
         let loki_decimal = LokiAmount::from_atomic(input_amount).to_decimal();
         let loki_depth = LokiAmount::from_atomic(liquidity.loki_depth).to_decimal();
@@ -83,10 +87,18 @@ where
         );
         let output_amount = GenericCoinAmount::decimal(output, output_amount).to_atomic();
 
-        Ok((input_amount, output_amount, loki_fee.to_atomic()))
+        Ok(Output {
+            input,
+            input_amount,
+            output,
+            output_amount,
+            loki_fee: loki_fee.to_atomic(),
+        })
     } else if output == Coin::LOKI {
         let pool_coin = PoolCoin::from(input).expect("Expected input to be a valid pool coin");
-        let liquidity = get_liquidity(pool_coin).unwrap_or(Liquidity::new());
+        let liquidity = provider
+            .get_liquidity(pool_coin)
+            .unwrap_or(Liquidity::new());
 
         let input_decimal = GenericCoinAmount::atmoic(input, input_amount).to_decimal();
         let input_depth = GenericCoinAmount::atmoic(input, liquidity.depth).to_decimal();
@@ -102,7 +114,13 @@ where
 
         let output_amount = LokiAmount::from_decimal(output_amount).to_atomic();
 
-        Ok((input_amount, output_amount, loki_fee.to_atomic()))
+        Ok(Output {
+            input,
+            input_amount,
+            output,
+            output_amount,
+            loki_fee: loki_fee.to_atomic(),
+        })
     } else {
         Err("LOKI coin needs to be passed into either input or output")
     }

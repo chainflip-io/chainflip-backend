@@ -2,6 +2,7 @@ use crate::vault::transactions::TransactionProvider;
 use crate::{
     side_chain::SideChainTx,
     transactions::{QuoteTx, WitnessTx},
+    utils::price,
 };
 
 /// A test transaction provider

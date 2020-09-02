@@ -5,7 +5,6 @@ use crate::{
     },
     side_chain::SideChainTx,
     transactions::QuoteTx,
-    utils::price::get_output_amount,
     vault::transactions::TransactionProvider,
 };
 use reqwest::StatusCode;
@@ -155,13 +154,12 @@ pub async fn post_quote<T: TransactionProvider>(
     }
 
     // Calculate the output amount
-    let estimated_output_amount =
-        get_output_amount(input_coin, input_amount, output_coin, |pool_coin| {
-            provider.get_liquidity(pool_coin)
-        })
+    let estimated_output_amount = provider
+        .get_output_amount(input_coin, input_amount, output_coin)
         .map(|vec| {
+            // The last result will always have the output coin value
             if let Some(value) = vec.last() {
-                value.1
+                value.output_amount
             } else {
                 0u128
             }
