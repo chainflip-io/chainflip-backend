@@ -1,4 +1,7 @@
-use crate::common::{coins::PoolCoin, Coin, LokiAmount, LokiPaymentId, Timestamp, WalletAddress};
+use crate::{
+    common::{coins::PoolCoin, Coin, LokiAmount, LokiPaymentId, Timestamp, WalletAddress},
+    side_chain::SideChainTx,
+};
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -91,4 +94,10 @@ pub struct PoolChangeTx {
     pub depth_change: i128,
     /// The depth change in atomic value of the LOKI in the pool
     pub loki_depth_change: i128,
+}
+
+impl From<PoolChangeTx> for SideChainTx {
+    fn from(tx: PoolChangeTx) -> Self {
+        SideChainTx::PoolChangeTx(tx)
+    }
 }
