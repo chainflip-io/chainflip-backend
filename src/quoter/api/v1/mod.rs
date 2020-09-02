@@ -70,7 +70,7 @@ pub struct CoinsParams {
 pub async fn get_coins(params: CoinsParams) -> Result<Vec<CoinInfo>, ResponseError> {
     // Return all coins if no params were passed
     if params.symbols.is_none() {
-        return Ok(Coin::ALL.iter().map(|coin| coin.get_info()).collect());
+        return Ok(Coin::SUPPORTED.iter().map(|coin| coin.get_info()).collect());
     }
 
     // Filter out invalid symbols

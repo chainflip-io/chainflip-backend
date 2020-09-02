@@ -1,7 +1,6 @@
 use super::*;
 
 use crate::side_chain::FakeSideChain;
-use crate::utils::test_utils::make_valid_quote_request;
 
 /// Populate the chain with 2 blocks, request all 2
 #[tokio::test]

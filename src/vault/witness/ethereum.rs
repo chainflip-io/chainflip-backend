@@ -177,7 +177,9 @@ mod test {
             output: Coin::BTC,
             input_address: WalletAddress::new(input_address),
             input_address_id: "".to_owned(),
-            return_address: WalletAddress::new("return"),
+            return_address: None,
+            input_amount: 0,
+            slippage_limit: 0.1,
         }
     }
 

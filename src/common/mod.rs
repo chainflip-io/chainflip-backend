@@ -27,7 +27,7 @@ pub use coins::Coin;
 
 /// SystemTime wrapper
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-pub struct Timestamp(SystemTime);
+pub struct Timestamp(pub SystemTime);
 
 impl Timestamp {
     /// Create an instance from `SystemTime` (should we implement `From` trait instead?)

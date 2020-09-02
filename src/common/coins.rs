@@ -37,7 +37,7 @@ pub struct CoinInfo {
 }
 
 /// Enum for supported coin types
-#[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
+#[derive(Debug, Serialize, Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub enum Coin {
     /// Bitcoin
     BTC,
@@ -45,6 +45,35 @@ pub enum Coin {
     ETH,
     /// Loki
     LOKI,
+}
+
+impl<'de> Deserialize<'de> for Coin {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{self, Unexpected, Visitor};
+        use std::fmt;
+
+        struct PIDVisitor;
+
+        impl<'de> Visitor<'de> for PIDVisitor {
+            type Value = Coin;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                write!(formatter, "Expecting a coin as a string")
+            }
+
+            fn visit_str<E>(self, s: &str) -> Result<Coin, E>
+            where
+                E: de::Error,
+            {
+                Coin::from_str(s).map_err(|_| de::Error::invalid_value(Unexpected::Str(s), &self))
+            }
+        }
+
+        deserializer.deserialize_str(PIDVisitor)
+    }
 }
 
 /// Invalid coin literal error
@@ -64,8 +93,13 @@ impl FromStr for Coin {
 }
 
 impl Coin {
-    /// Get all the coins
-    pub const ALL: &'static [Coin] = &[Coin::ETH, Coin::LOKI, Coin::BTC]; // There might be a better way to dynamically generate this.
+    /// The list of supported coins
+    pub const SUPPORTED: &'static [Coin] = &[Coin::ETH, Coin::LOKI];
+
+    /// Check if this coin is supported
+    pub fn is_supported(&self) -> bool {
+        Self::SUPPORTED.contains(self)
+    }
 
     /// Get information about this coin
     pub fn get_info(&self) -> CoinInfo {

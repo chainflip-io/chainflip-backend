@@ -1,4 +1,3 @@
-use crate::common::coins::CoinAmount;
 use std::convert::AsMut;
 
 /// The test utils

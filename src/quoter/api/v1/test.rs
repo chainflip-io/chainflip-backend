@@ -7,7 +7,7 @@ impl StateProvider for FakeState {}
 pub async fn get_coins_returns_all_coins() {
     let params = CoinsParams { symbols: None };
     let result = get_coins(params).await.expect("Expected result to be Ok.");
-    assert_eq!(result.len(), Coin::ALL.len());
+    assert_eq!(result.len(), Coin::SUPPORTED.len());
 }
 
 #[tokio::test]

@@ -5,8 +5,8 @@ use reqwest::StatusCode;
 use blockswap::{
     common,
     side_chain::FakeSideChain,
-    utils::test_utils::{make_valid_quote_request, transaction_provider::TestTransactionProvider},
-    vault::api::{v1::QuoteResponse, APIServer},
+    utils::test_utils::transaction_provider::TestTransactionProvider,
+    vault::api::{v1::post_quote::QuoteResponse, APIServer},
 };
 use std::sync::{Arc, Mutex};
 
@@ -79,17 +79,7 @@ async fn vault_http_server_tests() {
 
     // POST requests
 
-    // {
-    //     // assert_eq!(status, StatusCode::BAD_REQUEST);
-    // }
-
-    // {
-    //     let req = make_valid_quote_request();
-
-    //     let (status, _) = send_quote_req(&req).await;
-
-    //     assert_eq!(status, StatusCode::OK);
-    // }
+    // TODO:  Add once completed
 
     // shutdown the server
     let _ = tx.send(());

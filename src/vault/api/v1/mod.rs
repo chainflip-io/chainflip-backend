@@ -10,6 +10,10 @@ use warp::Filter;
 #[cfg(test)]
 mod tests;
 
+/// Post quote endpoint
+pub mod post_quote;
+use post_quote::post_quote;
+
 /// The v1 API endpoints
 pub fn endpoints<S: ISideChain + Send, T: TransactionProvider + Send>(
     side_chain: Arc<Mutex<S>>,
@@ -25,7 +29,6 @@ pub fn endpoints<S: ISideChain + Send, T: TransactionProvider + Send>(
     let quote = warp::path!("quote")
         .and(warp::post())
         .and(warp::body::json())
-        .and(using(side_chain.clone()))
         .and(using(provider.clone()))
         .map(post_quote)
         .and_then(api::respond);
@@ -131,42 +134,4 @@ pub async fn get_blocks<S: ISideChain>(
     };
 
     Ok(res)
-}
-
-// ==============================
-
-#[serde(rename_all = "camelCase")]
-#[derive(Debug, Serialize, Deserialize)]
-pub struct QuoteParams {
-    input_coin: String,
-    input_return_address: String,
-    input_address_id: String,
-    input_amount: String, // Amounts are strings,
-    output_coin: String,
-    output_address: String,
-    slippage_limit: f64,
-}
-
-#[serde(rename_all = "camelCase")]
-#[derive(Debug, Deserialize, Serialize)]
-pub struct QuoteResponse {
-    id: String,      // unique id
-    created_at: u64, // milliseconds from epoch
-    expires_at: u64, // milliseconds from epoch
-    input_coin: String,
-    input_address: String,        // Generated on the server,
-    input_return_address: String, // User specified address,
-    input_amount: String,
-    output_coin: String,
-    output_address: String,
-    estimated_output_amount: String, // Generated on the server. Quoted amount.
-    slippage_limit: f64,
-}
-
-pub async fn post_quote<S: ISideChain, T: TransactionProvider>(
-    params: QuoteParams,
-    side_chain: Arc<Mutex<S>>,
-    provider: Arc<Mutex<T>>,
-) -> Result<QuoteResponse, ResponseError> {
-    todo!()
 }
