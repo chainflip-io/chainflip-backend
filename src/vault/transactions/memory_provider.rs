@@ -2,7 +2,7 @@ use super::{Liquidity, TransactionProvider};
 use crate::{
     common::{coins::PoolCoin, Coin},
     side_chain::{ISideChain, SideChainTx},
-    transactions::{QuoteTx, WitnessTx},
+    transactions::{QuoteTx, StakeQuoteTx, WitnessTx},
 };
 use std::{
     collections::HashMap,
@@ -13,6 +13,7 @@ use std::{
 pub struct MemoryTransactionsProvider<S: ISideChain> {
     side_chain: Arc<Mutex<S>>,
     quote_txs: Vec<QuoteTx>,
+    stake_quote_txs: Vec<StakeQuoteTx>,
     witness_txs: Vec<WitnessTx>,
     pools: HashMap<Coin, Liquidity>,
     next_block_idx: u32,
@@ -24,6 +25,7 @@ impl<S: ISideChain> MemoryTransactionsProvider<S> {
         MemoryTransactionsProvider {
             side_chain: side_chain,
             quote_txs: vec![],
+            stake_quote_txs: vec![],
             witness_txs: vec![],
             pools: HashMap::new(),
             next_block_idx: 0,
@@ -32,12 +34,13 @@ impl<S: ISideChain> MemoryTransactionsProvider<S> {
 }
 
 impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
-    fn sync(&mut self) {
+    fn sync(&mut self) -> u32 {
         let side_chain = self.side_chain.lock().unwrap();
         while let Some(block) = side_chain.get_block(self.next_block_idx) {
             for tx in block.clone().txs {
                 match tx {
                     SideChainTx::QuoteTx(tx) => self.quote_txs.push(tx),
+                    SideChainTx::StakeQuoteTx(tx) => self.stake_quote_txs.push(tx),
                     SideChainTx::WitnessTx(tx) => self.witness_txs.push(tx),
                     SideChainTx::PoolChangeTx(tx) => {
                         let mut liquidity = self
@@ -60,11 +63,12 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
                         liquidity.loki_depth = loki_depth as u128;
                         self.pools.insert(tx.coin.get_coin(), liquidity);
                     }
-                    _ => continue,
                 }
             }
             self.next_block_idx += 1;
         }
+
+        self.next_block_idx
     }
 
     fn add_transactions(&mut self, txs: Vec<SideChainTx>) -> Result<(), String> {
@@ -90,6 +94,10 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
 
     fn get_quote_txs(&self) -> &[QuoteTx] {
         &self.quote_txs
+    }
+
+    fn get_stake_quote_txs(&self) -> &[StakeQuoteTx] {
+        &self.stake_quote_txs
     }
 
     fn get_witness_txs(&self) -> &[WitnessTx] {

@@ -1,7 +1,7 @@
 mod fake_side_chain;
 mod persistent_side_chain;
 
-use crate::transactions::{PoolChangeTx, QuoteTx, WitnessTx};
+use crate::transactions::{PoolChangeTx, QuoteTx, StakeQuoteTx, WitnessTx};
 
 use serde::{Deserialize, Serialize};
 
@@ -18,6 +18,8 @@ pub enum SideChainTx {
     WitnessTx(WitnessTx),
     /// The pool change transaction variant
     PoolChangeTx(PoolChangeTx),
+    /// Stake/provisioning quote transaction varian
+    StakeQuoteTx(StakeQuoteTx),
 }
 
 impl From<QuoteTx> for SideChainTx {
