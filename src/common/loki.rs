@@ -2,10 +2,13 @@ use super::{
     coins::{CoinAmount, CoinInfo},
     Coin,
 };
+
+use serde::{Deserialize, Serialize};
+
 use std::fmt::{self, Display};
 
 /// Represents regular and integrated wallet addresses for Loki
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct LokiWalletAddress {
     /// base58 (monero flavor) representation
     address: String,
@@ -33,7 +36,7 @@ impl LokiWalletAddress {
 }
 
 /// Payment id that can be used to identify loki transactions
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LokiPaymentId {
     // String representation of payment id with trailing zeros added at construction time.
     // We might consider using a constant size array/string on the stack for this
@@ -85,8 +88,41 @@ impl serde::Serialize for LokiPaymentId {
     }
 }
 
+impl<'de> Deserialize<'de> for LokiPaymentId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{self, Unexpected, Visitor};
+        use std::str::FromStr;
+
+        struct PIDVisitor;
+
+        impl<'de> Visitor<'de> for PIDVisitor {
+            type Value = LokiPaymentId;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                write!(
+                    formatter,
+                    "Expecting a short or long payment id as a string"
+                )
+            }
+
+            fn visit_str<E>(self, s: &str) -> Result<LokiPaymentId, E>
+            where
+                E: de::Error,
+            {
+                LokiPaymentId::from_str(s)
+                    .map_err(|_| de::Error::invalid_value(Unexpected::Str(s), &self))
+            }
+        }
+
+        deserializer.deserialize_str(PIDVisitor)
+    }
+}
+
 /// Loki coin amount
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct LokiAmount {
     atomic_amount: u128,
 }
@@ -116,5 +152,30 @@ impl CoinAmount for LokiAmount {
 
     fn coin_info(&self) -> CoinInfo {
         Coin::LOKI.get_info()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn payment_id_serialization_and_deserialization() {
+        use std::str::FromStr;
+
+        let pid = LokiPaymentId::from_str("60900e5603bf96e3").unwrap();
+
+        let serialized = serde_json::to_string(&pid).expect("Payment id serialization");
+
+        assert_eq!(
+            &serialized,
+            "\"60900e5603bf96e3000000000000000000000000000000000000000000000000\""
+        );
+
+        let deserialized: LokiPaymentId =
+            serde_json::from_str(&serialized).expect("Payment id deserialization");
+
+        assert_eq!(deserialized, pid);
     }
 }
