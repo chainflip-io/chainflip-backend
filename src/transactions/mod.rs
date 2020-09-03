@@ -30,6 +30,13 @@ pub struct QuoteTx {
 }
 
 impl Eq for QuoteTx {}
+
+impl std::hash::Hash for QuoteTx {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+
 /// Staking (provisioning) quote transaction
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct StakeQuoteTx {
@@ -41,9 +48,9 @@ pub struct StakeQuoteTx {
     pub loki_amount: LokiAmount,
 }
 
-impl std::hash::Hash for QuoteTx {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.id.hash(state);
+impl From<StakeQuoteTx> for SideChainTx {
+    fn from(tx: StakeQuoteTx) -> Self {
+        SideChainTx::StakeQuoteTx(tx)
     }
 }
 
@@ -75,6 +82,12 @@ pub struct WitnessTx {
     pub coin_type: Coin,
     /// The sender of the transaction
     pub sender: Option<String>,
+}
+
+impl From<WitnessTx> for SideChainTx {
+    fn from(tx: WitnessTx) -> Self {
+        SideChainTx::WitnessTx(tx)
+    }
 }
 
 impl PartialEq<WitnessTx> for WitnessTx {

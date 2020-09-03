@@ -1,11 +1,11 @@
-mod fake_side_chain;
+mod memory_side_chain;
 mod persistent_side_chain;
 
 use crate::transactions::{PoolChangeTx, QuoteTx, StakeQuoteTx, WitnessTx};
 
 use serde::{Deserialize, Serialize};
 
-pub use fake_side_chain::FakeSideChain;
+pub use memory_side_chain::MemorySideChain;
 pub use persistent_side_chain::PeristentSideChain;
 
 /// Side chain transaction type

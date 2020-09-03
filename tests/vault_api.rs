@@ -4,7 +4,7 @@ use reqwest::StatusCode;
 
 use blockswap::{
     common,
-    side_chain::FakeSideChain,
+    side_chain::MemorySideChain,
     utils::test_utils::transaction_provider::TestTransactionProvider,
     vault::api::{v1::post_quote::QuoteResponse, APIServer},
 };
@@ -53,7 +53,7 @@ where
 
 #[tokio::test]
 async fn vault_http_server_tests() {
-    let side_chain = FakeSideChain::new();
+    let side_chain = MemorySideChain::new();
     let side_chain = Arc::new(Mutex::new(side_chain));
 
     let provider = TestTransactionProvider::new();

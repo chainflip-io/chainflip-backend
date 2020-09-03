@@ -54,7 +54,7 @@ async fn test_loki_rpc() {
 }
 
 async fn test_loki_witness() {
-    use side_chain::FakeSideChain;
+    use side_chain::MemorySideChain;
     use std::sync::{Arc, Mutex};
 
     use vault::{
@@ -62,7 +62,7 @@ async fn test_loki_witness() {
         witness::LokiWitness,
     };
 
-    let mut s_chain = FakeSideChain::new();
+    let mut s_chain = MemorySideChain::new();
 
     let int_address = loki_rpc::make_integrated_address(PORT, None)
         .await

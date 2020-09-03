@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use blockswap::{
     common::{Block, Timestamp},
-    side_chain::{FakeSideChain, ISideChain, SideChainTx},
+    side_chain::{ISideChain, MemorySideChain, SideChainTx},
     transactions::CoinTx,
     utils::test_utils,
     vault::witness::FakeWitness,
@@ -20,7 +20,7 @@ fn test_witness_tx_is_made() {
 
     let timeout = std::time::Duration::from_millis(1000);
 
-    let s_chain = FakeSideChain::new();
+    let s_chain = MemorySideChain::new();
     let s_chain = Arc::new(Mutex::new(s_chain));
 
     let (loki_block_sender, loki_block_receiver) = crossbeam_channel::unbounded();

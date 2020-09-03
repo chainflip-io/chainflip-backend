@@ -8,8 +8,8 @@ use blockswap::{
     vault::{
         api::APIServer,
         blockchain_connection::{LokiConnection, LokiConnectionConfig},
-        transactions::{MemoryTransactionsProvider, TransactionProvider},
         processor::SideChainProcessor,
+        transactions::{MemoryTransactionsProvider, TransactionProvider},
         witness::LokiWitness,
     },
 };
