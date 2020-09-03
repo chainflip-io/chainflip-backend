@@ -36,6 +36,15 @@ pub struct CoinInfo {
     pub requires_return_address: bool,
 }
 
+impl CoinInfo {
+    /// Get 1 unit of this coin in atomic value.
+    ///
+    /// This is the same as doing: `10^decimals`
+    pub fn one_unit(&self) -> u128 {
+        10u128.pow(self.decimals)
+    }
+}
+
 /// Enum for supported coin types
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub enum Coin {

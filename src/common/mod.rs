@@ -25,21 +25,23 @@ pub use coins::Coin;
 // so it should probably be replaced by block_id when we
 // go distributed
 
-/// SystemTime wrapper
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-pub struct Timestamp(SystemTime);
+/// Unix millisecond timestamp wrapper
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, PartialEq, Eq, Deserialize, Serialize)]
+pub struct Timestamp(pub u128);
 
 impl Timestamp {
-    /// Create an instance from `SystemTime` (should we implement `From` trait instead?)
-    pub fn new(ts: SystemTime) -> Self {
-        Timestamp { 0: ts }
+    /// Create an instance from `SystemTime`
+    pub fn system_time(ts: SystemTime) -> Self {
+        let millis = ts
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("Failed to get unix timestamp")
+            .as_millis();
+        Timestamp(millis)
     }
 
-    /// Create an instance from current time
+    /// Create an instance from current system time
     pub fn now() -> Self {
-        Timestamp {
-            0: SystemTime::now(),
-        }
+        Timestamp::system_time(SystemTime::now())
     }
 }
 
