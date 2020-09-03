@@ -10,3 +10,5 @@ mod vault_api;
 #[cfg(test)]
 mod witness;
 
+#[cfg(test)]
+mod processor;

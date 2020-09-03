@@ -43,7 +43,7 @@ where
                 // TODO: put a balance change tx onto the side chain
                 info!("Found witness matching quote: {:?}", quote);
 
-                let coin = match PoolCoin::from(Coin::BTC) {
+                let coin = match PoolCoin::from(Coin::ETH) {
                     Ok(coin) => coin,
                     Err(err) => {
                         error!("Invalid quote ({})", err);
@@ -102,7 +102,10 @@ where
                 // (e.g. we don't want to send funds more than once if the
                 // latest block info failed to have been updated)
 
-                // self.tx_provider.add_transactions(new_txs);
+                if let Err(err) = self.tx_provider.add_transactions(new_txs) {
+                    error!("Error adding a pool change tx: {}", err);
+                    panic!();
+                };
 
                 if let Err(err) = self.db.set_data(DB_KEY, Some(idx)) {
                     error!("Could not update latest block in db: {}", err);

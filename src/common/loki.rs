@@ -128,15 +128,21 @@ pub struct LokiAmount {
 }
 
 impl LokiAmount {
+    /// Create from atomic amount
     pub fn from_atomic(n: u128) -> Self {
         LokiAmount { atomic_amount: n }
     }
 
+    /// Create from decimal
     pub fn from_decimal(n: f64) -> Self {
         let info = Coin::LOKI.get_info();
-        let decimals = info.decimals as i32;
         let atomic_amount = (n * info.one_unit() as f64).round() as u128;
         LokiAmount::from_atomic(atomic_amount)
+    }
+
+    /// Get inner atomic representation
+    pub fn to_atomic(&self) -> u128 {
+        self.atomic_amount
     }
 }
 

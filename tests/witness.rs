@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use blockswap::{
     common::{Block, Timestamp},
-    side_chain::{MemorySideChain, ISideChain, SideChainTx},
+    side_chain::{ISideChain, MemorySideChain, SideChainTx},
     transactions::CoinTx,
     utils::test_utils,
     vault::witness::FakeWitness,
