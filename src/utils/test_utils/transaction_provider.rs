@@ -1,7 +1,7 @@
 use crate::vault::transactions::TransactionProvider;
 use crate::{
     side_chain::SideChainTx,
-    transactions::{QuoteTx, WitnessTx},
+    transactions::{QuoteTx, StakeQuoteTx, WitnessTx},
     utils::price,
 };
 
@@ -9,6 +9,7 @@ use crate::{
 #[derive(Debug)]
 pub struct TestTransactionProvider {
     quote_txs: Vec<QuoteTx>,
+    stake_quote_txs: Vec<StakeQuoteTx>,
     witness_txs: Vec<WitnessTx>,
 }
 
@@ -17,13 +18,16 @@ impl TestTransactionProvider {
     pub fn new() -> Self {
         TestTransactionProvider {
             quote_txs: vec![],
+            stake_quote_txs: vec![],
             witness_txs: vec![],
         }
     }
 }
 
 impl TransactionProvider for TestTransactionProvider {
-    fn sync(&mut self) {}
+    fn sync(&mut self) -> u32 {
+        0
+    }
 
     fn add_transactions(&mut self, txs: Vec<SideChainTx>) -> Result<(), String> {
         for tx in txs {
@@ -38,6 +42,10 @@ impl TransactionProvider for TestTransactionProvider {
 
     fn get_quote_txs(&self) -> &[QuoteTx] {
         &self.quote_txs
+    }
+
+    fn get_stake_quote_txs(&self) -> &[StakeQuoteTx] {
+        &self.stake_quote_txs
     }
 
     fn get_witness_txs(&self) -> &[WitnessTx] {

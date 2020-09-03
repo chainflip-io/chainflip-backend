@@ -1,7 +1,7 @@
 use crate::{
     common::{coins::PoolCoin, Coin},
     side_chain::SideChainTx,
-    transactions::{QuoteTx, WitnessTx},
+    transactions::{QuoteTx, StakeQuoteTx, WitnessTx},
     utils::price::{self, OutputCalculation},
 };
 
@@ -26,14 +26,17 @@ impl Liquidity {
 
 /// An interface for providing transactions
 pub trait TransactionProvider {
-    /// Sync new transactions
-    fn sync(&mut self);
+    /// Sync new transactions and return the index of the first unprocessed block
+    fn sync(&mut self) -> u32;
 
     /// Add transactions
     fn add_transactions(&mut self, txs: Vec<SideChainTx>) -> Result<(), String>;
 
-    /// Get all the quote transactions
+    /// Get all swap quote transactions
     fn get_quote_txs(&self) -> &[QuoteTx];
+
+    /// Get all stake quote transactions
+    fn get_stake_quote_txs(&self) -> &[StakeQuoteTx];
 
     /// Get all the witness transactions
     fn get_witness_txs(&self) -> &[WitnessTx];

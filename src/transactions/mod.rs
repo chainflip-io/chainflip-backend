@@ -1,4 +1,7 @@
-use crate::common::{coins::PoolCoin, Coin, Timestamp, WalletAddress};
+use crate::{
+    common::{coins::PoolCoin, Coin, LokiAmount, LokiPaymentId, Timestamp, WalletAddress},
+    side_chain::SideChainTx,
+};
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -6,7 +9,7 @@ use uuid::Uuid;
 /// Quote transaction stored on the Side Chain
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct QuoteTx {
-    /// A uniquie identifier
+    /// A unique identifier
     pub id: Uuid,
     /// Timestamp for when the transaction was added onto the side chain
     pub timestamp: Timestamp,
@@ -27,6 +30,16 @@ pub struct QuoteTx {
 }
 
 impl Eq for QuoteTx {}
+/// Staking (provisioning) quote transaction
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct StakeQuoteTx {
+    /// A unique identifier
+    pub id: Uuid,
+    /// Info used to uniquely identify payment
+    pub input_loki_address_id: LokiPaymentId,
+    /// Loki amount that is meant to be deposited
+    pub loki_amount: LokiAmount,
+}
 
 impl std::hash::Hash for QuoteTx {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -34,6 +47,7 @@ impl std::hash::Hash for QuoteTx {
     }
 }
 
+// This might be obsolete...
 #[derive(Debug)]
 pub struct CoinTx {
     pub id: Uuid,
@@ -45,7 +59,7 @@ pub struct CoinTx {
 /// Witness transaction stored on the Side Chain
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct WitnessTx {
-    // A unique identifier
+    /// A unique identifier
     pub id: Uuid,
     /// The quote that this witness tx is linked to
     pub quote_id: Uuid,
@@ -80,4 +94,10 @@ pub struct PoolChangeTx {
     pub depth_change: i128,
     /// The depth change in atomic value of the LOKI in the pool
     pub loki_depth_change: i128,
+}
+
+impl From<PoolChangeTx> for SideChainTx {
+    fn from(tx: PoolChangeTx) -> Self {
+        SideChainTx::PoolChangeTx(tx)
+    }
 }
