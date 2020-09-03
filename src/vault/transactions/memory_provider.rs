@@ -112,12 +112,12 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::side_chain::FakeSideChain;
+    use crate::side_chain::MemorySideChain;
     use crate::{transactions::PoolChangeTx, utils::test_utils::create_fake_quote_tx};
     use uuid::Uuid;
 
-    fn setup() -> MemoryTransactionsProvider<FakeSideChain> {
-        let side_chain = Arc::new(Mutex::new(FakeSideChain::new()));
+    fn setup() -> MemoryTransactionsProvider<MemorySideChain> {
+        let side_chain = Arc::new(Mutex::new(MemorySideChain::new()));
         MemoryTransactionsProvider::new(side_chain)
     }
 

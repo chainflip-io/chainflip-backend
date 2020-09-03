@@ -1,13 +1,13 @@
 use super::*;
 
-use crate::side_chain::FakeSideChain;
+use crate::side_chain::MemorySideChain;
 
 /// Populate the chain with 2 blocks, request all 2
 #[tokio::test]
 async fn get_all_two_blocks() {
     let params = BlocksQueryParams::new(0, 2);
 
-    let mut side_chain = FakeSideChain::new();
+    let mut side_chain = MemorySideChain::new();
 
     side_chain.add_block(vec![]).unwrap();
     side_chain.add_block(vec![]).unwrap();
@@ -28,7 +28,7 @@ async fn get_two_blocks_out_of_three() {
 
     let params = BlocksQueryParams::new(0, 2);
 
-    let mut side_chain = FakeSideChain::new();
+    let mut side_chain = MemorySideChain::new();
 
     side_chain.add_block(vec![]).unwrap();
 
@@ -52,7 +52,7 @@ async fn get_two_blocks_out_of_three() {
 async fn cap_too_big_limit() {
     let params = BlocksQueryParams::new(1, 100);
 
-    let mut side_chain = FakeSideChain::new();
+    let mut side_chain = MemorySideChain::new();
 
     side_chain.add_block(vec![]).unwrap();
     side_chain.add_block(vec![]).unwrap();
@@ -70,7 +70,7 @@ async fn cap_too_big_limit() {
 #[tokio::test]
 async fn zero_limit() {
     let params = BlocksQueryParams::new(1, 0);
-    let mut side_chain = FakeSideChain::new();
+    let mut side_chain = MemorySideChain::new();
 
     side_chain.add_block(vec![]).unwrap();
     side_chain.add_block(vec![]).unwrap();
@@ -89,7 +89,7 @@ async fn zero_limit() {
 async fn blocks_do_not_exist() {
     let params = BlocksQueryParams::new(100, 2);
 
-    let mut side_chain = FakeSideChain::new();
+    let mut side_chain = MemorySideChain::new();
 
     side_chain.add_block(vec![]).unwrap();
     side_chain.add_block(vec![]).unwrap();

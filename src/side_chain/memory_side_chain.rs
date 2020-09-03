@@ -3,15 +3,15 @@ use super::{ISideChain, SideChainBlock, SideChainTx};
 use crate::transactions::{QuoteTx, WitnessTx};
 
 /// Fake implemenation of ISideChain that stores block in memory
-pub struct FakeSideChain {
+pub struct MemorySideChain {
     // For now store tx in memory:
     blocks: Vec<SideChainBlock>,
 }
 
-impl FakeSideChain {
+impl MemorySideChain {
     /// Create an empty (fake) chain
     pub fn new() -> Self {
-        FakeSideChain { blocks: vec![] }
+        MemorySideChain { blocks: vec![] }
     }
 
     /// Check whether the transaction exists
@@ -50,7 +50,7 @@ impl FakeSideChain {
     }
 }
 
-impl ISideChain for FakeSideChain {
+impl ISideChain for MemorySideChain {
     fn add_block(&mut self, txs: Vec<SideChainTx>) -> Result<(), String> {
         // For now all transactions live in their own block
         let block = SideChainBlock {
