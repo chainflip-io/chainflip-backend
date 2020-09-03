@@ -2,6 +2,7 @@
 extern crate log;
 
 use blockswap::{
+    common::store,
     logging,
     side_chain::{ISideChain, PeristentSideChain},
     vault::{
@@ -92,7 +93,12 @@ fn main() {
     let _witness = LokiWitness::new(loki_block_receiver, s_chain.clone());
 
     let tx_provider = MemoryTransactionsProvider::new(s_chain.clone());
-    let processor = SideChainProcessor::new(tx_provider);
+
+    // Opening another connection to the same database
+    let db_connection = rusqlite::Connection::open("blocks.db").expect("Could not open database");
+    let kvs = store::PersistentKVS::new(db_connection);
+
+    let processor = SideChainProcessor::new(tx_provider, kvs);
 
     processor.start();
 
