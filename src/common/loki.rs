@@ -127,6 +127,19 @@ pub struct LokiAmount {
     atomic_amount: u128,
 }
 
+impl LokiAmount {
+    pub fn from_atomic(n: u128) -> Self {
+        LokiAmount { atomic_amount: n }
+    }
+
+    pub fn from_decimal(n: f64) -> Self {
+        let info = Coin::LOKI.get_info();
+        let decimals = info.decimals as i32;
+        let atomic_amount = (n * info.one_unit() as f64).round() as u128;
+        LokiAmount::from_atomic(atomic_amount)
+    }
+}
+
 impl Display for LokiAmount {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} LOKI", self.to_string_pretty())
@@ -138,11 +151,7 @@ impl CoinAmount for LokiAmount {
         self.atomic_amount
     }
 
-    fn from_atomic(n: u128) -> Self {
-        LokiAmount { atomic_amount: n }
-    }
-
-    fn coin_info() -> CoinInfo {
+    fn coin_info(&self) -> CoinInfo {
         Coin::LOKI.get_info()
     }
 }

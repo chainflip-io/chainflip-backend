@@ -7,6 +7,7 @@ use blockswap::{
     vault::{
         api::APIServer,
         blockchain_connection::{LokiConnection, LokiConnectionConfig},
+        transactions::{MemoryTransactionsProvider, TransactionProvider},
         witness::LokiWitness,
     },
 };
@@ -29,6 +30,11 @@ fn main() {
     let s_chain = PeristentSideChain::open("blocks.db");
     let s_chain = Arc::new(Mutex::new(s_chain));
 
+    let mut provider = MemoryTransactionsProvider::new(s_chain.clone());
+    provider.sync();
+
+    let provider = Arc::new(Mutex::new(provider));
+
     let config = LokiConnectionConfig {
         rpc_wallet_port: 6934,
     };
@@ -50,5 +56,5 @@ fn main() {
     // can be used to shutdown the server
     let (_tx, rx) = tokio::sync::oneshot::channel();
 
-    APIServer::serve(s_chain, rx);
+    APIServer::serve(s_chain, provider, rx);
 }

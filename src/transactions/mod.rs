@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Quote transaction stored on the Side Chain
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct QuoteTx {
     /// A uniquie identifier
     pub id: Uuid,
@@ -12,17 +12,21 @@ pub struct QuoteTx {
     pub timestamp: Timestamp,
     /// The input coin for the quote
     pub input: Coin,
-    /// The output coin for the quote
-    pub output: Coin,
+    /// The amount to input
+    pub input_amount: u128,
     /// The wallet in which the user will deposit coins
     pub input_address: WalletAddress,
     /// Info used to derive unique deposit addresses
     pub input_address_id: String,
     /// The wallet used to refund coins in case of a failed swap
-    pub return_address: WalletAddress,
-    // There are more fields, but I will add them
-    // when I have actually start using them
+    pub return_address: Option<WalletAddress>,
+    /// The output coin for the quote
+    pub output: Coin,
+    /// The slippage limit
+    pub slippage_limit: f32,
 }
+
+impl Eq for QuoteTx {}
 
 impl std::hash::Hash for QuoteTx {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -35,7 +39,7 @@ pub struct CoinTx {
     pub id: Uuid,
     pub timestamp: Timestamp,
     pub deposit_address: WalletAddress,
-    pub return_address: WalletAddress,
+    pub return_address: Option<WalletAddress>,
 }
 
 /// Witness transaction stored on the Side Chain

@@ -2,6 +2,7 @@ use crate::{
     common::{coins::PoolCoin, Coin},
     side_chain::SideChainTx,
     transactions::{QuoteTx, WitnessTx},
+    utils::price::{self, OutputCalculation},
 };
 
 /// A simple representation of a pool liquidity
@@ -15,7 +16,7 @@ pub struct Liquidity {
 
 impl Liquidity {
     /// Create a new liquidity
-    fn new() -> Self {
+    pub fn new() -> Self {
         Liquidity {
             depth: 0,
             loki_depth: 0,
@@ -39,6 +40,23 @@ pub trait TransactionProvider {
 
     /// Get the liquidity for a given pool
     fn get_liquidity(&self, pool: PoolCoin) -> Option<Liquidity>;
+
+    /// Get the output amount.
+    ///
+    /// If `input` or `output` is `LOKI` then only 1 output is returned.
+    ///
+    /// If `input` or `output` is *NOT* `LOKI` then 2 outputs are returned: `[(input, LOKI, fee), (LOKI, output, fee)]`
+    fn get_output_amount(
+        &self,
+        input: Coin,
+        input_amount: u128,
+        output: Coin,
+    ) -> Result<OutputCalculation, &'static str>
+    where
+        Self: Sized,
+    {
+        price::get_output(self, input, input_amount, output)
+    }
 }
 
 /// Memory transaction provider

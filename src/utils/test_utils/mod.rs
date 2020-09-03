@@ -20,7 +20,7 @@ pub mod store;
 
 /// Create a dummy quote transaction to be used for tests
 pub fn create_fake_quote_tx() -> QuoteTx {
-    let return_address = WalletAddress::new("Alice");
+    let return_address = Some(WalletAddress::new("Alice"));
     let input_address = WalletAddress::new("Bob");
     let timestamp = Timestamp::now();
 
@@ -32,22 +32,11 @@ pub fn create_fake_quote_tx() -> QuoteTx {
         input_address_id: "".to_owned(),
         input_address,
         return_address,
+        input_amount: 0,
+        slippage_limit: 0.1,
     };
 
     quote
-}
-
-/// Create a fake but a valid looking quote request
-pub fn make_valid_quote_request() -> serde_json::Value {
-    serde_json::json!({
-        "inputCoin": "BTC",
-        "inputReturnAddress": "TODO",
-        "inputAddressID": "0",
-        "inputAmount": "0.5",
-        "outputCoin": "LOKI",
-        "outputAddress": "TODO",
-        "slippageLimit": 0.5,
-    })
 }
 
 /// Creates a new random file name that (if created)
