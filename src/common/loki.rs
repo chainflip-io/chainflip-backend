@@ -133,8 +133,9 @@ impl LokiAmount {
     }
 
     pub fn from_decimal(n: f64) -> Self {
-        let decimals = Coin::LOKI.get_info().decimals as i32;
-        let atomic_amount = (n * 10f64.powi(decimals)).round() as u128;
+        let info = Coin::LOKI.get_info();
+        let decimals = info.decimals as i32;
+        let atomic_amount = (n * info.one_unit() as f64).round() as u128;
         LokiAmount::from_atomic(atomic_amount)
     }
 }

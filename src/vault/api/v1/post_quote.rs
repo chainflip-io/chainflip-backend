@@ -12,7 +12,6 @@ use serde::{Deserialize, Serialize};
 use std::{
     str::FromStr,
     sync::{Arc, Mutex},
-    time::UNIX_EPOCH,
 };
 use uuid::Uuid;
 
@@ -111,7 +110,7 @@ pub fn validate_quote_params(params: &QuoteParams) -> Result<(), &'static str> {
 
     // Slippage
 
-    if params.slippage_limit <= 0.0 {
+    if params.slippage_limit < 0.0 {
         return Err("Slippage limit must be greater than or equal to 0");
     }
 
@@ -207,16 +206,9 @@ pub async fn post_quote<T: TransactionProvider>(
             internal_server_error()
         })?;
 
-    let created_at = quote
-        .timestamp
-        .0
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis())
-        .map_err(|_| internal_server_error())?;
-
     Ok(QuoteResponse {
         id: quote.id,
-        created_at,
+        created_at: quote.timestamp.0,
         // TODO: Implement expiration
         expires_at: 0,
         input_coin,

@@ -149,8 +149,9 @@ pub trait CoinAmount {
     /// Get the decimal representation of the amount
     fn to_decimal(&self) -> f64 {
         let atomic_amount = self.to_atomic() as f64;
-        let decimals = self.coin_info().decimals as i32;
-        atomic_amount / 10f64.powi(decimals)
+        let info = self.coin_info();
+        let decimals = info.decimals as i32;
+        atomic_amount / info.one_unit() as f64
     }
 
     /// Get coin info for current coin type
@@ -198,8 +199,9 @@ impl GenericCoinAmount {
 
     /// Create a coin amount from a decimal value
     pub fn decimal(coin: Coin, decimal_amount: f64) -> Self {
-        let decimals = coin.get_info().decimals as i32;
-        let atomic_amount = (decimal_amount * 10f64.powi(decimals)).round() as u128;
+        let info = coin.get_info();
+        let decimals = info.decimals as i32;
+        let atomic_amount = (decimal_amount * info.one_unit() as f64).round() as u128;
         GenericCoinAmount {
             coin,
             atomic_amount,
