@@ -31,7 +31,7 @@ pub struct Timestamp(pub u128);
 
 impl Timestamp {
     /// Create an instance from `SystemTime`
-    pub fn system_time(ts: SystemTime) -> Self {
+    pub fn from_system_time(ts: SystemTime) -> Self {
         let millis = ts
             .duration_since(SystemTime::UNIX_EPOCH)
             .expect("Failed to get unix timestamp")
@@ -41,7 +41,7 @@ impl Timestamp {
 
     /// Create an instance from current system time
     pub fn now() -> Self {
-        Timestamp::system_time(SystemTime::now())
+        Timestamp::from_system_time(SystemTime::now())
     }
 }
 
