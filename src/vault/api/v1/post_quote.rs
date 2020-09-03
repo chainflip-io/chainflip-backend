@@ -91,6 +91,7 @@ pub fn validate_quote_params(params: &QuoteParams) -> Result<(), &'static str> {
 
     let input_address_id = match params.input_coin {
         Coin::BTC | Coin::ETH => match params.input_address_id.parse::<u64>() {
+            // Index 0 is used for the main wallet and 1-4 are reserved for future use
             Ok(id) => {
                 if id < 5 {
                     Err(())
