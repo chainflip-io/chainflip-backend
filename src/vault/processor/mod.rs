@@ -30,39 +30,35 @@ where
         let mut new_txs = Vec::<SideChainTx>::default();
 
         for wtx in witness_txs {
-            for quote in quotes {
-                if wtx.quote_id == quote.id {
-                    // TODO: put a balance change tx onto the side chain
-                    info!("Found witness matching quote: {:?}", quote);
+            if let Some(quote) = quotes.iter().find(|quote| quote.id == wtx.quote_id) {
+                // TODO: put a balance change tx onto the side chain
+                info!("Found witness matching quote: {:?}", quote);
 
-                    let coin = match PoolCoin::from(Coin::BTC) {
-                        Ok(coin) => coin,
-                        Err(err) => {
-                            error!("Invalid quote ({})", err);
-                            continue;
-                        }
-                    };
+                let coin = match PoolCoin::from(Coin::BTC) {
+                    Ok(coin) => coin,
+                    Err(err) => {
+                        error!("Invalid quote ({})", err);
+                        continue;
+                    }
+                };
 
-                    let loki_depth_change = match i128::try_from(wtx.amount) {
-                        Ok(amount) => amount,
-                        Err(err) => {
-                            error!("Invalid amount in quote: {} ({})", wtx.amount, err);
-                            continue;
-                        }
-                    };
+                let loki_depth_change = match i128::try_from(wtx.amount) {
+                    Ok(amount) => amount,
+                    Err(err) => {
+                        error!("Invalid amount in quote: {} ({})", wtx.amount, err);
+                        continue;
+                    }
+                };
 
-                    // For now we are only depositing LOKI
-                    let pool_tx = PoolChangeTx {
-                        id: Uuid::new_v4(),
-                        coin,
-                        depth_change: 0,
-                        loki_depth_change,
-                    };
+                // For now we are only depositing LOKI
+                let pool_tx = PoolChangeTx {
+                    id: Uuid::new_v4(),
+                    coin,
+                    depth_change: 0,
+                    loki_depth_change,
+                };
 
-                    new_txs.push(pool_tx.into());
-
-                    break;
-                }
+                new_txs.push(pool_tx.into());
             }
         }
 
