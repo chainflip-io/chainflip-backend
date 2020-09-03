@@ -6,8 +6,8 @@ use crate::{
     vault::transactions::{Liquidity, TransactionProvider},
 };
 
-/// A simple output
-pub struct Output {
+/// Details about an output
+pub struct OutputDetail {
     /// The input coin
     pub input: Coin,
     /// The input amount
@@ -20,6 +20,29 @@ pub struct Output {
     pub loki_fee: u128,
 }
 
+/// The Output calculation.
+///
+/// Always has the property: `first.output == second.input`
+pub struct OutputCalculation {
+    /// The first calculation
+    pub first: OutputDetail,
+    /// The second calculation
+    pub second: Option<OutputDetail>,
+}
+
+impl OutputCalculation {
+    /// Create a new output calculation
+    pub fn new(first: OutputDetail, second: Option<OutputDetail>) -> Self {
+        if let Some(second) = &second {
+            if first.output != second.input {
+                panic!("First output doesn't match second input")
+            }
+        }
+
+        OutputCalculation { first, second }
+    }
+}
+
 /// The loki fee
 pub const LOKI_FEE_DECIMAL: f64 = 0.5;
 
@@ -27,31 +50,27 @@ pub const LOKI_FEE_DECIMAL: f64 = 0.5;
 
 /// Get the output amount.
 ///
-/// The tuples returned are in the format `(input, output, fee)`.
-///
-/// If `input` or `output` is `LOKI` then only 1 tuple is returned.
-///
-/// If `input` or `output` is *NOT* `LOKI` then 2 tuples are returned: `[(input, LOKI, fee), (LOKI, output, fee)]`
+/// If `input` or `output` is *NOT* `LOKI` then `first` will contain `input -> LOKI` and `second` will contain `LOKI -> output`
 pub fn get_output<T: TransactionProvider>(
     provider: &T,
     input: Coin,
     input_amount: u128,
     output: Coin,
-) -> Result<Vec<Output>, &'static str> {
+) -> Result<OutputCalculation, &'static str> {
     if input == output {
         return Err("Cannot get output amount for the same coin");
     }
 
     if input == Coin::LOKI || output == Coin::LOKI {
         get_output_amount_inner(provider, input, input_amount, output, LOKI_FEE_DECIMAL)
-            .map(|result| vec![result])
+            .map(|result| OutputCalculation::new(result, None))
     } else {
         let first =
             get_output_amount_inner(provider, input, input_amount, Coin::LOKI, LOKI_FEE_DECIMAL)?;
 
         let second =
             get_output_amount_inner(provider, Coin::LOKI, first.output_amount, output, 0.0)?;
-        Ok(vec![first, second])
+        Ok(OutputCalculation::new(first, Some(second)))
     }
 }
 
@@ -62,7 +81,7 @@ fn get_output_amount_inner<T: TransactionProvider>(
     input_amount: u128,
     output: Coin,
     loki_fee: f64,
-) -> Result<Output, &'static str> {
+) -> Result<OutputDetail, &'static str> {
     if input == output {
         return Err("Cannot get output amount for the same coin");
     }
@@ -87,7 +106,7 @@ fn get_output_amount_inner<T: TransactionProvider>(
         );
         let output_amount = GenericCoinAmount::decimal(output, output_amount).to_atomic();
 
-        Ok(Output {
+        Ok(OutputDetail {
             input,
             input_amount,
             output,
@@ -114,7 +133,7 @@ fn get_output_amount_inner<T: TransactionProvider>(
 
         let output_amount = LokiAmount::from_decimal(output_amount).to_atomic();
 
-        Ok(Output {
+        Ok(OutputDetail {
             input,
             input_amount,
             output,

@@ -2,7 +2,7 @@ use crate::{
     common::{coins::PoolCoin, Coin},
     side_chain::SideChainTx,
     transactions::{QuoteTx, WitnessTx},
-    utils::price::{self, Output},
+    utils::price::{self, OutputCalculation},
 };
 
 /// A simple representation of a pool liquidity
@@ -51,7 +51,7 @@ pub trait TransactionProvider {
         input: Coin,
         input_amount: u128,
         output: Coin,
-    ) -> Result<Vec<Output>, &'static str>
+    ) -> Result<OutputCalculation, &'static str>
     where
         Self: Sized,
     {

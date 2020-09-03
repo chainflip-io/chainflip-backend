@@ -90,11 +90,16 @@ pub fn validate_quote_params(params: &QuoteParams) -> Result<(), &'static str> {
     }
 
     let input_address_id = match params.input_coin {
-        Coin::BTC | Coin::ETH => params
-            .input_address_id
-            .parse::<u64>()
-            .map(|_| ())
-            .map_err(|_| ()),
+        Coin::BTC | Coin::ETH => match params.input_address_id.parse::<u64>() {
+            Ok(id) => {
+                if id < 5 {
+                    Err(())
+                } else {
+                    Ok(())
+                }
+            }
+            Err(_) => Err(()),
+        },
         Coin::LOKI => LokiPaymentId::from_str(&params.input_address_id)
             .map(|_| ())
             .map_err(|_| ()),
@@ -155,13 +160,9 @@ pub async fn post_quote<T: TransactionProvider>(
     // Calculate the output amount
     let estimated_output_amount = provider
         .get_output_amount(input_coin, input_amount, output_coin)
-        .map(|vec| {
-            // The last result will always have the output coin value
-            if let Some(value) = vec.last() {
-                value.output_amount
-            } else {
-                0u128
-            }
+        .map(|calculation| {
+            let detail = calculation.second.unwrap_or(calculation.first);
+            detail.output_amount
         })
         .unwrap_or(0);
     if estimated_output_amount == 0 {
