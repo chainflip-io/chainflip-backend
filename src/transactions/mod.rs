@@ -1,5 +1,8 @@
 use crate::{
-    common::{coins::PoolCoin, Coin, LokiAmount, LokiPaymentId, Timestamp, WalletAddress},
+    common::{
+        coins::{GenericCoinAmount, PoolCoin},
+        Coin, LokiAmount, LokiPaymentId, Timestamp, WalletAddress,
+    },
     side_chain::SideChainTx,
 };
 
@@ -46,6 +49,10 @@ pub struct StakeQuoteTx {
     pub input_loki_address_id: LokiPaymentId,
     /// Loki amount that is meant to be deposited
     pub loki_amount: LokiAmount,
+    /// Other coin's type
+    pub coin_type: PoolCoin,
+    /// Amount of the other (non-Loki) pool coin
+    pub coin_amount: GenericCoinAmount,
 }
 
 impl From<StakeQuoteTx> for SideChainTx {

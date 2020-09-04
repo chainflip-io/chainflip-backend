@@ -96,7 +96,7 @@ fn get_output_amount_inner<T: TransactionProvider>(
 
         let loki_decimal = LokiAmount::from_atomic(input_amount).to_decimal();
         let loki_depth = LokiAmount::from_atomic(liquidity.loki_depth).to_decimal();
-        let output_depth = GenericCoinAmount::atmoic(output, liquidity.depth).to_decimal();
+        let output_depth = GenericCoinAmount::from_atomic(output, liquidity.depth).to_decimal();
         let output_amount = calculate_output_amount(
             loki_decimal,
             loki_depth,
@@ -104,7 +104,7 @@ fn get_output_amount_inner<T: TransactionProvider>(
             output_depth,
             0.0,
         );
-        let output_amount = GenericCoinAmount::decimal(output, output_amount).to_atomic();
+        let output_amount = GenericCoinAmount::from_decimal(output, output_amount).to_atomic();
 
         Ok(OutputDetail {
             input,
@@ -119,8 +119,8 @@ fn get_output_amount_inner<T: TransactionProvider>(
             .get_liquidity(pool_coin)
             .unwrap_or(Liquidity::new());
 
-        let input_decimal = GenericCoinAmount::atmoic(input, input_amount).to_decimal();
-        let input_depth = GenericCoinAmount::atmoic(input, liquidity.depth).to_decimal();
+        let input_decimal = GenericCoinAmount::from_atomic(input, input_amount).to_decimal();
+        let input_depth = GenericCoinAmount::from_atomic(input, liquidity.depth).to_decimal();
         let loki_depth = LokiAmount::from_atomic(liquidity.loki_depth).to_decimal();
 
         let output_amount = calculate_output_amount(
