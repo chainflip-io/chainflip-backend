@@ -207,10 +207,7 @@ mod test {
         {
             let mut provider = provider.lock().unwrap();
             provider
-                .add_transactions(vec![
-                    SideChainTx::QuoteTx(eth_quote.clone()),
-                    SideChainTx::QuoteTx(btc_quote),
-                ])
+                .add_transactions(vec![eth_quote.clone().into(), btc_quote.into()])
                 .unwrap();
 
             assert_eq!(provider.get_quote_txs().len(), 2);

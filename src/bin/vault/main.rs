@@ -53,11 +53,11 @@ where
     let mut s_chain = s_chain.lock().unwrap();
 
     s_chain
-        .add_block(vec![SideChainTx::StakeQuoteTx(quote)])
+        .add_block(vec![quote.into()])
         .expect("Could not add a Quote TX");
 
     s_chain
-        .add_block(vec![SideChainTx::WitnessTx(witness)])
+        .add_block(vec![witness.into()])
         .expect("Could not add a Quote TX");
 }
 

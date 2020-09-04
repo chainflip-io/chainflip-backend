@@ -123,7 +123,7 @@ pub async fn post_quote<T: TransactionProvider>(
     };
 
     provider
-        .add_transactions(vec![SideChainTx::QuoteTx(quote.clone())])
+        .add_transactions(vec![quote.clone().into()])
         .map_err(|err| {
             error!("Failed to add quote transaction: {}", err);
             internal_server_error()
@@ -181,9 +181,7 @@ mod test {
             output: quote_params.output_coin,
             slippage_limit: quote_params.slippage_limit,
         };
-        provider
-            .add_transactions(vec![SideChainTx::QuoteTx(quote)])
-            .unwrap();
+        provider.add_transactions(vec![quote.into()]).unwrap();
 
         let provider = Arc::new(Mutex::new(provider));
 
@@ -216,9 +214,7 @@ mod test {
             };
 
             let mut provider = provider.lock().unwrap();
-            provider
-                .add_transactions(vec![SideChainTx::PoolChangeTx(tx)])
-                .unwrap();
+            provider.add_transactions(vec![tx.into()]).unwrap();
         }
 
         let result = post_quote(params(), provider.clone())
@@ -237,9 +233,7 @@ mod test {
             depth_change: 10000000000,
             loki_depth_change: 50000000000,
         };
-        provider
-            .add_transactions(vec![SideChainTx::PoolChangeTx(tx)])
-            .unwrap();
+        provider.add_transactions(vec![tx.into()]).unwrap();
 
         let provider = Arc::new(Mutex::new(provider));
 

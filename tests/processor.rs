@@ -43,7 +43,6 @@ fn create_witness_tx(quote: &StakeQuoteTx) -> WitnessTx {
 
 #[test]
 fn witnessed_staked_changes_pool_liquidity() {
-
     let s_chain = MemorySideChain::new();
     let s_chain = Arc::new(Mutex::new(s_chain));
 

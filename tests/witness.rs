@@ -33,7 +33,7 @@ fn test_witness_tx_is_made() {
     s_chain
         .lock()
         .unwrap()
-        .add_block(vec![SideChainTx::QuoteTx(quote_tx.clone())])
+        .add_block(vec![quote_tx.clone().into()])
         .expect("Could not add TX");
 
     // TODO: wait until witness acknowledged the quote (there must be
