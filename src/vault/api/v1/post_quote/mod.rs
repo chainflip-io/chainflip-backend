@@ -227,4 +227,26 @@ mod test {
 
         assert_eq!(&result.message, "Not enough liquidity");
     }
+
+    #[tokio::test]
+    async fn returns_response_if_successful() {
+        let mut provider = TestTransactionProvider::new();
+        let tx = PoolChangeTx {
+            id: Uuid::new_v4(),
+            coin: PoolCoin::from(Coin::ETH).unwrap(),
+            depth_change: 10000000000,
+            loki_depth_change: 50000000000,
+        };
+        provider
+            .add_transactions(vec![SideChainTx::PoolChangeTx(tx)])
+            .unwrap();
+
+        let provider = Arc::new(Mutex::new(provider));
+
+        post_quote(params(), provider.clone())
+            .await
+            .expect("Expected to get a quote response");
+
+        assert_eq!(provider.lock().unwrap().get_quote_txs().len(), 1);
+    }
 }
