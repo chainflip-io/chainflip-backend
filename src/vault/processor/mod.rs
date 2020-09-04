@@ -192,3 +192,55 @@ where
         });
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    use crate::{
+        common::{
+            coins::{CoinAmount, GenericCoinAmount},
+            LokiAmount,
+        },
+        side_chain::MemorySideChain,
+        utils::test_utils::{create_fake_stake_quote, create_fake_witness, store::MemoryKVS},
+        vault::transactions::MemoryTransactionsProvider,
+    };
+
+    type Processor = SideChainProcessor<MemoryTransactionsProvider<MemorySideChain>, MemoryKVS>;
+
+    #[test]
+    fn fulfilled_quotes_should_produce_new_tx() {
+        let coin_type = Coin::ETH;
+        let loki_amount = LokiAmount::from_decimal(1.0);
+        let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
+
+        let stake_tx = create_fake_stake_quote(loki_amount.clone(), coin_amount.clone());
+        let wtx_loki = create_fake_witness(&stake_tx, loki_amount.clone().into(), Coin::LOKI);
+        let wtx_eth = create_fake_witness(&stake_tx, coin_amount.clone(), coin_type);
+
+        let tx = Processor::process_stake_tx(&stake_tx, &[&wtx_loki, &wtx_eth]).unwrap();
+
+        if let SideChainTx::PoolChangeTx(tx) = tx {
+            assert_eq!(tx.depth_change as u128, coin_amount.to_atomic());
+            assert_eq!(tx.loki_depth_change as u128, loki_amount.to_atomic());
+        } else {
+            panic!("Invalid tx type");
+        }
+    }
+
+    #[test]
+    fn partially_fulfilled_quotes_do_not_produce_new_tx() {
+        let coin_type = Coin::ETH;
+        let loki_amount = LokiAmount::from_decimal(1.0);
+        let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
+
+        let stake_tx = create_fake_stake_quote(loki_amount.clone(), coin_amount.clone());
+        let wtx_loki = create_fake_witness(&stake_tx, loki_amount.clone().into(), Coin::LOKI);
+
+        let tx = Processor::process_stake_tx(&stake_tx, &[&wtx_loki]);
+
+        assert!(tx.is_none())
+    }
+}

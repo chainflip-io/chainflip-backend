@@ -1,11 +1,10 @@
 use blockswap::{
     common::{
         coins::{Coin, CoinAmount, GenericCoinAmount, PoolCoin},
-        LokiAmount, LokiPaymentId,
+        LokiAmount,
     },
     side_chain::{ISideChain, MemorySideChain},
-    transactions::{StakeQuoteTx, WitnessTx},
-    utils::test_utils::store::MemoryKVS,
+    utils::test_utils::{create_fake_stake_quote, create_fake_witness, store::MemoryKVS},
     vault::{
         processor::SideChainProcessor,
         transactions::{MemoryTransactionsProvider, TransactionProvider},
@@ -13,39 +12,9 @@ use blockswap::{
 };
 
 use std::{
-    str::FromStr,
     sync::{Arc, Mutex},
     time::Duration,
 };
-
-use uuid::Uuid;
-
-fn create_stake_loki_tx(loki_amount: LokiAmount, coin_amount: GenericCoinAmount) -> StakeQuoteTx {
-    StakeQuoteTx {
-        id: Uuid::new_v4(),
-        input_loki_address_id: LokiPaymentId::from_str("60900e5603bf96e3").unwrap(),
-        loki_amount,
-        coin_type: PoolCoin::from(coin_amount.coin_type()).expect("invalid coin type"),
-        coin_amount,
-    }
-}
-
-fn create_witness_tx(
-    quote: &StakeQuoteTx,
-    amount: GenericCoinAmount,
-    coin_type: Coin,
-) -> WitnessTx {
-    WitnessTx {
-        id: Uuid::new_v4(),
-        quote_id: quote.id,
-        transaction_id: "".to_owned(),
-        transaction_block_number: 0,
-        transaction_index: 0,
-        amount: amount.to_atomic(),
-        coin_type,
-        sender: None,
-    }
-}
 
 #[test]
 fn witnessed_staked_changes_pool_liquidity() {
@@ -58,15 +27,13 @@ fn witnessed_staked_changes_pool_liquidity() {
 
     let processor = SideChainProcessor::new(tx_provider, kvs);
 
-    // add_fake_transactions(&s_chain);
-
     let coin_type = Coin::ETH;
     let loki_amount = LokiAmount::from_decimal(1.0);
     let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
 
-    let stake_tx = create_stake_loki_tx(loki_amount.clone(), coin_amount.clone());
-    let wtx_loki = create_witness_tx(&stake_tx, loki_amount.clone().into(), Coin::LOKI);
-    let wtx_eth = create_witness_tx(&stake_tx, coin_amount.clone(), coin_type);
+    let stake_tx = create_fake_stake_quote(loki_amount.clone(), coin_amount.clone());
+    let wtx_loki = create_fake_witness(&stake_tx, loki_amount.clone().into(), Coin::LOKI);
+    let wtx_eth = create_fake_witness(&stake_tx, coin_amount.clone(), coin_type);
 
     {
         // Add blocks with those transactions
