@@ -207,12 +207,7 @@ mod test {
         let coin = PoolCoin::from(Coin::ETH).expect("Expected valid pool coin");
         let mut provider = setup();
         {
-            let change_tx = PoolChangeTx {
-                id: Uuid::new_v4(),
-                coin,
-                depth_change: -100,
-                loki_depth_change: -100,
-            };
+            let change_tx = PoolChangeTx::new(coin, -100, -100);
 
             let mut side_chain = provider.side_chain.lock().unwrap();
 
@@ -234,20 +229,8 @@ mod test {
 
             side_chain
                 .add_block(vec![
-                    PoolChangeTx {
-                        id: Uuid::new_v4(),
-                        coin,
-                        depth_change: 100,
-                        loki_depth_change: 100,
-                    }
-                    .into(),
-                    PoolChangeTx {
-                        id: Uuid::new_v4(),
-                        coin,
-                        depth_change: 100,
-                        loki_depth_change: -50,
-                    }
-                    .into(),
+                    PoolChangeTx::new(coin, 100, 100).into(),
+                    PoolChangeTx::new(coin, -50, 100).into(),
                 ])
                 .unwrap();
         }

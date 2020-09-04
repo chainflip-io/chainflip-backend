@@ -1,9 +1,6 @@
-use crate::{
-    common::{
-        coins::{GenericCoinAmount, PoolCoin},
-        Coin, LokiAmount, LokiPaymentId, Timestamp, WalletAddress,
-    },
-    side_chain::SideChainTx,
+use crate::common::{
+    coins::{GenericCoinAmount, PoolCoin},
+    Coin, LokiAmount, LokiPaymentId, Timestamp, WalletAddress,
 };
 
 use serde::{Deserialize, Serialize};
@@ -104,6 +101,18 @@ pub struct PoolChangeTx {
     pub loki_depth_change: i128,
 }
 
+impl PoolChangeTx {
+    /// Construct from fields
+    pub fn new(coin: PoolCoin, loki_depth_change: i128, depth_change: i128) -> Self {
+        PoolChangeTx {
+            id: Uuid::new_v4(),
+            coin,
+            depth_change,
+            loki_depth_change,
+        }
+    }
+}
+
 /// A transaction acknowledging pool provisioning
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct StakeTx {
@@ -114,5 +123,5 @@ pub struct StakeTx {
     /// Identifier of the corresponding quote transaction
     pub quote_tx: Uuid,
     /// Identifier of the corresponding witness transactions
-    pub witness_txs: Vec<Uuid>
+    pub witness_txs: Vec<Uuid>,
 }
