@@ -1,3 +1,4 @@
+use crate::common::LokiAmount;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, str::FromStr};
 
@@ -183,6 +184,7 @@ pub trait CoinAmount {
 }
 
 /// A generic coin amount
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GenericCoinAmount {
     coin: Coin,
     atomic_amount: u128,
@@ -190,7 +192,7 @@ pub struct GenericCoinAmount {
 
 impl GenericCoinAmount {
     /// Create a coin amount from atomic value
-    pub fn atmoic(coin: Coin, atomic_amount: u128) -> Self {
+    pub fn from_atomic(coin: Coin, atomic_amount: u128) -> Self {
         GenericCoinAmount {
             coin,
             atomic_amount,
@@ -198,7 +200,7 @@ impl GenericCoinAmount {
     }
 
     /// Create a coin amount from a decimal value
-    pub fn decimal(coin: Coin, decimal_amount: f64) -> Self {
+    pub fn from_decimal(coin: Coin, decimal_amount: f64) -> Self {
         let info = coin.get_info();
         let decimals = info.decimals as i32;
         let atomic_amount = (decimal_amount * info.one_unit() as f64).round() as u128;
@@ -206,6 +208,11 @@ impl GenericCoinAmount {
             coin,
             atomic_amount,
         }
+    }
+
+    /// Get coin type
+    pub fn coin_type(&self) -> Coin {
+        self.coin
     }
 }
 
@@ -216,6 +223,12 @@ impl CoinAmount for GenericCoinAmount {
 
     fn coin_info(&self) -> CoinInfo {
         self.coin.get_info()
+    }
+}
+
+impl From<LokiAmount> for GenericCoinAmount {
+    fn from(tx: LokiAmount) -> Self {
+        GenericCoinAmount::from_atomic(Coin::LOKI, tx.to_atomic())
     }
 }
 

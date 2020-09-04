@@ -35,39 +35,102 @@ where
         }
     }
 
+    /// Process a single stake quote with all witness transactions referencing it
+    fn process_stake_tx(quote: &StakeQuoteTx, witness_txs: &[&WitnessTx]) -> Option<SideChainTx> {
+        // TODO: put a balance change tx onto the side chain
+        info!("Found witness matching quote: {:?}", quote);
+
+        let mut loki_amount: Option<i128> = None;
+        let mut other_amount: Option<i128> = None;
+
+        for wtx in witness_txs {
+            match wtx.coin_type {
+                Coin::LOKI => {
+                    if loki_amount.is_some() {
+                        error!("Unexpected second loki witness transaction");
+                        return None;
+                    }
+
+                    let amount = match i128::try_from(wtx.amount) {
+                        Ok(amount) => amount,
+                        Err(err) => {
+                            error!("Invalid amount in quote: {} ({})", wtx.amount, err);
+                            return None;
+                        }
+                    };
+
+                    loki_amount = Some(amount);
+                }
+                coin_type @ _ => {
+                    if coin_type == quote.coin_type.get_coin() {
+                        if other_amount.is_some() {
+                            error!("Unexpected second loki witness transaction");
+                            return None;
+                        }
+
+                        let amount = match i128::try_from(wtx.amount) {
+                            Ok(amount) => amount,
+                            Err(err) => {
+                                error!("Invalid amount in quote: {} ({})", wtx.amount, err);
+                                return None;
+                            }
+                        };
+
+                        other_amount = Some(amount);
+                    } else {
+                        error!("Unexpected coin type: {}", coin_type);
+                        return None;
+                    }
+                }
+            }
+        }
+
+        if loki_amount.is_none() {
+            info!("Loki is not yet provisioned in quote: {:?}", quote);
+        }
+
+        if other_amount.is_none() {
+            info!(
+                "{} is not yet provisioned in quote: {:?}",
+                quote.coin_type.get_coin(),
+                quote
+            );
+        }
+
+        match (loki_amount, other_amount) {
+            (Some(loki_amount), Some(other_amount)) => {
+                let coin = quote.coin_type;
+
+                // For now we are only depositing LOKI
+                let tx = PoolChangeTx {
+                    id: Uuid::new_v4(),
+                    coin,
+                    depth_change: other_amount,
+                    loki_depth_change: loki_amount,
+                };
+
+                Some(tx.into())
+            }
+            _ => None,
+        }
+    }
+
+    /// Try to match witness transacitons with stake transactions and return a list of
+    /// transactions that should be added to the side chain
     fn process_stakes(quotes: &[StakeQuoteTx], witness_txs: &[WitnessTx]) -> Vec<SideChainTx> {
         let mut new_txs = Vec::<SideChainTx>::default();
 
-        for wtx in witness_txs {
-            if let Some(quote) = quotes.iter().find(|quote| quote.id == wtx.quote_id) {
-                // TODO: put a balance change tx onto the side chain
-                info!("Found witness matching quote: {:?}", quote);
+        for quote in quotes {
+            // Find all relevant witness transactions
+            let wtxs: Vec<&WitnessTx> = witness_txs
+                .iter()
+                .filter(|wtx| wtx.quote_id == quote.id)
+                .collect();
 
-                let coin = match PoolCoin::from(Coin::ETH) {
-                    Ok(coin) => coin,
-                    Err(err) => {
-                        error!("Invalid quote ({})", err);
-                        continue;
-                    }
-                };
-
-                let loki_depth_change = match i128::try_from(wtx.amount) {
-                    Ok(amount) => amount,
-                    Err(err) => {
-                        error!("Invalid amount in quote: {} ({})", wtx.amount, err);
-                        continue;
-                    }
-                };
-
-                // For now we are only depositing LOKI
-                let pool_tx = PoolChangeTx {
-                    id: Uuid::new_v4(),
-                    coin,
-                    depth_change: 0,
-                    loki_depth_change,
-                };
-
-                new_txs.push(pool_tx.into());
+            if !wtxs.is_empty() {
+                if let Some(tx) = SideChainProcessor::<T, KVS>::process_stake_tx(quote, &wtxs) {
+                    new_txs.push(tx);
+                }
             }
         }
 

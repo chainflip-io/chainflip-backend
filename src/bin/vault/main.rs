@@ -2,7 +2,10 @@
 extern crate log;
 
 use blockswap::{
-    common::store,
+    common::{
+        coins::{GenericCoinAmount, PoolCoin},
+        store,
+    },
     logging,
     side_chain::{ISideChain, PeristentSideChain},
     vault::{
@@ -25,18 +28,16 @@ where
     S: ISideChain,
 {
     use blockswap::{
-        common::{
-            coins::{Coin, CoinAmount},
-            LokiAmount, LokiPaymentId,
-        },
-        side_chain::SideChainTx,
+        common::{coins::Coin, LokiAmount, LokiPaymentId},
         transactions::{StakeQuoteTx, WitnessTx},
     };
 
     let quote = StakeQuoteTx {
         id: Uuid::new_v4(),
         input_loki_address_id: LokiPaymentId::from_str("60900e5603bf96e3").unwrap(),
-        loki_amount: LokiAmount::from_atomic(1_000_000_000),
+        loki_amount: LokiAmount::from_decimal(500.0),
+        coin_type: PoolCoin::from(Coin::ETH).unwrap(),
+        coin_amount: GenericCoinAmount::from_decimal(Coin::ETH, 1.0),
     };
 
     let witness = WitnessTx {
@@ -53,11 +54,11 @@ where
     let mut s_chain = s_chain.lock().unwrap();
 
     s_chain
-        .add_block(vec![SideChainTx::StakeQuoteTx(quote)])
+        .add_block(vec![quote.into()])
         .expect("Could not add a Quote TX");
 
     s_chain
-        .add_block(vec![SideChainTx::WitnessTx(witness)])
+        .add_block(vec![witness.into()])
         .expect("Could not add a Quote TX");
 }
 
