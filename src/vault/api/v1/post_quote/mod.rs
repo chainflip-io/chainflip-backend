@@ -150,7 +150,7 @@ mod test {
     use super::*;
     use crate::{
         common::coins::PoolCoin, transactions::PoolChangeTx,
-        utils::test_utils::transaction_provider::TestTransactionProvider,
+        utils::test_utils::get_transactions_provider,
     };
 
     fn params() -> QuoteParams {
@@ -169,7 +169,7 @@ mod test {
     async fn returns_error_if_quote_exists() {
         let quote_params = params();
 
-        let mut provider = TestTransactionProvider::new();
+        let mut provider = get_transactions_provider();
         let quote = QuoteTx {
             id: Uuid::new_v4(),
             timestamp: Timestamp::now(),
@@ -196,7 +196,7 @@ mod test {
 
     #[tokio::test]
     async fn returns_error_if_no_liquidity() {
-        let provider = TestTransactionProvider::new();
+        let provider = get_transactions_provider();
         let provider = Arc::new(Mutex::new(provider));
 
         // No pools yet
@@ -230,7 +230,7 @@ mod test {
 
     #[tokio::test]
     async fn returns_response_if_successful() {
-        let mut provider = TestTransactionProvider::new();
+        let mut provider = get_transactions_provider();
         let tx = PoolChangeTx {
             id: Uuid::new_v4(),
             coin: PoolCoin::from(Coin::ETH).unwrap(),

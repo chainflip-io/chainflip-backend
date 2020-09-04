@@ -1,16 +1,16 @@
 use crate::{
     common::{Coin, Timestamp, WalletAddress},
+    side_chain::{ISideChain, MemorySideChain},
     transactions::QuoteTx,
+    vault::transactions::MemoryTransactionsProvider,
 };
+use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 /// Test helpers for Block Processor
 pub mod block_processor;
 /// Test helpers for Vault Node API
 pub mod vault_node_api;
-
-/// Test helper for transaction provider
-pub mod transaction_provider;
 
 /// Test helper for ethereum
 pub mod ethereum;
@@ -68,4 +68,18 @@ impl Drop for TempRandomFile {
         std::fs::remove_file(&self.path)
             .expect(&format!("Could not remove temp file {}", &self.path));
     }
+}
+
+/// Get a transactions provider with a memory side chain
+pub fn get_transactions_provider() -> MemoryTransactionsProvider<MemorySideChain> {
+    let chain = MemorySideChain::new();
+    let chain = Arc::new(Mutex::new(chain));
+    MemoryTransactionsProvider::new(chain)
+}
+
+/// Get a transactions provider with the given side chain
+pub fn get_transactions_provider_with_chain<S: ISideChain>(
+    side_chain: Arc<Mutex<S>>,
+) -> MemoryTransactionsProvider<S> {
+    MemoryTransactionsProvider::new(side_chain)
 }
