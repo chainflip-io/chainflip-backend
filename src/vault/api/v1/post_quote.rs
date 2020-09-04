@@ -45,6 +45,20 @@ pub struct QuoteResponse {
     slippage_limit: f32,
 }
 
+/// Validate an address from the given `coin`
+fn validate_address(coin: &Coin, address: &str) -> Result<(), String> {
+    match coin {
+        Coin::LOKI => LokiWalletAddress::from_str(address).map(|_| ()),
+        Coin::ETH => ethereum::Address::from_str(address)
+            .map(|_| ())
+            .map_err(|str| str.to_owned()),
+        x => {
+            warn!("Address validation missing for {}", x);
+            Err("No address validation found".to_owned())
+        }
+    }
+}
+
 /// Validate quote params
 pub fn validate_quote_params(params: &QuoteParams) -> Result<(), &'static str> {
     // Coins
@@ -72,20 +86,13 @@ pub fn validate_quote_params(params: &QuoteParams) -> Result<(), &'static str> {
         return Err("Input return address not provided");
     }
 
-    let output_address = match params.output_coin {
-        Coin::LOKI => LokiWalletAddress::from_str(&params.output_address)
-            .map(|_| ())
-            .map_err(|_| ()),
-        Coin::ETH => ethereum::Address::from_str(&params.output_address)
-            .map(|_| ())
-            .map_err(|_| ()),
-        x => {
-            warn!("Failed to handle output address of {}", x);
-            Err(())
+    if let Some(return_address) = &params.input_return_address {
+        if validate_address(&params.input_coin, &return_address).is_err() {
+            return Err("Invalid return address");
         }
-    };
+    }
 
-    if output_address.is_err() {
+    if validate_address(&params.output_coin, &params.output_address).is_err() {
         return Err("Invalid output address");
     }
 
