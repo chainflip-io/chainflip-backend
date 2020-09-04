@@ -143,21 +143,25 @@ mod test {
             ethereum::{Address, Hash, Transaction},
             Timestamp, WalletAddress,
         },
+        side_chain::MemorySideChain,
         transactions::QuoteTx,
-        utils::test_utils::{store::MemoryKVS, transaction_provider::TestTransactionProvider},
+        utils::test_utils::{get_transactions_provider, store::MemoryKVS},
+        vault::transactions::MemoryTransactionsProvider,
     };
     use rand::Rng;
 
+    type TestTransactionsProvider = MemoryTransactionsProvider<MemorySideChain>;
+
     struct TestObjects {
         client: Arc<TestEthereumClient>,
-        provider: Arc<Mutex<TestTransactionProvider>>,
+        provider: Arc<Mutex<TestTransactionsProvider>>,
         store: Arc<Mutex<MemoryKVS>>,
-        witness: EthereumWitness<TestTransactionProvider, TestEthereumClient, MemoryKVS>,
+        witness: EthereumWitness<TestTransactionsProvider, TestEthereumClient, MemoryKVS>,
     }
 
     fn setup() -> TestObjects {
         let client = Arc::new(TestEthereumClient::new());
-        let provider = Arc::new(Mutex::new(TestTransactionProvider::new()));
+        let provider = Arc::new(Mutex::new(get_transactions_provider()));
         let store = Arc::new(Mutex::new(MemoryKVS::new()));
         let witness = EthereumWitness::new(client.clone(), provider.clone(), store.clone());
 
@@ -203,10 +207,7 @@ mod test {
         {
             let mut provider = provider.lock().unwrap();
             provider
-                .add_transactions(vec![
-                    SideChainTx::QuoteTx(eth_quote.clone()),
-                    SideChainTx::QuoteTx(btc_quote),
-                ])
+                .add_transactions(vec![eth_quote.clone().into(), btc_quote.into()])
                 .unwrap();
 
             assert_eq!(provider.get_quote_txs().len(), 2);

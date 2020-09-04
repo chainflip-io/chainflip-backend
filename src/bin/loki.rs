@@ -89,10 +89,8 @@ async fn test_loki_witness() {
         info!("Balance after: {}", res);
     }
 
-    let tx = crate::side_chain::SideChainTx::from(tx);
-
     s_chain
-        .add_block(vec![tx.clone()])
+        .add_block(vec![tx.into()])
         .expect("Error adding a transaction to the database");
 
     let s_chain = Arc::new(Mutex::new(s_chain));

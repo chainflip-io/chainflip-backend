@@ -151,10 +151,8 @@ where
 
         debug!("Adding witness tx: {:?}", &tx);
 
-        let tx = SideChainTx::WitnessTx(tx);
-
         side_chain
-            .add_block(vec![tx])
+            .add_block(vec![tx.into()])
             .expect("Could not publish witness tx");
 
         // Do we remove the quote here?

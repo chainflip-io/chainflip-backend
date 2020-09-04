@@ -5,7 +5,7 @@ use reqwest::StatusCode;
 use blockswap::{
     common,
     side_chain::MemorySideChain,
-    utils::test_utils::transaction_provider::TestTransactionProvider,
+    utils::test_utils::get_transactions_provider,
     vault::api::{v1::post_quote::QuoteResponse, APIServer},
 };
 use std::sync::{Arc, Mutex};
@@ -56,7 +56,7 @@ async fn vault_http_server_tests() {
     let side_chain = MemorySideChain::new();
     let side_chain = Arc::new(Mutex::new(side_chain));
 
-    let provider = TestTransactionProvider::new();
+    let provider = get_transactions_provider();
     let provider = Arc::new(Mutex::new(provider));
 
     let (tx, rx) = tokio::sync::oneshot::channel();

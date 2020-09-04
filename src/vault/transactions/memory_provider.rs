@@ -145,10 +145,7 @@ mod test {
             };
 
             side_chain
-                .add_block(vec![
-                    SideChainTx::QuoteTx(quote),
-                    SideChainTx::WitnessTx(witness),
-                ])
+                .add_block(vec![quote.into(), witness.into()])
                 .unwrap();
         }
 
@@ -159,7 +156,7 @@ mod test {
         assert_eq!(provider.get_witness_txs().len(), 1);
 
         provider
-            .add_transactions(vec![SideChainTx::QuoteTx(create_fake_quote_tx())])
+            .add_transactions(vec![create_fake_quote_tx().into()])
             .unwrap();
 
         assert_eq!(provider.next_block_idx, 2);
@@ -186,10 +183,7 @@ mod test {
             let mut side_chain = provider.side_chain.lock().unwrap();
 
             side_chain
-                .add_block(vec![
-                    SideChainTx::QuoteTx(quote),
-                    SideChainTx::WitnessTx(witness.clone()),
-                ])
+                .add_block(vec![quote.into(), witness.clone().into()])
                 .unwrap();
         }
 
@@ -198,9 +192,7 @@ mod test {
         assert_eq!(provider.get_witness_txs().len(), 1);
         assert_eq!(provider.next_block_idx, 1);
 
-        provider
-            .add_transactions(vec![SideChainTx::WitnessTx(witness)])
-            .unwrap();
+        provider.add_transactions(vec![witness.into()]).unwrap();
 
         assert_eq!(provider.get_witness_txs().len(), 1);
         assert_eq!(provider.next_block_idx, 1);
@@ -221,9 +213,7 @@ mod test {
 
             let mut side_chain = provider.side_chain.lock().unwrap();
 
-            side_chain
-                .add_block(vec![SideChainTx::PoolChangeTx(change_tx)])
-                .unwrap();
+            side_chain.add_block(vec![change_tx.into()]).unwrap();
         }
 
         // Pre condition check
@@ -241,18 +231,20 @@ mod test {
 
             side_chain
                 .add_block(vec![
-                    SideChainTx::PoolChangeTx(PoolChangeTx {
+                    PoolChangeTx {
                         id: Uuid::new_v4(),
                         coin,
                         depth_change: 100,
                         loki_depth_change: 100,
-                    }),
-                    SideChainTx::PoolChangeTx(PoolChangeTx {
+                    }
+                    .into(),
+                    PoolChangeTx {
                         id: Uuid::new_v4(),
                         coin,
                         depth_change: 100,
                         loki_depth_change: -50,
-                    }),
+                    }
+                    .into(),
                 ])
                 .unwrap();
         }

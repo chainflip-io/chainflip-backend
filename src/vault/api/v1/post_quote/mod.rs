@@ -9,11 +9,10 @@ use crate::{
 };
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use std::{
-    str::FromStr,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 use uuid::Uuid;
+
+mod validation;
 
 /// Params for the v1/quote endpoint
 #[serde(rename_all = "camelCase")]
@@ -45,84 +44,6 @@ pub struct QuoteResponse {
     slippage_limit: f32,
 }
 
-/// Validate quote params
-pub fn validate_quote_params(params: &QuoteParams) -> Result<(), &'static str> {
-    // Coins
-    if !params.input_coin.is_supported() {
-        return Err("Input coin is not supported");
-    } else if !params.output_coin.is_supported() {
-        return Err("Output coin is not supported");
-    }
-
-    if params.input_coin == params.output_coin {
-        return Err("Cannot swap between the same coins");
-    }
-
-    // Amount
-
-    let input_amount = params.input_amount.parse::<i128>().unwrap_or(0);
-    if input_amount <= 0 {
-        return Err("Invalid input amount provided");
-    }
-
-    // Addresses
-
-    if params.input_coin.get_info().requires_return_address && params.input_return_address.is_none()
-    {
-        return Err("Input return address not provided");
-    }
-
-    let output_address = match params.output_coin {
-        Coin::LOKI => LokiWalletAddress::from_str(&params.output_address)
-            .map(|_| ())
-            .map_err(|_| ()),
-        Coin::ETH => ethereum::Address::from_str(&params.output_address)
-            .map(|_| ())
-            .map_err(|_| ()),
-        x => {
-            warn!("Failed to handle output address of {}", x);
-            Err(())
-        }
-    };
-
-    if output_address.is_err() {
-        return Err("Invalid output address");
-    }
-
-    let input_address_id = match params.input_coin {
-        Coin::BTC | Coin::ETH => match params.input_address_id.parse::<u64>() {
-            // Index 0 is used for the main wallet and 1-4 are reserved for future use
-            Ok(id) => {
-                if id < 5 {
-                    Err(())
-                } else {
-                    Ok(())
-                }
-            }
-            Err(_) => Err(()),
-        },
-        Coin::LOKI => LokiPaymentId::from_str(&params.input_address_id)
-            .map(|_| ())
-            .map_err(|_| ()),
-        x => {
-            warn!("Failed to handle input address id of {}", x);
-            Err(())
-        }
-    };
-
-    if input_address_id.is_err() {
-        return Err("Invalid input id provided");
-    }
-
-    // Slippage
-
-    if params.slippage_limit < 0.0 {
-        return Err("Slippage limit must be greater than or equal to 0");
-    }
-
-    Ok(())
-}
-
 fn bad_request(message: &str) -> ResponseError {
     ResponseError::new(StatusCode::BAD_REQUEST, message)
 }
@@ -136,7 +57,7 @@ pub async fn post_quote<T: TransactionProvider>(
     params: QuoteParams,
     provider: Arc<Mutex<T>>,
 ) -> Result<QuoteResponse, ResponseError> {
-    if let Err(err) = validate_quote_params(&params) {
+    if let Err(err) = validation::validate_params(&params) {
         return Err(bad_request(err));
     }
 
@@ -202,7 +123,7 @@ pub async fn post_quote<T: TransactionProvider>(
     };
 
     provider
-        .add_transactions(vec![SideChainTx::QuoteTx(quote.clone())])
+        .add_transactions(vec![quote.clone().into()])
         .map_err(|err| {
             error!("Failed to add quote transaction: {}", err);
             internal_server_error()
@@ -222,4 +143,104 @@ pub async fn post_quote<T: TransactionProvider>(
         estimated_output_amount: estimated_output_amount.to_string(),
         slippage_limit: params.slippage_limit,
     })
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{
+        common::coins::PoolCoin, transactions::PoolChangeTx,
+        utils::test_utils::get_transactions_provider,
+    };
+
+    fn params() -> QuoteParams {
+        QuoteParams {
+            input_coin: Coin::LOKI,
+            input_return_address: Some("T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".to_string()),
+            input_address_id: "60900e5603bf96e3".to_owned(),
+            input_amount: "1000000000".to_string(),
+            output_coin: Coin::ETH,
+            output_address: "0x70e7db0678460c5e53f1ffc9221d1c692111dcc5".to_string(),
+            slippage_limit: 0.0,
+        }
+    }
+
+    #[tokio::test]
+    async fn returns_error_if_quote_exists() {
+        let quote_params = params();
+
+        let mut provider = get_transactions_provider();
+        let quote = QuoteTx {
+            id: Uuid::new_v4(),
+            timestamp: Timestamp::now(),
+            input: quote_params.input_coin,
+            input_amount: 10000,
+            input_address: WalletAddress::new("T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY"),
+            input_address_id: quote_params.input_address_id,
+            return_address: quote_params.input_return_address.clone().map(WalletAddress),
+            output: quote_params.output_coin,
+            slippage_limit: quote_params.slippage_limit,
+        };
+        provider.add_transactions(vec![quote.into()]).unwrap();
+
+        let provider = Arc::new(Mutex::new(provider));
+
+        let result = post_quote(params(), provider)
+            .await
+            .expect_err("Expected post_quote to return error");
+
+        assert_eq!(&result.message, "Quote already exists for input address id");
+    }
+
+    #[tokio::test]
+    async fn returns_error_if_no_liquidity() {
+        let provider = get_transactions_provider();
+        let provider = Arc::new(Mutex::new(provider));
+
+        // No pools yet
+        let result = post_quote(params(), provider.clone())
+            .await
+            .expect_err("Expected post_quote to return error");
+
+        assert_eq!(&result.message, "Not enough liquidity");
+
+        // Pool with no liquidity
+        {
+            let tx = PoolChangeTx {
+                id: Uuid::new_v4(),
+                coin: PoolCoin::from(Coin::ETH).unwrap(),
+                depth_change: 0,
+                loki_depth_change: 0,
+            };
+
+            let mut provider = provider.lock().unwrap();
+            provider.add_transactions(vec![tx.into()]).unwrap();
+        }
+
+        let result = post_quote(params(), provider.clone())
+            .await
+            .expect_err("Expected post_quote to return error");
+
+        assert_eq!(&result.message, "Not enough liquidity");
+    }
+
+    #[tokio::test]
+    async fn returns_response_if_successful() {
+        let mut provider = get_transactions_provider();
+        let tx = PoolChangeTx {
+            id: Uuid::new_v4(),
+            coin: PoolCoin::from(Coin::ETH).unwrap(),
+            depth_change: 10000000000,
+            loki_depth_change: 50000000000,
+        };
+        provider.add_transactions(vec![tx.into()]).unwrap();
+
+        let provider = Arc::new(Mutex::new(provider));
+
+        post_quote(params(), provider.clone())
+            .await
+            .expect("Expected to get a quote response");
+
+        assert_eq!(provider.lock().unwrap().get_quote_txs().len(), 1);
+    }
 }
