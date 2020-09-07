@@ -86,15 +86,16 @@ where
             for transaction in transactions {
                 if let Some(recipient) = transaction.to.as_ref() {
                     let recipient = recipient.to_string();
-                    let quote = quotes.iter().find(|quote| {
+                    let quote_info = quotes.iter().find(|quote_info| {
+                        let quote = &quote_info.quote;
                         quote.input == Coin::ETH && quote.input_address.0 == recipient
                     });
 
-                    if quote.is_none() {
+                    if quote_info.is_none() {
                         continue;
                     }
 
-                    let quote = quote.unwrap();
+                    let quote = &quote_info.unwrap().quote;
 
                     debug!("Publishing witness transaction for quote: {:?}", &quote);
 

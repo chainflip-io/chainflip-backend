@@ -4,6 +4,7 @@ use crate::{
     transactions::{QuoteTx, StakeQuoteTx, WitnessTx},
     utils::price::{self, OutputCalculation},
 };
+use memory_provider::QuoteTxWrapper;
 
 /// A simple representation of a pool liquidity
 #[derive(Debug, Copy, Clone)]
@@ -33,10 +34,10 @@ pub trait TransactionProvider {
     fn add_transactions(&mut self, txs: Vec<SideChainTx>) -> Result<(), String>;
 
     /// Get all swap quote transactions
-    fn get_quote_txs(&self) -> &[QuoteTx];
+    fn get_quote_txs(&self) -> &[QuoteTxWrapper<QuoteTx>];
 
     /// Get all stake quote transactions
-    fn get_stake_quote_txs(&self) -> &[StakeQuoteTx];
+    fn get_stake_quote_txs(&self) -> &[QuoteTxWrapper<StakeQuoteTx>];
 
     /// Get all the witness transactions
     fn get_witness_txs(&self) -> &[WitnessTx];
