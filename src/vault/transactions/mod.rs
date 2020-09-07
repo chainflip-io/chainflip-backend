@@ -1,9 +1,10 @@
 use crate::{
     common::{coins::PoolCoin, Coin},
     side_chain::SideChainTx,
-    transactions::{QuoteTx, StakeQuoteTx, WitnessTx},
+    transactions::{QuoteTx, StakeQuoteTx},
     utils::price::{self, OutputCalculation},
 };
+use memory_provider::{FulfilledTxWrapper, WitnessTxWrapper};
 
 /// A simple representation of a pool liquidity
 #[derive(Debug, Copy, Clone)]
@@ -33,13 +34,13 @@ pub trait TransactionProvider {
     fn add_transactions(&mut self, txs: Vec<SideChainTx>) -> Result<(), String>;
 
     /// Get all swap quote transactions
-    fn get_quote_txs(&self) -> &[QuoteTx];
+    fn get_quote_txs(&self) -> &[FulfilledTxWrapper<QuoteTx>];
 
     /// Get all stake quote transactions
-    fn get_stake_quote_txs(&self) -> &[StakeQuoteTx];
+    fn get_stake_quote_txs(&self) -> &[FulfilledTxWrapper<StakeQuoteTx>];
 
     /// Get all the witness transactions
-    fn get_witness_txs(&self) -> &[WitnessTx];
+    fn get_witness_txs(&self) -> &[WitnessTxWrapper];
 
     /// Get the liquidity for a given pool
     fn get_liquidity(&self, pool: PoolCoin) -> Option<Liquidity>;

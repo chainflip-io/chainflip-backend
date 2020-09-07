@@ -86,15 +86,16 @@ where
             for transaction in transactions {
                 if let Some(recipient) = transaction.to.as_ref() {
                     let recipient = recipient.to_string();
-                    let quote = quotes.iter().find(|quote| {
+                    let quote_info = quotes.iter().find(|quote_info| {
+                        let quote = &quote_info.inner;
                         quote.input == Coin::ETH && quote.input_address.0 == recipient
                     });
 
-                    if quote.is_none() {
+                    if quote_info.is_none() {
                         continue;
                     }
 
-                    let quote = quote.unwrap();
+                    let quote = &quote_info.unwrap().inner;
 
                     debug!("Publishing witness transaction for quote: {:?}", &quote);
 
@@ -248,10 +249,11 @@ mod test {
             "Expected a witness transaction to be added"
         );
 
-        let witness_tx = provider
+        let witness_tx = &provider
             .get_witness_txs()
             .first()
-            .expect("Expected witness tx to exist");
+            .expect("Expected witness tx to exist")
+            .inner;
 
         assert_eq!(witness_tx.quote_id, eth_quote.id);
         assert_eq!(witness_tx.transaction_id, eth_transaction.hash.to_string());
