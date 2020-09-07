@@ -69,8 +69,12 @@ pub fn validate_params(params: &QuoteParams) -> Result<(), &'static str> {
 
     // Slippage
 
-    if params.slippage_limit < 0.0 {
-        return Err("Slippage limit must be greater than or equal to 0");
+    if params.slippage_limit < 0.0 || params.slippage_limit >= 1.0 {
+        return Err("Slippage limit must be between 0 and 1");
+    }
+
+    if params.slippage_limit > 0.0 && params.input_return_address.is_none() {
+        return Err("Input return address not provided");
     }
 
     Ok(())
@@ -233,13 +237,33 @@ mod test {
 
     #[test]
     fn validates_slippage() {
-        let mut invalid = get_valid_params();
-        invalid.slippage_limit = -1.0;
+        let invalid_values: Vec<f32> = vec![-1.0, 1.0, 1.1];
+        for value in invalid_values.into_iter() {
+            let mut params = get_valid_params();
+            params.slippage_limit = value;
+
+            assert_eq!(
+                validate_params(&params).unwrap_err(),
+                "Slippage limit must be between 0 and 1"
+            );
+        }
+
+        // Setting slippage requires a return address to be set
+
+        let params = QuoteParams {
+            input_coin: Coin::ETH,
+            input_return_address: None,
+            input_address_id: "10".to_owned(),
+            input_amount: "1000000000".to_string(),
+            output_coin: Coin::LOKI,
+            output_address: LOKI_ADDRESS.to_string(),
+            slippage_limit: 0.1,
+        };
 
         assert_eq!(
-            validate_params(&invalid).unwrap_err(),
-            "Slippage limit must be greater than or equal to 0"
-        )
+            validate_params(&params).unwrap_err(),
+            "Input return address not provided"
+        );
     }
 
     #[test]

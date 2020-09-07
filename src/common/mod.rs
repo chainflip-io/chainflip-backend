@@ -2,6 +2,9 @@ use crate::transactions::CoinTx;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, hash::Hash, time::SystemTime};
 
+/// The Loki processing fee
+pub static LOKI_PROCESS_FEE_DECIMAL: f64 = 0.5;
+
 /// Definitions for various coins
 pub mod coins;
 

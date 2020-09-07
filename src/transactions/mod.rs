@@ -18,19 +18,25 @@ pub struct QuoteTx {
     pub timestamp: Timestamp,
     /// The input coin for the quote
     pub input: Coin,
-    /// The amount to input
-    pub input_amount: u128,
     /// The wallet in which the user will deposit coins
     pub input_address: WalletAddress,
     /// Info used to derive unique deposit addresses
     pub input_address_id: String,
     /// The wallet used to refund coins in case of a failed swap
+    ///
+    /// Invariant: must be set if `slippage_limit` > 0
     pub return_address: Option<WalletAddress>,
     /// The output coin for the quote
     pub output: Coin,
     /// The output address for the quote
     pub output_address: WalletAddress,
-    /// The slippage limit
+    /// The ratio between the input amount and output amounts at the time of quote creation
+    pub effective_price: f64,
+    /// The maximim price slippage limit
+    ///
+    /// Invariant: `0 <= slippage_limit < 1`
+    ///
+    /// Invariant: `return_address` must be set if slippage_limit > 0
     pub slippage_limit: f32,
 }
 
@@ -39,6 +45,44 @@ impl Eq for QuoteTx {}
 impl std::hash::Hash for QuoteTx {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id.hash(state);
+    }
+}
+
+impl QuoteTx {
+    /// Create a new quote transaction
+    pub fn new(
+        timestamp: Timestamp,
+        input: Coin,
+        input_address: WalletAddress,
+        input_address_id: String,
+        return_address: Option<WalletAddress>,
+        output: Coin,
+        output_address: WalletAddress,
+        effective_price: f64,
+        slippage_limit: f32,
+    ) -> Result<Self, &'static str> {
+        if slippage_limit < 0.0 || slippage_limit >= 1.0 {
+            return Err("Slippage limit must be between 0 and 1");
+        }
+
+        if (slippage_limit > 0.0 || input.get_info().requires_return_address)
+            && return_address.is_none()
+        {
+            return Err("Return address must be specified");
+        }
+
+        Ok(QuoteTx {
+            id: Uuid::new_v4(),
+            timestamp,
+            input,
+            input_address,
+            input_address_id,
+            return_address,
+            output,
+            output_address,
+            effective_price,
+            slippage_limit,
+        })
     }
 }
 

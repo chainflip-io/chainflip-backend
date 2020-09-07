@@ -1,6 +1,6 @@
 use super::{
     coins::{CoinAmount, CoinInfo},
-    Coin,
+    Coin, LOKI_PROCESS_FEE_DECIMAL,
 };
 
 use serde::{Deserialize, Serialize};
@@ -128,6 +128,11 @@ pub struct LokiAmount {
 }
 
 impl LokiAmount {
+    /// The loki process fee
+    pub fn process_fee() -> Self {
+        LokiAmount::from_decimal(LOKI_PROCESS_FEE_DECIMAL)
+    }
+
     /// Create from atomic amount
     pub fn from_atomic(n: u128) -> Self {
         LokiAmount { atomic_amount: n }

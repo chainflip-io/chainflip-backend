@@ -3,10 +3,12 @@ use crate::{
         coins::{CoinAmount, GenericCoinAmount, PoolCoin},
         Coin, LokiAmount,
     },
+    transactions::PoolChangeTx,
     vault::transactions::{Liquidity, TransactionProvider},
 };
 
 /// Details about an output
+#[derive(Debug, Copy, Clone)]
 pub struct OutputDetail {
     /// The input coin
     pub input: Coin,
@@ -20,9 +22,47 @@ pub struct OutputDetail {
     pub loki_fee: u128,
 }
 
+impl OutputDetail {
+    /// Convert this output detail to a pool change transaction
+    pub fn to_pool_change_tx(&self) -> Result<PoolChangeTx, &'static str> {
+        if self.input != Coin::LOKI && self.output != Coin::LOKI {
+            return Err("Cannot make a PoolChangeTx without a LOKI input or output");
+        }
+
+        let input_depth = self.input_amount as i128;
+        let output_depth = -1 * self.output_amount as i128;
+
+        let is_input_loki = self.input == Coin::LOKI;
+        let pool_coin = if is_input_loki {
+            self.output
+        } else {
+            self.input
+        };
+        let pool_coin = PoolCoin::from(pool_coin)?;
+
+        let depth_change = if is_input_loki {
+            output_depth
+        } else {
+            input_depth
+        };
+        let loki_depth_change = if is_input_loki {
+            input_depth
+        } else {
+            output_depth
+        };
+
+        Ok(PoolChangeTx::new(
+            pool_coin,
+            loki_depth_change,
+            depth_change,
+        ))
+    }
+}
+
 /// The Output calculation.
 ///
 /// Always has the property: `first.output == second.input`
+#[derive(Debug)]
 pub struct OutputCalculation {
     /// The first calculation
     pub first: OutputDetail,
@@ -43,9 +83,6 @@ impl OutputCalculation {
     }
 }
 
-/// The loki fee
-pub const LOKI_FEE_DECIMAL: f64 = 0.5;
-
 // Note: Ugly code below :(, haven't thought of a good way to handle this yet
 
 /// Get the output amount.
@@ -62,14 +99,30 @@ pub fn get_output<T: TransactionProvider>(
     }
 
     if input == Coin::LOKI || output == Coin::LOKI {
-        get_output_amount_inner(provider, input, input_amount, output, LOKI_FEE_DECIMAL)
-            .map(|result| OutputCalculation::new(result, None))
+        get_output_amount_inner(
+            provider,
+            input,
+            input_amount,
+            output,
+            LokiAmount::process_fee(),
+        )
+        .map(|result| OutputCalculation::new(result, None))
     } else {
-        let first =
-            get_output_amount_inner(provider, input, input_amount, Coin::LOKI, LOKI_FEE_DECIMAL)?;
+        let first = get_output_amount_inner(
+            provider,
+            input,
+            input_amount,
+            Coin::LOKI,
+            LokiAmount::process_fee(),
+        )?;
 
-        let second =
-            get_output_amount_inner(provider, Coin::LOKI, first.output_amount, output, 0.0)?;
+        let second = get_output_amount_inner(
+            provider,
+            Coin::LOKI,
+            first.output_amount,
+            output,
+            LokiAmount::from_atomic(0),
+        )?;
         Ok(OutputCalculation::new(first, Some(second)))
     }
 }
@@ -80,13 +133,11 @@ fn get_output_amount_inner<T: TransactionProvider>(
     input: Coin,
     input_amount: u128,
     output: Coin,
-    loki_fee: f64,
+    loki_fee: LokiAmount,
 ) -> Result<OutputDetail, &'static str> {
     if input == output {
         return Err("Cannot get output amount for the same coin");
     }
-
-    let loki_fee = LokiAmount::from_decimal(loki_fee);
 
     if input == Coin::LOKI {
         let pool_coin = PoolCoin::from(output).expect("Expected output to be a valid pool coin");

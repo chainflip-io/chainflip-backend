@@ -1,3 +1,4 @@
+use super::WalletAddress;
 use crate::utils::clone_into_array;
 use hdwallet::secp256k1::PublicKey;
 use regex::Regex;
@@ -69,6 +70,12 @@ impl Address {
 
         // The last 20 bytes in hex is the ethereum address
         Address(clone_into_array(&result[12..]))
+    }
+}
+
+impl Into<WalletAddress> for Address {
+    fn into(self) -> WalletAddress {
+        WalletAddress::new(&self.to_string())
     }
 }
 

@@ -1,5 +1,5 @@
 use crate::{
-    common::{store::KeyValueStore, Coin},
+    common::{store::KeyValueStore, Coin, WalletAddress},
     side_chain::SideChainTx,
     transactions::WitnessTx,
     vault::{blockchain_connection::ethereum::EthereumClient, transactions::TransactionProvider},
@@ -107,7 +107,7 @@ where
                         transaction_index: transaction.index,
                         amount: transaction.value,
                         coin_type: Coin::ETH,
-                        sender: Some(transaction.from.to_string()),
+                        sender: Some(transaction.from.into()),
                     };
 
                     witness_txs.push(tx);
@@ -174,17 +174,18 @@ mod test {
         }
     }
 
-    fn get_quote(id: u64, input: Coin, input_address: &str) -> QuoteTx {
+    fn get_quote(input: Coin, input_address: &str) -> QuoteTx {
         QuoteTx {
             id: Uuid::new_v4(),
             timestamp: Timestamp::now(),
             input,
             output: Coin::BTC,
+            output_address: WalletAddress::new("15N1pa6gnfqUD2q3SqQ492ENaFBDSRvBET"),
             input_address: WalletAddress::new(input_address),
             input_address_id: "".to_owned(),
             return_address: None,
-            input_amount: 0,
-            slippage_limit: 0.1,
+            effective_price: 1.0,
+            slippage_limit: 0.0,
         }
     }
 
@@ -202,8 +203,8 @@ mod test {
         let input_address = generate_eth_address();
 
         // Add a quote so we can witness it
-        let eth_quote = get_quote(0, Coin::ETH, &input_address.to_string()[..]);
-        let btc_quote = get_quote(1, Coin::BTC, &input_address.to_string()[..]);
+        let eth_quote = get_quote(Coin::ETH, &input_address.to_string()[..]);
+        let btc_quote = get_quote(Coin::BTC, &input_address.to_string()[..]);
 
         {
             let mut provider = provider.lock().unwrap();
@@ -263,7 +264,7 @@ mod test {
             eth_transaction.block_number
         );
         assert_eq!(witness_tx.amount, eth_transaction.value);
-        assert_eq!(witness_tx.sender, Some(eth_transaction.from.to_string()));
+        assert_eq!(witness_tx.sender, Some(eth_transaction.from.into()));
     }
 
     #[tokio::test]

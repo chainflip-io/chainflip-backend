@@ -10,6 +10,9 @@ use std::convert::TryFrom;
 use super::transactions::memory_provider::{FulfilledTxWrapper, WitnessTxWrapper};
 use uuid::Uuid;
 
+/// Processing utils
+pub mod utils;
+
 /// Swap processing
 mod swap;
 

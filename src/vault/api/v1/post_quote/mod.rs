@@ -1,11 +1,7 @@
 use crate::{
-    common::{
-        api::ResponseError, ethereum, Coin, LokiPaymentId, LokiWalletAddress, Timestamp,
-        WalletAddress,
-    },
-    side_chain::SideChainTx,
+    common::{api::ResponseError, Coin, Timestamp, WalletAddress},
     transactions::QuoteTx,
-    vault::transactions::TransactionProvider,
+    vault::{processor::utils::get_swap_expire_timestamp, transactions::TransactionProvider},
 };
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -92,6 +88,8 @@ pub async fn post_quote<T: TransactionProvider>(
         return Err(bad_request("Not enough liquidity"));
     }
 
+    let effective_price = input_amount as f64 / estimated_output_amount as f64;
+
     // Generate addresses
     let input_address = match input_coin {
         Coin::ETH => {
@@ -111,17 +109,18 @@ pub async fn post_quote<T: TransactionProvider>(
         }
     };
 
-    let quote = QuoteTx {
-        id: Uuid::new_v4(),
-        timestamp: Timestamp::now(),
-        input: input_coin,
-        input_amount,
-        input_address: WalletAddress::new(input_address),
-        input_address_id: params.input_address_id,
-        return_address: params.input_return_address.clone().map(WalletAddress),
-        output: output_coin,
-        slippage_limit: params.slippage_limit,
-    };
+    let quote = QuoteTx::new(
+        Timestamp::now(),
+        input_coin,
+        WalletAddress::new(input_address),
+        params.input_address_id,
+        params.input_return_address.clone().map(WalletAddress),
+        output_coin,
+        WalletAddress::new(&params.output_address),
+        effective_price,
+        params.slippage_limit,
+    )
+    .map_err(|err| bad_request(err))?;
 
     provider
         .add_transactions(vec![quote.clone().into()])
@@ -133,8 +132,7 @@ pub async fn post_quote<T: TransactionProvider>(
     Ok(QuoteResponse {
         id: quote.id,
         created_at: quote.timestamp.0,
-        // TODO: Implement expiration
-        expires_at: 0,
+        expires_at: get_swap_expire_timestamp(&quote.timestamp).0,
         input_coin,
         input_address: input_address.to_string(),
         input_return_address: params.input_return_address,
@@ -175,12 +173,13 @@ mod test {
             id: Uuid::new_v4(),
             timestamp: Timestamp::now(),
             input: quote_params.input_coin,
-            input_amount: 10000,
             input_address: WalletAddress::new("T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY"),
             input_address_id: quote_params.input_address_id,
             return_address: quote_params.input_return_address.clone().map(WalletAddress),
             output: quote_params.output_coin,
             slippage_limit: quote_params.slippage_limit,
+            output_address: WalletAddress::new(&quote_params.output_address),
+            effective_price: 1.0
         };
         provider.add_transactions(vec![quote.into()]).unwrap();
 
