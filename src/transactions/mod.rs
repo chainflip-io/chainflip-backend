@@ -28,6 +28,8 @@ pub struct QuoteTx {
     pub return_address: Option<WalletAddress>,
     /// The output coin for the quote
     pub output: Coin,
+    /// The output address for the quote
+    pub output_address: WalletAddress,
     /// The slippage limit
     pub slippage_limit: f32,
 }
@@ -82,7 +84,7 @@ pub struct WitnessTx {
     /// The coin type in which the transaction was made
     pub coin_type: Coin,
     /// The sender of the transaction
-    pub sender: Option<String>,
+    pub sender: Option<WalletAddress>,
 }
 
 impl PartialEq<WitnessTx> for WitnessTx {

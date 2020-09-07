@@ -10,6 +10,9 @@ use std::convert::TryFrom;
 use super::transactions::memory_provider::{FulfilledTxWrapper, WitnessTxWrapper};
 use uuid::Uuid;
 
+/// Swap processing
+mod swap;
+
 /// Component that matches witness transactions with quotes and processes them
 pub struct SideChainProcessor<T, KVS>
 where

@@ -1,6 +1,6 @@
 use crate::transactions::CoinTx;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, time::SystemTime};
+use std::{fmt::Display, hash::Hash, time::SystemTime};
 
 /// Definitions for various coins
 pub mod coins;
@@ -63,6 +63,12 @@ impl WalletAddress {
         WalletAddress {
             0: address.to_owned(),
         }
+    }
+}
+
+impl Hash for WalletAddress {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state)
     }
 }
 
