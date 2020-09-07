@@ -15,6 +15,9 @@ pub mod autoswap;
 /// Utils for calculating price
 pub mod price;
 
+/// Utils for address
+pub mod address;
+
 /// Clone slice values into an array
 ///
 /// # Example

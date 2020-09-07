@@ -1,7 +1,7 @@
 mod memory_side_chain;
 mod persistent_side_chain;
 
-use crate::transactions::{PoolChangeTx, QuoteTx, StakeQuoteTx, StakeTx, WitnessTx};
+use crate::transactions::{OutputTx, PoolChangeTx, QuoteTx, StakeQuoteTx, StakeTx, WitnessTx};
 
 use serde::{Deserialize, Serialize};
 
@@ -22,6 +22,8 @@ pub enum SideChainTx {
     StakeQuoteTx(StakeQuoteTx),
     /// Transaction acknowledging pool provisioning
     StakeTx(StakeTx),
+    /// The output transaction variant
+    OutputTx(OutputTx),
 }
 
 impl From<QuoteTx> for SideChainTx {
@@ -51,6 +53,12 @@ impl From<StakeQuoteTx> for SideChainTx {
 impl From<StakeTx> for SideChainTx {
     fn from(tx: StakeTx) -> Self {
         SideChainTx::StakeTx(tx)
+    }
+}
+
+impl From<OutputTx> for SideChainTx {
+    fn from(tx: OutputTx) -> Self {
+        SideChainTx::OutputTx(tx)
     }
 }
 

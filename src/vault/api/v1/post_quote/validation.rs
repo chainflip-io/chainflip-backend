@@ -1,20 +1,9 @@
 use super::QuoteParams;
-use crate::common::{ethereum, Coin, LokiPaymentId, LokiWalletAddress};
+use crate::{
+    common::{Coin, LokiPaymentId},
+    utils::address::validate_address,
+};
 use std::str::FromStr;
-
-/// Validate an address from the given `coin`
-fn validate_address(coin: Coin, address: &str) -> Result<(), String> {
-    match coin {
-        Coin::LOKI => LokiWalletAddress::from_str(address).map(|_| ()),
-        Coin::ETH => ethereum::Address::from_str(address)
-            .map(|_| ())
-            .map_err(|str| str.to_owned()),
-        x @ _ => {
-            warn!("Address validation missing for {}", x);
-            Err("No address validation found".to_owned())
-        }
-    }
-}
 
 /// Validate quote params
 pub fn validate_params(params: &QuoteParams) -> Result<(), &'static str> {

@@ -1,6 +1,9 @@
-use crate::common::{
-    coins::{GenericCoinAmount, PoolCoin},
-    Coin, LokiAmount, LokiPaymentId, Timestamp, WalletAddress,
+use crate::{
+    common::{
+        coins::{GenericCoinAmount, PoolCoin},
+        Coin, LokiAmount, LokiPaymentId, Timestamp, WalletAddress,
+    },
+    utils::address::validate_address,
 };
 
 use serde::{Deserialize, Serialize};
@@ -124,4 +127,69 @@ pub struct StakeTx {
     pub quote_tx: Uuid,
     /// Identifier of the corresponding witness transactions
     pub witness_txs: Vec<Uuid>,
+}
+
+/// A transaction for keeping track of any outgoing mainchain transaction
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct OutputTx {
+    /// A unique identifier
+    pub id: Uuid,
+    /// The time when the transaction was made
+    pub timestamp: Timestamp,
+    /// The quote that was processed in this output
+    pub quote_tx: Uuid,
+    /// The witness transactions that were processed in this output
+    pub witness_txs: Vec<Uuid>,
+    /// The pool change transactions that were made for this output
+    pub pool_change_txs: Vec<Uuid>,
+    /// The output coin
+    pub coin: Coin,
+    /// The address the output was sent to
+    pub address: WalletAddress,
+    /// The amount that was sent
+    pub amount: u128,
+    /// The fee incurred during sending
+    pub fee: u128,
+    /// The main chain transaction id
+    pub main_chain_tx_ids: Vec<String>,
+}
+
+impl OutputTx {
+    /// Construct from fields
+    pub fn new(
+        timestamp: Timestamp,
+        quote_tx: Uuid,
+        witness_txs: Vec<Uuid>,
+        pool_change_txs: Vec<Uuid>,
+        coin: Coin,
+        address: WalletAddress,
+        amount: u128,
+        fee: u128,
+        main_chain_tx_ids: Vec<String>,
+    ) -> Result<Self, &'static str> {
+        if witness_txs.is_empty() {
+            return Err("Cannot create an OutputTx with empty witness transactions");
+        }
+
+        if main_chain_tx_ids.is_empty() {
+            return Err("Cannot create an OutputTx with empty main chain transaction ids");
+        }
+
+        if validate_address(coin, &address.0).is_err() {
+            return Err("Invalid address passed in");
+        }
+
+        Ok(OutputTx {
+            id: Uuid::new_v4(),
+            timestamp,
+            quote_tx,
+            witness_txs,
+            pool_change_txs,
+            coin,
+            address,
+            amount,
+            fee,
+            main_chain_tx_ids,
+        })
+    }
 }
