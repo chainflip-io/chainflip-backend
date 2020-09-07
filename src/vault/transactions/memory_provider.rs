@@ -9,22 +9,31 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-/// Quote Transaction plus some extra info
-pub struct QuoteTxWrapper<Q> {
-    /// The actual quote transaction
-    pub quote: Q,
+/// Transaction plus a boolean flag
+pub struct FulfilledTxWrapper<Q> {
+    /// The actual transaction
+    pub inner: Q,
     /// Whether the transaction has been fulfilled (i.e. there
     /// is a matching "outcome" tx on the side chain)
     pub fulfilled: bool,
 }
 
+/// Witness transaction plus a boolean flag
+pub struct WitnessTxWrapper {
+    /// The actual transaction
+    pub inner: WitnessTx,
+    /// Whether the transaction has been used to fulfill
+    /// some quote transaction
+    pub used: bool,
+}
+
 /// An in-memory transaction provider
 pub struct MemoryTransactionsProvider<S: ISideChain> {
     side_chain: Arc<Mutex<S>>,
-    quote_txs: Vec<QuoteTxWrapper<QuoteTx>>,
-    stake_quote_txs: Vec<QuoteTxWrapper<StakeQuoteTx>>,
+    quote_txs: Vec<FulfilledTxWrapper<QuoteTx>>,
+    stake_quote_txs: Vec<FulfilledTxWrapper<StakeQuoteTx>>,
     stake_txs: Vec<StakeTx>,
-    witness_txs: Vec<WitnessTx>,
+    witness_txs: Vec<WitnessTxWrapper>,
     pools: HashMap<Coin, Liquidity>,
     next_block_idx: u32,
 }
@@ -55,8 +64,8 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
                     SideChainTx::QuoteTx(tx) => {
                         // Quote transactions always come before their
                         // corresponding "outcome" tx, so they start unfulfilled
-                        let tx = QuoteTxWrapper {
-                            quote: tx,
+                        let tx = FulfilledTxWrapper {
+                            inner: tx,
                             fulfilled: false,
                         };
 
@@ -64,14 +73,22 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
                     }
                     SideChainTx::StakeQuoteTx(tx) => {
                         // (same as above)
-                        let tx = QuoteTxWrapper {
-                            quote: tx,
+                        let tx = FulfilledTxWrapper {
+                            inner: tx,
                             fulfilled: false,
                         };
 
                         self.stake_quote_txs.push(tx)
                     }
-                    SideChainTx::WitnessTx(tx) => self.witness_txs.push(tx),
+                    SideChainTx::WitnessTx(tx) => {
+                        // We assume that witness transactions arrive unused
+                        let tx = WitnessTxWrapper {
+                            inner: tx,
+                            used: false,
+                        };
+
+                        self.witness_txs.push(tx);
+                    }
                     SideChainTx::PoolChangeTx(tx) => {
                         let mut liquidity = self
                             .pools
@@ -98,7 +115,7 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
                         if let Some(quote_info) = self
                             .stake_quote_txs
                             .iter_mut()
-                            .find(|quote_info| quote_info.quote.id == tx.quote_tx)
+                            .find(|quote_info| quote_info.inner.id == tx.quote_tx)
                         {
                             quote_info.fulfilled = true;
                         }
@@ -118,7 +135,7 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
             .into_iter()
             .filter(|tx| {
                 if let SideChainTx::WitnessTx(tx) = tx {
-                    return !self.witness_txs.iter().any(|witness| tx == witness);
+                    return !self.witness_txs.iter().any(|witness| tx == &witness.inner);
                 }
 
                 true
@@ -133,15 +150,15 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
         Ok(())
     }
 
-    fn get_quote_txs(&self) -> &[QuoteTxWrapper<QuoteTx>] {
+    fn get_quote_txs(&self) -> &[FulfilledTxWrapper<QuoteTx>] {
         &self.quote_txs
     }
 
-    fn get_stake_quote_txs(&self) -> &[QuoteTxWrapper<StakeQuoteTx>] {
+    fn get_stake_quote_txs(&self) -> &[FulfilledTxWrapper<StakeQuoteTx>] {
         &self.stake_quote_txs
     }
 
-    fn get_witness_txs(&self) -> &[WitnessTx] {
+    fn get_witness_txs(&self) -> &[WitnessTxWrapper] {
         &self.witness_txs
     }
 

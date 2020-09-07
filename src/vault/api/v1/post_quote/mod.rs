@@ -74,7 +74,7 @@ pub async fn post_quote<T: TransactionProvider>(
 
     // Ensure we don't have a quote with the address
     if let Some(_) = provider.get_quote_txs().iter().find(|quote_info| {
-        let quote = &quote_info.quote;
+        let quote = &quote_info.inner;
         quote.input == input_coin && quote.input_address_id == params.input_address_id
     }) {
         return Err(bad_request("Quote already exists for input address id"));
