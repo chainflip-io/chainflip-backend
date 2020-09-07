@@ -36,6 +36,15 @@ impl StakeQuoteResult {
     }
 }
 
+/// Events emited by the processor
+#[derive(Debug)]
+pub enum ProcessorEvent {
+    /// Block id processed (including all earlier blocks)
+    BLOCK(u32),
+}
+
+type EventSender = crossbeam_channel::Sender<ProcessorEvent>;
+
 impl<T, KVS> SideChainProcessor<T, KVS>
 where
     T: TransactionProvider + Send + 'static,
@@ -56,6 +65,8 @@ where
     ) -> Option<StakeQuoteResult> {
         // TODO: put a balance change tx onto the side chain
         info!("Found witness matching quote: {:?}", quote_info.inner);
+
+        // TODO: only print this if a witness is not used:
 
         // For now only process unfulfilled ones:
         if quote_info.fulfilled {
@@ -176,7 +187,9 @@ where
         new_txs
     }
 
-    fn run_event_loop(mut self) {
+    /// Poll the side chain/tx_provider and use event_sender to
+    /// notify of local events
+    fn run_event_loop(mut self, event_sender: Option<EventSender>) {
         const DB_KEY: &'static str = "processor_next_block_idx";
 
         // TODO: We should probably distinguish between no value and other errors here:
@@ -214,7 +227,12 @@ where
                     // Not quote sure how to recover from this, so probably best to terminate
                     panic!("Database failure");
                 }
+
                 next_block_idx = idx;
+                if let Some(sender) = &event_sender {
+                    let _ = sender.send(ProcessorEvent::BLOCK(idx));
+                    debug!("Processor processing block: {}", idx);
+                }
             }
 
             std::thread::sleep(std::time::Duration::from_secs(1));
@@ -223,11 +241,12 @@ where
         // any new witness transactions that should be processed
     }
 
-    /// Start processor thread
-    pub fn start(self) {
+    /// Start processor thread. If `event_sender` is provided, 
+    /// local events will be communicated through it.
+    pub fn start(self, event_sender: Option<EventSender>) {
         std::thread::spawn(move || {
             info!("Starting the processor thread");
-            self.run_event_loop();
+            self.run_event_loop(event_sender);
         });
     }
 }
@@ -257,20 +276,11 @@ mod tests {
 
         let quote_tx = create_fake_stake_quote(loki_amount.clone(), coin_amount.clone());
         let wtx_loki = create_fake_witness(&quote_tx, loki_amount.clone().into(), Coin::LOKI);
-        let wtx_loki = WitnessTxWrapper {
-            inner: wtx_loki,
-            used: false,
-        };
+        let wtx_loki = WitnessTxWrapper::new(wtx_loki, false);
         let wtx_eth = create_fake_witness(&quote_tx, coin_amount.clone(), coin_type);
-        let wtx_eth = WitnessTxWrapper {
-            inner: wtx_eth,
-            used: false,
-        };
+        let wtx_eth = WitnessTxWrapper::new(wtx_eth, false);
 
-        let quote_tx = FulfilledTxWrapper::<StakeQuoteTx> {
-            inner: quote_tx,
-            fulfilled: false,
-        };
+        let quote_tx = FulfilledTxWrapper::new(quote_tx, false);
 
         let res = Processor::process_stake_quote(&quote_tx, &[&wtx_loki, &wtx_eth]).unwrap();
 
@@ -297,15 +307,9 @@ mod tests {
 
         let quote_tx = create_fake_stake_quote(loki_amount.clone(), coin_amount.clone());
         let wtx_loki = create_fake_witness(&quote_tx, loki_amount.clone().into(), Coin::LOKI);
-        let wtx_loki = WitnessTxWrapper {
-            inner: wtx_loki,
-            used: false,
-        };
+        let wtx_loki = WitnessTxWrapper::new(wtx_loki, false);
 
-        let quote_tx = FulfilledTxWrapper::<StakeQuoteTx> {
-            inner: quote_tx,
-            fulfilled: false,
-        };
+        let quote_tx = FulfilledTxWrapper::new(quote_tx, false);
 
         let tx = Processor::process_stake_quote(&quote_tx, &[&wtx_loki]);
 
