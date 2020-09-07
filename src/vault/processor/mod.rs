@@ -1,10 +1,7 @@
 use crate::{
-    common::{
-        coins::{Coin, PoolCoin},
-        store::KeyValueStore,
-    },
+    common::{coins::Coin, store::KeyValueStore},
     side_chain::SideChainTx,
-    transactions::{PoolChangeTx, StakeQuoteTx, WitnessTx},
+    transactions::{PoolChangeTx, StakeQuoteTx, StakeTx, WitnessTx},
     vault::transactions::TransactionProvider,
 };
 
@@ -22,6 +19,22 @@ where
     db: KVS,
 }
 
+/// A set of transaction to be added to the side chain as a result
+/// of a successful match between stake and witness transactions
+struct StakeQuoteResult {
+    stake_tx: StakeTx,
+    pool_change: PoolChangeTx,
+}
+
+impl StakeQuoteResult {
+    pub fn new(stake_tx: StakeTx, pool_change: PoolChangeTx) -> Self {
+        StakeQuoteResult {
+            stake_tx,
+            pool_change,
+        }
+    }
+}
+
 impl<T, KVS> SideChainProcessor<T, KVS>
 where
     T: TransactionProvider + Send + 'static,
@@ -36,12 +49,18 @@ where
     }
 
     /// Process a single stake quote with all witness transactions referencing it
-    fn process_stake_tx(quote: &StakeQuoteTx, witness_txs: &[&WitnessTx]) -> Option<SideChainTx> {
+    fn process_stake_quote(
+        quote: &StakeQuoteTx,
+        witness_txs: &[&WitnessTx],
+    ) -> Option<StakeQuoteResult> {
         // TODO: put a balance change tx onto the side chain
         info!("Found witness matching quote: {:?}", quote);
 
         let mut loki_amount: Option<i128> = None;
         let mut other_amount: Option<i128> = None;
+
+        // Indexes of used witness transaction
+        let mut wtx_idxs = Vec::<Uuid>::default();
 
         for wtx in witness_txs {
             match wtx.coin_type {
@@ -59,6 +78,7 @@ where
                         }
                     };
 
+                    wtx_idxs.push(wtx.id);
                     loki_amount = Some(amount);
                 }
                 coin_type @ _ => {
@@ -75,7 +95,7 @@ where
                                 return None;
                             }
                         };
-
+                        wtx_idxs.push(wtx.id);
                         other_amount = Some(amount);
                     } else {
                         error!("Unexpected coin type: {}", coin_type);
@@ -101,15 +121,16 @@ where
             (Some(loki_amount), Some(other_amount)) => {
                 let coin = quote.coin_type;
 
-                // For now we are only depositing LOKI
-                let tx = PoolChangeTx {
+                let pool_change_tx = PoolChangeTx::new(coin, loki_amount, other_amount);
+
+                let stake_tx = StakeTx {
                     id: Uuid::new_v4(),
-                    coin,
-                    depth_change: other_amount,
-                    loki_depth_change: loki_amount,
+                    pool_change_tx: pool_change_tx.id,
+                    quote_tx: quote.id,
+                    witness_txs: wtx_idxs,
                 };
 
-                Some(tx.into())
+                Some(StakeQuoteResult::new(stake_tx, pool_change_tx))
             }
             _ => None,
         }
@@ -128,8 +149,10 @@ where
                 .collect();
 
             if !wtxs.is_empty() {
-                if let Some(tx) = SideChainProcessor::<T, KVS>::process_stake_tx(quote, &wtxs) {
-                    new_txs.push(tx);
+                if let Some(res) = SideChainProcessor::<T, KVS>::process_stake_quote(quote, &wtxs) {
+                    new_txs.reserve(new_txs.len() + 2);
+                    new_txs.push(res.stake_tx.into());
+                    new_txs.push(res.pool_change.into());
                 }
             }
         }
@@ -190,5 +213,64 @@ where
             info!("Starting the processor thread");
             self.run_event_loop();
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    use crate::{
+        common::{
+            coins::{CoinAmount, GenericCoinAmount},
+            LokiAmount,
+        },
+        side_chain::MemorySideChain,
+        utils::test_utils::{create_fake_stake_quote, create_fake_witness, store::MemoryKVS},
+        vault::transactions::MemoryTransactionsProvider,
+    };
+
+    type Processor = SideChainProcessor<MemoryTransactionsProvider<MemorySideChain>, MemoryKVS>;
+
+    #[test]
+    fn fulfilled_quotes_should_produce_new_tx() {
+        let coin_type = Coin::ETH;
+        let loki_amount = LokiAmount::from_decimal(1.0);
+        let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
+
+        let quote_tx = create_fake_stake_quote(loki_amount.clone(), coin_amount.clone());
+        let wtx_loki = create_fake_witness(&quote_tx, loki_amount.clone().into(), Coin::LOKI);
+        let wtx_eth = create_fake_witness(&quote_tx, coin_amount.clone(), coin_type);
+
+        let res = Processor::process_stake_quote(&quote_tx, &[&wtx_loki, &wtx_eth]).unwrap();
+
+        assert_eq!(
+            res.pool_change.depth_change as u128,
+            coin_amount.to_atomic()
+        );
+        assert_eq!(
+            res.pool_change.loki_depth_change as u128,
+            loki_amount.to_atomic()
+        );
+
+        assert_eq!(res.stake_tx.pool_change_tx, res.pool_change.id);
+        assert_eq!(res.stake_tx.quote_tx, quote_tx.id);
+        assert!(res.stake_tx.witness_txs.contains(&wtx_loki.id));
+        assert!(res.stake_tx.witness_txs.contains(&wtx_eth.id));
+    }
+
+    #[test]
+    fn partially_fulfilled_quotes_do_not_produce_new_tx() {
+        let coin_type = Coin::ETH;
+        let loki_amount = LokiAmount::from_decimal(1.0);
+        let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
+
+        let stake_tx = create_fake_stake_quote(loki_amount.clone(), coin_amount.clone());
+        let wtx_loki = create_fake_witness(&stake_tx, loki_amount.clone().into(), Coin::LOKI);
+
+        let tx = Processor::process_stake_quote(&stake_tx, &[&wtx_loki]);
+
+        assert!(tx.is_none())
     }
 }

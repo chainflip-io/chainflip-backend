@@ -2,7 +2,7 @@ use super::{Liquidity, TransactionProvider};
 use crate::{
     common::{coins::PoolCoin, Coin},
     side_chain::{ISideChain, SideChainTx},
-    transactions::{QuoteTx, StakeQuoteTx, WitnessTx},
+    transactions::{QuoteTx, StakeQuoteTx, StakeTx, WitnessTx},
 };
 use std::{
     collections::HashMap,
@@ -14,6 +14,7 @@ pub struct MemoryTransactionsProvider<S: ISideChain> {
     side_chain: Arc<Mutex<S>>,
     quote_txs: Vec<QuoteTx>,
     stake_quote_txs: Vec<StakeQuoteTx>,
+    stake_txs: Vec<StakeTx>,
     witness_txs: Vec<WitnessTx>,
     pools: HashMap<Coin, Liquidity>,
     next_block_idx: u32,
@@ -26,6 +27,7 @@ impl<S: ISideChain> MemoryTransactionsProvider<S> {
             side_chain: side_chain,
             quote_txs: vec![],
             stake_quote_txs: vec![],
+            stake_txs: vec![],
             witness_txs: vec![],
             pools: HashMap::new(),
             next_block_idx: 0,
@@ -63,6 +65,7 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
                         liquidity.loki_depth = loki_depth as u128;
                         self.pools.insert(tx.coin.get_coin(), liquidity);
                     }
+                    SideChainTx::StakeTx(tx) => self.stake_txs.push(tx),
                 }
             }
             self.next_block_idx += 1;
@@ -204,12 +207,7 @@ mod test {
         let coin = PoolCoin::from(Coin::ETH).expect("Expected valid pool coin");
         let mut provider = setup();
         {
-            let change_tx = PoolChangeTx {
-                id: Uuid::new_v4(),
-                coin,
-                depth_change: -100,
-                loki_depth_change: -100,
-            };
+            let change_tx = PoolChangeTx::new(coin, -100, -100);
 
             let mut side_chain = provider.side_chain.lock().unwrap();
 
@@ -231,20 +229,8 @@ mod test {
 
             side_chain
                 .add_block(vec![
-                    PoolChangeTx {
-                        id: Uuid::new_v4(),
-                        coin,
-                        depth_change: 100,
-                        loki_depth_change: 100,
-                    }
-                    .into(),
-                    PoolChangeTx {
-                        id: Uuid::new_v4(),
-                        coin,
-                        depth_change: 100,
-                        loki_depth_change: -50,
-                    }
-                    .into(),
+                    PoolChangeTx::new(coin, 100, 100).into(),
+                    PoolChangeTx::new(coin, -50, 100).into(),
                 ])
                 .unwrap();
         }

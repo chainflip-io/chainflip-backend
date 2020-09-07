@@ -36,7 +36,7 @@ where
         id: Uuid::new_v4(),
         input_loki_address_id: LokiPaymentId::from_str("60900e5603bf96e3").unwrap(),
         loki_amount: LokiAmount::from_decimal(500.0),
-        coin_type: PoolCoin::from(Coin::ETH).unwrap(),
+        coin_type: PoolCoin::ETH,
         coin_amount: GenericCoinAmount::from_decimal(Coin::ETH, 1.0),
     };
 

@@ -206,12 +206,7 @@ mod test {
 
         // Pool with no liquidity
         {
-            let tx = PoolChangeTx {
-                id: Uuid::new_v4(),
-                coin: PoolCoin::from(Coin::ETH).unwrap(),
-                depth_change: 0,
-                loki_depth_change: 0,
-            };
+            let tx = PoolChangeTx::new(PoolCoin::ETH, 0, 0);
 
             let mut provider = provider.lock().unwrap();
             provider.add_transactions(vec![tx.into()]).unwrap();
@@ -227,12 +222,7 @@ mod test {
     #[tokio::test]
     async fn returns_response_if_successful() {
         let mut provider = get_transactions_provider();
-        let tx = PoolChangeTx {
-            id: Uuid::new_v4(),
-            coin: PoolCoin::from(Coin::ETH).unwrap(),
-            depth_change: 10000000000,
-            loki_depth_change: 50000000000,
-        };
+        let tx = PoolChangeTx::new(PoolCoin::ETH, 10_000_000_000, 50_000_000_000);
         provider.add_transactions(vec![tx.into()]).unwrap();
 
         let provider = Arc::new(Mutex::new(provider));

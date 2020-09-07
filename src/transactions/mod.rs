@@ -1,9 +1,6 @@
-use crate::{
-    common::{
-        coins::{GenericCoinAmount, PoolCoin},
-        Coin, LokiAmount, LokiPaymentId, Timestamp, WalletAddress,
-    },
-    side_chain::SideChainTx,
+use crate::common::{
+    coins::{GenericCoinAmount, PoolCoin},
+    Coin, LokiAmount, LokiPaymentId, Timestamp, WalletAddress,
 };
 
 use serde::{Deserialize, Serialize};
@@ -55,12 +52,6 @@ pub struct StakeQuoteTx {
     pub coin_amount: GenericCoinAmount,
 }
 
-impl From<StakeQuoteTx> for SideChainTx {
-    fn from(tx: StakeQuoteTx) -> Self {
-        SideChainTx::StakeQuoteTx(tx)
-    }
-}
-
 // This might be obsolete...
 #[derive(Debug)]
 pub struct CoinTx {
@@ -91,12 +82,6 @@ pub struct WitnessTx {
     pub sender: Option<String>,
 }
 
-impl From<WitnessTx> for SideChainTx {
-    fn from(tx: WitnessTx) -> Self {
-        SideChainTx::WitnessTx(tx)
-    }
-}
-
 impl PartialEq<WitnessTx> for WitnessTx {
     fn eq(&self, other: &WitnessTx) -> bool {
         self.quote_id == other.quote_id && self.transaction_id == other.transaction_id
@@ -116,8 +101,27 @@ pub struct PoolChangeTx {
     pub loki_depth_change: i128,
 }
 
-impl From<PoolChangeTx> for SideChainTx {
-    fn from(tx: PoolChangeTx) -> Self {
-        SideChainTx::PoolChangeTx(tx)
+impl PoolChangeTx {
+    /// Construct from fields
+    pub fn new(coin: PoolCoin, loki_depth_change: i128, depth_change: i128) -> Self {
+        PoolChangeTx {
+            id: Uuid::new_v4(),
+            coin,
+            depth_change,
+            loki_depth_change,
+        }
     }
+}
+
+/// A transaction acknowledging pool provisioning
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct StakeTx {
+    /// A unique identifier
+    pub id: Uuid,
+    /// Identifier of the corresponding pool change transaction
+    pub pool_change_tx: Uuid,
+    /// Identifier of the corresponding quote transaction
+    pub quote_tx: Uuid,
+    /// Identifier of the corresponding witness transactions
+    pub witness_txs: Vec<Uuid>,
 }

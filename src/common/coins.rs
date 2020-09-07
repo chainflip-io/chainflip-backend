@@ -7,6 +7,9 @@ use std::{fmt::Display, str::FromStr};
 pub struct PoolCoin(Coin);
 
 impl PoolCoin {
+    /// Shortcut for etherium variant of pool coin
+    pub const ETH: PoolCoin = PoolCoin(Coin::ETH);
+
     /// Construct a PoolCoin from a Coin
     pub fn from(coin: Coin) -> Result<Self, &'static str> {
         if coin == Coin::LOKI {
