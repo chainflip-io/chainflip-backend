@@ -73,9 +73,9 @@ impl Address {
     }
 }
 
-impl Into<WalletAddress> for Address {
-    fn into(self) -> WalletAddress {
-        WalletAddress::new(&self.to_string())
+impl From<Address> for WalletAddress {
+    fn from(address: Address) -> Self {
+        WalletAddress::new(&address.to_string())
     }
 }
 

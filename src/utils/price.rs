@@ -1,4 +1,5 @@
 use crate::{
+    common::loki_process_fee,
     common::{
         coins::{CoinAmount, GenericCoinAmount, PoolCoin},
         Coin, LokiAmount,
@@ -6,6 +7,7 @@ use crate::{
     transactions::PoolChangeTx,
     vault::transactions::{Liquidity, TransactionProvider},
 };
+use std::convert::TryFrom;
 
 /// Details about an output
 #[derive(Debug, Copy, Clone)]
@@ -29,8 +31,11 @@ impl OutputDetail {
             return Err("Cannot make a PoolChangeTx without a LOKI input or output");
         }
 
-        let input_depth = self.input_amount as i128;
-        let output_depth = -1 * self.output_amount as i128;
+        let input_depth = i128::try_from(self.input_amount)
+            .map_err(|_| "Failed to convert input depth to i128")?;
+        let output_depth = i128::try_from(self.output_amount)
+            .map_err(|_| "Failed to convert output depth to i128")?;
+        let output_depth = -1 * output_depth;
 
         let is_input_loki = self.input == Coin::LOKI;
         let pool_coin = if is_input_loki {
@@ -98,23 +103,13 @@ pub fn get_output<T: TransactionProvider>(
         return Err("Cannot get output amount for the same coin");
     }
 
+    let fee = loki_process_fee();
+
     if input == Coin::LOKI || output == Coin::LOKI {
-        get_output_amount_inner(
-            provider,
-            input,
-            input_amount,
-            output,
-            LokiAmount::process_fee(),
-        )
-        .map(|result| OutputCalculation::new(result, None))
+        get_output_amount_inner(provider, input, input_amount, output, fee)
+            .map(|result| OutputCalculation::new(result, None))
     } else {
-        let first = get_output_amount_inner(
-            provider,
-            input,
-            input_amount,
-            Coin::LOKI,
-            LokiAmount::process_fee(),
-        )?;
+        let first = get_output_amount_inner(provider, input, input_amount, Coin::LOKI, fee)?;
 
         let second = get_output_amount_inner(
             provider,
