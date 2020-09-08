@@ -18,6 +18,13 @@ pub struct FulfilledTxWrapper<Q> {
     pub fulfilled: bool,
 }
 
+impl<Q> FulfilledTxWrapper<Q> {
+    /// Constructor
+    pub fn new(inner: Q, fulfilled: bool) -> FulfilledTxWrapper<Q> {
+        FulfilledTxWrapper { inner, fulfilled }
+    }
+}
+
 /// Witness transaction plus a boolean flag
 pub struct WitnessTxWrapper {
     /// The actual transaction
@@ -25,6 +32,13 @@ pub struct WitnessTxWrapper {
     /// Whether the transaction has been used to fulfill
     /// some quote transaction
     pub used: bool,
+}
+
+impl WitnessTxWrapper {
+    /// Construct from internal parts
+    pub fn new(inner: WitnessTx, used: bool) -> Self {
+        WitnessTxWrapper { inner, used }
+    }
 }
 
 /// An in-memory transaction provider
@@ -64,19 +78,13 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
                     SideChainTx::QuoteTx(tx) => {
                         // Quote transactions always come before their
                         // corresponding "outcome" tx, so they start unfulfilled
-                        let tx = FulfilledTxWrapper {
-                            inner: tx,
-                            fulfilled: false,
-                        };
+                        let tx = FulfilledTxWrapper::new(tx, false);
 
                         self.quote_txs.push(tx);
                     }
                     SideChainTx::StakeQuoteTx(tx) => {
                         // (same as above)
-                        let tx = FulfilledTxWrapper {
-                            inner: tx,
-                            fulfilled: false,
-                        };
+                        let tx = FulfilledTxWrapper::new(tx, false);
 
                         self.stake_quote_txs.push(tx)
                     }
@@ -96,6 +104,8 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
                             .cloned()
                             .unwrap_or(Liquidity::new());
 
+                        warn!("Pool change tx: {:?}, liquidity: {:?}", &tx, &liquidity);
+
                         let depth = liquidity.depth as i128 + tx.depth_change;
                         let loki_depth = liquidity.loki_depth as i128 + tx.loki_depth_change;
                         if depth < 0 || loki_depth < 0 {
@@ -111,7 +121,7 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
                         self.pools.insert(tx.coin.get_coin(), liquidity);
                     }
                     SideChainTx::StakeTx(tx) => {
-                        // Find quotes and mark them as fulfilled
+                        // Find quote and mark it as fulfilled
                         if let Some(quote_info) = self
                             .stake_quote_txs
                             .iter_mut()
@@ -119,6 +129,16 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
                         {
                             quote_info.fulfilled = true;
                         }
+
+                        // Find witness transacitons and mark them as used:
+                        for wtx_id in &tx.witness_txs {
+                            if let Some(witness_info) =
+                                self.witness_txs.iter_mut().find(|w| &w.inner.id == wtx_id)
+                            {
+                                witness_info.used = true;
+                            }
+                        }
+
                         self.stake_txs.push(tx)
                     }
                 }

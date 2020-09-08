@@ -57,6 +57,8 @@ impl ISideChain for MemorySideChain {
             id: self.blocks.len() as u32,
             txs,
         };
+
+        debug!("Adding block idx: {}", block.id);
         self.blocks.push(block);
         Ok(())
     }

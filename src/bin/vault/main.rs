@@ -101,7 +101,7 @@ fn main() {
 
     let processor = SideChainProcessor::new(tx_provider, kvs);
 
-    processor.start();
+    processor.start(None);
 
     // This code is temporary, for now just used to test the implementation
     add_fake_transactions(&s_chain);
