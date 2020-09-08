@@ -83,6 +83,12 @@ where
         let mut wtx_idxs = Vec::<Uuid>::default();
 
         for wtx in witness_txs {
+            // We don't expect used quotes at this stage,
+            // but let's double check this:
+            if wtx.used {
+                continue;
+            }
+
             let wtx = &wtx.inner;
 
             match wtx.coin_type {
@@ -241,7 +247,7 @@ where
         // any new witness transactions that should be processed
     }
 
-    /// Start processor thread. If `event_sender` is provided, 
+    /// Start processor thread. If `event_sender` is provided,
     /// local events will be communicated through it.
     pub fn start(self, event_sender: Option<EventSender>) {
         std::thread::spawn(move || {
@@ -274,10 +280,10 @@ mod tests {
         let loki_amount = LokiAmount::from_decimal(1.0);
         let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
 
-        let quote_tx = create_fake_stake_quote(loki_amount.clone(), coin_amount.clone());
-        let wtx_loki = create_fake_witness(&quote_tx, loki_amount.clone().into(), Coin::LOKI);
+        let quote_tx = create_fake_stake_quote(loki_amount, coin_amount);
+        let wtx_loki = create_fake_witness(&quote_tx, loki_amount.into(), Coin::LOKI);
         let wtx_loki = WitnessTxWrapper::new(wtx_loki, false);
-        let wtx_eth = create_fake_witness(&quote_tx, coin_amount.clone(), coin_type);
+        let wtx_eth = create_fake_witness(&quote_tx, coin_amount, coin_type);
         let wtx_eth = WitnessTxWrapper::new(wtx_eth, false);
 
         let quote_tx = FulfilledTxWrapper::new(quote_tx, false);
@@ -305,8 +311,8 @@ mod tests {
         let loki_amount = LokiAmount::from_decimal(1.0);
         let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
 
-        let quote_tx = create_fake_stake_quote(loki_amount.clone(), coin_amount.clone());
-        let wtx_loki = create_fake_witness(&quote_tx, loki_amount.clone().into(), Coin::LOKI);
+        let quote_tx = create_fake_stake_quote(loki_amount, coin_amount);
+        let wtx_loki = create_fake_witness(&quote_tx, loki_amount.into(), Coin::LOKI);
         let wtx_loki = WitnessTxWrapper::new(wtx_loki, false);
 
         let quote_tx = FulfilledTxWrapper::new(quote_tx, false);
@@ -314,5 +320,84 @@ mod tests {
         let tx = Processor::process_stake_quote(&quote_tx, &[&wtx_loki]);
 
         assert!(tx.is_none())
+    }
+
+    #[test]
+    fn witness_tx_cannot_be_reused() {
+        let coin_type = Coin::ETH;
+        let loki_amount = LokiAmount::from_decimal(1.0);
+        let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
+
+        let quote_tx = create_fake_stake_quote(loki_amount, coin_amount);
+
+        let wtx_loki = create_fake_witness(&quote_tx, loki_amount.into(), Coin::LOKI);
+        // Witness has already been used before
+        let wtx_loki = WitnessTxWrapper::new(wtx_loki, true);
+
+        let wtx_eth = create_fake_witness(&quote_tx, coin_amount, coin_type);
+        let wtx_eth = WitnessTxWrapper::new(wtx_eth, false);
+
+        let quote_tx = FulfilledTxWrapper::new(quote_tx, false);
+
+        let tx = Processor::process_stake_quote(&quote_tx, &[&wtx_loki, &wtx_eth]);
+
+        assert!(tx.is_none())
+    }
+
+    #[test]
+    fn quote_cannot_be_fulfilled_twice() {
+        let coin_type = Coin::ETH;
+        let loki_amount = LokiAmount::from_decimal(1.0);
+        let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
+
+        let quote_tx = create_fake_stake_quote(loki_amount, coin_amount);
+
+        let wtx_loki = create_fake_witness(&quote_tx, loki_amount.into(), Coin::LOKI);
+        let wtx_loki = WitnessTxWrapper::new(wtx_loki, false);
+
+        let wtx_eth = create_fake_witness(&quote_tx, coin_amount, coin_type);
+        let wtx_eth = WitnessTxWrapper::new(wtx_eth, false);
+
+        // The quote has already been fulfilled
+        let quote_tx = FulfilledTxWrapper::new(quote_tx, true);
+
+        let tx = Processor::process_stake_quote(&quote_tx, &[&wtx_loki, &wtx_eth]);
+
+        assert!(tx.is_none())
+    }
+
+    #[test]
+    fn check_staking_smaller_amounts() {
+        let loki_amount = LokiAmount::from_decimal(1.0);
+
+        let coin_type = Coin::ETH;
+        let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
+
+        let quote_tx = create_fake_stake_quote(
+            LokiAmount::from_decimal(2.0),
+            GenericCoinAmount::from_decimal(coin_type, 3.0),
+        );
+        let wtx_loki = create_fake_witness(&quote_tx, loki_amount.into(), Coin::LOKI);
+        let wtx_loki = WitnessTxWrapper::new(wtx_loki, false);
+        let wtx_eth = create_fake_witness(&quote_tx, coin_amount, coin_type);
+        let wtx_eth = WitnessTxWrapper::new(wtx_eth, false);
+
+        let quote_tx = FulfilledTxWrapper::new(quote_tx, false);
+
+        let res = Processor::process_stake_quote(&quote_tx, &[&wtx_loki, &wtx_eth]).unwrap();
+
+        assert_eq!(
+            res.pool_change.depth_change as u128,
+            coin_amount.to_atomic()
+        );
+        assert_eq!(
+            res.pool_change.loki_depth_change as u128,
+            loki_amount.to_atomic()
+        );
+
+        assert_eq!(res.stake_tx.pool_change_tx, res.pool_change.id);
+        assert_eq!(res.stake_tx.quote_tx, quote_tx.inner.id);
+        assert!(res.stake_tx.witness_txs.contains(&wtx_loki.inner.id));
+        assert!(res.stake_tx.witness_txs.contains(&wtx_eth.inner.id));
     }
 }

@@ -122,7 +122,7 @@ impl<'de> Deserialize<'de> for LokiPaymentId {
 }
 
 /// Loki coin amount
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 pub struct LokiAmount {
     atomic_amount: u128,
 }

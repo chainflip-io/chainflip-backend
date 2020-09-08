@@ -187,7 +187,7 @@ pub trait CoinAmount {
 }
 
 /// A generic coin amount
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GenericCoinAmount {
     coin: Coin,
     atomic_amount: u128,

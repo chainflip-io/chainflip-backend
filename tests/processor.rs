@@ -109,7 +109,6 @@ fn witnessed_staked_changes_pool_liquidity() {
 
     check_liquidity(&mut tx_provider, coin_type, &loki_amount, &coin_amount);
 
-
     {
         // Adding the same quote again
         let mut s_chain = s_chain.lock().unwrap();
