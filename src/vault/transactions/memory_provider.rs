@@ -2,7 +2,7 @@ use super::{Liquidity, TransactionProvider};
 use crate::{
     common::{coins::PoolCoin, Coin},
     side_chain::{ISideChain, SideChainTx},
-    transactions::{QuoteTx, StakeQuoteTx, StakeTx, WitnessTx},
+    transactions::{PoolChangeTx, QuoteTx, StakeQuoteTx, StakeTx, WitnessTx},
 };
 use std::{
     collections::HashMap,
@@ -41,9 +41,8 @@ impl WitnessTxWrapper {
     }
 }
 
-/// An in-memory transaction provider
-pub struct MemoryTransactionsProvider<S: ISideChain> {
-    side_chain: Arc<Mutex<S>>,
+/// All state that TransactionProvider will keep in memory
+struct MemoryState {
     quote_txs: Vec<FulfilledTxWrapper<QuoteTx>>,
     stake_quote_txs: Vec<FulfilledTxWrapper<StakeQuoteTx>>,
     stake_txs: Vec<StakeTx>,
@@ -52,26 +51,83 @@ pub struct MemoryTransactionsProvider<S: ISideChain> {
     next_block_idx: u32,
 }
 
+/// An in-memory transaction provider
+pub struct MemoryTransactionsProvider<S: ISideChain> {
+    side_chain: Arc<Mutex<S>>,
+    state: MemoryState,
+}
+
 impl<S: ISideChain> MemoryTransactionsProvider<S> {
     /// Create an in-memory transaction provider
     pub fn new(side_chain: Arc<Mutex<S>>) -> Self {
-        MemoryTransactionsProvider {
-            side_chain: side_chain,
+        let state = MemoryState {
             quote_txs: vec![],
             stake_quote_txs: vec![],
             stake_txs: vec![],
             witness_txs: vec![],
             pools: HashMap::new(),
             next_block_idx: 0,
+        };
+
+        MemoryTransactionsProvider { side_chain, state }
+    }
+}
+
+impl MemoryState {
+    fn process_stake_tx(&mut self, tx: StakeTx) {
+        // Find quote and mark it as fulfilled
+        if let Some(quote_info) = self
+            .stake_quote_txs
+            .iter_mut()
+            .find(|quote_info| quote_info.inner.id == tx.quote_tx)
+        {
+            quote_info.fulfilled = true;
         }
+
+        // Find witness transacitons and mark them as used:
+        for wtx_id in &tx.witness_txs {
+            if let Some(witness_info) = self.witness_txs.iter_mut().find(|w| &w.inner.id == wtx_id)
+            {
+                witness_info.used = true;
+            }
+        }
+
+        self.stake_txs.push(tx)
+    }
+
+    fn process_pool_change_tx(&mut self, tx: PoolChangeTx) {
+        let mut liquidity = self
+            .pools
+            .get(&tx.coin.get_coin())
+            .cloned()
+            .unwrap_or(Liquidity::new());
+
+        warn!("Pool change tx: {:?}, liquidity: {:?}", &tx, &liquidity);
+
+        let depth = liquidity.depth as i128 + tx.depth_change;
+        let loki_depth = liquidity.loki_depth as i128 + tx.loki_depth_change;
+        if depth < 0 || loki_depth < 0 {
+            error!(
+                "Negative liquidity depth found for tx: {:?}. Current: {:?}",
+                tx, liquidity
+            );
+            panic!("Negative liquidity depth found");
+        }
+
+        liquidity.depth = depth as u128;
+        liquidity.loki_depth = loki_depth as u128;
+        self.pools.insert(tx.coin.get_coin(), liquidity);
     }
 }
 
 impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
     fn sync(&mut self) -> u32 {
         let side_chain = self.side_chain.lock().unwrap();
-        while let Some(block) = side_chain.get_block(self.next_block_idx) {
-            debug!("TX Provider processing block: {}", self.next_block_idx);
+        while let Some(block) = side_chain.get_block(self.state.next_block_idx) {
+            debug!(
+                "TX Provider processing block: {}",
+                self.state.next_block_idx
+            );
 
             for tx in block.clone().txs {
                 match tx {
@@ -80,13 +136,13 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
                         // corresponding "outcome" tx, so they start unfulfilled
                         let tx = FulfilledTxWrapper::new(tx, false);
 
-                        self.quote_txs.push(tx);
+                        self.state.quote_txs.push(tx);
                     }
                     SideChainTx::StakeQuoteTx(tx) => {
                         // (same as above)
                         let tx = FulfilledTxWrapper::new(tx, false);
 
-                        self.stake_quote_txs.push(tx)
+                        self.state.stake_quote_txs.push(tx)
                     }
                     SideChainTx::WitnessTx(tx) => {
                         // We assume that witness transactions arrive unused
@@ -95,58 +151,16 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
                             used: false,
                         };
 
-                        self.witness_txs.push(tx);
+                        self.state.witness_txs.push(tx);
                     }
-                    SideChainTx::PoolChangeTx(tx) => {
-                        let mut liquidity = self
-                            .pools
-                            .get(&tx.coin.get_coin())
-                            .cloned()
-                            .unwrap_or(Liquidity::new());
-
-                        warn!("Pool change tx: {:?}, liquidity: {:?}", &tx, &liquidity);
-
-                        let depth = liquidity.depth as i128 + tx.depth_change;
-                        let loki_depth = liquidity.loki_depth as i128 + tx.loki_depth_change;
-                        if depth < 0 || loki_depth < 0 {
-                            error!(
-                                "Negative liquidity depth found for tx: {:?}. Current: {:?}",
-                                tx, liquidity
-                            );
-                            panic!("Negative liquidity depth found");
-                        }
-
-                        liquidity.depth = depth as u128;
-                        liquidity.loki_depth = loki_depth as u128;
-                        self.pools.insert(tx.coin.get_coin(), liquidity);
-                    }
-                    SideChainTx::StakeTx(tx) => {
-                        // Find quote and mark it as fulfilled
-                        if let Some(quote_info) = self
-                            .stake_quote_txs
-                            .iter_mut()
-                            .find(|quote_info| quote_info.inner.id == tx.quote_tx)
-                        {
-                            quote_info.fulfilled = true;
-                        }
-
-                        // Find witness transacitons and mark them as used:
-                        for wtx_id in &tx.witness_txs {
-                            if let Some(witness_info) =
-                                self.witness_txs.iter_mut().find(|w| &w.inner.id == wtx_id)
-                            {
-                                witness_info.used = true;
-                            }
-                        }
-
-                        self.stake_txs.push(tx)
-                    }
+                    SideChainTx::PoolChangeTx(tx) => self.state.process_pool_change_tx(tx),
+                    SideChainTx::StakeTx(tx) => self.state.process_stake_tx(tx),
                 }
             }
-            self.next_block_idx += 1;
+            self.state.next_block_idx += 1;
         }
 
-        self.next_block_idx
+        self.state.next_block_idx
     }
 
     fn add_transactions(&mut self, txs: Vec<SideChainTx>) -> Result<(), String> {
@@ -155,7 +169,11 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
             .into_iter()
             .filter(|tx| {
                 if let SideChainTx::WitnessTx(tx) = tx {
-                    return !self.witness_txs.iter().any(|witness| tx == &witness.inner);
+                    return !self
+                        .state
+                        .witness_txs
+                        .iter()
+                        .any(|witness| tx == &witness.inner);
                 }
 
                 true
@@ -171,19 +189,19 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
     }
 
     fn get_quote_txs(&self) -> &[FulfilledTxWrapper<QuoteTx>] {
-        &self.quote_txs
+        &self.state.quote_txs
     }
 
     fn get_stake_quote_txs(&self) -> &[FulfilledTxWrapper<StakeQuoteTx>] {
-        &self.stake_quote_txs
+        &self.state.stake_quote_txs
     }
 
     fn get_witness_txs(&self) -> &[WitnessTxWrapper] {
-        &self.witness_txs
+        &self.state.witness_txs
     }
 
     fn get_liquidity(&self, pool: PoolCoin) -> Option<Liquidity> {
-        self.pools.get(&pool.get_coin()).cloned()
+        self.state.pools.get(&pool.get_coin()).cloned()
     }
 }
 
@@ -229,7 +247,7 @@ mod test {
 
         provider.sync();
 
-        assert_eq!(provider.next_block_idx, 1);
+        assert_eq!(provider.state.next_block_idx, 1);
         assert_eq!(provider.get_quote_txs().len(), 1);
         assert_eq!(provider.get_witness_txs().len(), 1);
 
@@ -237,7 +255,7 @@ mod test {
             .add_transactions(vec![create_fake_quote_tx().into()])
             .unwrap();
 
-        assert_eq!(provider.next_block_idx, 2);
+        assert_eq!(provider.state.next_block_idx, 2);
         assert_eq!(provider.get_quote_txs().len(), 2);
     }
 
@@ -268,12 +286,12 @@ mod test {
         provider.sync();
 
         assert_eq!(provider.get_witness_txs().len(), 1);
-        assert_eq!(provider.next_block_idx, 1);
+        assert_eq!(provider.state.next_block_idx, 1);
 
         provider.add_transactions(vec![witness.into()]).unwrap();
 
         assert_eq!(provider.get_witness_txs().len(), 1);
-        assert_eq!(provider.next_block_idx, 1);
+        assert_eq!(provider.state.next_block_idx, 1);
     }
 
     #[test]
