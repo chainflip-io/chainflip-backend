@@ -1,6 +1,6 @@
 use super::{
     coins::{CoinAmount, CoinInfo},
-    Coin,
+    Coin, LOKI_PROCESS_FEE_DECIMAL,
 };
 
 use serde::{Deserialize, Serialize};

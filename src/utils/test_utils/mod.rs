@@ -37,8 +37,9 @@ pub fn create_fake_quote_tx() -> QuoteTx {
         input_address_id: "".to_owned(),
         input_address,
         return_address,
-        input_amount: 0,
+        effective_price: 1.0,
         slippage_limit: 0.1,
+        output_address: WalletAddress::new("Output"),
     };
 
     quote

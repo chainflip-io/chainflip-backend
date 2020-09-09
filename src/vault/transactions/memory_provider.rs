@@ -155,6 +155,7 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
                     }
                     SideChainTx::PoolChangeTx(tx) => self.state.process_pool_change_tx(tx),
                     SideChainTx::StakeTx(tx) => self.state.process_stake_tx(tx),
+                    SideChainTx::OutputTx(tx) => todo!(),
                 }
             }
             self.state.next_block_idx += 1;

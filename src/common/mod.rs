@@ -1,6 +1,14 @@
 use crate::transactions::CoinTx;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, time::SystemTime};
+use std::{fmt::Display, hash::Hash, time::SystemTime};
+
+/// The Loki processing fee
+pub static LOKI_PROCESS_FEE_DECIMAL: f64 = 0.5;
+
+/// The loki process fee
+pub fn loki_process_fee() -> LokiAmount {
+    LokiAmount::from_decimal(LOKI_PROCESS_FEE_DECIMAL)
+}
 
 /// Definitions for various coins
 pub mod coins;
@@ -48,7 +56,7 @@ impl Timestamp {
 /// A wrapper around String to be used as wallet address.
 /// We might want to use separate type for each type of
 /// wallet/blockchain
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Hash)]
 pub struct WalletAddress(pub String);
 
 impl Display for WalletAddress {
