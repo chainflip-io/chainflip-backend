@@ -164,7 +164,7 @@ fn get_output_amount_inner<T: LiquidityProvider>(
         liquidity.loki_depth
     };
 
-    let intput_fee = if is_loki_input {
+    let input_fee = if is_loki_input {
         loki_fee.to_atomic()
     } else {
         0
@@ -179,7 +179,7 @@ fn get_output_amount_inner<T: LiquidityProvider>(
     let output_amount = calculate_output_amount(
         NormalisedAmount::from(input_amount, input),
         NormalisedAmount::from(input_depth, input),
-        NormalisedAmount::from(intput_fee, input),
+        NormalisedAmount::from(input_fee, input),
         NormalisedAmount::from(output_depth, output),
         NormalisedAmount::from(output_fee, output),
     );
