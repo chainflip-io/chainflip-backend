@@ -1,4 +1,4 @@
-use super::{Liquidity, TransactionProvider};
+use super::{Liquidity, LiquidityProvider, TransactionProvider};
 use crate::{
     common::{coins::PoolCoin, Coin},
     side_chain::{ISideChain, SideChainTx},
@@ -200,7 +200,9 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
     fn get_witness_txs(&self) -> &[WitnessTxWrapper] {
         &self.state.witness_txs
     }
+}
 
+impl<S: ISideChain> LiquidityProvider for MemoryTransactionsProvider<S> {
     fn get_liquidity(&self, pool: PoolCoin) -> Option<Liquidity> {
         self.state.pools.get(&pool.get_coin()).cloned()
     }

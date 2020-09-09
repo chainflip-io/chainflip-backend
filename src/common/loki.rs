@@ -135,6 +135,7 @@ impl LokiAmount {
 
     /// Create from decimal
     pub fn from_decimal(n: f64) -> Self {
+        // TODO: Allow negative n?
         let info = Coin::LOKI.get_info();
         let atomic_amount = (n * info.one_unit() as f64).round() as u128;
         LokiAmount::from_atomic(atomic_amount)

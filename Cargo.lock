@@ -176,6 +176,7 @@ dependencies = [
  "serde_json",
  "tiny-keccak 2.0.2",
  "tokio",
+ "uint",
  "uuid",
  "warp",
  "web3",

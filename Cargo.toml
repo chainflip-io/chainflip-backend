@@ -28,6 +28,7 @@ regex="*"
 web3 = { version = "^0.13.0", default-features = false, features = ["http-tls"] }
 uuid = { version = "0.8", features = ["serde", "v4"] }
 itertools="*"
+uint="^0.8.5"
 
 [dependencies.rusqlite]
 version = "0.21.0"

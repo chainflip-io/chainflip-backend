@@ -52,7 +52,7 @@ pub fn calc_autoswap_amount(
     // there is no output fee
     let output_fee = 0.0;
 
-    let y = utils::price::calculate_output_amount(x, dl, i_fee, de, output_fee);
+    let y = utils::price::calculate_output_amount_deprecated(x, dl, i_fee, de, output_fee);
 
     // should be as close to 0 as possible
     let error = 1.0 - ((l - x) / (e + y)) * de / dl;
