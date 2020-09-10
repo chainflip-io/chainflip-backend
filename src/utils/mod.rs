@@ -18,6 +18,9 @@ pub mod price;
 /// Utils for address
 pub mod address;
 
+/// Primitive utils
+pub mod primitives;
+
 /// Clone slice values into an array
 ///
 /// # Example

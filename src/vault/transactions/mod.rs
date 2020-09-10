@@ -25,8 +25,14 @@ impl Liquidity {
     }
 }
 
+/// An interface for providing liquidity
+pub trait LiquidityProvider {
+    /// Get the liquidity for a given pool
+    fn get_liquidity(&self, pool: PoolCoin) -> Option<Liquidity>;
+}
+
 /// An interface for providing transactions
-pub trait TransactionProvider {
+pub trait TransactionProvider: LiquidityProvider {
     /// Sync new transactions and return the index of the first unprocessed block
     fn sync(&mut self) -> u32;
 
@@ -41,9 +47,6 @@ pub trait TransactionProvider {
 
     /// Get all the witness transactions
     fn get_witness_txs(&self) -> &[WitnessTxWrapper];
-
-    /// Get the liquidity for a given pool
-    fn get_liquidity(&self, pool: PoolCoin) -> Option<Liquidity>;
 
     /// Get the output amount.
     ///
