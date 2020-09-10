@@ -162,6 +162,8 @@ where
                     pool_change_tx: pool_change_tx.id,
                     quote_tx: quote.id,
                     witness_txs: wtx_idxs,
+                    staker_id: quote.staker_id.clone(),
+                    pool: coin,
                 };
 
                 Some(StakeQuoteResult::new(stake_tx, pool_change_tx))
@@ -190,6 +192,8 @@ where
                     SideChainProcessor::<T, KVS>::process_stake_quote(quote_info, &wtxs)
                 {
                     new_txs.reserve(new_txs.len() + 2);
+                    // IMPORTANT: stake transactions should come before pool change transactions,
+                    // due to the way Transaction provider processes them
                     new_txs.push(res.stake_tx.into());
                     new_txs.push(res.pool_change.into());
                 }
@@ -287,7 +291,7 @@ mod tests {
         let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
 
         let quote_tx = create_fake_stake_quote(loki_amount, coin_amount);
-        let wtx_loki = create_fake_witness(&quote_tx, loki_amount.into(), Coin::LOKI);
+        let wtx_loki = create_fake_witness(&quote_tx, loki_amount, Coin::LOKI);
         let wtx_loki = WitnessTxWrapper::new(wtx_loki, false);
         let wtx_eth = create_fake_witness(&quote_tx, coin_amount, coin_type);
         let wtx_eth = WitnessTxWrapper::new(wtx_eth, false);
@@ -318,7 +322,7 @@ mod tests {
         let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
 
         let quote_tx = create_fake_stake_quote(loki_amount, coin_amount);
-        let wtx_loki = create_fake_witness(&quote_tx, loki_amount.into(), Coin::LOKI);
+        let wtx_loki = create_fake_witness(&quote_tx, loki_amount, Coin::LOKI);
         let wtx_loki = WitnessTxWrapper::new(wtx_loki, false);
 
         let quote_tx = FulfilledTxWrapper::new(quote_tx, false);
@@ -336,7 +340,7 @@ mod tests {
 
         let quote_tx = create_fake_stake_quote(loki_amount, coin_amount);
 
-        let wtx_loki = create_fake_witness(&quote_tx, loki_amount.into(), Coin::LOKI);
+        let wtx_loki = create_fake_witness(&quote_tx, loki_amount, Coin::LOKI);
         // Witness has already been used before
         let wtx_loki = WitnessTxWrapper::new(wtx_loki, true);
 
@@ -358,7 +362,7 @@ mod tests {
 
         let quote_tx = create_fake_stake_quote(loki_amount, coin_amount);
 
-        let wtx_loki = create_fake_witness(&quote_tx, loki_amount.into(), Coin::LOKI);
+        let wtx_loki = create_fake_witness(&quote_tx, loki_amount, Coin::LOKI);
         let wtx_loki = WitnessTxWrapper::new(wtx_loki, false);
 
         let wtx_eth = create_fake_witness(&quote_tx, coin_amount, coin_type);
@@ -383,7 +387,7 @@ mod tests {
             LokiAmount::from_decimal(2.0),
             GenericCoinAmount::from_decimal(coin_type, 3.0),
         );
-        let wtx_loki = create_fake_witness(&quote_tx, loki_amount.into(), Coin::LOKI);
+        let wtx_loki = create_fake_witness(&quote_tx, loki_amount, Coin::LOKI);
         let wtx_loki = WitnessTxWrapper::new(wtx_loki, false);
         let wtx_eth = create_fake_witness(&quote_tx, coin_amount, coin_type);
         let wtx_eth = WitnessTxWrapper::new(wtx_eth, false);

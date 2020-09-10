@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::{fmt::Display, str::FromStr};
 
 /// A representation of a valid pool coin
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub struct PoolCoin(Coin);
 
 impl PoolCoin {

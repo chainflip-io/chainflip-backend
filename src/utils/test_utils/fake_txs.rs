@@ -3,7 +3,7 @@ use crate::{
         coins::{CoinAmount, GenericCoinAmount, PoolCoin},
         Coin, LokiAmount, LokiPaymentId,
     },
-    transactions::{StakeQuoteTx, WitnessTx},
+    transactions::{StakeQuoteTx, UnstakeRequestTx, WitnessTx},
 };
 use std::str::FromStr;
 use uuid::Uuid;
@@ -19,23 +19,31 @@ pub fn create_fake_stake_quote(
         loki_amount,
         coin_type: PoolCoin::from(coin_amount.coin_type()).expect("invalid coin type"),
         coin_amount,
+        staker_id: Uuid::new_v4().to_string(),
     }
 }
 
 /// Create a fake witness transaction for testing
-pub fn create_fake_witness(
-    quote: &StakeQuoteTx,
-    amount: GenericCoinAmount,
-    coin_type: Coin,
-) -> WitnessTx {
+pub fn create_fake_witness<T>(quote: &StakeQuoteTx, amount: T, coin_type: Coin) -> WitnessTx
+where
+    T: Into<GenericCoinAmount>,
+{
     WitnessTx {
         id: Uuid::new_v4(),
         quote_id: quote.id,
         transaction_id: "".to_owned(),
         transaction_block_number: 0,
         transaction_index: 0,
-        amount: amount.to_atomic(),
+        amount: amount.into().to_atomic(),
         coin_type,
         sender: None,
+    }
+}
+
+/// Create a fake unstake request for testing
+pub fn create_fake_unstake_request_tx(staker_id: String) -> UnstakeRequestTx {
+    UnstakeRequestTx {
+        id: Uuid::new_v4(),
+        staker_id,
     }
 }

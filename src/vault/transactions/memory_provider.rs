@@ -1,8 +1,13 @@
-use super::{Liquidity, LiquidityProvider, TransactionProvider};
+use super::{
+    portions::adjust_portions_after_stake, Liquidity, LiquidityProvider, TransactionProvider,
+};
 use crate::{
-    common::{coins::PoolCoin, Coin},
+    common::{
+        coins::{GenericCoinAmount, PoolCoin},
+        LokiAmount,
+    },
     side_chain::{ISideChain, SideChainTx},
-    transactions::{PoolChangeTx, QuoteTx, StakeQuoteTx, StakeTx, WitnessTx},
+    transactions::{PoolChangeTx, QuoteTx, StakeQuoteTx, StakeTx, UnstakeRequestTx, WitnessTx},
 };
 use std::{
     collections::HashMap,
@@ -41,14 +46,57 @@ impl WitnessTxWrapper {
     }
 }
 
+/// Staker Identity
+pub type StakerId = String;
+
+/// Integer value used to indicate the how much of the pool's
+/// value is associated with a given staker id.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct Portion(pub u64);
+
+impl Portion {
+    /// Value representing 100% ownership
+    pub const MAX: Portion = Portion(10_000_000_000u64);
+
+    /// Add checking for overflow
+    pub fn checked_add(self, rhs: Portion) -> Option<Portion> {
+        let sum = self.0 + rhs.0;
+
+        if sum <= Portion::MAX.0 {
+            Some(Portion(sum))
+        } else {
+            None
+        }
+    }
+
+    /// Subtract checking for underflow
+    pub fn checked_sub(self, rhs: Portion) -> Option<Portion> {
+        self.0.checked_sub(rhs.0).map(|x| Portion(x))
+    }
+}
+
+impl std::ops::Add for Portion {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        Self(self.0.checked_add(other.0).expect(""))
+    }
+}
+
+/// Portions in one pool
+pub type PoolPortions = HashMap<StakerId, Portion>;
+/// Portions in all pools
+pub type VaultPortions = HashMap<PoolCoin, PoolPortions>;
+
 /// All state that TransactionProvider will keep in memory
 struct MemoryState {
     quote_txs: Vec<FulfilledTxWrapper<QuoteTx>>,
     stake_quote_txs: Vec<FulfilledTxWrapper<StakeQuoteTx>>,
     stake_txs: Vec<StakeTx>,
     witness_txs: Vec<WitnessTxWrapper>,
-    pools: HashMap<Coin, Liquidity>,
+    pools: HashMap<PoolCoin, Liquidity>,
     next_block_idx: u32,
+    staker_portions: VaultPortions,
 }
 
 /// An in-memory transaction provider
@@ -67,10 +115,24 @@ impl<S: ISideChain> MemoryTransactionsProvider<S> {
             witness_txs: vec![],
             pools: HashMap::new(),
             next_block_idx: 0,
+            staker_portions: HashMap::new(),
         };
 
         MemoryTransactionsProvider { side_chain, state }
     }
+}
+
+/// How much of each coin a given staker owns
+/// in coin amounts
+pub struct StakerOwnership {
+    /// Staker identity
+    pub staker_id: StakerId,
+    /// Into which pool the contribution is made
+    pub pool_type: PoolCoin,
+    /// Contribution in Loki
+    pub loki: LokiAmount,
+    /// Contribution in the other coin
+    pub other: GenericCoinAmount,
 }
 
 impl MemoryState {
@@ -92,17 +154,24 @@ impl MemoryState {
             }
         }
 
+        // TODO: we need to have the associated PoolChangeTx at this point, but StakeTx
+        // only has a "uuid reference" to a transactions that we haven't processed yet...
+        // What's worse, we've made the assumption that StakeTx gets processed first,
+        // Because we want to see what the liquidity is like before the contribution was made.
+
+        // adjust_portions_after_stake(&mut self.staker_portions, &mut self.pools, &tx);
+
         self.stake_txs.push(tx)
     }
 
     fn process_pool_change_tx(&mut self, tx: PoolChangeTx) {
         let mut liquidity = self
             .pools
-            .get(&tx.coin.get_coin())
+            .get(&tx.coin)
             .cloned()
             .unwrap_or(Liquidity::new());
 
-        warn!("Pool change tx: {:?}, liquidity: {:?}", &tx, &liquidity);
+        info!("Pool change tx: {:?}", &tx);
 
         let depth = liquidity.depth as i128 + tx.depth_change;
         let loki_depth = liquidity.loki_depth as i128 + tx.loki_depth_change;
@@ -116,7 +185,14 @@ impl MemoryState {
 
         liquidity.depth = depth as u128;
         liquidity.loki_depth = loki_depth as u128;
-        self.pools.insert(tx.coin.get_coin(), liquidity);
+        self.pools.insert(tx.coin, liquidity);
+    }
+
+    fn process_unstake_request_tx(&mut self, _tx: UnstakeRequestTx) {
+        // 1. Find how much of the liquidity the skaker owns in the pool
+        // 2. Make payment to the refund for the amount requested
+
+        unimplemented!();
     }
 }
 
@@ -156,6 +232,7 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
                     SideChainTx::PoolChangeTx(tx) => self.state.process_pool_change_tx(tx),
                     SideChainTx::StakeTx(tx) => self.state.process_stake_tx(tx),
                     SideChainTx::OutputTx(tx) => todo!(),
+                    SideChainTx::UnstakeRequestTx(tx) => self.state.process_unstake_request_tx(tx),
                 }
             }
             self.state.next_block_idx += 1;
@@ -204,14 +281,14 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
 
 impl<S: ISideChain> LiquidityProvider for MemoryTransactionsProvider<S> {
     fn get_liquidity(&self, pool: PoolCoin) -> Option<Liquidity> {
-        self.state.pools.get(&pool.get_coin()).cloned()
+        self.state.pools.get(&pool).cloned()
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::side_chain::MemorySideChain;
+    use crate::{common::Coin, side_chain::MemorySideChain};
     use crate::{transactions::PoolChangeTx, utils::test_utils::create_fake_quote_tx};
     use uuid::Uuid;
 
