@@ -3,27 +3,61 @@ use crate::utils::primitives::U512;
 use std::convert::TryFrom;
 
 /// A structure for representing a normalised amount
+///
+/// The calculation below requires that all the atomic amounts use the same decimal places or it will return incorrect values.
+/// This struct is used to convert all atomic amounts to the same decimal place values.
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
-pub struct NormalisedAmount(u128);
+pub struct NormalisedAmount(U512);
 
 impl NormalisedAmount {
-    /// The amount of decimals to normalise
+    /// The amount of decimals to normalise.
+    ///
+    /// **This should always be greater than the largest decimal for a coin**
     const DECIMALS: u32 = 18;
 
     /// Create a normalised amount using the given atomic amount and coin
     pub fn from(amount: u128, coin: Coin) -> Self {
         let decimals = coin.get_info().decimals;
+        if decimals > Self::DECIMALS {
+            error!(
+                "{}({}) has more decimals than normalise amount({}) supports!",
+                coin,
+                decimals,
+                Self::DECIMALS
+            );
+            panic!("Larger decimal was used");
+        }
+
         let decimals = Self::DECIMALS.saturating_sub(decimals);
-        let ten_pow = 10u128.saturating_pow(decimals);
-        NormalisedAmount(amount.saturating_mul(ten_pow))
+        let ten_pow = U512::from(10)
+            .checked_pow(decimals.into())
+            .expect("Overflow occurred when calculating normalised amount");
+        let amount = U512::from(amount)
+            .checked_mul(ten_pow)
+            .expect("Overflow occurred when calculating normalised amount");
+        NormalisedAmount(amount)
     }
 
     /// Convert a normalised amount back into a coin atomic amount
-    pub fn to_atomic(&self, coin: Coin) -> u128 {
+    /// Return `None` if overflow occurs
+    pub fn to_atomic(&self, coin: Coin) -> Option<u128> {
         let decimals = coin.get_info().decimals;
+        if decimals > Self::DECIMALS {
+            error!(
+                "{}({}) has more decimals than normalise amount({}) supports!",
+                coin,
+                decimals,
+                Self::DECIMALS
+            );
+            panic!("Larger decimal was used");
+        }
+
         let decimals = Self::DECIMALS.saturating_sub(decimals);
-        let ten_pow = 10u128.saturating_pow(decimals);
-        self.0 / ten_pow
+        let ten_pow = U512::from(10)
+            .checked_pow(decimals.into())
+            .expect("Overflow occurred when converting normalised amount");
+        let amount = self.0 / ten_pow;
+        u128::try_from(amount).ok()
     }
 }
 
@@ -35,11 +69,11 @@ pub fn calculate_output_amount(
     output_depth: NormalisedAmount,
     output_fee: NormalisedAmount,
 ) -> NormalisedAmount {
-    let input_amount = U512::from(input_amount.0);
-    let input_fee = U512::from(input_fee.0);
-    let input_depth = U512::from(input_depth.0);
-    let output_depth = U512::from(output_depth.0);
-    let output_fee = U512::from(output_fee.0);
+    let input_amount = input_amount.0;
+    let input_fee = input_fee.0;
+    let input_depth = input_depth.0;
+    let output_depth = output_depth.0;
+    let output_fee = output_fee.0;
 
     let numerator = input_amount
         .saturating_sub(input_fee)
@@ -48,16 +82,15 @@ pub fn calculate_output_amount(
 
     let denominator = input_amount
         .saturating_add(input_depth)
-        .checked_pow(U512::from(2));
+        .checked_pow(2.into());
 
     // check overflow
     let denominator = match denominator {
         Some(value) => value,
-        None => return NormalisedAmount(0),
+        None => return NormalisedAmount(0.into()),
     };
 
     let output_amount: U512 = (numerator / denominator).saturating_sub(output_fee);
-    let output_amount = u128::try_from(output_amount).unwrap_or(0);
     NormalisedAmount(output_amount)
 }
 
@@ -88,19 +121,25 @@ mod test {
 
     use super::*;
 
-    #[test]
-    fn correctly_normalises() {
-        let eth_normalised = NormalisedAmount::from(1, Coin::ETH);
-        let loki_normalised = NormalisedAmount::from(1, Coin::LOKI);
-
-        assert_eq!(eth_normalised, NormalisedAmount(1));
-        assert_eq!(loki_normalised, NormalisedAmount(1000000000));
-        assert_eq!(loki_normalised.to_atomic(Coin::LOKI), 1);
-    }
-
     fn normalise_loki_decimal(amount: f64) -> NormalisedAmount {
         let atomic = LokiAmount::from_decimal(amount).to_atomic();
         NormalisedAmount::from(atomic, Coin::LOKI)
+    }
+
+    #[test]
+    fn normalised_amount_correctly_normalises() {
+        let eth_normalised = NormalisedAmount::from(1, Coin::ETH);
+        let loki_normalised = NormalisedAmount::from(1, Coin::LOKI);
+
+        assert_eq!(eth_normalised, NormalisedAmount(1.into()));
+        assert_eq!(loki_normalised, NormalisedAmount(1000000000u128.into()));
+        assert_eq!(loki_normalised.to_atomic(Coin::LOKI), Some(1));
+    }
+
+    #[test]
+    fn normalised_amount_handles_max_u128() {
+        let normalised = NormalisedAmount::from(u128::MAX, Coin::ETH);
+        assert_eq!(normalised, NormalisedAmount(u128::MAX.into()));
     }
 
     #[test]
@@ -128,7 +167,7 @@ mod test {
             );
             assert_eq!(
                 output.to_atomic(Coin::LOKI),
-                LokiAmount::from_decimal(value.5).to_atomic(),
+                Some(LokiAmount::from_decimal(value.5).to_atomic()),
             );
         }
     }
@@ -136,12 +175,12 @@ mod test {
     #[test]
     fn calculates_output_amount_handles_overflow() {
         let output = calculate_output_amount(
-            NormalisedAmount(u128::MAX),
-            NormalisedAmount(u128::MAX),
-            NormalisedAmount(0),
-            NormalisedAmount(u128::MAX),
-            NormalisedAmount(0),
+            NormalisedAmount(u128::MAX.into()),
+            NormalisedAmount(u128::MAX.into()),
+            NormalisedAmount(0.into()),
+            NormalisedAmount(u128::MAX.into()),
+            NormalisedAmount(0.into()),
         );
-        assert!(output.0 > 0);
+        assert!(output.0 > 0.into());
     }
 }

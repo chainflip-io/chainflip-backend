@@ -183,7 +183,8 @@ fn get_output_amount_inner<T: LiquidityProvider>(
         NormalisedAmount::from(output_depth, output),
         NormalisedAmount::from(output_fee, output),
     );
-    let output_amount = output_amount.to_atomic(output);
+
+    let output_amount = output_amount.to_atomic(output).unwrap_or(0);
 
     Ok(OutputDetail {
         input,
