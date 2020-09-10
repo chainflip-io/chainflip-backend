@@ -69,26 +69,40 @@ pub fn calculate_output_amount(
     output_depth: NormalisedAmount,
     output_fee: NormalisedAmount,
 ) -> NormalisedAmount {
+    let zero = NormalisedAmount(0.into());
+
     let input_amount = input_amount.0;
     let input_fee = input_fee.0;
     let input_depth = input_depth.0;
     let output_depth = output_depth.0;
     let output_fee = output_fee.0;
 
-    let numerator = input_amount
-        .saturating_sub(input_fee)
-        .saturating_mul(input_depth)
-        .saturating_mul(output_depth);
+    let numerator = input_amount.saturating_sub(input_fee);
 
-    let denominator = input_amount
-        .saturating_add(input_depth)
-        .checked_pow(2.into());
-
-    // check overflow
-    let denominator = match denominator {
+    // Check for overflows
+    let numerator = match numerator.checked_mul(input_depth) {
         Some(value) => value,
-        None => return NormalisedAmount(0.into()),
+        None => return zero,
     };
+
+    let numerator = match numerator.checked_mul(output_depth) {
+        Some(value) => value,
+        None => return zero,
+    };
+
+    let denominator = match input_amount.checked_add(input_depth) {
+        Some(value) => value,
+        None => return zero,
+    };
+
+    let denominator = match denominator.checked_pow(2.into()) {
+        Some(value) => value,
+        None => return zero,
+    };
+
+    if denominator == 0.into() {
+        return zero;
+    }
 
     let output_amount: U512 = (numerator / denominator).saturating_sub(output_fee);
     NormalisedAmount(output_amount)
