@@ -3,7 +3,7 @@ use crate::{
         coins::{GenericCoinAmount, PoolCoin},
         Coin, LokiAmount, LokiPaymentId, Timestamp, WalletAddress,
     },
-    utils::address::validate_address,
+    utils::validation::{validate_address, validate_address_id},
 };
 
 use serde::{Deserialize, Serialize};
@@ -69,6 +69,10 @@ impl QuoteTx {
             && return_address.is_none()
         {
             return Err("Return address must be specified");
+        }
+
+        if validate_address_id(input, &input_address_id).is_err() {
+            return Err("Input address id is invalid");
         }
 
         Ok(QuoteTx {

@@ -1,9 +1,5 @@
 use super::QuoteParams;
-use crate::{
-    common::{Coin, LokiPaymentId},
-    utils::address::validate_address,
-};
-use std::str::FromStr;
+use crate::utils::validation::{validate_address, validate_address_id};
 
 /// Validate quote params
 pub fn validate_params(params: &QuoteParams) -> Result<(), &'static str> {
@@ -42,28 +38,7 @@ pub fn validate_params(params: &QuoteParams) -> Result<(), &'static str> {
         return Err("Invalid output address");
     }
 
-    let input_address_id = match params.input_coin {
-        Coin::BTC | Coin::ETH => match params.input_address_id.parse::<u64>() {
-            // Index 0 is used for the main wallet and 1-4 are reserved for future use
-            Ok(id) => {
-                if id < 5 {
-                    Err(())
-                } else {
-                    Ok(())
-                }
-            }
-            Err(_) => Err(()),
-        },
-        Coin::LOKI => LokiPaymentId::from_str(&params.input_address_id)
-            .map(|_| ())
-            .map_err(|_| ()),
-        x @ _ => {
-            warn!("Failed to handle input address id of {}", x);
-            Err(())
-        }
-    };
-
-    if input_address_id.is_err() {
+    if validate_address_id(params.input_coin, &params.input_address_id).is_err() {
         return Err("Invalid input id provided");
     }
 
@@ -82,6 +57,8 @@ pub fn validate_params(params: &QuoteParams) -> Result<(), &'static str> {
 
 #[cfg(test)]
 mod test {
+    use crate::common::Coin;
+
     use super::*;
     use std::collections::HashMap;
 
@@ -159,69 +136,13 @@ mod test {
 
     #[test]
     fn validates_input_address_id() {
-        // Add values to test below
+        let mut invalid = get_valid_params();
+        invalid.input_address_id = "i am not invalid, i am outvalid".to_owned();
 
-        let mut id_map = HashMap::new();
-        id_map.insert(
-            Coin::ETH,
-            Values {
-                invalid: vec!["a", "-1", "0", "1", "2", "3", "4", "60900e5603bf96e3"],
-                valid: vec!["5", "100"],
-            },
+        assert_eq!(
+            validate_params(&invalid).unwrap_err(),
+            "Invalid input id provided"
         );
-        id_map.insert(
-            Coin::LOKI,
-            Values {
-                invalid: vec!["a", "-1", "0", "1000"],
-                valid: vec![
-                    "60900e5603bf96e3",
-                    "60900e5603bf96e3000000000000000000000000000000000000000000000000",
-                ],
-            },
-        );
-
-        // Perform tests on all the values
-
-        for (coin, values) in id_map {
-            let mut params = get_valid_params();
-
-            // Avoid same coin
-            if params.output_coin == coin {
-                params.output_coin = Coin::LOKI;
-                params.output_address = LOKI_ADDRESS.to_string();
-            }
-
-            let return_address = match coin {
-                Coin::LOKI => Some(LOKI_ADDRESS.to_string()),
-                _ => None,
-            };
-
-            params.input_coin = coin.clone();
-            params.input_return_address = return_address;
-
-            for id in values.invalid {
-                let mut invalid = params.clone();
-                invalid.input_address_id = id.to_string();
-
-                assert_eq!(
-                    validate_params(&invalid).unwrap_err(),
-                    "Invalid input id provided"
-                );
-            }
-
-            for id in values.valid {
-                let mut valid = params.clone();
-                valid.input_address_id = id.to_string();
-
-                assert_eq!(
-                    validate_params(&valid),
-                    Ok(()),
-                    "Expected input address id {} to be valid for {}",
-                    id,
-                    coin,
-                );
-            }
-        }
     }
 
     #[test]
