@@ -3,8 +3,11 @@ use blockswap::{
         coins::{Coin, CoinAmount, GenericCoinAmount, PoolCoin},
         LokiAmount,
     },
-    side_chain::{ISideChain, MemorySideChain},
-    utils::test_utils::{create_fake_stake_quote, create_fake_witness, store::MemoryKVS},
+    side_chain::{ISideChain, MemorySideChain, SideChainTx},
+    utils::test_utils::{
+        self, create_fake_stake_quote, create_fake_unstake_request_tx, create_fake_witness,
+        store::MemoryKVS,
+    },
     vault::{
         processor::{ProcessorEvent, SideChainProcessor},
         transactions::{MemoryTransactionsProvider, TransactionProvider},
@@ -45,8 +48,8 @@ fn spin_until_block(receiver: &crossbeam_channel::Receiver<ProcessorEvent>, targ
 fn check_liquidity<T>(
     tx_provider: &mut T,
     coin_type: Coin,
-    loki_amount: &LokiAmount,
-    coin_amount: &GenericCoinAmount,
+    loki_amount: LokiAmount,
+    coin_amount: GenericCoinAmount,
 ) where
     T: TransactionProvider,
 {
@@ -61,65 +64,160 @@ fn check_liquidity<T>(
     assert_eq!(liquidity.depth, coin_amount.to_atomic());
 }
 
-#[test]
-fn witnessed_staked_changes_pool_liquidity() {
-    let s_chain = MemorySideChain::new();
-    let s_chain = Arc::new(Mutex::new(s_chain));
+struct TestRunner {
+    chain: Arc<Mutex<MemorySideChain>>,
+    receiver: crossbeam_channel::Receiver<ProcessorEvent>,
+    provider: MemoryTransactionsProvider<MemorySideChain>,
+}
 
-    let tx_provider = MemoryTransactionsProvider::new(s_chain.clone());
+impl TestRunner {
+    fn new() -> Self {
+        let chain = MemorySideChain::new();
+        let chain = Arc::new(Mutex::new(chain));
 
-    let kvs = MemoryKVS::new();
+        let provider = MemoryTransactionsProvider::new(chain.clone());
 
-    let processor = SideChainProcessor::new(tx_provider, kvs);
+        let processor = SideChainProcessor::new(provider, MemoryKVS::new());
 
-    let coin_type = Coin::ETH;
-    let loki_amount = LokiAmount::from_decimal(1.0);
-    let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
+        // Create a channel to receive processor events through
+        let (sender, receiver) = crossbeam_channel::unbounded::<ProcessorEvent>();
 
-    let stake_tx = create_fake_stake_quote(loki_amount.clone(), coin_amount.clone());
-    let wtx_loki = create_fake_witness(&stake_tx, loki_amount.clone().into(), Coin::LOKI);
-    let wtx_eth = create_fake_witness(&stake_tx, coin_amount.clone(), coin_type);
+        processor.start(Some(sender));
 
+        // We are not super concerned about keeping 2 tx providers around, because
+        // we don't want to require thread safety in production, and having another
+        // instance it is cheap enough for tests
+        let provider = MemoryTransactionsProvider::new(chain.clone());
+
+        TestRunner {
+            chain,
+            receiver,
+            provider,
+        }
+    }
+
+    fn add_block<T>(&mut self, block: T)
+    where
+        T: Into<Vec<SideChainTx>>,
     {
+        let mut chain = self.chain.lock().unwrap();
+
+        chain
+            .add_block(block.into())
+            .expect("Could not add transactions");
+    }
+
+    /// Sync processor
+    fn sync(&mut self) {
+        let total_blocks = self.chain.lock().unwrap().total_blocks();
+
+        if total_blocks > 0 {
+            let last_block = total_blocks.checked_sub(1).unwrap();
+            spin_until_block(&self.receiver, last_block);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn witnessed_staked_changes_pool_liquidity() {
+        let mut runner = TestRunner::new();
+
+        let coin_type = Coin::ETH;
+        let loki_amount = LokiAmount::from_decimal(1.0);
+        let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
+
+        let stake_tx = create_fake_stake_quote(loki_amount, coin_amount);
+        let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
+        let wtx_eth = create_fake_witness(&stake_tx, coin_amount, coin_type);
+
+        runner.add_block([stake_tx.clone().into()]);
+        runner.add_block([wtx_loki.into(), wtx_eth.into()]);
+
+        runner.sync();
+
+        check_liquidity(&mut runner.provider, coin_type, loki_amount, coin_amount);
+
+        runner.add_block([stake_tx.clone().into()]);
+
+        runner.sync();
+
+        // Check that the balance has not changed
+        check_liquidity(&mut runner.provider, coin_type, loki_amount, coin_amount);
+    }
+
+    #[test]
+    fn unstake_transactions() {
+        test_utils::logging::init();
+
+        let mut runner = TestRunner::new();
+
+        // 1. Make a Stake TX and make sure it is acknowledged
+
+        let coin_type = Coin::ETH;
+        let loki_amount = LokiAmount::from_decimal(1.0);
+        let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
+
+        let stake_tx = create_fake_stake_quote(loki_amount, coin_amount);
+        let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
+        let wtx_eth = create_fake_witness(&stake_tx, coin_amount, coin_type);
+
         // Add blocks with those transactions
+        runner.add_block([stake_tx.clone().into()]);
+        runner.add_block([wtx_loki.into(), wtx_eth.into()]);
 
-        let mut s_chain = s_chain.lock().unwrap();
+        runner.sync();
 
-        s_chain
-            .add_block(vec![stake_tx.clone().into()])
-            .expect("Could not add a Quote TX");
+        check_liquidity(&mut runner.provider, coin_type, loki_amount, coin_amount);
 
-        s_chain
-            .add_block(vec![wtx_loki.into(), wtx_eth.into()])
-            .expect("Could not add a Quote TX");
+        // 2. Add an unstake request
+
+        // TODO:
+
+        // let unstake_tx = create_fake_unstake_request_tx(stake_tx.staker_id);
+
+        // runner.add_block([unstake_tx.into()]);
+
+        // runner.sync();
     }
 
-    // We start the processor this late to make sure if fetches all
-    // in the first iteration its "event loop"
+    #[test]
+    fn multiple_stakes() {
+        test_utils::logging::init();
 
-    // Create a channel to receive processor events through
-    let (sender, receiver) = crossbeam_channel::unbounded::<ProcessorEvent>();
+        let mut runner = TestRunner::new();
 
-    processor.start(Some(sender));
+        // 1. Make a Stake TX and make sure it is acknowledged
 
-    let mut tx_provider = MemoryTransactionsProvider::new(s_chain.clone());
+        let coin_type = Coin::ETH;
+        let loki_amount = LokiAmount::from_decimal(1.0);
+        let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
 
-    // spin until the transaction is added by the processor
-    spin_until_block(&receiver, 2);
+        let stake_tx = create_fake_stake_quote(loki_amount, coin_amount);
+        let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
+        let wtx_eth = create_fake_witness(&stake_tx, coin_amount, coin_type);
 
-    check_liquidity(&mut tx_provider, coin_type, &loki_amount, &coin_amount);
+        // Add blocks with those transactions
+        runner.add_block([stake_tx.clone().into()]);
+        runner.add_block([wtx_loki.into(), wtx_eth.into()]);
 
-    {
-        // Adding the same quote again
-        let mut s_chain = s_chain.lock().unwrap();
+        runner.sync();
 
-        s_chain
-            .add_block(vec![stake_tx.clone().into()])
-            .expect("Could not add a Quote TX");
+        check_liquidity(&mut runner.provider, coin_type, loki_amount, coin_amount);
+
+        // 2. Add another stake with another staker id
+
+        let stake_tx = create_fake_stake_quote(loki_amount, coin_amount);
+        let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
+        let wtx_eth = create_fake_witness(&stake_tx, coin_amount, coin_type);
+
+        runner.add_block([stake_tx.clone().into()]);
+        runner.add_block([wtx_loki.into(), wtx_eth.into()]);
+
+        runner.sync();
     }
-
-    spin_until_block(&receiver, 4);
-
-    // Check that the balance has not changed
-    check_liquidity(&mut tx_provider, coin_type, &loki_amount, &coin_amount);
 }

@@ -147,7 +147,7 @@ impl ISideChain for PeristentSideChain {
 fn should_read_block_after_reopen() {
     use crate::utils::test_utils;
 
-    env_logger::init();
+    test_utils::logging::init();
 
     let temp_file = test_utils::TempRandomFile::new();
 

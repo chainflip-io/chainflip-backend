@@ -68,4 +68,8 @@ pub trait TransactionProvider: LiquidityProvider {
 
 /// Memory transaction provider
 pub mod memory_provider;
+/// Helper functions to do portion-based calculations
+/// (probably should be a child module of memory_provider,
+/// but don't want to move too much code around)
+pub mod portions;
 pub use memory_provider::MemoryTransactionsProvider;

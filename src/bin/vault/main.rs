@@ -3,11 +3,12 @@ extern crate log;
 
 use blockswap::{
     common::{
-        coins::{GenericCoinAmount, PoolCoin},
-        store,
+        coins::{Coin, GenericCoinAmount},
+        store, LokiAmount,
     },
     logging,
     side_chain::{ISideChain, PeristentSideChain},
+    utils::test_utils::{create_fake_stake_quote, create_fake_witness},
     vault::{
         api::APIServer,
         blockchain_connection::{LokiConnection, LokiConnectionConfig},
@@ -16,40 +17,20 @@ use blockswap::{
         witness::LokiWitness,
     },
 };
+
 use std::sync::{Arc, Mutex};
-
-use std::str::FromStr;
-
-use uuid::Uuid;
 
 /// Currently only used for "testing"
 fn add_fake_transactions<S>(s_chain: &Arc<Mutex<S>>)
 where
     S: ISideChain,
 {
-    use blockswap::{
-        common::{coins::Coin, LokiAmount, LokiPaymentId},
-        transactions::{StakeQuoteTx, WitnessTx},
-    };
+    let quote = create_fake_stake_quote(
+        LokiAmount::from_decimal(500.0),
+        GenericCoinAmount::from_decimal(Coin::ETH, 1.0),
+    );
 
-    let quote = StakeQuoteTx {
-        id: Uuid::new_v4(),
-        input_loki_address_id: LokiPaymentId::from_str("60900e5603bf96e3").unwrap(),
-        loki_amount: LokiAmount::from_decimal(500.0),
-        coin_type: PoolCoin::ETH,
-        coin_amount: GenericCoinAmount::from_decimal(Coin::ETH, 1.0),
-    };
-
-    let witness = WitnessTx {
-        id: Uuid::new_v4(),
-        quote_id: quote.id,
-        transaction_id: "".to_owned(),
-        transaction_block_number: 0,
-        transaction_index: 0,
-        amount: quote.loki_amount.to_atomic(),
-        coin_type: Coin::LOKI,
-        sender: None,
-    };
+    let witness = create_fake_witness(&quote, quote.loki_amount, Coin::LOKI);
 
     let mut s_chain = s_chain.lock().unwrap();
 

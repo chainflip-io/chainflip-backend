@@ -103,6 +103,8 @@ pub struct StakeQuoteTx {
     pub coin_type: PoolCoin,
     /// Amount of the other (non-Loki) pool coin
     pub coin_amount: GenericCoinAmount,
+    /// Stakers identity
+    pub staker_id: String,
 }
 
 // This might be obsolete...
@@ -177,6 +179,20 @@ pub struct StakeTx {
     pub quote_tx: Uuid,
     /// Identifier of the corresponding witness transactions
     pub witness_txs: Vec<Uuid>,
+    /// For now this is just a simple way to identify "stakers".
+    /// We are likely to replace with something more private
+    pub staker_id: String,
+    /// Pool in which the stake is made
+    pub pool: PoolCoin,
+}
+
+/// Request to unstake funds
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct UnstakeRequestTx {
+    /// Unique identifier
+    pub id: Uuid,
+    /// Stakers identity (TODO: needs to be more private and with authentication)
+    pub staker_id: String,
 }
 
 /// A transaction for keeping track of any outgoing mainchain transaction
