@@ -5,7 +5,7 @@ use blockswap::{
     },
     side_chain::{ISideChain, MemorySideChain, SideChainTx},
     utils::test_utils::{
-        create_fake_stake_quote, create_fake_unstake_request_tx, create_fake_witness,
+        self, create_fake_stake_quote, create_fake_unstake_request_tx, create_fake_witness,
         store::MemoryKVS,
     },
     vault::{
@@ -118,101 +118,106 @@ impl TestRunner {
     }
 }
 
-#[test]
-fn witnessed_staked_changes_pool_liquidity() {
-    let mut runner = TestRunner::new();
+#[cfg(test)]
+mod tests {
 
-    let coin_type = Coin::ETH;
-    let loki_amount = LokiAmount::from_decimal(1.0);
-    let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
+    use super::*;
 
-    let stake_tx = create_fake_stake_quote(loki_amount, coin_amount);
-    let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
-    let wtx_eth = create_fake_witness(&stake_tx, coin_amount, coin_type);
+    #[test]
+    fn witnessed_staked_changes_pool_liquidity() {
+        let mut runner = TestRunner::new();
 
-    runner.add_block([stake_tx.clone().into()]);
-    runner.add_block([wtx_loki.into(), wtx_eth.into()]);
+        let coin_type = Coin::ETH;
+        let loki_amount = LokiAmount::from_decimal(1.0);
+        let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
 
-    runner.sync();
+        let stake_tx = create_fake_stake_quote(loki_amount, coin_amount);
+        let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
+        let wtx_eth = create_fake_witness(&stake_tx, coin_amount, coin_type);
 
-    check_liquidity(&mut runner.provider, coin_type, loki_amount, coin_amount);
+        runner.add_block([stake_tx.clone().into()]);
+        runner.add_block([wtx_loki.into(), wtx_eth.into()]);
 
-    runner.add_block([stake_tx.clone().into()]);
+        runner.sync();
 
-    runner.sync();
+        check_liquidity(&mut runner.provider, coin_type, loki_amount, coin_amount);
 
-    // Check that the balance has not changed
-    check_liquidity(&mut runner.provider, coin_type, loki_amount, coin_amount);
-}
+        runner.add_block([stake_tx.clone().into()]);
 
-#[test]
-fn unstake_transactions() {
-    env_logger::builder().format_timestamp(None).init();
+        runner.sync();
 
-    let mut runner = TestRunner::new();
+        // Check that the balance has not changed
+        check_liquidity(&mut runner.provider, coin_type, loki_amount, coin_amount);
+    }
 
-    // 1. Make a Stake TX and make sure it is acknowledged
+    #[test]
+    fn unstake_transactions() {
+        test_utils::logging::init();
 
-    let coin_type = Coin::ETH;
-    let loki_amount = LokiAmount::from_decimal(1.0);
-    let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
+        let mut runner = TestRunner::new();
 
-    let stake_tx = create_fake_stake_quote(loki_amount, coin_amount);
-    let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
-    let wtx_eth = create_fake_witness(&stake_tx, coin_amount, coin_type);
+        // 1. Make a Stake TX and make sure it is acknowledged
 
-    // Add blocks with those transactions
-    runner.add_block([stake_tx.clone().into()]);
-    runner.add_block([wtx_loki.into(), wtx_eth.into()]);
+        let coin_type = Coin::ETH;
+        let loki_amount = LokiAmount::from_decimal(1.0);
+        let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
 
-    runner.sync();
+        let stake_tx = create_fake_stake_quote(loki_amount, coin_amount);
+        let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
+        let wtx_eth = create_fake_witness(&stake_tx, coin_amount, coin_type);
 
-    check_liquidity(&mut runner.provider, coin_type, loki_amount, coin_amount);
+        // Add blocks with those transactions
+        runner.add_block([stake_tx.clone().into()]);
+        runner.add_block([wtx_loki.into(), wtx_eth.into()]);
 
-    // 2. Add an unstake request
+        runner.sync();
 
-    let unstake_tx = create_fake_unstake_request_tx(stake_tx.staker_id);
+        check_liquidity(&mut runner.provider, coin_type, loki_amount, coin_amount);
 
-    runner.add_block([unstake_tx.into()]);
+        // 2. Add an unstake request
 
-    runner.sync();
-}
+        // TODO:
 
-#[test]
-fn multiple_stakes() {
-    env_logger::builder()
-        .format_timestamp(None)
-        .format_module_path(false)
-        .init();
+        // let unstake_tx = create_fake_unstake_request_tx(stake_tx.staker_id);
 
-    let mut runner = TestRunner::new();
+        // runner.add_block([unstake_tx.into()]);
 
-    // 1. Make a Stake TX and make sure it is acknowledged
+        // runner.sync();
+    }
 
-    let coin_type = Coin::ETH;
-    let loki_amount = LokiAmount::from_decimal(1.0);
-    let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
+    #[test]
+    fn multiple_stakes() {
+        test_utils::logging::init();
 
-    let stake_tx = create_fake_stake_quote(loki_amount, coin_amount);
-    let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
-    let wtx_eth = create_fake_witness(&stake_tx, coin_amount, coin_type);
+        let mut runner = TestRunner::new();
 
-    // Add blocks with those transactions
-    runner.add_block([stake_tx.clone().into()]);
-    runner.add_block([wtx_loki.into(), wtx_eth.into()]);
+        // 1. Make a Stake TX and make sure it is acknowledged
 
-    runner.sync();
+        let coin_type = Coin::ETH;
+        let loki_amount = LokiAmount::from_decimal(1.0);
+        let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
 
-    check_liquidity(&mut runner.provider, coin_type, loki_amount, coin_amount);
+        let stake_tx = create_fake_stake_quote(loki_amount, coin_amount);
+        let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
+        let wtx_eth = create_fake_witness(&stake_tx, coin_amount, coin_type);
 
-    // 2. Add another stake with another staker id
+        // Add blocks with those transactions
+        runner.add_block([stake_tx.clone().into()]);
+        runner.add_block([wtx_loki.into(), wtx_eth.into()]);
 
-    let stake_tx = create_fake_stake_quote(loki_amount, coin_amount);
-    let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
-    let wtx_eth = create_fake_witness(&stake_tx, coin_amount, coin_type);
+        runner.sync();
 
-    runner.add_block([stake_tx.clone().into()]);
-    runner.add_block([wtx_loki.into(), wtx_eth.into()]);
+        check_liquidity(&mut runner.provider, coin_type, loki_amount, coin_amount);
 
-    runner.sync();
+        // 2. Add another stake with another staker id
+
+        let stake_tx = create_fake_stake_quote(loki_amount, coin_amount);
+        let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
+        let wtx_eth = create_fake_witness(&stake_tx, coin_amount, coin_type);
+
+        runner.add_block([stake_tx.clone().into()]);
+        runner.add_block([wtx_loki.into(), wtx_eth.into()]);
+
+        runner.sync();
+    }
 }

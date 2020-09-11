@@ -154,7 +154,7 @@ pub fn adjust_portions_after_stake(
 #[cfg(test)]
 mod tests {
 
-    use crate::transactions::PoolChangeTx;
+    use crate::{transactions::PoolChangeTx, utils::test_utils};
 
     use super::*;
 
@@ -225,10 +225,7 @@ mod tests {
 
     #[test]
     fn basic_portion_adjustment() {
-        env_logger::builder()
-            .format_timestamp(None)
-            .format_module_path(false)
-            .init();
+        test_utils::logging::init();
 
         let mut runner = TestRunner::new();
 
@@ -265,10 +262,7 @@ mod tests {
 
     #[test]
     fn portion_adjustment_with_pool_changes() {
-        env_logger::builder()
-            .format_timestamp(None)
-            .format_module_path(false)
-            .init();
+        test_utils::logging::init();
 
         let mut runner = TestRunner::new();
 

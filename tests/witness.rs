@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use blockswap::{
     common::{Block, Timestamp},
-    side_chain::{ISideChain, MemorySideChain, SideChainTx},
+    side_chain::{ISideChain, MemorySideChain},
     transactions::CoinTx,
     utils::test_utils,
     vault::witness::FakeWitness,
@@ -16,7 +16,7 @@ fn test_witness_tx_is_made() {
     // - test that there is witness transaction shortly after
 
     // Tests use a simpler logger
-    env_logger::init();
+    test_utils::logging::init();
 
     let timeout = std::time::Duration::from_millis(1000);
 

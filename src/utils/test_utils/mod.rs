@@ -21,6 +21,9 @@ pub mod store;
 /// Transactions used for testing
 pub mod fake_txs;
 
+/// Logging initialization
+pub mod logging;
+
 pub use fake_txs::{create_fake_stake_quote, create_fake_unstake_request_tx, create_fake_witness};
 
 /// Create a dummy quote transaction to be used for tests
