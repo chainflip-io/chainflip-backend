@@ -53,6 +53,8 @@ pub async fn post_quote<T: TransactionProvider>(
     params: QuoteParams,
     provider: Arc<Mutex<T>>,
 ) -> Result<QuoteResponse, ResponseError> {
+    let original_params = params.clone();
+
     if let Err(err) = validation::validate_params(&params) {
         return Err(bad_request(err));
     }
@@ -120,7 +122,14 @@ pub async fn post_quote<T: TransactionProvider>(
         effective_price,
         params.slippage_limit,
     )
-    .map_err(|err| bad_request(err))?;
+    .map_err(|err| {
+        error!(
+            "Failed to create quote tx for params: {:?} due to error {}",
+            original_params,
+            err.clone()
+        );
+        bad_request(err)
+    })?;
 
     provider
         .add_transactions(vec![quote.clone().into()])

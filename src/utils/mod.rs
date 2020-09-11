@@ -15,8 +15,8 @@ pub mod autoswap;
 /// Utils for calculating price
 pub mod price;
 
-/// Utils for address
-pub mod address;
+/// Utils for validation
+pub mod validation;
 
 /// Primitive utils
 pub mod primitives;
