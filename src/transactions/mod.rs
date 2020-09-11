@@ -187,9 +187,9 @@ pub struct StakeTx {
     pub pool: PoolCoin,
     /// Amount in the loki pool attributed to the staker in this tx
     pub loki_amount: LokiAmount,
-    /// Amount in the other coin (of type `pool`) attributed to the
+    /// Atomic amount in the other coin (of type `pool`) attributed to the
     /// staker in this tx
-    pub other_amount: GenericCoinAmount,
+    pub other_amount: u128,
 }
 
 /// Request to unstake funds

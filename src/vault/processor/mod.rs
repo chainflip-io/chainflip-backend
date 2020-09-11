@@ -164,8 +164,6 @@ where
                 let loki_amount = LokiAmount::from_atomic(loki_amount);
 
                 let other_amount: u128 = other_amount.try_into().expect("negative stake");
-                let other_amount =
-                    GenericCoinAmount::from_atomic(pool_coin.get_coin(), other_amount);
 
                 let stake_tx = StakeTx {
                     id: Uuid::new_v4(),

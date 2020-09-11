@@ -160,8 +160,11 @@ impl MemoryState {
         // What's worse, we've made the assumption that StakeTx gets processed first,
         // Because we want to see what the liquidity is like before the contribution was made.
 
-        let contribution =
-            StakeContribution::new(tx.staker_id.clone(), tx.loki_amount, tx.other_amount);
+        let contribution = StakeContribution::new(
+            tx.staker_id.clone(),
+            tx.loki_amount,
+            GenericCoinAmount::from_atomic(tx.pool.get_coin(), tx.other_amount),
+        );
 
         adjust_portions_after_stake(&mut self.staker_portions, &mut self.pools, &contribution);
 
