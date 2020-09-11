@@ -168,7 +168,8 @@ impl PoolChangeTx {
     }
 }
 
-/// A transaction acknowledging pool provisioning
+/// A transaction acknowledging pool provisioning. Note that `loki_amount`
+/// and `other_amount` don't necessarily match the amounts
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct StakeTx {
     /// A unique identifier
@@ -184,6 +185,11 @@ pub struct StakeTx {
     pub staker_id: String,
     /// Pool in which the stake is made
     pub pool: PoolCoin,
+    /// Amount in the loki pool attributed to the staker in this tx
+    pub loki_amount: LokiAmount,
+    /// Amount in the other coin (of type `pool`) attributed to the
+    /// staker in this tx
+    pub other_amount: GenericCoinAmount,
 }
 
 /// Request to unstake funds

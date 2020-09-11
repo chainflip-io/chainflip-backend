@@ -1,11 +1,13 @@
 use crate::{
+    common::coins::GenericCoinAmount,
+    common::LokiAmount,
     common::{coins::Coin, store::KeyValueStore},
     side_chain::SideChainTx,
     transactions::{PoolChangeTx, StakeQuoteTx, StakeTx},
     vault::transactions::TransactionProvider,
 };
 
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 
 use super::transactions::memory_provider::{FulfilledTxWrapper, WitnessTxWrapper};
 use uuid::Uuid;
@@ -153,9 +155,17 @@ where
 
         match (loki_amount, other_amount) {
             (Some(loki_amount), Some(other_amount)) => {
-                let coin = quote.coin_type;
+                let pool_coin = quote.coin_type;
 
-                let pool_change_tx = PoolChangeTx::new(coin, loki_amount, other_amount);
+                let pool_change_tx = PoolChangeTx::new(pool_coin, loki_amount, other_amount);
+
+                // TODO: autoswap goes here
+                let loki_amount: u128 = loki_amount.try_into().expect("negative stake");
+                let loki_amount = LokiAmount::from_atomic(loki_amount);
+
+                let other_amount: u128 = other_amount.try_into().expect("negative stake");
+                let other_amount =
+                    GenericCoinAmount::from_atomic(pool_coin.get_coin(), other_amount);
 
                 let stake_tx = StakeTx {
                     id: Uuid::new_v4(),
@@ -163,7 +173,9 @@ where
                     quote_tx: quote.id,
                     witness_txs: wtx_idxs,
                     staker_id: quote.staker_id.clone(),
-                    pool: coin,
+                    pool: pool_coin,
+                    loki_amount,
+                    other_amount,
                 };
 
                 Some(StakeQuoteResult::new(stake_tx, pool_change_tx))

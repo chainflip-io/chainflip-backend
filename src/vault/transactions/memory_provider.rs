@@ -1,5 +1,6 @@
 use super::{
-    portions::adjust_portions_after_stake, Liquidity, LiquidityProvider, TransactionProvider,
+    portions::adjust_portions_after_stake, portions::StakeContribution, Liquidity,
+    LiquidityProvider, TransactionProvider,
 };
 use crate::{
     common::{
@@ -159,7 +160,10 @@ impl MemoryState {
         // What's worse, we've made the assumption that StakeTx gets processed first,
         // Because we want to see what the liquidity is like before the contribution was made.
 
-        // adjust_portions_after_stake(&mut self.staker_portions, &mut self.pools, &tx);
+        let contribution =
+            StakeContribution::new(tx.staker_id.clone(), tx.loki_amount, tx.other_amount);
+
+        adjust_portions_after_stake(&mut self.staker_portions, &mut self.pools, &contribution);
 
         self.stake_txs.push(tx)
     }

@@ -2,7 +2,6 @@ use std::{collections::HashMap, convert::TryInto};
 
 use crate::{
     common::{coins::GenericCoinAmount, coins::PoolCoin, Coin, LokiAmount},
-    transactions::PoolChangeTx,
     utils::primitives::U256,
 };
 
@@ -64,13 +63,27 @@ pub fn aggregate_current_portions(
 /// Pool change tx associated with staker id
 pub struct StakeContribution {
     staker_id: StakerId,
-    pool_change_tx: PoolChangeTx,
+    loki_amount: LokiAmount,
+    other_amount: GenericCoinAmount,
 }
 
 impl StakeContribution {
     /// Into which pool the stake is made
     pub fn coin(&self) -> PoolCoin {
-        self.pool_change_tx.coin
+        PoolCoin::from(self.other_amount.coin_type()).expect("invalid coin")
+    }
+
+    /// Create for fileds
+    pub fn new(
+        staker_id: StakerId,
+        loki_amount: LokiAmount,
+        other_amount: GenericCoinAmount,
+    ) -> Self {
+        StakeContribution {
+            staker_id,
+            loki_amount,
+            other_amount,
+        }
     }
 }
 
@@ -83,11 +96,7 @@ fn adjust_portions_after_stake_for_coin(
 
     // Adjust portions for the existing staker ids
 
-    let extra_loki: u128 = tx
-        .pool_change_tx
-        .loki_depth_change
-        .try_into()
-        .expect("negative amount staked");
+    let extra_loki = tx.loki_amount.to_atomic();
 
     let new_total_loki = liquidity.loki_depth + extra_loki;
 
@@ -154,7 +163,7 @@ pub fn adjust_portions_after_stake(
 #[cfg(test)]
 mod tests {
 
-    use crate::{transactions::PoolChangeTx, utils::test_utils};
+    use crate::{common::coins::CoinAmount, utils::test_utils};
 
     use super::*;
 
@@ -195,21 +204,17 @@ mod tests {
             // In this test all stakes are "symmetrical"
             let factor = 1000;
 
-            let stake = StakeContribution {
-                staker_id: staker_id.clone(),
-                pool_change_tx: PoolChangeTx::new(
-                    PoolCoin::ETH,
-                    amount.to_atomic() as i128,
-                    amount.to_atomic() as i128 * factor,
-                ),
-            };
+            let stake = StakeContribution::new(
+                staker_id.clone(),
+                amount,
+                GenericCoinAmount::from_atomic(Coin::ETH, amount.to_atomic() * factor),
+            );
 
             adjust_portions_after_stake_for_coin(&mut self.portions, &self.liquidity, &stake);
 
             self.liquidity = Liquidity {
-                depth: self.liquidity.depth + stake.pool_change_tx.depth_change as u128,
-                loki_depth: self.liquidity.loki_depth
-                    + stake.pool_change_tx.loki_depth_change as u128,
+                depth: self.liquidity.depth + stake.other_amount.to_atomic(),
+                loki_depth: self.liquidity.loki_depth + stake.loki_amount.to_atomic(),
             };
         }
 
