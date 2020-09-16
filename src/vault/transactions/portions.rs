@@ -155,7 +155,7 @@ pub fn adjust_portions_after_stake(
 
     let mut pool_portions = portions.entry(tx.coin()).or_insert(Default::default());
 
-    let liquidity = pools.entry(tx.coin()).or_insert(Liquidity::new());
+    let liquidity = pools.entry(tx.coin()).or_insert(Liquidity::zero());
 
     adjust_portions_after_stake_for_coin(&mut pool_portions, &liquidity, &tx);
 }
@@ -192,7 +192,7 @@ mod tests {
     impl TestRunner {
         fn new() -> Self {
             let portions = PoolPortions::new();
-            let liquidity = Liquidity::new();
+            let liquidity = Liquidity::zero();
 
             TestRunner {
                 portions,

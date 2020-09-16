@@ -75,6 +75,14 @@ impl QuoteTx {
             return Err("Input address id is invalid");
         }
 
+        if validate_address(input, &input_address.0).is_err() {
+            return Err("Input address is invalid");
+        }
+
+        if validate_address(output, &output_address.0).is_err() {
+            return Err("Output address is invalid");
+        }
+
         Ok(QuoteTx {
             id: Uuid::new_v4(),
             timestamp,
@@ -201,8 +209,11 @@ pub struct UnstakeRequestTx {
     pub staker_id: String,
 }
 
-/// A transaction for keeping track of any outgoing mainchain transaction
-#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+/// A transaction which indicates that we need to send to the main chain.
+///
+/// Note: The `amount` specified in this transaction does not include any fees.
+/// Fees will need to be determined at a later stage and be taken away from the amount.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct OutputTx {
     /// A unique identifier
     pub id: Uuid,
@@ -216,14 +227,10 @@ pub struct OutputTx {
     pub pool_change_txs: Vec<Uuid>,
     /// The output coin
     pub coin: Coin,
-    /// The address the output was sent to
+    /// The receiving address the output
     pub address: WalletAddress,
-    /// The amount that was sent
+    /// The amount that we want to send
     pub amount: u128,
-    /// The fee incurred during sending
-    pub fee: u128,
-    /// The main chain transaction id
-    pub main_chain_tx_ids: Vec<String>,
 }
 
 impl OutputTx {
@@ -236,19 +243,12 @@ impl OutputTx {
         coin: Coin,
         address: WalletAddress,
         amount: u128,
-        fee: u128,
-        main_chain_tx_ids: Vec<String>,
     ) -> Result<Self, &'static str> {
         if witness_txs.is_empty() {
             return Err("Cannot create an OutputTx with empty witness transactions");
         }
-
-        if main_chain_tx_ids.is_empty() {
-            return Err("Cannot create an OutputTx with empty main chain transaction ids");
-        }
-
         if validate_address(coin, &address.0).is_err() {
-            return Err("Invalid address passed in");
+            return Err("Invalid output address");
         }
 
         Ok(OutputTx {
@@ -260,8 +260,6 @@ impl OutputTx {
             coin,
             address,
             amount,
-            fee,
-            main_chain_tx_ids,
         })
     }
 }

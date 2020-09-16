@@ -176,7 +176,7 @@ impl MemoryState {
             .pools
             .get(&tx.coin)
             .cloned()
-            .unwrap_or(Liquidity::new());
+            .unwrap_or(Liquidity::zero());
 
         info!("Pool change tx: {:?}", &tx);
 

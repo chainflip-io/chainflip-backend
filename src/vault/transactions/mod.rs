@@ -17,11 +17,13 @@ pub struct Liquidity {
 
 impl Liquidity {
     /// Create a new liquidity
-    pub fn new() -> Self {
-        Liquidity {
-            depth: 0,
-            loki_depth: 0,
-        }
+    pub fn new(depth: u128, loki_depth: u128) -> Self {
+        Liquidity { depth, loki_depth }
+    }
+
+    /// Create a liquidity with zero amount
+    pub fn zero() -> Self {
+        Self::new(0, 0)
     }
 }
 

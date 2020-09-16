@@ -8,6 +8,8 @@ pub fn validate_address(coin: Coin, address: &str) -> Result<(), String> {
         Coin::ETH => ethereum::Address::from_str(address)
             .map(|_| ())
             .map_err(|str| str.to_owned()),
+        // TODO: Add validation here
+        Coin::BTC => Ok(()),
         x @ _ => {
             warn!("Address validation missing for {}", x);
             Err("No address validation found".to_owned())

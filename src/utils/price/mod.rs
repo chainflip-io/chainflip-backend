@@ -1,12 +1,9 @@
 use crate::{
     common::loki_process_fee,
-    common::{
-        coins::{CoinAmount, GenericCoinAmount, PoolCoin},
-        Coin, LokiAmount,
-    },
+    common::{coins::PoolCoin, Coin, LokiAmount},
     transactions::PoolChangeTx,
+    vault::transactions::Liquidity,
     vault::transactions::LiquidityProvider,
-    vault::transactions::{Liquidity, TransactionProvider},
 };
 use std::convert::TryFrom;
 
@@ -150,7 +147,7 @@ fn get_output_amount_inner<T: LiquidityProvider>(
 
     let liquidity = provider
         .get_liquidity(pool_coin)
-        .unwrap_or(Liquidity::new());
+        .unwrap_or(Liquidity::zero());
 
     let input_depth = if is_loki_input {
         liquidity.loki_depth
@@ -193,4 +190,195 @@ fn get_output_amount_inner<T: LiquidityProvider>(
         output_amount,
         loki_fee: loki_fee.to_atomic(),
     })
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{
+        common::coins::CoinAmount, common::coins::GenericCoinAmount,
+        utils::test_utils::liquidity_provider::TestLiquidityProvider,
+    };
+
+    fn to_atomic(coin: Coin, amount: f64) -> u128 {
+        GenericCoinAmount::from_decimal(coin, amount).to_atomic()
+    }
+
+    #[test]
+    fn get_output_with_loki_input() {
+        let mut provider = TestLiquidityProvider::new();
+        provider.set_liquidity(
+            PoolCoin::ETH,
+            Some(Liquidity::new(
+                to_atomic(Coin::ETH, 20_000.0),
+                to_atomic(Coin::LOKI, 10_000.0),
+            )),
+        );
+
+        let input = Coin::LOKI;
+        let input_amount = to_atomic(input, 2500.0);
+        let output = Coin::ETH;
+        let expected_output_amount = to_atomic(output, 3199.36);
+
+        let calculation = get_output(&provider, input, input_amount, output)
+            .expect("Expected to get the correct output");
+
+        assert!(calculation.second.is_none(), "Expected only one output");
+
+        let detail = calculation.first;
+        assert_eq!(detail.input, input);
+        assert_eq!(detail.input_amount, input_amount);
+        assert_eq!(detail.output, output);
+        assert_eq!(detail.output_amount, expected_output_amount);
+        assert_eq!(detail.loki_fee, loki_process_fee().to_atomic());
+    }
+
+    #[test]
+    fn get_output_with_loki_output() {
+        let mut provider = TestLiquidityProvider::new();
+        provider.set_liquidity(
+            PoolCoin::ETH,
+            Some(Liquidity::new(
+                to_atomic(Coin::ETH, 10_000.0),
+                to_atomic(Coin::LOKI, 20_000.0),
+            )),
+        );
+
+        let input = Coin::ETH;
+        let input_amount = to_atomic(input, 2500.0);
+        let output = Coin::LOKI;
+        let expected_output_amount = to_atomic(output, 3199.5);
+
+        let calculation = get_output(&provider, input, input_amount, output)
+            .expect("Expected to get the correct output");
+
+        assert!(calculation.second.is_none(), "Expected only one output");
+
+        let detail = calculation.first;
+        assert_eq!(detail.input, input);
+        assert_eq!(detail.input_amount, input_amount);
+        assert_eq!(detail.output, output);
+        assert_eq!(detail.output_amount, expected_output_amount);
+        assert_eq!(detail.loki_fee, loki_process_fee().to_atomic());
+    }
+
+    #[test]
+    fn get_output_with_non_loki_input_output() {
+        let mut provider = TestLiquidityProvider::new();
+        provider.set_liquidity(
+            PoolCoin::ETH,
+            Some(Liquidity::new(
+                to_atomic(Coin::ETH, 10_000.0),
+                to_atomic(Coin::LOKI, 20_000.0),
+            )),
+        );
+
+        provider.set_liquidity(
+            PoolCoin::BTC,
+            Some(Liquidity::new(
+                to_atomic(Coin::BTC, 12_769.0),
+                to_atomic(Coin::LOKI, 10_191.0),
+            )),
+        );
+
+        let input = Coin::ETH;
+        let input_amount = to_atomic(input, 2500.0);
+        let output = Coin::BTC;
+        let expected_output_amount = to_atomic(output, 2322.0);
+
+        let calculation = get_output(&provider, input, input_amount, output)
+            .expect("Expected to get the correct output");
+
+        let first = calculation.first;
+        assert_eq!(first.input, input);
+        assert_eq!(first.input_amount, input_amount);
+        assert_eq!(first.output, Coin::LOKI);
+        assert_eq!(first.output_amount, to_atomic(Coin::LOKI, 3199.5));
+        assert_eq!(first.loki_fee, loki_process_fee().to_atomic());
+
+        let second = calculation.second.expect("Expected a second output");
+        assert_eq!(second.input, Coin::LOKI);
+        assert_eq!(second.input_amount, to_atomic(Coin::LOKI, 3199.5));
+        assert_eq!(second.output, output);
+        assert_eq!(second.output_amount, expected_output_amount);
+        assert_eq!(second.loki_fee, 0);
+    }
+
+    #[test]
+    fn output_detail_to_pool_change_tx() {
+        // Invalid
+        let invalid = OutputDetail {
+            input: Coin::BTC,
+            input_amount: 1,
+            output: Coin::ETH,
+            output_amount: 2,
+            loki_fee: 0,
+        };
+
+        assert_eq!(
+            invalid.to_pool_change_tx().unwrap_err(),
+            "Cannot make a PoolChangeTx without a LOKI input or output"
+        );
+
+        // Loki input
+        let loki_input = OutputDetail {
+            input: Coin::LOKI,
+            input_amount: 10,
+            output: Coin::ETH,
+            output_amount: 20,
+            loki_fee: 0,
+        };
+
+        let pool_change = loki_input
+            .to_pool_change_tx()
+            .expect("Expected a valid pool change transaction");
+
+        assert_eq!(pool_change.coin, PoolCoin::ETH);
+        assert_eq!(pool_change.loki_depth_change, 10);
+        assert_eq!(pool_change.depth_change, -20);
+
+        // Loki output
+        let loki_output = OutputDetail {
+            input: Coin::ETH,
+            input_amount: 10,
+            output: Coin::LOKI,
+            output_amount: 20,
+            loki_fee: 0,
+        };
+
+        let pool_change = loki_output
+            .to_pool_change_tx()
+            .expect("Expected a valid pool change transaction");
+
+        assert_eq!(pool_change.coin, PoolCoin::ETH);
+        assert_eq!(pool_change.depth_change, 10);
+        assert_eq!(pool_change.loki_depth_change, -20);
+
+        // Bounds
+        let max_input = OutputDetail {
+            input: Coin::LOKI,
+            input_amount: u128::MAX,
+            output: Coin::ETH,
+            output_amount: 20,
+            loki_fee: 0,
+        };
+
+        assert_eq!(
+            max_input.to_pool_change_tx().unwrap_err(),
+            "Failed to convert input depth to i128"
+        );
+
+        let max_output = OutputDetail {
+            input: Coin::LOKI,
+            input_amount: 20,
+            output: Coin::ETH,
+            output_amount: u128::MAX,
+            loki_fee: 0,
+        };
+
+        assert_eq!(
+            max_output.to_pool_change_tx().unwrap_err(),
+            "Failed to convert output depth to i128"
+        );
+    }
 }
