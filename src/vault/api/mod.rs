@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
 use warp::Filter;
 
+/// Api v1
 pub mod v1;
 
 /// Unused

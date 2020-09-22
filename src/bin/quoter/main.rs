@@ -4,7 +4,7 @@ extern crate log;
 use clap::{App, Arg};
 
 use blockswap::logging;
-use blockswap::quoter::{database, vault_node, Quoter};
+use blockswap::quoter::{config::QUOTER_CONFIG, database, vault_node, Quoter};
 use std::sync::{Arc, Mutex};
 
 /*
@@ -38,9 +38,10 @@ async fn main() {
     let port = matches.value_of("port").unwrap_or("3033");
 
     if let Ok(port) = port.parse::<u16>() {
+        let config = &QUOTER_CONFIG;
         info!("Starting the Blockswap Quoter");
 
-        let database = database::Database::open("quoter.db");
+        let database = database::Database::open(&config.database.name);
         let database = Arc::new(Mutex::new(database));
 
         let vault_node_api = vault_node::VaultNodeAPI::new(vault_node::Config {});

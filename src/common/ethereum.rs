@@ -19,9 +19,41 @@ impl Display for Hash {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Address(pub [u8; 20]);
 
+impl Address {
+    /// Checksum an address
+    /// Ref: https://github.com/ethereum/EIPs/blob/master/EIPS/eip-55.md
+    fn checksummed(&self) -> String {
+        let address = hex::encode(self.0).to_lowercase();
+        let mut checksumed = String::new();
+
+        // apply a keccak_256 hash of the address
+        let mut result = [0u8; 32];
+        let mut hasher = Keccak::v256();
+        hasher.update(address.as_bytes());
+        hasher.finalize(&mut result);
+
+        let hash: Vec<char> = hex::encode(result).chars().collect();
+
+        for (i, c) in address.chars().enumerate() {
+            let val = match i32::from_str_radix(&hash[i].to_string(), 16) {
+                Ok(val) => val,
+                _ => 0,
+            };
+
+            if val > 7 {
+                checksumed += &c.to_uppercase().to_string()
+            } else {
+                checksumed += &c.to_string()
+            }
+        }
+
+        checksumed
+    }
+}
+
 impl Display for Address {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "0x{}", hex::encode(self.0))
+        write!(f, "0x{}", self.checksummed())
     }
 }
 
@@ -38,7 +70,7 @@ impl FromStr for Address {
             return Err(INVALID_ADDRESS);
         }
 
-        let stripped = string.trim_start_matches("0x");
+        let stripped = string.trim_start_matches("0x").to_lowercase();
         let bytes = hex::decode(stripped).map_err(|_| INVALID_ADDRESS)?;
         Ok(Address(clone_into_array(&bytes)))
     }
@@ -57,7 +89,7 @@ impl Address {
     /// let public_key = PublicKey::from_str("034ac1bb1bc5fd7a9b173f6a136a40e4be64841c77d7f66ead444e101e01348127").unwrap();
     /// let address = Address::from_public_key(public_key);
     ///
-    /// assert_eq!(address.to_string(), "0x70e7db0678460c5e53f1ffc9221d1c692111dcc5".to_owned());
+    /// assert_eq!(address.to_string(), "0x70E7Db0678460C5e53F1FFc9221d1C692111dCc5".to_owned());
     /// ```
     pub fn from_public_key(public_key: PublicKey) -> Self {
         let bytes: [u8; 65] = public_key.serialize_uncompressed();

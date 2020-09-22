@@ -1,0 +1,6 @@
+[loki.rpc]
+port = 6934
+
+[eth]
+# Go to https://iancoleman.io/bip39/ to generate one
+# master_root_key = ""

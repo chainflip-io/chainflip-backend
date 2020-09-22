@@ -8,3 +8,6 @@ pub mod processor;
 pub mod transactions;
 /// Witness module for processing blockchain connections
 pub mod witness;
+
+/// Config for vault
+pub mod config;

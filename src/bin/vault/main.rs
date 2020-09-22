@@ -12,13 +12,18 @@ use blockswap::{
     vault::{
         api::APIServer,
         blockchain_connection::{LokiConnection, LokiConnectionConfig},
+        config::VAULT_CONFIG,
         processor::SideChainProcessor,
         transactions::{MemoryTransactionsProvider, TransactionProvider},
         witness::LokiWitness,
     },
 };
 
-use std::sync::{Arc, Mutex};
+use std::{
+    error::Error,
+    fmt::Display,
+    sync::{Arc, Mutex},
+};
 
 /// Currently only used for "testing"
 fn add_fake_transactions<S>(s_chain: &Arc<Mutex<S>>)
@@ -55,7 +60,10 @@ fn main() {
 
     logging::init("vault", None);
 
-    info!("Starting a Blockswap Vault node");
+    // Create the vault config and ensure it's valid
+    let vault_config = &VAULT_CONFIG;
+
+    info!("Starting a _ Vault node");
 
     let s_chain = PeristentSideChain::open("blocks.db");
     let s_chain = Arc::new(Mutex::new(s_chain));
@@ -66,7 +74,7 @@ fn main() {
     let provider = Arc::new(Mutex::new(provider));
 
     let config = LokiConnectionConfig {
-        rpc_wallet_port: 6934,
+        rpc_wallet_port: vault_config.loki.rpc.port,
     };
 
     let loki_connection = LokiConnection::new(config);

@@ -30,6 +30,7 @@ uuid = { version = "0.8", features = ["serde", "v4"] }
 itertools="*"
 uint="^0.8.5"
 env_logger="*"
+config="^0.10.1"
 
 [dependencies.rusqlite]
 version = "0.21.0"

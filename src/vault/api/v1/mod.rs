@@ -56,6 +56,7 @@ impl BlocksQueryParams {
     }
 }
 
+/// Block response
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlockResponseEntry {
     id: u32,

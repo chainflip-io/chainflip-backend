@@ -13,6 +13,9 @@ pub mod database;
 /// The vault node api consumer
 pub mod vault_node;
 
+/// The config
+pub mod config;
+
 /// Quoter
 pub struct Quoter {}
 

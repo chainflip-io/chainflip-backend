@@ -1,8 +1,13 @@
 use crate::{
+    common::ethereum,
     common::{api::ResponseError, Coin, Timestamp, WalletAddress},
     transactions::QuoteTx,
+    utils::bip44,
     utils::price,
-    vault::{processor::utils::get_swap_expire_timestamp, transactions::TransactionProvider},
+    vault::{
+        config::VAULT_CONFIG, processor::utils::get_swap_expire_timestamp,
+        transactions::TransactionProvider,
+    },
 };
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -47,6 +52,18 @@ fn bad_request(message: &str) -> ResponseError {
 
 fn internal_server_error() -> ResponseError {
     ResponseError::new(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
+}
+
+fn generate_eth_address(root_key: &str, index: u64) -> Result<String, String> {
+    let root_key = bip44::RawKey::decode(root_key).map_err(|err| format!("{}", err))?;
+
+    let root_key = root_key
+        .to_private_key()
+        .ok_or("Failed to generate extended private key".to_owned())?;
+
+    let key_pair = bip44::get_key_pair(root_key, bip44::CoinType::ETH, index)?;
+
+    Ok(ethereum::Address::from_public_key(key_pair.public_key).to_string())
 }
 
 /// Request a swap quote
@@ -96,12 +113,22 @@ pub async fn post_quote<T: TransactionProvider>(
     // Generate addresses
     let input_address = match input_coin {
         Coin::ETH => {
-            // TODO: Derive address from input_address_id
-            "0x70e7db0678460c5e53f1ffc9221d1c692111dcc5"
+            let index = match params.input_address_id.parse::<u64>() {
+                Ok(index) => index,
+                Err(_) => return Err(bad_request("Incorrect input address id")),
+            };
+
+            match generate_eth_address(&VAULT_CONFIG.eth.master_root_key, index) {
+                Ok(address) => address,
+                Err(err) => {
+                    warn!("Failed to generate ethereum address: {}", err);
+                    return Err(internal_server_error());
+                }
+            }
         }
         Coin::LOKI => {
             // TODO: Generate integrated address here
-            "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY"
+            "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".into()
         }
         _ => {
             warn!(
@@ -115,7 +142,7 @@ pub async fn post_quote<T: TransactionProvider>(
     let quote = QuoteTx::new(
         Timestamp::now(),
         input_coin,
-        WalletAddress::new(input_address),
+        WalletAddress::new(&input_address),
         params.input_address_id,
         params.input_return_address.clone().map(WalletAddress),
         output_coin,
@@ -172,6 +199,22 @@ mod test {
             output_address: "0x70e7db0678460c5e53f1ffc9221d1c692111dcc5".to_string(),
             slippage_limit: 0.0,
         }
+    }
+
+    #[test]
+    fn generates_correct_eth_address() {
+        // NEVER USE THIS IN AN ACTUAL APPLICATION! ONLY FOR TESTING
+        let root_key = "xprv9s21ZrQH143K3sFfKzYqgjMWgvsE44f6gxaRvyo11R22u2p5qegToQaEi7e6e5mRq3f92g9yDQQtu488ggct5gUspippg678t1QTCwBRb85";
+        assert_eq!(
+            &generate_eth_address(root_key, 0).unwrap(),
+            "0x48575a3C8fa7D0469FD39eCB67ec68d8C7564637"
+        );
+        assert_eq!(
+            &generate_eth_address(root_key, 1).unwrap(),
+            "0xB46878bd2E68e2b3f5145ccB868E626572905c5F"
+        );
+
+        assert!(&generate_eth_address("invalid_key", 0).is_err(),);
     }
 
     #[tokio::test]

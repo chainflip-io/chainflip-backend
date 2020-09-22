@@ -106,7 +106,7 @@ impl KeyPair {
 pub fn get_key_pair(
     root_key: ExtendedPrivKey,
     coin: CoinType,
-    address_index: u32,
+    address_index: u64,
 ) -> Result<KeyPair, String> {
     let priv_key = derive_private_key(root_key, coin, address_index)?;
     let pub_key = ExtendedPubKey::from_private_key(&priv_key);
@@ -121,7 +121,7 @@ pub fn get_key_pair(
 fn derive_private_key(
     root_key: ExtendedPrivKey,
     coin: CoinType,
-    address_index: u32,
+    address_index: u64,
 ) -> Result<ExtendedPrivKey, String> {
     // Derivation path we're using: m/44'/coin_type'/0'/0/address_index
     // See: https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki#path-levels

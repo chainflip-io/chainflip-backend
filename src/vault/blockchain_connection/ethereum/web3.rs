@@ -119,11 +119,11 @@ mod test {
         );
         assert_eq!(
             &first.from.to_string(),
-            "0x6b17141d06d70b50aa4e8c263c0b4ba598c4b8a0"
+            "0x6B17141D06d70B50AA4e8C263C0B4BA598c4b8a0"
         );
         assert_eq!(
             &first.to.as_ref().unwrap().to_string(),
-            "0xdb50dba4f9a046bfbe3d0d80e42308108a8dc70a"
+            "0xdb50dBa4f9A046bfBE3D0D80E42308108A8Dc70a"
         );
         assert_eq!(first.value, 105403140000000000);
     }

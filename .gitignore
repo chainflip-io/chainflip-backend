@@ -1,2 +1,6 @@
 /target
 *.log
+*.db
+loki_connection
+
+config/**/local.toml
