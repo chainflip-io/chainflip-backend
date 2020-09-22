@@ -2,14 +2,6 @@ use crate::transactions::CoinTx;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, hash::Hash, time::SystemTime};
 
-/// The Loki processing fee
-pub static LOKI_PROCESS_FEE_DECIMAL: f64 = 0.5;
-
-/// The loki process fee
-pub fn loki_process_fee() -> LokiAmount {
-    LokiAmount::from_decimal(LOKI_PROCESS_FEE_DECIMAL)
-}
-
 /// Definitions for various coins
 pub mod coins;
 
@@ -26,6 +18,9 @@ pub use loki::{LokiAmount, LokiPaymentId, LokiWalletAddress};
 
 /// Key value store definitions
 pub mod store;
+
+/// Liquidity provider
+pub mod liquidity_provider;
 
 pub use coins::Coin;
 

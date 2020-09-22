@@ -128,8 +128,8 @@ mod tests {
         let mut runner = TestRunner::new();
 
         let coin_type = Coin::ETH;
-        let loki_amount = LokiAmount::from_decimal(1.0);
-        let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
+        let loki_amount = LokiAmount::from_decimal_string("1.0");
+        let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
         let stake_tx = create_fake_stake_quote(loki_amount, coin_amount);
         let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
@@ -159,8 +159,8 @@ mod tests {
         // 1. Make a Stake TX and make sure it is acknowledged
 
         let coin_type = Coin::ETH;
-        let loki_amount = LokiAmount::from_decimal(1.0);
-        let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
+        let loki_amount = LokiAmount::from_decimal_string("1.0");
+        let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
         let stake_tx = create_fake_stake_quote(loki_amount, coin_amount);
         let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
@@ -194,8 +194,8 @@ mod tests {
         // 1. Make a Stake TX and make sure it is acknowledged
 
         let coin_type = Coin::ETH;
-        let loki_amount = LokiAmount::from_decimal(1.0);
-        let coin_amount = GenericCoinAmount::from_decimal(coin_type, 2.0);
+        let loki_amount = LokiAmount::from_decimal_string("1.0");
+        let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
         let stake_tx = create_fake_stake_quote(loki_amount, coin_amount);
         let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);

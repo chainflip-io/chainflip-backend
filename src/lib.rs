@@ -17,6 +17,9 @@ pub mod utils;
 /// Vault implementation
 pub mod vault;
 
+/// Constants in the application
+pub mod constants;
+
 #[macro_use]
 extern crate log;
 

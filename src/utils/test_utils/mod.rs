@@ -24,31 +24,25 @@ pub mod fake_txs;
 /// Logging initialization
 pub mod logging;
 
-// Test Liquidity provider
-pub mod liquidity_provider;
-
 pub use fake_txs::{create_fake_stake_quote, create_fake_unstake_request_tx, create_fake_witness};
 
 /// Create a dummy quote transaction to be used for tests
 pub fn create_fake_quote_tx() -> QuoteTx {
-    let return_address = Some(WalletAddress::new("Alice"));
-    let input_address = WalletAddress::new("Bob");
-    let timestamp = Timestamp::now();
+    let eth_address = WalletAddress::new("0x70e7db0678460c5e53f1ffc9221d1c692111dcc5");
+    let loki_address = WalletAddress::new("T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY");
 
-    let quote = QuoteTx {
-        id: Uuid::new_v4(),
-        timestamp,
-        input: Coin::LOKI,
-        output: Coin::BTC,
-        input_address_id: "".to_owned(),
-        input_address,
-        return_address,
-        effective_price: 1.0,
-        slippage_limit: 0.1,
-        output_address: WalletAddress::new("Output"),
-    };
-
-    quote
+    QuoteTx::new(
+        Timestamp::now(),
+        Coin::ETH,
+        eth_address.clone(),
+        "7".to_string(),
+        Some(eth_address),
+        Coin::LOKI,
+        loki_address,
+        1.0,
+        0.0,
+    )
+    .expect("Expected valid quote")
 }
 
 /// Creates a new random file name that (if created)

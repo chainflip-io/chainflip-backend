@@ -1,37 +1,12 @@
 use crate::{
-    common::{coins::PoolCoin, Coin},
+    common::liquidity_provider::LiquidityProvider,
+    common::Coin,
     side_chain::SideChainTx,
+    transactions::OutputTx,
     transactions::{QuoteTx, StakeQuoteTx},
     utils::price::{self, OutputCalculation},
 };
 use memory_provider::{FulfilledTxWrapper, WitnessTxWrapper};
-
-/// A simple representation of a pool liquidity
-#[derive(Debug, Copy, Clone)]
-pub struct Liquidity {
-    /// The depth of the coin staked against LOKI in the pool
-    pub depth: u128,
-    /// The depth of LOKI in the pool
-    pub loki_depth: u128,
-}
-
-impl Liquidity {
-    /// Create a new liquidity
-    pub fn new(depth: u128, loki_depth: u128) -> Self {
-        Liquidity { depth, loki_depth }
-    }
-
-    /// Create a liquidity with zero amount
-    pub fn zero() -> Self {
-        Self::new(0, 0)
-    }
-}
-
-/// An interface for providing liquidity
-pub trait LiquidityProvider {
-    /// Get the liquidity for a given pool
-    fn get_liquidity(&self, pool: PoolCoin) -> Option<Liquidity>;
-}
 
 /// An interface for providing transactions
 pub trait TransactionProvider: LiquidityProvider {
@@ -50,22 +25,8 @@ pub trait TransactionProvider: LiquidityProvider {
     /// Get all the witness transactions
     fn get_witness_txs(&self) -> &[WitnessTxWrapper];
 
-    /// Get the output amount.
-    ///
-    /// If `input` or `output` is `LOKI` then only 1 output is returned.
-    ///
-    /// If `input` or `output` is *NOT* `LOKI` then 2 outputs are returned: `[(input, LOKI, fee), (LOKI, output, fee)]`
-    fn get_output_amount(
-        &self,
-        input: Coin,
-        input_amount: u128,
-        output: Coin,
-    ) -> Result<OutputCalculation, &'static str>
-    where
-        Self: Sized,
-    {
-        price::get_output(self, input, input_amount, output)
-    }
+    /// Get all the output transactions
+    fn get_output_txs(&self) -> &[FulfilledTxWrapper<OutputTx>];
 }
 
 /// Memory transaction provider

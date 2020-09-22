@@ -1,6 +1,6 @@
 use crate::common::LokiAmount;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, str::FromStr};
+use std::{convert::TryFrom, fmt::Display, str::FromStr};
 
 /// A representation of a valid pool coin
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
@@ -112,7 +112,7 @@ impl FromStr for Coin {
 
 impl Coin {
     /// The list of supported coins
-    pub const SUPPORTED: &'static [Coin] = &[Coin::ETH, Coin::LOKI];
+    pub const SUPPORTED: &'static [Coin] = &[Coin::ETH, Coin::LOKI, Coin::BTC];
 
     /// Check if this coin is supported
     pub fn is_supported(&self) -> bool {
@@ -173,7 +173,7 @@ pub trait CoinAmount {
 
         let mut atomic_str = atomic_amount.to_string();
 
-        // Add learding zeroes for fractional amounts:
+        // Add leading zeroes for fractional amounts:
         if (atomic_str.len() as u32) < decimals + 1 {
             let extra = decimals + 1 - (atomic_str.len() as u32);
 
@@ -207,11 +207,34 @@ impl GenericCoinAmount {
         }
     }
 
-    /// Create a coin amount from a decimal value
-    pub fn from_decimal(coin: Coin, decimal_amount: f64) -> Self {
+    /// Create a coin amount from a decimal value.
+    /// **For tests only**
+    pub fn from_decimal_string(coin: Coin, decimal_string: &str) -> Self {
         let info = coin.get_info();
-        let decimals = info.decimals as i32;
-        let atomic_amount = (decimal_amount * info.one_unit() as f64).round() as u128;
+        let decimals = info.decimals;
+
+        let decimal_string: Vec<&str> = decimal_string.split(".").collect();
+        let integer = decimal_string.get(0).unwrap();
+
+        let mut fraction = decimal_string.get(1).cloned().unwrap_or("0").to_string();
+        fraction.truncate(decimals as usize);
+
+        // Add leading zeroes for fractional amounts:
+        if (fraction.len() as u32) < decimals {
+            let extra = decimals - (fraction.len() as u32);
+
+            // This is very inefficient, but should be good enough for now
+            for _ in 0..extra {
+                fraction.push('0');
+            }
+        }
+
+        let string_amount = format!("{}{}", integer, fraction);
+
+        let atomic_amount = string_amount
+            .parse()
+            .expect("Failed to convert decimal to atomic");
+
         GenericCoinAmount {
             coin,
             atomic_amount,
@@ -237,6 +260,16 @@ impl CoinAmount for GenericCoinAmount {
 impl From<LokiAmount> for GenericCoinAmount {
     fn from(tx: LokiAmount) -> Self {
         GenericCoinAmount::from_atomic(Coin::LOKI, tx.to_atomic())
+    }
+}
+
+impl From<GenericCoinAmount> for LokiAmount {
+    fn from(tx: GenericCoinAmount) -> Self {
+        if tx.coin != Coin::LOKI {
+            panic!("Cannot convert non-loki amount");
+        }
+
+        LokiAmount::from_atomic(tx.atomic_amount)
     }
 }
 
@@ -294,5 +327,20 @@ mod tests {
         let amount = TestAmount(105_403_140_000_000_000);
 
         assert_eq!(amount.to_decimal(), 0.10540314);
+    }
+
+    #[test]
+    fn test_generic_coin_from_decimal_string() {
+        let coin = GenericCoinAmount::from_decimal_string(Coin::ETH, "12500");
+        assert_eq!(coin.atomic_amount, 12500000000000000000000);
+
+        let coin = GenericCoinAmount::from_decimal_string(Coin::ETH, "3199.36");
+        assert_eq!(coin.atomic_amount, 3199360000000000000000);
+
+        let coin = GenericCoinAmount::from_decimal_string(Coin::ETH, "12500.5");
+        assert_eq!(coin.atomic_amount, 12500500000000000000000);
+
+        let coin = GenericCoinAmount::from_decimal_string(Coin::LOKI, "12500.512345678123");
+        assert_eq!(coin.atomic_amount, 12500512345678);
     }
 }

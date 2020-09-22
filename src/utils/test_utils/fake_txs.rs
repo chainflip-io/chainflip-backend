@@ -1,4 +1,5 @@
 use crate::{
+    common::Timestamp,
     common::{
         coins::{CoinAmount, GenericCoinAmount, PoolCoin},
         Coin, LokiAmount, LokiPaymentId,
@@ -24,18 +25,19 @@ pub fn create_fake_stake_quote(
 }
 
 /// Create a fake witness transaction for testing
-pub fn create_fake_witness<T>(quote: &StakeQuoteTx, amount: T, coin_type: Coin) -> WitnessTx
+pub fn create_fake_witness<T>(quote: &StakeQuoteTx, amount: T, coin: Coin) -> WitnessTx
 where
     T: Into<GenericCoinAmount>,
 {
     WitnessTx {
         id: Uuid::new_v4(),
+        timestamp: Timestamp::now(),
         quote_id: quote.id,
         transaction_id: "".to_owned(),
         transaction_block_number: 0,
         transaction_index: 0,
         amount: amount.into().to_atomic(),
-        coin_type,
+        coin,
         sender: None,
     }
 }

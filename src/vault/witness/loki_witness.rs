@@ -9,9 +9,12 @@ use std::sync::{Arc, Mutex};
 
 use crossbeam_channel::Receiver;
 
-use crate::side_chain::{ISideChain, SideChainTx};
 use crate::transactions::{QuoteTx, WitnessTx};
 use crate::vault::blockchain_connection::{Payment, Payments};
+use crate::{
+    common::Timestamp,
+    side_chain::{ISideChain, SideChainTx},
+};
 
 use crate::common::coins::{Coin, CoinAmount};
 use uuid::Uuid;
@@ -138,16 +141,16 @@ where
 
         let mut side_chain = self.side_chain.lock().unwrap();
 
-        let tx = WitnessTx {
-            id: Uuid::new_v4(),
-            quote_id: quote.id,
-            transaction_id: "0".to_owned(),
-            transaction_block_number: 0,
-            transaction_index: 0,
-            amount: payment.amount.to_atomic(),
-            coin_type: Coin::LOKI,
-            sender: None,
-        };
+        let tx = WitnessTx::new(
+            Timestamp::now(),
+            quote.id,
+            "0".to_owned(),
+            0,
+            0,
+            payment.amount.to_atomic(),
+            Coin::LOKI,
+            None,
+        );
 
         debug!("Adding witness tx: {:?}", &tx);
 

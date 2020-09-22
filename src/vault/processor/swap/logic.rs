@@ -1,13 +1,12 @@
 use super::refund::should_refund;
 
 use crate::{
-    common::Timestamp,
+    common::{liquidity_provider::LiquidityProvider, Timestamp},
     transactions::QuoteTx,
     transactions::WitnessTx,
     transactions::{OutputTx, PoolChangeTx},
     utils::{price, primitives::U256},
     vault::transactions::memory_provider::FulfilledTxWrapper,
-    vault::transactions::LiquidityProvider,
 };
 
 use std::{convert::TryFrom, error::Error, fmt};
@@ -15,8 +14,10 @@ use std::{convert::TryFrom, error::Error, fmt};
 /// Struct holding transactions
 #[derive(Debug, PartialEq, Eq)]
 pub struct SwapResult {
-    pool_changes: Vec<PoolChangeTx>,
-    output: OutputTx,
+    /// The pool changes
+    pub pool_changes: Vec<PoolChangeTx>,
+    /// The output transactions
+    pub output: OutputTx,
 }
 
 /// Errors for process_swap
@@ -185,27 +186,26 @@ mod test {
 
     use super::*;
     use crate::{
-        common::coins::CoinAmount, common::coins::GenericCoinAmount, common::coins::PoolCoin,
-        common::Coin, common::WalletAddress,
-        utils::test_utils::liquidity_provider::TestLiquidityProvider,
-        vault::transactions::Liquidity,
+        common::coins::{Coin, CoinAmount, GenericCoinAmount, PoolCoin},
+        common::liquidity_provider::{Liquidity, MemoryLiquidityProvider},
+        common::WalletAddress,
     };
 
-    fn to_atomic(coin: Coin, amount: f64) -> u128 {
-        GenericCoinAmount::from_decimal(coin, amount).to_atomic()
+    fn to_atomic(coin: Coin, amount: &str) -> u128 {
+        GenericCoinAmount::from_decimal_string(coin, amount).to_atomic()
     }
 
     fn setup() -> (
-        TestLiquidityProvider,
+        MemoryLiquidityProvider,
         FulfilledTxWrapper<QuoteTx>,
         Vec<WitnessTx>,
     ) {
-        let mut provider = TestLiquidityProvider::new();
+        let mut provider = MemoryLiquidityProvider::new();
         provider.set_liquidity(
             PoolCoin::ETH,
             Some(Liquidity::new(
-                to_atomic(Coin::ETH, 10_000.0),
-                to_atomic(Coin::LOKI, 20_000.0),
+                to_atomic(Coin::ETH, "10000.0"),
+                to_atomic(Coin::LOKI, "20000.0"),
             )),
         );
 
@@ -233,22 +233,24 @@ mod test {
         let witness_txes = vec![
             WitnessTx {
                 id: Uuid::new_v4(),
+                timestamp: Timestamp::now(),
                 quote_id: quote.inner.id,
                 transaction_id: Uuid::new_v4().to_string(),
                 transaction_block_number: 0,
                 transaction_index: 0,
-                amount: to_atomic(Coin::ETH, 1500.0),
-                coin_type: Coin::ETH,
+                amount: to_atomic(Coin::ETH, "1500.0"),
+                coin: Coin::ETH,
                 sender: None,
             },
             WitnessTx {
                 id: Uuid::new_v4(),
+                timestamp: Timestamp::now(),
                 quote_id: quote.inner.id,
                 transaction_id: Uuid::new_v4().to_string(),
                 transaction_block_number: 0,
                 transaction_index: 0,
-                amount: to_atomic(Coin::ETH, 1000.0),
-                coin_type: Coin::ETH,
+                amount: to_atomic(Coin::ETH, "1000.0"),
+                coin: Coin::ETH,
                 sender: None,
             },
         ];
@@ -316,10 +318,10 @@ mod test {
 
         let change = pool_changes.first().unwrap();
         assert_eq!(change.coin, PoolCoin::ETH);
-        assert_eq!(change.depth_change, to_atomic(Coin::ETH, 2500.0) as i128);
+        assert_eq!(change.depth_change, to_atomic(Coin::ETH, "2500.0") as i128);
         assert_eq!(
             change.loki_depth_change,
-            -1 * to_atomic(Coin::LOKI, 3199.5) as i128
+            -1 * to_atomic(Coin::LOKI, "3199.5") as i128
         );
 
         let witness_ids: Vec<Uuid> = witnesses.iter().map(|tx| tx.id).collect();
@@ -335,7 +337,7 @@ mod test {
         assert_eq!(output.pool_change_txs, vec![change.id]);
         assert_eq!(output.coin, Coin::LOKI);
         assert_eq!(output.address, quote.inner.output_address);
-        assert_eq!(output.amount, to_atomic(Coin::LOKI, 3199.5));
+        assert_eq!(output.amount, to_atomic(Coin::LOKI, "3199.5"));
     }
 
     #[test]
@@ -349,8 +351,8 @@ mod test {
         provider.set_liquidity(
             PoolCoin::BTC,
             Some(Liquidity::new(
-                to_atomic(Coin::BTC, 12_769.0),
-                to_atomic(Coin::LOKI, 10_191.0),
+                to_atomic(Coin::BTC, "12769.0"),
+                to_atomic(Coin::LOKI, "10191.0"),
             )),
         );
 
@@ -364,22 +366,22 @@ mod test {
         assert_eq!(first_change.coin, PoolCoin::ETH);
         assert_eq!(
             first_change.depth_change,
-            to_atomic(Coin::ETH, 2500.0) as i128
+            to_atomic(Coin::ETH, "2500.0") as i128
         );
         assert_eq!(
             first_change.loki_depth_change,
-            -1 * to_atomic(Coin::LOKI, 3199.5) as i128
+            -1 * to_atomic(Coin::LOKI, "3199.5") as i128
         );
 
         let second_change = pool_changes.last().unwrap();
         assert_eq!(second_change.coin, PoolCoin::BTC);
         assert_eq!(
             second_change.loki_depth_change,
-            to_atomic(Coin::LOKI, 3199.5) as i128
+            to_atomic(Coin::LOKI, "3199.5") as i128
         );
         assert_eq!(
             second_change.depth_change,
-            -1 * to_atomic(Coin::BTC, 2322.0) as i128
+            -1 * to_atomic(Coin::BTC, "2322.0") as i128
         );
 
         let witness_ids: Vec<Uuid> = witnesses.iter().map(|tx| tx.id).collect();
@@ -397,7 +399,7 @@ mod test {
         );
         assert_eq!(output.coin, Coin::BTC);
         assert_eq!(output.address, quote.inner.output_address);
-        assert_eq!(output.amount, to_atomic(Coin::BTC, 2322.0));
+        assert_eq!(output.amount, to_atomic(Coin::BTC, "2322.0"));
     }
 
     #[test]

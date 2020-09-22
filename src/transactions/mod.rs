@@ -79,6 +79,12 @@ impl QuoteTx {
             return Err("Input address is invalid");
         }
 
+        if let Some(address) = &return_address {
+            if validate_address(input, &address.0).is_err() {
+                return Err("Return address is invalid");
+            }
+        }
+
         if validate_address(output, &output_address.0).is_err() {
             return Err("Output address is invalid");
         }
@@ -129,6 +135,8 @@ pub struct CoinTx {
 pub struct WitnessTx {
     /// A unique identifier
     pub id: Uuid,
+    /// Timestamp for when the transaction was created
+    pub timestamp: Timestamp,
     /// The quote that this witness tx is linked to
     pub quote_id: Uuid,
     /// The input transaction id or hash
@@ -140,7 +148,7 @@ pub struct WitnessTx {
     /// The atomic input amount
     pub amount: u128,
     /// The coin type in which the transaction was made
-    pub coin_type: Coin,
+    pub coin: Coin,
     /// The sender of the transaction
     pub sender: Option<WalletAddress>,
 }
@@ -148,6 +156,32 @@ pub struct WitnessTx {
 impl PartialEq<WitnessTx> for WitnessTx {
     fn eq(&self, other: &WitnessTx) -> bool {
         self.quote_id == other.quote_id && self.transaction_id == other.transaction_id
+    }
+}
+
+impl WitnessTx {
+    /// Create a new witness transaction
+    pub fn new(
+        timestamp: Timestamp,
+        quote_id: Uuid,
+        transaction_id: String,
+        transaction_block_number: u64,
+        transaction_index: u64,
+        amount: u128,
+        coin: Coin,
+        sender: Option<WalletAddress>,
+    ) -> Self {
+        WitnessTx {
+            id: Uuid::new_v4(),
+            timestamp,
+            quote_id,
+            transaction_id,
+            transaction_block_number,
+            transaction_index,
+            amount,
+            coin,
+            sender,
+        }
     }
 }
 

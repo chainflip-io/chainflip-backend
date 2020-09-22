@@ -136,7 +136,7 @@ mod test {
     use super::*;
 
     fn normalise_loki_decimal(amount: f64) -> NormalisedAmount {
-        let atomic = LokiAmount::from_decimal(amount).to_atomic();
+        let atomic = LokiAmount::from_decimal_string(&amount.to_string()).to_atomic();
         NormalisedAmount::from(atomic, Coin::LOKI)
     }
 
@@ -184,7 +184,7 @@ mod test {
             );
             assert_eq!(
                 output.to_atomic(Coin::LOKI),
-                Some(LokiAmount::from_decimal(value.5).to_atomic()),
+                Some(LokiAmount::from_decimal_string(&value.5.to_string()).to_atomic()),
             );
         }
     }

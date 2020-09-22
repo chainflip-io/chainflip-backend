@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use crossbeam_channel::Receiver;
 
-use crate::common::{Block, Coin};
+use crate::common::{Block, Coin, Timestamp};
 use crate::side_chain::{ISideChain, SideChainTx};
 use crate::transactions::{CoinTx, QuoteTx, WitnessTx};
 use uuid::Uuid;
@@ -104,12 +104,13 @@ where
 
         let tx = WitnessTx {
             id: Uuid::new_v4(),
+            timestamp: Timestamp::now(),
             quote_id: quote.id,
             transaction_id: "0".to_owned(),
             transaction_block_number: 0,
             transaction_index: 0,
             amount: 0,
-            coin_type: Coin::LOKI,
+            coin: Coin::LOKI,
             sender: None,
         };
 

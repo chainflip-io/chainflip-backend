@@ -1,7 +1,9 @@
 use std::{collections::HashMap, convert::TryInto};
 
 use crate::{
-    common::{coins::GenericCoinAmount, coins::PoolCoin, Coin, LokiAmount},
+    common::{
+        coins::GenericCoinAmount, coins::PoolCoin, liquidity_provider::Liquidity, Coin, LokiAmount,
+    },
     utils::primitives::U256,
 };
 
@@ -9,7 +11,6 @@ use super::{
     memory_provider::StakerId,
     memory_provider::VaultPortions,
     memory_provider::{PoolPortions, Portion, StakerOwnership},
-    Liquidity,
 };
 
 /// Calculate atomic amount for a given portion from total atomic amount
@@ -144,7 +145,7 @@ fn adjust_portions_after_stake_for_coin(
 // but for now we need to make sure that liquidity is not `None`
 pub fn adjust_portions_after_stake(
     portions: &mut VaultPortions,
-    pools: &mut HashMap<PoolCoin, Liquidity>,
+    pools: &HashMap<PoolCoin, Liquidity>,
     tx: &StakeContribution,
 ) {
     // For each staker compute their current ownership in atomic
@@ -155,7 +156,8 @@ pub fn adjust_portions_after_stake(
 
     let mut pool_portions = portions.entry(tx.coin()).or_insert(Default::default());
 
-    let liquidity = pools.entry(tx.coin()).or_insert(Liquidity::zero());
+    let zero = Liquidity::zero();
+    let liquidity = pools.get(&tx.coin()).unwrap_or(&zero);
 
     adjust_portions_after_stake_for_coin(&mut pool_portions, &liquidity, &tx);
 }
@@ -169,7 +171,7 @@ mod tests {
 
     #[test]
     fn check_amount_from_portion() {
-        let total_amount = LokiAmount::from_decimal(1000.0).to_atomic();
+        let total_amount = LokiAmount::from_decimal_string("1000.0").to_atomic();
 
         assert_eq!(
             amount_from_portion(Portion::MAX, total_amount),
@@ -237,7 +239,7 @@ mod tests {
         let alice = "Alice".to_owned();
         let bob = "Bob".to_owned();
 
-        let amount1 = LokiAmount::from_decimal(100.0);
+        let amount1 = LokiAmount::from_decimal_string("100.0");
 
         // 1. First contribution from Alice
 
@@ -256,7 +258,7 @@ mod tests {
 
         // 3. Another contribution from Alice
 
-        let amount2 = LokiAmount::from_decimal(200.0);
+        let amount2 = LokiAmount::from_decimal_string("200.0");
 
         runner.add_stake(&alice, amount2);
 
@@ -274,7 +276,7 @@ mod tests {
         let alice = "Alice".to_owned();
         let bob = "Bob".to_owned();
 
-        let amount1 = LokiAmount::from_decimal(100.0);
+        let amount1 = LokiAmount::from_decimal_string("100.0");
 
         // 1. First contribution from Alice
 

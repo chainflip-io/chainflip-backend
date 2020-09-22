@@ -1,6 +1,7 @@
 use super::{
+    coins::GenericCoinAmount,
     coins::{CoinAmount, CoinInfo},
-    Coin, LOKI_PROCESS_FEE_DECIMAL,
+    Coin,
 };
 
 use serde::{Deserialize, Serialize};
@@ -134,11 +135,9 @@ impl LokiAmount {
     }
 
     /// Create from decimal
-    pub fn from_decimal(n: f64) -> Self {
-        // TODO: Allow negative n?
-        let info = Coin::LOKI.get_info();
-        let atomic_amount = (n * info.one_unit() as f64).round() as u128;
-        LokiAmount::from_atomic(atomic_amount)
+    /// **For tests only**
+    pub fn from_decimal_string(n: &str) -> Self {
+        GenericCoinAmount::from_decimal_string(Coin::LOKI, n).into()
     }
 
     /// Get inner atomic representation

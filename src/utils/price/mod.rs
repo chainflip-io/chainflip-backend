@@ -1,9 +1,8 @@
 use crate::{
-    common::loki_process_fee,
+    common::liquidity_provider::{Liquidity, LiquidityProvider},
     common::{coins::PoolCoin, Coin, LokiAmount},
+    constants::LOKI_SWAP_PROCESS_FEE,
     transactions::PoolChangeTx,
-    vault::transactions::Liquidity,
-    vault::transactions::LiquidityProvider,
 };
 use std::convert::TryFrom;
 
@@ -104,7 +103,7 @@ pub fn get_output<T: LiquidityProvider>(
         return Err("Cannot get output amount for the same coin");
     }
 
-    let fee = loki_process_fee();
+    let fee = LokiAmount::from_atomic(LOKI_SWAP_PROCESS_FEE);
 
     if input == Coin::LOKI || output == Coin::LOKI {
         get_output_amount_inner(provider, input, input_amount, output, fee)
@@ -197,28 +196,28 @@ mod test {
     use super::*;
     use crate::{
         common::coins::CoinAmount, common::coins::GenericCoinAmount,
-        utils::test_utils::liquidity_provider::TestLiquidityProvider,
+        common::liquidity_provider::MemoryLiquidityProvider,
     };
 
-    fn to_atomic(coin: Coin, amount: f64) -> u128 {
-        GenericCoinAmount::from_decimal(coin, amount).to_atomic()
+    fn to_atomic(coin: Coin, amount: &str) -> u128 {
+        GenericCoinAmount::from_decimal_string(coin, amount).to_atomic()
     }
 
     #[test]
     fn get_output_with_loki_input() {
-        let mut provider = TestLiquidityProvider::new();
+        let mut provider = MemoryLiquidityProvider::new();
         provider.set_liquidity(
             PoolCoin::ETH,
             Some(Liquidity::new(
-                to_atomic(Coin::ETH, 20_000.0),
-                to_atomic(Coin::LOKI, 10_000.0),
+                to_atomic(Coin::ETH, "20000.0"),
+                to_atomic(Coin::LOKI, "10000.0"),
             )),
         );
 
         let input = Coin::LOKI;
-        let input_amount = to_atomic(input, 2500.0);
+        let input_amount = to_atomic(input, "2500.0");
         let output = Coin::ETH;
-        let expected_output_amount = to_atomic(output, 3199.36);
+        let expected_output_amount = to_atomic(output, "3199.36");
 
         let calculation = get_output(&provider, input, input_amount, output)
             .expect("Expected to get the correct output");
@@ -230,24 +229,24 @@ mod test {
         assert_eq!(detail.input_amount, input_amount);
         assert_eq!(detail.output, output);
         assert_eq!(detail.output_amount, expected_output_amount);
-        assert_eq!(detail.loki_fee, loki_process_fee().to_atomic());
+        assert_eq!(detail.loki_fee, LOKI_SWAP_PROCESS_FEE);
     }
 
     #[test]
     fn get_output_with_loki_output() {
-        let mut provider = TestLiquidityProvider::new();
+        let mut provider = MemoryLiquidityProvider::new();
         provider.set_liquidity(
             PoolCoin::ETH,
             Some(Liquidity::new(
-                to_atomic(Coin::ETH, 10_000.0),
-                to_atomic(Coin::LOKI, 20_000.0),
+                to_atomic(Coin::ETH, "10000.0"),
+                to_atomic(Coin::LOKI, "20000.0"),
             )),
         );
 
         let input = Coin::ETH;
-        let input_amount = to_atomic(input, 2500.0);
+        let input_amount = to_atomic(input, "2500.0");
         let output = Coin::LOKI;
-        let expected_output_amount = to_atomic(output, 3199.5);
+        let expected_output_amount = to_atomic(output, "3199.5");
 
         let calculation = get_output(&provider, input, input_amount, output)
             .expect("Expected to get the correct output");
@@ -259,32 +258,32 @@ mod test {
         assert_eq!(detail.input_amount, input_amount);
         assert_eq!(detail.output, output);
         assert_eq!(detail.output_amount, expected_output_amount);
-        assert_eq!(detail.loki_fee, loki_process_fee().to_atomic());
+        assert_eq!(detail.loki_fee, LOKI_SWAP_PROCESS_FEE);
     }
 
     #[test]
     fn get_output_with_non_loki_input_output() {
-        let mut provider = TestLiquidityProvider::new();
+        let mut provider = MemoryLiquidityProvider::new();
         provider.set_liquidity(
             PoolCoin::ETH,
             Some(Liquidity::new(
-                to_atomic(Coin::ETH, 10_000.0),
-                to_atomic(Coin::LOKI, 20_000.0),
+                to_atomic(Coin::ETH, "10000.0"),
+                to_atomic(Coin::LOKI, "20000.0"),
             )),
         );
 
         provider.set_liquidity(
             PoolCoin::BTC,
             Some(Liquidity::new(
-                to_atomic(Coin::BTC, 12_769.0),
-                to_atomic(Coin::LOKI, 10_191.0),
+                to_atomic(Coin::BTC, "12769.0"),
+                to_atomic(Coin::LOKI, "10191.0"),
             )),
         );
 
         let input = Coin::ETH;
-        let input_amount = to_atomic(input, 2500.0);
+        let input_amount = to_atomic(input, "2500.0");
         let output = Coin::BTC;
-        let expected_output_amount = to_atomic(output, 2322.0);
+        let expected_output_amount = to_atomic(output, "2322.0");
 
         let calculation = get_output(&provider, input, input_amount, output)
             .expect("Expected to get the correct output");
@@ -293,12 +292,12 @@ mod test {
         assert_eq!(first.input, input);
         assert_eq!(first.input_amount, input_amount);
         assert_eq!(first.output, Coin::LOKI);
-        assert_eq!(first.output_amount, to_atomic(Coin::LOKI, 3199.5));
-        assert_eq!(first.loki_fee, loki_process_fee().to_atomic());
+        assert_eq!(first.output_amount, to_atomic(Coin::LOKI, "3199.5"));
+        assert_eq!(first.loki_fee, LOKI_SWAP_PROCESS_FEE);
 
         let second = calculation.second.expect("Expected a second output");
         assert_eq!(second.input, Coin::LOKI);
-        assert_eq!(second.input_amount, to_atomic(Coin::LOKI, 3199.5));
+        assert_eq!(second.input_amount, to_atomic(Coin::LOKI, "3199.5"));
         assert_eq!(second.output, output);
         assert_eq!(second.output_amount, expected_output_amount);
         assert_eq!(second.loki_fee, 0);

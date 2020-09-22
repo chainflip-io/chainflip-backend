@@ -26,8 +26,8 @@ where
     S: ISideChain,
 {
     let quote = create_fake_stake_quote(
-        LokiAmount::from_decimal(500.0),
-        GenericCoinAmount::from_decimal(Coin::ETH, 1.0),
+        LokiAmount::from_decimal_string("500"),
+        GenericCoinAmount::from_decimal_string(Coin::ETH, "1.0"),
     );
 
     let witness = create_fake_witness(&quote, quote.loki_amount, Coin::LOKI);

@@ -1,6 +1,7 @@
 use crate::{
     common::{api::ResponseError, Coin, Timestamp, WalletAddress},
     transactions::QuoteTx,
+    utils::price,
     vault::{processor::utils::get_swap_expire_timestamp, transactions::TransactionProvider},
 };
 use reqwest::StatusCode;
@@ -79,13 +80,13 @@ pub async fn post_quote<T: TransactionProvider>(
     }
 
     // Calculate the output amount
-    let estimated_output_amount = provider
-        .get_output_amount(input_coin, input_amount, output_coin)
-        .map(|calculation| {
-            let detail = calculation.second.unwrap_or(calculation.first);
-            detail.output_amount
-        })
-        .unwrap_or(0);
+    let estimated_output_amount =
+        price::get_output(&(*provider), input_coin, input_amount, output_coin)
+            .map(|calculation| {
+                let detail = calculation.second.unwrap_or(calculation.first);
+                detail.output_amount
+            })
+            .unwrap_or(0);
     if estimated_output_amount == 0 {
         return Err(bad_request("Not enough liquidity"));
     }

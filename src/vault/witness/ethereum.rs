@@ -1,4 +1,5 @@
 use crate::{
+    common::Timestamp,
     common::{store::KeyValueStore, Coin, WalletAddress},
     side_chain::SideChainTx,
     transactions::WitnessTx,
@@ -99,16 +100,16 @@ where
 
                     debug!("Publishing witness transaction for quote: {:?}", &quote);
 
-                    let tx = WitnessTx {
-                        id: Uuid::new_v4(),
-                        quote_id: quote.id,
-                        transaction_id: transaction.hash.to_string(),
-                        transaction_block_number: transaction.block_number,
-                        transaction_index: transaction.index,
-                        amount: transaction.value,
-                        coin_type: Coin::ETH,
-                        sender: Some(transaction.from.into()),
-                    };
+                    let tx = WitnessTx::new(
+                        Timestamp::now(),
+                        quote.id,
+                        transaction.hash.to_string(),
+                        transaction.block_number,
+                        transaction.index,
+                        transaction.value,
+                        Coin::ETH,
+                        Some(transaction.from.into()),
+                    );
 
                     witness_txs.push(tx);
                 }
