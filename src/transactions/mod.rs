@@ -297,3 +297,55 @@ impl OutputTx {
         })
     }
 }
+
+/// A transaction which indicates that we sent to the main chain.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub struct OutputSentTx {
+    /// A unique identifier
+    pub id: Uuid,
+    /// The time when the transaction was made
+    pub timestamp: Timestamp,
+    /// The output transactions that were sent
+    pub output_txs: Vec<Uuid>,
+    /// The output coin
+    pub coin: Coin,
+    /// The receiving address the output
+    pub address: WalletAddress,
+    /// The amount that we sent
+    pub amount: u128,
+    /// The fee that was taken
+    pub fee: u128,
+    /// The output transaction id or hash
+    pub transaction_id: String,
+}
+
+impl OutputSentTx {
+    /// Construct from fields
+    pub fn new(
+        timestamp: Timestamp,
+        output_txs: Vec<Uuid>,
+        coin: Coin,
+        address: WalletAddress,
+        amount: u128,
+        fee: u128,
+        transaction_id: String,
+    ) -> Result<Self, &'static str> {
+        if output_txs.is_empty() {
+            return Err("Cannot create an OutputSentTx with empty output transactions");
+        }
+        if validate_address(coin, &address.0).is_err() {
+            return Err("Invalid output address");
+        }
+
+        Ok(OutputSentTx {
+            id: Uuid::new_v4(),
+            timestamp,
+            output_txs,
+            coin,
+            address,
+            amount,
+            fee,
+            transaction_id,
+        })
+    }
+}

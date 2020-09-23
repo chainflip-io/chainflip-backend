@@ -18,6 +18,9 @@ pub mod utils;
 /// Swap processing
 mod swap;
 
+/// Output processing
+mod output;
+
 /// Component that matches witness transactions with quotes and processes them
 pub struct SideChainProcessor<T, KVS>
 where

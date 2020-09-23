@@ -8,6 +8,7 @@ use crate::{
         LokiAmount,
     },
     side_chain::{ISideChain, SideChainTx},
+    transactions::OutputSentTx,
     transactions::OutputTx,
     transactions::{PoolChangeTx, QuoteTx, StakeQuoteTx, StakeTx, UnstakeRequestTx, WitnessTx},
 };
@@ -219,6 +220,18 @@ impl MemoryState {
 
         self.output_txs.push(wrapper);
     }
+
+    fn process_output_sent_tx(&mut self, tx: OutputSentTx) {
+        // Find output txs and mark them as fulfilled
+        let outputs = self
+            .output_txs
+            .iter_mut()
+            .filter(|output| tx.output_txs.contains(&output.inner.id));
+
+        for output in outputs {
+            output.fulfilled = true;
+        }
+    }
 }
 
 impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
@@ -258,6 +271,7 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
                     SideChainTx::StakeTx(tx) => self.state.process_stake_tx(tx),
                     SideChainTx::OutputTx(tx) => self.state.process_output_tx(tx),
                     SideChainTx::UnstakeRequestTx(tx) => self.state.process_unstake_request_tx(tx),
+                    SideChainTx::OutputSentTx(tx) => self.state.process_output_sent_tx(tx),
                 }
             }
             self.state.next_block_idx += 1;
