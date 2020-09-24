@@ -12,3 +12,6 @@ mod witness;
 
 #[cfg(test)]
 mod processor;
+
+#[cfg(test)]
+mod eth_web3_client;

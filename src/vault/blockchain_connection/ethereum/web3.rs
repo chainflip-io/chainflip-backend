@@ -5,7 +5,6 @@ use crate::{
 };
 use async_trait::async_trait;
 use ethereum_tx_sign::RawTransaction;
-use hdwallet::secp256k1::PublicKey;
 use std::convert::TryFrom;
 use web3::{
     transports,
@@ -144,7 +143,7 @@ impl EthereumClient for Web3Client {
         let nonce: U256 = match self
             .web3
             .eth()
-            .transaction_count(our_address.into(), None)
+            .transaction_count(our_address.into(), Some(BlockNumber::Pending))
             .await
         {
             Ok(value) => value,
@@ -152,7 +151,7 @@ impl EthereumClient for Web3Client {
         };
 
         let raw_tx = RawTransaction {
-            nonce,
+            nonce: nonce,
             to: Some(tx.to.into()),
             value: U256::from(tx.amount.to_atomic()),
             gas_price: U256::from(tx.gas_price),
@@ -168,7 +167,7 @@ impl EthereumClient for Web3Client {
         let signed_tx = raw_tx.sign(&our_secret, &chain_id);
         match self.web3.eth().send_raw_transaction(signed_tx.into()).await {
             Ok(hash) => Ok(hash.into()),
-            Err(err) => return Err(format!("{}", err)),
+            Err(err) => return Err(format!("Tx: {:?}. {}", raw_tx, err)),
         }
     }
 }

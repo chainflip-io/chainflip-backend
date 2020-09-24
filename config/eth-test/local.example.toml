@@ -1,0 +1,3 @@
+provider = "https://ropsten.infura.io/v3/<key>"
+sender_private_key = ""
+receiving_address = ""
