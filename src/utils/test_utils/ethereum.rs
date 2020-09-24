@@ -1,5 +1,7 @@
-use crate::common::ethereum::Transaction;
-use crate::vault::blockchain_connection::ethereum::EthereumClient;
+use crate::vault::blockchain_connection::ethereum::{EstimateResult, EthereumClient};
+use crate::{
+    common::ethereum::Transaction, vault::blockchain_connection::ethereum::EstimateRequest,
+};
 use async_trait::async_trait;
 use std::{collections::VecDeque, sync::Mutex};
 
@@ -30,5 +32,9 @@ impl EthereumClient for TestEthereumClient {
 
     async fn get_transactions(&self, _block_number: u64) -> Option<Vec<Transaction>> {
         self.blocks.lock().unwrap().pop_front()
+    }
+
+    async fn get_estimated_fee(&self, tx: &EstimateRequest) -> Result<EstimateResult, String> {
+        Err("Not implemented".to_owned())
     }
 }

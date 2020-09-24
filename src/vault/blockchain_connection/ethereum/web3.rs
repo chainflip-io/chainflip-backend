@@ -1,13 +1,15 @@
-use super::EthereumClient;
-use crate::common::ethereum;
+use super::{EstimateRequest, EstimateResult, EthereumClient};
+use crate::common::{coins::CoinAmount, ethereum, Coin};
 use async_trait::async_trait;
+use std::convert::TryFrom;
 use web3::{
     transports,
-    types::{self, Block, BlockId, BlockNumber, Transaction, U64},
+    types::{self, Block, BlockId, BlockNumber, CallRequest, Transaction, U256, U64},
     Web3,
 };
 
 /// A Web3 ethereum client
+#[derive(Debug, Clone)]
 pub struct Web3Client {
     web3: Web3<transports::Http>,
 }
@@ -68,17 +70,81 @@ impl EthereumClient for Web3Client {
 
         None
     }
-}
 
-impl Into<ethereum::Hash> for types::H256 {
-    fn into(self) -> ethereum::Hash {
-        ethereum::Hash(self.to_fixed_bytes())
+    async fn get_estimated_fee(&self, tx: &EstimateRequest) -> Result<EstimateResult, String> {
+        if tx.amount.coin_type() != Coin::ETH {
+            return Err(format!("Cannot get estimate for {}", tx.amount.coin_type()));
+        }
+
+        let gas_price: U256 = match self.web3.eth().gas_price().await {
+            Ok(result) => result,
+            Err(error) => {
+                debug!("[Web3] Failed to get gas price for tx: {:?}", tx);
+                return Err(format!("Failed to fetch gas price: {}", error));
+            }
+        };
+
+        let gas_limit: U256 = match self
+            .web3
+            .eth()
+            .estimate_gas(
+                CallRequest {
+                    from: Some(tx.from.into()),
+                    to: Some(tx.to.into()),
+                    gas: None,
+                    gas_price: Some(gas_price),
+                    value: Some(tx.amount.to_atomic().into()),
+                    data: None,
+                },
+                None,
+            )
+            .await
+        {
+            Ok(result) => result,
+            Err(error) => {
+                debug!("[Web3] Failed to get estimated gas for tx: {:?}", tx);
+                return Err(format!("Failed to fetch gas limit: {}", error));
+            }
+        };
+
+        let gas_price = match u128::try_from(gas_price) {
+            Ok(price) => price,
+            Err(_) => return Err("Gas price is over U128::MAX".to_owned()),
+        };
+
+        let gas_limit = match u128::try_from(gas_limit) {
+            Ok(limit) => limit,
+            Err(_) => return Err("Gas limit is over U128::MAX".to_owned()),
+        };
+
+        Ok(EstimateResult {
+            gas_price,
+            gas_limit,
+        })
     }
 }
 
-impl Into<ethereum::Address> for types::H160 {
-    fn into(self) -> ethereum::Address {
-        ethereum::Address(self.to_fixed_bytes())
+impl From<ethereum::Hash> for types::H256 {
+    fn from(hash: ethereum::Hash) -> Self {
+        hash.0.into()
+    }
+}
+
+impl From<ethereum::Address> for types::H160 {
+    fn from(address: ethereum::Address) -> Self {
+        address.0.into()
+    }
+}
+
+impl From<types::H256> for ethereum::Hash {
+    fn from(hash: types::H256) -> Self {
+        ethereum::Hash(hash.to_fixed_bytes())
+    }
+}
+
+impl From<types::H160> for ethereum::Address {
+    fn from(address: types::H160) -> Self {
+        ethereum::Address(address.to_fixed_bytes())
     }
 }
 

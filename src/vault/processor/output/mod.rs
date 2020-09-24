@@ -2,7 +2,6 @@ use itertools::Itertools;
 
 use crate::{
     common::Coin, side_chain::SideChainTx, transactions::OutputTx,
-    vault::blockchain_connection::ethereum::EthereumClient,
     vault::transactions::memory_provider::FulfilledTxWrapper,
     vault::transactions::TransactionProvider,
 };
@@ -14,13 +13,13 @@ use coin_processor::CoinProcessor;
 pub use coin_processor::OutputCoinProcessor;
 
 /// Process all pending outputs
-pub fn process_outputs<T: TransactionProvider, E: EthereumClient>(
+pub async fn process_outputs<T: TransactionProvider + Sync, C: CoinProcessor>(
     provider: &mut T,
-    coin_processor: &OutputCoinProcessor<E>,
+    coin_processor: &C,
 ) {
     provider.sync();
 
-    process(provider, coin_processor);
+    process(provider, coin_processor).await;
 }
 
 fn get_grouped(outputs: &[FulfilledTxWrapper<OutputTx>]) -> Vec<(Coin, Vec<OutputTx>)> {
@@ -35,13 +34,16 @@ fn get_grouped(outputs: &[FulfilledTxWrapper<OutputTx>]) -> Vec<(Coin, Vec<Outpu
         .collect()
 }
 
-fn process<T: TransactionProvider, C: CoinProcessor>(provider: &mut T, coin_processor: &C) {
+async fn process<T: TransactionProvider + Sync, C: CoinProcessor>(
+    provider: &mut T,
+    coin_processor: &C,
+) {
     // Get outputs and group them by their coin types
     let outputs = provider.get_output_txs();
     let groups = get_grouped(outputs);
 
     for (coin, outputs) in groups {
-        let sent_txs = coin_processor.process(coin, &outputs);
+        let sent_txs = coin_processor.process(provider, coin, &outputs).await;
         if sent_txs.len() > 0 {
             let txs = sent_txs.into_iter().map_into::<SideChainTx>().collect_vec();
             provider.add_transactions(txs).unwrap()
@@ -65,6 +67,7 @@ mod test {
     };
 
     use super::*;
+    use async_trait::async_trait;
 
     struct TestCoinProcessor {
         map: HashMap<Coin, Vec<OutputSentTx>>,
@@ -82,8 +85,14 @@ mod test {
         }
     }
 
+    #[async_trait]
     impl CoinProcessor for TestCoinProcessor {
-        fn process(&self, coin: Coin, _outputs: &[OutputTx]) -> Vec<OutputSentTx> {
+        async fn process<T: TransactionProvider + Sync>(
+            &self,
+            provider: &T,
+            coin: Coin,
+            outputs: &[OutputTx],
+        ) -> Vec<OutputSentTx> {
             self.map.get(&coin).cloned().unwrap_or(vec![])
         }
     }
@@ -136,8 +145,8 @@ mod test {
         );
     }
 
-    #[test]
-    fn process_stores_output_sent_txs() {
+    #[tokio::test]
+    async fn process_stores_output_sent_txs() {
         let mut chain = MemorySideChain::new();
         let output_tx = get_output_tx(Coin::LOKI);
         chain.add_block(vec![output_tx.clone().into()]).unwrap();
@@ -165,15 +174,15 @@ mod test {
         let mut coin_processor = TestCoinProcessor::new();
         coin_processor.set_txs(Coin::LOKI, vec![output_sent_tx]);
 
-        process(&mut provider, &coin_processor);
+        process(&mut provider, &coin_processor).await;
 
         assert_eq!(provider.get_output_txs().len(), 1);
         let current_output_tx = provider.get_output_txs().first().unwrap();
         assert_eq!(current_output_tx.fulfilled, true);
     }
 
-    #[test]
-    fn process_with_no_sent_output_tx() {
+    #[tokio::test]
+    async fn process_with_no_sent_output_tx() {
         let mut chain = MemorySideChain::new();
         let output_tx = get_output_tx(Coin::LOKI);
         chain.add_block(vec![output_tx.clone().into()]).unwrap();
@@ -190,7 +199,7 @@ mod test {
         let mut coin_processor = TestCoinProcessor::new();
         coin_processor.set_txs(Coin::LOKI, vec![]);
 
-        process(&mut provider, &coin_processor);
+        process(&mut provider, &coin_processor).await;
 
         assert_eq!(provider.get_output_txs().len(), 1);
         let current_output_tx = provider.get_output_txs().first().unwrap();

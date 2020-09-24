@@ -10,6 +10,7 @@ mod raw_key;
 pub use raw_key::RawKey;
 
 /// BIP44 supported coin types
+#[derive(Debug, Copy, Clone)]
 pub enum CoinType {
     /// Bitcoin
     BTC,

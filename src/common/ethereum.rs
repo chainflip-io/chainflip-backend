@@ -6,7 +6,7 @@ use std::{fmt::Display, str::FromStr};
 use tiny_keccak::{Hasher, Keccak};
 
 /// A structure for etherum hashes
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Hash(pub [u8; 32]);
 
 impl Display for Hash {
@@ -16,7 +16,7 @@ impl Display for Hash {
 }
 
 /// A structure for ethereum address
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Address(pub [u8; 20]);
 
 impl Address {
