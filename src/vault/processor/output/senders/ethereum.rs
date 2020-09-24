@@ -10,7 +10,7 @@ use crate::{
     common::coins::GenericCoinAmount,
     common::ethereum::Address,
     common::Coin,
-    common::WalletAddress,
+    common::Timestamp,
     transactions::OutputSentTx,
     transactions::OutputTx,
     utils::{
@@ -19,7 +19,8 @@ use crate::{
     },
     vault::{
         blockchain_connection::ethereum::EstimateRequest,
-        blockchain_connection::ethereum::EthereumClient, transactions::TransactionProvider,
+        blockchain_connection::ethereum::EthereumClient,
+        blockchain_connection::ethereum::SendTransaction, transactions::TransactionProvider,
     },
 };
 
@@ -44,7 +45,7 @@ impl<E: EthereumClient> EthOutputSender<E> {
         }
     }
 
-    fn group_outputs<'a>(&self, outputs: &'a [OutputTx]) -> Vec<(Uuid, Vec<&'a OutputTx>)> {
+    fn group_outputs_by_quote(&self, outputs: &[OutputTx]) -> Vec<(Uuid, Vec<OutputTx>)> {
         // Make sure we only have valid outputs and group them by the quote
         let groups = outputs
             .iter()
@@ -53,13 +54,39 @@ impl<E: EthereumClient> EthOutputSender<E> {
 
         groups
             .into_iter()
-            .map(|(coin, group)| (coin, group.collect_vec()))
+            .map(|(quote, group)| (quote, group.cloned().collect_vec()))
             .collect()
+    }
+
+    /// Groups outputs where the total amount is less than u128::MAX
+    fn group_outputs_by_sending_amounts<'a>(
+        &self,
+        outputs: &'a [OutputTx],
+    ) -> Vec<(u128, Vec<&'a OutputTx>)> {
+        let mut groups: Vec<(u128, Vec<&OutputTx>)> = vec![];
+        let mut current_amount: u128 = 0;
+        let mut current_outputs: Vec<&OutputTx> = vec![];
+        for output in outputs {
+            match current_amount.checked_add(output.amount) {
+                Some(amount) => {
+                    current_amount = amount;
+                    current_outputs.push(output);
+                }
+                None => {
+                    let outputs = current_outputs;
+                    groups.push((current_amount, outputs));
+                    current_amount = 0;
+                    current_outputs = vec![];
+                }
+            }
+        }
+
+        groups
     }
 
     async fn send_outputs(
         &self,
-        outputs: &[&OutputTx],
+        outputs: &[OutputTx],
         key_pair: &KeyPair,
     ) -> Result<Vec<OutputSentTx>, String> {
         if outputs.is_empty() {
@@ -81,29 +108,74 @@ impl<E: EthereumClient> EthOutputSender<E> {
             }
         };
 
-        // TODO: Split outputs into chunks of u128
+        // Split outputs into chunks of u128
+        let groups = self.group_outputs_by_sending_amounts(outputs);
 
-        let request = EstimateRequest {
-            from: Address::from_public_key(key_pair.public_key),
-            to: address,
-            amount: GenericCoinAmount::from_atomic(Coin::ETH, 100),
-        };
-        let estimate = match self.client.get_estimated_fee(&request).await {
-            Ok(result) => result,
-            Err(err) => {
-                return Err(format!("Failed to get estimate: {}", err));
-            }
-        };
+        let mut sent_txs: Vec<OutputSentTx> = vec![];
 
-        let fee = U256::from(estimate.gas_limit).saturating_mul(estimate.gas_price.into());
-        let fee = match u128::try_from(fee) {
-            Ok(fee) => fee,
-            Err(_) => {
-                return Err("Eth Fee is higher than U128::MAX".to_owned());
-            }
-        };
+        for (total_amount, outputs) in groups {
+            let request = EstimateRequest {
+                from: Address::from(key_pair.public_key),
+                to: address,
+                amount: GenericCoinAmount::from_atomic(Coin::ETH, total_amount),
+            };
+            let estimate = match self.client.get_estimated_fee(&request).await {
+                Ok(result) => result,
+                Err(err) => {
+                    error!("Failed to get estimate: {}", err);
+                    continue;
+                }
+            };
 
-        Err("not finished".to_owned())
+            let fee = U256::from(estimate.gas_limit).saturating_mul(estimate.gas_price.into());
+            let fee = match u128::try_from(fee) {
+                Ok(fee) if fee > 0 && fee < total_amount => fee,
+                _ => {
+                    error!("Eth Fee is higher than U128::MAX or total amount");
+                    continue;
+                }
+            };
+
+            let new_amount = total_amount - fee;
+
+            // Send!
+            let transaction = SendTransaction {
+                from: key_pair.clone(),
+                to: address,
+                amount: GenericCoinAmount::from_atomic(Coin::ETH, new_amount),
+                gas_limit: estimate.gas_limit,
+                gas_price: estimate.gas_price,
+            };
+
+            let tx_hash = match self.client.send(&transaction).await {
+                Ok(hash) => hash,
+                Err(err) => {
+                    error!("Failed to send eth transaction: {}", err);
+                    continue;
+                }
+            };
+
+            let uuids = outputs.iter().map(|tx| tx.id).collect_vec();
+
+            match OutputSentTx::new(
+                Timestamp::now(),
+                uuids,
+                Coin::ETH,
+                address.into(),
+                new_amount,
+                fee,
+                tx_hash.to_string(),
+            ) {
+                Ok(tx) => sent_txs.push(tx),
+                // Panic here because we sent money but didn't record it into the system
+                Err(err) => panic!(
+                    "Failed to create output tx for {:?} with hash {}: {}",
+                    outputs, tx_hash, err
+                ),
+            };
+        }
+
+        Ok(sent_txs)
     }
 }
 
@@ -125,7 +197,7 @@ impl<E: EthereumClient + Sync + Send> OutputSender for EthOutputSender<E> {
                 }
             };
 
-        let grouped = self.group_outputs(outputs);
+        let grouped = self.group_outputs_by_quote(outputs);
 
         let mut sent_txs: Vec<OutputSentTx> = vec![];
 

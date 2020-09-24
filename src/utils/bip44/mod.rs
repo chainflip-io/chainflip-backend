@@ -42,7 +42,7 @@ impl TryFrom<Coin> for CoinType {
 }
 
 /// A representation of a Keypair
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct KeyPair {
     /// The ECDSA public key
     pub public_key: PublicKey,

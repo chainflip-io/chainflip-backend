@@ -1,6 +1,11 @@
-use super::{EstimateRequest, EstimateResult, EthereumClient};
-use crate::common::{coins::CoinAmount, ethereum, Coin};
+use super::{EstimateRequest, EstimateResult, EthereumClient, SendTransaction};
+use crate::{
+    common::{coins::CoinAmount, ethereum, Coin},
+    utils::clone_into_array,
+};
 use async_trait::async_trait;
+use ethereum_tx_sign::RawTransaction;
+use hdwallet::secp256k1::PublicKey;
 use std::convert::TryFrom;
 use web3::{
     transports,
@@ -121,6 +126,50 @@ impl EthereumClient for Web3Client {
             gas_price,
             gas_limit,
         })
+    }
+
+    async fn send(&self, tx: &SendTransaction) -> Result<ethereum::Hash, String> {
+        if tx.amount.coin_type() != Coin::ETH {
+            return Err(format!("Cannot send {}", tx.amount.coin_type()));
+        }
+
+        let chain_id: U256 = match self.web3.eth().chain_id().await {
+            Ok(value) => value,
+            Err(err) => return Err(format!("{}", err)),
+        };
+
+        let chain_id = u128::try_from(chain_id).map_err(|_| "Failed to get chain id".to_owned())?;
+        let our_address = ethereum::Address::from(tx.from.public_key);
+
+        let nonce: U256 = match self
+            .web3
+            .eth()
+            .transaction_count(our_address.into(), None)
+            .await
+        {
+            Ok(value) => value,
+            Err(err) => return Err(format!("{}", err)),
+        };
+
+        let raw_tx = RawTransaction {
+            nonce,
+            to: Some(tx.to.into()),
+            value: U256::from(tx.amount.to_atomic()),
+            gas_price: U256::from(tx.gas_price),
+            gas: U256::from(tx.gas_limit),
+            data: Vec::new(),
+        };
+
+        let our_secret = tx.from.private_key.to_string();
+        let our_secret = hex::decode(our_secret).map_err(|_| "Failed to decode secret key")?;
+        let our_secret: [u8; 32] = clone_into_array(&our_secret);
+        let our_secret: types::H256 = our_secret.into();
+
+        let signed_tx = raw_tx.sign(&our_secret, &chain_id);
+        match self.web3.eth().send_raw_transaction(signed_tx.into()).await {
+            Ok(hash) => Ok(hash.into()),
+            Err(err) => return Err(format!("{}", err)),
+        }
     }
 }
 

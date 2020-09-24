@@ -76,7 +76,13 @@ impl FromStr for Address {
     }
 }
 
-impl Address {
+impl From<Address> for WalletAddress {
+    fn from(address: Address) -> Self {
+        WalletAddress::new(&address.to_string())
+    }
+}
+
+impl From<PublicKey> for Address {
     /// Get the ethereum address from a ECDSA public key
     ///
     /// # Example
@@ -87,11 +93,11 @@ impl Address {
     /// use std::str::FromStr;
     ///
     /// let public_key = PublicKey::from_str("034ac1bb1bc5fd7a9b173f6a136a40e4be64841c77d7f66ead444e101e01348127").unwrap();
-    /// let address = Address::from_public_key(public_key);
+    /// let address = Address::from(public_key);
     ///
     /// assert_eq!(address.to_string(), "0x70E7Db0678460C5e53F1FFc9221d1C692111dCc5".to_owned());
     /// ```
-    pub fn from_public_key(public_key: PublicKey) -> Self {
+    fn from(public_key: PublicKey) -> Self {
         let bytes: [u8; 65] = public_key.serialize_uncompressed();
 
         // apply a keccak_256 hash of the public key
@@ -102,12 +108,6 @@ impl Address {
 
         // The last 20 bytes in hex is the ethereum address
         Address(clone_into_array(&result[12..]))
-    }
-}
-
-impl From<Address> for WalletAddress {
-    fn from(address: Address) -> Self {
-        WalletAddress::new(&address.to_string())
     }
 }
 

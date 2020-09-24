@@ -163,6 +163,7 @@ dependencies = [
  "config",
  "crossbeam-channel",
  "env_logger",
+ "ethereum-tx-sign",
  "hdwallet",
  "hex",
  "itertools",
@@ -431,6 +432,22 @@ dependencies = [
  "fixed-hash",
  "impl-rlp",
  "impl-serde",
+ "tiny-keccak 2.0.2",
+]
+
+[[package]]
+name = "ethereum-tx-sign"
+version = "3.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bad75bd5547ae8e8086776ffdff546ac4bf1e20de589ba1dd4a860f69ea21189"
+dependencies = [
+ "ethereum-types",
+ "num-traits 0.2.12",
+ "rlp",
+ "secp256k1",
+ "serde 1.0.114",
+ "serde_derive",
+ "serde_json",
  "tiny-keccak 2.0.2",
 ]
 

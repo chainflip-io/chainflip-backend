@@ -1,4 +1,6 @@
-use crate::vault::blockchain_connection::ethereum::{EstimateResult, EthereumClient};
+use crate::vault::blockchain_connection::ethereum::{
+    EstimateResult, EthereumClient, SendTransaction,
+};
 use crate::{
     common::ethereum::Transaction, vault::blockchain_connection::ethereum::EstimateRequest,
 };
@@ -35,6 +37,11 @@ impl EthereumClient for TestEthereumClient {
     }
 
     async fn get_estimated_fee(&self, tx: &EstimateRequest) -> Result<EstimateResult, String> {
+        Err("Not implemented".to_owned())
+    }
+
+    /// Send a transaction
+    async fn send(&self, tx: &SendTransaction) -> Result<Transaction, String> {
         Err("Not implemented".to_owned())
     }
 }

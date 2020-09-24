@@ -1,5 +1,9 @@
-use crate::common::{coins::GenericCoinAmount, ethereum::Address, ethereum::Transaction};
+use crate::{
+    common::{coins::GenericCoinAmount, ethereum::Address, ethereum::Hash, ethereum::Transaction},
+    utils::bip44::KeyPair,
+};
 use async_trait::async_trait;
+use hdwallet::{secp256k1::SecretKey, ExtendedPrivKey};
 
 /// Web3 client implementation
 pub mod web3;
@@ -24,6 +28,21 @@ pub struct EstimateRequest {
     pub amount: GenericCoinAmount,
 }
 
+/// The send transaction
+#[derive(Debug)]
+pub struct SendTransaction {
+    /// The sending wallet
+    pub from: KeyPair,
+    /// The address that is receiving
+    pub to: Address,
+    /// The amount being sent
+    pub amount: GenericCoinAmount,
+    /// The gas limit
+    pub gas_limit: u128,
+    /// The gas price
+    pub gas_price: u128,
+}
+
 /// A trait describing an ethereum client
 #[async_trait]
 pub trait EthereumClient {
@@ -36,4 +55,7 @@ pub trait EthereumClient {
 
     /// Get the estimated fee for the given transaction
     async fn get_estimated_fee(&self, tx: &EstimateRequest) -> Result<EstimateResult, String>;
+
+    /// Send a transaction
+    async fn send(&self, tx: &SendTransaction) -> Result<Hash, String>;
 }
