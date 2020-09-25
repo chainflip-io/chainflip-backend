@@ -81,6 +81,9 @@ async fn test_web3_send() {
     let to = Address::from_str(&config.receiving_address).unwrap();
 
     let total_amount = GenericCoinAmount::from_decimal_string(Coin::ETH, "0.005");
+
+    println!("Total amount to send: {}", total_amount.to_atomic());
+
     let request = EstimateRequest {
         from: Address::from(key_pair.public_key),
         to,
@@ -88,11 +91,17 @@ async fn test_web3_send() {
     };
 
     let estimate = web3.get_estimated_fee(&request).await.unwrap();
+    println!("{:?}", estimate);
+
     let fee = U256::from(estimate.gas_limit)
         .saturating_mul(estimate.gas_price.into())
         .as_u128();
 
+    println!("Fee: {}", fee);
+
     let new_amount = total_amount.to_atomic() - fee;
+
+    println!("Amount to send: {}", new_amount);
 
     let transaction = SendTransaction {
         from: key_pair,
