@@ -217,9 +217,10 @@ mod test {
     async fn returns_transactions() {
         let client = Web3Client::url(WEB3_URL).expect("Failed to create web3 client");
 
+        let test_block_number = 10739404;
         // https://etherscan.io/block/10739404
         let transactions = client
-            .get_transactions(10739404)
+            .get_transactions(test_block_number)
             .await
             .expect("Expected to get valid transactions");
 
@@ -231,7 +232,7 @@ mod test {
             .expect("Expected to get a valid transaction");
 
         assert_eq!(first.index, 0);
-        assert_eq!(first.block_number, 10739404);
+        assert_eq!(first.block_number, test_block_number);
         assert_eq!(
             &first.hash.to_string(),
             "0x9fa1d1918e486e36f0066b76e812a6c8f8a2948d3055716e6e8c820f18e9e575"

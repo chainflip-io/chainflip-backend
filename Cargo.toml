@@ -9,12 +9,15 @@ version = "0.1.0"
 [dependencies]
 async-trait = "*"
 base58-monero = "*"
+bitcoin = "0.23.0"
+bitcoincore-rpc = "0.11.0"
 bs58 = "0.3.1"
 clap = "^2"
 config = "^0.10.1"
 crossbeam-channel = "^0.4"
 env_logger = "*"
 ethereum-tx-sign = "*"
+futures = "0.3.5"
 hdwallet = "0.2.5"
 hex = "*"
 itertools = "*"
@@ -34,9 +37,8 @@ warp = { version = "*", features = ["tls"] }
 web3 = { version = "^0.13.0", default-features = false, features = ["http-tls"] }
 
 [dependencies.rusqlite]
-version = "0.21.0"
 features = ["bundled"]
-
+version = "0.21.0"
 
 [lib]
 name = "blockswap"
@@ -45,7 +47,6 @@ path = "src/lib.rs"
 [[bin]]
 name = "vault"
 path = "src/bin/vault/main.rs"
-
 
 [[bin]]
 name = "quoter"
