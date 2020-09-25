@@ -1,41 +1,43 @@
 [package]
-name = "blockswap"
-version = "0.1.0"
 authors = ["Maxim Shishmarev <maxim@loki.network>"]
 edition = "2018"
+name = "blockswap"
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+async-trait = "*"
+base58-monero = "*"
+bitcoin = "0.23.0"
+bitcoincore-rpc = "0.11.0"
+bs58 = "0.3.1"
 clap = "^2"
+config = "^0.10.1"
+crossbeam-channel = "^0.4"
+env_logger = "*"
+futures = "0.3.5"
+hdwallet = "0.2.5"
+hex = "*"
+itertools = "*"
+lazy_static = "*"
 log = "0.4.0"
 log4rs = "*"
-tokio = { version = "*", features = ["full"] }
-warp = { version = "*", features = ["tls"] }
-crossbeam-channel = "^0.4"
-serde = { version = "1.0", features = ["derive"]}
-serde_json = "*"
 rand = "*"
-lazy_static = "*"
-base58-monero = "*"
-bs58 = "0.3.1"
-hdwallet = "0.2.5"
-reqwest= { version = "^0.10", features = ["json"]}
+regex = "*"
+reqwest = {version = "^0.10", features = ["json"]}
+serde = {version = "1.0", features = ["derive"]}
+serde_json = "*"
 tiny-keccak = "*"
-hex = "*"
-async-trait="*"
-regex="*"
-web3 = { version = "^0.13.0", default-features = false, features = ["http-tls"] }
-uuid = { version = "0.8", features = ["serde", "v4"] }
-itertools="*"
-uint="^0.8.5"
-env_logger="*"
-config="^0.10.1"
+tokio = {version = "*", features = ["full"]}
+uint = "^0.8.5"
+uuid = {version = "0.8", features = ["serde", "v4"]}
+warp = {version = "*", features = ["tls"]}
+web3 = {version = "^0.13.0", default-features = false, features = ["http-tls"]}
 
 [dependencies.rusqlite]
-version = "0.21.0"
 features = ["bundled"]
-
+version = "0.21.0"
 
 [lib]
 name = "blockswap"
@@ -45,7 +47,6 @@ path = "src/lib.rs"
 name = "vault"
 path = "src/bin/vault/main.rs"
 
-
 [[bin]]
 name = "quoter"
 path = "src/bin/quoter/main.rs"
@@ -53,4 +54,3 @@ path = "src/bin/quoter/main.rs"
 [[bin]]
 name = "loki-playground"
 path = "src/bin/loki.rs"
-
