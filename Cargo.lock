@@ -153,38 +153,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "blockswap"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "base58-monero",
- "bs58",
- "clap",
- "config",
- "crossbeam-channel",
- "env_logger",
- "ethereum-tx-sign",
- "hdwallet",
- "hex",
- "itertools",
- "lazy_static",
- "log 0.4.11",
- "log4rs",
- "rand 0.7.3",
- "regex",
- "reqwest",
- "rusqlite",
- "serde 1.0.114",
- "serde_json",
- "tiny-keccak 2.0.2",
- "tokio",
- "uint",
- "uuid",
- "warp",
- "web3",
-]
-
-[[package]]
 name = "bs58"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -241,6 +209,38 @@ name = "cfg-if"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
+
+[[package]]
+name = "chainflip"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "base58-monero",
+ "bs58",
+ "clap",
+ "config",
+ "crossbeam-channel",
+ "env_logger",
+ "ethereum-tx-sign",
+ "hdwallet",
+ "hex",
+ "itertools",
+ "lazy_static",
+ "log 0.4.11",
+ "log4rs",
+ "rand 0.6.5",
+ "regex",
+ "reqwest",
+ "rusqlite",
+ "serde 1.0.114",
+ "serde_json",
+ "tiny-keccak 2.0.2",
+ "tokio",
+ "uint",
+ "uuid",
+ "warp",
+ "web3",
+]
 
 [[package]]
 name = "chrono"

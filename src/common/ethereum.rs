@@ -15,6 +15,25 @@ impl Display for Hash {
     }
 }
 
+impl FromStr for Hash {
+    type Err = &'static str;
+
+    fn from_str(string: &str) -> Result<Self, Self::Err> {
+        const INVALID_HASH: &str = "Invalid ethereum hash";
+        lazy_static! {
+            static ref HASH_REGEX: Regex = Regex::new(r"^(0x)?[a-fA-F0-9]{64}$").unwrap();
+        }
+
+        if !HASH_REGEX.is_match(string) {
+            return Err(INVALID_HASH);
+        }
+
+        let stripped = string.trim_start_matches("0x").to_lowercase();
+        let bytes = hex::decode(stripped).map_err(|_| INVALID_HASH)?;
+        Ok(Hash(clone_into_array(&bytes)))
+    }
+}
+
 /// A structure for ethereum address
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Address(pub [u8; 20]);

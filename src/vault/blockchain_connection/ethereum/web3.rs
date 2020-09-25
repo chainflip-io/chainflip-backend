@@ -198,6 +198,11 @@ impl From<types::H160> for ethereum::Address {
 
 #[cfg(test)]
 mod test {
+    use ethereum::Address;
+    use std::str::FromStr;
+
+    use crate::common::coins::GenericCoinAmount;
+
     use super::*;
 
     static WEB3_URL: &str = "https://api.myetherwallet.com/eth";
@@ -240,5 +245,19 @@ mod test {
             "0xdb50dBa4f9A046bfBE3D0D80E42308108A8Dc70a"
         );
         assert_eq!(first.value, 105403140000000000);
+    }
+
+    #[tokio::test]
+    async fn returns_estimate() {
+        let client = Web3Client::url(WEB3_URL).expect("Failed to create web3 client");
+        let request = EstimateRequest {
+            from: Address::from_str("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2").unwrap(), // wEth address
+            to: Address::from_str("0xdb50dBa4f9A046bfBE3D0D80E42308108A8Dc70a").unwrap(),
+            amount: GenericCoinAmount::from_decimal_string(Coin::ETH, "1"),
+        };
+
+        let estimate = client.get_estimated_fee(&request).await.unwrap();
+        assert_ne!(estimate.gas_limit, 0);
+        assert_ne!(estimate.gas_price, 0);
     }
 }

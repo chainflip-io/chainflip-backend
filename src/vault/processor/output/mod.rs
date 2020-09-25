@@ -22,7 +22,7 @@ pub async fn process_outputs<T: TransactionProvider + Sync, C: CoinProcessor>(
     process(provider, coin_processor).await;
 }
 
-fn get_grouped(outputs: &[FulfilledTxWrapper<OutputTx>]) -> Vec<(Coin, Vec<OutputTx>)> {
+fn group_by_coins(outputs: &[FulfilledTxWrapper<OutputTx>]) -> Vec<(Coin, Vec<OutputTx>)> {
     let groups = outputs
         .iter()
         .filter(|tx| !tx.fulfilled)
@@ -40,7 +40,7 @@ async fn process<T: TransactionProvider + Sync, C: CoinProcessor>(
 ) {
     // Get outputs and group them by their coin types
     let outputs = provider.get_output_txs();
-    let groups = get_grouped(outputs);
+    let groups = group_by_coins(outputs);
 
     for (coin, outputs) in groups {
         let sent_txs = coin_processor.process(provider, coin, &outputs).await;
@@ -63,6 +63,7 @@ mod test {
         side_chain::ISideChain,
         side_chain::MemorySideChain,
         transactions::OutputSentTx,
+        utils::test_utils::create_fake_output_tx,
         vault::transactions::MemoryTransactionsProvider,
     };
 
@@ -97,25 +98,12 @@ mod test {
         }
     }
 
-    fn get_output_tx(coin: Coin) -> OutputTx {
-        OutputTx {
-            id: uuid::Uuid::new_v4(),
-            timestamp: Timestamp::now(),
-            quote_tx: uuid::Uuid::new_v4(),
-            witness_txs: vec![],
-            pool_change_txs: vec![],
-            coin,
-            address: WalletAddress::new("address"),
-            amount: 100,
-        }
-    }
-
     #[test]
-    fn groups_outputs_correctly() {
-        let loki_output = get_output_tx(Coin::LOKI);
-        let eth_output = get_output_tx(Coin::ETH);
-        let second_eth_output = get_output_tx(Coin::ETH);
-        let fulfilled_output = get_output_tx(Coin::LOKI);
+    fn groups_outputs_by_coins_correctly() {
+        let loki_output = create_fake_output_tx(Coin::LOKI);
+        let eth_output = create_fake_output_tx(Coin::ETH);
+        let second_eth_output = create_fake_output_tx(Coin::ETH);
+        let fulfilled_output = create_fake_output_tx(Coin::LOKI);
 
         let txs = vec![
             FulfilledTxWrapper {
@@ -135,7 +123,7 @@ mod test {
                 fulfilled: true,
             },
         ];
-        let grouped = get_grouped(&txs);
+        let grouped = group_by_coins(&txs);
         assert_eq!(
             grouped,
             vec![
@@ -148,7 +136,7 @@ mod test {
     #[tokio::test]
     async fn process_stores_output_sent_txs() {
         let mut chain = MemorySideChain::new();
-        let output_tx = get_output_tx(Coin::LOKI);
+        let output_tx = create_fake_output_tx(Coin::LOKI);
         chain.add_block(vec![output_tx.clone().into()]).unwrap();
 
         let chain = Arc::new(Mutex::new(chain));
@@ -184,7 +172,7 @@ mod test {
     #[tokio::test]
     async fn process_with_no_sent_output_tx() {
         let mut chain = MemorySideChain::new();
-        let output_tx = get_output_tx(Coin::LOKI);
+        let output_tx = create_fake_output_tx(Coin::LOKI);
         chain.add_block(vec![output_tx.clone().into()]).unwrap();
 
         let chain = Arc::new(Mutex::new(chain));
