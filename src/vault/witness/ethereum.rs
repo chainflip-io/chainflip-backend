@@ -1,12 +1,11 @@
 use crate::{
     common::Timestamp,
-    common::{store::KeyValueStore, Coin, WalletAddress},
+    common::{store::KeyValueStore, Coin},
     side_chain::SideChainTx,
     transactions::WitnessTx,
     vault::{blockchain_connection::ethereum::EthereumClient, transactions::TransactionProvider},
 };
 use std::sync::{Arc, Mutex};
-use uuid::Uuid;
 
 /// The block that we should start scanning from if we're starting the witness from scratch.
 /// There's no reason to scan from a block before blockswap launch.
@@ -75,6 +74,8 @@ where
     }
 
     async fn poll_next_main_chain(&mut self) {
+        // TODO: Only add witnesses once we have a certain amount of confirmations
+        // To facilitate this we'd have to poll blocks up to current_block - num_of_confirmations
         while let Some(transactions) = self.client.get_transactions(self.next_ethereum_block).await
         {
             let mut provider = self.transaction_provider.lock().unwrap();
@@ -100,6 +101,7 @@ where
 
                     debug!("Publishing witness transaction for quote: {:?}", &quote);
 
+                    // TODO: Only add witness tx if amount > 0
                     let tx = WitnessTx::new(
                         Timestamp::now(),
                         quote.id,
@@ -151,6 +153,7 @@ mod test {
         vault::transactions::MemoryTransactionsProvider,
     };
     use rand::Rng;
+    use uuid::Uuid;
 
     type TestTransactionsProvider = MemoryTransactionsProvider<MemorySideChain>;
 

@@ -10,6 +10,7 @@ mod raw_key;
 pub use raw_key::RawKey;
 
 /// BIP44 supported coin types
+#[derive(Debug, Copy, Clone)]
 pub enum CoinType {
     /// Bitcoin
     BTC,
@@ -41,7 +42,7 @@ impl TryFrom<Coin> for CoinType {
 }
 
 /// A representation of a Keypair
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct KeyPair {
     /// The ECDSA public key
     pub public_key: PublicKey,

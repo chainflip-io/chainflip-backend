@@ -1,6 +1,7 @@
 use crate::{
     common::{Coin, Timestamp, WalletAddress},
     side_chain::{ISideChain, MemorySideChain},
+    transactions::OutputTx,
     transactions::QuoteTx,
     vault::transactions::MemoryTransactionsProvider,
 };
@@ -43,6 +44,26 @@ pub fn create_fake_quote_tx() -> QuoteTx {
         0.0,
     )
     .expect("Expected valid quote")
+}
+
+/// Create a fake output tx
+pub fn create_fake_output_tx(coin: Coin) -> OutputTx {
+    let address= match coin {
+        Coin::LOKI => "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY",
+        Coin::ETH => "0x70e7db0678460c5e53f1ffc9221d1c692111dcc5",
+        _ => "Address"
+    };
+
+    OutputTx {
+        id: uuid::Uuid::new_v4(),
+        timestamp: Timestamp::now(),
+        quote_tx: uuid::Uuid::new_v4(),
+        witness_txs: vec![],
+        pool_change_txs: vec![],
+        coin,
+        address: WalletAddress::new(address),
+        amount: 100,
+    }
 }
 
 /// Creates a new random file name that (if created)

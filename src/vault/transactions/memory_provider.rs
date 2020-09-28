@@ -8,6 +8,7 @@ use crate::{
         LokiAmount,
     },
     side_chain::{ISideChain, SideChainTx},
+    transactions::OutputSentTx,
     transactions::OutputTx,
     transactions::{PoolChangeTx, QuoteTx, StakeQuoteTx, StakeTx, UnstakeRequestTx, WitnessTx},
 };
@@ -17,8 +18,8 @@ use std::{
 };
 
 /// Transaction plus a boolean flag
-#[derive(Debug, Clone)]
-pub struct FulfilledTxWrapper<Q> {
+#[derive(Debug, Clone, PartialEq)]
+pub struct FulfilledTxWrapper<Q: PartialEq> {
     /// The actual transaction
     pub inner: Q,
     /// Whether the transaction has been fulfilled (i.e. there
@@ -26,7 +27,7 @@ pub struct FulfilledTxWrapper<Q> {
     pub fulfilled: bool,
 }
 
-impl<Q> FulfilledTxWrapper<Q> {
+impl<Q: PartialEq> FulfilledTxWrapper<Q> {
     /// Constructor
     pub fn new(inner: Q, fulfilled: bool) -> FulfilledTxWrapper<Q> {
         FulfilledTxWrapper { inner, fulfilled }
@@ -219,6 +220,18 @@ impl MemoryState {
 
         self.output_txs.push(wrapper);
     }
+
+    fn process_output_sent_tx(&mut self, tx: OutputSentTx) {
+        // Find output txs and mark them as fulfilled
+        let outputs = self
+            .output_txs
+            .iter_mut()
+            .filter(|output| tx.output_txs.contains(&output.inner.id));
+
+        for output in outputs {
+            output.fulfilled = true;
+        }
+    }
 }
 
 impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
@@ -258,6 +271,7 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
                     SideChainTx::StakeTx(tx) => self.state.process_stake_tx(tx),
                     SideChainTx::OutputTx(tx) => self.state.process_output_tx(tx),
                     SideChainTx::UnstakeRequestTx(tx) => self.state.process_unstake_request_tx(tx),
+                    SideChainTx::OutputSentTx(tx) => self.state.process_output_sent_tx(tx),
                 }
             }
             self.state.next_block_idx += 1;
@@ -317,7 +331,9 @@ impl<S: ISideChain> LiquidityProvider for MemoryTransactionsProvider<S> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{common::Coin, common::Timestamp, side_chain::MemorySideChain};
+    use crate::{
+        common::Coin, common::Timestamp, common::WalletAddress, side_chain::MemorySideChain,
+    };
     use crate::{transactions::PoolChangeTx, utils::test_utils::create_fake_quote_tx};
 
     fn setup() -> MemoryTransactionsProvider<MemorySideChain> {
@@ -552,5 +568,67 @@ mod test {
 
         assert_eq!(provider.get_quote_txs().first().unwrap().fulfilled, false);
         assert_eq!(provider.get_witness_txs().first().unwrap().used, true);
+    }
+
+    #[test]
+    fn test_provider_fulfills_output_txs_on_output_sent_tx() {
+        let mut provider = setup();
+
+        let output_tx = OutputTx {
+            id: uuid::Uuid::new_v4(),
+            timestamp: Timestamp::now(),
+            quote_tx: uuid::Uuid::new_v4(),
+            witness_txs: vec![],
+            pool_change_txs: vec![],
+            coin: Coin::LOKI,
+            address: WalletAddress::new("address"),
+            amount: 100,
+        };
+
+        let mut another_tx = output_tx.clone();
+        another_tx.id = uuid::Uuid::new_v4();
+
+        provider
+            .side_chain
+            .lock()
+            .unwrap()
+            .add_block(vec![output_tx.clone().into(), another_tx.clone().into()])
+            .unwrap();
+
+        provider.sync();
+
+        let expected = vec![
+            FulfilledTxWrapper::new(output_tx.clone(), false),
+            FulfilledTxWrapper::new(another_tx.clone(), false),
+        ];
+
+        assert_eq!(provider.get_output_txs().to_vec(), expected);
+
+        let output_sent_tx = OutputSentTx {
+            id: uuid::Uuid::new_v4(),
+            timestamp: Timestamp::now(),
+            output_txs: vec![output_tx.id, another_tx.id],
+            coin: Coin::LOKI,
+            address: WalletAddress::new("address"),
+            amount: 100,
+            fee: 100,
+            transaction_id: "".to_owned(),
+        };
+
+        provider
+            .side_chain
+            .lock()
+            .unwrap()
+            .add_block(vec![output_sent_tx.clone().into()])
+            .unwrap();
+
+        provider.sync();
+
+        let expected = vec![
+            FulfilledTxWrapper::new(output_tx.clone(), true),
+            FulfilledTxWrapper::new(another_tx.clone(), true),
+        ];
+
+        assert_eq!(provider.get_output_txs().to_vec(), expected);
     }
 }

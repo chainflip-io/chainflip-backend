@@ -1,7 +1,7 @@
 [package]
 authors = ["Maxim Shishmarev <maxim@loki.network>"]
 edition = "2018"
-name = "blockswap"
+name = "chainflip"
 version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -16,6 +16,7 @@ clap = "^2"
 config = "^0.10.1"
 crossbeam-channel = "^0.4"
 env_logger = "*"
+ethereum-tx-sign = "*"
 futures = "0.3.5"
 hdwallet = "0.2.5"
 hex = "*"
@@ -25,15 +26,15 @@ log = "0.4.0"
 log4rs = "*"
 rand = "*"
 regex = "*"
-reqwest = {version = "^0.10", features = ["json"]}
-serde = {version = "1.0", features = ["derive"]}
+reqwest = { version = "^0.10", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "*"
-tiny-keccak = "*"
-tokio = {version = "*", features = ["full"]}
+tiny-keccak = { version = "^2.0.0", features = ["keccak"] }
+tokio = { version = "*", features = ["full"] }
 uint = "^0.8.5"
-uuid = {version = "0.8", features = ["serde", "v4"]}
-warp = {version = "*", features = ["tls"]}
-web3 = {version = "^0.13.0", default-features = false, features = ["http-tls"]}
+uuid = { version = "0.8", features = ["serde", "v4"] }
+warp = { version = "*", features = ["tls"] }
+web3 = { version = "^0.13.0", default-features = false, features = ["http-tls"] }
 
 [dependencies.rusqlite]
 features = ["bundled"]

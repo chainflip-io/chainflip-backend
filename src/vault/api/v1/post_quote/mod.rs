@@ -63,7 +63,7 @@ fn generate_eth_address(root_key: &str, index: u64) -> Result<String, String> {
 
     let key_pair = bip44::get_key_pair(root_key, bip44::CoinType::ETH, index)?;
 
-    Ok(ethereum::Address::from_public_key(key_pair.public_key).to_string())
+    Ok(ethereum::Address::from(key_pair.public_key).to_string())
 }
 
 /// Request a swap quote
