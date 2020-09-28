@@ -8,8 +8,9 @@ pub fn validate_address(coin: Coin, address: &str) -> Result<(), String> {
         Coin::ETH => ethereum::Address::from_str(address)
             .map(|_| ())
             .map_err(|str| str.to_owned()),
-        // TODO: Add validation here
-        Coin::BTC => Ok(()),
+        Coin::BTC => bitcoin::Address::from_str(address)
+            .map(|_| ())
+            .map_err(|err| err.to_string()),
         x @ _ => {
             warn!("Address validation missing for {}", x);
             Err("No address validation found".to_owned())
@@ -49,11 +50,27 @@ mod test {
         let loki_address = "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY";
         let eth_address = "0x70e7db0678460c5e53f1ffc9221d1c692111dcc5";
 
+        // loki
         assert!(validate_address(Coin::LOKI, loki_address).is_ok());
         assert!(validate_address(Coin::LOKI, invalid).is_err());
 
+        // eth
         assert!(validate_address(Coin::ETH, eth_address).is_ok());
         assert!(validate_address(Coin::ETH, invalid).is_err());
+
+        // BTC - p2pkh
+        assert!(&validate_address(Coin::BTC, "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2").is_ok());
+        assert!(&validate_address(Coin::BTC, "1certainlyaninvalidaddress").is_err());
+
+        // BTC - p2sh
+        assert!(&validate_address(Coin::BTC, "3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy").is_ok());
+        assert!(&validate_address(Coin::BTC, "3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLb").is_err());
+
+        // BTC - bech32
+        assert!(&validate_address(Coin::BTC, "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq").is_ok());
+        assert!(
+            &validate_address(Coin::BTC, "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5md2").is_err()
+        );
     }
 
     #[test]
