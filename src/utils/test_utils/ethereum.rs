@@ -1,9 +1,8 @@
 use crate::{
-    common::ethereum::Hash,
-    vault::blockchain_connection::ethereum::{EstimateResult, EthereumClient, SendTransaction},
-};
-use crate::{
-    common::ethereum::Transaction, vault::blockchain_connection::ethereum::EstimateRequest,
+    common::ethereum::{Hash, Transaction},
+    vault::blockchain_connection::ethereum::{
+        EstimateRequest, EstimateResult, EthereumClient, SendTransaction,
+    },
 };
 use async_trait::async_trait;
 use std::{collections::VecDeque, sync::Mutex};

@@ -32,12 +32,8 @@ fn group_outputs_by_quote(outputs: &[OutputTx]) -> Vec<(Uuid, Vec<OutputTx>)> {
 
     let mut map: HashMap<Uuid, Vec<OutputTx>> = HashMap::new();
     for tx in valid_txs {
-        if map.get(&tx.quote_tx).is_none() {
-            map.insert(tx.quote_tx, vec![]);
-        }
-
-        let vector = map.get_mut(&tx.quote_tx).unwrap();
-        vector.push(tx.clone());
+        let entry = map.entry(tx.quote_tx).or_insert(vec![]);
+        entry.push(tx.clone());
     }
 
     map.into_iter()
