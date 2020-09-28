@@ -13,6 +13,9 @@ pub mod block_processor;
 /// Test helpers for Vault Node API
 pub mod vault_node_api;
 
+/// Test helper for Bitcoin
+pub mod btc;
+
 /// Test helper for ethereum
 pub mod ethereum;
 
@@ -28,18 +31,34 @@ pub mod logging;
 pub use fake_txs::{create_fake_stake_quote, create_fake_unstake_request_tx, create_fake_witness};
 
 /// Create a dummy quote transaction to be used for tests
-pub fn create_fake_quote_tx() -> QuoteTx {
+pub fn create_fake_quote_tx_eth_loki() -> QuoteTx {
     let eth_address = WalletAddress::new("0x70e7db0678460c5e53f1ffc9221d1c692111dcc5");
+
+    create_fake_quote_tx_coin_to_loki(Coin::ETH, eth_address)
+}
+
+/// Creates a fake quote tx from any input coin and address, to Loki
+pub fn create_fake_quote_tx_coin_to_loki(i_coin: Coin, i_addr: WalletAddress) -> QuoteTx {
     let loki_address = WalletAddress::new("T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY");
 
+    create_fake_quote_tx(i_coin, i_addr, Coin::LOKI, loki_address)
+}
+
+/// Create dummy quote tx generalised
+pub fn create_fake_quote_tx(
+    i_coin: Coin,
+    i_addr: WalletAddress,
+    o_coin: Coin,
+    o_addr: WalletAddress,
+) -> QuoteTx {
     QuoteTx::new(
         Timestamp::now(),
-        Coin::ETH,
-        eth_address.clone(),
+        i_coin,
+        i_addr.clone(),
         "7".to_string(),
-        Some(eth_address),
-        Coin::LOKI,
-        loki_address,
+        Some(i_addr),
+        o_coin,
+        o_addr,
         1.0,
         0.0,
     )

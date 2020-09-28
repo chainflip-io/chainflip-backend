@@ -334,7 +334,7 @@ mod test {
     use crate::{
         common::Coin, common::Timestamp, common::WalletAddress, side_chain::MemorySideChain,
     };
-    use crate::{transactions::PoolChangeTx, utils::test_utils::create_fake_quote_tx};
+    use crate::{transactions::PoolChangeTx, utils::test_utils::create_fake_quote_tx_eth_loki};
 
     fn setup() -> MemoryTransactionsProvider<MemorySideChain> {
         let side_chain = Arc::new(Mutex::new(MemorySideChain::new()));
@@ -352,7 +352,7 @@ mod test {
         {
             let mut side_chain = provider.side_chain.lock().unwrap();
 
-            let quote = create_fake_quote_tx();
+            let quote = create_fake_quote_tx_eth_loki();
             let witness = WitnessTx::new(
                 Timestamp::now(),
                 quote.id,
@@ -376,7 +376,7 @@ mod test {
         assert_eq!(provider.get_witness_txs().len(), 1);
 
         provider
-            .add_transactions(vec![create_fake_quote_tx().into()])
+            .add_transactions(vec![create_fake_quote_tx_eth_loki().into()])
             .unwrap();
 
         assert_eq!(provider.state.next_block_idx, 2);
@@ -387,7 +387,7 @@ mod test {
     fn test_provider_does_not_add_duplicates() {
         let mut provider = setup();
 
-        let quote = create_fake_quote_tx();
+        let quote = create_fake_quote_tx_eth_loki();
         let witness = WitnessTx::new(
             Timestamp::now(),
             quote.id,
@@ -468,7 +468,7 @@ mod test {
     fn test_provider_fulfills_quote_and_witness_on_output_tx() {
         let mut provider = setup();
 
-        let quote = create_fake_quote_tx();
+        let quote = create_fake_quote_tx_eth_loki();
         let witness = WitnessTx::new(
             Timestamp::now(),
             quote.id,
@@ -521,7 +521,7 @@ mod test {
     fn test_provider_does_not_fulfill_quote_on_refunded_output_tx() {
         let mut provider = setup();
 
-        let quote = create_fake_quote_tx();
+        let quote = create_fake_quote_tx_eth_loki();
         let witness = WitnessTx::new(
             Timestamp::now(),
             quote.id,

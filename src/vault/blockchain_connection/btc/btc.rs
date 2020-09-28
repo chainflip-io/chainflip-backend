@@ -1,14 +1,15 @@
 use super::BitcoinClient;
 use async_trait::async_trait;
+use bitcoin::Network;
 use bitcoin::Transaction;
 use bitcoincore_rpc::RpcApi;
 use bitcoincore_rpc::{self, Auth};
-
 use std::sync::Arc;
 
 /// Wraps the BTC RPC Client
 pub struct BtcClient {
     rpc_client: Arc<bitcoincore_rpc::Client>,
+    network: Network,
 }
 
 impl BtcClient {
@@ -17,8 +18,23 @@ impl BtcClient {
         let rpc_client = bitcoincore_rpc::Client::new(String::from(url), auth)
             .map_err(|err| format!("{}", err))?;
         let rpc_client_arc = Arc::new(rpc_client);
+
+        let network: Network;
+        let chain = rpc_client_arc.get_blockchain_info().unwrap().chain;
+        if chain == String::from("main") {
+            network = Network::Bitcoin;
+        } else if chain == String::from("test") {
+            network = Network::Testnet;
+        } else if chain == String::from("reg") {
+            network = Network::Regtest;
+        } else {
+            error!("Could not find network type, default to testnet");
+            network = Network::Testnet;
+        }
+
         Ok(BtcClient {
             rpc_client: rpc_client_arc,
+            network,
         })
     }
 }
@@ -52,17 +68,35 @@ impl BitcoinClient for BtcClient {
             }
         }
     }
+
+    fn get_network_type(&self) -> Network {
+        self.network
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
 
+    // Fro this to work you need bitcoind runnin on testnet with the credentials found
+    // below in the bitcoin.conf
+    fn get_test_client() -> BtcClient {
+        let auth = Auth::UserPass(String::from("bitcoinrpc"), String::from("Password123"));
+        BtcClient::new_from_url_auth("http://127.0.0.1:18332", auth).unwrap()
+    }
+
+    #[test]
+    #[ignore]
+    fn network_is_set() {
+        let client = get_test_client();
+        let network = client.network;
+        assert_eq!(network, Network::Testnet);
+    }
+
     #[tokio::test]
     #[ignore]
     async fn returns_latest_block_number() {
-        let auth = Auth::UserPass(String::from("bitcoinrpc"), String::from("Password123"));
-        let client = BtcClient::new_from_url_auth("http://127.0.0.1:18332", auth).unwrap();
+        let client = get_test_client();
         assert!(client.get_latest_block_number().await.is_ok());
     }
 
@@ -72,9 +106,7 @@ mod test {
         // This tested block is:
         // https://live.blockcypher.com/btc-testnet/block/00000000000000b4e5c133075b925face5b22dccb53112e4c7bf95313e0cf7f2/
         let test_block_number = 1834585;
-        // Bitcoind needs to be configured with a bitcoin.conf containing rpcuser and rpcpassword
-        let auth = Auth::UserPass(String::from("bitcoinrpc"), String::from("Password123"));
-        let client = BtcClient::new_from_url_auth("http://127.0.0.1:18332", auth).unwrap();
+        let client = get_test_client();
         let transactions = client
             .get_transactions(test_block_number)
             .await

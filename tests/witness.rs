@@ -28,7 +28,7 @@ fn test_witness_tx_is_made() {
     let witness = FakeWitness::new(loki_block_receiver, s_chain.clone());
     witness.start();
 
-    let quote_tx = test_utils::create_fake_quote_tx();
+    let quote_tx = test_utils::create_fake_quote_tx_eth_loki();
 
     s_chain
         .lock()

@@ -149,7 +149,10 @@ mod test {
         },
         side_chain::MemorySideChain,
         transactions::QuoteTx,
-        utils::test_utils::{get_transactions_provider, store::MemoryKVS},
+        utils::test_utils::{
+            create_fake_quote_tx_coin_to_loki, create_fake_quote_tx_eth_loki,
+            get_transactions_provider, store::MemoryKVS,
+        },
         vault::transactions::MemoryTransactionsProvider,
     };
     use rand::Rng;
@@ -178,21 +181,6 @@ mod test {
         }
     }
 
-    fn get_quote(input: Coin, input_address: &str) -> QuoteTx {
-        QuoteTx {
-            id: Uuid::new_v4(),
-            timestamp: Timestamp::now(),
-            input,
-            output: Coin::BTC,
-            output_address: WalletAddress::new("15N1pa6gnfqUD2q3SqQ492ENaFBDSRvBET"),
-            input_address: WalletAddress::new(input_address),
-            input_address_id: "".to_owned(),
-            return_address: None,
-            effective_price: 1.0,
-            slippage_limit: 0.0,
-        }
-    }
-
     fn generate_eth_address() -> Address {
         Address(rand::thread_rng().gen::<[u8; 20]>())
     }
@@ -207,8 +195,12 @@ mod test {
         let input_address = generate_eth_address();
 
         // Add a quote so we can witness it
-        let eth_quote = get_quote(Coin::ETH, &input_address.to_string()[..]);
-        let btc_quote = get_quote(Coin::BTC, &input_address.to_string()[..]);
+        let input_wallet_address = WalletAddress::new(&input_address.to_string()[..]);
+        let eth_quote = create_fake_quote_tx_coin_to_loki(Coin::ETH, input_wallet_address);
+        let btc_quote = create_fake_quote_tx_coin_to_loki(
+            Coin::BTC,
+            WalletAddress::new("1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"),
+        );
 
         {
             let mut provider = provider.lock().unwrap();

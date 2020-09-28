@@ -153,7 +153,7 @@ fn should_read_block_after_reopen() {
 
     let mut db = PeristentSideChain::open(temp_file.path());
 
-    let tx = test_utils::create_fake_quote_tx();
+    let tx = test_utils::create_fake_quote_tx_eth_loki();
     let tx = SideChainTx::from(tx);
 
     db.add_block(vec![tx.clone()])

@@ -70,7 +70,7 @@ async fn test_loki_witness() {
 
     info!("Integrated address: {:?}", int_address);
 
-    let mut tx = crate::utils::test_utils::create_fake_quote_tx();
+    let mut tx = crate::utils::test_utils::create_fake_quote_tx_eth_loki();
     tx.input_address_id = int_address.payment_id.clone();
 
     // Send some money to integrated address

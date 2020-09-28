@@ -114,7 +114,7 @@ mod test {
         side_chain::{ISideChain, MemorySideChain},
         transactions::OutputTx,
         transactions::PoolChangeTx,
-        utils::test_utils::create_fake_quote_tx,
+        utils::test_utils::create_fake_quote_tx_eth_loki,
         vault::transactions::MemoryTransactionsProvider,
     };
 
@@ -159,8 +159,8 @@ mod test {
     fn get_swaps_returns_pending_swaps() {
         let mut runner = Runner::new();
 
-        let quote_with_no_witnesses = create_fake_quote_tx();
-        let quote_with_witnesses = create_fake_quote_tx();
+        let quote_with_no_witnesses = create_fake_quote_tx_eth_loki();
+        let quote_with_witnesses = create_fake_quote_tx_eth_loki();
 
         let first_witness = get_witness(&quote_with_witnesses, 100);
         let second_witness = get_witness(&quote_with_witnesses, 200);
@@ -192,7 +192,7 @@ mod test {
     fn get_swaps_does_not_return_hard_expired_quotes() {
         let mut runner = Runner::new();
 
-        let mut quote = create_fake_quote_tx();
+        let mut quote = create_fake_quote_tx_eth_loki();
         quote.timestamp = Timestamp(0);
 
         let witness = get_witness(&quote, 100);
@@ -214,7 +214,7 @@ mod test {
     fn get_swaps_does_not_return_invalid_witness_transactions() {
         let mut runner = Runner::new();
 
-        let quote = create_fake_quote_tx();
+        let quote = create_fake_quote_tx_eth_loki();
         let mut witness = get_witness(&quote, 100);
         witness.coin = quote.output; // Witness coin must match quote input
 
@@ -235,7 +235,7 @@ mod test {
     fn get_swaps_does_not_return_processed_witnesses() {
         let mut runner = Runner::new();
 
-        let quote = create_fake_quote_tx();
+        let quote = create_fake_quote_tx_eth_loki();
         let unused = get_witness(&quote, 100);
         let used = get_witness(&quote, 150);
 
@@ -275,7 +275,7 @@ mod test {
     fn process_returns_refunds() {
         let provider = MemoryLiquidityProvider::new();
 
-        let quote = create_fake_quote_tx();
+        let quote = create_fake_quote_tx_eth_loki();
         let witness = get_witness(&quote, 100);
 
         // Refund should occur here because we have no liquidity
@@ -309,7 +309,7 @@ mod test {
             )),
         );
 
-        let quote = create_fake_quote_tx();
+        let quote = create_fake_quote_tx_eth_loki();
         assert_eq!(quote.input, Coin::ETH);
         assert_eq!(quote.output, Coin::LOKI);
 
@@ -354,15 +354,15 @@ mod test {
         provider.set_liquidity(PoolCoin::ETH, Some(eth_liquidity));
         provider.set_liquidity(PoolCoin::BTC, Some(btc_liquidity));
 
-        let quote = create_fake_quote_tx();
+        let quote = create_fake_quote_tx_eth_loki();
         assert_eq!(quote.input, Coin::ETH);
         assert_eq!(quote.output, Coin::LOKI);
 
-        let another = create_fake_quote_tx();
+        let another = create_fake_quote_tx_eth_loki();
         assert_eq!(quote.input, Coin::ETH);
         assert_eq!(quote.output, Coin::LOKI);
 
-        let mut btc_quote = create_fake_quote_tx();
+        let mut btc_quote = create_fake_quote_tx_eth_loki();
         btc_quote.input = Coin::BTC;
         btc_quote.input_address = WalletAddress::new("1FPR9qMV6nikLxKP1MnZG6jh4viqFUs7wV");
 
@@ -442,7 +442,7 @@ mod test {
     fn process_swaps_correctly_updates_side_chain() {
         let mut runner = Runner::new();
 
-        let quote = create_fake_quote_tx();
+        let quote = create_fake_quote_tx_eth_loki();
         assert_eq!(quote.input, Coin::ETH);
         assert_eq!(quote.output, Coin::LOKI);
 

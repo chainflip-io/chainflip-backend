@@ -2,9 +2,9 @@ use crate::{
     common::Timestamp,
     common::{
         coins::{CoinAmount, GenericCoinAmount, PoolCoin},
-        Coin, LokiAmount, LokiPaymentId,
+        Coin, LokiAmount, LokiPaymentId, WalletAddress,
     },
-    transactions::{StakeQuoteTx, UnstakeRequestTx, WitnessTx},
+    transactions::{QuoteTx, StakeQuoteTx, UnstakeRequestTx, WitnessTx},
 };
 use std::str::FromStr;
 use uuid::Uuid;

@@ -32,7 +32,7 @@ async fn get_two_blocks_out_of_three() {
 
     side_chain.add_block(vec![]).unwrap();
 
-    let tx = test_utils::create_fake_quote_tx();
+    let tx = test_utils::create_fake_quote_tx_eth_loki();
 
     side_chain.add_block(vec![tx.clone().into()]).unwrap();
     side_chain.add_block(vec![]).unwrap();
