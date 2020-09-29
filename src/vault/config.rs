@@ -35,12 +35,21 @@ pub struct EthConfig {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+/// Configuration for Bitcoin
+pub struct BtcConfig {
+    /// The seed to derive wallets from
+    pub master_root_key: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 /// Configuration for vault nodes
 pub struct VaultConfig {
     /// Loki config
     pub loki: LokiConfig,
     /// Eth config
     pub eth: EthConfig,
+    /// Btc config
+    pub btc: BtcConfig,
 }
 
 impl VaultConfig {

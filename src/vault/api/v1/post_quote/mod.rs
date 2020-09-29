@@ -54,16 +54,44 @@ fn internal_server_error() -> ResponseError {
     ResponseError::new(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
 }
 
-fn generate_eth_address(root_key: &str, index: u64) -> Result<String, String> {
+fn generate_bip44_keypair_from_root_key(
+    root_key: &str,
+    coin: bip44::CoinType,
+    index: u64,
+) -> Result<bip44::KeyPair, String> {
     let root_key = bip44::RawKey::decode(root_key).map_err(|err| format!("{}", err))?;
 
     let root_key = root_key
         .to_private_key()
         .ok_or("Failed to generate extended private key".to_owned())?;
 
-    let key_pair = bip44::get_key_pair(root_key, bip44::CoinType::ETH, index)?;
+    let key_pair = bip44::get_key_pair(root_key, coin, index)?;
+
+    return Ok(key_pair);
+}
+
+fn generate_eth_address(root_key: &str, index: u64) -> Result<String, String> {
+    let key_pair =
+        generate_bip44_keypair_from_root_key(root_key, bip44::CoinType::ETH, index).unwrap();
 
     Ok(ethereum::Address::from(key_pair.public_key).to_string())
+}
+
+fn generate_p2pkh_btc_address(
+    root_key: &str,
+    index: u64,
+    compressed: bool,
+) -> Result<String, String> {
+    let key_pair = generate_bip44_keypair_from_root_key(root_key, bip44::CoinType::BTC, index)?;
+    let btc_pubkey = bitcoin::PublicKey {
+        key: key_pair.public_key,
+        compressed,
+    };
+
+    let p2pkh_addr_str =
+        bitcoin::Address::p2pkh(&btc_pubkey, bitcoin::Network::Bitcoin).to_string();
+
+    Ok(p2pkh_addr_str)
 }
 
 /// Request a swap quote
@@ -117,7 +145,6 @@ pub async fn post_quote<T: TransactionProvider>(
                 Ok(index) => index,
                 Err(_) => return Err(bad_request("Incorrect input address id")),
             };
-
             match generate_eth_address(&VAULT_CONFIG.eth.master_root_key, index) {
                 Ok(address) => address,
                 Err(err) => {
@@ -129,6 +156,19 @@ pub async fn post_quote<T: TransactionProvider>(
         Coin::LOKI => {
             // TODO: Generate integrated address here
             "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".into()
+        }
+        Coin::BTC => {
+            let index = match params.input_address_id.parse::<u64>() {
+                Ok(index) => index,
+                Err(_) => return Err(bad_request("Incorrect input address id")),
+            };
+            match generate_p2pkh_btc_address(&VAULT_CONFIG.btc.master_root_key, index, false) {
+                Ok(address) => address,
+                Err(err) => {
+                    warn!("Failed to generate bitcoin address: {}", err);
+                    return Err(internal_server_error());
+                }
+            }
         }
         _ => {
             warn!(
@@ -189,6 +229,9 @@ mod test {
         utils::test_utils::get_transactions_provider,
     };
 
+    // NEVER USE THIS IN AN ACTUAL APPLICATION! ONLY FOR TESTING
+    const ROOT_KEY: &str = "xprv9s21ZrQH143K3sFfKzYqgjMWgvsE44f6gxaRvyo11R22u2p5qegToQaEi7e6e5mRq3f92g9yDQQtu488ggct5gUspippg678t1QTCwBRb85";
+
     fn params() -> QuoteParams {
         QuoteParams {
             input_coin: Coin::LOKI,
@@ -203,18 +246,39 @@ mod test {
 
     #[test]
     fn generates_correct_eth_address() {
-        // NEVER USE THIS IN AN ACTUAL APPLICATION! ONLY FOR TESTING
-        let root_key = "xprv9s21ZrQH143K3sFfKzYqgjMWgvsE44f6gxaRvyo11R22u2p5qegToQaEi7e6e5mRq3f92g9yDQQtu488ggct5gUspippg678t1QTCwBRb85";
         assert_eq!(
-            &generate_eth_address(root_key, 0).unwrap(),
+            &generate_eth_address(ROOT_KEY, 0).unwrap(),
             "0x48575a3C8fa7D0469FD39eCB67ec68d8C7564637"
         );
         assert_eq!(
-            &generate_eth_address(root_key, 1).unwrap(),
+            &generate_eth_address(ROOT_KEY, 1).unwrap(),
             "0xB46878bd2E68e2b3f5145ccB868E626572905c5F"
         );
+    }
 
-        assert!(&generate_eth_address("invalid_key", 0).is_err(),);
+    #[test]
+    fn generates_correct_btc_address() {
+        assert_eq!(
+            generate_p2pkh_btc_address(ROOT_KEY, 0, false).unwrap(),
+            "1Q6hHytu6sZmib3TUNeEhGxE8L2ydx5JZo",
+        );
+
+        assert_eq!(
+            generate_p2pkh_btc_address(ROOT_KEY, 1, true).unwrap(),
+            "1LbqQTsn9EJN1yWJ2YkQGtaihovjgs6cfW"
+        );
+
+        assert_eq!(
+            generate_p2pkh_btc_address(ROOT_KEY, 1, false).unwrap(),
+            "1PWyfwtkS9co1rTHvU2SSESbcu6zi2TmxH"
+        );
+
+        assert_ne!(
+            generate_p2pkh_btc_address(ROOT_KEY, 2, false).unwrap(),
+            "1LbqQTsn9EJN1yWJ2YkQGtaihovjgs6cfW"
+        );
+
+        assert!(generate_p2pkh_btc_address("not a real key", 4, false).is_err())
     }
 
     #[tokio::test]
