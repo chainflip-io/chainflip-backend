@@ -22,7 +22,9 @@ pub mod store;
 /// Liquidity provider
 pub mod liquidity_provider;
 
-pub use coins::Coin;
+pub use liquidity_provider::Liquidity;
+
+pub use coins::{Coin, GenericCoinAmount};
 
 // Note: time is not reliable in a distributed environment,
 // so it should probably be replaced by block_id when we

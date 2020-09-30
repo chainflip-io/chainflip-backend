@@ -297,6 +297,7 @@ dependencies = [
  "lazy_static",
  "log 0.4.11",
  "log4rs",
+ "num-bigint",
  "rand 0.7.3",
  "regex",
  "reqwest",
@@ -1402,6 +1403,17 @@ dependencies = [
  "lexical-core",
  "memchr",
  "version_check 0.9.2",
+]
+
+[[package]]
+name = "num-bigint"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7f3fc75e3697059fb1bc465e3d8cca6cf92f56854f201158b3f9c77d5a3cfa0"
+dependencies = [
+ "autocfg 1.0.1",
+ "num-integer",
+ "num-traits 0.2.12",
 ]
 
 [[package]]

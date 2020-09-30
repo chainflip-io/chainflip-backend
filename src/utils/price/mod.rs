@@ -173,14 +173,15 @@ fn get_output_amount_inner<T: LiquidityProvider>(
     };
 
     let output_amount = calculate_output_amount(
-        NormalisedAmount::from(input_amount, input),
-        NormalisedAmount::from(input_depth, input),
-        NormalisedAmount::from(input_fee, input),
-        NormalisedAmount::from(output_depth, output),
-        NormalisedAmount::from(output_fee, output),
-    );
-
-    let output_amount = output_amount.to_atomic(output).unwrap_or(0);
+        input,
+        input_amount,
+        input_depth,
+        input_fee,
+        output,
+        output_depth,
+        output_fee,
+    )
+    .unwrap_or(0);
 
     Ok(OutputDetail {
         input,
@@ -195,8 +196,7 @@ fn get_output_amount_inner<T: LiquidityProvider>(
 mod test {
     use super::*;
     use crate::{
-        common::coins::CoinAmount, common::coins::GenericCoinAmount,
-        common::liquidity_provider::MemoryLiquidityProvider,
+        common::coins::GenericCoinAmount, common::liquidity_provider::MemoryLiquidityProvider,
     };
 
     fn to_atomic(coin: Coin, amount: &str) -> u128 {

@@ -38,8 +38,8 @@ fn spin_until_block(receiver: &crossbeam_channel::Receiver<ProcessorEvent>, targ
                 error!("Channel timeout on receive");
                 break;
             }
-            Err(_) => {
-                panic!("Unexpected channel error");
+            Err(err) => {
+                panic!("Unexpected channel error: {}", err);
             }
         }
     }

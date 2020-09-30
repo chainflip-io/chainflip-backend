@@ -159,7 +159,6 @@ pub trait CoinAmount {
     fn to_decimal(&self) -> f64 {
         let atomic_amount = self.to_atomic() as f64;
         let info = self.coin_info();
-        let decimals = info.decimals as i32;
         atomic_amount / info.one_unit() as f64
     }
 
@@ -244,6 +243,11 @@ impl GenericCoinAmount {
     /// Get coin type
     pub fn coin_type(&self) -> Coin {
         self.coin
+    }
+
+    /// Get the underlying atomic amount
+    pub fn to_atomic(&self) -> u128 {
+        self.atomic_amount
     }
 }
 
