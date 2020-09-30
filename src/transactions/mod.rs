@@ -1,7 +1,6 @@
 use crate::{
     common::{
-        coins::{GenericCoinAmount, PoolCoin},
-        Coin, LokiAmount, LokiPaymentId, Timestamp, WalletAddress,
+        Coin, GenericCoinAmount, LokiAmount, LokiPaymentId, PoolCoin, Timestamp, WalletAddress,
     },
     utils::validation::{validate_address, validate_address_id},
 };

@@ -1,10 +1,7 @@
 use crate::{
     common::Timestamp,
-    common::{
-        coins::{CoinAmount, GenericCoinAmount, PoolCoin},
-        Coin, LokiAmount, LokiPaymentId, WalletAddress,
-    },
-    transactions::{QuoteTx, StakeQuoteTx, UnstakeRequestTx, WitnessTx},
+    common::{Coin, GenericCoinAmount, LokiAmount, LokiPaymentId, PoolCoin},
+    transactions::{StakeQuoteTx, UnstakeRequestTx, WitnessTx},
 };
 use std::str::FromStr;
 use uuid::Uuid;

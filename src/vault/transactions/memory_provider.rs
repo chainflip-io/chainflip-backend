@@ -1,8 +1,7 @@
 use crate::{
     common::{
-        coins::{GenericCoinAmount, PoolCoin},
         liquidity_provider::{Liquidity, LiquidityProvider, MemoryLiquidityProvider},
-        LokiAmount,
+        GenericCoinAmount, LokiAmount, PoolCoin,
     },
     side_chain::{ISideChain, SideChainTx},
     transactions::{

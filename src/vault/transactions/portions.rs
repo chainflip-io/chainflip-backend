@@ -1,11 +1,7 @@
 use std::{collections::HashMap, convert::TryInto};
 
 use crate::{
-    common::{
-        coins::{GenericCoinAmount, PoolCoin},
-        liquidity_provider::Liquidity,
-        Coin, LokiAmount,
-    },
+    common::{liquidity_provider::Liquidity, Coin, GenericCoinAmount, LokiAmount, PoolCoin},
     utils::{self, primitives::U256},
 };
 

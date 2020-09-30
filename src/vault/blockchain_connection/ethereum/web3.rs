@@ -201,7 +201,7 @@ mod test {
     use ethereum::Address;
     use std::str::FromStr;
 
-    use crate::common::coins::GenericCoinAmount;
+    use crate::common::GenericCoinAmount;
 
     use super::*;
 

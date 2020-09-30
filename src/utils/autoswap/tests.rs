@@ -197,8 +197,6 @@ mod autoswap_tests {
             let l = rng.gen::<u128>();
             let e = rng.gen::<u128>();
 
-            dbg!(l, e);
-
             let l = LokiAmount::from_atomic(l);
             let e = GenericCoinAmount::from_atomic(Coin::ETH, e);
 

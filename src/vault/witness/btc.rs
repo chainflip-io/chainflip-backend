@@ -188,9 +188,8 @@ mod test {
     use super::*;
     use crate::utils::test_utils::btc::TestBitcoinClient;
     use crate::{
-        common::{Timestamp, WalletAddress},
+        common::WalletAddress,
         side_chain::MemorySideChain,
-        transactions::QuoteTx,
         utils::test_utils::{
             create_fake_quote_tx_coin_to_loki, get_transactions_provider, store::MemoryKVS,
         },

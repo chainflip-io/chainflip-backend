@@ -1,13 +1,7 @@
 use blockswap::{
-    common::{
-        coins::{Coin, CoinAmount, GenericCoinAmount, PoolCoin},
-        LokiAmount,
-    },
+    common::{Coin, GenericCoinAmount, LokiAmount, PoolCoin},
     side_chain::{ISideChain, MemorySideChain, SideChainTx},
-    utils::test_utils::{
-        self, create_fake_stake_quote, create_fake_unstake_request_tx, create_fake_witness,
-        store::MemoryKVS,
-    },
+    utils::test_utils::{self, create_fake_stake_quote, create_fake_witness, store::MemoryKVS},
     vault::{
         processor::{ProcessorEvent, SideChainProcessor},
         transactions::{MemoryTransactionsProvider, TransactionProvider},

@@ -1,6 +1,6 @@
 use crate::common::LokiAmount;
 use serde::{Deserialize, Serialize};
-use std::{convert::TryFrom, fmt::Display, str::FromStr};
+use std::{fmt::Display, str::FromStr};
 
 /// A representation of a valid pool coin
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]

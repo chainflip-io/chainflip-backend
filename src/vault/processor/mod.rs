@@ -1,7 +1,5 @@
 use crate::{
-    common::coins::GenericCoinAmount,
-    common::LokiAmount,
-    common::{coins::Coin, store::KeyValueStore},
+    common::{store::KeyValueStore, Coin, LokiAmount},
     side_chain::SideChainTx,
     transactions::{PoolChangeTx, StakeQuoteTx, StakeTx},
     vault::transactions::TransactionProvider,
@@ -286,10 +284,7 @@ mod tests {
     use super::*;
 
     use crate::{
-        common::{
-            coins::{CoinAmount, GenericCoinAmount},
-            LokiAmount,
-        },
+        common::{GenericCoinAmount, LokiAmount},
         side_chain::MemorySideChain,
         utils::test_utils::{create_fake_stake_quote, create_fake_witness, store::MemoryKVS},
         vault::transactions::MemoryTransactionsProvider,

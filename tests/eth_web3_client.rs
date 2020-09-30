@@ -1,11 +1,9 @@
-use std::convert::TryFrom;
 use std::str::FromStr;
 
 use blockswap::{
-    common::coins::CoinAmount,
-    common::coins::GenericCoinAmount,
     common::ethereum::Address,
     common::Coin,
+    common::GenericCoinAmount,
     utils::bip44::KeyPair,
     utils::primitives::U256,
     vault::blockchain_connection::ethereum::{

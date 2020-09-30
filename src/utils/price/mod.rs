@@ -195,9 +195,7 @@ fn get_output_amount_inner<T: LiquidityProvider>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{
-        common::coins::GenericCoinAmount, common::liquidity_provider::MemoryLiquidityProvider,
-    };
+    use crate::common::{liquidity_provider::MemoryLiquidityProvider, GenericCoinAmount};
 
     fn to_atomic(coin: Coin, amount: &str) -> u128 {
         GenericCoinAmount::from_decimal_string(coin, amount).to_atomic()
