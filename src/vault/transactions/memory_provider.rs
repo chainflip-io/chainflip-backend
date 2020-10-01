@@ -1,16 +1,17 @@
-use super::{
-    portions::adjust_portions_after_stake, portions::StakeContribution, TransactionProvider,
-};
 use crate::{
-    common::liquidity_provider::{Liquidity, LiquidityProvider, MemoryLiquidityProvider},
     common::{
-        coins::{GenericCoinAmount, PoolCoin},
-        LokiAmount,
+        liquidity_provider::{Liquidity, LiquidityProvider, MemoryLiquidityProvider},
+        GenericCoinAmount, LokiAmount, PoolCoin,
     },
     side_chain::{ISideChain, SideChainTx},
-    transactions::OutputSentTx,
-    transactions::OutputTx,
-    transactions::{PoolChangeTx, QuoteTx, StakeQuoteTx, StakeTx, UnstakeRequestTx, WitnessTx},
+    transactions::{
+        OutputSentTx, OutputTx, PoolChangeTx, QuoteTx, StakeQuoteTx, StakeTx, UnstakeRequestTx,
+        WitnessTx,
+    },
+    vault::transactions::{
+        portions::{adjust_portions_after_stake, StakeContribution},
+        TransactionProvider,
+    },
 };
 use std::{
     collections::HashMap,

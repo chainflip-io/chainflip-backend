@@ -62,7 +62,7 @@ impl NormalisedAmount {
 }
 
 /// Calculate the output amount
-pub fn calculate_output_amount(
+fn calculate_output_amount_normalised(
     input_amount: NormalisedAmount,
     input_depth: NormalisedAmount,
     input_fee: NormalisedAmount,
@@ -108,25 +108,24 @@ pub fn calculate_output_amount(
     NormalisedAmount(output_amount)
 }
 
-/// Calculate the output amount in decimals from the given input amount, input and output depths and fees
-pub fn calculate_output_amount_deprecated(
-    input_amount: f64,
-    input_depth: f64,
-    input_fee: f64,
-    output_depth: f64,
-    output_fee: f64,
-) -> f64 {
-    if input_amount <= 0.0 || input_depth <= 0.0 || output_depth <= 0.0 {
-        return 0.0;
-    }
+pub(crate) fn calculate_output_amount(
+    input_coin: Coin,
+    input_amount: u128,
+    input_depth: u128,
+    input_fee: u128,
+    output_coin: Coin,
+    output_depth: u128,
+    output_fee: u128,
+) -> Option<u128> {
+    let output_amount = calculate_output_amount_normalised(
+        NormalisedAmount::from(input_amount, input_coin),
+        NormalisedAmount::from(input_depth, input_coin),
+        NormalisedAmount::from(input_fee, input_coin),
+        NormalisedAmount::from(output_depth, output_coin),
+        NormalisedAmount::from(output_fee, output_coin),
+    );
 
-    let input_fee = input_fee.max(0.0);
-    let output_fee = output_fee.max(0.0);
-
-    let output_amount = (input_amount - input_fee) * input_depth * output_depth
-        / (input_amount + input_depth).powi(2);
-
-    (output_amount - output_fee).max(0.0)
+    output_amount.to_atomic(output_coin)
 }
 
 #[cfg(test)]
@@ -175,7 +174,7 @@ mod test {
         ];
 
         for value in values.iter() {
-            let output = calculate_output_amount(
+            let output = calculate_output_amount_normalised(
                 normalise_loki_decimal(value.0),
                 normalise_loki_decimal(value.1),
                 normalise_loki_decimal(value.2),
@@ -191,7 +190,7 @@ mod test {
 
     #[test]
     fn calculates_output_amount_handles_overflow() {
-        let output = calculate_output_amount(
+        let output = calculate_output_amount_normalised(
             NormalisedAmount(u128::MAX.into()),
             NormalisedAmount(u128::MAX.into()),
             NormalisedAmount(0.into()),

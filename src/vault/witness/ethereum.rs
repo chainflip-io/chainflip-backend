@@ -145,18 +145,15 @@ mod test {
     use crate::{
         common::{
             ethereum::{Address, Hash, Transaction},
-            Timestamp, WalletAddress,
+            WalletAddress,
         },
         side_chain::MemorySideChain,
-        transactions::QuoteTx,
         utils::test_utils::{
-            create_fake_quote_tx_coin_to_loki, create_fake_quote_tx_eth_loki,
-            get_transactions_provider, store::MemoryKVS,
+            create_fake_quote_tx_coin_to_loki, get_transactions_provider, store::MemoryKVS,
         },
         vault::transactions::MemoryTransactionsProvider,
     };
     use rand::Rng;
-    use uuid::Uuid;
 
     type TestTransactionsProvider = MemoryTransactionsProvider<MemorySideChain>;
 

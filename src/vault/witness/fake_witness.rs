@@ -24,6 +24,7 @@ impl<T> FakeWitness<T>
 where
     T: ISideChain + Send + 'static,
 {
+    /// Construct from internal components
     pub fn new(bc: Receiver<Block>, side_chain: Arc<Mutex<T>>) -> FakeWitness<T> {
         let next_block_idx = 0;
 
@@ -54,7 +55,8 @@ where
         self.quotes.append(&mut quote_txs);
     }
 
-    fn poll_main_chain(&self) {
+    /// Returns `true` if we can poll again
+    fn poll_main_chain(&self) -> bool {
         loop {
             match self.loki_connection.try_recv() {
                 Ok(block) => {
@@ -62,11 +64,11 @@ where
                     self.process_main_chain_block(block);
                 }
                 Err(crossbeam_channel::TryRecvError::Disconnected) => {
-                    error!("Failed to receive message: Disconnected");
-                    break;
+                    debug!("Blockchain channel is closed");
+                    break false;
                 }
                 Err(crossbeam_channel::TryRecvError::Empty) => {
-                    break;
+                    break true;
                 }
             }
         }
@@ -77,7 +79,11 @@ where
             // Check the blockchain for quote tx on the side chain
             self.poll_side_chain();
 
-            self.poll_main_chain();
+            let connection_alive = self.poll_main_chain();
+
+            if !connection_alive {
+                break;
+            }
 
             std::thread::sleep(std::time::Duration::from_millis(10));
         }

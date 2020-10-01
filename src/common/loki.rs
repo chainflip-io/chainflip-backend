@@ -1,7 +1,6 @@
 use super::{
-    coins::GenericCoinAmount,
     coins::{CoinAmount, CoinInfo},
-    Coin,
+    Coin, GenericCoinAmount,
 };
 
 use serde::{Deserialize, Serialize};

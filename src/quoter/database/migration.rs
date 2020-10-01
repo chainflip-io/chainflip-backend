@@ -1,5 +1,4 @@
 use rusqlite::Error;
-use rusqlite::NO_PARAMS;
 use rusqlite::{Connection, Transaction};
 
 /// Migrate a database
@@ -40,7 +39,7 @@ where
 }
 
 fn migrate_to_version_1(connection: &mut Connection) {
-    apply_changes(connection, 1, |tx| {
+    apply_changes(connection, 1, |_tx| {
         // TODO: Add changes here
 
         Ok(())

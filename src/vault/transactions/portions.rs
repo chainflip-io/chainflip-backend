@@ -1,17 +1,11 @@
 use std::{collections::HashMap, convert::TryInto};
 
 use crate::{
-    common::{
-        coins::GenericCoinAmount, coins::PoolCoin, liquidity_provider::Liquidity, Coin, LokiAmount,
-    },
-    utils::primitives::U256,
+    common::{liquidity_provider::Liquidity, Coin, GenericCoinAmount, LokiAmount, PoolCoin},
+    utils::{self, primitives::U256},
 };
 
-use super::{
-    memory_provider::StakerId,
-    memory_provider::VaultPortions,
-    memory_provider::{PoolPortions, Portion, StakerOwnership},
-};
+use super::memory_provider::{PoolPortions, Portion, StakerId, StakerOwnership, VaultPortions};
 
 /// Calculate atomic amount for a given portion from total atomic amount
 fn amount_from_portion(portion: Portion, total_amount: u128) -> u128 {
@@ -41,7 +35,7 @@ fn portion_from_amount(amount: u128, total_amount: u128) -> Portion {
 }
 
 /// Calculate current ownership in atomic amounts
-pub fn aggregate_current_portions(
+pub(crate) fn aggregate_current_portions(
     portions: &PoolPortions,
     liquidity: Liquidity,
 ) -> Vec<StakerOwnership> {
@@ -62,9 +56,22 @@ pub fn aggregate_current_portions(
 }
 
 /// Pool change tx associated with staker id
-pub struct StakeContribution {
+struct EffectiveStakeContribution {
+    staker_id: StakerId,
+    /// We only need to keep track of the loki amount because
+    /// we know the other coin is contributed the equivalent
+    /// amount after autoswapping (proportional to the ratio
+    /// in the pool at the time of staking)
+    loki_amount: LokiAmount,
+}
+
+/// Pool change tx associated with staker id
+pub(crate) struct StakeContribution {
     staker_id: StakerId,
     loki_amount: LokiAmount,
+    /// This amount is actually unused since we can always
+    /// assume the contribute is symmetric at this point
+    /// (due to autoswap)
     other_amount: GenericCoinAmount,
 }
 
@@ -91,13 +98,15 @@ impl StakeContribution {
 fn adjust_portions_after_stake_for_coin(
     portions: &mut PoolPortions,
     liquidity: &Liquidity,
-    tx: &StakeContribution,
+    contribution: &StakeContribution,
 ) {
     let staker_amounts = aggregate_current_portions(&portions, *liquidity);
 
+    let contribution = compute_effective_contribution(&contribution, &liquidity);
+
     // Adjust portions for the existing staker ids
 
-    let extra_loki = tx.loki_amount.to_atomic();
+    let extra_loki = contribution.loki_amount.to_atomic();
 
     let new_total_loki = liquidity.loki_depth + extra_loki;
 
@@ -108,7 +117,7 @@ fn adjust_portions_after_stake_for_coin(
             .get_mut(&entry.staker_id)
             .expect("staker entry should exist");
 
-        // Stakes are always symmetric (after auto-swapping any assymetric stake),
+        // Stakes are always symmetric (after auto-swapping any asymmetric stake),
         // so we can use any coin to compute new portions:
 
         let p = portion_from_amount(entry.loki.to_atomic(), new_total_loki);
@@ -132,40 +141,72 @@ fn adjust_portions_after_stake_for_coin(
 
     info!("portions left: {:?}", portion_left);
 
-    let portion = portions.entry(tx.staker_id.clone()).or_insert(Portion(0));
+    let portion = portions
+        .entry(contribution.staker_id.clone())
+        .or_insert(Portion(0));
 
     *portion = portion
         .checked_add(portion_left)
         .expect("portions overflow");
 }
 
+/// Compute effective contribution, i.e. the contribution to the
+/// pool after a potential autoswap
+fn compute_effective_contribution(
+    stake: &StakeContribution,
+    liquidity: &Liquidity,
+) -> EffectiveStakeContribution {
+    let loki_amount = stake.loki_amount;
+    let other_amount = stake.other_amount;
+
+    let effective_loki = if liquidity.depth == 0 {
+        info!(
+            "First stake into {} pool, autoswap is not performed",
+            other_amount.coin_type()
+        );
+        loki_amount
+    } else {
+        let (effective_loki, _d_other) =
+            utils::autoswap::calc_autoswap_amount(loki_amount, other_amount, *liquidity)
+                .expect("incorrect autoswap usage");
+        effective_loki
+    };
+
+    EffectiveStakeContribution {
+        staker_id: stake.staker_id.clone(),
+        loki_amount: effective_loki,
+    }
+}
+
 /// Need to make sure that stake transactions are processed before
 /// Pool change transactions
 // NOTE: the reference to `pools` doesn't really need to be mutable,
 // but for now we need to make sure that liquidity is not `None`
-pub fn adjust_portions_after_stake(
+pub(crate) fn adjust_portions_after_stake(
     portions: &mut VaultPortions,
     pools: &HashMap<PoolCoin, Liquidity>,
-    tx: &StakeContribution,
+    contribution: &StakeContribution,
 ) {
     // For each staker compute their current ownership in atomic
     // amounts (before taking the new stake into account):
 
-    // TODO: make this work with other coins
-    assert_eq!(tx.coin(), PoolCoin::ETH);
+    let coin = contribution.coin();
 
-    let mut pool_portions = portions.entry(tx.coin()).or_insert(Default::default());
+    // TODO: make this work with other coins
+    assert_eq!(coin, PoolCoin::ETH);
+
+    let mut pool_portions = portions.entry(coin).or_insert(Default::default());
 
     let zero = Liquidity::zero();
-    let liquidity = pools.get(&tx.coin()).unwrap_or(&zero);
+    let liquidity = pools.get(&coin).unwrap_or(&zero);
 
-    adjust_portions_after_stake_for_coin(&mut pool_portions, &liquidity, &tx);
+    adjust_portions_after_stake_for_coin(&mut pool_portions, &liquidity, &contribution);
 }
 
 #[cfg(test)]
 mod tests {
 
-    use crate::{common::coins::CoinAmount, utils::test_utils};
+    use crate::utils::test_utils;
 
     use super::*;
 
@@ -203,14 +244,21 @@ mod tests {
         }
 
         fn add_stake(&mut self, staker_id: &StakerId, amount: LokiAmount) {
-            // In this test all stakes are "symmetrical"
+            // For convinience, eth amount is computed from loki amount:
             let factor = 1000;
+            let other_amount =
+                GenericCoinAmount::from_atomic(Coin::ETH, amount.to_atomic() * factor);
 
-            let stake = StakeContribution::new(
-                staker_id.clone(),
-                amount,
-                GenericCoinAmount::from_atomic(Coin::ETH, amount.to_atomic() * factor),
-            );
+            self.add_asymmetric_stake(staker_id, amount, other_amount);
+        }
+
+        fn add_asymmetric_stake(
+            &mut self,
+            staker_id: &StakerId,
+            loki_amount: LokiAmount,
+            other_amount: GenericCoinAmount,
+        ) {
+            let stake = StakeContribution::new(staker_id.clone(), loki_amount, other_amount);
 
             adjust_portions_after_stake_for_coin(&mut self.portions, &self.liquidity, &stake);
 
@@ -291,5 +339,34 @@ mod tests {
         assert_eq!(runner.portions.len(), 2);
         assert_eq!(runner.portions.get(&alice), Some(&THREE_QUATERS_PORTION));
         assert_eq!(runner.portions.get(&bob), Some(&QUATER_PORTION));
+    }
+
+    #[test]
+    fn test_asymmetric_stake() {
+        test_utils::logging::init();
+
+        let mut runner = TestRunner::new();
+
+        let alice = "Alice".to_owned();
+        let bob = "Bob".to_owned();
+
+        let amount = LokiAmount::from_decimal_string("100.0");
+
+        let eth = GenericCoinAmount::from_atomic(Coin::ETH, 0);
+
+        runner.add_stake(&alice, amount);
+        runner.add_asymmetric_stake(&bob, amount, eth);
+
+        assert_eq!(runner.portions.len(), 2);
+
+        let a = runner.portions.get(&alice).unwrap().0;
+        let b = runner.portions.get(&bob).unwrap().0;
+
+        // Not only Bob contributes to only one side of the pool, but
+        // he is also forced to autoswap (with low liquidity), resulting
+        // in somewhat small portions:
+
+        assert!(a > b * 2);
+        assert!(a < b * 5);
     }
 }
