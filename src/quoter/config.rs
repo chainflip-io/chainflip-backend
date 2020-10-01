@@ -25,6 +25,8 @@ pub struct Database {
 pub struct QuoterConfig {
     /// Loki config
     pub database: Database,
+    /// The vault node url
+    pub vault_node_url: String,
 }
 
 impl QuoterConfig {

@@ -13,7 +13,7 @@ impl API {
     /// Starts an http server in the current thread and blocks
     pub fn serve<V, S>(port: u16, vault_node: Arc<V>, state: Arc<Mutex<S>>)
     where
-        V: VaultNodeInterface + 'static,
+        V: VaultNodeInterface + Send + Sync + 'static,
         S: StateProvider + Send + 'static,
     {
         let routes = v1::endpoints(vault_node, state).recover(api::handle_rejection);

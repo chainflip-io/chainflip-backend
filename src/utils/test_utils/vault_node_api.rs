@@ -1,4 +1,4 @@
-use crate::quoter::vault_node::VaultNodeInterface;
+use crate::quoter::vault_node::{QuoteParams, VaultNodeInterface};
 use crate::side_chain::SideChainBlock;
 use std::{collections::VecDeque, sync::Mutex};
 
@@ -37,7 +37,7 @@ impl VaultNodeInterface for TestVaultNodeAPI {
         };
         Ok(blocks)
     }
-    fn submit_quote(&self) -> Result<crate::transactions::QuoteTx, String> {
+    fn submit_quote(&self, params: QuoteParams) -> Result<crate::transactions::QuoteTx, String> {
         todo!()
     }
 }

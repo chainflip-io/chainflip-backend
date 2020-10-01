@@ -5,7 +5,7 @@ use crate::{
         coins::{Coin, CoinInfo},
         Timestamp,
     },
-    quoter::{vault_node::VaultNodeInterface, StateProvider},
+    quoter::{vault_node::QuoteParams, vault_node::VaultNodeInterface, StateProvider},
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -21,11 +21,11 @@ mod test;
 
 /// The v1 API endpoints
 pub fn endpoints<V, S>(
-    _vault_node: Arc<V>,
+    vault_node: Arc<V>,
     state: Arc<Mutex<S>>,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone
 where
-    V: VaultNodeInterface,
+    V: VaultNodeInterface + Send + Sync,
     S: StateProvider + Send,
 {
     let coins = warp::path!("coins")
@@ -48,8 +48,16 @@ where
         .map(get_pools)
         .and_then(api::respond);
 
+    let submit_quote = warp::path!("submitQuote")
+        .and(warp::post())
+        .and(warp::body::json())
+        .and(using(state.clone()))
+        .and(using(vault_node.clone()))
+        .map(submit_quote)
+        .and_then(api::respond);
+
     warp::path!("v1" / ..) // Add path prefix /v1 to all our routes
-        .and(coins.or(estimate).or(pools))
+        .and(coins.or(estimate).or(pools).or(submit_quote))
 }
 
 /// Parameters for `coins` endpoint
@@ -227,4 +235,53 @@ where
         timestamp: Timestamp::now(),
         pools: HashMap::new(),
     });
+}
+
+/// Response for `quote` endpoint
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuoteResponse {}
+
+/// Parameters for `submitQuote` endpoint
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubmitQuoteParams {
+    /// The input coin
+    pub input_coin: String,
+    /// The input amount
+    pub input_amount: String,
+    /// The input return address
+    pub input_return_address: Option<String>,
+    /// The output address
+    pub output_address: String,
+    /// The slippage limit
+    pub slippage_limit: u32,
+}
+
+/// Submit a quote
+pub async fn submit_quote<S, V>(
+    params: SubmitQuoteParams,
+    _state: Arc<Mutex<S>>,
+    vault_node: Arc<V>,
+) -> Result<QuoteResponse, ResponseError>
+where
+    S: StateProvider,
+    V: VaultNodeInterface,
+{
+    // TODO: Add logic here
+    let quote_params = QuoteParams {
+        input_coin: params.input_coin,
+        input_amount: params.input_amount,
+        input_address_id: "0".to_owned(), // TODO: Populate this accordingly
+        input_return_address: params.input_return_address,
+        output_address: params.output_address,
+        slippage_limit: params.slippage_limit,
+    };
+
+    match vault_node.submit_quote(quote_params) {
+        Ok(_) => {}
+        Err(err) => return Err(ResponseError::new(StatusCode::BAD_REQUEST, &err)),
+    }
+
+    return Ok(QuoteResponse {});
 }
