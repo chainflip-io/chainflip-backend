@@ -60,7 +60,8 @@ struct EffectiveStakeContribution {
     staker_id: StakerId,
     /// We only need to keep track of the loki amount because
     /// we know the other coin is contributed the equivalent
-    /// amount after autoswapping
+    /// amount after autoswapping (proportional to the ratio
+    /// in the pool at the time of staking)
     loki_amount: LokiAmount,
 }
 
@@ -116,7 +117,7 @@ fn adjust_portions_after_stake_for_coin(
             .get_mut(&entry.staker_id)
             .expect("staker entry should exist");
 
-        // Stakes are always symmetric (after auto-swapping any assymetric stake),
+        // Stakes are always symmetric (after auto-swapping any asymmetric stake),
         // so we can use any coin to compute new portions:
 
         let p = portion_from_amount(entry.loki.to_atomic(), new_total_loki);
@@ -248,10 +249,10 @@ mod tests {
             let other_amount =
                 GenericCoinAmount::from_atomic(Coin::ETH, amount.to_atomic() * factor);
 
-            self.add_assymetric_stake(staker_id, amount, other_amount);
+            self.add_asymmetric_stake(staker_id, amount, other_amount);
         }
 
-        fn add_assymetric_stake(
+        fn add_asymmetric_stake(
             &mut self,
             staker_id: &StakerId,
             loki_amount: LokiAmount,
@@ -341,7 +342,7 @@ mod tests {
     }
 
     #[test]
-    fn test_assymetric_stake() {
+    fn test_asymmetric_stake() {
         test_utils::logging::init();
 
         let mut runner = TestRunner::new();
@@ -354,7 +355,7 @@ mod tests {
         let eth = GenericCoinAmount::from_atomic(Coin::ETH, 0);
 
         runner.add_stake(&alice, amount);
-        runner.add_assymetric_stake(&bob, amount, eth);
+        runner.add_asymmetric_stake(&bob, amount, eth);
 
         assert_eq!(runner.portions.len(), 2);
 
