@@ -70,6 +70,8 @@ pub fn create_fake_output_tx(coin: Coin) -> OutputTx {
     let address= match coin {
         Coin::LOKI => "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY",
         Coin::ETH => "0x70e7db0678460c5e53f1ffc9221d1c692111dcc5",
+        // p2pkh testnet address
+        Coin::BTC => "msXs47UUTTMr4Kqe2WaDfZCR9t9qb25WJo",
         _ => "Address"
     };
 

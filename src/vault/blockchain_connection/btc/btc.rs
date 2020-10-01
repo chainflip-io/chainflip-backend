@@ -1,7 +1,9 @@
-use super::BitcoinClient;
+use super::{BitcoinClient, SendTransaction};
+use crate::common::{coins::CoinAmount, Coin};
 use async_trait::async_trait;
-use bitcoin::Network;
-use bitcoin::Transaction;
+use bitcoin::Txid;
+use bitcoin::{Amount, Network, Transaction};
+use bitcoincore_rpc::json::EstimateMode::*;
 use bitcoincore_rpc::RpcApi;
 use bitcoincore_rpc::{self, Auth};
 use std::sync::Arc;
@@ -72,11 +74,47 @@ impl BitcoinClient for BtcClient {
     fn get_network_type(&self) -> Network {
         self.network
     }
+
+    async fn send(&self, send_tx: &SendTransaction) -> Result<Txid, String> {
+        if send_tx.amount.coin_type() != Coin::BTC {
+            return Err(format!("Cannot send {}", send_tx.amount.coin_type()));
+        }
+
+        let amount_to_send = Amount::from_sat(send_tx.amount.to_atomic() as u64);
+        debug!(
+            "Sending {} sats to address {} rpc",
+            amount_to_send, &send_tx.to
+        );
+        let txid = match self.rpc_client.send_to_address(
+            &send_tx.to,
+            amount_to_send,
+            None,
+            None,
+            // we want the fee taken from the amount the user is expecting
+            Some(true),
+            // allow this transaction to be replaced by a transaction with higher fees?
+            Some(false),
+            // Confirmation target (in number of blocks)
+            None,
+            // Default is Unset (can be one of Unset, Economical and Conservative)
+            Some(Unset),
+        ) {
+            Ok(txid) => txid,
+            Err(error) => {
+                error!("Could not send transaction: {:?}", error);
+                return Err(format!("Failed to send transaction: {}", error));
+            }
+        };
+
+        Ok(txid)
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use bitcoin::network::constants::Network;
+    use std::str::FromStr;
 
     // Fro this to work you need bitcoind runnin on testnet with the credentials found
     // below in the bitcoin.conf
@@ -118,5 +156,10 @@ mod test {
             .expect("Expected to get a valid first transaction");
 
         assert_eq!(first.version, 1);
+        assert_eq!(
+            first.txid(),
+            Txid::from_str("d307633388c12587f401bdc9fed6ade666149d81ebde821a7510135c89ff693c")
+                .unwrap()
+        )
     }
 }

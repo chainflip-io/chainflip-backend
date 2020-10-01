@@ -1,9 +1,20 @@
+use crate::{common::coins::GenericCoinAmount, utils::bip44::KeyPair};
 use async_trait::async_trait;
 use bitcoin::blockdata::transaction::Transaction;
-use bitcoin::Network;
+use bitcoin::{Address, Network, Txid};
 
 /// Define btc interface
 pub mod btc;
+
+#[derive(Debug)]
+pub struct SendTransaction {
+    /// The address that is sending
+    pub from: KeyPair,
+    /// The address that is receiving
+    pub to: Address,
+    /// The amount being sent
+    pub amount: GenericCoinAmount,
+}
 
 #[async_trait]
 /// Defines the interface for a bitcoin client, used by a bitcoin witness
@@ -16,4 +27,7 @@ pub trait BitcoinClient {
 
     /// Get network type of the btc client (bitcoin, testnet, regtest)
     fn get_network_type(&self) -> Network;
+
+    /// Send a bitcoin transaction
+    async fn send(&self, tx: &SendTransaction) -> Result<Txid, String>;
 }
