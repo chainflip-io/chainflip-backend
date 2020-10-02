@@ -13,28 +13,36 @@ struct LokiError(i128);
 fn try_x_inner(
     x0: u128,
     input_coin: Coin,
-    l: u128,
+    input_amount: u128,
     output_coin: Coin,
-    e: u128,
-    dl: u128,
-    de: u128,
+    output_amount: u128,
+    input_depth: u128,
+    output_depth: u128,
     ifee: u128,
     ofee: u128,
 ) -> Trial {
     assert!(x0 >= ifee);
 
-    let y = utils::price::calculate_output_amount(input_coin, x0, dl, ifee, output_coin, de, ofee)
-        .unwrap_or(0);
+    let y = utils::price::calculate_output_amount(
+        input_coin,
+        x0,
+        input_depth,
+        ifee,
+        output_coin,
+        output_depth,
+        ofee,
+    )
+    .unwrap_or(0);
 
     let x: BigInt = x0.into();
-    let l: BigInt = l.into();
+    let l: BigInt = input_amount.into();
     let ifee: BigInt = ifee.into();
     let ofee: BigInt = ofee.into();
-    let dl: BigInt = dl.into();
-    let de: BigInt = de.into();
+    let dl: BigInt = input_depth.into();
+    let de: BigInt = output_depth.into();
 
     // the amount of the other coin we would contribute
-    let e2: BigInt = e.saturating_add(y).into();
+    let e2: BigInt = output_amount.saturating_add(y).into();
 
     let y: BigInt = y.into();
 
@@ -77,13 +85,15 @@ fn try_x(x: u128, s: &State) -> Trial {
     )
 }
 
-// Point x and error associated with it
+/// Point x and error associated with it
 #[derive(Debug, Clone, Copy)]
 struct Trial {
     x: u128,
     error: i128,
 }
 
+/// A state that gets passed around (unmodified)
+/// thoroughout one autoswap computation
 struct State {
     input: u128,
     input_coin: Coin,
@@ -217,7 +227,9 @@ fn find_min_other(dl: u128, de: u128, ofee: u128) -> Result<u128, &'static str> 
     let de: BigInt = de.into();
     let ofee: BigInt = ofee.into();
 
-    // Solving quadratic equation x^2 + p * x + q = 0
+    // Solving quadratic equation x^2 + p * x + q = 0, obtained
+    // from solving the price equation (`calculate_output_amount`)
+    // for f(x) = LOKI_SWAP_PROCESS_FEE
 
     let p = BigInt::from(2) * &dl - (&dl * &de) / &ofee;
     let q = &dl * &dl;
