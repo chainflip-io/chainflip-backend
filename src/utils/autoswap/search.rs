@@ -107,10 +107,7 @@ struct State {
 
 /// Whether two numbers have the same sign
 fn same_sign(x: i128, y: i128) -> bool {
-    match (x > 0, y > 0) {
-        (true, true) | (false, false) => true,
-        _ => false,
-    }
+    x > 0 && y > 0 || x < 0 && y < 0
 }
 
 fn search_step(t0: Trial, t2: Trial, state: &State) -> Result<(Trial, Trial), ()> {
