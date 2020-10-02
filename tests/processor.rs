@@ -115,6 +115,8 @@ impl TestRunner {
 #[cfg(test)]
 mod tests {
 
+    use test_utils::create_fake_unstake_request_tx;
+
     use super::*;
 
     #[test]
@@ -170,13 +172,11 @@ mod tests {
 
         // 2. Add an unstake request
 
-        // TODO:
+        let unstake_tx = create_fake_unstake_request_tx(stake_tx.staker_id);
 
-        // let unstake_tx = create_fake_unstake_request_tx(stake_tx.staker_id);
+        runner.add_block([unstake_tx.into()]);
 
-        // runner.add_block([unstake_tx.into()]);
-
-        // runner.sync();
+        runner.sync();
     }
 
     #[test]
