@@ -8,6 +8,8 @@ use crate::{
 
 use num_bigint::BigInt;
 
+mod search;
+
 fn calc_autoswap_from_loki(
     loki_amount: LokiAmount,
     other_amount: GenericCoinAmount,
@@ -19,14 +21,8 @@ fn calc_autoswap_from_loki(
         return Ok((stake.loki, stake.other));
     }
 
-    let x = calc_autoswap_generalised(
-        loki_amount.to_atomic(),
-        other_amount.to_atomic(),
-        liquidity.loki_depth,
-        liquidity.depth,
-        LOKI_SWAP_PROCESS_FEE,
-        0,
-    )?;
+    let x = search::find_loki_x(loki_amount, other_amount, liquidity, LOKI_SWAP_PROCESS_FEE)
+        .unwrap_or(0);
 
     let y = utils::price::calculate_output_amount(
         Coin::LOKI,
@@ -50,7 +46,15 @@ fn calc_autoswap_from_loki(
         let stake = calc_symmetric_from_other(other_amount, liquidity);
         Ok((stake.loki, stake.other))
     } else {
-        validate_autoswap(loki_effective, other_effective, liquidity)?;
+        // Liquidity "changed" due to autoswap
+        let loki_depth = liquidity.loki_depth + x - LOKI_SWAP_PROCESS_FEE;
+        let depth = liquidity.depth - y;
+
+        validate_autoswap(
+            loki_effective,
+            other_effective,
+            Liquidity { loki_depth, depth },
+        )?;
         Ok((loki_effective, other_effective))
     }
 }
@@ -80,14 +84,7 @@ fn calc_autoswap_to_loki(
         return Ok((stake.loki, stake.other));
     }
 
-    let x = calc_autoswap_generalised(
-        other_amount.to_atomic(),
-        loki_amount.to_atomic(),
-        liquidity.depth,
-        liquidity.loki_depth,
-        0,
-        LOKI_SWAP_PROCESS_FEE,
-    )?;
+    let x = search::find_other_x(loki_amount, other_amount, liquidity, LOKI_SWAP_PROCESS_FEE)?;
 
     let y = utils::price::calculate_output_amount(
         other_amount.coin_type(),
@@ -111,62 +108,17 @@ fn calc_autoswap_to_loki(
         let stake = calc_symmetric_from_loki(loki_amount, other_amount.coin_type(), liquidity);
         Ok((stake.loki, stake.other))
     } else {
-        validate_autoswap(loki_effective, other_effective, liquidity)?;
+        // Liquidity "changed" due to autoswap
+        let loki_depth = liquidity.loki_depth - y - LOKI_SWAP_PROCESS_FEE;
+        let depth = liquidity.depth + x;
+
+        validate_autoswap(
+            loki_effective,
+            other_effective,
+            Liquidity { loki_depth, depth },
+        )?;
         Ok((loki_effective, other_effective))
     }
-}
-
-fn calc_autoswap_generalised(
-    loki_amount: u128,
-    other_amount: u128,
-    loki_depth: u128,
-    other_depth: u128,
-    input_fee: u128,
-    output_fee: u128,
-) -> Result<u128, ()> {
-    let l: BigInt = loki_amount.into();
-    let e: BigInt = other_amount.into();
-    let dl: BigInt = loki_depth.into();
-    let de: BigInt = other_depth.into();
-    let i_fee: BigInt = input_fee.into();
-    let o_fee: BigInt = output_fee.into();
-
-    // Solving cubic equation x^3 + b * x^2 + c * x + d = 0
-    let gamma = l - (e - o_fee) * &dl / de;
-
-    let b = BigInt::from(2) * &dl - &gamma;
-    let c = BigInt::from(2) * &dl * (&dl - &gamma);
-    let d = -&dl * &dl * (&gamma + &i_fee);
-
-    let delta0 = &b * &b - BigInt::from(3) * &c;
-
-    let delta1 = BigInt::from(2) * &b * &b * &b - BigInt::from(9) * &b * &c + BigInt::from(27) * &d;
-
-    let in_root = &delta1 * &delta1 - BigInt::from(4) * &delta0 * &delta0 * &delta0;
-
-    let inner_c = (&delta1 + BigInt::sqrt(&in_root)) / BigInt::from(2);
-
-    let big_c = BigInt::cbrt(&inner_c);
-
-    let x = -(&b + &big_c + &delta0 / &big_c) / BigInt::from(3);
-
-    let x: u128 = match x.try_into() {
-        Ok(x) => x,
-        Err(err) => {
-            error!("Invalid autoswap amount: {}", err);
-            return Err(());
-        }
-    };
-
-    if x > loki_amount {
-        error!(
-            "Swapped amount exceeds initial amount: {}/{}",
-            x, loki_amount
-        );
-        return Err(());
-    }
-
-    Ok(x as u128)
 }
 
 fn validate_autoswap(
@@ -181,12 +133,14 @@ fn validate_autoswap(
     let dl: BigInt = liquidity.loki_depth.into();
 
     // Error in atomic loki (easier to calculate in whole numbers)
-    let error = (dl * e) / de - l - BigInt::from(1);
-    let error: i128 = error.try_into().unwrap();
+    let error = (dl * e) / de - &l;
 
-    dbg!(&error);
+    // Normalize error by the input amount:
+    let error = (BigInt::from(1_000_000_000) * error) / &l;
 
-    if error.abs() > 1_000_000 {
+    let error: i128 = error.try_into().map_err(|_| ())?;
+
+    if error.abs() > 1 {
         return Err(());
     }
 
@@ -271,6 +225,7 @@ fn calc_symmetric_from_loki(
     }
 }
 
+/// Calculate effective contribution
 pub(crate) fn calc_autoswap_amount(
     loki_amount: LokiAmount,
     other_amount: GenericCoinAmount,

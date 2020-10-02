@@ -182,6 +182,7 @@ mod autoswap_tests {
 
         let l = loki(70_000_000);
         let e = eth(6_681_200);
+
         let res = calc_autoswap_amount(l, e, liquidity);
 
         assert!(res.is_ok());
@@ -193,7 +194,7 @@ mod autoswap_tests {
 
         let mut rng = StdRng::seed_from_u64(0);
 
-        for _ in 0..100 {
+        for _ in 0..10 {
             let l = rng.gen::<u128>();
             let e = rng.gen::<u128>();
 
