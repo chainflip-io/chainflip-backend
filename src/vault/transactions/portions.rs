@@ -56,6 +56,7 @@ pub(crate) fn aggregate_current_portions(
 }
 
 /// Pool change tx associated with staker id
+#[derive(Debug)]
 struct EffectiveStakeContribution {
     staker_id: StakerId,
     /// We only need to keep track of the loki amount because
