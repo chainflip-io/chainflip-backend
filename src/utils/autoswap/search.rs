@@ -93,7 +93,7 @@ struct Trial {
 }
 
 /// A state that gets passed around (unmodified)
-/// thoroughout one autoswap computation
+/// throughout one autoswap computation
 struct State {
     input: u128,
     input_coin: Coin,
