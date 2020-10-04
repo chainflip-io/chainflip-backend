@@ -97,6 +97,7 @@ pub type VaultPortions = HashMap<PoolCoin, PoolPortions>;
 struct MemoryState {
     quote_txs: Vec<FulfilledTxWrapper<QuoteTx>>,
     stake_quote_txs: Vec<FulfilledTxWrapper<StakeQuoteTx>>,
+    unstake_request_txs: Vec<UnstakeRequestTx>,
     stake_txs: Vec<StakeTx>,
     witness_txs: Vec<WitnessTxWrapper>,
     output_txs: Vec<FulfilledTxWrapper<OutputTx>>,
@@ -117,6 +118,7 @@ impl<S: ISideChain> MemoryTransactionsProvider<S> {
         let state = MemoryState {
             quote_txs: vec![],
             stake_quote_txs: vec![],
+            unstake_request_txs: vec![],
             stake_txs: vec![],
             witness_txs: vec![],
             output_txs: vec![],
@@ -188,11 +190,8 @@ impl MemoryState {
         }
     }
 
-    fn process_unstake_request_tx(&mut self, _tx: UnstakeRequestTx) {
-        // 1. Find how much of the liquidity the skaker owns in the pool
-        // 2. Make payment to the refund for the amount requested
-
-        unimplemented!();
+    fn process_unstake_request_tx(&mut self, tx: UnstakeRequestTx) {
+        self.unstake_request_txs.push(tx);
     }
 
     fn process_output_tx(&mut self, tx: OutputTx) {
@@ -320,6 +319,10 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
 
     fn get_output_txs(&self) -> &[FulfilledTxWrapper<OutputTx>] {
         &self.state.output_txs
+    }
+
+    fn get_unstake_request_txs(&self) -> &[UnstakeRequestTx] {
+        &self.state.unstake_request_txs
     }
 }
 

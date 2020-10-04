@@ -1,14 +1,4 @@
-use crate::{
-    common::{store::KeyValueStore, Coin, LokiAmount},
-    side_chain::SideChainTx,
-    transactions::{PoolChangeTx, StakeQuoteTx, StakeTx},
-    vault::transactions::TransactionProvider,
-};
-
-use std::convert::{TryFrom, TryInto};
-
-use super::transactions::memory_provider::{FulfilledTxWrapper, WitnessTxWrapper};
-use uuid::Uuid;
+use crate::{common::store::KeyValueStore, vault::transactions::TransactionProvider};
 
 /// Processing utils
 pub mod utils;
@@ -19,6 +9,9 @@ mod swap;
 /// Output processing
 mod output;
 
+/// Stake and unstake processing
+mod staking;
+
 /// Component that matches witness transactions with quotes and processes them
 pub struct SideChainProcessor<T, KVS>
 where
@@ -27,22 +20,6 @@ where
 {
     tx_provider: T,
     db: KVS,
-}
-
-/// A set of transaction to be added to the side chain as a result
-/// of a successful match between stake and witness transactions
-struct StakeQuoteResult {
-    stake_tx: StakeTx,
-    pool_change: PoolChangeTx,
-}
-
-impl StakeQuoteResult {
-    pub fn new(stake_tx: StakeTx, pool_change: PoolChangeTx) -> Self {
-        StakeQuoteResult {
-            stake_tx,
-            pool_change,
-        }
-    }
 }
 
 /// Events emited by the processor
@@ -67,151 +44,24 @@ where
         }
     }
 
-    /// Process a single stake quote with all witness transactions referencing it
-    fn process_stake_quote(
-        quote_info: &FulfilledTxWrapper<StakeQuoteTx>,
-        witness_txs: &[&WitnessTxWrapper],
-    ) -> Option<StakeQuoteResult> {
-        // TODO: put a balance change tx onto the side chain
-        info!("Found witness matching quote: {:?}", quote_info.inner);
+    fn on_blockchain_progress(&mut self) {
+        let stake_quote_txs = self.tx_provider.get_stake_quote_txs();
+        let witness_txs = self.tx_provider.get_witness_txs();
 
-        // TODO: only print this if a witness is not used:
+        let new_txs = staking::process_stakes(stake_quote_txs, witness_txs);
 
-        // For now only process unfulfilled ones:
-        if quote_info.fulfilled {
-            warn!("Witness matches an already fulfilled quote. Should refund?");
-            return None;
+        for tx in &new_txs {
+            info!("Adding new tx: {:?}", tx);
         }
 
-        let quote = &quote_info.inner;
+        // TODO: make sure that things below happend atomically
+        // (e.g. we don't want to send funds more than once if the
+        // latest block info failed to have been updated)
 
-        let mut loki_amount: Option<i128> = None;
-        let mut other_amount: Option<i128> = None;
-
-        // Indexes of used witness transaction
-        let mut wtx_idxs = Vec::<Uuid>::default();
-
-        for wtx in witness_txs {
-            // We don't expect used quotes at this stage,
-            // but let's double check this:
-            if wtx.used {
-                continue;
-            }
-
-            let wtx = &wtx.inner;
-
-            match wtx.coin {
-                Coin::LOKI => {
-                    if loki_amount.is_some() {
-                        error!("Unexpected second loki witness transaction");
-                        return None;
-                    }
-
-                    let amount = match i128::try_from(wtx.amount) {
-                        Ok(amount) => amount,
-                        Err(err) => {
-                            error!("Invalid amount in quote: {} ({})", wtx.amount, err);
-                            return None;
-                        }
-                    };
-
-                    wtx_idxs.push(wtx.id);
-                    loki_amount = Some(amount);
-                }
-                coin_type @ _ => {
-                    if coin_type == quote.coin_type.get_coin() {
-                        if other_amount.is_some() {
-                            error!("Unexpected second loki witness transaction");
-                            return None;
-                        }
-
-                        let amount = match i128::try_from(wtx.amount) {
-                            Ok(amount) => amount,
-                            Err(err) => {
-                                error!("Invalid amount in quote: {} ({})", wtx.amount, err);
-                                return None;
-                            }
-                        };
-                        wtx_idxs.push(wtx.id);
-                        other_amount = Some(amount);
-                    } else {
-                        error!("Unexpected coin type: {}", coin_type);
-                        return None;
-                    }
-                }
-            }
-        }
-
-        if loki_amount.is_none() {
-            info!("Loki is not yet provisioned in quote: {:?}", quote);
-        }
-
-        if other_amount.is_none() {
-            info!(
-                "{} is not yet provisioned in quote: {:?}",
-                quote.coin_type.get_coin(),
-                quote
-            );
-        }
-
-        match (loki_amount, other_amount) {
-            (Some(loki_amount), Some(other_amount)) => {
-                let pool_coin = quote.coin_type;
-
-                let pool_change_tx = PoolChangeTx::new(pool_coin, loki_amount, other_amount);
-
-                // TODO: autoswap goes here
-                let loki_amount: u128 = loki_amount.try_into().expect("negative stake");
-                let loki_amount = LokiAmount::from_atomic(loki_amount);
-
-                let other_amount: u128 = other_amount.try_into().expect("negative stake");
-
-                let stake_tx = StakeTx {
-                    id: Uuid::new_v4(),
-                    pool_change_tx: pool_change_tx.id,
-                    quote_tx: quote.id,
-                    witness_txs: wtx_idxs,
-                    staker_id: quote.staker_id.clone(),
-                    pool: pool_coin,
-                    loki_amount,
-                    other_amount,
-                };
-
-                Some(StakeQuoteResult::new(stake_tx, pool_change_tx))
-            }
-            _ => None,
-        }
-    }
-
-    /// Try to match witness transacitons with stake transactions and return a list of
-    /// transactions that should be added to the side chain
-    fn process_stakes(
-        quotes: &[FulfilledTxWrapper<StakeQuoteTx>],
-        witness_txs: &[WitnessTxWrapper],
-    ) -> Vec<SideChainTx> {
-        let mut new_txs = Vec::<SideChainTx>::default();
-
-        for quote_info in quotes {
-            // Find all relevant witness transactions
-            let wtxs: Vec<&WitnessTxWrapper> = witness_txs
-                .iter()
-                .filter(|wtx| !wtx.used && wtx.inner.quote_id == quote_info.inner.id)
-                .collect();
-
-            if !wtxs.is_empty() {
-                if let Some(res) =
-                    SideChainProcessor::<T, KVS>::process_stake_quote(quote_info, &wtxs)
-                {
-                    new_txs.reserve(new_txs.len() + 2);
-                    // IMPORTANT: stake transactions should come before pool change transactions,
-                    // due to the way Transaction provider processes them
-                    new_txs.push(res.stake_tx.into());
-                    new_txs.push(res.pool_change.into());
-                }
-            }
-        }
-
-        new_txs
+        if let Err(err) = self.tx_provider.add_transactions(new_txs) {
+            error!("Error adding a pool change tx: {}", err);
+            panic!();
+        };
     }
 
     /// Poll the side chain/tx_provider and use event_sender to
@@ -230,36 +80,19 @@ where
 
             // Check if transaction provider made progress
             if idx > next_block_idx {
-                let stake_quote_txs = self.tx_provider.get_stake_quote_txs();
-                let witness_txs = self.tx_provider.get_witness_txs();
+                self.on_blockchain_progress();
+            }
 
-                let new_txs =
-                    SideChainProcessor::<T, KVS>::process_stakes(stake_quote_txs, witness_txs);
+            if let Err(err) = self.db.set_data(DB_KEY, Some(idx)) {
+                error!("Could not update latest block in db: {}", err);
+                // Not quote sure how to recover from this, so probably best to terminate
+                panic!("Database failure");
+            }
 
-                for tx in &new_txs {
-                    info!("Adding new tx: {:?}", tx);
-                }
-
-                // TODO: make sure that things below happend atomically
-                // (e.g. we don't want to send funds more than once if the
-                // latest block info failed to have been updated)
-
-                if let Err(err) = self.tx_provider.add_transactions(new_txs) {
-                    error!("Error adding a pool change tx: {}", err);
-                    panic!();
-                };
-
-                if let Err(err) = self.db.set_data(DB_KEY, Some(idx)) {
-                    error!("Could not update latest block in db: {}", err);
-                    // Not quote sure how to recover from this, so probably best to terminate
-                    panic!("Database failure");
-                }
-
-                next_block_idx = idx;
-                if let Some(sender) = &event_sender {
-                    let _ = sender.send(ProcessorEvent::BLOCK(idx));
-                    debug!("Processor processing block: {}", idx);
-                }
+            next_block_idx = idx;
+            if let Some(sender) = &event_sender {
+                let _ = sender.send(ProcessorEvent::BLOCK(idx));
+                debug!("Processor processing block: {}", idx);
             }
 
             std::thread::sleep(std::time::Duration::from_secs(1));
@@ -275,147 +108,5 @@ where
             info!("Starting the processor thread");
             self.run_event_loop(event_sender);
         });
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-
-    use crate::{
-        common::{GenericCoinAmount, LokiAmount},
-        side_chain::MemorySideChain,
-        utils::test_utils::{create_fake_stake_quote, create_fake_witness, store::MemoryKVS},
-        vault::transactions::MemoryTransactionsProvider,
-    };
-
-    type Processor = SideChainProcessor<MemoryTransactionsProvider<MemorySideChain>, MemoryKVS>;
-
-    #[test]
-    fn fulfilled_quotes_should_produce_new_tx() {
-        let coin_type = Coin::ETH;
-        let loki_amount = LokiAmount::from_decimal_string("1.0");
-        let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
-
-        let quote_tx = create_fake_stake_quote(loki_amount, coin_amount);
-        let wtx_loki = create_fake_witness(&quote_tx, loki_amount, Coin::LOKI);
-        let wtx_loki = WitnessTxWrapper::new(wtx_loki, false);
-        let wtx_eth = create_fake_witness(&quote_tx, coin_amount, coin_type);
-        let wtx_eth = WitnessTxWrapper::new(wtx_eth, false);
-
-        let quote_tx = FulfilledTxWrapper::new(quote_tx, false);
-
-        let res = Processor::process_stake_quote(&quote_tx, &[&wtx_loki, &wtx_eth]).unwrap();
-
-        assert_eq!(
-            res.pool_change.depth_change as u128,
-            coin_amount.to_atomic()
-        );
-        assert_eq!(
-            res.pool_change.loki_depth_change as u128,
-            loki_amount.to_atomic()
-        );
-
-        assert_eq!(res.stake_tx.pool_change_tx, res.pool_change.id);
-        assert_eq!(res.stake_tx.quote_tx, quote_tx.inner.id);
-        assert!(res.stake_tx.witness_txs.contains(&wtx_loki.inner.id));
-        assert!(res.stake_tx.witness_txs.contains(&wtx_eth.inner.id));
-    }
-
-    #[test]
-    fn partially_fulfilled_quotes_do_not_produce_new_tx() {
-        let coin_type = Coin::ETH;
-        let loki_amount = LokiAmount::from_decimal_string("1.0");
-        let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
-
-        let quote_tx = create_fake_stake_quote(loki_amount, coin_amount);
-        let wtx_loki = create_fake_witness(&quote_tx, loki_amount, Coin::LOKI);
-        let wtx_loki = WitnessTxWrapper::new(wtx_loki, false);
-
-        let quote_tx = FulfilledTxWrapper::new(quote_tx, false);
-
-        let tx = Processor::process_stake_quote(&quote_tx, &[&wtx_loki]);
-
-        assert!(tx.is_none())
-    }
-
-    #[test]
-    fn witness_tx_cannot_be_reused() {
-        let coin_type = Coin::ETH;
-        let loki_amount = LokiAmount::from_decimal_string("1.0");
-        let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
-
-        let quote_tx = create_fake_stake_quote(loki_amount, coin_amount);
-
-        let wtx_loki = create_fake_witness(&quote_tx, loki_amount, Coin::LOKI);
-        // Witness has already been used before
-        let wtx_loki = WitnessTxWrapper::new(wtx_loki, true);
-
-        let wtx_eth = create_fake_witness(&quote_tx, coin_amount, coin_type);
-        let wtx_eth = WitnessTxWrapper::new(wtx_eth, false);
-
-        let quote_tx = FulfilledTxWrapper::new(quote_tx, false);
-
-        let tx = Processor::process_stake_quote(&quote_tx, &[&wtx_loki, &wtx_eth]);
-
-        assert!(tx.is_none())
-    }
-
-    #[test]
-    fn quote_cannot_be_fulfilled_twice() {
-        let coin_type = Coin::ETH;
-        let loki_amount = LokiAmount::from_decimal_string("1.0");
-        let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
-
-        let quote_tx = create_fake_stake_quote(loki_amount, coin_amount);
-
-        let wtx_loki = create_fake_witness(&quote_tx, loki_amount, Coin::LOKI);
-        let wtx_loki = WitnessTxWrapper::new(wtx_loki, false);
-
-        let wtx_eth = create_fake_witness(&quote_tx, coin_amount, coin_type);
-        let wtx_eth = WitnessTxWrapper::new(wtx_eth, false);
-
-        // The quote has already been fulfilled
-        let quote_tx = FulfilledTxWrapper::new(quote_tx, true);
-
-        let tx = Processor::process_stake_quote(&quote_tx, &[&wtx_loki, &wtx_eth]);
-
-        assert!(tx.is_none())
-    }
-
-    #[test]
-    fn check_staking_smaller_amounts() {
-        let loki_amount = LokiAmount::from_decimal_string("1.0");
-
-        let coin_type = Coin::ETH;
-        let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
-
-        let quote_tx = create_fake_stake_quote(
-            LokiAmount::from_decimal_string("2.0"),
-            GenericCoinAmount::from_decimal_string(coin_type, "3.0"),
-        );
-        let wtx_loki = create_fake_witness(&quote_tx, loki_amount, Coin::LOKI);
-        let wtx_loki = WitnessTxWrapper::new(wtx_loki, false);
-        let wtx_eth = create_fake_witness(&quote_tx, coin_amount, coin_type);
-        let wtx_eth = WitnessTxWrapper::new(wtx_eth, false);
-
-        let quote_tx = FulfilledTxWrapper::new(quote_tx, false);
-
-        let res = Processor::process_stake_quote(&quote_tx, &[&wtx_loki, &wtx_eth]).unwrap();
-
-        assert_eq!(
-            res.pool_change.depth_change as u128,
-            coin_amount.to_atomic()
-        );
-        assert_eq!(
-            res.pool_change.loki_depth_change as u128,
-            loki_amount.to_atomic()
-        );
-
-        assert_eq!(res.stake_tx.pool_change_tx, res.pool_change.id);
-        assert_eq!(res.stake_tx.quote_tx, quote_tx.inner.id);
-        assert!(res.stake_tx.witness_txs.contains(&wtx_loki.inner.id));
-        assert!(res.stake_tx.witness_txs.contains(&wtx_eth.inner.id));
     }
 }

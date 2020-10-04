@@ -1,10 +1,7 @@
 use crate::{
     common::liquidity_provider::LiquidityProvider,
-    common::Coin,
     side_chain::SideChainTx,
-    transactions::OutputTx,
-    transactions::{QuoteTx, StakeQuoteTx},
-    utils::price::{self, OutputCalculation},
+    transactions::{OutputTx, QuoteTx, StakeQuoteTx, UnstakeRequestTx},
 };
 use memory_provider::{FulfilledTxWrapper, WitnessTxWrapper};
 
@@ -27,6 +24,9 @@ pub trait TransactionProvider: LiquidityProvider {
 
     /// Get all the output transactions
     fn get_output_txs(&self) -> &[FulfilledTxWrapper<OutputTx>];
+
+    /// Get all (unfulfilled?) unstake requests
+    fn get_unstake_request_txs(&self) -> &[UnstakeRequestTx];
 }
 
 /// Memory transaction provider
