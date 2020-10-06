@@ -5,7 +5,8 @@ use crate::{
     utils::bip44,
     utils::price,
     vault::{
-        config::VAULT_CONFIG, processor::utils::get_swap_expire_timestamp,
+        config::{NetType, VAULT_CONFIG},
+        processor::utils::get_swap_expire_timestamp,
         transactions::TransactionProvider,
     },
 };
@@ -77,10 +78,12 @@ fn generate_eth_address(root_key: &str, index: u64) -> Result<String, String> {
     Ok(ethereum::Address::from(key_pair.public_key).to_string())
 }
 
-fn generate_p2pkh_btc_address(
+fn generate_btc_address(
     root_key: &str,
     index: u64,
     compressed: bool,
+    address_type: bitcoin::AddressType,
+    nettype: &NetType,
 ) -> Result<String, String> {
     let key_pair = generate_bip44_keypair_from_root_key(root_key, bip44::CoinType::BTC, index)?;
     let btc_pubkey = bitcoin::PublicKey {
@@ -88,10 +91,25 @@ fn generate_p2pkh_btc_address(
         compressed,
     };
 
-    let p2pkh_addr_str =
-        bitcoin::Address::p2pkh(&btc_pubkey, bitcoin::Network::Bitcoin).to_string();
+    let network = match nettype {
+        NetType::Testnet => bitcoin::Network::Testnet,
+        NetType::Mainnet => bitcoin::Network::Bitcoin,
+    };
 
-    Ok(p2pkh_addr_str)
+    let address = match address_type {
+        bitcoin::AddressType::P2wpkh => bitcoin::Address::p2wpkh(&btc_pubkey, network),
+        bitcoin::AddressType::P2pkh => bitcoin::Address::p2pkh(&btc_pubkey, network),
+        _ => {
+            warn!(
+                "Address type of {} is not currently supported. Defaulting to p2wpkh address",
+                address_type
+            );
+            bitcoin::Address::p2wpkh(&btc_pubkey, network)
+        }
+    };
+    let address = address.to_string();
+
+    Ok(address)
 }
 
 /// Request a swap quote
@@ -162,7 +180,13 @@ pub async fn post_quote<T: TransactionProvider>(
                 Ok(index) => index,
                 Err(_) => return Err(bad_request("Incorrect input address id")),
             };
-            match generate_p2pkh_btc_address(&VAULT_CONFIG.btc.master_root_key, index, false) {
+            match generate_btc_address(
+                &VAULT_CONFIG.btc.master_root_key,
+                index,
+                false,
+                bitcoin::AddressType::P2wpkh,
+                &VAULT_CONFIG.net_type,
+            ) {
                 Ok(address) => address,
                 Err(err) => {
                     warn!("Failed to generate bitcoin address: {}", err);
@@ -228,6 +252,7 @@ mod test {
         common::coins::PoolCoin, transactions::PoolChangeTx,
         utils::test_utils::get_transactions_provider,
     };
+    use bitcoin::AddressType::*;
 
     // NEVER USE THIS IN AN ACTUAL APPLICATION! ONLY FOR TESTING
     const ROOT_KEY: &str = "xprv9s21ZrQH143K3sFfKzYqgjMWgvsE44f6gxaRvyo11R22u2p5qegToQaEi7e6e5mRq3f92g9yDQQtu488ggct5gUspippg678t1QTCwBRb85";
@@ -258,27 +283,51 @@ mod test {
 
     #[test]
     fn generates_correct_btc_address() {
+        // === p2wpkh - pay-to-witness-pubkey-hash (segwit) addresses ===
         assert_eq!(
-            generate_p2pkh_btc_address(ROOT_KEY, 0, false).unwrap(),
-            "1Q6hHytu6sZmib3TUNeEhGxE8L2ydx5JZo",
+            generate_btc_address(ROOT_KEY, 0, false, P2wpkh, &NetType::Mainnet).unwrap(),
+            "bc1ql40fhzrdmljydema5mz5hmja7mul8smmdpvjxl"
+        );
+
+        // testnet generates different addresses to mainnet
+        assert_eq!(
+            generate_btc_address(ROOT_KEY, 0, false, P2wpkh, &NetType::Testnet).unwrap(),
+            "tb1ql40fhzrdmljydema5mz5hmja7mul8smm88hpav"
         );
 
         assert_eq!(
-            generate_p2pkh_btc_address(ROOT_KEY, 1, true).unwrap(),
+            generate_btc_address(ROOT_KEY, 1, false, P2wpkh, &NetType::Mainnet).unwrap(),
+            "bc1q7mlzxxwdx6ut660sg6fs8yhz3tphv6r28rwr3m"
+        );
+
+        // === p2pkh - pay-to-pubkey-hash (legacy) addresses ===
+        assert_eq!(
+            generate_btc_address(ROOT_KEY, 0, false, P2pkh, &NetType::Mainnet).unwrap(),
+            "1Q6hHytu6sZmib3TUNeEhGxE8L2ydx5JZo",
+        );
+
+        // testnet generates different addresses to mainnet
+        assert_eq!(
+            generate_btc_address(ROOT_KEY, 0, false, P2pkh, &NetType::Testnet).unwrap(),
+            "n4ceb2ysuu12VhX5BwccXCAYzKdgZY2XFH",
+        );
+
+        assert_eq!(
+            generate_btc_address(ROOT_KEY, 1, true, P2pkh, &NetType::Mainnet).unwrap(),
             "1LbqQTsn9EJN1yWJ2YkQGtaihovjgs6cfW"
         );
 
         assert_eq!(
-            generate_p2pkh_btc_address(ROOT_KEY, 1, false).unwrap(),
+            generate_btc_address(ROOT_KEY, 1, false, P2pkh, &NetType::Mainnet).unwrap(),
             "1PWyfwtkS9co1rTHvU2SSESbcu6zi2TmxH"
         );
 
         assert_ne!(
-            generate_p2pkh_btc_address(ROOT_KEY, 2, false).unwrap(),
+            generate_btc_address(ROOT_KEY, 2, false, P2pkh, &NetType::Mainnet).unwrap(),
             "1LbqQTsn9EJN1yWJ2YkQGtaihovjgs6cfW"
         );
 
-        assert!(generate_p2pkh_btc_address("not a real key", 4, false).is_err())
+        assert!(generate_btc_address("not a real key", 4, false, P2pkh, &NetType::Mainnet).is_err())
     }
 
     #[tokio::test]

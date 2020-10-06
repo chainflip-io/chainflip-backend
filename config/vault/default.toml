@@ -1,3 +1,6 @@
+# Options: testnet, mainnet
+net_type = "testnet"
+
 [loki.rpc]
 port = 6934
 

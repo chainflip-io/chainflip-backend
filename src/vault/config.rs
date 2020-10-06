@@ -14,6 +14,16 @@ lazy_static! {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+/// Defines network type for all chains each chain implementation can use
+/// this type to match on network type specific actions
+pub enum NetType {
+    /// Mainnet, real money here
+    Mainnet,
+    /// Testnet, use the testing network of each chain
+    Testnet,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 /// Configuration for the loki wallet rpc
 pub struct LokiRpcConfig {
     /// The port that the wallet rpc is running on
@@ -44,6 +54,8 @@ pub struct BtcConfig {
 #[derive(Debug, Deserialize, Clone)]
 /// Configuration for vault nodes
 pub struct VaultConfig {
+    /// Which network type to use for all the vaults
+    pub net_type: NetType,
     /// Loki config
     pub loki: LokiConfig,
     /// Eth config
