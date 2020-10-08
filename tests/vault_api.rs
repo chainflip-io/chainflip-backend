@@ -1,3 +1,4 @@
+use parking_lot::RwLock;
 use serde::Serialize;
 
 use reqwest::StatusCode;
@@ -57,7 +58,7 @@ async fn vault_http_server_tests() {
     let side_chain = Arc::new(Mutex::new(side_chain));
 
     let provider = get_transactions_provider();
-    let provider = Arc::new(Mutex::new(provider));
+    let provider = Arc::new(RwLock::new(provider));
 
     let (tx, rx) = tokio::sync::oneshot::channel();
 

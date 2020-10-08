@@ -18,6 +18,7 @@ use blockswap::{
         witness::LokiWitness,
     },
 };
+use parking_lot::RwLock;
 
 use std::sync::{Arc, Mutex};
 
@@ -67,7 +68,7 @@ fn main() {
     let mut provider = MemoryTransactionsProvider::new(s_chain.clone());
     provider.sync();
 
-    let provider = Arc::new(Mutex::new(provider));
+    let provider = Arc::new(RwLock::new(provider));
 
     let config = LokiConnectionConfig {
         rpc_wallet_port: vault_config.loki.rpc.port,

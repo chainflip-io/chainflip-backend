@@ -10,6 +10,7 @@ use crate::{
         transactions::TransactionProvider,
     },
 };
+use parking_lot::RwLock;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
@@ -115,7 +116,7 @@ fn generate_btc_address(
 /// Request a swap quote
 pub async fn post_quote<T: TransactionProvider>(
     params: QuoteParams,
-    provider: Arc<Mutex<T>>,
+    provider: Arc<RwLock<T>>,
 ) -> Result<QuoteResponse, ResponseError> {
     let original_params = params.clone();
 
@@ -131,7 +132,7 @@ pub async fn post_quote<T: TransactionProvider>(
         .parse::<u128>()
         .map_err(|_| internal_server_error())?;
 
-    let mut provider = provider.lock().unwrap();
+    let mut provider = provider.write();
     provider.sync();
 
     // Ensure we don't have a quote with the address
@@ -349,7 +350,7 @@ mod test {
         };
         provider.add_transactions(vec![quote.into()]).unwrap();
 
-        let provider = Arc::new(Mutex::new(provider));
+        let provider = Arc::new(RwLock::new(provider));
 
         let result = post_quote(params(), provider)
             .await
@@ -361,7 +362,7 @@ mod test {
     #[tokio::test]
     async fn returns_error_if_no_liquidity() {
         let provider = get_transactions_provider();
-        let provider = Arc::new(Mutex::new(provider));
+        let provider = Arc::new(RwLock::new(provider));
 
         // No pools yet
         let result = post_quote(params(), provider.clone())
@@ -374,7 +375,7 @@ mod test {
         {
             let tx = PoolChangeTx::new(PoolCoin::ETH, 0, 0);
 
-            let mut provider = provider.lock().unwrap();
+            let mut provider = provider.write();
             provider.add_transactions(vec![tx.into()]).unwrap();
         }
 
@@ -391,12 +392,12 @@ mod test {
         let tx = PoolChangeTx::new(PoolCoin::ETH, 10_000_000_000, 50_000_000_000);
         provider.add_transactions(vec![tx.into()]).unwrap();
 
-        let provider = Arc::new(Mutex::new(provider));
+        let provider = Arc::new(RwLock::new(provider));
 
         post_quote(params(), provider.clone())
             .await
             .expect("Expected to get a quote response");
 
-        assert_eq!(provider.lock().unwrap().get_quote_txs().len(), 1);
+        assert_eq!(provider.read().get_quote_txs().len(), 1);
     }
 }
