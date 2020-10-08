@@ -35,7 +35,7 @@ where
         GenericCoinAmount::from_decimal_string(Coin::ETH, "1.0"),
     );
 
-    let witness = create_fake_witness(&quote, quote.loki_amount, Coin::LOKI);
+    let witness = create_fake_witness(&quote, quote.loki_amount(), Coin::LOKI);
 
     let mut s_chain = s_chain.lock().unwrap();
 

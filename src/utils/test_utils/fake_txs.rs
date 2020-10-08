@@ -14,9 +14,9 @@ pub fn create_fake_stake_quote(
     StakeQuoteTx {
         id: Uuid::new_v4(),
         input_loki_address_id: LokiPaymentId::from_str("60900e5603bf96e3").unwrap(),
-        loki_amount,
+        loki_atomic_amount: loki_amount.to_atomic(),
         coin_type: PoolCoin::from(coin_amount.coin_type()).expect("invalid coin type"),
-        coin_amount,
+        coin_atomic_amount: coin_amount.to_atomic(),
         staker_id: Uuid::new_v4().to_string(),
     }
 }

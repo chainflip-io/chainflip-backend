@@ -65,7 +65,7 @@ pub trait BlockProcessor {
     fn get_last_processed_block_number(&self) -> Option<u32>;
 
     /// Process a list of blocks
-    fn process_blocks(&mut self, blocks: Vec<SideChainBlock>) -> Result<(), String>;
+    fn process_blocks(&mut self, blocks: &[SideChainBlock]) -> Result<(), String>;
 }
 
 /// A trait for providing quoter state

@@ -111,13 +111,41 @@ pub struct StakeQuoteTx {
     /// Info used to uniquely identify payment
     pub input_loki_address_id: LokiPaymentId,
     /// Loki amount that is meant to be deposited
-    pub loki_amount: LokiAmount,
+    pub loki_atomic_amount: u128,
     /// Other coin's type
     pub coin_type: PoolCoin,
     /// Amount of the other (non-Loki) pool coin
-    pub coin_amount: GenericCoinAmount,
+    pub coin_atomic_amount: u128,
     /// Stakers identity
     pub staker_id: String,
+}
+
+impl StakeQuoteTx {
+    /// Create a new stake quote tx
+    pub fn new(
+        input_loki_address_id: LokiPaymentId,
+        loki_atomic_amount: u128,
+        coin_type: PoolCoin,
+        coin_atomic_amount: u128,
+        staker_id: String,
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            input_loki_address_id,
+            loki_atomic_amount,
+            coin_type,
+            coin_atomic_amount,
+            staker_id,
+        }
+    }
+
+    pub fn loki_amount(&self) -> LokiAmount {
+        LokiAmount::from_atomic(self.loki_atomic_amount)
+    }
+
+    pub fn coin_amount(&self) -> GenericCoinAmount {
+        GenericCoinAmount::from_atomic(self.coin_type.get_coin(), self.coin_atomic_amount)
+    }
 }
 
 // This might be obsolete...

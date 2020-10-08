@@ -1,7 +1,39 @@
 use super::*;
 
 struct FakeState {}
-impl StateProvider for FakeState {}
+impl StateProvider for FakeState {
+    fn get_swap_quotes(&self) -> Option<Vec<crate::transactions::QuoteTx>> {
+        todo!()
+    }
+
+    fn get_swap_quote_tx(&self, id: String) -> Option<crate::transactions::QuoteTx> {
+        todo!()
+    }
+
+    fn get_stake_quotes(&self) -> Option<Vec<crate::transactions::StakeQuoteTx>> {
+        todo!()
+    }
+
+    fn get_stake_quote_tx(&self, id: String) -> Option<crate::transactions::StakeQuoteTx> {
+        todo!()
+    }
+
+    fn get_witness_txs(&self, quote_id: String) -> Option<Vec<crate::transactions::WitnessTx>> {
+        todo!()
+    }
+
+    fn get_output_txs(&self, quote_id: String) -> Option<Vec<crate::transactions::OutputTx>> {
+        todo!()
+    }
+
+    fn get_output_sent_txs(&self) -> Option<Vec<crate::transactions::OutputSentTx>> {
+        todo!()
+    }
+
+    fn get_pools(&self) -> HashMap<crate::common::PoolCoin, crate::common::Liquidity> {
+        todo!()
+    }
+}
 
 #[tokio::test]
 pub async fn get_coins_returns_all_coins() {

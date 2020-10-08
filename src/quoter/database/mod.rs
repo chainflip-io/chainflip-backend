@@ -2,7 +2,8 @@ use self::types::TransactionType;
 
 use super::{BlockProcessor, StateProvider};
 use crate::{
-    common::store::utils::SQLite as KVS, side_chain::SideChainBlock, side_chain::SideChainTx,
+    common::store::utils::SQLite as KVS,
+    side_chain::{SideChainBlock, SideChainTx},
 };
 use rusqlite::{self, Error, Transaction};
 use rusqlite::{params, Connection};
@@ -114,7 +115,7 @@ impl BlockProcessor for Database {
         KVS::get_data(&self.connection, "last_processed_block_number")
     }
 
-    fn process_blocks(&mut self, blocks: Vec<SideChainBlock>) -> Result<(), String> {
+    fn process_blocks(&mut self, blocks: &[SideChainBlock]) -> Result<(), String> {
         let tx = match self.connection.transaction() {
             Ok(transaction) => transaction,
             Err(err) => {
@@ -179,7 +180,20 @@ impl StateProvider for Database {
 
 #[cfg(test)]
 mod test {
+    use std::str::FromStr;
+
     use super::*;
+    use crate::{
+        common::Coin,
+        common::LokiPaymentId,
+        common::PoolCoin,
+        common::Timestamp,
+        common::WalletAddress,
+        transactions::{OutputSentTx, PoolChangeTx, StakeQuoteTx, WitnessTx},
+        utils::test_utils::create_fake_output_tx,
+        utils::test_utils::create_fake_quote_tx_eth_loki,
+        utils::test_utils::TEST_ETH_ADDRESS,
+    };
     use rusqlite::NO_PARAMS;
 
     fn setup() -> Database {
@@ -221,5 +235,73 @@ mod test {
         assert_eq!(results.id, uuid.to_string());
         assert_eq!(&results.data, "Hello");
         assert!(results.meta.is_none());
+    }
+
+    #[test]
+    fn processes_blocks() {
+        let mut db = setup();
+
+        assert!(db.get_last_processed_block_number().is_none());
+
+        let blocks: Vec<SideChainBlock> = vec![
+            SideChainBlock { id: 1, txs: vec![] },
+            SideChainBlock { id: 2, txs: vec![] },
+            SideChainBlock {
+                id: 10,
+                txs: vec![],
+            },
+        ];
+
+        db.process_blocks(&blocks).unwrap();
+
+        assert_eq!(db.get_last_processed_block_number(), Some(10));
+    }
+
+    #[test]
+    fn processes_transactions() {
+        let mut db = setup();
+        let tx = db.connection.transaction().unwrap();
+
+        let payment_id = LokiPaymentId::from_str("60900e5603bf96e3").unwrap();
+
+        let transactions: Vec<SideChainTx> = vec![
+            PoolChangeTx::new(PoolCoin::BTC, 100, -100).into(),
+            create_fake_quote_tx_eth_loki().into(), // Quote Tx
+            StakeQuoteTx::new(payment_id, 100, PoolCoin::BTC, 200, "id".to_owned()).into(),
+            WitnessTx::new(
+                Timestamp::now(),
+                Uuid::new_v4(),
+                "txid".to_owned(),
+                0,
+                0,
+                100,
+                Coin::ETH,
+                None,
+            )
+            .into(),
+            create_fake_output_tx(Coin::ETH).into(), // Output tx
+            OutputSentTx::new(
+                Timestamp::now(),
+                vec![Uuid::new_v4()],
+                Coin::ETH,
+                WalletAddress::new(TEST_ETH_ADDRESS),
+                100,
+                0,
+                "txid".to_owned(),
+            )
+            .unwrap()
+            .into(),
+        ];
+
+        Database::process_transactions(&tx, &transactions);
+
+        tx.commit().expect("Expected transactions to be added");
+
+        let count: u32 = db
+            .connection
+            .query_row("SELECT COUNT(*) from transactions", NO_PARAMS, |r| r.get(0))
+            .unwrap();
+
+        assert_eq!(count, 6);
     }
 }

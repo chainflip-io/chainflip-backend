@@ -30,16 +30,21 @@ pub mod logging;
 
 pub use fake_txs::{create_fake_stake_quote, create_fake_unstake_request_tx, create_fake_witness};
 
+/// Test ETH address
+pub const TEST_ETH_ADDRESS: &str = "0x70e7db0678460c5e53f1ffc9221d1c692111dcc5";
+/// Test LOKI address
+pub const TEST_LOKI_ADDRESS: &str = "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY";
+
 /// Create a dummy quote transaction to be used for tests
 pub fn create_fake_quote_tx_eth_loki() -> QuoteTx {
-    let eth_address = WalletAddress::new("0x70e7db0678460c5e53f1ffc9221d1c692111dcc5");
+    let eth_address = WalletAddress::new(TEST_ETH_ADDRESS);
 
     create_fake_quote_tx_coin_to_loki(Coin::ETH, eth_address)
 }
 
 /// Creates a fake quote tx from any input coin and address, to Loki
 pub fn create_fake_quote_tx_coin_to_loki(i_coin: Coin, i_addr: WalletAddress) -> QuoteTx {
-    let loki_address = WalletAddress::new("T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY");
+    let loki_address = WalletAddress::new(TEST_LOKI_ADDRESS);
 
     create_fake_quote_tx(i_coin, i_addr, Coin::LOKI, loki_address)
 }
