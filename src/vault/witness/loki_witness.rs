@@ -16,8 +16,7 @@ use crate::{
     side_chain::{ISideChain, SideChainTx},
 };
 
-use crate::common::coins::{Coin, CoinAmount};
-use uuid::Uuid;
+use crate::common::Coin;
 
 /// Witness Mock
 pub struct LokiWitness<T>

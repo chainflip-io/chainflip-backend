@@ -1,5 +1,7 @@
 use crate::{common::store::KeyValueStore, vault::transactions::TransactionProvider};
 
+pub use output::{CoinProcessor, LokiSender, OutputCoinProcessor};
+
 /// Processing utils
 pub mod utils;
 
@@ -13,13 +15,15 @@ mod output;
 mod staking;
 
 /// Component that matches witness transactions with quotes and processes them
-pub struct SideChainProcessor<T, KVS>
+pub struct SideChainProcessor<T, KVS, S>
 where
     T: TransactionProvider,
     KVS: KeyValueStore,
+    S: CoinProcessor,
 {
     tx_provider: T,
     db: KVS,
+    coin_sender: S,
 }
 
 /// Events emited by the processor
@@ -31,42 +35,32 @@ pub enum ProcessorEvent {
 
 type EventSender = crossbeam_channel::Sender<ProcessorEvent>;
 
-impl<T, KVS> SideChainProcessor<T, KVS>
+impl<T, KVS, S> SideChainProcessor<T, KVS, S>
 where
-    T: TransactionProvider + Send + 'static,
+    T: TransactionProvider + Send + Sync + 'static,
     KVS: KeyValueStore + Send + 'static,
+    S: CoinProcessor + Send + 'static,
 {
     /// Constructor taking a transaction provider
-    pub fn new(tx_provider: T, kvs: KVS) -> Self {
+    pub fn new(tx_provider: T, kvs: KVS, coin_sender: S) -> Self {
         SideChainProcessor {
             tx_provider,
             db: kvs,
+            coin_sender,
         }
     }
 
-    fn on_blockchain_progress(&mut self) {
-        let stake_quote_txs = self.tx_provider.get_stake_quote_txs();
-        let witness_txs = self.tx_provider.get_witness_txs();
+    async fn on_blockchain_progress(&mut self) {
+        staking::process_stakes(&mut self.tx_provider);
 
-        let new_txs = staking::process_stakes(stake_quote_txs, witness_txs);
+        swap::process_swaps(&mut self.tx_provider);
 
-        for tx in &new_txs {
-            info!("Adding new tx: {:?}", tx);
-        }
-
-        // TODO: make sure that things below happend atomically
-        // (e.g. we don't want to send funds more than once if the
-        // latest block info failed to have been updated)
-
-        if let Err(err) = self.tx_provider.add_transactions(new_txs) {
-            error!("Error adding a pool change tx: {}", err);
-            panic!();
-        };
+        output::process_outputs(&mut self.tx_provider, &mut self.coin_sender).await;
     }
 
     /// Poll the side chain/tx_provider and use event_sender to
     /// notify of local events
-    fn run_event_loop(mut self, event_sender: Option<EventSender>) {
+    async fn run_event_loop(mut self, event_sender: Option<EventSender>) {
         const DB_KEY: &'static str = "processor_next_block_idx";
 
         // TODO: We should probably distinguish between no value and other errors here:
@@ -78,9 +72,11 @@ where
         loop {
             let idx = self.tx_provider.sync();
 
+            debug!("Provider is at block: {}", idx);
+
             // Check if transaction provider made progress
-            if idx > next_block_idx {
-                self.on_blockchain_progress();
+            if idx >= next_block_idx {
+                self.on_blockchain_progress().await;
             }
 
             if let Err(err) = self.db.set_data(DB_KEY, Some(idx)) {
@@ -106,7 +102,12 @@ where
     pub fn start(self, event_sender: Option<EventSender>) {
         std::thread::spawn(move || {
             info!("Starting the processor thread");
-            self.run_event_loop(event_sender);
+
+            let mut rt = tokio::runtime::Runtime::new().unwrap();
+
+            rt.block_on(async {
+                self.run_event_loop(event_sender).await;
+            });
         });
     }
 }

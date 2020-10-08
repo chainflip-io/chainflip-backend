@@ -1,6 +1,6 @@
 //! Bindings to some commonly used methods exposed by Loki RPC Wallet
 
-use crate::common::{coins::CoinAmount, LokiAmount, LokiPaymentId, LokiWalletAddress};
+use crate::common::{LokiAmount, LokiPaymentId, LokiWalletAddress};
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 
@@ -348,6 +348,7 @@ struct TransferRequestParams {
     get_tx_hex: bool,
     get_tx_metadata: bool,
     get_tx_key: bool,
+    do_not_relay: bool,
 }
 
 /// Transfer response as received from loki wallet
@@ -355,6 +356,10 @@ struct TransferRequestParams {
 struct TransferResponseRaw {
     /// Fee in atomic units
     fee: u64,
+    /// Amount without the fee in atomic units
+    amount: u64,
+    /// /// Publically searchable transaction hash
+    tx_hash: String,
 }
 
 /// User-friendly transfer response
@@ -362,14 +367,38 @@ struct TransferResponseRaw {
 pub struct TransferResponse {
     /// Fee as typed amount
     pub fee: LokiAmount,
+    /// Amount without the fee
+    pub amount: LokiAmount,
+    /// Publically searchable transaction hash
+    pub tx_hash: String,
 }
 
-/// Make an rpc command to transfer `amount` of loki to `address`
+/// Transfer `amount` to `address` (fees not included)
 pub async fn transfer(
     port: u16,
     amount: &LokiAmount,
     address: &LokiWalletAddress,
+) -> Result<TransferResponse, String> {
+    let payment_id = None;
+    transfer_inner(port, amount, address, payment_id, false).await
+}
+
+/// Estimate fees for transfer
+pub async fn check_transfer_fee(
+    port: u16,
+    amount: &LokiAmount,
+    address: &LokiWalletAddress,
+) -> Result<TransferResponse, String> {
+    transfer_inner(port, amount, address, None, true).await
+}
+
+/// Make an rpc command to transfer `amount` of loki to `address`
+async fn transfer_inner(
+    port: u16,
+    amount: &LokiAmount,
+    address: &LokiWalletAddress,
     payment_id: Option<&str>,
+    check_fee_only: bool,
 ) -> Result<TransferResponse, String> {
     let amount: u64 = u64::try_from(amount.to_atomic()).map_err(|e| e.to_string())?;
 
@@ -386,11 +415,10 @@ pub async fn transfer(
         get_tx_key: true,
         get_tx_hex: true,
         get_tx_metadata: true,
+        do_not_relay: check_fee_only,
     };
 
     let params = serde_json::to_value(&params).map_err(|err| err.to_string())?;
-
-    info!("Params: {}", serde_json::to_string_pretty(&params).unwrap());
 
     let res = send_req_inner(port, "transfer", params)
         .await
@@ -401,6 +429,8 @@ pub async fn transfer(
     // Note that we will never get values larger than u64::MAX from the wallet...
     let res = TransferResponse {
         fee: LokiAmount::from_atomic(res.fee as u128),
+        amount: LokiAmount::from_atomic(res.amount as u128),
+        tx_hash: res.tx_hash,
     };
 
     Ok(res)

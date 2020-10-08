@@ -89,6 +89,7 @@ pub fn process_swaps<T: TransactionProvider>(provider: &mut T) {
     provider.sync();
 
     let swaps = get_swaps(provider);
+
     let transactions = process(provider, &swaps);
 
     if transactions.len() > 0 {
@@ -105,15 +106,9 @@ mod test {
     use uuid::Uuid;
 
     use crate::{
-        common::coins::CoinAmount,
-        common::coins::GenericCoinAmount,
-        common::coins::PoolCoin,
-        common::liquidity_provider::Liquidity,
-        common::Coin,
-        common::WalletAddress,
+        common::{Coin, GenericCoinAmount, Liquidity, PoolCoin, WalletAddress},
         side_chain::{ISideChain, MemorySideChain},
-        transactions::OutputTx,
-        transactions::PoolChangeTx,
+        transactions::{OutputTx, PoolChangeTx},
         utils::test_utils::create_fake_quote_tx_eth_loki,
         vault::transactions::MemoryTransactionsProvider,
     };

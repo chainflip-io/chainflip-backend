@@ -1,6 +1,6 @@
 use super::{
     coins::{CoinAmount, CoinInfo},
-    Coin, GenericCoinAmount,
+    Coin, GenericCoinAmount, WalletAddress,
 };
 
 use serde::{Deserialize, Serialize};
@@ -12,6 +12,18 @@ use std::fmt::{self, Display};
 pub struct LokiWalletAddress {
     /// base58 (monero flavor) representation
     address: String,
+}
+
+impl std::convert::From<WalletAddress> for LokiWalletAddress {
+    fn from(a: WalletAddress) -> Self {
+        LokiWalletAddress { address: a.0 }
+    }
+}
+
+impl From<LokiWalletAddress> for WalletAddress {
+    fn from(a: LokiWalletAddress) -> Self {
+        WalletAddress::new(&a.address)
+    }
 }
 
 impl std::str::FromStr for LokiWalletAddress {
@@ -142,6 +154,18 @@ impl LokiAmount {
     /// Get inner atomic representation
     pub fn to_atomic(&self) -> u128 {
         self.atomic_amount
+    }
+
+    /// Subtract checking for underflow
+    pub fn checked_sub(&self, v: &Self) -> Option<Self> {
+        let amount = self.to_atomic().checked_sub(v.to_atomic())?;
+        Some(LokiAmount::from_atomic(amount))
+    }
+
+    /// Add atomic amounts w/o overflow
+    pub fn saturating_add(&self, v: &Self) -> Self {
+        let amount = self.to_atomic().saturating_add(v.to_atomic());
+        LokiAmount::from_atomic(amount)
     }
 }
 

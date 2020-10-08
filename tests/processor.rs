@@ -1,12 +1,15 @@
 use blockswap::{
     common::{Coin, GenericCoinAmount, LokiAmount, PoolCoin},
     side_chain::{ISideChain, MemorySideChain, SideChainTx},
-    utils::test_utils::{self, create_fake_stake_quote, create_fake_witness, store::MemoryKVS},
+    transactions::{OutputSentTx, OutputTx},
+    utils::test_utils::{self, store::MemoryKVS},
     vault::{
-        processor::{ProcessorEvent, SideChainProcessor},
+        processor::{CoinProcessor, ProcessorEvent, SideChainProcessor},
         transactions::{MemoryTransactionsProvider, TransactionProvider},
     },
 };
+
+use async_trait::async_trait;
 
 use std::{
     sync::{Arc, Mutex},
@@ -58,10 +61,45 @@ fn check_liquidity<T>(
     assert_eq!(liquidity.depth, coin_amount.to_atomic());
 }
 
+struct FakeCoinSender {
+    /// Store processed outputs here
+    processed_txs: Arc<Mutex<Vec<OutputTx>>>,
+}
+
+impl FakeCoinSender {
+    fn new() -> (Self, Arc<Mutex<Vec<OutputTx>>>) {
+        let processed = Arc::new(Mutex::new(vec![]));
+
+        (
+            Self {
+                processed_txs: Arc::clone(&processed),
+            },
+            processed,
+        )
+    }
+}
+
+#[async_trait]
+impl CoinProcessor for FakeCoinSender {
+    async fn process<T: TransactionProvider + Sync>(
+        &self,
+        _provider: &T,
+        _coin: Coin,
+        outputs: &[OutputTx],
+    ) -> Vec<OutputSentTx> {
+        self.processed_txs
+            .lock()
+            .unwrap()
+            .append(&mut outputs.to_owned());
+        vec![]
+    }
+}
+
 struct TestRunner {
     chain: Arc<Mutex<MemorySideChain>>,
     receiver: crossbeam_channel::Receiver<ProcessorEvent>,
     provider: MemoryTransactionsProvider<MemorySideChain>,
+    sent_outputs: Arc<Mutex<Vec<OutputTx>>>,
 }
 
 impl TestRunner {
@@ -71,7 +109,9 @@ impl TestRunner {
 
         let provider = MemoryTransactionsProvider::new(chain.clone());
 
-        let processor = SideChainProcessor::new(provider, MemoryKVS::new());
+        let (sender, sent_outputs) = FakeCoinSender::new();
+
+        let processor = SideChainProcessor::new(provider, MemoryKVS::new(), sender);
 
         // Create a channel to receive processor events through
         let (sender, receiver) = crossbeam_channel::unbounded::<ProcessorEvent>();
@@ -87,6 +127,7 @@ impl TestRunner {
             chain,
             receiver,
             provider,
+            sent_outputs,
         }
     }
 
@@ -115,9 +156,8 @@ impl TestRunner {
 #[cfg(test)]
 mod tests {
 
-    use test_utils::create_fake_unstake_request_tx;
-
     use super::*;
+    use test_utils::*;
 
     #[test]
     fn witnessed_staked_changes_pool_liquidity() {

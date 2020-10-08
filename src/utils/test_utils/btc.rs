@@ -3,20 +3,23 @@ use async_trait::async_trait;
 use bitcoin::Network;
 use bitcoin::Transaction;
 use bitcoin::Txid;
-use std::{collections::VecDeque, sync::Mutex};
+use std::{collections::VecDeque, sync::Arc, sync::Mutex};
+
+type Blocks = VecDeque<Vec<Transaction>>;
 
 /// An ethereum client for testing
+#[derive(Clone)]
 pub struct TestBitcoinClient {
-    blocks: Mutex<VecDeque<Vec<Transaction>>>,
+    blocks: Arc<Mutex<Blocks>>,
     send_handler:
-        Option<Box<dyn Fn(&SendTransaction) -> Result<Txid, String> + Send + Sync + 'static>>,
+        Option<Arc<dyn Fn(&SendTransaction) -> Result<Txid, String> + Send + Sync + 'static>>,
 }
 
 impl TestBitcoinClient {
     /// Create a new test ethereum client
     pub fn new() -> Self {
         TestBitcoinClient {
-            blocks: Mutex::new(VecDeque::new()),
+            blocks: Arc::new(Mutex::new(VecDeque::new())),
             send_handler: None,
         }
     }
@@ -32,7 +35,7 @@ impl TestBitcoinClient {
         F: 'static,
         F: Fn(&SendTransaction) -> Result<Txid, String> + Send + Sync,
     {
-        self.send_handler = Some(Box::new(function));
+        self.send_handler = Some(Arc::new(function));
     }
 }
 

@@ -13,8 +13,12 @@ pub mod loki_rpc;
 /// Ethereum API
 pub mod ethereum;
 
+pub use ethereum::web3::Web3Client;
+
 /// Bitcoin API
 pub mod btc;
+
+pub use btc::btc::BtcClient;
 
 /// Connects to loki rpc wallet and pushes payments to the witness
 pub struct LokiConnection {

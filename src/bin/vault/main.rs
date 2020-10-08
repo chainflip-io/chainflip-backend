@@ -8,22 +8,18 @@ use blockswap::{
     },
     logging,
     side_chain::{ISideChain, PeristentSideChain},
-    utils::test_utils::{create_fake_stake_quote, create_fake_witness},
+    utils::test_utils::{btc::TestBitcoinClient, create_fake_stake_quote, create_fake_witness},
     vault::{
         api::APIServer,
-        blockchain_connection::{LokiConnection, LokiConnectionConfig},
+        blockchain_connection::{LokiConnection, LokiConnectionConfig, Web3Client},
         config::VAULT_CONFIG,
-        processor::SideChainProcessor,
+        processor::{LokiSender, OutputCoinProcessor, SideChainProcessor},
         transactions::{MemoryTransactionsProvider, TransactionProvider},
         witness::LokiWitness,
     },
 };
 
-use std::{
-    error::Error,
-    fmt::Display,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 /// Currently only used for "testing"
 fn add_fake_transactions<S>(s_chain: &Arc<Mutex<S>>)
@@ -88,7 +84,17 @@ fn main() {
     let db_connection = rusqlite::Connection::open("blocks.db").expect("Could not open database");
     let kvs = store::PersistentKVS::new(db_connection);
 
-    let processor = SideChainProcessor::new(tx_provider, kvs);
+    const WEB3_URL: &'static str = "https://api.myetherwallet.com/eth";
+    let eth_client = Web3Client::url(WEB3_URL).expect("Failed to create web3 client");
+
+    // TODO: use production client instead
+    let btc = TestBitcoinClient::new();
+
+    let loki = LokiSender::new(vault_config.loki.rpc.clone());
+
+    let coin_processor = OutputCoinProcessor::new(loki, eth_client, btc);
+
+    let processor = SideChainProcessor::new(tx_provider, kvs, coin_processor);
 
     processor.start(None);
 
