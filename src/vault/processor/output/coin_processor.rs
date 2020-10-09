@@ -1,12 +1,10 @@
 use crate::{
     common::Coin,
-    transactions::OutputSentTx,
-    transactions::OutputTx,
+    transactions::{OutputSentTx, OutputTx},
     utils::bip44,
     vault::{
         blockchain_connection::{btc::BitcoinClient, ethereum::EthereumClient},
         config::VAULT_CONFIG,
-        transactions::TransactionProvider,
     },
 };
 use async_trait::async_trait;
@@ -17,12 +15,7 @@ use super::senders::{btc::BtcOutputSender, ethereum::EthOutputSender, OutputSend
 #[async_trait]
 pub trait CoinProcessor {
     /// Send outputs using corresponding "sender" for each coin
-    async fn process<T: TransactionProvider + Sync>(
-        &self,
-        provider: &T,
-        coin: Coin,
-        outputs: &[OutputTx],
-    ) -> Vec<OutputSentTx>;
+    async fn process(&self, coin: Coin, outputs: &[OutputTx]) -> Vec<OutputSentTx>;
 }
 
 /// Struct responsible for sending outputs all supported coin types
@@ -46,12 +39,7 @@ where
     E: EthereumClient + Clone + Sync + Send,
     B: BitcoinClient + Clone + Sync + Send,
 {
-    async fn process<T: TransactionProvider + Sync>(
-        &self,
-        provider: &T,
-        coin: Coin,
-        outputs: &[OutputTx],
-    ) -> Vec<OutputSentTx> {
+    async fn process(&self, coin: Coin, outputs: &[OutputTx]) -> Vec<OutputSentTx> {
         match coin {
             Coin::ETH => {
                 let root_key = match bip44::RawKey::decode(&VAULT_CONFIG.eth.master_root_key) {
@@ -62,7 +50,7 @@ where
                     }
                 };
                 let sender = EthOutputSender::new(self.eth.clone(), root_key);
-                sender.send(provider, outputs).await
+                sender.send(outputs).await
             }
             Coin::BTC => {
                 let root_key = match bip44::RawKey::decode(&VAULT_CONFIG.btc.master_root_key) {
@@ -73,9 +61,9 @@ where
                     }
                 };
                 let sender = BtcOutputSender::new(self.btc.clone(), root_key);
-                sender.send(provider, outputs).await
+                sender.send(outputs).await
             }
-            Coin::LOKI => self.loki.send(provider, outputs).await,
+            Coin::LOKI => self.loki.send(outputs).await,
         }
     }
 }

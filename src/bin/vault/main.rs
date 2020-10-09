@@ -79,8 +79,6 @@ fn main() {
 
     let _witness = LokiWitness::new(loki_block_receiver, s_chain.clone());
 
-    let tx_provider = MemoryTransactionsProvider::new(s_chain.clone());
-
     // Opening another connection to the same database
     let db_connection = rusqlite::Connection::open("blocks.db").expect("Could not open database");
     let kvs = store::PersistentKVS::new(db_connection);
@@ -95,7 +93,7 @@ fn main() {
 
     let coin_processor = OutputCoinProcessor::new(loki, eth_client, btc);
 
-    let processor = SideChainProcessor::new(tx_provider, kvs, coin_processor);
+    let processor = SideChainProcessor::new(Arc::clone(&provider), kvs, coin_processor);
 
     processor.start(None);
 

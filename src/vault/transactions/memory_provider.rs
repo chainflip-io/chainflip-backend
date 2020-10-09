@@ -1,3 +1,5 @@
+use parking_lot::RwLock;
+
 use crate::{
     common::{
         liquidity_provider::{Liquidity, LiquidityProvider, MemoryLiquidityProvider},
@@ -128,6 +130,12 @@ impl<S: ISideChain> MemoryTransactionsProvider<S> {
         };
 
         MemoryTransactionsProvider { side_chain, state }
+    }
+
+    /// Helper constructor to return a wrapped (thread safe) instance
+    pub fn new_protected(side_chain: Arc<Mutex<S>>) -> Arc<RwLock<Self>> {
+        let p = Self::new(side_chain);
+        Arc::new(RwLock::new(p))
     }
 }
 

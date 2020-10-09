@@ -10,6 +10,7 @@ use blockswap::{
 };
 
 use async_trait::async_trait;
+use parking_lot::RwLock;
 
 use std::{
     sync::{Arc, Mutex},
@@ -81,12 +82,7 @@ impl FakeCoinSender {
 
 #[async_trait]
 impl CoinProcessor for FakeCoinSender {
-    async fn process<T: TransactionProvider + Sync>(
-        &self,
-        _provider: &T,
-        _coin: Coin,
-        outputs: &[OutputTx],
-    ) -> Vec<OutputSentTx> {
+    async fn process(&self, _coin: Coin, outputs: &[OutputTx]) -> Vec<OutputSentTx> {
         self.processed_txs
             .lock()
             .unwrap()
@@ -108,6 +104,7 @@ impl TestRunner {
         let chain = Arc::new(Mutex::new(chain));
 
         let provider = MemoryTransactionsProvider::new(chain.clone());
+        let provider = Arc::new(RwLock::new(provider));
 
         let (sender, sent_outputs) = FakeCoinSender::new();
 

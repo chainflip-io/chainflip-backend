@@ -1,14 +1,11 @@
 use crate::{
-    common::{coins::GenericCoinAmount, Coin, Timestamp, WalletAddress},
+    common::{Coin, GenericCoinAmount, Timestamp, WalletAddress},
     transactions::{OutputSentTx, OutputTx},
     utils::{
         bip44::{self, RawKey},
         primitives::U256,
     },
-    vault::{
-        blockchain_connection::btc::BitcoinClient, blockchain_connection::btc::SendTransaction,
-        transactions::TransactionProvider,
-    },
+    vault::blockchain_connection::btc::{BitcoinClient, SendTransaction},
 };
 use async_trait::async_trait;
 use bip44::KeyPair;
@@ -126,11 +123,7 @@ impl<B: BitcoinClient> BtcOutputSender<B> {
 
 #[async_trait]
 impl<B: BitcoinClient + Sync + Send> OutputSender for BtcOutputSender<B> {
-    async fn send<T: TransactionProvider + Sync>(
-        &self,
-        _provider: &T,
-        outputs: &[OutputTx],
-    ) -> Vec<OutputSentTx> {
+    async fn send(&self, outputs: &[OutputTx]) -> Vec<OutputSentTx> {
         let key_pair =
             match bip44::get_key_pair(self.root_private_key.clone(), bip44::CoinType::BTC, 0) {
                 Ok(keys) => keys,
@@ -156,7 +149,6 @@ impl<B: BitcoinClient + Sync + Send> OutputSender for BtcOutputSender<B> {
 #[cfg(test)]
 mod test {
     use crate::{
-        common::coins::CoinAmount,
         common::WalletAddress,
         utils::test_utils::{btc::TestBitcoinClient, create_fake_output_tx},
     };
