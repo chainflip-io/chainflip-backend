@@ -84,8 +84,8 @@ fn main() {
     let db_connection = rusqlite::Connection::open("blocks.db").expect("Could not open database");
     let kvs = store::PersistentKVS::new(db_connection);
 
-    const WEB3_URL: &'static str = "https://api.myetherwallet.com/eth";
-    let eth_client = Web3Client::url(WEB3_URL).expect("Failed to create web3 client");
+    let eth_client =
+        Web3Client::url(&vault_config.eth.provider_url).expect("Failed to create web3 client");
 
     // TODO: use production client instead
     let btc = TestBitcoinClient::new();

@@ -5,7 +5,10 @@ use super::{
 
 use serde::{Deserialize, Serialize};
 
-use std::fmt::{self, Display};
+use std::{
+    convert::TryFrom,
+    fmt::{self, Display},
+};
 
 /// Represents regular and integrated wallet addresses for Loki
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -14,9 +17,20 @@ pub struct LokiWalletAddress {
     address: String,
 }
 
-impl std::convert::From<WalletAddress> for LokiWalletAddress {
-    fn from(a: WalletAddress) -> Self {
-        LokiWalletAddress { address: a.0 }
+/// Helper function to convert from an owned string
+fn from_string(addr: String) -> Result<LokiWalletAddress, String> {
+    match addr.len() {
+        97 | 108 => Ok(LokiWalletAddress {
+            address: addr.to_owned(),
+        }),
+        x @ _ => Err(format!("Invalid address length: {}", x)),
+    }
+}
+
+impl TryFrom<WalletAddress> for LokiWalletAddress {
+    type Error = String;
+    fn try_from(a: WalletAddress) -> Result<Self, Self::Error> {
+        from_string(a.0)
     }
 }
 
@@ -31,12 +45,7 @@ impl std::str::FromStr for LokiWalletAddress {
 
     /// Construct from string, validating address length
     fn from_str(addr: &str) -> Result<Self, Self::Err> {
-        match addr.len() {
-            97 | 108 => Ok(LokiWalletAddress {
-                address: addr.to_owned(),
-            }),
-            x @ _ => Err(format!("Invalid address length: {}", x)),
-        }
+        from_string(addr.to_owned())
     }
 }
 

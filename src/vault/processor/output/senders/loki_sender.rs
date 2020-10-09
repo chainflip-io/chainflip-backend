@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use async_trait::async_trait;
 use uuid::Uuid;
 
@@ -44,7 +46,7 @@ impl LokiSender {
     }
 
     async fn send_inner(&self, outputs: &[OutputTx]) -> Vec<OutputSentTx> {
-        let port: u16 = 6935;
+        let port: u16 = self.config.port;
 
         let mut sent_outputs = vec![];
 
@@ -58,7 +60,15 @@ impl LokiSender {
                 amount, output.id
             );
 
-            let address: LokiWalletAddress = output.address.clone().into();
+            let address: LokiWalletAddress = match output.address.clone().try_into() {
+                Ok(addr) => addr,
+                Err(err) => {
+                    // TODO: we should probably mark the output as invalid so we don't
+                    // keep trying to process it on every block
+                    error!("Skipping invalid LOKI output: {}", err);
+                    continue;
+                }
+            };
 
             match send_with_estimated_fee(port, &amount, &address, output.id).await {
                 Ok(res) => {
