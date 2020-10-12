@@ -64,16 +64,13 @@ fn group_outputs_by_sending_amounts<'a>(outputs: &'a [OutputTx]) -> Vec<(u128, V
 
 pub mod btc;
 pub mod ethereum;
+pub mod loki_sender;
 
 #[cfg(test)]
 mod test {
 
     use super::*;
-    use crate::{
-        common::coins::CoinAmount,
-        common::WalletAddress,
-        utils::test_utils::{btc::TestBitcoinClient, create_fake_output_tx},
-    };
+    use crate::utils::test_utils::create_fake_output_tx;
 
     #[test]
     fn test_group_outputs_by_quote() {

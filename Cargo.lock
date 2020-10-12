@@ -298,6 +298,7 @@ dependencies = [
  "log 0.4.11",
  "log4rs",
  "num-bigint",
+ "parking_lot",
  "rand 0.7.3",
  "regex",
  "reqwest",

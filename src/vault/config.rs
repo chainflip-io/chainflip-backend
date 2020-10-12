@@ -42,6 +42,8 @@ pub struct LokiConfig {
 pub struct EthConfig {
     /// The seed to derive wallets from
     pub master_root_key: String,
+    /// Web3 api
+    pub provider_url: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]

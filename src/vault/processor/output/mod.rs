@@ -9,8 +9,9 @@ use crate::{
 mod coin_processor;
 mod senders;
 
-use coin_processor::CoinProcessor;
-pub use coin_processor::OutputCoinProcessor;
+pub use coin_processor::{CoinProcessor, OutputCoinProcessor};
+
+pub use senders::loki_sender::LokiSender;
 
 /// Process all pending outputs
 pub async fn process_outputs<T: TransactionProvider + Sync, C: CoinProcessor>(
@@ -42,11 +43,23 @@ async fn process<T: TransactionProvider + Sync, C: CoinProcessor>(
     let outputs = provider.get_output_txs();
     let groups = group_by_coins(outputs);
 
-    for (coin, outputs) in groups {
-        let sent_txs = coin_processor.process(provider, coin, &outputs).await;
-        if sent_txs.len() > 0 {
-            let txs = sent_txs.into_iter().map_into::<SideChainTx>().collect_vec();
-            provider.add_transactions(txs).unwrap()
+    let futs = groups
+        .iter()
+        .map(|(coin, outputs)| coin_processor.process(provider, *coin, outputs));
+
+    let txs = futures::future::join_all(futs)
+        .await
+        .into_iter()
+        .map(|txs| txs.into_iter().map_into::<SideChainTx>().collect_vec())
+        .flatten()
+        .collect_vec();
+
+    match provider.add_transactions(txs) {
+        Ok(_) => (),
+        Err(err) => {
+            error!("Could not save output sent txs: {}", err);
+            // TODO: investigate how we could recover from this error
+            panic!();
         }
     }
 }
@@ -90,9 +103,9 @@ mod test {
     impl CoinProcessor for TestCoinProcessor {
         async fn process<T: TransactionProvider + Sync>(
             &self,
-            provider: &T,
+            _provider: &T,
             coin: Coin,
-            outputs: &[OutputTx],
+            _outputs: &[OutputTx],
         ) -> Vec<OutputSentTx> {
             self.map.get(&coin).cloned().unwrap_or(vec![])
         }

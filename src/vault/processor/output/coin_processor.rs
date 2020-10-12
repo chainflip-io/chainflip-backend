@@ -16,6 +16,7 @@ use super::senders::{btc::BtcOutputSender, ethereum::EthOutputSender, OutputSend
 /// Handy trait for injecting custom processing code during testing
 #[async_trait]
 pub trait CoinProcessor {
+    /// Send outputs using corresponding "sender" for each coin
     async fn process<T: TransactionProvider + Sync>(
         &self,
         provider: &T,
@@ -24,21 +25,24 @@ pub trait CoinProcessor {
     ) -> Vec<OutputSentTx>;
 }
 
-pub struct OutputCoinProcessor<E: EthereumClient, B: BitcoinClient> {
+/// Struct responsible for sending outputs all supported coin types
+pub struct OutputCoinProcessor<L: OutputSender, E: EthereumClient, B: BitcoinClient> {
+    loki: L,
     eth: E,
     btc: B,
 }
 
-impl<E: EthereumClient, B: BitcoinClient> OutputCoinProcessor<E, B> {
+impl<L: OutputSender, E: EthereumClient, B: BitcoinClient> OutputCoinProcessor<L, E, B> {
     /// Create a new output coin processor
-    pub fn new(eth: E, btc: B) -> Self {
-        OutputCoinProcessor { eth, btc }
+    pub fn new(loki: L, eth: E, btc: B) -> Self {
+        OutputCoinProcessor { eth, btc, loki }
     }
 }
 
 #[async_trait]
-impl<E, B> CoinProcessor for OutputCoinProcessor<E, B>
+impl<L, E, B> CoinProcessor for OutputCoinProcessor<L, E, B>
 where
+    L: OutputSender + Sync + Send,
     E: EthereumClient + Clone + Sync + Send,
     B: BitcoinClient + Clone + Sync + Send,
 {
@@ -71,13 +75,7 @@ where
                 let sender = BtcOutputSender::new(self.btc.clone(), root_key);
                 sender.send(provider, outputs).await
             }
-            coin @ _ => {
-                warn!(
-                    "Cannot process outputs for {} because no associated sender is found!",
-                    coin
-                );
-                vec![]
-            }
+            Coin::LOKI => self.loki.send(provider, outputs).await,
         }
     }
 }

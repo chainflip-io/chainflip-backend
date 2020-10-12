@@ -4,7 +4,10 @@ use crate::{
     common::{Coin, LokiAmount},
     side_chain::SideChainTx,
     transactions::{PoolChangeTx, StakeQuoteTx, StakeTx},
-    vault::transactions::memory_provider::{FulfilledTxWrapper, WitnessTxWrapper},
+    vault::transactions::{
+        memory_provider::{FulfilledTxWrapper, WitnessTxWrapper},
+        TransactionProvider,
+    },
 };
 
 use std::convert::{TryFrom, TryInto};
@@ -27,9 +30,25 @@ impl StakeQuoteResult {
     }
 }
 
+pub(super) fn process_stakes<T: TransactionProvider>(tx_provider: &mut T) {
+    let stake_quote_txs = tx_provider.get_stake_quote_txs();
+    let witness_txs = tx_provider.get_witness_txs();
+
+    let new_txs = process_stakes_inner(stake_quote_txs, witness_txs);
+
+    // TODO: make sure that things below happen atomically
+    // (e.g. we don't want to send funds more than once if the
+    // latest block info failed to have been updated)
+
+    if let Err(err) = tx_provider.add_transactions(new_txs) {
+        error!("Error adding a pool change tx: {}", err);
+        panic!();
+    };
+}
+
 /// Try to match witness transacitons with stake transactions and return a list of
 /// transactions that should be added to the side chain
-pub(super) fn process_stakes(
+fn process_stakes_inner(
     quotes: &[FulfilledTxWrapper<StakeQuoteTx>],
     witness_txs: &[WitnessTxWrapper],
 ) -> Vec<SideChainTx> {
