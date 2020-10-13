@@ -1,5 +1,6 @@
 {
   "name": "Substrate Node template",
+  "context": "..",
   "settings": {
     "terminal.integrated.shell.linux": "/bin/bash",
     "lldb.executable": "/usr/bin/lldb"
@@ -13,5 +14,7 @@
     3000,
     9944
   ],
+  "preCreateCommand": "cargo build --release && cargo check",
+  "postStartCommand": "./target/release/node-template --dev --ws-external",
   "image": "paritytech/substrate-playground-template-node-template:sha-c9fda53"
 }
