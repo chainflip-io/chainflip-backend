@@ -16,5 +16,5 @@
   ],
   "preCreateCommand": "cargo build --release && cargo check",
   "postStartCommand": "./target/release/node-template --dev --ws-external",
-  "image": "paritytech/substrate-playground-template-node-template:sha-c9fda53"
+  "image": "paritytech/substrate-playground-template-node-template:latest"
 }
