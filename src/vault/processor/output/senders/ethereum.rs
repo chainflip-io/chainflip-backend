@@ -1,27 +1,18 @@
-use std::{collections::HashMap, convert::TryFrom, str::FromStr};
+use std::{convert::TryFrom, str::FromStr};
 
 use async_trait::async_trait;
 use bip44::KeyPair;
 use hdwallet::ExtendedPrivKey;
 use itertools::Itertools;
-use uuid::Uuid;
 
 use crate::{
-    common::coins::GenericCoinAmount,
-    common::ethereum::Address,
-    common::Coin,
-    common::Timestamp,
-    transactions::OutputSentTx,
-    transactions::OutputTx,
+    common::{ethereum::Address, Coin, GenericCoinAmount, Timestamp},
+    transactions::{OutputSentTx, OutputTx},
     utils::{
         bip44::{self, RawKey},
         primitives::U256,
     },
-    vault::{
-        blockchain_connection::ethereum::EstimateRequest,
-        blockchain_connection::ethereum::EthereumClient,
-        blockchain_connection::ethereum::SendTransaction, transactions::TransactionProvider,
-    },
+    vault::blockchain_connection::ethereum::{EstimateRequest, EthereumClient, SendTransaction},
 };
 
 use super::*;
@@ -153,11 +144,7 @@ impl<E: EthereumClient> EthOutputSender<E> {
 
 #[async_trait]
 impl<E: EthereumClient + Sync + Send> OutputSender for EthOutputSender<E> {
-    async fn send<T: TransactionProvider + Sync>(
-        &self,
-        _provider: &T,
-        outputs: &[OutputTx],
-    ) -> Vec<OutputSentTx> {
+    async fn send(&self, outputs: &[OutputTx]) -> Vec<OutputSentTx> {
         // For now we'll simply send from the main wallet (index 0)
         // In the future it'll be better to send it from our other generated wallets if they have enough eth
         let key_pair =
@@ -185,9 +172,7 @@ impl<E: EthereumClient + Sync + Send> OutputSender for EthOutputSender<E> {
 #[cfg(test)]
 mod test {
     use crate::{
-        common::coins::CoinAmount,
-        common::ethereum,
-        common::WalletAddress,
+        common::{ethereum, WalletAddress},
         utils::test_utils::{create_fake_output_tx, ethereum::TestEthereumClient},
         vault::blockchain_connection::ethereum::EstimateResult,
     };

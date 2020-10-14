@@ -1,6 +1,9 @@
+use std::sync::Arc;
+
 use crate::{common::store::KeyValueStore, vault::transactions::TransactionProvider};
 
 pub use output::{CoinProcessor, LokiSender, OutputCoinProcessor};
+use parking_lot::RwLock;
 
 /// Processing utils
 pub mod utils;
@@ -21,7 +24,7 @@ where
     KVS: KeyValueStore,
     S: CoinProcessor,
 {
-    tx_provider: T,
+    tx_provider: Arc<RwLock<T>>,
     db: KVS,
     coin_sender: S,
 }
@@ -42,7 +45,7 @@ where
     S: CoinProcessor + Send + 'static,
 {
     /// Constructor taking a transaction provider
-    pub fn new(tx_provider: T, kvs: KVS, coin_sender: S) -> Self {
+    pub fn new(tx_provider: Arc<RwLock<T>>, kvs: KVS, coin_sender: S) -> Self {
         SideChainProcessor {
             tx_provider,
             db: kvs,
@@ -70,7 +73,7 @@ where
         info!("Processor starting with next block idx: {}", next_block_idx);
 
         loop {
-            let idx = self.tx_provider.sync();
+            let idx = self.tx_provider.write().sync();
 
             debug!("Provider is at block: {}", idx);
 

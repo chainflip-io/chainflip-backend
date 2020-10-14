@@ -18,6 +18,7 @@ use blockswap::{
         witness::LokiWitness,
     },
 };
+use parking_lot::RwLock;
 
 use std::sync::{Arc, Mutex};
 
@@ -67,7 +68,7 @@ fn main() {
     let mut provider = MemoryTransactionsProvider::new(s_chain.clone());
     provider.sync();
 
-    let provider = Arc::new(Mutex::new(provider));
+    let provider = Arc::new(RwLock::new(provider));
 
     let config = LokiConnectionConfig {
         rpc_wallet_port: vault_config.loki.rpc.port,
@@ -77,8 +78,6 @@ fn main() {
     let loki_block_receiver = loki_connection.start();
 
     let _witness = LokiWitness::new(loki_block_receiver, s_chain.clone());
-
-    let tx_provider = MemoryTransactionsProvider::new(s_chain.clone());
 
     // Opening another connection to the same database
     let db_connection = rusqlite::Connection::open("blocks.db").expect("Could not open database");
@@ -94,7 +93,7 @@ fn main() {
 
     let coin_processor = OutputCoinProcessor::new(loki, eth_client, btc);
 
-    let processor = SideChainProcessor::new(tx_provider, kvs, coin_processor);
+    let processor = SideChainProcessor::new(Arc::clone(&provider), kvs, coin_processor);
 
     processor.start(None);
 

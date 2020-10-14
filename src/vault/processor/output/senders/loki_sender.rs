@@ -8,7 +8,6 @@ use crate::{
     transactions::{OutputSentTx, OutputTx},
     vault::blockchain_connection::loki_rpc::{self, TransferResponse},
     vault::config::LokiRpcConfig,
-    vault::transactions::TransactionProvider,
 };
 
 use super::OutputSender;
@@ -109,11 +108,7 @@ impl LokiSender {
 
 #[async_trait]
 impl OutputSender for LokiSender {
-    async fn send<T: TransactionProvider + Sync>(
-        &self,
-        _provider: &T,
-        outputs: &[OutputTx],
-    ) -> Vec<OutputSentTx> {
+    async fn send(&self, outputs: &[OutputTx]) -> Vec<OutputSentTx> {
         self.send_inner(outputs).await
     }
 }

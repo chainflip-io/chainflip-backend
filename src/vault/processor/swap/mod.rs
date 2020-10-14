@@ -1,6 +1,10 @@
 mod logic;
 mod refund;
 
+use std::sync::Arc;
+
+use parking_lot::RwLock;
+
 use crate::{
     common::liquidity_provider::LiquidityProvider,
     common::liquidity_provider::MemoryLiquidityProvider, common::Timestamp,
@@ -85,15 +89,16 @@ fn process<L: LiquidityProvider>(provider: &L, swaps: &[Swap]) -> Vec<SideChainT
 }
 
 /// Process all pending swaps
-pub fn process_swaps<T: TransactionProvider>(provider: &mut T) {
-    provider.sync();
+pub fn process_swaps<T: TransactionProvider>(provider: &mut Arc<RwLock<T>>) {
+    provider.write().sync();
 
-    let swaps = get_swaps(provider);
+    let swaps = get_swaps(&*provider.read());
 
-    let transactions = process(provider, &swaps);
+    let transactions = process(&*provider.read(), &swaps);
 
     if transactions.len() > 0 {
         provider
+            .write()
             .add_transactions(transactions)
             .expect("Failed to add processed swap transactions");
     }
@@ -117,19 +122,23 @@ mod test {
 
     struct Runner {
         side_chain: Arc<Mutex<MemorySideChain>>,
-        provider: MemoryTransactionsProvider<MemorySideChain>,
+        provider: Arc<RwLock<MemoryTransactionsProvider<MemorySideChain>>>,
     }
 
     impl Runner {
         fn new() -> Self {
             let side_chain = MemorySideChain::new();
             let side_chain = Arc::new(Mutex::new(side_chain));
-            let provider = MemoryTransactionsProvider::new(side_chain.clone());
+            let provider = MemoryTransactionsProvider::new_protected(side_chain.clone());
 
             Self {
                 side_chain,
                 provider,
             }
+        }
+
+        fn sync_provider(&mut self) {
+            self.provider.write().sync();
         }
     }
 
@@ -172,9 +181,9 @@ mod test {
             ])
             .unwrap();
 
-        runner.provider.sync();
+        runner.sync_provider();
 
-        let swaps = get_swaps(&runner.provider);
+        let swaps = get_swaps(&*runner.provider.read());
         assert_eq!(swaps.len(), 1);
 
         let swap = swaps.first().unwrap();
@@ -199,9 +208,9 @@ mod test {
             .add_block(vec![quote.into(), witness.into()])
             .unwrap();
 
-        runner.provider.sync();
+        runner.sync_provider();
 
-        let swaps = get_swaps(&runner.provider);
+        let swaps = get_swaps(&*runner.provider.read());
         assert_eq!(swaps.len(), 0);
     }
 
@@ -220,9 +229,9 @@ mod test {
             .add_block(vec![quote.into(), witness.into()])
             .unwrap();
 
-        runner.provider.sync();
+        runner.sync_provider();
 
-        let swaps = get_swaps(&runner.provider);
+        let swaps = get_swaps(&*runner.provider.read());
         assert_eq!(swaps.len(), 0);
     }
 
@@ -257,9 +266,9 @@ mod test {
             ])
             .unwrap();
 
-        runner.provider.sync();
+        runner.sync_provider();
 
-        let swaps = get_swaps(&runner.provider);
+        let swaps = get_swaps(&*runner.provider.read());
         assert_eq!(swaps.len(), 1);
 
         let swap = swaps.first().unwrap();
@@ -458,14 +467,14 @@ mod test {
             .add_block(vec![initial_pool.into(), quote.into(), witness.into()])
             .unwrap();
 
-        runner.provider.sync();
+        runner.sync_provider();
 
         // Pre conditions
-        assert_eq!(runner.provider.get_quote_txs().len(), 1);
-        assert_eq!(runner.provider.get_witness_txs().len(), 1);
-        assert_eq!(runner.provider.get_output_txs().len(), 0);
+        assert_eq!(runner.provider.read().get_quote_txs().len(), 1);
+        assert_eq!(runner.provider.read().get_witness_txs().len(), 1);
+        assert_eq!(runner.provider.read().get_output_txs().len(), 0);
         assert_eq!(
-            runner.provider.get_liquidity(PoolCoin::ETH),
+            runner.provider.read().get_liquidity(PoolCoin::ETH),
             Some(Liquidity::new(initial_eth_depth, initial_loki_depth))
         );
 
@@ -475,11 +484,11 @@ mod test {
         let new_loki_depth = to_atomic(Coin::LOKI, "16800.5");
 
         // Post conditions
-        assert_eq!(runner.provider.get_quote_txs().len(), 1);
-        assert_eq!(runner.provider.get_witness_txs().len(), 1);
-        assert_eq!(runner.provider.get_output_txs().len(), 1);
+        assert_eq!(runner.provider.read().get_quote_txs().len(), 1);
+        assert_eq!(runner.provider.read().get_witness_txs().len(), 1);
+        assert_eq!(runner.provider.read().get_output_txs().len(), 1);
         assert_eq!(
-            runner.provider.get_liquidity(PoolCoin::ETH),
+            runner.provider.read().get_liquidity(PoolCoin::ETH),
             Some(Liquidity::new(new_eth_depth, new_loki_depth))
         );
     }

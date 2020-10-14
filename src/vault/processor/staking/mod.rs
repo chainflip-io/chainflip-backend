@@ -10,8 +10,12 @@ use crate::{
     },
 };
 
-use std::convert::{TryFrom, TryInto};
+use std::{
+    convert::{TryFrom, TryInto},
+    sync::Arc,
+};
 
+use parking_lot::RwLock;
 use uuid::Uuid;
 
 /// A set of transaction to be added to the side chain as a result
@@ -30,17 +34,21 @@ impl StakeQuoteResult {
     }
 }
 
-pub(super) fn process_stakes<T: TransactionProvider>(tx_provider: &mut T) {
-    let stake_quote_txs = tx_provider.get_stake_quote_txs();
-    let witness_txs = tx_provider.get_witness_txs();
+pub(super) fn process_stakes<T: TransactionProvider>(tx_provider: &mut Arc<RwLock<T>>) {
+    let provider = tx_provider.read();
+    let stake_quote_txs = provider.get_stake_quote_txs();
+    let witness_txs = provider.get_witness_txs();
 
-    let new_txs = process_stakes_inner(stake_quote_txs, witness_txs);
+    // TODO: a potential room for improvement: autoswap is relatively slow,
+    // so we might want to release the mutex when performing it
+    let new_txs = process_stakes_inner(&stake_quote_txs, &witness_txs);
+    drop(provider);
 
     // TODO: make sure that things below happen atomically
     // (e.g. we don't want to send funds more than once if the
     // latest block info failed to have been updated)
 
-    if let Err(err) = tx_provider.add_transactions(new_txs) {
+    if let Err(err) = tx_provider.write().add_transactions(new_txs) {
         error!("Error adding a pool change tx: {}", err);
         panic!();
     };
