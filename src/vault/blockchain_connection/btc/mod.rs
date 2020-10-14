@@ -3,8 +3,10 @@ use async_trait::async_trait;
 use bitcoin::blockdata::transaction::Transaction;
 use bitcoin::{Address, Network, Txid};
 
-/// Define btc interface
+/// Define btc core / bitcoind interface
 pub mod btc;
+/// Define btc SPV interface
+pub mod btc_spv;
 
 #[derive(Debug)]
 pub struct SendTransaction {

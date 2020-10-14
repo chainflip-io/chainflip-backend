@@ -75,6 +75,7 @@ impl BitcoinClient for BtcClient {
         self.network
     }
 
+    /// Send a transaction
     async fn send(&self, send_tx: &SendTransaction) -> Result<Txid, String> {
         if send_tx.amount.coin_type() != Coin::BTC {
             return Err(format!("Cannot send {}", send_tx.amount.coin_type()));
