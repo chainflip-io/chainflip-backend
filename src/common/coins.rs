@@ -1,6 +1,6 @@
 use crate::common::LokiAmount;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, str::FromStr};
+use std::{convert::TryFrom, fmt::Display, str::FromStr};
 
 /// A representation of a valid pool coin
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
@@ -28,6 +28,26 @@ impl PoolCoin {
     pub const ETH: PoolCoin = PoolCoin(Coin::ETH);
     /// Bitcoin
     pub const BTC: PoolCoin = PoolCoin(Coin::BTC);
+}
+
+impl TryFrom<Coin> for PoolCoin {
+    type Error = &'static str;
+
+    fn try_from(coin: Coin) -> Result<Self, Self::Error> {
+        PoolCoin::from(coin)
+    }
+}
+
+impl From<PoolCoin> for Coin {
+    fn from(coin: PoolCoin) -> Self {
+        coin.get_coin()
+    }
+}
+
+impl Display for PoolCoin {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.get_coin())
+    }
 }
 
 /// Information about a coin
