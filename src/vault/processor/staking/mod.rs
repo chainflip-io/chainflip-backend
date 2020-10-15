@@ -1,11 +1,11 @@
 mod tests;
 
 use crate::{
-    common::{Coin, LokiAmount},
+    common::{Coin, GenericCoinAmount, LokiAmount, PoolCoin, Timestamp},
     side_chain::SideChainTx,
-    transactions::{PoolChangeTx, StakeQuoteTx, StakeTx},
+    transactions::{OutputTx, PoolChangeTx, StakeQuoteTx, StakeTx, UnstakeRequestTx},
     vault::transactions::{
-        memory_provider::{FulfilledTxWrapper, WitnessTxWrapper},
+        memory_provider::{FulfilledTxWrapper, Portion, WitnessTxWrapper},
         TransactionProvider,
     },
 };
@@ -17,6 +17,7 @@ use std::{
 
 use parking_lot::RwLock;
 use uuid::Uuid;
+use web3::types::U256;
 
 /// A set of transaction to be added to the side chain as a result
 /// of a successful match between stake and witness transactions
@@ -197,4 +198,133 @@ fn process_stake_quote(
         }
         _ => None,
     }
+}
+
+/// Get the atomic amount corresponding to `portion` of `total`
+fn get_portion_of_amount(total: u128, portion: Portion) -> u128 {
+    let total: U256 = total.into();
+    let portion: U256 = portion.0.into();
+    let res = total * portion / U256::from(Portion::MAX.0);
+    res.try_into().expect("overflow")
+}
+
+fn get_amounts_unstakable<T: TransactionProvider>(
+    tx_provider: &T,
+    pool: PoolCoin,
+    staker: &str,
+) -> Result<(LokiAmount, GenericCoinAmount), String> {
+    info!("Handling unstake tx for staker: {}", staker);
+
+    let portions = tx_provider.get_portions();
+
+    let coin_portions = portions
+        .get(&pool)
+        .ok_or(format!("No portions for coin: {}", pool))?;
+
+    let staker_portions = coin_portions.get(staker).ok_or(format!(
+        "No portions for staker: {} in {} pool",
+        staker, pool
+    ))?;
+
+    debug!("Staker portions: {:?}", staker_portions);
+
+    // For now we assume that we want to withdraw everything
+
+    // TODO: check that the fees that should be payed to
+    // liquidity providers (whatever they are) are part of "liquidity"
+    let liquidity = tx_provider
+        .get_liquidity(pool)
+        .expect("liquidity should exist");
+
+    let loki_amount = get_portion_of_amount(liquidity.loki_depth, *staker_portions);
+    let other_amount = get_portion_of_amount(liquidity.depth, *staker_portions);
+
+    let loki = LokiAmount::from_atomic(loki_amount);
+    let other = GenericCoinAmount::from_atomic(pool.get_coin(), other_amount);
+
+    Ok((loki, other))
+}
+
+fn prepare_output_txs(
+    tx: &UnstakeRequestTx,
+    loki_amount: LokiAmount,
+    other_amount: GenericCoinAmount,
+) -> Result<(OutputTx, OutputTx), &'static str> {
+    let loki = OutputTx::new(
+        Timestamp::now(),
+        tx.id,
+        vec![],
+        vec![],
+        Coin::LOKI,
+        tx.loki_address.clone(),
+        loki_amount.to_atomic(),
+    )
+    .map_err(|_| "could not construct Loki output")?;
+
+    let other = OutputTx::new(
+        Timestamp::now(),
+        tx.id,
+        vec![],
+        vec![],
+        tx.pool.into(),
+        tx.other_address.clone(),
+        other_amount.to_atomic(),
+    )
+    .map_err(|_| "could not construct Other output")?;
+
+    Ok((loki, other))
+}
+
+fn process_unstake_tx<T: TransactionProvider>(
+    tx_provider: &T,
+    tx: &UnstakeRequestTx,
+) -> Result<(OutputTx, OutputTx, PoolChangeTx), String> {
+    let staker = &tx.staker_id;
+
+    // Find out how much we can unstake
+    // NOTE: we might want to remove unstake qoutes if we can't process them
+    let (loki_amount, other_amount) = get_amounts_unstakable(tx_provider, tx.pool, staker)?;
+
+    debug!(
+        "Amounts unstakable by {} are: {} and {:?}",
+        staker, loki_amount, other_amount
+    );
+
+    let (loki_tx, other_tx) = prepare_output_txs(tx, loki_amount, other_amount)?;
+
+    let d_loki: i128 = loki_amount
+        .to_atomic()
+        .try_into()
+        .map_err(|_| "Loki amount overflow")?;
+    let d_other: i128 = other_amount
+        .to_atomic()
+        .try_into()
+        .map_err(|_| "Other amount overflow")?;
+
+    let pool_change_tx = PoolChangeTx::new(tx.pool, -d_loki, -d_other);
+
+    Ok((loki_tx, other_tx, pool_change_tx))
+}
+
+pub(super) fn process_unstakes<T: TransactionProvider>(tx_provider: &mut T) {
+    let unstake_txs = tx_provider.get_unstake_request_txs();
+
+    let mut output_txs: Vec<SideChainTx> = Vec::with_capacity(unstake_txs.len() * 3);
+
+    for tx in unstake_txs {
+        match process_unstake_tx(tx_provider, tx) {
+            Ok((output1, output2, pool_change)) => {
+                output_txs.push(output1.into());
+                output_txs.push(output2.into());
+                output_txs.push(pool_change.into());
+            }
+            Err(err) => {
+                warn!("Failed to process unstake request {}: {}", tx.id, err);
+            }
+        }
+    }
+
+    tx_provider
+        .add_transactions(output_txs)
+        .expect("Could not add transactions");
 }

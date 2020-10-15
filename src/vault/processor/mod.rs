@@ -56,6 +56,8 @@ where
     async fn on_blockchain_progress(&mut self) {
         staking::process_stakes(&mut self.tx_provider);
 
+        staking::process_unstakes(&mut *self.tx_provider.write());
+
         swap::process_swaps(&mut self.tx_provider);
 
         output::process_outputs(&mut self.tx_provider, &mut self.coin_sender).await;

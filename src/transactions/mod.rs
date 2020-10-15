@@ -240,6 +240,30 @@ pub struct UnstakeRequestTx {
     pub id: Uuid,
     /// Stakers identity (TODO: needs to be more private and with authentication)
     pub staker_id: String,
+    /// Which pool to unstake from
+    pub pool: PoolCoin,
+    /// Address to which withdraw loki
+    pub loki_address: WalletAddress,
+    /// Address to which withdraw the other coin
+    pub other_address: WalletAddress,
+}
+
+impl UnstakeRequestTx {
+    /// Construct from staker_id
+    pub fn new(
+        pool: PoolCoin,
+        staker_id: String,
+        loki_address: WalletAddress,
+        other_address: WalletAddress,
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            staker_id,
+            pool,
+            loki_address,
+            other_address,
+        }
+    }
 }
 
 /// A transaction which indicates that we need to send to the main chain.
@@ -277,9 +301,6 @@ impl OutputTx {
         address: WalletAddress,
         amount: u128,
     ) -> Result<Self, &'static str> {
-        if witness_txs.is_empty() {
-            return Err("Cannot create an OutputTx with empty witness transactions");
-        }
         if validate_address(coin, &address.0).is_err() {
             return Err("Invalid output address");
         }

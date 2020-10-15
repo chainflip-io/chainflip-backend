@@ -88,6 +88,12 @@ impl MemoryLiquidityProvider {
 
         liquidity.depth = depth as u128;
         liquidity.loki_depth = loki_depth as u128;
+
+        debug!(
+            "Liquidity for coin {:?} is now: {:?}",
+            pool_change.coin, liquidity
+        );
+
         self.pools.insert(pool_change.coin, liquidity);
 
         Ok(())

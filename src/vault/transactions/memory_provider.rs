@@ -192,6 +192,7 @@ impl MemoryState {
     }
 
     fn process_pool_change_tx(&mut self, tx: PoolChangeTx) {
+        debug!("Processing a pool change tx: {:?}", tx);
         if let Err(err) = self.liquidity.update_liquidity(&tx) {
             error!("Failed to process pool change tx {:?}: {}", tx, err);
             panic!(err);
@@ -331,6 +332,10 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
 
     fn get_unstake_request_txs(&self) -> &[UnstakeRequestTx] {
         &self.state.unstake_request_txs
+    }
+
+    fn get_portions(&self) -> &VaultPortions {
+        &self.state.staker_portions
     }
 }
 

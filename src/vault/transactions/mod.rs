@@ -5,6 +5,14 @@ use crate::{
 };
 use memory_provider::{FulfilledTxWrapper, WitnessTxWrapper};
 
+/// Memory transaction provider
+pub mod memory_provider;
+/// Helper functions to do portion-based calculations
+/// (probably should be a child module of memory_provider,
+/// but don't want to move too much code around)
+pub mod portions;
+pub use memory_provider::{MemoryTransactionsProvider, VaultPortions};
+
 /// An interface for providing transactions
 pub trait TransactionProvider: LiquidityProvider {
     /// Sync new transactions and return the index of the first unprocessed block
@@ -27,12 +35,7 @@ pub trait TransactionProvider: LiquidityProvider {
 
     /// Get all (unfulfilled?) unstake requests
     fn get_unstake_request_txs(&self) -> &[UnstakeRequestTx];
-}
 
-/// Memory transaction provider
-pub mod memory_provider;
-/// Helper functions to do portion-based calculations
-/// (probably should be a child module of memory_provider,
-/// but don't want to move too much code around)
-pub mod portions;
-pub use memory_provider::MemoryTransactionsProvider;
+    /// Get vault portions
+    fn get_portions(&self) -> &VaultPortions;
+}
