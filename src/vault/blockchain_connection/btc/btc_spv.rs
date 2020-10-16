@@ -1,8 +1,11 @@
 use serde::Deserialize;
 
+use super::BitcoinSPVClient;
 use crate::common::{coins::CoinAmount, Coin, GenericCoinAmount, WalletAddress};
+use async_trait::async_trait;
 use bitcoin::consensus::encode::deserialize;
 use bitcoin::Transaction;
+use bitcoin::Txid;
 use hex::FromHex;
 
 /// Electrum SPV error
@@ -19,9 +22,8 @@ pub struct BtcSPVResponse {
     result: Option<serde_json::Value>,
 }
 
-
 /// Can fetch UTXOs of particular addresses and send from a linked wallet using
-/// bitcoins Simple Payment Verification (SPV)
+/// bitcoin's Simple Payment Verification (SPV)
 ///
 /// ## Setup
 /// To setup an SPV client from python source
@@ -43,19 +45,6 @@ pub struct BtcSPVClient {
     username: String,
     password: String,
 }
-
-#[derive(Debug, Deserialize)]
-/// Contains the details of an Unspent transaction output
-pub struct BtcUTXO {
-    height: u64,
-    tx_hash: String,
-    tx_pos: u64,
-    value: u64,
-}
-
-#[derive(Debug, Deserialize)]
-/// Wrapper struct for an AddressUnspentResponse
-pub struct AddressUnspentResponse(Vec<BtcUTXO>);
 
 impl BtcSPVClient {
     fn new(port: u16, username: String, password: String) -> Self {
@@ -113,15 +102,49 @@ impl BtcSPVClient {
             Err("Neither result no error present in response".to_owned())
         }
     }
+}
 
+#[derive(Debug, Clone, Deserialize)]
+/// Contains the details of an Unspent transaction output
+pub struct BtcUTXO {
+    pub height: u64,
+    pub tx_hash: String,
+    pub tx_pos: u64,
+    pub value: u64,
+}
+
+impl BtcUTXO {
+    pub fn new(height: u64, tx_hash: String, tx_pos: u64, value: u64) -> Self {
+        BtcUTXO {
+            height,
+            tx_hash,
+            tx_pos,
+            value,
+        }
+    }
+}
+
+fn decode_hex_tx(hex_tx: &str) -> Result<Transaction, String> {
+    let tx_bytes = Vec::from_hex(hex_tx).map_err(|err| err.to_string())?;
+
+    let transaction: Result<Transaction, String> =
+        deserialize(&tx_bytes).map_err(|err| err.to_string());
+
+    transaction
+}
+
+#[derive(Debug, Deserialize)]
+/// Wrapper struct for an AddressUnspentResponse
+pub struct AddressUnspentResponse(pub Vec<BtcUTXO>);
+
+#[async_trait]
+impl BitcoinSPVClient for BtcSPVClient {
     /// Returns UTXO list of any address
     async fn get_address_unspent(
         &self,
-        address: WalletAddress,
+        address: &WalletAddress,
     ) -> Result<AddressUnspentResponse, String> {
-        // let mut params = serde_json::json!({});
         let params = serde_json::json!({ "address": address });
-        // params["address"] = address.to_string().into();
 
         let res = self
             .send_req_inner("getaddressunspent", params)
@@ -134,23 +157,10 @@ impl BtcSPVClient {
         Ok(unspent_response)
     }
 
-    fn decode_hex_tx(&self, hex_tx: &str) -> Result<Transaction, String> {
-        let tx_bytes = Vec::from_hex(hex_tx).map_err(|err| err.to_string())?;
-
-        let transaction: Result<Transaction, String> =
-            deserialize(&tx_bytes).map_err(|err| err.to_string());
-
-        transaction
-    }
-
     /// Sends a transaction to an address.
     /// # Prerequisite
     /// Wallet must be loaded into the electrum client for the funds to be spent
-    async fn send(
-        &self,
-        destination: WalletAddress,
-        atomic_amount: u128,
-    ) -> Result<Transaction, String> {
+    async fn send(&self, destination: WalletAddress, atomic_amount: u128) -> Result<Txid, String> {
         // Convert atomic amount to BTC amount the rpc expects
         let amount = GenericCoinAmount::from_atomic(Coin::BTC, atomic_amount);
         let btc_amount = amount.to_decimal();
@@ -169,9 +179,9 @@ impl BtcSPVClient {
 
         let hex_tx = res.as_str().ok_or("Could not cast result to string")?;
 
-        let tx = self.decode_hex_tx(hex_tx)?;
+        let tx = decode_hex_tx(hex_tx)?;
 
-        Ok(tx)
+        Ok(tx.txid())
     }
 }
 
@@ -188,7 +198,7 @@ mod test {
     async fn get_address_unspent_test() {
         let client = get_test_BtcSPVClient();
         let address = WalletAddress("tb1q62pygrp8af7v0gzdjycnnqcm9syhpdg6a0kunk".to_string());
-        let result = client.get_address_unspent(address).await;
+        let result = client.get_address_unspent(&address).await;
 
         assert!(result.is_ok());
     }
@@ -207,9 +217,8 @@ mod test {
 
     #[test]
     fn decode_tx_test() {
-        let client = get_test_BtcSPVClient();
         let hex = "020000000001025a54a3e8f52e70152c1d24d6fa6a57b6ffdf9565821e5c26468aceea14677a560100000000fdffffff5b9424587e602295d16a02c338574517d0ab0f7a6f15085964402f9fb63dfccf0000000000fdffffff02e803000000000000160014d282440c27ea7cc7a04d913139831b2c0970b51a903d0f0000000000160014bd058f3dcb7964e4b6ac16528bbd45dd6e5f74b10247304402200f37cdc12037dc1591712b5d3253fded2859dc10dce192bbaf4ec8a6727b063902205eec770c6729dc54df40aadf736c36112a7e97c8733d987f202046402fd461e4012102fafc20310f52e9152f1e81ba76329d81211d54e4e1473dd4c70ab031e6cb5a2702473044022078dee3a8b6218821130188b160bc8fe2876c88b97645d1e85542545b8020c27b022008d2a0f863e2583afde6397dfae2ec4b8fe61191bc74143f7686028674d45735012102fafc20310f52e9152f1e81ba76329d81211d54e4e1473dd4c70ab031e6cb5a2750661c00";
-        let tx = client.decode_hex_tx(hex);
+        let tx = decode_hex_tx(hex);
         assert!(tx.is_ok());
         let real_tx = tx.unwrap();
         let outputs = real_tx.output;
