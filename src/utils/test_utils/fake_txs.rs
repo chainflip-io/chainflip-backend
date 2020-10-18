@@ -1,13 +1,23 @@
 use crate::{
     common::Timestamp,
-    common::{Coin, GenericCoinAmount, LokiAmount, LokiPaymentId, PoolCoin},
-    transactions::{StakeQuoteTx, UnstakeRequestTx, WitnessTx},
+    common::{Coin, GenericCoinAmount, LokiAmount, LokiPaymentId, PoolCoin, WalletAddress},
+    transactions::{StakeQuoteTx, WitnessTx},
 };
 use std::str::FromStr;
 use uuid::Uuid;
 
 /// Create a fake stake quote transaction for testing
 pub fn create_fake_stake_quote(
+    loki_amount: LokiAmount,
+    coin_amount: GenericCoinAmount,
+) -> StakeQuoteTx {
+    let staker_id = Uuid::new_v4().to_string();
+    create_fake_stake_quote_for_id(&staker_id, loki_amount, coin_amount)
+}
+
+/// Create a fake stake quote transaction for a specific staker (for testing only)
+pub fn create_fake_stake_quote_for_id(
+    staker_id: &str,
     loki_amount: LokiAmount,
     coin_amount: GenericCoinAmount,
 ) -> StakeQuoteTx {
@@ -36,13 +46,5 @@ where
         amount: amount.into().to_atomic(),
         coin,
         sender: None,
-    }
-}
-
-/// Create a fake unstake request for testing
-pub fn create_fake_unstake_request_tx(staker_id: String) -> UnstakeRequestTx {
-    UnstakeRequestTx {
-        id: Uuid::new_v4(),
-        staker_id,
     }
 }

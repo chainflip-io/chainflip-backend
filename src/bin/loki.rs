@@ -38,7 +38,7 @@ async fn test_loki_rpc() {
 
     // make_int_address().await;
 
-    let res = loki_rpc::transfer(PORT, &amount, &other_address, None)
+    let res = loki_rpc::transfer(PORT, &amount, &other_address)
         .await
         .expect("Could not transfer");
 
@@ -81,7 +81,7 @@ async fn test_loki_witness() {
         let amount = LokiAmount::from_atomic(50_000_000);
         let address = LokiWalletAddress::from_str(&int_address.integrated_address)
             .expect("Incorrect wallet address");
-        let res = loki_rpc::transfer(PORT, &amount, &address, None).await;
+        let res = loki_rpc::transfer(PORT, &amount, &address).await;
 
         info!("Transfer response: {:?}", &res);
 

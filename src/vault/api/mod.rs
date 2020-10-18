@@ -2,6 +2,8 @@ use super::transactions::TransactionProvider;
 use crate::common::api::handle_rejection;
 use crate::side_chain::ISideChain;
 use std::sync::{Arc, Mutex};
+
+use parking_lot::RwLock;
 use tokio::sync::oneshot;
 use warp::Filter;
 
@@ -16,11 +18,11 @@ impl APIServer {
     /// when `shotdown_receiver` receives a signal (i.e. `send()` is called).
     pub fn serve<S, T>(
         side_chain: Arc<Mutex<S>>,
-        provider: Arc<Mutex<T>>,
+        provider: Arc<RwLock<T>>,
         shutdown_receiver: oneshot::Receiver<()>,
     ) where
         S: ISideChain + Send + 'static,
-        T: TransactionProvider + Send + 'static,
+        T: TransactionProvider + Send + Sync + 'static,
     {
         let routes = v1::endpoints(side_chain, provider).recover(handle_rejection);
 

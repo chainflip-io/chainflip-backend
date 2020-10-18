@@ -127,3 +127,24 @@ fn check_staking_smaller_amounts() {
     assert!(res.stake_tx.witness_txs.contains(&wtx_loki.inner.id));
     assert!(res.stake_tx.witness_txs.contains(&wtx_eth.inner.id));
 }
+
+#[test]
+fn check_portions_of_amount() {
+    assert_eq!(
+        get_portion_of_amount(1_000_000_000, Portion::MAX),
+        1_000_000_000
+    );
+
+    let third = Portion(Portion::MAX.0 / 3);
+
+    assert_eq!(
+        get_portion_of_amount(1_000_000_000, third),
+        1_000_000_000 / 3
+    );
+
+    let half = Portion(Portion::MAX.0 / 2);
+
+    assert_eq!(get_portion_of_amount(u128::MAX, half), u128::MAX / 2);
+
+    assert_eq!(get_portion_of_amount(0, half), 0);
+}

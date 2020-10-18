@@ -6,7 +6,6 @@ use crate::{
     vault::transactions::MemoryTransactionsProvider,
 };
 use std::sync::{Arc, Mutex};
-use uuid::Uuid;
 
 /// Test helpers for Block Processor
 pub mod block_processor;
@@ -28,7 +27,7 @@ pub mod fake_txs;
 /// Logging initialization
 pub mod logging;
 
-pub use fake_txs::{create_fake_stake_quote, create_fake_unstake_request_tx, create_fake_witness};
+pub use fake_txs::{create_fake_stake_quote, create_fake_witness};
 
 /// Test ETH address
 pub const TEST_ETH_ADDRESS: &str = "0x70e7db0678460c5e53f1ffc9221d1c692111dcc5";

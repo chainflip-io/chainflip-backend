@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use itertools::Itertools;
+use parking_lot::RwLock;
 
 use crate::{
     common::Coin, side_chain::SideChainTx, transactions::OutputTx,
@@ -9,15 +12,16 @@ use crate::{
 mod coin_processor;
 mod senders;
 
-use coin_processor::CoinProcessor;
-pub use coin_processor::OutputCoinProcessor;
+pub use coin_processor::{CoinProcessor, OutputCoinProcessor};
+
+pub use senders::loki_sender::LokiSender;
 
 /// Process all pending outputs
 pub async fn process_outputs<T: TransactionProvider + Sync, C: CoinProcessor>(
-    provider: &mut T,
+    provider: &mut Arc<RwLock<T>>,
     coin_processor: &C,
 ) {
-    provider.sync();
+    provider.write().sync();
 
     process(provider, coin_processor).await;
 }
@@ -35,18 +39,33 @@ fn group_by_coins(outputs: &[FulfilledTxWrapper<OutputTx>]) -> Vec<(Coin, Vec<Ou
 }
 
 async fn process<T: TransactionProvider + Sync, C: CoinProcessor>(
-    provider: &mut T,
+    provider: &mut Arc<RwLock<T>>,
     coin_processor: &C,
 ) {
     // Get outputs and group them by their coin types
-    let outputs = provider.get_output_txs();
-    let groups = group_by_coins(outputs);
+    let groups = {
+        let provider_lock = provider.read();
+        let outputs = provider_lock.get_output_txs();
+        group_by_coins(outputs)
+    };
 
-    for (coin, outputs) in groups {
-        let sent_txs = coin_processor.process(provider, coin, &outputs).await;
-        if sent_txs.len() > 0 {
-            let txs = sent_txs.into_iter().map_into::<SideChainTx>().collect_vec();
-            provider.add_transactions(txs).unwrap()
+    let futs = groups
+        .iter()
+        .map(|(coin, outputs)| coin_processor.process(*coin, outputs));
+
+    let txs = futures::future::join_all(futs)
+        .await
+        .into_iter()
+        .map(|txs| txs.into_iter().map_into::<SideChainTx>().collect_vec())
+        .flatten()
+        .collect_vec();
+
+    match provider.write().add_transactions(txs) {
+        Ok(_) => (),
+        Err(err) => {
+            error!("Could not save output sent txs: {}", err);
+            // TODO: investigate how we could recover from this error
+            panic!();
         }
     }
 }
@@ -88,12 +107,7 @@ mod test {
 
     #[async_trait]
     impl CoinProcessor for TestCoinProcessor {
-        async fn process<T: TransactionProvider + Sync>(
-            &self,
-            provider: &T,
-            coin: Coin,
-            outputs: &[OutputTx],
-        ) -> Vec<OutputSentTx> {
+        async fn process(&self, coin: Coin, _outputs: &[OutputTx]) -> Vec<OutputSentTx> {
             self.map.get(&coin).cloned().unwrap_or(vec![])
         }
     }
@@ -140,12 +154,12 @@ mod test {
         chain.add_block(vec![output_tx.clone().into()]).unwrap();
 
         let chain = Arc::new(Mutex::new(chain));
-        let mut provider = MemoryTransactionsProvider::new(chain);
-        provider.sync();
+        let mut provider = MemoryTransactionsProvider::new_protected(chain);
+        provider.write().sync();
 
         // Pre-condition: Output is not fulfilled
-        assert_eq!(provider.get_output_txs().len(), 1);
-        let current_output_tx = provider.get_output_txs().first().unwrap();
+        assert_eq!(provider.read().get_output_txs().len(), 1);
+        let current_output_tx = provider.read().get_output_txs().first().unwrap().clone();
         assert_eq!(current_output_tx.fulfilled, false);
 
         let output_sent_tx = OutputSentTx {
@@ -164,8 +178,8 @@ mod test {
 
         process(&mut provider, &coin_processor).await;
 
-        assert_eq!(provider.get_output_txs().len(), 1);
-        let current_output_tx = provider.get_output_txs().first().unwrap();
+        assert_eq!(provider.read().get_output_txs().len(), 1);
+        let current_output_tx = provider.read().get_output_txs().first().unwrap().clone();
         assert_eq!(current_output_tx.fulfilled, true);
     }
 
@@ -176,12 +190,12 @@ mod test {
         chain.add_block(vec![output_tx.clone().into()]).unwrap();
 
         let chain = Arc::new(Mutex::new(chain));
-        let mut provider = MemoryTransactionsProvider::new(chain);
-        provider.sync();
+        let mut provider = MemoryTransactionsProvider::new_protected(chain);
+        provider.write().sync();
 
         // Pre-condition: Output is not fulfilled
-        assert_eq!(provider.get_output_txs().len(), 1);
-        let current_output_tx = provider.get_output_txs().first().unwrap();
+        assert_eq!(provider.read().get_output_txs().len(), 1);
+        let current_output_tx = provider.read().get_output_txs().first().unwrap().clone();
         assert_eq!(current_output_tx.fulfilled, false);
 
         let mut coin_processor = TestCoinProcessor::new();
@@ -189,8 +203,8 @@ mod test {
 
         process(&mut provider, &coin_processor).await;
 
-        assert_eq!(provider.get_output_txs().len(), 1);
-        let current_output_tx = provider.get_output_txs().first().unwrap();
+        assert_eq!(provider.read().get_output_txs().len(), 1);
+        let current_output_tx = provider.read().get_output_txs().first().unwrap().clone();
         assert_eq!(current_output_tx.fulfilled, false);
     }
 }

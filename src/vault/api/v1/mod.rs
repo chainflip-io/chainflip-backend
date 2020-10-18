@@ -3,6 +3,7 @@ use crate::{
     side_chain::{ISideChain, SideChainTx},
     vault::transactions::TransactionProvider,
 };
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use warp::Filter;
@@ -15,9 +16,9 @@ pub mod post_quote;
 use post_quote::post_quote;
 
 /// The v1 API endpoints
-pub fn endpoints<S: ISideChain + Send, T: TransactionProvider + Send>(
+pub fn endpoints<S: ISideChain + Send, T: TransactionProvider + Send + Sync>(
     side_chain: Arc<Mutex<S>>,
-    provider: Arc<Mutex<T>>,
+    provider: Arc<RwLock<T>>,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     let blocks = warp::path!("blocks")
         .and(warp::get())

@@ -1,7 +1,6 @@
 use crate::{
     common::Coin,
     transactions::{OutputSentTx, OutputTx},
-    vault::transactions::TransactionProvider,
 };
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -11,11 +10,7 @@ use uuid::Uuid;
 #[async_trait]
 pub trait OutputSender {
     /// Send the given outputs and return output sent txs
-    async fn send<T: TransactionProvider + Sync>(
-        &self,
-        provider: &T,
-        outputs: &[OutputTx],
-    ) -> Vec<OutputSentTx>;
+    async fn send(&self, outputs: &[OutputTx]) -> Vec<OutputSentTx>;
 }
 
 fn group_outputs_by_quote(outputs: &[OutputTx], coin_type: Coin) -> Vec<(Uuid, Vec<OutputTx>)> {
@@ -64,16 +59,13 @@ fn group_outputs_by_sending_amounts<'a>(outputs: &'a [OutputTx]) -> Vec<(u128, V
 
 pub mod btc;
 pub mod ethereum;
+pub mod loki_sender;
 
 #[cfg(test)]
 mod test {
 
     use super::*;
-    use crate::{
-        common::coins::CoinAmount,
-        common::WalletAddress,
-        utils::test_utils::{btc::TestBitcoinClient, create_fake_output_tx},
-    };
+    use crate::utils::test_utils::create_fake_output_tx;
 
     #[test]
     fn test_group_outputs_by_quote() {

@@ -1,3 +1,5 @@
+use parking_lot::RwLock;
+
 use crate::{
     common::{
         liquidity_provider::{Liquidity, LiquidityProvider, MemoryLiquidityProvider},
@@ -129,6 +131,12 @@ impl<S: ISideChain> MemoryTransactionsProvider<S> {
 
         MemoryTransactionsProvider { side_chain, state }
     }
+
+    /// Helper constructor to return a wrapped (thread safe) instance
+    pub fn new_protected(side_chain: Arc<Mutex<S>>) -> Arc<RwLock<Self>> {
+        let p = Self::new(side_chain);
+        Arc::new(RwLock::new(p))
+    }
 }
 
 /// How much of each coin a given staker owns
@@ -184,6 +192,7 @@ impl MemoryState {
     }
 
     fn process_pool_change_tx(&mut self, tx: PoolChangeTx) {
+        debug!("Processing a pool change tx: {:?}", tx);
         if let Err(err) = self.liquidity.update_liquidity(&tx) {
             error!("Failed to process pool change tx {:?}: {}", tx, err);
             panic!(err);
@@ -323,6 +332,10 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
 
     fn get_unstake_request_txs(&self) -> &[UnstakeRequestTx] {
         &self.state.unstake_request_txs
+    }
+
+    fn get_portions(&self) -> &VaultPortions {
+        &self.state.staker_portions
     }
 }
 

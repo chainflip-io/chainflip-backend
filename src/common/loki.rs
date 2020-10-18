@@ -1,11 +1,14 @@
 use super::{
     coins::{CoinAmount, CoinInfo},
-    Coin, GenericCoinAmount,
+    Coin, GenericCoinAmount, WalletAddress,
 };
 
 use serde::{Deserialize, Serialize};
 
-use std::fmt::{self, Display};
+use std::{
+    convert::TryFrom,
+    fmt::{self, Display},
+};
 
 /// Represents regular and integrated wallet addresses for Loki
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -14,17 +17,35 @@ pub struct LokiWalletAddress {
     address: String,
 }
 
+/// Helper function to convert from an owned string
+fn from_string(addr: String) -> Result<LokiWalletAddress, String> {
+    match addr.len() {
+        97 | 108 => Ok(LokiWalletAddress {
+            address: addr.to_owned(),
+        }),
+        x @ _ => Err(format!("Invalid address length: {}", x)),
+    }
+}
+
+impl TryFrom<WalletAddress> for LokiWalletAddress {
+    type Error = String;
+    fn try_from(a: WalletAddress) -> Result<Self, Self::Error> {
+        from_string(a.0)
+    }
+}
+
+impl From<LokiWalletAddress> for WalletAddress {
+    fn from(a: LokiWalletAddress) -> Self {
+        WalletAddress::new(&a.address)
+    }
+}
+
 impl std::str::FromStr for LokiWalletAddress {
     type Err = String;
 
     /// Construct from string, validating address length
     fn from_str(addr: &str) -> Result<Self, Self::Err> {
-        match addr.len() {
-            97 | 108 => Ok(LokiWalletAddress {
-                address: addr.to_owned(),
-            }),
-            x @ _ => Err(format!("Invalid address length: {}", x)),
-        }
+        from_string(addr.to_owned())
     }
 }
 
@@ -142,6 +163,18 @@ impl LokiAmount {
     /// Get inner atomic representation
     pub fn to_atomic(&self) -> u128 {
         self.atomic_amount
+    }
+
+    /// Subtract checking for underflow
+    pub fn checked_sub(&self, v: &Self) -> Option<Self> {
+        let amount = self.to_atomic().checked_sub(v.to_atomic())?;
+        Some(LokiAmount::from_atomic(amount))
+    }
+
+    /// Add atomic amounts w/o overflow
+    pub fn saturating_add(&self, v: &Self) -> Self {
+        let amount = self.to_atomic().saturating_add(v.to_atomic());
+        LokiAmount::from_atomic(amount)
     }
 }
 
