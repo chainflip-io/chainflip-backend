@@ -30,15 +30,17 @@ pub struct SubmitQuoteParams {
 }
 
 /// Submit a quote
-pub async fn quote<S, V>(
+pub async fn quote<S, V, R>(
     params: SubmitQuoteParams,
     state: Arc<Mutex<S>>,
     vault_node: Arc<V>,
     cache: Arc<Mutex<HashMap<Coin, BTreeSet<String>>>>,
+    mut rng: R,
 ) -> Result<QuoteResponse, ResponseError>
 where
     S: StateProvider,
     V: VaultNodeInterface,
+    R: Rng,
 {
     let input_coin = match Coin::from_str(&params.input_coin) {
         Ok(coin) => coin,
@@ -65,13 +67,13 @@ where
         ids
     };
 
-    // TODO: generate random input address id
+    // How do we test this? :(
     let input_address_id = loop {
         let id = match input_coin {
-            Coin::BTC => "5".to_owned(), // TODO: Randomly generate an id > 5?
-            Coin::ETH => "5".to_owned(), // TODO: Randomly generate an id > 5?
+            Coin::BTC => rng.gen_range(6, u64::MAX).to_string(),
+            Coin::ETH => rng.gen_range(6, u64::MAX).to_string(),
             Coin::LOKI => {
-                let random_bytes = rand::thread_rng().gen::<[u8; 8]>();
+                let random_bytes = rng.gen::<[u8; 8]>();
                 hex::encode(random_bytes)
             }
             _ => {

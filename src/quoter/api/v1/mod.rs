@@ -5,10 +5,12 @@ use crate::{
     },
     quoter::{vault_node::VaultNodeInterface, StateProvider},
 };
+use rand::{prelude::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeSet, HashMap},
     sync::{Arc, Mutex},
+    time::SystemTime,
 };
 use warp::Filter;
 
@@ -38,6 +40,11 @@ where
     let input_id_change: HashMap<Coin, BTreeSet<String>> = HashMap::new();
     let input_id_cache = Arc::new(Mutex::new(input_id_change));
 
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .expect("Duration since UNIX_EPOCH failed");
+    let rng = StdRng::seed_from_u64(now.as_secs());
+
     let coins = warp::path!("coins")
         .and(warp::get())
         .and(warp::query::<CoinsParams>())
@@ -64,6 +71,7 @@ where
         .and(using(state.clone()))
         .and(using(vault_node.clone()))
         .and(using(input_id_cache.clone()))
+        .and(using(rng))
         .map(post_quote::quote)
         .and_then(api::respond);
 
