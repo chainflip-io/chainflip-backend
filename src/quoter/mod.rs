@@ -7,6 +7,7 @@ use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
+use uuid::Uuid;
 use vault_node::VaultNodeInterface;
 
 mod api;
@@ -71,19 +72,19 @@ pub trait BlockProcessor {
 /// A trait for providing quoter state
 pub trait StateProvider {
     /// Get all swap quotes
-    fn get_swap_quotes(&self) -> Option<Vec<QuoteTx>>;
+    fn get_swap_quotes(&self) -> Vec<QuoteTx>;
     /// Get swap quote with the given id
-    fn get_swap_quote_tx(&self, id: String) -> Option<QuoteTx>;
+    fn get_swap_quote_tx(&self, id: Uuid) -> Option<QuoteTx>;
     /// Get all stake quotes
-    fn get_stake_quotes(&self) -> Option<Vec<StakeQuoteTx>>;
+    fn get_stake_quotes(&self) -> Vec<StakeQuoteTx>;
     /// Get stake quore with the given id
-    fn get_stake_quote_tx(&self, id: String) -> Option<StakeQuoteTx>;
+    fn get_stake_quote_tx(&self, id: Uuid) -> Option<StakeQuoteTx>;
     /// Get all witness transactions with the given quote id
-    fn get_witness_txs(&self, quote_id: String) -> Option<Vec<WitnessTx>>;
+    fn get_witness_txs(&self) -> Vec<WitnessTx>;
     /// Get all output transactions with the given quote id
-    fn get_output_txs(&self, quote_id: String) -> Option<Vec<OutputTx>>;
+    fn get_output_txs(&self) -> Vec<OutputTx>;
     /// Get all output sent transactions
-    fn get_output_sent_txs(&self) -> Option<Vec<OutputSentTx>>;
+    fn get_output_sent_txs(&self) -> Vec<OutputSentTx>;
     /// Get the pools
     fn get_pools(&self) -> HashMap<PoolCoin, Liquidity>;
 }

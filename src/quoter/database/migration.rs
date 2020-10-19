@@ -43,7 +43,6 @@ fn migrate_to_version_1(connection: &mut Connection) {
         tx.execute(
             "CREATE TABLE IF NOT EXISTS transactions (
             id char(36) PRIMARY KEY,
-            meta TEXT,
             type TEXT NOT NULL,
             data BLOB NOT NULL
             )",

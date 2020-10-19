@@ -1,14 +1,19 @@
+use std::collections::HashMap;
+
 use self::types::TransactionType;
 
 use super::{BlockProcessor, StateProvider};
 use crate::{
     common::store::utils::SQLite as KVS,
+    common::Liquidity,
     side_chain::{SideChainBlock, SideChainTx},
 };
-use rusqlite::{self, Error, Transaction};
+use itertools::Itertools;
+use rusqlite::{self, Row, ToSql, Transaction};
 use rusqlite::{params, Connection};
-use serde::Deserialize;
+use serde::{de::DeserializeOwned, Deserialize};
 use uuid::Uuid;
+use web3::types::U256;
 
 mod migration;
 mod types;
@@ -17,6 +22,16 @@ mod types;
 #[derive(Debug)]
 pub struct Database {
     connection: Connection,
+}
+
+fn deserialize<T: DeserializeOwned>(data: &str) -> Option<T> {
+    match serde_json::from_str::<T>(data) {
+        Ok(block) => Some(block),
+        Err(err) => {
+            error!("Failed to parse json: {}", err);
+            None
+        }
+    }
 }
 
 impl Database {
@@ -46,67 +61,109 @@ impl Database {
             match tx {
                 SideChainTx::PoolChangeTx(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
-                    Database::insert_transaction(db, tx.id, None, tx.into(), serialized)
+                    Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
                 SideChainTx::QuoteTx(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
-                    Database::insert_transaction(db, tx.id, None, tx.into(), serialized)
+                    Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
                 SideChainTx::StakeQuoteTx(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
-                    Database::insert_transaction(db, tx.id, None, tx.into(), serialized)
+                    Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
                 SideChainTx::WitnessTx(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
-                    Database::insert_transaction(
-                        db,
-                        tx.id,
-                        Some(tx.quote_id.to_string()),
-                        tx.into(),
-                        serialized,
-                    )
+                    Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
                 SideChainTx::OutputTx(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
-                    Database::insert_transaction(
-                        db,
-                        tx.id,
-                        Some(tx.quote_tx.to_string()),
-                        tx.into(),
-                        serialized,
-                    )
+                    Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
                 SideChainTx::OutputSentTx(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
-                    Database::insert_transaction(db, tx.id, None, tx.into(), serialized)
+                    Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
                 _ => warn!("Failed to process transaction: {:?}", tx),
             }
         }
     }
 
-    fn insert_transaction(
-        db: &Transaction,
-        uuid: Uuid,
-        meta: Option<String>,
-        tx_type: TransactionType,
-        data: String,
-    ) {
+    fn insert_transaction(db: &Transaction, uuid: Uuid, tx_type: TransactionType, data: String) {
         db.execute(
-            "INSERT OR REPLACE INTO transactions (id, meta, type, data) VALUES (?1, ?2, ?3, ?4)",
-            params![uuid.to_string(), meta, tx_type.to_string(), data],
+            "INSERT OR REPLACE INTO transactions (id, type, data) VALUES (?1, ?2, ?3)",
+            params![uuid.to_string(), tx_type.to_string(), data],
         )
         .expect("Failed to create statement");
     }
 
-    fn deserialize<'a, T: Deserialize<'a>>(data: &'a str) -> Option<T> {
-        match serde_json::from_str::<T>(data) {
-            Ok(block) => Some(block),
-            Err(err) => {
-                error!("Failed to parse json: {}", err);
-                None
-            }
-        }
+    fn get_rows<T, P, F>(&self, stmt: &str, params: P, mut row_fn: F) -> Vec<T>
+    where
+        T: DeserializeOwned,
+        P: IntoIterator,
+        P::Item: ToSql,
+        F: FnMut(&Row<'_>) -> Option<String>,
+    {
+        let mut stmt = self
+            .connection
+            .prepare(stmt)
+            .expect("Could not prepare stmt");
+
+        let res = stmt
+            .query_map(params, |row| {
+                let result = row_fn(row);
+                if let Some(data) = result {
+                    return Ok(deserialize(&data));
+                }
+
+                Ok(None)
+            })
+            .unwrap()
+            .filter_map(|r| r.unwrap())
+            .collect();
+
+        res
+    }
+
+    fn get_row<T, P, F>(&self, stmt: &str, params: P, mut row_fn: F) -> Option<T>
+    where
+        T: DeserializeOwned,
+        P: IntoIterator,
+        P::Item: ToSql,
+        F: FnMut(&Row<'_>) -> Option<String>,
+    {
+        let mut stmt = self
+            .connection
+            .prepare(stmt)
+            .expect("Could not prepare stmt");
+
+        let res = stmt
+            .query_row(params, |row| {
+                let result = row_fn(row);
+                if let Some(data) = result {
+                    return Ok(deserialize(&data));
+                }
+
+                Ok(None)
+            })
+            .unwrap();
+
+        res
+    }
+
+    fn get_transactions<T: DeserializeOwned>(&self, tx_type: TransactionType) -> Vec<T> {
+        self.get_rows(
+            "SELECT data from transactions where type = ?",
+            params![tx_type.to_string()],
+            |row| row.get(0).ok(),
+        )
+    }
+
+    fn get_transaction<T: DeserializeOwned>(&self, id: &Uuid) -> Option<T> {
+        self.get_row(
+            "SELECT data from transactions where id = ?",
+            params![id.to_string()],
+            |row| row.get(0).ok(),
+        )
     }
 }
 
@@ -143,38 +200,56 @@ impl BlockProcessor for Database {
 }
 
 impl StateProvider for Database {
-    fn get_swap_quotes(&self) -> Option<Vec<crate::transactions::QuoteTx>> {
-        todo!()
+    fn get_swap_quotes(&self) -> Vec<crate::transactions::QuoteTx> {
+        self.get_transactions(TransactionType::SwapQuote)
     }
 
-    fn get_swap_quote_tx(&self, id: String) -> Option<crate::transactions::QuoteTx> {
-        todo!()
+    fn get_swap_quote_tx(&self, id: Uuid) -> Option<crate::transactions::QuoteTx> {
+        self.get_transaction(&id)
     }
 
-    fn get_stake_quotes(&self) -> Option<Vec<crate::transactions::StakeQuoteTx>> {
-        todo!()
+    fn get_stake_quotes(&self) -> Vec<crate::transactions::StakeQuoteTx> {
+        self.get_transactions(TransactionType::StakeQuote)
     }
 
-    fn get_stake_quote_tx(&self, id: String) -> Option<crate::transactions::StakeQuoteTx> {
-        todo!()
+    fn get_stake_quote_tx(&self, id: Uuid) -> Option<crate::transactions::StakeQuoteTx> {
+        self.get_transaction(&id)
     }
 
-    fn get_witness_txs(&self, quote_id: String) -> Option<Vec<crate::transactions::WitnessTx>> {
-        todo!()
+    fn get_witness_txs(&self) -> Vec<crate::transactions::WitnessTx> {
+        self.get_transactions(TransactionType::Witness)
     }
 
-    fn get_output_txs(&self, quote_id: String) -> Option<Vec<crate::transactions::OutputTx>> {
-        todo!()
+    fn get_output_txs(&self) -> Vec<crate::transactions::OutputTx> {
+        self.get_transactions(TransactionType::Output)
     }
 
-    fn get_output_sent_txs(&self) -> Option<Vec<crate::transactions::OutputSentTx>> {
-        todo!()
+    fn get_output_sent_txs(&self) -> Vec<crate::transactions::OutputSentTx> {
+        self.get_transactions(TransactionType::Sent)
     }
 
-    fn get_pools(
-        &self,
-    ) -> std::collections::HashMap<crate::common::PoolCoin, crate::common::Liquidity> {
-        todo!()
+    fn get_pools(&self) -> std::collections::HashMap<crate::common::PoolCoin, Liquidity> {
+        let mut map = HashMap::new();
+        let changes: Vec<crate::transactions::PoolChangeTx> =
+            self.get_transactions(TransactionType::PoolChange);
+
+        let groups = changes.iter().map(|tx| (tx.coin, tx)).into_group_map();
+        for (coin, txs) in groups {
+            let mut liquidity = Liquidity::zero();
+            for pool_change in txs {
+                let depth = liquidity.depth as i128 + pool_change.depth_change;
+                let loki_depth = liquidity.loki_depth as i128 + pool_change.loki_depth_change;
+                if depth < 0 || loki_depth < 0 {
+                    panic!("Negative liquidity depth found")
+                }
+                liquidity.depth = depth as u128;
+                liquidity.loki_depth = loki_depth as u128;
+            }
+
+            map.insert(coin, liquidity);
+        }
+
+        map
     }
 }
 
@@ -203,7 +278,6 @@ mod test {
 
     struct RawData {
         id: String,
-        meta: Option<String>,
         data: String,
     }
 
@@ -213,28 +287,22 @@ mod test {
         let tx = db.connection.transaction().unwrap();
 
         let uuid = Uuid::new_v4();
-        Database::insert_transaction(&tx, uuid, None, TransactionType::PoolChange, "Hello".into());
+        Database::insert_transaction(&tx, uuid, TransactionType::PoolChange, "Hello".into());
 
         tx.commit().unwrap();
 
         let results = db
             .connection
-            .query_row(
-                "select id, meta, data from transactions",
-                NO_PARAMS,
-                |row| {
-                    Ok(RawData {
-                        id: row.get(0).unwrap(),
-                        meta: row.get(1).unwrap(),
-                        data: row.get(2).unwrap(),
-                    })
-                },
-            )
+            .query_row("select id, data from transactions", NO_PARAMS, |row| {
+                Ok(RawData {
+                    id: row.get(0).unwrap(),
+                    data: row.get(1).unwrap(),
+                })
+            })
             .unwrap();
 
         assert_eq!(results.id, uuid.to_string());
         assert_eq!(&results.data, "Hello");
-        assert!(results.meta.is_none());
     }
 
     #[test]
@@ -303,5 +371,32 @@ mod test {
             .unwrap();
 
         assert_eq!(count, 6);
+    }
+
+    #[test]
+    fn returns_pools() {
+        let mut db = setup();
+        let transactions: Vec<SideChainTx> = vec![
+            PoolChangeTx::new(PoolCoin::BTC, 100, 100).into(),
+            PoolChangeTx::new(PoolCoin::ETH, 75, 75).into(),
+            PoolChangeTx::new(PoolCoin::BTC, 100, -50).into(),
+            PoolChangeTx::new(PoolCoin::BTC, 0, -50).into(),
+        ];
+
+        db.process_blocks(&[SideChainBlock {
+            id: 0,
+            txs: transactions,
+        }])
+        .unwrap();
+
+        let pools = db.get_pools();
+
+        let btc_pool = pools.get(&PoolCoin::BTC).unwrap();
+        assert_eq!(btc_pool.depth, 0);
+        assert_eq!(btc_pool.loki_depth, 200);
+
+        let eth_pool = pools.get(&PoolCoin::ETH).unwrap();
+        assert_eq!(eth_pool.depth, 75);
+        assert_eq!(eth_pool.loki_depth, 75);
     }
 }

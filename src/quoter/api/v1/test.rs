@@ -1,32 +1,34 @@
+use uuid::Uuid;
+
 use super::*;
 
 struct FakeState {}
 impl StateProvider for FakeState {
-    fn get_swap_quotes(&self) -> Option<Vec<crate::transactions::QuoteTx>> {
+    fn get_swap_quotes(&self) -> Vec<crate::transactions::QuoteTx> {
         todo!()
     }
 
-    fn get_swap_quote_tx(&self, id: String) -> Option<crate::transactions::QuoteTx> {
+    fn get_swap_quote_tx(&self, id: Uuid) -> Option<crate::transactions::QuoteTx> {
         todo!()
     }
 
-    fn get_stake_quotes(&self) -> Option<Vec<crate::transactions::StakeQuoteTx>> {
+    fn get_stake_quotes(&self) -> Vec<crate::transactions::StakeQuoteTx> {
         todo!()
     }
 
-    fn get_stake_quote_tx(&self, id: String) -> Option<crate::transactions::StakeQuoteTx> {
+    fn get_stake_quote_tx(&self, id: Uuid) -> Option<crate::transactions::StakeQuoteTx> {
         todo!()
     }
 
-    fn get_witness_txs(&self, quote_id: String) -> Option<Vec<crate::transactions::WitnessTx>> {
+    fn get_witness_txs(&self) -> Vec<crate::transactions::WitnessTx> {
         todo!()
     }
 
-    fn get_output_txs(&self, quote_id: String) -> Option<Vec<crate::transactions::OutputTx>> {
+    fn get_output_txs(&self) -> Vec<crate::transactions::OutputTx> {
         todo!()
     }
 
-    fn get_output_sent_txs(&self) -> Option<Vec<crate::transactions::OutputSentTx>> {
+    fn get_output_sent_txs(&self) -> Vec<crate::transactions::OutputSentTx> {
         todo!()
     }
 

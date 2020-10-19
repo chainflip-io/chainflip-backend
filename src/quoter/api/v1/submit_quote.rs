@@ -52,7 +52,7 @@ where
 
     let used_ids = {
         // Might be better if we add a function in state to get input ids for a given coin
-        let quotes = state.lock().unwrap().get_swap_quotes().unwrap_or(vec![]);
+        let quotes = state.lock().unwrap().get_swap_quotes();
         let mut cache = cache.lock().unwrap();
         let mut ids = cache.entry(input_coin).or_insert(BTreeSet::new()).clone();
 
