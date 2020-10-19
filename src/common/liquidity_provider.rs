@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use crate::{
@@ -6,7 +7,8 @@ use crate::{
 };
 
 /// A simple representation of a pool liquidity
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Liquidity {
     /// The depth of the coin staked against LOKI in the pool
     pub depth: u128,
