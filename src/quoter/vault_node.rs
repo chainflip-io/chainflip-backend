@@ -39,7 +39,7 @@ pub trait VaultNodeInterface {
     fn get_blocks(&self, start: u32, limit: u32) -> Result<Vec<SideChainBlock>, String>;
 
     /// Submit a quote to the vault node
-    fn submit_quote(&self, params: QuoteParams) -> Result<QuoteTx, String>; // TODO: Change Result type to a QuoteResponse?
+    fn submit_quote(&self, params: QuoteParams) -> Result<serde_json::Value, String>;
 }
 
 /// A client for communicating with vault nodes via http requests.
@@ -62,7 +62,7 @@ impl VaultNodeInterface for VaultNodeAPI {
         todo!()
     }
 
-    fn submit_quote(&self, params: QuoteParams) -> Result<QuoteTx, String> {
+    fn submit_quote(&self, params: QuoteParams) -> Result<serde_json::Value, String> {
         todo!()
     }
 }

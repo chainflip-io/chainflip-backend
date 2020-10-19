@@ -36,7 +36,7 @@ pub async fn quote<S, V, R>(
     vault_node: Arc<V>,
     cache: Arc<Mutex<HashMap<Coin, BTreeSet<String>>>>,
     mut rng: R,
-) -> Result<QuoteResponse, ResponseError>
+) -> Result<serde_json::Value, ResponseError>
 where
     S: StateProvider,
     V: VaultNodeInterface,
@@ -107,7 +107,7 @@ where
         .insert(input_address_id.clone());
 
     match vault_node.submit_quote(quote_params) {
-        Ok(_) => {}
+        Ok(result) => Ok(result),
         Err(err) => {
             // Something went wrong, remove id from cache
             cache
@@ -119,6 +119,4 @@ where
             return Err(ResponseError::new(StatusCode::BAD_REQUEST, &err));
         }
     }
-
-    return Ok(QuoteResponse {});
 }
