@@ -30,7 +30,7 @@ pub struct SubmitQuoteParams {
 }
 
 /// Submit a quote
-pub async fn submit_quote<S, V>(
+pub async fn quote<S, V>(
     params: SubmitQuoteParams,
     state: Arc<Mutex<S>>,
     vault_node: Arc<V>,

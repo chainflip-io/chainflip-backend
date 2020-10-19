@@ -12,8 +12,7 @@ use std::{
 };
 use warp::Filter;
 
-mod submit_quote;
-pub use submit_quote::submit_quote;
+mod post_quote;
 
 mod get_coins;
 pub use get_coins::{get_coins, CoinsParams};
@@ -59,17 +58,17 @@ where
         .map(get_pools)
         .and_then(api::respond);
 
-    let submit_quote_api = warp::path!("submitQuote")
+    let post_quote_api = warp::path!("quote")
         .and(warp::post())
         .and(warp::body::json())
         .and(using(state.clone()))
         .and(using(vault_node.clone()))
         .and(using(input_id_cache.clone()))
-        .map(submit_quote::submit_quote)
+        .map(post_quote::quote)
         .and_then(api::respond);
 
     warp::path!("v1" / ..) // Add path prefix /v1 to all our routes
-        .and(coins.or(estimate).or(pools).or(submit_quote_api))
+        .and(coins.or(estimate).or(pools).or(post_quote_api))
 }
 
 /// Response for `quote` endpoint

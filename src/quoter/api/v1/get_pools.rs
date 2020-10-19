@@ -73,21 +73,16 @@ where
 #[cfg(test)]
 mod test {
     use crate::{
-        quoter::database::Database, quoter::BlockProcessor, side_chain::SideChainBlock,
-        side_chain::SideChainTx, transactions::PoolChangeTx,
+        quoter::{api::v1::test::setup_memory_db, BlockProcessor},
+        side_chain::{SideChainBlock, SideChainTx},
+        transactions::PoolChangeTx,
     };
-    use rusqlite::Connection;
 
     use super::*;
 
-    fn setup() -> Database {
-        let connection = Connection::open_in_memory().expect("Failed to open connection");
-        Database::new(connection)
-    }
-
     #[tokio::test]
     async fn returns_correct_response_when_no_symbols_specified() {
-        let mut db = setup();
+        let mut db = setup_memory_db();
         let transactions: Vec<SideChainTx> = vec![
             PoolChangeTx::new(PoolCoin::BTC, 100, 100).into(),
             PoolChangeTx::new(PoolCoin::ETH, 75, 75).into(),
@@ -121,7 +116,7 @@ mod test {
 
     #[tokio::test]
     async fn returns_correct_response_when_symbols_specified() {
-        let mut db = setup();
+        let mut db = setup_memory_db();
         let transactions: Vec<SideChainTx> = vec![
             PoolChangeTx::new(PoolCoin::BTC, 100, 100).into(),
             PoolChangeTx::new(PoolCoin::ETH, 75, 75).into(),
@@ -141,6 +136,7 @@ mod test {
                     "BTC".to_string(),
                     "btc".to_string(),
                     "Loki".to_string(),
+                    "INVALID".to_string(),
                 ]),
             },
             db,
@@ -159,7 +155,7 @@ mod test {
 
     #[tokio::test]
     async fn returns_correct_response_when_no_pool() {
-        let mut db = setup();
+        let mut db = setup_memory_db();
         let transactions: Vec<SideChainTx> =
             vec![PoolChangeTx::new(PoolCoin::BTC, 100, 100).into()];
 

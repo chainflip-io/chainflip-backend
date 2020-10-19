@@ -37,3 +37,36 @@ pub async fn get_coins(params: CoinsParams) -> Result<Vec<CoinInfo>, ResponseErr
 
     return Ok(info);
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[tokio::test]
+    pub async fn returns_all_coins() {
+        let params = CoinsParams { symbols: None };
+        let result = get_coins(params).await.expect("Expected result to be Ok.");
+        assert_eq!(result.len(), Coin::SUPPORTED.len());
+    }
+
+    #[tokio::test]
+    pub async fn returns_coin_information() {
+        let params = CoinsParams {
+            symbols: Some(vec![
+                "eth".to_owned(),
+                "LOKI".to_owned(),
+                "invalid_coin".to_owned(),
+            ]),
+        };
+        let result = get_coins(params).await.expect("Expected result to be Ok.");
+
+        assert_eq!(result.len(), 2, "Expected get_coins to return 2 CoinInfo");
+
+        for info in result {
+            match info.symbol {
+                Coin::ETH | Coin::LOKI => continue,
+                coin @ _ => panic!("Result returned unexpected coin: {}", coin),
+            }
+        }
+    }
+}
