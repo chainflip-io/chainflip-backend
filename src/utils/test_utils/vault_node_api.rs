@@ -37,7 +37,7 @@ impl VaultNodeInterface for TestVaultNodeAPI {
         };
         Ok(blocks)
     }
-    fn submit_quote(&self, params: QuoteParams) -> Result<crate::transactions::QuoteTx, String> {
+    fn submit_quote(&self, params: QuoteParams) -> Result<serde_json::Value, String> {
         todo!()
     }
 }

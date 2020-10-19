@@ -1,6 +1,7 @@
 use crate::{
-    common::{api::ResponseError, coins::Coin},
+    common::{api::ResponseError, coins::Coin, liquidity_provider::LiquidityProvider},
     quoter::StateProvider,
+    utils::price,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -38,7 +39,7 @@ pub struct EstimateResponse {
 /// > GET /v1/get_estimate?inputCoin=LOKI&inputAmount=1000000&outputCoin=btc
 pub async fn get_estimate<S>(
     params: EstimateParams,
-    _state: Arc<Mutex<S>>,
+    state: Arc<Mutex<S>>,
 ) -> Result<EstimateResponse, ResponseError>
 where
     S: StateProvider,
@@ -77,11 +78,29 @@ where
         ));
     }
 
-    // TODO: Add logic here
+    let calculation = {
+        let state = state.lock().unwrap();
+
+        match price::get_output(&*state, input_coin, params.input_amount, output_coin) {
+            Ok(calculation) => calculation,
+            Err(err) => {
+                error!(
+                    "Failed to calculate output for params: {:?}. {}",
+                    params, err
+                );
+                return Err(ResponseError::new(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to calculate output",
+                ));
+            }
+        }
+    };
+
+    let price = calculation.second.unwrap_or(calculation.first);
 
     Ok(EstimateResponse {
-        output_amount: "0".to_owned(),
-        loki_fee: "0".to_owned(),
+        output_amount: price.output_amount.to_string(),
+        loki_fee: price.loki_fee.to_string(),
     })
 }
 

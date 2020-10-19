@@ -4,6 +4,7 @@ use self::types::TransactionType;
 
 use super::{BlockProcessor, StateProvider};
 use crate::{
+    common::liquidity_provider::LiquidityProvider,
     common::store::utils::SQLite as KVS,
     common::Liquidity,
     side_chain::{SideChainBlock, SideChainTx},
@@ -250,6 +251,12 @@ impl StateProvider for Database {
         }
 
         map
+    }
+}
+
+impl LiquidityProvider for Database {
+    fn get_liquidity(&self, pool: crate::common::PoolCoin) -> Option<Liquidity> {
+        self.get_pools().get(&pool).cloned()
     }
 }
 

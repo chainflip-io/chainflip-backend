@@ -1,5 +1,5 @@
 use crate::{
-    common::{Liquidity, PoolCoin},
+    common::{liquidity_provider::LiquidityProvider, Liquidity, PoolCoin},
     side_chain::SideChainBlock,
     transactions::{OutputSentTx, OutputTx, QuoteTx, StakeQuoteTx, WitnessTx},
 };
@@ -70,7 +70,7 @@ pub trait BlockProcessor {
 }
 
 /// A trait for providing quoter state
-pub trait StateProvider {
+pub trait StateProvider: LiquidityProvider {
     /// Get all swap quotes
     fn get_swap_quotes(&self) -> Vec<QuoteTx>;
     /// Get swap quote with the given id
