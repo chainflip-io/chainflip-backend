@@ -7,7 +7,6 @@ use crate::{
         config::VAULT_CONFIG,
     },
 };
-use async_trait::async_trait;
 
 use super::senders::{btc::BtcOutputSender, ethereum::EthOutputSender, OutputSender};
 

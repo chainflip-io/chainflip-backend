@@ -2,12 +2,16 @@ use crate::quoter::vault_node::{QuoteParams, VaultNodeInterface};
 use crate::side_chain::SideChainBlock;
 use std::{collections::VecDeque, sync::Mutex};
 
+/// Test vault node API
 pub struct TestVaultNodeAPI {
+    /// Return values of get_blocks
     pub get_blocks_return: Mutex<VecDeque<Vec<SideChainBlock>>>,
+    /// Error value of get_blocks
     pub get_blocks_error: Mutex<Option<String>>,
 }
 
 impl TestVaultNodeAPI {
+    /// Create a new test vault node api
     pub fn new() -> Self {
         TestVaultNodeAPI {
             get_blocks_return: Mutex::new(VecDeque::new()),
@@ -20,13 +24,15 @@ impl TestVaultNodeAPI {
         self.get_blocks_return.lock().unwrap().push_back(blocks);
     }
 
+    /// Set the get blocks error
     pub fn set_get_blocks_error(&self, error: Option<String>) {
         *self.get_blocks_error.lock().unwrap() = error;
     }
 }
 
+#[async_trait]
 impl VaultNodeInterface for TestVaultNodeAPI {
-    fn get_blocks(&self, _start: u32, _limit: u32) -> Result<Vec<SideChainBlock>, String> {
+    async fn get_blocks(&self, _start: u32, _limit: u32) -> Result<Vec<SideChainBlock>, String> {
         if let Some(error) = self.get_blocks_error.lock().unwrap().as_ref() {
             return Err(error.clone());
         }
@@ -37,7 +43,7 @@ impl VaultNodeInterface for TestVaultNodeAPI {
         };
         Ok(blocks)
     }
-    fn submit_quote(&self, params: QuoteParams) -> Result<serde_json::Value, String> {
+    async fn submit_quote(&self, _params: QuoteParams) -> Result<serde_json::Value, String> {
         todo!()
     }
 }

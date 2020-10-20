@@ -252,7 +252,7 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
                 self.state.next_block_idx
             );
 
-            for tx in block.clone().txs {
+            for tx in block.clone().transactions {
                 match tx {
                     SideChainTx::QuoteTx(tx) => {
                         // Quote transactions always come before their

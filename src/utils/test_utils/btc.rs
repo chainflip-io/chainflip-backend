@@ -1,5 +1,4 @@
 use crate::{common::WalletAddress, vault::blockchain_connection::btc::*};
-use async_trait::async_trait;
 use bitcoin::Network;
 use bitcoin::Transaction;
 use bitcoin::Txid;

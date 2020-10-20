@@ -87,7 +87,7 @@ pub struct SideChainBlock {
     /// Block index on the sidechain.
     pub id: u32,
     /// The list of transactions associated with the current block.
-    pub txs: Vec<SideChainTx>,
+    pub transactions: Vec<SideChainTx>,
 }
 
 /// Interface that must be provided by any "side chain" implementation

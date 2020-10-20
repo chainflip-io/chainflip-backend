@@ -4,7 +4,6 @@ use crate::{
         EstimateRequest, EstimateResult, EthereumClient, SendTransaction,
     },
 };
-use async_trait::async_trait;
 use std::{collections::VecDeque, sync::Mutex};
 
 /// An ethereum client for testing

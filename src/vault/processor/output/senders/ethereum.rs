@@ -1,6 +1,5 @@
 use std::{convert::TryFrom, str::FromStr};
 
-use async_trait::async_trait;
 use bip44::KeyPair;
 use hdwallet::ExtendedPrivKey;
 use itertools::Itertools;

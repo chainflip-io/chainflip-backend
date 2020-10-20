@@ -52,7 +52,7 @@ where
         let side_chain = self.side_chain.lock().unwrap();
 
         while let Some(block) = side_chain.get_block(self.next_block_idx) {
-            for tx in &block.txs {
+            for tx in &block.transactions {
                 if let SideChainTx::QuoteTx(tx) = tx {
                     debug!("Registered quote tx: {:?}", tx.id);
                     self.quotes.insert(tx.clone());

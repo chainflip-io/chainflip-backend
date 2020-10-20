@@ -7,11 +7,6 @@ use crate::{
 };
 use std::sync::{Arc, Mutex};
 
-/// Test helpers for Block Processor
-pub mod block_processor;
-/// Test helpers for Vault Node API
-pub mod vault_node_api;
-
 /// Test helper for Bitcoin
 pub mod btc;
 

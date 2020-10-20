@@ -48,11 +48,11 @@ where
     ///
     /// Panics if we detected any skipped blocks.
     /// This can happen if `VaultNodeInterface::get_blocks` returns partial data.
-    pub fn sync(&self) -> Result<(), String> {
+    pub async fn sync(&self) -> Result<(), String> {
         let mut error_count = 0;
         loop {
             let next_block_number = self.next_block_number.load(Ordering::SeqCst);
-            match self.api.get_blocks(next_block_number, 50) {
+            match self.api.get_blocks(next_block_number, 50).await {
                 Ok(blocks) => {
                     if blocks.is_empty() {
                         return Ok(());
@@ -99,23 +99,30 @@ where
     ///
     /// This operation will block the thread it is called on.
     pub fn poll(self, interval: time::Duration) {
-        loop {
-            if let Err(e) = self.sync() {
-                info!("Block Poller ran into an error while polling: {}", e);
-            }
+        let future = async {
+            loop {
+                if let Err(e) = self.sync().await {
+                    info!("Block Poller ran into an error while polling: {}", e);
+                }
 
-            // Wait for a while before fetching again
-            thread::sleep(interval);
-        }
+                // Wait for a while before fetching again
+                thread::sleep(interval);
+            }
+        };
+        let mut rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(future);
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::side_chain::SideChainBlock;
-    use crate::utils::test_utils::block_processor::TestBlockProcessor;
-    use crate::utils::test_utils::vault_node_api::TestVaultNodeAPI;
+    use crate::{
+        quoter::test_utils::{
+            block_processor::TestBlockProcessor, vault_node_api::TestVaultNodeAPI,
+        },
+        side_chain::SideChainBlock,
+    };
 
     struct TestVariables {
         poller: BlockPoller<TestVaultNodeAPI, TestBlockProcessor>,
@@ -135,73 +142,90 @@ mod test {
         }
     }
 
-    #[test]
-    fn test_sync_returns_when_no_blocks_returned() {
+    #[tokio::test]
+    async fn test_sync_returns_when_no_blocks_returned() {
         let state = setup();
         assert!(state.api.get_blocks_return.lock().unwrap().is_empty());
-        assert!(state.poller.sync().is_ok());
+        assert!(state.poller.sync().await.is_ok());
     }
 
-    #[test]
-    fn test_sync_returns_error_if_api_failed() {
+    #[tokio::test]
+    async fn test_sync_returns_error_if_api_failed() {
         let error = "APITestError".to_owned();
         let state = setup();
         state.api.set_get_blocks_error(Some(error.clone()));
-        assert_eq!(state.poller.sync().unwrap_err(), error);
+        assert_eq!(state.poller.sync().await.unwrap_err(), error);
     }
 
-    #[test]
+    #[tokio::test]
     #[should_panic(expected = "BlockPoller skipped blocks!")]
-    fn test_sync_panics_when_blocks_are_skipped() {
+    async fn test_sync_panics_when_blocks_are_skipped() {
         let state = setup();
         state.api.add_blocks(vec![
-            SideChainBlock { id: 1, txs: vec![] },
+            SideChainBlock {
+                id: 1,
+                transactions: vec![],
+            },
             SideChainBlock {
                 id: 100,
-                txs: vec![],
+                transactions: vec![],
             },
         ]);
         state.poller.next_block_number.store(1, Ordering::SeqCst);
-        state.poller.sync().unwrap();
+        state.poller.sync().await.unwrap();
     }
 
-    #[test]
-    fn test_sync_updates_next_block_number_only_if_larger() -> Result<(), String> {
+    #[tokio::test]
+    async fn test_sync_updates_next_block_number_only_if_larger() -> Result<(), String> {
         let state = setup();
         state.api.add_blocks(vec![
-            SideChainBlock { id: 0, txs: vec![] },
-            SideChainBlock { id: 1, txs: vec![] },
+            SideChainBlock {
+                id: 0,
+                transactions: vec![],
+            },
+            SideChainBlock {
+                id: 1,
+                transactions: vec![],
+            },
         ]);
 
-        state.poller.sync()?;
+        state.poller.sync().await?;
         assert_eq!(state.poller.next_block_number.load(Ordering::SeqCst), 2);
         Ok(())
     }
 
-    #[test]
-    fn test_sync_loops_through_all_blocks() -> Result<(), String> {
+    #[tokio::test]
+    async fn test_sync_loops_through_all_blocks() -> Result<(), String> {
         let state = setup();
         state.api.add_blocks(vec![
-            SideChainBlock { id: 0, txs: vec![] },
-            SideChainBlock { id: 1, txs: vec![] },
+            SideChainBlock {
+                id: 0,
+                transactions: vec![],
+            },
+            SideChainBlock {
+                id: 1,
+                transactions: vec![],
+            },
         ]);
-        state
-            .api
-            .add_blocks(vec![SideChainBlock { id: 2, txs: vec![] }]);
+        state.api.add_blocks(vec![SideChainBlock {
+            id: 2,
+            transactions: vec![],
+        }]);
 
-        state.poller.sync()?;
+        state.poller.sync().await?;
         assert_eq!(state.poller.next_block_number.load(Ordering::SeqCst), 3);
         assert_eq!(state.processor.lock().unwrap().recieved_blocks.len(), 3);
         Ok(())
     }
 
-    #[test]
-    fn test_sync_passes_blocks_to_processor() -> Result<(), String> {
+    #[tokio::test]
+    async fn test_sync_passes_blocks_to_processor() -> Result<(), String> {
         let state = setup();
-        state
-            .api
-            .add_blocks(vec![SideChainBlock { id: 0, txs: vec![] }]);
-        state.poller.sync()?;
+        state.api.add_blocks(vec![SideChainBlock {
+            id: 0,
+            transactions: vec![],
+        }]);
+        state.poller.sync().await?;
         assert_eq!(state.processor.lock().unwrap().recieved_blocks.len(), 1);
         assert_eq!(
             state
@@ -217,20 +241,21 @@ mod test {
         Ok(())
     }
 
-    #[test]
-    fn test_sync_returns_error_if_processor_failed() {
+    #[tokio::test]
+    async fn test_sync_returns_error_if_processor_failed() {
         let error = "ProcessorTestError".to_owned();
         let state = setup();
 
-        state
-            .api
-            .add_blocks(vec![SideChainBlock { id: 0, txs: vec![] }]);
+        state.api.add_blocks(vec![SideChainBlock {
+            id: 0,
+            transactions: vec![],
+        }]);
         state
             .processor
             .lock()
             .unwrap()
             .set_process_blocks_error(Some(error.clone()));
 
-        assert_eq!(state.poller.sync().unwrap_err(), error);
+        assert_eq!(state.poller.sync().await.unwrap_err(), error);
     }
 }

@@ -92,7 +92,7 @@ mod test {
 
         db.process_blocks(&[SideChainBlock {
             id: 0,
-            txs: transactions,
+            transactions: transactions,
         }])
         .unwrap();
 
@@ -124,7 +124,7 @@ mod test {
 
         db.process_blocks(&[SideChainBlock {
             id: 0,
-            txs: transactions,
+            transactions: transactions,
         }])
         .unwrap();
 
@@ -161,7 +161,7 @@ mod test {
 
         db.process_blocks(&[SideChainBlock {
             id: 0,
-            txs: transactions,
+            transactions: transactions,
         }])
         .unwrap();
 

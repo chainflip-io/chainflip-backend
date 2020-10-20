@@ -1,6 +1,5 @@
 use super::{BitcoinClient, SendTransaction};
 use crate::common::{coins::CoinAmount, Coin};
-use async_trait::async_trait;
 use bitcoin::Txid;
 use bitcoin::{Amount, Network, Transaction};
 use bitcoincore_rpc::json::EstimateMode::*;

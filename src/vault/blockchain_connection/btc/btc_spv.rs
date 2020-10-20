@@ -2,7 +2,6 @@ use serde::Deserialize;
 
 use super::BitcoinSPVClient;
 use crate::common::{coins::CoinAmount, Coin, GenericCoinAmount, WalletAddress};
-use async_trait::async_trait;
 use bitcoin::consensus::encode::deserialize;
 use bitcoin::Transaction;
 use bitcoin::Txid;

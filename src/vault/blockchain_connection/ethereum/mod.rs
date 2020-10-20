@@ -2,7 +2,6 @@ use crate::{
     common::{coins::GenericCoinAmount, ethereum::Address, ethereum::Hash, ethereum::Transaction},
     utils::bip44::KeyPair,
 };
-use async_trait::async_trait;
 use hdwallet::{secp256k1::SecretKey, ExtendedPrivKey};
 
 /// Web3 client implementation

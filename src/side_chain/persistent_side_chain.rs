@@ -114,7 +114,10 @@ fn get_block_from_db(db: &DB, block_idx: u32) -> Option<SideChainBlock> {
 impl ISideChain for PeristentSideChain {
     fn add_block(&mut self, txs: Vec<SideChainTx>) -> Result<(), String> {
         let block_idx = self.blocks.len() as u32;
-        let block = SideChainBlock { id: block_idx, txs };
+        let block = SideChainBlock {
+            id: block_idx,
+            transactions: txs,
+        };
 
         let blob = serde_json::to_string(&block).unwrap();
 
@@ -170,5 +173,5 @@ fn should_read_block_after_reopen() {
         .get_block(last_block_idx)
         .expect("Could not get last block");
 
-    assert_eq!(tx, last_block.txs[0]);
+    assert_eq!(tx, last_block.transactions[0]);
 }

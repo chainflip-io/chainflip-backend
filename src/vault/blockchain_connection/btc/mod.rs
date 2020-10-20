@@ -2,7 +2,6 @@ use crate::{
     common::{GenericCoinAmount, WalletAddress},
     utils::bip44::KeyPair,
 };
-use async_trait::async_trait;
 use bitcoin::blockdata::transaction::Transaction;
 use bitcoin::{Address, Network, Txid};
 use btc_spv::AddressUnspentResponse;

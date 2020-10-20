@@ -13,7 +13,7 @@ use crate::{
 use parking_lot::RwLock;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use uuid::Uuid;
 
 mod validation;

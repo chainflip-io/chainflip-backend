@@ -104,7 +104,7 @@ where
         .unwrap()
         .insert(input_address_id.clone());
 
-    match vault_node.submit_quote(quote_params) {
+    match vault_node.submit_quote(quote_params).await {
         Ok(result) => Ok(result),
         Err(err) => {
             // Something went wrong, remove id from cache
