@@ -6,7 +6,6 @@ use crate::{
     quoter::{vault_node::VaultNodeInterface, StateProvider},
 };
 use rand::{prelude::StdRng, SeedableRng};
-use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeSet, HashMap},
     sync::{Arc, Mutex},
@@ -27,6 +26,9 @@ pub use get_pools::{get_pools, PoolsParams};
 
 mod get_quote;
 pub use get_quote::{get_quote, GetQuoteParams};
+
+mod get_transactions;
+pub use get_transactions::{get_transactions, TransactionsParams};
 
 #[cfg(test)]
 mod test;
@@ -68,7 +70,14 @@ where
         .map(get_pools)
         .and_then(api::respond);
 
-    let get_quote_api = warp::path!("quote")
+    let transactions = warp::path!("quote")
+        .and(warp::get())
+        .and(warp::query::<TransactionsParams>())
+        .and(using(state.clone()))
+        .map(get_transactions)
+        .and_then(api::respond);
+
+    let quote = warp::path!("quote")
         .and(warp::get())
         .and(warp::query::<GetQuoteParams>())
         .and(using(state.clone()))
@@ -86,5 +95,12 @@ where
         .and_then(api::respond);
 
     warp::path!("v1" / ..) // Add path prefix /v1 to all our routes
-        .and(coins.or(estimate).or(pools).or(get_quote_api).or(post_quote_api))
+        .and(
+            coins
+                .or(estimate)
+                .or(pools)
+                .or(transactions)
+                .or(quote)
+                .or(post_quote_api),
+        )
 }

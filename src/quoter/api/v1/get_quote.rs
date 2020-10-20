@@ -37,7 +37,6 @@ pub struct QuoteResponse {
 
 /// Get information about a quote
 ///
-///
 /// # Example Query
 ///
 /// > GET /v1/quote?id=<quote-id>
@@ -48,6 +47,7 @@ pub async fn get_quote<S>(
 where
     S: StateProvider,
 {
+    // TODO: Also return stake quotes
     let id = match Uuid::from_str(&params.id) {
         Ok(id) => id,
         Err(_) => {

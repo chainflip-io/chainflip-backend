@@ -11,12 +11,10 @@ use std::{
 };
 use warp::http::StatusCode;
 
-use super::QuoteResponse;
-
-/// Parameters for `submitQuote` endpoint
+/// Parameters for POST `quote` endpoint
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SubmitQuoteParams {
+pub struct PostQuoteParams {
     /// The input coin
     pub input_coin: String,
     /// The input amount
@@ -31,7 +29,7 @@ pub struct SubmitQuoteParams {
 
 /// Submit a quote
 pub async fn quote<S, V, R>(
-    params: SubmitQuoteParams,
+    params: PostQuoteParams,
     state: Arc<Mutex<S>>,
     vault_node: Arc<V>,
     cache: Arc<Mutex<HashMap<Coin, BTreeSet<String>>>>,
