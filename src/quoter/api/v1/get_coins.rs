@@ -35,7 +35,7 @@ pub async fn get_coins(params: CoinsParams) -> Result<Vec<CoinInfo>, ResponseErr
 
     let info = valid_symbols.iter().map(|coin| coin.get_info()).collect();
 
-    return Ok(info);
+    Ok(info)
 }
 
 #[cfg(test)]

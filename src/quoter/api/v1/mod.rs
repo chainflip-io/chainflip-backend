@@ -25,6 +25,9 @@ pub use get_estimate::{get_estimate, EstimateParams};
 mod get_pools;
 pub use get_pools::{get_pools, PoolsParams};
 
+mod get_quote;
+pub use get_quote::{get_quote, GetQuoteParams};
+
 #[cfg(test)]
 mod test;
 
@@ -65,6 +68,13 @@ where
         .map(get_pools)
         .and_then(api::respond);
 
+    let get_quote_api = warp::path!("quote")
+        .and(warp::get())
+        .and(warp::query::<GetQuoteParams>())
+        .and(using(state.clone()))
+        .map(get_quote)
+        .and_then(api::respond);
+
     let post_quote_api = warp::path!("quote")
         .and(warp::post())
         .and(warp::body::json())
@@ -76,10 +86,5 @@ where
         .and_then(api::respond);
 
     warp::path!("v1" / ..) // Add path prefix /v1 to all our routes
-        .and(coins.or(estimate).or(pools).or(post_quote_api))
+        .and(coins.or(estimate).or(pools).or(get_quote_api).or(post_quote_api))
 }
-
-/// Response for `quote` endpoint
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct QuoteResponse {}
