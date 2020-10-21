@@ -48,29 +48,36 @@ where
         }
     };
 
-    let mut cache = input_id_cache.lock().unwrap();
-    let used_ids = cache.entry(input_coin).or_insert(BTreeSet::new()).clone();
+    let input_address_id = {
+        let mut cache = input_id_cache.lock().unwrap();
+        let used_ids = cache.entry(input_coin).or_insert(BTreeSet::new());
 
-    // How do we test this? :(
-    let input_address_id = loop {
-        let id = match input_coin {
-            Coin::BTC => rng.gen_range(6, u64::MAX).to_string(),
-            Coin::ETH => rng.gen_range(6, u64::MAX).to_string(),
-            Coin::LOKI => {
-                let random_bytes = rng.gen::<[u8; 8]>();
-                hex::encode(random_bytes)
-            }
-            _ => {
-                return Err(ResponseError::new(
-                    StatusCode::BAD_REQUEST,
-                    "Invalid input id",
-                ))
+        // How do we test this? :(
+        let input_address_id = loop {
+            let id = match input_coin {
+                Coin::BTC => rng.gen_range(6, u64::MAX).to_string(),
+                Coin::ETH => rng.gen_range(6, u64::MAX).to_string(),
+                Coin::LOKI => {
+                    let random_bytes = rng.gen::<[u8; 8]>();
+                    hex::encode(random_bytes)
+                }
+                _ => {
+                    return Err(ResponseError::new(
+                        StatusCode::BAD_REQUEST,
+                        "Invalid input id",
+                    ))
+                }
+            };
+
+            if !used_ids.contains(&id) {
+                break id;
             }
         };
 
-        if !used_ids.contains(&id) {
-            break id;
-        }
+        // Add the id in the cache
+        used_ids.insert(input_address_id.clone());
+
+        input_address_id
     };
 
     let quote_params = QuoteParams {
@@ -81,14 +88,6 @@ where
         output_address: params.output_address,
         slippage_limit: params.slippage_limit,
     };
-
-    // Add the id in the cache
-    cache
-        .get_mut(&input_coin)
-        .unwrap()
-        .insert(input_address_id.clone());
-
-    drop(cache);
 
     match vault_node.submit_quote(quote_params) {
         Ok(result) => Ok(result),
