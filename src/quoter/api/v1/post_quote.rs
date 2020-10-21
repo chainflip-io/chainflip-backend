@@ -65,7 +65,7 @@ where
         ids
     };
 
-    // How do we test this? :(
+    // This can be tested by using a Seeded RNG and using the same seed value
     let input_address_id = loop {
         let id = match input_coin {
             Coin::BTC => rng.gen_range(6, u64::MAX).to_string(),
