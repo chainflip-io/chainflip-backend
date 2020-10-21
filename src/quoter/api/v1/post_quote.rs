@@ -28,15 +28,13 @@ pub struct PostQuoteParams {
 }
 
 /// Submit a quote
-pub async fn quote<S, V, R>(
+pub async fn quote<V, R>(
     params: PostQuoteParams,
-    state: Arc<Mutex<S>>,
     vault_node: Arc<V>,
-    cache: Arc<Mutex<HashMap<Coin, BTreeSet<String>>>>,
+    input_id_cache: Arc<Mutex<HashMap<Coin, BTreeSet<String>>>>,
     mut rng: R,
 ) -> Result<serde_json::Value, ResponseError>
 where
-    S: StateProvider,
     V: VaultNodeInterface,
     R: Rng,
 {
@@ -50,20 +48,8 @@ where
         }
     };
 
-    let used_ids = {
-        // Might be better if we add a function in state to get input ids for a given coin
-        let quotes = state.lock().unwrap().get_swap_quotes();
-        let mut cache = cache.lock().unwrap();
-        let mut ids = cache.entry(input_coin).or_insert(BTreeSet::new()).clone();
-
-        for quote in quotes {
-            if quote.input == input_coin {
-                ids.insert(quote.input_address_id);
-            }
-        }
-
-        ids
-    };
+    let mut cache = input_id_cache.lock().unwrap();
+    let used_ids = cache.entry(input_coin).or_insert(BTreeSet::new()).clone();
 
     // How do we test this? :(
     let input_address_id = loop {
@@ -98,17 +84,17 @@ where
 
     // Add the id in the cache
     cache
-        .lock()
-        .unwrap()
         .get_mut(&input_coin)
         .unwrap()
         .insert(input_address_id.clone());
+
+    drop(cache);
 
     match vault_node.submit_quote(quote_params) {
         Ok(result) => Ok(result),
         Err(err) => {
             // Something went wrong, remove id from cache
-            cache
+            input_id_cache
                 .lock()
                 .unwrap()
                 .get_mut(&input_coin)

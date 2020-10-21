@@ -33,6 +33,24 @@ pub use get_transactions::{get_transactions, TransactionsParams};
 #[cfg(test)]
 mod test;
 
+/// Get a pre-populated input id cache
+pub fn get_input_id_cache<S>(state: &Arc<Mutex<S>>) -> HashMap<Coin, BTreeSet<String>>
+where
+    S: StateProvider,
+{
+    let mut cache: HashMap<Coin, BTreeSet<String>> = HashMap::new();
+    let quotes = state.lock().unwrap().get_swap_quotes();
+
+    for quote in quotes {
+        cache
+            .entry(quote.input)
+            .or_insert(BTreeSet::new())
+            .insert(quote.input_address_id);
+    }
+
+    cache
+}
+
 /// The v1 API endpoints
 pub fn endpoints<V, S>(
     vault_node: Arc<V>,
@@ -42,8 +60,9 @@ where
     V: VaultNodeInterface + Send + Sync,
     S: StateProvider + Send,
 {
-    let input_id_change: HashMap<Coin, BTreeSet<String>> = HashMap::new();
-    let input_id_cache = Arc::new(Mutex::new(input_id_change));
+    // Pre populate cache
+    let input_id_cache = get_input_id_cache(&state);
+    let input_id_cache = Arc::new(Mutex::new(input_id_cache));
 
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -87,7 +106,6 @@ where
     let post_quote_api = warp::path!("quote")
         .and(warp::post())
         .and(warp::body::json())
-        .and(using(state.clone()))
         .and(using(vault_node.clone()))
         .and(using(input_id_cache.clone()))
         .and(using(rng))
