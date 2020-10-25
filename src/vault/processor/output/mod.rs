@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use itertools::Itertools;
 use parking_lot::RwLock;
@@ -26,16 +26,12 @@ pub async fn process_outputs<T: TransactionProvider + Sync, C: CoinProcessor>(
     process(provider, coin_processor).await;
 }
 
-fn group_by_coins(outputs: &[FulfilledTxWrapper<OutputTx>]) -> Vec<(Coin, Vec<OutputTx>)> {
-    let groups = outputs
+fn group_by_coins(outputs: &[FulfilledTxWrapper<OutputTx>]) -> HashMap<Coin, Vec<OutputTx>> {
+    outputs
         .iter()
         .filter(|tx| !tx.fulfilled)
-        .group_by(|tx| tx.inner.coin);
-
-    groups
-        .into_iter()
-        .map(|(coin, group)| (coin, group.map(|tx| tx.inner.clone()).collect_vec()))
-        .collect()
+        .map(|tx| (tx.inner.coin, tx.inner.clone()))
+        .into_group_map()
 }
 
 async fn process<T: TransactionProvider + Sync, C: CoinProcessor>(
@@ -115,6 +111,7 @@ mod test {
     #[test]
     fn groups_outputs_by_coins_correctly() {
         let loki_output = create_fake_output_tx(Coin::LOKI);
+        let second_loki_output = create_fake_output_tx(Coin::LOKI);
         let eth_output = create_fake_output_tx(Coin::ETH);
         let second_eth_output = create_fake_output_tx(Coin::ETH);
         let fulfilled_output = create_fake_output_tx(Coin::LOKI);
@@ -129,6 +126,10 @@ mod test {
                 fulfilled: false,
             },
             FulfilledTxWrapper {
+                inner: second_loki_output.clone(),
+                fulfilled: false,
+            },
+            FulfilledTxWrapper {
                 inner: second_eth_output.clone(),
                 fulfilled: false,
             },
@@ -139,11 +140,12 @@ mod test {
         ];
         let grouped = group_by_coins(&txs);
         assert_eq!(
-            grouped,
-            vec![
-                (Coin::LOKI, vec![loki_output]),
-                (Coin::ETH, vec![eth_output, second_eth_output])
-            ]
+            grouped.get(&Coin::LOKI).unwrap(),
+            &[loki_output, second_loki_output]
+        );
+        assert_eq!(
+            grouped.get(&Coin::ETH).unwrap(),
+            &[eth_output, second_eth_output]
         );
     }
 

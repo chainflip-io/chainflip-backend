@@ -1,5 +1,13 @@
-use crate::side_chain::SideChainBlock;
-use std::sync::{Arc, Mutex};
+use crate::{
+    common::{liquidity_provider::LiquidityProvider, Liquidity, PoolCoin},
+    side_chain::SideChainBlock,
+    transactions::{OutputSentTx, OutputTx, QuoteTx, StakeQuoteTx, WitnessTx},
+};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
+use uuid::Uuid;
 use vault_node::VaultNodeInterface;
 
 mod api;
@@ -58,8 +66,25 @@ pub trait BlockProcessor {
     fn get_last_processed_block_number(&self) -> Option<u32>;
 
     /// Process a list of blocks
-    fn process_blocks(&mut self, blocks: Vec<SideChainBlock>) -> Result<(), String>;
+    fn process_blocks(&mut self, blocks: &[SideChainBlock]) -> Result<(), String>;
 }
 
 /// A trait for providing quoter state
-pub trait StateProvider {}
+pub trait StateProvider: LiquidityProvider {
+    /// Get all swap quotes
+    fn get_swap_quotes(&self) -> Vec<QuoteTx>;
+    /// Get swap quote with the given id
+    fn get_swap_quote_tx(&self, id: Uuid) -> Option<QuoteTx>;
+    /// Get all stake quotes
+    fn get_stake_quotes(&self) -> Vec<StakeQuoteTx>;
+    /// Get stake quore with the given id
+    fn get_stake_quote_tx(&self, id: Uuid) -> Option<StakeQuoteTx>;
+    /// Get all witness transactions with the given quote id
+    fn get_witness_txs(&self) -> Vec<WitnessTx>;
+    /// Get all output transactions with the given quote id
+    fn get_output_txs(&self) -> Vec<OutputTx>;
+    /// Get all output sent transactions
+    fn get_output_sent_txs(&self) -> Vec<OutputSentTx>;
+    /// Get the pools
+    fn get_pools(&self) -> HashMap<PoolCoin, Liquidity>;
+}

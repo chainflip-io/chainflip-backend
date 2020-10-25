@@ -195,8 +195,8 @@ pub async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, 
 /// use warp::Filter;
 /// use std::sync::Arc;
 ///
-/// async fn hello(string: Arc<String>) -> Result<String, ResponseError> {
-///     Ok(format!("Hello {}", string))
+/// async fn hello(string: Arc<String>, another_string: String) -> Result<String, ResponseError> {
+///     Ok(format!("Hello {}{}", string, another_string))
 /// }
 ///
 /// let string = Arc::new(String::from("world"));
@@ -204,17 +204,16 @@ pub async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, 
 /// let hello = warp::get()
 ///     .and(warp::path("hello"))
 ///     .and(using(string.clone()))
+///     .and(using(String::from("!")))
 ///     .map(hello)
 ///     .and_then(respond)
 ///     .recover(handle_rejection);
 ///
 /// warp::serve(hello).run(([127, 0, 0, 1], 3030));
 /// ```
-pub fn using<S>(
-    param: Arc<S>,
-) -> impl Filter<Extract = (Arc<S>,), Error = std::convert::Infallible> + Clone
+pub fn using<S>(param: S) -> impl Filter<Extract = (S,), Error = std::convert::Infallible> + Clone
 where
-    S: Send + Sync,
+    S: Clone + Send,
 {
     warp::any().map(move || param.clone())
 }

@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 /// Quote transaction stored on the Side Chain
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct QuoteTx {
     /// A unique identifier
     pub id: Uuid,
@@ -105,19 +106,48 @@ impl QuoteTx {
 
 /// Staking (provisioning) quote transaction
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StakeQuoteTx {
     /// A unique identifier
     pub id: Uuid,
     /// Info used to uniquely identify payment
     pub input_loki_address_id: LokiPaymentId,
     /// Loki amount that is meant to be deposited
-    pub loki_amount: LokiAmount,
+    pub loki_atomic_amount: u128,
     /// Other coin's type
     pub coin_type: PoolCoin,
     /// Amount of the other (non-Loki) pool coin
-    pub coin_amount: GenericCoinAmount,
+    pub coin_atomic_amount: u128,
     /// Stakers identity
     pub staker_id: String,
+}
+
+impl StakeQuoteTx {
+    /// Create a new stake quote tx
+    pub fn new(
+        input_loki_address_id: LokiPaymentId,
+        loki_atomic_amount: u128,
+        coin_type: PoolCoin,
+        coin_atomic_amount: u128,
+        staker_id: String,
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            input_loki_address_id,
+            loki_atomic_amount,
+            coin_type,
+            coin_atomic_amount,
+            staker_id,
+        }
+    }
+
+    pub fn loki_amount(&self) -> LokiAmount {
+        LokiAmount::from_atomic(self.loki_atomic_amount)
+    }
+
+    pub fn coin_amount(&self) -> GenericCoinAmount {
+        GenericCoinAmount::from_atomic(self.coin_type.get_coin(), self.coin_atomic_amount)
+    }
 }
 
 // This might be obsolete...
@@ -131,6 +161,7 @@ pub struct CoinTx {
 
 /// Witness transaction stored on the Side Chain
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WitnessTx {
     /// A unique identifier
     pub id: Uuid,
@@ -212,6 +243,7 @@ impl PoolChangeTx {
 /// A transaction acknowledging pool provisioning. Note that `loki_amount`
 /// and `other_amount` don't necessarily match the amounts
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StakeTx {
     /// A unique identifier
     pub id: Uuid,
@@ -271,6 +303,7 @@ impl UnstakeRequestTx {
 /// Note: The `amount` specified in this transaction does not include any fees.
 /// Fees will need to be determined at a later stage and be taken away from the amount.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OutputTx {
     /// A unique identifier
     pub id: Uuid,
@@ -320,6 +353,7 @@ impl OutputTx {
 
 /// A transaction which indicates that we sent to the main chain.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OutputSentTx {
     /// A unique identifier
     pub id: Uuid,

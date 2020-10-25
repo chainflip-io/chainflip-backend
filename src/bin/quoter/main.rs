@@ -44,7 +44,7 @@ async fn main() {
         let database = database::Database::open(&config.database.name);
         let database = Arc::new(Mutex::new(database));
 
-        let vault_node_api = vault_node::VaultNodeAPI::new(vault_node::Config {});
+        let vault_node_api = vault_node::VaultNodeAPI::new(&config.vault_node_url);
         let vault_node_api = Arc::new(vault_node_api);
 
         match Quoter::run(port, vault_node_api, database).await {

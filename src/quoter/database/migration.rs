@@ -1,5 +1,5 @@
-use rusqlite::Error;
 use rusqlite::{Connection, Transaction};
+use rusqlite::{Error, NO_PARAMS};
 
 /// Migrate a database
 ///
@@ -39,8 +39,16 @@ where
 }
 
 fn migrate_to_version_1(connection: &mut Connection) {
-    apply_changes(connection, 1, |_tx| {
-        // TODO: Add changes here
+    apply_changes(connection, 1, |tx| {
+        tx.execute(
+            "CREATE TABLE IF NOT EXISTS transactions (
+            id char(36) PRIMARY KEY,
+            type TEXT NOT NULL,
+            data BLOB NOT NULL
+            )",
+            NO_PARAMS,
+        )
+        .expect("could not create or open DB");
 
         Ok(())
     })

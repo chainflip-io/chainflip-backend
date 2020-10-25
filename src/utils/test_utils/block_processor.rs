@@ -24,11 +24,11 @@ impl BlockProcessor for TestBlockProcessor {
     fn get_last_processed_block_number(&self) -> Option<u32> {
         self.last_processed_block_number
     }
-    fn process_blocks(&mut self, blocks: Vec<SideChainBlock>) -> Result<(), String> {
+    fn process_blocks(&mut self, blocks: &[SideChainBlock]) -> Result<(), String> {
         if let Some(error) = self.process_blocks_error.as_ref() {
             return Err(error.clone());
         }
-        self.recieved_blocks.extend(blocks);
+        self.recieved_blocks.extend_from_slice(blocks);
         Ok(())
     }
 }

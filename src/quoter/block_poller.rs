@@ -70,7 +70,7 @@ where
                     }
 
                     // Pass blocks off to processor
-                    self.processor.lock().unwrap().process_blocks(blocks)?;
+                    self.processor.lock().unwrap().process_blocks(&blocks)?;
 
                     // Update our local value
                     if let Some(last_block_number) = last_block_number {
