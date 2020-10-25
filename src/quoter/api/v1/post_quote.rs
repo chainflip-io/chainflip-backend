@@ -1,8 +1,8 @@
 use crate::{
     common::{api::ResponseError, coins::Coin},
-    quoter::{vault_node::QuoteParams, vault_node::VaultNodeInterface, StateProvider},
+    quoter::{vault_node::QuoteParams, vault_node::VaultNodeInterface},
 };
-use rand::Rng;
+use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeSet, HashMap},
@@ -28,18 +28,11 @@ pub struct PostQuoteParams {
 }
 
 /// Submit a quote
-pub async fn quote<S, V, R>(
+pub async fn quote<V: VaultNodeInterface>(
     params: PostQuoteParams,
-    state: Arc<Mutex<S>>,
     vault_node: Arc<V>,
-    cache: Arc<Mutex<HashMap<Coin, BTreeSet<String>>>>,
-    mut rng: R,
-) -> Result<serde_json::Value, ResponseError>
-where
-    S: StateProvider,
-    V: VaultNodeInterface,
-    R: Rng,
-{
+    input_id_cache: Arc<Mutex<HashMap<Coin, BTreeSet<String>>>>,
+) -> Result<serde_json::Value, ResponseError> {
     let input_coin = match Coin::from_str(&params.input_coin) {
         Ok(coin) => coin,
         Err(_) => {
@@ -50,22 +43,43 @@ where
         }
     };
 
-    let used_ids = {
-        // Might be better if we add a function in state to get input ids for a given coin
-        let quotes = state.lock().unwrap().get_swap_quotes();
-        let mut cache = cache.lock().unwrap();
-        let mut ids = cache.entry(input_coin).or_insert(BTreeSet::new()).clone();
+    let rng = thread_rng();
+    let input_address_id =
+        generate_unique_input_address_id(input_coin, input_id_cache.clone(), rng)?;
 
-        for quote in quotes {
-            if quote.input == input_coin {
-                ids.insert(quote.input_address_id);
-            }
-        }
-
-        ids
+    let quote_params = QuoteParams {
+        input_coin: params.input_coin,
+        input_amount: params.input_amount,
+        input_address_id: input_address_id.clone(),
+        input_return_address: params.input_return_address,
+        output_address: params.output_address,
+        slippage_limit: params.slippage_limit,
     };
 
-    // This can be tested by using a Seeded RNG and using the same seed value
+    match vault_node.submit_quote(quote_params) {
+        Ok(result) => Ok(result),
+        Err(err) => {
+            // Something went wrong, remove id from cache
+            input_id_cache
+                .lock()
+                .unwrap()
+                .get_mut(&input_coin)
+                .unwrap()
+                .remove(&input_address_id);
+            return Err(ResponseError::new(StatusCode::BAD_REQUEST, &err));
+        }
+    }
+}
+
+fn generate_unique_input_address_id<R: Rng>(
+    input_coin: Coin,
+    input_id_cache: Arc<Mutex<HashMap<Coin, BTreeSet<String>>>>,
+    mut rng: R,
+) -> Result<String, ResponseError> {
+    let mut cache = input_id_cache.lock().unwrap();
+    let used_ids = cache.entry(input_coin).or_insert(BTreeSet::new());
+
+    // We can test this by passing a SeededRng
     let input_address_id = loop {
         let id = match input_coin {
             Coin::BTC => rng.gen_range(6, u64::MAX).to_string(),
@@ -87,34 +101,8 @@ where
         }
     };
 
-    let quote_params = QuoteParams {
-        input_coin: params.input_coin,
-        input_amount: params.input_amount,
-        input_address_id: input_address_id.clone(),
-        input_return_address: params.input_return_address,
-        output_address: params.output_address,
-        slippage_limit: params.slippage_limit,
-    };
-
     // Add the id in the cache
-    cache
-        .lock()
-        .unwrap()
-        .get_mut(&input_coin)
-        .unwrap()
-        .insert(input_address_id.clone());
+    used_ids.insert(input_address_id.clone());
 
-    match vault_node.submit_quote(quote_params).await {
-        Ok(result) => Ok(result),
-        Err(err) => {
-            // Something went wrong, remove id from cache
-            cache
-                .lock()
-                .unwrap()
-                .get_mut(&input_coin)
-                .unwrap()
-                .remove(&input_address_id);
-            return Err(ResponseError::new(StatusCode::BAD_REQUEST, &err));
-        }
-    }
+    Ok(input_address_id)
 }

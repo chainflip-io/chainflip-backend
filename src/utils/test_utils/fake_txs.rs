@@ -27,7 +27,7 @@ pub fn create_fake_stake_quote_for_id(
         loki_atomic_amount: loki_amount.to_atomic(),
         coin_type: PoolCoin::from(coin_amount.coin_type()).expect("invalid coin type"),
         coin_atomic_amount: coin_amount.to_atomic(),
-        staker_id: Uuid::new_v4().to_string(),
+        staker_id: staker_id.to_string(),
     }
 }
 
