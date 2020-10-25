@@ -64,11 +64,6 @@ where
     let input_id_cache = get_input_id_cache(&state);
     let input_id_cache = Arc::new(Mutex::new(input_id_cache));
 
-    let now = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .expect("Duration since UNIX_EPOCH failed");
-    let rng = StdRng::seed_from_u64(now.as_secs());
-
     let coins = warp::path!("coins")
         .and(warp::get())
         .and(warp::query::<CoinsParams>())
@@ -108,7 +103,6 @@ where
         .and(warp::body::json())
         .and(using(vault_node.clone()))
         .and(using(input_id_cache.clone()))
-        .and(using(rng))
         .map(post_quote::quote)
         .and_then(api::respond);
 

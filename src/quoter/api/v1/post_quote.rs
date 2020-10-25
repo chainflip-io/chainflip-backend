@@ -1,8 +1,8 @@
 use crate::{
     common::{api::ResponseError, coins::Coin},
-    quoter::{vault_node::QuoteParams, vault_node::VaultNodeInterface, StateProvider},
+    quoter::{vault_node::QuoteParams, vault_node::VaultNodeInterface},
 };
-use rand::Rng;
+use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeSet, HashMap},
@@ -28,16 +28,11 @@ pub struct PostQuoteParams {
 }
 
 /// Submit a quote
-pub async fn quote<V, R>(
+pub async fn quote<V: VaultNodeInterface>(
     params: PostQuoteParams,
     vault_node: Arc<V>,
     input_id_cache: Arc<Mutex<HashMap<Coin, BTreeSet<String>>>>,
-    mut rng: R,
-) -> Result<serde_json::Value, ResponseError>
-where
-    V: VaultNodeInterface,
-    R: Rng,
-{
+) -> Result<serde_json::Value, ResponseError> {
     let input_coin = match Coin::from_str(&params.input_coin) {
         Ok(coin) => coin,
         Err(_) => {
@@ -48,37 +43,9 @@ where
         }
     };
 
-    let input_address_id = {
-        let mut cache = input_id_cache.lock().unwrap();
-        let used_ids = cache.entry(input_coin).or_insert(BTreeSet::new());
-
-        // How do we test this? :(
-        let input_address_id = loop {
-            let id = match input_coin {
-                Coin::BTC => rng.gen_range(6, u64::MAX).to_string(),
-                Coin::ETH => rng.gen_range(6, u64::MAX).to_string(),
-                Coin::LOKI => {
-                    let random_bytes = rng.gen::<[u8; 8]>();
-                    hex::encode(random_bytes)
-                }
-                _ => {
-                    return Err(ResponseError::new(
-                        StatusCode::BAD_REQUEST,
-                        "Invalid input id",
-                    ))
-                }
-            };
-
-            if !used_ids.contains(&id) {
-                break id;
-            }
-        };
-
-        // Add the id in the cache
-        used_ids.insert(input_address_id.clone());
-
-        input_address_id
-    };
+    let rng = thread_rng();
+    let input_address_id =
+        generate_unique_input_address_id(input_coin, input_id_cache.clone(), rng)?;
 
     let quote_params = QuoteParams {
         input_coin: params.input_coin,
@@ -102,4 +69,40 @@ where
             return Err(ResponseError::new(StatusCode::BAD_REQUEST, &err));
         }
     }
+}
+
+fn generate_unique_input_address_id<R: Rng>(
+    input_coin: Coin,
+    input_id_cache: Arc<Mutex<HashMap<Coin, BTreeSet<String>>>>,
+    mut rng: R,
+) -> Result<String, ResponseError> {
+    let mut cache = input_id_cache.lock().unwrap();
+    let used_ids = cache.entry(input_coin).or_insert(BTreeSet::new());
+
+    // We can test this by passing a SeededRng
+    let input_address_id = loop {
+        let id = match input_coin {
+            Coin::BTC => rng.gen_range(6, u64::MAX).to_string(),
+            Coin::ETH => rng.gen_range(6, u64::MAX).to_string(),
+            Coin::LOKI => {
+                let random_bytes = rng.gen::<[u8; 8]>();
+                hex::encode(random_bytes)
+            }
+            _ => {
+                return Err(ResponseError::new(
+                    StatusCode::BAD_REQUEST,
+                    "Invalid input id",
+                ))
+            }
+        };
+
+        if !used_ids.contains(&id) {
+            break id;
+        }
+    };
+
+    // Add the id in the cache
+    used_ids.insert(input_address_id.clone());
+
+    Ok(input_address_id)
 }
