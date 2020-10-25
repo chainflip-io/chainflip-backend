@@ -398,7 +398,7 @@ mod test {
 
         db.process_blocks(&[SideChainBlock {
             id: 0,
-            transactions: transactions,
+            transactions,
         }])
         .unwrap();
 
