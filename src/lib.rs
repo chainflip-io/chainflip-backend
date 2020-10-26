@@ -26,6 +26,9 @@ extern crate log;
 #[macro_use]
 extern crate lazy_static;
 
+#[macro_use]
+extern crate async_trait;
+
 /// Temporary funciton to demostrate how to use
 /// unit/integration tests
 pub fn add(a: i32, b: i32) -> i32 {

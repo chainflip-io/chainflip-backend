@@ -183,7 +183,7 @@ impl BlockProcessor for Database {
         };
 
         for block in blocks.iter() {
-            Database::process_transactions(&tx, &block.txs)
+            Database::process_transactions(&tx, &block.transactions)
         }
 
         if let Err(err) = tx.commit() {
@@ -319,11 +319,17 @@ mod test {
         assert!(db.get_last_processed_block_number().is_none());
 
         let blocks: Vec<SideChainBlock> = vec![
-            SideChainBlock { id: 1, txs: vec![] },
-            SideChainBlock { id: 2, txs: vec![] },
+            SideChainBlock {
+                id: 1,
+                transactions: vec![],
+            },
+            SideChainBlock {
+                id: 2,
+                transactions: vec![],
+            },
             SideChainBlock {
                 id: 10,
-                txs: vec![],
+                transactions: vec![],
             },
         ];
 
@@ -392,7 +398,7 @@ mod test {
 
         db.process_blocks(&[SideChainBlock {
             id: 0,
-            txs: transactions,
+            transactions,
         }])
         .unwrap();
 

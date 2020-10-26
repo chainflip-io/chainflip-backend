@@ -7,7 +7,6 @@ use crate::{
     },
     vault::blockchain_connection::btc::{BitcoinClient, SendTransaction},
 };
-use async_trait::async_trait;
 use bip44::KeyPair;
 use bitcoin::Address;
 use hdwallet::ExtendedPrivKey;

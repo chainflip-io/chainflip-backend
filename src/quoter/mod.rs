@@ -24,6 +24,9 @@ pub mod vault_node;
 /// The config
 pub mod config;
 
+/// Test utils
+pub mod test_utils;
+
 /// Quoter
 pub struct Quoter {}
 
@@ -43,12 +46,11 @@ impl Quoter {
         D: BlockProcessor + StateProvider + Send + 'static,
     {
         let poller = block_poller::BlockPoller::new(vault_node_api.clone(), database.clone());
-        poller.sync()?; // Make sure we have all the latest blocks
+        poller.sync().await?; // Make sure we have all the latest blocks
 
         // Start loops
-        let poller_thread = std::thread::spawn(move || {
-            poller.poll(std::time::Duration::from_secs(1));
-        });
+        let poller_thread =
+            std::thread::spawn(move || poller.poll(std::time::Duration::from_secs(1)));
 
         API::serve(port, vault_node_api.clone(), database.clone());
 

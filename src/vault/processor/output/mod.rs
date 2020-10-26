@@ -83,7 +83,6 @@ mod test {
     };
 
     use super::*;
-    use async_trait::async_trait;
 
     struct TestCoinProcessor {
         map: HashMap<Coin, Vec<OutputSentTx>>,

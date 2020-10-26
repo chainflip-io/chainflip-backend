@@ -2,7 +2,6 @@ use crate::{
     common::Coin,
     transactions::{OutputSentTx, OutputTx},
 };
-use async_trait::async_trait;
 use std::collections::HashMap;
 use uuid::Uuid;
 

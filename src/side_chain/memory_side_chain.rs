@@ -17,7 +17,7 @@ impl MemorySideChain {
     /// Check whether the transaction exists
     pub fn check_tx(&self, quote_tx: &QuoteTx) -> bool {
         for block in &self.blocks {
-            for tx in &block.txs {
+            for tx in &block.transactions {
                 if let SideChainTx::WitnessTx(tx) = tx {
                     if tx.quote_id == quote_tx.id {
                         return true;
@@ -34,7 +34,7 @@ impl MemorySideChain {
         let mut quotes: Vec<WitnessTx> = vec![];
 
         for block in &self.blocks {
-            for tx in &block.txs {
+            for tx in &block.transactions {
                 match tx {
                     SideChainTx::WitnessTx(tx) => {
                         quotes.push(tx.clone());
@@ -55,7 +55,7 @@ impl ISideChain for MemorySideChain {
         // For now all transactions live in their own block
         let block = SideChainBlock {
             id: self.blocks.len() as u32,
-            txs,
+            transactions: txs,
         };
 
         debug!("Adding block idx: {}", block.id);

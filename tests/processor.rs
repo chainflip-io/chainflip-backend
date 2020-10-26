@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use blockswap::{
     common::{Coin, GenericCoinAmount, LokiAmount, PoolCoin},
     side_chain::{ISideChain, MemorySideChain, SideChainTx},
@@ -8,8 +9,6 @@ use blockswap::{
         transactions::{MemoryTransactionsProvider, TransactionProvider},
     },
 };
-
-use async_trait::async_trait;
 use parking_lot::RwLock;
 
 use std::{
@@ -118,7 +117,8 @@ mod tests {
 
             let (sender, sent_outputs) = FakeCoinSender::new();
 
-            let processor = SideChainProcessor::new(Arc::clone(&provider), MemoryKVS::new(), sender);
+            let processor =
+                SideChainProcessor::new(Arc::clone(&provider), MemoryKVS::new(), sender);
 
             // Create a channel to receive processor events through
             let (sender, receiver) = crossbeam_channel::unbounded::<ProcessorEvent>();
@@ -197,7 +197,8 @@ mod tests {
 
             let liquidity = self
                 .provider
-                .read().get_liquidity(PoolCoin::ETH)
+                .read()
+                .get_liquidity(PoolCoin::ETH)
                 .expect("liquidity should exist");
 
             assert_eq!(liquidity.loki_depth, loki_atomic);
@@ -249,12 +250,22 @@ mod tests {
         runner.add_block([stake_tx.clone().into()]);
         runner.add_block([wtx_loki.into(), wtx_eth.into()]);
 
-        check_liquidity(&mut *runner.provider.write(), coin_type, loki_amount, coin_amount);
+        check_liquidity(
+            &mut *runner.provider.write(),
+            coin_type,
+            loki_amount,
+            coin_amount,
+        );
 
         runner.add_block([stake_tx.clone().into()]);
 
         // Check that the balance has not changed
-        check_liquidity(&mut *runner.provider.write(), coin_type, loki_amount, coin_amount);
+        check_liquidity(
+            &mut *runner.provider.write(),
+            coin_type,
+            loki_amount,
+            coin_amount,
+        );
     }
 
     #[test]
@@ -277,7 +288,12 @@ mod tests {
         runner.add_block([stake_tx.clone().into()]);
         runner.add_block([wtx_loki.into(), wtx_eth.into()]);
 
-        check_liquidity(&mut *runner.provider.write(), coin_type, loki_amount, coin_amount);
+        check_liquidity(
+            &mut *runner.provider.write(),
+            coin_type,
+            loki_amount,
+            coin_amount,
+        );
 
         // 2. Add another stake with another staker id
 

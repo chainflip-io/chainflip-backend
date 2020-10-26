@@ -2,12 +2,13 @@ use crate::{
     common::{api::ResponseError, coins::Coin},
     quoter::{vault_node::QuoteParams, vault_node::VaultNodeInterface},
 };
-use rand::{thread_rng, Rng};
+use rand::{prelude::StdRng, Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeSet, HashMap},
     str::FromStr,
     sync::{Arc, Mutex},
+    time::SystemTime,
 };
 use warp::http::StatusCode;
 
@@ -43,7 +44,10 @@ pub async fn quote<V: VaultNodeInterface>(
         }
     };
 
-    let rng = thread_rng();
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .expect("Duration since UNIX_EPOCH failed");
+    let rng = StdRng::seed_from_u64(now.as_secs());
     let input_address_id =
         generate_unique_input_address_id(input_coin, input_id_cache.clone(), rng)?;
 
@@ -56,7 +60,7 @@ pub async fn quote<V: VaultNodeInterface>(
         slippage_limit: params.slippage_limit,
     };
 
-    match vault_node.submit_quote(quote_params) {
+    match vault_node.submit_quote(quote_params).await {
         Ok(result) => Ok(result),
         Err(err) => {
             // Something went wrong, remove id from cache

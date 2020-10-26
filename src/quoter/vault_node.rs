@@ -1,5 +1,5 @@
-use crate::side_chain::SideChainBlock;
-use crate::transactions::QuoteTx;
+use crate::{common::api, side_chain::SideChainBlock, vault::api::v1::BlocksQueryResponse};
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 /// Parameters for `submitQuote` endpoint
@@ -25,6 +25,7 @@ pub struct QuoteParams {
 pub struct Config {}
 
 /// An interface for interacting with the vault node.
+#[async_trait]
 pub trait VaultNodeInterface {
     /// Get blocks starting from index `start` with a limit of `limit`.
     ///
@@ -36,16 +37,17 @@ pub trait VaultNodeInterface {
     ///     let blocks = VaultNodeInterface.get_blocks(0, 50)?;
     /// ```
     /// The above code will return blocks 0 to 49.
-    fn get_blocks(&self, start: u32, limit: u32) -> Result<Vec<SideChainBlock>, String>;
+    async fn get_blocks(&self, start: u32, limit: u32) -> Result<Vec<SideChainBlock>, String>;
 
     /// Submit a quote to the vault node
-    fn submit_quote(&self, params: QuoteParams) -> Result<serde_json::Value, String>;
+    async fn submit_quote(&self, params: QuoteParams) -> Result<serde_json::Value, String>;
 }
 
 /// A client for communicating with vault nodes via http requests.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VaultNodeAPI {
     url: String,
+    client: Client,
 }
 
 impl VaultNodeAPI {
@@ -53,16 +55,62 @@ impl VaultNodeAPI {
     pub fn new(url: &str) -> Self {
         VaultNodeAPI {
             url: url.to_owned(),
+            client: reqwest::Client::new(),
         }
     }
 }
 
+#[async_trait]
 impl VaultNodeInterface for VaultNodeAPI {
-    fn get_blocks(&self, _start: u32, _limit: u32) -> Result<Vec<SideChainBlock>, String> {
-        todo!()
+    async fn get_blocks(&self, start: u32, limit: u32) -> Result<Vec<SideChainBlock>, String> {
+        let url = format!("{}/v1/blocks", self.url);
+
+        let res = self
+            .client
+            .get(&url)
+            .query(&[("number", start), ("limit", limit)])
+            .send()
+            .await
+            .map_err(|err| err.to_string())?;
+
+        let res = res
+            .json::<api::Response<BlocksQueryResponse>>()
+            .await
+            .map_err(|err| err.to_string())?;
+
+        if let Some(err) = res.error {
+            return Err(err.to_string());
+        }
+
+        match res.data {
+            Some(data) => Ok(data.blocks),
+            None => Err("Failed to get block data".to_string()),
+        }
     }
 
-    fn submit_quote(&self, params: QuoteParams) -> Result<serde_json::Value, String> {
-        todo!()
+    async fn submit_quote(&self, params: QuoteParams) -> Result<serde_json::Value, String> {
+        let url = format!("{}/v1/quote", self.url);
+
+        let res = self
+            .client
+            .post(&url)
+            .json(&params)
+            .send()
+            .await
+            .map_err(|err| err.to_string())?;
+
+        let res = res
+            .json::<api::Response<serde_json::Value>>()
+            .await
+            .map_err(|err| err.to_string())?;
+
+        if let Some(err) = res.error {
+            return Err(err.to_string());
+        }
+
+        match res.data {
+            Some(data) => Ok(data),
+            None => Err("Failed to submit quote".to_string()),
+        }
     }
 }

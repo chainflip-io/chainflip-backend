@@ -1,12 +1,17 @@
 use crate::{quoter::BlockProcessor, side_chain::SideChainBlock};
 
+/// Test block processor
 pub struct TestBlockProcessor {
+    /// The last processed block
     pub last_processed_block_number: Option<u32>,
+    /// The blocks received from process_blocks function
     pub recieved_blocks: Vec<SideChainBlock>,
+    /// Error to return in process_blocks function
     pub process_blocks_error: Option<String>,
 }
 
 impl TestBlockProcessor {
+    /// Create a new test block processor
     pub fn new() -> Self {
         TestBlockProcessor {
             last_processed_block_number: None,
@@ -15,6 +20,7 @@ impl TestBlockProcessor {
         }
     }
 
+    /// Set the process_blocks error
     pub fn set_process_blocks_error(&mut self, error: Option<String>) {
         self.process_blocks_error = error;
     }

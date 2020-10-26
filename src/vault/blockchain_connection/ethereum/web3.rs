@@ -3,7 +3,6 @@ use crate::{
     common::{coins::CoinAmount, ethereum, Coin},
     utils::clone_into_array,
 };
-use async_trait::async_trait;
 use ethereum_tx_sign::RawTransaction;
 use std::convert::TryFrom;
 use web3::{

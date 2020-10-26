@@ -1,6 +1,6 @@
 use crate::{
     common::api::{self, using, ResponseError},
-    side_chain::{ISideChain, SideChainTx},
+    side_chain::{ISideChain, SideChainBlock, SideChainTx},
     vault::transactions::TransactionProvider,
 };
 use parking_lot::RwLock;
@@ -57,19 +57,12 @@ impl BlocksQueryParams {
     }
 }
 
-/// Block response
-#[derive(Debug, Deserialize, Serialize)]
-pub struct BlockResponseEntry {
-    id: u32,
-    transactions: Vec<SideChainTx>,
-}
-
 /// Typed representation of the response for /blocks
 #[serde(rename_all = "camelCase")]
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlocksQueryResponse {
-    total_blocks: u32,
-    blocks: Vec<BlockResponseEntry>,
+    pub total_blocks: u32,
+    pub blocks: Vec<SideChainBlock>,
 }
 
 const DEFAULT_BLOCK_NUMBER: u32 = 0;
@@ -116,18 +109,7 @@ pub async fn get_blocks<S: ISideChain>(
     for idx in number..=last_idx {
         // We already checked the boundaries, so just asserting here:
         let block = side_chain.get_block(idx).expect("Failed to get block");
-
-        let transactions = block
-            .txs
-            .iter()
-            .map(|tx| tx.clone().into())
-            .collect::<Vec<_>>();
-
-        let block = BlockResponseEntry {
-            id: block.id,
-            transactions,
-        };
-        blocks.push(block);
+        blocks.push(block.clone());
     }
 
     let res = BlocksQueryResponse {
