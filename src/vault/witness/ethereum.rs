@@ -1,3 +1,5 @@
+use parking_lot::RwLock;
+
 use crate::{
     common::Timestamp,
     common::{store::KeyValueStore, Coin},
@@ -21,7 +23,7 @@ where
     C: EthereumClient,
     S: KeyValueStore,
 {
-    transaction_provider: Arc<Mutex<T>>,
+    transaction_provider: Arc<RwLock<T>>,
     client: Arc<C>,
     store: Arc<Mutex<S>>,
     next_ethereum_block: u64,
@@ -29,12 +31,12 @@ where
 
 impl<T, C, S> EthereumWitness<T, C, S>
 where
-    T: TransactionProvider + Send + 'static,
+    T: TransactionProvider + Send + Sync + 'static,
     C: EthereumClient + Send + Sync + 'static,
     S: KeyValueStore + Send + 'static,
 {
     /// Create a new ethereum chain witness
-    pub fn new(client: Arc<C>, transaction_provider: Arc<Mutex<T>>, store: Arc<Mutex<S>>) -> Self {
+    pub fn new(client: Arc<C>, transaction_provider: Arc<RwLock<T>>, store: Arc<Mutex<S>>) -> Self {
         let next_ethereum_block = match store.lock().unwrap().get_data::<u64>(NEXT_ETH_BLOCK_KEY) {
             Some(next_block) => next_block,
             None => {
@@ -63,7 +65,7 @@ where
     }
 
     /// Start witnessing the ethereum chain on a new thread
-    pub async fn start(mut self) {
+    pub fn start(mut self) {
         std::thread::spawn(move || {
             let mut rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -78,7 +80,7 @@ where
         // To facilitate this we'd have to poll blocks up to current_block - num_of_confirmations
         while let Some(transactions) = self.client.get_transactions(self.next_ethereum_block).await
         {
-            let mut provider = self.transaction_provider.lock().unwrap();
+            let mut provider = self.transaction_provider.write();
 
             provider.sync();
             let quotes = provider.get_quote_txs();
@@ -101,7 +103,6 @@ where
 
                     debug!("Publishing witness transaction for quote: {:?}", &quote);
 
-                    // TODO: Only add witness tx if amount > 0
                     let tx = WitnessTx::new(
                         Timestamp::now(),
                         quote.id,
@@ -113,7 +114,9 @@ where
                         Some(transaction.from.into()),
                     );
 
-                    witness_txs.push(tx);
+                    if tx.amount > 0 {
+                        witness_txs.push(tx);
+                    }
                 }
             }
 
@@ -159,14 +162,14 @@ mod test {
 
     struct TestObjects {
         client: Arc<TestEthereumClient>,
-        provider: Arc<Mutex<TestTransactionsProvider>>,
+        provider: Arc<RwLock<TestTransactionsProvider>>,
         store: Arc<Mutex<MemoryKVS>>,
         witness: EthereumWitness<TestTransactionsProvider, TestEthereumClient, MemoryKVS>,
     }
 
     fn setup() -> TestObjects {
         let client = Arc::new(TestEthereumClient::new());
-        let provider = Arc::new(Mutex::new(get_transactions_provider()));
+        let provider = Arc::new(RwLock::new(get_transactions_provider()));
         let store = Arc::new(Mutex::new(MemoryKVS::new()));
         let witness = EthereumWitness::new(client.clone(), provider.clone(), store.clone());
 
@@ -200,7 +203,7 @@ mod test {
         );
 
         {
-            let mut provider = provider.lock().unwrap();
+            let mut provider = provider.write();
             provider
                 .add_transactions(vec![eth_quote.clone().into(), btc_quote.into()])
                 .unwrap();
@@ -234,7 +237,7 @@ mod test {
         witness.poll_next_main_chain().await;
 
         // Check that transactions were added correctly
-        let provider = provider.lock().unwrap();
+        let provider = provider.read();
 
         assert_eq!(provider.get_quote_txs().len(), 2);
         assert_eq!(
