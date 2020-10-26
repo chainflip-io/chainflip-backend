@@ -2,14 +2,10 @@
 extern crate log;
 
 use blockswap::{
-    common::{
-        coins::{Coin, GenericCoinAmount},
-        store::PersistentKVS,
-        LokiAmount,
-    },
+    common::store::PersistentKVS,
     logging,
-    side_chain::{ISideChain, PeristentSideChain},
-    utils::test_utils::{btc::TestBitcoinClient, create_fake_stake_quote, create_fake_witness},
+    side_chain::PeristentSideChain,
+    utils::test_utils::btc::TestBitcoinClient,
     vault::{
         api::APIServer,
         blockchain_connection::{LokiConnection, LokiConnectionConfig, Web3Client},

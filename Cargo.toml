@@ -57,3 +57,7 @@ path = "src/bin/quoter/main.rs"
 [[bin]]
 name = "loki-playground"
 path = "src/bin/loki.rs"
+
+[[bin]]
+name = "pool-tool"
+path = "src/bin/pool.rs"
