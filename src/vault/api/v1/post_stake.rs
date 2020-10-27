@@ -116,7 +116,7 @@ pub async fn stake<T: TransactionProvider>(
             match generate_btc_address(
                 &config.btc_master_root_key,
                 index,
-                false,
+                true,
                 bitcoin::AddressType::P2wpkh,
                 &config.net_type,
             ) {

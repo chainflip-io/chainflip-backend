@@ -37,7 +37,7 @@ pub const TEST_ETH_ADDRESS: &str = "0x70e7db0678460c5e53f1ffc9221d1c692111dcc5";
 /// Test LOKI address
 pub const TEST_LOKI_ADDRESS: &str = "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY";
 /// Test BTC address
-pub const TEST_BTC_ADDRESS: &str = "3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy";
+pub const TEST_BTC_ADDRESS: &str = "tb1q6898gg3tkkjurdpl4cghaqgmyvs29p4x4h0552";
 
 /// Test ROOT Key
 pub const TEST_ROOT_KEY: &str = "xprv9s21ZrQH143K3sFfKzYqgjMWgvsE44f6gxaRvyo11R22u2p5qegToQaEi7e6e5mRq3f92g9yDQQtu488ggct5gUspippg678t1QTCwBRb85";
