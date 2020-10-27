@@ -117,7 +117,10 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::utils::test_utils::btc::TestBitcoinSPVClient;
+    use crate::{
+        utils::test_utils::btc::TestBitcoinSPVClient,
+        vault::blockchain_connection::btc::btc_spv::BtcUTXO,
+    };
 
     use crate::{
         common::WalletAddress,
@@ -129,7 +132,7 @@ mod test {
     type TestTransactionsProvider = MemoryTransactionsProvider<MemorySideChain>;
     struct TestObjects {
         client: Arc<TestBitcoinSPVClient>,
-        provider: Arc<Mutex<TestTransactionsProvider>>,
+        provider: Arc<RwLock<TestTransactionsProvider>>,
         witness: BtcSPVWitness<TestTransactionsProvider, TestBitcoinSPVClient>,
     }
 
@@ -137,7 +140,7 @@ mod test {
 
     fn setup() -> TestObjects {
         let client = Arc::new(TestBitcoinSPVClient::new());
-        let provider = Arc::new(Mutex::new(get_transactions_provider()));
+        let provider = Arc::new(RwLock::new(get_transactions_provider()));
         let witness = BtcSPVWitness::new(client.clone(), provider.clone());
 
         TestObjects {
@@ -176,7 +179,7 @@ mod test {
             create_fake_quote_tx_coin_to_loki(Coin::BTC, WalletAddress(BTC_PUBKEY.to_string()));
 
         {
-            let mut provider = provider.lock().unwrap();
+            let mut provider = provider.write();
             provider
                 .add_transactions(vec![btc_quote.clone().into()])
                 .unwrap();
@@ -187,7 +190,7 @@ mod test {
 
         witness.poll_addresses_of_quotes().await;
 
-        let provider = provider.lock().unwrap();
+        let provider = provider.read();
 
         assert_eq!(provider.get_quote_txs().len(), 1);
         // one witness tx for each utxo
@@ -205,7 +208,7 @@ mod test {
             create_fake_quote_tx_coin_to_loki(Coin::BTC, WalletAddress(BTC_PUBKEY.to_string()));
 
         {
-            let mut provider = provider.lock().unwrap();
+            let mut provider = provider.write();
             provider
                 .add_transactions(vec![btc_quote.clone().into()])
                 .unwrap();
@@ -216,7 +219,7 @@ mod test {
 
         witness.poll_addresses_of_quotes().await;
 
-        let provider = provider.lock().unwrap();
+        let provider = provider.read();
 
         assert_eq!(provider.get_quote_txs().len(), 1);
 
@@ -236,7 +239,7 @@ mod test {
         );
 
         {
-            let mut provider = provider.lock().unwrap();
+            let mut provider = provider.write();
             provider
                 .add_transactions(vec![eth_quote.clone().into()])
                 .unwrap();
@@ -247,7 +250,7 @@ mod test {
 
         witness.poll_addresses_of_quotes().await;
 
-        let provider = provider.lock().unwrap();
+        let provider = provider.read();
 
         assert_eq!(provider.get_quote_txs().len(), 1);
 
