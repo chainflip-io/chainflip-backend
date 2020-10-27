@@ -21,7 +21,7 @@ async fn main() {
         std::process::exit(101); // Rust's panics use 101 by default
     }));
 
-    let matches = App::new("Blockswap Quoter")
+    let matches = App::new("Chainflip Quoter")
         .version("0.1")
         .about("A web server that provides swap quotes")
         .arg(
@@ -39,7 +39,7 @@ async fn main() {
 
     if let Ok(port) = port.parse::<u16>() {
         let config = &QUOTER_CONFIG;
-        info!("Starting the Blockswap Quoter");
+        info!("Starting the Chainflip Quoter");
 
         let database = database::Database::open(&config.database.name);
         let database = Arc::new(Mutex::new(database));
@@ -48,8 +48,8 @@ async fn main() {
         let vault_node_api = Arc::new(vault_node_api);
 
         match Quoter::run(port, vault_node_api, database).await {
-            Ok(_) => info!("Stopping Blockswap Quoter"),
-            Err(e) => error!("Blockswap Quoter stopped due to error: {}", e),
+            Ok(_) => info!("Stopping Chainflip Quoter"),
+            Err(e) => error!("Chainflip Quoter stopped due to error: {}", e),
         }
     } else {
         eprintln!("Specified invalid port: {}", port);

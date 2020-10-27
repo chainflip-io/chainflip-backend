@@ -7,11 +7,11 @@ use blockswap::{
     common,
     side_chain::MemorySideChain,
     utils::test_utils::get_transactions_provider,
-    vault::api::{v1::post_quote::QuoteResponse, APIServer},
+    vault::api::{v1::post_quote::SwapQuoteResponse, APIServer},
 };
 use std::sync::{Arc, Mutex};
 
-type QuoteResponseWrapped = common::api::Response<QuoteResponse>;
+type QuoteResponseWrapped = common::api::Response<SwapQuoteResponse>;
 
 lazy_static::lazy_static! {
     static ref CLIENT: reqwest::Client = reqwest::Client::new();
@@ -31,7 +31,7 @@ where
     let status = res.status();
 
     let res = res
-        .json::<common::api::Response<QuoteResponse>>()
+        .json::<common::api::Response<SwapQuoteResponse>>()
         .await
         .unwrap();
 

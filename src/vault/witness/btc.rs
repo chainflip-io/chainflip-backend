@@ -7,6 +7,7 @@ use crate::{
 
 use bitcoin::blockdata::transaction::*;
 use bitcoin::Address;
+use parking_lot::RwLock;
 use uuid::Uuid;
 
 use std::sync::{Arc, Mutex};
@@ -23,7 +24,7 @@ where
     C: BitcoinClient,
     S: KeyValueStore,
 {
-    transaction_provider: Arc<Mutex<T>>,
+    transaction_provider: Arc<RwLock<T>>,
     client: Arc<C>,
     store: Arc<Mutex<S>>,
     next_bitcoin_block: u64,
@@ -32,12 +33,12 @@ where
 /// How much of this code can be shared between chains??
 impl<T, C, S> BitcoinWitness<T, C, S>
 where
-    T: TransactionProvider + Send + 'static,
+    T: TransactionProvider + Send + Sync + 'static,
     C: BitcoinClient + Send + Sync + 'static,
     S: KeyValueStore + Send + 'static,
 {
     /// Create a new bitcoin chain witness
-    pub fn new(client: Arc<C>, transaction_provider: Arc<Mutex<T>>, store: Arc<Mutex<S>>) -> Self {
+    pub fn new(client: Arc<C>, transaction_provider: Arc<RwLock<T>>, store: Arc<Mutex<S>>) -> Self {
         let next_bitcoin_block = match store.lock().unwrap().get_data::<u64>(NEXT_BTC_BLOCK_KEY) {
             Some(next_block) => next_block,
             None => {
@@ -66,7 +67,7 @@ where
     }
 
     /// Start witnessing the bitcoin chain on a new thread
-    pub async fn start(mut self) {
+    pub fn start(mut self) {
         std::thread::spawn(move || {
             let mut rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -94,7 +95,7 @@ where
 
     async fn poll_next_main_chain(&mut self) {
         while let Some(txs) = self.client.get_transactions(self.next_bitcoin_block).await {
-            let mut provider = self.transaction_provider.lock().unwrap();
+            let mut provider = self.transaction_provider.write();
             provider.sync();
             let quotes = provider.get_quote_txs();
 
@@ -204,7 +205,7 @@ mod test {
     type TestTransactionsProvider = MemoryTransactionsProvider<MemorySideChain>;
     struct TestObjects {
         client: Arc<TestBitcoinClient>,
-        provider: Arc<Mutex<TestTransactionsProvider>>,
+        provider: Arc<RwLock<TestTransactionsProvider>>,
         store: Arc<Mutex<MemoryKVS>>,
         witness: BitcoinWitness<TestTransactionsProvider, TestBitcoinClient, MemoryKVS>,
     }
@@ -434,7 +435,7 @@ mod test {
 
     fn setup() -> TestObjects {
         let client = Arc::new(TestBitcoinClient::new());
-        let provider = Arc::new(Mutex::new(get_transactions_provider()));
+        let provider = Arc::new(RwLock::new(get_transactions_provider()));
         let store = Arc::new(Mutex::new(MemoryKVS::new()));
         let witness = BitcoinWitness::new(client.clone(), provider.clone(), store.clone());
 
@@ -469,7 +470,7 @@ mod test {
         );
 
         {
-            let mut provider = provider.lock().unwrap();
+            let mut provider = provider.write();
             provider
                 .add_transactions(vec![eth_quote.clone().into(), btc_quote.clone().into()])
                 .unwrap();
@@ -481,7 +482,7 @@ mod test {
         // Poll and add a witness tx
         witness.poll_next_main_chain().await;
 
-        let provider = provider.lock().unwrap();
+        let provider = provider.read();
 
         assert_eq!(provider.get_quote_txs().len(), 2);
         assert_eq!(
@@ -557,7 +558,7 @@ mod test {
         );
 
         {
-            let mut provider = provider.lock().unwrap();
+            let mut provider = provider.write();
             provider
                 .add_transactions(vec![eth_quote.clone().into(), btc_quote.clone().into()])
                 .unwrap();
@@ -569,7 +570,7 @@ mod test {
         // Poll and add a witness tx
         witness.poll_next_main_chain().await;
 
-        let provider = provider.lock().unwrap();
+        let provider = provider.read();
 
         assert_eq!(provider.get_quote_txs().len(), 2);
         assert_eq!(

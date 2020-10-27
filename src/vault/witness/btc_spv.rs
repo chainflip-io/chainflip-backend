@@ -2,15 +2,13 @@ use crate::{
     common::{Coin, Timestamp},
     side_chain::SideChainTx,
     transactions::WitnessTx,
-    vault::{
-        blockchain_connection::btc::{btc_spv::BtcUTXO, BitcoinSPVClient},
-        transactions::TransactionProvider,
-    },
+    vault::{blockchain_connection::btc::BitcoinSPVClient, transactions::TransactionProvider},
 };
 
+use parking_lot::RwLock;
 use uuid::Uuid;
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 /// A Bitcoin transaction witness
 pub struct BtcSPVWitness<T, C>
@@ -18,18 +16,18 @@ where
     T: TransactionProvider,
     C: BitcoinSPVClient,
 {
-    transaction_provider: Arc<Mutex<T>>,
+    transaction_provider: Arc<RwLock<T>>,
     client: Arc<C>,
 }
 
 /// How much of this code can be shared between chains??
 impl<T, C> BtcSPVWitness<T, C>
 where
-    T: TransactionProvider + Send + 'static,
+    T: TransactionProvider + Send + Sync + 'static,
     C: BitcoinSPVClient + Send + Sync + 'static,
 {
     /// Create a new bitcoin chain witness
-    pub fn new(client: Arc<C>, transaction_provider: Arc<Mutex<T>>) -> Self {
+    pub fn new(client: Arc<C>, transaction_provider: Arc<RwLock<T>>) -> Self {
         BtcSPVWitness {
             client,
             transaction_provider,
@@ -45,7 +43,7 @@ where
     }
 
     /// Start witnessing the bitcoin chain on a new thread
-    pub async fn start(mut self) {
+    pub fn start(mut self) {
         std::thread::spawn(move || {
             let mut rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -56,48 +54,51 @@ where
     }
 
     async fn poll_addresses_of_quotes(&mut self) {
-        let mut provider = self.transaction_provider.lock().unwrap();
-        provider.sync();
+        self.transaction_provider.write().sync();
 
-        let quotes = provider.get_quote_txs();
+        let witness_txs = {
+            let provider = self.transaction_provider.read();
+            let quotes = provider.get_quote_txs();
 
-        let mut witness_txs: Vec<WitnessTx> = vec![];
-        for quote in quotes.iter().filter(|quote| quote.inner.input == Coin::BTC) {
-            let quote_inner = &quote.inner;
-            let input_addr = &quote_inner.input_address;
+            let mut witness_txs: Vec<WitnessTx> = vec![];
+            for quote in quotes.iter().filter(|quote| quote.inner.input == Coin::BTC) {
+                let quote_inner = &quote.inner;
+                let input_addr = &quote_inner.input_address;
 
-            let utxos = match self.client.get_address_unspent(input_addr).await {
-                Ok(utxos) => utxos,
-                Err(err) => {
-                    warn!(
-                        "Could not fetch UTXOs for bitcoin address: {}. Error: {}",
-                        &input_addr, err
-                    );
-                    continue;
-                }
-            };
-
-            if utxos.0.len() == 0 {
-                // no inputs to this address
-                continue;
-            }
-
-            for utxo in utxos.0 {
-                let tx = WitnessTx {
-                    id: Uuid::new_v4(),
-                    quote_id: quote_inner.id,
-                    transaction_id: utxo.tx_hash.clone(),
-                    transaction_block_number: utxo.height,
-                    transaction_index: utxo.tx_pos,
-                    amount: utxo.value as u128,
-                    timestamp: Timestamp::now(),
-                    coin: Coin::BTC,
-                    sender: None,
+                let utxos = match self.client.get_address_unspent(input_addr).await {
+                    Ok(utxos) => utxos,
+                    Err(err) => {
+                        warn!(
+                            "Could not fetch UTXOs for bitcoin address: {}. Error: {}",
+                            &input_addr, err
+                        );
+                        continue;
+                    }
                 };
 
-                witness_txs.push(tx);
+                if utxos.0.len() == 0 {
+                    // no inputs to this address
+                    continue;
+                }
+
+                for utxo in utxos.0 {
+                    let tx = WitnessTx {
+                        id: Uuid::new_v4(),
+                        quote_id: quote_inner.id,
+                        transaction_id: utxo.tx_hash.clone(),
+                        transaction_block_number: utxo.height,
+                        transaction_index: utxo.tx_pos,
+                        amount: utxo.value as u128,
+                        timestamp: Timestamp::now(),
+                        coin: Coin::BTC,
+                        sender: None,
+                    };
+
+                    witness_txs.push(tx);
+                }
             }
-        }
+            witness_txs
+        };
 
         if witness_txs.len() > 0 {
             let side_chain_txs = witness_txs
@@ -105,7 +106,8 @@ where
                 .map(SideChainTx::WitnessTx)
                 .collect();
 
-            provider
+            self.transaction_provider
+                .write()
                 .add_transactions(side_chain_txs)
                 .expect("Could not publish witness txs");
         }
@@ -115,7 +117,10 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::utils::test_utils::btc::TestBitcoinSPVClient;
+    use crate::{
+        utils::test_utils::btc::TestBitcoinSPVClient,
+        vault::blockchain_connection::btc::btc_spv::BtcUTXO,
+    };
 
     use crate::{
         common::WalletAddress,
@@ -127,7 +132,7 @@ mod test {
     type TestTransactionsProvider = MemoryTransactionsProvider<MemorySideChain>;
     struct TestObjects {
         client: Arc<TestBitcoinSPVClient>,
-        provider: Arc<Mutex<TestTransactionsProvider>>,
+        provider: Arc<RwLock<TestTransactionsProvider>>,
         witness: BtcSPVWitness<TestTransactionsProvider, TestBitcoinSPVClient>,
     }
 
@@ -135,7 +140,7 @@ mod test {
 
     fn setup() -> TestObjects {
         let client = Arc::new(TestBitcoinSPVClient::new());
-        let provider = Arc::new(Mutex::new(get_transactions_provider()));
+        let provider = Arc::new(RwLock::new(get_transactions_provider()));
         let witness = BtcSPVWitness::new(client.clone(), provider.clone());
 
         TestObjects {
@@ -174,7 +179,7 @@ mod test {
             create_fake_quote_tx_coin_to_loki(Coin::BTC, WalletAddress(BTC_PUBKEY.to_string()));
 
         {
-            let mut provider = provider.lock().unwrap();
+            let mut provider = provider.write();
             provider
                 .add_transactions(vec![btc_quote.clone().into()])
                 .unwrap();
@@ -185,7 +190,7 @@ mod test {
 
         witness.poll_addresses_of_quotes().await;
 
-        let provider = provider.lock().unwrap();
+        let provider = provider.read();
 
         assert_eq!(provider.get_quote_txs().len(), 1);
         // one witness tx for each utxo
@@ -203,7 +208,7 @@ mod test {
             create_fake_quote_tx_coin_to_loki(Coin::BTC, WalletAddress(BTC_PUBKEY.to_string()));
 
         {
-            let mut provider = provider.lock().unwrap();
+            let mut provider = provider.write();
             provider
                 .add_transactions(vec![btc_quote.clone().into()])
                 .unwrap();
@@ -214,7 +219,7 @@ mod test {
 
         witness.poll_addresses_of_quotes().await;
 
-        let provider = provider.lock().unwrap();
+        let provider = provider.read();
 
         assert_eq!(provider.get_quote_txs().len(), 1);
 
@@ -234,7 +239,7 @@ mod test {
         );
 
         {
-            let mut provider = provider.lock().unwrap();
+            let mut provider = provider.write();
             provider
                 .add_transactions(vec![eth_quote.clone().into()])
                 .unwrap();
@@ -245,7 +250,7 @@ mod test {
 
         witness.poll_addresses_of_quotes().await;
 
-        let provider = provider.lock().unwrap();
+        let provider = provider.read();
 
         assert_eq!(provider.get_quote_txs().len(), 1);
 
