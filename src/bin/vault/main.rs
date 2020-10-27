@@ -6,6 +6,7 @@ use blockswap::{
     logging,
     side_chain::{ISideChain, PeristentSideChain},
     utils::test_utils::{create_fake_stake_quote, create_fake_witness},
+    vault::witness::BtcSPVWitness,
     vault::{
         api::APIServer,
         blockchain_connection::{BtcSPVClient, LokiConnection, LokiConnectionConfig, Web3Client},
@@ -72,9 +73,8 @@ fn main() {
     let db_connection = rusqlite::Connection::open("blocks.db").expect("Could not open database");
     let kvs = Arc::new(Mutex::new(PersistentKVS::new(db_connection)));
     let loki_witness = LokiWitness::new(loki_block_receiver, s_chain.clone());
-    let eth_witness =
-        EthereumWitness::new(Arc::new(eth_client.clone()), provider.clone(), kvs.clone());
-    let btc_witness = BitcoinWitness::new(Arc::new(btc.clone()), provider.clone(), kvs);
+    let eth_witness = EthereumWitness::new(Arc::new(eth_client.clone()), provider.clone(), kvs);
+    let btc_witness = BtcSPVWitness::new(Arc::new(btc.clone()), provider.clone());
 
     loki_witness.start();
     eth_witness.start();
