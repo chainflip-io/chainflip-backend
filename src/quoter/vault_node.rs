@@ -1,4 +1,6 @@
-use crate::{common::api, side_chain::SideChainBlock, vault::api::v1::BlocksQueryResponse};
+use crate::{
+    common::api, side_chain::SideChainBlock, vault::api::v1::get_blocks::BlocksQueryResponse,
+};
 use reqwest::Client;
 
 pub use crate::vault::api::v1::post_stake::StakeQuoteParams;

@@ -73,7 +73,10 @@ pub async fn stake<V: VaultNodeInterface>(
                 .get_mut(&Coin::LOKI)
                 .unwrap()
                 .remove(&loki_input_address_id);
-            return Err(ResponseError::new(StatusCode::BAD_REQUEST, &err));
+            return Err(ResponseError::new(
+                StatusCode::BAD_REQUEST,
+                &format!("{}", err),
+            ));
         }
     }
 }

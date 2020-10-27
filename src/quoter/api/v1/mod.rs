@@ -11,8 +11,8 @@ use std::{
 };
 use warp::Filter;
 
-mod post_stake;
-mod post_swap;
+pub mod post_stake;
+pub mod post_swap;
 
 mod get_coins;
 pub use get_coins::{get_coins, CoinsParams};

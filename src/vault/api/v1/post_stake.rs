@@ -244,8 +244,8 @@ mod test {
         let provider = Arc::new(RwLock::new(get_transactions_provider()));
 
         let mut quote_params = params();
-        quote_params.pool = Coin::LOKI;
-        quote_params.coin_input_address_id = "invalid".to_string();
+        quote_params.pool = Coin::ETH;
+        quote_params.loki_input_address_id = "invalid".to_string();
 
         let result = stake(quote_params, provider.clone(), config())
             .await

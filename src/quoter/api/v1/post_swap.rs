@@ -85,7 +85,11 @@ pub async fn swap<V: VaultNodeInterface>(
                 .get_mut(&input_coin)
                 .unwrap()
                 .remove(&input_address_id);
-            return Err(ResponseError::new(StatusCode::BAD_REQUEST, &err));
+
+            return Err(ResponseError::new(
+                StatusCode::BAD_REQUEST,
+                &format!("{}", err),
+            ));
         }
     }
 }
