@@ -12,10 +12,12 @@ use std::{
 };
 use warp::http::StatusCode;
 
+use super::utils::generate_unique_input_address_id;
+
 /// Parameters for POST `quote` endpoint
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PostQuoteParams {
+pub struct PostStakeParams {
     /// The input coin
     pub input_coin: String,
     /// The input amount
@@ -28,8 +30,8 @@ pub struct PostQuoteParams {
     pub slippage_limit: u32,
 }
 
-/// Submit a quote
-pub async fn quote<V: VaultNodeInterface>(
+/// Submit a stake quoter
+pub async fn stake<V: VaultNodeInterface>(
     params: PostQuoteParams,
     vault_node: Arc<V>,
     input_id_cache: Arc<Mutex<HashMap<Coin, BTreeSet<String>>>>,
@@ -73,40 +75,4 @@ pub async fn quote<V: VaultNodeInterface>(
             return Err(ResponseError::new(StatusCode::BAD_REQUEST, &err));
         }
     }
-}
-
-fn generate_unique_input_address_id<R: Rng>(
-    input_coin: Coin,
-    input_id_cache: Arc<Mutex<HashMap<Coin, BTreeSet<String>>>>,
-    mut rng: R,
-) -> Result<String, ResponseError> {
-    let mut cache = input_id_cache.lock().unwrap();
-    let used_ids = cache.entry(input_coin).or_insert(BTreeSet::new());
-
-    // We can test this by passing a SeededRng
-    let input_address_id = loop {
-        let id = match input_coin {
-            Coin::BTC => rng.gen_range(6, u64::MAX).to_string(),
-            Coin::ETH => rng.gen_range(6, u64::MAX).to_string(),
-            Coin::LOKI => {
-                let random_bytes = rng.gen::<[u8; 8]>();
-                hex::encode(random_bytes)
-            }
-            _ => {
-                return Err(ResponseError::new(
-                    StatusCode::BAD_REQUEST,
-                    "Invalid input id",
-                ))
-            }
-        };
-
-        if !used_ids.contains(&id) {
-            break id;
-        }
-    };
-
-    // Add the id in the cache
-    used_ids.insert(input_address_id.clone());
-
-    Ok(input_address_id)
 }

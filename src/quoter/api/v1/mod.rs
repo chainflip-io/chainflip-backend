@@ -5,15 +5,13 @@ use crate::{
     },
     quoter::{vault_node::VaultNodeInterface, StateProvider},
 };
-use rand::{prelude::StdRng, SeedableRng};
 use std::{
     collections::{BTreeSet, HashMap},
     sync::{Arc, Mutex},
-    time::SystemTime,
 };
 use warp::Filter;
 
-mod post_quote;
+mod post_swap;
 
 mod get_coins;
 pub use get_coins::{get_coins, CoinsParams};
@@ -29,6 +27,9 @@ pub use get_quote::{get_quote, GetQuoteParams};
 
 mod get_transactions;
 pub use get_transactions::{get_transactions, TransactionsParams};
+
+// Util functions
+pub mod utils;
 
 #[cfg(test)]
 mod test;
@@ -98,12 +99,12 @@ where
         .map(get_quote)
         .and_then(api::respond);
 
-    let post_quote_api = warp::path!("quote")
+    let post_swap_api = warp::path!("swap")
         .and(warp::post())
         .and(warp::body::json())
         .and(using(vault_node.clone()))
         .and(using(input_id_cache.clone()))
-        .map(post_quote::quote)
+        .map(post_swap::swap)
         .and_then(api::respond);
 
     warp::path!("v1" / ..) // Add path prefix /v1 to all our routes
@@ -113,6 +114,6 @@ where
                 .or(pools)
                 .or(transactions)
                 .or(quote)
-                .or(post_quote_api),
+                .or(post_swap_api),
         )
 }
