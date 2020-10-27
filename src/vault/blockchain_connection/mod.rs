@@ -19,6 +19,7 @@ pub use ethereum::web3::Web3Client;
 pub mod btc;
 
 pub use btc::btc::BtcClient;
+pub use btc::btc_spv::BtcSPVClient;
 
 /// Connects to loki rpc wallet and pushes payments to the witness
 pub struct LokiConnection {

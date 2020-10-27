@@ -22,6 +22,11 @@ pub struct SendTransaction {
 }
 
 #[async_trait]
+pub trait IBitcoinSend {
+    async fn send(&self, tx: &SendTransaction) -> Result<Txid, String>;
+}
+
+#[async_trait]
 /// Defines the interface for a bitcoin core / bitcoind client, used by a bitcoin witness
 pub trait BitcoinClient {
     /// Get the latest block number of the btc chain
@@ -32,9 +37,6 @@ pub trait BitcoinClient {
 
     /// Get network type of the btc client (bitcoin, testnet, regtest)
     fn get_network_type(&self) -> Network;
-
-    /// Send a bitcoin transaction
-    async fn send(&self, tx: &SendTransaction) -> Result<Txid, String>;
 }
 
 #[async_trait]
@@ -45,9 +47,4 @@ pub trait BitcoinSPVClient {
         &self,
         address: &WalletAddress,
     ) -> Result<AddressUnspentResponse, String>;
-
-    /// Sends a transaction to an address.
-    /// # Prerequisite
-    /// Wallet must be loaded into the electrum client for the funds to be spent
-    async fn send(&self, destination: WalletAddress, atomic_amount: u128) -> Result<Txid, String>;
 }

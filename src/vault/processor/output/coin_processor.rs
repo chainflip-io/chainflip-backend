@@ -3,7 +3,7 @@ use crate::{
     transactions::{OutputSentTx, OutputTx},
     utils::bip44,
     vault::{
-        blockchain_connection::{btc::BitcoinClient, ethereum::EthereumClient},
+        blockchain_connection::{btc::IBitcoinSend, ethereum::EthereumClient},
         config::VAULT_CONFIG,
     },
 };
@@ -18,13 +18,13 @@ pub trait CoinProcessor {
 }
 
 /// Struct responsible for sending outputs all supported coin types
-pub struct OutputCoinProcessor<L: OutputSender, E: EthereumClient, B: BitcoinClient> {
+pub struct OutputCoinProcessor<L: OutputSender, E: EthereumClient, B: IBitcoinSend> {
     loki: L,
     eth: E,
     btc: B,
 }
 
-impl<L: OutputSender, E: EthereumClient, B: BitcoinClient> OutputCoinProcessor<L, E, B> {
+impl<L: OutputSender, E: EthereumClient, B: IBitcoinSend> OutputCoinProcessor<L, E, B> {
     /// Create a new output coin processor
     pub fn new(loki: L, eth: E, btc: B) -> Self {
         OutputCoinProcessor { eth, btc, loki }
@@ -36,7 +36,7 @@ impl<L, E, B> CoinProcessor for OutputCoinProcessor<L, E, B>
 where
     L: OutputSender + Sync + Send,
     E: EthereumClient + Clone + Sync + Send,
-    B: BitcoinClient + Clone + Sync + Send,
+    B: IBitcoinSend + Clone + Sync + Send,
 {
     async fn process(&self, coin: Coin, outputs: &[OutputTx]) -> Vec<OutputSentTx> {
         match coin {

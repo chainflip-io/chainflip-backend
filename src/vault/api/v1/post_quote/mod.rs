@@ -96,8 +96,9 @@ fn generate_btc_address(
     nettype: &NetType,
 ) -> Result<String, String> {
     let key_pair = generate_bip44_keypair_from_root_key(root_key, bip44::CoinType::BTC, index)?;
+
     let btc_pubkey = bitcoin::PublicKey {
-        key: key_pair.public_key,
+        key: bitcoin::secp256k1::PublicKey::from_slice(&key_pair.public_key.serialize()).unwrap(),
         compressed,
     };
 
@@ -107,14 +108,17 @@ fn generate_btc_address(
     };
 
     let address = match address_type {
-        bitcoin::AddressType::P2wpkh => bitcoin::Address::p2wpkh(&btc_pubkey, network),
+        // throw error that says must use compressed public key format
+        bitcoin::AddressType::P2wpkh => {
+            bitcoin::Address::p2wpkh(&btc_pubkey, network).map_err(|e| e.to_string())?
+        }
         bitcoin::AddressType::P2pkh => bitcoin::Address::p2pkh(&btc_pubkey, network),
         _ => {
             warn!(
                 "Address type of {} is not currently supported. Defaulting to p2wpkh address",
                 address_type
             );
-            bitcoin::Address::p2wpkh(&btc_pubkey, network)
+            bitcoin::Address::p2wpkh(&btc_pubkey, network).map_err(|e| e.to_string())?
         }
     };
     let address = address.to_string();
@@ -294,19 +298,19 @@ mod test {
     fn generates_correct_btc_address() {
         // === p2wpkh - pay-to-witness-pubkey-hash (segwit) addresses ===
         assert_eq!(
-            generate_btc_address(ROOT_KEY, 0, false, P2wpkh, &NetType::Mainnet).unwrap(),
-            "bc1ql40fhzrdmljydema5mz5hmja7mul8smmdpvjxl"
+            generate_btc_address(ROOT_KEY, 0, true, P2wpkh, &NetType::Mainnet).unwrap(),
+            "bc1qawvxp3jxlzj3ydcfjyq83cxkdxpu7st8az5hvq"
         );
 
         // testnet generates different addresses to mainnet
         assert_eq!(
-            generate_btc_address(ROOT_KEY, 0, false, P2wpkh, &NetType::Testnet).unwrap(),
-            "tb1ql40fhzrdmljydema5mz5hmja7mul8smm88hpav"
+            generate_btc_address(ROOT_KEY, 0, true, P2wpkh, &NetType::Testnet).unwrap(),
+            "tb1qawvxp3jxlzj3ydcfjyq83cxkdxpu7st8hy0yhn"
         );
 
         assert_eq!(
-            generate_btc_address(ROOT_KEY, 1, false, P2wpkh, &NetType::Mainnet).unwrap(),
-            "bc1q7mlzxxwdx6ut660sg6fs8yhz3tphv6r28rwr3m"
+            generate_btc_address(ROOT_KEY, 1, true, P2wpkh, &NetType::Mainnet).unwrap(),
+            "bc1q6uq0qny5pel4aane4cj0kuqz5sgkxczv6y4ypy"
         );
 
         // === p2pkh - pay-to-pubkey-hash (legacy) addresses ===

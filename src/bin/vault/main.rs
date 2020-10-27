@@ -4,11 +4,12 @@ extern crate log;
 use blockswap::{
     common::store::PersistentKVS,
     logging,
-    side_chain::PeristentSideChain,
-    utils::test_utils::btc::TestBitcoinClient,
+    side_chain::{ISideChain, PeristentSideChain},
+    utils::test_utils::{create_fake_stake_quote, create_fake_witness},
     vault::{
         api::APIServer,
-        blockchain_connection::{LokiConnection, LokiConnectionConfig, Web3Client},
+        blockchain_connection::{BtcSPVClient, LokiConnection, LokiConnectionConfig, Web3Client},
+        config::NetType,
         config::VAULT_CONFIG,
         processor::{LokiSender, OutputCoinProcessor, SideChainProcessor},
         transactions::{MemoryTransactionsProvider, TransactionProvider},
@@ -54,8 +55,18 @@ fn main() {
     let eth_client =
         Web3Client::url(&vault_config.eth.provider_url).expect("Failed to create web3 client");
 
-    // TODO: use production client instead
-    let btc = TestBitcoinClient::new();
+    let network = match &vault_config.net_type {
+        NetType::Testnet => bitcoin::Network::Testnet,
+        NetType::Mainnet => bitcoin::Network::Bitcoin,
+    };
+
+    let btc_config = &vault_config.btc;
+    let btc = BtcSPVClient::new(
+        btc_config.rpc_port,
+        btc_config.rpc_user.clone(),
+        btc_config.rpc_password.clone(),
+        network,
+    );
 
     // Witnesses
     let db_connection = rusqlite::Connection::open("blocks.db").expect("Could not open database");

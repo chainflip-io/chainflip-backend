@@ -51,6 +51,15 @@ pub struct EthConfig {
 pub struct BtcConfig {
     /// The seed to derive wallets from
     pub master_root_key: String,
+
+    /// Local port the RPC enabled daemon is running on
+    pub rpc_port: u16,
+
+    /// User for authenticating to the RPC
+    pub rpc_user: String,
+
+    /// Password for authenticating to the RPC
+    pub rpc_password: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]
