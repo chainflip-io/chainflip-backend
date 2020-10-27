@@ -4,7 +4,7 @@ use crate::{
     vault::{api::v1::post_quote::SwapQuoteResponse, processor::utils::get_swap_expire_timestamp},
 };
 use reqwest::StatusCode;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     str::FromStr,
     sync::{Arc, Mutex},
@@ -19,6 +19,13 @@ pub struct GetQuoteParams {
     pub id: String,
 }
 
+/// Response for GET `quote` endpoint
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase", tag = "type", content = "info")]
+pub enum GetQuoteResponse {
+    Swap(SwapQuoteResponse),
+}
+
 /// Get information about a quote
 ///
 /// # Example Query
@@ -27,7 +34,7 @@ pub struct GetQuoteParams {
 pub async fn get_quote<S>(
     params: GetQuoteParams,
     state: Arc<Mutex<S>>,
-) -> Result<Option<SwapQuoteResponse>, ResponseError>
+) -> Result<Option<GetQuoteResponse>, ResponseError>
 where
     S: StateProvider,
 {
@@ -57,7 +64,7 @@ where
                 output_address: quote.output_address.to_string(),
                 slippage_limit: quote.slippage_limit,
             };
-            Some(response)
+            Some(GetQuoteResponse::Swap(response))
         }
         _ => None,
     };
