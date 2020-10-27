@@ -1,4 +1,4 @@
-use super::{BitcoinClient, SendTransaction};
+use super::{BitcoinClient, IBitcoinSend, SendTransaction};
 use crate::common::{coins::CoinAmount, Coin};
 use bitcoin::Txid;
 use bitcoin::{Amount, Network, Transaction};
@@ -73,7 +73,10 @@ impl BitcoinClient for BtcClient {
     fn get_network_type(&self) -> Network {
         self.network
     }
+}
 
+#[async_trait]
+impl IBitcoinSend for BtcClient {
     /// Send a transaction
     async fn send(&self, send_tx: &SendTransaction) -> Result<Txid, String> {
         if send_tx.amount.coin_type() != Coin::BTC {

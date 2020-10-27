@@ -5,7 +5,7 @@ use crate::{
         bip44::{self, RawKey},
         primitives::U256,
     },
-    vault::blockchain_connection::btc::{BitcoinClient, SendTransaction},
+    vault::blockchain_connection::btc::{IBitcoinSend, SendTransaction},
 };
 use bip44::KeyPair;
 use bitcoin::Address;
@@ -16,12 +16,12 @@ use std::{convert::TryFrom, str::FromStr};
 use super::*;
 
 /// An output send for Bitcoin
-pub struct BtcOutputSender<B: BitcoinClient> {
+pub struct BtcOutputSender<B: IBitcoinSend> {
     client: B,
     root_private_key: ExtendedPrivKey,
 }
 
-impl<B: BitcoinClient> BtcOutputSender<B> {
+impl<B: IBitcoinSend> BtcOutputSender<B> {
     pub fn new(client: B, root_key: RawKey) -> Self {
         let root_private_key = root_key
             .to_private_key()
@@ -121,7 +121,7 @@ impl<B: BitcoinClient> BtcOutputSender<B> {
 }
 
 #[async_trait]
-impl<B: BitcoinClient + Sync + Send> OutputSender for BtcOutputSender<B> {
+impl<B: IBitcoinSend + Sync + Send> OutputSender for BtcOutputSender<B> {
     async fn send(&self, outputs: &[OutputTx]) -> Vec<OutputSentTx> {
         let key_pair =
             match bip44::get_key_pair(self.root_private_key.clone(), bip44::CoinType::BTC, 0) {
@@ -149,7 +149,7 @@ impl<B: BitcoinClient + Sync + Send> OutputSender for BtcOutputSender<B> {
 mod test {
     use crate::{
         common::WalletAddress,
-        utils::test_utils::{btc::TestBitcoinClient, create_fake_output_tx},
+        utils::test_utils::{btc::TestBitcoinSendClient, create_fake_output_tx},
     };
 
     use super::*;
@@ -161,11 +161,11 @@ mod test {
         .unwrap()
     }
 
-    fn get_output_sender() -> BtcOutputSender<TestBitcoinClient> {
+    fn get_output_sender() -> BtcOutputSender<TestBitcoinSendClient> {
         // DO NOT USE THIS KEY! ONLY FOR TESTING!
         const ROOT_KEY: &str = "xprv9s21ZrQH143K2eUB9ZVwgDAekjSBvvAx1bNn4YhbQ9YiNJEuvgZhraz33W2HKhubJAoiNEZbsD4RgYQJfYDf3ZuJudQjyL5jeQ96Wnp5KPm";
 
-        let client = TestBitcoinClient::new();
+        let client = TestBitcoinSendClient::new();
         let key = RawKey::decode(ROOT_KEY).unwrap();
         BtcOutputSender::new(client, key)
     }

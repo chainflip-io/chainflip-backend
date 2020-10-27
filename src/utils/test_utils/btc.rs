@@ -17,22 +17,27 @@ type Blocks = VecDeque<Vec<Transaction>>;
 #[derive(Clone)]
 pub struct TestBitcoinClient {
     blocks: Arc<Mutex<Blocks>>,
-    send_handler:
-        Option<Arc<dyn Fn(&SendTransaction) -> Result<Txid, String> + Send + Sync + 'static>>,
 }
 
-impl TestBitcoinClient {
-    /// Create a new test bitcoin client
-    pub fn new() -> Self {
-        TestBitcoinClient {
-            blocks: Arc::new(Mutex::new(VecDeque::new())),
-            send_handler: None,
-        }
-    }
+pub struct TestBitcoinSendClient {
+    send_handler:
+        Option<Box<dyn Fn(&SendTransaction) -> Result<Txid, String> + Send + Sync + 'static>>,
+}
 
-    /// Add a block to the client
-    pub fn add_block(&self, transactions: Vec<Transaction>) {
-        self.blocks.lock().unwrap().push_back(transactions)
+#[async_trait]
+impl IBitcoinSend for TestBitcoinSendClient {
+    async fn send(&self, tx: &SendTransaction) -> Result<Txid, String> {
+        if let Some(function) = &self.send_handler {
+            return function(tx);
+        }
+        Err("Not handled".to_owned())
+    }
+}
+
+impl TestBitcoinSendClient {
+    /// Create a new test bitcoin sender only client - for output processing
+    pub fn new() -> Self {
+        TestBitcoinSendClient { send_handler: None }
     }
 
     /// Set the handler for send
@@ -41,7 +46,20 @@ impl TestBitcoinClient {
         F: 'static,
         F: Fn(&SendTransaction) -> Result<Txid, String> + Send + Sync,
     {
-        self.send_handler = Some(Arc::new(function));
+        self.send_handler = Some(Box::new(function));
+    }
+}
+
+impl TestBitcoinClient {
+    /// Create a new test bitcoin sender only client - for output processing
+    pub fn new() -> Self {
+        TestBitcoinClient {
+            blocks: Arc::new(Mutex::new(VecDeque::new())),
+        }
+    }
+    /// Add a block to the client
+    pub fn add_block(&self, transactions: Vec<Transaction>) {
+        self.blocks.lock().unwrap().push_back(transactions)
     }
 }
 
@@ -58,21 +76,12 @@ impl BitcoinClient for TestBitcoinClient {
     fn get_network_type(&self) -> Network {
         Network::Testnet
     }
-
-    async fn send(&self, tx: &SendTransaction) -> Result<Txid, String> {
-        if let Some(function) = &self.send_handler {
-            return function(tx);
-        }
-        Err("Not handled".to_owned())
-    }
 }
 
 // ======================= TEST SPV CLIENT ==============================
 /// An bitcoin SPV client for testing
 pub struct TestBitcoinSPVClient {
     map_utxos: Mutex<HashMap<String, Vec<BtcUTXO>>>,
-    send_handler:
-        Option<Box<dyn Fn(&SendTransaction) -> Result<Txid, String> + Send + Sync + 'static>>,
 }
 
 impl TestBitcoinSPVClient {
@@ -80,7 +89,6 @@ impl TestBitcoinSPVClient {
     pub fn new() -> Self {
         TestBitcoinSPVClient {
             map_utxos: Mutex::new(HashMap::new()),
-            send_handler: None,
         }
     }
 
@@ -88,26 +96,10 @@ impl TestBitcoinSPVClient {
     pub fn add_utxos_for_address(&self, address: String, utxos: Vec<BtcUTXO>) {
         self.map_utxos.lock().unwrap().insert(address, utxos);
     }
-
-    /// Set the handler for send
-    pub fn set_send_handler<F>(&mut self, function: F)
-    where
-        F: 'static,
-        F: Fn(&SendTransaction) -> Result<Txid, String> + Send + Sync,
-    {
-        self.send_handler = Some(Box::new(function));
-    }
 }
 
 #[async_trait]
 impl BitcoinSPVClient for TestBitcoinSPVClient {
-    async fn send(&self, send_tx: &SendTransaction) -> Result<Txid, String> {
-        if let Some(function) = &self.send_handler {
-            return function(send_tx);
-        }
-        Err("Not handled".to_owned())
-    }
-
     async fn get_address_unspent(
         &self,
         address: &WalletAddress,

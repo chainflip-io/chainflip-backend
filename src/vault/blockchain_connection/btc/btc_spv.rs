@@ -1,4 +1,4 @@
-use super::{BitcoinSPVClient, SendTransaction};
+use super::{BitcoinSPVClient, IBitcoinSend, SendTransaction};
 use crate::{
     common::{Coin, GenericCoinAmount, WalletAddress},
     utils::bip44::{self, RawKey},
@@ -48,10 +48,12 @@ pub struct BtcSPVResponse {
 /// This will load from your `ELECTRUM_HOME` directory, normally something like `/Users/user/.electrum`
 /// 5. On initialising the client, use the above configuration settings, e.g.
 /// `BtcSPVClient::new(7777, "bitcoinrpc".to_string(), "Password123".to_string())`
+#[derive(Clone)]
 pub struct BtcSPVClient {
     port: u16,
     username: String,
     password: String,
+    network: bitcoin::Network,
 }
 
 pub struct SelectInputsResponse {
@@ -114,11 +116,12 @@ fn select_inputs_greedy(target: u128, utxos: Vec<BtcUTXO>) -> Option<SelectInput
 }
 
 impl BtcSPVClient {
-    fn new(port: u16, username: String, password: String) -> Self {
+    pub fn new(port: u16, username: String, password: String, network: bitcoin::Network) -> Self {
         BtcSPVClient {
             port,
             username,
             password,
+            network,
         }
     }
 
@@ -183,7 +186,16 @@ impl BtcSPVClient {
         let utxos = self.get_address_unspent(&send_to).await?.0;
 
         // Just add a 2000 sat fee for now, do fee estimation in next PR
-        let select_inputs = select_inputs_greedy(amount.to_atomic() + 2000, utxos).unwrap();
+        let select_inputs = match select_inputs_greedy(amount.to_atomic() + 2000, utxos) {
+            Some(inputs) => inputs,
+            None => {
+                return Err(format!(
+                    "Cannot send to {}, this wallet has less than {} Satoshis",
+                    send_to.to_string(),
+                    amount.to_atomic()
+                ));
+            }
+        };
         let inputs: Vec<BtcUTXO> = select_inputs.utxos;
         let change: u128 = select_inputs.change;
 
@@ -195,17 +207,20 @@ impl BtcSPVClient {
             compressed: true,
         };
 
-        // Need to pass the network in / get it from somewhere, not hardcoded
         // throws error if uncompressed pubkey provided (segwit must have compressed key)
-        let btc_sender_script_pubkey =
-            bitcoin::Address::p2wpkh(&sender_pubkey, bitcoin::Network::Testnet)
-                .unwrap()
-                .script_pubkey();
+        let btc_sender_script_pubkey = match bitcoin::Address::p2wpkh(&sender_pubkey, self.network)
+        {
+            Ok(addr) => addr.script_pubkey(),
+            Err(err) => {
+                error!("p2pwkh addresses must be created from a compressed edcsa public key, error: {}",  err.to_string());
+                return Err(err.to_string());
+            }
+        };
 
         let mut txins = vec![];
         for input in &inputs {
             let outpoint = OutPoint {
-                txid: Txid::from_str(&input.tx_hash).unwrap(),
+                txid: Txid::from_str(&input.tx_hash).map_err(|e| e.to_string())?,
                 vout: input.tx_pos as u32,
             };
 
@@ -245,8 +260,6 @@ impl BtcSPVClient {
             output: txouts,
         };
 
-        let unsigned_hex_tx = hex::encode(serialize(&transaction));
-
         Ok((transaction, inputs))
     }
 
@@ -264,7 +277,7 @@ impl BtcSPVClient {
         };
 
         let sender_script_pubkey =
-            bitcoin::Address::p2pkh(&btc_sender_pubkey, bitcoin::Network::Testnet).script_pubkey();
+            bitcoin::Address::p2pkh(&btc_sender_pubkey, self.network).script_pubkey();
 
         // We must sign each input individually
         let input_count = tx.input.len();
@@ -378,7 +391,10 @@ impl BitcoinSPVClient for BtcSPVClient {
 
         Ok(unspent_response)
     }
+}
 
+#[async_trait]
+impl IBitcoinSend for BtcSPVClient {
     /// Sends a transaction to an address.
     async fn send(&self, send_tx: &SendTransaction) -> Result<Txid, String> {
         let (tx, utxos) = self.construct_raw_tx(&send_tx).await?;
@@ -406,7 +422,12 @@ mod test {
     }
 
     fn get_test_BtcSPVClient() -> BtcSPVClient {
-        BtcSPVClient::new(7777, "bitcoinrpc".to_string(), "Password123".to_string())
+        BtcSPVClient::new(
+            7777,
+            "bitcoinrpc".to_string(),
+            "Password123".to_string(),
+            bitcoin::Network::Testnet,
+        )
     }
 
     #[test]
@@ -463,7 +484,7 @@ mod test {
         };
 
         let send_to_btc_addr =
-            bitcoin::Address::p2wpkh(&send_to_btc_pubkey, bitcoin::Network::Testnet).unwrap();
+            bitcoin::Address::p2wpkh(&send_to_btc_pubkey, client.network).unwrap();
 
         // send to self
         let send_transaction = SendTransaction {
