@@ -34,18 +34,27 @@ pub struct QuoteParams {
 /// Response for the v1/quote endpoint
 #[serde(rename_all = "camelCase")]
 #[derive(Debug, Deserialize, Serialize)]
-pub struct QuoteResponse {
-    id: Uuid,         // unique id
-    created_at: u128, // milliseconds from epoch
-    expires_at: u128, // milliseconds from epoch
-    input_coin: Coin,
-    input_address: String,                // Generated on the server,
-    input_return_address: Option<String>, // User specified address,
-    input_amount: String,
-    output_coin: Coin,
-    output_address: String,
-    estimated_output_amount: String, // Generated on the server. Quoted amount.
-    slippage_limit: f32,
+pub struct SwapQuoteResponse {
+    /// Quote id
+    pub id: Uuid,
+    /// Quote creation timestamp in milliseconds
+    pub created_at: u128,
+    /// Quote expire timestamp in milliseconds
+    pub expires_at: u128,
+    /// Input coin
+    pub input_coin: Coin,
+    /// Input address (Generated on the server)
+    pub input_address: String,
+    /// Input return address (User specified)
+    pub input_return_address: Option<String>,
+    /// The effective price (Input amount / Output amount)
+    pub effective_price: f64,
+    /// Output coin
+    pub output_coin: Coin,
+    /// Output address
+    pub output_address: String,
+    /// Slippage limit
+    pub slippage_limit: f32,
 }
 
 fn bad_request(message: &str) -> ResponseError {
@@ -117,7 +126,7 @@ fn generate_btc_address(
 pub async fn post_quote<T: TransactionProvider>(
     params: QuoteParams,
     provider: Arc<RwLock<T>>,
-) -> Result<QuoteResponse, ResponseError> {
+) -> Result<SwapQuoteResponse, ResponseError> {
     let original_params = params.clone();
 
     if let Err(err) = validation::validate_params(&params) {
@@ -231,17 +240,16 @@ pub async fn post_quote<T: TransactionProvider>(
             internal_server_error()
         })?;
 
-    Ok(QuoteResponse {
+    Ok(SwapQuoteResponse {
         id: quote.id,
         created_at: quote.timestamp.0,
         expires_at: get_swap_expire_timestamp(&quote.timestamp).0,
         input_coin,
         input_address: input_address.to_string(),
         input_return_address: params.input_return_address,
-        input_amount: params.input_amount,
+        effective_price,
         output_coin,
         output_address: params.output_address,
-        estimated_output_amount: estimated_output_amount.to_string(),
         slippage_limit: params.slippage_limit,
     })
 }

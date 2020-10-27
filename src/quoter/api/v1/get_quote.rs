@@ -1,10 +1,10 @@
 use crate::{
-    common::{api::ResponseError, coins::Coin},
+    common::api::ResponseError,
     quoter::StateProvider,
-    vault::processor::utils::get_swap_expire_timestamp,
+    vault::{api::v1::post_quote::SwapQuoteResponse, processor::utils::get_swap_expire_timestamp},
 };
 use reqwest::StatusCode;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::{
     str::FromStr,
     sync::{Arc, Mutex},
@@ -19,22 +19,6 @@ pub struct GetQuoteParams {
     pub id: String,
 }
 
-/// Response for GET `quote` endpoint
-#[serde(rename_all = "camelCase")]
-#[derive(Debug, Serialize, Deserialize)]
-pub struct QuoteResponse {
-    id: Uuid,         // unique id
-    created_at: u128, // milliseconds from epoch
-    expires_at: u128, // milliseconds from epoch
-    input_coin: Coin,
-    input_address: String,                // Generated on the server,
-    input_return_address: Option<String>, // User specified address,
-    effective_price: f64,
-    output_coin: Coin,
-    output_address: String,
-    slippage_limit: f32,
-}
-
 /// Get information about a quote
 ///
 /// # Example Query
@@ -43,7 +27,7 @@ pub struct QuoteResponse {
 pub async fn get_quote<S>(
     params: GetQuoteParams,
     state: Arc<Mutex<S>>,
-) -> Result<Option<QuoteResponse>, ResponseError>
+) -> Result<Option<SwapQuoteResponse>, ResponseError>
 where
     S: StateProvider,
 {
@@ -61,7 +45,7 @@ where
     let quote = state.lock().unwrap().get_swap_quote_tx(id);
     let response = match quote {
         Some(quote) => {
-            let response = QuoteResponse {
+            let response = SwapQuoteResponse {
                 id: quote.id,
                 created_at: quote.timestamp.0,
                 expires_at: get_swap_expire_timestamp(&quote.timestamp).0,
