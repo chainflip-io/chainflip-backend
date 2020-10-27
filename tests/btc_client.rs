@@ -53,7 +53,7 @@ async fn test_btc_send() {
     let key_pair = KeyPair::from_private_key(&config.sender_private_key).unwrap();
 
     let btc_pubkey = bitcoin::PublicKey {
-        key: key_pair.public_key,
+        key: bitcoin::secp256k1::PublicKey::from_slice(&key_pair.public_key.serialize()).unwrap(),
         compressed: false,
     };
 

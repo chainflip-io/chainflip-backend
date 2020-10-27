@@ -72,7 +72,7 @@ impl BitcoinClient for TestBitcoinClient {
 pub struct TestBitcoinSPVClient {
     map_utxos: Mutex<HashMap<String, Vec<BtcUTXO>>>,
     send_handler:
-        Option<Box<dyn Fn(WalletAddress, u128) -> Result<Txid, String> + Send + Sync + 'static>>,
+        Option<Box<dyn Fn(&SendTransaction) -> Result<Txid, String> + Send + Sync + 'static>>,
 }
 
 impl TestBitcoinSPVClient {
@@ -93,7 +93,7 @@ impl TestBitcoinSPVClient {
     pub fn set_send_handler<F>(&mut self, function: F)
     where
         F: 'static,
-        F: Fn(WalletAddress, u128) -> Result<Txid, String> + Send + Sync,
+        F: Fn(&SendTransaction) -> Result<Txid, String> + Send + Sync,
     {
         self.send_handler = Some(Box::new(function));
     }
@@ -101,9 +101,9 @@ impl TestBitcoinSPVClient {
 
 #[async_trait]
 impl BitcoinSPVClient for TestBitcoinSPVClient {
-    async fn send(&self, destination: WalletAddress, amount: u128) -> Result<Txid, String> {
+    async fn send(&self, send_tx: &SendTransaction) -> Result<Txid, String> {
         if let Some(function) = &self.send_handler {
-            return function(destination, amount);
+            return function(send_tx);
         }
         Err("Not handled".to_owned())
     }

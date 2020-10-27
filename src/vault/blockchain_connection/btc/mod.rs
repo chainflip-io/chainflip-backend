@@ -48,6 +48,7 @@ pub trait BitcoinSPVClient {
 
     /// Sends a transaction to an address.
     /// # Prerequisite
+    /// TODO: May not be true after this
     /// Wallet must be loaded into the electrum client for the funds to be spent
-    async fn send(&self, destination: WalletAddress, atomic_amount: u128) -> Result<Txid, String>;
+    async fn send(&self, send_tx: &SendTransaction) -> Result<Txid, String>;
 }

@@ -1,11 +1,20 @@
-use serde::Deserialize;
-
-use super::BitcoinSPVClient;
-use crate::common::{coins::CoinAmount, Coin, GenericCoinAmount, WalletAddress};
-use bitcoin::consensus::encode::deserialize;
-use bitcoin::Transaction;
-use bitcoin::Txid;
+use super::{BitcoinSPVClient, SendTransaction};
+use crate::{
+    common::{Coin, GenericCoinAmount, WalletAddress},
+    utils::bip44::{self, RawKey},
+};
+use async_trait::async_trait;
+use bip44::KeyPair;
+use bitcoin::util::bip143::SigHashCache;
+use bitcoin::{
+    blockdata::{script::*, transaction::*},
+    consensus::encode::{deserialize, serialize},
+    Transaction, Txid,
+};
+use core::str::FromStr;
+use hdwallet::secp256k1::{Message, Secp256k1};
 use hex::FromHex;
+use serde::Deserialize;
 
 /// Electrum SPV error
 #[derive(Debug, Deserialize)]
@@ -43,6 +52,65 @@ pub struct BtcSPVClient {
     port: u16,
     username: String,
     password: String,
+}
+
+pub struct SelectInputsResponse {
+    utxos: Vec<BtcUTXO>,
+    change: u128,
+}
+
+// we have to choose inputs that are greater than the fee too
+// TODO: In next PR account for fees
+fn select_inputs_greedy(target: u128, utxos: Vec<BtcUTXO>) -> Option<SelectInputsResponse> {
+    if utxos.len() == 0 {
+        return None;
+    }
+
+    let (mut lessers, greaters): (Vec<BtcUTXO>, Vec<BtcUTXO>) =
+        utxos.into_iter().partition(|utxo| {
+            let value = utxo.value as u128;
+            value < target
+        });
+
+    let mut input_utxos: Vec<BtcUTXO> = vec![];
+
+    let mut change: u128 = 0;
+    let mut can_send: bool = false;
+    if greaters.len() > 0 {
+        let min_greater = greaters
+            .into_iter()
+            .min_by(|x, y| x.value.cmp(&y.value))
+            .unwrap();
+        change = min_greater.value as u128 - target;
+        input_utxos.push(min_greater.to_owned());
+        can_send = true;
+    } else {
+        lessers.sort_by(|x, y| x.value.cmp(&y.value));
+        let mut sum: u64 = 0;
+        for utxo in lessers {
+            sum = sum
+                .checked_add(utxo.value)
+                .expect("Sum overflowed when aggregating UTXOs");
+            input_utxos.push(utxo);
+
+            // we have enough utxos to build the tx
+            if sum as u128 >= target {
+                change = sum as u128 - target;
+                can_send = true;
+                break;
+            }
+        }
+    }
+
+    // if it doesn't make up the full amount
+    if !can_send {
+        return None;
+    }
+
+    Some(SelectInputsResponse {
+        utxos: input_utxos,
+        change,
+    })
 }
 
 impl BtcSPVClient {
@@ -101,6 +169,161 @@ impl BtcSPVClient {
             Err("Neither result no error present in response".to_owned())
         }
     }
+
+    // TODO: ESTIMATE FEES - IN THE NEXT PR
+
+    /// Constructs a raw transaction, aggregating a wallet's UTXOs for sending
+    async fn construct_raw_tx(
+        &self,
+        send_transaction: &SendTransaction,
+    ) -> Result<(Transaction, Vec<BtcUTXO>), String> {
+        let send_to = WalletAddress(send_transaction.to.to_string());
+        let amount = send_transaction.amount;
+        let keypair = send_transaction.from.clone();
+        let utxos = self.get_address_unspent(&send_to).await?.0;
+
+        // Just add a 2000 sat fee for now, do fee estimation in next PR
+        let select_inputs = select_inputs_greedy(amount.to_atomic() + 2000, utxos).unwrap();
+        let inputs: Vec<BtcUTXO> = select_inputs.utxos;
+        let change: u128 = select_inputs.change;
+
+        let sender_pubkey = bitcoin::PublicKey {
+            // convert between two crate versions of PublicKey
+            key: bitcoin::secp256k1::PublicKey::from_slice(&keypair.public_key.serialize())
+                .unwrap(),
+            // for Segwit the key must be compressed
+            compressed: true,
+        };
+
+        // Need to pass the network in / get it from somewhere, not hardcoded
+        // throws error if uncompressed pubkey provided (segwit must have compressed key)
+        let btc_sender_script_pubkey =
+            bitcoin::Address::p2wpkh(&sender_pubkey, bitcoin::Network::Testnet)
+                .unwrap()
+                .script_pubkey();
+
+        let mut txins = vec![];
+        for input in &inputs {
+            let outpoint = OutPoint {
+                txid: Txid::from_str(&input.tx_hash).unwrap(),
+                vout: input.tx_pos as u32,
+            };
+
+            let txin = TxIn {
+                previous_output: outpoint,
+                // empty sig for segwit UTXOs
+                script_sig: Script::new(),
+                // I assume this is the position in the new tx?
+                sequence: 0xFFFFFFFF,
+                // add later
+                witness: Vec::default(),
+            };
+            txins.push(txin);
+        }
+
+        let send_to_script_pubkey = send_transaction.to.script_pubkey();
+
+        // Change (unspent from inputs must be sent back to sending wallet)
+        let change_tx_out = TxOut {
+            value: change as u64, // -fee from the sender's "wallet" -> Already included in the selection of utxos
+            script_pubkey: btc_sender_script_pubkey,
+        };
+
+        // Actual outgoing transaction
+        let send_tx_out = TxOut {
+            value: amount.to_atomic() as u64,
+            script_pubkey: send_to_script_pubkey,
+        };
+
+        let txouts: Vec<TxOut> = vec![change_tx_out, send_tx_out];
+
+        let transaction = Transaction {
+            version: 2,
+            // confirm as soon as possible
+            lock_time: 0,
+            input: txins,
+            output: txouts,
+        };
+
+        let unsigned_hex_tx = hex::encode(serialize(&transaction));
+
+        Ok((transaction, inputs))
+    }
+
+    // takes a mutable tx and adds the required signatures for a segwit transaction
+    async fn sign_tx(
+        &self,
+        mut tx: Transaction,
+        utxos: Vec<BtcUTXO>,
+        keypair: &KeyPair,
+    ) -> Result<Transaction, String> {
+        let btc_sender_pubkey = bitcoin::PublicKey {
+            key: bitcoin::secp256k1::PublicKey::from_slice(&keypair.public_key.serialize())
+                .unwrap(),
+            compressed: true,
+        };
+
+        let sender_script_pubkey =
+            bitcoin::Address::p2pkh(&btc_sender_pubkey, bitcoin::Network::Testnet).script_pubkey();
+
+        // We must sign each input individually
+        let input_count = tx.input.len();
+        let mut sig_hasher = SigHashCache::new(&mut tx);
+        for index in 0..input_count {
+            let sighash = sig_hasher
+                .signature_hash(
+                    index,
+                    &sender_script_pubkey,
+                    utxos[index].value,
+                    SigHashType::All,
+                )
+                .as_hash();
+
+            // sign the sighash
+            let secp = Secp256k1::new();
+            let msg = Message::from_slice(&sighash[..]).map_err(|err| err.to_string())?;
+            let sig = secp.sign(&msg, &keypair.private_key).serialize_der();
+
+            match secp.verify(&msg, &sig.to_signature().unwrap(), &keypair.public_key) {
+                Ok(res) => res,
+                Err(err) => {
+                    error!("Signing of sighash failed with error: {}", err);
+                    return Err(err.to_string());
+                }
+            };
+            // Add byte string
+            let mut sig = sig.to_vec();
+            // Add SIGHASHALL byte
+            sig.push(0x01);
+
+            let pubkey_bytes = btc_sender_pubkey.key.serialize().to_vec();
+
+            sig_hasher.access_witness(index).push(sig);
+            sig_hasher.access_witness(index).push(pubkey_bytes);
+        }
+
+        Ok(tx)
+    }
+
+    // take a pre-prepared serialized tx and broadcast it to the network
+    async fn broadcast_tx(&self, tx: String) -> Result<Txid, String> {
+        // only takes one "tx" arg
+        let params = serde_json::json!({ "tx": tx });
+
+        let res = self
+            .send_req_inner("broadcast", params)
+            .await
+            .map_err(|err| err.to_string())?;
+
+        let txid_str = res
+            .as_str()
+            .ok_or("Could not cast result to string")
+            .map_err(|e| e.to_string())?;
+
+        let txid = Txid::from_str(txid_str).map_err(|e| e.to_string())?;
+
+        Ok(txid)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -157,61 +380,33 @@ impl BitcoinSPVClient for BtcSPVClient {
     }
 
     /// Sends a transaction to an address.
-    /// # Prerequisite
-    /// Wallet must be loaded into the electrum client for the funds to be spent
-    async fn send(&self, destination: WalletAddress, atomic_amount: u128) -> Result<Txid, String> {
-        // Convert atomic amount to BTC amount the rpc expects
-        let amount = GenericCoinAmount::from_atomic(Coin::BTC, atomic_amount);
-        let btc_amount = amount.to_decimal();
+    async fn send(&self, send_tx: &SendTransaction) -> Result<Txid, String> {
+        let (tx, utxos) = self.construct_raw_tx(&send_tx).await?;
 
-        // amount in BTC
-        let params = serde_json::json!({
-            "destination": destination,
-            "amount": btc_amount
-        });
+        let signed_tx = self.sign_tx(tx, utxos, &send_tx.from).await?;
 
-        // returns a hex string of the transaction
-        let res = self
-            .send_req_inner("payto", params)
-            .await
-            .map_err(|err| err.to_string())?;
+        let signed_hex_tx = hex::encode(serialize(&signed_tx));
 
-        let hex_tx = res.as_str().ok_or("Could not cast result to string")?;
-
-        let tx = decode_hex_tx(hex_tx)?;
-
-        Ok(tx.txid())
+        self.broadcast_tx(signed_hex_tx).await
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::utils::test_utils::btc::TestBitcoinSPVClient;
+    use bitcoin::{PrivateKey, PublicKey};
+
+    // The (testnet) segwit public key for this address is: tb1q6898gg3tkkjurdpl4cghaqgmyvs29p4x4h0552
+    fn get_key_pair() -> KeyPair {
+        KeyPair::from_private_key(
+            "58a99f6e6f89cbbb7fc8c86ea95e6012b68a9cd9a41c4ffa7c8f20c201d0667f",
+        )
+        .unwrap()
+    }
 
     fn get_test_BtcSPVClient() -> BtcSPVClient {
         BtcSPVClient::new(7777, "bitcoinrpc".to_string(), "Password123".to_string())
-    }
-
-    #[tokio::test]
-    #[ignore = "Requires local setup and dependent on chain values that may change"]
-    async fn get_address_unspent_test() {
-        let client = get_test_BtcSPVClient();
-        let address = WalletAddress("tb1q62pygrp8af7v0gzdjycnnqcm9syhpdg6a0kunk".to_string());
-        let result = client.get_address_unspent(&address).await;
-
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    #[ignore = "Requires local setup and dependent on chain values that may change"]
-    async fn send_test() {
-        let client = get_test_BtcSPVClient();
-
-        let send_to = WalletAddress("tb1q62pygrp8af7v0gzdjycnnqcm9syhpdg6a0kunk".to_string());
-
-        let data = client.send(send_to, 100).await;
-
-        assert!(data.is_ok());
     }
 
     #[test]
@@ -222,5 +417,105 @@ mod test {
         let real_tx = tx.unwrap();
         let outputs = real_tx.output;
         assert_eq!(outputs.first().unwrap().value, 1000);
+    }
+
+    #[tokio::test]
+    #[ignore = "Dependent on BTC SPV Client"]
+    async fn get_address_unspent_test() {
+        let client = get_test_BtcSPVClient();
+        let address = WalletAddress("tb1q62pygrp8af7v0gzdjycnnqcm9syhpdg6a0kunk".to_string());
+        let result = client.get_address_unspent(&address).await;
+
+        assert!(result.is_ok());
+    }
+
+    fn fake_return_utxos() -> Vec<BtcUTXO> {
+        let utxo1 = BtcUTXO::new(
+            250000,
+            "a9ec47601a25f0cc27c63c78cab3d446294c5eccb171f3973ee9979c00bee432".to_string(),
+            0,
+            2000,
+        );
+        let utxo2 = BtcUTXO::new(
+            250002,
+            "b9ec47601a25f0cd27c63c78cab3d446294c5eccb171f3973ee9979c00bee442".to_string(),
+            0,
+            4000,
+        );
+        vec![utxo1, utxo2]
+    }
+
+    #[tokio::test]
+    #[ignore = "Depends on SPV client"]
+    async fn constructs_raw_tx_signs_and_sends_tx() {
+        // let client = TestBitcoinSPVClient::new();
+        let client = get_test_BtcSPVClient();
+
+        let amount = GenericCoinAmount::from_atomic(Coin::BTC, 200);
+        let keypair = get_key_pair();
+
+        let send_to_btc_pubkey = bitcoin::PublicKey {
+            // convert between two crate versions of PublicKey
+            key: bitcoin::secp256k1::PublicKey::from_slice(&keypair.public_key.serialize())
+                .unwrap(),
+            // Segwit is always compressed
+            compressed: true,
+        };
+
+        let send_to_btc_addr =
+            bitcoin::Address::p2wpkh(&send_to_btc_pubkey, bitcoin::Network::Testnet).unwrap();
+
+        // send to self
+        let send_transaction = SendTransaction {
+            from: keypair,
+            to: send_to_btc_addr,
+            amount,
+        };
+
+        let tx = client.send(&send_transaction).await;
+        assert!(tx.is_ok());
+    }
+
+    #[test]
+    fn get_greedy_inputs_greater() {
+        let target = 500;
+        let utxos = fake_return_utxos();
+        let inputs = select_inputs_greedy(target, utxos.clone()).unwrap().utxos;
+        let first = inputs.first().unwrap();
+        assert_eq!(
+            first.tx_hash,
+            "a9ec47601a25f0cc27c63c78cab3d446294c5eccb171f3973ee9979c00bee432"
+        );
+        assert_eq!(inputs.len(), 1);
+
+        let target = 3000;
+        let select_inputs = select_inputs_greedy(target, utxos.clone()).unwrap();
+        let inputs = select_inputs.utxos;
+        let change = select_inputs.change;
+        let first = inputs.first().unwrap();
+        assert_eq!(
+            first.tx_hash,
+            "b9ec47601a25f0cd27c63c78cab3d446294c5eccb171f3973ee9979c00bee442"
+        );
+        assert_eq!(inputs.len(), 1);
+        assert_eq!(change, 1000);
+    }
+
+    #[test]
+    fn get_greedy_inputs_combined() {
+        let target = 5000;
+        let utxos = fake_return_utxos();
+        let select_inputs = select_inputs_greedy(target, utxos.clone()).unwrap();
+        let inputs = select_inputs.utxos;
+        let change = select_inputs.change;
+        // both utxos required to make up the full amount
+        assert_eq!(inputs.len(), 2);
+        assert_eq!(change, 1000);
+    }
+
+    #[test]
+    #[ignore]
+    fn get_greedy_inputs_with_fee() {
+        todo!()
     }
 }
