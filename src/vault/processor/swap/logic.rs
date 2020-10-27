@@ -240,7 +240,6 @@ mod test {
                 transaction_index: 0,
                 amount: to_atomic(Coin::ETH, "1500.0"),
                 coin: Coin::ETH,
-                sender: None,
             },
             WitnessTx {
                 id: Uuid::new_v4(),
@@ -251,7 +250,6 @@ mod test {
                 transaction_index: 0,
                 amount: to_atomic(Coin::ETH, "1000.0"),
                 coin: Coin::ETH,
-                sender: None,
             },
         ];
 

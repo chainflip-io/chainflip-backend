@@ -2,10 +2,25 @@ use std::sync::{Arc, Mutex};
 
 use crossbeam_channel::Receiver;
 
-use crate::common::{Block, Coin, Timestamp};
+use crate::common::{Coin, Timestamp, WalletAddress};
 use crate::side_chain::{ISideChain, SideChainTx};
-use crate::transactions::{CoinTx, QuoteTx, WitnessTx};
+use crate::transactions::{QuoteTx, WitnessTx};
 use uuid::Uuid;
+
+#[derive(Debug)]
+pub struct CoinTx {
+    pub id: Uuid,
+    pub timestamp: Timestamp,
+    pub deposit_address: WalletAddress,
+    pub return_address: Option<WalletAddress>,
+}
+
+/// A representation of a block on some blockchain
+#[derive(Debug)]
+pub struct Block {
+    /// Transactions that belong to this block
+    pub txs: Vec<CoinTx>,
+}
 
 /// Witness Fake
 pub struct FakeWitness<T>
@@ -117,7 +132,6 @@ where
             transaction_index: 0,
             amount: 0,
             coin: Coin::LOKI,
-            sender: None,
         };
 
         let tx = SideChainTx::WitnessTx(tx);

@@ -273,8 +273,8 @@ mod test {
         common::WalletAddress,
         transactions::{OutputSentTx, PoolChangeTx, StakeQuoteTx, WitnessTx},
         utils::test_utils::create_fake_output_tx,
-        utils::test_utils::create_fake_quote_tx_eth_loki,
         utils::test_utils::TEST_ETH_ADDRESS,
+        utils::test_utils::{create_fake_quote_tx_eth_loki, create_fake_stake_quote},
     };
     use rusqlite::NO_PARAMS;
 
@@ -348,7 +348,7 @@ mod test {
         let transactions: Vec<SideChainTx> = vec![
             PoolChangeTx::new(PoolCoin::BTC, 100, -100).into(),
             create_fake_quote_tx_eth_loki().into(), // Quote Tx
-            StakeQuoteTx::new(payment_id, 100, PoolCoin::BTC, 200, "id".to_owned()).into(),
+            create_fake_stake_quote(PoolCoin::ETH).into(),
             WitnessTx::new(
                 Timestamp::now(),
                 Uuid::new_v4(),
@@ -357,7 +357,6 @@ mod test {
                 0,
                 100,
                 Coin::ETH,
-                None,
             )
             .into(),
             create_fake_output_tx(Coin::ETH).into(), // Output tx

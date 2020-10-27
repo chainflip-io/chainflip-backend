@@ -110,14 +110,16 @@ impl QuoteTx {
 pub struct StakeQuoteTx {
     /// A unique identifier
     pub id: Uuid,
-    /// Info used to uniquely identify payment
-    pub input_loki_address_id: LokiPaymentId,
-    /// Loki amount that is meant to be deposited
-    pub loki_atomic_amount: u128,
     /// Other coin's type
     pub coin_type: PoolCoin,
-    /// Amount of the other (non-Loki) pool coin
-    pub coin_atomic_amount: u128,
+    /// The coin input address
+    pub coin_input_address: WalletAddress,
+    /// The coin input address id
+    pub coin_input_address_id: String,
+    /// The loki input address
+    pub loki_input_address: WalletAddress,
+    /// Info used to uniquely identify payment
+    pub loki_input_address_id: LokiPaymentId,
     /// Stakers identity
     pub staker_id: String,
 }
@@ -125,38 +127,35 @@ pub struct StakeQuoteTx {
 impl StakeQuoteTx {
     /// Create a new stake quote tx
     pub fn new(
-        input_loki_address_id: LokiPaymentId,
-        loki_atomic_amount: u128,
         coin_type: PoolCoin,
-        coin_atomic_amount: u128,
+        coin_input_address: WalletAddress,
+        coin_input_address_id: String,
+        loki_input_address: WalletAddress,
+        loki_input_address_id: LokiPaymentId,
         staker_id: String,
-    ) -> Self {
-        Self {
-            id: Uuid::new_v4(),
-            input_loki_address_id,
-            loki_atomic_amount,
-            coin_type,
-            coin_atomic_amount,
-            staker_id,
+    ) -> Result<Self, &'static str> {
+        if validate_address_id(coin_type.get_coin(), &coin_input_address_id).is_err() {
+            return Err("Coin input address id is invalid");
         }
-    }
 
-    pub fn loki_amount(&self) -> LokiAmount {
-        LokiAmount::from_atomic(self.loki_atomic_amount)
-    }
+        if validate_address(coin_type.get_coin(), &coin_input_address.0).is_err() {
+            return Err("Coin input address is invalid");
+        }
 
-    pub fn coin_amount(&self) -> GenericCoinAmount {
-        GenericCoinAmount::from_atomic(self.coin_type.get_coin(), self.coin_atomic_amount)
-    }
-}
+        if validate_address(Coin::LOKI, &loki_input_address.0).is_err() {
+            return Err("Loki input address is invalid");
+        }
 
-// This might be obsolete...
-#[derive(Debug)]
-pub struct CoinTx {
-    pub id: Uuid,
-    pub timestamp: Timestamp,
-    pub deposit_address: WalletAddress,
-    pub return_address: Option<WalletAddress>,
+        Ok(Self {
+            id: Uuid::new_v4(),
+            coin_type,
+            coin_input_address,
+            coin_input_address_id,
+            loki_input_address,
+            loki_input_address_id,
+            staker_id,
+        })
+    }
 }
 
 /// Witness transaction stored on the Side Chain
@@ -179,8 +178,6 @@ pub struct WitnessTx {
     pub amount: u128,
     /// The coin type in which the transaction was made
     pub coin: Coin,
-    /// The sender of the transaction
-    pub sender: Option<WalletAddress>,
 }
 
 impl PartialEq<WitnessTx> for WitnessTx {
@@ -199,7 +196,6 @@ impl WitnessTx {
         transaction_index: u64,
         amount: u128,
         coin: Coin,
-        sender: Option<WalletAddress>,
     ) -> Self {
         WitnessTx {
             id: Uuid::new_v4(),
@@ -210,7 +206,6 @@ impl WitnessTx {
             transaction_index,
             amount,
             coin,
-            sender,
         }
     }
 }

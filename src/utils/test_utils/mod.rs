@@ -28,6 +28,8 @@ pub use fake_txs::{create_fake_stake_quote, create_fake_witness};
 pub const TEST_ETH_ADDRESS: &str = "0x70e7db0678460c5e53f1ffc9221d1c692111dcc5";
 /// Test LOKI address
 pub const TEST_LOKI_ADDRESS: &str = "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY";
+/// Test BTC address
+pub const TEST_BTC_ADDRESS: &str = "3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy";
 
 /// Create a dummy quote transaction to be used for tests
 pub fn create_fake_quote_tx_eth_loki() -> QuoteTx {

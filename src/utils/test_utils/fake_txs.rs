@@ -1,33 +1,35 @@
 use crate::{
     common::Timestamp,
-    common::{Coin, GenericCoinAmount, LokiAmount, LokiPaymentId, PoolCoin, WalletAddress},
+    common::{Coin, GenericCoinAmount, LokiPaymentId, PoolCoin, WalletAddress},
     transactions::{StakeQuoteTx, WitnessTx},
 };
 use std::str::FromStr;
 use uuid::Uuid;
 
+use super::{TEST_BTC_ADDRESS, TEST_ETH_ADDRESS, TEST_LOKI_ADDRESS};
+
 /// Create a fake stake quote transaction for testing
-pub fn create_fake_stake_quote(
-    loki_amount: LokiAmount,
-    coin_amount: GenericCoinAmount,
-) -> StakeQuoteTx {
+pub fn create_fake_stake_quote(coin: PoolCoin) -> StakeQuoteTx {
     let staker_id = Uuid::new_v4().to_string();
-    create_fake_stake_quote_for_id(&staker_id, loki_amount, coin_amount)
+    create_fake_stake_quote_for_id(&staker_id, coin)
 }
 
 /// Create a fake stake quote transaction for a specific staker (for testing only)
-pub fn create_fake_stake_quote_for_id(
-    staker_id: &str,
-    loki_amount: LokiAmount,
-    coin_amount: GenericCoinAmount,
-) -> StakeQuoteTx {
+pub fn create_fake_stake_quote_for_id(staker_id: &str, coin: PoolCoin) -> StakeQuoteTx {
+    let address = match coin.get_coin() {
+        Coin::BTC => TEST_BTC_ADDRESS,
+        Coin::ETH => TEST_ETH_ADDRESS,
+        _ => panic!("Failed to create fake stake quote"),
+    };
+
     StakeQuoteTx {
         id: Uuid::new_v4(),
-        input_loki_address_id: LokiPaymentId::from_str("60900e5603bf96e3").unwrap(),
-        loki_atomic_amount: loki_amount.to_atomic(),
-        coin_type: PoolCoin::from(coin_amount.coin_type()).expect("invalid coin type"),
-        coin_atomic_amount: coin_amount.to_atomic(),
+        coin_type: coin,
+        loki_input_address: WalletAddress::new(TEST_LOKI_ADDRESS),
+        loki_input_address_id: LokiPaymentId::from_str("60900e5603bf96e3").unwrap(),
         staker_id: staker_id.to_string(),
+        coin_input_address: WalletAddress::new(address),
+        coin_input_address_id: "6".to_string(),
     }
 }
 
@@ -45,6 +47,5 @@ where
         transaction_index: 0,
         amount: amount.into().to_atomic(),
         coin,
-        sender: None,
     }
 }

@@ -82,17 +82,15 @@ where
                 }
 
                 for utxo in utxos.0 {
-                    let tx = WitnessTx {
-                        id: Uuid::new_v4(),
-                        quote_id: quote_inner.id,
-                        transaction_id: utxo.tx_hash.clone(),
-                        transaction_block_number: utxo.height,
-                        transaction_index: utxo.tx_pos,
-                        amount: utxo.value as u128,
-                        timestamp: Timestamp::now(),
-                        coin: Coin::BTC,
-                        sender: None,
-                    };
+                    let tx = WitnessTx::new(
+                        Timestamp::now(),
+                        quote_inner.id,
+                        utxo.tx_hash.clone(),
+                        utxo.height,
+                        utxo.tx_pos,
+                        utxo.value as u128,
+                        Coin::BTC,
+                    );
 
                     witness_txs.push(tx);
                 }

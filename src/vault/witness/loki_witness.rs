@@ -148,7 +148,6 @@ where
             0,
             payment.amount.to_atomic(),
             Coin::LOKI,
-            None,
         );
 
         debug!("Adding witness tx: {:?}", &tx);
