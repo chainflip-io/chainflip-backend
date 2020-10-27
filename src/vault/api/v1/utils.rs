@@ -78,21 +78,20 @@ pub fn generate_btc_address(
 
 #[cfg(test)]
 mod test {
+    use crate::utils::test_utils::TEST_ROOT_KEY;
+
     use super::*;
 
     use bitcoin::AddressType::*;
 
-    // NEVER USE THIS IN AN ACTUAL APPLICATION! ONLY FOR TESTING
-    const ROOT_KEY: &str = "xprv9s21ZrQH143K3sFfKzYqgjMWgvsE44f6gxaRvyo11R22u2p5qegToQaEi7e6e5mRq3f92g9yDQQtu488ggct5gUspippg678t1QTCwBRb85";
-
     #[test]
     fn generates_correct_eth_address() {
         assert_eq!(
-            &generate_eth_address(ROOT_KEY, 0).unwrap(),
+            &generate_eth_address(TEST_ROOT_KEY, 0).unwrap(),
             "0x48575a3C8fa7D0469FD39eCB67ec68d8C7564637"
         );
         assert_eq!(
-            &generate_eth_address(ROOT_KEY, 1).unwrap(),
+            &generate_eth_address(TEST_ROOT_KEY, 1).unwrap(),
             "0xB46878bd2E68e2b3f5145ccB868E626572905c5F"
         );
     }
@@ -101,45 +100,45 @@ mod test {
     fn generates_correct_btc_address() {
         // === p2wpkh - pay-to-witness-pubkey-hash (segwit) addresses ===
         assert_eq!(
-            generate_btc_address(ROOT_KEY, 0, true, P2wpkh, &NetType::Mainnet).unwrap(),
+            generate_btc_address(TEST_ROOT_KEY, 0, true, P2wpkh, &NetType::Mainnet).unwrap(),
             "bc1qawvxp3jxlzj3ydcfjyq83cxkdxpu7st8az5hvq"
         );
 
         // testnet generates different addresses to mainnet
         assert_eq!(
-            generate_btc_address(ROOT_KEY, 0, true, P2wpkh, &NetType::Testnet).unwrap(),
+            generate_btc_address(TEST_ROOT_KEY, 0, true, P2wpkh, &NetType::Testnet).unwrap(),
             "tb1qawvxp3jxlzj3ydcfjyq83cxkdxpu7st8hy0yhn"
         );
 
         assert_eq!(
-            generate_btc_address(ROOT_KEY, 1, true, P2wpkh, &NetType::Mainnet).unwrap(),
+            generate_btc_address(TEST_ROOT_KEY, 1, true, P2wpkh, &NetType::Mainnet).unwrap(),
             "bc1q6uq0qny5pel4aane4cj0kuqz5sgkxczv6y4ypy"
         );
 
         // === p2pkh - pay-to-pubkey-hash (legacy) addresses ===
         assert_eq!(
-            generate_btc_address(ROOT_KEY, 0, false, P2pkh, &NetType::Mainnet).unwrap(),
+            generate_btc_address(TEST_ROOT_KEY, 0, false, P2pkh, &NetType::Mainnet).unwrap(),
             "1Q6hHytu6sZmib3TUNeEhGxE8L2ydx5JZo",
         );
 
         // testnet generates different addresses to mainnet
         assert_eq!(
-            generate_btc_address(ROOT_KEY, 0, false, P2pkh, &NetType::Testnet).unwrap(),
+            generate_btc_address(TEST_ROOT_KEY, 0, false, P2pkh, &NetType::Testnet).unwrap(),
             "n4ceb2ysuu12VhX5BwccXCAYzKdgZY2XFH",
         );
 
         assert_eq!(
-            generate_btc_address(ROOT_KEY, 1, true, P2pkh, &NetType::Mainnet).unwrap(),
+            generate_btc_address(TEST_ROOT_KEY, 1, true, P2pkh, &NetType::Mainnet).unwrap(),
             "1LbqQTsn9EJN1yWJ2YkQGtaihovjgs6cfW"
         );
 
         assert_eq!(
-            generate_btc_address(ROOT_KEY, 1, false, P2pkh, &NetType::Mainnet).unwrap(),
+            generate_btc_address(TEST_ROOT_KEY, 1, false, P2pkh, &NetType::Mainnet).unwrap(),
             "1PWyfwtkS9co1rTHvU2SSESbcu6zi2TmxH"
         );
 
         assert_ne!(
-            generate_btc_address(ROOT_KEY, 2, false, P2pkh, &NetType::Mainnet).unwrap(),
+            generate_btc_address(TEST_ROOT_KEY, 2, false, P2pkh, &NetType::Mainnet).unwrap(),
             "1LbqQTsn9EJN1yWJ2YkQGtaihovjgs6cfW"
         );
 

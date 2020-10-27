@@ -210,17 +210,15 @@ mod test {
     use super::*;
     use crate::{
         common::coins::PoolCoin, transactions::PoolChangeTx,
-        utils::test_utils::get_transactions_provider, vault::config::NetType,
+        utils::test_utils::get_transactions_provider, utils::test_utils::TEST_ROOT_KEY,
+        vault::config::NetType,
     };
-
-    // NEVER USE THIS IN AN ACTUAL APPLICATION! ONLY FOR TESTING
-    const ROOT_KEY: &str = "xprv9s21ZrQH143K3sFfKzYqgjMWgvsE44f6gxaRvyo11R22u2p5qegToQaEi7e6e5mRq3f92g9yDQQtu488ggct5gUspippg678t1QTCwBRb85";
 
     fn config() -> Config {
         Config {
             loki_wallet_address: "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".to_string(),
-            eth_master_root_key: ROOT_KEY.to_string(),
-            btc_master_root_key: ROOT_KEY.to_string(),
+            eth_master_root_key: TEST_ROOT_KEY.to_string(),
+            btc_master_root_key: TEST_ROOT_KEY.to_string(),
             net_type: NetType::Testnet
         }
     }
@@ -247,7 +245,7 @@ mod test {
             timestamp: Timestamp::now(),
             input: quote_params.input_coin,
             input_address: WalletAddress::new("T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY"),
-            input_address_id: quote_params.input_address_id,
+            input_address_id: quote_params.input_address_id.clone(),
             return_address: quote_params.input_return_address.clone().map(WalletAddress),
             output: quote_params.output_coin,
             slippage_limit: quote_params.slippage_limit,
@@ -258,9 +256,9 @@ mod test {
 
         let provider = Arc::new(RwLock::new(provider));
 
-        let result = swap(params(), provider, config())
+        let result = swap(quote_params, provider, config())
             .await
-            .expect_err("Expected post_quote to return error");
+            .expect_err("Expected swap to return error");
 
         assert_eq!(&result.message, "Quote already exists for input address id");
     }
@@ -273,7 +271,7 @@ mod test {
         // No pools yet
         let result = swap(params(), provider.clone(), config())
             .await
-            .expect_err("Expected post_quote to return error");
+            .expect_err("Expected swap to return error");
 
         assert_eq!(&result.message, "Not enough liquidity");
 
@@ -287,7 +285,7 @@ mod test {
 
         let result = swap(params(), provider.clone(), config())
             .await
-            .expect_err("Expected post_quote to return error");
+            .expect_err("Expected swap to return error");
 
         assert_eq!(&result.message, "Not enough liquidity");
     }
@@ -302,7 +300,7 @@ mod test {
 
         swap(params(), provider.clone(), config())
             .await
-            .expect("Expected to get a quote response");
+            .expect("Expected to get a swap response");
 
         assert_eq!(provider.read().get_quote_txs().len(), 1);
     }

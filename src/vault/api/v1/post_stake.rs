@@ -73,7 +73,7 @@ pub async fn stake<T: TransactionProvider>(
     let mut provider = provider.write();
     provider.sync();
 
-    // Ensure we don't have a quote with the address
+    // Ensure we don't have a quote with the input address
     if let Some(_) = provider.get_quote_txs().iter().find(|quote_info| {
         let quote = &quote_info.inner;
         let is_loki_quote =
@@ -184,6 +184,146 @@ pub async fn stake<T: TransactionProvider>(
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::{
+        utils::test_utils::create_fake_quote_tx, utils::test_utils::create_fake_stake_quote,
+        utils::test_utils::get_transactions_provider, utils::test_utils::TEST_ETH_ADDRESS,
+        utils::test_utils::TEST_LOKI_ADDRESS, utils::test_utils::TEST_ROOT_KEY,
+        vault::config::NetType,
+    };
 
-    // TODO: Add tests
+    fn config() -> Config {
+        Config {
+            loki_wallet_address: "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".to_string(),
+            eth_master_root_key: TEST_ROOT_KEY.to_string(),
+            btc_master_root_key: TEST_ROOT_KEY.to_string(),
+            net_type: NetType::Testnet
+        }
+    }
+
+    fn params() -> StakeQuoteParams {
+        StakeQuoteParams {
+            pool: Coin::ETH,
+            staker_id: "id".to_string(),
+            coin_input_address_id: "99999".to_string(),
+            loki_input_address_id: "b2d6a87ec06934ff".to_string(),
+        }
+    }
+
+    #[tokio::test]
+    async fn returns_error_if_invalid_pool_coin() {
+        let mut quote_params = params();
+        quote_params.pool = Coin::LOKI;
+
+        let provider = Arc::new(RwLock::new(get_transactions_provider()));
+        let result = stake(quote_params, provider, config())
+            .await
+            .expect_err("Expected stake to return error");
+
+        assert_eq!(&result.message, "Invalid pool specified");
+    }
+
+    #[tokio::test]
+    async fn returns_error_if_invalid_coin_input_address_id() {
+        let provider = Arc::new(RwLock::new(get_transactions_provider()));
+
+        for coin in vec![Coin::ETH, Coin::BTC] {
+            let mut quote_params = params();
+            quote_params.pool = coin;
+            quote_params.coin_input_address_id = "invalid".to_string();
+
+            let result = stake(quote_params, provider.clone(), config())
+                .await
+                .expect_err("Expected stake to return error");
+
+            assert_eq!(&result.message, "Invalid coin input address id");
+        }
+    }
+
+    #[tokio::test]
+    async fn returns_error_if_invalid_loki_input_address_id() {
+        let provider = Arc::new(RwLock::new(get_transactions_provider()));
+
+        let mut quote_params = params();
+        quote_params.pool = Coin::LOKI;
+        quote_params.coin_input_address_id = "invalid".to_string();
+
+        let result = stake(quote_params, provider.clone(), config())
+            .await
+            .expect_err("Expected stake to return error");
+
+        assert_eq!(&result.message, "Invalid loki input address id");
+    }
+
+    #[tokio::test]
+    async fn returns_error_if_swap_quote_with_same_input_address_exists() {
+        let quote_params = params();
+
+        let mut loki_quote = create_fake_quote_tx(
+            Coin::LOKI,
+            WalletAddress::new(TEST_LOKI_ADDRESS),
+            Coin::ETH,
+            WalletAddress::new(TEST_ETH_ADDRESS),
+        );
+        loki_quote.input_address_id = quote_params.loki_input_address_id.clone();
+
+        let mut other_quote = create_fake_quote_tx(
+            Coin::ETH,
+            WalletAddress::new(TEST_ETH_ADDRESS),
+            Coin::LOKI,
+            WalletAddress::new(TEST_LOKI_ADDRESS),
+        );
+        other_quote.input_address_id = quote_params.coin_input_address_id.clone();
+
+        // Make sure we're testing the right logic
+        assert_eq!(other_quote.input, quote_params.pool);
+
+        for quote in vec![loki_quote, other_quote] {
+            let mut provider = get_transactions_provider();
+            provider.add_transactions(vec![quote.into()]).unwrap();
+
+            let provider = Arc::new(RwLock::new(provider));
+
+            let result = stake(quote_params.clone(), provider, config())
+                .await
+                .expect_err("Expected stake to return error");
+
+            assert_eq!(&result.message, "Quote already exists for input address id");
+        }
+    }
+
+    #[tokio::test]
+    async fn returns_error_if_stake_quote_with_same_input_address_exists() {
+        let quote_params = params();
+
+        let mut quote_1 = create_fake_stake_quote(PoolCoin::ETH);
+        quote_1.loki_input_address_id =
+            LokiPaymentId::from_str(&quote_params.loki_input_address_id).unwrap();
+
+        let mut quote_2 = create_fake_stake_quote(PoolCoin::ETH);
+        quote_2.coin_input_address_id = quote_params.coin_input_address_id.clone();
+
+        for quote in vec![quote_1, quote_2] {
+            let mut provider = get_transactions_provider();
+            provider.add_transactions(vec![quote.into()]).unwrap();
+
+            let provider = Arc::new(RwLock::new(provider));
+
+            let result = stake(quote_params.clone(), provider, config())
+                .await
+                .expect_err("Expected stake to return error");
+
+            assert_eq!(&result.message, "Quote already exists for input address id");
+        }
+    }
+
+    #[tokio::test]
+    async fn returns_response_if_successful() {
+        let provider = Arc::new(RwLock::new(get_transactions_provider()));
+
+        stake(params(), provider.clone(), config())
+            .await
+            .expect("Expected to get a stake response");
+
+        assert_eq!(provider.read().get_stake_quote_txs().len(), 1);
+    }
 }

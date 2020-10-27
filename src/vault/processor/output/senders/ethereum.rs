@@ -172,6 +172,7 @@ impl<E: EthereumClient + Sync + Send> OutputSender for EthOutputSender<E> {
 mod test {
     use crate::{
         common::{ethereum, WalletAddress},
+        utils::test_utils::TEST_ROOT_KEY,
         utils::test_utils::{create_fake_output_tx, ethereum::TestEthereumClient},
         vault::blockchain_connection::ethereum::EstimateResult,
     };
@@ -186,11 +187,8 @@ mod test {
     }
 
     fn get_output_sender() -> EthOutputSender<TestEthereumClient> {
-        // DO NOT USE THIS KEY! ONLY FOR TESTING!
-        const ROOT_KEY: &str = "xprv9s21ZrQH143K2eUB9ZVwgDAekjSBvvAx1bNn4YhbQ9YiNJEuvgZhraz33W2HKhubJAoiNEZbsD4RgYQJfYDf3ZuJudQjyL5jeQ96Wnp5KPm";
-
         let client = TestEthereumClient::new();
-        let key = RawKey::decode(ROOT_KEY).unwrap();
+        let key = RawKey::decode(TEST_ROOT_KEY).unwrap();
         EthOutputSender::new(client, key)
     }
 

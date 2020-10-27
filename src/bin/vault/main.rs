@@ -4,9 +4,7 @@ extern crate log;
 use blockswap::{
     common::store::PersistentKVS,
     logging,
-    side_chain::{ISideChain, PeristentSideChain},
-    utils::test_utils::{create_fake_stake_quote, create_fake_witness},
-    vault::witness::BtcSPVWitness,
+    side_chain::PeristentSideChain,
     vault::{
         api::APIServer,
         blockchain_connection::{BtcSPVClient, LokiConnection, LokiConnectionConfig, Web3Client},
@@ -14,7 +12,7 @@ use blockswap::{
         config::VAULT_CONFIG,
         processor::{LokiSender, OutputCoinProcessor, SideChainProcessor},
         transactions::{MemoryTransactionsProvider, TransactionProvider},
-        witness::{BitcoinWitness, EthereumWitness, LokiWitness},
+        witness::{BtcSPVWitness, EthereumWitness, LokiWitness},
     },
 };
 use parking_lot::RwLock;
