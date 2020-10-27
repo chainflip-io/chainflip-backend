@@ -1,7 +1,5 @@
 use crate::{
-    common::{
-        Coin, GenericCoinAmount, LokiAmount, LokiPaymentId, PoolCoin, Timestamp, WalletAddress,
-    },
+    common::{Coin, LokiAmount, LokiPaymentId, PoolCoin, Timestamp, WalletAddress},
     utils::validation::{validate_address, validate_address_id},
 };
 
@@ -110,6 +108,8 @@ impl QuoteTx {
 pub struct StakeQuoteTx {
     /// A unique identifier
     pub id: Uuid,
+    /// When the quote was created
+    pub timestamp: Timestamp,
     /// Other coin's type
     pub coin_type: PoolCoin,
     /// The coin input address
@@ -127,6 +127,7 @@ pub struct StakeQuoteTx {
 impl StakeQuoteTx {
     /// Create a new stake quote tx
     pub fn new(
+        timestamp: Timestamp,
         coin_type: PoolCoin,
         coin_input_address: WalletAddress,
         coin_input_address_id: String,
@@ -148,6 +149,7 @@ impl StakeQuoteTx {
 
         Ok(Self {
             id: Uuid::new_v4(),
+            timestamp,
             coin_type,
             coin_input_address,
             coin_input_address_id,

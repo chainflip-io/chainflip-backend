@@ -1,24 +1,8 @@
 use crate::{common::api, side_chain::SideChainBlock, vault::api::v1::BlocksQueryResponse};
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
 
-/// Parameters for `submitQuote` endpoint
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct QuoteParams {
-    /// The input coin
-    pub input_coin: String,
-    /// The input amount
-    pub input_amount: String,
-    /// The input address id
-    pub input_address_id: String,
-    /// The input return address
-    pub input_return_address: Option<String>,
-    /// The output address
-    pub output_address: String,
-    /// The slippage limit
-    pub slippage_limit: u32,
-}
+pub use crate::vault::api::v1::post_stake::StakeQuoteParams;
+pub use crate::vault::api::v1::post_swap::SwapQuoteParams;
 
 /// Configuration for the vault node api
 #[derive(Debug, Copy, Clone)]
@@ -39,8 +23,11 @@ pub trait VaultNodeInterface {
     /// The above code will return blocks 0 to 49.
     async fn get_blocks(&self, start: u32, limit: u32) -> Result<Vec<SideChainBlock>, String>;
 
-    /// Submit a quote to the vault node
-    async fn submit_quote(&self, params: QuoteParams) -> Result<serde_json::Value, String>;
+    /// Submit a swap quote to the vault node
+    async fn submit_swap(&self, params: SwapQuoteParams) -> Result<serde_json::Value, String>;
+
+    /// Submit a stake quote to the vault node
+    async fn submit_stake(&self, params: StakeQuoteParams) -> Result<serde_json::Value, String>;
 }
 
 /// A client for communicating with vault nodes via http requests.
@@ -88,8 +75,34 @@ impl VaultNodeInterface for VaultNodeAPI {
         }
     }
 
-    async fn submit_quote(&self, params: QuoteParams) -> Result<serde_json::Value, String> {
-        let url = format!("{}/v1/quote", self.url);
+    async fn submit_swap(&self, params: SwapQuoteParams) -> Result<serde_json::Value, String> {
+        let url = format!("{}/v1/swap", self.url);
+
+        let res = self
+            .client
+            .post(&url)
+            .json(&params)
+            .send()
+            .await
+            .map_err(|err| err.to_string())?;
+
+        let res = res
+            .json::<api::Response<serde_json::Value>>()
+            .await
+            .map_err(|err| err.to_string())?;
+
+        if let Some(err) = res.error {
+            return Err(err.to_string());
+        }
+
+        match res.data {
+            Some(data) => Ok(data),
+            None => Err("Failed to submit quote".to_string()),
+        }
+    }
+
+    async fn submit_stake(&self, params: StakeQuoteParams) -> Result<serde_json::Value, String> {
+        let url = format!("{}/v1/stake", self.url);
 
         let res = self
             .client

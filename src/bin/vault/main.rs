@@ -92,5 +92,5 @@ fn main() {
     // API
     // can be used to shutdown the server
     let (_tx, rx) = tokio::sync::oneshot::channel();
-    APIServer::serve(s_chain, provider, rx);
+    APIServer::serve(&VAULT_CONFIG, s_chain, provider, rx);
 }

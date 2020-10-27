@@ -24,6 +24,7 @@ pub fn create_fake_stake_quote_for_id(staker_id: &str, coin: PoolCoin) -> StakeQ
 
     StakeQuoteTx {
         id: Uuid::new_v4(),
+        timestamp: Timestamp::now(),
         coin_type: coin,
         loki_input_address: WalletAddress::new(TEST_LOKI_ADDRESS),
         loki_input_address_id: LokiPaymentId::from_str("60900e5603bf96e3").unwrap(),

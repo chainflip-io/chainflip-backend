@@ -13,7 +13,7 @@ lazy_static! {
     };
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Copy, Clone)]
 /// Defines network type for all chains each chain implementation can use
 /// this type to match on network type specific actions
 pub enum NetType {
@@ -35,6 +35,8 @@ pub struct LokiRpcConfig {
 pub struct LokiConfig {
     /// RPC specific config
     pub rpc: LokiRpcConfig,
+    /// Main wallet address. There should be a better way of doing this, but for now this will be quickest
+    pub wallet_address: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]

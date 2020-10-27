@@ -3,7 +3,14 @@ use crate::{
     side_chain::{ISideChain, MemorySideChain},
     transactions::OutputTx,
     transactions::QuoteTx,
-    vault::transactions::MemoryTransactionsProvider,
+    vault::config::BtcConfig,
+    vault::config::EthConfig,
+    vault::config::LokiConfig,
+    vault::{
+        config::NetType,
+        config::{LokiRpcConfig, VaultConfig},
+        transactions::MemoryTransactionsProvider,
+    },
 };
 use std::sync::{Arc, Mutex};
 
@@ -131,4 +138,35 @@ pub fn get_transactions_provider_with_chain<S: ISideChain>(
     side_chain: Arc<Mutex<S>>,
 ) -> MemoryTransactionsProvider<S> {
     MemoryTransactionsProvider::new(side_chain)
+}
+
+/// Get a fake vault node config
+pub fn get_fake_config() -> VaultConfig {
+    // NEVER USE THIS IN AN ACTUAL APPLICATION! ONLY FOR TESTING
+    const ROOT_KEY: &str = "xprv9s21ZrQH143K3sFfKzYqgjMWgvsE44f6gxaRvyo11R22u2p5qegToQaEi7e6e5mRq3f92g9yDQQtu488ggct5gUspippg678t1QTCwBRb85";
+
+    let loki = LokiConfig {
+        rpc: LokiRpcConfig {
+            port: 8000
+        },
+        wallet_address: "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".to_string(),
+    };
+    let eth = EthConfig {
+        master_root_key: ROOT_KEY.to_string(),
+        provider_url: "http://localhost:8080".to_string(),
+    };
+
+    let btc = BtcConfig {
+        master_root_key: ROOT_KEY.to_string(),
+        rpc_port: 1000,
+        rpc_user: "user".to_string(),
+        rpc_password: "pass".to_string(),
+    };
+
+    VaultConfig {
+        loki,
+        net_type: NetType::Testnet,
+        eth,
+        btc,
+    }
 }

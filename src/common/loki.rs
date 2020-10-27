@@ -1,3 +1,5 @@
+use crate::utils::{clone_into_array, loki::address::get_integrated_address};
+
 use super::{
     coins::{CoinAmount, CoinInfo},
     Coin, GenericCoinAmount, WalletAddress,
@@ -14,23 +16,13 @@ use std::{
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct LokiWalletAddress {
     /// base58 (monero flavor) representation
-    address: String,
-}
-
-/// Helper function to convert from an owned string
-fn from_string(addr: String) -> Result<LokiWalletAddress, String> {
-    match addr.len() {
-        97 | 108 => Ok(LokiWalletAddress {
-            address: addr.to_owned(),
-        }),
-        x @ _ => Err(format!("Invalid address length: {}", x)),
-    }
+    pub address: String,
 }
 
 impl TryFrom<WalletAddress> for LokiWalletAddress {
     type Error = String;
     fn try_from(a: WalletAddress) -> Result<Self, Self::Error> {
-        from_string(a.0)
+        LokiWalletAddress::from_string(a.0)
     }
 }
 
@@ -45,7 +37,7 @@ impl std::str::FromStr for LokiWalletAddress {
 
     /// Construct from string, validating address length
     fn from_str(addr: &str) -> Result<Self, Self::Err> {
-        from_string(addr.to_owned())
+        LokiWalletAddress::from_string(addr.to_owned())
     }
 }
 
@@ -53,6 +45,16 @@ impl LokiWalletAddress {
     /// Get internal string representation
     pub fn to_str(&self) -> &str {
         &self.address
+    }
+
+    /// Helper function to convert from an owned string
+    fn from_string(addr: String) -> Result<LokiWalletAddress, String> {
+        match addr.len() {
+            97 | 108 => Ok(LokiWalletAddress {
+                address: addr.to_owned(),
+            }),
+            x @ _ => Err(format!("Invalid address length: {}", x)),
+        }
     }
 }
 
@@ -68,6 +70,19 @@ impl LokiPaymentId {
     /// Get payment id as a string slice
     pub fn to_str(&self) -> &str {
         &self.long_pid
+    }
+
+    /// Get the byte value of the payment id
+    pub fn to_bytes(&self) -> [u8; 8] {
+        let decoded = hex::decode(self.to_str()).unwrap();
+        clone_into_array(&decoded[..8])
+    }
+
+    /// get the integrated address from this payment id
+    pub fn get_integrated_address(&self, base_address: &str) -> Result<LokiWalletAddress, String> {
+        let address = get_integrated_address(base_address, &self.to_bytes())
+            .map_err(|err| err.to_string())?;
+        LokiWalletAddress::from_string(address)
     }
 }
 
@@ -198,11 +213,10 @@ impl CoinAmount for LokiAmount {
 mod tests {
 
     use super::*;
+    use std::str::FromStr;
 
     #[test]
     fn payment_id_serialization_and_deserialization() {
-        use std::str::FromStr;
-
         let pid = LokiPaymentId::from_str("60900e5603bf96e3").unwrap();
 
         let serialized = serde_json::to_string(&pid).expect("Payment id serialization");
@@ -216,5 +230,23 @@ mod tests {
             serde_json::from_str(&serialized).expect("Payment id deserialization");
 
         assert_eq!(deserialized, pid);
+    }
+
+    #[test]
+    fn payment_id_converts_to_bytes() {
+        let pid = LokiPaymentId::from_str("420fa29b2d9a49f5").unwrap();
+        assert_eq!(pid.to_bytes(), [66, 15, 162, 155, 45, 154, 73, 245])
+    }
+
+    #[test]
+    fn payment_id_generates_integrated_address() {
+        let address = "T6SvvzhYyo2cUwiZBtLoTKGBSqoeGYKP12nsJx3ZsHNm7NhLDwYezTU3Ya9Cgb1UgW3gZTE5RG5ny4QKTUbHiXS8267AzhpZs";
+        let expected = "TG9bwoX3b4YcUwiZBtLoTKGBSqoeGYKP12nsJx3ZsHNm7NhLDwYezTU3Ya9Cgb1UgW3gZTE5RG5ny4QKTUbHiXS8NCR92bBy6zV1dq77maK4";
+
+        let pid = LokiPaymentId::from_str("420fa29b2d9a49f5").unwrap();
+        assert_eq!(
+            &pid.get_integrated_address(address).unwrap().address,
+            expected
+        );
     }
 }

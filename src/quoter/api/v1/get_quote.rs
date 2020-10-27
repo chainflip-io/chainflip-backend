@@ -1,7 +1,8 @@
 use crate::{
     common::api::ResponseError,
     quoter::StateProvider,
-    vault::{api::v1::post_quote::SwapQuoteResponse, processor::utils::get_swap_expire_timestamp},
+    vault::api::v1::post_stake::StakeQuoteResponse,
+    vault::{api::v1::post_swap::SwapQuoteResponse, processor::utils::get_swap_expire_timestamp},
 };
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -24,6 +25,7 @@ pub struct GetQuoteParams {
 #[serde(rename_all = "camelCase", tag = "type", content = "info")]
 pub enum GetQuoteResponse {
     Swap(SwapQuoteResponse),
+    Stake(StakeQuoteResponse),
 }
 
 /// Get information about a quote
@@ -38,7 +40,6 @@ pub async fn get_quote<S>(
 where
     S: StateProvider,
 {
-    // TODO: Also return stake quotes
     let id = match Uuid::from_str(&params.id) {
         Ok(id) => id,
         Err(_) => {
@@ -49,8 +50,23 @@ where
         }
     };
 
+    if let Some(response) = get_swap_quote(id, state.clone()) {
+        return Ok(Some(GetQuoteResponse::Swap(response)));
+    }
+
+    if let Some(response) = get_stake_quote(id, state.clone()) {
+        return Ok(Some(GetQuoteResponse::Stake(response)));
+    }
+
+    Ok(None)
+}
+
+pub fn get_swap_quote<S>(id: Uuid, state: Arc<Mutex<S>>) -> Option<SwapQuoteResponse>
+where
+    S: StateProvider,
+{
     let quote = state.lock().unwrap().get_swap_quote_tx(id);
-    let response = match quote {
+    match quote {
         Some(quote) => {
             let response = SwapQuoteResponse {
                 id: quote.id,
@@ -64,10 +80,30 @@ where
                 output_address: quote.output_address.to_string(),
                 slippage_limit: quote.slippage_limit,
             };
-            Some(GetQuoteResponse::Swap(response))
+            Some(response)
         }
         _ => None,
-    };
+    }
+}
 
-    Ok(response)
+pub fn get_stake_quote<S>(id: Uuid, state: Arc<Mutex<S>>) -> Option<StakeQuoteResponse>
+where
+    S: StateProvider,
+{
+    let quote = state.lock().unwrap().get_stake_quote_tx(id);
+    match quote {
+        Some(quote) => {
+            let response = StakeQuoteResponse {
+                id: quote.id,
+                created_at: quote.timestamp.0,
+                expires_at: get_swap_expire_timestamp(&quote.timestamp).0,
+                pool: quote.coin_type.get_coin(),
+                staker_id: quote.staker_id,
+                loki_input_address: quote.loki_input_address.0,
+                coin_input_address: quote.coin_input_address.0,
+            };
+            Some(response)
+        }
+        _ => None,
+    }
 }

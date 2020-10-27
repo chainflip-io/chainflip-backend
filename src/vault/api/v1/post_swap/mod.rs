@@ -1,34 +1,39 @@
 use crate::{
-    common::ethereum,
-    common::{api::ResponseError, Coin, Timestamp, WalletAddress},
+    common::{api::ResponseError, Coin, LokiPaymentId, Timestamp, WalletAddress},
     transactions::QuoteTx,
-    utils::bip44,
     utils::price,
-    vault::{
-        config::{NetType, VAULT_CONFIG},
-        processor::utils::get_swap_expire_timestamp,
-        transactions::TransactionProvider,
-    },
+    vault::{processor::utils::get_swap_expire_timestamp, transactions::TransactionProvider},
 };
 use parking_lot::RwLock;
-use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 use uuid::Uuid;
+
+use super::{
+    utils::{bad_request, generate_btc_address, generate_eth_address, internal_server_error},
+    Config,
+};
 
 mod validation;
 
 /// Params for the v1/quote endpoint
 #[serde(rename_all = "camelCase")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QuoteParams {
-    input_coin: Coin,
-    input_return_address: Option<String>,
-    input_address_id: String,
-    input_amount: String, // Amounts are strings,
-    output_coin: Coin,
-    output_address: String,
-    slippage_limit: f32,
+pub struct SwapQuoteParams {
+    /// Input coin
+    pub input_coin: Coin,
+    /// Input return address
+    pub input_return_address: Option<String>,
+    /// Input address id
+    pub input_address_id: String,
+    /// Input atomic amount
+    pub input_amount: String, // Amounts are strings,
+    /// Output coin
+    pub output_coin: Coin,
+    /// Output address
+    pub output_address: String,
+    /// Slippage limit
+    pub slippage_limit: f32,
 }
 
 /// Response for the v1/quote endpoint
@@ -57,79 +62,11 @@ pub struct SwapQuoteResponse {
     pub slippage_limit: f32,
 }
 
-fn bad_request(message: &str) -> ResponseError {
-    ResponseError::new(StatusCode::BAD_REQUEST, message)
-}
-
-fn internal_server_error() -> ResponseError {
-    ResponseError::new(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
-}
-
-fn generate_bip44_keypair_from_root_key(
-    root_key: &str,
-    coin: bip44::CoinType,
-    index: u64,
-) -> Result<bip44::KeyPair, String> {
-    let root_key = bip44::RawKey::decode(root_key).map_err(|err| format!("{}", err))?;
-
-    let root_key = root_key
-        .to_private_key()
-        .ok_or("Failed to generate extended private key".to_owned())?;
-
-    let key_pair = bip44::get_key_pair(root_key, coin, index)?;
-
-    return Ok(key_pair);
-}
-
-fn generate_eth_address(root_key: &str, index: u64) -> Result<String, String> {
-    let key_pair =
-        generate_bip44_keypair_from_root_key(root_key, bip44::CoinType::ETH, index).unwrap();
-
-    Ok(ethereum::Address::from(key_pair.public_key).to_string())
-}
-
-fn generate_btc_address(
-    root_key: &str,
-    index: u64,
-    compressed: bool,
-    address_type: bitcoin::AddressType,
-    nettype: &NetType,
-) -> Result<String, String> {
-    let key_pair = generate_bip44_keypair_from_root_key(root_key, bip44::CoinType::BTC, index)?;
-
-    let btc_pubkey = bitcoin::PublicKey {
-        key: bitcoin::secp256k1::PublicKey::from_slice(&key_pair.public_key.serialize()).unwrap(),
-        compressed,
-    };
-
-    let network = match nettype {
-        NetType::Testnet => bitcoin::Network::Testnet,
-        NetType::Mainnet => bitcoin::Network::Bitcoin,
-    };
-
-    let address = match address_type {
-        // throw error that says must use compressed public key format
-        bitcoin::AddressType::P2wpkh => {
-            bitcoin::Address::p2wpkh(&btc_pubkey, network).map_err(|e| e.to_string())?
-        }
-        bitcoin::AddressType::P2pkh => bitcoin::Address::p2pkh(&btc_pubkey, network),
-        _ => {
-            warn!(
-                "Address type of {} is not currently supported. Defaulting to p2wpkh address",
-                address_type
-            );
-            bitcoin::Address::p2wpkh(&btc_pubkey, network).map_err(|e| e.to_string())?
-        }
-    };
-    let address = address.to_string();
-
-    Ok(address)
-}
-
 /// Request a swap quote
-pub async fn post_quote<T: TransactionProvider>(
-    params: QuoteParams,
+pub async fn swap<T: TransactionProvider>(
+    params: SwapQuoteParams,
     provider: Arc<RwLock<T>>,
+    config: Config,
 ) -> Result<SwapQuoteResponse, ResponseError> {
     let original_params = params.clone();
 
@@ -177,7 +114,7 @@ pub async fn post_quote<T: TransactionProvider>(
                 Ok(index) => index,
                 Err(_) => return Err(bad_request("Incorrect input address id")),
             };
-            match generate_eth_address(&VAULT_CONFIG.eth.master_root_key, index) {
+            match generate_eth_address(&config.eth_master_root_key, index) {
                 Ok(address) => address,
                 Err(err) => {
                     warn!("Failed to generate ethereum address: {}", err);
@@ -186,8 +123,18 @@ pub async fn post_quote<T: TransactionProvider>(
             }
         }
         Coin::LOKI => {
-            // TODO: Generate integrated address here
-            "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".into()
+            let payment_id = match LokiPaymentId::from_str(&params.input_address_id) {
+                Ok(id) => id,
+                Err(_) => return Err(bad_request("Incorrect input address id")),
+            };
+
+            match payment_id.get_integrated_address(&config.loki_wallet_address) {
+                Ok(address) => address.address,
+                Err(err) => {
+                    warn!("Failed to generate loki address: {}", err);
+                    return Err(internal_server_error());
+                }
+            }
         }
         Coin::BTC => {
             let index = match params.input_address_id.parse::<u64>() {
@@ -195,11 +142,11 @@ pub async fn post_quote<T: TransactionProvider>(
                 Err(_) => return Err(bad_request("Incorrect input address id")),
             };
             match generate_btc_address(
-                &VAULT_CONFIG.btc.master_root_key,
+                &config.btc_master_root_key,
                 index,
                 false,
                 bitcoin::AddressType::P2wpkh,
-                &VAULT_CONFIG.net_type,
+                &config.net_type,
             ) {
                 Ok(address) => address,
                 Err(err) => {
@@ -263,15 +210,23 @@ mod test {
     use super::*;
     use crate::{
         common::coins::PoolCoin, transactions::PoolChangeTx,
-        utils::test_utils::get_transactions_provider,
+        utils::test_utils::get_transactions_provider, vault::config::NetType,
     };
-    use bitcoin::AddressType::*;
 
     // NEVER USE THIS IN AN ACTUAL APPLICATION! ONLY FOR TESTING
     const ROOT_KEY: &str = "xprv9s21ZrQH143K3sFfKzYqgjMWgvsE44f6gxaRvyo11R22u2p5qegToQaEi7e6e5mRq3f92g9yDQQtu488ggct5gUspippg678t1QTCwBRb85";
 
-    fn params() -> QuoteParams {
-        QuoteParams {
+    fn config() -> Config {
+        Config {
+            loki_wallet_address: "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".to_string(),
+            eth_master_root_key: ROOT_KEY.to_string(),
+            btc_master_root_key: ROOT_KEY.to_string(),
+            net_type: NetType::Testnet
+        }
+    }
+
+    fn params() -> SwapQuoteParams {
+        SwapQuoteParams {
             input_coin: Coin::LOKI,
             input_return_address: Some("T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".to_string()),
             input_address_id: "60900e5603bf96e3".to_owned(),
@@ -280,67 +235,6 @@ mod test {
             output_address: "0x70e7db0678460c5e53f1ffc9221d1c692111dcc5".to_string(),
             slippage_limit: 0.0,
         }
-    }
-
-    #[test]
-    fn generates_correct_eth_address() {
-        assert_eq!(
-            &generate_eth_address(ROOT_KEY, 0).unwrap(),
-            "0x48575a3C8fa7D0469FD39eCB67ec68d8C7564637"
-        );
-        assert_eq!(
-            &generate_eth_address(ROOT_KEY, 1).unwrap(),
-            "0xB46878bd2E68e2b3f5145ccB868E626572905c5F"
-        );
-    }
-
-    #[test]
-    fn generates_correct_btc_address() {
-        // === p2wpkh - pay-to-witness-pubkey-hash (segwit) addresses ===
-        assert_eq!(
-            generate_btc_address(ROOT_KEY, 0, true, P2wpkh, &NetType::Mainnet).unwrap(),
-            "bc1qawvxp3jxlzj3ydcfjyq83cxkdxpu7st8az5hvq"
-        );
-
-        // testnet generates different addresses to mainnet
-        assert_eq!(
-            generate_btc_address(ROOT_KEY, 0, true, P2wpkh, &NetType::Testnet).unwrap(),
-            "tb1qawvxp3jxlzj3ydcfjyq83cxkdxpu7st8hy0yhn"
-        );
-
-        assert_eq!(
-            generate_btc_address(ROOT_KEY, 1, true, P2wpkh, &NetType::Mainnet).unwrap(),
-            "bc1q6uq0qny5pel4aane4cj0kuqz5sgkxczv6y4ypy"
-        );
-
-        // === p2pkh - pay-to-pubkey-hash (legacy) addresses ===
-        assert_eq!(
-            generate_btc_address(ROOT_KEY, 0, false, P2pkh, &NetType::Mainnet).unwrap(),
-            "1Q6hHytu6sZmib3TUNeEhGxE8L2ydx5JZo",
-        );
-
-        // testnet generates different addresses to mainnet
-        assert_eq!(
-            generate_btc_address(ROOT_KEY, 0, false, P2pkh, &NetType::Testnet).unwrap(),
-            "n4ceb2ysuu12VhX5BwccXCAYzKdgZY2XFH",
-        );
-
-        assert_eq!(
-            generate_btc_address(ROOT_KEY, 1, true, P2pkh, &NetType::Mainnet).unwrap(),
-            "1LbqQTsn9EJN1yWJ2YkQGtaihovjgs6cfW"
-        );
-
-        assert_eq!(
-            generate_btc_address(ROOT_KEY, 1, false, P2pkh, &NetType::Mainnet).unwrap(),
-            "1PWyfwtkS9co1rTHvU2SSESbcu6zi2TmxH"
-        );
-
-        assert_ne!(
-            generate_btc_address(ROOT_KEY, 2, false, P2pkh, &NetType::Mainnet).unwrap(),
-            "1LbqQTsn9EJN1yWJ2YkQGtaihovjgs6cfW"
-        );
-
-        assert!(generate_btc_address("not a real key", 4, false, P2pkh, &NetType::Mainnet).is_err())
     }
 
     #[tokio::test]
@@ -364,7 +258,7 @@ mod test {
 
         let provider = Arc::new(RwLock::new(provider));
 
-        let result = post_quote(params(), provider)
+        let result = swap(params(), provider, config())
             .await
             .expect_err("Expected post_quote to return error");
 
@@ -377,7 +271,7 @@ mod test {
         let provider = Arc::new(RwLock::new(provider));
 
         // No pools yet
-        let result = post_quote(params(), provider.clone())
+        let result = swap(params(), provider.clone(), config())
             .await
             .expect_err("Expected post_quote to return error");
 
@@ -391,7 +285,7 @@ mod test {
             provider.add_transactions(vec![tx.into()]).unwrap();
         }
 
-        let result = post_quote(params(), provider.clone())
+        let result = swap(params(), provider.clone(), config())
             .await
             .expect_err("Expected post_quote to return error");
 
@@ -406,7 +300,7 @@ mod test {
 
         let provider = Arc::new(RwLock::new(provider));
 
-        post_quote(params(), provider.clone())
+        swap(params(), provider.clone(), config())
             .await
             .expect("Expected to get a quote response");
 

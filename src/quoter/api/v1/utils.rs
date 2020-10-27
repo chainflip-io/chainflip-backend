@@ -9,7 +9,7 @@ use std::{
 pub fn generate_unique_input_address_id<R: Rng>(
     input_coin: Coin,
     input_id_cache: Arc<Mutex<HashMap<Coin, BTreeSet<String>>>>,
-    mut rng: R,
+    rng: &mut R,
 ) -> Result<String, ResponseError> {
     let mut cache = input_id_cache.lock().unwrap();
     let used_ids = cache.entry(input_coin).or_insert(BTreeSet::new());

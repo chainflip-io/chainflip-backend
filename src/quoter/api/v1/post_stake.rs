@@ -1,6 +1,6 @@
 use crate::{
-    common::{api::ResponseError, coins::Coin},
-    quoter::{vault_node::QuoteParams, vault_node::VaultNodeInterface},
+    common::{api::ResponseError, coins::Coin, PoolCoin},
+    quoter::vault_node::{StakeQuoteParams, VaultNodeInterface},
 };
 use rand::{prelude::StdRng, Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
@@ -19,59 +19,60 @@ use super::utils::generate_unique_input_address_id;
 #[serde(rename_all = "camelCase")]
 pub struct PostStakeParams {
     /// The input coin
-    pub input_coin: String,
-    /// The input amount
-    pub input_amount: String,
-    /// The input return address
-    pub input_return_address: Option<String>,
-    /// The output address
-    pub output_address: String,
-    /// The slippage limit
-    pub slippage_limit: u32,
+    pub pool: String,
+    /// The staker id
+    pub staker_id: String,
 }
 
 /// Submit a stake quoter
 pub async fn stake<V: VaultNodeInterface>(
-    params: PostQuoteParams,
+    params: PostStakeParams,
     vault_node: Arc<V>,
     input_id_cache: Arc<Mutex<HashMap<Coin, BTreeSet<String>>>>,
 ) -> Result<serde_json::Value, ResponseError> {
-    let input_coin = match Coin::from_str(&params.input_coin) {
+    let coin = match Coin::from_str(&params.pool) {
         Ok(coin) => coin,
         Err(_) => {
             return Err(ResponseError::new(
                 StatusCode::BAD_REQUEST,
-                "Invalid input coin",
+                "Invalid pool coin",
             ))
         }
+    };
+
+    if let Err(_) = PoolCoin::from(coin) {
+        return Err(ResponseError::new(
+            StatusCode::BAD_REQUEST,
+            "Invalid pool coin",
+        ));
     };
 
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .expect("Duration since UNIX_EPOCH failed");
-    let rng = StdRng::seed_from_u64(now.as_secs());
-    let input_address_id =
-        generate_unique_input_address_id(input_coin, input_id_cache.clone(), rng)?;
+    let mut rng = StdRng::seed_from_u64(now.as_secs());
+    let coin_input_address_id =
+        generate_unique_input_address_id(coin, input_id_cache.clone(), &mut rng)?;
+    let loki_input_address_id =
+        generate_unique_input_address_id(Coin::LOKI, input_id_cache.clone(), &mut rng)?;
 
-    let quote_params = QuoteParams {
-        input_coin: params.input_coin,
-        input_amount: params.input_amount,
-        input_address_id: input_address_id.clone(),
-        input_return_address: params.input_return_address,
-        output_address: params.output_address,
-        slippage_limit: params.slippage_limit,
+    let quote_params = StakeQuoteParams {
+        pool: coin,
+        staker_id: params.staker_id,
+        coin_input_address_id: coin_input_address_id.clone(),
+        loki_input_address_id: loki_input_address_id.clone(),
     };
 
-    match vault_node.submit_quote(quote_params).await {
+    match vault_node.submit_stake(quote_params).await {
         Ok(result) => Ok(result),
         Err(err) => {
             // Something went wrong, remove id from cache
-            input_id_cache
-                .lock()
+            let mut cache = input_id_cache.lock().unwrap();
+            cache.get_mut(&coin).unwrap().remove(&coin_input_address_id);
+            cache
+                .get_mut(&Coin::LOKI)
                 .unwrap()
-                .get_mut(&input_coin)
-                .unwrap()
-                .remove(&input_address_id);
+                .remove(&loki_input_address_id);
             return Err(ResponseError::new(StatusCode::BAD_REQUEST, &err));
         }
     }

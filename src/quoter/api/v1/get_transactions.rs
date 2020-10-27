@@ -45,6 +45,7 @@ where
     let witnesses = state.get_witness_txs();
     let outputs = state.get_output_txs();
     let sent = state.get_output_sent_txs();
+    let stakes = state.get_stake_txs();
 
     drop(state);
 
@@ -53,6 +54,12 @@ where
     let filtered_witnesses: Vec<SideChainTx> = witnesses
         .into_iter()
         .filter(|tx| tx.quote_id == id)
+        .map(|tx| tx.into())
+        .collect();
+
+    let filtered_stake: Vec<SideChainTx> = stakes
+        .into_iter()
+        .filter(|tx| tx.quote_tx == id)
         .map(|tx| tx.into())
         .collect();
 
@@ -68,5 +75,11 @@ where
         .map(|tx| tx.into())
         .collect();
 
-    Ok([filtered_witnesses, filtered_outputs, filtered_output_sent].concat())
+    Ok([
+        filtered_witnesses,
+        filtered_stake,
+        filtered_outputs,
+        filtered_output_sent,
+    ]
+    .concat())
 }
