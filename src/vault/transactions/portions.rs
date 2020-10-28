@@ -1,11 +1,11 @@
 use std::{collections::HashMap, convert::TryInto};
 
 use crate::{
-    common::{liquidity_provider::Liquidity, Coin, GenericCoinAmount, LokiAmount, PoolCoin},
+    common::*,
     utils::{self, primitives::U256},
 };
 
-use super::memory_provider::{PoolPortions, Portion, StakerId, StakerOwnership, VaultPortions};
+use super::memory_provider::{PoolPortions, Portion, StakerOwnership, VaultPortions};
 
 /// Calculate atomic amount for a given portion from total atomic amount
 fn amount_from_portion(portion: Portion, total_amount: u128) -> u128 {
@@ -285,8 +285,8 @@ mod tests {
 
         let mut runner = TestRunner::new();
 
-        let alice = "Alice".to_owned();
-        let bob = "Bob".to_owned();
+        let alice = StakerId("Alice".to_owned());
+        let bob = StakerId("Bob".to_owned());
 
         let amount1 = LokiAmount::from_decimal_string("100.0");
 
@@ -322,8 +322,8 @@ mod tests {
 
         let mut runner = TestRunner::new();
 
-        let alice = "Alice".to_owned();
-        let bob = "Bob".to_owned();
+        let alice = StakerId("Alice".to_owned());
+        let bob = StakerId("Bob".to_owned());
 
         let amount1 = LokiAmount::from_decimal_string("100.0");
 
@@ -348,8 +348,8 @@ mod tests {
 
         let mut runner = TestRunner::new();
 
-        let alice = "Alice".to_owned();
-        let bob = "Bob".to_owned();
+        let alice = StakerId("Alice".to_owned());
+        let bob = StakerId("Bob".to_owned());
 
         let amount = LokiAmount::from_decimal_string("100.0");
 

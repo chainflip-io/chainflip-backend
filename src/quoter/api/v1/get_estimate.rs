@@ -1,5 +1,5 @@
 use crate::{
-    common::{api::ResponseError, coins::Coin, liquidity_provider::LiquidityProvider},
+    common::{api::ResponseError, coins::Coin},
     quoter::StateProvider,
     utils::price,
 };

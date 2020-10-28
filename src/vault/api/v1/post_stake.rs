@@ -1,5 +1,5 @@
 use crate::{
-    common::{api::ResponseError, Coin, LokiPaymentId, PoolCoin, Timestamp, WalletAddress},
+    common::{api::ResponseError, *},
     transactions::StakeQuoteTx,
     utils::validation::validate_address_id,
     vault::{processor::utils::get_swap_expire_timestamp, transactions::TransactionProvider},
@@ -148,7 +148,7 @@ pub async fn stake<T: TransactionProvider>(
         params.coin_input_address_id,
         WalletAddress::new(&loki_input_address),
         loki_input_address_id,
-        params.staker_id.clone(),
+        StakerId(params.staker_id.clone()),
     )
     .map_err(|err| {
         error!(

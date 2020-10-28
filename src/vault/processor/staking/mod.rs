@@ -1,8 +1,9 @@
 mod tests;
 
 use crate::{
-    common::{Coin, GenericCoinAmount, LokiAmount, PoolCoin, Timestamp},
+    common::*,
     side_chain::SideChainTx,
+    transactions::signatures::verify_unstake,
     transactions::{OutputTx, PoolChangeTx, StakeQuoteTx, StakeTx, UnstakeRequestTx},
     vault::transactions::{
         memory_provider::{FulfilledTxWrapper, Portion, WitnessTxWrapper},
@@ -211,7 +212,7 @@ fn get_portion_of_amount(total: u128, portion: Portion) -> u128 {
 fn get_amounts_unstakable<T: TransactionProvider>(
     tx_provider: &T,
     pool: PoolCoin,
-    staker: &str,
+    staker: &StakerId,
 ) -> Result<(LokiAmount, GenericCoinAmount), String> {
     info!("Handling unstake tx for staker: {}", staker);
 
@@ -308,6 +309,11 @@ fn process_unstake_tx<T: TransactionProvider>(
 
 pub(super) fn process_unstakes<T: TransactionProvider>(tx_provider: &mut T) {
     let unstake_txs = tx_provider.get_unstake_request_txs();
+
+    let unstake_txs: Vec<_> = unstake_txs
+        .iter()
+        .filter(|tx| verify_unstake(tx).is_ok())
+        .collect();
 
     let mut output_txs: Vec<SideChainTx> = Vec::with_capacity(unstake_txs.len() * 3);
 

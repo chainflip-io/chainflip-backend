@@ -90,7 +90,7 @@ where
         created_at: quote.timestamp.0,
         expires_at: get_swap_expire_timestamp(&quote.timestamp).0,
         pool: quote.coin_type.get_coin(),
-        staker_id: quote.staker_id,
+        staker_id: quote.staker_id.0,
         loki_input_address: quote.loki_input_address.0,
         coin_input_address: quote.coin_input_address.0,
     })

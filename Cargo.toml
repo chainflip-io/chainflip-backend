@@ -37,6 +37,7 @@ uint = "^0.8.5"
 uuid = {version = "0.8", features = ["serde", "v4"]}
 warp = {version = "*", features = ["tls"]}
 web3 = {version = "^0.13.0", default-features = false, features = ["http-tls"]}
+ring = "*"
 
 [dependencies.rusqlite]
 features = ["bundled"]
