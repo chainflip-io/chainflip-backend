@@ -14,8 +14,7 @@ of organising code works better with integration tests.
  Ideally we would just parse commad line arguments here and call into the library.
 */
 
-#[tokio::main]
-async fn main() {
+fn main() {
     std::panic::set_hook(Box::new(|msg| {
         error!("Panicked with: {}", msg);
         std::process::exit(101); // Rust's panics use 101 by default
@@ -47,7 +46,7 @@ async fn main() {
         let vault_node_api = vault_node::VaultNodeAPI::new(&config.vault_node_url);
         let vault_node_api = Arc::new(vault_node_api);
 
-        match Quoter::run(port, vault_node_api, database).await {
+        match Quoter::run(port, vault_node_api, database) {
             Ok(_) => info!("Stopping Chainflip Quoter"),
             Err(e) => error!("Chainflip Quoter stopped due to error: {}", e),
         }

@@ -1,2 +1,4 @@
+vault_node_url = ""
+
 [database]
 name = "quoter.db"

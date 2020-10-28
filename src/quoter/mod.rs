@@ -36,7 +36,7 @@ impl Quoter {
     /// # Blocking
     ///
     /// This will block the thread it is run on.
-    pub async fn run<V, D>(
+    pub fn run<V, D>(
         port: u16,
         vault_node_api: Arc<V>,
         database: Arc<Mutex<D>>,
@@ -46,7 +46,9 @@ impl Quoter {
         D: BlockProcessor + StateProvider + Send + 'static,
     {
         let poller = block_poller::BlockPoller::new(vault_node_api.clone(), database.clone());
-        poller.sync().await?; // Make sure we have all the latest blocks
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(poller.sync())?;
 
         // Start loops
         let poller_thread =
