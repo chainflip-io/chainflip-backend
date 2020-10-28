@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 
 /// The block that we should start scanning from if we're starting the witness from scratch.
 /// There's no reason to scan from a block before blockswap launch.
-const START_BLOCK: u64 = 10746801;
+const START_BLOCK: u64 = 11148067;
 
 /// The db key for fetching and storing the next eth block
 const NEXT_ETH_BLOCK_KEY: &'static str = "next_eth_block";
@@ -60,7 +60,7 @@ where
         loop {
             self.poll_next_main_chain().await;
 
-            std::thread::sleep(std::time::Duration::from_millis(10));
+            std::thread::sleep(std::time::Duration::from_secs(10));
         }
     }
 
