@@ -26,7 +26,9 @@ impl BlocksQueryParams {
 #[serde(rename_all = "camelCase")]
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlocksQueryResponse {
+    /// The total blocks
     pub total_blocks: u32,
+    /// The current blocks
     pub blocks: Vec<SideChainBlock>,
 }
 
@@ -51,7 +53,7 @@ pub async fn get_blocks<S: ISideChain>(
     let side_chain = side_chain.lock().unwrap();
     let total_blocks = side_chain.total_blocks();
 
-    if total_blocks == 0 || number >= total_blocks || limit == 0 {
+    if total_blocks == 0 || number >= total_blocks || limit <= 0 {
         // Return an empty response
         let res = BlocksQueryResponse {
             total_blocks,

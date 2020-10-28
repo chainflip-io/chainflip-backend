@@ -66,24 +66,18 @@ where
     S: StateProvider,
 {
     let quote = state.lock().unwrap().get_swap_quote_tx(id);
-    match quote {
-        Some(quote) => {
-            let response = SwapQuoteResponse {
-                id: quote.id,
-                created_at: quote.timestamp.0,
-                expires_at: get_swap_expire_timestamp(&quote.timestamp).0,
-                input_coin: quote.input,
-                input_address: quote.input_address.to_string(),
-                input_return_address: quote.return_address.map(|r| r.to_string()),
-                effective_price: quote.effective_price,
-                output_coin: quote.output,
-                output_address: quote.output_address.to_string(),
-                slippage_limit: quote.slippage_limit,
-            };
-            Some(response)
-        }
-        _ => None,
-    }
+    quote.map(|quote| SwapQuoteResponse {
+        id: quote.id,
+        created_at: quote.timestamp.0,
+        expires_at: get_swap_expire_timestamp(&quote.timestamp).0,
+        input_coin: quote.input,
+        input_address: quote.input_address.to_string(),
+        input_return_address: quote.return_address.map(|r| r.to_string()),
+        effective_price: quote.effective_price,
+        output_coin: quote.output,
+        output_address: quote.output_address.to_string(),
+        slippage_limit: quote.slippage_limit,
+    })
 }
 
 pub fn get_stake_quote<S>(id: Uuid, state: Arc<Mutex<S>>) -> Option<StakeQuoteResponse>
@@ -91,19 +85,13 @@ where
     S: StateProvider,
 {
     let quote = state.lock().unwrap().get_stake_quote_tx(id);
-    match quote {
-        Some(quote) => {
-            let response = StakeQuoteResponse {
-                id: quote.id,
-                created_at: quote.timestamp.0,
-                expires_at: get_swap_expire_timestamp(&quote.timestamp).0,
-                pool: quote.coin_type.get_coin(),
-                staker_id: quote.staker_id,
-                loki_input_address: quote.loki_input_address.0,
-                coin_input_address: quote.coin_input_address.0,
-            };
-            Some(response)
-        }
-        _ => None,
-    }
+    quote.map(|quote| StakeQuoteResponse {
+        id: quote.id,
+        created_at: quote.timestamp.0,
+        expires_at: get_swap_expire_timestamp(&quote.timestamp).0,
+        pool: quote.coin_type.get_coin(),
+        staker_id: quote.staker_id,
+        loki_input_address: quote.loki_input_address.0,
+        coin_input_address: quote.coin_input_address.0,
+    })
 }
