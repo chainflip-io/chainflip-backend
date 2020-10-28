@@ -149,7 +149,7 @@ impl<B: IBitcoinSend + Sync + Send> OutputSender for BtcOutputSender<B> {
 mod test {
     use crate::{
         common::WalletAddress,
-        utils::test_utils::{btc::TestBitcoinSendClient, create_fake_output_tx},
+        utils::test_utils::{btc::TestBitcoinSendClient, create_fake_output_tx, TEST_ROOT_KEY},
     };
 
     use super::*;
@@ -162,11 +162,8 @@ mod test {
     }
 
     fn get_output_sender() -> BtcOutputSender<TestBitcoinSendClient> {
-        // DO NOT USE THIS KEY! ONLY FOR TESTING!
-        const ROOT_KEY: &str = "xprv9s21ZrQH143K2eUB9ZVwgDAekjSBvvAx1bNn4YhbQ9YiNJEuvgZhraz33W2HKhubJAoiNEZbsD4RgYQJfYDf3ZuJudQjyL5jeQ96Wnp5KPm";
-
         let client = TestBitcoinSendClient::new();
-        let key = RawKey::decode(ROOT_KEY).unwrap();
+        let key = RawKey::decode(TEST_ROOT_KEY).unwrap();
         BtcOutputSender::new(client, key)
     }
 

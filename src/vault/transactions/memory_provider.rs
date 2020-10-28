@@ -378,7 +378,6 @@ mod test {
                 1,
                 100,
                 Coin::ETH,
-                None,
             );
 
             side_chain
@@ -413,7 +412,6 @@ mod test {
             1,
             100,
             Coin::ETH,
-            None,
         );
 
         {
@@ -494,7 +492,6 @@ mod test {
             1,
             100,
             Coin::ETH,
-            None,
         );
 
         provider
@@ -547,7 +544,6 @@ mod test {
             1,
             100,
             Coin::ETH,
-            None,
         );
 
         provider

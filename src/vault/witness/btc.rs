@@ -155,7 +155,6 @@ where
                     amount: sent_amount.unwrap(),
                     timestamp: Timestamp::now(),
                     coin: Coin::BTC,
-                    sender: None,
                 };
 
                 witness_txs.push(tx);
@@ -507,7 +506,6 @@ mod test {
         // here we are simulating retrieving from our starting block
         assert_eq!(witness_tx.transaction_block_number, START_BLOCK);
         assert_eq!(witness_tx.amount, 86265);
-        assert_eq!(witness_tx.sender, None);
     }
 
     #[tokio::test]
@@ -590,6 +588,5 @@ mod test {
         // here we are simulating retrieving from our starting block
         assert_eq!(witness_tx.transaction_block_number, START_BLOCK);
         assert_eq!(witness_tx.amount, 86265);
-        assert_eq!(witness_tx.sender, None);
     }
 }

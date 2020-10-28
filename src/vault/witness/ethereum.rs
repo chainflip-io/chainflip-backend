@@ -111,7 +111,6 @@ where
                         transaction.index,
                         transaction.value,
                         Coin::ETH,
-                        Some(transaction.from.into()),
                     );
 
                     if tx.amount > 0 {
@@ -260,7 +259,6 @@ mod test {
             eth_transaction.block_number
         );
         assert_eq!(witness_tx.amount, eth_transaction.value);
-        assert_eq!(witness_tx.sender, Some(eth_transaction.from.into()));
     }
 
     #[tokio::test]

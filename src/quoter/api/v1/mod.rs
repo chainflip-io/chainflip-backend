@@ -5,15 +5,14 @@ use crate::{
     },
     quoter::{vault_node::VaultNodeInterface, StateProvider},
 };
-use rand::{prelude::StdRng, SeedableRng};
 use std::{
     collections::{BTreeSet, HashMap},
     sync::{Arc, Mutex},
-    time::SystemTime,
 };
 use warp::Filter;
 
-mod post_quote;
+pub mod post_stake;
+pub mod post_swap;
 
 mod get_coins;
 pub use get_coins::{get_coins, CoinsParams};
@@ -29,6 +28,9 @@ pub use get_quote::{get_quote, GetQuoteParams};
 
 mod get_transactions;
 pub use get_transactions::{get_transactions, TransactionsParams};
+
+// Util functions
+pub mod utils;
 
 #[cfg(test)]
 mod test;
@@ -46,6 +48,19 @@ where
             .entry(quote.input)
             .or_insert(BTreeSet::new())
             .insert(quote.input_address_id);
+    }
+
+    let stakes = state.lock().unwrap().get_stake_quotes();
+    for quote in stakes {
+        cache
+            .entry(quote.coin_type.get_coin())
+            .or_insert(BTreeSet::new())
+            .insert(quote.coin_input_address_id);
+
+        cache
+            .entry(Coin::LOKI)
+            .or_insert(BTreeSet::new())
+            .insert(quote.loki_input_address_id.to_string());
     }
 
     cache
@@ -98,12 +113,20 @@ where
         .map(get_quote)
         .and_then(api::respond);
 
-    let post_quote_api = warp::path!("quote")
+    let swap = warp::path!("swap")
         .and(warp::post())
         .and(warp::body::json())
         .and(using(vault_node.clone()))
         .and(using(input_id_cache.clone()))
-        .map(post_quote::quote)
+        .map(post_swap::swap)
+        .and_then(api::respond);
+
+    let stake = warp::path!("swap")
+        .and(warp::post())
+        .and(warp::body::json())
+        .and(using(vault_node.clone()))
+        .and(using(input_id_cache.clone()))
+        .map(post_stake::stake)
         .and_then(api::respond);
 
     warp::path!("v1" / ..) // Add path prefix /v1 to all our routes
@@ -113,6 +136,7 @@ where
                 .or(pools)
                 .or(transactions)
                 .or(quote)
-                .or(post_quote_api),
+                .or(swap)
+                .or(stake),
         )
 }

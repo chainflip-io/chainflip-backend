@@ -84,6 +84,10 @@ impl Database {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
+                SideChainTx::StakeTx(tx) => {
+                    let serialized = serde_json::to_string(tx).unwrap();
+                    Database::insert_transaction(db, tx.id, tx.into(), serialized)
+                }
                 _ => warn!("Failed to process transaction: {:?}", tx),
             }
         }
@@ -229,6 +233,10 @@ impl StateProvider for Database {
         self.get_transactions(TransactionType::Sent)
     }
 
+    fn get_stake_txs(&self) -> Vec<crate::transactions::StakeTx> {
+        self.get_transactions(TransactionType::Stake)
+    }
+
     fn get_pools(&self) -> std::collections::HashMap<crate::common::PoolCoin, Liquidity> {
         let mut map = HashMap::new();
         let changes: Vec<crate::transactions::PoolChangeTx> =
@@ -273,8 +281,8 @@ mod test {
         common::WalletAddress,
         transactions::{OutputSentTx, PoolChangeTx, StakeQuoteTx, WitnessTx},
         utils::test_utils::create_fake_output_tx,
-        utils::test_utils::create_fake_quote_tx_eth_loki,
         utils::test_utils::TEST_ETH_ADDRESS,
+        utils::test_utils::{create_fake_quote_tx_eth_loki, create_fake_stake_quote},
     };
     use rusqlite::NO_PARAMS;
 
@@ -348,7 +356,7 @@ mod test {
         let transactions: Vec<SideChainTx> = vec![
             PoolChangeTx::new(PoolCoin::BTC, 100, -100).into(),
             create_fake_quote_tx_eth_loki().into(), // Quote Tx
-            StakeQuoteTx::new(payment_id, 100, PoolCoin::BTC, 200, "id".to_owned()).into(),
+            create_fake_stake_quote(PoolCoin::ETH).into(),
             WitnessTx::new(
                 Timestamp::now(),
                 Uuid::new_v4(),
@@ -357,7 +365,6 @@ mod test {
                 0,
                 100,
                 Coin::ETH,
-                None,
             )
             .into(),
             create_fake_output_tx(Coin::ETH).into(), // Output tx

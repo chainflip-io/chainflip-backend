@@ -156,7 +156,10 @@ mod tests {
             loki_amount: LokiAmount,
             other_amount: GenericCoinAmount,
         ) -> StakeQuoteTx {
-            let stake_tx = create_fake_stake_quote_for_id(staker_id, loki_amount, other_amount);
+            let stake_tx = create_fake_stake_quote_for_id(
+                staker_id,
+                PoolCoin::from(other_amount.coin_type()).unwrap(),
+            );
             let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
             let wtx_eth = create_fake_witness(&stake_tx, other_amount, other_amount.coin_type());
 
@@ -243,7 +246,7 @@ mod tests {
         let loki_amount = LokiAmount::from_decimal_string("1.0");
         let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
-        let stake_tx = create_fake_stake_quote(loki_amount, coin_amount);
+        let stake_tx = create_fake_stake_quote(PoolCoin::from(coin_type).unwrap());
         let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
         let wtx_eth = create_fake_witness(&stake_tx, coin_amount, coin_type);
 
@@ -280,7 +283,7 @@ mod tests {
         let loki_amount = LokiAmount::from_decimal_string("1.0");
         let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
-        let stake_tx = create_fake_stake_quote(loki_amount, coin_amount);
+        let stake_tx = create_fake_stake_quote(PoolCoin::from(coin_type).unwrap());
         let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
         let wtx_eth = create_fake_witness(&stake_tx, coin_amount, coin_type);
 
@@ -297,7 +300,7 @@ mod tests {
 
         // 2. Add another stake with another staker id
 
-        let stake_tx = create_fake_stake_quote(loki_amount, coin_amount);
+        let stake_tx = create_fake_stake_quote(PoolCoin::from(coin_type).unwrap());
         let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
         let wtx_eth = create_fake_witness(&stake_tx, coin_amount, coin_type);
 
@@ -373,7 +376,8 @@ mod tests {
         let _ = runner.add_witnessed_stake_tx("Alice", loki_amount, eth_amount);
 
         // Bob creates a stake quote tx, but never pays the amounts:
-        let stake = create_fake_stake_quote_for_id("Bob", loki_amount, eth_amount);
+        let stake =
+            create_fake_stake_quote_for_id("Bob", PoolCoin::from(eth_amount.coin_type()).unwrap());
         runner.add_block([stake.clone().into()]);
 
         // Bob tries to unstake:

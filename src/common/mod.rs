@@ -1,4 +1,3 @@
-use crate::transactions::CoinTx;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, hash::Hash, time::SystemTime};
 
@@ -69,11 +68,4 @@ impl WalletAddress {
             0: address.to_owned(),
         }
     }
-}
-
-/// A representation of a block on some blockchain
-#[derive(Debug)]
-pub struct Block {
-    /// Transactions that belong to this block
-    pub txs: Vec<CoinTx>,
 }

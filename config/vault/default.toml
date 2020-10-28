@@ -3,6 +3,7 @@ net_type = "testnet"
 
 [loki.rpc]
 port = 6934
+# wallet_address = ""
 
 [eth]
 # Go to https://iancoleman.io/bip39/ to generate one

@@ -3,7 +3,14 @@ use crate::{
     side_chain::{ISideChain, MemorySideChain},
     transactions::OutputTx,
     transactions::QuoteTx,
-    vault::transactions::MemoryTransactionsProvider,
+    vault::config::BtcConfig,
+    vault::config::EthConfig,
+    vault::config::LokiConfig,
+    vault::{
+        config::NetType,
+        config::{LokiRpcConfig, VaultConfig},
+        transactions::MemoryTransactionsProvider,
+    },
 };
 use std::sync::{Arc, Mutex};
 
@@ -23,11 +30,17 @@ pub mod fake_txs;
 pub mod logging;
 
 pub use fake_txs::{create_fake_stake_quote, create_fake_witness};
+use uuid::Uuid;
 
 /// Test ETH address
 pub const TEST_ETH_ADDRESS: &str = "0x70e7db0678460c5e53f1ffc9221d1c692111dcc5";
 /// Test LOKI address
 pub const TEST_LOKI_ADDRESS: &str = "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY";
+/// Test BTC address
+pub const TEST_BTC_ADDRESS: &str = "tb1q6898gg3tkkjurdpl4cghaqgmyvs29p4x4h0552";
+
+/// Test ROOT Key
+pub const TEST_ROOT_KEY: &str = "xprv9s21ZrQH143K3sFfKzYqgjMWgvsE44f6gxaRvyo11R22u2p5qegToQaEi7e6e5mRq3f92g9yDQQtu488ggct5gUspippg678t1QTCwBRb85";
 
 /// Create a dummy quote transaction to be used for tests
 pub fn create_fake_quote_tx_eth_loki() -> QuoteTx {
@@ -50,18 +63,18 @@ pub fn create_fake_quote_tx(
     o_coin: Coin,
     o_addr: WalletAddress,
 ) -> QuoteTx {
-    QuoteTx::new(
-        Timestamp::now(),
-        i_coin,
-        i_addr.clone(),
-        "7".to_string(),
-        Some(i_addr),
-        o_coin,
-        o_addr,
-        1.0,
-        0.0,
-    )
-    .expect("Expected valid quote")
+    QuoteTx {
+        id: Uuid::new_v4(),
+        timestamp: Timestamp::now(),
+        input: i_coin,
+        input_address: i_addr.clone(),
+        input_address_id: "7".to_string(),
+        return_address: Some(i_addr),
+        output: o_coin,
+        output_address: o_addr,
+        effective_price: 1.0,
+        slippage_limit: 0.0,
+    }
 }
 
 /// Create a fake output tx
@@ -129,4 +142,32 @@ pub fn get_transactions_provider_with_chain<S: ISideChain>(
     side_chain: Arc<Mutex<S>>,
 ) -> MemoryTransactionsProvider<S> {
     MemoryTransactionsProvider::new(side_chain)
+}
+
+/// Get a fake vault node config
+pub fn get_fake_config() -> VaultConfig {
+    let loki = LokiConfig {
+        rpc: LokiRpcConfig {
+            port: 8000
+        },
+        wallet_address: "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".to_string(),
+    };
+    let eth = EthConfig {
+        master_root_key: TEST_ROOT_KEY.to_string(),
+        provider_url: "http://localhost:8080".to_string(),
+    };
+
+    let btc = BtcConfig {
+        master_root_key: TEST_ROOT_KEY.to_string(),
+        rpc_port: 1000,
+        rpc_user: "user".to_string(),
+        rpc_password: "pass".to_string(),
+    };
+
+    VaultConfig {
+        loki,
+        net_type: NetType::Testnet,
+        eth,
+        btc,
+    }
 }

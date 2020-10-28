@@ -7,7 +7,7 @@ fn fulfilled_quotes_should_produce_new_tx() {
     let loki_amount = LokiAmount::from_decimal_string("1.0");
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
-    let quote_tx = create_fake_stake_quote(loki_amount, coin_amount);
+    let quote_tx = create_fake_stake_quote(PoolCoin::from(coin_type).unwrap());
     let wtx_loki = create_fake_witness(&quote_tx, loki_amount, Coin::LOKI);
     let wtx_loki = WitnessTxWrapper::new(wtx_loki, false);
     let wtx_eth = create_fake_witness(&quote_tx, coin_amount, coin_type);
@@ -38,7 +38,7 @@ fn partially_fulfilled_quotes_do_not_produce_new_tx() {
     let loki_amount = LokiAmount::from_decimal_string("1.0");
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
-    let quote_tx = create_fake_stake_quote(loki_amount, coin_amount);
+    let quote_tx = create_fake_stake_quote(PoolCoin::from(coin_type).unwrap());
     let wtx_loki = create_fake_witness(&quote_tx, loki_amount, Coin::LOKI);
     let wtx_loki = WitnessTxWrapper::new(wtx_loki, false);
 
@@ -55,7 +55,7 @@ fn witness_tx_cannot_be_reused() {
     let loki_amount = LokiAmount::from_decimal_string("1.0");
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
-    let quote_tx = create_fake_stake_quote(loki_amount, coin_amount);
+    let quote_tx = create_fake_stake_quote(PoolCoin::from(coin_type).unwrap());
 
     let wtx_loki = create_fake_witness(&quote_tx, loki_amount, Coin::LOKI);
     // Witness has already been used before
@@ -77,7 +77,7 @@ fn quote_cannot_be_fulfilled_twice() {
     let loki_amount = LokiAmount::from_decimal_string("1.0");
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
-    let quote_tx = create_fake_stake_quote(loki_amount, coin_amount);
+    let quote_tx = create_fake_stake_quote(PoolCoin::from(coin_type).unwrap());
 
     let wtx_loki = create_fake_witness(&quote_tx, loki_amount, Coin::LOKI);
     let wtx_loki = WitnessTxWrapper::new(wtx_loki, false);
@@ -100,10 +100,7 @@ fn check_staking_smaller_amounts() {
     let coin_type = Coin::ETH;
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
-    let quote_tx = create_fake_stake_quote(
-        LokiAmount::from_decimal_string("2.0"),
-        GenericCoinAmount::from_decimal_string(coin_type, "3.0"),
-    );
+    let quote_tx = create_fake_stake_quote(PoolCoin::from(coin_type).unwrap());
     let wtx_loki = create_fake_witness(&quote_tx, loki_amount, Coin::LOKI);
     let wtx_loki = WitnessTxWrapper::new(wtx_loki, false);
     let wtx_eth = create_fake_witness(&quote_tx, coin_amount, coin_type);

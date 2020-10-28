@@ -1,11 +1,10 @@
 use std::sync::{Arc, Mutex};
 
 use blockswap::{
-    common::{Block, Timestamp},
+    common::Timestamp,
     side_chain::{ISideChain, MemorySideChain},
-    transactions::CoinTx,
     utils::test_utils,
-    vault::witness::FakeWitness,
+    vault::witness::fake_witness::{Block, CoinTx, FakeWitness},
 };
 use uuid::Uuid;
 

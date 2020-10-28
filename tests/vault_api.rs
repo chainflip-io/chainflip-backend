@@ -6,8 +6,11 @@ use reqwest::StatusCode;
 use blockswap::{
     common,
     side_chain::MemorySideChain,
+    utils::test_utils::get_fake_config,
     utils::test_utils::get_transactions_provider,
-    vault::api::{v1::post_quote::SwapQuoteResponse, APIServer},
+    vault::api::v1::post_swap::SwapQuoteResponse,
+    vault::api::APIServer,
+    vault::config::{LokiConfig, VaultConfig},
 };
 use std::sync::{Arc, Mutex};
 
@@ -63,7 +66,7 @@ async fn vault_http_server_tests() {
     let (tx, rx) = tokio::sync::oneshot::channel();
 
     let thread_handle = std::thread::spawn(move || {
-        APIServer::serve(side_chain, provider, rx);
+        APIServer::serve(&get_fake_config(), side_chain, provider, rx);
     });
 
     {

@@ -151,7 +151,6 @@ mod test {
             0,
             amount,
             quote.input,
-            None,
         )
     }
 

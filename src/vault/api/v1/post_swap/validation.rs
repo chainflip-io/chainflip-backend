@@ -1,8 +1,8 @@
-use super::QuoteParams;
+use super::SwapQuoteParams;
 use crate::utils::validation::{validate_address, validate_address_id};
 
 /// Validate quote params
-pub fn validate_params(params: &QuoteParams) -> Result<(), &'static str> {
+pub fn validate_params(params: &SwapQuoteParams) -> Result<(), &'static str> {
     // Coins
     if !params.input_coin.is_supported() {
         return Err("Input coin is not supported");
@@ -70,8 +70,8 @@ mod test {
         valid: Vec<T>,
     }
 
-    fn get_valid_params() -> QuoteParams {
-        QuoteParams {
+    fn get_valid_params() -> SwapQuoteParams {
+        SwapQuoteParams {
             input_coin: Coin::LOKI,
             input_return_address: Some(LOKI_ADDRESS.to_string()),
             input_address_id: "60900e5603bf96e3".to_owned(),
@@ -171,7 +171,7 @@ mod test {
 
         // Setting slippage requires a return address to be set
 
-        let params = QuoteParams {
+        let params = SwapQuoteParams {
             input_coin: Coin::ETH,
             input_return_address: None,
             input_address_id: "10".to_owned(),
