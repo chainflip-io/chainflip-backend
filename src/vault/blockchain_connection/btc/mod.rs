@@ -42,6 +42,14 @@ pub trait BitcoinClient {
 #[async_trait]
 /// Defines the interface for a bitcoin SPV client, used by a bitcoin SPV witness
 pub trait BitcoinSPVClient {
+    /// Estimate the fee of a Segwit tx
+    async fn get_estimated_fee(
+        &self,
+        send_tx: &SendTransaction,
+        fee_method: btc_spv::FeeMethod,
+        fee_level: u32,
+    ) -> Result<u64, String>;
+
     /// Returns UTXO list of any address
     async fn get_address_unspent(
         &self,

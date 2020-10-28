@@ -12,9 +12,11 @@ use bitcoin::{
     Transaction, Txid,
 };
 use core::str::FromStr;
-use hdwallet::secp256k1::{Message, Secp256k1};
+use hdwallet::secp256k1::{Message, PublicKey, Secp256k1};
 use hex::FromHex;
 use serde::Deserialize;
+use std::fmt::Display;
+use std::fmt::Formatter;
 
 /// Electrum SPV error
 #[derive(Debug, Deserialize)]
@@ -28,6 +30,44 @@ pub struct BtcSPVError {
 pub struct BtcSPVResponse {
     error: Option<BtcSPVError>,
     result: Option<serde_json::Value>,
+}
+
+/// Method for calculating fee
+
+/// Mempool and ETA depend on market conditions
+#[derive(Debug)]
+pub enum FeeMethod {
+    /// Static is returns a constant value, does not take market conditions into account. (0, 3000] sats/byte
+    /// These are stored as levels (0, 4], e.g. level 0 is 1000sats/kVbyte (1 sat/byte, the lowest possible)
+    Static,
+    /// ETA is based on number of blocks to confirm at tx, on average a BTC block takes ~10mins
+    Eta,
+
+    /// Mempool bases it off mempool congestion
+    Mempool,
+}
+
+impl FromStr for FeeMethod {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "eta" => Ok(FeeMethod::Eta),
+            "static" => Ok(FeeMethod::Static),
+            "mempool" => Ok(FeeMethod::Mempool),
+            _ => Err(()),
+        }
+    }
+}
+
+impl Display for FeeMethod {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            FeeMethod::Eta => write!(f, "eta"),
+            FeeMethod::Static => write!(f, "static"),
+            FeeMethod::Mempool => write!(f, "mempool"),
+        }
+    }
 }
 
 /// Can fetch UTXOs of particular addresses and send from a linked wallet using
@@ -115,6 +155,22 @@ fn select_inputs_greedy(target: u128, utxos: Vec<BtcUTXO>) -> Option<SelectInput
     })
 }
 
+fn wallet_address_from_pubkey(
+    pubkey: PublicKey,
+    network: bitcoin::Network,
+) -> Result<WalletAddress, String> {
+    let pubkey = bitcoin::PublicKey {
+        // convert between two crate versions of PublicKey
+        key: bitcoin::secp256k1::PublicKey::from_slice(&pubkey.serialize()).unwrap(),
+        // for Segwit the key must be compressed
+        compressed: true,
+    };
+    let p2pwkh_addr = bitcoin::Address::p2wpkh(&pubkey, network).map_err(|e| e.to_string())?;
+
+    let wallet_address = WalletAddress(p2pwkh_addr.to_string());
+    Ok(wallet_address)
+}
+
 impl BtcSPVClient {
     pub fn new(port: u16, username: String, password: String, network: bitcoin::Network) -> Self {
         BtcSPVClient {
@@ -173,41 +229,89 @@ impl BtcSPVClient {
         }
     }
 
-    // TODO: ESTIMATE FEES - IN THE NEXT PR
+    // Get transaction fee in satoshis, based on number of UTXOs in the transaction
+    async fn get_fee_from_num_utxos(
+        &self,
+        num_utxos_in_tx: u64,
+        fee_method: FeeMethod,
+        // fee_level is dependent on fee_method
+        fee_level: u32,
+    ) -> Result<u64, String> {
+        // 11 bytes is the base segwit tx size
+        const BASE_SEGWIT_TX_SIZE: u64 = 11;
+        const SEGWIT_INPUT_SIZE: u64 = 68;
+        const P2WPKH_OUTPUT_SIZE: u64 = 32;
+        // this is known, we have a "send to" and a "change" output
+        const NUM_OUTPUTS: u64 = 2;
+
+        let v_size = BASE_SEGWIT_TX_SIZE
+            + SEGWIT_INPUT_SIZE * num_utxos_in_tx
+            + P2WPKH_OUTPUT_SIZE * NUM_OUTPUTS;
+        let v_size = v_size as u64;
+
+        let fee_rate = self.get_fee_rate(fee_method, fee_level).await?;
+
+        // get_fee_rate returns in sats/kvBytes (virtual kilobytes)
+        let fee_rate = fee_rate as f64 / 1000 as f64;
+        let mut fee_rate = fee_rate.ceil() as u64;
+
+        // the lowest the fee per byte can be is 1 sat
+        if fee_rate < 1 {
+            fee_rate = 1;
+        }
+
+        let fee = v_size
+            .checked_mul(fee_rate)
+            .expect("Virtual tx size * fee rate overflowed");
+
+        Ok(fee)
+    }
 
     /// Constructs a raw transaction, aggregating a wallet's UTXOs for sending
     async fn construct_raw_tx(
         &self,
         send_transaction: &SendTransaction,
     ) -> Result<(Transaction, Vec<BtcUTXO>), String> {
-        let send_to = WalletAddress(send_transaction.to.to_string());
         let amount = send_transaction.amount;
-        let keypair = send_transaction.from.clone();
-        let utxos = self.get_address_unspent(&send_to).await?.0;
-
-        // Just add a 2000 sat fee for now, do fee estimation in next PR
-        let select_inputs = match select_inputs_greedy(amount.to_atomic() + 2000, utxos) {
-            Some(inputs) => inputs,
-            None => {
-                return Err(format!(
-                    "Cannot send to {}, this wallet has less than {} Satoshis",
-                    send_to.to_string(),
-                    amount.to_atomic()
-                ));
-            }
-        };
-        let inputs: Vec<BtcUTXO> = select_inputs.utxos;
-        let change: u128 = select_inputs.change;
-
+        let sender_keypair = send_transaction.from.clone();
         let sender_pubkey = bitcoin::PublicKey {
             // convert between two crate versions of PublicKey
-            key: bitcoin::secp256k1::PublicKey::from_slice(&keypair.public_key.serialize())
+            key: bitcoin::secp256k1::PublicKey::from_slice(&sender_keypair.public_key.serialize())
                 .unwrap(),
             // for Segwit the key must be compressed
             compressed: true,
         };
 
-        // throws error if uncompressed pubkey provided (segwit must have compressed key)
+        let sender_wallet_address =
+            wallet_address_from_pubkey(sender_keypair.public_key, self.network)?;
+
+        let utxos = self.get_address_unspent(&sender_wallet_address).await?.0;
+
+        let select_inputs = match select_inputs_greedy(amount.to_atomic(), utxos) {
+            Some(inputs) => inputs,
+            None => {
+                return Err(format!(
+                    "Cannot send to {}, this wallet has less than {} Satoshis",
+                    send_transaction.to.to_string(),
+                    amount.to_atomic()
+                ));
+            }
+        };
+        let inputs: Vec<BtcUTXO> = select_inputs.utxos;
+        let fee = self
+            .get_fee_from_num_utxos(inputs.len() as u64, FeeMethod::Eta, 1)
+            .await?;
+
+        if fee as u128 > amount.to_atomic() {
+            return Err(format!(
+                "Fee of {} is greater than send amount of {} (in atomic units)",
+                fee,
+                amount.to_atomic()
+            ));
+        }
+
+        let change: u128 = select_inputs.change;
+
         let btc_sender_script_pubkey = match bitcoin::Address::p2wpkh(&sender_pubkey, self.network)
         {
             Ok(addr) => addr.script_pubkey(),
@@ -228,9 +332,8 @@ impl BtcSPVClient {
                 previous_output: outpoint,
                 // empty sig for segwit UTXOs
                 script_sig: Script::new(),
-                // I assume this is the position in the new tx?
                 sequence: 0xFFFFFFFF,
-                // add later
+                // added by signing step
                 witness: Vec::default(),
             };
             txins.push(txin);
@@ -240,13 +343,13 @@ impl BtcSPVClient {
 
         // Change (unspent from inputs must be sent back to sending wallet)
         let change_tx_out = TxOut {
-            value: change as u64, // -fee from the sender's "wallet" -> Already included in the selection of utxos
+            value: change as u64,
             script_pubkey: btc_sender_script_pubkey,
         };
 
         // Actual outgoing transaction
         let send_tx_out = TxOut {
-            value: amount.to_atomic() as u64,
+            value: amount.to_atomic() as u64 - fee, // the user, not chainflip, pays the fee
             script_pubkey: send_to_script_pubkey,
         };
 
@@ -337,6 +440,26 @@ impl BtcSPVClient {
 
         Ok(txid)
     }
+
+    async fn get_fee_rate(&self, fee_method: FeeMethod, fee_level: u32) -> Result<u64, String> {
+        let fee_method_string = fee_method.to_string();
+        let params = serde_json::json!(
+        {
+            "fee_method": fee_method_string,
+            "fee_level": fee_level
+        });
+        let res = self
+            .send_req_inner("getfeerate", params)
+            .await
+            .map_err(|err| err.to_string())?;
+
+        let feerate = res
+            .as_u64()
+            .ok_or("Could not cast result to u64")
+            .map_err(|e| e.to_string())?;
+
+        Ok(feerate)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -390,6 +513,25 @@ impl BitcoinSPVClient for BtcSPVClient {
             serde_json::from_value(res).map_err(|err| err.to_string())?;
 
         Ok(unspent_response)
+    }
+
+    async fn get_estimated_fee(
+        &self,
+        send_tx: &SendTransaction,
+        fee_method: FeeMethod,
+        fee_level: u32,
+    ) -> Result<u64, String> {
+        let wallet_address = wallet_address_from_pubkey(send_tx.from.public_key, self.network)?;
+
+        let utxos = self.get_address_unspent(&wallet_address).await?.0;
+        let inputs = select_inputs_greedy(send_tx.amount.to_atomic(), utxos).ok_or(format!(
+            "Wallet {} does not have {} Sats to make this transaction",
+            wallet_address.to_string(),
+            send_tx.amount.to_atomic()
+        ))?;
+
+        self.get_fee_from_num_utxos(inputs.utxos.len() as u64, fee_method, fee_level)
+            .await
     }
 }
 
@@ -469,10 +611,9 @@ mod test {
     #[tokio::test]
     #[ignore = "Depends on SPV client"]
     async fn constructs_raw_tx_signs_and_sends_tx() {
-        // let client = TestBitcoinSPVClient::new();
         let client = get_test_BtcSPVClient();
 
-        let amount = GenericCoinAmount::from_atomic(Coin::BTC, 200);
+        let amount = GenericCoinAmount::from_atomic(Coin::BTC, 300);
         let keypair = get_key_pair();
 
         let send_to_btc_pubkey = bitcoin::PublicKey {
@@ -495,6 +636,15 @@ mod test {
 
         let tx = client.send(&send_transaction).await;
         assert!(tx.is_ok());
+    }
+
+    #[tokio::test]
+    #[ignore = "Depends on SPV Client"]
+    async fn get_fee_rate() {
+        let client = get_test_BtcSPVClient();
+        // confirm with an ETA confirmation of 4 blocks
+        let resp = client.get_fee_rate(FeeMethod::Eta, 4).await;
+        assert!(resp.is_ok());
     }
 
     #[test]
@@ -534,9 +684,53 @@ mod test {
         assert_eq!(change, 1000);
     }
 
+    #[tokio::test]
+    #[ignore = "Depends on SPV Client"]
+    async fn get_estimated_fee() {
+        let client = get_test_BtcSPVClient();
+        let amount = GenericCoinAmount::from_atomic(Coin::BTC, 400);
+        let keypair = get_key_pair();
+
+        let send_to_btc_pubkey = bitcoin::PublicKey {
+            // convert between two crate versions of PublicKey
+            key: bitcoin::secp256k1::PublicKey::from_slice(&keypair.public_key.serialize())
+                .unwrap(),
+            // Segwit is always compressed
+            compressed: true,
+        };
+
+        let send_to_btc_addr =
+            bitcoin::Address::p2wpkh(&send_to_btc_pubkey, client.network).unwrap();
+
+        // send to self
+        let send_transaction = SendTransaction {
+            from: keypair,
+            to: send_to_btc_addr,
+            amount,
+        };
+
+        let fee = client
+            .get_estimated_fee(&send_transaction, FeeMethod::Eta, 1)
+            .await;
+        assert!(fee.is_ok());
+        let fee = fee.unwrap();
+        println!("The fee returned is: {}", fee);
+    }
+
     #[test]
     #[ignore]
     fn get_greedy_inputs_with_fee() {
+        todo!()
+    }
+
+    #[test]
+    #[ignore = "todo"]
+    fn wallet_address_from_pubkey() {
+        todo!()
+    }
+
+    // if we attempt to send 200 sats but estimated fee is 250, what should happen?
+    fn fee_greater_than_amount_to_be_sent() {
         todo!()
     }
 }

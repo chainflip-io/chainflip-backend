@@ -113,4 +113,13 @@ impl BitcoinSPVClient for TestBitcoinSPVClient {
             .clone();
         Ok(AddressUnspentResponse(utxos_for_address))
     }
+
+    async fn get_estimated_fee(
+        &self,
+        send_tx: &SendTransaction,
+        fee_method: btc_spv::FeeMethod,
+        fee_level: u32,
+    ) -> Result<u64, String> {
+        Ok(1000)
+    }
 }
