@@ -30,15 +30,8 @@ pub async fn stake<V: VaultNodeInterface>(
     vault_node: Arc<V>,
     input_id_cache: Arc<Mutex<HashMap<Coin, BTreeSet<String>>>>,
 ) -> Result<serde_json::Value, ResponseError> {
-    let coin = match Coin::from_str(&params.pool) {
-        Ok(coin) => coin,
-        Err(_) => {
-            return Err(ResponseError::new(
-                StatusCode::BAD_REQUEST,
-                "Invalid pool coin",
-            ))
-        }
-    };
+    let coin = Coin::from_str(&params.pool)
+        .map_err(|_| ResponseError::new(StatusCode::BAD_REQUEST, "Invalid pool coin"))?;
 
     if let Err(_) = PoolCoin::from(coin) {
         return Err(ResponseError::new(

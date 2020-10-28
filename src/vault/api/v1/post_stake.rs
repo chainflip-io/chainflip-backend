@@ -56,19 +56,15 @@ pub async fn stake<T: TransactionProvider>(
 ) -> Result<StakeQuoteResponse, ResponseError> {
     let original_params = params.clone();
 
-    let pool_coin = match PoolCoin::from(params.pool) {
-        Ok(coin) => coin,
-        Err(_) => return Err(bad_request("Invalid pool specified")),
-    };
+    let pool_coin =
+        PoolCoin::from(params.pool).map_err(|_| bad_request("Invalid pool specified"))?;
 
     if let Err(_) = validate_address_id(params.pool, &params.coin_input_address_id) {
         return Err(bad_request("Invalid coin input address id"));
     }
 
-    let loki_input_address_id = match LokiPaymentId::from_str(&params.loki_input_address_id) {
-        Ok(id) => id,
-        Err(_) => return Err(bad_request("Invalid loki input address id")),
-    };
+    let loki_input_address_id = LokiPaymentId::from_str(&params.loki_input_address_id)
+        .map_err(|_| bad_request("Invalid loki input address id"))?;
 
     let mut provider = provider.write();
     provider.sync();

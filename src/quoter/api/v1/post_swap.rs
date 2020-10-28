@@ -38,25 +38,11 @@ pub async fn swap<V: VaultNodeInterface>(
     vault_node: Arc<V>,
     input_id_cache: Arc<Mutex<HashMap<Coin, BTreeSet<String>>>>,
 ) -> Result<serde_json::Value, ResponseError> {
-    let input_coin = match Coin::from_str(&params.input_coin) {
-        Ok(coin) => coin,
-        Err(_) => {
-            return Err(ResponseError::new(
-                StatusCode::BAD_REQUEST,
-                "Invalid input coin",
-            ))
-        }
-    };
+    let input_coin = Coin::from_str(&params.input_coin)
+        .map_err(|_| ResponseError::new(StatusCode::BAD_REQUEST, "Invalid input coin"))?;
 
-    let output_coin = match Coin::from_str(&params.output_coin) {
-        Ok(coin) => coin,
-        Err(_) => {
-            return Err(ResponseError::new(
-                StatusCode::BAD_REQUEST,
-                "Invalid output coin",
-            ))
-        }
-    };
+    let output_coin = Coin::from_str(&params.output_coin)
+        .map_err(|_| ResponseError::new(StatusCode::BAD_REQUEST, "Invalid output coin"))?;
 
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
