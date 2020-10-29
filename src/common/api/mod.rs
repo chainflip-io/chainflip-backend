@@ -164,6 +164,8 @@ pub async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, 
         response_error = error.clone();
     } else if let Some(_) = err.find::<warp::filters::body::BodyDeserializeError>() {
         response_error = ResponseError::new(warp::http::StatusCode::BAD_REQUEST, "Invalid Body");
+    } else if let Some(_) = err.find::<warp::reject::InvalidQuery>() {
+        response_error = ResponseError::new(warp::http::StatusCode::BAD_REQUEST, "Invalid Query");
     } else if let Some(_) = err.find::<warp::reject::MethodNotAllowed>() {
         response_error = ResponseError::new(
             warp::http::StatusCode::METHOD_NOT_ALLOWED,
