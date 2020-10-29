@@ -1,3 +1,6 @@
+[profile.release]
+debug = true
+
 [package]
 authors = ["Maxim Shishmarev <maxim@loki.network>"]
 edition = "2018"
