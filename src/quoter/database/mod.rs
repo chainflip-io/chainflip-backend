@@ -23,16 +23,6 @@ pub struct Database {
     connection: Connection,
 }
 
-fn deserialize<T: DeserializeOwned>(data: &str) -> Option<T> {
-    match serde_json::from_str::<T>(data) {
-        Ok(block) => Some(block),
-        Err(err) => {
-            error!("Failed to parse json: {}", err);
-            None
-        }
-    }
-}
-
 impl Database {
     /// Returns a database instance from the given path.
     pub fn open(file: &str) -> Self {
@@ -99,23 +89,19 @@ impl Database {
         .expect("Failed to create statement");
     }
 
-    fn get_rows<T, P, F>(&self, stmt: &str, params: P, mut row_fn: F) -> Vec<T>
+    fn get_rows<T, P, F>(&self, stmt: &str, params: P, row_fn: F) -> Vec<T>
     where
         T: DeserializeOwned,
         P: IntoIterator,
         P::Item: ToSql,
-        F: FnMut(&Row<'_>) -> Option<String>,
+        F: FnMut(&Row<'_>) -> Result<String, rusqlite::Error>,
     {
         let mut stmt = self
             .connection
             .prepare(stmt)
             .expect("Could not prepare stmt");
 
-        let rows = match stmt.query_map(params, |row| {
-            let result = row_fn(row);
-            let result: Option<T> = result.and_then(|data| deserialize(&data));
-            Ok(result)
-        }) {
+        let rows = match stmt.query_map(params, row_fn) {
             Ok(rows) => rows,
             Err(err) => {
                 debug!("Failed to fetch database rows: {}", err);
@@ -125,8 +111,10 @@ impl Database {
 
         let mut results = vec![];
         for result in rows {
-            // We can unwrap here safely because our function in query_map doesn't throw error
-            if let Some(data) = result.unwrap() {
+            if let Some(data) = result
+                .ok()
+                .and_then(|data| serde_json::from_str::<T>(&data).ok())
+            {
                 results.push(data)
             }
         }
@@ -134,36 +122,27 @@ impl Database {
         results
     }
 
-    fn get_row<T, P, F>(&self, stmt: &str, params: P, mut row_fn: F) -> Option<T>
+    fn get_row<T, P, F>(&self, stmt: &str, params: P, row_fn: F) -> Option<T>
     where
         T: DeserializeOwned,
         P: IntoIterator,
         P::Item: ToSql,
-        F: FnMut(&Row<'_>) -> Option<String>,
+        F: FnOnce(&Row<'_>) -> Result<String, rusqlite::Error>,
     {
         let mut stmt = self
             .connection
             .prepare(stmt)
             .expect("Could not prepare stmt");
 
-        stmt.query_row(params, |row| {
-            let result = row_fn(row);
-            match result.and_then(|data| deserialize(&data)) {
-                Some(value) => Ok(value),
-                None => {
-                    debug!("Failed to deserialize row data");
-                    Err(rusqlite::Error::QueryReturnedNoRows)
-                }
-            }
-        })
-        .ok()
+        let data = stmt.query_row(params, row_fn).ok()?;
+        serde_json::from_str::<T>(&data).ok()
     }
 
     fn get_transactions<T: DeserializeOwned>(&self, tx_type: TransactionType) -> Vec<T> {
         self.get_rows(
             "SELECT data from transactions where type = ?",
             params![tx_type.to_string()],
-            |row| row.get(0).ok(),
+            |row| row.get(0),
         )
     }
 
@@ -171,7 +150,7 @@ impl Database {
         self.get_row(
             "SELECT data from transactions where id = ?",
             params![id.to_string()],
-            |row| row.get(0).ok(),
+            |row| row.get(0),
         )
     }
 }
