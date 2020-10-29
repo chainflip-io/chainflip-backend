@@ -1,4 +1,4 @@
-name: Rust
+name: Chainflip
 
 on:
   push:
@@ -28,8 +28,10 @@ jobs:
     - name: Run tests
       run: cargo test --verbose
     - name: Upload artifacts
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v2
       with:
-        name: ${{ runner.OS }}
-        path: target/release
+        name: ${{ runner.os }} - Vault and quoter binaries
+        path: |
+          target/release/quoter
+          target/release/vault
     
