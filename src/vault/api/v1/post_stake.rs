@@ -142,7 +142,7 @@ pub async fn stake<T: TransactionProvider>(
         };
 
     let staker_id = StakerId::new(params.staker_id.clone())
-        .map_err(|err| bad_request(&format!("Invalid staker_id: {}", err)))?;
+        .map_err(|err| bad_request("Invalid staker id"))?;
 
     let quote = StakeQuoteTx::new(
         Timestamp::now(),
