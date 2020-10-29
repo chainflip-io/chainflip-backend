@@ -86,11 +86,10 @@ impl StakerId {
     pub fn new<T: ToString>(pubkey_hex: T) -> Result<Self, &'static str> {
         let pubkey: String = pubkey_hex.to_string();
 
-        let len = "0433829aa2cccda485ee215421bd6c2af3e6e1702e3202790af42a7332c3fc06ec08beafef0b504ed20d5176f6323da3a4d34c5761a82487087d93ebd673ca7293".len();
+        /// Expected pubkey length in hex (65 bytes)
+        const PUBKEY_LEN: usize = 130;
 
-        dbg!(len);
-
-        if pubkey.len() == len {
+        if pubkey.len() == PUBKEY_LEN {
             Ok(StakerId(pubkey))
         } else {
             Err("Unexpected pubkey length")
