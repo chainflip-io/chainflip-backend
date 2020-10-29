@@ -2,7 +2,7 @@ use serde;
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::fmt;
-use std::{future::Future, sync::Arc};
+use std::future::Future;
 use warp::{reject::Reject, Filter};
 
 /// A representation of a response error.

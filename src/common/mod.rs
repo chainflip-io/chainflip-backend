@@ -1,3 +1,4 @@
+use ring::signature::{EcdsaKeyPair, KeyPair};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, hash::Hash, time::SystemTime};
 
@@ -21,7 +22,7 @@ pub mod store;
 /// Liquidity provider
 pub mod liquidity_provider;
 
-pub use liquidity_provider::Liquidity;
+pub use liquidity_provider::{Liquidity, LiquidityProvider};
 
 pub use coins::{Coin, GenericCoinAmount, PoolCoin};
 
@@ -67,5 +68,55 @@ impl WalletAddress {
         WalletAddress {
             0: address.to_owned(),
         }
+    }
+}
+
+/// Staker's identity (Hex-encoded ECDSA P-256 Public Key)
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
+pub struct StakerId(String);
+
+impl std::fmt::Display for StakerId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", &self.0)
+    }
+}
+
+impl StakerId {
+    /// Create from hex representation of the public key
+    pub fn new<T: ToString>(pubkey_hex: T) -> Result<Self, &'static str> {
+        let pubkey: String = pubkey_hex.to_string();
+
+        /// Expected pubkey length in hex (65 bytes)
+        const PUBKEY_LEN: usize = 130;
+
+        if pubkey.len() == PUBKEY_LEN {
+            Ok(StakerId(pubkey))
+        } else {
+            Err("Unexpected pubkey length")
+        }
+    }
+
+    /// Get the inner representation (as hex string)
+    pub fn inner(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Staker capable of siging unstake transactions
+pub struct Staker {
+    /// Keypair used for signing
+    pub keys: EcdsaKeyPair,
+}
+
+impl Staker {
+    /// Convenience method to get hex-encoded pubkey
+    pub fn public_key(&self) -> String {
+        hex::encode(self.keys.public_key())
+    }
+
+    /// Convenience method to generate staker id from keys
+    pub fn id(&self) -> StakerId {
+        let pk = self.public_key();
+        StakerId::new(pk).expect("Valid keypair shouldn't generate invalid staker id")
     }
 }

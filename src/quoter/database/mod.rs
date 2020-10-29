@@ -4,17 +4,15 @@ use self::types::TransactionType;
 
 use super::{BlockProcessor, StateProvider};
 use crate::{
-    common::liquidity_provider::LiquidityProvider,
     common::store::utils::SQLite as KVS,
-    common::Liquidity,
+    common::{Liquidity, LiquidityProvider},
     side_chain::{SideChainBlock, SideChainTx},
 };
 use itertools::Itertools;
 use rusqlite::{self, Row, ToSql, Transaction};
 use rusqlite::{params, Connection};
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::de::DeserializeOwned;
 use uuid::Uuid;
-use web3::types::U256;
 
 mod migration;
 mod types;
@@ -270,20 +268,17 @@ impl LiquidityProvider for Database {
 
 #[cfg(test)]
 mod test {
-    use std::str::FromStr;
-
     use super::*;
+
     use crate::{
-        common::Coin,
-        common::LokiPaymentId,
-        common::PoolCoin,
-        common::Timestamp,
-        common::WalletAddress,
-        transactions::{OutputSentTx, PoolChangeTx, StakeQuoteTx, WitnessTx},
-        utils::test_utils::create_fake_output_tx,
+        common::*,
+        transactions::{OutputSentTx, PoolChangeTx, WitnessTx},
         utils::test_utils::TEST_ETH_ADDRESS,
-        utils::test_utils::{create_fake_quote_tx_eth_loki, create_fake_stake_quote},
+        utils::test_utils::{
+            create_fake_output_tx, create_fake_quote_tx_eth_loki, create_fake_stake_quote,
+        },
     };
+
     use rusqlite::NO_PARAMS;
 
     fn setup() -> Database {
@@ -350,8 +345,6 @@ mod test {
     fn processes_transactions() {
         let mut db = setup();
         let tx = db.connection.transaction().unwrap();
-
-        let payment_id = LokiPaymentId::from_str("60900e5603bf96e3").unwrap();
 
         let transactions: Vec<SideChainTx> = vec![
             PoolChangeTx::new(PoolCoin::BTC, 100, -100).into(),

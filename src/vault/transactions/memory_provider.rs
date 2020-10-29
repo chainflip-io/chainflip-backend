@@ -3,7 +3,7 @@ use parking_lot::RwLock;
 use crate::{
     common::{
         liquidity_provider::{Liquidity, LiquidityProvider, MemoryLiquidityProvider},
-        GenericCoinAmount, LokiAmount, PoolCoin,
+        GenericCoinAmount, LokiAmount, PoolCoin, StakerId,
     },
     side_chain::{ISideChain, SideChainTx},
     transactions::{
@@ -52,9 +52,6 @@ impl WitnessTxWrapper {
         WitnessTxWrapper { inner, used }
     }
 }
-
-/// Staker Identity
-pub type StakerId = String;
 
 /// Integer value used to indicate the how much of the pool's
 /// value is associated with a given staker id.

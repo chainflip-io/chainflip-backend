@@ -152,12 +152,12 @@ mod tests {
         /// necessary for the stake to be registered
         fn add_witnessed_stake_tx(
             &mut self,
-            staker_id: &str,
+            staker_id: &StakerId,
             loki_amount: LokiAmount,
             other_amount: GenericCoinAmount,
         ) -> StakeQuoteTx {
             let stake_tx = create_fake_stake_quote_for_id(
-                staker_id,
+                staker_id.to_owned(),
                 PoolCoin::from(other_amount.coin_type()).unwrap(),
             );
             let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
@@ -221,21 +221,16 @@ mod tests {
 
     use super::*;
     use blockswap::{
-        common::liquidity_provider::LiquidityProvider, common::WalletAddress,
-        transactions::StakeQuoteTx, utils::test_utils::fake_txs::create_fake_stake_quote_for_id,
+        common::StakerId,
+        common::{LiquidityProvider, Staker},
+        transactions::signatures::get_random_staker,
+        transactions::StakeQuoteTx,
+        utils::test_utils::fake_txs::{create_fake_stake_quote_for_id, create_unstake_for_staker},
     };
     use test_utils::*;
 
-    fn create_unstake_tx(tx: &StakeQuoteTx) -> UnstakeRequestTx {
-        let loki_address = WalletAddress::new("T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY");
-        let other_address = WalletAddress::new("0x70e7db0678460c5e53f1ffc9221d1c692111dcc5");
-
-        UnstakeRequestTx::new(
-            tx.coin_type,
-            tx.staker_id.clone(),
-            loki_address,
-            other_address,
-        )
+    fn create_unstake_tx(pool: PoolCoin, staker: &Staker) -> UnstakeRequestTx {
+        create_unstake_for_staker(pool, staker)
     }
 
     #[test]
@@ -317,12 +312,14 @@ mod tests {
         let loki_amount = LokiAmount::from_decimal_string("1.0");
         let eth_amount = GenericCoinAmount::from_decimal_string(Coin::ETH, "2.0");
 
-        let stake_tx = runner.add_witnessed_stake_tx("Alice", loki_amount, eth_amount);
+        let staker = get_random_staker();
+
+        let stake_tx = runner.add_witnessed_stake_tx(&staker.id(), loki_amount, eth_amount);
 
         // Check that the liquidity is non-zero before unstaking
         runner.check_eth_liquidity(loki_amount.to_atomic(), eth_amount.to_atomic());
 
-        let unstake_tx = create_unstake_tx(&stake_tx);
+        let unstake_tx = create_unstake_tx(stake_tx.coin_type, &staker);
 
         runner.add_block([unstake_tx.clone().into()]);
 
@@ -345,13 +342,16 @@ mod tests {
         let loki_amount = LokiAmount::from_decimal_string("1.0");
         let eth_amount = GenericCoinAmount::from_decimal_string(Coin::ETH, "2.0");
 
-        let _ = runner.add_witnessed_stake_tx("Alice", loki_amount, eth_amount);
-        let stake2 = runner.add_witnessed_stake_tx("Bob", loki_amount, eth_amount);
+        let alice = get_random_staker();
+        let bob = get_random_staker();
+
+        let _ = runner.add_witnessed_stake_tx(&alice.id(), loki_amount, eth_amount);
+        let stake2 = runner.add_witnessed_stake_tx(&bob.id(), loki_amount, eth_amount);
 
         // Check that liquidity is the sum of two stakes
         runner.check_eth_liquidity(loki_amount.to_atomic() * 2, eth_amount.to_atomic() * 2);
 
-        let unstake_tx = create_unstake_tx(&stake2);
+        let unstake_tx = create_unstake_tx(stake2.coin_type, &bob);
         runner.add_block([unstake_tx.clone().into()]);
 
         // Check that outputs have been payed out
@@ -373,15 +373,22 @@ mod tests {
         let loki_amount = LokiAmount::from_decimal_string("1.0");
         let eth_amount = GenericCoinAmount::from_decimal_string(Coin::ETH, "2.0");
 
-        let _ = runner.add_witnessed_stake_tx("Alice", loki_amount, eth_amount);
+        let alice = get_random_staker();
+
+        let _ = runner.add_witnessed_stake_tx(&alice.id(), loki_amount, eth_amount);
+
+        let bob = get_random_staker();
 
         // Bob creates a stake quote tx, but never pays the amounts:
-        let stake =
-            create_fake_stake_quote_for_id("Bob", PoolCoin::from(eth_amount.coin_type()).unwrap());
+        let stake = create_fake_stake_quote_for_id(
+            bob.id(),
+            PoolCoin::from(eth_amount.coin_type()).unwrap(),
+        );
+
         runner.add_block([stake.clone().into()]);
 
         // Bob tries to unstake:
-        let unstake_tx = create_unstake_tx(&stake);
+        let unstake_tx = create_unstake_tx(stake.coin_type, &bob);
         runner.add_block([unstake_tx.clone().into()]);
 
         // Check that no outputs are created:
@@ -393,5 +400,11 @@ mod tests {
             .count();
 
         assert_eq!(outputs, 0);
+    }
+
+    #[test]
+    #[ignore = "todo"]
+    fn cannot_unstake_with_invalid_signature() {
+        todo!();
     }
 }

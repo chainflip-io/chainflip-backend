@@ -1,5 +1,5 @@
 use crate::{
-    common::liquidity_provider::LiquidityProvider,
+    common::LiquidityProvider,
     side_chain::SideChainTx,
     transactions::{OutputTx, QuoteTx, StakeQuoteTx, UnstakeRequestTx},
 };

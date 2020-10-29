@@ -1,10 +1,13 @@
 use crate::{
-    common::{Coin, LokiAmount, LokiPaymentId, PoolCoin, Timestamp, WalletAddress},
+    common::*,
     utils::validation::{validate_address, validate_address_id},
 };
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+/// Signing of unstake transactions
+pub mod signatures;
 
 /// Quote transaction stored on the Side Chain
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -121,7 +124,7 @@ pub struct StakeQuoteTx {
     /// Info used to uniquely identify payment
     pub loki_input_address_id: LokiPaymentId,
     /// Stakers identity
-    pub staker_id: String,
+    pub staker_id: StakerId,
 }
 
 impl StakeQuoteTx {
@@ -133,7 +136,7 @@ impl StakeQuoteTx {
         coin_input_address_id: String,
         loki_input_address: WalletAddress,
         loki_input_address_id: LokiPaymentId,
-        staker_id: String,
+        staker_id: StakerId,
     ) -> Result<Self, &'static str> {
         if validate_address_id(coin_type.get_coin(), &coin_input_address_id).is_err() {
             return Err("Coin input address id is invalid");
@@ -250,9 +253,8 @@ pub struct StakeTx {
     pub quote_tx: Uuid,
     /// Identifier of the corresponding witness transactions
     pub witness_txs: Vec<Uuid>,
-    /// For now this is just a simple way to identify "stakers".
-    /// We are likely to replace with something more private
-    pub staker_id: String,
+    /// Staker's identity
+    pub staker_id: StakerId,
     /// Pool in which the stake is made
     pub pool: PoolCoin,
     /// Amount in the loki pool attributed to the staker in this tx
@@ -267,23 +269,29 @@ pub struct StakeTx {
 pub struct UnstakeRequestTx {
     /// Unique identifier
     pub id: Uuid,
-    /// Stakers identity (TODO: needs to be more private and with authentication)
-    pub staker_id: String,
+    /// Staker's identity
+    pub staker_id: StakerId,
     /// Which pool to unstake from
     pub pool: PoolCoin,
     /// Address to which withdraw loki
     pub loki_address: WalletAddress,
     /// Address to which withdraw the other coin
     pub other_address: WalletAddress,
+    /// Time of creation
+    pub timestamp: Timestamp,
+    /// Signature ECDSA-P256-SHA256
+    pub signature: String,
 }
 
 impl UnstakeRequestTx {
     /// Construct from staker_id
     pub fn new(
         pool: PoolCoin,
-        staker_id: String,
+        staker_id: StakerId,
         loki_address: WalletAddress,
         other_address: WalletAddress,
+        timestamp: Timestamp,
+        signature: String,
     ) -> Self {
         Self {
             id: Uuid::new_v4(),
@@ -291,6 +299,8 @@ impl UnstakeRequestTx {
             pool,
             loki_address,
             other_address,
+            timestamp,
+            signature,
         }
     }
 }

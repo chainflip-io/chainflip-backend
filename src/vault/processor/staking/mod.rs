@@ -1,8 +1,9 @@
 mod tests;
 
 use crate::{
-    common::{Coin, GenericCoinAmount, LokiAmount, PoolCoin, Timestamp},
+    common::*,
     side_chain::SideChainTx,
+    transactions::signatures::verify_unstake,
     transactions::{OutputTx, PoolChangeTx, StakeQuoteTx, StakeTx, UnstakeRequestTx},
     vault::transactions::{
         memory_provider::{FulfilledTxWrapper, Portion, WitnessTxWrapper},
@@ -211,7 +212,7 @@ fn get_portion_of_amount(total: u128, portion: Portion) -> u128 {
 fn get_amounts_unstakable<T: TransactionProvider>(
     tx_provider: &T,
     pool: PoolCoin,
-    staker: &str,
+    staker: &StakerId,
 ) -> Result<(LokiAmount, GenericCoinAmount), String> {
     info!("Handling unstake tx for staker: {}", staker);
 
@@ -309,9 +310,19 @@ fn process_unstake_tx<T: TransactionProvider>(
 pub(super) fn process_unstakes<T: TransactionProvider>(tx_provider: &mut T) {
     let unstake_txs = tx_provider.get_unstake_request_txs();
 
-    let mut output_txs: Vec<SideChainTx> = Vec::with_capacity(unstake_txs.len() * 3);
+    let (valid_txs, invalid_txs): (Vec<_>, Vec<_>) = unstake_txs
+        .iter()
+        .partition(|tx| verify_unstake(tx).is_ok());
 
-    for tx in unstake_txs {
+    for tx in invalid_txs {
+        warn!("Invalid signature for unstake request {}", tx.id);
+    }
+
+    // TODO: tx with invalid signatures should be removed (or not be added in the first place?)
+
+    let mut output_txs: Vec<SideChainTx> = Vec::with_capacity(valid_txs.len() * 3);
+
+    for tx in valid_txs {
         match process_unstake_tx(tx_provider, tx) {
             Ok((output1, output2, pool_change)) => {
                 output_txs.push(output1.into());
