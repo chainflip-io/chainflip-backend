@@ -4,62 +4,33 @@
 
 // Events: Lokid transaction, Ether transaction, Swap transaction from Side Chain
 
-use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use crossbeam_channel::Receiver;
+use parking_lot::RwLock;
+use uuid::Uuid;
 
-use crate::transactions::{QuoteTx, WitnessTx};
 use crate::vault::blockchain_connection::{Payment, Payments};
-use crate::{
-    common::Timestamp,
-    side_chain::{ISideChain, SideChainTx},
-};
+use crate::{common::Timestamp, side_chain::SideChainTx};
+use crate::{transactions::WitnessTx, vault::transactions::TransactionProvider};
 
 use crate::common::Coin;
 
 /// Witness Mock
-pub struct LokiWitness<T>
-where
-    T: ISideChain + Send,
-{
-    // TODO: need to make sure we keep track of which quotes have been witnessed
-    /// Outstanding quotes (make sure this stays synced)
-    quotes: HashSet<QuoteTx>,
+pub struct LokiWitness<T: TransactionProvider> {
+    transaction_provider: Arc<RwLock<T>>,
     loki_connection: Receiver<Payments>,
-    side_chain: Arc<Mutex<T>>,
-    // We should save this to a DB (maybe not, because when we restart, we might want to rescan the db for all quotes?)
-    next_block_idx: u32, // block from the side chain
 }
 
 impl<T> LokiWitness<T>
 where
-    T: ISideChain + Send + 'static,
+    T: TransactionProvider + Send + Sync + 'static,
 {
     /// Create Loki witness
-    pub fn new(bc: Receiver<Payments>, side_chain: Arc<Mutex<T>>) -> LokiWitness<T> {
-        let next_block_idx = 0;
-
+    pub fn new(bc: Receiver<Payments>, transaction_provider: Arc<RwLock<T>>) -> LokiWitness<T> {
         LokiWitness {
-            quotes: HashSet::new(),
             loki_connection: bc,
-            side_chain,
-            next_block_idx,
-        }
-    }
-
-    fn poll_side_chain(&mut self) {
-        let side_chain = self.side_chain.lock().unwrap();
-
-        while let Some(block) = side_chain.get_block(self.next_block_idx) {
-            for tx in &block.transactions {
-                if let SideChainTx::QuoteTx(tx) = tx {
-                    debug!("Registered quote tx: {:?}", tx.id);
-                    self.quotes.insert(tx.clone());
-                }
-            }
-
-            self.next_block_idx = self.next_block_idx + 1;
+            transaction_provider,
         }
     }
 
@@ -95,54 +66,26 @@ where
 
     fn event_loop(mut self) {
         loop {
-            // Check the blockchain for quote tx on the side chain
-            self.poll_side_chain();
-
             self.poll_main_chain();
 
-            std::thread::sleep(std::time::Duration::from_millis(10));
+            std::thread::sleep(std::time::Duration::from_secs(10));
         }
     }
 
+    /// Start the loki witness
     pub fn start(self) {
         std::thread::spawn(move || {
             self.event_loop();
         });
     }
 
-    /// Check whether `tx` matches any outstanding qoute and take the value from the set
-    fn find_and_take_matching_quote(&mut self, payment: &Payment) -> Option<QuoteTx> {
-        debug!(
-            "Looking for a matching quote for payment id: {} amount: {}",
-            payment.payment_id, payment.amount
-        );
-
-        let res = self
-            .quotes
-            .iter()
-            .find(|quote| payment.payment_id.to_str()[0..16] == quote.input_address_id);
-
-        match res {
-            Some(ref quote) => {
-                // Annoyngly I have to clone here, because otherwise I'm holding a reference
-                // into an object that I'm trying to modify at the same time...
-                let quote = (*quote).clone();
-
-                self.quotes.take(&quote)
-            }
-            None => None,
-        }
-    }
-
-    /// Publish witness tx for `quote`
-    fn publish_witness_tx(&self, quote: &QuoteTx, payment: &Payment) {
-        debug!("Publishing witness transaction for quote: {:?}", &quote);
-
-        let mut side_chain = self.side_chain.lock().unwrap();
+    /// Publish witness tx for `quote_id`
+    fn publish_witness_tx(&self, quote_id: Uuid, payment: &Payment) {
+        debug!("Publishing witness transaction for quote: {}", &quote_id);
 
         let tx = WitnessTx::new(
             Timestamp::now(),
-            quote.id,
+            quote_id,
             "0".to_owned(),
             0,
             0,
@@ -151,23 +94,57 @@ where
         );
 
         debug!("Adding witness tx: {:?}", &tx);
-
-        side_chain
-            .add_block(vec![tx.into()])
-            .expect("Could not publish witness tx");
-
-        // Do we remove the quote here?
     }
 
     /// Stuff to do whenever we receive a new block from
     /// a foreign chain
     fn process_main_chain_payments(&mut self, payments: Payments) {
-        for payment in &payments {
-            if let Some(quote) = self.find_and_take_matching_quote(payment) {
-                debug!("Found a matching transaction!");
+        self.transaction_provider.write().sync();
 
-                self.publish_witness_tx(&quote, payment);
+        let provider = self.transaction_provider.read();
+        let swaps = provider.get_quote_txs();
+        let stakes = provider.get_stake_quote_txs();
+
+        let mut witness_txs: Vec<SideChainTx> = vec![];
+
+        for payment in &payments {
+            let swap_quote = swaps
+                .iter()
+                .find(|quote| {
+                    quote.inner.input == Coin::LOKI
+                        && quote.inner.input_address_id == payment.payment_id.to_str()[0..16]
+                })
+                .map(|quote| quote.inner.id);
+
+            let stake_quote = stakes
+                .iter()
+                .find(|quote| quote.inner.loki_input_address_id == payment.payment_id)
+                .map(|quote| quote.inner.id);
+
+            if let Some(quote_id) = swap_quote.or(stake_quote) {
+                debug!("Publishing witness transaction for quote: {}", &quote_id);
+
+                let tx = WitnessTx::new(
+                    Timestamp::now(),
+                    quote_id,
+                    "0".to_owned(),
+                    0,
+                    0,
+                    payment.amount.to_atomic(),
+                    Coin::LOKI,
+                );
+
+                witness_txs.push(tx.into());
             }
+        }
+
+        drop(provider);
+
+        if witness_txs.len() > 0 {
+            self.transaction_provider
+                .write()
+                .add_transactions(witness_txs)
+                .expect("Could not publish witness tx");
         }
     }
 }

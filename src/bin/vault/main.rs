@@ -70,7 +70,7 @@ fn main() {
     // Witnesses
     let db_connection = rusqlite::Connection::open("blocks.db").expect("Could not open database");
     let kvs = Arc::new(Mutex::new(PersistentKVS::new(db_connection)));
-    let loki_witness = LokiWitness::new(loki_block_receiver, s_chain.clone());
+    let loki_witness = LokiWitness::new(loki_block_receiver, provider.clone());
     let eth_witness = EthereumWitness::new(Arc::new(eth_client.clone()), provider.clone(), kvs);
     let btc_witness = BtcSPVWitness::new(Arc::new(btc.clone()), provider.clone());
 
