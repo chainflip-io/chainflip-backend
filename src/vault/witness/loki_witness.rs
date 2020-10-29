@@ -112,7 +112,7 @@ where
                     .iter()
                     .find(|quote| {
                         quote.inner.input == Coin::LOKI
-                            && quote.inner.input_address_id == payment.payment_id.to_str()[0..16]
+                            && quote.inner.input_address_id == payment.payment_id.short()
                     })
                     .map(|quote| quote.inner.id);
 

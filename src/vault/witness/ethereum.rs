@@ -210,7 +210,7 @@ mod test {
         let input_address = generate_eth_address();
 
         // Add a quote so we can witness it
-        let input_wallet_address = WalletAddress::new(&input_address.to_string()[..]);
+        let input_wallet_address = WalletAddress::new(&input_address.to_string().to_lowercase());
         let eth_quote = create_fake_quote_tx_coin_to_loki(Coin::ETH, input_wallet_address);
         let btc_quote = create_fake_quote_tx_coin_to_loki(
             Coin::BTC,
@@ -285,7 +285,7 @@ mod test {
         let mut witness = params.witness;
 
         let input_address = generate_eth_address();
-        let input_wallet_address = WalletAddress::new(&input_address.to_string()[..]);
+        let input_wallet_address = WalletAddress::new(&input_address.to_string().to_lowercase());
 
         // Add a quote so we can witness it
         let mut eth_stake_quote = create_fake_stake_quote(PoolCoin::ETH);
