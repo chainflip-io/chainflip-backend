@@ -68,7 +68,7 @@ where
         loop {
             self.poll_main_chain();
 
-            std::thread::sleep(std::time::Duration::from_secs(10));
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
     }
 
@@ -77,23 +77,6 @@ where
         std::thread::spawn(move || {
             self.event_loop();
         });
-    }
-
-    /// Publish witness tx for `quote_id`
-    fn publish_witness_tx(&self, quote_id: Uuid, payment: &Payment) {
-        debug!("Publishing witness transaction for quote: {}", &quote_id);
-
-        let tx = WitnessTx::new(
-            Timestamp::now(),
-            quote_id,
-            "0".to_owned(),
-            0,
-            0,
-            payment.amount.to_atomic(),
-            Coin::LOKI,
-        );
-
-        debug!("Adding witness tx: {:?}", &tx);
     }
 
     /// Stuff to do whenever we receive a new block from
