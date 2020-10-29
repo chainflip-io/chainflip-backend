@@ -5,6 +5,7 @@ use crate::{
 };
 use std::{
     collections::HashMap,
+    net::SocketAddr,
     sync::{Arc, Mutex},
 };
 use uuid::Uuid;
@@ -37,7 +38,7 @@ impl Quoter {
     ///
     /// This will block the thread it is run on.
     pub fn run<V, D>(
-        port: u16,
+        addr: impl Into<SocketAddr>,
         vault_node_api: Arc<V>,
         database: Arc<Mutex<D>>,
     ) -> Result<(), String>
@@ -54,7 +55,7 @@ impl Quoter {
         let poller_thread =
             std::thread::spawn(move || poller.poll(std::time::Duration::from_secs(1)));
 
-        API::serve(port, vault_node_api.clone(), database.clone());
+        API::serve(addr, vault_node_api.clone(), database.clone());
 
         poller_thread
             .join()
