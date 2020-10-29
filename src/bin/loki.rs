@@ -1,16 +1,23 @@
+use std::{
+    str::FromStr,
+    sync::{Arc, Mutex},
+};
+
+use blockswap::{
+    common::*,
+    logging,
+    side_chain::{ISideChain, MemorySideChain},
+    utils,
+    vault::{
+        blockchain_connection::{loki_rpc, LokiConnection, LokiConnectionConfig},
+        transactions::{MemoryTransactionsProvider, TransactionProvider},
+        witness::LokiWitness,
+    },
+};
+use parking_lot::RwLock;
+
 #[macro_use]
 extern crate log;
-
-use blockswap::*;
-
-use std::str::FromStr;
-
-use vault::blockchain_connection::loki_rpc;
-// use std::io::Error;
-
-use crate::side_chain::ISideChain;
-
-use crate::common::{coins::CoinAmount, LokiAmount, LokiPaymentId, LokiWalletAddress};
 
 const PORT: u16 = 6934;
 
@@ -54,14 +61,6 @@ async fn test_loki_rpc() {
 }
 
 async fn test_loki_witness() {
-    use side_chain::MemorySideChain;
-    use std::sync::{Arc, Mutex};
-
-    use vault::{
-        blockchain_connection::{LokiConnection, LokiConnectionConfig},
-        witness::LokiWitness,
-    };
-
     let mut s_chain = MemorySideChain::new();
 
     let int_address = loki_rpc::make_integrated_address(PORT, None)
@@ -70,7 +69,7 @@ async fn test_loki_witness() {
 
     info!("Integrated address: {:?}", int_address);
 
-    let mut tx = crate::utils::test_utils::create_fake_quote_tx_eth_loki();
+    let mut tx = utils::test_utils::create_fake_quote_tx_eth_loki();
     tx.input_address_id = int_address.payment_id.clone();
 
     // Send some money to integrated address
@@ -95,6 +94,11 @@ async fn test_loki_witness() {
 
     let s_chain = Arc::new(Mutex::new(s_chain));
 
+    let mut provider = MemoryTransactionsProvider::new(s_chain.clone());
+    provider.sync();
+
+    let provider = Arc::new(RwLock::new(provider));
+
     let config = LokiConnectionConfig {
         rpc_wallet_port: PORT,
     };
@@ -102,7 +106,7 @@ async fn test_loki_witness() {
     let loki_connection = LokiConnection::new(config);
     let loki_block_receiver = loki_connection.start();
 
-    let witness = LokiWitness::new(loki_block_receiver, s_chain.clone());
+    let witness = LokiWitness::new(loki_block_receiver, provider.clone());
     witness.start();
 
     // Block current thread

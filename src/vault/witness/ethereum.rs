@@ -1,8 +1,9 @@
 use parking_lot::RwLock;
+use uuid::Uuid;
 
 use crate::{
     common::Timestamp,
-    common::{store::KeyValueStore, Coin},
+    common::{store::KeyValueStore, Coin, PoolCoin},
     side_chain::SideChainTx,
     transactions::WitnessTx,
     vault::{blockchain_connection::ethereum::EthereumClient, transactions::TransactionProvider},
@@ -83,29 +84,44 @@ where
             let mut provider = self.transaction_provider.write();
 
             provider.sync();
-            let quotes = provider.get_quote_txs();
+            let swaps = provider.get_quote_txs();
+            let stakes = provider.get_stake_quote_txs();
 
             let mut witness_txs: Vec<WitnessTx> = vec![];
 
             for transaction in transactions {
                 if let Some(recipient) = transaction.to.as_ref() {
                     let recipient = recipient.to_string();
-                    let quote_info = quotes.iter().find(|quote_info| {
+                    let swap_quote = swaps.iter().find(|quote_info| {
                         let quote = &quote_info.inner;
-                        quote.input == Coin::ETH && quote.input_address.0 == recipient
+                        quote.input == Coin::ETH
+                            && quote.input_address.0.to_lowercase() == recipient.to_lowercase()
                     });
 
-                    if quote_info.is_none() {
+                    let stake_quote = stakes.iter().find(|quote_info| {
+                        let quote = &quote_info.inner;
+                        quote.coin_type == PoolCoin::ETH
+                            && quote.coin_input_address.0.to_lowercase() == recipient.to_lowercase()
+                    });
+
+                    let quote_id = {
+                        let swap_id = swap_quote.map(|q| q.inner.id);
+                        let stake_id = stake_quote.map(|q| q.inner.id);
+
+                        swap_id.or(stake_id)
+                    };
+
+                    if quote_id.is_none() {
                         continue;
                     }
 
-                    let quote = &quote_info.unwrap().inner;
+                    let quote_id = quote_id.unwrap();
 
-                    debug!("Publishing witness transaction for quote: {:?}", &quote);
+                    debug!("Publishing witness transaction for quote: {}", &quote_id);
 
                     let tx = WitnessTx::new(
                         Timestamp::now(),
-                        quote.id,
+                        quote_id,
                         transaction.hash.to_string(),
                         transaction.block_number,
                         transaction.index,
@@ -143,7 +159,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::utils::test_utils::ethereum::TestEthereumClient;
+    use crate::utils::test_utils::{create_fake_stake_quote, ethereum::TestEthereumClient};
     use crate::{
         common::{
             ethereum::{Address, Hash, Transaction},
@@ -185,7 +201,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn adds_witness_transaction_correctly() {
+    async fn adds_swap_quote_witness_transaction_correctly() {
         let params = setup();
         let client = params.client;
         let provider = params.provider;
@@ -194,7 +210,7 @@ mod test {
         let input_address = generate_eth_address();
 
         // Add a quote so we can witness it
-        let input_wallet_address = WalletAddress::new(&input_address.to_string()[..]);
+        let input_wallet_address = WalletAddress::new(&input_address.to_string().to_lowercase());
         let eth_quote = create_fake_quote_tx_coin_to_loki(Coin::ETH, input_wallet_address);
         let btc_quote = create_fake_quote_tx_coin_to_loki(
             Coin::BTC,
@@ -252,6 +268,82 @@ mod test {
             .inner;
 
         assert_eq!(witness_tx.quote_id, eth_quote.id);
+        assert_eq!(witness_tx.transaction_id, eth_transaction.hash.to_string());
+        assert_eq!(witness_tx.transaction_index, eth_transaction.index);
+        assert_eq!(
+            witness_tx.transaction_block_number,
+            eth_transaction.block_number
+        );
+        assert_eq!(witness_tx.amount, eth_transaction.value);
+    }
+
+    #[tokio::test]
+    async fn adds_stake_quote_witness_transaction_correctly() {
+        let params = setup();
+        let client = params.client;
+        let provider = params.provider;
+        let mut witness = params.witness;
+
+        let input_address = generate_eth_address();
+        let input_wallet_address = WalletAddress::new(&input_address.to_string().to_lowercase());
+
+        // Add a quote so we can witness it
+        let mut eth_stake_quote = create_fake_stake_quote(PoolCoin::ETH);
+        eth_stake_quote.coin_input_address = input_wallet_address;
+
+        let btc_stake_quote = create_fake_stake_quote(PoolCoin::BTC);
+
+        {
+            let mut provider = provider.write();
+            provider
+                .add_transactions(vec![eth_stake_quote.clone().into(), btc_stake_quote.into()])
+                .unwrap();
+
+            assert_eq!(provider.get_stake_quote_txs().len(), 2);
+            assert_eq!(provider.get_witness_txs().len(), 0);
+        }
+
+        // Create the main chain transactions
+        let eth_transaction = Transaction {
+            hash: Hash(rand::thread_rng().gen::<[u8; 32]>()),
+            index: 0,
+            block_number: 0,
+            from: generate_eth_address(),
+            to: Some(input_address),
+            value: 100,
+        };
+
+        let another_eth_transaction = Transaction {
+            hash: Hash(rand::thread_rng().gen::<[u8; 32]>()),
+            index: 1,
+            block_number: 0,
+            from: generate_eth_address(),
+            to: Some(generate_eth_address()),
+            value: 100,
+        };
+
+        client.add_block(vec![eth_transaction.clone(), another_eth_transaction]);
+
+        // Poll!
+        witness.poll_next_main_chain().await;
+
+        // Check that transactions were added correctly
+        let provider = provider.read();
+
+        assert_eq!(provider.get_stake_quote_txs().len(), 2);
+        assert_eq!(
+            provider.get_witness_txs().len(),
+            1,
+            "Expected a witness transaction to be added"
+        );
+
+        let witness_tx = &provider
+            .get_witness_txs()
+            .first()
+            .expect("Expected witness tx to exist")
+            .inner;
+
+        assert_eq!(witness_tx.quote_id, eth_stake_quote.id);
         assert_eq!(witness_tx.transaction_id, eth_transaction.hash.to_string());
         assert_eq!(witness_tx.transaction_index, eth_transaction.index);
         assert_eq!(

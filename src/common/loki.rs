@@ -72,6 +72,12 @@ impl LokiPaymentId {
         &self.long_pid
     }
 
+    /// Get the short payment id
+    pub fn short(&self) -> &str {
+        // A short payment id consists of 16 characters
+        &self.long_pid[0..16]
+    }
+
     /// Get the byte value of the payment id
     pub fn to_bytes(&self) -> [u8; 8] {
         let decoded = hex::decode(self.to_str()).unwrap();
@@ -110,7 +116,7 @@ impl std::str::FromStr for LokiPaymentId {
 
 impl std::fmt::Display for LokiPaymentId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", &self.long_pid[0..16])
+        write!(f, "{}", &self.short())
     }
 }
 

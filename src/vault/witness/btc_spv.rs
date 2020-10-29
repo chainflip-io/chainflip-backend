@@ -1,10 +1,11 @@
 use crate::{
-    common::{Coin, Timestamp},
+    common::{Coin, PoolCoin, Timestamp},
     side_chain::SideChainTx,
     transactions::WitnessTx,
     vault::{blockchain_connection::btc::BitcoinSPVClient, transactions::TransactionProvider},
 };
 
+use itertools::Itertools;
 use parking_lot::RwLock;
 use uuid::Uuid;
 
@@ -58,19 +59,35 @@ where
 
         let witness_txs = {
             let provider = self.transaction_provider.read();
-            let quotes = provider.get_quote_txs();
+            let swaps = provider.get_quote_txs();
+            let stakes = provider.get_stake_quote_txs();
+
+            let swap_id_address_pairs = swaps
+                .iter()
+                .filter(|quote| quote.inner.input == Coin::BTC)
+                .map(|quote| {
+                    let quote_inner = &quote.inner;
+                    (quote_inner.id, quote_inner.input_address.clone())
+                })
+                .collect_vec();
+
+            let stake_id_address_pairs = stakes
+                .iter()
+                .filter(|quote| quote.inner.coin_type == PoolCoin::BTC)
+                .map(|quote| {
+                    let quote_inner = &quote.inner;
+                    (quote_inner.id, quote_inner.coin_input_address.clone())
+                })
+                .collect_vec();
 
             let mut witness_txs: Vec<WitnessTx> = vec![];
-            for quote in quotes.iter().filter(|quote| quote.inner.input == Coin::BTC) {
-                let quote_inner = &quote.inner;
-                let input_addr = &quote_inner.input_address;
-
-                let utxos = match self.client.get_address_unspent(input_addr).await {
+            for (id, address) in [swap_id_address_pairs, stake_id_address_pairs].concat() {
+                let utxos = match self.client.get_address_unspent(&address).await {
                     Ok(utxos) => utxos,
                     Err(err) => {
                         warn!(
                             "Could not fetch UTXOs for bitcoin address: {}. Error: {}",
-                            &input_addr, err
+                            &address, err
                         );
                         continue;
                     }
@@ -84,7 +101,7 @@ where
                 for utxo in utxos.0 {
                     let tx = WitnessTx::new(
                         Timestamp::now(),
-                        quote_inner.id,
+                        id,
                         utxo.tx_hash.clone(),
                         utxo.height,
                         utxo.tx_pos,
@@ -116,7 +133,7 @@ where
 mod test {
     use super::*;
     use crate::{
-        utils::test_utils::btc::TestBitcoinSPVClient,
+        utils::test_utils::btc::TestBitcoinSPVClient, utils::test_utils::create_fake_stake_quote,
         vault::blockchain_connection::btc::btc_spv::BtcUTXO,
     };
 
@@ -149,7 +166,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn polling_address_with_utxos_creates_witness_txs() {
+    async fn polling_swap_address_with_utxos_creates_witness_txs() {
         let params = setup();
         let mut witness = params.witness;
         let provider = params.provider;
@@ -178,9 +195,7 @@ mod test {
 
         {
             let mut provider = provider.write();
-            provider
-                .add_transactions(vec![btc_quote.clone().into()])
-                .unwrap();
+            provider.add_transactions(vec![btc_quote.into()]).unwrap();
 
             assert_eq!(provider.get_quote_txs().len(), 1);
             assert_eq!(provider.get_witness_txs().len(), 0);
@@ -196,6 +211,53 @@ mod test {
     }
 
     #[tokio::test]
+    async fn polling_stake_address_with_utxos_creates_witness_txs() {
+        let params = setup();
+        let mut witness = params.witness;
+        let provider = params.provider;
+        let client = params.client;
+
+        let utxo1 = BtcUTXO::new(
+            250000,
+            "a9ec47601a25f0cc27c63c78cab3d446294c5eccb171f3973ee9979c00bee432".to_string(),
+            0,
+            1000,
+        );
+        let utxo2 = BtcUTXO::new(
+            250002,
+            "b9ec47601a25f0cd27c63c78cab3d446294c5eccb171f3973ee9979c00bee442".to_string(),
+            0,
+            4000,
+        );
+
+        let utxos = vec![utxo1, utxo2];
+        // add utxos to test client
+        client.add_utxos_for_address(BTC_PUBKEY.to_string(), utxos);
+
+        // this quote will be witnessed
+        let mut btc_stake_quote = create_fake_stake_quote(PoolCoin::BTC);
+        btc_stake_quote.coin_input_address = WalletAddress(BTC_PUBKEY.to_string());
+
+        {
+            let mut provider = provider.write();
+            provider
+                .add_transactions(vec![btc_stake_quote.into()])
+                .unwrap();
+
+            assert_eq!(provider.get_stake_quote_txs().len(), 1);
+            assert_eq!(provider.get_witness_txs().len(), 0);
+        }
+
+        witness.poll_addresses_of_quotes().await;
+
+        let provider = provider.read();
+
+        assert_eq!(provider.get_stake_quote_txs().len(), 1);
+        // one witness tx for each utxo
+        assert_eq!(provider.get_witness_txs().len(), 2);
+    }
+
+    #[tokio::test]
     async fn polling_address_without_utxos_does_not_create_witness_txs() {
         let params = setup();
         let mut witness = params.witness;
@@ -205,13 +267,16 @@ mod test {
         let btc_quote =
             create_fake_quote_tx_coin_to_loki(Coin::BTC, WalletAddress(BTC_PUBKEY.to_string()));
 
+        let btc_stake_quote = create_fake_stake_quote(PoolCoin::BTC);
+
         {
             let mut provider = provider.write();
             provider
-                .add_transactions(vec![btc_quote.clone().into()])
+                .add_transactions(vec![btc_quote.into(), btc_stake_quote.into()])
                 .unwrap();
 
             assert_eq!(provider.get_quote_txs().len(), 1);
+            assert_eq!(provider.get_stake_quote_txs().len(), 1);
             assert_eq!(provider.get_witness_txs().len(), 0);
         }
 
@@ -220,7 +285,7 @@ mod test {
         let provider = provider.read();
 
         assert_eq!(provider.get_quote_txs().len(), 1);
-
+        assert_eq!(provider.get_stake_quote_txs().len(), 1);
         assert_eq!(provider.get_witness_txs().len(), 0);
     }
 
@@ -235,14 +300,16 @@ mod test {
             Coin::ETH,
             WalletAddress("0x70e7db0678460c5e53f1ffc9221d1c692111dcc5".to_string()),
         );
+        let eth_stake_quote = create_fake_stake_quote(PoolCoin::ETH);
 
         {
             let mut provider = provider.write();
             provider
-                .add_transactions(vec![eth_quote.clone().into()])
+                .add_transactions(vec![eth_quote.into(), eth_stake_quote.into()])
                 .unwrap();
 
             assert_eq!(provider.get_quote_txs().len(), 1);
+            assert_eq!(provider.get_stake_quote_txs().len(), 1);
             assert_eq!(provider.get_witness_txs().len(), 0);
         }
 
@@ -251,7 +318,7 @@ mod test {
         let provider = provider.read();
 
         assert_eq!(provider.get_quote_txs().len(), 1);
-
+        assert_eq!(provider.get_stake_quote_txs().len(), 1);
         assert_eq!(provider.get_witness_txs().len(), 0);
     }
 }
