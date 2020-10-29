@@ -125,10 +125,9 @@ impl Database {
 
         let mut results = vec![];
         for result in rows {
-            if let Ok(value) = result {
-                if let Some(data) = value {
-                    results.push(data)
-                }
+            // We can unwrap here safely because our function in query_map doesn't throw error
+            if let Some(data) = result.unwrap() {
+                results.push(data)
             }
         }
 
