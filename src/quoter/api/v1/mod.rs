@@ -99,7 +99,7 @@ where
         .map(get_pools)
         .and_then(api::respond);
 
-    let transactions = warp::path!("quote")
+    let transactions = warp::path!("transactions")
         .and(warp::get())
         .and(warp::query::<TransactionsParams>())
         .and(using(state.clone()))
@@ -121,7 +121,7 @@ where
         .map(post_swap::swap)
         .and_then(api::respond);
 
-    let stake = warp::path!("swap")
+    let stake = warp::path!("stake")
         .and(warp::post())
         .and(warp::body::json())
         .and(using(vault_node.clone()))
