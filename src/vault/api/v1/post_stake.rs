@@ -141,6 +141,9 @@ pub async fn stake<T: TransactionProvider>(
             }
         };
 
+    let staker_id = StakerId::new(params.staker_id.clone())
+        .map_err(|err| bad_request(&format!("Invalid staker_id: {}", err)))?;
+
     let quote = StakeQuoteTx::new(
         Timestamp::now(),
         pool_coin,
@@ -148,7 +151,7 @@ pub async fn stake<T: TransactionProvider>(
         params.coin_input_address_id,
         WalletAddress::new(&loki_input_address),
         loki_input_address_id,
-        StakerId(params.staker_id.clone()),
+        staker_id,
     )
     .map_err(|err| {
         error!(
@@ -181,10 +184,8 @@ pub async fn stake<T: TransactionProvider>(
 mod test {
     use super::*;
     use crate::{
-        utils::test_utils::create_fake_quote_tx, utils::test_utils::create_fake_stake_quote,
-        utils::test_utils::get_transactions_provider, utils::test_utils::TEST_ETH_ADDRESS,
-        utils::test_utils::TEST_LOKI_ADDRESS, utils::test_utils::TEST_ROOT_KEY,
-        vault::config::NetType,
+        transactions::signatures::get_random_staker, utils::test_utils::create_fake_quote_tx,
+        utils::test_utils::*, vault::config::NetType,
     };
 
     fn config() -> Config {
@@ -199,7 +200,7 @@ mod test {
     fn params() -> StakeQuoteParams {
         StakeQuoteParams {
             pool: Coin::ETH,
-            staker_id: "id".to_string(),
+            staker_id: get_random_staker().public_key(),
             coin_input_address_id: "99999".to_string(),
             loki_input_address_id: "b2d6a87ec06934ff".to_string(),
         }

@@ -45,7 +45,7 @@ pub fn sign_unstake(tx: &UnstakeRequestTx, keys: &EcdsaKeyPair) -> Result<Vec<u8
 
 /// Verify signature in `tx`
 pub fn verify_unstake(tx: &UnstakeRequestTx) -> Result<(), ()> {
-    let pubkey = hex::decode(&tx.staker_id.0).map_err(|_| ())?;
+    let pubkey = hex::decode(&tx.staker_id.inner()).map_err(|_| ())?;
 
     let signed_data = serialize_for_signing(tx);
 

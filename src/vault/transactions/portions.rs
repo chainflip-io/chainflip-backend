@@ -207,7 +207,7 @@ pub(crate) fn adjust_portions_after_stake(
 #[cfg(test)]
 mod tests {
 
-    use crate::utils::test_utils;
+    use crate::{transactions::signatures::get_random_staker, utils::test_utils};
 
     use super::*;
 
@@ -285,8 +285,8 @@ mod tests {
 
         let mut runner = TestRunner::new();
 
-        let alice = StakerId("Alice".to_owned());
-        let bob = StakerId("Bob".to_owned());
+        let alice = get_random_staker().id();
+        let bob = get_random_staker().id();
 
         let amount1 = LokiAmount::from_decimal_string("100.0");
 
@@ -322,8 +322,8 @@ mod tests {
 
         let mut runner = TestRunner::new();
 
-        let alice = StakerId("Alice".to_owned());
-        let bob = StakerId("Bob".to_owned());
+        let alice = get_random_staker().id();
+        let bob = get_random_staker().id();
 
         let amount1 = LokiAmount::from_decimal_string("100.0");
 
@@ -348,8 +348,8 @@ mod tests {
 
         let mut runner = TestRunner::new();
 
-        let alice = StakerId("Alice".to_owned());
-        let bob = StakerId("Bob".to_owned());
+        let alice = get_random_staker().id();
+        let bob = get_random_staker().id();
 
         let amount = LokiAmount::from_decimal_string("100.0");
 

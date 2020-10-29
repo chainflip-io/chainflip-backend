@@ -1,6 +1,9 @@
 use crate::{
     common::*,
-    transactions::{signatures::sign_unstake, StakeQuoteTx, UnstakeRequestTx, WitnessTx},
+    transactions::{
+        signatures::{get_random_staker, sign_unstake},
+        StakeQuoteTx, UnstakeRequestTx, WitnessTx,
+    },
 };
 
 use std::str::FromStr;
@@ -11,12 +14,12 @@ use super::{TEST_BTC_ADDRESS, TEST_ETH_ADDRESS, TEST_LOKI_ADDRESS};
 /// Create a fake stake quote transaction for testing
 pub fn create_fake_stake_quote(coin: PoolCoin) -> StakeQuoteTx {
     // TODO: should probably use a ecdsa key here
-    let staker_id = Uuid::new_v4().to_string();
-    create_fake_stake_quote_for_id(&staker_id, coin)
+    let staker_id = get_random_staker().id();
+    create_fake_stake_quote_for_id(staker_id, coin)
 }
 
 /// Create a fake stake quote transaction for a specific staker (for testing only)
-pub fn create_fake_stake_quote_for_id(staker_id: &str, coin: PoolCoin) -> StakeQuoteTx {
+pub fn create_fake_stake_quote_for_id(staker_id: StakerId, coin: PoolCoin) -> StakeQuoteTx {
     let address = match coin.get_coin() {
         Coin::BTC => TEST_BTC_ADDRESS,
         Coin::ETH => TEST_ETH_ADDRESS,
@@ -29,7 +32,7 @@ pub fn create_fake_stake_quote_for_id(staker_id: &str, coin: PoolCoin) -> StakeQ
         coin_type: coin,
         loki_input_address: WalletAddress::new(TEST_LOKI_ADDRESS),
         loki_input_address_id: LokiPaymentId::from_str("60900e5603bf96e3").unwrap(),
-        staker_id: StakerId(staker_id.to_string()),
+        staker_id,
         coin_input_address: WalletAddress::new(address),
         coin_input_address_id: "6".to_string(),
     }
@@ -59,7 +62,7 @@ pub fn create_unstake_for_staker(coin_type: PoolCoin, staker: &Staker) -> Unstak
 
     let timestamp = Timestamp::now();
 
-    let staker_id = StakerId(staker.public_key());
+    let staker_id = staker.id();
 
     let unsigned = UnstakeRequestTx::new(
         coin_type,

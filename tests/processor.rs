@@ -152,12 +152,12 @@ mod tests {
         /// necessary for the stake to be registered
         fn add_witnessed_stake_tx(
             &mut self,
-            staker_id: &str,
+            staker_id: &StakerId,
             loki_amount: LokiAmount,
             other_amount: GenericCoinAmount,
         ) -> StakeQuoteTx {
             let stake_tx = create_fake_stake_quote_for_id(
-                staker_id,
+                staker_id.to_owned(),
                 PoolCoin::from(other_amount.coin_type()).unwrap(),
             );
             let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
@@ -221,6 +221,7 @@ mod tests {
 
     use super::*;
     use blockswap::{
+        common::StakerId,
         common::{LiquidityProvider, Staker},
         transactions::signatures::get_random_staker,
         transactions::StakeQuoteTx,
@@ -313,7 +314,7 @@ mod tests {
 
         let staker = get_random_staker();
 
-        let stake_tx = runner.add_witnessed_stake_tx(&staker.public_key(), loki_amount, eth_amount);
+        let stake_tx = runner.add_witnessed_stake_tx(&staker.id(), loki_amount, eth_amount);
 
         // Check that the liquidity is non-zero before unstaking
         runner.check_eth_liquidity(loki_amount.to_atomic(), eth_amount.to_atomic());
@@ -344,8 +345,8 @@ mod tests {
         let alice = get_random_staker();
         let bob = get_random_staker();
 
-        let _ = runner.add_witnessed_stake_tx(&alice.public_key(), loki_amount, eth_amount);
-        let stake2 = runner.add_witnessed_stake_tx(&bob.public_key(), loki_amount, eth_amount);
+        let _ = runner.add_witnessed_stake_tx(&alice.id(), loki_amount, eth_amount);
+        let stake2 = runner.add_witnessed_stake_tx(&bob.id(), loki_amount, eth_amount);
 
         // Check that liquidity is the sum of two stakes
         runner.check_eth_liquidity(loki_amount.to_atomic() * 2, eth_amount.to_atomic() * 2);
@@ -372,13 +373,15 @@ mod tests {
         let loki_amount = LokiAmount::from_decimal_string("1.0");
         let eth_amount = GenericCoinAmount::from_decimal_string(Coin::ETH, "2.0");
 
-        let _ = runner.add_witnessed_stake_tx("Alice", loki_amount, eth_amount);
+        let alice = get_random_staker();
+
+        let _ = runner.add_witnessed_stake_tx(&alice.id(), loki_amount, eth_amount);
 
         let bob = get_random_staker();
 
         // Bob creates a stake quote tx, but never pays the amounts:
         let stake = create_fake_stake_quote_for_id(
-            &bob.public_key(),
+            bob.id(),
             PoolCoin::from(eth_amount.coin_type()).unwrap(),
         );
 

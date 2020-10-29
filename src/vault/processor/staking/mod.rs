@@ -310,14 +310,19 @@ fn process_unstake_tx<T: TransactionProvider>(
 pub(super) fn process_unstakes<T: TransactionProvider>(tx_provider: &mut T) {
     let unstake_txs = tx_provider.get_unstake_request_txs();
 
-    let unstake_txs: Vec<_> = unstake_txs
+    let (valid_txs, invalid_txs): (Vec<_>, Vec<_>) = unstake_txs
         .iter()
-        .filter(|tx| verify_unstake(tx).is_ok())
-        .collect();
+        .partition(|tx| verify_unstake(tx).is_ok());
 
-    let mut output_txs: Vec<SideChainTx> = Vec::with_capacity(unstake_txs.len() * 3);
+    for tx in invalid_txs {
+        warn!("Invalid signature for unstake request {}", tx.id);
+    }
 
-    for tx in unstake_txs {
+    // TODO: tx with invalid signatures should be removed (or not be added in the first place?)
+
+    let mut output_txs: Vec<SideChainTx> = Vec::with_capacity(valid_txs.len() * 3);
+
+    for tx in valid_txs {
         match process_unstake_tx(tx_provider, tx) {
             Ok((output1, output2, pool_change)) => {
                 output_txs.push(output1.into());

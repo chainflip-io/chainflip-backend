@@ -73,11 +73,33 @@ impl WalletAddress {
 
 /// Staker's identity (Hex-encoded ECDSA P-256 Public Key)
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
-pub struct StakerId(pub String);
+pub struct StakerId(String);
 
 impl std::fmt::Display for StakerId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", &self.0)
+    }
+}
+
+impl StakerId {
+    /// Create from hex representation of the public key
+    pub fn new<T: ToString>(pubkey_hex: T) -> Result<Self, &'static str> {
+        let pubkey: String = pubkey_hex.to_string();
+
+        let len = "0433829aa2cccda485ee215421bd6c2af3e6e1702e3202790af42a7332c3fc06ec08beafef0b504ed20d5176f6323da3a4d34c5761a82487087d93ebd673ca7293".len();
+
+        dbg!(len);
+
+        if pubkey.len() == len {
+            Ok(StakerId(pubkey))
+        } else {
+            Err("Unexpected pubkey length")
+        }
+    }
+
+    /// Get the inner representation (as hex string)
+    pub fn inner(&self) -> &str {
+        &self.0
     }
 }
 
@@ -91,5 +113,11 @@ impl Staker {
     /// Convenience method to get hex-encoded pubkey
     pub fn public_key(&self) -> String {
         hex::encode(self.keys.public_key())
+    }
+
+    /// Convenience method to generate staker id from keys
+    pub fn id(&self) -> StakerId {
+        let pk = self.public_key();
+        StakerId::new(pk).expect("Valid keypair shouldn't generate invalid staker id")
     }
 }
