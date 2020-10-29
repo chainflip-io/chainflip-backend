@@ -111,20 +111,28 @@ impl Database {
             .prepare(stmt)
             .expect("Could not prepare stmt");
 
-        let res = stmt
-            .query_map(params, |row| {
-                let result = row_fn(row);
-                if let Some(data) = result {
-                    return Ok(deserialize(&data));
+        let rows = match stmt.query_map(params, |row| {
+            let result = row_fn(row);
+            let result: Option<T> = result.and_then(|data| deserialize(&data));
+            Ok(result)
+        }) {
+            Ok(rows) => rows,
+            Err(err) => {
+                debug!("Failed to fetch database rows: {}", err);
+                return vec![];
+            }
+        };
+
+        let mut results = vec![];
+        for result in rows {
+            if let Ok(value) = result {
+                if let Some(data) = value {
+                    results.push(data)
                 }
+            }
+        }
 
-                Ok(None)
-            })
-            .unwrap()
-            .filter_map(|r| r.unwrap())
-            .collect();
-
-        res
+        results
     }
 
     fn get_row<T, P, F>(&self, stmt: &str, params: P, mut row_fn: F) -> Option<T>
@@ -139,18 +147,17 @@ impl Database {
             .prepare(stmt)
             .expect("Could not prepare stmt");
 
-        let res = stmt
-            .query_row(params, |row| {
-                let result = row_fn(row);
-                if let Some(data) = result {
-                    return Ok(deserialize(&data));
+        stmt.query_row(params, |row| {
+            let result = row_fn(row);
+            match result.and_then(|data| deserialize(&data)) {
+                Some(value) => Ok(value),
+                None => {
+                    debug!("Failed to deserialize row data");
+                    Err(rusqlite::Error::QueryReturnedNoRows)
                 }
-
-                Ok(None)
-            })
-            .unwrap();
-
-        res
+            }
+        })
+        .ok()
     }
 
     fn get_transactions<T: DeserializeOwned>(&self, tx_type: TransactionType) -> Vec<T> {
