@@ -101,44 +101,44 @@ where
     fn process_main_chain_payments(&mut self, payments: Payments) {
         self.transaction_provider.write().sync();
 
-        let provider = self.transaction_provider.read();
-        let swaps = provider.get_quote_txs();
-        let stakes = provider.get_stake_quote_txs();
+        let witness_txs = {
+            let provider = self.transaction_provider.read();
+            let swaps = provider.get_quote_txs();
+            let stakes = provider.get_stake_quote_txs();
+            let mut witness_txs: Vec<SideChainTx> = vec![];
 
-        let mut witness_txs: Vec<SideChainTx> = vec![];
+            for payment in &payments {
+                let swap_quote = swaps
+                    .iter()
+                    .find(|quote| {
+                        quote.inner.input == Coin::LOKI
+                            && quote.inner.input_address_id == payment.payment_id.to_str()[0..16]
+                    })
+                    .map(|quote| quote.inner.id);
 
-        for payment in &payments {
-            let swap_quote = swaps
-                .iter()
-                .find(|quote| {
-                    quote.inner.input == Coin::LOKI
-                        && quote.inner.input_address_id == payment.payment_id.to_str()[0..16]
-                })
-                .map(|quote| quote.inner.id);
+                let stake_quote = stakes
+                    .iter()
+                    .find(|quote| quote.inner.loki_input_address_id == payment.payment_id)
+                    .map(|quote| quote.inner.id);
 
-            let stake_quote = stakes
-                .iter()
-                .find(|quote| quote.inner.loki_input_address_id == payment.payment_id)
-                .map(|quote| quote.inner.id);
+                if let Some(quote_id) = swap_quote.or(stake_quote) {
+                    debug!("Publishing witness transaction for quote: {}", &quote_id);
 
-            if let Some(quote_id) = swap_quote.or(stake_quote) {
-                debug!("Publishing witness transaction for quote: {}", &quote_id);
+                    let tx = WitnessTx::new(
+                        Timestamp::now(),
+                        quote_id,
+                        "0".to_owned(),
+                        0,
+                        0,
+                        payment.amount.to_atomic(),
+                        Coin::LOKI,
+                    );
 
-                let tx = WitnessTx::new(
-                    Timestamp::now(),
-                    quote_id,
-                    "0".to_owned(),
-                    0,
-                    0,
-                    payment.amount.to_atomic(),
-                    Coin::LOKI,
-                );
-
-                witness_txs.push(tx.into());
+                    witness_txs.push(tx.into());
+                }
             }
-        }
-
-        drop(provider);
+            witness_txs
+        };
 
         if witness_txs.len() > 0 {
             self.transaction_provider
