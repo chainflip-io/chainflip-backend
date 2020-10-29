@@ -5,7 +5,11 @@ use clap::{App, Arg};
 
 use blockswap::logging;
 use blockswap::quoter::{config::QUOTER_CONFIG, database, vault_node, Quoter};
-use std::sync::{Arc, Mutex};
+use std::{
+    net::Ipv4Addr,
+    str::FromStr,
+    sync::{Arc, Mutex},
+};
 
 /*
 Entry point for the Quoter binary. We should try to keep it as small as posible
@@ -24,6 +28,12 @@ fn main() {
         .version("0.1")
         .about("A web server that provides swap quotes")
         .arg(
+            Arg::with_name("ip")
+                .long("ip")
+                .takes_value(true)
+                .help("IP on which to listen for incoming connections"),
+        )
+        .arg(
             Arg::with_name("port")
                 .short("p")
                 .long("port")
@@ -34,6 +44,8 @@ fn main() {
 
     logging::init("quoter", None);
 
+    let ip = matches.value_of("ip").unwrap_or("127.0.0.1");
+    let ipv4 = Ipv4Addr::from_str(ip).expect("Invalid ipv4 address");
     let port = matches.value_of("port").unwrap_or("3033");
 
     if let Ok(port) = port.parse::<u16>() {
@@ -46,7 +58,7 @@ fn main() {
         let vault_node_api = vault_node::VaultNodeAPI::new(&config.vault_node_url);
         let vault_node_api = Arc::new(vault_node_api);
 
-        match Quoter::run(port, vault_node_api, database) {
+        match Quoter::run((ipv4, port), vault_node_api, database) {
             Ok(_) => info!("Stopping Chainflip Quoter"),
             Err(e) => error!("Chainflip Quoter stopped due to error: {}", e),
         }
