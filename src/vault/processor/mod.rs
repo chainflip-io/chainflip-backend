@@ -77,9 +77,12 @@ where
         loop {
             let idx = self.tx_provider.write().sync();
 
+            if idx > next_block_idx {
+                debug!("Provider is at block: {}", idx);
+            }
+
             // Check if transaction provider made progress
             if idx >= next_block_idx {
-                debug!("Provider is at block: {}", idx);
                 self.on_blockchain_progress().await;
             }
 
