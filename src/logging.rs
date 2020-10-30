@@ -1,7 +1,7 @@
 use log::LevelFilter;
 use log4rs::append::console::ConsoleAppender;
 use log4rs::append::rolling_file::RollingFileAppender;
-use log4rs::config::{Appender, Config, Root};
+use log4rs::config::{Appender, Config, Logger, Root};
 use log4rs::encode::pattern::PatternEncoder;
 use log4rs::filter::threshold::ThresholdFilter;
 
@@ -18,8 +18,6 @@ pub fn init(base_name: &str, console_level: Option<LevelFilter>) {
     };
 
     let console_level = console_level.unwrap_or(default_level);
-
-    let file_level = LevelFilter::Debug;
 
     let encoder = Box::new(PatternEncoder::new("{h({l})} {m}{n}"));
     let stdout = ConsoleAppender::builder().encoder(encoder).build();
@@ -41,14 +39,20 @@ pub fn init(base_name: &str, console_level: Option<LevelFilter>) {
         .unwrap();
     let file_appender = Appender::builder().build("file", Box::new(file_appender));
 
+    let file_level = LevelFilter::Error;
+
     let root = Root::builder()
         .appender("stdout")
         .appender("file")
         .build(file_level);
 
+    // increase blockswap logging level to debug
+    let blockswap = Logger::builder().build("blockswap", LevelFilter::Debug);
+
     let config = Config::builder()
         .appender(stdout_appender)
         .appender(file_appender)
+        .logger(blockswap)
         .build(root)
         .unwrap();
 

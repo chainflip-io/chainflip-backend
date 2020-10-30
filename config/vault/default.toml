@@ -1,5 +1,5 @@
 # Options: testnet, mainnet
-net_type = "testnet"
+net_type = "Testnet"
 
 [loki.rpc]
 port = 6934

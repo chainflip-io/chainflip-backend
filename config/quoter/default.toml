@@ -1,4 +1,4 @@
-vault_node_url = ""
+vault_node_url = "http://127.0.0.1:3030"
 
 [database]
 name = "quoter.db"
