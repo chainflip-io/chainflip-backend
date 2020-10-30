@@ -129,9 +129,6 @@ where
         .map(post_stake::stake)
         .and_then(api::respond);
 
-    // Temporary open to all origins for testing
-    let cors = warp::cors().allow_any_origin().build();
-
     warp::path!("v1" / ..) // Add path prefix /v1 to all our routes
         .and(
             coins
@@ -142,5 +139,4 @@ where
                 .or(swap)
                 .or(stake),
         )
-        .with(cors);
 }

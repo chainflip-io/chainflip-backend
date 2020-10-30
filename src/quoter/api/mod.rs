@@ -19,7 +19,11 @@ impl API {
         V: VaultNodeInterface + Send + Sync + 'static,
         S: StateProvider + Send + 'static,
     {
-        let routes = v1::endpoints(vault_node, state).recover(api::handle_rejection);
+        // Temporary open to all origins for testing
+        let cors = warp::cors().allow_any_origin().build();
+        let routes = v1::endpoints(vault_node, state)
+            .with(cors)
+            .recover(api::handle_rejection);
 
         let future = async { warp::serve(routes).run(addr).await };
 
