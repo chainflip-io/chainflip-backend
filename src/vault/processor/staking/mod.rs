@@ -136,6 +136,10 @@ fn process_stake_quote(
                 wtx_idxs.push(wtx.id);
                 loki_amount = Some(amount);
             }
+            // Temporarily ignore bitcoin witness transactions
+            Coin::BTC => {
+                continue;
+            }
             coin_type @ _ => {
                 if coin_type == quote.coin_type.get_coin() {
                     if other_amount.is_some() {
