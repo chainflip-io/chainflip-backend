@@ -12,7 +12,7 @@ use std::{
 #[derive(Debug, Deserialize)]
 pub struct PoolsParams {
     /// The list of coin symbols
-    pub symbols: Option<Vec<String>>,
+    pub symbols: Option<String>,
 }
 
 /// Response for `pools` endpoint
@@ -51,10 +51,9 @@ where
     }
 
     // Filter out invalid symbols
-    let valid_symbols: Vec<Coin> = params
-        .symbols
-        .unwrap()
-        .iter()
+    let symbols = params.symbols.unwrap_or("".into());
+    let valid_symbols: Vec<Coin> = symbols
+        .split(",")
         .filter_map(|symbol| symbol.parse::<Coin>().ok())
         .filter(|symbol| symbol.clone() != Coin::LOKI)
         .collect();
@@ -132,12 +131,7 @@ mod test {
 
         let result = get_pools(
             PoolsParams {
-                symbols: Some(vec![
-                    "BTC".to_string(),
-                    "btc".to_string(),
-                    "Loki".to_string(),
-                    "INVALID".to_string(),
-                ]),
+                symbols: Some("BTC,btc,Loki,INVALID,,,123".to_string()),
             },
             db,
         )
@@ -169,7 +163,7 @@ mod test {
 
         let result = get_pools(
             PoolsParams {
-                symbols: Some(vec!["ETH".to_string()]),
+                symbols: Some("ETH".to_string()),
             },
             db,
         )

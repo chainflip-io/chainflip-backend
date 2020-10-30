@@ -8,7 +8,7 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize)]
 pub struct CoinsParams {
     /// The list of coin symbols
-    pub symbols: Option<Vec<String>>,
+    pub symbols: Option<String>,
 }
 
 /// Get coins that we support.
@@ -25,11 +25,10 @@ pub async fn get_coins(params: CoinsParams) -> Result<Vec<CoinInfo>, ResponseErr
         return Ok(Coin::SUPPORTED.iter().map(|coin| coin.get_info()).collect());
     }
 
-    // Filter out invalid symbols
-    let valid_symbols: Vec<Coin> = params
-        .symbols
-        .unwrap()
-        .iter()
+    // Convert comma deliminated string to vector and filter out invalid symbols
+    let symbols = params.symbols.unwrap_or("".into());
+    let valid_symbols: Vec<Coin> = symbols
+        .split(",")
         .filter_map(|symbol| symbol.parse::<Coin>().ok())
         .collect();
 
@@ -52,11 +51,7 @@ mod test {
     #[tokio::test]
     pub async fn returns_coin_information() {
         let params = CoinsParams {
-            symbols: Some(vec![
-                "eth".to_owned(),
-                "LOKI".to_owned(),
-                "invalid_coin".to_owned(),
-            ]),
+            symbols: Some("eth,LOKI,invalid_coin,,,123".to_string()),
         };
         let result = get_coins(params).await.expect("Expected result to be Ok.");
 
