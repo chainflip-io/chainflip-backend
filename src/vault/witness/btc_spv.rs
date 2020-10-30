@@ -39,7 +39,7 @@ where
         loop {
             self.poll_addresses_of_quotes().await;
 
-            std::thread::sleep(std::time::Duration::from_millis(10));
+            std::thread::sleep(std::time::Duration::from_secs(10));
         }
     }
 
