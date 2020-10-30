@@ -91,7 +91,7 @@ fn process_stake_quote(
     witness_txs: &[&WitnessTxWrapper],
 ) -> Option<StakeQuoteResult> {
     // TODO: put a balance change tx onto the side chain
-    info!("Found witness matching quote: {:?}", quote_info.inner);
+    info!("Found witness matching quote: {}", quote_info.inner.id);
 
     // TODO: only print this if a witness is not used:
 
@@ -161,14 +161,14 @@ fn process_stake_quote(
     }
 
     if loki_amount.is_none() {
-        info!("Loki is not yet provisioned in quote: {:?}", quote);
+        info!("Loki is not yet provisioned in quote: {}", quote.id);
     }
 
     if other_amount.is_none() {
         info!(
-            "{} is not yet provisioned in quote: {:?}",
+            "{} is not yet provisioned in quote: {}",
             quote.coin_type.get_coin(),
-            quote
+            quote.id
         );
     }
 

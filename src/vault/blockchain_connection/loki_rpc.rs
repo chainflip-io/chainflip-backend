@@ -42,12 +42,6 @@ async fn send_req_inner(
 
     let url = format!("http://localhost:{}/json_rpc", port);
 
-    debug!(
-        "Loki wallet rpc: /{}. Sending params: {}",
-        method,
-        params.to_string()
-    );
-
     let req = serde_json::json!({
         "jsonrpc": "2.0",
         "id": "0",
