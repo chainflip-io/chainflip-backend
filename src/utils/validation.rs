@@ -21,7 +21,7 @@ pub fn validate_address(coin: Coin, address: &str) -> Result<(), String> {
 /// Validate an address id for the given coin
 pub fn validate_address_id(coin: Coin, address_id: &str) -> Result<(), String> {
     match coin {
-        Coin::BTC | Coin::ETH => match address_id.parse::<u64>() {
+        Coin::BTC | Coin::ETH => match address_id.parse::<u32>() {
             // Index 0 is used for the main wallet and 1-4 are reserved for future use
             Ok(id) => {
                 if id < 5 {
