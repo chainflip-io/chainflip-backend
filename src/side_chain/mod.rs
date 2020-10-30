@@ -13,7 +13,7 @@ pub use persistent_side_chain::PeristentSideChain;
 
 /// Side chain transaction type
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
-#[serde(tag = "type", content = "info")]
+#[serde(tag = "type", content = "info", rename_all = "camelCase")]
 pub enum SideChainTx {
     /// The quote transaction variant
     QuoteTx(QuoteTx),
