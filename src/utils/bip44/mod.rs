@@ -107,7 +107,7 @@ impl KeyPair {
 pub fn get_key_pair(
     root_key: ExtendedPrivKey,
     coin: CoinType,
-    address_index: u64,
+    address_index: u32,
 ) -> Result<KeyPair, String> {
     let priv_key = derive_private_key(root_key, coin, address_index)?;
     let pub_key = ExtendedPubKey::from_private_key(&priv_key);
@@ -122,7 +122,7 @@ pub fn get_key_pair(
 fn derive_private_key(
     root_key: ExtendedPrivKey,
     coin: CoinType,
-    address_index: u64,
+    address_index: u32,
 ) -> Result<ExtendedPrivKey, String> {
     // Derivation path we're using: m/44'/coin_type'/0'/0/address_index
     // See: https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki#path-levels
@@ -135,4 +135,24 @@ fn derive_private_key(
         .map_err(|err| format!("{:?}", err))?;
 
     Ok(child_key)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_derive_private_key() {
+        let xpriv = "xprv9s21ZrQH143K2h2Jo5HX95FFUbu8QYXRDvmpStejFQQXSYw7LnsuczMXvfh9mVFCukNz6bXoYDSZhMzwQqtoDeMFkjG8PqzHCf4kDHYwYqK";
+        let root_key = RawKey::decode(xpriv).unwrap().to_private_key().unwrap();
+        for coin in vec![CoinType::BTC, CoinType::ETH] {
+            for index in vec![0, 1, 999, u32::MAX] {
+                assert!(
+                    derive_private_key(root_key.clone(), coin, index).is_ok(),
+                    "Expected to generate a key pair for index {}",
+                    index
+                )
+            }
+        }
+    }
 }
