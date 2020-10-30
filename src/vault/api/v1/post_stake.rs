@@ -92,7 +92,7 @@ pub async fn stake<T: TransactionProvider>(
     // Generate addresses
     let coin_input_address = match params.pool {
         Coin::ETH => {
-            let index = match params.coin_input_address_id.parse::<u64>() {
+            let index = match params.coin_input_address_id.parse::<u32>() {
                 Ok(index) => index,
                 Err(_) => return Err(bad_request("Incorrect input address id")),
             };
@@ -105,7 +105,7 @@ pub async fn stake<T: TransactionProvider>(
             }
         }
         Coin::BTC => {
-            let index = match params.coin_input_address_id.parse::<u64>() {
+            let index = match params.coin_input_address_id.parse::<u32>() {
                 Ok(index) => index,
                 Err(_) => return Err(bad_request("Incorrect input address id")),
             };
@@ -141,8 +141,8 @@ pub async fn stake<T: TransactionProvider>(
             }
         };
 
-    let staker_id = StakerId::new(params.staker_id.clone())
-        .map_err(|err| bad_request("Invalid staker id"))?;
+    let staker_id =
+        StakerId::new(params.staker_id.clone()).map_err(|err| bad_request("Invalid staker id"))?;
 
     let quote = StakeQuoteTx::new(
         Timestamp::now(),

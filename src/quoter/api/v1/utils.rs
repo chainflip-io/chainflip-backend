@@ -18,8 +18,8 @@ pub fn generate_unique_input_address_id<R: Rng>(
     // We can test this by passing a SeededRng
     let input_address_id = loop {
         let id = match input_coin {
-            Coin::BTC => rng.gen_range(6, u64::MAX).to_string(),
-            Coin::ETH => rng.gen_range(6, u64::MAX).to_string(),
+            Coin::BTC => rng.gen_range(5, u32::MAX).to_string(),
+            Coin::ETH => rng.gen_range(5, u32::MAX).to_string(),
             Coin::LOKI => {
                 let random_bytes = rng.gen::<[u8; 8]>();
                 hex::encode(random_bytes)

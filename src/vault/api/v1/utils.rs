@@ -16,7 +16,7 @@ pub fn internal_server_error() -> ResponseError {
 pub fn generate_bip44_keypair_from_root_key(
     root_key: &str,
     coin: bip44::CoinType,
-    index: u64,
+    index: u32,
 ) -> Result<bip44::KeyPair, String> {
     let root_key = bip44::RawKey::decode(root_key).map_err(|err| format!("{}", err))?;
 
@@ -30,7 +30,7 @@ pub fn generate_bip44_keypair_from_root_key(
 }
 
 /// Generate an eth address from a master root key and index
-pub fn generate_eth_address(root_key: &str, index: u64) -> Result<String, String> {
+pub fn generate_eth_address(root_key: &str, index: u32) -> Result<String, String> {
     let key_pair =
         generate_bip44_keypair_from_root_key(root_key, bip44::CoinType::ETH, index).unwrap();
 
@@ -40,7 +40,7 @@ pub fn generate_eth_address(root_key: &str, index: u64) -> Result<String, String
 /// Generate an btc address from a master root key and index and other params
 pub fn generate_btc_address(
     root_key: &str,
-    index: u64,
+    index: u32,
     compressed: bool,
     address_type: bitcoin::AddressType,
     nettype: &NetType,
@@ -83,6 +83,19 @@ mod test {
     use super::*;
 
     use bitcoin::AddressType::*;
+
+    #[test]
+    fn test_generate_bip44_keypair_from_root_key() {
+        for coin in vec![bip44::CoinType::BTC, bip44::CoinType::ETH] {
+            for index in vec![0, 500, u32::MAX] {
+                assert!(
+                    generate_bip44_keypair_from_root_key(TEST_ROOT_KEY, coin, index).is_ok(),
+                    "Expected to generate a key pair for index {}",
+                    index
+                )
+            }
+        }
+    }
 
     #[test]
     fn generates_correct_eth_address() {

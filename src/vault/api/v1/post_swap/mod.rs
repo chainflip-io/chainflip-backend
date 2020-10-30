@@ -110,7 +110,7 @@ pub async fn swap<T: TransactionProvider>(
     // Generate addresses
     let input_address = match input_coin {
         Coin::ETH => {
-            let index = match params.input_address_id.parse::<u64>() {
+            let index = match params.input_address_id.parse::<u32>() {
                 Ok(index) => index,
                 Err(_) => return Err(bad_request("Incorrect input address id")),
             };
@@ -137,7 +137,7 @@ pub async fn swap<T: TransactionProvider>(
             }
         }
         Coin::BTC => {
-            let index = match params.input_address_id.parse::<u64>() {
+            let index = match params.input_address_id.parse::<u32>() {
                 Ok(index) => index,
                 Err(_) => return Err(bad_request("Incorrect input address id")),
             };
