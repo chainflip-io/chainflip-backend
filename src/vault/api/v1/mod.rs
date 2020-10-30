@@ -55,7 +55,7 @@ pub fn endpoints<S: ISideChain + Send, T: TransactionProvider + Send + Sync>(
         .map(post_swap::swap)
         .and_then(api::respond);
 
-    let stake = warp::path!("swap")
+    let stake = warp::path!("stake")
         .and(warp::post())
         .and(warp::body::json())
         .and(using(provider.clone()))
