@@ -81,6 +81,12 @@ where
         // To facilitate this we'd have to poll blocks up to current_block - num_of_confirmations
         while let Some(transactions) = self.client.get_transactions(self.next_ethereum_block).await
         {
+            debug!(
+                "Got {} new ETH Transactions for block {}",
+                transactions.len(),
+                self.next_ethereum_block
+            );
+
             let mut provider = self.transaction_provider.write();
 
             provider.sync();
