@@ -194,7 +194,10 @@ pub(crate) fn adjust_portions_after_stake(
     let coin = contribution.coin();
 
     // TODO: make this work with other coins
-    assert_eq!(coin, PoolCoin::ETH);
+    if coin != PoolCoin::ETH {
+        debug!("Cannot adjust portions for {}", coin);
+        return;
+    }
 
     let mut pool_portions = portions.entry(coin).or_insert(Default::default());
 
