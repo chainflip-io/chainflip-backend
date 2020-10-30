@@ -142,7 +142,7 @@ impl EthereumClient for Web3Client {
         let nonce: U256 = match self
             .web3
             .eth()
-            .transaction_count(our_address.into(), Some(BlockNumber::Pending))
+            .transaction_count(our_address.clone().into(), Some(BlockNumber::Pending))
             .await
         {
             Ok(value) => value,
@@ -169,7 +169,7 @@ impl EthereumClient for Web3Client {
             Err(err) => {
                 return Err(format!(
                     "{}, sender: {}, Tx: {:?}",
-                    err, tx.from.public_key, raw_tx,
+                    err, our_address, raw_tx,
                 ))
             }
         }
