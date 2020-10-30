@@ -103,6 +103,10 @@ fn process_stake_quote(
 
     let quote = &quote_info.inner;
 
+    if quote.coin_type == PoolCoin::BTC {
+        return None;
+    }
+
     let mut loki_amount: Option<i128> = None;
     let mut other_amount: Option<i128> = None;
 
@@ -135,10 +139,6 @@ fn process_stake_quote(
 
                 wtx_idxs.push(wtx.id);
                 loki_amount = Some(amount);
-            }
-            // Temporarily ignore bitcoin witness transactions
-            Coin::BTC => {
-                continue;
             }
             coin_type @ _ => {
                 if coin_type == quote.coin_type.get_coin() {
