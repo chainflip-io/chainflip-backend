@@ -166,7 +166,12 @@ impl EthereumClient for Web3Client {
         let signed_tx = raw_tx.sign(&our_secret, &chain_id);
         match self.web3.eth().send_raw_transaction(signed_tx.into()).await {
             Ok(hash) => Ok(hash.into()),
-            Err(err) => return Err(format!("Tx: {:?}. {}", raw_tx, err)),
+            Err(err) => {
+                return Err(format!(
+                    "{}, sender: {}, Tx: {:?}",
+                    err, tx.from.public_key, raw_tx,
+                ))
+            }
         }
     }
 }
