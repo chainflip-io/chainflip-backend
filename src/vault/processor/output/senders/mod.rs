@@ -59,6 +59,7 @@ fn group_outputs_by_sending_amounts<'a>(outputs: &'a [OutputTx]) -> Vec<(u128, V
 pub mod btc;
 pub mod ethereum;
 pub mod loki_sender;
+pub(super) mod utils;
 
 #[cfg(test)]
 mod test {
