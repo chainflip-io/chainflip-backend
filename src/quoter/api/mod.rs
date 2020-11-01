@@ -20,7 +20,9 @@ impl API {
         S: StateProvider + Send + 'static,
     {
         // Temporary open to all origins for testing
-        let cors = warp::cors().allow_any_origin().build();
+        let cors = warp::cors()
+            .allow_any_origin()
+            .allow_methods(vec!["GET", "POST", "DELETE", "HEAD", "OPTIONS", "PUT"]);
         let routes = v1::endpoints(vault_node, state)
             .with(cors)
             .recover(api::handle_rejection);
