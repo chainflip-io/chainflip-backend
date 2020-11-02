@@ -190,7 +190,7 @@ pub struct BulkPaymentResponseEntry {
     /// Payment Id matching the input parameter
     pub payment_id: LokiPaymentId,
     /// Transaction hash used as the transaction Id
-    tx_hash: String,
+    pub tx_hash: String,
     /// Amount for this payment
     pub amount: LokiAmount,
     /// Height of the block that first confirmed this payment

@@ -198,11 +198,11 @@ impl BtcSPVClient {
             self.username, self.password, self.port
         );
 
-        debug!(
-            "Bitcoin SPV Wallet RPC: /{}. Sending params: {}",
-            method,
-            params.to_string()
-        );
+        // debug!(
+        //     "Bitcoin SPV Wallet RPC: /{}. Sending params: {}",
+        //     method,
+        //     params.to_string()
+        // );
 
         let req = serde_json::json!({
             "jsonrpc": "2.0",
