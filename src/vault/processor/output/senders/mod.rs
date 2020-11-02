@@ -105,7 +105,7 @@ pub fn get_input_id_indicies<T: TransactionProvider>(
         })
         .collect_vec();
 
-    [swaps, stakes].concat()
+    [vec![0], swaps, stakes].concat()
 }
 
 #[cfg(test)]
@@ -245,7 +245,7 @@ mod test {
             .unwrap();
 
         let indicies = get_input_id_indicies(provider.clone(), Coin::ETH);
-        assert_eq!(&indicies, &[5, 7]);
+        assert_eq!(&indicies, &[0, 5, 7]);
 
         let indicies = get_input_id_indicies(provider.clone(), Coin::LOKI);
         assert!(indicies.is_empty());

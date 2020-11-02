@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use crate::{common::store::KeyValueStore, vault::transactions::TransactionProvider};
 
-pub use output::{CoinProcessor, EthOutputSender, LokiSender, OutputCoinProcessor};
+pub use output::{
+    BtcOutputSender, CoinProcessor, EthOutputSender, LokiSender, OutputCoinProcessor,
+};
 use parking_lot::RwLock;
 
 /// Processing utils

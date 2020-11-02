@@ -168,7 +168,11 @@ impl<E: EthereumClient + Sync + Send, T: TransactionProvider + Sync + Send> Outp
         let keys = get_input_id_indicies(self.provider.clone(), Coin::ETH)
             .into_iter()
             .filter_map(|index| {
-                match bip44::get_key_pair(self.root_private_key.clone(), bip44::CoinType::ETH, 0) {
+                match bip44::get_key_pair(
+                    self.root_private_key.clone(),
+                    bip44::CoinType::ETH,
+                    index,
+                ) {
                     Ok(keys) => Some(keys),
                     Err(err) => {
                         error!(
