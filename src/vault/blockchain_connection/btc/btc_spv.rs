@@ -101,8 +101,13 @@ pub struct SelectInputsResponse {
     change: u128,
 }
 
-// we have to choose inputs that are greater than the fee too
-// TODO: In next PR account for fees
+#[derive(Debug, Deserialize)]
+pub struct GetBalanceResponse {
+    confirmed: String,
+    unconfirmed: String,
+}
+
+/// Use greedy selection algorithm to select the utxos for a transaction
 fn select_inputs_greedy(target: u128, utxos: Vec<BtcUTXO>) -> Option<SelectInputsResponse> {
     if utxos.len() == 0 {
         return None;
@@ -460,6 +465,26 @@ impl BtcSPVClient {
 
         Ok(feerate)
     }
+
+    /// Get the confirmed balance of any BTC address
+    async fn get_address_balance(
+        &self,
+        address: &WalletAddress,
+    ) -> Result<GenericCoinAmount, String> {
+        let params = serde_json::json!({ "address": address });
+
+        let res = self
+            .send_req_inner("getaddressbalance", params)
+            .await
+            .map_err(|err| err.to_string())?;
+
+        let get_balance_response: GetBalanceResponse =
+            serde_json::from_value(res).map_err(|err| err.to_string())?;
+
+        let generic_amt =
+            GenericCoinAmount::from_decimal_string(Coin::BTC, &get_balance_response.confirmed[..]);
+        Ok(generic_amt)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -715,6 +740,16 @@ mod test {
         assert!(fee.is_ok());
         let fee = fee.unwrap();
         println!("The fee returned is: {}", fee);
+    }
+
+    #[tokio::test]
+    #[ignore = "Depends on SPV Client"]
+    async fn get_address_balance_test() {
+        let client = get_test_BtcSPVClient();
+        let address = WalletAddress("tb1q62pygrp8af7v0gzdjycnnqcm9syhpdg6a0kunk".to_string());
+        let result = client.get_address_balance(&address).await;
+
+        assert!(result.is_ok());
     }
 
     #[test]
