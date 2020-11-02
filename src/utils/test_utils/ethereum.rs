@@ -75,4 +75,8 @@ impl EthereumClient for TestEthereumClient {
         }
         Err("Not handled".to_owned())
     }
+
+    async fn get_balance(&self, address: crate::common::ethereum::Address) -> Result<u128, String> {
+        todo!()
+    }
 }

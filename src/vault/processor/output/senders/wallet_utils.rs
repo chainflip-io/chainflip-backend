@@ -9,6 +9,12 @@ pub struct WalletBalance {
     balance: u128,
 }
 
+impl WalletBalance {
+    pub fn new(wallet: KeyPair, balance: u128) -> Self {
+        WalletBalance { wallet, balance }
+    }
+}
+
 impl Display for WalletBalance {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}: {}", self.wallet.public_key, self.balance)
@@ -17,8 +23,10 @@ impl Display for WalletBalance {
 
 /// An output mapped to a wallet
 pub struct WalletOutput {
-    wallet: KeyPair,
-    output: OutputTx,
+    /// The wallet
+    pub wallet: KeyPair,
+    /// The output to send
+    pub output: OutputTx,
 }
 
 /// Get the sending wallets for the given outputs

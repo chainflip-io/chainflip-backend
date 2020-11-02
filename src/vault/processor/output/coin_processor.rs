@@ -2,13 +2,10 @@ use crate::{
     common::Coin,
     transactions::{OutputSentTx, OutputTx},
     utils::bip44,
-    vault::{
-        blockchain_connection::{btc::IBitcoinSend, ethereum::EthereumClient},
-        config::VAULT_CONFIG,
-    },
+    vault::{blockchain_connection::btc::IBitcoinSend, config::VAULT_CONFIG},
 };
 
-use super::senders::{btc::BtcOutputSender, ethereum::EthOutputSender, OutputSender};
+use super::senders::{btc::BtcOutputSender, OutputSender};
 
 /// Handy trait for injecting custom processing code during testing
 #[async_trait]
@@ -18,13 +15,18 @@ pub trait CoinProcessor {
 }
 
 /// Struct responsible for sending outputs all supported coin types
-pub struct OutputCoinProcessor<L: OutputSender, E: EthereumClient, B: IBitcoinSend> {
+pub struct OutputCoinProcessor<L, E, B>
+where
+    L: OutputSender,
+    E: OutputSender,
+    B: IBitcoinSend,
+{
     loki: L,
     eth: E,
     btc: B,
 }
 
-impl<L: OutputSender, E: EthereumClient, B: IBitcoinSend> OutputCoinProcessor<L, E, B> {
+impl<L: OutputSender, E: OutputSender, B: IBitcoinSend> OutputCoinProcessor<L, E, B> {
     /// Create a new output coin processor
     pub fn new(loki: L, eth: E, btc: B) -> Self {
         OutputCoinProcessor { eth, btc, loki }
@@ -35,21 +37,20 @@ impl<L: OutputSender, E: EthereumClient, B: IBitcoinSend> OutputCoinProcessor<L,
 impl<L, E, B> CoinProcessor for OutputCoinProcessor<L, E, B>
 where
     L: OutputSender + Sync + Send,
-    E: EthereumClient + Clone + Sync + Send,
+    E: OutputSender + Sync + Send,
     B: IBitcoinSend + Clone + Sync + Send,
 {
     async fn process(&self, coin: Coin, outputs: &[OutputTx]) -> Vec<OutputSentTx> {
         match coin {
             Coin::ETH => {
-                let root_key = match bip44::RawKey::decode(&VAULT_CONFIG.eth.master_root_key) {
-                    Ok(key) => key,
-                    Err(_) => {
-                        error!("Failed to generate root key from eth master root key");
-                        return vec![];
-                    }
-                };
-                let sender = EthOutputSender::new(self.eth.clone(), root_key);
-                sender.send(outputs).await
+                // let root_key = match bip44::RawKey::decode(&VAULT_CONFIG.eth.master_root_key) {
+                //     Ok(key) => key,
+                //     Err(_) => {
+                //         error!("Failed to generate root key from eth master root key");
+                //         return vec![];
+                //     }
+                // };
+                self.eth.send(outputs).await
             }
             Coin::BTC => {
                 let root_key = match bip44::RawKey::decode(&VAULT_CONFIG.btc.master_root_key) {

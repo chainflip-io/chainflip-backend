@@ -14,7 +14,7 @@ mod senders;
 
 pub use coin_processor::{CoinProcessor, OutputCoinProcessor};
 
-pub use senders::loki_sender::LokiSender;
+pub use senders::{ethereum::EthOutputSender, loki_sender::LokiSender};
 
 /// Process all pending outputs
 pub async fn process_outputs<T: TransactionProvider + Sync, C: CoinProcessor>(

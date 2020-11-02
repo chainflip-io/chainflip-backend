@@ -126,6 +126,22 @@ impl EthereumClient for Web3Client {
         })
     }
 
+    async fn get_balance(&self, address: ethereum::Address) -> Result<u128, String> {
+        let balance = self
+            .web3
+            .eth()
+            .balance(address.into(), Some(BlockNumber::Latest))
+            .await
+            .map_err(|err| err.to_string())?;
+
+        let balance = match u128::try_from(balance) {
+            Ok(balance) => balance,
+            Err(_) => return Err("Balance is over U128::MAX".to_owned()),
+        };
+
+        Ok(balance)
+    }
+
     async fn send(&self, tx: &SendTransaction) -> Result<ethereum::Hash, String> {
         if tx.amount.coin_type() != Coin::ETH {
             return Err(format!("Cannot send {}", tx.amount.coin_type()));
