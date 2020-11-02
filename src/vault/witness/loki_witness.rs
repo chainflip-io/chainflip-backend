@@ -110,8 +110,8 @@ where
                     let tx = WitnessTx::new(
                         Timestamp::now(),
                         quote_id,
-                        "0".to_owned(),
-                        0,
+                        payment.tx_hash.clone(),
+                        payment.block_height,
                         0,
                         payment.amount.to_atomic(),
                         Coin::LOKI,
