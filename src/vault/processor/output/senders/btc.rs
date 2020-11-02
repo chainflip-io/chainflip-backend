@@ -5,24 +5,36 @@ use crate::{
         bip44::{self, RawKey},
         primitives::U256,
     },
-    vault::blockchain_connection::btc::{IBitcoinSend, SendTransaction},
+    vault::config::NetType,
+    vault::transactions::TransactionProvider,
+    vault::{
+        api::v1::utils::generate_btc_address,
+        blockchain_connection::btc::{IBitcoinSend, SendTransaction},
+    },
 };
 use bip44::KeyPair;
 use bitcoin::Address;
 use hdwallet::ExtendedPrivKey;
 use itertools::Itertools;
-use std::{convert::TryFrom, str::FromStr};
+use parking_lot::RwLock;
+use std::{convert::TryFrom, str::FromStr, sync::Arc};
 
-use super::*;
+use super::{
+    get_input_id_indices, group_outputs_by_sending_amounts,
+    wallet_utils::{get_sending_wallets, WalletBalance},
+    OutputSender,
+};
 
 /// An output send for Bitcoin
-pub struct BtcOutputSender<B: IBitcoinSend> {
+pub struct BtcOutputSender<B: IBitcoinSend, T: TransactionProvider> {
     client: B,
     root_private_key: ExtendedPrivKey,
+    provider: Arc<RwLock<T>>,
+    net_type: NetType,
 }
 
-impl<B: IBitcoinSend> BtcOutputSender<B> {
-    pub fn new(client: B, root_key: RawKey) -> Self {
+impl<B: IBitcoinSend, T: TransactionProvider> BtcOutputSender<B, T> {
+    pub fn new(client: B, provider: Arc<RwLock<T>>, root_key: RawKey, net_type: NetType) -> Self {
         let root_private_key = root_key
             .to_private_key()
             .expect("Failed to generate bitcoin extended private key");
@@ -30,6 +42,8 @@ impl<B: IBitcoinSend> BtcOutputSender<B> {
         Self {
             client,
             root_private_key,
+            provider,
+            net_type,
         }
     }
 
@@ -121,35 +135,86 @@ impl<B: IBitcoinSend> BtcOutputSender<B> {
 }
 
 #[async_trait]
-impl<B: IBitcoinSend + Sync + Send> OutputSender for BtcOutputSender<B> {
+impl<B: IBitcoinSend + Sync + Send, T: TransactionProvider + Sync + Send> OutputSender
+    for BtcOutputSender<B, T>
+{
     async fn send(&self, outputs: &[OutputTx]) -> Vec<OutputSentTx> {
-        let key_pair =
-            match bip44::get_key_pair(self.root_private_key.clone(), bip44::CoinType::BTC, 0) {
-                Ok(keys) => keys,
+        if (outputs.is_empty()) {
+            return vec![];
+        }
+
+        if let Some(tx) = outputs.iter().find(|quote| quote.coin != Coin::BTC) {
+            error!("Invalid output {:?} sent to BTC output sender", tx);
+            return vec![];
+        }
+
+        let keys = get_input_id_indices(self.provider.clone(), Coin::BTC)
+            .into_iter()
+            .filter_map(|index| {
+                match bip44::get_key_pair(
+                    self.root_private_key.clone(),
+                    bip44::CoinType::BTC,
+                    index,
+                ) {
+                    Ok(keys) => Some(keys),
+                    Err(err) => {
+                        error!(
+                            "Failed to generate btc key pair for index {}: {}",
+                            index, err
+                        );
+                        None
+                    }
+                }
+            });
+
+        // Don't know how we can do this in parallel
+        // futures::future::join_all(keys).await doesn't seems to work
+        let mut wallet_balances = vec![];
+        for key in keys {
+            let public_key = match generate_btc_address(
+                key.clone(),
+                true,
+                bitcoin::AddressType::P2wpkh,
+                &self.net_type,
+            ) {
+                Ok(address) => address,
                 Err(err) => {
-                    error!("Failed to generate BTC key pair for index 0: {}", err);
-                    return vec![];
+                    warn!("Failed to generate bitcoin address: {}", err);
+                    continue;
                 }
             };
 
-        let mut sent_txs: Vec<OutputSentTx> = vec![];
+            match self
+                .client
+                .get_address_balance(WalletAddress::new(&public_key))
+                .await
+            {
+                Ok(balance) => wallet_balances.push(WalletBalance::new(key, balance.to_atomic())),
+                Err(err) => {
+                    warn!("Failed to fetch balance for {}: {}", public_key, err);
+                }
+            };
+        }
+        let wallet_outputs = get_sending_wallets(&wallet_balances, outputs);
 
-        // Group outputs by their quote
-        let grouped = group_outputs_by_quote(outputs, Coin::BTC);
-        for (_, txs) in grouped {
-            let sent = self.send_outputs(&txs, &key_pair).await;
+        let mut sent_txs: Vec<OutputSentTx> = vec![];
+        for output in wallet_outputs {
+            let sent = self.send_outputs(&[output.output], &output.wallet).await;
             sent_txs.extend(sent);
         }
-
         sent_txs
     }
 }
 
 #[cfg(test)]
 mod test {
+    use std::sync::Mutex;
+
     use crate::{
         common::WalletAddress,
+        side_chain::MemorySideChain,
         utils::test_utils::{btc::TestBitcoinSendClient, create_fake_output_tx, TEST_ROOT_KEY},
+        vault::transactions::MemoryTransactionsProvider,
     };
 
     use super::*;
@@ -161,10 +226,14 @@ mod test {
         .unwrap()
     }
 
-    fn get_output_sender() -> BtcOutputSender<TestBitcoinSendClient> {
+    fn get_output_sender(
+    ) -> BtcOutputSender<TestBitcoinSendClient, MemoryTransactionsProvider<MemorySideChain>> {
+        let side_chain = MemorySideChain::new();
+        let side_chain = Arc::new(Mutex::new(side_chain));
+        let provider = MemoryTransactionsProvider::new_protected(side_chain.clone());
         let client = TestBitcoinSendClient::new();
         let key = RawKey::decode(TEST_ROOT_KEY).unwrap();
-        BtcOutputSender::new(client, key)
+        BtcOutputSender::new(client, provider, key, NetType::Testnet)
     }
 
     #[tokio::test]

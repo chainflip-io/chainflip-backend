@@ -134,7 +134,7 @@ mod test {
     use super::*;
     use crate::{
         utils::test_utils::btc::TestBitcoinSPVClient, utils::test_utils::create_fake_stake_quote,
-        vault::blockchain_connection::btc::btc_spv::BtcUTXO,
+        vault::blockchain_connection::btc::spv::BtcUTXO,
     };
 
     use crate::{

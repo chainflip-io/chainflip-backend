@@ -5,12 +5,14 @@ use blockswap::{
     common::store::PersistentKVS,
     logging,
     side_chain::PeristentSideChain,
+    utils::bip44,
     vault::{
         api::APIServer,
         blockchain_connection::{BtcSPVClient, LokiConnection, LokiConnectionConfig, Web3Client},
-        config::NetType,
-        config::VAULT_CONFIG,
-        processor::{LokiSender, OutputCoinProcessor, SideChainProcessor},
+        config::{NetType, VAULT_CONFIG},
+        processor::{
+            BtcOutputSender, EthOutputSender, LokiSender, OutputCoinProcessor, SideChainProcessor,
+        },
         transactions::{MemoryTransactionsProvider, TransactionProvider},
         witness::{BtcSPVWitness, EthereumWitness, LokiWitness},
     },
@@ -82,7 +84,25 @@ fn main() {
     let db_connection = rusqlite::Connection::open("blocks.db").expect("Could not open database");
     let kvs = PersistentKVS::new(db_connection);
     let loki = LokiSender::new(vault_config.loki.rpc.clone());
-    let coin_processor = OutputCoinProcessor::new(loki, eth_client, btc);
+
+    let eth_root_key = match bip44::RawKey::decode(&vault_config.eth.master_root_key) {
+        Ok(key) => key,
+        Err(_) => panic!("Failed to generate root key from eth master root key"),
+    };
+    let eth_sender = EthOutputSender::new(eth_client.clone(), provider.clone(), eth_root_key);
+
+    let btc_root_key = match bip44::RawKey::decode(&vault_config.btc.master_root_key) {
+        Ok(key) => key,
+        Err(_) => panic!("Failed to generate root key from btc master root key"),
+    };
+    let btc_sender = BtcOutputSender::new(
+        btc.clone(),
+        provider.clone(),
+        btc_root_key,
+        vault_config.net_type,
+    );
+
+    let coin_processor = OutputCoinProcessor::new(loki, eth_sender, btc_sender);
     let processor = SideChainProcessor::new(provider.clone(), kvs, coin_processor);
 
     processor.start(None);

@@ -4,12 +4,10 @@
 
 // Events: Lokid transaction, Ether transaction, Swap transaction from Side Chain
 
-mod btc;
 mod btc_spv;
 mod ethereum;
 mod loki_witness;
 
-pub use btc::BitcoinWitness;
 pub use btc_spv::BtcSPVWitness;
 pub use ethereum::EthereumWitness;
 pub use loki_witness::LokiWitness;

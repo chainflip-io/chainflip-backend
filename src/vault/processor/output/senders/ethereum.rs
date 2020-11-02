@@ -1,8 +1,9 @@
-use std::{convert::TryFrom, str::FromStr};
+use std::{convert::TryFrom, str::FromStr, sync::Arc};
 
 use bip44::KeyPair;
 use hdwallet::ExtendedPrivKey;
 use itertools::Itertools;
+use parking_lot::RwLock;
 
 use crate::{
     common::{ethereum::Address, Coin, GenericCoinAmount, Timestamp},
@@ -11,20 +12,30 @@ use crate::{
         bip44::{self, RawKey},
         primitives::U256,
     },
-    vault::blockchain_connection::ethereum::{EstimateRequest, EthereumClient, SendTransaction},
+    vault::{
+        blockchain_connection::ethereum::{EstimateRequest, EthereumClient, SendTransaction},
+        transactions::TransactionProvider,
+    },
 };
 
-use super::*;
+use super::{
+    get_input_id_indices, group_outputs_by_sending_amounts,
+    wallet_utils::{get_sending_wallets, WalletBalance},
+    OutputSender,
+};
+
+// TODO: The code here and the code in btc sender is very similar. We should refactor it in the future
 
 /// An output sender for Ethereum
-pub struct EthOutputSender<E: EthereumClient> {
+pub struct EthOutputSender<E: EthereumClient, T: TransactionProvider> {
     client: E,
     root_private_key: ExtendedPrivKey,
+    provider: Arc<RwLock<T>>,
 }
 
-impl<E: EthereumClient> EthOutputSender<E> {
+impl<E: EthereumClient, T: TransactionProvider> EthOutputSender<E, T> {
     /// Create a new output sender
-    pub fn new(client: E, root_key: RawKey) -> Self {
+    pub fn new(client: E, provider: Arc<RwLock<T>>, root_key: RawKey) -> Self {
         let root_private_key = root_key
             .to_private_key()
             .expect("Failed to generate ethereum extended private key");
@@ -32,6 +43,7 @@ impl<E: EthereumClient> EthOutputSender<E> {
         Self {
             client,
             root_private_key,
+            provider,
         }
     }
 
@@ -142,39 +154,71 @@ impl<E: EthereumClient> EthOutputSender<E> {
 }
 
 #[async_trait]
-impl<E: EthereumClient + Sync + Send> OutputSender for EthOutputSender<E> {
+impl<E: EthereumClient + Sync + Send, T: TransactionProvider + Sync + Send> OutputSender
+    for EthOutputSender<E, T>
+{
     async fn send(&self, outputs: &[OutputTx]) -> Vec<OutputSentTx> {
-        // For now we'll simply send from the main wallet (index 0)
-        // In the future it'll be better to send it from our other generated wallets if they have enough eth
-        let key_pair =
-            match bip44::get_key_pair(self.root_private_key.clone(), bip44::CoinType::ETH, 0) {
-                Ok(keys) => keys,
-                Err(err) => {
-                    error!("Failed to generate eth key pair for index 0: {}", err);
-                    return vec![];
-                }
-            };
-
-        let mut sent_txs: Vec<OutputSentTx> = vec![];
-
-        // Group outputs by their quote
-        let grouped = group_outputs_by_quote(outputs, Coin::ETH);
-        for (_, txs) in grouped {
-            let sent = self.send_outputs(&txs, &key_pair).await;
-            sent_txs.extend(sent);
+        if (outputs.is_empty()) {
+            return vec![];
         }
 
+        if let Some(tx) = outputs.iter().find(|quote| quote.coin != Coin::ETH) {
+            error!("Invalid output {:?} sent to ETH output sender", tx);
+            return vec![];
+        }
+
+        let keys = get_input_id_indices(self.provider.clone(), Coin::ETH)
+            .into_iter()
+            .filter_map(|index| {
+                match bip44::get_key_pair(
+                    self.root_private_key.clone(),
+                    bip44::CoinType::ETH,
+                    index,
+                ) {
+                    Ok(keys) => Some(keys),
+                    Err(err) => {
+                        error!(
+                            "Failed to generate eth key pair for index {}: {}",
+                            index, err
+                        );
+                        None
+                    }
+                }
+            });
+
+        // Don't know how we can do this in parallel
+        // futures::future::join_all(keys).await doesn't seems to work
+        let mut wallet_balances = vec![];
+        for key in keys {
+            match self.client.get_balance(key.public_key.into()).await {
+                Ok(balance) => wallet_balances.push(WalletBalance::new(key, balance)),
+                Err(err) => {
+                    warn!("Failed to fetch balance for {}: {}", key.public_key, err);
+                }
+            };
+        }
+        let wallet_outputs = get_sending_wallets(&wallet_balances, outputs);
+
+        let mut sent_txs: Vec<OutputSentTx> = vec![];
+        for output in wallet_outputs {
+            let sent = self.send_outputs(&[output.output], &output.wallet).await;
+            sent_txs.extend(sent);
+        }
         sent_txs
     }
 }
 
 #[cfg(test)]
 mod test {
+    use std::sync::Mutex;
+
     use crate::{
         common::{ethereum, WalletAddress},
+        side_chain::MemorySideChain,
         utils::test_utils::TEST_ROOT_KEY,
         utils::test_utils::{create_fake_output_tx, ethereum::TestEthereumClient},
         vault::blockchain_connection::ethereum::EstimateResult,
+        vault::transactions::MemoryTransactionsProvider,
     };
 
     use super::*;
@@ -186,10 +230,14 @@ mod test {
         .unwrap()
     }
 
-    fn get_output_sender() -> EthOutputSender<TestEthereumClient> {
+    fn get_output_sender(
+    ) -> EthOutputSender<TestEthereumClient, MemoryTransactionsProvider<MemorySideChain>> {
+        let side_chain = MemorySideChain::new();
+        let side_chain = Arc::new(Mutex::new(side_chain));
+        let provider = MemoryTransactionsProvider::new_protected(side_chain.clone());
         let client = TestEthereumClient::new();
         let key = RawKey::decode(TEST_ROOT_KEY).unwrap();
-        EthOutputSender::new(client, key)
+        EthOutputSender::new(client, provider, key)
     }
 
     #[tokio::test]

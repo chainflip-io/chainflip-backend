@@ -465,26 +465,6 @@ impl BtcSPVClient {
 
         Ok(feerate)
     }
-
-    /// Get the confirmed balance of any BTC address
-    async fn get_address_balance(
-        &self,
-        address: &WalletAddress,
-    ) -> Result<GenericCoinAmount, String> {
-        let params = serde_json::json!({ "address": address });
-
-        let res = self
-            .send_req_inner("getaddressbalance", params)
-            .await
-            .map_err(|err| err.to_string())?;
-
-        let get_balance_response: GetBalanceResponse =
-            serde_json::from_value(res).map_err(|err| err.to_string())?;
-
-        let generic_amt =
-            GenericCoinAmount::from_decimal_string(Coin::BTC, &get_balance_response.confirmed[..]);
-        Ok(generic_amt)
-    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -571,6 +551,26 @@ impl IBitcoinSend for BtcSPVClient {
         let signed_hex_tx = hex::encode(serialize(&signed_tx));
 
         self.broadcast_tx(signed_hex_tx).await
+    }
+
+    /// Get the confirmed balance of any BTC address
+    async fn get_address_balance(
+        &self,
+        address: WalletAddress,
+    ) -> Result<GenericCoinAmount, String> {
+        let params = serde_json::json!({ "address": address });
+
+        let res = self
+            .send_req_inner("getaddressbalance", params)
+            .await
+            .map_err(|err| err.to_string())?;
+
+        let get_balance_response: GetBalanceResponse =
+            serde_json::from_value(res).map_err(|err| err.to_string())?;
+
+        let generic_amt =
+            GenericCoinAmount::from_decimal_string(Coin::BTC, &get_balance_response.confirmed[..]);
+        Ok(generic_amt)
     }
 }
 
@@ -747,7 +747,7 @@ mod test {
     async fn get_address_balance_test() {
         let client = get_test_BtcSPVClient();
         let address = WalletAddress("tb1q62pygrp8af7v0gzdjycnnqcm9syhpdg6a0kunk".to_string());
-        let result = client.get_address_balance(&address).await;
+        let result = client.get_address_balance(address).await;
 
         assert!(result.is_ok());
     }

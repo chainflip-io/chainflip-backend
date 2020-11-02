@@ -10,7 +10,9 @@ use std::{str::FromStr, sync::Arc};
 use uuid::Uuid;
 
 use super::{
-    utils::{bad_request, generate_btc_address, generate_eth_address, internal_server_error},
+    utils::{
+        bad_request, generate_btc_address_from_index, generate_eth_address, internal_server_error,
+    },
     Config,
 };
 
@@ -109,7 +111,7 @@ pub async fn stake<T: TransactionProvider>(
                 Ok(index) => index,
                 Err(_) => return Err(bad_request("Incorrect input address id")),
             };
-            match generate_btc_address(
+            match generate_btc_address_from_index(
                 &config.btc_master_root_key,
                 index,
                 true,
