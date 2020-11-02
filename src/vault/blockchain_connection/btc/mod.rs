@@ -4,12 +4,10 @@ use crate::{
 };
 use bitcoin::blockdata::transaction::Transaction;
 use bitcoin::{Address, Network, Txid};
-use btc_spv::AddressUnspentResponse;
+use spv::AddressUnspentResponse;
 
-/// Define btc core / bitcoind interface
-pub mod btc;
 /// Define btc SPV interface
-pub mod btc_spv;
+pub mod spv;
 
 #[derive(Debug)]
 pub struct SendTransaction {
@@ -24,19 +22,10 @@ pub struct SendTransaction {
 #[async_trait]
 pub trait IBitcoinSend {
     async fn send(&self, tx: &SendTransaction) -> Result<Txid, String>;
-}
-
-#[async_trait]
-/// Defines the interface for a bitcoin core / bitcoind client, used by a bitcoin witness
-pub trait BitcoinClient {
-    /// Get the latest block number of the btc chain
-    async fn get_latest_block_number(&self) -> Result<u64, String>;
-    /// Get the transactions in the given block number.
-    /// `None` if block doesn't exist.
-    async fn get_transactions(&self, block_number: u64) -> Option<Vec<Transaction>>;
-
-    /// Get network type of the btc client (bitcoin, testnet, regtest)
-    fn get_network_type(&self) -> Network;
+    async fn get_address_balance(
+        &self,
+        address: WalletAddress,
+    ) -> Result<GenericCoinAmount, String>;
 }
 
 #[async_trait]
@@ -46,7 +35,7 @@ pub trait BitcoinSPVClient {
     async fn get_estimated_fee(
         &self,
         send_tx: &SendTransaction,
-        fee_method: btc_spv::FeeMethod,
+        fee_method: spv::FeeMethod,
         fee_level: u32,
     ) -> Result<u64, String>;
 

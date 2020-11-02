@@ -126,6 +126,22 @@ impl EthereumClient for Web3Client {
         })
     }
 
+    async fn get_balance(&self, address: ethereum::Address) -> Result<u128, String> {
+        let balance = self
+            .web3
+            .eth()
+            .balance(address.into(), Some(BlockNumber::Latest))
+            .await
+            .map_err(|err| err.to_string())?;
+
+        let balance = match u128::try_from(balance) {
+            Ok(balance) => balance,
+            Err(_) => return Err("Balance is over U128::MAX".to_owned()),
+        };
+
+        Ok(balance)
+    }
+
     async fn send(&self, tx: &SendTransaction) -> Result<ethereum::Hash, String> {
         if tx.amount.coin_type() != Coin::ETH {
             return Err(format!("Cannot send {}", tx.amount.coin_type()));
@@ -264,5 +280,15 @@ mod test {
         let estimate = client.get_estimated_fee(&request).await.unwrap();
         assert_ne!(estimate.gas_limit, 0);
         assert_ne!(estimate.gas_price, 0);
+    }
+
+    #[tokio::test]
+    async fn returns_balance() {
+        let client = Web3Client::url(WEB3_URL).expect("Failed to create web3 client");
+
+        let balance = client
+            .get_balance(Address::from_str("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2").unwrap())
+            .await;
+        assert!(balance.is_ok());
     }
 }

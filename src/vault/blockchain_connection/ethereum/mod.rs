@@ -55,6 +55,9 @@ pub trait EthereumClient {
     /// Get the estimated fee for the given transaction
     async fn get_estimated_fee(&self, tx: &EstimateRequest) -> Result<EstimateResult, String>;
 
+    /// Get the balance of the given address
+    async fn get_balance(&self, address: Address) -> Result<u128, String>;
+
     /// Send a transaction
     async fn send(&self, tx: &SendTransaction) -> Result<Hash, String>;
 }

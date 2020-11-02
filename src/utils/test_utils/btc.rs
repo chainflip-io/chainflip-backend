@@ -1,8 +1,11 @@
-use crate::{common::WalletAddress, vault::blockchain_connection::btc::*};
+use crate::{
+    common::{GenericCoinAmount, WalletAddress},
+    vault::blockchain_connection::btc::*,
+};
 use bitcoin::Network;
 use bitcoin::Transaction;
 use bitcoin::Txid;
-use btc_spv::{AddressUnspentResponse, BtcUTXO};
+use spv::{AddressUnspentResponse, BtcUTXO};
 use std::{
     collections::{HashMap, VecDeque},
     sync::Mutex,
@@ -32,6 +35,13 @@ impl IBitcoinSend for TestBitcoinSendClient {
         }
         Err("Not handled".to_owned())
     }
+
+    async fn get_address_balance(
+        &self,
+        address: WalletAddress,
+    ) -> Result<GenericCoinAmount, String> {
+        Err("Not handled".to_owned())
+    }
 }
 
 impl TestBitcoinSendClient {
@@ -47,34 +57,6 @@ impl TestBitcoinSendClient {
         F: Fn(&SendTransaction) -> Result<Txid, String> + Send + Sync,
     {
         self.send_handler = Some(Box::new(function));
-    }
-}
-
-impl TestBitcoinClient {
-    /// Create a new test bitcoin sender only client - for output processing
-    pub fn new() -> Self {
-        TestBitcoinClient {
-            blocks: Arc::new(Mutex::new(VecDeque::new())),
-        }
-    }
-    /// Add a block to the client
-    pub fn add_block(&self, transactions: Vec<Transaction>) {
-        self.blocks.lock().unwrap().push_back(transactions)
-    }
-}
-
-#[async_trait]
-impl BitcoinClient for TestBitcoinClient {
-    async fn get_latest_block_number(&self) -> Result<u64, String> {
-        Ok(0)
-    }
-
-    async fn get_transactions(&self, _block_number: u64) -> Option<Vec<Transaction>> {
-        self.blocks.lock().unwrap().pop_front()
-    }
-
-    fn get_network_type(&self) -> Network {
-        Network::Testnet
     }
 }
 
@@ -117,7 +99,7 @@ impl BitcoinSPVClient for TestBitcoinSPVClient {
     async fn get_estimated_fee(
         &self,
         send_tx: &SendTransaction,
-        fee_method: btc_spv::FeeMethod,
+        fee_method: spv::FeeMethod,
         fee_level: u32,
     ) -> Result<u64, String> {
         Ok(1000)

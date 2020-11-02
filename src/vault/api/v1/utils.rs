@@ -1,6 +1,11 @@
 use reqwest::StatusCode;
 
-use crate::{common::api::ResponseError, common::ethereum, utils::bip44, vault::config::NetType};
+use crate::{
+    common::api::ResponseError,
+    common::ethereum,
+    utils::bip44::{self, KeyPair},
+    vault::config::NetType,
+};
 
 /// Bad request response error
 pub fn bad_request(message: &str) -> ResponseError {
@@ -38,7 +43,7 @@ pub fn generate_eth_address(root_key: &str, index: u32) -> Result<String, String
 }
 
 /// Generate an btc address from a master root key and index and other params
-pub fn generate_btc_address(
+pub fn generate_btc_address_from_index(
     root_key: &str,
     index: u32,
     compressed: bool,
@@ -47,6 +52,15 @@ pub fn generate_btc_address(
 ) -> Result<String, String> {
     let key_pair = generate_bip44_keypair_from_root_key(root_key, bip44::CoinType::BTC, index)?;
 
+    generate_btc_address(key_pair, compressed, address_type, nettype)
+}
+
+pub fn generate_btc_address(
+    key_pair: KeyPair,
+    compressed: bool,
+    address_type: bitcoin::AddressType,
+    nettype: &NetType,
+) -> Result<String, String> {
     let btc_pubkey = bitcoin::PublicKey {
         key: bitcoin::secp256k1::PublicKey::from_slice(&key_pair.public_key.serialize()).unwrap(),
         compressed,
@@ -113,48 +127,63 @@ mod test {
     fn generates_correct_btc_address() {
         // === p2wpkh - pay-to-witness-pubkey-hash (segwit) addresses ===
         assert_eq!(
-            generate_btc_address(TEST_ROOT_KEY, 0, true, P2wpkh, &NetType::Mainnet).unwrap(),
+            generate_btc_address_from_index(TEST_ROOT_KEY, 0, true, P2wpkh, &NetType::Mainnet)
+                .unwrap(),
             "bc1qawvxp3jxlzj3ydcfjyq83cxkdxpu7st8az5hvq"
         );
 
         // testnet generates different addresses to mainnet
         assert_eq!(
-            generate_btc_address(TEST_ROOT_KEY, 0, true, P2wpkh, &NetType::Testnet).unwrap(),
+            generate_btc_address_from_index(TEST_ROOT_KEY, 0, true, P2wpkh, &NetType::Testnet)
+                .unwrap(),
             "tb1qawvxp3jxlzj3ydcfjyq83cxkdxpu7st8hy0yhn"
         );
 
         assert_eq!(
-            generate_btc_address(TEST_ROOT_KEY, 1, true, P2wpkh, &NetType::Mainnet).unwrap(),
+            generate_btc_address_from_index(TEST_ROOT_KEY, 1, true, P2wpkh, &NetType::Mainnet)
+                .unwrap(),
             "bc1q6uq0qny5pel4aane4cj0kuqz5sgkxczv6y4ypy"
         );
 
         // === p2pkh - pay-to-pubkey-hash (legacy) addresses ===
         assert_eq!(
-            generate_btc_address(TEST_ROOT_KEY, 0, false, P2pkh, &NetType::Mainnet).unwrap(),
+            generate_btc_address_from_index(TEST_ROOT_KEY, 0, false, P2pkh, &NetType::Mainnet)
+                .unwrap(),
             "1Q6hHytu6sZmib3TUNeEhGxE8L2ydx5JZo",
         );
 
         // testnet generates different addresses to mainnet
         assert_eq!(
-            generate_btc_address(TEST_ROOT_KEY, 0, false, P2pkh, &NetType::Testnet).unwrap(),
+            generate_btc_address_from_index(TEST_ROOT_KEY, 0, false, P2pkh, &NetType::Testnet)
+                .unwrap(),
             "n4ceb2ysuu12VhX5BwccXCAYzKdgZY2XFH",
         );
 
         assert_eq!(
-            generate_btc_address(TEST_ROOT_KEY, 1, true, P2pkh, &NetType::Mainnet).unwrap(),
+            generate_btc_address_from_index(TEST_ROOT_KEY, 1, true, P2pkh, &NetType::Mainnet)
+                .unwrap(),
             "1LbqQTsn9EJN1yWJ2YkQGtaihovjgs6cfW"
         );
 
         assert_eq!(
-            generate_btc_address(TEST_ROOT_KEY, 1, false, P2pkh, &NetType::Mainnet).unwrap(),
+            generate_btc_address_from_index(TEST_ROOT_KEY, 1, false, P2pkh, &NetType::Mainnet)
+                .unwrap(),
             "1PWyfwtkS9co1rTHvU2SSESbcu6zi2TmxH"
         );
 
         assert_ne!(
-            generate_btc_address(TEST_ROOT_KEY, 2, false, P2pkh, &NetType::Mainnet).unwrap(),
+            generate_btc_address_from_index(TEST_ROOT_KEY, 2, false, P2pkh, &NetType::Mainnet)
+                .unwrap(),
             "1LbqQTsn9EJN1yWJ2YkQGtaihovjgs6cfW"
         );
 
-        assert!(generate_btc_address("not a real key", 4, false, P2pkh, &NetType::Mainnet).is_err())
+        assert!(generate_btc_address_from_index(
+            "not a real key",
+            4,
+            false,
+            P2pkh,
+            &NetType::Mainnet
+        )
+        .is_err())
     }
 }

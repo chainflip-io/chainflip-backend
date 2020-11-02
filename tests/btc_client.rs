@@ -1,9 +1,3 @@
-use bitcoincore_rpc::{self, Auth};
-use blockswap::{
-    common::{coins::GenericCoinAmount, Coin},
-    utils::bip44::KeyPair,
-    vault::blockchain_connection::btc::{btc::BtcClient, BitcoinClient, SendTransaction},
-};
 use config::Config;
 use serde::Deserialize;
 
