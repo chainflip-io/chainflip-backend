@@ -64,8 +64,8 @@ fn group_outputs_by_sending_amounts<'a>(outputs: &'a [OutputTx]) -> Vec<(u128, V
     groups
 }
 
-/// Get input id indicies
-pub fn get_input_id_indicies<T: TransactionProvider>(
+/// Get input id indices
+pub fn get_input_id_indices<T: TransactionProvider>(
     provider: Arc<RwLock<T>>,
     coin: Coin,
 ) -> Vec<u32> {
@@ -80,7 +80,7 @@ pub fn get_input_id_indicies<T: TransactionProvider>(
         .iter()
         .filter_map(|quote| {
             let quote = &quote.inner;
-            if quote.input == Coin::ETH {
+            if quote.input == coin {
                 if let Ok(id) = quote.input_address_id.parse::<u32>() {
                     return Some(id);
                 }
@@ -95,7 +95,7 @@ pub fn get_input_id_indicies<T: TransactionProvider>(
         .iter()
         .filter_map(|quote| {
             let quote = &quote.inner;
-            if quote.coin_type.get_coin() == Coin::ETH {
+            if quote.coin_type.get_coin() == coin {
                 if let Ok(id) = quote.coin_input_address_id.parse::<u32>() {
                     return Some(id);
                 }
@@ -207,7 +207,7 @@ mod test {
     }
 
     #[test]
-    fn test_get_input_id_indicies() {
+    fn test_get_input_id_indices() {
         let side_chain = MemorySideChain::new();
         let side_chain = Arc::new(Mutex::new(side_chain));
         let provider = MemoryTransactionsProvider::new_protected(side_chain.clone());
@@ -244,10 +244,13 @@ mod test {
             ])
             .unwrap();
 
-        let indicies = get_input_id_indicies(provider.clone(), Coin::ETH);
-        assert_eq!(&indicies, &[0, 5, 7]);
+        let indices = get_input_id_indices(provider.clone(), Coin::ETH);
+        assert_eq!(&indices, &[0, 5, 7]);
 
-        let indicies = get_input_id_indicies(provider.clone(), Coin::LOKI);
-        assert!(indicies.is_empty());
+        let indices = get_input_id_indices(provider.clone(), Coin::BTC);
+        assert_eq!(&indices, &[0, 6, 8]);
+
+        let indices = get_input_id_indices(provider.clone(), Coin::LOKI);
+        assert!(indices.is_empty());
     }
 }

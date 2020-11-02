@@ -19,10 +19,12 @@ use crate::{
 };
 
 use super::{
-    get_input_id_indicies, group_outputs_by_sending_amounts,
+    get_input_id_indices, group_outputs_by_sending_amounts,
     wallet_utils::{get_sending_wallets, WalletBalance},
     OutputSender,
 };
+
+// TODO: The code here and the code in btc sender is very similar. We should refactor it in the future
 
 /// An output sender for Ethereum
 pub struct EthOutputSender<E: EthereumClient, T: TransactionProvider> {
@@ -165,7 +167,7 @@ impl<E: EthereumClient + Sync + Send, T: TransactionProvider + Sync + Send> Outp
             return vec![];
         }
 
-        let keys = get_input_id_indicies(self.provider.clone(), Coin::ETH)
+        let keys = get_input_id_indices(self.provider.clone(), Coin::ETH)
             .into_iter()
             .filter_map(|index| {
                 match bip44::get_key_pair(

@@ -20,7 +20,7 @@ use parking_lot::RwLock;
 use std::{convert::TryFrom, str::FromStr, sync::Arc};
 
 use super::{
-    get_input_id_indicies, group_outputs_by_sending_amounts,
+    get_input_id_indices, group_outputs_by_sending_amounts,
     wallet_utils::{get_sending_wallets, WalletBalance},
     OutputSender,
 };
@@ -148,7 +148,7 @@ impl<B: IBitcoinSend + Sync + Send, T: TransactionProvider + Sync + Send> Output
             return vec![];
         }
 
-        let keys = get_input_id_indicies(self.provider.clone(), Coin::BTC)
+        let keys = get_input_id_indices(self.provider.clone(), Coin::BTC)
             .into_iter()
             .filter_map(|index| {
                 match bip44::get_key_pair(

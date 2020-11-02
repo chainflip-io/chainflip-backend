@@ -62,7 +62,7 @@ pub fn get_sending_wallets(balances: &[WalletBalance], outputs: &[OutputTx]) -> 
                     wallet_outputs.push(wallet_output);
                     wallet_balance.balance = new_balance;
                 }
-                None => warn!(
+                None => error!(
                     "Error occured while subtracting {} from wallet balance {}",
                     output.amount, wallet_balance.balance
                 ),
