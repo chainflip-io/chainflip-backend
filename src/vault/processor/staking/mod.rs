@@ -103,10 +103,6 @@ fn process_stake_quote(
 
     let quote = &quote_info.inner;
 
-    if quote.coin_type == PoolCoin::BTC {
-        return None;
-    }
-
     let mut loki_amount: Option<i128> = None;
     let mut other_amount: Option<i128> = None;
 

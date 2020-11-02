@@ -2,7 +2,7 @@ use super::*;
 use crate::{common::GenericCoinAmount, utils::test_utils::*};
 
 #[test]
-fn fulfilled_quotes_should_produce_new_tx() {
+fn fulfilled_eth_quotes_should_produce_new_tx() {
     let coin_type = Coin::ETH;
     let loki_amount = LokiAmount::from_decimal_string("1.0");
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
@@ -30,6 +30,37 @@ fn fulfilled_quotes_should_produce_new_tx() {
     assert_eq!(res.stake_tx.quote_tx, quote_tx.inner.id);
     assert!(res.stake_tx.witness_txs.contains(&wtx_loki.inner.id));
     assert!(res.stake_tx.witness_txs.contains(&wtx_eth.inner.id));
+}
+
+#[test]
+fn fulfilled_btc_quotes_should_produce_new_tx() {
+    let coin_type = Coin::BTC;
+    let loki_amount = LokiAmount::from_decimal_string("1.0");
+    let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
+
+    let quote_tx = create_fake_stake_quote(PoolCoin::from(coin_type).unwrap());
+    let wtx_loki = create_fake_witness(&quote_tx, loki_amount, Coin::LOKI);
+    let wtx_loki = WitnessTxWrapper::new(wtx_loki, false);
+    let wtx_btc = create_fake_witness(&quote_tx, coin_amount, coin_type);
+    let wtx_btc = WitnessTxWrapper::new(wtx_btc, false);
+
+    let quote_tx = FulfilledTxWrapper::new(quote_tx, false);
+
+    let res = process_stake_quote(&quote_tx, &[&wtx_loki, &wtx_btc]).unwrap();
+
+    assert_eq!(
+        res.pool_change.depth_change as u128,
+        coin_amount.to_atomic()
+    );
+    assert_eq!(
+        res.pool_change.loki_depth_change as u128,
+        loki_amount.to_atomic()
+    );
+
+    assert_eq!(res.stake_tx.pool_change_tx, res.pool_change.id);
+    assert_eq!(res.stake_tx.quote_tx, quote_tx.inner.id);
+    assert!(res.stake_tx.witness_txs.contains(&wtx_loki.inner.id));
+    assert!(res.stake_tx.witness_txs.contains(&wtx_btc.inner.id));
 }
 
 #[test]

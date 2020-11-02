@@ -38,6 +38,7 @@ fn portion_from_amount(amount: u128, total_amount: u128) -> Portion {
 pub(crate) fn aggregate_current_portions(
     portions: &PoolPortions,
     liquidity: Liquidity,
+    pool_coin: PoolCoin,
 ) -> Vec<StakerOwnership> {
     portions
         .iter()
@@ -47,9 +48,9 @@ pub(crate) fn aggregate_current_portions(
 
             StakerOwnership {
                 staker_id: staker_id.clone(),
-                pool_type: PoolCoin::ETH,
+                pool_type: pool_coin,
                 loki: LokiAmount::from_atomic(loki),
-                other: GenericCoinAmount::from_atomic(Coin::ETH, other),
+                other: GenericCoinAmount::from_atomic(pool_coin.into(), other),
             }
         })
         .collect()
@@ -101,7 +102,8 @@ fn adjust_portions_after_stake_for_coin(
     liquidity: &Liquidity,
     contribution: &StakeContribution,
 ) {
-    let staker_amounts = aggregate_current_portions(&portions, *liquidity);
+    let pool_coin = contribution.coin();
+    let staker_amounts = aggregate_current_portions(&portions, *liquidity, pool_coin);
 
     let contribution = compute_effective_contribution(&contribution, &liquidity);
 
@@ -193,12 +195,6 @@ pub(crate) fn adjust_portions_after_stake(
 
     let coin = contribution.coin();
 
-    // TODO: make this work with other coins
-    if coin != PoolCoin::ETH {
-        debug!("Cannot adjust portions for {}", coin);
-        return;
-    }
-
     let mut pool_portions = portions.entry(coin).or_insert(Default::default());
 
     let zero = Liquidity::zero();
@@ -247,11 +243,19 @@ mod tests {
             }
         }
 
-        fn add_stake(&mut self, staker_id: &StakerId, amount: LokiAmount) {
+        fn add_stake_eth(&mut self, staker_id: &StakerId, amount: LokiAmount) {
             // For convinience, eth amount is computed from loki amount:
             let factor = 1000;
             let other_amount =
                 GenericCoinAmount::from_atomic(Coin::ETH, amount.to_atomic() * factor);
+
+            self.add_asymmetric_stake(staker_id, amount, other_amount);
+        }
+
+        fn add_stake_btc(&mut self, staker_id: &StakerId, amount: LokiAmount) {
+            let factor = 1000;
+            let other_amount =
+                GenericCoinAmount::from_atomic(Coin::BTC, amount.to_atomic() * factor);
 
             self.add_asymmetric_stake(staker_id, amount, other_amount);
         }
@@ -295,14 +299,14 @@ mod tests {
 
         // 1. First contribution from Alice
 
-        runner.add_stake(&alice, amount1);
+        runner.add_stake_eth(&alice, amount1);
 
         assert_eq!(runner.portions.len(), 1);
         assert_eq!(runner.portions.get(&alice), Some(&Portion::MAX));
 
         // 2. Second equal contribution from Bob
 
-        runner.add_stake(&bob, amount1);
+        runner.add_stake_eth(&bob, amount1);
 
         assert_eq!(runner.portions.len(), 2);
         assert_eq!(runner.portions.get(&alice), Some(&HALF_PORTION));
@@ -312,7 +316,7 @@ mod tests {
 
         let amount2 = LokiAmount::from_decimal_string("200.0");
 
-        runner.add_stake(&alice, amount2);
+        runner.add_stake_eth(&alice, amount2);
 
         assert_eq!(runner.portions.len(), 2);
         assert_eq!(runner.portions.get(&alice), Some(&THREE_QUATERS_PORTION));
@@ -332,13 +336,13 @@ mod tests {
 
         // 1. First contribution from Alice
 
-        runner.add_stake(&alice, amount1);
+        runner.add_stake_eth(&alice, amount1);
 
         runner.scale_liquidity(3);
 
         // 2. Bob contributes after the liquidity changed
 
-        runner.add_stake(&bob, amount1);
+        runner.add_stake_eth(&bob, amount1);
 
         assert_eq!(runner.portions.len(), 2);
         assert_eq!(runner.portions.get(&alice), Some(&THREE_QUATERS_PORTION));
@@ -346,7 +350,7 @@ mod tests {
     }
 
     #[test]
-    fn test_asymmetric_stake() {
+    fn test_asymmetric_stake_eth() {
         test_utils::logging::init();
 
         let mut runner = TestRunner::new();
@@ -358,8 +362,37 @@ mod tests {
 
         let eth = GenericCoinAmount::from_atomic(Coin::ETH, 0);
 
-        runner.add_stake(&alice, amount);
+        runner.add_stake_eth(&alice, amount);
         runner.add_asymmetric_stake(&bob, amount, eth);
+
+        assert_eq!(runner.portions.len(), 2);
+
+        let a = runner.portions.get(&alice).unwrap().0;
+        let b = runner.portions.get(&bob).unwrap().0;
+
+        // Not only Bob contributes to only one side of the pool, but
+        // he is also forced to autoswap (with low liquidity), resulting
+        // in somewhat small portions:
+
+        assert!(a > b * 2);
+        assert!(a < b * 5);
+    }
+
+    #[test]
+    fn test_asymmetric_stake_btc() {
+        test_utils::logging::init();
+
+        let mut runner = TestRunner::new();
+
+        let alice = get_random_staker().id();
+        let bob = get_random_staker().id();
+
+        let amount = LokiAmount::from_decimal_string("100.0");
+
+        let btc = GenericCoinAmount::from_atomic(Coin::BTC, 0);
+
+        runner.add_stake_btc(&alice, amount);
+        runner.add_asymmetric_stake(&bob, amount, btc);
 
         assert_eq!(runner.portions.len(), 2);
 
