@@ -72,7 +72,26 @@ fn process_stakes_inner(
             .collect();
 
         if !wtxs.is_empty() {
-            if let Some(res) = process_stake_quote(quote_info, &wtxs) {
+            // Refund the user
+            if quote_info.fulfilled {
+                warn!("Already fulfilled quote has witness transactions, refunding.");
+
+                match refund_stake_txs(quote_info, &wtxs) {
+                    Ok(txs) => {
+                        for tx in txs {
+                            new_txs.push(tx.into());
+                        }
+                    }
+                    Err(e) => {
+                        error!(
+                            "Could not create refunds for quote {}, error: {}",
+                            quote_info.inner.id,
+                            e.to_string()
+                        );
+                        return new_txs;
+                    }
+                }
+            } else if let Some(res) = process_stake_quote(quote_info, &wtxs) {
                 new_txs.reserve(new_txs.len() + 2);
                 // IMPORTANT: stake transactions should come before pool change transactions,
                 // due to the way Transaction provider processes them
@@ -85,6 +104,28 @@ fn process_stakes_inner(
     new_txs
 }
 
+fn refund_stake_txs(
+    quote_info: &FulfilledTxWrapper<StakeQuoteTx>,
+    witness_txs: &[&WitnessTxWrapper],
+) -> Result<Vec<OutputTx>, String> {
+    let mut output_txs: Vec<OutputTx> = vec![];
+    for w_tx in witness_txs {
+        let output_tx = OutputTx::new(
+            Timestamp::now(),
+            quote_info.inner.id,
+            vec![w_tx.inner.id],
+            vec![],
+            quote_info.inner.coin_type.into(),
+            // which address? when to use loki or other?
+            quote_info.inner.other_return_address,
+            w_tx.inner.amount,
+        )?;
+        output_txs.push(output_tx);
+    }
+
+    Ok(output_txs)
+}
+
 /// Process a single stake quote with all witness transactions referencing it
 fn process_stake_quote(
     quote_info: &FulfilledTxWrapper<StakeQuoteTx>,
@@ -94,12 +135,6 @@ fn process_stake_quote(
     info!("Found witness matching quote: {}", quote_info.inner.id);
 
     // TODO: only print this if a witness is not used:
-
-    // For now only process unfulfilled ones:
-    if quote_info.fulfilled {
-        warn!("Witness matches an already fulfilled quote. Should refund?");
-        return None;
-    }
 
     let quote = &quote_info.inner;
 
@@ -139,7 +174,7 @@ fn process_stake_quote(
             coin_type @ _ => {
                 if coin_type == quote.coin_type.get_coin() {
                     if other_amount.is_some() {
-                        error!("Unexpected second loki witness transaction");
+                        error!("Unexpected second {} witness transaction", coin_type);
                         return None;
                     }
 

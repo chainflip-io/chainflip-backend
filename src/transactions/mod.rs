@@ -125,6 +125,10 @@ pub struct StakeQuoteTx {
     pub loki_input_address_id: LokiPaymentId,
     /// Stakers identity
     pub staker_id: StakerId,
+    /// Address to return Loki to if Stake quote already fulfilled
+    pub loki_return_address: WalletAddress,
+    /// Address to return other coin to if Stake quote already fulfilled
+    pub other_return_address: WalletAddress,
 }
 
 impl StakeQuoteTx {
@@ -137,6 +141,8 @@ impl StakeQuoteTx {
         loki_input_address: WalletAddress,
         loki_input_address_id: LokiPaymentId,
         staker_id: StakerId,
+        loki_return_address: WalletAddress,
+        other_return_address: WalletAddress,
     ) -> Result<Self, &'static str> {
         if validate_address_id(coin_type.get_coin(), &coin_input_address_id).is_err() {
             return Err("Coin input address id is invalid");
@@ -159,6 +165,8 @@ impl StakeQuoteTx {
             loki_input_address,
             loki_input_address_id,
             staker_id,
+            loki_return_address,
+            other_return_address,
         })
     }
 }
