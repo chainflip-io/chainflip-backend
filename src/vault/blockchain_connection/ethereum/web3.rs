@@ -281,4 +281,14 @@ mod test {
         assert_ne!(estimate.gas_limit, 0);
         assert_ne!(estimate.gas_price, 0);
     }
+
+    #[tokio::test]
+    async fn returns_balance() {
+        let client = Web3Client::url(WEB3_URL).expect("Failed to create web3 client");
+
+        let balance = client
+            .get_balance(Address::from_str("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2").unwrap())
+            .await;
+        assert!(balance.is_ok());
+    }
 }
