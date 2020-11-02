@@ -52,21 +52,17 @@ pub fn get_sending_wallets(balances: &[WalletBalance], outputs: &[OutputTx]) -> 
         // Get the first balance and see if we can fit the output into it. If we can't then we'll have to skip this output :(
         let wallet_balance = balances.first_mut().unwrap();
         if wallet_balance.balance >= output.amount {
-            match wallet_balance.balance.checked_sub(output.amount) {
-                Some(new_balance) => {
-                    let wallet_output = WalletOutput {
-                        wallet: wallet_balance.wallet.clone(),
-                        output: output.clone(),
-                    };
-
-                    wallet_outputs.push(wallet_output);
-                    wallet_balance.balance = new_balance;
-                }
-                None => error!(
-                    "Error occured while subtracting {} from wallet balance {}",
-                    output.amount, wallet_balance.balance
-                ),
+            let new_balance = wallet_balance
+                .balance
+                .checked_sub(output.amount)
+                .expect("Failed to calculate new balance");
+            let wallet_output = WalletOutput {
+                wallet: wallet_balance.wallet.clone(),
+                output: output.clone(),
             };
+
+            wallet_outputs.push(wallet_output);
+            wallet_balance.balance = new_balance;
         } else {
             warn!(
                 "Cannot find a suitable wallet for Output: {}, balance: {}",
