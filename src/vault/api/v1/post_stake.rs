@@ -26,6 +26,10 @@ pub struct StakeQuoteParams {
     pub coin_input_address_id: String,
     /// The loki input address id
     pub loki_input_address_id: String,
+    /// Address to return Loki to if Stake quote already fulfilled
+    pub loki_return_address: String,
+    /// Address to return other coin to if Stake quote already fulfilled
+    pub other_return_address: String,
 }
 
 /// Response for the v1/quote endpoint
