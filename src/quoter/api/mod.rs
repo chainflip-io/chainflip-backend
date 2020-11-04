@@ -19,10 +19,17 @@ impl API {
         V: VaultNodeInterface + Send + Sync + 'static,
         S: StateProvider + Send + 'static,
     {
+        let http_headers = vec![
+            "Access-Control-Allow-Origin",
+            "Access-Control-Allow-Methods",
+            "Content-Type",
+            "Accept",
+        ];
         // Temporary open to all origins for testing
         let cors = warp::cors()
             .allow_any_origin()
-            .allow_methods(vec!["GET", "POST", "DELETE", "HEAD", "OPTIONS", "PUT"]);
+            .allow_methods(vec!["GET", "POST", "DELETE", "HEAD", "OPTIONS", "PUT"])
+            .allow_headers(http_headers);
         let routes = v1::endpoints(vault_node, state)
             .with(cors)
             .recover(api::handle_rejection);
