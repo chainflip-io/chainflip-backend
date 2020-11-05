@@ -50,8 +50,12 @@ pub struct StakeQuoteResponse {
     pub staker_id: String,
     /// Loki input address
     pub loki_input_address: String,
+    /// Loki return address
+    pub loki_return_address: String,
     /// Other coin input address
     pub coin_input_address: String,
+    /// Other coin return address
+    pub coin_return_address: String,
 }
 
 /// Request a stake quote
@@ -193,6 +197,8 @@ pub async fn stake<T: TransactionProvider>(
         pool: params.pool,
         loki_input_address,
         coin_input_address,
+        loki_return_address: quote.loki_return_address.map(|f| f.0).unwrap_or("".into()),
+        coin_return_address: quote.coin_return_address.map(|f| f.0).unwrap_or("".into()),
     })
 }
 

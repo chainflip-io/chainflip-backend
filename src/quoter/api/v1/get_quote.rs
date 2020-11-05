@@ -93,5 +93,7 @@ where
         staker_id: quote.staker_id.inner().to_owned(),
         loki_input_address: quote.loki_input_address.0,
         coin_input_address: quote.coin_input_address.0,
+        loki_return_address: quote.loki_return_address.map(|f| f.0).unwrap_or("".into()),
+        coin_return_address: quote.coin_return_address.map(|f| f.0).unwrap_or("".into()),
     })
 }
