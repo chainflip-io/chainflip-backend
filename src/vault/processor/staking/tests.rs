@@ -81,6 +81,40 @@ fn partially_fulfilled_quotes_do_not_produce_new_tx() {
 }
 
 #[test]
+fn refunds_if_stake_quote_is_fulfilled() {
+    let loki_amount = LokiAmount::from_decimal_string("1.0");
+    let btc_amount = GenericCoinAmount::from_decimal_string(Coin::BTC, "2.0");
+
+    let quote_tx = create_fake_stake_quote(PoolCoin::BTC);
+    let wtx_loki = create_fake_witness(&quote_tx, loki_amount, Coin::LOKI);
+    let wtx_loki = WitnessTxWrapper::new(wtx_loki, false);
+    let wtx_btc = create_fake_witness(&quote_tx, btc_amount, Coin::BTC);
+    let wtx_btc = WitnessTxWrapper::new(wtx_btc, false);
+
+    let quote_tx = FulfilledTxWrapper::new(quote_tx, true);
+
+    // Processing fulfilled stake quote should return nothing
+    assert!(process_stake_quote(&quote_tx, &[&wtx_loki, &wtx_btc]).is_none());
+
+    let outputs = refund_stake_txs(&quote_tx, &[&wtx_loki, &wtx_btc]);
+    assert_eq!(outputs.len(), 2);
+
+    let loki_output = outputs.iter().find(|tx| tx.coin == Coin::LOKI).unwrap();
+    assert_eq!(
+        Some(loki_output.address.clone()),
+        quote_tx.inner.loki_return_address
+    );
+    assert_eq!(loki_output.amount, loki_amount.to_atomic());
+
+    let btc_output = outputs.iter().find(|tx| tx.coin == Coin::BTC).unwrap();
+    assert_eq!(
+        Some(btc_output.address.clone()),
+        quote_tx.inner.coin_return_address
+    );
+    assert_eq!(btc_output.amount, btc_amount.to_atomic());
+}
+
+#[test]
 fn witness_tx_cannot_be_reused() {
     let coin_type = Coin::ETH;
     let loki_amount = LokiAmount::from_decimal_string("1.0");
