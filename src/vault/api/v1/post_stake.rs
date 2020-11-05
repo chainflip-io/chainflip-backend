@@ -1,7 +1,7 @@
 use crate::{
     common::{api::ResponseError, *},
     transactions::StakeQuoteTx,
-    utils::validation::validate_address_id,
+    utils::validation::{validate_address, validate_address_id},
     vault::{processor::utils::get_swap_expire_timestamp, transactions::TransactionProvider},
 };
 use parking_lot::RwLock;
@@ -67,6 +67,14 @@ pub async fn stake<T: TransactionProvider>(
 
     if let Err(_) = validate_address_id(params.pool, &params.coin_input_address_id) {
         return Err(bad_request("Invalid coin input address id"));
+    }
+
+    if let Err(_) = validate_address(Coin::LOKI, &params.loki_return_address) {
+        return Err(bad_request("Invalid loki return address"));
+    }
+
+    if let Err(_) = validate_address(params.pool, &params.other_return_address) {
+        return Err(bad_request("Invalid other return address"));
     }
 
     let loki_input_address_id = LokiPaymentId::from_str(&params.loki_input_address_id)
@@ -158,10 +166,12 @@ pub async fn stake<T: TransactionProvider>(
         WalletAddress::new(&loki_input_address),
         loki_input_address_id,
         staker_id,
+        WalletAddress::new(&params.loki_return_address),
+        WalletAddress::new(&params.other_return_address),
     )
     .map_err(|err| {
         error!(
-            "Failed to create stakke quote tx for params: {:?} due to error {}",
+            "Failed to create stake quote tx for params: {:?} due to error {}",
             original_params,
             err.clone()
         );
@@ -209,6 +219,8 @@ mod test {
             staker_id: get_random_staker().public_key(),
             coin_input_address_id: "99999".to_string(),
             loki_input_address_id: "b2d6a87ec06934ff".to_string(),
+            loki_return_address: TEST_LOKI_ADDRESS.to_string(),
+            other_return_address: TEST_ETH_ADDRESS.to_string(),
         }
     }
 
@@ -255,6 +267,34 @@ mod test {
             .expect_err("Expected stake to return error");
 
         assert_eq!(&result.message, "Invalid loki input address id");
+    }
+
+    #[tokio::test]
+    async fn returns_error_if_invalid_loki_return_address() {
+        let provider = Arc::new(RwLock::new(get_transactions_provider()));
+
+        let mut quote_params = params();
+        quote_params.loki_return_address = "invalid".to_string();
+
+        let result = stake(quote_params, provider.clone(), config())
+            .await
+            .expect_err("Expected stake to return error");
+
+        assert_eq!(&result.message, "Invalid loki return address");
+    }
+
+    #[tokio::test]
+    async fn returns_error_if_invalid_other_return_address() {
+        let provider = Arc::new(RwLock::new(get_transactions_provider()));
+
+        let mut quote_params = params();
+        quote_params.other_return_address = "invalid".to_string();
+
+        let result = stake(quote_params, provider.clone(), config())
+            .await
+            .expect_err("Expected stake to return error");
+
+        assert_eq!(&result.message, "Invalid other return address");
     }
 
     #[tokio::test]

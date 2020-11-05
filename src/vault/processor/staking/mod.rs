@@ -71,33 +71,26 @@ fn process_stakes_inner(
             .filter(|wtx| !wtx.used && wtx.inner.quote_id == quote_info.inner.id)
             .collect();
 
-        if !wtxs.is_empty() {
-            // Refund the user
-            if quote_info.fulfilled {
-                warn!("Already fulfilled quote has witness transactions, refunding.");
+        if wtxs.is_empty() {
+            continue;
+        }
 
-                match refund_stake_txs(quote_info, &wtxs) {
-                    Ok(txs) => {
-                        for tx in txs {
-                            new_txs.push(tx.into());
-                        }
-                    }
-                    Err(e) => {
-                        error!(
-                            "Could not create refunds for quote {}, error: {}",
-                            quote_info.inner.id,
-                            e.to_string()
-                        );
-                        return new_txs;
-                    }
-                }
-            } else if let Some(res) = process_stake_quote(quote_info, &wtxs) {
-                new_txs.reserve(new_txs.len() + 2);
-                // IMPORTANT: stake transactions should come before pool change transactions,
-                // due to the way Transaction provider processes them
-                new_txs.push(res.stake_tx.into());
-                new_txs.push(res.pool_change.into());
+        // Refund the user if the quote is fulfilled
+        if quote_info.fulfilled {
+            let refunds = refund_stake_txs(quote_info, &wtxs);
+            if refunds.len() > 0 {
+                info!(
+                    "Quote {} is already fulfilled, refunding!",
+                    quote_info.inner.id
+                );
+                new_txs.extend(refunds.into_iter().map(|tx| tx.into()));
             }
+        } else if let Some(res) = process_stake_quote(quote_info, &wtxs) {
+            new_txs.reserve(new_txs.len() + 2);
+            // IMPORTANT: stake transactions should come before pool change transactions,
+            // due to the way Transaction provider processes them
+            new_txs.push(res.stake_tx.into());
+            new_txs.push(res.pool_change.into());
         }
     }
 
@@ -107,23 +100,53 @@ fn process_stakes_inner(
 fn refund_stake_txs(
     quote_info: &FulfilledTxWrapper<StakeQuoteTx>,
     witness_txs: &[&WitnessTxWrapper],
-) -> Result<Vec<OutputTx>, String> {
-    let mut output_txs: Vec<OutputTx> = vec![];
-    for w_tx in witness_txs {
-        let output_tx = OutputTx::new(
-            Timestamp::now(),
-            quote_info.inner.id,
-            vec![w_tx.inner.id],
-            vec![],
-            quote_info.inner.coin_type.into(),
-            // which address? when to use loki or other?
-            quote_info.inner.other_return_address,
-            w_tx.inner.amount,
-        )?;
-        output_txs.push(output_tx);
+) -> Vec<OutputTx> {
+    if !quote_info.fulfilled {
+        return vec![];
     }
 
-    Ok(output_txs)
+    let quote = &quote_info.inner;
+    let quote_coin = quote.coin_type.get_coin();
+    let mut output_txs: Vec<OutputTx> = vec![];
+
+    let valid_txs = witness_txs.iter().filter(|tx| !tx.used).map(|tx| &tx.inner);
+
+    for tx in valid_txs {
+        let return_address = match tx.coin {
+            Coin::LOKI => quote.loki_return_address.clone(),
+            coin if coin == quote_coin => quote.coin_return_address.clone(),
+            coin => {
+                warn!(
+                    "Found a witness for coin {} but quote is for coin {}",
+                    coin, quote_coin
+                );
+                None
+            }
+        };
+
+        // Can't refund without a return address
+        if return_address.is_none() {
+            continue;
+        }
+
+        match OutputTx::new(
+            Timestamp::now(),
+            quote.id,
+            vec![tx.id],
+            vec![],
+            tx.coin,
+            return_address.unwrap(),
+            tx.amount,
+        ) {
+            Ok(output) => output_txs.push(output),
+            Err(err) => warn!(
+                "Failed to create refund output tx for stake witness {:?}: {}",
+                tx, err
+            ),
+        }
+    }
+
+    output_txs
 }
 
 /// Process a single stake quote with all witness transactions referencing it
@@ -131,10 +154,11 @@ fn process_stake_quote(
     quote_info: &FulfilledTxWrapper<StakeQuoteTx>,
     witness_txs: &[&WitnessTxWrapper],
 ) -> Option<StakeQuoteResult> {
-    // TODO: put a balance change tx onto the side chain
-    info!("Found witness matching quote: {}", quote_info.inner.id);
+    if quote_info.fulfilled {
+        return None;
+    }
 
-    // TODO: only print this if a witness is not used:
+    info!("Found witness matching quote: {}", quote_info.inner.id);
 
     let quote = &quote_info.inner;
 
