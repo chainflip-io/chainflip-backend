@@ -335,6 +335,8 @@ pub struct OutputTx {
     /// The time when the transaction was made
     pub timestamp: Timestamp,
     /// The quote that was processed in this output
+    // TODO: Rename this because it's not necessary that only quote txs are used here
+    // When processing unstake txs this field is set to Unstake Request id
     pub quote_tx: Uuid,
     /// The witness transactions that were processed in this output
     pub witness_txs: Vec<Uuid>,

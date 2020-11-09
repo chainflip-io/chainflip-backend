@@ -76,6 +76,10 @@ impl Database {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
+                SideChainTx::UnstakeRequestTx(tx) => {
+                    let serialized = serde_json::to_string(tx).unwrap();
+                    Database::insert_transaction(db, tx.id, tx.into(), serialized)
+                }
                 _ => warn!("Failed to process transaction: {:?}", tx),
             }
         }
@@ -220,6 +224,10 @@ impl StateProvider for Database {
         self.get_transactions(TransactionType::Stake)
     }
 
+    fn get_unstake_txs(&self) -> Vec<crate::transactions::UnstakeRequestTx> {
+        self.get_transactions(TransactionType::Unstake)
+    }
+
     fn get_pools(&self) -> std::collections::HashMap<crate::common::PoolCoin, Liquidity> {
         let mut map = HashMap::new();
         let changes: Vec<crate::transactions::PoolChangeTx> =
@@ -257,8 +265,10 @@ mod test {
 
     use crate::{
         common::*,
+        transactions::UnstakeRequestTx,
         transactions::{OutputSentTx, PoolChangeTx, WitnessTx},
         utils::test_utils::TEST_ETH_ADDRESS,
+        utils::test_utils::TEST_LOKI_ADDRESS,
         utils::test_utils::{
             create_fake_output_tx, create_fake_quote_tx_eth_loki, create_fake_stake_quote,
         },
@@ -357,6 +367,15 @@ mod test {
             )
             .unwrap()
             .into(),
+            UnstakeRequestTx::new(
+                PoolCoin::ETH,
+                StakerId::new("0433829aa2cccda485ee215421bd6c2af3e6e1702e3202790af42a7332c3fc06ec08beafef0b504ed20d5176f6323da3a4d34c5761a82487087d93ebd673ca7293".to_string()).unwrap(),
+                WalletAddress::new(TEST_LOKI_ADDRESS),
+                WalletAddress::new(TEST_ETH_ADDRESS),
+                Timestamp::now(),
+                "sig".to_string(),
+            )
+            .into(),
         ];
 
         Database::process_transactions(&tx, &transactions);
@@ -368,7 +387,7 @@ mod test {
             .query_row("SELECT COUNT(*) from transactions", NO_PARAMS, |r| r.get(0))
             .unwrap();
 
-        assert_eq!(count, 6);
+        assert_eq!(count, 7);
     }
 
     #[test]
