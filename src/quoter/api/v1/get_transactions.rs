@@ -34,6 +34,13 @@ pub async fn get_transactions<S>(
 where
     S: StateProvider,
 {
+    if params.quote_id.is_some() && params.staker_id.is_some() {
+        return Err(ResponseError::new(
+            StatusCode::BAD_REQUEST,
+            "Only one of quoterId or stakerId is allowed",
+        ));
+    }
+
     if let Some(quote_id) = params.quote_id {
         let id = match Uuid::from_str(&quote_id) {
             Ok(id) => id,
@@ -62,6 +69,7 @@ where
     Ok(vec![])
 }
 
+/// Get transactions related to the given quote id
 fn get_quote_id_transactions<S>(
     id: Uuid,
     state: Arc<Mutex<S>>,
@@ -113,6 +121,7 @@ where
     .concat())
 }
 
+/// Get transactions related to the given staker id
 fn get_staker_id_transactions<S>(
     id: StakerId,
     state: Arc<Mutex<S>>,
