@@ -207,3 +207,25 @@ where
     ]
     .concat())
 }
+
+#[cfg(test)]
+mod test {
+    #[test]
+    #[ignore = "todo"]
+    fn test_returns_transactions_belonging_to_swap_quote() {
+        todo!()
+    }
+
+    #[test]
+    #[ignore = "todo"]
+    fn test_returns_transactions_belonging_to_stake_quote() {
+        todo!()
+    }
+
+    #[test]
+    #[ignore = "todo"]
+    fn test_returns_transactions_belonging_to_staker_id() {
+        // Test quotes, witnesses, refund outputs, stakes, unstake requests, unstake outputs, output sent
+        todo!()
+    }
+}
