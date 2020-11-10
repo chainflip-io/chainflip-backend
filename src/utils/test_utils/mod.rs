@@ -29,7 +29,16 @@ pub mod fake_txs;
 /// Logging initialization
 pub mod logging;
 
-pub use fake_txs::{create_fake_stake_quote, create_fake_witness};
+/// Utils for staking and unstaking
+pub mod staking;
+
+mod test_runner;
+pub use test_runner::TestRunner;
+
+pub use fake_txs::{
+    create_fake_stake_quote, create_fake_stake_quote_for_id, create_fake_witness,
+    create_unstake_for_staker,
+};
 use uuid::Uuid;
 
 /// Test ETH address
@@ -84,7 +93,6 @@ pub fn create_fake_output_tx(coin: Coin) -> OutputTx {
         Coin::ETH => "0x70e7db0678460c5e53f1ffc9221d1c692111dcc5",
         // p2pkh testnet address
         Coin::BTC => "msXs47UUTTMr4Kqe2WaDfZCR9t9qb25WJo",
-        _ => "Address"
     };
 
     OutputTx {

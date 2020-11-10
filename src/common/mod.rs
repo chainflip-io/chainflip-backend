@@ -50,6 +50,16 @@ impl Timestamp {
     }
 }
 
+impl std::str::FromStr for Timestamp {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let ts: u128 = s.parse().map_err(|_| "Timestamp must be valid u128")?;
+
+        Ok(Timestamp(ts))
+    }
+}
+
 /// A wrapper around String to be used as wallet address.
 /// We might want to use separate type for each type of
 /// wallet/blockchain
