@@ -1,7 +1,9 @@
 use crate::{
     common::{Liquidity, LiquidityProvider, PoolCoin},
     side_chain::SideChainBlock,
-    transactions::{OutputSentTx, OutputTx, QuoteTx, StakeQuoteTx, StakeTx, WitnessTx},
+    transactions::{
+        OutputSentTx, OutputTx, QuoteTx, StakeQuoteTx, StakeTx, UnstakeRequestTx, WitnessTx,
+    },
 };
 use std::{
     collections::HashMap,
@@ -92,6 +94,8 @@ pub trait StateProvider: LiquidityProvider {
     fn get_output_sent_txs(&self) -> Vec<OutputSentTx>;
     /// Get all stake txs
     fn get_stake_txs(&self) -> Vec<StakeTx>;
+    /// Get all unstake txs
+    fn get_unstake_txs(&self) -> Vec<UnstakeRequestTx>;
     /// Get the pools
     fn get_pools(&self) -> HashMap<PoolCoin, Liquidity>;
 }
