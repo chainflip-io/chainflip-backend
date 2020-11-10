@@ -1,4 +1,4 @@
-use crate::quoter::vault_node::{SwapQuoteParams, VaultNodeInterface};
+use crate::quoter::vault_node::{SwapQuoteParams, UnstakeParams, VaultNodeInterface};
 use crate::side_chain::SideChainBlock;
 use std::{collections::VecDeque, sync::Mutex};
 
@@ -49,8 +49,12 @@ impl VaultNodeInterface for TestVaultNodeAPI {
 
     async fn submit_stake(
         &self,
-        params: crate::quoter::vault_node::StakeQuoteParams,
+        _params: crate::quoter::vault_node::StakeQuoteParams,
     ) -> Result<serde_json::Value, String> {
+        todo!()
+    }
+
+    async fn submit_unstake(&self, _params: UnstakeParams) -> Result<serde_json::Value, String> {
         todo!()
     }
 }

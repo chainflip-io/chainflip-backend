@@ -1,6 +1,6 @@
 use std::{convert::TryFrom, str::FromStr, sync::Arc};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use warp::http::StatusCode;
 
 use parking_lot::RwLock;
@@ -12,7 +12,7 @@ use crate::{
 };
 
 /// Request parameters for unstake
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct UnstakeParams {
     /// Staker's public key
     staker_id: StakerId,
