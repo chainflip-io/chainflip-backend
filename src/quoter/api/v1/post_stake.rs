@@ -22,6 +22,10 @@ pub struct PostStakeParams {
     pub pool: String,
     /// The staker id
     pub staker_id: String,
+    /// Address to return Loki to if Stake quote already fulfilled
+    pub loki_return_address: String,
+    /// Address to return other coin to if Stake quote already fulfilled
+    pub other_return_address: String,
 }
 
 /// Submit a stake quoter
@@ -54,6 +58,8 @@ pub async fn stake<V: VaultNodeInterface>(
         staker_id: params.staker_id,
         coin_input_address_id: coin_input_address_id.clone(),
         loki_input_address_id: loki_input_address_id.clone(),
+        loki_return_address: params.loki_return_address,
+        other_return_address: params.other_return_address,
     };
 
     match vault_node.submit_stake(quote_params).await {

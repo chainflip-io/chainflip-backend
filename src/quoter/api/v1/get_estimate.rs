@@ -36,7 +36,7 @@ pub struct EstimateResponse {
 ///
 /// # Example Query
 ///
-/// > GET /v1/get_estimate?inputCoin=LOKI&inputAmount=1000000&outputCoin=btc
+/// > GET /v1/estimate?inputCoin=LOKI&inputAmount=1000000000&outputCoin=BTC
 pub async fn get_estimate<S>(
     params: EstimateParams,
     state: Arc<Mutex<S>>,

@@ -113,18 +113,24 @@ pub struct StakeQuoteTx {
     pub id: Uuid,
     /// When the quote was created
     pub timestamp: Timestamp,
+    /// Stakers identity
+    pub staker_id: StakerId,
     /// Other coin's type
     pub coin_type: PoolCoin,
     /// The coin input address
     pub coin_input_address: WalletAddress,
     /// The coin input address id
     pub coin_input_address_id: String,
+    /// Address to return other coin to if Stake quote already fulfilled
+    /// TODO: This should be a required field but since we have older stake quotes, we need to make this optional. Remove it in the future
+    pub coin_return_address: Option<WalletAddress>,
     /// The loki input address
     pub loki_input_address: WalletAddress,
     /// Info used to uniquely identify payment
     pub loki_input_address_id: LokiPaymentId,
-    /// Stakers identity
-    pub staker_id: StakerId,
+    /// Address to return Loki to if Stake quote already fulfilled
+    /// TODO: This should be a required field but since we have older stake quotes, we need to make this optional. Remove it in the future
+    pub loki_return_address: Option<WalletAddress>,
 }
 
 impl StakeQuoteTx {
@@ -137,6 +143,8 @@ impl StakeQuoteTx {
         loki_input_address: WalletAddress,
         loki_input_address_id: LokiPaymentId,
         staker_id: StakerId,
+        loki_return_address: WalletAddress,
+        coin_return_address: WalletAddress,
     ) -> Result<Self, &'static str> {
         if validate_address_id(coin_type.get_coin(), &coin_input_address_id).is_err() {
             return Err("Coin input address id is invalid");
@@ -150,6 +158,14 @@ impl StakeQuoteTx {
             return Err("Loki input address is invalid");
         }
 
+        if validate_address(coin_type.get_coin(), &coin_return_address.0).is_err() {
+            return Err("Coin return address is invalid");
+        }
+
+        if validate_address(Coin::LOKI, &loki_return_address.0).is_err() {
+            return Err("Loki return address is invalid");
+        }
+
         Ok(Self {
             id: Uuid::new_v4(),
             timestamp,
@@ -159,6 +175,8 @@ impl StakeQuoteTx {
             loki_input_address,
             loki_input_address_id,
             staker_id,
+            loki_return_address: Some(loki_return_address),
+            coin_return_address: Some(coin_return_address),
         })
     }
 }

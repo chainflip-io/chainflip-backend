@@ -71,18 +71,82 @@ fn process_stakes_inner(
             .filter(|wtx| !wtx.used && wtx.inner.quote_id == quote_info.inner.id)
             .collect();
 
-        if !wtxs.is_empty() {
-            if let Some(res) = process_stake_quote(quote_info, &wtxs) {
-                new_txs.reserve(new_txs.len() + 2);
-                // IMPORTANT: stake transactions should come before pool change transactions,
-                // due to the way Transaction provider processes them
-                new_txs.push(res.stake_tx.into());
-                new_txs.push(res.pool_change.into());
+        if wtxs.is_empty() {
+            continue;
+        }
+
+        // Refund the user if the quote is fulfilled
+        if quote_info.fulfilled {
+            let refunds = refund_stake_txs(quote_info, &wtxs);
+            if refunds.len() > 0 {
+                info!(
+                    "Quote {} is already fulfilled, refunding!",
+                    quote_info.inner.id
+                );
+                new_txs.extend(refunds.into_iter().map(|tx| tx.into()));
             }
+        } else if let Some(res) = process_stake_quote(quote_info, &wtxs) {
+            new_txs.reserve(new_txs.len() + 2);
+            // IMPORTANT: stake transactions should come before pool change transactions,
+            // due to the way Transaction provider processes them
+            new_txs.push(res.stake_tx.into());
+            new_txs.push(res.pool_change.into());
         }
     }
 
     new_txs
+}
+
+fn refund_stake_txs(
+    quote_info: &FulfilledTxWrapper<StakeQuoteTx>,
+    witness_txs: &[&WitnessTxWrapper],
+) -> Vec<OutputTx> {
+    if !quote_info.fulfilled {
+        return vec![];
+    }
+
+    let quote = &quote_info.inner;
+    let quote_coin = quote.coin_type.get_coin();
+    let mut output_txs: Vec<OutputTx> = vec![];
+
+    let valid_txs = witness_txs.iter().filter(|tx| !tx.used).map(|tx| &tx.inner);
+
+    for tx in valid_txs {
+        let return_address = match tx.coin {
+            Coin::LOKI => quote.loki_return_address.clone(),
+            coin if coin == quote_coin => quote.coin_return_address.clone(),
+            coin => {
+                warn!(
+                    "Found a witness for coin {} but quote is for coin {}",
+                    coin, quote_coin
+                );
+                None
+            }
+        };
+
+        // Can't refund without a return address
+        if return_address.is_none() {
+            continue;
+        }
+
+        match OutputTx::new(
+            Timestamp::now(),
+            quote.id,
+            vec![tx.id],
+            vec![],
+            tx.coin,
+            return_address.unwrap(),
+            tx.amount,
+        ) {
+            Ok(output) => output_txs.push(output),
+            Err(err) => warn!(
+                "Failed to create refund output tx for stake witness {:?}: {}",
+                tx, err
+            ),
+        }
+    }
+
+    output_txs
 }
 
 /// Process a single stake quote with all witness transactions referencing it
@@ -90,16 +154,11 @@ fn process_stake_quote(
     quote_info: &FulfilledTxWrapper<StakeQuoteTx>,
     witness_txs: &[&WitnessTxWrapper],
 ) -> Option<StakeQuoteResult> {
-    // TODO: put a balance change tx onto the side chain
-    info!("Found witness matching quote: {}", quote_info.inner.id);
-
-    // TODO: only print this if a witness is not used:
-
-    // For now only process unfulfilled ones:
     if quote_info.fulfilled {
-        warn!("Witness matches an already fulfilled quote. Should refund?");
         return None;
     }
+
+    info!("Found witness matching quote: {}", quote_info.inner.id);
 
     let quote = &quote_info.inner;
 
@@ -139,7 +198,7 @@ fn process_stake_quote(
             coin_type @ _ => {
                 if coin_type == quote.coin_type.get_coin() {
                     if other_amount.is_some() {
-                        error!("Unexpected second loki witness transaction");
+                        error!("Unexpected second {} witness transaction", coin_type);
                         return None;
                     }
 
