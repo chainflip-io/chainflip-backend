@@ -2,6 +2,7 @@ use crate::{
     common::api::ResponseError, common::StakerId, quoter::StateProvider, side_chain::SideChainTx,
     transactions::OutputTx,
 };
+use itertools::Itertools;
 use reqwest::StatusCode;
 use serde::Deserialize;
 use std::{
@@ -140,18 +141,41 @@ where
 
     drop(state);
 
-    let mut unstakes = unstakes.into_iter().filter(|tx| tx.staker_id == id);
-    let mut quotes = quotes.into_iter().filter(|tx| tx.staker_id == id);
+    let quotes = quotes
+        .into_iter()
+        .filter(|tx| tx.staker_id == id)
+        .collect_vec();
+    let unstakes = unstakes
+        .into_iter()
+        .filter(|tx| tx.staker_id == id)
+        .collect_vec();
 
     let filtered_witnesses: Vec<SideChainTx> = witnesses
         .into_iter()
-        .filter(|tx| quotes.find(|quote| tx.quote_id == quote.id).is_some())
+        .filter(|tx| {
+            quotes
+                .iter()
+                .find(|quote| tx.quote_id == quote.id)
+                .is_some()
+        })
         .map(|tx| tx.into())
         .collect();
 
     let filtered_outputs: Vec<OutputTx> = outputs
         .into_iter()
-        .filter(|tx| unstakes.find(|quote| quote.id == tx.quote_tx).is_some())
+        .filter(|tx| {
+            let unstake_output = unstakes
+                .iter()
+                .find(|quote| quote.id == tx.quote_tx)
+                .is_some();
+
+            let refund_output = quotes
+                .iter()
+                .find(|quote| quote.id == tx.quote_tx)
+                .is_some();
+
+            unstake_output || refund_output
+        })
         .collect();
     let ids: Vec<Uuid> = filtered_outputs.iter().map(|tx| tx.id).collect();
     let filtered_outputs: Vec<SideChainTx> =
@@ -163,7 +187,7 @@ where
         .map(|tx| tx.into())
         .collect();
 
-    let filtered_quotes: Vec<SideChainTx> = quotes.map(|tx| tx.into()).collect();
+    let filtered_quotes: Vec<SideChainTx> = quotes.into_iter().map(|tx| tx.into()).collect();
 
     let filtered_stakes: Vec<SideChainTx> = stakes
         .into_iter()
@@ -171,7 +195,7 @@ where
         .map(|tx| tx.into())
         .collect();
 
-    let filtered_unstakes: Vec<SideChainTx> = unstakes.map(|tx| tx.into()).collect();
+    let filtered_unstakes: Vec<SideChainTx> = unstakes.into_iter().map(|tx| tx.into()).collect();
 
     Ok([
         filtered_quotes,
@@ -182,4 +206,26 @@ where
         filtered_output_sent,
     ]
     .concat())
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    #[ignore = "todo"]
+    fn test_returns_transactions_belonging_to_swap_quote() {
+        todo!()
+    }
+
+    #[test]
+    #[ignore = "todo"]
+    fn test_returns_transactions_belonging_to_stake_quote() {
+        todo!()
+    }
+
+    #[test]
+    #[ignore = "todo"]
+    fn test_returns_transactions_belonging_to_staker_id() {
+        // Test quotes, witnesses, refund outputs, stakes, unstake requests, unstake outputs, output sent
+        todo!()
+    }
 }
