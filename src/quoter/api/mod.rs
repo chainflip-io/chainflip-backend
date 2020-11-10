@@ -27,7 +27,6 @@ impl API {
         ];
         // Temporary open to all origins for testing
         let cors = warp::cors()
-            .allow_any_origin()
             .allow_methods(vec!["GET", "POST", "DELETE", "HEAD", "OPTIONS", "PUT"])
             .allow_headers(http_headers);
         let routes = v1::endpoints(vault_node, state)
