@@ -1,7 +1,7 @@
 use crate::{
     common::*,
     transactions::{
-        signatures::{get_random_staker, sign_unstake},
+        signatures::{get_random_staker},
         StakeQuoteTx, UnstakeRequestTx, WitnessTx,
     },
 };
@@ -76,7 +76,9 @@ pub fn create_unstake_for_staker(coin_type: PoolCoin, staker: &Staker) -> Unstak
         "".to_owned(),
     );
 
-    let signature = sign_unstake(&unsigned, &staker.keys).expect("could not sign unstake request");
+    let signature = unsigned
+        .sign(&staker.keys)
+        .expect("could not sign unstake request");
 
     UnstakeRequestTx::new(
         coin_type,
@@ -85,6 +87,6 @@ pub fn create_unstake_for_staker(coin_type: PoolCoin, staker: &Staker) -> Unstak
         unsigned.other_address,
         UnstakeFraction::MAX,
         timestamp,
-        base64::encode(&signature),
+        signature,
     )
 }

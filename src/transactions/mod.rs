@@ -3,6 +3,7 @@ use crate::{
     utils::validation::{validate_address, validate_address_id},
 };
 
+use ring::signature::EcdsaKeyPair;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -324,6 +325,12 @@ impl UnstakeRequestTx {
             fraction,
             signature,
         }
+    }
+
+    /// Create a base64 encoded signature using `keys`
+    pub fn sign(&self, keys: &EcdsaKeyPair) -> Result<String, ()> {
+        let signature = signatures::sign_unstake(&self, keys)?;
+        Ok(base64::encode(&signature))
     }
 }
 

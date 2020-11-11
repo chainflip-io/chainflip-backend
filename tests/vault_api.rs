@@ -73,7 +73,7 @@ where
     status
 }
 
-async fn check_unstake_endponit(config: &TestConfig) -> StatusCode {
+async fn check_unstake_endpoint(config: &TestConfig) -> StatusCode {
     let loki_address = "T6UBx3DnXsocMxGDgLR9ejGmbY5iphPiG9YwDZyNiCM81dgM776a1h7FwFCZZxm7yPabRxQeyfLesBynTWP6DfJq1DAtb6QYn";
     let other_address = TEST_ETH_ADDRESS;
     let fraction = UnstakeFraction::MAX;
@@ -89,8 +89,9 @@ async fn check_unstake_endponit(config: &TestConfig) -> StatusCode {
         "".to_owned(),
     );
 
-    let signature = sign_unstake(&tx, &config.staker.keys).expect("failed to sign unstake tx");
-    let signature = base64::encode(&signature);
+    let signature = tx
+        .sign(&config.staker.keys)
+        .expect("failed to sign unstake tx");
 
     let req = serde_json::json!({
         "staker_id": config.staker.public_key(),
@@ -178,7 +179,7 @@ async fn vault_http_server_tests() {
 
     {
         // v1/unstake
-        let status = check_unstake_endponit(&config).await;
+        let status = check_unstake_endpoint(&config).await;
         assert_eq!(status, StatusCode::OK);
     }
 

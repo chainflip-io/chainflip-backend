@@ -58,7 +58,7 @@ pub async fn post_unstake<T: TransactionProvider>(
 ) -> Result<serde_json::Value, ResponseError> {
     // Check staker Id:
     let staker_id = StakerId::new(params.staker_id)
-        .map_err(|err| bad_request!("Invalid staker_id: {}", err))?;
+        .map_err(|err| bad_request!("Invalid staker id: {}", err))?;
 
     let pool = PoolCoin::from(params.pool).map_err(|err| bad_request!("Invalid pool: {}", err))?;
 
