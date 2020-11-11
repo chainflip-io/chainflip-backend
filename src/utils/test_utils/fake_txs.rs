@@ -1,9 +1,6 @@
 use crate::{
     common::*,
-    transactions::{
-        signatures::{get_random_staker},
-        StakeQuoteTx, UnstakeRequestTx, WitnessTx,
-    },
+    transactions::{signatures::get_random_staker, StakeQuoteTx, UnstakeRequestTx, WitnessTx},
 };
 
 use std::str::FromStr;

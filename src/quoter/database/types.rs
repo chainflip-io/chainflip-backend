@@ -1,7 +1,8 @@
 use std::{fmt::Display, str::FromStr};
 
 use crate::transactions::{
-    OutputSentTx, OutputTx, PoolChangeTx, QuoteTx, StakeQuoteTx, StakeTx, WitnessTx,
+    OutputSentTx, OutputTx, PoolChangeTx, QuoteTx, StakeQuoteTx, StakeTx, UnstakeRequestTx,
+    WitnessTx,
 };
 
 #[derive(Debug, Eq, PartialEq)]
@@ -13,6 +14,7 @@ pub enum TransactionType {
     Stake,
     Output,
     Sent,
+    Unstake,
 }
 
 impl Display for TransactionType {
@@ -80,5 +82,11 @@ impl From<&OutputTx> for TransactionType {
 impl From<&OutputSentTx> for TransactionType {
     fn from(_: &OutputSentTx) -> Self {
         TransactionType::Sent
+    }
+}
+
+impl From<&UnstakeRequestTx> for TransactionType {
+    fn from(_: &UnstakeRequestTx) -> Self {
+        TransactionType::Unstake
     }
 }
