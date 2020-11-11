@@ -4,6 +4,7 @@ use reqwest::StatusCode;
 
 use blockswap::{
     common::{self, *},
+    transactions::{signatures::sign_unstake, UnstakeRequestTx},
     utils::test_utils::staking::get_fake_staker,
     utils::test_utils::{self, *},
     vault::api::v1::post_swap::SwapQuoteResponse,
@@ -73,16 +74,34 @@ where
 }
 
 async fn check_unstake_endponit(config: &TestConfig) -> StatusCode {
-    let timestamp = Timestamp::now().0.to_string();
+    let loki_address = "T6UBx3DnXsocMxGDgLR9ejGmbY5iphPiG9YwDZyNiCM81dgM776a1h7FwFCZZxm7yPabRxQeyfLesBynTWP6DfJq1DAtb6QYn";
+    let other_address = TEST_ETH_ADDRESS;
+    let fraction = UnstakeFraction::MAX;
+    let timestamp = Timestamp::now();
+
+    let tx = UnstakeRequestTx::new(
+        PoolCoin::ETH,
+        config.staker.id(),
+        WalletAddress::new(loki_address),
+        WalletAddress::new(other_address),
+        fraction,
+        timestamp,
+        "".to_owned(),
+    );
+
+    let signature = sign_unstake(&tx, &config.staker.keys).expect("failed to sign unstake tx");
+    let signature = base64::encode(&signature);
 
     let req = serde_json::json!({
         "staker_id": config.staker.public_key(),
         "pool": "ETH",
-        "loki_address": "T6UBx3DnXsocMxGDgLR9ejGmbY5iphPiG9YwDZyNiCM81dgM776a1h7FwFCZZxm7yPabRxQeyfLesBynTWP6DfJq1DAtb6QYn",
-        "other_address": "<PLACEHOLDER>",
-        "timestamp": timestamp,
-        "signature": "<PLACEHOLDER>",
+        "loki_address": loki_address,
+        "other_address": other_address,
+        "timestamp": timestamp.0.to_string(),
+        "fraction": fraction,
+        "signature": signature,
     });
+
     post_unstake_req(&req).await
 }
 

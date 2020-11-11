@@ -7,10 +7,10 @@ use parking_lot::RwLock;
 
 use crate::{
     common::*,
-    side_chain::{MemorySideChain, ISideChain, SideChainTx},
+    side_chain::{ISideChain, MemorySideChain, SideChainTx},
     transactions::*,
-    vault::processor::{SideChainProcessor, CoinProcessor, ProcessorEvent},
-    vault::transactions::{TransactionProvider, MemoryTransactionsProvider},
+    vault::processor::{CoinProcessor, ProcessorEvent, SideChainProcessor},
+    vault::transactions::{MemoryTransactionsProvider, TransactionProvider},
 };
 
 use super::{create_fake_witness, fake_txs::create_fake_stake_quote_for_id, store::MemoryKVS};

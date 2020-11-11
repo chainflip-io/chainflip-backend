@@ -297,6 +297,8 @@ pub struct UnstakeRequestTx {
     pub other_address: WalletAddress,
     /// Time of creation
     pub timestamp: Timestamp,
+    /// Fraction of the total portions to unstake (a number from 1 to 10000)
+    pub fraction: UnstakeFraction,
     /// Signature ECDSA-P256-SHA256
     pub signature: String,
 }
@@ -308,6 +310,7 @@ impl UnstakeRequestTx {
         staker_id: StakerId,
         loki_address: WalletAddress,
         other_address: WalletAddress,
+        fraction: UnstakeFraction,
         timestamp: Timestamp,
         signature: String,
     ) -> Self {
@@ -318,6 +321,7 @@ impl UnstakeRequestTx {
             loki_address,
             other_address,
             timestamp,
+            fraction,
             signature,
         }
     }

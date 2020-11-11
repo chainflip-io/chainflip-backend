@@ -130,3 +130,37 @@ impl Staker {
         StakerId::new(pk).expect("Valid keypair shouldn't generate invalid staker id")
     }
 }
+
+/// Fraction of the total owned amount to unstake
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
+pub struct UnstakeFraction(u32);
+
+impl UnstakeFraction {
+    /// Value representing 100% ownership
+    pub const MAX: UnstakeFraction = UnstakeFraction(10_000);
+
+    /// Create an instance if valid
+    pub fn new(fraction: u32) -> Result<Self, &'static str> {
+        if fraction < 1 || fraction > UnstakeFraction::MAX.0 {
+            Err("Fraction must be in the range (0; 10_000]")
+        } else {
+            Ok(UnstakeFraction(fraction))
+        }
+    }
+}
+
+impl std::str::FromStr for UnstakeFraction {
+    type Err = &'static str;
+
+    fn from_str(f: &str) -> Result<Self, Self::Err> {
+        let fraction: u32 = f.parse().map_err(|_| "fraction must be an integer")?;
+
+        UnstakeFraction::new(fraction)
+    }
+}
+
+impl Display for UnstakeFraction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}

@@ -22,7 +22,7 @@ pub struct LokiWalletAddress {
 impl TryFrom<WalletAddress> for LokiWalletAddress {
     type Error = String;
     fn try_from(a: WalletAddress) -> Result<Self, Self::Error> {
-        LokiWalletAddress::from_string(a.0)
+        LokiWalletAddress::from_string(&a.0)
     }
 }
 
@@ -37,7 +37,7 @@ impl std::str::FromStr for LokiWalletAddress {
 
     /// Construct from string, validating address length
     fn from_str(addr: &str) -> Result<Self, Self::Err> {
-        LokiWalletAddress::from_string(addr.to_owned())
+        LokiWalletAddress::from_string(addr)
     }
 }
 
@@ -48,7 +48,8 @@ impl LokiWalletAddress {
     }
 
     /// Helper function to convert from an owned string
-    fn from_string(addr: String) -> Result<LokiWalletAddress, String> {
+    fn from_string<S: Into<String>>(addr: S) -> Result<LokiWalletAddress, String> {
+        let addr: String = addr.into();
         match addr.len() {
             97 | 108 => Ok(LokiWalletAddress {
                 address: addr.to_owned(),

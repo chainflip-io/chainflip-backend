@@ -71,6 +71,7 @@ pub fn create_unstake_for_staker(coin_type: PoolCoin, staker: &Staker) -> Unstak
         staker_id,
         loki_address,
         other_address,
+        UnstakeFraction::MAX,
         timestamp,
         "".to_owned(),
     );
@@ -82,7 +83,8 @@ pub fn create_unstake_for_staker(coin_type: PoolCoin, staker: &Staker) -> Unstak
         unsigned.staker_id,
         unsigned.loki_address,
         unsigned.other_address,
+        UnstakeFraction::MAX,
         timestamp,
-        hex::encode(signature),
+        base64::encode(&signature),
     )
 }

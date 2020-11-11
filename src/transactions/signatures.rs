@@ -9,8 +9,8 @@ use super::UnstakeRequestTx;
 
 fn serialize_for_signing(tx: &UnstakeRequestTx) -> Vec<u8> {
     format!(
-        "{}|{}|{}|{}",
-        tx.staker_id, tx.loki_address, tx.other_address, tx.timestamp.0
+        "{}|{}|{}|{}|{}|{}",
+        tx.staker_id, tx.pool, tx.loki_address, tx.other_address, tx.fraction, tx.timestamp.0
     )
     .as_bytes()
     .into()
@@ -49,7 +49,7 @@ pub fn verify_unstake(tx: &UnstakeRequestTx) -> Result<(), ()> {
 
     let signed_data = serialize_for_signing(tx);
 
-    let signature = hex::decode(&tx.signature).map_err(|_| ())?;
+    let signature = base64::decode(&tx.signature).map_err(|_| ())?;
 
     detail::verify(&signed_data, &signature, &pubkey)
 }
@@ -99,7 +99,7 @@ mod tests {
 
         tx.timestamp = Timestamp(1603777110013u128);
 
-        let expected = "0433829aa2cccda485ee215421bd6c2af3e6e1702e3202790af42a7332c3fc06ec08beafef0b504ed20d5176f6323da3a4d34c5761a82487087d93ebd673ca7293|T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY|0x70e7db0678460c5e53f1ffc9221d1c692111dcc5|1603777110013".as_bytes();
+        let expected = "0433829aa2cccda485ee215421bd6c2af3e6e1702e3202790af42a7332c3fc06ec08beafef0b504ed20d5176f6323da3a4d34c5761a82487087d93ebd673ca7293|ETH|T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY|0x70e7db0678460c5e53f1ffc9221d1c692111dcc5|10000|1603777110013".as_bytes();
 
         assert_eq!(serialize_for_signing(&tx), expected);
     }

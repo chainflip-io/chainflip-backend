@@ -8,6 +8,10 @@ use parking_lot::RwLock;
 use std::sync::{Arc, Mutex};
 use warp::Filter;
 
+/// Utils
+#[macro_use]
+pub mod utils;
+
 /// Post swap quote endpoint
 pub mod post_swap;
 
@@ -20,9 +24,6 @@ pub mod post_unstake;
 /// Get blocks endpoint
 pub mod get_blocks;
 use get_blocks::{get_blocks, BlocksQueryParams};
-
-/// Utils
-pub mod utils;
 
 #[derive(Debug, Clone)]
 /// A config object for swap and stake
