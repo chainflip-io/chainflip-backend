@@ -7,7 +7,6 @@ use parking_lot::RwLock;
 
 use crate::{
     common::{api::ResponseError, *},
-    transactions::signatures,
     transactions::UnstakeRequestTx,
     utils::validation::validate_address,
     vault::transactions::TransactionProvider,
@@ -102,7 +101,7 @@ pub async fn post_unstake<T: TransactionProvider>(
         params.signature,
     );
 
-    signatures::verify_unstake(&tx).map_err(|_| bad_request!("Invalid signature"))?;
+    tx.verify().map_err(|_| bad_request!("Invalid signature"))?;
 
     let tx_id = tx.id;
 

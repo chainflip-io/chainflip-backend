@@ -110,6 +110,6 @@ mod tests {
 
         let fake_unstake = create_unstake_for_staker(PoolCoin::ETH, &staker);
 
-        verify_unstake(&fake_unstake).expect("Signature should be valid for unstake tx");
+        fake_unstake.verify().expect("Signature should be valid for unstake tx");
     }
 }

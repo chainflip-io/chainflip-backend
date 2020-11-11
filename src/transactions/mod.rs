@@ -332,6 +332,11 @@ impl UnstakeRequestTx {
         let signature = signatures::sign_unstake(&self, keys)?;
         Ok(base64::encode(&signature))
     }
+
+    /// Check that the signature is valid
+    pub fn verify(&self) -> Result<(), ()> {
+        signatures::verify_unstake(&self)
+    }
 }
 
 /// A transaction which indicates that we need to send to the main chain.
