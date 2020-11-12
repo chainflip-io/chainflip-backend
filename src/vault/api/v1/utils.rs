@@ -13,6 +13,12 @@ macro_rules! bad_request {
     };
 }
 
+macro_rules! internal_error {
+    ($($arg:tt)*) => {
+        ResponseError::new(reqwest::StatusCode::INTERNAL_SERVER_ERROR, &format!($($arg)*))
+    };
+}
+
 /// Bad request response error
 pub fn bad_request(message: &str) -> ResponseError {
     ResponseError::new(StatusCode::BAD_REQUEST, message)

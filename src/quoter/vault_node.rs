@@ -76,7 +76,7 @@ impl VaultNodeInterface for VaultNodeAPI {
             .map_err(|err| err.to_string())?;
 
         if let Some(err) = res.error {
-            return Err(err.to_string());
+            return Err(err.message);
         }
 
         match res.data {
@@ -105,7 +105,7 @@ impl VaultNodeInterface for VaultNodeAPI {
             .map_err(|err| err.to_string())?;
 
         if let Some(err) = res.error {
-            return Err(err.to_string());
+            return Err(err.message);
         }
 
         match res.data {
@@ -131,7 +131,7 @@ impl VaultNodeInterface for VaultNodeAPI {
             .map_err(|err| err.to_string())?;
 
         if let Some(err) = res.error {
-            return Err(err.to_string());
+            return Err(err.message);
         }
 
         match res.data {
@@ -157,7 +157,7 @@ impl VaultNodeInterface for VaultNodeAPI {
             .map_err(|err| err.to_string())?;
 
         if let Some(err) = res.error {
-            return Err(err.to_string());
+            return Err(err.message);
         }
 
         match res.data {
@@ -183,7 +183,7 @@ impl VaultNodeInterface for VaultNodeAPI {
             .map_err(|err| err.to_string())?;
 
         if let Some(err) = res.error {
-            return Err(err.to_string());
+            return Err(err.message);
         }
 
         match res.data {
