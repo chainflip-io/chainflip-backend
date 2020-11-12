@@ -28,7 +28,7 @@ pub struct PortionsResponse {
     estimated_other_amount: String,
 }
 
-fn portion_of_total(total: u128, portions: Portion) -> u128 {
+fn amount_from_portion(total: u128, portions: Portion) -> u128 {
     let total: U256 = total.into();
 
     let portions: U256 = portions.0.into();
@@ -72,8 +72,8 @@ where
         .get_liquidity(pool_coin)
         .ok_or(internal_error!("Unexpected missing liquidity"))?;
 
-    let loki = portion_of_total(liquidity.loki_depth, portions);
-    let other = portion_of_total(liquidity.loki_depth, portions);
+    let loki = amount_from_portion(liquidity.loki_depth, portions);
+    let other = amount_from_portion(liquidity.depth, portions);
 
     let loki = loki.to_string();
     let other = other.to_string();
@@ -91,12 +91,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn check_portions_of_total_amount() {
-        assert_eq!(portion_of_total(1000, Portion::MAX), 1000);
-        assert_eq!(portion_of_total(u128::MAX, Portion::MAX), u128::MAX);
+    fn check_amount_from_portion() {
+        assert_eq!(amount_from_portion(u128::MAX, Portion::MAX), u128::MAX);
 
         let portions = Portion(Portion::MAX.0 * 3 / 4);
 
-        assert_eq!(portion_of_total(1000, portions), 750);
+        assert_eq!(amount_from_portion(1000, portions), 750);
     }
 }

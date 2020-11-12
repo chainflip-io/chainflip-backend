@@ -28,6 +28,7 @@ pub trait VaultNodeInterface {
     /// The above code will return blocks 0 to 49.
     async fn get_blocks(&self, start: u32, limit: u32) -> Result<Vec<SideChainBlock>, String>;
 
+    /// Get portions associated with staker_id
     async fn get_portions(&self, params: PortionsParams) -> Result<serde_json::Value, String>;
 
     /// Submit a swap quote to the vault node
