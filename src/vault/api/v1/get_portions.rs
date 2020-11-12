@@ -12,7 +12,9 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PortionsParams {
+    /// Get portions associated with this staker Id
     pub staker_id: String,
+    /// Pool identified by coin type other than Loki
     pub pool: Coin,
 }
 
@@ -47,11 +49,9 @@ where
         .get(&pool)
         .ok_or(bad_request!("No portions for pool {}", pool))?;
 
-    let portions = pool
-        .get(&staker_id)
-        .ok_or(bad_request!("No portions for staker {}", staker_id))?;
+    let portions = pool.get(&staker_id).map(|portions| portions.0).unwrap_or(0);
 
     Ok(PortionsResponse {
-        portions: portions.0.to_string(),
+        portions: portions.to_string(),
     })
 }

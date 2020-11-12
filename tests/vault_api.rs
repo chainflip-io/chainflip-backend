@@ -64,11 +64,8 @@ where
         .await
         .unwrap();
 
-    dbg!(&res);
-
     let status = res.status();
-    let text = res.text().await;
-    dbg!(&text);
+    let _text = res.text().await;
 
     status
 }
@@ -86,9 +83,7 @@ where
 
     let status = res.status();
 
-    let text = res.text().await;
-
-    dbg!(&text);
+    let _text = res.text().await;
 
     status
 }
