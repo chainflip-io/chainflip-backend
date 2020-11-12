@@ -94,10 +94,10 @@ async fn check_unstake_endpoint(config: &TestConfig) -> StatusCode {
         .expect("failed to sign unstake tx");
 
     let req = serde_json::json!({
-        "staker_id": config.staker.public_key(),
+        "stakerId": config.staker.public_key(),
         "pool": "ETH",
-        "loki_address": loki_address,
-        "other_address": other_address,
+        "lokiAddress": loki_address,
+        "otherAddress": other_address,
         "timestamp": timestamp.0.to_string(),
         "fraction": fraction,
         "signature": signature,
