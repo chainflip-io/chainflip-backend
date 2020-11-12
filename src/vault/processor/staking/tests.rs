@@ -67,7 +67,7 @@ fn fulfilled_btc_quotes_should_produce_new_tx() {
 fn partially_fulfilled_quotes_do_not_produce_new_tx() {
     let coin_type = Coin::ETH;
     let loki_amount = LokiAmount::from_decimal_string("1.0");
-    let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
+    let _coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
     let quote_tx = create_fake_stake_quote(PoolCoin::from(coin_type).unwrap());
     let wtx_loki = create_fake_witness(&quote_tx, loki_amount, Coin::LOKI);

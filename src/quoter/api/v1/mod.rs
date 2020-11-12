@@ -13,6 +13,7 @@ use warp::Filter;
 
 pub mod post_stake;
 pub mod post_swap;
+pub mod post_unstake;
 
 mod get_coins;
 pub use get_coins::{get_coins, CoinsParams};
@@ -129,6 +130,13 @@ where
         .map(post_stake::stake)
         .and_then(api::respond);
 
+    let unstake = warp::path!("unstake")
+        .and(warp::post())
+        .and(warp::body::json())
+        .and(using(vault_node.clone()))
+        .map(post_unstake::unstake)
+        .and_then(api::respond);
+
     warp::path!("v1" / ..) // Add path prefix /v1 to all our routes
         .and(
             coins
@@ -137,6 +145,7 @@ where
                 .or(transactions)
                 .or(quote)
                 .or(swap)
-                .or(stake),
+                .or(stake)
+                .or(unstake),
         )
 }

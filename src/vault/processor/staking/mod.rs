@@ -1,3 +1,4 @@
+#[cfg(test)]
 mod tests;
 
 use crate::{
@@ -369,9 +370,8 @@ fn process_unstake_tx<T: TransactionProvider>(
 pub(super) fn process_unstakes<T: TransactionProvider>(tx_provider: &mut T) {
     let unstake_txs = tx_provider.get_unstake_request_txs();
 
-    let (valid_txs, invalid_txs): (Vec<_>, Vec<_>) = unstake_txs
-        .iter()
-        .partition(|tx| verify_unstake(tx).is_ok());
+    let (valid_txs, invalid_txs): (Vec<_>, Vec<_>) =
+        unstake_txs.iter().partition(|tx| tx.verify().is_ok());
 
     for tx in invalid_txs {
         warn!("Invalid signature for unstake request {}", tx.id);

@@ -3,6 +3,7 @@ use crate::{
     utils::validation::{validate_address, validate_address_id},
 };
 
+use ring::signature::EcdsaKeyPair;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -297,6 +298,8 @@ pub struct UnstakeRequestTx {
     pub other_address: WalletAddress,
     /// Time of creation
     pub timestamp: Timestamp,
+    /// Fraction of the total portions to unstake (a number from 1 to 10000)
+    pub fraction: UnstakeFraction,
     /// Signature ECDSA-P256-SHA256
     pub signature: String,
 }
@@ -308,6 +311,7 @@ impl UnstakeRequestTx {
         staker_id: StakerId,
         loki_address: WalletAddress,
         other_address: WalletAddress,
+        fraction: UnstakeFraction,
         timestamp: Timestamp,
         signature: String,
     ) -> Self {
@@ -318,8 +322,20 @@ impl UnstakeRequestTx {
             loki_address,
             other_address,
             timestamp,
+            fraction,
             signature,
         }
+    }
+
+    /// Create a base64 encoded signature using `keys`
+    pub fn sign(&self, keys: &EcdsaKeyPair) -> Result<String, ()> {
+        let signature = signatures::sign_unstake(&self, keys)?;
+        Ok(base64::encode(&signature))
+    }
+
+    /// Check that the signature is valid
+    pub fn verify(&self) -> Result<(), ()> {
+        signatures::verify_unstake(&self)
     }
 }
 

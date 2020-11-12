@@ -372,6 +372,7 @@ mod test {
                 StakerId::new("0433829aa2cccda485ee215421bd6c2af3e6e1702e3202790af42a7332c3fc06ec08beafef0b504ed20d5176f6323da3a4d34c5761a82487087d93ebd673ca7293".to_string()).unwrap(),
                 WalletAddress::new(TEST_LOKI_ADDRESS),
                 WalletAddress::new(TEST_ETH_ADDRESS),
+                UnstakeFraction::MAX,
                 Timestamp::now(),
                 "sig".to_string(),
             )

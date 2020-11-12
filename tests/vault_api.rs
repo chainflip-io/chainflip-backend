@@ -1,18 +1,16 @@
-use parking_lot::RwLock;
 use serde::Serialize;
 
 use reqwest::StatusCode;
 
 use blockswap::{
-    common,
-    side_chain::MemorySideChain,
-    utils::test_utils::get_fake_config,
-    utils::test_utils::get_transactions_provider,
+    common::{self, *},
+    transactions::{signatures::sign_unstake, UnstakeRequestTx},
+    utils::test_utils::staking::get_fake_staker,
+    utils::test_utils::{self, *},
     vault::api::v1::post_swap::SwapQuoteResponse,
     vault::api::APIServer,
-    vault::config::{LokiConfig, VaultConfig},
 };
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 type QuoteResponseWrapped = common::api::Response<SwapQuoteResponse>;
 
@@ -55,19 +53,115 @@ where
     res.status()
 }
 
+async fn post_unstake_req<T>(req: &T) -> StatusCode
+where
+    T: Serialize + ?Sized,
+{
+    let res = CLIENT
+        .post("http://localhost:3030/v1/unstake")
+        .json(req)
+        .send()
+        .await
+        .unwrap();
+
+    dbg!(&res);
+
+    let status = res.status();
+    let text = res.text().await;
+    dbg!(&text);
+
+    status
+}
+
+async fn check_unstake_endpoint(config: &TestConfig) -> StatusCode {
+    let loki_address = "T6UBx3DnXsocMxGDgLR9ejGmbY5iphPiG9YwDZyNiCM81dgM776a1h7FwFCZZxm7yPabRxQeyfLesBynTWP6DfJq1DAtb6QYn";
+    let other_address = TEST_ETH_ADDRESS;
+    let fraction = UnstakeFraction::MAX;
+    let timestamp = Timestamp::now();
+
+    let tx = UnstakeRequestTx::new(
+        PoolCoin::ETH,
+        config.staker.id(),
+        WalletAddress::new(loki_address),
+        WalletAddress::new(other_address),
+        fraction,
+        timestamp,
+        "".to_owned(),
+    );
+
+    let signature = tx
+        .sign(&config.staker.keys)
+        .expect("failed to sign unstake tx");
+
+    let req = serde_json::json!({
+        "staker_id": config.staker.public_key(),
+        "pool": "ETH",
+        "loki_address": loki_address,
+        "other_address": other_address,
+        "timestamp": timestamp.0.to_string(),
+        "fraction": fraction,
+        "signature": signature,
+    });
+
+    post_unstake_req(&req).await
+}
+
+struct TestConfig {
+    /// A valid (known) staker
+    pub staker: Staker,
+}
+
+impl TestConfig {
+    /// Create an arbitrary instance
+    fn default() -> Self {
+        TestConfig {
+            staker: get_fake_staker(),
+        }
+    }
+}
+
+/// Setup some state on the side chain for the tests to interact with
+fn setup_state(config: &TestConfig, runner: &mut TestRunner) {
+    // Add a valid stake
+
+    let loki_amount = LokiAmount::from_decimal_string("1.0");
+    let eth_amount = GenericCoinAmount::from_decimal_string(Coin::ETH, "2.0");
+
+    let keypair = &config.staker;
+
+    runner.add_witnessed_stake_tx(&keypair.id(), loki_amount, eth_amount);
+    runner.sync();
+}
+
+/// Note that we reuse the same server instance in all of these tests
+/// to reduce the overhead and preventing potential "Address already in use"
+/// errors when tests are running in parallel
 #[tokio::test]
 async fn vault_http_server_tests() {
-    let side_chain = MemorySideChain::new();
-    let side_chain = Arc::new(Mutex::new(side_chain));
+    // ***********************
+    // ******** SETUP ********
+    // ***********************
 
-    let provider = get_transactions_provider();
-    let provider = Arc::new(RwLock::new(provider));
+    test_utils::logging::init();
+
+    let mut runner = TestRunner::new();
+
+    let chain = Arc::clone(&runner.chain);
+    let provider = Arc::clone(&runner.provider);
 
     let (tx, rx) = tokio::sync::oneshot::channel();
 
     let thread_handle = std::thread::spawn(move || {
-        APIServer::serve(&get_fake_config(), side_chain, provider, rx);
+        APIServer::serve(&get_fake_config(), chain, provider, rx);
     });
+
+    let config = TestConfig::default();
+
+    setup_state(&config, &mut runner);
+
+    // ***********************
+    // ******** TESTS ********
+    // ***********************
 
     {
         // number=0&limit=1
@@ -83,7 +177,15 @@ async fn vault_http_server_tests() {
 
     // POST requests
 
-    // TODO:  Add once completed
+    {
+        // v1/unstake
+        let status = check_unstake_endpoint(&config).await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    // ***********************
+    // ******* CLEANUP *******
+    // ***********************
 
     // shutdown the server
     let _ = tx.send(());

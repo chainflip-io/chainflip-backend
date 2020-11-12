@@ -5,6 +5,7 @@ use reqwest::Client;
 
 pub use crate::vault::api::v1::post_stake::StakeQuoteParams;
 pub use crate::vault::api::v1::post_swap::SwapQuoteParams;
+pub use crate::vault::api::v1::post_unstake::UnstakeParams;
 
 /// Configuration for the vault node api
 #[derive(Debug, Copy, Clone)]
@@ -30,6 +31,9 @@ pub trait VaultNodeInterface {
 
     /// Submit a stake quote to the vault node
     async fn submit_stake(&self, params: StakeQuoteParams) -> Result<serde_json::Value, String>;
+
+    /// Submit an unstake request to the vault node
+    async fn submit_unstake(&self, params: UnstakeParams) -> Result<serde_json::Value, String>;
 }
 
 /// A client for communicating with vault nodes via http requests.
@@ -126,6 +130,32 @@ impl VaultNodeInterface for VaultNodeAPI {
         match res.data {
             Some(data) => Ok(data),
             None => Err("Failed to submit quote".to_string()),
+        }
+    }
+
+    async fn submit_unstake(&self, params: UnstakeParams) -> Result<serde_json::Value, String> {
+        let url = format!("{}/v1/unstake", self.url);
+
+        let res = self
+            .client
+            .post(&url)
+            .json(&params)
+            .send()
+            .await
+            .map_err(|err| err.to_string())?;
+
+        let res = res
+            .json::<api::Response<serde_json::Value>>()
+            .await
+            .map_err(|err| err.to_string())?;
+
+        if let Some(err) = res.error {
+            return Err(err.to_string());
+        }
+
+        match res.data {
+            Some(data) => Ok(data),
+            None => Err("Failed to submit unstake request".to_string()),
         }
     }
 }

@@ -7,6 +7,12 @@ use crate::{
     vault::config::NetType,
 };
 
+macro_rules! bad_request {
+    ($($arg:tt)*) => {
+        ResponseError::new(StatusCode::BAD_REQUEST, &format!($($arg)*))
+    };
+}
+
 /// Bad request response error
 pub fn bad_request(message: &str) -> ResponseError {
     ResponseError::new(StatusCode::BAD_REQUEST, message)

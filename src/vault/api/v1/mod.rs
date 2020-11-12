@@ -8,18 +8,22 @@ use parking_lot::RwLock;
 use std::sync::{Arc, Mutex};
 use warp::Filter;
 
+/// Utils
+#[macro_use]
+pub mod utils;
+
 /// Post swap quote endpoint
 pub mod post_swap;
 
 /// Post stake quote endpoint
 pub mod post_stake;
 
+/// Post unstake endpoint
+pub mod post_unstake;
+
 /// Get blocks endpoint
 pub mod get_blocks;
 use get_blocks::{get_blocks, BlocksQueryParams};
-
-/// Utils
-pub mod utils;
 
 #[derive(Debug, Clone)]
 /// A config object for swap and stake
@@ -63,6 +67,13 @@ pub fn endpoints<S: ISideChain + Send, T: TransactionProvider + Send + Sync>(
         .map(post_stake::stake)
         .and_then(api::respond);
 
+    let unstake = warp::path!("unstake")
+        .and(warp::post())
+        .and(warp::body::json())
+        .and(using(provider.clone()))
+        .map(post_unstake::post_unstake)
+        .and_then(api::respond);
+
     warp::path!("v1" / ..) // Add path prefix /v1 to all our routes
-        .and(blocks.or(swap).or(stake))
+        .and(blocks.or(swap).or(stake).or(unstake))
 }

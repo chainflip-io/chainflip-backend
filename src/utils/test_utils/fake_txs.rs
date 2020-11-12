@@ -1,9 +1,6 @@
 use crate::{
     common::*,
-    transactions::{
-        signatures::{get_random_staker, sign_unstake},
-        StakeQuoteTx, UnstakeRequestTx, WitnessTx,
-    },
+    transactions::{signatures::get_random_staker, StakeQuoteTx, UnstakeRequestTx, WitnessTx},
 };
 
 use std::str::FromStr;
@@ -71,18 +68,22 @@ pub fn create_unstake_for_staker(coin_type: PoolCoin, staker: &Staker) -> Unstak
         staker_id,
         loki_address,
         other_address,
+        UnstakeFraction::MAX,
         timestamp,
         "".to_owned(),
     );
 
-    let signature = sign_unstake(&unsigned, &staker.keys).expect("could not sign unstake request");
+    let signature = unsigned
+        .sign(&staker.keys)
+        .expect("could not sign unstake request");
 
     UnstakeRequestTx::new(
         coin_type,
         unsigned.staker_id,
         unsigned.loki_address,
         unsigned.other_address,
+        UnstakeFraction::MAX,
         timestamp,
-        hex::encode(signature),
+        signature,
     )
 }
