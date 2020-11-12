@@ -285,6 +285,7 @@ pub struct StakeTx {
 
 /// Request to unstake funds
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UnstakeRequestTx {
     /// Unique identifier
     pub id: Uuid,

@@ -14,6 +14,7 @@ use crate::{
 
 /// Request parameters for unstake
 #[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UnstakeParams {
     /// Staker's public key
     staker_id: String,
