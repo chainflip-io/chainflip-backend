@@ -4,7 +4,7 @@ use reqwest::StatusCode;
 
 use blockswap::{
     common::{self, *},
-    transactions::{signatures::sign_unstake, UnstakeRequestTx},
+    transactions::UnstakeRequestTx,
     utils::test_utils::staking::get_fake_staker,
     utils::test_utils::{self, *},
     vault::api::v1::post_swap::SwapQuoteResponse,
@@ -68,6 +68,26 @@ where
 
     let status = res.status();
     let text = res.text().await;
+    dbg!(&text);
+
+    status
+}
+
+async fn send_portions_req<T>(query: &T) -> StatusCode
+where
+    T: Serialize + ?Sized,
+{
+    let res = CLIENT
+        .get("http://localhost:3030/v1/portions")
+        .query(query)
+        .send()
+        .await
+        .unwrap();
+
+    let status = res.status();
+
+    let text = res.text().await;
+
     dbg!(&text);
 
     status
@@ -165,13 +185,20 @@ async fn vault_http_server_tests() {
 
     {
         // number=0&limit=1
-        let status = send_blocks_req(&[("number", 0), ("limit", 1)]).await;
+        let status = send_blocks_req(&[("number", 0u32), ("limit", 1u32)]).await;
         assert_eq!(status, StatusCode::OK);
     }
 
     {
         // (no params)
         let status = send_blocks_req(&[("", "")]).await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    {
+        let staker_id = config.staker.public_key();
+        let pool = "ETH".to_owned();
+        let status = send_portions_req(&[("stakerId", staker_id), ("pool", pool)]).await;
         assert_eq!(status, StatusCode::OK);
     }
 

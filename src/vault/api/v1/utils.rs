@@ -9,7 +9,7 @@ use crate::{
 
 macro_rules! bad_request {
     ($($arg:tt)*) => {
-        ResponseError::new(StatusCode::BAD_REQUEST, &format!($($arg)*))
+        ResponseError::new(reqwest::StatusCode::BAD_REQUEST, &format!($($arg)*))
     };
 }
 

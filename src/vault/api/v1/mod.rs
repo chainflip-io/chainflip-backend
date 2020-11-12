@@ -25,6 +25,11 @@ pub mod post_unstake;
 pub mod get_blocks;
 use get_blocks::{get_blocks, BlocksQueryParams};
 
+/// Get portions endpoint
+mod get_portions;
+use get_portions::get_portions;
+pub use get_portions::PortionsParams;
+
 #[derive(Debug, Clone)]
 /// A config object for swap and stake
 pub struct Config {
@@ -74,6 +79,13 @@ pub fn endpoints<S: ISideChain + Send, T: TransactionProvider + Send + Sync>(
         .map(post_unstake::post_unstake)
         .and_then(api::respond);
 
+    let portions = warp::path!("portions")
+        .and(warp::get())
+        .and(warp::query::<PortionsParams>())
+        .and(using(provider.clone()))
+        .map(get_portions)
+        .and_then(api::respond);
+
     warp::path!("v1" / ..) // Add path prefix /v1 to all our routes
-        .and(blocks.or(swap).or(stake).or(unstake))
+        .and(blocks.or(swap).or(stake).or(unstake).or(portions))
 }

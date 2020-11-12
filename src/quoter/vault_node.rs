@@ -1,5 +1,7 @@
 use crate::{
-    common::api, side_chain::SideChainBlock, vault::api::v1::get_blocks::BlocksQueryResponse,
+    common::api,
+    side_chain::SideChainBlock,
+    vault::api::v1::{get_blocks::BlocksQueryResponse, PortionsParams},
 };
 use reqwest::Client;
 
@@ -25,6 +27,8 @@ pub trait VaultNodeInterface {
     /// ```
     /// The above code will return blocks 0 to 49.
     async fn get_blocks(&self, start: u32, limit: u32) -> Result<Vec<SideChainBlock>, String>;
+
+    async fn get_portions(&self, params: PortionsParams) -> Result<serde_json::Value, String>;
 
     /// Submit a swap quote to the vault node
     async fn submit_swap(&self, params: SwapQuoteParams) -> Result<serde_json::Value, String>;
@@ -78,6 +82,35 @@ impl VaultNodeInterface for VaultNodeAPI {
         match res.data {
             Some(data) => Ok(data.blocks),
             None => Err("Failed to get block data".to_string()),
+        }
+    }
+
+    async fn get_portions(&self, params: PortionsParams) -> Result<serde_json::Value, String> {
+        let url = format!("{}/v1/portions", self.url);
+
+        let res = self
+            .client
+            .get(&url)
+            .query(&[
+                ("stakerId", params.staker_id),
+                ("pool", params.pool.to_string()),
+            ])
+            .send()
+            .await
+            .map_err(|err| err.to_string())?;
+
+        let res = res
+            .json::<api::Response<serde_json::Value>>()
+            .await
+            .map_err(|err| err.to_string())?;
+
+        if let Some(err) = res.error {
+            return Err(err.to_string());
+        }
+
+        match res.data {
+            Some(data) => Ok(data),
+            None => Err("Failed to get portions".to_string()),
         }
     }
 
