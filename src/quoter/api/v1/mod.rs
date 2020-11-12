@@ -4,6 +4,7 @@ use crate::{
         coins::Coin,
     },
     quoter::{vault_node::VaultNodeInterface, StateProvider},
+    vault::api::v1::PortionsParams,
 };
 use std::{
     collections::{BTreeSet, HashMap},
@@ -29,6 +30,9 @@ pub use get_quote::{get_quote, GetQuoteParams};
 
 mod get_transactions;
 pub use get_transactions::{get_transactions, TransactionsParams};
+
+mod get_portions;
+pub use get_portions::get_portions;
 
 // Util functions
 pub mod utils;
@@ -112,6 +116,13 @@ where
         .and(warp::query::<GetQuoteParams>())
         .and(using(state.clone()))
         .map(get_quote)
+        .and_then(api::respond);
+
+    let quote = warp::path!("portions")
+        .and(warp::get())
+        .and(warp::query::<PortionsParams>())
+        .and(using(vault_node.clone()))
+        .map(get_portions)
         .and_then(api::respond);
 
     let swap = warp::path!("swap")

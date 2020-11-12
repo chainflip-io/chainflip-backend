@@ -20,6 +20,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use serde::Serialize;
+
 /// Transaction plus a boolean flag
 #[derive(Debug, Clone, PartialEq)]
 pub struct FulfilledTxWrapper<Q: PartialEq> {
@@ -55,7 +57,7 @@ impl WitnessTxWrapper {
 
 /// Integer value used to indicate the how much of the pool's
 /// value is associated with a given staker id.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize)]
 pub struct Portion(pub u64);
 
 impl Portion {
