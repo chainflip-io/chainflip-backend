@@ -118,7 +118,7 @@ where
         .map(get_quote)
         .and_then(api::respond);
 
-    let quote = warp::path!("portions")
+    let portions = warp::path!("portions")
         .and(warp::get())
         .and(warp::query::<PortionsParams>())
         .and(using(vault_node.clone()))
@@ -155,6 +155,7 @@ where
                 .or(pools)
                 .or(transactions)
                 .or(quote)
+                .or(portions)
                 .or(swap)
                 .or(stake)
                 .or(unstake),
