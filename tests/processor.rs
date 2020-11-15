@@ -3,6 +3,7 @@ use blockswap::{
     transactions::signatures::get_random_staker,
     transactions::UnstakeRequestTx,
     utils::test_utils::{self, *},
+    vault::transactions::memory_provider::Portion,
     vault::transactions::TransactionProvider,
 };
 
@@ -158,6 +159,51 @@ fn half_staker_can_unstake_half() {
 
     // Check that liquidity halved
     runner.check_eth_liquidity(loki_amount.to_atomic(), eth_amount.to_atomic());
+}
+
+#[test]
+fn portions_adjusted_after_unstake() {
+    // Two stakers, one unstakes, the other
+    // should own MAX portions
+
+    test_utils::logging::init();
+
+    let mut runner = TestRunner::new();
+
+    let loki_amount = LokiAmount::from_decimal_string("1.0");
+    let eth_amount = GenericCoinAmount::from_decimal_string(Coin::ETH, "2.0");
+
+    let alice = get_random_staker();
+    let bob = get_random_staker();
+
+    let _stake1 = runner.add_witnessed_stake_tx(&alice.id(), loki_amount, eth_amount);
+    let _stake2 = runner.add_witnessed_stake_tx(&bob.id(), loki_amount, eth_amount);
+
+    // Each should have 50% portions
+
+    let portions_alice = runner
+        .get_portions_for(&alice.id(), PoolCoin::ETH)
+        .expect("Alice must have portions");
+    let portions_bob = runner
+        .get_portions_for(&bob.id(), PoolCoin::ETH)
+        .expect("Bob must have portions");
+
+    assert_eq!(portions_alice.0, Portion::MAX.0 / 2);
+    assert_eq!(portions_bob.0, Portion::MAX.0 / 2);
+
+    // Bob unstakes
+
+    runner.add_unstake_for(&bob, PoolCoin::ETH);
+
+    // Alice should have 100%, bob 0%
+
+    let portions_alice = runner
+        .get_portions_for(&alice.id(), PoolCoin::ETH)
+        .expect("Alice must have portions");
+    let portions_bob = runner.get_portions_for(&bob.id(), PoolCoin::ETH);
+
+    assert_eq!(portions_alice, Portion::MAX);
+    assert!(portions_bob.is_err(), "Bob must not have portions");
 }
 
 #[test]

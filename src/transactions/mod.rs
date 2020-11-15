@@ -339,6 +339,31 @@ impl UnstakeRequestTx {
     }
 }
 
+/// A transaction that acknowledges a processed unstake request
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub struct UnstakeTx {
+    /// A unique identifier
+    pub id: Uuid,
+    /// The time the transaction was made
+    pub timestamp: Timestamp,
+    /// Unstake request id
+    pub request_id: Uuid,
+    /// Coin output transactions (one for each coin type in the pool)
+    pub output_txs: [Uuid; 2],
+}
+
+impl UnstakeTx {
+    /// Create from unstake request id
+    pub fn new(request_id: Uuid, output_txs: [Uuid; 2]) -> Self {
+        UnstakeTx {
+            id: Uuid::new_v4(),
+            timestamp: Timestamp::now(),
+            request_id,
+            output_txs,
+        }
+    }
+}
+
 /// A transaction which indicates that we need to send to the main chain.
 ///
 /// Note: The `amount` specified in this transaction does not include any fees.

@@ -8,7 +8,7 @@ use crate::{
     side_chain::{ISideChain, SideChainTx},
     transactions::{
         OutputSentTx, OutputTx, PoolChangeTx, QuoteTx, StakeQuoteTx, StakeTx, UnstakeRequestTx,
-        WitnessTx,
+        UnstakeTx, WitnessTx,
     },
     vault::transactions::{
         portions::{adjust_portions_after_stake, StakeContribution},
@@ -21,6 +21,8 @@ use std::{
 };
 
 use serde::Serialize;
+
+use super::portions::{adjust_portions_after_unstake, UnstakeWithdrawal};
 
 /// Transaction plus a boolean flag
 #[derive(Debug, Clone, PartialEq)]
@@ -99,6 +101,7 @@ struct MemoryState {
     quote_txs: Vec<FulfilledTxWrapper<QuoteTx>>,
     stake_quote_txs: Vec<FulfilledTxWrapper<StakeQuoteTx>>,
     unstake_request_txs: Vec<UnstakeRequestTx>,
+    unstake_txs: Vec<UnstakeTx>,
     stake_txs: Vec<StakeTx>,
     witness_txs: Vec<WitnessTxWrapper>,
     output_txs: Vec<FulfilledTxWrapper<OutputTx>>,
@@ -120,6 +123,7 @@ impl<S: ISideChain> MemoryTransactionsProvider<S> {
             quote_txs: vec![],
             stake_quote_txs: vec![],
             unstake_request_txs: vec![],
+            unstake_txs: vec![],
             stake_txs: vec![],
             witness_txs: vec![],
             output_txs: vec![],
@@ -140,6 +144,7 @@ impl<S: ISideChain> MemoryTransactionsProvider<S> {
 
 /// How much of each coin a given staker owns
 /// in coin amounts
+#[derive(Debug, Clone)]
 pub struct StakerOwnership {
     /// Staker identity
     pub staker_id: StakerId,
@@ -200,6 +205,35 @@ impl MemoryState {
 
     fn process_unstake_request_tx(&mut self, tx: UnstakeRequestTx) {
         self.unstake_request_txs.push(tx);
+    }
+
+    fn process_unstake_tx(&mut self, tx: UnstakeTx) {
+        // We must be able to find the request or else we won't be
+        // able to adjust portions which might result in double unstake
+        let unstake_req = self
+            .unstake_request_txs
+            .iter()
+            .find(|req| req.id == tx.request_id)
+            .expect("Unstake tx must have a matching unstake request");
+
+        let staker_id = unstake_req.staker_id.clone();
+        let pool = *&unstake_req.pool;
+        let fraction = *&unstake_req.fraction;
+
+        let unstake = UnstakeWithdrawal {
+            staker_id,
+            fraction,
+            pool,
+        };
+
+        let liquidity = self
+            .liquidity
+            .get_liquidity(pool)
+            .expect("Liquidity must exist for unstaked coin");
+
+        adjust_portions_after_unstake(&mut self.staker_portions, &liquidity, unstake);
+
+        self.unstake_txs.push(tx);
     }
 
     fn process_output_tx(&mut self, tx: OutputTx) {
@@ -279,6 +313,7 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
                     SideChainTx::StakeTx(tx) => self.state.process_stake_tx(tx),
                     SideChainTx::OutputTx(tx) => self.state.process_output_tx(tx),
                     SideChainTx::UnstakeRequestTx(tx) => self.state.process_unstake_request_tx(tx),
+                    SideChainTx::UnstakeTx(tx) => self.state.process_unstake_tx(tx),
                     SideChainTx::OutputSentTx(tx) => self.state.process_output_sent_tx(tx),
                 }
             }

@@ -133,7 +133,7 @@ impl Staker {
 
 /// Fraction of the total owned amount to unstake
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
-pub struct UnstakeFraction(u32);
+pub struct UnstakeFraction(pub u32);
 
 impl UnstakeFraction {
     /// Value representing 100% ownership

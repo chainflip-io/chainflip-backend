@@ -95,7 +95,6 @@ mod tests {
         assert_eq!(amount_from_portion(u128::MAX, Portion::MAX), u128::MAX);
 
         let portions = Portion(Portion::MAX.0 * 3 / 4);
-
         assert_eq!(amount_from_portion(1000, portions), 750);
     }
 }
