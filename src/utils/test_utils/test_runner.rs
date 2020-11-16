@@ -10,10 +10,14 @@ use crate::{
     side_chain::{ISideChain, MemorySideChain, SideChainTx},
     transactions::*,
     vault::processor::{CoinProcessor, ProcessorEvent, SideChainProcessor},
+    vault::transactions::memory_provider::Portion,
     vault::transactions::{MemoryTransactionsProvider, TransactionProvider},
 };
 
-use super::{create_fake_witness, fake_txs::create_fake_stake_quote_for_id, store::MemoryKVS};
+use super::{
+    create_fake_witness, create_unstake_for_staker, fake_txs::create_fake_stake_quote_for_id,
+    store::MemoryKVS,
+};
 
 struct FakeCoinSender {
     /// Store processed outputs here
@@ -159,6 +163,32 @@ impl TestRunner {
 
         assert_eq!(liquidity.loki_depth, loki_atomic);
         assert_eq!(liquidity.depth, eth_atomic);
+    }
+
+    /// Convenience method to add a signed unstake trasaction for `staker_id`
+    pub fn add_unstake_for(&mut self, staker: &Staker, pool: PoolCoin) {
+        let tx = create_unstake_for_staker(pool, staker);
+
+        self.add_block([tx.into()]);
+    }
+
+    /// Convenience method to get portions for `staker_id` in `pool`
+    pub fn get_portions_for(
+        &self,
+        staker_id: &StakerId,
+        pool: PoolCoin,
+    ) -> Result<Portion, String> {
+        let provider = self.provider.read();
+        let all_pools = provider.get_portions();
+        let pool = all_pools
+            .get(&pool)
+            .ok_or(format!("Pool should have portions: {}", pool))?;
+
+        let portions = pool
+            .get(&staker_id)
+            .ok_or("No portions for this staker id")?;
+
+        Ok(*portions)
     }
 
     /// Sync processor

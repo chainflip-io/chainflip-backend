@@ -137,7 +137,8 @@ where
     let outputs = state.get_output_txs();
     let sent = state.get_output_sent_txs();
     let stakes = state.get_stake_txs();
-    let unstakes = state.get_unstake_txs();
+    let unstake_requests = state.get_unstake_requests();
+    let unstakes = state.get_unstakes();
 
     drop(state);
 
@@ -145,10 +146,21 @@ where
         .into_iter()
         .filter(|tx| tx.staker_id == id)
         .collect_vec();
-    let unstakes = unstakes
+    let filtered_unstake_requests = unstake_requests
         .into_iter()
         .filter(|tx| tx.staker_id == id)
         .collect_vec();
+
+    let filtered_unstakes: Vec<SideChainTx> = unstakes
+        .into_iter()
+        .filter(|tx| {
+            filtered_unstake_requests
+                .iter()
+                .find(|req| req.id == tx.request_id)
+                .is_some()
+        })
+        .map(|tx| tx.into())
+        .collect();
 
     let filtered_witnesses: Vec<SideChainTx> = witnesses
         .into_iter()
@@ -164,7 +176,7 @@ where
     let filtered_outputs: Vec<OutputTx> = outputs
         .into_iter()
         .filter(|tx| {
-            let unstake_output = unstakes
+            let unstake_output = filtered_unstake_requests
                 .iter()
                 .find(|quote| quote.id == tx.quote_tx)
                 .is_some();
@@ -195,12 +207,16 @@ where
         .map(|tx| tx.into())
         .collect();
 
-    let filtered_unstakes: Vec<SideChainTx> = unstakes.into_iter().map(|tx| tx.into()).collect();
+    let filtered_unstake_requests: Vec<SideChainTx> = filtered_unstake_requests
+        .into_iter()
+        .map(|tx| tx.into())
+        .collect();
 
     Ok([
         filtered_quotes,
         filtered_witnesses,
         filtered_stakes,
+        filtered_unstake_requests,
         filtered_unstakes,
         filtered_outputs,
         filtered_output_sent,

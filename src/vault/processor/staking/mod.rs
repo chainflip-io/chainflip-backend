@@ -4,8 +4,7 @@ mod tests;
 use crate::{
     common::*,
     side_chain::SideChainTx,
-    transactions::signatures::verify_unstake,
-    transactions::{OutputTx, PoolChangeTx, StakeQuoteTx, StakeTx, UnstakeRequestTx},
+    transactions::{OutputTx, PoolChangeTx, StakeQuoteTx, StakeTx, UnstakeRequestTx, UnstakeTx},
     vault::transactions::{
         memory_provider::{FulfilledTxWrapper, Portion, WitnessTxWrapper},
         TransactionProvider,
@@ -339,7 +338,7 @@ fn prepare_output_txs(
 fn process_unstake_tx<T: TransactionProvider>(
     tx_provider: &T,
     tx: &UnstakeRequestTx,
-) -> Result<(OutputTx, OutputTx, PoolChangeTx), String> {
+) -> Result<(OutputTx, OutputTx, PoolChangeTx, UnstakeTx), String> {
     let staker = &tx.staker_id;
 
     // Find out how much we can unstake
@@ -364,7 +363,9 @@ fn process_unstake_tx<T: TransactionProvider>(
 
     let pool_change_tx = PoolChangeTx::new(tx.pool, -d_loki, -d_other);
 
-    Ok((loki_tx, other_tx, pool_change_tx))
+    let unstake_tx = UnstakeTx::new(tx.id, [loki_tx.id, other_tx.id]);
+
+    Ok((loki_tx, other_tx, pool_change_tx, unstake_tx))
 }
 
 pub(super) fn process_unstakes<T: TransactionProvider>(tx_provider: &mut T) {
@@ -377,16 +378,19 @@ pub(super) fn process_unstakes<T: TransactionProvider>(tx_provider: &mut T) {
         warn!("Invalid signature for unstake request {}", tx.id);
     }
 
-    // TODO: tx with invalid signatures should be removed (or not be added in the first place?)
+    // TODO: We shouldn't be getting invalid signatures as we already validate
+    // them before adding to the database, but since we check them again, we
+    // we should handle the case where they are invalid (by removing from the db)
 
-    let mut output_txs: Vec<SideChainTx> = Vec::with_capacity(valid_txs.len() * 3);
+    let mut new_txs: Vec<SideChainTx> = Vec::with_capacity(valid_txs.len() * 4);
 
     for tx in valid_txs {
         match process_unstake_tx(tx_provider, tx) {
-            Ok((output1, output2, pool_change)) => {
-                output_txs.push(output1.into());
-                output_txs.push(output2.into());
-                output_txs.push(pool_change.into());
+            Ok((output1, output2, pool_change, unstake_tx)) => {
+                new_txs.push(output1.into());
+                new_txs.push(output2.into());
+                new_txs.push(pool_change.into());
+                new_txs.push(unstake_tx.into());
             }
             Err(err) => {
                 warn!("Failed to process unstake request {}: {}", tx.id, err);
@@ -395,6 +399,6 @@ pub(super) fn process_unstakes<T: TransactionProvider>(tx_provider: &mut T) {
     }
 
     tx_provider
-        .add_transactions(output_txs)
+        .add_transactions(new_txs)
         .expect("Could not add transactions");
 }

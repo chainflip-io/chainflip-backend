@@ -80,7 +80,10 @@ impl Database {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                _ => warn!("Failed to process transaction: {:?}", tx),
+                SideChainTx::UnstakeTx(tx) => {
+                    let serialized = serde_json::to_string(tx).unwrap();
+                    Database::insert_transaction(db, tx.id, tx.into(), serialized)
+                }
             }
         }
     }
@@ -224,8 +227,12 @@ impl StateProvider for Database {
         self.get_transactions(TransactionType::Stake)
     }
 
-    fn get_unstake_txs(&self) -> Vec<crate::transactions::UnstakeRequestTx> {
+    fn get_unstakes(&self) -> Vec<crate::transactions::UnstakeTx> {
         self.get_transactions(TransactionType::Unstake)
+    }
+
+    fn get_unstake_requests(&self) -> Vec<crate::transactions::UnstakeRequestTx> {
+        self.get_transactions(TransactionType::UnstakeRequest)
     }
 
     fn get_pools(&self) -> std::collections::HashMap<crate::common::PoolCoin, Liquidity> {
