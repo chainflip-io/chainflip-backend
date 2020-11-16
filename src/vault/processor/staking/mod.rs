@@ -378,7 +378,9 @@ pub(super) fn process_unstakes<T: TransactionProvider>(tx_provider: &mut T) {
         warn!("Invalid signature for unstake request {}", tx.id);
     }
 
-    // TODO: tx with invalid signatures should be removed (or not be added in the first place?)
+    // TODO: We shouldn't be getting invalid signatures as we already validate
+    // them before adding to the database, but since we check them again, we
+    // we should handle the case where they are invalid (by removing from the db)
 
     let mut new_txs: Vec<SideChainTx> = Vec::with_capacity(valid_txs.len() * 4);
 

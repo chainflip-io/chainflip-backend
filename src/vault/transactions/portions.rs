@@ -113,7 +113,7 @@ impl StakeContribution {
 }
 
 /// Calculate fraction of a portion of the total amount
-fn amount_from_fraction_and_poriton(
+fn amount_from_fraction_and_portion(
     fraction: UnstakeFraction,
     portion: Portion,
     total: u128,
@@ -144,7 +144,7 @@ fn adjust_portions_after_unstake_for_coin(
         .get(&unstake.staker_id)
         .expect("Staker id must exist");
 
-    let loki = amount_from_fraction_and_poriton(fraction, portion, liquidity.loki_depth);
+    let loki = amount_from_fraction_and_portion(fraction, portion, liquidity.loki_depth);
 
     let staker_amounts = aggregate_current_portions(&portions, *liquidity, pool);
 
@@ -157,7 +157,7 @@ fn adjust_portions_after_unstake_for_coin(
     assert_eq!(
         unstaker_entries.len(),
         1,
-        "There must be exactly one entry for usntaker id"
+        "There must be exactly one entry for unstaker id"
     );
 
     let mut unstaker_entry = unstaker_entries.pop().unwrap();
@@ -184,7 +184,7 @@ fn adjust_portions_after_unstake_for_coin(
 
     let all_entries = other_entries;
 
-    let mut portions_left = Portion::MAX;
+    let mut dust_left_from_portions = Portion::MAX;
 
     for entry in &all_entries {
         let portion = portions
@@ -196,7 +196,7 @@ fn adjust_portions_after_unstake_for_coin(
         let p = portion_from_amount(owned, new_total_loki);
         *portion = p;
 
-        portions_left = portions_left.checked_sub(p).expect("underflow");
+        dust_left_from_portions = dust_left_from_portions.checked_sub(p).expect("underflow");
     }
 
     if all_entries.len() > 1 {
@@ -205,7 +205,9 @@ fn adjust_portions_after_unstake_for_coin(
                 .get_mut(&entry.staker_id)
                 .expect("staker entry must exist");
 
-            *portion = portion.checked_add(portions_left).expect("overflow");
+            *portion = portion
+                .checked_add(dust_left_from_portions)
+                .expect("overflow");
         }
     }
 
@@ -427,7 +429,7 @@ mod tests {
                 .get(staker_id)
                 .expect("Staker id is expected to have portions");
             let loki_amount =
-                amount_from_fraction_and_poriton(fraction, portion, self.liquidity.loki_depth);
+                amount_from_fraction_and_portion(fraction, portion, self.liquidity.loki_depth);
 
             let other_amount = loki_amount * self.liquidity.depth / self.liquidity.loki_depth;
 
@@ -679,13 +681,13 @@ mod tests {
         let portion = Portion::MAX;
 
         assert_eq!(
-            amount_from_fraction_and_poriton(UnstakeFraction::MAX, portion, 1000),
+            amount_from_fraction_and_portion(UnstakeFraction::MAX, portion, 1000),
             1000
         );
 
         let half_fraction = UnstakeFraction::new(UnstakeFraction::MAX.0 / 2).unwrap();
         assert_eq!(
-            amount_from_fraction_and_poriton(half_fraction, HALF_PORTION, 1000),
+            amount_from_fraction_and_portion(half_fraction, HALF_PORTION, 1000),
             250
         );
     }

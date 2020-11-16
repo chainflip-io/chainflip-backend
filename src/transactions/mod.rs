@@ -340,6 +340,7 @@ impl UnstakeRequestTx {
 }
 
 /// A transaction that acknowledges a processed unstake request
+#[serde(rename_all = "camelCase")]
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct UnstakeTx {
     /// A unique identifier
