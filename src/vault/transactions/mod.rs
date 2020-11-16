@@ -34,7 +34,7 @@ pub trait TransactionProvider: LiquidityProvider {
     fn get_output_txs(&self) -> &[FulfilledTxWrapper<OutputTx>];
 
     /// Get all (unfulfilled?) unstake requests
-    fn get_unstake_request_txs(&self) -> &[UnstakeRequestTx];
+    fn get_unstake_request_txs(&self) -> &[FulfilledTxWrapper<UnstakeRequestTx>];
 
     /// Get vault portions
     fn get_portions(&self) -> &VaultPortions;

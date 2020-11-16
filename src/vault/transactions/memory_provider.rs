@@ -100,7 +100,7 @@ pub type VaultPortions = HashMap<PoolCoin, PoolPortions>;
 struct MemoryState {
     quote_txs: Vec<FulfilledTxWrapper<QuoteTx>>,
     stake_quote_txs: Vec<FulfilledTxWrapper<StakeQuoteTx>>,
-    unstake_request_txs: Vec<UnstakeRequestTx>,
+    unstake_request_txs: Vec<FulfilledTxWrapper<UnstakeRequestTx>>,
     unstake_txs: Vec<UnstakeTx>,
     stake_txs: Vec<StakeTx>,
     witness_txs: Vec<WitnessTxWrapper>,
@@ -204,17 +204,31 @@ impl MemoryState {
     }
 
     fn process_unstake_request_tx(&mut self, tx: UnstakeRequestTx) {
+        let tx = FulfilledTxWrapper::new(tx, false);
         self.unstake_request_txs.push(tx);
     }
 
     fn process_unstake_tx(&mut self, tx: UnstakeTx) {
         // We must be able to find the request or else we won't be
         // able to adjust portions which might result in double unstake
-        let unstake_req = self
+
+        // Find quote and mark it as fulfilled
+        let wrapped_unstake_request = match self
             .unstake_request_txs
-            .iter()
-            .find(|req| req.id == tx.request_id)
-            .expect("Unstake tx must have a matching unstake request");
+            .iter_mut()
+            .find(|w_unstake_req| w_unstake_req.inner.id == tx.request_id)
+        {
+            Some(w_unstake_req) => {
+                w_unstake_req.fulfilled = true;
+                w_unstake_req
+            }
+            None => panic!(
+                "No unstake request found that matches unstake transaction request id: {}",
+                tx.request_id
+            ),
+        };
+
+        let unstake_req = &wrapped_unstake_request.inner;
 
         let staker_id = unstake_req.staker_id.clone();
         let pool = *&unstake_req.pool;
@@ -364,7 +378,7 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
         &self.state.output_txs
     }
 
-    fn get_unstake_request_txs(&self) -> &[UnstakeRequestTx] {
+    fn get_unstake_request_txs(&self) -> &[FulfilledTxWrapper<UnstakeRequestTx>] {
         &self.state.unstake_request_txs
     }
 

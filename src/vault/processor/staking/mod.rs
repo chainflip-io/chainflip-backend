@@ -126,6 +126,10 @@ fn refund_stake_txs(
 
         // Can't refund without a return address
         if return_address.is_none() {
+            warn!(
+                "No return address specified for stake quote id: {}",
+                tx.quote_id
+            );
             continue;
         }
 
@@ -337,8 +341,10 @@ fn prepare_output_txs(
 
 fn process_unstake_tx<T: TransactionProvider>(
     tx_provider: &T,
-    tx: &UnstakeRequestTx,
+    tx: &FulfilledTxWrapper<UnstakeRequestTx>,
 ) -> Result<(OutputTx, OutputTx, PoolChangeTx, UnstakeTx), String> {
+    let tx = &tx.inner;
+
     let staker = &tx.staker_id;
 
     // Find out how much we can unstake
@@ -369,13 +375,15 @@ fn process_unstake_tx<T: TransactionProvider>(
 }
 
 pub(super) fn process_unstakes<T: TransactionProvider>(tx_provider: &mut T) {
-    let unstake_txs = tx_provider.get_unstake_request_txs();
+    let unstake_request_txs = tx_provider.get_unstake_request_txs();
 
-    let (valid_txs, invalid_txs): (Vec<_>, Vec<_>) =
-        unstake_txs.iter().partition(|tx| tx.verify().is_ok());
+    let (valid_txs, invalid_txs): (Vec<_>, Vec<_>) = unstake_request_txs
+        .iter()
+        .filter(|tx| !tx.fulfilled)
+        .partition(|tx| tx.inner.verify().is_ok());
 
     for tx in invalid_txs {
-        warn!("Invalid signature for unstake request {}", tx.id);
+        warn!("Invalid signature for unstake request {}", tx.inner.id);
     }
 
     // TODO: We shouldn't be getting invalid signatures as we already validate
@@ -393,7 +401,7 @@ pub(super) fn process_unstakes<T: TransactionProvider>(tx_provider: &mut T) {
                 new_txs.push(unstake_tx.into());
             }
             Err(err) => {
-                warn!("Failed to process unstake request {}: {}", tx.id, err);
+                warn!("Failed to process unstake request {}: {}", tx.inner.id, err);
             }
         }
     }
