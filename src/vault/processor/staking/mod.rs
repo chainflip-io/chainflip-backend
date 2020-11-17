@@ -75,9 +75,17 @@ fn process_stakes_inner(
             continue;
         }
 
+        let wtxs_inner: Vec<_> = wtxs.iter().map(|w| &w.inner).collect();
+
+        debug!(
+            "Unused witness txs for quote {}: {:#?}",
+            quote_info.inner.id, wtxs_inner
+        );
+
         // Refund the user if the quote is fulfilled
         if quote_info.fulfilled {
             let refunds = refund_stake_txs(quote_info, &wtxs);
+            debug!("The refunds to send: {:#?}", refunds);
             if refunds.len() > 0 {
                 info!(
                     "Quote {} is already fulfilled, refunding!",
@@ -162,7 +170,7 @@ fn process_stake_quote(
         return None;
     }
 
-    info!("Found witness matching quote: {}", quote_info.inner.id);
+    debug!("Found witness matching quote: {}", quote_info.inner.id);
 
     let quote = &quote_info.inner;
 
@@ -224,11 +232,11 @@ fn process_stake_quote(
     }
 
     if loki_amount.is_none() {
-        info!("Loki is not yet provisioned in quote: {}", quote.id);
+        debug!("Loki is not yet provisioned in quote: {}", quote.id);
     }
 
     if other_amount.is_none() {
-        info!(
+        debug!(
             "{} is not yet provisioned in quote: {}",
             quote.coin_type.get_coin(),
             quote.id

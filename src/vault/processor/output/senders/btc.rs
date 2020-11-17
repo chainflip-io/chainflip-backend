@@ -120,6 +120,7 @@ impl<B: IBitcoinSend, T: TransactionProvider> BtcOutputSender<B, T> {
         // Split outputs into chunks of u128
         let groups = group_outputs_by_sending_amounts(outputs);
         for (_, outputs) in groups {
+            debug!("Output tx to be sent: {:#?}", outputs);
             match self.send_outputs_inner(&outputs, key_pair).await {
                 Ok(sent_tx) => sent_txs.push(sent_tx),
                 Err(err) => {
