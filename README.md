@@ -2,42 +2,70 @@
 
 A new FRAME-based Substrate node, ready for hacking :rocket:
 
-## Local Development
+## Getting Started
 
-Follow these steps to prepare a local Substrate development environment :hammer_and_wrench:
+This project contains some configuration files to help get started :hammer_and_wrench:
 
-### Setup
+### Rust Setup
 
-Setup instructions can be found at the
-[Substrate Developer Hub](https://substrate.dev/docs/en/knowledgebase/getting-started).
+Setup instructions for working with the [Rust](https://www.rust-lang.org/) programming language can
+be found at the
+[Substrate Developer Hub](https://substrate.dev/docs/en/knowledgebase/getting-started). Follow those
+steps to install [`rustup`](https://rustup.rs/) and configure the Rust toolchain to default to the
+latest stable version.
+
+### Makefile
+
+This project uses a [Makefile](Makefile) to document helpful commands and make it easier to execute
+them. Get started by running these [`make`](https://www.gnu.org/software/make/manual/make.html)
+targets:
+
+1. `make init` - Run the [init script](scripts/init.sh) to configure the Rust toolchain for
+   [WebAssembly compilation](https://substrate.dev/docs/en/knowledgebase/getting-started/#webassembly-compilation).
+1. `make run` - Build and launch this project in development mode.
+
+The init script and Makefile both specify the version of the
+[Rust nightly compiler](https://substrate.dev/docs/en/knowledgebase/getting-started/#rust-nightly-toolchain)
+that this project depends on.
 
 ### Build
 
-Once the development environment is set up, build the node template. This command will build the
-[Wasm](https://substrate.dev/docs/en/knowledgebase/advanced/executor#wasm-execution) and
-[native](https://substrate.dev/docs/en/knowledgebase/advanced/executor#native-execution) code:
+The `make run` command will perform an initial build. Use the following command to build the node
+without launching it:
 
-```bash
-WASM_BUILD_TOOLCHAIN=nightly-2020-10-05 cargo build --release
+```sh
+make build
+```
+
+### Embedded Docs
+
+Once the project has been built, the following command can be used to explore all parameters and
+subcommands:
+
+```sh
+./target/release/node-template -h
 ```
 
 ## Run
 
-### Single Node Development Chain
+The `make run` command will launch a temporary node and its state will be discarded after you
+terminate the process. After the project has been built, there are other ways to launch the node.
 
-Purge any existing dev chain state:
+### Single-Node Development Chain
 
-```bash
-./target/release/node-template purge-chain --dev
-```
-
-Start a dev chain:
+This command will start the single-node development chain with persistent state:
 
 ```bash
 ./target/release/node-template --dev
 ```
 
-Or, start a dev chain with detailed logging:
+Purge the development chain's state:
+
+```bash
+./target/release/node-template purge-chain --dev
+```
+
+Start the development chain with detailed logging:
 
 ```bash
 RUST_LOG=debug RUST_BACKTRACE=1 ./target/release/node-template -lruntime=debug --dev
