@@ -1,7 +1,10 @@
 use super::{BitcoinSPVClient, IBitcoinSend, SendTransaction};
 use crate::{
     common::{Coin, GenericCoinAmount, WalletAddress},
-    utils::bip44::{self, RawKey},
+    utils::{
+        address::generate_btc_address_from_index,
+        bip44::{self, RawKey},
+    },
 };
 use async_trait::async_trait;
 use bip44::KeyPair;
@@ -94,13 +97,16 @@ pub struct BtcSPVClient {
     username: String,
     password: String,
     network: bitcoin::Network,
+    change_address: bitcoin::Address,
 }
 
+/// Contains the UTXOs to be used in a transaction, and the amount of change returned to the sender
 pub struct SelectInputsResponse {
     utxos: Vec<BtcUTXO>,
     change: u128,
 }
 
+/// Struct to contain response of getaddressbalance SPV RPC call
 #[derive(Debug, Deserialize)]
 pub struct GetBalanceResponse {
     confirmed: String,
@@ -177,12 +183,20 @@ fn wallet_address_from_pubkey(
 }
 
 impl BtcSPVClient {
-    pub fn new(port: u16, username: String, password: String, network: bitcoin::Network) -> Self {
+    /// Create new BtcSPVClient
+    pub fn new(
+        port: u16,
+        username: String,
+        password: String,
+        network: bitcoin::Network,
+        change_address: bitcoin::Address,
+    ) -> Self {
         BtcSPVClient {
             port,
             username,
             password,
             network,
+            change_address,
         }
     }
 
@@ -197,12 +211,6 @@ impl BtcSPVClient {
             "http://{}:{}@localhost:{}",
             self.username, self.password, self.port
         );
-
-        // debug!(
-        //     "Bitcoin SPV Wallet RPC: /{}. Sending params: {}",
-        //     method,
-        //     params.to_string()
-        // );
 
         let req = serde_json::json!({
             "jsonrpc": "2.0",
@@ -279,13 +287,6 @@ impl BtcSPVClient {
     ) -> Result<(Transaction, Vec<BtcUTXO>), String> {
         let amount = send_transaction.amount;
         let sender_keypair = send_transaction.from.clone();
-        let sender_pubkey = bitcoin::PublicKey {
-            // convert between two crate versions of PublicKey
-            key: bitcoin::secp256k1::PublicKey::from_slice(&sender_keypair.public_key.serialize())
-                .unwrap(),
-            // for Segwit the key must be compressed
-            compressed: true,
-        };
 
         let sender_wallet_address =
             wallet_address_from_pubkey(sender_keypair.public_key, self.network)?;
@@ -315,17 +316,6 @@ impl BtcSPVClient {
             ));
         }
 
-        let change: u128 = select_inputs.change;
-
-        let btc_sender_script_pubkey = match bitcoin::Address::p2wpkh(&sender_pubkey, self.network)
-        {
-            Ok(addr) => addr.script_pubkey(),
-            Err(err) => {
-                error!("p2pwkh addresses must be created from a compressed edcsa public key, error: {}",  err.to_string());
-                return Err(err.to_string());
-            }
-        };
-
         let mut txins = vec![];
         for input in &inputs {
             let outpoint = OutPoint {
@@ -346,19 +336,22 @@ impl BtcSPVClient {
 
         let send_to_script_pubkey = send_transaction.to.script_pubkey();
 
-        // Change (unspent from inputs must be sent back to sending wallet)
-        let change_tx_out = TxOut {
-            value: change as u64,
-            script_pubkey: btc_sender_script_pubkey,
-        };
-
-        // Actual outgoing transaction
+        // "Actual" outgoing transaction
         let send_tx_out = TxOut {
             value: amount.to_atomic() as u64 - fee, // the user, not chainflip, pays the fee
             script_pubkey: send_to_script_pubkey,
         };
 
-        let txouts: Vec<TxOut> = vec![change_tx_out, send_tx_out];
+        let mut txouts: Vec<TxOut> = vec![send_tx_out];
+
+        // Change (unspent from inputs must be sent back to sending wallet)
+        if select_inputs.change > 0 {
+            let change_tx_out = TxOut {
+                value: select_inputs.change as u64,
+                script_pubkey: self.change_address.script_pubkey(),
+            };
+            txouts.push(change_tx_out);
+        }
 
         let transaction = Transaction {
             version: 2,
@@ -578,7 +571,7 @@ impl IBitcoinSend for BtcSPVClient {
 mod test {
     use super::*;
     use crate::utils::test_utils::btc::TestBitcoinSPVClient;
-    use bitcoin::{PrivateKey, PublicKey};
+    use bitcoin::PrivateKey;
 
     // The (testnet) segwit public key for this address is: tb1q6898gg3tkkjurdpl4cghaqgmyvs29p4x4h0552
     fn get_key_pair() -> KeyPair {
@@ -594,6 +587,8 @@ mod test {
             "bitcoinrpc".to_string(),
             "Password123".to_string(),
             bitcoin::Network::Testnet,
+            // change address is same as that derived from the key pair above
+            bitcoin::Address::from_str("tb1q6898gg3tkkjurdpl4cghaqgmyvs29p4x4h0552").unwrap(),
         )
     }
 
@@ -661,6 +656,45 @@ mod test {
 
         let tx = client.send(&send_transaction).await;
         assert!(tx.is_ok());
+    }
+
+    // if we attempt to send 200 sats but estimated fee is 250, what should happen?
+    #[tokio::test]
+    #[ignore = "Depends on SPV client"]
+    async fn fee_greater_than_amount_to_be_sent() {
+        let client = get_test_BtcSPVClient();
+
+        // fee will always be more than 10 sats
+        let amount = GenericCoinAmount::from_atomic(Coin::BTC, 10);
+        let keypair = get_key_pair();
+
+        let send_to_btc_pubkey = bitcoin::PublicKey {
+            // convert between two crate versions of PublicKey
+            key: bitcoin::secp256k1::PublicKey::from_slice(&keypair.public_key.serialize())
+                .unwrap(),
+            // Segwit is always compressed
+            compressed: true,
+        };
+
+        let send_to_btc_addr =
+            bitcoin::Address::p2wpkh(&send_to_btc_pubkey, client.network).unwrap();
+
+        println!("Send to this addr: {}", send_to_btc_addr);
+
+        // send to self
+        let send_transaction = SendTransaction {
+            from: keypair,
+            to: send_to_btc_addr,
+            amount,
+        };
+
+        let tx = client.send(&send_transaction).await;
+
+        assert!(tx.is_err());
+
+        let err = tx.unwrap_err();
+
+        assert!(err.contains("is greater than send amount of"));
     }
 
     #[tokio::test]
@@ -753,19 +787,16 @@ mod test {
     }
 
     #[test]
-    #[ignore]
-    fn get_greedy_inputs_with_fee() {
-        todo!()
-    }
+    fn wallet_address_from_pubkey_test() {
+        let keypair = get_key_pair();
 
-    #[test]
-    #[ignore = "todo"]
-    fn wallet_address_from_pubkey() {
-        todo!()
-    }
-
-    // if we attempt to send 200 sats but estimated fee is 250, what should happen?
-    fn fee_greater_than_amount_to_be_sent() {
-        todo!()
+        let wallet_address =
+            wallet_address_from_pubkey(keypair.public_key, bitcoin::Network::Bitcoin);
+        assert!(wallet_address.is_ok());
+        let wallet_address = wallet_address.unwrap();
+        assert_eq!(
+            wallet_address,
+            WalletAddress("bc1q6898gg3tkkjurdpl4cghaqgmyvs29p4xl3580e".to_string())
+        );
     }
 }

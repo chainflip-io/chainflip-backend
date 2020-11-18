@@ -405,7 +405,16 @@ impl OutputTx {
         amount: u128,
     ) -> Result<Self, &'static str> {
         if validate_address(coin, &address.0).is_err() {
+            error!(
+                "Invalid output address {} for quote {}",
+                address.0, quote_tx
+            );
             return Err("Invalid output address");
+        }
+
+        if amount == 0 {
+            error!("Invalid output amount {} for quote {}", amount, quote_tx);
+            return Err("Invalid output amount");
         }
 
         Ok(OutputTx {

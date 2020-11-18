@@ -5,7 +5,7 @@ use blockswap::{
     common::store::PersistentKVS,
     logging,
     side_chain::PeristentSideChain,
-    utils::bip44,
+    utils::{address::generate_btc_address_from_index, bip44},
     vault::{
         api::APIServer,
         blockchain_connection::{BtcSPVClient, LokiConnection, LokiConnectionConfig, Web3Client},
@@ -19,6 +19,7 @@ use blockswap::{
 };
 use parking_lot::RwLock;
 
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 /// Entry point for the Vault node binary. We should try to keep it as small as posible
@@ -56,17 +57,32 @@ fn main() {
     let eth_client =
         Web3Client::url(&vault_config.eth.provider_url).expect("Failed to create web3 client");
 
-    let network = match &vault_config.net_type {
+    let btc_network = match &vault_config.net_type {
         NetType::Testnet => bitcoin::Network::Testnet,
         NetType::Mainnet => bitcoin::Network::Bitcoin,
     };
 
     let btc_config = &vault_config.btc;
+
+    // all change should go to address at index 0
+    let btc_root_address = generate_btc_address_from_index(
+        &btc_config.master_root_key,
+        0,
+        true,
+        bitcoin::AddressType::P2wpkh,
+        &vault_config.net_type,
+    )
+    .expect("Could not generate bitcoin address for index 0");
+
+    let btc_change_address = bitcoin::Address::from_str(&btc_root_address)
+        .expect("Couldn't get bitcoin Address type from type &str");
+
     let btc = BtcSPVClient::new(
         btc_config.rpc_port,
         btc_config.rpc_user.clone(),
         btc_config.rpc_password.clone(),
-        network,
+        btc_network,
+        btc_change_address,
     );
 
     // Witnesses

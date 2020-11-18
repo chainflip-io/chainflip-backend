@@ -2,15 +2,13 @@ use crate::{
     common::{Coin, GenericCoinAmount, Timestamp, WalletAddress},
     transactions::{OutputSentTx, OutputTx},
     utils::{
+        address::generate_btc_address,
         bip44::{self, RawKey},
         primitives::U256,
     },
+    vault::blockchain_connection::btc::{IBitcoinSend, SendTransaction},
     vault::config::NetType,
     vault::transactions::TransactionProvider,
-    vault::{
-        api::v1::utils::generate_btc_address,
-        blockchain_connection::btc::{IBitcoinSend, SendTransaction},
-    },
 };
 use bip44::KeyPair;
 use bitcoin::Address;
@@ -34,6 +32,7 @@ pub struct BtcOutputSender<B: IBitcoinSend, T: TransactionProvider> {
 }
 
 impl<B: IBitcoinSend, T: TransactionProvider> BtcOutputSender<B, T> {
+    /// Create new BtcOutputSender
     pub fn new(client: B, provider: Arc<RwLock<T>>, root_key: RawKey, net_type: NetType) -> Self {
         let root_private_key = root_key
             .to_private_key()
@@ -120,7 +119,6 @@ impl<B: IBitcoinSend, T: TransactionProvider> BtcOutputSender<B, T> {
         // Split outputs into chunks of u128
         let groups = group_outputs_by_sending_amounts(outputs);
         for (_, outputs) in groups {
-            debug!("Output tx to be sent: {:#?}", outputs);
             match self.send_outputs_inner(&outputs, key_pair).await {
                 Ok(sent_tx) => sent_txs.push(sent_tx),
                 Err(err) => {

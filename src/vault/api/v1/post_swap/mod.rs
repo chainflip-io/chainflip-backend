@@ -1,7 +1,10 @@
 use crate::{
     common::{api::ResponseError, Coin, LokiPaymentId, Timestamp, WalletAddress},
     transactions::QuoteTx,
-    utils::price,
+    utils::{
+        address::{generate_btc_address_from_index, generate_eth_address},
+        price,
+    },
     vault::{processor::utils::get_swap_expire_timestamp, transactions::TransactionProvider},
 };
 use parking_lot::RwLock;
@@ -10,9 +13,7 @@ use std::{str::FromStr, sync::Arc};
 use uuid::Uuid;
 
 use super::{
-    utils::{
-        bad_request, generate_btc_address_from_index, generate_eth_address, internal_server_error,
-    },
+    utils::{bad_request, internal_server_error},
     Config,
 };
 

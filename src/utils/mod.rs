@@ -21,6 +21,9 @@ pub mod validation;
 /// Primitive utils
 pub mod primitives;
 
+/// Address utils
+pub mod address;
+
 /// Clone slice values into an array
 ///
 /// # Example

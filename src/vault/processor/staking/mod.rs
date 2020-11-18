@@ -75,17 +75,9 @@ fn process_stakes_inner(
             continue;
         }
 
-        let wtxs_inner: Vec<_> = wtxs.iter().map(|w| &w.inner).collect();
-
-        debug!(
-            "Unused witness txs for quote {}: {:#?}",
-            quote_info.inner.id, wtxs_inner
-        );
-
         // Refund the user if the quote is fulfilled
         if quote_info.fulfilled {
             let refunds = refund_stake_txs(quote_info, &wtxs);
-            debug!("The refunds to send: {:#?}", refunds);
             if refunds.len() > 0 {
                 info!(
                     "Quote {} is already fulfilled, refunding!",
@@ -99,7 +91,7 @@ fn process_stakes_inner(
             // due to the way Transaction provider processes them
             new_txs.push(res.stake_tx.into());
             new_txs.push(res.pool_change.into());
-        }
+        };
     }
 
     new_txs
@@ -117,9 +109,10 @@ fn refund_stake_txs(
     let quote_coin = quote.coin_type.get_coin();
     let mut output_txs: Vec<OutputTx> = vec![];
 
-    let valid_txs = witness_txs.iter().filter(|tx| !tx.used).map(|tx| &tx.inner);
+    let valid_witness_txs = witness_txs.iter().filter(|tx| !tx.used);
 
-    for tx in valid_txs {
+    for wtx in valid_witness_txs {
+        let tx = &wtx.inner;
         let return_address = match tx.coin {
             Coin::LOKI => quote.loki_return_address.clone(),
             coin if coin == quote_coin => quote.coin_return_address.clone(),
@@ -138,6 +131,11 @@ fn refund_stake_txs(
                 "No return address specified for stake quote id: {}",
                 tx.quote_id
             );
+            continue;
+        }
+
+        if tx.amount == 0 {
+            warn!("Witness tx {} has amount 0", tx.id);
             continue;
         }
 
