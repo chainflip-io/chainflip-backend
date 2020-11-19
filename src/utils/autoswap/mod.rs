@@ -14,7 +14,7 @@ fn calc_autoswap_from_loki(
     loki_amount: LokiAmount,
     other_amount: GenericCoinAmount,
     liquidity: Liquidity,
-) -> Result<(LokiAmount, GenericCoinAmount), ()> {
+) -> Result<(LokiAmount, GenericCoinAmount), &'static str> {
     if loki_amount.to_atomic() <= LOKI_SWAP_PROCESS_FEE {
         warn!("Fee exceeds staked amount");
         let stake = calc_symmetric_from_other(other_amount, liquidity);
@@ -54,7 +54,8 @@ fn calc_autoswap_from_loki(
             loki_effective,
             other_effective,
             Liquidity { loki_depth, depth },
-        )?;
+        )
+        .map_err(|_| "Autoswap didn't pass validity check")?;
         Ok((loki_effective, other_effective))
     }
 }
@@ -65,7 +66,7 @@ fn small_other_stake(other_amount: GenericCoinAmount, liquidity: Liquidity) -> b
     let de: BigInt = liquidity.depth.into();
 
     // The amount of loki that we would receive after swapping all of the other coin
-    let max_loki = &e * &dl * &de / ((&e + &dl) * (&e + &dl)) - BigInt::from(LOKI_SWAP_PROCESS_FEE);
+    let max_loki = &e * &dl * &de / ((&e + &de) * (&e + &de)) - BigInt::from(LOKI_SWAP_PROCESS_FEE);
 
     max_loki < BigInt::from(0)
 }
@@ -74,17 +75,31 @@ fn calc_autoswap_to_loki(
     loki_amount: LokiAmount,
     other_amount: GenericCoinAmount,
     liquidity: Liquidity,
-) -> Result<(LokiAmount, GenericCoinAmount), ()> {
+) -> Result<(LokiAmount, GenericCoinAmount), &'static str> {
     // Input fee is 0 because we are swapping
     // some other coin for Loki
 
+    // This only checks that the amount of the other coin is there in principle, i.e.
+    // to make *some* kind of swap
     if small_other_stake(other_amount, liquidity) {
         warn!("Fee exceeds staked amount");
         let stake = calc_symmetric_from_loki(loki_amount, other_amount.coin_type(), liquidity);
         return Ok((stake.loki, stake.other));
     }
 
-    let x = search::find_other_x(loki_amount, other_amount, liquidity, LOKI_SWAP_PROCESS_FEE)?;
+    let x = match search::find_other_x(loki_amount, other_amount, liquidity, LOKI_SWAP_PROCESS_FEE)
+    {
+        Some(x) => x,
+        None => {
+            // It is possible pass the test above, but still have only a marginal amount
+            // extra of the other coin (not enough to pay for the fee)
+            info!(
+                "No amount of other coin can be autoswapped, falling back to staking symmetrically"
+            );
+            let stake = calc_symmetric_from_loki(loki_amount, other_amount.coin_type(), liquidity);
+            return Ok((stake.loki, stake.other));
+        }
+    };
 
     let y = utils::price::calculate_output_amount(
         other_amount.coin_type(),
@@ -116,7 +131,8 @@ fn calc_autoswap_to_loki(
             loki_effective,
             other_effective,
             Liquidity { loki_depth, depth },
-        )?;
+        )
+        .map_err(|_| "Autoswap didn't pass validity check")?;
         Ok((loki_effective, other_effective))
     }
 }
@@ -135,8 +151,12 @@ fn validate_autoswap(
     // Error in atomic loki (easier to calculate in whole numbers)
     let error = (dl * e) / de - &l;
 
+    // We multiply the nominator by this amount because we work
+    // with whole number, which can't represent fractions
+    const ACCURACY: u32 = 1_000_000;
+
     // Normalize error by the input amount:
-    let error = (BigInt::from(1_000_000_000) * error) / &l;
+    let error = (BigInt::from(ACCURACY) * error) / &l;
 
     let error: i128 = error.try_into().map_err(|_| ())?;
 
@@ -230,7 +250,7 @@ pub(crate) fn calc_autoswap_amount(
     loki_amount: LokiAmount,
     other_amount: GenericCoinAmount,
     liquidity: Liquidity,
-) -> Result<(LokiAmount, GenericCoinAmount), ()> {
+) -> Result<(LokiAmount, GenericCoinAmount), &'static str> {
     // Need to determine which way to swap:
 
     match calc_swap_direction(loki_amount, other_amount, liquidity) {

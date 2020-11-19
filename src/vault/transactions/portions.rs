@@ -297,9 +297,13 @@ fn compute_effective_contribution(
         );
         loki_amount
     } else {
-        let (effective_loki, _d_other) =
+        let (effective_loki, other) =
             utils::autoswap::calc_autoswap_amount(loki_amount, other_amount, *liquidity)
                 .expect("incorrect autoswap usage");
+        info!(
+            "Autoswapped from ({:?}, {:?}) to ({:?}, {:?})",
+            loki_amount, other_amount, effective_loki, other
+        );
         effective_loki
     };
 
@@ -674,6 +678,41 @@ mod tests {
         assert!(runner.portions.get(&bob).is_none());
         let c = runner.portions.get(&charlie).unwrap();
         assert_eq!(*c, Portion::MAX);
+    }
+
+    #[test]
+    fn staking_marginal_extra_btc() {
+        test_utils::logging::init();
+
+        let mut runner = TestRunner::new();
+
+        // 1. No autoswap on the first stake: it creates initial liquidity
+        let loki = LokiAmount::from_decimal_string("500.0");
+        let btc = GenericCoinAmount::from_decimal_string(Coin::BTC, "0.02");
+
+        let alice = get_random_staker().id();
+
+        runner.add_asymmetric_stake(&alice, loki, btc);
+
+        // 2. Bob contributes half of what Alice contributed in Loki, but
+        // a larger amount of BTC, which should result in autoswap (and a
+        // higher that 33.3% portion for Bob)
+
+        let bob = get_random_staker().id();
+
+        let loki = LokiAmount::from_decimal_string("250.0");
+        let btc = GenericCoinAmount::from_decimal_string(Coin::BTC, "0.028");
+
+        runner.add_asymmetric_stake(&bob, loki, btc);
+
+        let a = runner
+            .portions
+            .get(&alice)
+            .expect("Alice should have portions");
+        let b = runner.portions.get(&bob).expect("Bob should have portions");
+
+        assert_eq!(a.0, 5952304034);
+        assert_eq!(b.0, 4047695966);
     }
 
     #[test]
