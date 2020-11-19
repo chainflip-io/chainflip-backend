@@ -297,9 +297,13 @@ fn compute_effective_contribution(
         );
         loki_amount
     } else {
-        let (effective_loki, _d_other) =
+        let (effective_loki, other) =
             utils::autoswap::calc_autoswap_amount(loki_amount, other_amount, *liquidity)
                 .expect("incorrect autoswap usage");
+        info!(
+            "Autoswapped from ({:?}, {:?}) to ({:?}, {:?})",
+            loki_amount, other_amount, effective_loki, other
+        );
         effective_loki
     };
 

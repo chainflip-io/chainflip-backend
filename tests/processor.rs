@@ -243,6 +243,35 @@ fn non_staker_cannot_unstake() {
 }
 
 #[test]
+fn assymetric_stake_result_in_autoswap() {
+    test_utils::logging::init();
+
+    let mut runner = TestRunner::new();
+
+    let loki_amount = LokiAmount::from_decimal_string("500.0");
+    let btc_amount = GenericCoinAmount::from_decimal_string(Coin::BTC, "0.02");
+
+    let alice = get_random_staker();
+    let _ = runner.add_witnessed_stake_tx(&alice.id(), loki_amount, btc_amount);
+
+    let bob = get_random_staker();
+
+    let loki_amount = LokiAmount::from_decimal_string("250.0");
+    let btc_amount = GenericCoinAmount::from_decimal_string(Coin::BTC, "0.028");
+
+    let _ = runner.add_witnessed_stake_tx(&bob.id(), loki_amount, btc_amount);
+
+    let a = runner
+        .get_portions_for(&alice.id(), PoolCoin::BTC)
+        .expect("Portion should exist for Alice");
+    let b = runner
+        .get_portions_for(&bob.id(), PoolCoin::BTC)
+        .expect("Portion should exist for Bob");
+
+    dbg!(a, b);
+}
+
+#[test]
 #[ignore = "todo"]
 fn cannot_unstake_with_invalid_signature() {
     todo!();

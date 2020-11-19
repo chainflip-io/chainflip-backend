@@ -228,8 +228,8 @@ fn find_min_other(dl: u128, de: u128, ofee: u128) -> Result<u128, &'static str> 
     // from solving the price equation (`calculate_output_amount`)
     // for f(x) = LOKI_SWAP_PROCESS_FEE
 
-    let p = BigInt::from(2) * &dl - (&dl * &de) / &ofee;
-    let q = &dl * &dl;
+    let p = BigInt::from(2) * &de - (&dl * &de) / &ofee;
+    let q = &de * &de;
 
     let discriminant = &p * &p - BigInt::from(4) * &q;
 
@@ -279,14 +279,14 @@ mod tests {
 
     #[test]
     fn negative_discriminant() {
-        let dl = loki(100).to_atomic();
-        let de = LOKI_SWAP_PROCESS_FEE * 4;
+        let de = eth(100).to_atomic();
+        let dl = LOKI_SWAP_PROCESS_FEE * 4;
         let ofee = LOKI_SWAP_PROCESS_FEE;
 
         find_min_other(dl, de, ofee).unwrap();
 
         // de < 4 * output fee
-        let res = find_min_other(dl, de - 1, ofee).unwrap_err();
+        let res = find_min_other(dl - 1, de, ofee).unwrap_err();
         assert_eq!(res, "Negative discriminant");
     }
 
