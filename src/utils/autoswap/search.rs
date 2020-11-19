@@ -186,19 +186,17 @@ pub(super) fn find_other_x(
     other_amount: GenericCoinAmount,
     liquidity: Liquidity,
     ofee: u128,
-) -> Result<u128, ()> {
+) -> Option<u128> {
     let loki = loki.to_atomic();
     let other = other_amount.to_atomic();
     let dl = liquidity.loki_depth;
     let de = liquidity.depth;
 
     // min amount of other coin to swap to get non-negative loki as output:
-    let x0 = find_min_other(dl, de, ofee).map_err(|_| ())?;
-
-    dbg!(x0, other);
+    let x0 = find_min_other(dl, de, ofee).ok()?;
 
     if x0 > other {
-        return Err(());
+        return None;
     }
 
     let x2 = other;
@@ -214,7 +212,7 @@ pub(super) fn find_other_x(
         ofee,
     };
 
-    find_x(x0, x2, &state)
+    find_x(x0, x2, &state).ok()
 }
 
 /// Find minimum amount of the non-loki coin to swap to get a non-negative loki output
@@ -336,6 +334,6 @@ mod tests {
         let dl = loki(20_000_000);
         let de = eth(100_000);
 
-        assert!(find_other_x(l, e, liquidity(dl, de), LOKI_SWAP_PROCESS_FEE).is_ok());
+        assert!(find_other_x(l, e, liquidity(dl, de), LOKI_SWAP_PROCESS_FEE).is_some());
     }
 }

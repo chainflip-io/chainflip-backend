@@ -89,11 +89,10 @@ fn calc_autoswap_to_loki(
 
     let x = match search::find_other_x(loki_amount, other_amount, liquidity, LOKI_SWAP_PROCESS_FEE)
     {
-        Ok(x) => x,
-        Err(_) => {
-            // This should not be considered a failure, because it is possible pass the test above,
-            // but still have only a marginal amount extra of the other coin (not enough to pay for
-            // the fee)
+        Some(x) => x,
+        None => {
+            // It is possible pass the test above, but still have only a marginal amount
+            // extra of the other coin (not enough to pay for the fee)
             info!(
                 "No amount of other coin can be autoswapped, falling back to staking symmetrically"
             );

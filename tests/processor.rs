@@ -257,7 +257,7 @@ fn assymetric_stake_result_in_autoswap() {
     let bob = get_random_staker();
 
     let loki_amount = LokiAmount::from_decimal_string("250.0");
-    let btc_amount = GenericCoinAmount::from_decimal_string(Coin::BTC, "0.028");
+    let btc_amount = GenericCoinAmount::from_decimal_string(Coin::BTC, "0.02");
 
     let _ = runner.add_witnessed_stake_tx(&bob.id(), loki_amount, btc_amount);
 
@@ -268,7 +268,10 @@ fn assymetric_stake_result_in_autoswap() {
         .get_portions_for(&bob.id(), PoolCoin::BTC)
         .expect("Portion should exist for Bob");
 
-    dbg!(a, b);
+    // We expect the 50% < a < 66% (Bob stakes a 50% of Alices Loki,
+    // but the same amount of BTC, resulting in autoswap)
+    assert_eq!(a.0, 6162430986);
+    assert_eq!(b.0, 3837569014);
 }
 
 #[test]
