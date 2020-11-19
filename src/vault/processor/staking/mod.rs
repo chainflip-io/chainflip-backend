@@ -36,14 +36,14 @@ impl StakeQuoteResult {
     }
 }
 
-pub(super) fn process_stakes<T: TransactionProvider>(tx_provider: &mut Arc<RwLock<T>>) {
+pub(super) fn process_stake_quotes<T: TransactionProvider>(tx_provider: &mut Arc<RwLock<T>>) {
     let provider = tx_provider.read();
     let stake_quote_txs = provider.get_stake_quote_txs();
     let witness_txs = provider.get_witness_txs();
 
     // TODO: a potential room for improvement: autoswap is relatively slow,
     // so we might want to release the mutex when performing it
-    let new_txs = process_stakes_inner(&stake_quote_txs, &witness_txs);
+    let new_txs = process_stake_quotes_inner(&stake_quote_txs, &witness_txs);
     drop(provider);
 
     // TODO: make sure that things below happen atomically
@@ -58,7 +58,7 @@ pub(super) fn process_stakes<T: TransactionProvider>(tx_provider: &mut Arc<RwLoc
 
 /// Try to match witness transacitons with stake transactions and return a list of
 /// transactions that should be added to the side chain
-fn process_stakes_inner(
+fn process_stake_quotes_inner(
     quotes: &[FulfilledTxWrapper<StakeQuoteTx>],
     witness_txs: &[WitnessTxWrapper],
 ) -> Vec<SideChainTx> {
@@ -77,7 +77,7 @@ fn process_stakes_inner(
 
         // Refund the user if the quote is fulfilled
         if quote_info.fulfilled {
-            let refunds = refund_stake_txs(quote_info, &wtxs);
+            let refunds = refund_stake_quote_txs(quote_info, &wtxs);
             if refunds.len() > 0 {
                 info!(
                     "Quote {} is already fulfilled, refunding!",
@@ -97,7 +97,7 @@ fn process_stakes_inner(
     new_txs
 }
 
-fn refund_stake_txs(
+fn refund_stake_quote_txs(
     quote_info: &FulfilledTxWrapper<StakeQuoteTx>,
     witness_txs: &[&WitnessTxWrapper],
 ) -> Vec<OutputTx> {
@@ -345,7 +345,7 @@ fn prepare_output_txs(
     Ok((loki, other))
 }
 
-fn process_unstake_tx<T: TransactionProvider>(
+fn process_unstake_request_tx<T: TransactionProvider>(
     tx_provider: &T,
     tx: &FulfilledTxWrapper<UnstakeRequestTx>,
 ) -> Result<(OutputTx, OutputTx, PoolChangeTx, UnstakeTx), String> {
@@ -380,7 +380,7 @@ fn process_unstake_tx<T: TransactionProvider>(
     Ok((loki_tx, other_tx, pool_change_tx, unstake_tx))
 }
 
-pub(super) fn process_unstakes<T: TransactionProvider>(tx_provider: &mut T) {
+pub(super) fn process_unstake_requests<T: TransactionProvider>(tx_provider: &mut T) {
     let unstake_request_txs = tx_provider.get_unstake_request_txs();
 
     let (valid_txs, invalid_txs): (Vec<_>, Vec<_>) = unstake_request_txs
@@ -399,7 +399,7 @@ pub(super) fn process_unstakes<T: TransactionProvider>(tx_provider: &mut T) {
     let mut new_txs: Vec<SideChainTx> = Vec::with_capacity(valid_txs.len() * 4);
 
     for tx in valid_txs {
-        match process_unstake_tx(tx_provider, tx) {
+        match process_unstake_request_tx(tx_provider, tx) {
             Ok((output1, output2, pool_change, unstake_tx)) => {
                 new_txs.push(output1.into());
                 new_txs.push(output2.into());

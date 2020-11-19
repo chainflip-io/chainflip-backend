@@ -96,7 +96,7 @@ fn refunds_if_stake_quote_is_fulfilled() {
     // Processing fulfilled stake quote should return nothing
     assert!(process_stake_quote(&quote_tx, &[&wtx_loki, &wtx_btc]).is_none());
 
-    let outputs = refund_stake_txs(&quote_tx, &[&wtx_loki, &wtx_btc]);
+    let outputs = refund_stake_quote_txs(&quote_tx, &[&wtx_loki, &wtx_btc]);
     assert_eq!(outputs.len(), 2);
 
     let loki_output = outputs.iter().find(|tx| tx.coin == Coin::LOKI).unwrap();
