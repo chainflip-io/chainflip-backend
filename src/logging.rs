@@ -46,13 +46,13 @@ pub fn init(base_name: &str, console_level: Option<LevelFilter>) {
         .appender("file")
         .build(file_level);
 
-    // increase blockswap logging level to debug
-    let blockswap = Logger::builder().build("blockswap", LevelFilter::Debug);
+    // increase chainflip logging level to debug
+    let chainflip = Logger::builder().build("chainflip", LevelFilter::Debug);
 
     let config = Config::builder()
         .appender(stdout_appender)
         .appender(file_appender)
-        .logger(blockswap)
+        .logger(chainflip)
         .build(root)
         .unwrap();
 

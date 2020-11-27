@@ -1,4 +1,4 @@
-use blockswap::{
+use chainflip::{
     common::*,
     transactions::signatures::get_random_staker,
     transactions::UnstakeRequestTx,

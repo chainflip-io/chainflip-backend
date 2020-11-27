@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate log;
 
-use blockswap::{
+use chainflip::{
     common::store::PersistentKVS,
     logging,
     side_chain::PeristentSideChain,

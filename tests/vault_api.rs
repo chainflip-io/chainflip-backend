@@ -2,7 +2,7 @@ use serde::Serialize;
 
 use reqwest::StatusCode;
 
-use blockswap::{
+use chainflip::{
     common::{self, *},
     transactions::UnstakeRequestTx,
     utils::test_utils::staking::get_fake_staker,

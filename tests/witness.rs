@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use blockswap::{
+use chainflip::{
     common::Timestamp,
     side_chain::{ISideChain, MemorySideChain},
     utils::test_utils,

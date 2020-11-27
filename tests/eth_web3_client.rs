@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use blockswap::{
+use chainflip::{
     common::ethereum::Address,
     common::Coin,
     common::GenericCoinAmount,
@@ -22,7 +22,7 @@ Binary for testing eth client.
         4. Create another eth account and record its address (This will be the account that you receive the ETH to)
         5. Set information in `local.toml` along with a ropsten provider (See Providers below)
         6. Remove test ignore
-        7. Run `cargo test --package blockswap --test integration_test -- eth_web3_client::test_web3_send --exact --color always --nocapture`
+        7. Run `cargo test --package chainflip --test integration_test -- eth_web3_client::test_web3_send --exact --color always --nocapture`
 
 Providers:
     It is reccomended you use a local geth light node for testing consistency.

@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 
-//! Main blockswap library shared between Vault and Quoter
+//! Main chainflip library shared between Vault and Quoter
 
 /// Code that is commonly used by other modules
 pub mod common;

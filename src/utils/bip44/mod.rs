@@ -56,7 +56,7 @@ impl KeyPair {
     /// # Example
     ///
     /// ```
-    /// use blockswap::utils::bip44::KeyPair;
+    /// use chainflip::utils::bip44::KeyPair;
     ///
     /// let private_key = "58a99f6e6f89cbbb7fc8c86ea95e6012b68a9cd9a41c4ffa7c8f20c201d0667f";
     /// let key_pair = KeyPair::from_private_key(private_key).unwrap();
@@ -87,8 +87,8 @@ impl KeyPair {
 /// # Example
 ///
 /// ```
-/// use blockswap::utils::bip44::{get_key_pair, RawKey, CoinType};
-/// use blockswap::common::Coin;
+/// use chainflip::utils::bip44::{get_key_pair, RawKey, CoinType};
+/// use chainflip::common::Coin;
 ///
 /// let xpriv = "xprv9s21ZrQH143K2h2Jo5HX95FFUbu8QYXRDvmpStejFQQXSYw7LnsuczMXvfh9mVFCukNz6bXoYDSZhMzwQqtoDeMFkjG8PqzHCf4kDHYwYqK";
 /// let root_key = RawKey::decode(xpriv).unwrap().to_private_key().unwrap();

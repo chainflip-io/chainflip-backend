@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use blockswap::{
+use chainflip::{
     common::*,
     logging,
     side_chain::{ISideChain, MemorySideChain},

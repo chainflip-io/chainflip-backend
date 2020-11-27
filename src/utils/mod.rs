@@ -29,7 +29,7 @@ pub mod address;
 /// # Example
 ///
 /// ```
-/// use blockswap::utils::clone_into_array;
+/// use chainflip::utils::clone_into_array;
 ///
 /// let original = [1, 2, 3, 4, 5];
 /// let cloned: [u8; 4] = clone_into_array(&original[..4]);

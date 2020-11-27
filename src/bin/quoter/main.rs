@@ -3,8 +3,8 @@ extern crate log;
 
 use clap::{App, Arg};
 
-use blockswap::logging;
-use blockswap::quoter::{config::QUOTER_CONFIG, database, vault_node, Quoter};
+use chainflip::logging;
+use chainflip::quoter::{config::QUOTER_CONFIG, database, vault_node, Quoter};
 use std::{
     net::Ipv4Addr,
     str::FromStr,

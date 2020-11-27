@@ -5,7 +5,7 @@ use base58_monero;
 /// # Example
 ///
 /// ```
-/// use blockswap::utils::loki::address::get_integrated_address;
+/// use chainflip::utils::loki::address::get_integrated_address;
 ///
 /// let base_address = "L7fffztMU6PF6gmx2TtY8wTBsqU51Wy9B4RwvJzbE4bUK1zFtK99yNz2rXEAnHH53qf63NANZGdYXZdUpwUvo19RGxxHWxK";
 /// let payment_id: [u8; 8] = [66, 15, 162, 155, 45, 154, 73, 245];

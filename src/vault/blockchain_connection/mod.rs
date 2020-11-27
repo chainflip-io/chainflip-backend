@@ -44,8 +44,8 @@ pub type Payments = Vec<Payment>;
 
 /// Loki connection start scanning from this block if no can't
 /// find existing database records. (There is no reason to scan
-/// blocks that came before blockswap launch)
-const FIRST_BLOCKSWAP_BLOCK: u64 = 363680;
+/// blocks that came before chainflip launch)
+const FIRST_CHAINFLIP_BLOCK: u64 = 363680;
 
 /// Loki connection requests payments for a sliding window of blocks
 /// because the wallet does not (always) acknowledge payments right away
@@ -74,9 +74,9 @@ impl LokiConnection {
             None => {
                 warn!(
                     "Last block record not found for Loki Connection, using default: {}",
-                    FIRST_BLOCKSWAP_BLOCK
+                    FIRST_CHAINFLIP_BLOCK
                 );
-                FIRST_BLOCKSWAP_BLOCK
+                FIRST_CHAINFLIP_BLOCK
             }
         };
 

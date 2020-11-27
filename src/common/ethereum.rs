@@ -107,7 +107,7 @@ impl From<PublicKey> for Address {
     /// # Example
     ///
     /// ```
-    /// use blockswap::common::ethereum::Address;
+    /// use chainflip::common::ethereum::Address;
     /// use hdwallet::secp256k1::PublicKey;
     /// use std::str::FromStr;
     ///

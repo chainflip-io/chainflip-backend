@@ -74,7 +74,7 @@ impl<T> Response<T> {
 /// # Example
 ///
 /// ```
-/// use blockswap::common::api::{respond, ResponseError, handle_rejection};
+/// use chainflip::common::api::{respond, ResponseError, handle_rejection};
 /// use warp::Filter;
 /// use std::future::Future;
 ///
@@ -127,7 +127,7 @@ where
 /// # Example
 ///
 /// ```
-/// use blockswap::common::api::{respond, ResponseError, handle_rejection};
+/// use chainflip::common::api::{respond, ResponseError, handle_rejection};
 /// use warp::Filter;
 /// use std::future::Future;
 ///
@@ -193,7 +193,7 @@ pub async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, 
 /// # Example
 ///
 /// ```
-/// use blockswap::common::api::{respond, ResponseError, handle_rejection, using};
+/// use chainflip::common::api::{respond, ResponseError, handle_rejection, using};
 /// use warp::Filter;
 /// use std::sync::Arc;
 ///

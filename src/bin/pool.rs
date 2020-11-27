@@ -1,4 +1,4 @@
-use blockswap::{
+use chainflip::{
     common::{Coin, PoolCoin},
     side_chain::{ISideChain, PeristentSideChain},
     transactions::PoolChangeTx,

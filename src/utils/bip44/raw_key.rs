@@ -53,7 +53,7 @@ impl RawKey {
     /// # Example
     ///
     /// ```
-    /// use blockswap::utils::bip44::RawKey;
+    /// use chainflip::utils::bip44::RawKey;
     ///
     /// let key = "xpub661MyMwAqRbcG8Zah6TcX3QpP5yJApaXcyLK8CJcZkuYjczivsHxVL5qm9cw8BYLYehgFeddK5WrxhntpcvqJKTVg96dUVL9P7hZ7Kcvqvd";
     /// let raw_key = RawKey::decode(key);
@@ -87,7 +87,7 @@ impl RawKey {
     /// ## Successful conversion
     ///
     /// ```
-    /// use blockswap::utils::bip44::RawKey;
+    /// use chainflip::utils::bip44::RawKey;
     ///
     /// let key = "xpub661MyMwAqRbcG8Zah6TcX3QpP5yJApaXcyLK8CJcZkuYjczivsHxVL5qm9cw8BYLYehgFeddK5WrxhntpcvqJKTVg96dUVL9P7hZ7Kcvqvd";
     /// let raw_key = RawKey::decode(key).unwrap();
@@ -98,7 +98,7 @@ impl RawKey {
     /// ## Failed conversion
     ///
     /// ```
-    /// use blockswap::utils::bip44::RawKey;
+    /// use chainflip::utils::bip44::RawKey;
     ///
     /// let key = "xprv9zkiHpWM7sSAmi9iU8dSNnQ5dVb4J54zFcd137js4yykpxHrzjTXHQThjGHkCVjPCYxKo5AZKon4KRAXC4ZsR4prRtGTBPqNivjDgFdSnCc";
     /// let raw_key = RawKey::decode(key).unwrap();
@@ -129,7 +129,7 @@ impl RawKey {
     /// ## Successful conversion
     ///
     /// ```
-    /// use blockswap::utils::bip44::RawKey;
+    /// use chainflip::utils::bip44::RawKey;
     ///
     /// let key = "xprv9zkiHpWM7sSAmi9iU8dSNnQ5dVb4J54zFcd137js4yykpxHrzjTXHQThjGHkCVjPCYxKo5AZKon4KRAXC4ZsR4prRtGTBPqNivjDgFdSnCc";
     /// let raw_key = RawKey::decode(key).unwrap();
@@ -140,7 +140,7 @@ impl RawKey {
     /// ## Failed conversion
     ///
     /// ```
-    /// use blockswap::utils::bip44::RawKey;
+    /// use chainflip::utils::bip44::RawKey;
     ///
     /// let key = "xpub661MyMwAqRbcG8Zah6TcX3QpP5yJApaXcyLK8CJcZkuYjczivsHxVL5qm9cw8BYLYehgFeddK5WrxhntpcvqJKTVg96dUVL9P7hZ7Kcvqvd";
     /// let raw_key = RawKey::decode(key).unwrap();

@@ -45,7 +45,7 @@ features = ["bundled"]
 version = "0.21.0"
 
 [lib]
-name = "blockswap"
+name = "chainflip"
 path = "src/lib.rs"
 
 [[bin]]
