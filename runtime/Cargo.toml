@@ -1,11 +1,11 @@
 [package]
-authors = ['Substrate DevHub <https://github.com/substrate-developer-hub>']
+authors = ['Chainflip Team <https://github.com/chainflip-io>']
 edition = '2018'
-homepage = 'https://substrate.dev'
-license = 'Unlicense'
-name = 'node-template-runtime'
-repository = 'https://github.com/substrate-developer-hub/substrate-node-template/'
-version = '2.0.0'
+homepage = 'https://chainflip.io'
+license = '<TODO>'
+name = 'state-chain-runtime'
+repository = 'https://github.com/chainflip-io/chainflip-test-state-chain'
+version = '0.0.1'
 
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
@@ -35,7 +35,6 @@ frame-system = {default-features = false, version = '2.0.0'}
 frame-system-benchmarking = {default-features = false, optional = true, version = '2.0.0'}
 frame-system-rpc-runtime-api = {default-features = false, version = '2.0.0'}
 pallet-aura = {default-features = false, version = '2.0.0'}
-pallet-balances = {default-features = false, version = '2.0.0'}
 pallet-grandpa = {default-features = false, version = '2.0.0'}
 pallet-randomness-collective-flip = {default-features = false, version = '2.0.0'}
 pallet-sudo = {default-features = false, version = '2.0.0'}
@@ -71,7 +70,6 @@ std = [
   'frame-system/std',
   'frame-system-rpc-runtime-api/std',
   'pallet-aura/std',
-  'pallet-balances/std',
   'pallet-grandpa/std',
   'pallet-randomness-collective-flip/std',
   'pallet-sudo/std',
