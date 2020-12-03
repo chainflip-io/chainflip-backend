@@ -1,16 +1,16 @@
 [package]
-authors = ['Substrate DevHub <https://github.com/substrate-developer-hub>']
+authors = ['Chainflip Team <https://github.com/chainflip-io>']
 build = 'build.rs'
-description = 'A fresh FRAME-based Substrate node, ready for hacking.'
+description = 'Runs the state chain of Chainflip'
 edition = '2018'
-homepage = 'https://substrate.dev'
-license = 'Unlicense'
-name = 'node-template'
-repository = 'https://github.com/substrate-developer-hub/substrate-node-template/'
-version = '2.0.0'
+homepage = 'https://chainflip.io'
+license = '<TODO>'
+name = 'state-chain-node'
+repository = 'https://github.com/chainflip-io/chainflip-test-state-chain'
+version = '0.0.1'
 
 [[bin]]
-name = 'node-template'
+name = 'state-chain-node'
 
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
@@ -23,22 +23,22 @@ jsonrpc-core = '15.0.0'
 structopt = '0.3.8'
 
 # local dependencies
-node-template-runtime = { path = '../runtime', version = '2.0.0' }
+state-chain-runtime = {path = '../runtime', version = '0.0.1'}
 
 # Substrate dependencies
 frame-benchmarking = '2.0.0'
 frame-benchmarking-cli = '2.0.0'
 pallet-transaction-payment-rpc = '2.0.0'
 sc-basic-authorship = '0.8.0'
-sc-cli = { features = ['wasmtime'], version = '0.8.0' }
+sc-cli = {features = ['wasmtime'], version = '0.8.0'}
 sc-client-api = '2.0.0'
 sc-consensus = '0.8.0'
 sc-consensus-aura = '0.8.0'
-sc-executor = { features = ['wasmtime'], version = '0.8.0' }
+sc-executor = {features = ['wasmtime'], version = '0.8.0'}
 sc-finality-grandpa = '0.8.0'
 sc-rpc = '2.0.0'
 sc-rpc-api = '0.8.0'
-sc-service = { features = ['wasmtime'], version = '0.8.0' }
+sc-service = {features = ['wasmtime'], version = '0.8.0'}
 sc-transaction-pool = '2.0.0'
 sp-api = '2.0.0'
 sp-block-builder = '2.0.0'
@@ -54,4 +54,4 @@ substrate-frame-rpc-system = '2.0.0'
 
 [features]
 default = []
-runtime-benchmarks = ['node-template-runtime/runtime-benchmarks']
+runtime-benchmarks = ['state-chain-runtime/runtime-benchmarks']
