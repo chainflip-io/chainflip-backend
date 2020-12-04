@@ -1,17 +1,17 @@
-version: "3.2"
+version: "0.1"
 
 services:
   dev:
-    container_name: node-template
+    container_name: chainflip-state-chain
     image: paritytech/ci-linux:974ba3ac-20201006
-    working_dir: /var/www/node-template
+    working_dir: /var/www/state-chain-node
     ports:
       - "9944:9944"
     environment:
-      - CARGO_HOME=/var/www/node-template/.cargo
+      - CARGO_HOME=/var/www/state-chain-node/.cargo
     volumes:
-      - .:/var/www/node-template
+      - .:/var/www/state-chain-node
       - type: bind
         source: ./.local
         target: /root/.local
-    command: bash -c "cargo build --release && ./target/release/node-template --dev --ws-external"
+    command: bash -c "cargo build --release && ./target/release/state-chain-node --dev --ws-external"
