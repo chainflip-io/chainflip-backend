@@ -1,10 +1,9 @@
 use parking_lot::RwLock;
-use uuid::Uuid;
 
 use crate::{
     common::Timestamp,
     common::{store::KeyValueStore, Coin, PoolCoin},
-    side_chain::SideChainTx,
+    side_chain::{SideChainTx, SubstrateNodeI},
     transactions::WitnessTx,
     vault::{blockchain_connection::ethereum::EthereumClient, transactions::TransactionProvider},
 };
@@ -18,26 +17,34 @@ const START_BLOCK: u64 = 9079997;
 const NEXT_ETH_BLOCK_KEY: &'static str = "next_eth_block";
 
 /// A ethereum transaction witness
-pub struct EthereumWitness<T, C, S>
+pub struct EthereumWitness<T, C, S, N>
 where
     T: TransactionProvider,
     C: EthereumClient,
     S: KeyValueStore,
+    N: SubstrateNodeI,
 {
     transaction_provider: Arc<RwLock<T>>,
     client: Arc<C>,
     store: Arc<Mutex<S>>,
     next_ethereum_block: u64,
+    node: Arc<RwLock<N>>,
 }
 
-impl<T, C, S> EthereumWitness<T, C, S>
+impl<T, C, S, N> EthereumWitness<T, C, S, N>
 where
     T: TransactionProvider + Send + Sync + 'static,
     C: EthereumClient + Send + Sync + 'static,
     S: KeyValueStore + Send + 'static,
+    N: SubstrateNodeI + Send + Sync + 'static,
 {
     /// Create a new ethereum chain witness
-    pub fn new(client: Arc<C>, transaction_provider: Arc<RwLock<T>>, store: Arc<Mutex<S>>) -> Self {
+    pub fn new(
+        client: Arc<C>,
+        transaction_provider: Arc<RwLock<T>>,
+        store: Arc<Mutex<S>>,
+        node: Arc<RwLock<N>>,
+    ) -> Self {
         let next_ethereum_block = match store.lock().unwrap().get_data::<u64>(NEXT_ETH_BLOCK_KEY) {
             Some(next_block) => next_block,
             None => {
@@ -54,6 +61,7 @@ where
             transaction_provider,
             store,
             next_ethereum_block,
+            node,
         }
     }
 
@@ -93,10 +101,10 @@ where
             let swaps = provider.get_quote_txs();
             let stakes = provider.get_stake_quote_txs();
 
-            let mut witness_txs: Vec<WitnessTx> = vec![];
+            let mut witness_txs: Vec<SideChainTx> = vec![];
 
             for transaction in transactions {
-                if let Some(recipient) = transaction.to.as_ref() {
+                if let Some(recipient) = transaction.to {
                     let recipient = recipient.to_string();
                     let swap_quote = swaps.iter().find(|quote_info| {
                         let quote = &quote_info.inner;
@@ -136,20 +144,15 @@ where
                     );
 
                     if tx.amount > 0 {
-                        witness_txs.push(tx);
+                        witness_txs.push(tx.into());
                     }
                 }
             }
 
-            if witness_txs.len() > 0 {
-                let side_chain_txs = witness_txs
-                    .into_iter()
-                    .map(SideChainTx::WitnessTx)
-                    .collect();
+            drop(provider);
 
-                provider
-                    .add_transactions(side_chain_txs)
-                    .expect("Could not publish witness txs");
+            if witness_txs.len() > 0 {
+                self.node.write().submit_txs(witness_txs);
             }
 
             self.next_ethereum_block = self.next_ethereum_block + 1;
@@ -165,7 +168,6 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::utils::test_utils::{create_fake_stake_quote, ethereum::TestEthereumClient};
     use crate::{
         common::{
             ethereum::{Address, Hash, Transaction},
@@ -177,6 +179,10 @@ mod test {
         },
         vault::transactions::MemoryTransactionsProvider,
     };
+    use crate::{
+        side_chain::FakeSubstrateNode,
+        utils::test_utils::{create_fake_stake_quote, ethereum::TestEthereumClient},
+    };
     use rand::Rng;
 
     type TestTransactionsProvider = MemoryTransactionsProvider<MemorySideChain>;
@@ -185,14 +191,20 @@ mod test {
         client: Arc<TestEthereumClient>,
         provider: Arc<RwLock<TestTransactionsProvider>>,
         store: Arc<Mutex<MemoryKVS>>,
-        witness: EthereumWitness<TestTransactionsProvider, TestEthereumClient, MemoryKVS>,
+        witness: EthereumWitness<
+            TestTransactionsProvider,
+            TestEthereumClient,
+            MemoryKVS,
+            FakeSubstrateNode<TestTransactionsProvider>,
+        >,
     }
 
     fn setup() -> TestObjects {
         let client = Arc::new(TestEthereumClient::new());
         let provider = Arc::new(RwLock::new(get_transactions_provider()));
         let store = Arc::new(Mutex::new(MemoryKVS::new()));
-        let witness = EthereumWitness::new(client.clone(), provider.clone(), store.clone());
+        let node = Arc::new(RwLock::new(FakeSubstrateNode::new(provider.clone())));
+        let witness = EthereumWitness::new(client.clone(), provider.clone(), store.clone(), node);
 
         TestObjects {
             client,

@@ -1,6 +1,10 @@
 mod memory_side_chain;
 mod persistent_side_chain;
 
+mod substrate_node;
+
+pub use substrate_node::{FakeSubstrateNode, SubstrateNode, SubstrateNodeI};
+
 use crate::transactions::{
     OutputSentTx, OutputTx, PoolChangeTx, QuoteTx, StakeQuoteTx, StakeTx, UnstakeRequestTx,
     UnstakeTx, WitnessTx,
