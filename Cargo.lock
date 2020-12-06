@@ -3413,6 +3413,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-chainflip-transactions"
+version = "0.0.1"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-finality-tracker"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6417,6 +6430,7 @@ dependencies = [
  "frame-system-rpc-runtime-api",
  "hex-literal",
  "pallet-aura",
+ "pallet-chainflip-transactions",
  "pallet-grandpa",
  "pallet-randomness-collective-flip",
  "pallet-sudo",
