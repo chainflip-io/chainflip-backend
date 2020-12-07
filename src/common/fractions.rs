@@ -2,9 +2,10 @@ use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, convert::TryInto, fmt::Display, str::FromStr};
 
 /// Type alias for a Percentage fraction
+/// Fraction of the total owned amount to unstake
 pub type UnstakeFraction = PercentageFraction;
 
-/// Fraction of the total owned amount to unstake
+/// An atomic representation of a fraction with 2 significant digits
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
 pub struct PercentageFraction(u32);
 
