@@ -44,3 +44,8 @@ where
     <A as AsMut<[T]>>::as_mut(&mut a).clone_from_slice(slice);
     a
 }
+
+/// Calculate the effective price from the input and output amounts
+pub fn calculate_effective_price(input_amount: u128, output_amount: u128) -> Option<u128> {
+    (input_amount << 64).checked_div(output_amount)
+}

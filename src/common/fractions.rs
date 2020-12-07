@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, convert::TryInto, fmt::Display, str::FromStr};
 
-/// Type aliad for a Percentage fraction
+/// Type alias for a Percentage fraction
 pub type UnstakeFraction = PercentageFraction;
 
 /// Fraction of the total owned amount to unstake
@@ -28,7 +28,7 @@ impl PercentageFraction {
 
     /// Get the fraction value
     pub fn fraction(&self) -> f32 {
-        self.0 as f32 / 100f32
+        self.0 as f32 / Self::MAX.0 as f32
     }
 }
 
@@ -36,7 +36,7 @@ impl FromStr for PercentageFraction {
     type Err = &'static str;
 
     fn from_str(f: &str) -> Result<Self, Self::Err> {
-        let fraction: f32 = f.parse().map_err(|_| "fraction must be an integer")?;
+        let fraction: f32 = f.parse().map_err(|_| "string must be a number")?;
         fraction.try_into()
     }
 }
@@ -50,8 +50,13 @@ impl Display for PercentageFraction {
 impl TryFrom<f32> for PercentageFraction {
     type Error = &'static str;
 
+    /// Convert (0, 1] into a percentage fraction
     fn try_from(value: f32) -> Result<Self, Self::Error> {
-        let atomic = (value * 100f32).trunc() as u32;
+        if value <= 0.0 || value > 1.0 {
+            return Err("Value must be in range (0, 1]");
+        }
+
+        let atomic = (value * Self::MAX.0 as f32).trunc() as u32;
         PercentageFraction::new(atomic)
     }
 }
@@ -77,33 +82,33 @@ mod test {
 
     #[test]
     fn correctly_parses_f32() {
-        assert!(PercentageFraction::try_from(100.1f32).is_err());
+        assert!(PercentageFraction::try_from(1.1f32).is_err());
         assert!(PercentageFraction::try_from(0f32).is_err());
 
-        assert!(PercentageFraction::try_from(0.1f32).is_ok());
-        assert!(PercentageFraction::try_from(100f32).is_ok());
+        assert!(PercentageFraction::try_from(0.111f32).is_ok());
+        assert!(PercentageFraction::try_from(1f32).is_ok());
 
-        let fraction = PercentageFraction::try_from(33.33987654f32);
+        let fraction = PercentageFraction::try_from(0.3333987654f32);
         assert_eq!(fraction.unwrap().value(), 3333);
     }
 
     #[test]
     fn correctly_parses_string() {
         assert!(PercentageFraction::from_str("abc").is_err());
-        assert!(PercentageFraction::from_str("100.1").is_err());
+        assert!(PercentageFraction::from_str("1.1").is_err());
         assert!(PercentageFraction::from_str("0").is_err());
 
         assert!(PercentageFraction::from_str("0.1").is_ok());
-        assert!(PercentageFraction::from_str("100").is_ok());
+        assert!(PercentageFraction::from_str("1.0").is_ok());
 
-        let fraction = PercentageFraction::from_str("33.33987654");
+        let fraction = PercentageFraction::from_str("0.3333987654");
         assert_eq!(fraction.unwrap().value(), 3333);
     }
 
     #[test]
     fn correctly_returns_fraction() {
-        assert_eq!(PercentageFraction::new(0001).unwrap().fraction(), 0.01f32);
-        assert_eq!(PercentageFraction::new(5134).unwrap().fraction(), 51.34f32);
-        assert_eq!(PercentageFraction::new(100_00).unwrap().fraction(), 100f32);
+        assert_eq!(PercentageFraction::new(0001).unwrap().fraction(), 0.0001f32);
+        assert_eq!(PercentageFraction::new(5134).unwrap().fraction(), 0.5134f32);
+        assert_eq!(PercentageFraction::new(100_00).unwrap().fraction(), 1f32);
     }
 }

@@ -41,6 +41,8 @@ pub use fake_txs::{
 };
 use uuid::Uuid;
 
+use super::calculate_effective_price;
+
 /// Test ETH address
 pub const TEST_ETH_ADDRESS: &str = "0x70e7db0678460c5e53f1ffc9221d1c692111dcc5";
 /// Test LOKI address
@@ -81,8 +83,8 @@ pub fn create_fake_quote_tx(
         return_address: Some(i_addr),
         output: o_coin,
         output_address: o_addr,
-        effective_price: 1.0,
-        slippage_limit: 0.0,
+        effective_price: calculate_effective_price(1, 1).unwrap(),
+        slippage_limit: None,
     }
 }
 

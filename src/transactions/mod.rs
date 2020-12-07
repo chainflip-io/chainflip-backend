@@ -32,14 +32,14 @@ pub struct QuoteTx {
     pub output: Coin,
     /// The output address for the quote
     pub output_address: WalletAddress,
-    /// The ratio between the input amount and output amounts at the time of quote creation
-    pub effective_price: f64,
+    /// The ratio between the input amount and output amounts at the time of quote creation. Currently stored as ((input amount << 64) / output amount)
+    pub effective_price: u128,
     /// The maximim price slippage limit
     ///
-    /// Invariant: `0 <= slippage_limit < 1`
+    /// Invariant: `0 < slippage_limit < PercentageFraction::MAX`
     ///
-    /// Invariant: `return_address` must be set if slippage_limit > 0
-    pub slippage_limit: f32,
+    /// Invariant: `return_address` must be set if slippage_limit is set
+    pub slippage_limit: Option<PercentageFraction>,
 }
 
 impl Eq for QuoteTx {}
@@ -60,14 +60,16 @@ impl QuoteTx {
         return_address: Option<WalletAddress>,
         output: Coin,
         output_address: WalletAddress,
-        effective_price: f64,
-        slippage_limit: f32,
+        effective_price: u128,
+        slippage_limit: Option<PercentageFraction>,
     ) -> Result<Self, &'static str> {
-        if slippage_limit < 0.0 || slippage_limit >= 1.0 {
-            return Err("Slippage limit must be between 0 and 1");
+        if let Some(fraction) = slippage_limit {
+            if fraction == PercentageFraction::MAX {
+                return Err("Slippage limit must be less than 10000");
+            }
         }
 
-        if (slippage_limit > 0.0 || input.get_info().requires_return_address)
+        if (slippage_limit.is_some() || input.get_info().requires_return_address)
             && return_address.is_none()
         {
             return Err("Return address must be specified");
