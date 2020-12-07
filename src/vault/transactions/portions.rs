@@ -3,7 +3,7 @@ use std::{collections::HashMap, convert::TryInto};
 use rand::{prelude::StdRng, seq::SliceRandom, SeedableRng};
 
 use crate::{
-    common::*,
+    common::{fractions::UnstakeFraction, *},
     utils::{self, primitives::U256},
 };
 
@@ -121,8 +121,8 @@ fn amount_from_fraction_and_portion(
     let loki_owned = amount_from_portion(portion, total);
 
     let loki_owned: U256 = loki_owned.into();
-    let fraction: U256 = fraction.0.into();
-    let max_fraction: U256 = UnstakeFraction::MAX.0.into();
+    let fraction: U256 = fraction.value().into();
+    let max_fraction: U256 = UnstakeFraction::MAX.value().into();
 
     let loki: U256 = loki_owned * fraction / max_fraction;
 
@@ -724,7 +724,7 @@ mod tests {
             1000
         );
 
-        let half_fraction = UnstakeFraction::new(UnstakeFraction::MAX.0 / 2).unwrap();
+        let half_fraction = UnstakeFraction::new(UnstakeFraction::MAX.value() / 2).unwrap();
         assert_eq!(
             amount_from_fraction_and_portion(half_fraction, HALF_PORTION, 1000),
             250
