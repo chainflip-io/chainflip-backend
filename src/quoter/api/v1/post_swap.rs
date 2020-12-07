@@ -29,7 +29,7 @@ pub struct PostQuoteParams {
     /// The output address
     pub output_address: String,
     /// The slippage limit
-    pub slippage_limit: f32,
+    pub slippage_limit: u32,
 }
 
 /// Submit a swap quote

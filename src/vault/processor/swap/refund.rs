@@ -1,5 +1,10 @@
+use std::convert::TryInto;
+
+use web3::types::U256;
+
 use crate::{
-    transactions::QuoteTx, vault::processor::utils::is_swap_quote_expired,
+    common::fractions::PercentageFraction, transactions::QuoteTx, utils::calculate_effective_price,
+    vault::processor::utils::is_swap_quote_expired,
     vault::transactions::memory_provider::FulfilledTxWrapper,
 };
 
@@ -52,17 +57,30 @@ fn check_refund(
 
     // Slippage limit of 0 means we swap regardless of the limit
     let slippage_limit = quote.inner.slippage_limit;
-    if slippage_limit <= 0.0 {
+    if slippage_limit.is_none() {
         return Result::InvalidSlippageLimit;
     }
 
-    let effective_price = input_amount as f64 / output_amount as f64;
+    let effective_price = calculate_effective_price(input_amount, output_amount)
+        .expect("Failed to calculate effective price");
 
     // Calculate the slippage.
     // This will return negative value if we get a better price than what was quoted.
-    let slippage = 1.0 - (quote.inner.effective_price / effective_price);
+    let max = PercentageFraction::MAX.value();
+    let numerator = U256::from(quote.inner.effective_price)
+        .checked_mul(max.into())
+        .expect("Overflow when multiplying inner effective price by PercentageFraction::MAX");
 
-    if slippage > slippage_limit as f64 {
+    let fraction: i64 = numerator
+        .checked_div(effective_price.into())
+        .expect("Failed to calculate slippage limit")
+        .try_into()
+        .expect("Overflow when calcularing quote effective price / current effective price");
+
+    let max = max as i64;
+    let slippage = max - fraction;
+
+    if slippage > slippage_limit.unwrap().value() as i64 {
         Result::SlippageLimitExceeded
     } else {
         Result::SlippageValid
@@ -87,6 +105,8 @@ pub fn should_refund(
 
 #[cfg(test)]
 mod test {
+    use std::convert::TryFrom;
+
     use super::*;
     use crate::{common::Coin, common::Timestamp, common::WalletAddress};
 
@@ -99,8 +119,8 @@ mod test {
             Some(WalletAddress::new("0x70e7db0678460c5e53f1ffc9221d1c692111dcc5")),
             Coin::LOKI,
             WalletAddress::new("T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY"),
-            1.0,
-            0.1,
+            1,
+            Some(PercentageFraction::try_from(0.1).unwrap()),
         ).unwrap();
 
         FulfilledTxWrapper {
@@ -111,6 +131,8 @@ mod test {
 
     #[test]
     fn test_check_refund() {
+        let one_to_one_effective_price = calculate_effective_price(100, 100).unwrap();
+
         // No return address
         let mut quote = get_quote();
         quote.inner.return_address = None;
@@ -130,11 +152,8 @@ mod test {
 
         // No slippage set
         let mut quote = get_quote();
-        let values = vec![0.0, -1.0];
-        for value in values {
-            quote.inner.slippage_limit = value;
-            assert_eq!(check_refund(&quote, 100, 100), Result::InvalidSlippageLimit);
-        }
+        quote.inner.slippage_limit = None;
+        assert_eq!(check_refund(&quote, 100, 100), Result::InvalidSlippageLimit);
 
         // Zero output amount
         let quote = get_quote();
@@ -142,22 +161,22 @@ mod test {
 
         // Received more coins than quoted
         let mut quote = get_quote();
-        quote.inner.effective_price = 1.0; // 1:1 ratio
-        quote.inner.slippage_limit = 0.1;
+        quote.inner.effective_price = one_to_one_effective_price; // 1:1 ratio
+        quote.inner.slippage_limit = Some(PercentageFraction::try_from(0.1).unwrap());
 
         assert_eq!(check_refund(&quote, 100, 130), Result::SlippageValid);
 
         // Slippage not exceeded
         let mut quote = get_quote();
-        quote.inner.effective_price = 1.0; // 1:1 ratio
-        quote.inner.slippage_limit = 0.2;
+        quote.inner.effective_price = one_to_one_effective_price; // 1:1 ratio
+        quote.inner.slippage_limit = Some(PercentageFraction::try_from(0.2).unwrap());
 
         assert_eq!(check_refund(&quote, 100, 80), Result::SlippageValid);
 
         // Slippage exceeded
         let mut quote = get_quote();
-        quote.inner.effective_price = 1.0; // 1:1 ratio
-        quote.inner.slippage_limit = 0.2;
+        quote.inner.effective_price = one_to_one_effective_price; // 1:1 ratio
+        quote.inner.slippage_limit = Some(PercentageFraction::try_from(0.2).unwrap());
 
         assert_eq!(check_refund(&quote, 100, 79), Result::SlippageLimitExceeded);
     }

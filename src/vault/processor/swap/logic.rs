@@ -220,8 +220,8 @@ mod test {
             Some(eth_address),
             Coin::LOKI,
             loki_address,
-            1.0,
-            0.0,
+            1,
+            None,
         )
         .expect("Expected valid quote");
 

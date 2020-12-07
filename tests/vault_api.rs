@@ -3,7 +3,7 @@ use serde::Serialize;
 use reqwest::StatusCode;
 
 use chainflip::{
-    common::{self, *},
+    common::{self, fractions::*, *},
     transactions::UnstakeRequestTx,
     utils::test_utils::staking::get_fake_staker,
     utils::test_utils::{self, *},

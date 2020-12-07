@@ -1,5 +1,8 @@
 use super::SwapQuoteParams;
-use crate::utils::validation::{validate_address, validate_address_id};
+use crate::{
+    common::fractions::PercentageFraction,
+    utils::validation::{validate_address, validate_address_id},
+};
 
 /// Validate quote params
 pub fn validate_params(params: &SwapQuoteParams) -> Result<(), &'static str> {
@@ -44,11 +47,11 @@ pub fn validate_params(params: &SwapQuoteParams) -> Result<(), &'static str> {
 
     // Slippage
 
-    if params.slippage_limit < 0.0 || params.slippage_limit >= 1.0 {
-        return Err("Slippage limit must be between 0 and 1");
+    if params.slippage_limit >= PercentageFraction::MAX.value() {
+        return Err("Slippage limit must be between 0 and 10000");
     }
 
-    if params.slippage_limit > 0.0 && params.input_return_address.is_none() {
+    if params.slippage_limit > 0 && params.input_return_address.is_none() {
         return Err("Input return address not provided");
     }
 
@@ -78,7 +81,7 @@ mod test {
             input_amount: "1000000000".to_string(),
             output_coin: Coin::ETH,
             output_address: ETH_ADDRESS.to_string(),
-            slippage_limit: 0.0,
+            slippage_limit: 0,
         }
     }
 
@@ -158,14 +161,14 @@ mod test {
 
     #[test]
     fn validates_slippage() {
-        let invalid_values: Vec<f32> = vec![-1.0, 1.0, 1.1];
+        let invalid_values: Vec<u32> = vec![10_001, 11_000];
         for value in invalid_values.into_iter() {
             let mut params = get_valid_params();
             params.slippage_limit = value;
 
             assert_eq!(
                 validate_params(&params).unwrap_err(),
-                "Slippage limit must be between 0 and 1"
+                "Slippage limit must be between 0 and 10000"
             );
         }
 
@@ -178,7 +181,7 @@ mod test {
             input_amount: "1000000000".to_string(),
             output_coin: Coin::LOKI,
             output_address: LOKI_ADDRESS.to_string(),
-            slippage_limit: 0.1,
+            slippage_limit: 10,
         };
 
         assert_eq!(

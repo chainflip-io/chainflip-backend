@@ -271,7 +271,7 @@ mod test {
     use super::*;
 
     use crate::{
-        common::*,
+        common::{fractions::*, *},
         transactions::UnstakeRequestTx,
         transactions::{OutputSentTx, PoolChangeTx, WitnessTx},
         utils::test_utils::TEST_ETH_ADDRESS,

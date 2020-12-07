@@ -76,7 +76,7 @@ where
         effective_price: quote.effective_price,
         output_coin: quote.output,
         output_address: quote.output_address.to_string(),
-        slippage_limit: quote.slippage_limit,
+        slippage_limit: quote.slippage_limit.map_or(0, |fraction| fraction.value()),
     })
 }
 

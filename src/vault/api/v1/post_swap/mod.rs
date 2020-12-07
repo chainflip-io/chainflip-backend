@@ -1,9 +1,9 @@
 use crate::{
-    common::{api::ResponseError, Coin, LokiPaymentId, Timestamp, WalletAddress},
+    common::{api::ResponseError, fractions::*, Coin, LokiPaymentId, Timestamp, WalletAddress},
     transactions::QuoteTx,
     utils::{
         address::{generate_btc_address_from_index, generate_eth_address},
-        price,
+        calculate_effective_price, price,
     },
     vault::{processor::utils::get_swap_expire_timestamp, transactions::TransactionProvider},
 };
@@ -36,7 +36,7 @@ pub struct SwapQuoteParams {
     /// Output address
     pub output_address: String,
     /// Slippage limit
-    pub slippage_limit: f32,
+    pub slippage_limit: u32,
 }
 
 /// Response for the v1/quote endpoint
@@ -55,14 +55,14 @@ pub struct SwapQuoteResponse {
     pub input_address: String,
     /// Input return address (User specified)
     pub input_return_address: Option<String>,
-    /// The effective price (Input amount / Output amount)
-    pub effective_price: f64,
+    /// The effective price ((Input amount << 64) / Output amount)
+    pub effective_price: u128,
     /// Output coin
     pub output_coin: Coin,
     /// Output address
     pub output_address: String,
     /// Slippage limit
-    pub slippage_limit: f32,
+    pub slippage_limit: u32,
 }
 
 /// Request a swap quote
@@ -108,7 +108,16 @@ pub async fn swap<T: TransactionProvider>(
         return Err(bad_request("Not enough liquidity"));
     }
 
-    let effective_price = input_amount as f64 / estimated_output_amount as f64;
+    let effective_price = match calculate_effective_price(input_amount, estimated_output_amount) {
+        Some(price) => price,
+        None => {
+            warn!(
+                "Failed to calculate effective price for input {} and output {}",
+                input_amount, estimated_output_amount
+            );
+            return Err(internal_server_error());
+        }
+    };
 
     // Generate addresses
     let input_address = match input_coin {
@@ -167,6 +176,16 @@ pub async fn swap<T: TransactionProvider>(
         }
     };
 
+    let slippage_limit = {
+        if params.slippage_limit > 0 {
+            let fraction =
+                PercentageFraction::new(params.slippage_limit).map_err(|err| bad_request(err))?;
+            Some(fraction)
+        } else {
+            None
+        }
+    };
+
     let quote = QuoteTx::new(
         Timestamp::now(),
         input_coin,
@@ -176,7 +195,7 @@ pub async fn swap<T: TransactionProvider>(
         output_coin,
         WalletAddress::new(&params.output_address),
         effective_price,
-        params.slippage_limit,
+        slippage_limit,
     )
     .map_err(|err| {
         error!(
@@ -234,7 +253,7 @@ mod test {
             input_amount: "1000000000".to_string(),
             output_coin: Coin::ETH,
             output_address: "0x70e7db0678460c5e53f1ffc9221d1c692111dcc5".to_string(),
-            slippage_limit: 0.0,
+            slippage_limit: 0,
         }
     }
 
@@ -251,9 +270,9 @@ mod test {
             input_address_id: quote_params.input_address_id.clone(),
             return_address: quote_params.input_return_address.clone().map(WalletAddress),
             output: quote_params.output_coin,
-            slippage_limit: quote_params.slippage_limit,
+            slippage_limit: None,
             output_address: WalletAddress::new(&quote_params.output_address),
-            effective_price: 1.0
+            effective_price: 1
         };
         provider.add_transactions(vec![quote.into()]).unwrap();
 

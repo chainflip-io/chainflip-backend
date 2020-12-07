@@ -6,7 +6,7 @@ use warp::http::StatusCode;
 use parking_lot::RwLock;
 
 use crate::{
-    common::{api::ResponseError, *},
+    common::{api::ResponseError, fractions::UnstakeFraction, *},
     transactions::UnstakeRequestTx,
     utils::validation::validate_address,
     vault::transactions::TransactionProvider,
