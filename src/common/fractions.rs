@@ -11,7 +11,7 @@ pub struct PercentageFraction(u32);
 
 impl PercentageFraction {
     /// Value representing 100%
-    pub const MAX: PercentageFraction = PercentageFraction(100_00);
+    pub const MAX: PercentageFraction = PercentageFraction(10_000);
 
     /// Create an instance if valid
     pub fn new(fraction: u32) -> Result<Self, &'static str> {
