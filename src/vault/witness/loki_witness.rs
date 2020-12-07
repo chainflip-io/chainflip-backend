@@ -10,13 +10,13 @@ use crossbeam_channel::Receiver;
 use parking_lot::RwLock;
 
 use crate::{common::Timestamp, side_chain::SideChainTx};
-use crate::{side_chain::SubstrateNodeI, vault::blockchain_connection::Payments};
+use crate::{side_chain::IStateChainNode, vault::blockchain_connection::Payments};
 use crate::{transactions::WitnessTx, vault::transactions::TransactionProvider};
 
 use crate::common::Coin;
 
 /// Witness Mock
-pub struct LokiWitness<T: TransactionProvider, S: SubstrateNodeI> {
+pub struct LokiWitness<T: TransactionProvider, S: IStateChainNode> {
     transaction_provider: Arc<RwLock<T>>,
     substrate_node: Arc<RwLock<S>>,
     loki_connection: Receiver<Payments>,
@@ -25,7 +25,7 @@ pub struct LokiWitness<T: TransactionProvider, S: SubstrateNodeI> {
 impl<T, S> LokiWitness<T, S>
 where
     T: TransactionProvider + Send + Sync + 'static,
-    S: SubstrateNodeI + Send + Sync + 'static,
+    S: IStateChainNode + Send + Sync + 'static,
 {
     /// Create Loki witness
     pub fn new(

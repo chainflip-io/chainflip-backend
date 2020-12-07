@@ -3,7 +3,7 @@ use parking_lot::RwLock;
 use crate::{
     common::Timestamp,
     common::{store::KeyValueStore, Coin, PoolCoin},
-    side_chain::{SideChainTx, SubstrateNodeI},
+    side_chain::{IStateChainNode, SideChainTx},
     transactions::WitnessTx,
     vault::{blockchain_connection::ethereum::EthereumClient, transactions::TransactionProvider},
 };
@@ -22,7 +22,7 @@ where
     T: TransactionProvider,
     C: EthereumClient,
     S: KeyValueStore,
-    N: SubstrateNodeI,
+    N: IStateChainNode,
 {
     transaction_provider: Arc<RwLock<T>>,
     client: Arc<C>,
@@ -36,7 +36,7 @@ where
     T: TransactionProvider + Send + Sync + 'static,
     C: EthereumClient + Send + Sync + 'static,
     S: KeyValueStore + Send + 'static,
-    N: SubstrateNodeI + Send + Sync + 'static,
+    N: IStateChainNode + Send + Sync + 'static,
 {
     /// Create a new ethereum chain witness
     pub fn new(
@@ -180,7 +180,7 @@ mod test {
         vault::transactions::MemoryTransactionsProvider,
     };
     use crate::{
-        side_chain::FakeSubstrateNode,
+        side_chain::FakeStateChainNode,
         utils::test_utils::{create_fake_stake_quote, ethereum::TestEthereumClient},
     };
     use rand::Rng;
@@ -195,7 +195,7 @@ mod test {
             TestTransactionsProvider,
             TestEthereumClient,
             MemoryKVS,
-            FakeSubstrateNode<TestTransactionsProvider>,
+            FakeStateChainNode<TestTransactionsProvider>,
         >,
     }
 
@@ -203,7 +203,7 @@ mod test {
         let client = Arc::new(TestEthereumClient::new());
         let provider = Arc::new(RwLock::new(get_transactions_provider()));
         let store = Arc::new(Mutex::new(MemoryKVS::new()));
-        let node = Arc::new(RwLock::new(FakeSubstrateNode::new(provider.clone())));
+        let node = Arc::new(RwLock::new(FakeStateChainNode::new(provider.clone())));
         let witness = EthereumWitness::new(client.clone(), provider.clone(), store.clone(), node);
 
         TestObjects {

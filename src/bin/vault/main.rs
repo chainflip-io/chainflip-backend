@@ -4,7 +4,7 @@ extern crate log;
 use chainflip::{
     common::store::PersistentKVS,
     logging,
-    side_chain::{PeristentSideChain, SubstrateNode},
+    side_chain::{PeristentSideChain, StateChainNode},
     utils::{address::generate_btc_address_from_index, bip44},
     vault::{
         api::APIServer,
@@ -89,7 +89,7 @@ fn main() {
     let db_connection = rusqlite::Connection::open("blocks.db").expect("Could not open database");
     let kvs = Arc::new(Mutex::new(PersistentKVS::new(db_connection)));
 
-    let node = Arc::new(RwLock::new(SubstrateNode::new()));
+    let node = Arc::new(RwLock::new(StateChainNode::new()));
 
     let loki_witness = LokiWitness::new(loki_block_receiver, provider.clone(), node.clone());
     let eth_witness = EthereumWitness::new(

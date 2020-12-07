@@ -1,6 +1,6 @@
 use crate::{
     common::{Coin, PoolCoin, Timestamp},
-    side_chain::{SideChainTx, SubstrateNodeI},
+    side_chain::{IStateChainNode, SideChainTx},
     transactions::WitnessTx,
     vault::{blockchain_connection::btc::BitcoinSPVClient, transactions::TransactionProvider},
 };
@@ -14,7 +14,7 @@ pub struct BtcSPVWitness<T, C, S>
 where
     T: TransactionProvider,
     C: BitcoinSPVClient,
-    S: SubstrateNodeI,
+    S: IStateChainNode,
 {
     transaction_provider: Arc<RwLock<T>>,
     node: Arc<RwLock<S>>,
@@ -26,7 +26,7 @@ impl<T, C, S> BtcSPVWitness<T, C, S>
 where
     T: TransactionProvider + Send + Sync + 'static,
     C: BitcoinSPVClient + Send + Sync + 'static,
-    S: SubstrateNodeI + Send + Sync + 'static,
+    S: IStateChainNode + Send + Sync + 'static,
 {
     /// Create a new bitcoin chain witness
     pub fn new(client: Arc<C>, transaction_provider: Arc<RwLock<T>>, node: Arc<RwLock<S>>) -> Self {
@@ -125,7 +125,7 @@ where
 mod test {
     use super::*;
     use crate::{
-        side_chain::FakeSubstrateNode, utils::test_utils::btc::TestBitcoinSPVClient,
+        side_chain::FakeStateChainNode, utils::test_utils::btc::TestBitcoinSPVClient,
         utils::test_utils::create_fake_stake_quote,
         vault::blockchain_connection::btc::spv::BtcUTXO,
     };
@@ -144,7 +144,7 @@ mod test {
         witness: BtcSPVWitness<
             TestTransactionsProvider,
             TestBitcoinSPVClient,
-            FakeSubstrateNode<TestTransactionsProvider>,
+            FakeStateChainNode<TestTransactionsProvider>,
         >,
     }
 
@@ -154,7 +154,7 @@ mod test {
         let client = Arc::new(TestBitcoinSPVClient::new());
         let provider = Arc::new(RwLock::new(get_transactions_provider()));
 
-        let node = Arc::new(RwLock::new(FakeSubstrateNode::new(provider.clone())));
+        let node = Arc::new(RwLock::new(FakeStateChainNode::new(provider.clone())));
         let witness = BtcSPVWitness::new(client.clone(), provider.clone(), node);
 
         TestObjects {

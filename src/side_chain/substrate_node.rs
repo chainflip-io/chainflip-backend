@@ -6,23 +6,23 @@ use super::SideChainTx;
 
 /// Interface to the substrate node
 #[async_trait]
-pub trait SubstrateNodeI {
+pub trait IStateChainNode {
     /// Submit transactions to the node's mempool
     fn submit_txs(&self, txs: Vec<SideChainTx>);
 }
 
 /// Real connection to the local Substrate Node (TODO)
-pub struct SubstrateNode {}
+pub struct StateChainNode {}
 
-impl SubstrateNode {
+impl StateChainNode {
     /// Create default (TODO)
     pub fn new() -> Self {
-        SubstrateNode {}
+        StateChainNode {}
     }
 }
 
 #[async_trait]
-impl SubstrateNodeI for SubstrateNode {
+impl IStateChainNode for StateChainNode {
     fn submit_txs(&self, _txs: Vec<SideChainTx>) {
         info!("TODO: send transacitons to substrate");
     }
@@ -31,22 +31,22 @@ impl SubstrateNodeI for SubstrateNode {
 /// Test double for Substrate Node that always writes to the
 /// provider as if transactions are immidiately added a
 /// finalized block
-pub struct FakeSubstrateNode<T>
+pub struct FakeStateChainNode<T>
 where
     T: TransactionProvider,
 {
     provider: Arc<RwLock<T>>,
 }
 
-impl<T: TransactionProvider> FakeSubstrateNode<T> {
+impl<T: TransactionProvider> FakeStateChainNode<T> {
     /// Construct an instance given transaction provider
     pub fn new(provider: Arc<RwLock<T>>) -> Self {
-        FakeSubstrateNode { provider }
+        FakeStateChainNode { provider }
     }
 }
 
 #[async_trait]
-impl<T> SubstrateNodeI for FakeSubstrateNode<T>
+impl<T> IStateChainNode for FakeStateChainNode<T>
 where
     T: TransactionProvider,
 {
