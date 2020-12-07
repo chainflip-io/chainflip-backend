@@ -3413,6 +3413,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-staking"
+version = "0.0.1"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-chainflip-transactions"
 version = "0.0.1"
 dependencies = [
@@ -6433,6 +6446,7 @@ dependencies = [
  "pallet-chainflip-transactions",
  "pallet-grandpa",
  "pallet-randomness-collective-flip",
+ "pallet-session",
  "pallet-sudo",
  "pallet-timestamp",
  "parity-scale-codec",
