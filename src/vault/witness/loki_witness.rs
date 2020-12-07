@@ -8,28 +8,34 @@ use std::sync::Arc;
 
 use crossbeam_channel::Receiver;
 use parking_lot::RwLock;
-use uuid::Uuid;
 
-use crate::vault::blockchain_connection::{Payment, Payments};
 use crate::{common::Timestamp, side_chain::SideChainTx};
+use crate::{side_chain::IStateChainNode, vault::blockchain_connection::Payments};
 use crate::{transactions::WitnessTx, vault::transactions::TransactionProvider};
 
 use crate::common::Coin;
 
 /// Witness Mock
-pub struct LokiWitness<T: TransactionProvider> {
+pub struct LokiWitness<T: TransactionProvider, S: IStateChainNode> {
     transaction_provider: Arc<RwLock<T>>,
+    substrate_node: Arc<RwLock<S>>,
     loki_connection: Receiver<Payments>,
 }
 
-impl<T> LokiWitness<T>
+impl<T, S> LokiWitness<T, S>
 where
     T: TransactionProvider + Send + Sync + 'static,
+    S: IStateChainNode + Send + Sync + 'static,
 {
     /// Create Loki witness
-    pub fn new(bc: Receiver<Payments>, transaction_provider: Arc<RwLock<T>>) -> LokiWitness<T> {
+    pub fn new(
+        bc: Receiver<Payments>,
+        transaction_provider: Arc<RwLock<T>>,
+        node: Arc<RwLock<S>>,
+    ) -> LokiWitness<T, S> {
         LokiWitness {
             loki_connection: bc,
+            substrate_node: node,
             transaction_provider,
         }
     }
@@ -82,6 +88,11 @@ where
     /// Stuff to do whenever we receive a new block from
     /// a foreign chain
     fn process_main_chain_payments(&mut self, payments: Payments) {
+        // We need to read the state to know which quotes we should witness
+
+        // TODO: now that there is a delay between submitting a witness and
+        // finding it (finalized) on the chain we need to make sure we don't submit
+        // the same witness twice
         self.transaction_provider.write().sync();
 
         let witness_txs = {
@@ -123,11 +134,9 @@ where
             witness_txs
         };
 
-        if witness_txs.len() > 0 {
-            self.transaction_provider
-                .write()
-                .add_transactions(witness_txs)
-                .expect("Could not publish witness tx");
-        }
+        let node = self.substrate_node.write();
+
+        // TODO: synchronously or asynchronously?
+        node.submit_txs(witness_txs);
     }
 }

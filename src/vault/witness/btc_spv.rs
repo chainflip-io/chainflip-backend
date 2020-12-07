@@ -1,36 +1,38 @@
 use crate::{
     common::{Coin, PoolCoin, Timestamp},
-    side_chain::SideChainTx,
+    side_chain::{IStateChainNode, SideChainTx},
     transactions::WitnessTx,
     vault::{blockchain_connection::btc::BitcoinSPVClient, transactions::TransactionProvider},
 };
 
-use itertools::Itertools;
 use parking_lot::RwLock;
-use uuid::Uuid;
 
 use std::sync::Arc;
 
 /// A Bitcoin transaction witness
-pub struct BtcSPVWitness<T, C>
+pub struct BtcSPVWitness<T, C, S>
 where
     T: TransactionProvider,
     C: BitcoinSPVClient,
+    S: IStateChainNode,
 {
     transaction_provider: Arc<RwLock<T>>,
+    node: Arc<RwLock<S>>,
     client: Arc<C>,
 }
 
 /// How much of this code can be shared between chains??
-impl<T, C> BtcSPVWitness<T, C>
+impl<T, C, S> BtcSPVWitness<T, C, S>
 where
     T: TransactionProvider + Send + Sync + 'static,
     C: BitcoinSPVClient + Send + Sync + 'static,
+    S: IStateChainNode + Send + Sync + 'static,
 {
     /// Create a new bitcoin chain witness
-    pub fn new(client: Arc<C>, transaction_provider: Arc<RwLock<T>>) -> Self {
+    pub fn new(client: Arc<C>, transaction_provider: Arc<RwLock<T>>, node: Arc<RwLock<S>>) -> Self {
         BtcSPVWitness {
             client,
+            node,
             transaction_provider,
         }
     }
@@ -68,8 +70,7 @@ where
                 .map(|quote| {
                     let quote_inner = &quote.inner;
                     (quote_inner.id, quote_inner.input_address.clone())
-                })
-                .collect_vec();
+                });
 
             let stake_id_address_pairs = stakes
                 .iter()
@@ -77,11 +78,10 @@ where
                 .map(|quote| {
                     let quote_inner = &quote.inner;
                     (quote_inner.id, quote_inner.coin_input_address.clone())
-                })
-                .collect_vec();
+                });
 
-            let mut witness_txs: Vec<WitnessTx> = vec![];
-            for (id, address) in [swap_id_address_pairs, stake_id_address_pairs].concat() {
+            let mut witness_txs: Vec<SideChainTx> = vec![];
+            for (id, address) in swap_id_address_pairs.chain(stake_id_address_pairs) {
                 let utxos = match self.client.get_address_unspent(&address).await {
                     Ok(utxos) => utxos,
                     Err(err) => {
@@ -109,22 +109,14 @@ where
                         Coin::BTC,
                     );
 
-                    witness_txs.push(tx);
+                    witness_txs.push(tx.into());
                 }
             }
             witness_txs
         };
 
         if witness_txs.len() > 0 {
-            let side_chain_txs = witness_txs
-                .into_iter()
-                .map(SideChainTx::WitnessTx)
-                .collect();
-
-            self.transaction_provider
-                .write()
-                .add_transactions(side_chain_txs)
-                .expect("Could not publish witness txs");
+            self.node.write().submit_txs(witness_txs);
         }
     }
 }
@@ -133,7 +125,8 @@ where
 mod test {
     use super::*;
     use crate::{
-        utils::test_utils::btc::TestBitcoinSPVClient, utils::test_utils::create_fake_stake_quote,
+        side_chain::FakeStateChainNode, utils::test_utils::btc::TestBitcoinSPVClient,
+        utils::test_utils::create_fake_stake_quote,
         vault::blockchain_connection::btc::spv::BtcUTXO,
     };
 
@@ -148,7 +141,11 @@ mod test {
     struct TestObjects {
         client: Arc<TestBitcoinSPVClient>,
         provider: Arc<RwLock<TestTransactionsProvider>>,
-        witness: BtcSPVWitness<TestTransactionsProvider, TestBitcoinSPVClient>,
+        witness: BtcSPVWitness<
+            TestTransactionsProvider,
+            TestBitcoinSPVClient,
+            FakeStateChainNode<TestTransactionsProvider>,
+        >,
     }
 
     const BTC_PUBKEY: &str = "msjFLavJYLoF3hs3rgTrmBanpaHntjDgWQ";
@@ -156,7 +153,9 @@ mod test {
     fn setup() -> TestObjects {
         let client = Arc::new(TestBitcoinSPVClient::new());
         let provider = Arc::new(RwLock::new(get_transactions_provider()));
-        let witness = BtcSPVWitness::new(client.clone(), provider.clone());
+
+        let node = Arc::new(RwLock::new(FakeStateChainNode::new(provider.clone())));
+        let witness = BtcSPVWitness::new(client.clone(), provider.clone(), node);
 
         TestObjects {
             client,
