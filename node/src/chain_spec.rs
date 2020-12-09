@@ -1,7 +1,7 @@
 use sp_core::{Pair, Public, sr25519};
 use state_chain_runtime::{
 	AccountId, AuraConfig, GenesisConfig, GrandpaConfig, BalancesConfig,
-	SudoConfig, SystemConfig, WASM_BINARY, Signature, ValidatorSetConfig, SessionConfig, opaque::SessionKeys
+	SudoConfig, SystemConfig, WASM_BINARY, Signature, ValidatorConfig, SessionConfig, opaque::SessionKeys
 };
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_finality_grandpa::AuthorityId as GrandpaId;
@@ -144,7 +144,7 @@ fn testnet_genesis(
 			code: wasm_binary.to_vec(),
 			changes_trie_config: Default::default(),
 		}),
-		validatorset: Some(ValidatorSetConfig {
+		pallet_cf_validator: Some(ValidatorConfig {
 			validators: initial_authorities.iter().map(|x| x.0.clone()).collect::<Vec<_>>(),
 		}),
 		pallet_session: Some(SessionConfig {

@@ -3428,7 +3428,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-cf-staking"
+name = "pallet-cf-transactions"
 version = "0.0.1"
 dependencies = [
  "frame-support",
@@ -3441,12 +3441,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-chainflip-transactions"
+name = "pallet-cf-validator"
 version = "0.0.1"
 dependencies = [
  "frame-support",
  "frame-system",
+ "pallet-session",
  "parity-scale-codec",
+ "serde",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -6459,7 +6461,8 @@ dependencies = [
  "hex-literal",
  "pallet-aura",
  "pallet-balances",
- "pallet-chainflip-transactions",
+ "pallet-cf-transactions",
+ "pallet-cf-validator",
  "pallet-grandpa",
  "pallet-randomness-collective-flip",
  "pallet-session",
@@ -6478,7 +6481,6 @@ dependencies = [
  "sp-std",
  "sp-transaction-pool",
  "sp-version",
- "substrate-validator-set",
  "substrate-wasm-builder-runner",
 ]
 
@@ -6634,22 +6636,6 @@ dependencies = [
  "log",
  "prometheus",
  "tokio 0.2.22",
-]
-
-[[package]]
-name = "substrate-validator-set"
-version = "0.2.0"
-source = "git+https://github.com/gautamdhameja/substrate-validator-set.git#0d0953e6bcd34b1b9c5dd0e8f1255642d1d216d9"
-dependencies = [
- "frame-support",
- "frame-system",
- "pallet-session",
- "parity-scale-codec",
- "serde",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
 ]
 
 [[package]]

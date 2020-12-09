@@ -38,7 +38,6 @@ pub use pallet_timestamp::Call as TimestampCall;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{Perbill, Permill};
-pub use validatorset;
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -118,19 +117,19 @@ pub fn native_version() -> NativeVersion {
     }
 }
 
-impl validatorset::Trait for Runtime {
+impl pallet_cf_validator::Trait for Runtime {
 	type Event = Event;
 }
 
 impl pallet_session::Trait for Runtime {
 	type SessionHandler = <opaque::SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
-	type ShouldEndSession = ValidatorSet;
-	type SessionManager = ValidatorSet;
+	type ShouldEndSession = Validator;
+	type SessionManager = Validator;
 	type Event = Event;
 	type Keys = opaque::SessionKeys;
-	type NextSessionRotation = ValidatorSet;
+	type NextSessionRotation = Validator;
 	type ValidatorId = <Self as frame_system::Trait>::AccountId;
-	type ValidatorIdOf = validatorset::ValidatorOf<Self>;
+	type ValidatorIdOf = pallet_cf_validator::ValidatorOf<Self>;
 	type DisabledValidatorsThreshold = ();
 	type WeightInfo = ();
 }
@@ -231,7 +230,7 @@ impl pallet_grandpa::Trait for Runtime {
     type WeightInfo = ();
 }
 
-impl pallet_chainflip_transactions::Trait for Runtime {
+impl pallet_cf_transactions::Trait for Runtime {
     type Event = Event;
 }
 
@@ -280,11 +279,11 @@ construct_runtime!(
         Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
-		ValidatorSet: validatorset::{Module, Call, Storage, Event<T>, Config<T>},
+		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
 		Aura: pallet_aura::{Module, Config<T>, Inherent},
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
         Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
-        Transactions: pallet_chainflip_transactions::{Module, Call, Event<T>},
+        Transactions: pallet_cf_transactions::{Module, Call, Event<T>},
 	}
 );
 
