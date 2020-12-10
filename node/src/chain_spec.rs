@@ -1,6 +1,6 @@
 use sp_core::{Pair, Public, sr25519};
 use state_chain_runtime::{
-	AccountId, AuraConfig, GenesisConfig, GrandpaConfig, BalancesConfig,
+	AccountId, AuraConfig, GenesisConfig, GrandpaConfig,
 	SudoConfig, SystemConfig, WASM_BINARY, Signature, ValidatorConfig, SessionConfig, opaque::SessionKeys
 };
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -68,9 +68,6 @@ pub fn development_config() -> Result<ChainSpec, String> {
 			// Sudo account
 			get_account_id_from_seed::<sr25519::Public>("Alice"),
 			true,
-			vec![
-				get_account_id_from_seed::<sr25519::Public>("Alice"),
-			],
 		),
 		// Bootnodes
 		vec![],
@@ -103,20 +100,6 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 			// Sudo account
 			get_account_id_from_seed::<sr25519::Public>("Alice"),
 			true,
-			vec![
-				get_account_id_from_seed::<sr25519::Public>("Alice"),
-				get_account_id_from_seed::<sr25519::Public>("Bob"),
-				get_account_id_from_seed::<sr25519::Public>("Charlie"),
-				get_account_id_from_seed::<sr25519::Public>("Dave"),
-				get_account_id_from_seed::<sr25519::Public>("Eve"),
-				get_account_id_from_seed::<sr25519::Public>("Ferdie"),
-				get_account_id_from_seed::<sr25519::Public>("Alice//stash"),
-				get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
-				get_account_id_from_seed::<sr25519::Public>("Charlie//stash"),
-				get_account_id_from_seed::<sr25519::Public>("Dave//stash"),
-				get_account_id_from_seed::<sr25519::Public>("Eve//stash"),
-				get_account_id_from_seed::<sr25519::Public>("Ferdie//stash"),
-			],
 		),
 		// Bootnodes
 		vec![],
@@ -137,7 +120,6 @@ fn testnet_genesis(
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>,
 	root_key: AccountId,
 	_enable_println: bool,
-	endowed_accounts: Vec<AccountId>,
 ) -> GenesisConfig {
 	GenesisConfig {
 		frame_system: Some(SystemConfig {
@@ -161,9 +143,6 @@ fn testnet_genesis(
 		pallet_sudo: Some(SudoConfig {
 			// Assign network admin rights.
 			key: root_key,
-		}),
-		pallet_balances: Some(BalancesConfig {
-			balances: endowed_accounts.iter().cloned().map(|k|(k, 1 << 60)).collect(),
 		}),
 	}
 }
