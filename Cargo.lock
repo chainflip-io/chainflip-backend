@@ -3413,12 +3413,27 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-chainflip-transactions"
+name = "pallet-cf-transactions"
 version = "0.0.1"
 dependencies = [
  "frame-support",
  "frame-system",
  "parity-scale-codec",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-cf-validator"
+version = "0.0.1"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "pallet-session",
+ "parity-scale-codec",
+ "serde",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -6430,9 +6445,11 @@ dependencies = [
  "frame-system-rpc-runtime-api",
  "hex-literal",
  "pallet-aura",
- "pallet-chainflip-transactions",
+ "pallet-cf-transactions",
+ "pallet-cf-validator",
  "pallet-grandpa",
  "pallet-randomness-collective-flip",
+ "pallet-session",
  "pallet-sudo",
  "pallet-timestamp",
  "parity-scale-codec",

@@ -142,3 +142,22 @@ pub struct OutputSent {
     pub fee: u128,
     pub transaction_id: String,
 }
+
+// ======= STAKING ========
+#[derive(Clone, Debug, Decode, Encode, PartialEq, Eq)]
+pub struct Stake {
+    pub id: Uuid,
+    pub timestamp: Timestamp,
+    pub staker_eth_address: WalletAddress,
+    pub vault_id: u32,
+    pub witness_tx: Uuid
+}
+
+#[derive(Clone, Debug, Decode, Encode, PartialEq, Eq)]
+pub struct Unstake {
+    pub id: Uuid,
+    pub timestamp: Timestamp,
+    pub staker_eth_address: WalletAddress,
+    pub vault_id: u32,
+    pub witness_tx: Uuid
+}

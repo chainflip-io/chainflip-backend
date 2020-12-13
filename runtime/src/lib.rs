@@ -12,7 +12,7 @@ use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::traits::{
-    BlakeTwo256, Block as BlockT, IdentifyAccount, IdentityLookup, NumberFor, Saturating, Verify,
+    BlakeTwo256, Block as BlockT, IdentifyAccount, IdentityLookup, NumberFor, Saturating, Verify, OpaqueKeys
 };
 use sp_runtime::{
     create_runtime_str, generic, impl_opaque_keys,
@@ -114,6 +114,23 @@ pub fn native_version() -> NativeVersion {
     }
 }
 
+impl pallet_cf_validator::Trait for Runtime {
+	type Event = Event;
+}
+
+impl pallet_session::Trait for Runtime {
+	type SessionHandler = <opaque::SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
+	type ShouldEndSession = Validator;
+	type SessionManager = Validator;
+	type Event = Event;
+	type Keys = opaque::SessionKeys;
+	type NextSessionRotation = Validator;
+	type ValidatorId = <Self as frame_system::Trait>::AccountId;
+	type ValidatorIdOf = pallet_cf_validator::ValidatorOf<Self>;
+	type DisabledValidatorsThreshold = ();
+	type WeightInfo = ();
+}
+
 parameter_types! {
     pub const BlockHashCount: BlockNumber = 2400;
     /// We allow for 2 seconds of compute with a 6 second average block time.
@@ -182,7 +199,7 @@ impl frame_system::Trait for Runtime {
     /// What to do if an account is fully reaped from the system.
     type OnKilledAccount = ();
     /// The data to be stored in an account.
-    type AccountData = ();
+    type AccountData =();
     /// Weight information for the extrinsics of this pallet.
     type SystemWeightInfo = ();
 }
@@ -210,7 +227,7 @@ impl pallet_grandpa::Trait for Runtime {
     type WeightInfo = ();
 }
 
-impl pallet_chainflip_transactions::Trait for Runtime {
+impl pallet_cf_transactions::Trait for Runtime {
     type Event = Event;
 }
 
@@ -231,21 +248,27 @@ impl pallet_sudo::Trait for Runtime {
     type Call = Call;
 }
 
-// Create the runtime by composing the FRAME pallets that were previously configured.
+parameter_types! {
+	pub const ExistentialDeposit: u128 = 0;
+	pub const MaxLocks: u32 = 50;
+}
+
 construct_runtime!(
-    pub enum Runtime where
-        Block = Block,
-        NodeBlock = opaque::Block,
-        UncheckedExtrinsic = UncheckedExtrinsic
-    {
-        System: frame_system::{Module, Call, Config, Storage, Event<T>},
+	pub enum Runtime where
+		Block = Block,
+		NodeBlock = opaque::Block,
+		UncheckedExtrinsic = UncheckedExtrinsic
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
         RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
-        Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
-        Aura: pallet_aura::{Module, Config<T>, Inherent},
-        Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
+		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
+		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
+		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
+		Aura: pallet_aura::{Module, Config<T>, Inherent},
+		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
         Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
-        Transactions: pallet_chainflip_transactions::{Module, Call, Event<T>},
-    }
+        Transactions: pallet_cf_transactions::{Module, Call, Event<T>},
+	}
 );
 
 /// The address format for describing accounts.
