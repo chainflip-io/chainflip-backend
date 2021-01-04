@@ -7,7 +7,7 @@ use crate::{
     transactions::WitnessTx,
 };
 
-/// Typed representation of the response for /get_witness_txs
+/// Typed representation of the response for /get_witnesses
 #[serde(rename_all = "camelCase")]
 #[derive(Debug, Deserialize, Serialize)]
 pub(super) struct WitnessQueryResponse {
@@ -15,12 +15,12 @@ pub(super) struct WitnessQueryResponse {
     pub witness_txs: Vec<WitnessTx>,
 }
 
-/// Get the side chain witness transactions
+/// Get all known transaction witnesses
 ///
 /// # Example Query
 ///
-/// > GET /v1/get_witness_txs
-pub(super) async fn get_witness_txs<S: ISideChain>(
+/// > GET /v1/get_witnesses
+pub(super) async fn get_witnesses<S: ISideChain>(
     side_chain: Arc<Mutex<S>>,
 ) -> Result<WitnessQueryResponse, ResponseError> {
     let side_chain = side_chain.lock().unwrap();
@@ -76,11 +76,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn check_get_witness_txs() {
+    async fn check_get_witnesses() {
         let chain = init();
         let chain = Arc::new(Mutex::new(chain));
 
-        let res = get_witness_txs(chain).await.expect("result should be OK");
+        let res = get_witnesses(chain).await.expect("result should be OK");
 
         assert_eq!(res.witness_txs.len(), 2);
     }

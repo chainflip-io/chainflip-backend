@@ -27,7 +27,7 @@ use get_blocks::{get_blocks, BlocksQueryParams};
 
 /// Get witness transactions endpoint
 mod get_witness_txs;
-use get_witness_txs::get_witness_txs;
+use get_witness_txs::get_witnesses;
 
 /// Get portions endpoint
 mod get_portions;
@@ -60,10 +60,10 @@ pub fn endpoints<S: ISideChain + Send, T: TransactionProvider + Send + Sync>(
         .map(get_blocks)
         .and_then(api::respond);
 
-    let witnesses = warp::path!("witness_txs")
+    let witnesses = warp::path!("witnesses")
         .and(warp::get())
         .and(using(side_chain.clone()))
-        .map(get_witness_txs)
+        .map(get_witnesses)
         .and_then(api::respond);
 
     let swap = warp::path!("swap")
