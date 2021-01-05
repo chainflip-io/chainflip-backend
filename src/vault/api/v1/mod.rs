@@ -25,6 +25,10 @@ pub mod post_unstake;
 pub mod get_blocks;
 use get_blocks::{get_blocks, BlocksQueryParams};
 
+/// Get witness transactions endpoint
+mod get_witness_txs;
+use get_witness_txs::get_witnesses;
+
 /// Get portions endpoint
 mod get_portions;
 use get_portions::get_portions;
@@ -54,6 +58,12 @@ pub fn endpoints<S: ISideChain + Send, T: TransactionProvider + Send + Sync>(
         .and(warp::query::<BlocksQueryParams>())
         .and(using(side_chain.clone()))
         .map(get_blocks)
+        .and_then(api::respond);
+
+    let witnesses = warp::path!("witnesses")
+        .and(warp::get())
+        .and(using(side_chain.clone()))
+        .map(get_witnesses)
         .and_then(api::respond);
 
     let swap = warp::path!("swap")
@@ -87,5 +97,12 @@ pub fn endpoints<S: ISideChain + Send, T: TransactionProvider + Send + Sync>(
         .and_then(api::respond);
 
     warp::path!("v1" / ..) // Add path prefix /v1 to all our routes
-        .and(blocks.or(swap).or(stake).or(unstake).or(portions))
+        .and(
+            blocks
+                .or(swap)
+                .or(stake)
+                .or(unstake)
+                .or(portions)
+                .or(witnesses),
+        )
 }
