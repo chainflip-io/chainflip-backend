@@ -1,13 +1,11 @@
-use std::{collections::HashMap, sync::Arc};
-
-use itertools::Itertools;
-use parking_lot::RwLock;
-
 use crate::{
-    common::Coin, side_chain::SideChainTx, transactions::OutputTx,
-    vault::transactions::memory_provider::FulfilledTxWrapper,
+    side_chain::SideChainTx, vault::transactions::memory_provider::FulfilledTxWrapper,
     vault::transactions::TransactionProvider,
 };
+use chainflip_common::types::{chain::Output, coin::Coin};
+use itertools::Itertools;
+use parking_lot::RwLock;
+use std::{collections::HashMap, sync::Arc};
 
 mod coin_processor;
 mod senders;
@@ -26,7 +24,7 @@ pub async fn process_outputs<T: TransactionProvider + Sync, C: CoinProcessor>(
     process(provider, coin_processor).await;
 }
 
-fn group_by_coins(outputs: &[FulfilledTxWrapper<OutputTx>]) -> HashMap<Coin, Vec<OutputTx>> {
+fn group_by_coins(outputs: &[FulfilledTxWrapper<Output>]) -> HashMap<Coin, Vec<Output>> {
     outputs
         .iter()
         .filter(|tx| !tx.fulfilled)
@@ -68,24 +66,19 @@ async fn process<T: TransactionProvider + Sync, C: CoinProcessor>(
 
 #[cfg(test)]
 mod test {
+    use super::*;
+    use crate::{
+        side_chain::ISideChain, side_chain::MemorySideChain, utils::test_utils::data::TestData,
+        vault::transactions::MemoryTransactionsProvider,
+    };
+    use chainflip_common::types::{chain::OutputSent, Timestamp, UUIDv4};
     use std::{
         collections::HashMap,
         sync::{Arc, Mutex},
     };
 
-    use crate::{
-        common::{Timestamp, WalletAddress},
-        side_chain::ISideChain,
-        side_chain::MemorySideChain,
-        transactions::OutputSentTx,
-        utils::test_utils::create_fake_output_tx,
-        vault::transactions::MemoryTransactionsProvider,
-    };
-
-    use super::*;
-
     struct TestCoinProcessor {
-        map: HashMap<Coin, Vec<OutputSentTx>>,
+        map: HashMap<Coin, Vec<OutputSent>>,
     }
 
     impl TestCoinProcessor {
@@ -95,25 +88,25 @@ mod test {
             }
         }
 
-        fn set_txs(&mut self, coin: Coin, txs: Vec<OutputSentTx>) {
+        fn set_txs(&mut self, coin: Coin, txs: Vec<OutputSent>) {
             self.map.insert(coin, txs);
         }
     }
 
     #[async_trait]
     impl CoinProcessor for TestCoinProcessor {
-        async fn process(&self, coin: Coin, _outputs: &[OutputTx]) -> Vec<OutputSentTx> {
+        async fn process(&self, coin: Coin, _outputs: &[Output]) -> Vec<OutputSent> {
             self.map.get(&coin).cloned().unwrap_or(vec![])
         }
     }
 
     #[test]
     fn groups_outputs_by_coins_correctly() {
-        let loki_output = create_fake_output_tx(Coin::LOKI);
-        let second_loki_output = create_fake_output_tx(Coin::LOKI);
-        let eth_output = create_fake_output_tx(Coin::ETH);
-        let second_eth_output = create_fake_output_tx(Coin::ETH);
-        let fulfilled_output = create_fake_output_tx(Coin::LOKI);
+        let loki_output = TestData::output(Coin::LOKI, 100);
+        let second_loki_output = TestData::output(Coin::LOKI, 100);
+        let eth_output = TestData::output(Coin::ETH, 100);
+        let second_eth_output = TestData::output(Coin::ETH, 100);
+        let fulfilled_output = TestData::output(Coin::LOKI, 100);
 
         let txs = vec![
             FulfilledTxWrapper {
@@ -151,7 +144,7 @@ mod test {
     #[tokio::test]
     async fn process_stores_output_sent_txs() {
         let mut chain = MemorySideChain::new();
-        let output_tx = create_fake_output_tx(Coin::LOKI);
+        let output_tx = TestData::output(Coin::LOKI, 100);
         chain.add_block(vec![output_tx.clone().into()]).unwrap();
 
         let chain = Arc::new(Mutex::new(chain));
@@ -163,15 +156,15 @@ mod test {
         let current_output_tx = provider.read().get_output_txs().first().unwrap().clone();
         assert_eq!(current_output_tx.fulfilled, false);
 
-        let output_sent_tx = OutputSentTx {
-            id: uuid::Uuid::new_v4(),
+        let output_sent_tx = OutputSent {
+            id: UUIDv4::new(),
             timestamp: Timestamp::now(),
-            output_txs: vec![output_tx.id],
+            outputs: vec![output_tx.id],
             coin: Coin::LOKI,
-            address: WalletAddress::new("address"),
+            address: "address".into(),
             amount: 100,
             fee: 100,
-            transaction_id: "".to_owned(),
+            transaction_id: "".into(),
         };
 
         let mut coin_processor = TestCoinProcessor::new();
@@ -187,7 +180,7 @@ mod test {
     #[tokio::test]
     async fn process_with_no_sent_output_tx() {
         let mut chain = MemorySideChain::new();
-        let output_tx = create_fake_output_tx(Coin::LOKI);
+        let output_tx = TestData::output(Coin::LOKI, 100);
         chain.add_block(vec![output_tx.clone().into()]).unwrap();
 
         let chain = Arc::new(Mutex::new(chain));

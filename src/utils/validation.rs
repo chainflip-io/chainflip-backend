@@ -1,4 +1,5 @@
-use crate::common::{ethereum, Coin, LokiPaymentId, LokiWalletAddress};
+use crate::common::{ethereum, LokiPaymentId, LokiWalletAddress};
+use chainflip_common::types::coin::Coin;
 use std::str::FromStr;
 
 /// Validate an address from the given `coin`
@@ -11,10 +12,6 @@ pub fn validate_address(coin: Coin, address: &str) -> Result<(), String> {
         Coin::BTC => bitcoin::Address::from_str(address)
             .map(|_| ())
             .map_err(|err| err.to_string()),
-        x @ _ => {
-            warn!("Address validation missing for {}", x);
-            Err("No address validation found".to_owned())
-        }
     }
 }
 
@@ -33,10 +30,6 @@ pub fn validate_address_id(coin: Coin, address_id: &str) -> Result<(), String> {
             Err(_) => Err("Address id must be an signed integer".to_owned()),
         },
         Coin::LOKI => LokiPaymentId::from_str(address_id).map(|_| ()),
-        x @ _ => {
-            warn!("Address id validation missing for {}", x);
-            Err("No address if validation found".to_owned())
-        }
     }
 }
 

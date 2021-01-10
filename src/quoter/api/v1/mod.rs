@@ -1,11 +1,9 @@
 use crate::{
-    common::{
-        api::{self, using},
-        coins::Coin,
-    },
+    common::api::{self, using},
     quoter::{vault_node::VaultNodeInterface, StateProvider},
     vault::api::v1::PortionsParams,
 };
+use chainflip_common::types::coin::Coin;
 use std::{
     collections::{BTreeSet, HashMap},
     sync::{Arc, Mutex},
@@ -40,12 +38,14 @@ pub mod utils;
 #[cfg(test)]
 mod test;
 
+pub type InputIdCache = HashMap<Coin, BTreeSet<Vec<u8>>>;
+
 /// Get a pre-populated input id cache
-pub fn get_input_id_cache<S>(state: &Arc<Mutex<S>>) -> HashMap<Coin, BTreeSet<String>>
+pub fn get_input_id_cache<S>(state: &Arc<Mutex<S>>) -> InputIdCache
 where
     S: StateProvider,
 {
-    let mut cache: HashMap<Coin, BTreeSet<String>> = HashMap::new();
+    let mut cache: InputIdCache = HashMap::new();
     let quotes = state.lock().unwrap().get_swap_quotes();
 
     for quote in quotes {
@@ -58,14 +58,14 @@ where
     let stakes = state.lock().unwrap().get_stake_quotes();
     for quote in stakes {
         cache
-            .entry(quote.coin_type.get_coin())
+            .entry(quote.pool)
             .or_insert(BTreeSet::new())
             .insert(quote.coin_input_address_id);
 
         cache
             .entry(Coin::LOKI)
             .or_insert(BTreeSet::new())
-            .insert(quote.loki_input_address_id.to_string());
+            .insert(quote.base_input_address_id);
     }
 
     cache

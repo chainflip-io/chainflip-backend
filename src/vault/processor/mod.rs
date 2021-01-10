@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::{common::store::KeyValueStore, vault::transactions::TransactionProvider};
 
+use chainflip_common::types::Network;
 pub use output::{
     BtcOutputSender, CoinProcessor, EthOutputSender, LokiSender, OutputCoinProcessor,
 };
@@ -29,6 +30,7 @@ where
     tx_provider: Arc<RwLock<T>>,
     db: KVS,
     coin_sender: S,
+    network: Network,
 }
 
 /// Events emited by the processor
@@ -47,20 +49,21 @@ where
     S: CoinProcessor + Send + 'static,
 {
     /// Constructor taking a transaction provider
-    pub fn new(tx_provider: Arc<RwLock<T>>, kvs: KVS, coin_sender: S) -> Self {
+    pub fn new(tx_provider: Arc<RwLock<T>>, kvs: KVS, coin_sender: S, network: Network) -> Self {
         SideChainProcessor {
             tx_provider,
             db: kvs,
             coin_sender,
+            network,
         }
     }
 
     async fn on_blockchain_progress(&mut self) {
-        staking::process_stake_quotes(&mut self.tx_provider);
+        staking::process_stake_quotes(&mut self.tx_provider, self.network);
 
-        staking::process_unstake_requests(&mut *self.tx_provider.write());
+        staking::process_unstake_requests(&mut *self.tx_provider.write(), self.network);
 
-        swap::process_swaps(&mut self.tx_provider);
+        swap::process_swaps(&mut self.tx_provider, self.network);
 
         output::process_outputs(&mut self.tx_provider, &mut self.coin_sender).await;
     }

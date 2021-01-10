@@ -1,5 +1,5 @@
-use crate::common::Coin;
 use crate::utils::primitives::U512;
+use chainflip_common::types::coin::Coin;
 use std::convert::TryFrom;
 
 /// A structure for representing a normalised amount

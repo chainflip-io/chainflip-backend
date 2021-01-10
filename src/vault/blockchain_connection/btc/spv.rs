@@ -1,25 +1,21 @@
 use super::{BitcoinSPVClient, IBitcoinSend, SendTransaction};
 use crate::{
-    common::{Coin, GenericCoinAmount, WalletAddress},
-    utils::{
-        address::generate_btc_address_from_index,
-        bip44::{self, RawKey},
-    },
+    common::{GenericCoinAmount, WalletAddress},
+    utils::bip44::KeyPair,
 };
 use async_trait::async_trait;
-use bip44::KeyPair;
-use bitcoin::util::bip143::SigHashCache;
 use bitcoin::{
     blockdata::{script::*, transaction::*},
     consensus::encode::{deserialize, serialize},
+    util::bip143::SigHashCache,
     Transaction, Txid,
 };
+use chainflip_common::types::coin::Coin;
 use core::str::FromStr;
 use hdwallet::secp256k1::{Message, PublicKey, Secp256k1};
 use hex::FromHex;
 use serde::Deserialize;
-use std::fmt::Display;
-use std::fmt::Formatter;
+use std::fmt::{Display, Formatter};
 
 /// Electrum SPV error
 #[derive(Debug, Deserialize)]
@@ -570,8 +566,6 @@ impl IBitcoinSend for BtcSPVClient {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::utils::test_utils::btc::TestBitcoinSPVClient;
-    use bitcoin::PrivateKey;
 
     // The (testnet) segwit public key for this address is: tb1q6898gg3tkkjurdpl4cghaqgmyvs29p4x4h0552
     fn get_key_pair() -> KeyPair {
@@ -581,7 +575,7 @@ mod test {
         .unwrap()
     }
 
-    fn get_test_BtcSPVClient() -> BtcSPVClient {
+    fn get_test_btc_spv_client() -> BtcSPVClient {
         BtcSPVClient::new(
             7777,
             "bitcoinrpc".to_string(),
@@ -605,7 +599,7 @@ mod test {
     #[tokio::test]
     #[ignore = "Dependent on BTC SPV Client"]
     async fn get_address_unspent_test() {
-        let client = get_test_BtcSPVClient();
+        let client = get_test_btc_spv_client();
         let address = WalletAddress("tb1q62pygrp8af7v0gzdjycnnqcm9syhpdg6a0kunk".to_string());
         let result = client.get_address_unspent(&address).await;
 
@@ -631,7 +625,7 @@ mod test {
     #[tokio::test]
     #[ignore = "Depends on SPV client"]
     async fn constructs_raw_tx_signs_and_sends_tx() {
-        let client = get_test_BtcSPVClient();
+        let client = get_test_btc_spv_client();
 
         let amount = GenericCoinAmount::from_atomic(Coin::BTC, 300);
         let keypair = get_key_pair();
@@ -662,7 +656,7 @@ mod test {
     #[tokio::test]
     #[ignore = "Depends on SPV client"]
     async fn fee_greater_than_amount_to_be_sent() {
-        let client = get_test_BtcSPVClient();
+        let client = get_test_btc_spv_client();
 
         // fee will always be more than 10 sats
         let amount = GenericCoinAmount::from_atomic(Coin::BTC, 10);
@@ -700,7 +694,7 @@ mod test {
     #[tokio::test]
     #[ignore = "Depends on SPV Client"]
     async fn get_fee_rate() {
-        let client = get_test_BtcSPVClient();
+        let client = get_test_btc_spv_client();
         // confirm with an ETA confirmation of 4 blocks
         let resp = client.get_fee_rate(FeeMethod::Eta, 4).await;
         assert!(resp.is_ok());
@@ -746,7 +740,7 @@ mod test {
     #[tokio::test]
     #[ignore = "Depends on SPV Client"]
     async fn get_estimated_fee() {
-        let client = get_test_BtcSPVClient();
+        let client = get_test_btc_spv_client();
         let amount = GenericCoinAmount::from_atomic(Coin::BTC, 400);
         let keypair = get_key_pair();
 
@@ -779,7 +773,7 @@ mod test {
     #[tokio::test]
     #[ignore = "Depends on SPV Client"]
     async fn get_address_balance_test() {
-        let client = get_test_BtcSPVClient();
+        let client = get_test_btc_spv_client();
         let address = WalletAddress("tb1q62pygrp8af7v0gzdjycnnqcm9syhpdg6a0kunk".to_string());
         let result = client.get_address_balance(address).await;
 

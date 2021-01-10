@@ -1,16 +1,22 @@
 use crate::{
-    common::{api::ResponseError, fractions::*, Coin, LokiPaymentId, Timestamp, WalletAddress},
-    transactions::QuoteTx,
+    common::{
+        api::ResponseError, input_address_id::input_address_id_string_to_bytes, LokiPaymentId,
+    },
     utils::{
         address::{generate_btc_address_from_index, generate_eth_address},
         calculate_effective_price, price,
     },
     vault::{processor::utils::get_swap_expire_timestamp, transactions::TransactionProvider},
 };
+use chainflip_common::types::{
+    chain::{SwapQuote, Validate},
+    coin::Coin,
+    fraction::PercentageFraction,
+    Timestamp, UUIDv4,
+};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::{str::FromStr, sync::Arc};
-use uuid::Uuid;
 
 use super::{
     utils::{bad_request, internal_server_error},
@@ -44,7 +50,7 @@ pub struct SwapQuoteParams {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SwapQuoteResponse {
     /// Quote id
-    pub id: Uuid,
+    pub id: UUIDv4,
     /// Quote creation timestamp in milliseconds
     pub created_at: u128,
     /// Quote expire timestamp in milliseconds
@@ -88,10 +94,13 @@ pub async fn swap<T: TransactionProvider>(
     let mut provider = provider.write();
     provider.sync();
 
+    let input_address_id = input_address_id_string_to_bytes(input_coin, &params.input_address_id)
+        .map_err(|_| bad_request("Invalid input address id"))?;
+
     // Ensure we don't have a quote with the address
     if let Some(_) = provider.get_quote_txs().iter().find(|quote_info| {
         let quote = &quote_info.inner;
-        quote.input == input_coin && quote.input_address_id == params.input_address_id
+        quote.input == input_coin && quote.input_address_id == input_address_id
     }) {
         return Err(bad_request("Quote already exists for input address id"));
     }
@@ -158,7 +167,7 @@ pub async fn swap<T: TransactionProvider>(
                 index,
                 true,
                 bitcoin::AddressType::P2wpkh,
-                &config.net_type,
+                config.net_type,
             ) {
                 Ok(address) => address,
                 Err(err) => {
@@ -166,13 +175,6 @@ pub async fn swap<T: TransactionProvider>(
                     return Err(internal_server_error());
                 }
             }
-        }
-        _ => {
-            warn!(
-                "Input address generation not implemented for {}",
-                input_coin
-            );
-            return Err(internal_server_error());
         }
     };
 
@@ -186,25 +188,45 @@ pub async fn swap<T: TransactionProvider>(
         }
     };
 
-    let quote = QuoteTx::new(
-        Timestamp::now(),
-        input_coin,
-        WalletAddress::new(&input_address),
-        params.input_address_id,
-        params.input_return_address.clone().map(WalletAddress),
-        output_coin,
-        WalletAddress::new(&params.output_address),
+    let input_address_id = match input_coin {
+        Coin::BTC | Coin::ETH => {
+            let index = match params.input_address_id.parse::<u32>() {
+                Ok(index) => index,
+                Err(_) => return Err(bad_request("Incorrect input address id")),
+            };
+
+            index.to_be_bytes().to_vec()
+        }
+        Coin::LOKI => {
+            let payment_id = match LokiPaymentId::from_str(&params.input_address_id) {
+                Ok(id) => id,
+                Err(_) => return Err(bad_request("Incorrect input address id")),
+            };
+
+            payment_id.to_bytes().to_vec()
+        }
+    };
+
+    let quote = SwapQuote {
+        id: UUIDv4::new(),
+        timestamp: Timestamp::now(),
+        input: input_coin,
+        input_address: input_address.clone().into(),
+        input_address_id,
+        return_address: params.input_return_address.clone().map(|id| id.into()),
+        output: output_coin,
+        output_address: params.output_address.clone().into(),
         effective_price,
         slippage_limit,
-    )
-    .map_err(|err| {
+    };
+
+    if let Err(err) = quote.validate(config.net_type) {
         error!(
-            "Failed to create quote tx for params: {:?} due to error {}",
-            original_params,
-            err.clone()
+            "Failed to create swap quote for params: {:?} due to error {}",
+            original_params, err
         );
-        bad_request(err)
-    })?;
+        return Err(bad_request(err));
+    }
 
     provider
         .add_transactions(vec![quote.clone().into()])
@@ -229,19 +251,17 @@ pub async fn swap<T: TransactionProvider>(
 
 #[cfg(test)]
 mod test {
+    use chainflip_common::types::{chain::PoolChange, Network};
+
     use super::*;
-    use crate::{
-        common::coins::PoolCoin, transactions::PoolChangeTx,
-        utils::test_utils::get_transactions_provider, utils::test_utils::TEST_ROOT_KEY,
-        vault::config::NetType,
-    };
+    use crate::{utils::test_utils::get_transactions_provider, utils::test_utils::TEST_ROOT_KEY};
 
     fn config() -> Config {
         Config {
             loki_wallet_address: "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".to_string(),
             eth_master_root_key: TEST_ROOT_KEY.to_string(),
             btc_master_root_key: TEST_ROOT_KEY.to_string(),
-            net_type: NetType::Testnet
+            net_type: Network::Testnet
         }
     }
 
@@ -262,16 +282,16 @@ mod test {
         let quote_params = params();
 
         let mut provider = get_transactions_provider();
-        let quote = QuoteTx {
-            id: Uuid::new_v4(),
+        let quote = SwapQuote {
+            id: UUIDv4::new(),
             timestamp: Timestamp::now(),
             input: quote_params.input_coin,
-            input_address: WalletAddress::new("T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY"),
-            input_address_id: quote_params.input_address_id.clone(),
-            return_address: quote_params.input_return_address.clone().map(WalletAddress),
+            input_address: "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".into(),
+            input_address_id: LokiPaymentId::from_str(&quote_params.input_address_id).unwrap().to_bytes().to_vec(),
+            return_address: quote_params.input_return_address.clone().map(|id| id.into()),
             output: quote_params.output_coin,
             slippage_limit: None,
-            output_address: WalletAddress::new(&quote_params.output_address),
+            output_address: quote_params.output_address.clone().into(),
             effective_price: 1
         };
         provider.add_transactions(vec![quote.into()]).unwrap();
@@ -299,7 +319,13 @@ mod test {
 
         // Pool with no liquidity
         {
-            let tx = PoolChangeTx::new(PoolCoin::ETH, 0, 0);
+            let tx = PoolChange {
+                id: UUIDv4::new(),
+                timestamp: Timestamp::now(),
+                pool: Coin::ETH,
+                depth_change: 0,
+                base_depth_change: 0,
+            };
 
             let mut provider = provider.write();
             provider.add_transactions(vec![tx.into()]).unwrap();
@@ -315,7 +341,13 @@ mod test {
     #[tokio::test]
     async fn returns_response_if_successful() {
         let mut provider = get_transactions_provider();
-        let tx = PoolChangeTx::new(PoolCoin::ETH, 10_000_000_000, 50_000_000_000);
+        let tx = PoolChange {
+            id: UUIDv4::new(),
+            timestamp: Timestamp::now(),
+            pool: Coin::ETH,
+            depth_change: 10_000_000_000,
+            base_depth_change: 50_000_000_000,
+        };
         provider.add_transactions(vec![tx.into()]).unwrap();
 
         let provider = Arc::new(RwLock::new(provider));

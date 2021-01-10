@@ -1,9 +1,8 @@
 use crate::{
-    common::{coins::GenericCoinAmount, ethereum::Address, ethereum::Hash, ethereum::Transaction},
+    common::{coins::GenericCoinAmount, ethereum::Hash, ethereum::Transaction},
     utils::bip44::KeyPair,
 };
-use hdwallet::{secp256k1::SecretKey, ExtendedPrivKey};
-
+use chainflip_common::types::addresses::EthereumAddress;
 /// Web3 client implementation
 pub mod web3;
 
@@ -20,9 +19,9 @@ pub struct EstimateResult {
 #[derive(Debug)]
 pub struct EstimateRequest {
     /// The address that is sending
-    pub from: Address,
+    pub from: EthereumAddress,
     /// The address that is receiving
-    pub to: Address,
+    pub to: EthereumAddress,
     /// The amount being sent
     pub amount: GenericCoinAmount,
 }
@@ -33,7 +32,7 @@ pub struct SendTransaction {
     /// The sending wallet
     pub from: KeyPair,
     /// The address that is receiving
-    pub to: Address,
+    pub to: EthereumAddress,
     /// The amount being sent
     pub amount: GenericCoinAmount,
     /// The gas limit
@@ -56,7 +55,7 @@ pub trait EthereumClient {
     async fn get_estimated_fee(&self, tx: &EstimateRequest) -> Result<EstimateResult, String>;
 
     /// Get the balance of the given address
-    async fn get_balance(&self, address: Address) -> Result<u128, String>;
+    async fn get_balance(&self, address: EthereumAddress) -> Result<u128, String>;
 
     /// Send a transaction
     async fn send(&self, tx: &SendTransaction) -> Result<Hash, String>;

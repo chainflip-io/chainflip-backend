@@ -1,6 +1,7 @@
 use crate::common::LokiAmount;
+use chainflip_common::types::coin::{Coin, CoinInfo};
 use serde::{Deserialize, Serialize};
-use std::{convert::TryFrom, fmt::Display, str::FromStr};
+use std::{convert::TryFrom, fmt::Display};
 
 /// A representation of a valid pool coin
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
@@ -9,8 +10,8 @@ pub struct PoolCoin(Coin);
 impl PoolCoin {
     /// Construct a PoolCoin from a Coin
     pub fn from(coin: Coin) -> Result<Self, &'static str> {
-        if coin == Coin::LOKI {
-            Err("Cannot have a LOKI coin pool")
+        if coin == Coin::BASE_COIN {
+            Err("Cannot have a BASE coin pool")
         } else {
             Ok(PoolCoin(coin))
         }
@@ -50,126 +51,6 @@ impl Display for PoolCoin {
     }
 }
 
-/// Information about a coin
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct CoinInfo {
-    /// The full name of the coin
-    pub name: &'static str,
-    /// The coin symbol
-    pub symbol: Coin,
-    /// The amount of decimals the coin uses.
-    pub decimals: u32,
-    /// Whether this coin requires a return address
-    /// (so it could be refunded in necessary)
-    pub requires_return_address: bool,
-}
-
-impl CoinInfo {
-    /// Get 1 unit of this coin in atomic value.
-    ///
-    /// This is the same as doing: `10^decimals`
-    pub fn one_unit(&self) -> u128 {
-        10u128.pow(self.decimals)
-    }
-}
-
-/// Enum for supported coin types
-#[derive(Debug, Serialize, Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
-pub enum Coin {
-    /// Bitcoin
-    BTC,
-    /// Ethereum
-    ETH,
-    /// Loki
-    LOKI,
-}
-
-impl<'de> Deserialize<'de> for Coin {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        use serde::de::{self, Unexpected, Visitor};
-        use std::fmt;
-
-        struct PIDVisitor;
-
-        impl<'de> Visitor<'de> for PIDVisitor {
-            type Value = Coin;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                write!(formatter, "Expecting a coin as a string")
-            }
-
-            fn visit_str<E>(self, s: &str) -> Result<Coin, E>
-            where
-                E: de::Error,
-            {
-                Coin::from_str(s).map_err(|_| de::Error::invalid_value(Unexpected::Str(s), &self))
-            }
-        }
-
-        deserializer.deserialize_str(PIDVisitor)
-    }
-}
-
-/// Invalid coin literal error
-pub const COIN_PARSING_ERROR: &'static str = "failed to parse coin";
-
-impl FromStr for Coin {
-    type Err = &'static str;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "LOKI" | "Loki" | "loki" => Ok(Coin::LOKI),
-            "BTC" | "btc" => Ok(Coin::BTC),
-            "ETH" | "eth" => Ok(Coin::ETH),
-            _ => Err(COIN_PARSING_ERROR),
-        }
-    }
-}
-
-impl Coin {
-    /// The list of supported coins
-    pub const SUPPORTED: &'static [Coin] = &[Coin::ETH, Coin::LOKI, Coin::BTC];
-
-    /// Check if this coin is supported
-    pub fn is_supported(&self) -> bool {
-        Self::SUPPORTED.contains(self)
-    }
-
-    /// Get information about this coin
-    pub fn get_info(&self) -> CoinInfo {
-        match self {
-            Coin::LOKI => CoinInfo {
-                name: "Loki Network",
-                symbol: Coin::LOKI,
-                decimals: 9,
-                requires_return_address: true,
-            },
-            Coin::ETH => CoinInfo {
-                name: "Ethereum",
-                symbol: Coin::ETH,
-                decimals: 18,
-                requires_return_address: false,
-            },
-            Coin::BTC => CoinInfo {
-                name: "Bitcoin",
-                symbol: Coin::BTC,
-                decimals: 8,
-                requires_return_address: false,
-            },
-        }
-    }
-}
-
-impl Display for Coin {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
 /// Generic coin amount interface
 pub trait CoinAmount {
     /// Get the internal representation of the amount in atomic values
@@ -179,7 +60,8 @@ pub trait CoinAmount {
     fn to_decimal(&self) -> f64 {
         let atomic_amount = self.to_atomic() as f64;
         let info = self.coin_info();
-        atomic_amount / info.one_unit() as f64
+        let one_unit = 10u128.pow(info.decimals);
+        atomic_amount / one_unit as f64
     }
 
     /// Get coin info for current coin type
@@ -317,18 +199,6 @@ mod tests {
                 requires_return_address: false,
             }
         }
-    }
-
-    #[test]
-    fn valid_coin_literal_parsing() {
-        assert!(Coin::from_str("ETH").is_ok());
-        assert!(Coin::from_str("eth").is_ok());
-
-        assert!(Coin::from_str("BTC").is_ok());
-        assert!(Coin::from_str("btc").is_ok());
-
-        assert!(Coin::from_str("LOKI").is_ok());
-        assert!(Coin::from_str("loki").is_ok());
     }
 
     #[test]

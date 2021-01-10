@@ -1,30 +1,33 @@
+use crate::{
+    common::liquidity_provider::{LiquidityProvider, MemoryLiquidityProvider},
+    constants::SWAP_QUOTE_HARD_EXPIRE,
+    side_chain::SideChainTx,
+    vault::transactions::{
+        memory_provider::{FulfilledTxWrapper, WitnessTxWrapper},
+        TransactionProvider,
+    },
+};
+use chainflip_common::types::{
+    chain::{SwapQuote, Witness},
+    Network, Timestamp,
+};
+use parking_lot::RwLock;
+use std::sync::Arc;
+
 mod logic;
 mod refund;
 
-use std::sync::Arc;
-
-use parking_lot::RwLock;
-
-use crate::{
-    common::liquidity_provider::LiquidityProvider,
-    common::liquidity_provider::MemoryLiquidityProvider, common::Timestamp,
-    constants::SWAP_QUOTE_HARD_EXPIRE, side_chain::SideChainTx, transactions::QuoteTx,
-    transactions::WitnessTx, vault::transactions::memory_provider::FulfilledTxWrapper,
-    vault::transactions::memory_provider::WitnessTxWrapper,
-    vault::transactions::TransactionProvider,
-};
-
 #[derive(Debug)]
 struct Swap {
-    quote: FulfilledTxWrapper<QuoteTx>,
-    witnesses: Vec<WitnessTx>,
+    quote: FulfilledTxWrapper<SwapQuote>,
+    witnesses: Vec<Witness>,
 }
 
 fn get_swaps<T: TransactionProvider>(provider: &T) -> Vec<Swap> {
     let now = Timestamp::now();
-    let is_hard_expired = |quote: &QuoteTx| now.0 - quote.timestamp.0 >= SWAP_QUOTE_HARD_EXPIRE;
+    let is_hard_expired = |quote: &SwapQuote| now.0 - quote.timestamp.0 >= SWAP_QUOTE_HARD_EXPIRE;
 
-    let quotes: Vec<&FulfilledTxWrapper<QuoteTx>> = provider
+    let quotes: Vec<&FulfilledTxWrapper<SwapQuote>> = provider
         .get_quote_txs()
         .iter()
         .filter(|tx| !is_hard_expired(&tx.inner))
@@ -39,9 +42,9 @@ fn get_swaps<T: TransactionProvider>(provider: &T) -> Vec<Swap> {
     let mut swaps: Vec<Swap> = vec![];
 
     for quote in quotes {
-        let witnesses: Vec<WitnessTx> = witnesses
+        let witnesses: Vec<Witness> = witnesses
             .iter()
-            .filter(|tx| tx.inner.quote_id == quote.inner.id && tx.inner.coin == quote.inner.input)
+            .filter(|tx| tx.inner.quote == quote.inner.id && tx.inner.coin == quote.inner.input)
             .map(|tx| tx.inner.clone())
             .collect();
 
@@ -56,7 +59,11 @@ fn get_swaps<T: TransactionProvider>(provider: &T) -> Vec<Swap> {
     swaps
 }
 
-fn process<L: LiquidityProvider>(provider: &L, swaps: &[Swap]) -> Vec<SideChainTx> {
+fn process<L: LiquidityProvider>(
+    provider: &L,
+    swaps: &[Swap],
+    network: Network,
+) -> Vec<SideChainTx> {
     if swaps.is_empty() {
         return vec![];
     }
@@ -67,7 +74,7 @@ fn process<L: LiquidityProvider>(provider: &L, swaps: &[Swap]) -> Vec<SideChainT
     let mut transactions: Vec<SideChainTx> = vec![];
 
     for swap in swaps.iter() {
-        match logic::process_swap(&liquidity, &swap.quote, &swap.witnesses) {
+        match logic::process_swap(&liquidity, &swap.quote, &swap.witnesses, network) {
             Ok(result) => {
                 // Update liquidity
                 for tx in result.pool_changes {
@@ -75,10 +82,10 @@ fn process<L: LiquidityProvider>(provider: &L, swaps: &[Swap]) -> Vec<SideChainT
                         .update_liquidity(&tx)
                         .expect("Failed to update liquidity in a swap!");
 
-                    transactions.push(SideChainTx::PoolChangeTx(tx));
+                    transactions.push(SideChainTx::PoolChange(tx));
                 }
 
-                transactions.push(SideChainTx::OutputTx(result.output));
+                transactions.push(SideChainTx::Output(result.output));
             }
             // On an error we can just log and try again later
             Err(err) => error!("Failed to process swap {:?}. {}", swap, err),
@@ -89,12 +96,12 @@ fn process<L: LiquidityProvider>(provider: &L, swaps: &[Swap]) -> Vec<SideChainT
 }
 
 /// Process all pending swaps
-pub fn process_swaps<T: TransactionProvider>(provider: &mut Arc<RwLock<T>>) {
+pub fn process_swaps<T: TransactionProvider>(provider: &mut Arc<RwLock<T>>, network: Network) {
     provider.write().sync();
 
     let swaps = get_swaps(&*provider.read());
 
-    let transactions = process(&*provider.read(), &swaps);
+    let transactions = process(&*provider.read(), &swaps, network);
 
     if transactions.len() > 0 {
         provider
@@ -106,17 +113,18 @@ pub fn process_swaps<T: TransactionProvider>(provider: &mut Arc<RwLock<T>>) {
 
 #[cfg(test)]
 mod test {
-    use std::sync::{Arc, Mutex};
-
-    use uuid::Uuid;
-
     use crate::{
-        common::{Coin, GenericCoinAmount, Liquidity, PoolCoin, WalletAddress},
+        common::{GenericCoinAmount, Liquidity, PoolCoin},
         side_chain::{ISideChain, MemorySideChain},
-        transactions::{OutputTx, PoolChangeTx},
-        utils::test_utils::create_fake_quote_tx_eth_loki,
+        utils::test_utils::data::TestData,
         vault::transactions::MemoryTransactionsProvider,
     };
+    use chainflip_common::types::{
+        chain::{Output, OutputParent},
+        coin::Coin,
+        UUIDv4,
+    };
+    use std::sync::{Arc, Mutex};
 
     use super::*;
 
@@ -142,16 +150,8 @@ mod test {
         }
     }
 
-    fn get_witness(quote: &QuoteTx, amount: u128) -> WitnessTx {
-        WitnessTx::new(
-            Timestamp::now(),
-            quote.id,
-            Uuid::new_v4().to_string(),
-            0,
-            0,
-            amount,
-            quote.input,
-        )
+    fn get_witness(quote: &SwapQuote, amount: u128) -> Witness {
+        TestData::witness(quote.id, amount, quote.input)
     }
 
     fn to_atomic(coin: Coin, amount: &str) -> u128 {
@@ -162,8 +162,8 @@ mod test {
     fn get_swaps_returns_pending_swaps() {
         let mut runner = Runner::new();
 
-        let quote_with_no_witnesses = create_fake_quote_tx_eth_loki();
-        let quote_with_witnesses = create_fake_quote_tx_eth_loki();
+        let quote_with_no_witnesses = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let quote_with_witnesses = TestData::swap_quote(Coin::ETH, Coin::LOKI);
 
         let first_witness = get_witness(&quote_with_witnesses, 100);
         let second_witness = get_witness(&quote_with_witnesses, 200);
@@ -195,7 +195,7 @@ mod test {
     fn get_swaps_does_not_return_hard_expired_quotes() {
         let mut runner = Runner::new();
 
-        let mut quote = create_fake_quote_tx_eth_loki();
+        let mut quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
         quote.timestamp = Timestamp(0);
 
         let witness = get_witness(&quote, 100);
@@ -217,7 +217,7 @@ mod test {
     fn get_swaps_does_not_return_invalid_witness_transactions() {
         let mut runner = Runner::new();
 
-        let quote = create_fake_quote_tx_eth_loki();
+        let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
         let mut witness = get_witness(&quote, 100);
         witness.coin = quote.output; // Witness coin must match quote input
 
@@ -238,20 +238,20 @@ mod test {
     fn get_swaps_does_not_return_processed_witnesses() {
         let mut runner = Runner::new();
 
-        let quote = create_fake_quote_tx_eth_loki();
+        let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
         let unused = get_witness(&quote, 100);
         let used = get_witness(&quote, 150);
 
-        let output = OutputTx::new(
-            Timestamp::now(),
-            quote.id,
-            vec![used.id],
-            vec![],
-            quote.output,
-            quote.output_address.clone(),
-            200,
-        )
-        .expect("Expected valid output tx");
+        let output = Output {
+            id: UUIDv4::new(),
+            timestamp: Timestamp::now(),
+            parent: OutputParent::SwapQuote(quote.id),
+            witnesses: vec![used.id],
+            pool_changes: vec![],
+            coin: quote.output,
+            address: quote.output_address.clone(),
+            amount: 200,
+        };
 
         runner
             .side_chain
@@ -278,7 +278,7 @@ mod test {
     fn process_returns_refunds() {
         let provider = MemoryLiquidityProvider::new();
 
-        let quote = create_fake_quote_tx_eth_loki();
+        let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
         let witness = get_witness(&quote, 100);
 
         // Refund should occur here because we have no liquidity
@@ -290,10 +290,10 @@ mod test {
             witnesses: vec![witness],
         };
 
-        let txs = process(&provider, &[swap]);
+        let txs = process(&provider, &[swap], Network::Testnet);
         assert_eq!(txs.len(), 1);
 
-        if let SideChainTx::OutputTx(output) = txs.first().unwrap() {
+        if let SideChainTx::Output(output) = txs.first().unwrap() {
             assert_eq!(output.coin, quote.input);
             assert_eq!(output.amount, 100);
         } else {
@@ -312,7 +312,7 @@ mod test {
             )),
         );
 
-        let quote = create_fake_quote_tx_eth_loki();
+        let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
         assert_eq!(quote.input, Coin::ETH);
         assert_eq!(quote.output, Coin::LOKI);
 
@@ -326,16 +326,16 @@ mod test {
             witnesses: vec![witness],
         };
 
-        let txs = process(&provider, &[swap]);
+        let txs = process(&provider, &[swap], Network::Testnet);
         assert_eq!(txs.len(), 2);
 
         match txs.first().unwrap() {
-            SideChainTx::PoolChangeTx(_) => {}
+            SideChainTx::PoolChange(_) => {}
             tx @ _ => panic!("Expected to find pool change transaction. Found: {:?}", tx),
         }
 
         match txs.last().unwrap() {
-            SideChainTx::OutputTx(_) => {}
+            SideChainTx::Output(_) => {}
             tx @ _ => panic!("Expected to find output transaction. Found {:?}", tx),
         }
     }
@@ -357,17 +357,15 @@ mod test {
         provider.set_liquidity(PoolCoin::ETH, Some(eth_liquidity));
         provider.set_liquidity(PoolCoin::BTC, Some(btc_liquidity));
 
-        let quote = create_fake_quote_tx_eth_loki();
+        let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
         assert_eq!(quote.input, Coin::ETH);
         assert_eq!(quote.output, Coin::LOKI);
 
-        let another = create_fake_quote_tx_eth_loki();
+        let another = TestData::swap_quote(Coin::ETH, Coin::LOKI);
         assert_eq!(quote.input, Coin::ETH);
         assert_eq!(quote.output, Coin::LOKI);
 
-        let mut btc_quote = create_fake_quote_tx_eth_loki();
-        btc_quote.input = Coin::BTC;
-        btc_quote.input_address = WalletAddress::new("1FPR9qMV6nikLxKP1MnZG6jh4viqFUs7wV");
+        let btc_quote = TestData::swap_quote(Coin::BTC, Coin::LOKI);
 
         let swaps = vec![
             Swap {
@@ -393,21 +391,21 @@ mod test {
             },
         ];
 
-        let txs = process(&provider, &swaps);
+        let txs = process(&provider, &swaps, Network::Testnet);
         assert_eq!(txs.len(), 6);
 
         let expected_first_amount = 3199500000000;
         let expected_second_amount = 2332902777777;
         let expected_third_amount = 3199500000000;
 
-        if let SideChainTx::OutputTx(first_output) = txs.get(1).unwrap() {
+        if let SideChainTx::Output(first_output) = txs.get(1).unwrap() {
             assert_eq!(first_output.coin, Coin::LOKI);
             assert_eq!(first_output.amount, expected_first_amount);
         } else {
             panic!("Expected to get an output transaction");
         }
 
-        if let SideChainTx::OutputTx(second_output) = txs.get(3).unwrap() {
+        if let SideChainTx::Output(second_output) = txs.get(3).unwrap() {
             assert_eq!(second_output.coin, Coin::LOKI);
             assert_ne!(
                 second_output.amount, expected_first_amount,
@@ -418,7 +416,7 @@ mod test {
             panic!("Expected to get an output transaction");
         }
 
-        if let SideChainTx::OutputTx(third_output) = txs.get(5).unwrap() {
+        if let SideChainTx::Output(third_output) = txs.get(5).unwrap() {
             assert_eq!(third_output.coin, Coin::LOKI);
             assert_eq!(
                 third_output.amount, expected_third_amount,
@@ -445,7 +443,7 @@ mod test {
     fn process_swaps_correctly_updates_side_chain() {
         let mut runner = Runner::new();
 
-        let quote = create_fake_quote_tx_eth_loki();
+        let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
         assert_eq!(quote.input, Coin::ETH);
         assert_eq!(quote.output, Coin::LOKI);
 
@@ -454,10 +452,10 @@ mod test {
         let initial_eth_depth = to_atomic(Coin::ETH, "10000.0");
         let initial_loki_depth = to_atomic(Coin::LOKI, "20000.0");
 
-        let initial_pool = PoolChangeTx::new(
-            PoolCoin::ETH,
-            initial_loki_depth as i128,
+        let initial_pool = TestData::pool_change(
+            Coin::ETH,
             initial_eth_depth as i128,
+            initial_loki_depth as i128,
         );
         runner
             .side_chain
@@ -477,7 +475,7 @@ mod test {
             Some(Liquidity::new(initial_eth_depth, initial_loki_depth))
         );
 
-        process_swaps(&mut runner.provider);
+        process_swaps(&mut runner.provider, Network::Testnet);
 
         let new_eth_depth = to_atomic(Coin::ETH, "12500.0");
         let new_loki_depth = to_atomic(Coin::LOKI, "16800.5");

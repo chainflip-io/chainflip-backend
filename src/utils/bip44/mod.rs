@@ -1,4 +1,4 @@
-use crate::common::Coin;
+use chainflip_common::types::{addresses::EthereumAddress, coin::Coin};
 use hdwallet::{
     secp256k1::{PublicKey, Secp256k1, SecretKey},
     DefaultKeyChain, ExtendedPrivKey, ExtendedPubKey, KeyChain,
@@ -88,7 +88,6 @@ impl KeyPair {
 ///
 /// ```
 /// use chainflip::utils::bip44::{get_key_pair, RawKey, CoinType};
-/// use chainflip::common::Coin;
 ///
 /// let xpriv = "xprv9s21ZrQH143K2h2Jo5HX95FFUbu8QYXRDvmpStejFQQXSYw7LnsuczMXvfh9mVFCukNz6bXoYDSZhMzwQqtoDeMFkjG8PqzHCf4kDHYwYqK";
 /// let root_key = RawKey::decode(xpriv).unwrap().to_private_key().unwrap();
@@ -135,6 +134,12 @@ fn derive_private_key(
         .map_err(|err| format!("{:?}", err))?;
 
     Ok(child_key)
+}
+
+impl From<KeyPair> for EthereumAddress {
+    fn from(keys: KeyPair) -> EthereumAddress {
+        EthereumAddress::from_public_key(keys.public_key.serialize_uncompressed())
+    }
 }
 
 #[cfg(test)]

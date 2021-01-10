@@ -1,8 +1,5 @@
-use crate::{
-    common::{api::ResponseError, coins::Coin},
-    quoter::StateProvider,
-    utils::price,
-};
+use crate::{common::api::ResponseError, quoter::StateProvider, utils::price};
+use chainflip_common::types::coin::Coin;
 use serde::{Deserialize, Serialize};
 use std::{
     str::FromStr,

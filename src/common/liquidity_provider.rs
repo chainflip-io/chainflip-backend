@@ -1,25 +1,23 @@
+use chainflip_common::types::{chain::PoolChange, coin::Coin};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{collections::HashMap, convert::TryInto};
 
-use crate::{
-    common::{coins::PoolCoin, Coin},
-    transactions::PoolChangeTx,
-};
+use crate::common::coins::PoolCoin;
 
 /// A simple representation of a pool liquidity
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Liquidity {
-    /// The depth of the coin staked against LOKI in the pool
+    /// The depth of the coin staked against Base coin in the pool
     pub depth: u128,
-    /// The depth of LOKI in the pool
-    pub loki_depth: u128,
+    /// The depth of Base coin in the pool
+    pub base_depth: u128,
 }
 
 impl Liquidity {
     /// Create a new liquidity
-    pub fn new(depth: u128, loki_depth: u128) -> Self {
-        Liquidity { depth, loki_depth }
+    pub fn new(depth: u128, base_depth: u128) -> Self {
+        Liquidity { depth, base_depth }
     }
 
     /// Create a liquidity with zero amount
@@ -75,28 +73,30 @@ impl MemoryLiquidityProvider {
     }
 
     /// Update liquidity from a pool change transaction
-    pub fn update_liquidity(&mut self, pool_change: &PoolChangeTx) -> Result<(), &'static str> {
+    pub fn update_liquidity(&mut self, pool_change: &PoolChange) -> Result<(), &'static str> {
+        let pool_coin = pool_change.pool.try_into()?;
+
         let mut liquidity = self
             .pools
-            .get(&pool_change.coin)
+            .get(&pool_coin)
             .cloned()
             .unwrap_or(Liquidity::zero());
 
         let depth = liquidity.depth as i128 + pool_change.depth_change;
-        let loki_depth = liquidity.loki_depth as i128 + pool_change.loki_depth_change;
-        if depth < 0 || loki_depth < 0 {
+        let base_depth = liquidity.base_depth as i128 + pool_change.base_depth_change;
+        if depth < 0 || base_depth < 0 {
             return Err("Negative liquidity depth found");
         }
 
         liquidity.depth = depth as u128;
-        liquidity.loki_depth = loki_depth as u128;
+        liquidity.base_depth = base_depth as u128;
 
         debug!(
             "Liquidity for coin {:?} is now: {:?}",
-            pool_change.coin, liquidity
+            pool_change.pool, liquidity
         );
 
-        self.pools.insert(pool_change.coin, liquidity);
+        self.pools.insert(pool_coin, liquidity);
 
         Ok(())
     }
@@ -110,6 +110,8 @@ impl LiquidityProvider for MemoryLiquidityProvider {
 
 #[cfg(test)]
 mod test {
+    use crate::utils::test_utils::data::TestData;
+
     use super::*;
 
     #[test]
@@ -145,7 +147,7 @@ mod test {
     #[test]
     fn updates_liquidity() {
         let mut provider = MemoryLiquidityProvider::new();
-        let pool_change = PoolChangeTx::new(PoolCoin::ETH, 100, -100);
+        let pool_change = TestData::pool_change(Coin::ETH, -100, 100);
 
         assert!(provider.get_liquidity(PoolCoin::ETH).is_none());
         assert_eq!(

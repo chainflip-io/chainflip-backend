@@ -1,8 +1,8 @@
 use chainflip::{
-    common::{Coin, PoolCoin},
+    common::PoolCoin,
     side_chain::{ISideChain, PeristentSideChain},
-    transactions::PoolChangeTx,
 };
+use chainflip_common::types::{chain::PoolChange, coin::Coin, Timestamp, UUIDv4};
 use clap::{App, Arg};
 use std::str::FromStr;
 
@@ -41,7 +41,13 @@ async fn main() {
         .checked_mul(10i128.pow(Coin::LOKI.get_info().decimals))
         .expect("Failed to calculate atomic value of loki depth");
 
-    let pool_change = PoolChangeTx::new(pool_coin, loki_depth, depth);
+    let pool_change = PoolChange {
+        id: UUIDv4::new(),
+        timestamp: Timestamp::now(),
+        pool: pool_coin.get_coin(),
+        depth_change: depth,
+        base_depth_change: loki_depth,
+    };
 
     // Insert tx into the side chain
     let mut s_chain = PeristentSideChain::open("blocks.db");

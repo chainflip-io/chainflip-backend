@@ -1,16 +1,16 @@
 use crate::{
-    common::api::ResponseError,
+    common::{api::ResponseError, StakerId},
     quoter::StateProvider,
     vault::api::v1::post_stake::StakeQuoteResponse,
     vault::{api::v1::post_swap::SwapQuoteResponse, processor::utils::get_swap_expire_timestamp},
 };
+use chainflip_common::types::UUIDv4;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::{
     str::FromStr,
     sync::{Arc, Mutex},
 };
-use uuid::Uuid;
 
 /// Parameters for GET `quote` endpoint
 #[derive(Debug, Deserialize)]
@@ -40,7 +40,7 @@ pub async fn get_quote<S>(
 where
     S: StateProvider,
 {
-    let id = match Uuid::from_str(&params.id) {
+    let id = match UUIDv4::from_str(&params.id) {
         Ok(id) => id,
         Err(_) => {
             return Err(ResponseError::new(
@@ -61,7 +61,7 @@ where
     Ok(None)
 }
 
-pub fn get_swap_quote<S>(id: Uuid, state: Arc<Mutex<S>>) -> Option<SwapQuoteResponse>
+pub fn get_swap_quote<S>(id: UUIDv4, state: Arc<Mutex<S>>) -> Option<SwapQuoteResponse>
 where
     S: StateProvider,
 {
@@ -80,7 +80,7 @@ where
     })
 }
 
-pub fn get_stake_quote<S>(id: Uuid, state: Arc<Mutex<S>>) -> Option<StakeQuoteResponse>
+pub fn get_stake_quote<S>(id: UUIDv4, state: Arc<Mutex<S>>) -> Option<StakeQuoteResponse>
 where
     S: StateProvider,
 {
@@ -89,11 +89,11 @@ where
         id: quote.id,
         created_at: quote.timestamp.0,
         expires_at: get_swap_expire_timestamp(&quote.timestamp).0,
-        pool: quote.coin_type.get_coin(),
-        staker_id: quote.staker_id.inner().to_owned(),
-        loki_input_address: quote.loki_input_address.0,
-        coin_input_address: quote.coin_input_address.0,
-        loki_return_address: quote.loki_return_address.map(|f| f.0).unwrap_or("".into()),
-        coin_return_address: quote.coin_return_address.map(|f| f.0).unwrap_or("".into()),
+        pool: quote.pool,
+        staker_id: StakerId::from_bytes(&quote.staker_id).unwrap().to_string(),
+        loki_input_address: quote.base_input_address.to_string(),
+        coin_input_address: quote.coin_input_address.to_string(),
+        loki_return_address: quote.base_return_address.to_string(),
+        coin_return_address: quote.coin_return_address.to_string(),
     })
 }

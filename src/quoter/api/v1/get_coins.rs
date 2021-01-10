@@ -1,7 +1,5 @@
-use crate::common::{
-    api::ResponseError,
-    coins::{Coin, CoinInfo},
-};
+use crate::common::api::ResponseError;
+use chainflip_common::types::coin::{Coin, CoinInfo};
 use serde::Deserialize;
 
 /// Parameters for `coins` endpoint

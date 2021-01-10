@@ -16,6 +16,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        token: ${{ secrets.CI_PAT }} # CI_PAT is a secret that contains a personal access token for checking out private repos
+        submodules: true
     - uses: actions/cache@v2
       with:
         path: |

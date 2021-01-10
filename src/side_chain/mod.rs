@@ -5,10 +5,7 @@ mod substrate_node;
 
 pub use substrate_node::{FakeStateChainNode, IStateChainNode, StateChainNode};
 
-use crate::transactions::{
-    OutputSentTx, OutputTx, PoolChangeTx, QuoteTx, StakeQuoteTx, StakeTx, UnstakeRequestTx,
-    UnstakeTx, WitnessTx,
-};
+use chainflip_common::types::chain::*;
 
 use serde::{Deserialize, Serialize};
 
@@ -19,77 +16,68 @@ pub use persistent_side_chain::PeristentSideChain;
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(tag = "type", content = "info")]
 pub enum SideChainTx {
-    /// The quote transaction variant
-    QuoteTx(QuoteTx),
-    /// The witness transaction variant
-    WitnessTx(WitnessTx),
-    /// The pool change transaction variant
-    PoolChangeTx(PoolChangeTx),
-    /// Stake/provisioning quote transaction varian
-    StakeQuoteTx(StakeQuoteTx),
-    /// Transaction acknowledging pool provisioning
-    StakeTx(StakeTx),
-    /// The output transaction variant
-    OutputTx(OutputTx),
-    /// Unstake request variant
-    UnstakeRequestTx(UnstakeRequestTx),
-    /// Unstake confirmation variant
-    UnstakeTx(UnstakeTx),
-    /// Output sent transaction variant
-    OutputSentTx(OutputSentTx),
+    DepositQuote(DepositQuote),
+    Deposit(Deposit),
+    OutputSent(OutputSent),
+    Output(Output),
+    PoolChange(PoolChange),
+    SwapQuote(SwapQuote),
+    WithdrawRequest(WithdrawRequest),
+    Withdraw(Withdraw),
+    Witness(Witness),
 }
 
-impl From<QuoteTx> for SideChainTx {
-    fn from(tx: QuoteTx) -> Self {
-        SideChainTx::QuoteTx(tx)
+impl From<DepositQuote> for SideChainTx {
+    fn from(tx: DepositQuote) -> Self {
+        SideChainTx::DepositQuote(tx)
     }
 }
 
-impl From<WitnessTx> for SideChainTx {
-    fn from(tx: WitnessTx) -> Self {
-        SideChainTx::WitnessTx(tx)
+impl From<Deposit> for SideChainTx {
+    fn from(tx: Deposit) -> Self {
+        SideChainTx::Deposit(tx)
     }
 }
 
-impl From<PoolChangeTx> for SideChainTx {
-    fn from(tx: PoolChangeTx) -> Self {
-        SideChainTx::PoolChangeTx(tx)
+impl From<OutputSent> for SideChainTx {
+    fn from(tx: OutputSent) -> Self {
+        SideChainTx::OutputSent(tx)
     }
 }
 
-impl From<StakeQuoteTx> for SideChainTx {
-    fn from(tx: StakeQuoteTx) -> Self {
-        SideChainTx::StakeQuoteTx(tx)
+impl From<Output> for SideChainTx {
+    fn from(tx: Output) -> Self {
+        SideChainTx::Output(tx)
     }
 }
 
-impl From<StakeTx> for SideChainTx {
-    fn from(tx: StakeTx) -> Self {
-        SideChainTx::StakeTx(tx)
+impl From<PoolChange> for SideChainTx {
+    fn from(tx: PoolChange) -> Self {
+        SideChainTx::PoolChange(tx)
     }
 }
 
-impl From<OutputTx> for SideChainTx {
-    fn from(tx: OutputTx) -> Self {
-        SideChainTx::OutputTx(tx)
+impl From<SwapQuote> for SideChainTx {
+    fn from(tx: SwapQuote) -> Self {
+        SideChainTx::SwapQuote(tx)
     }
 }
 
-impl From<UnstakeRequestTx> for SideChainTx {
-    fn from(tx: UnstakeRequestTx) -> Self {
-        SideChainTx::UnstakeRequestTx(tx)
+impl From<WithdrawRequest> for SideChainTx {
+    fn from(tx: WithdrawRequest) -> Self {
+        SideChainTx::WithdrawRequest(tx)
     }
 }
 
-impl From<UnstakeTx> for SideChainTx {
-    fn from(tx: UnstakeTx) -> Self {
-        SideChainTx::UnstakeTx(tx)
+impl From<Withdraw> for SideChainTx {
+    fn from(tx: Withdraw) -> Self {
+        SideChainTx::Withdraw(tx)
     }
 }
 
-impl From<OutputSentTx> for SideChainTx {
-    fn from(tx: OutputSentTx) -> Self {
-        SideChainTx::OutputSentTx(tx)
+impl From<Witness> for SideChainTx {
+    fn from(tx: Witness) -> Self {
+        SideChainTx::Witness(tx)
     }
 }
 

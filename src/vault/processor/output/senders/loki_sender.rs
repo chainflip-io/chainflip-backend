@@ -1,27 +1,29 @@
-use std::convert::TryInto;
-
-use uuid::Uuid;
-
+use super::OutputSender;
 use crate::{
-    common::{Coin, LokiAmount, LokiWalletAddress, Timestamp},
-    transactions::{OutputSentTx, OutputTx},
+    common::{LokiAmount, LokiWalletAddress},
     vault::blockchain_connection::loki_rpc::{self, TransferResponse},
     vault::config::LokiRpcConfig,
 };
-
-use super::OutputSender;
+use chainflip_common::types::{
+    chain::{Output, OutputSent, Validate},
+    coin::Coin,
+    Network, Timestamp, UUIDv4,
+};
+use std::str::FromStr;
 
 /// Struct used for making Loki transactions
 pub struct LokiSender {
     /// Loki rpc wallet configuration
     config: LokiRpcConfig,
+    /// The network type of the sender
+    network: Network,
 }
 
 async fn send_with_estimated_fee(
     port: u16,
     amount: &LokiAmount,
     address: &LokiWalletAddress,
-    output_id: Uuid,
+    output_id: UUIDv4,
 ) -> Result<TransferResponse, String> {
     let res = loki_rpc::check_transfer_fee(port, &amount, &address).await?;
 
@@ -39,11 +41,11 @@ async fn send_with_estimated_fee(
 
 impl LokiSender {
     /// Create instance from config
-    pub fn new(config: LokiRpcConfig) -> Self {
-        Self { config }
+    pub fn new(config: LokiRpcConfig, network: Network) -> Self {
+        Self { config, network }
     }
 
-    async fn send_inner(&self, outputs: &[OutputTx]) -> Vec<OutputSentTx> {
+    async fn send_inner(&self, outputs: &[Output]) -> Vec<OutputSent> {
         let port: u16 = self.config.port;
 
         let mut sent_outputs = vec![];
@@ -58,7 +60,7 @@ impl LokiSender {
                 amount, output.id
             );
 
-            let address: LokiWalletAddress = match output.address.clone().try_into() {
+            let loki_address = match LokiWalletAddress::from_str(&output.address.to_string()) {
                 Ok(addr) => addr,
                 Err(err) => {
                     // TODO: we should probably mark the output as invalid so we don't
@@ -68,7 +70,7 @@ impl LokiSender {
                 }
             };
 
-            match send_with_estimated_fee(port, &amount, &address, output.id).await {
+            match send_with_estimated_fee(port, &amount, &loki_address, output.id).await {
                 Ok(res) => {
                     dbg!(&res);
                     let total_spent = res.amount.saturating_add(&res.fee);
@@ -77,23 +79,25 @@ impl LokiSender {
                         total_spent, output.id
                     );
 
-                    let tx = match OutputSentTx::new(
-                        Timestamp::now(),
-                        vec![output.id],
-                        Coin::LOKI,
-                        address.into(),
-                        amount.to_atomic(),
-                        res.fee.to_atomic(),
-                        res.tx_hash.clone(),
-                    ) {
-                        Ok(tx) => tx,
-                        Err(err) => panic!(
-                            "Failed to create output sent tx for output {} with hash {}: {}",
-                            output.id, res.tx_hash, err
-                        ),
+                    let sent = OutputSent {
+                        id: UUIDv4::new(),
+                        timestamp: Timestamp::now(),
+                        outputs: vec![output.id],
+                        coin: Coin::LOKI,
+                        address: output.address.clone(),
+                        amount: amount.to_atomic(),
+                        fee: res.fee.to_atomic(),
+                        transaction_id: (&res.tx_hash).into(),
                     };
 
-                    sent_outputs.push(tx);
+                    if let Err(err) = sent.validate(self.network) {
+                        panic!(
+                            "Failed to create output tx for {:?} with hash {}: {}",
+                            output.id, res.tx_hash, err
+                        );
+                    }
+
+                    sent_outputs.push(sent);
                 }
                 Err(err) => {
                     error!("Failed to send (output id: {}): {}", output.id, err);
@@ -107,21 +111,16 @@ impl LokiSender {
 
 #[async_trait]
 impl OutputSender for LokiSender {
-    async fn send(&self, outputs: &[OutputTx]) -> Vec<OutputSentTx> {
+    async fn send(&self, outputs: &[Output]) -> Vec<OutputSent> {
         self.send_inner(outputs).await
     }
 }
 
 #[cfg(test)]
 mod tests {
-
-    use crate::{
-        common::Coin,
-        common::WalletAddress,
-        utils::test_utils::{self, create_fake_output_tx},
-    };
-
     use super::*;
+    use crate::utils::test_utils;
+    use test_utils::data::TestData;
 
     #[tokio::test]
     #[ignore = "Custom environment setup required"]
@@ -131,12 +130,12 @@ mod tests {
         // This test requires loki rpc wallet to run under the following port
         let config = LokiRpcConfig { port: 6935 };
 
-        let loki = LokiSender::new(config);
+        let loki = LokiSender::new(config, Network::Testnet);
 
-        let mut output = create_fake_output_tx(Coin::LOKI);
-
-        output.address = WalletAddress::new("T6T6otxMejTKavFEQP66VufY9y8vr2Z6RMzoQ95BZx7KWy6zCngrfh39dUVtrF3crtLRFdXpmgjjH7658C74NoJ91imYo7zMk");
-        output.amount = LokiAmount::from_decimal_string("1.25").to_atomic();
+        let output = TestData::output(
+            Coin::LOKI,
+            LokiAmount::from_decimal_string("1.25").to_atomic(),
+        );
 
         let txs = loki.send_inner(&[output]).await;
 

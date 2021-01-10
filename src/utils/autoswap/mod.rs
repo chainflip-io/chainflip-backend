@@ -1,12 +1,11 @@
-use std::convert::TryInto;
-
 use crate::{
-    common::{Coin, GenericCoinAmount, Liquidity, LokiAmount},
+    common::{GenericCoinAmount, Liquidity, LokiAmount},
     constants::LOKI_SWAP_PROCESS_FEE,
     utils,
 };
-
+use chainflip_common::types::coin::Coin;
 use num_bigint::BigInt;
+use std::convert::TryInto;
 
 mod search;
 
@@ -27,7 +26,7 @@ fn calc_autoswap_from_loki(
     let y = utils::price::calculate_output_amount(
         Coin::LOKI,
         x,
-        liquidity.loki_depth,
+        liquidity.base_depth,
         LOKI_SWAP_PROCESS_FEE,
         other_amount.coin_type(),
         liquidity.depth,
@@ -47,13 +46,16 @@ fn calc_autoswap_from_loki(
         Ok((stake.loki, stake.other))
     } else {
         // Liquidity "changed" due to autoswap
-        let loki_depth = liquidity.loki_depth + x - LOKI_SWAP_PROCESS_FEE;
+        let loki_depth = liquidity.base_depth + x - LOKI_SWAP_PROCESS_FEE;
         let depth = liquidity.depth - y;
 
         validate_autoswap(
             loki_effective,
             other_effective,
-            Liquidity { loki_depth, depth },
+            Liquidity {
+                base_depth: loki_depth,
+                depth,
+            },
         )
         .map_err(|_| "Autoswap didn't pass validity check")?;
         Ok((loki_effective, other_effective))
@@ -62,7 +64,7 @@ fn calc_autoswap_from_loki(
 
 fn small_other_stake(other_amount: GenericCoinAmount, liquidity: Liquidity) -> bool {
     let e: BigInt = other_amount.to_atomic().into();
-    let dl: BigInt = liquidity.loki_depth.into();
+    let dl: BigInt = liquidity.base_depth.into();
     let de: BigInt = liquidity.depth.into();
 
     // The amount of loki that we would receive after swapping all of the other coin
@@ -107,7 +109,7 @@ fn calc_autoswap_to_loki(
         liquidity.depth,
         0,
         Coin::LOKI,
-        liquidity.loki_depth,
+        liquidity.base_depth,
         LOKI_SWAP_PROCESS_FEE,
     )
     .unwrap_or(0);
@@ -124,13 +126,16 @@ fn calc_autoswap_to_loki(
         Ok((stake.loki, stake.other))
     } else {
         // Liquidity "changed" due to autoswap
-        let loki_depth = liquidity.loki_depth - y - LOKI_SWAP_PROCESS_FEE;
+        let loki_depth = liquidity.base_depth - y - LOKI_SWAP_PROCESS_FEE;
         let depth = liquidity.depth + x;
 
         validate_autoswap(
             loki_effective,
             other_effective,
-            Liquidity { loki_depth, depth },
+            Liquidity {
+                base_depth: loki_depth,
+                depth,
+            },
         )
         .map_err(|_| "Autoswap didn't pass validity check")?;
         Ok((loki_effective, other_effective))
@@ -146,7 +151,7 @@ fn validate_autoswap(
     let e: BigInt = other_effective_amount.to_atomic().into();
 
     let de: BigInt = liquidity.depth.into();
-    let dl: BigInt = liquidity.loki_depth.into();
+    let dl: BigInt = liquidity.base_depth.into();
 
     // Error in atomic loki (easier to calculate in whole numbers)
     let error = (dl * e) / de - &l;
@@ -178,7 +183,7 @@ fn calc_swap_direction(
     let l: BigInt = loki_amount.to_atomic().into();
     let e: BigInt = other_amount.to_atomic().into();
 
-    let dl: BigInt = liquidity.loki_depth.into();
+    let dl: BigInt = liquidity.base_depth.into();
     let de: BigInt = liquidity.depth.into();
 
     let gamma = &l * &de - &e * &dl;
@@ -212,7 +217,7 @@ fn calc_symmetric_from_other(
 ) -> EffectiveStakeAmounts {
     let e: BigInt = other_amount.to_atomic().into();
     let de: BigInt = liquidity.depth.into();
-    let dl: BigInt = liquidity.loki_depth.into();
+    let dl: BigInt = liquidity.base_depth.into();
 
     let loki = (e * dl) / de;
 
@@ -233,7 +238,7 @@ fn calc_symmetric_from_loki(
 ) -> EffectiveStakeAmounts {
     let l: BigInt = loki_amount.to_atomic().into();
     let de: BigInt = liquidity.depth.into();
-    let dl: BigInt = liquidity.loki_depth.into();
+    let dl: BigInt = liquidity.base_depth.into();
 
     let other = (l * de) / dl;
 

@@ -1,6 +1,6 @@
 use ring::signature::{EcdsaKeyPair, KeyPair};
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, hash::Hash, time::SystemTime};
+use std::{convert::TryInto, fmt::Display, hash::Hash};
 
 /// Definitions for various coins
 pub mod coins;
@@ -19,49 +19,15 @@ pub use loki::{LokiAmount, LokiPaymentId, LokiWalletAddress};
 /// Key value store definitions
 pub mod store;
 
-/// Fractions
-pub mod fractions;
-
 /// Liquidity provider
 pub mod liquidity_provider;
 
 pub use liquidity_provider::{Liquidity, LiquidityProvider};
 
-pub use coins::{Coin, GenericCoinAmount, PoolCoin};
+pub use coins::{GenericCoinAmount, PoolCoin};
 
-// Note: time is not reliable in a distributed environment,
-// so it should probably be replaced by block_id when we
-// go distributed
-
-/// Unix millisecond timestamp wrapper
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, PartialEq, Eq, Deserialize, Serialize)]
-pub struct Timestamp(pub u128);
-
-impl Timestamp {
-    /// Create an instance from `SystemTime`
-    pub fn from_system_time(ts: SystemTime) -> Self {
-        let millis = ts
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .expect("Failed to get unix timestamp")
-            .as_millis();
-        Timestamp(millis)
-    }
-
-    /// Create an instance from current system time
-    pub fn now() -> Self {
-        Timestamp::from_system_time(SystemTime::now())
-    }
-}
-
-impl std::str::FromStr for Timestamp {
-    type Err = &'static str;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let ts: u128 = s.parse().map_err(|_| "Timestamp must be valid u128")?;
-
-        Ok(Timestamp(ts))
-    }
-}
+/// Small utils for input address id
+pub mod input_address_id;
 
 /// A wrapper around String to be used as wallet address.
 /// We might want to use separate type for each type of
@@ -109,9 +75,32 @@ impl StakerId {
         }
     }
 
+    /// Create from bytes
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, &'static str> {
+        let string = hex::encode(bytes);
+        Self::new(string)
+    }
+
     /// Get the inner representation (as hex string)
     pub fn inner(&self) -> &str {
         &self.0
+    }
+
+    /// Get the byte representation of the staker id
+    pub fn bytes(&self) -> [u8; 65] {
+        hex::decode(self.0.clone()).unwrap().try_into().unwrap()
+    }
+}
+
+impl<T: AsRef<[u8]>> PartialEq<T> for StakerId {
+    fn eq(&self, other: &T) -> bool {
+        self.bytes() == other.as_ref()
+    }
+}
+
+impl PartialEq<StakerId> for Vec<u8> {
+    fn eq(&self, other: &StakerId) -> bool {
+        *self == &other.bytes()
     }
 }
 

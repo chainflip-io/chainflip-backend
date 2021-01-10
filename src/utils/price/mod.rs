@@ -1,13 +1,17 @@
 use crate::{
     common::liquidity_provider::{Liquidity, LiquidityProvider},
-    common::{coins::PoolCoin, Coin, LokiAmount},
+    common::{coins::PoolCoin, LokiAmount},
     constants::LOKI_SWAP_PROCESS_FEE,
-    transactions::PoolChangeTx,
+};
+pub use calculation::*;
+use chainflip_common::types::{
+    chain::{PoolChange, Validate},
+    coin::Coin,
+    Network, Timestamp, UUIDv4,
 };
 use std::convert::TryFrom;
 
 mod calculation;
-pub use calculation::*;
 
 /// Details about an output
 #[derive(Debug, Copy, Clone)]
@@ -26,7 +30,7 @@ pub struct OutputDetail {
 
 impl OutputDetail {
     /// Convert this output detail to a pool change transaction
-    pub fn to_pool_change_tx(&self) -> Result<PoolChangeTx, &'static str> {
+    pub fn to_pool_change_tx(&self) -> Result<PoolChange, &'static str> {
         if self.input != Coin::LOKI && self.output != Coin::LOKI {
             return Err("Cannot make a PoolChangeTx without a LOKI input or output");
         }
@@ -37,30 +41,37 @@ impl OutputDetail {
             .map_err(|_| "Failed to convert output depth to i128")?;
         let output_depth = -1 * output_depth;
 
-        let is_input_loki = self.input == Coin::LOKI;
-        let pool_coin = if is_input_loki {
+        let is_input_base = self.input == Coin::BASE_COIN;
+        let pool_coin = if is_input_base {
             self.output
         } else {
             self.input
         };
-        let pool_coin = PoolCoin::from(pool_coin)?;
 
-        let depth_change = if is_input_loki {
+        let depth_change = if is_input_base {
             output_depth
         } else {
             input_depth
         };
-        let loki_depth_change = if is_input_loki {
+        let base_depth_change = if is_input_base {
             input_depth
         } else {
             output_depth
         };
 
-        Ok(PoolChangeTx::new(
-            pool_coin,
-            loki_depth_change,
+        let change = PoolChange {
+            id: UUIDv4::new(),
+            timestamp: Timestamp::now(),
+            pool: pool_coin,
             depth_change,
-        ))
+            base_depth_change,
+        };
+
+        // Network type shouldn't really matter here
+        // Just validatinf to ensure base and depth change are correct
+        change.validate(Network::Mainnet)?;
+
+        Ok(change)
     }
 }
 
@@ -149,7 +160,7 @@ fn get_output_amount_inner<T: LiquidityProvider>(
         .unwrap_or(Liquidity::zero());
 
     let input_depth = if is_loki_input {
-        liquidity.loki_depth
+        liquidity.base_depth
     } else {
         liquidity.depth
     };
@@ -157,7 +168,7 @@ fn get_output_amount_inner<T: LiquidityProvider>(
     let output_depth = if is_loki_input {
         liquidity.depth
     } else {
-        liquidity.loki_depth
+        liquidity.base_depth
     };
 
     let input_fee = if is_loki_input {
@@ -330,8 +341,8 @@ mod test {
             .to_pool_change_tx()
             .expect("Expected a valid pool change transaction");
 
-        assert_eq!(pool_change.coin, PoolCoin::ETH);
-        assert_eq!(pool_change.loki_depth_change, 10);
+        assert_eq!(pool_change.pool, Coin::ETH);
+        assert_eq!(pool_change.base_depth_change, 10);
         assert_eq!(pool_change.depth_change, -20);
 
         // Loki output
@@ -347,9 +358,9 @@ mod test {
             .to_pool_change_tx()
             .expect("Expected a valid pool change transaction");
 
-        assert_eq!(pool_change.coin, PoolCoin::ETH);
+        assert_eq!(pool_change.pool, Coin::ETH);
         assert_eq!(pool_change.depth_change, 10);
-        assert_eq!(pool_change.loki_depth_change, -20);
+        assert_eq!(pool_change.base_depth_change, -20);
 
         // Bounds
         let max_input = OutputDetail {

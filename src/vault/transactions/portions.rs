@@ -1,13 +1,11 @@
-use std::{collections::HashMap, convert::TryInto};
-
-use rand::{prelude::StdRng, seq::SliceRandom, SeedableRng};
-
+use super::memory_provider::{PoolPortions, Portion, StakerOwnership, VaultPortions};
 use crate::{
-    common::{fractions::UnstakeFraction, *},
+    common::*,
     utils::{self, primitives::U256},
 };
-
-use super::memory_provider::{PoolPortions, Portion, StakerOwnership, VaultPortions};
+use chainflip_common::types::fraction::WithdrawFraction;
+use rand::{prelude::StdRng, seq::SliceRandom, SeedableRng};
+use std::{collections::HashMap, convert::TryInto};
 
 /// Calculate atomic amount for a given portion from total atomic amount
 fn amount_from_portion(portion: Portion, total_amount: u128) -> u128 {
@@ -51,7 +49,7 @@ pub(crate) fn aggregate_current_portions(
     portions
         .iter()
         .map(|(staker_id, portion)| {
-            let loki = amount_from_portion(*portion, liquidity.loki_depth);
+            let loki = amount_from_portion(*portion, liquidity.base_depth);
             let other = amount_from_portion(*portion, liquidity.depth);
 
             StakerOwnership {
@@ -88,7 +86,7 @@ pub(crate) struct StakeContribution {
 /// How much (`fraction`) `staker_id` withdrew from `pool`
 pub struct UnstakeWithdrawal {
     pub staker_id: StakerId,
-    pub fraction: UnstakeFraction,
+    pub fraction: WithdrawFraction,
     pub pool: PoolCoin,
 }
 
@@ -114,7 +112,7 @@ impl StakeContribution {
 
 /// Calculate fraction of a portion of the total amount
 fn amount_from_fraction_and_portion(
-    fraction: UnstakeFraction,
+    fraction: WithdrawFraction,
     portion: Portion,
     total: u128,
 ) -> u128 {
@@ -122,7 +120,7 @@ fn amount_from_fraction_and_portion(
 
     let loki_owned: U256 = loki_owned.into();
     let fraction: U256 = fraction.value().into();
-    let max_fraction: U256 = UnstakeFraction::MAX.value().into();
+    let max_fraction: U256 = WithdrawFraction::MAX.value().into();
 
     let loki: U256 = loki_owned * fraction / max_fraction;
 
@@ -138,13 +136,13 @@ fn adjust_portions_after_unstake_for_coin(
 ) {
     let pool = unstake.pool;
 
-    let fraction = UnstakeFraction::MAX;
+    let fraction = WithdrawFraction::MAX;
 
     let portion = *portions
         .get(&unstake.staker_id)
         .expect("Staker id must exist");
 
-    let loki = amount_from_fraction_and_portion(fraction, portion, liquidity.loki_depth);
+    let loki = amount_from_fraction_and_portion(fraction, portion, liquidity.base_depth);
 
     let staker_amounts = aggregate_current_portions(&portions, *liquidity, pool);
 
@@ -168,7 +166,7 @@ fn adjust_portions_after_unstake_for_coin(
         .checked_sub(&LokiAmount::from_atomic(loki_withdrawn))
         .expect("underflow");
 
-    let new_total_loki = liquidity.loki_depth.saturating_sub(loki_withdrawn);
+    let new_total_loki = liquidity.base_depth.saturating_sub(loki_withdrawn);
 
     // Adjust everyone's portions according to the new total amount
 
@@ -239,7 +237,7 @@ fn adjust_portions_after_stake_for_coin(
 
     let extra_loki = contribution.loki_amount.to_atomic();
 
-    let new_total_loki = liquidity.loki_depth + extra_loki;
+    let new_total_loki = liquidity.base_depth + extra_loki;
 
     let mut portions_sum = Portion(0);
 
@@ -350,10 +348,9 @@ pub(crate) fn adjust_portions_after_unstake(
 
 #[cfg(test)]
 mod tests {
-
-    use crate::{transactions::signatures::get_random_staker, utils::test_utils};
-
     use super::*;
+    use crate::utils::test_utils::{self, staking::get_random_staker};
+    use chainflip_common::types::coin::Coin;
 
     #[test]
     fn check_amount_from_portion() {
@@ -417,7 +414,7 @@ mod tests {
 
             self.liquidity = Liquidity {
                 depth: self.liquidity.depth + stake.other_amount.to_atomic(),
-                loki_depth: self.liquidity.loki_depth + stake.loki_amount.to_atomic(),
+                base_depth: self.liquidity.base_depth + stake.loki_amount.to_atomic(),
             };
         }
 
@@ -425,7 +422,7 @@ mod tests {
         fn unstake_symmetric(
             &mut self,
             staker_id: &StakerId,
-            fraction: UnstakeFraction,
+            fraction: WithdrawFraction,
             pool: PoolCoin,
         ) {
             let portion = *self
@@ -433,9 +430,9 @@ mod tests {
                 .get(staker_id)
                 .expect("Staker id is expected to have portions");
             let loki_amount =
-                amount_from_fraction_and_portion(fraction, portion, self.liquidity.loki_depth);
+                amount_from_fraction_and_portion(fraction, portion, self.liquidity.base_depth);
 
-            let other_amount = loki_amount * self.liquidity.depth / self.liquidity.loki_depth;
+            let other_amount = loki_amount * self.liquidity.depth / self.liquidity.base_depth;
 
             let unstake = UnstakeWithdrawal {
                 staker_id: staker_id.to_owned(),
@@ -447,16 +444,16 @@ mod tests {
 
             self.liquidity = Liquidity {
                 depth: self.liquidity.depth + other_amount,
-                loki_depth: self
+                base_depth: self
                     .liquidity
-                    .loki_depth
+                    .base_depth
                     .checked_sub(loki_amount)
                     .expect("underflow"),
             }
         }
 
         fn scale_liquidity(&mut self, factor: u32) {
-            self.liquidity.loki_depth = self.liquidity.loki_depth * factor as u128;
+            self.liquidity.base_depth = self.liquidity.base_depth * factor as u128;
             self.liquidity.depth = self.liquidity.depth * factor as u128;
         }
     }
@@ -607,7 +604,7 @@ mod tests {
 
         // 2. Alice unstakes everything
 
-        runner.unstake_symmetric(&alice, UnstakeFraction::MAX, PoolCoin::ETH);
+        runner.unstake_symmetric(&alice, WithdrawFraction::MAX, PoolCoin::ETH);
 
         assert!(runner.portions.get(&alice).is_none());
     }
@@ -636,7 +633,7 @@ mod tests {
 
         // 2. Alice unstakes everything
 
-        runner.unstake_symmetric(&alice, UnstakeFraction::MAX, PoolCoin::ETH);
+        runner.unstake_symmetric(&alice, WithdrawFraction::MAX, PoolCoin::ETH);
 
         assert!(runner.portions.get(&alice).is_none());
         let b = runner.portions.get(&bob).unwrap();
@@ -671,8 +668,8 @@ mod tests {
 
         // 2. Alice and Bob unstakes everything
 
-        runner.unstake_symmetric(&alice, UnstakeFraction::MAX, PoolCoin::ETH);
-        runner.unstake_symmetric(&bob, UnstakeFraction::MAX, PoolCoin::ETH);
+        runner.unstake_symmetric(&alice, WithdrawFraction::MAX, PoolCoin::ETH);
+        runner.unstake_symmetric(&bob, WithdrawFraction::MAX, PoolCoin::ETH);
 
         assert!(runner.portions.get(&alice).is_none());
         assert!(runner.portions.get(&bob).is_none());
@@ -720,11 +717,11 @@ mod tests {
         let portion = Portion::MAX;
 
         assert_eq!(
-            amount_from_fraction_and_portion(UnstakeFraction::MAX, portion, 1000),
+            amount_from_fraction_and_portion(WithdrawFraction::MAX, portion, 1000),
             1000
         );
 
-        let half_fraction = UnstakeFraction::new(UnstakeFraction::MAX.value() / 2).unwrap();
+        let half_fraction = WithdrawFraction::new(WithdrawFraction::MAX.value() / 2).unwrap();
         assert_eq!(
             amount_from_fraction_and_portion(half_fraction, HALF_PORTION, 1000),
             250

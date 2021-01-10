@@ -1,21 +1,17 @@
+use chainflip_common::types::chain::*;
 use std::{fmt::Display, str::FromStr};
-
-use crate::transactions::{
-    OutputSentTx, OutputTx, PoolChangeTx, QuoteTx, StakeQuoteTx, StakeTx, UnstakeRequestTx,
-    UnstakeTx, WitnessTx,
-};
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum TransactionType {
     PoolChange,
     SwapQuote,
-    StakeQuote,
+    DepositQuote,
     Witness,
-    Stake,
+    Deposit,
     Output,
     Sent,
-    UnstakeRequest,
-    Unstake,
+    WithdrawRequest,
+    Withdraw,
 }
 
 impl Display for TransactionType {
@@ -24,9 +20,6 @@ impl Display for TransactionType {
     }
 }
 
-/// Invalid coin literal error
-pub const PARSING_ERROR: &'static str = "failed to parse transaction type";
-
 impl FromStr for TransactionType {
     type Err = &'static str;
 
@@ -34,68 +27,68 @@ impl FromStr for TransactionType {
         match s {
             "PoolChange" => Ok(TransactionType::PoolChange),
             "SwapQuote" => Ok(TransactionType::SwapQuote),
-            "StakeQuote" => Ok(TransactionType::StakeQuote),
+            "DepositQuote" => Ok(TransactionType::DepositQuote),
             "Witness" => Ok(TransactionType::Witness),
-            "Stake" => Ok(TransactionType::Stake),
+            "Deposit" => Ok(TransactionType::Deposit),
             "Output" => Ok(TransactionType::Output),
             "Sent" => Ok(TransactionType::Sent),
-            "Unstake" => Ok(TransactionType::Unstake),
-            "UnstakeRequest" => Ok(TransactionType::UnstakeRequest),
-            _ => Err(PARSING_ERROR),
+            "Withdraw" => Ok(TransactionType::Withdraw),
+            "WithdrawRequest" => Ok(TransactionType::WithdrawRequest),
+            _ => Err("Invalid transaction type"),
         }
     }
 }
 
-impl From<&PoolChangeTx> for TransactionType {
-    fn from(_: &PoolChangeTx) -> Self {
+impl From<&PoolChange> for TransactionType {
+    fn from(_: &PoolChange) -> Self {
         TransactionType::PoolChange
     }
 }
 
-impl From<&QuoteTx> for TransactionType {
-    fn from(_: &QuoteTx) -> Self {
+impl From<&SwapQuote> for TransactionType {
+    fn from(_: &SwapQuote) -> Self {
         TransactionType::SwapQuote
     }
 }
 
-impl From<&StakeQuoteTx> for TransactionType {
-    fn from(_: &StakeQuoteTx) -> Self {
-        TransactionType::StakeQuote
+impl From<&DepositQuote> for TransactionType {
+    fn from(_: &DepositQuote) -> Self {
+        TransactionType::DepositQuote
     }
 }
 
-impl From<&StakeTx> for TransactionType {
-    fn from(_: &StakeTx) -> Self {
-        TransactionType::Stake
+impl From<&Deposit> for TransactionType {
+    fn from(_: &Deposit) -> Self {
+        TransactionType::Deposit
     }
 }
 
-impl From<&WitnessTx> for TransactionType {
-    fn from(_: &WitnessTx) -> Self {
+impl From<&Witness> for TransactionType {
+    fn from(_: &Witness) -> Self {
         TransactionType::Witness
     }
 }
 
-impl From<&OutputTx> for TransactionType {
-    fn from(_: &OutputTx) -> Self {
+impl From<&Output> for TransactionType {
+    fn from(_: &Output) -> Self {
         TransactionType::Output
     }
 }
 
-impl From<&OutputSentTx> for TransactionType {
-    fn from(_: &OutputSentTx) -> Self {
+impl From<&OutputSent> for TransactionType {
+    fn from(_: &OutputSent) -> Self {
         TransactionType::Sent
     }
 }
 
-impl From<&UnstakeRequestTx> for TransactionType {
-    fn from(_: &UnstakeRequestTx) -> Self {
-        TransactionType::UnstakeRequest
+impl From<&WithdrawRequest> for TransactionType {
+    fn from(_: &WithdrawRequest) -> Self {
+        TransactionType::WithdrawRequest
     }
 }
 
-impl From<&UnstakeTx> for TransactionType {
-    fn from(_: &UnstakeTx) -> Self {
-        TransactionType::Unstake
+impl From<&Withdraw> for TransactionType {
+    fn from(_: &Withdraw) -> Self {
+        TransactionType::Withdraw
     }
 }

@@ -1,12 +1,10 @@
-use std::convert::TryInto;
-
-use web3::types::U256;
-
 use crate::{
-    common::fractions::PercentageFraction, transactions::QuoteTx, utils::calculate_effective_price,
-    vault::processor::utils::is_swap_quote_expired,
+    utils::calculate_effective_price, vault::processor::utils::is_swap_quote_expired,
     vault::transactions::memory_provider::FulfilledTxWrapper,
 };
+use chainflip_common::types::{chain::SwapQuote, fraction::PercentageFraction};
+use std::convert::TryInto;
+use web3::types::U256;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 enum Result {
@@ -35,7 +33,7 @@ impl Result {
 }
 
 fn check_refund(
-    quote: &FulfilledTxWrapper<QuoteTx>,
+    quote: &FulfilledTxWrapper<SwapQuote>,
     input_amount: u128,
     output_amount: u128,
 ) -> Result {
@@ -96,7 +94,7 @@ fn check_refund(
 ///     - Slippage limit is above 0.0
 ///     - Slippage between quote effective price and current effective price is greater than the slippage limit
 pub fn should_refund(
-    quote: &FulfilledTxWrapper<QuoteTx>,
+    quote: &FulfilledTxWrapper<SwapQuote>,
     input_amount: u128,
     output_amount: u128,
 ) -> bool {
@@ -105,23 +103,14 @@ pub fn should_refund(
 
 #[cfg(test)]
 mod test {
+    use super::*;
+    use crate::utils::test_utils::data::TestData;
+    use chainflip_common::types::{coin::Coin, Timestamp};
     use std::convert::TryFrom;
 
-    use super::*;
-    use crate::{common::Coin, common::Timestamp, common::WalletAddress};
-
-    fn get_quote() -> FulfilledTxWrapper<QuoteTx> {
-        let quote = QuoteTx::new(
-            Timestamp::now(),
-            Coin::ETH,
-            WalletAddress::new("0x70e7db0678460c5e53f1ffc9221d1c692111dcc5"),
-            "6".to_owned(),
-            Some(WalletAddress::new("0x70e7db0678460c5e53f1ffc9221d1c692111dcc5")),
-            Coin::LOKI,
-            WalletAddress::new("T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY"),
-            1,
-            Some(PercentageFraction::try_from(0.1).unwrap()),
-        ).unwrap();
+    fn get_quote() -> FulfilledTxWrapper<SwapQuote> {
+        let mut quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        quote.slippage_limit = Some(PercentageFraction::try_from(0.1).unwrap());
 
         FulfilledTxWrapper {
             inner: quote,

@@ -25,3 +25,20 @@ pub fn get_fake_staker() -> Staker {
         keys: get_fake_ecdsa_key(),
     }
 }
+
+pub fn get_random_ecdsa_key() -> EcdsaKeyPair {
+    let rng = ring::rand::SystemRandom::new();
+
+    let algo = &signature::ECDSA_P256_SHA256_FIXED_SIGNING;
+
+    let pkcs8 = EcdsaKeyPair::generate_pkcs8(algo, &rng).expect("could not generate random key");
+
+    EcdsaKeyPair::from_pkcs8(algo, &pkcs8.as_ref()).unwrap()
+}
+
+/// Create a staker represented by a valid but arbitrary keypair
+pub fn get_random_staker() -> Staker {
+    Staker {
+        keys: get_random_ecdsa_key(),
+    }
+}

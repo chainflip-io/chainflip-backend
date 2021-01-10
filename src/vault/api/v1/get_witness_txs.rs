@@ -1,18 +1,17 @@
-use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
-
 use crate::{
     common::api::ResponseError,
     side_chain::{ISideChain, SideChainTx},
-    transactions::WitnessTx,
 };
+use chainflip_common::types::chain::Witness;
+use serde::{Deserialize, Serialize};
+use std::sync::{Arc, Mutex};
 
 /// Typed representation of the response for /get_witnesses
 #[serde(rename_all = "camelCase")]
 #[derive(Debug, Deserialize, Serialize)]
 pub(super) struct WitnessQueryResponse {
     /// The current blocks
-    pub witness_txs: Vec<WitnessTx>,
+    pub witness_txs: Vec<Witness>,
 }
 
 /// Get all known transaction witnesses
@@ -33,7 +32,7 @@ pub(super) async fn get_witnesses<S: ISideChain>(
         let block = side_chain.get_block(block_idx).expect("invalid index");
 
         for tx in &block.transactions {
-            if let SideChainTx::WitnessTx(tx) = tx {
+            if let SideChainTx::Witness(tx) = tx {
                 witness_txs.push(tx.clone());
             }
         }
@@ -47,28 +46,29 @@ pub(super) async fn get_witnesses<S: ISideChain>(
 #[cfg(test)]
 mod tests {
 
-    use crate::{
-        common::{Coin, GenericCoinAmount, LokiAmount, PoolCoin},
-        side_chain::MemorySideChain,
-        utils::test_utils::{create_fake_stake_quote, create_fake_witness},
-    };
+    use chainflip_common::types::coin::Coin;
 
     use super::*;
+    use crate::{
+        common::{GenericCoinAmount, LokiAmount},
+        side_chain::MemorySideChain,
+        utils::test_utils::data::TestData,
+    };
 
     fn init() -> MemorySideChain {
         let mut chain = MemorySideChain::new();
 
-        let quote = create_fake_stake_quote(PoolCoin::ETH);
+        let quote = TestData::deposit_quote(Coin::ETH);
 
         let loki_amount = LokiAmount::from_decimal_string("10");
 
         let eth_amount = GenericCoinAmount::from_decimal_string(Coin::ETH, "10");
 
-        let witness = create_fake_witness(&quote, loki_amount, Coin::LOKI);
+        let witness = TestData::witness(quote.id, loki_amount.to_atomic(), Coin::LOKI);
 
         chain.add_block(vec![witness.into()]).expect("adding block");
 
-        let witness = create_fake_witness(&quote, eth_amount, Coin::ETH);
+        let witness = TestData::witness(quote.id, eth_amount.to_atomic(), Coin::ETH);
 
         chain.add_block(vec![witness.into()]).expect("adding block");
 

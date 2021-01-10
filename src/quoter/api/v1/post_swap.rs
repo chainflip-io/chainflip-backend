@@ -1,18 +1,19 @@
 use crate::{
-    common::{api::ResponseError, coins::Coin},
-    quoter::vault_node::{SwapQuoteParams, VaultNodeInterface},
+    common::{api::ResponseError, input_address_id::input_address_id_to_string},
+    quoter::vault_node::VaultNodeInterface,
+    vault::api::v1::post_swap::SwapQuoteParams,
 };
+use chainflip_common::types::coin::Coin;
 use rand::{prelude::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeSet, HashMap},
     str::FromStr,
     sync::{Arc, Mutex},
     time::SystemTime,
 };
 use warp::http::StatusCode;
 
-use super::utils::generate_unique_input_address_id;
+use super::{utils::generate_unique_input_address_id, InputIdCache};
 
 /// Parameters for POST `quote` endpoint
 #[derive(Debug, Serialize, Deserialize)]
@@ -36,7 +37,7 @@ pub struct PostQuoteParams {
 pub async fn swap<V: VaultNodeInterface>(
     params: PostQuoteParams,
     vault_node: Arc<V>,
-    input_id_cache: Arc<Mutex<HashMap<Coin, BTreeSet<String>>>>,
+    input_id_cache: Arc<Mutex<InputIdCache>>,
 ) -> Result<serde_json::Value, ResponseError> {
     let input_coin = Coin::from_str(&params.input_coin)
         .map_err(|_| ResponseError::new(StatusCode::BAD_REQUEST, "Invalid input coin"))?;
@@ -51,10 +52,14 @@ pub async fn swap<V: VaultNodeInterface>(
     let input_address_id =
         generate_unique_input_address_id(input_coin, input_id_cache.clone(), &mut rng)?;
 
+    // Convert to string representation
+    let string_input_address_id = input_address_id_to_string(input_coin, &input_address_id)
+        .expect("Invalid input address id");
+
     let quote_params = SwapQuoteParams {
         input_coin,
         input_amount: params.input_amount,
-        input_address_id: input_address_id.clone(),
+        input_address_id: string_input_address_id,
         input_return_address: params.input_return_address,
         output_coin,
         output_address: params.output_address,

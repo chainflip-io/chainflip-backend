@@ -1,18 +1,16 @@
-use std::collections::HashMap;
-
 use self::types::TransactionType;
-
 use super::{BlockProcessor, StateProvider};
 use crate::{
     common::store::utils::SQLite as KVS,
-    common::{Liquidity, LiquidityProvider},
+    common::{Liquidity, LiquidityProvider, PoolCoin},
     side_chain::{SideChainBlock, SideChainTx},
 };
+use chainflip_common::types::{chain::*, UUIDv4};
 use itertools::Itertools;
 use rusqlite::{self, Row, ToSql, Transaction};
 use rusqlite::{params, Connection};
 use serde::de::DeserializeOwned;
-use uuid::Uuid;
+use std::collections::HashMap;
 
 mod migration;
 mod types;
@@ -48,39 +46,39 @@ impl Database {
     fn process_transactions(db: &Transaction, txs: &[SideChainTx]) {
         for tx in txs {
             match tx {
-                SideChainTx::PoolChangeTx(tx) => {
+                SideChainTx::PoolChange(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::QuoteTx(tx) => {
+                SideChainTx::SwapQuote(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::StakeQuoteTx(tx) => {
+                SideChainTx::DepositQuote(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::WitnessTx(tx) => {
+                SideChainTx::Witness(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::OutputTx(tx) => {
+                SideChainTx::Output(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::OutputSentTx(tx) => {
+                SideChainTx::OutputSent(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::StakeTx(tx) => {
+                SideChainTx::Deposit(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::UnstakeRequestTx(tx) => {
+                SideChainTx::WithdrawRequest(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::UnstakeTx(tx) => {
+                SideChainTx::Withdraw(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
@@ -88,7 +86,7 @@ impl Database {
         }
     }
 
-    fn insert_transaction(db: &Transaction, uuid: Uuid, tx_type: TransactionType, data: String) {
+    fn insert_transaction(db: &Transaction, uuid: UUIDv4, tx_type: TransactionType, data: String) {
         db.execute(
             "INSERT OR REPLACE INTO transactions (id, type, data) VALUES (?1, ?2, ?3)",
             params![uuid.to_string(), tx_type.to_string(), data],
@@ -153,7 +151,7 @@ impl Database {
         )
     }
 
-    fn get_transaction<T: DeserializeOwned>(&self, id: &Uuid) -> Option<T> {
+    fn get_transaction<T: DeserializeOwned>(&self, id: UUIDv4) -> Option<T> {
         self.get_row(
             "SELECT data from transactions where id = ?",
             params![id.to_string()],
@@ -195,62 +193,64 @@ impl BlockProcessor for Database {
 }
 
 impl StateProvider for Database {
-    fn get_swap_quotes(&self) -> Vec<crate::transactions::QuoteTx> {
+    fn get_swap_quotes(&self) -> Vec<SwapQuote> {
         self.get_transactions(TransactionType::SwapQuote)
     }
 
-    fn get_swap_quote_tx(&self, id: Uuid) -> Option<crate::transactions::QuoteTx> {
-        self.get_transaction(&id)
+    fn get_swap_quote_tx(&self, id: UUIDv4) -> Option<SwapQuote> {
+        self.get_transaction(id)
     }
 
-    fn get_stake_quotes(&self) -> Vec<crate::transactions::StakeQuoteTx> {
-        self.get_transactions(TransactionType::StakeQuote)
+    fn get_stake_quotes(&self) -> Vec<DepositQuote> {
+        self.get_transactions(TransactionType::DepositQuote)
     }
 
-    fn get_stake_quote_tx(&self, id: Uuid) -> Option<crate::transactions::StakeQuoteTx> {
-        self.get_transaction(&id)
+    fn get_stake_quote_tx(&self, id: UUIDv4) -> Option<DepositQuote> {
+        self.get_transaction(id)
     }
 
-    fn get_witness_txs(&self) -> Vec<crate::transactions::WitnessTx> {
+    fn get_witness_txs(&self) -> Vec<Witness> {
         self.get_transactions(TransactionType::Witness)
     }
 
-    fn get_output_txs(&self) -> Vec<crate::transactions::OutputTx> {
+    fn get_output_txs(&self) -> Vec<Output> {
         self.get_transactions(TransactionType::Output)
     }
 
-    fn get_output_sent_txs(&self) -> Vec<crate::transactions::OutputSentTx> {
+    fn get_output_sent_txs(&self) -> Vec<OutputSent> {
         self.get_transactions(TransactionType::Sent)
     }
 
-    fn get_stake_txs(&self) -> Vec<crate::transactions::StakeTx> {
-        self.get_transactions(TransactionType::Stake)
+    fn get_stake_txs(&self) -> Vec<Deposit> {
+        self.get_transactions(TransactionType::Deposit)
     }
 
-    fn get_unstakes(&self) -> Vec<crate::transactions::UnstakeTx> {
-        self.get_transactions(TransactionType::Unstake)
+    fn get_unstakes(&self) -> Vec<Withdraw> {
+        self.get_transactions(TransactionType::Withdraw)
     }
 
-    fn get_unstake_requests(&self) -> Vec<crate::transactions::UnstakeRequestTx> {
-        self.get_transactions(TransactionType::UnstakeRequest)
+    fn get_unstake_requests(&self) -> Vec<WithdrawRequest> {
+        self.get_transactions(TransactionType::WithdrawRequest)
     }
 
-    fn get_pools(&self) -> std::collections::HashMap<crate::common::PoolCoin, Liquidity> {
+    fn get_pools(&self) -> std::collections::HashMap<PoolCoin, Liquidity> {
         let mut map = HashMap::new();
-        let changes: Vec<crate::transactions::PoolChangeTx> =
-            self.get_transactions(TransactionType::PoolChange);
+        let changes: Vec<PoolChange> = self.get_transactions(TransactionType::PoolChange);
 
-        let groups = changes.iter().map(|tx| (tx.coin, tx)).into_group_map();
+        let groups = changes
+            .iter()
+            .map(|tx| (PoolCoin::from(tx.pool).unwrap(), tx))
+            .into_group_map();
         for (coin, txs) in groups {
             let mut liquidity = Liquidity::zero();
             for pool_change in txs {
                 let depth = liquidity.depth as i128 + pool_change.depth_change;
-                let loki_depth = liquidity.loki_depth as i128 + pool_change.loki_depth_change;
-                if depth < 0 || loki_depth < 0 {
+                let base_depth = liquidity.base_depth as i128 + pool_change.base_depth_change;
+                if depth < 0 || base_depth < 0 {
                     panic!("Negative liquidity depth found")
                 }
                 liquidity.depth = depth as u128;
-                liquidity.loki_depth = loki_depth as u128;
+                liquidity.base_depth = base_depth as u128;
             }
 
             map.insert(coin, liquidity);
@@ -261,7 +261,7 @@ impl StateProvider for Database {
 }
 
 impl LiquidityProvider for Database {
-    fn get_liquidity(&self, pool: crate::common::PoolCoin) -> Option<Liquidity> {
+    fn get_liquidity(&self, pool: PoolCoin) -> Option<Liquidity> {
         self.get_pools().get(&pool).cloned()
     }
 }
@@ -269,18 +269,11 @@ impl LiquidityProvider for Database {
 #[cfg(test)]
 mod test {
     use super::*;
-
     use crate::{
-        common::{fractions::*, *},
-        transactions::UnstakeRequestTx,
-        transactions::{OutputSentTx, PoolChangeTx, WitnessTx},
-        utils::test_utils::TEST_ETH_ADDRESS,
-        utils::test_utils::TEST_LOKI_ADDRESS,
-        utils::test_utils::{
-            create_fake_output_tx, create_fake_quote_tx_eth_loki, create_fake_stake_quote,
-        },
+        common::*,
+        utils::test_utils::{data::TestData, staking::get_random_staker},
     };
-
+    use chainflip_common::types::coin::Coin;
     use rusqlite::NO_PARAMS;
 
     fn setup() -> Database {
@@ -298,7 +291,7 @@ mod test {
         let mut db = setup();
         let tx = db.connection.transaction().unwrap();
 
-        let uuid = Uuid::new_v4();
+        let uuid = UUIDv4::new();
         Database::insert_transaction(&tx, uuid, TransactionType::PoolChange, "Hello".into());
 
         tx.commit().unwrap();
@@ -347,43 +340,16 @@ mod test {
     fn processes_transactions() {
         let mut db = setup();
         let tx = db.connection.transaction().unwrap();
+        let staker = get_random_staker();
 
         let transactions: Vec<SideChainTx> = vec![
-            PoolChangeTx::new(PoolCoin::BTC, 100, -100).into(),
-            create_fake_quote_tx_eth_loki().into(), // Quote Tx
-            create_fake_stake_quote(PoolCoin::ETH).into(),
-            WitnessTx::new(
-                Timestamp::now(),
-                Uuid::new_v4(),
-                "txid".to_owned(),
-                0,
-                0,
-                100,
-                Coin::ETH,
-            )
-            .into(),
-            create_fake_output_tx(Coin::ETH).into(), // Output tx
-            OutputSentTx::new(
-                Timestamp::now(),
-                vec![Uuid::new_v4()],
-                Coin::ETH,
-                WalletAddress::new(TEST_ETH_ADDRESS),
-                100,
-                0,
-                "txid".to_owned(),
-            )
-            .unwrap()
-            .into(),
-            UnstakeRequestTx::new(
-                PoolCoin::ETH,
-                StakerId::new("0433829aa2cccda485ee215421bd6c2af3e6e1702e3202790af42a7332c3fc06ec08beafef0b504ed20d5176f6323da3a4d34c5761a82487087d93ebd673ca7293".to_string()).unwrap(),
-                WalletAddress::new(TEST_LOKI_ADDRESS),
-                WalletAddress::new(TEST_ETH_ADDRESS),
-                UnstakeFraction::MAX,
-                Timestamp::now(),
-                "sig".to_string(),
-            )
-            .into(),
+            TestData::pool_change(Coin::BTC, -100, 100).into(),
+            TestData::swap_quote(Coin::ETH, Coin::LOKI).into(),
+            TestData::deposit_quote(Coin::ETH).into(),
+            TestData::witness(UUIDv4::new(), 100, Coin::ETH).into(),
+            TestData::output(Coin::ETH, 100).into(),
+            TestData::output_sent(Coin::ETH).into(),
+            TestData::withdraw_request_for_staker(&staker, Coin::ETH).into(),
         ];
 
         Database::process_transactions(&tx, &transactions);
@@ -395,17 +361,17 @@ mod test {
             .query_row("SELECT COUNT(*) from transactions", NO_PARAMS, |r| r.get(0))
             .unwrap();
 
-        assert_eq!(count, 7);
+        assert_eq!(count, transactions.len() as u32);
     }
 
     #[test]
     fn returns_pools() {
         let mut db = setup();
         let transactions: Vec<SideChainTx> = vec![
-            PoolChangeTx::new(PoolCoin::BTC, 100, 100).into(),
-            PoolChangeTx::new(PoolCoin::ETH, 75, 75).into(),
-            PoolChangeTx::new(PoolCoin::BTC, 100, -50).into(),
-            PoolChangeTx::new(PoolCoin::BTC, 0, -50).into(),
+            TestData::pool_change(Coin::BTC, 100, 100).into(),
+            TestData::pool_change(Coin::ETH, 75, 75).into(),
+            TestData::pool_change(Coin::BTC, 100, -50).into(),
+            TestData::pool_change(Coin::BTC, 0, -50).into(),
         ];
 
         db.process_blocks(&[SideChainBlock {
@@ -417,11 +383,11 @@ mod test {
         let pools = db.get_pools();
 
         let btc_pool = pools.get(&PoolCoin::BTC).unwrap();
-        assert_eq!(btc_pool.depth, 0);
-        assert_eq!(btc_pool.loki_depth, 200);
+        assert_eq!(btc_pool.depth, 200);
+        assert_eq!(btc_pool.base_depth, 0);
 
         let eth_pool = pools.get(&PoolCoin::ETH).unwrap();
         assert_eq!(eth_pool.depth, 75);
-        assert_eq!(eth_pool.loki_depth, 75);
+        assert_eq!(eth_pool.base_depth, 75);
     }
 }

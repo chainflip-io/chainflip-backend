@@ -1,39 +1,41 @@
+use super::{
+    get_input_id_indices, group_outputs_by_sending_amounts,
+    wallet_utils::{get_sending_wallets, WalletBalance},
+    OutputSender,
+};
 use crate::{
-    common::{Coin, GenericCoinAmount, Timestamp, WalletAddress},
-    transactions::{OutputSentTx, OutputTx},
+    common::{GenericCoinAmount, WalletAddress},
     utils::{
         address::generate_btc_address,
         bip44::{self, RawKey},
         primitives::U256,
     },
     vault::blockchain_connection::btc::{IBitcoinSend, SendTransaction},
-    vault::config::NetType,
     vault::transactions::TransactionProvider,
 };
 use bip44::KeyPair;
 use bitcoin::Address;
+use chainflip_common::types::{
+    chain::{Output, OutputSent, Validate},
+    coin::Coin,
+    Network, Timestamp, UUIDv4,
+};
 use hdwallet::ExtendedPrivKey;
 use itertools::Itertools;
 use parking_lot::RwLock;
 use std::{convert::TryFrom, str::FromStr, sync::Arc};
-
-use super::{
-    get_input_id_indices, group_outputs_by_sending_amounts,
-    wallet_utils::{get_sending_wallets, WalletBalance},
-    OutputSender,
-};
 
 /// An output send for Bitcoin
 pub struct BtcOutputSender<B: IBitcoinSend, T: TransactionProvider> {
     client: B,
     root_private_key: ExtendedPrivKey,
     provider: Arc<RwLock<T>>,
-    net_type: NetType,
+    net_type: Network,
 }
 
 impl<B: IBitcoinSend, T: TransactionProvider> BtcOutputSender<B, T> {
     /// Create new BtcOutputSender
-    pub fn new(client: B, provider: Arc<RwLock<T>>, root_key: RawKey, net_type: NetType) -> Self {
+    pub fn new(client: B, provider: Arc<RwLock<T>>, root_key: RawKey, net_type: Network) -> Self {
         let root_private_key = root_key
             .to_private_key()
             .expect("Failed to generate bitcoin extended private key");
@@ -48,9 +50,9 @@ impl<B: IBitcoinSend, T: TransactionProvider> BtcOutputSender<B, T> {
 
     async fn send_outputs_inner(
         &self,
-        outputs: &[&OutputTx],
+        outputs: &[&Output],
         key_pair: &KeyPair,
-    ) -> Result<OutputSentTx, String> {
+    ) -> Result<OutputSent, String> {
         if outputs.is_empty() {
             return Err("Empty outputs".to_owned());
         }
@@ -68,7 +70,7 @@ impl<B: IBitcoinSend, T: TransactionProvider> BtcOutputSender<B, T> {
             return Err("Received BTC outputs with different addresses!".to_owned());
         }
 
-        let address = match Address::from_str(&address.0) {
+        let btc_address = match Address::from_str(&address.to_string()) {
             Ok(address) => address,
             Err(_) => {
                 return Err(format!(
@@ -81,7 +83,7 @@ impl<B: IBitcoinSend, T: TransactionProvider> BtcOutputSender<B, T> {
         // Send!
         let transaction = SendTransaction {
             from: key_pair.clone(),
-            to: address.clone(),
+            to: btc_address.clone(),
             amount: GenericCoinAmount::from_atomic(Coin::BTC, total_amount),
         };
 
@@ -92,19 +94,20 @@ impl<B: IBitcoinSend, T: TransactionProvider> BtcOutputSender<B, T> {
 
         let uuids = outputs.iter().map(|tx| tx.id).collect_vec();
 
-        let wallet_address = WalletAddress::new(&address.to_string());
-
-        match OutputSentTx::new(
-            Timestamp::now(),
-            uuids,
-            Coin::BTC,
-            wallet_address,
-            total_amount,
+        let sent = OutputSent {
+            id: UUIDv4::new(),
+            timestamp: Timestamp::now(),
+            outputs: uuids,
+            coin: Coin::BTC,
+            address: address.clone(),
+            amount: total_amount,
             // Fee is already taken from the send amount when sent
-            0,
-            tx_hash.to_string(),
-        ) {
-            Ok(tx) => Ok(tx),
+            fee: 0,
+            transaction_id: tx_hash.to_string().into(),
+        };
+
+        match sent.validate(self.net_type) {
+            Ok(_) => Ok(sent),
             // Panic here because we sent money but didn't record it into the system
             Err(err) => panic!(
                 "Failed to create output tx for {:?} with hash {}: {}",
@@ -113,8 +116,8 @@ impl<B: IBitcoinSend, T: TransactionProvider> BtcOutputSender<B, T> {
         }
     }
 
-    async fn send_outputs(&self, outputs: &[OutputTx], key_pair: &KeyPair) -> Vec<OutputSentTx> {
-        let mut sent_txs: Vec<OutputSentTx> = vec![];
+    async fn send_outputs(&self, outputs: &[Output], key_pair: &KeyPair) -> Vec<OutputSent> {
+        let mut sent_txs: Vec<OutputSent> = vec![];
 
         // Split outputs into chunks of u128
         let groups = group_outputs_by_sending_amounts(outputs);
@@ -137,7 +140,7 @@ impl<B: IBitcoinSend, T: TransactionProvider> BtcOutputSender<B, T> {
 impl<B: IBitcoinSend + Sync + Send, T: TransactionProvider + Sync + Send> OutputSender
     for BtcOutputSender<B, T>
 {
-    async fn send(&self, outputs: &[OutputTx]) -> Vec<OutputSentTx> {
+    async fn send(&self, outputs: &[Output]) -> Vec<OutputSent> {
         if (outputs.is_empty()) {
             return vec![];
         }
@@ -174,7 +177,7 @@ impl<B: IBitcoinSend + Sync + Send, T: TransactionProvider + Sync + Send> Output
                 key.clone(),
                 true,
                 bitcoin::AddressType::P2wpkh,
-                &self.net_type,
+                self.net_type,
             ) {
                 Ok(address) => address,
                 Err(err) => {
@@ -196,7 +199,7 @@ impl<B: IBitcoinSend + Sync + Send, T: TransactionProvider + Sync + Send> Output
         }
         let wallet_outputs = get_sending_wallets(&wallet_balances, outputs);
 
-        let mut sent_txs: Vec<OutputSentTx> = vec![];
+        let mut sent_txs: Vec<OutputSent> = vec![];
         for output in wallet_outputs {
             let sent = self.send_outputs(&[output.output], &output.wallet).await;
             sent_txs.extend(sent);
@@ -207,16 +210,15 @@ impl<B: IBitcoinSend + Sync + Send, T: TransactionProvider + Sync + Send> Output
 
 #[cfg(test)]
 mod test {
-    use std::sync::Mutex;
-
+    use super::*;
     use crate::{
-        common::WalletAddress,
         side_chain::MemorySideChain,
-        utils::test_utils::{btc::TestBitcoinSendClient, create_fake_output_tx, TEST_ROOT_KEY},
+        utils::test_utils::{
+            btc::TestBitcoinSendClient, data::TestData, TEST_BTC_ADDRESS, TEST_ROOT_KEY,
+        },
         vault::transactions::MemoryTransactionsProvider,
     };
-
-    use super::*;
+    use std::sync::Mutex;
 
     fn get_key_pair() -> KeyPair {
         KeyPair::from_private_key(
@@ -232,7 +234,7 @@ mod test {
         let provider = MemoryTransactionsProvider::new_protected(side_chain.clone());
         let client = TestBitcoinSendClient::new();
         let key = RawKey::decode(TEST_ROOT_KEY).unwrap();
-        BtcOutputSender::new(client, provider, key, NetType::Testnet)
+        BtcOutputSender::new(client, provider, key, Network::Testnet)
     }
 
     #[tokio::test]
@@ -247,10 +249,8 @@ mod test {
 
         // =================
 
-        let mut output_1 = create_fake_output_tx(Coin::BTC);
-        let mut output_2 = create_fake_output_tx(Coin::BTC);
-        output_1.amount = u128::MAX;
-        output_2.amount = 100;
+        let output_1 = TestData::output(Coin::BTC, u128::MAX);
+        let output_2 = TestData::output(Coin::BTC, 100);
 
         assert_eq!(
             &sender
@@ -262,9 +262,9 @@ mod test {
 
         // =================
 
-        let output_1 = create_fake_output_tx(Coin::BTC);
-        let mut output_2 = create_fake_output_tx(Coin::BTC);
-        output_2.address = WalletAddress::new("different");
+        let output_1 = TestData::output(Coin::BTC, 100);
+        let mut output_2 = TestData::output(Coin::BTC, 100);
+        output_2.address = "different".into();
 
         assert_eq!(
             &sender
@@ -276,9 +276,9 @@ mod test {
 
         // =================
 
-        let mut output_1 = create_fake_output_tx(Coin::BTC);
-        let mut output_2 = create_fake_output_tx(Coin::BTC);
-        output_1.address = WalletAddress::new("invalid");
+        let mut output_1 = TestData::output(Coin::BTC, 100);
+        let mut output_2 = TestData::output(Coin::BTC, 100);
+        output_1.address = "invalid".into();
         output_2.address = output_1.address.clone();
 
         assert!(sender
@@ -290,9 +290,7 @@ mod test {
         // =================
         // Fee higher than or equal to the amount
 
-        let mut output_1 = create_fake_output_tx(Coin::BTC);
-        // amount less than fee
-        output_1.amount = 10;
+        let output_1 = TestData::output(Coin::BTC, 10);
 
         sender.client.set_send_handler(|_| Err("Send Error".into()));
 
@@ -311,15 +309,13 @@ mod test {
         let key_pair = get_key_pair();
         let key_pair_public_key = (&key_pair.public_key).to_string();
 
-        let mut output_1 = create_fake_output_tx(Coin::BTC);
-        let mut output_2 = create_fake_output_tx(Coin::BTC);
-        output_1.amount = 100;
-        output_2.amount = 200;
+        let mut output_1 = TestData::output(Coin::BTC, 100);
+        let mut output_2 = TestData::output(Coin::BTC, 200);
 
         // bitcoin address (old) are case sensitive
-        let address = "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2";
-        output_1.address = WalletAddress::new(address);
-        output_2.address = WalletAddress::new(address);
+        let address = TEST_BTC_ADDRESS;
+        output_1.address = address.into();
+        output_2.address = address.into();
 
         // random testnet transaction id
         let hash = "525fed92644fbd91b3bd183ed2134acd0ca1aaa4fa0fb714c2d1322be550fefe";
@@ -337,13 +333,13 @@ mod test {
             .await
             .unwrap();
 
-        assert_eq!(sent_tx.output_txs, vec![output_1.id, output_2.id]);
+        assert_eq!(sent_tx.outputs, vec![output_1.id, output_2.id]);
         assert_eq!(sent_tx.coin, Coin::BTC);
-        assert_eq!(&sent_tx.address.0, address);
+        assert_eq!(sent_tx.address, address.into());
         assert_eq!(sent_tx.amount, 300);
         // Fee is sent from the send amount
         assert_eq!(sent_tx.fee, 0);
-        assert_eq!(&sent_tx.transaction_id, hash);
+        assert_eq!(sent_tx.transaction_id, hash.into());
     }
 
     #[tokio::test]
@@ -351,12 +347,9 @@ mod test {
         let mut sender = get_output_sender();
         let key_pair = get_key_pair();
 
-        let mut output_1 = create_fake_output_tx(Coin::BTC);
-        let mut output_2 = create_fake_output_tx(Coin::BTC);
-
         // Make sure send_outputs splits these outputs in 2 distinct sends
-        output_1.amount = u128::MAX;
-        output_2.amount = 200;
+        let output_1 = TestData::output(Coin::BTC, u128::MAX);
+        let output_2 = TestData::output(Coin::BTC, 200);
 
         sender.client.set_send_handler(|tx| {
             // Make output_1 fail
@@ -377,7 +370,7 @@ mod test {
         assert_eq!(sent.len(), 1);
 
         let first = sent.first().unwrap();
-        assert_eq!(&first.output_txs, &[output_2.id]);
+        assert_eq!(&first.outputs, &[output_2.id]);
         assert_eq!(first.amount, 200);
         assert_eq!(first.fee, 0);
     }

@@ -1,13 +1,9 @@
 use crate::{
-    common::{Coin, Timestamp, WalletAddress},
     side_chain::{ISideChain, MemorySideChain},
-    transactions::OutputTx,
-    transactions::QuoteTx,
     vault::config::BtcConfig,
     vault::config::EthConfig,
     vault::config::LokiConfig,
     vault::{
-        config::NetType,
         config::{LokiRpcConfig, VaultConfig},
         transactions::MemoryTransactionsProvider,
     },
@@ -23,8 +19,8 @@ pub mod ethereum;
 /// Test helper for key value store
 pub mod store;
 
-/// Transactions used for testing
-pub mod fake_txs;
+/// Data used for testing
+pub mod data;
 
 /// Logging initialization
 pub mod logging;
@@ -33,81 +29,20 @@ pub mod logging;
 pub mod staking;
 
 mod test_runner;
+use chainflip_common::types::Network;
 pub use test_runner::TestRunner;
-
-pub use fake_txs::{
-    create_fake_stake_quote, create_fake_stake_quote_for_id, create_fake_witness,
-    create_unstake_for_staker,
-};
-use uuid::Uuid;
-
-use super::calculate_effective_price;
 
 /// Test ETH address
 pub const TEST_ETH_ADDRESS: &str = "0x70e7db0678460c5e53f1ffc9221d1c692111dcc5";
 /// Test LOKI address
 pub const TEST_LOKI_ADDRESS: &str = "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY";
+/// Test LOKI Payment id
+pub const TEST_LOKI_PAYMENT_ID: [u8; 8] = [66, 15, 162, 155, 45, 154, 73, 245];
 /// Test BTC address
 pub const TEST_BTC_ADDRESS: &str = "tb1q6898gg3tkkjurdpl4cghaqgmyvs29p4x4h0552";
 
 /// Test ROOT Key
 pub const TEST_ROOT_KEY: &str = "xprv9s21ZrQH143K3sFfKzYqgjMWgvsE44f6gxaRvyo11R22u2p5qegToQaEi7e6e5mRq3f92g9yDQQtu488ggct5gUspippg678t1QTCwBRb85";
-
-/// Create a dummy quote transaction to be used for tests
-pub fn create_fake_quote_tx_eth_loki() -> QuoteTx {
-    let eth_address = WalletAddress::new(TEST_ETH_ADDRESS);
-
-    create_fake_quote_tx_coin_to_loki(Coin::ETH, eth_address)
-}
-
-/// Creates a fake quote tx from any input coin and address, to Loki
-pub fn create_fake_quote_tx_coin_to_loki(i_coin: Coin, i_addr: WalletAddress) -> QuoteTx {
-    let loki_address = WalletAddress::new(TEST_LOKI_ADDRESS);
-
-    create_fake_quote_tx(i_coin, i_addr, Coin::LOKI, loki_address)
-}
-
-/// Create dummy quote tx generalised
-pub fn create_fake_quote_tx(
-    i_coin: Coin,
-    i_addr: WalletAddress,
-    o_coin: Coin,
-    o_addr: WalletAddress,
-) -> QuoteTx {
-    QuoteTx {
-        id: Uuid::new_v4(),
-        timestamp: Timestamp::now(),
-        input: i_coin,
-        input_address: i_addr.clone(),
-        input_address_id: "7".to_string(),
-        return_address: Some(i_addr),
-        output: o_coin,
-        output_address: o_addr,
-        effective_price: calculate_effective_price(1, 1).unwrap(),
-        slippage_limit: None,
-    }
-}
-
-/// Create a fake output tx
-pub fn create_fake_output_tx(coin: Coin) -> OutputTx {
-    let address= match coin {
-        Coin::LOKI => "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY",
-        Coin::ETH => "0x70e7db0678460c5e53f1ffc9221d1c692111dcc5",
-        // p2pkh testnet address
-        Coin::BTC => "msXs47UUTTMr4Kqe2WaDfZCR9t9qb25WJo",
-    };
-
-    OutputTx {
-        id: uuid::Uuid::new_v4(),
-        timestamp: Timestamp::now(),
-        quote_tx: uuid::Uuid::new_v4(),
-        witness_txs: vec![],
-        pool_change_txs: vec![],
-        coin,
-        address: WalletAddress::new(address),
-        amount: 100,
-    }
-}
 
 /// Creates a new random file name that (if created)
 /// gets removed when this object is destructed
@@ -176,7 +111,7 @@ pub fn get_fake_config() -> VaultConfig {
 
     VaultConfig {
         loki,
-        net_type: NetType::Testnet,
+        net_type: Network::Testnet,
         eth,
         btc,
     }

@@ -2,8 +2,7 @@ use crate::{
     common::{GenericCoinAmount, WalletAddress},
     utils::bip44::KeyPair,
 };
-use bitcoin::blockdata::transaction::Transaction;
-use bitcoin::{Address, Network, Txid};
+use bitcoin::{Address, Txid};
 use spv::AddressUnspentResponse;
 
 /// Define btc SPV interface

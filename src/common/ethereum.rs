@@ -1,5 +1,6 @@
 use super::WalletAddress;
 use crate::utils::clone_into_array;
+use chainflip_common::types::addresses::EthereumAddress;
 use hdwallet::secp256k1::PublicKey;
 use regex::Regex;
 use std::{fmt::Display, str::FromStr};

@@ -1,11 +1,10 @@
-use std::convert::TryInto;
-
-use num_bigint::{BigInt, Sign};
-
 use crate::{
-    common::{Coin, GenericCoinAmount, Liquidity, LokiAmount},
+    common::{GenericCoinAmount, Liquidity, LokiAmount},
     utils,
 };
+use chainflip_common::types::coin::Coin;
+use num_bigint::{BigInt, Sign};
+use std::convert::TryInto;
 
 #[derive(Debug, Clone, Copy)]
 struct LokiError(i128);
@@ -162,7 +161,7 @@ pub(super) fn find_loki_x(
     let x0 = ifee;
     let x2 = loki.to_atomic();
 
-    let dl = liquidity.loki_depth;
+    let dl = liquidity.base_depth;
     let de = liquidity.depth;
 
     let state = State {
@@ -189,7 +188,7 @@ pub(super) fn find_other_x(
 ) -> Option<u128> {
     let loki = loki.to_atomic();
     let other = other_amount.to_atomic();
-    let dl = liquidity.loki_depth;
+    let dl = liquidity.base_depth;
     let de = liquidity.depth;
 
     // min amount of other coin to swap to get non-negative loki as output:
@@ -255,13 +254,8 @@ fn find_min_other(dl: u128, de: u128, ofee: u128) -> Result<u128, &'static str> 
 #[cfg(test)]
 mod tests {
 
-    use crate::{
-        common::{Coin, GenericCoinAmount},
-        constants::LOKI_SWAP_PROCESS_FEE,
-        utils,
-    };
-
     use super::*;
+    use crate::{common::GenericCoinAmount, constants::LOKI_SWAP_PROCESS_FEE, utils};
 
     fn loki(x: u128) -> LokiAmount {
         LokiAmount::from_atomic(x * 1_000_000_000)

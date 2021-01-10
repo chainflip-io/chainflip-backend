@@ -1,7 +1,8 @@
 use crate::{
-    common::{api::ResponseError, coins::Coin, Liquidity, PoolCoin, Timestamp},
+    common::{api::ResponseError, Liquidity, PoolCoin},
     quoter::StateProvider,
 };
+use chainflip_common::types::{coin::Coin, Timestamp};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -55,7 +56,7 @@ where
     let valid_symbols: Vec<Coin> = symbols
         .split(",")
         .filter_map(|symbol| symbol.parse::<Coin>().ok())
-        .filter(|symbol| symbol.clone() != Coin::LOKI)
+        .filter(|symbol| symbol.clone() != Coin::BASE_COIN)
         .collect();
 
     let filtered_pools = pools
@@ -74,7 +75,7 @@ mod test {
     use crate::{
         quoter::{api::v1::test::setup_memory_db, BlockProcessor},
         side_chain::{SideChainBlock, SideChainTx},
-        transactions::PoolChangeTx,
+        utils::test_utils::data::TestData,
     };
 
     use super::*;
@@ -83,10 +84,10 @@ mod test {
     async fn returns_correct_response_when_no_symbols_specified() {
         let mut db = setup_memory_db();
         let transactions: Vec<SideChainTx> = vec![
-            PoolChangeTx::new(PoolCoin::BTC, 100, 100).into(),
-            PoolChangeTx::new(PoolCoin::ETH, 75, 75).into(),
-            PoolChangeTx::new(PoolCoin::BTC, 100, -50).into(),
-            PoolChangeTx::new(PoolCoin::BTC, 0, -50).into(),
+            TestData::pool_change(Coin::BTC, 100, 100).into(),
+            TestData::pool_change(Coin::ETH, 75, 75).into(),
+            TestData::pool_change(Coin::BTC, -50, 100).into(),
+            TestData::pool_change(Coin::BTC, -50, 0).into(),
         ];
 
         db.process_blocks(&[SideChainBlock {
@@ -106,19 +107,19 @@ mod test {
 
         let btc_pool = pools.get(&PoolCoin::BTC).unwrap();
         assert_eq!(btc_pool.depth, 0);
-        assert_eq!(btc_pool.loki_depth, 200);
+        assert_eq!(btc_pool.base_depth, 200);
 
         let eth_pool = pools.get(&PoolCoin::ETH).unwrap();
         assert_eq!(eth_pool.depth, 75);
-        assert_eq!(eth_pool.loki_depth, 75);
+        assert_eq!(eth_pool.base_depth, 75);
     }
 
     #[tokio::test]
     async fn returns_correct_response_when_symbols_specified() {
         let mut db = setup_memory_db();
         let transactions: Vec<SideChainTx> = vec![
-            PoolChangeTx::new(PoolCoin::BTC, 100, 100).into(),
-            PoolChangeTx::new(PoolCoin::ETH, 75, 75).into(),
+            TestData::pool_change(Coin::BTC, 100, 100).into(),
+            TestData::pool_change(Coin::ETH, 75, 75).into(),
         ];
 
         db.process_blocks(&[SideChainBlock {
@@ -142,7 +143,7 @@ mod test {
 
         let btc_pool = pools.get(&PoolCoin::BTC).unwrap();
         assert_eq!(btc_pool.depth, 100);
-        assert_eq!(btc_pool.loki_depth, 100);
+        assert_eq!(btc_pool.base_depth, 100);
 
         assert_eq!(pools.contains_key(&PoolCoin::ETH), false)
     }
@@ -151,7 +152,7 @@ mod test {
     async fn returns_correct_response_when_no_pool() {
         let mut db = setup_memory_db();
         let transactions: Vec<SideChainTx> =
-            vec![PoolChangeTx::new(PoolCoin::BTC, 100, 100).into()];
+            vec![TestData::pool_change(Coin::BTC, 100, 100).into()];
 
         db.process_blocks(&[SideChainBlock {
             id: 0,

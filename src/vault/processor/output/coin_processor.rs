@@ -1,15 +1,14 @@
-use crate::{
-    common::Coin,
-    transactions::{OutputSentTx, OutputTx},
-};
-
 use super::senders::OutputSender;
+use chainflip_common::types::{
+    chain::{Output, OutputSent},
+    coin::Coin,
+};
 
 /// Handy trait for injecting custom processing code during testing
 #[async_trait]
 pub trait CoinProcessor {
     /// Send outputs using corresponding "sender" for each coin
-    async fn process(&self, coin: Coin, outputs: &[OutputTx]) -> Vec<OutputSentTx>;
+    async fn process(&self, coin: Coin, outputs: &[Output]) -> Vec<OutputSent>;
 }
 
 /// Struct responsible for sending outputs all supported coin types
@@ -38,7 +37,7 @@ where
     E: OutputSender + Sync + Send,
     B: OutputSender + Sync + Send,
 {
-    async fn process(&self, coin: Coin, outputs: &[OutputTx]) -> Vec<OutputSentTx> {
+    async fn process(&self, coin: Coin, outputs: &[Output]) -> Vec<OutputSent> {
         match coin {
             Coin::ETH => self.eth.send(outputs).await,
             Coin::BTC => self.btc.send(outputs).await,

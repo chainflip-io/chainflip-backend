@@ -1,26 +1,21 @@
-use parking_lot::RwLock;
-
 use crate::{
     common::{
         liquidity_provider::{Liquidity, LiquidityProvider, MemoryLiquidityProvider},
         GenericCoinAmount, LokiAmount, PoolCoin, StakerId,
     },
     side_chain::{ISideChain, SideChainTx},
-    transactions::{
-        OutputSentTx, OutputTx, PoolChangeTx, QuoteTx, StakeQuoteTx, StakeTx, UnstakeRequestTx,
-        UnstakeTx, WitnessTx,
-    },
     vault::transactions::{
         portions::{adjust_portions_after_stake, StakeContribution},
         TransactionProvider,
     },
 };
+use chainflip_common::types::chain::*;
+use parking_lot::RwLock;
+use serde::Serialize;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
-
-use serde::Serialize;
 
 use super::portions::{adjust_portions_after_unstake, UnstakeWithdrawal};
 
@@ -44,7 +39,7 @@ impl<Q: PartialEq> FulfilledTxWrapper<Q> {
 /// Witness transaction plus a boolean flag
 pub struct WitnessTxWrapper {
     /// The actual transaction
-    pub inner: WitnessTx,
+    pub inner: Witness,
     /// Whether the transaction has been used to fulfill
     /// some quote transaction
     pub used: bool,
@@ -52,7 +47,7 @@ pub struct WitnessTxWrapper {
 
 impl WitnessTxWrapper {
     /// Construct from internal parts
-    pub fn new(inner: WitnessTx, used: bool) -> Self {
+    pub fn new(inner: Witness, used: bool) -> Self {
         WitnessTxWrapper { inner, used }
     }
 }
@@ -98,13 +93,13 @@ pub type VaultPortions = HashMap<PoolCoin, PoolPortions>;
 
 /// All state that TransactionProvider will keep in memory
 struct MemoryState {
-    quote_txs: Vec<FulfilledTxWrapper<QuoteTx>>,
-    stake_quote_txs: Vec<FulfilledTxWrapper<StakeQuoteTx>>,
-    unstake_request_txs: Vec<FulfilledTxWrapper<UnstakeRequestTx>>,
-    unstake_txs: Vec<UnstakeTx>,
-    stake_txs: Vec<StakeTx>,
+    quote_txs: Vec<FulfilledTxWrapper<SwapQuote>>,
+    stake_quote_txs: Vec<FulfilledTxWrapper<DepositQuote>>,
+    unstake_request_txs: Vec<FulfilledTxWrapper<WithdrawRequest>>,
+    unstake_txs: Vec<Withdraw>,
+    stake_txs: Vec<Deposit>,
     witness_txs: Vec<WitnessTxWrapper>,
-    output_txs: Vec<FulfilledTxWrapper<OutputTx>>,
+    output_txs: Vec<FulfilledTxWrapper<Output>>,
     liquidity: MemoryLiquidityProvider,
     next_block_idx: u32,
     staker_portions: VaultPortions,
@@ -157,33 +152,33 @@ pub struct StakerOwnership {
 }
 
 impl MemoryState {
-    fn process_stake_tx(&mut self, tx: StakeTx) {
+    fn process_stake_tx(&mut self, tx: Deposit) {
         // Find quote and mark it as fulfilled
         if let Some(quote_info) = self
             .stake_quote_txs
             .iter_mut()
-            .find(|quote_info| quote_info.inner.id == tx.quote_tx)
+            .find(|quote_info| quote_info.inner.id == tx.quote)
         {
             quote_info.fulfilled = true;
         }
 
         // Find witness transacitons and mark them as used:
-        for wtx_id in &tx.witness_txs {
+        for wtx_id in &tx.witnesses {
             if let Some(witness_info) = self.witness_txs.iter_mut().find(|w| &w.inner.id == wtx_id)
             {
                 witness_info.used = true;
             }
         }
 
-        // TODO: we need to have the associated PoolChangeTx at this point, but StakeTx
+        // TODO: we need to have the associated PoolChange at this point, but Deposit
         // only has a "uuid reference" to a transactions that we haven't processed yet...
-        // What's worse, we've made the assumption that StakeTx gets processed first,
+        // What's worse, we've made the assumption that Deposit gets processed first,
         // Because we want to see what the liquidity is like before the contribution was made.
 
         let contribution = StakeContribution::new(
-            tx.staker_id.clone(),
-            tx.loki_amount,
-            GenericCoinAmount::from_atomic(tx.pool.get_coin(), tx.other_amount),
+            StakerId::from_bytes(&tx.staker_id).unwrap(),
+            LokiAmount::from_atomic(tx.base_amount),
+            GenericCoinAmount::from_atomic(tx.pool, tx.other_amount),
         );
 
         adjust_portions_after_stake(
@@ -195,7 +190,7 @@ impl MemoryState {
         self.stake_txs.push(tx)
     }
 
-    fn process_pool_change_tx(&mut self, tx: PoolChangeTx) {
+    fn process_pool_change_tx(&mut self, tx: PoolChange) {
         debug!("Processing a pool change tx: {:?}", tx);
         if let Err(err) = self.liquidity.update_liquidity(&tx) {
             error!("Failed to process pool change tx {:?}: {}", tx, err);
@@ -203,12 +198,12 @@ impl MemoryState {
         }
     }
 
-    fn process_unstake_request_tx(&mut self, tx: UnstakeRequestTx) {
+    fn process_unstake_request_tx(&mut self, tx: WithdrawRequest) {
         let tx = FulfilledTxWrapper::new(tx, false);
         self.unstake_request_txs.push(tx);
     }
 
-    fn process_unstake_tx(&mut self, tx: UnstakeTx) {
+    fn process_unstake_tx(&mut self, tx: Withdraw) {
         // We must be able to find the request or else we won't be
         // able to adjust portions which might result in double unstake
 
@@ -216,7 +211,7 @@ impl MemoryState {
         let wrapped_unstake_request = match self
             .unstake_request_txs
             .iter_mut()
-            .find(|w_unstake_req| w_unstake_req.inner.id == tx.request_id)
+            .find(|w_unstake_req| w_unstake_req.inner.id == tx.withdraw_request)
         {
             Some(w_unstake_req) => {
                 w_unstake_req.fulfilled = true;
@@ -224,14 +219,14 @@ impl MemoryState {
             }
             None => panic!(
                 "No unstake request found that matches unstake transaction request id: {}",
-                tx.request_id
+                tx.withdraw_request
             ),
         };
 
         let unstake_req = &wrapped_unstake_request.inner;
 
-        let staker_id = unstake_req.staker_id.clone();
-        let pool = *&unstake_req.pool;
+        let staker_id = StakerId::from_bytes(&unstake_req.staker_id).unwrap();
+        let pool = PoolCoin::from(*&unstake_req.pool).unwrap();
         let fraction = *&unstake_req.fraction;
 
         let unstake = UnstakeWithdrawal {
@@ -250,10 +245,10 @@ impl MemoryState {
         self.unstake_txs.push(tx);
     }
 
-    fn process_output_tx(&mut self, tx: OutputTx) {
+    fn process_output_tx(&mut self, tx: Output) {
         // Find quote and mark it as fulfilled only if it's not a refund
         if let Some(quote_info) = self.quote_txs.iter_mut().find(|quote_info| {
-            quote_info.inner.id == tx.quote_tx && quote_info.inner.output == tx.coin
+            quote_info.inner.id == tx.parent_id() && quote_info.inner.output == tx.coin
         }) {
             quote_info.fulfilled = true;
         }
@@ -262,7 +257,7 @@ impl MemoryState {
         let witnesses = self
             .witness_txs
             .iter_mut()
-            .filter(|witness| tx.witness_txs.contains(&witness.inner.id));
+            .filter(|witness| tx.witnesses.contains(&witness.inner.id));
 
         for witness in witnesses {
             witness.used = true;
@@ -277,12 +272,12 @@ impl MemoryState {
         self.output_txs.push(wrapper);
     }
 
-    fn process_output_sent_tx(&mut self, tx: OutputSentTx) {
+    fn process_output_sent_tx(&mut self, tx: OutputSent) {
         // Find output txs and mark them as fulfilled
         let outputs = self
             .output_txs
             .iter_mut()
-            .filter(|output| tx.output_txs.contains(&output.inner.id));
+            .filter(|output| tx.outputs.contains(&output.inner.id));
 
         for output in outputs {
             output.fulfilled = true;
@@ -301,20 +296,20 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
 
             for tx in block.clone().transactions {
                 match tx {
-                    SideChainTx::QuoteTx(tx) => {
+                    SideChainTx::SwapQuote(tx) => {
                         // Quote transactions always come before their
                         // corresponding "outcome" tx, so they start unfulfilled
                         let tx = FulfilledTxWrapper::new(tx, false);
 
                         self.state.quote_txs.push(tx);
                     }
-                    SideChainTx::StakeQuoteTx(tx) => {
+                    SideChainTx::DepositQuote(tx) => {
                         // (same as above)
                         let tx = FulfilledTxWrapper::new(tx, false);
 
                         self.state.stake_quote_txs.push(tx)
                     }
-                    SideChainTx::WitnessTx(tx) => {
+                    SideChainTx::Witness(tx) => {
                         // We assume that witness transactions arrive unused
                         let tx = WitnessTxWrapper {
                             inner: tx,
@@ -323,12 +318,12 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
 
                         self.state.witness_txs.push(tx);
                     }
-                    SideChainTx::PoolChangeTx(tx) => self.state.process_pool_change_tx(tx),
-                    SideChainTx::StakeTx(tx) => self.state.process_stake_tx(tx),
-                    SideChainTx::OutputTx(tx) => self.state.process_output_tx(tx),
-                    SideChainTx::UnstakeRequestTx(tx) => self.state.process_unstake_request_tx(tx),
-                    SideChainTx::UnstakeTx(tx) => self.state.process_unstake_tx(tx),
-                    SideChainTx::OutputSentTx(tx) => self.state.process_output_sent_tx(tx),
+                    SideChainTx::PoolChange(tx) => self.state.process_pool_change_tx(tx),
+                    SideChainTx::Deposit(tx) => self.state.process_stake_tx(tx),
+                    SideChainTx::Output(tx) => self.state.process_output_tx(tx),
+                    SideChainTx::WithdrawRequest(tx) => self.state.process_unstake_request_tx(tx),
+                    SideChainTx::Withdraw(tx) => self.state.process_unstake_tx(tx),
+                    SideChainTx::OutputSent(tx) => self.state.process_output_sent_tx(tx),
                 }
             }
             self.state.next_block_idx += 1;
@@ -342,7 +337,7 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
         let valid_txs: Vec<SideChainTx> = txs
             .into_iter()
             .filter(|tx| {
-                if let SideChainTx::WitnessTx(tx) = tx {
+                if let SideChainTx::Witness(tx) = tx {
                     return !self
                         .state
                         .witness_txs
@@ -362,11 +357,11 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
         Ok(())
     }
 
-    fn get_quote_txs(&self) -> &[FulfilledTxWrapper<QuoteTx>] {
+    fn get_quote_txs(&self) -> &[FulfilledTxWrapper<SwapQuote>] {
         &self.state.quote_txs
     }
 
-    fn get_stake_quote_txs(&self) -> &[FulfilledTxWrapper<StakeQuoteTx>] {
+    fn get_stake_quote_txs(&self) -> &[FulfilledTxWrapper<DepositQuote>] {
         &self.state.stake_quote_txs
     }
 
@@ -374,11 +369,11 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
         &self.state.witness_txs
     }
 
-    fn get_output_txs(&self) -> &[FulfilledTxWrapper<OutputTx>] {
+    fn get_output_txs(&self) -> &[FulfilledTxWrapper<Output>] {
         &self.state.output_txs
     }
 
-    fn get_unstake_request_txs(&self) -> &[FulfilledTxWrapper<UnstakeRequestTx>] {
+    fn get_unstake_request_txs(&self) -> &[FulfilledTxWrapper<WithdrawRequest>] {
         &self.state.unstake_request_txs
     }
 
@@ -396,10 +391,8 @@ impl<S: ISideChain> LiquidityProvider for MemoryTransactionsProvider<S> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{
-        common::Coin, common::Timestamp, common::WalletAddress, side_chain::MemorySideChain,
-    };
-    use crate::{transactions::PoolChangeTx, utils::test_utils::create_fake_quote_tx_eth_loki};
+    use crate::{side_chain::MemorySideChain, utils::test_utils::data::TestData};
+    use chainflip_common::types::{coin::Coin, Timestamp, UUIDv4};
 
     fn setup() -> MemoryTransactionsProvider<MemorySideChain> {
         let side_chain = Arc::new(Mutex::new(MemorySideChain::new()));
@@ -417,16 +410,8 @@ mod test {
         {
             let mut side_chain = provider.side_chain.lock().unwrap();
 
-            let quote = create_fake_quote_tx_eth_loki();
-            let witness = WitnessTx::new(
-                Timestamp::now(),
-                quote.id,
-                "0".to_owned(),
-                0,
-                1,
-                100,
-                Coin::ETH,
-            );
+            let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+            let witness = TestData::witness(quote.id, 100, Coin::ETH);
 
             side_chain
                 .add_block(vec![quote.into(), witness.into()])
@@ -440,7 +425,7 @@ mod test {
         assert_eq!(provider.get_witness_txs().len(), 1);
 
         provider
-            .add_transactions(vec![create_fake_quote_tx_eth_loki().into()])
+            .add_transactions(vec![TestData::swap_quote(Coin::ETH, Coin::LOKI).into()])
             .unwrap();
 
         assert_eq!(provider.state.next_block_idx, 2);
@@ -451,16 +436,8 @@ mod test {
     fn test_provider_does_not_add_duplicates() {
         let mut provider = setup();
 
-        let quote = create_fake_quote_tx_eth_loki();
-        let witness = WitnessTx::new(
-            Timestamp::now(),
-            quote.id,
-            "0".to_owned(),
-            0,
-            1,
-            100,
-            Coin::ETH,
-        );
+        let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let witness = TestData::witness(quote.id, 100, Coin::ETH);
 
         {
             let mut side_chain = provider.side_chain.lock().unwrap();
@@ -487,8 +464,7 @@ mod test {
         let coin = PoolCoin::from(Coin::ETH).expect("Expected valid pool coin");
         let mut provider = setup();
         {
-            let change_tx = PoolChangeTx::new(coin, -100, -100);
-
+            let change_tx = TestData::pool_change(coin.get_coin(), -100, -100);
             let mut side_chain = provider.side_chain.lock().unwrap();
 
             side_chain.add_block(vec![change_tx.into()]).unwrap();
@@ -509,8 +485,8 @@ mod test {
 
             side_chain
                 .add_block(vec![
-                    PoolChangeTx::new(coin, 100, 100).into(),
-                    PoolChangeTx::new(coin, -50, 100).into(),
+                    TestData::pool_change(coin.get_coin(), 100, 100).into(),
+                    TestData::pool_change(coin.get_coin(), 100, -50).into(),
                 ])
                 .unwrap();
         }
@@ -524,23 +500,15 @@ mod test {
             .expect("Expected liquidity to exist");
 
         assert_eq!(liquidity.depth, 200);
-        assert_eq!(liquidity.loki_depth, 50);
+        assert_eq!(liquidity.base_depth, 50);
     }
 
     #[test]
     fn test_provider_fulfills_quote_and_witness_on_output_tx() {
         let mut provider = setup();
 
-        let quote = create_fake_quote_tx_eth_loki();
-        let witness = WitnessTx::new(
-            Timestamp::now(),
-            quote.id,
-            "0".to_owned(),
-            0,
-            1,
-            100,
-            Coin::ETH,
-        );
+        let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let witness = TestData::witness(quote.id, 100, Coin::ETH);
 
         provider
             .side_chain
@@ -555,16 +523,10 @@ mod test {
         assert_eq!(provider.get_witness_txs().first().unwrap().used, false);
 
         // Swap
-        let output = OutputTx::new(
-            Timestamp::now(),
-            quote.id,
-            vec![witness.id],
-            vec![],
-            quote.output,
-            quote.output_address,
-            100,
-        )
-        .unwrap();
+        let mut output = TestData::output(quote.output, 100);
+        output.parent = OutputParent::SwapQuote(quote.id);
+        output.witnesses = vec![witness.id];
+        output.address = quote.output_address.clone();
 
         provider
             .side_chain
@@ -583,16 +545,8 @@ mod test {
     fn test_provider_does_not_fulfill_quote_on_refunded_output_tx() {
         let mut provider = setup();
 
-        let quote = create_fake_quote_tx_eth_loki();
-        let witness = WitnessTx::new(
-            Timestamp::now(),
-            quote.id,
-            "0".to_owned(),
-            0,
-            1,
-            100,
-            Coin::ETH,
-        );
+        let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let witness = TestData::witness(quote.id, 100, Coin::ETH);
 
         provider
             .side_chain
@@ -607,16 +561,10 @@ mod test {
         assert_eq!(provider.get_witness_txs().first().unwrap().used, false);
 
         // Refund
-        let output = OutputTx::new(
-            Timestamp::now(),
-            quote.id,
-            vec![witness.id],
-            vec![],
-            quote.input,
-            quote.return_address.unwrap(),
-            100,
-        )
-        .unwrap();
+        let mut output = TestData::output(quote.input, 100);
+        output.parent = OutputParent::SwapQuote(quote.id);
+        output.witnesses = vec![witness.id];
+        output.address = quote.return_address.unwrap().clone();
 
         provider
             .side_chain
@@ -635,19 +583,10 @@ mod test {
     fn test_provider_fulfills_output_txs_on_output_sent_tx() {
         let mut provider = setup();
 
-        let output_tx = OutputTx {
-            id: uuid::Uuid::new_v4(),
-            timestamp: Timestamp::now(),
-            quote_tx: uuid::Uuid::new_v4(),
-            witness_txs: vec![],
-            pool_change_txs: vec![],
-            coin: Coin::LOKI,
-            address: WalletAddress::new("address"),
-            amount: 100,
-        };
+        let output_tx = TestData::output(Coin::LOKI, 100);
 
         let mut another_tx = output_tx.clone();
-        another_tx.id = uuid::Uuid::new_v4();
+        another_tx.id = UUIDv4::new();
 
         provider
             .side_chain
@@ -665,15 +604,15 @@ mod test {
 
         assert_eq!(provider.get_output_txs().to_vec(), expected);
 
-        let output_sent_tx = OutputSentTx {
-            id: uuid::Uuid::new_v4(),
+        let output_sent_tx = OutputSent {
+            id: UUIDv4::new(),
             timestamp: Timestamp::now(),
-            output_txs: vec![output_tx.id, another_tx.id],
+            outputs: vec![output_tx.id, another_tx.id],
             coin: Coin::LOKI,
-            address: WalletAddress::new("address"),
+            address: "address".into(),
             amount: 100,
             fee: 100,
-            transaction_id: "".to_owned(),
+            transaction_id: "".into(),
         };
 
         provider

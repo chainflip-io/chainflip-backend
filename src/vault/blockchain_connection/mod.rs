@@ -3,9 +3,8 @@
 //! `last_processed_block` being the latest block that
 //! will not be requested again
 
-use crossbeam_channel::Receiver;
-
 use crate::common::store::{KeyValueStore, PersistentKVS};
+use crossbeam_channel::Receiver;
 
 /// Loki RPC wallet API
 pub mod loki_rpc;
@@ -17,7 +16,6 @@ pub use ethereum::web3::Web3Client;
 
 /// Bitcoin API
 pub mod btc;
-
 pub use btc::spv::BtcSPVClient;
 
 /// Connects to loki rpc wallet and pushes payments to the witness

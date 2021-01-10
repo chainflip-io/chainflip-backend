@@ -1,12 +1,10 @@
 use crate::{
-    common::{Coin, PoolCoin, Timestamp},
+    common::WalletAddress,
     side_chain::{IStateChainNode, SideChainTx},
-    transactions::WitnessTx,
     vault::{blockchain_connection::btc::BitcoinSPVClient, transactions::TransactionProvider},
 };
-
+use chainflip_common::types::{chain::Witness, coin::Coin, Timestamp, UUIDv4};
 use parking_lot::RwLock;
-
 use std::sync::Arc;
 
 /// A Bitcoin transaction witness
@@ -74,7 +72,7 @@ where
 
             let stake_id_address_pairs = stakes
                 .iter()
-                .filter(|quote| quote.inner.coin_type == PoolCoin::BTC)
+                .filter(|quote| quote.inner.pool == Coin::BTC)
                 .map(|quote| {
                     let quote_inner = &quote.inner;
                     (quote_inner.id, quote_inner.coin_input_address.clone())
@@ -82,7 +80,8 @@ where
 
             let mut witness_txs: Vec<SideChainTx> = vec![];
             for (id, address) in swap_id_address_pairs.chain(stake_id_address_pairs) {
-                let utxos = match self.client.get_address_unspent(&address).await {
+                let btc_address = WalletAddress(address.to_string());
+                let utxos = match self.client.get_address_unspent(&btc_address).await {
                     Ok(utxos) => utxos,
                     Err(err) => {
                         warn!(
@@ -99,15 +98,16 @@ where
                 }
 
                 for utxo in utxos.0 {
-                    let tx = WitnessTx::new(
-                        Timestamp::now(),
-                        id,
-                        utxo.tx_hash.clone(),
-                        utxo.height,
-                        utxo.tx_pos,
-                        utxo.value as u128,
-                        Coin::BTC,
-                    );
+                    let tx = Witness {
+                        id: UUIDv4::new(),
+                        timestamp: Timestamp::now(),
+                        quote: id,
+                        transaction_id: utxo.tx_hash.into(),
+                        transaction_block_number: utxo.height,
+                        transaction_index: utxo.tx_pos,
+                        amount: utxo.value as u128,
+                        coin: Coin::BTC,
+                    };
 
                     witness_txs.push(tx.into());
                 }
@@ -125,16 +125,13 @@ where
 mod test {
     use super::*;
     use crate::{
-        side_chain::FakeStateChainNode, utils::test_utils::btc::TestBitcoinSPVClient,
-        utils::test_utils::create_fake_stake_quote,
-        vault::blockchain_connection::btc::spv::BtcUTXO,
-    };
-
-    use crate::{
-        common::WalletAddress,
-        side_chain::MemorySideChain,
-        utils::test_utils::{create_fake_quote_tx_coin_to_loki, get_transactions_provider},
-        vault::transactions::MemoryTransactionsProvider,
+        side_chain::{FakeStateChainNode, MemorySideChain},
+        utils::test_utils::{
+            btc::TestBitcoinSPVClient, data::TestData, get_transactions_provider, TEST_BTC_ADDRESS,
+        },
+        vault::{
+            blockchain_connection::btc::spv::BtcUTXO, transactions::MemoryTransactionsProvider,
+        },
     };
 
     type TestTransactionsProvider = MemoryTransactionsProvider<MemorySideChain>;
@@ -147,8 +144,6 @@ mod test {
             FakeStateChainNode<TestTransactionsProvider>,
         >,
     }
-
-    const BTC_PUBKEY: &str = "msjFLavJYLoF3hs3rgTrmBanpaHntjDgWQ";
 
     fn setup() -> TestObjects {
         let client = Arc::new(TestBitcoinSPVClient::new());
@@ -186,11 +181,10 @@ mod test {
 
         let utxos = vec![utxo1, utxo2];
         // add utxos to test client
-        client.add_utxos_for_address(BTC_PUBKEY.to_string(), utxos);
+        client.add_utxos_for_address(TEST_BTC_ADDRESS.to_string(), utxos);
 
         // this quote will be witnessed
-        let btc_quote =
-            create_fake_quote_tx_coin_to_loki(Coin::BTC, WalletAddress(BTC_PUBKEY.to_string()));
+        let btc_quote = TestData::swap_quote(Coin::BTC, Coin::LOKI);
 
         {
             let mut provider = provider.write();
@@ -231,11 +225,10 @@ mod test {
 
         let utxos = vec![utxo1, utxo2];
         // add utxos to test client
-        client.add_utxos_for_address(BTC_PUBKEY.to_string(), utxos);
+        client.add_utxos_for_address(TEST_BTC_ADDRESS.to_string(), utxos);
 
         // this quote will be witnessed
-        let mut btc_stake_quote = create_fake_stake_quote(PoolCoin::BTC);
-        btc_stake_quote.coin_input_address = WalletAddress(BTC_PUBKEY.to_string());
+        let btc_stake_quote = TestData::deposit_quote(Coin::BTC);
 
         {
             let mut provider = provider.write();
@@ -263,10 +256,8 @@ mod test {
         let provider = params.provider;
 
         // this quote will be witnessed
-        let btc_quote =
-            create_fake_quote_tx_coin_to_loki(Coin::BTC, WalletAddress(BTC_PUBKEY.to_string()));
-
-        let btc_stake_quote = create_fake_stake_quote(PoolCoin::BTC);
+        let btc_quote = TestData::swap_quote(Coin::BTC, Coin::LOKI);
+        let btc_stake_quote = TestData::deposit_quote(Coin::BTC);
 
         {
             let mut provider = provider.write();
@@ -295,11 +286,8 @@ mod test {
         let provider = params.provider;
 
         // this quote should NOT be witnessed by the BTC witness since it's an ETH quote
-        let eth_quote = create_fake_quote_tx_coin_to_loki(
-            Coin::ETH,
-            WalletAddress("0x70e7db0678460c5e53f1ffc9221d1c692111dcc5".to_string()),
-        );
-        let eth_stake_quote = create_fake_stake_quote(PoolCoin::ETH);
+        let eth_quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let eth_stake_quote = TestData::deposit_quote(Coin::ETH);
 
         {
             let mut provider = provider.write();

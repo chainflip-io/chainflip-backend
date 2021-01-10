@@ -1,8 +1,5 @@
-use crate::{
-    common::LiquidityProvider,
-    side_chain::SideChainTx,
-    transactions::{OutputTx, QuoteTx, StakeQuoteTx, UnstakeRequestTx},
-};
+use crate::{common::LiquidityProvider, side_chain::SideChainTx};
+use chainflip_common::types::chain::{DepositQuote, Output, SwapQuote, WithdrawRequest};
 use memory_provider::{FulfilledTxWrapper, WitnessTxWrapper};
 
 /// Memory transaction provider
@@ -22,19 +19,19 @@ pub trait TransactionProvider: LiquidityProvider {
     fn add_transactions(&mut self, txs: Vec<SideChainTx>) -> Result<(), String>;
 
     /// Get all swap quote transactions
-    fn get_quote_txs(&self) -> &[FulfilledTxWrapper<QuoteTx>];
+    fn get_quote_txs(&self) -> &[FulfilledTxWrapper<SwapQuote>];
 
     /// Get all stake quote transactions
-    fn get_stake_quote_txs(&self) -> &[FulfilledTxWrapper<StakeQuoteTx>];
+    fn get_stake_quote_txs(&self) -> &[FulfilledTxWrapper<DepositQuote>];
 
     /// Get all the witness transactions
     fn get_witness_txs(&self) -> &[WitnessTxWrapper];
 
     /// Get all the output transactions
-    fn get_output_txs(&self) -> &[FulfilledTxWrapper<OutputTx>];
+    fn get_output_txs(&self) -> &[FulfilledTxWrapper<Output>];
 
     /// Get all (unfulfilled?) unstake requests
-    fn get_unstake_request_txs(&self) -> &[FulfilledTxWrapper<UnstakeRequestTx>];
+    fn get_unstake_request_txs(&self) -> &[FulfilledTxWrapper<WithdrawRequest>];
 
     /// Get vault portions
     fn get_portions(&self) -> &VaultPortions;

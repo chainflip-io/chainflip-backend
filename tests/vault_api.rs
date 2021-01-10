@@ -1,15 +1,14 @@
-use serde::Serialize;
-
-use reqwest::StatusCode;
-
 use chainflip::{
-    common::{self, fractions::*, *},
-    transactions::UnstakeRequestTx,
+    common::{self, *},
     utils::test_utils::staking::get_fake_staker,
     utils::test_utils::{self, *},
     vault::api::v1::post_swap::SwapQuoteResponse,
     vault::api::APIServer,
 };
+use chainflip_common::types::coin::Coin;
+use data::TestData;
+use reqwest::StatusCode;
+use serde::Serialize;
 use std::sync::Arc;
 
 type QuoteResponseWrapped = common::api::Response<SwapQuoteResponse>;
@@ -89,33 +88,19 @@ where
 }
 
 async fn check_unstake_endpoint(config: &TestConfig) -> StatusCode {
-    let loki_address = "T6UBx3DnXsocMxGDgLR9ejGmbY5iphPiG9YwDZyNiCM81dgM776a1h7FwFCZZxm7yPabRxQeyfLesBynTWP6DfJq1DAtb6QYn";
-    let other_address = TEST_ETH_ADDRESS;
-    let fraction = UnstakeFraction::MAX;
-    let timestamp = Timestamp::now();
+    let mut tx = TestData::withdraw_request_for_staker(&config.staker, Coin::ETH);
 
-    let tx = UnstakeRequestTx::new(
-        PoolCoin::ETH,
-        config.staker.id(),
-        WalletAddress::new(loki_address),
-        WalletAddress::new(other_address),
-        fraction,
-        timestamp,
-        "".to_owned(),
-    );
-
-    let signature = tx
-        .sign(&config.staker.keys)
+    tx.sign(&config.staker.keys)
         .expect("failed to sign unstake tx");
 
     let req = serde_json::json!({
         "stakerId": config.staker.public_key(),
         "pool": "ETH",
-        "lokiAddress": loki_address,
-        "otherAddress": other_address,
-        "timestamp": timestamp.0.to_string(),
-        "fraction": fraction,
-        "signature": signature,
+        "lokiAddress": tx.base_address.to_string(),
+        "otherAddress": tx.other_address.to_string(),
+        "timestamp": tx.timestamp.to_string(),
+        "fraction": tx.fraction,
+        "signature": base64::encode(tx.signature),
     });
 
     post_unstake_req(&req).await

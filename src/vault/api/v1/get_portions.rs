@@ -1,14 +1,12 @@
-use std::{convert::TryInto, sync::Arc};
-
+use crate::utils::primitives::U256;
 use crate::{
-    common::{api::ResponseError, Coin, PoolCoin, StakerId},
+    common::{api::ResponseError, PoolCoin, StakerId},
     vault::transactions::{memory_provider::Portion, TransactionProvider},
 };
-
-use crate::utils::primitives::U256;
-
+use chainflip_common::types::coin::Coin;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use std::{convert::TryInto, sync::Arc};
 
 /// Parameters for GET /v1/portions request
 #[serde(rename_all = "camelCase")]
@@ -72,7 +70,7 @@ where
         .get_liquidity(pool_coin)
         .ok_or(internal_error!("Unexpected missing liquidity"))?;
 
-    let loki = amount_from_portion(liquidity.loki_depth, portions);
+    let loki = amount_from_portion(liquidity.base_depth, portions);
     let other = amount_from_portion(liquidity.depth, portions);
 
     let loki = loki.to_string();

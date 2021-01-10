@@ -1,8 +1,6 @@
 use super::{ISideChain, SideChainBlock, SideChainTx};
-
-use rusqlite::{params, NO_PARAMS};
-
 use rusqlite::Connection as DB;
+use rusqlite::{params, NO_PARAMS};
 
 /// Implementation of ISideChain that uses sqlite to
 /// persist between restarts
@@ -146,32 +144,36 @@ impl ISideChain for PeristentSideChain {
     }
 }
 
-#[test]
-fn should_read_block_after_reopen() {
-    use crate::utils::test_utils;
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::utils::test_utils::{self, data::TestData};
+    use chainflip_common::types::coin::Coin;
 
-    test_utils::logging::init();
+    #[test]
+    fn should_read_block_after_reopen() {
+        test_utils::logging::init();
 
-    let temp_file = test_utils::TempRandomFile::new();
+        let temp_file = test_utils::TempRandomFile::new();
 
-    let mut db = PeristentSideChain::open(temp_file.path());
+        let mut db = PeristentSideChain::open(temp_file.path());
 
-    let tx = test_utils::create_fake_quote_tx_eth_loki();
-    let tx = SideChainTx::from(tx);
+        let tx: SideChainTx = TestData::swap_quote(Coin::ETH, Coin::LOKI).into();
 
-    db.add_block(vec![tx.clone()])
-        .expect("Error adding a transaction to the database");
+        db.add_block(vec![tx.clone()])
+            .expect("Error adding a transaction to the database");
 
-    // Close the database
-    drop(db);
+        // Close the database
+        drop(db);
 
-    let db = PeristentSideChain::open(temp_file.path());
+        let db = PeristentSideChain::open(temp_file.path());
 
-    let total_blocks = db.total_blocks();
-    let last_block_idx = total_blocks.checked_sub(1).expect("Unexpected block count");
-    let last_block = db
-        .get_block(last_block_idx)
-        .expect("Could not get last block");
+        let total_blocks = db.total_blocks();
+        let last_block_idx = total_blocks.checked_sub(1).expect("Unexpected block count");
+        let last_block = db
+            .get_block(last_block_idx)
+            .expect("Could not get last block");
 
-    assert_eq!(tx, last_block.transactions[0]);
+        assert_eq!(tx, last_block.transactions[0]);
+    }
 }

@@ -89,9 +89,9 @@ pub async fn get_blocks<S: ISideChain>(
 
 #[cfg(test)]
 mod test {
-    use crate::side_chain::MemorySideChain;
-
     use super::*;
+    use crate::{side_chain::MemorySideChain, utils::test_utils::data::TestData};
+    use chainflip_common::types::coin::Coin;
 
     /// Populate the chain with 2 blocks, request all 2
     #[tokio::test]
@@ -115,15 +115,13 @@ mod test {
 
     #[tokio::test]
     async fn get_two_blocks_out_of_three() {
-        use crate::utils::test_utils;
-
         let params = BlocksQueryParams::new(0, 2);
 
         let mut side_chain = MemorySideChain::new();
 
         side_chain.add_block(vec![]).unwrap();
 
-        let tx = test_utils::create_fake_quote_tx_eth_loki();
+        let tx = TestData::swap_quote(Coin::ETH, Coin::LOKI);
 
         side_chain.add_block(vec![tx.clone().into()]).unwrap();
         side_chain.add_block(vec![]).unwrap();

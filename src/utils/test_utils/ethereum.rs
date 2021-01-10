@@ -4,6 +4,7 @@ use crate::{
         EstimateRequest, EstimateResult, EthereumClient, SendTransaction,
     },
 };
+use chainflip_common::types::addresses::EthereumAddress;
 use std::{collections::VecDeque, sync::Mutex};
 
 /// An ethereum client for testing
@@ -76,7 +77,7 @@ impl EthereumClient for TestEthereumClient {
         Err("Not handled".to_owned())
     }
 
-    async fn get_balance(&self, address: crate::common::ethereum::Address) -> Result<u128, String> {
+    async fn get_balance(&self, _address: EthereumAddress) -> Result<u128, String> {
         todo!()
     }
 }

@@ -1,12 +1,12 @@
 //! Bindings to some commonly used methods exposed by Loki RPC Wallet
 
 use crate::common::{LokiAmount, LokiPaymentId, LokiWalletAddress};
-use std::convert::{TryFrom, TryInto};
-use std::fmt;
-
-use std::str::FromStr;
-
 use serde::{Deserialize, Serialize};
+use std::{
+    convert::{TryFrom, TryInto},
+    fmt,
+    str::FromStr,
+};
 
 // get_bulk_payments
 

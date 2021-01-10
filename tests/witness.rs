@@ -1,12 +1,11 @@
-use std::sync::{Arc, Mutex};
-
 use chainflip::{
-    common::Timestamp,
     side_chain::{ISideChain, MemorySideChain},
     utils::test_utils,
     vault::witness::fake_witness::{Block, CoinTx, FakeWitness},
 };
-use uuid::Uuid;
+use chainflip_common::types::{coin::Coin, Timestamp, UUIDv4};
+use std::sync::{Arc, Mutex};
+use test_utils::data::TestData;
 
 #[test]
 fn test_witness_tx_is_made() {
@@ -27,7 +26,7 @@ fn test_witness_tx_is_made() {
     let witness = FakeWitness::new(loki_block_receiver, s_chain.clone());
     witness.start();
 
-    let quote_tx = test_utils::create_fake_quote_tx_eth_loki();
+    let quote_tx = TestData::swap_quote(Coin::ETH, Coin::LOKI);
 
     s_chain
         .lock()
@@ -41,10 +40,10 @@ fn test_witness_tx_is_made() {
     std::thread::sleep(std::time::Duration::from_millis(100));
 
     let coin_tx = CoinTx {
-        id: Uuid::new_v4(),
+        id: UUIDv4::new(),
         timestamp: Timestamp::now(),
-        deposit_address: quote_tx.input_address.clone(),
-        return_address: quote_tx.return_address.clone(),
+        deposit_address: quote_tx.input_address.clone().to_string(),
+        return_address: quote_tx.return_address.clone().map(|t| t.to_string()),
     };
 
     let block = Block { txs: vec![coin_tx] };
@@ -60,7 +59,7 @@ fn test_witness_tx_is_made() {
 
         if witness_txs
             .iter()
-            .find(|tx| tx.quote_id == quote_tx.id)
+            .find(|tx| tx.quote == quote_tx.id)
             .is_some()
         {
             break true;

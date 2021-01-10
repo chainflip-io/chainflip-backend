@@ -4,16 +4,14 @@
 
 // Events: Lokid transaction, Ether transaction, Swap transaction from Side Chain
 
-use std::sync::Arc;
-
+use crate::{
+    side_chain::IStateChainNode, side_chain::SideChainTx, vault::blockchain_connection::Payments,
+    vault::transactions::TransactionProvider,
+};
+use chainflip_common::types::{chain::Witness, coin::Coin, Timestamp, UUIDv4};
 use crossbeam_channel::Receiver;
 use parking_lot::RwLock;
-
-use crate::{common::Timestamp, side_chain::SideChainTx};
-use crate::{side_chain::IStateChainNode, vault::blockchain_connection::Payments};
-use crate::{transactions::WitnessTx, vault::transactions::TransactionProvider};
-
-use crate::common::Coin;
+use std::sync::Arc;
 
 /// Witness Mock
 pub struct LokiWitness<T: TransactionProvider, S: IStateChainNode> {
@@ -106,29 +104,34 @@ where
                     .iter()
                     .find(|quote| {
                         quote.inner.input == Coin::LOKI
-                            && quote.inner.input_address_id == payment.payment_id.short()
+                            && quote.inner.input_address_id == payment.payment_id.to_bytes()
                     })
                     .map(|quote| quote.inner.id);
 
                 let stake_quote = stakes
                     .iter()
-                    .find(|quote| quote.inner.loki_input_address_id == payment.payment_id)
+                    .find(|quote| {
+                        quote.inner.base_input_address_id == payment.payment_id.to_bytes()
+                    })
                     .map(|quote| quote.inner.id);
 
                 if let Some(quote_id) = swap_quote.or(stake_quote) {
                     debug!("Publishing witness transaction for quote: {}", &quote_id);
 
-                    let tx = WitnessTx::new(
-                        Timestamp::now(),
-                        quote_id,
-                        payment.tx_hash.clone(),
-                        payment.block_height,
-                        0,
-                        payment.amount.to_atomic(),
-                        Coin::LOKI,
-                    );
+                    let tx = Witness {
+                        id: UUIDv4::new(),
+                        timestamp: Timestamp::now(),
+                        quote: quote_id,
+                        transaction_id: payment.tx_hash.clone().into(),
+                        transaction_block_number: payment.block_height,
+                        transaction_index: 0,
+                        amount: payment.amount.to_atomic(),
+                        coin: Coin::LOKI,
+                    };
 
-                    witness_txs.push(tx.into());
+                    if tx.amount > 0 {
+                        witness_txs.push(tx.into());
+                    }
                 }
             }
             witness_txs

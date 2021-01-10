@@ -1,9 +1,9 @@
 use crate::{
     common::api::{self, using},
     side_chain::ISideChain,
-    vault::config::NetType,
     vault::transactions::TransactionProvider,
 };
+use chainflip_common::types::Network;
 use parking_lot::RwLock;
 use std::sync::{Arc, Mutex};
 use warp::Filter;
@@ -44,7 +44,7 @@ pub struct Config {
     /// BTC master root key
     pub btc_master_root_key: String,
     /// Network type
-    pub net_type: NetType,
+    pub net_type: Network,
 }
 
 /// The v1 API endpoints
@@ -86,6 +86,7 @@ pub fn endpoints<S: ISideChain + Send, T: TransactionProvider + Send + Sync>(
         .and(warp::post())
         .and(warp::body::json())
         .and(using(provider.clone()))
+        .and(using(config.clone()))
         .map(post_unstake::post_unstake)
         .and_then(api::respond);
 

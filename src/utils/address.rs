@@ -1,8 +1,8 @@
 use crate::{
     common::ethereum,
     utils::bip44::{self, KeyPair},
-    vault::config::NetType,
 };
+use chainflip_common::types::Network;
 
 /// Generate bip44 keypair for a master root key
 pub fn generate_bip44_keypair_from_root_key(
@@ -35,7 +35,7 @@ pub fn generate_btc_address_from_index(
     index: u32,
     compressed: bool,
     address_type: bitcoin::AddressType,
-    nettype: &NetType,
+    nettype: Network,
 ) -> Result<String, String> {
     let key_pair = generate_bip44_keypair_from_root_key(root_key, bip44::CoinType::BTC, index)?;
 
@@ -47,7 +47,7 @@ pub fn generate_btc_address(
     key_pair: KeyPair,
     compressed: bool,
     address_type: bitcoin::AddressType,
-    nettype: &NetType,
+    nettype: Network,
 ) -> Result<String, String> {
     let btc_pubkey = bitcoin::PublicKey {
         key: bitcoin::secp256k1::PublicKey::from_slice(&key_pair.public_key.serialize()).unwrap(),
@@ -55,8 +55,8 @@ pub fn generate_btc_address(
     };
 
     let network = match nettype {
-        NetType::Testnet => bitcoin::Network::Testnet,
-        NetType::Mainnet => bitcoin::Network::Bitcoin,
+        Network::Testnet => bitcoin::Network::Testnet,
+        Network::Mainnet => bitcoin::Network::Bitcoin,
     };
 
     let address = match address_type {
@@ -80,10 +80,8 @@ pub fn generate_btc_address(
 
 #[cfg(test)]
 mod test {
-    use crate::utils::test_utils::TEST_ROOT_KEY;
-
     use super::*;
-
+    use crate::utils::test_utils::TEST_ROOT_KEY;
     use bitcoin::AddressType::*;
 
     #[test]
@@ -115,52 +113,52 @@ mod test {
     fn generates_correct_btc_address() {
         // === p2wpkh - pay-to-witness-pubkey-hash (segwit) addresses ===
         assert_eq!(
-            generate_btc_address_from_index(TEST_ROOT_KEY, 0, true, P2wpkh, &NetType::Mainnet)
+            generate_btc_address_from_index(TEST_ROOT_KEY, 0, true, P2wpkh, Network::Mainnet)
                 .unwrap(),
             "bc1qawvxp3jxlzj3ydcfjyq83cxkdxpu7st8az5hvq"
         );
 
         // testnet generates different addresses to mainnet
         assert_eq!(
-            generate_btc_address_from_index(TEST_ROOT_KEY, 0, true, P2wpkh, &NetType::Testnet)
+            generate_btc_address_from_index(TEST_ROOT_KEY, 0, true, P2wpkh, Network::Testnet)
                 .unwrap(),
             "tb1qawvxp3jxlzj3ydcfjyq83cxkdxpu7st8hy0yhn"
         );
 
         assert_eq!(
-            generate_btc_address_from_index(TEST_ROOT_KEY, 1, true, P2wpkh, &NetType::Mainnet)
+            generate_btc_address_from_index(TEST_ROOT_KEY, 1, true, P2wpkh, Network::Mainnet)
                 .unwrap(),
             "bc1q6uq0qny5pel4aane4cj0kuqz5sgkxczv6y4ypy"
         );
 
         // === p2pkh - pay-to-pubkey-hash (legacy) addresses ===
         assert_eq!(
-            generate_btc_address_from_index(TEST_ROOT_KEY, 0, false, P2pkh, &NetType::Mainnet)
+            generate_btc_address_from_index(TEST_ROOT_KEY, 0, false, P2pkh, Network::Mainnet)
                 .unwrap(),
             "1Q6hHytu6sZmib3TUNeEhGxE8L2ydx5JZo",
         );
 
         // testnet generates different addresses to mainnet
         assert_eq!(
-            generate_btc_address_from_index(TEST_ROOT_KEY, 0, false, P2pkh, &NetType::Testnet)
+            generate_btc_address_from_index(TEST_ROOT_KEY, 0, false, P2pkh, Network::Testnet)
                 .unwrap(),
             "n4ceb2ysuu12VhX5BwccXCAYzKdgZY2XFH",
         );
 
         assert_eq!(
-            generate_btc_address_from_index(TEST_ROOT_KEY, 1, true, P2pkh, &NetType::Mainnet)
+            generate_btc_address_from_index(TEST_ROOT_KEY, 1, true, P2pkh, Network::Mainnet)
                 .unwrap(),
             "1LbqQTsn9EJN1yWJ2YkQGtaihovjgs6cfW"
         );
 
         assert_eq!(
-            generate_btc_address_from_index(TEST_ROOT_KEY, 1, false, P2pkh, &NetType::Mainnet)
+            generate_btc_address_from_index(TEST_ROOT_KEY, 1, false, P2pkh, Network::Mainnet)
                 .unwrap(),
             "1PWyfwtkS9co1rTHvU2SSESbcu6zi2TmxH"
         );
 
         assert_ne!(
-            generate_btc_address_from_index(TEST_ROOT_KEY, 2, false, P2pkh, &NetType::Mainnet)
+            generate_btc_address_from_index(TEST_ROOT_KEY, 2, false, P2pkh, Network::Mainnet)
                 .unwrap(),
             "1LbqQTsn9EJN1yWJ2YkQGtaihovjgs6cfW"
         );
@@ -170,7 +168,7 @@ mod test {
             4,
             false,
             P2pkh,
-            &NetType::Mainnet
+            Network::Mainnet
         )
         .is_err())
     }

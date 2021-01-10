@@ -1,23 +1,22 @@
 use super::refund::should_refund;
-
 use crate::{
-    common::{liquidity_provider::LiquidityProvider, Timestamp},
-    transactions::QuoteTx,
-    transactions::WitnessTx,
-    transactions::{OutputTx, PoolChangeTx},
+    common::liquidity_provider::LiquidityProvider,
     utils::{price, primitives::U256},
     vault::transactions::memory_provider::FulfilledTxWrapper,
 };
-
+use chainflip_common::types::{
+    chain::{Output, OutputParent, PoolChange, SwapQuote, Validate, Witness},
+    Network, Timestamp, UUIDv4,
+};
 use std::{convert::TryFrom, error::Error, fmt};
 
 /// Struct holding transactions
 #[derive(Debug, PartialEq, Eq)]
 pub struct SwapResult {
     /// The pool changes
-    pub pool_changes: Vec<PoolChangeTx>,
+    pub pool_changes: Vec<PoolChange>,
     /// The output transactions
-    pub output: OutputTx,
+    pub output: Output,
 }
 
 /// Errors for process_swap
@@ -30,9 +29,9 @@ pub enum SwapError {
     /// Failed to calculate output amount
     FailedToCalculateOutputAmount(String),
     /// Failed to generate output transaction
-    FailedToGenerateOutputTx(String),
+    FailedToGenerateOutput(String),
     /// Failed to generate pool change transactions
-    FailedToGeneratePoolChangeTx,
+    FailedToGeneratePoolChange,
     /// Missing witness transactions
     MissingWitnessTransactions,
 }
@@ -46,10 +45,10 @@ impl fmt::Display for SwapError {
             SwapError::MissingReturnAddress => {
                 write!(f, "Cannot generate a refund. Return address is missing.")
             }
-            SwapError::FailedToGenerateOutputTx(err) => {
+            SwapError::FailedToGenerateOutput(err) => {
                 write!(f, "Failed to create output transaction: {}", err)
             }
-            SwapError::FailedToGeneratePoolChangeTx => {
+            SwapError::FailedToGeneratePoolChange => {
                 write!(f, "Failed to create pool change transactions")
             }
             SwapError::FailedToCalculateOutputAmount(err) => {
@@ -65,8 +64,9 @@ impl Error for SwapError {}
 /// Process a given swap quote
 pub fn process_swap<L: LiquidityProvider>(
     provider: &L,
-    quote: &FulfilledTxWrapper<QuoteTx>,
-    witnesses: &[WitnessTx],
+    quote: &FulfilledTxWrapper<SwapQuote>,
+    witnesses: &[Witness],
+    network: Network,
 ) -> Result<SwapResult, SwapError> {
     if witnesses.is_empty() {
         return Err(SwapError::MissingWitnessTransactions);
@@ -113,29 +113,30 @@ pub fn process_swap<L: LiquidityProvider>(
             None => return Err(SwapError::MissingReturnAddress),
         };
 
-        let output = match OutputTx::new(
-            Timestamp::now(),
-            quote_id,
-            witness_ids,
-            vec![],
-            quote.inner.input,
-            return_address,
-            input_amount,
-        ) {
-            Ok(output) => output,
-            Err(err) => return Err(SwapError::FailedToGenerateOutputTx(err.to_owned())),
+        let output = Output {
+            id: UUIDv4::new(),
+            timestamp: Timestamp::now(),
+            parent: OutputParent::SwapQuote(quote_id),
+            witnesses: witness_ids,
+            pool_changes: vec![],
+            coin: quote.inner.input,
+            address: return_address,
+            amount: input_amount,
         };
 
-        return Ok(SwapResult {
-            pool_changes: vec![],
-            output,
-        });
+        return match output.validate(network) {
+            Ok(_) => Ok(SwapResult {
+                pool_changes: vec![],
+                output,
+            }),
+            Err(err) => Err(SwapError::FailedToGenerateOutput(err.to_owned())),
+        };
     }
 
     assert!(output_amount > 0);
 
     // Construct the pool change transactions
-    let pool_changes: Vec<PoolChangeTx> = [Some(output.first), output.second]
+    let pool_changes: Vec<PoolChange> = [Some(output.first), output.second]
         .iter()
         .filter_map(|x| {
             if let Some(detail) = x {
@@ -156,40 +157,41 @@ pub fn process_swap<L: LiquidityProvider>(
         .collect();
 
     if pool_changes.is_empty() {
-        return Err(SwapError::FailedToGeneratePoolChangeTx);
+        return Err(SwapError::FailedToGeneratePoolChange);
     }
 
     // Create the output
     let pool_change_ids = pool_changes.iter().map(|tx| tx.id).collect();
-    let output = match OutputTx::new(
-        Timestamp::now(),
-        quote_id,
-        witness_ids,
-        pool_change_ids,
-        quote.inner.output,
-        quote.inner.output_address.clone(),
-        output_amount,
-    ) {
-        Ok(output) => output,
-        Err(err) => return Err(SwapError::FailedToGenerateOutputTx(err.to_owned())),
+
+    let output = Output {
+        id: UUIDv4::new(),
+        timestamp: Timestamp::now(),
+        parent: OutputParent::SwapQuote(quote_id),
+        witnesses: witness_ids,
+        pool_changes: pool_change_ids,
+        coin: quote.inner.output,
+        address: quote.inner.output_address.clone(),
+        amount: output_amount,
     };
 
-    Ok(SwapResult {
-        pool_changes,
-        output,
-    })
+    match output.validate(network) {
+        Ok(_) => Ok(SwapResult {
+            pool_changes,
+            output,
+        }),
+        Err(err) => Err(SwapError::FailedToGenerateOutput(err.to_owned())),
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use uuid::Uuid;
-
     use super::*;
     use crate::{
-        common::coins::{Coin, CoinAmount, GenericCoinAmount, PoolCoin},
+        common::coins::{GenericCoinAmount, PoolCoin},
         common::liquidity_provider::{Liquidity, MemoryLiquidityProvider},
-        common::WalletAddress,
+        utils::test_utils::{data::TestData, TEST_BTC_ADDRESS},
     };
+    use chainflip_common::types::coin::Coin;
 
     fn to_atomic(coin: Coin, amount: &str) -> u128 {
         GenericCoinAmount::from_decimal_string(coin, amount).to_atomic()
@@ -197,8 +199,8 @@ mod test {
 
     fn setup() -> (
         MemoryLiquidityProvider,
-        FulfilledTxWrapper<QuoteTx>,
-        Vec<WitnessTx>,
+        FulfilledTxWrapper<SwapQuote>,
+        Vec<Witness>,
     ) {
         let mut provider = MemoryLiquidityProvider::new();
         provider.set_liquidity(
@@ -209,48 +211,15 @@ mod test {
             )),
         );
 
-        let eth_address = WalletAddress::new("0x70e7db0678460c5e53f1ffc9221d1c692111dcc5");
-        let loki_address = WalletAddress::new("T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY");
-
-        let quote = QuoteTx::new(
-            Timestamp::now(),
-            Coin::ETH,
-            eth_address.clone(),
-            "7".to_string(),
-            Some(eth_address),
-            Coin::LOKI,
-            loki_address,
-            1,
-            None,
-        )
-        .expect("Expected valid quote");
-
+        let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
         let quote = FulfilledTxWrapper {
             inner: quote,
             fulfilled: false,
         };
 
         let witness_txes = vec![
-            WitnessTx {
-                id: Uuid::new_v4(),
-                timestamp: Timestamp::now(),
-                quote_id: quote.inner.id,
-                transaction_id: Uuid::new_v4().to_string(),
-                transaction_block_number: 0,
-                transaction_index: 0,
-                amount: to_atomic(Coin::ETH, "1500.0"),
-                coin: Coin::ETH,
-            },
-            WitnessTx {
-                id: Uuid::new_v4(),
-                timestamp: Timestamp::now(),
-                quote_id: quote.inner.id,
-                transaction_id: Uuid::new_v4().to_string(),
-                transaction_block_number: 0,
-                transaction_index: 0,
-                amount: to_atomic(Coin::ETH, "1000.0"),
-                coin: Coin::ETH,
-            },
+            TestData::witness(quote.inner.id, to_atomic(Coin::ETH, "1500.0"), Coin::ETH),
+            TestData::witness(quote.inner.id, to_atomic(Coin::ETH, "1000.0"), Coin::ETH),
         ];
 
         (provider, quote, witness_txes)
@@ -262,23 +231,23 @@ mod test {
         let (provider, mut quote, witnesses) = setup();
         quote.fulfilled = true;
 
-        let result =
-            process_swap(&provider, &quote, &witnesses).expect("Expected to process a swap");
+        let result = process_swap(&provider, &quote, &witnesses, Network::Testnet)
+            .expect("Expected to process a swap");
 
         let amount = witnesses.iter().fold(0, |acc, tx| acc + tx.amount);
 
         assert!(result.pool_changes.is_empty());
 
-        let witness_ids: Vec<Uuid> = witnesses.iter().map(|tx| tx.id).collect();
+        let witness_ids: Vec<UUIDv4> = witnesses.iter().map(|tx| tx.id).collect();
 
         let output = result.output;
-        assert_eq!(output.quote_tx, quote.inner.id);
-        assert_eq!(output.witness_txs, witness_ids);
+        assert_eq!(output.parent, OutputParent::SwapQuote(quote.inner.id));
+        assert_eq!(output.witnesses, witness_ids);
         assert!(
             output.timestamp.0 >= quote.inner.timestamp.0,
             "Expected output timestamp to be newer than quote"
         );
-        assert_eq!(output.pool_change_txs.len(), 0);
+        assert_eq!(output.pool_changes.len(), 0);
         assert_eq!(output.coin, Coin::ETH);
         assert_eq!(output.address, quote.inner.return_address.unwrap());
         assert_eq!(output.amount, amount);
@@ -289,15 +258,15 @@ mod test {
         let (mut provider, quote, witnesses) = setup();
         provider.set_liquidity(PoolCoin::ETH, None);
 
-        let result =
-            process_swap(&provider, &quote, &witnesses).expect("Expected to process a swap");
+        let result = process_swap(&provider, &quote, &witnesses, Network::Testnet)
+            .expect("Expected to process a swap");
 
         let amount = witnesses.iter().fold(0, |acc, tx| acc + tx.amount);
 
         assert!(result.pool_changes.is_empty());
 
         let output = result.output;
-        assert_eq!(output.pool_change_txs.len(), 0);
+        assert_eq!(output.pool_changes.len(), 0);
         assert_eq!(output.coin, Coin::ETH);
         assert_eq!(output.amount, amount);
     }
@@ -308,31 +277,31 @@ mod test {
 
         assert!(provider.get_liquidity(PoolCoin::ETH).is_some());
 
-        let result =
-            process_swap(&provider, &quote, &witnesses).expect("Expected to process a swap");
+        let result = process_swap(&provider, &quote, &witnesses, Network::Testnet)
+            .expect("Expected to process a swap");
 
         let pool_changes = result.pool_changes;
         assert_eq!(pool_changes.len(), 1);
 
         let change = pool_changes.first().unwrap();
-        assert_eq!(change.coin, PoolCoin::ETH);
+        assert_eq!(change.pool, Coin::ETH);
         assert_eq!(change.depth_change, to_atomic(Coin::ETH, "2500.0") as i128);
         assert_eq!(
-            change.loki_depth_change,
+            change.base_depth_change,
             -1 * to_atomic(Coin::LOKI, "3199.5") as i128
         );
 
-        let witness_ids: Vec<Uuid> = witnesses.iter().map(|tx| tx.id).collect();
+        let witness_ids: Vec<UUIDv4> = witnesses.iter().map(|tx| tx.id).collect();
 
         let output = result.output;
-        assert_eq!(output.quote_tx, quote.inner.id);
-        assert_eq!(output.witness_txs, witness_ids);
+        assert_eq!(output.parent, OutputParent::SwapQuote(quote.inner.id));
+        assert_eq!(output.witnesses, witness_ids);
         assert!(
             output.timestamp.0 >= quote.inner.timestamp.0,
             "Expected output timestamp to be newer than quote"
         );
-        assert_eq!(output.pool_change_txs.len(), 1);
-        assert_eq!(output.pool_change_txs, vec![change.id]);
+        assert_eq!(output.pool_changes.len(), 1);
+        assert_eq!(output.pool_changes, vec![change.id]);
         assert_eq!(output.coin, Coin::LOKI);
         assert_eq!(output.address, quote.inner.output_address);
         assert_eq!(output.amount, to_atomic(Coin::LOKI, "3199.5"));
@@ -342,7 +311,7 @@ mod test {
     fn returns_correct_swaps_for_non_loki_quotes() {
         let (mut provider, mut quote, witnesses) = setup();
         quote.inner.output = Coin::BTC;
-        quote.inner.output_address = WalletAddress::new("1FPR9qMV6nikLxKP1MnZG6jh4viqFUs7wV");
+        quote.inner.output_address = TEST_BTC_ADDRESS.into();
 
         assert!(provider.get_liquidity(PoolCoin::ETH).is_some());
 
@@ -354,27 +323,27 @@ mod test {
             )),
         );
 
-        let result =
-            process_swap(&provider, &quote, &witnesses).expect("Expected to process a swap");
+        let result = process_swap(&provider, &quote, &witnesses, Network::Testnet)
+            .expect("Expected to process a swap");
 
         let pool_changes = result.pool_changes;
         assert_eq!(pool_changes.len(), 2);
 
         let first_change = pool_changes.first().unwrap();
-        assert_eq!(first_change.coin, PoolCoin::ETH);
+        assert_eq!(first_change.pool, Coin::ETH);
         assert_eq!(
             first_change.depth_change,
             to_atomic(Coin::ETH, "2500.0") as i128
         );
         assert_eq!(
-            first_change.loki_depth_change,
+            first_change.base_depth_change,
             -1 * to_atomic(Coin::LOKI, "3199.5") as i128
         );
 
         let second_change = pool_changes.last().unwrap();
-        assert_eq!(second_change.coin, PoolCoin::BTC);
+        assert_eq!(second_change.pool, Coin::BTC);
         assert_eq!(
-            second_change.loki_depth_change,
+            second_change.base_depth_change,
             to_atomic(Coin::LOKI, "3199.5") as i128
         );
         assert_eq!(
@@ -382,19 +351,16 @@ mod test {
             -1 * to_atomic(Coin::BTC, "2322.0") as i128
         );
 
-        let witness_ids: Vec<Uuid> = witnesses.iter().map(|tx| tx.id).collect();
+        let witness_ids: Vec<UUIDv4> = witnesses.iter().map(|tx| tx.id).collect();
 
         let output = result.output;
-        assert_eq!(output.quote_tx, quote.inner.id);
-        assert_eq!(output.witness_txs, witness_ids);
+        assert_eq!(output.parent, OutputParent::SwapQuote(quote.inner.id));
+        assert_eq!(output.witnesses, witness_ids);
         assert!(
             output.timestamp.0 >= quote.inner.timestamp.0,
             "Expected output timestamp to be newer than quote"
         );
-        assert_eq!(
-            output.pool_change_txs,
-            vec![first_change.id, second_change.id]
-        );
+        assert_eq!(output.pool_changes, vec![first_change.id, second_change.id]);
         assert_eq!(output.coin, Coin::BTC);
         assert_eq!(output.address, quote.inner.output_address);
         assert_eq!(output.amount, to_atomic(Coin::BTC, "2322.0"));
@@ -406,32 +372,32 @@ mod test {
         quote.inner.return_address = None; // Refund can only happen with a return address
         provider.set_liquidity(PoolCoin::ETH, None);
 
-        let result = process_swap(&provider, &quote, &witnesses);
+        let result = process_swap(&provider, &quote, &witnesses, Network::Testnet);
         assert_eq!(result.unwrap_err(), SwapError::MissingReturnAddress);
     }
 
     #[test]
     fn returns_error_on_invalid_return_address() {
         let (provider, mut quote, witnesses) = setup();
-        quote.inner.return_address = Some(WalletAddress::new("Invalid address"));
+        quote.inner.return_address = Some("Invalid address".into());
         quote.fulfilled = true;
 
-        let result = process_swap(&provider, &quote, &witnesses);
+        let result = process_swap(&provider, &quote, &witnesses, Network::Testnet);
         assert_eq!(
             result.unwrap_err(),
-            SwapError::FailedToGenerateOutputTx("Invalid output address".to_owned())
+            SwapError::FailedToGenerateOutput("Invalid address".to_owned())
         );
     }
 
     #[test]
     fn returns_error_on_invalid_output_address() {
         let (provider, mut quote, witnesses) = setup();
-        quote.inner.output_address = WalletAddress::new("Invalid address");
+        quote.inner.output_address = "Invalid address".into();
 
-        let result = process_swap(&provider, &quote, &witnesses);
+        let result = process_swap(&provider, &quote, &witnesses, Network::Testnet);
         assert_eq!(
             result.unwrap_err(),
-            SwapError::FailedToGenerateOutputTx("Invalid output address".to_owned())
+            SwapError::FailedToGenerateOutput("Invalid address".to_owned())
         );
     }
 
@@ -442,7 +408,7 @@ mod test {
         let first = witnesses.first_mut().unwrap();
         first.amount = u128::MAX;
 
-        let result = process_swap(&provider, &quote, &witnesses);
+        let result = process_swap(&provider, &quote, &witnesses, Network::Testnet);
         assert_eq!(result.unwrap_err(), SwapError::InputAmountOverflow);
     }
 
@@ -452,7 +418,7 @@ mod test {
 
         let empty = vec![];
 
-        let result = process_swap(&provider, &quote, &empty);
+        let result = process_swap(&provider, &quote, &empty, Network::Testnet);
         assert_eq!(result.unwrap_err(), SwapError::MissingWitnessTransactions);
     }
 
@@ -462,7 +428,7 @@ mod test {
         quote.inner.output = quote.inner.input;
         quote.inner.output_address = quote.inner.input_address.clone();
 
-        let result = process_swap(&provider, &quote, &witnesses);
+        let result = process_swap(&provider, &quote, &witnesses, Network::Testnet);
         assert_eq!(
             result.unwrap_err(),
             SwapError::FailedToCalculateOutputAmount(

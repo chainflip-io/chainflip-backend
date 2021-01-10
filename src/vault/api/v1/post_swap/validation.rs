@@ -1,8 +1,6 @@
 use super::SwapQuoteParams;
-use crate::{
-    common::fractions::PercentageFraction,
-    utils::validation::{validate_address, validate_address_id},
-};
+use crate::utils::validation::{validate_address, validate_address_id};
+use chainflip_common::types::fraction::PercentageFraction;
 
 /// Validate quote params
 pub fn validate_params(params: &SwapQuoteParams) -> Result<(), &'static str> {
@@ -60,9 +58,8 @@ pub fn validate_params(params: &SwapQuoteParams) -> Result<(), &'static str> {
 
 #[cfg(test)]
 mod test {
-    use crate::common::Coin;
-
     use super::*;
+    use chainflip_common::types::coin::Coin;
     use std::collections::HashMap;
 
     const LOKI_ADDRESS: &str = "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY";

@@ -1,6 +1,6 @@
 use crate::{
-    common::api::ResponseError,
-    quoter::vault_node::{UnstakeParams, VaultNodeInterface},
+    common::api::ResponseError, quoter::vault_node::VaultNodeInterface,
+    vault::api::v1::post_unstake::UnstakeParams,
 };
 use std::sync::Arc;
 use warp::http::StatusCode;

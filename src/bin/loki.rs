@@ -1,8 +1,3 @@
-use std::{
-    str::FromStr,
-    sync::{Arc, Mutex},
-};
-
 use chainflip::{
     common::*,
     logging,
@@ -14,7 +9,13 @@ use chainflip::{
         witness::LokiWitness,
     },
 };
+use chainflip_common::types::coin::Coin;
 use parking_lot::RwLock;
+use std::{
+    str::FromStr,
+    sync::{Arc, Mutex},
+};
+use utils::test_utils::data::TestData;
 
 #[macro_use]
 extern crate log;
@@ -69,8 +70,11 @@ async fn test_loki_witness() {
 
     info!("Integrated address: {:?}", int_address);
 
-    let mut tx = utils::test_utils::create_fake_quote_tx_eth_loki();
-    tx.input_address_id = int_address.payment_id.clone();
+    let mut tx = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+    tx.input_address_id = LokiPaymentId::from_str(&int_address.payment_id)
+        .unwrap()
+        .to_bytes()
+        .to_vec();
 
     // Send some money to integrated address
     {

@@ -1,12 +1,12 @@
-use crate::{
-    common::Coin,
-    transactions::{OutputSentTx, OutputTx},
-    vault::transactions::TransactionProvider,
+use crate::vault::transactions::TransactionProvider;
+use chainflip_common::types::{
+    chain::{Output, OutputSent},
+    coin::Coin,
+    UUIDv4,
 };
 use itertools::Itertools;
 use parking_lot::RwLock;
-use std::{collections::HashMap, sync::Arc};
-use uuid::Uuid;
+use std::{collections::HashMap, convert::TryInto, sync::Arc};
 
 pub mod btc;
 pub mod ethereum;
@@ -17,16 +17,16 @@ pub(super) mod wallet_utils;
 #[async_trait]
 pub trait OutputSender {
     /// Send the given outputs and return output sent txs
-    async fn send(&self, outputs: &[OutputTx]) -> Vec<OutputSentTx>;
+    async fn send(&self, outputs: &[Output]) -> Vec<OutputSent>;
 }
 
-fn group_outputs_by_quote(outputs: &[OutputTx], coin_type: Coin) -> Vec<(Uuid, Vec<OutputTx>)> {
+fn group_outputs_by_quote(outputs: &[Output], coin_type: Coin) -> Vec<(UUIDv4, Vec<Output>)> {
     // Make sure we only have valid outputs and group them by the quote
     let valid_txs = outputs.iter().filter(|tx| tx.coin == coin_type);
 
-    let mut map: HashMap<Uuid, Vec<OutputTx>> = HashMap::new();
+    let mut map: HashMap<UUIDv4, Vec<Output>> = HashMap::new();
     for tx in valid_txs {
-        let entry = map.entry(tx.quote_tx).or_insert(vec![]);
+        let entry = map.entry(tx.parent_id()).or_insert(vec![]);
         entry.push(tx.clone());
     }
 
@@ -36,14 +36,14 @@ fn group_outputs_by_quote(outputs: &[OutputTx], coin_type: Coin) -> Vec<(Uuid, V
 }
 
 /// Groups outputs where the total amount is less than u128::MAX
-fn group_outputs_by_sending_amounts<'a>(outputs: &'a [OutputTx]) -> Vec<(u128, Vec<&'a OutputTx>)> {
-    let mut groups: Vec<(u128, Vec<&OutputTx>)> = vec![];
+fn group_outputs_by_sending_amounts<'a>(outputs: &'a [Output]) -> Vec<(u128, Vec<&'a Output>)> {
+    let mut groups: Vec<(u128, Vec<&Output>)> = vec![];
     if outputs.is_empty() {
         return vec![];
     }
 
     let mut current_amount: u128 = 0;
-    let mut current_outputs: Vec<&OutputTx> = vec![];
+    let mut current_outputs: Vec<&Output> = vec![];
     for output in outputs {
         match current_amount.checked_add(output.amount) {
             Some(amount) => {
@@ -81,8 +81,8 @@ pub fn get_input_id_indices<T: TransactionProvider>(
         .filter_map(|quote| {
             let quote = &quote.inner;
             if quote.input == coin {
-                if let Ok(id) = quote.input_address_id.parse::<u32>() {
-                    return Some(id);
+                if let Ok(bytes) = quote.input_address_id.clone().try_into() {
+                    return Some(u32::from_be_bytes(bytes));
                 }
             }
 
@@ -95,9 +95,9 @@ pub fn get_input_id_indices<T: TransactionProvider>(
         .iter()
         .filter_map(|quote| {
             let quote = &quote.inner;
-            if quote.coin_type.get_coin() == coin {
-                if let Ok(id) = quote.coin_input_address_id.parse::<u32>() {
-                    return Some(id);
+            if quote.pool == coin {
+                if let Ok(bytes) = quote.coin_input_address_id.clone().try_into() {
+                    return Some(u32::from_be_bytes(bytes));
                 }
             }
 
@@ -110,36 +110,29 @@ pub fn get_input_id_indices<T: TransactionProvider>(
 
 #[cfg(test)]
 mod test {
-
-    use std::sync::Mutex;
-
     use super::*;
     use crate::{
-        common::PoolCoin,
-        common::WalletAddress,
-        side_chain::MemorySideChain,
-        utils::test_utils::TEST_BTC_ADDRESS,
-        utils::test_utils::TEST_ETH_ADDRESS,
-        utils::test_utils::TEST_LOKI_ADDRESS,
-        utils::test_utils::{create_fake_output_tx, create_fake_quote_tx, create_fake_stake_quote},
+        side_chain::MemorySideChain, utils::test_utils::data::TestData,
         vault::transactions::MemoryTransactionsProvider,
     };
+    use chainflip_common::types::chain::OutputParent;
+    use std::sync::Mutex;
 
     #[test]
     fn test_group_outputs_by_quote() {
-        let loki_output = create_fake_output_tx(Coin::LOKI);
-        let mut btc_output_1 = create_fake_output_tx(Coin::BTC);
-        let mut btc_output_2 = create_fake_output_tx(Coin::BTC);
-        let mut btc_output_3 = create_fake_output_tx(Coin::BTC);
-        let mut btc_output_4 = create_fake_output_tx(Coin::BTC);
+        let loki_output = TestData::output(Coin::LOKI, 10);
+        let mut btc_output_1 = TestData::output(Coin::BTC, 10);
+        let mut btc_output_2 = TestData::output(Coin::BTC, 10);
+        let mut btc_output_3 = TestData::output(Coin::BTC, 10);
+        let mut btc_output_4 = TestData::output(Coin::BTC, 10);
 
-        let quote_1 = uuid::Uuid::new_v4();
-        btc_output_1.quote_tx = quote_1;
-        btc_output_3.quote_tx = quote_1;
+        let quote_1 = UUIDv4::new();
+        btc_output_1.parent = OutputParent::SwapQuote(quote_1);
+        btc_output_3.parent = OutputParent::SwapQuote(quote_1);
 
-        let quote_2 = uuid::Uuid::new_v4();
-        btc_output_2.quote_tx = quote_2;
-        btc_output_4.quote_tx = quote_2;
+        let quote_2 = UUIDv4::new();
+        btc_output_2.parent = OutputParent::SwapQuote(quote_2);
+        btc_output_4.parent = OutputParent::SwapQuote(quote_2);
 
         let result = group_outputs_by_quote(
             &[
@@ -165,8 +158,8 @@ mod test {
 
     #[test]
     fn test_group_outputs_by_sending_amounts() {
-        let mut eth_output_1 = create_fake_output_tx(Coin::ETH);
-        let mut eth_output_2 = create_fake_output_tx(Coin::ETH);
+        let mut eth_output_1 = TestData::output(Coin::ETH, 10);
+        let mut eth_output_2 = TestData::output(Coin::ETH, 10);
 
         eth_output_1.amount = 100;
         eth_output_2.amount = 200;
@@ -212,27 +205,17 @@ mod test {
         let side_chain = Arc::new(Mutex::new(side_chain));
         let provider = MemoryTransactionsProvider::new_protected(side_chain.clone());
 
-        let mut eth_quote = create_fake_quote_tx(
-            Coin::ETH,
-            WalletAddress::new(TEST_ETH_ADDRESS),
-            Coin::LOKI,
-            WalletAddress::new(TEST_LOKI_ADDRESS),
-        );
-        eth_quote.input_address_id = "5".to_string();
+        let mut eth_quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        eth_quote.input_address_id = 5u32.to_be_bytes().to_vec();
 
-        let mut btc_quote = create_fake_quote_tx(
-            Coin::BTC,
-            WalletAddress::new(TEST_BTC_ADDRESS),
-            Coin::LOKI,
-            WalletAddress::new(TEST_LOKI_ADDRESS),
-        );
-        btc_quote.input_address_id = "6".to_string();
+        let mut btc_quote = TestData::swap_quote(Coin::BTC, Coin::LOKI);
+        btc_quote.input_address_id = 6u32.to_be_bytes().to_vec();
 
-        let mut eth_stake = create_fake_stake_quote(PoolCoin::ETH);
-        eth_stake.coin_input_address_id = "7".to_string();
+        let mut eth_stake = TestData::deposit_quote(Coin::ETH);
+        eth_stake.coin_input_address_id = 7u32.to_be_bytes().to_vec();
 
-        let mut btc_stake = create_fake_stake_quote(PoolCoin::BTC);
-        btc_stake.coin_input_address_id = "8".to_string();
+        let mut btc_stake = TestData::deposit_quote(Coin::BTC);
+        btc_stake.coin_input_address_id = 8u32.to_be_bytes().to_vec();
 
         provider
             .write()

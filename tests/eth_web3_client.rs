@@ -1,17 +1,14 @@
-use std::str::FromStr;
-
 use chainflip::{
-    common::ethereum::Address,
-    common::Coin,
     common::GenericCoinAmount,
-    utils::bip44::KeyPair,
-    utils::primitives::U256,
+    utils::{bip44::KeyPair, primitives::U256},
     vault::blockchain_connection::ethereum::{
         web3::Web3Client, EstimateRequest, EthereumClient, SendTransaction,
     },
 };
+use chainflip_common::types::{addresses::EthereumAddress, coin::Coin};
 use config::Config;
 use serde::Deserialize;
+use std::str::FromStr;
 
 /**
 Binary for testing eth client.
@@ -76,14 +73,14 @@ async fn test_web3_send() {
     let web3 = Web3Client::url(&config.provider).unwrap();
 
     let key_pair = KeyPair::from_private_key(&config.sender_private_key).unwrap();
-    let to = Address::from_str(&config.receiving_address).unwrap();
+    let to = EthereumAddress::from_str(&config.receiving_address).unwrap();
 
     let total_amount = GenericCoinAmount::from_decimal_string(Coin::ETH, "0.005");
 
     println!("Total amount to send: {}", total_amount.to_atomic());
 
     let request = EstimateRequest {
-        from: Address::from(key_pair.public_key),
+        from: EthereumAddress::from_public_key(key_pair.public_key.serialize_uncompressed()),
         to,
         amount: total_amount,
     };

@@ -1,18 +1,18 @@
-use std::sync::{Arc, Mutex};
-
-use crossbeam_channel::Receiver;
-
-use crate::common::{Coin, Timestamp, WalletAddress};
 use crate::side_chain::{ISideChain, SideChainTx};
-use crate::transactions::{QuoteTx, WitnessTx};
-use uuid::Uuid;
+use chainflip_common::types::{
+    chain::{SwapQuote, Witness},
+    coin::Coin,
+    Timestamp, UUIDv4,
+};
+use crossbeam_channel::Receiver;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
 pub struct CoinTx {
-    pub id: Uuid,
+    pub id: UUIDv4,
     pub timestamp: Timestamp,
-    pub deposit_address: WalletAddress,
-    pub return_address: Option<WalletAddress>,
+    pub deposit_address: String,
+    pub return_address: Option<String>,
 }
 
 /// A representation of a block on some blockchain
@@ -28,7 +28,7 @@ where
     T: ISideChain + Send,
 {
     /// Outstanding quotes (make sure this stays synced)
-    quotes: Vec<QuoteTx>,
+    quotes: Vec<SwapQuote>,
     loki_connection: Receiver<Block>,
     side_chain: Arc<Mutex<T>>,
     // We should save this to a DB (maybe not, because when we restart, we might want to rescan the db for all quotes?)
@@ -58,7 +58,7 @@ where
 
         while let Some(block) = side_chain.get_block(self.next_block_idx) {
             for tx in &block.transactions {
-                if let SideChainTx::QuoteTx(tx) = tx {
+                if let SideChainTx::SwapQuote(tx) = tx {
                     debug!("Registered quote tx: {:?}", tx.id);
                     quote_txs.push(tx.clone());
                 }
@@ -104,6 +104,7 @@ where
         }
     }
 
+    /// Start
     pub fn start(self) {
         std::thread::spawn(move || {
             self.event_loop();
@@ -111,30 +112,30 @@ where
     }
 
     /// Check whether `tx` matches any outstanding qoute
-    fn find_quote(&self, tx: &CoinTx) -> Option<&QuoteTx> {
-        self.quotes
-            .iter()
-            .find(|quote| tx.deposit_address == quote.input_address)
+    fn find_quote(&self, tx: &CoinTx) -> Option<&SwapQuote> {
+        self.quotes.iter().find(|quote| {
+            tx.deposit_address.to_lowercase() == quote.input_address.to_string().to_lowercase()
+        })
     }
 
     /// Publish witness tx for `quote`
-    fn publish_witness_tx(&self, quote: &QuoteTx) {
+    fn publish_witness_tx(&self, quote: &SwapQuote) {
         debug!("Publishing witness transaction for quote: {:?}", &quote);
 
         let mut side_chain = self.side_chain.lock().unwrap();
 
-        let tx = WitnessTx {
-            id: Uuid::new_v4(),
+        let tx = Witness {
+            id: UUIDv4::new(),
             timestamp: Timestamp::now(),
-            quote_id: quote.id,
-            transaction_id: "0".to_owned(),
+            quote: quote.id,
+            transaction_id: "0".into(),
             transaction_block_number: 0,
             transaction_index: 0,
-            amount: 0,
+            amount: 100,
             coin: Coin::LOKI,
         };
 
-        let tx = SideChainTx::WitnessTx(tx);
+        let tx = SideChainTx::Witness(tx);
 
         side_chain
             .add_block(vec![tx])

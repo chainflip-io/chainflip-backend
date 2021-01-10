@@ -1,5 +1,5 @@
 use super::*;
-use crate::common::{Coin, GenericCoinAmount, LokiAmount};
+use crate::common::{GenericCoinAmount, LokiAmount};
 use rand::prelude::*;
 
 #[cfg(test)]
@@ -23,7 +23,7 @@ mod autoswap_tests {
 
         Liquidity {
             depth: de.to_atomic(),
-            loki_depth: dl.to_atomic(),
+            base_depth: dl.to_atomic(),
         }
     }
 

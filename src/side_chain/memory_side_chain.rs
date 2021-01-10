@@ -1,6 +1,6 @@
-use super::{ISideChain, SideChainBlock, SideChainTx};
+use chainflip_common::types::{chain::Witness, UUIDv4};
 
-use crate::transactions::{QuoteTx, WitnessTx};
+use super::{ISideChain, SideChainBlock, SideChainTx};
 
 /// Fake implemenation of ISideChain that stores block in memory
 pub struct MemorySideChain {
@@ -15,11 +15,11 @@ impl MemorySideChain {
     }
 
     /// Check whether the transaction exists
-    pub fn check_tx(&self, quote_tx: &QuoteTx) -> bool {
+    pub fn check_tx(&self, quote_id: UUIDv4) -> bool {
         for block in &self.blocks {
             for tx in &block.transactions {
-                if let SideChainTx::WitnessTx(tx) = tx {
-                    if tx.quote_id == quote_tx.id {
+                if let SideChainTx::Witness(tx) = tx {
+                    if tx.quote == quote_id {
                         return true;
                     }
                 }
@@ -30,13 +30,13 @@ impl MemorySideChain {
     }
 
     /// Convenience method for getting all witness transactions
-    pub fn get_witness_txs(&self) -> Vec<WitnessTx> {
-        let mut quotes: Vec<WitnessTx> = vec![];
+    pub fn get_witness_txs(&self) -> Vec<Witness> {
+        let mut quotes: Vec<Witness> = vec![];
 
         for block in &self.blocks {
             for tx in &block.transactions {
                 match tx {
-                    SideChainTx::WitnessTx(tx) => {
+                    SideChainTx::Witness(tx) => {
                         quotes.push(tx.clone());
                     }
                     _ => {

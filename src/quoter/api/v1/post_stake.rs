@@ -1,18 +1,19 @@
 use crate::{
-    common::{api::ResponseError, coins::Coin, PoolCoin},
-    quoter::vault_node::{StakeQuoteParams, VaultNodeInterface},
+    common::{api::ResponseError, input_address_id::input_address_id_to_string, PoolCoin},
+    quoter::vault_node::VaultNodeInterface,
+    vault::api::v1::post_stake::StakeQuoteParams,
 };
-use rand::{prelude::StdRng, Rng, SeedableRng};
+use chainflip_common::types::coin::Coin;
+use rand::{prelude::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeSet, HashMap},
     str::FromStr,
     sync::{Arc, Mutex},
     time::SystemTime,
 };
 use warp::http::StatusCode;
 
-use super::utils::generate_unique_input_address_id;
+use super::{utils::generate_unique_input_address_id, InputIdCache};
 
 /// Parameters for POST `quote` endpoint
 #[derive(Debug, Serialize, Deserialize)]
@@ -28,11 +29,12 @@ pub struct PostStakeParams {
     pub other_return_address: String,
 }
 
+/// TODO: Rename this to deposit
 /// Submit a stake quoter
 pub async fn stake<V: VaultNodeInterface>(
     params: PostStakeParams,
     vault_node: Arc<V>,
-    input_id_cache: Arc<Mutex<HashMap<Coin, BTreeSet<String>>>>,
+    input_id_cache: Arc<Mutex<InputIdCache>>,
 ) -> Result<serde_json::Value, ResponseError> {
     let coin = Coin::from_str(&params.pool)
         .map_err(|_| ResponseError::new(StatusCode::BAD_REQUEST, "Invalid pool coin"))?;
@@ -53,11 +55,18 @@ pub async fn stake<V: VaultNodeInterface>(
     let loki_input_address_id =
         generate_unique_input_address_id(Coin::LOKI, input_id_cache.clone(), &mut rng)?;
 
+    // Convert to string representation
+    let string_coin_input_address_id =
+        input_address_id_to_string(coin, &coin_input_address_id).expect("Invalid input address id");
+    let string_loki_input_address_id =
+        input_address_id_to_string(Coin::LOKI, &loki_input_address_id)
+            .expect("Invalid input address id");
+
     let quote_params = StakeQuoteParams {
         pool: coin,
         staker_id: params.staker_id,
-        coin_input_address_id: coin_input_address_id.clone(),
-        loki_input_address_id: loki_input_address_id.clone(),
+        coin_input_address_id: string_coin_input_address_id,
+        loki_input_address_id: string_loki_input_address_id,
         loki_return_address: params.loki_return_address,
         other_return_address: params.other_return_address,
     };

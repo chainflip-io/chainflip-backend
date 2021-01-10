@@ -1,13 +1,10 @@
-use std::{convert::TryFrom, str::FromStr, sync::Arc};
-
-use bip44::KeyPair;
-use hdwallet::ExtendedPrivKey;
-use itertools::Itertools;
-use parking_lot::RwLock;
-
+use super::{
+    get_input_id_indices, group_outputs_by_sending_amounts,
+    wallet_utils::{get_sending_wallets, WalletBalance},
+    OutputSender,
+};
 use crate::{
-    common::{ethereum::Address, Coin, GenericCoinAmount, Timestamp},
-    transactions::{OutputSentTx, OutputTx},
+    common::GenericCoinAmount,
     utils::{
         bip44::{self, RawKey},
         primitives::U256,
@@ -17,12 +14,17 @@ use crate::{
         transactions::TransactionProvider,
     },
 };
-
-use super::{
-    get_input_id_indices, group_outputs_by_sending_amounts,
-    wallet_utils::{get_sending_wallets, WalletBalance},
-    OutputSender,
+use bip44::KeyPair;
+use chainflip_common::types::{
+    addresses::EthereumAddress,
+    chain::{Output, OutputSent, Validate},
+    coin::Coin,
+    Network, Timestamp, UUIDv4,
 };
+use hdwallet::ExtendedPrivKey;
+use itertools::Itertools;
+use parking_lot::RwLock;
+use std::{convert::TryFrom, str::FromStr, sync::Arc};
 
 // TODO: The code here and the code in btc sender is very similar. We should refactor it in the future
 
@@ -31,11 +33,12 @@ pub struct EthOutputSender<E: EthereumClient, T: TransactionProvider> {
     client: E,
     root_private_key: ExtendedPrivKey,
     provider: Arc<RwLock<T>>,
+    network: Network,
 }
 
 impl<E: EthereumClient, T: TransactionProvider> EthOutputSender<E, T> {
     /// Create a new output sender
-    pub fn new(client: E, provider: Arc<RwLock<T>>, root_key: RawKey) -> Self {
+    pub fn new(client: E, provider: Arc<RwLock<T>>, root_key: RawKey, network: Network) -> Self {
         let root_private_key = root_key
             .to_private_key()
             .expect("Failed to generate ethereum extended private key");
@@ -44,14 +47,15 @@ impl<E: EthereumClient, T: TransactionProvider> EthOutputSender<E, T> {
             client,
             root_private_key,
             provider,
+            network,
         }
     }
 
     async fn send_outputs_inner(
         &self,
-        outputs: &[&OutputTx],
+        outputs: &[&Output],
         key_pair: &KeyPair,
-    ) -> Result<OutputSentTx, String> {
+    ) -> Result<OutputSent, String> {
         if outputs.is_empty() {
             return Err("Empty outputs".to_owned());
         }
@@ -69,19 +73,19 @@ impl<E: EthereumClient, T: TransactionProvider> EthOutputSender<E, T> {
             return Err("Received eth outputs with different addresses!".to_owned());
         }
 
-        let address = match Address::from_str(&address.0) {
+        let eth_address = match EthereumAddress::from_str(&address.to_string()) {
             Ok(address) => address,
             Err(_) => {
                 return Err(format!(
                     "Failed to convert to ethereum address: {}",
-                    address.0
+                    address
                 ));
             }
         };
 
         let request = EstimateRequest {
-            from: Address::from(key_pair.public_key),
-            to: address,
+            from: key_pair.clone().into(),
+            to: eth_address,
             amount: GenericCoinAmount::from_atomic(Coin::ETH, total_amount),
         };
 
@@ -102,7 +106,7 @@ impl<E: EthereumClient, T: TransactionProvider> EthOutputSender<E, T> {
         // Send!
         let transaction = SendTransaction {
             from: key_pair.clone(),
-            to: address,
+            to: eth_address,
             amount: GenericCoinAmount::from_atomic(Coin::ETH, new_amount),
             gas_limit: estimate.gas_limit,
             gas_price: estimate.gas_price,
@@ -115,16 +119,19 @@ impl<E: EthereumClient, T: TransactionProvider> EthOutputSender<E, T> {
 
         let uuids = outputs.iter().map(|tx| tx.id).collect_vec();
 
-        match OutputSentTx::new(
-            Timestamp::now(),
-            uuids,
-            Coin::ETH,
-            address.into(),
-            new_amount,
+        let sent = OutputSent {
+            id: UUIDv4::new(),
+            timestamp: Timestamp::now(),
+            outputs: uuids,
+            coin: Coin::ETH,
+            address: address.clone(),
+            amount: new_amount,
             fee,
-            tx_hash.to_string(),
-        ) {
-            Ok(tx) => Ok(tx),
+            transaction_id: tx_hash.to_string().into(),
+        };
+
+        match sent.validate(self.network) {
+            Ok(_) => Ok(sent),
             // Panic here because we sent money but didn't record it into the system
             Err(err) => panic!(
                 "Failed to create output tx for {:?} with hash {}: {}",
@@ -133,8 +140,8 @@ impl<E: EthereumClient, T: TransactionProvider> EthOutputSender<E, T> {
         }
     }
 
-    async fn send_outputs(&self, outputs: &[OutputTx], key_pair: &KeyPair) -> Vec<OutputSentTx> {
-        let mut sent_txs: Vec<OutputSentTx> = vec![];
+    async fn send_outputs(&self, outputs: &[Output], key_pair: &KeyPair) -> Vec<OutputSent> {
+        let mut sent_txs: Vec<OutputSent> = vec![];
 
         // Split outputs into chunks of u128
         let groups = group_outputs_by_sending_amounts(outputs);
@@ -157,7 +164,7 @@ impl<E: EthereumClient, T: TransactionProvider> EthOutputSender<E, T> {
 impl<E: EthereumClient + Sync + Send, T: TransactionProvider + Sync + Send> OutputSender
     for EthOutputSender<E, T>
 {
-    async fn send(&self, outputs: &[OutputTx]) -> Vec<OutputSentTx> {
+    async fn send(&self, outputs: &[Output]) -> Vec<OutputSent> {
         if (outputs.is_empty()) {
             return vec![];
         }
@@ -190,7 +197,7 @@ impl<E: EthereumClient + Sync + Send, T: TransactionProvider + Sync + Send> Outp
         // futures::future::join_all(keys).await doesn't seems to work
         let mut wallet_balances = vec![];
         for key in keys {
-            match self.client.get_balance(key.public_key.into()).await {
+            match self.client.get_balance(key.clone().into()).await {
                 Ok(balance) => wallet_balances.push(WalletBalance::new(key, balance)),
                 Err(err) => {
                     warn!("Failed to fetch balance for {}: {}", key.public_key, err);
@@ -199,7 +206,7 @@ impl<E: EthereumClient + Sync + Send, T: TransactionProvider + Sync + Send> Outp
         }
         let wallet_outputs = get_sending_wallets(&wallet_balances, outputs);
 
-        let mut sent_txs: Vec<OutputSentTx> = vec![];
+        let mut sent_txs: Vec<OutputSent> = vec![];
         for output in wallet_outputs {
             let sent = self.send_outputs(&[output.output], &output.wallet).await;
             sent_txs.extend(sent);
@@ -210,18 +217,17 @@ impl<E: EthereumClient + Sync + Send, T: TransactionProvider + Sync + Send> Outp
 
 #[cfg(test)]
 mod test {
-    use std::sync::Mutex;
-
-    use crate::{
-        common::{ethereum, WalletAddress},
-        side_chain::MemorySideChain,
-        utils::test_utils::TEST_ROOT_KEY,
-        utils::test_utils::{create_fake_output_tx, ethereum::TestEthereumClient},
-        vault::blockchain_connection::ethereum::EstimateResult,
-        vault::transactions::MemoryTransactionsProvider,
-    };
-
     use super::*;
+    use crate::{
+        common::ethereum,
+        side_chain::MemorySideChain,
+        utils::test_utils::{data::TestData, ethereum::TestEthereumClient, TEST_ROOT_KEY},
+        vault::{
+            blockchain_connection::ethereum::EstimateResult,
+            transactions::MemoryTransactionsProvider,
+        },
+    };
+    use std::sync::Mutex;
 
     fn get_key_pair() -> KeyPair {
         KeyPair::from_private_key(
@@ -237,7 +243,7 @@ mod test {
         let provider = MemoryTransactionsProvider::new_protected(side_chain.clone());
         let client = TestEthereumClient::new();
         let key = RawKey::decode(TEST_ROOT_KEY).unwrap();
-        EthOutputSender::new(client, provider, key)
+        EthOutputSender::new(client, provider, key, Network::Testnet)
     }
 
     #[tokio::test]
@@ -251,10 +257,8 @@ mod test {
 
         // =================
 
-        let mut output_1 = create_fake_output_tx(Coin::ETH);
-        let mut output_2 = create_fake_output_tx(Coin::ETH);
-        output_1.amount = u128::MAX;
-        output_2.amount = 100;
+        let output_1 = TestData::output(Coin::ETH, u128::MAX);
+        let output_2 = TestData::output(Coin::ETH, 100);
 
         assert_eq!(
             &sender
@@ -266,9 +270,9 @@ mod test {
 
         // =================
 
-        let output_1 = create_fake_output_tx(Coin::ETH);
-        let mut output_2 = create_fake_output_tx(Coin::ETH);
-        output_2.address = WalletAddress::new("different");
+        let output_1 = TestData::output(Coin::ETH, 100);
+        let mut output_2 = TestData::output(Coin::ETH, 100);
+        output_2.address = "different".into();
 
         assert_eq!(
             &sender
@@ -280,9 +284,9 @@ mod test {
 
         // =================
 
-        let mut output_1 = create_fake_output_tx(Coin::ETH);
-        let mut output_2 = create_fake_output_tx(Coin::ETH);
-        output_1.address = WalletAddress::new("invalid");
+        let mut output_1 = TestData::output(Coin::ETH, 100);
+        let mut output_2 = TestData::output(Coin::ETH, 100);
+        output_1.address = "invalid".into();
         output_2.address = output_1.address.clone();
 
         assert!(sender
@@ -293,7 +297,7 @@ mod test {
 
         // =================
 
-        let output_1 = create_fake_output_tx(Coin::ETH);
+        let output_1 = TestData::output(Coin::ETH, 100);
         sender
             .client
             .set_get_estimate_fee_handler(|_| Err("Error".into()));
@@ -309,8 +313,7 @@ mod test {
         // =================
         // Fee higher than or equal to total amount
 
-        let mut output_1 = create_fake_output_tx(Coin::ETH);
-        output_1.amount = 100;
+        let mut output_1 = TestData::output(Coin::ETH, 100);
         sender.client.set_get_estimate_fee_handler(|_| {
             Ok(EstimateResult {
                 gas_limit: 100,
@@ -337,8 +340,7 @@ mod test {
 
         // =================
 
-        let mut output_1 = create_fake_output_tx(Coin::ETH);
-        output_1.amount = 100;
+        let output_1 = TestData::output(Coin::ETH, 100);
         sender.client.set_get_estimate_fee_handler(|_| {
             Ok(EstimateResult {
                 gas_limit: 100,
@@ -356,8 +358,7 @@ mod test {
 
         // =================
 
-        let mut output_1 = create_fake_output_tx(Coin::ETH);
-        output_1.amount = 100;
+        let output_1 = TestData::output(Coin::ETH, 100);
         sender.client.set_get_estimate_fee_handler(|_| {
             Ok(EstimateResult {
                 gas_limit: u128::MAX,
@@ -375,8 +376,7 @@ mod test {
 
         // =================
 
-        let mut output_1 = create_fake_output_tx(Coin::ETH);
-        output_1.amount = 100;
+        let output_1 = TestData::output(Coin::ETH, 100);
         sender.client.set_get_estimate_fee_handler(|_| {
             Ok(EstimateResult {
                 gas_limit: 1,
@@ -400,14 +400,12 @@ mod test {
         let key_pair = get_key_pair();
         let key_pair_public_key = (&key_pair.public_key).to_string();
 
-        let mut output_1 = create_fake_output_tx(Coin::ETH);
-        let mut output_2 = create_fake_output_tx(Coin::ETH);
-        output_1.amount = 100;
-        output_2.amount = 200;
+        let mut output_1 = TestData::output(Coin::ETH, 100);
+        let mut output_2 = TestData::output(Coin::ETH, 200);
 
         let address = "0x70e7db0678460c5e53f1ffc9221d1c692111dcc5";
-        output_1.address = WalletAddress::new(address);
-        output_2.address = WalletAddress::new(address);
+        output_1.address = address.into();
+        output_2.address = address.into();
 
         sender.client.set_get_estimate_fee_handler(|_| {
             Ok(EstimateResult {
@@ -433,12 +431,12 @@ mod test {
             .await
             .unwrap();
 
-        assert_eq!(sent_tx.output_txs, vec![output_1.id, output_2.id]);
+        assert_eq!(sent_tx.outputs, vec![output_1.id, output_2.id]);
         assert_eq!(sent_tx.coin, Coin::ETH);
-        assert_eq!(&sent_tx.address.0.to_lowercase(), address);
+        assert_eq!(sent_tx.address, address.into());
         assert_eq!(sent_tx.amount, 299);
         assert_eq!(sent_tx.fee, 1);
-        assert_eq!(&sent_tx.transaction_id, hash);
+        assert_eq!(sent_tx.transaction_id, hash.into());
     }
 
     #[tokio::test]
@@ -446,12 +444,9 @@ mod test {
         let mut sender = get_output_sender();
         let key_pair = get_key_pair();
 
-        let mut output_1 = create_fake_output_tx(Coin::ETH);
-        let mut output_2 = create_fake_output_tx(Coin::ETH);
-
         // Make sure send_outputs splits these outputs in 2 distinct sends
-        output_1.amount = u128::MAX;
-        output_2.amount = 200;
+        let output_1 = TestData::output(Coin::ETH, u128::MAX);
+        let output_2 = TestData::output(Coin::ETH, 200);
 
         sender.client.set_get_estimate_fee_handler(|_| {
             Ok(EstimateResult {
@@ -478,7 +473,7 @@ mod test {
         assert_eq!(sent.len(), 1);
 
         let first = sent.first().unwrap();
-        assert_eq!(&first.output_txs, &[output_2.id]);
+        assert_eq!(&first.outputs, &[output_2.id]);
         assert_eq!(first.amount, 199);
         assert_eq!(first.fee, 1);
     }

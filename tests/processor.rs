@@ -1,11 +1,11 @@
 use chainflip::{
     common::*,
-    transactions::signatures::get_random_staker,
-    transactions::UnstakeRequestTx,
-    utils::test_utils::{self, *},
+    utils::test_utils::{self, staking::get_random_staker, *},
     vault::transactions::memory_provider::Portion,
     vault::transactions::TransactionProvider,
 };
+use chainflip_common::types::coin::Coin;
+use data::TestData;
 
 fn check_liquidity<T>(
     tx_provider: &mut T,
@@ -22,12 +22,8 @@ fn check_liquidity<T>(
         .unwrap();
 
     // Check that a pool with the right amount was created
-    assert_eq!(liquidity.loki_depth, loki_amount.to_atomic());
+    assert_eq!(liquidity.base_depth, loki_amount.to_atomic());
     assert_eq!(liquidity.depth, coin_amount.to_atomic());
-}
-
-fn create_unstake_tx(pool: PoolCoin, staker: &Staker) -> UnstakeRequestTx {
-    create_unstake_for_staker(pool, staker)
 }
 
 #[test]
@@ -38,9 +34,9 @@ fn witnessed_staked_changes_pool_liquidity() {
     let loki_amount = LokiAmount::from_decimal_string("1.0");
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
-    let stake_tx = create_fake_stake_quote(PoolCoin::from(coin_type).unwrap());
-    let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
-    let wtx_eth = create_fake_witness(&stake_tx, coin_amount, coin_type);
+    let stake_tx = TestData::deposit_quote(coin_type);
+    let wtx_loki = TestData::witness(stake_tx.id, loki_amount.to_atomic(), Coin::LOKI);
+    let wtx_eth = TestData::witness(stake_tx.id, coin_amount.to_atomic(), coin_type);
 
     runner.add_block([stake_tx.clone().into()]);
     runner.add_block([wtx_loki.into(), wtx_eth.into()]);
@@ -75,9 +71,9 @@ fn multiple_stakes() {
     let loki_amount = LokiAmount::from_decimal_string("1.0");
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
-    let stake_tx = create_fake_stake_quote(PoolCoin::from(coin_type).unwrap());
-    let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
-    let wtx_eth = create_fake_witness(&stake_tx, coin_amount, coin_type);
+    let stake_tx = TestData::deposit_quote(coin_type);
+    let wtx_loki = TestData::witness(stake_tx.id, loki_amount.to_atomic(), Coin::LOKI);
+    let wtx_eth = TestData::witness(stake_tx.id, coin_amount.to_atomic(), coin_type);
 
     // Add blocks with those transactions
     runner.add_block([stake_tx.clone().into()]);
@@ -92,9 +88,9 @@ fn multiple_stakes() {
 
     // 2. Add another stake with another staker id
 
-    let stake_tx = create_fake_stake_quote(PoolCoin::from(coin_type).unwrap());
-    let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
-    let wtx_eth = create_fake_witness(&stake_tx, coin_amount, coin_type);
+    let stake_tx = TestData::deposit_quote(coin_type);
+    let wtx_loki = TestData::witness(stake_tx.id, loki_amount.to_atomic(), Coin::LOKI);
+    let wtx_eth = TestData::witness(stake_tx.id, coin_amount.to_atomic(), coin_type);
 
     runner.add_block([stake_tx.clone().into()]);
     runner.add_block([wtx_loki.into(), wtx_eth.into()]);
@@ -116,7 +112,7 @@ fn sole_staker_can_unstake_all() {
     // Check that the liquidity is non-zero before unstaking
     runner.check_eth_liquidity(loki_amount.to_atomic(), eth_amount.to_atomic());
 
-    let unstake_tx = create_unstake_tx(stake_tx.coin_type, &staker);
+    let unstake_tx = TestData::withdraw_request_for_staker(&staker, stake_tx.pool);
 
     runner.add_block([unstake_tx.clone().into()]);
 
@@ -148,7 +144,7 @@ fn half_staker_can_unstake_half() {
     // Check that liquidity is the sum of two stakes
     runner.check_eth_liquidity(loki_amount.to_atomic() * 2, eth_amount.to_atomic() * 2);
 
-    let unstake_tx = create_unstake_tx(stake2.coin_type, &bob);
+    let unstake_tx = TestData::withdraw_request_for_staker(&bob, stake2.pool);
     runner.add_block([unstake_tx.clone().into()]);
 
     // Check that outputs have been payed out
@@ -222,13 +218,12 @@ fn non_staker_cannot_unstake() {
     let bob = get_random_staker();
 
     // Bob creates a stake quote tx, but never pays the amounts:
-    let stake =
-        create_fake_stake_quote_for_id(bob.id(), PoolCoin::from(eth_amount.coin_type()).unwrap());
+    let stake = TestData::deposit_quote_for_id(bob.id(), eth_amount.coin_type());
 
     runner.add_block([stake.clone().into()]);
 
     // Bob tries to unstake:
-    let unstake_tx = create_unstake_tx(stake.coin_type, &bob);
+    let unstake_tx = TestData::withdraw_request_for_staker(&bob, stake.pool);
     runner.add_block([unstake_tx.clone().into()]);
 
     // Check that no outputs are created:
@@ -236,7 +231,7 @@ fn non_staker_cannot_unstake() {
 
     let outputs = sent_outputs
         .iter()
-        .filter(|output| output.quote_tx == unstake_tx.id)
+        .filter(|output| output.parent_id() == unstake_tx.id)
         .count();
 
     assert_eq!(outputs, 0);

@@ -10,8 +10,6 @@ pub mod logging;
 pub mod quoter;
 /// Side Chain implementation
 pub mod side_chain;
-/// Various transaction types commonly used by other modules
-pub mod transactions;
 /// Helper functions (including helper functions for tests)
 pub mod utils;
 /// Vault implementation
@@ -28,6 +26,8 @@ extern crate lazy_static;
 
 #[macro_use]
 extern crate async_trait;
+
+extern crate chainflip_common;
 
 /// Temporary funciton to demostrate how to use
 /// unit/integration tests

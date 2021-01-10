@@ -1,6 +1,7 @@
-use std::fmt::Display;
+use chainflip_common::types::chain::Output;
 
-use crate::{transactions::OutputTx, utils::bip44::KeyPair};
+use crate::utils::bip44::KeyPair;
+use std::fmt::Display;
 
 /// A struct for representing wallet balance
 #[derive(Debug, Clone)]
@@ -26,13 +27,13 @@ pub struct WalletOutput {
     /// The wallet
     pub wallet: KeyPair,
     /// The output to send
-    pub output: OutputTx,
+    pub output: Output,
 }
 
 /// Get the sending wallets for the given outputs
 ///
 /// This uses a very basic greedy algorithm at the moment
-pub fn get_sending_wallets(balances: &[WalletBalance], outputs: &[OutputTx]) -> Vec<WalletOutput> {
+pub fn get_sending_wallets(balances: &[WalletBalance], outputs: &[Output]) -> Vec<WalletOutput> {
     if balances.is_empty() {
         warn!("Empty wallet balances passed to get_sending_wallets");
         return vec![];
@@ -76,11 +77,11 @@ pub fn get_sending_wallets(balances: &[WalletBalance], outputs: &[OutputTx]) -> 
 
 #[cfg(test)]
 mod test {
-    use rand::{thread_rng, Rng};
-
-    use crate::{common::Coin, utils::test_utils::create_fake_output_tx};
+    use crate::utils::test_utils::data::TestData;
 
     use super::*;
+    use chainflip_common::types::coin::Coin;
+    use rand::{thread_rng, Rng};
 
     fn get_key_pair() -> KeyPair {
         let random_bytes = thread_rng().gen::<[u8; 32]>();
@@ -95,14 +96,10 @@ mod test {
 
     #[test]
     fn returns_wallet_outputs() {
-        let mut biggest_output_tx = create_fake_output_tx(Coin::LOKI);
-        biggest_output_tx.amount = 1000;
-        let mut big_output_tx = create_fake_output_tx(Coin::LOKI);
-        big_output_tx.amount = 750;
-        let mut medium_output_tx = create_fake_output_tx(Coin::LOKI);
-        medium_output_tx.amount = 500;
-        let mut small_output_tx = create_fake_output_tx(Coin::LOKI);
-        small_output_tx.amount = 100;
+        let biggest_output_tx = TestData::output(Coin::LOKI, 1000);
+        let big_output_tx = TestData::output(Coin::LOKI, 700);
+        let medium_output_tx = TestData::output(Coin::LOKI, 500);
+        let small_output_tx = TestData::output(Coin::LOKI, 100);
 
         let outputs = vec![
             big_output_tx.clone(),

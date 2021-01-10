@@ -1,17 +1,13 @@
 use crate::{
     common::{Liquidity, LiquidityProvider, PoolCoin},
     side_chain::SideChainBlock,
-    transactions::{
-        OutputSentTx, OutputTx, QuoteTx, StakeQuoteTx, StakeTx, UnstakeRequestTx, UnstakeTx,
-        WitnessTx,
-    },
 };
+use chainflip_common::types::{chain::*, UUIDv4};
 use std::{
     collections::HashMap,
     net::SocketAddr,
     sync::{Arc, Mutex},
 };
-use uuid::Uuid;
 use vault_node::VaultNodeInterface;
 
 mod api;
@@ -77,28 +73,29 @@ pub trait BlockProcessor {
     fn process_blocks(&mut self, blocks: &[SideChainBlock]) -> Result<(), String>;
 }
 
+// TODO: Remove tx from these names
 /// A trait for providing quoter state
 pub trait StateProvider: LiquidityProvider {
     /// Get all swap quotes
-    fn get_swap_quotes(&self) -> Vec<QuoteTx>;
+    fn get_swap_quotes(&self) -> Vec<SwapQuote>;
     /// Get swap quote with the given id
-    fn get_swap_quote_tx(&self, id: Uuid) -> Option<QuoteTx>;
+    fn get_swap_quote_tx(&self, id: UUIDv4) -> Option<SwapQuote>;
     /// Get all stake quotes
-    fn get_stake_quotes(&self) -> Vec<StakeQuoteTx>;
+    fn get_stake_quotes(&self) -> Vec<DepositQuote>;
     /// Get stake quore with the given id
-    fn get_stake_quote_tx(&self, id: Uuid) -> Option<StakeQuoteTx>;
+    fn get_stake_quote_tx(&self, id: UUIDv4) -> Option<DepositQuote>;
     /// Get all witness transactions with the given quote id
-    fn get_witness_txs(&self) -> Vec<WitnessTx>;
+    fn get_witness_txs(&self) -> Vec<Witness>;
     /// Get all output transactions with the given quote id
-    fn get_output_txs(&self) -> Vec<OutputTx>;
+    fn get_output_txs(&self) -> Vec<Output>;
     /// Get all output sent transactions
-    fn get_output_sent_txs(&self) -> Vec<OutputSentTx>;
+    fn get_output_sent_txs(&self) -> Vec<OutputSent>;
     /// Get all stake txs
-    fn get_stake_txs(&self) -> Vec<StakeTx>;
+    fn get_stake_txs(&self) -> Vec<Deposit>;
     /// Get all unstake requests
-    fn get_unstake_requests(&self) -> Vec<UnstakeRequestTx>;
+    fn get_unstake_requests(&self) -> Vec<WithdrawRequest>;
     /// Get all unstake txs
-    fn get_unstakes(&self) -> Vec<UnstakeTx>;
+    fn get_unstakes(&self) -> Vec<Withdraw>;
     /// Get the pools
     fn get_pools(&self) -> HashMap<PoolCoin, Liquidity>;
 }

@@ -2,7 +2,6 @@ use crate::{
     common::{GenericCoinAmount, WalletAddress},
     vault::blockchain_connection::btc::*,
 };
-use bitcoin::Network;
 use bitcoin::Transaction;
 use bitcoin::Txid;
 use spv::{AddressUnspentResponse, BtcUTXO};
@@ -22,6 +21,7 @@ pub struct TestBitcoinClient {
     blocks: Arc<Mutex<Blocks>>,
 }
 
+/// Test bitcoin send client
 pub struct TestBitcoinSendClient {
     send_handler:
         Option<Box<dyn Fn(&SendTransaction) -> Result<Txid, String> + Send + Sync + 'static>>,
@@ -38,7 +38,7 @@ impl IBitcoinSend for TestBitcoinSendClient {
 
     async fn get_address_balance(
         &self,
-        address: WalletAddress,
+        _address: WalletAddress,
     ) -> Result<GenericCoinAmount, String> {
         Err("Not handled".to_owned())
     }
@@ -98,9 +98,9 @@ impl BitcoinSPVClient for TestBitcoinSPVClient {
 
     async fn get_estimated_fee(
         &self,
-        send_tx: &SendTransaction,
-        fee_method: spv::FeeMethod,
-        fee_level: u32,
+        _send_tx: &SendTransaction,
+        _fee_method: spv::FeeMethod,
+        _fee_level: u32,
     ) -> Result<u64, String> {
         Ok(1000)
     }

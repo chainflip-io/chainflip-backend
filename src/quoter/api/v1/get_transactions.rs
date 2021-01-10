@@ -1,7 +1,7 @@
 use crate::{
     common::api::ResponseError, common::StakerId, quoter::StateProvider, side_chain::SideChainTx,
-    transactions::OutputTx,
 };
+use chainflip_common::types::{chain::Output, UUIDv4};
 use itertools::Itertools;
 use reqwest::StatusCode;
 use serde::Deserialize;
@@ -9,7 +9,6 @@ use std::{
     str::FromStr,
     sync::{Arc, Mutex},
 };
-use uuid::Uuid;
 
 /// Parameters for GET `transactions` endpoint
 #[derive(Debug, Deserialize)]
@@ -43,7 +42,7 @@ where
     }
 
     if let Some(quote_id) = params.quote_id {
-        let id = match Uuid::from_str(&quote_id) {
+        let id = match UUIDv4::from_str(&quote_id) {
             Ok(id) => id,
             Err(_) => {
                 return Err(ResponseError::new(
@@ -72,7 +71,7 @@ where
 
 /// Get transactions related to the given quote id
 fn get_quote_id_transactions<S>(
-    id: Uuid,
+    id: UUIDv4,
     state: Arc<Mutex<S>>,
 ) -> Result<Vec<SideChainTx>, ResponseError>
 where
@@ -91,25 +90,27 @@ where
 
     let filtered_witnesses: Vec<SideChainTx> = witnesses
         .into_iter()
-        .filter(|tx| tx.quote_id == id)
+        .filter(|tx| tx.quote == id)
         .map(|tx| tx.into())
         .collect();
 
     let filtered_stake: Vec<SideChainTx> = stakes
         .into_iter()
-        .filter(|tx| tx.quote_tx == id)
+        .filter(|tx| tx.quote == id)
         .map(|tx| tx.into())
         .collect();
 
-    let filtered_outputs: Vec<OutputTx> =
-        outputs.into_iter().filter(|tx| tx.quote_tx == id).collect();
-    let ids: Vec<Uuid> = filtered_outputs.iter().map(|tx| tx.id).collect();
+    let filtered_outputs: Vec<Output> = outputs
+        .into_iter()
+        .filter(|tx| tx.parent_id() == id)
+        .collect();
+    let ids: Vec<UUIDv4> = filtered_outputs.iter().map(|tx| tx.id).collect();
     let filtered_outputs: Vec<SideChainTx> =
         filtered_outputs.into_iter().map(|tx| tx.into()).collect();
 
     let filtered_output_sent: Vec<SideChainTx> = sent
         .into_iter()
-        .filter(|tx| ids.iter().find(|id| tx.output_txs.contains(id)).is_some())
+        .filter(|tx| ids.iter().find(|id| tx.outputs.contains(id)).is_some())
         .map(|tx| tx.into())
         .collect();
 
@@ -156,7 +157,7 @@ where
         .filter(|tx| {
             filtered_unstake_requests
                 .iter()
-                .find(|req| req.id == tx.request_id)
+                .find(|req| req.id == tx.withdraw_request)
                 .is_some()
         })
         .map(|tx| tx.into())
@@ -164,38 +165,33 @@ where
 
     let filtered_witnesses: Vec<SideChainTx> = witnesses
         .into_iter()
-        .filter(|tx| {
-            quotes
-                .iter()
-                .find(|quote| tx.quote_id == quote.id)
-                .is_some()
-        })
+        .filter(|tx| quotes.iter().find(|quote| tx.quote == quote.id).is_some())
         .map(|tx| tx.into())
         .collect();
 
-    let filtered_outputs: Vec<OutputTx> = outputs
+    let filtered_outputs: Vec<Output> = outputs
         .into_iter()
         .filter(|tx| {
             let unstake_output = filtered_unstake_requests
                 .iter()
-                .find(|quote| quote.id == tx.quote_tx)
+                .find(|quote| quote.id == tx.parent_id())
                 .is_some();
 
             let refund_output = quotes
                 .iter()
-                .find(|quote| quote.id == tx.quote_tx)
+                .find(|quote| quote.id == tx.parent_id())
                 .is_some();
 
             unstake_output || refund_output
         })
         .collect();
-    let ids: Vec<Uuid> = filtered_outputs.iter().map(|tx| tx.id).collect();
+    let ids: Vec<UUIDv4> = filtered_outputs.iter().map(|tx| tx.id).collect();
     let filtered_outputs: Vec<SideChainTx> =
         filtered_outputs.into_iter().map(|tx| tx.into()).collect();
 
     let filtered_output_sent: Vec<SideChainTx> = sent
         .into_iter()
-        .filter(|tx| ids.iter().find(|id| tx.output_txs.contains(id)).is_some())
+        .filter(|tx| ids.iter().find(|id| tx.outputs.contains(id)).is_some())
         .map(|tx| tx.into())
         .collect();
 

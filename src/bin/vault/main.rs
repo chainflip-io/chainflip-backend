@@ -9,7 +9,7 @@ use chainflip::{
     vault::{
         api::APIServer,
         blockchain_connection::{BtcSPVClient, LokiConnection, LokiConnectionConfig, Web3Client},
-        config::{NetType, VAULT_CONFIG},
+        config::VAULT_CONFIG,
         processor::{
             BtcOutputSender, EthOutputSender, LokiSender, OutputCoinProcessor, SideChainProcessor,
         },
@@ -17,8 +17,8 @@ use chainflip::{
         witness::{BtcSPVWitness, EthereumWitness, LokiWitness},
     },
 };
+use chainflip_common::types::Network;
 use parking_lot::RwLock;
-
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
@@ -58,8 +58,8 @@ fn main() {
         Web3Client::url(&vault_config.eth.provider_url).expect("Failed to create web3 client");
 
     let btc_network = match &vault_config.net_type {
-        NetType::Testnet => bitcoin::Network::Testnet,
-        NetType::Mainnet => bitcoin::Network::Bitcoin,
+        Network::Testnet => bitcoin::Network::Testnet,
+        Network::Mainnet => bitcoin::Network::Bitcoin,
     };
 
     let btc_config = &vault_config.btc;
@@ -70,7 +70,7 @@ fn main() {
         0,
         true,
         bitcoin::AddressType::P2wpkh,
-        &vault_config.net_type,
+        vault_config.net_type,
     )
     .expect("Could not generate bitcoin address for index 0");
 
@@ -107,13 +107,18 @@ fn main() {
     // Processor
     let db_connection = rusqlite::Connection::open("blocks.db").expect("Could not open database");
     let kvs = PersistentKVS::new(db_connection);
-    let loki = LokiSender::new(vault_config.loki.rpc.clone());
+    let loki = LokiSender::new(vault_config.loki.rpc.clone(), vault_config.net_type);
 
     let eth_root_key = match bip44::RawKey::decode(&vault_config.eth.master_root_key) {
         Ok(key) => key,
         Err(_) => panic!("Failed to generate root key from eth master root key"),
     };
-    let eth_sender = EthOutputSender::new(eth_client.clone(), provider.clone(), eth_root_key);
+    let eth_sender = EthOutputSender::new(
+        eth_client.clone(),
+        provider.clone(),
+        eth_root_key,
+        vault_config.net_type,
+    );
 
     let btc_root_key = match bip44::RawKey::decode(&vault_config.btc.master_root_key) {
         Ok(key) => key,
@@ -127,7 +132,8 @@ fn main() {
     );
 
     let coin_processor = OutputCoinProcessor::new(loki, eth_sender, btc_sender);
-    let processor = SideChainProcessor::new(provider.clone(), kvs, coin_processor);
+    let processor =
+        SideChainProcessor::new(provider.clone(), kvs, coin_processor, vault_config.net_type);
 
     processor.start(None);
 

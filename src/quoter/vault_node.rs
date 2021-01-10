@@ -1,13 +1,12 @@
 use crate::{
     common::api,
     side_chain::SideChainBlock,
-    vault::api::v1::{get_blocks::BlocksQueryResponse, PortionsParams},
+    vault::api::v1::{
+        get_blocks::BlocksQueryResponse, post_stake::StakeQuoteParams, post_swap::SwapQuoteParams,
+        post_unstake::UnstakeParams, PortionsParams,
+    },
 };
 use reqwest::Client;
-
-pub use crate::vault::api::v1::post_stake::StakeQuoteParams;
-pub use crate::vault::api::v1::post_swap::SwapQuoteParams;
-pub use crate::vault::api::v1::post_unstake::UnstakeParams;
 
 /// Configuration for the vault node api
 #[derive(Debug, Copy, Clone)]

@@ -1,31 +1,26 @@
+use super::{data::TestData, store::MemoryKVS};
+use crate::{
+    common::*,
+    side_chain::{ISideChain, MemorySideChain, SideChainTx},
+    vault::{
+        processor::{CoinProcessor, ProcessorEvent, SideChainProcessor},
+        transactions::{memory_provider::Portion, MemoryTransactionsProvider, TransactionProvider},
+    },
+};
+use chainflip_common::types::{chain::*, coin::Coin, Network};
+use parking_lot::RwLock;
 use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
 
-use parking_lot::RwLock;
-
-use crate::{
-    common::*,
-    side_chain::{ISideChain, MemorySideChain, SideChainTx},
-    transactions::*,
-    vault::processor::{CoinProcessor, ProcessorEvent, SideChainProcessor},
-    vault::transactions::memory_provider::Portion,
-    vault::transactions::{MemoryTransactionsProvider, TransactionProvider},
-};
-
-use super::{
-    create_fake_witness, create_unstake_for_staker, fake_txs::create_fake_stake_quote_for_id,
-    store::MemoryKVS,
-};
-
 struct FakeCoinSender {
     /// Store processed outputs here
-    processed_txs: Arc<Mutex<Vec<OutputTx>>>,
+    processed_txs: Arc<Mutex<Vec<Output>>>,
 }
 
 impl FakeCoinSender {
-    fn new() -> (Self, Arc<Mutex<Vec<OutputTx>>>) {
+    fn new() -> (Self, Arc<Mutex<Vec<Output>>>) {
         let processed = Arc::new(Mutex::new(vec![]));
 
         (
@@ -39,7 +34,7 @@ impl FakeCoinSender {
 
 #[async_trait]
 impl CoinProcessor for FakeCoinSender {
-    async fn process(&self, _coin: Coin, outputs: &[OutputTx]) -> Vec<OutputSentTx> {
+    async fn process(&self, _coin: Coin, outputs: &[Output]) -> Vec<OutputSent> {
         self.processed_txs
             .lock()
             .unwrap()
@@ -58,7 +53,7 @@ pub struct TestRunner {
     /// State provider
     pub provider: Arc<RwLock<MemoryTransactionsProvider<MemorySideChain>>>,
     /// Sent outputs are recorded here
-    pub sent_outputs: Arc<Mutex<Vec<OutputTx>>>,
+    pub sent_outputs: Arc<Mutex<Vec<Output>>>,
 }
 
 impl TestRunner {
@@ -72,7 +67,12 @@ impl TestRunner {
 
         let (sender, sent_outputs) = FakeCoinSender::new();
 
-        let processor = SideChainProcessor::new(Arc::clone(&provider), MemoryKVS::new(), sender);
+        let processor = SideChainProcessor::new(
+            Arc::clone(&provider),
+            MemoryKVS::new(),
+            sender,
+            Network::Testnet,
+        );
 
         // Create a channel to receive processor events through
         let (sender, receiver) = crossbeam_channel::unbounded::<ProcessorEvent>();
@@ -110,13 +110,15 @@ impl TestRunner {
         staker_id: &StakerId,
         loki_amount: LokiAmount,
         other_amount: GenericCoinAmount,
-    ) -> StakeQuoteTx {
-        let stake_tx = create_fake_stake_quote_for_id(
-            staker_id.to_owned(),
-            PoolCoin::from(other_amount.coin_type()).unwrap(),
+    ) -> DepositQuote {
+        let stake_tx =
+            TestData::deposit_quote_for_id(staker_id.to_owned(), other_amount.coin_type());
+        let wtx_loki = TestData::witness(stake_tx.id, loki_amount.to_atomic(), Coin::LOKI);
+        let wtx_eth = TestData::witness(
+            stake_tx.id,
+            other_amount.to_atomic(),
+            other_amount.coin_type(),
         );
-        let wtx_loki = create_fake_witness(&stake_tx, loki_amount, Coin::LOKI);
-        let wtx_eth = create_fake_witness(&stake_tx, other_amount, other_amount.coin_type());
 
         self.add_block([stake_tx.clone().into()]);
         self.add_block([wtx_loki.into(), wtx_eth.into()]);
@@ -125,12 +127,12 @@ impl TestRunner {
     }
 
     /// Convenience method to find outputs associated with `tx` unstake
-    pub fn get_outputs_for_unstake(&self, tx: &UnstakeRequestTx) -> EthStakeOutputs {
+    pub fn get_outputs_for_unstake(&self, tx: &WithdrawRequest) -> EthStakeOutputs {
         let sent_outputs = self.sent_outputs.lock().unwrap();
 
         let outputs: Vec<_> = sent_outputs
             .iter()
-            .filter(|output| output.quote_tx == tx.id)
+            .filter(|output| output.parent_id() == tx.id)
             .cloned()
             .collect();
 
@@ -161,13 +163,13 @@ impl TestRunner {
             .get_liquidity(PoolCoin::ETH)
             .expect("liquidity should exist");
 
-        assert_eq!(liquidity.loki_depth, loki_atomic);
+        assert_eq!(liquidity.base_depth, loki_atomic);
         assert_eq!(liquidity.depth, eth_atomic);
     }
 
     /// Convenience method to add a signed unstake trasaction for `staker_id`
     pub fn add_unstake_for(&mut self, staker: &Staker, pool: PoolCoin) {
-        let tx = create_unstake_for_staker(pool, staker);
+        let tx = TestData::withdraw_request_for_staker(staker, pool.get_coin());
 
         self.add_block([tx.into()]);
     }
@@ -206,9 +208,9 @@ impl TestRunner {
 /// should be generated when unstaking from loki/eth pool
 pub struct EthStakeOutputs {
     /// Loki output
-    pub loki_output: OutputTx,
+    pub loki_output: Output,
     /// Ethereum output
-    pub eth_output: OutputTx,
+    pub eth_output: Output,
 }
 
 fn spin_until_block(receiver: &crossbeam_channel::Receiver<ProcessorEvent>, target_idx: u32) {

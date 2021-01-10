@@ -1,10 +1,8 @@
 use crate::utils::{clone_into_array, loki::address::get_integrated_address};
 
-use super::{
-    coins::{CoinAmount, CoinInfo},
-    Coin, GenericCoinAmount, WalletAddress,
-};
+use super::{coins::CoinAmount, GenericCoinAmount, WalletAddress};
 
+use chainflip_common::types::coin::{Coin, CoinInfo};
 use serde::{Deserialize, Serialize};
 
 use std::{

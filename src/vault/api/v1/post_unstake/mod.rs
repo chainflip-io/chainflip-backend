@@ -1,16 +1,20 @@
-use std::{str::FromStr, sync::Arc};
-
-use serde::{Deserialize, Serialize};
-use warp::http::StatusCode;
-
-use parking_lot::RwLock;
-
 use crate::{
-    common::{api::ResponseError, fractions::UnstakeFraction, *},
-    transactions::UnstakeRequestTx,
+    common::{api::ResponseError, *},
     utils::validation::validate_address,
     vault::transactions::TransactionProvider,
 };
+use chainflip_common::types::{
+    chain::{Validate, WithdrawRequest},
+    coin::Coin,
+    fraction::WithdrawFraction,
+    Timestamp, UUIDv4,
+};
+use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
+use std::{str::FromStr, sync::Arc};
+use warp::http::StatusCode;
+
+use super::Config;
 
 /// Request parameters for unstake
 #[derive(Deserialize, Serialize)]
@@ -55,6 +59,7 @@ fn check_staker_id_exists<T: TransactionProvider>(
 pub async fn post_unstake<T: TransactionProvider>(
     params: UnstakeParams,
     provider: Arc<RwLock<T>>,
+    config: Config,
 ) -> Result<serde_json::Value, ResponseError> {
     // Check staker Id:
     let staker_id = StakerId::new(params.staker_id)
@@ -78,31 +83,36 @@ pub async fn post_unstake<T: TransactionProvider>(
     }
 
     // Check fraction (currently we only allow full unstaking, i.e. UnstakeFraction::MAX)
-    let fraction = UnstakeFraction::new(params.fraction)
+    let fraction = WithdrawFraction::new(params.fraction)
         .map_err(|err| bad_request!("Invalid percentage: {}", err))?;
 
-    if fraction != UnstakeFraction::MAX {
+    if fraction != WithdrawFraction::MAX {
         return Err(bad_request!(
             "Fraction must be 10000 (partial unstaking is not yet supported)"
         ));
     }
+
+    let signature =
+        base64::decode(params.signature).map_err(|_| bad_request!("Invalid base64 signature"))?;
 
     let timestamp =
         Timestamp::from_str(&params.timestamp).map_err(|err| bad_request!("{}", err))?;
 
     let mut provider = provider.write();
 
-    let tx = UnstakeRequestTx::new(
-        pool,
-        staker_id,
-        loki_address.into(),
-        other_address,
-        fraction,
+    let tx = WithdrawRequest {
+        id: UUIDv4::new(),
         timestamp,
-        params.signature,
-    );
+        staker_id: staker_id.bytes().to_vec(),
+        pool: pool.get_coin(),
+        base_address: loki_address.address.into(),
+        other_address: other_address.0.into(),
+        fraction,
+        signature,
+    };
 
-    tx.verify().map_err(|_| bad_request!("Invalid signature"))?;
+    tx.validate(config.net_type)
+        .map_err(|err| bad_request!("{}", err))?;
 
     let tx_id = tx.id;
 

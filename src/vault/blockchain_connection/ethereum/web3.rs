@@ -1,8 +1,6 @@
 use super::{EstimateRequest, EstimateResult, EthereumClient, SendTransaction};
-use crate::{
-    common::{coins::CoinAmount, ethereum, Coin},
-    utils::clone_into_array,
-};
+use crate::{common::ethereum, utils::clone_into_array};
+use chainflip_common::types::{addresses::EthereumAddress, coin::Coin};
 use ethereum_tx_sign::RawTransaction;
 use std::convert::TryFrom;
 use web3::{
@@ -92,8 +90,8 @@ impl EthereumClient for Web3Client {
             .eth()
             .estimate_gas(
                 CallRequest {
-                    from: Some(tx.from.into()),
-                    to: Some(tx.to.into()),
+                    from: Some(tx.from.0.into()),
+                    to: Some(tx.to.0.into()),
                     gas: None,
                     gas_price: Some(gas_price),
                     value: Some(tx.amount.to_atomic().into()),
@@ -126,11 +124,11 @@ impl EthereumClient for Web3Client {
         })
     }
 
-    async fn get_balance(&self, address: ethereum::Address) -> Result<u128, String> {
+    async fn get_balance(&self, address: EthereumAddress) -> Result<u128, String> {
         let balance = self
             .web3
             .eth()
-            .balance(address.into(), Some(BlockNumber::Latest))
+            .balance(address.0.into(), Some(BlockNumber::Latest))
             .await
             .map_err(|err| err.to_string())?;
 
@@ -167,7 +165,7 @@ impl EthereumClient for Web3Client {
 
         let raw_tx = RawTransaction {
             nonce: nonce,
-            to: Some(tx.to.into()),
+            to: Some(tx.to.0.into()),
             value: U256::from(tx.amount.to_atomic()),
             gas_price: U256::from(tx.gas_price),
             gas: U256::from(tx.gas_limit),
@@ -218,12 +216,9 @@ impl From<types::H160> for ethereum::Address {
 
 #[cfg(test)]
 mod test {
-    use ethereum::Address;
-    use std::str::FromStr;
-
-    use crate::common::GenericCoinAmount;
-
     use super::*;
+    use crate::common::GenericCoinAmount;
+    use std::str::FromStr;
 
     static WEB3_URL: &str = "https://api.myetherwallet.com/eth";
 
@@ -272,8 +267,8 @@ mod test {
     async fn returns_estimate() {
         let client = Web3Client::url(WEB3_URL).expect("Failed to create web3 client");
         let request = EstimateRequest {
-            from: Address::from_str("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2").unwrap(), // wEth address
-            to: Address::from_str("0xdb50dBa4f9A046bfBE3D0D80E42308108A8Dc70a").unwrap(),
+            from: EthereumAddress::from_str("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2").unwrap(), // wEth address
+            to: EthereumAddress::from_str("0xdb50dBa4f9A046bfBE3D0D80E42308108A8Dc70a").unwrap(),
             amount: GenericCoinAmount::from_decimal_string(Coin::ETH, "1"),
         };
 
@@ -287,7 +282,9 @@ mod test {
         let client = Web3Client::url(WEB3_URL).expect("Failed to create web3 client");
 
         let balance = client
-            .get_balance(Address::from_str("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2").unwrap())
+            .get_balance(
+                EthereumAddress::from_str("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2").unwrap(),
+            )
             .await;
         assert!(balance.is_ok());
     }

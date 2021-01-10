@@ -1,3 +1,4 @@
+use chainflip_common::types::Network;
 use config::{Config, ConfigError, Environment, File};
 use serde::Deserialize;
 use std::env;
@@ -11,16 +12,6 @@ lazy_static! {
             panic!("Failed to load config");
         }
     };
-}
-
-#[derive(Debug, Deserialize, Copy, Clone)]
-/// Defines network type for all chains each chain implementation can use
-/// this type to match on network type specific actions
-pub enum NetType {
-    /// Mainnet, real money here
-    Mainnet,
-    /// Testnet, use the testing network of each chain
-    Testnet,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -68,7 +59,7 @@ pub struct BtcConfig {
 /// Configuration for vault nodes
 pub struct VaultConfig {
     /// Which network type to use for all the vaults
-    pub net_type: NetType,
+    pub net_type: Network,
     /// Loki config
     pub loki: LokiConfig,
     /// Eth config
