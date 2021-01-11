@@ -26,6 +26,7 @@ serde = {features = ['derive'], optional = true, version = '1.0.101'}
 
 # Chainflip dependencies
 pallet-cf-transactions = { path = "../pallets/cf-transactions", default-features =  false}
+transactions-runtime-api = { path = "../pallets/cf-transactions/runtime-api", default-features = false }
 pallet-cf-validator = { path = "../pallets/cf-validator", default-features = false}
 
 # Substrate dependencies

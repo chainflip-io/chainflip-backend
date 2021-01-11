@@ -32,22 +32,23 @@ pub fn create_full<C, P>(
 	C: ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block> + HeaderMetadata<Block, Error=BlockChainError> + 'static,
 	C: Send + Sync + 'static,
-	C::Api: substrate_frame_rpc_system::AccountNonceApi<Block, AccountId, Index>,
 	C::Api: BlockBuilder<Block>,
+	C::Api: transactions_runtime_api::WitnessApi<Block>,
 	P: TransactionPool + 'static,
 {
-	use substrate_frame_rpc_system::{FullSystem, SystemApi};
+	// use substrate_frame_rpc_system::{FullSystem, SystemApi};
 
 	let mut io = jsonrpc_core::IoHandler::default();
 	let FullDeps {
 		client,
-		pool,
-		deny_unsafe,
+		 pool: _,
+		 deny_unsafe: _,
 	} = deps;
-
-	io.extend_with(
-		SystemApi::to_delegate(FullSystem::new(client.clone(), pool, deny_unsafe))
-	);
+	
+	// RPC for getting witness transactions from the state chain
+	io.extend_with(transactions_rpc::WitnessApi::to_delegate(
+		transactions_rpc::Witness::new(client)
+	));
 
 	// Extend this RPC with a custom API by using the following syntax.
 	// `YourRpcStruct` should have a reference to a client, which is needed

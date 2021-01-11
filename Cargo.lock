@@ -3418,6 +3418,7 @@ version = "0.0.1"
 dependencies = [
  "frame-support",
  "frame-system",
+ "pallet-cf-validator",
  "parity-scale-codec",
  "sp-core",
  "sp-io",
@@ -6405,6 +6406,8 @@ dependencies = [
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
  "pallet-transaction-payment-rpc",
  "sc-basic-authorship",
  "sc-cli",
@@ -6431,6 +6434,8 @@ dependencies = [
  "structopt",
  "substrate-build-script-utils",
  "substrate-frame-rpc-system",
+ "transactions-rpc",
+ "transactions-runtime-api",
 ]
 
 [[package]]
@@ -6466,6 +6471,7 @@ dependencies = [
  "sp-transaction-pool",
  "sp-version",
  "substrate-wasm-builder-runner",
+ "transactions-runtime-api",
 ]
 
 [[package]]
@@ -7169,6 +7175,37 @@ dependencies = [
  "tracing-core",
  "tracing-log",
  "tracing-serde",
+]
+
+[[package]]
+name = "transactions-rpc"
+version = "2.0.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "parity-scale-codec",
+ "serde",
+ "sp-api",
+ "sp-blockchain",
+ "sp-core",
+ "sp-io",
+ "sp-rpc",
+ "sp-runtime",
+ "transactions-runtime-api",
+]
+
+[[package]]
+name = "transactions-runtime-api"
+version = "2.0.0"
+dependencies = [
+ "frame-system",
+ "serde_json",
+ "sp-api",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]

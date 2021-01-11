@@ -304,6 +304,15 @@ pub type Executive = frame_executive::Executive<
 >;
 
 impl_runtime_apis! {
+
+    impl transactions_runtime_api::WitnessApi<Block> for Runtime {
+        
+        fn get_witnesses() {
+            Transactions::get_witnesses();
+            // Transactions::get_number()
+        }
+    }
+    
     impl sp_api::Core<Block> for Runtime {
         fn version() -> RuntimeVersion {
             VERSION

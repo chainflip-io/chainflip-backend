@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::{decl_error, decl_event, decl_module, dispatch::DispatchResult};
-use frame_system::ensure_signed;
+use frame_support::{decl_error, decl_event, ensure, decl_storage, decl_module, dispatch::DispatchResult};
+use frame_system::{ensure_signed};
 use sp_std::vec::Vec;
 
 #[cfg(test)]
@@ -13,10 +13,16 @@ mod tests;
 mod states;
 
 /// Configure the pallet by specifying the parameters and types on which it depends.
-pub trait Trait: frame_system::Trait {
+pub trait Trait: frame_system::Trait + pallet_cf_validator::Trait {
     /// Because this pallet emits events, it depends on the runtime's definition of an event.
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 }
+
+decl_storage!(
+    trait Store for Module<T: Trait> as WitnessStorage {
+        WitnessMap get(fn witness_map): map hasher(blake2_128_concat) Vec<u8> => Vec<T::AccountId>;
+    }
+);
 
 // Transaction events
 decl_event!(
@@ -35,6 +41,7 @@ decl_event!(
         OutputAdded(AccountId, states::Output),
         OutputSentAdded(AccountId, states::OutputSent),
         DataAdded(AccountId, Vec<u8>),
+        NumberAdded(AccountId, u8),
     }
 );
 
@@ -43,7 +50,7 @@ decl_error! {
     pub enum Error for Module<T: Trait> {
         /// Invalid data was provided
         InvalidData,
-        // TODO: Add more errors?
+        ValidatorAlreadySubmittedWitness,
     }
 }
 
@@ -96,11 +103,28 @@ decl_module! {
             // Ensure extrinsic is signed
             let who = ensure_signed(origin)?;
 
-            // TODO: Validate state
+            if <WitnessMap<T>>::contains_key(&data.id) {
+                // insert an entry into the pre-existing vector
+                let mut curr_validators = <WitnessMap<T>>::get(&data.id);
+                // make sure the validator is not already in the set
+                match curr_validators.binary_search(&who) {
+                    Ok(_) => return Err(Error::<T>::ValidatorAlreadySubmittedWitness.into()),
+                    Err(index) => {
+                        curr_validators.insert(index, who.clone());
+                        <WitnessMap<T>>::insert(&data.id, curr_validators);
+                        Self::deposit_event(RawEvent::WitnessAdded(who, data));
+                        return Ok(());
+                    }
+                }
+                
+            } else {
+                // insert a new key and initialise the vector with the current value
+                let mut validators = Vec::default();
+                validators.push(who.clone());
 
-            Self::deposit_event(RawEvent::WitnessAdded(who, data));
-
-            Ok(())
+                <WitnessMap<T>>::insert(&data.id, validators);
+                Ok(())
+            }   
         }
 
         #[weight = 0]
@@ -163,16 +187,37 @@ decl_module! {
             Ok(())
         }
 
+        // This is for testing
         #[weight = 0]
         pub fn set_data(origin, data: Vec<u8>) -> DispatchResult {
             // Ensure extrinsic is signed
             let who = ensure_signed(origin)?;
 
-            // TODO: Validate state
-
             Self::deposit_event(RawEvent::DataAdded(who, data));
 
             Ok(())
         }
+    }
+}
+
+impl<T: Trait> Module<T> {
+	pub fn get_witnesses() {
+
+        let mut valid_witnesess: Vec<Vec<u8>> = Vec::new();
+        let validators = <pallet_cf_validator::Module<T>>::get_validators();
+        let num_validators = validators.len();
+        // super majority
+        let threshold = num_validators as f64 * 0.67;
+        for (witness_id, validators_of_witness) in <WitnessMap<T>>::iter() {
+            // return the witnesses that have more than the number of validators as witnesses
+            frame_support::debug::info!("Witness id: {:#?}", witness_id);
+            frame_support::debug::info!("Validators for witness: {:#?}", validators_of_witness);
+
+            if validators_of_witness.len() as f64 > threshold {
+                valid_witnesess.push(witness_id);
+            }
+        }
+
+        frame_support::debug::info!("Valid witnesses: {:#?}", valid_witnesess);
     }
 }
