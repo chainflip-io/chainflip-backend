@@ -17,10 +17,10 @@ mod swap;
 /// Output processing
 mod output;
 
-/// Stake and unstake processing
+/// deposit and withdraw processing
 mod staking;
 
-/// Component that matches witness transactions with quotes and processes them
+/// Component that matches witnesses with quotes and processes them
 pub struct SideChainProcessor<T, KVS, S>
 where
     T: TransactionProvider,
@@ -59,9 +59,9 @@ where
     }
 
     async fn on_blockchain_progress(&mut self) {
-        staking::process_stake_quotes(&mut self.tx_provider, self.network);
+        staking::process_deposit_quotes(&mut self.tx_provider, self.network);
 
-        staking::process_unstake_requests(&mut *self.tx_provider.write(), self.network);
+        staking::process_withdraw_requests(&mut *self.tx_provider.write(), self.network);
 
         swap::process_swaps(&mut self.tx_provider, self.network);
 
@@ -106,7 +106,7 @@ where
             std::thread::sleep(std::time::Duration::from_secs(1));
         }
         // Poll the side chain (via the transaction provider) and see if there are
-        // any new witness transactions that should be processed
+        // any new witnesses that should be processed
     }
 
     /// Start processor thread. If `event_sender` is provided,

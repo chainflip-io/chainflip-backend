@@ -76,7 +76,7 @@ pub fn get_input_id_indices<T: TransactionProvider>(
     let provider = provider.read();
 
     let swaps = provider
-        .get_quote_txs()
+        .get_swap_quotes()
         .iter()
         .filter_map(|quote| {
             let quote = &quote.inner;
@@ -90,8 +90,8 @@ pub fn get_input_id_indices<T: TransactionProvider>(
         })
         .collect_vec();
 
-    let stakes = provider
-        .get_stake_quote_txs()
+    let deposit_quotes = provider
+        .get_deposit_quotes()
         .iter()
         .filter_map(|quote| {
             let quote = &quote.inner;
@@ -105,7 +105,7 @@ pub fn get_input_id_indices<T: TransactionProvider>(
         })
         .collect_vec();
 
-    [vec![0], swaps, stakes].concat()
+    [vec![0], swaps, deposit_quotes].concat()
 }
 
 #[cfg(test)]
@@ -211,19 +211,19 @@ mod test {
         let mut btc_quote = TestData::swap_quote(Coin::BTC, Coin::LOKI);
         btc_quote.input_address_id = 6u32.to_be_bytes().to_vec();
 
-        let mut eth_stake = TestData::deposit_quote(Coin::ETH);
-        eth_stake.coin_input_address_id = 7u32.to_be_bytes().to_vec();
+        let mut eth_deposit = TestData::deposit_quote(Coin::ETH);
+        eth_deposit.coin_input_address_id = 7u32.to_be_bytes().to_vec();
 
-        let mut btc_stake = TestData::deposit_quote(Coin::BTC);
-        btc_stake.coin_input_address_id = 8u32.to_be_bytes().to_vec();
+        let mut btc_deposit = TestData::deposit_quote(Coin::BTC);
+        btc_deposit.coin_input_address_id = 8u32.to_be_bytes().to_vec();
 
         provider
             .write()
             .add_transactions(vec![
                 eth_quote.into(),
                 btc_quote.into(),
-                eth_stake.into(),
-                btc_stake.into(),
+                eth_deposit.into(),
+                btc_deposit.into(),
             ])
             .unwrap();
 

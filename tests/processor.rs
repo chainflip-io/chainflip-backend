@@ -27,18 +27,18 @@ fn check_liquidity<T>(
 }
 
 #[test]
-fn witnessed_staked_changes_pool_liquidity() {
+fn witnessed_deposit_changes_pool_liquidity() {
     let mut runner = TestRunner::new();
 
     let coin_type = Coin::ETH;
     let loki_amount = LokiAmount::from_decimal_string("1.0");
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
-    let stake_tx = TestData::deposit_quote(coin_type);
-    let wtx_loki = TestData::witness(stake_tx.id, loki_amount.to_atomic(), Coin::LOKI);
-    let wtx_eth = TestData::witness(stake_tx.id, coin_amount.to_atomic(), coin_type);
+    let deposit_quote = TestData::deposit_quote(coin_type);
+    let wtx_loki = TestData::witness(deposit_quote.id, loki_amount.to_atomic(), Coin::LOKI);
+    let wtx_eth = TestData::witness(deposit_quote.id, coin_amount.to_atomic(), coin_type);
 
-    runner.add_block([stake_tx.clone().into()]);
+    runner.add_block([deposit_quote.clone().into()]);
     runner.add_block([wtx_loki.into(), wtx_eth.into()]);
 
     check_liquidity(
@@ -48,7 +48,7 @@ fn witnessed_staked_changes_pool_liquidity() {
         coin_amount,
     );
 
-    runner.add_block([stake_tx.clone().into()]);
+    runner.add_block([deposit_quote.clone().into()]);
 
     // Check that the balance has not changed
     check_liquidity(
@@ -60,23 +60,23 @@ fn witnessed_staked_changes_pool_liquidity() {
 }
 
 #[test]
-fn multiple_stakes() {
+fn multiple_deposits() {
     test_utils::logging::init();
 
     let mut runner = TestRunner::new();
 
-    // 1. Make a Stake TX and make sure it is acknowledged
+    // 1. Make a deposit and make sure it is acknowledged
 
     let coin_type = Coin::ETH;
     let loki_amount = LokiAmount::from_decimal_string("1.0");
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
-    let stake_tx = TestData::deposit_quote(coin_type);
-    let wtx_loki = TestData::witness(stake_tx.id, loki_amount.to_atomic(), Coin::LOKI);
-    let wtx_eth = TestData::witness(stake_tx.id, coin_amount.to_atomic(), coin_type);
+    let deposit_quote = TestData::deposit_quote(coin_type);
+    let wtx_loki = TestData::witness(deposit_quote.id, loki_amount.to_atomic(), Coin::LOKI);
+    let wtx_eth = TestData::witness(deposit_quote.id, coin_amount.to_atomic(), coin_type);
 
     // Add blocks with those transactions
-    runner.add_block([stake_tx.clone().into()]);
+    runner.add_block([deposit_quote.clone().into()]);
     runner.add_block([wtx_loki.into(), wtx_eth.into()]);
 
     check_liquidity(
@@ -86,18 +86,18 @@ fn multiple_stakes() {
         coin_amount,
     );
 
-    // 2. Add another stake with another staker id
+    // 2. Add another deposit with another staker id
 
-    let stake_tx = TestData::deposit_quote(coin_type);
-    let wtx_loki = TestData::witness(stake_tx.id, loki_amount.to_atomic(), Coin::LOKI);
-    let wtx_eth = TestData::witness(stake_tx.id, coin_amount.to_atomic(), coin_type);
+    let deposit_quote = TestData::deposit_quote(coin_type);
+    let wtx_loki = TestData::witness(deposit_quote.id, loki_amount.to_atomic(), Coin::LOKI);
+    let wtx_eth = TestData::witness(deposit_quote.id, coin_amount.to_atomic(), coin_type);
 
-    runner.add_block([stake_tx.clone().into()]);
+    runner.add_block([deposit_quote.clone().into()]);
     runner.add_block([wtx_loki.into(), wtx_eth.into()]);
 }
 
 #[test]
-fn sole_staker_can_unstake_all() {
+fn sole_staker_can_withdraw_all() {
     test_utils::logging::init();
 
     let mut runner = TestRunner::new();
@@ -107,17 +107,17 @@ fn sole_staker_can_unstake_all() {
 
     let staker = get_random_staker();
 
-    let stake_tx = runner.add_witnessed_stake_tx(&staker.id(), loki_amount, eth_amount);
+    let deposit_quote = runner.add_witnessed_deposit_quote(&staker.id(), loki_amount, eth_amount);
 
     // Check that the liquidity is non-zero before unstaking
     runner.check_eth_liquidity(loki_amount.to_atomic(), eth_amount.to_atomic());
 
-    let unstake_tx = TestData::withdraw_request_for_staker(&staker, stake_tx.pool);
+    let withdraw_request = TestData::withdraw_request_for_staker(&staker, deposit_quote.pool);
 
-    runner.add_block([unstake_tx.clone().into()]);
+    runner.add_block([withdraw_request.clone().into()]);
 
     // Check that outputs have been payed out
-    let outputs = runner.get_outputs_for_unstake(&unstake_tx);
+    let outputs = runner.get_outputs_for_withdraw_request(&withdraw_request);
 
     assert_eq!(outputs.loki_output.amount, loki_amount.to_atomic());
     assert_eq!(outputs.eth_output.amount, eth_amount.to_atomic());
@@ -127,7 +127,7 @@ fn sole_staker_can_unstake_all() {
 }
 
 #[test]
-fn half_staker_can_unstake_half() {
+fn half_staker_can_withdraw_half() {
     test_utils::logging::init();
 
     let mut runner = TestRunner::new();
@@ -138,17 +138,17 @@ fn half_staker_can_unstake_half() {
     let alice = get_random_staker();
     let bob = get_random_staker();
 
-    let _ = runner.add_witnessed_stake_tx(&alice.id(), loki_amount, eth_amount);
-    let stake2 = runner.add_witnessed_stake_tx(&bob.id(), loki_amount, eth_amount);
+    let _ = runner.add_witnessed_deposit_quote(&alice.id(), loki_amount, eth_amount);
+    let deposit2 = runner.add_witnessed_deposit_quote(&bob.id(), loki_amount, eth_amount);
 
-    // Check that liquidity is the sum of two stakes
+    // Check that liquidity is the sum of two deposits
     runner.check_eth_liquidity(loki_amount.to_atomic() * 2, eth_amount.to_atomic() * 2);
 
-    let unstake_tx = TestData::withdraw_request_for_staker(&bob, stake2.pool);
-    runner.add_block([unstake_tx.clone().into()]);
+    let withdraw_request = TestData::withdraw_request_for_staker(&bob, deposit2.pool);
+    runner.add_block([withdraw_request.clone().into()]);
 
     // Check that outputs have been payed out
-    let outputs = runner.get_outputs_for_unstake(&unstake_tx);
+    let outputs = runner.get_outputs_for_withdraw_request(&withdraw_request);
 
     assert_eq!(outputs.loki_output.amount, loki_amount.to_atomic());
     assert_eq!(outputs.eth_output.amount, eth_amount.to_atomic());
@@ -158,8 +158,8 @@ fn half_staker_can_unstake_half() {
 }
 
 #[test]
-fn portions_adjusted_after_unstake() {
-    // Two stakers, one unstakes, the other
+fn portions_adjusted_after_withdraw() {
+    // Two stakers, one withdraws, the other
     // should own MAX portions
 
     test_utils::logging::init();
@@ -172,8 +172,8 @@ fn portions_adjusted_after_unstake() {
     let alice = get_random_staker();
     let bob = get_random_staker();
 
-    let _stake1 = runner.add_witnessed_stake_tx(&alice.id(), loki_amount, eth_amount);
-    let _stake2 = runner.add_witnessed_stake_tx(&bob.id(), loki_amount, eth_amount);
+    runner.add_witnessed_deposit_quote(&alice.id(), loki_amount, eth_amount);
+    runner.add_witnessed_deposit_quote(&bob.id(), loki_amount, eth_amount);
 
     // Each should have 50% portions
 
@@ -187,9 +187,9 @@ fn portions_adjusted_after_unstake() {
     assert_eq!(portions_alice.0, Portion::MAX.0 / 2);
     assert_eq!(portions_bob.0, Portion::MAX.0 / 2);
 
-    // Bob unstakes
+    // Bob withdraws
 
-    runner.add_unstake_for(&bob, PoolCoin::ETH);
+    runner.add_withdraw_request_for(&bob, PoolCoin::ETH);
 
     // Alice should have 100%, bob 0%
 
@@ -203,7 +203,7 @@ fn portions_adjusted_after_unstake() {
 }
 
 #[test]
-fn non_staker_cannot_unstake() {
+fn non_staker_cannot_withdraw() {
     test_utils::logging::init();
 
     let mut runner = TestRunner::new();
@@ -213,32 +213,32 @@ fn non_staker_cannot_unstake() {
 
     let alice = get_random_staker();
 
-    let _ = runner.add_witnessed_stake_tx(&alice.id(), loki_amount, eth_amount);
+    let _ = runner.add_witnessed_deposit_quote(&alice.id(), loki_amount, eth_amount);
 
     let bob = get_random_staker();
 
-    // Bob creates a stake quote tx, but never pays the amounts:
-    let stake = TestData::deposit_quote_for_id(bob.id(), eth_amount.coin_type());
+    // Bob creates a deposit quote, but never pays the amounts:
+    let deposit_quote = TestData::deposit_quote_for_id(bob.id(), eth_amount.coin_type());
 
-    runner.add_block([stake.clone().into()]);
+    runner.add_block([deposit_quote.clone().into()]);
 
-    // Bob tries to unstake:
-    let unstake_tx = TestData::withdraw_request_for_staker(&bob, stake.pool);
-    runner.add_block([unstake_tx.clone().into()]);
+    // Bob tries to withdraw:
+    let withdraw_request = TestData::withdraw_request_for_staker(&bob, deposit_quote.pool);
+    runner.add_block([withdraw_request.clone().into()]);
 
     // Check that no outputs are created:
     let sent_outputs = runner.sent_outputs.lock().unwrap();
 
     let outputs = sent_outputs
         .iter()
-        .filter(|output| output.parent_id() == unstake_tx.id)
+        .filter(|output| output.parent_id() == withdraw_request.id)
         .count();
 
     assert_eq!(outputs, 0);
 }
 
 #[test]
-fn assymetric_stake_result_in_autoswap() {
+fn assymetric_deposit_result_in_autoswap() {
     test_utils::logging::init();
 
     let mut runner = TestRunner::new();
@@ -247,14 +247,14 @@ fn assymetric_stake_result_in_autoswap() {
     let btc_amount = GenericCoinAmount::from_decimal_string(Coin::BTC, "0.02");
 
     let alice = get_random_staker();
-    let _ = runner.add_witnessed_stake_tx(&alice.id(), loki_amount, btc_amount);
+    let _ = runner.add_witnessed_deposit_quote(&alice.id(), loki_amount, btc_amount);
 
     let bob = get_random_staker();
 
     let loki_amount = LokiAmount::from_decimal_string("250.0");
     let btc_amount = GenericCoinAmount::from_decimal_string(Coin::BTC, "0.02");
 
-    let _ = runner.add_witnessed_stake_tx(&bob.id(), loki_amount, btc_amount);
+    let _ = runner.add_witnessed_deposit_quote(&bob.id(), loki_amount, btc_amount);
 
     let a = runner
         .get_portions_for(&alice.id(), PoolCoin::BTC)
@@ -263,7 +263,7 @@ fn assymetric_stake_result_in_autoswap() {
         .get_portions_for(&bob.id(), PoolCoin::BTC)
         .expect("Portion should exist for Bob");
 
-    // We expect the 50% < a < 66% (Bob stakes a 50% of Alices Loki,
+    // We expect the 50% < a < 66% (Bob deposits a 50% of Alices Loki,
     // but the same amount of BTC, resulting in autoswap)
     assert_eq!(a.0, 6162430986);
     assert_eq!(b.0, 3837569014);
@@ -271,6 +271,6 @@ fn assymetric_stake_result_in_autoswap() {
 
 #[test]
 #[ignore = "todo"]
-fn cannot_unstake_with_invalid_signature() {
+fn cannot_withdraw_with_invalid_signature() {
     todo!();
 }

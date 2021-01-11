@@ -10,9 +10,9 @@ use std::{
 };
 use warp::Filter;
 
-pub mod post_stake;
+pub mod post_deposit;
 pub mod post_swap;
-pub mod post_unstake;
+pub mod post_withdraw;
 
 mod get_coins;
 pub use get_coins::{get_coins, CoinsParams};
@@ -55,8 +55,8 @@ where
             .insert(quote.input_address_id);
     }
 
-    let stakes = state.lock().unwrap().get_stake_quotes();
-    for quote in stakes {
+    let deposit_quotes = state.lock().unwrap().get_deposit_quotes();
+    for quote in deposit_quotes {
         cache
             .entry(quote.pool)
             .or_insert(BTreeSet::new())
@@ -133,19 +133,19 @@ where
         .map(post_swap::swap)
         .and_then(api::respond);
 
-    let stake = warp::path!("stake")
+    let deposit = warp::path!("deposit")
         .and(warp::post())
         .and(warp::body::json())
         .and(using(vault_node.clone()))
         .and(using(input_id_cache.clone()))
-        .map(post_stake::stake)
+        .map(post_deposit::deposit)
         .and_then(api::respond);
 
-    let unstake = warp::path!("unstake")
+    let withdraw = warp::path!("withdraw")
         .and(warp::post())
         .and(warp::body::json())
         .and(using(vault_node.clone()))
-        .map(post_unstake::unstake)
+        .map(post_withdraw::withdraw)
         .and_then(api::respond);
 
     warp::path!("v1" / ..) // Add path prefix /v1 to all our routes
@@ -157,7 +157,7 @@ where
                 .or(quote)
                 .or(portions)
                 .or(swap)
-                .or(stake)
-                .or(unstake),
+                .or(deposit)
+                .or(withdraw),
         )
 }

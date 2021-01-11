@@ -107,12 +107,12 @@ mod autoswap_tests {
     fn small_swap_from_loki() {
         // The swappable loki is smaller than the loki fee that would be payed
         let liquidity = make_liquidity(900, 900);
-        let loki_stake = LokiAmount::from_atomic(100_100_000_000);
+        let loki_deposit = LokiAmount::from_atomic(100_100_000_000);
 
         // NOTE: There is slightly more than 100 loki:
-        assert_ne!(loki_stake, loki(100));
+        assert_ne!(loki_deposit, loki(100));
 
-        let res = calc_autoswap_amount(loki_stake, eth(100), liquidity);
+        let res = calc_autoswap_amount(loki_deposit, eth(100), liquidity);
         assert!(res.is_ok());
 
         let (eff_loki, eff_eth) = res.unwrap();
@@ -126,16 +126,16 @@ mod autoswap_tests {
         // The swappable loki is smaller than the loki fee that would be payed
         let liquidity = make_liquidity(900, 900);
 
-        let staked_loki = loki(100);
-        let staked_eth = eth(100);
+        let deposited_loki = loki(100);
+        let deposited_eth = eth(100);
 
-        let res = calc_autoswap_amount(staked_loki, staked_eth, liquidity);
+        let res = calc_autoswap_amount(deposited_loki, deposited_eth, liquidity);
         assert!(res.is_ok());
 
         let (eff_loki, eff_eth) = res.unwrap();
 
-        assert_eq!(eff_loki, staked_loki);
-        assert_eq!(eff_eth, staked_eth);
+        assert_eq!(eff_loki, deposited_loki);
+        assert_eq!(eff_eth, deposited_eth);
 
         dbg!(&res);
     }

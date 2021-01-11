@@ -2,7 +2,7 @@ use super::refund::should_refund;
 use crate::{
     common::liquidity_provider::LiquidityProvider,
     utils::{price, primitives::U256},
-    vault::transactions::memory_provider::FulfilledTxWrapper,
+    vault::transactions::memory_provider::FulfilledWrapper,
 };
 use chainflip_common::types::{
     chain::{Output, OutputParent, PoolChange, SwapQuote, Validate, Witness},
@@ -32,8 +32,8 @@ pub enum SwapError {
     FailedToGenerateOutput(String),
     /// Failed to generate pool change transactions
     FailedToGeneratePoolChange,
-    /// Missing witness transactions
-    MissingWitnessTransactions,
+    /// Missing witnesses
+    MissingWitnesses,
 }
 
 impl fmt::Display for SwapError {
@@ -54,7 +54,7 @@ impl fmt::Display for SwapError {
             SwapError::FailedToCalculateOutputAmount(err) => {
                 write!(f, "Failed to calculate output amount: {}", err)
             }
-            SwapError::MissingWitnessTransactions => write!(f, "No witness transactions provided"),
+            SwapError::MissingWitnesses => write!(f, "No witnesses provided"),
         }
     }
 }
@@ -64,12 +64,12 @@ impl Error for SwapError {}
 /// Process a given swap quote
 pub fn process_swap<L: LiquidityProvider>(
     provider: &L,
-    quote: &FulfilledTxWrapper<SwapQuote>,
+    quote: &FulfilledWrapper<SwapQuote>,
     witnesses: &[Witness],
     network: Network,
 ) -> Result<SwapResult, SwapError> {
     if witnesses.is_empty() {
-        return Err(SwapError::MissingWitnessTransactions);
+        return Err(SwapError::MissingWitnesses);
     }
 
     let quote_id = quote.inner.id;
@@ -199,7 +199,7 @@ mod test {
 
     fn setup() -> (
         MemoryLiquidityProvider,
-        FulfilledTxWrapper<SwapQuote>,
+        FulfilledWrapper<SwapQuote>,
         Vec<Witness>,
     ) {
         let mut provider = MemoryLiquidityProvider::new();
@@ -212,7 +212,7 @@ mod test {
         );
 
         let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
-        let quote = FulfilledTxWrapper {
+        let quote = FulfilledWrapper {
             inner: quote,
             fulfilled: false,
         };
@@ -419,7 +419,7 @@ mod test {
         let empty = vec![];
 
         let result = process_swap(&provider, &quote, &empty, Network::Testnet);
-        assert_eq!(result.unwrap_err(), SwapError::MissingWitnessTransactions);
+        assert_eq!(result.unwrap_err(), SwapError::MissingWitnesses);
     }
 
     #[test]

@@ -15,9 +15,9 @@ fn calc_autoswap_from_loki(
     liquidity: Liquidity,
 ) -> Result<(LokiAmount, GenericCoinAmount), &'static str> {
     if loki_amount.to_atomic() <= LOKI_SWAP_PROCESS_FEE {
-        warn!("Fee exceeds staked amount");
-        let stake = calc_symmetric_from_other(other_amount, liquidity);
-        return Ok((stake.loki, stake.other));
+        warn!("Fee exceeds deposited amount");
+        let deposit = calc_symmetric_from_other(other_amount, liquidity);
+        return Ok((deposit.loki, deposit.other));
     }
 
     let x = search::find_loki_x(loki_amount, other_amount, liquidity, LOKI_SWAP_PROCESS_FEE)
@@ -42,8 +42,8 @@ fn calc_autoswap_from_loki(
 
     if y == 0 {
         debug!("Auto-swapped amount is negligible");
-        let stake = calc_symmetric_from_other(other_amount, liquidity);
-        Ok((stake.loki, stake.other))
+        let deposit = calc_symmetric_from_other(other_amount, liquidity);
+        Ok((deposit.loki, deposit.other))
     } else {
         // Liquidity "changed" due to autoswap
         let loki_depth = liquidity.base_depth + x - LOKI_SWAP_PROCESS_FEE;
@@ -62,7 +62,7 @@ fn calc_autoswap_from_loki(
     }
 }
 
-fn small_other_stake(other_amount: GenericCoinAmount, liquidity: Liquidity) -> bool {
+fn small_other_deposit(other_amount: GenericCoinAmount, liquidity: Liquidity) -> bool {
     let e: BigInt = other_amount.to_atomic().into();
     let dl: BigInt = liquidity.base_depth.into();
     let de: BigInt = liquidity.depth.into();
@@ -83,10 +83,10 @@ fn calc_autoswap_to_loki(
 
     // This only checks that the amount of the other coin is there in principle, i.e.
     // to make *some* kind of swap
-    if small_other_stake(other_amount, liquidity) {
-        warn!("Fee exceeds staked amount");
-        let stake = calc_symmetric_from_loki(loki_amount, other_amount.coin_type(), liquidity);
-        return Ok((stake.loki, stake.other));
+    if small_other_deposit(other_amount, liquidity) {
+        warn!("Fee exceeds deposited amount");
+        let deposit = calc_symmetric_from_loki(loki_amount, other_amount.coin_type(), liquidity);
+        return Ok((deposit.loki, deposit.other));
     }
 
     let x = match search::find_other_x(loki_amount, other_amount, liquidity, LOKI_SWAP_PROCESS_FEE)
@@ -98,8 +98,9 @@ fn calc_autoswap_to_loki(
             info!(
                 "No amount of other coin can be autoswapped, falling back to staking symmetrically"
             );
-            let stake = calc_symmetric_from_loki(loki_amount, other_amount.coin_type(), liquidity);
-            return Ok((stake.loki, stake.other));
+            let deposit =
+                calc_symmetric_from_loki(loki_amount, other_amount.coin_type(), liquidity);
+            return Ok((deposit.loki, deposit.other));
         }
     };
 
@@ -122,8 +123,8 @@ fn calc_autoswap_to_loki(
 
     if y == 0 {
         debug!("Auto-swapped amount is negligible");
-        let stake = calc_symmetric_from_loki(loki_amount, other_amount.coin_type(), liquidity);
-        Ok((stake.loki, stake.other))
+        let deposit = calc_symmetric_from_loki(loki_amount, other_amount.coin_type(), liquidity);
+        Ok((deposit.loki, deposit.other))
     } else {
         // Liquidity "changed" due to autoswap
         let loki_depth = liquidity.base_depth - y - LOKI_SWAP_PROCESS_FEE;
@@ -204,17 +205,17 @@ enum SwapDirection {
     FromLoki,
 }
 
-struct EffectiveStakeAmounts {
+struct EffectiveDepositAmounts {
     loki: LokiAmount,
     other: GenericCoinAmount,
 }
 
-/// Calculate the ideal amount of loki to be staked
-/// together with `other` amount (to make the stake symmetrical)
+/// Calculate the ideal amount of loki to be deposited
+/// together with `other` amount (to make the deposit symmetrical)
 fn calc_symmetric_from_other(
     other_amount: GenericCoinAmount,
     liquidity: Liquidity,
-) -> EffectiveStakeAmounts {
+) -> EffectiveDepositAmounts {
     let e: BigInt = other_amount.to_atomic().into();
     let de: BigInt = liquidity.depth.into();
     let dl: BigInt = liquidity.base_depth.into();
@@ -223,19 +224,19 @@ fn calc_symmetric_from_other(
 
     let loki: u128 = loki.try_into().expect("unexpected overflow");
 
-    EffectiveStakeAmounts {
+    EffectiveDepositAmounts {
         loki: LokiAmount::from_atomic(loki),
         other: other_amount,
     }
 }
 
-/// Calculate the ideal amount of loki to be staked
-/// together with `other` amount (to make the stake symmetrical)
+/// Calculate the ideal amount of loki to be deposited
+/// together with `other` amount (to make the deposit symmetrical)
 fn calc_symmetric_from_loki(
     loki_amount: LokiAmount,
     other_coin: Coin,
     liquidity: Liquidity,
-) -> EffectiveStakeAmounts {
+) -> EffectiveDepositAmounts {
     let l: BigInt = loki_amount.to_atomic().into();
     let de: BigInt = liquidity.depth.into();
     let dl: BigInt = liquidity.base_depth.into();
@@ -244,7 +245,7 @@ fn calc_symmetric_from_loki(
 
     let other: u128 = other.try_into().expect("unexpected overflow");
 
-    EffectiveStakeAmounts {
+    EffectiveDepositAmounts {
         loki: loki_amount,
         other: GenericCoinAmount::from_atomic(other_coin, other),
     }

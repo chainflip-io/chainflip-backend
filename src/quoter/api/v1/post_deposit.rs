@@ -1,7 +1,7 @@
 use crate::{
     common::{api::ResponseError, input_address_id::input_address_id_to_string, PoolCoin},
     quoter::vault_node::VaultNodeInterface,
-    vault::api::v1::post_stake::StakeQuoteParams,
+    vault::api::v1::post_deposit::DepositQuoteParams,
 };
 use chainflip_common::types::coin::Coin;
 use rand::{prelude::StdRng, SeedableRng};
@@ -18,7 +18,7 @@ use super::{utils::generate_unique_input_address_id, InputIdCache};
 /// Parameters for POST `quote` endpoint
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PostStakeParams {
+pub struct PostDepositParams {
     /// The input coin
     pub pool: String,
     /// The staker id
@@ -30,9 +30,9 @@ pub struct PostStakeParams {
 }
 
 /// TODO: Rename this to deposit
-/// Submit a stake quoter
-pub async fn stake<V: VaultNodeInterface>(
-    params: PostStakeParams,
+/// Submit a deposit quote
+pub async fn deposit<V: VaultNodeInterface>(
+    params: PostDepositParams,
     vault_node: Arc<V>,
     input_id_cache: Arc<Mutex<InputIdCache>>,
 ) -> Result<serde_json::Value, ResponseError> {
@@ -62,7 +62,7 @@ pub async fn stake<V: VaultNodeInterface>(
         input_address_id_to_string(Coin::LOKI, &loki_input_address_id)
             .expect("Invalid input address id");
 
-    let quote_params = StakeQuoteParams {
+    let quote_params = DepositQuoteParams {
         pool: coin,
         staker_id: params.staker_id,
         coin_input_address_id: string_coin_input_address_id,
@@ -71,7 +71,7 @@ pub async fn stake<V: VaultNodeInterface>(
         other_return_address: params.other_return_address,
     };
 
-    match vault_node.submit_stake(quote_params).await {
+    match vault_node.submit_deposit(quote_params).await {
         Ok(result) => Ok(result),
         Err(err) => {
             // Something went wrong, remove id from cache

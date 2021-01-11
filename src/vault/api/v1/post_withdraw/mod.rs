@@ -16,13 +16,13 @@ use warp::http::StatusCode;
 
 use super::Config;
 
-/// Request parameters for unstake
+/// Request parameters for withdraw
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UnstakeParams {
+pub struct WithdrawParams {
     /// Staker's public key
     staker_id: String,
-    /// Pool to unstake from
+    /// Pool to withdraw from
     pool: Coin,
     /// Return Loki address
     loki_address: String,
@@ -30,7 +30,7 @@ pub struct UnstakeParams {
     other_address: String,
     /// Request creation timestamp
     timestamp: String,
-    /// Percentage of the total portions to unstake
+    /// Percentage of the total portions to withdraw
     fraction: u32,
     /// Signature over the above fields
     signature: String,
@@ -55,9 +55,9 @@ fn check_staker_id_exists<T: TransactionProvider>(
     pool_portions.contains_key(&staker_id)
 }
 
-/// Handle unstake request after initial parameter parsing
-pub async fn post_unstake<T: TransactionProvider>(
-    params: UnstakeParams,
+/// Handle withdraw request after initial parameter parsing
+pub async fn post_withdraw<T: TransactionProvider>(
+    params: WithdrawParams,
     provider: Arc<RwLock<T>>,
     config: Config,
 ) -> Result<serde_json::Value, ResponseError> {
@@ -82,7 +82,7 @@ pub async fn post_unstake<T: TransactionProvider>(
         return Err(bad_request!("Unknown staker id"));
     }
 
-    // Check fraction (currently we only allow full unstaking, i.e. UnstakeFraction::MAX)
+    // Check fraction (currently we only allow full withdrawing, i.e. WithdrawFraction::MAX)
     let fraction = WithdrawFraction::new(params.fraction)
         .map_err(|err| bad_request!("Invalid percentage: {}", err))?;
 
@@ -119,7 +119,7 @@ pub async fn post_unstake<T: TransactionProvider>(
     provider.add_transactions(vec![tx.into()]).map_err(|_| {
         ResponseError::new(
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Could not record unstake transaction",
+            "Could not record withdraw request transaction",
         )
     })?;
 

@@ -22,8 +22,8 @@ use std::{str::FromStr, sync::Arc};
 /// Params for the v1/quote endpoint
 #[serde(rename_all = "camelCase")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StakeQuoteParams {
-    /// The pool to stake into
+pub struct DepositQuoteParams {
+    /// The pool to deposit into
     pub pool: Coin,
     /// The staker id
     pub staker_id: String,
@@ -31,16 +31,16 @@ pub struct StakeQuoteParams {
     pub coin_input_address_id: String,
     /// The loki input address id
     pub loki_input_address_id: String,
-    /// Address to return Loki to if Stake quote already fulfilled
+    /// Address to return Loki to if deposit quote already fulfilled
     pub loki_return_address: String,
-    /// Address to return other coin to if Stake quote already fulfilled
+    /// Address to return other coin to if deposit quote already fulfilled
     pub other_return_address: String,
 }
 
 /// Response for the v1/quote endpoint
 #[serde(rename_all = "camelCase")]
 #[derive(Debug, Deserialize, Serialize)]
-pub struct StakeQuoteResponse {
+pub struct DepositQuoteResponse {
     /// Quote id
     pub id: UUIDv4,
     /// Quote creation timestamp in milliseconds
@@ -62,12 +62,12 @@ pub struct StakeQuoteResponse {
 }
 
 // TODO: Rename to deposit
-/// Request a stake quote
-pub async fn stake<T: TransactionProvider>(
-    params: StakeQuoteParams,
+/// Request a deposit quote
+pub async fn deposit<T: TransactionProvider>(
+    params: DepositQuoteParams,
     provider: Arc<RwLock<T>>,
     config: Config,
-) -> Result<StakeQuoteResponse, ResponseError> {
+) -> Result<DepositQuoteResponse, ResponseError> {
     let original_params = params.clone();
 
     let pool_coin =
@@ -96,7 +96,7 @@ pub async fn stake<T: TransactionProvider>(
     provider.sync();
 
     // Ensure we don't have a quote with the input address
-    if let Some(_) = provider.get_quote_txs().iter().find(|quote_info| {
+    if let Some(_) = provider.get_swap_quotes().iter().find(|quote_info| {
         let quote = &quote_info.inner;
         let is_loki_quote =
             quote.input == Coin::LOKI && quote.input_address_id == loki_input_address_id.to_bytes();
@@ -107,7 +107,7 @@ pub async fn stake<T: TransactionProvider>(
         return Err(bad_request("Quote already exists for input address id"));
     }
 
-    if let Some(_) = provider.get_stake_quote_txs().iter().find(|quote_info| {
+    if let Some(_) = provider.get_deposit_quotes().iter().find(|quote_info| {
         let quote = &quote_info.inner;
         quote.base_input_address_id == loki_input_address_id.to_bytes()
             || quote.coin_input_address_id == coin_input_address_id
@@ -189,7 +189,7 @@ pub async fn stake<T: TransactionProvider>(
 
     quote.validate(config.net_type).map_err(|err| {
         error!(
-            "Failed to create stake quote tx for params: {:?} due to error {}",
+            "Failed to create deposit quote for params: {:?} due to error {}",
             original_params,
             err.clone()
         );
@@ -199,11 +199,11 @@ pub async fn stake<T: TransactionProvider>(
     provider
         .add_transactions(vec![quote.clone().into()])
         .map_err(|err| {
-            error!("Failed to add quote transaction: {}", err);
+            error!("Failed to add deposit quote: {}", err);
             internal_server_error()
         })?;
 
-    Ok(StakeQuoteResponse {
+    Ok(DepositQuoteResponse {
         id: quote.id,
         created_at: quote.timestamp.0,
         expires_at: get_swap_expire_timestamp(&quote.timestamp).0,
@@ -235,8 +235,8 @@ mod test {
         }
     }
 
-    fn params() -> StakeQuoteParams {
-        StakeQuoteParams {
+    fn params() -> DepositQuoteParams {
+        DepositQuoteParams {
             pool: Coin::ETH,
             staker_id: get_random_staker().public_key(),
             coin_input_address_id: "99999".to_string(),
@@ -252,9 +252,9 @@ mod test {
         quote_params.pool = Coin::LOKI;
 
         let provider = Arc::new(RwLock::new(get_transactions_provider()));
-        let result = stake(quote_params, provider, config())
+        let result = deposit(quote_params, provider, config())
             .await
-            .expect_err("Expected stake to return error");
+            .expect_err("Expected deposit to return error");
 
         assert_eq!(&result.message, "Invalid pool specified");
     }
@@ -268,9 +268,9 @@ mod test {
             quote_params.pool = coin;
             quote_params.coin_input_address_id = "invalid".to_string();
 
-            let result = stake(quote_params, provider.clone(), config())
+            let result = deposit(quote_params, provider.clone(), config())
                 .await
-                .expect_err("Expected stake to return error");
+                .expect_err("Expected deposit to return error");
 
             assert_eq!(&result.message, "Invalid coin input address id");
         }
@@ -284,9 +284,9 @@ mod test {
         quote_params.pool = Coin::ETH;
         quote_params.loki_input_address_id = "invalid".to_string();
 
-        let result = stake(quote_params, provider.clone(), config())
+        let result = deposit(quote_params, provider.clone(), config())
             .await
-            .expect_err("Expected stake to return error");
+            .expect_err("Expected deposit to return error");
 
         assert_eq!(&result.message, "Invalid loki input address id");
     }
@@ -298,9 +298,9 @@ mod test {
         let mut quote_params = params();
         quote_params.loki_return_address = "invalid".to_string();
 
-        let result = stake(quote_params, provider.clone(), config())
+        let result = deposit(quote_params, provider.clone(), config())
             .await
-            .expect_err("Expected stake to return error");
+            .expect_err("Expected deposit to return error");
 
         assert_eq!(&result.message, "Invalid loki return address");
     }
@@ -312,9 +312,9 @@ mod test {
         let mut quote_params = params();
         quote_params.other_return_address = "invalid".to_string();
 
-        let result = stake(quote_params, provider.clone(), config())
+        let result = deposit(quote_params, provider.clone(), config())
             .await
-            .expect_err("Expected stake to return error");
+            .expect_err("Expected deposit to return error");
 
         assert_eq!(&result.message, "Invalid other return address");
     }
@@ -342,16 +342,16 @@ mod test {
 
             let provider = Arc::new(RwLock::new(provider));
 
-            let result = stake(quote_params.clone(), provider, config())
+            let result = deposit(quote_params.clone(), provider, config())
                 .await
-                .expect_err("Expected stake to return error");
+                .expect_err("Expected deposit to return error");
 
             assert_eq!(&result.message, "Quote already exists for input address id");
         }
     }
 
     #[tokio::test]
-    async fn returns_error_if_stake_quote_with_same_input_address_exists() {
+    async fn returns_error_if_deposit_quote_with_same_input_address_exists() {
         let quote_params = params();
 
         let mut quote_1 = TestData::deposit_quote(Coin::ETH);
@@ -372,9 +372,9 @@ mod test {
 
             let provider = Arc::new(RwLock::new(provider));
 
-            let result = stake(quote_params.clone(), provider, config())
+            let result = deposit(quote_params.clone(), provider, config())
                 .await
-                .expect_err("Expected stake to return error");
+                .expect_err("Expected deposit to return error");
 
             assert_eq!(&result.message, "Quote already exists for input address id");
         }
@@ -384,10 +384,10 @@ mod test {
     async fn returns_response_if_successful() {
         let provider = Arc::new(RwLock::new(get_transactions_provider()));
 
-        stake(params(), provider.clone(), config())
+        deposit(params(), provider.clone(), config())
             .await
-            .expect("Expected to get a stake response");
+            .expect("Expected to get a deposit response");
 
-        assert_eq!(provider.read().get_stake_quote_txs().len(), 1);
+        assert_eq!(provider.read().get_deposit_quotes().len(), 1);
     }
 }

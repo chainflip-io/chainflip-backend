@@ -98,7 +98,7 @@ pub async fn swap<T: TransactionProvider>(
         .map_err(|_| bad_request("Invalid input address id"))?;
 
     // Ensure we don't have a quote with the address
-    if let Some(_) = provider.get_quote_txs().iter().find(|quote_info| {
+    if let Some(_) = provider.get_swap_quotes().iter().find(|quote_info| {
         let quote = &quote_info.inner;
         quote.input == input_coin && quote.input_address_id == input_address_id
     }) {
@@ -231,7 +231,7 @@ pub async fn swap<T: TransactionProvider>(
     provider
         .add_transactions(vec![quote.clone().into()])
         .map_err(|err| {
-            error!("Failed to add quote transaction: {}", err);
+            error!("Failed to add swap quote: {}", err);
             internal_server_error()
         })?;
 
@@ -356,6 +356,6 @@ mod test {
             .await
             .expect("Expected to get a swap response");
 
-        assert_eq!(provider.read().get_quote_txs().len(), 1);
+        assert_eq!(provider.read().get_swap_quotes().len(), 1);
     }
 }

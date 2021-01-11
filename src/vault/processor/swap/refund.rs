@@ -1,6 +1,6 @@
 use crate::{
     utils::calculate_effective_price, vault::processor::utils::is_swap_quote_expired,
-    vault::transactions::memory_provider::FulfilledTxWrapper,
+    vault::transactions::memory_provider::FulfilledWrapper,
 };
 use chainflip_common::types::{chain::SwapQuote, fraction::PercentageFraction};
 use std::convert::TryInto;
@@ -33,7 +33,7 @@ impl Result {
 }
 
 fn check_refund(
-    quote: &FulfilledTxWrapper<SwapQuote>,
+    quote: &FulfilledWrapper<SwapQuote>,
     input_amount: u128,
     output_amount: u128,
 ) -> Result {
@@ -94,7 +94,7 @@ fn check_refund(
 ///     - Slippage limit is above 0.0
 ///     - Slippage between quote effective price and current effective price is greater than the slippage limit
 pub fn should_refund(
-    quote: &FulfilledTxWrapper<SwapQuote>,
+    quote: &FulfilledWrapper<SwapQuote>,
     input_amount: u128,
     output_amount: u128,
 ) -> bool {
@@ -108,11 +108,11 @@ mod test {
     use chainflip_common::types::{coin::Coin, Timestamp};
     use std::convert::TryFrom;
 
-    fn get_quote() -> FulfilledTxWrapper<SwapQuote> {
+    fn get_quote() -> FulfilledWrapper<SwapQuote> {
         let mut quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
         quote.slippage_limit = Some(PercentageFraction::try_from(0.1).unwrap());
 
-        FulfilledTxWrapper {
+        FulfilledWrapper {
             inner: quote,
             fulfilled: false,
         }

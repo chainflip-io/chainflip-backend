@@ -8,7 +8,7 @@ use crate::common::coins::PoolCoin;
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Liquidity {
-    /// The depth of the coin staked against Base coin in the pool
+    /// The depth of the coin against Base coin in the pool
     pub depth: u128,
     /// The depth of Base coin in the pool
     pub base_depth: u128,

@@ -5,7 +5,7 @@ use crate::{
     },
     side_chain::{ISideChain, SideChainTx},
     vault::transactions::{
-        portions::{adjust_portions_after_stake, StakeContribution},
+        portions::{adjust_portions_after_deposit, DepositContribution},
         TransactionProvider,
     },
 };
@@ -17,11 +17,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use super::portions::{adjust_portions_after_unstake, UnstakeWithdrawal};
+use super::portions::{adjust_portions_after_withdraw, Withdrawal};
 
 /// Transaction plus a boolean flag
 #[derive(Debug, Clone, PartialEq)]
-pub struct FulfilledTxWrapper<Q: PartialEq> {
+pub struct FulfilledWrapper<Q: PartialEq> {
     /// The actual transaction
     pub inner: Q,
     /// Whether the transaction has been fulfilled (i.e. there
@@ -29,26 +29,25 @@ pub struct FulfilledTxWrapper<Q: PartialEq> {
     pub fulfilled: bool,
 }
 
-impl<Q: PartialEq> FulfilledTxWrapper<Q> {
+impl<Q: PartialEq> FulfilledWrapper<Q> {
     /// Constructor
-    pub fn new(inner: Q, fulfilled: bool) -> FulfilledTxWrapper<Q> {
-        FulfilledTxWrapper { inner, fulfilled }
+    pub fn new(inner: Q, fulfilled: bool) -> FulfilledWrapper<Q> {
+        FulfilledWrapper { inner, fulfilled }
     }
 }
 
-/// Witness transaction plus a boolean flag
-pub struct WitnessTxWrapper {
+/// Witness plus a boolean flag
+pub struct UsedWitnessWrapper {
     /// The actual transaction
     pub inner: Witness,
-    /// Whether the transaction has been used to fulfill
-    /// some quote transaction
+    /// Whether the transaction has been used to fulfill some quote
     pub used: bool,
 }
 
-impl WitnessTxWrapper {
+impl UsedWitnessWrapper {
     /// Construct from internal parts
     pub fn new(inner: Witness, used: bool) -> Self {
-        WitnessTxWrapper { inner, used }
+        UsedWitnessWrapper { inner, used }
     }
 }
 
@@ -93,13 +92,13 @@ pub type VaultPortions = HashMap<PoolCoin, PoolPortions>;
 
 /// All state that TransactionProvider will keep in memory
 struct MemoryState {
-    quote_txs: Vec<FulfilledTxWrapper<SwapQuote>>,
-    stake_quote_txs: Vec<FulfilledTxWrapper<DepositQuote>>,
-    unstake_request_txs: Vec<FulfilledTxWrapper<WithdrawRequest>>,
-    unstake_txs: Vec<Withdraw>,
-    stake_txs: Vec<Deposit>,
-    witness_txs: Vec<WitnessTxWrapper>,
-    output_txs: Vec<FulfilledTxWrapper<Output>>,
+    swap_quotes: Vec<FulfilledWrapper<SwapQuote>>,
+    deposit_quotes: Vec<FulfilledWrapper<DepositQuote>>,
+    withdraw_requests: Vec<FulfilledWrapper<WithdrawRequest>>,
+    withdraws: Vec<Withdraw>,
+    deposits: Vec<Deposit>,
+    witnesses: Vec<UsedWitnessWrapper>,
+    outputs: Vec<FulfilledWrapper<Output>>,
     liquidity: MemoryLiquidityProvider,
     next_block_idx: u32,
     staker_portions: VaultPortions,
@@ -115,13 +114,13 @@ impl<S: ISideChain> MemoryTransactionsProvider<S> {
     /// Create an in-memory transaction provider
     pub fn new(side_chain: Arc<Mutex<S>>) -> Self {
         let state = MemoryState {
-            quote_txs: vec![],
-            stake_quote_txs: vec![],
-            unstake_request_txs: vec![],
-            unstake_txs: vec![],
-            stake_txs: vec![],
-            witness_txs: vec![],
-            output_txs: vec![],
+            swap_quotes: vec![],
+            deposit_quotes: vec![],
+            withdraw_requests: vec![],
+            withdraws: vec![],
+            deposits: vec![],
+            witnesses: vec![],
+            outputs: vec![],
             liquidity: MemoryLiquidityProvider::new(),
             next_block_idx: 0,
             staker_portions: HashMap::new(),
@@ -152,20 +151,19 @@ pub struct StakerOwnership {
 }
 
 impl MemoryState {
-    fn process_stake_tx(&mut self, tx: Deposit) {
+    fn process_deposit(&mut self, tx: Deposit) {
         // Find quote and mark it as fulfilled
         if let Some(quote_info) = self
-            .stake_quote_txs
+            .deposit_quotes
             .iter_mut()
             .find(|quote_info| quote_info.inner.id == tx.quote)
         {
             quote_info.fulfilled = true;
         }
 
-        // Find witness transacitons and mark them as used:
+        // Find witnesses and mark them as used:
         for wtx_id in &tx.witnesses {
-            if let Some(witness_info) = self.witness_txs.iter_mut().find(|w| &w.inner.id == wtx_id)
-            {
+            if let Some(witness_info) = self.witnesses.iter_mut().find(|w| &w.inner.id == wtx_id) {
                 witness_info.used = true;
             }
         }
@@ -175,22 +173,22 @@ impl MemoryState {
         // What's worse, we've made the assumption that Deposit gets processed first,
         // Because we want to see what the liquidity is like before the contribution was made.
 
-        let contribution = StakeContribution::new(
+        let contribution = DepositContribution::new(
             StakerId::from_bytes(&tx.staker_id).unwrap(),
             LokiAmount::from_atomic(tx.base_amount),
             GenericCoinAmount::from_atomic(tx.pool, tx.other_amount),
         );
 
-        adjust_portions_after_stake(
+        adjust_portions_after_deposit(
             &mut self.staker_portions,
             &mut self.liquidity.get_pools(),
             &contribution,
         );
 
-        self.stake_txs.push(tx)
+        self.deposits.push(tx)
     }
 
-    fn process_pool_change_tx(&mut self, tx: PoolChange) {
+    fn process_pool_change(&mut self, tx: PoolChange) {
         debug!("Processing a pool change tx: {:?}", tx);
         if let Err(err) = self.liquidity.update_liquidity(&tx) {
             error!("Failed to process pool change tx {:?}: {}", tx, err);
@@ -198,38 +196,38 @@ impl MemoryState {
         }
     }
 
-    fn process_unstake_request_tx(&mut self, tx: WithdrawRequest) {
-        let tx = FulfilledTxWrapper::new(tx, false);
-        self.unstake_request_txs.push(tx);
+    fn process_withdraw_request(&mut self, tx: WithdrawRequest) {
+        let tx = FulfilledWrapper::new(tx, false);
+        self.withdraw_requests.push(tx);
     }
 
-    fn process_unstake_tx(&mut self, tx: Withdraw) {
+    fn process_withdraw(&mut self, tx: Withdraw) {
         // We must be able to find the request or else we won't be
-        // able to adjust portions which might result in double unstake
+        // able to adjust portions which might result in double withdraw
 
         // Find quote and mark it as fulfilled
-        let wrapped_unstake_request = match self
-            .unstake_request_txs
+        let wrapped_withdraw_request = match self
+            .withdraw_requests
             .iter_mut()
-            .find(|w_unstake_req| w_unstake_req.inner.id == tx.withdraw_request)
+            .find(|w_withdraw_req| w_withdraw_req.inner.id == tx.withdraw_request)
         {
-            Some(w_unstake_req) => {
-                w_unstake_req.fulfilled = true;
-                w_unstake_req
+            Some(w_withdraw_req) => {
+                w_withdraw_req.fulfilled = true;
+                w_withdraw_req
             }
             None => panic!(
-                "No unstake request found that matches unstake transaction request id: {}",
+                "No withdraw request found that matches withdraw request id: {}",
                 tx.withdraw_request
             ),
         };
 
-        let unstake_req = &wrapped_unstake_request.inner;
+        let withdraw_req = &wrapped_withdraw_request.inner;
 
-        let staker_id = StakerId::from_bytes(&unstake_req.staker_id).unwrap();
-        let pool = PoolCoin::from(*&unstake_req.pool).unwrap();
-        let fraction = *&unstake_req.fraction;
+        let staker_id = StakerId::from_bytes(&withdraw_req.staker_id).unwrap();
+        let pool = PoolCoin::from(*&withdraw_req.pool).unwrap();
+        let fraction = *&withdraw_req.fraction;
 
-        let unstake = UnstakeWithdrawal {
+        let withdrawal = Withdrawal {
             staker_id,
             fraction,
             pool,
@@ -238,24 +236,24 @@ impl MemoryState {
         let liquidity = self
             .liquidity
             .get_liquidity(pool)
-            .expect("Liquidity must exist for unstaked coin");
+            .expect("Liquidity must exist for withdrawn coin");
 
-        adjust_portions_after_unstake(&mut self.staker_portions, &liquidity, unstake);
+        adjust_portions_after_withdraw(&mut self.staker_portions, &liquidity, withdrawal);
 
-        self.unstake_txs.push(tx);
+        self.withdraws.push(tx);
     }
 
     fn process_output_tx(&mut self, tx: Output) {
         // Find quote and mark it as fulfilled only if it's not a refund
-        if let Some(quote_info) = self.quote_txs.iter_mut().find(|quote_info| {
+        if let Some(quote_info) = self.swap_quotes.iter_mut().find(|quote_info| {
             quote_info.inner.id == tx.parent_id() && quote_info.inner.output == tx.coin
         }) {
             quote_info.fulfilled = true;
         }
 
-        // Find witness txs and mark them as fulfilled
+        // Find witnesses and mark them as fulfilled
         let witnesses = self
-            .witness_txs
+            .witnesses
             .iter_mut()
             .filter(|witness| tx.witnesses.contains(&witness.inner.id));
 
@@ -264,18 +262,18 @@ impl MemoryState {
         }
 
         // Add output tx
-        let wrapper = FulfilledTxWrapper {
+        let wrapper = FulfilledWrapper {
             inner: tx,
             fulfilled: false,
         };
 
-        self.output_txs.push(wrapper);
+        self.outputs.push(wrapper);
     }
 
     fn process_output_sent_tx(&mut self, tx: OutputSent) {
         // Find output txs and mark them as fulfilled
         let outputs = self
-            .output_txs
+            .outputs
             .iter_mut()
             .filter(|output| tx.outputs.contains(&output.inner.id));
 
@@ -297,32 +295,31 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
             for tx in block.clone().transactions {
                 match tx {
                     SideChainTx::SwapQuote(tx) => {
-                        // Quote transactions always come before their
-                        // corresponding "outcome" tx, so they start unfulfilled
-                        let tx = FulfilledTxWrapper::new(tx, false);
+                        // Quotes always come before their corresponding "outcome", so they start unfulfilled
+                        let tx = FulfilledWrapper::new(tx, false);
 
-                        self.state.quote_txs.push(tx);
+                        self.state.swap_quotes.push(tx);
                     }
                     SideChainTx::DepositQuote(tx) => {
                         // (same as above)
-                        let tx = FulfilledTxWrapper::new(tx, false);
+                        let tx = FulfilledWrapper::new(tx, false);
 
-                        self.state.stake_quote_txs.push(tx)
+                        self.state.deposit_quotes.push(tx)
                     }
                     SideChainTx::Witness(tx) => {
-                        // We assume that witness transactions arrive unused
-                        let tx = WitnessTxWrapper {
+                        // We assume that witness arrive unused
+                        let tx = UsedWitnessWrapper {
                             inner: tx,
                             used: false,
                         };
 
-                        self.state.witness_txs.push(tx);
+                        self.state.witnesses.push(tx);
                     }
-                    SideChainTx::PoolChange(tx) => self.state.process_pool_change_tx(tx),
-                    SideChainTx::Deposit(tx) => self.state.process_stake_tx(tx),
+                    SideChainTx::PoolChange(tx) => self.state.process_pool_change(tx),
+                    SideChainTx::Deposit(tx) => self.state.process_deposit(tx),
                     SideChainTx::Output(tx) => self.state.process_output_tx(tx),
-                    SideChainTx::WithdrawRequest(tx) => self.state.process_unstake_request_tx(tx),
-                    SideChainTx::Withdraw(tx) => self.state.process_unstake_tx(tx),
+                    SideChainTx::WithdrawRequest(tx) => self.state.process_withdraw_request(tx),
+                    SideChainTx::Withdraw(tx) => self.state.process_withdraw(tx),
                     SideChainTx::OutputSent(tx) => self.state.process_output_sent_tx(tx),
                 }
             }
@@ -340,7 +337,7 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
                 if let SideChainTx::Witness(tx) = tx {
                     return !self
                         .state
-                        .witness_txs
+                        .witnesses
                         .iter()
                         .any(|witness| tx == &witness.inner);
                 }
@@ -357,24 +354,24 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
         Ok(())
     }
 
-    fn get_quote_txs(&self) -> &[FulfilledTxWrapper<SwapQuote>] {
-        &self.state.quote_txs
+    fn get_swap_quotes(&self) -> &[FulfilledWrapper<SwapQuote>] {
+        &self.state.swap_quotes
     }
 
-    fn get_stake_quote_txs(&self) -> &[FulfilledTxWrapper<DepositQuote>] {
-        &self.state.stake_quote_txs
+    fn get_deposit_quotes(&self) -> &[FulfilledWrapper<DepositQuote>] {
+        &self.state.deposit_quotes
     }
 
-    fn get_witness_txs(&self) -> &[WitnessTxWrapper] {
-        &self.state.witness_txs
+    fn get_witnesses(&self) -> &[UsedWitnessWrapper] {
+        &self.state.witnesses
     }
 
-    fn get_output_txs(&self) -> &[FulfilledTxWrapper<Output>] {
-        &self.state.output_txs
+    fn get_outputs(&self) -> &[FulfilledWrapper<Output>] {
+        &self.state.outputs
     }
 
-    fn get_unstake_request_txs(&self) -> &[FulfilledTxWrapper<WithdrawRequest>] {
-        &self.state.unstake_request_txs
+    fn get_withdraw_requests(&self) -> &[FulfilledWrapper<WithdrawRequest>] {
+        &self.state.withdraw_requests
     }
 
     fn get_portions(&self) -> &VaultPortions {
@@ -403,8 +400,8 @@ mod test {
     fn test_provider() {
         let mut provider = setup();
 
-        assert!(provider.get_quote_txs().is_empty());
-        assert!(provider.get_witness_txs().is_empty());
+        assert!(provider.get_swap_quotes().is_empty());
+        assert!(provider.get_witnesses().is_empty());
 
         // Add some random blocks
         {
@@ -421,15 +418,15 @@ mod test {
         provider.sync();
 
         assert_eq!(provider.state.next_block_idx, 1);
-        assert_eq!(provider.get_quote_txs().len(), 1);
-        assert_eq!(provider.get_witness_txs().len(), 1);
+        assert_eq!(provider.get_swap_quotes().len(), 1);
+        assert_eq!(provider.get_witnesses().len(), 1);
 
         provider
             .add_transactions(vec![TestData::swap_quote(Coin::ETH, Coin::LOKI).into()])
             .unwrap();
 
         assert_eq!(provider.state.next_block_idx, 2);
-        assert_eq!(provider.get_quote_txs().len(), 2);
+        assert_eq!(provider.get_swap_quotes().len(), 2);
     }
 
     #[test]
@@ -449,12 +446,12 @@ mod test {
 
         provider.sync();
 
-        assert_eq!(provider.get_witness_txs().len(), 1);
+        assert_eq!(provider.get_witnesses().len(), 1);
         assert_eq!(provider.state.next_block_idx, 1);
 
         provider.add_transactions(vec![witness.into()]).unwrap();
 
-        assert_eq!(provider.get_witness_txs().len(), 1);
+        assert_eq!(provider.get_witnesses().len(), 1);
         assert_eq!(provider.state.next_block_idx, 1);
     }
 
@@ -519,8 +516,8 @@ mod test {
 
         provider.sync();
 
-        assert_eq!(provider.get_quote_txs().first().unwrap().fulfilled, false);
-        assert_eq!(provider.get_witness_txs().first().unwrap().used, false);
+        assert_eq!(provider.get_swap_quotes().first().unwrap().fulfilled, false);
+        assert_eq!(provider.get_witnesses().first().unwrap().used, false);
 
         // Swap
         let mut output = TestData::output(quote.output, 100);
@@ -537,8 +534,8 @@ mod test {
 
         provider.sync();
 
-        assert_eq!(provider.get_quote_txs().first().unwrap().fulfilled, true);
-        assert_eq!(provider.get_witness_txs().first().unwrap().used, true);
+        assert_eq!(provider.get_swap_quotes().first().unwrap().fulfilled, true);
+        assert_eq!(provider.get_witnesses().first().unwrap().used, true);
     }
 
     #[test]
@@ -557,8 +554,8 @@ mod test {
 
         provider.sync();
 
-        assert_eq!(provider.get_quote_txs().first().unwrap().fulfilled, false);
-        assert_eq!(provider.get_witness_txs().first().unwrap().used, false);
+        assert_eq!(provider.get_swap_quotes().first().unwrap().fulfilled, false);
+        assert_eq!(provider.get_witnesses().first().unwrap().used, false);
 
         // Refund
         let mut output = TestData::output(quote.input, 100);
@@ -575,8 +572,8 @@ mod test {
 
         provider.sync();
 
-        assert_eq!(provider.get_quote_txs().first().unwrap().fulfilled, false);
-        assert_eq!(provider.get_witness_txs().first().unwrap().used, true);
+        assert_eq!(provider.get_swap_quotes().first().unwrap().fulfilled, false);
+        assert_eq!(provider.get_witnesses().first().unwrap().used, true);
     }
 
     #[test]
@@ -598,11 +595,11 @@ mod test {
         provider.sync();
 
         let expected = vec![
-            FulfilledTxWrapper::new(output_tx.clone(), false),
-            FulfilledTxWrapper::new(another_tx.clone(), false),
+            FulfilledWrapper::new(output_tx.clone(), false),
+            FulfilledWrapper::new(another_tx.clone(), false),
         ];
 
-        assert_eq!(provider.get_output_txs().to_vec(), expected);
+        assert_eq!(provider.get_outputs().to_vec(), expected);
 
         let output_sent_tx = OutputSent {
             id: UUIDv4::new(),
@@ -625,10 +622,10 @@ mod test {
         provider.sync();
 
         let expected = vec![
-            FulfilledTxWrapper::new(output_tx.clone(), true),
-            FulfilledTxWrapper::new(another_tx.clone(), true),
+            FulfilledWrapper::new(output_tx.clone(), true),
+            FulfilledWrapper::new(another_tx.clone(), true),
         ];
 
-        assert_eq!(provider.get_output_txs().to_vec(), expected);
+        assert_eq!(provider.get_outputs().to_vec(), expected);
     }
 }

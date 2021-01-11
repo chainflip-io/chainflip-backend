@@ -5,7 +5,7 @@ use crate::{
 use std::sync::Arc;
 use warp::http::StatusCode;
 
-/// Submit a stake quoter
+/// Get portions
 pub async fn get_portions<V: VaultNodeInterface>(
     params: PortionsParams,
     vault_node: Arc<V>,

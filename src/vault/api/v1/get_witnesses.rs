@@ -18,7 +18,7 @@ pub(super) struct WitnessQueryResponse {
 ///
 /// # Example Query
 ///
-/// > GET /v1/get_witnesses
+/// > GET /v1/witnesses
 pub(super) async fn get_witnesses<S: ISideChain>(
     side_chain: Arc<Mutex<S>>,
 ) -> Result<WitnessQueryResponse, ResponseError> {

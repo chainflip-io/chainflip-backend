@@ -79,10 +79,10 @@ where
 {
     let state = state.lock().unwrap();
 
-    let witnesses = state.get_witness_txs();
-    let outputs = state.get_output_txs();
-    let sent = state.get_output_sent_txs();
-    let stakes = state.get_stake_txs();
+    let witnesses = state.get_witnesses();
+    let outputs = state.get_outputs();
+    let sent = state.get_output_sents();
+    let deposits = state.get_deposits();
 
     drop(state);
 
@@ -94,7 +94,7 @@ where
         .map(|tx| tx.into())
         .collect();
 
-    let filtered_stake: Vec<SideChainTx> = stakes
+    let filtered_deposit: Vec<SideChainTx> = deposits
         .into_iter()
         .filter(|tx| tx.quote == id)
         .map(|tx| tx.into())
@@ -116,7 +116,7 @@ where
 
     Ok([
         filtered_witnesses,
-        filtered_stake,
+        filtered_deposit,
         filtered_outputs,
         filtered_output_sent,
     ]
@@ -133,13 +133,13 @@ where
 {
     let state = state.lock().unwrap();
 
-    let quotes = state.get_stake_quotes();
-    let witnesses = state.get_witness_txs();
-    let outputs = state.get_output_txs();
-    let sent = state.get_output_sent_txs();
-    let stakes = state.get_stake_txs();
-    let unstake_requests = state.get_unstake_requests();
-    let unstakes = state.get_unstakes();
+    let quotes = state.get_deposit_quotes();
+    let witnesses = state.get_witnesses();
+    let outputs = state.get_outputs();
+    let sent = state.get_output_sents();
+    let deposits = state.get_deposits();
+    let withdraw_requests = state.get_withdraw_requests();
+    let withdraws = state.get_withdraws();
 
     drop(state);
 
@@ -147,15 +147,15 @@ where
         .into_iter()
         .filter(|tx| tx.staker_id == id)
         .collect_vec();
-    let filtered_unstake_requests = unstake_requests
+    let filtered_withdraw_requests = withdraw_requests
         .into_iter()
         .filter(|tx| tx.staker_id == id)
         .collect_vec();
 
-    let filtered_unstakes: Vec<SideChainTx> = unstakes
+    let filtered_withdraws: Vec<SideChainTx> = withdraws
         .into_iter()
         .filter(|tx| {
-            filtered_unstake_requests
+            filtered_withdraw_requests
                 .iter()
                 .find(|req| req.id == tx.withdraw_request)
                 .is_some()
@@ -172,7 +172,7 @@ where
     let filtered_outputs: Vec<Output> = outputs
         .into_iter()
         .filter(|tx| {
-            let unstake_output = filtered_unstake_requests
+            let withdraw_output = filtered_withdraw_requests
                 .iter()
                 .find(|quote| quote.id == tx.parent_id())
                 .is_some();
@@ -182,7 +182,7 @@ where
                 .find(|quote| quote.id == tx.parent_id())
                 .is_some();
 
-            unstake_output || refund_output
+            withdraw_output || refund_output
         })
         .collect();
     let ids: Vec<UUIDv4> = filtered_outputs.iter().map(|tx| tx.id).collect();
@@ -197,13 +197,13 @@ where
 
     let filtered_quotes: Vec<SideChainTx> = quotes.into_iter().map(|tx| tx.into()).collect();
 
-    let filtered_stakes: Vec<SideChainTx> = stakes
+    let filtered_deposits: Vec<SideChainTx> = deposits
         .into_iter()
         .filter(|tx| tx.staker_id == id)
         .map(|tx| tx.into())
         .collect();
 
-    let filtered_unstake_requests: Vec<SideChainTx> = filtered_unstake_requests
+    let filtered_withdraw_requests: Vec<SideChainTx> = filtered_withdraw_requests
         .into_iter()
         .map(|tx| tx.into())
         .collect();
@@ -211,9 +211,9 @@ where
     Ok([
         filtered_quotes,
         filtered_witnesses,
-        filtered_stakes,
-        filtered_unstake_requests,
-        filtered_unstakes,
+        filtered_deposits,
+        filtered_withdraw_requests,
+        filtered_withdraws,
         filtered_outputs,
         filtered_output_sent,
     ]
@@ -230,14 +230,14 @@ mod test {
 
     #[test]
     #[ignore = "todo"]
-    fn test_returns_transactions_belonging_to_stake_quote() {
+    fn test_returns_transactions_belonging_to_deposit_quote() {
         todo!()
     }
 
     #[test]
     #[ignore = "todo"]
     fn test_returns_transactions_belonging_to_staker_id() {
-        // Test quotes, witnesses, refund outputs, stakes, unstake requests, unstake outputs, output sent
+        // Test quotes, witnesses, refund outputs, deposits, withdraw requests, withdraw outputs, output sent
         todo!()
     }
 }

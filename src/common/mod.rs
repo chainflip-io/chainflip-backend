@@ -104,7 +104,7 @@ impl PartialEq<StakerId> for Vec<u8> {
     }
 }
 
-/// Staker capable of siging unstake transactions
+/// Staker capable of siging withdraw transactions
 pub struct Staker {
     /// Keypair used for signing
     pub keys: EcdsaKeyPair,

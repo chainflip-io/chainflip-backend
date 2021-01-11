@@ -1,5 +1,5 @@
 use crate::{
-    side_chain::SideChainTx, vault::transactions::memory_provider::FulfilledTxWrapper,
+    side_chain::SideChainTx, vault::transactions::memory_provider::FulfilledWrapper,
     vault::transactions::TransactionProvider,
 };
 use chainflip_common::types::{chain::Output, coin::Coin};
@@ -24,7 +24,7 @@ pub async fn process_outputs<T: TransactionProvider + Sync, C: CoinProcessor>(
     process(provider, coin_processor).await;
 }
 
-fn group_by_coins(outputs: &[FulfilledTxWrapper<Output>]) -> HashMap<Coin, Vec<Output>> {
+fn group_by_coins(outputs: &[FulfilledWrapper<Output>]) -> HashMap<Coin, Vec<Output>> {
     outputs
         .iter()
         .filter(|tx| !tx.fulfilled)
@@ -39,7 +39,7 @@ async fn process<T: TransactionProvider + Sync, C: CoinProcessor>(
     // Get outputs and group them by their coin types
     let groups = {
         let provider_lock = provider.read();
-        let outputs = provider_lock.get_output_txs();
+        let outputs = provider_lock.get_outputs();
         group_by_coins(outputs)
     };
 
@@ -109,23 +109,23 @@ mod test {
         let fulfilled_output = TestData::output(Coin::LOKI, 100);
 
         let txs = vec![
-            FulfilledTxWrapper {
+            FulfilledWrapper {
                 inner: loki_output.clone(),
                 fulfilled: false,
             },
-            FulfilledTxWrapper {
+            FulfilledWrapper {
                 inner: eth_output.clone(),
                 fulfilled: false,
             },
-            FulfilledTxWrapper {
+            FulfilledWrapper {
                 inner: second_loki_output.clone(),
                 fulfilled: false,
             },
-            FulfilledTxWrapper {
+            FulfilledWrapper {
                 inner: second_eth_output.clone(),
                 fulfilled: false,
             },
-            FulfilledTxWrapper {
+            FulfilledWrapper {
                 inner: fulfilled_output,
                 fulfilled: true,
             },
@@ -152,8 +152,8 @@ mod test {
         provider.write().sync();
 
         // Pre-condition: Output is not fulfilled
-        assert_eq!(provider.read().get_output_txs().len(), 1);
-        let current_output_tx = provider.read().get_output_txs().first().unwrap().clone();
+        assert_eq!(provider.read().get_outputs().len(), 1);
+        let current_output_tx = provider.read().get_outputs().first().unwrap().clone();
         assert_eq!(current_output_tx.fulfilled, false);
 
         let output_sent_tx = OutputSent {
@@ -172,8 +172,8 @@ mod test {
 
         process(&mut provider, &coin_processor).await;
 
-        assert_eq!(provider.read().get_output_txs().len(), 1);
-        let current_output_tx = provider.read().get_output_txs().first().unwrap().clone();
+        assert_eq!(provider.read().get_outputs().len(), 1);
+        let current_output_tx = provider.read().get_outputs().first().unwrap().clone();
         assert_eq!(current_output_tx.fulfilled, true);
     }
 
@@ -188,8 +188,8 @@ mod test {
         provider.write().sync();
 
         // Pre-condition: Output is not fulfilled
-        assert_eq!(provider.read().get_output_txs().len(), 1);
-        let current_output_tx = provider.read().get_output_txs().first().unwrap().clone();
+        assert_eq!(provider.read().get_outputs().len(), 1);
+        let current_output_tx = provider.read().get_outputs().first().unwrap().clone();
         assert_eq!(current_output_tx.fulfilled, false);
 
         let mut coin_processor = TestCoinProcessor::new();
@@ -197,8 +197,8 @@ mod test {
 
         process(&mut provider, &coin_processor).await;
 
-        assert_eq!(provider.read().get_output_txs().len(), 1);
-        let current_output_tx = provider.read().get_output_txs().first().unwrap().clone();
+        assert_eq!(provider.read().get_outputs().len(), 1);
+        let current_output_tx = provider.read().get_outputs().first().unwrap().clone();
         assert_eq!(current_output_tx.fulfilled, false);
     }
 }

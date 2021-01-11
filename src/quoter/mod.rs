@@ -72,30 +72,28 @@ pub trait BlockProcessor {
     /// Process a list of blocks
     fn process_blocks(&mut self, blocks: &[SideChainBlock]) -> Result<(), String>;
 }
-
-// TODO: Remove tx from these names
 /// A trait for providing quoter state
 pub trait StateProvider: LiquidityProvider {
     /// Get all swap quotes
     fn get_swap_quotes(&self) -> Vec<SwapQuote>;
     /// Get swap quote with the given id
-    fn get_swap_quote_tx(&self, id: UUIDv4) -> Option<SwapQuote>;
-    /// Get all stake quotes
-    fn get_stake_quotes(&self) -> Vec<DepositQuote>;
-    /// Get stake quore with the given id
-    fn get_stake_quote_tx(&self, id: UUIDv4) -> Option<DepositQuote>;
-    /// Get all witness transactions with the given quote id
-    fn get_witness_txs(&self) -> Vec<Witness>;
-    /// Get all output transactions with the given quote id
-    fn get_output_txs(&self) -> Vec<Output>;
-    /// Get all output sent transactions
-    fn get_output_sent_txs(&self) -> Vec<OutputSent>;
-    /// Get all stake txs
-    fn get_stake_txs(&self) -> Vec<Deposit>;
-    /// Get all unstake requests
-    fn get_unstake_requests(&self) -> Vec<WithdrawRequest>;
-    /// Get all unstake txs
-    fn get_unstakes(&self) -> Vec<Withdraw>;
+    fn get_swap_quote(&self, id: UUIDv4) -> Option<SwapQuote>;
+    /// Get all deposit quotes
+    fn get_deposit_quotes(&self) -> Vec<DepositQuote>;
+    /// Get deposit quote with the given id
+    fn get_deposit_quote(&self, id: UUIDv4) -> Option<DepositQuote>;
+    /// Get all witnesses
+    fn get_witnesses(&self) -> Vec<Witness>;
+    /// Get all outputs
+    fn get_outputs(&self) -> Vec<Output>;
+    /// Get all output sents
+    fn get_output_sents(&self) -> Vec<OutputSent>;
+    /// Get all deposits
+    fn get_deposits(&self) -> Vec<Deposit>;
+    /// Get all withdraw requests
+    fn get_withdraw_requests(&self) -> Vec<WithdrawRequest>;
+    /// Get all withdraws
+    fn get_withdraws(&self) -> Vec<Withdraw>;
     /// Get the pools
     fn get_pools(&self) -> HashMap<PoolCoin, Liquidity>;
 }

@@ -9,9 +9,9 @@ use test_utils::data::TestData;
 
 #[test]
 fn test_witness_tx_is_made() {
-    // - add a quote tx onto the side chain
+    // - add a quote onto the side chain
     // - add a corresponding coin tx onto the main chain
-    // - test that there is witness transaction shortly after
+    // - test that there is witness shortly after
 
     // Tests use a simpler logger
     test_utils::logging::init();

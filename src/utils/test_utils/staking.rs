@@ -2,7 +2,7 @@ use ring::signature::{self, EcdsaKeyPair};
 
 use crate::common::Staker;
 
-/// Get fake ecdsa keypiar used for signing unstake txs
+/// Get fake ecdsa keypiar used for signing withdraw requests
 fn get_fake_ecdsa_key() -> EcdsaKeyPair {
     let algo = &signature::ECDSA_P256_SHA256_FIXED_SIGNING;
 

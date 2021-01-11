@@ -5,7 +5,7 @@ use crate::{
     common::*,
     side_chain::SideChainTx,
     vault::transactions::{
-        memory_provider::{FulfilledTxWrapper, Portion, WitnessTxWrapper},
+        memory_provider::{FulfilledWrapper, Portion, UsedWitnessWrapper},
         TransactionProvider,
     },
 };
@@ -17,34 +17,33 @@ use std::{
 };
 use web3::types::U256;
 
-// TODO: Rename Stake -> Deposit
 /// A set of transaction to be added to the side chain as a result
-/// of a successful match between stake and witness transactions
-struct StakeQuoteResult {
-    stake_tx: Deposit,
+/// of a successful match between deposit and witnesses
+struct DepositQuoteResult {
+    deposit: Deposit,
     pool_change: PoolChange,
 }
 
-impl StakeQuoteResult {
-    pub fn new(stake_tx: Deposit, pool_change: PoolChange) -> Self {
-        StakeQuoteResult {
-            stake_tx,
+impl DepositQuoteResult {
+    pub fn new(deposit: Deposit, pool_change: PoolChange) -> Self {
+        DepositQuoteResult {
+            deposit: deposit,
             pool_change,
         }
     }
 }
 
-pub(super) fn process_stake_quotes<T: TransactionProvider>(
+pub(super) fn process_deposit_quotes<T: TransactionProvider>(
     tx_provider: &mut Arc<RwLock<T>>,
     network: Network,
 ) {
     let provider = tx_provider.read();
-    let stake_quote_txs = provider.get_stake_quote_txs();
-    let witness_txs = provider.get_witness_txs();
+    let deposit_quotes = provider.get_deposit_quotes();
+    let witness_txs = provider.get_witnesses();
 
     // TODO: a potential room for improvement: autoswap is relatively slow,
     // so we might want to release the mutex when performing it
-    let new_txs = process_stake_quotes_inner(&stake_quote_txs, &witness_txs, network);
+    let new_txs = process_deposit_quotes_inner(&deposit_quotes, &witness_txs, network);
     drop(provider);
 
     // TODO: make sure that things below happen atomically
@@ -57,18 +56,17 @@ pub(super) fn process_stake_quotes<T: TransactionProvider>(
     };
 }
 
-/// Try to match witness transacitons with stake transactions and return a list of
-/// transactions that should be added to the side chain
-fn process_stake_quotes_inner(
-    quotes: &[FulfilledTxWrapper<DepositQuote>],
-    witness_txs: &[WitnessTxWrapper],
+/// Try to match witnesses with deposit quotes and return a list of deposits that should be added to the side chain
+fn process_deposit_quotes_inner(
+    quotes: &[FulfilledWrapper<DepositQuote>],
+    witness_txs: &[UsedWitnessWrapper],
     network: Network,
 ) -> Vec<SideChainTx> {
     let mut new_txs = Vec::<SideChainTx>::default();
 
     for quote_info in quotes {
-        // Find all relevant witness transactions
-        let wtxs: Vec<&WitnessTxWrapper> = witness_txs
+        // Find all relevant witnesses
+        let wtxs: Vec<&UsedWitnessWrapper> = witness_txs
             .iter()
             .filter(|wtx| !wtx.used && wtx.inner.quote == quote_info.inner.id)
             .collect();
@@ -79,7 +77,7 @@ fn process_stake_quotes_inner(
 
         // Refund the user if the quote is fulfilled
         if quote_info.fulfilled {
-            let refunds = refund_stake_quote_txs(quote_info, &wtxs, network);
+            let refunds = refund_deposit_quotes(quote_info, &wtxs, network);
             if refunds.len() > 0 {
                 info!(
                     "Quote {} is already fulfilled, refunding!",
@@ -87,11 +85,11 @@ fn process_stake_quotes_inner(
                 );
                 new_txs.extend(refunds.into_iter().map(|tx| tx.into()));
             }
-        } else if let Some(res) = process_stake_quote(quote_info, &wtxs, network) {
+        } else if let Some(res) = process_deposit_quote(quote_info, &wtxs, network) {
             new_txs.reserve(new_txs.len() + 2);
-            // IMPORTANT: stake transactions should come before pool change transactions,
+            // IMPORTANT: deposits should come before pool changes,
             // due to the way Transaction provider processes them
-            new_txs.push(res.stake_tx.into());
+            new_txs.push(res.deposit.into());
             new_txs.push(res.pool_change.into());
         };
     }
@@ -99,9 +97,9 @@ fn process_stake_quotes_inner(
     new_txs
 }
 
-fn refund_stake_quote_txs(
-    quote_info: &FulfilledTxWrapper<DepositQuote>,
-    witness_txs: &[&WitnessTxWrapper],
+fn refund_deposit_quotes(
+    quote_info: &FulfilledWrapper<DepositQuote>,
+    witness_txs: &[&UsedWitnessWrapper],
     network: Network,
 ) -> Vec<Output> {
     if !quote_info.fulfilled {
@@ -128,7 +126,7 @@ fn refund_stake_quote_txs(
         };
 
         if tx.amount == 0 {
-            warn!("Witness tx {} has amount 0", tx.id);
+            warn!("Witness {} has amount 0", tx.id);
             continue;
         }
 
@@ -146,7 +144,7 @@ fn refund_stake_quote_txs(
         match output.validate(network) {
             Ok(_) => output_txs.push(output),
             Err(err) => warn!(
-                "Failed to create refund output tx for stake witness {:?}: {}",
+                "Failed to create refund output for deposit witness {:?}: {}",
                 tx, err
             ),
         }
@@ -155,12 +153,12 @@ fn refund_stake_quote_txs(
     output_txs
 }
 
-/// Process a single stake quote with all witness transactions referencing it
-fn process_stake_quote(
-    quote_info: &FulfilledTxWrapper<DepositQuote>,
-    witness_txs: &[&WitnessTxWrapper],
+/// Process a single deposit quote with all witnesses referencing it
+fn process_deposit_quote(
+    quote_info: &FulfilledWrapper<DepositQuote>,
+    witness_txs: &[&UsedWitnessWrapper],
     network: Network,
-) -> Option<StakeQuoteResult> {
+) -> Option<DepositQuoteResult> {
     if quote_info.fulfilled {
         return None;
     }
@@ -172,7 +170,7 @@ fn process_stake_quote(
     let mut loki_amount: Option<i128> = None;
     let mut other_amount: Option<i128> = None;
 
-    // Indexes of used witness transaction
+    // Indexes of used witnesses
     let mut wtx_idxs = Vec::<UUIDv4>::default();
 
     for wtx in witness_txs {
@@ -187,7 +185,7 @@ fn process_stake_quote(
         match wtx.coin {
             Coin::LOKI => {
                 if loki_amount.is_some() {
-                    error!("Unexpected second loki witness transaction");
+                    error!("Unexpected second loki witness");
                     return None;
                 }
 
@@ -205,7 +203,7 @@ fn process_stake_quote(
             coin_type @ _ => {
                 if coin_type == quote.pool {
                     if other_amount.is_some() {
-                        error!("Unexpected second {} witness transaction", coin_type);
+                        error!("Unexpected second {} witness", coin_type);
                         return None;
                     }
 
@@ -248,10 +246,10 @@ fn process_stake_quote(
             };
 
             // TODO: autoswap goes here
-            let loki_amount: u128 = loki_amount.try_into().expect("negative stake");
-            let other_amount: u128 = other_amount.try_into().expect("negative stake");
+            let loki_amount: u128 = loki_amount.try_into().expect("negative deposit");
+            let other_amount: u128 = other_amount.try_into().expect("negative deposit");
 
-            let stake_tx = Deposit {
+            let deposit = Deposit {
                 id: UUIDv4::new(),
                 timestamp: Timestamp::now(),
                 quote: quote.id,
@@ -263,10 +261,10 @@ fn process_stake_quote(
                 other_amount,
             };
 
-            match stake_tx.validate(network) {
-                Ok(_) => Some(StakeQuoteResult::new(stake_tx, pool_change_tx)),
+            match deposit.validate(network) {
+                Ok(_) => Some(DepositQuoteResult::new(deposit, pool_change_tx)),
                 Err(_) => {
-                    warn!("Invalid deposit {:?}", stake_tx);
+                    warn!("Invalid deposit {:?}", deposit);
                     None
                 }
             }
@@ -283,12 +281,12 @@ fn get_portion_of_amount(total: u128, portion: Portion) -> u128 {
     res.try_into().expect("overflow")
 }
 
-fn get_amounts_unstakable<T: TransactionProvider>(
+fn get_amounts_withdrawable<T: TransactionProvider>(
     tx_provider: &T,
     pool: PoolCoin,
     staker: &StakerId,
 ) -> Result<(LokiAmount, GenericCoinAmount), String> {
-    info!("Handling unstake tx for staker: {}", staker);
+    info!("Handling withdraw tx for staker: {}", staker);
 
     let portions = tx_provider.get_portions();
 
@@ -320,7 +318,7 @@ fn get_amounts_unstakable<T: TransactionProvider>(
     Ok((loki, other))
 }
 
-fn prepare_output_txs(
+fn prepare_outputs(
     tx: &WithdrawRequest,
     loki_amount: LokiAmount,
     other_amount: GenericCoinAmount,
@@ -358,26 +356,26 @@ fn prepare_output_txs(
     Ok((loki, other))
 }
 
-fn process_unstake_request_tx<T: TransactionProvider>(
+fn process_withdraw_request<T: TransactionProvider>(
     tx_provider: &T,
-    tx: &FulfilledTxWrapper<WithdrawRequest>,
+    tx: &FulfilledWrapper<WithdrawRequest>,
     network: Network,
 ) -> Result<(Output, Output, PoolChange, Withdraw), String> {
     let tx = &tx.inner;
 
     let staker = StakerId::from_bytes(&tx.staker_id).unwrap();
 
-    // Find out how much we can unstake
-    // NOTE: we might want to remove unstake qoutes if we can't process them
+    // Find out how much we can withdraw
+    // NOTE: we might want to remove withdraw requests if we can't process them
     let (loki_amount, other_amount) =
-        get_amounts_unstakable(tx_provider, PoolCoin::from(tx.pool).unwrap(), &staker)?;
+        get_amounts_withdrawable(tx_provider, PoolCoin::from(tx.pool).unwrap(), &staker)?;
 
     debug!(
-        "Amounts unstakable by {} are: {} and {:?}",
+        "Amounts withdrawable by {} are: {} and {:?}",
         staker, loki_amount, other_amount
     );
 
-    let (loki_tx, other_tx) = prepare_output_txs(tx, loki_amount, other_amount, network)?;
+    let (loki_tx, other_tx) = prepare_outputs(tx, loki_amount, other_amount, network)?;
 
     let d_loki: i128 = loki_amount
         .to_atomic()
@@ -397,30 +395,30 @@ fn process_unstake_request_tx<T: TransactionProvider>(
     };
     pool_change_tx.validate(network)?;
 
-    let unstake_tx = Withdraw {
+    let withdraw = Withdraw {
         id: UUIDv4::new(),
         timestamp: Timestamp::now(),
         withdraw_request: tx.id,
         outputs: [loki_tx.id, other_tx.id],
     };
-    unstake_tx.validate(network)?;
+    withdraw.validate(network)?;
 
-    Ok((loki_tx, other_tx, pool_change_tx, unstake_tx))
+    Ok((loki_tx, other_tx, pool_change_tx, withdraw))
 }
 
-pub(super) fn process_unstake_requests<T: TransactionProvider>(
+pub(super) fn process_withdraw_requests<T: TransactionProvider>(
     tx_provider: &mut T,
     network: Network,
 ) {
-    let unstake_request_txs = tx_provider.get_unstake_request_txs();
+    let withdraw_request_txs = tx_provider.get_withdraw_requests();
 
-    let (valid_txs, invalid_txs): (Vec<_>, Vec<_>) = unstake_request_txs
+    let (valid_txs, invalid_txs): (Vec<_>, Vec<_>) = withdraw_request_txs
         .iter()
         .filter(|tx| !tx.fulfilled)
         .partition(|tx| tx.inner.verify_signature());
 
     for tx in invalid_txs {
-        warn!("Invalid signature for unstake request {}", tx.inner.id);
+        warn!("Invalid signature for withdraw request {}", tx.inner.id);
     }
 
     // TODO: We shouldn't be getting invalid signatures as we already validate
@@ -430,15 +428,18 @@ pub(super) fn process_unstake_requests<T: TransactionProvider>(
     let mut new_txs: Vec<SideChainTx> = Vec::with_capacity(valid_txs.len() * 4);
 
     for tx in valid_txs {
-        match process_unstake_request_tx(tx_provider, tx, network) {
-            Ok((output1, output2, pool_change, unstake_tx)) => {
+        match process_withdraw_request(tx_provider, tx, network) {
+            Ok((output1, output2, pool_change, withdraw)) => {
                 new_txs.push(output1.into());
                 new_txs.push(output2.into());
                 new_txs.push(pool_change.into());
-                new_txs.push(unstake_tx.into());
+                new_txs.push(withdraw.into());
             }
             Err(err) => {
-                warn!("Failed to process unstake request {}: {}", tx.inner.id, err);
+                warn!(
+                    "Failed to process withdraw request {}: {}",
+                    tx.inner.id, err
+                );
             }
         }
     }

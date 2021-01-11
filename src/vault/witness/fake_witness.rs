@@ -59,7 +59,7 @@ where
         while let Some(block) = side_chain.get_block(self.next_block_idx) {
             for tx in &block.transactions {
                 if let SideChainTx::SwapQuote(tx) = tx {
-                    debug!("Registered quote tx: {:?}", tx.id);
+                    debug!("Registered swap quote: {:?}", tx.id);
                     quote_txs.push(tx.clone());
                 }
             }
@@ -91,7 +91,7 @@ where
 
     fn event_loop(mut self) {
         loop {
-            // Check the blockchain for quote tx on the side chain
+            // Check the blockchain for quotes on the side chain
             self.poll_side_chain();
 
             let connection_alive = self.poll_main_chain();
@@ -118,9 +118,9 @@ where
         })
     }
 
-    /// Publish witness tx for `quote`
+    /// Publish witness for `quote`
     fn publish_witness_tx(&self, quote: &SwapQuote) {
-        debug!("Publishing witness transaction for quote: {:?}", &quote);
+        debug!("Publishing witness for quote: {:?}", &quote);
 
         let mut side_chain = self.side_chain.lock().unwrap();
 
@@ -139,7 +139,7 @@ where
 
         side_chain
             .add_block(vec![tx])
-            .expect("Could not publish witness tx");
+            .expect("Could not publish witness");
 
         // Do we remove the quote here?
     }

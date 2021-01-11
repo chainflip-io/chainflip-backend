@@ -103,36 +103,36 @@ impl TestRunner {
         self.sync();
     }
 
-    /// A helper function that adds a stake quote and the corresponding witness transactions
-    /// necessary for the stake to be registered
-    pub fn add_witnessed_stake_tx(
+    /// A helper function that adds a deposit quote and the corresponding witnesses
+    /// necessary for the deposit to be registered
+    pub fn add_witnessed_deposit_quote(
         &mut self,
         staker_id: &StakerId,
         loki_amount: LokiAmount,
         other_amount: GenericCoinAmount,
     ) -> DepositQuote {
-        let stake_tx =
+        let deposit_quote =
             TestData::deposit_quote_for_id(staker_id.to_owned(), other_amount.coin_type());
-        let wtx_loki = TestData::witness(stake_tx.id, loki_amount.to_atomic(), Coin::LOKI);
+        let wtx_loki = TestData::witness(deposit_quote.id, loki_amount.to_atomic(), Coin::LOKI);
         let wtx_eth = TestData::witness(
-            stake_tx.id,
+            deposit_quote.id,
             other_amount.to_atomic(),
             other_amount.coin_type(),
         );
 
-        self.add_block([stake_tx.clone().into()]);
+        self.add_block([deposit_quote.clone().into()]);
         self.add_block([wtx_loki.into(), wtx_eth.into()]);
 
-        stake_tx
+        deposit_quote
     }
 
-    /// Convenience method to find outputs associated with `tx` unstake
-    pub fn get_outputs_for_unstake(&self, tx: &WithdrawRequest) -> EthStakeOutputs {
+    /// Convenience method to find outputs associated with withdraws
+    pub fn get_outputs_for_withdraw_request(&self, request: &WithdrawRequest) -> EthDepositOutputs {
         let sent_outputs = self.sent_outputs.lock().unwrap();
 
         let outputs: Vec<_> = sent_outputs
             .iter()
-            .filter(|output| output.parent_id() == tx.id)
+            .filter(|output| output.parent_id() == request.id)
             .cloned()
             .collect();
 
@@ -147,7 +147,7 @@ impl TestRunner {
             .expect("Eth output should exist")
             .clone();
 
-        EthStakeOutputs {
+        EthDepositOutputs {
             loki_output,
             eth_output,
         }
@@ -167,8 +167,8 @@ impl TestRunner {
         assert_eq!(liquidity.depth, eth_atomic);
     }
 
-    /// Convenience method to add a signed unstake trasaction for `staker_id`
-    pub fn add_unstake_for(&mut self, staker: &Staker, pool: PoolCoin) {
+    /// Convenience method to add a signed withdraw request for `staker_id`
+    pub fn add_withdraw_request_for(&mut self, staker: &Staker, pool: PoolCoin) {
         let tx = TestData::withdraw_request_for_staker(staker, pool.get_coin());
 
         self.add_block([tx.into()]);
@@ -206,7 +206,7 @@ impl TestRunner {
 
 /// A helper struct that represents the two outputs that
 /// should be generated when unstaking from loki/eth pool
-pub struct EthStakeOutputs {
+pub struct EthDepositOutputs {
     /// Loki output
     pub loki_output: Output,
     /// Ethereum output

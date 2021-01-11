@@ -59,8 +59,8 @@ where
 
         let witness_txs = {
             let provider = self.transaction_provider.read();
-            let swaps = provider.get_quote_txs();
-            let stakes = provider.get_stake_quote_txs();
+            let swaps = provider.get_swap_quotes();
+            let deposit_quotes = provider.get_deposit_quotes();
 
             let swap_id_address_pairs = swaps
                 .iter()
@@ -70,7 +70,7 @@ where
                     (quote_inner.id, quote_inner.input_address.clone())
                 });
 
-            let stake_id_address_pairs = stakes
+            let deposit_id_address_pairs = deposit_quotes
                 .iter()
                 .filter(|quote| quote.inner.pool == Coin::BTC)
                 .map(|quote| {
@@ -79,7 +79,7 @@ where
                 });
 
             let mut witness_txs: Vec<SideChainTx> = vec![];
-            for (id, address) in swap_id_address_pairs.chain(stake_id_address_pairs) {
+            for (id, address) in swap_id_address_pairs.chain(deposit_id_address_pairs) {
                 let btc_address = WalletAddress(address.to_string());
                 let utxos = match self.client.get_address_unspent(&btc_address).await {
                     Ok(utxos) => utxos,
@@ -190,21 +190,21 @@ mod test {
             let mut provider = provider.write();
             provider.add_transactions(vec![btc_quote.into()]).unwrap();
 
-            assert_eq!(provider.get_quote_txs().len(), 1);
-            assert_eq!(provider.get_witness_txs().len(), 0);
+            assert_eq!(provider.get_swap_quotes().len(), 1);
+            assert_eq!(provider.get_witnesses().len(), 0);
         }
 
         witness.poll_addresses_of_quotes().await;
 
         let provider = provider.read();
 
-        assert_eq!(provider.get_quote_txs().len(), 1);
-        // one witness tx for each utxo
-        assert_eq!(provider.get_witness_txs().len(), 2);
+        assert_eq!(provider.get_swap_quotes().len(), 1);
+        // one witness for each utxo
+        assert_eq!(provider.get_witnesses().len(), 2);
     }
 
     #[tokio::test]
-    async fn polling_stake_address_with_utxos_creates_witness_txs() {
+    async fn polling_deposit_address_with_utxos_creates_witness_txs() {
         let params = setup();
         let mut witness = params.witness;
         let provider = params.provider;
@@ -228,25 +228,25 @@ mod test {
         client.add_utxos_for_address(TEST_BTC_ADDRESS.to_string(), utxos);
 
         // this quote will be witnessed
-        let btc_stake_quote = TestData::deposit_quote(Coin::BTC);
+        let btc_deposit_quote = TestData::deposit_quote(Coin::BTC);
 
         {
             let mut provider = provider.write();
             provider
-                .add_transactions(vec![btc_stake_quote.into()])
+                .add_transactions(vec![btc_deposit_quote.into()])
                 .unwrap();
 
-            assert_eq!(provider.get_stake_quote_txs().len(), 1);
-            assert_eq!(provider.get_witness_txs().len(), 0);
+            assert_eq!(provider.get_deposit_quotes().len(), 1);
+            assert_eq!(provider.get_witnesses().len(), 0);
         }
 
         witness.poll_addresses_of_quotes().await;
 
         let provider = provider.read();
 
-        assert_eq!(provider.get_stake_quote_txs().len(), 1);
-        // one witness tx for each utxo
-        assert_eq!(provider.get_witness_txs().len(), 2);
+        assert_eq!(provider.get_deposit_quotes().len(), 1);
+        // one witness for each utxo
+        assert_eq!(provider.get_witnesses().len(), 2);
     }
 
     #[tokio::test]
@@ -257,26 +257,26 @@ mod test {
 
         // this quote will be witnessed
         let btc_quote = TestData::swap_quote(Coin::BTC, Coin::LOKI);
-        let btc_stake_quote = TestData::deposit_quote(Coin::BTC);
+        let btc_deposit_quote = TestData::deposit_quote(Coin::BTC);
 
         {
             let mut provider = provider.write();
             provider
-                .add_transactions(vec![btc_quote.into(), btc_stake_quote.into()])
+                .add_transactions(vec![btc_quote.into(), btc_deposit_quote.into()])
                 .unwrap();
 
-            assert_eq!(provider.get_quote_txs().len(), 1);
-            assert_eq!(provider.get_stake_quote_txs().len(), 1);
-            assert_eq!(provider.get_witness_txs().len(), 0);
+            assert_eq!(provider.get_swap_quotes().len(), 1);
+            assert_eq!(provider.get_deposit_quotes().len(), 1);
+            assert_eq!(provider.get_witnesses().len(), 0);
         }
 
         witness.poll_addresses_of_quotes().await;
 
         let provider = provider.read();
 
-        assert_eq!(provider.get_quote_txs().len(), 1);
-        assert_eq!(provider.get_stake_quote_txs().len(), 1);
-        assert_eq!(provider.get_witness_txs().len(), 0);
+        assert_eq!(provider.get_swap_quotes().len(), 1);
+        assert_eq!(provider.get_deposit_quotes().len(), 1);
+        assert_eq!(provider.get_witnesses().len(), 0);
     }
 
     #[tokio::test]
@@ -287,25 +287,25 @@ mod test {
 
         // this quote should NOT be witnessed by the BTC witness since it's an ETH quote
         let eth_quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
-        let eth_stake_quote = TestData::deposit_quote(Coin::ETH);
+        let eth_deposit_quote = TestData::deposit_quote(Coin::ETH);
 
         {
             let mut provider = provider.write();
             provider
-                .add_transactions(vec![eth_quote.into(), eth_stake_quote.into()])
+                .add_transactions(vec![eth_quote.into(), eth_deposit_quote.into()])
                 .unwrap();
 
-            assert_eq!(provider.get_quote_txs().len(), 1);
-            assert_eq!(provider.get_stake_quote_txs().len(), 1);
-            assert_eq!(provider.get_witness_txs().len(), 0);
+            assert_eq!(provider.get_swap_quotes().len(), 1);
+            assert_eq!(provider.get_deposit_quotes().len(), 1);
+            assert_eq!(provider.get_witnesses().len(), 0);
         }
 
         witness.poll_addresses_of_quotes().await;
 
         let provider = provider.read();
 
-        assert_eq!(provider.get_quote_txs().len(), 1);
-        assert_eq!(provider.get_stake_quote_txs().len(), 1);
-        assert_eq!(provider.get_witness_txs().len(), 0);
+        assert_eq!(provider.get_swap_quotes().len(), 1);
+        assert_eq!(provider.get_deposit_quotes().len(), 1);
+        assert_eq!(provider.get_witnesses().len(), 0);
     }
 }

@@ -3,7 +3,7 @@ use crate::{
     constants::SWAP_QUOTE_HARD_EXPIRE,
     side_chain::SideChainTx,
     vault::transactions::{
-        memory_provider::{FulfilledTxWrapper, WitnessTxWrapper},
+        memory_provider::{FulfilledWrapper, UsedWitnessWrapper},
         TransactionProvider,
     },
 };
@@ -19,7 +19,7 @@ mod refund;
 
 #[derive(Debug)]
 struct Swap {
-    quote: FulfilledTxWrapper<SwapQuote>,
+    quote: FulfilledWrapper<SwapQuote>,
     witnesses: Vec<Witness>,
 }
 
@@ -27,14 +27,14 @@ fn get_swaps<T: TransactionProvider>(provider: &T) -> Vec<Swap> {
     let now = Timestamp::now();
     let is_hard_expired = |quote: &SwapQuote| now.0 - quote.timestamp.0 >= SWAP_QUOTE_HARD_EXPIRE;
 
-    let quotes: Vec<&FulfilledTxWrapper<SwapQuote>> = provider
-        .get_quote_txs()
+    let quotes: Vec<&FulfilledWrapper<SwapQuote>> = provider
+        .get_swap_quotes()
         .iter()
         .filter(|tx| !is_hard_expired(&tx.inner))
         .collect();
 
-    let witnesses: Vec<&WitnessTxWrapper> = provider
-        .get_witness_txs()
+    let witnesses: Vec<&UsedWitnessWrapper> = provider
+        .get_witnesses()
         .iter()
         .filter(|tx| !tx.used)
         .collect();
@@ -283,7 +283,7 @@ mod test {
 
         // Refund should occur here because we have no liquidity
         let swap = Swap {
-            quote: FulfilledTxWrapper {
+            quote: FulfilledWrapper {
                 inner: quote.clone(),
                 fulfilled: false,
             },
@@ -319,7 +319,7 @@ mod test {
         let witness = get_witness(&quote, to_atomic(Coin::ETH, "2500.0"));
 
         let swap = Swap {
-            quote: FulfilledTxWrapper {
+            quote: FulfilledWrapper {
                 inner: quote,
                 fulfilled: false,
             },
@@ -369,21 +369,21 @@ mod test {
 
         let swaps = vec![
             Swap {
-                quote: FulfilledTxWrapper {
+                quote: FulfilledWrapper {
                     inner: quote.clone(),
                     fulfilled: false,
                 },
                 witnesses: vec![get_witness(&quote, to_atomic(Coin::ETH, "2500.0"))],
             },
             Swap {
-                quote: FulfilledTxWrapper {
+                quote: FulfilledWrapper {
                     inner: another.clone(),
                     fulfilled: false,
                 },
                 witnesses: vec![get_witness(&another, to_atomic(Coin::ETH, "2500.0"))],
             },
             Swap {
-                quote: FulfilledTxWrapper {
+                quote: FulfilledWrapper {
                     inner: btc_quote.clone(),
                     fulfilled: false,
                 },
@@ -467,9 +467,9 @@ mod test {
         runner.sync_provider();
 
         // Pre conditions
-        assert_eq!(runner.provider.read().get_quote_txs().len(), 1);
-        assert_eq!(runner.provider.read().get_witness_txs().len(), 1);
-        assert_eq!(runner.provider.read().get_output_txs().len(), 0);
+        assert_eq!(runner.provider.read().get_swap_quotes().len(), 1);
+        assert_eq!(runner.provider.read().get_witnesses().len(), 1);
+        assert_eq!(runner.provider.read().get_outputs().len(), 0);
         assert_eq!(
             runner.provider.read().get_liquidity(PoolCoin::ETH),
             Some(Liquidity::new(initial_eth_depth, initial_loki_depth))
@@ -481,9 +481,9 @@ mod test {
         let new_loki_depth = to_atomic(Coin::LOKI, "16800.5");
 
         // Post conditions
-        assert_eq!(runner.provider.read().get_quote_txs().len(), 1);
-        assert_eq!(runner.provider.read().get_witness_txs().len(), 1);
-        assert_eq!(runner.provider.read().get_output_txs().len(), 1);
+        assert_eq!(runner.provider.read().get_swap_quotes().len(), 1);
+        assert_eq!(runner.provider.read().get_witnesses().len(), 1);
+        assert_eq!(runner.provider.read().get_outputs().len(), 1);
         assert_eq!(
             runner.provider.read().get_liquidity(PoolCoin::ETH),
             Some(Liquidity::new(new_eth_depth, new_loki_depth))

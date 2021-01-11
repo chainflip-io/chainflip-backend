@@ -96,8 +96,8 @@ where
             let mut provider = self.transaction_provider.write();
 
             provider.sync();
-            let swaps = provider.get_quote_txs();
-            let stakes = provider.get_stake_quote_txs();
+            let swaps = provider.get_swap_quotes();
+            let deposit_quotes = provider.get_deposit_quotes();
 
             let mut witness_txs: Vec<SideChainTx> = vec![];
 
@@ -111,7 +111,7 @@ where
                                 == recipient.to_lowercase()
                     });
 
-                    let stake_quote = stakes.iter().find(|quote_info| {
+                    let deposit_quote = deposit_quotes.iter().find(|quote_info| {
                         let quote = &quote_info.inner;
                         quote.pool == Coin::ETH
                             && quote.coin_input_address.to_string().to_lowercase()
@@ -120,9 +120,9 @@ where
 
                     let quote_id = {
                         let swap_id = swap_quote.map(|q| q.inner.id);
-                        let stake_id = stake_quote.map(|q| q.inner.id);
+                        let deposit_id = deposit_quote.map(|q| q.inner.id);
 
-                        swap_id.or(stake_id)
+                        swap_id.or(deposit_id)
                     };
 
                     if quote_id.is_none() {
@@ -131,7 +131,7 @@ where
 
                     let quote_id = quote_id.unwrap();
 
-                    debug!("Publishing witness transaction for quote: {}", &quote_id);
+                    debug!("Publishing witness for quote: {}", &quote_id);
 
                     let tx = Witness {
                         id: UUIDv4::new(),
@@ -232,8 +232,8 @@ mod test {
                 .add_transactions(vec![eth_quote.clone().into(), btc_quote.into()])
                 .unwrap();
 
-            assert_eq!(provider.get_quote_txs().len(), 2);
-            assert_eq!(provider.get_witness_txs().len(), 0);
+            assert_eq!(provider.get_swap_quotes().len(), 2);
+            assert_eq!(provider.get_witnesses().len(), 0);
         }
 
         // Create the main chain transactions
@@ -263,17 +263,17 @@ mod test {
         // Check that transactions were added correctly
         let provider = provider.read();
 
-        assert_eq!(provider.get_quote_txs().len(), 2);
+        assert_eq!(provider.get_swap_quotes().len(), 2);
         assert_eq!(
-            provider.get_witness_txs().len(),
+            provider.get_witnesses().len(),
             1,
-            "Expected a witness transaction to be added"
+            "Expected a witness to be added"
         );
 
         let witness_tx = &provider
-            .get_witness_txs()
+            .get_witnesses()
             .first()
-            .expect("Expected witness tx to exist")
+            .expect("Expected witness to exist")
             .inner;
 
         assert_eq!(witness_tx.quote, eth_quote.id);
@@ -290,7 +290,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn adds_stake_quote_witness_transaction_correctly() {
+    async fn adds_deposit_quote_witness_transaction_correctly() {
         let params = setup();
         let client = params.client;
         let provider = params.provider;
@@ -299,19 +299,22 @@ mod test {
         let input_address = generate_eth_address();
 
         // Add a quote so we can witness it
-        let mut eth_stake_quote = TestData::deposit_quote(Coin::ETH);
-        eth_stake_quote.coin_input_address = input_address.to_string().to_lowercase().into();
+        let mut eth_deposit_quote = TestData::deposit_quote(Coin::ETH);
+        eth_deposit_quote.coin_input_address = input_address.to_string().to_lowercase().into();
 
-        let btc_stake_quote = TestData::deposit_quote(Coin::BTC);
+        let btc_deposit_quote = TestData::deposit_quote(Coin::BTC);
 
         {
             let mut provider = provider.write();
             provider
-                .add_transactions(vec![eth_stake_quote.clone().into(), btc_stake_quote.into()])
+                .add_transactions(vec![
+                    eth_deposit_quote.clone().into(),
+                    btc_deposit_quote.into(),
+                ])
                 .unwrap();
 
-            assert_eq!(provider.get_stake_quote_txs().len(), 2);
-            assert_eq!(provider.get_witness_txs().len(), 0);
+            assert_eq!(provider.get_deposit_quotes().len(), 2);
+            assert_eq!(provider.get_witnesses().len(), 0);
         }
 
         // Create the main chain transactions
@@ -341,20 +344,20 @@ mod test {
         // Check that transactions were added correctly
         let provider = provider.read();
 
-        assert_eq!(provider.get_stake_quote_txs().len(), 2);
+        assert_eq!(provider.get_deposit_quotes().len(), 2);
         assert_eq!(
-            provider.get_witness_txs().len(),
+            provider.get_witnesses().len(),
             1,
-            "Expected a witness transaction to be added"
+            "Expected a witness to be added"
         );
 
         let witness_tx = &provider
-            .get_witness_txs()
+            .get_witnesses()
             .first()
-            .expect("Expected witness tx to exist")
+            .expect("Expected witness to exist")
             .inner;
 
-        assert_eq!(witness_tx.quote, eth_stake_quote.id);
+        assert_eq!(witness_tx.quote, eth_deposit_quote.id);
         assert_eq!(
             witness_tx.transaction_id.to_string(),
             eth_transaction.hash.to_string()

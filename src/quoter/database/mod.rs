@@ -197,39 +197,39 @@ impl StateProvider for Database {
         self.get_transactions(TransactionType::SwapQuote)
     }
 
-    fn get_swap_quote_tx(&self, id: UUIDv4) -> Option<SwapQuote> {
+    fn get_swap_quote(&self, id: UUIDv4) -> Option<SwapQuote> {
         self.get_transaction(id)
     }
 
-    fn get_stake_quotes(&self) -> Vec<DepositQuote> {
+    fn get_deposit_quotes(&self) -> Vec<DepositQuote> {
         self.get_transactions(TransactionType::DepositQuote)
     }
 
-    fn get_stake_quote_tx(&self, id: UUIDv4) -> Option<DepositQuote> {
+    fn get_deposit_quote(&self, id: UUIDv4) -> Option<DepositQuote> {
         self.get_transaction(id)
     }
 
-    fn get_witness_txs(&self) -> Vec<Witness> {
+    fn get_witnesses(&self) -> Vec<Witness> {
         self.get_transactions(TransactionType::Witness)
     }
 
-    fn get_output_txs(&self) -> Vec<Output> {
+    fn get_outputs(&self) -> Vec<Output> {
         self.get_transactions(TransactionType::Output)
     }
 
-    fn get_output_sent_txs(&self) -> Vec<OutputSent> {
+    fn get_output_sents(&self) -> Vec<OutputSent> {
         self.get_transactions(TransactionType::Sent)
     }
 
-    fn get_stake_txs(&self) -> Vec<Deposit> {
+    fn get_deposits(&self) -> Vec<Deposit> {
         self.get_transactions(TransactionType::Deposit)
     }
 
-    fn get_unstakes(&self) -> Vec<Withdraw> {
+    fn get_withdraws(&self) -> Vec<Withdraw> {
         self.get_transactions(TransactionType::Withdraw)
     }
 
-    fn get_unstake_requests(&self) -> Vec<WithdrawRequest> {
+    fn get_withdraw_requests(&self) -> Vec<WithdrawRequest> {
         self.get_transactions(TransactionType::WithdrawRequest)
     }
 

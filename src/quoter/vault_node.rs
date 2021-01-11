@@ -2,8 +2,8 @@ use crate::{
     common::api,
     side_chain::SideChainBlock,
     vault::api::v1::{
-        get_blocks::BlocksQueryResponse, post_stake::StakeQuoteParams, post_swap::SwapQuoteParams,
-        post_unstake::UnstakeParams, PortionsParams,
+        get_blocks::BlocksQueryResponse, post_deposit::DepositQuoteParams,
+        post_swap::SwapQuoteParams, post_withdraw::WithdrawParams, PortionsParams,
     },
 };
 use reqwest::Client;
@@ -33,11 +33,12 @@ pub trait VaultNodeInterface {
     /// Submit a swap quote to the vault node
     async fn submit_swap(&self, params: SwapQuoteParams) -> Result<serde_json::Value, String>;
 
-    /// Submit a stake quote to the vault node
-    async fn submit_stake(&self, params: StakeQuoteParams) -> Result<serde_json::Value, String>;
+    /// Submit a deposit quote to the vault node
+    async fn submit_deposit(&self, params: DepositQuoteParams)
+        -> Result<serde_json::Value, String>;
 
-    /// Submit an unstake request to the vault node
-    async fn submit_unstake(&self, params: UnstakeParams) -> Result<serde_json::Value, String>;
+    /// Submit an withdraw request to the vault node
+    async fn submit_withdraw(&self, params: WithdrawParams) -> Result<serde_json::Value, String>;
 }
 
 /// A client for communicating with vault nodes via http requests.
@@ -140,8 +141,11 @@ impl VaultNodeInterface for VaultNodeAPI {
         }
     }
 
-    async fn submit_stake(&self, params: StakeQuoteParams) -> Result<serde_json::Value, String> {
-        let url = format!("{}/v1/stake", self.url);
+    async fn submit_deposit(
+        &self,
+        params: DepositQuoteParams,
+    ) -> Result<serde_json::Value, String> {
+        let url = format!("{}/v1/deposit", self.url);
 
         let res = self
             .client
@@ -166,8 +170,8 @@ impl VaultNodeInterface for VaultNodeAPI {
         }
     }
 
-    async fn submit_unstake(&self, params: UnstakeParams) -> Result<serde_json::Value, String> {
-        let url = format!("{}/v1/unstake", self.url);
+    async fn submit_withdraw(&self, params: WithdrawParams) -> Result<serde_json::Value, String> {
+        let url = format!("{}/v1/withdraw", self.url);
 
         let res = self
             .client
@@ -188,7 +192,7 @@ impl VaultNodeInterface for VaultNodeAPI {
 
         match res.data {
             Some(data) => Ok(data),
-            None => Err("Failed to submit unstake request".to_string()),
+            None => Err("Failed to submit withdraw request".to_string()),
         }
     }
 }

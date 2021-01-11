@@ -1,7 +1,7 @@
 use crate::{
     common::{api::ResponseError, StakerId},
     quoter::StateProvider,
-    vault::api::v1::post_stake::StakeQuoteResponse,
+    vault::api::v1::post_deposit::DepositQuoteResponse,
     vault::{api::v1::post_swap::SwapQuoteResponse, processor::utils::get_swap_expire_timestamp},
 };
 use chainflip_common::types::UUIDv4;
@@ -25,7 +25,7 @@ pub struct GetQuoteParams {
 #[serde(rename_all = "camelCase", tag = "type", content = "info")]
 pub enum GetQuoteResponse {
     Swap(SwapQuoteResponse),
-    Stake(StakeQuoteResponse),
+    Deposit(DepositQuoteResponse),
 }
 
 /// Get information about a quote
@@ -54,8 +54,8 @@ where
         return Ok(Some(GetQuoteResponse::Swap(response)));
     }
 
-    if let Some(response) = get_stake_quote(id, state.clone()) {
-        return Ok(Some(GetQuoteResponse::Stake(response)));
+    if let Some(response) = get_deposit_quote(id, state.clone()) {
+        return Ok(Some(GetQuoteResponse::Deposit(response)));
     }
 
     Ok(None)
@@ -65,7 +65,7 @@ pub fn get_swap_quote<S>(id: UUIDv4, state: Arc<Mutex<S>>) -> Option<SwapQuoteRe
 where
     S: StateProvider,
 {
-    let quote = state.lock().unwrap().get_swap_quote_tx(id);
+    let quote = state.lock().unwrap().get_swap_quote(id);
     quote.map(|quote| SwapQuoteResponse {
         id: quote.id,
         created_at: quote.timestamp.0,
@@ -80,12 +80,12 @@ where
     })
 }
 
-pub fn get_stake_quote<S>(id: UUIDv4, state: Arc<Mutex<S>>) -> Option<StakeQuoteResponse>
+pub fn get_deposit_quote<S>(id: UUIDv4, state: Arc<Mutex<S>>) -> Option<DepositQuoteResponse>
 where
     S: StateProvider,
 {
-    let quote = state.lock().unwrap().get_stake_quote_tx(id);
-    quote.map(|quote| StakeQuoteResponse {
+    let quote = state.lock().unwrap().get_deposit_quote(id);
+    quote.map(|quote| DepositQuoteResponse {
         id: quote.id,
         created_at: quote.timestamp.0,
         expires_at: get_swap_expire_timestamp(&quote.timestamp).0,

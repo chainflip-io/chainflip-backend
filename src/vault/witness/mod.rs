@@ -1,5 +1,5 @@
 //! Witness has the following responsibilities:
-//! - It is subscribed to the side chain for *quote transactions*
+//! - It is subscribed to the side chain for *quotes*
 //! - It monitors foreign blockchains for *incoming transactions*
 
 // Events: Lokid transaction, Ether transaction, Swap transaction from Side Chain

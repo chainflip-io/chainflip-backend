@@ -52,12 +52,12 @@ where
     res.status()
 }
 
-async fn post_unstake_req<T>(req: &T) -> StatusCode
+async fn post_withdraw_req<T>(req: &T) -> StatusCode
 where
     T: Serialize + ?Sized,
 {
     let res = CLIENT
-        .post("http://localhost:3030/v1/unstake")
+        .post("http://localhost:3030/v1/withdraw")
         .json(req)
         .send()
         .await
@@ -87,11 +87,11 @@ where
     status
 }
 
-async fn check_unstake_endpoint(config: &TestConfig) -> StatusCode {
+async fn check_withdraw_endpoint(config: &TestConfig) -> StatusCode {
     let mut tx = TestData::withdraw_request_for_staker(&config.staker, Coin::ETH);
 
     tx.sign(&config.staker.keys)
-        .expect("failed to sign unstake tx");
+        .expect("failed to sign withdraw request");
 
     let req = serde_json::json!({
         "stakerId": config.staker.public_key(),
@@ -103,7 +103,7 @@ async fn check_unstake_endpoint(config: &TestConfig) -> StatusCode {
         "signature": base64::encode(tx.signature),
     });
 
-    post_unstake_req(&req).await
+    post_withdraw_req(&req).await
 }
 
 struct TestConfig {
@@ -122,14 +122,14 @@ impl TestConfig {
 
 /// Setup some state on the side chain for the tests to interact with
 fn setup_state(config: &TestConfig, runner: &mut TestRunner) {
-    // Add a valid stake
+    // Add a valid deposit
 
     let loki_amount = LokiAmount::from_decimal_string("1.0");
     let eth_amount = GenericCoinAmount::from_decimal_string(Coin::ETH, "2.0");
 
     let keypair = &config.staker;
 
-    runner.add_witnessed_stake_tx(&keypair.id(), loki_amount, eth_amount);
+    runner.add_witnessed_deposit_quote(&keypair.id(), loki_amount, eth_amount);
     runner.sync();
 }
 
@@ -185,8 +185,8 @@ async fn vault_http_server_tests() {
     // POST requests
 
     {
-        // v1/unstake
-        let status = check_unstake_endpoint(&config).await;
+        // v1/withdraw
+        let status = check_withdraw_endpoint(&config).await;
         assert_eq!(status, StatusCode::OK);
     }
 

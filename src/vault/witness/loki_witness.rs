@@ -1,5 +1,5 @@
 //! Witness has the following responsibilities:
-//! - It is subscribed to the side chain for *quote transactions*
+//! - It is subscribed to the side chain for *quotes*
 //! - It monitors foreign blockchains for *incoming transactions*
 
 // Events: Lokid transaction, Ether transaction, Swap transaction from Side Chain
@@ -95,8 +95,8 @@ where
 
         let witness_txs = {
             let provider = self.transaction_provider.read();
-            let swaps = provider.get_quote_txs();
-            let stakes = provider.get_stake_quote_txs();
+            let swaps = provider.get_swap_quotes();
+            let deposit_quotes = provider.get_deposit_quotes();
             let mut witness_txs: Vec<SideChainTx> = vec![];
 
             for payment in &payments {
@@ -108,15 +108,15 @@ where
                     })
                     .map(|quote| quote.inner.id);
 
-                let stake_quote = stakes
+                let deposit_quote = deposit_quotes
                     .iter()
                     .find(|quote| {
                         quote.inner.base_input_address_id == payment.payment_id.to_bytes()
                     })
                     .map(|quote| quote.inner.id);
 
-                if let Some(quote_id) = swap_quote.or(stake_quote) {
-                    debug!("Publishing witness transaction for quote: {}", &quote_id);
+                if let Some(quote_id) = swap_quote.or(deposit_quote) {
+                    debug!("Publishing witnesses for quote: {}", &quote_id);
 
                     let tx = Witness {
                         id: UUIDv4::new(),

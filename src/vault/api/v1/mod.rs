@@ -15,19 +15,19 @@ pub mod utils;
 /// Post swap quote endpoint
 pub mod post_swap;
 
-/// Post stake quote endpoint
-pub mod post_stake;
+/// Post deposit quote endpoint
+pub mod post_deposit;
 
-/// Post unstake endpoint
-pub mod post_unstake;
+/// Post withdraw request endpoint
+pub mod post_withdraw;
 
 /// Get blocks endpoint
 pub mod get_blocks;
 use get_blocks::{get_blocks, BlocksQueryParams};
 
-/// Get witness transactions endpoint
-mod get_witness_txs;
-use get_witness_txs::get_witnesses;
+/// Get witnesses endpoint
+mod get_witnesses;
+use get_witnesses::get_witnesses;
 
 /// Get portions endpoint
 mod get_portions;
@@ -35,7 +35,7 @@ use get_portions::get_portions;
 pub use get_portions::PortionsParams;
 
 #[derive(Debug, Clone)]
-/// A config object for swap and stake
+/// A config object for swap and deposit
 pub struct Config {
     /// Loki wallet address
     pub loki_wallet_address: String,
@@ -74,20 +74,20 @@ pub fn endpoints<S: ISideChain + Send, T: TransactionProvider + Send + Sync>(
         .map(post_swap::swap)
         .and_then(api::respond);
 
-    let stake = warp::path!("stake")
+    let deposit = warp::path!("deposit")
         .and(warp::post())
         .and(warp::body::json())
         .and(using(provider.clone()))
         .and(using(config.clone()))
-        .map(post_stake::stake)
+        .map(post_deposit::deposit)
         .and_then(api::respond);
 
-    let unstake = warp::path!("unstake")
+    let withdraw = warp::path!("withdraw")
         .and(warp::post())
         .and(warp::body::json())
         .and(using(provider.clone()))
         .and(using(config.clone()))
-        .map(post_unstake::post_unstake)
+        .map(post_withdraw::post_withdraw)
         .and_then(api::respond);
 
     let portions = warp::path!("portions")
@@ -101,8 +101,8 @@ pub fn endpoints<S: ISideChain + Send, T: TransactionProvider + Send + Sync>(
         .and(
             blocks
                 .or(swap)
-                .or(stake)
-                .or(unstake)
+                .or(deposit)
+                .or(withdraw)
                 .or(portions)
                 .or(witnesses),
         )

@@ -29,7 +29,7 @@ impl MemorySideChain {
         false
     }
 
-    /// Convenience method for getting all witness transactions
+    /// Convenience method for getting all witnesses
     pub fn get_witness_txs(&self) -> Vec<Witness> {
         let mut quotes: Vec<Witness> = vec![];
 
