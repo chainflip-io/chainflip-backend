@@ -3,16 +3,11 @@ use crate::{
     vault::api::v1::post_swap::SwapQuoteParams,
 };
 use chainflip_common::{types::coin::Coin, utils::address_id};
-use rand::{prelude::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
-use std::{
-    str::FromStr,
-    sync::{Arc, Mutex},
-    time::SystemTime,
-};
+use std::{str::FromStr, sync::Arc};
 use warp::http::StatusCode;
 
-use super::{utils::generate_unique_input_address_id, InputIdCache};
+use super::input_id_cache::InputIdCache;
 
 /// Parameters for POST `quote` endpoint
 #[derive(Debug, Serialize, Deserialize)]
@@ -36,7 +31,7 @@ pub struct PostQuoteParams {
 pub async fn swap<V: VaultNodeInterface>(
     params: PostQuoteParams,
     vault_node: Arc<V>,
-    input_id_cache: Arc<Mutex<InputIdCache>>,
+    input_id_cache: InputIdCache,
 ) -> Result<serde_json::Value, ResponseError> {
     let input_coin = Coin::from_str(&params.input_coin)
         .map_err(|_| ResponseError::new(StatusCode::BAD_REQUEST, "Invalid input coin"))?;
@@ -44,12 +39,7 @@ pub async fn swap<V: VaultNodeInterface>(
     let output_coin = Coin::from_str(&params.output_coin)
         .map_err(|_| ResponseError::new(StatusCode::BAD_REQUEST, "Invalid output coin"))?;
 
-    let now = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .expect("Duration since UNIX_EPOCH failed");
-    let mut rng = StdRng::seed_from_u64(now.as_secs());
-    let input_address_id =
-        generate_unique_input_address_id(input_coin, input_id_cache.clone(), &mut rng)?;
+    let input_address_id = input_id_cache.generate_unique_input_address_id(&input_coin);
 
     // Convert to string representation
     let string_input_address_id =
@@ -69,12 +59,7 @@ pub async fn swap<V: VaultNodeInterface>(
         Ok(result) => Ok(result),
         Err(err) => {
             // Something went wrong, remove id from cache
-            input_id_cache
-                .lock()
-                .unwrap()
-                .get_mut(&input_coin)
-                .unwrap()
-                .remove(&input_address_id);
+            input_id_cache.remove(&input_coin, &input_address_id);
 
             return Err(ResponseError::new(
                 StatusCode::BAD_REQUEST,

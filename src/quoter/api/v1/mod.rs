@@ -3,11 +3,7 @@ use crate::{
     quoter::{vault_node::VaultNodeInterface, StateProvider},
     vault::api::v1::PortionsParams,
 };
-use chainflip_common::types::coin::Coin;
-use std::{
-    collections::{BTreeSet, HashMap},
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 use warp::Filter;
 
 pub mod post_deposit;
@@ -32,44 +28,11 @@ pub use get_transactions::{get_transactions, TransactionsParams};
 mod get_portions;
 pub use get_portions::get_portions;
 
-// Util functions
-pub mod utils;
+mod input_id_cache;
+use input_id_cache::InputIdCache;
 
 #[cfg(test)]
 mod test;
-
-pub type InputIdCache = HashMap<Coin, BTreeSet<Vec<u8>>>;
-
-/// Get a pre-populated input id cache
-pub fn get_input_id_cache<S>(state: &Arc<Mutex<S>>) -> InputIdCache
-where
-    S: StateProvider,
-{
-    let mut cache: InputIdCache = HashMap::new();
-    let quotes = state.lock().unwrap().get_swap_quotes();
-
-    for quote in quotes {
-        cache
-            .entry(quote.input)
-            .or_insert(BTreeSet::new())
-            .insert(quote.input_address_id);
-    }
-
-    let deposit_quotes = state.lock().unwrap().get_deposit_quotes();
-    for quote in deposit_quotes {
-        cache
-            .entry(quote.pool)
-            .or_insert(BTreeSet::new())
-            .insert(quote.coin_input_address_id);
-
-        cache
-            .entry(Coin::LOKI)
-            .or_insert(BTreeSet::new())
-            .insert(quote.base_input_address_id);
-    }
-
-    cache
-}
 
 /// The v1 API endpoints
 pub fn endpoints<V, S>(
@@ -81,8 +44,7 @@ where
     S: StateProvider + Send,
 {
     // Pre populate cache
-    let input_id_cache = get_input_id_cache(&state);
-    let input_id_cache = Arc::new(Mutex::new(input_id_cache));
+    let input_id_cache = InputIdCache::from_state(state.clone());
 
     let coins = warp::path!("coins")
         .and(warp::get())
