@@ -170,12 +170,13 @@ where
 mod test {
     use super::*;
     use crate::{
-        common::ethereum::{Address, Hash, Transaction},
+        common::ethereum::{Hash, Transaction},
         side_chain::MemorySideChain,
         utils::test_utils::{data::TestData, get_transactions_provider, store::MemoryKVS},
         vault::transactions::MemoryTransactionsProvider,
     };
     use crate::{side_chain::FakeStateChainNode, utils::test_utils::ethereum::TestEthereumClient};
+    use chainflip_common::types::addresses::EthereumAddress;
     use rand::Rng;
 
     type TestTransactionsProvider = MemoryTransactionsProvider<MemorySideChain>;
@@ -207,8 +208,8 @@ mod test {
         }
     }
 
-    fn generate_eth_address() -> Address {
-        Address(rand::thread_rng().gen::<[u8; 20]>())
+    fn generate_eth_address() -> EthereumAddress {
+        EthereumAddress(rand::thread_rng().gen::<[u8; 20]>())
     }
 
     #[tokio::test]

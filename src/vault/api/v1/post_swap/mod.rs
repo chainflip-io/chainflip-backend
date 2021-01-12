@@ -1,27 +1,28 @@
+use super::{
+    utils::{bad_request, internal_server_error},
+    Config,
+};
 use crate::{
-    common::{
-        api::ResponseError, input_address_id::input_address_id_string_to_bytes, LokiPaymentId,
-    },
+    common::api::ResponseError,
     utils::{
         address::{generate_btc_address_from_index, generate_eth_address},
         calculate_effective_price, price,
     },
     vault::{processor::utils::get_swap_expire_timestamp, transactions::TransactionProvider},
 };
-use chainflip_common::types::{
-    chain::{SwapQuote, Validate},
-    coin::Coin,
-    fraction::PercentageFraction,
-    Timestamp, UUIDv4,
+use chainflip_common::{
+    types::{
+        addresses::LokiAddress,
+        chain::{SwapQuote, Validate},
+        coin::Coin,
+        fraction::PercentageFraction,
+        Timestamp, UUIDv4,
+    },
+    utils::address_id,
 };
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::{str::FromStr, sync::Arc};
-
-use super::{
-    utils::{bad_request, internal_server_error},
-    Config,
-};
+use std::{convert::TryInto, str::FromStr, sync::Arc};
 
 mod validation;
 
@@ -79,7 +80,7 @@ pub async fn swap<T: TransactionProvider>(
 ) -> Result<SwapQuoteResponse, ResponseError> {
     let original_params = params.clone();
 
-    if let Err(err) = validation::validate_params(&params) {
+    if let Err(err) = validation::validate_params(&params, config.net_type) {
         return Err(bad_request(err));
     }
 
@@ -94,7 +95,8 @@ pub async fn swap<T: TransactionProvider>(
     let mut provider = provider.write();
     provider.sync();
 
-    let input_address_id = input_address_id_string_to_bytes(input_coin, &params.input_address_id)
+    // Validation of this happens above
+    let input_address_id = address_id::to_bytes(input_coin, &params.input_address_id)
         .map_err(|_| bad_request("Invalid input address id"))?;
 
     // Ensure we don't have a quote with the address
@@ -144,18 +146,16 @@ pub async fn swap<T: TransactionProvider>(
             }
         }
         Coin::LOKI => {
-            let payment_id = match LokiPaymentId::from_str(&params.input_address_id) {
-                Ok(id) => id,
-                Err(_) => return Err(bad_request("Incorrect input address id")),
-            };
+            let loki_base_address = LokiAddress::from_str(&config.loki_wallet_address)
+                .expect("Expected valid loki wallet address");
+            let payment_id = input_address_id.clone().try_into().map_err(|_| {
+                warn!("Failed to convert input address id to loki payment id");
+                internal_server_error()
+            })?;
+            let base_input_address = loki_base_address.with_payment_id(Some(payment_id));
+            assert_eq!(base_input_address.network(), config.net_type);
 
-            match payment_id.get_integrated_address(&config.loki_wallet_address) {
-                Ok(address) => address.address,
-                Err(err) => {
-                    warn!("Failed to generate loki address: {}", err);
-                    return Err(internal_server_error());
-                }
-            }
+            base_input_address.to_string()
         }
         Coin::BTC => {
             let index = match params.input_address_id.parse::<u32>() {
@@ -185,25 +185,6 @@ pub async fn swap<T: TransactionProvider>(
             Some(fraction)
         } else {
             None
-        }
-    };
-
-    let input_address_id = match input_coin {
-        Coin::BTC | Coin::ETH => {
-            let index = match params.input_address_id.parse::<u32>() {
-                Ok(index) => index,
-                Err(_) => return Err(bad_request("Incorrect input address id")),
-            };
-
-            index.to_be_bytes().to_vec()
-        }
-        Coin::LOKI => {
-            let payment_id = match LokiPaymentId::from_str(&params.input_address_id) {
-                Ok(id) => id,
-                Err(_) => return Err(bad_request("Incorrect input address id")),
-            };
-
-            payment_id.to_bytes().to_vec()
         }
     };
 
@@ -287,7 +268,7 @@ mod test {
             timestamp: Timestamp::now(),
             input: quote_params.input_coin,
             input_address: "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".into(),
-            input_address_id: LokiPaymentId::from_str(&quote_params.input_address_id).unwrap().to_bytes().to_vec(),
+            input_address_id: address_id::to_bytes(Coin::LOKI, &quote_params.input_address_id).unwrap(),
             return_address: quote_params.input_return_address.clone().map(|id| id.into()),
             output: quote_params.output_coin,
             slippage_limit: None,

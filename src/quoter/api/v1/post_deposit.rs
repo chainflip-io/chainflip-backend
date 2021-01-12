@@ -1,9 +1,9 @@
 use crate::{
-    common::{api::ResponseError, input_address_id::input_address_id_to_string, PoolCoin},
+    common::{api::ResponseError, PoolCoin},
     quoter::vault_node::VaultNodeInterface,
     vault::api::v1::post_deposit::DepositQuoteParams,
 };
-use chainflip_common::types::coin::Coin;
+use chainflip_common::{types::coin::Coin, utils::address_id};
 use rand::{prelude::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -57,10 +57,9 @@ pub async fn deposit<V: VaultNodeInterface>(
 
     // Convert to string representation
     let string_coin_input_address_id =
-        input_address_id_to_string(coin, &coin_input_address_id).expect("Invalid input address id");
-    let string_loki_input_address_id =
-        input_address_id_to_string(Coin::LOKI, &loki_input_address_id)
-            .expect("Invalid input address id");
+        address_id::to_string(coin, &coin_input_address_id).expect("Invalid input address id");
+    let string_loki_input_address_id = address_id::to_string(Coin::LOKI, &loki_input_address_id)
+        .expect("Invalid input address id");
 
     let quote_params = DepositQuoteParams {
         pool: coin,

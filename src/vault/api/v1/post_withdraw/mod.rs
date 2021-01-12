@@ -1,13 +1,15 @@
 use crate::{
     common::{api::ResponseError, *},
-    utils::validation::validate_address,
     vault::transactions::TransactionProvider,
 };
-use chainflip_common::types::{
-    chain::{Validate, WithdrawRequest},
-    coin::Coin,
-    fraction::WithdrawFraction,
-    Timestamp, UUIDv4,
+use chainflip_common::{
+    types::{
+        chain::{Validate, WithdrawRequest},
+        coin::Coin,
+        fraction::WithdrawFraction,
+        Timestamp, UUIDv4,
+    },
+    validation::validate_address,
 };
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -24,8 +26,8 @@ pub struct WithdrawParams {
     staker_id: String,
     /// Pool to withdraw from
     pool: Coin,
-    /// Return Loki address
-    loki_address: String,
+    /// Return base address
+    base_address: String,
     /// Return `PoolCoin` address
     other_address: String,
     /// Request creation timestamp
@@ -67,15 +69,13 @@ pub async fn post_withdraw<T: TransactionProvider>(
 
     let pool = PoolCoin::from(params.pool).map_err(|err| bad_request!("Invalid pool: {}", err))?;
 
-    // Check loki address
-    let loki_address = LokiWalletAddress::from_str(&params.loki_address)
-        .map_err(|_| bad_request!("Invalid Loki address"))?;
+    // Check base address
+    validate_address(Coin::BASE_COIN, config.net_type, &params.base_address)
+        .map_err(|err| bad_request!("Invalid base address: {}", err))?;
 
     // Check the other address
-    validate_address(pool.into(), &params.other_address)
+    validate_address(pool.into(), config.net_type, &params.other_address)
         .map_err(|err| bad_request!("Invalid address for coin {}: {}", pool, err))?;
-
-    let other_address = WalletAddress(params.other_address);
 
     // We don't want to pollute our db with invalid transactions
     if !check_staker_id_exists(&staker_id, pool, &provider) {
@@ -105,8 +105,8 @@ pub async fn post_withdraw<T: TransactionProvider>(
         timestamp,
         staker_id: staker_id.bytes().to_vec(),
         pool: pool.get_coin(),
-        base_address: loki_address.address.into(),
-        other_address: other_address.0.into(),
+        base_address: params.base_address.into(),
+        other_address: params.other_address.into(),
         fraction,
         signature,
     };

@@ -1,9 +1,12 @@
 use super::SwapQuoteParams;
-use crate::utils::validation::{validate_address, validate_address_id};
-use chainflip_common::types::fraction::PercentageFraction;
+use chainflip_common::{
+    types::{fraction::PercentageFraction, Network},
+    utils::address_id,
+    validation::{validate_address, validate_address_id},
+};
 
 /// Validate quote params
-pub fn validate_params(params: &SwapQuoteParams) -> Result<(), &'static str> {
+pub fn validate_params(params: &SwapQuoteParams, network: Network) -> Result<(), &'static str> {
     // Coins
     if !params.input_coin.is_supported() {
         return Err("Input coin is not supported");
@@ -30,16 +33,18 @@ pub fn validate_params(params: &SwapQuoteParams) -> Result<(), &'static str> {
     }
 
     if let Some(return_address) = &params.input_return_address {
-        if validate_address(params.input_coin, &return_address).is_err() {
+        if validate_address(params.input_coin, network, &return_address).is_err() {
             return Err("Invalid return address");
         }
     }
 
-    if validate_address(params.output_coin, &params.output_address).is_err() {
+    if validate_address(params.output_coin, network, &params.output_address).is_err() {
         return Err("Invalid output address");
     }
 
-    if validate_address_id(params.input_coin, &params.input_address_id).is_err() {
+    let input_address_id = address_id::to_bytes(params.input_coin, &params.input_address_id)
+        .map_err(|_| "Invalid input id provided")?;
+    if validate_address_id(params.input_coin, &input_address_id).is_err() {
         return Err("Invalid input id provided");
     }
 
@@ -58,12 +63,11 @@ pub fn validate_params(params: &SwapQuoteParams) -> Result<(), &'static str> {
 
 #[cfg(test)]
 mod test {
+    use crate::utils::test_utils::{TEST_ETH_ADDRESS, TEST_LOKI_ADDRESS};
+
     use super::*;
     use chainflip_common::types::coin::Coin;
     use std::collections::HashMap;
-
-    const LOKI_ADDRESS: &str = "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY";
-    const ETH_ADDRESS: &str = "0x70e7db0678460c5e53f1ffc9221d1c692111dcc5";
 
     struct Values<T> {
         invalid: Vec<T>,
@@ -73,11 +77,11 @@ mod test {
     fn get_valid_params() -> SwapQuoteParams {
         SwapQuoteParams {
             input_coin: Coin::LOKI,
-            input_return_address: Some(LOKI_ADDRESS.to_string()),
+            input_return_address: Some(TEST_LOKI_ADDRESS.to_string()),
             input_address_id: "60900e5603bf96e3".to_owned(),
             input_amount: "1000000000".to_string(),
             output_coin: Coin::ETH,
-            output_address: ETH_ADDRESS.to_string(),
+            output_address: TEST_ETH_ADDRESS.to_string(),
             slippage_limit: 0,
         }
     }
@@ -85,7 +89,7 @@ mod test {
     #[test]
     fn validates_correctly() {
         let valid = get_valid_params();
-        assert_eq!(validate_params(&valid), Ok(()));
+        assert_eq!(validate_params(&valid, Network::Testnet), Ok(()));
     }
 
     #[test]
@@ -95,7 +99,7 @@ mod test {
         invalid.input_return_address = Some(invalid.output_address.clone());
 
         assert_eq!(
-            validate_params(&invalid).unwrap_err(),
+            validate_params(&invalid, Network::Testnet).unwrap_err(),
             "Cannot swap between the same coins"
         );
     }
@@ -108,7 +112,7 @@ mod test {
             invalid.input_amount = input_amount;
 
             assert_eq!(
-                validate_params(&invalid).unwrap_err(),
+                validate_params(&invalid, Network::Testnet).unwrap_err(),
                 "Invalid input amount provided"
             );
         }
@@ -121,7 +125,7 @@ mod test {
         missing_return_address.input_return_address = None;
 
         assert_eq!(
-            validate_params(&missing_return_address).unwrap_err(),
+            validate_params(&missing_return_address, Network::Testnet).unwrap_err(),
             "Input return address not provided"
         );
 
@@ -129,7 +133,7 @@ mod test {
         invalid_address.input_return_address = Some("i'm an address! weeeee!".to_string());
 
         assert_eq!(
-            validate_params(&invalid_address).unwrap_err(),
+            validate_params(&invalid_address, Network::Testnet).unwrap_err(),
             "Invalid return address"
         );
     }
@@ -140,7 +144,7 @@ mod test {
         invalid.input_address_id = "i am not invalid, i am outvalid".to_owned();
 
         assert_eq!(
-            validate_params(&invalid).unwrap_err(),
+            validate_params(&invalid, Network::Testnet).unwrap_err(),
             "Invalid input id provided"
         );
     }
@@ -151,7 +155,7 @@ mod test {
         invalid_address.output_address = "i'm an address! weeeee!".to_string();
 
         assert_eq!(
-            validate_params(&invalid_address).unwrap_err(),
+            validate_params(&invalid_address, Network::Testnet).unwrap_err(),
             "Invalid output address"
         );
     }
@@ -164,7 +168,7 @@ mod test {
             params.slippage_limit = value;
 
             assert_eq!(
-                validate_params(&params).unwrap_err(),
+                validate_params(&params, Network::Testnet).unwrap_err(),
                 "Slippage limit must be between 0 and 10000"
             );
         }
@@ -177,58 +181,13 @@ mod test {
             input_address_id: "10".to_owned(),
             input_amount: "1000000000".to_string(),
             output_coin: Coin::LOKI,
-            output_address: LOKI_ADDRESS.to_string(),
+            output_address: TEST_LOKI_ADDRESS.to_string(),
             slippage_limit: 10,
         };
 
         assert_eq!(
-            validate_params(&params).unwrap_err(),
+            validate_params(&params, Network::Testnet).unwrap_err(),
             "Input return address not provided"
         );
-    }
-
-    #[test]
-    fn validates_address() {
-        // Insert values to test below
-
-        let mut map = HashMap::new();
-        map.insert(Coin::LOKI, Values {
-            invalid: vec![ETH_ADDRESS, "abcdefg", "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kH"],
-            valid: vec![LOKI_ADDRESS]
-        });
-
-        map.insert(
-            Coin::ETH,
-            Values {
-                invalid: vec![
-                    LOKI_ADDRESS,
-                    "abcdefg",
-                    "70e7db0678460c5e53f1ffc9221d1c692111d",
-                ],
-                valid: vec![ETH_ADDRESS, "70e7db0678460c5e53f1ffc9221d1c692111dcc5"],
-            },
-        );
-
-        // Perform the test
-
-        for (coin, values) in map {
-            for invalid in values.invalid {
-                assert!(
-                    validate_address(coin, invalid).is_err(),
-                    "Expected {} to be an invalid address for {}",
-                    invalid,
-                    coin
-                );
-            }
-
-            for valid in values.valid {
-                assert!(
-                    validate_address(coin, valid).is_ok(),
-                    "Expected {} to be a valid address for {}",
-                    valid,
-                    coin
-                );
-            }
-        }
     }
 }

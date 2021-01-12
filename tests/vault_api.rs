@@ -96,7 +96,7 @@ async fn check_withdraw_endpoint(config: &TestConfig) -> StatusCode {
     let req = serde_json::json!({
         "stakerId": config.staker.public_key(),
         "pool": "ETH",
-        "lokiAddress": tx.base_address.to_string(),
+        "baseAddress": tx.base_address.to_string(),
         "otherAddress": tx.other_address.to_string(),
         "timestamp": tx.timestamp.to_string(),
         "fraction": tx.fraction,

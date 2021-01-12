@@ -26,9 +26,6 @@ pub use liquidity_provider::{Liquidity, LiquidityProvider};
 
 pub use coins::{GenericCoinAmount, PoolCoin};
 
-/// Small utils for input address id
-pub mod input_address_id;
-
 /// A wrapper around String to be used as wallet address.
 /// We might want to use separate type for each type of
 /// wallet/blockchain

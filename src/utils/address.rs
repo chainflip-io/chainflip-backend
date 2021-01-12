@@ -1,8 +1,5 @@
-use crate::{
-    common::ethereum,
-    utils::bip44::{self, KeyPair},
-};
-use chainflip_common::types::Network;
+use crate::utils::bip44::{self, KeyPair};
+use chainflip_common::types::{addresses::EthereumAddress, Network};
 
 /// Generate bip44 keypair for a master root key
 pub fn generate_bip44_keypair_from_root_key(
@@ -26,7 +23,7 @@ pub fn generate_eth_address(root_key: &str, index: u32) -> Result<String, String
     let key_pair =
         generate_bip44_keypair_from_root_key(root_key, bip44::CoinType::ETH, index).unwrap();
 
-    Ok(ethereum::Address::from(key_pair.public_key).to_string())
+    Ok(EthereumAddress::from_public_key(key_pair.public_key.serialize_uncompressed()).to_string())
 }
 
 /// Generate an btc address from a master root key and index and other params

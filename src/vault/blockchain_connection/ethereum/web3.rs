@@ -61,8 +61,8 @@ impl EthereumClient for Web3Client {
                     hash: tx.hash.into(),
                     index: tx.transaction_index.unwrap().as_u64(),
                     block_number: tx.block_number.unwrap().as_u64(),
-                    from: tx.from.into(),
-                    to: tx.to.map(|val| val.into()),
+                    from: EthereumAddress(tx.from.to_fixed_bytes()),
+                    to: tx.to.map(|val| EthereumAddress(val.to_fixed_bytes())),
                     value: tx.value.as_u128(),
                 })
                 .collect();
@@ -151,12 +151,13 @@ impl EthereumClient for Web3Client {
         };
 
         let chain_id = u128::try_from(chain_id).map_err(|_| "Failed to get chain id".to_owned())?;
-        let our_address = ethereum::Address::from(tx.from.public_key);
+        let our_address =
+            EthereumAddress::from_public_key(tx.from.public_key.serialize_uncompressed());
 
         let nonce: U256 = match self
             .web3
             .eth()
-            .transaction_count(our_address.clone().into(), Some(BlockNumber::Pending))
+            .transaction_count(our_address.0.clone().into(), Some(BlockNumber::Pending))
             .await
         {
             Ok(value) => value,
@@ -196,21 +197,9 @@ impl From<ethereum::Hash> for types::H256 {
     }
 }
 
-impl From<ethereum::Address> for types::H160 {
-    fn from(address: ethereum::Address) -> Self {
-        address.0.into()
-    }
-}
-
 impl From<types::H256> for ethereum::Hash {
     fn from(hash: types::H256) -> Self {
         ethereum::Hash(hash.to_fixed_bytes())
-    }
-}
-
-impl From<types::H160> for ethereum::Address {
-    fn from(address: types::H160) -> Self {
-        ethereum::Address(address.to_fixed_bytes())
     }
 }
 

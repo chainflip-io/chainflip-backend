@@ -1,9 +1,8 @@
 use crate::{
-    common::{api::ResponseError, input_address_id::input_address_id_to_string},
-    quoter::vault_node::VaultNodeInterface,
+    common::api::ResponseError, quoter::vault_node::VaultNodeInterface,
     vault::api::v1::post_swap::SwapQuoteParams,
 };
-use chainflip_common::types::coin::Coin;
+use chainflip_common::{types::coin::Coin, utils::address_id};
 use rand::{prelude::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -53,8 +52,8 @@ pub async fn swap<V: VaultNodeInterface>(
         generate_unique_input_address_id(input_coin, input_id_cache.clone(), &mut rng)?;
 
     // Convert to string representation
-    let string_input_address_id = input_address_id_to_string(input_coin, &input_address_id)
-        .expect("Invalid input address id");
+    let string_input_address_id =
+        address_id::to_string(input_coin, &input_address_id).expect("Invalid input address id");
 
     let quote_params = SwapQuoteParams {
         input_coin,

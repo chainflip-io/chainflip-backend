@@ -14,10 +14,6 @@ pub mod autoswap;
 
 /// Utils for calculating price
 pub mod price;
-
-/// Utils for validation
-pub mod validation;
-
 /// Primitive utils
 pub mod primitives;
 

@@ -16,14 +16,23 @@ pub use persistent_side_chain::PeristentSideChain;
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(tag = "type", content = "info")]
 pub enum SideChainTx {
+    /// Deposit quote
     DepositQuote(DepositQuote),
+    /// Deposit
     Deposit(Deposit),
+    /// Output sent
     OutputSent(OutputSent),
+    /// Output
     Output(Output),
+    /// Pool change
     PoolChange(PoolChange),
+    /// Swap quote
     SwapQuote(SwapQuote),
+    /// Withdraw request
     WithdrawRequest(WithdrawRequest),
+    /// Withdraw
     Withdraw(Withdraw),
+    /// Witness
     Witness(Witness),
 }
 
