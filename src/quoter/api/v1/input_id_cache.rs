@@ -41,7 +41,6 @@ impl InputIdCache {
         F: FnMut(&mut BTreeSet<Vec<u8>>) -> R,
     {
         let mut cache = self.0.lock().unwrap();
-        // let addresses = cache.entry(*coin).or_default();
         f(cache.entry(*coin).or_default())
     }
 
