@@ -36,7 +36,7 @@ impl InputIdCache {
         Self(Arc::new(Mutex::new(cache)))
     }
 
-    pub fn update_cache<F, R>(&self, coin: &Coin, mut f: F) -> R
+    fn update_cache<F, R>(&self, coin: &Coin, mut f: F) -> R
     where
         F: FnMut(&mut BTreeSet<Vec<u8>>) -> R,
     {
