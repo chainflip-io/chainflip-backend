@@ -137,16 +137,16 @@ impl<T: Trait> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 }
 
 impl<T: Trait> Module<T> {
-	pub fn get_validators() -> Vec<T::AccountId> {
-        // just u8 data atm
-        let validators = match Self::validators().ok_or(Error::<T>::NoValidators) {
-			Ok(validators) => validators,
+	pub fn get_validators() -> Result<Vec<T::AccountId>, &'static  str> {
+        match Self::validators().ok_or(Error::<T>::NoValidators) {
+			Ok(validators) => {
+				frame_support::debug::info!("Validators found: {:#?}", validators);
+				return Ok(validators);
+			},
 			Err(e) => {
 				frame_support::debug::error!("{:#?}", e);
-				panic!("No validators found");
+				return Err("No validators found");
 			}
 		};
-        frame_support::debug::info!("Validators found: {:#?}", validators);
-        validators
     }
 }

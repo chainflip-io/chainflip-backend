@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::{decl_error, decl_event, ensure, decl_storage, decl_module, dispatch::DispatchResult};
+use frame_support::{decl_error, decl_event, decl_storage, decl_module, dispatch::DispatchResult};
 use frame_system::{ensure_signed};
 use sp_std::vec::Vec;
 
@@ -99,32 +99,29 @@ decl_module! {
         }
 
         #[weight = 0]
-        pub fn set_witness(origin, data: states::Witness) -> DispatchResult {
+        pub fn set_witness(origin, witness: states::Witness) -> DispatchResult {
             // Ensure extrinsic is signed
             let who = ensure_signed(origin)?;
 
-            if <WitnessMap<T>>::contains_key(&data.id) {
+            if <WitnessMap<T>>::contains_key(&witness.id) {
                 // insert an entry into the pre-existing vector
-                let mut curr_validators = <WitnessMap<T>>::get(&data.id);
+                let mut curr_validators = <WitnessMap<T>>::get(&witness.id);
                 // make sure the validator is not already in the set
                 match curr_validators.binary_search(&who) {
                     Ok(_) => return Err(Error::<T>::ValidatorAlreadySubmittedWitness.into()),
                     Err(index) => {
                         curr_validators.insert(index, who.clone());
-                        <WitnessMap<T>>::insert(&data.id, curr_validators);
-                        Self::deposit_event(RawEvent::WitnessAdded(who, data));
-                        return Ok(());
+                        <WitnessMap<T>>::insert(&witness.id, curr_validators);
                     }
                 }
-                
             } else {
                 // insert a new key and initialise the vector with the current value
                 let mut validators = Vec::default();
                 validators.push(who.clone());
-
-                <WitnessMap<T>>::insert(&data.id, validators);
-                Ok(())
-            }   
+                <WitnessMap<T>>::insert(&witness.id, validators);
+            }
+            Self::deposit_event(RawEvent::WitnessAdded(who, witness));
+            Ok(())
         }
 
         #[weight = 0]
@@ -201,11 +198,11 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	pub fn get_witnesses() {
+	pub fn get_valid_witnesses() -> Vec<Vec<u8>> {
 
         let mut valid_witnesess: Vec<Vec<u8>> = Vec::new();
         let validators = <pallet_cf_validator::Module<T>>::get_validators();
-        let num_validators = validators.len();
+        let num_validators = validators.unwrap_or(Vec::new()).len();
         // super majority
         let threshold = num_validators as f64 * 0.67;
         for (witness_id, validators_of_witness) in <WitnessMap<T>>::iter() {
@@ -219,5 +216,6 @@ impl<T: Trait> Module<T> {
         }
 
         frame_support::debug::info!("Valid witnesses: {:#?}", valid_witnesess);
+        valid_witnesess
     }
 }

@@ -1,4 +1,3 @@
-use frame_system::Trait;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use sp_api::ProvideRuntimeApi;
@@ -9,8 +8,8 @@ use transactions_runtime_api::WitnessApi as WitnessRuntimeApi;
 
 #[rpc]
 pub trait WitnessApi<BlockHash> {
-    #[rpc(name = "get_witnesses")]
-    fn get_witnesses(&self, at: Option<BlockHash>) -> Result<()>;
+    #[rpc(name = "get_valid_witnesses")]
+    fn get_valid_witnesses(&self, at: Option<BlockHash>) -> Result<Vec<Vec<u8>>>;
 }
 
 
@@ -33,14 +32,14 @@ impl<C, Block> WitnessApi<<Block as BlockT>::Hash> for Witness<C, Block>
         C: HeaderBackend<Block>,
         C::Api: WitnessRuntimeApi<Block>,
 {
-    fn get_witnesses(&self, at: Option<<Block as BlockT>::Hash>) -> Result<()> {
+    fn get_valid_witnesses(&self, at: Option<<Block as BlockT>::Hash>) -> Result<Vec<Vec<u8>>> {
         let api = self.client.runtime_api();
         let at = BlockId::hash(at.unwrap_or_else(|| 
         self.client.info().best_hash));
 
         frame_support::debug::info!("get witnesses at: {:#}", at);
 
-        let runtime_api_result = api.get_witnesses(&at);
+        let runtime_api_result = api.get_valid_witnesses(&at);
 
         frame_support::debug::info!("runtime api result: {:#?}", runtime_api_result);
         runtime_api_result.map_err(|e| RpcError {

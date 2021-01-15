@@ -307,9 +307,8 @@ impl_runtime_apis! {
 
     impl transactions_runtime_api::WitnessApi<Block> for Runtime {
         
-        fn get_witnesses() {
-            Transactions::get_witnesses();
-            // Transactions::get_number()
+        fn get_valid_witnesses() -> Vec<Vec<u8>> {
+            Transactions::get_valid_witnesses()
         }
     }
     

@@ -7202,6 +7202,8 @@ name = "transactions-runtime-api"
 version = "2.0.0"
 dependencies = [
  "frame-system",
+ "jsonrpc-core",
+ "parity-scale-codec",
  "serde_json",
  "sp-api",
  "sp-runtime",
