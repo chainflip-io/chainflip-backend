@@ -4,16 +4,11 @@ use crate::{
     vault::api::v1::post_deposit::DepositQuoteParams,
 };
 use chainflip_common::{types::coin::Coin, utils::address_id};
-use rand::{prelude::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
-use std::{
-    str::FromStr,
-    sync::{Arc, Mutex},
-    time::SystemTime,
-};
+use std::{str::FromStr, sync::Arc};
 use warp::http::StatusCode;
 
-use super::{utils::generate_unique_input_address_id, InputIdCache};
+use super::input_id_cache::InputIdCache;
 
 /// Parameters for POST `quote` endpoint
 #[derive(Debug, Serialize, Deserialize)]
@@ -29,12 +24,11 @@ pub struct PostDepositParams {
     pub other_return_address: String,
 }
 
-/// TODO: Rename this to deposit
 /// Submit a deposit quote
 pub async fn deposit<V: VaultNodeInterface>(
     params: PostDepositParams,
     vault_node: Arc<V>,
-    input_id_cache: Arc<Mutex<InputIdCache>>,
+    input_id_cache: InputIdCache,
 ) -> Result<serde_json::Value, ResponseError> {
     let coin = Coin::from_str(&params.pool)
         .map_err(|_| ResponseError::new(StatusCode::BAD_REQUEST, "Invalid pool coin"))?;
@@ -46,14 +40,8 @@ pub async fn deposit<V: VaultNodeInterface>(
         ));
     };
 
-    let now = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .expect("Duration since UNIX_EPOCH failed");
-    let mut rng = StdRng::seed_from_u64(now.as_secs());
-    let coin_input_address_id =
-        generate_unique_input_address_id(coin, input_id_cache.clone(), &mut rng)?;
-    let loki_input_address_id =
-        generate_unique_input_address_id(Coin::LOKI, input_id_cache.clone(), &mut rng)?;
+    let coin_input_address_id = input_id_cache.generate_unique_input_address_id(&coin);
+    let loki_input_address_id = input_id_cache.generate_unique_input_address_id(&coin);
 
     // Convert to string representation
     let string_coin_input_address_id =
@@ -73,13 +61,10 @@ pub async fn deposit<V: VaultNodeInterface>(
     match vault_node.submit_deposit(quote_params).await {
         Ok(result) => Ok(result),
         Err(err) => {
-            // Something went wrong, remove id from cache
-            let mut cache = input_id_cache.lock().unwrap();
-            cache.get_mut(&coin).unwrap().remove(&coin_input_address_id);
-            cache
-                .get_mut(&Coin::LOKI)
-                .unwrap()
-                .remove(&loki_input_address_id);
+            // Something went wrong, remove ids from cache
+            input_id_cache.remove(&coin, &coin_input_address_id);
+            input_id_cache.remove(&Coin::LOKI, &loki_input_address_id);
+
             return Err(ResponseError::new(
                 StatusCode::BAD_REQUEST,
                 &format!("{}", err),
