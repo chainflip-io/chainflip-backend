@@ -4,7 +4,7 @@ services:
 
   cf-substrate-node-${NODE_NAME}:
     build: ./.
-    image: cf-state-chain-node:dev
+    image: cf-state-chain-node
     networks:
       chainflip:
         ipv4_address: "${SUBNET_BASE}.${NETWORK_SUFFIX}"

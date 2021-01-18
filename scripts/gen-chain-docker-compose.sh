@@ -52,6 +52,11 @@ done
 # The docker-compose 'config' command validates and combines the files into a single file.
 CMD="${CMD} config --no-interpolate"
 
+# Output some help as File comments
+echo "# Remember to add the following to the commands for non-bootnodes after finding out"
+echo "# the correct peer-id to use (see docs/docker-compose.md):"
+echo "# --bootnodes /ip4/{bootnode-ip-address}/tcp/30333/p2p/{bootnode-peer-id}"
+
 ### Run the command. This will output the generated file to stdout.
 
 $CMD
