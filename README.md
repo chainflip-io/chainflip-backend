@@ -8,11 +8,8 @@ This project contains some configuration files to help get started :hammer_and_w
 
 ### Rust Setup
 
-Setup instructions for working with the [Rust](https://www.rust-lang.org/) programming language can
-be found at the
-[Substrate Developer Hub](https://substrate.dev/docs/en/knowledgebase/getting-started). Follow those
-steps to install [`rustup`](https://rustup.rs/) and configure the Rust toolchain to default to the
-latest stable version.
+Follow the [Rust setup instructions](./doc/rust-setup.md) before using the included Makefile to
+be found at the build the Node Template.
 
 ### Makefile
 

@@ -4,7 +4,7 @@ init:
 
 .PHONY: check
 check:
-	SKIP_WASM_BUILD=1 cargo check
+	SKIP_WASM_BUILD=1 cargo check --release
 
 .PHONY: check-chainflip-transactions
 check-chainflip-transactions:
@@ -12,15 +12,15 @@ check-chainflip-transactions:
 
 .PHONY: test
 test:
-	SKIP_WASM_BUILD=1 cargo test --all
+	SKIP_WASM_BUILD=1 cargo test --release --all
 
 .PHONY: run
 run:
-	WASM_BUILD_TOOLCHAIN=nightly-2020-10-05 cargo run --release -- --dev --tmp
+	cargo run --release -- --dev --tmp
 
 .PHONY: build
 build:
-	WASM_BUILD_TOOLCHAIN=nightly-2020-10-05 cargo build --release
+	cargo build --release
 
 .PHONY: run-alice
 run-alice:
