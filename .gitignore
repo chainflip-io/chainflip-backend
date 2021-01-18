@@ -11,3 +11,7 @@
 
 # The cache for chain data in container
 .local
+
+# docker-compose is generated dynamically
+./docker-compose.yml
+./docker-compose.yaml
