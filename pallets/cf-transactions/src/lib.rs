@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::{decl_error, decl_event, decl_storage, decl_module, dispatch::DispatchResult};
-use frame_system::{ensure_signed};
+use frame_support::{decl_error, decl_event, decl_module, decl_storage, dispatch::DispatchResult};
+use frame_system::ensure_signed;
 use sp_std::vec::Vec;
 
 #[cfg(test)]
@@ -198,24 +198,17 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	pub fn get_valid_witnesses() -> Vec<Vec<u8>> {
-
+    pub fn get_valid_witnesses() -> Vec<Vec<u8>> {
         let mut valid_witnesess: Vec<Vec<u8>> = Vec::new();
         let validators = <pallet_cf_validator::Module<T>>::get_validators();
         let num_validators = validators.unwrap_or(Vec::new()).len();
         // super majority
         let threshold = num_validators as f64 * 0.67;
         for (witness_id, validators_of_witness) in <WitnessMap<T>>::iter() {
-            // return the witnesses that have more than the number of validators as witnesses
-            frame_support::debug::info!("Witness id: {:#?}", witness_id);
-            frame_support::debug::info!("Validators for witness: {:#?}", validators_of_witness);
-
             if validators_of_witness.len() as f64 > threshold {
                 valid_witnesess.push(witness_id);
             }
         }
-
-        frame_support::debug::info!("Valid witnesses: {:#?}", valid_witnesess);
         valid_witnesess
     }
 }

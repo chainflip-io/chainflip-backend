@@ -12,7 +12,7 @@ use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::traits::{
-    BlakeTwo256, Block as BlockT, IdentifyAccount, IdentityLookup, NumberFor, Saturating, Verify, OpaqueKeys
+    BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Saturating, Verify,
 };
 use sp_runtime::{
     create_runtime_str, generic, impl_opaque_keys,
@@ -90,7 +90,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("state-chain-node"),
     impl_name: create_runtime_str!("state-chain-node"),
     authoring_version: 1,
-    spec_version: 1,
+    spec_version: 100,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 1,
@@ -115,20 +115,20 @@ pub fn native_version() -> NativeVersion {
 }
 
 impl pallet_cf_validator::Trait for Runtime {
-	type Event = Event;
+    type Event = Event;
 }
 
 impl pallet_session::Trait for Runtime {
-	type SessionHandler = <opaque::SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
-	type ShouldEndSession = Validator;
-	type SessionManager = Validator;
-	type Event = Event;
-	type Keys = opaque::SessionKeys;
-	type NextSessionRotation = Validator;
-	type ValidatorId = <Self as frame_system::Trait>::AccountId;
-	type ValidatorIdOf = pallet_cf_validator::ValidatorOf<Self>;
-	type DisabledValidatorsThreshold = ();
-	type WeightInfo = ();
+    type SessionHandler = <opaque::SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
+    type ShouldEndSession = Validator;
+    type SessionManager = Validator;
+    type Event = Event;
+    type Keys = opaque::SessionKeys;
+    type NextSessionRotation = Validator;
+    type ValidatorId = <Self as frame_system::Trait>::AccountId;
+    type ValidatorIdOf = pallet_cf_validator::ValidatorOf<Self>;
+    type DisabledValidatorsThreshold = ();
+    type WeightInfo = ();
 }
 
 parameter_types! {
@@ -153,7 +153,7 @@ impl frame_system::Trait for Runtime {
     /// The aggregated dispatch type that is available for extrinsics.
     type Call = Call;
     /// The lookup mechanism to get account ID from whatever is passed in dispatchers.
-    type Lookup = IdentityLookup<AccountId>;
+    type Lookup = multiaddress::AccountIdLookup<AccountId, ()>;
     /// The index type for storing how many extrinsics an account has signed.
     type Index = Index;
     /// The index type for blocks.
@@ -199,7 +199,7 @@ impl frame_system::Trait for Runtime {
     /// What to do if an account is fully reaped from the system.
     type OnKilledAccount = ();
     /// The data to be stored in an account.
-    type AccountData =();
+    type AccountData = ();
     /// Weight information for the extrinsics of this pallet.
     type SystemWeightInfo = ();
 }
@@ -249,30 +249,31 @@ impl pallet_sudo::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const ExistentialDeposit: u128 = 0;
-	pub const MaxLocks: u32 = 50;
+    pub const ExistentialDeposit: u128 = 0;
+    pub const MaxLocks: u32 = 50;
 }
 
 construct_runtime!(
-	pub enum Runtime where
-		Block = Block,
-		NodeBlock = opaque::Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
-	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+    pub enum Runtime where
+        Block = Block,
+        NodeBlock = opaque::Block,
+        UncheckedExtrinsic = UncheckedExtrinsic
+    {
+        System: frame_system::{Module, Call, Config, Storage, Event<T>},
         RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
-		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
-		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
-		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
-		Aura: pallet_aura::{Module, Config<T>, Inherent},
-		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
+        Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
+        Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
+        Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
+        Aura: pallet_aura::{Module, Config<T>, Inherent},
+        Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
         Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
         Transactions: pallet_cf_transactions::{Module, Call, Event<T>},
-	}
+    }
 );
 
 /// The address format for describing accounts.
-pub type Address = AccountId;
+mod multiaddress;
+pub type Address = multiaddress::MultiAddress<AccountId, ()>;
 /// Block header type as expected by this runtime.
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 /// Block type as expected by this runtime.
@@ -341,7 +342,8 @@ impl_runtime_apis! {
             Executive::finalize_block()
         }
 
-        fn inherent_extrinsics(data: sp_inherents::InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
+        fn inherent_extrinsics(data: sp_inherents::InherentData) ->
+            Vec<<Block as BlockT>::Extrinsic> {
             data.create_extrinsics()
         }
 
