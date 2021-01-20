@@ -1,6 +1,6 @@
 use crate::{
     common::api::{self, using},
-    side_chain::ISideChain,
+    local_store::ISideChain,
     vault::transactions::TransactionProvider,
 };
 use chainflip_common::types::Network;
@@ -27,7 +27,7 @@ use get_blocks::{get_blocks, BlocksQueryParams};
 
 /// Get witnesses endpoint
 mod get_witnesses;
-use get_witnesses::get_witnesses;
+use get_witnesses::get_local_witnesses;
 
 /// Get portions endpoint
 mod get_portions;
@@ -63,7 +63,7 @@ pub fn endpoints<S: ISideChain + Send, T: TransactionProvider + Send + Sync>(
     let witnesses = warp::path!("witnesses")
         .and(warp::get())
         .and(using(side_chain.clone()))
-        .map(get_witnesses)
+        .map(get_local_witnesses)
         .and_then(api::respond);
 
     let swap = warp::path!("swap")

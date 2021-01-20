@@ -112,7 +112,7 @@ pub fn get_input_id_indices<T: TransactionProvider>(
 mod test {
     use super::*;
     use crate::{
-        side_chain::MemorySideChain, utils::test_utils::data::TestData,
+        local_store::MemorySideChain, utils::test_utils::data::TestData,
         vault::transactions::MemoryTransactionsProvider,
     };
     use chainflip_common::types::chain::OutputParent;

@@ -1,5 +1,5 @@
 use crate::{
-    common::api::ResponseError, common::StakerId, quoter::StateProvider, side_chain::LocalEvent,
+    common::api::ResponseError, common::StakerId, quoter::StateProvider, local_store::LocalEvent,
 };
 use chainflip_common::types::{chain::Output, UUIDv4};
 use itertools::Itertools;

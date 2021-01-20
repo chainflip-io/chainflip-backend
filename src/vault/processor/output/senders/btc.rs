@@ -212,7 +212,7 @@ impl<B: IBitcoinSend + Sync + Send, T: TransactionProvider + Sync + Send> Output
 mod test {
     use super::*;
     use crate::{
-        side_chain::MemorySideChain,
+        local_store::MemorySideChain,
         utils::test_utils::{
             btc::TestBitcoinSendClient, data::TestData, TEST_BTC_ADDRESS, TEST_ROOT_KEY,
         },

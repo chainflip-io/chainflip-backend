@@ -3,7 +3,7 @@ use crate::{
         liquidity_provider::{Liquidity, LiquidityProvider, MemoryLiquidityProvider},
         GenericCoinAmount, LokiAmount, PoolCoin, StakerId,
     },
-    side_chain::{ISideChain, LocalEvent},
+    local_store::{ISideChain, LocalEvent},
     vault::transactions::{
         portions::{adjust_portions_after_deposit, DepositContribution},
         TransactionProvider,
@@ -388,7 +388,7 @@ impl<S: ISideChain> LiquidityProvider for MemoryTransactionsProvider<S> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{side_chain::MemorySideChain, utils::test_utils::data::TestData};
+    use crate::{local_store::MemorySideChain, utils::test_utils::data::TestData};
     use chainflip_common::types::{coin::Coin, Timestamp, UUIDv4};
 
     fn setup() -> MemoryTransactionsProvider<MemorySideChain> {

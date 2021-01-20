@@ -1,6 +1,6 @@
 use crate::{
     common::api::ResponseError,
-    side_chain::{ISideChain, SideChainBlock},
+    local_store::{ISideChain, SideChainBlock},
 };
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
@@ -90,7 +90,7 @@ pub async fn get_blocks<S: ISideChain>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{side_chain::MemorySideChain, utils::test_utils::data::TestData};
+    use crate::{local_store::MemorySideChain, utils::test_utils::data::TestData};
     use chainflip_common::types::coin::Coin;
 
     /// Populate the chain with 2 blocks, request all 2

@@ -1,7 +1,7 @@
 use super::{data::TestData, store::MemoryKVS};
 use crate::{
     common::*,
-    side_chain::{ISideChain, MemorySideChain, LocalEvent},
+    local_store::{ISideChain, MemorySideChain, LocalEvent},
     vault::{
         processor::{CoinProcessor, ProcessorEvent, SideChainProcessor},
         transactions::{memory_provider::Portion, MemoryTransactionsProvider, TransactionProvider},

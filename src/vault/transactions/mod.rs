@@ -1,4 +1,4 @@
-use crate::{common::LiquidityProvider, side_chain::LocalEvent};
+use crate::{common::LiquidityProvider, local_store::LocalEvent};
 use chainflip_common::types::chain::{DepositQuote, Output, SwapQuote, WithdrawRequest};
 use memory_provider::{FulfilledWrapper, UsedWitnessWrapper};
 

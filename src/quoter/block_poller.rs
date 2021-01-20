@@ -121,7 +121,7 @@ mod test {
         quoter::test_utils::{
             block_processor::TestBlockProcessor, vault_node_api::TestVaultNodeAPI,
         },
-        side_chain::SideChainBlock,
+        local_store::SideChainBlock,
     };
 
     struct TestVariables {

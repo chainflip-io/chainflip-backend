@@ -1,6 +1,6 @@
 use crate::{
     common::api,
-    side_chain::SideChainBlock,
+    local_store::SideChainBlock,
     vault::api::v1::{
         get_blocks::BlocksQueryResponse, post_deposit::DepositQuoteParams,
         post_swap::SwapQuoteParams, post_withdraw::WithdrawParams, PortionsParams,

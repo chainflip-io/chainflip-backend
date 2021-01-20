@@ -1,6 +1,6 @@
 use crate::{
     common::store::KeyValueStore,
-    side_chain::{LocalEvent},
+    local_store::{LocalEvent},
     vault::{blockchain_connection::ethereum::EthereumClient, transactions::TransactionProvider},
 };
 use chainflip_common::types::{chain::Witness, coin::Coin, Timestamp, UUIDv4};
@@ -166,7 +166,7 @@ mod test {
     use super::*;
     use crate::{
         common::ethereum::{Hash, Transaction},
-        side_chain::MemorySideChain,
+        local_store::MemorySideChain,
         utils::test_utils::{data::TestData, get_transactions_provider, store::MemoryKVS},
         vault::transactions::MemoryTransactionsProvider,
     };

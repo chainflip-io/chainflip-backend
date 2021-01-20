@@ -1,6 +1,6 @@
 use chainflip::{
     common::PoolCoin,
-    side_chain::{ISideChain, PeristentSideChain},
+    local_store::{ISideChain, PeristentSideChain},
 };
 use chainflip_common::types::{chain::PoolChange, coin::Coin, Timestamp, UUIDv4};
 use clap::{App, Arg};

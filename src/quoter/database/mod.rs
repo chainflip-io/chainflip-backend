@@ -3,7 +3,7 @@ use super::{BlockProcessor, StateProvider};
 use crate::{
     common::store::utils::SQLite as KVS,
     common::{Liquidity, LiquidityProvider, PoolCoin},
-    side_chain::{SideChainBlock, LocalEvent},
+    local_store::{SideChainBlock, LocalEvent},
 };
 use chainflip_common::types::{chain::*, UUIDv4};
 use itertools::Itertools;

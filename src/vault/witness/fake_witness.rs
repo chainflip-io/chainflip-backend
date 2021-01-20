@@ -1,4 +1,4 @@
-use crate::side_chain::{ISideChain, LocalEvent};
+use crate::local_store::{ISideChain, LocalEvent};
 use chainflip_common::types::{
     chain::{SwapQuote, Witness},
     coin::Coin,

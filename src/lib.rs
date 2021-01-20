@@ -9,7 +9,7 @@ pub mod logging;
 /// Quoter implementation
 pub mod quoter;
 /// Side Chain implementation
-pub mod side_chain;
+pub mod local_store;
 /// Helper functions (including helper functions for tests)
 pub mod utils;
 /// Vault implementation

@@ -220,7 +220,7 @@ mod test {
     use super::*;
     use crate::{
         common::ethereum,
-        side_chain::MemorySideChain,
+        local_store::MemorySideChain,
         utils::test_utils::{data::TestData, ethereum::TestEthereumClient, TEST_ROOT_KEY},
         vault::{
             blockchain_connection::ethereum::EstimateResult,

@@ -1,6 +1,6 @@
 use super::{config::VaultConfig, transactions::TransactionProvider};
 use crate::common::api::handle_rejection;
-use crate::side_chain::ISideChain;
+use crate::local_store::ISideChain;
 use std::sync::{Arc, Mutex};
 
 use parking_lot::RwLock;

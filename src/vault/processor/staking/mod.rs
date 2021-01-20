@@ -3,7 +3,7 @@ mod tests;
 
 use crate::{
     common::*,
-    side_chain::LocalEvent,
+    local_store::LocalEvent,
     vault::transactions::{
         memory_provider::{FulfilledWrapper, Portion, UsedWitnessWrapper},
         TransactionProvider,

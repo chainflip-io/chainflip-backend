@@ -74,7 +74,7 @@ where
 mod test {
     use crate::{
         quoter::{api::v1::test::setup_memory_db, BlockProcessor},
-        side_chain::{SideChainBlock, LocalEvent},
+        local_store::{SideChainBlock, LocalEvent},
         utils::test_utils::data::TestData,
     };
 

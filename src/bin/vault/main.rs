@@ -4,7 +4,7 @@ extern crate log;
 use chainflip::{
     common::store::PersistentKVS,
     logging,
-    side_chain::{PeristentSideChain},
+    local_store::{PeristentSideChain},
     utils::{address::generate_btc_address_from_index, bip44},
     vault::{
         api::APIServer,

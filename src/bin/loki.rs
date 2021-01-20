@@ -1,7 +1,7 @@
 use chainflip::{
     common::*,
     logging,
-    side_chain::{ISideChain, MemorySideChain},
+    local_store::{ISideChain, MemorySideChain},
     utils,
     vault::{
         blockchain_connection::{loki_rpc, LokiConnection, LokiConnectionConfig},

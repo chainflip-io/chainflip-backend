@@ -1,6 +1,6 @@
 use crate::{
     common::api::ResponseError,
-    side_chain::{ISideChain, LocalEvent},
+    local_store::{ISideChain, LocalEvent},
 };
 use chainflip_common::types::chain::Witness;
 use serde::{Deserialize, Serialize};
@@ -19,7 +19,7 @@ pub(super) struct WitnessQueryResponse {
 /// # Example Query
 ///
 /// > GET /v1/witnesses
-pub(super) async fn get_witnesses<S: ISideChain>(
+pub(super) async fn get_local_witnesses<S: ISideChain>(
     side_chain: Arc<Mutex<S>>,
 ) -> Result<WitnessQueryResponse, ResponseError> {
     let side_chain = side_chain.lock().unwrap();
@@ -51,7 +51,7 @@ mod tests {
     use super::*;
     use crate::{
         common::{GenericCoinAmount, LokiAmount},
-        side_chain::MemorySideChain,
+        local_store::MemorySideChain,
         utils::test_utils::data::TestData,
     };
 

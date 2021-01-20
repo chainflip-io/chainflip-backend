@@ -1,5 +1,5 @@
 use chainflip::{
-    side_chain::{ISideChain, MemorySideChain},
+    local_store::{ISideChain, MemorySideChain},
     utils::test_utils,
     vault::witness::fake_witness::{Block, CoinTx, FakeWitness},
 };

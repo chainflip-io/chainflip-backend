@@ -1,5 +1,5 @@
 use crate::{
-    side_chain::LocalEvent, vault::transactions::memory_provider::FulfilledWrapper,
+    local_store::LocalEvent, vault::transactions::memory_provider::FulfilledWrapper,
     vault::transactions::TransactionProvider,
 };
 use chainflip_common::types::{chain::Output, coin::Coin};
@@ -68,7 +68,7 @@ async fn process<T: TransactionProvider + Sync, C: CoinProcessor>(
 mod test {
     use super::*;
     use crate::{
-        side_chain::ISideChain, side_chain::MemorySideChain, utils::test_utils::data::TestData,
+        local_store::ISideChain, local_store::MemorySideChain, utils::test_utils::data::TestData,
         vault::transactions::MemoryTransactionsProvider,
     };
     use chainflip_common::types::{chain::OutputSent, Timestamp, UUIDv4};

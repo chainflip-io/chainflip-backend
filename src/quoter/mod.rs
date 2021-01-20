@@ -1,6 +1,6 @@
 use crate::{
     common::{Liquidity, LiquidityProvider, PoolCoin},
-    side_chain::SideChainBlock,
+    local_store::SideChainBlock,
 };
 use chainflip_common::types::{chain::*, UUIDv4};
 use std::{

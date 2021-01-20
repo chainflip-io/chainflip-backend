@@ -5,7 +5,7 @@
 // Events: Lokid transaction, Ether transaction, Swap transaction from Side Chain
 
 use crate::{
-    side_chain::LocalEvent, vault::blockchain_connection::Payments,
+    local_store::LocalEvent, vault::blockchain_connection::Payments,
     vault::transactions::TransactionProvider,
 };
 use chainflip_common::types::{chain::Witness, coin::Coin, Timestamp, UUIDv4};
