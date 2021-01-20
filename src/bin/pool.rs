@@ -1,6 +1,6 @@
 use chainflip::{
     common::PoolCoin,
-    local_store::{ISideChain, PeristentSideChain},
+    side_chain::{ISideChain, PersistentSideChain},
 };
 use chainflip_common::types::{chain::PoolChange, coin::Coin, Timestamp, UUIDv4};
 use clap::{App, Arg};
@@ -50,7 +50,7 @@ async fn main() {
     };
 
     // Insert tx into the side chain
-    let mut s_chain = PeristentSideChain::open("blocks.db");
+    let mut s_chain = PersistentSideChain::open("blocks.db");
     s_chain.add_block(vec![pool_change.clone().into()]).unwrap();
 
     println!("Added tx: {:?}", pool_change);

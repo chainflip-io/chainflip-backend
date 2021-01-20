@@ -1,6 +1,6 @@
 use crate::{
     common::api::ResponseError,
-    local_store::{ISideChain, LocalEvent},
+    side_chain::{ISideChain, SideChainTx},
 };
 use chainflip_common::types::chain::Witness;
 use serde::{Deserialize, Serialize};
@@ -32,7 +32,7 @@ pub(super) async fn get_local_witnesses<S: ISideChain>(
         let block = side_chain.get_block(block_idx).expect("invalid index");
 
         for tx in &block.transactions {
-            if let LocalEvent::Witness(tx) = tx {
+            if let SideChainTx::Witness(tx) = tx {
                 witness_txs.push(tx.clone());
             }
         }
@@ -51,7 +51,7 @@ mod tests {
     use super::*;
     use crate::{
         common::{GenericCoinAmount, LokiAmount},
-        local_store::MemorySideChain,
+        side_chain::MemorySideChain,
         utils::test_utils::data::TestData,
     };
 

@@ -1,10 +1,10 @@
-use super::{ISideChain, SideChainBlock, LocalEvent};
+use super::{ISideChain, SideChainBlock, SideChainTx};
 use rusqlite::Connection as DB;
 use rusqlite::{params, NO_PARAMS};
 
 /// Implementation of ISideChain that uses sqlite to
 /// persist between restarts
-pub struct PeristentSideChain {
+pub struct PersistentSideChain {
     blocks: Vec<SideChainBlock>,
     db: DB,
 }
@@ -62,8 +62,8 @@ fn read_rows(db: &DB) -> Result<Vec<SideChainBlock>, String> {
     Ok(blocks)
 }
 
-impl PeristentSideChain {
-    /// Create a instance of PeristentSideChain associated with a database file
+impl PersistentSideChain {
+    /// Create a instance of PersistentSideChain associated with a database file
     /// with name `file`. The file is created if does not exist. The database tables
     /// are created they don't already exist.
     pub fn open(file: &str) -> Self {
@@ -82,7 +82,7 @@ impl PeristentSideChain {
 
         debug!("Loaded {} blocks from the database", blocks.len());
 
-        PeristentSideChain { db, blocks }
+        PersistentSideChain { db, blocks }
     }
 }
 
@@ -109,8 +109,8 @@ fn get_block_from_db(db: &DB, block_idx: u32) -> Option<SideChainBlock> {
     }
 }
 
-impl ISideChain for PeristentSideChain {
-    fn add_block(&mut self, txs: Vec<LocalEvent>) -> Result<(), String> {
+impl ISideChain for PersistentSideChain {
+    fn add_block(&mut self, txs: Vec<SideChainTx>) -> Result<(), String> {
         let block_idx = self.blocks.len() as u32;
         let block = SideChainBlock {
             id: block_idx,
@@ -156,9 +156,9 @@ mod test {
 
         let temp_file = test_utils::TempRandomFile::new();
 
-        let mut db = PeristentSideChain::open(temp_file.path());
+        let mut db = PersistentSideChain::open(temp_file.path());
 
-        let tx: LocalEvent = TestData::swap_quote(Coin::ETH, Coin::LOKI).into();
+        let tx: SideChainTx = TestData::swap_quote(Coin::ETH, Coin::LOKI).into();
 
         db.add_block(vec![tx.clone()])
             .expect("Error adding a transaction to the database");
@@ -166,7 +166,7 @@ mod test {
         // Close the database
         drop(db);
 
-        let db = PeristentSideChain::open(temp_file.path());
+        let db = PersistentSideChain::open(temp_file.path());
 
         let total_blocks = db.total_blocks();
         let last_block_idx = total_blocks.checked_sub(1).expect("Unexpected block count");

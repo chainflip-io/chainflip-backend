@@ -1,6 +1,6 @@
 use crate::{
     common::api::{self, using},
-    local_store::ISideChain,
+    side_chain::ISideChain,
     vault::transactions::TransactionProvider,
 };
 use chainflip_common::types::Network;

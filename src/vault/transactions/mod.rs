@@ -1,4 +1,4 @@
-use crate::{common::LiquidityProvider, local_store::LocalEvent};
+use crate::{common::LiquidityProvider, side_chain::SideChainTx};
 use chainflip_common::types::chain::{DepositQuote, Output, SwapQuote, WithdrawRequest};
 use memory_provider::{FulfilledWrapper, UsedWitnessWrapper};
 
@@ -16,7 +16,7 @@ pub trait TransactionProvider: LiquidityProvider {
     fn sync(&mut self) -> u32;
 
     /// Add transactions
-    fn add_transactions(&mut self, txs: Vec<LocalEvent>) -> Result<(), String>;
+    fn add_transactions(&mut self, txs: Vec<SideChainTx>) -> Result<(), String>;
 
     /// Get all swap quotes
     fn get_swap_quotes(&self) -> &[FulfilledWrapper<SwapQuote>];

@@ -3,7 +3,7 @@ use super::{BlockProcessor, StateProvider};
 use crate::{
     common::store::utils::SQLite as KVS,
     common::{Liquidity, LiquidityProvider, PoolCoin},
-    local_store::{SideChainBlock, LocalEvent},
+    side_chain::{SideChainBlock, SideChainTx},
 };
 use chainflip_common::types::{chain::*, UUIDv4};
 use itertools::Itertools;
@@ -43,42 +43,42 @@ impl Database {
         )
     }
 
-    fn process_transactions(db: &Transaction, txs: &[LocalEvent]) {
+    fn process_transactions(db: &Transaction, txs: &[SideChainTx]) {
         for tx in txs {
             match tx {
-                LocalEvent::PoolChange(tx) => {
+                SideChainTx::PoolChange(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                LocalEvent::SwapQuote(tx) => {
+                SideChainTx::SwapQuote(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                LocalEvent::DepositQuote(tx) => {
+                SideChainTx::DepositQuote(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                LocalEvent::Witness(tx) => {
+                SideChainTx::Witness(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                LocalEvent::Output(tx) => {
+                SideChainTx::Output(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                LocalEvent::OutputSent(tx) => {
+                SideChainTx::OutputSent(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                LocalEvent::Deposit(tx) => {
+                SideChainTx::Deposit(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                LocalEvent::WithdrawRequest(tx) => {
+                SideChainTx::WithdrawRequest(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                LocalEvent::Withdraw(tx) => {
+                SideChainTx::Withdraw(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
@@ -342,7 +342,7 @@ mod test {
         let tx = db.connection.transaction().unwrap();
         let staker = get_random_staker();
 
-        let transactions: Vec<LocalEvent> = vec![
+        let transactions: Vec<SideChainTx> = vec![
             TestData::pool_change(Coin::BTC, -100, 100).into(),
             TestData::swap_quote(Coin::ETH, Coin::LOKI).into(),
             TestData::deposit_quote(Coin::ETH).into(),
@@ -367,7 +367,7 @@ mod test {
     #[test]
     fn returns_pools() {
         let mut db = setup();
-        let transactions: Vec<LocalEvent> = vec![
+        let transactions: Vec<SideChainTx> = vec![
             TestData::pool_change(Coin::BTC, 100, 100).into(),
             TestData::pool_change(Coin::ETH, 75, 75).into(),
             TestData::pool_change(Coin::BTC, 100, -50).into(),

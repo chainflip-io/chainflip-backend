@@ -5,7 +5,7 @@
 // Events: Lokid transaction, Ether transaction, Swap transaction from Side Chain
 
 use crate::{
-    local_store::LocalEvent, vault::blockchain_connection::Payments,
+    side_chain::SideChainTx, vault::blockchain_connection::Payments,
     vault::transactions::TransactionProvider,
 };
 use chainflip_common::types::{chain::Witness, coin::Coin, Timestamp, UUIDv4};
@@ -93,7 +93,7 @@ where
             let provider = self.transaction_provider.read();
             let swaps = provider.get_swap_quotes();
             let deposit_quotes = provider.get_deposit_quotes();
-            let mut witness_txs: Vec<LocalEvent> = vec![];
+            let mut witness_txs: Vec<SideChainTx> = vec![];
 
             for payment in &payments {
                 let swap_quote = swaps

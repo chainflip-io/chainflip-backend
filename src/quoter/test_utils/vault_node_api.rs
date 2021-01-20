@@ -2,7 +2,7 @@ use crate::{
     quoter::vault_node::VaultNodeInterface,
     vault::api::v1::{post_swap::SwapQuoteParams, post_withdraw::WithdrawParams, PortionsParams},
 };
-use crate::{local_store::SideChainBlock, vault::api::v1::post_deposit::DepositQuoteParams};
+use crate::{side_chain::SideChainBlock, vault::api::v1::post_deposit::DepositQuoteParams};
 use std::{collections::VecDeque, sync::Mutex};
 
 /// Test vault node API

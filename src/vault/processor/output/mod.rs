@@ -1,5 +1,5 @@
 use crate::{
-    local_store::LocalEvent, vault::transactions::memory_provider::FulfilledWrapper,
+    side_chain::SideChainTx, vault::transactions::memory_provider::FulfilledWrapper,
     vault::transactions::TransactionProvider,
 };
 use chainflip_common::types::{chain::Output, coin::Coin};
@@ -50,7 +50,7 @@ async fn process<T: TransactionProvider + Sync, C: CoinProcessor>(
     let txs = futures::future::join_all(futs)
         .await
         .into_iter()
-        .map(|txs| txs.into_iter().map_into::<LocalEvent>().collect_vec())
+        .map(|txs| txs.into_iter().map_into::<SideChainTx>().collect_vec())
         .flatten()
         .collect_vec();
 
@@ -68,7 +68,7 @@ async fn process<T: TransactionProvider + Sync, C: CoinProcessor>(
 mod test {
     use super::*;
     use crate::{
-        local_store::ISideChain, local_store::MemorySideChain, utils::test_utils::data::TestData,
+        side_chain::ISideChain, side_chain::MemorySideChain, utils::test_utils::data::TestData,
         vault::transactions::MemoryTransactionsProvider,
     };
     use chainflip_common::types::{chain::OutputSent, Timestamp, UUIDv4};

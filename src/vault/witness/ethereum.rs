@@ -1,6 +1,6 @@
 use crate::{
     common::store::KeyValueStore,
-    local_store::{LocalEvent},
+    side_chain::{SideChainTx},
     vault::{blockchain_connection::ethereum::EthereumClient, transactions::TransactionProvider},
 };
 use chainflip_common::types::{chain::Witness, coin::Coin, Timestamp, UUIDv4};
@@ -94,7 +94,7 @@ where
             let swaps = provider.get_swap_quotes();
             let deposit_quotes = provider.get_deposit_quotes();
 
-            let mut witness_txs: Vec<LocalEvent> = vec![];
+            let mut witness_txs: Vec<SideChainTx> = vec![];
 
             for transaction in transactions {
                 if let Some(recipient) = transaction.to {
@@ -166,7 +166,7 @@ mod test {
     use super::*;
     use crate::{
         common::ethereum::{Hash, Transaction},
-        local_store::MemorySideChain,
+        side_chain::MemorySideChain,
         utils::test_utils::{data::TestData, get_transactions_provider, store::MemoryKVS},
         vault::transactions::MemoryTransactionsProvider,
     };

@@ -4,7 +4,8 @@ extern crate log;
 use chainflip::{
     common::store::PersistentKVS,
     logging,
-    local_store::{PeristentSideChain},
+    local_store::{PersistentLocalStore},
+    side_chain::{PersistentSideChain},
     utils::{address::generate_btc_address_from_index, bip44},
     vault::{
         api::APIServer,
@@ -39,8 +40,11 @@ fn main() {
 
     info!("Starting a _ Vault node");
 
-    let s_chain = PeristentSideChain::open("blocks.db");
+    let s_chain = PersistentSideChain::open("blocks.db");
     let s_chain = Arc::new(Mutex::new(s_chain));
+
+    let l_store = PersistentLocalStore::open("store.db");
+    let l_store = Arc::new(Mutex::new(l_store));
 
     let mut provider = MemoryTransactionsProvider::new(s_chain.clone());
     provider.sync();
@@ -137,5 +141,5 @@ fn main() {
     // API
     // can be used to shutdown the server
     let (_tx, rx) = tokio::sync::oneshot::channel();
-    APIServer::serve(&VAULT_CONFIG, s_chain, provider, rx);
+    APIServer::serve(&VAULT_CONFIG, s_chain, l_store, provider, rx);
 }

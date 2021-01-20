@@ -1,4 +1,4 @@
-use crate::{quoter::BlockProcessor, local_store::SideChainBlock};
+use crate::{quoter::BlockProcessor, side_chain::SideChainBlock};
 
 /// Test block processor
 pub struct TestBlockProcessor {

@@ -1,6 +1,6 @@
 use crate::{
     common::WalletAddress,
-    local_store::{LocalEvent},
+    side_chain::{SideChainTx},
     vault::{blockchain_connection::btc::BitcoinSPVClient, transactions::TransactionProvider},
 };
 use chainflip_common::types::{chain::Witness, coin::Coin, Timestamp, UUIDv4};
@@ -74,7 +74,7 @@ where
                     (quote_inner.id, quote_inner.coin_input_address.clone())
                 });
 
-            let mut witness_txs: Vec<LocalEvent> = vec![];
+            let mut witness_txs: Vec<SideChainTx> = vec![];
             for (id, address) in swap_id_address_pairs.chain(deposit_id_address_pairs) {
                 let btc_address = WalletAddress(address.to_string());
                 let utxos = match self.client.get_address_unspent(&btc_address).await {
@@ -121,7 +121,7 @@ where
 mod test {
     use super::*;
     use crate::{
-        local_store::{MemorySideChain},
+        side_chain::{MemorySideChain},
         utils::test_utils::{
             btc::TestBitcoinSPVClient, data::TestData, get_transactions_provider, TEST_BTC_ADDRESS,
         },

@@ -8,8 +8,12 @@ pub mod common;
 pub mod logging;
 /// Quoter implementation
 pub mod quoter;
-/// Side Chain implementation
+/// Mock side chain implementation
+pub mod side_chain;
+
+/// Local store, stores the full transaction data, the data that's not stored on the substrate node
 pub mod local_store;
+
 /// Helper functions (including helper functions for tests)
 pub mod utils;
 /// Vault implementation

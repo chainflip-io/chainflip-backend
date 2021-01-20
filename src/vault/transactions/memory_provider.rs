@@ -3,7 +3,7 @@ use crate::{
         liquidity_provider::{Liquidity, LiquidityProvider, MemoryLiquidityProvider},
         GenericCoinAmount, LokiAmount, PoolCoin, StakerId,
     },
-    local_store::{ISideChain, LocalEvent},
+    side_chain::{ISideChain, SideChainTx},
     vault::transactions::{
         portions::{adjust_portions_after_deposit, DepositContribution},
         TransactionProvider,
@@ -294,19 +294,19 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
 
             for tx in block.clone().transactions {
                 match tx {
-                    LocalEvent::SwapQuote(tx) => {
+                    SideChainTx::SwapQuote(tx) => {
                         // Quotes always come before their corresponding "outcome", so they start unfulfilled
                         let tx = FulfilledWrapper::new(tx, false);
 
                         self.state.swap_quotes.push(tx);
                     }
-                    LocalEvent::DepositQuote(tx) => {
+                    SideChainTx::DepositQuote(tx) => {
                         // (same as above)
                         let tx = FulfilledWrapper::new(tx, false);
 
                         self.state.deposit_quotes.push(tx)
                     }
-                    LocalEvent::Witness(tx) => {
+                    SideChainTx::Witness(tx) => {
                         // We assume that witness arrive unused
                         let tx = UsedWitnessWrapper {
                             inner: tx,
@@ -315,12 +315,12 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
 
                         self.state.witnesses.push(tx);
                     }
-                    LocalEvent::PoolChange(tx) => self.state.process_pool_change(tx),
-                    LocalEvent::Deposit(tx) => self.state.process_deposit(tx),
-                    LocalEvent::Output(tx) => self.state.process_output_tx(tx),
-                    LocalEvent::WithdrawRequest(tx) => self.state.process_withdraw_request(tx),
-                    LocalEvent::Withdraw(tx) => self.state.process_withdraw(tx),
-                    LocalEvent::OutputSent(tx) => self.state.process_output_sent_tx(tx),
+                    SideChainTx::PoolChange(tx) => self.state.process_pool_change(tx),
+                    SideChainTx::Deposit(tx) => self.state.process_deposit(tx),
+                    SideChainTx::Output(tx) => self.state.process_output_tx(tx),
+                    SideChainTx::WithdrawRequest(tx) => self.state.process_withdraw_request(tx),
+                    SideChainTx::Withdraw(tx) => self.state.process_withdraw(tx),
+                    SideChainTx::OutputSent(tx) => self.state.process_output_sent_tx(tx),
                 }
             }
             self.state.next_block_idx += 1;
@@ -329,12 +329,12 @@ impl<S: ISideChain> TransactionProvider for MemoryTransactionsProvider<S> {
         self.state.next_block_idx
     }
 
-    fn add_transactions(&mut self, txs: Vec<LocalEvent>) -> Result<(), String> {
+    fn add_transactions(&mut self, txs: Vec<SideChainTx>) -> Result<(), String> {
         // Filter out any duplicate transactions
-        let valid_txs: Vec<LocalEvent> = txs
+        let valid_txs: Vec<SideChainTx> = txs
             .into_iter()
             .filter(|tx| {
-                if let LocalEvent::Witness(tx) = tx {
+                if let SideChainTx::Witness(tx) = tx {
                     return !self
                         .state
                         .witnesses
@@ -388,7 +388,7 @@ impl<S: ISideChain> LiquidityProvider for MemoryTransactionsProvider<S> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{local_store::MemorySideChain, utils::test_utils::data::TestData};
+    use crate::{side_chain::MemorySideChain, utils::test_utils::data::TestData};
     use chainflip_common::types::{coin::Coin, Timestamp, UUIDv4};
 
     fn setup() -> MemoryTransactionsProvider<MemorySideChain> {

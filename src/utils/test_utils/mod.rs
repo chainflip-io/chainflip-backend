@@ -1,5 +1,5 @@
 use crate::{
-    local_store::{ISideChain, MemorySideChain},
+    side_chain::{ISideChain, MemorySideChain},
     vault::config::BtcConfig,
     vault::config::EthConfig,
     vault::config::LokiConfig,
