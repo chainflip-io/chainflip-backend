@@ -1,5 +1,5 @@
 use crate::{
-    side_chain::SideChainTx, vault::transactions::memory_provider::FulfilledWrapper,
+    side_chain::LocalEvent, vault::transactions::memory_provider::FulfilledWrapper,
     vault::transactions::TransactionProvider,
 };
 use chainflip_common::types::{chain::Output, coin::Coin};
@@ -50,7 +50,7 @@ async fn process<T: TransactionProvider + Sync, C: CoinProcessor>(
     let txs = futures::future::join_all(futs)
         .await
         .into_iter()
-        .map(|txs| txs.into_iter().map_into::<SideChainTx>().collect_vec())
+        .map(|txs| txs.into_iter().map_into::<LocalEvent>().collect_vec())
         .flatten()
         .collect_vec();
 

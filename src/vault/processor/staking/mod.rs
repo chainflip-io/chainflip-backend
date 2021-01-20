@@ -3,7 +3,7 @@ mod tests;
 
 use crate::{
     common::*,
-    side_chain::SideChainTx,
+    side_chain::LocalEvent,
     vault::transactions::{
         memory_provider::{FulfilledWrapper, Portion, UsedWitnessWrapper},
         TransactionProvider,
@@ -61,8 +61,8 @@ fn process_deposit_quotes_inner(
     quotes: &[FulfilledWrapper<DepositQuote>],
     witness_txs: &[UsedWitnessWrapper],
     network: Network,
-) -> Vec<SideChainTx> {
-    let mut new_txs = Vec::<SideChainTx>::default();
+) -> Vec<LocalEvent> {
+    let mut new_txs = Vec::<LocalEvent>::default();
 
     for quote_info in quotes {
         // Find all relevant witnesses
@@ -425,7 +425,7 @@ pub(super) fn process_withdraw_requests<T: TransactionProvider>(
     // them before adding to the database, but since we check them again, we
     // we should handle the case where they are invalid (by removing from the db)
 
-    let mut new_txs: Vec<SideChainTx> = Vec::with_capacity(valid_txs.len() * 4);
+    let mut new_txs: Vec<LocalEvent> = Vec::with_capacity(valid_txs.len() * 4);
 
     for tx in valid_txs {
         match process_withdraw_request(tx_provider, tx, network) {

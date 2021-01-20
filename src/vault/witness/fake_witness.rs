@@ -1,4 +1,4 @@
-use crate::side_chain::{ISideChain, SideChainTx};
+use crate::side_chain::{ISideChain, LocalEvent};
 use chainflip_common::types::{
     chain::{SwapQuote, Witness},
     coin::Coin,
@@ -58,7 +58,7 @@ where
 
         while let Some(block) = side_chain.get_block(self.next_block_idx) {
             for tx in &block.transactions {
-                if let SideChainTx::SwapQuote(tx) = tx {
+                if let LocalEvent::SwapQuote(tx) = tx {
                     debug!("Registered swap quote: {:?}", tx.id);
                     quote_txs.push(tx.clone());
                 }
@@ -135,7 +135,7 @@ where
             coin: Coin::LOKI,
         };
 
-        let tx = SideChainTx::Witness(tx);
+        let tx = LocalEvent::Witness(tx);
 
         side_chain
             .add_block(vec![tx])

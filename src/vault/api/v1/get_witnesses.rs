@@ -1,6 +1,6 @@
 use crate::{
     common::api::ResponseError,
-    side_chain::{ISideChain, SideChainTx},
+    side_chain::{ISideChain, LocalEvent},
 };
 use chainflip_common::types::chain::Witness;
 use serde::{Deserialize, Serialize};
@@ -32,7 +32,7 @@ pub(super) async fn get_witnesses<S: ISideChain>(
         let block = side_chain.get_block(block_idx).expect("invalid index");
 
         for tx in &block.transactions {
-            if let SideChainTx::Witness(tx) = tx {
+            if let LocalEvent::Witness(tx) = tx {
                 witness_txs.push(tx.clone());
             }
         }

@@ -1,7 +1,7 @@
 use super::{data::TestData, store::MemoryKVS};
 use crate::{
     common::*,
-    side_chain::{ISideChain, MemorySideChain, SideChainTx},
+    side_chain::{ISideChain, MemorySideChain, LocalEvent},
     vault::{
         processor::{CoinProcessor, ProcessorEvent, SideChainProcessor},
         transactions::{memory_provider::Portion, MemoryTransactionsProvider, TransactionProvider},
@@ -90,7 +90,7 @@ impl TestRunner {
     /// Add `block` to the blockchain
     pub fn add_block<T>(&mut self, block: T)
     where
-        T: Into<Vec<SideChainTx>>,
+        T: Into<Vec<LocalEvent>>,
     {
         let mut chain = self.chain.lock().unwrap();
 

@@ -1,7 +1,7 @@
 use chainflip::{
     common::*,
     logging,
-    side_chain::{ISideChain, MemorySideChain, StateChainNode},
+    side_chain::{ISideChain, MemorySideChain},
     utils,
     vault::{
         blockchain_connection::{loki_rpc, LokiConnection, LokiConnectionConfig},
@@ -110,10 +110,7 @@ async fn test_loki_witness() {
     let loki_connection = LokiConnection::new(config);
     let loki_block_receiver = loki_connection.start();
 
-    let node = StateChainNode::new();
-    let node = Arc::new(RwLock::new(node));
-
-    let witness = LokiWitness::new(loki_block_receiver, provider.clone(), node);
+    let witness = LokiWitness::new(loki_block_receiver, provider.clone());
     witness.start();
 
     // Block current thread

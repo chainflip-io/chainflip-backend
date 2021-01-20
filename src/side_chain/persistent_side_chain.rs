@@ -1,4 +1,4 @@
-use super::{ISideChain, SideChainBlock, SideChainTx};
+use super::{ISideChain, SideChainBlock, LocalEvent};
 use rusqlite::Connection as DB;
 use rusqlite::{params, NO_PARAMS};
 
@@ -110,7 +110,7 @@ fn get_block_from_db(db: &DB, block_idx: u32) -> Option<SideChainBlock> {
 }
 
 impl ISideChain for PeristentSideChain {
-    fn add_block(&mut self, txs: Vec<SideChainTx>) -> Result<(), String> {
+    fn add_block(&mut self, txs: Vec<LocalEvent>) -> Result<(), String> {
         let block_idx = self.blocks.len() as u32;
         let block = SideChainBlock {
             id: block_idx,
@@ -158,7 +158,7 @@ mod test {
 
         let mut db = PeristentSideChain::open(temp_file.path());
 
-        let tx: SideChainTx = TestData::swap_quote(Coin::ETH, Coin::LOKI).into();
+        let tx: LocalEvent = TestData::swap_quote(Coin::ETH, Coin::LOKI).into();
 
         db.add_block(vec![tx.clone()])
             .expect("Error adding a transaction to the database");

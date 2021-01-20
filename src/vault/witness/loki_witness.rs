@@ -5,7 +5,7 @@
 // Events: Lokid transaction, Ether transaction, Swap transaction from Side Chain
 
 use crate::{
-    side_chain::IStateChainNode, side_chain::SideChainTx, vault::blockchain_connection::Payments,
+    side_chain::LocalEvent, vault::blockchain_connection::Payments,
     vault::transactions::TransactionProvider,
 };
 use chainflip_common::types::{chain::Witness, coin::Coin, Timestamp, UUIDv4};
@@ -14,26 +14,22 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 
 /// Witness Mock
-pub struct LokiWitness<T: TransactionProvider, S: IStateChainNode> {
+pub struct LokiWitness<T: TransactionProvider> {
     transaction_provider: Arc<RwLock<T>>,
-    substrate_node: Arc<RwLock<S>>,
     loki_connection: Receiver<Payments>,
 }
 
-impl<T, S> LokiWitness<T, S>
+impl<T> LokiWitness<T>
 where
     T: TransactionProvider + Send + Sync + 'static,
-    S: IStateChainNode + Send + Sync + 'static,
 {
     /// Create Loki witness
     pub fn new(
         bc: Receiver<Payments>,
         transaction_provider: Arc<RwLock<T>>,
-        node: Arc<RwLock<S>>,
-    ) -> LokiWitness<T, S> {
+    ) -> LokiWitness<T> {
         LokiWitness {
             loki_connection: bc,
-            substrate_node: node,
             transaction_provider,
         }
     }
@@ -97,7 +93,7 @@ where
             let provider = self.transaction_provider.read();
             let swaps = provider.get_swap_quotes();
             let deposit_quotes = provider.get_deposit_quotes();
-            let mut witness_txs: Vec<SideChainTx> = vec![];
+            let mut witness_txs: Vec<LocalEvent> = vec![];
 
             for payment in &payments {
                 let swap_quote = swaps
@@ -137,9 +133,6 @@ where
             witness_txs
         };
 
-        let node = self.substrate_node.write();
-
-        // TODO: synchronously or asynchronously?
-        node.submit_txs(witness_txs);
+        self.transaction_provider.write().add_transactions(witness_txs).expect("Transactions not added");
     }
 }

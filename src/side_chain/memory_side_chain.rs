@@ -1,6 +1,6 @@
 use chainflip_common::types::{chain::Witness, UUIDv4};
 
-use super::{ISideChain, SideChainBlock, SideChainTx};
+use super::{ISideChain, SideChainBlock, LocalEvent};
 
 /// Fake implemenation of ISideChain that stores block in memory
 pub struct MemorySideChain {
@@ -18,7 +18,7 @@ impl MemorySideChain {
     pub fn check_tx(&self, quote_id: UUIDv4) -> bool {
         for block in &self.blocks {
             for tx in &block.transactions {
-                if let SideChainTx::Witness(tx) = tx {
+                if let LocalEvent::Witness(tx) = tx {
                     if tx.quote == quote_id {
                         return true;
                     }
@@ -36,7 +36,7 @@ impl MemorySideChain {
         for block in &self.blocks {
             for tx in &block.transactions {
                 match tx {
-                    SideChainTx::Witness(tx) => {
+                    LocalEvent::Witness(tx) => {
                         quotes.push(tx.clone());
                     }
                     _ => {
@@ -51,7 +51,7 @@ impl MemorySideChain {
 }
 
 impl ISideChain for MemorySideChain {
-    fn add_block(&mut self, txs: Vec<SideChainTx>) -> Result<(), String> {
+    fn add_block(&mut self, txs: Vec<LocalEvent>) -> Result<(), String> {
         // For now all transactions live in their own block
         let block = SideChainBlock {
             id: self.blocks.len() as u32,
