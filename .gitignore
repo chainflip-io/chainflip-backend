@@ -4,3 +4,4 @@
 loki_connection
 
 config/**/local.toml
+chainflip-common/

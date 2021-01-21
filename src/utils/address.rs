@@ -19,11 +19,13 @@ pub fn generate_bip44_keypair_from_root_key(
 }
 
 /// Generate an eth address from a master root key and index
-pub fn generate_eth_address(root_key: &str, index: u32) -> Result<String, String> {
+pub fn generate_eth_address(root_key: &str, index: u32) -> Result<EthereumAddress, String> {
     let key_pair =
         generate_bip44_keypair_from_root_key(root_key, bip44::CoinType::ETH, index).unwrap();
 
-    Ok(EthereumAddress::from_public_key(key_pair.public_key.serialize_uncompressed()).to_string())
+    Ok(EthereumAddress::from_public_key(
+        key_pair.public_key.serialize_uncompressed(),
+    ))
 }
 
 /// Generate an btc address from a master root key and index and other params
@@ -97,11 +99,11 @@ mod test {
     #[test]
     fn generates_correct_eth_address() {
         assert_eq!(
-            &generate_eth_address(TEST_ROOT_KEY, 0).unwrap(),
+            &generate_eth_address(TEST_ROOT_KEY, 0).unwrap().to_string(),
             "0x48575a3C8fa7D0469FD39eCB67ec68d8C7564637"
         );
         assert_eq!(
-            &generate_eth_address(TEST_ROOT_KEY, 1).unwrap(),
+            &generate_eth_address(TEST_ROOT_KEY, 1).unwrap().to_string(),
             "0xB46878bd2E68e2b3f5145ccB868E626572905c5F"
         );
     }

@@ -7,16 +7,7 @@ use crate::{
     utils::address::{generate_btc_address_from_index, generate_eth_address},
     vault::{processor::utils::get_swap_expire_timestamp, transactions::TransactionProvider},
 };
-use chainflip_common::{
-    types::{
-        addresses::LokiAddress,
-        chain::{DepositQuote, Validate},
-        coin::Coin,
-        Timestamp, UUIDv4,
-    },
-    utils::address_id,
-    validation::{validate_address, validate_address_id},
-};
+use chainflip_common::{types::{Timestamp, UUIDv4, addresses::{EthereumAddress, LokiAddress}, chain::{DepositQuote, Validate}, coin::Coin}, utils::{address_id, ethereum::ETH_DEPOSIT_INIT_CODE}, validation::{validate_address, validate_address_id}};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::{convert::TryInto, str::FromStr, sync::Arc};
@@ -123,17 +114,22 @@ pub async fn deposit<T: TransactionProvider>(
     // Generate addresses
     let coin_input_address = match params.pool {
         Coin::ETH => {
-            let index = match params.coin_input_address_id.parse::<u32>() {
-                Ok(index) => index,
-                Err(_) => return Err(bad_request("Incorrect input address id")),
-            };
-            match generate_eth_address(&config.eth_master_root_key, index) {
+            // Main vault address
+            // Currently we just assume it's at index 0 but we can change it in the future
+            let root_address = match generate_eth_address(&config.eth_master_root_key, 0) {
                 Ok(address) => address,
                 Err(err) => {
                     warn!("Failed to generate ethereum address: {}", err);
                     return Err(internal_server_error());
                 }
-            }
+            };
+
+            let salt = coin_input_address_id.clone().try_into().map_err(|_| {
+                warn!("Failed to convert coin input address id to ethereum salt");
+                internal_server_error()
+            })?;
+
+            EthereumAddress::create2(&root_address, salt, &ETH_DEPOSIT_INIT_CODE).to_string()
         }
         Coin::BTC => {
             let index = match params.coin_input_address_id.parse::<u32>() {
@@ -221,10 +217,7 @@ pub async fn deposit<T: TransactionProvider>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::utils::test_utils::{
-        self, get_transactions_provider, staking::get_random_staker, TEST_ETH_ADDRESS,
-        TEST_LOKI_ADDRESS, TEST_ROOT_KEY,
-    };
+    use crate::utils::test_utils::{self, TEST_ETH_ADDRESS, TEST_ETH_SALT, TEST_LOKI_ADDRESS, TEST_ROOT_KEY, get_transactions_provider, staking::get_random_staker};
     use chainflip_common::types::Network;
     use test_utils::data::TestData;
 
@@ -241,7 +234,7 @@ mod test {
         DepositQuoteParams {
             pool: Coin::ETH,
             staker_id: get_random_staker().public_key(),
-            coin_input_address_id: "99999".to_string(),
+            coin_input_address_id: hex::encode(TEST_ETH_SALT),
             loki_input_address_id: "b2d6a87ec06934ff".to_string(),
             loki_return_address: TEST_LOKI_ADDRESS.to_string(),
             other_return_address: TEST_ETH_ADDRESS.to_string(),

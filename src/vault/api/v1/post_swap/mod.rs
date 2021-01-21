@@ -10,16 +10,7 @@ use crate::{
     },
     vault::{processor::utils::get_swap_expire_timestamp, transactions::TransactionProvider},
 };
-use chainflip_common::{
-    types::{
-        addresses::LokiAddress,
-        chain::{SwapQuote, Validate},
-        coin::Coin,
-        fraction::PercentageFraction,
-        Timestamp, UUIDv4,
-    },
-    utils::address_id,
-};
+use chainflip_common::{types::{Timestamp, UUIDv4, addresses::{EthereumAddress, LokiAddress}, chain::{SwapQuote, Validate}, coin::Coin, fraction::PercentageFraction}, utils::{address_id, ethereum::ETH_DEPOSIT_INIT_CODE}};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::{convert::TryInto, str::FromStr, sync::Arc};
@@ -133,17 +124,22 @@ pub async fn swap<T: TransactionProvider>(
     // Generate addresses
     let input_address = match input_coin {
         Coin::ETH => {
-            let index = match params.input_address_id.parse::<u32>() {
-                Ok(index) => index,
-                Err(_) => return Err(bad_request("Incorrect input address id")),
-            };
-            match generate_eth_address(&config.eth_master_root_key, index) {
+            // Main vault address
+            // Currently we just assume it's at index 0 but we can change it in the future
+            let root_address = match generate_eth_address(&config.eth_master_root_key, 0) {
                 Ok(address) => address,
                 Err(err) => {
                     warn!("Failed to generate ethereum address: {}", err);
                     return Err(internal_server_error());
                 }
-            }
+            };
+
+            let salt = input_address_id.clone().try_into().map_err(|_| {
+                warn!("Failed to convert input address id to ethereum salt");
+                internal_server_error()
+            })?;
+
+            EthereumAddress::create2(&root_address, salt, &ETH_DEPOSIT_INIT_CODE).to_string()
         }
         Coin::LOKI => {
             let loki_base_address = LokiAddress::from_str(&config.loki_wallet_address)
