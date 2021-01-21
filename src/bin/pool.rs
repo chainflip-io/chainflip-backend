@@ -1,8 +1,8 @@
 use chainflip::{
     common::PoolCoin,
-    side_chain::{ISideChain, PersistentSideChain},
+    local_store::{ILocalStore, PersistentLocalStore},
 };
-use chainflip_common::types::{chain::PoolChange, coin::Coin, Timestamp, UUIDv4};
+use chainflip_common::types::{chain::PoolChange, coin::Coin, UUIDv4};
 use clap::{App, Arg};
 use std::str::FromStr;
 
@@ -43,15 +43,17 @@ async fn main() {
 
     let pool_change = PoolChange {
         id: UUIDv4::new(),
-        timestamp: Timestamp::now(),
         pool: pool_coin.get_coin(),
         depth_change: depth,
         base_depth_change: loki_depth,
+        event_number: None,
     };
 
-    // Insert tx into the side chain
-    let mut s_chain = PersistentSideChain::open("blocks.db");
-    s_chain.add_block(vec![pool_change.clone().into()]).unwrap();
+    // Insert events into the local store
+    let mut l_store = PersistentLocalStore::open("local_store.db");
+    l_store
+        .add_events(vec![pool_change.clone().into()])
+        .unwrap();
 
-    println!("Added tx: {:?}", pool_change);
+    println!("Added event: {:?}", pool_change);
 }

@@ -36,12 +36,13 @@ where
 /// Events emited by the processor
 #[derive(Debug)]
 pub enum ProcessorEvent {
-    /// Block id processed (including all earlier blocks)
-    BLOCK(u32),
+    /// Last event processed (including all earlier events)
+    EVENT(u64),
 }
 
 type EventSender = crossbeam_channel::Sender<ProcessorEvent>;
 
+// TODO: STate chain processor?
 impl<T, KVS, S> SideChainProcessor<T, KVS, S>
 where
     T: TransactionProvider + Send + Sync + 'static,
@@ -71,36 +72,36 @@ where
     /// Poll the side chain/tx_provider and use event_sender to
     /// notify of local events
     async fn run_event_loop(mut self, event_sender: Option<EventSender>) {
-        const DB_KEY: &'static str = "processor_next_block_idx";
+        const DB_KEY: &'static str = "processor_next_event";
 
         // TODO: We should probably distinguish between no value and other errors here:
         // The first block that's yet to be processed by us
-        let mut next_block_idx = self.db.get_data(DB_KEY).unwrap_or(0);
+        let mut next_event: u64 = self.db.get_data(DB_KEY).unwrap_or(0);
 
-        info!("Processor starting with next block idx: {}", next_block_idx);
+        info!("Processor starting with next event number: {}", next_event);
 
         loop {
-            let idx = self.tx_provider.write().sync();
+            let curr_event = self.tx_provider.write().sync();
 
-            if idx > next_block_idx {
-                debug!("Provider is at block: {}", idx);
+            if curr_event > next_event {
+                debug!("Provider is at block: {}", curr_event);
             }
 
             // Check if transaction provider made progress
-            if idx >= next_block_idx {
+            if curr_event >= next_event {
                 self.on_blockchain_progress().await;
             }
 
-            if let Err(err) = self.db.set_data(DB_KEY, Some(idx)) {
-                error!("Could not update latest block in db: {}", err);
+            if let Err(err) = self.db.set_data(DB_KEY, Some(curr_event)) {
+                error!("Could not update latest event in db: {}", err);
                 // Not quote sure how to recover from this, so probably best to terminate
                 panic!("Database failure");
             }
 
-            next_block_idx = idx;
+            next_event = curr_event;
             if let Some(sender) = &event_sender {
-                let _ = sender.send(ProcessorEvent::BLOCK(idx));
-                debug!("Processor processing block: {}", idx);
+                let _ = sender.send(ProcessorEvent::EVENT(curr_event));
+                debug!("Processor processing event at {}", curr_event);
             }
 
             std::thread::sleep(std::time::Duration::from_secs(1));

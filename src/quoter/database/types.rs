@@ -1,6 +1,8 @@
 use chainflip_common::types::chain::*;
 use std::{fmt::Display, str::FromStr};
 
+use crate::local_store::LocalEvent;
+
 #[derive(Debug, Eq, PartialEq)]
 pub enum TransactionType {
     PoolChange,

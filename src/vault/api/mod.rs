@@ -1,6 +1,5 @@
 use super::{config::VaultConfig, transactions::TransactionProvider};
 use crate::common::api::handle_rejection;
-use crate::side_chain::ISideChain;
 use crate::local_store::ILocalStore;
 use std::sync::{Arc, Mutex};
 
@@ -17,16 +16,14 @@ pub struct APIServer {}
 impl APIServer {
     /// Starts an http server in the current thread and blocks. Gracefully shutdowns
     /// when `shotdown_receiver` receives a signal (i.e. `send()` is called).
-    pub fn serve<S, T, L>(
+    pub fn serve<T, L>(
         config: &VaultConfig,
-        side_chain: Arc<Mutex<S>>,
         local_store: Arc<Mutex<L>>,
         provider: Arc<RwLock<T>>,
         shutdown_receiver: oneshot::Receiver<()>,
     ) where
-        S: ISideChain + Send + 'static,
         T: TransactionProvider + Send + Sync + 'static,
-        L: ILocalStore + Send + 'static
+        L: ILocalStore + Send + 'static,
     {
         let config = v1::Config {
             loki_wallet_address: config.loki.wallet_address.clone(),
@@ -34,7 +31,7 @@ impl APIServer {
             btc_master_root_key: config.btc.master_root_key.clone(),
             net_type: config.net_type,
         };
-        let routes = v1::endpoints(side_chain, provider, config).recover(handle_rejection);
+        let routes = v1::endpoints(local_store, provider, config).recover(handle_rejection);
 
         let mut rt = tokio::runtime::Runtime::new().unwrap();
 

@@ -9,28 +9,6 @@ pub struct PersistentLocalStore {
     db: DB,
 }
 
-// #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Serialize, Deserialize)]
-// #[serde(rename_all = "camelCase")]
-// pub struct Witness {
-//     /// A unique identifier
-//     pub id: UUIDv4,
-//     /// Creation timestamp
-//     pub timestamp: Timestamp,
-//     /// The identifier of the quote related to the witness.
-//     pub quote: UUIDv4,
-//     /// The utf-8 encoded bytes of the input transaction id or hash on the actual blockchain
-//     pub transaction_id: ByteString,
-//     /// The transaction block number on the actual blockchain
-//     pub transaction_block_number: u64,
-//     /// The input transaction index in the block
-//     pub transaction_index: u64,
-//     /// The amount that was sent.
-//     pub amount: AtomicAmount,
-//     /// The type of coin that was sent.
-//     pub coin: Coin,
-// }
-
-
 // Should we link to a coin table
 fn create_tables_if_new(db: &DB) {
     db.execute(
@@ -41,7 +19,8 @@ fn create_tables_if_new(db: &DB) {
             quote TEXT NOT NULL,
             tx_block_number INTEGER NOT NULL,
             tx_index INTEGER NOT NULL,
-            amount INTEGER NOT NULL
+            amount INTEGER NOT NULL,
+            last_seen INTEGER AUTOINCREMENT,
             PRIMARY KEY (coin, txid),
     )",
         NO_PARAMS,
@@ -54,8 +33,7 @@ fn read_rows(db: &DB) -> Result<(), String> {
         .prepare("SELECT coin, txid FROM witness;")
         .expect("Could not prepare stmt");
 
-
-        // THIS MAY BE ABLE TO BE CLEANED UP IF USING "PROPER" RELATIONAL DB
+    // THIS MAY BE ABLE TO BE CLEANED UP IF USING "PROPER" RELATIONAL DB
     let res: Vec<Result<(String, String), _>> = stmt
         .query_map(NO_PARAMS, |row| Ok((row.get(0)?, row.get(1)?)))
         .map_err(|err| err.to_string())?
@@ -83,6 +61,14 @@ impl PersistentLocalStore {
 
 impl ILocalStore for PersistentLocalStore {
     fn add_events(&mut self, events: Vec<LocalEvent>) -> Result<(), String> {
+        todo!();
+    }
+
+    fn get_events(&mut self, last_seen: u64) -> Option<Vec<LocalEvent>> {
+        todo!();
+    }
+
+    fn total_events(&mut self) -> u64 {
         todo!();
     }
 }

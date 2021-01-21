@@ -3,9 +3,8 @@ extern crate log;
 
 use chainflip::{
     common::store::PersistentKVS,
+    local_store::PersistentLocalStore,
     logging,
-    local_store::{PersistentLocalStore},
-    side_chain::{PersistentSideChain},
     utils::{address::generate_btc_address_from_index, bip44},
     vault::{
         api::APIServer,
@@ -40,13 +39,10 @@ fn main() {
 
     info!("Starting a _ Vault node");
 
-    let s_chain = PersistentSideChain::open("blocks.db");
-    let s_chain = Arc::new(Mutex::new(s_chain));
-
     let l_store = PersistentLocalStore::open("store.db");
     let l_store = Arc::new(Mutex::new(l_store));
 
-    let mut provider = MemoryTransactionsProvider::new(s_chain.clone());
+    let mut provider = MemoryTransactionsProvider::new(l_store.clone());
     provider.sync();
 
     let provider = Arc::new(RwLock::new(provider));
@@ -94,11 +90,7 @@ fn main() {
     let kvs = Arc::new(Mutex::new(PersistentKVS::new(db_connection)));
 
     let loki_witness = LokiWitness::new(loki_block_receiver, provider.clone());
-    let eth_witness = EthereumWitness::new(
-        Arc::new(eth_client.clone()),
-        provider.clone(),
-        kvs,
-    );
+    let eth_witness = EthereumWitness::new(Arc::new(eth_client.clone()), provider.clone(), kvs);
     let btc_witness = BtcSPVWitness::new(Arc::new(btc.clone()), provider.clone());
 
     loki_witness.start();
@@ -141,5 +133,5 @@ fn main() {
     // API
     // can be used to shutdown the server
     let (_tx, rx) = tokio::sync::oneshot::channel();
-    APIServer::serve(&VAULT_CONFIG, s_chain, l_store, provider, rx);
+    APIServer::serve(&VAULT_CONFIG, l_store, provider, rx);
 }

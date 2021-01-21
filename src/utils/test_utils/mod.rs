@@ -1,5 +1,5 @@
 use crate::{
-    side_chain::{ISideChain, MemorySideChain},
+    local_store::{self, ILocalStore, MemoryLocalStore},
     vault::config::BtcConfig,
     vault::config::EthConfig,
     vault::config::LokiConfig,
@@ -75,18 +75,18 @@ impl Drop for TempRandomFile {
     }
 }
 
-/// Get a transactions provider with a memory side chain
-pub fn get_transactions_provider() -> MemoryTransactionsProvider<MemorySideChain> {
-    let chain = MemorySideChain::new();
-    let chain = Arc::new(Mutex::new(chain));
-    MemoryTransactionsProvider::new(chain)
+/// Get a transactions provider with a memory local store
+pub fn get_transactions_provider() -> MemoryTransactionsProvider<MemoryLocalStore> {
+    let store = MemoryLocalStore::new();
+    let store = Arc::new(Mutex::new(store));
+    MemoryTransactionsProvider::new(store)
 }
 
-/// Get a transactions provider with the given side chain
-pub fn get_transactions_provider_with_chain<S: ISideChain>(
-    side_chain: Arc<Mutex<S>>,
-) -> MemoryTransactionsProvider<S> {
-    MemoryTransactionsProvider::new(side_chain)
+/// Get a transactions provider with the given local store
+pub fn get_transactions_provider_with_store<L: ILocalStore>(
+    local_store: Arc<Mutex<L>>,
+) -> MemoryTransactionsProvider<L> {
+    MemoryTransactionsProvider::new(local_store)
 }
 
 /// Get a fake vault node config

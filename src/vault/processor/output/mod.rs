@@ -1,5 +1,5 @@
 use crate::{
-    side_chain::SideChainTx, vault::transactions::memory_provider::FulfilledWrapper,
+    local_store::LocalEvent, vault::transactions::memory_provider::FulfilledWrapper,
     vault::transactions::TransactionProvider,
 };
 use chainflip_common::types::{chain::Output, coin::Coin};
@@ -50,11 +50,11 @@ async fn process<T: TransactionProvider + Sync, C: CoinProcessor>(
     let txs = futures::future::join_all(futs)
         .await
         .into_iter()
-        .map(|txs| txs.into_iter().map_into::<SideChainTx>().collect_vec())
+        .map(|txs| txs.into_iter().map_into::<LocalEvent>().collect_vec())
         .flatten()
         .collect_vec();
 
-    match provider.write().add_transactions(txs) {
+    match provider.write().add_local_events(txs) {
         Ok(_) => (),
         Err(err) => {
             error!("Could not save output sent txs: {}", err);
@@ -68,7 +68,7 @@ async fn process<T: TransactionProvider + Sync, C: CoinProcessor>(
 mod test {
     use super::*;
     use crate::{
-        side_chain::ISideChain, side_chain::MemorySideChain, utils::test_utils::data::TestData,
+        local_store::MemoryLocalStore, utils::test_utils::data::TestData,
         vault::transactions::MemoryTransactionsProvider,
     };
     use chainflip_common::types::{chain::OutputSent, Timestamp, UUIDv4};
@@ -143,12 +143,12 @@ mod test {
 
     #[tokio::test]
     async fn process_stores_output_sent_txs() {
-        let mut chain = MemorySideChain::new();
+        let mut store = MemoryLocalStore::new();
         let output_tx = TestData::output(Coin::LOKI, 100);
-        chain.add_block(vec![output_tx.clone().into()]).unwrap();
+        store.add_block(vec![output_tx.clone().into()]).unwrap();
 
-        let chain = Arc::new(Mutex::new(chain));
-        let mut provider = MemoryTransactionsProvider::new_protected(chain);
+        let store = Arc::new(Mutex::new(store));
+        let mut provider = MemoryTransactionsProvider::new_protected(store);
         provider.write().sync();
 
         // Pre-condition: Output is not fulfilled
@@ -179,12 +179,12 @@ mod test {
 
     #[tokio::test]
     async fn process_with_no_sent_output_tx() {
-        let mut chain = MemorySideChain::new();
+        let mut store = MemoryLocalStore::new();
         let output_tx = TestData::output(Coin::LOKI, 100);
-        chain.add_block(vec![output_tx.clone().into()]).unwrap();
+        store.add_block(vec![output_tx.clone().into()]).unwrap();
 
-        let chain = Arc::new(Mutex::new(chain));
-        let mut provider = MemoryTransactionsProvider::new_protected(chain);
+        let store = Arc::new(Mutex::new(store));
+        let mut provider = MemoryTransactionsProvider::new_protected(store);
         provider.write().sync();
 
         // Pre-condition: Output is not fulfilled

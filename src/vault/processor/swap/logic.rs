@@ -6,7 +6,7 @@ use crate::{
 };
 use chainflip_common::types::{
     chain::{Output, OutputParent, PoolChange, SwapQuote, Validate, Witness},
-    Network, Timestamp, UUIDv4,
+    Network, UUIDv4,
 };
 use std::{convert::TryFrom, error::Error, fmt};
 
@@ -115,13 +115,13 @@ pub fn process_swap<L: LiquidityProvider>(
 
         let output = Output {
             id: UUIDv4::new(),
-            timestamp: Timestamp::now(),
             parent: OutputParent::SwapQuote(quote_id),
             witnesses: witness_ids,
             pool_changes: vec![],
             coin: quote.inner.input,
             address: return_address,
             amount: input_amount,
+            event_number: None,
         };
 
         return match output.validate(network) {
@@ -165,13 +165,13 @@ pub fn process_swap<L: LiquidityProvider>(
 
     let output = Output {
         id: UUIDv4::new(),
-        timestamp: Timestamp::now(),
         parent: OutputParent::SwapQuote(quote_id),
         witnesses: witness_ids,
         pool_changes: pool_change_ids,
         coin: quote.inner.output,
         address: quote.inner.output_address.clone(),
         amount: output_amount,
+        event_number: None,
     };
 
     match output.validate(network) {
@@ -244,8 +244,8 @@ mod test {
         assert_eq!(output.parent, OutputParent::SwapQuote(quote.inner.id));
         assert_eq!(output.witnesses, witness_ids);
         assert!(
-            output.timestamp.0 >= quote.inner.timestamp.0,
-            "Expected output timestamp to be newer than quote"
+            output.event_number.unwrap() >= quote.inner.event_number.unwrap(),
+            "Expected output event_number to be newer than quote"
         );
         assert_eq!(output.pool_changes.len(), 0);
         assert_eq!(output.coin, Coin::ETH);
@@ -296,9 +296,10 @@ mod test {
         let output = result.output;
         assert_eq!(output.parent, OutputParent::SwapQuote(quote.inner.id));
         assert_eq!(output.witnesses, witness_ids);
+
         assert!(
-            output.timestamp.0 >= quote.inner.timestamp.0,
-            "Expected output timestamp to be newer than quote"
+            output.event_number.unwrap() >= quote.inner.event_number.unwrap(),
+            "Expected output event_number to be newer than quote"
         );
         assert_eq!(output.pool_changes.len(), 1);
         assert_eq!(output.pool_changes, vec![change.id]);
@@ -357,7 +358,7 @@ mod test {
         assert_eq!(output.parent, OutputParent::SwapQuote(quote.inner.id));
         assert_eq!(output.witnesses, witness_ids);
         assert!(
-            output.timestamp.0 >= quote.inner.timestamp.0,
+            output.event_number.unwrap() >= quote.inner.event_number.unwrap(),
             "Expected output timestamp to be newer than quote"
         );
         assert_eq!(output.pool_changes, vec![first_change.id, second_change.id]);

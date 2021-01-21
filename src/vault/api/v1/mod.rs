@@ -1,6 +1,6 @@
 use crate::{
     common::api::{self, using},
-    side_chain::ISideChain,
+    local_store::{self, ILocalStore},
     vault::transactions::TransactionProvider,
 };
 use chainflip_common::types::Network;
@@ -20,10 +20,6 @@ pub mod post_deposit;
 
 /// Post withdraw request endpoint
 pub mod post_withdraw;
-
-/// Get blocks endpoint
-pub mod get_blocks;
-use get_blocks::{get_blocks, BlocksQueryParams};
 
 /// Get witnesses endpoint
 mod get_witnesses;
@@ -48,21 +44,14 @@ pub struct Config {
 }
 
 /// The v1 API endpoints
-pub fn endpoints<S: ISideChain + Send, T: TransactionProvider + Send + Sync>(
-    side_chain: Arc<Mutex<S>>,
+pub fn endpoints<L: ILocalStore + Send, T: TransactionProvider + Send + Sync>(
+    local_store: Arc<Mutex<L>>,
     provider: Arc<RwLock<T>>,
     config: Config,
 ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-    let blocks = warp::path!("blocks")
-        .and(warp::get())
-        .and(warp::query::<BlocksQueryParams>())
-        .and(using(side_chain.clone()))
-        .map(get_blocks)
-        .and_then(api::respond);
-
     let witnesses = warp::path!("witnesses")
         .and(warp::get())
-        .and(using(side_chain.clone()))
+        .and(using(local_store.clone()))
         .map(get_local_witnesses)
         .and_then(api::respond);
 
@@ -97,13 +86,6 @@ pub fn endpoints<S: ISideChain + Send, T: TransactionProvider + Send + Sync>(
         .map(get_portions)
         .and_then(api::respond);
 
-    warp::path!("v1" / ..) // Add path prefix /v1 to all our routes
-        .and(
-            blocks
-                .or(swap)
-                .or(deposit)
-                .or(withdraw)
-                .or(portions)
-                .or(witnesses),
-        )
+    // Add path prefix /v1 to all our routes
+    warp::path!("v1" / ..).and(swap.or(deposit).or(withdraw).or(portions).or(witnesses))
 }

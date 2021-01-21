@@ -121,13 +121,13 @@ impl<E: EthereumClient, T: TransactionProvider> EthOutputSender<E, T> {
 
         let sent = OutputSent {
             id: UUIDv4::new(),
-            timestamp: Timestamp::now(),
             outputs: uuids,
             coin: Coin::ETH,
             address: address.clone(),
             amount: new_amount,
             fee,
             transaction_id: tx_hash.to_string().into(),
+            event_number: None,
         };
 
         match sent.validate(self.network) {
@@ -220,7 +220,7 @@ mod test {
     use super::*;
     use crate::{
         common::ethereum,
-        side_chain::MemorySideChain,
+        local_store::MemoryLocalStore,
         utils::test_utils::{data::TestData, ethereum::TestEthereumClient, TEST_ROOT_KEY},
         vault::{
             blockchain_connection::ethereum::EstimateResult,
@@ -237,10 +237,10 @@ mod test {
     }
 
     fn get_output_sender(
-    ) -> EthOutputSender<TestEthereumClient, MemoryTransactionsProvider<MemorySideChain>> {
-        let side_chain = MemorySideChain::new();
-        let side_chain = Arc::new(Mutex::new(side_chain));
-        let provider = MemoryTransactionsProvider::new_protected(side_chain.clone());
+    ) -> EthOutputSender<TestEthereumClient, MemoryTransactionsProvider<MemoryLocalStore>> {
+        let local_store = MemoryLocalStore::new();
+        let local_store = Arc::new(Mutex::new(local_store));
+        let provider = MemoryTransactionsProvider::new_protected(local_store.clone());
         let client = TestEthereumClient::new();
         let key = RawKey::decode(TEST_ROOT_KEY).unwrap();
         EthOutputSender::new(client, provider, key, Network::Testnet)

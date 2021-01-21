@@ -38,6 +38,7 @@ impl TestData {
             base_input_address: TEST_LOKI_ADDRESS.into(),
             base_input_address_id: TEST_LOKI_PAYMENT_ID.to_vec(),
             base_return_address: TEST_LOKI_ADDRESS.into(),
+            event_number: None,
         };
         quote.validate(Network::Testnet).unwrap();
         quote
@@ -47,13 +48,13 @@ impl TestData {
     pub fn witness(quote_id: UUIDv4, amount: u128, coin: Coin) -> Witness {
         let witness = Witness {
             id: UUIDv4::new(),
-            timestamp: Timestamp::now(),
             quote: quote_id,
             transaction_id: "".into(),
             transaction_block_number: 0,
             transaction_index: 0,
             amount,
             coin,
+            event_number: None,
         };
         witness.validate(Network::Testnet).unwrap();
         witness
@@ -72,6 +73,7 @@ impl TestData {
             other_address: TEST_ETH_ADDRESS.into(),
             fraction: WithdrawFraction::MAX,
             signature: vec![],
+            event_number: None,
         };
 
         request
@@ -112,6 +114,7 @@ impl TestData {
             output_address: output_address.into(),
             effective_price: calculate_effective_price(1, 1).unwrap(),
             slippage_limit: None,
+            event_number: None,
         };
         quote.validate(Network::Testnet).unwrap();
         quote
@@ -121,10 +124,10 @@ impl TestData {
     pub fn pool_change(pool: Coin, depth_change: i128, base_depth_change: i128) -> PoolChange {
         let change = PoolChange {
             id: UUIDv4::new(),
-            timestamp: Timestamp::now(),
             pool,
             depth_change,
             base_depth_change,
+            event_number: None,
         };
         change.validate(Network::Testnet).unwrap();
         change
@@ -140,13 +143,13 @@ impl TestData {
 
         let output = Output {
             id: UUIDv4::new(),
-            timestamp: Timestamp::now(),
             parent: OutputParent::SwapQuote(UUIDv4::new()),
             witnesses: vec![],
             pool_changes: vec![],
             coin,
             address: address.into(),
             amount,
+            event_number: None,
         };
         output.validate(Network::Testnet).unwrap();
         output
@@ -162,13 +165,13 @@ impl TestData {
 
         let sent = OutputSent {
             id: UUIDv4::new(),
-            timestamp: Timestamp::now(),
             outputs: vec![UUIDv4::new()],
             coin,
             address: address.into(),
             amount: 100,
             fee: 0,
             transaction_id: "txid".into(),
+            event_number: None,
         };
         sent.validate(Network::Testnet).unwrap();
         sent

@@ -1,9 +1,9 @@
 use crate::{
     common::WalletAddress,
-    side_chain::{SideChainTx},
+    local_store::LocalEvent,
     vault::{blockchain_connection::btc::BitcoinSPVClient, transactions::TransactionProvider},
 };
-use chainflip_common::types::{chain::Witness, coin::Coin, Timestamp, UUIDv4};
+use chainflip_common::types::{chain::Witness, coin::Coin, UUIDv4};
 use parking_lot::RwLock;
 use std::sync::Arc;
 
@@ -74,7 +74,7 @@ where
                     (quote_inner.id, quote_inner.coin_input_address.clone())
                 });
 
-            let mut witness_txs: Vec<SideChainTx> = vec![];
+            let mut witness_txs: Vec<LocalEvent> = vec![];
             for (id, address) in swap_id_address_pairs.chain(deposit_id_address_pairs) {
                 let btc_address = WalletAddress(address.to_string());
                 let utxos = match self.client.get_address_unspent(&btc_address).await {
@@ -96,13 +96,13 @@ where
                 for utxo in utxos.0 {
                     let tx = Witness {
                         id: UUIDv4::new(),
-                        timestamp: Timestamp::now(),
                         quote: id,
                         transaction_id: utxo.tx_hash.into(),
                         transaction_block_number: utxo.height,
                         transaction_index: utxo.tx_pos,
                         amount: utxo.value as u128,
                         coin: Coin::BTC,
+                        event_number: None,
                     };
 
                     witness_txs.push(tx.into());
@@ -112,7 +112,9 @@ where
         };
 
         if witness_txs.len() > 0 {
-            self.transaction_provider.write().add_transactions(witness_txs);
+            self.transaction_provider
+                .write()
+                .add_local_events(witness_txs);
         }
     }
 }
@@ -121,7 +123,7 @@ where
 mod test {
     use super::*;
     use crate::{
-        side_chain::{MemorySideChain},
+        local_store::MemoryLocalStore,
         utils::test_utils::{
             btc::TestBitcoinSPVClient, data::TestData, get_transactions_provider, TEST_BTC_ADDRESS,
         },
@@ -130,14 +132,11 @@ mod test {
         },
     };
 
-    type TestTransactionsProvider = MemoryTransactionsProvider<MemorySideChain>;
+    type TestTransactionsProvider = MemoryTransactionsProvider<MemoryLocalStore>;
     struct TestObjects {
         client: Arc<TestBitcoinSPVClient>,
         provider: Arc<RwLock<TestTransactionsProvider>>,
-        witness: BtcSPVWitness<
-            TestTransactionsProvider,
-            TestBitcoinSPVClient,
-        >,
+        witness: BtcSPVWitness<TestTransactionsProvider, TestBitcoinSPVClient>,
     }
 
     fn setup() -> TestObjects {
@@ -182,7 +181,7 @@ mod test {
 
         {
             let mut provider = provider.write();
-            provider.add_transactions(vec![btc_quote.into()]).unwrap();
+            provider.add_local_events(vec![btc_quote.into()]).unwrap();
 
             assert_eq!(provider.get_swap_quotes().len(), 1);
             assert_eq!(provider.get_witnesses().len(), 0);
@@ -227,7 +226,7 @@ mod test {
         {
             let mut provider = provider.write();
             provider
-                .add_transactions(vec![btc_deposit_quote.into()])
+                .add_local_events(vec![btc_deposit_quote.into()])
                 .unwrap();
 
             assert_eq!(provider.get_deposit_quotes().len(), 1);
@@ -256,7 +255,7 @@ mod test {
         {
             let mut provider = provider.write();
             provider
-                .add_transactions(vec![btc_quote.into(), btc_deposit_quote.into()])
+                .add_local_events(vec![btc_quote.into(), btc_deposit_quote.into()])
                 .unwrap();
 
             assert_eq!(provider.get_swap_quotes().len(), 1);
@@ -286,7 +285,7 @@ mod test {
         {
             let mut provider = provider.write();
             provider
-                .add_transactions(vec![eth_quote.into(), eth_deposit_quote.into()])
+                .add_local_events(vec![eth_quote.into(), eth_deposit_quote.into()])
                 .unwrap();
 
             assert_eq!(provider.get_swap_quotes().len(), 1);

@@ -1,7 +1,7 @@
 use super::{data::TestData, store::MemoryKVS};
 use crate::{
     common::*,
-    side_chain::{ISideChain, MemorySideChain, SideChainTx},
+    local_store::{ILocalStore, LocalEvent, MemoryLocalStore},
     vault::{
         processor::{CoinProcessor, ProcessorEvent, SideChainProcessor},
         transactions::{memory_provider::Portion, MemoryTransactionsProvider, TransactionProvider},
@@ -10,6 +10,7 @@ use crate::{
 use chainflip_common::types::{chain::*, coin::Coin, Network};
 use parking_lot::RwLock;
 use std::{
+    hint::unreachable_unchecked,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -46,12 +47,12 @@ impl CoinProcessor for FakeCoinSender {
 /// A wrapper around sidechain/provider used in tests with handy
 /// shortcuts for staking etc.
 pub struct TestRunner {
-    /// Sidechain
-    pub chain: Arc<Mutex<MemorySideChain>>,
+    /// Local store
+    pub store: Arc<Mutex<MemoryLocalStore>>,
     /// Receiving end of the channel used to shut down the server
     pub receiver: crossbeam_channel::Receiver<ProcessorEvent>,
     /// State provider
-    pub provider: Arc<RwLock<MemoryTransactionsProvider<MemorySideChain>>>,
+    pub provider: Arc<RwLock<MemoryTransactionsProvider<MemoryLocalStore>>>,
     /// Sent outputs are recorded here
     pub sent_outputs: Arc<Mutex<Vec<Output>>>,
 }
@@ -59,10 +60,9 @@ pub struct TestRunner {
 impl TestRunner {
     /// Create an instance
     pub fn new() -> Self {
-        let chain = MemorySideChain::new();
-        let chain = Arc::new(Mutex::new(chain));
-
-        let provider = MemoryTransactionsProvider::new(chain.clone());
+        let store = MemoryLocalStore::new();
+        let store = Arc::new(Mutex::new(store));
+        let provider = MemoryTransactionsProvider::new(store.clone());
         let provider = Arc::new(RwLock::new(provider));
 
         let (sender, sent_outputs) = FakeCoinSender::new();
@@ -80,27 +80,22 @@ impl TestRunner {
         processor.start(Some(sender));
 
         TestRunner {
-            chain,
+            store,
             receiver,
             provider,
             sent_outputs,
         }
     }
 
-    /// Add `block` to the blockchain
-    pub fn add_block<T>(&mut self, block: T)
+    pub fn add_local_events<L>(&mut self, events: L)
     where
-        T: Into<Vec<SideChainTx>>,
+        L: Into<Vec<LocalEvent>>,
     {
-        let mut chain = self.chain.lock().unwrap();
+        let mut local_store = self.store.lock().unwrap();
 
-        chain
-            .add_block(block.into())
-            .expect("Could not add transactions");
-
-        drop(chain);
-
-        self.sync();
+        local_store
+            .add_events(events.into())
+            .expect("Could not add events");
     }
 
     /// A helper function that adds a deposit quote and the corresponding witnesses
@@ -120,8 +115,11 @@ impl TestRunner {
             other_amount.coin_type(),
         );
 
-        self.add_block([deposit_quote.clone().into()]);
-        self.add_block([wtx_loki.into(), wtx_eth.into()]);
+        self.add_local_events([
+            wtx_loki.into(),
+            wtx_eth.into(),
+            deposit_quote.clone().into(),
+        ]);
 
         deposit_quote
     }
@@ -171,7 +169,7 @@ impl TestRunner {
     pub fn add_withdraw_request_for(&mut self, staker: &Staker, pool: PoolCoin) {
         let tx = TestData::withdraw_request_for_staker(staker, pool.get_coin());
 
-        self.add_block([tx.into()]);
+        self.add_local_events([tx.into()])
     }
 
     /// Convenience method to get portions for `staker_id` in `pool`
@@ -195,12 +193,9 @@ impl TestRunner {
 
     /// Sync processor
     pub fn sync(&mut self) {
-        let total_blocks = self.chain.lock().unwrap().total_blocks();
-
-        if total_blocks > 0 {
-            let last_block = total_blocks.checked_sub(1).unwrap();
-            spin_until_block(&self.receiver, last_block);
-        }
+        // let total_blocks = self.chain.lock().unwrap().total_blocks();
+        let last_seen = self.store.lock().unwrap().total_events();
+        spin_until_last_seen(&self.receiver, last_seen);
     }
 }
 
@@ -213,7 +208,7 @@ pub struct EthDepositOutputs {
     pub eth_output: Output,
 }
 
-fn spin_until_block(receiver: &crossbeam_channel::Receiver<ProcessorEvent>, target_idx: u32) {
+fn spin_until_last_seen(receiver: &crossbeam_channel::Receiver<ProcessorEvent>, last_seen: u64) {
     // Long timeout just to make sure a failing test
     let timeout = Duration::from_secs(10);
 
@@ -221,8 +216,8 @@ fn spin_until_block(receiver: &crossbeam_channel::Receiver<ProcessorEvent>, targ
         match receiver.recv_timeout(timeout) {
             Ok(event) => {
                 info!("--- received event: {:?}", event);
-                let ProcessorEvent::BLOCK(idx) = event;
-                if idx >= target_idx {
+                let ProcessorEvent::EVENT(seen) = event;
+                if seen >= last_seen {
                     break;
                 }
             }

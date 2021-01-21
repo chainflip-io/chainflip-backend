@@ -1,9 +1,9 @@
 use self::types::TransactionType;
-use super::{BlockProcessor, StateProvider};
+use super::{EventProcessor, StateProvider};
 use crate::{
     common::store::utils::SQLite as KVS,
     common::{Liquidity, LiquidityProvider, PoolCoin},
-    side_chain::{SideChainBlock, SideChainTx},
+    local_store::LocalEvent,
 };
 use chainflip_common::types::{chain::*, UUIDv4};
 use itertools::Itertools;
@@ -35,50 +35,50 @@ impl Database {
         Database { connection }
     }
 
-    fn set_last_processed_block_number(&self, block_number: u32) -> Result<(), String> {
+    fn set_last_processed_event_number(&self, event_num: u128) -> Result<(), String> {
         KVS::set_data(
             &self.connection,
-            "last_processed_block_number",
-            Some(block_number),
+            "last_processed_event_number",
+            Some(event_num),
         )
     }
 
-    fn process_transactions(db: &Transaction, txs: &[SideChainTx]) {
+    fn process_transactions(db: &Transaction, txs: &[LocalEvent]) {
         for tx in txs {
             match tx {
-                SideChainTx::PoolChange(tx) => {
+                LocalEvent::Witness(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::SwapQuote(tx) => {
+                LocalEvent::PoolChange(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::DepositQuote(tx) => {
+                LocalEvent::SwapQuote(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::Witness(tx) => {
+                LocalEvent::DepositQuote(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::Output(tx) => {
+                LocalEvent::Output(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::OutputSent(tx) => {
+                LocalEvent::OutputSent(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::Deposit(tx) => {
+                LocalEvent::Deposit(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::WithdrawRequest(tx) => {
+                LocalEvent::WithdrawRequest(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::Withdraw(tx) => {
+                LocalEvent::Withdraw(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
@@ -160,36 +160,40 @@ impl Database {
     }
 }
 
-impl BlockProcessor for Database {
-    fn get_last_processed_block_number(&self) -> Option<u32> {
-        KVS::get_data(&self.connection, "last_processed_block_number")
+impl EventProcessor for Database {
+    fn get_last_processed_event_number(&self) -> Option<u64> {
+        KVS::get_data(&self.connection, "last_processed_event_number")
     }
 
-    fn process_blocks(&mut self, blocks: &[SideChainBlock]) -> Result<(), String> {
-        let tx = match self.connection.transaction() {
-            Ok(transaction) => transaction,
-            Err(err) => {
-                error!("Failed to open database transaction: {}", err);
-                return Err("Failed to process block".to_owned());
-            }
-        };
-
-        for block in blocks.iter() {
-            Database::process_transactions(&tx, &block.transactions)
-        }
-
-        if let Err(err) = tx.commit() {
-            error!("Failed to commit process block changes: {}", err);
-            return Err("Failed to commit process block changes".to_owned());
-        };
-
-        let last_block_number = blocks.iter().map(|b| b.id).max();
-        if let Some(last_block_number) = last_block_number {
-            self.set_last_processed_block_number(last_block_number)?;
-        }
-
-        Ok(())
+    fn process_events(&mut self, events: &[LocalEvent]) -> Result<(), String> {
+        todo!();
     }
+
+    // fn process_blocks(&mut self, blocks: &[SideChainBlock]) -> Result<(), String> {
+    //     let tx = match self.connection.transaction() {
+    //         Ok(transaction) => transaction,
+    //         Err(err) => {
+    //             error!("Failed to open database transaction: {}", err);
+    //             return Err("Failed to process block".to_owned());
+    //         }
+    //     };
+
+    //     for block in blocks.iter() {
+    //         Database::process_transactions(&tx, &block.transactions)
+    //     }
+
+    //     if let Err(err) = tx.commit() {
+    //         error!("Failed to commit process block changes: {}", err);
+    //         return Err("Failed to commit process block changes".to_owned());
+    //     };
+
+    //     let last_block_number = blocks.iter().map(|b| b.id).max();
+    //     if let Some(last_block_number) = last_block_number {
+    //         self.set_last_processed_block_number(last_block_number)?;
+    //     }
+
+    //     Ok(())
+    // }
 }
 
 impl StateProvider for Database {
@@ -311,30 +315,35 @@ mod test {
     }
 
     #[test]
-    fn processes_blocks() {
-        let mut db = setup();
-
-        assert!(db.get_last_processed_block_number().is_none());
-
-        let blocks: Vec<SideChainBlock> = vec![
-            SideChainBlock {
-                id: 1,
-                transactions: vec![],
-            },
-            SideChainBlock {
-                id: 2,
-                transactions: vec![],
-            },
-            SideChainBlock {
-                id: 10,
-                transactions: vec![],
-            },
-        ];
-
-        db.process_blocks(&blocks).unwrap();
-
-        assert_eq!(db.get_last_processed_block_number(), Some(10));
+    fn process_events() {
+        todo!();
     }
+
+    // #[test]
+    // fn processes_blocks() {
+    //     let mut db = setup();
+
+    //     assert!(db.get_last_processed_block_number().is_none());
+
+    //     let blocks: Vec<SideChainBlock> = vec![
+    //         SideChainBlock {
+    //             id: 1,
+    //             transactions: vec![],
+    //         },
+    //         SideChainBlock {
+    //             id: 2,
+    //             transactions: vec![],
+    //         },
+    //         SideChainBlock {
+    //             id: 10,
+    //             transactions: vec![],
+    //         },
+    //     ];
+
+    //     db.process_blocks(&blocks).unwrap();
+
+    //     assert_eq!(db.get_last_processed_block_number(), Some(10));
+    // }
 
     #[test]
     fn processes_transactions() {
@@ -342,7 +351,7 @@ mod test {
         let tx = db.connection.transaction().unwrap();
         let staker = get_random_staker();
 
-        let transactions: Vec<SideChainTx> = vec![
+        let transactions: Vec<LocalEvent> = vec![
             TestData::pool_change(Coin::BTC, -100, 100).into(),
             TestData::swap_quote(Coin::ETH, Coin::LOKI).into(),
             TestData::deposit_quote(Coin::ETH).into(),
@@ -367,18 +376,19 @@ mod test {
     #[test]
     fn returns_pools() {
         let mut db = setup();
-        let transactions: Vec<SideChainTx> = vec![
+        let transactions: Vec<LocalEvent> = vec![
             TestData::pool_change(Coin::BTC, 100, 100).into(),
             TestData::pool_change(Coin::ETH, 75, 75).into(),
             TestData::pool_change(Coin::BTC, 100, -50).into(),
             TestData::pool_change(Coin::BTC, 0, -50).into(),
         ];
 
-        db.process_blocks(&[SideChainBlock {
-            id: 0,
-            transactions,
-        }])
-        .unwrap();
+        todo!("process events");
+        // db.process_blocks(&[SideChainBlock {
+        //     id: 0,
+        //     transactions,
+        // }])
+        // .unwrap();
 
         let pools = db.get_pools();
 

@@ -1,7 +1,7 @@
 use crate::{
     common::liquidity_provider::{LiquidityProvider, MemoryLiquidityProvider},
     constants::SWAP_QUOTE_HARD_EXPIRE,
-    side_chain::SideChainTx,
+    local_store::LocalEvent,
     vault::transactions::{
         memory_provider::{FulfilledWrapper, UsedWitnessWrapper},
         TransactionProvider,
@@ -63,7 +63,7 @@ fn process<L: LiquidityProvider>(
     provider: &L,
     swaps: &[Swap],
     network: Network,
-) -> Vec<SideChainTx> {
+) -> Vec<LocalEvent> {
     if swaps.is_empty() {
         return vec![];
     }
@@ -71,7 +71,7 @@ fn process<L: LiquidityProvider>(
     let mut liquidity = MemoryLiquidityProvider::new();
     liquidity.populate(provider);
 
-    let mut transactions: Vec<SideChainTx> = vec![];
+    let mut transactions: Vec<LocalEvent> = vec![];
 
     for swap in swaps.iter() {
         match logic::process_swap(&liquidity, &swap.quote, &swap.witnesses, network) {
@@ -82,10 +82,10 @@ fn process<L: LiquidityProvider>(
                         .update_liquidity(&tx)
                         .expect("Failed to update liquidity in a swap!");
 
-                    transactions.push(SideChainTx::PoolChange(tx));
+                    transactions.push(LocalEvent::PoolChange(tx));
                 }
 
-                transactions.push(SideChainTx::Output(result.output));
+                transactions.push(LocalEvent::Output(result.output));
             }
             // On an error we can just log and try again later
             Err(err) => error!("Failed to process swap {:?}. {}", swap, err),
@@ -101,13 +101,13 @@ pub fn process_swaps<T: TransactionProvider>(provider: &mut Arc<RwLock<T>>, netw
 
     let swaps = get_swaps(&*provider.read());
 
-    let transactions = process(&*provider.read(), &swaps, network);
+    let events = process(&*provider.read(), &swaps, network);
 
-    if transactions.len() > 0 {
+    if events.len() > 0 {
         provider
             .write()
-            .add_transactions(transactions)
-            .expect("Failed to add processed swap transactions");
+            .add_local_events(events)
+            .expect("Failed to add processed swap events");
     }
 }
 
@@ -115,7 +115,7 @@ pub fn process_swaps<T: TransactionProvider>(provider: &mut Arc<RwLock<T>>, netw
 mod test {
     use crate::{
         common::{GenericCoinAmount, Liquidity, PoolCoin},
-        side_chain::{ISideChain, MemorySideChain},
+        local_store::{LocalEvent, MemoryLocalStore},
         utils::test_utils::data::TestData,
         vault::transactions::MemoryTransactionsProvider,
     };
@@ -129,13 +129,13 @@ mod test {
     use super::*;
 
     struct Runner {
-        side_chain: Arc<Mutex<MemorySideChain>>,
-        provider: Arc<RwLock<MemoryTransactionsProvider<MemorySideChain>>>,
+        side_chain: Arc<Mutex<MemoryLocalStore>>,
+        provider: Arc<RwLock<MemoryTransactionsProvider<MemoryLocalStore>>>,
     }
 
     impl Runner {
         fn new() -> Self {
-            let side_chain = MemorySideChain::new();
+            let side_chain = MemoryLocalStore::new();
             let side_chain = Arc::new(Mutex::new(side_chain));
             let provider = MemoryTransactionsProvider::new_protected(side_chain.clone());
 
@@ -293,7 +293,7 @@ mod test {
         let txs = process(&provider, &[swap], Network::Testnet);
         assert_eq!(txs.len(), 1);
 
-        if let SideChainTx::Output(output) = txs.first().unwrap() {
+        if let LocalEvent::Output(output) = txs.first().unwrap() {
             assert_eq!(output.coin, quote.input);
             assert_eq!(output.amount, 100);
         } else {
@@ -330,12 +330,12 @@ mod test {
         assert_eq!(txs.len(), 2);
 
         match txs.first().unwrap() {
-            SideChainTx::PoolChange(_) => {}
+            LocalEvent::PoolChange(_) => {}
             tx @ _ => panic!("Expected to find pool change transaction. Found: {:?}", tx),
         }
 
         match txs.last().unwrap() {
-            SideChainTx::Output(_) => {}
+            LocalEvent::Output(_) => {}
             tx @ _ => panic!("Expected to find output transaction. Found {:?}", tx),
         }
     }
@@ -398,14 +398,14 @@ mod test {
         let expected_second_amount = 2332902777777;
         let expected_third_amount = 3199500000000;
 
-        if let SideChainTx::Output(first_output) = txs.get(1).unwrap() {
+        if let LocalEvent::Output(first_output) = txs.get(1).unwrap() {
             assert_eq!(first_output.coin, Coin::LOKI);
             assert_eq!(first_output.amount, expected_first_amount);
         } else {
             panic!("Expected to get an output transaction");
         }
 
-        if let SideChainTx::Output(second_output) = txs.get(3).unwrap() {
+        if let LocalEvent::Output(second_output) = txs.get(3).unwrap() {
             assert_eq!(second_output.coin, Coin::LOKI);
             assert_ne!(
                 second_output.amount, expected_first_amount,
@@ -416,7 +416,7 @@ mod test {
             panic!("Expected to get an output transaction");
         }
 
-        if let SideChainTx::Output(third_output) = txs.get(5).unwrap() {
+        if let LocalEvent::Output(third_output) = txs.get(5).unwrap() {
             assert_eq!(third_output.coin, Coin::LOKI);
             assert_eq!(
                 third_output.amount, expected_third_amount,

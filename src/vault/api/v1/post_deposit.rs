@@ -187,6 +187,7 @@ pub async fn deposit<T: TransactionProvider>(
         base_input_address: base_input_address.to_string().into(),
         base_input_address_id,
         base_return_address: params.loki_return_address.into(),
+        event_number: None,
     };
 
     quote.validate(config.net_type).map_err(|err| {
@@ -199,7 +200,7 @@ pub async fn deposit<T: TransactionProvider>(
     })?;
 
     provider
-        .add_transactions(vec![quote.clone().into()])
+        .add_local_events(vec![quote.clone().into()])
         .map_err(|err| {
             error!("Failed to add deposit quote: {}", err);
             internal_server_error()
@@ -364,7 +365,7 @@ mod test {
 
         for quote in vec![quote_1, quote_2] {
             let mut provider = get_transactions_provider();
-            provider.add_transactions(vec![quote.into()]).unwrap();
+            provider.add_local_events(vec![quote.into()]).unwrap();
 
             let provider = Arc::new(RwLock::new(provider));
 

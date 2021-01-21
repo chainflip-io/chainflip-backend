@@ -81,13 +81,13 @@ impl LokiSender {
 
                     let sent = OutputSent {
                         id: UUIDv4::new(),
-                        timestamp: Timestamp::now(),
                         outputs: vec![output.id],
                         coin: Coin::LOKI,
                         address: output.address.clone(),
                         amount: amount.to_atomic(),
                         fee: res.fee.to_atomic(),
                         transaction_id: (&res.tx_hash).into(),
+                        event_number: None,
                     };
 
                     if let Err(err) = sent.validate(self.network) {

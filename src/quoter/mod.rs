@@ -1,6 +1,6 @@
 use crate::{
     common::{Liquidity, LiquidityProvider, PoolCoin},
-    side_chain::SideChainBlock,
+    local_store::LocalEvent,
 };
 use chainflip_common::types::{chain::*, UUIDv4};
 use std::{
@@ -11,7 +11,7 @@ use std::{
 use vault_node::VaultNodeInterface;
 
 mod api;
-mod block_poller;
+mod state_chain_poller;
 
 use api::API;
 
@@ -26,6 +26,9 @@ pub mod config;
 
 /// Test utils
 pub mod test_utils;
+
+/// helper types
+pub mod types;
 
 /// Quoter
 pub struct Quoter {}
@@ -43,9 +46,10 @@ impl Quoter {
     ) -> Result<(), String>
     where
         V: VaultNodeInterface + Send + Sync + 'static,
-        D: BlockProcessor + StateProvider + Send + 'static,
+        D: EventProcessor + StateProvider + Send + 'static,
     {
-        let poller = block_poller::BlockPoller::new(vault_node_api.clone(), database.clone());
+        let poller =
+            state_chain_poller::StateChainPoller::new(vault_node_api.clone(), database.clone());
         tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(poller.sync())?;
@@ -64,13 +68,10 @@ impl Quoter {
     }
 }
 
-/// A trait for processing side chain blocks received from the vault node.
-pub trait BlockProcessor {
-    /// Get the block number that was last processed.
-    fn get_last_processed_block_number(&self) -> Option<u32>;
+pub trait EventProcessor {
+    fn get_last_processed_event_number(&self) -> Option<u64>;
 
-    /// Process a list of blocks
-    fn process_blocks(&mut self, blocks: &[SideChainBlock]) -> Result<(), String>;
+    fn process_events(&mut self, events: &[LocalEvent]) -> Result<(), String>;
 }
 /// A trait for providing quoter state
 pub trait StateProvider: LiquidityProvider {

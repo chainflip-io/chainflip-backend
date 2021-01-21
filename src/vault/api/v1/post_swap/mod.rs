@@ -199,6 +199,7 @@ pub async fn swap<T: TransactionProvider>(
         output_address: params.output_address.clone().into(),
         effective_price,
         slippage_limit,
+        event_number: None,
     };
 
     if let Err(err) = quote.validate(config.net_type) {
@@ -210,7 +211,7 @@ pub async fn swap<T: TransactionProvider>(
     }
 
     provider
-        .add_transactions(vec![quote.clone().into()])
+        .add_local_events(vec![quote.clone().into()])
         .map_err(|err| {
             error!("Failed to add swap quote: {}", err);
             internal_server_error()
@@ -273,9 +274,10 @@ mod test {
             output: quote_params.output_coin,
             slippage_limit: None,
             output_address: quote_params.output_address.clone().into(),
-            effective_price: 1
+            effective_price: 1,
+            event_number: None
         };
-        provider.add_transactions(vec![quote.into()]).unwrap();
+        provider.add_local_events(vec![quote.into()]).unwrap();
 
         let provider = Arc::new(RwLock::new(provider));
 
@@ -302,10 +304,10 @@ mod test {
         {
             let tx = PoolChange {
                 id: UUIDv4::new(),
-                timestamp: Timestamp::now(),
                 pool: Coin::ETH,
                 depth_change: 0,
                 base_depth_change: 0,
+                event_number: None,
             };
 
             let mut provider = provider.write();
@@ -324,12 +326,12 @@ mod test {
         let mut provider = get_transactions_provider();
         let tx = PoolChange {
             id: UUIDv4::new(),
-            timestamp: Timestamp::now(),
             pool: Coin::ETH,
             depth_change: 10_000_000_000,
             base_depth_change: 50_000_000_000,
+            event_number: None,
         };
-        provider.add_transactions(vec![tx.into()]).unwrap();
+        provider.add_local_events(vec![tx.into()]).unwrap();
 
         let provider = Arc::new(RwLock::new(provider));
 
