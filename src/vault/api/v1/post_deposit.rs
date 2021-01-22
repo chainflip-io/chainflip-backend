@@ -7,7 +7,16 @@ use crate::{
     utils::address::{generate_btc_address_from_index, generate_eth_address},
     vault::{processor::utils::get_swap_expire_timestamp, transactions::TransactionProvider},
 };
-use chainflip_common::{types::{Timestamp, UUIDv4, addresses::{EthereumAddress, LokiAddress}, chain::{DepositQuote, Validate}, coin::Coin}, utils::{address_id, ethereum::ETH_DEPOSIT_INIT_CODE}, validation::{validate_address, validate_address_id}};
+use chainflip_common::{
+    types::{
+        addresses::{EthereumAddress, LokiAddress},
+        chain::{DepositQuote, Validate},
+        coin::Coin,
+        Timestamp, UUIDv4,
+    },
+    utils::{address_id, ethereum::ETH_DEPOSIT_INIT_CODE},
+    validation::{validate_address, validate_address_id},
+};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::{convert::TryInto, str::FromStr, sync::Arc};
@@ -217,7 +226,10 @@ pub async fn deposit<T: TransactionProvider>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::utils::test_utils::{self, TEST_ETH_ADDRESS, TEST_ETH_SALT, TEST_LOKI_ADDRESS, TEST_ROOT_KEY, get_transactions_provider, staking::get_random_staker};
+    use crate::utils::test_utils::{
+        self, get_transactions_provider, staking::get_random_staker, TEST_ETH_ADDRESS,
+        TEST_ETH_SALT, TEST_LOKI_ADDRESS, TEST_ROOT_KEY,
+    };
     use chainflip_common::types::Network;
     use test_utils::data::TestData;
 

@@ -30,10 +30,5 @@ jobs:
       run: cargo build --verbose --release
     - name: Run tests
       run: cargo test --verbose
-    # - name: Upload artifacts
-    #   uses: actions/upload-artifact@v2
-    #   with:
-    #     name: ${{ runner.os }} - Vault and quoter binaries
-    #     path: |
-    #       target/release/quoter
-    #       target/release/vault
+    - name: Check formatting
+      run: cargo fmt -- --check

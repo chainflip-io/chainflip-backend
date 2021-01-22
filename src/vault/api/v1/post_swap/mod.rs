@@ -10,7 +10,16 @@ use crate::{
     },
     vault::{processor::utils::get_swap_expire_timestamp, transactions::TransactionProvider},
 };
-use chainflip_common::{types::{Timestamp, UUIDv4, addresses::{EthereumAddress, LokiAddress}, chain::{SwapQuote, Validate}, coin::Coin, fraction::PercentageFraction}, utils::{address_id, ethereum::ETH_DEPOSIT_INIT_CODE}};
+use chainflip_common::{
+    types::{
+        addresses::{EthereumAddress, LokiAddress},
+        chain::{SwapQuote, Validate},
+        coin::Coin,
+        fraction::PercentageFraction,
+        Timestamp, UUIDv4,
+    },
+    utils::{address_id, ethereum::ETH_DEPOSIT_INIT_CODE},
+};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::{convert::TryInto, str::FromStr, sync::Arc};
