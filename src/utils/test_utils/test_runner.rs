@@ -87,6 +87,7 @@ impl TestRunner {
         }
     }
 
+    /// Add a bunch of local events to the store, for retrieval later on, when consensus is reached
     pub fn add_local_events<L>(&mut self, events: L)
     where
         L: Into<Vec<LocalEvent>>,

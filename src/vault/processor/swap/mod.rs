@@ -1,7 +1,7 @@
 use crate::{
     common::liquidity_provider::{LiquidityProvider, MemoryLiquidityProvider},
     constants::SWAP_QUOTE_HARD_EXPIRE,
-    local_store::LocalEvent,
+    local_store::{ILocalStore, LocalEvent},
     vault::transactions::{
         memory_provider::{FulfilledWrapper, UsedWitnessWrapper},
         TransactionProvider,
@@ -129,18 +129,18 @@ mod test {
     use super::*;
 
     struct Runner {
-        side_chain: Arc<Mutex<MemoryLocalStore>>,
+        local_store: Arc<Mutex<MemoryLocalStore>>,
         provider: Arc<RwLock<MemoryTransactionsProvider<MemoryLocalStore>>>,
     }
 
     impl Runner {
         fn new() -> Self {
-            let side_chain = MemoryLocalStore::new();
-            let side_chain = Arc::new(Mutex::new(side_chain));
-            let provider = MemoryTransactionsProvider::new_protected(side_chain.clone());
+            let local_store = MemoryLocalStore::new();
+            let local_store = Arc::new(Mutex::new(local_store));
+            let provider = MemoryTransactionsProvider::new_protected(local_store.clone());
 
             Self {
-                side_chain,
+                local_store,
                 provider,
             }
         }
@@ -169,10 +169,10 @@ mod test {
         let second_witness = get_witness(&quote_with_witnesses, 200);
 
         runner
-            .side_chain
+            .local_store
             .lock()
             .unwrap()
-            .add_block(vec![
+            .add_events(vec![
                 quote_with_no_witnesses.into(),
                 quote_with_witnesses.clone().into(),
                 first_witness.clone().into(),
@@ -201,10 +201,10 @@ mod test {
         let witness = get_witness(&quote, 100);
 
         runner
-            .side_chain
+            .local_store
             .lock()
             .unwrap()
-            .add_block(vec![quote.into(), witness.into()])
+            .add_events(vec![quote.into(), witness.into()])
             .unwrap();
 
         runner.sync_provider();
@@ -222,10 +222,10 @@ mod test {
         witness.coin = quote.output; // Witness coin must match quote input
 
         runner
-            .side_chain
+            .local_store
             .lock()
             .unwrap()
-            .add_block(vec![quote.into(), witness.into()])
+            .add_events(vec![quote.into(), witness.into()])
             .unwrap();
 
         runner.sync_provider();
@@ -244,20 +244,20 @@ mod test {
 
         let output = Output {
             id: UUIDv4::new(),
-            timestamp: Timestamp::now(),
             parent: OutputParent::SwapQuote(quote.id),
             witnesses: vec![used.id],
             pool_changes: vec![],
             coin: quote.output,
             address: quote.output_address.clone(),
             amount: 200,
+            event_number: None,
         };
 
         runner
-            .side_chain
+            .local_store
             .lock()
             .unwrap()
-            .add_block(vec![
+            .add_events(vec![
                 quote.into(),
                 unused.clone().into(),
                 used.into(),
@@ -440,7 +440,7 @@ mod test {
     }
 
     #[test]
-    fn process_swaps_correctly_updates_side_chain() {
+    fn process_swaps_correctly_updates_local_store() {
         let mut runner = Runner::new();
 
         let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
@@ -458,10 +458,10 @@ mod test {
             initial_loki_depth as i128,
         );
         runner
-            .side_chain
+            .local_store
             .lock()
             .unwrap()
-            .add_block(vec![initial_pool.into(), quote.into(), witness.into()])
+            .add_events(vec![initial_pool.into(), quote.into(), witness.into()])
             .unwrap();
 
         runner.sync_provider();

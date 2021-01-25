@@ -146,7 +146,7 @@ async fn vault_http_server_tests() {
 
     let mut runner = TestRunner::new();
 
-    let chain = Arc::clone(&runner.chain);
+    let chain = Arc::clone(&runner.store);
     let provider = Arc::clone(&runner.provider);
 
     let (tx, rx) = tokio::sync::oneshot::channel();

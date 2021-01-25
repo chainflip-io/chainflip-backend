@@ -339,7 +339,7 @@ mod test {
 
         for quote in vec![loki_quote, other_quote] {
             let mut provider = get_transactions_provider();
-            provider.add_transactions(vec![quote.into()]).unwrap();
+            provider.add_local_events(vec![quote.into()]).unwrap();
 
             let provider = Arc::new(RwLock::new(provider));
 

@@ -38,8 +38,8 @@ fn witnessed_deposit_changes_pool_liquidity() {
     let wtx_loki = TestData::witness(deposit_quote.id, loki_amount.to_atomic(), Coin::LOKI);
     let wtx_eth = TestData::witness(deposit_quote.id, coin_amount.to_atomic(), coin_type);
 
-    runner.add_block([deposit_quote.clone().into()]);
-    runner.add_block([wtx_loki.into(), wtx_eth.into()]);
+    runner.add_local_events([deposit_quote.clone().into()]);
+    runner.add_local_events([wtx_loki.into(), wtx_eth.into()]);
 
     check_liquidity(
         &mut *runner.provider.write(),
@@ -48,7 +48,7 @@ fn witnessed_deposit_changes_pool_liquidity() {
         coin_amount,
     );
 
-    runner.add_block([deposit_quote.clone().into()]);
+    runner.add_local_events([deposit_quote.clone().into()]);
 
     // Check that the balance has not changed
     check_liquidity(
@@ -76,8 +76,8 @@ fn multiple_deposits() {
     let wtx_eth = TestData::witness(deposit_quote.id, coin_amount.to_atomic(), coin_type);
 
     // Add blocks with those transactions
-    runner.add_block([deposit_quote.clone().into()]);
-    runner.add_block([wtx_loki.into(), wtx_eth.into()]);
+    runner.add_local_events([deposit_quote.clone().into()]);
+    runner.add_local_events([wtx_loki.into(), wtx_eth.into()]);
 
     check_liquidity(
         &mut *runner.provider.write(),
@@ -92,8 +92,8 @@ fn multiple_deposits() {
     let wtx_loki = TestData::witness(deposit_quote.id, loki_amount.to_atomic(), Coin::LOKI);
     let wtx_eth = TestData::witness(deposit_quote.id, coin_amount.to_atomic(), coin_type);
 
-    runner.add_block([deposit_quote.clone().into()]);
-    runner.add_block([wtx_loki.into(), wtx_eth.into()]);
+    runner.add_local_events([deposit_quote.clone().into()]);
+    runner.add_local_events([wtx_loki.into(), wtx_eth.into()]);
 }
 
 #[test]
@@ -114,7 +114,7 @@ fn sole_staker_can_withdraw_all() {
 
     let withdraw_request = TestData::withdraw_request_for_staker(&staker, deposit_quote.pool);
 
-    runner.add_block([withdraw_request.clone().into()]);
+    runner.add_local_events([withdraw_request.clone().into()]);
 
     // Check that outputs have been payed out
     let outputs = runner.get_outputs_for_withdraw_request(&withdraw_request);
@@ -145,7 +145,7 @@ fn half_staker_can_withdraw_half() {
     runner.check_eth_liquidity(loki_amount.to_atomic() * 2, eth_amount.to_atomic() * 2);
 
     let withdraw_request = TestData::withdraw_request_for_staker(&bob, deposit2.pool);
-    runner.add_block([withdraw_request.clone().into()]);
+    runner.add_local_events([withdraw_request.clone().into()]);
 
     // Check that outputs have been payed out
     let outputs = runner.get_outputs_for_withdraw_request(&withdraw_request);
@@ -220,11 +220,11 @@ fn non_staker_cannot_withdraw() {
     // Bob creates a deposit quote, but never pays the amounts:
     let deposit_quote = TestData::deposit_quote_for_id(bob.id(), eth_amount.coin_type());
 
-    runner.add_block([deposit_quote.clone().into()]);
+    runner.add_local_events([deposit_quote.clone().into()]);
 
     // Bob tries to withdraw:
     let withdraw_request = TestData::withdraw_request_for_staker(&bob, deposit_quote.pool);
-    runner.add_block([withdraw_request.clone().into()]);
+    runner.add_local_events([withdraw_request.clone().into()]);
 
     // Check that no outputs are created:
     let sent_outputs = runner.sent_outputs.lock().unwrap();

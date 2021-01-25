@@ -311,7 +311,7 @@ mod test {
             };
 
             let mut provider = provider.write();
-            provider.add_transactions(vec![tx.into()]).unwrap();
+            provider.add_local_events(vec![tx.into()]).unwrap();
         }
 
         let result = swap(params(), provider.clone(), config())

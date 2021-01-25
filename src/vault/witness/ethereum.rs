@@ -295,7 +295,7 @@ mod test {
         {
             let mut provider = provider.write();
             provider
-                .add_transactions(vec![
+                .add_local_events(vec![
                     eth_deposit_quote.clone().into(),
                     btc_deposit_quote.into(),
                 ])

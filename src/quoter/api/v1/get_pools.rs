@@ -74,7 +74,7 @@ where
 mod test {
     use crate::{
         local_store::LocalEvent,
-        quoter::{api::v1::test::setup_memory_db, BlockProcessor},
+        quoter::{api::v1::test::setup_memory_db, EventProcessor},
         utils::test_utils::data::TestData,
     };
 
@@ -83,7 +83,7 @@ mod test {
     #[tokio::test]
     async fn returns_correct_response_when_no_symbols_specified() {
         let mut db = setup_memory_db();
-        let transactions: Vec<LocalEvent> = vec![
+        let events: Vec<LocalEvent> = vec![
             TestData::pool_change(Coin::BTC, 100, 100).into(),
             TestData::pool_change(Coin::ETH, 75, 75).into(),
             TestData::pool_change(Coin::BTC, -50, 100).into(),
@@ -120,7 +120,7 @@ mod test {
     #[tokio::test]
     async fn returns_correct_response_when_symbols_specified() {
         let mut db = setup_memory_db();
-        let transactions: Vec<LocalEvent> = vec![
+        let events: Vec<LocalEvent> = vec![
             TestData::pool_change(Coin::BTC, 100, 100).into(),
             TestData::pool_change(Coin::ETH, 75, 75).into(),
         ];
@@ -128,11 +128,11 @@ mod test {
         // db process_events
         todo!();
 
-        db.process_blocks(&[SideChainBlock {
-            id: 0,
-            transactions,
-        }])
-        .unwrap();
+        // db.process_blocks(&[SideChainBlock {
+        //     id: 0,
+        //     transactions,
+        // }])
+        // .unwrap();
 
         let db = Arc::new(Mutex::new(db));
 
@@ -157,13 +157,14 @@ mod test {
     #[tokio::test]
     async fn returns_correct_response_when_no_pool() {
         let mut db = setup_memory_db();
-        let transactions: Vec<LocalEvent> = vec![TestData::pool_change(Coin::BTC, 100, 100).into()];
+        let events: Vec<LocalEvent> = vec![TestData::pool_change(Coin::BTC, 100, 100).into()];
 
-        db.process_blocks(&[SideChainBlock {
-            id: 0,
-            transactions,
-        }])
-        .unwrap();
+        todo!("process events");
+        // db.process_blocks(&[SideChainBlock {
+        //     id: 0,
+        //     transactions,
+        // }])
+        // .unwrap();
 
         let db = Arc::new(Mutex::new(db));
 

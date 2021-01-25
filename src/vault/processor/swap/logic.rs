@@ -243,10 +243,6 @@ mod test {
         let output = result.output;
         assert_eq!(output.parent, OutputParent::SwapQuote(quote.inner.id));
         assert_eq!(output.witnesses, witness_ids);
-        assert!(
-            output.event_number.unwrap() >= quote.inner.event_number.unwrap(),
-            "Expected output event_number to be newer than quote"
-        );
         assert_eq!(output.pool_changes.len(), 0);
         assert_eq!(output.coin, Coin::ETH);
         assert_eq!(output.address, quote.inner.return_address.unwrap());
@@ -296,11 +292,6 @@ mod test {
         let output = result.output;
         assert_eq!(output.parent, OutputParent::SwapQuote(quote.inner.id));
         assert_eq!(output.witnesses, witness_ids);
-
-        assert!(
-            output.event_number.unwrap() >= quote.inner.event_number.unwrap(),
-            "Expected output event_number to be newer than quote"
-        );
         assert_eq!(output.pool_changes.len(), 1);
         assert_eq!(output.pool_changes, vec![change.id]);
         assert_eq!(output.coin, Coin::LOKI);
@@ -357,10 +348,6 @@ mod test {
         let output = result.output;
         assert_eq!(output.parent, OutputParent::SwapQuote(quote.inner.id));
         assert_eq!(output.witnesses, witness_ids);
-        assert!(
-            output.event_number.unwrap() >= quote.inner.event_number.unwrap(),
-            "Expected output timestamp to be newer than quote"
-        );
         assert_eq!(output.pool_changes, vec![first_change.id, second_change.id]);
         assert_eq!(output.coin, Coin::BTC);
         assert_eq!(output.address, quote.inner.output_address);

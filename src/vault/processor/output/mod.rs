@@ -68,10 +68,11 @@ async fn process<T: TransactionProvider + Sync, C: CoinProcessor>(
 mod test {
     use super::*;
     use crate::{
-        local_store::MemoryLocalStore, utils::test_utils::data::TestData,
+        local_store::{ILocalStore, MemoryLocalStore},
+        utils::test_utils::data::TestData,
         vault::transactions::MemoryTransactionsProvider,
     };
-    use chainflip_common::types::{chain::OutputSent, Timestamp, UUIDv4};
+    use chainflip_common::types::{chain::OutputSent, UUIDv4};
     use std::{
         collections::HashMap,
         sync::{Arc, Mutex},
@@ -145,7 +146,7 @@ mod test {
     async fn process_stores_output_sent_txs() {
         let mut store = MemoryLocalStore::new();
         let output_tx = TestData::output(Coin::LOKI, 100);
-        store.add_block(vec![output_tx.clone().into()]).unwrap();
+        store.add_events(vec![output_tx.clone().into()]).unwrap();
 
         let store = Arc::new(Mutex::new(store));
         let mut provider = MemoryTransactionsProvider::new_protected(store);
@@ -158,13 +159,13 @@ mod test {
 
         let output_sent_tx = OutputSent {
             id: UUIDv4::new(),
-            timestamp: Timestamp::now(),
             outputs: vec![output_tx.id],
             coin: Coin::LOKI,
             address: "address".into(),
             amount: 100,
             fee: 100,
             transaction_id: "".into(),
+            event_number: None,
         };
 
         let mut coin_processor = TestCoinProcessor::new();
@@ -181,7 +182,7 @@ mod test {
     async fn process_with_no_sent_output_tx() {
         let mut store = MemoryLocalStore::new();
         let output_tx = TestData::output(Coin::LOKI, 100);
-        store.add_block(vec![output_tx.clone().into()]).unwrap();
+        store.add_events(vec![output_tx.clone().into()]).unwrap();
 
         let store = Arc::new(Mutex::new(store));
         let mut provider = MemoryTransactionsProvider::new_protected(store);
