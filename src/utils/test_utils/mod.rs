@@ -103,7 +103,7 @@ pub fn get_fake_config() -> VaultConfig {
         wallet_address: "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".to_string(),
     };
     let eth = EthConfig {
-        master_root_key: TEST_ROOT_KEY.to_string(),
+        private_key: "58a99f6e6f89cbbb7fc8c86ea95e6012b68a9cd9a41c4ffa7c8f20c201d0667f".to_string(),
         provider_url: "http://localhost:8080".to_string(),
     };
 

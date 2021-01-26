@@ -6,8 +6,8 @@ port = 6934
 # wallet_address = ""
 
 [eth]
-# Go to https://iancoleman.io/bip39/ to generate one
-# master_root_key = ""
+# Web3 API url
+# provider_url = ""
 
 [btc]
 # generate one

@@ -1,52 +1,39 @@
 use super::{
-    get_input_id_indices, group_outputs_by_sending_amounts,
+    group_outputs_by_sending_amounts,
     wallet_utils::{get_sending_wallets, WalletBalance},
     OutputSender,
 };
 use crate::{
     common::GenericCoinAmount,
-    utils::{
-        bip44::{self, RawKey},
-        primitives::U256,
-    },
-    vault::{
-        blockchain_connection::ethereum::{EstimateRequest, EthereumClient, SendTransaction},
-        transactions::TransactionProvider,
-    },
+    utils::{bip44::KeyPair, primitives::U256},
+    vault::blockchain_connection::ethereum::{EstimateRequest, EthereumClient, SendTransaction},
 };
-use bip44::KeyPair;
 use chainflip_common::types::{
     addresses::EthereumAddress,
     chain::{Output, OutputSent, Validate},
     coin::Coin,
     Network, Timestamp, UUIDv4,
 };
-use hdwallet::ExtendedPrivKey;
 use itertools::Itertools;
-use parking_lot::RwLock;
-use std::{convert::TryFrom, str::FromStr, sync::Arc};
+use std::{convert::TryFrom, str::FromStr};
 
-// TODO: The code here and the code in btc sender is very similar. We should refactor it in the future
+// ==============================================================================
+// TODO: Modify this sender to use Vault contract and multi-sig for sending ETH
+// ==============================================================================
 
 /// An output sender for Ethereum
-pub struct EthOutputSender<E: EthereumClient, T: TransactionProvider> {
+pub struct EthOutputSender<E: EthereumClient> {
     client: E,
-    root_private_key: ExtendedPrivKey,
-    provider: Arc<RwLock<T>>,
+    key_pair: KeyPair,
     network: Network,
 }
 
-impl<E: EthereumClient, T: TransactionProvider> EthOutputSender<E, T> {
+impl<E: EthereumClient> EthOutputSender<E> {
     /// Create a new output sender
-    pub fn new(client: E, provider: Arc<RwLock<T>>, root_key: RawKey, network: Network) -> Self {
-        let root_private_key = root_key
-            .to_private_key()
-            .expect("Failed to generate ethereum extended private key");
-
+    pub fn new(client: E, key_pair: KeyPair, network: Network) -> Self {
         Self {
             client,
-            root_private_key,
-            provider,
+            key_pair,
             network,
         }
     }
@@ -161,9 +148,7 @@ impl<E: EthereumClient, T: TransactionProvider> EthOutputSender<E, T> {
 }
 
 #[async_trait]
-impl<E: EthereumClient + Sync + Send, T: TransactionProvider + Sync + Send> OutputSender
-    for EthOutputSender<E, T>
-{
+impl<E: EthereumClient + Sync + Send> OutputSender for EthOutputSender<E> {
     async fn send(&self, outputs: &[Output]) -> Vec<OutputSent> {
         if (outputs.is_empty()) {
             return vec![];
@@ -174,37 +159,18 @@ impl<E: EthereumClient + Sync + Send, T: TransactionProvider + Sync + Send> Outp
             return vec![];
         }
 
-        let keys = get_input_id_indices(self.provider.clone(), Coin::ETH)
-            .into_iter()
-            .filter_map(|index| {
-                match bip44::get_key_pair(
-                    self.root_private_key.clone(),
-                    bip44::CoinType::ETH,
-                    index,
-                ) {
-                    Ok(keys) => Some(keys),
-                    Err(err) => {
-                        error!(
-                            "Failed to generate eth key pair for index {}: {}",
-                            index, err
-                        );
-                        None
-                    }
-                }
-            });
+        // For now get the balance of our address and use that for sending
+        let our_address =
+            EthereumAddress::from_public_key(self.key_pair.public_key.serialize_uncompressed());
+        let our_balance = match self.client.get_balance(our_address.clone()).await {
+            Ok(balance) => WalletBalance::new(self.key_pair.clone(), balance),
+            Err(err) => {
+                error!("Failed to fetch balance for {}: {}", our_address, err);
+                return vec![];
+            }
+        };
 
-        // Don't know how we can do this in parallel
-        // futures::future::join_all(keys).await doesn't seems to work
-        let mut wallet_balances = vec![];
-        for key in keys {
-            match self.client.get_balance(key.clone().into()).await {
-                Ok(balance) => wallet_balances.push(WalletBalance::new(key, balance)),
-                Err(err) => {
-                    warn!("Failed to fetch balance for {}: {}", key.public_key, err);
-                }
-            };
-        }
-        let wallet_outputs = get_sending_wallets(&wallet_balances, outputs);
+        let wallet_outputs = get_sending_wallets(&vec![our_balance], outputs);
 
         let mut sent_txs: Vec<OutputSent> = vec![];
         for output in wallet_outputs {
@@ -220,14 +186,9 @@ mod test {
     use super::*;
     use crate::{
         common::ethereum,
-        side_chain::MemorySideChain,
-        utils::test_utils::{data::TestData, ethereum::TestEthereumClient, TEST_ROOT_KEY},
-        vault::{
-            blockchain_connection::ethereum::EstimateResult,
-            transactions::MemoryTransactionsProvider,
-        },
+        utils::test_utils::{data::TestData, ethereum::TestEthereumClient},
+        vault::blockchain_connection::ethereum::EstimateResult,
     };
-    use std::sync::Mutex;
 
     fn get_key_pair() -> KeyPair {
         KeyPair::from_private_key(
@@ -236,14 +197,10 @@ mod test {
         .unwrap()
     }
 
-    fn get_output_sender(
-    ) -> EthOutputSender<TestEthereumClient, MemoryTransactionsProvider<MemorySideChain>> {
-        let side_chain = MemorySideChain::new();
-        let side_chain = Arc::new(Mutex::new(side_chain));
-        let provider = MemoryTransactionsProvider::new_protected(side_chain.clone());
+    fn get_output_sender() -> EthOutputSender<TestEthereumClient> {
         let client = TestEthereumClient::new();
-        let key = RawKey::decode(TEST_ROOT_KEY).unwrap();
-        EthOutputSender::new(client, provider, key, Network::Testnet)
+        let key = get_key_pair();
+        EthOutputSender::new(client, key, Network::Testnet)
     }
 
     #[tokio::test]
