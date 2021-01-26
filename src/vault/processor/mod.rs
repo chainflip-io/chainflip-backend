@@ -115,7 +115,7 @@ where
         std::thread::spawn(move || {
             info!("Starting the processor thread");
 
-            let mut rt = tokio::runtime::Runtime::new().unwrap();
+            let rt = tokio::runtime::Runtime::new().unwrap();
 
             rt.block_on(async {
                 self.run_event_loop(event_sender).await;

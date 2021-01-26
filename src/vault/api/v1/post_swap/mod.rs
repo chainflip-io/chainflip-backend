@@ -11,6 +11,7 @@ use crate::{
     vault::{processor::utils::get_swap_expire_timestamp, transactions::TransactionProvider},
 };
 use chainflip_common::{
+    constants::ethereum::ETH_DEPOSIT_INIT_CODE,
     types::{
         addresses::{EthereumAddress, LokiAddress},
         chain::{SwapQuote, Validate},
@@ -18,7 +19,7 @@ use chainflip_common::{
         fraction::PercentageFraction,
         Timestamp, UUIDv4,
     },
-    utils::{address_id, ethereum::ETH_DEPOSIT_INIT_CODE},
+    utils::address_id,
 };
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};

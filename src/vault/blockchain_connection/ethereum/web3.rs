@@ -1,11 +1,14 @@
 use super::{EstimateRequest, EstimateResult, EthereumClient, SendTransaction};
-use crate::{common::ethereum, utils::clone_into_array};
+use crate::common::ethereum;
 use chainflip_common::types::{addresses::EthereumAddress, coin::Coin};
-use ethereum_tx_sign::RawTransaction;
 use std::convert::TryFrom;
 use web3::{
+    signing::SecretKeyRef,
     transports,
-    types::{self, Block, BlockId, BlockNumber, CallRequest, Transaction, U256, U64},
+    types::{
+        self, Block, BlockId, BlockNumber, Bytes, CallRequest, Transaction, TransactionParameters,
+        U256, U64,
+    },
     Web3,
 };
 
@@ -26,6 +29,20 @@ impl Web3Client {
     pub fn url(url: &str) -> Result<Self, String> {
         let transport = transports::Http::new(url).map_err(|err| format!("{}", err))?;
         Ok(Web3Client::new(transport))
+    }
+}
+
+impl From<&SendTransaction> for TransactionParameters {
+    fn from(tx: &SendTransaction) -> Self {
+        TransactionParameters {
+            nonce: None,
+            to: Some(tx.to.0.into()),
+            gas: U256::from(tx.gas_limit),
+            gas_price: Some(U256::from(tx.gas_price)),
+            value: U256::from(tx.amount.to_atomic()),
+            data: Bytes::default(),
+            chain_id: None,
+        }
     }
 }
 
@@ -164,29 +181,30 @@ impl EthereumClient for Web3Client {
             Err(err) => return Err(format!("{}", err)),
         };
 
-        let raw_tx = RawTransaction {
-            nonce: nonce,
-            to: Some(tx.to.0.into()),
-            value: U256::from(tx.amount.to_atomic()),
-            gas_price: U256::from(tx.gas_price),
-            gas: U256::from(tx.gas_limit),
-            data: Vec::new(),
+        let tx_params = TransactionParameters {
+            nonce: Some(nonce),
+            chain_id: Some(chain_id as u64),
+            ..tx.into()
         };
 
-        let our_secret = tx.from.private_key.to_string();
-        let our_secret = hex::decode(our_secret).map_err(|_| "Failed to decode secret key")?;
-        let our_secret: [u8; 32] = clone_into_array(&our_secret);
-        let our_secret: types::H256 = our_secret.into();
+        let key = secp256k1::SecretKey::from_slice(&tx.from.private_key[..])
+            .expect("Copying a key to another key should never fail.");
 
-        let signed_tx = raw_tx.sign(&our_secret, &chain_id);
-        match self.web3.eth().send_raw_transaction(signed_tx.into()).await {
+        let signed_tx = self
+            .web3
+            .accounts()
+            .sign_transaction(tx_params, SecretKeyRef::new(&key))
+            .await
+            .map_err(|e| e.to_string())?;
+
+        match self
+            .web3
+            .eth()
+            .send_raw_transaction(signed_tx.raw_transaction)
+            .await
+        {
             Ok(hash) => Ok(hash.into()),
-            Err(err) => {
-                return Err(format!(
-                    "{}, sender: {}, Tx: {:?}",
-                    err, our_address, raw_tx,
-                ))
-            }
+            Err(err) => return Err(format!("{}, sender: {}, Tx: {:?}", err, our_address, tx)),
         }
     }
 }

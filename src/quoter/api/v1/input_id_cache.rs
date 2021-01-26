@@ -61,7 +61,7 @@ impl InputIdCache {
                 // ETH CREATE2 uses a 32 byte salt
                 Coin::ETH => rng.gen::<[u8; 32]>().to_vec(),
                 // BTC uses u32 indicies which we can derive an address through hd wallets
-                Coin::BTC => rng.gen_range(5, u32::MAX).to_be_bytes().to_vec(),
+                Coin::BTC => rng.gen_range(5..u32::MAX).to_be_bytes().to_vec(),
                 // LOKI uses 8 random bytes which represent a payment id
                 Coin::LOKI => rng.gen::<[u8; 8]>().to_vec(),
             };

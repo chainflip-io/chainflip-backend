@@ -7,8 +7,8 @@ version = "0.1.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-trait = "*"
-base58-monero = "*"
+async-trait = "0.1"
+base58-monero = "0.2"
 base64 = "*"
 bitcoin = "0.25.2"
 bitcoincore-rpc = "0.12.0"
@@ -17,29 +17,30 @@ chainflip-common = { path = "chainflip-common" }
 clap = "^2"
 config = "^0.10.1"
 crossbeam-channel = "^0.4"
-env_logger = "*"
-ethereum-tx-sign = "*"
+env_logger = "0.8"
 futures = "0.3.5"
 hdwallet = "0.2.5"
-hex = "*"
-itertools = "*"
-lazy_static = "*"
+hex = "0.4"
+itertools = "0.10"
+lazy_static = "1.4"
 log = "0.4.0"
-log4rs = "*"
+log4rs = "1.0"
 num-bigint = "0.3.0"
 parking_lot = "0.11"
-rand = "*"
-regex = "*"
+rand = "0.8"
+regex = "1.4"
 reqwest = {version = "^0.10", features = ["json"]}
-ring = "*"
+ring = "0.16"
+# Note: this should be the same version as that used by the web3 crate.
+secp256k1 = "^0.20"
 serde = {version = "1.0", features = ["derive"]}
-serde_json = "*"
+serde_json = "1.0"
 tiny-keccak = {version = "^2.0.0", features = ["keccak"]}
-tokio = {version = "*", features = ["full"]}
+tokio = {version = "1.1", features = ["full"]}
 uint = "^0.8.5"
 uuid = {version = "0.8", features = ["serde", "v4"]}
 warp = {version = "*", features = ["tls"]}
-web3 = {version = "^0.13.0", default-features = false, features = ["http-tls"]}
+web3 = {version = "^0.15.0"}
 
 [dependencies.rusqlite]
 features = ["bundled"]

@@ -33,7 +33,7 @@ impl APIServer {
         };
         let routes = v1::endpoints(side_chain, provider, config).recover(handle_rejection);
 
-        let mut rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().unwrap();
 
         let future = async {
             let (_addr, server) =
