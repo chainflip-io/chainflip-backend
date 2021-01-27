@@ -24,23 +24,18 @@ pub(super) async fn get_local_witnesses<L: ILocalStore>(
 ) -> Result<WitnessQueryResponse, ResponseError> {
     let mut local_store = local_store.lock().unwrap();
 
-    let total = local_store.total_events();
-
     let mut witness_txs = vec![];
 
-    for event_num in 0..total {
-        let events = local_store.get_events(event_num).expect("invalid index");
+    // get *all* events from the beginning of time
+    let events = local_store.get_events(0).expect("invalid index");
 
-        for tx in &events {
-            if let LocalEvent::Witness(tx) = tx {
-                witness_txs.push(tx.clone());
-            }
+    for evt in &events {
+        if let LocalEvent::Witness(e) = evt {
+            witness_txs.push(e.clone());
         }
     }
 
-    let res = WitnessQueryResponse { witness_txs };
-
-    Ok(res)
+    Ok(WitnessQueryResponse { witness_txs })
 }
 
 #[cfg(test)]

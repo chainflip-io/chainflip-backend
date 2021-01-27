@@ -35,11 +35,15 @@ impl Database {
         Database { connection }
     }
 
-    fn set_last_processed_event_number(&self, event_num: u128) -> Result<(), String> {
+    fn increment_last_processed_event_number(&self, num_events: u64) -> Result<(), String> {
+        let last_event_num = self.get_last_processed_event_number().unwrap_or(0);
+        let new_last_event_num = last_event_num
+            .checked_add(num_events)
+            .expect("overflow on last_processsed_event_num");
         KVS::set_data(
             &self.connection,
             "last_processed_event_number",
-            Some(event_num),
+            Some(new_last_event_num),
         )
     }
 
@@ -181,8 +185,10 @@ impl EventProcessor for Database {
             return Err(format!("Failed to commit process events changes: {}", err));
         }
 
-        // TODO set last event number here, this is just a mock
-        self.set_last_processed_event_number(0);
+        if let Err(err) = self.increment_last_processed_event_number(events.len() as u64) {
+            error!("Failed to increment last_processed_event");
+            return Err(format!("Failed to increment last_processed_event_number"));
+        }
 
         Ok(())
     }
@@ -321,7 +327,7 @@ mod test {
 
         let results = db
             .connection
-            .query_row("select id, data from transactions", NO_PARAMS, |row| {
+            .query_row("select id, data from events", NO_PARAMS, |row| {
                 Ok(RawData {
                     id: row.get(0).unwrap(),
                     data: row.get(1).unwrap(),
@@ -334,12 +340,7 @@ mod test {
     }
 
     #[test]
-    fn process_events() {
-        todo!();
-    }
-
-    #[test]
-    fn processes_blocks() {
+    fn processes_events() {
         let mut db = setup();
 
         assert!(db.get_last_processed_event_number().is_none());
@@ -352,7 +353,7 @@ mod test {
 
         db.process_events(&events).unwrap();
 
-        assert_eq!(db.get_last_processed_event_number(), Some(10));
+        assert_eq!(db.get_last_processed_event_number(), Some(3));
     }
 
     #[test]

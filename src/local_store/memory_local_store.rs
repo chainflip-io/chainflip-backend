@@ -20,7 +20,7 @@ impl MemoryLocalStore {
             .events
             .iter()
             .filter(|e| {
-                if let LocalEvent::Witness(w) = e {
+                if let LocalEvent::Witness(_) = e {
                     true
                 } else {
                     false
@@ -55,12 +55,12 @@ impl ILocalStore for MemoryLocalStore {
         if self.events.is_empty() {
             return None;
         }
-        // let slice_num = last_seen + 1;
+
         Some(self.events[last_seen as usize..].to_vec())
     }
 
     fn total_events(&mut self) -> u64 {
-        todo!()
+        self.events.len() as u64
     }
 }
 

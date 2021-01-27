@@ -68,9 +68,12 @@ impl Quoter {
     }
 }
 
+/// inteface for defining an event processor of the 
 pub trait EventProcessor {
+    /// gets the last processed event number, so we can process any event after this one
     fn get_last_processed_event_number(&self) -> Option<u64>;
 
+    /// process the events that are read in by the quoter
     fn process_events(&mut self, events: &[LocalEvent]) -> Result<(), String>;
 }
 /// A trait for providing quoter state

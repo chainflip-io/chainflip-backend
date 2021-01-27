@@ -286,8 +286,10 @@ impl MemoryState {
 impl<L: ILocalStore> TransactionProvider for MemoryTransactionsProvider<L> {
     fn sync(&mut self) -> u64 {
         let mut local_store = self.local_store.lock().unwrap();
-        let events = local_store.get_events(self.state.next_event).unwrap();
-        println!("There are {}", events.len());
+        let events = match local_store.get_events(self.state.next_event) {
+            Some(events) => events,
+            None => return self.state.next_event,
+        };
         for evt in events {
             match evt {
                 LocalEvent::Witness(evt) => {
@@ -337,7 +339,6 @@ impl<L: ILocalStore> TransactionProvider for MemoryTransactionsProvider<L> {
             .collect();
 
         if valid_events.len() > 0 {
-            println!("Adding valid events");
             self.local_store.lock().unwrap().add_events(valid_events)?;
         }
 
@@ -435,17 +436,13 @@ mod test {
                 .unwrap();
         }
 
-        let evt_num = provider.sync();
-        println!("evt num: {:#?}", evt_num);
-        let witnesses = provider.get_witnesses();
-        // println!("Here are the witnesses: {:#?}", witnesses;
         assert_eq!(provider.get_witnesses().len(), 1);
-        assert_eq!(provider.state.next_event, 1);
+        assert_eq!(provider.state.next_event, 2);
 
         provider.add_local_events(vec![witness.into()]).unwrap();
 
         assert_eq!(provider.get_witnesses().len(), 1);
-        assert_eq!(provider.state.next_event, 1);
+        assert_eq!(provider.state.next_event, 2);
     }
 
     #[test]
