@@ -1,3 +1,4 @@
+use super::input_id_cache::InputIdCache;
 use crate::{
     common::api::ResponseError, quoter::vault_node::VaultNodeInterface,
     vault::api::v1::post_swap::SwapQuoteParams,
@@ -6,8 +7,6 @@ use chainflip_common::{types::coin::Coin, utils::address_id};
 use serde::{Deserialize, Serialize};
 use std::{str::FromStr, sync::Arc};
 use warp::http::StatusCode;
-
-use super::input_id_cache::InputIdCache;
 
 /// Parameters for POST `quote` endpoint
 #[derive(Debug, Serialize, Deserialize)]

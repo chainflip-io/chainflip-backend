@@ -63,16 +63,9 @@ pub fn validate_params(params: &SwapQuoteParams, network: Network) -> Result<(),
 
 #[cfg(test)]
 mod test {
-    use crate::utils::test_utils::{TEST_ETH_ADDRESS, TEST_LOKI_ADDRESS};
-
     use super::*;
+    use crate::utils::test_utils::{TEST_ETH_ADDRESS, TEST_ETH_SALT, TEST_LOKI_ADDRESS};
     use chainflip_common::types::coin::Coin;
-    use std::collections::HashMap;
-
-    struct Values<T> {
-        invalid: Vec<T>,
-        valid: Vec<T>,
-    }
 
     fn get_valid_params() -> SwapQuoteParams {
         SwapQuoteParams {
@@ -178,7 +171,7 @@ mod test {
         let params = SwapQuoteParams {
             input_coin: Coin::ETH,
             input_return_address: None,
-            input_address_id: "10".to_owned(),
+            input_address_id: hex::encode(TEST_ETH_SALT),
             input_amount: "1000000000".to_string(),
             output_coin: Coin::LOKI,
             output_address: TEST_LOKI_ADDRESS.to_string(),

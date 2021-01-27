@@ -1,6 +1,6 @@
 use super::{
-    staking::get_random_staker, TEST_BTC_ADDRESS, TEST_ETH_ADDRESS, TEST_LOKI_ADDRESS,
-    TEST_LOKI_PAYMENT_ID,
+    staking::get_random_staker, TEST_BTC_ADDRESS, TEST_ETH_ADDRESS, TEST_ETH_SALT,
+    TEST_LOKI_ADDRESS, TEST_LOKI_PAYMENT_ID,
 };
 use crate::{
     common::{Staker, StakerId},
@@ -27,13 +27,19 @@ impl TestData {
             _ => panic!("Failed to create fake deposit quote"),
         };
 
+        let coin_input_address_id = match pool {
+            Coin::BTC => 6u32.to_be_bytes().to_vec(),
+            Coin::ETH => TEST_ETH_SALT.to_vec(),
+            _ => panic!("Failed to create fake deposit quote"),
+        };
+
         let quote = DepositQuote {
             id: UUIDv4::new(),
             timestamp: Timestamp::now(),
             pool,
             staker_id: staker_id.bytes().to_vec(),
             coin_input_address: address.into(),
-            coin_input_address_id: 6u32.to_be_bytes().to_vec(),
+            coin_input_address_id,
             coin_return_address: address.into(),
             base_input_address: TEST_LOKI_ADDRESS.into(),
             base_input_address_id: TEST_LOKI_PAYMENT_ID.to_vec(),
@@ -94,7 +100,8 @@ impl TestData {
 
         let input_address_id = match input {
             Coin::LOKI => TEST_LOKI_PAYMENT_ID.to_vec(),
-            Coin::ETH | Coin::BTC => 7u32.to_be_bytes().to_vec(),
+            Coin::ETH => TEST_ETH_SALT.to_vec(),
+            Coin::BTC => 7u32.to_be_bytes().to_vec(),
         };
 
         let output_address = match output {

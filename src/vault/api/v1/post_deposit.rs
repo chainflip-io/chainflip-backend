@@ -4,12 +4,13 @@ use super::{
 };
 use crate::{
     common::{api::ResponseError, *},
-    utils::address::{generate_btc_address_from_index, generate_eth_address},
+    utils::address::generate_btc_address_from_index,
     vault::{processor::utils::get_swap_expire_timestamp, transactions::TransactionProvider},
 };
 use chainflip_common::{
+    constants::ethereum,
     types::{
-        addresses::LokiAddress,
+        addresses::{EthereumAddress, LokiAddress},
         chain::{DepositQuote, Validate},
         coin::Coin,
         Timestamp, UUIDv4,
@@ -123,17 +124,15 @@ pub async fn deposit<T: TransactionProvider>(
     // Generate addresses
     let coin_input_address = match params.pool {
         Coin::ETH => {
-            let index = match params.coin_input_address_id.parse::<u32>() {
-                Ok(index) => index,
-                Err(_) => return Err(bad_request("Incorrect input address id")),
-            };
-            match generate_eth_address(&config.eth_master_root_key, index) {
-                Ok(address) => address,
-                Err(err) => {
-                    warn!("Failed to generate ethereum address: {}", err);
-                    return Err(internal_server_error());
-                }
-            }
+            let vault_address = ethereum::get_vault_address(config.net_type);
+
+            let salt = coin_input_address_id.clone().try_into().map_err(|_| {
+                warn!("Failed to convert coin input address id to ethereum salt");
+                internal_server_error()
+            })?;
+
+            EthereumAddress::create2(&vault_address, salt, &ethereum::ETH_DEPOSIT_INIT_CODE)
+                .to_string()
         }
         Coin::BTC => {
             let index = match params.coin_input_address_id.parse::<u32>() {
@@ -224,7 +223,7 @@ mod test {
     use super::*;
     use crate::utils::test_utils::{
         self, get_transactions_provider, staking::get_random_staker, TEST_ETH_ADDRESS,
-        TEST_LOKI_ADDRESS, TEST_ROOT_KEY,
+        TEST_ETH_SALT, TEST_LOKI_ADDRESS, TEST_ROOT_KEY,
     };
     use chainflip_common::types::Network;
     use test_utils::data::TestData;
@@ -232,7 +231,6 @@ mod test {
     fn config() -> Config {
         Config {
             loki_wallet_address: "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".to_string(),
-            eth_master_root_key: TEST_ROOT_KEY.to_string(),
             btc_master_root_key: TEST_ROOT_KEY.to_string(),
             net_type: Network::Testnet
         }
@@ -242,7 +240,7 @@ mod test {
         DepositQuoteParams {
             pool: Coin::ETH,
             staker_id: get_random_staker().public_key(),
-            coin_input_address_id: "99999".to_string(),
+            coin_input_address_id: hex::encode(TEST_ETH_SALT),
             loki_input_address_id: "b2d6a87ec06934ff".to_string(),
             loki_return_address: TEST_LOKI_ADDRESS.to_string(),
             other_return_address: TEST_ETH_ADDRESS.to_string(),

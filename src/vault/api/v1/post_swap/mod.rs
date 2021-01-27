@@ -4,15 +4,13 @@ use super::{
 };
 use crate::{
     common::api::ResponseError,
-    utils::{
-        address::{generate_btc_address_from_index, generate_eth_address},
-        calculate_effective_price, price,
-    },
+    utils::{address::generate_btc_address_from_index, calculate_effective_price, price},
     vault::{processor::utils::get_swap_expire_timestamp, transactions::TransactionProvider},
 };
 use chainflip_common::{
+    constants::ethereum,
     types::{
-        addresses::LokiAddress,
+        addresses::{EthereumAddress, LokiAddress},
         chain::{SwapQuote, Validate},
         coin::Coin,
         fraction::PercentageFraction,
@@ -133,17 +131,15 @@ pub async fn swap<T: TransactionProvider>(
     // Generate addresses
     let input_address = match input_coin {
         Coin::ETH => {
-            let index = match params.input_address_id.parse::<u32>() {
-                Ok(index) => index,
-                Err(_) => return Err(bad_request("Incorrect input address id")),
-            };
-            match generate_eth_address(&config.eth_master_root_key, index) {
-                Ok(address) => address,
-                Err(err) => {
-                    warn!("Failed to generate ethereum address: {}", err);
-                    return Err(internal_server_error());
-                }
-            }
+            let vault_address = ethereum::get_vault_address(config.net_type);
+
+            let salt = input_address_id.clone().try_into().map_err(|_| {
+                warn!("Failed to convert input address id to ethereum salt");
+                internal_server_error()
+            })?;
+
+            EthereumAddress::create2(&vault_address, salt, &ethereum::ETH_DEPOSIT_INIT_CODE)
+                .to_string()
         }
         Coin::LOKI => {
             let loki_base_address = LokiAddress::from_str(&config.loki_wallet_address)
@@ -241,7 +237,6 @@ mod test {
     fn config() -> Config {
         Config {
             loki_wallet_address: "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".to_string(),
-            eth_master_root_key: TEST_ROOT_KEY.to_string(),
             btc_master_root_key: TEST_ROOT_KEY.to_string(),
             net_type: Network::Testnet
         }

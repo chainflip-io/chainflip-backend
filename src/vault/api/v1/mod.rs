@@ -35,8 +35,6 @@ pub use get_portions::PortionsParams;
 pub struct Config {
     /// Loki wallet address
     pub loki_wallet_address: String,
-    /// Ethereum master root key
-    pub eth_master_root_key: String,
     /// BTC master root key
     pub btc_master_root_key: String,
     /// Network type

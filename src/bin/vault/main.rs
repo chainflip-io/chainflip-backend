@@ -102,16 +102,11 @@ fn main() {
     let kvs = PersistentKVS::new(db_connection);
     let loki = LokiSender::new(vault_config.loki.rpc.clone(), vault_config.net_type);
 
-    let eth_root_key = match bip44::RawKey::decode(&vault_config.eth.master_root_key) {
+    let eth_key_pair = match bip44::KeyPair::from_private_key(&vault_config.eth.private_key) {
         Ok(key) => key,
         Err(_) => panic!("Failed to generate root key from eth master root key"),
     };
-    let eth_sender = EthOutputSender::new(
-        eth_client.clone(),
-        provider.clone(),
-        eth_root_key,
-        vault_config.net_type,
-    );
+    let eth_sender = EthOutputSender::new(eth_client.clone(), eth_key_pair, vault_config.net_type);
 
     let btc_root_key = match bip44::RawKey::decode(&vault_config.btc.master_root_key) {
         Ok(key) => key,

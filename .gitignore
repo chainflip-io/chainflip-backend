@@ -6,3 +6,4 @@ loki_connection
 config/**/local.toml
 
 .DS_STORE
+chainflip-common/

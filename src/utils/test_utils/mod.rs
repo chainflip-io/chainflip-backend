@@ -34,6 +34,11 @@ pub use test_runner::TestRunner;
 
 /// Test ETH address
 pub const TEST_ETH_ADDRESS: &str = "0x70e7db0678460c5e53f1ffc9221d1c692111dcc5";
+/// Test ETH salt
+pub const TEST_ETH_SALT: [u8; 32] = [
+    178, 214, 168, 126, 192, 105, 52, 255, 88, 87, 230, 120, 208, 115, 0, 13, 228, 47, 250, 223,
+    163, 244, 100, 248, 233, 43, 188, 199, 188, 141, 34, 238,
+];
 /// Test LOKI address
 pub const TEST_LOKI_ADDRESS: &str = "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY";
 /// Test LOKI Payment id
@@ -98,7 +103,7 @@ pub fn get_fake_config() -> VaultConfig {
         wallet_address: "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".to_string(),
     };
     let eth = EthConfig {
-        master_root_key: TEST_ROOT_KEY.to_string(),
+        private_key: "58a99f6e6f89cbbb7fc8c86ea95e6012b68a9cd9a41c4ffa7c8f20c201d0667f".to_string(),
         provider_url: "http://localhost:8080".to_string(),
     };
 
