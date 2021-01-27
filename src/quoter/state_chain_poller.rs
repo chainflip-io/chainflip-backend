@@ -131,7 +131,7 @@ where
 mod test {
     use super::*;
     use crate::quoter::test_utils::{
-        block_processor::TestEventProcessor, vault_node_api::TestVaultNodeAPI,
+        event_processor::TestEventProcessor, vault_node_api::TestVaultNodeAPI,
     };
 
     struct TestVariables {

@@ -32,7 +32,11 @@ impl EventProcessor for TestEventProcessor {
     }
 
     fn process_events(&mut self, events: &[LocalEvent]) -> Result<(), String> {
-        todo!();
+        if let Some(error) = self.process_events_error.as_ref() {
+            return Err(error.clone());
+        }
+        // self.last_processed_event_number
+        Ok(())
     }
     // fn process_blocks(&mut self, blocks: &[SideChainBlock]) -> Result<(), String> {
     //     if let Some(error) = self.process_blocks_error.as_ref() {

@@ -286,45 +286,34 @@ impl MemoryState {
 impl<L: ILocalStore> TransactionProvider for MemoryTransactionsProvider<L> {
     fn sync(&mut self) -> u64 {
         let mut local_store = self.local_store.lock().unwrap();
-        while let Some(events) = local_store.get_events(self.state.next_event) {
-            debug!(
-                "TX Provider processing block from side_chain: {}",
-                self.state.next_event
-            );
+        let events = local_store.get_events(self.state.next_event).unwrap();
 
-            for evt in events {
-                match evt {
-                    LocalEvent::Witness(evt) => {
-                        dbg!("Something here??");
-                        todo!();
-                    }
-                    LocalEvent::SwapQuote(evt) => {
-                        // Quotes always come before their corresponding "outcome", so they start unfulfilled
-                        let evt = FulfilledWrapper::new(evt, false);
-
-                        self.state.swap_quotes.push(evt);
-                    }
-                    LocalEvent::DepositQuote(evt) => {
-                        // (same as above)
-                        let evt = FulfilledWrapper::new(evt, false);
-
-                        self.state.deposit_quotes.push(evt)
-                    }
-                    LocalEvent::PoolChange(evt) => self.state.process_pool_change(evt),
-                    LocalEvent::Deposit(evt) => self.state.process_deposit(evt),
-                    LocalEvent::Output(evt) => self.state.process_output_tx(evt),
-                    LocalEvent::WithdrawRequest(evt) => self.state.process_withdraw_request(evt),
-                    LocalEvent::Withdraw(evt) => self.state.process_withdraw(evt),
-                    LocalEvent::OutputSent(evt) => self.state.process_output_sent_tx(evt),
+        for evt in events {
+            match evt {
+                LocalEvent::Witness(evt) => {
+                    self.state
+                        .witnesses
+                        .push(UsedWitnessWrapper::new(evt, false));
                 }
-            }
-            self.state.next_event += 1;
-        }
+                LocalEvent::SwapQuote(evt) => {
+                    // Quotes always come before their corresponding "outcome", so they start unfulfilled
+                    let evt = FulfilledWrapper::new(evt, false);
 
-        // loop the local store. FIll this out when get_events is implemented
-        // WE SHOULD ONLY BE LOOPING THROUGH THE EVENTS WE GET FROM THE STATE CHAIN HERE
-        while let Some(events) = local_store.get_events(0) {
-            debug!("Processing events from local_store")
+                    self.state.swap_quotes.push(evt);
+                }
+                LocalEvent::DepositQuote(evt) => {
+                    // (same as above)
+                    let evt = FulfilledWrapper::new(evt, false);
+
+                    self.state.deposit_quotes.push(evt)
+                }
+                LocalEvent::PoolChange(evt) => self.state.process_pool_change(evt),
+                LocalEvent::Deposit(evt) => self.state.process_deposit(evt),
+                LocalEvent::Output(evt) => self.state.process_output_tx(evt),
+                LocalEvent::WithdrawRequest(evt) => self.state.process_withdraw_request(evt),
+                LocalEvent::Withdraw(evt) => self.state.process_withdraw(evt),
+                LocalEvent::OutputSent(evt) => self.state.process_output_sent_tx(evt),
+            }
         }
 
         self.state.next_event

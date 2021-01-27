@@ -91,7 +91,7 @@ pub trait ILocalStore {
     /// Add events to the local store
     fn add_events(&mut self, events: Vec<LocalEvent>) -> Result<(), String>;
 
-    // Get events from the local store
+    /// Get events from the local store
     fn get_events(&mut self, last_event: u64) -> Option<Vec<LocalEvent>>;
 
     /// Get total number of events in the db

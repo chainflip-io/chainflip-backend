@@ -159,12 +159,7 @@ mod test {
         let mut db = setup_memory_db();
         let events: Vec<LocalEvent> = vec![TestData::pool_change(Coin::BTC, 100, 100).into()];
 
-        todo!("process events");
-        // db.process_blocks(&[SideChainBlock {
-        //     id: 0,
-        //     transactions,
-        // }])
-        // .unwrap();
+        db.process_events(events).unwrap();
 
         let db = Arc::new(Mutex::new(db));
 

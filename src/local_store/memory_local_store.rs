@@ -1,90 +1,79 @@
-use std::collections::HashMap;
-
 use chainflip_common::types::{chain::*, UUIDv4};
-use itertools::all;
 
 use super::{ILocalStore, LocalEvent};
 
 /// Fake implemenation of ILocalStore that stores events in memory
 pub struct MemoryLocalStore {
     // Use transaction type enum instead of string
-    events: HashMap<&'static str, Vec<LocalEvent>>,
+    events: Vec<LocalEvent>,
 }
 
 impl MemoryLocalStore {
     /// Create an empty (fake) store
     pub fn new() -> Self {
-        MemoryLocalStore {
-            events: HashMap::new(),
-        }
+        MemoryLocalStore { events: vec![] }
     }
 
-    /// Convenience method for getting all witnesses
+    /// Helper for getting just the witness transactions
     pub fn get_witness_evts(&self) -> Vec<Witness> {
-        let mut witnesses = Vec::new();
-        let all_witnesses_from_db: Option<&Vec<LocalEvent>> = self.events.get("Witness");
-        if all_witnesses_from_db.is_none() {
-            return vec![];
-        }
-        for event in all_witnesses_from_db.unwrap() {
-            match event {
-                LocalEvent::Witness(w) => {
-                    witnesses.push(w.clone());
+        let witness_events: Vec<_> = self
+            .events
+            .iter()
+            .filter(|e| {
+                if let LocalEvent::Witness(w) = e {
+                    true
+                } else {
+                    false
                 }
-                _ => {
-                    // skip
-                }
+            })
+            .collect();
+
+        let mut witnesses: Vec<Witness> = vec![];
+
+        for witness in witness_events {
+            if let LocalEvent::Witness(w) = witness {
+                witnesses.push(w.clone());
             }
         }
+
         witnesses
     }
 }
 
+/// Convenience method for getting all witnesses
+// pub fn get_witness_evts(&self) -> Vec<Witness> {
+//     let mut witnesses = Vec::new();
+//     let all_witnesses_from_db: Option<&Vec<LocalEvent>> = self.events.get("Witness");
+
+//     if all_witnesses_from_db.is_none() {
+//         return vec![];
+//     }
+//     for event in all_witnesses_from_db.unwrap() {
+//         match event {
+//             LocalEvent::Witness(w) => {
+//                 witnesses.push(w.clone());
+//             }
+//             _ => {
+//                 // skip
+//             }
+//         }
+//     }
+//     witnesses
+// }
+
 impl ILocalStore for MemoryLocalStore {
     fn add_events(&mut self, events: Vec<LocalEvent>) -> Result<(), String> {
         for event in events {
-            match event {
-                LocalEvent::Witness(_) => {
-                    // store a witness
-                    let empty = &mut Vec::new();
-                    let witnesses = self.events.get("Witness").unwrap_or(empty);
-                    let mut new_ws = witnesses.clone();
-                    new_ws.push(event);
-                    self.events.insert("Witness", new_ws);
-                }
-                LocalEvent::DepositQuote(_) => {}
-                LocalEvent::Deposit(_) => {}
-                LocalEvent::OutputSent(_) => {}
-                LocalEvent::Output(_) => {}
-                LocalEvent::PoolChange(_) => {}
-                LocalEvent::SwapQuote(_) => {}
-                LocalEvent::WithdrawRequest(_) => {}
-                LocalEvent::Withdraw(_) => {}
-            }
+            self.events.push(event);
         }
         Ok(())
     }
 
     fn get_events(&mut self, last_seen: u64) -> Option<Vec<LocalEvent>> {
-        let mut events = Vec::new();
-        let all_witnesses: Option<&Vec<LocalEvent>> = self.events.get("Witness");
-        if all_witnesses.is_none() {
+        if self.events.is_empty() {
             return None;
         }
-        for event in all_witnesses.unwrap() {
-            match event {
-                LocalEvent::Witness(w) => {
-                    if w.event_number.unwrap_or(0) > last_seen {
-                        events.push(event.clone());
-                    }
-                }
-                _ => {
-                    todo!("More events");
-                }
-            }
-        }
-
-        Some(events)
+        Some(self.events.clone())
     }
 
     fn total_events(&mut self) -> u64 {
