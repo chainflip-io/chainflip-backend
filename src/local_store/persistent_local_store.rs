@@ -1,47 +1,25 @@
-use super::{ILocalStore, LocalEvent};
-use rusqlite::{params, types::FromSql, NO_PARAMS};
-use rusqlite::{Connection as DB, RowIndex};
+use super::{ILocalStore, LocalEvent, StorageItem};
+use rusqlite::Connection as DB;
+use rusqlite::{params, NO_PARAMS};
 
 /// Implementation of ILocalStore that uses sqlite to
 /// persist between restarts
 pub struct PersistentLocalStore {
+    // is this required?
     events: Vec<LocalEvent>,
     db: DB,
 }
 
-// TODO: Should we FK to a coin table ?
-// TODO: Foreign key to quotes
 fn create_tables_if_new(db: &DB) {
-    // witnesses
     db.execute(
-        "CREATE TABLE IF NOT EXISTS witness (
-            coin TEXT NOT NULL,
-            txid TEXT NOT NULL,
-            quote TEXT NOT NULL,
-            tx_block_number INTEGER NOT NULL,
-            tx_index INTEGER NOT NULL,
-            amount INTEGER NOT NULL,
-            PRIMARY KEY (txid, coin)
+        "CREATE TABLE IF NOT EXISTS events (
+                id TEXT PRIMARY KEY,
+                data BLOB NOT NULL
     )",
         NO_PARAMS,
     )
     .expect("could not create or open DB");
 }
-
-// fn read_rows(db: &DB) -> Result<(), String> {
-//     let mut stmt = db
-//         .prepare("SELECT coin, txid FROM witness;")
-//         .expect("Could not prepare stmt");
-
-//     // THIS MAY BE ABLE TO BE CLEANED UP IF USING "PROPER" RELATIONAL DB
-//     let res: Vec<Result<(String, String), _>> = stmt
-//         .query_map(NO_PARAMS, |row| Ok((row.get(0)?, row.get(1)?)))
-//         .map_err(|err| err.to_string())?
-//         .collect();
-
-//     println!("the result of the database read rows is: {:#?}", res);
-//     Ok(())
-// }
 
 impl PersistentLocalStore {
     /// Create a instance of PersistentLocalStore associated with a database file
@@ -60,88 +38,64 @@ impl PersistentLocalStore {
 
         PersistentLocalStore { db, events }
     }
-
-    fn get_events_as_str(&mut self, last_seen: u64) -> Result<Vec<String>, String> {
-        let mut select_witnesses = self
-            .db
-            .prepare("SELECT * FROM witness")
-            .expect("Could not prepare stmt");
-
-        let mut rows = select_witnesses
-            .query(NO_PARAMS)
-            .map_err(|err| err.to_string())?;
-        // .expect("Something went wrong");
-
-        // let val: Result<String, _> = select_witnesses
-        //     .query_row(params![], |row| row.get(1))
-        //     .map_err(|e| e.to_string());
-        // println!("The returned result is: {:#?}", res);
-        // for row in res {
-        //     println!("Here's a row: {:#?}", row);
-        // }
-        while let Some(result_row) = rows.next().expect("no next") {
-            // let row = try!(result_row);
-            // let row = result_row.unwrap();
-            let coin: String = result_row.get(0).expect("couldn't get it");
-            println!("Result row, 0: {:#?}", coin);
-        }
-        Err("no".to_string())
-    }
 }
 
 impl ILocalStore for PersistentLocalStore {
     fn add_events(&mut self, events: Vec<LocalEvent>) -> Result<(), String> {
         // add witnesses
         for event in events {
-            match event {
-                LocalEvent::Witness(evt) => {
-                    match self.db.execute(
-                        "
-                    INSERT INTO witness
-                    (coin, txid, quote, tx_block_number, tx_index, amount)
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-                    ",
-                        // :( why can't we use anything bigger than u32, this is v. bad
-                        params![
-                            evt.coin.to_string(),
-                            evt.transaction_id.to_string(),
-                            evt.quote.to_string(),
-                            evt.transaction_block_number as u32,
-                            evt.transaction_index as u32,
-                            evt.amount as u32
-                        ],
-                    ) {
-                        Ok(res) => {
-                            trace!(
-                                "Witness ({:#}, {:#} added to db",
-                                evt.coin,
-                                evt.transaction_id
-                            )
-                        }
-                        Err(e) => {
-                            println!("could not add witness: {:#?}", e);
-                            error!("Witness could not be added to db, {:#?}", e)
-                        }
-                    }
+            let id = event.unique_id();
+            let blob = serde_json::to_string(&event).unwrap();
+            match self.db.execute(
+                "
+            INSERT INTO events
+            (id, data) VALUES (?1, ?2)
+            ",
+                params![id, blob],
+            ) {
+                Ok(_) => {
+                    trace!("Witness ({:#} added to db", id);
                 }
-                _ => {
-                    // nothing
+                Err(e) => {
+                    println!("Witness {:#} could not be added to db, {:#?}", id, e);
+                    return Err(format!(
+                        "Witness {:#} could not be added to db, {:#?}",
+                        id, e
+                    ));
                 }
             }
         }
-
         Ok(())
     }
 
+    // TODO: Implement with > last_seen
     fn get_events(&mut self, last_seen: u64) -> Option<Vec<LocalEvent>> {
-        let mut select_witnesses = self
+        let mut select_events = self
             .db
-            .prepare("SELECT * FROM witness")
+            .prepare("SELECT data FROM events")
             .expect("Could not prepare stmt");
 
-        let val: Result<String, _> = select_witnesses.query_row(params![], |row| row.get(0));
-        println!("The returned result is: {:#?}", val.unwrap());
-        None
+        // add row_id > last_seen here
+        let mut rows = select_events
+            .query(NO_PARAMS)
+            .map_err(|err| err.to_string())
+            .unwrap();
+
+        let mut recent_events: Vec<LocalEvent> = Vec::new();
+        for row in rows.next() {
+            match row {
+                Some(evt) => {
+                    let str_val: String = evt.get(0).unwrap();
+                    let l_evt = serde_json::from_str::<LocalEvent>(&str_val).unwrap();
+                    recent_events.push(l_evt);
+                }
+                None => {
+                    println!("Nothing to see here");
+                    return None;
+                }
+            }
+        }
+        Some(recent_events)
     }
 
     // Do we really neeed this?
@@ -164,25 +118,20 @@ mod test {
 
         let evt: LocalEvent = TestData::witness(UUIDv4::new(), 100, Coin::ETH).into();
 
-        println!("has created the quote");
-
-        // db
-        let result = db
-            .add_events(vec![evt.clone()])
+        db.add_events(vec![evt.clone()])
             .expect("Error adding an event to the database");
-
-        println!("Added evt");
 
         // Close the database
         drop(db);
 
         let mut db = PersistentLocalStore::open(temp_file.path());
 
-        // let total_events = db.total_events();
-        // let last_events = db.get_events(0).expect("Could not get last events");
-        let resp = db.get_events_as_str(0);
-        println!("Here's the str events: {:#?}", resp);
+        let events = db.get_events(0).unwrap();
+        assert_eq!(events.len(), 1);
+        let first_evt = events.first().unwrap();
 
-        // assert_eq!(evt, last_events[0]);
+        if let LocalEvent::Witness(w) = first_evt {
+            assert_eq!(w.amount, 100);
+        };
     }
 }

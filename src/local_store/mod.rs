@@ -97,3 +97,42 @@ pub trait ILocalStore {
     /// Get total number of events in the db
     fn total_events(&mut self) -> u64;
 }
+
+pub trait StorageItem {
+    fn unique_id(&self) -> String;
+}
+
+// Must be unique across *all LocalEvents*
+impl StorageItem for LocalEvent {
+    fn unique_id(&self) -> String {
+        match self {
+            LocalEvent::Withdraw(evt) => {
+                todo!();
+            }
+            LocalEvent::Witness(evt) => {
+                format!("{}-{}", evt.coin.to_string(), evt.transaction_id)
+            }
+            LocalEvent::DepositQuote(_) => {
+                todo!()
+            }
+            LocalEvent::Deposit(_) => {
+                todo!()
+            }
+            LocalEvent::OutputSent(_) => {
+                todo!()
+            }
+            LocalEvent::Output(_) => {
+                todo!()
+            }
+            LocalEvent::PoolChange(_) => {
+                todo!()
+            }
+            LocalEvent::SwapQuote(_) => {
+                todo!()
+            }
+            LocalEvent::WithdrawRequest(_) => {
+                todo!()
+            }
+        }
+    }
+}

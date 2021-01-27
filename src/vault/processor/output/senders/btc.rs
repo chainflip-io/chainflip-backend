@@ -18,7 +18,7 @@ use bitcoin::Address;
 use chainflip_common::types::{
     chain::{Output, OutputSent, Validate},
     coin::Coin,
-    Network, Timestamp, UUIDv4,
+    Network, UUIDv4,
 };
 use hdwallet::ExtendedPrivKey;
 use itertools::Itertools;

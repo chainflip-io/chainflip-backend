@@ -116,8 +116,7 @@ impl TestData {
             slippage_limit: None,
             event_number: None,
         };
-        // TODO fix this, it's breaking
-        // quote.validate(Network::Testnet).unwrap();
+        quote.validate(Network::Testnet).unwrap();
         quote
     }
 
