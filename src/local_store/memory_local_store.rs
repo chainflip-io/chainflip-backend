@@ -40,31 +40,13 @@ impl MemoryLocalStore {
     }
 }
 
-/// Convenience method for getting all witnesses
-// pub fn get_witness_evts(&self) -> Vec<Witness> {
-//     let mut witnesses = Vec::new();
-//     let all_witnesses_from_db: Option<&Vec<LocalEvent>> = self.events.get("Witness");
-
-//     if all_witnesses_from_db.is_none() {
-//         return vec![];
-//     }
-//     for event in all_witnesses_from_db.unwrap() {
-//         match event {
-//             LocalEvent::Witness(w) => {
-//                 witnesses.push(w.clone());
-//             }
-//             _ => {
-//                 // skip
-//             }
-//         }
-//     }
-//     witnesses
-// }
-
 impl ILocalStore for MemoryLocalStore {
     fn add_events(&mut self, events: Vec<LocalEvent>) -> Result<(), String> {
-        for event in events {
-            self.events.push(event);
+        for event in &events {
+            // don't add duplicates
+            if events.iter().any(|e| e == event) {
+                self.events.push(event.clone());
+            }
         }
         Ok(())
     }
@@ -73,7 +55,8 @@ impl ILocalStore for MemoryLocalStore {
         if self.events.is_empty() {
             return None;
         }
-        Some(self.events.clone())
+        // let slice_num = last_seen + 1;
+        Some(self.events[last_seen as usize..].to_vec())
     }
 
     fn total_events(&mut self) -> u64 {

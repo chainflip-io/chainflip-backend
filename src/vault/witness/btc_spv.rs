@@ -51,11 +51,13 @@ where
     }
 
     async fn poll_addresses_of_quotes(&mut self) {
+        println!("Get addresses of quotes");
         self.transaction_provider.write().sync();
 
         let witness_txs = {
             let provider = self.transaction_provider.read();
             let swaps = provider.get_swap_quotes();
+            println!("Swaps {:#?}", swaps);
             let deposit_quotes = provider.get_deposit_quotes();
 
             let swap_id_address_pairs = swaps
@@ -186,11 +188,11 @@ mod test {
             assert_eq!(provider.get_swap_quotes().len(), 1);
             assert_eq!(provider.get_witnesses().len(), 0);
         }
-
+        // assert_eq!(provider.write().get_swap_quotes().len(), 1);
         witness.poll_addresses_of_quotes().await;
 
         let provider = provider.read();
-
+        println!("Checking number of swap quotes");
         assert_eq!(provider.get_swap_quotes().len(), 1);
         // one witness for each utxo
         assert_eq!(provider.get_witnesses().len(), 2);

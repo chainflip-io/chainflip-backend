@@ -287,7 +287,7 @@ impl<L: ILocalStore> TransactionProvider for MemoryTransactionsProvider<L> {
     fn sync(&mut self) -> u64 {
         let mut local_store = self.local_store.lock().unwrap();
         let events = local_store.get_events(self.state.next_event).unwrap();
-
+        println!("There are {}", events.len());
         for evt in events {
             match evt {
                 LocalEvent::Witness(evt) => {
@@ -314,6 +314,7 @@ impl<L: ILocalStore> TransactionProvider for MemoryTransactionsProvider<L> {
                 LocalEvent::Withdraw(evt) => self.state.process_withdraw(evt),
                 LocalEvent::OutputSent(evt) => self.state.process_output_sent_tx(evt),
             }
+            self.state.next_event += 1
         }
 
         self.state.next_event
@@ -336,6 +337,7 @@ impl<L: ILocalStore> TransactionProvider for MemoryTransactionsProvider<L> {
             .collect();
 
         if valid_events.len() > 0 {
+            println!("Adding valid events");
             self.local_store.lock().unwrap().add_events(valid_events)?;
         }
 
@@ -378,7 +380,7 @@ impl<L: ILocalStore> LiquidityProvider for MemoryTransactionsProvider<L> {
 mod test {
     use super::*;
     use crate::{local_store::MemoryLocalStore, utils::test_utils::data::TestData};
-    use chainflip_common::types::{coin::Coin, Timestamp, UUIDv4};
+    use chainflip_common::types::{coin::Coin, UUIDv4};
 
     fn setup() -> MemoryTransactionsProvider<MemoryLocalStore> {
         let local_store = Arc::new(Mutex::new(MemoryLocalStore::new()));
@@ -392,7 +394,7 @@ mod test {
         assert!(provider.get_swap_quotes().is_empty());
         assert!(provider.get_witnesses().is_empty());
 
-        // Add some random blocks
+        // Add some random events
         {
             let mut local_store = provider.local_store.lock().unwrap();
 
@@ -406,7 +408,7 @@ mod test {
 
         provider.sync();
 
-        assert_eq!(provider.state.next_event, 1);
+        assert_eq!(provider.state.next_event, 2);
         assert_eq!(provider.get_swap_quotes().len(), 1);
         assert_eq!(provider.get_witnesses().len(), 1);
 
@@ -414,7 +416,7 @@ mod test {
             .add_local_events(vec![TestData::swap_quote(Coin::ETH, Coin::LOKI).into()])
             .unwrap();
 
-        assert_eq!(provider.state.next_event, 2);
+        assert_eq!(provider.state.next_event, 3);
         assert_eq!(provider.get_swap_quotes().len(), 2);
     }
 
@@ -433,8 +435,10 @@ mod test {
                 .unwrap();
         }
 
-        provider.sync();
-
+        let evt_num = provider.sync();
+        println!("evt num: {:#?}", evt_num);
+        let witnesses = provider.get_witnesses();
+        // println!("Here are the witnesses: {:#?}", witnesses;
         assert_eq!(provider.get_witnesses().len(), 1);
         assert_eq!(provider.state.next_event, 1);
 

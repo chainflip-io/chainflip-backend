@@ -90,15 +90,7 @@ mod test {
             TestData::pool_change(Coin::BTC, -50, 0).into(),
         ];
 
-        // db process events
-        todo!();
-
-        // db.process_blocks(&[SideChainBlock {
-        //     id: 0,
-        //     transactions,
-        // }])
-        // .unwrap();
-
+        db.process_events(&events).unwrap();
         let db = Arc::new(Mutex::new(db));
 
         // No symbols
@@ -125,14 +117,7 @@ mod test {
             TestData::pool_change(Coin::ETH, 75, 75).into(),
         ];
 
-        // db process_events
-        todo!();
-
-        // db.process_blocks(&[SideChainBlock {
-        //     id: 0,
-        //     transactions,
-        // }])
-        // .unwrap();
+        db.process_events(&events).unwrap();
 
         let db = Arc::new(Mutex::new(db));
 
@@ -159,7 +144,7 @@ mod test {
         let mut db = setup_memory_db();
         let events: Vec<LocalEvent> = vec![TestData::pool_change(Coin::BTC, 100, 100).into()];
 
-        db.process_events(events).unwrap();
+        db.process_events(&events).unwrap();
 
         let db = Arc::new(Mutex::new(db));
 

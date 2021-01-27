@@ -5,7 +5,7 @@ pub struct TestEventProcessor {
     /// The last processed block
     pub last_processed_event_number: Option<u64>,
     /// The blocks received from process_blocks function
-    // pub recieved_blocks: Vec<SideChainBlock>,
+    pub recieved_events: Vec<LocalEvent>,
     /// Error to return in process_blocks function
     pub process_events_error: Option<String>,
 }
@@ -15,7 +15,7 @@ impl TestEventProcessor {
     pub fn new() -> Self {
         TestEventProcessor {
             last_processed_event_number: None,
-            // recieved_blocks: vec![],
+            recieved_events: vec![],
             process_events_error: None,
         }
     }
@@ -35,14 +35,7 @@ impl EventProcessor for TestEventProcessor {
         if let Some(error) = self.process_events_error.as_ref() {
             return Err(error.clone());
         }
-        // self.last_processed_event_number
+        self.recieved_events.extend_from_slice(events);
         Ok(())
     }
-    // fn process_blocks(&mut self, blocks: &[SideChainBlock]) -> Result<(), String> {
-    //     if let Some(error) = self.process_blocks_error.as_ref() {
-    //         return Err(error.clone());
-    //     }
-    //     self.recieved_blocks.extend_from_slice(blocks);
-    //     Ok(())
-    // }
 }
