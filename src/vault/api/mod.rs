@@ -27,7 +27,6 @@ impl APIServer {
     {
         let config = v1::Config {
             loki_wallet_address: config.loki.wallet_address.clone(),
-            eth_master_root_key: config.eth.master_root_key.clone(),
             btc_master_root_key: config.btc.master_root_key.clone(),
             net_type: config.net_type,
         };

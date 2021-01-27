@@ -4,11 +4,11 @@ use super::{
 };
 use crate::{
     common::{api::ResponseError, *},
-    utils::address::{generate_btc_address_from_index, generate_eth_address},
+    utils::address::generate_btc_address_from_index,
     vault::{processor::utils::get_swap_expire_timestamp, transactions::TransactionProvider},
 };
 use chainflip_common::{
-    constants::ethereum::ETH_DEPOSIT_INIT_CODE,
+    constants::ethereum,
     types::{
         addresses::{EthereumAddress, LokiAddress},
         chain::{DepositQuote, Validate},
@@ -124,22 +124,15 @@ pub async fn deposit<T: TransactionProvider>(
     // Generate addresses
     let coin_input_address = match params.pool {
         Coin::ETH => {
-            // Main vault address
-            // Currently we just assume it's at index 0 but we can change it in the future
-            let root_address = match generate_eth_address(&config.eth_master_root_key, 0) {
-                Ok(address) => address,
-                Err(err) => {
-                    warn!("Failed to generate ethereum address: {}", err);
-                    return Err(internal_server_error());
-                }
-            };
+            let vault_address = ethereum::get_vault_address(config.net_type);
 
             let salt = coin_input_address_id.clone().try_into().map_err(|_| {
                 warn!("Failed to convert coin input address id to ethereum salt");
                 internal_server_error()
             })?;
 
-            EthereumAddress::create2(&root_address, salt, &ETH_DEPOSIT_INIT_CODE).to_string()
+            EthereumAddress::create2(&vault_address, salt, &ethereum::ETH_DEPOSIT_INIT_CODE)
+                .to_string()
         }
         Coin::BTC => {
             let index = match params.coin_input_address_id.parse::<u32>() {
@@ -237,7 +230,6 @@ mod test {
     fn config() -> Config {
         Config {
             loki_wallet_address: "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".to_string(),
-            eth_master_root_key: TEST_ROOT_KEY.to_string(),
             btc_master_root_key: TEST_ROOT_KEY.to_string(),
             net_type: Network::Testnet
         }

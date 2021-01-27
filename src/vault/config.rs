@@ -33,8 +33,8 @@ pub struct LokiConfig {
 #[derive(Debug, Deserialize, Clone)]
 /// Configutation for ethereum
 pub struct EthConfig {
-    /// The seed to derive wallets from
-    pub master_root_key: String,
+    /// Private key used for sending
+    pub private_key: String,
     /// Web3 api
     pub provider_url: String,
 }
