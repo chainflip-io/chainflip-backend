@@ -1,6 +1,6 @@
 {
-  "Address": "AccountId",
-  "LookupSource": "AccountId",
+  "Address": "MultiAddress",
+  "LookupSource": "MultiAddress",
   "SwapQuote": {
     "id": "String",
     "timestamp": "u128",
