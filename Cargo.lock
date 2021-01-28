@@ -121,6 +121,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "alt_serde"
+version = "1.0.104"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03beeddedd09889b96def26f78ba46e34ffd9bdaaa33b2c980cbaa1d0e762686"
+dependencies = [
+ "alt_serde_derive",
+]
+
+[[package]]
+name = "alt_serde_derive"
+version = "1.0.104"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6757ed5faa82ccfbfa1837cd7a7a2e1bdb634236f21fa74d6c5c5736152838a1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "ansi_term"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -712,7 +732,7 @@ dependencies = [
  "semver 0.11.0",
  "semver-parser 0.10.2",
  "serde",
- "serde_json",
+ "serde_json 1.0.61",
 ]
 
 [[package]]
@@ -1752,7 +1772,7 @@ dependencies = [
  "parking_lot 0.9.0",
  "pin-project 0.4.27",
  "serde",
- "serde_json",
+ "serde_json 1.0.61",
 ]
 
 [[package]]
@@ -2451,7 +2471,7 @@ dependencies = [
  "jsonrpc-pubsub",
  "log",
  "serde",
- "serde_json",
+ "serde_json 1.0.61",
  "url 1.7.2",
 ]
 
@@ -2465,7 +2485,7 @@ dependencies = [
  "log",
  "serde",
  "serde_derive",
- "serde_json",
+ "serde_json 1.0.61",
 ]
 
 [[package]]
@@ -5058,7 +5078,7 @@ dependencies = [
  "sc-network",
  "sc-telemetry",
  "serde",
- "serde_json",
+ "serde_json 1.0.61",
  "sp-chain-spec",
  "sp-core",
  "sp-runtime",
@@ -5108,7 +5128,7 @@ dependencies = [
  "sc-telemetry",
  "sc-tracing",
  "serde",
- "serde_json",
+ "serde_json 1.0.61",
  "sp-blockchain",
  "sp-core",
  "sp-keyring",
@@ -5367,7 +5387,7 @@ dependencies = [
  "sc-network",
  "sc-network-gossip",
  "sc-telemetry",
- "serde_json",
+ "serde_json 1.0.61",
  "sp-api",
  "sp-application-crypto",
  "sp-arithmetic",
@@ -5412,7 +5432,7 @@ dependencies = [
  "merlin",
  "parking_lot 0.10.2",
  "rand 0.7.3",
- "serde_json",
+ "serde_json 1.0.61",
  "sp-application-crypto",
  "sp-core",
  "subtle 2.4.0",
@@ -5475,7 +5495,7 @@ dependencies = [
  "sc-client-api",
  "sc-peerset",
  "serde",
- "serde_json",
+ "serde_json 1.0.61",
  "slog",
  "slog_derive",
  "smallvec 0.6.14",
@@ -5546,7 +5566,7 @@ dependencies = [
  "futures 0.3.12",
  "libp2p",
  "log",
- "serde_json",
+ "serde_json 1.0.61",
  "sp-utils",
  "wasm-timer",
 ]
@@ -5579,7 +5599,7 @@ dependencies = [
  "sc-executor",
  "sc-keystore",
  "sc-rpc-api",
- "serde_json",
+ "serde_json 1.0.61",
  "sp-api",
  "sp-blockchain",
  "sp-chain-spec",
@@ -5610,7 +5630,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.10.2",
  "serde",
- "serde_json",
+ "serde_json 1.0.61",
  "sp-chain-spec",
  "sp-core",
  "sp-rpc",
@@ -5633,7 +5653,7 @@ dependencies = [
  "jsonrpc-ws-server",
  "log",
  "serde",
- "serde_json",
+ "serde_json 1.0.61",
  "sp-runtime",
  "substrate-prometheus-endpoint",
 ]
@@ -5676,7 +5696,7 @@ dependencies = [
  "sc-tracing",
  "sc-transaction-pool",
  "serde",
- "serde_json",
+ "serde_json 1.0.61",
  "slog",
  "sp-api",
  "sp-application-crypto",
@@ -5750,7 +5770,7 @@ dependencies = [
  "rustc-hash",
  "sc-telemetry",
  "serde",
- "serde_json",
+ "serde_json 1.0.61",
  "slog",
  "sp-tracing",
  "tracing",
@@ -5980,6 +6000,16 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
+version = "1.0.44"
+source = "git+https://github.com/Xanewok/json?branch=no-std#7954c3a363cf78bde5bbf2e875a222ff9ccafed4"
+dependencies = [
+ "alt_serde",
+ "itoa",
+ "ryu",
+]
+
+[[package]]
+name = "serde_json"
 version = "1.0.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fceb2595057b6891a4ee808f70054bd2d12f0e97f1cbb78689b59f676df325a"
@@ -6115,7 +6145,7 @@ dependencies = [
  "chrono",
  "erased-serde",
  "serde",
- "serde_json",
+ "serde_json 1.0.61",
  "slog",
 ]
 
@@ -6320,7 +6350,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f20aee31e7576ab5bef17345e9c2d4c1863dae3a3cc3ab3540592182e118720d"
 dependencies = [
  "serde",
- "serde_json",
+ "serde_json 1.0.61",
 ]
 
 [[package]]
@@ -6621,7 +6651,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3b8c2658dfa3f0a9447dbbebffa672905c4af48e6b914a814b04c39e2a8700b"
 dependencies = [
  "serde",
- "serde_json",
+ "serde_json 1.0.61",
 ]
 
 [[package]]
@@ -6869,6 +6899,7 @@ dependencies = [
  "sp-transaction-pool",
  "sp-version",
  "substrate-wasm-builder",
+ "witness-fetch",
 ]
 
 [[package]]
@@ -7577,7 +7608,7 @@ dependencies = [
  "matchers",
  "regex",
  "serde",
- "serde_json",
+ "serde_json 1.0.61",
  "sharded-slab",
  "smallvec 1.6.1",
  "thread_local",
@@ -8234,6 +8265,23 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
+
+[[package]]
+name = "witness-fetch"
+version = "0.1.0"
+dependencies = [
+ "alt_serde",
+ "frame-support",
+ "frame-system",
+ "num-traits",
+ "pallet-cf-validator",
+ "parity-scale-codec",
+ "serde_json 1.0.44",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
 
 [[package]]
 name = "ws2_32-sys"
