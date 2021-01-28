@@ -89,17 +89,6 @@ mod test {
         assert_eq!(stored_events.len(), 1);
     }
 
-    // #[test]
-    // fn get_all_events() {
-    //     let mut store = MemoryLocalStore::new();
-    //     let evt = TestData::witness(UUIDv4::new(), 1000, Coin::ETH);
-    //     let dq = TestData::deposit_quote(Coin::ETH);
-
-    //     store.add_events(events).unwrap();
-
-    //     let all_events = get_events()
-    // }
-
     #[test]
     fn get_events_from_last_seen() {
         let mut store = MemoryLocalStore::new();
@@ -110,5 +99,16 @@ mod test {
 
         let all_events = store.get_events(1).unwrap();
         assert_eq!(all_events.len(), 1);
+    }
+
+    #[test]
+    fn get_total_events() {
+        let mut store = MemoryLocalStore::new();
+        let evt = LocalEvent::Witness(TestData::witness(UUIDv4::new(), 1000, Coin::ETH));
+        let dq = LocalEvent::DepositQuote(TestData::deposit_quote(Coin::ETH));
+
+        store.add_events(vec![evt, dq]).unwrap();
+
+        assert_eq!(store.total_events(), 2);
     }
 }

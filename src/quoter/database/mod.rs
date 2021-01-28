@@ -186,38 +186,12 @@ impl EventProcessor for Database {
         }
 
         if let Err(err) = self.increment_last_processed_event_number(events.len() as u64) {
-            error!("Failed to increment last_processed_event");
+            error!("Failed to increment last_processed_event_number");
             return Err(format!("Failed to increment last_processed_event_number"));
         }
 
         Ok(())
     }
-
-    // fn process_blocks(&mut self, blocks: &[SideChainBlock]) -> Result<(), String> {
-    //     let tx = match self.connection.transaction() {
-    //         Ok(transaction) => transaction,
-    //         Err(err) => {
-    //             error!("Failed to open database transaction: {}", err);
-    //             return Err("Failed to process block".to_owned());
-    //         }
-    //     };
-
-    //     for block in blocks.iter() {
-    //         Database::process_transactions(&tx, &block.transactions)
-    //     }
-
-    //     if let Err(err) = tx.commit() {
-    //         error!("Failed to commit process block changes: {}", err);
-    //         return Err("Failed to commit process block changes".to_owned());
-    //     };
-
-    //     let last_block_number = blocks.iter().map(|b| b.id).max();
-    //     if let Some(last_block_number) = last_block_number {
-    //         self.set_last_processed_block_number(last_block_number)?;
-    //     }
-
-    //     Ok(())
-    // }
 }
 
 impl StateProvider for Database {

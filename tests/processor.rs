@@ -107,13 +107,10 @@ fn sole_staker_can_withdraw_all() {
 
     let staker = get_random_staker();
 
-    println!("will add deposite quote");
     let deposit_quote = runner.add_witnessed_deposit_quote(&staker.id(), loki_amount, eth_amount);
 
-    println!("will check eth liquidity");
     // Check that the liquidity is non-zero before unstaking
     runner.check_eth_liquidity(loki_amount.to_atomic(), eth_amount.to_atomic());
-    println!("check eth liquidity done");
 
     let withdraw_request = TestData::withdraw_request_for_staker(&staker, deposit_quote.pool);
 

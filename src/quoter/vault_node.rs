@@ -2,8 +2,8 @@ use crate::{
     common::api,
     local_store::LocalEvent,
     vault::api::v1::{
-        post_deposit::DepositQuoteParams, post_swap::SwapQuoteParams,
-        post_withdraw::WithdrawParams, PortionsParams,
+        get_events::EventsQueryResponse, post_deposit::DepositQuoteParams,
+        post_swap::SwapQuoteParams, post_withdraw::WithdrawParams, PortionsParams,
     },
 };
 use reqwest::Client;
@@ -61,7 +61,29 @@ impl VaultNodeAPI {
 #[async_trait]
 impl VaultNodeInterface for VaultNodeAPI {
     async fn get_events(&self, start: u64, limit: u64) -> Result<Vec<LocalEvent>, String> {
-        todo!("get the events");
+        let url = format!("{}/v1/events", self.url);
+
+        let res = self
+            .client
+            .get(&url)
+            .query(&[("number", start), ("limit", limit)])
+            .send()
+            .await
+            .map_err(|err| err.to_string())?;
+
+        let res = res
+            .json::<api::Response<EventsQueryResponse>>()
+            .await
+            .map_err(|err| err.to_string())?;
+
+        if let Some(err) = res.error {
+            return Err(err.message);
+        }
+
+        match res.data {
+            Some(data) => Ok(data.events),
+            None => Err("Failed to get event data".to_string()),
+        }
     }
 
     async fn get_portions(&self, params: PortionsParams) -> Result<serde_json::Value, String> {

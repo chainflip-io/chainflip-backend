@@ -66,6 +66,27 @@ impl TestData {
         witness
     }
 
+    /// Create a fake witness with an event num
+    pub fn witness_with_event_num(
+        quote_id: UUIDv4,
+        amount: u128,
+        coin: Coin,
+        event_num: u64,
+    ) -> Witness {
+        let witness = Witness {
+            id: UUIDv4::new(),
+            quote: quote_id,
+            transaction_id: "".into(),
+            transaction_block_number: 0,
+            transaction_index: 0,
+            amount,
+            coin,
+            event_number: Some(event_num),
+        };
+        witness.validate(Network::Testnet).unwrap();
+        witness
+    }
+
     /// Create a fake withdraw request for the given staker
     pub fn withdraw_request_for_staker(staker: &Staker, pool: Coin) -> WithdrawRequest {
         let staker_id = staker.id();

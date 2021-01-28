@@ -1,11 +1,8 @@
 // This (eventually) will be responsible for polling the "actual" state chain, and not the one that
 // the centralised version used
 
-use crate::local_store::LocalEvent;
-
 use super::EventProcessor;
 use super::{types::EventNumberLocalEvent, vault_node::VaultNodeInterface};
-// ughhh what do I do here? "use of unstable library feature"
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::{thread, time};
@@ -52,8 +49,8 @@ where
     ///
     /// # Panics
     ///
-    /// Panics if we detected any skipped blocks.
-    /// This can happen if `VaultNodeInterface::get_blocks` returns partial data.
+    /// Panics if we detected any skipped events.
+    /// This can happen if `VaultNodeInterface::get_events` returns partial data.
     pub async fn sync(&self) -> Result<(), String> {
         let mut error_count: u32 = 0;
         loop {
@@ -75,6 +72,8 @@ where
                     // Validate the returned block numbers to make sure we didn't skip
                     // assumption: get_events(2, 4) will get us events 2,3,4,5
                     let expected_last_event_number = next_event_number + (events.len() as u64) - 1;
+                    println!("Expected last event num: {}", expected_last_event_number);
+                    println!("next event number: {}", next_event_number);
                     if let Some(last_event_number) = last_event_number {
                         if last_event_number != expected_last_event_number {
                             error!("Expected last event number to be {} but got {}. We must've skipped an event!", last_event_number, expected_last_event_number);
@@ -129,9 +128,15 @@ where
 
 #[cfg(test)]
 mod test {
+    use chainflip_common::types::{coin::Coin, UUIDv4};
+
     use super::*;
-    use crate::quoter::test_utils::{
-        event_processor::TestEventProcessor, vault_node_api::TestVaultNodeAPI,
+    use crate::{
+        local_store::LocalEvent,
+        quoter::test_utils::{
+            event_processor::TestEventProcessor, vault_node_api::TestVaultNodeAPI,
+        },
+        utils::test_utils::data::TestData,
     };
 
     struct TestVariables {
@@ -152,120 +157,122 @@ mod test {
         }
     }
 
-    // #[tokio::test]
-    // async fn test_sync_returns_when_no_blocks_returned() {
-    //     let state = setup();
-    //     assert!(state.api.get_blocks_return.lock().unwrap().is_empty());
-    //     assert!(state.poller.sync().await.is_ok());
-    // }
+    #[tokio::test]
+    async fn test_sync_returns_when_no_blocks_returned() {
+        let state = setup();
+        assert!(state.api.get_events_return.lock().unwrap().is_empty());
+        assert!(state.poller.sync().await.is_ok());
+    }
 
-    // #[tokio::test]
-    // async fn test_sync_returns_error_if_api_failed() {
-    //     let error = "APITestError".to_owned();
-    //     let state = setup();
-    //     state.api.set_get_blocks_error(Some(error.clone()));
-    //     assert_eq!(state.poller.sync().await.unwrap_err(), error);
-    // }
+    #[tokio::test]
+    async fn test_sync_returns_error_if_api_failed() {
+        let error = "APITestError".to_owned();
+        let state = setup();
+        state.api.set_get_events_error(Some(error.clone()));
+        assert_eq!(state.poller.sync().await.unwrap_err(), error);
+    }
 
-    // #[tokio::test]
-    // #[should_panic(expected = "StateChainPoller skipped blocks!")]
-    // async fn test_sync_panics_when_blocks_are_skipped() {
-    //     let state = setup();
-    //     state.api.add_blocks(vec![
-    //         SideChainBlock {
-    //             id: 1,
-    //             transactions: vec![],
-    //         },
-    //         SideChainBlock {
-    //             id: 100,
-    //             transactions: vec![],
-    //         },
-    //     ]);
-    //     state.poller.next_block_number.store(1, Ordering::SeqCst);
-    //     state.poller.sync().await.unwrap();
-    // }
+    #[tokio::test]
+    #[should_panic(expected = "StateChainPoller skipped events!")]
+    async fn test_sync_panics_when_events_are_skipped() {
+        let state = setup();
+        state.api.add_events(vec![
+            LocalEvent::Witness(TestData::witness(UUIDv4::new(), 100, Coin::ETH)),
+            LocalEvent::Witness(TestData::witness(UUIDv4::new(), 123, Coin::BTC)),
+        ]);
+        state.poller.next_event_number.store(1, Ordering::SeqCst);
+        state.poller.sync().await.unwrap();
+    }
 
-    // #[tokio::test]
-    // async fn test_sync_updates_next_block_number_only_if_larger() -> Result<(), String> {
-    //     let state = setup();
-    //     state.api.add_blocks(vec![
-    //         SideChainBlock {
-    //             id: 0,
-    //             transactions: vec![],
-    //         },
-    //         SideChainBlock {
-    //             id: 1,
-    //             transactions: vec![],
-    //         },
-    //     ]);
+    #[tokio::test]
+    async fn test_sync_updates_next_event_number_only_if_larger() -> Result<(), String> {
+        let state = setup();
+        state.api.add_events(vec![
+            LocalEvent::Witness(TestData::witness_with_event_num(
+                UUIDv4::new(),
+                100,
+                Coin::ETH,
+                0,
+            )),
+            LocalEvent::Witness(TestData::witness_with_event_num(
+                UUIDv4::new(),
+                123,
+                Coin::BTC,
+                1,
+            )),
+        ]);
 
-    //     state.poller.sync().await?;
-    //     assert_eq!(state.poller.next_block_number.load(Ordering::SeqCst), 2);
-    //     Ok(())
-    // }
+        state.poller.sync().await?;
+        assert_eq!(state.poller.next_event_number.load(Ordering::SeqCst), 2);
+        Ok(())
+    }
 
-    // #[tokio::test]
-    // async fn test_sync_loops_through_all_blocks() -> Result<(), String> {
-    //     let state = setup();
-    //     state.api.add_blocks(vec![
-    //         SideChainBlock {
-    //             id: 0,
-    //             transactions: vec![],
-    //         },
-    //         SideChainBlock {
-    //             id: 1,
-    //             transactions: vec![],
-    //         },
-    //     ]);
-    //     state.api.add_blocks(vec![SideChainBlock {
-    //         id: 2,
-    //         transactions: vec![],
-    //     }]);
+    #[tokio::test]
+    async fn test_sync_loops_through_all_events() -> Result<(), String> {
+        let state = setup();
+        state.api.add_events(vec![
+            LocalEvent::Witness(TestData::witness_with_event_num(
+                UUIDv4::new(),
+                100,
+                Coin::ETH,
+                0,
+            )),
+            LocalEvent::Witness(TestData::witness_with_event_num(
+                UUIDv4::new(),
+                123,
+                Coin::BTC,
+                1,
+            )),
+        ]);
+        state
+            .api
+            .add_events(vec![LocalEvent::Witness(TestData::witness_with_event_num(
+                UUIDv4::new(),
+                100,
+                Coin::ETH,
+                2,
+            ))]);
 
-    //     state.poller.sync().await?;
-    //     assert_eq!(state.poller.next_block_number.load(Ordering::SeqCst), 3);
-    //     assert_eq!(state.processor.lock().unwrap().recieved_blocks.len(), 3);
-    //     Ok(())
-    // }
+        state.poller.sync().await?;
+        assert_eq!(state.poller.next_event_number.load(Ordering::SeqCst), 3);
+        assert_eq!(state.processor.lock().unwrap().recieved_events.len(), 3);
+        Ok(())
+    }
 
-    // #[tokio::test]
-    // async fn test_sync_passes_blocks_to_processor() -> Result<(), String> {
-    //     let state = setup();
-    //     state.api.add_blocks(vec![SideChainBlock {
-    //         id: 0,
-    //         transactions: vec![],
-    //     }]);
-    //     state.poller.sync().await?;
-    //     assert_eq!(state.processor.lock().unwrap().recieved_blocks.len(), 1);
-    //     assert_eq!(
-    //         state
-    //             .processor
-    //             .lock()
-    //             .unwrap()
-    //             .recieved_blocks
-    //             .get(0)
-    //             .unwrap()
-    //             .id,
-    //         0
-    //     );
-    //     Ok(())
-    // }
+    #[tokio::test]
+    async fn test_sync_passes_blocks_to_processor() -> Result<(), String> {
+        let state = setup();
+        state
+            .api
+            .add_events(vec![LocalEvent::Witness(TestData::witness_with_event_num(
+                UUIDv4::new(),
+                100,
+                Coin::ETH,
+                0,
+            ))]);
+        state.poller.sync().await?;
+        assert_eq!(state.processor.lock().unwrap().recieved_events.len(), 1);
+        Ok(())
+    }
 
-    // #[tokio::test]
-    // async fn test_sync_returns_error_if_processor_failed() {
-    //     let error = "ProcessorTestError".to_owned();
-    //     let state = setup();
+    #[tokio::test]
+    async fn test_sync_returns_error_if_processor_failed() {
+        let error = "ProcessorTestError".to_owned();
+        let state = setup();
 
-    //     state.api.add_blocks(vec![SideChainBlock {
-    //         id: 0,
-    //         transactions: vec![],
-    //     }]);
-    //     state
-    //         .processor
-    //         .lock()
-    //         .unwrap()
-    //         .set_process_blocks_error(Some(error.clone()));
+        state
+            .api
+            .add_events(vec![LocalEvent::Witness(TestData::witness(
+                UUIDv4::new(),
+                100,
+                Coin::ETH,
+            ))]);
+        state
+            .processor
+            .lock()
+            .unwrap()
+            .set_process_events_error(Some(error.clone()));
 
-    //     assert_eq!(state.poller.sync().await.unwrap_err(), error);
-    // }
+        assert_eq!(state.poller.sync().await.unwrap_err(), error);
+    }
 }
