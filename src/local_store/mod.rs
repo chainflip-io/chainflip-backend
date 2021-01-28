@@ -98,7 +98,9 @@ pub trait ILocalStore {
     fn total_events(&mut self) -> u64;
 }
 
+/// Trait for items to be stored in the database
 pub trait StorageItem {
+    /// Generate a unique id for use as Key in the Sqlite DB
     fn unique_id(&self) -> String;
 }
 
@@ -106,33 +108,17 @@ pub trait StorageItem {
 impl StorageItem for LocalEvent {
     fn unique_id(&self) -> String {
         match self {
-            LocalEvent::Withdraw(evt) => {
-                todo!();
-            }
+            LocalEvent::Withdraw(evt) => evt.id.to_string(),
             LocalEvent::Witness(evt) => {
                 format!("{}-{}", evt.coin.to_string(), evt.transaction_id)
             }
-            LocalEvent::DepositQuote(_) => {
-                todo!()
-            }
-            LocalEvent::Deposit(_) => {
-                todo!()
-            }
-            LocalEvent::OutputSent(_) => {
-                todo!()
-            }
-            LocalEvent::Output(_) => {
-                todo!()
-            }
-            LocalEvent::PoolChange(_) => {
-                todo!()
-            }
-            LocalEvent::SwapQuote(_) => {
-                todo!()
-            }
-            LocalEvent::WithdrawRequest(_) => {
-                todo!()
-            }
+            LocalEvent::DepositQuote(evt) => evt.id.to_string(),
+            LocalEvent::Deposit(evt) => evt.id.to_string(),
+            LocalEvent::OutputSent(evt) => evt.id.to_string(),
+            LocalEvent::Output(evt) => evt.id.to_string(),
+            LocalEvent::PoolChange(evt) => evt.id.to_string(),
+            LocalEvent::SwapQuote(evt) => evt.id.to_string(),
+            LocalEvent::WithdrawRequest(evt) => evt.id.to_string(),
         }
     }
 }

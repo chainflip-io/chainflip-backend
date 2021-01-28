@@ -4,7 +4,6 @@ use super::{ILocalStore, LocalEvent};
 
 /// Fake implemenation of ILocalStore that stores events in memory
 pub struct MemoryLocalStore {
-    // Use transaction type enum instead of string
     events: Vec<LocalEvent>,
 }
 
@@ -14,7 +13,7 @@ impl MemoryLocalStore {
         MemoryLocalStore { events: vec![] }
     }
 
-    /// Helper for getting just the witness transactions
+    /// Helper for getting just the witnesses
     pub fn get_witness_evts(&self) -> Vec<Witness> {
         let witness_events: Vec<_> = self
             .events
@@ -52,10 +51,9 @@ impl ILocalStore for MemoryLocalStore {
     }
 
     fn get_events(&mut self, last_seen: u64) -> Option<Vec<LocalEvent>> {
-        if self.events.is_empty() {
+        if self.events.is_empty() || last_seen > self.events.len() as u64 {
             return None;
         }
-
         Some(self.events[last_seen as usize..].to_vec())
     }
 
@@ -89,5 +87,28 @@ mod test {
 
         let stored_events = store.get_events(0).unwrap();
         assert_eq!(stored_events.len(), 1);
+    }
+
+    // #[test]
+    // fn get_all_events() {
+    //     let mut store = MemoryLocalStore::new();
+    //     let evt = TestData::witness(UUIDv4::new(), 1000, Coin::ETH);
+    //     let dq = TestData::deposit_quote(Coin::ETH);
+
+    //     store.add_events(events).unwrap();
+
+    //     let all_events = get_events()
+    // }
+
+    #[test]
+    fn get_events_from_last_seen() {
+        let mut store = MemoryLocalStore::new();
+        let evt = LocalEvent::Witness(TestData::witness(UUIDv4::new(), 1000, Coin::ETH));
+        let dq = LocalEvent::DepositQuote(TestData::deposit_quote(Coin::ETH));
+
+        store.add_events(vec![evt, dq]).unwrap();
+
+        let all_events = store.get_events(1).unwrap();
+        assert_eq!(all_events.len(), 1);
     }
 }

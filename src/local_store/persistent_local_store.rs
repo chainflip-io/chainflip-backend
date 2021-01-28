@@ -1,3 +1,5 @@
+use std::u64;
+
 use super::{ILocalStore, LocalEvent, StorageItem};
 use rusqlite::Connection as DB;
 use rusqlite::{params, NO_PARAMS};
@@ -5,8 +7,6 @@ use rusqlite::{params, NO_PARAMS};
 /// Implementation of ILocalStore that uses sqlite to
 /// persist between restarts
 pub struct PersistentLocalStore {
-    // is this required?
-    events: Vec<LocalEvent>,
     db: DB,
 }
 
@@ -30,19 +30,14 @@ impl PersistentLocalStore {
 
         create_tables_if_new(&db);
 
-        println!("Could create the tables");
+        // Load the events into memory here
 
-        // TODO: If cannot read db here, panic
-        // Not sure if events even necessary here
-        let events: Vec<LocalEvent> = Vec::new();
-
-        PersistentLocalStore { db, events }
+        PersistentLocalStore { db }
     }
 }
 
 impl ILocalStore for PersistentLocalStore {
     fn add_events(&mut self, events: Vec<LocalEvent>) -> Result<(), String> {
-        // add witnesses
         for event in events {
             let id = event.unique_id();
             let blob = serde_json::to_string(&event).unwrap();
@@ -54,53 +49,48 @@ impl ILocalStore for PersistentLocalStore {
                 params![id, blob],
             ) {
                 Ok(_) => {
-                    trace!("Witness ({:#} added to db", id);
+                    trace!("Event ({:#} added to db", id);
                 }
                 Err(e) => {
-                    println!("Witness {:#} could not be added to db, {:#?}", id, e);
-                    return Err(format!(
-                        "Witness {:#} could not be added to db, {:#?}",
-                        id, e
-                    ));
+                    return Err(format!("Event {:#} could not be added to db, {:#?}", id, e));
                 }
             }
         }
         Ok(())
     }
 
-    // TODO: Implement with > last_seen
     fn get_events(&mut self, last_seen: u64) -> Option<Vec<LocalEvent>> {
         let mut select_events = self
             .db
-            .prepare("SELECT data FROM events")
+            .prepare("SELECT data FROM events WHERE rowid > ?")
             .expect("Could not prepare stmt");
 
-        // add row_id > last_seen here
         let mut rows = select_events
-            .query(NO_PARAMS)
+            // only u32 or smaller is castable to a SQL type
+            .query(params![last_seen as u32])
             .map_err(|err| err.to_string())
             .unwrap();
 
         let mut recent_events: Vec<LocalEvent> = Vec::new();
-        for row in rows.next() {
-            match row {
-                Some(evt) => {
-                    let str_val: String = evt.get(0).unwrap();
-                    let l_evt = serde_json::from_str::<LocalEvent>(&str_val).unwrap();
-                    recent_events.push(l_evt);
-                }
-                None => {
-                    println!("Nothing to see here");
-                    return None;
-                }
-            }
+
+        while let Some(row) = rows.next().ok()? {
+            let str_val: String = row.get(0).unwrap();
+            let l_evt = serde_json::from_str::<LocalEvent>(&str_val).unwrap();
+            recent_events.push(l_evt);
         }
+
         Some(recent_events)
     }
 
-    // Do we really neeed this?
     fn total_events(&mut self) -> u64 {
-        return 0;
+        let mut total_events = self
+            .db
+            .prepare("SELECT COUNT(*) FROM events")
+            .expect("Could not prepare stmt");
+
+        let count: Result<u32, _> = total_events.query_row(NO_PARAMS, |row| row.get(0));
+
+        count.unwrap() as u64
     }
 }
 
@@ -133,5 +123,56 @@ mod test {
         if let LocalEvent::Witness(w) = first_evt {
             assert_eq!(w.amount, 100);
         };
+    }
+
+    #[test]
+    fn get_all_events() {
+        let temp_file = test_utils::TempRandomFile::new();
+
+        let mut db = PersistentLocalStore::open(temp_file.path());
+
+        let evt: LocalEvent = TestData::witness(UUIDv4::new(), 100, Coin::ETH).into();
+        let evt2: LocalEvent = LocalEvent::DepositQuote(TestData::deposit_quote(Coin::ETH));
+
+        db.add_events(vec![evt.clone(), evt2.clone()])
+            .expect("Error adding an event to the database");
+
+        let all_events = db.get_events(0).unwrap();
+
+        assert_eq!(all_events.len(), 2);
+    }
+
+    #[test]
+    fn get_events_last_seen_non_zero() {
+        let temp_file = test_utils::TempRandomFile::new();
+
+        let mut db = PersistentLocalStore::open(temp_file.path());
+
+        let evt: LocalEvent = TestData::witness(UUIDv4::new(), 100, Coin::ETH).into();
+        let evt2: LocalEvent = LocalEvent::DepositQuote(TestData::deposit_quote(Coin::ETH));
+
+        db.add_events(vec![evt.clone(), evt2.clone()])
+            .expect("Error adding an event to the database");
+
+        let all_events = db.get_events(1).unwrap();
+
+        assert_eq!(all_events.len(), 1);
+    }
+
+    #[test]
+    fn get_total_events() {
+        let temp_file = test_utils::TempRandomFile::new();
+
+        let mut db = PersistentLocalStore::open(temp_file.path());
+
+        let evt: LocalEvent = TestData::witness(UUIDv4::new(), 100, Coin::ETH).into();
+        let evt2: LocalEvent = LocalEvent::DepositQuote(TestData::deposit_quote(Coin::ETH));
+
+        assert_eq!(db.total_events(), 0);
+
+        db.add_events(vec![evt.clone(), evt2.clone()])
+            .expect("Error adding an event to the database");
+
+        assert_eq!(db.total_events(), 2);
     }
 }

@@ -430,16 +430,19 @@ mod test {
 
         {
             let mut local_store = provider.local_store.lock().unwrap();
-
             local_store
                 .add_events(vec![quote.into(), witness.clone().into()])
                 .unwrap();
         }
 
+        provider.sync();
+
         assert_eq!(provider.get_witnesses().len(), 1);
         assert_eq!(provider.state.next_event, 2);
 
         provider.add_local_events(vec![witness.into()]).unwrap();
+
+        provider.sync();
 
         assert_eq!(provider.get_witnesses().len(), 1);
         assert_eq!(provider.state.next_event, 2);

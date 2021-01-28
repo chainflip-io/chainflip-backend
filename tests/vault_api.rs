@@ -38,20 +38,6 @@ where
     (status, res)
 }
 
-async fn send_blocks_req<T>(query: &T) -> StatusCode
-where
-    T: Serialize + ?Sized,
-{
-    let res = CLIENT
-        .get("http://localhost:3030/v1/blocks")
-        .query(query)
-        .send()
-        .await
-        .unwrap();
-
-    res.status()
-}
-
 async fn post_withdraw_req<T>(req: &T) -> StatusCode
 where
     T: Serialize + ?Sized,
@@ -162,18 +148,6 @@ async fn vault_http_server_tests() {
     // ***********************
     // ******** TESTS ********
     // ***********************
-
-    {
-        // number=0&limit=1
-        let status = send_blocks_req(&[("number", 0u32), ("limit", 1u32)]).await;
-        assert_eq!(status, StatusCode::OK);
-    }
-
-    {
-        // (no params)
-        let status = send_blocks_req(&[("", "")]).await;
-        assert_eq!(status, StatusCode::OK);
-    }
 
     {
         let staker_id = config.staker.public_key();

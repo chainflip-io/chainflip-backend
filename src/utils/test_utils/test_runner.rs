@@ -97,6 +97,10 @@ impl TestRunner {
         local_store
             .add_events(events.into())
             .expect("Could not add events");
+
+        drop(local_store);
+
+        self.sync();
     }
 
     /// A helper function that adds a deposit quote and the corresponding witnesses
@@ -116,11 +120,15 @@ impl TestRunner {
             other_amount.coin_type(),
         );
 
+        println!("adding deposit quote and witnesses");
+
         self.add_local_events([
             wtx_loki.into(),
             wtx_eth.into(),
             deposit_quote.clone().into(),
         ]);
+
+        println!("added deposit quote and witnesses");
 
         deposit_quote
     }
@@ -155,6 +163,12 @@ impl TestRunner {
     /// Convenience method to check liquidity amounts in ETH pool
     pub fn check_eth_liquidity(&mut self, loki_atomic: u128, eth_atomic: u128) {
         self.provider.write().sync();
+        let provider = self.provider.read();
+        let ws = provider.get_witnesses();
+        let ws: Vec<Witness> = ws.iter().map(|w| w.inner.clone()).collect();
+        println!("Getting the witnesses: {:#?}", ws);
+        let dqs = provider.get_deposit_quotes();
+        println!("Get the deposit quotes: {:#?}", dqs);
 
         let liquidity = self
             .provider
@@ -194,7 +208,6 @@ impl TestRunner {
 
     /// Sync processor
     pub fn sync(&mut self) {
-        // let total_blocks = self.chain.lock().unwrap().total_blocks();
         let last_seen = self.store.lock().unwrap().total_events();
         spin_until_last_seen(&self.receiver, last_seen);
     }
