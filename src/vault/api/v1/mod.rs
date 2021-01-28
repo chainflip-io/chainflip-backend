@@ -34,6 +34,8 @@ mod get_portions;
 use get_portions::get_portions;
 pub use get_portions::PortionsParams;
 
+use self::get_witnesses::WitnessQueryParams;
+
 #[derive(Debug, Clone)]
 /// A config object for swap and deposit
 pub struct Config {
@@ -60,6 +62,7 @@ pub fn endpoints<S: ISideChain + Send, T: TransactionProvider + Send + Sync>(
 
     let witnesses = warp::path!("witnesses")
         .and(warp::get())
+        .and(warp::query::<WitnessQueryParams>())
         .and(using(side_chain.clone()))
         .map(get_witnesses)
         .and_then(api::respond);

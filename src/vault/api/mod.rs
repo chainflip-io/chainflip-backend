@@ -1,7 +1,10 @@
 use super::{config::VaultConfig, transactions::TransactionProvider};
 use crate::common::api::handle_rejection;
 use crate::side_chain::ISideChain;
-use std::sync::{Arc, Mutex};
+use std::{
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+};
 
 use parking_lot::RwLock;
 use tokio::sync::oneshot;
@@ -34,11 +37,14 @@ impl APIServer {
 
         let mut rt = tokio::runtime::Runtime::new().unwrap();
 
+        let addr: SocketAddr = (([127, 0, 0, 1], 3030)).into();
+
+        info!("Vault rpc is initialized at: {}", addr);
+
         let future = async {
-            let (_addr, server) =
-                warp::serve(routes).bind_with_graceful_shutdown(([127, 0, 0, 1], 3030), async {
-                    shutdown_receiver.await.ok();
-                });
+            let (_addr, server) = warp::serve(routes).bind_with_graceful_shutdown(addr, async {
+                shutdown_receiver.await.ok();
+            });
 
             server.await;
         };

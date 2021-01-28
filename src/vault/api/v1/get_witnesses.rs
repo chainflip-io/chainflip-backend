@@ -3,8 +3,15 @@ use crate::{
     side_chain::{ISideChain, SideChainTx},
 };
 use chainflip_common::types::chain::Witness;
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
+
+/// Parameters for GET /get_witnesses request
+#[derive(Debug, Deserialize, Serialize)]
+pub struct WitnessQueryParams {
+    last_seen: Option<String>,
+}
 
 /// Typed representation of the response for /get_witnesses
 #[serde(rename_all = "camelCase")]
@@ -20,9 +27,19 @@ pub(super) struct WitnessQueryResponse {
 ///
 /// > GET /v1/witnesses
 pub(super) async fn get_witnesses<S: ISideChain>(
+    params: WitnessQueryParams,
     side_chain: Arc<Mutex<S>>,
 ) -> Result<WitnessQueryResponse, ResponseError> {
     let side_chain = side_chain.lock().unwrap();
+
+    let WitnessQueryParams { last_seen } = params;
+
+    let last_seen = match last_seen {
+        Some(ts) => ts.parse::<u128>().map_err(|_| {
+            ResponseError::new(StatusCode::BAD_REQUEST, "Invalid value for last_seen")
+        })?,
+        None => 0,
+    };
 
     let total = side_chain.total_blocks();
 
@@ -33,7 +50,11 @@ pub(super) async fn get_witnesses<S: ISideChain>(
 
         for tx in &block.transactions {
             if let SideChainTx::Witness(tx) = tx {
-                witness_txs.push(tx.clone());
+                // There is a risk that we might get two witnesses with exact
+                // same timestamp (down to a millisecond), but for now the timestamps will do.
+                if tx.timestamp.0 > last_seen as u128 {
+                    witness_txs.push(tx.clone());
+                }
             }
         }
     }
@@ -46,7 +67,7 @@ pub(super) async fn get_witnesses<S: ISideChain>(
 #[cfg(test)]
 mod tests {
 
-    use chainflip_common::types::coin::Coin;
+    use chainflip_common::types::{coin::Coin, Timestamp, UUIDv4};
 
     use super::*;
     use crate::{
@@ -76,12 +97,49 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn check_get_witnesses() {
+    async fn get_witnesses_returns_all() {
         let chain = init();
         let chain = Arc::new(Mutex::new(chain));
 
-        let res = get_witnesses(chain).await.expect("result should be OK");
+        let params = WitnessQueryParams { last_seen: None };
+
+        let res = get_witnesses(params, chain)
+            .await
+            .expect("result should be OK");
 
         assert_eq!(res.witness_txs.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn get_witnesses_returns_recent_only() {
+        use std::thread::sleep;
+        use std::time::Duration;
+
+        let chain = init();
+        let chain = Arc::new(Mutex::new(chain));
+
+        let last_seen = Some(Timestamp::now().to_string());
+
+        sleep(Duration::from_millis(1));
+
+        let params = WitnessQueryParams { last_seen };
+
+        // Add a fresh witness
+        {
+            let mut chain = chain.lock().unwrap();
+
+            let tx =
+                crate::utils::test_utils::data::TestData::witness(UUIDv4::new(), 10, Coin::BTC);
+
+            chain
+                .add_block(vec![tx.into()])
+                .expect("Could not add block");
+        }
+
+        let res = get_witnesses(params, chain)
+            .await
+            .expect("result should be OK");
+
+        assert_eq!(res.witness_txs.len(), 1);
     }
 }
