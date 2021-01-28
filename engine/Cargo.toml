@@ -25,6 +25,7 @@ lazy_static = "1.4"
 log = "0.4"
 log4rs = "1.0"
 num-bigint = "0.3"
+parity-scale-codec = { version = "2.0", features = ["derive"] }
 parking_lot = "0.11"
 rand = "0.8"
 regex = "1.4"
@@ -34,6 +35,7 @@ ring = "0.16"
 secp256k1 = "0.20"
 serde = {version = "1.0", features = ["derive"]}
 serde_json = "1.0"
+thiserror = "1.0"
 tokio = {version = "1.1", features = ["full"]}
 tokio-compat-02 = "0.2"
 uint = "0.8"
