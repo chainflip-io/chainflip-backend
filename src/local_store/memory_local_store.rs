@@ -57,6 +57,19 @@ impl ILocalStore for MemoryLocalStore {
         Some(self.events[last_seen as usize..].to_vec())
     }
 
+    fn get_witnesses(&mut self, last_seen: u64) -> Option<Vec<Witness>> {
+        let events = self.get_events(last_seen);
+        let mut witnesses: Vec<Witness> = vec![];
+        for event in events? {
+            if let LocalEvent::Witness(w) = event {
+                witnesses.push(w);
+            } else {
+                // skip
+            }
+        }
+        Some(witnesses)
+    }
+
     fn total_events(&mut self) -> u64 {
         self.events.len() as u64
     }

@@ -27,7 +27,7 @@ pub mod post_withdraw;
 
 /// Get witnesses endpoint
 mod get_witnesses;
-use get_witnesses::get_local_witnesses;
+use get_witnesses::{get_local_witnesses, WitnessQueryParams};
 
 /// Get portions endpoint
 mod get_portions;
@@ -62,6 +62,7 @@ pub fn endpoints<L: ILocalStore + Send, T: TransactionProvider + Send + Sync>(
 
     let witnesses = warp::path!("witnesses")
         .and(warp::get())
+        .and(warp::query::<WitnessQueryParams>())
         .and(using(local_store.clone()))
         .map(get_local_witnesses)
         .and_then(api::respond);

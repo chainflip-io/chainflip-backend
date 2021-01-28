@@ -94,6 +94,9 @@ pub trait ILocalStore {
     /// Get events from the local store
     fn get_events(&mut self, last_event: u64) -> Option<Vec<LocalEvent>>;
 
+    /// Helper method for getting just the witnesses
+    fn get_witnesses(&mut self, last_event: u64) -> Option<Vec<Witness>>;
+
     /// Get total number of events in the db
     fn total_events(&mut self) -> u64;
 }

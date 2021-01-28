@@ -1,9 +1,13 @@
-use crate::{local_store::LocalEvent, vault::api::v1::post_deposit::DepositQuoteParams};
-use crate::{
-    quoter::vault_node::VaultNodeInterface,
-    vault::api::v1::{post_swap::SwapQuoteParams, post_withdraw::WithdrawParams, PortionsParams},
-};
 use std::{collections::VecDeque, sync::Mutex};
+
+use crate::{
+    local_store::LocalEvent,
+    quoter::vault_node::VaultNodeInterface,
+    vault::api::v1::{
+        post_deposit::DepositQuoteParams, post_swap::SwapQuoteParams,
+        post_withdraw::WithdrawParams, PortionsParams,
+    },
+};
 
 /// Test vault node API
 pub struct TestVaultNodeAPI {

@@ -3,8 +3,16 @@ use crate::{
     local_store::{ILocalStore, LocalEvent},
 };
 use chainflip_common::types::chain::Witness;
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
+use warp::sse::event;
+
+/// Parameters for GET /get_witnesses request
+#[derive(Debug, Deserialize, Serialize)]
+pub struct WitnessQueryParams {
+    last_seen: Option<u64>,
+}
 
 /// Typed representation of the response for /get_witnesses
 #[serde(rename_all = "camelCase")]
@@ -18,22 +26,18 @@ pub(super) struct WitnessQueryResponse {
 ///
 /// # Example Query
 ///
-/// > GET /v1/witnesses
+/// > GET /v1/witnesses?last_seen=2
 pub(super) async fn get_local_witnesses<L: ILocalStore>(
+    params: WitnessQueryParams,
     local_store: Arc<Mutex<L>>,
 ) -> Result<WitnessQueryResponse, ResponseError> {
     let mut local_store = local_store.lock().unwrap();
 
-    let mut witness_txs = vec![];
+    let WitnessQueryParams { last_seen } = params;
 
-    // get *all* events from the beginning of time
-    let events = local_store.get_events(0).expect("invalid index");
-
-    for evt in &events {
-        if let LocalEvent::Witness(e) = evt {
-            witness_txs.push(e.clone());
-        }
-    }
+    let witness_txs = local_store
+        .get_witnesses(last_seen.unwrap_or(0))
+        .expect("invalid index");
 
     Ok(WitnessQueryResponse { witness_txs })
 }
@@ -41,7 +45,7 @@ pub(super) async fn get_local_witnesses<L: ILocalStore>(
 #[cfg(test)]
 mod tests {
 
-    use chainflip_common::types::coin::Coin;
+    use chainflip_common::types::{coin::Coin, UUIDv4};
 
     use super::*;
     use crate::{
@@ -60,15 +64,10 @@ mod tests {
         let eth_amount = GenericCoinAmount::from_decimal_string(Coin::ETH, "10");
 
         let witness = TestData::witness(quote.id, loki_amount.to_atomic(), Coin::LOKI);
+        let witness2 = TestData::witness(quote.id, eth_amount.to_atomic(), Coin::ETH);
 
         store
-            .add_events(vec![witness.into()])
-            .expect("adding events");
-
-        let witness = TestData::witness(quote.id, eth_amount.to_atomic(), Coin::ETH);
-
-        store
-            .add_events(vec![witness.into()])
+            .add_events(vec![witness.into(), witness2.into()])
             .expect("adding events");
 
         store
@@ -79,9 +78,40 @@ mod tests {
         let store = init();
         let store = Arc::new(Mutex::new(store));
 
-        let res = get_local_witnesses(store)
+        let params = WitnessQueryParams { last_seen: None };
+
+        let res = get_local_witnesses(params, store)
             .await
             .expect("result should be OK");
+
+        assert_eq!(res.witness_txs.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn get_witnesses_returns_recent_only() {
+        let store = init();
+        let store = Arc::new(Mutex::new(store));
+
+        let last_seen: Option<u64> = Some(1);
+
+        let params = WitnessQueryParams { last_seen };
+
+        // Add a fresh witness, to the 2 already in there
+        {
+            let mut store = store.lock().unwrap();
+
+            let evt1 = TestData::witness(UUIDv4::new(), 10, Coin::BTC);
+
+            store
+                .add_events(vec![evt1.into()])
+                .expect("Could not add event");
+        }
+
+        let res = get_local_witnesses(params, store)
+            .await
+            .expect("result should be OK");
+
+        println!("The witnesses: {:#?}", res.witness_txs);
 
         assert_eq!(res.witness_txs.len(), 2);
     }

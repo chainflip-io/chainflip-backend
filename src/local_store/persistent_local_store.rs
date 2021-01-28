@@ -1,6 +1,7 @@
 use std::u64;
 
 use super::{ILocalStore, LocalEvent, StorageItem};
+use chainflip_common::types::chain::Witness;
 use rusqlite::Connection as DB;
 use rusqlite::{params, NO_PARAMS};
 
@@ -91,6 +92,19 @@ impl ILocalStore for PersistentLocalStore {
         let count: Result<u32, _> = total_events.query_row(NO_PARAMS, |row| row.get(0));
 
         count.unwrap() as u64
+    }
+
+    fn get_witnesses(&mut self, last_event: u64) -> Option<Vec<Witness>> {
+        let events = self.get_events(last_event);
+        let mut witnesses: Vec<Witness> = vec![];
+        for event in events? {
+            if let LocalEvent::Witness(w) = event {
+                witnesses.push(w);
+            } else {
+                // skip
+            }
+        }
+        Some(witnesses)
     }
 }
 
