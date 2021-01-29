@@ -68,7 +68,7 @@ impl Quoter {
     }
 }
 
-/// inteface for defining an event processor of the 
+/// inteface for defining an event processor of the
 pub trait EventProcessor {
     /// gets the last processed event number, so we can process any event after this one
     fn get_last_processed_event_number(&self) -> Option<u64>;
