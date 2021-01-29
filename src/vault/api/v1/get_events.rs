@@ -90,8 +90,8 @@ mod test {
 
         local_store
             .add_events(vec![
-                LocalEvent::Witness(TestData::witness(UUIDv4::new(), 100, Coin::ETH)),
-                LocalEvent::Witness(TestData::witness(UUIDv4::new(), 123, Coin::BTC)),
+                TestData::witness(UUIDv4::new(), 100, Coin::ETH).into(),
+                TestData::witness(UUIDv4::new(), 123, Coin::BTC).into(),
             ])
             .unwrap();
 

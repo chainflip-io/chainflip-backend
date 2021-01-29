@@ -99,5 +99,12 @@ pub fn endpoints<L: ILocalStore + Send, T: TransactionProvider + Send + Sync>(
         .and_then(api::respond);
 
     // Add path prefix /v1 to all our routes
-    warp::path!("v1" / ..).and(events.or(swap.or(deposit).or(withdraw).or(portions).or(witnesses)))
+    warp::path!("v1" / ..).and(
+        events
+            .or(swap)
+            .or(deposit)
+            .or(withdraw)
+            .or(portions)
+            .or(witnesses),
+    )
 }

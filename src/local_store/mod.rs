@@ -86,6 +86,28 @@ impl From<Withdraw> for LocalEvent {
     }
 }
 
+/// Gets the event number for a local event
+pub trait GetEventNumber {
+    /// Gets the event number for a local event
+    fn event_number(&self) -> Option<u64>;
+}
+
+impl GetEventNumber for LocalEvent {
+    fn event_number(&self) -> Option<u64> {
+        match self {
+            LocalEvent::Witness(e) => e.event_number,
+            LocalEvent::DepositQuote(e) => e.event_number,
+            LocalEvent::Deposit(e) => e.event_number,
+            LocalEvent::OutputSent(e) => e.event_number,
+            LocalEvent::Output(e) => e.event_number,
+            LocalEvent::PoolChange(e) => e.event_number,
+            LocalEvent::SwapQuote(e) => e.event_number,
+            LocalEvent::WithdrawRequest(e) => e.event_number,
+            LocalEvent::Withdraw(e) => e.event_number,
+        }
+    }
+}
+
 /// Interface that must be provided by any "side chain" implementation
 pub trait ILocalStore {
     /// Add events to the local store

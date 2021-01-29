@@ -27,9 +27,6 @@ pub mod config;
 /// Test utils
 pub mod test_utils;
 
-/// helper types
-pub mod types;
-
 /// Quoter
 pub struct Quoter {}
 
@@ -68,7 +65,7 @@ impl Quoter {
     }
 }
 
-/// inteface for defining an event processor of the 
+/// inteface for defining an event processor
 pub trait EventProcessor {
     /// gets the last processed event number, so we can process any event after this one
     fn get_last_processed_event_number(&self) -> Option<u64>;
