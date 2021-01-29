@@ -1,8 +1,10 @@
 // This (eventually) will be responsible for polling the "actual" state chain, and not the one that
 // the centralised version used
 
+use crate::local_store::GetEventNumber;
+
+use super::vault_node::VaultNodeInterface;
 use super::EventProcessor;
-use super::{types::EventNumberLocalEvent, vault_node::VaultNodeInterface};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::{thread, time};
@@ -61,13 +63,8 @@ where
                         return Ok(());
                     }
 
-                    let last_event_number: Option<u64> = events
-                        .iter()
-                        .map(|e| {
-                            let evt_num_local_evt: EventNumberLocalEvent = e.into();
-                            evt_num_local_evt.event_number.unwrap_or(0)
-                        })
-                        .max();
+                    let last_event_number: Option<u64> =
+                        events.iter().map(|e| e.event_number().unwrap_or(0)).max();
 
                     // Validate the returned block numbers to make sure we didn't skip
                     // assumption: get_events(2, 4) will get us events 2,3,4,5
