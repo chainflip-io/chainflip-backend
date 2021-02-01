@@ -87,12 +87,15 @@ impl From<Withdraw> for LocalEvent {
 }
 
 /// Gets the event number for a local event
-pub trait GetEventNumber {
+pub trait EventNumber {
     /// Gets the event number for a local event
     fn event_number(&self) -> Option<u64>;
+
+    /// set event number for a local event
+    fn set_event_number(&mut self, event_number: u64);
 }
 
-impl GetEventNumber for LocalEvent {
+impl EventNumber for LocalEvent {
     fn event_number(&self) -> Option<u64> {
         match self {
             LocalEvent::Witness(e) => e.event_number,
@@ -104,6 +107,20 @@ impl GetEventNumber for LocalEvent {
             LocalEvent::SwapQuote(e) => e.event_number,
             LocalEvent::WithdrawRequest(e) => e.event_number,
             LocalEvent::Withdraw(e) => e.event_number,
+        }
+    }
+
+    fn set_event_number(&mut self, event_number: u64) {
+        match self {
+            LocalEvent::Witness(e) => e.event_number = Some(event_number),
+            LocalEvent::DepositQuote(e) => e.event_number = Some(event_number),
+            LocalEvent::Deposit(e) => e.event_number = Some(event_number),
+            LocalEvent::OutputSent(e) => e.event_number = Some(event_number),
+            LocalEvent::Output(e) => e.event_number = Some(event_number),
+            LocalEvent::PoolChange(e) => e.event_number = Some(event_number),
+            LocalEvent::SwapQuote(e) => e.event_number = Some(event_number),
+            LocalEvent::WithdrawRequest(e) => e.event_number = Some(event_number),
+            LocalEvent::Withdraw(e) => e.event_number = Some(event_number),
         }
     }
 }

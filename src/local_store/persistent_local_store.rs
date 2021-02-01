@@ -1,6 +1,6 @@
 use std::u64;
 
-use super::{ILocalStore, LocalEvent, StorageItem};
+use super::{EventNumber, ILocalStore, LocalEvent, StorageItem};
 use chainflip_common::types::chain::Witness;
 use rusqlite::Connection as DB;
 use rusqlite::{params, NO_PARAMS};
@@ -63,7 +63,7 @@ impl ILocalStore for PersistentLocalStore {
     fn get_events(&self, last_seen: u64) -> Vec<LocalEvent> {
         let mut select_events = self
             .db
-            .prepare("SELECT data FROM events WHERE rowid > ?")
+            .prepare("SELECT data, rowid as event_number FROM events WHERE rowid > ?")
             .expect("Could not prepare stmt");
 
         let mut rows = select_events
@@ -75,8 +75,11 @@ impl ILocalStore for PersistentLocalStore {
         let mut recent_events: Vec<LocalEvent> = Vec::new();
 
         while let Some(row) = rows.next().expect("Rows should be readable") {
-            let str_val: String = row.get(0).unwrap();
-            let l_evt = serde_json::from_str::<LocalEvent>(&str_val).unwrap();
+            let data_str: String = row.get(0).unwrap();
+            let mut l_evt = serde_json::from_str::<LocalEvent>(&data_str).unwrap();
+            // sqlite limited to u32
+            let row_val: u32 = row.get(1).unwrap();
+            l_evt.set_event_number(row_val as u64);
             recent_events.push(l_evt);
         }
 
@@ -115,7 +118,7 @@ mod test {
         // Close the database
         drop(db);
 
-        let mut db = PersistentLocalStore::open(temp_file.path());
+        let db = PersistentLocalStore::open(temp_file.path());
 
         let events = db.get_events(0);
         assert_eq!(events.len(), 1);

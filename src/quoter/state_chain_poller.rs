@@ -1,7 +1,7 @@
 // This (eventually) will be responsible for polling the "actual" state chain, and not the one that
 // the centralised version used
 
-use crate::local_store::GetEventNumber;
+use crate::local_store::EventNumber;
 
 use super::vault_node::VaultNodeInterface;
 use super::EventProcessor;
