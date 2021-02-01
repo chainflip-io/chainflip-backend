@@ -7,11 +7,16 @@ use chainflip_common::types::{
 use crossbeam_channel::Receiver;
 use std::sync::{Arc, Mutex};
 
+/// Describes a transaction on a supported chain
 #[derive(Debug)]
 pub struct CoinTx {
+    /// internal id of transaction
     pub id: UUIDv4,
+    /// timestamp of transaction
     pub timestamp: Timestamp,
+    /// address coins deposited to
     pub deposit_address: String,
+    /// address the coins are returned to if the tx fails / is outdated
     pub return_address: Option<String>,
 }
 
@@ -55,16 +60,13 @@ where
     fn poll_side_chain(&mut self) {
         let mut quote_txs = vec![];
 
-        let mut local_store = self.local_store.lock().unwrap();
+        let local_store = self.local_store.lock().unwrap();
 
-        while let Some(events) = local_store.get_events(self.next_event) {
-            for tx in &events {
-                if let LocalEvent::SwapQuote(tx) = tx {
-                    debug!("Registered swap quote: {:?}", tx.id);
-                    quote_txs.push(tx.clone());
-                }
+        for tx in &local_store.get_events(self.next_event) {
+            if let LocalEvent::SwapQuote(tx) = tx {
+                debug!("Registered swap quote: {:?}", tx.id);
+                quote_txs.push(tx.clone());
             }
-
             self.next_event = self.next_event + 1;
         }
 

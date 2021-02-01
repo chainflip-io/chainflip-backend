@@ -64,7 +64,7 @@ pub async fn get_events<L: ILocalStore>(
 
     // we would calculate the limit here and add it as a param to get_events
 
-    let events = local_store.get_events(number as u64).unwrap_or(vec![]);
+    let events = local_store.get_events(number as u64);
 
     println!("Events returned {}", events.len());
     let res = EventsQueryResponse {

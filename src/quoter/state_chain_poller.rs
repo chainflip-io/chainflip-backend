@@ -5,7 +5,6 @@ use crate::local_store::GetEventNumber;
 
 use super::vault_node::VaultNodeInterface;
 use super::EventProcessor;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::{thread, time};
 
@@ -17,7 +16,7 @@ where
 {
     api: Arc<V>,
     processor: Arc<Mutex<P>>,
-    next_event_number: AtomicU64,
+    next_event_number: u64,
 }
 
 impl<V, P> StateChainPoller<V, P>
@@ -37,7 +36,7 @@ where
         StateChainPoller {
             api,
             processor,
-            next_event_number: AtomicU64::new(next_event_number),
+            next_event_number,
         }
     }
 
@@ -53,11 +52,10 @@ where
     ///
     /// Panics if we detected any skipped events.
     /// This can happen if `VaultNodeInterface::get_events` returns partial data.
-    pub async fn sync(&self) -> Result<(), String> {
+    pub async fn sync(&mut self) -> Result<(), String> {
         let mut error_count: u32 = 0;
         loop {
-            let next_event_number = self.next_event_number.load(Ordering::SeqCst);
-            match self.api.get_events(next_event_number, 50).await {
+            match self.api.get_events(self.next_event_number, 50).await {
                 Ok(events) => {
                     if events.is_empty() {
                         return Ok(());
@@ -68,9 +66,8 @@ where
 
                     // Validate the returned block numbers to make sure we didn't skip
                     // assumption: get_events(2, 4) will get us events 2,3,4,5
-                    let expected_last_event_number = next_event_number + (events.len() as u64) - 1;
-                    println!("Expected last event num: {}", expected_last_event_number);
-                    println!("next event number: {}", next_event_number);
+                    let expected_last_event_number =
+                        self.next_event_number + (events.len() as u64) - 1;
                     if let Some(last_event_number) = last_event_number {
                         if last_event_number != expected_last_event_number {
                             error!("Expected last event number to be {} but got {}. We must've skipped an event!", last_event_number, expected_last_event_number);
@@ -83,9 +80,8 @@ where
 
                     // Update our local value
                     if let Some(last_event_number) = last_event_number {
-                        if last_event_number + 1 > next_event_number {
-                            self.next_event_number
-                                .store(last_event_number + 1, Ordering::SeqCst);
+                        if last_event_number + 1 > self.next_event_number {
+                            self.next_event_number = last_event_number + 1;
                         }
                     }
 
@@ -107,7 +103,7 @@ where
     /// # Blocking
     ///
     /// This operation will block the thread it is called on.
-    pub fn poll(self, interval: time::Duration) {
+    pub fn poll(&mut self, interval: time::Duration) {
         let future = async {
             loop {
                 if let Err(e) = self.sync().await {
@@ -156,7 +152,7 @@ mod test {
 
     #[tokio::test]
     async fn test_sync_returns_when_no_blocks_returned() {
-        let state = setup();
+        let mut state = setup();
         assert!(state.api.get_events_return.lock().unwrap().is_empty());
         assert!(state.poller.sync().await.is_ok());
     }
@@ -164,7 +160,7 @@ mod test {
     #[tokio::test]
     async fn test_sync_returns_error_if_api_failed() {
         let error = "APITestError".to_owned();
-        let state = setup();
+        let mut state = setup();
         state.api.set_get_events_error(Some(error.clone()));
         assert_eq!(state.poller.sync().await.unwrap_err(), error);
     }
@@ -172,18 +168,18 @@ mod test {
     #[tokio::test]
     #[should_panic(expected = "StateChainPoller skipped events!")]
     async fn test_sync_panics_when_events_are_skipped() {
-        let state = setup();
+        let mut state = setup();
         state.api.add_events(vec![
             LocalEvent::Witness(TestData::witness(UUIDv4::new(), 100, Coin::ETH)),
             LocalEvent::Witness(TestData::witness(UUIDv4::new(), 123, Coin::BTC)),
         ]);
-        state.poller.next_event_number.store(1, Ordering::SeqCst);
+        state.poller.next_event_number = 1;
         state.poller.sync().await.unwrap();
     }
 
     #[tokio::test]
     async fn test_sync_updates_next_event_number_only_if_larger() -> Result<(), String> {
-        let state = setup();
+        let mut state = setup();
         state.api.add_events(vec![
             LocalEvent::Witness(TestData::witness_with_event_num(
                 UUIDv4::new(),
@@ -200,13 +196,13 @@ mod test {
         ]);
 
         state.poller.sync().await?;
-        assert_eq!(state.poller.next_event_number.load(Ordering::SeqCst), 2);
+        assert_eq!(state.poller.next_event_number, 2);
         Ok(())
     }
 
     #[tokio::test]
     async fn test_sync_loops_through_all_events() -> Result<(), String> {
-        let state = setup();
+        let mut state = setup();
         state.api.add_events(vec![
             LocalEvent::Witness(TestData::witness_with_event_num(
                 UUIDv4::new(),
@@ -231,14 +227,14 @@ mod test {
             ))]);
 
         state.poller.sync().await?;
-        assert_eq!(state.poller.next_event_number.load(Ordering::SeqCst), 3);
+        assert_eq!(state.poller.next_event_number, 3);
         assert_eq!(state.processor.lock().unwrap().recieved_events.len(), 3);
         Ok(())
     }
 
     #[tokio::test]
     async fn test_sync_passes_blocks_to_processor() -> Result<(), String> {
-        let state = setup();
+        let mut state = setup();
         state
             .api
             .add_events(vec![LocalEvent::Witness(TestData::witness_with_event_num(
@@ -255,7 +251,7 @@ mod test {
     #[tokio::test]
     async fn test_sync_returns_error_if_processor_failed() {
         let error = "ProcessorTestError".to_owned();
-        let state = setup();
+        let mut state = setup();
 
         state
             .api

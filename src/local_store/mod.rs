@@ -114,13 +114,27 @@ pub trait ILocalStore {
     fn add_events(&mut self, events: Vec<LocalEvent>) -> Result<(), String>;
 
     /// Get events from the local store
-    fn get_events(&mut self, last_event: u64) -> Option<Vec<LocalEvent>>;
+    fn get_events(&self, last_event: u64) -> Vec<LocalEvent>;
 
     /// Helper method for getting just the witnesses
-    fn get_witnesses(&mut self, last_event: u64) -> Option<Vec<Witness>>;
+    fn get_witnesses(&self, last_event: u64) -> Vec<Witness> {
+        let witnesses: Vec<_> = self
+            .get_events(last_event)
+            .iter()
+            .filter_map(|event| {
+                if let LocalEvent::Witness(w) = event {
+                    Some(w.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        witnesses
+    }
 
     /// Get total number of events in the db
-    fn total_events(&mut self) -> u64;
+    fn total_events(&self) -> u64;
 }
 
 /// Trait for items to be stored in the database

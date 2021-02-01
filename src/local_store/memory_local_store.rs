@@ -1,4 +1,4 @@
-use chainflip_common::types::{chain::*, UUIDv4};
+use chainflip_common::types::chain::*;
 
 use super::{ILocalStore, LocalEvent};
 
@@ -41,36 +41,20 @@ impl MemoryLocalStore {
 
 impl ILocalStore for MemoryLocalStore {
     fn add_events(&mut self, events: Vec<LocalEvent>) -> Result<(), String> {
-        for event in &events {
+        for new_event in &events {
             // don't add duplicates
-            if events.iter().any(|e| e == event) {
-                self.events.push(event.clone());
+            if !self.events.iter().any(|e| e == new_event) {
+                self.events.push(new_event.clone());
             }
         }
         Ok(())
     }
 
-    fn get_events(&mut self, last_seen: u64) -> Option<Vec<LocalEvent>> {
-        if self.events.is_empty() || last_seen > self.events.len() as u64 {
-            return None;
-        }
-        Some(self.events[last_seen as usize..].to_vec())
+    fn get_events(&self, last_seen: u64) -> Vec<LocalEvent> {
+        self.events[last_seen as usize..].to_vec()
     }
 
-    fn get_witnesses(&mut self, last_seen: u64) -> Option<Vec<Witness>> {
-        let events = self.get_events(last_seen);
-        let mut witnesses: Vec<Witness> = vec![];
-        for event in events? {
-            if let LocalEvent::Witness(w) = event {
-                witnesses.push(w);
-            } else {
-                // skip
-            }
-        }
-        Some(witnesses)
-    }
-
-    fn total_events(&mut self) -> u64 {
+    fn total_events(&self) -> u64 {
         self.events.len() as u64
     }
 }
@@ -78,8 +62,8 @@ impl ILocalStore for MemoryLocalStore {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::utils::test_utils::{self, data::TestData};
-    use chainflip_common::types::coin::Coin;
+    use crate::{utils::test_utils::data::TestData, vault::witness};
+    use chainflip_common::types::{coin::Coin, UUIDv4};
 
     #[test]
     fn add_events() {
@@ -98,8 +82,19 @@ mod test {
         let events = vec![witness];
         store.add_events(events).unwrap();
 
-        let stored_events = store.get_events(0).unwrap();
+        let stored_events = store.get_events(0);
         assert_eq!(stored_events.len(), 1);
+    }
+
+    #[test]
+    fn add_events_no_dups() {
+        let mut store = MemoryLocalStore::new();
+        let uuid = UUIDv4::new();
+        let witness = TestData::witness(uuid, 100, Coin::ETH);
+        store
+            .add_events(vec![witness.clone().into(), witness.into()])
+            .unwrap();
+        assert_eq!(store.get_events(0).len(), 1);
     }
 
     #[test]
@@ -110,7 +105,7 @@ mod test {
 
         store.add_events(vec![evt, dq]).unwrap();
 
-        let all_events = store.get_events(1).unwrap();
+        let all_events = store.get_events(1);
         assert_eq!(all_events.len(), 1);
     }
 

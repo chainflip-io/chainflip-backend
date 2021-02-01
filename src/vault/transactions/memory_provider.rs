@@ -285,12 +285,8 @@ impl MemoryState {
 
 impl<L: ILocalStore> TransactionProvider for MemoryTransactionsProvider<L> {
     fn sync(&mut self) -> u64 {
-        let mut local_store = self.local_store.lock().unwrap();
-        let events = match local_store.get_events(self.state.next_event) {
-            Some(events) => events,
-            None => return self.state.next_event,
-        };
-        for evt in events {
+        let local_store = self.local_store.lock().unwrap();
+        for evt in local_store.get_events(self.state.next_event) {
             match evt {
                 LocalEvent::Witness(evt) => {
                     self.state

@@ -60,7 +60,7 @@ impl ILocalStore for PersistentLocalStore {
         Ok(())
     }
 
-    fn get_events(&mut self, last_seen: u64) -> Option<Vec<LocalEvent>> {
+    fn get_events(&self, last_seen: u64) -> Vec<LocalEvent> {
         let mut select_events = self
             .db
             .prepare("SELECT data FROM events WHERE rowid > ?")
@@ -74,16 +74,16 @@ impl ILocalStore for PersistentLocalStore {
 
         let mut recent_events: Vec<LocalEvent> = Vec::new();
 
-        while let Some(row) = rows.next().ok()? {
+        while let Some(row) = rows.next().expect("Rows should be readable") {
             let str_val: String = row.get(0).unwrap();
             let l_evt = serde_json::from_str::<LocalEvent>(&str_val).unwrap();
             recent_events.push(l_evt);
         }
 
-        Some(recent_events)
+        recent_events
     }
 
-    fn total_events(&mut self) -> u64 {
+    fn total_events(&self) -> u64 {
         let mut total_events = self
             .db
             .prepare("SELECT COUNT(*) FROM events")
@@ -92,19 +92,6 @@ impl ILocalStore for PersistentLocalStore {
         let count: Result<u32, _> = total_events.query_row(NO_PARAMS, |row| row.get(0));
 
         count.unwrap() as u64
-    }
-
-    fn get_witnesses(&mut self, last_event: u64) -> Option<Vec<Witness>> {
-        let events = self.get_events(last_event);
-        let mut witnesses: Vec<Witness> = vec![];
-        for event in events? {
-            if let LocalEvent::Witness(w) = event {
-                witnesses.push(w);
-            } else {
-                // skip
-            }
-        }
-        Some(witnesses)
     }
 }
 
@@ -130,7 +117,7 @@ mod test {
 
         let mut db = PersistentLocalStore::open(temp_file.path());
 
-        let events = db.get_events(0).unwrap();
+        let events = db.get_events(0);
         assert_eq!(events.len(), 1);
         let first_evt = events.first().unwrap();
 
@@ -151,7 +138,7 @@ mod test {
         db.add_events(vec![evt.clone(), evt2.clone()])
             .expect("Error adding an event to the database");
 
-        let all_events = db.get_events(0).unwrap();
+        let all_events = db.get_events(0);
 
         assert_eq!(all_events.len(), 2);
     }
@@ -168,7 +155,7 @@ mod test {
         db.add_events(vec![evt.clone(), evt2.clone()])
             .expect("Error adding an event to the database");
 
-        let all_events = db.get_events(1).unwrap();
+        let all_events = db.get_events(1);
 
         assert_eq!(all_events.len(), 1);
     }

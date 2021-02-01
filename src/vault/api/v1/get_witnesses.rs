@@ -31,13 +31,11 @@ pub(super) async fn get_local_witnesses<L: ILocalStore>(
     params: WitnessQueryParams,
     local_store: Arc<Mutex<L>>,
 ) -> Result<WitnessQueryResponse, ResponseError> {
-    let mut local_store = local_store.lock().unwrap();
+    let local_store = local_store.lock().unwrap();
 
     let WitnessQueryParams { last_seen } = params;
 
-    let witness_txs = local_store
-        .get_witnesses(last_seen.unwrap_or(0))
-        .expect("invalid index");
+    let witness_txs = local_store.get_witnesses(last_seen.unwrap_or(0));
 
     Ok(WitnessQueryResponse { witness_txs })
 }

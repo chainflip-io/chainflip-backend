@@ -45,7 +45,7 @@ impl Quoter {
         V: VaultNodeInterface + Send + Sync + 'static,
         D: EventProcessor + StateProvider + Send + 'static,
     {
-        let poller =
+        let mut poller =
             state_chain_poller::StateChainPoller::new(vault_node_api.clone(), database.clone());
         tokio::runtime::Runtime::new()
             .unwrap()
