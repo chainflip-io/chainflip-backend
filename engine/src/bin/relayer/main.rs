@@ -1,12 +1,11 @@
-use chainflip::relayer::{EventStreamer, Result, StakeManager};
+use chainflip::relayer::{self, EthEventStreamer, Result, StakeManager};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let stakingEventSource = StakeManager::load()?;
+    let event_source = StakeManager::load()?;
 
-    let relayer = EventStreamer::new("ws://path/to/eth/endpoint", stakingEventSource).await?;
-
-    // Load the contracts,
+    let relayer =
+        EthEventStreamer::new("ws://localhost::8545", event_source, relayer::sinks::Stdout).await?;
 
     relayer.run(None).await?;
 

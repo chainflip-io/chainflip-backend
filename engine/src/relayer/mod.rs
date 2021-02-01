@@ -1,33 +1,38 @@
-mod contracts;
+pub mod contracts;
 mod eth_event_streamer;
+pub mod sinks;
 
+pub use anyhow::Result;
 pub use contracts::stake_manager::StakeManager;
-pub use eth_event_streamer::EventStreamer;
+pub use eth_event_streamer::EthEventStreamer;
 
 use thiserror::Error;
 
-use self::contracts::EventSource;
+use web3::{
+    ethabi::TopicFilter,
+    types::{BlockNumber, FilterBuilder},
+};
 
-/// The result type for this module.
-pub type Result<T> = core::result::Result<T, RelayerError>;
-
-/// The `Error` type for this module.
+/// The `Error` type for errors specific to this module.
 #[derive(Error, Debug)]
-pub enum RelayerError {
-    /// Wrapper for `web3` errors.
-    #[error(transparent)]
-    Web3Error(#[from] web3::Error),
-
-    /// Wrapper for errors in the event producers.
-    #[error(transparent)]
-    EventProducerError(#[from] contracts::EventProducerError),
-}
+pub enum RelayerError {}
 
 /// Implement this for the substrate client.
-#[async_trait(?Send)]
-pub trait EventProcessor<S>
+#[async_trait]
+pub trait EventSink<E>
 where
-    S: EventSource + 'static,
+    E: Send,
 {
-    async fn process_event(&self, event: S::Event);
+    async fn process_event(&self, event: E);
+}
+
+/// Implement this for the each contract.
+pub trait EventSource {
+    type Event: Send;
+
+    fn topic_filter_for_event(&self, name: &str) -> Result<TopicFilter>;
+
+    fn filter_builder(&self, block: BlockNumber) -> FilterBuilder;
+
+    fn parse_event(&self, log: web3::types::Log) -> Result<Self::Event>;
 }

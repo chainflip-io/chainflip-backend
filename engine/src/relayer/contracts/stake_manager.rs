@@ -1,4 +1,7 @@
+use crate::relayer::EventSource;
+
 use super::*;
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use web3::{
     api::Eth,
@@ -14,6 +17,16 @@ lazy_static! {
 /// A wrapper for the StakeManager Ethereum contract.
 pub struct StakeManager {
     contract: ethabi::Contract,
+}
+
+/// Represents the events that are expected from the StakeManager contract.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StakingEvent {
+    Staked {
+        node_id: ethabi::Uint,
+        amount: ethabi::Uint,
+    },
+    Unknown,
 }
 
 impl StakeManager {
@@ -46,7 +59,6 @@ impl StakeManager {
 
 impl EventSource for StakeManager {
     type Event = StakingEvent;
-    type Error = EventProducerError;
 
     fn topic_filter_for_event(&self, name: &str) -> Result<TopicFilter> {
         let f = self.get_event(name)?.filter(RawTopicFilter::default())?;
@@ -81,16 +93,7 @@ impl EventSource for StakeManager {
 
                 Ok(event)
             }
-            s => Err(EventProducerError::UnexpectedEvent(s)),
+            s => Err(EventProducerError::UnexpectedEvent(s))?,
         }
     }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum StakingEvent {
-    Staked {
-        node_id: ethabi::Uint,
-        amount: ethabi::Uint,
-    },
-    Unknown,
 }

@@ -1,21 +1,21 @@
-use super::{contracts::EventSource, EventProcessor, Result};
+use super::{EventSink, EventSource, Result};
 use futures::StreamExt;
 use web3::types::BlockNumber;
 
-pub struct EventStreamer<E: 'static + EventSource, P: EventProcessor<E>> {
+pub struct EthEventStreamer<S: EventSource, P: EventSink<S::Event>> {
     web3_client: ::web3::Web3<::web3::transports::WebSocket>,
-    event_source: E,
-    event_processor: P,
+    event_source: S,
+    event_sink: P,
 }
 
-impl<E: 'static + EventSource, P: EventProcessor<E>> EventStreamer<E, P> {
-    pub async fn new(url: &str, event_source: E, event_processor: P) -> Result<Self> {
+impl<S: EventSource, P: EventSink<S::Event>> EthEventStreamer<S, P> {
+    pub async fn new(url: &str, event_source: S, event_sink: P) -> Result<Self> {
         let transport = ::web3::transports::WebSocket::new(url).await?;
 
         Ok(Self {
             web3_client: ::web3::Web3::new(transport),
             event_source,
-            event_processor,
+            event_sink,
         })
     }
 
@@ -35,8 +35,11 @@ impl<E: 'static + EventSource, P: EventProcessor<E>> EventStreamer<E, P> {
             .await?
             .map(|log_result| self.event_source.parse_event(log_result?));
 
-        let processing_loop = event_stream.for_each_concurrent(None, |event| async {
-            self.event_processor.process_event(event.unwrap()).await
+        let processing_loop = event_stream.for_each_concurrent(None, |parse_result| async {
+            match parse_result {
+                Ok(event) => self.event_sink.process_event(event).await,
+                Err(e) => log::error!("Unable to parse event: {}.", e),
+            }
         });
 
         Ok(processing_loop.await)
