@@ -7,10 +7,9 @@ use crate::{
         transactions::{memory_provider::Portion, MemoryTransactionsProvider, TransactionProvider},
     },
 };
-use chainflip_common::types::{chain::*, coin::Coin, Network};
+use chainflip_common::types::{chain::*, coin::Coin, unique_id::GetUniqueId, Network};
 use parking_lot::RwLock;
 use std::{
-    hint::unreachable_unchecked,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -113,9 +112,13 @@ impl TestRunner {
     ) -> DepositQuote {
         let deposit_quote =
             TestData::deposit_quote_for_id(staker_id.to_owned(), other_amount.coin_type());
-        let wtx_loki = TestData::witness(deposit_quote.id, loki_amount.to_atomic(), Coin::LOKI);
+        let wtx_loki = TestData::witness(
+            deposit_quote.unique_id(),
+            loki_amount.to_atomic(),
+            Coin::LOKI,
+        );
         let wtx_eth = TestData::witness(
-            deposit_quote.id,
+            deposit_quote.unique_id(),
             other_amount.to_atomic(),
             other_amount.coin_type(),
         );
@@ -139,7 +142,7 @@ impl TestRunner {
 
         let outputs: Vec<_> = sent_outputs
             .iter()
-            .filter(|output| output.parent_id() == request.id)
+            .filter(|output| output.parent_id() == request.unique_id())
             .cloned()
             .collect();
 

@@ -6,7 +6,6 @@ use chainflip_common::types::chain::Witness;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
-use warp::sse::event;
 
 /// Parameters for GET /get_witnesses request
 #[derive(Debug, Deserialize, Serialize)]
@@ -43,7 +42,7 @@ pub(super) async fn get_local_witnesses<L: ILocalStore>(
 #[cfg(test)]
 mod tests {
 
-    use chainflip_common::types::{coin::Coin, UUIDv4};
+    use chainflip_common::types::{coin::Coin, unique_id::GetUniqueId};
 
     use super::*;
     use crate::{
@@ -61,8 +60,8 @@ mod tests {
 
         let eth_amount = GenericCoinAmount::from_decimal_string(Coin::ETH, "10");
 
-        let witness = TestData::witness(quote.id, loki_amount.to_atomic(), Coin::LOKI);
-        let witness2 = TestData::witness(quote.id, eth_amount.to_atomic(), Coin::ETH);
+        let witness = TestData::witness(quote.unique_id(), loki_amount.to_atomic(), Coin::LOKI);
+        let witness2 = TestData::witness(quote.unique_id(), eth_amount.to_atomic(), Coin::ETH);
 
         store
             .add_events(vec![witness.into(), witness2.into()])
@@ -98,7 +97,7 @@ mod tests {
         {
             let mut store = store.lock().unwrap();
 
-            let evt1 = TestData::witness(UUIDv4::new(), 10, Coin::BTC);
+            let evt1 = TestData::witness(0, 10, Coin::BTC);
 
             store
                 .add_events(vec![evt1.into()])

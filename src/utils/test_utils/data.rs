@@ -7,7 +7,7 @@ use crate::{
     utils::calculate_effective_price,
 };
 use chainflip_common::types::{
-    chain::*, coin::Coin, fraction::WithdrawFraction, Network, Timestamp, UUIDv4,
+    chain::*, coin::Coin, fraction::WithdrawFraction, Network, Timestamp,
 };
 
 /// Struct for generating test data
@@ -34,7 +34,6 @@ impl TestData {
         };
 
         let quote = DepositQuote {
-            id: UUIDv4::new(),
             timestamp: Timestamp::now(),
             pool,
             staker_id: staker_id.bytes().to_vec(),
@@ -51,11 +50,10 @@ impl TestData {
     }
 
     /// Create a fake witness
-    pub fn witness(quote_id: UUIDv4, amount: u128, coin: Coin) -> Witness {
+    pub fn witness(quote_id: UniqueId, amount: u128, coin: Coin) -> Witness {
         let witness = Witness {
-            id: UUIDv4::new(),
             quote: quote_id,
-            transaction_id: "".into(),
+            transaction_id: "btc-123".into(),
             transaction_block_number: 0,
             transaction_index: 0,
             amount,
@@ -68,13 +66,12 @@ impl TestData {
 
     /// Create a fake witness with an event num
     pub fn witness_with_event_num(
-        quote_id: UUIDv4,
+        quote_id: UniqueId,
         amount: u128,
         coin: Coin,
         event_num: u64,
     ) -> Witness {
         let witness = Witness {
-            id: UUIDv4::new(),
             quote: quote_id,
             transaction_id: "".into(),
             transaction_block_number: 0,
@@ -92,7 +89,6 @@ impl TestData {
         let staker_id = staker.id();
 
         let mut request = WithdrawRequest {
-            id: UUIDv4::new(),
             timestamp: Timestamp::now(),
             staker_id: staker_id.bytes().to_vec(),
             pool,
@@ -132,7 +128,6 @@ impl TestData {
         };
 
         let quote = SwapQuote {
-            id: UUIDv4::new(),
             timestamp: Timestamp::now(),
             input,
             input_address: input_address.into(),
@@ -151,7 +146,6 @@ impl TestData {
     /// Create a fake pool change
     pub fn pool_change(pool: Coin, depth_change: i128, base_depth_change: i128) -> PoolChange {
         let change = PoolChange {
-            id: UUIDv4::new(),
             pool,
             depth_change,
             base_depth_change,
@@ -170,8 +164,7 @@ impl TestData {
         };
 
         let output = Output {
-            id: UUIDv4::new(),
-            parent: OutputParent::SwapQuote(UUIDv4::new()),
+            parent: OutputParent::SwapQuote(0),
             witnesses: vec![],
             pool_changes: vec![],
             coin,
@@ -192,8 +185,7 @@ impl TestData {
         };
 
         let sent = OutputSent {
-            id: UUIDv4::new(),
-            outputs: vec![UUIDv4::new()],
+            outputs: vec![1],
             coin,
             address: address.into(),
             amount: 100,

@@ -8,7 +8,7 @@ use crate::{
     local_store::LocalEvent, vault::blockchain_connection::Payments,
     vault::transactions::TransactionProvider,
 };
-use chainflip_common::types::{chain::Witness, coin::Coin, UUIDv4};
+use chainflip_common::types::{chain::Witness, coin::Coin, unique_id::GetUniqueId};
 use crossbeam_channel::Receiver;
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -99,20 +99,19 @@ where
                         quote.inner.input == Coin::LOKI
                             && quote.inner.input_address_id == payment.payment_id.to_bytes()
                     })
-                    .map(|quote| quote.inner.id);
+                    .map(|quote| quote.inner.unique_id());
 
                 let deposit_quote = deposit_quotes
                     .iter()
                     .find(|quote| {
                         quote.inner.base_input_address_id == payment.payment_id.to_bytes()
                     })
-                    .map(|quote| quote.inner.id);
+                    .map(|quote| quote.inner.unique_id());
 
                 if let Some(quote_id) = swap_quote.or(deposit_quote) {
                     debug!("Publishing witnesses for quote: {}", &quote_id);
 
                     let tx = Witness {
-                        id: UUIDv4::new(),
                         quote: quote_id,
                         transaction_id: payment.tx_hash.clone().into(),
                         transaction_block_number: payment.block_height,

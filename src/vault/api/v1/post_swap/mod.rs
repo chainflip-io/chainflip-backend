@@ -14,7 +14,7 @@ use chainflip_common::{
         chain::{SwapQuote, Validate},
         coin::Coin,
         fraction::PercentageFraction,
-        Timestamp, UUIDv4,
+        Timestamp,
     },
     utils::address_id,
 };
@@ -48,8 +48,6 @@ pub struct SwapQuoteParams {
 #[serde(rename_all = "camelCase")]
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SwapQuoteResponse {
-    /// Quote id
-    pub id: UUIDv4,
     /// Quote creation timestamp in milliseconds
     pub created_at: u128,
     /// Quote expire timestamp in milliseconds
@@ -185,7 +183,6 @@ pub async fn swap<T: TransactionProvider>(
     };
 
     let quote = SwapQuote {
-        id: UUIDv4::new(),
         timestamp: Timestamp::now(),
         input: input_coin,
         input_address: input_address.clone().into(),
@@ -214,7 +211,6 @@ pub async fn swap<T: TransactionProvider>(
         })?;
 
     Ok(SwapQuoteResponse {
-        id: quote.id,
         created_at: quote.timestamp.0,
         expires_at: get_swap_expire_timestamp(&quote.timestamp).0,
         input_coin,
@@ -260,7 +256,6 @@ mod test {
 
         let mut provider = get_transactions_provider();
         let quote = SwapQuote {
-            id: UUIDv4::new(),
             timestamp: Timestamp::now(),
             input: quote_params.input_coin,
             input_address: "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".into(),
@@ -298,7 +293,6 @@ mod test {
         // Pool with no liquidity
         {
             let tx = PoolChange {
-                id: UUIDv4::new(),
                 pool: Coin::ETH,
                 depth_change: 0,
                 base_depth_change: 0,
@@ -320,7 +314,6 @@ mod test {
     async fn returns_response_if_successful() {
         let mut provider = get_transactions_provider();
         let tx = PoolChange {
-            id: UUIDv4::new(),
             pool: Coin::ETH,
             depth_change: 10_000_000_000,
             base_depth_change: 50_000_000_000,

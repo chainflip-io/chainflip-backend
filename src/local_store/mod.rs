@@ -1,7 +1,7 @@
 mod memory_local_store;
 mod persistent_local_store;
 
-use chainflip_common::types::chain::*;
+use chainflip_common::types::{chain::*, unique_id::GetUniqueId};
 
 use serde::{Deserialize, Serialize};
 
@@ -157,24 +157,22 @@ pub trait ILocalStore {
 /// Trait for items to be stored in the database
 pub trait StorageItem {
     /// Generate a unique id for use as Key in the Sqlite DB
-    fn unique_id(&self) -> String;
+    fn unique_id(&self) -> UniqueId;
 }
 
 // Must be unique across *all LocalEvents*
 impl StorageItem for LocalEvent {
-    fn unique_id(&self) -> String {
+    fn unique_id(&self) -> UniqueId {
         match self {
-            LocalEvent::Withdraw(evt) => evt.id.to_string(),
-            LocalEvent::Witness(evt) => {
-                format!("{}-{}", evt.coin.to_string(), evt.transaction_id)
-            }
-            LocalEvent::DepositQuote(evt) => evt.id.to_string(),
-            LocalEvent::Deposit(evt) => evt.id.to_string(),
-            LocalEvent::OutputSent(evt) => evt.id.to_string(),
-            LocalEvent::Output(evt) => evt.id.to_string(),
-            LocalEvent::PoolChange(evt) => evt.id.to_string(),
-            LocalEvent::SwapQuote(evt) => evt.id.to_string(),
-            LocalEvent::WithdrawRequest(evt) => evt.id.to_string(),
+            LocalEvent::Withdraw(evt) => evt.unique_id(),
+            LocalEvent::Witness(evt) => evt.unique_id(),
+            LocalEvent::DepositQuote(evt) => evt.unique_id(),
+            LocalEvent::Deposit(evt) => evt.unique_id(),
+            LocalEvent::OutputSent(evt) => evt.unique_id(),
+            LocalEvent::Output(evt) => evt.unique_id(),
+            LocalEvent::PoolChange(evt) => evt.unique_id(),
+            LocalEvent::SwapQuote(evt) => evt.unique_id(),
+            LocalEvent::WithdrawRequest(evt) => evt.unique_id(),
         }
     }
 }

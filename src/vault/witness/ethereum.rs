@@ -3,7 +3,7 @@ use crate::{
     local_store::LocalEvent,
     vault::{blockchain_connection::ethereum::EthereumClient, transactions::TransactionProvider},
 };
-use chainflip_common::types::{chain::Witness, coin::Coin, Timestamp, UUIDv4};
+use chainflip_common::types::{chain::Witness, coin::Coin, unique_id::GetUniqueId};
 use parking_lot::RwLock;
 use std::sync::{Arc, Mutex};
 
@@ -110,8 +110,8 @@ where
                     });
 
                     let quote_id = {
-                        let swap_id = swap_quote.map(|q| q.inner.id);
-                        let deposit_id = deposit_quote.map(|q| q.inner.id);
+                        let swap_id = swap_quote.map(|q| q.inner.unique_id());
+                        let deposit_id = deposit_quote.map(|q| q.inner.unique_id());
 
                         swap_id.or(deposit_id)
                     };
@@ -125,7 +125,6 @@ where
                     debug!("Publishing witness for quote: {}", &quote_id);
 
                     let tx = Witness {
-                        id: UUIDv4::new(),
                         quote: quote_id,
                         transaction_id: transaction.hash.to_string().into(),
                         transaction_block_number: transaction.block_number,
@@ -264,7 +263,7 @@ mod test {
             .expect("Expected witness to exist")
             .inner;
 
-        assert_eq!(witness_tx.quote, eth_quote.id);
+        assert_eq!(witness_tx.quote, eth_quote.unique_id());
         assert_eq!(
             witness_tx.transaction_id.to_string(),
             eth_transaction.hash.to_string()
@@ -345,7 +344,7 @@ mod test {
             .expect("Expected witness to exist")
             .inner;
 
-        assert_eq!(witness_tx.quote, eth_deposit_quote.id);
+        assert_eq!(witness_tx.quote, eth_deposit_quote.unique_id());
         assert_eq!(
             witness_tx.transaction_id.to_string(),
             eth_transaction.hash.to_string()

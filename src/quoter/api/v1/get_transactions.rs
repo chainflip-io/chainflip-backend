@@ -1,7 +1,10 @@
 use crate::{
     common::api::ResponseError, common::StakerId, local_store::LocalEvent, quoter::StateProvider,
 };
-use chainflip_common::types::{chain::Output, UUIDv4};
+use chainflip_common::types::{
+    chain::{Output, UniqueId},
+    unique_id::GetUniqueId,
+};
 use itertools::Itertools;
 use reqwest::StatusCode;
 use serde::Deserialize;
@@ -42,7 +45,7 @@ where
     }
 
     if let Some(quote_id) = params.quote_id {
-        let id = match UUIDv4::from_str(&quote_id) {
+        let id = match u64::from_str(&quote_id) {
             Ok(id) => id,
             Err(_) => {
                 return Err(ResponseError::new(
@@ -71,7 +74,7 @@ where
 
 /// Get transactions related to the given quote id
 fn get_quote_id_transactions<S>(
-    id: UUIDv4,
+    id: UniqueId,
     state: Arc<Mutex<S>>,
 ) -> Result<Vec<LocalEvent>, ResponseError>
 where
@@ -104,7 +107,7 @@ where
         .into_iter()
         .filter(|tx| tx.parent_id() == id)
         .collect();
-    let ids: Vec<UUIDv4> = filtered_outputs.iter().map(|tx| tx.id).collect();
+    let ids: Vec<UniqueId> = filtered_outputs.iter().map(|tx| tx.unique_id()).collect();
     let filtered_outputs: Vec<LocalEvent> =
         filtered_outputs.into_iter().map(|tx| tx.into()).collect();
 
@@ -157,7 +160,7 @@ where
         .filter(|tx| {
             filtered_withdraw_requests
                 .iter()
-                .find(|req| req.id == tx.withdraw_request)
+                .find(|req| req.unique_id() == tx.withdraw_request)
                 .is_some()
         })
         .map(|tx| tx.into())
@@ -165,7 +168,12 @@ where
 
     let filtered_witnesses: Vec<LocalEvent> = witnesses
         .into_iter()
-        .filter(|tx| quotes.iter().find(|quote| tx.quote == quote.id).is_some())
+        .filter(|tx| {
+            quotes
+                .iter()
+                .find(|quote| tx.quote == quote.unique_id())
+                .is_some()
+        })
         .map(|tx| tx.into())
         .collect();
 
@@ -174,18 +182,18 @@ where
         .filter(|tx| {
             let withdraw_output = filtered_withdraw_requests
                 .iter()
-                .find(|quote| quote.id == tx.parent_id())
+                .find(|quote| quote.unique_id() == tx.parent_id())
                 .is_some();
 
             let refund_output = quotes
                 .iter()
-                .find(|quote| quote.id == tx.parent_id())
+                .find(|quote| quote.unique_id() == tx.parent_id())
                 .is_some();
 
             withdraw_output || refund_output
         })
         .collect();
-    let ids: Vec<UUIDv4> = filtered_outputs.iter().map(|tx| tx.id).collect();
+    let ids: Vec<UniqueId> = filtered_outputs.iter().map(|tx| tx.unique_id()).collect();
     let filtered_outputs: Vec<LocalEvent> =
         filtered_outputs.into_iter().map(|tx| tx.into()).collect();
 

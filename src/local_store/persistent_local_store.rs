@@ -1,7 +1,6 @@
 use std::u64;
 
 use super::{EventNumber, ILocalStore, LocalEvent, StorageItem};
-use chainflip_common::types::chain::Witness;
 use rusqlite::Connection as DB;
 use rusqlite::{params, NO_PARAMS};
 
@@ -47,7 +46,8 @@ impl ILocalStore for PersistentLocalStore {
             INSERT INTO events
             (id, data) VALUES (?1, ?2)
             ",
-                params![id, blob],
+                // TODO: how to get around u32 limit of sqlite?
+                params![id as u32, blob],
             ) {
                 Ok(_) => {
                     trace!("Event ({:#} added to db", id);
@@ -102,7 +102,7 @@ impl ILocalStore for PersistentLocalStore {
 mod test {
     use super::*;
     use crate::utils::test_utils::{self, data::TestData};
-    use chainflip_common::types::{coin::Coin, UUIDv4};
+    use chainflip_common::types::coin::Coin;
 
     #[test]
     fn test_db_created_successfully() {
@@ -110,7 +110,7 @@ mod test {
 
         let mut db = PersistentLocalStore::open(temp_file.path());
 
-        let evt: LocalEvent = TestData::witness(UUIDv4::new(), 100, Coin::ETH).into();
+        let evt: LocalEvent = TestData::witness(0, 100, Coin::ETH).into();
 
         db.add_events(vec![evt.clone()])
             .expect("Error adding an event to the database");
@@ -135,7 +135,7 @@ mod test {
 
         let mut db = PersistentLocalStore::open(temp_file.path());
 
-        let evt: LocalEvent = TestData::witness(UUIDv4::new(), 100, Coin::ETH).into();
+        let evt: LocalEvent = TestData::witness(0, 100, Coin::ETH).into();
         let evt2: LocalEvent = LocalEvent::DepositQuote(TestData::deposit_quote(Coin::ETH));
 
         db.add_events(vec![evt.clone(), evt2.clone()])
@@ -152,7 +152,7 @@ mod test {
 
         let mut db = PersistentLocalStore::open(temp_file.path());
 
-        let evt: LocalEvent = TestData::witness(UUIDv4::new(), 100, Coin::ETH).into();
+        let evt: LocalEvent = TestData::witness(0, 100, Coin::ETH).into();
         let evt2: LocalEvent = LocalEvent::DepositQuote(TestData::deposit_quote(Coin::ETH));
 
         db.add_events(vec![evt.clone(), evt2.clone()])
@@ -169,7 +169,7 @@ mod test {
 
         let mut db = PersistentLocalStore::open(temp_file.path());
 
-        let evt: LocalEvent = TestData::witness(UUIDv4::new(), 100, Coin::ETH).into();
+        let evt: LocalEvent = TestData::witness(0, 100, Coin::ETH).into();
         let evt2: LocalEvent = LocalEvent::DepositQuote(TestData::deposit_quote(Coin::ETH));
 
         assert_eq!(db.total_events(), 0);

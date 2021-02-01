@@ -1,4 +1,4 @@
-use chainflip_common::types::chain::Output;
+use chainflip_common::types::{chain::Output, unique_id::GetUniqueId};
 
 use crate::utils::bip44::KeyPair;
 use std::fmt::Display;
@@ -67,7 +67,8 @@ pub fn get_sending_wallets(balances: &[WalletBalance], outputs: &[Output]) -> Ve
         } else {
             warn!(
                 "Cannot find a suitable wallet for Output: {}, balance: {}",
-                output.id, output.amount
+                output.unique_id(),
+                output.amount
             );
         }
     }

@@ -2,7 +2,7 @@ use chainflip::{
     common::PoolCoin,
     local_store::{ILocalStore, PersistentLocalStore},
 };
-use chainflip_common::types::{chain::PoolChange, coin::Coin, UUIDv4};
+use chainflip_common::types::{chain::PoolChange, coin::Coin};
 use clap::{App, Arg};
 use std::str::FromStr;
 
@@ -42,7 +42,6 @@ async fn main() {
         .expect("Failed to calculate atomic value of loki depth");
 
     let pool_change = PoolChange {
-        id: UUIDv4::new(),
         pool: pool_coin.get_coin(),
         depth_change: depth,
         base_depth_change: loki_depth,

@@ -3,7 +3,7 @@ use crate::{
     local_store::LocalEvent,
     vault::{blockchain_connection::btc::BitcoinSPVClient, transactions::TransactionProvider},
 };
-use chainflip_common::types::{chain::Witness, coin::Coin, UUIDv4};
+use chainflip_common::types::{chain::Witness, coin::Coin, unique_id::GetUniqueId};
 use parking_lot::RwLock;
 use std::sync::Arc;
 
@@ -63,7 +63,7 @@ where
                 .filter(|quote| quote.inner.input == Coin::BTC)
                 .map(|quote| {
                     let quote_inner = &quote.inner;
-                    (quote_inner.id, quote_inner.input_address.clone())
+                    (quote_inner.unique_id(), quote_inner.input_address.clone())
                 });
 
             let deposit_id_address_pairs = deposit_quotes
@@ -71,7 +71,7 @@ where
                 .filter(|quote| quote.inner.pool == Coin::BTC)
                 .map(|quote| {
                     let quote_inner = &quote.inner;
-                    (quote_inner.id, quote_inner.coin_input_address.clone())
+                    (quote_inner.unique_id(), quote_inner.coin_input_address.clone())
                 });
 
             let mut witness_txs: Vec<LocalEvent> = vec![];
@@ -95,7 +95,6 @@ where
 
                 for utxo in utxos.0 {
                     let tx = Witness {
-                        id: UUIDv4::new(),
                         quote: id,
                         transaction_id: utxo.tx_hash.into(),
                         transaction_block_number: utxo.height,

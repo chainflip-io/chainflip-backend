@@ -13,7 +13,7 @@ use chainflip_common::{
         addresses::{EthereumAddress, LokiAddress},
         chain::{DepositQuote, Validate},
         coin::Coin,
-        Timestamp, UUIDv4,
+        Timestamp,
     },
     utils::address_id,
     validation::{validate_address, validate_address_id},
@@ -44,8 +44,6 @@ pub struct DepositQuoteParams {
 #[serde(rename_all = "camelCase")]
 #[derive(Debug, Deserialize, Serialize)]
 pub struct DepositQuoteResponse {
-    /// Quote id
-    pub id: UUIDv4,
     /// Quote creation timestamp in milliseconds
     pub created_at: u128,
     /// Quote expire timestamp in milliseconds
@@ -176,7 +174,6 @@ pub async fn deposit<T: TransactionProvider>(
         StakerId::new(params.staker_id.clone()).map_err(|_| bad_request("Invalid staker id"))?;
 
     let quote = DepositQuote {
-        id: UUIDv4::new(),
         timestamp: Timestamp::now(),
         staker_id: staker_id.bytes().to_vec(),
         pool: pool_coin.get_coin(),
@@ -206,7 +203,6 @@ pub async fn deposit<T: TransactionProvider>(
         })?;
 
     Ok(DepositQuoteResponse {
-        id: quote.id,
         created_at: quote.timestamp.0,
         expires_at: get_swap_expire_timestamp(&quote.timestamp).0,
         staker_id: params.staker_id,

@@ -9,7 +9,7 @@ use crate::{
         TransactionProvider,
     },
 };
-use chainflip_common::types::{chain::*, coin::Coin, Network, UUIDv4};
+use chainflip_common::types::{chain::*, coin::Coin, unique_id::GetUniqueId, Network};
 use parking_lot::RwLock;
 use std::{
     convert::{TryFrom, TryInto},
@@ -68,7 +68,7 @@ fn process_deposit_quotes_inner(
         // Find all relevant witnesses
         let wtxs: Vec<&UsedWitnessWrapper> = witness_txs
             .iter()
-            .filter(|wtx| !wtx.used && wtx.inner.quote == quote_info.inner.id)
+            .filter(|wtx| !wtx.used && wtx.inner.quote == quote_info.inner.unique_id())
             .collect();
 
         if wtxs.is_empty() {
@@ -81,7 +81,7 @@ fn process_deposit_quotes_inner(
             if refunds.len() > 0 {
                 info!(
                     "Quote {} is already fulfilled, refunding!",
-                    quote_info.inner.id
+                    quote_info.inner.unique_id()
                 );
                 new_events.extend(refunds.into_iter().map(|tx| tx.into()));
             }
@@ -126,14 +126,13 @@ fn refund_deposit_quotes(
         };
 
         if tx.amount == 0 {
-            warn!("Witness {} has amount 0", tx.id);
+            warn!("Witness {} has amount 0", tx.unique_id());
             continue;
         }
 
         let output = Output {
-            id: UUIDv4::new(),
-            parent: OutputParent::DepositQuote(quote.id),
-            witnesses: vec![tx.id],
+            parent: OutputParent::DepositQuote(quote.unique_id()),
+            witnesses: vec![tx.unique_id()],
             pool_changes: vec![],
             coin: tx.coin,
             address: return_address,
@@ -163,7 +162,10 @@ fn process_deposit_quote(
         return None;
     }
 
-    debug!("Found witness matching quote: {}", quote_info.inner.id);
+    debug!(
+        "Found witness matching quote: {}",
+        quote_info.inner.unique_id()
+    );
 
     let quote = &quote_info.inner;
 
@@ -171,7 +173,7 @@ fn process_deposit_quote(
     let mut other_amount: Option<i128> = None;
 
     // Indexes of used witnesses
-    let mut wtx_idxs = Vec::<UUIDv4>::default();
+    let mut wtx_idxs = Vec::<UniqueId>::default();
 
     for wtx in witness_txs {
         // We don't expect used quotes at this stage,
@@ -197,7 +199,7 @@ fn process_deposit_quote(
                     }
                 };
 
-                wtx_idxs.push(wtx.id);
+                wtx_idxs.push(wtx.unique_id());
                 loki_amount = Some(amount);
             }
             coin_type @ _ => {
@@ -214,7 +216,7 @@ fn process_deposit_quote(
                             return None;
                         }
                     };
-                    wtx_idxs.push(wtx.id);
+                    wtx_idxs.push(wtx.unique_id());
                     other_amount = Some(amount);
                 } else {
                     error!("Unexpected coin type: {}", coin_type);
@@ -225,20 +227,23 @@ fn process_deposit_quote(
     }
 
     if loki_amount.is_none() {
-        debug!("Loki is not yet provisioned in quote: {}", quote.id);
+        debug!(
+            "Loki is not yet provisioned in quote: {}",
+            quote.unique_id()
+        );
     }
 
     if other_amount.is_none() {
         debug!(
             "{} is not yet provisioned in quote: {}",
-            quote.pool, quote.id
+            quote.pool,
+            quote.unique_id()
         );
     }
 
     match (loki_amount, other_amount) {
         (Some(loki_amount), Some(other_amount)) => {
             let pool_change_tx = PoolChange {
-                id: UUIDv4::new(),
                 pool: quote.pool,
                 depth_change: other_amount,
                 base_depth_change: loki_amount,
@@ -250,10 +255,9 @@ fn process_deposit_quote(
             let other_amount: u128 = other_amount.try_into().expect("negative deposit");
 
             let deposit = Deposit {
-                id: UUIDv4::new(),
-                quote: quote.id,
+                quote: quote.unique_id(),
                 witnesses: wtx_idxs,
-                pool_change: pool_change_tx.id,
+                pool_change: pool_change_tx.unique_id(),
                 staker_id: quote.staker_id.clone(),
                 pool: quote.pool,
                 base_amount: loki_amount,
@@ -325,8 +329,7 @@ fn prepare_outputs(
     network: Network,
 ) -> Result<(Output, Output), &'static str> {
     let loki = Output {
-        id: UUIDv4::new(),
-        parent: OutputParent::WithdrawRequest(tx.id),
+        parent: OutputParent::WithdrawRequest(tx.unique_id()),
         witnesses: vec![],
         pool_changes: vec![],
         coin: Coin::LOKI,
@@ -339,8 +342,7 @@ fn prepare_outputs(
         .map_err(|_| "could not construct Loki output")?;
 
     let other = Output {
-        id: UUIDv4::new(),
-        parent: OutputParent::WithdrawRequest(tx.id),
+        parent: OutputParent::WithdrawRequest(tx.unique_id()),
         witnesses: vec![],
         pool_changes: vec![],
         coin: tx.pool,
@@ -387,7 +389,6 @@ fn process_withdraw_request<T: TransactionProvider>(
         .map_err(|_| "Other amount overflow")?;
 
     let pool_change_tx = PoolChange {
-        id: UUIDv4::new(),
         pool: tx.pool,
         depth_change: -d_other,
         base_depth_change: -d_loki,
@@ -396,9 +397,8 @@ fn process_withdraw_request<T: TransactionProvider>(
     pool_change_tx.validate(network)?;
 
     let withdraw = Withdraw {
-        id: UUIDv4::new(),
-        withdraw_request: tx.id,
-        outputs: [loki_tx.id, other_tx.id],
+        withdraw_request: tx.unique_id(),
+        outputs: [loki_tx.unique_id(), other_tx.unique_id()],
         event_number: None,
     };
     withdraw.validate(network)?;
@@ -418,7 +418,10 @@ pub(super) fn process_withdraw_requests<T: TransactionProvider>(
         .partition(|tx| tx.inner.verify_signature());
 
     for tx in invalid_evts {
-        warn!("Invalid signature for withdraw request {}", tx.inner.id);
+        warn!(
+            "Invalid signature for withdraw request {}",
+            tx.inner.unique_id()
+        );
     }
 
     // TODO: We shouldn't be getting invalid signatures as we already validate
@@ -438,7 +441,8 @@ pub(super) fn process_withdraw_requests<T: TransactionProvider>(
             Err(err) => {
                 warn!(
                     "Failed to process withdraw request {}: {}",
-                    tx.inner.id, err
+                    tx.inner.unique_id(),
+                    err
                 );
             }
         }

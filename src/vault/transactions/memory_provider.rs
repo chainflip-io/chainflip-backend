@@ -3,13 +3,13 @@ use crate::{
         liquidity_provider::{Liquidity, LiquidityProvider, MemoryLiquidityProvider},
         GenericCoinAmount, LokiAmount, PoolCoin, StakerId,
     },
-    local_store::{self, ILocalStore, LocalEvent},
+    local_store::{ILocalStore, LocalEvent},
     vault::transactions::{
         portions::{adjust_portions_after_deposit, DepositContribution},
         TransactionProvider,
     },
 };
-use chainflip_common::types::chain::*;
+use chainflip_common::types::{chain::*, unique_id::GetUniqueId};
 use parking_lot::RwLock;
 use serde::Serialize;
 use std::{
@@ -156,14 +156,18 @@ impl MemoryState {
         if let Some(quote_info) = self
             .deposit_quotes
             .iter_mut()
-            .find(|quote_info| quote_info.inner.id == tx.quote)
+            .find(|quote_info| quote_info.inner.unique_id() == tx.quote)
         {
             quote_info.fulfilled = true;
         }
 
         // Find witnesses and mark them as used:
         for wtx_id in &tx.witnesses {
-            if let Some(witness_info) = self.witnesses.iter_mut().find(|w| &w.inner.id == wtx_id) {
+            if let Some(witness_info) = self
+                .witnesses
+                .iter_mut()
+                .find(|w| &w.inner.unique_id() == wtx_id)
+            {
                 witness_info.used = true;
             }
         }
@@ -209,7 +213,7 @@ impl MemoryState {
         let wrapped_withdraw_request = match self
             .withdraw_requests
             .iter_mut()
-            .find(|w_withdraw_req| w_withdraw_req.inner.id == tx.withdraw_request)
+            .find(|w_withdraw_req| w_withdraw_req.inner.unique_id() == tx.withdraw_request)
         {
             Some(w_withdraw_req) => {
                 w_withdraw_req.fulfilled = true;
@@ -246,7 +250,7 @@ impl MemoryState {
     fn process_output_tx(&mut self, tx: Output) {
         // Find quote and mark it as fulfilled only if it's not a refund
         if let Some(quote_info) = self.swap_quotes.iter_mut().find(|quote_info| {
-            quote_info.inner.id == tx.parent_id() && quote_info.inner.output == tx.coin
+            quote_info.inner.unique_id() == tx.parent_id() && quote_info.inner.output == tx.coin
         }) {
             quote_info.fulfilled = true;
         }
@@ -255,7 +259,7 @@ impl MemoryState {
         let witnesses = self
             .witnesses
             .iter_mut()
-            .filter(|witness| tx.witnesses.contains(&witness.inner.id));
+            .filter(|witness| tx.witnesses.contains(&witness.inner.unique_id()));
 
         for witness in witnesses {
             witness.used = true;
@@ -275,7 +279,7 @@ impl MemoryState {
         let outputs = self
             .outputs
             .iter_mut()
-            .filter(|output| tx.outputs.contains(&output.inner.id));
+            .filter(|output| tx.outputs.contains(&output.inner.unique_id()));
 
         for output in outputs {
             output.fulfilled = true;
@@ -296,8 +300,12 @@ impl<L: ILocalStore> TransactionProvider for MemoryTransactionsProvider<L> {
                 LocalEvent::SwapQuote(evt) => {
                     // Quotes always come before their corresponding "outcome", so they start unfulfilled
                     let evt = FulfilledWrapper::new(evt, false);
-
+                    println!("Syncing swap quote");
                     self.state.swap_quotes.push(evt);
+                    println!(
+                        "Here are the current swap quotes: {:#?}",
+                        self.state.swap_quotes
+                    );
                 }
                 LocalEvent::DepositQuote(evt) => {
                     // (same as above)
@@ -343,6 +351,7 @@ impl<L: ILocalStore> TransactionProvider for MemoryTransactionsProvider<L> {
     }
 
     fn get_swap_quotes(&self) -> &[FulfilledWrapper<SwapQuote>] {
+        println!("Get swap quotes from MemoryTransactionProvider");
         &self.state.swap_quotes
     }
 
@@ -377,7 +386,7 @@ impl<L: ILocalStore> LiquidityProvider for MemoryTransactionsProvider<L> {
 mod test {
     use super::*;
     use crate::{local_store::MemoryLocalStore, utils::test_utils::data::TestData};
-    use chainflip_common::types::{coin::Coin, UUIDv4};
+    use chainflip_common::types::coin::Coin;
 
     fn setup() -> MemoryTransactionsProvider<MemoryLocalStore> {
         let local_store = Arc::new(Mutex::new(MemoryLocalStore::new()));
@@ -396,7 +405,7 @@ mod test {
             let mut local_store = provider.local_store.lock().unwrap();
 
             let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
-            let witness = TestData::witness(quote.id, 100, Coin::ETH);
+            let witness = TestData::witness(quote.unique_id(), 100, Coin::ETH);
 
             local_store
                 .add_events(vec![quote.into(), witness.into()])
@@ -410,7 +419,7 @@ mod test {
         assert_eq!(provider.get_witnesses().len(), 1);
 
         provider
-            .add_local_events(vec![TestData::swap_quote(Coin::ETH, Coin::LOKI).into()])
+            .add_local_events(vec![TestData::swap_quote(Coin::ETH, Coin::BTC).into()])
             .unwrap();
 
         assert_eq!(provider.state.next_event, 3);
@@ -422,7 +431,7 @@ mod test {
         let mut provider = setup();
 
         let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
-        let witness = TestData::witness(quote.id, 100, Coin::ETH);
+        let witness = TestData::witness(quote.unique_id(), 100, Coin::ETH);
 
         {
             let mut local_store = provider.local_store.lock().unwrap();
@@ -494,7 +503,7 @@ mod test {
         let mut provider = setup();
 
         let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
-        let witness = TestData::witness(quote.id, 100, Coin::ETH);
+        let witness = TestData::witness(quote.unique_id(), 100, Coin::ETH);
 
         provider
             .local_store
@@ -510,8 +519,8 @@ mod test {
 
         // Swap
         let mut output = TestData::output(quote.output, 100);
-        output.parent = OutputParent::SwapQuote(quote.id);
-        output.witnesses = vec![witness.id];
+        output.parent = OutputParent::SwapQuote(quote.unique_id());
+        output.witnesses = vec![witness.unique_id()];
         output.address = quote.output_address.clone();
 
         provider
@@ -532,7 +541,7 @@ mod test {
         let mut provider = setup();
 
         let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
-        let witness = TestData::witness(quote.id, 100, Coin::ETH);
+        let witness = TestData::witness(quote.unique_id(), 100, Coin::ETH);
 
         provider
             .local_store
@@ -548,8 +557,8 @@ mod test {
 
         // Refund
         let mut output = TestData::output(quote.input, 100);
-        output.parent = OutputParent::SwapQuote(quote.id);
-        output.witnesses = vec![witness.id];
+        output.parent = OutputParent::SwapQuote(quote.unique_id());
+        output.witnesses = vec![witness.unique_id()];
         output.address = quote.return_address.unwrap().clone();
 
         provider
@@ -571,28 +580,26 @@ mod test {
 
         let output_tx = TestData::output(Coin::LOKI, 100);
 
-        let mut another_tx = output_tx.clone();
-        another_tx.id = UUIDv4::new();
+        let output_tx2 = TestData::output(Coin::ETH, 102);
 
         provider
             .local_store
             .lock()
             .unwrap()
-            .add_events(vec![output_tx.clone().into(), another_tx.clone().into()])
+            .add_events(vec![output_tx.clone().into(), output_tx2.clone().into()])
             .unwrap();
 
         provider.sync();
 
         let expected = vec![
             FulfilledWrapper::new(output_tx.clone(), false),
-            FulfilledWrapper::new(another_tx.clone(), false),
+            FulfilledWrapper::new(output_tx2.clone(), false),
         ];
 
         assert_eq!(provider.get_outputs().to_vec(), expected);
 
         let output_sent_tx = OutputSent {
-            id: UUIDv4::new(),
-            outputs: vec![output_tx.id, another_tx.id],
+            outputs: vec![output_tx.unique_id(), output_tx2.unique_id()],
             coin: Coin::LOKI,
             address: "address".into(),
             amount: 100,
@@ -612,7 +619,7 @@ mod test {
 
         let expected = vec![
             FulfilledWrapper::new(output_tx.clone(), true),
-            FulfilledWrapper::new(another_tx.clone(), true),
+            FulfilledWrapper::new(output_tx2.clone(), true),
         ];
 
         assert_eq!(provider.get_outputs().to_vec(), expected);

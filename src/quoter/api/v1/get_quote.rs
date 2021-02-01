@@ -4,13 +4,11 @@ use crate::{
     vault::api::v1::post_deposit::DepositQuoteResponse,
     vault::{api::v1::post_swap::SwapQuoteResponse, processor::utils::get_swap_expire_timestamp},
 };
-use chainflip_common::types::UUIDv4;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use std::{
-    str::FromStr,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
+
+use chainflip_common::types::chain::UniqueId;
 
 /// Parameters for GET `quote` endpoint
 #[derive(Debug, Deserialize)]
@@ -40,7 +38,7 @@ pub async fn get_quote<S>(
 where
     S: StateProvider,
 {
-    let id = match UUIDv4::from_str(&params.id) {
+    let id = match params.id.parse::<u64>() {
         Ok(id) => id,
         Err(_) => {
             return Err(ResponseError::new(
@@ -61,13 +59,12 @@ where
     Ok(None)
 }
 
-pub fn get_swap_quote<S>(id: UUIDv4, state: Arc<Mutex<S>>) -> Option<SwapQuoteResponse>
+pub fn get_swap_quote<S>(id: UniqueId, state: Arc<Mutex<S>>) -> Option<SwapQuoteResponse>
 where
     S: StateProvider,
 {
     let quote = state.lock().unwrap().get_swap_quote(id);
     quote.map(|quote| SwapQuoteResponse {
-        id: quote.id,
         created_at: quote.timestamp.0,
         expires_at: get_swap_expire_timestamp(&quote.timestamp).0,
         input_coin: quote.input,
@@ -80,13 +77,12 @@ where
     })
 }
 
-pub fn get_deposit_quote<S>(id: UUIDv4, state: Arc<Mutex<S>>) -> Option<DepositQuoteResponse>
+pub fn get_deposit_quote<S>(id: UniqueId, state: Arc<Mutex<S>>) -> Option<DepositQuoteResponse>
 where
     S: StateProvider,
 {
     let quote = state.lock().unwrap().get_deposit_quote(id);
     quote.map(|quote| DepositQuoteResponse {
-        id: quote.id,
         created_at: quote.timestamp.0,
         expires_at: get_swap_expire_timestamp(&quote.timestamp).0,
         pool: quote.pool,

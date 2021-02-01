@@ -1,8 +1,9 @@
-use crate::local_store::{self, ILocalStore, LocalEvent};
+use crate::local_store::{ILocalStore, LocalEvent};
 use chainflip_common::types::{
     chain::{SwapQuote, Witness},
     coin::Coin,
-    Timestamp, UUIDv4,
+    unique_id::GetUniqueId,
+    Timestamp,
 };
 use crossbeam_channel::Receiver;
 use std::sync::{Arc, Mutex};
@@ -10,8 +11,6 @@ use std::sync::{Arc, Mutex};
 /// Describes a transaction on a supported chain
 #[derive(Debug)]
 pub struct CoinTx {
-    /// internal id of transaction
-    pub id: UUIDv4,
     /// timestamp of transaction
     pub timestamp: Timestamp,
     /// address coins deposited to
@@ -64,7 +63,7 @@ where
 
         for tx in &local_store.get_events(self.next_event) {
             if let LocalEvent::SwapQuote(tx) = tx {
-                debug!("Registered swap quote: {:?}", tx.id);
+                debug!("Registered swap quote: {:?}", tx.unique_id());
                 quote_txs.push(tx.clone());
             }
             self.next_event = self.next_event + 1;
@@ -128,8 +127,7 @@ where
         let mut local_store = self.local_store.lock().unwrap();
 
         let tx = Witness {
-            id: UUIDv4::new(),
-            quote: quote.id,
+            quote: quote.unique_id(),
             transaction_id: "0".into(),
             transaction_block_number: 0,
             transaction_index: 0,

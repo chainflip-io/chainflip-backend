@@ -5,8 +5,9 @@ use crate::{
     vault::transactions::memory_provider::FulfilledWrapper,
 };
 use chainflip_common::types::{
-    chain::{Output, OutputParent, PoolChange, SwapQuote, Validate, Witness},
-    Network, UUIDv4,
+    chain::{Output, OutputParent, PoolChange, SwapQuote, UniqueId, Validate, Witness},
+    unique_id::GetUniqueId,
+    Network,
 };
 use std::{convert::TryFrom, error::Error, fmt};
 
@@ -72,8 +73,8 @@ pub fn process_swap<L: LiquidityProvider>(
         return Err(SwapError::MissingWitnesses);
     }
 
-    let quote_id = quote.inner.id;
-    let witness_ids = witnesses.iter().map(|w| w.id).collect();
+    let quote_id = quote.inner.unique_id();
+    let witness_ids = witnesses.iter().map(|w| w.unique_id()).collect();
 
     // Calculate input amounts
     let input_amount = witnesses.iter().fold(U256::from(0), |acc, tx| {
@@ -114,7 +115,6 @@ pub fn process_swap<L: LiquidityProvider>(
         };
 
         let output = Output {
-            id: UUIDv4::new(),
             parent: OutputParent::SwapQuote(quote_id),
             witnesses: witness_ids,
             pool_changes: vec![],
@@ -161,10 +161,9 @@ pub fn process_swap<L: LiquidityProvider>(
     }
 
     // Create the output
-    let pool_change_ids = pool_changes.iter().map(|tx| tx.id).collect();
+    let pool_change_ids = pool_changes.iter().map(|tx| tx.unique_id()).collect();
 
     let output = Output {
-        id: UUIDv4::new(),
         parent: OutputParent::SwapQuote(quote_id),
         witnesses: witness_ids,
         pool_changes: pool_change_ids,
@@ -191,7 +190,7 @@ mod test {
         common::liquidity_provider::{Liquidity, MemoryLiquidityProvider},
         utils::test_utils::{data::TestData, TEST_BTC_ADDRESS},
     };
-    use chainflip_common::types::coin::Coin;
+    use chainflip_common::types::{coin::Coin, unique_id::GetUniqueId};
 
     fn to_atomic(coin: Coin, amount: &str) -> u128 {
         GenericCoinAmount::from_decimal_string(coin, amount).to_atomic()
@@ -218,8 +217,16 @@ mod test {
         };
 
         let witness_txes = vec![
-            TestData::witness(quote.inner.id, to_atomic(Coin::ETH, "1500.0"), Coin::ETH),
-            TestData::witness(quote.inner.id, to_atomic(Coin::ETH, "1000.0"), Coin::ETH),
+            TestData::witness(
+                quote.inner.unique_id(),
+                to_atomic(Coin::ETH, "1500.0"),
+                Coin::ETH,
+            ),
+            TestData::witness(
+                quote.inner.unique_id(),
+                to_atomic(Coin::ETH, "1000.0"),
+                Coin::ETH,
+            ),
         ];
 
         (provider, quote, witness_txes)
@@ -238,10 +245,13 @@ mod test {
 
         assert!(result.pool_changes.is_empty());
 
-        let witness_ids: Vec<UUIDv4> = witnesses.iter().map(|tx| tx.id).collect();
+        let witness_ids: Vec<UniqueId> = witnesses.iter().map(|tx| tx.unique_id()).collect();
 
         let output = result.output;
-        assert_eq!(output.parent, OutputParent::SwapQuote(quote.inner.id));
+        assert_eq!(
+            output.parent,
+            OutputParent::SwapQuote(quote.inner.unique_id())
+        );
         assert_eq!(output.witnesses, witness_ids);
         assert_eq!(output.pool_changes.len(), 0);
         assert_eq!(output.coin, Coin::ETH);
@@ -287,13 +297,16 @@ mod test {
             -1 * to_atomic(Coin::LOKI, "3199.5") as i128
         );
 
-        let witness_ids: Vec<UUIDv4> = witnesses.iter().map(|tx| tx.id).collect();
+        let witness_ids: Vec<UniqueId> = witnesses.iter().map(|tx| tx.unique_id()).collect();
 
         let output = result.output;
-        assert_eq!(output.parent, OutputParent::SwapQuote(quote.inner.id));
+        assert_eq!(
+            output.parent,
+            OutputParent::SwapQuote(quote.inner.unique_id())
+        );
         assert_eq!(output.witnesses, witness_ids);
         assert_eq!(output.pool_changes.len(), 1);
-        assert_eq!(output.pool_changes, vec![change.id]);
+        assert_eq!(output.pool_changes, vec![change.unique_id()]);
         assert_eq!(output.coin, Coin::LOKI);
         assert_eq!(output.address, quote.inner.output_address);
         assert_eq!(output.amount, to_atomic(Coin::LOKI, "3199.5"));
@@ -343,12 +356,18 @@ mod test {
             -1 * to_atomic(Coin::BTC, "2322.0") as i128
         );
 
-        let witness_ids: Vec<UUIDv4> = witnesses.iter().map(|tx| tx.id).collect();
+        let witness_ids: Vec<UniqueId> = witnesses.iter().map(|tx| tx.unique_id()).collect();
 
         let output = result.output;
-        assert_eq!(output.parent, OutputParent::SwapQuote(quote.inner.id));
+        assert_eq!(
+            output.parent,
+            OutputParent::SwapQuote(quote.inner.unique_id())
+        );
         assert_eq!(output.witnesses, witness_ids);
-        assert_eq!(output.pool_changes, vec![first_change.id, second_change.id]);
+        assert_eq!(
+            output.pool_changes,
+            vec![first_change.unique_id(), second_change.unique_id()]
+        );
         assert_eq!(output.coin, Coin::BTC);
         assert_eq!(output.address, quote.inner.output_address);
         assert_eq!(output.amount, to_atomic(Coin::BTC, "2322.0"));

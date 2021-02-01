@@ -4,7 +4,7 @@ use chainflip::{
     vault::transactions::memory_provider::Portion,
     vault::transactions::TransactionProvider,
 };
-use chainflip_common::types::coin::Coin;
+use chainflip_common::types::{coin::Coin, unique_id::GetUniqueId};
 use data::TestData;
 
 fn check_liquidity<T>(
@@ -35,8 +35,16 @@ fn witnessed_deposit_changes_pool_liquidity() {
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
     let deposit_quote = TestData::deposit_quote(coin_type);
-    let wtx_loki = TestData::witness(deposit_quote.id, loki_amount.to_atomic(), Coin::LOKI);
-    let wtx_eth = TestData::witness(deposit_quote.id, coin_amount.to_atomic(), coin_type);
+    let wtx_loki = TestData::witness(
+        deposit_quote.unique_id(),
+        loki_amount.to_atomic(),
+        Coin::LOKI,
+    );
+    let wtx_eth = TestData::witness(
+        deposit_quote.unique_id(),
+        coin_amount.to_atomic(),
+        coin_type,
+    );
 
     runner.add_local_events([deposit_quote.clone().into()]);
     runner.add_local_events([wtx_loki.into(), wtx_eth.into()]);
@@ -72,8 +80,16 @@ fn multiple_deposits() {
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
     let deposit_quote = TestData::deposit_quote(coin_type);
-    let wtx_loki = TestData::witness(deposit_quote.id, loki_amount.to_atomic(), Coin::LOKI);
-    let wtx_eth = TestData::witness(deposit_quote.id, coin_amount.to_atomic(), coin_type);
+    let wtx_loki = TestData::witness(
+        deposit_quote.unique_id(),
+        loki_amount.to_atomic(),
+        Coin::LOKI,
+    );
+    let wtx_eth = TestData::witness(
+        deposit_quote.unique_id(),
+        coin_amount.to_atomic(),
+        coin_type,
+    );
 
     // Add blocks with those transactions
     runner.add_local_events([deposit_quote.clone().into()]);
@@ -89,8 +105,16 @@ fn multiple_deposits() {
     // 2. Add another deposit with another staker id
 
     let deposit_quote = TestData::deposit_quote(coin_type);
-    let wtx_loki = TestData::witness(deposit_quote.id, loki_amount.to_atomic(), Coin::LOKI);
-    let wtx_eth = TestData::witness(deposit_quote.id, coin_amount.to_atomic(), coin_type);
+    let wtx_loki = TestData::witness(
+        deposit_quote.unique_id(),
+        loki_amount.to_atomic(),
+        Coin::LOKI,
+    );
+    let wtx_eth = TestData::witness(
+        deposit_quote.unique_id(),
+        coin_amount.to_atomic(),
+        coin_type,
+    );
 
     runner.add_local_events([deposit_quote.clone().into()]);
     runner.add_local_events([wtx_loki.into(), wtx_eth.into()]);
@@ -231,7 +255,7 @@ fn non_staker_cannot_withdraw() {
 
     let outputs = sent_outputs
         .iter()
-        .filter(|output| output.parent_id() == withdraw_request.id)
+        .filter(|output| output.parent_id() == withdraw_request.unique_id())
         .count();
 
     assert_eq!(outputs, 0);

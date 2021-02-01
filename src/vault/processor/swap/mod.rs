@@ -9,6 +9,7 @@ use crate::{
 };
 use chainflip_common::types::{
     chain::{SwapQuote, Witness},
+    unique_id::GetUniqueId,
     Network, Timestamp,
 };
 use parking_lot::RwLock;
@@ -44,7 +45,9 @@ fn get_swaps<T: TransactionProvider>(provider: &T) -> Vec<Swap> {
     for quote in quotes {
         let witnesses: Vec<Witness> = witnesses
             .iter()
-            .filter(|tx| tx.inner.quote == quote.inner.id && tx.inner.coin == quote.inner.input)
+            .filter(|tx| {
+                tx.inner.quote == quote.inner.unique_id() && tx.inner.coin == quote.inner.input
+            })
             .map(|tx| tx.inner.clone())
             .collect();
 
@@ -122,7 +125,6 @@ mod test {
     use chainflip_common::types::{
         chain::{Output, OutputParent},
         coin::Coin,
-        UUIDv4,
     };
     use std::sync::{Arc, Mutex};
 
@@ -151,7 +153,7 @@ mod test {
     }
 
     fn get_witness(quote: &SwapQuote, amount: u128) -> Witness {
-        TestData::witness(quote.id, amount, quote.input)
+        TestData::witness(quote.unique_id(), amount, quote.input)
     }
 
     fn to_atomic(coin: Coin, amount: &str) -> u128 {
@@ -230,6 +232,7 @@ mod test {
 
         runner.sync_provider();
 
+        // let swaps = get_swaps()
         let swaps = get_swaps(&*runner.provider.read());
         assert_eq!(swaps.len(), 0);
     }
@@ -243,9 +246,8 @@ mod test {
         let used = get_witness(&quote, 150);
 
         let output = Output {
-            id: UUIDv4::new(),
-            parent: OutputParent::SwapQuote(quote.id),
-            witnesses: vec![used.id],
+            parent: OutputParent::SwapQuote(quote.unique_id()),
+            witnesses: vec![used.unique_id()],
             pool_changes: vec![],
             coin: quote.output,
             address: quote.output_address.clone(),
