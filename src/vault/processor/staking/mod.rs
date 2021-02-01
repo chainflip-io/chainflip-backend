@@ -3,13 +3,13 @@ mod tests;
 
 use crate::{
     common::*,
-    side_chain::SideChainTx,
+    local_store::LocalEvent,
     vault::transactions::{
         memory_provider::{FulfilledWrapper, Portion, UsedWitnessWrapper},
         TransactionProvider,
     },
 };
-use chainflip_common::types::{chain::*, coin::Coin, Network, Timestamp, UUIDv4};
+use chainflip_common::types::{chain::*, coin::Coin, Network, UUIDv4};
 use parking_lot::RwLock;
 use std::{
     convert::{TryFrom, TryInto},
@@ -43,14 +43,14 @@ pub(super) fn process_deposit_quotes<T: TransactionProvider>(
 
     // TODO: a potential room for improvement: autoswap is relatively slow,
     // so we might want to release the mutex when performing it
-    let new_txs = process_deposit_quotes_inner(&deposit_quotes, &witness_txs, network);
+    let new_events = process_deposit_quotes_inner(&deposit_quotes, &witness_txs, network);
     drop(provider);
 
     // TODO: make sure that things below happen atomically
     // (e.g. we don't want to send funds more than once if the
     // latest block info failed to have been updated)
 
-    if let Err(err) = tx_provider.write().add_transactions(new_txs) {
+    if let Err(err) = tx_provider.write().add_local_events(new_events) {
         error!("Error adding a pool change tx: {}", err);
         panic!();
     };
@@ -61,8 +61,8 @@ fn process_deposit_quotes_inner(
     quotes: &[FulfilledWrapper<DepositQuote>],
     witness_txs: &[UsedWitnessWrapper],
     network: Network,
-) -> Vec<SideChainTx> {
-    let mut new_txs = Vec::<SideChainTx>::default();
+) -> Vec<LocalEvent> {
+    let mut new_events = Vec::<LocalEvent>::default();
 
     for quote_info in quotes {
         // Find all relevant witnesses
@@ -83,18 +83,18 @@ fn process_deposit_quotes_inner(
                     "Quote {} is already fulfilled, refunding!",
                     quote_info.inner.id
                 );
-                new_txs.extend(refunds.into_iter().map(|tx| tx.into()));
+                new_events.extend(refunds.into_iter().map(|tx| tx.into()));
             }
         } else if let Some(res) = process_deposit_quote(quote_info, &wtxs, network) {
-            new_txs.reserve(new_txs.len() + 2);
+            new_events.reserve(new_events.len() + 2);
             // IMPORTANT: deposits should come before pool changes,
             // due to the way Transaction provider processes them
-            new_txs.push(res.deposit.into());
-            new_txs.push(res.pool_change.into());
+            new_events.push(res.deposit.into());
+            new_events.push(res.pool_change.into());
         };
     }
 
-    new_txs
+    new_events
 }
 
 fn refund_deposit_quotes(
@@ -132,13 +132,13 @@ fn refund_deposit_quotes(
 
         let output = Output {
             id: UUIDv4::new(),
-            timestamp: Timestamp::now(),
             parent: OutputParent::DepositQuote(quote.id),
             witnesses: vec![tx.id],
             pool_changes: vec![],
             coin: tx.coin,
             address: return_address,
             amount: tx.amount,
+            event_number: None,
         };
 
         match output.validate(network) {
@@ -239,10 +239,10 @@ fn process_deposit_quote(
         (Some(loki_amount), Some(other_amount)) => {
             let pool_change_tx = PoolChange {
                 id: UUIDv4::new(),
-                timestamp: Timestamp::now(),
                 pool: quote.pool,
                 depth_change: other_amount,
                 base_depth_change: loki_amount,
+                event_number: None,
             };
 
             // TODO: autoswap goes here
@@ -251,7 +251,6 @@ fn process_deposit_quote(
 
             let deposit = Deposit {
                 id: UUIDv4::new(),
-                timestamp: Timestamp::now(),
                 quote: quote.id,
                 witnesses: wtx_idxs,
                 pool_change: pool_change_tx.id,
@@ -259,6 +258,7 @@ fn process_deposit_quote(
                 pool: quote.pool,
                 base_amount: loki_amount,
                 other_amount,
+                event_number: None,
             };
 
             match deposit.validate(network) {
@@ -326,13 +326,13 @@ fn prepare_outputs(
 ) -> Result<(Output, Output), &'static str> {
     let loki = Output {
         id: UUIDv4::new(),
-        timestamp: Timestamp::now(),
         parent: OutputParent::WithdrawRequest(tx.id),
         witnesses: vec![],
         pool_changes: vec![],
         coin: Coin::LOKI,
         address: tx.base_address.clone(),
         amount: loki_amount.to_atomic(),
+        event_number: None,
     };
 
     loki.validate(network)
@@ -340,13 +340,13 @@ fn prepare_outputs(
 
     let other = Output {
         id: UUIDv4::new(),
-        timestamp: Timestamp::now(),
         parent: OutputParent::WithdrawRequest(tx.id),
         witnesses: vec![],
         pool_changes: vec![],
         coin: tx.pool,
         address: tx.other_address.clone(),
         amount: other_amount.to_atomic(),
+        event_number: None,
     };
 
     other
@@ -388,18 +388,18 @@ fn process_withdraw_request<T: TransactionProvider>(
 
     let pool_change_tx = PoolChange {
         id: UUIDv4::new(),
-        timestamp: Timestamp::now(),
         pool: tx.pool,
         depth_change: -d_other,
         base_depth_change: -d_loki,
+        event_number: None,
     };
     pool_change_tx.validate(network)?;
 
     let withdraw = Withdraw {
         id: UUIDv4::new(),
-        timestamp: Timestamp::now(),
         withdraw_request: tx.id,
         outputs: [loki_tx.id, other_tx.id],
+        event_number: None,
     };
     withdraw.validate(network)?;
 
@@ -410,14 +410,14 @@ pub(super) fn process_withdraw_requests<T: TransactionProvider>(
     tx_provider: &mut T,
     network: Network,
 ) {
-    let withdraw_request_txs = tx_provider.get_withdraw_requests();
+    let withdraw_request_events = tx_provider.get_withdraw_requests();
 
-    let (valid_txs, invalid_txs): (Vec<_>, Vec<_>) = withdraw_request_txs
+    let (valid_evts, invalid_evts): (Vec<_>, Vec<_>) = withdraw_request_events
         .iter()
         .filter(|tx| !tx.fulfilled)
         .partition(|tx| tx.inner.verify_signature());
 
-    for tx in invalid_txs {
+    for tx in invalid_evts {
         warn!("Invalid signature for withdraw request {}", tx.inner.id);
     }
 
@@ -425,15 +425,15 @@ pub(super) fn process_withdraw_requests<T: TransactionProvider>(
     // them before adding to the database, but since we check them again, we
     // we should handle the case where they are invalid (by removing from the db)
 
-    let mut new_txs: Vec<SideChainTx> = Vec::with_capacity(valid_txs.len() * 4);
+    let mut new_events: Vec<LocalEvent> = Vec::with_capacity(valid_evts.len() * 4);
 
-    for tx in valid_txs {
+    for tx in valid_evts {
         match process_withdraw_request(tx_provider, tx, network) {
             Ok((output1, output2, pool_change, withdraw)) => {
-                new_txs.push(output1.into());
-                new_txs.push(output2.into());
-                new_txs.push(pool_change.into());
-                new_txs.push(withdraw.into());
+                new_events.push(output1.into());
+                new_events.push(output2.into());
+                new_events.push(pool_change.into());
+                new_events.push(withdraw.into());
             }
             Err(err) => {
                 warn!(
@@ -445,6 +445,6 @@ pub(super) fn process_withdraw_requests<T: TransactionProvider>(
     }
 
     tx_provider
-        .add_transactions(new_txs)
+        .add_local_events(new_events)
         .expect("Could not add transactions");
 }

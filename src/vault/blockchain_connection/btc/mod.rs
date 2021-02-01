@@ -8,6 +8,7 @@ use spv::AddressUnspentResponse;
 /// Define btc SPV interface
 pub mod spv;
 
+/// Everything required to send a bitcoin transaction
 #[derive(Debug)]
 pub struct SendTransaction {
     /// The address that is sending
@@ -18,9 +19,13 @@ pub struct SendTransaction {
     pub amount: GenericCoinAmount,
 }
 
+/// Required trait for implementor to be able to send BTC
 #[async_trait]
 pub trait IBitcoinSend {
+    /// Creates and sends a bitcoin transaction on the bitcoin network, returns the BTC txid
     async fn send(&self, tx: &SendTransaction) -> Result<Txid, String>;
+
+    /// Gets the balance of any address on the bitcoin network
     async fn get_address_balance(
         &self,
         address: WalletAddress,

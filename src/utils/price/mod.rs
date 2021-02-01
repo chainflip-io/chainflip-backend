@@ -7,7 +7,7 @@ pub use calculation::*;
 use chainflip_common::types::{
     chain::{PoolChange, Validate},
     coin::Coin,
-    Network, Timestamp, UUIDv4,
+    Network, UUIDv4,
 };
 use std::convert::TryFrom;
 
@@ -61,10 +61,10 @@ impl OutputDetail {
 
         let change = PoolChange {
             id: UUIDv4::new(),
-            timestamp: Timestamp::now(),
             pool: pool_coin,
             depth_change,
             base_depth_change,
+            event_number: None,
         };
 
         // Network type shouldn't really matter here

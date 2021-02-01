@@ -4,12 +4,13 @@
 
 /// Code that is commonly used by other modules
 pub mod common;
+/// Local store, stores the full transaction data, the data that's not stored on the substrate node
+pub mod local_store;
 /// Logging set up
 pub mod logging;
 /// Quoter implementation
 pub mod quoter;
-/// Side Chain implementation
-pub mod side_chain;
+
 /// Helper functions (including helper functions for tests)
 pub mod utils;
 /// Vault implementation

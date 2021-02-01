@@ -38,12 +38,12 @@ where
     (status, res)
 }
 
-async fn send_blocks_req<T>(query: &T) -> StatusCode
+async fn send_events_req<T>(query: &T) -> StatusCode
 where
     T: Serialize + ?Sized,
 {
     let res = CLIENT
-        .get("http://localhost:3030/v1/blocks")
+        .get("http://localhost:3030/v1/events")
         .query(query)
         .send()
         .await
@@ -146,7 +146,7 @@ async fn vault_http_server_tests() {
 
     let mut runner = TestRunner::new();
 
-    let chain = Arc::clone(&runner.chain);
+    let chain = Arc::clone(&runner.store);
     let provider = Arc::clone(&runner.provider);
 
     let (tx, rx) = tokio::sync::oneshot::channel();
@@ -165,13 +165,7 @@ async fn vault_http_server_tests() {
 
     {
         // number=0&limit=1
-        let status = send_blocks_req(&[("number", 0u32), ("limit", 1u32)]).await;
-        assert_eq!(status, StatusCode::OK);
-    }
-
-    {
-        // (no params)
-        let status = send_blocks_req(&[("", "")]).await;
+        let status = send_events_req(&[("number", 0u32), ("limit", 1u32)]).await;
         assert_eq!(status, StatusCode::OK);
     }
 

@@ -1,9 +1,9 @@
 use self::types::TransactionType;
-use super::{BlockProcessor, StateProvider};
+use super::{EventProcessor, StateProvider};
 use crate::{
     common::store::utils::SQLite as KVS,
     common::{Liquidity, LiquidityProvider, PoolCoin},
-    side_chain::{SideChainBlock, SideChainTx},
+    local_store::LocalEvent,
 };
 use chainflip_common::types::{chain::*, UUIDv4};
 use itertools::Itertools;
@@ -35,50 +35,54 @@ impl Database {
         Database { connection }
     }
 
-    fn set_last_processed_block_number(&self, block_number: u32) -> Result<(), String> {
+    fn increment_last_processed_event_number(&self, num_events: u64) -> Result<(), String> {
+        let last_event_num = self.get_last_processed_event_number().unwrap_or(0);
+        let new_last_event_num = last_event_num
+            .checked_add(num_events)
+            .expect("overflow on last_processsed_event_num");
         KVS::set_data(
             &self.connection,
-            "last_processed_block_number",
-            Some(block_number),
+            "last_processed_event_number",
+            Some(new_last_event_num),
         )
     }
 
-    fn process_transactions(db: &Transaction, txs: &[SideChainTx]) {
+    fn process_events(db: &Transaction, txs: &[LocalEvent]) {
         for tx in txs {
             match tx {
-                SideChainTx::PoolChange(tx) => {
+                LocalEvent::Witness(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::SwapQuote(tx) => {
+                LocalEvent::PoolChange(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::DepositQuote(tx) => {
+                LocalEvent::SwapQuote(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::Witness(tx) => {
+                LocalEvent::DepositQuote(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::Output(tx) => {
+                LocalEvent::Output(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::OutputSent(tx) => {
+                LocalEvent::OutputSent(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::Deposit(tx) => {
+                LocalEvent::Deposit(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::WithdrawRequest(tx) => {
+                LocalEvent::WithdrawRequest(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
-                SideChainTx::Withdraw(tx) => {
+                LocalEvent::Withdraw(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
                     Database::insert_transaction(db, tx.id, tx.into(), serialized)
                 }
@@ -88,7 +92,7 @@ impl Database {
 
     fn insert_transaction(db: &Transaction, uuid: UUIDv4, tx_type: TransactionType, data: String) {
         db.execute(
-            "INSERT OR REPLACE INTO transactions (id, type, data) VALUES (?1, ?2, ?3)",
+            "INSERT OR REPLACE INTO events (id, type, data) VALUES (?1, ?2, ?3)",
             params![uuid.to_string(), tx_type.to_string(), data],
         )
         .expect("Failed to create statement");
@@ -145,7 +149,7 @@ impl Database {
 
     fn get_transactions<T: DeserializeOwned>(&self, tx_type: TransactionType) -> Vec<T> {
         self.get_rows(
-            "SELECT data from transactions where type = ?",
+            "SELECT data from events where type = ?",
             params![tx_type.to_string()],
             |row| row.get(0),
         )
@@ -153,39 +157,37 @@ impl Database {
 
     fn get_transaction<T: DeserializeOwned>(&self, id: UUIDv4) -> Option<T> {
         self.get_row(
-            "SELECT data from transactions where id = ?",
+            "SELECT data from events where id = ?",
             params![id.to_string()],
             |row| row.get(0),
         )
     }
 }
 
-impl BlockProcessor for Database {
-    fn get_last_processed_block_number(&self) -> Option<u32> {
-        KVS::get_data(&self.connection, "last_processed_block_number")
+impl EventProcessor for Database {
+    fn get_last_processed_event_number(&self) -> Option<u64> {
+        KVS::get_data(&self.connection, "last_processed_event_number")
     }
 
-    fn process_blocks(&mut self, blocks: &[SideChainBlock]) -> Result<(), String> {
-        let tx = match self.connection.transaction() {
-            Ok(transaction) => transaction,
+    fn process_events(&mut self, events: &[LocalEvent]) -> Result<(), String> {
+        let conn = match self.connection.transaction() {
+            Ok(tx) => tx,
             Err(err) => {
                 error!("Failed to open database transaction: {}", err);
                 return Err("Failed to process block".to_owned());
             }
         };
 
-        for block in blocks.iter() {
-            Database::process_transactions(&tx, &block.transactions)
+        Database::process_events(&conn, events);
+
+        if let Err(err) = conn.commit() {
+            error!("Failed to commit process events changes: {}", err);
+            return Err(format!("Failed to commit process events changes: {}", err));
         }
 
-        if let Err(err) = tx.commit() {
-            error!("Failed to commit process block changes: {}", err);
-            return Err("Failed to commit process block changes".to_owned());
-        };
-
-        let last_block_number = blocks.iter().map(|b| b.id).max();
-        if let Some(last_block_number) = last_block_number {
-            self.set_last_processed_block_number(last_block_number)?;
+        if let Err(err) = self.increment_last_processed_event_number(events.len() as u64) {
+            error!("Failed to increment last_processed_event_number");
+            return Err(format!("Failed to increment last_processed_event_number"));
         }
 
         Ok(())
@@ -274,6 +276,7 @@ mod test {
         utils::test_utils::{data::TestData, staking::get_random_staker},
     };
     use chainflip_common::types::coin::Coin;
+    use itertools::process_results;
     use rusqlite::NO_PARAMS;
 
     fn setup() -> Database {
@@ -298,7 +301,7 @@ mod test {
 
         let results = db
             .connection
-            .query_row("select id, data from transactions", NO_PARAMS, |row| {
+            .query_row("select id, data from events", NO_PARAMS, |row| {
                 Ok(RawData {
                     id: row.get(0).unwrap(),
                     data: row.get(1).unwrap(),
@@ -311,29 +314,20 @@ mod test {
     }
 
     #[test]
-    fn processes_blocks() {
+    fn processes_events() {
         let mut db = setup();
 
-        assert!(db.get_last_processed_block_number().is_none());
+        assert!(db.get_last_processed_event_number().is_none());
 
-        let blocks: Vec<SideChainBlock> = vec![
-            SideChainBlock {
-                id: 1,
-                transactions: vec![],
-            },
-            SideChainBlock {
-                id: 2,
-                transactions: vec![],
-            },
-            SideChainBlock {
-                id: 10,
-                transactions: vec![],
-            },
+        let events: Vec<LocalEvent> = vec![
+            TestData::pool_change(Coin::BTC, -100, 100).into(),
+            TestData::swap_quote(Coin::ETH, Coin::LOKI).into(),
+            TestData::deposit_quote(Coin::ETH).into(),
         ];
 
-        db.process_blocks(&blocks).unwrap();
+        db.process_events(&events).unwrap();
 
-        assert_eq!(db.get_last_processed_block_number(), Some(10));
+        assert_eq!(db.get_last_processed_event_number(), Some(3));
     }
 
     #[test]
@@ -342,7 +336,7 @@ mod test {
         let tx = db.connection.transaction().unwrap();
         let staker = get_random_staker();
 
-        let transactions: Vec<SideChainTx> = vec![
+        let events: Vec<LocalEvent> = vec![
             TestData::pool_change(Coin::BTC, -100, 100).into(),
             TestData::swap_quote(Coin::ETH, Coin::LOKI).into(),
             TestData::deposit_quote(Coin::ETH).into(),
@@ -352,33 +346,29 @@ mod test {
             TestData::withdraw_request_for_staker(&staker, Coin::ETH).into(),
         ];
 
-        Database::process_transactions(&tx, &transactions);
+        Database::process_events(&tx, &events);
 
-        tx.commit().expect("Expected transactions to be added");
+        tx.commit().expect("Expected events to be added");
 
         let count: u32 = db
             .connection
-            .query_row("SELECT COUNT(*) from transactions", NO_PARAMS, |r| r.get(0))
+            .query_row("SELECT COUNT(*) from events", NO_PARAMS, |r| r.get(0))
             .unwrap();
 
-        assert_eq!(count, transactions.len() as u32);
+        assert_eq!(count, events.len() as u32);
     }
 
     #[test]
     fn returns_pools() {
         let mut db = setup();
-        let transactions: Vec<SideChainTx> = vec![
+        let events: Vec<LocalEvent> = vec![
             TestData::pool_change(Coin::BTC, 100, 100).into(),
             TestData::pool_change(Coin::ETH, 75, 75).into(),
             TestData::pool_change(Coin::BTC, 100, -50).into(),
             TestData::pool_change(Coin::BTC, 0, -50).into(),
         ];
 
-        db.process_blocks(&[SideChainBlock {
-            id: 0,
-            transactions,
-        }])
-        .unwrap();
+        db.process_events(&events).unwrap();
 
         let pools = db.get_pools();
 

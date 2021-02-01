@@ -41,7 +41,7 @@ where
 fn migrate_to_version_1(connection: &mut Connection) {
     apply_changes(connection, 1, |tx| {
         tx.execute(
-            "CREATE TABLE IF NOT EXISTS transactions (
+            "CREATE TABLE IF NOT EXISTS events (
             id char(36) PRIMARY KEY,
             type TEXT NOT NULL,
             data BLOB NOT NULL

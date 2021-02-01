@@ -109,6 +109,7 @@ pub async fn post_withdraw<T: TransactionProvider>(
         other_address: params.other_address.into(),
         fraction,
         signature,
+        event_number: None,
     };
 
     tx.validate(config.net_type)
@@ -116,7 +117,7 @@ pub async fn post_withdraw<T: TransactionProvider>(
 
     let tx_id = tx.id;
 
-    provider.add_transactions(vec![tx.into()]).map_err(|_| {
+    provider.add_local_events(vec![tx.into()]).map_err(|_| {
         ResponseError::new(
             StatusCode::INTERNAL_SERVER_ERROR,
             "Could not record withdraw request transaction",

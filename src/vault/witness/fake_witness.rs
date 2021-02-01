@@ -1,4 +1,4 @@
-use crate::side_chain::{ISideChain, SideChainTx};
+use crate::local_store::{self, ILocalStore, LocalEvent};
 use chainflip_common::types::{
     chain::{SwapQuote, Witness},
     coin::Coin,
@@ -7,11 +7,16 @@ use chainflip_common::types::{
 use crossbeam_channel::Receiver;
 use std::sync::{Arc, Mutex};
 
+/// Describes a transaction on a supported chain
 #[derive(Debug)]
 pub struct CoinTx {
+    /// internal id of transaction
     pub id: UUIDv4,
+    /// timestamp of transaction
     pub timestamp: Timestamp,
+    /// address coins deposited to
     pub deposit_address: String,
+    /// address the coins are returned to if the tx fails / is outdated
     pub return_address: Option<String>,
 }
 
@@ -25,46 +30,44 @@ pub struct Block {
 /// Witness Fake
 pub struct FakeWitness<T>
 where
-    T: ISideChain + Send,
+    T: ILocalStore + Send,
 {
     /// Outstanding quotes (make sure this stays synced)
     quotes: Vec<SwapQuote>,
     loki_connection: Receiver<Block>,
-    side_chain: Arc<Mutex<T>>,
+    local_store: Arc<Mutex<T>>,
+
     // We should save this to a DB (maybe not, because when we restart, we might want to rescan the db for all quotes?)
-    next_block_idx: u32, // block from the side chain
+    next_event: u64, // event from local store
 }
 
 impl<T> FakeWitness<T>
 where
-    T: ISideChain + Send + 'static,
+    T: ILocalStore + Send + 'static,
 {
     /// Construct from internal components
-    pub fn new(bc: Receiver<Block>, side_chain: Arc<Mutex<T>>) -> FakeWitness<T> {
-        let next_block_idx = 0;
+    pub fn new(bc: Receiver<Block>, local_store: Arc<Mutex<T>>) -> FakeWitness<T> {
+        let next_event = 0;
 
         FakeWitness {
             quotes: vec![],
             loki_connection: bc,
-            side_chain,
-            next_block_idx,
+            local_store,
+            next_event,
         }
     }
 
     fn poll_side_chain(&mut self) {
         let mut quote_txs = vec![];
 
-        let side_chain = self.side_chain.lock().unwrap();
+        let local_store = self.local_store.lock().unwrap();
 
-        while let Some(block) = side_chain.get_block(self.next_block_idx) {
-            for tx in &block.transactions {
-                if let SideChainTx::SwapQuote(tx) = tx {
-                    debug!("Registered swap quote: {:?}", tx.id);
-                    quote_txs.push(tx.clone());
-                }
+        for tx in &local_store.get_events(self.next_event) {
+            if let LocalEvent::SwapQuote(tx) = tx {
+                debug!("Registered swap quote: {:?}", tx.id);
+                quote_txs.push(tx.clone());
             }
-
-            self.next_block_idx = self.next_block_idx + 1;
+            self.next_event = self.next_event + 1;
         }
 
         self.quotes.append(&mut quote_txs);
@@ -122,26 +125,24 @@ where
     fn publish_witness_tx(&self, quote: &SwapQuote) {
         debug!("Publishing witness for quote: {:?}", &quote);
 
-        let mut side_chain = self.side_chain.lock().unwrap();
+        let mut local_store = self.local_store.lock().unwrap();
 
         let tx = Witness {
             id: UUIDv4::new(),
-            timestamp: Timestamp::now(),
             quote: quote.id,
             transaction_id: "0".into(),
             transaction_block_number: 0,
             transaction_index: 0,
             amount: 100,
             coin: Coin::LOKI,
+            event_number: None,
         };
 
-        let tx = SideChainTx::Witness(tx);
+        let tx = LocalEvent::Witness(tx);
 
-        side_chain
-            .add_block(vec![tx])
+        local_store
+            .add_events(vec![tx])
             .expect("Could not publish witness");
-
-        // Do we remove the quote here?
     }
 
     /// Stuff to do whenever we receive a new block from

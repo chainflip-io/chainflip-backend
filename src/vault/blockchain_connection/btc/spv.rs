@@ -41,7 +41,6 @@ pub enum FeeMethod {
     Static,
     /// ETA is based on number of blocks to confirm at tx, on average a BTC block takes ~10mins
     Eta,
-
     /// Mempool bases it off mempool congestion
     Mempool,
 }

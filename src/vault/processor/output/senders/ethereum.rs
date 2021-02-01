@@ -108,13 +108,13 @@ impl<E: EthereumClient> EthOutputSender<E> {
 
         let sent = OutputSent {
             id: UUIDv4::new(),
-            timestamp: Timestamp::now(),
             outputs: uuids,
             coin: Coin::ETH,
             address: address.clone(),
             amount: new_amount,
             fee,
             transaction_id: tx_hash.to_string().into(),
+            event_number: None,
         };
 
         match sent.validate(self.network) {

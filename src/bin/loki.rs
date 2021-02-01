@@ -1,8 +1,7 @@
 use chainflip::{
     common::*,
-    logging,
-    side_chain::{ISideChain, MemorySideChain, StateChainNode},
-    utils,
+    local_store::{ILocalStore, MemoryLocalStore},
+    logging, utils,
     vault::{
         blockchain_connection::{loki_rpc, LokiConnection, LokiConnectionConfig},
         transactions::{MemoryTransactionsProvider, TransactionProvider},
@@ -62,7 +61,7 @@ async fn test_loki_rpc() {
 }
 
 async fn test_loki_witness() {
-    let mut s_chain = MemorySideChain::new();
+    let mut local_store = MemoryLocalStore::new();
 
     let int_address = loki_rpc::make_integrated_address(PORT, None)
         .await
@@ -92,13 +91,13 @@ async fn test_loki_witness() {
         info!("Balance after: {}", res);
     }
 
-    s_chain
-        .add_block(vec![tx.into()])
+    local_store
+        .add_events(vec![tx.into()])
         .expect("Error adding a transaction to the database");
 
-    let s_chain = Arc::new(Mutex::new(s_chain));
+    let local_store = Arc::new(Mutex::new(local_store));
 
-    let mut provider = MemoryTransactionsProvider::new(s_chain.clone());
+    let mut provider = MemoryTransactionsProvider::new(local_store.clone());
     provider.sync();
 
     let provider = Arc::new(RwLock::new(provider));
@@ -110,10 +109,7 @@ async fn test_loki_witness() {
     let loki_connection = LokiConnection::new(config);
     let loki_block_receiver = loki_connection.start();
 
-    let node = StateChainNode::new();
-    let node = Arc::new(RwLock::new(node));
-
-    let witness = LokiWitness::new(loki_block_receiver, provider.clone(), node);
+    let witness = LokiWitness::new(loki_block_receiver, provider.clone());
     witness.start();
 
     // Block current thread

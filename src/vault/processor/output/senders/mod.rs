@@ -112,7 +112,7 @@ pub fn get_input_id_indices<T: TransactionProvider>(
 mod test {
     use super::*;
     use crate::{
-        side_chain::MemorySideChain, utils::test_utils::data::TestData,
+        local_store::MemoryLocalStore, utils::test_utils::data::TestData,
         vault::transactions::MemoryTransactionsProvider,
     };
     use chainflip_common::types::chain::OutputParent;
@@ -201,9 +201,9 @@ mod test {
 
     #[test]
     fn test_get_input_id_indices() {
-        let side_chain = MemorySideChain::new();
-        let side_chain = Arc::new(Mutex::new(side_chain));
-        let provider = MemoryTransactionsProvider::new_protected(side_chain.clone());
+        let local_store = MemoryLocalStore::new();
+        let local_store = Arc::new(Mutex::new(local_store));
+        let provider = MemoryTransactionsProvider::new_protected(local_store.clone());
 
         let mut eth_quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
         eth_quote.input_address_id = 5u32.to_be_bytes().to_vec();
@@ -219,7 +219,7 @@ mod test {
 
         provider
             .write()
-            .add_transactions(vec![
+            .add_local_events(vec![
                 eth_quote.into(),
                 btc_quote.into(),
                 eth_deposit.into(),

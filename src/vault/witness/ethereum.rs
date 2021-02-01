@@ -1,6 +1,6 @@
 use crate::{
     common::store::KeyValueStore,
-    side_chain::{IStateChainNode, SideChainTx},
+    local_store::LocalEvent,
     vault::{blockchain_connection::ethereum::EthereumClient, transactions::TransactionProvider},
 };
 use chainflip_common::types::{chain::Witness, coin::Coin, Timestamp, UUIDv4};
@@ -15,34 +15,26 @@ const START_BLOCK: u64 = 9079997;
 const NEXT_ETH_BLOCK_KEY: &'static str = "next_eth_block";
 
 /// A ethereum transaction witness
-pub struct EthereumWitness<T, C, S, N>
+pub struct EthereumWitness<T, C, S>
 where
     T: TransactionProvider,
     C: EthereumClient,
     S: KeyValueStore,
-    N: IStateChainNode,
 {
     transaction_provider: Arc<RwLock<T>>,
     client: Arc<C>,
     store: Arc<Mutex<S>>,
     next_ethereum_block: u64,
-    node: Arc<RwLock<N>>,
 }
 
-impl<T, C, S, N> EthereumWitness<T, C, S, N>
+impl<T, C, S> EthereumWitness<T, C, S>
 where
     T: TransactionProvider + Send + Sync + 'static,
     C: EthereumClient + Send + Sync + 'static,
     S: KeyValueStore + Send + 'static,
-    N: IStateChainNode + Send + Sync + 'static,
 {
     /// Create a new ethereum chain witness
-    pub fn new(
-        client: Arc<C>,
-        transaction_provider: Arc<RwLock<T>>,
-        store: Arc<Mutex<S>>,
-        node: Arc<RwLock<N>>,
-    ) -> Self {
+    pub fn new(client: Arc<C>, transaction_provider: Arc<RwLock<T>>, store: Arc<Mutex<S>>) -> Self {
         let next_ethereum_block = match store.lock().unwrap().get_data::<u64>(NEXT_ETH_BLOCK_KEY) {
             Some(next_block) => next_block,
             None => {
@@ -59,7 +51,6 @@ where
             transaction_provider,
             store,
             next_ethereum_block,
-            node,
         }
     }
 
@@ -99,7 +90,7 @@ where
             let swaps = provider.get_swap_quotes();
             let deposit_quotes = provider.get_deposit_quotes();
 
-            let mut witness_txs: Vec<SideChainTx> = vec![];
+            let mut witness_txs: Vec<LocalEvent> = vec![];
 
             for transaction in transactions {
                 if let Some(recipient) = transaction.to {
@@ -135,13 +126,13 @@ where
 
                     let tx = Witness {
                         id: UUIDv4::new(),
-                        timestamp: Timestamp::now(),
                         quote: quote_id,
                         transaction_id: transaction.hash.to_string().into(),
                         transaction_block_number: transaction.block_number,
                         transaction_index: transaction.index,
                         amount: transaction.value,
                         coin: Coin::ETH,
+                        event_number: None,
                     };
 
                     if tx.amount > 0 {
@@ -153,7 +144,9 @@ where
             drop(provider);
 
             if witness_txs.len() > 0 {
-                self.node.write().submit_txs(witness_txs);
+                self.transaction_provider
+                    .write()
+                    .add_local_events(witness_txs);
             }
 
             self.next_ethereum_block = self.next_ethereum_block + 1;
@@ -169,36 +162,30 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::utils::test_utils::ethereum::TestEthereumClient;
     use crate::{
         common::ethereum::{Hash, Transaction},
-        side_chain::MemorySideChain,
+        local_store::MemoryLocalStore,
         utils::test_utils::{data::TestData, get_transactions_provider, store::MemoryKVS},
         vault::transactions::MemoryTransactionsProvider,
     };
-    use crate::{side_chain::FakeStateChainNode, utils::test_utils::ethereum::TestEthereumClient};
     use chainflip_common::types::addresses::EthereumAddress;
     use rand::Rng;
 
-    type TestTransactionsProvider = MemoryTransactionsProvider<MemorySideChain>;
+    type TestTransactionsProvider = MemoryTransactionsProvider<MemoryLocalStore>;
 
     struct TestObjects {
         client: Arc<TestEthereumClient>,
         provider: Arc<RwLock<TestTransactionsProvider>>,
         store: Arc<Mutex<MemoryKVS>>,
-        witness: EthereumWitness<
-            TestTransactionsProvider,
-            TestEthereumClient,
-            MemoryKVS,
-            FakeStateChainNode<TestTransactionsProvider>,
-        >,
+        witness: EthereumWitness<TestTransactionsProvider, TestEthereumClient, MemoryKVS>,
     }
 
     fn setup() -> TestObjects {
         let client = Arc::new(TestEthereumClient::new());
         let provider = Arc::new(RwLock::new(get_transactions_provider()));
         let store = Arc::new(Mutex::new(MemoryKVS::new()));
-        let node = Arc::new(RwLock::new(FakeStateChainNode::new(provider.clone())));
-        let witness = EthereumWitness::new(client.clone(), provider.clone(), store.clone(), node);
+        let witness = EthereumWitness::new(client.clone(), provider.clone(), store.clone());
 
         TestObjects {
             client,
@@ -230,7 +217,7 @@ mod test {
         {
             let mut provider = provider.write();
             provider
-                .add_transactions(vec![eth_quote.clone().into(), btc_quote.into()])
+                .add_local_events(vec![eth_quote.clone().into(), btc_quote.into()])
                 .unwrap();
 
             assert_eq!(provider.get_swap_quotes().len(), 2);
@@ -308,7 +295,7 @@ mod test {
         {
             let mut provider = provider.write();
             provider
-                .add_transactions(vec![
+                .add_local_events(vec![
                     eth_deposit_quote.clone().into(),
                     btc_deposit_quote.into(),
                 ])

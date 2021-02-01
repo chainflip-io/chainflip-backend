@@ -18,7 +18,7 @@ use bitcoin::Address;
 use chainflip_common::types::{
     chain::{Output, OutputSent, Validate},
     coin::Coin,
-    Network, Timestamp, UUIDv4,
+    Network, UUIDv4,
 };
 use hdwallet::ExtendedPrivKey;
 use itertools::Itertools;
@@ -96,7 +96,6 @@ impl<B: IBitcoinSend, T: TransactionProvider> BtcOutputSender<B, T> {
 
         let sent = OutputSent {
             id: UUIDv4::new(),
-            timestamp: Timestamp::now(),
             outputs: uuids,
             coin: Coin::BTC,
             address: address.clone(),
@@ -104,6 +103,7 @@ impl<B: IBitcoinSend, T: TransactionProvider> BtcOutputSender<B, T> {
             // Fee is already taken from the send amount when sent
             fee: 0,
             transaction_id: tx_hash.to_string().into(),
+            event_number: None,
         };
 
         match sent.validate(self.net_type) {
@@ -212,7 +212,7 @@ impl<B: IBitcoinSend + Sync + Send, T: TransactionProvider + Sync + Send> Output
 mod test {
     use super::*;
     use crate::{
-        side_chain::MemorySideChain,
+        local_store::MemoryLocalStore,
         utils::test_utils::{
             btc::TestBitcoinSendClient, data::TestData, TEST_BTC_ADDRESS, TEST_ROOT_KEY,
         },
@@ -228,10 +228,10 @@ mod test {
     }
 
     fn get_output_sender(
-    ) -> BtcOutputSender<TestBitcoinSendClient, MemoryTransactionsProvider<MemorySideChain>> {
-        let side_chain = MemorySideChain::new();
-        let side_chain = Arc::new(Mutex::new(side_chain));
-        let provider = MemoryTransactionsProvider::new_protected(side_chain.clone());
+    ) -> BtcOutputSender<TestBitcoinSendClient, MemoryTransactionsProvider<MemoryLocalStore>> {
+        let local_store = MemoryLocalStore::new();
+        let local_store = Arc::new(Mutex::new(local_store));
+        let provider = MemoryTransactionsProvider::new_protected(local_store.clone());
         let client = TestBitcoinSendClient::new();
         let key = RawKey::decode(TEST_ROOT_KEY).unwrap();
         BtcOutputSender::new(client, provider, key, Network::Testnet)
