@@ -28,6 +28,7 @@ serde = {features = ['derive'], optional = true, version = '1.0.119'}
 pallet-cf-transactions = { path = "../pallets/cf-transactions", default-features =  false}
 transactions-runtime-api = { path = "../pallets/cf-transactions/runtime-api", default-features = false }
 pallet-cf-validator = { path = "../pallets/cf-validator", default-features = false}
+witness-fetch = { path = "../pallets/witness-fetch", default-features = false }
 
 # Substrate dependencies
 frame-benchmarking = {default-features = false, optional = true, version = '2.0.0'}

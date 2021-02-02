@@ -6,13 +6,15 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+use frame_system::offchain::SendTransactionTypes;
 use pallet_grandpa::fg_primitives;
 use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::traits::{
-    BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Saturating, Verify,
+    BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys,
+    Saturating, Verify,
 };
 use sp_runtime::{
     create_runtime_str, generic, impl_opaque_keys,
@@ -26,7 +28,7 @@ use sp_version::RuntimeVersion;
 
 // A few exports that help ease life for downstream crates.
 pub use frame_support::{
-    construct_runtime, parameter_types,
+    construct_runtime, debug, parameter_types,
     traits::{KeyOwnerProofSystem, Randomness},
     weights::{
         constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
@@ -118,6 +120,14 @@ impl pallet_cf_validator::Trait for Runtime {
     type Event = Event;
 }
 
+impl<C> SendTransactionTypes<C> for Runtime
+where
+    Call: From<C>,
+{
+    type Extrinsic = UncheckedExtrinsic;
+    type OverarchingCall = Call;
+}
+
 impl pallet_session::Trait for Runtime {
     type SessionHandler = <opaque::SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
     type ShouldEndSession = Validator;
@@ -204,6 +214,11 @@ impl frame_system::Trait for Runtime {
     type SystemWeightInfo = ();
 }
 
+impl frame_system::offchain::SigningTypes for Runtime {
+    type Public = <Signature as Verify>::Signer;
+    type Signature = Signature;
+}
+
 impl pallet_aura::Trait for Runtime {
     type AuthorityId = AuraId;
 }
@@ -233,6 +248,12 @@ impl pallet_cf_transactions::Trait for Runtime {
 
 parameter_types! {
     pub const MinimumPeriod: u64 = SLOT_DURATION / 2;
+}
+
+impl witness_fetch::Trait for Runtime {
+    type Call = Call;
+    type Event = Event;
+    type AuthorityId = witness_fetch::crypto::AuthorityId;
 }
 
 impl pallet_timestamp::Trait for Runtime {
@@ -268,6 +289,7 @@ construct_runtime!(
         Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
         Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
         Transactions: pallet_cf_transactions::{Module, Call, Event<T>},
+        WitnessFetcher: witness_fetch::{Module, Call, Event<T>, ValidateUnsigned},
     }
 );
 
