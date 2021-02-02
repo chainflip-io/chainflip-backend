@@ -355,7 +355,6 @@ dependencies = [
  "parity-scale-codec",
  "ring",
  "serde 1.0.116",
- "siphasher",
  "sp-std",
  "tiny-keccak 2.0.2",
  "uuid",
@@ -2268,12 +2267,6 @@ dependencies = [
  "arc-swap",
  "libc",
 ]
-
-[[package]]
-name = "siphasher"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa8f3741c7372e75519bd9346068370c9cdaabcc1f9599cbcf2a2719352286b7"
 
 [[package]]
 name = "slab"

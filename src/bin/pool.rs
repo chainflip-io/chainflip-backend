@@ -41,18 +41,11 @@ async fn main() {
         .checked_mul(10i128.pow(Coin::LOKI.get_info().decimals))
         .expect("Failed to calculate atomic value of loki depth");
 
-    let pool_change = PoolChange {
-        pool: pool_coin.get_coin(),
-        depth_change: depth,
-        base_depth_change: loki_depth,
-        event_number: None,
-    };
+    let pool_change = PoolChange::new(pool_coin.get_coin(), depth, loki_depth, None);
 
     // Insert events into the local store
     let mut l_store = PersistentLocalStore::open("local_store.db");
     l_store
         .add_events(vec![pool_change.clone().into()])
         .unwrap();
-
-    println!("Added event: {:?}", pool_change);
 }

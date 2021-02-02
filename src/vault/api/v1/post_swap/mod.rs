@@ -14,6 +14,7 @@ use chainflip_common::{
         chain::{SwapQuote, Validate},
         coin::Coin,
         fraction::PercentageFraction,
+        unique_id::GetUniqueId,
         Timestamp,
     },
     utils::address_id,
@@ -48,6 +49,7 @@ pub struct SwapQuoteParams {
 #[serde(rename_all = "camelCase")]
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SwapQuoteResponse {
+    pub id: u64,
     /// Quote creation timestamp in milliseconds
     pub created_at: u128,
     /// Quote expire timestamp in milliseconds
@@ -211,6 +213,7 @@ pub async fn swap<T: TransactionProvider>(
         })?;
 
     Ok(SwapQuoteResponse {
+        id: quote.unique_id(),
         created_at: quote.timestamp.0,
         expires_at: get_swap_expire_timestamp(&quote.timestamp).0,
         input_coin,
@@ -292,12 +295,7 @@ mod test {
 
         // Pool with no liquidity
         {
-            let tx = PoolChange {
-                pool: Coin::ETH,
-                depth_change: 0,
-                base_depth_change: 0,
-                event_number: None,
-            };
+            let tx = PoolChange::new(Coin::ETH, 0, 0, None);
 
             let mut provider = provider.write();
             provider.add_local_events(vec![tx.into()]).unwrap();
@@ -313,12 +311,7 @@ mod test {
     #[tokio::test]
     async fn returns_response_if_successful() {
         let mut provider = get_transactions_provider();
-        let tx = PoolChange {
-            pool: Coin::ETH,
-            depth_change: 10_000_000_000,
-            base_depth_change: 50_000_000_000,
-            event_number: None,
-        };
+        let tx = PoolChange::new(Coin::ETH, 10_000_000_000, 50_000_000_000, None);
         provider.add_local_events(vec![tx.into()]).unwrap();
 
         let provider = Arc::new(RwLock::new(provider));

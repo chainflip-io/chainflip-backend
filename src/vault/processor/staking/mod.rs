@@ -243,12 +243,7 @@ fn process_deposit_quote(
 
     match (loki_amount, other_amount) {
         (Some(loki_amount), Some(other_amount)) => {
-            let pool_change_tx = PoolChange {
-                pool: quote.pool,
-                depth_change: other_amount,
-                base_depth_change: loki_amount,
-                event_number: None,
-            };
+            let pool_change_tx = PoolChange::new(quote.pool, other_amount, loki_amount, None);
 
             // TODO: autoswap goes here
             let loki_amount: u128 = loki_amount.try_into().expect("negative deposit");
@@ -388,12 +383,7 @@ fn process_withdraw_request<T: TransactionProvider>(
         .try_into()
         .map_err(|_| "Other amount overflow")?;
 
-    let pool_change_tx = PoolChange {
-        pool: tx.pool,
-        depth_change: -d_other,
-        base_depth_change: -d_loki,
-        event_number: None,
-    };
+    let pool_change_tx = PoolChange::new(tx.pool, -d_other, -d_loki, None);
     pool_change_tx.validate(network)?;
 
     let withdraw = Withdraw {

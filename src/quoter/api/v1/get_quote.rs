@@ -8,7 +8,7 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
-use chainflip_common::types::chain::UniqueId;
+use chainflip_common::types::{chain::UniqueId, unique_id::GetUniqueId};
 
 /// Parameters for GET `quote` endpoint
 #[derive(Debug, Deserialize)]
@@ -65,6 +65,7 @@ where
 {
     let quote = state.lock().unwrap().get_swap_quote(id);
     quote.map(|quote| SwapQuoteResponse {
+        id: quote.unique_id(),
         created_at: quote.timestamp.0,
         expires_at: get_swap_expire_timestamp(&quote.timestamp).0,
         input_coin: quote.input,

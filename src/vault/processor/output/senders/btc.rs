@@ -312,7 +312,7 @@ mod test {
         let key_pair_public_key = (&key_pair.public_key).to_string();
 
         let mut output_1 = TestData::output(Coin::BTC, 100);
-        let mut output_2 = TestData::output(Coin::BTC, 200);
+        let mut output_2 = TestData::output(Coin::ETH, 200);
 
         // bitcoin address (old) are case sensitive
         let address = TEST_BTC_ADDRESS;

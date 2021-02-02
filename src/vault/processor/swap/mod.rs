@@ -165,7 +165,7 @@ mod test {
         let mut runner = Runner::new();
 
         let quote_with_no_witnesses = TestData::swap_quote(Coin::ETH, Coin::LOKI);
-        let quote_with_witnesses = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let quote_with_witnesses = TestData::swap_quote(Coin::BTC, Coin::LOKI);
 
         let first_witness = get_witness(&quote_with_witnesses, 100);
         let second_witness = get_witness(&quote_with_witnesses, 200);
@@ -232,7 +232,6 @@ mod test {
 
         runner.sync_provider();
 
-        // let swaps = get_swaps()
         let swaps = get_swaps(&*runner.provider.read());
         assert_eq!(swaps.len(), 0);
     }

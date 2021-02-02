@@ -44,7 +44,6 @@ impl ILocalStore for MemoryLocalStore {
         for new_event in &events {
             // don't add duplicates
             if !self.events.iter().any(|e| e == new_event) {
-                println!("Adding event: {:#?}", new_event.clone());
                 self.events.push(new_event.clone());
             }
         }

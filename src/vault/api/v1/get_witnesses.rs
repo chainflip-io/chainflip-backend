@@ -108,8 +108,6 @@ mod tests {
             .await
             .expect("result should be OK");
 
-        println!("The witnesses: {:#?}", res.witness_txs);
-
         assert_eq!(res.witness_txs.len(), 2);
     }
 }

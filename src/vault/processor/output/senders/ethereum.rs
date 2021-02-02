@@ -358,7 +358,7 @@ mod test {
         let key_pair_public_key = (&key_pair.public_key).to_string();
 
         let mut output_1 = TestData::output(Coin::ETH, 100);
-        let mut output_2 = TestData::output(Coin::ETH, 200);
+        let mut output_2 = TestData::output(Coin::BTC, 200);
 
         let address = "0x70e7db0678460c5e53f1ffc9221d1c692111dcc5";
         output_1.address = address.into();

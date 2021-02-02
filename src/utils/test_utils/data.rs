@@ -9,6 +9,7 @@ use crate::{
 use chainflip_common::types::{
     chain::*, coin::Coin, fraction::WithdrawFraction, Network, Timestamp,
 };
+use uuid::Uuid;
 
 /// Struct for generating test data
 pub struct TestData {}
@@ -53,7 +54,8 @@ impl TestData {
     pub fn witness(quote_id: UniqueId, amount: u128, coin: Coin) -> Witness {
         let witness = Witness {
             quote: quote_id,
-            transaction_id: "btc-123".into(),
+            // Just create a random pseudo-transaction_id for the witness
+            transaction_id: Uuid::new_v4().to_string().into(),
             transaction_block_number: 0,
             transaction_index: 0,
             amount,
@@ -145,12 +147,7 @@ impl TestData {
 
     /// Create a fake pool change
     pub fn pool_change(pool: Coin, depth_change: i128, base_depth_change: i128) -> PoolChange {
-        let change = PoolChange {
-            pool,
-            depth_change,
-            base_depth_change,
-            event_number: None,
-        };
+        let change = PoolChange::new(pool, depth_change, base_depth_change, None);
         change.validate(Network::Testnet).unwrap();
         change
     }

@@ -300,12 +300,7 @@ impl<L: ILocalStore> TransactionProvider for MemoryTransactionsProvider<L> {
                 LocalEvent::SwapQuote(evt) => {
                     // Quotes always come before their corresponding "outcome", so they start unfulfilled
                     let evt = FulfilledWrapper::new(evt, false);
-                    println!("Syncing swap quote");
                     self.state.swap_quotes.push(evt);
-                    println!(
-                        "Here are the current swap quotes: {:#?}",
-                        self.state.swap_quotes
-                    );
                 }
                 LocalEvent::DepositQuote(evt) => {
                     // (same as above)
@@ -351,7 +346,6 @@ impl<L: ILocalStore> TransactionProvider for MemoryTransactionsProvider<L> {
     }
 
     fn get_swap_quotes(&self) -> &[FulfilledWrapper<SwapQuote>] {
-        println!("Get swap quotes from MemoryTransactionProvider");
         &self.state.swap_quotes
     }
 
