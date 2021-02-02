@@ -3,7 +3,7 @@
 First, generate a `docker-compose.yml` file using the `gen-chain-docker-compose.sh` utility script. As arguments, pass valid `--name` arguments (alice, bob, charlie etc... see `state-chain-node --help` for a full list). The script should output a valid docker-compose config to `stdout`. Pipe this to a custom `docker-compose` configuration file:
 
 ```bash
-./gen-chain-docker-compose.sh alice bob eve > docker-compose.yml
+./scripts/gen-chain-docker-compose.sh alice bob eve > docker-compose.yml
 ```
 
 You can then start the network. 
