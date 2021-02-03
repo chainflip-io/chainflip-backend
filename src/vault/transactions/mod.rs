@@ -1,6 +1,6 @@
 use crate::{common::LiquidityProvider, local_store::LocalEvent};
 use chainflip_common::types::chain::{DepositQuote, Output, SwapQuote, WithdrawRequest};
-use memory_provider::{FulfilledWrapper, UsedWitnessWrapper};
+use memory_provider::{FulfilledWrapper, StatusWitnessWrapper};
 
 /// Memory transaction provider
 pub mod memory_provider;
@@ -25,7 +25,7 @@ pub trait TransactionProvider: LiquidityProvider {
     fn get_deposit_quotes(&self) -> &[FulfilledWrapper<DepositQuote>];
 
     /// Get all the witnesses
-    fn get_witnesses(&self) -> &[UsedWitnessWrapper];
+    fn get_witnesses(&self) -> &[StatusWitnessWrapper];
 
     /// Get all the output transactions
     fn get_outputs(&self) -> &[FulfilledWrapper<Output>];

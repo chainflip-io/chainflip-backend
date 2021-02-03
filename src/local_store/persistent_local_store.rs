@@ -1,5 +1,7 @@
 use std::u64;
 
+use crate::vault::transactions::memory_provider::WitnessStatus;
+
 use super::{EventNumber, ILocalStore, LocalEvent, StorageItem};
 use rusqlite::Connection as DB;
 use rusqlite::{params, NO_PARAMS};
@@ -14,7 +16,8 @@ fn create_tables_if_new(db: &DB) {
     db.execute(
         "CREATE TABLE IF NOT EXISTS events (
                 id TEXT PRIMARY KEY,
-                data BLOB NOT NULL
+                data BLOB NOT NULL,
+                status TEXT,
     )",
         NO_PARAMS,
     )
@@ -95,6 +98,33 @@ impl ILocalStore for PersistentLocalStore {
         let count: Result<u32, _> = total_events.query_row(NO_PARAMS, |row| row.get(0));
 
         count.unwrap() as u64
+    }
+
+    fn set_witness_status(&mut self, id: u64, status: WitnessStatus) -> Result<(), String> {
+        let status = status.to_string();
+        // let mut update_witness_status = self
+        //     .db
+        //     .prepare("UPDATE events SET status = ? WHERE id = ?")
+        //     .expect("Could not prepare update witness status statement");
+
+        match self.db.execute(
+            "
+            UPDATE events SET status = ?1
+            WHERE id = ?2
+            ",
+            // TODO: how to get around u32 limit of sqlite?
+            params![status, id as u32],
+        ) {
+            Ok(_) => {
+                debug!("Witness {} updated to status {}", id, status);
+            }
+            Err(e) => {
+                error!("Failed to update witness {}", id);
+                return Err(e.to_string());
+            }
+        };
+
+        Ok(())
     }
 }
 

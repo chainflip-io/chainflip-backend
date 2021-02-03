@@ -5,7 +5,7 @@ use crate::{
     common::*,
     local_store::LocalEvent,
     vault::transactions::{
-        memory_provider::{FulfilledWrapper, Portion, UsedWitnessWrapper},
+        memory_provider::{FulfilledWrapper, Portion, StatusWitnessWrapper, WitnessStatus},
         TransactionProvider,
     },
 };
@@ -59,16 +59,19 @@ pub(super) fn process_deposit_quotes<T: TransactionProvider>(
 /// Try to match witnesses with deposit quotes and return a list of deposits that should be added to the side chain
 fn process_deposit_quotes_inner(
     quotes: &[FulfilledWrapper<DepositQuote>],
-    witness_txs: &[UsedWitnessWrapper],
+    witness_txs: &[StatusWitnessWrapper],
     network: Network,
 ) -> Vec<LocalEvent> {
     let mut new_events = Vec::<LocalEvent>::default();
 
     for quote_info in quotes {
         // Find all relevant witnesses
-        let wtxs: Vec<&UsedWitnessWrapper> = witness_txs
+        let wtxs: Vec<&StatusWitnessWrapper> = witness_txs
             .iter()
-            .filter(|wtx| !wtx.used && wtx.inner.quote == quote_info.inner.unique_id())
+            .filter(|wtx| {
+                !(wtx.status == WitnessStatus::Processed)
+                    && wtx.inner.quote == quote_info.inner.unique_id()
+            })
             .collect();
 
         if wtxs.is_empty() {
@@ -99,7 +102,7 @@ fn process_deposit_quotes_inner(
 
 fn refund_deposit_quotes(
     quote_info: &FulfilledWrapper<DepositQuote>,
-    witness_txs: &[&UsedWitnessWrapper],
+    witness_txs: &[&StatusWitnessWrapper],
     network: Network,
 ) -> Vec<Output> {
     if !quote_info.fulfilled {
@@ -110,7 +113,9 @@ fn refund_deposit_quotes(
     let quote_coin = quote.pool;
     let mut output_txs: Vec<Output> = vec![];
 
-    let valid_witness_txs = witness_txs.iter().filter(|tx| !tx.used);
+    let valid_witness_txs = witness_txs
+        .iter()
+        .filter(|tx| !(tx.status == WitnessStatus::Processed));
 
     for wtx in valid_witness_txs {
         let tx = &wtx.inner;
@@ -155,7 +160,7 @@ fn refund_deposit_quotes(
 /// Process a single deposit quote with all witnesses referencing it
 fn process_deposit_quote(
     quote_info: &FulfilledWrapper<DepositQuote>,
-    witness_txs: &[&UsedWitnessWrapper],
+    witness_txs: &[&StatusWitnessWrapper],
     network: Network,
 ) -> Option<DepositQuoteResult> {
     if quote_info.fulfilled {
@@ -178,7 +183,7 @@ fn process_deposit_quote(
     for wtx in witness_txs {
         // We don't expect used quotes at this stage,
         // but let's double check this:
-        if wtx.used {
+        if wtx.status == WitnessStatus::Processed {
             continue;
         }
 

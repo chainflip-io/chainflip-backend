@@ -1,10 +1,20 @@
 use chainflip_common::types::chain::*;
 
-use super::{ILocalStore, LocalEvent};
+use crate::vault::transactions::memory_provider::WitnessStatus;
+
+use super::{ILocalStore, LocalEvent, StorageItem};
+
+pub const NULL_STATUS: &'static str = "null";
+
+pub struct FakeDbEntry {
+    id: u64,
+    data: LocalEvent,
+    status: &'static str,
+}
 
 /// Fake implemenation of ILocalStore that stores events in memory
 pub struct MemoryLocalStore {
-    events: Vec<LocalEvent>,
+    events: Vec<FakeDbEntry>,
 }
 
 impl MemoryLocalStore {
@@ -19,7 +29,7 @@ impl MemoryLocalStore {
             .events
             .iter()
             .filter(|e| {
-                if let LocalEvent::Witness(_) = e {
+                if let LocalEvent::Witness(_) = e.data {
                     true
                 } else {
                     false
@@ -30,7 +40,7 @@ impl MemoryLocalStore {
         let mut witnesses: Vec<Witness> = vec![];
 
         for witness in witness_events {
-            if let LocalEvent::Witness(w) = witness {
+            if let LocalEvent::Witness(w) = witness.data {
                 witnesses.push(w.clone());
             }
         }
@@ -43,19 +53,34 @@ impl ILocalStore for MemoryLocalStore {
     fn add_events(&mut self, events: Vec<LocalEvent>) -> Result<(), String> {
         for new_event in &events {
             // don't add duplicates
-            if !self.events.iter().any(|e| e == new_event) {
-                self.events.push(new_event.clone());
+            if !self.events.iter().any(|e| e.data == new_event.clone()) {
+                let fake_entry = FakeDbEntry {
+                    id: new_event.unique_id(),
+                    status: NULL_STATUS,
+                    data: new_event.clone(),
+                };
+                self.events.push(fake_entry);
             }
         }
         Ok(())
     }
 
     fn get_events(&self, last_seen: u64) -> Vec<LocalEvent> {
-        self.events[last_seen as usize..].to_vec()
+        self.events[last_seen as usize..]
+            .iter()
+            .map(|db_e| db_e.data)
+            .collect()
     }
 
     fn total_events(&self) -> u64 {
         self.events.len() as u64
+    }
+
+    fn set_witness_status(&mut self, id: u64, status: WitnessStatus) -> Result<(), String> {
+        let mut event_to_update = self.events.iter().find(|e| e.id == id).unwrap();
+        event_to_update.status = &status.to_string();
+
+        Ok(())
     }
 }
 
@@ -76,6 +101,7 @@ mod test {
             amount: 0,
             coin: Coin::BTC,
             event_number: Some(1),
+            confirmed: false,
         };
         let witness = LocalEvent::Witness(witness);
         let events = vec![witness];

@@ -7,9 +7,11 @@
 mod btc_spv;
 mod ethereum;
 mod loki_witness;
+mod witness_confirmer;
 
 pub use btc_spv::BtcSPVWitness;
 pub use ethereum::EthereumWitness;
 pub use loki_witness::LokiWitness;
+pub use witness_confirmer::WitnessConfirmer;
 
 pub mod fake_witness;

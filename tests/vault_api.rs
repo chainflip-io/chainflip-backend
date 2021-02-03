@@ -30,10 +30,7 @@ where
 
     let status = res.status();
 
-    let res = res
-        .json::<common::api::Response<SwapQuoteResponse>>()
-        .await
-        .unwrap();
+    let res = res.json::<QuoteResponseWrapped>().await.unwrap();
 
     (status, res)
 }

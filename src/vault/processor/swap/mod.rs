@@ -3,7 +3,7 @@ use crate::{
     constants::SWAP_QUOTE_HARD_EXPIRE,
     local_store::{ILocalStore, LocalEvent},
     vault::transactions::{
-        memory_provider::{FulfilledWrapper, UsedWitnessWrapper},
+        memory_provider::{FulfilledWrapper, StatusWitnessWrapper, WitnessStatus},
         TransactionProvider,
     },
 };
@@ -34,10 +34,10 @@ fn get_swaps<T: TransactionProvider>(provider: &T) -> Vec<Swap> {
         .filter(|tx| !is_hard_expired(&tx.inner))
         .collect();
 
-    let witnesses: Vec<&UsedWitnessWrapper> = provider
+    let witnesses: Vec<&StatusWitnessWrapper> = provider
         .get_witnesses()
         .iter()
-        .filter(|tx| !tx.used)
+        .filter(|tx| !(tx.status == WitnessStatus::Processed))
         .collect();
 
     let mut swaps: Vec<Swap> = vec![];

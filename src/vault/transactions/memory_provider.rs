@@ -14,6 +14,7 @@ use parking_lot::RwLock;
 use serde::Serialize;
 use std::{
     collections::HashMap,
+    fmt,
     sync::{Arc, Mutex},
 };
 
@@ -36,18 +37,31 @@ impl<Q: PartialEq> FulfilledWrapper<Q> {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub enum WitnessStatus {
+    AwaitingConfirmation,
+    Confirmed,
+    Processed,
+}
+
+impl fmt::Display for WitnessStatus {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 /// Witness plus a boolean flag
-pub struct UsedWitnessWrapper {
+pub struct StatusWitnessWrapper {
     /// The actual transaction
     pub inner: Witness,
     /// Whether the transaction has been used to fulfill some quote
-    pub used: bool,
+    pub status: WitnessStatus,
 }
 
-impl UsedWitnessWrapper {
+impl StatusWitnessWrapper {
     /// Construct from internal parts
-    pub fn new(inner: Witness, used: bool) -> Self {
-        UsedWitnessWrapper { inner, used }
+    pub fn new(inner: Witness, status: WitnessStatus) -> Self {
+        StatusWitnessWrapper { inner, status }
     }
 }
 
@@ -97,7 +111,7 @@ struct MemoryState {
     withdraw_requests: Vec<FulfilledWrapper<WithdrawRequest>>,
     withdraws: Vec<Withdraw>,
     deposits: Vec<Deposit>,
-    witnesses: Vec<UsedWitnessWrapper>,
+    witnesses: Vec<StatusWitnessWrapper>,
     outputs: Vec<FulfilledWrapper<Output>>,
     liquidity: MemoryLiquidityProvider,
     next_event: u64,
@@ -168,7 +182,7 @@ impl MemoryState {
                 .iter_mut()
                 .find(|w| &w.inner.unique_id() == wtx_id)
             {
-                witness_info.used = true;
+                witness_info.status = WitnessStatus::Processed;
             }
         }
 
@@ -262,7 +276,7 @@ impl MemoryState {
             .filter(|witness| tx.witnesses.contains(&witness.inner.unique_id()));
 
         for witness in witnesses {
-            witness.used = true;
+            witness.status = WitnessStatus::Processed;
         }
 
         // Add output tx
@@ -293,9 +307,10 @@ impl<L: ILocalStore> TransactionProvider for MemoryTransactionsProvider<L> {
         for evt in local_store.get_events(self.state.next_event) {
             match evt {
                 LocalEvent::Witness(evt) => {
-                    self.state
-                        .witnesses
-                        .push(UsedWitnessWrapper::new(evt, false));
+                    self.state.witnesses.push(StatusWitnessWrapper::new(
+                        evt,
+                        WitnessStatus::AwaitingConfirmation,
+                    ));
                 }
                 LocalEvent::SwapQuote(evt) => {
                     // Quotes always come before their corresponding "outcome", so they start unfulfilled
@@ -353,7 +368,7 @@ impl<L: ILocalStore> TransactionProvider for MemoryTransactionsProvider<L> {
         &self.state.deposit_quotes
     }
 
-    fn get_witnesses(&self) -> &[UsedWitnessWrapper] {
+    fn get_witnesses(&self) -> &[StatusWitnessWrapper] {
         &self.state.witnesses
     }
 
@@ -509,7 +524,10 @@ mod test {
         provider.sync();
 
         assert_eq!(provider.get_swap_quotes().first().unwrap().fulfilled, false);
-        assert_eq!(provider.get_witnesses().first().unwrap().used, false);
+        assert_eq!(
+            provider.get_witnesses().first().unwrap().status,
+            WitnessStatus::AwaitingConfirmation
+        );
 
         // Swap
         let mut output = TestData::output(quote.output, 100);
@@ -527,7 +545,10 @@ mod test {
         provider.sync();
 
         assert_eq!(provider.get_swap_quotes().first().unwrap().fulfilled, true);
-        assert_eq!(provider.get_witnesses().first().unwrap().used, true);
+        assert_eq!(
+            provider.get_witnesses().first().unwrap().status,
+            WitnessStatus::Processed
+        );
     }
 
     #[test]
@@ -547,7 +568,10 @@ mod test {
         provider.sync();
 
         assert_eq!(provider.get_swap_quotes().first().unwrap().fulfilled, false);
-        assert_eq!(provider.get_witnesses().first().unwrap().used, false);
+        assert_eq!(
+            provider.get_witnesses().first().unwrap().status,
+            WitnessStatus::AwaitingConfirmation
+        );
 
         // Refund
         let mut output = TestData::output(quote.input, 100);
@@ -565,7 +589,10 @@ mod test {
         provider.sync();
 
         assert_eq!(provider.get_swap_quotes().first().unwrap().fulfilled, false);
-        assert_eq!(provider.get_witnesses().first().unwrap().used, true);
+        assert_eq!(
+            provider.get_witnesses().first().unwrap().status,
+            WitnessStatus::Processed
+        );
     }
 
     #[test]
