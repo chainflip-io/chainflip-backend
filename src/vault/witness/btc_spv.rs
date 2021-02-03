@@ -71,7 +71,10 @@ where
                 .filter(|quote| quote.inner.pool == Coin::BTC)
                 .map(|quote| {
                     let quote_inner = &quote.inner;
-                    (quote_inner.unique_id(), quote_inner.coin_input_address.clone())
+                    (
+                        quote_inner.unique_id(),
+                        quote_inner.coin_input_address.clone(),
+                    )
                 });
 
             let mut witness_txs: Vec<LocalEvent> = vec![];
