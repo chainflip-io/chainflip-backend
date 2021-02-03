@@ -119,6 +119,7 @@ where
                         amount: payment.amount.to_atomic(),
                         coin: Coin::LOKI,
                         event_number: None,
+                        confirmed: false,
                     };
 
                     if tx.amount > 0 {

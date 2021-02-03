@@ -61,6 +61,7 @@ impl TestData {
             amount,
             coin,
             event_number: None,
+            confirmed: false,
         };
         witness.validate(Network::Testnet).unwrap();
         witness
@@ -81,6 +82,7 @@ impl TestData {
             amount,
             coin,
             event_number: Some(event_num),
+            confirmed: false,
         };
         witness.validate(Network::Testnet).unwrap();
         witness
