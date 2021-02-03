@@ -11,7 +11,7 @@ use web3::{
 
 lazy_static! {
     static ref CONTRACT_ADDRESS: H160 =
-        H160::from_str(todo!("Get the address from config.")).unwrap();
+        H160::from_str("0xd59D75482465E7442e59f73320152dab5ac458d7").unwrap();
 }
 
 /// A wrapper for the StakeManager Ethereum contract.
@@ -72,18 +72,21 @@ impl EventSource for StakeManager {
     }
 
     fn parse_event(&self, log: web3::types::Log) -> Result<Self::Event> {
-        let (sig, params) = log
+        let sig = log
             .topics
-            .split_first()
-            .ok_or_else(|| EventProducerError::EmptyTopics)?;
+            .first()
+            .ok_or_else(|| EventProducerError::EmptyTopics)?
+            .clone();
 
         let raw_log = ethabi::RawLog {
-            topics: params.to_vec(),
+            topics: log.topics,
             data: log.data.0,
         };
 
-        match *sig {
-            _ if *sig == self.staked_event().signature() => {
+        log::debug!("Parsing event with signature: {}", sig);
+
+        match sig {
+            _ if sig == self.staked_event().signature() => {
                 let log = self.staked_event().parse_log(raw_log)?;
 
                 let event = StakingEvent::Staked {

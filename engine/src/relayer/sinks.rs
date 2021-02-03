@@ -1,5 +1,5 @@
 mod state_chain;
-mod stdout;
+mod logger;
 
 pub use state_chain::StateChain;
-pub use stdout::Stdout;
+pub use logger::Logger;

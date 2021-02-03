@@ -1,13 +1,13 @@
 use crate::relayer::EventSink;
 
-pub struct Stdout;
+pub struct Logger;
 
 #[async_trait]
-impl<E> EventSink<E> for Stdout
+impl<E> EventSink<E> for Logger
 where
     E: 'static + Send + std::fmt::Debug,
 {
     async fn process_event(&self, event: E) {
-        log::debug!("Received event: {:?}", event);
+        log::info!("Received event: {:?}", event);
     }
 }
