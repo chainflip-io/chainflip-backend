@@ -1,5 +1,5 @@
 use super::{EventSink, EventSource, Result};
-use futures::StreamExt;
+use futures::{stream, StreamExt};
 use tokio_compat_02::FutureExt;
 use web3::types::BlockNumber;
 
@@ -20,19 +20,35 @@ impl<S: EventSource, P: EventSink<S::Event>> EthEventStreamer<S, P> {
         })
     }
 
-    /// Create a stream of Ethereum log events.
+    /// Create a stream of Ethereum log events. If `from_block` is `None`, starts at the pending block.
     pub async fn run(&self, from_block: Option<u64>) -> Result<()> {
-        let filter = self
+        // The `fromBlock` parameter doesn't seem to work reliably with subscription streams, so
+        // request past block via http and prepend them to the stream manually.
+        let past_logs = if let Some(b) = from_block {
+            let http_filter = self.event_source.filter_builder(b.into()).build();
+
+            self.web3_client.eth().logs(http_filter).await?
+        } else {
+            Vec::new()
+        };
+
+        // This is the filter for the subscription. Explicitly set it to start at the pending block
+        // since this is what happens in most cases anyway.
+        let ws_filter = self
             .event_source
-            .filter_builder(from_block.map_or(BlockNumber::Pending, |h| h.into()))
+            .filter_builder(BlockNumber::Pending)
             .build();
 
-        let log_stream = self
+        let future_logs = self
             .web3_client
             .eth_subscribe()
-            .subscribe_logs(filter)
+            .subscribe_logs(ws_filter)
             .compat()
             .await?;
+
+        let log_stream = stream::iter(past_logs)
+            .map(|log| Ok(log))
+            .chain(future_logs);
 
         let event_stream = log_stream.map(|log_result| self.event_source.parse_event(log_result?));
 

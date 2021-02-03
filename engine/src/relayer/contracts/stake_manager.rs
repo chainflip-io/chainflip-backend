@@ -83,7 +83,11 @@ impl EventSource for StakeManager {
             data: log.data.0,
         };
 
-        log::debug!("Parsing event with signature: {}", sig);
+        log::debug!(
+            "Parsing event from block {:?} with signature: {:?}",
+            log.block_number.unwrap_or_default(),
+            sig
+        );
 
         match sig {
             _ if sig == self.staked_event().signature() => {
