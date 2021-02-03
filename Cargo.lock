@@ -3718,6 +3718,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-balances"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "452c3bfacacee9b272f4236a2bcad488dcb5751ebfd592b2cd8921fa5017df16"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "serde",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-transactions"
 version = "0.0.1"
 dependencies = [
@@ -3781,6 +3796,22 @@ dependencies = [
  "sp-finality-grandpa",
  "sp-runtime",
  "sp-session",
+ "sp-staking",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-offences"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3808652ee7766d6d8a9564407b07bcf1bdfc9b6b1d82365605105737b7a6992f"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "serde",
+ "sp-runtime",
  "sp-staking",
  "sp-std",
 ]
@@ -6878,9 +6909,11 @@ dependencies = [
  "frame-system-rpc-runtime-api",
  "hex-literal",
  "pallet-aura",
+ "pallet-authorship",
  "pallet-cf-transactions",
  "pallet-cf-validator",
  "pallet-grandpa",
+ "pallet-offences",
  "pallet-randomness-collective-flip",
  "pallet-session",
  "pallet-sudo",
