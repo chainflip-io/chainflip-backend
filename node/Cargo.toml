@@ -26,9 +26,8 @@ structopt = '0.3.8'
 
 # local dependencies
 state-chain-runtime = {path = '../runtime', version = '0.0.1'}
-transactions-rpc = { path = "../pallets/cf-transactions/rpc" }
-transactions-runtime-api = { path = "../pallets/cf-transactions/runtime-api" }
-
+witness-fetch-rpc = { path = "../pallets/witness-fetch/rpc" }
+witness-fetch-runtime-api = { path = "../pallets/witness-fetch/runtime-api" }
 
 # Substrate dependencies
 frame-benchmarking = '2.0.1'

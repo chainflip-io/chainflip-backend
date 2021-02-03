@@ -189,6 +189,3 @@ by appending your own. A few useful ones are as follow.
 # Check whether the code is compilable
 ./scripts/docker_run.sh cargo check
 ```
-
-## Testing against a mock Chainflip Engine (CFE)
-You can use [json-server](https://github.com/typicode/json-server) to test without having to run the CFE

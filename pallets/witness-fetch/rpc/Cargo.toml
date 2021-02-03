@@ -1,6 +1,6 @@
 
 [package]
-name = "transactions-rpc"
+name = "witness-fetch-rpc"
 version = "2.0.0"
 edition = "2018"
 authors = ['Chainflip Team']
@@ -25,9 +25,7 @@ frame-support = { default-features = false, version = '2.0.0' }
 frame-system = { default-features = false, version = '2.0.0' }
 
 # local packages
-transactions-runtime-api = { version = "2.0.0", path = "../runtime-api", default-features = false }
-
-
+witness-fetch-runtime-api = { version = "2.0.0", path = "../runtime-api", default-features = false }
 
 [dev-dependencies]
 sp-core = { default-features = false, version = '2.0.0' }
@@ -39,5 +37,5 @@ std = [
   "serde",
   "sp-api/std",
   "sp-runtime/std",
-  "transactions-runtime-api/std"
+  "witness-fetch-runtime-api/std"
 ]

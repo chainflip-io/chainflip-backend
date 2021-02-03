@@ -143,13 +143,13 @@ decl_module! {
 
                 Ok(witness_res) => {
 
-                    let count = witness_res.data.witness_txs.len();
+                    let count = witness_res.data.witness_evts.len();
 
                     if count > 0 {
                         debug::info!("👷 [{:?}] OCW fetched {} witnesses from CFE", block, count);
                     }
 
-                    for witness in &witness_res.data.witness_txs {
+                    for witness in &witness_res.data.witness_evts {
 
                         let mut tx_id = witness.coin.clone();
 
@@ -161,7 +161,7 @@ decl_module! {
                     }
 
 
-                    if let Some(witness) = witness_res.data.witness_txs.last() {
+                    if let Some(witness) = witness_res.data.witness_evts.last() {
                         let last_seen = witness.event_number;
 
                         if let Err(_) = s_info.mutate::<_, (), _>(|_: Option<Option<u64>>| {
@@ -181,7 +181,24 @@ decl_module! {
     }
 }
 
+
 impl<T: Trait> Module<T> {
+
+    /// returns to the RPC call `get_valid_witnesses`
+    pub fn get_valid_witnesses() -> Vec<Vec<u8>> {
+        let mut valid_witnesess: Vec<Vec<u8>> = Vec::new();
+        let validators = <pallet_cf_validator::Module<T>>::get_validators();
+        let num_validators = validators.unwrap_or(Vec::new()).len();
+        // super majority
+        let threshold = num_validators as f64 * 0.67;
+        for (witness_id, validators_of_witness) in <WitnessMap<T>>::iter() {
+            if validators_of_witness.len() as f64 > threshold {
+                valid_witnesess.push(witness_id);
+            }
+        }
+        valid_witnesess
+    }
+
     fn add_witness_inner(witness: WitnessId, who: T::AccountId) -> DispatchResult {
         let wstr = AString::from_utf8_lossy(&witness);
 
@@ -280,7 +297,7 @@ struct Witness {
     event_number: u64,
 }
 
-use alt_serde::Deserialize;
+use alt_serde::{Deserialize, Serialize};
 
 #[serde(crate = "alt_serde")]
 #[derive(Deserialize, Debug)]
@@ -307,9 +324,7 @@ fn fetch_witnesses(last_seen: u64) -> CFResult<WitnessResponse> {
 
     let val = fetch_json(url.as_bytes())?;
 
-    debug::info!("val: {:#?}", val);
-
-    let res = serde_json::from_value(val).map_err(|_| "JSON is not WitnessResponse")?;
+    let res = serde_json::from_value(val).map_err(|_| "JSON could not be deserialised to WitnessResponse")?;
 
     Ok(res)
 }
@@ -325,8 +340,6 @@ fn fetch_json(remote_url: &[u8]) -> CFResult<serde_json::Value> {
     let response = pending
         .wait()
         .map_err(|_| "Error in waiting http response back")?;
-
-    debug::info!("the response is: {:#?}", response);
 
     if response.code != 200 {
         debug::warn!("Unexpected status code: {}", response.code);
@@ -365,3 +378,25 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
         }
     }
 }
+
+// #[cfg(test)]
+// mod test {
+
+//     use super::*;
+
+//     #[test]
+//     fn serialise_witness_response() {
+//         let resp = WitnessResponse {
+//             success: true,
+//             data: WitnessData {
+//                 witness_evts: vec![
+//                     Witness {
+//                         event_number: 1,
+//                         transaction_id: "hello",
+//                         coin: "ETH"
+//                     }
+//                 ]
+//             }
+//         }
+//     }
+// }

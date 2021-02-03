@@ -6879,8 +6879,8 @@ dependencies = [
  "structopt",
  "substrate-build-script-utils",
  "substrate-frame-rpc-system",
- "transactions-rpc",
- "transactions-runtime-api",
+ "witness-fetch-rpc",
+ "witness-fetch-runtime-api",
 ]
 
 [[package]]
@@ -6916,8 +6916,8 @@ dependencies = [
  "sp-transaction-pool",
  "sp-version",
  "substrate-wasm-builder",
- "transactions-runtime-api",
  "witness-fetch",
+ "witness-fetch-runtime-api",
 ]
 
 [[package]]
@@ -7637,38 +7637,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "transactions-rpc"
-version = "2.0.0"
-dependencies = [
- "frame-support",
- "frame-system",
- "jsonrpc-core",
- "jsonrpc-core-client",
- "jsonrpc-derive",
- "parity-scale-codec",
- "serde",
- "sp-api",
- "sp-blockchain",
- "sp-core",
- "sp-io",
- "sp-rpc",
- "sp-runtime",
- "transactions-runtime-api",
-]
-
-[[package]]
-name = "transactions-runtime-api"
-version = "2.0.0"
-dependencies = [
- "frame-system",
- "jsonrpc-core",
- "parity-scale-codec",
- "sp-api",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
 name = "trie-db"
 version = "0.22.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8338,6 +8306,38 @@ dependencies = [
  "parity-scale-codec",
  "sp-core",
  "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "witness-fetch-rpc"
+version = "2.0.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "parity-scale-codec",
+ "serde",
+ "sp-api",
+ "sp-blockchain",
+ "sp-core",
+ "sp-io",
+ "sp-rpc",
+ "sp-runtime",
+ "witness-fetch-runtime-api",
+]
+
+[[package]]
+name = "witness-fetch-runtime-api"
+version = "2.0.0"
+dependencies = [
+ "frame-system",
+ "jsonrpc-core",
+ "parity-scale-codec",
+ "sp-api",
  "sp-runtime",
  "sp-std",
 ]

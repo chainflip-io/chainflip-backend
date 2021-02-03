@@ -4,7 +4,7 @@ use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use std::sync::Arc;
-use transactions_runtime_api::WitnessApi as WitnessRuntimeApi;
+use witness_fetch_runtime_api::WitnessApi as WitnessRuntimeApi;
 
 #[rpc]
 pub trait WitnessApi<BlockHash> {

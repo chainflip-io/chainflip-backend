@@ -1,0 +1,14 @@
+{
+    "witnesses": {
+            "success":true,
+            "data":{
+               "witnessEvts":[
+                  {
+                     "eventNumber":1,
+                     "transactionId":"123",
+                     "coin":"Hello"
+                  }
+               ]
+            }
+         }
+}

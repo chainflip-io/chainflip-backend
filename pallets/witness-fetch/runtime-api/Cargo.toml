@@ -1,5 +1,5 @@
 [package]
-name = "transactions-runtime-api"
+name = "witness-fetch-runtime-api"
 version = "2.0.0"
 authors = ['Chainflip Team']
 edition = "2018"

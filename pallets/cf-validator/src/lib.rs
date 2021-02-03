@@ -135,7 +135,7 @@ impl<T: Trait> Module<T> {
 	pub fn get_validators() -> Result<Vec<T::AccountId>, &'static  str> {
         match Self::validators().ok_or(Error::<T>::NoValidators) {
 			Ok(validators) => {
-				frame_support::debug::info!("Validators found: {:#?}", validators);
+				frame_support::debug::info!("Fetching the {} validators on the network", validators.len());
 				return Ok(validators);
 			},
 			Err(e) => {

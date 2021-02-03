@@ -328,10 +328,10 @@ pub type Executive = frame_executive::Executive<
 
 impl_runtime_apis! {
 
-    impl transactions_runtime_api::WitnessApi<Block> for Runtime {
+    impl witness_fetch_runtime_api::WitnessApi<Block> for Runtime {
         
         fn get_valid_witnesses() -> Vec<Vec<u8>> {
-            Transactions::get_valid_witnesses()
+            WitnessFetcher::get_valid_witnesses()
         }
     }
     
