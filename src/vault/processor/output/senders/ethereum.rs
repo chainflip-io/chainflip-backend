@@ -12,7 +12,8 @@ use chainflip_common::types::{
     addresses::EthereumAddress,
     chain::{Output, OutputSent, Validate},
     coin::Coin,
-    Network, Timestamp, UUIDv4,
+    unique_id::GetUniqueId,
+    Network,
 };
 use itertools::Itertools;
 use std::{convert::TryFrom, str::FromStr};
@@ -104,10 +105,9 @@ impl<E: EthereumClient> EthOutputSender<E> {
             Err(err) => return Err(format!("Failed to send eth transaction: {}", err)),
         };
 
-        let uuids = outputs.iter().map(|tx| tx.id).collect_vec();
+        let uuids = outputs.iter().map(|tx| tx.unique_id()).collect_vec();
 
         let sent = OutputSent {
-            id: UUIDv4::new(),
             outputs: uuids,
             coin: Coin::ETH,
             address: address.clone(),
@@ -358,7 +358,7 @@ mod test {
         let key_pair_public_key = (&key_pair.public_key).to_string();
 
         let mut output_1 = TestData::output(Coin::ETH, 100);
-        let mut output_2 = TestData::output(Coin::ETH, 200);
+        let mut output_2 = TestData::output(Coin::BTC, 200);
 
         let address = "0x70e7db0678460c5e53f1ffc9221d1c692111dcc5";
         output_1.address = address.into();
@@ -388,7 +388,10 @@ mod test {
             .await
             .unwrap();
 
-        assert_eq!(sent_tx.outputs, vec![output_1.id, output_2.id]);
+        assert_eq!(
+            sent_tx.outputs,
+            vec![output_1.unique_id(), output_2.unique_id()]
+        );
         assert_eq!(sent_tx.coin, Coin::ETH);
         assert_eq!(sent_tx.address, address.into());
         assert_eq!(sent_tx.amount, 299);
@@ -430,7 +433,7 @@ mod test {
         assert_eq!(sent.len(), 1);
 
         let first = sent.first().unwrap();
-        assert_eq!(&first.outputs, &[output_2.id]);
+        assert_eq!(&first.outputs, &[output_2.unique_id()]);
         assert_eq!(first.amount, 199);
         assert_eq!(first.fee, 1);
     }

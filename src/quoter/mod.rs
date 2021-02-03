@@ -2,7 +2,7 @@ use crate::{
     common::{Liquidity, LiquidityProvider, PoolCoin},
     local_store::LocalEvent,
 };
-use chainflip_common::types::{chain::*, UUIDv4};
+use chainflip_common::types::chain::*;
 use std::{
     collections::HashMap,
     net::SocketAddr,
@@ -78,11 +78,11 @@ pub trait StateProvider: LiquidityProvider {
     /// Get all swap quotes
     fn get_swap_quotes(&self) -> Vec<SwapQuote>;
     /// Get swap quote with the given id
-    fn get_swap_quote(&self, id: UUIDv4) -> Option<SwapQuote>;
+    fn get_swap_quote(&self, id: UniqueId) -> Option<SwapQuote>;
     /// Get all deposit quotes
     fn get_deposit_quotes(&self) -> Vec<DepositQuote>;
     /// Get deposit quote with the given id
-    fn get_deposit_quote(&self, id: UUIDv4) -> Option<DepositQuote>;
+    fn get_deposit_quote(&self, id: UniqueId) -> Option<DepositQuote>;
     /// Get all witnesses
     fn get_witnesses(&self) -> Vec<Witness>;
     /// Get all outputs

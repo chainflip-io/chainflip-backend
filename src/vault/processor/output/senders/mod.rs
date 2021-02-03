@@ -1,8 +1,7 @@
 use crate::vault::transactions::TransactionProvider;
 use chainflip_common::types::{
-    chain::{Output, OutputSent},
+    chain::{Output, OutputSent, UniqueId},
     coin::Coin,
-    UUIDv4,
 };
 use itertools::Itertools;
 use parking_lot::RwLock;
@@ -20,11 +19,11 @@ pub trait OutputSender {
     async fn send(&self, outputs: &[Output]) -> Vec<OutputSent>;
 }
 
-fn group_outputs_by_quote(outputs: &[Output], coin_type: Coin) -> Vec<(UUIDv4, Vec<Output>)> {
+fn group_outputs_by_quote(outputs: &[Output], coin_type: Coin) -> Vec<(UniqueId, Vec<Output>)> {
     // Make sure we only have valid outputs and group them by the quote
     let valid_txs = outputs.iter().filter(|tx| tx.coin == coin_type);
 
-    let mut map: HashMap<UUIDv4, Vec<Output>> = HashMap::new();
+    let mut map: HashMap<UniqueId, Vec<Output>> = HashMap::new();
     for tx in valid_txs {
         let entry = map.entry(tx.parent_id()).or_insert(vec![]);
         entry.push(tx.clone());
@@ -126,11 +125,11 @@ mod test {
         let mut btc_output_3 = TestData::output(Coin::BTC, 10);
         let mut btc_output_4 = TestData::output(Coin::BTC, 10);
 
-        let quote_1 = UUIDv4::new();
+        let quote_1 = 0;
         btc_output_1.parent = OutputParent::SwapQuote(quote_1);
         btc_output_3.parent = OutputParent::SwapQuote(quote_1);
 
-        let quote_2 = UUIDv4::new();
+        let quote_2 = 1;
         btc_output_2.parent = OutputParent::SwapQuote(quote_2);
         btc_output_4.parent = OutputParent::SwapQuote(quote_2);
 

@@ -10,9 +10,9 @@ fn fulfilled_eth_quotes_should_produce_new_tx() {
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
     let quote_tx = TestData::deposit_quote(coin_type);
-    let wtx_loki = TestData::witness(quote_tx.id, loki_amount.to_atomic(), Coin::LOKI);
+    let wtx_loki = TestData::witness(quote_tx.unique_id(), loki_amount.to_atomic(), Coin::LOKI);
     let wtx_loki = UsedWitnessWrapper::new(wtx_loki, false);
-    let wtx_eth = TestData::witness(quote_tx.id, coin_amount.to_atomic(), coin_type);
+    let wtx_eth = TestData::witness(quote_tx.unique_id(), coin_amount.to_atomic(), coin_type);
     let wtx_eth = UsedWitnessWrapper::new(wtx_eth, false);
 
     let quote_tx = FulfilledWrapper::new(quote_tx, false);
@@ -28,10 +28,10 @@ fn fulfilled_eth_quotes_should_produce_new_tx() {
         loki_amount.to_atomic()
     );
 
-    assert_eq!(res.deposit.pool_change, res.pool_change.id);
-    assert_eq!(res.deposit.quote, quote_tx.inner.id);
-    assert!(res.deposit.witnesses.contains(&wtx_loki.inner.id));
-    assert!(res.deposit.witnesses.contains(&wtx_eth.inner.id));
+    assert_eq!(res.deposit.pool_change, res.pool_change.unique_id());
+    assert_eq!(res.deposit.quote, quote_tx.inner.unique_id());
+    assert!(res.deposit.witnesses.contains(&wtx_loki.inner.unique_id()));
+    assert!(res.deposit.witnesses.contains(&wtx_eth.inner.unique_id()));
 }
 
 #[test]
@@ -41,9 +41,9 @@ fn fulfilled_btc_quotes_should_produce_new_tx() {
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
     let quote_tx = TestData::deposit_quote(coin_type);
-    let wtx_loki = TestData::witness(quote_tx.id, loki_amount.to_atomic(), Coin::LOKI);
+    let wtx_loki = TestData::witness(quote_tx.unique_id(), loki_amount.to_atomic(), Coin::LOKI);
     let wtx_loki = UsedWitnessWrapper::new(wtx_loki, false);
-    let wtx_btc = TestData::witness(quote_tx.id, coin_amount.to_atomic(), coin_type);
+    let wtx_btc = TestData::witness(quote_tx.unique_id(), coin_amount.to_atomic(), coin_type);
     let wtx_btc = UsedWitnessWrapper::new(wtx_btc, false);
 
     let quote_tx = FulfilledWrapper::new(quote_tx, false);
@@ -59,10 +59,10 @@ fn fulfilled_btc_quotes_should_produce_new_tx() {
         loki_amount.to_atomic()
     );
 
-    assert_eq!(res.deposit.pool_change, res.pool_change.id);
-    assert_eq!(res.deposit.quote, quote_tx.inner.id);
-    assert!(res.deposit.witnesses.contains(&wtx_loki.inner.id));
-    assert!(res.deposit.witnesses.contains(&wtx_btc.inner.id));
+    assert_eq!(res.deposit.pool_change, res.pool_change.unique_id());
+    assert_eq!(res.deposit.quote, quote_tx.inner.unique_id());
+    assert!(res.deposit.witnesses.contains(&wtx_loki.inner.unique_id()));
+    assert!(res.deposit.witnesses.contains(&wtx_btc.inner.unique_id()));
 }
 
 #[test]
@@ -72,7 +72,7 @@ fn partially_fulfilled_quotes_do_not_produce_new_tx() {
     let _coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
     let quote_tx = TestData::deposit_quote(coin_type);
-    let wtx_loki = TestData::witness(quote_tx.id, loki_amount.to_atomic(), Coin::LOKI);
+    let wtx_loki = TestData::witness(quote_tx.unique_id(), loki_amount.to_atomic(), Coin::LOKI);
     let wtx_loki = UsedWitnessWrapper::new(wtx_loki, false);
 
     let quote_tx = FulfilledWrapper::new(quote_tx, false);
@@ -89,9 +89,9 @@ fn refunds_if_deposit_quote_is_fulfilled() {
     let btc_amount = GenericCoinAmount::from_decimal_string(Coin::BTC, "2.0");
 
     let quote_tx = TestData::deposit_quote(coin_type);
-    let wtx_loki = TestData::witness(quote_tx.id, loki_amount.to_atomic(), Coin::LOKI);
+    let wtx_loki = TestData::witness(quote_tx.unique_id(), loki_amount.to_atomic(), Coin::LOKI);
     let wtx_loki = UsedWitnessWrapper::new(wtx_loki, false);
-    let wtx_btc = TestData::witness(quote_tx.id, btc_amount.to_atomic(), coin_type);
+    let wtx_btc = TestData::witness(quote_tx.unique_id(), btc_amount.to_atomic(), coin_type);
     let wtx_btc = UsedWitnessWrapper::new(wtx_btc, false);
 
     let quote_tx = FulfilledWrapper::new(quote_tx, true);
@@ -119,11 +119,11 @@ fn witness_tx_cannot_be_reused() {
 
     let quote_tx = TestData::deposit_quote(coin_type);
 
-    let wtx_loki = TestData::witness(quote_tx.id, loki_amount.to_atomic(), Coin::LOKI);
+    let wtx_loki = TestData::witness(quote_tx.unique_id(), loki_amount.to_atomic(), Coin::LOKI);
     // Witness has already been used before
     let wtx_loki = UsedWitnessWrapper::new(wtx_loki, true);
 
-    let wtx_eth = TestData::witness(quote_tx.id, coin_amount.to_atomic(), coin_type);
+    let wtx_eth = TestData::witness(quote_tx.unique_id(), coin_amount.to_atomic(), coin_type);
     let wtx_eth = UsedWitnessWrapper::new(wtx_eth, false);
 
     let quote_tx = FulfilledWrapper::new(quote_tx, false);
@@ -141,10 +141,10 @@ fn quote_cannot_be_fulfilled_twice() {
 
     let quote_tx = TestData::deposit_quote(coin_type);
 
-    let wtx_loki = TestData::witness(quote_tx.id, loki_amount.to_atomic(), Coin::LOKI);
+    let wtx_loki = TestData::witness(quote_tx.unique_id(), loki_amount.to_atomic(), Coin::LOKI);
     let wtx_loki = UsedWitnessWrapper::new(wtx_loki, false);
 
-    let wtx_eth = TestData::witness(quote_tx.id, coin_amount.to_atomic(), coin_type);
+    let wtx_eth = TestData::witness(quote_tx.unique_id(), coin_amount.to_atomic(), coin_type);
     let wtx_eth = UsedWitnessWrapper::new(wtx_eth, false);
 
     // The quote has already been fulfilled
@@ -163,9 +163,9 @@ fn check_staking_smaller_amounts() {
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
     let quote_tx = TestData::deposit_quote(coin_type);
-    let wtx_loki = TestData::witness(quote_tx.id, loki_amount.to_atomic(), Coin::LOKI);
+    let wtx_loki = TestData::witness(quote_tx.unique_id(), loki_amount.to_atomic(), Coin::LOKI);
     let wtx_loki = UsedWitnessWrapper::new(wtx_loki, false);
-    let wtx_eth = TestData::witness(quote_tx.id, coin_amount.to_atomic(), coin_type);
+    let wtx_eth = TestData::witness(quote_tx.unique_id(), coin_amount.to_atomic(), coin_type);
     let wtx_eth = UsedWitnessWrapper::new(wtx_eth, false);
 
     let quote_tx = FulfilledWrapper::new(quote_tx, false);
@@ -181,10 +181,10 @@ fn check_staking_smaller_amounts() {
         loki_amount.to_atomic()
     );
 
-    assert_eq!(res.deposit.pool_change, res.pool_change.id);
-    assert_eq!(res.deposit.quote, quote_tx.inner.id);
-    assert!(res.deposit.witnesses.contains(&wtx_loki.inner.id));
-    assert!(res.deposit.witnesses.contains(&wtx_eth.inner.id));
+    assert_eq!(res.deposit.pool_change, res.pool_change.unique_id());
+    assert_eq!(res.deposit.quote, quote_tx.inner.unique_id());
+    assert!(res.deposit.witnesses.contains(&wtx_loki.inner.unique_id()));
+    assert!(res.deposit.witnesses.contains(&wtx_eth.inner.unique_id()));
 }
 
 #[test]

@@ -62,15 +62,14 @@ impl ILocalStore for MemoryLocalStore {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{utils::test_utils::data::TestData, vault::witness};
-    use chainflip_common::types::{coin::Coin, UUIDv4};
+    use crate::utils::test_utils::data::TestData;
+    use chainflip_common::types::coin::Coin;
 
     #[test]
     fn add_events() {
         let mut store = MemoryLocalStore::new();
         let witness = Witness {
-            id: UUIDv4::new(),
-            quote: UUIDv4::new(),
+            quote: 0,
             transaction_id: "".into(),
             transaction_block_number: 0,
             transaction_index: 0,
@@ -89,8 +88,7 @@ mod test {
     #[test]
     fn add_events_no_dups() {
         let mut store = MemoryLocalStore::new();
-        let uuid = UUIDv4::new();
-        let witness = TestData::witness(uuid, 100, Coin::ETH);
+        let witness = TestData::witness(0, 100, Coin::ETH);
         store
             .add_events(vec![witness.clone().into(), witness.into()])
             .unwrap();
@@ -100,7 +98,7 @@ mod test {
     #[test]
     fn get_events_from_last_seen() {
         let mut store = MemoryLocalStore::new();
-        let evt = LocalEvent::Witness(TestData::witness(UUIDv4::new(), 1000, Coin::ETH));
+        let evt = LocalEvent::Witness(TestData::witness(0, 1000, Coin::ETH));
         let dq = LocalEvent::DepositQuote(TestData::deposit_quote(Coin::ETH));
 
         store.add_events(vec![evt, dq]).unwrap();
@@ -112,7 +110,7 @@ mod test {
     #[test]
     fn get_total_events() {
         let mut store = MemoryLocalStore::new();
-        let evt = LocalEvent::Witness(TestData::witness(UUIDv4::new(), 1000, Coin::ETH));
+        let evt = LocalEvent::Witness(TestData::witness(0, 1000, Coin::ETH));
         let dq = LocalEvent::DepositQuote(TestData::deposit_quote(Coin::ETH));
 
         store.add_events(vec![evt, dq]).unwrap();

@@ -5,9 +5,10 @@ use crate::{
     vault::config::LokiRpcConfig,
 };
 use chainflip_common::types::{
-    chain::{Output, OutputSent, Validate},
+    chain::{Output, OutputSent, UniqueId, Validate},
     coin::Coin,
-    Network, Timestamp, UUIDv4,
+    unique_id::GetUniqueId,
+    Network,
 };
 use std::str::FromStr;
 
@@ -23,7 +24,7 @@ async fn send_with_estimated_fee(
     port: u16,
     amount: &LokiAmount,
     address: &LokiWalletAddress,
-    output_id: UUIDv4,
+    output_id: UniqueId,
 ) -> Result<TransferResponse, String> {
     let res = loki_rpc::check_transfer_fee(port, &amount, &address).await?;
 
@@ -57,7 +58,8 @@ impl LokiSender {
 
             info!(
                 "Sending Loki: {} (incuding fee) for output id: {}]",
-                amount, output.id
+                amount,
+                output.unique_id()
             );
 
             let loki_address = match LokiWalletAddress::from_str(&output.address.to_string()) {
@@ -70,18 +72,18 @@ impl LokiSender {
                 }
             };
 
-            match send_with_estimated_fee(port, &amount, &loki_address, output.id).await {
+            match send_with_estimated_fee(port, &amount, &loki_address, output.unique_id()).await {
                 Ok(res) => {
                     dbg!(&res);
                     let total_spent = res.amount.saturating_add(&res.fee);
                     debug!(
                         "Total Loki spent: {} for output id: {}",
-                        total_spent, output.id
+                        total_spent,
+                        output.unique_id()
                     );
 
                     let sent = OutputSent {
-                        id: UUIDv4::new(),
-                        outputs: vec![output.id],
+                        outputs: vec![output.unique_id()],
                         coin: Coin::LOKI,
                         address: output.address.clone(),
                         amount: amount.to_atomic(),
@@ -93,14 +95,20 @@ impl LokiSender {
                     if let Err(err) = sent.validate(self.network) {
                         panic!(
                             "Failed to create output tx for {:?} with hash {}: {}",
-                            output.id, res.tx_hash, err
+                            output.unique_id(),
+                            res.tx_hash,
+                            err
                         );
                     }
 
                     sent_outputs.push(sent);
                 }
                 Err(err) => {
-                    error!("Failed to send (output id: {}): {}", output.id, err);
+                    error!(
+                        "Failed to send (output id: {}): {}",
+                        output.unique_id(),
+                        err
+                    );
                 }
             }
         }

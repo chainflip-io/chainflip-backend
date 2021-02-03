@@ -79,7 +79,7 @@ pub async fn get_events<L: ILocalStore>(
 mod test {
     use super::*;
     use crate::{local_store::MemoryLocalStore, utils::test_utils::data::TestData};
-    use chainflip_common::types::{coin::Coin, UUIDv4};
+    use chainflip_common::types::coin::Coin;
 
     /// Populate the chain with 2 events, request all 2
     #[tokio::test]
@@ -90,8 +90,8 @@ mod test {
 
         local_store
             .add_events(vec![
-                TestData::witness(UUIDv4::new(), 100, Coin::ETH).into(),
-                TestData::witness(UUIDv4::new(), 123, Coin::BTC).into(),
+                TestData::witness(0, 100, Coin::ETH).into(),
+                TestData::witness(1, 123, Coin::BTC).into(),
             ])
             .unwrap();
 
@@ -114,8 +114,8 @@ mod test {
         local_store
             .add_events(vec![
                 TestData::swap_quote(Coin::ETH, Coin::LOKI).into(),
-                TestData::witness(UUIDv4::new(), 100, Coin::ETH).into(),
-                TestData::witness(UUIDv4::new(), 123, Coin::BTC).into(),
+                TestData::witness(0, 100, Coin::ETH).into(),
+                TestData::witness(1, 123, Coin::BTC).into(),
             ])
             .unwrap();
         let local_store = Arc::new(Mutex::new(local_store));
@@ -135,7 +135,7 @@ mod test {
         let mut local_store = MemoryLocalStore::new();
 
         local_store
-            .add_events(vec![TestData::witness(UUIDv4::new(), 123, Coin::BTC).into()])
+            .add_events(vec![TestData::witness(0, 123, Coin::BTC).into()])
             .unwrap();
 
         let local_store = Arc::new(Mutex::new(local_store));
@@ -156,8 +156,8 @@ mod test {
 
         local_store
             .add_events(vec![
-                TestData::witness(UUIDv4::new(), 123, Coin::BTC).into(),
-                TestData::witness(UUIDv4::new(), 10, Coin::ETH).into(),
+                TestData::witness(0, 123, Coin::BTC).into(),
+                TestData::witness(1, 10, Coin::ETH).into(),
             ])
             .unwrap();
 
@@ -179,7 +179,7 @@ mod test {
         let mut local_store = MemoryLocalStore::new();
 
         local_store
-            .add_events(vec![TestData::witness(UUIDv4::new(), 123, Coin::BTC).into()])
+            .add_events(vec![TestData::witness(0, 123, Coin::BTC).into()])
             .unwrap();
 
         let local_store = Arc::new(Mutex::new(local_store));

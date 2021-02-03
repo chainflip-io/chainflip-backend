@@ -7,7 +7,7 @@ pub use calculation::*;
 use chainflip_common::types::{
     chain::{PoolChange, Validate},
     coin::Coin,
-    Network, UUIDv4,
+    Network,
 };
 use std::convert::TryFrom;
 
@@ -59,13 +59,7 @@ impl OutputDetail {
             output_depth
         };
 
-        let change = PoolChange {
-            id: UUIDv4::new(),
-            pool: pool_coin,
-            depth_change,
-            base_depth_change,
-            event_number: None,
-        };
+        let change = PoolChange::new(pool_coin, depth_change, base_depth_change, None);
 
         // Network type shouldn't really matter here
         // Just validatinf to ensure base and depth change are correct

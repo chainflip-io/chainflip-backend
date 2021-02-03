@@ -5,8 +5,8 @@ use crate::{
     common::{Liquidity, LiquidityProvider, PoolCoin},
     local_store::LocalEvent,
 };
-use chainflip_common::types::{chain::*, UUIDv4};
-use itertools::Itertools;
+use chainflip_common::types::{chain::*, unique_id::GetUniqueId};
+use itertools::{Itertools, Unique};
 use rusqlite::{self, Row, ToSql, Transaction};
 use rusqlite::{params, Connection};
 use serde::de::DeserializeOwned;
@@ -52,45 +52,50 @@ impl Database {
             match tx {
                 LocalEvent::Witness(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
-                    Database::insert_transaction(db, tx.id, tx.into(), serialized)
+                    Database::insert_transaction(db, tx.unique_id(), tx.into(), serialized)
                 }
                 LocalEvent::PoolChange(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
-                    Database::insert_transaction(db, tx.id, tx.into(), serialized)
+                    Database::insert_transaction(db, tx.unique_id(), tx.into(), serialized)
                 }
                 LocalEvent::SwapQuote(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
-                    Database::insert_transaction(db, tx.id, tx.into(), serialized)
+                    Database::insert_transaction(db, tx.unique_id(), tx.into(), serialized)
                 }
                 LocalEvent::DepositQuote(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
-                    Database::insert_transaction(db, tx.id, tx.into(), serialized)
+                    Database::insert_transaction(db, tx.unique_id(), tx.into(), serialized)
                 }
                 LocalEvent::Output(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
-                    Database::insert_transaction(db, tx.id, tx.into(), serialized)
+                    Database::insert_transaction(db, tx.unique_id(), tx.into(), serialized)
                 }
                 LocalEvent::OutputSent(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
-                    Database::insert_transaction(db, tx.id, tx.into(), serialized)
+                    Database::insert_transaction(db, tx.unique_id(), tx.into(), serialized)
                 }
                 LocalEvent::Deposit(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
-                    Database::insert_transaction(db, tx.id, tx.into(), serialized)
+                    Database::insert_transaction(db, tx.unique_id(), tx.into(), serialized)
                 }
                 LocalEvent::WithdrawRequest(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
-                    Database::insert_transaction(db, tx.id, tx.into(), serialized)
+                    Database::insert_transaction(db, tx.unique_id(), tx.into(), serialized)
                 }
                 LocalEvent::Withdraw(tx) => {
                     let serialized = serde_json::to_string(tx).unwrap();
-                    Database::insert_transaction(db, tx.id, tx.into(), serialized)
+                    Database::insert_transaction(db, tx.unique_id(), tx.into(), serialized)
                 }
             }
         }
     }
 
-    fn insert_transaction(db: &Transaction, uuid: UUIDv4, tx_type: TransactionType, data: String) {
+    fn insert_transaction(
+        db: &Transaction,
+        uuid: UniqueId,
+        tx_type: TransactionType,
+        data: String,
+    ) {
         db.execute(
             "INSERT OR REPLACE INTO events (id, type, data) VALUES (?1, ?2, ?3)",
             params![uuid.to_string(), tx_type.to_string(), data],
@@ -155,7 +160,7 @@ impl Database {
         )
     }
 
-    fn get_transaction<T: DeserializeOwned>(&self, id: UUIDv4) -> Option<T> {
+    fn get_transaction<T: DeserializeOwned>(&self, id: UniqueId) -> Option<T> {
         self.get_row(
             "SELECT data from events where id = ?",
             params![id.to_string()],
@@ -199,7 +204,7 @@ impl StateProvider for Database {
         self.get_transactions(TransactionType::SwapQuote)
     }
 
-    fn get_swap_quote(&self, id: UUIDv4) -> Option<SwapQuote> {
+    fn get_swap_quote(&self, id: UniqueId) -> Option<SwapQuote> {
         self.get_transaction(id)
     }
 
@@ -207,7 +212,7 @@ impl StateProvider for Database {
         self.get_transactions(TransactionType::DepositQuote)
     }
 
-    fn get_deposit_quote(&self, id: UUIDv4) -> Option<DepositQuote> {
+    fn get_deposit_quote(&self, id: UniqueId) -> Option<DepositQuote> {
         self.get_transaction(id)
     }
 
@@ -294,8 +299,7 @@ mod test {
         let mut db = setup();
         let tx = db.connection.transaction().unwrap();
 
-        let uuid = UUIDv4::new();
-        Database::insert_transaction(&tx, uuid, TransactionType::PoolChange, "Hello".into());
+        Database::insert_transaction(&tx, 0, TransactionType::PoolChange, "Hello".into());
 
         tx.commit().unwrap();
 
@@ -309,7 +313,7 @@ mod test {
             })
             .unwrap();
 
-        assert_eq!(results.id, uuid.to_string());
+        assert_eq!(results.id, "0");
         assert_eq!(&results.data, "Hello");
     }
 
@@ -340,7 +344,7 @@ mod test {
             TestData::pool_change(Coin::BTC, -100, 100).into(),
             TestData::swap_quote(Coin::ETH, Coin::LOKI).into(),
             TestData::deposit_quote(Coin::ETH).into(),
-            TestData::witness(UUIDv4::new(), 100, Coin::ETH).into(),
+            TestData::witness(1212, 100, Coin::ETH).into(),
             TestData::output(Coin::ETH, 100).into(),
             TestData::output_sent(Coin::ETH).into(),
             TestData::withdraw_request_for_staker(&staker, Coin::ETH).into(),
@@ -355,7 +359,7 @@ mod test {
             .query_row("SELECT COUNT(*) from events", NO_PARAMS, |r| r.get(0))
             .unwrap();
 
-        assert_eq!(count, events.len() as u32);
+        assert_eq!(count, 7);
     }
 
     #[test]

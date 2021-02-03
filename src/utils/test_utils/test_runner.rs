@@ -4,13 +4,15 @@ use crate::{
     local_store::{ILocalStore, LocalEvent, MemoryLocalStore},
     vault::{
         processor::{CoinProcessor, ProcessorEvent, SideChainProcessor},
-        transactions::{memory_provider::Portion, MemoryTransactionsProvider, TransactionProvider},
+        transactions::{
+            memory_provider::{FulfilledWrapper, Portion},
+            MemoryTransactionsProvider, TransactionProvider,
+        },
     },
 };
-use chainflip_common::types::{chain::*, coin::Coin, Network};
+use chainflip_common::types::{chain::*, coin::Coin, unique_id::GetUniqueId, Network};
 use parking_lot::RwLock;
 use std::{
-    hint::unreachable_unchecked,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -113,22 +115,22 @@ impl TestRunner {
     ) -> DepositQuote {
         let deposit_quote =
             TestData::deposit_quote_for_id(staker_id.to_owned(), other_amount.coin_type());
-        let wtx_loki = TestData::witness(deposit_quote.id, loki_amount.to_atomic(), Coin::LOKI);
+        let wtx_loki = TestData::witness(
+            deposit_quote.unique_id(),
+            loki_amount.to_atomic(),
+            Coin::LOKI,
+        );
         let wtx_eth = TestData::witness(
-            deposit_quote.id,
+            deposit_quote.unique_id(),
             other_amount.to_atomic(),
             other_amount.coin_type(),
         );
-
-        println!("adding deposit quote and witnesses");
 
         self.add_local_events([
             wtx_loki.into(),
             wtx_eth.into(),
             deposit_quote.clone().into(),
         ]);
-
-        println!("added deposit quote and witnesses");
 
         deposit_quote
     }
@@ -139,7 +141,7 @@ impl TestRunner {
 
         let outputs: Vec<_> = sent_outputs
             .iter()
-            .filter(|output| output.parent_id() == request.id)
+            .filter(|output| output.parent_id() == request.unique_id())
             .cloned()
             .collect();
 
@@ -166,9 +168,7 @@ impl TestRunner {
         let provider = self.provider.read();
         let ws = provider.get_witnesses();
         let ws: Vec<Witness> = ws.iter().map(|w| w.inner.clone()).collect();
-        println!("Getting the witnesses: {:#?}", ws);
         let dqs = provider.get_deposit_quotes();
-        println!("Get the deposit quotes: {:#?}", dqs);
 
         let liquidity = self
             .provider
@@ -210,6 +210,11 @@ impl TestRunner {
     pub fn sync(&mut self) {
         let last_seen = self.store.lock().unwrap().total_events();
         spin_until_last_seen(&self.receiver, last_seen);
+    }
+
+    /// get deposit quotes
+    pub fn get_deposit_quotes(&self) -> Vec<FulfilledWrapper<DepositQuote>> {
+        self.provider.read().get_deposit_quotes().to_vec()
     }
 }
 

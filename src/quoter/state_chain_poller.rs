@@ -121,7 +121,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use chainflip_common::types::{coin::Coin, UUIDv4};
+    use chainflip_common::types::coin::Coin;
 
     use super::*;
     use crate::{
@@ -170,8 +170,8 @@ mod test {
     async fn test_sync_panics_when_events_are_skipped() {
         let mut state = setup();
         state.api.add_events(vec![
-            LocalEvent::Witness(TestData::witness(UUIDv4::new(), 100, Coin::ETH)),
-            LocalEvent::Witness(TestData::witness(UUIDv4::new(), 123, Coin::BTC)),
+            LocalEvent::Witness(TestData::witness(0, 100, Coin::ETH)),
+            LocalEvent::Witness(TestData::witness(1, 123, Coin::BTC)),
         ]);
         state.poller.next_event_number = 1;
         state.poller.sync().await.unwrap();
@@ -181,18 +181,8 @@ mod test {
     async fn test_sync_updates_next_event_number_only_if_larger() -> Result<(), String> {
         let mut state = setup();
         state.api.add_events(vec![
-            LocalEvent::Witness(TestData::witness_with_event_num(
-                UUIDv4::new(),
-                100,
-                Coin::ETH,
-                0,
-            )),
-            LocalEvent::Witness(TestData::witness_with_event_num(
-                UUIDv4::new(),
-                123,
-                Coin::BTC,
-                1,
-            )),
+            LocalEvent::Witness(TestData::witness_with_event_num(0, 100, Coin::ETH, 0)),
+            LocalEvent::Witness(TestData::witness_with_event_num(1, 123, Coin::BTC, 1)),
         ]);
 
         state.poller.sync().await?;
@@ -204,23 +194,13 @@ mod test {
     async fn test_sync_loops_through_all_events() -> Result<(), String> {
         let mut state = setup();
         state.api.add_events(vec![
-            LocalEvent::Witness(TestData::witness_with_event_num(
-                UUIDv4::new(),
-                100,
-                Coin::ETH,
-                0,
-            )),
-            LocalEvent::Witness(TestData::witness_with_event_num(
-                UUIDv4::new(),
-                123,
-                Coin::BTC,
-                1,
-            )),
+            LocalEvent::Witness(TestData::witness_with_event_num(0, 100, Coin::ETH, 0)),
+            LocalEvent::Witness(TestData::witness_with_event_num(1, 123, Coin::BTC, 1)),
         ]);
         state
             .api
             .add_events(vec![LocalEvent::Witness(TestData::witness_with_event_num(
-                UUIDv4::new(),
+                0,
                 100,
                 Coin::ETH,
                 2,
@@ -238,7 +218,7 @@ mod test {
         state
             .api
             .add_events(vec![LocalEvent::Witness(TestData::witness_with_event_num(
-                UUIDv4::new(),
+                4,
                 100,
                 Coin::ETH,
                 0,
@@ -256,7 +236,7 @@ mod test {
         state
             .api
             .add_events(vec![LocalEvent::Witness(TestData::witness(
-                UUIDv4::new(),
+                0,
                 100,
                 Coin::ETH,
             ))]);

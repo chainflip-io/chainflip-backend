@@ -3,7 +3,7 @@ use chainflip::{
     utils::test_utils,
     vault::witness::fake_witness::{Block, CoinTx, FakeWitness},
 };
-use chainflip_common::types::{coin::Coin, Timestamp, UUIDv4};
+use chainflip_common::types::{coin::Coin, unique_id::GetUniqueId, Timestamp};
 use std::sync::{Arc, Mutex};
 use test_utils::data::TestData;
 
@@ -40,7 +40,6 @@ fn test_witness_event_is_made() {
     std::thread::sleep(std::time::Duration::from_millis(100));
 
     let coin_tx = CoinTx {
-        id: UUIDv4::new(),
         timestamp: Timestamp::now(),
         deposit_address: quote_tx.input_address.clone().to_string(),
         return_address: quote_tx.return_address.clone().map(|t| t.to_string()),
@@ -57,7 +56,11 @@ fn test_witness_event_is_made() {
 
         let witnesses = local_store.lock().unwrap().get_witness_evts();
 
-        if witnesses.iter().find(|w| w.quote == quote_tx.id).is_some() {
+        if witnesses
+            .iter()
+            .find(|w| w.quote == quote_tx.unique_id())
+            .is_some()
+        {
             break true;
         } else if now.elapsed() > timeout {
             break false;

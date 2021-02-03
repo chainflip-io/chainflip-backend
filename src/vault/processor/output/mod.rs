@@ -72,7 +72,7 @@ mod test {
         utils::test_utils::data::TestData,
         vault::transactions::MemoryTransactionsProvider,
     };
-    use chainflip_common::types::{chain::OutputSent, UUIDv4};
+    use chainflip_common::types::{chain::OutputSent, unique_id::GetUniqueId};
     use std::{
         collections::HashMap,
         sync::{Arc, Mutex},
@@ -158,8 +158,7 @@ mod test {
         assert_eq!(current_output_tx.fulfilled, false);
 
         let output_sent_tx = OutputSent {
-            id: UUIDv4::new(),
-            outputs: vec![output_tx.id],
+            outputs: vec![output_tx.unique_id()],
             coin: Coin::LOKI,
             address: "address".into(),
             amount: 100,
