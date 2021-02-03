@@ -162,7 +162,7 @@ decl_module! {
 
 
                     if let Some(witness) = witness_res.data.witness_txs.last() {
-                        let last_seen = witness.timestamp;
+                        let last_seen = witness.event_number;
 
                         if let Err(_) = s_info.mutate::<_, (), _>(|_: Option<Option<u64>>| {
                             Ok(last_seen)
@@ -275,9 +275,9 @@ pub mod crypto {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct Witness {
-    timestamp: u64,
     transaction_id: AString,
     coin: AString,
+    event_number: u64,
 }
 
 use alt_serde::Deserialize;
@@ -286,7 +286,7 @@ use alt_serde::Deserialize;
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct WitnessData {
-    witness_txs: Vec<Witness>,
+    witness_evts: Vec<Witness>,
 }
 
 #[serde(crate = "alt_serde")]
@@ -299,12 +299,15 @@ struct WitnessResponse {
 fn fetch_witnesses(last_seen: u64) -> CFResult<WitnessResponse> {
     use alt_serde::__private::ToString;
 
-    let mut url = AString::from("http://127.0.0.1:3030/v1/witnesses?last_seen=");
-    url.push_str(&last_seen.to_string());
+    // let mut url = AString::from("http://127.0.0.1:3030/v1/witnesses?last_seen=");
+    let mut url = AString::from("http://127.0.0.1:3000/witnesses");
+    // url.push_str(&last_seen.to_string());
 
     debug::info!("[witness]: fetching {}", &url);
 
     let val = fetch_json(url.as_bytes())?;
+
+    debug::info!("val: {:#?}", val);
 
     let res = serde_json::from_value(val).map_err(|_| "JSON is not WitnessResponse")?;
 
@@ -322,6 +325,8 @@ fn fetch_json(remote_url: &[u8]) -> CFResult<serde_json::Value> {
     let response = pending
         .wait()
         .map_err(|_| "Error in waiting http response back")?;
+
+    debug::info!("the response is: {:#?}", response);
 
     if response.code != 200 {
         debug::warn!("Unexpected status code: {}", response.code);
