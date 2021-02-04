@@ -145,7 +145,8 @@ where
             if witness_txs.len() > 0 {
                 self.transaction_provider
                     .write()
-                    .add_local_events(witness_txs);
+                    .add_local_events(witness_txs)
+                    .unwrap();
             }
 
             self.next_ethereum_block = self.next_ethereum_block + 1;

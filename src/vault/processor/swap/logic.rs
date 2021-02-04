@@ -5,7 +5,7 @@ use crate::{
     vault::transactions::memory_provider::FulfilledWrapper,
 };
 use chainflip_common::types::{
-    chain::{Output, OutputParent, PoolChange, SwapQuote, UniqueId, Validate, Witness},
+    chain::{Output, OutputParent, PoolChange, SwapQuote, Validate, Witness},
     unique_id::GetUniqueId,
     Network,
 };
@@ -190,7 +190,7 @@ mod test {
         common::liquidity_provider::{Liquidity, MemoryLiquidityProvider},
         utils::test_utils::{data::TestData, TEST_BTC_ADDRESS},
     };
-    use chainflip_common::types::{coin::Coin, unique_id::GetUniqueId};
+    use chainflip_common::types::{chain::UniqueId, coin::Coin, unique_id::GetUniqueId};
 
     fn to_atomic(coin: Coin, amount: &str) -> u128 {
         GenericCoinAmount::from_decimal_string(coin, amount).to_atomic()

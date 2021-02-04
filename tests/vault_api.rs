@@ -1,8 +1,7 @@
 use chainflip::{
-    common::{self, *},
+    common::*,
     utils::test_utils::staking::get_fake_staker,
     utils::test_utils::{self, *},
-    vault::api::v1::post_swap::SwapQuoteResponse,
     vault::api::APIServer,
 };
 use chainflip_common::types::coin::Coin;
@@ -11,31 +10,8 @@ use reqwest::StatusCode;
 use serde::Serialize;
 use std::sync::Arc;
 
-type QuoteResponseWrapped = common::api::Response<SwapQuoteResponse>;
-
 lazy_static::lazy_static! {
     static ref CLIENT: reqwest::Client = reqwest::Client::new();
-}
-
-async fn send_quote_req<T>(req: &T) -> (StatusCode, QuoteResponseWrapped)
-where
-    T: Serialize,
-{
-    let res = CLIENT
-        .post("http://localhost:3030/v1/quote")
-        .json(&req)
-        .send()
-        .await
-        .unwrap();
-
-    let status = res.status();
-
-    let res = res
-        .json::<common::api::Response<SwapQuoteResponse>>()
-        .await
-        .unwrap();
-
-    (status, res)
 }
 
 async fn send_events_req<T>(query: &T) -> StatusCode

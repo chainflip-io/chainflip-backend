@@ -85,8 +85,11 @@ pub(crate) struct DepositContribution {
 
 /// How much (`fraction`) `staker_id` withdrew from `pool`
 pub struct Withdrawal {
+    /// The staker associated with the withdrawal
     pub staker_id: StakerId,
+    /// The amount to withdraw
     pub fraction: WithdrawFraction,
+    /// The pool to withdraw from
     pub pool: PoolCoin,
 }
 

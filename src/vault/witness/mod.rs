@@ -12,4 +12,5 @@ pub use btc_spv::BtcSPVWitness;
 pub use ethereum::EthereumWitness;
 pub use loki_witness::LokiWitness;
 
+/// A fake witness
 pub mod fake_witness;

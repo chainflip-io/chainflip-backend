@@ -165,10 +165,6 @@ impl TestRunner {
     /// Convenience method to check liquidity amounts in ETH pool
     pub fn check_eth_liquidity(&mut self, loki_atomic: u128, eth_atomic: u128) {
         self.provider.write().sync();
-        let provider = self.provider.read();
-        let ws = provider.get_witnesses();
-        let ws: Vec<Witness> = ws.iter().map(|w| w.inner.clone()).collect();
-        let dqs = provider.get_deposit_quotes();
 
         let liquidity = self
             .provider

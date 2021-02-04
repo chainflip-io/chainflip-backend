@@ -17,6 +17,7 @@ pub struct BtcConfig {
 }
 
 impl BtcConfig {
+    #[allow(dead_code)]
     fn from_file() -> Self {
         let mut config = Config::new();
         config

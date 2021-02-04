@@ -49,6 +49,7 @@ pub struct SwapQuoteParams {
 #[serde(rename_all = "camelCase")]
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SwapQuoteResponse {
+    /// The id of the quote
     pub id: u64,
     /// Quote creation timestamp in milliseconds
     pub created_at: u128,

@@ -21,12 +21,6 @@ extern crate log;
 
 const PORT: u16 = 6934;
 
-async fn make_int_address() {
-    let my_int_address = loki_rpc::make_integrated_address(PORT, None).await.unwrap();
-
-    dbg!(my_int_address);
-}
-
 #[allow(unused)]
 async fn test_loki_rpc() {
     let res = loki_rpc::get_balance(PORT).await.expect("Req is Err");

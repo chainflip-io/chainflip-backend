@@ -1,10 +1,7 @@
 use crate::{
-    local_store::{self, ILocalStore, MemoryLocalStore},
-    vault::config::BtcConfig,
-    vault::config::EthConfig,
-    vault::config::LokiConfig,
+    local_store::{ILocalStore, MemoryLocalStore},
     vault::{
-        config::{LokiRpcConfig, VaultConfig},
+        config::{BtcConfig, EthConfig, LokiConfig, LokiRpcConfig, VaultConfig},
         transactions::MemoryTransactionsProvider,
     },
 };

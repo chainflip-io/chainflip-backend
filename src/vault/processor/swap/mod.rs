@@ -1,7 +1,7 @@
 use crate::{
     common::liquidity_provider::{LiquidityProvider, MemoryLiquidityProvider},
     constants::SWAP_QUOTE_HARD_EXPIRE,
-    local_store::{ILocalStore, LocalEvent},
+    local_store::LocalEvent,
     vault::transactions::{
         memory_provider::{FulfilledWrapper, UsedWitnessWrapper},
         TransactionProvider,
@@ -118,7 +118,7 @@ pub fn process_swaps<T: TransactionProvider>(provider: &mut Arc<RwLock<T>>, netw
 mod test {
     use crate::{
         common::{GenericCoinAmount, Liquidity, PoolCoin},
-        local_store::{LocalEvent, MemoryLocalStore},
+        local_store::{ILocalStore, LocalEvent, MemoryLocalStore},
         utils::test_utils::data::TestData,
         vault::transactions::MemoryTransactionsProvider,
     };
