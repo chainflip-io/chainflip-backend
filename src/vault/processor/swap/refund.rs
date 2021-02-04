@@ -109,7 +109,7 @@ mod test {
     use std::convert::TryFrom;
 
     fn get_quote() -> FulfilledWrapper<SwapQuote> {
-        let mut quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let mut quote = TestData::swap_quote(Coin::ETH, Coin::OXEN);
         quote.slippage_limit = Some(PercentageFraction::try_from(0.1).unwrap());
 
         FulfilledWrapper {

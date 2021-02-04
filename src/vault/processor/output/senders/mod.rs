@@ -9,7 +9,7 @@ use std::{convert::TryInto, sync::Arc};
 
 pub mod btc;
 pub mod ethereum;
-pub mod loki_sender;
+pub mod oxen_sender;
 pub(super) mod wallet_utils;
 
 /// A trait for an output sender
@@ -53,7 +53,7 @@ pub fn get_input_id_indices<T: TransactionProvider>(
     provider: Arc<RwLock<T>>,
     coin: Coin,
 ) -> Vec<u32> {
-    if coin == Coin::LOKI {
+    if coin == Coin::OXEN {
         return vec![];
     }
 
@@ -150,10 +150,10 @@ mod test {
         let local_store = Arc::new(Mutex::new(local_store));
         let provider = MemoryTransactionsProvider::new_protected(local_store.clone());
 
-        let mut eth_quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let mut eth_quote = TestData::swap_quote(Coin::ETH, Coin::OXEN);
         eth_quote.input_address_id = 5u32.to_be_bytes().to_vec();
 
-        let mut btc_quote = TestData::swap_quote(Coin::BTC, Coin::LOKI);
+        let mut btc_quote = TestData::swap_quote(Coin::BTC, Coin::OXEN);
         btc_quote.input_address_id = 6u32.to_be_bytes().to_vec();
 
         let mut eth_deposit = TestData::deposit_quote(Coin::ETH);
@@ -178,7 +178,7 @@ mod test {
         let indices = get_input_id_indices(provider.clone(), Coin::BTC);
         assert_eq!(&indices, &[0, 6, 8]);
 
-        let indices = get_input_id_indices(provider.clone(), Coin::LOKI);
+        let indices = get_input_id_indices(provider.clone(), Coin::OXEN);
         assert!(indices.is_empty());
     }
 }

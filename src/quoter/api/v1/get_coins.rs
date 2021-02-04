@@ -16,7 +16,7 @@ pub struct CoinsParams {
 ///
 /// # Example Query
 ///
-/// > GET /v1/coins?symbols=BTC,loki
+/// > GET /v1/coins?symbols=BTC,oxen
 pub async fn get_coins(params: CoinsParams) -> Result<Vec<CoinInfo>, ResponseError> {
     // Return all coins if no params were passed
     if params.symbols.is_none() {
@@ -49,7 +49,7 @@ mod test {
     #[tokio::test]
     pub async fn returns_coin_information() {
         let params = CoinsParams {
-            symbols: Some("eth,LOKI,invalid_coin,,,123".to_string()),
+            symbols: Some("eth,OXEN,invalid_coin,,,123".to_string()),
         };
         let result = get_coins(params).await.expect("Expected result to be Ok.");
 
@@ -57,7 +57,7 @@ mod test {
 
         for info in result {
             match info.symbol {
-                Coin::ETH | Coin::LOKI => continue,
+                Coin::ETH | Coin::OXEN => continue,
                 coin @ _ => panic!("Result returned unexpected coin: {}", coin),
             }
         }

@@ -164,8 +164,8 @@ mod test {
     fn get_swaps_returns_pending_swaps() {
         let mut runner = Runner::new();
 
-        let quote_with_no_witnesses = TestData::swap_quote(Coin::ETH, Coin::LOKI);
-        let quote_with_witnesses = TestData::swap_quote(Coin::BTC, Coin::LOKI);
+        let quote_with_no_witnesses = TestData::swap_quote(Coin::ETH, Coin::OXEN);
+        let quote_with_witnesses = TestData::swap_quote(Coin::BTC, Coin::OXEN);
 
         let first_witness = get_witness(&quote_with_witnesses, 100);
         let second_witness = get_witness(&quote_with_witnesses, 200);
@@ -197,7 +197,7 @@ mod test {
     fn get_swaps_does_not_return_hard_expired_quotes() {
         let mut runner = Runner::new();
 
-        let mut quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let mut quote = TestData::swap_quote(Coin::ETH, Coin::OXEN);
         quote.timestamp = Timestamp(0);
 
         let witness = get_witness(&quote, 100);
@@ -219,7 +219,7 @@ mod test {
     fn get_swaps_does_not_return_invalid_witness_transactions() {
         let mut runner = Runner::new();
 
-        let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let quote = TestData::swap_quote(Coin::ETH, Coin::OXEN);
         let mut witness = get_witness(&quote, 100);
         witness.coin = quote.output; // Witness coin must match quote input
 
@@ -240,7 +240,7 @@ mod test {
     fn get_swaps_does_not_return_processed_witnesses() {
         let mut runner = Runner::new();
 
-        let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let quote = TestData::swap_quote(Coin::ETH, Coin::OXEN);
         let unused = get_witness(&quote, 100);
         let used = get_witness(&quote, 150);
 
@@ -279,7 +279,7 @@ mod test {
     fn process_returns_refunds() {
         let provider = MemoryLiquidityProvider::new();
 
-        let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let quote = TestData::swap_quote(Coin::ETH, Coin::OXEN);
         let witness = get_witness(&quote, 100);
 
         // Refund should occur here because we have no liquidity
@@ -309,13 +309,13 @@ mod test {
             PoolCoin::ETH,
             Some(Liquidity::new(
                 to_atomic(Coin::ETH, "10000.0"),
-                to_atomic(Coin::LOKI, "20000.0"),
+                to_atomic(Coin::OXEN, "20000.0"),
             )),
         );
 
-        let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let quote = TestData::swap_quote(Coin::ETH, Coin::OXEN);
         assert_eq!(quote.input, Coin::ETH);
-        assert_eq!(quote.output, Coin::LOKI);
+        assert_eq!(quote.output, Coin::OXEN);
 
         let witness = get_witness(&quote, to_atomic(Coin::ETH, "2500.0"));
 
@@ -347,26 +347,26 @@ mod test {
 
         let eth_liquidity = Liquidity::new(
             to_atomic(Coin::ETH, "10000.0"),
-            to_atomic(Coin::LOKI, "20000.0"),
+            to_atomic(Coin::OXEN, "20000.0"),
         );
 
         let btc_liquidity = Liquidity::new(
             to_atomic(Coin::BTC, "10000.0"),
-            to_atomic(Coin::LOKI, "20000.0"),
+            to_atomic(Coin::OXEN, "20000.0"),
         );
 
         provider.set_liquidity(PoolCoin::ETH, Some(eth_liquidity));
         provider.set_liquidity(PoolCoin::BTC, Some(btc_liquidity));
 
-        let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let quote = TestData::swap_quote(Coin::ETH, Coin::OXEN);
         assert_eq!(quote.input, Coin::ETH);
-        assert_eq!(quote.output, Coin::LOKI);
+        assert_eq!(quote.output, Coin::OXEN);
 
-        let another = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let another = TestData::swap_quote(Coin::ETH, Coin::OXEN);
         assert_eq!(quote.input, Coin::ETH);
-        assert_eq!(quote.output, Coin::LOKI);
+        assert_eq!(quote.output, Coin::OXEN);
 
-        let btc_quote = TestData::swap_quote(Coin::BTC, Coin::LOKI);
+        let btc_quote = TestData::swap_quote(Coin::BTC, Coin::OXEN);
 
         let swaps = vec![
             Swap {
@@ -400,14 +400,14 @@ mod test {
         let expected_third_amount = 3199500000000;
 
         if let LocalEvent::Output(first_output) = txs.get(1).unwrap() {
-            assert_eq!(first_output.coin, Coin::LOKI);
+            assert_eq!(first_output.coin, Coin::OXEN);
             assert_eq!(first_output.amount, expected_first_amount);
         } else {
             panic!("Expected to get an output transaction");
         }
 
         if let LocalEvent::Output(second_output) = txs.get(3).unwrap() {
-            assert_eq!(second_output.coin, Coin::LOKI);
+            assert_eq!(second_output.coin, Coin::OXEN);
             assert_ne!(
                 second_output.amount, expected_first_amount,
                 "Expected liquidity to update between swap process"
@@ -418,7 +418,7 @@ mod test {
         }
 
         if let LocalEvent::Output(third_output) = txs.get(5).unwrap() {
-            assert_eq!(third_output.coin, Coin::LOKI);
+            assert_eq!(third_output.coin, Coin::OXEN);
             assert_eq!(
                 third_output.amount, expected_third_amount,
                 "Expected liquidity to not be affected for BTC quote"
@@ -444,19 +444,19 @@ mod test {
     fn process_swaps_correctly_updates_local_store() {
         let mut runner = Runner::new();
 
-        let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let quote = TestData::swap_quote(Coin::ETH, Coin::OXEN);
         assert_eq!(quote.input, Coin::ETH);
-        assert_eq!(quote.output, Coin::LOKI);
+        assert_eq!(quote.output, Coin::OXEN);
 
         let witness = get_witness(&quote, to_atomic(Coin::ETH, "2500.0"));
 
         let initial_eth_depth = to_atomic(Coin::ETH, "10000.0");
-        let initial_loki_depth = to_atomic(Coin::LOKI, "20000.0");
+        let initial_oxen_depth = to_atomic(Coin::OXEN, "20000.0");
 
         let initial_pool = TestData::pool_change(
             Coin::ETH,
             initial_eth_depth as i128,
-            initial_loki_depth as i128,
+            initial_oxen_depth as i128,
         );
         runner
             .local_store
@@ -473,13 +473,13 @@ mod test {
         assert_eq!(runner.provider.read().get_outputs().len(), 0);
         assert_eq!(
             runner.provider.read().get_liquidity(PoolCoin::ETH),
-            Some(Liquidity::new(initial_eth_depth, initial_loki_depth))
+            Some(Liquidity::new(initial_eth_depth, initial_oxen_depth))
         );
 
         process_swaps(&mut runner.provider, Network::Testnet);
 
         let new_eth_depth = to_atomic(Coin::ETH, "12500.0");
-        let new_loki_depth = to_atomic(Coin::LOKI, "16800.5");
+        let new_oxen_depth = to_atomic(Coin::OXEN, "16800.5");
 
         // Post conditions
         assert_eq!(runner.provider.read().get_swap_quotes().len(), 1);
@@ -487,7 +487,7 @@ mod test {
         assert_eq!(runner.provider.read().get_outputs().len(), 1);
         assert_eq!(
             runner.provider.read().get_liquidity(PoolCoin::ETH),
-            Some(Liquidity::new(new_eth_depth, new_loki_depth))
+            Some(Liquidity::new(new_eth_depth, new_oxen_depth))
         );
     }
 }

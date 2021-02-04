@@ -2,7 +2,7 @@
 //! - It is subscribed to the side chain for *quotes*
 //! - It monitors foreign blockchains for *incoming transactions*
 
-// Events: Lokid transaction, Ether transaction, Swap transaction from Side Chain
+// Events: Oxend transaction, Ether transaction, Swap transaction from Side Chain
 
 use crate::{
     local_store::LocalEvent, vault::blockchain_connection::Payments,
@@ -14,29 +14,29 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 
 /// Witness Mock
-pub struct LokiWitness<T: TransactionProvider> {
+pub struct OxenWitness<T: TransactionProvider> {
     transaction_provider: Arc<RwLock<T>>,
-    loki_connection: Receiver<Payments>,
+    oxen_connection: Receiver<Payments>,
 }
 
-impl<T> LokiWitness<T>
+impl<T> OxenWitness<T>
 where
     T: TransactionProvider + Send + Sync + 'static,
 {
-    /// Create Loki witness
-    pub fn new(bc: Receiver<Payments>, transaction_provider: Arc<RwLock<T>>) -> LokiWitness<T> {
-        LokiWitness {
-            loki_connection: bc,
+    /// Create Oxen witness
+    pub fn new(bc: Receiver<Payments>, transaction_provider: Arc<RwLock<T>>) -> OxenWitness<T> {
+        OxenWitness {
+            oxen_connection: bc,
             transaction_provider,
         }
     }
 
     fn poll_main_chain(&mut self) {
         loop {
-            match self.loki_connection.try_recv() {
+            match self.oxen_connection.try_recv() {
                 Ok(payments) => {
                     debug!(
-                        "Received payments from loki wallet (count: {})",
+                        "Received payments from oxen wallet (count: {})",
                         payments.len()
                     );
 
@@ -52,7 +52,7 @@ where
                     error!("Failed to receive message: Disconnected");
                     // Something must have gone wrong if the channel is closed,
                     // so it is bette to abort the program here
-                    panic!("Loki connection has been severed");
+                    panic!("Oxen connection has been severed");
                 }
                 Err(crossbeam_channel::TryRecvError::Empty) => {
                     break;
@@ -69,7 +69,7 @@ where
         }
     }
 
-    /// Start the loki witness
+    /// Start the oxen witness
     pub fn start(self) {
         std::thread::spawn(move || {
             self.event_loop();
@@ -96,7 +96,7 @@ where
                 let swap_quote = swaps
                     .iter()
                     .find(|quote| {
-                        quote.inner.input == Coin::LOKI
+                        quote.inner.input == Coin::OXEN
                             && quote.inner.input_address_id == payment.payment_id.to_bytes()
                     })
                     .map(|quote| quote.inner.unique_id());
@@ -117,7 +117,7 @@ where
                         transaction_block_number: payment.block_height,
                         transaction_index: 0,
                         amount: payment.amount.to_atomic(),
-                        coin: Coin::LOKI,
+                        coin: Coin::OXEN,
                         event_number: None,
                     };
 

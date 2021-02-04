@@ -10,7 +10,7 @@ use data::TestData;
 fn check_liquidity<T>(
     tx_provider: &mut T,
     coin_type: Coin,
-    loki_amount: LokiAmount,
+    oxen_amount: OxenAmount,
     coin_amount: GenericCoinAmount,
 ) where
     T: TransactionProvider,
@@ -22,7 +22,7 @@ fn check_liquidity<T>(
         .unwrap();
 
     // Check that a pool with the right amount was created
-    assert_eq!(liquidity.base_depth, loki_amount.to_atomic());
+    assert_eq!(liquidity.base_depth, oxen_amount.to_atomic());
     assert_eq!(liquidity.depth, coin_amount.to_atomic());
 }
 
@@ -31,14 +31,14 @@ fn witnessed_deposit_changes_pool_liquidity() {
     let mut runner = TestRunner::new();
 
     let coin_type = Coin::ETH;
-    let loki_amount = LokiAmount::from_decimal_string("1.0");
+    let oxen_amount = OxenAmount::from_decimal_string("1.0");
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
     let deposit_quote = TestData::deposit_quote(coin_type);
-    let wtx_loki = TestData::witness(
+    let wtx_oxen = TestData::witness(
         deposit_quote.unique_id(),
-        loki_amount.to_atomic(),
-        Coin::LOKI,
+        oxen_amount.to_atomic(),
+        Coin::OXEN,
     );
     let wtx_eth = TestData::witness(
         deposit_quote.unique_id(),
@@ -47,12 +47,12 @@ fn witnessed_deposit_changes_pool_liquidity() {
     );
 
     runner.add_local_events([deposit_quote.clone().into()]);
-    runner.add_local_events([wtx_loki.into(), wtx_eth.into()]);
+    runner.add_local_events([wtx_oxen.into(), wtx_eth.into()]);
 
     check_liquidity(
         &mut *runner.provider.write(),
         coin_type,
-        loki_amount,
+        oxen_amount,
         coin_amount,
     );
 
@@ -62,7 +62,7 @@ fn witnessed_deposit_changes_pool_liquidity() {
     check_liquidity(
         &mut *runner.provider.write(),
         coin_type,
-        loki_amount,
+        oxen_amount,
         coin_amount,
     );
 }
@@ -76,14 +76,14 @@ fn multiple_deposits() {
     // 1. Make a deposit and make sure it is acknowledged
 
     let coin_type = Coin::ETH;
-    let loki_amount = LokiAmount::from_decimal_string("1.0");
+    let oxen_amount = OxenAmount::from_decimal_string("1.0");
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
     let deposit_quote = TestData::deposit_quote(coin_type);
-    let wtx_loki = TestData::witness(
+    let wtx_oxen = TestData::witness(
         deposit_quote.unique_id(),
-        loki_amount.to_atomic(),
-        Coin::LOKI,
+        oxen_amount.to_atomic(),
+        Coin::OXEN,
     );
     let wtx_eth = TestData::witness(
         deposit_quote.unique_id(),
@@ -93,22 +93,22 @@ fn multiple_deposits() {
 
     // Add blocks with those transactions
     runner.add_local_events([deposit_quote.clone().into()]);
-    runner.add_local_events([wtx_loki.into(), wtx_eth.into()]);
+    runner.add_local_events([wtx_oxen.into(), wtx_eth.into()]);
 
     check_liquidity(
         &mut *runner.provider.write(),
         coin_type,
-        loki_amount,
+        oxen_amount,
         coin_amount,
     );
 
     // 2. Add another deposit with another staker id
 
     let deposit_quote = TestData::deposit_quote(coin_type);
-    let wtx_loki = TestData::witness(
+    let wtx_oxen = TestData::witness(
         deposit_quote.unique_id(),
-        loki_amount.to_atomic(),
-        Coin::LOKI,
+        oxen_amount.to_atomic(),
+        Coin::OXEN,
     );
     let wtx_eth = TestData::witness(
         deposit_quote.unique_id(),
@@ -117,7 +117,7 @@ fn multiple_deposits() {
     );
 
     runner.add_local_events([deposit_quote.clone().into()]);
-    runner.add_local_events([wtx_loki.into(), wtx_eth.into()]);
+    runner.add_local_events([wtx_oxen.into(), wtx_eth.into()]);
 }
 
 #[test]
@@ -126,15 +126,15 @@ fn sole_staker_can_withdraw_all() {
 
     let mut runner = TestRunner::new();
 
-    let loki_amount = LokiAmount::from_decimal_string("1.0");
+    let oxen_amount = OxenAmount::from_decimal_string("1.0");
     let eth_amount = GenericCoinAmount::from_decimal_string(Coin::ETH, "2.0");
 
     let staker = get_random_staker();
 
-    let deposit_quote = runner.add_witnessed_deposit_quote(&staker.id(), loki_amount, eth_amount);
+    let deposit_quote = runner.add_witnessed_deposit_quote(&staker.id(), oxen_amount, eth_amount);
 
     // Check that the liquidity is non-zero before unstaking
-    runner.check_eth_liquidity(loki_amount.to_atomic(), eth_amount.to_atomic());
+    runner.check_eth_liquidity(oxen_amount.to_atomic(), eth_amount.to_atomic());
 
     let withdraw_request = TestData::withdraw_request_for_staker(&staker, deposit_quote.pool);
 
@@ -143,7 +143,7 @@ fn sole_staker_can_withdraw_all() {
     // Check that outputs have been payed out
     let outputs = runner.get_outputs_for_withdraw_request(&withdraw_request);
 
-    assert_eq!(outputs.loki_output.amount, loki_amount.to_atomic());
+    assert_eq!(outputs.oxen_output.amount, oxen_amount.to_atomic());
     assert_eq!(outputs.eth_output.amount, eth_amount.to_atomic());
 
     // Check that liquidity is 0 after unstaking. (Is this even a valid state???)
@@ -156,17 +156,17 @@ fn half_staker_can_withdraw_half() {
 
     let mut runner = TestRunner::new();
 
-    let loki_amount = LokiAmount::from_decimal_string("1.0");
+    let oxen_amount = OxenAmount::from_decimal_string("1.0");
     let eth_amount = GenericCoinAmount::from_decimal_string(Coin::ETH, "2.0");
 
     let alice = get_random_staker();
     let bob = get_random_staker();
 
-    let _ = runner.add_witnessed_deposit_quote(&alice.id(), loki_amount, eth_amount);
-    let deposit2 = runner.add_witnessed_deposit_quote(&bob.id(), loki_amount, eth_amount);
+    let _ = runner.add_witnessed_deposit_quote(&alice.id(), oxen_amount, eth_amount);
+    let deposit2 = runner.add_witnessed_deposit_quote(&bob.id(), oxen_amount, eth_amount);
 
     // Check that liquidity is the sum of two deposits
-    runner.check_eth_liquidity(loki_amount.to_atomic() * 2, eth_amount.to_atomic() * 2);
+    runner.check_eth_liquidity(oxen_amount.to_atomic() * 2, eth_amount.to_atomic() * 2);
 
     let withdraw_request = TestData::withdraw_request_for_staker(&bob, deposit2.pool);
     runner.add_local_events([withdraw_request.clone().into()]);
@@ -174,11 +174,11 @@ fn half_staker_can_withdraw_half() {
     // Check that outputs have been payed out
     let outputs = runner.get_outputs_for_withdraw_request(&withdraw_request);
 
-    assert_eq!(outputs.loki_output.amount, loki_amount.to_atomic());
+    assert_eq!(outputs.oxen_output.amount, oxen_amount.to_atomic());
     assert_eq!(outputs.eth_output.amount, eth_amount.to_atomic());
 
     // Check that liquidity halved
-    runner.check_eth_liquidity(loki_amount.to_atomic(), eth_amount.to_atomic());
+    runner.check_eth_liquidity(oxen_amount.to_atomic(), eth_amount.to_atomic());
 }
 
 #[test]
@@ -190,14 +190,14 @@ fn portions_adjusted_after_withdraw() {
 
     let mut runner = TestRunner::new();
 
-    let loki_amount = LokiAmount::from_decimal_string("1.0");
+    let oxen_amount = OxenAmount::from_decimal_string("1.0");
     let eth_amount = GenericCoinAmount::from_decimal_string(Coin::ETH, "2.0");
 
     let alice = get_random_staker();
     let bob = get_random_staker();
 
-    runner.add_witnessed_deposit_quote(&alice.id(), loki_amount, eth_amount);
-    runner.add_witnessed_deposit_quote(&bob.id(), loki_amount, eth_amount);
+    runner.add_witnessed_deposit_quote(&alice.id(), oxen_amount, eth_amount);
+    runner.add_witnessed_deposit_quote(&bob.id(), oxen_amount, eth_amount);
 
     // Each should have 50% portions
 
@@ -232,12 +232,12 @@ fn non_staker_cannot_withdraw() {
 
     let mut runner = TestRunner::new();
 
-    let loki_amount = LokiAmount::from_decimal_string("1.0");
+    let oxen_amount = OxenAmount::from_decimal_string("1.0");
     let eth_amount = GenericCoinAmount::from_decimal_string(Coin::ETH, "2.0");
 
     let alice = get_random_staker();
 
-    let _ = runner.add_witnessed_deposit_quote(&alice.id(), loki_amount, eth_amount);
+    let _ = runner.add_witnessed_deposit_quote(&alice.id(), oxen_amount, eth_amount);
 
     let bob = get_random_staker();
 
@@ -267,18 +267,18 @@ fn assymetric_deposit_result_in_autoswap() {
 
     let mut runner = TestRunner::new();
 
-    let loki_amount = LokiAmount::from_decimal_string("500.0");
+    let oxen_amount = OxenAmount::from_decimal_string("500.0");
     let btc_amount = GenericCoinAmount::from_decimal_string(Coin::BTC, "0.02");
 
     let alice = get_random_staker();
-    let _ = runner.add_witnessed_deposit_quote(&alice.id(), loki_amount, btc_amount);
+    let _ = runner.add_witnessed_deposit_quote(&alice.id(), oxen_amount, btc_amount);
 
     let bob = get_random_staker();
 
-    let loki_amount = LokiAmount::from_decimal_string("250.0");
+    let oxen_amount = OxenAmount::from_decimal_string("250.0");
     let btc_amount = GenericCoinAmount::from_decimal_string(Coin::BTC, "0.02");
 
-    let _ = runner.add_witnessed_deposit_quote(&bob.id(), loki_amount, btc_amount);
+    let _ = runner.add_witnessed_deposit_quote(&bob.id(), oxen_amount, btc_amount);
 
     let a = runner
         .get_portions_for(&alice.id(), PoolCoin::BTC)
@@ -287,7 +287,7 @@ fn assymetric_deposit_result_in_autoswap() {
         .get_portions_for(&bob.id(), PoolCoin::BTC)
         .expect("Portion should exist for Bob");
 
-    // We expect the 50% < a < 66% (Bob deposits a 50% of Alices Loki,
+    // We expect the 50% < a < 66% (Bob deposits a 50% of Alices Oxen,
     // but the same amount of BTC, resulting in autoswap)
     assert_eq!(a.0, 6162430986);
     assert_eq!(b.0, 3837569014);

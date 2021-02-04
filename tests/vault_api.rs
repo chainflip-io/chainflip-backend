@@ -100,12 +100,12 @@ impl TestConfig {
 fn setup_state(config: &TestConfig, runner: &mut TestRunner) {
     // Add a valid deposit
 
-    let loki_amount = LokiAmount::from_decimal_string("1.0");
+    let oxen_amount = OxenAmount::from_decimal_string("1.0");
     let eth_amount = GenericCoinAmount::from_decimal_string(Coin::ETH, "2.0");
 
     let keypair = &config.staker;
 
-    runner.add_witnessed_deposit_quote(&keypair.id(), loki_amount, eth_amount);
+    runner.add_witnessed_deposit_quote(&keypair.id(), oxen_amount, eth_amount);
     runner.sync();
 }
 

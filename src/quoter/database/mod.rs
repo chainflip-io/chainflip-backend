@@ -324,7 +324,7 @@ mod test {
 
         let events: Vec<LocalEvent> = vec![
             TestData::pool_change(Coin::BTC, -100, 100).into(),
-            TestData::swap_quote(Coin::ETH, Coin::LOKI).into(),
+            TestData::swap_quote(Coin::ETH, Coin::OXEN).into(),
             TestData::deposit_quote(Coin::ETH).into(),
         ];
 
@@ -341,7 +341,7 @@ mod test {
 
         let events: Vec<LocalEvent> = vec![
             TestData::pool_change(Coin::BTC, -100, 100).into(),
-            TestData::swap_quote(Coin::ETH, Coin::LOKI).into(),
+            TestData::swap_quote(Coin::ETH, Coin::OXEN).into(),
             TestData::deposit_quote(Coin::ETH).into(),
             TestData::witness(1212, 100, Coin::ETH).into(),
             TestData::output(Coin::ETH, 100).into(),

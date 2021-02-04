@@ -180,7 +180,7 @@ mod test {
         client.add_utxos_for_address(TEST_BTC_ADDRESS.to_string(), utxos);
 
         // this quote will be witnessed
-        let btc_quote = TestData::swap_quote(Coin::BTC, Coin::LOKI);
+        let btc_quote = TestData::swap_quote(Coin::BTC, Coin::OXEN);
 
         {
             let mut provider = provider.write();
@@ -251,7 +251,7 @@ mod test {
         let provider = params.provider;
 
         // this quote will be witnessed
-        let btc_quote = TestData::swap_quote(Coin::BTC, Coin::LOKI);
+        let btc_quote = TestData::swap_quote(Coin::BTC, Coin::OXEN);
         let btc_deposit_quote = TestData::deposit_quote(Coin::BTC);
 
         {
@@ -281,7 +281,7 @@ mod test {
         let provider = params.provider;
 
         // this quote should NOT be witnessed by the BTC witness since it's an ETH quote
-        let eth_quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let eth_quote = TestData::swap_quote(Coin::ETH, Coin::OXEN);
         let eth_deposit_quote = TestData::deposit_quote(Coin::ETH);
 
         {

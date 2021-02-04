@@ -130,23 +130,23 @@ pub(crate) fn calculate_output_amount(
 
 #[cfg(test)]
 mod test {
-    use crate::common::LokiAmount;
+    use crate::common::OxenAmount;
 
     use super::*;
 
-    fn normalise_loki_decimal(amount: f64) -> NormalisedAmount {
-        let atomic = LokiAmount::from_decimal_string(&amount.to_string()).to_atomic();
-        NormalisedAmount::from(atomic, Coin::LOKI)
+    fn normalise_oxen_decimal(amount: f64) -> NormalisedAmount {
+        let atomic = OxenAmount::from_decimal_string(&amount.to_string()).to_atomic();
+        NormalisedAmount::from(atomic, Coin::OXEN)
     }
 
     #[test]
     fn normalised_amount_correctly_normalises() {
         let eth_normalised = NormalisedAmount::from(1, Coin::ETH);
-        let loki_normalised = NormalisedAmount::from(1, Coin::LOKI);
+        let oxen_normalised = NormalisedAmount::from(1, Coin::OXEN);
 
         assert_eq!(eth_normalised, NormalisedAmount(1.into()));
-        assert_eq!(loki_normalised, NormalisedAmount(1000000000u128.into()));
-        assert_eq!(loki_normalised.to_atomic(Coin::LOKI), Some(1));
+        assert_eq!(oxen_normalised, NormalisedAmount(1000000000u128.into()));
+        assert_eq!(oxen_normalised.to_atomic(Coin::OXEN), Some(1));
     }
 
     #[test]
@@ -175,15 +175,15 @@ mod test {
 
         for value in values.iter() {
             let output = calculate_output_amount_normalised(
-                normalise_loki_decimal(value.0),
-                normalise_loki_decimal(value.1),
-                normalise_loki_decimal(value.2),
-                normalise_loki_decimal(value.3),
-                normalise_loki_decimal(value.4),
+                normalise_oxen_decimal(value.0),
+                normalise_oxen_decimal(value.1),
+                normalise_oxen_decimal(value.2),
+                normalise_oxen_decimal(value.3),
+                normalise_oxen_decimal(value.4),
             );
             assert_eq!(
-                output.to_atomic(Coin::LOKI),
-                Some(LokiAmount::from_decimal_string(&value.5.to_string()).to_atomic()),
+                output.to_atomic(Coin::OXEN),
+                Some(OxenAmount::from_decimal_string(&value.5.to_string()).to_atomic()),
             );
         }
     }

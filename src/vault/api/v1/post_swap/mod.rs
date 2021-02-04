@@ -10,7 +10,7 @@ use crate::{
 use chainflip_common::{
     constants::ethereum,
     types::{
-        addresses::{EthereumAddress, LokiAddress},
+        addresses::{EthereumAddress, OxenAddress},
         chain::{SwapQuote, Validate},
         coin::Coin,
         fraction::PercentageFraction,
@@ -142,14 +142,14 @@ pub async fn swap<T: TransactionProvider>(
             EthereumAddress::create2(&vault_address, salt, &ethereum::ETH_DEPOSIT_INIT_CODE)
                 .to_string()
         }
-        Coin::LOKI => {
-            let loki_base_address = LokiAddress::from_str(&config.loki_wallet_address)
-                .expect("Expected valid loki wallet address");
+        Coin::OXEN => {
+            let oxen_base_address = OxenAddress::from_str(&config.oxen_wallet_address)
+                .expect("Expected valid oxen wallet address");
             let payment_id = input_address_id.clone().try_into().map_err(|_| {
-                warn!("Failed to convert input address id to loki payment id");
+                warn!("Failed to convert input address id to oxen payment id");
                 internal_server_error()
             })?;
-            let base_input_address = loki_base_address.with_payment_id(Some(payment_id));
+            let base_input_address = oxen_base_address.with_payment_id(Some(payment_id));
             assert_eq!(base_input_address.network(), config.net_type);
 
             base_input_address.to_string()
@@ -236,7 +236,7 @@ mod test {
 
     fn config() -> Config {
         Config {
-            loki_wallet_address: "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".to_string(),
+            oxen_wallet_address: "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".to_string(),
             btc_master_root_key: TEST_ROOT_KEY.to_string(),
             net_type: Network::Testnet
         }
@@ -244,7 +244,7 @@ mod test {
 
     fn params() -> SwapQuoteParams {
         SwapQuoteParams {
-            input_coin: Coin::LOKI,
+            input_coin: Coin::OXEN,
             input_return_address: Some("T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".to_string()),
             input_address_id: "60900e5603bf96e3".to_owned(),
             input_amount: "1000000000".to_string(),
@@ -263,7 +263,7 @@ mod test {
             timestamp: Timestamp::now(),
             input: quote_params.input_coin,
             input_address: "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".into(),
-            input_address_id: address_id::to_bytes(Coin::LOKI, &quote_params.input_address_id).unwrap(),
+            input_address_id: address_id::to_bytes(Coin::OXEN, &quote_params.input_address_id).unwrap(),
             return_address: quote_params.input_return_address.clone().map(|id| id.into()),
             output: quote_params.output_coin,
             slippage_limit: None,

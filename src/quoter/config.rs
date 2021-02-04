@@ -23,7 +23,7 @@ pub struct Database {
 #[derive(Debug, Deserialize, Clone)]
 /// Configuration for quoter
 pub struct QuoterConfig {
-    /// Loki config
+    /// Oxen config
     pub database: Database,
     /// The vault node url
     pub vault_node_url: String,

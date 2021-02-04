@@ -1,4 +1,4 @@
-//! Loki payments don't always appear in the latest block,
+//! Oxen payments don't always appear in the latest block,
 //! so we poll for a sliding window of size SLIDING_WINDOW_SIZE with
 //! `last_processed_block` being the latest block that
 //! will not be requested again
@@ -6,8 +6,8 @@
 use crate::common::store::{KeyValueStore, PersistentKVS};
 use crossbeam_channel::Receiver;
 
-/// Loki RPC wallet API
-pub mod loki_rpc;
+/// Oxen RPC wallet API
+pub mod oxen_rpc;
 
 /// Ethereum API
 pub mod ethereum;
@@ -18,76 +18,76 @@ pub use ethereum::web3::Web3Client;
 pub mod btc;
 pub use btc::spv::BtcSPVClient;
 
-/// Connects to loki rpc wallet and pushes payments to the witness
-pub struct LokiConnection {
-    config: LokiConnectionConfig,
+/// Connects to oxen rpc wallet and pushes payments to the witness
+pub struct OxenConnection {
+    config: OxenConnectionConfig,
     /// database for persistent state
     db: PersistentKVS,
     last_processed_block: u64,
 }
 
-/// Configuration for loki wallet connection
-pub struct LokiConnectionConfig {
-    /// port on which loki wallet rpc is running
+/// Configuration for oxen wallet connection
+pub struct OxenConnectionConfig {
+    /// port on which oxen wallet rpc is running
     pub rpc_wallet_port: u16,
 }
 
 /// Payment for now is just an alias to the type returned
 /// directly from the wallet, but might turn it into its
 /// own struct in the future
-pub type Payment = loki_rpc::BulkPaymentResponseEntry;
+pub type Payment = oxen_rpc::BulkPaymentResponseEntry;
 
 /// Convenience alias for a vector of payments
 pub type Payments = Vec<Payment>;
 
-/// Loki connection start scanning from this block if no can't
+/// Oxen connection start scanning from this block if no can't
 /// find existing database records. (There is no reason to scan
 /// blocks that came before chainflip launch)
 const FIRST_CHAINFLIP_BLOCK: u64 = 363680;
 
-/// Loki connection requests payments for a sliding window of blocks
+/// Oxen connection requests payments for a sliding window of blocks
 /// because the wallet does not (always) acknowledge payments right away
 const SLIDING_WINDOW_SIZE: u64 = 2;
 
 const LAST_PROCESSED_DB_KEY: &'static str = "last_processed_block";
 
-impl LokiConnection {
+impl OxenConnection {
     /// Default implementation
-    pub fn new(config: LokiConnectionConfig) -> LokiConnection {
+    pub fn new(config: OxenConnectionConfig) -> OxenConnection {
         // Use some recent block hieght for now
 
         let connection =
-            rusqlite::Connection::open("loki_connection").expect("Failed to open connection");
+            rusqlite::Connection::open("oxen_connection").expect("Failed to open connection");
 
         let db = PersistentKVS::new(connection);
 
         let last_processed_block = match db.get_data::<u64>(LAST_PROCESSED_DB_KEY) {
             Some(last_block) => {
                 info!(
-                    "Loaded last block record for Loki Connection from DB: {}",
+                    "Loaded last block record for Oxen Connection from DB: {}",
                     last_block
                 );
                 last_block
             }
             None => {
                 warn!(
-                    "Last block record not found for Loki Connection, using default: {}",
+                    "Last block record not found for Oxen Connection, using default: {}",
                     FIRST_CHAINFLIP_BLOCK
                 );
                 FIRST_CHAINFLIP_BLOCK
             }
         };
 
-        LokiConnection {
+        OxenConnection {
             config,
             db,
             last_processed_block,
         }
     }
 
-    /// Poll loki rpc wallet
+    /// Poll oxen rpc wallet
     async fn poll_once(&mut self) -> Result<Payments, String> {
-        let cur_height = loki_rpc::get_height(self.config.rpc_wallet_port).await?;
+        let cur_height = oxen_rpc::get_height(self.config.rpc_wallet_port).await?;
 
         // We only request payments when the blockchain made progress,
         // i.e. cur_height >= last_processed_block + SLIDING_WINDOW_SIZE
@@ -103,7 +103,7 @@ impl LokiConnection {
             return Ok(vec![]);
         }
 
-        info!("New loki blockchain height is {}", cur_height);
+        info!("New oxen blockchain height is {}", cur_height);
 
         info!(
             "Requesting payments from blocks in [{}; {}] ({} blocks)",
@@ -113,7 +113,7 @@ impl LokiConnection {
         );
 
         let res =
-            loki_rpc::get_bulk_payments(self.config.rpc_wallet_port, vec![], start_block).await?;
+            oxen_rpc::get_bulk_payments(self.config.rpc_wallet_port, vec![], start_block).await?;
 
         // IMPORTANT: it might be too early to mark the block as processed (since the
         // program can be interrupted before the handler had the chance

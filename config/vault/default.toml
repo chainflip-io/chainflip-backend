@@ -1,7 +1,7 @@
 # Options: testnet, mainnet
 net_type = "Testnet"
 
-[loki.rpc]
+[oxen.rpc]
 port = 6934
 # wallet_address = ""
 

@@ -206,11 +206,11 @@ mod test {
             PoolCoin::ETH,
             Some(Liquidity::new(
                 to_atomic(Coin::ETH, "10000.0"),
-                to_atomic(Coin::LOKI, "20000.0"),
+                to_atomic(Coin::OXEN, "20000.0"),
             )),
         );
 
-        let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let quote = TestData::swap_quote(Coin::ETH, Coin::OXEN);
         let quote = FulfilledWrapper {
             inner: quote,
             fulfilled: false,
@@ -294,7 +294,7 @@ mod test {
         assert_eq!(change.depth_change, to_atomic(Coin::ETH, "2500.0") as i128);
         assert_eq!(
             change.base_depth_change,
-            -1 * to_atomic(Coin::LOKI, "3199.5") as i128
+            -1 * to_atomic(Coin::OXEN, "3199.5") as i128
         );
 
         let witness_ids: Vec<UniqueId> = witnesses.iter().map(|tx| tx.unique_id()).collect();
@@ -307,13 +307,13 @@ mod test {
         assert_eq!(output.witnesses, witness_ids);
         assert_eq!(output.pool_changes.len(), 1);
         assert_eq!(output.pool_changes, vec![change.unique_id()]);
-        assert_eq!(output.coin, Coin::LOKI);
+        assert_eq!(output.coin, Coin::OXEN);
         assert_eq!(output.address, quote.inner.output_address);
-        assert_eq!(output.amount, to_atomic(Coin::LOKI, "3199.5"));
+        assert_eq!(output.amount, to_atomic(Coin::OXEN, "3199.5"));
     }
 
     #[test]
-    fn returns_correct_swaps_for_non_loki_quotes() {
+    fn returns_correct_swaps_for_non_oxen_quotes() {
         let (mut provider, mut quote, witnesses) = setup();
         quote.inner.output = Coin::BTC;
         quote.inner.output_address = TEST_BTC_ADDRESS.into();
@@ -324,7 +324,7 @@ mod test {
             PoolCoin::BTC,
             Some(Liquidity::new(
                 to_atomic(Coin::BTC, "12769.0"),
-                to_atomic(Coin::LOKI, "10191.0"),
+                to_atomic(Coin::OXEN, "10191.0"),
             )),
         );
 
@@ -342,14 +342,14 @@ mod test {
         );
         assert_eq!(
             first_change.base_depth_change,
-            -1 * to_atomic(Coin::LOKI, "3199.5") as i128
+            -1 * to_atomic(Coin::OXEN, "3199.5") as i128
         );
 
         let second_change = pool_changes.last().unwrap();
         assert_eq!(second_change.pool, Coin::BTC);
         assert_eq!(
             second_change.base_depth_change,
-            to_atomic(Coin::LOKI, "3199.5") as i128
+            to_atomic(Coin::OXEN, "3199.5") as i128
         );
         assert_eq!(
             second_change.depth_change,

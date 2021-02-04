@@ -113,7 +113,7 @@ mod test {
 
         local_store
             .add_events(vec![
-                TestData::swap_quote(Coin::ETH, Coin::LOKI).into(),
+                TestData::swap_quote(Coin::ETH, Coin::OXEN).into(),
                 TestData::witness(0, 100, Coin::ETH).into(),
                 TestData::witness(1, 123, Coin::BTC).into(),
             ])

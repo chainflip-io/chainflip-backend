@@ -1,5 +1,5 @@
 [package]
-authors = ["Maxim Shishmarev <maxim@loki.network>"]
+authors = ["Maxim Shishmarev <maxim@oxen.io>"]
 edition = "2018"
 name = "chainflip"
 version = "0.1.0"
@@ -58,8 +58,8 @@ name = "quoter"
 path = "src/bin/quoter/main.rs"
 
 [[bin]]
-name = "loki-playground"
-path = "src/bin/loki.rs"
+name = "oxen-playground"
+path = "src/bin/oxen.rs"
 
 [[bin]]
 name = "pool-tool"

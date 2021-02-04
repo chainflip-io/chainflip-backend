@@ -14,7 +14,7 @@ use std::{convert::TryInto, sync::Arc};
 pub struct PortionsParams {
     /// Get portions associated with this staker Id
     pub staker_id: String,
-    /// Pool identified by coin type other than Loki
+    /// Pool identified by coin type other than Oxen
     pub pool: Coin,
 }
 
@@ -22,7 +22,7 @@ pub struct PortionsParams {
 #[derive(Debug, Serialize)]
 pub struct PortionsResponse {
     portions: String,
-    estimated_loki_amount: String,
+    estimated_oxen_amount: String,
     estimated_other_amount: String,
 }
 
@@ -70,15 +70,15 @@ where
         .get_liquidity(pool_coin)
         .ok_or(internal_error!("Unexpected missing liquidity"))?;
 
-    let loki = amount_from_portion(liquidity.base_depth, portions);
+    let oxen = amount_from_portion(liquidity.base_depth, portions);
     let other = amount_from_portion(liquidity.depth, portions);
 
-    let loki = loki.to_string();
+    let oxen = oxen.to_string();
     let other = other.to_string();
 
     Ok(PortionsResponse {
         portions: portions.0.to_string(),
-        estimated_loki_amount: loki,
+        estimated_oxen_amount: oxen,
         estimated_other_amount: other,
     })
 }

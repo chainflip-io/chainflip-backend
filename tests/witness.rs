@@ -21,12 +21,12 @@ fn test_witness_event_is_made() {
     let local_store = MemoryLocalStore::new();
     let local_store = Arc::new(Mutex::new(local_store));
 
-    let (loki_block_sender, loki_block_receiver) = crossbeam_channel::unbounded();
+    let (oxen_block_sender, oxen_block_receiver) = crossbeam_channel::unbounded();
 
-    let witness = FakeWitness::new(loki_block_receiver, local_store.clone());
+    let witness = FakeWitness::new(oxen_block_receiver, local_store.clone());
     witness.start();
 
-    let quote_tx = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+    let quote_tx = TestData::swap_quote(Coin::ETH, Coin::OXEN);
 
     local_store
         .lock()
@@ -47,7 +47,7 @@ fn test_witness_event_is_made() {
 
     let block = Block { txs: vec![coin_tx] };
 
-    loki_block_sender.send(block).unwrap();
+    oxen_block_sender.send(block).unwrap();
 
     let now = std::time::Instant::now();
 

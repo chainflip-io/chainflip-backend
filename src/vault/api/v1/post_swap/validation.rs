@@ -64,13 +64,13 @@ pub fn validate_params(params: &SwapQuoteParams, network: Network) -> Result<(),
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::utils::test_utils::{TEST_ETH_ADDRESS, TEST_ETH_SALT, TEST_LOKI_ADDRESS};
+    use crate::utils::test_utils::{TEST_ETH_ADDRESS, TEST_ETH_SALT, TEST_OXEN_ADDRESS};
     use chainflip_common::types::coin::Coin;
 
     fn get_valid_params() -> SwapQuoteParams {
         SwapQuoteParams {
-            input_coin: Coin::LOKI,
-            input_return_address: Some(TEST_LOKI_ADDRESS.to_string()),
+            input_coin: Coin::OXEN,
+            input_return_address: Some(TEST_OXEN_ADDRESS.to_string()),
             input_address_id: "60900e5603bf96e3".to_owned(),
             input_amount: "1000000000".to_string(),
             output_coin: Coin::ETH,
@@ -114,7 +114,7 @@ mod test {
     #[test]
     fn validates_input_return_address() {
         let mut missing_return_address = get_valid_params();
-        missing_return_address.input_coin = Coin::LOKI;
+        missing_return_address.input_coin = Coin::OXEN;
         missing_return_address.input_return_address = None;
 
         assert_eq!(
@@ -173,8 +173,8 @@ mod test {
             input_return_address: None,
             input_address_id: hex::encode(TEST_ETH_SALT),
             input_amount: "1000000000".to_string(),
-            output_coin: Coin::LOKI,
-            output_address: TEST_LOKI_ADDRESS.to_string(),
+            output_coin: Coin::OXEN,
+            output_address: TEST_OXEN_ADDRESS.to_string(),
             slippage_limit: 10,
         };
 

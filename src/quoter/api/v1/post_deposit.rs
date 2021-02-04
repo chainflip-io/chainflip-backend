@@ -18,8 +18,8 @@ pub struct PostDepositParams {
     pub pool: String,
     /// The staker id
     pub staker_id: String,
-    /// Address to return Loki to if Stake quote already fulfilled
-    pub loki_return_address: String,
+    /// Address to return Oxen to if Stake quote already fulfilled
+    pub oxen_return_address: String,
     /// Address to return other coin to if Stake quote already fulfilled
     pub other_return_address: String,
 }
@@ -41,20 +41,20 @@ pub async fn deposit<V: VaultNodeInterface>(
     };
 
     let coin_input_address_id = input_id_cache.generate_unique_input_address_id(&coin);
-    let loki_input_address_id = input_id_cache.generate_unique_input_address_id(&coin);
+    let oxen_input_address_id = input_id_cache.generate_unique_input_address_id(&coin);
 
     // Convert to string representation
     let string_coin_input_address_id =
         address_id::to_string(coin, &coin_input_address_id).expect("Invalid input address id");
-    let string_loki_input_address_id = address_id::to_string(Coin::LOKI, &loki_input_address_id)
+    let string_oxen_input_address_id = address_id::to_string(Coin::OXEN, &oxen_input_address_id)
         .expect("Invalid input address id");
 
     let quote_params = DepositQuoteParams {
         pool: coin,
         staker_id: params.staker_id,
         coin_input_address_id: string_coin_input_address_id,
-        loki_input_address_id: string_loki_input_address_id,
-        loki_return_address: params.loki_return_address,
+        oxen_input_address_id: string_oxen_input_address_id,
+        oxen_return_address: params.oxen_return_address,
         other_return_address: params.other_return_address,
     };
 
@@ -63,7 +63,7 @@ pub async fn deposit<V: VaultNodeInterface>(
         Err(err) => {
             // Something went wrong, remove ids from cache
             input_id_cache.remove(&coin, &coin_input_address_id);
-            input_id_cache.remove(&Coin::LOKI, &loki_input_address_id);
+            input_id_cache.remove(&Coin::OXEN, &oxen_input_address_id);
 
             return Err(ResponseError::new(
                 StatusCode::BAD_REQUEST,

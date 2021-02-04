@@ -209,10 +209,10 @@ mod test {
         let input_address = generate_eth_address();
 
         // Add a quote so we can witness it
-        let mut eth_quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let mut eth_quote = TestData::swap_quote(Coin::ETH, Coin::OXEN);
         eth_quote.input_address = input_address.to_string().to_lowercase().into();
 
-        let btc_quote = TestData::swap_quote(Coin::BTC, Coin::LOKI);
+        let btc_quote = TestData::swap_quote(Coin::BTC, Coin::OXEN);
 
         {
             let mut provider = provider.write();

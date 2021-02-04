@@ -15,17 +15,17 @@ lazy_static! {
 }
 
 #[derive(Debug, Deserialize, Clone)]
-/// Configuration for the loki wallet rpc
-pub struct LokiRpcConfig {
+/// Configuration for the oxen wallet rpc
+pub struct OxenRpcConfig {
     /// The port that the wallet rpc is running on
     pub port: u16,
 }
 
 #[derive(Debug, Deserialize, Clone)]
-/// Configuration for loki
-pub struct LokiConfig {
+/// Configuration for oxen
+pub struct OxenConfig {
     /// RPC specific config
-    pub rpc: LokiRpcConfig,
+    pub rpc: OxenRpcConfig,
     /// Main wallet address. There should be a better way of doing this, but for now this will be quickest
     pub wallet_address: String,
 }
@@ -60,8 +60,8 @@ pub struct BtcConfig {
 pub struct VaultConfig {
     /// Which network type to use for all the vaults
     pub net_type: Network,
-    /// Loki config
-    pub loki: LokiConfig,
+    /// Oxen config
+    pub oxen: OxenConfig,
     /// Eth config
     pub eth: EthConfig,
     /// Btc config

@@ -39,8 +39,8 @@ use self::get_events::EventsParams;
 #[derive(Debug, Clone)]
 /// A config object for swap and deposit
 pub struct Config {
-    /// Loki wallet address
-    pub loki_wallet_address: String,
+    /// Oxen wallet address
+    pub oxen_wallet_address: String,
     /// BTC master root key
     pub btc_master_root_key: String,
     /// Network type

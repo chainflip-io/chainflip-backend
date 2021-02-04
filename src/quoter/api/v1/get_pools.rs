@@ -123,7 +123,7 @@ mod test {
 
         let result = get_pools(
             PoolsParams {
-                symbols: Some("BTC,btc,Loki,INVALID,,,123".to_string()),
+                symbols: Some("BTC,btc,Oxen,INVALID,,,123".to_string()),
             },
             db,
         )
