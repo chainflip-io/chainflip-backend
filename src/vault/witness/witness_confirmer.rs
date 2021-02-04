@@ -26,10 +26,13 @@ enum WitnessConfirmerError {
 
 type Result<T> = std::result::Result<T, WitnessConfirmerError>;
 
+/// Polls the state chain for any witnesses that it has seen and sets the confirmed flag
+/// on witnesses it sees are confirmed on its local database
 pub struct WitnessConfirmer<T>
 where
     T: TransactionProvider,
 {
+    // provides access to underlying local store, used to store events
     provider: Arc<RwLock<T>>,
 }
 
@@ -42,10 +45,9 @@ impl<T> WitnessConfirmer<T>
 where
     T: TransactionProvider + Send + Sync + 'static,
 {
-    fn new(provider: T) -> Self {
-        WitnessConfirmer {
-            provider: Arc::new(RwLock::new(provider)),
-        }
+    /// Create a new witness confirmer from a transaction provider
+    pub fn new(provider: Arc<RwLock<T>>) -> Self {
+        WitnessConfirmer { provider }
     }
 
     async fn event_loop(&mut self) {

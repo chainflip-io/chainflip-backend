@@ -14,7 +14,7 @@ use chainflip::{
             BtcOutputSender, EthOutputSender, LokiSender, OutputCoinProcessor, SideChainProcessor,
         },
         transactions::{MemoryTransactionsProvider, TransactionProvider},
-        witness::{BtcSPVWitness, EthereumWitness, LokiWitness},
+        witness::{BtcSPVWitness, EthereumWitness, LokiWitness, WitnessConfirmer},
     },
 };
 use chainflip_common::types::Network;
@@ -92,10 +92,12 @@ fn main() {
     let loki_witness = LokiWitness::new(loki_block_receiver, provider.clone());
     let eth_witness = EthereumWitness::new(Arc::new(eth_client.clone()), provider.clone(), kvs);
     let btc_witness = BtcSPVWitness::new(Arc::new(btc.clone()), provider.clone());
+    let witness_confirmer = WitnessConfirmer::new(provider.clone());
 
     loki_witness.start();
     eth_witness.start();
     btc_witness.start();
+    witness_confirmer.start();
 
     // Processor
     let db_connection = rusqlite::Connection::open("blocks.db").expect("Could not open database");
