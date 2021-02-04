@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     fmt,
+    str::FromStr,
     sync::{Arc, Mutex},
 };
 
@@ -54,6 +55,21 @@ impl fmt::Display for WitnessStatus {
     }
 }
 
+impl FromStr for WitnessStatus {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            // can come back from the database as Null
+            "Null" => Ok(WitnessStatus::AwaitingConfirmation),
+            "AwaitingConfirmation" => Ok(WitnessStatus::AwaitingConfirmation),
+            "Confirmed" => Ok(WitnessStatus::Confirmed),
+            "Processed" => Ok(WitnessStatus::Processed),
+            _ => Err(()),
+        }
+    }
+}
+
 /// Witness plus a boolean flag
 #[derive(Debug)]
 pub struct StatusWitnessWrapper {
@@ -67,6 +83,11 @@ impl StatusWitnessWrapper {
     /// Construct from internal parts
     pub fn new(inner: Witness, status: WitnessStatus) -> Self {
         StatusWitnessWrapper { inner, status }
+    }
+
+    /// Is the witness status Confirmed
+    pub fn is_confirmed(&self) -> bool {
+        self.status == WitnessStatus::Confirmed
     }
 }
 
@@ -171,6 +192,7 @@ pub struct StakerOwnership {
 
 impl MemoryState {
     fn process_deposit(&mut self, tx: Deposit) {
+        println!("Processing deposit");
         // Find quote and mark it as fulfilled
         if let Some(quote_info) = self
             .deposit_quotes
@@ -180,6 +202,7 @@ impl MemoryState {
             quote_info.fulfilled = true;
         }
 
+        // println!("The witness statuses for the deposit: {:#?}", &tx.witnesses.iter().map(|w| w.status));
         // Find witnesses and mark them as used:
         for wtx_id in &tx.witnesses {
             if let Some(witness_info) = self
@@ -187,6 +210,10 @@ impl MemoryState {
                 .iter_mut()
                 .find(|w| &w.inner.unique_id() == wtx_id)
             {
+                println!(
+                    "Witness status before marking processed: {:#?}",
+                    witness_info.status
+                );
                 witness_info.status = WitnessStatus::Processed;
             }
         }
@@ -275,10 +302,9 @@ impl MemoryState {
         }
 
         // Find witnesses and mark them as fulfilled
-        let witnesses = self
-            .witnesses
-            .iter_mut()
-            .filter(|witness| tx.witnesses.contains(&witness.inner.unique_id()));
+        let witnesses = self.witnesses.iter_mut().filter(|witness| {
+            witness.is_confirmed() && tx.witnesses.contains(&witness.inner.unique_id())
+        });
 
         for witness in witnesses {
             witness.status = WitnessStatus::Processed;
@@ -295,6 +321,8 @@ impl MemoryState {
 
     fn process_output_sent_tx(&mut self, tx: OutputSent) {
         // Find output txs and mark them as fulfilled
+
+        // can this be made `.find()` and without the second loop? there should only be one output?
         let outputs = self
             .outputs
             .iter_mut()
@@ -304,9 +332,31 @@ impl MemoryState {
             output.fulfilled = true;
         }
     }
+
+    fn confirm_witness_mem(&mut self, witness_id: u64) {
+        let witness = self
+            .witnesses
+            .iter_mut()
+            .find(|e| e.inner.unique_id() == witness_id);
+
+        match witness {
+            Some(w) => w.status = WitnessStatus::Confirmed,
+            None => {
+                println!("Witness does not exist");
+                debug!("Witness does not exist");
+            }
+        }
+    }
 }
 
 impl<L: ILocalStore> TransactionProvider for MemoryTransactionsProvider<L> {
+    // Here we fetch events from the database and put them into memory
+    // The core assumption here is that events are not in intermediate stages of processing
+    // This is particularly relevant wrt witnesses. We now have the ability to store
+    // `status` on events in the db, and retrieve this. Status is currently only updated in memory
+    // thus if a witness was `Confirmed` but before it become processed the program crashed, then
+    // on restart that witness would be loaded back in as `AwaitingConfirmation`
+    // We should change this, it requires a bit of a restructure.
     fn sync(&mut self) -> u64 {
         let local_store = self.local_store.lock().unwrap();
         for evt in local_store.get_events(self.state.next_event) {
@@ -366,8 +416,10 @@ impl<L: ILocalStore> TransactionProvider for MemoryTransactionsProvider<L> {
     }
 
     fn confirm_witness(&mut self, witness_id: u64) -> Result<(), String> {
-        let mut local_store = self.local_store.lock().unwrap();
-        local_store.set_witness_status(witness_id, WitnessStatus::Confirmed)?;
+        // let mut local_store = self.local_store.lock().unwrap();
+        // local_store.set_witness_status(witness_id, WitnessStatus::Confirmed)?;
+        // update the in mem version of status
+        self.state.confirm_witness_mem(witness_id);
         Ok(())
     }
 
@@ -524,6 +576,7 @@ mod test {
 
         let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
         let witness = TestData::witness(quote.unique_id(), 100, Coin::ETH);
+        let witness_id = witness.unique_id();
 
         provider
             .local_store
@@ -534,16 +587,18 @@ mod test {
 
         provider.sync();
 
+        provider.confirm_witness(witness_id).unwrap();
+
         assert_eq!(provider.get_swap_quotes().first().unwrap().fulfilled, false);
         assert_eq!(
             provider.get_witnesses().first().unwrap().status,
-            WitnessStatus::AwaitingConfirmation
+            WitnessStatus::Confirmed
         );
 
         // Swap
         let mut output = TestData::output(quote.output, 100);
         output.parent = OutputParent::SwapQuote(quote.unique_id());
-        output.witnesses = vec![witness.unique_id()];
+        output.witnesses = vec![witness_id];
         output.address = quote.output_address.clone();
 
         provider
@@ -568,6 +623,7 @@ mod test {
 
         let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
         let witness = TestData::witness(quote.unique_id(), 100, Coin::ETH);
+        let witness_id = witness.unique_id();
 
         provider
             .local_store
@@ -578,16 +634,19 @@ mod test {
 
         provider.sync();
 
+        // confirm the witness before starting to process - emulating witness_confirmer
+        provider.confirm_witness(witness_id).unwrap();
+
         assert_eq!(provider.get_swap_quotes().first().unwrap().fulfilled, false);
         assert_eq!(
             provider.get_witnesses().first().unwrap().status,
-            WitnessStatus::AwaitingConfirmation
+            WitnessStatus::Confirmed
         );
 
         // Refund
         let mut output = TestData::output(quote.input, 100);
         output.parent = OutputParent::SwapQuote(quote.unique_id());
-        output.witnesses = vec![witness.unique_id()];
+        output.witnesses = vec![witness_id];
         output.address = quote.return_address.unwrap().clone();
 
         provider
@@ -648,6 +707,8 @@ mod test {
             .unwrap();
 
         provider.sync();
+
+        // provider.confirm_witness(witness)
 
         let expected = vec![
             FulfilledWrapper::new(output_tx.clone(), true),

@@ -120,17 +120,34 @@ impl TestRunner {
             loki_amount.to_atomic(),
             Coin::LOKI,
         );
+        let wtx_loki_id = wtx_loki.unique_id();
         let wtx_eth = TestData::witness(
             deposit_quote.unique_id(),
             other_amount.to_atomic(),
             other_amount.coin_type(),
         );
+        let wtx_eth_id = wtx_eth.unique_id();
+
+        // println!(
+        //     "Witnesses before confirming: {:#?}",
+        //     provider.get_witnesses()
+        // );
 
         self.add_local_events([
             wtx_loki.into(),
             wtx_eth.into(),
             deposit_quote.clone().into(),
         ]);
+
+        let mut provider = self.provider.write();
+        // confirm the witnesses - emulating witness_confirmer
+        provider.confirm_witness(wtx_loki_id).unwrap();
+        provider.confirm_witness(wtx_eth_id).unwrap();
+
+        println!(
+            "Witnesses after confirming: {:#?}",
+            provider.get_witnesses()
+        );
 
         deposit_quote
     }
@@ -165,10 +182,6 @@ impl TestRunner {
     /// Convenience method to check liquidity amounts in ETH pool
     pub fn check_eth_liquidity(&mut self, loki_atomic: u128, eth_atomic: u128) {
         self.provider.write().sync();
-        let provider = self.provider.read();
-        let ws = provider.get_witnesses();
-        let ws: Vec<Witness> = ws.iter().map(|w| w.inner.clone()).collect();
-        let dqs = provider.get_deposit_quotes();
 
         let liquidity = self
             .provider
@@ -193,12 +206,14 @@ impl TestRunner {
         staker_id: &StakerId,
         pool: PoolCoin,
     ) -> Result<Portion, String> {
+        println!("Getting portions for staker_id: {:#?}", staker_id);
         let provider = self.provider.read();
         let all_pools = provider.get_portions();
         let pool = all_pools
             .get(&pool)
             .ok_or(format!("Pool should have portions: {}", pool))?;
 
+        println!("Pool portions: {:#?}", pool);
         let portions = pool
             .get(&staker_id)
             .ok_or("No portions for this staker id")?;

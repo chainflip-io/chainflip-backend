@@ -1,4 +1,4 @@
-use std::u64;
+use std::{str::FromStr, u64};
 
 use crate::vault::transactions::memory_provider::{StatusWitnessWrapper, WitnessStatus};
 
@@ -124,8 +124,7 @@ impl ILocalStore for PersistentLocalStore {
                 let row_val: u32 = row.get(1).unwrap();
                 let status: String = row.get(2).unwrap_or(NULL_STATUS.to_string());
                 let witness_status: WitnessStatus =
-                    serde_json::from_str::<WitnessStatus>(&format!("\"{}\"", &status))
-                        .unwrap_or(WitnessStatus::AwaitingConfirmation);
+                    WitnessStatus::from_str(&status).unwrap_or(WitnessStatus::AwaitingConfirmation);
                 w.event_number = Some(row_val as u64);
                 let status_witness_wrapper = StatusWitnessWrapper {
                     inner: w,

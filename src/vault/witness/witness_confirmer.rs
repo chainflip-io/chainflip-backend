@@ -81,6 +81,7 @@ where
 
         for sc_id in sc_witness_ids {
             let id = state_chain_id_to_local_store_id(sc_id);
+            // confirms it in memory
             if let Err(e) = self.provider.write().confirm_witness(id) {
                 error!("Failed to confirm witness {}. {:#?}", id, e);
             }
@@ -102,8 +103,6 @@ where
             .send()
             .await
             .map_err(|e| WitnessConfirmerError::WitnessFetchError(e.to_string()))?;
-
-        // println!("The res text is: {:#?}", res.text().await);
 
         let res = res
             .json::<ScResponse<Vec<String>>>()
@@ -160,4 +159,7 @@ mod test {
         let witness_ids = confirmed_witnesses.unwrap();
         println!("The witness ids are: {:#?}", witness_ids);
     }
+
+    #[tokio::test]
+    async fn state_chain_returns_witness_local_has_not_seen() {}
 }

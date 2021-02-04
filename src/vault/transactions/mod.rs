@@ -19,7 +19,7 @@ pub trait TransactionProvider: LiquidityProvider {
     fn add_local_events(&mut self, events: Vec<LocalEvent>) -> Result<(), String>;
 
     /// confirm a witness
-    fn confirm_witness(&mut self, witness: u64) -> Result<(), String>;
+    fn confirm_witness(&mut self, witness_id: u64) -> Result<(), String>;
 
     /// Get all swap quotes
     fn get_swap_quotes(&self) -> &[FulfilledWrapper<SwapQuote>];

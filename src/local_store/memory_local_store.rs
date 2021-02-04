@@ -1,11 +1,14 @@
+use std::str::FromStr;
+
 use chainflip_common::types::chain::*;
 
-use crate::vault::transactions::memory_provider::WitnessStatus;
+use crate::vault::transactions::memory_provider::{StatusWitnessWrapper, WitnessStatus};
 
 use super::{ILocalStore, LocalEvent, StorageItem};
 
 pub const NULL_STATUS: &'static str = "null";
 
+#[derive(Debug)]
 pub struct FakeDbEntry {
     id: u64,
     data: LocalEvent,
@@ -78,16 +81,26 @@ impl ILocalStore for MemoryLocalStore {
 
     fn set_witness_status(&mut self, id: u64, status: WitnessStatus) -> Result<(), String> {
         let event_to_update = self.events.iter_mut().find(|e| e.id == id).unwrap();
+        println!("Event to update: {:#?}", event_to_update);
         event_to_update.status = status.to_string();
 
         Ok(())
     }
 
-    fn get_witnesses_status(
-        &self,
-        last_event: u64,
-    ) -> Vec<crate::vault::transactions::memory_provider::StatusWitnessWrapper> {
-        todo!()
+    fn get_witnesses_status(&self, last_seen: u64) -> Vec<StatusWitnessWrapper> {
+        self.events[last_seen as usize..]
+            .iter()
+            .filter_map(|e| {
+                if let LocalEvent::Witness(w) = &e.data {
+                    Some(StatusWitnessWrapper {
+                        status: WitnessStatus::from_str(&e.status).unwrap(),
+                        inner: w.clone(),
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }
 

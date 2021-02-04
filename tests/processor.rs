@@ -204,10 +204,12 @@ fn portions_adjusted_after_withdraw() {
     let portions_alice = runner
         .get_portions_for(&alice.id(), PoolCoin::ETH)
         .expect("Alice must have portions");
+
+    println!("Alice has portions");
     let portions_bob = runner
         .get_portions_for(&bob.id(), PoolCoin::ETH)
         .expect("Bob must have portions");
-
+    println!("Bob has portions");
     assert_eq!(portions_alice.0, Portion::MAX.0 / 2);
     assert_eq!(portions_bob.0, Portion::MAX.0 / 2);
 
@@ -262,7 +264,7 @@ fn non_staker_cannot_withdraw() {
 }
 
 #[test]
-fn assymetric_deposit_result_in_autoswap() {
+fn asymmetric_deposit_result_in_autoswap() {
     test_utils::logging::init();
 
     let mut runner = TestRunner::new();
@@ -279,6 +281,8 @@ fn assymetric_deposit_result_in_autoswap() {
     let btc_amount = GenericCoinAmount::from_decimal_string(Coin::BTC, "0.02");
 
     let _ = runner.add_witnessed_deposit_quote(&bob.id(), loki_amount, btc_amount);
+
+    // observe the witness
 
     let a = runner
         .get_portions_for(&alice.id(), PoolCoin::BTC)

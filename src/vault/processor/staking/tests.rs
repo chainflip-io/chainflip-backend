@@ -11,9 +11,9 @@ fn fulfilled_eth_quotes_should_produce_new_tx() {
 
     let quote_tx = TestData::deposit_quote(coin_type);
     let wtx_loki = TestData::witness(quote_tx.unique_id(), loki_amount.to_atomic(), Coin::LOKI);
-    let wtx_loki = StatusWitnessWrapper::new(wtx_loki, WitnessStatus::AwaitingConfirmation);
+    let wtx_loki = StatusWitnessWrapper::new(wtx_loki, WitnessStatus::Confirmed);
     let wtx_eth = TestData::witness(quote_tx.unique_id(), coin_amount.to_atomic(), coin_type);
-    let wtx_eth = StatusWitnessWrapper::new(wtx_eth, WitnessStatus::AwaitingConfirmation);
+    let wtx_eth = StatusWitnessWrapper::new(wtx_eth, WitnessStatus::Confirmed);
 
     let quote_tx = FulfilledWrapper::new(quote_tx, false);
 
@@ -42,9 +42,9 @@ fn fulfilled_btc_quotes_should_produce_new_tx() {
 
     let quote_tx = TestData::deposit_quote(coin_type);
     let wtx_loki = TestData::witness(quote_tx.unique_id(), loki_amount.to_atomic(), Coin::LOKI);
-    let wtx_loki = StatusWitnessWrapper::new(wtx_loki, WitnessStatus::AwaitingConfirmation);
+    let wtx_loki = StatusWitnessWrapper::new(wtx_loki, WitnessStatus::Confirmed);
     let wtx_btc = TestData::witness(quote_tx.unique_id(), coin_amount.to_atomic(), coin_type);
-    let wtx_btc = StatusWitnessWrapper::new(wtx_btc, WitnessStatus::AwaitingConfirmation);
+    let wtx_btc = StatusWitnessWrapper::new(wtx_btc, WitnessStatus::Confirmed);
 
     let quote_tx = FulfilledWrapper::new(quote_tx, false);
 
@@ -73,7 +73,7 @@ fn partially_fulfilled_quotes_do_not_produce_new_tx() {
 
     let quote_tx = TestData::deposit_quote(coin_type);
     let wtx_loki = TestData::witness(quote_tx.unique_id(), loki_amount.to_atomic(), Coin::LOKI);
-    let wtx_loki = StatusWitnessWrapper::new(wtx_loki, WitnessStatus::AwaitingConfirmation);
+    let wtx_loki = StatusWitnessWrapper::new(wtx_loki, WitnessStatus::Confirmed);
 
     let quote_tx = FulfilledWrapper::new(quote_tx, false);
 
@@ -90,9 +90,9 @@ fn refunds_if_deposit_quote_is_fulfilled() {
 
     let quote_tx = TestData::deposit_quote(coin_type);
     let wtx_loki = TestData::witness(quote_tx.unique_id(), loki_amount.to_atomic(), Coin::LOKI);
-    let wtx_loki = StatusWitnessWrapper::new(wtx_loki, WitnessStatus::AwaitingConfirmation);
+    let wtx_loki = StatusWitnessWrapper::new(wtx_loki, WitnessStatus::Confirmed);
     let wtx_btc = TestData::witness(quote_tx.unique_id(), btc_amount.to_atomic(), coin_type);
-    let wtx_btc = StatusWitnessWrapper::new(wtx_btc, WitnessStatus::AwaitingConfirmation);
+    let wtx_btc = StatusWitnessWrapper::new(wtx_btc, WitnessStatus::Confirmed);
 
     let quote_tx = FulfilledWrapper::new(quote_tx, true);
 
@@ -164,9 +164,9 @@ fn check_staking_smaller_amounts() {
 
     let quote_tx = TestData::deposit_quote(coin_type);
     let wtx_loki = TestData::witness(quote_tx.unique_id(), loki_amount.to_atomic(), Coin::LOKI);
-    let wtx_loki = StatusWitnessWrapper::new(wtx_loki, WitnessStatus::AwaitingConfirmation);
+    let wtx_loki = StatusWitnessWrapper::new(wtx_loki, WitnessStatus::Confirmed);
     let wtx_eth = TestData::witness(quote_tx.unique_id(), coin_amount.to_atomic(), coin_type);
-    let wtx_eth = StatusWitnessWrapper::new(wtx_eth, WitnessStatus::AwaitingConfirmation);
+    let wtx_eth = StatusWitnessWrapper::new(wtx_eth, WitnessStatus::Confirmed);
 
     let quote_tx = FulfilledWrapper::new(quote_tx, false);
 

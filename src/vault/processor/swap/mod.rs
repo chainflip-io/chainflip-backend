@@ -37,7 +37,7 @@ fn get_swaps<T: TransactionProvider>(provider: &T) -> Vec<Swap> {
     let witnesses: Vec<&StatusWitnessWrapper> = provider
         .get_witnesses()
         .iter()
-        .filter(|tx| !(tx.status == WitnessStatus::Processed))
+        .filter(|tx| tx.is_confirmed())
         .collect();
 
     let mut swaps: Vec<Swap> = vec![];
@@ -184,7 +184,15 @@ mod test {
 
         runner.sync_provider();
 
-        let swaps = get_swaps(&*runner.provider.read());
+        // emulate the witness_confirmer
+        let mut provider = runner.provider.write();
+        provider.confirm_witness(first_witness.unique_id()).unwrap();
+
+        provider
+            .confirm_witness(second_witness.unique_id())
+            .unwrap();
+
+        let swaps = get_swaps(&*provider);
         assert_eq!(swaps.len(), 1);
 
         let swap = swaps.first().unwrap();
@@ -268,11 +276,54 @@ mod test {
 
         runner.sync_provider();
 
+        // emulate the witness_confirmer's job
+        runner
+            .provider
+            .write()
+            .confirm_witness(unused.unique_id())
+            .unwrap();
+
         let swaps = get_swaps(&*runner.provider.read());
         assert_eq!(swaps.len(), 1);
 
         let swap = swaps.first().unwrap();
         assert_eq!(swap.witnesses, vec![unused]);
+    }
+
+    #[test]
+    fn get_swaps_does_not_return_swaps_if_witnesses_not_confirmed() {
+        let mut runner = Runner::new();
+
+        let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let unused = get_witness(&quote, 100);
+        let used = get_witness(&quote, 150);
+
+        let output = Output {
+            parent: OutputParent::SwapQuote(quote.unique_id()),
+            witnesses: vec![used.unique_id()],
+            pool_changes: vec![],
+            coin: quote.output,
+            address: quote.output_address.clone(),
+            amount: 200,
+            event_number: None,
+        };
+
+        runner
+            .local_store
+            .lock()
+            .unwrap()
+            .add_events(vec![
+                quote.into(),
+                unused.clone().into(),
+                used.into(),
+                output.into(),
+            ])
+            .unwrap();
+
+        runner.sync_provider();
+
+        let swaps = get_swaps(&*runner.provider.read());
+        assert_eq!(swaps.len(), 0);
     }
 
     #[test]
@@ -462,10 +513,23 @@ mod test {
             .local_store
             .lock()
             .unwrap()
-            .add_events(vec![initial_pool.into(), quote.into(), witness.into()])
+            .add_events(vec![
+                initial_pool.into(),
+                quote.into(),
+                witness.clone().into(),
+            ])
             .unwrap();
 
         runner.sync_provider();
+
+        // emulate witness_confirmer
+        runner
+            .provider
+            .write()
+            .confirm_witness(witness.unique_id())
+            .unwrap();
+
+        println!("Confirmed the witness");
 
         // Pre conditions
         assert_eq!(runner.provider.read().get_swap_quotes().len(), 1);

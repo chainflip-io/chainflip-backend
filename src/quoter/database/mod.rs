@@ -281,7 +281,6 @@ mod test {
         utils::test_utils::{data::TestData, staking::get_random_staker},
     };
     use chainflip_common::types::coin::Coin;
-    use itertools::process_results;
     use rusqlite::NO_PARAMS;
 
     fn setup() -> Database {

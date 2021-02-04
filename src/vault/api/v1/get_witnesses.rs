@@ -3,7 +3,6 @@ use crate::{
     local_store::{ILocalStore, LocalEvent},
 };
 use chainflip_common::types::chain::Witness;
-use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
