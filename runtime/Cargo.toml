@@ -27,6 +27,7 @@ serde = {features = ['derive'], optional = true, version = '1.0.119'}
 # Chainflip dependencies
 pallet-cf-transactions = { path = "../pallets/cf-transactions", default-features =  false}
 pallet-cf-validator = { path = "../pallets/cf-validator", default-features = false}
+witness-fetch = { path = "../pallets/witness-fetch", default-features = false }
 
 # Substrate dependencies
 frame-benchmarking = {default-features = false, optional = true, version = '2.0.1'}
@@ -36,7 +37,9 @@ frame-system = {default-features = false, version = '2.0.1'}
 frame-system-benchmarking = {default-features = false, optional = true, version = '2.0.1'}
 frame-system-rpc-runtime-api = {default-features = false, version = '2.0.1'}
 pallet-aura = {default-features = false, version = '2.0.1'}
+pallet-authorship = {default-features = false, version = '2.0.1'}
 pallet-grandpa = {default-features = false, version = '2.0.1'}
+pallet-offences = {default-features = false, version = '2.0.1'}
 pallet-randomness-collective-flip = {default-features = false, version = '2.0.1'}
 pallet-session = {default-features = false, version = '2.0.1'}
 pallet-sudo = {default-features = false, version = '2.0.1'}
@@ -72,8 +75,11 @@ std = [
   'frame-system/std',
   'frame-system-rpc-runtime-api/std',
   'pallet-aura/std',
+  'pallet-authorship/std',
   'pallet-grandpa/std',
+  'pallet-offences/std',
   'pallet-randomness-collective-flip/std',
+  'pallet-session/std',
   'pallet-sudo/std',
   'pallet-timestamp/std',
   'sp-api/std',
@@ -87,4 +93,7 @@ std = [
   'sp-std/std',
   'sp-transaction-pool/std',
   'sp-version/std',
+  'pallet-cf-transactions/std',
+  'pallet-cf-validator/std',
+  'witness-fetch/std',
 ]

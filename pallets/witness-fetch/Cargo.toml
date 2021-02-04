@@ -1,0 +1,57 @@
+[package]
+name = "witness-fetch"
+version = "0.1.0"
+authors = [""]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+num-traits = { version = "0.2.8", default-features = false }
+alt_serde = { version = "1", default-features = false, features = ["derive"] }
+serde_json = { version = "1", default-features = false, git = "https://github.com/Xanewok/json", branch = "no-std", features = ["alloc"] }
+
+pallet-cf-validator = { path = "../cf-validator", default-features = false}
+
+[dependencies.codec]
+package = "parity-scale-codec"
+version = "1.0.0"
+default-features = false
+features = ["derive"]
+
+[dependencies.sp-core]
+package = "sp-core"
+default-features = false
+version = "2.0.0"
+
+[dependencies.rstd]
+package = "sp-std"
+default-features = false
+version = "2.0.0"
+
+[dependencies.sp-io]
+default-features = false
+version = "2.0.0"
+
+[dependencies.sp-runtime]
+default-features = false
+version = "2.0.0"
+
+[dependencies.frame-support]
+package = "frame-support"
+default-features = false
+version = "2.0.0"
+
+[dependencies.frame-system]
+package = "frame-system"
+default-features = false
+version = "2.0.0"
+
+[features]
+default = ["std"]
+std = [
+  "codec/std",
+  "sp-runtime/std",
+  "frame-support/std",
+  "frame-system/std",
+] 

@@ -6,8 +6,10 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+use frame_system::offchain::SendTransactionTypes;
 use pallet_grandpa::fg_primitives;
 use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
+use pallet_session::historical as session_historical;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
@@ -26,7 +28,7 @@ use sp_version::RuntimeVersion;
 
 // A few exports that help ease life for downstream crates.
 pub use frame_support::{
-    construct_runtime, parameter_types,
+    construct_runtime, debug, parameter_types,
     traits::{KeyOwnerProofSystem, Randomness},
     weights::{
         constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
@@ -118,6 +120,14 @@ impl pallet_cf_validator::Trait for Runtime {
     type Event = Event;
 }
 
+impl<C> SendTransactionTypes<C> for Runtime
+where
+    Call: From<C>,
+{
+    type Extrinsic = UncheckedExtrinsic;
+    type OverarchingCall = Call;
+}
+
 impl pallet_session::Trait for Runtime {
     type SessionHandler = <opaque::SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
     type ShouldEndSession = Validator;
@@ -129,6 +139,11 @@ impl pallet_session::Trait for Runtime {
     type ValidatorIdOf = pallet_cf_validator::ValidatorOf<Self>;
     type DisabledValidatorsThreshold = ();
     type WeightInfo = ();
+}
+
+impl pallet_session::historical::Trait for Runtime {
+    type FullIdentification = ();
+    type FullIdentificationOf = ();
 }
 
 parameter_types! {
@@ -204,6 +219,11 @@ impl frame_system::Trait for Runtime {
     type SystemWeightInfo = ();
 }
 
+impl frame_system::offchain::SigningTypes for Runtime {
+    type Public = <Signature as Verify>::Signer;
+    type Signature = Signature;
+}
+
 impl pallet_aura::Trait for Runtime {
     type AuthorityId = AuraId;
 }
@@ -212,7 +232,7 @@ impl pallet_grandpa::Trait for Runtime {
     type Event = Event;
     type Call = Call;
 
-    type KeyOwnerProofSystem = ();
+    type KeyOwnerProofSystem = Historical;
 
     type KeyOwnerProof =
         <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
@@ -222,13 +242,31 @@ impl pallet_grandpa::Trait for Runtime {
         GrandpaId,
     )>>::IdentificationTuple;
 
-    type HandleEquivocation = ();
+    type HandleEquivocation =
+        pallet_grandpa::EquivocationHandler<Self::KeyOwnerIdentification, Offences>;
 
     type WeightInfo = ();
 }
 
 impl pallet_cf_transactions::Trait for Runtime {
     type Event = Event;
+}
+
+parameter_types! {
+    pub OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * MaximumBlockWeight::get();
+}
+
+impl pallet_offences::Trait for Runtime {
+    type Event = Event;
+    type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
+    type OnOffenceHandler = ();
+    type WeightSoftLimit = OffencesWeightSoftLimit;
+}
+
+impl witness_fetch::Trait for Runtime {
+    type Call = Call;
+    type Event = Event;
+    type AuthorityId = witness_fetch::crypto::AuthorityId;
 }
 
 parameter_types! {
@@ -241,6 +279,18 @@ impl pallet_timestamp::Trait for Runtime {
     type OnTimestampSet = Aura;
     type MinimumPeriod = MinimumPeriod;
     type WeightInfo = ();
+}
+
+parameter_types! {
+    /// The number of blocks back we should accept uncles
+    pub const UncleGenerations: BlockNumber = 5;
+}
+
+impl pallet_authorship::Trait for Runtime {
+    type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, Aura>;
+    type UncleGenerations = UncleGenerations;
+    type FilterUncle = ();
+    type EventHandler = ();
 }
 
 impl pallet_sudo::Trait for Runtime {
@@ -263,11 +313,15 @@ construct_runtime!(
         RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
         Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
         Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
+        Historical: session_historical::{Module},
         Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
         Aura: pallet_aura::{Module, Config<T>, Inherent},
+        Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
         Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
         Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
+        Offences: pallet_offences::{Module, Call, Storage, Event},
         Transactions: pallet_cf_transactions::{Module, Call, Event<T>},
+        WitnessFetcher: witness_fetch::{Module, Call, Event<T>, ValidateUnsigned},
     }
 );
 
@@ -394,23 +448,29 @@ impl_runtime_apis! {
         }
 
         fn submit_report_equivocation_unsigned_extrinsic(
-            _equivocation_proof: fg_primitives::EquivocationProof<
+            equivocation_proof: fg_primitives::EquivocationProof<
                 <Block as BlockT>::Hash,
                 NumberFor<Block>,
             >,
-            _key_owner_proof: fg_primitives::OpaqueKeyOwnershipProof,
+            key_owner_proof: fg_primitives::OpaqueKeyOwnershipProof,
         ) -> Option<()> {
-            None
+            let key_owner_proof = key_owner_proof.decode()?;
+
+            Grandpa::submit_unsigned_equivocation_report(
+                equivocation_proof,
+                key_owner_proof,
+            )
         }
 
         fn generate_key_ownership_proof(
             _set_id: fg_primitives::SetId,
-            _authority_id: GrandpaId,
+            authority_id: GrandpaId,
         ) -> Option<fg_primitives::OpaqueKeyOwnershipProof> {
-            // NOTE: this is the only implementation possible since we've
-            // defined our key owner proof type as a bottom type (i.e. a type
-            // with no values).
-            None
+            use codec::Encode;
+
+            Historical::prove((fg_primitives::KEY_TYPE, authority_id))
+                .map(|p| p.encode())
+                .map(fg_primitives::OpaqueKeyOwnershipProof::new)
         }
     }
 
