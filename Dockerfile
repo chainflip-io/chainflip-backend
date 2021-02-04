@@ -14,7 +14,7 @@ ENV RUSTC_WRAPPER=sccache
 
 FROM rust-with-sccache as rust-substrate-base
 
-ARG RUST_VERSION=nightly
+ARG RUST_VERSION=nightly-2021-01-18
 RUN rustup install $RUST_VERSION \
     && rustup update \
     && rustup default $RUST_VERSION \
