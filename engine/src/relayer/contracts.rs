@@ -1,8 +1,8 @@
 use thiserror::Error;
 use web3::{
     contract::tokens::Tokenizable,
-    ethabi::{Log, TopicFilter},
-    types::{BlockNumber, FilterBuilder, H256},
+    ethabi::Log,
+    types::{BlockNumber, H256},
 };
 
 pub mod stake_manager;

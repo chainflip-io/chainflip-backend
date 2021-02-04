@@ -4,7 +4,7 @@ pub mod sinks;
 
 pub use anyhow::Result;
 pub use contracts::stake_manager::StakeManager;
-pub use eth_event_streamer::EthEventStreamer;
+pub use eth_event_streamer::{EthEventStreamBuilder, EthEventStreamer};
 
 use thiserror::Error;
 
@@ -28,7 +28,7 @@ where
 
 /// Implement this for the each contract.
 pub trait EventSource {
-    type Event: Send;
+    type Event: Send + Copy;
 
     fn topic_filter_for_event(&self, name: &str) -> Result<TopicFilter>;
 

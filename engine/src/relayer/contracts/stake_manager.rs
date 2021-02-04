@@ -22,11 +22,13 @@ pub struct StakeManager {
 /// Represents the events that are expected from the StakeManager contract.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StakingEvent {
+    /// The `Staked(nodeId, amount)` event.
     Staked {
+        /// The node id of the validator that submitted the stake.
         node_id: ethabi::Uint,
+        /// The amount of FLIP that was staked.
         amount: ethabi::Uint,
     },
-    Unknown,
 }
 
 impl StakeManager {

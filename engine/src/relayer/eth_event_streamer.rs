@@ -1,25 +1,54 @@
+use core::future;
+
 use super::{EventSink, EventSource, Result};
-use futures::{stream, StreamExt};
+use futures::{future::join_all, stream, StreamExt};
 use tokio_compat_02::FutureExt;
 use web3::types::BlockNumber;
 
-pub struct EthEventStreamer<S: EventSource, P: EventSink<S::Event>> {
+pub struct EthEventStreamer<S: EventSource> {
     web3_client: ::web3::Web3<::web3::transports::WebSocket>,
     event_source: S,
-    event_sink: P,
+    event_sinks: Vec<Box<dyn EventSink<S::Event>>>,
 }
 
-impl<S: EventSource, P: EventSink<S::Event>> EthEventStreamer<S, P> {
-    pub async fn new(url: &str, event_source: S, event_sink: P) -> Result<Self> {
-        let transport = ::web3::transports::WebSocket::new(url).compat().await?;
+pub struct EthEventStreamBuilder<S: EventSource> {
+    url: String,
+    event_source: S,
+    event_sinks: Vec<Box<dyn EventSink<S::Event>>>,
+}
 
-        Ok(Self {
-            web3_client: ::web3::Web3::new(transport),
+impl<S: EventSource> EthEventStreamBuilder<S> {
+    pub fn new(url: &str, event_source: S) -> Self {
+        Self {
+            url: url.into(),
             event_source,
-            event_sink,
-        })
+            event_sinks: Vec::new(),
+        }
     }
 
+    pub fn with_sink<E: 'static + EventSink<S::Event>>(mut self, sink: E) -> Self {
+        self.event_sinks.push(Box::new(sink));
+        self
+    }
+
+    pub async fn build(self) -> Result<EthEventStreamer<S>> {
+        if self.event_sinks.is_empty() {
+            anyhow::bail!("Can't build a stream with no sink.")
+        } else {
+            let transport = ::web3::transports::WebSocket::new(self.url.as_str())
+                .compat()
+                .await?;
+
+            Ok(EthEventStreamer {
+                web3_client: ::web3::Web3::new(transport),
+                event_source: self.event_source,
+                event_sinks: self.event_sinks,
+            })
+        }
+    }
+}
+
+impl<S: EventSource> EthEventStreamer<S> {
     /// Create a stream of Ethereum log events. If `from_block` is `None`, starts at the pending block.
     pub async fn run(&self, from_block: Option<u64>) -> Result<()> {
         // The `fromBlock` parameter doesn't seem to work reliably with subscription streams, so
@@ -54,7 +83,14 @@ impl<S: EventSource, P: EventSink<S::Event>> EthEventStreamer<S, P> {
 
         let processing_loop = event_stream.for_each_concurrent(None, |parse_result| async {
             match parse_result {
-                Ok(event) => self.event_sink.process_event(event).await,
+                Ok(event) => {
+                    join_all(
+                        self.event_sinks
+                            .iter()
+                            .map(|sink| async move { sink.process_event(event).await }),
+                    )
+                    .await;
+                }
                 Err(e) => log::error!("Unable to parse event: {}.", e.backtrace()),
             }
         });
