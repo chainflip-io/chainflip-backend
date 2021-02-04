@@ -7,7 +7,10 @@ use parking_lot::RwLock;
 use reqwest::{header::CONTENT_TYPE, Response};
 use serde::Deserialize;
 
-use crate::{common, vault::transactions::TransactionProvider};
+use crate::{
+    common,
+    vault::transactions::{memory_provider::WitnessStatus, TransactionProvider},
+};
 
 #[derive(Deserialize, Debug)]
 struct ConfirmedWitnessResponse {
@@ -76,8 +79,9 @@ where
 
         for sc_id in sc_witness_ids {
             let id = state_chain_id_to_local_store_id(sc_id);
-
-            // get it from the database. Do we need an individual event lookup method?
+            if let Err(e) = self.provider.write().confirm_witness(id) {
+                error!("Failed to confirm witness {}. {:#?}", id, e);
+            }
         }
     }
 
@@ -107,11 +111,6 @@ where
         println!("Here's the res: {:#?}", res);
 
         Ok(res.result.unwrap_or(vec![]))
-    }
-
-    fn set_witnesses_to_confirmed(&self) {
-        let events = self.provider.read().get_witnesses();
-        
     }
 }
 
@@ -143,7 +142,7 @@ mod test {
 
     #[test]
     #[ignore]
-    fn sets_confirmed_true_when_sc_witness_matches_local_witness() {}
+    fn sets_status_confirmed_when_sc_witness_matches_local_witness() {}
 
     #[test]
     #[ignore]

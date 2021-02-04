@@ -1,8 +1,10 @@
 use std::u64;
 
-use crate::vault::transactions::memory_provider::WitnessStatus;
+use crate::vault::transactions::memory_provider::{StatusWitnessWrapper, WitnessStatus};
 
-use super::{EventNumber, ILocalStore, LocalEvent, StorageItem};
+use super::{memory_local_store::NULL_STATUS, EventNumber, ILocalStore, LocalEvent, StorageItem};
+use chainflip_common::types::chain::Witness;
+use reqwest::StatusCode;
 use rusqlite::Connection as DB;
 use rusqlite::{params, NO_PARAMS};
 
@@ -17,7 +19,7 @@ fn create_tables_if_new(db: &DB) {
         "CREATE TABLE IF NOT EXISTS events (
                 id TEXT PRIMARY KEY,
                 data BLOB NOT NULL,
-                status TEXT,
+                status TEXT
     )",
         NO_PARAMS,
     )
@@ -100,12 +102,46 @@ impl ILocalStore for PersistentLocalStore {
         count.unwrap() as u64
     }
 
+    fn get_witnesses_status(&self, last_seen: u64) -> Vec<StatusWitnessWrapper> {
+        let mut select_events = self
+            .db
+            .prepare("SELECT data, rowid as event_number, status FROM events WHERE rowid > ?")
+            .expect("Could not prepare stmt");
+
+        let mut rows = select_events
+            // only u32 or smaller is castable to a SQL type
+            .query(params![last_seen as u32])
+            .map_err(|err| err.to_string())
+            .unwrap();
+
+        let mut recent_witnesses: Vec<StatusWitnessWrapper> = Vec::new();
+
+        while let Some(row) = rows.next().expect("Rows should be readable") {
+            let data_str: String = row.get(0).unwrap();
+            let witness = serde_json::from_str::<LocalEvent>(&data_str).unwrap();
+            // sqlite limited to u32
+            if let LocalEvent::Witness(mut w) = witness {
+                let row_val: u32 = row.get(1).unwrap();
+                let status: String = row.get(2).unwrap_or(NULL_STATUS.to_string());
+                let witness_status: WitnessStatus =
+                    serde_json::from_str::<WitnessStatus>(&format!("\"{}\"", &status))
+                        .unwrap_or(WitnessStatus::AwaitingConfirmation);
+                w.event_number = Some(row_val as u64);
+                let status_witness_wrapper = StatusWitnessWrapper {
+                    inner: w,
+                    status: witness_status,
+                };
+                recent_witnesses.push(status_witness_wrapper);
+            }
+        }
+
+        // println!("{:#?}", recent_witnesses);
+
+        recent_witnesses
+    }
+
     fn set_witness_status(&mut self, id: u64, status: WitnessStatus) -> Result<(), String> {
         let status = status.to_string();
-        // let mut update_witness_status = self
-        //     .db
-        //     .prepare("UPDATE events SET status = ? WHERE id = ?")
-        //     .expect("Could not prepare update witness status statement");
 
         match self.db.execute(
             "
@@ -115,7 +151,7 @@ impl ILocalStore for PersistentLocalStore {
             // TODO: how to get around u32 limit of sqlite?
             params![status, id as u32],
         ) {
-            Ok(_) => {
+            Ok(n) => {
                 debug!("Witness {} updated to status {}", id, status);
             }
             Err(e) => {
@@ -132,7 +168,7 @@ impl ILocalStore for PersistentLocalStore {
 mod test {
     use super::*;
     use crate::utils::test_utils::{self, data::TestData};
-    use chainflip_common::types::coin::Coin;
+    use chainflip_common::types::{coin::Coin, unique_id::GetUniqueId};
 
     #[test]
     fn test_db_created_successfully() {
@@ -208,5 +244,35 @@ mod test {
             .expect("Error adding an event to the database");
 
         assert_eq!(db.total_events(), 2);
+    }
+
+    #[test]
+    fn set_witness_status() {
+        let temp_file = test_utils::TempRandomFile::new();
+
+        let mut db = PersistentLocalStore::open(temp_file.path());
+
+        let witness: LocalEvent = TestData::witness(0, 100, Coin::ETH).into();
+
+        // add a witness to the database, without specifying a status
+        db.add_events(vec![witness.clone()])
+            .expect("Error adding an event to the database");
+
+        assert_eq!(db.total_events(), 1);
+
+        let events = db.get_witnesses_status(0);
+        let witness_from_db = events.first().unwrap();
+        // ensure the default return is AwaitingConfirmation
+        assert_eq!(witness_from_db.status, WitnessStatus::AwaitingConfirmation);
+
+        // Update the witness status
+        db.set_witness_status(witness_from_db.inner.unique_id(), WitnessStatus::Confirmed)
+            .unwrap();
+
+        let events = db.get_witnesses_status(0);
+
+        let witness_from_db = events.first().unwrap();
+        assert_eq!(witness_from_db.status, WitnessStatus::Confirmed);
+        assert_eq!(witness_from_db.inner.event_number, Some(1));
     }
 }

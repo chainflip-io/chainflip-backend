@@ -9,7 +9,7 @@ pub const NULL_STATUS: &'static str = "null";
 pub struct FakeDbEntry {
     id: u64,
     data: LocalEvent,
-    status: &'static str,
+    status: String,
 }
 
 /// Fake implemenation of ILocalStore that stores events in memory
@@ -40,7 +40,7 @@ impl MemoryLocalStore {
         let mut witnesses: Vec<Witness> = vec![];
 
         for witness in witness_events {
-            if let LocalEvent::Witness(w) = witness.data {
+            if let LocalEvent::Witness(w) = &witness.data {
                 witnesses.push(w.clone());
             }
         }
@@ -56,7 +56,7 @@ impl ILocalStore for MemoryLocalStore {
             if !self.events.iter().any(|e| e.data == new_event.clone()) {
                 let fake_entry = FakeDbEntry {
                     id: new_event.unique_id(),
-                    status: NULL_STATUS,
+                    status: NULL_STATUS.to_string(),
                     data: new_event.clone(),
                 };
                 self.events.push(fake_entry);
@@ -68,7 +68,7 @@ impl ILocalStore for MemoryLocalStore {
     fn get_events(&self, last_seen: u64) -> Vec<LocalEvent> {
         self.events[last_seen as usize..]
             .iter()
-            .map(|db_e| db_e.data)
+            .map(|db_e| db_e.data.clone())
             .collect()
     }
 
@@ -77,10 +77,17 @@ impl ILocalStore for MemoryLocalStore {
     }
 
     fn set_witness_status(&mut self, id: u64, status: WitnessStatus) -> Result<(), String> {
-        let mut event_to_update = self.events.iter().find(|e| e.id == id).unwrap();
-        event_to_update.status = &status.to_string();
+        let event_to_update = self.events.iter_mut().find(|e| e.id == id).unwrap();
+        event_to_update.status = status.to_string();
 
         Ok(())
+    }
+
+    fn get_witnesses_status(
+        &self,
+        last_event: u64,
+    ) -> Vec<crate::vault::transactions::memory_provider::StatusWitnessWrapper> {
+        todo!()
     }
 }
 

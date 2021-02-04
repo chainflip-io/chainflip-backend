@@ -11,7 +11,7 @@ use crate::{
 };
 use chainflip_common::types::{chain::*, unique_id::GetUniqueId};
 use parking_lot::RwLock;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     fmt,
@@ -37,10 +37,14 @@ impl<Q: PartialEq> FulfilledWrapper<Q> {
     }
 }
 
-#[derive(Debug, PartialEq)]
+/// Defines the processing stage the witness is in
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub enum WitnessStatus {
+    /// When it has been locally witnessed
     AwaitingConfirmation,
+    /// When it has been confirmed by the network, i.e. it's ready for processing
     Confirmed,
+    /// After it has been processed. No further action should be taken on this witness
     Processed,
 }
 
@@ -51,6 +55,7 @@ impl fmt::Display for WitnessStatus {
 }
 
 /// Witness plus a boolean flag
+#[derive(Debug)]
 pub struct StatusWitnessWrapper {
     /// The actual transaction
     pub inner: Witness,
@@ -357,6 +362,12 @@ impl<L: ILocalStore> TransactionProvider for MemoryTransactionsProvider<L> {
         }
 
         self.sync();
+        Ok(())
+    }
+
+    fn confirm_witness(&mut self, witness_id: u64) -> Result<(), String> {
+        let mut local_store = self.local_store.lock().unwrap();
+        local_store.set_witness_status(witness_id, WitnessStatus::Confirmed)?;
         Ok(())
     }
 
