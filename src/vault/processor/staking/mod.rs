@@ -69,6 +69,8 @@ fn process_deposit_quotes_inner(
         witnesses
     );
 
+    println!("Number of quotes to process: {}", quotes.len());
+
     for quote_info in quotes {
         // only process confirmed witnesses
         let wtxs: Vec<&StatusWitnessWrapper> = witnesses

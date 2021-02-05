@@ -105,6 +105,15 @@ impl TestRunner {
         self.sync();
     }
 
+    /// Confirms witnesses when called. This is used to emulate the
+    /// witness confirmer
+    pub fn confirm_witnesses(&mut self, witnesses: Vec<Witness>) {
+        let mut provider = self.provider.write();
+        for witness in witnesses {
+            provider.confirm_witness(witness.unique_id()).unwrap();
+        }
+    }
+
     /// A helper function that adds a deposit quote and the corresponding witnesses
     /// necessary for the deposit to be registered
     pub fn add_witnessed_deposit_quote(
@@ -245,7 +254,7 @@ pub struct EthDepositOutputs {
 fn spin_until_last_seen(receiver: &crossbeam_channel::Receiver<ProcessorEvent>, last_seen: u64) {
     // Long timeout just to make sure a failing test
     let timeout = Duration::from_secs(10);
-
+    println!("Spin until last seen, last_seen: {}", last_seen);
     loop {
         match receiver.recv_timeout(timeout) {
             Ok(event) => {
