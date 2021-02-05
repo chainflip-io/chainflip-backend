@@ -134,7 +134,6 @@ where
             amount: 100,
             coin: Coin::LOKI,
             event_number: None,
-            confirmed: false,
         };
 
         let tx = LocalEvent::Witness(tx);

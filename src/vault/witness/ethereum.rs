@@ -132,7 +132,6 @@ where
                         amount: transaction.value,
                         coin: Coin::ETH,
                         event_number: None,
-                        confirmed: false,
                     };
 
                     if tx.amount > 0 {

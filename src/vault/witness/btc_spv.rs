@@ -105,7 +105,6 @@ where
                         amount: utxo.value as u128,
                         coin: Coin::BTC,
                         event_number: None,
-                        confirmed: false,
                     };
 
                     witness_txs.push(tx.into());

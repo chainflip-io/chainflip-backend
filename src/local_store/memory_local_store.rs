@@ -28,25 +28,17 @@ impl MemoryLocalStore {
 
     /// Helper for getting just the witnesses
     pub fn get_witness_evts(&self) -> Vec<Witness> {
-        let witness_events: Vec<_> = self
+        let witnesses: Vec<Witness> = self
             .events
             .iter()
-            .filter(|e| {
-                if let LocalEvent::Witness(_) = e.data {
-                    true
+            .filter_map(|e| {
+                if let LocalEvent::Witness(w) = &e.data {
+                    Some(w.clone())
                 } else {
-                    false
+                    None
                 }
             })
             .collect();
-
-        let mut witnesses: Vec<Witness> = vec![];
-
-        for witness in witness_events {
-            if let LocalEvent::Witness(w) = &witness.data {
-                witnesses.push(w.clone());
-            }
-        }
 
         witnesses
     }
@@ -121,7 +113,6 @@ mod test {
             amount: 0,
             coin: Coin::BTC,
             event_number: Some(1),
-            confirmed: false,
         };
         let witness = LocalEvent::Witness(witness);
         let events = vec![witness];
