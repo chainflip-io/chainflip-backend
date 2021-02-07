@@ -8,7 +8,7 @@ use chainflip::{
         witness::OxenWitness,
     },
 };
-use chainflip_common::types::coin::Coin;
+use chainflip_common::types::{addresses::OxenAddress, coin::Coin};
 use parking_lot::RwLock;
 use std::{
     str::FromStr,
@@ -29,11 +29,11 @@ async fn test_oxen_rpc() {
     // integrated_address: "TGArxr3H99KcMxGDgLR9ejGmbY5iphPiG9YwDZyNiCM81dgM776a1h7FwFCZZxm7yPabRxQeyfLesBynTWP6DfJq5669EoibhUa2J8zgrtF2"
     // payment_id: "60900e5603bf96e3"
 
-    let own_address = OxenWalletAddress::from_str("T6UBx3DnXsocMxGDgLR9ejGmbY5iphPiG9YwDZyNiCM81dgM776a1h7FwFCZZxm7yPabRxQeyfLesBynTWP6DfJq1DAtb6QYn").unwrap();
+    let own_address = OxenAddress::from_str("T6UBx3DnXsocMxGDgLR9ejGmbY5iphPiG9YwDZyNiCM81dgM776a1h7FwFCZZxm7yPabRxQeyfLesBynTWP6DfJq1DAtb6QYn").unwrap();
 
-    let other_address = OxenWalletAddress::from_str("T6T6otxMejTKavFEQP66VufY9y8vr2Z6RMzoQ95BZx7KWy6zCngrfh39dUVtrF3crtLRFdXpmgjjH7658C74NoJ91imYo7zMk").unwrap();
+    let other_address = OxenAddress::from_str("T6T6otxMejTKavFEQP66VufY9y8vr2Z6RMzoQ95BZx7KWy6zCngrfh39dUVtrF3crtLRFdXpmgjjH7658C74NoJ91imYo7zMk").unwrap();
 
-    let int_address = OxenWalletAddress::from_str("TGArxr3H99KcMxGDgLR9ejGmbY5iphPiG9YwDZyNiCM81dgM776a1h7FwFCZZxm7yPabRxQeyfLesBynTWP6DfJq5669EoibhUa2J8zgrtF2").unwrap();
+    let int_address = OxenAddress::from_str("TGArxr3H99KcMxGDgLR9ejGmbY5iphPiG9YwDZyNiCM81dgM776a1h7FwFCZZxm7yPabRxQeyfLesBynTWP6DfJq5669EoibhUa2J8zgrtF2").unwrap();
 
     let amount = OxenAmount::from_atomic(100_000_000_000);
 
@@ -64,10 +64,7 @@ async fn test_oxen_witness() {
     info!("Integrated address: {:?}", int_address);
 
     let mut tx = TestData::swap_quote(Coin::ETH, Coin::OXEN);
-    tx.input_address_id = OxenPaymentId::from_str(&int_address.payment_id)
-        .unwrap()
-        .to_bytes()
-        .to_vec();
+    tx.input_address_id = hex::decode(&int_address.payment_id).unwrap();
 
     // Send some money to integrated address
     {
@@ -75,7 +72,7 @@ async fn test_oxen_witness() {
         info!("Balance before: {}", res);
 
         let amount = OxenAmount::from_atomic(50_000_000);
-        let address = OxenWalletAddress::from_str(&int_address.integrated_address)
+        let address = OxenAddress::from_str(&int_address.integrated_address)
             .expect("Incorrect wallet address");
         let res = oxen_rpc::transfer(PORT, &amount, &address).await;
 

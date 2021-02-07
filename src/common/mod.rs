@@ -13,8 +13,7 @@ pub mod ethereum;
 
 /// Definitions for Oxen
 pub mod oxen;
-
-pub use oxen::{OxenAmount, OxenPaymentId, OxenWalletAddress};
+pub use oxen::OxenAmount;
 
 /// Key value store definitions
 pub mod store;
