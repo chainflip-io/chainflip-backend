@@ -51,8 +51,7 @@ impl ILocalStore for PersistentLocalStore {
             INSERT INTO events
             (id, data) VALUES (?1, ?2)
             ",
-                // TODO: how to get around u32 limit of sqlite?
-                params![id as u32, blob],
+                params![id as i64, blob],
             ) {
                 Ok(_) => {
                     trace!("Event ({:#} added to db", id);
@@ -82,8 +81,7 @@ impl ILocalStore for PersistentLocalStore {
         while let Some(row) = rows.next().expect("Rows should be readable") {
             let data_str: String = row.get(0).unwrap();
             let mut l_evt = serde_json::from_str::<LocalEvent>(&data_str).unwrap();
-            // sqlite limited to u32
-            let row_val: u32 = row.get(1).unwrap();
+            let row_val: i64 = row.get(1).unwrap();
             l_evt.set_event_number(row_val as u64);
             recent_events.push(l_evt);
         }
@@ -97,7 +95,7 @@ impl ILocalStore for PersistentLocalStore {
             .prepare("SELECT COUNT(*) FROM events")
             .expect("Could not prepare stmt");
 
-        let count: Result<u32, _> = total_events.query_row(NO_PARAMS, |row| row.get(0));
+        let count: Result<i64, _> = total_events.query_row(NO_PARAMS, |row| row.get(0));
 
         count.unwrap() as u64
     }
@@ -109,8 +107,7 @@ impl ILocalStore for PersistentLocalStore {
             .expect("Could not prepare stmt");
 
         let mut rows = select_events
-            // only u32 or smaller is castable to a SQL type
-            .query(params![last_seen as u32])
+            .query(params![last_seen as i64])
             .map_err(|err| err.to_string())
             .unwrap();
 
@@ -119,9 +116,8 @@ impl ILocalStore for PersistentLocalStore {
         while let Some(row) = rows.next().expect("Rows should be readable") {
             let data_str: String = row.get(0).unwrap();
             let witness = serde_json::from_str::<LocalEvent>(&data_str).unwrap();
-            // sqlite limited to u32
             if let LocalEvent::Witness(mut w) = witness {
-                let row_val: u32 = row.get(1).unwrap();
+                let row_val: i64 = row.get(1).unwrap();
                 let status: String = row.get(2).unwrap_or(NULL_STATUS.to_string());
                 let witness_status: WitnessStatus =
                     WitnessStatus::from_str(&status).unwrap_or(WitnessStatus::AwaitingConfirmation);
@@ -134,8 +130,6 @@ impl ILocalStore for PersistentLocalStore {
             }
         }
 
-        // println!("{:#?}", recent_witnesses);
-
         recent_witnesses
     }
 
@@ -147,8 +141,7 @@ impl ILocalStore for PersistentLocalStore {
             UPDATE events SET status = ?1
             WHERE id = ?2
             ",
-            // TODO: how to get around u32 limit of sqlite?
-            params![status, id as u32],
+            params![status, id as i64],
         ) {
             Ok(n) => {
                 debug!("Witness {} updated to status {}", id, status);

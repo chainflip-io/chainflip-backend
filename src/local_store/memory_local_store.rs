@@ -8,7 +8,7 @@ use super::{ILocalStore, LocalEvent, StorageItem};
 
 pub const NULL_STATUS: &'static str = "null";
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FakeDbEntry {
     id: u64,
     data: LocalEvent,
