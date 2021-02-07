@@ -4,7 +4,7 @@ use crate::{common::store::KeyValueStore, vault::transactions::TransactionProvid
 
 use chainflip_common::types::Network;
 pub use output::{
-    BtcOutputSender, CoinProcessor, EthOutputSender, LokiSender, OutputCoinProcessor,
+    BtcOutputSender, CoinProcessor, EthOutputSender, OutputCoinProcessor, OxenSender,
 };
 use parking_lot::RwLock;
 

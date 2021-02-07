@@ -18,15 +18,15 @@ where
     E: OutputSender,
     B: OutputSender,
 {
-    loki: L,
+    oxen: L,
     eth: E,
     btc: B,
 }
 
 impl<L: OutputSender, E: OutputSender, B: OutputSender> OutputCoinProcessor<L, E, B> {
     /// Create a new output coin processor
-    pub fn new(loki: L, eth: E, btc: B) -> Self {
-        OutputCoinProcessor { eth, btc, loki }
+    pub fn new(oxen: L, eth: E, btc: B) -> Self {
+        OutputCoinProcessor { eth, btc, oxen }
     }
 }
 
@@ -41,7 +41,7 @@ where
         match coin {
             Coin::ETH => self.eth.send(outputs).await,
             Coin::BTC => self.btc.send(outputs).await,
-            Coin::LOKI => self.loki.send(outputs).await,
+            Coin::OXEN => self.oxen.send(outputs).await,
         }
     }
 }

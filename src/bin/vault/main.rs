@@ -8,13 +8,13 @@ use chainflip::{
     utils::{address::generate_btc_address_from_index, bip44},
     vault::{
         api::APIServer,
-        blockchain_connection::{BtcSPVClient, LokiConnection, LokiConnectionConfig, Web3Client},
+        blockchain_connection::{BtcSPVClient, OxenConnection, OxenConnectionConfig, Web3Client},
         config::VAULT_CONFIG,
         processor::{
-            BtcOutputSender, EthOutputSender, LokiSender, OutputCoinProcessor, SideChainProcessor,
+            BtcOutputSender, EthOutputSender, OutputCoinProcessor, OxenSender, SideChainProcessor,
         },
         transactions::{MemoryTransactionsProvider, TransactionProvider},
-        witness::{BtcSPVWitness, EthereumWitness, LokiWitness, WitnessConfirmer},
+        witness::{BtcSPVWitness, EthereumWitness, OxenWitness, WitnessConfirmer},
     },
 };
 use chainflip_common::types::Network;
@@ -47,12 +47,12 @@ fn main() {
 
     let provider = Arc::new(RwLock::new(provider));
 
-    let config = LokiConnectionConfig {
-        rpc_wallet_port: vault_config.loki.rpc.port,
+    let config = OxenConnectionConfig {
+        rpc_wallet_port: vault_config.oxen.rpc.port,
     };
 
-    let loki_connection = LokiConnection::new(config);
-    let loki_block_receiver = loki_connection.start();
+    let oxen_connection = OxenConnection::new(config);
+    let oxen_block_receiver = oxen_connection.start();
 
     let eth_client =
         Web3Client::url(&vault_config.eth.provider_url).expect("Failed to create web3 client");
@@ -89,12 +89,12 @@ fn main() {
     let db_connection = rusqlite::Connection::open("blocks.db").expect("Could not open database");
     let kvs = Arc::new(Mutex::new(PersistentKVS::new(db_connection)));
 
-    let loki_witness = LokiWitness::new(loki_block_receiver, provider.clone());
+    let oxen_witness = OxenWitness::new(oxen_block_receiver, provider.clone());
     let eth_witness = EthereumWitness::new(Arc::new(eth_client.clone()), provider.clone(), kvs);
     let btc_witness = BtcSPVWitness::new(Arc::new(btc.clone()), provider.clone());
     let witness_confirmer = WitnessConfirmer::new(provider.clone());
 
-    loki_witness.start();
+    oxen_witness.start();
     eth_witness.start();
     btc_witness.start();
     witness_confirmer.start();
@@ -102,7 +102,7 @@ fn main() {
     // Processor
     let db_connection = rusqlite::Connection::open("blocks.db").expect("Could not open database");
     let kvs = PersistentKVS::new(db_connection);
-    let loki = LokiSender::new(vault_config.loki.rpc.clone(), vault_config.net_type);
+    let oxen = OxenSender::new(vault_config.oxen.rpc.clone(), vault_config.net_type);
 
     let eth_key_pair = match bip44::KeyPair::from_private_key(&vault_config.eth.private_key) {
         Ok(key) => key,
@@ -121,7 +121,7 @@ fn main() {
         vault_config.net_type,
     );
 
-    let coin_processor = OutputCoinProcessor::new(loki, eth_sender, btc_sender);
+    let coin_processor = OutputCoinProcessor::new(oxen, eth_sender, btc_sender);
     let processor =
         SideChainProcessor::new(provider.clone(), kvs, coin_processor, vault_config.net_type);
 

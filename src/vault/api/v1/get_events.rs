@@ -50,7 +50,7 @@ pub async fn get_events<L: ILocalStore>(
     let number = number.unwrap_or(DEFAULT_EVENT_NUMBER);
     let limit = limit.unwrap_or(MAX_EVENTS_IN_RESPONSE);
 
-    let mut local_store = local_store.lock().unwrap();
+    let local_store = local_store.lock().unwrap();
     let total_events = local_store.total_events();
 
     if total_events == 0 || number >= total_events as u32 || limit <= 0 {
@@ -113,7 +113,7 @@ mod test {
 
         local_store
             .add_events(vec![
-                TestData::swap_quote(Coin::ETH, Coin::LOKI).into(),
+                TestData::swap_quote(Coin::ETH, Coin::OXEN).into(),
                 TestData::witness(0, 100, Coin::ETH).into(),
                 TestData::witness(1, 123, Coin::BTC).into(),
             ])

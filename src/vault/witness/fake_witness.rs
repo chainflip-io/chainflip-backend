@@ -33,7 +33,7 @@ where
 {
     /// Outstanding quotes (make sure this stays synced)
     quotes: Vec<SwapQuote>,
-    loki_connection: Receiver<Block>,
+    oxen_connection: Receiver<Block>,
     local_store: Arc<Mutex<T>>,
 
     // We should save this to a DB (maybe not, because when we restart, we might want to rescan the db for all quotes?)
@@ -50,7 +50,7 @@ where
 
         FakeWitness {
             quotes: vec![],
-            loki_connection: bc,
+            oxen_connection: bc,
             local_store,
             next_event,
         }
@@ -75,9 +75,9 @@ where
     /// Returns `true` if we can poll again
     fn poll_main_chain(&self) -> bool {
         loop {
-            match self.loki_connection.try_recv() {
+            match self.oxen_connection.try_recv() {
                 Ok(block) => {
-                    debug!("Received message from loki blockchain: {:?}", block);
+                    debug!("Received message from oxen blockchain: {:?}", block);
                     self.process_main_chain_block(block);
                 }
                 Err(crossbeam_channel::TryRecvError::Disconnected) => {
@@ -132,7 +132,7 @@ where
             transaction_block_number: 0,
             transaction_index: 0,
             amount: 100,
-            coin: Coin::LOKI,
+            coin: Coin::OXEN,
             event_number: None,
         };
 

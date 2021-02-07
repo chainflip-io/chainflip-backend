@@ -6,7 +6,7 @@ use crate::{
     local_store::LocalEvent,
 };
 use chainflip_common::types::{chain::*, unique_id::GetUniqueId};
-use itertools::{Itertools, Unique};
+use itertools::Itertools;
 use rusqlite::{self, Row, ToSql, Transaction};
 use rusqlite::{params, Connection};
 use serde::de::DeserializeOwned;
@@ -191,7 +191,7 @@ impl EventProcessor for Database {
         }
 
         if let Err(err) = self.increment_last_processed_event_number(events.len() as u64) {
-            error!("Failed to increment last_processed_event_number");
+            error!("Failed to increment last_processed_event_number: {}", err);
             return Err(format!("Failed to increment last_processed_event_number"));
         }
 
@@ -324,7 +324,7 @@ mod test {
 
         let events: Vec<LocalEvent> = vec![
             TestData::pool_change(Coin::BTC, -100, 100).into(),
-            TestData::swap_quote(Coin::ETH, Coin::LOKI).into(),
+            TestData::swap_quote(Coin::ETH, Coin::OXEN).into(),
             TestData::deposit_quote(Coin::ETH).into(),
         ];
 
@@ -341,7 +341,7 @@ mod test {
 
         let events: Vec<LocalEvent> = vec![
             TestData::pool_change(Coin::BTC, -100, 100).into(),
-            TestData::swap_quote(Coin::ETH, Coin::LOKI).into(),
+            TestData::swap_quote(Coin::ETH, Coin::OXEN).into(),
             TestData::deposit_quote(Coin::ETH).into(),
             TestData::witness(1212, 100, Coin::ETH).into(),
             TestData::output(Coin::ETH, 100).into(),

@@ -49,13 +49,13 @@ pub(crate) fn aggregate_current_portions(
     portions
         .iter()
         .map(|(staker_id, portion)| {
-            let loki = amount_from_portion(*portion, liquidity.base_depth);
+            let oxen = amount_from_portion(*portion, liquidity.base_depth);
             let other = amount_from_portion(*portion, liquidity.depth);
 
             StakerOwnership {
                 staker_id: staker_id.clone(),
                 pool_type: pool_coin,
-                loki: LokiAmount::from_atomic(loki),
+                oxen: OxenAmount::from_atomic(oxen),
                 other: GenericCoinAmount::from_atomic(pool_coin.into(), other),
             }
         })
@@ -66,17 +66,17 @@ pub(crate) fn aggregate_current_portions(
 #[derive(Debug)]
 struct EffectiveDepositContribution {
     staker_id: StakerId,
-    /// We only need to keep track of the loki amount because
+    /// We only need to keep track of the oxen amount because
     /// we know the other coin is contributed the equivalent
     /// amount after autoswapping (proportional to the ratio
     /// in the pool at the time of staking)
-    loki_amount: LokiAmount,
+    oxen_amount: OxenAmount,
 }
 
 /// Pool change associated with staker id
 pub(crate) struct DepositContribution {
     staker_id: StakerId,
-    loki_amount: LokiAmount,
+    oxen_amount: OxenAmount,
     /// This amount is actually unused since we can always
     /// assume the contribute is symmetric at this point
     /// (due to autoswap)
@@ -85,8 +85,11 @@ pub(crate) struct DepositContribution {
 
 /// How much (`fraction`) `staker_id` withdrew from `pool`
 pub struct Withdrawal {
+    /// The staker associated with the withdrawal
     pub staker_id: StakerId,
+    /// The amount to withdraw
     pub fraction: WithdrawFraction,
+    /// The pool to withdraw from
     pub pool: PoolCoin,
 }
 
@@ -99,12 +102,12 @@ impl DepositContribution {
     /// Create for fileds
     pub fn new(
         staker_id: StakerId,
-        loki_amount: LokiAmount,
+        oxen_amount: OxenAmount,
         other_amount: GenericCoinAmount,
     ) -> Self {
         DepositContribution {
             staker_id,
-            loki_amount,
+            oxen_amount,
             other_amount,
         }
     }
@@ -116,16 +119,16 @@ fn amount_from_fraction_and_portion(
     portion: Portion,
     total: u128,
 ) -> u128 {
-    let loki_owned = amount_from_portion(portion, total);
+    let oxen_owned = amount_from_portion(portion, total);
 
-    let loki_owned: U256 = loki_owned.into();
+    let oxen_owned: U256 = oxen_owned.into();
     let fraction: U256 = fraction.value().into();
     let max_fraction: U256 = WithdrawFraction::MAX.value().into();
 
-    let loki: U256 = loki_owned * fraction / max_fraction;
+    let oxen: U256 = oxen_owned * fraction / max_fraction;
 
-    let loki: u128 = loki.try_into().expect("Unexpected overflow");
-    loki
+    let oxen: u128 = oxen.try_into().expect("Unexpected overflow");
+    oxen
 }
 
 /// Adjust portions taking `withdraw` into account
@@ -142,7 +145,7 @@ fn adjust_portions_after_withdraw_for_coin(
         .get(&withdrawal.staker_id)
         .expect("Staker id must exist");
 
-    let loki = amount_from_fraction_and_portion(fraction, portion, liquidity.base_depth);
+    let oxen = amount_from_fraction_and_portion(fraction, portion, liquidity.base_depth);
 
     let staker_amounts = aggregate_current_portions(&portions, *liquidity, pool);
 
@@ -160,13 +163,13 @@ fn adjust_portions_after_withdraw_for_coin(
 
     let mut withdrawer_entry = withdrawer_entries.pop().unwrap();
 
-    let loki_withdrawn = withdrawer_entry.loki.to_atomic().min(loki);
-    withdrawer_entry.loki = withdrawer_entry
-        .loki
-        .checked_sub(&LokiAmount::from_atomic(loki_withdrawn))
+    let oxen_withdrawn = withdrawer_entry.oxen.to_atomic().min(oxen);
+    withdrawer_entry.oxen = withdrawer_entry
+        .oxen
+        .checked_sub(&OxenAmount::from_atomic(oxen_withdrawn))
         .expect("underflow");
 
-    let new_total_loki = liquidity.base_depth.saturating_sub(loki_withdrawn);
+    let new_total_oxen = liquidity.base_depth.saturating_sub(oxen_withdrawn);
 
     // Adjust everyone's portions according to the new total amount
 
@@ -189,9 +192,9 @@ fn adjust_portions_after_withdraw_for_coin(
             .get_mut(&entry.staker_id)
             .expect("staker entry must exist");
 
-        let owned = entry.loki.to_atomic();
+        let owned = entry.oxen.to_atomic();
 
-        let p = portion_from_amount(owned, new_total_loki);
+        let p = portion_from_amount(owned, new_total_oxen);
         *portion = p;
 
         dust_left_from_portions = dust_left_from_portions.checked_sub(p).expect("underflow");
@@ -235,9 +238,9 @@ fn adjust_portions_after_deposit_for_coin(
 
     // Adjust portions for the existing staker ids
 
-    let extra_loki = contribution.loki_amount.to_atomic();
+    let extra_oxen = contribution.oxen_amount.to_atomic();
 
-    let new_total_loki = liquidity.base_depth + extra_loki;
+    let new_total_oxen = liquidity.base_depth + extra_oxen;
 
     let mut portions_sum = Portion(0);
 
@@ -249,7 +252,7 @@ fn adjust_portions_after_deposit_for_coin(
         // Deposits are always symmetric (after auto-swapping any asymmetric deposit),
         // so we can use any coin to compute new portions:
 
-        let p = portion_from_amount(entry.loki.to_atomic(), new_total_loki);
+        let p = portion_from_amount(entry.oxen.to_atomic(), new_total_oxen);
 
         portions_sum = portions_sum.checked_add(p).expect("poritons overflow");
 
@@ -285,29 +288,29 @@ fn compute_effective_contribution(
     deposit: &DepositContribution,
     liquidity: &Liquidity,
 ) -> EffectiveDepositContribution {
-    let loki_amount = deposit.loki_amount;
+    let oxen_amount = deposit.oxen_amount;
     let other_amount = deposit.other_amount;
 
-    let effective_loki = if liquidity.depth == 0 {
+    let effective_oxen = if liquidity.depth == 0 {
         info!(
             "First deposit into {} pool, autoswap is not performed",
             other_amount.coin_type()
         );
-        loki_amount
+        oxen_amount
     } else {
-        let (effective_loki, other) =
-            utils::autoswap::calc_autoswap_amount(loki_amount, other_amount, *liquidity)
+        let (effective_oxen, other) =
+            utils::autoswap::calc_autoswap_amount(oxen_amount, other_amount, *liquidity)
                 .expect("incorrect autoswap usage");
         info!(
             "Autoswapped from ({:?}, {:?}) to ({:?}, {:?})",
-            loki_amount, other_amount, effective_loki, other
+            oxen_amount, other_amount, effective_oxen, other
         );
-        effective_loki
+        effective_oxen
     };
 
     EffectiveDepositContribution {
         staker_id: deposit.staker_id.clone(),
-        loki_amount: effective_loki,
+        oxen_amount: effective_oxen,
     }
 }
 
@@ -353,7 +356,7 @@ mod tests {
 
     #[test]
     fn check_amount_from_portion() {
-        let total_amount = LokiAmount::from_decimal_string("1000.0").to_atomic();
+        let total_amount = OxenAmount::from_decimal_string("1000.0").to_atomic();
 
         assert_eq!(
             amount_from_portion(Portion::MAX, total_amount),
@@ -384,8 +387,8 @@ mod tests {
             }
         }
 
-        fn add_deposit_eth(&mut self, staker_id: &StakerId, amount: LokiAmount) {
-            // For convinience, eth amount is computed from loki amount:
+        fn add_deposit_eth(&mut self, staker_id: &StakerId, amount: OxenAmount) {
+            // For convinience, eth amount is computed from oxen amount:
             let factor = 1000;
             let other_amount =
                 GenericCoinAmount::from_atomic(Coin::ETH, amount.to_atomic() * factor);
@@ -393,7 +396,7 @@ mod tests {
             self.add_asymmetric_deposit(staker_id, amount, other_amount);
         }
 
-        fn add_deposit_btc(&mut self, staker_id: &StakerId, amount: LokiAmount) {
+        fn add_deposit_btc(&mut self, staker_id: &StakerId, amount: OxenAmount) {
             let factor = 1000;
             let other_amount =
                 GenericCoinAmount::from_atomic(Coin::BTC, amount.to_atomic() * factor);
@@ -404,20 +407,20 @@ mod tests {
         fn add_asymmetric_deposit(
             &mut self,
             staker_id: &StakerId,
-            loki_amount: LokiAmount,
+            oxen_amount: OxenAmount,
             other_amount: GenericCoinAmount,
         ) {
-            let deposit = DepositContribution::new(staker_id.clone(), loki_amount, other_amount);
+            let deposit = DepositContribution::new(staker_id.clone(), oxen_amount, other_amount);
 
             adjust_portions_after_deposit_for_coin(&mut self.portions, &self.liquidity, &deposit);
 
             self.liquidity = Liquidity {
                 depth: self.liquidity.depth + deposit.other_amount.to_atomic(),
-                base_depth: self.liquidity.base_depth + deposit.loki_amount.to_atomic(),
+                base_depth: self.liquidity.base_depth + deposit.oxen_amount.to_atomic(),
             };
         }
 
-        /// Withdraw, other amount is derived from loki_amount
+        /// Withdraw, other amount is derived from oxen_amount
         fn withdraw_symmetric(
             &mut self,
             staker_id: &StakerId,
@@ -428,10 +431,10 @@ mod tests {
                 .portions
                 .get(staker_id)
                 .expect("Staker id is expected to have portions");
-            let loki_amount =
+            let oxen_amount =
                 amount_from_fraction_and_portion(fraction, portion, self.liquidity.base_depth);
 
-            let other_amount = loki_amount * self.liquidity.depth / self.liquidity.base_depth;
+            let other_amount = oxen_amount * self.liquidity.depth / self.liquidity.base_depth;
 
             let withdrawal = Withdrawal {
                 staker_id: staker_id.to_owned(),
@@ -450,7 +453,7 @@ mod tests {
                 base_depth: self
                     .liquidity
                     .base_depth
-                    .checked_sub(loki_amount)
+                    .checked_sub(oxen_amount)
                     .expect("underflow"),
             }
         }
@@ -475,7 +478,7 @@ mod tests {
         let alice = get_random_staker().id();
         let bob = get_random_staker().id();
 
-        let amount1 = LokiAmount::from_decimal_string("100.0");
+        let amount1 = OxenAmount::from_decimal_string("100.0");
 
         // 1. First contribution from Alice
 
@@ -494,7 +497,7 @@ mod tests {
 
         // 3. Another contribution from Alice
 
-        let amount2 = LokiAmount::from_decimal_string("200.0");
+        let amount2 = OxenAmount::from_decimal_string("200.0");
 
         runner.add_deposit_eth(&alice, amount2);
 
@@ -512,7 +515,7 @@ mod tests {
         let alice = get_random_staker().id();
         let bob = get_random_staker().id();
 
-        let amount1 = LokiAmount::from_decimal_string("100.0");
+        let amount1 = OxenAmount::from_decimal_string("100.0");
 
         // 1. First contribution from Alice
 
@@ -538,7 +541,7 @@ mod tests {
         let alice = get_random_staker().id();
         let bob = get_random_staker().id();
 
-        let amount = LokiAmount::from_decimal_string("100.0");
+        let amount = OxenAmount::from_decimal_string("100.0");
 
         let eth = GenericCoinAmount::from_atomic(Coin::ETH, 0);
 
@@ -567,7 +570,7 @@ mod tests {
         let alice = get_random_staker().id();
         let bob = get_random_staker().id();
 
-        let amount = LokiAmount::from_decimal_string("100.0");
+        let amount = OxenAmount::from_decimal_string("100.0");
 
         let btc = GenericCoinAmount::from_atomic(Coin::BTC, 0);
 
@@ -597,7 +600,7 @@ mod tests {
 
         let alice = get_random_staker().id();
 
-        let amount = LokiAmount::from_decimal_string("100.0");
+        let amount = OxenAmount::from_decimal_string("100.0");
 
         runner.add_deposit_eth(&alice, amount);
 
@@ -623,7 +626,7 @@ mod tests {
         let alice = get_random_staker().id();
         let bob = get_random_staker().id();
 
-        let amount = LokiAmount::from_decimal_string("100.0");
+        let amount = OxenAmount::from_decimal_string("100.0");
 
         runner.add_deposit_eth(&alice, amount);
         runner.add_deposit_eth(&bob, amount);
@@ -655,7 +658,7 @@ mod tests {
         let bob = get_random_staker().id();
         let charlie = get_random_staker().id();
 
-        let amount = LokiAmount::from_decimal_string("100.0");
+        let amount = OxenAmount::from_decimal_string("100.0");
 
         runner.add_deposit_eth(&alice, amount);
         runner.add_deposit_eth(&bob, amount);
@@ -687,23 +690,23 @@ mod tests {
         let mut runner = TestRunner::new();
 
         // 1. No autoswap on the first deposit: it creates initial liquidity
-        let loki = LokiAmount::from_decimal_string("500.0");
+        let oxen = OxenAmount::from_decimal_string("500.0");
         let btc = GenericCoinAmount::from_decimal_string(Coin::BTC, "0.02");
 
         let alice = get_random_staker().id();
 
-        runner.add_asymmetric_deposit(&alice, loki, btc);
+        runner.add_asymmetric_deposit(&alice, oxen, btc);
 
-        // 2. Bob contributes half of what Alice contributed in Loki, but
+        // 2. Bob contributes half of what Alice contributed in Oxen, but
         // a larger amount of BTC, which should result in autoswap (and a
         // higher that 33.3% portion for Bob)
 
         let bob = get_random_staker().id();
 
-        let loki = LokiAmount::from_decimal_string("250.0");
+        let oxen = OxenAmount::from_decimal_string("250.0");
         let btc = GenericCoinAmount::from_decimal_string(Coin::BTC, "0.028");
 
-        runner.add_asymmetric_deposit(&bob, loki, btc);
+        runner.add_asymmetric_deposit(&bob, oxen, btc);
 
         let a = runner
             .portions

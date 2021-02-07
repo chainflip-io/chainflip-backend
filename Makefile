@@ -10,6 +10,10 @@ test:
 build:
 	cargo build --release
 
+.PHONY: init
+init:
+	git submodule update --init --recursive
+
 .PHONY: update
 update:
 	git submodule foreach --recursive git pull origin master

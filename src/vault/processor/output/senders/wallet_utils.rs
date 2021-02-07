@@ -97,10 +97,10 @@ mod test {
 
     #[test]
     fn returns_wallet_outputs() {
-        let biggest_output_tx = TestData::output(Coin::LOKI, 1000);
-        let big_output_tx = TestData::output(Coin::LOKI, 700);
-        let medium_output_tx = TestData::output(Coin::LOKI, 500);
-        let small_output_tx = TestData::output(Coin::LOKI, 100);
+        let biggest_output_tx = TestData::output(Coin::OXEN, 1000);
+        let big_output_tx = TestData::output(Coin::OXEN, 700);
+        let medium_output_tx = TestData::output(Coin::OXEN, 500);
+        let small_output_tx = TestData::output(Coin::OXEN, 100);
 
         let outputs = vec![
             big_output_tx.clone(),

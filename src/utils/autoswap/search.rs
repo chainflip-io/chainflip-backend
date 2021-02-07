@@ -1,5 +1,5 @@
 use crate::{
-    common::{GenericCoinAmount, Liquidity, LokiAmount},
+    common::{GenericCoinAmount, Liquidity, OxenAmount},
     utils,
 };
 use chainflip_common::types::coin::Coin;
@@ -7,7 +7,7 @@ use num_bigint::{BigInt, Sign};
 use std::convert::TryInto;
 
 #[derive(Debug, Clone, Copy)]
-struct LokiError(i128);
+struct OxenError(i128);
 
 fn try_x_inner(
     x0: u128,
@@ -49,10 +49,10 @@ fn try_x_inner(
     let dl2 = &dl + &x - &ifee;
     let de2 = &de - &y - &ofee;
 
-    // the amount of loki proportional to e2
+    // the amount of oxen proportional to e2
     let l_target = e2 * dl2 / de2;
 
-    // the amount of loki left
+    // the amount of oxen left
     let l2 = l - x;
 
     let error = &l_target - &l2;
@@ -150,23 +150,23 @@ fn find_x(x0: u128, x2: u128, state: &State) -> Result<u128, ()> {
     Ok(x)
 }
 
-/// Find atomic amount `x` of Loki that should be swapped
+/// Find atomic amount `x` of Oxen that should be swapped
 /// for the other coin in autoswap
-pub(super) fn find_loki_x(
-    loki: LokiAmount,
+pub(super) fn find_oxen_x(
+    oxen: OxenAmount,
     other: GenericCoinAmount,
     liquidity: Liquidity,
     ifee: u128,
 ) -> Result<u128, ()> {
     let x0 = ifee;
-    let x2 = loki.to_atomic();
+    let x2 = oxen.to_atomic();
 
     let dl = liquidity.base_depth;
     let de = liquidity.depth;
 
     let state = State {
-        input: loki.to_atomic(),
-        input_coin: Coin::LOKI,
+        input: oxen.to_atomic(),
+        input_coin: Coin::OXEN,
         output_coin: other.coin_type(),
         output: other.to_atomic(),
         input_depth: dl,
@@ -178,20 +178,20 @@ pub(super) fn find_loki_x(
     find_x(x0, x2, &state)
 }
 
-/// Find atomic amount `x` of the "non-loki" coin that should be swapped
-/// for Loki in autoswap
+/// Find atomic amount `x` of the "non-oxen" coin that should be swapped
+/// for Oxen in autoswap
 pub(super) fn find_other_x(
-    loki: LokiAmount,
+    oxen: OxenAmount,
     other_amount: GenericCoinAmount,
     liquidity: Liquidity,
     ofee: u128,
 ) -> Option<u128> {
-    let loki = loki.to_atomic();
+    let oxen = oxen.to_atomic();
     let other = other_amount.to_atomic();
     let dl = liquidity.base_depth;
     let de = liquidity.depth;
 
-    // min amount of other coin to swap to get non-negative loki as output:
+    // min amount of other coin to swap to get non-negative oxen as output:
     let x0 = find_min_other(dl, de, ofee).ok()?;
 
     if x0 > other {
@@ -203,8 +203,8 @@ pub(super) fn find_other_x(
     let state = State {
         input: other,
         input_coin: other_amount.coin_type(),
-        output_coin: Coin::LOKI,
-        output: loki,
+        output_coin: Coin::OXEN,
+        output: oxen,
         input_depth: de,
         output_depth: dl,
         ifee: 0,
@@ -214,7 +214,7 @@ pub(super) fn find_other_x(
     find_x(x0, x2, &state).ok()
 }
 
-/// Find minimum amount of the non-loki coin to swap to get a non-negative loki output
+/// Find minimum amount of the non-oxen coin to swap to get a non-negative oxen output
 /// (i.e. taking ouptut fee into account)
 fn find_min_other(dl: u128, de: u128, ofee: u128) -> Result<u128, &'static str> {
     let dl: BigInt = dl.into();
@@ -223,7 +223,7 @@ fn find_min_other(dl: u128, de: u128, ofee: u128) -> Result<u128, &'static str> 
 
     // Solving quadratic equation x^2 + p * x + q = 0, obtained
     // from solving the price equation (`calculate_output_amount`)
-    // for f(x) = LOKI_SWAP_PROCESS_FEE
+    // for f(x) = OXEN_SWAP_PROCESS_FEE
 
     let p = BigInt::from(2) * &de - (&dl * &de) / &ofee;
     let q = &de * &de;
@@ -255,25 +255,25 @@ fn find_min_other(dl: u128, de: u128, ofee: u128) -> Result<u128, &'static str> 
 mod tests {
 
     use super::*;
-    use crate::{common::GenericCoinAmount, constants::LOKI_SWAP_PROCESS_FEE, utils};
+    use crate::{common::GenericCoinAmount, constants::OXEN_SWAP_PROCESS_FEE, utils};
 
-    fn loki(x: u128) -> LokiAmount {
-        LokiAmount::from_atomic(x * 1_000_000_000)
+    fn oxen(x: u128) -> OxenAmount {
+        OxenAmount::from_atomic(x * 1_000_000_000)
     }
 
     fn eth(x: u128) -> GenericCoinAmount {
         GenericCoinAmount::from_atomic(Coin::ETH, x * 1_000_000_000_000_000_000)
     }
 
-    fn liquidity(l: LokiAmount, e: GenericCoinAmount) -> Liquidity {
+    fn liquidity(l: OxenAmount, e: GenericCoinAmount) -> Liquidity {
         Liquidity::new(e.to_atomic(), l.to_atomic())
     }
 
     #[test]
     fn negative_discriminant() {
         let de = eth(100).to_atomic();
-        let dl = LOKI_SWAP_PROCESS_FEE * 4;
-        let ofee = LOKI_SWAP_PROCESS_FEE;
+        let dl = OXEN_SWAP_PROCESS_FEE * 4;
+        let ofee = OXEN_SWAP_PROCESS_FEE;
 
         find_min_other(dl, de, ofee).unwrap();
 
@@ -284,19 +284,19 @@ mod tests {
 
     #[test]
     fn min_swappable_amount() {
-        let dl = loki(200).to_atomic();
+        let dl = oxen(200).to_atomic();
         let de = eth(200).to_atomic();
 
-        let x = find_min_other(dl, de, LOKI_SWAP_PROCESS_FEE).unwrap();
+        let x = find_min_other(dl, de, OXEN_SWAP_PROCESS_FEE).unwrap();
 
         let y = utils::price::calculate_output_amount(
             Coin::ETH,
             x,
             de,
             0,
-            Coin::LOKI,
+            Coin::OXEN,
             dl,
-            LOKI_SWAP_PROCESS_FEE,
+            OXEN_SWAP_PROCESS_FEE,
         )
         .unwrap_or(0);
 
@@ -312,22 +312,22 @@ mod tests {
     }
 
     #[test]
-    fn search_loki_x() {
-        let l = loki(1_000_000);
+    fn search_oxen_x() {
+        let l = oxen(1_000_000);
         let e = eth(2_000);
-        let dl = loki(20_000_000);
+        let dl = oxen(20_000_000);
         let de = eth(100_000);
 
-        assert!(find_loki_x(l, e, liquidity(dl, de), LOKI_SWAP_PROCESS_FEE).is_ok());
+        assert!(find_oxen_x(l, e, liquidity(dl, de), OXEN_SWAP_PROCESS_FEE).is_ok());
     }
 
     #[test]
     fn search_other_x() {
-        let l = loki(1_000_000);
+        let l = oxen(1_000_000);
         let e = eth(20_000);
-        let dl = loki(20_000_000);
+        let dl = oxen(20_000_000);
         let de = eth(100_000);
 
-        assert!(find_other_x(l, e, liquidity(dl, de), LOKI_SWAP_PROCESS_FEE).is_some());
+        assert!(find_other_x(l, e, liquidity(dl, de), OXEN_SWAP_PROCESS_FEE).is_some());
     }
 }

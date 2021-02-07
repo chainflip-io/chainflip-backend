@@ -88,9 +88,9 @@ where
         expires_at: get_swap_expire_timestamp(&quote.timestamp).0,
         pool: quote.pool,
         staker_id: StakerId::from_bytes(&quote.staker_id).unwrap().to_string(),
-        loki_input_address: quote.base_input_address.to_string(),
+        oxen_input_address: quote.base_input_address.to_string(),
         coin_input_address: quote.coin_input_address.to_string(),
-        loki_return_address: quote.base_return_address.to_string(),
+        oxen_return_address: quote.base_return_address.to_string(),
         coin_return_address: quote.coin_return_address.to_string(),
     })
 }

@@ -3,8 +3,6 @@ use std::{str::FromStr, u64};
 use crate::vault::transactions::memory_provider::{StatusWitnessWrapper, WitnessStatus};
 
 use super::{memory_local_store::NULL_STATUS, EventNumber, ILocalStore, LocalEvent, StorageItem};
-use chainflip_common::types::chain::Witness;
-use reqwest::StatusCode;
 use rusqlite::Connection as DB;
 use rusqlite::{params, NO_PARAMS};
 
@@ -143,7 +141,7 @@ impl ILocalStore for PersistentLocalStore {
             ",
             params![status, id as i64],
         ) {
-            Ok(n) => {
+            Ok(_) => {
                 debug!("Witness {} updated to status {}", id, status);
             }
             Err(e) => {

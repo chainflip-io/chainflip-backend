@@ -1,23 +1,28 @@
 use data::TestData;
 
 use super::*;
-use crate::{common::GenericCoinAmount, utils::test_utils::*};
+use crate::{
+    common::GenericCoinAmount, utils::test_utils::*,
+    vault::transactions::memory_provider::WitnessStatus,
+};
 
 #[test]
 fn fulfilled_eth_quotes_should_produce_new_tx() {
     let coin_type = Coin::ETH;
-    let loki_amount = LokiAmount::from_decimal_string("1.0");
+    let oxen_amount = OxenAmount::from_decimal_string("1.0");
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
     let quote_tx = TestData::deposit_quote(coin_type);
-    let wtx_loki = TestData::witness(quote_tx.unique_id(), loki_amount.to_atomic(), Coin::LOKI);
-    let wtx_loki = StatusWitnessWrapper::new(wtx_loki, WitnessStatus::Confirmed);
+
+    let wtx_oxen = TestData::witness(quote_tx.unique_id(), oxen_amount.to_atomic(), Coin::OXEN);
+    let wtx_oxen = StatusWitnessWrapper::new(wtx_oxen, WitnessStatus::Confirmed);
+
     let wtx_eth = TestData::witness(quote_tx.unique_id(), coin_amount.to_atomic(), coin_type);
     let wtx_eth = StatusWitnessWrapper::new(wtx_eth, WitnessStatus::Confirmed);
 
     let quote_tx = FulfilledWrapper::new(quote_tx, false);
 
-    let res = process_deposit_quote(&quote_tx, &[&wtx_loki, &wtx_eth], Network::Testnet).unwrap();
+    let res = process_deposit_quote(&quote_tx, &[&wtx_oxen, &wtx_eth], Network::Testnet).unwrap();
 
     assert_eq!(
         res.pool_change.depth_change as u128,
@@ -25,30 +30,32 @@ fn fulfilled_eth_quotes_should_produce_new_tx() {
     );
     assert_eq!(
         res.pool_change.base_depth_change as u128,
-        loki_amount.to_atomic()
+        oxen_amount.to_atomic()
     );
 
     assert_eq!(res.deposit.pool_change, res.pool_change.unique_id());
     assert_eq!(res.deposit.quote, quote_tx.inner.unique_id());
-    assert!(res.deposit.witnesses.contains(&wtx_loki.inner.unique_id()));
+    assert!(res.deposit.witnesses.contains(&wtx_oxen.inner.unique_id()));
     assert!(res.deposit.witnesses.contains(&wtx_eth.inner.unique_id()));
 }
 
 #[test]
 fn fulfilled_btc_quotes_should_produce_new_tx() {
     let coin_type = Coin::BTC;
-    let loki_amount = LokiAmount::from_decimal_string("1.0");
+    let oxen_amount = OxenAmount::from_decimal_string("1.0");
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
     let quote_tx = TestData::deposit_quote(coin_type);
-    let wtx_loki = TestData::witness(quote_tx.unique_id(), loki_amount.to_atomic(), Coin::LOKI);
-    let wtx_loki = StatusWitnessWrapper::new(wtx_loki, WitnessStatus::Confirmed);
+
+    let wtx_oxen = TestData::witness(quote_tx.unique_id(), oxen_amount.to_atomic(), Coin::OXEN);
+    let wtx_oxen = StatusWitnessWrapper::new(wtx_oxen, WitnessStatus::Confirmed);
+
     let wtx_btc = TestData::witness(quote_tx.unique_id(), coin_amount.to_atomic(), coin_type);
     let wtx_btc = StatusWitnessWrapper::new(wtx_btc, WitnessStatus::Confirmed);
 
     let quote_tx = FulfilledWrapper::new(quote_tx, false);
 
-    let res = process_deposit_quote(&quote_tx, &[&wtx_loki, &wtx_btc], Network::Testnet).unwrap();
+    let res = process_deposit_quote(&quote_tx, &[&wtx_oxen, &wtx_btc], Network::Testnet).unwrap();
 
     assert_eq!(
         res.pool_change.depth_change as u128,
@@ -56,28 +63,29 @@ fn fulfilled_btc_quotes_should_produce_new_tx() {
     );
     assert_eq!(
         res.pool_change.base_depth_change as u128,
-        loki_amount.to_atomic()
+        oxen_amount.to_atomic()
     );
 
     assert_eq!(res.deposit.pool_change, res.pool_change.unique_id());
     assert_eq!(res.deposit.quote, quote_tx.inner.unique_id());
-    assert!(res.deposit.witnesses.contains(&wtx_loki.inner.unique_id()));
+    assert!(res.deposit.witnesses.contains(&wtx_oxen.inner.unique_id()));
     assert!(res.deposit.witnesses.contains(&wtx_btc.inner.unique_id()));
 }
 
 #[test]
 fn partially_fulfilled_quotes_do_not_produce_new_tx() {
     let coin_type = Coin::ETH;
-    let loki_amount = LokiAmount::from_decimal_string("1.0");
+    let oxen_amount = OxenAmount::from_decimal_string("1.0");
     let _coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
     let quote_tx = TestData::deposit_quote(coin_type);
-    let wtx_loki = TestData::witness(quote_tx.unique_id(), loki_amount.to_atomic(), Coin::LOKI);
-    let wtx_loki = StatusWitnessWrapper::new(wtx_loki, WitnessStatus::Confirmed);
+
+    let wtx_oxen = TestData::witness(quote_tx.unique_id(), oxen_amount.to_atomic(), Coin::OXEN);
+    let wtx_oxen = StatusWitnessWrapper::new(wtx_oxen, WitnessStatus::Confirmed);
 
     let quote_tx = FulfilledWrapper::new(quote_tx, false);
 
-    let tx = process_deposit_quote(&quote_tx, &[&wtx_loki], Network::Testnet);
+    let tx = process_deposit_quote(&quote_tx, &[&wtx_oxen], Network::Testnet);
 
     assert!(tx.is_none())
 }
@@ -85,26 +93,28 @@ fn partially_fulfilled_quotes_do_not_produce_new_tx() {
 #[test]
 fn refunds_if_deposit_quote_is_fulfilled() {
     let coin_type = Coin::BTC;
-    let loki_amount = LokiAmount::from_decimal_string("1.0");
+    let oxen_amount = OxenAmount::from_decimal_string("1.0");
     let btc_amount = GenericCoinAmount::from_decimal_string(Coin::BTC, "2.0");
 
     let quote_tx = TestData::deposit_quote(coin_type);
-    let wtx_loki = TestData::witness(quote_tx.unique_id(), loki_amount.to_atomic(), Coin::LOKI);
-    let wtx_loki = StatusWitnessWrapper::new(wtx_loki, WitnessStatus::Confirmed);
+
+    let wtx_oxen = TestData::witness(quote_tx.unique_id(), oxen_amount.to_atomic(), Coin::OXEN);
+    let wtx_oxen = StatusWitnessWrapper::new(wtx_oxen, WitnessStatus::Confirmed);
+
     let wtx_btc = TestData::witness(quote_tx.unique_id(), btc_amount.to_atomic(), coin_type);
     let wtx_btc = StatusWitnessWrapper::new(wtx_btc, WitnessStatus::Confirmed);
 
     let quote_tx = FulfilledWrapper::new(quote_tx, true);
 
     // Processing fulfilled deposit quote should return nothing
-    assert!(process_deposit_quote(&quote_tx, &[&wtx_loki, &wtx_btc], Network::Testnet).is_none());
+    assert!(process_deposit_quote(&quote_tx, &[&wtx_oxen, &wtx_btc], Network::Testnet).is_none());
 
-    let outputs = refund_deposit_quotes(&quote_tx, &[&wtx_loki, &wtx_btc], Network::Testnet);
+    let outputs = refund_deposit_quotes(&quote_tx, &[&wtx_oxen, &wtx_btc], Network::Testnet);
     assert_eq!(outputs.len(), 2);
 
-    let loki_output = outputs.iter().find(|tx| tx.coin == Coin::LOKI).unwrap();
-    assert_eq!(loki_output.address, quote_tx.inner.base_return_address);
-    assert_eq!(loki_output.amount, loki_amount.to_atomic());
+    let oxen_output = outputs.iter().find(|tx| tx.coin == Coin::OXEN).unwrap();
+    assert_eq!(oxen_output.address, quote_tx.inner.base_return_address);
+    assert_eq!(oxen_output.amount, oxen_amount.to_atomic());
 
     let btc_output = outputs.iter().find(|tx| tx.coin == Coin::BTC).unwrap();
     assert_eq!(btc_output.address, quote_tx.inner.coin_return_address);
@@ -114,21 +124,21 @@ fn refunds_if_deposit_quote_is_fulfilled() {
 #[test]
 fn witness_tx_cannot_be_reused() {
     let coin_type = Coin::ETH;
-    let loki_amount = LokiAmount::from_decimal_string("1.0");
+    let oxen_amount = OxenAmount::from_decimal_string("1.0");
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
     let quote_tx = TestData::deposit_quote(coin_type);
 
-    let wtx_loki = TestData::witness(quote_tx.unique_id(), loki_amount.to_atomic(), Coin::LOKI);
+    let wtx_oxen = TestData::witness(quote_tx.unique_id(), oxen_amount.to_atomic(), Coin::OXEN);
     // Witness has already been used before
-    let wtx_loki = StatusWitnessWrapper::new(wtx_loki, WitnessStatus::Processed);
+    let wtx_oxen = StatusWitnessWrapper::new(wtx_oxen, WitnessStatus::Processed);
 
     let wtx_eth = TestData::witness(quote_tx.unique_id(), coin_amount.to_atomic(), coin_type);
     let wtx_eth = StatusWitnessWrapper::new(wtx_eth, WitnessStatus::AwaitingConfirmation);
 
     let quote_tx = FulfilledWrapper::new(quote_tx, false);
 
-    let tx = process_deposit_quote(&quote_tx, &[&wtx_loki, &wtx_eth], Network::Testnet);
+    let tx = process_deposit_quote(&quote_tx, &[&wtx_oxen, &wtx_eth], Network::Testnet);
 
     assert!(tx.is_none())
 }
@@ -136,13 +146,13 @@ fn witness_tx_cannot_be_reused() {
 #[test]
 fn quote_cannot_be_fulfilled_twice() {
     let coin_type = Coin::ETH;
-    let loki_amount = LokiAmount::from_decimal_string("1.0");
+    let oxen_amount = OxenAmount::from_decimal_string("1.0");
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
     let quote_tx = TestData::deposit_quote(coin_type);
 
-    let wtx_loki = TestData::witness(quote_tx.unique_id(), loki_amount.to_atomic(), Coin::LOKI);
-    let wtx_loki = StatusWitnessWrapper::new(wtx_loki, WitnessStatus::AwaitingConfirmation);
+    let wtx_oxen = TestData::witness(quote_tx.unique_id(), oxen_amount.to_atomic(), Coin::OXEN);
+    let wtx_oxen = StatusWitnessWrapper::new(wtx_oxen, WitnessStatus::AwaitingConfirmation);
 
     let wtx_eth = TestData::witness(quote_tx.unique_id(), coin_amount.to_atomic(), coin_type);
     let wtx_eth = StatusWitnessWrapper::new(wtx_eth, WitnessStatus::AwaitingConfirmation);
@@ -150,27 +160,29 @@ fn quote_cannot_be_fulfilled_twice() {
     // The quote has already been fulfilled
     let quote_tx = FulfilledWrapper::new(quote_tx, true);
 
-    let tx = process_deposit_quote(&quote_tx, &[&wtx_loki, &wtx_eth], Network::Testnet);
+    let tx = process_deposit_quote(&quote_tx, &[&wtx_oxen, &wtx_eth], Network::Testnet);
 
     assert!(tx.is_none())
 }
 
 #[test]
 fn check_staking_smaller_amounts() {
-    let loki_amount = LokiAmount::from_decimal_string("1.0");
+    let oxen_amount = OxenAmount::from_decimal_string("1.0");
 
     let coin_type = Coin::ETH;
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
     let quote_tx = TestData::deposit_quote(coin_type);
-    let wtx_loki = TestData::witness(quote_tx.unique_id(), loki_amount.to_atomic(), Coin::LOKI);
-    let wtx_loki = StatusWitnessWrapper::new(wtx_loki, WitnessStatus::Confirmed);
+
+    let wtx_oxen = TestData::witness(quote_tx.unique_id(), oxen_amount.to_atomic(), Coin::OXEN);
+    let wtx_oxen = StatusWitnessWrapper::new(wtx_oxen, WitnessStatus::Confirmed);
+
     let wtx_eth = TestData::witness(quote_tx.unique_id(), coin_amount.to_atomic(), coin_type);
     let wtx_eth = StatusWitnessWrapper::new(wtx_eth, WitnessStatus::Confirmed);
 
     let quote_tx = FulfilledWrapper::new(quote_tx, false);
 
-    let res = process_deposit_quote(&quote_tx, &[&wtx_loki, &wtx_eth], Network::Testnet).unwrap();
+    let res = process_deposit_quote(&quote_tx, &[&wtx_oxen, &wtx_eth], Network::Testnet).unwrap();
 
     assert_eq!(
         res.pool_change.depth_change as u128,
@@ -178,12 +190,12 @@ fn check_staking_smaller_amounts() {
     );
     assert_eq!(
         res.pool_change.base_depth_change as u128,
-        loki_amount.to_atomic()
+        oxen_amount.to_atomic()
     );
 
     assert_eq!(res.deposit.pool_change, res.pool_change.unique_id());
     assert_eq!(res.deposit.quote, quote_tx.inner.unique_id());
-    assert!(res.deposit.witnesses.contains(&wtx_loki.inner.unique_id()));
+    assert!(res.deposit.witnesses.contains(&wtx_oxen.inner.unique_id()));
     assert!(res.deposit.witnesses.contains(&wtx_eth.inner.unique_id()));
 }
 

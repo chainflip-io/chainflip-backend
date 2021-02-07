@@ -5,7 +5,7 @@ use base58_monero;
 /// # Example
 ///
 /// ```
-/// use chainflip::utils::loki::address::get_integrated_address;
+/// use chainflip::utils::oxen::address::get_integrated_address;
 ///
 /// let base_address = "L7fffztMU6PF6gmx2TtY8wTBsqU51Wy9B4RwvJzbE4bUK1zFtK99yNz2rXEAnHH53qf63NANZGdYXZdUpwUvo19RGxxHWxK";
 /// let payment_id: [u8; 8] = [66, 15, 162, 155, 45, 154, 73, 245];
@@ -35,14 +35,14 @@ pub fn get_integrated_address(
 
 /// Get the address tag for an integrated address regardless of network type
 fn get_integrated_address_tag(from: u8) -> Result<u8, &'static str> {
-    // Loki information from: https://docs.loki.network/Wallets/Addresses/MainAddress/
+    // Oxen information from: https://docs.loki.network/Wallets/Addresses/MainAddress/
     // Monero information from: https://monerodocs.org/public-address/standard-address/
     match from {
-        // Loki - main net (main, integrated, subaddress)
+        // Oxen - main net (main, integrated, subaddress)
         114 | 115 | 116 => Ok(115),
-        // Loki - stage net (main, integrated, subaddress)
+        // Oxen - stage net (main, integrated, subaddress)
         24 | 25 | 36 => Ok(25),
-        // Loki - test net (main, integrated, subaddress)
+        // Oxen - test net (main, integrated, subaddress)
         156 | 157 | 158 => Ok(157),
         // Monero - main net (main, integrated, subaddress)
         18 | 19 | 42 => Ok(19),
@@ -61,7 +61,7 @@ mod test {
     const PAYMENT_ID: [u8; 8] = [66, 15, 162, 155, 45, 154, 73, 245];
 
     #[test]
-    fn returns_loki_integrated_address() {
+    fn returns_oxen_integrated_address() {
         let address = "L7fffztMU6PF6gmx2TtY8wTBsqU51Wy9B4RwvJzbE4bUK1zFtK99yNz2rXEAnHH53qf63NANZGdYXZdUpwUvo19RGxxHWxK";
         let expected = "LHNLgohr5MuF6gmx2TtY8wTBsqU51Wy9B4RwvJzbE4bUK1zFtK99yNz2rXEAnHH53qf63NANZGdYXZdUpwUvo19RQdP3TqmQTySUkKMhZf";
 
@@ -70,7 +70,7 @@ mod test {
     }
 
     #[test]
-    fn returns_loki_test_net_integrated_address() {
+    fn returns_oxen_test_net_integrated_address() {
         let address = "T6SvvzhYyo2cUwiZBtLoTKGBSqoeGYKP12nsJx3ZsHNm7NhLDwYezTU3Ya9Cgb1UgW3gZTE5RG5ny4QKTUbHiXS8267AzhpZs";
         let expected = "TG9bwoX3b4YcUwiZBtLoTKGBSqoeGYKP12nsJx3ZsHNm7NhLDwYezTU3Ya9Cgb1UgW3gZTE5RG5ny4QKTUbHiXS8NCR92bBy6zV1dq77maK4";
 

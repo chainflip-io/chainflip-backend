@@ -25,15 +25,15 @@ pub struct EstimateParams {
 pub struct EstimateResponse {
     /// The output amount in atomic value
     pub output_amount: String,
-    /// The total loki fee
-    pub loki_fee: String,
+    /// The total oxen fee
+    pub oxen_fee: String,
 }
 
 /// Get estimated output amount
 ///
 /// # Example Query
 ///
-/// > GET /v1/estimate?inputCoin=LOKI&inputAmount=1000000000&outputCoin=BTC
+/// > GET /v1/estimate?inputCoin=OXEN&inputAmount=1000000000&outputCoin=BTC
 pub async fn get_estimate<S>(
     params: EstimateParams,
     state: Arc<Mutex<S>>,
@@ -88,7 +88,7 @@ where
 
     Ok(EstimateResponse {
         output_amount: price.output_amount.to_string(),
-        loki_fee: price.loki_fee.to_string(),
+        oxen_fee: price.oxen_fee.to_string(),
     })
 }
 
@@ -105,7 +105,7 @@ mod test {
         let invalid_input_coin = EstimateParams {
             input_coin: "invalid".to_owned(),
             input_amount: "1000000".to_owned(),
-            output_coin: "loki".to_owned(),
+            output_coin: "oxen".to_owned(),
         };
 
         let error = get_estimate(invalid_input_coin, state.clone())
@@ -121,7 +121,7 @@ mod test {
         let state = Arc::new(Mutex::new(db));
 
         let invalid_output_coin = EstimateParams {
-            input_coin: "loki".to_owned(),
+            input_coin: "oxen".to_owned(),
             input_amount: "1000000".to_owned(),
             output_coin: "invalid".to_owned(),
         };
@@ -141,7 +141,7 @@ mod test {
         let invalid_input_amount = EstimateParams {
             input_coin: "btc".to_owned(),
             input_amount: "-123".to_owned(),
-            output_coin: "loki".to_owned(),
+            output_coin: "oxen".to_owned(),
         };
 
         let error = get_estimate(invalid_input_amount, state.clone())
@@ -153,7 +153,7 @@ mod test {
         let invalid_input_amount = EstimateParams {
             input_coin: "btc".to_owned(),
             input_amount: "abc".to_owned(),
-            output_coin: "loki".to_owned(),
+            output_coin: "oxen".to_owned(),
         };
 
         let error = get_estimate(invalid_input_amount, state.clone())
@@ -165,7 +165,7 @@ mod test {
         let invalid_input_amount = EstimateParams {
             input_coin: "btc".to_owned(),
             input_amount: "123.0123".to_owned(),
-            output_coin: "loki".to_owned(),
+            output_coin: "oxen".to_owned(),
         };
 
         let error = get_estimate(invalid_input_amount, state.clone())
@@ -181,9 +181,9 @@ mod test {
         let state = Arc::new(Mutex::new(db));
 
         let same_coins = EstimateParams {
-            input_coin: "loki".to_owned(),
+            input_coin: "oxen".to_owned(),
             input_amount: "1000000".to_owned(),
-            output_coin: "loki".to_owned(),
+            output_coin: "oxen".to_owned(),
         };
 
         let error = get_estimate(same_coins, state.clone())
@@ -204,7 +204,7 @@ mod test {
         let invalid_input_amount = EstimateParams {
             input_coin: "btc".to_owned(),
             input_amount: "0".to_owned(),
-            output_coin: "loki".to_owned(),
+            output_coin: "oxen".to_owned(),
         };
 
         let error = get_estimate(invalid_input_amount, state.clone())
@@ -222,7 +222,7 @@ mod test {
         let valid_params = EstimateParams {
             input_coin: "btc".to_owned(),
             input_amount: "1000000".to_owned(),
-            output_coin: "loki".to_owned(),
+            output_coin: "oxen".to_owned(),
         };
 
         get_estimate(valid_params, state.clone())

@@ -5,7 +5,7 @@ use crate::{
     common::*,
     local_store::LocalEvent,
     vault::transactions::{
-        memory_provider::{FulfilledWrapper, Portion, StatusWitnessWrapper, WitnessStatus},
+        memory_provider::{FulfilledWrapper, Portion, StatusWitnessWrapper},
         TransactionProvider,
     },
 };
@@ -123,7 +123,7 @@ fn refund_deposit_quotes(
     for wtx in confirmed_witnesses {
         let tx = &wtx.inner;
         let return_address = match tx.coin {
-            Coin::LOKI => quote.base_return_address.clone(),
+            Coin::OXEN => quote.base_return_address.clone(),
             coin if coin == quote_coin => quote.coin_return_address.clone(),
             coin => {
                 panic!(
@@ -177,7 +177,7 @@ fn process_deposit_quote(
 
     let quote = &quote_info.inner;
 
-    let mut loki_amount: Option<i128> = None;
+    let mut oxen_amount: Option<i128> = None;
     let mut other_amount: Option<i128> = None;
 
     // Indexes of used witnesses
@@ -193,9 +193,9 @@ fn process_deposit_quote(
         let wtx = &wtx.inner;
 
         match wtx.coin {
-            Coin::LOKI => {
-                if loki_amount.is_some() {
-                    error!("Unexpected second loki witness");
+            Coin::OXEN => {
+                if oxen_amount.is_some() {
+                    error!("Unexpected second oxen witness");
                     return None;
                 }
 
@@ -208,7 +208,7 @@ fn process_deposit_quote(
                 };
 
                 wtx_idxs.push(wtx.unique_id());
-                loki_amount = Some(amount);
+                oxen_amount = Some(amount);
             }
             coin_type @ _ => {
                 if coin_type == quote.pool {
@@ -234,9 +234,9 @@ fn process_deposit_quote(
         }
     }
 
-    if loki_amount.is_none() {
+    if oxen_amount.is_none() {
         debug!(
-            "Loki is not yet provisioned in quote: {}",
+            "Oxen is not yet provisioned in quote: {}",
             quote.unique_id()
         );
     }
@@ -249,12 +249,12 @@ fn process_deposit_quote(
         );
     }
 
-    match (loki_amount, other_amount) {
-        (Some(loki_amount), Some(other_amount)) => {
-            let pool_change_tx = PoolChange::new(quote.pool, other_amount, loki_amount, None);
+    match (oxen_amount, other_amount) {
+        (Some(oxen_amount), Some(other_amount)) => {
+            let pool_change_tx = PoolChange::new(quote.pool, other_amount, oxen_amount, None);
 
             // TODO: autoswap goes here
-            let loki_amount: u128 = loki_amount.try_into().expect("negative deposit");
+            let oxen_amount: u128 = oxen_amount.try_into().expect("negative deposit");
             let other_amount: u128 = other_amount.try_into().expect("negative deposit");
 
             let deposit = Deposit {
@@ -263,7 +263,7 @@ fn process_deposit_quote(
                 pool_change: pool_change_tx.unique_id(),
                 staker_id: quote.staker_id.clone(),
                 pool: quote.pool,
-                base_amount: loki_amount,
+                base_amount: oxen_amount,
                 other_amount,
                 event_number: None,
             };
@@ -292,7 +292,7 @@ fn get_amounts_withdrawable<T: TransactionProvider>(
     tx_provider: &T,
     pool: PoolCoin,
     staker: &StakerId,
-) -> Result<(LokiAmount, GenericCoinAmount), String> {
+) -> Result<(OxenAmount, GenericCoinAmount), String> {
     info!("Handling withdraw tx for staker: {}", staker);
 
     let portions = tx_provider.get_portions();
@@ -316,33 +316,33 @@ fn get_amounts_withdrawable<T: TransactionProvider>(
         .get_liquidity(pool)
         .expect("liquidity should exist");
 
-    let loki_amount = get_portion_of_amount(liquidity.base_depth, *staker_portions);
+    let oxen_amount = get_portion_of_amount(liquidity.base_depth, *staker_portions);
     let other_amount = get_portion_of_amount(liquidity.depth, *staker_portions);
 
-    let loki = LokiAmount::from_atomic(loki_amount);
+    let oxen = OxenAmount::from_atomic(oxen_amount);
     let other = GenericCoinAmount::from_atomic(pool.get_coin(), other_amount);
 
-    Ok((loki, other))
+    Ok((oxen, other))
 }
 
 fn prepare_outputs(
     tx: &WithdrawRequest,
-    loki_amount: LokiAmount,
+    oxen_amount: OxenAmount,
     other_amount: GenericCoinAmount,
     network: Network,
 ) -> Result<(Output, Output), &'static str> {
-    let loki = Output {
+    let oxen = Output {
         parent: OutputParent::WithdrawRequest(tx.unique_id()),
         witnesses: vec![],
         pool_changes: vec![],
-        coin: Coin::LOKI,
+        coin: Coin::OXEN,
         address: tx.base_address.clone(),
-        amount: loki_amount.to_atomic(),
+        amount: oxen_amount.to_atomic(),
         event_number: None,
     };
 
-    loki.validate(network)
-        .map_err(|_| "could not construct Loki output")?;
+    oxen.validate(network)
+        .map_err(|_| "could not construct Oxen output")?;
 
     let other = Output {
         parent: OutputParent::WithdrawRequest(tx.unique_id()),
@@ -356,9 +356,9 @@ fn prepare_outputs(
 
     other
         .validate(network)
-        .map_err(|_| "could not construct Loki output")?;
+        .map_err(|_| "could not construct Oxen output")?;
 
-    Ok((loki, other))
+    Ok((oxen, other))
 }
 
 fn process_withdraw_request<T: TransactionProvider>(
@@ -372,36 +372,36 @@ fn process_withdraw_request<T: TransactionProvider>(
 
     // Find out how much we can withdraw
     // NOTE: we might want to remove withdraw requests if we can't process them
-    let (loki_amount, other_amount) =
+    let (oxen_amount, other_amount) =
         get_amounts_withdrawable(tx_provider, PoolCoin::from(tx.pool).unwrap(), &staker)?;
 
     debug!(
         "Amounts withdrawable by {} are: {} and {:?}",
-        staker, loki_amount, other_amount
+        staker, oxen_amount, other_amount
     );
 
-    let (loki_tx, other_tx) = prepare_outputs(tx, loki_amount, other_amount, network)?;
+    let (oxen_tx, other_tx) = prepare_outputs(tx, oxen_amount, other_amount, network)?;
 
-    let d_loki: i128 = loki_amount
+    let d_oxen: i128 = oxen_amount
         .to_atomic()
         .try_into()
-        .map_err(|_| "Loki amount overflow")?;
+        .map_err(|_| "Oxen amount overflow")?;
     let d_other: i128 = other_amount
         .to_atomic()
         .try_into()
         .map_err(|_| "Other amount overflow")?;
 
-    let pool_change_tx = PoolChange::new(tx.pool, -d_other, -d_loki, None);
+    let pool_change_tx = PoolChange::new(tx.pool, -d_other, -d_oxen, None);
     pool_change_tx.validate(network)?;
 
     let withdraw = Withdraw {
         withdraw_request: tx.unique_id(),
-        outputs: [loki_tx.unique_id(), other_tx.unique_id()],
+        outputs: [oxen_tx.unique_id(), other_tx.unique_id()],
         event_number: None,
     };
     withdraw.validate(network)?;
 
-    Ok((loki_tx, other_tx, pool_change_tx, withdraw))
+    Ok((oxen_tx, other_tx, pool_change_tx, withdraw))
 }
 
 pub(super) fn process_withdraw_requests<T: TransactionProvider>(

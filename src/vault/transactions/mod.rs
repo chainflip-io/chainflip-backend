@@ -1,5 +1,5 @@
 use crate::{common::LiquidityProvider, local_store::LocalEvent};
-use chainflip_common::types::chain::{DepositQuote, Output, SwapQuote, WithdrawRequest, Witness};
+use chainflip_common::types::chain::{DepositQuote, Output, SwapQuote, WithdrawRequest};
 use memory_provider::{FulfilledWrapper, StatusWitnessWrapper};
 
 /// Memory transaction provider

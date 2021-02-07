@@ -26,6 +26,7 @@ pub fn get_fake_staker() -> Staker {
     }
 }
 
+/// Get a random ECDSA key pair
 pub fn get_random_ecdsa_key() -> EcdsaKeyPair {
     let rng = ring::rand::SystemRandom::new();
 

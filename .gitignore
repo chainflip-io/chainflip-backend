@@ -1,7 +1,7 @@
 /target
 *.log
 *.db
-loki_connection
+oxen_connection
 
 config/**/local.toml
 

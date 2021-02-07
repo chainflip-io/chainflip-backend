@@ -4,13 +4,10 @@ use std::sync::Arc;
 use chainflip_common::types::chain::{UniqueId, Witness};
 use common::api::ScResponse;
 use parking_lot::RwLock;
-use reqwest::{header::CONTENT_TYPE, Response};
+use reqwest::header::CONTENT_TYPE;
 use serde::Deserialize;
 
-use crate::{
-    common,
-    vault::transactions::{memory_provider::WitnessStatus, TransactionProvider},
-};
+use crate::{common, vault::transactions::TransactionProvider};
 
 #[derive(Deserialize, Debug)]
 struct ConfirmedWitnessResponse {
@@ -38,7 +35,7 @@ where
 
 fn state_chain_id_to_local_store_id(sc_id: String) -> UniqueId {
     let split: Vec<&str> = sc_id.split("-").collect();
-    Witness::id_from_id_fields(split.get(0).unwrap(), split.get(1).unwrap())
+    Witness::id_from(split.get(0).unwrap(), split.get(1).unwrap())
 }
 
 impl<T> WitnessConfirmer<T>

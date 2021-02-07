@@ -119,17 +119,17 @@ impl TestRunner {
     pub fn add_witnessed_deposit_quote(
         &mut self,
         staker_id: &StakerId,
-        loki_amount: LokiAmount,
+        oxen_amount: OxenAmount,
         other_amount: GenericCoinAmount,
     ) -> DepositQuote {
         let deposit_quote =
             TestData::deposit_quote_for_id(staker_id.to_owned(), other_amount.coin_type());
-        let wtx_loki = TestData::witness(
+        let wtx_oxen = TestData::witness(
             deposit_quote.unique_id(),
-            loki_amount.to_atomic(),
-            Coin::LOKI,
+            oxen_amount.to_atomic(),
+            Coin::OXEN,
         );
-        let wtx_loki_id = wtx_loki.unique_id();
+        let wtx_oxen_id = wtx_oxen.unique_id();
         let wtx_eth = TestData::witness(
             deposit_quote.unique_id(),
             other_amount.to_atomic(),
@@ -137,20 +137,15 @@ impl TestRunner {
         );
         let wtx_eth_id = wtx_eth.unique_id();
 
-        // println!(
-        //     "Witnesses before confirming: {:#?}",
-        //     provider.get_witnesses()
-        // );
-
         self.add_local_events([
-            wtx_loki.into(),
+            wtx_oxen.into(),
             wtx_eth.into(),
             deposit_quote.clone().into(),
         ]);
 
         let mut provider = self.provider.write();
         // confirm the witnesses - emulating witness_confirmer
-        provider.confirm_witness(wtx_loki_id).unwrap();
+        provider.confirm_witness(wtx_oxen_id).unwrap();
         provider.confirm_witness(wtx_eth_id).unwrap();
 
         println!(
@@ -171,10 +166,10 @@ impl TestRunner {
             .cloned()
             .collect();
 
-        let loki_output = outputs
+        let oxen_output = outputs
             .iter()
-            .find(|x| x.coin == Coin::LOKI)
-            .expect("Loki output should exist")
+            .find(|x| x.coin == Coin::OXEN)
+            .expect("Oxen output should exist")
             .clone();
         let eth_output = outputs
             .iter()
@@ -183,13 +178,13 @@ impl TestRunner {
             .clone();
 
         EthDepositOutputs {
-            loki_output,
+            oxen_output,
             eth_output,
         }
     }
 
     /// Convenience method to check liquidity amounts in ETH pool
-    pub fn check_eth_liquidity(&mut self, loki_atomic: u128, eth_atomic: u128) {
+    pub fn check_eth_liquidity(&mut self, oxen_atomic: u128, eth_atomic: u128) {
         self.provider.write().sync();
 
         let liquidity = self
@@ -198,7 +193,7 @@ impl TestRunner {
             .get_liquidity(PoolCoin::ETH)
             .expect("liquidity should exist");
 
-        assert_eq!(liquidity.base_depth, loki_atomic);
+        assert_eq!(liquidity.base_depth, oxen_atomic);
         assert_eq!(liquidity.depth, eth_atomic);
     }
 
@@ -243,10 +238,10 @@ impl TestRunner {
 }
 
 /// A helper struct that represents the two outputs that
-/// should be generated when unstaking from loki/eth pool
+/// should be generated when unstaking from oxen/eth pool
 pub struct EthDepositOutputs {
-    /// Loki output
-    pub loki_output: Output,
+    /// Oxen output
+    pub oxen_output: Output,
     /// Ethereum output
     pub eth_output: Output,
 }

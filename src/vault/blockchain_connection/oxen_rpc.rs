@@ -1,6 +1,6 @@
-//! Bindings to some commonly used methods exposed by Loki RPC Wallet
+//! Bindings to some commonly used methods exposed by Oxen RPC Wallet
 
-use crate::common::{LokiAmount, LokiPaymentId, LokiWalletAddress};
+use crate::common::{OxenAmount, OxenPaymentId, OxenWalletAddress};
 use serde::{Deserialize, Serialize};
 use std::{
     convert::{TryFrom, TryInto},
@@ -12,15 +12,15 @@ use std::{
 
 /// Error returned by the rpc wallet
 #[derive(Debug, Deserialize)]
-pub struct LokiResponseError {
+pub struct OxenResponseError {
     code: i32,
     message: String,
 }
 
 /// Response wrapper used in all responses from the rpc wallet
 #[derive(Debug, Deserialize)]
-pub struct LokiResponse {
-    error: Option<LokiResponseError>,
+pub struct OxenResponse {
+    error: Option<OxenResponseError>,
     result: Option<serde_json::Value>,
 }
 
@@ -58,10 +58,10 @@ async fn send_req_inner(
 
     let text = res.text().await.map_err(|err| err.to_string())?;
 
-    let res: LokiResponse = serde_json::from_str(&text).map_err(|err| err.to_string())?;
+    let res: OxenResponse = serde_json::from_str(&text).map_err(|err| err.to_string())?;
 
     if let Some(err) = res.error {
-        error!("Loki wallet rpc error");
+        error!("Oxen wallet rpc error");
         return Err(err.message.to_owned());
     }
 
@@ -75,7 +75,7 @@ async fn send_req_inner(
 /// Response for endpoint: `make_integrated_address`
 #[derive(Debug, Deserialize)]
 pub struct IntegratedAddressResponse {
-    /// The address that can be used to transfer loki to
+    /// The address that can be used to transfer oxen to
     pub integrated_address: String,
     /// Payment identifier
     pub payment_id: String,
@@ -124,7 +124,7 @@ pub struct SubaddressIndex {
     minor: u32,
 }
 
-/// Payment entry as received from loki wallet
+/// Payment entry as received from oxen wallet
 #[derive(Debug, Deserialize)]
 pub struct BulkPaymentResponseEntryRaw {
     /// Payment Id matching the input parameter
@@ -143,7 +143,7 @@ pub struct BulkPaymentResponseEntryRaw {
     address: String,
 }
 
-/// Bulk payment response as received from loki wallet
+/// Bulk payment response as received from oxen wallet
 #[derive(Debug, Deserialize)]
 pub struct BulkPaymentResponseRaw {
     /// List of payment details
@@ -155,13 +155,13 @@ impl TryFrom<BulkPaymentResponseEntryRaw> for BulkPaymentResponseEntry {
 
     fn try_from(a: BulkPaymentResponseEntryRaw) -> Result<Self, Self::Error> {
         let entry = BulkPaymentResponseEntry {
-            payment_id: LokiPaymentId::from_str(&a.payment_id)?,
+            payment_id: OxenPaymentId::from_str(&a.payment_id)?,
             tx_hash: a.tx_hash,
-            amount: LokiAmount::from_atomic(a.amount as u128),
+            amount: OxenAmount::from_atomic(a.amount as u128),
             block_height: a.block_height,
             unlock_time: a.unlock_time,
             subaddr_index: a.subaddr_index,
-            address: LokiWalletAddress::from_str(&a.address)?,
+            address: OxenWalletAddress::from_str(&a.address)?,
         };
 
         Ok(entry)
@@ -188,11 +188,11 @@ impl TryFrom<BulkPaymentResponseRaw> for BulkPaymentResponse {
 #[derive(Debug)]
 pub struct BulkPaymentResponseEntry {
     /// Payment Id matching the input parameter
-    pub payment_id: LokiPaymentId,
+    pub payment_id: OxenPaymentId,
     /// Transaction hash used as the transaction Id
     pub tx_hash: String,
     /// Amount for this payment
-    pub amount: LokiAmount,
+    pub amount: OxenAmount,
     /// Height of the block that first confirmed this payment
     pub block_height: u64,
     /// Time (in blocks) until this payment is safe to spend
@@ -200,7 +200,7 @@ pub struct BulkPaymentResponseEntry {
     /// Account and subaddress indexes
     subaddr_index: SubaddressIndex,
     /// Address receiving the payment
-    address: LokiWalletAddress,
+    address: OxenWalletAddress,
 }
 
 /// Bulk payment reponse
@@ -224,7 +224,7 @@ fn is_empty_object(v: &serde_json::Value) -> bool {
 /// Get all payments for given payment ids (Uses `get_bulk_payments` endpoint)
 pub async fn get_bulk_payments(
     port: u16,
-    payment_ids: Vec<LokiPaymentId>,
+    payment_ids: Vec<OxenPaymentId>,
     min_block_height: u64,
 ) -> Result<BulkPaymentResponse, String> {
     let payment_ids = serde_json::to_value(payment_ids).map_err(|err| err.to_string())?;
@@ -236,7 +236,7 @@ pub async fn get_bulk_payments(
 
     let res = send_req_inner(port, "get_bulk_payments", params).await?;
 
-    // Instead of reponding with an empty list, loki gives an empty response...
+    // Instead of reponding with an empty list, oxen gives an empty response...
 
     let res = if is_empty_object(&res) {
         BulkPaymentResponseRaw { payments: vec![] }
@@ -247,18 +247,18 @@ pub async fn get_bulk_payments(
     res.try_into()
 }
 
-/// Balance in a loki wallet
+/// Balance in a oxen wallet
 #[derive(Debug)]
-pub struct LokiBalance {
+pub struct OxenBalance {
     /// Total balance (including locked inputs)
-    pub balance: LokiAmount,
+    pub balance: OxenAmount,
     /// Unlocked balance
-    pub unlocked_balance: LokiAmount,
+    pub unlocked_balance: OxenAmount,
     /// Number of blocks until all balance becomes unlocked (ready to spend)
     pub blocks_to_unlock: u32,
 }
 
-impl fmt::Display for LokiBalance {
+impl fmt::Display for OxenBalance {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -286,7 +286,7 @@ pub async fn get_height(port: u16) -> Result<u64, String> {
 }
 
 /// Request balance in the default account
-pub async fn get_balance(port: u16) -> Result<LokiBalance, String> {
+pub async fn get_balance(port: u16) -> Result<OxenBalance, String> {
     let params = serde_json::json!({
         "account_index": 0,
     });
@@ -298,9 +298,9 @@ pub async fn get_balance(port: u16) -> Result<LokiBalance, String> {
     let balance_res: BalanceResponse =
         serde_json::from_value(res).map_err(|err| err.to_string())?;
 
-    let balance = LokiBalance {
-        balance: LokiAmount::from_atomic(balance_res.balance),
-        unlocked_balance: LokiAmount::from_atomic(balance_res.unlocked_balance),
+    let balance = OxenBalance {
+        balance: OxenAmount::from_atomic(balance_res.balance),
+        unlocked_balance: OxenAmount::from_atomic(balance_res.unlocked_balance),
         blocks_to_unlock: balance_res.blocks_to_unlock,
     };
 
@@ -315,16 +315,16 @@ struct Destination {
     address: String,
 }
 
-// From loki-rpc-wallet:
-// std::list<wallet::transfer_destination> destinations; // Array of destinations to receive LOKI.
+// From oxen-rpc-wallet:
+// std::list<wallet::transfer_destination> destinations; // Array of destinations to receive OXEN.
 // uint32_t account_index;                       // (Optional) Transfer from this account index. (Defaults to 0)
 // std::set<uint32_t> subaddr_indices;           // (Optional) Transfer from this set of subaddresses. (Defaults to 0)
 // uint32_t priority;                            // Set a priority for the transaction. Accepted values are: 1 for unimportant or 5 for blink.  (0 and 2-4 are accepted for backwards compatibility and are equivalent to 5)
 // bool blink;                                   // (Deprecated) Set priority to 5 for blink, field is deprecated: specifies that the tx should be blinked (`priority` will be ignored).
-// uint64_t unlock_time;                         // Number of blocks before the loki can be spent (0 to use the default lock time).
+// uint64_t unlock_time;                         // Number of blocks before the oxen can be spent (0 to use the default lock time).
 // std::string payment_id;                       // (Optional) Random 64-character hex string to identify a transaction.
 // bool get_tx_key;                              // (Optional) Return the transaction key after sending.
-// bool do_not_relay;                            // (Optional) If true, the newly created transaction will not be relayed to the loki network. (Defaults to false)
+// bool do_not_relay;                            // (Optional) If true, the newly created transaction will not be relayed to the oxen network. (Defaults to false)
 // bool get_tx_hex;                              // Return the transaction as hex string after sending. (Defaults to false)
 // bool get_tx_metadata;
 
@@ -334,7 +334,7 @@ struct TransferRequestParams {
     destinations: Vec<Destination>,
     /// Priority value for the transaction. Accepted values are: 1 for unimportant or 5 for blink.
     priority: u8,
-    /// Number of blocks before the loki can be spent (0 to use the default lock time).
+    /// Number of blocks before the oxen can be spent (0 to use the default lock time).
     unlock_time: u64,
     // /// Random 64-character hex (not 16?) string to identify a transaction
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -345,7 +345,7 @@ struct TransferRequestParams {
     do_not_relay: bool,
 }
 
-/// Transfer response as received from loki wallet
+/// Transfer response as received from oxen wallet
 #[derive(Deserialize)]
 struct TransferResponseRaw {
     /// Fee in atomic units
@@ -360,9 +360,9 @@ struct TransferResponseRaw {
 #[derive(Debug)]
 pub struct TransferResponse {
     /// Fee as typed amount
-    pub fee: LokiAmount,
+    pub fee: OxenAmount,
     /// Amount without the fee
-    pub amount: LokiAmount,
+    pub amount: OxenAmount,
     /// Publically searchable transaction hash
     pub tx_hash: String,
 }
@@ -370,8 +370,8 @@ pub struct TransferResponse {
 /// Transfer `amount` to `address` (fees not included)
 pub async fn transfer(
     port: u16,
-    amount: &LokiAmount,
-    address: &LokiWalletAddress,
+    amount: &OxenAmount,
+    address: &OxenWalletAddress,
 ) -> Result<TransferResponse, String> {
     let payment_id = None;
     transfer_inner(port, amount, address, payment_id, false).await
@@ -380,17 +380,17 @@ pub async fn transfer(
 /// Estimate fees for transfer
 pub async fn check_transfer_fee(
     port: u16,
-    amount: &LokiAmount,
-    address: &LokiWalletAddress,
+    amount: &OxenAmount,
+    address: &OxenWalletAddress,
 ) -> Result<TransferResponse, String> {
     transfer_inner(port, amount, address, None, true).await
 }
 
-/// Make an rpc command to transfer `amount` of loki to `address`
+/// Make an rpc command to transfer `amount` of oxen to `address`
 async fn transfer_inner(
     port: u16,
-    amount: &LokiAmount,
-    address: &LokiWalletAddress,
+    amount: &OxenAmount,
+    address: &OxenWalletAddress,
     payment_id: Option<&str>,
     check_fee_only: bool,
 ) -> Result<TransferResponse, String> {
@@ -422,8 +422,8 @@ async fn transfer_inner(
 
     // Note that we will never get values larger than u64::MAX from the wallet...
     let res = TransferResponse {
-        fee: LokiAmount::from_atomic(res.fee as u128),
-        amount: LokiAmount::from_atomic(res.amount as u128),
+        fee: OxenAmount::from_atomic(res.fee as u128),
+        amount: OxenAmount::from_atomic(res.amount as u128),
         tx_hash: res.tx_hash,
     };
 

@@ -1,7 +1,7 @@
 use crate::{
     common::{
         liquidity_provider::{Liquidity, LiquidityProvider, MemoryLiquidityProvider},
-        GenericCoinAmount, LokiAmount, PoolCoin, StakerId,
+        GenericCoinAmount, OxenAmount, PoolCoin, StakerId,
     },
     local_store::{ILocalStore, LocalEvent},
     vault::transactions::{
@@ -184,8 +184,8 @@ pub struct StakerOwnership {
     pub staker_id: StakerId,
     /// Into which pool the contribution is made
     pub pool_type: PoolCoin,
-    /// Contribution in Loki
-    pub loki: LokiAmount,
+    /// Contribution in Oxen
+    pub oxen: OxenAmount,
     /// Contribution in the other coin
     pub other: GenericCoinAmount,
 }
@@ -225,7 +225,7 @@ impl MemoryState {
 
         let contribution = DepositContribution::new(
             StakerId::from_bytes(&tx.staker_id).unwrap(),
-            LokiAmount::from_atomic(tx.base_amount),
+            OxenAmount::from_atomic(tx.base_amount),
             GenericCoinAmount::from_atomic(tx.pool, tx.other_amount),
         );
 
@@ -476,7 +476,7 @@ mod test {
         {
             let mut local_store = provider.local_store.lock().unwrap();
 
-            let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+            let quote = TestData::swap_quote(Coin::ETH, Coin::OXEN);
             let witness = TestData::witness(quote.unique_id(), 100, Coin::ETH);
 
             local_store
@@ -502,7 +502,7 @@ mod test {
     fn test_provider_does_not_add_duplicates() {
         let mut provider = setup();
 
-        let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let quote = TestData::swap_quote(Coin::ETH, Coin::OXEN);
         let witness = TestData::witness(quote.unique_id(), 100, Coin::ETH);
 
         {
@@ -574,7 +574,7 @@ mod test {
     fn test_provider_fulfills_quote_and_witness_on_output_tx() {
         let mut provider = setup();
 
-        let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let quote = TestData::swap_quote(Coin::ETH, Coin::OXEN);
         let witness = TestData::witness(quote.unique_id(), 100, Coin::ETH);
         let witness_id = witness.unique_id();
 
@@ -621,7 +621,7 @@ mod test {
     fn test_provider_does_not_fulfill_quote_on_refunded_output_tx() {
         let mut provider = setup();
 
-        let quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let quote = TestData::swap_quote(Coin::ETH, Coin::OXEN);
         let witness = TestData::witness(quote.unique_id(), 100, Coin::ETH);
         let witness_id = witness.unique_id();
 
@@ -669,7 +669,7 @@ mod test {
     fn test_provider_fulfills_output_txs_on_output_sent_tx() {
         let mut provider = setup();
 
-        let output_tx = TestData::output(Coin::LOKI, 100);
+        let output_tx = TestData::output(Coin::OXEN, 100);
 
         let output_tx2 = TestData::output(Coin::ETH, 102);
 
@@ -691,7 +691,7 @@ mod test {
 
         let output_sent_tx = OutputSent {
             outputs: vec![output_tx.unique_id(), output_tx2.unique_id()],
-            coin: Coin::LOKI,
+            coin: Coin::OXEN,
             address: "address".into(),
             amount: 100,
             fee: 100,

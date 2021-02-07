@@ -1,6 +1,6 @@
 use super::{
     staking::get_random_staker, TEST_BTC_ADDRESS, TEST_ETH_ADDRESS, TEST_ETH_SALT,
-    TEST_LOKI_ADDRESS, TEST_LOKI_PAYMENT_ID,
+    TEST_OXEN_ADDRESS, TEST_OXEN_PAYMENT_ID,
 };
 use crate::{
     common::{Staker, StakerId},
@@ -41,9 +41,9 @@ impl TestData {
             coin_input_address: address.into(),
             coin_input_address_id,
             coin_return_address: address.into(),
-            base_input_address: TEST_LOKI_ADDRESS.into(),
-            base_input_address_id: TEST_LOKI_PAYMENT_ID.to_vec(),
-            base_return_address: TEST_LOKI_ADDRESS.into(),
+            base_input_address: TEST_OXEN_ADDRESS.into(),
+            base_input_address_id: TEST_OXEN_PAYMENT_ID.to_vec(),
+            base_return_address: TEST_OXEN_ADDRESS.into(),
             event_number: None,
         };
         quote.validate(Network::Testnet).unwrap();
@@ -94,7 +94,7 @@ impl TestData {
             timestamp: Timestamp::now(),
             staker_id: staker_id.bytes().to_vec(),
             pool,
-            base_address: TEST_LOKI_ADDRESS.into(),
+            base_address: TEST_OXEN_ADDRESS.into(),
             other_address: TEST_ETH_ADDRESS.into(),
             fraction: WithdrawFraction::MAX,
             signature: vec![],
@@ -112,19 +112,19 @@ impl TestData {
     /// Create a fake swap quote
     pub fn swap_quote(input: Coin, output: Coin) -> SwapQuote {
         let input_address = match input {
-            Coin::LOKI => TEST_LOKI_ADDRESS,
+            Coin::OXEN => TEST_OXEN_ADDRESS,
             Coin::ETH => TEST_ETH_ADDRESS,
             Coin::BTC => TEST_BTC_ADDRESS,
         };
 
         let input_address_id = match input {
-            Coin::LOKI => TEST_LOKI_PAYMENT_ID.to_vec(),
+            Coin::OXEN => TEST_OXEN_PAYMENT_ID.to_vec(),
             Coin::ETH => TEST_ETH_SALT.to_vec(),
             Coin::BTC => 7u32.to_be_bytes().to_vec(),
         };
 
         let output_address = match output {
-            Coin::LOKI => TEST_LOKI_ADDRESS,
+            Coin::OXEN => TEST_OXEN_ADDRESS,
             Coin::ETH => TEST_ETH_ADDRESS,
             Coin::BTC => TEST_BTC_ADDRESS,
         };
@@ -155,7 +155,7 @@ impl TestData {
     /// Create a fake output
     pub fn output(coin: Coin, amount: u128) -> Output {
         let address = match coin {
-            Coin::LOKI => TEST_LOKI_ADDRESS,
+            Coin::OXEN => TEST_OXEN_ADDRESS,
             Coin::ETH => TEST_ETH_ADDRESS,
             Coin::BTC => TEST_BTC_ADDRESS,
         };
@@ -176,7 +176,7 @@ impl TestData {
     /// Create a fake output sent
     pub fn output_sent(coin: Coin) -> OutputSent {
         let address = match coin {
-            Coin::LOKI => TEST_LOKI_ADDRESS,
+            Coin::OXEN => TEST_OXEN_ADDRESS,
             Coin::ETH => TEST_ETH_ADDRESS,
             Coin::BTC => TEST_BTC_ADDRESS,
         };

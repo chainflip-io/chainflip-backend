@@ -1,7 +1,4 @@
-use crate::{
-    common::api::ResponseError,
-    local_store::{ILocalStore, LocalEvent},
-};
+use crate::{common::api::ResponseError, local_store::ILocalStore};
 use chainflip_common::types::chain::Witness;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
@@ -45,7 +42,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        common::{GenericCoinAmount, LokiAmount},
+        common::{GenericCoinAmount, OxenAmount},
         local_store::MemoryLocalStore,
         utils::test_utils::data::TestData,
     };
@@ -55,11 +52,11 @@ mod tests {
 
         let quote = TestData::deposit_quote(Coin::ETH);
 
-        let loki_amount = LokiAmount::from_decimal_string("10");
+        let oxen_amount = OxenAmount::from_decimal_string("10");
 
         let eth_amount = GenericCoinAmount::from_decimal_string(Coin::ETH, "10");
 
-        let witness = TestData::witness(quote.unique_id(), loki_amount.to_atomic(), Coin::LOKI);
+        let witness = TestData::witness(quote.unique_id(), oxen_amount.to_atomic(), Coin::OXEN);
         let witness2 = TestData::witness(quote.unique_id(), eth_amount.to_atomic(), Coin::ETH);
 
         store
