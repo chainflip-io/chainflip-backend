@@ -38,9 +38,11 @@ frame-system = {default-features = false, version = '2.0.0'}
 frame-system-benchmarking = {default-features = false, optional = true, version = '2.0.0'}
 frame-system-rpc-runtime-api = {default-features = false, version = '2.0.0'}
 pallet-aura = {default-features = false, version = '2.0.0'}
+pallet-authorship = {default-features = false, version = '2.0.0'}
 pallet-grandpa = {default-features = false, version = '2.0.0'}
+pallet-offences = {default-features = false, version = '2.0.0'}
 pallet-randomness-collective-flip = {default-features = false, version = '2.0.0'}
-pallet-session = {default-features = false, version = '2.0.0'}
+pallet-session = {default-features = false, version = '2.0.0', features = ['historical']}
 pallet-sudo = {default-features = false, version = '2.0.0'}
 pallet-timestamp = {default-features = false, version = '2.0.0'}
 sp-api = {default-features = false, version = '2.0.0'}
@@ -74,8 +76,11 @@ std = [
   'frame-system/std',
   'frame-system-rpc-runtime-api/std',
   'pallet-aura/std',
+  'pallet-authorship/std',
   'pallet-grandpa/std',
+  'pallet-offences/std',
   'pallet-randomness-collective-flip/std',
+  'pallet-session/std',
   'pallet-sudo/std',
   'pallet-timestamp/std',
   'sp-api/std',
@@ -89,4 +94,7 @@ std = [
   'sp-std/std',
   'sp-transaction-pool/std',
   'sp-version/std',
+  'pallet-cf-transactions/std',
+  'pallet-cf-validator/std',
+  'witness-fetch/std',
 ]

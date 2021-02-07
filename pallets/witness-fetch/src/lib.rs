@@ -25,8 +25,6 @@ use system::{
     },
 };
 
-
-
 /// Defines application identifier for crypto keys of this module.
 ///
 /// Every module that deals with signatures needs to declare its unique identifier for
@@ -181,9 +179,7 @@ decl_module! {
     }
 }
 
-
 impl<T: Trait> Module<T> {
-
     /// returns to the RPC call `get_confirmed_witnesses`
     pub fn get_confirmed_witnesses() -> Vec<Vec<u8>> {
         let mut confirmed_witnesses: Vec<Vec<u8>> = Vec::new();
@@ -314,17 +310,19 @@ struct WitnessResponse {
 }
 
 fn fetch_witnesses(last_seen: u64) -> CFResult<WitnessResponse> {
-    use alt_serde::__private::ToString;
+    // use alt_serde::__private::ToString;
 
-    // let mut url = AString::from("http://127.0.0.1:3030/v1/witnesses?last_seen=");
-    let mut url = AString::from("http://127.0.0.1:3000/witnesses");
-    // url.push_str(&last_seen.to_string());
+    let mut url = AString::from("http://127.0.0.1:3030/v1/witnesses?last_seen=");
+    // for testing
+    // let mut url = AString::from("http://127.0.0.1:3000/witnesses");
+    url.push_str(&last_seen.to_string());
 
     debug::info!("[witness]: fetching {}", &url);
 
     let val = fetch_json(url.as_bytes())?;
 
-    let res = serde_json::from_value(val).map_err(|_| "JSON could not be deserialised to WitnessResponse")?;
+    let res = serde_json::from_value(val)
+        .map_err(|_| "JSON could not be deserialised to WitnessResponse")?;
 
     Ok(res)
 }
@@ -378,25 +376,3 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
         }
     }
 }
-
-// #[cfg(test)]
-// mod test {
-
-//     use super::*;
-
-//     #[test]
-//     fn serialise_witness_response() {
-//         let resp = WitnessResponse {
-//             success: true,
-//             data: WitnessData {
-//                 witness_evts: vec![
-//                     Witness {
-//                         event_number: 1,
-//                         transaction_id: "hello",
-//                         coin: "ETH"
-//                     }
-//                 ]
-//             }
-//         }
-//     }
-// }

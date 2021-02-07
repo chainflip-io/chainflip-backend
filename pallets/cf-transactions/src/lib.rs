@@ -60,8 +60,6 @@ decl_module! {
 
         fn deposit_event() = default;
 
-        // TODO: Write a macro for the functions below?
-
         #[weight = 0]
         pub fn set_swap_quote(origin, data: states::SwapQuote) -> DispatchResult {
             // Ensure extrinsic is signed
@@ -95,32 +93,6 @@ decl_module! {
 
             Self::deposit_event(RawEvent::WithdrawRequestAdded(who, data));
 
-            Ok(())
-        }
-
-        #[weight = 0]
-        pub fn set_witness(origin, witness: states::Witness) -> DispatchResult {
-            // Ensure extrinsic is signed
-            let who = ensure_signed(origin)?;
-
-            if <WitnessMap<T>>::contains_key(&witness.id) {
-                // insert an entry into the pre-existing vector
-                let mut curr_validators = <WitnessMap<T>>::get(&witness.id);
-                // make sure the validator is not already in the set
-                match curr_validators.binary_search(&who) {
-                    Ok(_) => return Err(Error::<T>::ValidatorAlreadySubmittedWitness.into()),
-                    Err(index) => {
-                        curr_validators.insert(index, who.clone());
-                        <WitnessMap<T>>::insert(&witness.id, curr_validators);
-                    }
-                }
-            } else {
-                // insert a new key and initialise the vector with the current value
-                let mut validators = Vec::default();
-                validators.push(who.clone());
-                <WitnessMap<T>>::insert(&witness.id, validators);
-            }
-            Self::deposit_event(RawEvent::WitnessAdded(who, witness));
             Ok(())
         }
 
