@@ -330,8 +330,8 @@ impl_runtime_apis! {
 
     impl witness_fetch_runtime_api::WitnessApi<Block> for Runtime {
         
-        fn get_valid_witnesses() -> Vec<Vec<u8>> {
-            WitnessFetcher::get_valid_witnesses()
+        fn get_confirmed_witnesses() -> Vec<Vec<u8>> {
+            WitnessFetcher::get_confirmed_witnesses()
         }
     }
     

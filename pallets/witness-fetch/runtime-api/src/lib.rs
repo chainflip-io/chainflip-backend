@@ -4,6 +4,6 @@ use sp_std::vec::Vec;
 
 sp_api::decl_runtime_apis! {
     pub trait WitnessApi {
-        fn get_valid_witnesses() -> Vec<Vec<u8>>;
+        fn get_confirmed_witnesses() -> Vec<Vec<u8>>;
     }
 }

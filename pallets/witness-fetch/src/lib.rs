@@ -184,19 +184,19 @@ decl_module! {
 
 impl<T: Trait> Module<T> {
 
-    /// returns to the RPC call `get_valid_witnesses`
-    pub fn get_valid_witnesses() -> Vec<Vec<u8>> {
-        let mut valid_witnesess: Vec<Vec<u8>> = Vec::new();
+    /// returns to the RPC call `get_confirmed_witnesses`
+    pub fn get_confirmed_witnesses() -> Vec<Vec<u8>> {
+        let mut confirmed_witnesses: Vec<Vec<u8>> = Vec::new();
         let validators = <pallet_cf_validator::Module<T>>::get_validators();
         let num_validators = validators.unwrap_or(Vec::new()).len();
         // super majority
         let threshold = num_validators as f64 * 0.67;
         for (witness_id, validators_of_witness) in <WitnessMap<T>>::iter() {
             if validators_of_witness.len() as f64 > threshold {
-                valid_witnesess.push(witness_id);
+                confirmed_witnesses.push(witness_id);
             }
         }
-        valid_witnesess
+        confirmed_witnesses
     }
 
     fn add_witness_inner(witness: WitnessId, who: T::AccountId) -> DispatchResult {
