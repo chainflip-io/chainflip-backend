@@ -1,5 +1,3 @@
-use core::future;
-
 use super::{EventSink, EventSource, Result};
 use futures::{future::join_all, stream, StreamExt};
 use tokio_compat_02::FutureExt;

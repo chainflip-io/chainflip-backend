@@ -1,5 +1,5 @@
-mod state_chain;
 mod logger;
+mod state_chain;
 
-pub use state_chain::StateChain;
 pub use logger::Logger;
+pub use state_chain::{StakingCall, StateChainCaller};
