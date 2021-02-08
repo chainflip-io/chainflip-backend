@@ -37,5 +37,7 @@ std = [
   "serde",
   "sp-api/std",
   "sp-runtime/std",
+  "frame-support/std",
+  "frame-system/std",
   "witness-fetch-runtime-api/std"
 ]

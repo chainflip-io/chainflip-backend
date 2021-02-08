@@ -293,7 +293,7 @@ struct Witness {
     event_number: u64,
 }
 
-use alt_serde::{Deserialize, Serialize};
+use alt_serde::Deserialize;
 
 #[serde(crate = "alt_serde")]
 #[derive(Deserialize, Debug)]
@@ -310,10 +310,8 @@ struct WitnessResponse {
 }
 
 fn fetch_witnesses(last_seen: u64) -> CFResult<WitnessResponse> {
-    // use alt_serde::__private::ToString;
-
     let mut url = AString::from("http://127.0.0.1:3030/v1/witnesses?last_seen=");
-    // for testing
+    // for testing, with the json-server
     // let mut url = AString::from("http://127.0.0.1:3000/witnesses");
     url.push_str(&last_seen.to_string());
 

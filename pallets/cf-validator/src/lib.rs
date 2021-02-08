@@ -126,23 +126,26 @@ impl<T: Trait> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber
 pub struct ValidatorOf<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Trait> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
-	fn convert(account: T::AccountId) -> Option<T::AccountId> {
-		Some(account)
-	}
+    fn convert(account: T::AccountId) -> Option<T::AccountId> {
+        Some(account)
+    }
 }
 
 impl<T: Trait> Module<T> {
-	pub fn get_validators() -> Result<Vec<T::AccountId>, &'static  str> {
+    pub fn get_validators() -> Result<Vec<T::AccountId>, &'static str> {
         match Self::validators().ok_or(Error::<T>::NoValidators) {
-			Ok(validators) => {
-				frame_support::debug::info!("Fetching the {} validators on the network", validators.len());
-				return Ok(validators);
-			},
-			Err(e) => {
-				frame_support::debug::error!("{:#?}", e);
-				return Err("No validators found");
-			}
-		};
+            Ok(validators) => {
+                frame_support::debug::info!(
+                    "Fetching the {} validators on the network",
+                    validators.len()
+                );
+                return Ok(validators);
+            }
+            Err(e) => {
+                frame_support::debug::error!("Failed to get validators: {:#?}", e);
+                return Err("No validators found");
+            }
+        };
     }
 
     pub fn is_validator(account_id: &T::AccountId) -> bool {
