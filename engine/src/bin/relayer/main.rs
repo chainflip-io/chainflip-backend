@@ -12,7 +12,7 @@ async fn main() -> Result<()> {
     let relayer = EthEventStreamBuilder::new("ws://host.docker.internal:8545", event_source)
         .with_sink(Logger::default())
         .with_sink(Logger::new(log::Level::Info))
-        .with_sink(StateChainCaller::<StakingCall>::new("ws://host.docker.internal:9944").await?)
+        .with_sink(StateChainCaller::<StakingCall>::new("http://host.docker.internal:9944").await?)
         .build()
         .await?;
 
