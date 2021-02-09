@@ -1,16 +1,18 @@
+use std::str::FromStr;
+
 use super::OutputSender;
 use crate::{
-    common::{OxenAmount, OxenWalletAddress},
+    common::OxenAmount,
     vault::blockchain_connection::oxen_rpc::{self, TransferResponse},
     vault::config::OxenRpcConfig,
 };
 use chainflip_common::types::{
+    addresses::OxenAddress,
     chain::{Output, OutputSent, UniqueId, Validate},
     coin::Coin,
     unique_id::GetUniqueId,
     Network,
 };
-use std::str::FromStr;
 
 /// Struct used for making Oxen transactions
 pub struct OxenSender {
@@ -23,7 +25,7 @@ pub struct OxenSender {
 async fn send_with_estimated_fee(
     port: u16,
     amount: &OxenAmount,
-    address: &OxenWalletAddress,
+    address: &OxenAddress,
     output_id: UniqueId,
 ) -> Result<TransferResponse, String> {
     let res = oxen_rpc::check_transfer_fee(port, &amount, &address).await?;
@@ -62,7 +64,7 @@ impl OxenSender {
                 output.unique_id()
             );
 
-            let oxen_address = match OxenWalletAddress::from_str(&output.address.to_string()) {
+            let oxen_address = match OxenAddress::from_str(&output.address.to_string()) {
                 Ok(addr) => addr,
                 Err(err) => {
                     // TODO: we should probably mark the output as invalid so we don't

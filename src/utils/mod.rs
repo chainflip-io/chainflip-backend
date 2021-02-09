@@ -3,9 +3,6 @@ use std::convert::AsMut;
 /// The test utils
 pub mod test_utils;
 
-/// Oxen utils
-pub mod oxen;
-
 /// Utils for generating HD wallets (bip32/bip44)
 pub mod bip44;
 

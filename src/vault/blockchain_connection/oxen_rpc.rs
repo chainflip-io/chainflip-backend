@@ -1,6 +1,7 @@
 //! Bindings to some commonly used methods exposed by Oxen RPC Wallet
 
-use crate::common::{OxenAmount, OxenPaymentId, OxenWalletAddress};
+use crate::common::OxenAmount;
+use chainflip_common::types::addresses::{OxenAddress, OxenPaymentId};
 use serde::{Deserialize, Serialize};
 use std::{
     convert::{TryFrom, TryInto},
@@ -155,13 +156,16 @@ impl TryFrom<BulkPaymentResponseEntryRaw> for BulkPaymentResponseEntry {
 
     fn try_from(a: BulkPaymentResponseEntryRaw) -> Result<Self, Self::Error> {
         let entry = BulkPaymentResponseEntry {
-            payment_id: OxenPaymentId::from_str(&a.payment_id)?,
+            payment_id: hex::decode(&a.payment_id)
+                .map_err(|_| "Payment id must be in hex format")?
+                .try_into()
+                .map_err(|_| "Invalid payment id")?,
             tx_hash: a.tx_hash,
             amount: OxenAmount::from_atomic(a.amount as u128),
             block_height: a.block_height,
             unlock_time: a.unlock_time,
             subaddr_index: a.subaddr_index,
-            address: OxenWalletAddress::from_str(&a.address)?,
+            address: OxenAddress::from_str(&a.address)?,
         };
 
         Ok(entry)
@@ -200,7 +204,7 @@ pub struct BulkPaymentResponseEntry {
     /// Account and subaddress indexes
     subaddr_index: SubaddressIndex,
     /// Address receiving the payment
-    address: OxenWalletAddress,
+    address: OxenAddress,
 }
 
 /// Bulk payment reponse
@@ -227,10 +231,14 @@ pub async fn get_bulk_payments(
     payment_ids: Vec<OxenPaymentId>,
     min_block_height: u64,
 ) -> Result<BulkPaymentResponse, String> {
-    let payment_ids = serde_json::to_value(payment_ids).map_err(|err| err.to_string())?;
+    let hex_payment_ids = payment_ids
+        .iter()
+        .map(|id| hex::encode(id))
+        .collect::<Vec<String>>();
+    let hex_payment_ids = serde_json::to_value(hex_payment_ids).map_err(|err| err.to_string())?;
 
     let params = serde_json::json!({
-        "payment_ids": payment_ids,
+        "payment_ids": hex_payment_ids,
         "min_block_height": min_block_height
     });
 
@@ -371,7 +379,7 @@ pub struct TransferResponse {
 pub async fn transfer(
     port: u16,
     amount: &OxenAmount,
-    address: &OxenWalletAddress,
+    address: &OxenAddress,
 ) -> Result<TransferResponse, String> {
     let payment_id = None;
     transfer_inner(port, amount, address, payment_id, false).await
@@ -381,7 +389,7 @@ pub async fn transfer(
 pub async fn check_transfer_fee(
     port: u16,
     amount: &OxenAmount,
-    address: &OxenWalletAddress,
+    address: &OxenAddress,
 ) -> Result<TransferResponse, String> {
     transfer_inner(port, amount, address, None, true).await
 }
@@ -390,7 +398,7 @@ pub async fn check_transfer_fee(
 async fn transfer_inner(
     port: u16,
     amount: &OxenAmount,
-    address: &OxenWalletAddress,
+    address: &OxenAddress,
     payment_id: Option<&str>,
     check_fee_only: bool,
 ) -> Result<TransferResponse, String> {
@@ -398,7 +406,7 @@ async fn transfer_inner(
 
     let dest = Destination {
         amount,
-        address: address.to_str().to_owned(),
+        address: address.to_string().to_owned(),
     };
 
     let params = TransferRequestParams {
