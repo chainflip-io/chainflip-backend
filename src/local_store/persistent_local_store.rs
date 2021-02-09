@@ -15,9 +15,10 @@ pub struct PersistentLocalStore {
 fn create_tables_if_new(db: &DB) {
     db.execute(
         "CREATE TABLE IF NOT EXISTS events (
-                id TEXT PRIMARY KEY,
-                data BLOB NOT NULL,
-                status TEXT
+            rowid INTEGER PRIMARY KEY AUTOINCREMENT,
+            id TEXT NOT NULL UNIQUE,
+            data BLOB NOT NULL,
+            status TEXT
     )",
         NO_PARAMS,
     )
