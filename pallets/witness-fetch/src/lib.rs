@@ -312,13 +312,12 @@ struct WitnessResponse {
 
 fn fetch_witnesses(last_seen: u64) -> CFResult<WitnessResponse> {
     // this is used, don't listen to rust-analyzer
-    #[allow(dead_code)]
     use alt_serde::__private::ToString;
 
     let mut url = AString::from("http://127.0.0.1:3030/v1/witnesses?last_seen=");
+    url.push_str(&last_seen.to_string());
     // for testing, with the json-server
     // let mut url = AString::from("http://127.0.0.1:3000/witnesses");
-    url.push_str(&last_seen.to_string());
 
     debug::info!("[witness]: fetching {}", &url);
 
