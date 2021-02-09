@@ -5,7 +5,7 @@ use crate::{
     common::*,
     local_store::LocalEvent,
     vault::transactions::{
-        memory_provider::{FulfilledWrapper, Portion, UsedWitnessWrapper},
+        memory_provider::{FulfilledWrapper, Portion, StatusWitnessWrapper},
         TransactionProvider,
     },
 };
@@ -39,11 +39,11 @@ pub(super) fn process_deposit_quotes<T: TransactionProvider>(
 ) {
     let provider = tx_provider.read();
     let deposit_quotes = provider.get_deposit_quotes();
-    let witness_txs = provider.get_witnesses();
+    let witnesses = provider.get_witnesses();
 
     // TODO: a potential room for improvement: autoswap is relatively slow,
     // so we might want to release the mutex when performing it
-    let new_events = process_deposit_quotes_inner(&deposit_quotes, &witness_txs, network);
+    let new_events = process_deposit_quotes_inner(&deposit_quotes, &witnesses, network);
     drop(provider);
 
     // TODO: make sure that things below happen atomically
@@ -59,19 +59,27 @@ pub(super) fn process_deposit_quotes<T: TransactionProvider>(
 /// Try to match witnesses with deposit quotes and return a list of deposits that should be added to the side chain
 fn process_deposit_quotes_inner(
     quotes: &[FulfilledWrapper<DepositQuote>],
-    witness_txs: &[UsedWitnessWrapper],
+    witnesses: &[StatusWitnessWrapper],
     network: Network,
 ) -> Vec<LocalEvent> {
     let mut new_events = Vec::<LocalEvent>::default();
 
+    println!(
+        "Witnesses in process deposit_quotes_inner: {:#?}",
+        witnesses
+    );
+
+    println!("Number of quotes to process: {}", quotes.len());
+
     for quote_info in quotes {
-        // Find all relevant witnesses
-        let wtxs: Vec<&UsedWitnessWrapper> = witness_txs
+        // only process confirmed witnesses
+        let wtxs: Vec<&StatusWitnessWrapper> = witnesses
             .iter()
-            .filter(|wtx| !wtx.used && wtx.inner.quote == quote_info.inner.unique_id())
+            .filter(|wtx| wtx.is_confirmed() && wtx.inner.quote == quote_info.inner.unique_id())
             .collect();
 
         if wtxs.is_empty() {
+            println!("There are witnesses, but none confirmed in deposit quotes inner");
             continue;
         }
 
@@ -99,7 +107,7 @@ fn process_deposit_quotes_inner(
 
 fn refund_deposit_quotes(
     quote_info: &FulfilledWrapper<DepositQuote>,
-    witness_txs: &[&UsedWitnessWrapper],
+    witnesses: &[&StatusWitnessWrapper],
     network: Network,
 ) -> Vec<Output> {
     if !quote_info.fulfilled {
@@ -110,9 +118,9 @@ fn refund_deposit_quotes(
     let quote_coin = quote.pool;
     let mut output_txs: Vec<Output> = vec![];
 
-    let valid_witness_txs = witness_txs.iter().filter(|tx| !tx.used);
+    let confirmed_witnesses = witnesses.iter().filter(|tx| tx.is_confirmed());
 
-    for wtx in valid_witness_txs {
+    for wtx in confirmed_witnesses {
         let tx = &wtx.inner;
         let return_address = match tx.coin {
             Coin::OXEN => quote.base_return_address.clone(),
@@ -155,7 +163,7 @@ fn refund_deposit_quotes(
 /// Process a single deposit quote with all witnesses referencing it
 fn process_deposit_quote(
     quote_info: &FulfilledWrapper<DepositQuote>,
-    witness_txs: &[&UsedWitnessWrapper],
+    witnesses: &[&StatusWitnessWrapper],
     network: Network,
 ) -> Option<DepositQuoteResult> {
     if quote_info.fulfilled {
@@ -175,10 +183,10 @@ fn process_deposit_quote(
     // Indexes of used witnesses
     let mut wtx_idxs = Vec::<UniqueId>::default();
 
-    for wtx in witness_txs {
-        // We don't expect used quotes at this stage,
+    for wtx in witnesses {
+        // We don't expect processed or unconfirmed quotes quotes at this stage,
         // but let's double check this:
-        if wtx.used {
+        if !wtx.is_confirmed() {
             continue;
         }
 

@@ -67,6 +67,21 @@ impl<T> Response<T> {
     }
 }
 
+/// A representation of the RPC response from the state chain
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ScResponse<T> {
+    /// rpc call's id
+    pub id: u64,
+    /// json rpc version number
+    pub jsonrpc: String,
+    /// The data associated with this response if successful.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<T>,
+    /// The error associated with this response if not successful.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<ResponseError>,
+}
+
 /// Convert an API result into a warp response.
 ///
 /// Should be used in conjunction with `handle_rejection`.

@@ -105,6 +105,15 @@ impl TestRunner {
         self.sync();
     }
 
+    /// Confirms witnesses when called. This is used to emulate the
+    /// witness confirmer
+    pub fn confirm_witnesses(&mut self, witnesses: Vec<Witness>) {
+        let mut provider = self.provider.write();
+        for witness in witnesses {
+            provider.confirm_witness(witness.unique_id()).unwrap();
+        }
+    }
+
     /// A helper function that adds a deposit quote and the corresponding witnesses
     /// necessary for the deposit to be registered
     pub fn add_witnessed_deposit_quote(
@@ -120,17 +129,29 @@ impl TestRunner {
             oxen_amount.to_atomic(),
             Coin::OXEN,
         );
+        let wtx_oxen_id = wtx_oxen.unique_id();
         let wtx_eth = TestData::witness(
             deposit_quote.unique_id(),
             other_amount.to_atomic(),
             other_amount.coin_type(),
         );
+        let wtx_eth_id = wtx_eth.unique_id();
 
         self.add_local_events([
             wtx_oxen.into(),
             wtx_eth.into(),
             deposit_quote.clone().into(),
         ]);
+
+        let mut provider = self.provider.write();
+        // confirm the witnesses - emulating witness_confirmer
+        provider.confirm_witness(wtx_oxen_id).unwrap();
+        provider.confirm_witness(wtx_eth_id).unwrap();
+
+        println!(
+            "Witnesses after confirming: {:#?}",
+            provider.get_witnesses()
+        );
 
         deposit_quote
     }
@@ -189,12 +210,14 @@ impl TestRunner {
         staker_id: &StakerId,
         pool: PoolCoin,
     ) -> Result<Portion, String> {
+        println!("Getting portions for staker_id: {:#?}", staker_id);
         let provider = self.provider.read();
         let all_pools = provider.get_portions();
         let pool = all_pools
             .get(&pool)
             .ok_or(format!("Pool should have portions: {}", pool))?;
 
+        println!("Pool portions: {:#?}", pool);
         let portions = pool
             .get(&staker_id)
             .ok_or("No portions for this staker id")?;
@@ -226,7 +249,7 @@ pub struct EthDepositOutputs {
 fn spin_until_last_seen(receiver: &crossbeam_channel::Receiver<ProcessorEvent>, last_seen: u64) {
     // Long timeout just to make sure a failing test
     let timeout = Duration::from_secs(10);
-
+    println!("Spin until last seen, last_seen: {}", last_seen);
     loop {
         match receiver.recv_timeout(timeout) {
             Ok(event) => {

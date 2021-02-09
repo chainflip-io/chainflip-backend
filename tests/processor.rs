@@ -8,15 +8,13 @@ use chainflip_common::types::{coin::Coin, unique_id::GetUniqueId};
 use data::TestData;
 
 fn check_liquidity<T>(
-    tx_provider: &mut T,
+    tx_provider: &T,
     coin_type: Coin,
     oxen_amount: OxenAmount,
     coin_amount: GenericCoinAmount,
 ) where
     T: TransactionProvider,
 {
-    tx_provider.sync();
-
     let liquidity = tx_provider
         .get_liquidity(PoolCoin::from(coin_type).unwrap())
         .unwrap();
@@ -47,7 +45,10 @@ fn witnessed_deposit_changes_pool_liquidity() {
     );
 
     runner.add_local_events([deposit_quote.clone().into()]);
-    runner.add_local_events([wtx_oxen.into(), wtx_eth.into()]);
+    runner.add_local_events([wtx_oxen.clone().into(), wtx_eth.clone().into()]);
+    runner.confirm_witnesses(vec![wtx_oxen, wtx_eth]);
+
+    std::thread::sleep(std::time::Duration::from_secs(5));
 
     check_liquidity(
         &mut *runner.provider.write(),
@@ -93,7 +94,10 @@ fn multiple_deposits() {
 
     // Add blocks with those transactions
     runner.add_local_events([deposit_quote.clone().into()]);
-    runner.add_local_events([wtx_oxen.into(), wtx_eth.into()]);
+    runner.add_local_events([wtx_oxen.clone().into(), wtx_eth.clone().into()]);
+    runner.confirm_witnesses(vec![wtx_oxen, wtx_eth]);
+
+    std::thread::sleep(std::time::Duration::from_secs(4));
 
     check_liquidity(
         &mut *runner.provider.write(),
@@ -133,6 +137,7 @@ fn sole_staker_can_withdraw_all() {
 
     let deposit_quote = runner.add_witnessed_deposit_quote(&staker.id(), oxen_amount, eth_amount);
 
+    std::thread::sleep(std::time::Duration::from_secs(4));
     // Check that the liquidity is non-zero before unstaking
     runner.check_eth_liquidity(oxen_amount.to_atomic(), eth_amount.to_atomic());
 
@@ -146,7 +151,8 @@ fn sole_staker_can_withdraw_all() {
     assert_eq!(outputs.oxen_output.amount, oxen_amount.to_atomic());
     assert_eq!(outputs.eth_output.amount, eth_amount.to_atomic());
 
-    // Check that liquidity is 0 after unstaking. (Is this even a valid state???)
+    std::thread::sleep(std::time::Duration::from_secs(4));
+
     runner.check_eth_liquidity(0, 0);
 }
 
@@ -165,6 +171,8 @@ fn half_staker_can_withdraw_half() {
     let _ = runner.add_witnessed_deposit_quote(&alice.id(), oxen_amount, eth_amount);
     let deposit2 = runner.add_witnessed_deposit_quote(&bob.id(), oxen_amount, eth_amount);
 
+    std::thread::sleep(std::time::Duration::from_secs(4));
+
     // Check that liquidity is the sum of two deposits
     runner.check_eth_liquidity(oxen_amount.to_atomic() * 2, eth_amount.to_atomic() * 2);
 
@@ -176,6 +184,8 @@ fn half_staker_can_withdraw_half() {
 
     assert_eq!(outputs.oxen_output.amount, oxen_amount.to_atomic());
     assert_eq!(outputs.eth_output.amount, eth_amount.to_atomic());
+
+    std::thread::sleep(std::time::Duration::from_secs(4));
 
     // Check that liquidity halved
     runner.check_eth_liquidity(oxen_amount.to_atomic(), eth_amount.to_atomic());
@@ -199,15 +209,18 @@ fn portions_adjusted_after_withdraw() {
     runner.add_witnessed_deposit_quote(&alice.id(), oxen_amount, eth_amount);
     runner.add_witnessed_deposit_quote(&bob.id(), oxen_amount, eth_amount);
 
-    // Each should have 50% portions
+    std::thread::sleep(std::time::Duration::from_secs(4));
 
+    // Each should have 50% portions
     let portions_alice = runner
         .get_portions_for(&alice.id(), PoolCoin::ETH)
         .expect("Alice must have portions");
+
+    println!("Alice has portions");
     let portions_bob = runner
         .get_portions_for(&bob.id(), PoolCoin::ETH)
         .expect("Bob must have portions");
-
+    println!("Bob has portions");
     assert_eq!(portions_alice.0, Portion::MAX.0 / 2);
     assert_eq!(portions_bob.0, Portion::MAX.0 / 2);
 
@@ -262,7 +275,7 @@ fn non_staker_cannot_withdraw() {
 }
 
 #[test]
-fn assymetric_deposit_result_in_autoswap() {
+fn asymmetric_deposit_result_in_autoswap() {
     test_utils::logging::init();
 
     let mut runner = TestRunner::new();
@@ -270,15 +283,23 @@ fn assymetric_deposit_result_in_autoswap() {
     let oxen_amount = OxenAmount::from_decimal_string("500.0");
     let btc_amount = GenericCoinAmount::from_decimal_string(Coin::BTC, "0.02");
 
+    println!("Alice add deposit quote");
     let alice = get_random_staker();
     let _ = runner.add_witnessed_deposit_quote(&alice.id(), oxen_amount, btc_amount);
 
+    println!("Bob add deposit quote");
     let bob = get_random_staker();
 
     let oxen_amount = OxenAmount::from_decimal_string("250.0");
     let btc_amount = GenericCoinAmount::from_decimal_string(Coin::BTC, "0.02");
 
     let _ = runner.add_witnessed_deposit_quote(&bob.id(), oxen_amount, btc_amount);
+
+    // wait here so the test runner processor can progress
+    std::thread::sleep(std::time::Duration::from_secs(5));
+
+    println!("Witnesses and deposit quotes added. Now to get the portions");
+    // observe the witness
 
     let a = runner
         .get_portions_for(&alice.id(), PoolCoin::BTC)

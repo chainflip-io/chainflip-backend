@@ -1,6 +1,8 @@
-use std::u64;
+use std::{str::FromStr, u64};
 
-use super::{EventNumber, ILocalStore, LocalEvent, StorageItem};
+use crate::vault::transactions::memory_provider::{StatusWitnessWrapper, WitnessStatus};
+
+use super::{memory_local_store::NULL_STATUS, EventNumber, ILocalStore, LocalEvent, StorageItem};
 use rusqlite::Connection as DB;
 use rusqlite::{params, NO_PARAMS};
 
@@ -13,8 +15,10 @@ pub struct PersistentLocalStore {
 fn create_tables_if_new(db: &DB) {
     db.execute(
         "CREATE TABLE IF NOT EXISTS events (
-                id TEXT PRIMARY KEY,
-                data BLOB NOT NULL
+            rowid INTEGER PRIMARY KEY AUTOINCREMENT,
+            id TEXT NOT NULL UNIQUE,
+            data BLOB NOT NULL,
+            status TEXT
     )",
         NO_PARAMS,
     )
@@ -46,8 +50,7 @@ impl ILocalStore for PersistentLocalStore {
             INSERT INTO events
             (id, data) VALUES (?1, ?2)
             ",
-                // TODO: how to get around u32 limit of sqlite?
-                params![id as u32, blob],
+                params![id as i64, blob],
             ) {
                 Ok(_) => {
                     trace!("Event ({:#} added to db", id);
@@ -77,8 +80,7 @@ impl ILocalStore for PersistentLocalStore {
         while let Some(row) = rows.next().expect("Rows should be readable") {
             let data_str: String = row.get(0).unwrap();
             let mut l_evt = serde_json::from_str::<LocalEvent>(&data_str).unwrap();
-            // sqlite limited to u32
-            let row_val: u32 = row.get(1).unwrap();
+            let row_val: i64 = row.get(1).unwrap();
             l_evt.set_event_number(row_val as u64);
             recent_events.push(l_evt);
         }
@@ -92,9 +94,64 @@ impl ILocalStore for PersistentLocalStore {
             .prepare("SELECT COUNT(*) FROM events")
             .expect("Could not prepare stmt");
 
-        let count: Result<u32, _> = total_events.query_row(NO_PARAMS, |row| row.get(0));
+        let count: Result<i64, _> = total_events.query_row(NO_PARAMS, |row| row.get(0));
 
         count.unwrap() as u64
+    }
+
+    fn get_witnesses_status(&self, last_seen: u64) -> Vec<StatusWitnessWrapper> {
+        let mut select_events = self
+            .db
+            .prepare("SELECT data, rowid as event_number, status FROM events WHERE rowid > ?")
+            .expect("Could not prepare stmt");
+
+        let mut rows = select_events
+            .query(params![last_seen as i64])
+            .map_err(|err| err.to_string())
+            .unwrap();
+
+        let mut recent_witnesses: Vec<StatusWitnessWrapper> = Vec::new();
+
+        while let Some(row) = rows.next().expect("Rows should be readable") {
+            let data_str: String = row.get(0).unwrap();
+            let witness = serde_json::from_str::<LocalEvent>(&data_str).unwrap();
+            if let LocalEvent::Witness(mut w) = witness {
+                let row_val: i64 = row.get(1).unwrap();
+                let status: String = row.get(2).unwrap_or(NULL_STATUS.to_string());
+                let witness_status: WitnessStatus =
+                    WitnessStatus::from_str(&status).unwrap_or(WitnessStatus::AwaitingConfirmation);
+                w.event_number = Some(row_val as u64);
+                let status_witness_wrapper = StatusWitnessWrapper {
+                    inner: w,
+                    status: witness_status,
+                };
+                recent_witnesses.push(status_witness_wrapper);
+            }
+        }
+
+        recent_witnesses
+    }
+
+    fn set_witness_status(&mut self, id: u64, status: WitnessStatus) -> Result<(), String> {
+        let status = status.to_string();
+
+        match self.db.execute(
+            "
+            UPDATE events SET status = ?1
+            WHERE id = ?2
+            ",
+            params![status, id as i64],
+        ) {
+            Ok(_) => {
+                debug!("Witness {} updated to status {}", id, status);
+            }
+            Err(e) => {
+                error!("Failed to update witness {}", id);
+                return Err(e.to_string());
+            }
+        };
+
+        Ok(())
     }
 }
 
@@ -102,7 +159,7 @@ impl ILocalStore for PersistentLocalStore {
 mod test {
     use super::*;
     use crate::utils::test_utils::{self, data::TestData};
-    use chainflip_common::types::coin::Coin;
+    use chainflip_common::types::{coin::Coin, unique_id::GetUniqueId};
 
     #[test]
     fn test_db_created_successfully() {
@@ -178,5 +235,35 @@ mod test {
             .expect("Error adding an event to the database");
 
         assert_eq!(db.total_events(), 2);
+    }
+
+    #[test]
+    fn set_witness_status() {
+        let temp_file = test_utils::TempRandomFile::new();
+
+        let mut db = PersistentLocalStore::open(temp_file.path());
+
+        let witness: LocalEvent = TestData::witness(0, 100, Coin::ETH).into();
+
+        // add a witness to the database, without specifying a status
+        db.add_events(vec![witness.clone()])
+            .expect("Error adding an event to the database");
+
+        assert_eq!(db.total_events(), 1);
+
+        let events = db.get_witnesses_status(0);
+        let witness_from_db = events.first().unwrap();
+        // ensure the default return is AwaitingConfirmation
+        assert_eq!(witness_from_db.status, WitnessStatus::AwaitingConfirmation);
+
+        // Update the witness status
+        db.set_witness_status(witness_from_db.inner.unique_id(), WitnessStatus::Confirmed)
+            .unwrap();
+
+        let events = db.get_witnesses_status(0);
+
+        let witness_from_db = events.first().unwrap();
+        assert_eq!(witness_from_db.status, WitnessStatus::Confirmed);
+        assert_eq!(witness_from_db.inner.event_number, Some(1));
     }
 }

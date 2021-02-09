@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 pub use memory_local_store::MemoryLocalStore;
 pub use persistent_local_store::PersistentLocalStore;
 
+use crate::vault::transactions::memory_provider::{StatusWitnessWrapper, WitnessStatus};
+
 /// Side chain transaction type
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(tag = "type", content = "info")]
@@ -150,8 +152,14 @@ pub trait ILocalStore {
         witnesses
     }
 
+    /// Get witnesses with their current status
+    fn get_witnesses_status(&self, last_event: u64) -> Vec<StatusWitnessWrapper>;
+
     /// Get total number of events in the db
     fn total_events(&self) -> u64;
+
+    /// Sets the status column of a particular witness
+    fn set_witness_status(&mut self, id: u64, status: WitnessStatus) -> Result<(), String>;
 }
 
 /// Trait for items to be stored in the database

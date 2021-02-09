@@ -1,10 +1,23 @@
+use std::str::FromStr;
+
 use chainflip_common::types::chain::*;
 
-use super::{ILocalStore, LocalEvent};
+use crate::vault::transactions::memory_provider::{StatusWitnessWrapper, WitnessStatus};
+
+use super::{ILocalStore, LocalEvent, StorageItem};
+
+pub const NULL_STATUS: &'static str = "null";
+
+#[derive(Debug, Clone)]
+pub struct FakeDbEntry {
+    id: u64,
+    data: LocalEvent,
+    status: String,
+}
 
 /// Fake implemenation of ILocalStore that stores events in memory
 pub struct MemoryLocalStore {
-    events: Vec<LocalEvent>,
+    events: Vec<FakeDbEntry>,
 }
 
 impl MemoryLocalStore {
@@ -15,25 +28,17 @@ impl MemoryLocalStore {
 
     /// Helper for getting just the witnesses
     pub fn get_witness_evts(&self) -> Vec<Witness> {
-        let witness_events: Vec<_> = self
+        let witnesses: Vec<Witness> = self
             .events
             .iter()
-            .filter(|e| {
-                if let LocalEvent::Witness(_) = e {
-                    true
+            .filter_map(|e| {
+                if let LocalEvent::Witness(w) = &e.data {
+                    Some(w.clone())
                 } else {
-                    false
+                    None
                 }
             })
             .collect();
-
-        let mut witnesses: Vec<Witness> = vec![];
-
-        for witness in witness_events {
-            if let LocalEvent::Witness(w) = witness {
-                witnesses.push(w.clone());
-            }
-        }
 
         witnesses
     }
@@ -43,19 +48,51 @@ impl ILocalStore for MemoryLocalStore {
     fn add_events(&mut self, events: Vec<LocalEvent>) -> Result<(), String> {
         for new_event in &events {
             // don't add duplicates
-            if !self.events.iter().any(|e| e == new_event) {
-                self.events.push(new_event.clone());
+            if !self.events.iter().any(|e| e.data == new_event.clone()) {
+                let fake_entry = FakeDbEntry {
+                    id: new_event.unique_id(),
+                    status: NULL_STATUS.to_string(),
+                    data: new_event.clone(),
+                };
+                self.events.push(fake_entry);
             }
         }
         Ok(())
     }
 
     fn get_events(&self, last_seen: u64) -> Vec<LocalEvent> {
-        self.events[last_seen as usize..].to_vec()
+        self.events[last_seen as usize..]
+            .iter()
+            .map(|db_e| db_e.data.clone())
+            .collect()
     }
 
     fn total_events(&self) -> u64 {
         self.events.len() as u64
+    }
+
+    fn set_witness_status(&mut self, id: u64, status: WitnessStatus) -> Result<(), String> {
+        let event_to_update = self.events.iter_mut().find(|e| e.id == id).unwrap();
+        println!("Event to update: {:#?}", event_to_update);
+        event_to_update.status = status.to_string();
+
+        Ok(())
+    }
+
+    fn get_witnesses_status(&self, last_seen: u64) -> Vec<StatusWitnessWrapper> {
+        self.events[last_seen as usize..]
+            .iter()
+            .filter_map(|e| {
+                if let LocalEvent::Witness(w) = &e.data {
+                    Some(StatusWitnessWrapper {
+                        status: WitnessStatus::from_str(&e.status).unwrap(),
+                        inner: w.clone(),
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }
 

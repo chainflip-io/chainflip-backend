@@ -1,7 +1,10 @@
 use data::TestData;
 
 use super::*;
-use crate::{common::GenericCoinAmount, utils::test_utils::*};
+use crate::{
+    common::GenericCoinAmount, utils::test_utils::*,
+    vault::transactions::memory_provider::WitnessStatus,
+};
 
 #[test]
 fn fulfilled_eth_quotes_should_produce_new_tx() {
@@ -10,10 +13,12 @@ fn fulfilled_eth_quotes_should_produce_new_tx() {
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
     let quote_tx = TestData::deposit_quote(coin_type);
+
     let wtx_oxen = TestData::witness(quote_tx.unique_id(), oxen_amount.to_atomic(), Coin::OXEN);
-    let wtx_oxen = UsedWitnessWrapper::new(wtx_oxen, false);
+    let wtx_oxen = StatusWitnessWrapper::new(wtx_oxen, WitnessStatus::Confirmed);
+
     let wtx_eth = TestData::witness(quote_tx.unique_id(), coin_amount.to_atomic(), coin_type);
-    let wtx_eth = UsedWitnessWrapper::new(wtx_eth, false);
+    let wtx_eth = StatusWitnessWrapper::new(wtx_eth, WitnessStatus::Confirmed);
 
     let quote_tx = FulfilledWrapper::new(quote_tx, false);
 
@@ -41,10 +46,12 @@ fn fulfilled_btc_quotes_should_produce_new_tx() {
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
     let quote_tx = TestData::deposit_quote(coin_type);
+
     let wtx_oxen = TestData::witness(quote_tx.unique_id(), oxen_amount.to_atomic(), Coin::OXEN);
-    let wtx_oxen = UsedWitnessWrapper::new(wtx_oxen, false);
+    let wtx_oxen = StatusWitnessWrapper::new(wtx_oxen, WitnessStatus::Confirmed);
+
     let wtx_btc = TestData::witness(quote_tx.unique_id(), coin_amount.to_atomic(), coin_type);
-    let wtx_btc = UsedWitnessWrapper::new(wtx_btc, false);
+    let wtx_btc = StatusWitnessWrapper::new(wtx_btc, WitnessStatus::Confirmed);
 
     let quote_tx = FulfilledWrapper::new(quote_tx, false);
 
@@ -72,8 +79,9 @@ fn partially_fulfilled_quotes_do_not_produce_new_tx() {
     let _coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
     let quote_tx = TestData::deposit_quote(coin_type);
+
     let wtx_oxen = TestData::witness(quote_tx.unique_id(), oxen_amount.to_atomic(), Coin::OXEN);
-    let wtx_oxen = UsedWitnessWrapper::new(wtx_oxen, false);
+    let wtx_oxen = StatusWitnessWrapper::new(wtx_oxen, WitnessStatus::Confirmed);
 
     let quote_tx = FulfilledWrapper::new(quote_tx, false);
 
@@ -89,10 +97,12 @@ fn refunds_if_deposit_quote_is_fulfilled() {
     let btc_amount = GenericCoinAmount::from_decimal_string(Coin::BTC, "2.0");
 
     let quote_tx = TestData::deposit_quote(coin_type);
+
     let wtx_oxen = TestData::witness(quote_tx.unique_id(), oxen_amount.to_atomic(), Coin::OXEN);
-    let wtx_oxen = UsedWitnessWrapper::new(wtx_oxen, false);
+    let wtx_oxen = StatusWitnessWrapper::new(wtx_oxen, WitnessStatus::Confirmed);
+
     let wtx_btc = TestData::witness(quote_tx.unique_id(), btc_amount.to_atomic(), coin_type);
-    let wtx_btc = UsedWitnessWrapper::new(wtx_btc, false);
+    let wtx_btc = StatusWitnessWrapper::new(wtx_btc, WitnessStatus::Confirmed);
 
     let quote_tx = FulfilledWrapper::new(quote_tx, true);
 
@@ -121,10 +131,10 @@ fn witness_tx_cannot_be_reused() {
 
     let wtx_oxen = TestData::witness(quote_tx.unique_id(), oxen_amount.to_atomic(), Coin::OXEN);
     // Witness has already been used before
-    let wtx_oxen = UsedWitnessWrapper::new(wtx_oxen, true);
+    let wtx_oxen = StatusWitnessWrapper::new(wtx_oxen, WitnessStatus::Processed);
 
     let wtx_eth = TestData::witness(quote_tx.unique_id(), coin_amount.to_atomic(), coin_type);
-    let wtx_eth = UsedWitnessWrapper::new(wtx_eth, false);
+    let wtx_eth = StatusWitnessWrapper::new(wtx_eth, WitnessStatus::AwaitingConfirmation);
 
     let quote_tx = FulfilledWrapper::new(quote_tx, false);
 
@@ -142,10 +152,10 @@ fn quote_cannot_be_fulfilled_twice() {
     let quote_tx = TestData::deposit_quote(coin_type);
 
     let wtx_oxen = TestData::witness(quote_tx.unique_id(), oxen_amount.to_atomic(), Coin::OXEN);
-    let wtx_oxen = UsedWitnessWrapper::new(wtx_oxen, false);
+    let wtx_oxen = StatusWitnessWrapper::new(wtx_oxen, WitnessStatus::AwaitingConfirmation);
 
     let wtx_eth = TestData::witness(quote_tx.unique_id(), coin_amount.to_atomic(), coin_type);
-    let wtx_eth = UsedWitnessWrapper::new(wtx_eth, false);
+    let wtx_eth = StatusWitnessWrapper::new(wtx_eth, WitnessStatus::AwaitingConfirmation);
 
     // The quote has already been fulfilled
     let quote_tx = FulfilledWrapper::new(quote_tx, true);
@@ -163,10 +173,12 @@ fn check_staking_smaller_amounts() {
     let coin_amount = GenericCoinAmount::from_decimal_string(coin_type, "2.0");
 
     let quote_tx = TestData::deposit_quote(coin_type);
+
     let wtx_oxen = TestData::witness(quote_tx.unique_id(), oxen_amount.to_atomic(), Coin::OXEN);
-    let wtx_oxen = UsedWitnessWrapper::new(wtx_oxen, false);
+    let wtx_oxen = StatusWitnessWrapper::new(wtx_oxen, WitnessStatus::Confirmed);
+
     let wtx_eth = TestData::witness(quote_tx.unique_id(), coin_amount.to_atomic(), coin_type);
-    let wtx_eth = UsedWitnessWrapper::new(wtx_eth, false);
+    let wtx_eth = StatusWitnessWrapper::new(wtx_eth, WitnessStatus::Confirmed);
 
     let quote_tx = FulfilledWrapper::new(quote_tx, false);
 

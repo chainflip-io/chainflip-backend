@@ -7,10 +7,12 @@
 mod btc_spv;
 mod ethereum;
 mod oxen_witness;
+mod witness_confirmer;
 
 pub use btc_spv::BtcSPVWitness;
 pub use ethereum::EthereumWitness;
 pub use oxen_witness::OxenWitness;
+pub use witness_confirmer::WitnessConfirmer;
 
 /// A fake witness
 pub mod fake_witness;
