@@ -41,6 +41,7 @@ use codec::{Decode, Encode};
 use sp_runtime::RuntimeDebug;
 
 type AString = codec::alloc::string::String;
+
 type WitnessId = Vec<u8>;
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -310,6 +311,10 @@ struct WitnessResponse {
 }
 
 fn fetch_witnesses(last_seen: u64) -> CFResult<WitnessResponse> {
+    // this is used, don't listen to rust-analyzer
+    #[allow(dead_code)]
+    use alt_serde::__private::ToString;
+
     let mut url = AString::from("http://127.0.0.1:3030/v1/witnesses?last_seen=");
     // for testing, with the json-server
     // let mut url = AString::from("http://127.0.0.1:3000/witnesses");

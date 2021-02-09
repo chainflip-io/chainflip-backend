@@ -1,3 +1,4 @@
+use chainflip_common::types::utf8::ByteString;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use sp_api::ProvideRuntimeApi;
@@ -9,7 +10,7 @@ use witness_fetch_runtime_api::WitnessApi as WitnessRuntimeApi;
 #[rpc]
 pub trait WitnessApi<BlockHash> {
     #[rpc(name = "get_confirmed_witnesses")]
-    fn get_confirmed_witnesses(&self, at: Option<BlockHash>) -> Result<Vec<String>>;
+    fn get_confirmed_witnesses(&self, at: Option<BlockHash>) -> Result<Vec<ByteString>>;
 }
 
 pub struct Witness<C, M> {
@@ -34,7 +35,10 @@ where
     C: HeaderBackend<Block>,
     C::Api: WitnessRuntimeApi<Block>,
 {
-    fn get_confirmed_witnesses(&self, at: Option<<Block as BlockT>::Hash>) -> Result<Vec<String>> {
+    fn get_confirmed_witnesses(
+        &self,
+        at: Option<<Block as BlockT>::Hash>,
+    ) -> Result<Vec<ByteString>> {
         let api = self.client.runtime_api();
         let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 
@@ -42,12 +46,7 @@ where
 
         match runtime_api_result {
             Ok(result) => {
-                let witnesses =
-                    byte_witnesses_to_string_witnesses(result).map_err(|e| RpcError {
-                        code: ErrorCode::ServerError(9998),
-                        message: "Failed to parse witnesses".into(),
-                        data: Some(format!("{:#?}", e).into()),
-                    })?;
+                let witnesses: Vec<ByteString> = result.iter().map(|w| w.clone().into()).collect();
                 return Ok(witnesses);
             }
             Err(err) => {
@@ -59,15 +58,4 @@ where
             }
         }
     }
-}
-
-fn byte_witnesses_to_string_witnesses(
-    byte_witnesses: Vec<Vec<u8>>,
-) -> std::result::Result<Vec<String>, String> {
-    let mut string_witnesses: Vec<String> = Vec::new();
-    for b_witness in byte_witnesses {
-        let utf8_witness = String::from_utf8(b_witness).map_err(|e| e.to_string())?;
-        string_witnesses.push(utf8_witness);
-    }
-    Ok(string_witnesses)
 }

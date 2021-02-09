@@ -438,6 +438,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5024ee8015f02155eee35c711107ddd9a9bf3cb689cf2a9089c97e79b6e1ae83"
 
 [[package]]
+name = "base58-monero"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06753f02479480272d4ffc2c850174e2c2e84c887ffa357bc0d8f61ff38791fc"
+dependencies = [
+ "tiny-keccak",
+]
+
+[[package]]
 name = "base64"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -454,6 +463,12 @@ name = "base64"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
+
+[[package]]
+name = "bech32-no_std"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4756f018d917ebf7d60361ce6b48e88a9f1904525429e501bc0841b9436d416e"
 
 [[package]]
 name = "bincode"
@@ -640,6 +655,9 @@ name = "bs58"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "771fe0050b883fcc3ea2359b1a96bcfbc090b7116eae7c3c512c7a083fdf23d3"
+dependencies = [
+ "sha2 0.9.3",
+]
 
 [[package]]
 name = "bstr"
@@ -797,6 +815,26 @@ dependencies = [
  "poly1305",
  "stream-cipher",
  "zeroize",
+]
+
+[[package]]
+name = "chainflip-common"
+version = "0.0.1"
+dependencies = [
+ "base58-monero",
+ "base64 0.13.0",
+ "bech32-no_std",
+ "bs58 0.4.0",
+ "hex",
+ "lazy_static",
+ "parity-scale-codec",
+ "ring",
+ "serde",
+ "serde_json",
+ "siphasher",
+ "sp-std",
+ "tiny-keccak",
+ "uuid",
 ]
 
 [[package]]
@@ -1978,8 +2016,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9495705279e7140bf035dde1f6e750c162df8b625267cd52cc44e0b156732c8"
 dependencies = [
  "cfg-if 1.0.0",
+ "js-sys",
  "libc",
  "wasi 0.10.0+wasi-snapshot-preview1",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -6166,6 +6206,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0f0242b8e50dd9accdd56170e94ca1ebd223b098eb9c83539a6e367d0f36ae68"
 
 [[package]]
+name = "siphasher"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa8f3741c7372e75519bd9346068370c9cdaabcc1f9599cbcf2a2719352286b7"
+
+[[package]]
 name = "slab"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7839,6 +7885,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "uuid"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
+dependencies = [
+ "getrandom 0.2.2",
+ "serde",
+]
+
+[[package]]
 name = "value-bag"
 version = "1.0.0-alpha.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8347,6 +8403,7 @@ dependencies = [
 name = "witness-fetch-rpc"
 version = "2.0.0"
 dependencies = [
+ "chainflip-common",
  "frame-support",
  "frame-system",
  "jsonrpc-core",
