@@ -359,6 +359,14 @@ pub type Executive = frame_executive::Executive<
 >;
 
 impl_runtime_apis! {
+
+    impl witness_fetch_runtime_api::WitnessApi<Block> for Runtime {
+
+        fn get_confirmed_witnesses() -> Vec<Vec<u8>> {
+            WitnessFetcher::get_confirmed_witnesses()
+        }
+    }
+
     impl sp_api::Core<Block> for Runtime {
         fn version() -> RuntimeVersion {
             VERSION

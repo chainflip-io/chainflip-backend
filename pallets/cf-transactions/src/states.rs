@@ -26,7 +26,7 @@ pub type F64 = String;
 pub type F32 = String;
 
 // Types from chainflip backend
-type Uuid = String;
+pub type Uuid = String;
 type StakerId = String;
 type Coin = String;
 type PoolCoin = String;

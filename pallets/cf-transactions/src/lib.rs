@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::{decl_error, decl_event, decl_module, dispatch::DispatchResult};
+use frame_support::{decl_error, decl_event, decl_module, decl_storage, dispatch::DispatchResult};
 use frame_system::ensure_signed;
 use sp_std::vec::Vec;
 
@@ -13,10 +13,16 @@ mod tests;
 mod states;
 
 /// Configure the pallet by specifying the parameters and types on which it depends.
-pub trait Trait: frame_system::Trait {
+pub trait Trait: frame_system::Trait + pallet_cf_validator::Trait {
     /// Because this pallet emits events, it depends on the runtime's definition of an event.
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 }
+
+decl_storage!(
+    trait Store for Module<T: Trait> as WitnessStorage {
+        WitnessMap get(fn witness_map): map hasher(blake2_128_concat) Vec<u8> => Vec<T::AccountId>;
+    }
+);
 
 // Transaction events
 decl_event!(
@@ -35,6 +41,7 @@ decl_event!(
         OutputAdded(AccountId, states::Output),
         OutputSentAdded(AccountId, states::OutputSent),
         DataAdded(AccountId, Vec<u8>),
+        NumberAdded(AccountId, u8),
     }
 );
 
@@ -43,7 +50,7 @@ decl_error! {
     pub enum Error for Module<T: Trait> {
         /// Invalid data was provided
         InvalidData,
-        // TODO: Add more errors?
+        ValidatorAlreadySubmittedWitness,
     }
 }
 
@@ -52,8 +59,6 @@ decl_module! {
         type Error = Error<T>;
 
         fn deposit_event() = default;
-
-        // TODO: Write a macro for the functions below?
 
         #[weight = 0]
         pub fn set_swap_quote(origin, data: states::SwapQuote) -> DispatchResult {
@@ -87,18 +92,6 @@ decl_module! {
             // TODO: Validate state
 
             Self::deposit_event(RawEvent::WithdrawRequestAdded(who, data));
-
-            Ok(())
-        }
-
-        #[weight = 0]
-        pub fn set_witness(origin, data: states::Witness) -> DispatchResult {
-            // Ensure extrinsic is signed
-            let who = ensure_signed(origin)?;
-
-            // TODO: Validate state
-
-            Self::deposit_event(RawEvent::WitnessAdded(who, data));
 
             Ok(())
         }
@@ -163,12 +156,11 @@ decl_module! {
             Ok(())
         }
 
+        // This is for testing
         #[weight = 0]
         pub fn set_data(origin, data: Vec<u8>) -> DispatchResult {
             // Ensure extrinsic is signed
             let who = ensure_signed(origin)?;
-
-            // TODO: Validate state
 
             Self::deposit_event(RawEvent::DataAdded(who, data));
 

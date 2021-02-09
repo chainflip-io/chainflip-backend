@@ -20,10 +20,14 @@ substrate-build-script-utils = '2.0.1'
 
 [dependencies]
 jsonrpc-core = '15.0.0'
+jsonrpc-core-client = "15.0"
+jsonrpc-derive = "15.0"
 structopt = '0.3.8'
 
 # local dependencies
 state-chain-runtime = {path = '../runtime', version = '0.0.1'}
+witness-fetch-rpc = { path = "../pallets/witness-fetch/rpc" }
+witness-fetch-runtime-api = { path = "../pallets/witness-fetch/runtime-api" }
 
 # Substrate dependencies
 frame-benchmarking = '2.0.1'

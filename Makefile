@@ -10,6 +10,10 @@ check:
 check-chainflip-transactions:
 	SKIP_WASM_BUILD=1 cargo check --manifest-path pallets/chainflip-transactions/Cargo.toml
 
+.PHONY: update
+update:
+	git submodule foreach --recursive git pull origin master
+
 .PHONY: test
 test:
 	SKIP_WASM_BUILD=1 cargo test --release --all
