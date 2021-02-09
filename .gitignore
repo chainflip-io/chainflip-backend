@@ -1,7 +1,10 @@
 /target
 *.log
 *.db
-loki_connection
+oxen_connection
 
 config/**/local.toml
+
+.DS_STORE
 chainflip-common/
+.vscode/

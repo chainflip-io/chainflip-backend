@@ -1,10 +1,13 @@
-use crate::{
-    common::api::ResponseError,
-    side_chain::{ISideChain, SideChainTx},
-};
+use crate::{common::api::ResponseError, local_store::ILocalStore};
 use chainflip_common::types::chain::Witness;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
+
+/// Parameters for GET /get_witnesses request
+#[derive(Debug, Deserialize, Serialize)]
+pub struct WitnessQueryParams {
+    last_seen: Option<u64>,
+}
 
 /// Typed representation of the response for /get_witnesses
 #[serde(rename_all = "camelCase")]
@@ -18,69 +21,88 @@ pub(super) struct WitnessQueryResponse {
 ///
 /// # Example Query
 ///
-/// > GET /v1/witnesses
-pub(super) async fn get_witnesses<S: ISideChain>(
-    side_chain: Arc<Mutex<S>>,
+/// > GET /v1/witnesses?last_seen=2
+pub(super) async fn get_local_witnesses<L: ILocalStore>(
+    params: WitnessQueryParams,
+    local_store: Arc<Mutex<L>>,
 ) -> Result<WitnessQueryResponse, ResponseError> {
-    let side_chain = side_chain.lock().unwrap();
+    let local_store = local_store.lock().unwrap();
 
-    let total = side_chain.total_blocks();
+    let WitnessQueryParams { last_seen } = params;
 
-    let mut witness_txs = vec![];
+    let witness_txs = local_store.get_witnesses(last_seen.unwrap_or(0));
 
-    for block_idx in 0..total {
-        let block = side_chain.get_block(block_idx).expect("invalid index");
-
-        for tx in &block.transactions {
-            if let SideChainTx::Witness(tx) = tx {
-                witness_txs.push(tx.clone());
-            }
-        }
-    }
-
-    let res = WitnessQueryResponse { witness_txs };
-
-    Ok(res)
+    Ok(WitnessQueryResponse { witness_txs })
 }
 
 #[cfg(test)]
 mod tests {
 
-    use chainflip_common::types::coin::Coin;
+    use chainflip_common::types::{coin::Coin, unique_id::GetUniqueId};
 
     use super::*;
     use crate::{
-        common::{GenericCoinAmount, LokiAmount},
-        side_chain::MemorySideChain,
+        common::{GenericCoinAmount, OxenAmount},
+        local_store::MemoryLocalStore,
         utils::test_utils::data::TestData,
     };
 
-    fn init() -> MemorySideChain {
-        let mut chain = MemorySideChain::new();
+    fn init() -> MemoryLocalStore {
+        let mut store = MemoryLocalStore::new();
 
         let quote = TestData::deposit_quote(Coin::ETH);
 
-        let loki_amount = LokiAmount::from_decimal_string("10");
+        let oxen_amount = OxenAmount::from_decimal_string("10");
 
         let eth_amount = GenericCoinAmount::from_decimal_string(Coin::ETH, "10");
 
-        let witness = TestData::witness(quote.id, loki_amount.to_atomic(), Coin::LOKI);
+        let witness = TestData::witness(quote.unique_id(), oxen_amount.to_atomic(), Coin::OXEN);
+        let witness2 = TestData::witness(quote.unique_id(), eth_amount.to_atomic(), Coin::ETH);
 
-        chain.add_block(vec![witness.into()]).expect("adding block");
+        store
+            .add_events(vec![witness.into(), witness2.into()])
+            .expect("adding events");
 
-        let witness = TestData::witness(quote.id, eth_amount.to_atomic(), Coin::ETH);
-
-        chain.add_block(vec![witness.into()]).expect("adding block");
-
-        chain
+        store
     }
 
     #[tokio::test]
     async fn check_get_witnesses() {
-        let chain = init();
-        let chain = Arc::new(Mutex::new(chain));
+        let store = init();
+        let store = Arc::new(Mutex::new(store));
 
-        let res = get_witnesses(chain).await.expect("result should be OK");
+        let params = WitnessQueryParams { last_seen: None };
+
+        let res = get_local_witnesses(params, store)
+            .await
+            .expect("result should be OK");
+
+        assert_eq!(res.witness_txs.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn get_witnesses_returns_recent_only() {
+        let store = init();
+        let store = Arc::new(Mutex::new(store));
+
+        let last_seen: Option<u64> = Some(1);
+
+        let params = WitnessQueryParams { last_seen };
+
+        // Add a fresh witness, to the 2 already in there
+        {
+            let mut store = store.lock().unwrap();
+
+            let evt1 = TestData::witness(0, 10, Coin::BTC);
+
+            store
+                .add_events(vec![evt1.into()])
+                .expect("Could not add event");
+        }
+
+        let res = get_local_witnesses(params, store)
+            .await
+            .expect("result should be OK");
 
         assert_eq!(res.witness_txs.len(), 2);
     }

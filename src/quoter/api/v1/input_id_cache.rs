@@ -28,7 +28,7 @@ impl InputIdCache {
                 .insert(quote.coin_input_address_id);
 
             cache
-                .entry(Coin::LOKI)
+                .entry(Coin::OXEN)
                 .or_insert(BTreeSet::new())
                 .insert(quote.base_input_address_id);
         }
@@ -62,8 +62,8 @@ impl InputIdCache {
                 Coin::ETH => rng.gen::<[u8; 32]>().to_vec(),
                 // BTC uses u32 indicies which we can derive an address through hd wallets
                 Coin::BTC => rng.gen_range(5..u32::MAX).to_be_bytes().to_vec(),
-                // LOKI uses 8 random bytes which represent a payment id
-                Coin::LOKI => rng.gen::<[u8; 8]>().to_vec(),
+                // OXEN uses 8 random bytes which represent a payment id
+                Coin::OXEN => rng.gen::<[u8; 8]>().to_vec(),
             };
 
             if used_ids.insert(id.clone()) {
@@ -88,7 +88,7 @@ mod test {
         let mut rng = StdRng::seed_from_u64(0);
         let cache = InputIdCache::default();
 
-        for coin in vec![Coin::LOKI, Coin::ETH, Coin::BTC] {
+        for coin in vec![Coin::OXEN, Coin::ETH, Coin::BTC] {
             cache.generate_unique_input_address_id_with_rng(&coin, &mut rng);
             assert_eq!(cache.0.lock().unwrap().get(&coin).unwrap().len(), 1);
         }
@@ -109,10 +109,10 @@ mod test {
             ],
         );
         first_ids.insert(Coin::BTC, vec![129, 245, 247, 179]);
-        first_ids.insert(Coin::LOKI, vec![178, 214, 168, 126, 192, 105, 52, 255]);
+        first_ids.insert(Coin::OXEN, vec![178, 214, 168, 126, 192, 105, 52, 255]);
 
         // generate first ids
-        for coin in vec![Coin::LOKI, Coin::ETH, Coin::BTC] {
+        for coin in vec![Coin::OXEN, Coin::ETH, Coin::BTC] {
             let mut rng = StdRng::seed_from_u64(seed);
             cache.generate_unique_input_address_id_with_rng(&coin, &mut rng);
 
@@ -132,7 +132,7 @@ mod test {
         }
 
         // Generate other ids
-        for coin in vec![Coin::LOKI, Coin::ETH, Coin::BTC] {
+        for coin in vec![Coin::OXEN, Coin::ETH, Coin::BTC] {
             let mut rng = StdRng::seed_from_u64(seed);
             cache.generate_unique_input_address_id_with_rng(&coin, &mut rng);
             assert_eq!(cache.0.lock().unwrap().get(&coin).unwrap().len(), 2);

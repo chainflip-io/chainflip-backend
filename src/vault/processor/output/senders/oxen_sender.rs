@@ -1,31 +1,34 @@
-use super::OutputSender;
-use crate::{
-    common::{LokiAmount, LokiWalletAddress},
-    vault::blockchain_connection::loki_rpc::{self, TransferResponse},
-    vault::config::LokiRpcConfig,
-};
-use chainflip_common::types::{
-    chain::{Output, OutputSent, Validate},
-    coin::Coin,
-    Network, Timestamp, UUIDv4,
-};
 use std::str::FromStr;
 
-/// Struct used for making Loki transactions
-pub struct LokiSender {
-    /// Loki rpc wallet configuration
-    config: LokiRpcConfig,
+use super::OutputSender;
+use crate::{
+    common::OxenAmount,
+    vault::blockchain_connection::oxen_rpc::{self, TransferResponse},
+    vault::config::OxenRpcConfig,
+};
+use chainflip_common::types::{
+    addresses::OxenAddress,
+    chain::{Output, OutputSent, UniqueId, Validate},
+    coin::Coin,
+    unique_id::GetUniqueId,
+    Network,
+};
+
+/// Struct used for making Oxen transactions
+pub struct OxenSender {
+    /// Oxen rpc wallet configuration
+    config: OxenRpcConfig,
     /// The network type of the sender
     network: Network,
 }
 
 async fn send_with_estimated_fee(
     port: u16,
-    amount: &LokiAmount,
-    address: &LokiWalletAddress,
-    output_id: UUIDv4,
+    amount: &OxenAmount,
+    address: &OxenAddress,
+    output_id: UniqueId,
 ) -> Result<TransferResponse, String> {
-    let res = loki_rpc::check_transfer_fee(port, &amount, &address).await?;
+    let res = oxen_rpc::check_transfer_fee(port, &amount, &address).await?;
 
     debug!("Estimated fee: {} (output id: {})", res.fee, output_id);
 
@@ -36,12 +39,12 @@ async fn send_with_estimated_fee(
         amount, output_id
     );
 
-    loki_rpc::transfer(port, &amount, &address).await
+    oxen_rpc::transfer(port, &amount, &address).await
 }
 
-impl LokiSender {
+impl OxenSender {
     /// Create instance from config
-    pub fn new(config: LokiRpcConfig, network: Network) -> Self {
+    pub fn new(config: OxenRpcConfig, network: Network) -> Self {
         Self { config, network }
     }
 
@@ -51,56 +54,63 @@ impl LokiSender {
         let mut sent_outputs = vec![];
 
         for output in outputs {
-            assert_eq!(output.coin, Coin::LOKI);
+            assert_eq!(output.coin, Coin::OXEN);
 
-            let amount = LokiAmount::from_atomic(output.amount);
+            let amount = OxenAmount::from_atomic(output.amount);
 
             info!(
-                "Sending Loki: {} (incuding fee) for output id: {}]",
-                amount, output.id
+                "Sending Oxen: {} (incuding fee) for output id: {}]",
+                amount,
+                output.unique_id()
             );
 
-            let loki_address = match LokiWalletAddress::from_str(&output.address.to_string()) {
+            let oxen_address = match OxenAddress::from_str(&output.address.to_string()) {
                 Ok(addr) => addr,
                 Err(err) => {
                     // TODO: we should probably mark the output as invalid so we don't
                     // keep trying to process it on every block
-                    error!("Skipping invalid LOKI output: {}", err);
+                    error!("Skipping invalid OXEN output: {}", err);
                     continue;
                 }
             };
 
-            match send_with_estimated_fee(port, &amount, &loki_address, output.id).await {
+            match send_with_estimated_fee(port, &amount, &oxen_address, output.unique_id()).await {
                 Ok(res) => {
                     dbg!(&res);
                     let total_spent = res.amount.saturating_add(&res.fee);
                     debug!(
-                        "Total Loki spent: {} for output id: {}",
-                        total_spent, output.id
+                        "Total Oxen spent: {} for output id: {}",
+                        total_spent,
+                        output.unique_id()
                     );
 
                     let sent = OutputSent {
-                        id: UUIDv4::new(),
-                        timestamp: Timestamp::now(),
-                        outputs: vec![output.id],
-                        coin: Coin::LOKI,
+                        outputs: vec![output.unique_id()],
+                        coin: Coin::OXEN,
                         address: output.address.clone(),
                         amount: amount.to_atomic(),
                         fee: res.fee.to_atomic(),
                         transaction_id: (&res.tx_hash).into(),
+                        event_number: None,
                     };
 
                     if let Err(err) = sent.validate(self.network) {
                         panic!(
                             "Failed to create output tx for {:?} with hash {}: {}",
-                            output.id, res.tx_hash, err
+                            output.unique_id(),
+                            res.tx_hash,
+                            err
                         );
                     }
 
                     sent_outputs.push(sent);
                 }
                 Err(err) => {
-                    error!("Failed to send (output id: {}): {}", output.id, err);
+                    error!(
+                        "Failed to send (output id: {}): {}",
+                        output.unique_id(),
+                        err
+                    );
                 }
             }
         }
@@ -110,7 +120,7 @@ impl LokiSender {
 }
 
 #[async_trait]
-impl OutputSender for LokiSender {
+impl OutputSender for OxenSender {
     async fn send(&self, outputs: &[Output]) -> Vec<OutputSent> {
         self.send_inner(outputs).await
     }
@@ -127,17 +137,17 @@ mod tests {
     async fn it_sends() {
         test_utils::logging::init();
 
-        // This test requires loki rpc wallet to run under the following port
-        let config = LokiRpcConfig { port: 6935 };
+        // This test requires oxen rpc wallet to run under the following port
+        let config = OxenRpcConfig { port: 6935 };
 
-        let loki = LokiSender::new(config, Network::Testnet);
+        let oxen = OxenSender::new(config, Network::Testnet);
 
         let output = TestData::output(
-            Coin::LOKI,
-            LokiAmount::from_decimal_string("1.25").to_atomic(),
+            Coin::OXEN,
+            OxenAmount::from_decimal_string("1.25").to_atomic(),
         );
 
-        let txs = loki.send_inner(&[output]).await;
+        let txs = oxen.send_inner(&[output]).await;
 
         assert_eq!(txs.len(), 1);
     }

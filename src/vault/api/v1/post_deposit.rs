@@ -10,10 +10,10 @@ use crate::{
 use chainflip_common::{
     constants::ethereum,
     types::{
-        addresses::{EthereumAddress, LokiAddress},
+        addresses::{EthereumAddress, OxenAddress},
         chain::{DepositQuote, Validate},
         coin::Coin,
-        Timestamp, UUIDv4,
+        Timestamp,
     },
     utils::address_id,
     validation::{validate_address, validate_address_id},
@@ -32,10 +32,10 @@ pub struct DepositQuoteParams {
     pub staker_id: String,
     /// The input address if of the other coin
     pub coin_input_address_id: String,
-    /// The loki input address id
-    pub loki_input_address_id: String,
-    /// Address to return Loki to if deposit quote already fulfilled
-    pub loki_return_address: String,
+    /// The oxen input address id
+    pub oxen_input_address_id: String,
+    /// Address to return Oxen to if deposit quote already fulfilled
+    pub oxen_return_address: String,
     /// Address to return other coin to if deposit quote already fulfilled
     pub other_return_address: String,
 }
@@ -44,8 +44,6 @@ pub struct DepositQuoteParams {
 #[serde(rename_all = "camelCase")]
 #[derive(Debug, Deserialize, Serialize)]
 pub struct DepositQuoteResponse {
-    /// Quote id
-    pub id: UUIDv4,
     /// Quote creation timestamp in milliseconds
     pub created_at: u128,
     /// Quote expire timestamp in milliseconds
@@ -54,10 +52,10 @@ pub struct DepositQuoteResponse {
     pub pool: Coin,
     /// Staker id
     pub staker_id: String,
-    /// Loki input address
-    pub loki_input_address: String,
-    /// Loki return address
-    pub loki_return_address: String,
+    /// Oxen input address
+    pub oxen_input_address: String,
+    /// Oxen return address
+    pub oxen_return_address: String,
     /// Other coin input address
     pub coin_input_address: String,
     /// Other coin return address
@@ -76,7 +74,7 @@ pub async fn deposit<T: TransactionProvider>(
         PoolCoin::from(params.pool).map_err(|_| bad_request("Invalid pool specified"))?;
 
     let base_input_address_id =
-        address_id::to_bytes(Coin::BASE_COIN, &params.loki_input_address_id)
+        address_id::to_bytes(Coin::BASE_COIN, &params.oxen_input_address_id)
             .map_err(|_| bad_request("Invalid base input address id"))?;
 
     if let Err(_) = validate_address_id(Coin::BASE_COIN, &base_input_address_id) {
@@ -90,8 +88,8 @@ pub async fn deposit<T: TransactionProvider>(
         return Err(bad_request("Invalid coin input address id"));
     }
 
-    if let Err(_) = validate_address(Coin::LOKI, config.net_type, &params.loki_return_address) {
-        return Err(bad_request("Invalid loki return address"));
+    if let Err(_) = validate_address(Coin::OXEN, config.net_type, &params.oxen_return_address) {
+        return Err(bad_request("Invalid oxen return address"));
     }
 
     if let Err(_) = validate_address(params.pool, config.net_type, &params.other_return_address) {
@@ -162,21 +160,20 @@ pub async fn deposit<T: TransactionProvider>(
         }
     };
 
-    let loki_base_address = LokiAddress::from_str(&config.loki_wallet_address)
-        .expect("Expected valid loki wallet address");
+    let oxen_base_address = OxenAddress::from_str(&config.oxen_wallet_address)
+        .expect("Expected valid oxen wallet address");
 
     let payment_id = base_input_address_id.clone().try_into().map_err(|_| {
-        warn!("Failed to convert base input address id to loki payment id");
+        warn!("Failed to convert base input address id to oxen payment id");
         internal_server_error()
     })?;
-    let base_input_address = loki_base_address.with_payment_id(Some(payment_id));
+    let base_input_address = oxen_base_address.with_payment_id(Some(payment_id));
     assert_eq!(base_input_address.network(), config.net_type);
 
     let staker_id =
         StakerId::new(params.staker_id.clone()).map_err(|_| bad_request("Invalid staker id"))?;
 
     let quote = DepositQuote {
-        id: UUIDv4::new(),
         timestamp: Timestamp::now(),
         staker_id: staker_id.bytes().to_vec(),
         pool: pool_coin.get_coin(),
@@ -185,7 +182,8 @@ pub async fn deposit<T: TransactionProvider>(
         coin_return_address: params.other_return_address.into(),
         base_input_address: base_input_address.to_string().into(),
         base_input_address_id,
-        base_return_address: params.loki_return_address.into(),
+        base_return_address: params.oxen_return_address.into(),
+        event_number: None,
     };
 
     quote.validate(config.net_type).map_err(|err| {
@@ -198,21 +196,20 @@ pub async fn deposit<T: TransactionProvider>(
     })?;
 
     provider
-        .add_transactions(vec![quote.clone().into()])
+        .add_local_events(vec![quote.clone().into()])
         .map_err(|err| {
             error!("Failed to add deposit quote: {}", err);
             internal_server_error()
         })?;
 
     Ok(DepositQuoteResponse {
-        id: quote.id,
         created_at: quote.timestamp.0,
         expires_at: get_swap_expire_timestamp(&quote.timestamp).0,
         staker_id: params.staker_id,
         pool: params.pool,
-        loki_input_address: base_input_address.to_string(),
+        oxen_input_address: base_input_address.to_string(),
         coin_input_address,
-        loki_return_address: quote.base_return_address.to_string(),
+        oxen_return_address: quote.base_return_address.to_string(),
         coin_return_address: quote.coin_return_address.to_string(),
     })
 }
@@ -222,14 +219,14 @@ mod test {
     use super::*;
     use crate::utils::test_utils::{
         self, get_transactions_provider, staking::get_random_staker, TEST_ETH_ADDRESS,
-        TEST_ETH_SALT, TEST_LOKI_ADDRESS, TEST_ROOT_KEY,
+        TEST_ETH_SALT, TEST_OXEN_ADDRESS, TEST_ROOT_KEY,
     };
     use chainflip_common::types::Network;
     use test_utils::data::TestData;
 
     fn config() -> Config {
         Config {
-            loki_wallet_address: "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".to_string(),
+            oxen_wallet_address: "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".to_string(),
             btc_master_root_key: TEST_ROOT_KEY.to_string(),
             net_type: Network::Testnet
         }
@@ -240,8 +237,8 @@ mod test {
             pool: Coin::ETH,
             staker_id: get_random_staker().public_key(),
             coin_input_address_id: hex::encode(TEST_ETH_SALT),
-            loki_input_address_id: "b2d6a87ec06934ff".to_string(),
-            loki_return_address: TEST_LOKI_ADDRESS.to_string(),
+            oxen_input_address_id: "b2d6a87ec06934ff".to_string(),
+            oxen_return_address: TEST_OXEN_ADDRESS.to_string(),
             other_return_address: TEST_ETH_ADDRESS.to_string(),
         }
     }
@@ -249,7 +246,7 @@ mod test {
     #[tokio::test]
     async fn returns_error_if_invalid_pool_coin() {
         let mut quote_params = params();
-        quote_params.pool = Coin::LOKI;
+        quote_params.pool = Coin::OXEN;
 
         let provider = Arc::new(RwLock::new(get_transactions_provider()));
         let result = deposit(quote_params, provider, config())
@@ -277,12 +274,12 @@ mod test {
     }
 
     #[tokio::test]
-    async fn returns_error_if_invalid_loki_input_address_id() {
+    async fn returns_error_if_invalid_oxen_input_address_id() {
         let provider = Arc::new(RwLock::new(get_transactions_provider()));
 
         let mut quote_params = params();
         quote_params.pool = Coin::ETH;
-        quote_params.loki_input_address_id = "invalid".to_string();
+        quote_params.oxen_input_address_id = "invalid".to_string();
 
         let result = deposit(quote_params, provider.clone(), config())
             .await
@@ -292,17 +289,17 @@ mod test {
     }
 
     #[tokio::test]
-    async fn returns_error_if_invalid_loki_return_address() {
+    async fn returns_error_if_invalid_oxen_return_address() {
         let provider = Arc::new(RwLock::new(get_transactions_provider()));
 
         let mut quote_params = params();
-        quote_params.loki_return_address = "invalid".to_string();
+        quote_params.oxen_return_address = "invalid".to_string();
 
         let result = deposit(quote_params, provider.clone(), config())
             .await
             .expect_err("Expected deposit to return error");
 
-        assert_eq!(&result.message, "Invalid loki return address");
+        assert_eq!(&result.message, "Invalid oxen return address");
     }
 
     #[tokio::test]
@@ -323,20 +320,20 @@ mod test {
     async fn returns_error_if_swap_quote_with_same_input_address_exists() {
         let quote_params = params();
 
-        let mut loki_quote = TestData::swap_quote(Coin::LOKI, Coin::ETH);
-        loki_quote.input_address_id =
-            address_id::to_bytes(Coin::LOKI, &quote_params.loki_input_address_id).unwrap();
+        let mut oxen_quote = TestData::swap_quote(Coin::OXEN, Coin::ETH);
+        oxen_quote.input_address_id =
+            address_id::to_bytes(Coin::OXEN, &quote_params.oxen_input_address_id).unwrap();
 
-        let mut other_quote = TestData::swap_quote(Coin::ETH, Coin::LOKI);
+        let mut other_quote = TestData::swap_quote(Coin::ETH, Coin::OXEN);
         other_quote.input_address_id =
             address_id::to_bytes(Coin::ETH, &quote_params.coin_input_address_id).unwrap();
 
         // Make sure we're testing the right logic
         assert_eq!(other_quote.input, quote_params.pool);
 
-        for quote in vec![loki_quote, other_quote] {
+        for quote in vec![oxen_quote, other_quote] {
             let mut provider = get_transactions_provider();
-            provider.add_transactions(vec![quote.into()]).unwrap();
+            provider.add_local_events(vec![quote.into()]).unwrap();
 
             let provider = Arc::new(RwLock::new(provider));
 
@@ -354,7 +351,7 @@ mod test {
 
         let mut quote_1 = TestData::deposit_quote(Coin::ETH);
         quote_1.base_input_address_id =
-            address_id::to_bytes(Coin::LOKI, &quote_params.loki_input_address_id).unwrap();
+            address_id::to_bytes(Coin::OXEN, &quote_params.oxen_input_address_id).unwrap();
 
         let mut quote_2 = TestData::deposit_quote(Coin::ETH);
         quote_2.coin_input_address_id =
@@ -362,7 +359,7 @@ mod test {
 
         for quote in vec![quote_1, quote_2] {
             let mut provider = get_transactions_provider();
-            provider.add_transactions(vec![quote.into()]).unwrap();
+            provider.add_local_events(vec![quote.into()]).unwrap();
 
             let provider = Arc::new(RwLock::new(provider));
 

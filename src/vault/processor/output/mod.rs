@@ -1,5 +1,5 @@
 use crate::{
-    side_chain::SideChainTx, vault::transactions::memory_provider::FulfilledWrapper,
+    local_store::LocalEvent, vault::transactions::memory_provider::FulfilledWrapper,
     vault::transactions::TransactionProvider,
 };
 use chainflip_common::types::{chain::Output, coin::Coin};
@@ -12,7 +12,7 @@ mod senders;
 
 pub use coin_processor::{CoinProcessor, OutputCoinProcessor};
 
-pub use senders::{btc::BtcOutputSender, ethereum::EthOutputSender, loki_sender::LokiSender};
+pub use senders::{btc::BtcOutputSender, ethereum::EthOutputSender, oxen_sender::OxenSender};
 
 /// Process all pending outputs
 pub async fn process_outputs<T: TransactionProvider + Sync, C: CoinProcessor>(
@@ -50,11 +50,11 @@ async fn process<T: TransactionProvider + Sync, C: CoinProcessor>(
     let txs = futures::future::join_all(futs)
         .await
         .into_iter()
-        .map(|txs| txs.into_iter().map_into::<SideChainTx>().collect_vec())
+        .map(|txs| txs.into_iter().map_into::<LocalEvent>().collect_vec())
         .flatten()
         .collect_vec();
 
-    match provider.write().add_transactions(txs) {
+    match provider.write().add_local_events(txs) {
         Ok(_) => (),
         Err(err) => {
             error!("Could not save output sent txs: {}", err);
@@ -68,10 +68,11 @@ async fn process<T: TransactionProvider + Sync, C: CoinProcessor>(
 mod test {
     use super::*;
     use crate::{
-        side_chain::ISideChain, side_chain::MemorySideChain, utils::test_utils::data::TestData,
+        local_store::{ILocalStore, MemoryLocalStore},
+        utils::test_utils::data::TestData,
         vault::transactions::MemoryTransactionsProvider,
     };
-    use chainflip_common::types::{chain::OutputSent, Timestamp, UUIDv4};
+    use chainflip_common::types::{chain::OutputSent, unique_id::GetUniqueId};
     use std::{
         collections::HashMap,
         sync::{Arc, Mutex},
@@ -102,15 +103,15 @@ mod test {
 
     #[test]
     fn groups_outputs_by_coins_correctly() {
-        let loki_output = TestData::output(Coin::LOKI, 100);
-        let second_loki_output = TestData::output(Coin::LOKI, 100);
+        let oxen_output = TestData::output(Coin::OXEN, 100);
+        let second_oxen_output = TestData::output(Coin::OXEN, 100);
         let eth_output = TestData::output(Coin::ETH, 100);
         let second_eth_output = TestData::output(Coin::ETH, 100);
-        let fulfilled_output = TestData::output(Coin::LOKI, 100);
+        let fulfilled_output = TestData::output(Coin::OXEN, 100);
 
         let txs = vec![
             FulfilledWrapper {
-                inner: loki_output.clone(),
+                inner: oxen_output.clone(),
                 fulfilled: false,
             },
             FulfilledWrapper {
@@ -118,7 +119,7 @@ mod test {
                 fulfilled: false,
             },
             FulfilledWrapper {
-                inner: second_loki_output.clone(),
+                inner: second_oxen_output.clone(),
                 fulfilled: false,
             },
             FulfilledWrapper {
@@ -132,8 +133,8 @@ mod test {
         ];
         let grouped = group_by_coins(&txs);
         assert_eq!(
-            grouped.get(&Coin::LOKI).unwrap(),
-            &[loki_output, second_loki_output]
+            grouped.get(&Coin::OXEN).unwrap(),
+            &[oxen_output, second_oxen_output]
         );
         assert_eq!(
             grouped.get(&Coin::ETH).unwrap(),
@@ -143,12 +144,12 @@ mod test {
 
     #[tokio::test]
     async fn process_stores_output_sent_txs() {
-        let mut chain = MemorySideChain::new();
-        let output_tx = TestData::output(Coin::LOKI, 100);
-        chain.add_block(vec![output_tx.clone().into()]).unwrap();
+        let mut store = MemoryLocalStore::new();
+        let output_tx = TestData::output(Coin::OXEN, 100);
+        store.add_events(vec![output_tx.clone().into()]).unwrap();
 
-        let chain = Arc::new(Mutex::new(chain));
-        let mut provider = MemoryTransactionsProvider::new_protected(chain);
+        let store = Arc::new(Mutex::new(store));
+        let mut provider = MemoryTransactionsProvider::new_protected(store);
         provider.write().sync();
 
         // Pre-condition: Output is not fulfilled
@@ -157,18 +158,17 @@ mod test {
         assert_eq!(current_output_tx.fulfilled, false);
 
         let output_sent_tx = OutputSent {
-            id: UUIDv4::new(),
-            timestamp: Timestamp::now(),
-            outputs: vec![output_tx.id],
-            coin: Coin::LOKI,
+            outputs: vec![output_tx.unique_id()],
+            coin: Coin::OXEN,
             address: "address".into(),
             amount: 100,
             fee: 100,
             transaction_id: "".into(),
+            event_number: None,
         };
 
         let mut coin_processor = TestCoinProcessor::new();
-        coin_processor.set_txs(Coin::LOKI, vec![output_sent_tx]);
+        coin_processor.set_txs(Coin::OXEN, vec![output_sent_tx]);
 
         process(&mut provider, &coin_processor).await;
 
@@ -179,12 +179,12 @@ mod test {
 
     #[tokio::test]
     async fn process_with_no_sent_output_tx() {
-        let mut chain = MemorySideChain::new();
-        let output_tx = TestData::output(Coin::LOKI, 100);
-        chain.add_block(vec![output_tx.clone().into()]).unwrap();
+        let mut store = MemoryLocalStore::new();
+        let output_tx = TestData::output(Coin::OXEN, 100);
+        store.add_events(vec![output_tx.clone().into()]).unwrap();
 
-        let chain = Arc::new(Mutex::new(chain));
-        let mut provider = MemoryTransactionsProvider::new_protected(chain);
+        let store = Arc::new(Mutex::new(store));
+        let mut provider = MemoryTransactionsProvider::new_protected(store);
         provider.write().sync();
 
         // Pre-condition: Output is not fulfilled
@@ -193,7 +193,7 @@ mod test {
         assert_eq!(current_output_tx.fulfilled, false);
 
         let mut coin_processor = TestCoinProcessor::new();
-        coin_processor.set_txs(Coin::LOKI, vec![]);
+        coin_processor.set_txs(Coin::OXEN, vec![]);
 
         process(&mut provider, &coin_processor).await;
 

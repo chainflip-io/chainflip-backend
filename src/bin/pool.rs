@@ -1,8 +1,8 @@
 use chainflip::{
     common::PoolCoin,
-    side_chain::{ISideChain, PeristentSideChain},
+    local_store::{ILocalStore, PersistentLocalStore},
 };
-use chainflip_common::types::{chain::PoolChange, coin::Coin, Timestamp, UUIDv4};
+use chainflip_common::types::{chain::PoolChange, coin::Coin};
 use clap::{App, Arg};
 use std::str::FromStr;
 
@@ -18,7 +18,7 @@ async fn main() {
         .about("Util for changing pool value in chainflip")
         .arg(Arg::with_name("coin").help("The pool coin: eth or btc"))
         .arg(Arg::with_name("depth").help("The change of depth of the coin in decimal value"))
-        .arg(Arg::with_name("loki_depth").help("The change of loki depth of loki in decimal value"))
+        .arg(Arg::with_name("oxen_depth").help("The change of oxen depth of oxen in decimal value"))
         .get_matches();
 
     let coin = matches
@@ -33,25 +33,19 @@ async fn main() {
         .checked_mul(10i128.pow(coin.get_info().decimals))
         .expect("Failed to calculate atomic value of depth");
 
-    let loki_depth = matches
-        .value_of("loki_depth")
-        .expect("Expected a loki depth");
-    let loki_depth = loki_depth.parse::<i128>().unwrap();
-    let loki_depth = loki_depth
-        .checked_mul(10i128.pow(Coin::LOKI.get_info().decimals))
-        .expect("Failed to calculate atomic value of loki depth");
+    let oxen_depth = matches
+        .value_of("oxen_depth")
+        .expect("Expected a oxen depth");
+    let oxen_depth = oxen_depth.parse::<i128>().unwrap();
+    let oxen_depth = oxen_depth
+        .checked_mul(10i128.pow(Coin::OXEN.get_info().decimals))
+        .expect("Failed to calculate atomic value of oxen depth");
 
-    let pool_change = PoolChange {
-        id: UUIDv4::new(),
-        timestamp: Timestamp::now(),
-        pool: pool_coin.get_coin(),
-        depth_change: depth,
-        base_depth_change: loki_depth,
-    };
+    let pool_change = PoolChange::new(pool_coin.get_coin(), depth, oxen_depth, None);
 
-    // Insert tx into the side chain
-    let mut s_chain = PeristentSideChain::open("blocks.db");
-    s_chain.add_block(vec![pool_change.clone().into()]).unwrap();
-
-    println!("Added tx: {:?}", pool_change);
+    // Insert events into the local store
+    let mut l_store = PersistentLocalStore::open("local_store.db");
+    l_store
+        .add_events(vec![pool_change.clone().into()])
+        .unwrap();
 }

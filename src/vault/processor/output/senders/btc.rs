@@ -18,7 +18,8 @@ use bitcoin::Address;
 use chainflip_common::types::{
     chain::{Output, OutputSent, Validate},
     coin::Coin,
-    Network, Timestamp, UUIDv4,
+    unique_id::GetUniqueId,
+    Network,
 };
 use hdwallet::ExtendedPrivKey;
 use itertools::Itertools;
@@ -92,18 +93,17 @@ impl<B: IBitcoinSend, T: TransactionProvider> BtcOutputSender<B, T> {
             Err(err) => return Err(format!("Failed to send BTC transaction: {}", err)),
         };
 
-        let uuids = outputs.iter().map(|tx| tx.id).collect_vec();
+        let unique_ids = outputs.iter().map(|e| e.unique_id()).collect_vec();
 
         let sent = OutputSent {
-            id: UUIDv4::new(),
-            timestamp: Timestamp::now(),
-            outputs: uuids,
+            outputs: unique_ids,
             coin: Coin::BTC,
             address: address.clone(),
             amount: total_amount,
             // Fee is already taken from the send amount when sent
             fee: 0,
             transaction_id: tx_hash.to_string().into(),
+            event_number: None,
         };
 
         match sent.validate(self.net_type) {
@@ -210,9 +210,11 @@ impl<B: IBitcoinSend + Sync + Send, T: TransactionProvider + Sync + Send> Output
 
 #[cfg(test)]
 mod test {
+    use chainflip_common::types::unique_id::GetUniqueId;
+
     use super::*;
     use crate::{
-        side_chain::MemorySideChain,
+        local_store::MemoryLocalStore,
         utils::test_utils::{
             btc::TestBitcoinSendClient, data::TestData, TEST_BTC_ADDRESS, TEST_ROOT_KEY,
         },
@@ -228,10 +230,10 @@ mod test {
     }
 
     fn get_output_sender(
-    ) -> BtcOutputSender<TestBitcoinSendClient, MemoryTransactionsProvider<MemorySideChain>> {
-        let side_chain = MemorySideChain::new();
-        let side_chain = Arc::new(Mutex::new(side_chain));
-        let provider = MemoryTransactionsProvider::new_protected(side_chain.clone());
+    ) -> BtcOutputSender<TestBitcoinSendClient, MemoryTransactionsProvider<MemoryLocalStore>> {
+        let local_store = MemoryLocalStore::new();
+        let local_store = Arc::new(Mutex::new(local_store));
+        let provider = MemoryTransactionsProvider::new_protected(local_store.clone());
         let client = TestBitcoinSendClient::new();
         let key = RawKey::decode(TEST_ROOT_KEY).unwrap();
         BtcOutputSender::new(client, provider, key, Network::Testnet)
@@ -310,7 +312,7 @@ mod test {
         let key_pair_public_key = (&key_pair.public_key).to_string();
 
         let mut output_1 = TestData::output(Coin::BTC, 100);
-        let mut output_2 = TestData::output(Coin::BTC, 200);
+        let mut output_2 = TestData::output(Coin::ETH, 200);
 
         // bitcoin address (old) are case sensitive
         let address = TEST_BTC_ADDRESS;
@@ -333,7 +335,10 @@ mod test {
             .await
             .unwrap();
 
-        assert_eq!(sent_tx.outputs, vec![output_1.id, output_2.id]);
+        assert_eq!(
+            sent_tx.outputs,
+            vec![output_1.unique_id(), output_2.unique_id()]
+        );
         assert_eq!(sent_tx.coin, Coin::BTC);
         assert_eq!(sent_tx.address, address.into());
         assert_eq!(sent_tx.amount, 300);
@@ -370,7 +375,7 @@ mod test {
         assert_eq!(sent.len(), 1);
 
         let first = sent.first().unwrap();
-        assert_eq!(&first.outputs, &[output_2.id]);
+        assert_eq!(&first.outputs, &[output_2.unique_id()]);
         assert_eq!(first.amount, 200);
         assert_eq!(first.fee, 0);
     }

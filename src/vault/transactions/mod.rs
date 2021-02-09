@@ -1,6 +1,6 @@
-use crate::{common::LiquidityProvider, side_chain::SideChainTx};
+use crate::{common::LiquidityProvider, local_store::LocalEvent};
 use chainflip_common::types::chain::{DepositQuote, Output, SwapQuote, WithdrawRequest};
-use memory_provider::{FulfilledWrapper, UsedWitnessWrapper};
+use memory_provider::{FulfilledWrapper, StatusWitnessWrapper};
 
 /// Memory transaction provider
 pub mod memory_provider;
@@ -12,11 +12,14 @@ pub use memory_provider::{MemoryTransactionsProvider, VaultPortions};
 
 /// An interface for providing transactions
 pub trait TransactionProvider: LiquidityProvider {
-    /// Sync new transactions and return the index of the first unprocessed block
-    fn sync(&mut self) -> u32;
+    /// Sync new transactions and return the index of the first unprocessed event
+    fn sync(&mut self) -> u64;
 
-    /// Add transactions
-    fn add_transactions(&mut self, txs: Vec<SideChainTx>) -> Result<(), String>;
+    /// Add events to local store
+    fn add_local_events(&mut self, events: Vec<LocalEvent>) -> Result<(), String>;
+
+    /// confirm a witness
+    fn confirm_witness(&mut self, witness_id: u64) -> Result<(), String>;
 
     /// Get all swap quotes
     fn get_swap_quotes(&self) -> &[FulfilledWrapper<SwapQuote>];
@@ -25,7 +28,7 @@ pub trait TransactionProvider: LiquidityProvider {
     fn get_deposit_quotes(&self) -> &[FulfilledWrapper<DepositQuote>];
 
     /// Get all the witnesses
-    fn get_witnesses(&self) -> &[UsedWitnessWrapper];
+    fn get_witnesses(&self) -> &[StatusWitnessWrapper];
 
     /// Get all the output transactions
     fn get_outputs(&self) -> &[FulfilledWrapper<Output>];

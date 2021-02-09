@@ -7,7 +7,8 @@ use chainflip_common::{
         chain::{Validate, WithdrawRequest},
         coin::Coin,
         fraction::WithdrawFraction,
-        Timestamp, UUIDv4,
+        unique_id::GetUniqueId,
+        Timestamp,
     },
     validation::validate_address,
 };
@@ -101,7 +102,6 @@ pub async fn post_withdraw<T: TransactionProvider>(
     let mut provider = provider.write();
 
     let tx = WithdrawRequest {
-        id: UUIDv4::new(),
         timestamp,
         staker_id: staker_id.bytes().to_vec(),
         pool: pool.get_coin(),
@@ -109,14 +109,15 @@ pub async fn post_withdraw<T: TransactionProvider>(
         other_address: params.other_address.into(),
         fraction,
         signature,
+        event_number: None,
     };
 
     tx.validate(config.net_type)
         .map_err(|err| bad_request!("{}", err))?;
 
-    let tx_id = tx.id;
+    let tx_id = tx.unique_id();
 
-    provider.add_transactions(vec![tx.into()]).map_err(|_| {
+    provider.add_local_events(vec![tx.into()]).map_err(|_| {
         ResponseError::new(
             StatusCode::INTERNAL_SERVER_ERROR,
             "Could not record withdraw request transaction",

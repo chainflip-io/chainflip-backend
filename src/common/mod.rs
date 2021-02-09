@@ -11,10 +11,9 @@ pub mod api;
 /// Definitions for Ethereum
 pub mod ethereum;
 
-/// Definitions for Loki
-pub mod loki;
-
-pub use loki::{LokiAmount, LokiPaymentId, LokiWalletAddress};
+/// Definitions for Oxen
+pub mod oxen;
+pub use oxen::OxenAmount;
 
 /// Key value store definitions
 pub mod store;

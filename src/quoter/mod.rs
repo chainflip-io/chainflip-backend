@@ -1,8 +1,8 @@
 use crate::{
     common::{Liquidity, LiquidityProvider, PoolCoin},
-    side_chain::SideChainBlock,
+    local_store::LocalEvent,
 };
-use chainflip_common::types::{chain::*, UUIDv4};
+use chainflip_common::types::chain::*;
 use std::{
     collections::HashMap,
     net::SocketAddr,
@@ -11,7 +11,7 @@ use std::{
 use vault_node::VaultNodeInterface;
 
 mod api;
-mod block_poller;
+mod state_chain_poller;
 
 use api::API;
 
@@ -43,9 +43,10 @@ impl Quoter {
     ) -> Result<(), String>
     where
         V: VaultNodeInterface + Send + Sync + 'static,
-        D: BlockProcessor + StateProvider + Send + 'static,
+        D: EventProcessor + StateProvider + Send + 'static,
     {
-        let poller = block_poller::BlockPoller::new(vault_node_api.clone(), database.clone());
+        let mut poller =
+            state_chain_poller::StateChainPoller::new(vault_node_api.clone(), database.clone());
         tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(poller.sync())?;
@@ -64,24 +65,24 @@ impl Quoter {
     }
 }
 
-/// A trait for processing side chain blocks received from the vault node.
-pub trait BlockProcessor {
-    /// Get the block number that was last processed.
-    fn get_last_processed_block_number(&self) -> Option<u32>;
+/// inteface for defining an event processor
+pub trait EventProcessor {
+    /// gets the last processed event number, so we can process any event after this one
+    fn get_last_processed_event_number(&self) -> Option<u64>;
 
-    /// Process a list of blocks
-    fn process_blocks(&mut self, blocks: &[SideChainBlock]) -> Result<(), String>;
+    /// process the events that are read in by the quoter
+    fn process_events(&mut self, events: &[LocalEvent]) -> Result<(), String>;
 }
 /// A trait for providing quoter state
 pub trait StateProvider: LiquidityProvider {
     /// Get all swap quotes
     fn get_swap_quotes(&self) -> Vec<SwapQuote>;
     /// Get swap quote with the given id
-    fn get_swap_quote(&self, id: UUIDv4) -> Option<SwapQuote>;
+    fn get_swap_quote(&self, id: UniqueId) -> Option<SwapQuote>;
     /// Get all deposit quotes
     fn get_deposit_quotes(&self) -> Vec<DepositQuote>;
     /// Get deposit quote with the given id
-    fn get_deposit_quote(&self, id: UUIDv4) -> Option<DepositQuote>;
+    fn get_deposit_quote(&self, id: UniqueId) -> Option<DepositQuote>;
     /// Get all witnesses
     fn get_witnesses(&self) -> Vec<Witness>;
     /// Get all outputs

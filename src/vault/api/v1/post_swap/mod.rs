@@ -10,11 +10,12 @@ use crate::{
 use chainflip_common::{
     constants::ethereum,
     types::{
-        addresses::{EthereumAddress, LokiAddress},
+        addresses::{EthereumAddress, OxenAddress},
         chain::{SwapQuote, Validate},
         coin::Coin,
         fraction::PercentageFraction,
-        Timestamp, UUIDv4,
+        unique_id::GetUniqueId,
+        Timestamp,
     },
     utils::address_id,
 };
@@ -48,8 +49,8 @@ pub struct SwapQuoteParams {
 #[serde(rename_all = "camelCase")]
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SwapQuoteResponse {
-    /// Quote id
-    pub id: UUIDv4,
+    /// The id of the quote
+    pub id: u64,
     /// Quote creation timestamp in milliseconds
     pub created_at: u128,
     /// Quote expire timestamp in milliseconds
@@ -141,14 +142,14 @@ pub async fn swap<T: TransactionProvider>(
             EthereumAddress::create2(&vault_address, salt, &ethereum::ETH_DEPOSIT_INIT_CODE)
                 .to_string()
         }
-        Coin::LOKI => {
-            let loki_base_address = LokiAddress::from_str(&config.loki_wallet_address)
-                .expect("Expected valid loki wallet address");
+        Coin::OXEN => {
+            let oxen_base_address = OxenAddress::from_str(&config.oxen_wallet_address)
+                .expect("Expected valid oxen wallet address");
             let payment_id = input_address_id.clone().try_into().map_err(|_| {
-                warn!("Failed to convert input address id to loki payment id");
+                warn!("Failed to convert input address id to oxen payment id");
                 internal_server_error()
             })?;
-            let base_input_address = loki_base_address.with_payment_id(Some(payment_id));
+            let base_input_address = oxen_base_address.with_payment_id(Some(payment_id));
             assert_eq!(base_input_address.network(), config.net_type);
 
             base_input_address.to_string()
@@ -185,7 +186,6 @@ pub async fn swap<T: TransactionProvider>(
     };
 
     let quote = SwapQuote {
-        id: UUIDv4::new(),
         timestamp: Timestamp::now(),
         input: input_coin,
         input_address: input_address.clone().into(),
@@ -195,6 +195,7 @@ pub async fn swap<T: TransactionProvider>(
         output_address: params.output_address.clone().into(),
         effective_price,
         slippage_limit,
+        event_number: None,
     };
 
     if let Err(err) = quote.validate(config.net_type) {
@@ -206,14 +207,14 @@ pub async fn swap<T: TransactionProvider>(
     }
 
     provider
-        .add_transactions(vec![quote.clone().into()])
+        .add_local_events(vec![quote.clone().into()])
         .map_err(|err| {
             error!("Failed to add swap quote: {}", err);
             internal_server_error()
         })?;
 
     Ok(SwapQuoteResponse {
-        id: quote.id,
+        id: quote.unique_id(),
         created_at: quote.timestamp.0,
         expires_at: get_swap_expire_timestamp(&quote.timestamp).0,
         input_coin,
@@ -235,7 +236,7 @@ mod test {
 
     fn config() -> Config {
         Config {
-            loki_wallet_address: "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".to_string(),
+            oxen_wallet_address: "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".to_string(),
             btc_master_root_key: TEST_ROOT_KEY.to_string(),
             net_type: Network::Testnet
         }
@@ -243,7 +244,7 @@ mod test {
 
     fn params() -> SwapQuoteParams {
         SwapQuoteParams {
-            input_coin: Coin::LOKI,
+            input_coin: Coin::OXEN,
             input_return_address: Some("T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".to_string()),
             input_address_id: "60900e5603bf96e3".to_owned(),
             input_amount: "1000000000".to_string(),
@@ -259,18 +260,18 @@ mod test {
 
         let mut provider = get_transactions_provider();
         let quote = SwapQuote {
-            id: UUIDv4::new(),
             timestamp: Timestamp::now(),
             input: quote_params.input_coin,
             input_address: "T6SMsepawgrKXeFmQroAbuTQMqLWyMxiVUgZ6APCRFgxQAUQ1AkEtHxAgDMZJJG9HMJeTeDsqWiuCMsNahScC7ZS2StC9kHhY".into(),
-            input_address_id: address_id::to_bytes(Coin::LOKI, &quote_params.input_address_id).unwrap(),
+            input_address_id: address_id::to_bytes(Coin::OXEN, &quote_params.input_address_id).unwrap(),
             return_address: quote_params.input_return_address.clone().map(|id| id.into()),
             output: quote_params.output_coin,
             slippage_limit: None,
             output_address: quote_params.output_address.clone().into(),
-            effective_price: 1
+            effective_price: 1,
+            event_number: None
         };
-        provider.add_transactions(vec![quote.into()]).unwrap();
+        provider.add_local_events(vec![quote.into()]).unwrap();
 
         let provider = Arc::new(RwLock::new(provider));
 
@@ -295,16 +296,10 @@ mod test {
 
         // Pool with no liquidity
         {
-            let tx = PoolChange {
-                id: UUIDv4::new(),
-                timestamp: Timestamp::now(),
-                pool: Coin::ETH,
-                depth_change: 0,
-                base_depth_change: 0,
-            };
+            let tx = PoolChange::new(Coin::ETH, 0, 0, None);
 
             let mut provider = provider.write();
-            provider.add_transactions(vec![tx.into()]).unwrap();
+            provider.add_local_events(vec![tx.into()]).unwrap();
         }
 
         let result = swap(params(), provider.clone(), config())
@@ -317,14 +312,8 @@ mod test {
     #[tokio::test]
     async fn returns_response_if_successful() {
         let mut provider = get_transactions_provider();
-        let tx = PoolChange {
-            id: UUIDv4::new(),
-            timestamp: Timestamp::now(),
-            pool: Coin::ETH,
-            depth_change: 10_000_000_000,
-            base_depth_change: 50_000_000_000,
-        };
-        provider.add_transactions(vec![tx.into()]).unwrap();
+        let tx = PoolChange::new(Coin::ETH, 10_000_000_000, 50_000_000_000, None);
+        provider.add_local_events(vec![tx.into()]).unwrap();
 
         let provider = Arc::new(RwLock::new(provider));
 

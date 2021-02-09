@@ -6,14 +6,13 @@ use crate::{
 use async_trait::async_trait;
 use bitcoin::{
     blockdata::{script::*, transaction::*},
-    consensus::encode::{deserialize, serialize},
+    consensus::encode::serialize,
     util::bip143::SigHashCache,
     Transaction, Txid,
 };
 use chainflip_common::types::coin::Coin;
 use core::str::FromStr;
 use hdwallet::secp256k1::{Message, PublicKey, Secp256k1};
-use hex::FromHex;
 use serde::Deserialize;
 use std::fmt::{Display, Formatter};
 
@@ -41,7 +40,6 @@ pub enum FeeMethod {
     Static,
     /// ETA is based on number of blocks to confirm at tx, on average a BTC block takes ~10mins
     Eta,
-
     /// Mempool bases it off mempool congestion
     Mempool,
 }
@@ -459,13 +457,18 @@ impl BtcSPVClient {
 #[derive(Debug, Clone, Deserialize)]
 /// Contains the details of an Unspent transaction output
 pub struct BtcUTXO {
+    /// The block height of the UTXO
     pub height: u64,
+    /// The transaction hash
     pub tx_hash: String,
+    /// The index of the transaction in the block
     pub tx_pos: u64,
+    /// The amount of the UTXO
     pub value: u64,
 }
 
 impl BtcUTXO {
+    /// Create a new UTXO
     pub fn new(height: u64, tx_hash: String, tx_pos: u64, value: u64) -> Self {
         BtcUTXO {
             height,
@@ -474,15 +477,6 @@ impl BtcUTXO {
             value,
         }
     }
-}
-
-fn decode_hex_tx(hex_tx: &str) -> Result<Transaction, String> {
-    let tx_bytes = Vec::from_hex(hex_tx).map_err(|err| err.to_string())?;
-
-    let transaction: Result<Transaction, String> =
-        deserialize(&tx_bytes).map_err(|err| err.to_string());
-
-    transaction
 }
 
 #[derive(Debug, Deserialize)]
@@ -566,6 +560,8 @@ impl IBitcoinSend for BtcSPVClient {
 #[cfg(test)]
 mod test {
     use super::*;
+    use bitcoin::consensus::deserialize;
+    use hex::FromHex;
 
     // The (testnet) segwit public key for this address is: tb1q6898gg3tkkjurdpl4cghaqgmyvs29p4x4h0552
     fn get_key_pair() -> KeyPair {
@@ -584,6 +580,15 @@ mod test {
             // change address is same as that derived from the key pair above
             bitcoin::Address::from_str("tb1q6898gg3tkkjurdpl4cghaqgmyvs29p4x4h0552").unwrap(),
         )
+    }
+
+    fn decode_hex_tx(hex_tx: &str) -> Result<Transaction, String> {
+        let tx_bytes = Vec::from_hex(hex_tx).map_err(|err| err.to_string())?;
+
+        let transaction: Result<Transaction, String> =
+            deserialize(&tx_bytes).map_err(|err| err.to_string());
+
+        transaction
     }
 
     #[test]

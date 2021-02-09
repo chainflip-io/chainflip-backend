@@ -1,13 +1,13 @@
 use crate::{
     common::liquidity_provider::{Liquidity, LiquidityProvider},
-    common::{coins::PoolCoin, LokiAmount},
-    constants::LOKI_SWAP_PROCESS_FEE,
+    common::{coins::PoolCoin, OxenAmount},
+    constants::OXEN_SWAP_PROCESS_FEE,
 };
 pub use calculation::*;
 use chainflip_common::types::{
     chain::{PoolChange, Validate},
     coin::Coin,
-    Network, Timestamp, UUIDv4,
+    Network,
 };
 use std::convert::TryFrom;
 
@@ -24,15 +24,15 @@ pub struct OutputDetail {
     pub output: Coin,
     /// The output amount
     pub output_amount: u128,
-    /// The fee paid in loki
-    pub loki_fee: u128,
+    /// The fee paid in oxen
+    pub oxen_fee: u128,
 }
 
 impl OutputDetail {
     /// Convert this output detail to a pool change transaction
     pub fn to_pool_change_tx(&self) -> Result<PoolChange, &'static str> {
-        if self.input != Coin::LOKI && self.output != Coin::LOKI {
-            return Err("Cannot make a PoolChangeTx without a LOKI input or output");
+        if self.input != Coin::OXEN && self.output != Coin::OXEN {
+            return Err("Cannot make a PoolChangeTx without a OXEN input or output");
         }
 
         let input_depth = i128::try_from(self.input_amount)
@@ -59,13 +59,7 @@ impl OutputDetail {
             output_depth
         };
 
-        let change = PoolChange {
-            id: UUIDv4::new(),
-            timestamp: Timestamp::now(),
-            pool: pool_coin,
-            depth_change,
-            base_depth_change,
-        };
+        let change = PoolChange::new(pool_coin, depth_change, base_depth_change, None);
 
         // Network type shouldn't really matter here
         // Just validatinf to ensure base and depth change are correct
@@ -103,7 +97,7 @@ impl OutputCalculation {
 
 /// Get the output amount.
 ///
-/// If `input` or `output` is *NOT* `LOKI` then `first` will contain `input -> LOKI` and `second` will contain `LOKI -> output`
+/// If `input` or `output` is *NOT* `OXEN` then `first` will contain `input -> OXEN` and `second` will contain `OXEN -> output`
 pub fn get_output<T: LiquidityProvider>(
     provider: &T,
     input: Coin,
@@ -114,20 +108,20 @@ pub fn get_output<T: LiquidityProvider>(
         return Err("Cannot get output amount for the same coin");
     }
 
-    let fee = LokiAmount::from_atomic(LOKI_SWAP_PROCESS_FEE);
+    let fee = OxenAmount::from_atomic(OXEN_SWAP_PROCESS_FEE);
 
-    if input == Coin::LOKI || output == Coin::LOKI {
+    if input == Coin::OXEN || output == Coin::OXEN {
         get_output_amount_inner(provider, input, input_amount, output, fee)
             .map(|result| OutputCalculation::new(result, None))
     } else {
-        let first = get_output_amount_inner(provider, input, input_amount, Coin::LOKI, fee)?;
+        let first = get_output_amount_inner(provider, input, input_amount, Coin::OXEN, fee)?;
 
         let second = get_output_amount_inner(
             provider,
-            Coin::LOKI,
+            Coin::OXEN,
             first.output_amount,
             output,
-            LokiAmount::from_atomic(0),
+            OxenAmount::from_atomic(0),
         )?;
         Ok(OutputCalculation::new(first, Some(second)))
     }
@@ -139,19 +133,19 @@ fn get_output_amount_inner<T: LiquidityProvider>(
     input: Coin,
     input_amount: u128,
     output: Coin,
-    loki_fee: LokiAmount,
+    oxen_fee: OxenAmount,
 ) -> Result<OutputDetail, &'static str> {
     if input == output {
         return Err("Cannot get output amount for the same coin");
     }
 
-    if input != Coin::LOKI && output != Coin::LOKI {
-        return Err("LOKI coin needs to be passed into either input or output");
+    if input != Coin::OXEN && output != Coin::OXEN {
+        return Err("OXEN coin needs to be passed into either input or output");
     }
 
-    let is_loki_input = input == Coin::LOKI;
+    let is_oxen_input = input == Coin::OXEN;
 
-    let pool_coin = if is_loki_input { output } else { input };
+    let pool_coin = if is_oxen_input { output } else { input };
     let pool_coin =
         PoolCoin::from(pool_coin).map_err(|_| "Expected a valid pool coin to be present")?;
 
@@ -159,28 +153,28 @@ fn get_output_amount_inner<T: LiquidityProvider>(
         .get_liquidity(pool_coin)
         .unwrap_or(Liquidity::zero());
 
-    let input_depth = if is_loki_input {
+    let input_depth = if is_oxen_input {
         liquidity.base_depth
     } else {
         liquidity.depth
     };
 
-    let output_depth = if is_loki_input {
+    let output_depth = if is_oxen_input {
         liquidity.depth
     } else {
         liquidity.base_depth
     };
 
-    let input_fee = if is_loki_input {
-        loki_fee.to_atomic()
+    let input_fee = if is_oxen_input {
+        oxen_fee.to_atomic()
     } else {
         0
     };
 
-    let output_fee = if is_loki_input {
+    let output_fee = if is_oxen_input {
         0
     } else {
-        loki_fee.to_atomic()
+        oxen_fee.to_atomic()
     };
 
     let output_amount = calculate_output_amount(
@@ -199,7 +193,7 @@ fn get_output_amount_inner<T: LiquidityProvider>(
         input_amount,
         output,
         output_amount,
-        loki_fee: loki_fee.to_atomic(),
+        oxen_fee: oxen_fee.to_atomic(),
     })
 }
 
@@ -213,17 +207,17 @@ mod test {
     }
 
     #[test]
-    fn get_output_with_loki_input() {
+    fn get_output_with_oxen_input() {
         let mut provider = MemoryLiquidityProvider::new();
         provider.set_liquidity(
             PoolCoin::ETH,
             Some(Liquidity::new(
                 to_atomic(Coin::ETH, "20000.0"),
-                to_atomic(Coin::LOKI, "10000.0"),
+                to_atomic(Coin::OXEN, "10000.0"),
             )),
         );
 
-        let input = Coin::LOKI;
+        let input = Coin::OXEN;
         let input_amount = to_atomic(input, "2500.0");
         let output = Coin::ETH;
         let expected_output_amount = to_atomic(output, "3199.36");
@@ -238,23 +232,23 @@ mod test {
         assert_eq!(detail.input_amount, input_amount);
         assert_eq!(detail.output, output);
         assert_eq!(detail.output_amount, expected_output_amount);
-        assert_eq!(detail.loki_fee, LOKI_SWAP_PROCESS_FEE);
+        assert_eq!(detail.oxen_fee, OXEN_SWAP_PROCESS_FEE);
     }
 
     #[test]
-    fn get_output_with_loki_output() {
+    fn get_output_with_oxen_output() {
         let mut provider = MemoryLiquidityProvider::new();
         provider.set_liquidity(
             PoolCoin::ETH,
             Some(Liquidity::new(
                 to_atomic(Coin::ETH, "10000.0"),
-                to_atomic(Coin::LOKI, "20000.0"),
+                to_atomic(Coin::OXEN, "20000.0"),
             )),
         );
 
         let input = Coin::ETH;
         let input_amount = to_atomic(input, "2500.0");
-        let output = Coin::LOKI;
+        let output = Coin::OXEN;
         let expected_output_amount = to_atomic(output, "3199.5");
 
         let calculation = get_output(&provider, input, input_amount, output)
@@ -267,17 +261,17 @@ mod test {
         assert_eq!(detail.input_amount, input_amount);
         assert_eq!(detail.output, output);
         assert_eq!(detail.output_amount, expected_output_amount);
-        assert_eq!(detail.loki_fee, LOKI_SWAP_PROCESS_FEE);
+        assert_eq!(detail.oxen_fee, OXEN_SWAP_PROCESS_FEE);
     }
 
     #[test]
-    fn get_output_with_non_loki_input_output() {
+    fn get_output_with_non_oxen_input_output() {
         let mut provider = MemoryLiquidityProvider::new();
         provider.set_liquidity(
             PoolCoin::ETH,
             Some(Liquidity::new(
                 to_atomic(Coin::ETH, "10000.0"),
-                to_atomic(Coin::LOKI, "20000.0"),
+                to_atomic(Coin::OXEN, "20000.0"),
             )),
         );
 
@@ -285,7 +279,7 @@ mod test {
             PoolCoin::BTC,
             Some(Liquidity::new(
                 to_atomic(Coin::BTC, "12769.0"),
-                to_atomic(Coin::LOKI, "10191.0"),
+                to_atomic(Coin::OXEN, "10191.0"),
             )),
         );
 
@@ -300,16 +294,16 @@ mod test {
         let first = calculation.first;
         assert_eq!(first.input, input);
         assert_eq!(first.input_amount, input_amount);
-        assert_eq!(first.output, Coin::LOKI);
-        assert_eq!(first.output_amount, to_atomic(Coin::LOKI, "3199.5"));
-        assert_eq!(first.loki_fee, LOKI_SWAP_PROCESS_FEE);
+        assert_eq!(first.output, Coin::OXEN);
+        assert_eq!(first.output_amount, to_atomic(Coin::OXEN, "3199.5"));
+        assert_eq!(first.oxen_fee, OXEN_SWAP_PROCESS_FEE);
 
         let second = calculation.second.expect("Expected a second output");
-        assert_eq!(second.input, Coin::LOKI);
-        assert_eq!(second.input_amount, to_atomic(Coin::LOKI, "3199.5"));
+        assert_eq!(second.input, Coin::OXEN);
+        assert_eq!(second.input_amount, to_atomic(Coin::OXEN, "3199.5"));
         assert_eq!(second.output, output);
         assert_eq!(second.output_amount, expected_output_amount);
-        assert_eq!(second.loki_fee, 0);
+        assert_eq!(second.oxen_fee, 0);
     }
 
     #[test]
@@ -320,24 +314,24 @@ mod test {
             input_amount: 1,
             output: Coin::ETH,
             output_amount: 2,
-            loki_fee: 0,
+            oxen_fee: 0,
         };
 
         assert_eq!(
             invalid.to_pool_change_tx().unwrap_err(),
-            "Cannot make a PoolChangeTx without a LOKI input or output"
+            "Cannot make a PoolChangeTx without a OXEN input or output"
         );
 
-        // Loki input
-        let loki_input = OutputDetail {
-            input: Coin::LOKI,
+        // Oxen input
+        let oxen_input = OutputDetail {
+            input: Coin::OXEN,
             input_amount: 10,
             output: Coin::ETH,
             output_amount: 20,
-            loki_fee: 0,
+            oxen_fee: 0,
         };
 
-        let pool_change = loki_input
+        let pool_change = oxen_input
             .to_pool_change_tx()
             .expect("Expected a valid pool change transaction");
 
@@ -345,16 +339,16 @@ mod test {
         assert_eq!(pool_change.base_depth_change, 10);
         assert_eq!(pool_change.depth_change, -20);
 
-        // Loki output
-        let loki_output = OutputDetail {
+        // Oxen output
+        let oxen_output = OutputDetail {
             input: Coin::ETH,
             input_amount: 10,
-            output: Coin::LOKI,
+            output: Coin::OXEN,
             output_amount: 20,
-            loki_fee: 0,
+            oxen_fee: 0,
         };
 
-        let pool_change = loki_output
+        let pool_change = oxen_output
             .to_pool_change_tx()
             .expect("Expected a valid pool change transaction");
 
@@ -364,11 +358,11 @@ mod test {
 
         // Bounds
         let max_input = OutputDetail {
-            input: Coin::LOKI,
+            input: Coin::OXEN,
             input_amount: u128::MAX,
             output: Coin::ETH,
             output_amount: 20,
-            loki_fee: 0,
+            oxen_fee: 0,
         };
 
         assert_eq!(
@@ -377,11 +371,11 @@ mod test {
         );
 
         let max_output = OutputDetail {
-            input: Coin::LOKI,
+            input: Coin::OXEN,
             input_amount: 20,
             output: Coin::ETH,
             output_amount: u128::MAX,
-            loki_fee: 0,
+            oxen_fee: 0,
         };
 
         assert_eq!(

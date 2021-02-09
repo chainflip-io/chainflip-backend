@@ -3,13 +3,13 @@ mod tests;
 
 use crate::{
     common::*,
-    side_chain::SideChainTx,
+    local_store::LocalEvent,
     vault::transactions::{
-        memory_provider::{FulfilledWrapper, Portion, UsedWitnessWrapper},
+        memory_provider::{FulfilledWrapper, Portion, StatusWitnessWrapper},
         TransactionProvider,
     },
 };
-use chainflip_common::types::{chain::*, coin::Coin, Network, Timestamp, UUIDv4};
+use chainflip_common::types::{chain::*, coin::Coin, unique_id::GetUniqueId, Network};
 use parking_lot::RwLock;
 use std::{
     convert::{TryFrom, TryInto},
@@ -39,18 +39,18 @@ pub(super) fn process_deposit_quotes<T: TransactionProvider>(
 ) {
     let provider = tx_provider.read();
     let deposit_quotes = provider.get_deposit_quotes();
-    let witness_txs = provider.get_witnesses();
+    let witnesses = provider.get_witnesses();
 
     // TODO: a potential room for improvement: autoswap is relatively slow,
     // so we might want to release the mutex when performing it
-    let new_txs = process_deposit_quotes_inner(&deposit_quotes, &witness_txs, network);
+    let new_events = process_deposit_quotes_inner(&deposit_quotes, &witnesses, network);
     drop(provider);
 
     // TODO: make sure that things below happen atomically
     // (e.g. we don't want to send funds more than once if the
     // latest block info failed to have been updated)
 
-    if let Err(err) = tx_provider.write().add_transactions(new_txs) {
+    if let Err(err) = tx_provider.write().add_local_events(new_events) {
         error!("Error adding a pool change tx: {}", err);
         panic!();
     };
@@ -59,19 +59,27 @@ pub(super) fn process_deposit_quotes<T: TransactionProvider>(
 /// Try to match witnesses with deposit quotes and return a list of deposits that should be added to the side chain
 fn process_deposit_quotes_inner(
     quotes: &[FulfilledWrapper<DepositQuote>],
-    witness_txs: &[UsedWitnessWrapper],
+    witnesses: &[StatusWitnessWrapper],
     network: Network,
-) -> Vec<SideChainTx> {
-    let mut new_txs = Vec::<SideChainTx>::default();
+) -> Vec<LocalEvent> {
+    let mut new_events = Vec::<LocalEvent>::default();
+
+    println!(
+        "Witnesses in process deposit_quotes_inner: {:#?}",
+        witnesses
+    );
+
+    println!("Number of quotes to process: {}", quotes.len());
 
     for quote_info in quotes {
-        // Find all relevant witnesses
-        let wtxs: Vec<&UsedWitnessWrapper> = witness_txs
+        // only process confirmed witnesses
+        let wtxs: Vec<&StatusWitnessWrapper> = witnesses
             .iter()
-            .filter(|wtx| !wtx.used && wtx.inner.quote == quote_info.inner.id)
+            .filter(|wtx| wtx.is_confirmed() && wtx.inner.quote == quote_info.inner.unique_id())
             .collect();
 
         if wtxs.is_empty() {
+            println!("There are witnesses, but none confirmed in deposit quotes inner");
             continue;
         }
 
@@ -81,25 +89,25 @@ fn process_deposit_quotes_inner(
             if refunds.len() > 0 {
                 info!(
                     "Quote {} is already fulfilled, refunding!",
-                    quote_info.inner.id
+                    quote_info.inner.unique_id()
                 );
-                new_txs.extend(refunds.into_iter().map(|tx| tx.into()));
+                new_events.extend(refunds.into_iter().map(|tx| tx.into()));
             }
         } else if let Some(res) = process_deposit_quote(quote_info, &wtxs, network) {
-            new_txs.reserve(new_txs.len() + 2);
+            new_events.reserve(new_events.len() + 2);
             // IMPORTANT: deposits should come before pool changes,
             // due to the way Transaction provider processes them
-            new_txs.push(res.deposit.into());
-            new_txs.push(res.pool_change.into());
+            new_events.push(res.deposit.into());
+            new_events.push(res.pool_change.into());
         };
     }
 
-    new_txs
+    new_events
 }
 
 fn refund_deposit_quotes(
     quote_info: &FulfilledWrapper<DepositQuote>,
-    witness_txs: &[&UsedWitnessWrapper],
+    witnesses: &[&StatusWitnessWrapper],
     network: Network,
 ) -> Vec<Output> {
     if !quote_info.fulfilled {
@@ -110,12 +118,12 @@ fn refund_deposit_quotes(
     let quote_coin = quote.pool;
     let mut output_txs: Vec<Output> = vec![];
 
-    let valid_witness_txs = witness_txs.iter().filter(|tx| !tx.used);
+    let confirmed_witnesses = witnesses.iter().filter(|tx| tx.is_confirmed());
 
-    for wtx in valid_witness_txs {
+    for wtx in confirmed_witnesses {
         let tx = &wtx.inner;
         let return_address = match tx.coin {
-            Coin::LOKI => quote.base_return_address.clone(),
+            Coin::OXEN => quote.base_return_address.clone(),
             coin if coin == quote_coin => quote.coin_return_address.clone(),
             coin => {
                 panic!(
@@ -126,19 +134,18 @@ fn refund_deposit_quotes(
         };
 
         if tx.amount == 0 {
-            warn!("Witness {} has amount 0", tx.id);
+            warn!("Witness {} has amount 0", tx.unique_id());
             continue;
         }
 
         let output = Output {
-            id: UUIDv4::new(),
-            timestamp: Timestamp::now(),
-            parent: OutputParent::DepositQuote(quote.id),
-            witnesses: vec![tx.id],
+            parent: OutputParent::DepositQuote(quote.unique_id()),
+            witnesses: vec![tx.unique_id()],
             pool_changes: vec![],
             coin: tx.coin,
             address: return_address,
             amount: tx.amount,
+            event_number: None,
         };
 
         match output.validate(network) {
@@ -156,36 +163,39 @@ fn refund_deposit_quotes(
 /// Process a single deposit quote with all witnesses referencing it
 fn process_deposit_quote(
     quote_info: &FulfilledWrapper<DepositQuote>,
-    witness_txs: &[&UsedWitnessWrapper],
+    witnesses: &[&StatusWitnessWrapper],
     network: Network,
 ) -> Option<DepositQuoteResult> {
     if quote_info.fulfilled {
         return None;
     }
 
-    debug!("Found witness matching quote: {}", quote_info.inner.id);
+    debug!(
+        "Found witness matching quote: {}",
+        quote_info.inner.unique_id()
+    );
 
     let quote = &quote_info.inner;
 
-    let mut loki_amount: Option<i128> = None;
+    let mut oxen_amount: Option<i128> = None;
     let mut other_amount: Option<i128> = None;
 
     // Indexes of used witnesses
-    let mut wtx_idxs = Vec::<UUIDv4>::default();
+    let mut wtx_idxs = Vec::<UniqueId>::default();
 
-    for wtx in witness_txs {
-        // We don't expect used quotes at this stage,
+    for wtx in witnesses {
+        // We don't expect processed or unconfirmed quotes quotes at this stage,
         // but let's double check this:
-        if wtx.used {
+        if !wtx.is_confirmed() {
             continue;
         }
 
         let wtx = &wtx.inner;
 
         match wtx.coin {
-            Coin::LOKI => {
-                if loki_amount.is_some() {
-                    error!("Unexpected second loki witness");
+            Coin::OXEN => {
+                if oxen_amount.is_some() {
+                    error!("Unexpected second oxen witness");
                     return None;
                 }
 
@@ -197,8 +207,8 @@ fn process_deposit_quote(
                     }
                 };
 
-                wtx_idxs.push(wtx.id);
-                loki_amount = Some(amount);
+                wtx_idxs.push(wtx.unique_id());
+                oxen_amount = Some(amount);
             }
             coin_type @ _ => {
                 if coin_type == quote.pool {
@@ -214,7 +224,7 @@ fn process_deposit_quote(
                             return None;
                         }
                     };
-                    wtx_idxs.push(wtx.id);
+                    wtx_idxs.push(wtx.unique_id());
                     other_amount = Some(amount);
                 } else {
                     error!("Unexpected coin type: {}", coin_type);
@@ -224,41 +234,38 @@ fn process_deposit_quote(
         }
     }
 
-    if loki_amount.is_none() {
-        debug!("Loki is not yet provisioned in quote: {}", quote.id);
+    if oxen_amount.is_none() {
+        debug!(
+            "Oxen is not yet provisioned in quote: {}",
+            quote.unique_id()
+        );
     }
 
     if other_amount.is_none() {
         debug!(
             "{} is not yet provisioned in quote: {}",
-            quote.pool, quote.id
+            quote.pool,
+            quote.unique_id()
         );
     }
 
-    match (loki_amount, other_amount) {
-        (Some(loki_amount), Some(other_amount)) => {
-            let pool_change_tx = PoolChange {
-                id: UUIDv4::new(),
-                timestamp: Timestamp::now(),
-                pool: quote.pool,
-                depth_change: other_amount,
-                base_depth_change: loki_amount,
-            };
+    match (oxen_amount, other_amount) {
+        (Some(oxen_amount), Some(other_amount)) => {
+            let pool_change_tx = PoolChange::new(quote.pool, other_amount, oxen_amount, None);
 
             // TODO: autoswap goes here
-            let loki_amount: u128 = loki_amount.try_into().expect("negative deposit");
+            let oxen_amount: u128 = oxen_amount.try_into().expect("negative deposit");
             let other_amount: u128 = other_amount.try_into().expect("negative deposit");
 
             let deposit = Deposit {
-                id: UUIDv4::new(),
-                timestamp: Timestamp::now(),
-                quote: quote.id,
+                quote: quote.unique_id(),
                 witnesses: wtx_idxs,
-                pool_change: pool_change_tx.id,
+                pool_change: pool_change_tx.unique_id(),
                 staker_id: quote.staker_id.clone(),
                 pool: quote.pool,
-                base_amount: loki_amount,
+                base_amount: oxen_amount,
                 other_amount,
+                event_number: None,
             };
 
             match deposit.validate(network) {
@@ -285,7 +292,7 @@ fn get_amounts_withdrawable<T: TransactionProvider>(
     tx_provider: &T,
     pool: PoolCoin,
     staker: &StakerId,
-) -> Result<(LokiAmount, GenericCoinAmount), String> {
+) -> Result<(OxenAmount, GenericCoinAmount), String> {
     info!("Handling withdraw tx for staker: {}", staker);
 
     let portions = tx_provider.get_portions();
@@ -309,51 +316,49 @@ fn get_amounts_withdrawable<T: TransactionProvider>(
         .get_liquidity(pool)
         .expect("liquidity should exist");
 
-    let loki_amount = get_portion_of_amount(liquidity.base_depth, *staker_portions);
+    let oxen_amount = get_portion_of_amount(liquidity.base_depth, *staker_portions);
     let other_amount = get_portion_of_amount(liquidity.depth, *staker_portions);
 
-    let loki = LokiAmount::from_atomic(loki_amount);
+    let oxen = OxenAmount::from_atomic(oxen_amount);
     let other = GenericCoinAmount::from_atomic(pool.get_coin(), other_amount);
 
-    Ok((loki, other))
+    Ok((oxen, other))
 }
 
 fn prepare_outputs(
     tx: &WithdrawRequest,
-    loki_amount: LokiAmount,
+    oxen_amount: OxenAmount,
     other_amount: GenericCoinAmount,
     network: Network,
 ) -> Result<(Output, Output), &'static str> {
-    let loki = Output {
-        id: UUIDv4::new(),
-        timestamp: Timestamp::now(),
-        parent: OutputParent::WithdrawRequest(tx.id),
+    let oxen = Output {
+        parent: OutputParent::WithdrawRequest(tx.unique_id()),
         witnesses: vec![],
         pool_changes: vec![],
-        coin: Coin::LOKI,
+        coin: Coin::OXEN,
         address: tx.base_address.clone(),
-        amount: loki_amount.to_atomic(),
+        amount: oxen_amount.to_atomic(),
+        event_number: None,
     };
 
-    loki.validate(network)
-        .map_err(|_| "could not construct Loki output")?;
+    oxen.validate(network)
+        .map_err(|_| "could not construct Oxen output")?;
 
     let other = Output {
-        id: UUIDv4::new(),
-        timestamp: Timestamp::now(),
-        parent: OutputParent::WithdrawRequest(tx.id),
+        parent: OutputParent::WithdrawRequest(tx.unique_id()),
         witnesses: vec![],
         pool_changes: vec![],
         coin: tx.pool,
         address: tx.other_address.clone(),
         amount: other_amount.to_atomic(),
+        event_number: None,
     };
 
     other
         .validate(network)
-        .map_err(|_| "could not construct Loki output")?;
+        .map_err(|_| "could not construct Oxen output")?;
 
-    Ok((loki, other))
+    Ok((oxen, other))
 }
 
 fn process_withdraw_request<T: TransactionProvider>(
@@ -367,84 +372,81 @@ fn process_withdraw_request<T: TransactionProvider>(
 
     // Find out how much we can withdraw
     // NOTE: we might want to remove withdraw requests if we can't process them
-    let (loki_amount, other_amount) =
+    let (oxen_amount, other_amount) =
         get_amounts_withdrawable(tx_provider, PoolCoin::from(tx.pool).unwrap(), &staker)?;
 
     debug!(
         "Amounts withdrawable by {} are: {} and {:?}",
-        staker, loki_amount, other_amount
+        staker, oxen_amount, other_amount
     );
 
-    let (loki_tx, other_tx) = prepare_outputs(tx, loki_amount, other_amount, network)?;
+    let (oxen_tx, other_tx) = prepare_outputs(tx, oxen_amount, other_amount, network)?;
 
-    let d_loki: i128 = loki_amount
+    let d_oxen: i128 = oxen_amount
         .to_atomic()
         .try_into()
-        .map_err(|_| "Loki amount overflow")?;
+        .map_err(|_| "Oxen amount overflow")?;
     let d_other: i128 = other_amount
         .to_atomic()
         .try_into()
         .map_err(|_| "Other amount overflow")?;
 
-    let pool_change_tx = PoolChange {
-        id: UUIDv4::new(),
-        timestamp: Timestamp::now(),
-        pool: tx.pool,
-        depth_change: -d_other,
-        base_depth_change: -d_loki,
-    };
+    let pool_change_tx = PoolChange::new(tx.pool, -d_other, -d_oxen, None);
     pool_change_tx.validate(network)?;
 
     let withdraw = Withdraw {
-        id: UUIDv4::new(),
-        timestamp: Timestamp::now(),
-        withdraw_request: tx.id,
-        outputs: [loki_tx.id, other_tx.id],
+        withdraw_request: tx.unique_id(),
+        outputs: [oxen_tx.unique_id(), other_tx.unique_id()],
+        event_number: None,
     };
     withdraw.validate(network)?;
 
-    Ok((loki_tx, other_tx, pool_change_tx, withdraw))
+    Ok((oxen_tx, other_tx, pool_change_tx, withdraw))
 }
 
 pub(super) fn process_withdraw_requests<T: TransactionProvider>(
     tx_provider: &mut T,
     network: Network,
 ) {
-    let withdraw_request_txs = tx_provider.get_withdraw_requests();
+    let withdraw_request_events = tx_provider.get_withdraw_requests();
 
-    let (valid_txs, invalid_txs): (Vec<_>, Vec<_>) = withdraw_request_txs
+    let (valid_evts, invalid_evts): (Vec<_>, Vec<_>) = withdraw_request_events
         .iter()
         .filter(|tx| !tx.fulfilled)
         .partition(|tx| tx.inner.verify_signature());
 
-    for tx in invalid_txs {
-        warn!("Invalid signature for withdraw request {}", tx.inner.id);
+    for tx in invalid_evts {
+        warn!(
+            "Invalid signature for withdraw request {}",
+            tx.inner.unique_id()
+        );
     }
 
     // TODO: We shouldn't be getting invalid signatures as we already validate
     // them before adding to the database, but since we check them again, we
     // we should handle the case where they are invalid (by removing from the db)
 
-    let mut new_txs: Vec<SideChainTx> = Vec::with_capacity(valid_txs.len() * 4);
+    let mut new_events: Vec<LocalEvent> = Vec::with_capacity(valid_evts.len() * 4);
 
-    for tx in valid_txs {
+    for tx in valid_evts {
         match process_withdraw_request(tx_provider, tx, network) {
             Ok((output1, output2, pool_change, withdraw)) => {
-                new_txs.push(output1.into());
-                new_txs.push(output2.into());
-                new_txs.push(pool_change.into());
-                new_txs.push(withdraw.into());
+                new_events.push(output1.into());
+                new_events.push(output2.into());
+                new_events.push(pool_change.into());
+                new_events.push(withdraw.into());
             }
             Err(err) => {
                 warn!(
                     "Failed to process withdraw request {}: {}",
-                    tx.inner.id, err
+                    tx.inner.unique_id(),
+                    err
                 );
             }
         }
     }
 
     tx_provider
-        .add_transactions(new_txs)
+        .add_local_events(new_events)
         .expect("Could not add transactions");
 }

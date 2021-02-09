@@ -1,7 +1,10 @@
 use crate::{
-    common::api::ResponseError, common::StakerId, quoter::StateProvider, side_chain::SideChainTx,
+    common::api::ResponseError, common::StakerId, local_store::LocalEvent, quoter::StateProvider,
 };
-use chainflip_common::types::{chain::Output, UUIDv4};
+use chainflip_common::types::{
+    chain::{Output, UniqueId},
+    unique_id::GetUniqueId,
+};
 use itertools::Itertools;
 use reqwest::StatusCode;
 use serde::Deserialize;
@@ -30,7 +33,7 @@ pub struct TransactionsParams {
 pub async fn get_transactions<S>(
     params: TransactionsParams,
     state: Arc<Mutex<S>>,
-) -> Result<Vec<SideChainTx>, ResponseError>
+) -> Result<Vec<LocalEvent>, ResponseError>
 where
     S: StateProvider,
 {
@@ -42,7 +45,7 @@ where
     }
 
     if let Some(quote_id) = params.quote_id {
-        let id = match UUIDv4::from_str(&quote_id) {
+        let id = match u64::from_str(&quote_id) {
             Ok(id) => id,
             Err(_) => {
                 return Err(ResponseError::new(
@@ -71,9 +74,9 @@ where
 
 /// Get transactions related to the given quote id
 fn get_quote_id_transactions<S>(
-    id: UUIDv4,
+    id: UniqueId,
     state: Arc<Mutex<S>>,
-) -> Result<Vec<SideChainTx>, ResponseError>
+) -> Result<Vec<LocalEvent>, ResponseError>
 where
     S: StateProvider,
 {
@@ -88,13 +91,13 @@ where
 
     // I know this is terribly inefficient but it'll have to do for now until we can clean it up :(
 
-    let filtered_witnesses: Vec<SideChainTx> = witnesses
+    let filtered_witnesses: Vec<LocalEvent> = witnesses
         .into_iter()
         .filter(|tx| tx.quote == id)
         .map(|tx| tx.into())
         .collect();
 
-    let filtered_deposit: Vec<SideChainTx> = deposits
+    let filtered_deposit: Vec<LocalEvent> = deposits
         .into_iter()
         .filter(|tx| tx.quote == id)
         .map(|tx| tx.into())
@@ -104,11 +107,11 @@ where
         .into_iter()
         .filter(|tx| tx.parent_id() == id)
         .collect();
-    let ids: Vec<UUIDv4> = filtered_outputs.iter().map(|tx| tx.id).collect();
-    let filtered_outputs: Vec<SideChainTx> =
+    let ids: Vec<UniqueId> = filtered_outputs.iter().map(|tx| tx.unique_id()).collect();
+    let filtered_outputs: Vec<LocalEvent> =
         filtered_outputs.into_iter().map(|tx| tx.into()).collect();
 
-    let filtered_output_sent: Vec<SideChainTx> = sent
+    let filtered_output_sent: Vec<LocalEvent> = sent
         .into_iter()
         .filter(|tx| ids.iter().find(|id| tx.outputs.contains(id)).is_some())
         .map(|tx| tx.into())
@@ -127,7 +130,7 @@ where
 fn get_staker_id_transactions<S>(
     id: StakerId,
     state: Arc<Mutex<S>>,
-) -> Result<Vec<SideChainTx>, ResponseError>
+) -> Result<Vec<LocalEvent>, ResponseError>
 where
     S: StateProvider,
 {
@@ -152,20 +155,25 @@ where
         .filter(|tx| tx.staker_id == id)
         .collect_vec();
 
-    let filtered_withdraws: Vec<SideChainTx> = withdraws
+    let filtered_withdraws: Vec<LocalEvent> = withdraws
         .into_iter()
         .filter(|tx| {
             filtered_withdraw_requests
                 .iter()
-                .find(|req| req.id == tx.withdraw_request)
+                .find(|req| req.unique_id() == tx.withdraw_request)
                 .is_some()
         })
         .map(|tx| tx.into())
         .collect();
 
-    let filtered_witnesses: Vec<SideChainTx> = witnesses
+    let filtered_witnesses: Vec<LocalEvent> = witnesses
         .into_iter()
-        .filter(|tx| quotes.iter().find(|quote| tx.quote == quote.id).is_some())
+        .filter(|tx| {
+            quotes
+                .iter()
+                .find(|quote| tx.quote == quote.unique_id())
+                .is_some()
+        })
         .map(|tx| tx.into())
         .collect();
 
@@ -174,36 +182,36 @@ where
         .filter(|tx| {
             let withdraw_output = filtered_withdraw_requests
                 .iter()
-                .find(|quote| quote.id == tx.parent_id())
+                .find(|quote| quote.unique_id() == tx.parent_id())
                 .is_some();
 
             let refund_output = quotes
                 .iter()
-                .find(|quote| quote.id == tx.parent_id())
+                .find(|quote| quote.unique_id() == tx.parent_id())
                 .is_some();
 
             withdraw_output || refund_output
         })
         .collect();
-    let ids: Vec<UUIDv4> = filtered_outputs.iter().map(|tx| tx.id).collect();
-    let filtered_outputs: Vec<SideChainTx> =
+    let ids: Vec<UniqueId> = filtered_outputs.iter().map(|tx| tx.unique_id()).collect();
+    let filtered_outputs: Vec<LocalEvent> =
         filtered_outputs.into_iter().map(|tx| tx.into()).collect();
 
-    let filtered_output_sent: Vec<SideChainTx> = sent
+    let filtered_output_sent: Vec<LocalEvent> = sent
         .into_iter()
         .filter(|tx| ids.iter().find(|id| tx.outputs.contains(id)).is_some())
         .map(|tx| tx.into())
         .collect();
 
-    let filtered_quotes: Vec<SideChainTx> = quotes.into_iter().map(|tx| tx.into()).collect();
+    let filtered_quotes: Vec<LocalEvent> = quotes.into_iter().map(|tx| tx.into()).collect();
 
-    let filtered_deposits: Vec<SideChainTx> = deposits
+    let filtered_deposits: Vec<LocalEvent> = deposits
         .into_iter()
         .filter(|tx| tx.staker_id == id)
         .map(|tx| tx.into())
         .collect();
 
-    let filtered_withdraw_requests: Vec<SideChainTx> = filtered_withdraw_requests
+    let filtered_withdraw_requests: Vec<LocalEvent> = filtered_withdraw_requests
         .into_iter()
         .map(|tx| tx.into())
         .collect();

@@ -1,4 +1,4 @@
-use crate::common::LokiAmount;
+use crate::common::OxenAmount;
 use chainflip_common::types::coin::{Coin, CoinInfo};
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt::Display};
@@ -163,19 +163,19 @@ impl CoinAmount for GenericCoinAmount {
     }
 }
 
-impl From<LokiAmount> for GenericCoinAmount {
-    fn from(tx: LokiAmount) -> Self {
-        GenericCoinAmount::from_atomic(Coin::LOKI, tx.to_atomic())
+impl From<OxenAmount> for GenericCoinAmount {
+    fn from(tx: OxenAmount) -> Self {
+        GenericCoinAmount::from_atomic(Coin::OXEN, tx.to_atomic())
     }
 }
 
-impl From<GenericCoinAmount> for LokiAmount {
+impl From<GenericCoinAmount> for OxenAmount {
     fn from(tx: GenericCoinAmount) -> Self {
-        if tx.coin != Coin::LOKI {
-            panic!("Cannot convert non-loki amount");
+        if tx.coin != Coin::OXEN {
+            panic!("Cannot convert non-oxen amount");
         }
 
-        LokiAmount::from_atomic(tx.atomic_amount)
+        OxenAmount::from_atomic(tx.atomic_amount)
     }
 }
 
@@ -234,7 +234,7 @@ mod tests {
         let coin = GenericCoinAmount::from_decimal_string(Coin::ETH, "12500.5");
         assert_eq!(coin.atomic_amount, 12500500000000000000000);
 
-        let coin = GenericCoinAmount::from_decimal_string(Coin::LOKI, "12500.512345678123");
+        let coin = GenericCoinAmount::from_decimal_string(Coin::OXEN, "12500.512345678123");
         assert_eq!(coin.atomic_amount, 12500512345678);
     }
 }
