@@ -11,8 +11,9 @@ use chainflip_common::{
     constants::ethereum,
     types::{
         addresses::{EthereumAddress, OxenAddress},
-        chain::{DepositQuote, Validate},
+        chain::{DepositQuote, UniqueId, Validate},
         coin::Coin,
+        unique_id::GetUniqueId,
         Timestamp,
     },
     utils::address_id,
@@ -30,12 +31,12 @@ pub struct DepositQuoteParams {
     pub pool: Coin,
     /// The staker id
     pub staker_id: String,
-    /// The input address if of the other coin
-    pub coin_input_address_id: String,
-    /// The oxen input address id
-    pub oxen_input_address_id: String,
-    /// Address to return Oxen to if deposit quote already fulfilled
-    pub oxen_return_address: String,
+    /// The input address id of the other coin in the pool
+    pub other_input_address_id: String,
+    /// The input address id of the base coin
+    pub base_input_address_id: String,
+    /// Address to return base coins to if deposit quote already fulfilled
+    pub base_return_address: String,
     /// Address to return other coin to if deposit quote already fulfilled
     pub other_return_address: String,
 }
@@ -44,6 +45,8 @@ pub struct DepositQuoteParams {
 #[serde(rename_all = "camelCase")]
 #[derive(Debug, Deserialize, Serialize)]
 pub struct DepositQuoteResponse {
+    /// Quote id
+    pub id: UniqueId,
     /// Quote creation timestamp in milliseconds
     pub created_at: u128,
     /// Quote expire timestamp in milliseconds
@@ -52,14 +55,14 @@ pub struct DepositQuoteResponse {
     pub pool: Coin,
     /// Staker id
     pub staker_id: String,
-    /// Oxen input address
-    pub oxen_input_address: String,
-    /// Oxen return address
-    pub oxen_return_address: String,
+    /// Flip input address
+    pub base_input_address: String,
+    /// Flip return address
+    pub base_return_address: String,
     /// Other coin input address
-    pub coin_input_address: String,
+    pub other_input_address: String,
     /// Other coin return address
-    pub coin_return_address: String,
+    pub other_return_address: String,
 }
 
 /// Request a deposit quote
@@ -74,21 +77,21 @@ pub async fn deposit<T: TransactionProvider>(
         PoolCoin::from(params.pool).map_err(|_| bad_request("Invalid pool specified"))?;
 
     let base_input_address_id =
-        address_id::to_bytes(Coin::BASE_COIN, &params.oxen_input_address_id)
+        address_id::to_bytes(Coin::BASE_COIN, &params.base_input_address_id)
             .map_err(|_| bad_request("Invalid base input address id"))?;
 
     if let Err(_) = validate_address_id(Coin::BASE_COIN, &base_input_address_id) {
         return Err(bad_request("Invalid base input address id"));
     }
 
-    let coin_input_address_id = address_id::to_bytes(params.pool, &params.coin_input_address_id)
+    let other_input_address_id = address_id::to_bytes(params.pool, &params.other_input_address_id)
         .map_err(|_| bad_request("Invalid coin input address id"))?;
 
-    if let Err(_) = validate_address_id(params.pool, &coin_input_address_id) {
+    if let Err(_) = validate_address_id(params.pool, &other_input_address_id) {
         return Err(bad_request("Invalid coin input address id"));
     }
 
-    if let Err(_) = validate_address(Coin::OXEN, config.net_type, &params.oxen_return_address) {
+    if let Err(_) = validate_address(Coin::OXEN, config.net_type, &params.base_return_address) {
         return Err(bad_request("Invalid oxen return address"));
     }
 
@@ -105,7 +108,7 @@ pub async fn deposit<T: TransactionProvider>(
         let is_base_quote =
             quote.input == Coin::BASE_COIN && quote.input_address_id == base_input_address_id;
         let is_other_quote =
-            quote.input == params.pool && quote.input_address_id == coin_input_address_id;
+            quote.input == params.pool && quote.input_address_id == other_input_address_id;
         is_base_quote || is_other_quote
     }) {
         return Err(bad_request("Quote already exists for input address id"));
@@ -114,17 +117,17 @@ pub async fn deposit<T: TransactionProvider>(
     if let Some(_) = provider.get_deposit_quotes().iter().find(|quote_info| {
         let quote = &quote_info.inner;
         quote.base_input_address_id == base_input_address_id
-            || quote.coin_input_address_id == coin_input_address_id
+            || quote.coin_input_address_id == other_input_address_id
     }) {
         return Err(bad_request("Quote already exists for input address id"));
     }
 
     // Generate addresses
-    let coin_input_address = match params.pool {
+    let other_input_address = match params.pool {
         Coin::ETH => {
             let vault_address = ethereum::get_vault_address(config.net_type);
 
-            let salt = coin_input_address_id.clone().try_into().map_err(|_| {
+            let salt = other_input_address_id.clone().try_into().map_err(|_| {
                 warn!("Failed to convert coin input address id to ethereum salt");
                 internal_server_error()
             })?;
@@ -133,7 +136,7 @@ pub async fn deposit<T: TransactionProvider>(
                 .to_string()
         }
         Coin::BTC => {
-            let index = match params.coin_input_address_id.parse::<u32>() {
+            let index = match params.other_input_address_id.parse::<u32>() {
                 Ok(index) => index,
                 Err(_) => return Err(bad_request("Incorrect input address id")),
             };
@@ -177,12 +180,12 @@ pub async fn deposit<T: TransactionProvider>(
         timestamp: Timestamp::now(),
         staker_id: staker_id.bytes().to_vec(),
         pool: pool_coin.get_coin(),
-        coin_input_address: coin_input_address.clone().into(),
-        coin_input_address_id,
+        coin_input_address: other_input_address.clone().into(),
+        coin_input_address_id: other_input_address_id,
         coin_return_address: params.other_return_address.into(),
         base_input_address: base_input_address.to_string().into(),
         base_input_address_id,
-        base_return_address: params.oxen_return_address.into(),
+        base_return_address: params.base_return_address.into(),
         event_number: None,
     };
 
@@ -203,14 +206,15 @@ pub async fn deposit<T: TransactionProvider>(
         })?;
 
     Ok(DepositQuoteResponse {
+        id: quote.unique_id(),
         created_at: quote.timestamp.0,
         expires_at: get_swap_expire_timestamp(&quote.timestamp).0,
         staker_id: params.staker_id,
         pool: params.pool,
-        oxen_input_address: base_input_address.to_string(),
-        coin_input_address,
-        oxen_return_address: quote.base_return_address.to_string(),
-        coin_return_address: quote.coin_return_address.to_string(),
+        base_input_address: base_input_address.to_string(),
+        other_input_address: other_input_address,
+        base_return_address: quote.base_return_address.to_string(),
+        other_return_address: quote.coin_return_address.to_string(),
     })
 }
 
@@ -236,9 +240,9 @@ mod test {
         DepositQuoteParams {
             pool: Coin::ETH,
             staker_id: get_random_staker().public_key(),
-            coin_input_address_id: hex::encode(TEST_ETH_SALT),
-            oxen_input_address_id: "b2d6a87ec06934ff".to_string(),
-            oxen_return_address: TEST_OXEN_ADDRESS.to_string(),
+            other_input_address_id: hex::encode(TEST_ETH_SALT),
+            base_input_address_id: "b2d6a87ec06934ff".to_string(),
+            base_return_address: TEST_OXEN_ADDRESS.to_string(),
             other_return_address: TEST_ETH_ADDRESS.to_string(),
         }
     }
@@ -257,13 +261,13 @@ mod test {
     }
 
     #[tokio::test]
-    async fn returns_error_if_invalid_coin_input_address_id() {
+    async fn returns_error_if_invalid_other_input_address_id() {
         let provider = Arc::new(RwLock::new(get_transactions_provider()));
 
         for coin in vec![Coin::ETH, Coin::BTC] {
             let mut quote_params = params();
             quote_params.pool = coin;
-            quote_params.coin_input_address_id = "invalid".to_string();
+            quote_params.other_input_address_id = "invalid".to_string();
 
             let result = deposit(quote_params, provider.clone(), config())
                 .await
@@ -279,7 +283,7 @@ mod test {
 
         let mut quote_params = params();
         quote_params.pool = Coin::ETH;
-        quote_params.oxen_input_address_id = "invalid".to_string();
+        quote_params.base_input_address_id = "invalid".to_string();
 
         let result = deposit(quote_params, provider.clone(), config())
             .await
@@ -293,7 +297,7 @@ mod test {
         let provider = Arc::new(RwLock::new(get_transactions_provider()));
 
         let mut quote_params = params();
-        quote_params.oxen_return_address = "invalid".to_string();
+        quote_params.base_return_address = "invalid".to_string();
 
         let result = deposit(quote_params, provider.clone(), config())
             .await
@@ -322,11 +326,11 @@ mod test {
 
         let mut oxen_quote = TestData::swap_quote(Coin::OXEN, Coin::ETH);
         oxen_quote.input_address_id =
-            address_id::to_bytes(Coin::OXEN, &quote_params.oxen_input_address_id).unwrap();
+            address_id::to_bytes(Coin::OXEN, &quote_params.base_input_address_id).unwrap();
 
         let mut other_quote = TestData::swap_quote(Coin::ETH, Coin::OXEN);
         other_quote.input_address_id =
-            address_id::to_bytes(Coin::ETH, &quote_params.coin_input_address_id).unwrap();
+            address_id::to_bytes(Coin::ETH, &quote_params.other_input_address_id).unwrap();
 
         // Make sure we're testing the right logic
         assert_eq!(other_quote.input, quote_params.pool);
@@ -351,11 +355,11 @@ mod test {
 
         let mut quote_1 = TestData::deposit_quote(Coin::ETH);
         quote_1.base_input_address_id =
-            address_id::to_bytes(Coin::OXEN, &quote_params.oxen_input_address_id).unwrap();
+            address_id::to_bytes(Coin::OXEN, &quote_params.base_input_address_id).unwrap();
 
         let mut quote_2 = TestData::deposit_quote(Coin::ETH);
         quote_2.coin_input_address_id =
-            address_id::to_bytes(Coin::ETH, &quote_params.coin_input_address_id).unwrap();
+            address_id::to_bytes(Coin::ETH, &quote_params.other_input_address_id).unwrap();
 
         for quote in vec![quote_1, quote_2] {
             let mut provider = get_transactions_provider();

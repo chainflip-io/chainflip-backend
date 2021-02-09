@@ -84,13 +84,14 @@ where
 {
     let quote = state.lock().unwrap().get_deposit_quote(id);
     quote.map(|quote| DepositQuoteResponse {
+        id: quote.unique_id(),
         created_at: quote.timestamp.0,
         expires_at: get_swap_expire_timestamp(&quote.timestamp).0,
         pool: quote.pool,
         staker_id: StakerId::from_bytes(&quote.staker_id).unwrap().to_string(),
-        oxen_input_address: quote.base_input_address.to_string(),
-        coin_input_address: quote.coin_input_address.to_string(),
-        oxen_return_address: quote.base_return_address.to_string(),
-        coin_return_address: quote.coin_return_address.to_string(),
+        base_input_address: quote.base_input_address.to_string(),
+        other_input_address: quote.coin_input_address.to_string(),
+        base_return_address: quote.base_return_address.to_string(),
+        other_return_address: quote.coin_return_address.to_string(),
     })
 }

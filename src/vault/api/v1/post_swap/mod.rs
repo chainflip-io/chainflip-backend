@@ -11,7 +11,7 @@ use chainflip_common::{
     constants::ethereum,
     types::{
         addresses::{EthereumAddress, OxenAddress},
-        chain::{SwapQuote, Validate},
+        chain::{SwapQuote, UniqueId, Validate},
         coin::Coin,
         fraction::PercentageFraction,
         unique_id::GetUniqueId,
@@ -50,7 +50,7 @@ pub struct SwapQuoteParams {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SwapQuoteResponse {
     /// The id of the quote
-    pub id: u64,
+    pub id: UniqueId,
     /// Quote creation timestamp in milliseconds
     pub created_at: u128,
     /// Quote expire timestamp in milliseconds
