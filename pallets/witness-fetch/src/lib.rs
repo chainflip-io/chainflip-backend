@@ -1,22 +1,20 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use codec::{Decode, Encode};
 use frame_support as support;
 use frame_system as system;
-
 use rstd::prelude::*;
-
+use sp_runtime::RuntimeDebug;
 use sp_runtime::{
     offchain::{http, storage::StorageValueRef},
     traits::IdentifyAccount,
     transaction_validity::{InvalidTransaction, ValidTransaction},
     DispatchResult, KeyTypeId,
 };
-
 use support::{
     debug, decl_error, decl_event, decl_module, decl_storage,
     unsigned::{TransactionSource, TransactionValidity},
 };
-
 use system::{
     ensure_none,
     offchain::{
@@ -24,6 +22,12 @@ use system::{
         SigningTypes,
     },
 };
+
+#[cfg(not(feature = "std"))]
+extern crate alloc;
+
+#[cfg(not(feature = "std"))]
+use alloc::string::String;
 
 /// Defines application identifier for crypto keys of this module.
 ///
@@ -35,12 +39,6 @@ use system::{
 
 /// NOTE(maxim): currently we are reusing aura's keys
 pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"aura");
-
-use codec::{Decode, Encode};
-
-use sp_runtime::RuntimeDebug;
-
-type AString = codec::alloc::string::String;
 
 type WitnessId = Vec<u8>;
 
@@ -119,7 +117,7 @@ decl_module! {
             let account = public.into_account();
 
             if !pallet_cf_validator::Module::<T>::is_validator(&account) {
-                let id_str = AString::from_utf8_lossy(&tx_id);
+                let id_str = String::from_utf8_lossy(&tx_id);
                 debug::warn!("👷 OCW rejected witness {} from non-validator {:?}", id_str, account);
                 return Err(Error::<T>::InvalidValidator.into());
             }
@@ -197,7 +195,7 @@ impl<T: Trait> Module<T> {
     }
 
     fn add_witness_inner(witness: WitnessId, who: T::AccountId) -> DispatchResult {
-        let wstr = AString::from_utf8_lossy(&witness);
+        let wstr = String::from_utf8_lossy(&witness);
 
         debug::info!("👷 OCW is adding witness {} from {:?}", &wstr, &who);
 
@@ -289,8 +287,8 @@ pub mod crypto {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct Witness {
-    transaction_id: AString,
-    coin: AString,
+    transaction_id: String,
+    coin: String,
     event_number: u64,
 }
 
@@ -314,10 +312,10 @@ fn fetch_witnesses(last_seen: u64) -> CFResult<WitnessResponse> {
     // this is used, don't listen to rust-analyzer
     use alt_serde::__private::ToString;
 
-    let mut url = AString::from("http://127.0.0.1:3030/v1/witnesses?last_seen=");
+    let mut url = String::from("http://127.0.0.1:3030/v1/witnesses?last_seen=");
     url.push_str(&last_seen.to_string());
     // for testing, with the json-server
-    // let mut url = AString::from("http://127.0.0.1:3000/witnesses");
+    // let mut url = String::from("http://127.0.0.1:3000/witnesses");
 
     debug::info!("[witness]: fetching {}", &url);
 
