@@ -1,22 +1,20 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use codec::{Decode, Encode};
 use frame_support as support;
 use frame_system as system;
-
 use rstd::prelude::*;
-
+use sp_runtime::RuntimeDebug;
 use sp_runtime::{
     offchain::{http, storage::StorageValueRef},
     traits::IdentifyAccount,
     transaction_validity::{InvalidTransaction, ValidTransaction},
     DispatchResult, KeyTypeId,
 };
-
 use support::{
     debug, decl_error, decl_event, decl_module, decl_storage,
     unsigned::{TransactionSource, TransactionValidity},
 };
-
 use system::{
     ensure_none,
     offchain::{
@@ -24,6 +22,12 @@ use system::{
         SigningTypes,
     },
 };
+
+#[cfg(not(feature = "std"))]
+extern crate alloc;
+
+#[cfg(not(feature = "std"))]
+use alloc::string::String;
 
 /// Defines application identifier for crypto keys of this module.
 ///
@@ -36,11 +40,6 @@ use system::{
 /// NOTE(maxim): currently we are reusing aura's keys
 pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"aura");
 
-use codec::{Decode, Encode};
-
-use sp_runtime::RuntimeDebug;
-
-type AString = codec::alloc::string::String;
 type WitnessId = Vec<u8>;
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -118,8 +117,8 @@ decl_module! {
             let account = public.into_account();
 
             if !pallet_cf_validator::Module::<T>::is_validator(&account) {
-                let id_str = AString::from_utf8_lossy(&tx_id);
-                debug::warn!("👷 OCW rejected witness {} from non-validator {}", id_str, account);
+                let id_str = String::from_utf8_lossy(&tx_id);
+                debug::warn!("👷 OCW rejected witness {} from non-validator {:?}", id_str, account);
                 return Err(Error::<T>::InvalidValidator.into());
             }
 
@@ -141,13 +140,13 @@ decl_module! {
 
                 Ok(witness_res) => {
 
-                    let count = witness_res.data.witness_txs.len();
+                    let count = witness_res.data.witness_evts.len();
 
                     if count > 0 {
                         debug::info!("👷 [{:?}] OCW fetched {} witnesses from CFE", block, count);
                     }
 
-                    for witness in &witness_res.data.witness_txs {
+                    for witness in &witness_res.data.witness_evts {
 
                         let mut tx_id = witness.coin.clone();
 
@@ -159,8 +158,8 @@ decl_module! {
                     }
 
 
-                    if let Some(witness) = witness_res.data.witness_txs.last() {
-                        let last_seen = witness.timestamp;
+                    if let Some(witness) = witness_res.data.witness_evts.last() {
+                        let last_seen = witness.event_number;
 
                         if let Err(_) = s_info.mutate::<_, (), _>(|_: Option<Option<u64>>| {
                             Ok(last_seen)
@@ -180,8 +179,23 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
+    /// returns to the RPC call `get_confirmed_witnesses`
+    pub fn get_confirmed_witnesses() -> Vec<Vec<u8>> {
+        let mut confirmed_witnesses: Vec<Vec<u8>> = Vec::new();
+        let validators = <pallet_cf_validator::Module<T>>::get_validators();
+        let num_validators = validators.unwrap_or(Vec::new()).len();
+        // super majority
+        let threshold = num_validators as f64 * 0.67;
+        for (witness_id, validators_of_witness) in <WitnessMap<T>>::iter() {
+            if validators_of_witness.len() as f64 > threshold {
+                confirmed_witnesses.push(witness_id);
+            }
+        }
+        confirmed_witnesses
+    }
+
     fn add_witness_inner(witness: WitnessId, who: T::AccountId) -> DispatchResult {
-        let wstr = AString::from_utf8_lossy(&witness);
+        let wstr = String::from_utf8_lossy(&witness);
 
         debug::info!("👷 OCW is adding witness {} from {:?}", &wstr, &who);
 
@@ -273,9 +287,9 @@ pub mod crypto {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct Witness {
-    timestamp: u64,
-    transaction_id: AString,
-    coin: AString,
+    transaction_id: String,
+    coin: String,
+    event_number: u64,
 }
 
 use alt_serde::Deserialize;
@@ -284,7 +298,7 @@ use alt_serde::Deserialize;
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct WitnessData {
-    witness_txs: Vec<Witness>,
+    witness_evts: Vec<Witness>,
 }
 
 #[serde(crate = "alt_serde")]
@@ -295,16 +309,20 @@ struct WitnessResponse {
 }
 
 fn fetch_witnesses(last_seen: u64) -> CFResult<WitnessResponse> {
-    use alt_serde::export::ToString;
+    // this is used, don't listen to rust-analyzer
+    use alt_serde::__private::ToString;
 
-    let mut url = AString::from("http://127.0.0.1:3030/v1/witnesses?last_seen=");
+    let mut url = String::from("http://127.0.0.1:3030/v1/witnesses?last_seen=");
     url.push_str(&last_seen.to_string());
+    // for testing, with the json-server
+    // let mut url = String::from("http://127.0.0.1:3000/witnesses");
 
     debug::info!("[witness]: fetching {}", &url);
 
     let val = fetch_json(url.as_bytes())?;
 
-    let res = serde_json::from_value(val).map_err(|_| "JSON is not WitnessResponse")?;
+    let res = serde_json::from_value(val)
+        .map_err(|_| "JSON could not be deserialised to WitnessResponse")?;
 
     Ok(res)
 }
