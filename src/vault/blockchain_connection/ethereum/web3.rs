@@ -2,6 +2,7 @@ use super::{EstimateRequest, EstimateResult, EthereumClient, SendTransaction};
 use crate::common::ethereum;
 use chainflip_common::types::{addresses::EthereumAddress, coin::Coin};
 use std::convert::TryFrom;
+use tokio_compat_02::FutureExt;
 use web3::{
     signing::SecretKeyRef,
     transports,
@@ -49,7 +50,7 @@ impl From<&SendTransaction> for TransactionParameters {
 #[async_trait]
 impl EthereumClient for Web3Client {
     async fn get_latest_block_number(&self) -> Result<u64, String> {
-        match self.web3.eth().block_number().await {
+        match self.web3.eth().block_number().compat().await {
             Ok(result) => Ok(result.as_u64()),
             Err(err) => Err(format!("{}", err)),
         }
@@ -61,6 +62,7 @@ impl EthereumClient for Web3Client {
             .web3
             .eth()
             .block_with_txs(BlockId::Number(block_number))
+            .compat()
             .await
         {
             Ok(result) => result,
@@ -94,7 +96,7 @@ impl EthereumClient for Web3Client {
             return Err(format!("Cannot get estimate for {}", tx.amount.coin_type()));
         }
 
-        let gas_price: U256 = match self.web3.eth().gas_price().await {
+        let gas_price: U256 = match self.web3.eth().gas_price().compat().await {
             Ok(result) => result,
             Err(error) => {
                 debug!("[Web3] Failed to get gas price for tx: {:?}", tx);
@@ -116,6 +118,7 @@ impl EthereumClient for Web3Client {
                 },
                 None,
             )
+            .compat()
             .await
         {
             Ok(result) => result,
@@ -146,6 +149,7 @@ impl EthereumClient for Web3Client {
             .web3
             .eth()
             .balance(address.0.into(), Some(BlockNumber::Latest))
+            .compat()
             .await
             .map_err(|err| err.to_string())?;
 
@@ -162,7 +166,7 @@ impl EthereumClient for Web3Client {
             return Err(format!("Cannot send {}", tx.amount.coin_type()));
         }
 
-        let chain_id: U256 = match self.web3.eth().chain_id().await {
+        let chain_id: U256 = match self.web3.eth().chain_id().compat().await {
             Ok(value) => value,
             Err(err) => return Err(format!("{}", err)),
         };
@@ -175,6 +179,7 @@ impl EthereumClient for Web3Client {
             .web3
             .eth()
             .transaction_count(our_address.0.clone().into(), Some(BlockNumber::Pending))
+            .compat()
             .await
         {
             Ok(value) => value,
@@ -194,6 +199,7 @@ impl EthereumClient for Web3Client {
             .web3
             .accounts()
             .sign_transaction(tx_params, SecretKeyRef::new(&key))
+            .compat()
             .await
             .map_err(|e| e.to_string())?;
 
@@ -201,6 +207,7 @@ impl EthereumClient for Web3Client {
             .web3
             .eth()
             .send_raw_transaction(signed_tx.raw_transaction)
+            .compat()
             .await
         {
             Ok(hash) => Ok(hash.into()),
