@@ -31,14 +31,10 @@ jobs:
           curl https://sh.rustup.rs -sSf | sh -s -- -y
           source ~/.cargo/env
           rustup default stable
-
-      - name: Check Build
-        run: |
-          make init
-          make check
-
+          
       - name: Build
         run: |
+          make init
           make build
 
       - name: Upload artifacts
