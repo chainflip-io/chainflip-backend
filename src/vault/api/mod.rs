@@ -35,7 +35,7 @@ impl APIServer {
         };
         let routes = v1::endpoints(local_store, provider, config).recover(handle_rejection);
 
-        let mut rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().unwrap();
 
         let addr: SocketAddr = (([127, 0, 0, 1], 3030)).into();
 

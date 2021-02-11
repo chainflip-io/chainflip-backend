@@ -9,6 +9,7 @@ use data::TestData;
 use reqwest::StatusCode;
 use serde::Serialize;
 use std::sync::Arc;
+use tokio_compat_02::FutureExt;
 
 lazy_static::lazy_static! {
     static ref CLIENT: reqwest::Client = reqwest::Client::new();
@@ -141,14 +142,18 @@ async fn vault_http_server_tests() {
 
     {
         // number=0&limit=1
-        let status = send_events_req(&[("number", 0u32), ("limit", 1u32)]).await;
+        let status = send_events_req(&[("number", 0u32), ("limit", 1u32)])
+            .compat()
+            .await;
         assert_eq!(status, StatusCode::OK);
     }
 
     {
         let staker_id = config.staker.public_key();
         let pool = "ETH".to_owned();
-        let status = send_portions_req(&[("stakerId", staker_id), ("pool", pool)]).await;
+        let status = send_portions_req(&[("stakerId", staker_id), ("pool", pool)])
+            .compat()
+            .await;
         assert_eq!(status, StatusCode::OK);
     }
 
@@ -156,7 +161,7 @@ async fn vault_http_server_tests() {
 
     {
         // v1/withdraw
-        let status = check_withdraw_endpoint(&config).await;
+        let status = check_withdraw_endpoint(&config).compat().await;
         assert_eq!(status, StatusCode::OK);
     }
 

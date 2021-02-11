@@ -65,7 +65,7 @@ where
     /// Start witnessing the ethereum chain on a new thread
     pub fn start(mut self) {
         std::thread::spawn(move || {
-            let mut rt = tokio::runtime::Runtime::new().unwrap();
+            let rt = tokio::runtime::Runtime::new().unwrap();
 
             rt.block_on(async {
                 self.event_loop().await;

@@ -390,9 +390,9 @@ impl BtcSPVClient {
             // sign the sighash
             let secp = Secp256k1::new();
             let msg = Message::from_slice(&sighash[..]).map_err(|err| err.to_string())?;
-            let sig = secp.sign(&msg, &keypair.private_key).serialize_der();
+            let sig = secp.sign(&msg, &keypair.private_key);
 
-            match secp.verify(&msg, &sig.to_signature().unwrap(), &keypair.public_key) {
+            match secp.verify(&msg, &sig, &keypair.public_key) {
                 Ok(res) => res,
                 Err(err) => {
                     error!("Signing of sighash failed with error: {}", err);
@@ -400,7 +400,7 @@ impl BtcSPVClient {
                 }
             };
             // Add byte string
-            let mut sig = sig.to_vec();
+            let mut sig = sig.serialize_der().to_vec();
             // Add SIGHASHALL byte
             sig.push(0x01);
 

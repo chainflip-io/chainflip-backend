@@ -23,7 +23,7 @@ impl API {
 
         let future = async { warp::serve(routes).run(addr).await };
 
-        let mut rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().unwrap();
 
         rt.block_on(future);
     }

@@ -61,7 +61,7 @@ impl RawKey {
     /// ```
     pub fn decode(key: &str) -> Result<Self, StaticError> {
         let bytes = bs58::decode(key)
-            .with_alphabet(bs58::alphabet::BITCOIN)
+            .with_alphabet(bs58::Alphabet::BITCOIN)
             .into_vec()
             .map_err(|_| INVALID_KEY)?;
 

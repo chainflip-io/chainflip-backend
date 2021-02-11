@@ -142,7 +142,7 @@ impl OxenConnection {
                 }
             }
 
-            tokio::time::delay_for(std::time::Duration::from_millis(2000)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
         }
     }
 
@@ -156,7 +156,7 @@ impl OxenConnection {
         // spawn a separate thread to make it non-blocking.
 
         std::thread::spawn(move || {
-            let mut rt = tokio::runtime::Runtime::new().unwrap();
+            let rt = tokio::runtime::Runtime::new().unwrap();
 
             rt.block_on(self.poll_loop(tx));
         });
