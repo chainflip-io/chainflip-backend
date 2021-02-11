@@ -1,7 +1,7 @@
 use chainflip::relayer::{self, EthEventStreamBuilder, Result, StakeManager};
-use relayer::sinks::{Logger, StakingCall, StateChainCaller};
+use relayer::sinks::{Logger, StakeManagerRuntimeCaller};
 
-#[tokio::main]
+#[async_std::main]
 async fn main() -> Result<()> {
     env_logger::init();
 
@@ -10,9 +10,8 @@ async fn main() -> Result<()> {
     let event_source = StakeManager::load()?;
 
     let relayer = EthEventStreamBuilder::new("ws://host.docker.internal:8545", event_source)
-        .with_sink(Logger::default())
         .with_sink(Logger::new(log::Level::Info))
-        .with_sink(StateChainCaller::<StakingCall>::new("http://host.docker.internal:9944").await?)
+        .with_sink(StakeManagerRuntimeCaller::new("ws://host.docker.internal:55029").await?)
         .build()
         .await?;
 

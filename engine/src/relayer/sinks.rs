@@ -2,4 +2,4 @@ mod logger;
 mod state_chain;
 
 pub use logger::Logger;
-pub use state_chain::{StakingCall, StateChainCaller};
+pub use state_chain::{StakeManagerRuntimeCaller, StateChainCaller};

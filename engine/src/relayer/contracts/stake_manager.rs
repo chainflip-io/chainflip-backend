@@ -11,7 +11,7 @@ use web3::{
 
 lazy_static! {
     static ref CONTRACT_ADDRESS: H160 =
-        H160::from_str("0xd59D75482465E7442e59f73320152dab5ac458d7").unwrap();
+        H160::from_str("0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f").unwrap();
 }
 
 /// A wrapper for the StakeManager Ethereum contract.
