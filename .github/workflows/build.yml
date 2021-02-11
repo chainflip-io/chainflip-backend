@@ -1,9 +1,7 @@
-name: Chainflip
+name: Build and upload
 
 on:
   push:
-    branches: [ master ]
-  pull_request:
     branches: [ master ]
 
 env:
@@ -27,8 +25,15 @@ jobs:
           target
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - name: Build
-      run: cargo build --verbose --release
+      run: cargo check --verbose --release
     - name: Run tests
       run: cargo test --verbose
     - name: Check formatting
       run: cargo fmt -- --check
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v1
+      with:
+        name: Chainflip engine
+        path: |
+          target/release/vault
+          target/release/quoter
