@@ -140,13 +140,14 @@ decl_module! {
 
                 Ok(witness_res) => {
 
-                    let count = witness_res.data.witness_evts.len();
+                    let witness_evts = witness_res.data.witness_evts.unwrap_or(Vec::new());
+                    let count = witness_evts.len();
 
                     if count > 0 {
                         debug::info!("👷 [{:?}] OCW fetched {} witnesses from CFE", block, count);
                     }
 
-                    for witness in &witness_res.data.witness_evts {
+                    for witness in &witness_evts {
 
                         let mut tx_id = witness.coin.clone();
 
@@ -158,7 +159,7 @@ decl_module! {
                     }
 
 
-                    if let Some(witness) = witness_res.data.witness_evts.last() {
+                    if let Some(witness) = witness_evts.last() {
                         let last_seen = witness.event_number;
 
                         if let Err(_) = s_info.mutate::<_, (), _>(|_: Option<Option<u64>>| {
@@ -298,7 +299,7 @@ use alt_serde::Deserialize;
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct WitnessData {
-    witness_evts: Vec<Witness>,
+    witness_evts: Option<Vec<Witness>>,
 }
 
 #[serde(crate = "alt_serde")]
