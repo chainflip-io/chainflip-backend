@@ -85,7 +85,7 @@ where
             let curr_event = self.tx_provider.write().sync();
 
             if curr_event > next_event {
-                debug!("Provider is at block: {}", curr_event);
+                debug!("Provider is at event: {}", curr_event);
             }
 
             // Check if transaction provider made progress

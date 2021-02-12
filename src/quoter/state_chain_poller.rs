@@ -66,11 +66,12 @@ where
 
                     // Validate the returned block numbers to make sure we didn't skip
                     // assumption: get_events(2, 4) will get us events 2,3,4,5
-                    let expected_last_event_number =
-                        self.next_event_number + (events.len() as u64) - 1;
+                    // It's possible the INSERT into the db skipped an event, there is no guarantee
+                    // it always increases by one. It's unlikely to cause issues, but it may in the future
+                    let expected_last_event_number = self.next_event_number + events.len() as u64;
                     if let Some(last_event_number) = last_event_number {
-                        if last_event_number != expected_last_event_number {
-                            error!("Expected last event number to be {} but got {}. We must've skipped an event!", last_event_number, expected_last_event_number);
+                        if last_event_number + 1 != expected_last_event_number {
+                            error!("Expected last event number {} but got {}. We must've skipped an event!", last_event_number, expected_last_event_number);
                             panic!("StateChainPoller skipped events!");
                         }
                     }
@@ -205,7 +206,6 @@ mod test {
                 Coin::ETH,
                 2,
             ))]);
-
         state.poller.sync().await?;
         assert_eq!(state.poller.next_event_number, 3);
         assert_eq!(state.processor.lock().unwrap().recieved_events.len(), 3);

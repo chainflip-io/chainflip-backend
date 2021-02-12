@@ -64,13 +64,6 @@ fn process_deposit_quotes_inner(
 ) -> Vec<LocalEvent> {
     let mut new_events = Vec::<LocalEvent>::default();
 
-    println!(
-        "Witnesses in process deposit_quotes_inner: {:#?}",
-        witnesses
-    );
-
-    println!("Number of quotes to process: {}", quotes.len());
-
     for quote_info in quotes {
         // only process confirmed witnesses
         let wtxs: Vec<&StatusWitnessWrapper> = witnesses
@@ -79,7 +72,6 @@ fn process_deposit_quotes_inner(
             .collect();
 
         if wtxs.is_empty() {
-            println!("There are witnesses, but none confirmed in deposit quotes inner");
             continue;
         }
 

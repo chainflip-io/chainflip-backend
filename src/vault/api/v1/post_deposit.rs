@@ -23,7 +23,7 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::{convert::TryInto, str::FromStr, sync::Arc};
 
-/// Params for the v1/quote endpoint
+/// Params for the v1/deposit endpoint
 #[serde(rename_all = "camelCase")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DepositQuoteParams {
@@ -41,7 +41,7 @@ pub struct DepositQuoteParams {
     pub other_return_address: String,
 }
 
-/// Response for the v1/quote endpoint
+/// Response for the v1/deposit endpoint
 #[serde(rename_all = "camelCase")]
 #[derive(Debug, Deserialize, Serialize)]
 pub struct DepositQuoteResponse {
