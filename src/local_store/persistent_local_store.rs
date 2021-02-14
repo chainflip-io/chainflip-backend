@@ -45,6 +45,23 @@ impl ILocalStore for PersistentLocalStore {
         for event in events {
             let id = event.unique_id();
             let blob = serde_json::to_string(&event).unwrap();
+            let mut select_events = self
+                .db
+                .prepare("SELECT id FROM events WHERE id = ?")
+                .expect("Could not prepare stmt");
+
+            let current_id: Result<String, String> = select_events
+                .query_row(params![id as i64], |row| row.get(0))
+                .map_err(|err| err.to_string());
+
+            // if the id exists, don't try and add it again
+            if current_id.is_ok() {
+                trace!(
+                    "Event id of {} already exists in the local store",
+                    current_id.unwrap()
+                );
+                return Ok(());
+            }
             match self.db.execute(
                 "
             INSERT INTO events
@@ -265,5 +282,26 @@ mod test {
         let witness_from_db = events.first().unwrap();
         assert_eq!(witness_from_db.status, WitnessStatus::Confirmed);
         assert_eq!(witness_from_db.inner.event_number, Some(1));
+    }
+
+    #[test]
+    fn attempt_to_add_duplicate_id_entry_is_skipped() {
+        let temp_file = test_utils::TempRandomFile::new();
+
+        let mut db = PersistentLocalStore::open(temp_file.path());
+
+        let witness: LocalEvent = TestData::witness(0, 100, Coin::ETH).into();
+
+        // add a witness to the database, without specifying a status
+        db.add_events(vec![witness.clone()])
+            .expect("Error adding an event to the database");
+
+        assert_eq!(db.total_events(), 1);
+
+        db.add_events(vec![witness.clone()])
+            .expect("Error adding duplicate to database");
+
+        // event just gets skipped, so total remains the same
+        assert_eq!(db.total_events(), 1);
     }
 }
