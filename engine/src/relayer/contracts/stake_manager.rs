@@ -23,12 +23,12 @@ pub struct StakeManager {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StakingEvent {
     /// The `Staked(nodeId, amount)` event.
-    Staked {
+    Staked(
         /// The node id of the validator that submitted the stake.
-        node_id: ethabi::Uint,
+        ethabi::Uint,
         /// The amount of FLIP that was staked.
-        amount: ethabi::Uint,
-    },
+        ethabi::Uint,
+    ),
 }
 
 impl StakeManager {
@@ -95,10 +95,10 @@ impl EventSource for StakeManager {
             _ if sig == self.staked_event().signature() => {
                 let log = self.staked_event().parse_log(raw_log)?;
 
-                let event = StakingEvent::Staked {
-                    node_id: decode_log_param(&log, "nodeID")?,
-                    amount: decode_log_param(&log, "amount")?,
-                };
+                let event = StakingEvent::Staked(
+                    decode_log_param(&log, "nodeID")?,
+                    decode_log_param(&log, "amount")?,
+                );
 
                 Ok(event)
             }

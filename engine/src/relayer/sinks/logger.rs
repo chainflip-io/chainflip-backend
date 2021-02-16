@@ -1,4 +1,5 @@
 use crate::relayer::EventSink;
+use anyhow::Result;
 
 /// A simple Logger that implements `EventSink`.
 pub struct Logger {
@@ -23,7 +24,8 @@ impl<E> EventSink<E> for Logger
 where
     E: 'static + Send + std::fmt::Debug,
 {
-    async fn process_event(&self, event: E) {
+    async fn process_event(&self, event: E) -> Result<()> {
         log::log!(self.level, "Received event: {:?}", event);
+        Ok(())
     }
 }

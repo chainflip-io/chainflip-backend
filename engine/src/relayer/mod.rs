@@ -23,7 +23,7 @@ pub trait EventSink<E>
 where
     E: Send,
 {
-    async fn process_event(&self, event: E);
+    async fn process_event(&self, event: E) -> Result<()>;
 }
 
 /// Implement this for the each contract.

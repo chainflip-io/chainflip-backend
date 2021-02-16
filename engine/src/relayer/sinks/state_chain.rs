@@ -1,28 +1,18 @@
 use anyhow::Result;
-use core::marker::PhantomData;
+use stake_manager::StakedCall;
 
-use parity_scale_codec::Encode;
-
-use substrate_subxt::{
-    module, sp_core::U256, system::System, Call, Client, ClientBuilder, Encoded,
-    NodeTemplateRuntime,
-};
+use substrate_subxt::{extrinsic, Client, ClientBuilder, NodeTemplateRuntime};
 
 use crate::relayer::{contracts::stake_manager::StakingEvent, EventSink};
 
-pub type StakeManagerRuntimeCaller =
-    StateChainCaller<stake_manager::HandleStakingEventCall<NodeTemplateRuntime>>;
-
 #[derive(Clone)]
-pub struct StateChainCaller<C: Call<NodeTemplateRuntime>> {
-    phantom: PhantomData<C>,
+pub struct StateChainCaller {
     client: Client<NodeTemplateRuntime>,
 }
 
-impl<C: Call<NodeTemplateRuntime>> StateChainCaller<C> {
+impl StateChainCaller {
     pub async fn new(url: &str) -> Result<Self> {
         Ok(Self {
-            phantom: PhantomData,
             client: ClientBuilder::<NodeTemplateRuntime>::new()
                 .set_url(url)
                 .build()
@@ -32,25 +22,23 @@ impl<C: Call<NodeTemplateRuntime>> StateChainCaller<C> {
 }
 
 #[async_trait]
-impl<E, C> EventSink<E> for StateChainCaller<C>
-where
-    E: 'static + Send,
-    C: Call<NodeTemplateRuntime> + From<E> + std::fmt::Debug + Send + Sync,
-{
-    async fn process_event(&self, event: E) {
-        let call = C::from(event);
+impl EventSink<StakingEvent> for StateChainCaller {
+    async fn process_event(&self, event: StakingEvent) -> Result<()> {
+        let call_encoded = self.client.encode(match event {
+            StakingEvent::Staked(node_id, amount) => StakedCall::from_eth_params(node_id, amount),
+        })?;
 
-        log::debug!("Encoded event call as: {:?}", call);
-        log::debug!("Encoded as hex this is: {}", hex::encode(call.encode()));
+        log::debug!("Encoded event call as: {}", hex::encode(&call_encoded.0));
 
-        let unsigned_extrinsic = self.client.create_unsigned(call).unwrap();
+        // let unsigned_extrinsic = self.client.create_unsigned(call).unwrap();
+        let unsigned_extrinsic = extrinsic::create_unsigned::<NodeTemplateRuntime>(call_encoded);
 
         match self.client.submit_extrinsic(unsigned_extrinsic).await {
             Ok(receipt) => log::info!("Extrinsic submitted, hash: {:?}", receipt),
             Err(e) => log::error!("Extrinsic rejected: {}", e),
-        }
+        };
 
-        // log::debug!("Extrinsic submitted, hash: {:?}", receipt);
+        Ok(())
     }
 }
 
@@ -61,36 +49,13 @@ pub mod stake_manager {
         module,
         sp_core::U256,
         system::{System, SystemEventsDecoder},
-        Call, Client, ClientBuilder, Encoded, NodeTemplateRuntime,
+        Call, NodeTemplateRuntime, Runtime,
     };
-
-    use crate::relayer::contracts::stake_manager::StakingEvent;
+    use web3::ethabi;
 
     /// These need to be compatible with the types used by the runtime pallet.
     type ValidatorId = U256;
     type StakingAmount = u128;
-
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode)]
-    enum StakingCall {
-        staked(ValidatorId, StakingAmount),
-    }
-
-    /// Converts an Ethereum `StakingEvent` to a `StakingCall`. Note this uses `unsafe` internally to convert
-    /// from `ethabi::Uint` to `subxt::sp_core::U256`. This should be fine since these are based
-    /// on the same implementation, just that the compiler can't tell.
-    impl<T: StakeManager> From<StakingEvent> for HandleStakingEventCall<T> {
-        fn from(event: StakingEvent) -> Self {
-            let call = match event {
-                StakingEvent::Staked { node_id, amount } => {
-                    StakingCall::staked(unsafe { std::mem::transmute(node_id) }, amount.as_u128())
-                }
-            };
-            HandleStakingEventCall {
-                _runtime: PhantomData,
-                call: Encoded(call.encode()),
-            }
-        }
-    }
 
     /// The subset of the `pallet_cf_staking::Trait` that a client must implement.
     #[module]
@@ -99,15 +64,24 @@ pub mod stake_manager {
     impl StakeManager for NodeTemplateRuntime {}
 
     #[derive(Clone, Debug, PartialEq, Eq, Call, Encode)]
-    pub struct HandleStakingEventCall<T: StakeManager> {
+    pub struct StakedCall<T: StakeManager> {
         /// Runtime marker.
         pub _runtime: PhantomData<T>,
-        /// Encoded transaction.
-        call: Encoded,
+        /// Call arguments.
+        pub account_id: ValidatorId,
+        pub amount: StakingAmount,
     }
 
-    // impl Call<DefaultNodeRuntime> for HandleStakingEvent {
-    //     const MODULE: &'static str = "StakeManager";
-    //     const FUNCTION: &'static str = "handle_staking_event";
-    // }
+    impl<T: StakeManager> StakedCall<T> {
+        /// Used to convert ethereum event params to params for the runtime call. Note this uses
+        /// `unsafe` to convert from `ethabi::Uint` to `subxt::sp_core::U256`. This should be fine
+        /// since these are based on the same implementation, just that the compiler doesn't know this.
+        pub fn from_eth_params(node_id: ethabi::Uint, amount: ethabi::Uint) -> Self {
+            Self {
+                _runtime: PhantomData,
+                account_id: unsafe { std::mem::transmute(node_id) },
+                amount: amount.as_u128(),
+            }
+        }
+    }
 }

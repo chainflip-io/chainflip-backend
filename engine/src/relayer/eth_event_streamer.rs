@@ -82,11 +82,11 @@ impl<S: EventSource> EthEventStreamer<S> {
         let processing_loop = event_stream.for_each_concurrent(None, |parse_result| async {
             match parse_result {
                 Ok(event) => {
-                    join_all(
-                        self.event_sinks
-                            .iter()
-                            .map(|sink| async move { sink.process_event(event).await }),
-                    )
+                    join_all(self.event_sinks.iter().map(|sink| async move {
+                        sink.process_event(event)
+                            .await
+                            .map_err(|e| log::error!("Error while processing event:\n{}", e))
+                    }))
                     .await;
                 }
                 Err(e) => log::error!("Unable to parse event: {}.", e.backtrace()),
