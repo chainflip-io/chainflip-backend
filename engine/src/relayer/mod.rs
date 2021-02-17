@@ -8,31 +8,31 @@ pub use eth_event_streamer::{EthEventStreamBuilder, EthEventStreamer};
 
 use thiserror::Error;
 
-use web3::{
-    ethabi::TopicFilter,
-    types::{BlockNumber, FilterBuilder},
-};
+use web3::types::{BlockNumber, FilterBuilder};
 
 /// The `Error` type for errors specific to this module.
 #[derive(Error, Debug)]
 pub enum RelayerError {}
 
-/// Implement this for the substrate client.
+/// Something that accepts and processes events asychronously.
 #[async_trait]
 pub trait EventSink<E>
 where
     E: Send,
 {
+    /// Accepts an event and does something, returning a result to indicate success.
     async fn process_event(&self, event: E) -> Result<()>;
 }
 
-/// Implement this for the each contract.
+/// Implement this for each contract for which you want to subscribe to events.
 pub trait EventSource {
+    /// The Event type expected from this contract. Likely to be an enum of all possible events.
     type Event: Send + Copy;
 
-    fn topic_filter_for_event(&self, name: &str) -> Result<TopicFilter>;
-
+    /// Returns an eth filter for the events from the contract, starting at the given
+    /// block number.
     fn filter_builder(&self, block: BlockNumber) -> FilterBuilder;
 
+    /// Attempt to parse an event from an ethereum Log item.
     fn parse_event(&self, log: web3::types::Log) -> Result<Self::Event>;
 }

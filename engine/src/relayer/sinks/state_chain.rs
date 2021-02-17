@@ -5,12 +5,15 @@ use substrate_subxt::{extrinsic, Client, ClientBuilder, NodeTemplateRuntime};
 
 use crate::relayer::{contracts::stake_manager::StakingEvent, EventSink};
 
+/// Wraps a `subxt` substrate client.
 #[derive(Clone)]
 pub struct StateChainCaller {
     client: Client<NodeTemplateRuntime>,
 }
 
 impl StateChainCaller {
+    /// Initialises the substrate client. Times out after 10 seconds if no connection can be made.
+    /// The `url` argument should be a websocket url, for example "ws://localhost:9944".
     pub async fn new(url: &str) -> Result<Self> {
         Ok(Self {
             client: ClientBuilder::<NodeTemplateRuntime>::new()
@@ -21,6 +24,8 @@ impl StateChainCaller {
     }
 }
 
+/// An EventSink implementation that accepts a StakingEvent and calls the corresponding extrinsic on the
+/// state chain.
 #[async_trait]
 impl EventSink<StakingEvent> for StateChainCaller {
     async fn process_event(&self, event: StakingEvent) -> Result<()> {
@@ -30,7 +35,6 @@ impl EventSink<StakingEvent> for StateChainCaller {
 
         log::debug!("Encoded event call as: {}", hex::encode(&call_encoded.0));
 
-        // let unsigned_extrinsic = self.client.create_unsigned(call).unwrap();
         let unsigned_extrinsic = extrinsic::create_unsigned::<NodeTemplateRuntime>(call_encoded);
 
         match self.client.submit_extrinsic(unsigned_extrinsic).await {
@@ -49,7 +53,7 @@ pub mod stake_manager {
         module,
         sp_core::U256,
         system::{System, SystemEventsDecoder},
-        Call, NodeTemplateRuntime, Runtime,
+        Call, NodeTemplateRuntime,
     };
     use web3::ethabi;
 
