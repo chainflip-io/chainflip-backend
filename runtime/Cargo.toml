@@ -31,31 +31,31 @@ pallet-cf-validator = { path = "../pallets/cf-validator", default-features = fal
 witness-fetch = { path = "../pallets/witness-fetch", default-features = false }
 
 # Substrate dependencies
-frame-benchmarking = {default-features = false, optional = true, version = '2.0.0'}
-frame-executive = {default-features = false, version = '2.0.0'}
-frame-support = {default-features = false, version = '2.0.0'}
-frame-system = {default-features = false, version = '2.0.0'}
-frame-system-benchmarking = {default-features = false, optional = true, version = '2.0.0'}
-frame-system-rpc-runtime-api = {default-features = false, version = '2.0.0'}
-pallet-aura = {default-features = false, version = '2.0.0'}
-pallet-authorship = {default-features = false, version = '2.0.0'}
-pallet-grandpa = {default-features = false, version = '2.0.0'}
-pallet-offences = {default-features = false, version = '2.0.0'}
-pallet-randomness-collective-flip = {default-features = false, version = '2.0.0'}
-pallet-session = {default-features = false, version = '2.0.0', features = ['historical']}
-pallet-sudo = {default-features = false, version = '2.0.0'}
-pallet-timestamp = {default-features = false, version = '2.0.0'}
-sp-api = {default-features = false, version = '2.0.0'}
-sp-block-builder = {default-features = false, version = '2.0.0'}
+frame-benchmarking = {default-features = false, optional = true, version = '2.0.1'}
+frame-executive = {default-features = false, version = '2.0.1'}
+frame-support = {default-features = false, version = '2.0.1'}
+frame-system = {default-features = false, version = '2.0.1'}
+frame-system-benchmarking = {default-features = false, optional = true, version = '2.0.1'}
+frame-system-rpc-runtime-api = {default-features = false, version = '2.0.1'}
+pallet-aura = {default-features = false, version = '2.0.1'}
+pallet-authorship = {default-features = false, version = '2.0.1'}
+pallet-grandpa = {default-features = false, version = '2.0.1'}
+pallet-offences = {default-features = false, version = '2.0.1'}
+pallet-randomness-collective-flip = {default-features = false, version = '2.0.1'}
+pallet-session = {default-features = false, version = '2.0.1', features = ['historical']}
+pallet-sudo = {default-features = false, version = '2.0.1'}
+pallet-timestamp = {default-features = false, version = '2.0.1'}
+sp-api = {default-features = false, version = '2.0.1'}
+sp-block-builder = {default-features = false, version = '2.0.1'}
 sp-consensus-aura = {default-features = false, version = '0.8.0'}
-sp-core = {default-features = false, version = '2.0.0'}
-sp-inherents = {default-features = false, version = '2.0.0'}
-sp-offchain = {default-features = false, version = '2.0.0'}
-sp-runtime = {default-features = false, version = '2.0.0'}
-sp-session = {default-features = false, version = '2.0.0'}
-sp-std = {default-features = false, version = '2.0.0'}
-sp-transaction-pool = {default-features = false, version = '2.0.0'}
-sp-version = {default-features = false, version = '2.0.0'}
+sp-core = {default-features = false, version = '2.0.1'}
+sp-inherents = {default-features = false, version = '2.0.1'}
+sp-offchain = {default-features = false, version = '2.0.1'}
+sp-runtime = {default-features = false, version = '2.0.1'}
+sp-session = {default-features = false, version = '2.0.1'}
+sp-std = {default-features = false, version = '2.0.1'}
+sp-transaction-pool = {default-features = false, version = '2.0.1'}
+sp-version = {default-features = false, version = '2.0.1'}
 
 [features]
 default = ['std']

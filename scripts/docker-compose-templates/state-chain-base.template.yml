@@ -1,0 +1,8 @@
+version: "3"
+
+networks:
+  chainflip:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${SUBNET_BASE}.0/16

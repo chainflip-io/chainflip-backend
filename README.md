@@ -70,8 +70,8 @@ RUST_LOG=debug RUST_BACKTRACE=1 ./target/release/state-chain-node -lruntime=debu
 
 ### Multi-Node Local Testnet
 
-If you want to see the multi-node consensus algorithm in action, refer to
-[our Start a Private Network tutorial](https://substrate.dev/docs/en/tutorials/start-a-private-network/).
+With a little effort you can run a local testnet [using docker compose](doc/docker-compose). 
+
 
 ## Template Structure
 
