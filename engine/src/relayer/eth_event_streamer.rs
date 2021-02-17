@@ -89,7 +89,7 @@ impl<S: EventSource> EthEventStreamer<S> {
                     }))
                     .await;
                 }
-                Err(e) => log::error!("Unable to parse event: {}.", e.backtrace()),
+                Err(e) => log::error!("Unable to parse event: {}.", e),
             }
         });
 
