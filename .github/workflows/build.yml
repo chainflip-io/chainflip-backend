@@ -1,9 +1,9 @@
-name: Check Set-Up & Build
+name: Check then build
 
 # Controls when the action will run. 
 on:
   # Triggers the workflow on push or pull request events but only for the master branch
-  pull_request:
+  push:
     branches: [ master ]
 
   # Allows you to run this workflow manually from the Actions tab
@@ -31,8 +31,14 @@ jobs:
           curl https://sh.rustup.rs -sSf | sh -s -- -y
           source ~/.cargo/env
           rustup default stable
-
-      - name: Check Build
+          
+      - name: Build
         run: |
           make init
-          make check
+          make build
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v1
+        with:
+          name: State chain
+          path: target/release/state-chain-node

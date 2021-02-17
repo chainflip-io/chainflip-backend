@@ -24,7 +24,7 @@ run:
 
 .PHONY: build
 build:
-	cargo build --release
+	WASM_BUILD_TOOLCHAIN=nightly cargo build --release
 
 .PHONY: run-alice
 run-alice:
