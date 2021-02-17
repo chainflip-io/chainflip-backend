@@ -42,7 +42,7 @@ pallet-authorship = {default-features = false, version = '2.0.1'}
 pallet-grandpa = {default-features = false, version = '2.0.1'}
 pallet-offences = {default-features = false, version = '2.0.1'}
 pallet-randomness-collective-flip = {default-features = false, version = '2.0.1'}
-pallet-session = {default-features = false, version = '2.0.1'}
+pallet-session = {default-features = false, version = '2.0.1', features = ['historical']}
 pallet-sudo = {default-features = false, version = '2.0.1'}
 pallet-timestamp = {default-features = false, version = '2.0.1'}
 sp-api = {default-features = false, version = '2.0.1'}
