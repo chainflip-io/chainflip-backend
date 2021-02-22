@@ -6,4 +6,6 @@ members = [
   'node',
   'pallets/*',
   'runtime',
+  'chainflip-common',
+  'chainflip-engine',
 ]
