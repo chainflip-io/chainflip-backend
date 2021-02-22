@@ -16,6 +16,11 @@ jobs:
 
     runs-on: ubuntu-20.04
 
+    strategy:
+      matrix:
+        # List the non-substrate packages here.
+        package = ['chainflip-common', 'chainflip-engine']
+
     steps:
     - uses: actions/checkout@v2
       with:
@@ -30,14 +35,14 @@ jobs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
     - name: Check formatting
-      run: cargo fmt -- --check
+      run: cargo fmt -p ${{ matrix.package }} -- --check
+
+    - name: Run tests
+      run: cargo test -p ${{ matrix.package }} --verbose
 
     - name: Build
-      run: cargo check --verbose --release
+      run: cargo build -p chainflip-engine --verbose --release
       
-    - name: Run tests
-      run: cargo test --verbose
-
     - name: Upload artifacts
       uses: actions/upload-artifact@v2
       with:
