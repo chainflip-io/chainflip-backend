@@ -1,0 +1,13 @@
+[Unit]
+Description=Chainflip Vault
+Wants=network.target
+
+[Service]
+WorkingDirectory=/root/chainflip
+ExecStart=/root/chainflip/vault
+
+Restart=on-failure
+EnvironmentFile=/etc/environment
+
+[Install]
+WantedBy=default.target

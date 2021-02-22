@@ -1,0 +1,7 @@
+# Default localhost testnet rpc location
+provider = "http://127.0.0.1:18332"
+receiving_address = ""
+rpc_password = ""
+rpc_port = 7777
+rpc_user = ""
+sender_private_key = ""

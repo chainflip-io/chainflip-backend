@@ -1,0 +1,13 @@
+[Unit]
+Description=Chainflip Quoter
+Wants=network.target
+
+[Service]
+WorkingDirectory=/root/chainflip
+ExecStart=/root/chainflip/quoter --ip 0.0.0.0
+
+Restart=on-failure
+EnvironmentFile=/etc/environment
+
+[Install]
+WantedBy=default.target

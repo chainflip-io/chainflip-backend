@@ -1,38 +1,45 @@
-name: Check Set-Up & Build
 
-# Controls when the action will run. 
+name: Cargo check non-substrate components
+
 on:
-  # Triggers the workflow on push or pull request events but only for the master branch
   pull_request:
     branches: [ master ]
+    paths-ignore:
+    - 'node/**'
+    - 'pallets/**'
+    - 'runtime/**'
 
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
+env:
+  CARGO_TERM_COLOR: always
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  check:
-    # The type of runner that the job will run on
+  build:
+
     runs-on: ubuntu-20.04
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
+    strategy:
+      matrix:
+        # List the non-substrate packages here.
+        package = ['chainflip-common', 'chainflip-engine']
+
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
-        with:
-          token: ${{ secrets.CI_PAT }} # CI_PAT is a secret that contains a personal access token for checking out private repos
-          submodules: true
+    - uses: actions/checkout@v2
+      with:
+        token: ${{ secrets.CI_PAT }} # CI_PAT is a secret that contains a personal access token for checking out private repos
 
-      - name: Set-Up
-        run: sudo apt install -y cmake pkg-config libssl-dev git build-essential clang libclang-dev curl
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Install Rustup
-        run: |
-          curl https://sh.rustup.rs -sSf | sh -s -- -y
-          source ~/.cargo/env
-          rustup default stable
+    - name: Check formatting
+      run: cargo fmt -p ${{ matrix.package }} -- --check
 
-      - name: Check Build
-        run: |
-          make init
-          make check
+    - name: Build
+      run: cargo check -p ${{ matrix.package }} --verbose --release
+
+    - name: Run tests
+      run: cargo test -p ${{ matrix.package }} --verbose
