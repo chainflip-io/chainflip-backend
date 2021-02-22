@@ -1,0 +1,19 @@
+{
+    "witnesses": {
+         "success":true,
+         "data":{
+            "witnessEvts":[
+               {
+                  "eventNumber":1,
+                  "transactionId":"486b38d06512cb4e4e39432e010df1b60038bb73c41b0351cc208f691f0904a3",
+                  "coin":"BTC"
+               },
+               {
+                  "eventNumber":2,
+                  "transactionId":"486b38d06512cb4e4e39432e010df1b60038bb7aaaaaaa51cc208f691f0904a3",
+                  "coin":"BTC"
+               }
+            ]
+         }
+      }
+}
