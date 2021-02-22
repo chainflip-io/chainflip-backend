@@ -1,3 +1,0 @@
-[submodule "chainflip-common"]
-	path = chainflip-common
-	url = git@github.com:chainflip-io/chainflip-common.git
