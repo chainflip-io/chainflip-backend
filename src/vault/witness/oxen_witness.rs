@@ -97,13 +97,13 @@ where
                     .iter()
                     .find(|quote| {
                         quote.inner.input == Coin::OXEN
-                            && quote.inner.input_address_id == payment.payment_id
+                            && quote.inner.input_address_id == payment.payment_id.bytes()
                     })
                     .map(|quote| quote.inner.unique_id());
 
                 let deposit_quote = deposit_quotes
                     .iter()
-                    .find(|quote| quote.inner.base_input_address_id == payment.payment_id)
+                    .find(|quote| quote.inner.base_input_address_id == payment.payment_id.bytes())
                     .map(|quote| quote.inner.unique_id());
 
                 if let Some(quote_id) = swap_quote.or(deposit_quote) {

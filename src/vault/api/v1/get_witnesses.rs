@@ -13,8 +13,8 @@ pub struct WitnessQueryParams {
 #[serde(rename_all = "camelCase")]
 #[derive(Debug, Deserialize, Serialize)]
 pub(super) struct WitnessQueryResponse {
-    /// The current blocks
-    pub witness_txs: Vec<Witness>,
+    /// The current witness events
+    pub witness_evts: Vec<Witness>,
 }
 
 /// Get all known transaction witnesses
@@ -30,9 +30,9 @@ pub(super) async fn get_local_witnesses<L: ILocalStore>(
 
     let WitnessQueryParams { last_seen } = params;
 
-    let witness_txs = local_store.get_witnesses(last_seen.unwrap_or(0));
+    let witness_evts = local_store.get_witnesses(last_seen.unwrap_or(0));
 
-    Ok(WitnessQueryResponse { witness_txs })
+    Ok(WitnessQueryResponse { witness_evts })
 }
 
 #[cfg(test)]
@@ -77,7 +77,7 @@ mod tests {
             .await
             .expect("result should be OK");
 
-        assert_eq!(res.witness_txs.len(), 2);
+        assert_eq!(res.witness_evts.len(), 2);
     }
 
     #[tokio::test]
@@ -104,6 +104,6 @@ mod tests {
             .await
             .expect("result should be OK");
 
-        assert_eq!(res.witness_txs.len(), 2);
+        assert_eq!(res.witness_evts.len(), 2);
     }
 }

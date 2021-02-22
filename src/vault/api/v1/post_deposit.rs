@@ -10,7 +10,7 @@ use crate::{
 use chainflip_common::{
     constants::ethereum,
     types::{
-        addresses::{EthereumAddress, OxenAddress},
+        addresses::{EthereumAddress, OxenAddress, OxenPaymentId},
         chain::{DepositQuote, UniqueId, Validate},
         coin::Coin,
         unique_id::GetUniqueId,
@@ -166,10 +166,14 @@ pub async fn deposit<T: TransactionProvider>(
     let oxen_base_address = OxenAddress::from_str(&config.oxen_wallet_address)
         .expect("Expected valid oxen wallet address");
 
-    let payment_id = base_input_address_id.clone().try_into().map_err(|_| {
-        warn!("Failed to convert base input address id to oxen payment id");
+    let payment_id: OxenPaymentId = params.base_input_address_id.try_into().map_err(|e| {
+        warn!(
+            "Failed to convert base input address id to oxen payment id: {:#?}",
+            e
+        );
         internal_server_error()
     })?;
+
     let base_input_address = oxen_base_address.with_payment_id(Some(payment_id));
     assert_eq!(base_input_address.network(), config.net_type);
 

@@ -192,7 +192,6 @@ pub struct StakerOwnership {
 
 impl MemoryState {
     fn process_deposit(&mut self, tx: Deposit) {
-        println!("Processing deposit");
         // Find quote and mark it as fulfilled
         if let Some(quote_info) = self
             .deposit_quotes
@@ -202,7 +201,6 @@ impl MemoryState {
             quote_info.fulfilled = true;
         }
 
-        // println!("The witness statuses for the deposit: {:#?}", &tx.witnesses.iter().map(|w| w.status));
         // Find witnesses and mark them as used:
         for wtx_id in &tx.witnesses {
             if let Some(witness_info) = self
@@ -210,10 +208,6 @@ impl MemoryState {
                 .iter_mut()
                 .find(|w| &w.inner.unique_id() == wtx_id)
             {
-                println!(
-                    "Witness status before marking processed: {:#?}",
-                    witness_info.status
-                );
                 witness_info.status = WitnessStatus::Processed;
             }
         }
@@ -239,7 +233,7 @@ impl MemoryState {
     }
 
     fn process_pool_change(&mut self, tx: PoolChange) {
-        debug!("Processing a pool change tx: {:?}", tx);
+        debug!("Processing a pool change evt: {:?}", tx);
         if let Err(err) = self.liquidity.update_liquidity(&tx) {
             error!("Failed to process pool change tx {:?}: {}", tx, err);
             panic!(err);

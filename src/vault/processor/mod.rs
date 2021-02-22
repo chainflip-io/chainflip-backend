@@ -60,7 +60,6 @@ where
     }
 
     async fn on_blockchain_progress(&mut self) {
-        println!("On blockchain progress");
         staking::process_deposit_quotes(&mut self.tx_provider, self.network);
 
         staking::process_withdraw_requests(&mut *self.tx_provider.write(), self.network);

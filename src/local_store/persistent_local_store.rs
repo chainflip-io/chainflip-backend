@@ -38,6 +38,15 @@ impl PersistentLocalStore {
 
         PersistentLocalStore { db }
     }
+
+    /// Only for tests
+    fn open_in_memory() -> Self {
+        let db = DB::open_in_memory().expect("Could not open in memory db");
+
+        create_tables_if_new(&db);
+
+        PersistentLocalStore { db }
+    }
 }
 
 impl ILocalStore for PersistentLocalStore {
@@ -222,9 +231,7 @@ mod test {
 
     #[test]
     fn get_events_last_seen_non_zero() {
-        let temp_file = test_utils::TempRandomFile::new();
-
-        let mut db = PersistentLocalStore::open(temp_file.path());
+        let mut db = PersistentLocalStore::open_in_memory();
 
         let evt: LocalEvent = TestData::witness(0, 100, Coin::ETH).into();
         let evt2: LocalEvent = LocalEvent::DepositQuote(TestData::deposit_quote(Coin::ETH));
@@ -239,9 +246,7 @@ mod test {
 
     #[test]
     fn get_total_events() {
-        let temp_file = test_utils::TempRandomFile::new();
-
-        let mut db = PersistentLocalStore::open(temp_file.path());
+        let mut db = PersistentLocalStore::open_in_memory();
 
         let evt: LocalEvent = TestData::witness(0, 100, Coin::ETH).into();
         let evt2: LocalEvent = LocalEvent::DepositQuote(TestData::deposit_quote(Coin::ETH));
@@ -256,9 +261,7 @@ mod test {
 
     #[test]
     fn set_witness_status() {
-        let temp_file = test_utils::TempRandomFile::new();
-
-        let mut db = PersistentLocalStore::open(temp_file.path());
+        let mut db = PersistentLocalStore::open_in_memory();
 
         let witness: LocalEvent = TestData::witness(0, 100, Coin::ETH).into();
 
@@ -286,9 +289,7 @@ mod test {
 
     #[test]
     fn attempt_to_add_duplicate_id_entry_is_skipped() {
-        let temp_file = test_utils::TempRandomFile::new();
-
-        let mut db = PersistentLocalStore::open(temp_file.path());
+        let mut db = PersistentLocalStore::open_in_memory();
 
         let witness: LocalEvent = TestData::witness(0, 100, Coin::ETH).into();
 
@@ -303,5 +304,23 @@ mod test {
 
         // event just gets skipped, so total remains the same
         assert_eq!(db.total_events(), 1);
+    }
+
+    #[test]
+    fn get_witnesses() {
+        let mut db = PersistentLocalStore::open_in_memory();
+
+        let witness: LocalEvent = TestData::witness(0, 100, Coin::ETH).into();
+
+        // add a witness to the database, without specifying a status
+        db.add_events(vec![witness.clone()])
+            .expect("Error adding an event to the database");
+
+        assert_eq!(db.total_events(), 1);
+
+        let witnesses = db.get_witnesses(0);
+
+        assert_eq!(witnesses.len(), 1);
+        assert_eq!(witnesses.first().unwrap().unique_id(), witness.unique_id());
     }
 }

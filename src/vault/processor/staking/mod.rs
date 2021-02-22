@@ -227,14 +227,14 @@ fn process_deposit_quote(
     }
 
     if oxen_amount.is_none() {
-        debug!(
+        trace!(
             "Oxen is not yet provisioned in quote: {}",
             quote.unique_id()
         );
     }
 
     if other_amount.is_none() {
-        debug!(
+        trace!(
             "{} is not yet provisioned in quote: {}",
             quote.pool,
             quote.unique_id()

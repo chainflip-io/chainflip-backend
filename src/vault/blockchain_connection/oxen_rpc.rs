@@ -9,8 +9,6 @@ use std::{
     str::FromStr,
 };
 
-// get_bulk_payments
-
 /// Error returned by the rpc wallet
 #[derive(Debug, Deserialize)]
 pub struct OxenResponseError {
@@ -62,7 +60,7 @@ async fn send_req_inner(
     let res: OxenResponse = serde_json::from_str(&text).map_err(|err| err.to_string())?;
 
     if let Some(err) = res.error {
-        error!("Oxen wallet rpc error");
+        error!("Oxen wallet rpc error: {}", err.message);
         return Err(err.message.to_owned());
     }
 
@@ -155,11 +153,9 @@ impl TryFrom<BulkPaymentResponseEntryRaw> for BulkPaymentResponseEntry {
     type Error = String;
 
     fn try_from(a: BulkPaymentResponseEntryRaw) -> Result<Self, Self::Error> {
+        let payment_id: OxenPaymentId = a.payment_id.try_into()?;
         let entry = BulkPaymentResponseEntry {
-            payment_id: hex::decode(&a.payment_id)
-                .map_err(|_| "Payment id must be in hex format")?
-                .try_into()
-                .map_err(|_| "Invalid payment id")?,
+            payment_id,
             tx_hash: a.tx_hash,
             amount: OxenAmount::from_atomic(a.amount as u128),
             block_height: a.block_height,
@@ -233,7 +229,7 @@ pub async fn get_bulk_payments(
 ) -> Result<BulkPaymentResponse, String> {
     let hex_payment_ids = payment_ids
         .iter()
-        .map(|id| hex::encode(id))
+        .map(|id| id.hex_encoded())
         .collect::<Vec<String>>();
     let hex_payment_ids = serde_json::to_value(hex_payment_ids).map_err(|err| err.to_string())?;
 
@@ -436,4 +432,55 @@ async fn transfer_inner(
     };
 
     Ok(res)
+}
+
+#[cfg(test)]
+mod test {
+    use std::convert::TryInto;
+
+    use super::{
+        BulkPaymentResponse, BulkPaymentResponseEntryRaw, BulkPaymentResponseRaw, SubaddressIndex,
+    };
+
+    #[test]
+    fn raw_long_payment_id_into_bulk_payment_result() {
+        let bulk_payment_result_raw: BulkPaymentResponseRaw = BulkPaymentResponseRaw {
+            payments: vec![BulkPaymentResponseEntryRaw {
+                payment_id: "5ea5bd6c91501a69000000000000000000000000000000000000000000000000".to_string(),
+                tx_hash: "10ed23de1eb2405072b35da9ea4ee763c5259ffd63a3ef350d9498adf557413c".to_string(),
+                amount: 42000000,
+                block_height: 490211,
+                unlock_time: 0,
+                subaddr_index: SubaddressIndex {
+                    major: 0,
+                    minor: 0,
+                },
+                address: "T6TZFhWSKHmQkm9WE2tUSe6Upt6Cp3Nv4aoFhYKQMw9E8ZDezQZMvVYcWoXF3u7XQeJ4NZjNo7wpgDvH8WkiBHmt27mK75273".to_string()
+            }],
+        };
+
+        let payment_result: Result<BulkPaymentResponse, _> = bulk_payment_result_raw.try_into();
+        assert!(payment_result.is_ok());
+    }
+
+    #[test]
+    fn raw_short_payment_id_into_bulk_payment_result() {
+        let bulk_payment_result_raw: BulkPaymentResponseRaw = BulkPaymentResponseRaw {
+            payments: vec![BulkPaymentResponseEntryRaw {
+                payment_id: "5ea5bd6c91501a69".to_string(),
+                tx_hash: "10ed23de1eb2405072b35da9ea4ee763c5259ffd63a3ef350d9498adf557413c".to_string(),
+                amount: 42000000,
+                block_height: 490211,
+                unlock_time: 0,
+                subaddr_index: SubaddressIndex {
+                    major: 0,
+                    minor: 0,
+                },
+                address: "T6TZFhWSKHmQkm9WE2tUSe6Upt6Cp3Nv4aoFhYKQMw9E8ZDezQZMvVYcWoXF3u7XQeJ4NZjNo7wpgDvH8WkiBHmt27mK75273".to_string()
+            }],
+        };
+
+        let payment_result: Result<BulkPaymentResponse, _> = bulk_payment_result_raw.try_into();
+        assert!(payment_result.is_ok());
+    }
 }

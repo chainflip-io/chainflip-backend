@@ -86,7 +86,7 @@ fn main() {
     );
 
     // Witnesses
-    let db_connection = rusqlite::Connection::open("blocks.db").expect("Could not open database");
+    let db_connection = rusqlite::Connection::open("store.db").expect("Could not open database");
     let kvs = Arc::new(Mutex::new(PersistentKVS::new(db_connection)));
 
     let oxen_witness = OxenWitness::new(oxen_block_receiver, provider.clone());
@@ -100,7 +100,7 @@ fn main() {
     witness_confirmer.start();
 
     // Processor
-    let db_connection = rusqlite::Connection::open("blocks.db").expect("Could not open database");
+    let db_connection = rusqlite::Connection::open("store.db").expect("Could not open database");
     let kvs = PersistentKVS::new(db_connection);
     let oxen = OxenSender::new(vault_config.oxen.rpc.clone(), vault_config.net_type);
 
