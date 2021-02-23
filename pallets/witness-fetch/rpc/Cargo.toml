@@ -4,7 +4,7 @@ name = "witness-fetch-rpc"
 version = "2.0.0"
 edition = "2018"
 authors = ['Chainflip Team']
-repository = 'https://github.com/chainflip-io/chainflip-test-state-chain'
+repository = 'https://github.com/chainflip-io/chainflip-backend'
 description = "A pallet for the cf-transactions RPC"
 license = "GPL-3.0-or-later"
 

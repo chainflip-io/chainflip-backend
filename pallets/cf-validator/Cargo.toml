@@ -4,7 +4,7 @@ edition = '2018'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
 name = 'pallet-cf-validator'
-repository = 'https://github.com/chainflip-io/chainflip-test-state-chain'
+repository = 'https://github.com/chainflip-io/chainflip-backend'
 version = '0.0.1'
 
 [package.metadata.docs.rs]
