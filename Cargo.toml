@@ -3,9 +3,9 @@ panic = 'unwind'
 
 [workspace]
 members = [
-  'node',
-  'pallets/*',
-  'runtime',
-  'chainflip-common',
-  'chainflip-engine',
+  'state-chain/node',
+  'state-chain/pallets/*',
+  'state-chain/runtime',
+  'common',
+  'engine',
 ]
