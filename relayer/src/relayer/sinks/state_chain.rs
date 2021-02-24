@@ -1,4 +1,5 @@
 use anyhow::Result;
+use async_trait::async_trait;
 use stake_manager::StakedCall;
 
 use substrate_subxt::{extrinsic, Client, ClientBuilder, NodeTemplateRuntime};

@@ -1,5 +1,10 @@
-use chainflip::relayer::{self, EthEventStreamBuilder, Result, StakeManager};
-use relayer::sinks::{Logger, StateChainCaller};
+mod relayer;
+
+use relayer::{
+    contracts::stake_manager::StakeManager,
+    sinks::{Logger, StateChainCaller},
+    EthEventStreamBuilder, Result,
+};
 
 #[async_std::main]
 async fn main() -> Result<()> {

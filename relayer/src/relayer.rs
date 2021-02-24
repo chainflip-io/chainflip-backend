@@ -3,6 +3,7 @@ mod eth_event_streamer;
 pub mod sinks;
 
 pub use anyhow::Result;
+use async_trait::async_trait;
 pub use contracts::stake_manager::StakeManager;
 pub use eth_event_streamer::{EthEventStreamBuilder, EthEventStreamer};
 

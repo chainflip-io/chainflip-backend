@@ -5,7 +5,6 @@ use crate::relayer::EventSource;
 use super::*;
 use serde::{Deserialize, Serialize};
 use web3::{
-    api::Eth,
     ethabi,
     types::{FilterBuilder, H160},
 };
@@ -48,14 +47,6 @@ impl StakeManager {
 
     fn get_event(&self, name: &str) -> Result<&ethabi::Event> {
         Ok(self.contract.event(name)?)
-    }
-
-    /// Convert to a web3-style callable contract with apis for calling contract functions.
-    pub fn to_callable_contract<T: web3::Transport>(
-        self,
-        client: Eth<T>,
-    ) -> web3::contract::Contract<T> {
-        web3::contract::Contract::<T>::new(client, self.deployed_address, self.contract)
     }
 }
 
