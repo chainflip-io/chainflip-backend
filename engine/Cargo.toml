@@ -12,7 +12,7 @@ base64 = "0.13"
 bitcoin = "0.26"
 bitcoincore-rpc = "0.13"
 bs58 = "0.4"
-chainflip-common = { path = "../chainflip-common" }
+chainflip-common = { path = "../common" }
 clap = "^2"
 config = "^0.10"
 crossbeam-channel = "^0.4"

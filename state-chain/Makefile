@@ -4,15 +4,11 @@ init:
 
 .PHONY: check
 check:
-	SKIP_WASM_BUILD=1 cargo check --release
+	SKIP_WASM_BUILD=1 cargo check -p state-chain-node --release
 
 .PHONY: check-chainflip-transactions
 check-chainflip-transactions:
 	SKIP_WASM_BUILD=1 cargo check --manifest-path pallets/chainflip-transactions/Cargo.toml
-
-.PHONY: update
-update:
-	git submodule foreach --recursive git pull origin master
 
 .PHONY: test
 test:
@@ -20,11 +16,11 @@ test:
 
 .PHONY: run
 run:
-	cargo run --release -- --dev --tmp
+	cargo run --release --bin state-chain-node -- --dev --tmp
 
 .PHONY: build
 build:
-	WASM_BUILD_TOOLCHAIN=nightly cargo build --release
+	WASM_BUILD_TOOLCHAIN=nightly cargo build -p state-chain-node --release
 
 .PHONY: run-alice
 run-alice:

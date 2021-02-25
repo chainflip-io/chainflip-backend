@@ -7,9 +7,8 @@ on:
     branches: [ master ]
     # Only trigger this if files in these directories change.
     paths:
-    - 'node/**'
-    - 'pallets/**'
-    - 'runtime/**'
+    - 'state-chain/**'
+    - 'common/**'
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -49,5 +48,5 @@ jobs:
 
     - name: Check Build
       run: |
-        make init
-        make check
+        make -C state-chain init
+        make -C state-chain check

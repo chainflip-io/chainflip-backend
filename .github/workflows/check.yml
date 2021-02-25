@@ -5,9 +5,7 @@ on:
   pull_request:
     branches: [ master ]
     paths-ignore:
-    - 'node/**'
-    - 'pallets/**'
-    - 'runtime/**'
+    - 'state-chain/**'
 
 env:
   CARGO_TERM_COLOR: always
