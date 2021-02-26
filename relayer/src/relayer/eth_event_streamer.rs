@@ -1,6 +1,5 @@
 use super::{EventSink, EventSource, Result};
 use futures::{future::join_all, stream, StreamExt};
-use tokio_compat_02::FutureExt;
 use web3::types::BlockNumber;
 
 pub struct EthEventStreamer<S: EventSource> {
@@ -34,7 +33,6 @@ impl<S: EventSource> EthEventStreamBuilder<S> {
             anyhow::bail!("Can't build a stream with no sink.")
         } else {
             let transport = ::web3::transports::WebSocket::new(self.url.as_str())
-                .compat()
                 .await?;
 
             Ok(EthEventStreamer {
@@ -70,7 +68,6 @@ impl<S: EventSource> EthEventStreamer<S> {
             .web3_client
             .eth_subscribe()
             .subscribe_logs(ws_filter)
-            .compat()
             .await?;
 
         let log_stream = stream::iter(past_logs)
