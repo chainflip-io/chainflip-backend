@@ -1,6 +1,9 @@
 use super::{EventSink, EventSource, Result};
+use std::time::Duration;
+use async_std::task;
 use futures::{future::join_all, stream, StreamExt};
 use web3::types::{BlockNumber, SyncState};
+
 
 pub struct EthEventStreamer<S: EventSource> {
     web3_client: ::web3::Web3<::web3::transports::WebSocket>,
@@ -58,6 +61,7 @@ impl<S: EventSource> EthEventStreamer<S> {
                     break;
                 },
             }
+            task::sleep(Duration::from_secs(4)).await;
         }
 
         // The `fromBlock` parameter doesn't seem to work reliably with subscription streams, so
