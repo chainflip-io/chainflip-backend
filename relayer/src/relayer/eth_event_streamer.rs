@@ -1,6 +1,6 @@
 use super::{EventSink, EventSource, Result};
 use futures::{future::join_all, stream, StreamExt};
-use web3::types::BlockNumber;
+use web3::types::{BlockNumber, SyncState};
 
 pub struct EthEventStreamer<S: EventSource> {
     web3_client: ::web3::Web3<::web3::transports::WebSocket>,
@@ -47,6 +47,19 @@ impl<S: EventSource> EthEventStreamBuilder<S> {
 impl<S: EventSource> EthEventStreamer<S> {
     /// Create a stream of Ethereum log events. If `from_block` is `None`, starts at the pending block.
     pub async fn run(&self, from_block: Option<u64>) -> Result<()> {
+        // Make sure the eth node is fully synced
+        // let mut sync_stream = self.web3_client.eth_subscribe().subscribe_syncing().await?;
+        loop {
+            match self.web3_client.eth().syncing().await? {
+                SyncState::Syncing(info) => log::info!("Waiting for eth node to sync: {:?}", info),
+                SyncState::NotSyncing => {
+                    log::info!("Eth node is synced, subscribing to log events.");
+                    // sync_stream.unsubscribe().await?;
+                    break;
+                },
+            }
+        }
+
         // The `fromBlock` parameter doesn't seem to work reliably with subscription streams, so
         // request past block via http and prepend them to the stream manually.
         let past_logs = if let Some(b) = from_block {
