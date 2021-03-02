@@ -10,8 +10,6 @@ pub mod local_store;
 pub mod logging;
 /// Quoter implementation
 pub mod quoter;
-/// Ethereum Event relayer
-pub mod relayer;
 /// Helper functions (including helper functions for tests)
 pub mod utils;
 /// Vault implementation
