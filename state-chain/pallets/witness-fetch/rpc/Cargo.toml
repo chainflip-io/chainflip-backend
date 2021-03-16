@@ -1,7 +1,7 @@
 
 [package]
 name = "witness-fetch-rpc"
-version = "2.0.0"
+version = "0.1.0"
 edition = "2018"
 authors = ['Chainflip Team']
 repository = 'https://github.com/chainflip-io/chainflip-backend'
@@ -9,7 +9,7 @@ description = "A pallet for the cf-transactions RPC"
 license = "GPL-3.0-or-later"
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.3.0" }
+codec = { package = "parity-scale-codec", version = "2.0" }
 jsonrpc-core = "15.0"
 jsonrpc-core-client = "15.0"
 jsonrpc-derive = "15.0"
@@ -17,20 +17,20 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 
 # Substrate packages
 
-sp-api = { version = '2.0.0', default-features = false }
-sp-blockchain = { version = '2.0.0', default-features = false}
-sp-rpc = { version = '2.0.0', default-features = false}
-sp-runtime = { version = '2.0.0', default-features = false}
-frame-support = { default-features = false, version = '2.0.0' }
-frame-system = { default-features = false, version = '2.0.0' }
+sp-api = { version = '3.0.0', default-features = false }
+sp-blockchain = { version = '3.0.0', default-features = false}
+sp-rpc = { version = '3.0.0', default-features = false}
+sp-runtime = { version = '3.0.0', default-features = false}
+frame-support = { default-features = false, version = '3.0.0' }
+frame-system = { default-features = false, version = '3.0.0' }
 
 # local packages
-witness-fetch-runtime-api = { version = "2.0.0", path = "../runtime-api", default-features = false }
+witness-fetch-runtime-api = { version = "0.1.0", path = "../runtime-api", default-features = false }
 chainflip-common = { path = "../../../../common" }
 
 [dev-dependencies]
-sp-core = { default-features = false, version = '2.0.0' }
-sp-io = { default-features = false, version = '2.0.0' }
+sp-core = { default-features = false, version = '3.0.0' }
+sp-io = { default-features = false, version = '3.0.0' }
 
 [features]
 default = ["std"]

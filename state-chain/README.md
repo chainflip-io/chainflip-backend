@@ -4,34 +4,27 @@ Chainflip state chain, based off the substrate node template.
 
 ## Getting Started
 
-This project contains some configuration files to help get started :hammer_and_wrench:
+Follow these steps to get started :hammer_and_wrench:
 
 ### Rust Setup
 
-Follow the [Rust setup instructions](./doc/rust-setup.md) before using the included Makefile to
-be found at the build the Node Template.
+First, complete the [basic Rust setup instructions](./doc/rust-setup.md).
 
 ### Makefile
 
-This project uses a [Makefile](Makefile) to document helpful commands and make it easier to execute
-them. Get started by running these [`make`](https://www.gnu.org/software/make/manual/make.html)
-targets:
+Use Rust's native `cargo` command to build and launch the template node:
 
-1. `make init` - Run the [init script](scripts/init.sh) to configure the Rust toolchain for
-   [WebAssembly compilation](https://substrate.dev/docs/en/knowledgebase/getting-started/#webassembly-compilation).
-1. `make run` - Build and launch this project in development mode.
-
-The init script and Makefile both specify the version of the
-[Rust nightly compiler](https://substrate.dev/docs/en/knowledgebase/getting-started/#rust-nightly-toolchain)
-that this project depends on.
+```sh
+cargo run --release -- --dev --tmp
+```
 
 ### Build
 
-The `make run` command will perform an initial build. Use the following command to build the node
+The `cargo run` command will perform an initial build. Use the following command to build the node
 without launching it:
 
 ```sh
-make build
+cargo build --release
 ```
 
 ### Embedded Docs
@@ -45,8 +38,9 @@ subcommands:
 
 ## Run
 
-The `make run` command will launch a temporary node and its state will be discarded after you
-terminate the process. After the project has been built, there are other ways to launch the node.
+The provided `cargo run` command will launch a temporary node and its state will be discarded after
+you terminate the process. After the project has been built, there are other ways to launch the
+node.
 
 ### Single-Node Development Chain
 
@@ -137,7 +131,7 @@ Review the [FRAME runtime implementation](./runtime/src/lib.rs) included in this
 the following:
 
 -   This file configures several pallets to include in the runtime. Each pallet configuration is
-    defined by a code block that begins with `impl $PALLET_NAME::Trait for Runtime`.
+    defined by a code block that begins with `impl $PALLET_NAME::Config for Runtime`.
 -   The pallets are composed into a single runtime by way of the
     [`construct_runtime!`](https://crates.parity.io/frame_support/macro.construct_runtime.html)
     macro, which is part of the core
@@ -161,8 +155,8 @@ A FRAME pallet is compromised of a number of blockchain primitives:
 -   Events: Substrate uses [events](https://substrate.dev/docs/en/knowledgebase/runtime/events) to
     notify users of important changes in the runtime.
 -   Errors: When a dispatchable fails, it returns an error.
--   Trait: The `Trait` configuration interface is used to define the types and parameters upon which
-    a FRAME pallet depends.
+-   Config: The `Config` configuration interface is used to define the types and parameters upon 
+    which a FRAME pallet depends.
 
 ### Run in Docker
 

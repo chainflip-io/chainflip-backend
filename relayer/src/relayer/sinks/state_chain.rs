@@ -19,6 +19,9 @@ impl StateChainCaller {
         Ok(Self {
             client: ClientBuilder::<NodeTemplateRuntime>::new()
                 .set_url(url)
+                // See https://github.com/paritytech/substrate-subxt/pull/227
+                // This allows us to avoid defining every single call in the runtime. 
+                .skip_type_sizes_check()
                 .build()
                 .await?,
         })
@@ -53,7 +56,7 @@ pub mod stake_manager {
     use substrate_subxt::{
         module,
         sp_core::U256,
-        system::{System, SystemEventsDecoder},
+        system::System,
         Call, NodeTemplateRuntime,
     };
     use web3::ethabi;
@@ -62,7 +65,7 @@ pub mod stake_manager {
     type ValidatorId = U256;
     type StakingAmount = u128;
 
-    /// The subset of the `pallet_cf_staking::Trait` that a client must implement.
+    /// The subset of the `pallet_cf_staking::Config` that a client must implement.
     #[module]
     pub trait StakeManager: System {}
 
