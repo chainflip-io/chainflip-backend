@@ -252,7 +252,6 @@ impl pallet_cf_transactions::Trait for Runtime {
     type Event = Event;
 }
 
-
 impl pallet_cf_staking::Trait for Runtime {
     type Event = Event;
 
