@@ -5,7 +5,7 @@ use frame_support::{
     debug, decl_error, decl_event, decl_module, decl_storage, dispatch::DispatchResult,
     unsigned::TransactionValidity, Parameter,
 };
-use sp_runtime::traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Zero};
+use sp_runtime::traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Zero, CheckedSub};
 use sp_runtime::transaction_validity::{InvalidTransaction, TransactionSource, ValidTransaction};
 use sp_std::{fmt::Debug, ops::Add, prelude::*};
 
@@ -30,7 +30,8 @@ pub trait Trait: frame_system::Trait {
         + Debug
         + Default
         + Zero
-        + Add;
+        + Add
+        + CheckedSub;
 }
 
 type AccountId<T> = <T as frame_system::Trait>::AccountId;
@@ -48,8 +49,8 @@ decl_event! {
     {
         /// A validator has staked some FLIP on the Ethereum chain. [validator_id, total_stake]
         Staked(AccountId,Amount),
-        /// A validator has claimed their FLIP on the Ethereum chain. [validator_id, remaining_stake]
-        Claimed(AccountId,Amount),
+        /// A validator has claimed their FLIP on the Ethereum chain. [validator_id, claimed_amount, remaining_stake]
+        Claimed(AccountId,Amount,Amount),
     }
 }
 
@@ -61,6 +62,8 @@ decl_error! {
         UnknownAccount,
         /// The claimant doesn't exist
         UnknownClaimant,
+        /// The claimant tried to claim more funds than were available
+        ExcessFundsClaimed,
     }
 }
 
@@ -99,29 +102,43 @@ decl_module! {
         /// Previously staked funds have been reclaimed.
         /// Note that calling this doesn't initiate any protocol changes - the `claim` has already been authorised
         /// by validator multisig.
+        /// If the claimant tries to claim more funds than are available, we set the claimant's balance to 
+        /// zero and raise an error. 
         #[weight = 10_000]
         pub fn claimed(_origin,
             account_id: AccountId<T>,
-            amount: T::StakedAmount) -> DispatchResult
+            claimed_amount: T::StakedAmount) -> DispatchResult
         {
             // TODO:
             // Checks:
             // - Are we currently mid-auction? (does it make a difference?)
-            // - Do we need to check if the claim exceeds available funds? Or can we assume this was checked before
-            //   authorisation by the multisig?
             debug::info!("Received `claimed` event!");
 
-            let remaining_stake = Stakes::<T>::try_mutate_exists(&account_id, |storage| {
-                match storage.as_mut() {
+            let (remaining_stake, overflow) = Stakes::<T>::try_mutate_exists::<_,_,Error::<T>,_>(&account_id, |storage| {
+                let mut overflow = false;
+
+                *storage = match storage {
                     Some(staked_amount) => {
-                        *staked_amount = *staked_amount - amount;
-                        Ok(*staked_amount)
+                        match staked_amount.checked_sub(&claimed_amount) {
+                            Some(balance) if balance == T::StakedAmount::zero() => Ok(None),
+                            Some(balance) => Ok(Some(balance)),
+                            None => {
+                                overflow = true;
+                                Ok(None)
+                            }
+                        }
                     },
-                    None => Err(<Error<T>>::UnknownClaimant)
-                }
+                    None => Err(Error::<T>::UnknownClaimant)
+                }?;
+
+                Ok((storage.unwrap_or(T::StakedAmount::zero()), overflow))
             })?;
 
-            Self::deposit_event(RawEvent::Claimed(account_id, remaining_stake));
+            if overflow {
+                Err(Error::<T>::ExcessFundsClaimed)?;
+            }
+
+            Self::deposit_event(RawEvent::Claimed(account_id, claimed_amount, remaining_stake));
             Ok(())
         }
     }
