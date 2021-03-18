@@ -46,5 +46,18 @@ fn claiming_unclaimable_is_err() {
     new_test_ext().execute_with(|| {
         // Claim the FLIP.
         assert_err!(StakeManager::claimed(Origin::none(), 123, 45u128), <Error<Test>>::UnknownClaimant);
+        assert_eq!(Stakes::<Test>::contains_key(123), false);
+    });
+}
+
+#[test]
+fn claiming_too_much_removes_claimant_and_is_err() {
+    new_test_ext().execute_with(|| {
+        // Stake some FLIP.
+        assert_ok!(StakeManager::staked(Origin::none(), 123, 45u128));
+        // Claim too much FLIP.
+        assert_err!(StakeManager::claimed(Origin::none(), 123, 46u128), <Error<Test>>::ExcessFundsClaimed);
+        // Ensure the Id has been removed.
+        assert_eq!(Stakes::<Test>::contains_key(123), false);
     });
 }

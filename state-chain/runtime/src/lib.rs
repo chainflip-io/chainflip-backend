@@ -248,7 +248,6 @@ impl pallet_cf_transactions::Config for Runtime {
     type Event = Event;
 }
 
-
 impl pallet_cf_staking::Config for Runtime {
     type Event = Event;
 
