@@ -1,0 +1,49 @@
+kind: pipeline
+type: docker
+name: default
+
+steps:
+  - name: test
+    image: ubuntu-20.04
+    commands:
+      - sudo apt install -y cmake pkg-config libssl-dev git build-essential clang libclang-dev curl
+      - |
+        curl https://sh.rustup.rs -sSf | sh -s -- -y
+        source ~/.cargo/env
+        rustup default stable
+      - |
+        make -C state-chain init
+        make -C state-chain check
+
+trigger:
+  event:
+    - push
+
+
+#    steps:
+#      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+#      - uses: actions/checkout@v2
+#        with:
+#          token: ${{ secrets.CI_PAT }} # CI_PAT is a secret that contains a personal access token for checking out private repos
+#
+#      - uses: actions/cache@v2
+#        with:
+#          path: |
+#            ~/.cargo/registry
+#            ~/.cargo/git
+#            target
+#          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+#
+#      - name: Set-Up
+#        run: sudo apt install -y cmake pkg-config libssl-dev git build-essential clang libclang-dev curl
+#
+#      - name: Install Rustup
+#        run: |
+#          curl https://sh.rustup.rs -sSf | sh -s -- -y
+#          source ~/.cargo/env
+#          rustup default stable
+#
+#      - name: Check Build
+#        run: |
+#          make -C state-chain init
+#          make -C state-chain check
