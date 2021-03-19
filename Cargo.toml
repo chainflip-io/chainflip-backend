@@ -8,4 +8,5 @@ members = [
   'state-chain/runtime',
   'common',
   'engine',
+  'relayer',
 ]

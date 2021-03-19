@@ -10,7 +10,6 @@ pub mod local_store;
 pub mod logging;
 /// Quoter implementation
 pub mod quoter;
-
 /// Helper functions (including helper functions for tests)
 pub mod utils;
 /// Vault implementation

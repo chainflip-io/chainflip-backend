@@ -29,6 +29,7 @@ pallet-cf-transactions = { path = "../pallets/cf-transactions", default-features
 witness-fetch-runtime-api = { path = "../pallets/witness-fetch/runtime-api", default-features = false }
 pallet-cf-validator = { path = "../pallets/cf-validator", default-features = false}
 witness-fetch = { path = "../pallets/witness-fetch", default-features = false }
+pallet-cf-staking = { path = "../pallets/cf-staking", default-features = false}
 
 # Substrate dependencies
 frame-benchmarking = {default-features = false, optional = true, version = '2.0.1'}
@@ -97,4 +98,5 @@ std = [
   'pallet-cf-transactions/std',
   'pallet-cf-validator/std',
   'witness-fetch/std',
+  'pallet-cf-staking/std',
 ]

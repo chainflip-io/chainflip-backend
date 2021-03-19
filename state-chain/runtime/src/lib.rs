@@ -252,6 +252,13 @@ impl pallet_cf_transactions::Trait for Runtime {
     type Event = Event;
 }
 
+impl pallet_cf_staking::Trait for Runtime {
+    type Event = Event;
+
+    // See comment in the pallet's trait definition - we may want to consider using the Balances pallet.
+    type StakedAmount = u128;
+}
+
 parameter_types! {
     pub OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * MaximumBlockWeight::get();
 }
@@ -322,6 +329,7 @@ construct_runtime!(
         Offences: pallet_offences::{Module, Call, Storage, Event},
         Transactions: pallet_cf_transactions::{Module, Call, Event<T>},
         WitnessFetcher: witness_fetch::{Module, Call, Event<T>, ValidateUnsigned},
+        StakeManager: pallet_cf_staking::{Module, Call, Event<T>, ValidateUnsigned},
     }
 );
 
