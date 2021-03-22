@@ -6,6 +6,7 @@ steps:
   - name: test
     image: ubuntu:20.04
     commands:
+      - apt update
       - apt install -y cmake pkg-config libssl-dev git build-essential clang libclang-dev curl
       - |
         curl https://sh.rustup.rs -sSf | sh -s -- -y
