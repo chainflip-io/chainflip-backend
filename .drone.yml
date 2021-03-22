@@ -15,9 +15,10 @@ steps:
         from_secret: docker_username
       password:
         from_secret: docker_password
-      repo: ghcr.io/chainflip-io/chainflip-backend
+      repo: ghcr.io/chainflip-io/chainflip-backend/state-chain
       registry: ghcr.io
       tags: latest
+      cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain
       build_args_from_env:
         - AWS_ACCESS_KEY_ID
         - AWS_SECRET_ACCESS_KEY

@@ -1,17 +1,18 @@
-ARG AWS_ACCESS_KEY_ID
-ARG AWS_SECRET_ACCESS_KEY
-
 FROM ghcr.io/chainflip-io/chainflip-infrastructure/build/state-chain-base:latest as rust-build
 
-# ENV SCCACHE_DIR=/.rust-build-cache
 WORKDIR /chainflip-node
 COPY . .
-# RUN --mount=type=cache,target=/.rust-build-cache \
-#     cargo build --release 
-RUN cargo build --release
 
+ARG AWS_ACCESS_KEY_ID
+ARG AWS_SECRET_ACCESS_KEY
+ENV SCCACHE_ERROR_LOG=/tmp/sccache_log.txt SCCACHE_LOG=debug AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}  AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+RUN export RUSTC_WRAPPER=sccache
+
+RUN cargo build
+
+RUN cat /tmp/sccache_log.txt
 FROM rust-build
 
 EXPOSE 9944
-
+RUN sccache -s
 CMD ./target/release/state-chain-node --dev --ws-external
