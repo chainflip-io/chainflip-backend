@@ -1,24 +1,19 @@
 kind: pipeline
 type: docker
-name: default
+name: chainflip-backend
 
 steps:
-  - name: test
-    image: ubuntu:20.04
-    environment:
-      DEBIAN_FRONTEND: noninteractive
-      SHELL: /bin/bash
-    commands:
-      - apt update
-      - apt install -y cmake pkg-config libssl-dev git build-essential clang libclang-dev curl
-      - |
-        curl https://sh.rustup.rs -sSf | sh -s -- -y
-        . ~/.cargo/env
-        rustup default stable
-        rustup update nightly
-        rustup update stable
-        rustup target add wasm32-unknown-unknown --toolchain nightly
-        SKIP_WASM_BUILD=1 cargo check --release
+  - name: build
+    image: plugins/docker
+    settings:
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+      repo: ghcr.io/chainflip-io/chainflip-backend
+      registry: ghcr.io
+      tags: latest
+
 trigger:
   event:
     - push
