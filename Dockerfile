@@ -10,11 +10,10 @@ RUN export RUSTC_WRAPPER=sccache
 
 ARG RUST_VERSION=nightly
 RUN rustup install $RUST_VERSION \
-    rustup default stable \
-    rustup update $RUST_VERSION \
-    rustup update stable \
+    && rustup update \
+    && rustup default $RUST_VERSION \
     && rustup target add wasm32-unknown-unknown --toolchain $RUST_VERSION
-    
+ 
 RUN cargo build --release
 
 RUN cat /tmp/sccache_log.txt
