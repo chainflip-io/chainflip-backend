@@ -5,6 +5,8 @@ name: default
 steps:
   - name: test
     image: ubuntu:20.04
+    environment:
+      DEBIAN_FRONTEND: noninteractive
     commands:
       - apt update
       - apt install -y cmake pkg-config libssl-dev git build-essential clang libclang-dev curl
