@@ -1,39 +1,9 @@
-#syntax=docker/dockerfile:1.2
+ARG AWS_ACCESS_KEY_ID
+ARG AWS_SECRET_ACCESS_KEY
 
-# FROM rust as rust-with-sccache
-
-# ARG SCCACHE_VER="0.2.15"
-
-# RUN curl -fsSLo /tmp/sccache.tgz \
-#     https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VER}/sccache-v0.2.15-x86_64-unknown-linux-musl.tar.gz \
-#     && tar -xzf /tmp/sccache.tgz -C /tmp --strip-components=1 \
-#     && mv /tmp/sccache /usr/bin && chmod +x /usr/bin/sccache \
-#     && rm -rf /tmp/*
-
-# ENV RUSTC_WRAPPER=sccache
-
-# FROM rust-with-sccache as rust-substrate-base
-FROM rust as rust-substrate-base
-
-ARG RUST_VERSION=nightly
-RUN rustup install $RUST_VERSION \
-    && rustup update \
-    && rustup default $RUST_VERSION \
-    && rustup target add wasm32-unknown-unknown --toolchain $RUST_VERSION
-
-# Substrate and rust compiler dependencies.
-RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-    && apt-get -y install --no-install-recommends \
-        cmake \
-        build-essential \
-        clang \
-        libclang-dev \
-        lld
-
-FROM rust-substrate-base as rust-build
+FROM ghcr.io/chainflip-io/chainflip-infrastructure/build/state-chain-base:latest as rust-build
 
 # ENV SCCACHE_DIR=/.rust-build-cache
-
 WORKDIR /chainflip-node
 COPY . .
 # RUN --mount=type=cache,target=/.rust-build-cache \

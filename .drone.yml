@@ -5,6 +5,11 @@ name: chainflip-backend
 steps:
   - name: build
     image: plugins/docker
+    environment:
+      AWS_ACCESS_KEY_ID:
+        from_secret: aws_access_key_id
+      AWS_SECRET_ACCESS_KEY:
+        from_secret: aws_secret_access_key
     settings:
       username:
         from_secret: docker_username
@@ -13,7 +18,9 @@ steps:
       repo: ghcr.io/chainflip-io/chainflip-backend
       registry: ghcr.io
       tags: latest
-
+      build_args_from_env:
+        - AWS_ACCESS_KEY_ID
+        - AWS_SECRET_ACCESS_KEY
 trigger:
   event:
     - push
