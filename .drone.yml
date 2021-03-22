@@ -13,7 +13,7 @@ steps:
       - apt install -y cmake pkg-config libssl-dev git build-essential clang libclang-dev curl
       - |
         curl https://sh.rustup.rs -sSf | sh -s -- -y
-        source ~/.cargo/env
+        /bin/bash source ~/.cargo/env
         rustup default stable
         rustup update nightly
         rustup update stable
