@@ -12,12 +12,12 @@ use sp_std::prelude::*;
 mod mock;
 mod tests;
 
-pub trait Trait: system::Trait + pallet_session::Trait {
-    type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+pub trait Config: system::Config + pallet_session::Config {
+    type Event: From<Event<Self>> + Into<<Self as system::Config>::Event>;
 }
 
 decl_storage! {
-    trait Store for Module<T: Trait> as Validator {
+    trait Store for Module<T: Config> as Validator {
         pub Validators get(fn validators) config(): Option<Vec<T::AccountId>>;
         Flag get(fn flag): bool;
     }
@@ -26,7 +26,7 @@ decl_storage! {
 decl_event!(
     pub enum Event<T>
     where
-        AccountId = <T as system::Trait>::AccountId,
+        AccountId = <T as system::Config>::AccountId,
     {
         // New validator added.
         ValidatorAdded(AccountId),
@@ -38,13 +38,13 @@ decl_event!(
 
 decl_error! {
     /// Errors for the module.
-    pub enum Error for Module<T: Trait> {
+    pub enum Error for Module<T: Config> {
         NoValidators,
     }
 }
 
 decl_module! {
-    pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+    pub struct Module<T: Config> for enum Call where origin: T::Origin {
         fn deposit_event() = default;
 
         /// New validator's session keys should be set in session module before calling this.
@@ -89,14 +89,14 @@ decl_module! {
 
 /// Indicates to the session module if the session should be rotated.
 /// We set this flag to true when we add/remove a validator.
-impl<T: Trait> pallet_session::ShouldEndSession<T::BlockNumber> for Module<T> {
+impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Module<T> {
     fn should_end_session(_now: T::BlockNumber) -> bool {
         Self::flag()
     }
 }
 
 /// Provides the new set of validators to the session module when session is being rotated.
-impl<T: Trait> pallet_session::SessionManager<T::AccountId> for Module<T> {
+impl<T: Config> pallet_session::SessionManager<T::AccountId> for Module<T> {
     fn new_session(_new_index: u32) -> Option<Vec<T::AccountId>> {
         // Flag is set to false so that the session doesn't keep rotating.
         Flag::put(false);
@@ -109,7 +109,7 @@ impl<T: Trait> pallet_session::SessionManager<T::AccountId> for Module<T> {
     fn start_session(_start_index: u32) {}
 }
 
-impl<T: Trait> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Module<T> {
+impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Module<T> {
     fn estimate_next_session_rotation(_now: T::BlockNumber) -> Option<T::BlockNumber> {
         None
     }
@@ -125,13 +125,13 @@ impl<T: Trait> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber
 /// In this module, for simplicity, we just return the same AccountId.
 pub struct ValidatorOf<T>(sp_std::marker::PhantomData<T>);
 
-impl<T: Trait> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
+impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
     fn convert(account: T::AccountId) -> Option<T::AccountId> {
         Some(account)
     }
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
     pub fn get_validators() -> Result<Vec<T::AccountId>, &'static str> {
         match Self::validators().ok_or(Error::<T>::NoValidators) {
             Ok(validators) => {

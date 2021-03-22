@@ -45,11 +45,13 @@ jobs:
         curl https://sh.rustup.rs -sSf | sh -s -- -y
         source ~/.cargo/env
         rustup default stable
+        rustup update nightly
+        rustup update stable
+        rustup target add wasm32-unknown-unknown --toolchain nightly
         
     - name: Build
       run: |
-        make -C state-chain init
-        make -C state-chain build
+        cargo build --release
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v1
