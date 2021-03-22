@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode, FullCodec};
+use codec::{FullCodec};
 use frame_support::{
     debug, decl_error, decl_event, decl_module, decl_storage, dispatch::DispatchResult,
     unsigned::TransactionValidity, Parameter,
@@ -16,9 +16,9 @@ mod mock;
 mod tests;
 
 /// Configure the pallet by specifying the parameters and types on which it depends.
-pub trait Trait: frame_system::Trait {
+pub trait Config: frame_system::Config {
     /// Standard Event type.
-    type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+    type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
     /// Numeric type based on the `Balance` type from `Currency` trait. Defined inline for now, but we
     /// might want to consider using the `Balances` pallet in future.
@@ -34,18 +34,18 @@ pub trait Trait: frame_system::Trait {
         + CheckedSub;
 }
 
-type AccountId<T> = <T as frame_system::Trait>::AccountId;
+type AccountId<T> = <T as frame_system::Config>::AccountId;
 
 decl_storage! {
-    trait Store for Module<T: Trait> as StakedFlip {
+    trait Store for Module<T: Config> as StakedFlip {
         pub Stakes get(fn get_stakes): map hasher(identity) AccountId<T> => T::StakedAmount;
     }
 }
 
 decl_event! {
     pub enum Event<T> where
-        AccountId = <T as frame_system::Trait>::AccountId,
-        Amount = <T as Trait>::StakedAmount,
+        AccountId = <T as frame_system::Config>::AccountId,
+        Amount = <T as Config>::StakedAmount,
     {
         /// A validator has staked some FLIP on the Ethereum chain. [validator_id, total_stake]
         Staked(AccountId,Amount),
@@ -55,7 +55,7 @@ decl_event! {
 }
 
 decl_error! {
-    pub enum Error for Module<T: Trait> {
+    pub enum Error for Module<T: Config> {
         /// Staker is already staked.
         AlreadyStaked,
         /// The account to be staked is not known.
@@ -68,7 +68,7 @@ decl_error! {
 }
 
 decl_module! {
-    pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+    pub struct Module<T: Config> for enum Call where origin: T::Origin {
         // Errors must be initialized if they are used by the pallet.
         type Error = Error<T>;
 
@@ -144,7 +144,7 @@ decl_module! {
     }
 }
 
-impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
+impl<T: Config> frame_support::unsigned::ValidateUnsigned for Module<T> {
     type Call = Call<T>;
 
     fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {

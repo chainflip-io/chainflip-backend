@@ -48,6 +48,17 @@ export OPENSSL_LIB_DIR="/usr/lib/openssl-1.0"
 export OPENSSL_INCLUDE_DIR="/usr/include/openssl-1.0"
 ```
 
+### Fedora/RHEL/CentOS
+
+Use a terminal to run the following commands:
+
+```bash
+# Update
+sudo dnf update
+# Install packages
+sudo dnf install cmake pkgconfig rocksdb rocksdb-devel llvm git libcurl libcurl-devel curl-devel clang
+```
+
 ## Rust Developer Environment
 
 This project uses [`rustup`](https://rustup.rs/) to help manage the Rust toolchain. First install
@@ -60,14 +71,11 @@ curl https://sh.rustup.rs -sSf | sh
 source ~/.cargo/env
 ```
 
-Finally, configure the Rust toolchain to default to the latest stable version:
+Finally, configure the Rust toolchain:
 
 ```bash
 rustup default stable
+rustup update nightly
+rustup update stable
+rustup target add wasm32-unknown-unknown --toolchain nightly
 ```
-
-## Build the Project
-
-Now that the standard Rust environment is configured, use the
-[included Makefile](../README.md#makefile) to install the project-specific toolchains and build the
-project.
