@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 curl https://sh.rustup.rs -sSf | sh -s -- -y
 source /usr/local/cargo/env
 rustup default stable

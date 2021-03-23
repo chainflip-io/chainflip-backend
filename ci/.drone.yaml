@@ -7,7 +7,6 @@ steps:
     image: ghcr.io/chainflip-io/chainflip-infrastructure/build/state-chain-base:latest
     environment:
       SCCACHE_DIR: /cache
-      SCCACHE_LOG: debug
       WASM_BUILD_TOOLCHAIN: nightly
     commands:
       - chmod +x ci/scripts/check.sh
