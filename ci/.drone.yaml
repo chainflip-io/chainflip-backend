@@ -10,6 +10,7 @@ steps:
       SCCACHE_LOG: debug
       WASM_BUILD_TOOLCHAIN: nightly
     commands:
+      - chmod +x ci/scripts/check.sh
       - ./ci/scripts/check.sh
     volumes:
       - name: cache
