@@ -10,3 +10,4 @@ rustup target add wasm32-unknown-unknown --toolchain nightly
 SKIP_WASM_BUILD=1 cargo check --release
 
 sccache -s
+
