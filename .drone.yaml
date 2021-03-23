@@ -10,6 +10,12 @@ steps:
       SCCACHE_LOG: debug
       WASM_BUILD_TOOLCHAIN: nightly
     commands:
+      - sccache -s
+      - |
+        rustup default stable
+        rustup update nightly
+        rustup update stable
+        rustup target add wasm32-unknown-unknown --toolchain nightly
       - cargo build -p state-chain-node --release
       - sccache -s
     volumes:
@@ -18,7 +24,7 @@ steps:
 trigger:
   event:
     - push
-    
+
 volumes:
   - name: cache
     host:
