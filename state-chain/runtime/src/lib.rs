@@ -2,44 +2,43 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
 
-// Make the WASM binary available.
-#[cfg(feature = "std")]
-include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
-
+// A few exports that help ease life for downstream crates.
+pub use frame_support::{
+    construct_runtime, debug, parameter_types,
+    StorageValue,
+    traits::{KeyOwnerProofSystem, Randomness},
+    weights::{
+        constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
+        IdentityFee, Weight,
+    },
+};
 use frame_system::offchain::SendTransactionTypes;
-use pallet_grandpa::fg_primitives;
 use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
+use pallet_grandpa::fg_primitives;
 use pallet_session::historical as session_historical;
+pub use pallet_timestamp::Call as TimestampCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
+use sp_runtime::{
+    ApplyExtrinsicResult, create_runtime_str, generic,
+    impl_opaque_keys,
+    MultiSignature, transaction_validity::{TransactionSource, TransactionValidity},
+};
+pub use sp_runtime::{Perbill, Permill};
+#[cfg(any(feature = "std", test))]
+pub use sp_runtime::BuildStorage;
 use sp_runtime::traits::{
     AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify,
-};
-use sp_runtime::{
-    create_runtime_str, generic, impl_opaque_keys,
-    transaction_validity::{TransactionSource, TransactionValidity},
-    ApplyExtrinsicResult, MultiSignature,
 };
 use sp_std::prelude::*;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-// A few exports that help ease life for downstream crates.
-pub use frame_support::{
-    construct_runtime, debug, parameter_types,
-    traits::{KeyOwnerProofSystem, Randomness},
-    weights::{
-        constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
-        IdentityFee, Weight,
-    },
-    StorageValue,
-};
-pub use pallet_timestamp::Call as TimestampCall;
-#[cfg(any(feature = "std", test))]
-pub use sp_runtime::BuildStorage;
-pub use sp_runtime::{Perbill, Permill};
+// Make the WASM binary available.
+#[cfg(feature = "std")]
+include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -69,9 +68,9 @@ pub type DigestItem = generic::DigestItem<Hash>;
 /// of data like extrinsics, allowing for them to continue syncing the network through upgrades
 /// to even the core data structures.
 pub mod opaque {
-    use super::*;
-
     pub use sp_runtime::OpaqueExtrinsic as UncheckedExtrinsic;
+
+    use super::*;
 
     /// Opaque block header type.
     pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
@@ -127,8 +126,8 @@ impl pallet_cf_validator::Config for Runtime {
 }
 
 impl<C> SendTransactionTypes<C> for Runtime
-where
-    Call: From<C>,
+    where
+        Call: From<C>,
 {
     type Extrinsic = UncheckedExtrinsic;
     type OverarchingCall = Call;
@@ -170,10 +169,10 @@ parameter_types! {
 impl frame_system::Config for Runtime {
     /// The basic call filter to use in dispatchable.
     type BaseCallFilter = ();
-	/// Block & extrinsics weights: base values and limits.
-	type BlockWeights = BlockWeights;
-	/// The maximum length of a block (in bytes).
-	type BlockLength = BlockLength;
+    /// Block & extrinsics weights: base values and limits.
+    type BlockWeights = BlockWeights;
+    /// The maximum length of a block (in bytes).
+    type BlockLength = BlockLength;
     /// The identifier used to distinguish between accounts.
     type AccountId = AccountId;
     /// The aggregated dispatch type that is available for extrinsics.
@@ -212,8 +211,8 @@ impl frame_system::Config for Runtime {
     type AccountData = ();
     /// Weight information for the extrinsics of this pallet.
     type SystemWeightInfo = ();
-	/// This is used as an identifier of the chain. 42 is the generic substrate prefix.
-	type SS58Prefix = SS58Prefix;
+    /// This is used as an identifier of the chain. 42 is the generic substrate prefix.
+    type SS58Prefix = SS58Prefix;
 }
 
 impl frame_system::offchain::SigningTypes for Runtime {
@@ -232,7 +231,7 @@ impl pallet_grandpa::Config for Runtime {
     type KeyOwnerProofSystem = Historical;
 
     type KeyOwnerProof =
-        <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
+    <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
 
     type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
         KeyTypeId,
@@ -246,13 +245,6 @@ impl pallet_grandpa::Config for Runtime {
 
 impl pallet_cf_transactions::Config for Runtime {
     type Event = Event;
-}
-
-impl pallet_cf_staking::Config for Runtime {
-    type Event = Event;
-
-    // See comment in the pallet's trait definition - we may want to consider using the Balances pallet.
-    type StakedAmount = u128;
 }
 
 impl pallet_cf_staking::Config for Runtime {
