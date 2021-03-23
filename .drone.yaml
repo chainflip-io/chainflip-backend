@@ -18,6 +18,7 @@ steps:
 trigger:
   event:
     - push
+    
 volumes:
   - name: cache
     host:
