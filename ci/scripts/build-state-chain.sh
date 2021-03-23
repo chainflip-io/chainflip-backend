@@ -9,7 +9,7 @@ rustup update nightly
 rustup update stable
 rustup target add wasm32-unknown-unknown --toolchain nightly
 
-SKIP_WASM_BUILD=1 cargo check --release
+SKIP_WASM_BUILD=1 cargo build --release
 
 sccache -s
 
