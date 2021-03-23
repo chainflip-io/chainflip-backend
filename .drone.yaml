@@ -12,11 +12,14 @@ steps:
     commands:
       - sccache -s
       - |
+        curl https://sh.rustup.rs -sSf | sh -s -- -y
+        source ~/.cargo/env
         rustup default stable
         rustup update nightly
         rustup update stable
         rustup target add wasm32-unknown-unknown --toolchain nightly
-      - cargo build -p state-chain-node --release
+
+      - SKIP_WASM_BUILD=1 cargo check --release
       - sccache -s
     volumes:
       - name: cache
