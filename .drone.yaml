@@ -1,6 +1,6 @@
 kind: pipeline
-name: default
 type: docker
+name: chainflip-backend
 
 steps:
   - name: build-test-rust
@@ -15,12 +15,13 @@ steps:
     volumes:
       - name: cache
         path: /cache
+trigger:
+  event:
+    - push
+
 volumes:
   - name: cache
     host:
       path: /mnt/chainflip-build-runner/sccache
 node:
   builder: "true"
-trigger:
-  event:
-    - push
