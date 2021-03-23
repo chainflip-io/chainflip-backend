@@ -22,3 +22,7 @@ volumes:
       path: /mnt/chainflip-build-runner/sccache
 node:
   builder: "true"
+
+trigger:
+  event:
+    - push
