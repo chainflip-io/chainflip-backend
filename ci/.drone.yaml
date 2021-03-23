@@ -3,14 +3,25 @@ type: docker
 name: chainflip-backend
 
 steps:
-  - name: build-test-rust
+  - name: check-state-chain
     image: ghcr.io/chainflip-io/chainflip-infrastructure/build/state-chain-base:latest
     environment:
       SCCACHE_DIR: /cache
       WASM_BUILD_TOOLCHAIN: nightly
     commands:
-      - chmod +x ci/scripts/check.sh
-      - ./ci/scripts/check.sh
+      - chmod +x ci/scripts/check-state-chain.sh
+      - ./ci/scripts/check-state-chain.sh
+    volumes:
+      - name: cache
+        path: /cache
+  - name: build-state-chain
+    image: ghcr.io/chainflip-io/chainflip-infrastructure/build/state-chain-base:latest
+    environment:
+      SCCACHE_DIR: /cache
+      WASM_BUILD_TOOLCHAIN: nightly
+    commands:
+      - chmod +x ci/scripts/build-state-chain.sh
+      - ./ci/scripts/build-state-chain.sh
     volumes:
       - name: cache
         path: /cache
