@@ -15,14 +15,12 @@ steps:
     volumes:
       - name: cache
         path: /cache
-
 volumes:
   - name: cache
     host:
       path: /mnt/chainflip-build-runner/sccache
 node:
   builder: "true"
-
 trigger:
   event:
     - push
