@@ -1,9 +1,7 @@
 use crate::pallet as pallet_cf_core;
-use sp_core::H256;
+use sp_core::{H256, sr25519::Public};
 use frame_support::parameter_types;
-use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup}, testing::Header,
-};
+use sp_runtime::{Permill, testing::Header, traits::{BlakeTwo256, IdentityLookup}};
 use frame_system as system;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -53,6 +51,37 @@ impl system::Config for Test {
 
 impl pallet_cf_core::Config for Test {
 	type Event = Event;
+
+	type Amount = ();
+
+	type AutoSwap = ();
+
+	// TODO: Implement PerThing for actual Bips instead of using Permill.
+	type Bips = Permill;
+
+	type BlockHash = ();
+
+	type BlockNumber = ();
+
+	type Chain = ();
+
+	type Crypto = Public;
+
+	type LiquidityPubKey = Public;
+
+	type OutputAddress = ();
+
+	type OutputId = ();
+
+	type QuoteId = ();
+
+	type SlashData = ();
+
+	type SlashReason = ();
+
+	type Ticker = ();
+
+	type TxHash = ();
 }
 
 // Build genesis storage according to the mock runtime.

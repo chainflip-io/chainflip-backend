@@ -1,17 +1,17 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-
 #[cfg(test)]
 mod mock;
 
 #[cfg(test)]
 mod tests;
 
-pub use frame_system::pallet::*;
-
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::pallet_prelude::*;
+    use codec::Codec;
+    use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+
+	use sp_runtime::{PerThing, Percent, app_crypto::RuntimePublic};
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -21,8 +21,27 @@ pub mod pallet {
 	pub trait Config: frame_system::Config
 	{
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		// Note: `Member` is defined in frame_support::pallet_prelude and is a helper trait for
+		// arguments to callables defined under the `pallet:call` macro.
+		type Amount: Member + Codec;
+		type AutoSwap: Member + Codec;
+		type Bips: Member + Codec + PerThing;
+		type BlockHash: Member + Codec;
+		type BlockNumber: Member + Codec;
+		type Chain: Member + Codec;
+		type Crypto: Member + RuntimePublic;
+		type LiquidityPubKey: Member + Codec + RuntimePublic;
+		type OutputAddress: Member + Codec;
+		type OutputId: Member + Codec;
+		type QuoteId: Member + Codec;
+		type SlashData: Member + Codec;
+		type SlashReason: Member + Codec;
+		type Ticker: Member + Codec;
+		type TxHash: Member + Codec;
 	}
 
+	// Short-hand type definitions.
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
 
 	#[pallet::hooks]
@@ -38,43 +57,156 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T>
-			// TODO_MAYBE_WHERE_CLAUSE
 	{
-		/// An example dispatchable that takes a singles value as a parameter, writes the value to
-		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-		pub fn do_something(origin: OriginFor<T>, something: u32) -> DispatchResultWithPostInfo {
+		/// Record a quote for a swap on the state chain.
+		#[pallet::weight(10_000 )]
+		pub fn quote_swap(
+			origin: OriginFor<T>, 
+			incoming_asset: T::Ticker,
+			outgoing_asset: T::Ticker,
+			outgoing_address: T::OutputAddress,
+			max_slippage_bips: Option<T::Bips>,
+			refund_address: Option<T::OutputAddress>,
+			auth_public_key: Option<T::LiquidityPubKey>
+		) -> DispatchResultWithPostInfo {
 			// Check that the extrinsic was signed and get the signer.
 			// This function will return an error if the extrinsic is not signed.
 			// https://substrate.dev/docs/en/knowledgebase/runtime/origin
-			let who = ensure_signed(origin)?;
-
-			// Update storage.
-			Something::<T>::put(something);
-
-			// Emit an event.
-			Self::deposit_event(Event::SomethingStored(something, who));
-			// Return a successful DispatchResult
-			Ok(().into())
+			let _who = ensure_signed(origin)?;
+			
+			todo!()
 		}
 
-		/// An example dispatchable that may throw a custom error.
-		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1))]
-		pub fn cause_error(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		/// Record a quote for liquidity provisioning on the state chain.
+		#[pallet::weight(10_000)]
+		pub fn quote_provision(
+			origin: OriginFor<T>,
+			base_asset: T::Ticker,
+			pair_asset: T::Ticker,
+			base_asset_refund_address: T::OutputAddress,
+			pair_asset_refund_address: T::OutputAddress,
+			auto_swap: T::AutoSwap,
+			auth_public_key: T::LiquidityPubKey,
+			max_slippage_bips: Option<T::Bips>
+		) -> DispatchResultWithPostInfo {
 			let _who = ensure_signed(origin)?;
 
-			// Read a value from storage.
-			match Something::<T>::get() {
-				// Return an error if the value has not been set.
-				None => Err(Error::<T>::NoneValue)?,
-				Some(old) => {
-					// Increment the value read from storage; will error in the event of overflow.
-					let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
-					// Update the value in storage with the incremented result.
-					Something::<T>::put(new);
-					Ok(())
-				},
-			}.map(Into::into)
+			todo!()
+		}
+
+		/// Records a witness on the state chain pursuant to a particular quote.
+		#[pallet::weight(10_000)]
+		pub fn witness(
+			origin: OriginFor<T>,
+			asset: T::Ticker,
+			atomic_amount: T::Amount,
+			block_number: <T as Config>::BlockNumber,
+			block_hash: T::BlockHash,
+			transaction_hash: T::TxHash,
+			quote_id: Option<T::QuoteId>
+		) -> DispatchResultWithPostInfo {
+			let _who = ensure_signed(origin)?;
+
+			todo!()
+		}
+
+		/// Claim a refund if your swap could not be processed.
+		#[pallet::weight(10_000)]
+		pub fn claim_swap_refund(
+			origin: OriginFor<T>,
+			quote_id: T::QuoteId,
+			refund_asset_address: T::OutputAddress,
+			signature: <T::LiquidityPubKey as RuntimePublic>::Signature
+		) -> DispatchResultWithPostInfo {
+			let _who = ensure_signed(origin)?;
+
+			todo!()
+		}
+
+		/// Claim the liquidity that you have deposited with an optional implicit
+		/// swap if base_asset_withdraw_percent and pair_asset_withdraw_percent are not the
+		/// same value. LPs can also withdraw to neither the base or pair assets by
+		/// swapping to the desired asset.
+		#[pallet::weight(10_000)]
+		pub fn claim_provision(
+			origin: OriginFor<T>,
+			auth_public_key: T::LiquidityPubKey,
+			base_asset: T::Ticker,
+			pair_asset: T::Ticker,
+			base_asset_withdraw_percent: Percent,
+			pair_asset_withdraw_percent: Percent,
+			nonce: u32,
+			signature: <T::LiquidityPubKey as RuntimePublic>::Signature,
+			output_asset: Option<T::Ticker>,
+			base_asset_address: Option<T::OutputAddress>,
+			pair_asset_address: Option<T::OutputAddress>,
+			output_asset_address: Option<T::OutputAddress>,
+			max_slippage_bips: Option<T::Bips>
+		) -> DispatchResultWithPostInfo {
+			let _who = ensure_signed(origin)?;
+
+			todo!()
+		}
+
+		/// Saves an output "batch" on the state chain and nominates a sender to kick off the signing processing.
+		/// It should be the final extrinsic processed in any block, and there should only be one instance per block.
+		/// this extrinsic should result in an unsigned transaction being recorded on the state chain.
+		#[pallet::weight(10_000)]
+		pub fn batch_outputs(
+			origin: OriginFor<T>,
+			output_ids: Vec<T::OutputId>,
+			base_chain: T::Chain,
+			gas_fee: u32
+		) -> DispatchResultWithPostInfo {
+			let _who = ensure_signed(origin)?;
+
+			todo!()
+		}
+
+		/// Get FLIP that is held for me by the system, signed by validator key.
+		#[pallet::weight(10_000)]
+		pub fn claim_flip(
+			origin: OriginFor<T>,
+			percentage: Percent
+		) -> DispatchResultWithPostInfo {
+			let _who = ensure_signed(origin)?;
+
+			todo!()
+		}
+
+		/// Record a liveness proof for a validator
+		#[pallet::weight(10_000)]
+		pub fn i_am_online(
+			origin: OriginFor<T>,
+			latest_block_hash: T::BlockHash,
+			signatures: Vec<(T::Chain, <T::Crypto as RuntimePublic>::Signature)>
+		) -> DispatchResultWithPostInfo {
+			let _who = ensure_signed(origin)?;
+
+			todo!()
+		}
+
+		/// Called by nodes who want to unbond their stake at the end of this vault's life.
+		#[pallet::weight(10_000)]
+		pub fn unstake(
+			origin: OriginFor<T>,
+		) -> DispatchResultWithPostInfo {
+			let _who = ensure_signed(origin)?;
+
+			todo!()
+		}
+
+		// Called by nodes who want to unbond their stake at the end of this vault's life.
+		#[pallet::weight(10_000)]
+		pub fn slash(
+			origin: OriginFor<T>,
+			validator_id: T::AccountId,
+			reason: T::SlashReason,
+			data: Option<T::SlashData>
+		) -> DispatchResultWithPostInfo {
+			let _who = ensure_signed(origin)?;
+
+			todo!()
 		}
 	}
 
