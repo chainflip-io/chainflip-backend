@@ -1,9 +1,7 @@
-use crate as pallet_cf_staking;
-use sp_core::H256;
+use crate::pallet as pallet_cf_core;
+use sp_core::{H256, sr25519::Public};
 use frame_support::parameter_types;
-use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup}, testing::Header, 
-};
+use sp_runtime::{Permill, testing::Header, traits::{BlakeTwo256, IdentityLookup}};
 use frame_system as system;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -17,7 +15,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		StakeManager: pallet_cf_staking::{Module, Call, Storage, Event<T>},
+		ChainflipCore: pallet_cf_core::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -51,10 +49,39 @@ impl system::Config for Test {
 	type SS58Prefix = SS58Prefix;
 }
 
-impl pallet_cf_staking::Config for Test {
+impl pallet_cf_core::Config for Test {
 	type Event = Event;
 
-	type StakedAmount = u128;
+	type Amount = ();
+
+	type AutoSwap = ();
+
+	// TODO: Implement PerThing for actual Bips instead of using Permill.
+	type Bips = Permill;
+
+	type BlockHash = ();
+
+	type BlockNumber = ();
+
+	type Chain = ();
+
+	type Crypto = Public;
+
+	type LiquidityPubKey = Public;
+
+	type OutputAddress = ();
+
+	type OutputId = ();
+
+	type QuoteId = ();
+
+	type SlashData = ();
+
+	type SlashReason = ();
+
+	type Ticker = ();
+
+	type TxHash = ();
 }
 
 // Build genesis storage according to the mock runtime.

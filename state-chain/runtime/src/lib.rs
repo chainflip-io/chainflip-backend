@@ -255,13 +255,6 @@ impl pallet_cf_staking::Config for Runtime {
     type StakedAmount = u128;
 }
 
-impl pallet_cf_staking::Config for Runtime {
-    type Event = Event;
-
-    // See comment in the pallet's trait definition - we may want to consider using the Balances pallet.
-    type StakedAmount = u128;
-}
-
 parameter_types! {
     pub OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * BlockWeights::get().max_block;
 }

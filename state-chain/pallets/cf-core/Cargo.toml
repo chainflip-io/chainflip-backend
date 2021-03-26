@@ -1,11 +1,11 @@
 [package]
-authors = ['Chainflip Team <https://github.com/chainflip-io>']
-description = 'FRAME pallet for managing stakers of FLIP.'
+authors = ['Chainflip <https://chainflip.io>']
+description = 'Chainflip core functionality.'
 edition = '2018'
 homepage = 'https://chainflip.io'
-license = '<TODO>'
-name = 'pallet-cf-staking'
-repository = 'https://github.com/chainflip-io/chainflip-backend'
+# license = TBC
+name = 'pallet-cf-core'
+repository = 'https://github.com/chainflip-io/chainflip-backend/'
 version = '0.1.0'
 
 [package.metadata.docs.rs]
@@ -19,13 +19,10 @@ package = 'parity-scale-codec'
 version = '2.0'
 
 [dependencies]
-# Non-substrate external deps
-
-# Substrate deps
 frame-support = { default-features = false, version = '3.0.0' }
 frame-system = { default-features = false, version = '3.0.0' }
-sp-runtime = { default-features = false, version = '3.0.0' }
 sp-core = { default-features = false, version = '3.0.0' }
+sp-runtime = { default-features = false, version = '3.0.0' }
 sp-std = { default-features = false, version = '3.0.0' }
 
 [dev-dependencies]
@@ -38,7 +35,7 @@ std = [
     'codec/std',
     'frame-support/std',
     'frame-system/std',
-    'sp-runtime/std',
     'sp-core/std',
+    'sp-runtime/std',
     'sp-std/std',
 ]
