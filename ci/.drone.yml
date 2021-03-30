@@ -30,9 +30,6 @@ steps:
     volumes:
       - name: cache
         path: /cache
-trigger:
-  event:
-    - push
 volumes:
   - name: cache
     host:
