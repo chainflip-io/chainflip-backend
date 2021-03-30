@@ -5,9 +5,6 @@ name: chainflip-backend
 steps:
   - name: check-state-chain
     image: ghcr.io/chainflip-io/chainflip-infrastructure/build/state-chain-base:latest
-    when:
-      trigger:
-        - push
     environment:
       SCCACHE_BUCKET: chainflip-sccache
       WASM_BUILD_TOOLCHAIN: nightly
@@ -24,9 +21,6 @@ steps:
         path: /cache
   - name: build-state-chain
     image: ghcr.io/chainflip-io/chainflip-infrastructure/build/state-chain-base:latest
-    when:
-      branch:
-        - main
     environment:
       SCCACHE_DIR: /cache
       WASM_BUILD_TOOLCHAIN: nightly
@@ -36,7 +30,9 @@ steps:
     volumes:
       - name: cache
         path: /cache
-
+trigger:
+  event:
+    - push
 volumes:
   - name: cache
     host:
