@@ -48,3 +48,6 @@ volumes:
       path: /mnt/chainflip-build-runner/sccache
 node:
   builder: "true"
+
+image_pull_secrets:
+  - dockerconfigjson
