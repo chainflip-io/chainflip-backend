@@ -20,7 +20,7 @@ steps:
       SCCACHE_DIR: /cache
       WASM_BUILD_TOOLCHAIN: nightly
     commands:
-      - rustup install nightly
+      - . /usr/local/cargo/env
       - cargo build --release
       - sccache -s
     volumes:
