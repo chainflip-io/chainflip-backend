@@ -5,35 +5,27 @@ name: chainflip-backend
 steps:
   - name: check-state-chain
     image: ghcr.io/chainflip-io/chainflip-infrastructure/build/state-chain-base:latest
-    when:
-      event:
-        include:
-          - push
-          - pull_request
     environment:
       SCCACHE_DIR: /cache
       WASM_BUILD_TOOLCHAIN: nightly
     commands:
+      - SKIP_WASM_BUILD=1 cargo check --release
       - sccache -s
-      - chmod +x ci/scripts/check-state-chain.sh
-      - ./ci/scripts/check-state-chain.sh
     volumes:
       - name: cache
         path: /cache
   - name: build-state-chain
     image: ghcr.io/chainflip-io/chainflip-infrastructure/build/state-chain-base:latest
-    when:
-      branch:
-        - main
     environment:
       SCCACHE_DIR: /cache
       WASM_BUILD_TOOLCHAIN: nightly
     commands:
-      - chmod +x ci/scripts/build-state-chain.sh
-      - ./ci/scripts/build-state-chain.sh
+      - cargo build --release
+      - sccache -s
     volumes:
       - name: cache
         path: /cache
+
 trigger:
   event:
     - pull_request
