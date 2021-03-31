@@ -29,13 +29,13 @@ steps:
 
 trigger:
   event:
-    - pull_request
+    - push
 
 volumes:
   - name: cache
     host:
       path: /mnt/chainflip-build-runner/sccache
-      
+
 node:
   builder: "true"
 
