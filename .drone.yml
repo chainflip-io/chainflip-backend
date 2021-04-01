@@ -35,19 +35,20 @@ steps:
       registry: ghcr.io
       tags: latest
       cache_from: ghcr.io/chainflip-io/chainflip-infrastructure/state-chain-node:latest
-  - name: publish-state-chain-node
-    image: plugins/github-release
-    settings:
-      api_key:
-        from_secret: github_token
-      files: target/release/state-chain-node
-      title: test
-      note: CHANGELOG.md
-      draft: true
+# TODO: Not required until things get serious
+#  - name: publish-state-chain-node
+#    image: plugins/github-release
+#    settings:
+#      api_key:
+#        from_secret: github_token
+#      files: target/release/state-chain-node
+#      title: test
+#      note: CHANGELOG.md
+#      draft: true
 
 trigger:
   event:
-    - tag
+    - pull_request
 
 volumes:
   - name: cache
