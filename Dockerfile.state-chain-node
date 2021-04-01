@@ -1,5 +1,5 @@
 #syntax=docker/dockerfile:1.2
-FROM scratch
+FROM rust:alpine
 
 COPY ./target/release/state-chain-node /usr/local/bin
 
