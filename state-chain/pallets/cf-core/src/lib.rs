@@ -30,7 +30,8 @@ pub mod pallet {
 		type BlockHash: Member + Codec;
 		type BlockNumber: Member + Codec;
 		type Chain: Member + Codec;
-		type Crypto: Member + RuntimePublic;
+		type Crypto: Member + Codec + RuntimePublic;
+		type EthereumPubKey: Member + Codec + RuntimePublic;
 		type LiquidityPubKey: Member + Codec + RuntimePublic;
 		type OutputAddress: Member + Codec;
 		type OutputId: Member + Codec;
@@ -186,6 +187,19 @@ pub mod pallet {
 			todo!()
 		}
 
+		/// Called as a witness for a new stake submitted through the StakeManager contract.
+		#[pallet::weight(10_000)]
+		pub fn stake(
+			origin: OriginFor<T>,
+			validator_id: T::AccountId,
+			staked_amount: T::Amount,
+			eth_pubkey: T::EthereumPubKey,
+		) -> DispatchResultWithPostInfo {
+			let _who = ensure_signed(origin)?;
+
+			todo!()
+		}
+
 		/// Called by nodes who want to unbond their stake at the end of this vault's life.
 		#[pallet::weight(10_000)]
 		pub fn unstake(
@@ -196,13 +210,35 @@ pub mod pallet {
 			todo!()
 		}
 
-		// Called by nodes who want to unbond their stake at the end of this vault's life.
+		/// Slash someone. 
 		#[pallet::weight(10_000)]
 		pub fn slash(
 			origin: OriginFor<T>,
 			validator_id: T::AccountId,
 			reason: T::SlashReason,
 			data: Option<T::SlashData>
+		) -> DispatchResultWithPostInfo {
+			let _who = ensure_signed(origin)?;
+
+			todo!()
+		}
+
+		/// Start the creation of a new vault. 
+		#[pallet::weight(10_000)]
+		pub fn create_vault(
+			origin: OriginFor<T>,
+			chain: T::Chain
+		) -> DispatchResultWithPostInfo {
+			let _who = ensure_signed(origin)?;
+
+			todo!()
+		}
+
+		/// Start the rotation of funds to a new vault.
+		#[pallet::weight(10_000)]
+		pub fn rotate_vault(
+			origin: OriginFor<T>,
+			chain: T::Chain
 		) -> DispatchResultWithPostInfo {
 			let _who = ensure_signed(origin)?;
 
