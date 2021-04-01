@@ -41,13 +41,13 @@ steps:
       api_key:
         from_secret: github_token
       files: target/release/state-chain-node
-      title: 0.0.1
+      title: test
       note: CHANGELOG.md
       draft: true
 
 trigger:
   event:
-    - pull_request
+    - tag
 
 volumes:
   - name: cache
