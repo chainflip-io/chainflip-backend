@@ -13,7 +13,7 @@ steps:
     volumes:
       - name: cache
         path: /cache
-  - name: build-state-chain
+  - name: compile-state-chain
     image: ghcr.io/chainflip-io/chainflip-infrastructure/state-chain-base:latest
     environment:
       SCCACHE_DIR: /cache
@@ -35,7 +35,15 @@ steps:
       registry: ghcr.io
       tags: latest
       cache_from: ghcr.io/chainflip-io/chainflip-infrastructure/state-chain-node:latest
-
+  - name: publish-state-chain-node
+    image: plugins/github-release
+    settings:
+      api_key:
+        from_secret: github_token
+      files: target/release/state-chain-node
+      title: 0.0.1
+      note: CHANGELOG.md
+      draft: true
 
 trigger:
   event:
