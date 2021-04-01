@@ -18,9 +18,7 @@ steps:
     image: ghcr.io/chainflip-io/chainflip-infrastructure/state-chain-base:latest
     environment:
       SCCACHE_DIR: /cache
-      WASM_BUILD_TOOLCHAIN: nightly
     commands:
-      - rustup show
       - cargo build --release
       - sccache -s
     volumes:
