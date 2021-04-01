@@ -1,8 +1,8 @@
 #syntax=docker/dockerfile:1.2
 FROM ghcr.io/chainflip-io/chainflip-infrastructure/state-chain-base:latest
 
-COPY ./target/release/state-chain-node /usr/local/bin
+COPY . .
 
 EXPOSE 9944
 
-CMD state-chain-node --dev --ws-external
+CMD ./target/release/state-chain-node --dev --ws-external
