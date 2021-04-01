@@ -3,17 +3,17 @@ type: docker
 name: chainflip-backend
 
 steps:
-  - name: check-state-chain
-    image: ghcr.io/chainflip-io/chainflip-infrastructure/state-chain-base:latest
-    environment:
-      SCCACHE_DIR: /cache
-      WASM_BUILD_TOOLCHAIN: nightly
-    commands:
-      - SKIP_WASM_BUILD=1 cargo check --release
-      - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
+  #  - name: check-state-chain
+  #    image: ghcr.io/chainflip-io/chainflip-infrastructure/state-chain-base:latest
+  #    environment:
+  #      SCCACHE_DIR: /cache
+  #      WASM_BUILD_TOOLCHAIN: nightly
+  #    commands:
+  #      - SKIP_WASM_BUILD=1 cargo check --release
+  #      - sccache -s
+  #    volumes:
+  #      - name: cache
+  #        path: /cache
   - name: build-state-chain
     image: ghcr.io/chainflip-io/chainflip-infrastructure/state-chain-base:latest
     environment:
