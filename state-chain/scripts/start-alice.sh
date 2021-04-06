@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Start Alice's node
-./target/release/state-chain-node \
+../target/release/state-chain-node \
   --base-path /tmp/alice \
   --chain local \
   --alice \
