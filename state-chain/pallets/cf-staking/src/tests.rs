@@ -1,5 +1,5 @@
 use crate::{mock::*, Error, Stakes};
-use frame_support::{assert_err, assert_ok, storage::StorageMap};
+use frame_support::{assert_err, assert_ok};
 
 #[test]
 fn staked_amount_is_added_and_subtracted() {
