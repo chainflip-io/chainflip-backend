@@ -8253,6 +8253,7 @@ dependencies = [
  "hex-literal",
  "pallet-aura",
  "pallet-authorship",
+ "pallet-balances",
  "pallet-cf-staking",
  "pallet-cf-transactions",
  "pallet-cf-validator",

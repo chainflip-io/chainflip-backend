@@ -39,6 +39,7 @@ frame-system = {default-features = false, version = '3.0.0'}
 frame-system-benchmarking = {default-features = false, optional = true, version = '3.0.0'}
 frame-system-rpc-runtime-api = {default-features = false, version = '3.0.0'}
 pallet-aura = {default-features = false, version = '3.0.0'}
+pallet-balances = { default-features = false, version = '3.0.0' }
 pallet-authorship = {default-features = false, version = '3.0.0'}
 pallet-grandpa = {default-features = false, version = '3.0.0'}
 pallet-offences = {default-features = false, version = '3.0.0'}
