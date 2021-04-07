@@ -17,6 +17,7 @@ use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthority
 use pallet_grandpa::fg_primitives;
 use pallet_session::historical as session_historical;
 pub use pallet_timestamp::Call as TimestampCall;
+pub use pallet_balances::Call as BalancesCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
@@ -56,6 +57,9 @@ pub type AccountIndex = u32;
 
 /// Index of a transaction in the chain.
 pub type Index = u32;
+
+/// Balance of an account.
+pub type Balance = u128;
 
 /// A hash of some data used by the chain.
 pub type Hash = sp_core::H256;
@@ -208,7 +212,7 @@ impl frame_system::Config for Runtime {
     /// What to do if an account is fully reaped from the system.
     type OnKilledAccount = ();
     /// The data to be stored in an account.
-    type AccountData = ();
+    type AccountData = pallet_balances::AccountData<Balance>;
     /// Weight information for the extrinsics of this pallet.
     type SystemWeightInfo = ();
     /// This is used as an identifier of the chain. 42 is the generic substrate prefix.
@@ -241,6 +245,23 @@ impl pallet_grandpa::Config for Runtime {
     type HandleEquivocation = ();
 
     type WeightInfo = ();
+}
+
+parameter_types! {
+	pub const ExistentialDeposit: u128 = 500;
+	pub const MaxLocks: u32 = 50;
+}
+
+impl pallet_balances::Config for Runtime {
+	type MaxLocks = MaxLocks;
+	/// The type for recording an account's balance.
+	type Balance = Balance;
+	/// The ubiquitous event type.
+	type Event = Event;
+	type DustRemoval = ();
+	type ExistentialDeposit = ExistentialDeposit;
+	type AccountStore = System;
+	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
 }
 
 impl pallet_cf_transactions::Config for Runtime {
@@ -300,11 +321,6 @@ impl pallet_sudo::Config for Runtime {
     type Call = Call;
 }
 
-parameter_types! {
-    pub const ExistentialDeposit: u128 = 0;
-    pub const MaxLocks: u32 = 50;
-}
-
 construct_runtime!(
     pub enum Runtime where
         Block = Block,
@@ -320,6 +336,7 @@ construct_runtime!(
         Aura: pallet_aura::{Module, Config<T>},
         Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
         Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
+        Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
         Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
         Offences: pallet_offences::{Module, Call, Storage, Event},
         Transactions: pallet_cf_transactions::{Module, Call, Event<T>},
