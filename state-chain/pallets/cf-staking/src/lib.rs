@@ -13,10 +13,21 @@ pub mod pallet {
     use codec::FullCodec;
     use frame_support::pallet_prelude::*;
     use frame_system::pallet_prelude::*;
-    use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Zero};
+    use frame_system::pallet::Account;
+    use sp_runtime::{app_crypto::RuntimePublic, traits::{AtLeast32BitUnsigned, CheckedSub, Zero}};
     use sp_std::{fmt::Debug, ops::Add};
 
     type AccountId<T> = <T as frame_system::Config>::AccountId;
+
+    struct ClaimState<T: Config> {
+        claim_nonce: u32,
+        pending_claim: Option<Claim<T>>,
+    }
+
+    #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+    struct Claim<T: Config> {
+        amount: T::StakedAmount,
+    }
 
     #[pallet::config]
     pub trait Config: frame_system::Config
@@ -26,21 +37,30 @@ pub mod pallet {
     
         /// Numeric type based on the `Balance` type from `Currency` trait. Defined inline for now, but we
         /// might want to consider using the `Balances` pallet in future.
-        type StakedAmount: Parameter
-            + AtLeast32BitUnsigned
+        type StakedAmount: Member
             + FullCodec
             + Copy
-            + MaybeSerializeDeserialize
-            + Debug
             + Default
+            + AtLeast32BitUnsigned
+            + MaybeSerializeDeserialize
             + Zero
             + Add
             + CheckedSub;
+        
+		type EthereumPubKey: Member + FullCodec + RuntimePublic;
     }
 
     #[pallet::pallet]
     #[pallet::generate_store(pub(super) trait Store)]
     pub struct Pallet<T>(PhantomData<T>);
+
+    #[pallet::storage]
+    #[pallet::getter(fn get_stakes)]
+    pub type Stakes<T: Config> = StorageMap<_, Identity, AccountId<T>, T::StakedAmount, ValueQuery>;
+
+    #[pallet::storage]
+    #[pallet::getter(fn get_claim_states)]
+    pub type ClaimStates<T: Config> = StorageMap<_, Identity, AccountId<T>, ClaimState<T>, ValueQuery>;
 
     #[pallet::hooks]
     impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
@@ -50,44 +70,86 @@ pub mod pallet {
     #[pallet::call]
     impl<T: Config> Pallet<T>
     {
-        /// Add staked funds to an account.
+        /// Called as a witness for a new stake submitted through the StakeManager contract.
+        /// 
         #[pallet::weight(10_000)]
-        pub fn staked(_origin: OriginFor<T>,
-            account_id: AccountId<T>,
-            amount: T::StakedAmount) -> DispatchResultWithPostInfo
-        {
-            // TODO:
-            // Checks:
-            // - Is this a validator that is already staked? (does it make a difference?)
-            // - Are we currently mid-auction? (does it make a difference?)
-            // Questions:
-            // - do we need to segregate "pending" stake from "active" stake?
-            debug::info!("Received `staked` event!");
+        pub fn witness_staked_event(
+            origin: OriginFor<T>,
+            staker_account_id: AccountId<T>,
+            amount: T::StakedAmount,
+			eth_pubkey: T::EthereumPubKey,
+        ) -> DispatchResultWithPostInfo {
+            let who = ensure_signed(origin)?;
 
-            let staked_amount: T::StakedAmount = Stakes::<T>::mutate_exists(&account_id, |storage| {
-                let staked_amount = storage.unwrap_or(T::StakedAmount::zero()) + amount;
-                *storage = Some(staked_amount);
-                staked_amount
-            });
+            debug::info!("Witnessed `staked` event!");
 
-            Self::deposit_event(Event::Staked(account_id, staked_amount));
+            if Account::<T>::contains_key(who) {
+                // Vote to call `stake` through the multisig. 
+            } else {
+                // Vote to call `refund` through multisig
+            }
+
+            Ok(().into())
+        }
+
+        /// Add staked funds to an account. 
+		#[pallet::weight(10_000)]
+		pub fn stake(
+			origin: OriginFor<T>,
+			account_id: T::AccountId,
+			amount: T::StakedAmount,
+			_eth_pubkey: T::EthereumPubKey,
+		) -> DispatchResultWithPostInfo {
+            let who = ensure_signed(origin)?;
+
+            // TODO: Assert that the calling origin is the MultiSig origin. 
+            
+            let total_stake: T::StakedAmount = Stakes::<T>::mutate_exists(
+                &account_id, 
+                |storage| {
+                    let total_stake = storage.unwrap_or(T::StakedAmount::zero()) + amount;
+                    *storage = Some(total_stake);
+                    total_stake
+                });
+
+            Self::deposit_event(Event::Staked(account_id, amount, total_stake));
+
+			todo!()
+		}
+
+        /// Get FLIP that is held for me by the system, signed by a validator key.
+        #[pallet::weight(10_000)]
+        pub fn claim(
+            origin: OriginFor<T>,
+            amount: T::StakedAmount,
+        ) -> DispatchResultWithPostInfo {
+            let who = ensure_signed(origin);
+
+            // TODO: 
+            // Is enough balance available? 
+            // Are any unexpired claims pending? If so, return the pending claim instead.
+            // Reserve the balance so it can't be re-claimed. 
+            // Emit ClaimSigRequested(nonce)
+
             Ok(().into())
         }
 
         /// Previously staked funds have been reclaimed.
+        ///
         /// Note that calling this doesn't initiate any protocol changes - the `claim` has already been authorised
-        /// by validator multisig.
+        /// by validator multisig. This merely signals that the claimant has in fact redeemed their funds via the 
+        /// `StakeManager` contract. 
+        ///
         /// If the claimant tries to claim more funds than are available, we set the claimant's balance to 
         /// zero and raise an error. 
         #[pallet::weight(10_000)]
-        pub fn claimed(_origin: OriginFor<T>,
+        pub fn claimed(
+            origin: OriginFor<T>,
             account_id: AccountId<T>,
-            claimed_amount: T::StakedAmount) -> DispatchResultWithPostInfo
-        {
-            // TODO:
-            // Checks:
-            // - Are we currently mid-auction? (does it make a difference?)
-            debug::info!("Received `claimed` event!");
+            claimed_amount: T::StakedAmount,
+        ) -> DispatchResultWithPostInfo {
+            let who = ensure_signed(origin)?;
+            debug::info!("Witnessed `claimed` event!");
 
             let (remaining_stake, overflow) = Stakes::<T>::try_mutate_exists::<_,_,Error::<T>,_>(&account_id, |storage| {
                 let mut overflow = false;
@@ -109,6 +171,7 @@ pub mod pallet {
                 Ok((storage.unwrap_or(T::StakedAmount::zero()), overflow))
             })?;
 
+            // QUESTION: Is it ok to do this, ie. raise an error *after* changing the state? 
             if overflow {
                 Err(Error::<T>::ExcessFundsClaimed)?;
             }
@@ -118,22 +181,20 @@ pub mod pallet {
         }
     }
 
-    // #[pallet::inherent]
-
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config>
     {
-        /// A validator has staked some FLIP on the Ethereum chain. [validator_id, total_stake]
-        Staked(AccountId<T>, T::StakedAmount),
+        /// A validator has staked some FLIP on the Ethereum chain. [validator_id, stake_added, total_stake]
+        Staked(AccountId<T>, T::StakedAmount, T::StakedAmount),
         /// A validator has claimed their FLIP on the Ethereum chain. [validator_id, claimed_amount, remaining_stake]
         Claimed(AccountId<T>, T::StakedAmount, T::StakedAmount),
+        /// The staked amount should be refunded to the provided Ethereum address. [refund_amount, address]
+        Refund(T::StakedAmount, T::EthereumPubKey),
     }
 
     #[pallet::error]
     pub enum Error<T> {
-        /// Staker is already staked.
-        AlreadyStaked,
         /// The account to be staked is not known.
         UnknownAccount,
         /// The claimant doesn't exist
@@ -141,46 +202,6 @@ pub mod pallet {
         /// The claimant tried to claim more funds than were available
         ExcessFundsClaimed,
     }
-
-    #[pallet::validate_unsigned]
-    impl<T: Config> frame_support::unsigned::ValidateUnsigned for Pallet<T> {
-        type Call = Call<T>;
-    
-        fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-            if let Call::staked(account_id, amount) = call {
-                // TODO: What restrictions to impose on this?
-                // - Should be signed by a known validator (read up on SignedExtension / SignedExtra)
-                // - Does it need to be propagated?
-                // - Constrain the TransactionSource?
-                // - Set longevity to make sure txn expires if not applied.
-    
-                ValidTransaction::with_tag_prefix("StakeManager")
-                    // TODO: there should be a system-wide default priority for unsigned txns
-                    .priority(100)
-                    //
-                    // .and_requires()
-                    // `provides` are necessary for transaction validity so we need to include something. Since
-                    // we have no `requires`, the only effect of this is to make sure only a single unsigned
-                    // transaction with the below criteria will get into the transaction pool in a single block.
-                    .and_provides((
-                        frame_system::Module::<T>::block_number(),
-                        account_id,
-                        amount,
-                    ))
-                    // .longevity(TryInto::<u64>::try_into(
-                    // 	T::SessionDuration::get() / 2u32.into()
-                    // ).unwrap_or(64_u64))
-                    .propagate(true)
-                    .build()
-            } else {
-                InvalidTransaction::Call.into()
-            }
-        }
-    }
-
-    #[pallet::storage]
-    #[pallet::getter(fn get_stakes)]
-    pub type Stakes<T: Config> = StorageMap<_, Identity, AccountId<T>, T::StakedAmount, ValueQuery>;
 }
 
 
