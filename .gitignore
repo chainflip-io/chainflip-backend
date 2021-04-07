@@ -24,3 +24,5 @@ oxen_connection
 
 # Local CFE config
 chainflip-engine/config/**/local.toml
+
+.vscode
