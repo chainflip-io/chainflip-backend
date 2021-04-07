@@ -9,3 +9,4 @@
   --validator \
   --rpc-methods Unsafe \
   --name MyNode02
+  --bootnodes /ip4/127.0.0.1/tcp/30333/p2p/12D3KooWP5jieLzE4cJpnu3ergYYwAgiPqsuCEQz1hoFCNVxbYTX
