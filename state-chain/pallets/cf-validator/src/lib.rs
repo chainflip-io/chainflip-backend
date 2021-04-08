@@ -4,67 +4,70 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::{decl_error, decl_event, decl_module, decl_storage, dispatch, StorageValue};
-use frame_system::{self as system, ensure_signed};
+use sp_std::{
+	prelude::*,
+};
 use sp_runtime::traits::Convert;
-use sp_std::prelude::*;
+pub use pallet::*;
 
-mod mock;
-mod tests;
+#[frame_support::pallet]
+pub mod pallet {
+    use frame_support::{
+		pallet_prelude::*,
+	};
+	use frame_system::pallet_prelude::*;
+	use super::*;
 
-pub trait Config: system::Config + pallet_session::Config {
-    type Event: From<Event<Self>> + Into<<Self as system::Config>::Event>;
-}
-
-decl_storage! {
-    trait Store for Module<T: Config> as Validator {
-        pub Validators get(fn validators) config(): Option<Vec<T::AccountId>>;
-        Flag get(fn flag): bool;
+    #[pallet::config]
+	pub trait Config: frame_system::Config + pallet_session::Config {
+		/// The overarching event type.
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
     }
-}
+    
+    // Simple declaration of the `Pallet` type. It is placeholder we use to implement traits and
+	// method.
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	pub struct Pallet<T>(_);
 
-decl_event!(
-    pub enum Event<T>
-    where
-        AccountId = <T as system::Config>::AccountId,
-    {
-        // New validator added.
-        ValidatorAdded(AccountId),
-
+    #[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event<T: Config> {
+		// New validator added.
+        ValidatorAdded(T::AccountId),
         // Validator removed.
-        ValidatorRemoved(AccountId),
-    }
-);
+        ValidatorRemoved(T::AccountId),
+	}
 
-decl_error! {
-    /// Errors for the module.
-    pub enum Error for Module<T: Config> {
+    #[pallet::error]
+    pub enum Error<T> {
         NoValidators,
     }
-}
+    
+    // Pallet implements [`Hooks`] trait to define some logic to execute in some context.
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
-decl_module! {
-    pub struct Module<T: Config> for enum Call where origin: T::Origin {
-        fn deposit_event() = default;
-
+    #[pallet::call]
+	impl<T: Config> Pallet<T> {
         /// New validator's session keys should be set in session module before calling this.
-        #[weight = 0]
-        pub fn add_validator(origin, validator_id: T::AccountId) -> dispatch::DispatchResult {
+        #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+        pub(super) fn add_validator(origin: OriginFor<T>, validator_id: T::AccountId) -> DispatchResultWithPostInfo {
             ensure_signed(origin)?;
             let mut validators = Self::validators().ok_or(Error::<T>::NoValidators)?;
             validators.push(validator_id.clone());
             <Validators<T>>::put(validators);
             // Calling rotate_session to queue the new session keys.
             <pallet_session::Module<T>>::rotate_session();
-            Self::deposit_event(RawEvent::ValidatorAdded(validator_id));
-
+            Self::deposit_event(Event::ValidatorAdded(validator_id));
+            
             // Triggering rotate session again for the queued keys to take effect immediately
-            Flag::put(true);
-            Ok(())
+            <Flag<T>>::put(true);
+            Ok(().into())
         }
 
-        #[weight = 0]
-        pub fn remove_validator(origin, validator_id: T::AccountId) -> dispatch::DispatchResult {
+        #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+        pub(super) fn remove_validator(origin: OriginFor<T>, validator_id: T::AccountId) -> DispatchResultWithPostInfo {
             ensure_signed(origin)?;
             let mut validators = Self::validators().ok_or(Error::<T>::NoValidators)?;
             // Assuming that this will be a PoA network for enterprise use-cases,
@@ -78,13 +81,50 @@ decl_module! {
             <Validators<T>>::put(validators);
             // Calling rotate_session to queue the new session keys.
             <pallet_session::Module<T>>::rotate_session();
-            Self::deposit_event(RawEvent::ValidatorRemoved(validator_id));
+            Self::deposit_event(Event::ValidatorRemoved(validator_id));
 
             // Triggering rotate session again for the queued keys to take effect.
-            Flag::put(true);
-            Ok(())
+            <Flag<T>>::put(true);
+            Ok(().into())
         }
     }
+
+    #[pallet::storage]
+	#[pallet::getter(fn flag)]
+	pub(super) type Flag<T: Config> = StorageValue<_, bool, ValueQuery>;
+
+    #[pallet::storage]
+	#[pallet::getter(fn validators)]
+	pub(super) type Validators<T: Config> = StorageValue<_, Vec<T::AccountId>, OptionQuery>;
+    
+    // The genesis config type.
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub validators: Vec<T::AccountId>,
+	}
+
+
+    	// The default value for the genesis config type.
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self {
+				validators: Default::default(),
+			}
+		}
+	}
+
+	// The build of genesis for the pallet.
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			// <Dummy<T>>::put(&self.dummy);
+			// for (a, b) in &self.bar {
+			// 	<Bar<T>>::insert(a, b);
+			// }
+			// <Foo<T>>::put(&self.foo);
+		}
+	}
 }
 
 /// Indicates to the session module if the session should be rotated.
@@ -99,8 +139,7 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Module<T> {
 impl<T: Config> pallet_session::SessionManager<T::AccountId> for Module<T> {
     fn new_session(_new_index: u32) -> Option<Vec<T::AccountId>> {
         // Flag is set to false so that the session doesn't keep rotating.
-        Flag::put(false);
-
+        <Flag<T>>::put(false);
         Self::validators()
     }
 
@@ -131,7 +170,7 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
     }
 }
 
-impl<T: Config> Module<T> {
+impl<T: Config> Pallet<T> {
     pub fn get_validators() -> Result<Vec<T::AccountId>, &'static str> {
         match Self::validators().ok_or(Error::<T>::NoValidators) {
             Ok(validators) => {
