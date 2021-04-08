@@ -1,14 +1,12 @@
 # CF-Validator Design Document
 
-A pallet to run the validator auction at set days, at the moment that would be an epoch of 28 days, but would be configurable with a sudo call. On an auction event a list of stakers would be taken from the staking pallet and cross referenced with their visibility online based on their staked amount. The top X amount of this list would then have Y amount reserved/locked for the upcoming session.
+A pallet to run the validator auction at set days, at the moment that would be an epoch of 28 days, but would be configurable with a sudo call. On an auction event a list of stakers would be taken from the staking pallet and cross referenced with their visibility online based on their staked amount. The top X number of stakers of this list would then have Y amount reserved/locked for the upcoming session.  The amount bonded, or Y, would be the smallest amount staked by the set of X stakers so that all bond the same amount.
 
 ## Calls
 
 ```
 // Set days for epoch, sudo call
 fn set_epoch(days: u32)
-// Set minimum staked amount, sudo call
-fn set_min_stake(stake: Balance)
 // Set size of validator set, sudo call
 fn set_validator_set_size(size: u32)
 // Rotate set, sudo call.  Resets epoch time and rotate validators
@@ -24,7 +22,6 @@ type Days = u32
 
 ```
 EpochDays: Days
-MinStake: Balance
 ValidatorSize: u32
 ```
 
