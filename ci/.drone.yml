@@ -17,8 +17,8 @@ steps:
       cache_from: ghcr.io/chainflip-io/chainflip-infrastructure/rust-base:latest
 
 trigger:
-  #  branch:
-  #    - main
+  branch:
+    - main
   event:
     - push
 
