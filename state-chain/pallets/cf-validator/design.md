@@ -6,9 +6,9 @@ A pallet to run the validator auction at set days, at the moment that would be a
 
 ```
 // Set days for epoch, sudo call
-fn set_epoch(days: u32)
+fn set_epoch(days: Days)
 // Set size of validator set, sudo call
-fn set_validator_set_size(size: u32)
+fn set_max_validators(size: ValidatorSize)
 // Rotate set, sudo call.  Resets epoch time and rotate validators
 fn rotate()
 ```
@@ -16,18 +16,22 @@ fn rotate()
 ## Types
 ```
 type Days = u32
+type ValidatorSize = u32;
 ```
 
 ## Storage
 
 ```
 EpochDays: Days
-ValidatorSize: u32
+MaxValidators: u32
 ```
 
 ## Events
 ```
 AuctionStarted()
 AuctionEnded()
+EpochChanged(from: Days, to:Day, by: AccountId)
+MaximumValidatorsChanged(from: u32, to: u32, by:AccountId)
+
 ```
 

@@ -333,7 +333,7 @@ construct_runtime!(
         Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
         Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
         Historical: session_historical::{Module},
-        Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
+        Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config},
         Aura: pallet_aura::{Module, Config<T>},
         Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
         Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
