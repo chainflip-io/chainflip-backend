@@ -35,16 +35,15 @@ steps:
       registry: ghcr.io
       tags: latest
       cache_from: ghcr.io/chainflip-io/chainflip-infrastructure/state-chain-node:latest
-# TODO: Not required until things get serious
-#  - name: publish-state-chain-node
-#    image: plugins/github-release
-#    settings:
-#      api_key:
-#        from_secret: github_token
-#      files: target/release/state-chain-node
-#      title: test
-#      note: CHANGELOG.md
-#      draft: true
+  - name: publish-state-chain-node
+    image: docker.bintray.io/jfrog/jfrog-cli-go:latest
+    environment:
+      access_token:
+        from_secret: jfrog_access_token
+      url:
+        from_secret: jfrog_artifactory_url
+    commands:
+      - jfrog rt u --access-token $access_token --url $url ./target/release/state-chain-node state-chain/state-chain-node-latest
 
 trigger:
   event:
