@@ -1,10 +1,37 @@
 # Chainflip staking pallet
 
-This is a work-in-progress implementation of Chainflip staking functionality. 
+This is a work-in-progress implementation of Chainflip staking functionality.
 
 ## Purpose
 
-Receive notifications of events occurring in Chainflip's `StakeManager` Ethereum contract and update validator's stakes accordingly. 
+This pallet manages staking and claiming of stakes, including:
+
+- Receiving witnesses of events occurring in Chainflip's `StakeManager` Ethereum contract and updating validator's stakes accordingly.
+- Processing claim requests
+
+### Staking
+
+In order to stake, a prospective validator must:
+
+- Have a running state chain node and associated account ID.
+- Stake `FLIP` token through the `StakeManager` contract on Ethereum, specifying:
+    1. the amount they wish to stake
+    2. their account ID on the state chain network
+    3. an address on the ethereum network to which their stake can be returned in the event that they specify an invalid account ID.
+
+### Claiming
+
+Claiming is a bit more involved. In order to claim available stake, active validator nodes must generate a valid threshold signature over the claim arguments and a nonce value.
+
+This then allows anyone to craft a valid `StakeManager::claim` smart contract call.
+
+When called, `StakeManager::claim` will emit a `Claimed` event. This event is then witnessed on the state chain to update the validator's balance.
+
+A validator can have at most one open claim at any given time. If a validator submits a new claim this replaces any existing claim.
+
+### Signatures
+
+This pallet has no knowledge of signatures generated for submission to the `StakeManager::claim` smart contract call. The chainflip engine should store this and make it available to the validators so it can be posted to an Eth node.
 
 ### Genesis Configuration
 
@@ -14,6 +41,6 @@ This pallet does not have any genesis configuration.
 
 You can view the reference docs for this pallet by running:
 
-```
+```sh
 cargo doc --open
 ```
