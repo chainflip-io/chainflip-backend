@@ -4,7 +4,7 @@ name: chainflip-backend
 
 steps:
   - name: check-state-chain
-    image: ghcr.io/chainflip-io/chainflip-infrastructure/state-chain-base:latest
+    image: ghcr.io/chainflip-io/chainflip-infrastructure/rust-base:latest
     environment:
       SCCACHE_DIR: /cache
     commands:
@@ -14,7 +14,7 @@ steps:
       - name: cache
         path: /cache
   - name: compile-state-chain
-    image: ghcr.io/chainflip-io/chainflip-infrastructure/state-chain-base:latest
+    image: ghcr.io/chainflip-io/chainflip-infrastructure/rust-base:latest
     environment:
       SCCACHE_DIR: /cache
     commands:
