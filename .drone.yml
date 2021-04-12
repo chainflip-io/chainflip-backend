@@ -31,7 +31,7 @@ steps:
     environment:
       SCCACHE_DIR: /cache
     commands:
-      - cargo build --release
+      - cargo build --release -Zmultitarget --target x86_64-apple-darwin --target wasm32-unknown-unknown
       - sccache -s
     volumes:
       - name: cache
@@ -41,8 +41,6 @@ steps:
         - main
       event:
         - push
-      paths:
-        - state-chain/*
   - name: publish-state-chain-node
     image: docker.bintray.io/jfrog/jfrog-cli-go:latest
     environment:
@@ -51,14 +49,13 @@ steps:
       url:
         from_secret: jfrog_artifactory_url
     commands:
-      - jfrog rt u --access-token $access_token --url $url ./target/release/state-chain-node state-chain-node/state-chain-node
+      - jfrog rt u --access-token $access_token --url $url ./target/x86_64-apple-darwin/release/state-chain-node state-chain-node/x86_64-apple-darwin_state-chain-node
+      - jfrog rt u --access-token $access_token --url $url ./target/wasm32-unknown-unknown/release/state-chain-node state-chain-node/wasm32-unknown-unknown_state-chain-node
     when:
       branch:
         - main
       event:
         - push
-      paths:
-        - state-chain/*
 
 trigger:
   event:
