@@ -3,7 +3,8 @@ type: docker
 name: chainflip-state-chain
 
 steps:
-  - name: check-state-chain
+  # Pull request check and build
+  - name: check-state-chain-dev
     image: ghcr.io/chainflip-io/chainflip-infrastructure/rust-base:latest
     environment:
       SCCACHE_DIR: /cache
@@ -13,6 +14,18 @@ steps:
     volumes:
       - name: cache
         path: /cache
+  - name: compile-state-chain-dev
+    image: ghcr.io/chainflip-io/chainflip-infrastructure/rust-base:latest
+    environment:
+      SCCACHE_DIR: /cache
+    commands:
+      - cargo build --release
+      - sccache -s
+    volumes:
+      - name: cache
+        path: /cache
+
+  # Merge to master build and publish
   - name: compile-state-chain
     image: ghcr.io/chainflip-io/chainflip-infrastructure/rust-base:latest
     environment:
@@ -23,7 +36,14 @@ steps:
     volumes:
       - name: cache
         path: /cache
-  - name: publish-state-chain-node-dev
+    when:
+      branch:
+        - main
+      event:
+        - push
+  #      paths:
+  #        - state-chain/*
+  - name: publish-state-chain-node
     image: docker.bintray.io/jfrog/jfrog-cli-go:latest
     environment:
       access_token:
@@ -31,13 +51,20 @@ steps:
       url:
         from_secret: jfrog_artifactory_url
     commands:
-      - jfrog rt u --access-token $access_token --url $url ./target/release/state-chain-node state-chain-node/state-chain-node-dev
+      - jfrog rt u --access-token $access_token --url $url ./target/release/state-chain-node state-chain-node/state-chain-node
+    when:
+      branch:
+        - main
+      event:
+        - push
+#      paths:
+#        - state-chain/*
 
 trigger:
   event:
     - pull_request
-  paths:
-    - state-chain/*
+#  paths:
+#    - state-chain/*
 
 volumes:
   - name: cache
