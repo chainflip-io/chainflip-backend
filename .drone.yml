@@ -1,6 +1,6 @@
 kind: pipeline
 type: docker
-name: chainflip-backend
+name: chainflip-state-chain
 
 steps:
   - name: check-state-chain
@@ -23,19 +23,7 @@ steps:
     volumes:
       - name: cache
         path: /cache
-  - name: build-state-chain-node
-    image: plugins/docker
-    settings:
-      username:
-        from_secret: docker_username
-      password:
-        from_secret: docker_password
-      repo: ghcr.io/chainflip-io/chainflip-infrastructure/state-chain-node
-      dockerfile: Dockerfile.state-chain-node
-      registry: ghcr.io
-      tags: latest
-      cache_from: ghcr.io/chainflip-io/chainflip-infrastructure/state-chain-node:latest
-  - name: publish-state-chain-node
+  - name: publish-state-chain-node-dev
     image: docker.bintray.io/jfrog/jfrog-cli-go:latest
     environment:
       access_token:
@@ -43,11 +31,13 @@ steps:
       url:
         from_secret: jfrog_artifactory_url
     commands:
-      - jfrog rt u --access-token $access_token --url $url ./target/release/state-chain-node state-chain/state-chain-node-latest
+      - jfrog rt u --access-token $access_token --url $url ./target/release/state-chain-node state-chain-node/state-chain-node-dev
 
 trigger:
-  event:
+  branch:
     - pull_request
+  paths:
+    - state-chain/*
 
 volumes:
   - name: cache
