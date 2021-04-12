@@ -41,8 +41,8 @@ steps:
         - main
       event:
         - push
-  #      paths:
-  #        - state-chain/*
+      paths:
+        - state-chain/*
   - name: publish-state-chain-node
     image: docker.bintray.io/jfrog/jfrog-cli-go:latest
     environment:
@@ -57,14 +57,14 @@ steps:
         - main
       event:
         - push
-#      paths:
-#        - state-chain/*
+      paths:
+        - state-chain/*
 
 trigger:
   event:
     - pull_request
-#  paths:
-#    - state-chain/*
+  paths:
+    - state-chain/*
 
 volumes:
   - name: cache
