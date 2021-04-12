@@ -34,7 +34,7 @@ steps:
       - jfrog rt u --access-token $access_token --url $url ./target/release/state-chain-node state-chain-node/state-chain-node-dev
 
 trigger:
-  branch:
+  event:
     - pull_request
   paths:
     - state-chain/*
