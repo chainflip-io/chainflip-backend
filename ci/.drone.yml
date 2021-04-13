@@ -6,8 +6,7 @@ steps:
   - name: lint-drone-yml
     image: 'drone/cli'
     commands: 
-      - drone lint --trusted
+      - lint --trusted
 trigger: 
-  event:
-    include:
-    - push
+  paths:
+    - .drone.yml
