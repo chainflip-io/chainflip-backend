@@ -120,7 +120,7 @@ pub mod pallet {
         pub fn claim(
             origin: OriginFor<T>,
             amount: T::StakedAmount,
-            refund_address: T::EthereumAddress,
+            claim_address: T::EthereumAddress,
         ) -> DispatchResultWithPostInfo {
             let who = ensure_signed(origin)?;
 
@@ -142,7 +142,7 @@ pub mod pallet {
             });
             
             // Emit the event requesting that the CFE to generate the claim voucher.
-            Self::deposit_event(Event::<T>::ClaimSigRequested(refund_address, nonce, amount));
+            Self::deposit_event(Event::<T>::ClaimSigRequested(claim_address, nonce, amount));
 
             // Assume for now that the siging process is successful and simply insert this claim into
             // the pending claims. 
