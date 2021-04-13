@@ -1,6 +1,20 @@
+.build-config: &build-config
+  volumes:
+    - name: cache
+      host:
+        path: /mnt/chainflip-build-runner/sccache
+
+  node:
+    builder: "true"
+
+  image_pull_secrets:
+    - dockerconfigjson
+
+
+---
 kind: pipeline
 type: docker
-name: chainflip-state-chain
+name: chainflip-state-chain-pr
 
 steps:
   # Pull request check and build
@@ -25,6 +39,21 @@ steps:
       - name: cache
         path: /cache
 
+trigger:
+  event:
+    - pull_request
+  paths:
+    - state-chain/*
+
+<<: *build-config
+
+---
+kind: pipeline
+type: docker
+name: chainflip-state-chain-main
+
+
+steps:
   # Merge to master build and publish
   - name: compile-state-chain
     image: ghcr.io/chainflip-io/chainflip-infrastructure/rust-base:latest
@@ -36,11 +65,7 @@ steps:
     volumes:
       - name: cache
         path: /cache
-    when:
-      branch:
-        - main
-      event:
-        - push
+
   - name: publish-state-chain-node
     image: docker.bintray.io/jfrog/jfrog-cli-go:latest
     environment:
@@ -51,25 +76,11 @@ steps:
     commands:
       - jfrog rt u --access-token $access_token --url $url ./target/x86_64-apple-darwin/release/state-chain-node state-chain-node/x86_64-apple-darwin_state-chain-node
       - jfrog rt u --access-token $access_token --url $url ./target/wasm32-unknown-unknown/release/state-chain-node state-chain-node/wasm32-unknown-unknown_state-chain-node
-    when:
-      branch:
-        - main
-      event:
-        - push
 
 trigger:
+  branch:
+    - main
   event:
-    - pull_request
-  paths:
-    - state-chain/*
+    - push
 
-volumes:
-  - name: cache
-    host:
-      path: /mnt/chainflip-build-runner/sccache
-
-node:
-  builder: "true"
-
-image_pull_secrets:
-  - dockerconfigjson
+<<: *build-config
