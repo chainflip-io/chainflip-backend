@@ -6,6 +6,7 @@ use sp_runtime::traits::{BadOrigin};
 fn building_a_candidate_list() {
     new_test_ext().execute_with(|| {
         // Pull a list of candidates from cf-staking
+        assert_ok!(RotationManager::get_validators());
     });
 }
 
