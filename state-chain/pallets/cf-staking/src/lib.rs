@@ -38,7 +38,7 @@ pub mod pallet {
             + MaybeSerializeDeserialize
             + CheckedSub;
         
-        type EthereumPubKey: Member + FullCodec + RuntimePublic;
+        type EthereumAddress: Member + FullCodec;
 
         type Nonce: Member
             + FullCodec
@@ -81,7 +81,7 @@ pub mod pallet {
             origin: OriginFor<T>,
             staker_account_id: AccountId<T>,
             amount: T::StakedAmount,
-			eth_pubkey: T::EthereumPubKey,
+			refund_address: T::EthereumAddress,
         ) -> DispatchResultWithPostInfo {
             let who = ensure_signed(origin)?;
 
@@ -97,7 +97,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			account_id: T::AccountId,
 			amount: T::StakedAmount,
-			_eth_pubkey: T::EthereumPubKey,
+			refund_address: T::EthereumAddress,
 		) -> DispatchResultWithPostInfo {
             Self::ensure_multi(origin)?;
 
@@ -119,7 +119,7 @@ pub mod pallet {
         pub fn claim(
             origin: OriginFor<T>,
             amount: T::StakedAmount,
-            eth_address: T::EthereumPubKey,
+            refund_address: T::EthereumAddress,
         ) -> DispatchResultWithPostInfo {
             let who = ensure_signed(origin)?;
 
@@ -141,7 +141,7 @@ pub mod pallet {
             });
             
             // Emit the event requesting that the CFE to generate the claim voucher.
-            Self::deposit_event(Event::<T>::ClaimSigRequested(eth_address, nonce, amount));
+            Self::deposit_event(Event::<T>::ClaimSigRequested(refund_address, nonce, amount));
 
             // Assume for now that the siging process is successful and simply insert this claim into
             // the pending claims. 
@@ -207,10 +207,10 @@ pub mod pallet {
         Claimed(AccountId<T>, T::StakedAmount),
 
         /// The staked amount should be refunded to the provided Ethereum address. [refund_amount, address]
-        Refund(T::StakedAmount, T::EthereumPubKey),
+        Refund(T::StakedAmount, T::EthereumAddress),
 
         /// A claim request has been made to provided Ethereum address. [address, nonce, amount]
-        ClaimSigRequested(T::EthereumPubKey, T::Nonce, T::StakedAmount),
+        ClaimSigRequested(T::EthereumAddress, T::Nonce, T::StakedAmount),
     }
 
     #[pallet::error]
