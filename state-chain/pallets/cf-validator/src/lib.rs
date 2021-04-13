@@ -10,6 +10,7 @@ mod tests;
 pub use pallet::*;
 use sp_runtime::traits::Convert;
 use sp_std::prelude::*;
+use frame_support::sp_runtime::traits::{Saturating, Zero};
 
 type ValidatorSize = u32;
 
@@ -78,6 +79,10 @@ pub mod pallet {
     }
 
     #[pallet::storage]
+    #[pallet::getter(fn last_block_number)]
+    pub(super) type LastBlockNumber<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+
+    #[pallet::storage]
     #[pallet::getter(fn epoch_number_of_blocks)]
     pub(super) type EpochNumberOfBlocks<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
@@ -111,8 +116,8 @@ pub mod pallet {
 /// Indicates to the session module if the session should be rotated.
 /// We set this flag to true when we add/remove a validator.
 impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
-    fn should_end_session(_now: T::BlockNumber) -> bool {
-        false
+    fn should_end_session(now: T::BlockNumber) -> bool {
+        Self::should_end_session(now)
     }
 }
 
@@ -154,7 +159,13 @@ impl<T: Config> Pallet<T> {
         Ok(vec![])
     }
 
-    pub fn is_validator(account_id: &T::AccountId) -> bool {
-        return false;
+    pub fn should_end_session(now: T::BlockNumber) -> bool {
+        let epoch_blocks = EpochNumberOfBlocks::<T>::get();
+        if epoch_blocks == Zero::zero() {
+            return false;
+        }
+        let last_block_number = LastBlockNumber::<T>::get();
+        let diff = now.saturating_sub(last_block_number);
+        diff >= epoch_blocks
     }
 }

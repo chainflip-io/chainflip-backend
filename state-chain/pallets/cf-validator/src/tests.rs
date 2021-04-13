@@ -3,6 +3,17 @@ use frame_support::{assert_err, assert_ok, storage::StorageMap, assert_noop};
 use sp_runtime::traits::{BadOrigin};
 
 #[test]
+fn sessions_do_end() {
+    new_test_ext().execute_with(|| {
+        assert!(!RotationManager::should_end_session(2));
+        // Set blocks for epoch
+        assert_ok!(RotationManager::set_epoch(Origin::root(), 2));
+        assert!(RotationManager::should_end_session(2));
+        assert!(!RotationManager::should_end_session(3));
+    });
+}
+
+#[test]
 fn building_a_candidate_list() {
     new_test_ext().execute_with(|| {
         // Pull a list of candidates from cf-staking
