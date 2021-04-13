@@ -10,7 +10,7 @@ mod tests;
 pub use pallet::*;
 use sp_runtime::traits::Convert;
 use sp_std::prelude::*;
-type Days = u32;
+
 type ValidatorSize = u32;
 
 #[frame_support::pallet]
@@ -26,16 +26,16 @@ pub mod pallet {
     }
 
     #[pallet::pallet]
-    #[pallet::generate_store(pub(super) trait Store)]
+    #[pallet::generate_store(pub (super) trait Store)]
     pub struct Pallet<T>(_);
 
     #[pallet::event]
-    #[pallet::generate_deposit(pub(super) fn deposit_event)]
+    #[pallet::generate_deposit(pub (super) fn deposit_event)]
     pub enum Event<T: Config> {
         AuctionStarted(),
         AuctionEnded(),
-        EpochChanged(Days, Days, T::AccountId),
-        MaximumValidatorsChanged(ValidatorSize, ValidatorSize, T::AccountId)
+        EpochChanged(T::BlockNumber, T::BlockNumber),
+        MaximumValidatorsChanged(ValidatorSize, ValidatorSize),
     }
 
     #[pallet::error]
@@ -49,20 +49,18 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-
         /// New validator's session keys should be set in session module before calling this.
         #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
         pub(super) fn set_epoch(
             origin: OriginFor<T>,
-            days: Days,
+            number_of_blocks: T::BlockNumber,
         ) -> DispatchResultWithPostInfo {
             ensure_root(origin)?;
-
             Ok(().into())
         }
 
         #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-        pub(super) fn remove_validator(
+        pub(super) fn set_validator_size(
             origin: OriginFor<T>,
             size: ValidatorSize,
         ) -> DispatchResultWithPostInfo {
@@ -71,7 +69,7 @@ pub mod pallet {
         }
 
         #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-        pub(super) fn rotate(
+        pub(super) fn force_rotation(
             origin: OriginFor<T>,
         ) -> DispatchResultWithPostInfo {
             ensure_root(origin)?;
@@ -80,32 +78,32 @@ pub mod pallet {
     }
 
     #[pallet::storage]
-    #[pallet::getter(fn epoch_days)]
-    pub(super) type EpochDays<T: Config> = StorageValue<_, Days, ValueQuery>;
+    #[pallet::getter(fn epoch_number_of_blocks)]
+    pub(super) type EpochNumberOfBlocks<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
     #[pallet::storage]
     #[pallet::getter(fn max_validators)]
-    pub(super) type MaxValidators<T: Config> = StorageValue<_, ValidatorSize, ValueQuery>;
+    pub(super) type SizeValidatorSet<T: Config> = StorageValue<_, ValidatorSize, ValueQuery>;
 
     #[pallet::genesis_config]
-    pub struct GenesisConfig {
-        pub max_validators: ValidatorSize,
-        pub epoch_days: Days,
+    pub struct GenesisConfig<T: Config> {
+        pub size_validator_set: ValidatorSize,
+        pub epoch_number_of_blocks: T::BlockNumber,
     }
 
     #[cfg(feature = "std")]
-    impl Default for GenesisConfig {
+    impl<T:Config> Default for GenesisConfig<T> {
         fn default() -> Self {
             Self {
-                max_validators: 0,
-                epoch_days: 0,
+                size_validator_set: 0,
+                epoch_number_of_blocks: 0u32.into(),
             }
         }
     }
 
     // The build of genesis for the pallet.
     #[pallet::genesis_build]
-    impl<T: Config> GenesisBuild<T> for GenesisConfig {
+    impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
         fn build(&self) {}
     }
 }
@@ -153,7 +151,7 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 
 impl<T: Config> Pallet<T> {
     pub fn get_validators() -> Result<Vec<T::AccountId>, &'static str> {
-        Err("No validators found")
+        Ok(vec![])
     }
 
     pub fn is_validator(account_id: &T::AccountId) -> bool {

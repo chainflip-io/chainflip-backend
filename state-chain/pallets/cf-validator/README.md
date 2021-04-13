@@ -36,7 +36,7 @@ next+1 validator set would be set as the next set.
 
 ```
 // Set days for epoch, sudo call
-fn set_epoch(blocknumber: BlockNumber)
+fn set_epoch(number_of_blocks: BlockNumber)
 // Set size of validator set, sudo call
 fn set_validator_size(size: ValidatorSize)
 // Forces a rotation, sudo call
@@ -50,7 +50,7 @@ An optional set of validators can be set as initial validators.
 ## Storage
 
 ```
-EpochBlockNumber: BlockNumber
+EpochNumberOfBlocks: BlockNumber
 SizeValidatorSet: u32
 ```
 
