@@ -4,6 +4,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod mock;
+mod tests;
+
 pub use pallet::*;
 use sp_runtime::traits::Convert;
 use sp_std::prelude::*;
@@ -17,7 +20,7 @@ pub mod pallet {
     use frame_system::pallet_prelude::*;
 
     #[pallet::config]
-    pub trait Config: frame_system::Config + pallet_session::Config {
+    pub trait Config: frame_system::Config {
         /// The overarching event type.
         type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
     }
