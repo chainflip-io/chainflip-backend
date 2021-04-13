@@ -40,7 +40,7 @@ fn set_epoch(blocknumber: BlockNumber)
 // Set size of validator set, sudo call
 fn set_validator_size(size: ValidatorSize)
 // Forces a rotation, sudo call
-fn rotate()
+fn force_rotation()
 ```
 
 ### Genesis Configuration
