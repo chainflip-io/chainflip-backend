@@ -1,9 +1,10 @@
 kind: pipeline
 type: docker
-name: chainflip-backend
+name: chainflip-state-chain
 
 steps:
-  - name: check-state-chain
+  # Pull request check and build
+  - name: check-state-chain-dev
     image: ghcr.io/chainflip-io/chainflip-infrastructure/rust-base:latest
     environment:
       SCCACHE_DIR: /cache
@@ -13,7 +14,7 @@ steps:
     volumes:
       - name: cache
         path: /cache
-  - name: compile-state-chain
+  - name: compile-state-chain-dev
     image: ghcr.io/chainflip-io/chainflip-infrastructure/rust-base:latest
     environment:
       SCCACHE_DIR: /cache
@@ -23,18 +24,23 @@ steps:
     volumes:
       - name: cache
         path: /cache
-  - name: build-state-chain-node
-    image: plugins/docker
-    settings:
-      username:
-        from_secret: docker_username
-      password:
-        from_secret: docker_password
-      repo: ghcr.io/chainflip-io/chainflip-infrastructure/state-chain-node
-      dockerfile: Dockerfile.state-chain-node
-      registry: ghcr.io
-      tags: latest
-      cache_from: ghcr.io/chainflip-io/chainflip-infrastructure/state-chain-node:latest
+
+  # Merge to master build and publish
+  - name: compile-state-chain
+    image: ghcr.io/chainflip-io/chainflip-infrastructure/rust-base:latest
+    environment:
+      SCCACHE_DIR: /cache
+    commands:
+      - cargo build --release -Zmultitarget --target x86_64-apple-darwin --target wasm32-unknown-unknown
+      - sccache -s
+    volumes:
+      - name: cache
+        path: /cache
+    when:
+      branch:
+        - main
+      event:
+        - push
   - name: publish-state-chain-node
     image: docker.bintray.io/jfrog/jfrog-cli-go:latest
     environment:
@@ -43,11 +49,19 @@ steps:
       url:
         from_secret: jfrog_artifactory_url
     commands:
-      - jfrog rt u --access-token $access_token --url $url ./target/release/state-chain-node state-chain/state-chain-node-latest
+      - jfrog rt u --access-token $access_token --url $url ./target/x86_64-apple-darwin/release/state-chain-node state-chain-node/x86_64-apple-darwin_state-chain-node
+      - jfrog rt u --access-token $access_token --url $url ./target/wasm32-unknown-unknown/release/state-chain-node state-chain-node/wasm32-unknown-unknown_state-chain-node
+    when:
+      branch:
+        - main
+      event:
+        - push
 
 trigger:
   event:
     - pull_request
+  paths:
+    - state-chain/*
 
 volumes:
   - name: cache
