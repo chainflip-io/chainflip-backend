@@ -11,7 +11,7 @@ use frame_system::{ensure_root, pallet_prelude::OriginFor};
 pub use pallet::*;
 
 use codec::FullCodec;
-use sp_runtime::{app_crypto::RuntimePublic, traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub, One, Zero}};
+use sp_runtime::{traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub, One}};
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -102,11 +102,12 @@ pub mod pallet {
             Self::ensure_multi(origin)?;
 
             if Account::<T>::contains_key(&account_id) {
-                Self::add_stake(account_id, amount)?;
+                let total_stake = Self::add_stake(&account_id, amount)?;
+                Self::deposit_event(Event::Staked(account_id, amount, total_stake));
             } else {
                 // Account doesn't exist.
-                // Vote to call `refund` through multisig.
-                todo!()
+                debug::info!("Unknown staking account id {:?}, proceeding to refund.", account_id);
+                Self::deposit_event(Event::Refund(amount, refund_address));
             }
             
             Ok(().into())
@@ -239,20 +240,16 @@ pub mod pallet {
 }
 
 impl<T: Config> Module<T> {
-    fn add_stake(account_id: T::AccountId, amount: T::StakedAmount) -> Result<(), Error<T>> {
-        let total_stake: T::StakedAmount = Stakes::<T>::try_mutate(
-            &account_id, 
+    fn add_stake(account_id: &T::AccountId, amount: T::StakedAmount) -> Result<T::StakedAmount, Error<T>> {
+        Stakes::<T>::try_mutate(
+            account_id, 
             |stake| {
                 *stake = stake
                     .checked_add(&amount)
                     .ok_or(Error::<T>::StakeOverflow)?;
                 
                 Ok(*stake)
-            })?;
-
-        Self::deposit_event(Event::Staked(account_id, amount, total_stake));
-
-        Ok(())
+            })
     }
 
     fn ensure_multi(origin: OriginFor<T>) -> Result<(), BadOrigin> {
