@@ -6,13 +6,12 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+use frame_support::error::BadOrigin;
+use frame_system::{ensure_root, pallet_prelude::OriginFor};
 pub use pallet::*;
 
 use codec::FullCodec;
-use sp_runtime::{
-    app_crypto::RuntimePublic, 
-    traits::{AtLeast32BitUnsigned, CheckedSub, One, Zero}
-};
+use sp_runtime::{app_crypto::RuntimePublic, traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub, One, Zero}};
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -90,7 +89,7 @@ pub mod pallet {
             Ok(().into())
         }
 
-        /// Funds have been staked funds to an account. 
+        /// Funds have been staked to an account via the StakeManager smart contract. 
         ///
         /// **This is a MultiSig call**
 		#[pallet::weight(10_000)]
@@ -100,18 +99,16 @@ pub mod pallet {
 			amount: T::StakedAmount,
 			_eth_pubkey: T::EthereumPubKey,
 		) -> DispatchResultWithPostInfo {
-            let who = ensure_signed(origin)?;
+            Self::ensure_multi(origin)?;
 
-            // TODO: Assert that the calling origin is the MultiSig origin. 
-
-            if Account::<T>::contains_key(who) {
-                Self::add_stake(account_id, amount);
+            if Account::<T>::contains_key(&account_id) {
+                Self::add_stake(account_id, amount)?;
             } else {
                 // Account doesn't exist.
                 // Vote to call `refund` through multisig.
+                todo!()
             }
             
-
             Ok(().into())
 		}
 
@@ -189,12 +186,10 @@ pub mod pallet {
             account_id: AccountId<T>,
             claimed_amount: T::StakedAmount,
         ) -> DispatchResultWithPostInfo {
-            let who = ensure_signed(origin)?;
-            
-            // TODO: Assert that the calling origin is the MultiSig origin.
+            Self::ensure_multi(origin)?;
 
-            // Find pending claim and delete it.
-
+            let pending_claim_amount = PendingClaims::<T>::take(&account_id).ok_or(Error::<T>::NoPendingClaim)?;
+            ensure!(claimed_amount == pending_claim_amount, Error::<T>::InvalidClaimAmount);
 
             Self::deposit_event(Event::Claimed(account_id, claimed_amount));
             Ok(().into())
@@ -223,8 +218,11 @@ pub mod pallet {
         /// The account to be staked is not known.
         UnknownAccount,
 
-        /// The claimant doesn't exist.
-        UnknownClaimant,
+        /// An invalid claim has been witnessed: the account has no pending claims.
+        NoPendingClaim,
+
+        /// An invalid claim has been witnessed: the amount claimed does not match the pending claim amount.
+        InvalidClaimAmount,
 
         /// The claimant doesn't exist.
         InsufficientStake,
@@ -232,21 +230,33 @@ pub mod pallet {
         /// The claimant tried to claim despite having a claim already pending.
         PendingClaim,
 
-        /// The claimant tried to claim more funds than were available.
+        /// The claimant tried to claim more funds than were available. 
         ClaimOverflow,
+
+        /// Stake amount caused overflow on addition. Should never happen.
+        StakeOverflow,
     }
 }
 
 impl<T: Config> Module<T> {
-    fn add_stake(account_id: T::AccountId, amount: T::StakedAmount) {
-        let total_stake: T::StakedAmount = Stakes::<T>::mutate_exists(
+    fn add_stake(account_id: T::AccountId, amount: T::StakedAmount) -> Result<(), Error<T>> {
+        let total_stake: T::StakedAmount = Stakes::<T>::try_mutate(
             &account_id, 
-            |storage| {
-                let total_stake = storage.unwrap_or(T::StakedAmount::zero()) + amount;
-                *storage = Some(total_stake);
-                total_stake
-            });
+            |stake| {
+                *stake = stake
+                    .checked_add(&amount)
+                    .ok_or(Error::<T>::StakeOverflow)?;
+                
+                Ok(*stake)
+            })?;
 
         Self::deposit_event(Event::Staked(account_id, amount, total_stake));
+
+        Ok(())
+    }
+
+    fn ensure_multi(origin: OriginFor<T>) -> Result<(), BadOrigin> {
+        // TODO: replace this with a dedicated MULTISIG user instead of root.
+        ensure_root(origin)
     }
 }
