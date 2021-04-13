@@ -2,6 +2,14 @@
 
 This is a work-in-progress implementation of Chainflip staking functionality.
 
+## Assumptions
+
+Some simplifying assumptions have been made for now, and will need to be addressed as the project advances:
+
+- Assume Signature requests always succeed and result in a valid claim voucher being issued.
+- Claim vouchers don't expire - to do this we need to be able to query the current Ethereum block number.
+- Witness MultiSig is simulated using `ensure_root`.
+
 ## Purpose
 
 This pallet manages staking and claiming of stakes, including:
