@@ -1,15 +1,72 @@
-# How to add a validator
+# CF-Validator Pallet
 
-1. Start 2 nodes
-2. Ensure each node has their Aura and Grandpa keys set. You set keys by using the `author` insertKey RPC call on the polkadot js app. Follow this guide from here https://substrate.dev/docs/en/tutorials/start-a-private-network/keygen
-3. NB: Make sure that the first of the keys you generate/use, are entered into the chainspec correctly. SR25519 pubkeys for Aura, and ED25519 pubkeys for Grandpa.
-If you've done the above correctly, you should start authoring blocks. However, if finalisation is not occurring, you will have to restart the node that was configured as an an authority in the genesis block.
-4. After finalisation is occurring go to RPC -> author -> rotateKeys() and copy the key returned.
-5. Go to accounts and create an account to represent the second node. Note: This will be the same seed that was used to submit the second key to the node. This will be Account B.
-6. Go to extrinsics, set the user as Account B and then session -> setKeys().
-Paste the rotated key from step 4 into the `keys` field.
-Enter `0x00` into the `proof` field
-Submit the signed transaction.
-7. Now, still in Extrinsics and still on Account B, you can enter: validator -> addValidator, and add Account B as validator.
+A work-in-progress implementation of validation rotation for Chainflip.
 
-Now when you return to the block explorer you should see both Accounts/Nodes producing blocks, and finalisation should be following. If finalisation is stuck, you may need to restart the second node so it uses its new keys.
+## Overview
+
+This pallet manages the rotation of validators that have staked on Chainflip.
+
+## Terminology
+
+- Validator: A node that has staked an amount of `FLIP` ERC20 token.
+- Validator ID: TBC
+- Era: A period in blocks in which a set of validators ensure the network.
+- Rotation: The process of rotating the validator sets, also referred to as the auction.
+- Sudo: A single account that is also called the "sudo key" which allows "privileged functions"
+
+## Goals
+
+- Compile a list of viable validators
+- Rotate a set of validators at each auction
+
+## Candidates
+
+A list of candidates are required to be proposed as the next set of validators. These candidates would be provided by
+the `cf-staking` pallet based on the requirements set within the same pallet. A maximum set size would be first proposed
+as a candidate list and would be scheduled as the next+1 validator set.
+
+## Rotation
+
+On rotation at specified era the previous candidate list would be switched with the current validating set and the
+next+1 validator set would be set as the next set.
+
+## Interface
+
+### Dispatchable Functions
+
+```
+// Set days for epoch, sudo call
+fn set_epoch(blocknumber: BlockNumber)
+// Set size of validator set, sudo call
+fn set_validator_size(size: ValidatorSize)
+// Forces a rotation, sudo call
+fn rotate()
+```
+
+### Genesis Configuration
+
+An optional set of validators can be set as initial validators.
+
+## Storage
+
+```
+EpochBlockNumber: BlockNumber
+SizeValidatorSet: u32
+```
+
+## Events
+
+```
+AuctionStarted()
+AuctionEnded()
+EpochChanged(from: Days, to:Day)
+SizeValidatorSetChanged(from: u32, to: u32)
+```
+
+## Reference Docs
+
+You can view the reference docs for this pallet by running:
+
+```sh
+cargo doc --open
+```
