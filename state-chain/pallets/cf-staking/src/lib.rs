@@ -189,10 +189,14 @@ pub mod pallet {
         ) -> DispatchResultWithPostInfo {
             Self::ensure_multi(origin)?;
 
-            let pending_claim_amount = PendingClaims::<T>::take(&account_id).ok_or(Error::<T>::NoPendingClaim)?;
+            let pending_claim_amount = PendingClaims::<T>::get(&account_id).ok_or(Error::<T>::NoPendingClaim)?;
+            
             ensure!(claimed_amount == pending_claim_amount, Error::<T>::InvalidClaimAmount);
 
+            PendingClaims::<T>::remove(&account_id);
+
             Self::deposit_event(Event::Claimed(account_id, claimed_amount));
+
             Ok(().into())
         }
     }

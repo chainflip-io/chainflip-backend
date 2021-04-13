@@ -5,6 +5,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup}, testing::Header, 
 };
 use frame_system as system;
+use system::{Account, AccountInfo};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -55,9 +56,24 @@ impl pallet_cf_staking::Config for Test {
 	type Event = Event;
 
 	type StakedAmount = u128;
+
+	type EthereumAddress = u64;
+
+	type Nonce = u32;
 }
+
+pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
+pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+	let mut ext: sp_io::TestExternalities = system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
+
+	// Seed with two active accounts.
+	ext.execute_with(|| {
+		Account::<Test>::insert(ALICE, AccountInfo::default());
+		Account::<Test>::insert(BOB, AccountInfo::default());
+	});
+
+	ext
 }
