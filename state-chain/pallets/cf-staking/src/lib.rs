@@ -8,13 +8,18 @@ mod tests;
 
 pub use pallet::*;
 
+use codec::FullCodec;
+use sp_runtime::{
+    app_crypto::RuntimePublic, 
+    traits::{AtLeast32BitUnsigned, CheckedSub, One, Zero}
+};
+
 #[frame_support::pallet]
 pub mod pallet {
-    use codec::FullCodec;
+    use super::*;
     use frame_support::pallet_prelude::*;
     use frame_system::pallet_prelude::*;
     use frame_system::pallet::Account;
-    use sp_runtime::{app_crypto::RuntimePublic, traits::{AtLeast32BitUnsigned, CheckedSub, One, Zero}};
 
     type AccountId<T> = <T as frame_system::Config>::AccountId;
 
@@ -57,8 +62,8 @@ pub mod pallet {
         _, 
         Identity, 
         AccountId<T>, 
-        (T::Nonce, T::StakedAmount), 
-        ValueQuery>;
+        T::StakedAmount, 
+        OptionQuery>;
 
     #[pallet::storage]
     pub type Nonces<T: Config> = StorageMap<_, Identity, AccountId<T>, T::Nonce, ValueQuery>;
@@ -82,20 +87,14 @@ pub mod pallet {
             let who = ensure_signed(origin)?;
 
             debug::info!("Witnessed `staked` event!");
-
-            if Account::<T>::contains_key(who) {
-                // Vote to call `stake` through the multisig. 
-            } else {
-                // Account doesn't exist.
-                // Vote to call `refund` through multisig.
-            }
-
             Ok(().into())
         }
 
-        /// Add staked funds to an account. 
+        /// Funds have been staked funds to an account. 
+        ///
+        /// **This is a MultiSig call**
 		#[pallet::weight(10_000)]
-		pub fn stake(
+		pub fn staked(
 			origin: OriginFor<T>,
 			account_id: T::AccountId,
 			amount: T::StakedAmount,
@@ -104,16 +103,14 @@ pub mod pallet {
             let who = ensure_signed(origin)?;
 
             // TODO: Assert that the calling origin is the MultiSig origin. 
-            
-            let total_stake: T::StakedAmount = Stakes::<T>::mutate_exists(
-                &account_id, 
-                |storage| {
-                    let total_stake = storage.unwrap_or(T::StakedAmount::zero()) + amount;
-                    *storage = Some(total_stake);
-                    total_stake
-                });
 
-            Self::deposit_event(Event::Staked(account_id, amount, total_stake));
+            if Account::<T>::contains_key(who) {
+                Self::add_stake(account_id, amount);
+            } else {
+                // Account doesn't exist.
+                // Vote to call `refund` through multisig.
+            }
+            
 
             Ok(().into())
 		}
@@ -153,7 +150,7 @@ pub mod pallet {
             // the pending claims. 
             //
             // TODO: This should be inserted by the CFE signer process including a valid signature.
-            PendingClaims::<T>::insert(&who, (nonce, amount));
+            PendingClaims::<T>::insert(&who, amount);
 
             Ok(().into())
         }
@@ -184,6 +181,8 @@ pub mod pallet {
         ///
         /// If the claimant tries to claim more funds than are available, we set the claimant's balance to 
         /// zero and raise an error. 
+        ///
+        /// **This is a MultiSig call**
         #[pallet::weight(10_000)]
         pub fn claimed(
             origin: OriginFor<T>,
@@ -194,37 +193,10 @@ pub mod pallet {
             
             // TODO: Assert that the calling origin is the MultiSig origin.
 
-            let (remaining_stake, overflow) = Stakes::<T>::try_mutate_exists::<_,_,Error::<T>,_>(&account_id, |storage| {
-                let mut overflow = false;
+            // Find pending claim and delete it.
 
-                *storage = match storage {
-                    Some(staked_amount) => {
-                        match staked_amount.checked_sub(&claimed_amount) {
 
-                            // If the validator has no more balance, remove the storage entry.
-                            Some(balance) if balance == T::StakedAmount::zero() => Ok(None),
-
-                            // Otherwise update the storage entry with the new stake balance. 
-                            Some(balance) => Ok(Some(balance)),
-
-                            // `None` indicates overflow occurred. This should never happen, however, if it does, 
-                            // we set an overflow flag and delete the record.
-                            None => {
-                                overflow = true;
-                                Ok(None)
-                            }
-                        }
-                    },
-                    None => Err(Error::<T>::UnknownClaimant)
-                }?;
-
-                Ok((storage.unwrap_or(T::StakedAmount::zero()), overflow))
-            })?;
-
-            // QUESTION: Is it ok to do this, ie. raise an error *after* changing the state? 
-            ensure!(!overflow, Error::<T>::ClaimOverflow);
-
-            Self::deposit_event(Event::Claimed(account_id, claimed_amount, remaining_stake));
+            Self::deposit_event(Event::Claimed(account_id, claimed_amount));
             Ok(().into())
         }
     }
@@ -236,8 +208,8 @@ pub mod pallet {
         /// A validator has staked some FLIP on the Ethereum chain. [validator_id, stake_added, total_stake]
         Staked(AccountId<T>, T::StakedAmount, T::StakedAmount),
 
-        /// A validator has claimed their FLIP on the Ethereum chain. [validator_id, claimed_amount, remaining_stake]
-        Claimed(AccountId<T>, T::StakedAmount, T::StakedAmount),
+        /// A validator has claimed their FLIP on the Ethereum chain. [validator_id, claimed_amount]
+        Claimed(AccountId<T>, T::StakedAmount),
 
         /// The staked amount should be refunded to the provided Ethereum address. [refund_amount, address]
         Refund(T::StakedAmount, T::EthereumPubKey),
@@ -262,5 +234,19 @@ pub mod pallet {
 
         /// The claimant tried to claim more funds than were available.
         ClaimOverflow,
+    }
+}
+
+impl<T: Config> Module<T> {
+    fn add_stake(account_id: T::AccountId, amount: T::StakedAmount) {
+        let total_stake: T::StakedAmount = Stakes::<T>::mutate_exists(
+            &account_id, 
+            |storage| {
+                let total_stake = storage.unwrap_or(T::StakedAmount::zero()) + amount;
+                *storage = Some(total_stake);
+                total_stake
+            });
+
+        Self::deposit_event(Event::Staked(account_id, amount, total_stake));
     }
 }
