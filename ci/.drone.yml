@@ -4,9 +4,10 @@ type: docker
 
 steps:
   - name: lint-drone-yml
-    image: 'drone/drone:1'
+    image: 'drone/cli'
     commands: 
       - drone lint --trusted
-    when: 
-      event:
-        - push
+trigger: 
+  event:
+    include:
+    - push
