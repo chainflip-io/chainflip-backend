@@ -1,7 +1,14 @@
-use crate::{mock::*, Error};
-use frame_support::{assert_err, assert_ok, storage::StorageMap, assert_noop};
+use super::*;
+use crate::{Error, mock::*};
 use sp_runtime::traits::{BadOrigin, Zero};
+use frame_support::{assert_ok, assert_noop};
+
+// Constants
 const ALICE: u64 = 100;
+
+fn last_event() -> mock::Event {
+    frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
+}
 
 #[test]
 fn sessions_do_end() {
@@ -9,8 +16,12 @@ fn sessions_do_end() {
         assert!(!RotationManager::should_end_session(2));
         // Set blocks for epoch
         assert_ok!(RotationManager::set_epoch(Origin::root(), 2));
+        assert_eq!(
+            last_event(),
+            mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, 2)),
+        );
         assert!(RotationManager::should_end_session(2));
-        assert!(!RotationManager::should_end_session(3));
+        assert!(!RotationManager::should_end_session(1));
     });
 }
 
