@@ -34,6 +34,7 @@ fn changing_epoch() {
             last_event(),
             mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, 2)),
         );
+        assert_noop!(RotationManager::set_epoch(Origin::root(), 2), Error::<Test>::InvalidEpoch);
     });
 }
 

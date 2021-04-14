@@ -68,6 +68,7 @@ pub mod pallet {
             ensure_root(origin)?;
             ensure!(number_of_blocks >= T::MinEpoch::get().saturated_into(), Error::<T>::InvalidEpoch);
             let old_epoch = EpochNumberOfBlocks::<T>::get();
+            ensure!(old_epoch != number_of_blocks, Error::<T>::InvalidEpoch);
             EpochNumberOfBlocks::<T>::set(number_of_blocks);
             Self::deposit_event(Event::EpochChanged(old_epoch, number_of_blocks));
             Ok(().into())
