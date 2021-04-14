@@ -3,7 +3,7 @@ name: ci-checks
 type: docker
 
 steps:
-  - name: test
+  - name: lint-drone-yml
     pull: always
     image: chainflip.jfrog.io/infrastructure/chainflip-master:latest
     commands:
@@ -14,7 +14,7 @@ trigger:
   event:
     - push
   paths:
-    - .drone.yml
+    - "*.drone.yml*"
   branch:
     exclude:
       - main
