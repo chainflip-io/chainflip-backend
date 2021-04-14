@@ -102,7 +102,7 @@ steps:
         from_secret: docker_password
       repo: ghcr.io/chainflip-io/chainflip-backend/rust-base
       dockerfile: Dockerfile.rust-base
-      registry: ghcr.io/chainflip-io
+      registry: ghcr.io
       tags: latest
       cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
 
