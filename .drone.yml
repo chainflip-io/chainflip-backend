@@ -112,12 +112,6 @@ trigger:
     - pull_request
   paths:
     - Dockerfile.rust-base
-node:
-  builder: "true"
-volumes:
-  - name: cache
-    host:
-      path: /mnt/chainflip-build-runner/sccache
 image_pull_secrets:
   - dockerconfigjson
 
@@ -133,7 +127,6 @@ steps:
     image: chainflip.jfrog.io/infrastructure/chainflip-master:latest
     commands:
       - drone lint --trusted
-
 
 trigger:
   event:
