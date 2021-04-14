@@ -6,7 +6,7 @@ steps:
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<< pull_request >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # Pull request check and build
   - name: check-state-chain-dev
-    image: chainflip.jfrog.io/chainflip-backend/rust-base:latest
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
       SCCACHE_DIR: /cache
     commands:
@@ -16,7 +16,7 @@ steps:
       - name: cache
         path: /cache
   - name: compile-state-chain-dev
-    image: chainflip.jfrog.io/chainflip-backend/rust-base:latest
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
       SCCACHE_DIR: /cache
     commands:
@@ -51,7 +51,7 @@ name: chainflip-state-chain
 # Merge to master build and publish
 steps:
   - name: compile-state-chain
-    image: chainflip.jfrog.io/chainflip-backend/rust-base:latest
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
       SCCACHE_DIR: /cache
     commands:
@@ -100,11 +100,11 @@ steps:
         from_secret: docker_username
       password:
         from_secret: docker_password
-      repo: chainflip.jfrog.io/chainflip-backend/rust-base
+      repo: ghcr.io/chainflip-io/chainflip-backend/rust-base
       dockerfile: Dockerfile.rust-base
-      registry: chainflip.jfrog.io
+      registry: ghcr.io/chainflip-io
       tags: latest
-      cache_from: chainflip.jfrog.io/chainflip-backend/rust-base:latest
+      cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
 
 # Config
 trigger:
@@ -124,7 +124,7 @@ type: docker
 steps:
   - name: lint-drone-yml
     pull: always
-    image: chainflip.jfrog.io/infrastructure/chainflip-master:latest
+    image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     commands:
       - drone lint --trusted
 
