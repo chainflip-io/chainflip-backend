@@ -1,6 +1,7 @@
 use crate::{mock::*, Error};
 use frame_support::{assert_err, assert_ok, storage::StorageMap, assert_noop};
-use sp_runtime::traits::{BadOrigin};
+use sp_runtime::traits::{BadOrigin, Zero};
+const ALICE: u64 = 100;
 
 #[test]
 fn sessions_do_end() {
@@ -33,9 +34,9 @@ fn have_optional_validators_on_genesis() {
 fn you_have_to_be_priviledged() {
     new_test_ext().execute_with(|| {
         // Run through the sudo extrinsics to be sure they are what they are
-        assert_noop!(RotationManager::set_epoch(Origin::signed(100), 0u32.into()), BadOrigin);
-        assert_noop!(RotationManager::set_validator_size(Origin::signed(100), 0u32.into()), BadOrigin);
-        assert_noop!(RotationManager::force_rotation(Origin::signed(100)), BadOrigin);
+        assert_noop!(RotationManager::set_epoch(Origin::signed(ALICE), Zero::zero()), BadOrigin);
+        assert_noop!(RotationManager::set_validator_size(Origin::signed(ALICE), Zero::zero()), BadOrigin);
+        assert_noop!(RotationManager::force_rotation(Origin::signed(ALICE)), BadOrigin);
     });
 }
 
