@@ -1,11 +1,12 @@
 kind: pipeline
 type: docker
-name: chainflip-state-chain
+name: chainflip-state-chain-pr
 
 steps:
-  # Pull request check and build
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<< pull_request >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+# Pull request check and build
   - name: check-state-chain-dev
-    image: ghcr.io/chainflip-io/chainflip-infrastructure/rust-base:latest
+    image: chainflip.jfrog.io/chainflip-backend/rust-base:latest
     environment:
       SCCACHE_DIR: /cache
     commands:
@@ -15,7 +16,7 @@ steps:
       - name: cache
         path: /cache
   - name: compile-state-chain-dev
-    image: ghcr.io/chainflip-io/chainflip-infrastructure/rust-base:latest
+    image: chainflip.jfrog.io/chainflip-backend/rust-base:latest
     environment:
       SCCACHE_DIR: /cache
     commands:
@@ -25,9 +26,32 @@ steps:
       - name: cache
         path: /cache
 
-  # Merge to master build and publish
+# Config
+trigger:
+  event:
+    - pull_request
+  paths:
+    - state-chain/*
+node:
+  builder: "true"
+volumes:
+  - name: cache
+    host:
+      path: /mnt/chainflip-build-runner/sccache
+image_pull_secrets:
+  - dockerconfigjson
+
+---
+
+kind: pipeline
+type: docker
+name: chainflip-state-chain
+
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<< main >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+# Merge to master build and publish
+steps:
   - name: compile-state-chain
-    image: ghcr.io/chainflip-io/chainflip-infrastructure/rust-base:latest
+    image: chainflip.jfrog.io/chainflip-backend/rust-base:latest
     environment:
       SCCACHE_DIR: /cache
     commands:
@@ -36,11 +60,6 @@ steps:
     volumes:
       - name: cache
         path: /cache
-    when:
-      branch:
-        - main
-      event:
-        - push
   - name: publish-state-chain-node
     image: docker.bintray.io/jfrog/jfrog-cli-go:latest
     environment:
@@ -51,25 +70,71 @@ steps:
     commands:
       - jfrog rt u --access-token $access_token --url $url ./target/x86_64-apple-darwin/release/state-chain-node state-chain-node/x86_64-apple-darwin_state-chain-node
       - jfrog rt u --access-token $access_token --url $url ./target/wasm32-unknown-unknown/release/state-chain-node state-chain-node/wasm32-unknown-unknown_state-chain-node
-    when:
-      branch:
-        - main
-      event:
-        - push
 
+# Config
 trigger:
+  branch:
+    - main
   event:
-    - pull_request
-  paths:
-    - state-chain/*
-
+    - push
+node:
+  builder: "true"
 volumes:
   - name: cache
     host:
       path: /mnt/chainflip-build-runner/sccache
+image_pull_secrets:
+  - dockerconfigjson
 
-node:
-  builder: "true"
+---
+# Build the base rust image for compiling all rust projects.
+kind: pipeline
+type: docker
+name: build-base-images
+
+steps:
+  - name: rust-base
+    image: plugins/docker
+    settings:
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+      repo: chainflip.jfrog.io/chainflip-backend/rust-base
+      dockerfile: Dockerfile.rust-base
+      registry: chainflip.jfrog.io
+      tags: latest
+      cache_from: chainflip.jfrog.io/chainflip-backend/rust-base:latest
+
+# Config
+trigger:
+  event:
+    - pull_request
+  paths:
+    - Dockerfile.rust-base
+image_pull_secrets:
+  - dockerconfigjson
+
+---
+# Run checks on infrastructure configuration prior to merge.
+kind: pipeline
+name: ci-checks
+type: docker
+
+steps:
+  - name: lint-drone-yml
+    pull: always
+    image: chainflip.jfrog.io/infrastructure/chainflip-master:latest
+    commands:
+      - drone lint --trusted
+
+trigger:
+  event:
+    exclude:
+      - pull_request
+  paths:
+    - .drone.yml
+    - Dockerfile.rust-base
 
 image_pull_secrets:
   - dockerconfigjson
