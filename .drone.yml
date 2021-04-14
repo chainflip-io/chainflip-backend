@@ -108,6 +108,8 @@ steps:
 
 # Config
 trigger:
+  event:
+    - pull_request
   paths:
     - Dockerfile.rust-base
 node:
