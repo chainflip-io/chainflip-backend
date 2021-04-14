@@ -134,6 +134,9 @@ steps:
 
 
 trigger:
+  event:
+    exclude:
+      - pull_request
   paths:
     - .drone.yml
     - Dockerfile.rust-base
