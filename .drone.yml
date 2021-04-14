@@ -6,7 +6,7 @@ steps:
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<< pull_request >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # Pull request check and build
   - name: check-state-chain-dev
-    image: ghcr.io/chainflip-io/chainflip-infrastructure/rust-base:latest
+    image: chainflip.jfrog.io/chainflip-backend/rust-base:latest
     environment:
       SCCACHE_DIR: /cache
     commands:
@@ -16,7 +16,7 @@ steps:
       - name: cache
         path: /cache
   - name: compile-state-chain-dev
-    image: ghcr.io/chainflip-io/chainflip-infrastructure/rust-base:latest
+    image: chainflip.jfrog.io/chainflip-backend/rust-base:latest
     environment:
       SCCACHE_DIR: /cache
     commands:
@@ -51,7 +51,7 @@ name: chainflip-state-chain
 # Merge to master build and publish
 steps:
   - name: compile-state-chain
-    image: ghcr.io/chainflip-io/chainflip-infrastructure/rust-base:latest
+    image: chainflip.jfrog.io/chainflip-backend/rust-base:latest
     environment:
       SCCACHE_DIR: /cache
     commands:
