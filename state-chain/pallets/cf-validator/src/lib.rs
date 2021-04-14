@@ -119,8 +119,8 @@ pub mod pallet {
     impl<T: Config> Default for GenesisConfig<T> {
         fn default() -> Self {
             Self {
-                size_validator_set: 0,
-                epoch_number_of_blocks: 0u32.into(),
+                size_validator_set: Zero::zero(),
+                epoch_number_of_blocks: Zero::zero(),
             }
         }
     }
