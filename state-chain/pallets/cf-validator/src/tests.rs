@@ -69,7 +69,7 @@ fn sessions_do_end() {
 fn building_a_candidate_list() {
     new_test_ext().execute_with(|| {
         // Pull a list of candidates from cf-staking
-        assert_ok!(RotationManager::get_validators());
+        RotationManager::get_validators();
     });
 }
 

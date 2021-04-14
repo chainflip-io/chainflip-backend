@@ -1,7 +1,9 @@
 use super::*;
 use crate as pallet_cf_validator;
-
+//use sp_core::{sr25519};
 use sp_core::H256;
+use codec::{Encode, Decode};
+use sp_io::hashing::blake2_256;
 use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 use frame_support::{parameter_types, construct_runtime};
 
@@ -47,6 +49,20 @@ impl frame_system::Config for Test {
     type SS58Prefix = ();
 }
 
+pub struct TestValidatorProvider;
+
+fn account<AccountId: Decode + Default>(name: &'static str, index: u32, seed: u32) -> AccountId {
+    let entropy = (name, index, seed).using_encoded(blake2_256);
+    AccountId::decode(&mut &entropy[..]).unwrap_or_default()
+}
+
+impl<T: Config> ValidatorProvider<T> for TestValidatorProvider {
+    fn get_validators() -> Option<Vec<T::AccountId>> {
+        Some(vec![account("alice", 0, 0),
+                  account("bob", 1, 0),
+                  account("charlie", 2, 0)])
+    }
+}
 parameter_types! {
 	pub const MinEpoch: u64 = 1;
 	pub const MinValidatorSetSize: u64 = 2;
@@ -56,6 +72,7 @@ impl Config for Test {
     type Event = Event;
     type MinEpoch = MinEpoch;
     type MinValidatorSetSize = MinValidatorSetSize;
+    type ValidatorProvider = TestValidatorProvider;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

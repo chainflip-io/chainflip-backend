@@ -13,6 +13,15 @@ use sp_std::prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};
 
 type ValidatorSize = u32;
+pub trait ValidatorProvider<T: Config> {
+    fn get_validators() -> Option<Vec<T::AccountId>>;
+}
+
+impl<T: Config> ValidatorProvider<T> for () {
+    fn get_validators() -> Option<Vec<T::AccountId>> {
+        None
+    }
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -29,6 +38,8 @@ pub mod pallet {
     pub trait Config: frame_system::Config {
         /// The overarching event type.
         type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+        /// A provider for our validators
+        type ValidatorProvider: ValidatorProvider<Self>;
 
         #[pallet::constant]
         type MinEpoch: Get<u64>;
@@ -141,7 +152,7 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 /// Provides the new set of validators to the session module when session is being rotated.
 impl<T: Config> pallet_session::SessionManager<T::AccountId> for Pallet<T> {
     fn new_session(_new_index: u32) -> Option<Vec<T::AccountId>> {
-        None
+        T::ValidatorProvider::get_validators()
     }
 
     fn end_session(_end_index: u32) {}
@@ -172,8 +183,9 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 }
 
 impl<T: Config> Pallet<T> {
-    pub fn get_validators() -> Result<Vec<T::AccountId>, &'static str> {
-        Ok(vec![])
+
+    pub fn get_validators() -> Option<Vec<T::AccountId>> {
+        T::ValidatorProvider::get_validators()
     }
 
     pub fn should_end_session(now: T::BlockNumber) -> bool {
