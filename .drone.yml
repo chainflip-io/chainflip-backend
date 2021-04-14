@@ -87,13 +87,11 @@ image_pull_secrets:
   - dockerconfigjson
 
 ---
-
+# Build the base rust image for compiling all rust projects.
 kind: pipeline
 type: docker
 name: build-base-images
 
-# <<<<<<<<<<<<<<<<<<<<<<<<<<<<< main >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-# Merge to master build and publish
 steps:
   - name: rust-base
     image: plugins/docker
@@ -118,5 +116,28 @@ volumes:
   - name: cache
     host:
       path: /mnt/chainflip-build-runner/sccache
+image_pull_secrets:
+  - dockerconfigjson
+
+---
+# Run checks on infrastructure configuration prior to merge.
+kind: pipeline
+name: ci-checks
+type: docker
+
+steps:
+  - name: lint-drone-yml
+    pull: always
+    image: chainflip.jfrog.io/infrastructure/chainflip-master:latest
+    commands:
+      - drone lint --trusted
+
+
+trigger:
+  paths:
+    - .drone.yml
+    - Dockerfile.rust-base
+
+
 image_pull_secrets:
   - dockerconfigjson
