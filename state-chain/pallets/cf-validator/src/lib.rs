@@ -11,6 +11,7 @@ pub use pallet::*;
 use sp_runtime::traits::Convert;
 use sp_std::prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};
+use log::{debug};
 
 type ValidatorSize = u32;
 pub trait ValidatorProvider<T: Config> {
@@ -151,13 +152,20 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 
 /// Provides the new set of validators to the session module when session is being rotated.
 impl<T: Config> pallet_session::SessionManager<T::AccountId> for Pallet<T> {
-    fn new_session(_new_index: u32) -> Option<Vec<T::AccountId>> {
-        T::ValidatorProvider::get_validators()
+    fn new_session(new_index: u32) -> Option<Vec<T::AccountId>> {
+        debug!("planning new_session({})", new_index);
+        Self::new_session(new_index)
     }
 
-    fn end_session(_end_index: u32) {}
+    fn end_session(end_index: u32) {
+        debug!("starting start_session({})", end_index);
+        Self::end_session(end_index)
+    }
 
-    fn start_session(_start_index: u32) {}
+    fn start_session(start_index: u32) {
+        debug!("ending end_session({})", start_index);
+        Self::start_session(start_index)
+    }
 }
 
 impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
@@ -183,6 +191,19 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 }
 
 impl<T: Config> Pallet<T> {
+
+    fn new_session(new_index: u32) -> Option<Vec<T::AccountId>> {
+        debug!("Creating a new session {}", new_index);
+        None
+    }
+
+    fn end_session(end_index: u32) {
+        debug!("Ending a session {}", end_index);
+    }
+
+    fn start_session(start_index: u32) {
+        debug!("Starting a new session {}", start_index);
+    }
 
     pub fn get_validators() -> Option<Vec<T::AccountId>> {
         T::ValidatorProvider::get_validators()
