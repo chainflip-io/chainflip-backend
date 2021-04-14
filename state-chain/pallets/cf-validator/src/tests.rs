@@ -11,6 +11,20 @@ fn last_event() -> mock::Event {
 }
 
 #[test]
+fn changing_validator_size() {
+    new_test_ext().execute_with(|| {
+        assert_eq!(<Test as Config>::MinValidatorSetSize::get(), 2);
+        assert_noop!(RotationManager::set_validator_size(Origin::root(), 0), Error::<Test>::InvalidValidatorSetSize);
+        assert_ok!(RotationManager::set_validator_size(Origin::root(), 2));
+        assert_eq!(
+            last_event(),
+            mock::Event::pallet_cf_validator(crate::Event::MaximumValidatorsChanged(0, 2)),
+        );
+        assert_noop!(RotationManager::set_validator_size(Origin::root(), 2), Error::<Test>::InvalidValidatorSetSize);
+    });
+}
+
+#[test]
 fn changing_epoch() {
     new_test_ext().execute_with(|| {
         assert_eq!(<Test as Config>::MinEpoch::get(), 1);

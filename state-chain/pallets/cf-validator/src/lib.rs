@@ -32,6 +32,9 @@ pub mod pallet {
 
         #[pallet::constant]
         type MinEpoch: Get<u64>;
+
+        #[pallet::constant]
+        type MinValidatorSetSize: Get<u64>;
     }
 
     #[pallet::event]
@@ -47,6 +50,7 @@ pub mod pallet {
     pub enum Error<T> {
         NoValidators,
         InvalidEpoch,
+        InvalidValidatorSetSize,
     }
 
     // Pallet implements [`Hooks`] trait to define some logic to execute in some context.
@@ -75,6 +79,11 @@ pub mod pallet {
             size: ValidatorSize,
         ) -> DispatchResultWithPostInfo {
             ensure_root(origin)?;
+            ensure!(size >= T::MinValidatorSetSize::get().saturated_into(), Error::<T>::InvalidValidatorSetSize);
+            let old_size = SizeValidatorSet::<T>::get();
+            ensure!(old_size != size, Error::<T>::InvalidValidatorSetSize);
+            SizeValidatorSet::<T>::set(size.clone());
+            Self::deposit_event(Event::MaximumValidatorsChanged(old_size, size));
             Ok(().into())
         }
 
