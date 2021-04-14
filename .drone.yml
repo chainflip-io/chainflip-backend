@@ -85,3 +85,39 @@ volumes:
       path: /mnt/chainflip-build-runner/sccache
 image_pull_secrets:
   - dockerconfigjson
+
+---
+
+kind: pipeline
+type: docker
+name: build-base-images
+
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<< main >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+# Merge to master build and publish
+steps:
+  - name: rust-base
+    image: plugins/docker
+    settings:
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+      repo: chainflip.jfrog.io/chainflip-backend/rust-base
+      dockerfile: Dockerfile.rust-base
+      registry: chainflip.jfrog.io
+      tags: latest
+      debug: true
+      cache_from: chainflip.jfrog.io/chainflip-backend/rust-base:latest
+
+# Config
+trigger:
+  paths:
+    - Dockerfile.rust-base
+node:
+  builder: "true"
+volumes:
+  - name: cache
+    host:
+      path: /mnt/chainflip-build-runner/sccache
+image_pull_secrets:
+  - dockerconfigjson
