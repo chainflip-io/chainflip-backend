@@ -11,10 +11,22 @@ fn last_event() -> mock::Event {
 }
 
 #[test]
+fn changing_epoch() {
+    new_test_ext().execute_with(|| {
+        assert_eq!(<Test as Config>::MinEpoch::get(), 1);
+        assert_noop!(RotationManager::set_epoch(Origin::root(), 0), Error::<Test>::InvalidEpoch);
+        assert_ok!(RotationManager::set_epoch(Origin::root(), 2));
+        assert_eq!(
+            last_event(),
+            mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, 2)),
+        );
+    });
+}
+
+#[test]
 fn sessions_do_end() {
     new_test_ext().execute_with(|| {
         assert!(!RotationManager::should_end_session(2));
-        // Set blocks for epoch
         assert_ok!(RotationManager::set_epoch(Origin::root(), 2));
         assert_eq!(
             last_event(),

@@ -47,8 +47,13 @@ impl frame_system::Config for Test {
     type SS58Prefix = ();
 }
 
+parameter_types! {
+	pub const MinEpoch: u64 = 1;
+}
+
 impl Config for Test {
     type Event = Event;
+    type MinEpoch = MinEpoch;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

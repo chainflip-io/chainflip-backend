@@ -19,6 +19,7 @@ pub mod pallet {
     use super::*;
     use frame_support::pallet_prelude::*;
     use frame_system::pallet_prelude::*;
+    use frame_support::sp_runtime::SaturatedConversion;
 
     #[pallet::pallet]
     #[pallet::generate_store(pub (super) trait Store)]
@@ -28,6 +29,9 @@ pub mod pallet {
     pub trait Config: frame_system::Config {
         /// The overarching event type.
         type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+        #[pallet::constant]
+        type MinEpoch: Get<u64>;
     }
 
     #[pallet::event]
@@ -42,6 +46,7 @@ pub mod pallet {
     #[pallet::error]
     pub enum Error<T> {
         NoValidators,
+        InvalidEpoch,
     }
 
     // Pallet implements [`Hooks`] trait to define some logic to execute in some context.
@@ -50,15 +55,17 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-        /// New validator's session keys should be set in session module before calling this.
+
         #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
         pub(super) fn set_epoch(
             origin: OriginFor<T>,
             number_of_blocks: T::BlockNumber,
         ) -> DispatchResultWithPostInfo {
             ensure_root(origin)?;
+            ensure!(number_of_blocks >= T::MinEpoch::get().saturated_into(), Error::<T>::InvalidEpoch);
+            let old_epoch = EpochNumberOfBlocks::<T>::get();
             EpochNumberOfBlocks::<T>::set(number_of_blocks);
-            Self::deposit_event(Event::EpochChanged(Zero::zero(), number_of_blocks));
+            Self::deposit_event(Event::EpochChanged(old_epoch, number_of_blocks));
             Ok(().into())
         }
 
@@ -99,7 +106,7 @@ pub mod pallet {
     }
 
     #[cfg(feature = "std")]
-    impl<T:Config> Default for GenesisConfig<T> {
+    impl<T: Config> Default for GenesisConfig<T> {
         fn default() -> Self {
             Self {
                 size_validator_set: 0,
