@@ -106,7 +106,6 @@ steps:
       dockerfile: Dockerfile.rust-base
       registry: chainflip.jfrog.io
       tags: latest
-      debug: true
       cache_from: chainflip.jfrog.io/chainflip-backend/rust-base:latest
 
 # Config
