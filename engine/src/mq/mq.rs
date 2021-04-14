@@ -2,7 +2,8 @@ use crossbeam_channel::Receiver;
 use thiserror::Error;
 
 /// Message should be deserialized by the individual components
-pub type Message = Vec<u8>;
+#[derive(Debug, PartialEq, Clone)]
+pub struct Message(pub Vec<u8>);
 
 /// Contains various general message queue options
 pub struct Options {
@@ -13,8 +14,16 @@ pub struct Options {
 #[derive(Error, Debug)]
 pub enum MQError {
     /// Failure to publish to the subject
-    #[error("Error publish to subject")]
-    PublishError(#[from] std::io::Error),
+    #[error("Error publishing to subject")]
+    PublishError,
+
+    /// Failure to subscribe to the subject
+    #[error("Error subscribing to subject")]
+    SubscribeError,
+
+    /// Failure to convert channel between types
+    #[error("Error converting channel to generic Message type")]
+    ConversionError,
 
     /// Errors that are not wrapped above
     #[error("Unknonwn error occurred")]
