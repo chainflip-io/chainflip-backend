@@ -4677,6 +4677,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-witness"
+version = "0.1.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec 2.0.1",
+ "serde 1.0.124",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+]
+
+[[package]]
 name = "pallet-grandpa"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
