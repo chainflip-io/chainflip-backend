@@ -3,10 +3,22 @@ name: ci-checks
 type: docker
 
 steps:
-  - name: lint-drone-yml
-    image: 'drone/cli'
-    commands: 
-      - lint --trusted
-trigger: 
+  - name: test
+    pull: always
+    image: chainflip.jfrog.io/infrastructure/chainflip-master:latest
+    commands:
+      - drone lint --trusted
+
+
+trigger:
+  event:
+    - push
   paths:
     - .drone.yml
+  branch:
+    exclude:
+      - main
+
+
+image_pull_secrets:
+  - dockerconfigjson
