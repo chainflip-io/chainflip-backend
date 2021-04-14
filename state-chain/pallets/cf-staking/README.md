@@ -52,3 +52,13 @@ You can view the reference docs for this pallet by running:
 ```sh
 cargo doc --open
 ```
+
+## Improvements
+
+Some future improvements:
+
+- Address all TODO and QUESTION items mentioned in the code.
+- Address the abovementioned assumptions where appropriate.
+- Add Ethereum crypto primitives for signature verification.
+- Pre-encode the claim data according to the required eth encoding and store the encoded claim for easier signature verification (the claim sig is made over an ethereum-compatible encoding of the parameters)
+- Store pending claims in a hash lookup so the signer doesn't have to re-submit all the params through the `post_claim_signature` extrinsic.
