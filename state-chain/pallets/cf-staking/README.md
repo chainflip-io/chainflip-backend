@@ -39,7 +39,7 @@ A validator can have at most one open claim at any given time. If a validator su
 
 ### Signatures
 
-This pallet has no knowledge of signatures generated for submission to the `StakeManager::claim` smart contract call. The chainflip engine should store this and make it available to the validators so it can be posted to an Eth node.
+Once the CFE has generated a valid signature for a claim, it should be posted back to the chain via `post_claim_signature`.
 
 ### Genesis Configuration
 
