@@ -4,19 +4,21 @@ use nats;
 
 // This will likely have a private field containing the underlying mq client
 pub struct NatsMQClient {
-    /// The nats.rs connection to the Nats server
+    /// The nats.rs Connection to the Nats server
     conn: nats::Connection,
 }
 
 impl IMQClient<Message> for NatsMQClient {
     fn connect(opts: Options) -> Self {
-        println!("First we try to connect to Nats");
         let conn = nats::connect(opts.url).expect("Could not connect to Nats");
         NatsMQClient { conn }
     }
 
-    fn publish(&self, subject: &str, message: Vec<u8>) {
-        todo!()
+    fn publish(&self, subject: &str, message: Vec<u8>) -> Result<()> {
+        println!("Publish message: {:#?}, to subject: {}", message, subject);
+        self.conn
+            .publish(subject, message)
+            .map_err(|err| MQError::PublishError(err))
     }
 
     fn subscribe(&self, subject: &str) -> Result<Receiver<Message>> {
@@ -28,15 +30,25 @@ impl IMQClient<Message> for NatsMQClient {
 mod test {
     use super::*;
 
-    #[ignore = "Depends on Nats being online"]
-    #[test]
-    fn connect_to_nats() {
+    fn setup_client() -> NatsMQClient {
         let options = Options {
             url: "http://localhost:4222",
         };
 
-        let nats_client = NatsMQClient::connect(options);
-        let client_id = nats_client.conn.client_ip();
-        assert!(client_id.is_ok())
+        NatsMQClient::connect(options)
+    }
+
+    #[ignore = "Depends on Nats being online"]
+    #[test]
+    fn connect_to_nats() {
+        let nats_client = setup_client();
+        let client_ip = nats_client.conn.client_ip();
+        assert!(client_ip.is_ok())
+    }
+
+    #[test]
+    fn publish_to_subject() {
+        let nats_client = setup_client();
+        nats_client.publish("witness.eth", "hello".as_bytes().to_owned())
     }
 }

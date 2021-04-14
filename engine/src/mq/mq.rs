@@ -1,4 +1,5 @@
 use crossbeam_channel::Receiver;
+use thiserror::Error;
 
 /// Message should be deserialized by the individual components
 pub type Message = Vec<u8>;
@@ -9,8 +10,14 @@ pub struct Options {
 }
 
 /// Message Queue Error type
+#[derive(Error, Debug)]
 pub enum MQError {
+    /// Failure to publish to the subject
+    #[error("Error publish to subject")]
+    PublishError(#[from] std::io::Error),
+
     /// Errors that are not wrapped above
+    #[error("Unknonwn error occurred")]
     Other,
 }
 
@@ -23,7 +30,7 @@ pub trait IMQClient<Message> {
     fn connect(opts: Options) -> Self;
 
     /// Publish something to a particular subject
-    fn publish(&self, subject: &str, message: Vec<u8>);
+    fn publish(&self, subject: &str, message: Vec<u8>) -> Result<()>;
 
     /// Subscribe to a subject
     fn subscribe(&self, subject: &str) -> Result<Receiver<Message>>;

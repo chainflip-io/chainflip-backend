@@ -13,5 +13,6 @@ You can start the Nats server with Docker.
 docker pull nats:latest
 
 # Run the image, on the default port, 4222, in detached mode
-docker run -p 4222:4222 -ti -d nats:latest
+# port 8222 provides a site with stats on the nats server
+docker run -p 4222:4222 -p 8222:8222 -ti -d nats:latest
 ```
