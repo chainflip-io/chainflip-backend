@@ -55,7 +55,7 @@ steps:
     environment:
       SCCACHE_DIR: /cache
     commands:
-      - cargo build --release -Zmultitarget --target x86_64-apple-darwin --target x86_64-unknown-linux-musl
+      - cargo build --release -Zmultitarget --target x86_64-apple-darwin --target x86_64-unknown-linux-gnu
       - sccache -s
     volumes:
       - name: cache
@@ -69,7 +69,7 @@ steps:
         from_secret: jfrog_artifactory_url
     commands:
       - jfrog rt u --access-token $access_token --url $url ./target/x86_64-apple-darwin/release/state-chain-node state-chain-node/x86_64-apple-darwin_state-chain-node
-      - jfrog rt u --access-token $access_token --url $url ./target/wasm32-unknown-unknown/release/state-chain-node state-chain-node/wasm32-unknown-unknown_state-chain-node
+      - jfrog rt u --access-token $access_token --url $url ./target/x86_64-unknown-linux-gnu/release/state-chain-node state-chain-node/x86_64-unknown-linux-gnu_state-chain-node
 
 # Config
 trigger:
