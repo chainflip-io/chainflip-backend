@@ -5,16 +5,17 @@ pub type Message = Vec<u8>;
 
 /// Contains various general message queue options
 pub struct Options {
-    url: String,
+    pub url: &'static str,
 }
 
 /// Message Queue Error type
 pub enum MQError {
+    /// Errors that are not wrapped above
     Other,
 }
 
 /// Message Queue Result type
-type Result<T> = std::result::Result<T, MQError>;
+pub type Result<T> = std::result::Result<T, MQError>;
 
 /// Interface for a message queue
 pub trait IMQClient<Message> {

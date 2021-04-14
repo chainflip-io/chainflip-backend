@@ -8,3 +8,4 @@ edition = "2018"
 
 [dependencies]
 crossbeam-channel = "0.5.1"
+nats = "0.9.12"
