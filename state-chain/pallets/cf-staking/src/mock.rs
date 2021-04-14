@@ -1,9 +1,8 @@
 use crate as pallet_cf_staking;
+use app_crypto::ecdsa::Public;
 use sp_core::H256;
 use frame_support::parameter_types;
-use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup}, testing::Header, 
-};
+use sp_runtime::{app_crypto, testing::Header, traits::{BlakeTwo256, IdentityLookup}};
 use frame_system as system;
 use system::{Account, AccountInfo};
 
@@ -25,6 +24,7 @@ frame_support::construct_runtime!(
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const SS58Prefix: u8 = 42;
+	pub const UnsignedPriority: u32 = 100;
 }
 
 impl system::Config for Test {
@@ -60,6 +60,10 @@ impl pallet_cf_staking::Config for Test {
 	type EthereumAddress = u64;
 
 	type Nonce = u32;
+
+	type EthereumCrypto = Public;
+
+	type UnsignedPriority = UnsignedPriority;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
