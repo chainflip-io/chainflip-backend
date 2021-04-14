@@ -17,7 +17,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		RotationManager: pallet_cf_validator::{Module, Call, Storage, Event<T>},
+		ValidatorManager: pallet_cf_validator::{Module, Call, Storage, Event<T>},
 	}
 );
 

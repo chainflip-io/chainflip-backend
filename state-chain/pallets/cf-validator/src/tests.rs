@@ -13,13 +13,13 @@ fn last_event() -> mock::Event {
 #[test]
 fn estimation_on_next_session() {
     new_test_ext().execute_with(|| {
-        assert_ok!(RotationManager::set_epoch(Origin::root(), 2));
+        assert_ok!(ValidatorManager::set_epoch(Origin::root(), 2));
         assert_eq!(
             last_event(),
             mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, 2)),
         );
 
-        assert_eq!(RotationManager::estimate_next_session_rotation(3), Some(5));
+        assert_eq!(ValidatorManager::estimate_next_session_rotation(3), Some(5));
     });
 }
 
@@ -27,13 +27,13 @@ fn estimation_on_next_session() {
 fn changing_validator_size() {
     new_test_ext().execute_with(|| {
         assert_eq!(<Test as Config>::MinValidatorSetSize::get(), 2);
-        assert_noop!(RotationManager::set_validator_size(Origin::root(), 0), Error::<Test>::InvalidValidatorSetSize);
-        assert_ok!(RotationManager::set_validator_size(Origin::root(), 2));
+        assert_noop!(ValidatorManager::set_validator_size(Origin::root(), 0), Error::<Test>::InvalidValidatorSetSize);
+        assert_ok!(ValidatorManager::set_validator_size(Origin::root(), 2));
         assert_eq!(
             last_event(),
             mock::Event::pallet_cf_validator(crate::Event::MaximumValidatorsChanged(0, 2)),
         );
-        assert_noop!(RotationManager::set_validator_size(Origin::root(), 2), Error::<Test>::InvalidValidatorSetSize);
+        assert_noop!(ValidatorManager::set_validator_size(Origin::root(), 2), Error::<Test>::InvalidValidatorSetSize);
     });
 }
 
@@ -41,27 +41,27 @@ fn changing_validator_size() {
 fn changing_epoch() {
     new_test_ext().execute_with(|| {
         assert_eq!(<Test as Config>::MinEpoch::get(), 1);
-        assert_noop!(RotationManager::set_epoch(Origin::root(), 0), Error::<Test>::InvalidEpoch);
-        assert_ok!(RotationManager::set_epoch(Origin::root(), 2));
+        assert_noop!(ValidatorManager::set_epoch(Origin::root(), 0), Error::<Test>::InvalidEpoch);
+        assert_ok!(ValidatorManager::set_epoch(Origin::root(), 2));
         assert_eq!(
             last_event(),
             mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, 2)),
         );
-        assert_noop!(RotationManager::set_epoch(Origin::root(), 2), Error::<Test>::InvalidEpoch);
+        assert_noop!(ValidatorManager::set_epoch(Origin::root(), 2), Error::<Test>::InvalidEpoch);
     });
 }
 
 #[test]
 fn sessions_do_end() {
     new_test_ext().execute_with(|| {
-        assert!(!RotationManager::should_end_session(2));
-        assert_ok!(RotationManager::set_epoch(Origin::root(), 2));
+        assert!(!ValidatorManager::should_end_session(2));
+        assert_ok!(ValidatorManager::set_epoch(Origin::root(), 2));
         assert_eq!(
             last_event(),
             mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, 2)),
         );
-        assert!(RotationManager::should_end_session(2));
-        assert!(!RotationManager::should_end_session(1));
+        assert!(ValidatorManager::should_end_session(2));
+        assert!(!ValidatorManager::should_end_session(1));
     });
 }
 
@@ -69,7 +69,7 @@ fn sessions_do_end() {
 fn building_a_candidate_list() {
     new_test_ext().execute_with(|| {
         // Pull a list of candidates from cf-staking
-        RotationManager::get_validators();
+        ValidatorManager::get_validators();
     });
 }
 
@@ -85,9 +85,9 @@ fn have_optional_validators_on_genesis() {
 fn you_have_to_be_priviledged() {
     new_test_ext().execute_with(|| {
         // Run through the sudo extrinsics to be sure they are what they are
-        assert_noop!(RotationManager::set_epoch(Origin::signed(ALICE), Zero::zero()), BadOrigin);
-        assert_noop!(RotationManager::set_validator_size(Origin::signed(ALICE), Zero::zero()), BadOrigin);
-        assert_noop!(RotationManager::force_rotation(Origin::signed(ALICE)), BadOrigin);
+        assert_noop!(ValidatorManager::set_epoch(Origin::signed(ALICE), Zero::zero()), BadOrigin);
+        assert_noop!(ValidatorManager::set_validator_size(Origin::signed(ALICE), Zero::zero()), BadOrigin);
+        assert_noop!(ValidatorManager::force_rotation(Origin::signed(ALICE)), BadOrigin);
     });
 }
 
