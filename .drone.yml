@@ -138,6 +138,5 @@ trigger:
     - .drone.yml
     - Dockerfile.rust-base
 
-
 image_pull_secrets:
   - dockerconfigjson
