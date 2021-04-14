@@ -59,7 +59,6 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-
         #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
         pub(super) fn set_epoch(
             origin: OriginFor<T>,
@@ -133,7 +132,6 @@ pub mod pallet {
 }
 
 /// Indicates to the session module if the session should be rotated.
-/// We set this flag to true when we add/remove a validator.
 impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
     fn should_end_session(now: T::BlockNumber) -> bool {
         Self::should_end_session(now)
@@ -152,8 +150,8 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId> for Pallet<T> {
 }
 
 impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
-    fn estimate_next_session_rotation(_now: T::BlockNumber) -> Option<T::BlockNumber> {
-        None
+    fn estimate_next_session_rotation(now: T::BlockNumber) -> Option<T::BlockNumber> {
+        Self::estimate_next_session_rotation(now)
     }
 
     // The validity of this weight depends on the implementation of `estimate_next_session_rotation`
@@ -186,5 +184,10 @@ impl<T: Config> Pallet<T> {
         let last_block_number = LastBlockNumber::<T>::get();
         let diff = now.saturating_sub(last_block_number);
         diff >= epoch_blocks
+    }
+
+    pub fn estimate_next_session_rotation(now: T::BlockNumber) -> Option<T::BlockNumber> {
+        let epoch_blocks = EpochNumberOfBlocks::<T>::get();
+        Some(now + epoch_blocks)
     }
 }

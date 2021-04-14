@@ -11,6 +11,19 @@ fn last_event() -> mock::Event {
 }
 
 #[test]
+fn estimation_on_next_session() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(RotationManager::set_epoch(Origin::root(), 2));
+        assert_eq!(
+            last_event(),
+            mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, 2)),
+        );
+
+        assert_eq!(RotationManager::estimate_next_session_rotation(3), Some(5));
+    });
+}
+
+#[test]
 fn changing_validator_size() {
     new_test_ext().execute_with(|| {
         assert_eq!(<Test as Config>::MinValidatorSetSize::get(), 2);
