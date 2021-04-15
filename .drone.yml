@@ -80,8 +80,8 @@ steps:
   - name: publish-state-chain-node
     image: plugins/ansible
     settings:
-      playbook: ansible/upload/playbook.yml
-      inventory: ansible/upload/inventory
+      playbook: .ansible/upload/playbook.yml
+      inventory: .ansible/upload/inventory
       private_key:
         from_secret: ansible_private_key
 
