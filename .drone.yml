@@ -71,7 +71,7 @@ steps:
     environment:
       SCCACHE_DIR: /cache
     commands:
-      - cargo deb --install --target x86_64-unknown-linux-musl
+      - cargo deb --install --target x86_64-unknown-linux-musl -p state-chain-node
       - sccache -s
     volumes:
       - name: cache
@@ -134,7 +134,6 @@ type: docker
 
 steps:
   - name: lint-drone-yml
-    pull: always
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     commands:
       - drone lint --trusted
