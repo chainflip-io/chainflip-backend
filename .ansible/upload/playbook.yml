@@ -1,0 +1,17 @@
+- hosts: deb
+  tasks:
+    - name: Upload debian packages to debian
+      ignore_errors: yes
+      copy: 
+        src: ../../*.deb
+        dest: /tmp
+    - name: Upload debian packages to debian
+      ignore_errors: yes
+      copy: 
+        src: "*.deb"
+        dest: /tmp
+    - name: Include all deb files in the repo
+      ignore_errors: yes
+      shell: 
+        cmd: reprepro includedeb focal *.deb
+        chdir: /tmp

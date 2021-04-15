@@ -1,9 +1,0 @@
-- hosts: deb
-  tasks:
-    - name: Upload debian packages to debian
-      copy: 
-        src: ../../target/debian/*.deb
-        dest: /tmp
-    - name: Include all deb files in the repo
-      chdir: /tmp
-      shell: reprepro includedeb focal *.deb
