@@ -6,6 +6,12 @@ use frame_support::{assert_ok, assert_noop};
 // Constants
 const ALICE: u64 = 100;
 
+fn events() -> Vec<mock::Event> {
+    let evt = System::events().into_iter().map(|evt| evt.event).collect::<Vec<_>>();
+    System::reset_events();
+    evt
+}
+
 fn last_event() -> mock::Event {
     frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
 }
@@ -96,14 +102,42 @@ fn you_have_to_be_priviledged() {
 fn bring_forward_session() {
     new_test_ext().execute_with(|| {
         // Set session epoch to 2, we are on block 1
-        assert_ok!(ValidatorManager::set_epoch(Origin::root(), 2));
-        assert_eq!(
-            last_event(),
-            mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, 2)),
-        );
-        // Move two blocks forward
-        run_to_block(2);
+        let epoch = 2;
+        let mut block_number = epoch;
+        assert_ok!(ValidatorManager::set_epoch(Origin::root(), epoch));
 
+        // Move a session forward
+        run_to_block(block_number);
+        assert_eq!(
+            events(),
+            [
+                mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, 2)),
+                mock::Event::pallet_cf_validator(crate::Event::AuctionStarted()),
+                mock::Event::pallet_session(pallet_session::Event::NewSession(1)),
+            ]
+        );
+
+        // Move a session forward
+        block_number += epoch;
+        run_to_block(block_number);
+        assert_eq!(
+            events(),
+            [
+                mock::Event::pallet_cf_validator(crate::Event::AuctionStarted()),
+                mock::Event::pallet_session(pallet_session::Event::NewSession(2)),
+            ]
+        );
+
+        // Move a session forward
+        block_number += epoch;
+        run_to_block(block_number);
+        assert_eq!(
+            events(),
+            [
+                mock::Event::pallet_cf_validator(crate::Event::AuctionStarted()),
+                mock::Event::pallet_session(pallet_session::Event::NewSession(3)),
+            ]
+        );
     });
 }
 

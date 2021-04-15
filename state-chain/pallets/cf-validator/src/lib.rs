@@ -157,11 +157,14 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 
 /// Provides the new set of validators to the session module when session is being rotated.
 impl<T: Config> pallet_session::SessionManager<T::AccountId> for Pallet<T> {
+
+    // On rotation this is called #3
     fn new_session(new_index: u32) -> Option<Vec<T::AccountId>> {
         debug!("planning new_session({})", new_index);
         Self::new_session(new_index)
     }
 
+    // On rotation this is called #1
     fn end_session(end_index: u32) {
         debug!("starting start_session({})", end_index);
         Self::end_session(end_index)
@@ -170,7 +173,8 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId> for Pallet<T> {
     // On rotation this is called #2
     fn start_session(start_index: u32) {
         debug!("ending end_session({})", start_index);
-        Self::start_session(start_index)
+        Self::start_session(start_index);
+        Self::deposit_event(Event::AuctionStarted());
     }
 }
 
@@ -223,7 +227,9 @@ impl<T: Config> Pallet<T> {
         }
         let last_block_number = LastBlockNumber::<T>::get();
         let diff = now.saturating_sub(last_block_number);
-        diff >= epoch_blocks
+        let end = diff >= epoch_blocks;
+        if end { LastBlockNumber::<T>::set(now); }
+        end
     }
 
     pub fn estimate_next_session_rotation(now: T::BlockNumber) -> Option<T::BlockNumber> {
