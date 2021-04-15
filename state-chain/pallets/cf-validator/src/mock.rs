@@ -20,13 +20,20 @@ use sp_runtime::{
 };
 use frame_support::{parameter_types, construct_runtime, traits::{OnInitialize, OnFinalize}};
 use pallet_session::SessionHandler;
+use std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-const ALICE: u64 = 100;
-const BOB: u64 = 200;
-const CHARLIE: u64 = 300;
+pub const ALICE: u64 = 100;
+pub const BOB: u64 = 200;
+pub const CHARLIE: u64 = 300;
+
+thread_local! {
+    pub static SESSION_CHANGED: RefCell<bool> = RefCell::new(false);
+	pub static CURRENT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
+	pub static NEXT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
+}
 
 pub struct TestSessionHandler;
 
@@ -34,22 +41,27 @@ impl SessionHandler<u64> for TestSessionHandler {
     const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[UintAuthorityId::ID];
     fn on_genesis_session<T: OpaqueKeys>(_validators: &[(u64, T)]) {}
     fn on_new_session<T: OpaqueKeys>(
-        _changed: bool,
-        _validators: &[(u64, T)],
-        _queued_validators: &[(u64, T)],
+        changed: bool,
+        validators: &[(u64, T)],
+        queued_validators: &[(u64, T)],
     ) {
-        // SESSION_CHANGED.with(|l| *l.borrow_mut() = changed);
-        // AUTHORITIES.with(|l|
-        //     *l.borrow_mut() = validators.iter()
-        //         .map(|(_, id)| id.get::<UintAuthorityId>(DUMMY).unwrap_or_default())
-        //         .collect()
-        // );
-    }
-    fn on_disabled(_validator_index: usize) {
-        //DISABLED.with(|l| *l.borrow_mut() = true)
+        SESSION_CHANGED.with(|l| *l.borrow_mut() = changed);
+        CURRENT_VALIDATORS.with(|l|
+            *l.borrow_mut() = validators.iter()
+                .map(|(id, _)| *id)
+                .collect()
+        );
+        NEXT_VALIDATORS.with(|l|
+            *l.borrow_mut() = queued_validators.iter()
+                .map(|(id, _)| *id)
+                .collect()
+        );
     }
     fn on_before_session_ending() {
         //BEFORE_SESSION_END_CALLED.with(|b| *b.borrow_mut() = true);
+    }
+    fn on_disabled(_validator_index: usize) {
+        //DISABLED.with(|l| *l.borrow_mut() = true)
     }
 }
 
@@ -120,7 +132,7 @@ pub struct TestValidatorProvider;
 
 impl ValidatorProvider<u64> for TestValidatorProvider {
     fn get_validators(index: SessionIndex) -> Option<Vec<u64>> {
-        Some(vec![ALICE + index as u64, BOB + index as u64, CHARLIE + index as u64])
+        Some(vec![index as u64, index as u64, index as u64])
     }
 }
 parameter_types! {
@@ -142,6 +154,15 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
     let mut ext = sp_io::TestExternalities::new(t);
     ext.execute_with(|| System::set_block_number(1));
     ext
+}
+
+
+pub fn current_validators() -> Vec<u64> {
+    CURRENT_VALIDATORS.with(|l| l.borrow().to_vec())
+}
+
+pub fn next_validators() -> Vec<u64> {
+    NEXT_VALIDATORS.with(|l| l.borrow().to_vec())
 }
 
 pub fn run_to_block(n: u64) {

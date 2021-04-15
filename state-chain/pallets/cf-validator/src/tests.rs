@@ -105,7 +105,7 @@ fn bring_forward_session() {
         let epoch = 2;
         let mut block_number = epoch;
         assert_ok!(ValidatorManager::set_epoch(Origin::root(), epoch));
-
+        assert_eq!(mock::current_validators().len(), 0);
         // Move a session forward
         run_to_block(block_number);
         assert_eq!(
@@ -116,6 +116,10 @@ fn bring_forward_session() {
                 mock::Event::pallet_session(pallet_session::Event::NewSession(1)),
             ]
         );
+        // We have no current validators in first rotation
+        assert_eq!(mock::current_validators().len(), 0);
+        assert_eq!(mock::next_validators().len(), 3);
+        assert_eq!(mock::next_validators()[0], 2);  // Session 2 is next up
 
         // Move a session forward
         block_number += epoch;
@@ -128,6 +132,11 @@ fn bring_forward_session() {
             ]
         );
 
+        assert_eq!(mock::current_validators().len(), 3);
+        assert_eq!(mock::current_validators()[0], 2);  // Session 2 is now current
+        assert_eq!(mock::next_validators().len(), 3);
+        assert_eq!(mock::next_validators()[0], 3);  // Session 3 is now next up
+
         // Move a session forward
         block_number += epoch;
         run_to_block(block_number);
@@ -138,6 +147,11 @@ fn bring_forward_session() {
                 mock::Event::pallet_session(pallet_session::Event::NewSession(3)),
             ]
         );
+
+        assert_eq!(mock::current_validators().len(), 3);
+        assert_eq!(mock::current_validators()[0], 3);  // Session 3 is now current
+        assert_eq!(mock::next_validators().len(), 3);
+        assert_eq!(mock::current_validators()[0], 4);  // Session 4 is now next up
     });
 }
 
@@ -158,6 +172,7 @@ fn limit_validator_set_size() {
         // Update (validator size - 1)
         // Force a rotation
         // Confirm we have a (validator - 1) set size
+
     });
 }
 
