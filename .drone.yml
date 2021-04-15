@@ -70,10 +70,15 @@ steps:
     volumes:
       - name: cache
         path: /cache
-depends_on:
-  - compile-state-chain-linux
-  - compile-state-chain-darwin
-  # Config
+  - name: publish-state-chain-node
+    image: docker.bintray.io/jfrog/jfrog-cli-go:latest
+    commands:
+      - echo "Waiting on deb"
+    depends_on:
+      - compile-state-chain-linux
+      - compile-state-chain-darwin
+
+# Config
 trigger:
 #  branch:
 #    - main
