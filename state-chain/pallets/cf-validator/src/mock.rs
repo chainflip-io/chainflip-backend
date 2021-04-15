@@ -118,17 +118,17 @@ fn account<AccountId: Decode + Default>(name: &'static str, index: u32, seed: u3
 }
 
 impl<T: Config> ValidatorProvider<T> for TestValidatorProvider {
-    fn get_validators() -> Option<Vec<T::AccountId>> {
-        Some(vec![account("ALICE", 0, 0),
-                  account("BOB", 1, 0),
-                  account("CHARLIE", 2, 0)])
+    fn get_validators(index: SessionIndex) -> Option<Vec<T::AccountId>> {
+        Some(vec![account("ALICE", 0, index),
+                  account("BOB", 1, index),
+                  account("CHARLIE", 2, index)])
     }
 
-    fn session_ending() {
+    fn session_ending(_index: SessionIndex) {
         // Get ready for next set to be called in get_validators()
     }
 
-    fn session_starting() {
+    fn session_starting(_index: SessionIndex) {
         // New session starting
     }
 }

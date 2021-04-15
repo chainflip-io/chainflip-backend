@@ -13,18 +13,20 @@ use frame_support::sp_runtime::traits::{Saturating, Zero};
 use log::{debug};
 
 type ValidatorSize = u32;
+type SessionIndex = u32;
+
 pub trait ValidatorProvider<T: Config> {
-    fn get_validators() -> Option<Vec<T::AccountId>>;
-    fn session_ending();
-    fn session_starting();
+    fn get_validators(index: SessionIndex) -> Option<Vec<T::AccountId>>;
+    fn session_ending(index: SessionIndex);
+    fn session_starting(index: SessionIndex);
 }
 
 impl<T: Config> ValidatorProvider<T> for () {
-    fn get_validators() -> Option<Vec<T::AccountId>> {
+    fn get_validators(_index: SessionIndex) -> Option<Vec<T::AccountId>> {
         None
     }
-    fn session_ending() {}
-    fn session_starting() {}
+    fn session_ending(_index: SessionIndex) {}
+    fn session_starting(_index: SessionIndex) {}
 }
 
 #[frame_support::pallet]
@@ -165,6 +167,7 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId> for Pallet<T> {
         Self::end_session(end_index)
     }
 
+    // On rotation this is called #2
     fn start_session(start_index: u32) {
         debug!("ending end_session({})", start_index);
         Self::start_session(start_index)
