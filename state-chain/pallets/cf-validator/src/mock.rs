@@ -9,7 +9,6 @@ use frame_support::{parameter_types, construct_runtime};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
-pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 
 construct_runtime!(
 	pub enum Test where
@@ -63,6 +62,15 @@ impl<T: Config> ValidatorProvider<T> for TestValidatorProvider {
                   account("BOB", 1, 0),
                   account("CHARLIE", 2, 0)])
     }
+
+    fn session_ending() {
+        // Get ready for next set to be called in get_validators()
+    }
+
+    fn session_starting() {
+        // New session starting
+    }
+
 }
 parameter_types! {
 	pub const MinEpoch: u64 = 1;

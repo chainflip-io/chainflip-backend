@@ -6,7 +6,6 @@
 
 mod mock;
 mod tests;
-
 pub use pallet::*;
 use sp_runtime::traits::Convert;
 use sp_std::prelude::*;
@@ -16,12 +15,16 @@ use log::{debug};
 type ValidatorSize = u32;
 pub trait ValidatorProvider<T: Config> {
     fn get_validators() -> Option<Vec<T::AccountId>>;
+    fn session_ending();
+    fn session_starting();
 }
 
 impl<T: Config> ValidatorProvider<T> for () {
     fn get_validators() -> Option<Vec<T::AccountId>> {
         None
     }
+    fn session_ending() {}
+    fn session_starting() {}
 }
 
 #[frame_support::pallet]
@@ -194,11 +197,12 @@ impl<T: Config> Pallet<T> {
 
     fn new_session(new_index: u32) -> Option<Vec<T::AccountId>> {
         debug!("Creating a new session {}", new_index);
-        None
+        Self::get_validators()
     }
 
     fn end_session(end_index: u32) {
         debug!("Ending a session {}", end_index);
+        T::ValidatorProvider::session_ending()
     }
 
     fn start_session(start_index: u32) {
