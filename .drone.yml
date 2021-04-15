@@ -60,23 +60,12 @@ steps:
     volumes:
       - name: cache
         path: /cache
-  - name: compile-state-chain-darwin
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_DIR: /cache
-    commands:
-      - cargo build --release --target x86_64-apple-darwin
-      - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
   - name: publish-state-chain-node
     image: docker.bintray.io/jfrog/jfrog-cli-go:latest
     commands:
       - echo "Waiting on deb"
     depends_on:
       - compile-state-chain-linux
-      - compile-state-chain-darwin
 
 # Config
 trigger:
