@@ -39,6 +39,6 @@ std = [
     'sp-core/std',
     'sp-io/std',
     'serde',
-    # 'log/std',
+    'log/std',
     'pallet-session/std'
 ]

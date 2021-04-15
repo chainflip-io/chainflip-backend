@@ -95,10 +95,15 @@ fn you_have_to_be_priviledged() {
 #[test]
 fn bring_forward_session() {
     new_test_ext().execute_with(|| {
-        // Get current next session block number
-        // Update next session (block number - 1)
-        // Wait (block number - 1) blocks
-        // Confirm things have switched
+        // Set session epoch to 2, we are on block 1
+        assert_ok!(ValidatorManager::set_epoch(Origin::root(), 2));
+        assert_eq!(
+            last_event(),
+            mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, 2)),
+        );
+        // Move two blocks forward
+        run_to_block(2);
+
     });
 }
 
