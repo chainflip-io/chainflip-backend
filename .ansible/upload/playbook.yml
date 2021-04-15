@@ -3,15 +3,11 @@
     - name: Upload debian packages to debian
       ignore_errors: yes
       copy: 
-        src: ../../*.deb
+        src: ./files
         dest: /tmp
-    - name: Upload debian packages to debian
-      ignore_errors: yes
-      copy: 
-        src: "*.deb"
-        dest: /tmp
+        directory_mode: yes
     - name: Include all deb files in the repo
       ignore_errors: yes
       shell: 
-        cmd: reprepro includedeb focal *.deb
+        cmd: reprepro -b /srv/repos/apt/debian includedeb focal *.deb
         chdir: /tmp

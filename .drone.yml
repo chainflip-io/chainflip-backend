@@ -72,7 +72,7 @@ steps:
     environment:
       SCCACHE_DIR: /cache
     commands:
-      - cargo deb --target x86_64-unknown-linux-musl -p state-chain-node --output ./
+      - cargo deb --target x86_64-unknown-linux-musl -p state-chain-node --output ./.ansible/files/
       - sccache -s
     volumes:
       - name: cache
