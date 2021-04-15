@@ -1,9 +1,15 @@
-use crossbeam_channel::Receiver;
+use async_trait::async_trait;
 use thiserror::Error;
+use tokio::sync::mpsc::Receiver;
+
+// use super::nats_client::NatsReceiverAdapter;
 
 /// Message should be deserialized by the individual components
 #[derive(Debug, PartialEq, Clone)]
 pub struct Message(pub Vec<u8>);
+
+/// Message Queue Result type
+pub type Result<T> = std::result::Result<T, MQError>;
 
 /// Contains various general message queue options
 pub struct Options {
@@ -21,26 +27,23 @@ pub enum MQError {
     #[error("Error subscribing to subject")]
     SubscribeError,
 
-    /// Failure to convert channel between types
-    #[error("Error converting channel to generic Message type")]
-    ConversionError,
-
     /// Errors that are not wrapped above
     #[error("Unknonwn error occurred")]
     Other,
 }
 
-/// Message Queue Result type
-pub type Result<T> = std::result::Result<T, MQError>;
-
 /// Interface for a message queue
+#[async_trait]
 pub trait IMQClient<Message> {
     /// Open a connection to the message queue
-    fn connect(opts: Options) -> Self;
+    async fn connect(opts: Options) -> Self;
 
     /// Publish something to a particular subject
-    fn publish(&self, subject: &str, message: Vec<u8>) -> Result<()>;
+    async fn publish(&self, subject: &str, message: Vec<u8>) -> Result<()>;
 
     /// Subscribe to a subject
-    fn subscribe(&self, subject: &str) -> Result<Receiver<Message>>;
+    async fn subscribe(&self, subject: &str) -> Result<Receiver<Message>>;
+
+    /// Unsubscribe from a subject
+    async fn unsubscrbe(&self, subject: &str) -> Result<()>;
 }

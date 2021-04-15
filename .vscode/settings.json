@@ -1,5 +1,9 @@
 {
     "search.exclude": {
         "**/target": true
-    }
+    },
+    "rust-analyzer.checkOnSave.allFeatures": null,
+    "rust-analyzer.checkOnSave.extraArgs": [
+        "--target-dir", "/Users/kaz/Documents/Chainflip/chainflip-backend/engine",
+    ],
 }

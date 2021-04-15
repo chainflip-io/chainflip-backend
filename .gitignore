@@ -26,3 +26,5 @@ oxen_connection
 chainflip-engine/config/**/local.toml
 
 .vscode
+
+**/debug/

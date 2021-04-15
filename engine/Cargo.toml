@@ -8,5 +8,12 @@ edition = "2018"
 
 [dependencies]
 crossbeam-channel = "0.5.1"
+async-nats = "0.9.12"
+async-trait = "0.1.49"
 nats = "0.9.12"
 thiserror = "1.0.24"
+tokio = { version = "1.5.0", features = ["full"] }
+futures = "0.3.14"
+async-stream = "0.3.0"
+futures-core = "0.3.14"
+futures-util = "0.3.14"
