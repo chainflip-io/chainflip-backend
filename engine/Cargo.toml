@@ -64,3 +64,12 @@ path = "src/bin/oxen.rs"
 [[bin]]
 name = "pool-tool"
 path = "src/bin/pool.rs"
+
+[package.metadata.deb]
+name = "engine"
+maintainer = "Chainflip UG <dev@chainflip.io>"
+extended-description = """\
+Chainflip Validator Engine Package"""
+depends = "$auto"
+section = "rust"
+priority = "required"

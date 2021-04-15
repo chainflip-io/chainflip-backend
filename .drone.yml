@@ -1,47 +1,47 @@
-kind: pipeline
-type: docker
-name: chainflip-state-chain-pr
-
-steps:
-# <<<<<<<<<<<<<<<<<<<<<<<<<<<<< pull_request >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-# Pull request check and build
-  - name: check-state-chain-dev
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_DIR: /cache
-    commands:
-      - SKIP_WASM_BUILD=1 cargo check --release
-      - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
-  - name: compile-state-chain-dev
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_DIR: /cache
-    commands:
-      - cargo build --release
-      - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
-
-# Config
-trigger:
-  event:
-    - pull_request
-  paths:
-    - state-chain/*
-node:
-  builder: "true"
-volumes:
-  - name: cache
-    host:
-      path: /mnt/chainflip-build-runner/sccache
-image_pull_secrets:
-  - dockerconfigjson
-
----
+#kind: pipeline
+#type: docker
+#name: chainflip-state-chain-pr
+#
+#steps:
+## <<<<<<<<<<<<<<<<<<<<<<<<<<<<< pull_request >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+## Pull request check and build
+#  - name: check-state-chain-dev
+#    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+#    environment:
+#      SCCACHE_DIR: /cache
+#    commands:
+#      - SKIP_WASM_BUILD=1 cargo check --release
+#      - sccache -s
+#    volumes:
+#      - name: cache
+#        path: /cache
+#  - name: compile-state-chain-dev
+#    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+#    environment:
+#      SCCACHE_DIR: /cache
+#    commands:
+#      - cargo build --release
+#      - sccache -s
+#    volumes:
+#      - name: cache
+#        path: /cache
+#
+## Config
+#trigger:
+#  event:
+#    - pull_request
+#  paths:
+#    - state-chain/*
+#node:
+#  builder: "true"
+#volumes:
+#  - name: cache
+#    host:
+#      path: /mnt/chainflip-build-runner/sccache
+#image_pull_secrets:
+#  - dockerconfigjson
+#
+#---
 
 kind: pipeline
 type: docker
@@ -50,12 +50,28 @@ name: chainflip-state-chain
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<< main >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # Merge to master build and publish
 steps:
+  - name: rust-base
+    image: plugins/docker
+    settings:
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+      repo: ghcr.io/chainflip-io/chainflip-backend/rust-base
+      dockerfile: Dockerfile.rust-base
+      registry: ghcr.io
+      tags: latest
+      cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    when: 
+      paths:
+        - Dockerfile.rust-base
+        - .drone.yml
   - name: compile-state-chain-linux
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
       SCCACHE_DIR: /cache
     commands:
-      - cargo build --release --target x86_64-unknown-linux-musl
+      - cargo deb --install --target x86_64-unknown-linux-musl
       - sccache -s
     volumes:
       - name: cache
@@ -82,34 +98,34 @@ volumes:
 image_pull_secrets:
   - dockerconfigjson
 
----
+#---
 # Build the base rust image for compiling all rust projects.
-kind: pipeline
-type: docker
-name: build-base-images
-
-steps:
-  - name: rust-base
-    image: plugins/docker
-    settings:
-      username:
-        from_secret: docker_username
-      password:
-        from_secret: docker_password
-      repo: ghcr.io/chainflip-io/chainflip-backend/rust-base
-      dockerfile: Dockerfile.rust-base
-      registry: ghcr.io
-      tags: latest
-      cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-
-# Config
-trigger:
-  event:
-    - pull_request
-  paths:
-    - Dockerfile.rust-base
-image_pull_secrets:
-  - dockerconfigjson
+#kind: pipeline
+#type: docker
+#name: build-base-images
+#
+#steps:
+#  - name: rust-base
+#    image: plugins/docker
+#    settings:
+#      username:
+#        from_secret: docker_username
+#      password:
+#        from_secret: docker_password
+#      repo: ghcr.io/chainflip-io/chainflip-backend/rust-base
+#      dockerfile: Dockerfile.rust-base
+#      registry: ghcr.io
+#      tags: latest
+#      cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+#
+## Config
+#trigger:
+#  event:
+#    - pull_request
+#  paths:
+#    - Dockerfile.rust-base
+#image_pull_secrets:
+#  - dockerconfigjson
 
 ---
 # Run checks on infrastructure configuration prior to merge.

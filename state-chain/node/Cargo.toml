@@ -60,3 +60,16 @@ substrate-frame-rpc-system = '3.0.0'
 [features]
 default = []
 runtime-benchmarks = ['state-chain-runtime/runtime-benchmarks']
+
+[package.metadata.deb]
+name = "state-chain-node"
+maintainer = "Chainflip UG <dev@chainflip.io>"
+extended-description = """\
+Chainflip Validator Node Package"""
+depends = "$auto"
+section = "rust"
+priority = "required"
+assets = [
+    ["target/release/cargo-deb", "usr/bin/", "755"],
+    ["README.md", "usr/share/doc/cargo-deb/README", "644"],
+]
