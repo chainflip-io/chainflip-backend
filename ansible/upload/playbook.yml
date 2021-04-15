@@ -5,4 +5,5 @@
         src: ../../target/debian/*.deb
         dest: /tmp
     - name: Include all deb files in the repo
-      shell: echo help
+      chdir: /tmp
+      shell: reprepro includedeb focal *.deb
