@@ -50,28 +50,30 @@ name: chainflip-state-chain
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<< main >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # Merge to master build and publish
 steps:
-  - name: compile-state-chain
+  - name: compile-state-chain-linux
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
       SCCACHE_DIR: /cache
     commands:
-      - cargo build --release -Zmultitarget --target x86_64-apple-darwin --target x86_64-unknown-linux-gnu
+      - cargo build --release --target x86_64-unknown-linux-musl
       - sccache -s
     volumes:
       - name: cache
         path: /cache
-  - name: publish-state-chain-node
-    image: docker.bintray.io/jfrog/jfrog-cli-go:latest
+  - name: compile-state-chain-darwin
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
-      access_token:
-        from_secret: jfrog_access_token
-      url:
-        from_secret: jfrog_artifactory_url
+      SCCACHE_DIR: /cache
     commands:
-      - jfrog rt u --access-token $access_token --url $url ./target/x86_64-apple-darwin/release/state-chain-node state-chain-node/x86_64-apple-darwin_state-chain-node
-      - jfrog rt u --access-token $access_token --url $url ./target/x86_64-unknown-linux-gnu/release/state-chain-node state-chain-node/x86_64-unknown-linux-gnu_state-chain-node
-
-# Config
+      - cargo build --release --target x86_64-apple-darwin
+      - sccache -s
+    volumes:
+      - name: cache
+        path: /cache
+depends_on:
+  - compile-state-chain-linux
+  - compile-state-chain-darwin
+  # Config
 trigger:
 #  branch:
 #    - main
