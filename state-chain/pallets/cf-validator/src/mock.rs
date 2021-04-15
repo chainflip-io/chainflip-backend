@@ -1,14 +1,51 @@
 use super::*;
 use crate as pallet_cf_validator;
-//use sp_core::{sr25519};
-use sp_core::H256;
 use codec::{Encode, Decode};
 use sp_io::hashing::blake2_256;
-use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+use sp_core::{crypto::key_types::DUMMY, H256};
+use sp_runtime::{
+    Perbill,
+    impl_opaque_keys,
+    traits::{
+        BlakeTwo256,
+        IdentityLookup,
+        OpaqueKeys
+    },
+    testing::{
+        Header,
+        UintAuthorityId
+    },
+    RuntimeAppPublic
+};
 use frame_support::{parameter_types, construct_runtime, traits::{OnInitialize, OnFinalize}};
+use pallet_session::SessionHandler;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
+
+pub struct TestSessionHandler;
+impl SessionHandler<u64> for TestSessionHandler {
+    const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[UintAuthorityId::ID];
+    fn on_genesis_session<T: OpaqueKeys>(_validators: &[(u64, T)]) {}
+    fn on_new_session<T: OpaqueKeys>(
+        _changed: bool,
+        _validators: &[(u64, T)],
+        _queued_validators: &[(u64, T)],
+    ) {
+        // SESSION_CHANGED.with(|l| *l.borrow_mut() = changed);
+        // AUTHORITIES.with(|l|
+        //     *l.borrow_mut() = validators.iter()
+        //         .map(|(_, id)| id.get::<UintAuthorityId>(DUMMY).unwrap_or_default())
+        //         .collect()
+        // );
+    }
+    fn on_disabled(_validator_index: usize) {
+        //DISABLED.with(|l| *l.borrow_mut() = true)
+    }
+    fn on_before_session_ending() {
+        //BEFORE_SESSION_END_CALLED.with(|b| *b.borrow_mut() = true);
+    }
+}
 
 construct_runtime!(
 	pub enum Test where
@@ -18,6 +55,7 @@ construct_runtime!(
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		ValidatorManager: pallet_cf_validator::{Module, Call, Storage, Event<T>},
+        Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
 	}
 );
 
@@ -47,6 +85,29 @@ impl frame_system::Config for Test {
     type OnKilledAccount = ();
     type SystemWeightInfo = ();
     type SS58Prefix = ();
+}
+
+impl_opaque_keys! {
+	pub struct MockSessionKeys {
+		pub dummy: UintAuthorityId,
+	}
+}
+
+parameter_types! {
+	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
+}
+
+impl pallet_session::Config for Test {
+    type ShouldEndSession = ValidatorManager;
+    type SessionManager = ValidatorManager;
+    type SessionHandler = TestSessionHandler;
+    type ValidatorId = u64;
+    type ValidatorIdOf = pallet_cf_validator::ValidatorOf<Self>;
+    type Keys = MockSessionKeys;
+    type Event = Event;
+    type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
+    type NextSessionRotation = ();
+    type WeightInfo = ();
 }
 
 pub struct TestValidatorProvider;
@@ -97,6 +158,6 @@ pub fn run_to_block(n: u64) {
         System::on_finalize(System::block_number());
         System::set_block_number(System::block_number() + 1);
         System::on_initialize(System::block_number());
-        // ValidatorManager::on_initialize(System::block_number());
+        Session::on_initialize(System::block_number());
     }
 }
