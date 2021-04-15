@@ -92,20 +92,20 @@ fn you_have_to_be_priviledged() {
 }
 
 #[test]
-fn bring_forward_era() {
+fn bring_forward_session() {
     new_test_ext().execute_with(|| {
-        // Get current next era block number
-        // Update next era (block number - 1)
+        // Get current next session block number
+        // Update next session (block number - 1)
         // Wait (block number - 1) blocks
         // Confirm things have switched
     });
 }
 
 #[test]
-fn push_back_era() {
+fn push_back_session() {
     new_test_ext().execute_with(|| {
-        // Get current next era block number
-        // Update next era (block number + 1)
+        // Get current next session block number
+        // Update next session (block number + 1)
         // Wait (block number + 1) blocks
         // Confirm we had a switch
     });
