@@ -68,8 +68,9 @@ fn sessions_do_end() {
 #[test]
 fn building_a_candidate_list() {
     new_test_ext().execute_with(|| {
-        // Pull a list of candidates from cf-staking
-        ValidatorManager::get_validators();
+        // Pull a list of candidates
+        let maybe_validators = ValidatorManager::get_validators().unwrap_or(vec![]);
+        assert_eq!(maybe_validators.len(), 3);
     });
 }
 
