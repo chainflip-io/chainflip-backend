@@ -10,4 +10,4 @@
       ignore_errors: yes
       shell: 
         cmd: reprepro -b /srv/repos/apt/debian includedeb focal *.deb
-        chdir: /tmp
+        chdir: /tmp/files
