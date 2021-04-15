@@ -9,13 +9,14 @@ use sp_runtime::{
     traits::{
         BlakeTwo256,
         IdentityLookup,
-        OpaqueKeys
+        OpaqueKeys,
+        ConvertInto,
     },
     testing::{
         Header,
-        UintAuthorityId
+        UintAuthorityId,
     },
-    RuntimeAppPublic
+    RuntimeAppPublic,
 };
 use frame_support::{parameter_types, construct_runtime, traits::{OnInitialize, OnFinalize}};
 use pallet_session::SessionHandler;
@@ -23,7 +24,12 @@ use pallet_session::SessionHandler;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
+const ALICE: u64 = 100;
+const BOB: u64 = 200;
+const CHARLIE: u64 = 300;
+
 pub struct TestSessionHandler;
+
 impl SessionHandler<u64> for TestSessionHandler {
     const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[UintAuthorityId::ID];
     fn on_genesis_session<T: OpaqueKeys>(_validators: &[(u64, T)]) {}
@@ -102,7 +108,7 @@ impl pallet_session::Config for Test {
     type SessionManager = ValidatorManager;
     type SessionHandler = TestSessionHandler;
     type ValidatorId = u64;
-    type ValidatorIdOf = pallet_cf_validator::ValidatorOf<Self>;
+    type ValidatorIdOf = ConvertInto;
     type Keys = MockSessionKeys;
     type Event = Event;
     type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
@@ -112,16 +118,9 @@ impl pallet_session::Config for Test {
 
 pub struct TestValidatorProvider;
 
-fn account<AccountId: Decode + Default>(name: &'static str, index: u32, seed: u32) -> AccountId {
-    let entropy = (name, index, seed).using_encoded(blake2_256);
-    AccountId::decode(&mut &entropy[..]).unwrap_or_default()
-}
-
-impl<T: Config> ValidatorProvider<T> for TestValidatorProvider {
-    fn get_validators(index: SessionIndex) -> Option<Vec<T::AccountId>> {
-        Some(vec![account("ALICE", 0, index),
-                  account("BOB", 1, index),
-                  account("CHARLIE", 2, index)])
+impl ValidatorProvider<u64> for TestValidatorProvider {
+    fn get_validators(index: SessionIndex) -> Option<Vec<u64>> {
+        Some(vec![ALICE + index as u64, BOB + index as u64, CHARLIE + index as u64])
     }
 }
 parameter_types! {
@@ -133,6 +132,7 @@ impl Config for Test {
     type Event = Event;
     type MinEpoch = MinEpoch;
     type MinValidatorSetSize = MinValidatorSetSize;
+    type ValidatorId = u64;
     type ValidatorProvider = TestValidatorProvider;
 }
 

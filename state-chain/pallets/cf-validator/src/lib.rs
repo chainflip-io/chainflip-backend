@@ -15,12 +15,12 @@ use log::{debug};
 type ValidatorSize = u32;
 type SessionIndex = u32;
 
-pub trait ValidatorProvider<T: Config> {
-    fn get_validators(index: SessionIndex) -> Option<Vec<T::AccountId>>;
+pub trait ValidatorProvider<ValidatorId> {
+    fn get_validators(index: SessionIndex) -> Option<Vec<ValidatorId>>;
 }
 
-impl<T: Config> ValidatorProvider<T> for () {
-    fn get_validators(_index: SessionIndex) -> Option<Vec<T::AccountId>> {
+impl<ValidatorId> ValidatorProvider<ValidatorId> for () {
+    fn get_validators(_index: SessionIndex) -> Option<Vec<ValidatorId>> {
         None
     }
 }
@@ -40,8 +40,9 @@ pub mod pallet {
     pub trait Config: frame_system::Config {
         /// The overarching event type.
         type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+        type ValidatorId;
         /// A provider for our validators
-        type ValidatorProvider: ValidatorProvider<Self>;
+        type ValidatorProvider: ValidatorProvider<Self::ValidatorId>;
 
         #[pallet::constant]
         type MinEpoch: Get<u64>;
@@ -152,10 +153,10 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 }
 
 /// Provides the new set of validators to the session module when session is being rotated.
-impl<T: Config> pallet_session::SessionManager<T::AccountId> for Pallet<T> {
+impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 
     // On rotation this is called #3
-    fn new_session(new_index: u32) -> Option<Vec<T::AccountId>> {
+    fn new_session(new_index: u32) -> Option<Vec<T::ValidatorId>> {
         debug!("planning new_session({})", new_index);
         Self::new_session(new_index)
     }
@@ -196,7 +197,7 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 
 impl<T: Config> Pallet<T> {
 
-    fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
+    fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
         debug!("Creating a new session {}", new_index);
         Self::get_validators(new_index)
     }
@@ -209,7 +210,7 @@ impl<T: Config> Pallet<T> {
         debug!("Starting a new session {}", start_index);
     }
 
-    pub fn get_validators(index: SessionIndex) -> Option<Vec<T::AccountId>> {
+    pub fn get_validators(index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
         T::ValidatorProvider::get_validators(index)
     }
 
