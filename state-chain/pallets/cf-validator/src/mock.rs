@@ -9,6 +9,7 @@ use frame_support::{parameter_types, construct_runtime};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
+pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 
 construct_runtime!(
 	pub enum Test where
@@ -58,9 +59,9 @@ fn account<AccountId: Decode + Default>(name: &'static str, index: u32, seed: u3
 
 impl<T: Config> ValidatorProvider<T> for TestValidatorProvider {
     fn get_validators() -> Option<Vec<T::AccountId>> {
-        Some(vec![account("alice", 0, 0),
-                  account("bob", 1, 0),
-                  account("charlie", 2, 0)])
+        Some(vec![account("ALICE", 0, 0),
+                  account("BOB", 1, 0),
+                  account("CHARLIE", 2, 0)])
     }
 }
 parameter_types! {
