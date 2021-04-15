@@ -80,8 +80,7 @@ steps:
     image: docker.bintray.io/jfrog/jfrog-cli-go:latest
     commands:
       - echo "Waiting on deb"
-    depends_on:
-      - compile-state-chain-linux
+
 
 # Config
 trigger:
