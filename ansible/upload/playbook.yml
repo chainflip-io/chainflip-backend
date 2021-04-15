@@ -1,4 +1,4 @@
-- hosts: deb.chainflip.xyz
+- hosts: deb
   tasks:
     - name: Upload debian packages to debian
       copy: 
