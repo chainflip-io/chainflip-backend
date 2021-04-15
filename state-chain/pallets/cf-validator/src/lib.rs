@@ -17,16 +17,12 @@ type SessionIndex = u32;
 
 pub trait ValidatorProvider<T: Config> {
     fn get_validators(index: SessionIndex) -> Option<Vec<T::AccountId>>;
-    fn session_ending(index: SessionIndex);
-    fn session_starting(index: SessionIndex);
 }
 
 impl<T: Config> ValidatorProvider<T> for () {
     fn get_validators(_index: SessionIndex) -> Option<Vec<T::AccountId>> {
         None
     }
-    fn session_ending(_index: SessionIndex) {}
-    fn session_starting(_index: SessionIndex) {}
 }
 
 #[frame_support::pallet]
@@ -189,8 +185,6 @@ impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumbe
     }
 }
 
-/// Implementation of Convert trait for mapping ValidatorId with AccountId.
-/// This is mainly used to map stash and controller keys.
 /// In this module, for simplicity, we just return the same AccountId.
 pub struct ValidatorOf<T>(sp_std::marker::PhantomData<T>);
 
@@ -202,22 +196,21 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 
 impl<T: Config> Pallet<T> {
 
-    fn new_session(new_index: u32) -> Option<Vec<T::AccountId>> {
+    fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
         debug!("Creating a new session {}", new_index);
-        Self::get_validators()
+        Self::get_validators(new_index)
     }
 
-    fn end_session(end_index: u32) {
+    fn end_session(end_index: SessionIndex) {
         debug!("Ending a session {}", end_index);
-        T::ValidatorProvider::session_ending()
     }
 
-    fn start_session(start_index: u32) {
+    fn start_session(start_index: SessionIndex) {
         debug!("Starting a new session {}", start_index);
     }
 
-    pub fn get_validators() -> Option<Vec<T::AccountId>> {
-        T::ValidatorProvider::get_validators()
+    pub fn get_validators(index: SessionIndex) -> Option<Vec<T::AccountId>> {
+        T::ValidatorProvider::get_validators(index)
     }
 
     pub fn should_end_session(now: T::BlockNumber) -> bool {

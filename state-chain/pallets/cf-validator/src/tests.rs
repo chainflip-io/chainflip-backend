@@ -75,7 +75,7 @@ fn sessions_do_end() {
 fn building_a_candidate_list() {
     new_test_ext().execute_with(|| {
         // Pull a list of candidates
-        let maybe_validators = ValidatorManager::get_validators().unwrap_or(vec![]);
+        let maybe_validators = ValidatorManager::get_validators(0).unwrap_or(vec![]);
         assert_eq!(maybe_validators.len(), 3);
     });
 }

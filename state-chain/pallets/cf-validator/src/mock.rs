@@ -123,14 +123,6 @@ impl<T: Config> ValidatorProvider<T> for TestValidatorProvider {
                   account("BOB", 1, index),
                   account("CHARLIE", 2, index)])
     }
-
-    fn session_ending(_index: SessionIndex) {
-        // Get ready for next set to be called in get_validators()
-    }
-
-    fn session_starting(_index: SessionIndex) {
-        // New session starting
-    }
 }
 parameter_types! {
 	pub const MinEpoch: u64 = 1;
