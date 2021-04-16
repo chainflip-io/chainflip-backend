@@ -6,14 +6,33 @@
 
 mod mock;
 mod tests;
+
 pub use pallet::*;
-use sp_runtime::traits::Convert;
+use sp_runtime::traits::{Convert, OpaqueKeys};
 use sp_std::prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};
 use log::{debug};
 
 type ValidatorSize = u32;
 type SessionIndex = u32;
+
+pub trait ValidatorHandler<ValidatorId> {
+    fn on_new_session(
+        changed: bool,
+        current_validators: Vec<ValidatorId>,
+        next_validators: Vec<ValidatorId>
+    );
+    fn on_before_session_ending();
+}
+
+impl<ValidatorId> ValidatorHandler<ValidatorId> for () {
+    fn on_new_session(
+        _changed: bool,
+        _current_validators: Vec<ValidatorId>,
+        _next_validators: Vec<ValidatorId>
+    ) {}
+    fn on_before_session_ending() {}
+}
 
 pub trait CandidateProvider<ValidatorId, Stake> {
     fn get_candidates(index: SessionIndex) -> Option<Vec<(ValidatorId, Stake)>>;
@@ -44,6 +63,8 @@ pub mod pallet {
         type Stake: Eq + Ord + Copy;
         /// A provider for our validators
         type CandidateProvider: CandidateProvider<Self::ValidatorId, Self::Stake>;
+        /// A handler for callbacks
+        type ValidatorHandler: ValidatorHandler<Self::ValidatorId>;
 
         #[pallet::constant]
         type MinEpoch: Get<u64>;
@@ -153,6 +174,36 @@ pub mod pallet {
     }
 }
 
+impl<T: Config> pallet_session::SessionHandler<T::ValidatorId> for Pallet<T> {
+    const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[];
+    fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(T::ValidatorId, Ks)]) {}
+
+    fn on_new_session<Ks: OpaqueKeys>(
+        changed: bool,
+        validators: &[(T::ValidatorId, Ks)],
+        queued_validators: &[(T::ValidatorId, Ks)],
+    ) {
+        let current_validators = validators.iter()
+            .map(|(id, _)| *id)
+            .collect::<Vec<T::ValidatorId>>();
+
+        let next_validators = queued_validators.iter()
+            .map(|(id, _)| *id)
+            .collect::<Vec<T::ValidatorId>>();
+
+        T::ValidatorHandler::on_new_session(changed, current_validators, next_validators);
+    }
+
+    /// Triggered before [`SessionManager::end_session`] handler
+    fn on_before_session_ending() {
+        T::ValidatorHandler::on_before_session_ending();
+    }
+
+    fn on_disabled(_validator_index: usize) {
+        // TBD
+    }
+}
+
 /// Indicates to the session module if the session should be rotated.
 impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
     fn should_end_session(now: T::BlockNumber) -> bool {
@@ -162,7 +213,6 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 
 /// Provides the new set of validators to the session module when session is being rotated.
 impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
-
     // On rotation this is called #3
     fn new_session(new_index: u32) -> Option<Vec<T::ValidatorId>> {
         debug!("planning new_session({})", new_index);
@@ -203,7 +253,6 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 }
 
 impl<T: Config> Pallet<T> {
-
     fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
         debug!("Creating a new session {}", new_index);
         let candidates = Self::run_auction(new_index);

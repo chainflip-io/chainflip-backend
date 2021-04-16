@@ -35,33 +35,26 @@ thread_local! {
 	pub static NEXT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 }
 
-pub struct TestSessionHandler;
+pub struct TestValidatorHandler;
 
-impl SessionHandler<u64> for TestSessionHandler {
-    const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[UintAuthorityId::ID];
-    fn on_genesis_session<T: OpaqueKeys>(_validators: &[(u64, T)]) {}
-    fn on_new_session<T: OpaqueKeys>(
+impl ValidatorHandler<u64> for TestValidatorHandler {
+    fn on_new_session(
         changed: bool,
-        validators: &[(u64, T)],
-        queued_validators: &[(u64, T)],
+        current_validators: Vec<u64>,
+        next_validators: Vec<u64>,
     ) {
         SESSION_CHANGED.with(|l| *l.borrow_mut() = changed);
+
         CURRENT_VALIDATORS.with(|l|
-            *l.borrow_mut() = validators.iter()
-                .map(|(id, _)| *id)
-                .collect()
+            *l.borrow_mut() = current_validators
         );
+
         NEXT_VALIDATORS.with(|l|
-            *l.borrow_mut() = queued_validators.iter()
-                .map(|(id, _)| *id)
-                .collect()
+            *l.borrow_mut() = next_validators
         );
     }
     fn on_before_session_ending() {
-        //BEFORE_SESSION_END_CALLED.with(|b| *b.borrow_mut() = true);
-    }
-    fn on_disabled(_validator_index: usize) {
-        //DISABLED.with(|l| *l.borrow_mut() = true)
+        // Nothing for the moment
     }
 }
 
@@ -118,7 +111,7 @@ parameter_types! {
 impl pallet_session::Config for Test {
     type ShouldEndSession = ValidatorManager;
     type SessionManager = ValidatorManager;
-    type SessionHandler = TestSessionHandler;
+    type SessionHandler = ValidatorManager;
     type ValidatorId = u64;
     type ValidatorIdOf = ConvertInto;
     type Keys = MockSessionKeys;
@@ -147,6 +140,7 @@ impl Config for Test {
     type ValidatorId = u64;
     type Stake = u64;
     type CandidateProvider = TestCandidateProvider;
+    type ValidatorHandler = TestValidatorHandler;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
