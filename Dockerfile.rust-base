@@ -1,7 +1,7 @@
 # This Dockfile provides the base image to perform all tasks
 # related to our Rust projects. Our CI needs a properly configured
 # environment so we can guarantee consistancy between projects.
-FROM joseluisq/rust-linux-darwin-builder:1.51.0 as rust-substrate-base
+FROM rust as  rust-substrate-base
 
 # Download and install sccache https://github.com/mozilla/sccache
 ARG SCCACHE_VER="0.2.15"
