@@ -187,10 +187,20 @@ fn force_rotation() {
     new_test_ext().execute_with(|| {
         // We are after 3 validators, the mock is set up for 3
         assert_ok!(ValidatorManager::set_validator_size(Origin::root(), 3));
+        assert_eq!(
+            last_event(),
+            mock::Event::pallet_cf_validator(crate::Event::MaximumValidatorsChanged(0, 3)),
+        );
         // Set the epoch at 10
         let epoch = 10;
         let block_number = 2;
         assert_ok!(ValidatorManager::set_epoch(Origin::root(), epoch));
+        assert_eq!(
+            last_event(),
+            mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, 10)),
+        );
+        // Clear the event queue
+        System::reset_events();
         // Run forward 2 blocks
         run_to_block(block_number);
         // No rotation, no candidates
@@ -198,6 +208,15 @@ fn force_rotation() {
         // Force rotation for next block
         assert_ok!(ValidatorManager::force_rotation(Origin::root()));
         run_to_block(block_number + 1);
+        assert_eq!(
+            events(),
+            [
+                mock::Event::pallet_cf_validator(crate::Event::ForceRotationRequested()),
+                mock::Event::pallet_cf_validator(crate::Event::AuctionStarted()),
+                mock::Event::pallet_cf_validator(crate::Event::AuctionEnded()),
+                mock::Event::pallet_session(pallet_session::Event::NewSession(1)),
+            ]
+        );
         // Hello there candidates
         assert_eq!(mock::next_validators().len(), 3);
     });
@@ -208,24 +227,46 @@ fn push_back_session() {
     new_test_ext().execute_with(|| {
         // We are after 3 validators, the mock is set up for 3
         assert_ok!(ValidatorManager::set_validator_size(Origin::root(), 3));
+        assert_eq!(
+            last_event(),
+            mock::Event::pallet_cf_validator(crate::Event::MaximumValidatorsChanged(0, 3)),
+        );
         // Check we get rotation
         let epoch = 2;
         let mut block_number = epoch;
         assert_ok!(ValidatorManager::set_epoch(Origin::root(), epoch));
+        assert_eq!(
+            last_event(),
+            mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, epoch)),
+        );
         run_to_block(block_number);
         assert_eq!(mock::current_validators().len(), 0);
         assert_eq!(mock::next_validators().len(), 3);
         // Push back rotation by an epoch so we should see no rotation now for the last epoch
         assert_ok!(ValidatorManager::set_epoch(Origin::root(), epoch * 2));
+        assert_eq!(
+            last_event(),
+            mock::Event::pallet_cf_validator(crate::Event::EpochChanged(epoch, epoch * 2)),
+        );
         block_number += epoch;
         run_to_block(block_number);
         assert_eq!(mock::current_validators().len(), 0);
         assert_eq!(mock::next_validators().len(), 3);
+        // Clear the event queue
+        System::reset_events();
         // Move forward and now it should rotate
         block_number += epoch;
         run_to_block(block_number);
         assert_eq!(mock::current_validators().len(), 3);
         assert_eq!(mock::next_validators().len(), 3);
+        assert_eq!(
+            events(),
+            [
+                mock::Event::pallet_cf_validator(crate::Event::AuctionStarted()),
+                mock::Event::pallet_cf_validator(crate::Event::AuctionEnded()),
+                mock::Event::pallet_session(pallet_session::Event::NewSession(2)),
+            ]
+        );
     });
 }
 
@@ -234,23 +275,58 @@ fn limit_validator_set_size() {
     new_test_ext().execute_with(|| {
         // We are after 3 validators, the mock is set up for 3
         assert_ok!(ValidatorManager::set_validator_size(Origin::root(), 3));
+        assert_eq!(
+            last_event(),
+            mock::Event::pallet_cf_validator(crate::Event::MaximumValidatorsChanged(0, 3)),
+        );
         // Run a rotation
         let epoch = 2;
         let mut block_number = epoch;
         assert_ok!(ValidatorManager::set_epoch(Origin::root(), epoch));
+        assert_eq!(
+            last_event(),
+            mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, epoch)),
+        );
+        // Clear the event queue
+        System::reset_events();
         run_to_block(block_number);
         assert_eq!(mock::current_validators().len(), 0);
         assert_eq!(mock::next_validators().len(), 3);
+        assert_eq!(
+            events(),
+            [
+                mock::Event::pallet_cf_validator(crate::Event::AuctionStarted()),
+                mock::Event::pallet_cf_validator(crate::Event::AuctionEnded()),
+                mock::Event::pallet_session(pallet_session::Event::NewSession(1)),
+            ]
+        );
         // Reduce size of validator set, we should see next set of candidates reduced from 3 to 2
         assert_ok!(ValidatorManager::set_validator_size(Origin::root(), 2));
         block_number += epoch;
         run_to_block(block_number);
         assert_eq!(mock::current_validators().len(), 3);
         assert_eq!(mock::next_validators().len(), 2);
+        assert_eq!(
+            events(),
+            [
+                mock::Event::pallet_cf_validator(crate::Event::MaximumValidatorsChanged(3, 2)),
+                mock::Event::pallet_cf_validator(crate::Event::AuctionStarted()),
+                mock::Event::pallet_cf_validator(crate::Event::AuctionEnded()),
+                mock::Event::pallet_session(pallet_session::Event::NewSession(2)),
+            ]
+        );
         // One more to see the rotation maintain the new set size of 2
         block_number += epoch;
         run_to_block(block_number);
         assert_eq!(mock::current_validators().len(), 2);
         assert_eq!(mock::next_validators().len(), 2);
+        assert_eq!(
+            events(),
+            [
+                mock::Event::pallet_cf_validator(crate::Event::AuctionStarted()),
+                mock::Event::pallet_cf_validator(crate::Event::AuctionEnded()),
+                mock::Event::pallet_session(pallet_session::Event::NewSession(3)),
+            ]
+        );
     });
 }
