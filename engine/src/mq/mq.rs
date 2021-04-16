@@ -6,11 +6,11 @@ use thiserror::Error;
 
 /// Message should be deserialized by the individual components
 #[derive(Debug, PartialEq, Clone)]
-pub struct Message(pub Box<Vec<u8>>);
+pub struct Message(pub Vec<u8>);
 
 impl Message {
     pub fn new(data: Vec<u8>) -> Self {
-        Message(Box::new(data))
+        Message(data)
     }
 }
 
