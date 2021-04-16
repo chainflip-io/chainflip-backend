@@ -15,12 +15,12 @@ use log::{debug};
 type ValidatorSize = u32;
 type SessionIndex = u32;
 
-pub trait CandidateProvider<ValidatorId> {
-    fn get_candidates(index: SessionIndex) -> Option<Vec<ValidatorId>>;
+pub trait CandidateProvider<ValidatorId, Stake> {
+    fn get_candidates(index: SessionIndex) -> Option<Vec<(ValidatorId, Stake)>>;
 }
 
-impl<ValidatorId> CandidateProvider<ValidatorId> for () {
-    fn get_candidates(_index: SessionIndex) -> Option<Vec<ValidatorId>> {
+impl<ValidatorId, Stake> CandidateProvider<ValidatorId, Stake> for () {
+    fn get_candidates(_index: SessionIndex) -> Option<Vec<(ValidatorId, Stake)>> {
         None
     }
 }
@@ -40,9 +40,10 @@ pub mod pallet {
     pub trait Config: frame_system::Config {
         /// The overarching event type.
         type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-        type ValidatorId;
+        type ValidatorId: Eq + Ord + Copy;
+        type Stake: Eq + Ord + Copy;
         /// A provider for our validators
-        type ValidatorProvider: CandidateProvider<Self::ValidatorId>;
+        type CandidateProvider: CandidateProvider<Self::ValidatorId, Self::Stake>;
 
         #[pallet::constant]
         type MinEpoch: Get<u64>;
@@ -171,7 +172,6 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
     fn start_session(start_index: u32) {
         debug!("ending end_session({})", start_index);
         Self::start_session(start_index);
-        Self::deposit_event(Event::AuctionStarted());
     }
 }
 
@@ -199,7 +199,9 @@ impl<T: Config> Pallet<T> {
 
     fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
         debug!("Creating a new session {}", new_index);
-        Self::get_validators(new_index)
+        let candidates = Self::run_auction(new_index);
+        Self::deposit_event(Event::AuctionEnded());
+        candidates
     }
 
     fn end_session(end_index: SessionIndex) {
@@ -208,10 +210,23 @@ impl<T: Config> Pallet<T> {
 
     fn start_session(start_index: SessionIndex) {
         debug!("Starting a new session {}", start_index);
+        Self::deposit_event(Event::AuctionStarted());
     }
 
-    pub fn get_validators(index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
-        T::ValidatorProvider::get_candidates(index)
+    pub fn run_auction(index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
+        // A basic auction algorithm.  We sort by stake amount and take the top of the validator
+        // set size and let session pallet do the rest
+        // Space here to add other prioritisation parameters
+        if let Some(mut candidates) = T::CandidateProvider::get_candidates(index) {
+            candidates.sort_by_key(|k| k.1);
+            let max_size = SizeValidatorSet::<T>::get();
+            let candidates = candidates.get(0..max_size as usize);
+            if let Some(candidates) = candidates {
+                let candidates: Vec<T::ValidatorId> = candidates.iter().map(|i| i.0).collect();
+                return Some(candidates);
+            }
+        }
+        None
     }
 
     pub fn should_end_session(now: T::BlockNumber) -> bool {
@@ -219,11 +234,6 @@ impl<T: Config> Pallet<T> {
         if epoch_blocks == Zero::zero() {
             return false;
         }
-        let last_block_number = LastBlockNumber::<T>::get();
-        let diff = now.saturating_sub(last_block_number);
-        let end = diff >= epoch_blocks;
-        if end { LastBlockNumber::<T>::set(now); }
-        end
     }
 
     pub fn estimate_next_session_rotation(now: T::BlockNumber) -> Option<T::BlockNumber> {

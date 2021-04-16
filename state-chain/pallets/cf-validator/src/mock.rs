@@ -128,11 +128,11 @@ impl pallet_session::Config for Test {
     type WeightInfo = ();
 }
 
-pub struct TestValidatorProvider;
+pub struct TestCandidateProvider;
 
-impl CandidateProvider<u64> for TestValidatorProvider {
-    fn get_candidates(index: SessionIndex) -> Option<Vec<u64>> {
-        Some(vec![index as u64, index as u64, index as u64])
+impl CandidateProvider<u64, u64> for TestCandidateProvider {
+    fn get_candidates(index: SessionIndex) -> Option<Vec<(u64, u64)>> {
+        Some(vec![(index as u64, 1), (index as u64, 2), (index as u64, 3)])
     }
 }
 parameter_types! {
@@ -145,7 +145,8 @@ impl Config for Test {
     type MinEpoch = MinEpoch;
     type MinValidatorSetSize = MinValidatorSetSize;
     type ValidatorId = u64;
-    type ValidatorProvider = TestValidatorProvider;
+    type Stake = u64;
+    type CandidateProvider = TestCandidateProvider;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

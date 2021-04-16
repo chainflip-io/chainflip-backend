@@ -75,7 +75,8 @@ fn sessions_do_end() {
 fn building_a_candidate_list() {
     new_test_ext().execute_with(|| {
         // Pull a list of candidates
-        let maybe_validators = ValidatorManager::get_validators(0).unwrap_or(vec![]);
+        assert_ok!(ValidatorManager::set_validator_size(Origin::root(), 3));
+        let maybe_validators = ValidatorManager::run_auction(0).unwrap_or(vec![]);
         assert_eq!(maybe_validators.len(), 3);
     });
 }
@@ -101,6 +102,7 @@ fn you_have_to_be_priviledged() {
 #[test]
 fn bring_forward_session() {
     new_test_ext().execute_with(|| {
+        assert_ok!(ValidatorManager::set_validator_size(Origin::root(), 3));
         // Set session epoch to 2, we are on block 1
         let epoch = 2;
         let mut block_number = epoch;
@@ -111,8 +113,10 @@ fn bring_forward_session() {
         assert_eq!(
             events(),
             [
+                mock::Event::pallet_cf_validator(crate::Event::MaximumValidatorsChanged(0, 3)),
                 mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, 2)),
                 mock::Event::pallet_cf_validator(crate::Event::AuctionStarted()),
+                mock::Event::pallet_cf_validator(crate::Event::AuctionEnded()),
                 mock::Event::pallet_session(pallet_session::Event::NewSession(1)),
             ]
         );
@@ -128,6 +132,7 @@ fn bring_forward_session() {
             events(),
             [
                 mock::Event::pallet_cf_validator(crate::Event::AuctionStarted()),
+                mock::Event::pallet_cf_validator(crate::Event::AuctionEnded()),
                 mock::Event::pallet_session(pallet_session::Event::NewSession(2)),
             ]
         );
@@ -144,6 +149,7 @@ fn bring_forward_session() {
             events(),
             [
                 mock::Event::pallet_cf_validator(crate::Event::AuctionStarted()),
+                mock::Event::pallet_cf_validator(crate::Event::AuctionEnded()),
                 mock::Event::pallet_session(pallet_session::Event::NewSession(3)),
             ]
         );
@@ -151,7 +157,7 @@ fn bring_forward_session() {
         assert_eq!(mock::current_validators().len(), 3);
         assert_eq!(mock::current_validators()[0], 3);  // Session 3 is now current
         assert_eq!(mock::next_validators().len(), 3);
-        assert_eq!(mock::current_validators()[0], 4);  // Session 4 is now next up
+        assert_eq!(mock::next_validators()[0], 4);  // Session 4 is now next up
     });
 }
 
