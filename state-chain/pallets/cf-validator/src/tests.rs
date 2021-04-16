@@ -204,11 +204,25 @@ fn push_back_session() {
 #[test]
 fn limit_validator_set_size() {
     new_test_ext().execute_with(|| {
-        // Get current validator size
-        // Update (validator size - 1)
-        // Force a rotation
-        // Confirm we have a (validator - 1) set size
+        assert_ok!(ValidatorManager::set_validator_size(Origin::root(), 3));
+        let epoch = 2;
+        let mut block_number = epoch;
+        assert_ok!(ValidatorManager::set_epoch(Origin::root(), epoch));
+        run_to_block(block_number);
+        assert_eq!(mock::current_validators().len(), 0);
+        assert_eq!(mock::next_validators().len(), 3);
 
+        // Reduce size of validator set, we should see next set of candidates reduced
+        assert_ok!(ValidatorManager::set_validator_size(Origin::root(), 2));
+        block_number += epoch;
+        run_to_block(block_number);
+        assert_eq!(mock::current_validators().len(), 3);
+        assert_eq!(mock::next_validators().len(), 2);
+        // One more to see the rotation maintain the new set size of 2
+        block_number += epoch;
+        run_to_block(block_number);
+        assert_eq!(mock::current_validators().len(), 2);
+        assert_eq!(mock::next_validators().len(), 2);
     });
 }
 
