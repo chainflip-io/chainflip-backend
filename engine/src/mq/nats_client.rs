@@ -1,4 +1,4 @@
-use super::{unsafe_pin_message_stream, IMQClient, MQError, Message, Options, Result};
+use super::{pin_message_stream, IMQClient, MQError, Message, Options, Result};
 use async_nats;
 use async_stream::try_stream;
 use async_trait::async_trait;
@@ -118,7 +118,7 @@ mod test {
             .await
             .unwrap();
 
-        let mut stream = unsafe_pin_message_stream(stream);
+        let mut stream = pin_message_stream(stream);
 
         tokio::spawn(async move {
             // may require a sleep in here, but nats is fast enough to work without one atm
@@ -159,7 +159,7 @@ mod test {
             .await
             .unwrap();
 
-        let mut stream = unsafe_pin_message_stream(stream);
+        let mut stream = pin_message_stream(stream);
 
         tokio::spawn(async move {
             // may require a sleep in here, but nats is fast enough to work without one atm

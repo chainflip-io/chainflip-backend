@@ -64,11 +64,8 @@ pub trait IMQClient<Message> {
 }
 
 /// Used to pin a stream within a single scope.
-pub fn unsafe_pin_message_stream(
+pub fn pin_message_stream(
     stream: Box<dyn Stream<Item = std::result::Result<Message, ()>>>,
 ) -> Pin<Box<dyn Stream<Item = std::result::Result<Message, ()>>>> {
-    // This is safe to use, as long as the pin is used only in a single scope
-    let pinned_stream = unsafe { Pin::new_unchecked(stream) };
-
-    return pinned_stream;
+    stream.into()
 }
