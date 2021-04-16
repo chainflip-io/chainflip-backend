@@ -15,12 +15,12 @@ use log::{debug};
 type ValidatorSize = u32;
 type SessionIndex = u32;
 
-pub trait ValidatorProvider<ValidatorId> {
-    fn get_validators(index: SessionIndex) -> Option<Vec<ValidatorId>>;
+pub trait CandidateProvider<ValidatorId> {
+    fn get_candidates(index: SessionIndex) -> Option<Vec<ValidatorId>>;
 }
 
-impl<ValidatorId> ValidatorProvider<ValidatorId> for () {
-    fn get_validators(_index: SessionIndex) -> Option<Vec<ValidatorId>> {
+impl<ValidatorId> CandidateProvider<ValidatorId> for () {
+    fn get_candidates(_index: SessionIndex) -> Option<Vec<ValidatorId>> {
         None
     }
 }
@@ -42,7 +42,7 @@ pub mod pallet {
         type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
         type ValidatorId;
         /// A provider for our validators
-        type ValidatorProvider: ValidatorProvider<Self::ValidatorId>;
+        type ValidatorProvider: CandidateProvider<Self::ValidatorId>;
 
         #[pallet::constant]
         type MinEpoch: Get<u64>;
@@ -211,7 +211,7 @@ impl<T: Config> Pallet<T> {
     }
 
     pub fn get_validators(index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
-        T::ValidatorProvider::get_validators(index)
+        T::ValidatorProvider::get_candidates(index)
     }
 
     pub fn should_end_session(now: T::BlockNumber) -> bool {

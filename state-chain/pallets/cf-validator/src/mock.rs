@@ -130,8 +130,8 @@ impl pallet_session::Config for Test {
 
 pub struct TestValidatorProvider;
 
-impl ValidatorProvider<u64> for TestValidatorProvider {
-    fn get_validators(index: SessionIndex) -> Option<Vec<u64>> {
+impl CandidateProvider<u64> for TestValidatorProvider {
+    fn get_candidates(index: SessionIndex) -> Option<Vec<u64>> {
         Some(vec![index as u64, index as u64, index as u64])
     }
 }
