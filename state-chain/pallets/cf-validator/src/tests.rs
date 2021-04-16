@@ -179,10 +179,25 @@ fn force_rotation() {
 #[test]
 fn push_back_session() {
     new_test_ext().execute_with(|| {
-        // Get current next session block number
-        // Update next session (block number + 1)
-        // Wait (block number + 1) blocks
-        // Confirm we had a switch
+        assert_ok!(ValidatorManager::set_validator_size(Origin::root(), 3));
+        // Check we get rotation
+        let epoch = 2;
+        let mut block_number = epoch;
+        assert_ok!(ValidatorManager::set_epoch(Origin::root(), epoch));
+        run_to_block(block_number);
+        assert_eq!(mock::current_validators().len(), 0);
+        assert_eq!(mock::next_validators().len(), 3);
+        // Push back rotation by an epoch so we should see no rotation now for the last epoch
+        assert_ok!(ValidatorManager::set_epoch(Origin::root(), epoch * 2));
+        block_number += epoch;
+        run_to_block(block_number);
+        assert_eq!(mock::current_validators().len(), 0);
+        assert_eq!(mock::next_validators().len(), 3);
+        // Move forward and now it should rotate
+        block_number += epoch;
+        run_to_block(block_number);
+        assert_eq!(mock::current_validators().len(), 3);
+        assert_eq!(mock::next_validators().len(), 3);
     });
 }
 
