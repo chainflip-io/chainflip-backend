@@ -1,33 +1,24 @@
 use super::*;
 use crate as pallet_cf_validator;
-use codec::{Encode, Decode};
-use sp_io::hashing::blake2_256;
-use sp_core::{crypto::key_types::DUMMY, H256};
+use sp_core::{H256};
 use sp_runtime::{
     Perbill,
     impl_opaque_keys,
     traits::{
         BlakeTwo256,
         IdentityLookup,
-        OpaqueKeys,
         ConvertInto,
     },
     testing::{
         Header,
         UintAuthorityId,
     },
-    RuntimeAppPublic,
 };
 use frame_support::{parameter_types, construct_runtime, traits::{OnInitialize, OnFinalize}};
-use pallet_session::SessionHandler;
 use std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
-
-pub const ALICE: u64 = 100;
-pub const BOB: u64 = 200;
-pub const CHARLIE: u64 = 300;
 
 thread_local! {
     pub static SESSION_CHANGED: RefCell<bool> = RefCell::new(false);
