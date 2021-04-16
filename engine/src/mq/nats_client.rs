@@ -150,7 +150,34 @@ mod test {
 
         let nats_client = NatsMQClient::connect(options).await;
 
-        let stream = nats_client.subscribe("eth.witness").await;
-        assert!(stream.is_ok());
+        let test_message = "I SAW A TRANSACTION".as_bytes().to_owned();
+
+        let stream = nats_client.subscribe("witness.eth").await.unwrap();
+
+        nats_client
+            .publish("witness.eth", test_message)
+            .await
+            .unwrap();
+
+        let mut stream = unsafe_pin_message_stream(stream);
+
+        tokio::spawn(async move {
+            // may require a sleep in here, but nats is fast enough to work without one atm
+            nats_client.close().await.unwrap();
+        });
+
+        let mut count: i32 = 0;
+        while let Some(m) = stream.next().await {
+            match m {
+                Ok(_) => {
+                    count += 1;
+                }
+                Err(_) => {
+                    break;
+                }
+            }
+        }
+
+        assert_eq!(count, 1);
     }
 }
