@@ -910,6 +910,7 @@ dependencies = [
  "nats",
  "thiserror",
  "tokio 1.5.0",
+ "tokio-stream",
 ]
 
 [[package]]
@@ -8433,6 +8434,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "24da22d077e0f15f55162bdbdc661228c1581892f52074fb242678d015b45162"
 dependencies = [
  "futures 0.1.31",
+]
+
+[[package]]
+name = "tokio-stream"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e177a5d8c3bf36de9ebe6d58537d8879e964332f93fb3339e43f618c81361af0"
+dependencies = [
+ "futures-core",
+ "pin-project-lite 0.2.6",
+ "tokio 1.5.0",
 ]
 
 [[package]]

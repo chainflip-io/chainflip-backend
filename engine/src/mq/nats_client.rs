@@ -1,14 +1,9 @@
-use std::pin::Pin;
-
 use super::{IMQClient, MQError, Message, Options, Result};
 use async_nats;
-use async_stream::{stream, AsyncStream};
+use async_stream::try_stream;
 use async_trait::async_trait;
-use futures::Future;
-use futures_core::stream::Stream;
-use futures_util::stream::StreamExt;
 use nats;
-use tokio::sync::mpsc::{self, Receiver};
+use tokio_stream::{Stream, StreamExt};
 
 // This will likely have a private field containing the underlying mq client
 #[derive(Clone)]
@@ -18,14 +13,23 @@ pub struct NatsMQClient {
 }
 
 impl From<nats::Message> for Message {
-    fn from(msg: nats::Message) -> Self {
-        Message(msg.data)
+    fn from(m: nats::Message) -> Self {
+        Message::new(m.data)
     }
 }
 
-/// Restrict this T to being a valid message type
-pub struct ReceiverAdapter<T> {
-    pub receiver: Receiver<T>,
+pub struct Subscription {
+    inner: async_nats::Subscription,
+}
+
+impl Subscription {
+    pub fn into_stream(self) -> impl Stream<Item = std::result::Result<Message, ()>> {
+        try_stream! {
+            while let Some(m) = self.inner.next().await {
+                yield Message::new(m.data);
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -44,33 +48,33 @@ impl IMQClient<Message> for NatsMQClient {
             .map_err(|_| MQError::PublishError)
     }
 
-    async fn subscribe(&self, subject: &str) -> Result<Receiver<Message>> {
-        let subscription = self
+    async fn subscribe(
+        &self,
+        subject: &str,
+    ) -> Result<Box<dyn Stream<Item = std::result::Result<Message, ()>>>> {
+        let sub = self
             .conn
             .subscribe(subject)
             .await
             .map_err(|_| MQError::SubscribeError)?;
 
-        let (tx, rx) = mpsc::channel::<Message>(300);
+        let subscription = Subscription { inner: sub };
 
-        tokio::spawn(async move {
-            loop {
-                while let Some(m) = subscription.next().await {
-                    tx.send(Message(m.data)).await.unwrap();
-                }
-            }
-        });
-
-        Ok(rx)
+        Ok(Box::new(subscription.into_stream()))
     }
 
-    async fn unsubscrbe(&self, subject: &str) -> Result<()> {
-        todo!()
+    async fn close(&self) -> Result<()> {
+        self.conn
+            .close()
+            .await
+            .map_err(|_| MQError::ErrorClosingConnection)
     }
 }
 
 #[cfg(test)]
 mod test {
+
+    use std::pin::Pin;
 
     use super::*;
 
@@ -107,28 +111,32 @@ mod test {
 
         let test_message = "I SAW A TRANSACTION".as_bytes().to_owned();
 
-        let mut stream = nats_client.subscribe("witness.eth").await.unwrap();
+        let stream = nats_client.subscribe("witness.eth").await.unwrap();
 
         nats_client
             .publish("witness.eth", test_message)
             .await
             .unwrap();
 
-        while let Some(item) = stream.recv().await {
-            println!("Here is the item: {:#?}", item);
+        let mut stream = unsafe { Pin::new_unchecked(stream) };
+
+        tokio::spawn(async move {
+            // may require a sleep in here, but nats is fast enough to work without one atm
+            nats_client.close().await.unwrap();
+        });
+
+        let mut count: i32 = 0;
+        while let Some(m) = stream.next().await {
+            match m {
+                Ok(_) => {
+                    count += 1;
+                }
+                Err(_) => {
+                    break;
+                }
+            }
         }
 
-        tpol
-
-        // Publish something to the mq so that we can read it
-        // std::thread::spawn(move || {
-        //     let pub_res = nats_client.publish("witness.eth", test_message.clone());
-        //     assert!(pub_res.is_ok());
-        // });
-
-        // let msg_received = receiver.recv();
-        // println!("Message received: {:#?}", msg_received);
-        // assert!(msg_received.is_ok())
-        // assert_eq!(msg_received.0, test_message);
+        assert_eq!(count, 1);
     }
 }

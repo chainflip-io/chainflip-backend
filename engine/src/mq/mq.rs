@@ -1,12 +1,18 @@
 use async_trait::async_trait;
+use futures::Stream;
 use thiserror::Error;
-use tokio::sync::mpsc::Receiver;
 
 // use super::nats_client::NatsReceiverAdapter;
 
 /// Message should be deserialized by the individual components
 #[derive(Debug, PartialEq, Clone)]
-pub struct Message(pub Vec<u8>);
+pub struct Message(pub Box<Vec<u8>>);
+
+impl Message {
+    pub fn new(data: Vec<u8>) -> Self {
+        Message(Box::new(data))
+    }
+}
 
 /// Message Queue Result type
 pub type Result<T> = std::result::Result<T, MQError>;
@@ -27,6 +33,10 @@ pub enum MQError {
     #[error("Error subscribing to subject")]
     SubscribeError,
 
+    /// Error when closing the connection
+    #[error("Error closing the connection")]
+    ErrorClosingConnection,
+
     /// Errors that are not wrapped above
     #[error("Unknonwn error occurred")]
     Other,
@@ -42,8 +52,11 @@ pub trait IMQClient<Message> {
     async fn publish(&self, subject: &str, message: Vec<u8>) -> Result<()>;
 
     /// Subscribe to a subject
-    async fn subscribe(&self, subject: &str) -> Result<Receiver<Message>>;
+    async fn subscribe(
+        &self,
+        subject: &str,
+    ) -> Result<Box<dyn Stream<Item = std::result::Result<Message, ()>>>>;
 
-    /// Unsubscribe from a subject
-    async fn unsubscrbe(&self, subject: &str) -> Result<()>;
+    /// Close the connection to the MQ
+    async fn close(&self) -> Result<()>;
 }
