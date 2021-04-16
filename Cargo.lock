@@ -908,6 +908,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "nats",
+ "nats_test_server",
  "thiserror",
  "tokio 1.5.0",
  "tokio-stream",
@@ -4023,6 +4024,20 @@ dependencies = [
  "rustls-native-certs 0.5.0",
  "webpki",
  "winapi 0.3.9",
+]
+
+[[package]]
+name = "nats_test_server"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3d031b0977a694a9f02acf5de932ea2e09e4c1e8432de6995ae596e7c313083"
+dependencies = [
+ "env_logger 0.8.3",
+ "log",
+ "rand 0.7.3",
+ "serde",
+ "serde_derive",
+ "serde_json",
 ]
 
 [[package]]

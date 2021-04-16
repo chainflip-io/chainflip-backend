@@ -1,4 +1,4 @@
-use super::{IMQClient, MQError, Message, Options, Result};
+use super::{unsafe_pin_message_stream, IMQClient, MQError, Message, Options, Result};
 use async_nats;
 use async_stream::try_stream;
 use async_trait::async_trait;
@@ -35,7 +35,7 @@ impl Subscription {
 #[async_trait]
 impl IMQClient<Message> for NatsMQClient {
     async fn connect(opts: Options) -> Self {
-        let conn = async_nats::connect(opts.url)
+        let conn = async_nats::connect(opts.url.as_str())
             .await
             .expect(&format!("Could not connect to Nats on {}", opts.url));
         NatsMQClient { conn }
@@ -74,13 +74,13 @@ impl IMQClient<Message> for NatsMQClient {
 #[cfg(test)]
 mod test {
 
-    use std::pin::Pin;
+    use nats_test_server::*;
 
     use super::*;
 
     async fn setup_client() -> NatsMQClient {
         let options = Options {
-            url: "http://localhost:4222",
+            url: "http://localhost:4222".to_string(),
         };
 
         NatsMQClient::connect(options).await
@@ -118,7 +118,7 @@ mod test {
             .await
             .unwrap();
 
-        let mut stream = unsafe { Pin::new_unchecked(stream) };
+        let mut stream = unsafe_pin_message_stream(stream);
 
         tokio::spawn(async move {
             // may require a sleep in here, but nats is fast enough to work without one atm
@@ -138,5 +138,19 @@ mod test {
         }
 
         assert_eq!(count, 1);
+    }
+
+    // Use the nats test server instead of the running nats instance
+    #[tokio::test]
+    async fn nats_test_server_connect() {
+        let server = NatsTestServer::build().spawn();
+
+        let addr = server.address().to_string();
+        let options = Options { url: addr };
+
+        let nats_client = NatsMQClient::connect(options).await;
+
+        let stream = nats_client.subscribe("eth.witness").await;
+        assert!(stream.is_ok());
     }
 }

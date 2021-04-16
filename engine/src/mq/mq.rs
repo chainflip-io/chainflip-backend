@@ -1,3 +1,5 @@
+use std::pin::Pin;
+
 use async_trait::async_trait;
 use futures::Stream;
 use thiserror::Error;
@@ -19,7 +21,7 @@ pub type Result<T> = std::result::Result<T, MQError>;
 
 /// Contains various general message queue options
 pub struct Options {
-    pub url: &'static str,
+    pub url: String,
 }
 
 /// Message Queue Error type
@@ -59,4 +61,14 @@ pub trait IMQClient<Message> {
 
     /// Close the connection to the MQ
     async fn close(&self) -> Result<()>;
+}
+
+/// Used to pin a stream within a single scope.
+pub fn unsafe_pin_message_stream(
+    stream: Box<dyn Stream<Item = std::result::Result<Message, ()>>>,
+) -> Pin<Box<dyn Stream<Item = std::result::Result<Message, ()>>>> {
+    // This is safe to use, as long as the pin is used only in a single scope
+    let pinned_stream = unsafe { Pin::new_unchecked(stream) };
+
+    return pinned_stream;
 }
