@@ -59,6 +59,7 @@ pub mod pallet {
         AuctionEnded(),
         EpochChanged(T::BlockNumber, T::BlockNumber),
         MaximumValidatorsChanged(ValidatorSize, ValidatorSize),
+        ForceRotationRequested(),
     }
 
     #[pallet::error]
@@ -107,9 +108,15 @@ pub mod pallet {
             origin: OriginFor<T>,
         ) -> DispatchResultWithPostInfo {
             ensure_root(origin)?;
+            Force::<T>::set(true);
+            Self::deposit_event(Event::ForceRotationRequested());
             Ok(().into())
         }
     }
+
+    #[pallet::storage]
+    #[pallet::getter(fn force)]
+    pub(super) type Force<T: Config> = StorageValue<_, bool, ValueQuery>;
 
     #[pallet::storage]
     #[pallet::getter(fn last_block_number)]
@@ -230,9 +237,19 @@ impl<T: Config> Pallet<T> {
     }
 
     pub fn should_end_session(now: T::BlockNumber) -> bool {
-        let epoch_blocks = EpochNumberOfBlocks::<T>::get();
-        if epoch_blocks == Zero::zero() {
-            return false;
+        if Force::<T>::get() {
+            Force::<T>::set(false);
+            true
+        } else {
+            let epoch_blocks = EpochNumberOfBlocks::<T>::get();
+            if epoch_blocks == Zero::zero() {
+                return false;
+            }
+            let last_block_number = LastBlockNumber::<T>::get();
+            let diff = now.saturating_sub(last_block_number);
+            let end = diff >= epoch_blocks;
+            if end { LastBlockNumber::<T>::set(now); }
+            end
         }
     }
 

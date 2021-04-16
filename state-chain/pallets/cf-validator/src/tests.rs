@@ -162,6 +162,21 @@ fn bring_forward_session() {
 }
 
 #[test]
+fn force_rotation() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(ValidatorManager::set_validator_size(Origin::root(), 3));
+        let epoch = 10;
+        let block_number = 2;
+        assert_ok!(ValidatorManager::set_epoch(Origin::root(), epoch));
+        run_to_block(block_number);
+        assert_eq!(mock::next_validators().len(), 0);
+        assert_ok!(ValidatorManager::force_rotation(Origin::root()));
+        run_to_block(block_number + 1);
+        assert_eq!(mock::next_validators().len(), 3);
+    });
+}
+
+#[test]
 fn push_back_session() {
     new_test_ext().execute_with(|| {
         // Get current next session block number
@@ -182,11 +197,4 @@ fn limit_validator_set_size() {
     });
 }
 
-#[test]
-fn force_rotation() {
-    new_test_ext().execute_with(|| {
-        // Force rotation
-        // Get validator size
-        // Check it has rotated with the set validator size
-    });
-}
+
