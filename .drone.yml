@@ -89,7 +89,7 @@ steps:
 # Config
 trigger:
   branch:
-    - main
+    - release/sandstorm
   event:
     - push
 node:
