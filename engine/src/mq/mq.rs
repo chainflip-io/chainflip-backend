@@ -25,8 +25,16 @@ pub struct Options {
 #[derive(Error, Debug)]
 pub enum MQError {
     /// Failure to publish to the subject
+    #[error("Error subscribing to subject")]
+    SubscribeError,
+
+    /// Failure to publish message to subject
     #[error("Error publishing to subject")]
-    NatsError(#[from] std::io::Error),
+    PublishError,
+
+    /// Failure to close the connection to the message queue
+    #[error("Error closing connection")]
+    ClosingConnectionError,
 
     /// Errors that are not wrapped above
     #[error(transparent)]

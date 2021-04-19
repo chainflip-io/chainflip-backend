@@ -900,15 +900,17 @@ dependencies = [
 name = "chainflip-engine"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-nats",
  "async-stream",
  "async-trait",
+ "chainflip-common",
  "crossbeam-channel",
  "futures 0.3.14",
  "futures-core",
  "futures-util",
- "nats",
  "nats_test_server",
+ "serde",
  "thiserror",
  "tokio 1.5.0",
  "tokio-stream",

@@ -39,7 +39,7 @@ impl IMQClient<Message> for NatsMQClient {
         self.conn
             .publish(&subject.to_string(), message_data)
             .await
-            .map_err(|e| MQError::NatsError(e))
+            .map_err(|_| MQError::PublishError)
     }
 
     async fn subscribe(&self, subject: Subject) -> Result<Box<dyn Stream<Item = Message>>> {
@@ -47,7 +47,7 @@ impl IMQClient<Message> for NatsMQClient {
             .conn
             .subscribe(&subject.to_string())
             .await
-            .map_err(|e| MQError::NatsError(e))?;
+            .map_err(|_| MQError::SubscribeError)?;
 
         let subscription = Subscription { inner: sub };
 
@@ -55,7 +55,10 @@ impl IMQClient<Message> for NatsMQClient {
     }
 
     async fn close(&self) -> Result<()> {
-        self.conn.close().await.map_err(|e| MQError::NatsError(e))
+        self.conn
+            .close()
+            .await
+            .map_err(|_| MQError::ClosingConnectionError)
     }
 }
 
