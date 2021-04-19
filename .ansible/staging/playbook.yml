@@ -1,0 +1,16 @@
+- hosts: state-chain
+  vars:
+    ansible_ssh_user: root
+    ansible_ssh_private_key_file: "{{ lookup('env','HOME') }}/.ssh/chainflip_state_chain_node_key_pem"
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+  tasks:
+    - name: "state-chain.staging :- Create releases directory"
+      file: 
+        state: directory
+        path: /root/state-chain/releases
+    - name: "state-chain.staging :- Upload releases to nodes"
+      ignore_errors: yes
+      copy:
+        src: ../../target/release/state-chain-node
+        dest: "/root/state-chain/releases/state-chain-node-{{ ansible_date_time.iso8601 }}"
+        mode: u+x,g+x,o+x

@@ -26,3 +26,7 @@ oxen_connection
 chainflip-engine/config/**/local.toml
 
 .vscode
+
+# Terraform
+.terraform/**/.terraform
+.terraform/secrets.tf
