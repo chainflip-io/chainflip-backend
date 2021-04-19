@@ -78,20 +78,20 @@ steps:
       - name: cache
         path: /cache
 # TODO: Add state-chain binaries to machine
-#  - name: publish-state-chain-node
-#    image: plugins/ansible
-#    settings:
-#      verbose: 2
-#      playbook: .ansible/upload/playbook.yml
-#      inventory: .ansible/upload/inventory
-#      private_key:
-#        from_secret: ansible_private_key
+  - name: publish-state-chain-node
+    image: plugins/ansible
+    settings:
+      verbose: 2
+      playbook: .ansible/staging/playbook.yml
+      inventory: .ansible/staging/inventory
+      private_key:
+        from_secret: ansible_staging_private_key
 
 
 # Config
 trigger:
-  branch:
-    - main
+#  branch:
+#    - main
   event:
     - push
 node:
