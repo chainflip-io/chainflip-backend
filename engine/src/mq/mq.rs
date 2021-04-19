@@ -26,11 +26,11 @@ pub struct Options {
 pub enum MQError {
     /// Failure to publish to the subject
     #[error("Error subscribing to subject")]
-    SubscribeError,
+    SubscribeError(std::io::Error),
 
     /// Failure to publish message to subject
     #[error("Error publishing to subject")]
-    PublishError,
+    PublishError(std::io::Error),
 
     /// Failure to close the connection to the message queue
     #[error("Error closing connection")]
