@@ -7,26 +7,26 @@
         dest: /tmp
         directory_mode: yes
 #        TODO: Come up with better method for automating the package update
-#    - name: Get file names
-#      delegate_to: localhost
-#      command: ls files
-#      register: filenames
-#    - name: Get all listed executables
-#      shell: reprepro -b /srv/repos/apt/debian list focal | awk '{print $2}'
-#      register: packages
-#    - name: Remove all deb files in the repo
-#      ignore_errors: yes
-#      shell: 
-#        cmd: reprepro_expect /srv/repos/apt/debian remove focal {{ item }}
-#        chdir: /tmp/files
-#      with_items: "{{ packages.stdout_lines }}"
-#    - name: Include all deb files in the repo
-#      ignore_errors: yes
-#      shell: 
-#        cmd: reprepro_expect /srv/repos/apt/debian includedeb focal {{ item }}
-#        chdir: /tmp/files
-#      with_items: "{{ filenames.stdout_lines }}"
-#    - name: Export deb files in the repo
-#      ignore_errors: yes
-#      shell: 
-#        cmd: reprepro_expect_export /srv/repos/apt/debian
+    - name: Get file names
+      delegate_to: localhost
+      command: ls files
+      register: filenames
+    - name: Get all listed executables
+      shell: reprepro -b /srv/repos/apt/debian list focal | awk '{print $2}'
+      register: packages
+    - name: Remove all deb files in the repo
+      ignore_errors: yes
+      shell: 
+        cmd: reprepro_expect /srv/repos/apt/debian remove focal {{ item }}
+        chdir: /tmp/files
+      with_items: "{{ packages.stdout_lines }}"
+    - name: Include all deb files in the repo
+      ignore_errors: yes
+      shell: 
+        cmd: reprepro_expect /srv/repos/apt/debian includedeb focal {{ item }}
+        chdir: /tmp/files
+      with_items: "{{ filenames.stdout_lines }}"
+    - name: Export deb files in the repo
+      ignore_errors: yes
+      shell: 
+        cmd: reprepro_expect_export /srv/repos/apt/debian
