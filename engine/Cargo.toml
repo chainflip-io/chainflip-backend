@@ -7,3 +7,12 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+
+[package.metadata.deb]
+name = "engine"
+maintainer = "Chainflip UG <dev@chainflip.io>"
+extended-description = """\
+Chainflip Validator Engine Package"""
+depends = "$auto"
+section = "rust"
+priority = "required"
