@@ -11,5 +11,5 @@
       ignore_errors: yes
       copy:
         src: ../../target/release/state-chain-node
-        dest: "/root/state-chain/releases/state-chain-node-{{ ansible_date_time.iso8601 }}"
+        dest: "/root/state-chain/releases/state-chain-node-{{ ansible_date_time.date }}"
         mode: u+x,g+x,o+x

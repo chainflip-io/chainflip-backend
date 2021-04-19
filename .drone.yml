@@ -68,7 +68,6 @@ steps:
         - .drone.yml
   - name: compile-state-chain-linux
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    failure: ignore
     environment:
       SCCACHE_DIR: /cache
     commands:
@@ -77,7 +76,6 @@ steps:
     volumes:
       - name: cache
         path: /cache
-# TODO: Add state-chain binaries to machine
   - name: publish-state-chain-node
     image: plugins/ansible
     settings:
@@ -90,8 +88,8 @@ steps:
 
 # Config
 trigger:
-#  branch:
-#    - main
+  branch:
+    - main
   event:
     - push
 node:
