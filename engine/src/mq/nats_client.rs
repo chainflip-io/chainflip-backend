@@ -1,8 +1,8 @@
-use super::{pin_message_stream, IMQClient, MQError, Message, Options, Result};
+use super::{pin_message_stream, IMQClient, MQError, Message, Options, Result, Subject};
 use async_nats;
-use async_stream::try_stream;
+use async_stream::stream;
 use async_trait::async_trait;
-use nats;
+use chainflip_common::types::coin::Coin;
 use tokio_stream::{Stream, StreamExt};
 
 // This will likely have a private field containing the underlying mq client
@@ -12,21 +12,15 @@ pub struct NatsMQClient {
     conn: async_nats::Connection,
 }
 
-impl From<nats::Message> for Message {
-    fn from(m: nats::Message) -> Self {
-        Message::new(m.data)
-    }
-}
-
-pub struct Subscription {
+struct Subscription {
     inner: async_nats::Subscription,
 }
 
 impl Subscription {
-    pub fn into_stream(self) -> impl Stream<Item = std::result::Result<Message, ()>> {
-        try_stream! {
+    pub fn into_stream(self) -> impl Stream<Item = Message> {
+        stream! {
             while let Some(m) = self.inner.next().await {
-                yield Message::new(m.data);
+                yield Message(m.data);
             }
         }
     }
@@ -41,22 +35,19 @@ impl IMQClient<Message> for NatsMQClient {
         NatsMQClient { conn }
     }
 
-    async fn publish(&self, subject: &str, message: Vec<u8>) -> Result<()> {
+    async fn publish(&self, subject: Subject, message_data: Vec<u8>) -> Result<()> {
         self.conn
-            .publish(subject, message)
+            .publish(&subject.to_string(), message_data)
             .await
-            .map_err(|_| MQError::PublishError)
+            .map_err(|e| MQError::NatsError(e))
     }
 
-    async fn subscribe(
-        &self,
-        subject: &str,
-    ) -> Result<Box<dyn Stream<Item = std::result::Result<Message, ()>>>> {
+    async fn subscribe(&self, subject: Subject) -> Result<Box<dyn Stream<Item = Message>>> {
         let sub = self
             .conn
-            .subscribe(subject)
+            .subscribe(&subject.to_string())
             .await
-            .map_err(|_| MQError::SubscribeError)?;
+            .map_err(|e| MQError::NatsError(e))?;
 
         let subscription = Subscription { inner: sub };
 
@@ -64,10 +55,7 @@ impl IMQClient<Message> for NatsMQClient {
     }
 
     async fn close(&self) -> Result<()> {
-        self.conn
-            .close()
-            .await
-            .map_err(|_| MQError::ErrorClosingConnection)
+        self.conn.close().await.map_err(|e| MQError::NatsError(e))
     }
 }
 
@@ -99,22 +87,20 @@ mod test {
     async fn publish_to_subject() {
         let nats_client = setup_client().await;
         let res = nats_client
-            .publish("witness.eth", "hello".as_bytes().to_owned())
+            .publish(Subject::Witness(Coin::ETH), "hello".as_bytes().to_owned())
             .await;
         assert!(res.is_ok());
     }
 
-    #[ignore = "Depends on Nats being online"]
-    #[tokio::test]
-    async fn subscribe_to_eth_witness() {
-        let nats_client = setup_client().await;
-
+    async fn subscribe_test_inner(nats_client: NatsMQClient) {
         let test_message = "I SAW A TRANSACTION".as_bytes().to_owned();
 
-        let stream = nats_client.subscribe("witness.eth").await.unwrap();
+        let subject = Subject::Witness(Coin::ETH);
+
+        let stream = nats_client.subscribe(subject).await.unwrap();
 
         nats_client
-            .publish("witness.eth", test_message)
+            .publish(subject, test_message.clone())
             .await
             .unwrap();
 
@@ -127,17 +113,19 @@ mod test {
 
         let mut count: i32 = 0;
         while let Some(m) = stream.next().await {
-            match m {
-                Ok(_) => {
-                    count += 1;
-                }
-                Err(_) => {
-                    break;
-                }
-            }
+            count += 1;
+            assert_eq!(m.0, test_message);
         }
 
         assert_eq!(count, 1);
+    }
+
+    #[ignore = "Depends on Nats being online"]
+    #[tokio::test]
+    async fn subscribe_to_eth_witness() {
+        let nats_client = setup_client().await;
+
+        subscribe_test_inner(nats_client).await;
     }
 
     // Use the nats test server instead of the running nats instance
@@ -150,34 +138,6 @@ mod test {
 
         let nats_client = NatsMQClient::connect(options).await;
 
-        let test_message = "I SAW A TRANSACTION".as_bytes().to_owned();
-
-        let stream = nats_client.subscribe("witness.eth").await.unwrap();
-
-        nats_client
-            .publish("witness.eth", test_message)
-            .await
-            .unwrap();
-
-        let mut stream = pin_message_stream(stream);
-
-        tokio::spawn(async move {
-            // may require a sleep in here, but nats is fast enough to work without one atm
-            nats_client.close().await.unwrap();
-        });
-
-        let mut count: i32 = 0;
-        while let Some(m) = stream.next().await {
-            match m {
-                Ok(_) => {
-                    count += 1;
-                }
-                Err(_) => {
-                    break;
-                }
-            }
-        }
-
-        assert_eq!(count, 1);
+        subscribe_test_inner(nats_client).await;
     }
 }
