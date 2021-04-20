@@ -6,7 +6,6 @@ use async_stream::stream;
 use async_trait::async_trait;
 use chainflip_common::types::coin::Coin;
 use serde::de::DeserializeOwned;
-use serde::Deserialize;
 use serde::Serialize;
 use tokio_stream::{Stream, StreamExt};
 
