@@ -1,25 +1,19 @@
-use std::marker::PhantomData;
-
 use super::{pin_message_stream, IMQClient, Options, Subject};
 use async_nats;
 use async_stream::stream;
 use async_trait::async_trait;
 use chainflip_common::types::coin::Coin;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::{de::DeserializeOwned, Deserialize};
 use tokio_stream::{Stream, StreamExt};
 
 type Result<T> = anyhow::Result<T>;
 
 // This will likely have a private field containing the underlying mq client
 #[derive(Clone)]
-pub struct NatsMQClient<M>
-where
-    M: Serialize + DeserializeOwned + Send,
-{
+pub struct NatsMQClient {
     /// The nats.rs Connection to the Nats server
     conn: async_nats::Connection,
-    _marker: PhantomData<M>,
 }
 
 struct Subscription {
@@ -37,19 +31,13 @@ impl Subscription {
 }
 
 #[async_trait(?Send)]
-impl<M> IMQClient<M> for NatsMQClient<M>
-where
-    M: Serialize + DeserializeOwned + Send + 'static,
-{
+impl IMQClient for NatsMQClient {
     async fn connect(opts: Options) -> Result<Box<Self>> {
         let conn = async_nats::connect(opts.url.as_str()).await?;
-        Ok(Box::new(NatsMQClient {
-            conn,
-            _marker: PhantomData,
-        }))
+        Ok(Box::new(NatsMQClient { conn }))
     }
 
-    async fn publish(&self, subject: Subject, message_data: M) -> Result<()> {
+    async fn publish<M: Serialize>(&self, subject: Subject, message_data: M) -> Result<()> {
         let bytes = serde_json::to_string(&message_data)?;
         let bytes = bytes.as_bytes();
         self.conn.publish(&subject.to_string(), bytes).await?;
@@ -77,7 +65,7 @@ mod test {
 
     use super::*;
 
-    async fn setup_client() -> Box<NatsMQClient<Vec<u8>>> {
+    async fn setup_client() -> Box<NatsMQClient> {
         let options = Options {
             url: "http://localhost:4222".to_string(),
         };
@@ -103,7 +91,7 @@ mod test {
         assert!(res.is_ok());
     }
 
-    async fn subscribe_test_inner(nats_client: Box<NatsMQClient<Vec<u8>>>) {
+    async fn subscribe_test_inner(nats_client: Box<NatsMQClient>) {
         let test_message = "I SAW A TRANSACTION".as_bytes().to_owned();
         let expected_message = serde_json::to_string(&test_message).unwrap();
         let expected_bytes = expected_message.as_bytes();
