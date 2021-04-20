@@ -28,10 +28,10 @@ where
     async fn publish(&self, subject: Subject, message: M) -> Result<()>;
 
     /// Subscribe to a subject
-    async fn subscribe(&self, subject: Subject) -> anyhow::Result<Box<dyn Stream<Item = Vec<u8>>>>;
+    async fn subscribe(&self, subject: Subject) -> Result<Box<dyn Stream<Item = Vec<u8>>>>;
 
     // / Close the connection to the MQ
-    // async fn close(&self) -> Result<()>;
+    async fn close(&self) -> Result<()>;
 }
 
 /// Used to pin a stream within a single scope.

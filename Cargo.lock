@@ -911,6 +911,7 @@ dependencies = [
  "futures-util",
  "nats_test_server",
  "serde",
+ "serde_json",
  "thiserror",
  "tokio 1.5.0",
  "tokio-stream",
