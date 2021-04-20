@@ -14,7 +14,7 @@ use frame_support::sp_runtime::traits::{Saturating, Zero};
 use log::{debug};
 
 type ValidatorSize = u32;
-type SessionIndex = u32;
+type EpochIndex = u32;
 
 pub trait ValidatorHandler<ValidatorId> {
 	fn on_new_session(
@@ -35,11 +35,11 @@ impl<ValidatorId> ValidatorHandler<ValidatorId> for () {
 }
 
 pub trait CandidateProvider<ValidatorId, Stake> {
-	fn get_candidates(index: SessionIndex) -> Vec<(ValidatorId, Stake)>;
+	fn get_candidates(index: EpochIndex) -> Vec<(ValidatorId, Stake)>;
 }
 
 impl<ValidatorId, Stake> CandidateProvider<ValidatorId, Stake> for () {
-	fn get_candidates(_index: SessionIndex) -> Vec<(ValidatorId, Stake)> {
+	fn get_candidates(_index: EpochIndex) -> Vec<(ValidatorId, Stake)> {
 		vec![]
 	}
 }
@@ -76,8 +76,8 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		AuctionStarted(SessionIndex),
-		AuctionEnded(SessionIndex),
+		AuctionStarted(EpochIndex),
+		AuctionEnded(EpochIndex),
 		EpochChanged(T::BlockNumber, T::BlockNumber),
 		MaximumValidatorsChanged(ValidatorSize, ValidatorSize),
 		ForceRotationRequested(),
@@ -253,7 +253,7 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 }
 
 impl<T: Config> Pallet<T> {
-	fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
+	fn new_session(new_index: EpochIndex) -> Option<Vec<T::ValidatorId>> {
 		debug!("Creating a new session {}", new_index);
 		Self::deposit_event(Event::AuctionStarted(new_index));
 		let candidates = Self::run_auction(new_index);
@@ -261,15 +261,15 @@ impl<T: Config> Pallet<T> {
 		candidates
 	}
 
-	fn end_session(end_index: SessionIndex) {
+	fn end_session(end_index: EpochIndex) {
 		debug!("Ending a session {}", end_index);
 	}
 
-	fn start_session(start_index: SessionIndex) {
+	fn start_session(start_index: EpochIndex) {
 		debug!("Starting a new session {}", start_index);
 	}
 
-	pub fn run_auction(index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
+	pub fn run_auction(index: EpochIndex) -> Option<Vec<T::ValidatorId>> {
 		// A basic auction algorithm.  We sort by stake amount and take the top of the validator
 		// set size and let session pallet do the rest
 		// Space here to add other prioritisation parameters

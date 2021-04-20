@@ -115,7 +115,7 @@ impl pallet_session::Config for Test {
 pub struct TestCandidateProvider;
 
 impl CandidateProvider<u64, u64> for TestCandidateProvider {
-	fn get_candidates(index: SessionIndex) -> Vec<(u64, u64)> {
+	fn get_candidates(index: EpochIndex) -> Vec<(u64, u64)> {
 		vec![(index as u64, 1), (index as u64, 2), (index as u64, 3)]
 	}
 }
