@@ -1,10 +1,13 @@
+use std::marker::PhantomData;
+
 use super::{pin_message_stream, IMQClient, Options, Result, Subject};
 use async_nats;
 use async_stream::stream;
 use async_trait::async_trait;
 use chainflip_common::types::coin::Coin;
+use serde::de::DeserializeOwned;
 use serde::Deserialize;
-use serde::{de::DeserializeOwned, ser::Serialize, Serializer};
+use serde::Serialize;
 use tokio_stream::{Stream, StreamExt};
 
 // This will likely have a private field containing the underlying mq client
@@ -28,10 +31,10 @@ impl Subscription {
     }
 }
 
-#[async_trait]
-impl<M> IMQClient<M> for NatsMQClient
+#[async_trait(?Send)]
+impl<'a, M> IMQClient<M> for NatsMQClient
 where
-    M: Serialize + DeserializeOwned,
+    M: Serialize + DeserializeOwned + Send + 'static,
 {
     async fn connect(opts: Options) -> anyhow::Result<Box<Self>> {
         let conn = async_nats::connect(opts.url.as_str()).await?;
@@ -39,39 +42,44 @@ where
     }
 
     async fn publish(&self, subject: Subject, message_data: M) -> anyhow::Result<()> {
-        let bytes = message_data.serialize();
-        let conn = self.conn.publish(&subject.to_string(), bytes).await?;
-        Ok(conn)
+        let bytes = serde_json::to_string(&message_data)?;
+        let bytes = bytes.as_bytes();
+        self.conn.publish(&subject.to_string(), bytes).await?;
+        Ok(())
     }
 
-    // async fn subscribe(&self, subject: Subject) -> anyhow::Result<Box<dyn Stream<Item = M>>> {
-    //     let sub = self.conn.subscribe(&subject.to_string()).await?;
+    async fn subscribe(&self, subject: Subject) -> anyhow::Result<Box<dyn Stream<Item = Vec<u8>>>> {
+        let sub = self.conn.subscribe(&subject.to_string()).await?;
 
-    //     let subscription = Subscription { inner: sub };
+        let subscription = Subscription { inner: sub };
 
-    //     Ok(Box::new(subscription.into_stream()))
+        Ok(Box::new(subscription.into_stream()))
+    }
+
+    // async fn close(&self) -> anyhow::Result<()> {
+    //     let conn = self.conn.close().await?;
+    //     Ok(conn)
     // }
-
-    async fn close(&self) -> anyhow::Result<()> {
-        let conn = self.conn.close().await?;
-        Ok(conn)
-    }
 }
 
-// #[cfg(test)]
-// mod test {
+#[cfg(test)]
+mod test {
 
-//     use nats_test_server::*;
+    use nats_test_server::*;
 
-//     use super::*;
+    use super::*;
 
-//     async fn setup_client() -> Box<NatsMQClient> {
-//         let options = Options {
-//             url: "http://localhost:4222".to_string(),
-//         };
+    async fn setup_client() -> Box<NatsMQClient> {
+        let options = Options {
+            url: "http://localhost:4222".to_string(),
+        };
 
-//         NatsMQClient::connect(options).await.unwrap()
-//     }
+        match NatsMQClient::connect(options).await {
+            Ok(a) => a,
+            _ => unreachable!(),
+        }
+    }
+}
 
 //     #[ignore = "Depends on Nats being online"]
 //     #[tokio::test]
@@ -139,4 +147,4 @@ where
 
 //         subscribe_test_inner(nats_client).await;
 //     }
-}
+// }

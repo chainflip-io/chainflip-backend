@@ -16,10 +16,10 @@ pub struct Options {
 }
 
 /// Interface for a message queue
-#[async_trait]
+#[async_trait(?Send)]
 pub trait IMQClient<M>
 where
-    M: Serialize + DeserializeOwned,
+    M: Serialize + DeserializeOwned + Send,
 {
     /// Open a connection to the message queue
     async fn connect(opts: Options) -> Result<Box<Self>>;
@@ -27,11 +27,11 @@ where
     /// Publish something to a particular subject
     async fn publish(&self, subject: Subject, message: M) -> Result<()>;
 
-    // /// Subscribe to a subject
-    // async fn subscribe(&self, subject: Subject) -> Result<Box<dyn Stream<Item = M>>>;
+    /// Subscribe to a subject
+    async fn subscribe(&self, subject: Subject) -> anyhow::Result<Box<dyn Stream<Item = Vec<u8>>>>;
 
-    /// Close the connection to the MQ
-    async fn close(&self) -> Result<()>;
+    // / Close the connection to the MQ
+    // async fn close(&self) -> Result<()>;
 }
 
 /// Used to pin a stream within a single scope.
