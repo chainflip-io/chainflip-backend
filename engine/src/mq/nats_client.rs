@@ -1,10 +1,9 @@
-use super::{pin_message_stream, IMQClient, Options, Subject};
+use super::{IMQClient, Options, Subject};
+use anyhow::Context;
 use async_nats;
 use async_stream::stream;
 use async_trait::async_trait;
-use chainflip_common::types::coin::Coin;
-use serde::Serialize;
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{de::DeserializeOwned, Serialize};
 use tokio_stream::{Stream, StreamExt};
 
 type Result<T> = anyhow::Result<T>;
@@ -37,19 +36,22 @@ impl IMQClient for NatsMQClient {
         Ok(Box::new(NatsMQClient { conn }))
     }
 
-    async fn publish<M: Serialize>(&self, subject: Subject, message_data: M) -> Result<()> {
-        let bytes = serde_json::to_string(&message_data)?;
+    async fn publish<M: Serialize>(&self, subject: Subject, message: &'_ M) -> Result<()> {
+        let bytes = serde_json::to_string(message)?;
         let bytes = bytes.as_bytes();
         self.conn.publish(&subject.to_string(), bytes).await?;
         Ok(())
     }
 
-    async fn subscribe(&self, subject: Subject) -> Result<Box<dyn Stream<Item = Vec<u8>>>> {
+    async fn subscribe<M: DeserializeOwned>(&self, subject: Subject) -> Result<Box<dyn Stream<Item = Result<M>>>> {
         let sub = self.conn.subscribe(&subject.to_string()).await?;
 
         let subscription = Subscription { inner: sub };
+        let stream = subscription
+            .into_stream()
+            .map(|bytes| serde_json::from_slice(&bytes[..]).context("Message deserialization failed."));
 
-        Ok(Box::new(subscription.into_stream()))
+        Ok(Box::new(stream))
     }
 
     async fn close(&self) -> Result<()> {
@@ -61,9 +63,19 @@ impl IMQClient for NatsMQClient {
 #[cfg(test)]
 mod test {
 
+    use core::panic;
+    use std::time::Duration;
+
+    use chainflip_common::types::coin::Coin;
     use nats_test_server::*;
+    use serde::Deserialize;
+
+    use crate::mq::pin_message_stream;
 
     use super::*;
+
+    #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+    struct TestMessage(String);
 
     async fn setup_client() -> Box<NatsMQClient> {
         let options = Options {
@@ -86,34 +98,30 @@ mod test {
     async fn publish_to_subject() {
         let nats_client = setup_client().await;
         let res = nats_client
-            .publish(Subject::Witness(Coin::ETH), "hello".as_bytes().to_owned())
+            .publish(Subject::Witness(Coin::ETH), &TestMessage(String::from("hello")))
             .await;
         assert!(res.is_ok());
     }
 
     async fn subscribe_test_inner(nats_client: Box<NatsMQClient>) {
-        let test_message = "I SAW A TRANSACTION".as_bytes().to_owned();
-        let expected_message = serde_json::to_string(&test_message).unwrap();
-        let expected_bytes = expected_message.as_bytes();
+        let test_message = TestMessage(String::from("I SAW A TRANSACTION"));
 
         let subject = Subject::Witness(Coin::ETH);
 
-        let stream = nats_client.subscribe(subject).await.unwrap();
+        let stream = nats_client.subscribe::<TestMessage>(subject).await.unwrap();
 
         nats_client
-            .publish(subject, test_message.clone())
+            .publish(subject, &test_message)
             .await
             .unwrap();
 
         let mut stream = pin_message_stream(stream);
 
-        let mut count: i32 = 0;
-        while let Some(m) = stream.next().await {
-            count += 1;
-            assert_eq!(m, expected_bytes);
-        }
-
-        assert_eq!(count, 1);
+        match tokio::time::timeout(Duration::from_millis(100), stream.next()).await {
+            Ok(Some(m)) => assert_eq!(m.unwrap(), test_message),
+            Ok(None) => panic!("Unexpected error: stream returned early."),
+            Err(_) => panic!("Nats stream timed out."),
+        };
     }
 
     #[ignore = "Depends on Nats being online"]
