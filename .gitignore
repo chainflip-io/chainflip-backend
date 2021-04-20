@@ -28,3 +28,7 @@ chainflip-engine/config/**/local.toml
 .vscode
 
 **/debug/
+
+# Terraform
+.terraform/**/.terraform
+.terraform/secrets.tf
