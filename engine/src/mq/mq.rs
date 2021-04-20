@@ -4,63 +4,41 @@ use async_trait::async_trait;
 use chainflip_common::types::coin::Coin;
 use fmt::write;
 use futures::Stream;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use thiserror::Error;
 
-// use super::nats_client::NatsReceiverAdapter;
-
-/// Message should be deserialized by the individual components
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-pub struct Message(pub Vec<u8>);
-
 /// Message Queue Result type
-pub type Result<T> = std::result::Result<T, MQError>;
+pub type Result<T> = anyhow::Result<T>;
 
 /// Contains various general message queue options
 pub struct Options {
     pub url: String,
 }
 
-/// Message Queue Error type
-#[derive(Error, Debug)]
-pub enum MQError {
-    /// Failure to publish to the subject
-    #[error("Error subscribing to subject")]
-    SubscribeError,
-
-    /// Failure to publish message to subject
-    #[error("Error publishing to subject")]
-    PublishError,
-
-    /// Failure to close the connection to the message queue
-    #[error("Error closing connection")]
-    ClosingConnectionError,
-
-    /// Errors that are not wrapped above
-    #[error(transparent)]
-    Other(anyhow::Error),
-}
-
 /// Interface for a message queue
 #[async_trait]
-pub trait IMQClient<Message> {
+pub trait IMQClient<M>
+where
+    M: Serialize + DeserializeOwned,
+{
     /// Open a connection to the message queue
-    async fn connect(opts: Options) -> Self;
+    async fn connect(opts: Options) -> Result<Box<Self>>;
 
     /// Publish something to a particular subject
-    async fn publish(&self, subject: Subject, message: Vec<u8>) -> Result<()>;
+    async fn publish(&self, subject: Subject, message: M) -> Result<()>;
 
-    /// Subscribe to a subject
-    async fn subscribe(&self, subject: Subject) -> Result<Box<dyn Stream<Item = Message>>>;
+    // /// Subscribe to a subject
+    // async fn subscribe(&self, subject: Subject) -> Result<Box<dyn Stream<Item = M>>>;
 
     /// Close the connection to the MQ
     async fn close(&self) -> Result<()>;
 }
 
 /// Used to pin a stream within a single scope.
-pub fn pin_message_stream(
-    stream: Box<dyn Stream<Item = Message>>,
-) -> Pin<Box<dyn Stream<Item = Message>>> {
+pub fn pin_message_stream<M>(stream: Box<dyn Stream<Item = M>>) -> Pin<Box<dyn Stream<Item = M>>>
+where
+    M: Serialize + DeserializeOwned,
+{
     stream.into()
 }
 
