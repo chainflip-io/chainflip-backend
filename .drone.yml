@@ -1,10 +1,12 @@
 kind: pipeline
 type: docker
-name: chainflip-backend
+name: chainflip-state-chain-pr
 
 steps:
-  - name: check-state-chain
-    image: ghcr.io/chainflip-io/chainflip-infrastructure/state-chain-base:latest
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<< pull_request >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+# Pull request check and build
+  - name: check-state-chain-dev
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
       SCCACHE_DIR: /cache
     commands:
@@ -13,8 +15,8 @@ steps:
     volumes:
       - name: cache
         path: /cache
-  - name: compile-state-chain
-    image: ghcr.io/chainflip-io/chainflip-infrastructure/state-chain-base:latest
+  - name: compile-state-chain-dev
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
       SCCACHE_DIR: /cache
     commands:
@@ -23,40 +25,103 @@ steps:
     volumes:
       - name: cache
         path: /cache
-  - name: build-state-chain-node
+
+# Config
+trigger:
+  event:
+    - pull_request
+  paths:
+    - state-chain/*
+node:
+  builder: "true"
+volumes:
+  - name: cache
+    host:
+      path: /mnt/chainflip-build-runner/sccache
+image_pull_secrets:
+  - dockerconfigjson
+
+---
+
+kind: pipeline
+type: docker
+name: chainflip-state-chain
+
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<< main >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+# Merge to master build and publish
+steps:
+  - name: rust-base
     image: plugins/docker
     settings:
       username:
         from_secret: docker_username
       password:
         from_secret: docker_password
-      repo: ghcr.io/chainflip-io/chainflip-infrastructure/state-chain-node
-      dockerfile: Dockerfile.state-chain-node
+      repo: ghcr.io/chainflip-io/chainflip-backend/rust-base
+      dockerfile: Dockerfile.rust-base
       registry: ghcr.io
       tags: latest
-      cache_from: ghcr.io/chainflip-io/chainflip-infrastructure/state-chain-node:latest
-# TODO: Not required until things get serious
+      cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    when: 
+      paths:
+        - Dockerfile.rust-base
+        - .drone.yml
+  - name: compile-state-chain-linux
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    failure: ignore
+    environment:
+      SCCACHE_DIR: /cache
+    commands:
+      - cargo build --release
+      - sccache -s
+    volumes:
+      - name: cache
+        path: /cache
+# TODO: Add state-chain binaries to machine
 #  - name: publish-state-chain-node
-#    image: plugins/github-release
+#    image: plugins/ansible
 #    settings:
-#      api_key:
-#        from_secret: github_token
-#      files: target/release/state-chain-node
-#      title: test
-#      note: CHANGELOG.md
-#      draft: true
+#      verbose: 2
+#      playbook: .ansible/upload/playbook.yml
+#      inventory: .ansible/upload/inventory
+#      private_key:
+#        from_secret: ansible_private_key
 
+
+# Config
 trigger:
+  branch:
+    - main
   event:
-    - pull_request
-
+    - push
+node:
+  builder: "true"
 volumes:
   - name: cache
     host:
       path: /mnt/chainflip-build-runner/sccache
+image_pull_secrets:
+  - dockerconfigjson
 
-node:
-  builder: "true"
+---
+# Run checks on infrastructure configuration prior to merge.
+kind: pipeline
+name: ci-checks
+type: docker
+
+steps:
+  - name: lint-drone-yml
+    image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+    commands:
+      - drone lint --trusted
+
+trigger:
+  event:
+    exclude:
+      - pull_request
+  paths:
+    - .drone.yml
+    - Dockerfile.rust-base
 
 image_pull_secrets:
   - dockerconfigjson
