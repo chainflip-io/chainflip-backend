@@ -3,10 +3,13 @@
     ansible_ssh_user: root
     ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
   tasks:
-    - name: "state-chain.staging :- Create releases directory"
+    - name: "state-chain.staging :- Create directories"
       file: 
         state: directory
-        path: /root/state-chain/releases
+        path: "/root/state-chain/{{item}}"
+      with_items: 
+        - releases
+        - config
     - name: "state-chain.staging :- Upload releases to nodes"
       ignore_errors: yes
       copy:
