@@ -37,7 +37,7 @@ impl Subscription {
 }
 
 #[async_trait(?Send)]
-impl<'a, M> IMQClient<M> for NatsMQClient<M>
+impl<M> IMQClient<M> for NatsMQClient<M>
 where
     M: Serialize + DeserializeOwned + Send + 'static,
 {
