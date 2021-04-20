@@ -1,3 +1,5 @@
-[state-chain]
+[alice]
 state-chain-0.chainflip.xyz
+
+[bob]
 state-chain-1.chainflip.xyz

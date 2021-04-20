@@ -1,5 +1,5 @@
 locals {
-  state-chain-count = 1
+  state-chain-count = 2
 }
 resource "hcloud_server" "state-chain-node" {
   count = local.state-chain-count
