@@ -1,12 +1,11 @@
 use super::{IMQClient, Options, Subject};
 use anyhow::Context;
+use anyhow::Result;
 use async_nats;
 use async_stream::stream;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use tokio_stream::{Stream, StreamExt};
-
-type Result<T> = anyhow::Result<T>;
 
 // This will likely have a private field containing the underlying mq client
 #[derive(Clone)]
@@ -43,13 +42,16 @@ impl IMQClient for NatsMQClient {
         Ok(())
     }
 
-    async fn subscribe<M: DeserializeOwned>(&self, subject: Subject) -> Result<Box<dyn Stream<Item = Result<M>>>> {
+    async fn subscribe<M: DeserializeOwned>(
+        &self,
+        subject: Subject,
+    ) -> Result<Box<dyn Stream<Item = Result<M>>>> {
         let sub = self.conn.subscribe(&subject.to_string()).await?;
 
         let subscription = Subscription { inner: sub };
-        let stream = subscription
-            .into_stream()
-            .map(|bytes| serde_json::from_slice(&bytes[..]).context("Message deserialization failed."));
+        let stream = subscription.into_stream().map(|bytes| {
+            serde_json::from_slice(&bytes[..]).context("Message deserialization failed.")
+        });
 
         Ok(Box::new(stream))
     }
@@ -98,7 +100,10 @@ mod test {
     async fn publish_to_subject() {
         let nats_client = setup_client().await;
         let res = nats_client
-            .publish(Subject::Witness(Coin::ETH), &TestMessage(String::from("hello")))
+            .publish(
+                Subject::Witness(Coin::ETH),
+                &TestMessage(String::from("hello")),
+            )
             .await;
         assert!(res.is_ok());
     }
@@ -110,10 +115,7 @@ mod test {
 
         let stream = nats_client.subscribe::<TestMessage>(subject).await.unwrap();
 
-        nats_client
-            .publish(subject, &test_message)
-            .await
-            .unwrap();
+        nats_client.publish(subject, &test_message).await.unwrap();
 
         let mut stream = pin_message_stream(stream);
 
