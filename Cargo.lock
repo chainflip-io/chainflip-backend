@@ -4680,6 +4680,7 @@ dependencies = [
 name = "pallet-cf-witness"
 version = "0.1.0"
 dependencies = [
+ "bitvec 0.20.2",
  "frame-support",
  "frame-system",
  "parity-scale-codec 2.0.1",
@@ -9249,7 +9250,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04f8ab788026715fa63b31960869617cba39117e520eb415b0139543e325ab59"
 dependencies = [
  "cfg-if 0.1.10",
- "rand 0.3.23",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
