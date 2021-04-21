@@ -5,22 +5,22 @@ name: chainflip-state-chain-pr
 steps:
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<< pull_request >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # Pull request check and build
-  - name: check-state-chain-dev
+  - name: check-state-chain
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
       SCCACHE_DIR: /cache
     commands:
-      - SKIP_WASM_BUILD=1 cargo check --release
+      - SKIP_WASM_BUILD=1 cargo check --release --bin state-chain-node
       - sccache -s
     volumes:
       - name: cache
         path: /cache
-  - name: compile-state-chain-dev
+  - name: compile-state-chain
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
       SCCACHE_DIR: /cache
     commands:
-      - cargo build --release
+      - cargo build --release --bin state-chain-node
       - sccache -s
     volumes:
       - name: cache
