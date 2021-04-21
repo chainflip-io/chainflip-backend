@@ -1,6 +1,7 @@
 mod mq;
 mod p2p;
+mod witness;
 
 fn main() {
-    println!("Hello");
+    println!("Hello from the CFE!");
 }
