@@ -4,10 +4,6 @@ version = "0.1.0"
 authors = ["Kyle Zsembery <zsembery.kyle@gmail.com>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-
 [package.metadata.deb]
 name = "engine"
 maintainer = "Chainflip UG <dev@chainflip.io>"
@@ -16,3 +12,25 @@ Chainflip Validator Engine Package"""
 depends = "$auto"
 section = "rust"
 priority = "required"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+crossbeam-channel = "0.5.1"
+async-nats = "0.9.12"
+async-trait = "0.1.49"
+thiserror = "1.0.24"
+tokio = { version = "1.5.0", features = ["full"] }
+futures = "0.3.14"
+async-stream = "0.3.0"
+futures-core = "0.3.14"
+futures-util = "0.3.14"
+tokio-stream = "0.1.5"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+chainflip-common = { path = "../common" }
+
+
+[dev-dependencies]
+nats_test_server = "0.3.0"
