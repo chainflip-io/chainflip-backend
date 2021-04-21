@@ -65,16 +65,14 @@ impl IMQClient for NatsMQClient {
 #[cfg(test)]
 mod test {
 
+    use super::*;
     use core::panic;
     use std::time::Duration;
 
     use chainflip_common::types::coin::Coin;
-    use nats_test_server::*;
     use serde::Deserialize;
 
     use crate::mq::pin_message_stream;
-
-    use super::*;
 
     #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
     struct TestMessage(String);
@@ -130,19 +128,6 @@ mod test {
     #[tokio::test]
     async fn subscribe_to_eth_witness() {
         let nats_client = setup_client().await;
-
-        subscribe_test_inner(nats_client).await;
-    }
-
-    // Use the nats test server instead of the running nats instance
-    #[tokio::test]
-    async fn nats_test_server_connect() {
-        let server = NatsTestServer::build().spawn();
-
-        let addr = server.address().to_string();
-        let options = Options { url: addr };
-
-        let nats_client = NatsMQClient::connect(options).await.unwrap();
 
         subscribe_test_inner(nats_client).await;
     }

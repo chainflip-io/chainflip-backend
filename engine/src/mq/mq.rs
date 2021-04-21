@@ -1,10 +1,10 @@
 use std::{fmt, pin::Pin};
 
+use anyhow::Result;
 use async_trait::async_trait;
 use chainflip_common::types::coin::Coin;
 use futures::Stream;
 use serde::{de::DeserializeOwned, Serialize};
-use anyhow::Result;
 
 /// Contains various general message queue options
 pub struct Options {
@@ -21,18 +21,19 @@ pub trait IMQClient {
     async fn publish<M: Serialize>(&self, subject: Subject, message: &'_ M) -> Result<()>;
 
     /// Subscribe to a subject
-    async fn subscribe<M: DeserializeOwned>(&self, subject: Subject) -> Result<Box<dyn Stream<Item = Result<M>>>>;
+    async fn subscribe<M: DeserializeOwned>(
+        &self,
+        subject: Subject,
+    ) -> Result<Box<dyn Stream<Item = Result<M>>>>;
 
     // / Close the connection to the MQ
     async fn close(&self) -> Result<()>;
 }
 
 /// Used to pin a stream within a single scope.
-pub fn pin_message_stream<M>(stream: Box<dyn Stream<Item = M>>) -> Pin<Box<dyn Stream<Item = M>>>
-{
+pub fn pin_message_stream<M>(stream: Box<dyn Stream<Item = M>>) -> Pin<Box<dyn Stream<Item = M>>> {
     stream.into()
 }
-
 /// Subjects that can be published / subscribed to
 #[derive(Debug, Clone, Copy)]
 pub enum Subject {
