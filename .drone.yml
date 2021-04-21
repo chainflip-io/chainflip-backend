@@ -32,6 +32,7 @@ trigger:
     - pull_request
   paths:
     - state-chain/*
+    - Cargo.*
 node:
   builder: "true"
 volumes:
