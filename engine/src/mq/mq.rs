@@ -1,69 +1,39 @@
-use std::{fmt, ops::Sub, pin::Pin};
+use std::{fmt, pin::Pin};
 
+use anyhow::Result;
 use async_trait::async_trait;
 use chainflip_common::types::coin::Coin;
-use fmt::write;
 use futures::Stream;
-use serde::{Deserialize, Serialize};
-use thiserror::Error;
-
-// use super::nats_client::NatsReceiverAdapter;
-
-/// Message should be deserialized by the individual components
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-pub struct Message(pub Vec<u8>);
-
-/// Message Queue Result type
-pub type Result<T> = std::result::Result<T, MQError>;
+use serde::{de::DeserializeOwned, Serialize};
 
 /// Contains various general message queue options
 pub struct Options {
     pub url: String,
 }
 
-/// Message Queue Error type
-#[derive(Error, Debug)]
-pub enum MQError {
-    /// Failure to publish to the subject
-    #[error("Error subscribing to subject")]
-    SubscribeError(std::io::Error),
-
-    /// Failure to publish message to subject
-    #[error("Error publishing to subject")]
-    PublishError(std::io::Error),
-
-    /// Failure to close the connection to the message queue
-    #[error("Error closing connection")]
-    ClosingConnectionError,
-
-    /// Errors that are not wrapped above
-    #[error(transparent)]
-    Other(anyhow::Error),
-}
-
 /// Interface for a message queue
-#[async_trait]
-pub trait IMQClient<Message> {
+#[async_trait(?Send)]
+pub trait IMQClient {
     /// Open a connection to the message queue
-    async fn connect(opts: Options) -> Self;
+    async fn connect(opts: Options) -> Result<Box<Self>>;
 
     /// Publish something to a particular subject
-    async fn publish(&self, subject: Subject, message: Vec<u8>) -> Result<()>;
+    async fn publish<M: Serialize>(&self, subject: Subject, message: &'_ M) -> Result<()>;
 
     /// Subscribe to a subject
-    async fn subscribe(&self, subject: Subject) -> Result<Box<dyn Stream<Item = Message>>>;
+    async fn subscribe<M: DeserializeOwned>(
+        &self,
+        subject: Subject,
+    ) -> Result<Box<dyn Stream<Item = Result<M>>>>;
 
-    /// Close the connection to the MQ
+    // / Close the connection to the MQ
     async fn close(&self) -> Result<()>;
 }
 
 /// Used to pin a stream within a single scope.
-pub fn pin_message_stream(
-    stream: Box<dyn Stream<Item = Message>>,
-) -> Pin<Box<dyn Stream<Item = Message>>> {
+pub fn pin_message_stream<M>(stream: Box<dyn Stream<Item = M>>) -> Pin<Box<dyn Stream<Item = M>>> {
     stream.into()
 }
-
 /// Subjects that can be published / subscribed to
 #[derive(Debug, Clone, Copy)]
 pub enum Subject {
