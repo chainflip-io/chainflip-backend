@@ -30,11 +30,11 @@ impl Subscription {
 /// let mock_mq = MockMQ::new(&server).await;
 /// ```
 impl MockMQ {
-    pub async fn new(server: &NatsTestServer) -> Box<Self> {
+    pub async fn new(server: &NatsTestServer) -> Self {
         let addr = server.address().to_string();
         let options = Options { url: addr };
 
-        MockMQ::connect(options)
+        *MockMQ::connect(options)
             .await
             .expect("Failed to initialise MockMQ")
     }
@@ -90,14 +90,14 @@ mod test {
     #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
     struct TestMessage(String);
 
-    async fn subscribe_test_inner(nats_client: Box<MockMQ>) {
+    async fn subscribe_test_inner(mock_client: MockMQ) {
         let test_message = TestMessage(String::from("I SAW A TRANSACTION"));
 
         let subject = Subject::Witness(Coin::ETH);
 
-        let stream = nats_client.subscribe::<TestMessage>(subject).await.unwrap();
+        let stream = mock_client.subscribe::<TestMessage>(subject).await.unwrap();
 
-        nats_client.publish(subject, &test_message).await.unwrap();
+        mock_client.publish(subject, &test_message).await.unwrap();
 
         let mut stream = pin_message_stream(stream);
 
