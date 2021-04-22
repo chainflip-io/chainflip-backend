@@ -19,22 +19,28 @@ package = 'parity-scale-codec'
 version = '2.0.0'
 
 [dependencies]
-bitvec = { default-features = false, version = '0.20' }
+bitvec = { default-features = false, version = '0.20', features = ["alloc"] }
 frame-support = { default-features = false, version = '3.0.0' }
 frame-system = { default-features = false, version = '3.0.0' }
+pallet-session = { default-features = false, version = '3.0.0' }
 sp-core = { default-features = false, version = '3.0.0' }
+sp-io = { default-features = false, version = '3.0.0' }
 sp-runtime = { default-features = false, version = '3.0.0' }
+sp-std = { default-features = false, version = '3.0.0' }
 
 [dev-dependencies]
 serde = { version = "1.0.119" }
-sp-io = { default-features = false, version = '3.0.0' }
 
 [features]
 default = ['std']
 std = [
+    'bitvec/std',
     'codec/std',
     'frame-support/std',
     'frame-system/std',
+    'pallet-session/std',
     'sp-core/std',
+    'sp-io/std',
     'sp-runtime/std',
+    'sp-std/std',
 ]

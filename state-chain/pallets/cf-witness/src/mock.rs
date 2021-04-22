@@ -1,4 +1,4 @@
-use crate as pallet_template;
+use crate::{self as pallet_cf_witness};
 use sp_core::H256;
 use frame_support::parameter_types;
 use sp_runtime::{
@@ -17,7 +17,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		TemplateModule: pallet_template::{Module, Call, Storage, Event<T>},
+		Witness: pallet_cf_witness::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -51,9 +51,13 @@ impl system::Config for Test {
 	type SS58Prefix = SS58Prefix;
 }
 
-impl pallet_template::Config for Test {
+impl pallet_cf_witness::Config for Test {
 	type Event = Event;
+	type Origin = Origin;
+	type Call = Call;
+	type ValidatorId = u64;
 }
+
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {

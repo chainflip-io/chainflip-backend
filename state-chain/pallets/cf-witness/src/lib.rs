@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+
 pub use pallet::*;
 
 #[cfg(test)]
@@ -8,16 +9,21 @@ mod mock;
 mod tests;
 
 use codec::FullCodec;
-use frame_support::pallet_prelude::Member;
-use sp_runtime::traits::AtLeast32BitUnsigned;
+use frame_support::{pallet_prelude::Member, traits::EnsureOrigin};
+use pallet_session::SessionHandler;
+use sp_runtime::traits::{AtLeast32BitUnsigned, Zero};
+use sp_std::{
+	prelude::*,
+	ops::AddAssign
+};
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use bitvec::prelude::*;
-    use frame_support::{dispatch::{Dispatchable, GetDispatchInfo, PostDispatchInfo}, pallet_prelude::*};
+	use frame_support::{dispatch::{DispatchResult, Dispatchable, GetDispatchInfo, PostDispatchInfo}, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
-    use sp_core::blake2_256;
+	use sp_io::hashing::blake2_256;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -25,20 +31,22 @@ pub mod pallet {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
+		/// The outer Origin needs to be compatible with this pallet's Origin
+		type Origin: From<RawOrigin>;
+
 		/// The overarching call type.
 		type Call: Member + FullCodec
-			+ Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
+			+ Dispatchable<Origin=<Self as Config>::Origin, PostInfo=PostDispatchInfo>
 			+ GetDispatchInfo 
 			+ From<frame_system::Call<Self>>;
 
-		// TODO: Investigate frame_support::ValidatorSet incase this already provides the required functionality.
-		type ValidatorProvider: ValidatorProvider<Self>;
+		type Epoch: Member + FullCodec + AtLeast32BitUnsigned + Default;
 
 		type ValidatorId: Member + FullCodec + From<<Self as frame_system::Config>::AccountId>;
 	}
 
 	/// Alias for the `Epoch` type defined by the `ValidatorProvider`.
-	type Epoch<T> = <<T as Config>::ValidatorProvider as ValidatorProvider<T>>::Epoch;
+	type Epoch<T> = <T as Config>::Epoch;
 
 	/// Just a bunch of bytes, but they should decode to a valid `Call`.
 	type OpaqueCall = Vec<u8>;
@@ -69,14 +77,20 @@ pub mod pallet {
 		Epoch<T>,
 		Identity,
 		<T as frame_system::Config>::AccountId,
-		u64
+		u16
 	>;
 
 	// QUESTION: Should this be managed here or in the sessions pallet, for example? (The *active* validator set and 
 	// therefore the threshold might change due to unavailable nodes, slashing etc.)
 	#[pallet::storage]
 	pub(super) type ConsensusThreshold<T> = StorageValue<_, u32, ValueQuery>;
-	
+
+	#[pallet::storage]
+	pub(super) type NumValidators<T> = StorageValue<_, u32, ValueQuery>;
+
+	#[pallet::storage]
+	pub(super) type CurrentEpoch<T: Config> = StorageValue<_, Epoch<T>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -89,6 +103,9 @@ pub mod pallet {
 
 		/// The witness threshold has been reached [call_sig, num_votes]
 		ThresholdReached(CallHash),
+
+		/// A witness call has been executed [call_sig, result].
+		WitnessExecuted(CallHash, DispatchResult)
 	}
 
 	// Errors inform users that something went wrong.
@@ -107,8 +124,8 @@ pub mod pallet {
 		// TODO: 
 		//   - think about using a hook to apply voted-on extrinsics in batches instead of inline in the witness fn.
 		//   - check the era and maybe update the validator set: store validator set as an IndexSet
-		//			(see: https://substrate.dev/rustdocs/v3.0.0/indexmap/set/struct.IndexSet.html)
-		// 			This way, the set of approvals can be stored in a BitVec which should be the quite memory-efficient.
+		//   (see: https://substrate.dev/rustdocs/v3.0.0/indexmap/set/struct.IndexSet.html)
+		//    This way, the set of approvals can be stored in a BitVec which should be the quite memory-efficient.
 	}
 
 	#[pallet::call]
@@ -121,8 +138,8 @@ pub mod pallet {
 			call: <T as Config>::Call) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
-			let epoch: Epoch<T> = T::ValidatorProvider::current_epoch();
-			let num_validators = T::ValidatorProvider::num_validators() as usize;
+			let epoch: Epoch<T> = CurrentEpoch::<T>::get();
+			let num_validators = NumValidators::<T>::get() as usize;
 			
 			// Look up the signer in the list of validators
 			let index = ValidatorIndex::<T>::get(&epoch, &who)
@@ -132,7 +149,7 @@ pub mod pallet {
 			let num_votes = Calls::<T>::try_mutate::<_, _, _, Error::<T>, _>(&epoch, &call, |buffer| {
 				// If there is no storage item, create an empty one.
 				if buffer.is_none() {
-					let empty_mask = bits![Msb0, u8; 0].repeat(num_validators);
+					let empty_mask = BitVec::<Msb0, u8>::repeat(false, num_validators);
 					*buffer = Some(empty_mask.into_vec())
 				}
 
@@ -161,23 +178,73 @@ pub mod pallet {
 			// Check if threshold is reached and, if so, apply the voted-on Call.
 			if num_votes == threshold {
 				Self::deposit_event(Event::<T>::ThresholdReached(call_hash));
+				let result = call.dispatch((RawOrigin::WitnessThreshold).into());
+				Self::deposit_event(Event::<T>::WitnessExecuted(
+					call_hash, result.map(|_| ()).map_err(|e| e.error)
+				));
 			}
 
-			// QUESTION: Do we want to allow voting to continue *after* the call has been made? Might be useful for 
-			// slashing?
+			// QUESTIONS: 
+			// - Do we want to allow voting to continue *after* the call has been made? Might be useful for 
+			//   slashing?
+			// - If not, maybe we ought to check if threshold is reached and, if so, return early.
 
 			Ok(().into())
 		}
 	}
+
+	/// Witness pallet origin
+	#[pallet::origin]
+	pub type Origin = RawOrigin;
+
+	pub enum RawOrigin {
+		WitnessThreshold
+	}
 }
 
-pub trait ValidatorProvider<T: Config> {
-	type Epoch: Member + FullCodec + AtLeast32BitUnsigned;
-	type Validatorid: From<<T as frame_system::Config>::AccountId>;
+pub struct EnsureWitnessed;
 
-	fn num_validators() -> u32;
+impl<O: Into<Result<RawOrigin, O>>> EnsureOrigin<O> for EnsureWitnessed {
+	type Success = ();
 
-	fn validators() -> Vec<Self::Validatorid>;
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		match o.into() {
+			Ok(o) => match o {
+				RawOrigin::WitnessThreshold => Ok(()),
+			}
+			Err(o) => Err(o)
+		}
+	}
+}
 
-	fn current_epoch() -> Self::Epoch;
+/// Implementation of [SessionHandler](pallet_session::SessionHandler) to update
+/// the current list of validators and the current epoch. 
+impl<T, ValidatorId> SessionHandler<ValidatorId> for Pallet<T> where
+	T: Config,
+	ValidatorId: Clone + Into<<T as frame_system::Config>::AccountId> {
+		
+	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[];
+
+	fn on_genesis_session<Ks: sp_runtime::traits::OpaqueKeys>(validators: &[(ValidatorId, Ks)]) {
+		for (i, (v, _k)) in validators.iter().enumerate() {
+			ValidatorIndex::<T>::insert(<T as Config>::Epoch::zero(), (*v).clone().into(), i as u16)
+		}
+	}
+
+	fn on_new_session<Ks: sp_runtime::traits::OpaqueKeys>(
+		_changed: bool,
+		_validators: &[(ValidatorId, Ks)],
+		queued_validators: &[(ValidatorId, Ks)],
+	) {
+		CurrentEpoch::<T>::mutate(|e| e.add_assign(1u32.into()));
+
+		for (i, (v, _k)) in queued_validators.iter().enumerate() {
+			ValidatorIndex::<T>::insert(<T as Config>::Epoch::zero(), (*v).clone().into(), i as u16)
+		}
+	}
+
+	fn on_disabled(_validator_index: usize) {
+		// Reduce threshold?
+		todo!()
+	}
 }
