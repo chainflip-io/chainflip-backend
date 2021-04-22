@@ -4683,11 +4683,13 @@ dependencies = [
  "bitvec 0.20.2",
  "frame-support",
  "frame-system",
+ "pallet-session",
  "parity-scale-codec 2.0.1",
  "serde 1.0.124",
  "sp-core",
  "sp-io",
  "sp-runtime",
+ "sp-std 3.0.0",
 ]
 
 [[package]]
@@ -8270,6 +8272,7 @@ dependencies = [
  "pallet-cf-staking",
  "pallet-cf-transactions",
  "pallet-cf-validator",
+ "pallet-cf-witness",
  "pallet-grandpa",
  "pallet-offences",
  "pallet-randomness-collective-flip",

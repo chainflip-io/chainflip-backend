@@ -135,7 +135,7 @@ pub mod pallet {
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
 		pub fn witness(
 			origin: OriginFor<T>, 
-			call: <T as Config>::Call) -> DispatchResultWithPostInfo {
+			call: Box<<T as Config>::Call>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
 			let epoch: Epoch<T> = CurrentEpoch::<T>::get();
@@ -146,7 +146,7 @@ pub mod pallet {
 				.ok_or(Error::<T>::UnauthorizedWitness)? as usize;
 			
 			// Register the vote
-			let num_votes = Calls::<T>::try_mutate::<_, _, _, Error::<T>, _>(&epoch, &call, |buffer| {
+			let num_votes = Calls::<T>::try_mutate::<_, _, _, Error::<T>, _>(&epoch, &*call, |buffer| {
 				// If there is no storage item, create an empty one.
 				if buffer.is_none() {
 					let empty_mask = BitVec::<Msb0, u8>::repeat(false, num_validators);
@@ -197,6 +197,7 @@ pub mod pallet {
 	#[pallet::origin]
 	pub type Origin = RawOrigin;
 
+	#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
 	pub enum RawOrigin {
 		WitnessThreshold
 	}
@@ -204,10 +205,12 @@ pub mod pallet {
 
 pub struct EnsureWitnessed;
 
-impl<O: Into<Result<RawOrigin, O>>> EnsureOrigin<O> for EnsureWitnessed {
+impl<OuterOrigin> EnsureOrigin<OuterOrigin> for EnsureWitnessed where 
+	OuterOrigin: Into<Result<RawOrigin, OuterOrigin>> + From<RawOrigin>,
+{
 	type Success = ();
 
-	fn try_origin(o: O) -> Result<Self::Success, O> {
+	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
 		match o.into() {
 			Ok(o) => match o {
 				RawOrigin::WitnessThreshold => Ok(()),

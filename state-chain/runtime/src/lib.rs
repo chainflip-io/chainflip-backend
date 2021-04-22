@@ -1,3 +1,4 @@
+#![feature(trivial_bounds)]
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
@@ -63,6 +64,8 @@ pub type Hash = sp_core::H256;
 /// Digest item type.
 pub type DigestItem = generic::DigestItem<Hash>;
 
+pub type FlipBalance = u128;
+
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
 /// of data like extrinsics, allowing for them to continue syncing the network through upgrades
@@ -125,9 +128,8 @@ impl pallet_cf_validator::Config for Runtime {
     type Event = Event;
 }
 
-impl<C> SendTransactionTypes<C> for Runtime
-    where
-        Call: From<C>,
+impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime where
+    Call: From<LocalCall>,
 {
     type Extrinsic = UncheckedExtrinsic;
     type OverarchingCall = Call;
@@ -247,12 +249,12 @@ impl pallet_cf_transactions::Config for Runtime {
     type Event = Event;
 }
 
-impl pallet_cf_staking::Config for Runtime {
-    type Event = Event;
+// impl pallet_cf_staking::Config for Runtime {
+//     type Event = Event;
 
-    // See comment in the pallet's trait definition - we may want to consider using the Balances pallet.
-    type StakedAmount = u128;
-}
+//     // See comment in the pallet's trait definition - we may want to consider using the Balances pallet.
+//     type StakedAmount = u128;
+// }
 
 parameter_types! {
     pub OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * BlockWeights::get().max_block;
@@ -300,6 +302,27 @@ impl pallet_sudo::Config for Runtime {
     type Call = Call;
 }
 
+impl pallet_cf_witness::Config for Runtime {
+    type Event = Event;
+    type Origin = Origin;
+    type Call = Call;
+
+    // TODO: use Epoch anf ValidatorId definitions from validator rotation pallet
+    type Epoch = u64;
+    type ValidatorId = <Self as frame_system::Config>::AccountId;
+}
+
+impl pallet_cf_staking::Config for Runtime {
+    type Event = Event;
+    type StakedAmount = FlipBalance;
+
+    // TODO: check this against the address type used in the StakeManager
+    type EthereumAddress = [u8; 20];
+
+    // TODO: check this against the nonce type used in the StakeManager
+    type Nonce = u64;
+}
+
 parameter_types! {
     pub const ExistentialDeposit: u128 = 0;
     pub const MaxLocks: u32 = 50;
@@ -324,7 +347,8 @@ construct_runtime!(
         Offences: pallet_offences::{Module, Call, Storage, Event},
         Transactions: pallet_cf_transactions::{Module, Call, Event<T>},
         WitnessFetcher: witness_fetch::{Module, Call, Event<T>, ValidateUnsigned},
-        StakeManager: pallet_cf_staking::{Module, Call, Event<T>, ValidateUnsigned},
+        Witness: pallet_cf_witness::{Module, Call, Event<T>, Origin},
+        StakeManager: pallet_cf_staking::{Module, Call, Event<T>},
     }
 );
 
@@ -361,13 +385,6 @@ pub type Executive = frame_executive::Executive<
 >;
 
 impl_runtime_apis! {
-
-    impl witness_fetch_runtime_api::WitnessApi<Block> for Runtime {
-
-        fn get_confirmed_witnesses() -> Vec<Vec<u8>> {
-            WitnessFetcher::get_confirmed_witnesses()
-        }
-    }
 
     impl sp_api::Core<Block> for Runtime {
         fn version() -> RuntimeVersion {
