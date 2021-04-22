@@ -30,8 +30,7 @@ steps:
 trigger:
   event:
     - pull_request
-  paths:
-    - state-chain/*
+
 node:
   builder: "true"
 volumes:
