@@ -13,7 +13,15 @@ resource "aws_s3_bucket" "terraform-state-chainflip-state-chain" {
     Owner = "https://github.com/chainflip-io/chainflip-backend.git"
     Name = "state-chain"
   }
+}
 
+resource "aws_s3_bucket_public_access_block" "chainflip-drone-ci-cache" {
+  bucket = aws_s3_bucket.terraform-state-chainflip-state-chain.id
+
+  block_public_acls   = true
+  block_public_policy = true
+  restrict_public_buckets = true
+  ignore_public_acls = true
 }
 
 resource "aws_dynamodb_table" "terraform-lock-chainflip-state-chain" {
