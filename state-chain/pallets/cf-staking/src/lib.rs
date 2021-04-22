@@ -6,8 +6,8 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use frame_support::error::BadOrigin;
-use frame_system::{ensure_root, pallet_prelude::OriginFor};
+use frame_support::{error::BadOrigin, traits::EnsureOrigin};
+use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 
 use codec::FullCodec;
@@ -47,6 +47,8 @@ pub mod pallet {
             + AtLeast32BitUnsigned
             + MaybeSerializeDeserialize
             + CheckedSub;
+
+        type EnsureWitnessed: EnsureOrigin<Self::Origin>;
     }
 
     #[pallet::pallet]
@@ -99,7 +101,7 @@ pub mod pallet {
 			amount: T::StakedAmount,
 			refund_address: T::EthereumAddress,
 		) -> DispatchResultWithPostInfo {
-            Self::ensure_multi(origin)?;
+            Self::ensure_witnessed(origin)?;
 
             if Account::<T>::contains_key(&account_id) {
                 let total_stake = Self::add_stake(&account_id, amount)?;
@@ -187,7 +189,7 @@ pub mod pallet {
             account_id: AccountId<T>,
             claimed_amount: T::StakedAmount,
         ) -> DispatchResultWithPostInfo {
-            Self::ensure_multi(origin)?;
+            Self::ensure_witnessed(origin)?;
 
             let pending_claim_amount = PendingClaims::<T>::get(&account_id).ok_or(Error::<T>::NoPendingClaim)?;
             
@@ -256,8 +258,7 @@ impl<T: Config> Module<T> {
             })
     }
 
-    fn ensure_multi(origin: OriginFor<T>) -> Result<(), BadOrigin> {
-        // TODO: replace this with a dedicated MULTISIG user instead of root.
-        ensure_root(origin)
+    fn ensure_witnessed(origin: OriginFor<T>) -> Result<<T::EnsureWitnessed as EnsureOrigin<OriginFor<T>>>::Success, BadOrigin> {
+        T::EnsureWitnessed::ensure_origin(origin)
     }
 }

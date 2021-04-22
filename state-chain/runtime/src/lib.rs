@@ -316,6 +316,8 @@ impl pallet_cf_staking::Config for Runtime {
     type Event = Event;
     type StakedAmount = FlipBalance;
 
+    type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
+
     // TODO: check this against the address type used in the StakeManager
     type EthereumAddress = [u8; 20];
 
