@@ -106,7 +106,7 @@ steps:
 # Config
 trigger:
   branch:
-    - release/sandstorm
+    - main
   event:
     - push
 node:
