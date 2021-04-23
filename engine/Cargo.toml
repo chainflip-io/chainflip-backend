@@ -6,6 +6,7 @@ edition = "2018"
 
 [[bin]]
 name = 'engine'
+path = 'src/main.rs'
 
 [package.metadata.deb]
 name = "engine"
