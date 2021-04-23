@@ -109,12 +109,12 @@ steps:
 
 # Config
 trigger:
-#  branch:
-#    - main
+  branch:
+    - main
   event:
     - push
-#  paths:
-#    - engine/*
+  paths:
+    - engine/*
 
 node:
   builder: "true"
