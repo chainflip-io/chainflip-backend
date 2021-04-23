@@ -1,5 +1,12 @@
 - hosts: state-chain
   tasks:
+    - name: "state-chain.staging :- Create directories"
+      file:
+        state: directory
+        path: "/root/{{target}}/{{item}}"
+      with_items:
+        - releases
+        - config
     - name: "state-chain.staging :- Upload releases to nodes"
       copy:
         src: "../../target/release/{{target}}"
