@@ -34,6 +34,8 @@ pub fn subscribe_to_events() {
 
         let mut decoder = EventsDecoder::try_from(metadata.clone()).unwrap();
 
+        // This doesn't really do anything as far as I can tell. Raised an issue on their github about how to
+        // actually do it
         decoder
             .register_type_size::<AccountId>("AccountId")
             .unwrap();
