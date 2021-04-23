@@ -10,7 +10,7 @@ steps:
     environment:
       SCCACHE_DIR: /cache
     commands:
-      - SKIP_WASM_BUILD=1 cargo check --bin chainflip-engine
+      - SKIP_WASM_BUILD=1 cargo check --release --bin chainflip-engine
       - sccache -s
     volumes:
       - name: cache
@@ -20,7 +20,7 @@ steps:
     environment:
       SCCACHE_DIR: /cache
     commands:
-      - cargo build --bin chainflip-engine
+      - cargo build --release --bin chainflip-engine
       - sccache -s
     volumes:
       - name: cache
@@ -82,7 +82,9 @@ steps:
     settings:
       verbose: 2
       playbook: .ansible/staging/playbook.yml
-      inventory: .ansible/staging/inventory
+      inventory: .ansible/staging/inventory/all
+      extra_vars:
+        target: chainflip-engine
       private_key:
         from_secret: ansible_staging_private_key
   - name: notify
@@ -107,12 +109,12 @@ steps:
 
 # Config
 trigger:
-  branch:
-    - main
+#  branch:
+#    - main
   event:
     - push
-  paths:
-    - engine/*
+#  paths:
+#    - engine/*
 node:
   builder: "true"
 volumes:

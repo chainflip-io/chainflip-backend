@@ -82,7 +82,9 @@ steps:
     settings:
       verbose: 2
       playbook: .ansible/staging/playbook.yml
-      inventory: .ansible/staging/inventory
+      inventory: .ansible/staging/inventory/all
+      extra_vars:
+        target: state-chain-node
       private_key:
         from_secret: ansible_staging_private_key
   - name: notify
