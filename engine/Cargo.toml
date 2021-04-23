@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["Kyle Zsembery <zsembery.kyle@gmail.com>"]
 edition = "2018"
 
+[[bin]]
+name = 'engine'
+
 [package.metadata.deb]
 name = "engine"
 maintainer = "Chainflip UG <dev@chainflip.io>"
