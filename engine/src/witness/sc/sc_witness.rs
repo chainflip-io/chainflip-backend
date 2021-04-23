@@ -1,8 +1,4 @@
-use substrate_api_client::{
-    events::EventsDecoder,
-    sp_runtime::app_crypto::{app_crypto, app_crypto_pair, sr25519, Pair},
-    Api,
-};
+use substrate_api_client::{events::EventsDecoder, sp_runtime::app_crypto::sr25519, Api};
 
 use std::{convert::TryFrom, sync::mpsc::channel};
 use substrate_api_client::utils::FromHexString;
