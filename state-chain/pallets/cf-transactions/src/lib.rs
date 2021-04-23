@@ -30,7 +30,6 @@ decl_event!(
     where
         AccountId = <T as frame_system::Config>::AccountId,
     {
-        // TODO: Write a macro for the things below?
         SwapQuoteAdded(AccountId, states::SwapQuote),
         DepositQuoteAdded(AccountId, states::DepositQuote),
         WithdrawRequestAdded(AccountId, states::WithdrawRequest),
