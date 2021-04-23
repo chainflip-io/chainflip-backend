@@ -10,7 +10,7 @@ steps:
     environment:
       SCCACHE_DIR: /cache
     commands:
-      - SKIP_WASM_BUILD=1 cargo check --release --bin engine
+      - SKIP_WASM_BUILD=1 cargo check --bin chainflip-engine
       - sccache -s
     volumes:
       - name: cache
@@ -20,7 +20,7 @@ steps:
     environment:
       SCCACHE_DIR: /cache
     commands:
-      - cargo build --release --bin engine
+      - cargo build --bin chainflip-engine
       - sccache -s
     volumes:
       - name: cache
@@ -72,7 +72,7 @@ steps:
     environment:
       SCCACHE_DIR: /cache
     commands:
-      - cargo build --release --bin engine
+      - cargo build --release --bin chainflip-engine
       - sccache -s
     volumes:
       - name: cache
