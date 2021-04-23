@@ -99,7 +99,7 @@ steps:
         from_secret: discord_webhook_id
       webhook_token:
         from_secret: discord_webhook_token
-      message: >
+      message: |
         ⚠️ Build Failure ⚠️
 
         The latest `engine` compile has failed.
