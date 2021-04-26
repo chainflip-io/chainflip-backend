@@ -2,3 +2,8 @@ tasks:
   - before: >
       rustup target add wasm32-unknown-unknown --toolchain nightly-2021-03-24
   - init: cargo build --release
+github:
+  prebuilds:
+    branches: true
+    pullRequestsFromForks: true
+    addLabel: prebuilt-in-gitpod
