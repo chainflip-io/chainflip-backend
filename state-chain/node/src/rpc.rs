@@ -33,21 +33,15 @@ pub fn create_full<C, P>(
 	C: HeaderBackend<Block> + HeaderMetadata<Block, Error=BlockChainError> + 'static,
 	C: Send + Sync + 'static,
 	C::Api: BlockBuilder<Block>,
-	C::Api: witness_fetch_runtime_api::WitnessApi<Block>,
 	P: TransactionPool + 'static,
 {
 
-	let mut io = jsonrpc_core::IoHandler::default();
+	let io = jsonrpc_core::IoHandler::default();
 	let FullDeps {
-		client,
+		client: _,
 	 	pool: _,
 	 	deny_unsafe: _,
 	} = deps;
-	
-	// RPC for getting witness transactions from the state chain
-	io.extend_with(witness_fetch_rpc::WitnessApi::to_delegate(
-		witness_fetch_rpc::Witness::new(client)
-	));
 
 	io
 }
