@@ -1,3 +1,4 @@
 tasks:
-  - init: cargo build
-    command: cargo watch -x run
+  - before: >
+      rustup target add wasm32-unknown-unknown --toolchain nightly-2021-03-24
+  - init: cargo build --release
