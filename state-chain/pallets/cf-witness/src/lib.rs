@@ -49,14 +49,14 @@ pub mod pallet {
 	/// Alias for the `Epoch` type defined by the `ValidatorProvider`.
 	pub(super) type Epoch<T> = <T as Config>::Epoch;
 
-	/// Just a bunch of bytes, but they should decode to a valid `Call`.
-	pub(super) type OpaqueCall = Vec<u8>;
-
 	/// A hash to index the call by.
 	pub(super) type CallHash = [u8; 32];
 
 	/// Convenience alias for a collection of bits representing the votes of each validator.
 	pub(super) type VoteMask = BitSlice<Msb0, u8>;
+
+	/// The type used for tallying votes.
+	pub(super) type VoteCount = u32;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -66,8 +66,8 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		Epoch<T>,
-		Blake2_128Concat,
-		<T as Config>::Call, 
+		Identity,
+		CallHash, 
 		Vec<u8>
 	>;
 
@@ -81,7 +81,7 @@ pub mod pallet {
 		u16
 	>;
 
-	// QUESTION: Should this be managed here or in the sessions pallet, for example? (The *active* validator set and 
+	// TODO: This param should probably be managed in the sessions pallet. (The *active* validator set and 
 	// therefore the threshold might change due to unavailable nodes, slashing etc.)
 	#[pallet::storage]
 	pub(super) type ConsensusThreshold<T> = StorageValue<_, u32, ValueQuery>;
@@ -96,37 +96,27 @@ pub mod pallet {
 	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A new call has been registered for voting [call, call_sig]
-		NewEvent(OpaqueCall, CallHash),
-
-		/// Some external event has been witnessed [call_sig, who]
-		WitnessReceived(CallHash, <T as Config>::ValidatorId),
+		/// Some external event has been witnessed [call_sig, who, num_votes]
+		WitnessReceived(CallHash, <T as Config>::ValidatorId, VoteCount),
 
 		/// The witness threshold has been reached [call_sig, num_votes]
-		ThresholdReached(CallHash),
+		ThresholdReached(CallHash, VoteCount),
 
 		/// A witness call has been executed [call_sig, result].
 		WitnessExecuted(CallHash, DispatchResult)
 	}
 
-	// Errors inform users that something went wrong.
+	
 	#[pallet::error]
 	pub enum Error<T> {
 		/// CRITICAL: The validator index is out of bounds. This should never happen. 
 		ValidatorIndexOutOfBounds,
+
 		/// Witness is not a validator.
 		UnauthorizedWitness,
+
 		/// A witness vote was cast twice by the same validator.
 		DuplicateWitness
-	}
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		// TODO: 
-		//   - think about using a hook to apply voted-on extrinsics in batches instead of inline in the witness fn.
-		//   - check the era and maybe update the validator set: store validator set as an IndexSet
-		//   (see: https://substrate.dev/rustdocs/v3.0.0/indexmap/set/struct.IndexSet.html)
-		//    This way, the set of approvals can be stored in a BitVec which should be the quite memory-efficient.
 	}
 
 	#[pallet::call]
@@ -147,6 +137,7 @@ pub mod pallet {
 	#[pallet::origin]
 	pub type Origin = RawOrigin;
 
+	/// The raw origin enum for this pallet.
 	#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
 	pub enum RawOrigin {
 		WitnessThreshold
@@ -166,6 +157,10 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This implementation uses a bitmask whereby each index to the bitmask represents a validator account ID in the 
 	/// current Epoch.
+	///
+	/// **Note:**
+	/// This implementation currently allows voting to continue even after the vote threshold is reached. 
+	///
 	fn do_witness(
 		who: <T as frame_system::Config>::AccountId, 
 		call: <T as Config>::Call) -> DispatchResultWithPostInfo 
@@ -178,7 +173,8 @@ impl<T: Config> Pallet<T> {
 			.ok_or(Error::<T>::UnauthorizedWitness)? as usize;
 		
 		// Register the vote
-		let num_votes = Calls::<T>::try_mutate::<_, _, _, Error::<T>, _>(&epoch, &call, |buffer| {
+		let call_hash = Hashable::blake2_256(&call);
+		let num_votes = Calls::<T>::try_mutate::<_, _, _, Error::<T>, _>(&epoch, &call_hash, |buffer| {
 			// If there is no storage item, create an empty one.
 			if buffer.is_none() {
 				let empty_mask = BitVec::<Msb0, u8>::repeat(false, num_validators);
@@ -202,25 +198,18 @@ impl<T: Config> Pallet<T> {
 			Ok(bits.count_ones())
 		})?;
 
-		// TODO: It would be more efficient to calculate the hash above and use as the index to the bitmask of votes.
-		let call_hash = Hashable::blake2_256(&call);
 		let threshold = ConsensusThreshold::<T>::get() as usize;
 
-		Self::deposit_event(Event::<T>::WitnessReceived(call_hash, who.into()));
+		Self::deposit_event(Event::<T>::WitnessReceived(call_hash, who.into(), num_votes as VoteCount));
 
 		// Check if threshold is reached and, if so, apply the voted-on Call.
 		if num_votes == threshold {
-			Self::deposit_event(Event::<T>::ThresholdReached(call_hash));
+			Self::deposit_event(Event::<T>::ThresholdReached(call_hash, num_votes as VoteCount));
 			let result = call.dispatch((RawOrigin::WitnessThreshold).into());
 			Self::deposit_event(Event::<T>::WitnessExecuted(
 				call_hash, result.map(|_| ()).map_err(|e| e.error)
 			));
 		}
-
-		// QUESTIONS: 
-		// - Do we want to allow voting to continue *after* the call has been made? Might be useful for 
-		//   slashing?
-		// - If not, maybe we ought to check if threshold is reached and, if so, return early.
 
 		Ok(().into())
 	}
@@ -236,6 +225,14 @@ impl<T: pallet::Config> cf_traits::Witnesser for Pallet<T> {
 }
 
 /// Simple struct on which to implement EnsureOrigin for our pallet's custom origin type. 
+///
+/// # Example:
+///
+/// ```rust
+/// if let Ok(()) = EnsureWitnessed::ensure_origin(origin) {
+/// 	log::debug!("This extrinsic was called as a result of witness threshold consensus.");
+/// }
+/// ```
 pub struct EnsureWitnessed;
 
 impl<OuterOrigin> EnsureOrigin<OuterOrigin> for EnsureWitnessed where 
