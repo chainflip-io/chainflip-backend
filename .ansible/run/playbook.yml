@@ -1,0 +1,90 @@
+- hosts: all
+  vars:
+    chainflip_purge_chain: false
+    nginx_revproxy_sites:
+      chainflip:
+        domains:
+          - "{{ inventory_hostname }}"
+        upstreams:
+          - { backend_address: 0.0.0.0, backend_port: 9933 }
+        letsencrypt: true
+        letsencrypt_email: dev@chainflip.io
+  roles:
+    - geerlingguy.pip
+    - hispanico.nginx_revproxy
+  tasks:
+    - name: "state-chain.run :- Copy SSH keys to all nodes"
+      copy:
+        src: ~/.ssh/chainflip_state_chain_node_key_pem
+        dest: ~/.ssh/
+        mode: 0700
+    - name: "state-chain.run :- Install pexpect"
+      pip:
+        name: pexpect
+      become: yes
+    - name: "state-chain.run :- Purge chain"
+      when: chainflip_purge_chain
+      expect: 
+        command: /root/state-chain/releases/state-chain-node-{{ chainflip_scn_version }} purge-chain --dev
+        responses:
+          Are:
+            - y
+
+- hosts: bob
+  tasks:
+    - name: "state-chain.run :- Create releases directory"
+      file:
+        state: directory
+        path: /root/state-chain/releases
+    - name: "state-chain.run :- Copy latest state-chain-node to all machines"
+      synchronize:
+        src: /root/state-chain/releases/
+        dest: /root/state-chain/releases/
+        private_key: /root/.ssh/chainflip_state_chain_node_key_pem
+        use_ssh_args: yes
+      delegate_to: state-chain-0.chainflip.xyz
+
+- hosts: alice
+  vars:
+    chainflip_dev_name: alice
+  tasks:
+    - name: "state-chain.run :- Copy systemd service to hosts"
+      template: 
+        src: ./templates/state-chain-node.service.j2
+        dest: /etc/systemd/system/state-chain-node.service
+        
+    - name: "state-chain.run :- Start service"
+      systemd:
+        daemon-reload: yes
+        enabled: yes
+        state: restarted
+        service: state-chain-node
+    
+    - name: "state-chain.run :- Wait for start"
+      pause: 
+        seconds: 3
+    
+    - name: "state-chain.run :- Get peer ID"
+      register: alice_peer_id
+      uri:
+        url: http://0.0.0.0:9933
+        body: '{"id":1, "jsonrpc":"2.0", "method": "system_localPeerId"}'
+        body_format: json
+        method: POST
+
+- hosts: bob
+  vars: 
+    chainflip_dev_name: bob
+    chainflip_bootnodes: "/ip4/157.90.112.211/tcp/30333/p2p/{{ hostvars['state-chain-0.chainflip.xyz']['alice_peer_id'].json.result }}"
+  tasks:
+    - name: "state-chain.run :- Copy systemd service to hosts"
+      template:
+        src: ./templates/state-chain-node.service.j2
+        dest: /etc/systemd/system/state-chain-node.service
+        
+    - name: "state-chain.run :- Start service"
+      systemd:
+        daemon-reload: yes
+        enabled: yes
+        state: restarted
+        service: state-chain-node

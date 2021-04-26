@@ -1,62 +1,17 @@
+# Run checks on infrastructure configuration prior to merge.
 kind: pipeline
+name: ci-checks
 type: docker
-name: chainflip-backend
 
 steps:
-  - name: check-state-chain
-    image: ghcr.io/chainflip-io/chainflip-infrastructure/state-chain-base:latest
-    environment:
-      SCCACHE_DIR: /cache
+  - name: lint-drone-yml
+    image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     commands:
-      - SKIP_WASM_BUILD=1 cargo check --release
-      - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
-  - name: compile-state-chain
-    image: ghcr.io/chainflip-io/chainflip-infrastructure/state-chain-base:latest
-    environment:
-      SCCACHE_DIR: /cache
-    commands:
-      - cargo build --release
-      - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
-  - name: build-state-chain-node
-    image: plugins/docker
-    settings:
-      username:
-        from_secret: docker_username
-      password:
-        from_secret: docker_password
-      repo: ghcr.io/chainflip-io/chainflip-infrastructure/state-chain-node
-      dockerfile: Dockerfile.state-chain-node
-      registry: ghcr.io
-      tags: latest
-      cache_from: ghcr.io/chainflip-io/chainflip-infrastructure/state-chain-node:latest
-# TODO: Not required until things get serious
-#  - name: publish-state-chain-node
-#    image: plugins/github-release
-#    settings:
-#      api_key:
-#        from_secret: github_token
-#      files: target/release/state-chain-node
-#      title: test
-#      note: CHANGELOG.md
-#      draft: true
+      - drone lint --trusted
 
 trigger:
   event:
     - pull_request
-
-volumes:
-  - name: cache
-    host:
-      path: /mnt/chainflip-build-runner/sccache
-
-node:
-  builder: "true"
 
 image_pull_secrets:
   - dockerconfigjson

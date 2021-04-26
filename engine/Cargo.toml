@@ -1,66 +1,36 @@
 [package]
-authors = ["Maxim Shishmarev <maxim@oxen.io>"]
-edition = "2018"
-name = "chainflip"
+name = "chainflip-engine"
 version = "0.1.0"
+authors = ["Kyle Zsembery <zsembery.kyle@gmail.com>"]
+edition = "2018"
+
+[package.metadata.deb]
+name = "engine"
+maintainer = "Chainflip UG <dev@chainflip.io>"
+extended-description = """\
+Chainflip Validator Engine Package"""
+depends = "$auto"
+section = "rust"
+priority = "required"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-trait = "0.1"
-base64 = "0.13"
-bitcoin = "0.26"
-bitcoincore-rpc = "0.13"
-bs58 = "0.4"
-chainflip-common = { path = "../common" }
-clap = "^2"
-config = "^0.10"
-crossbeam-channel = "^0.4"
-env_logger = "0.8"
-futures = "0.3"
-hdwallet = "0.3"
-hex = "0.4"
-itertools = "0.10"
-lazy_static = "1.4"
-log = "0.4"
-log4rs = "1.0"
-num-bigint = "0.3"
-parking_lot = "0.11"
-rand = "0.8"
-regex = "1.4"
-reqwest = {version = "0.11", features = ["json"]}
-ring = "0.16"
-# Note: this should be the same version as that used by the web3 crate.
-secp256k1 = "0.20"
-serde = {version = "1.0", features = ["derive"]}
+crossbeam-channel = "0.5.1"
+async-nats = "0.9.12"
+async-trait = "0.1.49"
+thiserror = "1.0.24"
+tokio = { version = "1.5.0", features = ["full"] }
+futures = "0.3.14"
+async-stream = "0.3.0"
+futures-core = "0.3.14"
+futures-util = "0.3.14"
+tokio-stream = "0.1.5"
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = {version = "1.1", features = ["full"]}
-tokio-compat-02 = "0.2"
-uint = "0.8"
-uuid = {version = "0.8", features = ["serde", "v4"]}
-warp = {version = "0.3", features = ["tls"]}
-web3 = {version = "0.15"}
+anyhow = "1.0"
+chainflip-common = { path = "../common" }
 
-[dependencies.rusqlite]
-features = ["bundled"]
-version = "0.21"
 
-[lib]
-name = "chainflip"
-path = "src/lib.rs"
-
-[[bin]]
-name = "vault"
-path = "src/bin/vault/main.rs"
-
-[[bin]]
-name = "quoter"
-path = "src/bin/quoter/main.rs"
-
-[[bin]]
-name = "oxen-playground"
-path = "src/bin/oxen.rs"
-
-[[bin]]
-name = "pool-tool"
-path = "src/bin/pool.rs"
+[dev-dependencies]
+nats_test_server = "0.3.0"
