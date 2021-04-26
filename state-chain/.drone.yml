@@ -31,7 +31,7 @@ trigger:
   event:
     - pull_request
   paths:
-    - state-chain/*
+    - state-chain/**/*.rs
 
 node:
   builder: "true"
