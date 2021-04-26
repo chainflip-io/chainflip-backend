@@ -6,6 +6,7 @@ members = [
   'state-chain/node',
   'state-chain/pallets/*',
   'state-chain/runtime',
+  'state-chain/traits',
   'common',
   'engine',
   'relayer',

@@ -19,6 +19,9 @@ package = 'parity-scale-codec'
 version = '2.0'
 
 [dependencies]
+# Internal deps
+cf-traits = { path = '../../traits', default-features = false }
+
 # Non-substrate external deps
 
 # Substrate deps
@@ -35,6 +38,7 @@ sp-io = { default-features = false, version = '3.0.0' }
 [features]
 default = ['std']
 std = [
+    'cf-traits/std',
     'codec/std',
     'frame-support/std',
     'frame-system/std',

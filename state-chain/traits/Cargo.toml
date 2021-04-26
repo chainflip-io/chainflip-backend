@@ -1,0 +1,20 @@
+[package]
+name = "cf-traits"
+version = "0.1.0"
+edition = "2018"
+authors = ['Chainflip Devs <https://github.com/chainflip-io>']
+description = "Common traits used in the Chainflip runtime"
+
+[dependencies]
+# Substrate packages
+sp-std = { version = '3.0', default-features = false }
+frame-support = { default-features = false, version = '3.0.0' }
+frame-system = { default-features = false, version = '3.0.0' }
+
+[features]
+default = ['std']
+std = [
+	'sp-std/std',
+    'frame-support/std',
+    'frame-system/std',
+]

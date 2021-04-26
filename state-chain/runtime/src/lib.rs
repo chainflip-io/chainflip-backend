@@ -314,6 +314,8 @@ impl pallet_cf_witness::Config for Runtime {
 
 impl pallet_cf_staking::Config for Runtime {
     type Event = Event;
+    type Call = Call;
+
     type StakedAmount = FlipBalance;
 
     type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
@@ -323,6 +325,8 @@ impl pallet_cf_staking::Config for Runtime {
 
     // TODO: check this against the nonce type used in the StakeManager
     type Nonce = u64;
+
+    type Witnesser = pallet_cf_witness::Pallet<Runtime>;
 }
 
 parameter_types! {

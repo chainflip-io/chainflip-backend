@@ -8,8 +8,9 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+use bitvec::prelude::*;
 use codec::FullCodec;
-use frame_support::{pallet_prelude::Member, traits::EnsureOrigin};
+use frame_support::{Hashable, dispatch::{DispatchResultWithPostInfo, Dispatchable}, pallet_prelude::Member, traits::EnsureOrigin};
 use pallet_session::SessionHandler;
 use sp_runtime::traits::{AtLeast32BitUnsigned, Zero};
 use sp_std::{
@@ -20,10 +21,8 @@ use sp_std::{
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use bitvec::prelude::*;
 	use frame_support::{dispatch::{DispatchResult, Dispatchable, GetDispatchInfo, PostDispatchInfo}, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
-	use sp_io::hashing::blake2_256;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -42,20 +41,22 @@ pub mod pallet {
 
 		type Epoch: Member + FullCodec + AtLeast32BitUnsigned + Default;
 
-		type ValidatorId: Member + FullCodec + From<<Self as frame_system::Config>::AccountId>;
+		type ValidatorId: Member + FullCodec 
+			+ From<<Self as frame_system::Config>::AccountId> 
+			+ Into<<Self as frame_system::Config>::AccountId>;
 	}
 
 	/// Alias for the `Epoch` type defined by the `ValidatorProvider`.
-	type Epoch<T> = <T as Config>::Epoch;
+	pub(super) type Epoch<T> = <T as Config>::Epoch;
 
 	/// Just a bunch of bytes, but they should decode to a valid `Call`.
-	type OpaqueCall = Vec<u8>;
+	pub(super) type OpaqueCall = Vec<u8>;
 
 	/// A hash to index the call by.
-	type CallHash = [u8; 32];
+	pub(super) type CallHash = [u8; 32];
 
 	/// Convenience alias for a collection of bits representing the votes of each validator.
-	type VoteMask = BitSlice<Msb0, u8>;
+	pub(super) type VoteMask = BitSlice<Msb0, u8>;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -138,58 +139,7 @@ pub mod pallet {
 			call: Box<<T as Config>::Call>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
-			let epoch: Epoch<T> = CurrentEpoch::<T>::get();
-			let num_validators = NumValidators::<T>::get() as usize;
-			
-			// Look up the signer in the list of validators
-			let index = ValidatorIndex::<T>::get(&epoch, &who)
-				.ok_or(Error::<T>::UnauthorizedWitness)? as usize;
-			
-			// Register the vote
-			let num_votes = Calls::<T>::try_mutate::<_, _, _, Error::<T>, _>(&epoch, &*call, |buffer| {
-				// If there is no storage item, create an empty one.
-				if buffer.is_none() {
-					let empty_mask = BitVec::<Msb0, u8>::repeat(false, num_validators);
-					*buffer = Some(empty_mask.into_vec())
-				}
-
-				let bytes = buffer.as_mut().expect("Checked for none condition above, this will never panic;");
-
-				// Convert to an addressable bitmask
-				let bits = VoteMask::from_slice_mut(bytes)
-					.expect("Only panics if the slice size exceeds the max; The number of validators should never exceed this;");
-
-				// Return an error if already voted, otherwise set the indexed bit to `true` to indicate a vote.
-				if bits[index] {
-					Err(Error::<T>::DuplicateWitness)?
-				} else {
-					let mut vote = bits.get_mut(index).ok_or(Error::<T>::ValidatorIndexOutOfBounds)?;
-					*vote = true;
-				}
-
-				Ok(bits.count_ones())
-			})?;
-
-			let call_hash = call.using_encoded(|bytes| blake2_256(bytes));
-			let threshold = ConsensusThreshold::<T>::get() as usize;
-
-			Self::deposit_event(Event::<T>::WitnessReceived(call_hash, who.into()));
-
-			// Check if threshold is reached and, if so, apply the voted-on Call.
-			if num_votes == threshold {
-				Self::deposit_event(Event::<T>::ThresholdReached(call_hash));
-				let result = call.dispatch((RawOrigin::WitnessThreshold).into());
-				Self::deposit_event(Event::<T>::WitnessExecuted(
-					call_hash, result.map(|_| ()).map_err(|e| e.error)
-				));
-			}
-
-			// QUESTIONS: 
-			// - Do we want to allow voting to continue *after* the call has been made? Might be useful for 
-			//   slashing?
-			// - If not, maybe we ought to check if threshold is reached and, if so, return early.
-
-			Ok(().into())
+			Self::do_witness(who, *call)
 		}
 	}
 
@@ -203,6 +153,89 @@ pub mod pallet {
 	}
 }
 
+impl<T: Config> Pallet<T> {
+	/// Do the actual witnessing.
+	/// 
+	/// Think of this a vote for some action (represented by a runtime `call`) to be taken. At a high level:
+	///
+	/// 1. Look up the account id in the list of validators. 
+	/// 2. Get the list of votes for the call, or an empty list if this is the first vote.
+	/// 3. Add the account's vote to the list.
+	/// 4. Check the number of votes against the reuquired threshold.
+	/// 5. If the threshold is exceeded, execute the voted-on `call`. 
+	///
+	/// This implementation uses a bitmask whereby each index to the bitmask represents a validator account ID in the 
+	/// current Epoch.
+	fn do_witness(
+		who: <T as frame_system::Config>::AccountId, 
+		call: <T as Config>::Call) -> DispatchResultWithPostInfo 
+	{
+		let epoch: Epoch<T> = CurrentEpoch::<T>::get();
+		let num_validators = NumValidators::<T>::get() as usize;
+		
+		// Look up the signer in the list of validators
+		let index = ValidatorIndex::<T>::get(&epoch, &who)
+			.ok_or(Error::<T>::UnauthorizedWitness)? as usize;
+		
+		// Register the vote
+		let num_votes = Calls::<T>::try_mutate::<_, _, _, Error::<T>, _>(&epoch, &call, |buffer| {
+			// If there is no storage item, create an empty one.
+			if buffer.is_none() {
+				let empty_mask = BitVec::<Msb0, u8>::repeat(false, num_validators);
+				*buffer = Some(empty_mask.into_vec())
+			}
+
+			let bytes = buffer.as_mut().expect("Checked for none condition above, this will never panic;");
+
+			// Convert to an addressable bitmask
+			let bits = VoteMask::from_slice_mut(bytes)
+				.expect("Only panics if the slice size exceeds the max; The number of validators should never exceed this;");
+
+			// Return an error if already voted, otherwise set the indexed bit to `true` to indicate a vote.
+			if bits[index] {
+				Err(Error::<T>::DuplicateWitness)?
+			} else {
+				let mut vote = bits.get_mut(index).ok_or(Error::<T>::ValidatorIndexOutOfBounds)?;
+				*vote = true;
+			}
+
+			Ok(bits.count_ones())
+		})?;
+
+		// TODO: It would be more efficient to calculate the hash above and use as the index to the bitmask of votes.
+		let call_hash = Hashable::blake2_256(&call);
+		let threshold = ConsensusThreshold::<T>::get() as usize;
+
+		Self::deposit_event(Event::<T>::WitnessReceived(call_hash, who.into()));
+
+		// Check if threshold is reached and, if so, apply the voted-on Call.
+		if num_votes == threshold {
+			Self::deposit_event(Event::<T>::ThresholdReached(call_hash));
+			let result = call.dispatch((RawOrigin::WitnessThreshold).into());
+			Self::deposit_event(Event::<T>::WitnessExecuted(
+				call_hash, result.map(|_| ()).map_err(|e| e.error)
+			));
+		}
+
+		// QUESTIONS: 
+		// - Do we want to allow voting to continue *after* the call has been made? Might be useful for 
+		//   slashing?
+		// - If not, maybe we ought to check if threshold is reached and, if so, return early.
+
+		Ok(().into())
+	}
+}
+
+impl<T: pallet::Config> cf_traits::Witnesser for Pallet<T> {
+    type AccountId = T::ValidatorId;
+    type Call = <T as pallet::Config>::Call;
+
+    fn witness(who: Self::AccountId, call: Self::Call) -> DispatchResultWithPostInfo {
+        Self::do_witness(who.into(), call)
+    }
+}
+
+/// Simple struct on which to implement EnsureOrigin for our pallet's custom origin type. 
 pub struct EnsureWitnessed;
 
 impl<OuterOrigin> EnsureOrigin<OuterOrigin> for EnsureWitnessed where 

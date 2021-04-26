@@ -16,7 +16,8 @@ use sp_runtime::{traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub, One}};
 #[frame_support::pallet]
 pub mod pallet {
     use super::*;
-    use frame_support::pallet_prelude::*;
+    use cf_traits::Witnesser;
+    use frame_support::{Callable, dispatch::WithPostDispatchInfo, pallet_prelude::*};
     use frame_system::pallet_prelude::*;
     use frame_system::pallet::Account;
 
@@ -27,6 +28,9 @@ pub mod pallet {
     {
         /// Standard Event type.
         type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+        /// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
+        type Call: From<Call<Self>> + IsType<<Self as frame_system::Config>::Call>;
     
         /// Numeric type based on the `Balance` type from `Currency` trait. Defined inline for now, but we
         /// might want to consider using the `Balances` pallet in future.
@@ -49,6 +53,10 @@ pub mod pallet {
             + CheckedSub;
 
         type EnsureWitnessed: EnsureOrigin<Self::Origin>;
+
+        type Witnesser: cf_traits::Witnesser<
+            Call=<Self as Config>::Call, 
+            AccountId=<Self as frame_system::Config>::AccountId>;
     }
 
     #[pallet::pallet]
@@ -164,11 +172,10 @@ pub mod pallet {
             account_id: AccountId<T>,
             claimed_amount: T::StakedAmount,
         ) -> DispatchResultWithPostInfo {
-            let who = ensure_signed(origin)?;
-            debug::info!("Witnessed `claimed` event!");
+            let who =  ensure_signed(origin)?;
+            let call = Call::claimed(account_id, claimed_amount);
 
-            // If a claim exists, remove it.
-            // If it doesn't exist, something bad has happened.
+            T::Witnesser::witness(who, call.into())?;
 
             Ok(().into())
         }
