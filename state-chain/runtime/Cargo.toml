@@ -26,9 +26,7 @@ serde = {features = ['derive'], optional = true, version = '1.0.119'}
 
 # Chainflip dependencies
 pallet-cf-transactions = { path = "../pallets/cf-transactions", default-features =  false}
-witness-fetch-runtime-api = { path = "../pallets/witness-fetch/runtime-api", default-features = false }
 pallet-cf-validator = { path = "../pallets/cf-validator", default-features = false}
-witness-fetch = { path = "../pallets/witness-fetch", default-features = false }
 pallet-cf-staking = { path = "../pallets/cf-staking", default-features = false}
 
 # Substrate dependencies
@@ -98,6 +96,5 @@ std = [
   'sp-version/std',
   'pallet-cf-transactions/std',
   'pallet-cf-validator/std',
-  'witness-fetch/std',
   'pallet-cf-staking/std',
 ]

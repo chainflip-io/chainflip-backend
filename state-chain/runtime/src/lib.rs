@@ -286,12 +286,6 @@ impl pallet_offences::Config for Runtime {
     type WeightSoftLimit = OffencesWeightSoftLimit;
 }
 
-impl witness_fetch::Config for Runtime {
-    type Call = Call;
-    type Event = Event;
-    type AuthorityId = witness_fetch::crypto::AuthorityId;
-}
-
 parameter_types! {
     pub const MinimumPeriod: u64 = SLOT_DURATION / 2;
 }
@@ -340,7 +334,6 @@ construct_runtime!(
         Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
         Offences: pallet_offences::{Module, Call, Storage, Event},
         Transactions: pallet_cf_transactions::{Module, Call, Event<T>},
-        WitnessFetcher: witness_fetch::{Module, Call, Event<T>, ValidateUnsigned},
         StakeManager: pallet_cf_staking::{Module, Call, Event<T>, ValidateUnsigned},
     }
 );
@@ -378,13 +371,6 @@ pub type Executive = frame_executive::Executive<
 >;
 
 impl_runtime_apis! {
-
-    impl witness_fetch_runtime_api::WitnessApi<Block> for Runtime {
-
-        fn get_confirmed_witnesses() -> Vec<Vec<u8>> {
-            WitnessFetcher::get_confirmed_witnesses()
-        }
-    }
 
     impl sp_api::Core<Block> for Runtime {
         fn version() -> RuntimeVersion {
