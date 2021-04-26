@@ -3,6 +3,7 @@ use futures::stream::Scan;
 use pallet_cf_transactions::Event;
 use sp_core::{sr25519, Pair};
 use sp_keyring::AccountKeyring;
+use state_chain_runtime::AccountId;
 use substrate_subxt::{
     balances::{TransferCallExt, TransferEvent},
     extrinsic::DefaultExtra,
@@ -73,12 +74,13 @@ pub async fn subscribe_to_events() -> Result<()> {
     let client = ClientBuilder::<StateChainRuntime>::new()
         // .set_url("http://127.0.0.1:9944")
         .skip_type_sizes_check()
-        // .register_type_size::<u32>("AccountId32")
+        .register_type_size::<AccountId>("AccountId")
         // .register_type_size(name)
         .build()
         .await?;
 
-    let sub = client.subscribe_finalized_events().await?;
+    // TODO: Put this back to finalized events
+    let sub = client.subscribe_events().await?;
     let decoder = client.events_decoder();
     let mut sub = EventSubscription::new(sub, decoder);
 
@@ -93,11 +95,11 @@ pub async fn subscribe_to_events() -> Result<()> {
         // this is how we decode, but how to do it with a custom type??
         // let event = DataAddedEvent::<StateChainRuntime>::decode(&mut &raw.data[..]).unwrap();
 
-        // let event = DataAddedEvent::<StateChainRuntime>::decode(&mut &raw.data[..]).unwrap();
+        let event = DataAddedEvent::<StateChainRuntime>::decode(&mut &raw.data[..]).unwrap();
 
         // println!("Here's the decoded event");
 
-        // println!("Here's the event to be added: {:#?}", event);
+        println!("Here's the event to be added: {:#?}", event);
         // let event = TransferEvent::<NodeTemplateRuntime>::decode(&mut &raw.data[..]);
         // println!("Event metadata from frame system: {:#?}", event);
         // let event = TransferEvent::<DefaultNodeRuntime>::decode(&mut &raw.data[..]);
