@@ -1,3 +1,5 @@
+[![Gitpod ready-to-code](https://img.shields.io/badge/Gitpod-ready--to--code-blue?logo=gitpod)](https://gitpod.io/#https://github.com/chainflip-io/chainflip-backend)
+
 [![Build Status](http://drone.ourbrain.io/api/badges/chainflip-io/chainflip-backend/status.svg?ref=refs/heads/main)](http://drone.ourbrain.io/chainflip-io/chainflip-backend)
 
 # Chainflip
