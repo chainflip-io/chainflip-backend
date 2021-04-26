@@ -7,7 +7,6 @@ members = [
   'state-chain/pallets/cf-core',
   'state-chain/pallets/cf-staking',
   'state-chain/pallets/cf-validator',
-  'state-chain/pallets/cf-transactions',
   'state-chain/runtime',
   'common',
   'engine',
