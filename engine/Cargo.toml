@@ -36,7 +36,7 @@ substrate-subxt = { version = "0.15 "}
 sp-core = "*"
 sp-keyring = "*"
 frame-system = "*"
-parity-scale-codec = "2.1.1"
+codec = { package = "parity-scale-codec", version = "2.1", default-features = false, features = ["derive", "full"] }
 
 
 # Local deps

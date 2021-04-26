@@ -6,7 +6,7 @@ use substrate_api_client::utils::FromHexString;
 use frame_system::EventRecord;
 use sp_core::H256 as Hash;
 
-use parity_scale_codec::Decode;
+use codec::Decode;
 use state_chain_runtime::{AccountId, Event};
 
 /// Start witnessing the state chain
