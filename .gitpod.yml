@@ -7,3 +7,4 @@ github:
     branches: true
     pullRequestsFromForks: true
     addLabel: prebuilt-in-gitpod
+    addComment: true
