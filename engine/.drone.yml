@@ -31,7 +31,7 @@ trigger:
   event:
     - pull_request
   paths:
-    - engine/*
+    - engine/**/*.rs
 
 node:
   builder: "true"
