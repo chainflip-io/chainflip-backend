@@ -97,37 +97,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "alt_serde"
-version = "1.0.119"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbdd08f26bc9972e3597a32bb7fe2b0de4e85ccfb4214acec94165b940aa537e"
-dependencies = [
- "alt_serde_derive",
-]
-
-[[package]]
-name = "alt_serde_derive"
-version = "1.0.119"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "629ddaf5b2675d9a27e9521a88870f8edea113e4a83d6d5178268b0d70e9a9a3"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "alt_serde_json"
-version = "1.0.61"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8f0eb8296bb24f54901cbb46b675ce2d4e6099a47eea0024cf0f48068c70313"
-dependencies = [
- "alt_serde",
- "itoa",
- "ryu",
-]
-
-[[package]]
 name = "ansi_term"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4340,26 +4309,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-cf-transactions"
-version = "0.0.1"
-dependencies = [
- "frame-support",
- "frame-system",
- "pallet-cf-validator",
- "parity-scale-codec 2.0.1",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std 3.0.0",
-]
-
-[[package]]
 name = "pallet-cf-validator"
 version = "0.0.1"
 dependencies = [
  "frame-support",
  "frame-system",
- "log 0.4.14",
+ "log",
  "pallet-session",
  "parity-scale-codec 2.0.1",
  "serde",
@@ -7810,8 +7765,6 @@ dependencies = [
  "structopt",
  "substrate-build-script-utils",
  "substrate-frame-rpc-system",
- "witness-fetch-rpc",
- "witness-fetch-runtime-api",
 ]
 
 [[package]]
@@ -7829,7 +7782,6 @@ dependencies = [
  "pallet-authorship",
  "pallet-balances",
  "pallet-cf-staking",
- "pallet-cf-transactions",
  "pallet-cf-validator",
  "pallet-grandpa",
  "pallet-offences",
@@ -7851,8 +7803,6 @@ dependencies = [
  "sp-transaction-pool",
  "sp-version",
  "substrate-wasm-builder",
- "witness-fetch",
- "witness-fetch-runtime-api",
 ]
 
 [[package]]
@@ -9441,56 +9391,6 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
-
-[[package]]
-name = "witness-fetch"
-version = "0.1.0"
-dependencies = [
- "alt_serde",
- "alt_serde_json",
- "frame-support",
- "frame-system",
- "num-traits",
- "pallet-cf-validator",
- "parity-scale-codec 2.0.1",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std 3.0.0",
-]
-
-[[package]]
-name = "witness-fetch-rpc"
-version = "0.1.0"
-dependencies = [
- "chainflip-common",
- "frame-support",
- "frame-system",
- "jsonrpc-core 15.1.0",
- "jsonrpc-core-client",
- "jsonrpc-derive",
- "parity-scale-codec 2.0.1",
- "serde",
- "sp-api",
- "sp-blockchain",
- "sp-core",
- "sp-io",
- "sp-rpc",
- "sp-runtime",
- "witness-fetch-runtime-api",
-]
-
-[[package]]
-name = "witness-fetch-runtime-api"
-version = "0.1.0"
-dependencies = [
- "frame-system",
- "jsonrpc-core 15.1.0",
- "parity-scale-codec 1.3.7",
- "sp-api",
- "sp-runtime",
- "sp-std 3.0.0",
-]
 
 [[package]]
 name = "ws2_32-sys"

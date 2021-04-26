@@ -125,8 +125,20 @@ pub fn native_version() -> NativeVersion {
     }
 }
 
+// FIXME: These would be changed
+parameter_types! {
+	pub const MinEpoch: BlockNumber = 1;
+	pub const MinValidatorSetSize: u64 = 2;
+}
+
 impl pallet_cf_validator::Config for Runtime {
     type Event = Event;
+    type MinEpoch = MinEpoch;
+    type MinValidatorSetSize = MinValidatorSetSize;
+    type ValidatorId = <Self as frame_system::Config>::AccountId;
+    type Stake = u64;
+    type CandidateProvider = ();
+    type ValidatorHandler = ();
 }
 
 impl<C> SendTransactionTypes<C> for Runtime
@@ -323,7 +335,7 @@ construct_runtime!(
         Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
         Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
         Historical: session_historical::{Module},
-        Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config},
+        Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
         Aura: pallet_aura::{Module, Config<T>},
         Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
         Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},

@@ -4,7 +4,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(test)]
 mod mock;
+#[cfg(test)]
 mod tests;
 
 pub use pallet::*;
@@ -59,7 +61,7 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-		type ValidatorId: Eq + Ord + Copy;
+		type ValidatorId: Eq + Ord + Clone;
 		type Stake: Eq + Ord + Copy;
 		/// A provider for our validators
 		type CandidateProvider: CandidateProvider<Self::ValidatorId, Self::Stake>;
@@ -184,11 +186,11 @@ impl<T: Config> pallet_session::SessionHandler<T::ValidatorId> for Pallet<T> {
 		queued_validators: &[(T::ValidatorId, Ks)],
 	) {
 		let current_validators = validators.iter()
-			.map(|(id, _)| *id)
+			.map(|(id, _)| id.clone())
 			.collect::<Vec<T::ValidatorId>>();
 
 		let next_validators = queued_validators.iter()
-			.map(|(id, _)| *id)
+			.map(|(id, _)| id.clone())
 			.collect::<Vec<T::ValidatorId>>();
 
 		T::ValidatorHandler::on_new_session(changed, current_validators, next_validators);
@@ -279,7 +281,7 @@ impl<T: Config> Pallet<T> {
 			let max_size = SizeValidatorSet::<T>::get();
 			let candidates = candidates.get(0..max_size as usize);
 			if let Some(candidates) = candidates {
-				let candidates: Vec<T::ValidatorId> = candidates.iter().map(|i| i.0).collect();
+				let candidates: Vec<T::ValidatorId> = candidates.iter().map(|i| i.0.clone()).collect();
 				return Some(    candidates);
 			}
 		}

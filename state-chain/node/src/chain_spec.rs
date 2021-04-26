@@ -146,8 +146,8 @@ fn testnet_genesis(
 			changes_trie_config: Default::default(),
 		}),
 		pallet_cf_validator: Some(ValidatorConfig {
-			max_validators: 150,
-			epoch_days: 28
+			size_validator_set: 2,
+			epoch_number_of_blocks: 2
 		}),
 		pallet_session: Some(SessionConfig {
 			keys: initial_authorities.iter().map(|x| {
