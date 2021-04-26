@@ -1,5 +1,6 @@
 use crate::{mock::*, Error, Stakes, PendingClaims, Config};
 use frame_support::{assert_err, assert_ok, error::BadOrigin};
+use sp_core::ecdsa::Signature;
 
 const ETH_DUMMY_ADDR: <Test as Config>::EthereumAddress = 0u64;
 
@@ -33,8 +34,8 @@ fn staked_amount_is_added_and_subtracted() {
 		assert_eq!(Stakes::<Test>::get(BOB), stake_b - claim_b);
 
 		// Check the pending claims
-		assert_eq!(PendingClaims::<Test>::get(ALICE), Some(claim_a));
-		assert_eq!(PendingClaims::<Test>::get(BOB), Some(claim_b));
+		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().amount, claim_a);
+		assert_eq!(PendingClaims::<Test>::get(BOB).unwrap().amount, claim_b);
 	});
 }
 
@@ -129,5 +130,52 @@ fn multisig_endpoints_cant_be_called_from_invalid_origins() {
 
 		assert_err!(StakeManager::claimed(Origin::none(), ALICE, stake), BadOrigin);
 		assert_err!(StakeManager::claimed(Origin::signed(Default::default()), ALICE, stake), BadOrigin);
+	});
+}
+
+#[test]
+fn sigature_is_inserted() {
+	new_test_ext().execute_with(|| {
+		let stake = 45u128;
+		let sig = Signature::from_slice(&[1u8; 65]);
+
+		// Stake some FLIP.
+		assert_ok!(StakeManager::staked(Origin::root(), ALICE, stake, ETH_DUMMY_ADDR));
+
+		// Claim it.
+		assert_ok!(StakeManager::claim(Origin::signed(ALICE), stake, ETH_DUMMY_ADDR));
+
+		// Check storage for the signature, should not be there.
+		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().signature, None);
+		
+		// Insert a signature.
+		assert_ok!(StakeManager::post_claim_signature(Origin::none(), ALICE, stake, 0, ETH_DUMMY_ADDR, sig.clone()));
+
+		// Check storage for the signature.
+		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().signature, Some(sig));
+	});
+}
+
+#[test]
+fn witnessing_witnesses() {
+	new_test_ext().execute_with(|| {
+		WITNESS_THRESHOLD.with(|cell| {
+			let mut threshold = cell.borrow_mut();
+			*threshold = 2;
+		});
+
+		// Bob votes
+		assert_ok!(StakeManager::witness_staked(Origin::signed(BOB), ALICE, 123, ETH_DUMMY_ADDR));
+
+		// Should be one vote but not staked yet.
+		let count = WITNESS_VOTES.with(|cell| cell.borrow().len());
+		assert_eq!(count, 1);
+		assert_eq!(Stakes::<Test>::get(ALICE), 0);
+
+		// Bob votes again (the mock allows this)
+		assert_ok!(StakeManager::witness_staked(Origin::signed(BOB), ALICE, 123, ETH_DUMMY_ADDR));
+
+		// Alice should be staked since we set the threshold to 2.
+		assert_eq!(Stakes::<Test>::get(ALICE), 123);
 	});
 }

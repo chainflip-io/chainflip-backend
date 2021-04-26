@@ -20,7 +20,7 @@ use pallet_session::historical as session_historical;
 pub use pallet_timestamp::Call as TimestampCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
+use sp_core::{OpaqueMetadata, crypto::KeyTypeId, ecdsa};
 use sp_runtime::{
     ApplyExtrinsicResult, create_runtime_str, generic,
     impl_opaque_keys,
@@ -33,6 +33,7 @@ use sp_runtime::traits::{
     AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify,
 };
 use sp_std::prelude::*;
+use sp_transaction_pool::TransactionPriority;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
@@ -312,19 +313,27 @@ impl pallet_cf_witness::Config for Runtime {
     type ValidatorId = <Self as frame_system::Config>::AccountId;
 }
 
+parameter_types! {
+    pub const UnsignedPriority: TransactionPriority = 0;
+}
+
 impl pallet_cf_staking::Config for Runtime {
     type Event = Event;
     type Call = Call;
 
     type StakedAmount = FlipBalance;
 
-    type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
-
     // TODO: check this against the address type used in the StakeManager
     type EthereumAddress = [u8; 20];
 
     // TODO: check this against the nonce type used in the StakeManager
     type Nonce = u64;
+
+    type EthereumCrypto = ecdsa::Public;
+
+    type UnsignedPriority = UnsignedPriority;
+
+    type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
 
     type Witnesser = pallet_cf_witness::Pallet<Runtime>;
 }

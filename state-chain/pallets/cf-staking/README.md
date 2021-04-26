@@ -39,7 +39,7 @@ A validator can have at most one open claim at any given time. If a validator su
 
 ### Signatures
 
-This pallet has no knowledge of signatures generated for submission to the `StakeManager::claim` smart contract call. The chainflip engine should store this and make it available to the validators so it can be posted to an Eth node.
+Once the CFE has generated a valid signature for a claim, it should be posted back to the chain via `post_claim_signature`.
 
 ### Genesis Configuration
 
@@ -52,3 +52,13 @@ You can view the reference docs for this pallet by running:
 ```sh
 cargo doc --open
 ```
+
+## Improvements
+
+Some future improvements:
+
+- Address all TODO and QUESTION items mentioned in the code.
+- Address the abovementioned assumptions where appropriate.
+- Add Ethereum crypto primitives for signature verification.
+- Pre-encode the claim data according to the required eth encoding and store the encoded claim for easier signature verification (the claim sig is made over an ethereum-compatible encoding of the parameters)
+- Store pending claims in a hash lookup so the signer doesn't have to re-submit all the params through the `post_claim_signature` extrinsic.
