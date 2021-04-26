@@ -93,9 +93,11 @@ pub mod pallet {
             amount: T::StakedAmount,
 			refund_address: T::EthereumAddress,
         ) -> DispatchResultWithPostInfo {
-            let who = ensure_signed(origin)?;
+            let who =  ensure_signed(origin)?;
+            let call = Call::staked(staker_account_id, amount, refund_address);
 
-            debug::info!("Witnessed `staked` event!");
+            T::Witnesser::witness(who, call.into())?;
+
             Ok(().into())
         }
 
