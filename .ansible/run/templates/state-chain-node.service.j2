@@ -1,0 +1,11 @@
+[Unit]
+Description=Chainflip Validator
+
+[Service]
+ExecStart=/root/state-chain/releases/state-chain-node-{{ chainflip_scn_version }} --{{ chainflip_dev_name }} --base-path /root/state-chain/{{ chainflip_dev_name }} --ws-external --rpc-external --dev {% if chainflip_bootnodes is defined %} --bootnodes {{ chainflip_bootnodes }} {% endif %}
+
+Restart=always
+RestartSec=120
+
+[Install]
+WantedBy=multi-user.target
