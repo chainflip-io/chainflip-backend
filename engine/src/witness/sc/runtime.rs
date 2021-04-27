@@ -15,6 +15,7 @@ use substrate_subxt::{
 };
 
 use substrate_subxt::balances::BalancesEventTypeRegistry;
+use substrate_subxt::session::SessionEventTypeRegistry;
 use substrate_subxt::sudo::SudoEventTypeRegistry;
 
 use substrate_subxt::sp_runtime::OpaqueExtrinsic;
@@ -38,7 +39,7 @@ impl Runtime for StateChainRuntime {
     type Extra = DefaultExtra<Self>;
 
     fn register_type_sizes(event_type_registry: &mut EventTypeRegistry<Self>) {
-        // event_type_registry.with_session();
+        event_type_registry.with_session();
         event_type_registry.with_sudo();
         event_type_registry.with_balances();
         register_default_type_sizes(event_type_registry);

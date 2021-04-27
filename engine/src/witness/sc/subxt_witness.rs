@@ -1,9 +1,10 @@
 use anyhow::Result;
+use frame_system::Event;
 use futures::stream::Scan;
 use pallet_cf_transactions::Event;
 use sp_core::{sr25519, Pair};
 use sp_keyring::AccountKeyring;
-use state_chain_runtime::AccountId;
+use state_chain_runtime::{AccountId, System};
 use substrate_subxt::{
     balances::{TransferCallExt, TransferEvent},
     extrinsic::DefaultExtra,
@@ -11,58 +12,28 @@ use substrate_subxt::{
     sp_core::Decode,
     sp_runtime::MultiSignature,
     system::ExtrinsicSuccessEvent,
-    ClientBuilder, EventSubscription, ExtrinsicSuccess, NodeTemplateRuntime, PairSigner, Runtime,
+    Client, ClientBuilder, EventSubscription, ExtrinsicSuccess, NodeTemplateRuntime, PairSigner,
+    Runtime,
 };
 
 use crate::witness::sc::transactions::DataAddedEvent;
 
-use super::runtime::StateChainRuntime;
-
-// impl Runtime for SCRuntime {
-//     type Signature = MultiSignature;
-
-//     type Extra = DefaultExtra<Self>;
-
-//     fn register_type_sizes(event_type_registry: &mut substrate_subxt::EventTypeRegistry<Self>) {
-//         event_type_registry.with_system();
-//         register_default_type_sizes(event_type_registery);
-
-//         // custom types
-//         // event_type_registry.register_type_size(name)
-//     }
-// }
-
-// Provides hooks to register missing runtime type sizes either statically via the Runtime trait impl:
-
-// impl Runtime for MyCustomRuntime {
-//     type Signature = MultiSignature;
-//     type Extra = DefaultExtra<Self>;
-
-//     fn register_type_sizes(event_type_registry: &mut EventTypeRegistry<Self>) {
-//         event_type_registry.with_system();
-//         event_type_registry.with_balances();
-//         register_default_type_sizes(event_type_registry);
-//         // add more custom type registrations here:
-//         event_type_registry.register_type_size::<u32>("MyCustomType");
-//     }
-// }
-// Or dynamically via the ClientBuilder:
-
-// ClientBuilder::<NodeTemplateRuntime>::new()
-//     .register_type_size::<u32>("MyCustomRuntimeType")
-//     .build()
-// In addition, the build() method on the ClientBuilder will now check for missing type sizes by default, and return an Err if there are any missing. This can be disabled by skip_type_sizes_check:
-
-// ClientBuilder::<NodeTemplateRuntime>::new()
-//     .skip_type_sizes_check()
-//     .build()
-
-// }
+use super::{runtime::StateChainRuntime, transactions::DataAddedMoreEvent};
 
 pub async fn start() {
     println!("Start the state chain witness with subxt");
 
     subscribe_to_events().await.unwrap();
+}
+
+async fn create_subscription<'a, E: substrate_subxt::Event<StateChainRuntime>>(
+    client: Client<StateChainRuntime>,
+) -> Result<EventSubscription<'a, StateChainRuntime>> {
+    let sub = client.subscribe_finalized_events().await?;
+    let decoder = client.events_decoder();
+    let mut sub = EventSubscription::new(sub, decoder);
+    sub.filter_event::<E>();
+    Ok(sub)
 }
 
 // An error thrown at one point for something - looks useful
@@ -72,10 +43,8 @@ pub async fn subscribe_to_events() -> Result<()> {
     // let signer: PairSigner::new(AccountKeyring::Alice.pair());
 
     let client = ClientBuilder::<StateChainRuntime>::new()
-        // .set_url("http://127.0.0.1:9944")
         .skip_type_sizes_check()
         .register_type_size::<AccountId>("AccountId")
-        // .register_type_size(name)
         .build()
         .await?;
 
@@ -83,26 +52,39 @@ pub async fn subscribe_to_events() -> Result<()> {
     let sub = client.subscribe_events().await?;
     let decoder = client.events_decoder();
     let mut sub = EventSubscription::new(sub, decoder);
+    let sub_more = client.subscribe_events().await?;
+    let decoder_more = client.events_decoder();
+    // let mut sub_more = EventSubscription::new(sub_more, decoder_more);
 
+    // the loop will only decode these bois
     sub.filter_event::<DataAddedEvent<_>>();
-
-    // try get just the frame system event
+    sub.filter_event::<DataAddedMoreEvent<_>>();
+    // sub_more.filter_event::<DataAddedMoreEvent<_>>();
     loop {
-        // TODO: DECODE THE EVENTS HERE YEET
         let raw = sub.next().await.unwrap().unwrap();
         println!("Raw event:\n{:#?}", raw);
 
-        // this is how we decode, but how to do it with a custom type??
-        // let event = DataAddedEvent::<StateChainRuntime>::decode(&mut &raw.data[..]).unwrap();
-
         let event = DataAddedEvent::<StateChainRuntime>::decode(&mut &raw.data[..]).unwrap();
-
-        // println!("Here's the decoded event");
+        println!(
+            "The sender of this data is: {} and they sent: '{:?}'",
+            event.who,
+            String::from_utf8(event.clone().data),
+        );
 
         println!("Here's the event to be added: {:#?}", event);
-        // let event = TransferEvent::<NodeTemplateRuntime>::decode(&mut &raw.data[..]);
-        // println!("Event metadata from frame system: {:#?}", event);
-        // let event = TransferEvent::<DefaultNodeRuntime>::decode(&mut &raw.data[..]);
+
+        // ===== next event subscription =====
+        let raw = sub.next().await.unwrap().unwrap();
+        println!("Raw event:\n{:#?}", raw);
+
+        let event = DataAddedEvent::<StateChainRuntime>::decode(&mut &raw.data[..]).unwrap();
+        println!(
+            "The sender of this data is: {} and they sent: '{:?}'",
+            event.who,
+            String::from_utf8(event.clone().data),
+        );
+
+        println!("Here's the event to be added: {:#?}", event);
     }
 
     Ok(())

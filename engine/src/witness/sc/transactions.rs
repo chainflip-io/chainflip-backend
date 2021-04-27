@@ -19,21 +19,23 @@ pub struct DataAddedEvent<T: Transactions> {
     pub data: Vec<u8>,
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct DataAddedMoreEvent<T: Transactions> {
+    pub who: <T as System>::AccountId,
 
-//     use substrate_subxt::PairSigner;
+    pub data: Vec<u8>,
+}
 
-//     use crate::witness::sc::runtime::StateChainRuntime;
 
-//     use sp_keyring::AccountKeyring;
+#[cfg(test)]
+mod tests {
 
-//     use substrate_subxt::{subxt_test}
+    use frame_system::RawEvent;
 
-//     #[tokio::test]
-//     async fn basic_add_data() {
-//         let alice = PairSigner::<StateChainRuntime, _>::new(AccountKeyring::Alice.pair());
+    use super::*;
 
-//     }
-// }
+    #[test]
+    fn test_decode_raw_data_added() {
+        let raw_data_added = 
+    }
+}
