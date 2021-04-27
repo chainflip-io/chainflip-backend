@@ -26,3 +26,12 @@ pub struct ClaimSigRequested<S: Staking> {
 
     pub eth_account: Vec<u8>,
 }
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct Claim<S: Staking> {
+    pub who: <S as System>::AccountId,
+    pub amount: u128,
+    pub nonce: u32,
+    pub address: String,
+    pub signature: String,
+}

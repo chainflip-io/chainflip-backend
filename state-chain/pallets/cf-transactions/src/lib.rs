@@ -40,7 +40,7 @@ decl_event!(
         OutputAdded(AccountId, states::Output),
         OutputSentAdded(AccountId, states::OutputSent),
         DataAdded(AccountId, Vec<u8>),
-        NumberAdded(AccountId, u8),
+        DataAddedMore(AccountId, Vec<u8>),
     }
 );
 
@@ -162,6 +162,17 @@ decl_module! {
             let who = ensure_signed(origin)?;
 
             Self::deposit_event(RawEvent::DataAdded(who, data));
+
+            Ok(())
+        }
+
+        // This is for testing
+        #[weight = 0]
+        pub fn set_more_data(origin, data: Vec<u8>) -> DispatchResult {
+            // Ensure extrinsic is signed
+            let who = ensure_signed(origin)?;
+
+            Self::deposit_event(RawEvent::DataAddedMore(who, data));
 
             Ok(())
         }

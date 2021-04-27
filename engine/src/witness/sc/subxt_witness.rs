@@ -53,7 +53,7 @@ pub async fn create_client() -> Result<Client<StateChainRuntime>> {
 pub async fn subscribe_to_events() -> Result<()> {
     let client = create_client().await?;
 
-    // TODO: Put these back to finalized events
+    // TODO: subscribe_events -> finalised events
 
     // ===== DataAddedEvents - for easy testing ====
     let sub = client.subscribe_events().await?;

@@ -900,6 +900,7 @@ dependencies = [
  "sp-keyring",
  "state-chain-runtime",
  "substrate-api-client",
+ "substrate-subxt",
  "thiserror",
  "tokio 1.5.0",
  "tokio-stream",
