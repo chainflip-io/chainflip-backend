@@ -41,6 +41,16 @@ A validator can have at most one open claim at any given time. If a validator su
 
 Once the CFE has generated a valid signature for a claim, it should be posted back to the chain via `post_claim_signature`.
 
+## Dependencies
+
+### Traits
+
+This pallet depends on the `Witnesser` defined in [traits](../../traits). See [cf-witness](../cf-witness) for an implementation.
+
+### Pallets
+
+This pallet does not depend on any other FRAME pallet or externally developed modules.
+
 ### Genesis Configuration
 
 This pallet does not have any genesis configuration.
