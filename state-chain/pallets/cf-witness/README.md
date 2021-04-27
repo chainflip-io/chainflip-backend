@@ -28,7 +28,7 @@ This template pallet does not have any genesis configuration.
 
 This pallet implements the `Witnesser` trait as defined [here](../../traits). It also defines `EnsureWitnessed`, a type that
 can be used to restrict an extrinsic such that it can only be called from this pallet. In order to do so follow these
-steps:
+steps (also, see the [mock::dummy](./mock/dummy.rs) pallet):
 
 1. Make sure to include the `Origin` of this pallet in the `construct_runtime!` macro call:
 

@@ -231,7 +231,7 @@ impl<T: pallet::Config> cf_traits::Witnesser for Pallet<T> {
 ///
 /// # Example:
 ///
-/// ```rust
+/// ```ignore
 /// if let Ok(()) = EnsureWitnessed::ensure_origin(origin) {
 /// 	log::debug!("This extrinsic was called as a result of witness threshold consensus.");
 /// }
