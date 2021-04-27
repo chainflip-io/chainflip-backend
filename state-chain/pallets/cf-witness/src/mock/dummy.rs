@@ -38,7 +38,7 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// Event documentation should end with an array that provides descriptive names for event
 		/// parameters. [something, who]
-		SomethingStored(u32),
+		ValueIncremented(u32),
 	}
 	
 	#[pallet::error]
@@ -57,14 +57,14 @@ pub mod pallet {
 		/// An example dispatchable that takes a singles value as a parameter, writes the value to
 		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-		pub fn put_value(origin: OriginFor<T>, something: u32) -> DispatchResultWithPostInfo {
+		pub fn increment_value(origin: OriginFor<T>, amount: u32) -> DispatchResultWithPostInfo {
 			let _who = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			// Update storage.
-			<Something<T>>::put(something);
+			<Something<T>>::put(amount);
 
 			// Emit an event.
-			Self::deposit_event(Event::SomethingStored(something));
+			Self::deposit_event(Event::ValueIncremented(amount));
 			// Return a successful DispatchResultWithPostInfo
 			Ok(().into())
 		}

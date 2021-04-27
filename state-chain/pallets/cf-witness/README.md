@@ -82,3 +82,9 @@ in your pallet that delegates to the witness pallet).
     let call = Call::my_extrinsic(some_arg);
     T::Witnesser::witness(who, call.into())?;
     ```
+
+## TODO
+
+Some ideas for future improvements:
+
+- Wrap the VoteMask operations in a nicer api that provides transparent Encode/Decode and methods for eg. vote counts.

@@ -74,6 +74,7 @@ impl dummy::Config for Test {
 pub const ALISSA: <Test as frame_system::Config>::AccountId = 123u64;
 pub const BOBSON: <Test as frame_system::Config>::AccountId = 456u64;
 pub const CHARLEMAGNE: <Test as frame_system::Config>::AccountId = 789u64;
+pub const DEIRDRE: <Test as frame_system::Config>::AccountId = 987u64;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
