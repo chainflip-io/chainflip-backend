@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use sp_keyring::AccountKeyring;
 use state_chain_runtime::{AccountId, System};
@@ -8,25 +10,19 @@ use substrate_subxt::{
     sp_core::Decode,
     Client, ClientBuilder, EventSubscription,
 };
+use tokio::sync::Mutex;
 
 use crate::{
-    mq::{nats_client::NatsMQClient, IMQClient, Options, Subject},
+    mq::{IMQClient, Subject},
     witness::sc::transactions::DataAddedEvent,
 };
 
 use super::{runtime::StateChainRuntime, staking::ClaimSigRequested};
 
-pub async fn start() {
+pub async fn start<M: IMQClient>(mq_client: Arc<Mutex<M>>) {
     println!("Start the state chain witness with subxt");
 
-    // Not sure if the client should be created here, or above...
-    let options = Options {
-        url: "http://localhost:9944".to_string(),
-    };
-
-    let mq_client = NatsMQClient::connect(options).await.unwrap();
-
-    subscribe_to_events(*mq_client).await.unwrap();
+    subscribe_to_events(mq_client).await.unwrap();
 }
 
 // async fn create_subscription<'a, E: substrate_subxt::Event<StateChainRuntime>>(
@@ -52,7 +48,7 @@ async fn create_subxt_client() -> Result<Client<StateChainRuntime>> {
     Ok(client)
 }
 
-async fn subscribe_to_events<M: IMQClient>(mq_client: M) -> Result<()> {
+async fn subscribe_to_events<M: IMQClient>(mq_client: Arc<Mutex<M>>) -> Result<()> {
     let client = create_subxt_client().await?;
 
     // TODO: subscribe_events -> finalised events
@@ -82,7 +78,12 @@ async fn subscribe_to_events<M: IMQClient>(mq_client: M) -> Result<()> {
         );
 
         println!("Adding event: {:#?} to the message queue", event);
-        mq_client.publish(Subject::Claim, &event).await.unwrap();
+        mq_client
+            .lock()
+            .await
+            .publish(Subject::Claim, &event)
+            .await
+            .unwrap();
 
         // Sig claim request
         let raw = sig_claim_requested_events.next().await.unwrap().unwrap();
@@ -97,6 +98,10 @@ async fn subscribe_to_events<M: IMQClient>(mq_client: M) -> Result<()> {
 #[cfg(test)]
 mod tests {
 
+    use nats_test_server::NatsTestServer;
+
+    use crate::mq::mq_mock::MockMQ;
+
     use super::*;
 
     #[tokio::test]
@@ -106,8 +111,11 @@ mod tests {
         //     variant: "DataAdded".to_string(),
         //     data: "Hello".as_bytes().to_owned(),
         // };
+        let server = NatsTestServer::build().spawn();
+        let test_mq_client = MockMQ::new(&server).await;
+        let test_mq_client = Arc::new(Mutex::new(test_mq_client));
 
-        start().await;
+        start(test_mq_client).await;
     }
 }
 

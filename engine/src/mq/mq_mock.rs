@@ -26,7 +26,7 @@ impl Subscription {
 
 /// # Using MockMQ
 /// ```
-/// let server = NatsTestServer::build()::spawn();
+/// let server = NatsTestServer::build().spawn();
 /// let mock_mq = MockMQ::new(&server).await;
 /// ```
 impl MockMQ {
