@@ -1,5 +1,6 @@
 // Implements support for the transactions module
 
+use chainflip_common::types::addresses::{Address, EthereumAddress};
 use codec::{Codec, Decode, Encode};
 use substrate_subxt::{
     module,
@@ -26,16 +27,13 @@ pub struct DataAddedMoreEvent<T: Transactions> {
     pub data: Vec<u8>,
 }
 
-
 #[cfg(test)]
 mod tests {
-
-    use frame_system::RawEvent;
 
     use super::*;
 
     #[test]
     fn test_decode_raw_data_added() {
-        let raw_data_added = 
+        todo!()
     }
 }

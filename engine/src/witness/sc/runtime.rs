@@ -20,7 +20,7 @@ use substrate_subxt::sudo::SudoEventTypeRegistry;
 
 use substrate_subxt::sp_runtime::OpaqueExtrinsic;
 
-use super::transactions;
+use super::{staking, transactions};
 
 // use substrate_subxt::system::SystemEventTypeRegistry;
 
@@ -75,6 +75,8 @@ impl Sudo for StateChainRuntime {}
 // Must implement the custom events for the runtime
 
 impl transactions::Transactions for StateChainRuntime {}
+
+impl staking::Staking for StateChainRuntime {}
 
 #[cfg(test)]
 mod tests {
