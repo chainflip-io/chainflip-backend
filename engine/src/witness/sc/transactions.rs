@@ -2,6 +2,7 @@
 
 use chainflip_common::types::addresses::{Address, EthereumAddress};
 use codec::{Codec, Decode, Encode};
+use serde::Serialize;
 use substrate_subxt::{
     module,
     sp_runtime::{app_crypto::RuntimePublic, traits::Member},
@@ -13,15 +14,8 @@ use substrate_subxt::{
 pub trait Transactions: System {}
 
 // Apparently should be an event type here
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Serialize)]
 pub struct DataAddedEvent<T: Transactions> {
-    pub who: <T as System>::AccountId,
-
-    pub data: Vec<u8>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct DataAddedMoreEvent<T: Transactions> {
     pub who: <T as System>::AccountId,
 
     pub data: Vec<u8>,

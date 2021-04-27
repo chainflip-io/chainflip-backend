@@ -1,5 +1,5 @@
 pub mod mq;
-mod nats_client;
+pub mod nats_client;
 
 #[cfg(test)]
 mod mq_mock;

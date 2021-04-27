@@ -1,3 +1,4 @@
+use serde::Serialize;
 use substrate_subxt::{
     balances::{AccountData, Balances},
     extrinsic::DefaultExtra,
@@ -14,6 +15,7 @@ use substrate_subxt::{
     BasicSessionKeys, EventTypeRegistry, Runtime,
 };
 
+// Not sure why these are errors in VSCode, but without them, it doesn't work
 use substrate_subxt::balances::BalancesEventTypeRegistry;
 use substrate_subxt::session::SessionEventTypeRegistry;
 use substrate_subxt::sudo::SudoEventTypeRegistry;
@@ -31,7 +33,7 @@ use super::{staking, transactions};
 /// # Note
 ///
 /// Main difference is `type Address = AccountId`.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 pub struct StateChainRuntime;
 
 impl Runtime for StateChainRuntime {

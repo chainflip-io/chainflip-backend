@@ -9,14 +9,24 @@ use substrate_subxt::{
     Client, ClientBuilder, EventSubscription,
 };
 
-use crate::witness::sc::transactions::DataAddedEvent;
+use crate::{
+    mq::{nats_client::NatsMQClient, IMQClient, Options, Subject},
+    witness::sc::transactions::DataAddedEvent,
+};
 
 use super::{runtime::StateChainRuntime, staking::ClaimSigRequested};
 
 pub async fn start() {
     println!("Start the state chain witness with subxt");
 
-    subscribe_to_events().await.unwrap();
+    // Not sure if the client should be created here, or above...
+    let options = Options {
+        url: "http://localhost:9944".to_string(),
+    };
+
+    let mq_client = NatsMQClient::connect(options).await.unwrap();
+
+    subscribe_to_events(*mq_client).await.unwrap();
 }
 
 // async fn create_subscription<'a, E: substrate_subxt::Event<StateChainRuntime>>(
@@ -30,7 +40,7 @@ pub async fn start() {
 // }
 
 /// Create a substrate subxt client over the StateChainRuntime
-async fn create_client() -> Result<Client<StateChainRuntime>> {
+async fn create_subxt_client() -> Result<Client<StateChainRuntime>> {
     let client = ClientBuilder::<StateChainRuntime>::new()
         // ideally don't use this, but we currently have a few types that aren't even used, so this is to save
         // defining types for them.
@@ -42,8 +52,8 @@ async fn create_client() -> Result<Client<StateChainRuntime>> {
     Ok(client)
 }
 
-async fn subscribe_to_events() -> Result<()> {
-    let client = create_client().await?;
+async fn subscribe_to_events<M: IMQClient>(mq_client: M) -> Result<()> {
+    let client = create_subxt_client().await?;
 
     // TODO: subscribe_events -> finalised events
 
@@ -71,7 +81,8 @@ async fn subscribe_to_events() -> Result<()> {
             String::from_utf8(event.clone().data),
         );
 
-        println!("Here's the event to be added: {:#?}", event);
+        println!("Adding event: {:#?} to the message queue", event);
+        mq_client.publish(Subject::Claim, &event).await.unwrap();
 
         // Sig claim request
         let raw = sig_claim_requested_events.next().await.unwrap().unwrap();
