@@ -1,7 +1,4 @@
 use anyhow::Result;
-use frame_system::Event;
-use futures::stream::Scan;
-use sp_core::{sr25519, Pair};
 use sp_keyring::AccountKeyring;
 use state_chain_runtime::{AccountId, System};
 use substrate_subxt::{
@@ -9,17 +6,12 @@ use substrate_subxt::{
     extrinsic::DefaultExtra,
     register_default_type_sizes,
     sp_core::Decode,
-    sp_runtime::MultiSignature,
-    system::ExtrinsicSuccessEvent,
-    Client, ClientBuilder, EventSubscription, ExtrinsicSuccess, NodeTemplateRuntime, PairSigner,
-    Runtime,
+    Client, ClientBuilder, EventSubscription,
 };
 
 use crate::witness::sc::transactions::DataAddedEvent;
 
-use super::{
-    runtime::StateChainRuntime, staking::ClaimSigRequested, transactions::DataAddedMoreEvent,
-};
+use super::{runtime::StateChainRuntime, staking::ClaimSigRequested};
 
 pub async fn start() {
     println!("Start the state chain witness with subxt");
@@ -38,7 +30,7 @@ pub async fn start() {
 // }
 
 /// Create a substrate subxt client over the StateChainRuntime
-pub async fn create_client() -> Result<Client<StateChainRuntime>> {
+async fn create_client() -> Result<Client<StateChainRuntime>> {
     let client = ClientBuilder::<StateChainRuntime>::new()
         // ideally don't use this, but we currently have a few types that aren't even used, so this is to save
         // defining types for them.
@@ -50,7 +42,7 @@ pub async fn create_client() -> Result<Client<StateChainRuntime>> {
     Ok(client)
 }
 
-pub async fn subscribe_to_events() -> Result<()> {
+async fn subscribe_to_events() -> Result<()> {
     let client = create_client().await?;
 
     // TODO: subscribe_events -> finalised events

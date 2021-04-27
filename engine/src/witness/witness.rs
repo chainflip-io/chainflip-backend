@@ -1,8 +1,8 @@
-use super::sc::{self, sc_witness};
+use super::sc::{self, sc_observer};
 
-pub fn main() {
+pub async fn main() {
     // Start the state chain witness
-    sc_witness::start();
+    sc_observer::start().await;
 
-    // Start the other witness processes
+    // Start the other witness processes...
 }
