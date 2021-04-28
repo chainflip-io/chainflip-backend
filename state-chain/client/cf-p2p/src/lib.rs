@@ -8,7 +8,7 @@ use sp_runtime::{traits::Block as BlockT};
 use sp_runtime::sp_std::sync::Arc;
 use std::borrow::Cow;
 
-type Message = Vec<u8>;
+pub type Message = Vec<u8>;
 
 pub trait Client {
     fn new_peer(&self, peer_id: &PeerId);
@@ -89,6 +89,14 @@ impl<C, B, H> NetworkBridge<C, B, H>
             network_event_stream,
             protocol: "chainflip-cf-p2p".into(),
         }
+    }
+
+    pub fn send_message(&self, peer_id: &PeerId, data: Message) {
+        self.state_machine.send_message(peer_id, data);
+    }
+
+    pub fn broadcast(&self, data: Message) {
+        self.state_machine.broadcast(data);
     }
 }
 
