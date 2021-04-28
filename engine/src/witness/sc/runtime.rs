@@ -15,24 +15,18 @@ use substrate_subxt::{
     BasicSessionKeys, EventTypeRegistry, Runtime,
 };
 
-// Not sure why these are errors in VSCode, but without them, it doesn't work
-use substrate_subxt::balances::BalancesEventTypeRegistry;
-use substrate_subxt::session::SessionEventTypeRegistry;
-use substrate_subxt::sudo::SudoEventTypeRegistry;
+use substrate_subxt::{
+    balances::BalancesEventTypeRegistry, session::SessionEventTypeRegistry,
+    sudo::SudoEventTypeRegistry, system::SystemEventTypeRegistry,
+};
 
 use substrate_subxt::sp_runtime::OpaqueExtrinsic;
 
 use super::{staking, transactions};
 
-// use substrate_subxt::system::SystemEventTypeRegistry;
-
-// Runtime template for use in decoding
+// Runtime template for use in decoding by subxt
 
 /// Concrete type definitions compatible with the state chain node
-///
-/// # Note
-///
-/// Main difference is `type Address = AccountId`.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 pub struct StateChainRuntime;
 
@@ -41,13 +35,13 @@ impl Runtime for StateChainRuntime {
     type Extra = DefaultExtra<Self>;
 
     fn register_type_sizes(event_type_registry: &mut EventTypeRegistry<Self>) {
+        event_type_registry.with_system();
         event_type_registry.with_session();
         event_type_registry.with_sudo();
         event_type_registry.with_balances();
         register_default_type_sizes(event_type_registry);
 
-        // TODO Add any custom stuff here
-        event_type_registry.register_type_size::<u32>("AccountId32");
+        // Add any custom types here...
     }
 }
 
@@ -76,6 +70,7 @@ impl Sudo for StateChainRuntime {}
 
 // Must implement the custom events for the runtime
 
+// TOOD: This can be removed??
 impl transactions::Transactions for StateChainRuntime {}
 
 impl staking::Staking for StateChainRuntime {}
