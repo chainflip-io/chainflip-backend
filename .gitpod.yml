@@ -9,3 +9,4 @@ github:
     pullRequestsFromForks: true
     addBadge: true
     addComment: true
+    pullRequests: true
