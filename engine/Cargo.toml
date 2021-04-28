@@ -43,7 +43,6 @@ codec = { package = "parity-scale-codec", version = "2.1", default-features = fa
 # Local deps
 chainflip-common = { path = "../common" }
 state-chain-runtime = { path = "../state-chain/runtime" }
-pallet-cf-transactions = { path = "../state-chain/pallets/cf-transactions" }
 
 [dev-dependencies]
 nats_test_server = "0.3.0"

@@ -888,7 +888,6 @@ dependencies = [
  "futures-util",
  "hex",
  "nats_test_server",
- "pallet-cf-transactions",
  "parity-scale-codec 2.1.1",
  "serde",
  "serde_json",
@@ -4351,25 +4350,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-cf-transactions"
-version = "0.0.1"
-dependencies = [
- "frame-support",
- "frame-system",
- "pallet-cf-validator",
- "parity-scale-codec 2.1.1",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std 3.0.0",
-]
-
-[[package]]
 name = "pallet-cf-validator"
 version = "0.0.1"
 dependencies = [
  "frame-support",
  "frame-system",
+ "log",
  "pallet-session",
  "parity-scale-codec 2.1.1",
  "serde",
@@ -7837,7 +7823,6 @@ dependencies = [
  "pallet-authorship",
  "pallet-balances",
  "pallet-cf-staking",
- "pallet-cf-transactions",
  "pallet-cf-validator",
  "pallet-grandpa",
  "pallet-offences",

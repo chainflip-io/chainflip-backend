@@ -33,9 +33,9 @@ where
     C::Api: BlockBuilder<Block>,
     P: TransactionPool + 'static,
 {
-    let mut io = jsonrpc_core::IoHandler::default();
+    let io = jsonrpc_core::IoHandler::default();
     let FullDeps {
-        client,
+        client: _,
         pool: _,
         deny_unsafe: _,
     } = deps;
