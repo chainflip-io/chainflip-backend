@@ -3,13 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use sp_keyring::AccountKeyring;
 use state_chain_runtime::{AccountId, System};
-use substrate_subxt::{
-    balances::{TransferCallExt, TransferEvent},
-    extrinsic::DefaultExtra,
-    register_default_type_sizes,
-    sp_core::Decode,
-    Client, ClientBuilder, EventSubscription, RawEvent,
-};
+use substrate_subxt::{Client, ClientBuilder, EventSubscription, RawEvent};
 
 use tokio::sync::Mutex;
 
@@ -42,7 +36,6 @@ async fn create_subxt_client() -> Result<Client<StateChainRuntime>> {
 async fn subscribe_to_events<M: 'static + IMQClient + Send + Sync>(mq_client: Arc<Mutex<M>>) {
     let mq_c = mq_client.clone();
 
-    let mq_c = mq_c.clone();
     tokio::spawn(async move {
         let client = create_subxt_client().await.unwrap();
 
@@ -149,8 +142,6 @@ mod tests {
         };
         let event =
             ExtrinsicSuccessEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..]).unwrap();
-
-        println!("Here's the event: {:#?}", event);
 
         let success_event: ExtrinsicSuccessEvent<StateChainRuntime> = ExtrinsicSuccessEvent {
             _runtime: PhantomData,
