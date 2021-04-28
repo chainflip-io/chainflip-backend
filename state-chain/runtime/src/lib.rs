@@ -20,7 +20,7 @@ pub use pallet_timestamp::Call as TimestampCall;
 pub use pallet_balances::Call as BalancesCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
+use sp_core::{crypto::KeyTypeId, OpaqueMetadata, ecdsa};
 use sp_runtime::{
     ApplyExtrinsicResult, create_runtime_str, generic,
     impl_opaque_keys,
@@ -36,6 +36,7 @@ use sp_std::prelude::*;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
+use sp_transaction_pool::TransactionPriority;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -276,11 +277,24 @@ impl pallet_balances::Config for Runtime {
 	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
 }
 
-impl pallet_cf_staking::Config for Runtime {
-    type Event = Event;
+parameter_types! {
+	pub const UnsignedPriority: TransactionPriority = 100;
+}
 
-    // See comment in the pallet's trait definition - we may want to consider using the Balances pallet.
-    type StakedAmount = u128;
+impl pallet_cf_staking::Config for Runtime {
+	type Event = Event;
+
+	type StakedAmount = u128;
+
+	// TODO: check this against the address type used in the StakeManager
+	type EthereumAddress = [u8; 20];
+
+	// TODO: check this against the nonce type used in the StakeManager
+	type Nonce = u64;
+
+    type EthereumCrypto = ecdsa::Public;
+    
+    type UnsignedPriority = UnsignedPriority; 
 }
 
 parameter_types! {
