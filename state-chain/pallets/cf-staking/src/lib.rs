@@ -162,12 +162,9 @@ pub mod pallet {
 			});
 			
 			// Emit the event requesting that the CFE generate the claim voucher.
-			Self::deposit_event(Event::<T>::ClaimSigRequested(address, nonce, amount));
+			Self::deposit_event(Event::<T>::ClaimSigRequested(who.clone(), address, nonce, amount));
 
-			// Assume for now that the siging process is successful and simply insert this claim into
-			// the pending claims. 
-			//
-			// TODO: This should be inserted by the CFE signer process including a valid signature.
+			// Insert a pending claim without a signature.
 			PendingClaims::<T>::insert(&who, Claim {
 				amount,
 				nonce,
@@ -269,8 +266,8 @@ pub mod pallet {
 		/// The staked amount should be refunded to the provided Ethereum address. [refund_amount, address]
 		Refund(T::StakedAmount, T::EthereumAddress),
 
-		/// A claim request has been made to provided Ethereum address. [address, nonce, amount]
-		ClaimSigRequested(T::EthereumAddress, T::Nonce, T::StakedAmount),
+		/// A claim request has been made to provided Ethereum address. [who, address, nonce, amount]
+		ClaimSigRequested(AccountId<T>, T::EthereumAddress, T::Nonce, T::StakedAmount),
 
 		/// A claim signature has been issued by the signer module. [issuer, amount, nonce, address, signature]
 		ClaimSignatureIssued(AccountId<T>, T::StakedAmount, T::Nonce, T::EthereumAddress, <T::EthereumCrypto as RuntimePublic>::Signature)
