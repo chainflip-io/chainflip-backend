@@ -2,7 +2,7 @@ use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
 
 #[rpc]
-pub trait RpcCalls {
+pub trait RpcApi {
     #[rpc(name = "p2p_send")]
     fn send(&self, peer_id: Option<String>) -> Result<u64>;
 }
@@ -15,7 +15,7 @@ impl Rpc {
         }
     }
 }
-impl RpcCalls for Rpc {
+impl RpcApi for Rpc {
     fn send(&self, peer_id: Option<String>) -> Result<u64> {
         Ok(200)
     }

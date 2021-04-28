@@ -36,12 +36,16 @@ pub fn create_full<C, P>(
 	P: TransactionPool + 'static,
 {
 
-	let io = jsonrpc_core::IoHandler::default();
+	let mut io = jsonrpc_core::IoHandler::default();
 	let FullDeps {
 		client: _,
 	 	pool: _,
 	 	deny_unsafe: _,
 	} = deps;
+
+	io.extend_with(cf_p2p_rpc::RpcApi::to_delegate(
+		cf_p2p_rpc::Rpc::new()
+	));
 
 	io
 }
