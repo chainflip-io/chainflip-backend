@@ -1,0 +1,13 @@
+[package]
+name = "cf-p2p-rpc"
+version = "0.1.0"
+authors = ["Andy Bell <andy@chainflip.io>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+jsonrpc-core = "17.0.0"
+jsonrpc-core-client = "17.0.0"
+jsonrpc-derive = "17.0.0"
+serde = {version = "1.0.125", features = ["derive"], optional = true}
