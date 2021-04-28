@@ -3,6 +3,7 @@ panic = 'unwind'
 
 [workspace]
 members = [
+  'state-chain/client/cf-p2p',
   'state-chain/node',
   'state-chain/pallets/cf-core',
   'state-chain/pallets/cf-staking',
