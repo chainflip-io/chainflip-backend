@@ -51,8 +51,6 @@ async fn create_subxt_client() -> Result<Client<StateChainRuntime>> {
     Ok(client)
 }
 
-async fn pub_task<M: IMQClient>(mq_client: Arc<Mutex<M>>) {}
-
 async fn subscribe_to_events<M: 'static + IMQClient + Send + Sync>(mq_client: Arc<Mutex<M>>) {
     let client = create_subxt_client().await.unwrap();
 
