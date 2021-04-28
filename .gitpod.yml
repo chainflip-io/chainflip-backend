@@ -1,7 +1,7 @@
 image:
   file: .gitpod.Dockerfile
 tasks:
-  - prebuild: cargo build --release
+  - prebuild: SCCACHE_DIR=/cache cargo check --release
 
 github:
   prebuilds:
