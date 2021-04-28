@@ -22,7 +22,7 @@ use super::{runtime::StateChainRuntime, staking::ClaimSigRequested};
 
 /// TODO: Make this sync
 /// Kick of the state chain observer process
-pub async fn start<M: IMQClient>(mq_client: Arc<Mutex<M>>) {
+pub async fn start<M: 'static + IMQClient + Send + Sync>(mq_client: Arc<Mutex<M>>) {
     println!("Start the state chain witness with subxt");
 
     subscribe_to_events(mq_client).await;
@@ -53,7 +53,7 @@ async fn create_subxt_client() -> Result<Client<StateChainRuntime>> {
 
 async fn pub_task<M: IMQClient>(mq_client: Arc<Mutex<M>>) {}
 
-async fn subscribe_to_events<M: IMQClient>(mq_client: Arc<Mutex<M>>) {
+async fn subscribe_to_events<M: 'static + IMQClient + Send + Sync>(mq_client: Arc<Mutex<M>>) {
     let client = create_subxt_client().await.unwrap();
 
     // TODO: subscribe_events -> finalised events
@@ -77,15 +77,19 @@ async fn subscribe_to_events<M: IMQClient>(mq_client: Arc<Mutex<M>>) {
         // let raw = sub.next().await.unwrap().unwrap();
         // println!("Raw event:\n{:#?}", raw);
 
-        let mq_c = mq_client.lock();
-
-        mq_c.await
-            .publish(
-                Subject::Claim,
-                &"THIS WILL BE SERIALIZED MUHHAAHAHAH".to_string(),
-            )
+        let mq_c = mq_c
+            .lock()
+            .await
+            .publish(Subject::Claim, &"hello".to_string())
             .await
             .unwrap();
+
+        // mq_c.publish(
+        //     Subject::Claim,
+        //     &"THIS WILL BE SERIALIZED MUHHAAHAHAH".to_string(),
+        // )
+        // .await
+        // .unwrap();
 
         //     // let event = DataAddedEvent::<StateChainRuntime>::decode(&mut &raw.data[..]).unwrap();
         //     // println!(

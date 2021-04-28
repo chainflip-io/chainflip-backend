@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
-use std::sync::Mutex;
+use tokio::sync::Mutex;
 
 use crate::mq::IMQClient;
 
 use super::sc::{self, sc_observer};
 
-pub async fn start<M: IMQClient>(mq_client: Arc<M>) {
+pub async fn start<M: 'static + IMQClient + Send + Sync>(mq_client: Arc<Mutex<M>>) {
     // Start the state chain witness
     sc_observer::start(mq_client.clone()).await;
 

@@ -12,13 +12,13 @@ pub struct Options {
 }
 
 /// Interface for a message queue
-#[async_trait(?Send)]
+#[async_trait]
 pub trait IMQClient {
     /// Open a connection to the message queue
     async fn connect(opts: Options) -> Result<Box<Self>>;
 
     /// Publish something to a particular subject
-    async fn publish<M: Serialize>(&self, subject: Subject, message: &'_ M) -> Result<()>;
+    async fn publish<M: Serialize + Sync>(&self, subject: Subject, message: &'_ M) -> Result<()>;
 
     /// Subscribe to a subject
     async fn subscribe<M: DeserializeOwned>(

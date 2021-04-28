@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use std::sync::Mutex;
+use tokio::sync::Mutex;
 
 use crate::mq::{nats_client::NatsMQClient, IMQClient, Options};
 
@@ -20,7 +20,7 @@ async fn main() {
         url: "localhost:9944".to_string(),
     };
     let mq_client = NatsMQClient::connect(options).await.unwrap();
-    let mq_client = Arc::new(*mq_client);
+    let mq_client = Arc::new(Mutex::new(*mq_client));
 
     // start observing the state chain and witnessing other chains
     witness::witness::start(mq_client.clone()).await;
