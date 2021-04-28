@@ -34,7 +34,6 @@ use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify,
 };
 use sp_std::prelude::*;
-use sp_transaction_pool::TransactionPriority;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
