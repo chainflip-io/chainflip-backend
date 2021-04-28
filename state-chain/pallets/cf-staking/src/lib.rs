@@ -64,9 +64,6 @@ pub mod pallet {
 		/// A type representing ethereum cryptographic primitives.
 		type EthereumCrypto: Member + FullCodec + RuntimePublic;
 
-		/// Base priority of unsigned transactions.
-		type UnsignedPriority: Get<TransactionPriority>;
-
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 
 		type Witnesser: cf_traits::Witnesser<
@@ -301,39 +298,6 @@ pub mod pallet {
 
 		/// Stake amount caused overflow on addition. Should never happen.
 		StakeOverflow,
-	}
-
-	#[pallet::validate_unsigned]
-	impl<T: Config> ValidateUnsigned for Pallet<T> {
-		type Call = Call<T>;
-
-		fn validate_unsigned(
-			source: TransactionSource,
-			call: &Self::Call
-		) -> TransactionValidity {
-			if let Call::post_claim_signature(account_id, amount, address, nonce, sig) = call {
-				
-				// TODO: Verify signature here.
-
-				ValidTransaction::with_tag_prefix("ClaimSig")
-					.priority(T::UnsignedPriority::get())
-					// `provides` are necessary for transaction validity so we need to include something. Since
-					// we have no `requires`, the only effect of this is to make sure only a single unsigned
-					// transaction with the below criteria will get into the transaction pool in a single block.
-					.and_provides((
-						frame_system::Module::<T>::block_number(),
-						account_id,
-						amount,
-					))
-					// .longevity(TryInto::<u64>::try_into(
-					// 	T::SessionDuration::get() / 2u32.into()
-					// ).unwrap_or(64_u64))
-					.propagate(true)
-					.build()
-			} else {
-				InvalidTransaction::Call.into()
-			}
-		}
 	}
 }
 

@@ -354,8 +354,6 @@ impl pallet_cf_staking::Config for Runtime {
 
 	type EthereumCrypto = ecdsa::Public;
 
-	type UnsignedPriority = UnsignedPriority;
-
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
 
 	type Witnesser = pallet_cf_witness::Pallet<Runtime>;
