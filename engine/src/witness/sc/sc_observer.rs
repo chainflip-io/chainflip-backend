@@ -42,37 +42,35 @@ async fn create_subxt_client() -> Result<Client<StateChainRuntime>> {
 async fn subscribe_to_events<M: 'static + IMQClient + Send + Sync>(mq_client: Arc<Mutex<M>>) {
     let mq_c = mq_client.clone();
 
-    loop {
-        let mq_c = mq_c.clone();
-        tokio::spawn(async move {
-            let client = create_subxt_client().await.unwrap();
+    let mq_c = mq_c.clone();
+    tokio::spawn(async move {
+        let client = create_subxt_client().await.unwrap();
 
-            let client = client.clone();
-            let sub = client.subscribe_finalized_events().await.unwrap();
-            let decoder = client.events_decoder();
-            let mut sub = EventSubscription::new(sub, decoder);
+        let client = client.clone();
+        let sub = client.subscribe_finalized_events().await.unwrap();
+        let decoder = client.events_decoder();
+        let mut sub = EventSubscription::new(sub, decoder);
 
-            loop {
-                let raw_event = sub.next().await.unwrap().unwrap();
-                println!("Raw event:\n{:#?}", raw_event);
+        loop {
+            let raw_event = sub.next().await.unwrap().unwrap();
+            println!("Raw event:\n{:#?}", raw_event);
 
-                let subject: Option<Subject> = subject_from_raw_event(&raw_event);
+            let subject: Option<Subject> = subject_from_raw_event(&raw_event);
 
-                if let Some(subject) = subject {
-                    mq_c.lock()
-                        .await
-                        .publish(subject, &raw_event.data)
-                        .await
-                        .unwrap();
-                } else {
-                    println!(
-                        "Unable to resolve event: {:#?} to a known event type",
-                        raw_event
-                    )
-                }
+            if let Some(subject) = subject {
+                mq_c.lock()
+                    .await
+                    .publish(subject, &raw_event.data)
+                    .await
+                    .unwrap();
+            } else {
+                println!(
+                    "Unable to resolve event: {:#?} to a known event type",
+                    raw_event
+                )
             }
-        });
-    }
+        }
+    });
 }
 
 /// Returns the subject to publish the data of a raw event to
