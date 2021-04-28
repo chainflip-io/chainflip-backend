@@ -232,25 +232,25 @@ pub mod pallet {
 			address: T::EthereumAddress,
 			signature: <T::EthereumCrypto as RuntimePublic>::Signature,
 		) -> DispatchResultWithPostInfo {
-			ensure_none(origin)?;
-
-			// TODO: Verify the signature
-			// Should we do this here or in the implementation of ValidateUnsigned?
-			// We need to be careful since verification is expensive and therefore a potential DOS vector.
-			// 
-			// For now, assume signature is valid and proceed.
+			// TODO: we should check more than just "is this a valid account" - see clubhouse stories 471 and 473
+			let who = ensure_signed(origin)?;
 
 			let _ = PendingClaims::<T>::mutate_exists(&account_id, |maybe_claim| {
 				match maybe_claim.as_mut() {
 					Some(claim) => {
-						claim.signature = Some(signature.clone());
-						Ok(())
+						match claim.signature {
+							Some(_) => Err(Error::<T>::SignatureAlreadyIssued),
+							None => {
+								claim.signature = Some(signature.clone());
+								Ok(())
+							},
+						}
 					},
 					None => Err(Error::<T>::NoPendingClaim)
 				}
 			})?;
 
-			Self::deposit_event(Event::ClaimSignatureIssued(amount, nonce, address, signature));
+			Self::deposit_event(Event::ClaimSignatureIssued(who, amount, nonce, address, signature));
 
 			Ok(().into())
 		}
@@ -272,8 +272,8 @@ pub mod pallet {
 		/// A claim request has been made to provided Ethereum address. [address, nonce, amount]
 		ClaimSigRequested(T::EthereumAddress, T::Nonce, T::StakedAmount),
 
-		/// A claim signature has been issued by the signer module. [amount, nonce, address, signature]
-		ClaimSignatureIssued(T::StakedAmount, T::Nonce, T::EthereumAddress, <T::EthereumCrypto as RuntimePublic>::Signature)
+		/// A claim signature has been issued by the signer module. [issuer, amount, nonce, address, signature]
+		ClaimSignatureIssued(AccountId<T>, T::StakedAmount, T::Nonce, T::EthereumAddress, <T::EthereumCrypto as RuntimePublic>::Signature)
 	}
 
 	#[pallet::error]
@@ -298,6 +298,9 @@ pub mod pallet {
 
 		/// Stake amount caused overflow on addition. Should never happen.
 		StakeOverflow,
+
+		/// Some account tried to post a signature to the 
+		SignatureAlreadyIssued,
 	}
 }
 
