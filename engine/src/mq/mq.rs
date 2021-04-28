@@ -18,7 +18,11 @@ pub trait IMQClient {
     async fn connect(opts: Options) -> Result<Box<Self>>;
 
     /// Publish something to a particular subject
-    async fn publish<M: Serialize + Sync>(&self, subject: Subject, message: &'_ M) -> Result<()>;
+    async fn publish<M: 'static + Serialize + Sync>(
+        &self,
+        subject: Subject,
+        message: &'_ M,
+    ) -> Result<()>;
 
     /// Subscribe to a subject
     async fn subscribe<M: DeserializeOwned>(

@@ -8,7 +8,7 @@ use substrate_subxt::{
     extrinsic::DefaultExtra,
     register_default_type_sizes,
     sp_core::Decode,
-    Client, ClientBuilder, EventSubscription,
+    Client, ClientBuilder, EventSubscription, RawEvent,
 };
 
 use tokio::sync::Mutex;
@@ -59,54 +59,80 @@ async fn subscribe_to_events<M: 'static + IMQClient + Send + Sync>(mq_client: Ar
     // TODO: subscribe_events -> finalised events
 
     // ===== DataAddedEvents - for easy testing ====
+    let client = client.clone();
     let sub = client.subscribe_events().await.unwrap();
     let decoder = client.events_decoder();
     let mut sub = EventSubscription::new(sub, decoder);
-    sub.filter_event::<DataAddedEvent<_>>();
+    // data_added_sub.filter_event::<DataAddedEvent<_>>();
 
     // SigClaimRequested
-    // let sig_claim_requested_events = client.subscribe_finalized_events().await.unwrap();
-    // let decoder_more = client.events_decoder();
+    // let client_2 = client.clone();
+    // let sig_claim_requested_events = client_2.subscribe_finalized_events().await.unwrap();
+    // let decoder_more = client_2.events_decoder();
     // let mut sig_claim_requested_events =
     //     EventSubscription::new(sig_claim_requested_events, decoder_more);
     // sig_claim_requested_events.filter_event::<ClaimSigRequested<_>>();
 
     // TOOD: Spawn a thread. For each? or for all subscriptions? atm I think the latter, not much to gain for extra threads here
-    let mq_c = mq_client.clone();
-    tokio::spawn(async move {
-        // let raw = sub.next().await.unwrap().unwrap();
-        // println!("Raw event:\n{:#?}", raw);
 
-        let mq_c = mq_c
-            .lock()
-            .await
-            .publish(Subject::Claim, &"hello".to_string())
-            .await
-            .unwrap();
+    loop {
+        let raw_event = sub.next().await.unwrap().unwrap();
+        // let raw_sig_claim_requested = sig_claim_requested_events.next().await.unwrap().unwrap();
+        let mq_c = mq_client.clone();
 
-        // mq_c.publish(
-        //     Subject::Claim,
-        //     &"THIS WILL BE SERIALIZED MUHHAAHAHAH".to_string(),
-        // )
-        // .await
-        // .unwrap();
+        tokio::spawn(async move {
+            println!("Raw event:\n{:#?}", raw_event);
 
-        //     // let event = DataAddedEvent::<StateChainRuntime>::decode(&mut &raw.data[..]).unwrap();
-        //     // println!(
-        //     //     "The sender of this data is: {} and they sent: '{:?}'",
-        //     //     event.who,
-        //     //     String::from_utf8(event.clone().data),
-        //     // );
+            let subject: Option<Subject> = subject_from_raw_event(&raw_event);
 
-        //     println!("Adding event: {:#?} to the message queue", "Event");
+            // Have some example consumer somewhere, of how to do this, but I think the raw bytes should be sent straight to the message queue
+            // why serialize / deserialize when we can just decode?
+            // let event =
+            //     DataAddedEvent::<StateChainRuntime>::decode(&mut &raw_data_added.data[..]).unwrap();
 
-        //     // Sig claim request
-        //     // let raw = sig_claim_requested_events.next().await.unwrap().unwrap();
-        //     // println!("the raw event is: {:#?}", raw);
-        //     // let event = ClaimSigRequested::<StateChainRuntime>::decode(&mut &raw.data[..]).unwrap();
-        //     // mq_c.publish(Subject::Claim, &event).await.unwrap();
-        //     // println!("The sender is {:#?}", event.who);
-    });
+            if let Some(subject) = subject {
+                mq_c.lock()
+                    .await
+                    .publish(subject, &raw_event.data)
+                    .await
+                    .unwrap();
+            } else {
+                println!(
+                    "Unable to resolve event: {:#?} to a known event type",
+                    raw_event
+                )
+            }
+
+            // Sig claim request
+            // let raw = sig_claim_requested_events.next().await.unwrap().unwrap();
+            // println!("the raw event is: {:#?}", raw);
+            // let event = ClaimSigRequested::<StateChainRuntime>::decode(&mut &raw.data[..]).unwrap();
+            // mq_c.lock()
+            //     .await
+            //     .publish(Subject::Claim, &event)
+            //     .await
+            //     .unwrap();
+            // println!("The sender is {:#?}", event.who);
+
+            //     println!("Adding event: {:#?} to the message queue", "Event");
+        });
+    }
+}
+
+fn subject_from_raw_event(event: &RawEvent) -> Option<Subject> {
+    let subject = match event.module.as_str() {
+        "System" => None,
+        "Transactions" => match event.variant.as_str() {
+            "DataAdded" => Some(Subject::Claim),
+            _ => None,
+        },
+        "Staking" => match event.variant.as_str() {
+            "ClaimSigRequested" => Some(Subject::Claim),
+            _ => None,
+        },
+        _ => None,
+    };
+    subject
 }
 
 #[cfg(test)]

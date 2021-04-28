@@ -40,7 +40,7 @@ impl MockMQ {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl IMQClient for MockMQ {
     /// This should never really be called by testing functions, instead tests should use
     /// MockMQ::new()
@@ -49,7 +49,7 @@ impl IMQClient for MockMQ {
         Ok(Box::new(MockMQ { conn }))
     }
 
-    async fn publish<M: serde::Serialize>(
+    async fn publish<M: 'static + serde::Serialize + Sync>(
         &self,
         subject: super::Subject,
         message: &'_ M,
