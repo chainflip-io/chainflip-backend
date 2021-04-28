@@ -29,7 +29,3 @@ chainflip-engine/config/**/local.toml
 .idea
 
 **/debug/
-
-# Terraform
-../chainflip-infrastructure/projects/.terraform/**/.terraform
-../chainflip-infrastructure/projects/.terraform/secrets.tf
