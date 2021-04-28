@@ -215,6 +215,12 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		is_authority: role.is_network_authority(),
 	};
 
+	let p2p = cf_p2p::run_bridge((), network.clone());
+	task_manager.spawn_essential_handle().spawn_blocking(
+		"cf-p2p",
+		p2p?
+	);
+
 	if enable_grandpa {
 		// start the full GRANDPA voter
 		// NOTE: non-authorities could run the GRANDPA observer protocol, but at
