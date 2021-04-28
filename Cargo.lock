@@ -4344,7 +4344,7 @@ dependencies = [
  "frame-system",
  "pallet-session",
  "parity-scale-codec 2.0.1",
- "serde 1.0.124",
+ "serde",
  "sp-core",
  "sp-io",
  "sp-runtime",
