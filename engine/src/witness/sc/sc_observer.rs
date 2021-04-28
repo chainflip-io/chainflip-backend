@@ -58,18 +58,9 @@ async fn subscribe_to_events<M: 'static + IMQClient + Send + Sync>(mq_client: Ar
 
     // ===== DataAddedEvents - for easy testing ====
     let client = client.clone();
-    let sub = client.subscribe_events().await.unwrap();
+    let sub = client.subscribe_finalized_events().await.unwrap();
     let decoder = client.events_decoder();
     let mut sub = EventSubscription::new(sub, decoder);
-    // data_added_sub.filter_event::<DataAddedEvent<_>>();
-
-    // SigClaimRequested
-    // let client_2 = client.clone();
-    // let sig_claim_requested_events = client_2.subscribe_finalized_events().await.unwrap();
-    // let decoder_more = client_2.events_decoder();
-    // let mut sig_claim_requested_events =
-    //     EventSubscription::new(sig_claim_requested_events, decoder_more);
-    // sig_claim_requested_events.filter_event::<ClaimSigRequested<_>>();
 
     // TOOD: Spawn a thread. For each? or for all subscriptions? atm I think the latter, not much to gain for extra threads here
 
@@ -100,19 +91,6 @@ async fn subscribe_to_events<M: 'static + IMQClient + Send + Sync>(mq_client: Ar
                     raw_event
                 )
             }
-
-            // Sig claim request
-            // let raw = sig_claim_requested_events.next().await.unwrap().unwrap();
-            // println!("the raw event is: {:#?}", raw);
-            // let event = ClaimSigRequested::<StateChainRuntime>::decode(&mut &raw.data[..]).unwrap();
-            // mq_c.lock()
-            //     .await
-            //     .publish(Subject::Claim, &event)
-            //     .await
-            //     .unwrap();
-            // println!("The sender is {:#?}", event.who);
-
-            //     println!("Adding event: {:#?} to the message queue", "Event");
         });
     }
 }
