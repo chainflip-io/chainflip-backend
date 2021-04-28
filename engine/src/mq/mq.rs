@@ -39,7 +39,7 @@ pub fn pin_message_stream<M>(stream: Box<dyn Stream<Item = M>>) -> Pin<Box<dyn S
     stream.into()
 }
 /// Subjects that can be published / subscribed to
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Subject {
     Witness(Coin),
     Quote(Coin),

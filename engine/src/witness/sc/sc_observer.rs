@@ -134,6 +134,30 @@ mod tests {
         start(test_mq_client).await;
     }
 
+    #[test]
+    fn subject_from_raw_event_test() {
+        // test success case
+        let raw_event = substrate_subxt::RawEvent {
+            // Module and variant are defined by the state chain node
+            module: "Staking".to_string(),
+            variant: "ClaimSigRequested".to_string(),
+            data: "Test data".as_bytes().to_owned(),
+        };
+
+        let subject = subject_from_raw_event(&raw_event);
+        assert_eq!(subject, Some(Subject::Claim));
+
+        // test "fail" case
+        let raw_event_invalid = substrate_subxt::RawEvent {
+            // Module and variant are defined by the state chain node
+            module: "NotAModule".to_string(),
+            variant: "NotAVariant".to_string(),
+            data: "Test data".as_bytes().to_owned(),
+        };
+        let subject = subject_from_raw_event(&raw_event_invalid);
+        assert_eq!(subject, None);
+    }
+
     // TODO: Test decodinng of each of the custom events using some raw data
 }
 
