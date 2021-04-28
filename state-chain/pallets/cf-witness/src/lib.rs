@@ -219,12 +219,12 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: pallet::Config> cf_traits::Witnesser for Pallet<T> {
-    type AccountId = T::ValidatorId;
-    type Call = <T as pallet::Config>::Call;
+	type AccountId = T::ValidatorId;
+	type Call = <T as pallet::Config>::Call;
 
-    fn witness(who: Self::AccountId, call: Self::Call) -> DispatchResultWithPostInfo {
-        Self::do_witness(who.into(), call)
-    }
+	fn witness(who: Self::AccountId, call: Self::Call) -> DispatchResultWithPostInfo {
+		Self::do_witness(who.into(), call)
+	}
 }
 
 /// Simple struct on which to implement EnsureOrigin for our pallet's custom origin type. 
