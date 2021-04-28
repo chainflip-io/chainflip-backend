@@ -127,7 +127,7 @@ pub mod pallet {
 			} else {
 				// Account doesn't exist.
 				debug::info!("Unknown staking account id {:?}, proceeding to refund.", account_id);
-				Self::deposit_event(Event::Refund(amount, refund_address));
+				Self::deposit_event(Event::StakeRefund(account_id, amount, refund_address));
 			}
 			
 			Ok(().into())
@@ -263,8 +263,8 @@ pub mod pallet {
 		/// A validator has claimed their FLIP on the Ethereum chain. [validator_id, claimed_amount]
 		Claimed(AccountId<T>, T::StakedAmount),
 
-		/// The staked amount should be refunded to the provided Ethereum address. [refund_amount, address]
-		Refund(T::StakedAmount, T::EthereumAddress),
+		/// The staked amount should be refunded to the provided Ethereum address. [node_id, refund_amount, address]
+		StakeRefund(AccountId<T>, T::StakedAmount, T::EthereumAddress),
 
 		/// A claim request has been made to provided Ethereum address. [who, address, nonce, amount]
 		ClaimSigRequested(AccountId<T>, T::EthereumAddress, T::Nonce, T::StakedAmount),
