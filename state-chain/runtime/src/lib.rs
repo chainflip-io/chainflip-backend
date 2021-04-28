@@ -18,6 +18,7 @@ use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthority
 use pallet_grandpa::fg_primitives;
 use pallet_session::historical as session_historical;
 pub use pallet_timestamp::Call as TimestampCall;
+pub use pallet_balances::Call as BalancesCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{OpaqueMetadata, crypto::KeyTypeId, ecdsa};
@@ -58,6 +59,9 @@ pub type AccountIndex = u32;
 
 /// Index of a transaction in the chain.
 pub type Index = u32;
+
+/// Balance of an account.
+pub type Balance = u128;
 
 /// A hash of some data used by the chain.
 pub type Hash = sp_core::H256;
@@ -125,8 +129,20 @@ pub fn native_version() -> NativeVersion {
     }
 }
 
+// FIXME: These would be changed
+parameter_types! {
+	pub const MinEpoch: BlockNumber = 1;
+	pub const MinValidatorSetSize: u64 = 2;
+}
+
 impl pallet_cf_validator::Config for Runtime {
     type Event = Event;
+    type MinEpoch = MinEpoch;
+    type MinValidatorSetSize = MinValidatorSetSize;
+    type ValidatorId = <Self as frame_system::Config>::AccountId;
+    type Stake = u64;
+    type CandidateProvider = ();
+    type ValidatorHandler = ();
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime where
@@ -211,7 +227,7 @@ impl frame_system::Config for Runtime {
     /// What to do if an account is fully reaped from the system.
     type OnKilledAccount = ();
     /// The data to be stored in an account.
-    type AccountData = ();
+    type AccountData = pallet_balances::AccountData<Balance>;
     /// Weight information for the extrinsics of this pallet.
     type SystemWeightInfo = ();
     /// This is used as an identifier of the chain. 42 is the generic substrate prefix.
@@ -246,8 +262,21 @@ impl pallet_grandpa::Config for Runtime {
     type WeightInfo = ();
 }
 
-impl pallet_cf_transactions::Config for Runtime {
-    type Event = Event;
+parameter_types! {
+	pub const ExistentialDeposit: u128 = 500;
+	pub const MaxLocks: u32 = 50;
+}
+
+impl pallet_balances::Config for Runtime {
+	type MaxLocks = MaxLocks;
+	/// The type for recording an account's balance.
+	type Balance = Balance;
+	/// The ubiquitous event type.
+	type Event = Event;
+	type DustRemoval = ();
+	type ExistentialDeposit = ExistentialDeposit;
+	type AccountStore = System;
+	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
 }
 
 // impl pallet_cf_staking::Config for Runtime {
@@ -266,12 +295,6 @@ impl pallet_offences::Config for Runtime {
     type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
     type OnOffenceHandler = ();
     type WeightSoftLimit = OffencesWeightSoftLimit;
-}
-
-impl witness_fetch::Config for Runtime {
-    type Call = Call;
-    type Event = Event;
-    type AuthorityId = witness_fetch::crypto::AuthorityId;
 }
 
 parameter_types! {
@@ -338,11 +361,6 @@ impl pallet_cf_staking::Config for Runtime {
     type Witnesser = pallet_cf_witness::Pallet<Runtime>;
 }
 
-parameter_types! {
-    pub const ExistentialDeposit: u128 = 0;
-    pub const MaxLocks: u32 = 50;
-}
-
 construct_runtime!(
     pub enum Runtime where
         Block = Block,
@@ -352,6 +370,7 @@ construct_runtime!(
         System: frame_system::{Module, Call, Config, Storage, Event<T>},
         RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
         Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
+        Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
         Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
         Historical: session_historical::{Module},
         Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
@@ -360,8 +379,6 @@ construct_runtime!(
         Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
         Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
         Offences: pallet_offences::{Module, Call, Storage, Event},
-        Transactions: pallet_cf_transactions::{Module, Call, Event<T>},
-        WitnessFetcher: witness_fetch::{Module, Call, Event<T>, ValidateUnsigned},
         Witness: pallet_cf_witness::{Module, Call, Event<T>, Origin},
         StakeManager: pallet_cf_staking::{Module, Call, Event<T>},
     }

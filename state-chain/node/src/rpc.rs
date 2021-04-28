@@ -35,5 +35,13 @@ pub fn create_full<C, P>(
 	C::Api: BlockBuilder<Block>,
 	P: TransactionPool + 'static,
 {
-	jsonrpc_core::IoHandler::default()
+
+	let io = jsonrpc_core::IoHandler::default();
+	let FullDeps {
+		client: _,
+	 	pool: _,
+	 	deny_unsafe: _,
+	} = deps;
+
+	io
 }

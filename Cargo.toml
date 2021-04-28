@@ -4,7 +4,9 @@ panic = 'unwind'
 [workspace]
 members = [
   'state-chain/node',
-  'state-chain/pallets/*',
+  'state-chain/pallets/cf-core',
+  'state-chain/pallets/cf-staking',
+  'state-chain/pallets/cf-validator',
   'state-chain/runtime',
   'state-chain/traits',
   'common',

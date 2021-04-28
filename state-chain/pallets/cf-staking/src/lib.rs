@@ -39,9 +39,8 @@ pub mod pallet {
 
 		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
 		type Call: From<Call<Self>> + IsType<<Self as frame_system::Config>::Call>;
-	
-		/// Numeric type based on the `Balance` type from `Currency` trait. Defined inline for now, but we
-		/// might want to consider using the `Balances` pallet in future.
+
+		/// Numeric type denomination for the staked asset.
 		type StakedAmount: Member
 			+ FullCodec
 			+ Copy
@@ -61,7 +60,7 @@ pub mod pallet {
 			+ AtLeast32BitUnsigned
 			+ MaybeSerializeDeserialize
 			+ CheckedSub;
-		
+
 		/// A type representing ethereum cryptographic primitives.
 		type EthereumCrypto: Member + FullCodec + RuntimePublic;
 
