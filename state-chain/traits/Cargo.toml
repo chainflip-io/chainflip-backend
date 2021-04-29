@@ -14,7 +14,7 @@ frame-system = { default-features = false, version = '3.0.0' }
 [features]
 default = ['std']
 std = [
-	'sp-std/std',
+    'sp-std/std',
     'frame-support/std',
     'frame-system/std',
 ]
