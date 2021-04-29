@@ -80,7 +80,7 @@ pub const DEIRDRE: <Test as frame_system::Config>::AccountId = 987u64;
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext : sp_io::TestExternalities = system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
 
-	// Seed with two active validators and set the consensus threshold to two.
+	// Seed with three active validators and set the consensus threshold to two.
 	ext.execute_with(|| {
 		pallet_cf_witness::ValidatorIndex::<Test>::insert(0, ALISSA, 0);
 		pallet_cf_witness::ValidatorIndex::<Test>::insert(0, BOBSON, 1);
