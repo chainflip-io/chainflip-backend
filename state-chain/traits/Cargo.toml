@@ -2,7 +2,7 @@
 name = "cf-traits"
 version = "0.1.0"
 edition = "2018"
-authors = ['Chainflip Devs <https://github.com/chainflip-io>']
+authors = ['Chainflip <https://chainflip.io>']
 description = "Common traits used in the Chainflip runtime"
 
 [dependencies]
