@@ -104,7 +104,7 @@ pub mod pallet {
 			amount: T::StakedAmount,
 			refund_address: T::EthereumAddress,
 		) -> DispatchResultWithPostInfo {
-			let who =  ensure_signed(origin)?;
+			let who = ensure_signed(origin)?;
 			let call = Call::staked(staker_account_id, amount, refund_address);
 
 			T::Witnesser::witness(who, call.into())?;
@@ -188,7 +188,7 @@ pub mod pallet {
 			account_id: AccountId<T>,
 			claimed_amount: T::StakedAmount,
 		) -> DispatchResultWithPostInfo {
-			let who =  ensure_signed(origin)?;
+			let who = ensure_signed(origin)?;
 			let call = Call::claimed(account_id, claimed_amount);
 
 			T::Witnesser::witness(who, call.into())?;
