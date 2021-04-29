@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::hash::Hash;
 use futures::{Stream, Future, StreamExt};
 use std::task::{Context, Poll};
 use std::pin::Pin;
@@ -7,7 +6,8 @@ use sc_network::{PeerId, Event, NetworkService, ExHashT};
 use sp_runtime::{traits::Block as BlockT};
 use sp_runtime::sp_std::sync::Arc;
 use std::borrow::Cow;
-
+use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
+use log::debug;
 pub type Message = Vec<u8>;
 
 pub trait Client {
@@ -26,6 +26,7 @@ struct StateMachine<C: Client, B: BlockT, H: ExHashT> {
     client: C,
     network: Arc<NetworkService<B, H>>,
     peers: HashMap<PeerId, ()>,
+    protocol: Cow<'static, str>,
 }
 
 impl<C, B, H> StateMachine<C, B, H>
@@ -34,11 +35,12 @@ impl<C, B, H> StateMachine<C, B, H>
         B: BlockT,
         H: ExHashT,
 {
-    pub fn new(client: C, network: Arc<NetworkService<B, H>>) -> Self {
+    pub fn new(client: C, network: Arc<NetworkService<B, H>>, protocol: &'static str) -> Self {
         StateMachine {
             client,
             network,
             peers: HashMap::new(),
+            protocol: protocol.into(),
         }
     }
 
@@ -58,20 +60,65 @@ impl<C, B, H> StateMachine<C, B, H>
         }
     }
 
-    pub fn send_message(&self, _peer_id: &PeerId, _data: Message) {
-        unimplemented!()
+    pub fn send_message(&mut self, peer_id: PeerId, message: Message) {
+        if self.peers.contains_key(&peer_id) {
+            self.network.write_notification(peer_id, self.protocol.clone(), message);
+        }
     }
 
     pub fn broadcast(&self, _data: Message) {
         unimplemented!()
     }
- }
+}
+
+struct OutgoingMessagesWorker {
+    rx: UnboundedReceiver<(Vec<PeerId>, Message)>,
+}
+
+struct Sender(UnboundedSender<(Vec<PeerId>, Message)>);
+
+impl Sender {
+    fn send(&self, peer_id: PeerId, message: Message) {
+        if let Err(e) = self.0.unbounded_send((vec![peer_id], message)) {
+            debug!("Failed to send message {:?}", e);
+        }
+    }
+}
+
+impl Unpin for OutgoingMessagesWorker {}
+
+impl OutgoingMessagesWorker {
+    fn new() -> (Self, UnboundedSender<(Vec<PeerId>, Message)>) {
+        let (tx, rx) = unbounded();
+        (OutgoingMessagesWorker {
+            rx,
+        }, tx)
+    }
+}
+
+impl Stream for OutgoingMessagesWorker {
+    type Item = (Vec<PeerId>, Message);
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = &mut *self;
+        match this.rx.poll_next_unpin(cx) {
+            Poll::Ready(None) => return Poll::Ready(None),
+            Poll::Ready(Some((to, message))) => {
+                return Poll::Ready(Some((to, message)));
+            }
+            Poll::Pending => {},
+        };
+        Poll::Pending
+    }
+}
 
 pub struct NetworkBridge<C: Client, B: BlockT, H: ExHashT> {
     network: Arc<NetworkService<B, H>>,
     state_machine: StateMachine<C, B, H>,
     network_event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
     protocol: Cow<'static, str>,
+    worker: OutgoingMessagesWorker,
+    sender: UnboundedSender<(Vec<PeerId>, Message)>
 }
 
 impl<C, B, H> NetworkBridge<C, B, H>
@@ -81,22 +128,27 @@ impl<C, B, H> NetworkBridge<C, B, H>
         H: ExHashT,
 {
     pub fn new(client: C, network: Arc<NetworkService<B, H>>) -> Self {
-        let state_machine = StateMachine::new(client, network.clone());
+        let state_machine = StateMachine::new(client, network.clone(), "chainflip-cf-p2p");
         let network_event_stream = Box::pin(network.event_stream("chainflip-cf-p2p"));
+        let (worker, sender) = OutgoingMessagesWorker::new();
         NetworkBridge {
             network: network.clone(),
             state_machine,
             network_event_stream,
             protocol: "chainflip-cf-p2p".into(),
+            worker,
+            sender,
         }
     }
 
-    pub fn send_message(&self, peer_id: &PeerId, data: Message) {
-        self.state_machine.send_message(peer_id, data);
+    pub fn send_message(&mut self, peer_id: PeerId, data: Message) {
+        if let Err(e) = self.sender.unbounded_send((vec![peer_id], data)) {
+            debug!("Failed to push message to channel {:?}", e);
+        }
     }
 
     pub fn broadcast(&self, data: Message) {
-        self.state_machine.broadcast(data);
+        todo!()
     }
 }
 
@@ -106,6 +158,7 @@ impl<C, B, H> Unpin for NetworkBridge<C, B, H>
         B: BlockT,
         H: ExHashT {}
 
+
 impl<C, B, H> Future for NetworkBridge<C, B, H>
     where
         C: Client,
@@ -114,8 +167,23 @@ impl<C, B, H> Future for NetworkBridge<C, B, H>
 {
     type Output = ();
 
+    // TODO return Result for poll
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         let this = &mut *self;
+        loop {
+            match this.worker.poll_next_unpin(cx) {
+                Poll::Ready(Some((peer_ids, message))) => {
+                    for peer_id in peer_ids {
+                        this.state_machine.send_message(peer_id, message.clone());
+                    }
+                },
+                // TODO Handle close of stream
+                Poll::Ready(None) => return Poll::Ready(
+                    ()
+                ),
+                Poll::Pending => break,
+            }
+        }
 
         loop {
             match this.network_event_stream.poll_next_unpin(cx) {
