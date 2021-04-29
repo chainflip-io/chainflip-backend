@@ -64,9 +64,6 @@ pub mod pallet {
 		/// A type representing ethereum cryptographic primitives.
 		type EthereumCrypto: Member + FullCodec + RuntimePublic;
 
-		/// Base priority of unsigned transactions.
-		type UnsignedPriority: Get<TransactionPriority>;
-
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 
 		type Witnesser: cf_traits::Witnesser<
@@ -130,7 +127,7 @@ pub mod pallet {
 			} else {
 				// Account doesn't exist.
 				debug::info!("Unknown staking account id {:?}, proceeding to refund.", account_id);
-				Self::deposit_event(Event::Refund(amount, refund_address));
+				Self::deposit_event(Event::StakeRefund(account_id, amount, refund_address));
 			}
 			
 			Ok(().into())
@@ -165,12 +162,9 @@ pub mod pallet {
 			});
 			
 			// Emit the event requesting that the CFE generate the claim voucher.
-			Self::deposit_event(Event::<T>::ClaimSigRequested(address, nonce, amount));
+			Self::deposit_event(Event::<T>::ClaimSigRequested(who.clone(), address, nonce, amount));
 
-			// Assume for now that the siging process is successful and simply insert this claim into
-			// the pending claims. 
-			//
-			// TODO: This should be inserted by the CFE signer process including a valid signature.
+			// Insert a pending claim without a signature.
 			PendingClaims::<T>::insert(&who, Claim {
 				amount,
 				nonce,
@@ -235,25 +229,25 @@ pub mod pallet {
 			address: T::EthereumAddress,
 			signature: <T::EthereumCrypto as RuntimePublic>::Signature,
 		) -> DispatchResultWithPostInfo {
-			ensure_none(origin)?;
-
-			// TODO: Verify the signature
-			// Should we do this here or in the implementation of ValidateUnsigned?
-			// We need to be careful since verification is expensive and therefore a potential DOS vector.
-			// 
-			// For now, assume signature is valid and proceed.
+			// TODO: we should check more than just "is this a valid account" - see clubhouse stories 471 and 473
+			let who = ensure_signed(origin)?;
 
 			let _ = PendingClaims::<T>::mutate_exists(&account_id, |maybe_claim| {
 				match maybe_claim.as_mut() {
 					Some(claim) => {
-						claim.signature = Some(signature.clone());
-						Ok(())
+						match claim.signature {
+							Some(_) => Err(Error::<T>::SignatureAlreadyIssued),
+							None => {
+								claim.signature = Some(signature.clone());
+								Ok(())
+							},
+						}
 					},
 					None => Err(Error::<T>::NoPendingClaim)
 				}
 			})?;
 
-			Self::deposit_event(Event::ClaimSignatureIssued(amount, nonce, address, signature));
+			Self::deposit_event(Event::ClaimSignatureIssued(who, amount, nonce, address, signature));
 
 			Ok(().into())
 		}
@@ -269,14 +263,14 @@ pub mod pallet {
 		/// A validator has claimed their FLIP on the Ethereum chain. [validator_id, claimed_amount]
 		Claimed(AccountId<T>, T::StakedAmount),
 
-		/// The staked amount should be refunded to the provided Ethereum address. [refund_amount, address]
-		Refund(T::StakedAmount, T::EthereumAddress),
+		/// The staked amount should be refunded to the provided Ethereum address. [node_id, refund_amount, address]
+		StakeRefund(AccountId<T>, T::StakedAmount, T::EthereumAddress),
 
-		/// A claim request has been made to provided Ethereum address. [address, nonce, amount]
-		ClaimSigRequested(T::EthereumAddress, T::Nonce, T::StakedAmount),
+		/// A claim request has been made to provided Ethereum address. [who, address, nonce, amount]
+		ClaimSigRequested(AccountId<T>, T::EthereumAddress, T::Nonce, T::StakedAmount),
 
-		/// A claim signature has been issued by the signer module. [amount, nonce, address, signature]
-		ClaimSignatureIssued(T::StakedAmount, T::Nonce, T::EthereumAddress, <T::EthereumCrypto as RuntimePublic>::Signature)
+		/// A claim signature has been issued by the signer module. [issuer, amount, nonce, address, signature]
+		ClaimSignatureIssued(AccountId<T>, T::StakedAmount, T::Nonce, T::EthereumAddress, <T::EthereumCrypto as RuntimePublic>::Signature)
 	}
 
 	#[pallet::error]
@@ -301,39 +295,9 @@ pub mod pallet {
 
 		/// Stake amount caused overflow on addition. Should never happen.
 		StakeOverflow,
-	}
 
-	#[pallet::validate_unsigned]
-	impl<T: Config> ValidateUnsigned for Pallet<T> {
-		type Call = Call<T>;
-
-		fn validate_unsigned(
-			source: TransactionSource,
-			call: &Self::Call
-		) -> TransactionValidity {
-			if let Call::post_claim_signature(account_id, amount, address, nonce, sig) = call {
-				
-				// TODO: Verify signature here.
-
-				ValidTransaction::with_tag_prefix("ClaimSig")
-					.priority(T::UnsignedPriority::get())
-					// `provides` are necessary for transaction validity so we need to include something. Since
-					// we have no `requires`, the only effect of this is to make sure only a single unsigned
-					// transaction with the below criteria will get into the transaction pool in a single block.
-					.and_provides((
-						frame_system::Module::<T>::block_number(),
-						account_id,
-						amount,
-					))
-					// .longevity(TryInto::<u64>::try_into(
-					// 	T::SessionDuration::get() / 2u32.into()
-					// ).unwrap_or(64_u64))
-					.propagate(true)
-					.build()
-			} else {
-				InvalidTransaction::Call.into()
-			}
-		}
+		/// Some account tried to post a signature to the 
+		SignatureAlreadyIssued,
 	}
 }
 

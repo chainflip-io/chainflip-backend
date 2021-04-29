@@ -34,7 +34,6 @@ use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify,
 };
 use sp_std::prelude::*;
-use sp_transaction_pool::TransactionPriority;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
@@ -279,13 +278,6 @@ impl pallet_balances::Config for Runtime {
 	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
 }
 
-// impl pallet_cf_staking::Config for Runtime {
-//     type Event = Event;
-
-//     // See comment in the pallet's trait definition - we may want to consider using the Balances pallet.
-//     type StakedAmount = u128;
-// }
-
 parameter_types! {
 	pub OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * BlockWeights::get().max_block;
 }
@@ -336,10 +328,6 @@ impl pallet_cf_witness::Config for Runtime {
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 }
 
-parameter_types! {
-	pub const UnsignedPriority: TransactionPriority = 0;
-}
-
 impl pallet_cf_staking::Config for Runtime {
 	type Event = Event;
 	type Call = Call;
@@ -353,8 +341,6 @@ impl pallet_cf_staking::Config for Runtime {
 	type Nonce = u64;
 
 	type EthereumCrypto = ecdsa::Public;
-
-	type UnsignedPriority = UnsignedPriority;
 
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
 
