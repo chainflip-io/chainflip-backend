@@ -7,8 +7,23 @@ use sp_runtime::{traits::Block as BlockT};
 use sp_runtime::sp_std::sync::Arc;
 use std::borrow::Cow;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
-use log::debug;
+use log::{debug};
+
 pub type Message = Vec<u8>;
+
+pub trait NetworkT : Clone {
+    fn write_notification(&self, who: PeerId, protocol: Cow<'static, str>, message: Vec<u8>);
+    fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>>;
+}
+
+impl<B: BlockT, H: ExHashT> NetworkT for Arc<NetworkService<B, H>> {
+    fn write_notification(&self, target: PeerId, protocol: Cow<'static, str>, message: Vec<u8>) {
+        NetworkService::write_notification(self, target, protocol, message)
+    }
+    fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
+        Box::pin(NetworkService::event_stream(self, "network-chainflip"))
+    }
+}
 
 pub trait Observer {
     fn new_peer(&self, peer_id: &PeerId);
@@ -17,25 +32,24 @@ pub trait Observer {
 }
 
 impl Observer for () {
-    fn new_peer(&self, peer_id: &PeerId) {}
-    fn disconnected(&self, peer_id: &PeerId) {}
-    fn received(&self, peer_id: &PeerId, messages: Message) {}
+    fn new_peer(&self, _peer_id: &PeerId) {}
+    fn disconnected(&self, _peer_id: &PeerId) {}
+    fn received(&self, _peer_id: &PeerId, _messages: Message) {}
 }
 
-struct StateMachine<O: Observer, B: BlockT, H: ExHashT> {
+struct StateMachine<O: Observer, N: NetworkT> {
     observer: O,
-    network: Arc<NetworkService<B, H>>,
+    network: N,
     peers: HashMap<PeerId, ()>,
     protocol: Cow<'static, str>,
 }
 
-impl<O, B, H> StateMachine<O, B, H>
+impl<O, N> StateMachine<O, N>
     where
         O: Observer,
-        B: BlockT,
-        H: ExHashT,
+        N: NetworkT,
 {
-    pub fn new(observer: O, network: Arc<NetworkService<B, H>>, protocol: &'static str) -> Self {
+    pub fn new(observer: O, network: N, protocol: Cow<'static, str>) -> Self {
         StateMachine {
             observer,
             network,
@@ -112,30 +126,29 @@ impl Stream for OutgoingMessagesWorker {
     }
 }
 
-pub struct NetworkBridge<O: Observer, B: BlockT, H: ExHashT> {
-    network: Arc<NetworkService<B, H>>,
-    state_machine: StateMachine<O, B, H>,
+pub struct NetworkBridge<O: Observer, N: NetworkT> {
+    network: N,
+    state_machine: StateMachine<O, N>,
     network_event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
     protocol: Cow<'static, str>,
     worker: OutgoingMessagesWorker,
     sender: UnboundedSender<(Vec<PeerId>, Message)>
 }
 
-impl<O, B, H> NetworkBridge<O, B, H>
+impl<O, N> NetworkBridge<O, N>
     where
         O: Observer,
-        B: BlockT,
-        H: ExHashT,
+        N: NetworkT,
 {
-    pub fn new(observer: O, network: Arc<NetworkService<B, H>>) -> Self {
-        let state_machine = StateMachine::new(observer, network.clone(), "chainflip-cf-p2p");
-        let network_event_stream = Box::pin(network.event_stream("chainflip-cf-p2p"));
+    pub fn new(observer: O, network: N, protocol: Cow<'static, str>) -> Self {
+        let state_machine = StateMachine::new(observer, network.clone(), protocol.clone());
+        let network_event_stream = Box::pin(network.event_stream());
         let (worker, sender) = OutgoingMessagesWorker::new();
         NetworkBridge {
             network: network.clone(),
             state_machine,
             network_event_stream,
-            protocol: "chainflip-cf-p2p".into(),
+            protocol: protocol.clone(),
             worker,
             sender,
         }
@@ -152,18 +165,16 @@ impl<O, B, H> NetworkBridge<O, B, H>
     }
 }
 
-impl<O, B, H> Unpin for NetworkBridge<O, B, H>
+impl<O, N> Unpin for NetworkBridge<O, N>
     where
         O: Observer,
-        B: BlockT,
-        H: ExHashT {}
+        N: NetworkT, {}
 
 
-impl<O, B, H> Future for NetworkBridge<O, B, H>
+impl<O, N> Future for NetworkBridge<O, N>
     where
         O: Observer,
-        B: BlockT,
-        H: ExHashT,
+        N: NetworkT,
 {
     type Output = ();
 
@@ -228,18 +239,120 @@ impl<O, B, H> Future for NetworkBridge<O, B, H>
     }
 }
 
-/// where's the bridge?
-pub fn run_bridge<C: Observer, B: BlockT, H: ExHashT>(client: C, network: Arc<NetworkService<B, H>>)
-                                                      -> impl Future<Output=()> {
+// where's the bridge?
+pub fn run_bridge<O: Observer, N: NetworkT>(client: O, network: N, protocol: Cow<'static, str>)
+    -> impl Future<Output=()> {
 
-    let network_bridge = NetworkBridge::new(client, network);
+    let network_bridge = NetworkBridge::<O, N>::new(client, network, protocol);
     network_bridge
 }
 
 #[cfg(test)]
 mod tests {
+    use futures::{channel::mpsc::{unbounded, UnboundedSender}, executor::{block_on}, future::poll_fn, FutureExt};
+    use futures::{Stream};
+    use sc_network::{PeerId, Event, ObservedRole};
+    use std::sync::{Arc, Mutex};
+    use super::*;
+
+    #[derive(Clone, Default)]
+    struct TestNetwork {
+        inner: Arc<Mutex<TestNetworkInner>>,
+    }
+
+    #[derive(Clone, Default)]
+    struct TestNetworkInner {
+        event_senders: Vec<UnboundedSender<Event>>,
+        last_notification: Option<(Vec<u8>, Vec<u8>)>,
+    }
+
+    impl NetworkT for TestNetwork {
+        fn write_notification(&self, who: PeerId, _protocol: Cow<'static, str>, message: Vec<u8>) {
+            self.inner.lock().unwrap().last_notification = Some((who.to_bytes(), message));
+        }
+
+        fn event_stream(&self) -> Pin<Box<dyn Stream<Item=Event> + Send>> {
+            let (tx, rx) = unbounded();
+            self.inner.lock().unwrap().event_senders.push(tx);
+
+            Box::pin(rx)
+        }
+    }
+
+    #[derive(Clone, Default)]
+    struct TestObserver {
+        inner: Arc<Mutex<TestObserverInner>>
+    }
+
+    #[derive(Clone, Default)]
+    struct TestObserverInner(Option<Vec<u8>>,
+                             Option<Vec<u8>>,
+                             Option<(Vec<u8>, Vec<u8>)>);
+
+    impl Observer for TestObserver {
+        fn new_peer(&self, peer_id: &PeerId) {
+            self.inner.lock().unwrap().0 = Some(peer_id.to_bytes());
+        }
+
+        fn disconnected(&self, peer_id: &PeerId) {
+            self.inner.lock().unwrap().1 = Some(peer_id.to_bytes());
+        }
+
+        fn received(&self, peer_id: &PeerId, messages: Message) {
+            self.inner.lock().unwrap().2 = Some((peer_id.to_bytes(), messages));
+        }
+    }
+
     #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+    fn send_message_to_peer() {
+        let network = TestNetwork::default();
+        let protocol = Cow::Borrowed("/chainflip-protocol");
+        let observer = TestObserver::default();
+        let mut bridge = NetworkBridge::new(
+            observer.clone(),
+            network.clone(),
+            protocol.clone());
+
+        let peer = PeerId::random();
+
+        // Register peer
+        let mut event_sender = network.inner.lock()
+            .unwrap()
+            .event_senders
+            .pop()
+            .unwrap();
+
+        let msg = Event::NotificationStreamOpened {
+            remote: peer.clone(),
+            protocol: protocol.clone(),
+            role: ObservedRole::Authority,
+        };
+
+        event_sender.start_send(msg).expect("Event stream is unbounded");
+
+        block_on(poll_fn(|cx| {
+            let mut sent = false;
+            loop {
+                if let Poll::Ready(()) = bridge.poll_unpin(cx) {
+                    unreachable!("we should have a new network event");
+                }
+
+                let o = observer.inner.lock().unwrap();
+
+                if let Some(_) = &o.0  {
+                    if !sent {
+                        bridge.send_message(peer, b"this rocks".to_vec());
+                        sent = true;
+                    }
+
+                    if let Some(notification) = network.inner.lock()
+                        .unwrap().last_notification.as_ref() {
+                        assert_eq!(notification.clone(), (peer.to_bytes(), b"this rocks".to_vec()));
+                        break;
+                    }
+                }
+            }
+            Poll::Ready(())
+        }));
     }
 }
