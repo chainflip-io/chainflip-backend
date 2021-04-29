@@ -10,34 +10,34 @@ use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use log::debug;
 pub type Message = Vec<u8>;
 
-pub trait Client {
+pub trait Observer {
     fn new_peer(&self, peer_id: &PeerId);
     fn disconnected(&self, peer_id: &PeerId);
     fn received(&self, peer_id: &PeerId, messages: Message);
 }
 
-impl Client for () {
+impl Observer for () {
     fn new_peer(&self, peer_id: &PeerId) {}
     fn disconnected(&self, peer_id: &PeerId) {}
     fn received(&self, peer_id: &PeerId, messages: Message) {}
 }
 
-struct StateMachine<C: Client, B: BlockT, H: ExHashT> {
-    client: C,
+struct StateMachine<O: Observer, B: BlockT, H: ExHashT> {
+    observer: O,
     network: Arc<NetworkService<B, H>>,
     peers: HashMap<PeerId, ()>,
     protocol: Cow<'static, str>,
 }
 
-impl<C, B, H> StateMachine<C, B, H>
+impl<O, B, H> StateMachine<O, B, H>
     where
-        C: Client,
+        O: Observer,
         B: BlockT,
         H: ExHashT,
 {
-    pub fn new(client: C, network: Arc<NetworkService<B, H>>, protocol: &'static str) -> Self {
+    pub fn new(observer: O, network: Arc<NetworkService<B, H>>, protocol: &'static str) -> Self {
         StateMachine {
-            client,
+            observer,
             network,
             peers: HashMap::new(),
             protocol: protocol.into(),
@@ -46,17 +46,17 @@ impl<C, B, H> StateMachine<C, B, H>
 
     pub fn new_peer(&mut self, peer_id: &PeerId) {
         self.peers.insert(peer_id.clone(), ());
-        self.client.new_peer(peer_id);
+        self.observer.new_peer(peer_id);
     }
 
     pub fn disconnected(&mut self, peer_id: &PeerId) {
         self.peers.remove(peer_id);
-        self.client.disconnected(peer_id);
+        self.observer.disconnected(peer_id);
     }
 
     pub fn received(&self, peer_id: &PeerId, messages: Vec<Message>) {
         for message in messages {
-            self.client.received(peer_id, message);
+            self.observer.received(peer_id, message);
         }
     }
 
@@ -112,23 +112,23 @@ impl Stream for OutgoingMessagesWorker {
     }
 }
 
-pub struct NetworkBridge<C: Client, B: BlockT, H: ExHashT> {
+pub struct NetworkBridge<O: Observer, B: BlockT, H: ExHashT> {
     network: Arc<NetworkService<B, H>>,
-    state_machine: StateMachine<C, B, H>,
+    state_machine: StateMachine<O, B, H>,
     network_event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
     protocol: Cow<'static, str>,
     worker: OutgoingMessagesWorker,
     sender: UnboundedSender<(Vec<PeerId>, Message)>
 }
 
-impl<C, B, H> NetworkBridge<C, B, H>
+impl<O, B, H> NetworkBridge<O, B, H>
     where
-        C: Client,
+        O: Observer,
         B: BlockT,
         H: ExHashT,
 {
-    pub fn new(client: C, network: Arc<NetworkService<B, H>>) -> Self {
-        let state_machine = StateMachine::new(client, network.clone(), "chainflip-cf-p2p");
+    pub fn new(observer: O, network: Arc<NetworkService<B, H>>) -> Self {
+        let state_machine = StateMachine::new(observer, network.clone(), "chainflip-cf-p2p");
         let network_event_stream = Box::pin(network.event_stream("chainflip-cf-p2p"));
         let (worker, sender) = OutgoingMessagesWorker::new();
         NetworkBridge {
@@ -152,16 +152,16 @@ impl<C, B, H> NetworkBridge<C, B, H>
     }
 }
 
-impl<C, B, H> Unpin for NetworkBridge<C, B, H>
+impl<O, B, H> Unpin for NetworkBridge<O, B, H>
     where
-        C: Client,
+        O: Observer,
         B: BlockT,
         H: ExHashT {}
 
 
-impl<C, B, H> Future for NetworkBridge<C, B, H>
+impl<O, B, H> Future for NetworkBridge<O, B, H>
     where
-        C: Client,
+        O: Observer,
         B: BlockT,
         H: ExHashT,
 {
@@ -229,8 +229,8 @@ impl<C, B, H> Future for NetworkBridge<C, B, H>
 }
 
 /// where's the bridge?
-pub fn run_bridge<C: Client, B: BlockT, H: ExHashT>(client: C, network: Arc<NetworkService<B, H>>)
-    -> impl Future<Output=()> {
+pub fn run_bridge<C: Observer, B: BlockT, H: ExHashT>(client: C, network: Arc<NetworkService<B, H>>)
+                                                      -> impl Future<Output=()> {
 
     let network_bridge = NetworkBridge::new(client, network);
     network_bridge
