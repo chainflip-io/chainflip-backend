@@ -37,6 +37,7 @@ use sp_std::prelude::*;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
+use sp_transaction_pool::TransactionPriority;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
