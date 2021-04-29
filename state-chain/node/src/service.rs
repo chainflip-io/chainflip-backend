@@ -11,6 +11,7 @@ pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use sc_finality_grandpa::SharedVoterState;
 use sc_keystore::LocalKeystore;
+use std::borrow::Cow;
 
 // Our native executor instance.
 native_executor_instance!(
@@ -135,6 +136,11 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
 
+	let observer = cf_p2p::DeafObserver;
+
+	let p2p = cf_p2p::NetworkBridge::new(observer, network.clone(), Cow::Borrowed("/chainflip-protocol"));
+	let communications = p2p.communication.clone();
+
 	let rpc_extensions_builder = {
 		let client = client.clone();
 		let pool = transaction_pool.clone();
@@ -144,6 +150,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 				client: client.clone(),
 				pool: pool.clone(),
 				deny_unsafe,
+				communications: communications.clone(),
 			};
 
 			crate::rpc::create_full(deps)
@@ -215,10 +222,9 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		is_authority: role.is_network_authority(),
 	};
 
-	let p2p = cf_p2p::run_bridge((), network.clone());
 	task_manager.spawn_essential_handle().spawn_blocking(
 		"cf-p2p",
-		p2p?
+		p2p
 	);
 
 	if enable_grandpa {

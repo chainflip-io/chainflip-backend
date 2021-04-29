@@ -31,7 +31,8 @@ pub trait Observer {
     fn received(&self, peer_id: &PeerId, messages: Message);
 }
 
-impl Observer for () {
+pub struct DeafObserver;
+impl Observer for DeafObserver {
     fn new_peer(&self, _peer_id: &PeerId) {}
     fn disconnected(&self, _peer_id: &PeerId) {}
     fn received(&self, _peer_id: &PeerId, _messages: Message) {}
@@ -132,7 +133,8 @@ pub struct NetworkBridge<O: Observer, N: NetworkT> {
     network_event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
     protocol: Cow<'static, str>,
     worker: OutgoingMessagesWorker,
-    sender: UnboundedSender<(Vec<PeerId>, Message)>
+    sender: UnboundedSender<(Vec<PeerId>, Message)>,
+    pub communication: Arc<Interface>,
 }
 
 impl<O, N> NetworkBridge<O, N>
@@ -144,23 +146,34 @@ impl<O, N> NetworkBridge<O, N>
         let state_machine = StateMachine::new(observer, network.clone(), protocol.clone());
         let network_event_stream = Box::pin(network.event_stream());
         let (worker, sender) = OutgoingMessagesWorker::new();
+        let communication = Arc::new(Interface(sender.clone()));
         NetworkBridge {
             network: network.clone(),
             state_machine,
             network_event_stream,
             protocol: protocol.clone(),
             worker,
-            sender,
+            sender: sender.clone(),
+            communication,
         }
     }
+}
 
-    pub fn send_message(&mut self, peer_id: PeerId, data: Message) {
-        if let Err(e) = self.sender.unbounded_send((vec![peer_id], data)) {
+pub trait Communication {
+    fn send_message(&mut self, peer_id: PeerId, data: Message);
+    fn broadcast(&self, data: Message);
+}
+
+pub struct Interface(UnboundedSender<(Vec<PeerId>, Message)>);
+
+impl Communication for Interface {
+    fn send_message(&mut self, peer_id: PeerId, data: Message) {
+        if let Err(e) = self.0.unbounded_send((vec![peer_id], data)) {
             debug!("Failed to push message to channel {:?}", e);
         }
     }
 
-    pub fn broadcast(&self, data: Message) {
+    fn broadcast(&self, data: Message) {
         todo!()
     }
 }
@@ -237,14 +250,6 @@ impl<O, N> Future for NetworkBridge<O, N>
 
         Poll::Pending
     }
-}
-
-// where's the bridge?
-pub fn run_bridge<O: Observer, N: NetworkT>(client: O, network: N, protocol: Cow<'static, str>)
-    -> impl Future<Output=()> {
-
-    let network_bridge = NetworkBridge::<O, N>::new(client, network, protocol);
-    network_bridge
 }
 
 #[cfg(test)]

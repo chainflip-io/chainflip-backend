@@ -1,5 +1,7 @@
 use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
+use cf_p2p::Communication;
+use std::sync::Arc;
 
 #[rpc]
 pub trait RpcApi {
@@ -7,15 +9,18 @@ pub trait RpcApi {
     fn send(&self, peer_id: Option<String>) -> Result<u64>;
 }
 
-pub struct Rpc {}
+pub struct Rpc<C: Communication> {
+    communications: Arc<C>,
+}
 
-impl Rpc {
-    pub fn new() -> Self {
+impl<C: Communication> Rpc<C> {
+    pub fn new(communications: Arc<C>) -> Self {
         Rpc {
+            communications,
         }
     }
 }
-impl RpcApi for Rpc {
+impl<C: Communication + Sync + Send + 'static> RpcApi for Rpc<C> {
     fn send(&self, peer_id: Option<String>) -> Result<u64> {
         Ok(200)
     }

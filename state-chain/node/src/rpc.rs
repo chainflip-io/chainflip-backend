@@ -5,7 +5,7 @@
 
 #![warn(missing_docs)]
 
-use std::sync::Arc;
+use std::sync::{Arc};
 
 use state_chain_runtime::{opaque::Block};
 use sp_api::ProvideRuntimeApi;
@@ -16,24 +16,27 @@ use sp_transaction_pool::TransactionPool;
 
 
 /// Full client dependencies.
-pub struct FullDeps<C, P> {
+pub struct FullDeps<C, P, T> {
 	/// The client instance to use.
 	pub client: Arc<C>,
 	/// Transaction pool instance.
 	pub pool: Arc<P>,
 	/// Whether to deny unsafe calls
 	pub deny_unsafe: DenyUnsafe,
+	/// p2p
+	pub communications: Arc<T>
 }
 
 /// Instantiate all full RPC extensions.
-pub fn create_full<C, P>(
-	deps: FullDeps<C, P>,
+pub fn create_full<C, P, T>(
+	deps: FullDeps<C, P, T>,
 ) -> jsonrpc_core::IoHandler<sc_rpc::Metadata> where
 	C: ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block> + HeaderMetadata<Block, Error=BlockChainError> + 'static,
 	C: Send + Sync + 'static,
 	C::Api: BlockBuilder<Block>,
 	P: TransactionPool + 'static,
+	T: cf_p2p::Communication + Send + Sync + 'static,
 {
 
 	let mut io = jsonrpc_core::IoHandler::default();
@@ -41,10 +44,11 @@ pub fn create_full<C, P>(
 		client: _,
 	 	pool: _,
 	 	deny_unsafe: _,
+		communications
 	} = deps;
 
 	io.extend_with(cf_p2p_rpc::RpcApi::to_delegate(
-		cf_p2p_rpc::Rpc::new()
+		cf_p2p_rpc::Rpc::new(communications)
 	));
 
 	io
