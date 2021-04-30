@@ -7,10 +7,15 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+sc-rpc = "3.0.0"
 jsonrpc-core = '15.1.0'
 jsonrpc-core-client = '15.1'
 jsonrpc-derive = '15.1'
+jsonrpc-pubsub = "15.1.0"
 serde = {version = "1.0.125", features = ["derive"], optional = true}
 cf-p2p = { path = "../" }
 bs58 = "0.4.0"
 sc-network = "0.9.0"
+log = "0.4.14"
+futures = { version = "0.3.4", features = ["compat"] }
+
