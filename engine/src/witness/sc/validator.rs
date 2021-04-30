@@ -13,8 +13,6 @@ use substrate_subxt::{
     Event,
 };
 
-use state_chain_runtime::Event as SCEvent;
-
 #[module]
 pub trait Validator: System {}
 
@@ -28,10 +26,18 @@ pub struct MaximumValidatorsChangedEvent<V: Validator> {
     pub _phantom: PhantomData<V>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct EpochChangedEvent<V: Validator> {
     pub from: V::BlockNumber,
     pub to: V::BlockNumber,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct AuctionStartedEvent<V: Validator> {
+    // TODO:  Ideally we use V::EpochIndex here, however we do that
+    pub epoch_index: u32,
+
+    pub _phantom: PhantomData<V>,
 }
 
 // RawEvent {
@@ -46,14 +52,13 @@ mod tests {
     use substrate_subxt::RawEvent;
 
     use crate::witness::sc::runtime::StateChainRuntime;
+    use codec::Encode;
+    use state_chain_runtime::Runtime as SCRuntime;
 
     use super::*;
 
     #[test]
     fn epoch_changed_decoding() {
-        use codec::Encode;
-        use state_chain_runtime::Runtime as SCRuntime;
-
         let event: <SCRuntime as Config>::Event =
             pallet_cf_validator::Event::<SCRuntime>::EpochChanged(4, 10).into();
 
@@ -72,7 +77,23 @@ mod tests {
     #[test]
     fn auction_started_decoding() {
         // AuctionStarted(EpochIndex)
-        todo!()
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_validator::Event::<SCRuntime>::AuctionStarted(1).into();
+
+        let encoded_auction_started = event.encode();
+        // the first 2 bytes are (module_index, event_variant_index), these can be stripped
+        let encoded_auction_started = encoded_auction_started[2..].to_vec();
+
+        let decoded_event =
+            AuctionStartedEvent::<StateChainRuntime>::decode(&mut &encoded_auction_started[..])
+                .unwrap();
+
+        let expecting = AuctionStartedEvent {
+            epoch_index: 1,
+            _phantom: PhantomData,
+        };
+
+        assert_eq!(decoded_event, expecting);
     }
 
     #[test]

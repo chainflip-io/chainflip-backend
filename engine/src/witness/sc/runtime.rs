@@ -43,6 +43,8 @@ impl Runtime for StateChainRuntime {
 
         // Add any custom types here...
         event_type_registry.register_type_size::<<Self as System>::BlockNumber>("EpochIndex");
+
+        // This doesn't seem the correct way to do this, but it works :shrug:
         event_type_registry.register_type_size::<u32>("T::BlockNumber");
     }
 }
