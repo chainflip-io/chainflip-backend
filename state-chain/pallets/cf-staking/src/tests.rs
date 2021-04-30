@@ -155,3 +155,27 @@ fn sigature_is_inserted() {
 		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().signature, Some(sig));
 	});
 }
+
+#[test]
+fn witnessing_witnesses() {
+	new_test_ext().execute_with(|| {
+		WITNESS_THRESHOLD.with(|cell| {
+			let mut threshold = cell.borrow_mut();
+			*threshold = 2;
+		});
+
+		// Bob votes
+		assert_ok!(StakeManager::witness_staked(Origin::signed(BOB), ALICE, 123, ETH_DUMMY_ADDR));
+
+		// Should be one vote but not staked yet.
+		let count = WITNESS_VOTES.with(|cell| cell.borrow().len());
+		assert_eq!(count, 1);
+		assert_eq!(Stakes::<Test>::get(ALICE), 0);
+
+		// Bob votes again (the mock allows this)
+		assert_ok!(StakeManager::witness_staked(Origin::signed(BOB), ALICE, 123, ETH_DUMMY_ADDR));
+
+		// Alice should be staked since we set the threshold to 2.
+		assert_eq!(Stakes::<Test>::get(ALICE), 123);
+	});
+}
