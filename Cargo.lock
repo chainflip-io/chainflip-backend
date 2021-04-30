@@ -888,6 +888,7 @@ dependencies = [
  "futures-util",
  "hex",
  "nats_test_server",
+ "pallet-cf-validator",
  "parity-scale-codec 2.1.1",
  "serde",
  "serde_json",

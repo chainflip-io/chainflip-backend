@@ -1,3 +1,5 @@
+// TODO: Remove this, transaction pallet is now removed. This is staying just as a template while Kyle works on it :)
+// Also remove it from the runtime.rs
 // Implements support for the transactions module
 
 use chainflip_common::types::addresses::{Address, EthereumAddress};

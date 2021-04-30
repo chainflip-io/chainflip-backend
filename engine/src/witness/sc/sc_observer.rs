@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use chainflip_common::types::coin::Coin;
 use sp_keyring::AccountKeyring;
 use state_chain_runtime::{AccountId, System};
 use substrate_subxt::{Client, ClientBuilder, EventSubscription, RawEvent};
@@ -70,12 +71,13 @@ async fn subscribe_to_events<M: 'static + IMQClient + Send + Sync>(mq_client: Ar
 fn subject_from_raw_event(event: &RawEvent) -> Option<Subject> {
     let subject = match event.module.as_str() {
         "System" => None,
-        "Transactions" => match event.variant.as_str() {
-            "DataAdded" => Some(Subject::Claim),
-            _ => None,
-        },
         "Staking" => match event.variant.as_str() {
             "ClaimSigRequested" => Some(Subject::Claim),
+            // All Stake refunds are ETH, how are these refunds coming out though?
+            "StakeRefund" => Some(Subject::Batch(Coin::ETH)),
+            "ClaimSignatureIssued" => Some(Subject::Claim),
+            // This doesn't need to go anywhere, this is just a confirmation emitted perhaps for block explorers
+            "Claimed" => None,
             _ => None,
         },
         _ => None,
@@ -86,12 +88,15 @@ fn subject_from_raw_event(event: &RawEvent) -> Option<Subject> {
 #[cfg(test)]
 mod tests {
 
-    use std::marker::PhantomData;
+    use std::{marker::PhantomData, str::FromStr};
 
+    use chainflip_common::types::addresses::EthereumAddress;
+    use codec::Decode;
+    use hex::encode;
     use nats_test_server::NatsTestServer;
     use substrate_subxt::system::ExtrinsicSuccessEvent;
 
-    use crate::mq::mq_mock::MockMQ;
+    use crate::{mq::mq_mock::MockMQ, witness::sc::staking::Claim};
 
     use frame_support::weights::{DispatchClass, DispatchInfo, Pays};
 
@@ -153,5 +158,39 @@ mod tests {
         };
 
         assert_eq!(event, success_event);
+
+        let raw_event = RawEvent {
+            module: "Staking".to_string(),
+            variant: "ClaimSigRequested".to_string(),
+            data: hex::decode("482d7c09000000000200").unwrap(),
+        };
+
+        let event =
+            ClaimSigRequested::<StateChainRuntime>::decode(&mut &raw_event.data[..]).unwrap();
+
+        // pallet_cf_validator(crate::Event::MaximumValidatorsChanged(0, 2))
+
+        let claim_sig_requested: ClaimSigRequested<StateChainRuntime> = ClaimSigRequested {
+            who: AccountKeyring::Alice.to_account_id(),
+            amount: 123u128,
+            nonce: 123,
+            eth_account: "0x0000000000000000000000000000000000000000"
+                .as_bytes()
+                .to_vec(),
+        };
+
+        assert_eq!(event, claim_sig_requested);
+    }
+
+    #[test]
+    fn test_with_real_events() {
+        use codec::Encode;
+        use state_chain_runtime::Runtime as SCRuntime;
+
+        // pallet_cf_validator(crate::Event::MaximumValidatorsChanged(0, 2))
+        let event = pallet_cf_validator::Event::<SCRuntime>::MaximumValidatorsChanged(0, 2);
+        let event_hex = event.encode();
+
+        println!("Event hex is: {:#?}", event_hex);
     }
 }
