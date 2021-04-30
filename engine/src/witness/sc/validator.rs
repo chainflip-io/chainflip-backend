@@ -49,85 +49,47 @@ mod tests {
 
     use super::*;
 
-    // This test works
     #[test]
-    fn test_epoch_changed() {
-        let raw_event = RawEvent {
-            module: "Validator".to_string(),
-            variant: "EpochChanged".to_string(),
-            data: hex::decode("040000000a000000").unwrap(),
-        };
-
-        let event =
-            EpochChangedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..]).unwrap();
-
-        let epoch_changed_event = EpochChangedEvent::<StateChainRuntime> { from: 4, to: 10 };
-
-        println!("Here's the event: {:#?}", event);
-
-        assert_eq!(event, epoch_changed_event);
-    }
-
-    #[test]
-    fn epoch_encoding_working() {
+    fn epoch_changed_decoding() {
         use codec::Encode;
         use state_chain_runtime::Runtime as SCRuntime;
-        let hex_event_from_subxt = hex::decode("040000000a000000").unwrap();
-        println!("Hex event from subxt: {:#?}", hex_event_from_subxt);
 
-        let event =
-            EpochChangedEvent::<StateChainRuntime>::decode(&mut &hex_event_from_subxt[..]).unwrap();
-
-        println!("Event decoded into custom subxt struct: {:#?}", event);
-
-        let epoch_changed_evt = pallet_cf_validator::Event::<SCRuntime>::EpochChanged(4, 10);
         let event: <SCRuntime as Config>::Event =
             pallet_cf_validator::Event::<SCRuntime>::EpochChanged(4, 10).into();
 
-        println!("Epoch changed event: {:#?}", epoch_changed_evt);
         let encoded_epoch = event.encode();
-
-        // strip the module and variant from the front (subxt does this already, and puts the "module" and "variant" headers on for us)
+        // the first 2 bytes are (module_index, event_variant_index), these can be stripped
         let encoded_epoch = encoded_epoch[2..].to_vec();
-        println!("Encoded epoch: {:#?}", encoded_epoch);
 
         let decoded_event =
             EpochChangedEvent::<StateChainRuntime>::decode(&mut &encoded_epoch[..]).unwrap();
-        println!("Decoded event: {:#?}", decoded_event);
+
+        let expecting = EpochChangedEvent { from: 4, to: 10 };
+
+        assert_eq!(decoded_event, expecting);
     }
 
-    // #[test]
-    // fn test_with_real_events() {
-    //     use codec::{Decode, Encode};
-    //     use state_chain_runtime::Runtime as SCRuntime;
+    #[test]
+    fn auction_started_decoding() {
+        // AuctionStarted(EpochIndex)
+        todo!()
+    }
 
-    //     // pallet_cf_validator(crate::Event::MaximumValidatorsChanged(0, 2))
-    //     let event = SCEvent::pallet_cf_validator(
-    //         pallet_cf_validator::Event::<SCRuntime>::MaximumValidatorsChanged(0, 250),
-    //     );
+    #[test]
+    fn auction_ended_decoding() {
+        // AuctionEnded(EpochIndex)
+        todo!()
+    }
 
-    //     let event = pallet_cf_validator::Event::<SCRuntime>::MaximumValidatorsChanged(0, 250);
-    //     println!("Event: {:#?}", event);
+    #[test]
+    fn max_validators_changed_decoding() {
+        // MaximumValidatorsChangedDecoding(ValidatorSize, ValidatorSize)
+        todo!()
+    }
 
-    //     let raw_event = RawEvent {
-    //         module: "Hello".to_string(),
-    //         variant: "Goodbye".to_string(),
-    //         data: event.to_vec(),
-    //     };
-
-    //     let raw_bytes = hex::encode(&event);
-    //     println!("Event wrapped: {:#?}", evt);
-
-    // let event_encoded = hex::encode(event.into());
-    // println!("Event encoded: {:#?}", event_encoded);
-
-    // let decoded_event = MaximumValidatorsChanged::<StateChainRuntime>::decode(
-    //     &mut &event_encoded.as_bytes()[..],
-    // );
-
-    // assert!(decoded_event.is_ok());
-    // let decoded_event = decoded_event.unwrap();
-
-    // println!("Decoded event: {:#?}", decoded_event);
-    // }
+    #[test]
+    fn force_rotation_requested_decoding() {
+        // ForceRotationRequested()
+        todo!()
+    }
 }
