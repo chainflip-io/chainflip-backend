@@ -13,7 +13,7 @@ use sp_blockchain::{Error as BlockChainError, HeaderMetadata, HeaderBackend};
 use sp_block_builder::BlockBuilder;
 pub use sc_rpc_api::DenyUnsafe;
 use sp_transaction_pool::TransactionPool;
-
+use sc_rpc::SubscriptionTaskExecutor;
 
 /// Full client dependencies.
 pub struct FullDeps<C, P, T> {
@@ -30,6 +30,7 @@ pub struct FullDeps<C, P, T> {
 /// Instantiate all full RPC extensions.
 pub fn create_full<C, P, T>(
 	deps: FullDeps<C, P, T>,
+	subscription_task_executor: SubscriptionTaskExecutor,
 ) -> jsonrpc_core::IoHandler<sc_rpc::Metadata> where
 	C: ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block> + HeaderMetadata<Block, Error=BlockChainError> + 'static,
@@ -48,7 +49,7 @@ pub fn create_full<C, P, T>(
 	} = deps;
 
 	io.extend_with(cf_p2p_rpc::RpcApi::to_delegate(
-		cf_p2p_rpc::Rpc::new(communications)
+		cf_p2p_rpc::Rpc::new(communications, Arc::new(subscription_task_executor))
 	));
 
 	io

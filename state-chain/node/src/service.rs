@@ -141,6 +141,9 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	let p2p = cf_p2p::NetworkBridge::new(observer, network.clone(), Cow::Borrowed("/chainflip-protocol"));
 	let communications = p2p.communication.clone();
 
+	let subscription_task_executor =
+		sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle());
+
 	let rpc_extensions_builder = {
 		let client = client.clone();
 		let pool = transaction_pool.clone();
@@ -153,7 +156,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 				communications: communications.clone(),
 			};
 
-			crate::rpc::create_full(deps)
+			crate::rpc::create_full(deps, subscription_task_executor.clone())
 		})
 	};
 
