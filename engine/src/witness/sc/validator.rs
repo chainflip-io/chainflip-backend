@@ -42,7 +42,7 @@ pub struct EpochChangedEvent<V: Validator> {
 
 mod tests {
 
-    use pallet_cf_validator::Event;
+    use pallet_cf_validator::{Config, Event};
     use substrate_subxt::RawEvent;
 
     use crate::witness::sc::runtime::StateChainRuntime;
@@ -81,9 +81,19 @@ mod tests {
         println!("Event decoded into custom subxt struct: {:#?}", event);
 
         let epoch_changed_evt = pallet_cf_validator::Event::<SCRuntime>::EpochChanged(4, 10);
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_validator::Event::<SCRuntime>::EpochChanged(4, 10).into();
+
         println!("Epoch changed event: {:#?}", epoch_changed_evt);
-        let encoded_epoch = epoch_changed_evt.encode();
+        let encoded_epoch = event.encode();
+
+        // strip the module and variant from the front (subxt does this already, and puts the "module" and "variant" headers on for us)
+        let encoded_epoch = encoded_epoch[2..].to_vec();
         println!("Encoded epoch: {:#?}", encoded_epoch);
+
+        let decoded_event =
+            EpochChangedEvent::<StateChainRuntime>::decode(&mut &encoded_epoch[..]).unwrap();
+        println!("Decoded event: {:#?}", decoded_event);
     }
 
     // #[test]
