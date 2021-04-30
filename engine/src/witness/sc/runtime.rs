@@ -22,7 +22,7 @@ use substrate_subxt::{
 
 use substrate_subxt::sp_runtime::OpaqueExtrinsic;
 
-use super::{staking, transactions};
+use super::{staking, transactions, validator};
 
 // Runtime template for use in decoding by subxt
 
@@ -42,6 +42,8 @@ impl Runtime for StateChainRuntime {
         register_default_type_sizes(event_type_registry);
 
         // Add any custom types here...
+        event_type_registry.register_type_size::<<Self as System>::BlockNumber>("EpochIndex");
+        event_type_registry.register_type_size::<u32>("T::BlockNumber");
     }
 }
 
@@ -74,6 +76,8 @@ impl Sudo for StateChainRuntime {}
 impl transactions::Transactions for StateChainRuntime {}
 
 impl staking::Staking for StateChainRuntime {}
+
+impl validator::Validator for StateChainRuntime {}
 
 #[cfg(test)]
 mod tests {

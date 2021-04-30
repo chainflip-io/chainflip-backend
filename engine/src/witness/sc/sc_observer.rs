@@ -35,36 +35,37 @@ async fn create_subxt_client() -> Result<Client<StateChainRuntime>> {
 }
 
 async fn subscribe_to_events<M: 'static + IMQClient + Send + Sync>(mq_client: Arc<Mutex<M>>) {
+    // let mq_c = mq_client.clone();
+
     let mq_c = mq_client.clone();
+    // tokio::spawn(async move {
+    let client = create_subxt_client().await.unwrap();
 
-    tokio::spawn(async move {
-        let client = create_subxt_client().await.unwrap();
+    let sub = client.subscribe_finalized_events().await.unwrap();
+    let decoder = client.events_decoder();
+    let mut sub = EventSubscription::new(sub, decoder);
 
-        let client = client.clone();
-        let sub = client.subscribe_finalized_events().await.unwrap();
-        let decoder = client.events_decoder();
-        let mut sub = EventSubscription::new(sub, decoder);
+    loop {
+        println!("Awaiting event");
+        let raw_event = sub.next().await.unwrap().unwrap();
+        println!("Raw event:\n{:#?}", raw_event);
 
-        loop {
-            let raw_event = sub.next().await.unwrap().unwrap();
-            println!("Raw event:\n{:#?}", raw_event);
+        let subject: Option<Subject> = subject_from_raw_event(&raw_event);
 
-            let subject: Option<Subject> = subject_from_raw_event(&raw_event);
-
-            if let Some(subject) = subject {
-                mq_c.lock()
-                    .await
-                    .publish(subject, &raw_event.data)
-                    .await
-                    .unwrap();
-            } else {
-                println!(
-                    "Unable to resolve event: {:#?} to a known event type",
-                    raw_event
-                )
-            }
+        if let Some(subject) = subject {
+            mq_c.lock()
+                .await
+                .publish(subject, &raw_event.data)
+                .await
+                .unwrap();
+        } else {
+            println!(
+                "Unable to resolve event: {:#?} to a known event type",
+                raw_event
+            )
         }
-    });
+    }
+    // });
 }
 
 /// Returns the subject to publish the data of a raw event to
@@ -96,7 +97,10 @@ mod tests {
     use nats_test_server::NatsTestServer;
     use substrate_subxt::system::ExtrinsicSuccessEvent;
 
-    use crate::{mq::mq_mock::MockMQ, witness::sc::staking::Claim};
+    use crate::{
+        mq::mq_mock::MockMQ,
+        witness::sc::{staking::Claim, validator::MaximumValidatorsChangedEvent},
+    };
 
     use frame_support::weights::{DispatchClass, DispatchInfo, Pays};
 
@@ -145,6 +149,7 @@ mod tests {
             // This is not random data, it decodes to the ExtrinsicSuccessEvent below
             data: hex::decode("482d7c09000000000200").unwrap(),
         };
+
         let event =
             ExtrinsicSuccessEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..]).unwrap();
 
@@ -182,15 +187,10 @@ mod tests {
         assert_eq!(event, claim_sig_requested);
     }
 
-    #[test]
-    fn test_with_real_events() {
-        use codec::Encode;
-        use state_chain_runtime::Runtime as SCRuntime;
+    // #[test]
+    // fn test_system_event() {
+    //     use codec::Encode;
+    //     use state_chain_runtime::Runtime as SCRuntime;
 
-        // pallet_cf_validator(crate::Event::MaximumValidatorsChanged(0, 2))
-        let event = pallet_cf_validator::Event::<SCRuntime>::MaximumValidatorsChanged(0, 2);
-        let event_hex = event.encode();
-
-        println!("Event hex is: {:#?}", event_hex);
-    }
+    // }
 }

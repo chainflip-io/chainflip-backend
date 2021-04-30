@@ -108,7 +108,7 @@ fn staked_and_claimed_events_must_match() {
 
 		// Claim it.
 		let claim = StakeManager::claim(Origin::signed(ALICE), stake, ETH_DUMMY_ADDR);
-		// assert_ok!(StakeManager::claim(Origin::signed(ALICE), stake, ETH_DUMMY_ADDR));
+		assert_ok!(StakeManager::claim(Origin::signed(ALICE), stake, ETH_DUMMY_ADDR));
 
 		// Invalid Claimed Event from Ethereum: wrong account.
 		assert_err!(StakeManager::claimed(Origin::root(), BOB, stake), <Error<Test>>::NoPendingClaim);

@@ -15,7 +15,6 @@ use substrate_subxt::{
 #[module]
 pub trait Staking: System {}
 
-// Apparently should be an event type here
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Serialize)]
 pub struct ClaimSigRequested<S: Staking> {
     /// The AccountId of the validator wanting to claim
