@@ -5,7 +5,7 @@
 
 #![warn(missing_docs)]
 
-use std::sync::{Arc};
+use std::sync::{Arc, Mutex};
 
 use state_chain_runtime::{opaque::Block};
 use sp_api::ProvideRuntimeApi;
@@ -24,7 +24,7 @@ pub struct FullDeps<C, P, T> {
 	/// Whether to deny unsafe calls
 	pub deny_unsafe: DenyUnsafe,
 	/// p2p
-	pub communications: Arc<T>
+	pub communications: Arc<Mutex<T>>
 }
 
 /// Instantiate all full RPC extensions.

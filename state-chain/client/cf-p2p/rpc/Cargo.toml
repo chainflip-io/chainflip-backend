@@ -12,3 +12,5 @@ jsonrpc-core-client = '15.1'
 jsonrpc-derive = '15.1'
 serde = {version = "1.0.125", features = ["derive"], optional = true}
 cf-p2p = { path = "../" }
+bs58 = "0.4.0"
+sc-network = "0.9.0"

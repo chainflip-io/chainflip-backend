@@ -8,6 +8,7 @@ use sp_runtime::sp_std::sync::Arc;
 use std::borrow::Cow;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use log::{debug};
+use std::sync::Mutex;
 
 pub type Message = Vec<u8>;
 
@@ -134,7 +135,7 @@ pub struct NetworkBridge<O: Observer, N: NetworkT> {
     protocol: Cow<'static, str>,
     worker: OutgoingMessagesWorker,
     sender: UnboundedSender<(Vec<PeerId>, Message)>,
-    pub communication: Arc<Interface>,
+    pub communication: Arc<Mutex<Interface>>,
 }
 
 impl<O, N> NetworkBridge<O, N>
@@ -146,7 +147,7 @@ impl<O, N> NetworkBridge<O, N>
         let state_machine = StateMachine::new(observer, network.clone(), protocol.clone());
         let network_event_stream = Box::pin(network.event_stream());
         let (worker, sender) = OutgoingMessagesWorker::new();
-        let communication = Arc::new(Interface(sender.clone()));
+        let communication = Arc::new(Mutex::new(Interface(sender.clone())));
         NetworkBridge {
             network: network.clone(),
             state_machine,
