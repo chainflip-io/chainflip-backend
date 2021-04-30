@@ -28,11 +28,6 @@ use sp_runtime::{
     transaction_validity::{TransactionSource, TransactionValidity},
     ApplyExtrinsicResult, MultiSignature,
 };
-use sp_runtime::{
-    create_runtime_str, generic, impl_opaque_keys,
-    transaction_validity::{TransactionSource, TransactionValidity},
-    ApplyExtrinsicResult, MultiSignature,
-};
 pub use sp_runtime::{Perbill, Permill};
 use sp_std::prelude::*;
 use sp_transaction_pool::TransactionPriority;
