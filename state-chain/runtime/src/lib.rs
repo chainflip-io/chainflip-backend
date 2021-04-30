@@ -20,10 +20,7 @@ use pallet_session::historical as session_historical;
 pub use pallet_timestamp::Call as TimestampCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
-use sp_runtime::traits::{
-    AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify,
-};
+use sp_core::{crypto::KeyTypeId, ecdsa, OpaqueMetadata};
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -31,8 +28,14 @@ use sp_runtime::{
     transaction_validity::{TransactionSource, TransactionValidity},
     ApplyExtrinsicResult, MultiSignature,
 };
+use sp_runtime::{
+    create_runtime_str, generic, impl_opaque_keys,
+    transaction_validity::{TransactionSource, TransactionValidity},
+    ApplyExtrinsicResult, MultiSignature,
+};
 pub use sp_runtime::{Perbill, Permill};
 use sp_std::prelude::*;
+use sp_transaction_pool::TransactionPriority;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
@@ -276,11 +279,24 @@ impl pallet_balances::Config for Runtime {
     type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
 }
 
+parameter_types! {
+    pub const UnsignedPriority: TransactionPriority = 100;
+}
+
 impl pallet_cf_staking::Config for Runtime {
     type Event = Event;
 
-    // See comment in the pallet's trait definition - we may want to consider using the Balances pallet.
     type StakedAmount = u128;
+
+    // TODO: check this against the address type used in the StakeManager
+    type EthereumAddress = [u8; 20];
+
+    // TODO: check this against the nonce type used in the StakeManager
+    type Nonce = u64;
+
+    type EthereumCrypto = ecdsa::Public;
+
+    type UnsignedPriority = UnsignedPriority;
 }
 
 parameter_types! {
