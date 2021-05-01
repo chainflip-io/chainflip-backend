@@ -141,7 +141,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type MinValidatorSetSize = MinValidatorSetSize;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type Stake = u64;
-	type CandidateProvider = ();
+	type CandidateProvider = pallet_cf_staking::Pallet<Self>;
 	type ValidatorHandler = ();
 }
 

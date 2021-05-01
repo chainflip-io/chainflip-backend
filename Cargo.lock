@@ -4310,6 +4310,7 @@ dependencies = [
  "cf-traits",
  "frame-support",
  "frame-system",
+ "pallet-cf-validator",
  "parity-scale-codec 2.0.1",
  "serde",
  "sp-core",

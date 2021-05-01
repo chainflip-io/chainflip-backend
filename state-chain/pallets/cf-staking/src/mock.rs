@@ -1,16 +1,18 @@
-use std::{cell::RefCell, marker::PhantomData};
-
 use crate::{self as pallet_cf_staking, Config};
 use app_crypto::ecdsa::Public;
 use sp_core::H256;
-use frame_support::{dispatch::Dispatchable, parameter_types, traits::EnsureOrigin};
+use frame_support::{parameter_types};
 use sp_runtime::{app_crypto, testing::Header, traits::{BlakeTwo256, IdentityLookup}};
-use frame_system as system;
-use system::{Account, AccountInfo, RawOrigin, ensure_root};
+use frame_system::{Account, AccountInfo};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
+
+pub(super) mod bond_provider;
+pub(super) mod validator_provider;
+pub(super) mod witnesser;
+pub(super) mod ensure_witnessed;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -27,10 +29,9 @@ frame_support::construct_runtime!(
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const SS58Prefix: u8 = 42;
-	pub const UnsignedPriority: u32 = 100;
 }
 
-impl system::Config for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -59,7 +60,7 @@ impl Config for Test {
 	type Event = Event;
 	type Call = Call;
 
-	type StakedAmount = u128;
+	type TokenAmount = u128;
 
 	type EthereumAddress = u64;
 
@@ -67,57 +68,21 @@ impl Config for Test {
 
 	type EthereumCrypto = Public;
 
-	type UnsignedPriority = UnsignedPriority;
+	type EnsureWitnessed = ensure_witnessed::Mock;
 
-	type EnsureWitnessed = MockEnsureWitnessed;
+	type Witnesser = witnesser::Mock;
 
-	type Witnesser = MockWitnesser;
-}
+	type BondProvider = bond_provider::Mock;
 
-pub struct MockEnsureWitnessed;
-
-impl EnsureOrigin<Origin> for MockEnsureWitnessed {
-	type Success = ();
-
-	fn try_origin(o: Origin) -> Result<Self::Success, Origin> {
-		ensure_root(o).or(Err(RawOrigin::None.into()))
-	}
-}
-
-pub struct MockWitnesser;
-
-thread_local! {
-	pub static WITNESS_THRESHOLD: RefCell<u32> = RefCell::new(0);
-	pub static WITNESS_VOTES: RefCell<Vec<Call>> = RefCell::new(vec![]);
-}
-
-impl cf_traits::Witnesser for MockWitnesser {
-	type AccountId = AccountId;
-	type Call = Call;
-
-	fn witness(_who: Self::AccountId, call: Self::Call) -> frame_support::dispatch::DispatchResultWithPostInfo {
-		let count = WITNESS_VOTES.with(|votes| {
-			let mut votes = votes.borrow_mut();
-			votes.push(call.clone());
-			votes.iter().filter(|vote| **vote == call.clone()).count()
-		});
-
-		let threshold = WITNESS_THRESHOLD.with(|t| t.borrow().clone());
-
-		if count as u32 == threshold {
-			Dispatchable::dispatch(call, Origin::root())
-		} else {
-			Ok(().into())
-		}
-	}
-}
+	type ValidatorProvider = validator_provider::Mock;
+} 
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities = system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
+	let mut ext: sp_io::TestExternalities = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
 
 	// Seed with two active accounts.
 	ext.execute_with(|| {
