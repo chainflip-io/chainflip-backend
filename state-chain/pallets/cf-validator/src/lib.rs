@@ -36,12 +36,18 @@ impl<ValidatorId> ValidatorHandler<ValidatorId> for () {
 	fn on_before_session_ending() {}
 }
 
-pub trait CandidateProvider<ValidatorId, Stake> {
-	fn get_candidates(index: EpochIndex) -> Vec<(ValidatorId, Stake)>;
+pub trait CandidateProvider {
+	type ValidatorId: Eq + Ord + Clone;
+	type Stake: Eq + Ord + Copy;
+
+	fn get_candidates() -> Vec<(Self::ValidatorId, Self::Stake)>;
 }
 
-impl<ValidatorId, Stake> CandidateProvider<ValidatorId, Stake> for () {
-	fn get_candidates(_index: EpochIndex) -> Vec<(ValidatorId, Stake)> {
+impl CandidateProvider for () {
+	type ValidatorId = u32;
+	type Stake = u32;
+
+	fn get_candidates() -> Vec<(Self::ValidatorId, Self::Stake)> {
 		vec![]
 	}
 }
@@ -62,9 +68,9 @@ pub mod pallet {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		type ValidatorId: Eq + Ord + Clone;
-		type Stake: Eq + Ord + Copy;
+		// type Stake: Eq + Ord + Copy;
 		/// A provider for our validators
-		type CandidateProvider: CandidateProvider<Self::ValidatorId, Self::Stake>;
+		type CandidateProvider: CandidateProvider<ValidatorId=Self::ValidatorId>;
 		/// A handler for callbacks
 		type ValidatorHandler: ValidatorHandler<Self::ValidatorId>;
 
@@ -254,13 +260,17 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 	}
 }
 
+type Stake<T: Config> = <<T as Config>::CandidateProvider as CandidateProvider>::Stake;
+
 impl<T: Config> Pallet<T> {
+
 	fn new_session(new_index: EpochIndex) -> Option<Vec<T::ValidatorId>> {
 		debug!("Creating a new session {}", new_index);
 		Self::deposit_event(Event::AuctionStarted(new_index));
-		let candidates = Self::run_auction(new_index);
+		let candidates = T::CandidateProvider::get_candidates();
+		let new_validators = Self::run_auction(candidates);
 		Self::deposit_event(Event::AuctionEnded(new_index));
-		candidates
+		new_validators
 	}
 
 	fn end_session(end_index: EpochIndex) {
@@ -271,13 +281,13 @@ impl<T: Config> Pallet<T> {
 		debug!("Starting a new session {}", start_index);
 	}
 
-	pub fn run_auction(index: EpochIndex) -> Option<Vec<T::ValidatorId>> {
+	pub fn run_auction(mut candidates: Vec<(T::ValidatorId, Stake<T>)>) -> Option<Vec<T::ValidatorId>> {
 		// A basic auction algorithm.  We sort by stake amount and take the top of the validator
 		// set size and let session pallet do the rest
 		// Space here to add other prioritisation parameters
-		let mut candidates = T::CandidateProvider::get_candidates(index);
 		if !candidates.is_empty() {
 			candidates.sort_unstable_by_key(|k| k.1);
+			candidates.reverse();
 			let max_size = SizeValidatorSet::<T>::get();
 			let candidates = candidates.get(0..max_size as usize);
 			if let Some(candidates) = candidates {

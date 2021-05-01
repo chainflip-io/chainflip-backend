@@ -96,7 +96,7 @@ fn building_a_candidate_list() {
 		// We are after 3 validators, the mock is set up for 3
 		assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), 3));
 		// Run an auction and get our candidate validators, should be 3
-		let maybe_validators = ValidatorManager::run_auction(0).unwrap_or(vec![]);
+		let maybe_validators = ValidatorManager::run_auction().unwrap_or(vec![]);
 		assert_eq!(maybe_validators.len(), 3);
 	});
 }
@@ -143,8 +143,15 @@ fn bring_forward_session() {
 		);
 		// We have no current validators in first rotation
 		assert_eq!(mock::current_validators().len(), 0);
-		assert_eq!(mock::next_validators().len(), 3);
-		assert_eq!(mock::next_validators()[0], 2);  // Session 2 is next up
+		assert_eq!(mock::next_validators().len(), 0);
+		assert_eq!(TestValidatorHandler::get_current_epoch(), 0);
+
+		// Validator set hasn't changed.
+		assert_eq!(mock::current_validators(), mock::next_validators());
+
+		// Add another candidate with a higher bid.
+		CANDIDATES.with(|cell| cell.borrow_mut().push((4, 4)));
+		CANDIDATES.with(|cell| cell.borrow_mut().push((5, 0)));
 
 		// Move a session forward
 		block_number += epoch;
@@ -159,9 +166,11 @@ fn bring_forward_session() {
 		);
 
 		assert_eq!(mock::current_validators().len(), 3);
-		assert_eq!(mock::current_validators()[0], 2);  // Session 2 is now current
+		assert_eq!(TestValidatorHandler::get_current_epoch(), 1);
 		assert_eq!(mock::next_validators().len(), 3);
-		assert_eq!(mock::next_validators()[0], 3);  // Session 3 is now next up
+		// Validator set change has been queued
+		assert_ne!(mock::current_validators(), mock::next_validators());
+		// assert_eq!(mock::next_validators()[0], 3);  // Session 3 is now next up
 
 		// Move a session forward
 		block_number += epoch;
@@ -176,9 +185,11 @@ fn bring_forward_session() {
 		);
 
 		assert_eq!(mock::current_validators().len(), 3);
-		assert_eq!(mock::current_validators()[0], 3);  // Session 3 is now current
+		assert_eq!(TestValidatorHandler::get_current_epoch(), 2);
 		assert_eq!(mock::next_validators().len(), 3);
-		assert_eq!(mock::next_validators()[0], 4);  // Session 4 is now next up
+		// No change in validators. 
+		assert_eq!(mock::current_validators(), mock::next_validators());
+		// assert_eq!(mock::next_validators()[0], 4);  // Session 4 is now next up
 	});
 }
 

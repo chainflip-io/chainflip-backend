@@ -21,12 +21,19 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 thread_local! {
-	pub static SESSION_CHANGED: RefCell<bool> = RefCell::new(false);
+	pub static CANDIDATES: RefCell<Vec<(u64, u64)>> = RefCell::new(vec![(1, 1), (2, 2), (3, 3)]);
+	pub static CURRENT_EPOCH: RefCell<u64> = RefCell::new(0);
 	pub static CURRENT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 	pub static NEXT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 }
 
 pub struct TestValidatorHandler;
+
+impl TestValidatorHandler {
+	pub fn get_current_epoch() -> u64 {
+		CURRENT_EPOCH.with(|e| *e.borrow())
+	}
+}
 
 impl ValidatorHandler<u64> for TestValidatorHandler {
 	fn on_new_session(
@@ -34,15 +41,11 @@ impl ValidatorHandler<u64> for TestValidatorHandler {
 		current_validators: Vec<u64>,
 		next_validators: Vec<u64>,
 	) {
-		SESSION_CHANGED.with(|l| *l.borrow_mut() = changed);
-
-		CURRENT_VALIDATORS.with(|l|
-			*l.borrow_mut() = current_validators
-		);
-
-		NEXT_VALIDATORS.with(|l|
-			*l.borrow_mut() = next_validators
-		);
+		if changed {
+			CURRENT_EPOCH.with(|e| *e.borrow_mut() += 1);
+			CURRENT_VALIDATORS.with(|l| *l.borrow_mut() = current_validators);
+			NEXT_VALIDATORS.with(|l| *l.borrow_mut() = next_validators);
+		}
 	}
 	fn on_before_session_ending() {
 		// Nothing for the moment
@@ -114,9 +117,12 @@ impl pallet_session::Config for Test {
 
 pub struct TestCandidateProvider;
 
-impl CandidateProvider<u64, u64> for TestCandidateProvider {
-	fn get_candidates(index: EpochIndex) -> Vec<(u64, u64)> {
-		vec![(index as u64, 1), (index as u64, 2), (index as u64, 3)]
+impl CandidateProvider for TestCandidateProvider {
+	type ValidatorId = u64;
+	type Stake = u64;
+
+	fn get_candidates() -> Vec<(Self::ValidatorId, Self::Stake)> {
+		CANDIDATES.with(|cell| cell.borrow().clone())
 	}
 }
 parameter_types! {
@@ -129,7 +135,7 @@ impl Config for Test {
 	type MinEpoch = MinEpoch;
 	type MinValidatorSetSize = MinValidatorSetSize;
 	type ValidatorId = u64;
-	type Stake = u64;
+	// type Stake = u64;
 	type CandidateProvider = TestCandidateProvider;
 	type ValidatorHandler = TestValidatorHandler;
 }
