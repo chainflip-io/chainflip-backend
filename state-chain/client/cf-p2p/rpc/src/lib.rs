@@ -1,6 +1,6 @@
 use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
-use cf_p2p::Communication;
+use cf_p2p::{Communication, Message};
 use std::sync::{Arc, Mutex};
 use bs58;
 use sc_network::{PeerId};
@@ -8,9 +8,10 @@ use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionMan
 use jsonrpc_core::futures::{future::Executor, Future, Stream};
 use std::marker::Send;
 use log::warn;
-use futures::{StreamExt, TryStreamExt};
+use futures::{StreamExt, TryStreamExt, SinkExt};
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use jsonrpc_core::futures::Sink;
+use cf_p2p::Observer;
 
 #[rpc]
 pub trait RpcApi {
@@ -64,23 +65,50 @@ impl<T> P2PStream<T> {
     }
 }
 
-pub struct Rpc<C: Communication> {
-    communications: Arc<Mutex<C>>,
+pub struct RpcParams {
+    stream: Arc<P2PStream<Vec<u8>>>,
     manager: SubscriptionManager,
-    stream: P2PStream<Vec<u8>>,
+}
+
+impl RpcParams {
+    pub fn new<E>(executor: Arc<E>) -> Self
+        where E: Executor<Box<(dyn Future<Item = (), Error = ()> + Send)>> + Send + Sync + 'static,
+    {
+        RpcParams {
+            stream: Arc::new(P2PStream::new()),
+            manager: SubscriptionManager::new(executor),
+        }
+    }
+}
+
+impl Observer for RpcParams {
+    fn new_peer(&self, peer_id: &PeerId) {
+        // self.stream.
+    }
+
+    fn disconnected(&self, peer_id: &PeerId) {
+        //self.stream
+    }
+
+    // Notify subscribers of message received, yes we are not filtering yet
+    fn received(&self, peer_id: &PeerId, messages: Message) {
+        let subscribers = self.stream.subscribers.lock().unwrap();
+        for mut subscriber in subscribers.iter() {
+            subscriber.send(messages.clone());
+        }
+    }
+}
+
+pub struct Rpc<C: Communication> {
+    params: Arc<RpcParams>,
+    comms: Arc<Mutex<C>>,
 }
 
 impl<C: Communication> Rpc<C> {
-    pub fn new<E>(communications: Arc<Mutex<C>>, executor: Arc<E>) -> Self
-        where E: Executor<Box<(dyn Future<Item = (), Error = ()> + Send)>> + Send + Sync + 'static,
-    {
-        let manager = SubscriptionManager::new(executor);
-        let stream = P2PStream::new();
-
+    pub fn new(comms: Arc<Mutex<C>>, params: Arc<RpcParams>) -> Self {
         Rpc {
-            communications,
-            manager,
-            stream,
+            comms,
+            params,
         }
     }
 }
@@ -95,7 +123,7 @@ impl<C: Communication + Sync + Send + 'static> RpcApi
             if let Ok(peer_id) = bs58::decode(peer_id.as_bytes()).into_vec() {
                 if let Ok(peer_id) = PeerId::from_bytes(&*peer_id) {
                     if let Some(message) = message {
-                        self.communications.lock().unwrap().send_message(peer_id, message.into_bytes());
+                        self.comms.lock().unwrap().send_message(peer_id, message.into_bytes());
                         return Ok(200);
                     }
                 }
@@ -110,12 +138,12 @@ impl<C: Communication + Sync + Send + 'static> RpcApi
         _metadata: Self::Metadata,
         subscriber: Subscriber<Vec<u8>>
     ) {
-        let stream = self.stream.subscribe()
+        let stream = self.params.stream.subscribe()
             .map(|x| Ok::<_,()>(x))
             .map_err(|e| warn!("Notification stream error: {:?}", e))
             .compat();
 
-        self.manager.add(subscriber, |sink| {
+        self.params.manager.add(subscriber, |sink| {
             let stream = stream.map(|res| Ok(res));
             sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
                 .send_all(stream)
@@ -128,7 +156,7 @@ impl<C: Communication + Sync + Send + 'static> RpcApi
         _metadata: Option<Self::Metadata>,
         id: SubscriptionId
     ) -> jsonrpc_core::Result<bool> {
-        Ok(self.manager.cancel(id))
+        Ok(self.params.manager.cancel(id))
     }
 }
 
