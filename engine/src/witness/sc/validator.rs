@@ -40,11 +40,18 @@ pub struct AuctionStartedEvent<V: Validator> {
     pub _phantom: PhantomData<V>,
 }
 
-// RawEvent {
-//     module: "Validator",
-//     variant: "EpochChanged",
-//     data: "040000000a000000",
-// }
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct AuctionEndedEvent<V: Validator> {
+    // TODO:  Ideally we use V::EpochIndex here, however we do that
+    pub epoch_index: u32,
+
+    pub _phantom: PhantomData<V>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct ForceRotationRequestedEvent<V: Validator> {
+    pub _phantom: PhantomData<V>,
+}
 
 mod tests {
 
@@ -99,18 +106,67 @@ mod tests {
     #[test]
     fn auction_ended_decoding() {
         // AuctionEnded(EpochIndex)
-        todo!()
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_validator::Event::<SCRuntime>::AuctionEnded(1).into();
+
+        let encoded_auction_ended = event.encode();
+        // the first 2 bytes are (module_index, event_variant_index), these can be stripped
+        let encoded_auction_ended = encoded_auction_ended[2..].to_vec();
+
+        let decoded_event =
+            AuctionEndedEvent::<StateChainRuntime>::decode(&mut &encoded_auction_ended[..])
+                .unwrap();
+
+        let expecting = AuctionEndedEvent {
+            epoch_index: 1,
+            _phantom: PhantomData,
+        };
+
+        assert_eq!(decoded_event, expecting);
     }
 
     #[test]
     fn max_validators_changed_decoding() {
-        // MaximumValidatorsChangedDecoding(ValidatorSize, ValidatorSize)
-        todo!()
+        // MaximumValidatorsChanged(ValidatorSize, ValidatorSize)
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_validator::Event::<SCRuntime>::MaximumValidatorsChanged(1, 4).into();
+
+        let encoded_max_validators_changed = event.encode();
+        // the first 2 bytes are (module_index, event_variant_index), these can be stripped
+        let encoded_max_validators_changed = encoded_max_validators_changed[2..].to_vec();
+
+        let decoded_event = MaximumValidatorsChangedEvent::<StateChainRuntime>::decode(
+            &mut &encoded_max_validators_changed[..],
+        )
+        .unwrap();
+
+        let expecting = MaximumValidatorsChangedEvent {
+            before: 1,
+            now: 4,
+            _phantom: PhantomData,
+        };
+
+        assert_eq!(decoded_event, expecting);
     }
 
     #[test]
     fn force_rotation_requested_decoding() {
-        // ForceRotationRequested()
-        todo!()
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_validator::Event::<SCRuntime>::ForceRotationRequested().into();
+
+        let encodeded_force_rotation = event.encode();
+        // the first 2 bytes are (module_index, event_variant_index), these can be stripped
+        let encodeded_force_rotation = encodeded_force_rotation[2..].to_vec();
+
+        let decoded_event = ForceRotationRequestedEvent::<StateChainRuntime>::decode(
+            &mut &encodeded_force_rotation[..],
+        )
+        .unwrap();
+
+        let expecting = ForceRotationRequestedEvent {
+            _phantom: PhantomData,
+        };
+
+        assert_eq!(decoded_event, expecting);
     }
 }
