@@ -12,6 +12,8 @@ use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use sc_finality_grandpa::SharedVoterState;
 use sc_keystore::LocalKeystore;
 use std::borrow::Cow;
+use cf_p2p::NetworkBridge;
+use cf_p2p_rpc::RpcParams;
 
 // Our native executor instance.
 native_executor_instance!(
@@ -136,13 +138,14 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
 
-	let observer = cf_p2p::DeafObserver;
-
-	let p2p = cf_p2p::NetworkBridge::new(observer, network.clone(), Cow::Borrowed("/chainflip-protocol"));
-	let communications = p2p.communication.clone();
-
 	let subscription_task_executor =
 		sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle());
+	let (rpc_params, _) = RpcParams::new(Arc::new(subscription_task_executor));
+	let rpc_params = Arc::new(rpc_params);
+	let (p2p, comms) = NetworkBridge::new(
+		rpc_params.clone(),
+		network.clone(),
+		Cow::Borrowed("/chainflip-protocol"));
 
 	let rpc_extensions_builder = {
 		let client = client.clone();
@@ -153,10 +156,10 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 				client: client.clone(),
 				pool: pool.clone(),
 				deny_unsafe,
-				communications: communications.clone(),
+				comms: comms.clone(),
 			};
 
-			crate::rpc::create_full(deps, subscription_task_executor.clone())
+			crate::rpc::create_full(deps, rpc_params.clone())
 		})
 	};
 

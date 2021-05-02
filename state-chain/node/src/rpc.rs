@@ -24,13 +24,13 @@ pub struct FullDeps<C, P, T> {
 	/// Whether to deny unsafe calls
 	pub deny_unsafe: DenyUnsafe,
 	/// p2p
-	pub communications: Arc<Mutex<T>>
+	pub comms: Arc<Mutex<T>>
 }
 
 /// Instantiate all full RPC extensions.
 pub fn create_full<C, P, T>(
 	deps: FullDeps<C, P, T>,
-	subscription_task_executor: SubscriptionTaskExecutor,
+	params: Arc<cf_p2p_rpc::RpcParams>,
 ) -> jsonrpc_core::IoHandler<sc_rpc::Metadata> where
 	C: ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block> + HeaderMetadata<Block, Error=BlockChainError> + 'static,
@@ -45,11 +45,11 @@ pub fn create_full<C, P, T>(
 		client: _,
 	 	pool: _,
 	 	deny_unsafe: _,
-		communications
+		comms
 	} = deps;
 
 	io.extend_with(cf_p2p_rpc::RpcApi::to_delegate(
-		cf_p2p_rpc::Rpc::new(communications, Arc::new(subscription_task_executor))
+		cf_p2p_rpc::Rpc::new(comms, params)
 	));
 
 	io

@@ -40,7 +40,7 @@ impl Observer for DeafObserver {
 }
 
 struct StateMachine<O: Observer, N: NetworkT> {
-    observer: O,
+    observer: Arc<O>,
     network: N,
     peers: HashMap<PeerId, ()>,
     protocol: Cow<'static, str>,
@@ -51,7 +51,7 @@ impl<O, N> StateMachine<O, N>
         O: Observer,
         N: NetworkT,
 {
-    pub fn new(observer: O, network: N, protocol: Cow<'static, str>) -> Self {
+    pub fn new(observer: Arc<O>, network: N, protocol: Cow<'static, str>) -> Self {
         StateMachine {
             observer,
             network,
@@ -135,7 +135,7 @@ pub struct NetworkBridge<O: Observer, N: NetworkT> {
     protocol: Cow<'static, str>,
     worker: OutgoingMessagesWorker,
     sender: UnboundedSender<(Vec<PeerId>, Message)>,
-    pub communication: Arc<Mutex<Interface>>,
+    communication: Arc<Mutex<Interface>>,
 }
 
 impl<O, N> NetworkBridge<O, N>
@@ -143,20 +143,20 @@ impl<O, N> NetworkBridge<O, N>
         O: Observer,
         N: NetworkT,
 {
-    pub fn new(observer: O, network: N, protocol: Cow<'static, str>) -> Self {
+    pub fn new(observer: Arc<O>, network: N, protocol: Cow<'static, str>) -> (Self, Arc<Mutex<Interface>>) {
         let state_machine = StateMachine::new(observer, network.clone(), protocol.clone());
         let network_event_stream = Box::pin(network.event_stream());
         let (worker, sender) = OutgoingMessagesWorker::new();
         let communication = Arc::new(Mutex::new(Interface(sender.clone())));
-        NetworkBridge {
+        (NetworkBridge {
             network: network.clone(),
             state_machine,
             network_event_stream,
             protocol: protocol.clone(),
             worker,
             sender: sender.clone(),
-            communication,
-        }
+            communication: communication.clone(),
+        }, communication.clone())
     }
 }
 
@@ -313,8 +313,8 @@ mod tests {
     fn send_message_to_peer() {
         let network = TestNetwork::default();
         let protocol = Cow::Borrowed("/chainflip-protocol");
-        let observer = TestObserver::default();
-        let mut bridge = NetworkBridge::new(
+        let observer = Arc::new(TestObserver::default());
+        let (mut bridge, comms) = NetworkBridge::new(
             observer.clone(),
             network.clone(),
             protocol.clone());
@@ -347,7 +347,7 @@ mod tests {
 
                 if let Some(_) = &o.0  {
                     if !sent {
-                        bridge.send_message(peer, b"this rocks".to_vec());
+                        comms.lock().unwrap().send_message(peer, b"this rocks".to_vec());
                         sent = true;
                     }
 
