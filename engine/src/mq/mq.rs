@@ -47,6 +47,7 @@ pub enum Subject {
     Broadcast(Coin),
     Stake,
     Claim,
+    Rotate,
 }
 
 impl fmt::Display for Subject {
@@ -69,6 +70,9 @@ impl fmt::Display for Subject {
             }
             Subject::Claim => {
                 write!(f, "claim")
+            }
+            Subject::Rotate => {
+                write!(f, "rotate")
             }
         }
     }

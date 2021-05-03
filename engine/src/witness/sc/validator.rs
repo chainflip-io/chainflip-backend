@@ -27,7 +27,7 @@ pub struct MaximumValidatorsChangedEvent<V: Validator> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
-pub struct EpochChangedEvent<V: Validator> {
+pub struct EpochDurationChangedEvent<V: Validator> {
     pub from: V::BlockNumber,
     pub to: V::BlockNumber,
 }
@@ -67,16 +67,17 @@ mod tests {
     #[test]
     fn epoch_changed_decoding() {
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_validator::Event::<SCRuntime>::EpochChanged(4, 10).into();
+            pallet_cf_validator::Event::<SCRuntime>::EpochDurationChanged(4, 10).into();
 
         let encoded_epoch = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped
         let encoded_epoch = encoded_epoch[2..].to_vec();
 
         let decoded_event =
-            EpochChangedEvent::<StateChainRuntime>::decode(&mut &encoded_epoch[..]).unwrap();
+            EpochDurationChangedEvent::<StateChainRuntime>::decode(&mut &encoded_epoch[..])
+                .unwrap();
 
-        let expecting = EpochChangedEvent { from: 4, to: 10 };
+        let expecting = EpochDurationChangedEvent { from: 4, to: 10 };
 
         assert_eq!(decoded_event, expecting);
     }

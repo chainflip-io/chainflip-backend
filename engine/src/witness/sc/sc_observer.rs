@@ -14,8 +14,6 @@ use super::runtime::StateChainRuntime;
 
 /// Kick off the state chain observer process
 pub async fn start<M: 'static + IMQClient + Send + Sync>(mq_client: Arc<Mutex<M>>) {
-    println!("Start the state chain witness with subxt");
-
     subscribe_to_events(mq_client).await;
 }
 
@@ -32,17 +30,14 @@ async fn create_subxt_client() -> Result<Client<StateChainRuntime>> {
 }
 
 async fn subscribe_to_events<M: 'static + IMQClient + Send + Sync>(mq_client: Arc<Mutex<M>>) {
-    // let mq_c = mq_client.clone();
-
     let mq_c = mq_client.clone();
-    // tokio::spawn(async move {
-    let client = create_subxt_client().await.unwrap();
+    tokio::spawn(async move {
+        let client = create_subxt_client().await.unwrap();
 
-    let sub = client.subscribe_finalized_events().await.unwrap();
-    let decoder = client.events_decoder();
-    let mut sub = EventSubscription::new(sub, decoder);
+        let sub = client.subscribe_finalized_events().await.unwrap();
+        let decoder = client.events_decoder();
+        let mut sub = EventSubscription::new(sub, decoder);
 
-    loop {
         println!("Awaiting event");
         let raw_event = sub.next().await.unwrap().unwrap();
         println!("Raw event:\n{:#?}", raw_event);
@@ -61,8 +56,7 @@ async fn subscribe_to_events<M: 'static + IMQClient + Send + Sync>(mq_client: Ar
                 raw_event
             )
         }
-    }
-    // });
+    });
 }
 
 /// Returns the subject to publish the data of a raw event to
@@ -74,10 +68,17 @@ fn subject_from_raw_event(event: &RawEvent) -> Option<Subject> {
             // All Stake refunds are ETH, how are these refunds coming out though?
             "StakeRefund" => Some(Subject::Batch(Coin::ETH)),
             "ClaimSignatureIssued" => Some(Subject::Claim),
-            // This doesn't need to go anywhere, this is just a confirmation emitted perhaps for block explorers
+            // This doesn't need to go anywhere, this is just a confirmation emitted, perhaps for block explorers
             "Claimed" => None,
             _ => None,
         },
+        "Validator" => match event.variant.as_str() {
+            "AuctionEnded" => None,
+            "AuctionStarted" => None,
+            "ForceRotationRequested" => Some(Subject::Rotate),
+            "Epoch"
+            _ => None,
+        }
         _ => None,
     };
     subject
@@ -132,57 +133,4 @@ mod tests {
         let subject = subject_from_raw_event(&raw_event_invalid);
         assert_eq!(subject, None);
     }
-
-    // This test can probably go elsewhere later, but for now this works
-    // TOOD: Add all The CF specific events here
-    // #[test]
-    // fn example_event_decoding() {
-    //     let raw_event = RawEvent {
-    //         module: "System".to_string(),
-    //         variant: "ExtrinsicSuccess".to_string(),
-    //         // This is not random data, it decodes to the ExtrinsicSuccessEvent below
-    //         data: hex::decode("482d7c09000000000200").unwrap(),
-    //     };
-
-    //     let event =
-    //         ExtrinsicSuccessEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..]).unwrap();
-
-    //     let success_event: ExtrinsicSuccessEvent<StateChainRuntime> = ExtrinsicSuccessEvent {
-    //         _runtime: PhantomData,
-    //         info: DispatchInfo {
-    //             weight: 159133000,
-    //             class: DispatchClass::Mandatory,
-    //             pays_fee: Pays::Yes,
-    //         },
-    //     };
-
-    //     assert_eq!(event, success_event);
-
-    //     let raw_event = RawEvent {
-    //         module: "Staking".to_string(),
-    //         variant: "ClaimSigRequested".to_string(),
-    //         data: hex::decode("482d7c09000000000200").unwrap(),
-    //     };
-
-    //     let event =
-    //         ClaimSigRequested::<StateChainRuntime>::decode(&mut &raw_event.data[..]).unwrap();
-
-    //     let claim_sig_requested: ClaimSigRequestedEvent<StateChainRuntime> = ClaimSigRequested {
-    //         who: AccountKeyring::Alice.to_account_id(),
-    //         amount: 123u128,
-    //         nonce: 123,
-    //         eth_account: "0x0000000000000000000000000000000000000000"
-    //             .as_bytes()
-    //             .to_vec(),
-    //     };
-
-    //     assert_eq!(event, claim_sig_requested);
-    // }
-
-    // #[test]
-    // fn test_system_event() {
-    //     use codec::Encode;
-    //     use state_chain_runtime::Runtime as SCRuntime;
-
-    // }
 }

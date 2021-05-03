@@ -59,7 +59,7 @@ SizeValidatorSet: u32
 ```
 AuctionStarted()
 AuctionEnded()
-EpochChanged(from: Days, to:Day)
+EpochDurationChanged(from: Days, to:Day)
 SizeValidatorSetChanged(from: u32, to: u32)
 ```
 
