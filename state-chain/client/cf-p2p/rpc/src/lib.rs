@@ -21,6 +21,9 @@ pub trait RpcApi {
     #[rpc(name = "p2p_send")]
     fn send(&self, peer_id: Option<String>, message: Option<String>) -> Result<u64>;
 
+    #[rpc(name = "p2p_broadcast")]
+    fn broadcast(&self, message: Option<String>) -> Result<u64>;
+
     /// Subscribe to receive notifications
     #[pubsub(
         subscription = "cf_p2p_notifications",
@@ -134,6 +137,15 @@ impl<C: Communication + Sync + Send + 'static> RpcApi
         Ok(400)
     }
 
+    fn broadcast(&self, message: Option<String>) -> Result<u64> {
+        if let Some(message) = message {
+            self.comms.lock().unwrap().broadcast(message.into_bytes());
+            return Ok(200);
+        }
+
+        Ok(400)
+    }
+
     fn subscribe_notifications(
         &self,
         _metadata: Self::Metadata,
@@ -228,6 +240,19 @@ mod tests {
         let request = format!(
             "{{\"jsonrpc\":\"2.0\",\"method\":\"p2p_send\",\"params\":[\"{}\", \"{}\"],\"id\":1}}",
             peer.to_base58(), "hello",
+        );
+        let meta = sc_rpc::Metadata::default();
+        assert_eq!(io.handle_request_sync(&request, meta), Some("{\"jsonrpc\":\"2.0\",\"result\":200,\"id\":1}".to_string()));
+    }
+
+    #[test]
+    fn broadcast_message() {
+        let (io,  _) = setup_io_handler();
+
+        let peer = PeerId::random();
+        let request = format!(
+            "{{\"jsonrpc\":\"2.0\",\"method\":\"p2p_broadcast\",\"params\":[\"{}\"],\"id\":1}}",
+            "hello",
         );
         let meta = sc_rpc::Metadata::default();
         assert_eq!(io.handle_request_sync(&request, meta), Some("{\"jsonrpc\":\"2.0\",\"result\":200,\"id\":1}".to_string()));
