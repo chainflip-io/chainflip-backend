@@ -1,3 +1,5 @@
+use std::{collections::HashSet, vec};
+
 use super::*;
 use crate::{Error, mock::*};
 use sp_runtime::traits::{BadOrigin, Zero};
@@ -95,9 +97,23 @@ fn building_a_candidate_list() {
 	new_test_ext().execute_with(|| {
 		// We are after 3 validators, the mock is set up for 3
 		assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), 3));
+		let mut candidates: Vec<(u64, u64)> = vec![(1, 2), (2, 3), (3, 4)];
+		let winners: HashSet<u64> = [1, 2, 3].iter().cloned().collect();
+
 		// Run an auction and get our candidate validators, should be 3
-		let maybe_validators = ValidatorManager::run_auction().unwrap_or(vec![]);
-		assert_eq!(maybe_validators.len(), 3);
+		let maybe_validators = ValidatorManager::run_auction(candidates.clone());
+		assert_eq!(maybe_validators.map(|v| v.iter().cloned().collect()), Some(winners.clone()));
+
+		// Add a low bid, should not change the validator set.
+		candidates.push((4, 1));
+		let maybe_validators = ValidatorManager::run_auction(candidates.clone());
+		assert_eq!(maybe_validators.map(|v| v.iter().cloned().collect()), Some(winners.clone()));
+
+		// Add a high bid, should alter the winners
+		candidates.push((5, 5));
+		let winners: HashSet<u64> = [2, 3, 5].iter().cloned().collect();
+		let maybe_validators = ValidatorManager::run_auction(candidates.clone());
+		assert_eq!(maybe_validators.map(|v| v.iter().cloned().collect()), Some(winners.clone()));
 	});
 }
 
