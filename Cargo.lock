@@ -817,6 +817,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cf-traits"
+version = "0.1.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "sp-std 3.0.0",
+]
+
+[[package]]
 name = "cfg-if"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4340,6 +4349,7 @@ dependencies = [
 name = "pallet-cf-staking"
 version = "0.1.0"
 dependencies = [
+ "cf-traits",
  "frame-support",
  "frame-system",
  "parity-scale-codec 2.1.1",
@@ -4357,6 +4367,23 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log",
+ "pallet-session",
+ "parity-scale-codec 2.1.1",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std 3.0.0",
+]
+
+[[package]]
+name = "pallet-cf-witness"
+version = "0.1.0"
+dependencies = [
+ "bitvec 0.20.2",
+ "cf-traits",
+ "frame-support",
+ "frame-system",
  "pallet-session",
  "parity-scale-codec 2.1.1",
  "serde",
@@ -7825,6 +7852,7 @@ dependencies = [
  "pallet-balances",
  "pallet-cf-staking",
  "pallet-cf-validator",
+ "pallet-cf-witness",
  "pallet-grandpa",
  "pallet-offences",
  "pallet-randomness-collective-flip",
