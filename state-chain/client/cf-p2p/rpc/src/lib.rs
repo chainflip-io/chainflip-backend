@@ -171,11 +171,8 @@ mod tests {
 
     struct TestCommunication;
     impl cf_p2p::Communication for TestCommunication {
-        fn send_message(&mut self, peer_id: PeerId, data: Message) {
-        }
-
-        fn broadcast(&self, data: Message) {
-        }
+        fn send_message(&mut self, peer_id: PeerId, data: Message) {}
+        fn broadcast(&self, data: Message) {}
     }
 
     fn setup_io_handler() -> (jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>, Arc<P2PStream<Vec<u8>>>) {
@@ -189,7 +186,7 @@ mod tests {
     }
 
     fn setup_session() -> (sc_rpc::Metadata, jsonrpc_core::futures::sync::mpsc::Receiver<String>) {
-        let (tx, rx) = jsonrpc_core::futures::sync::mpsc::channel(1);
+        let (tx, rx) = jsonrpc_core::futures::sync::mpsc::channel(2);
         let meta = sc_rpc::Metadata::new(tx);
         (meta, rx)
     }
@@ -224,7 +221,20 @@ mod tests {
     }
 
     #[test]
-    fn subscribe_and_listen_for_message() {
+    fn send_message() {
+        let (io,  _) = setup_io_handler();
+
+        let peer = PeerId::random();
+        let request = format!(
+            "{{\"jsonrpc\":\"2.0\",\"method\":\"p2p_send\",\"params\":[\"{}\", \"{}\"],\"id\":1}}",
+            peer.to_base58(), "hello",
+        );
+        let meta = sc_rpc::Metadata::default();
+        assert_eq!(io.handle_request_sync(&request, meta), Some("{\"jsonrpc\":\"2.0\",\"result\":200,\"id\":1}".to_string()));
+    }
+
+    #[test]
+    fn subscribe_and_listen_for_messages() {
         let (io,  stream) = setup_io_handler();
         let (meta, receiver) = setup_session();
 
@@ -233,12 +243,14 @@ mod tests {
         let mut resp: serde_json::Value = serde_json::from_str(&resp.unwrap()).unwrap();
         let sub_id: String = serde_json::from_value(resp["result"].take()).unwrap();
 
+        // Simulate a message being received from the peer
         let message: Vec<u8> = vec![1,2,3];
         let subscribers = stream.subscribers.lock().unwrap();
         for mut subscriber in subscribers.iter() {
             subscriber.unbounded_send(message.clone());
         }
 
+        // We should get a notification of this event
         let recv = receiver.take(1).wait().flatten().collect::<Vec<_>>();
         let recv: Notification = serde_json::from_str(&recv[0]).unwrap();
         let mut json_map = match recv.params {
