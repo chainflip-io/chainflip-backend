@@ -16,22 +16,69 @@ use substrate_subxt::{
 pub trait Staking: System {}
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Serialize)]
-pub struct ClaimSigRequested<S: Staking> {
+pub struct ClaimSigRequestedEvent<S: Staking> {
     /// The AccountId of the validator wanting to claim
     pub who: <S as System>::AccountId,
 
     pub amount: u128,
 
-    pub nonce: u32,
+    pub nonce: u64,
 
     pub eth_account: Vec<u8>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Serialize)]
-pub struct Claim<S: Staking> {
+pub struct ClaimedEvent<S: Staking> {
     pub who: <S as System>::AccountId,
     pub amount: u128,
     pub nonce: u32,
     pub address: String,
     pub signature: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::witness::sc::runtime::StateChainRuntime;
+    use codec::Encode;
+    use pallet_cf_staking::{Config, Event};
+    use sp_core::hexdisplay::AsBytesRef;
+    use state_chain_runtime::Runtime as SCRuntime;
+
+    use sp_keyring::AccountKeyring;
+
+    #[test]
+    fn claim_sig_requested_decode_test() {
+        let who = AccountKeyring::Alice.to_account_id();
+        let eth_address: [u8; 20] = [
+            00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00,
+        ];
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_staking::Event::<SCRuntime>::ClaimSigRequested(
+                who,
+                eth_address,
+                123u64,
+                123u128,
+            )
+            .into();
+
+        let encoded_claim_sig_requested = event.encode();
+        // the first 2 bytes are (module_index, event_variant_index), these can be stripped
+        let encoded_claim_sig_requested = encoded_claim_sig_requested[2..].to_vec();
+
+        let decoded_event = ClaimSigRequestedEvent::<StateChainRuntime>::decode(
+            &mut &encoded_claim_sig_requested[..],
+        )
+        .unwrap();
+
+        let expecting = ClaimSigRequestedEvent {
+            who,
+            nonce: 123u64,
+            amount: 123u128,
+            eth_account: eth_address.into(),
+        };
+
+        assert_eq!(decoded_event, expecting);
+    }
 }

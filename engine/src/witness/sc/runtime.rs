@@ -22,7 +22,7 @@ use substrate_subxt::{
 
 use substrate_subxt::sp_runtime::OpaqueExtrinsic;
 
-use super::{staking, transactions, validator};
+use super::{staking, validator};
 
 // Runtime template for use in decoding by subxt
 
@@ -73,9 +73,6 @@ impl Session for StateChainRuntime {
 impl Sudo for StateChainRuntime {}
 
 // Must implement the custom events for the runtime
-
-// TOOD: This can be removed??
-impl transactions::Transactions for StateChainRuntime {}
 
 impl staking::Staking for StateChainRuntime {}
 

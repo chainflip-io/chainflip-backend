@@ -8,12 +8,9 @@ use substrate_subxt::{Client, ClientBuilder, EventSubscription, RawEvent};
 
 use tokio::sync::Mutex;
 
-use crate::{
-    mq::{IMQClient, Subject},
-    witness::sc::transactions::DataAddedEvent,
-};
+use crate::mq::{IMQClient, Subject};
 
-use super::{runtime::StateChainRuntime, staking::ClaimSigRequested};
+use super::runtime::StateChainRuntime;
 
 /// Kick off the state chain observer process
 pub async fn start<M: 'static + IMQClient + Send + Sync>(mq_client: Arc<Mutex<M>>) {
@@ -97,10 +94,7 @@ mod tests {
     use nats_test_server::NatsTestServer;
     use substrate_subxt::system::ExtrinsicSuccessEvent;
 
-    use crate::{
-        mq::mq_mock::MockMQ,
-        witness::sc::{staking::Claim, validator::MaximumValidatorsChangedEvent},
-    };
+    use crate::{mq::mq_mock::MockMQ, witness::sc::validator::MaximumValidatorsChangedEvent};
 
     use frame_support::weights::{DispatchClass, DispatchInfo, Pays};
 
@@ -172,8 +166,6 @@ mod tests {
 
         let event =
             ClaimSigRequested::<StateChainRuntime>::decode(&mut &raw_event.data[..]).unwrap();
-
-        // pallet_cf_validator(crate::Event::MaximumValidatorsChanged(0, 2))
 
         let claim_sig_requested: ClaimSigRequested<StateChainRuntime> = ClaimSigRequested {
             who: AccountKeyring::Alice.to_account_id(),
