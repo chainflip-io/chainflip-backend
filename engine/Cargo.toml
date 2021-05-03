@@ -42,9 +42,9 @@ codec = { package = "parity-scale-codec", version = "2.1", default-features = fa
 
 # Local deps
 chainflip-common = { path = "../common" }
-state-chain-runtime = { path = "../state-chain/runtime" }
-pallet-cf-validator = { path = "../state-chain/pallets/cf-validator", default-features = false }
-pallet-cf-staking = { path = "../state-chain/pallets/cf-staking", default-features = false }
+state-chain-runtime = { path = "../state-chain/runtime", default-features = false }
+pallet-cf-validator = { path = "../state-chain/pallets/cf-validator" }
+pallet-cf-staking = { path = "../state-chain/pallets/cf-staking" }
 
 [dev-dependencies]
 nats_test_server = "0.3.0"
@@ -53,5 +53,8 @@ frame-support = "*"
 [features]
 default = ['std']
 std = [
-    'pallet-cf-staking/std'
+    'state-chain-runtime/std',
 ]
+#     'pallet-cf-validator/std',
+#     'pallet-cf-staking/std'
+# ]

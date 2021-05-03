@@ -25,9 +25,9 @@ hex-literal = {optional = true, version = '0.3.1'}
 serde = {features = ['derive'], optional = true, version = '1.0.119'}
 
 # Chainflip dependencies
-pallet-cf-validator = { path = "../pallets/cf-validator", default-features = false}
-pallet-cf-staking = { path = "../pallets/cf-staking", default-features = false}
-pallet-cf-witness = { path = "../pallets/cf-witness", default-features = false}
+pallet-cf-validator = { path = "../pallets/cf-validator", default-features = false }
+pallet-cf-staking = { path = "../pallets/cf-staking", default-features = false }
+pallet-cf-witness = { path = "../pallets/cf-witness", default-features = false, version = "0.1.0" }
 
 # Substrate dependencies
 frame-benchmarking = {default-features = false, optional = true, version = '3.0.0'}
