@@ -6,8 +6,6 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use std::todo;
-
 use frame_support::{ensure, error::BadOrigin, traits::EnsureOrigin};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
@@ -19,6 +17,7 @@ use sp_runtime::{traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub, One, Sat
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::Witnesser;
 	use frame_support::pallet_prelude::*;
 	use frame_system::{Account, pallet_prelude::*};
 	use sp_runtime::app_crypto::RuntimePublic;
