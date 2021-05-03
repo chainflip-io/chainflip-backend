@@ -84,7 +84,7 @@ pub mod pallet {
 	}
 
 	impl<T: Config> StakeRecord<T> {
-		pub fn try_remove_stake(&mut self, amount: &T::TokenAmount) -> Option<()> {
+		pub fn try_subtract_stake(&mut self, amount: &T::TokenAmount) -> Option<()> {
 			self.stake.checked_sub(amount).map(|result| {
 				self.stake = result;
 			})
@@ -185,7 +185,7 @@ pub mod pallet {
 			
 			// Throw an error if the validator tries to claim too much. Otherwise decrement the stake by the 
 			// amount claimed.
-			Self::remove_stake(&who, amount)?;
+			Self::subtract_stake(&who, amount)?;
 
 			// Don't check for overflow here - we don't expect more than 2^32 claims.
 			let nonce = Nonces::<T>::mutate(&who, |nonce| {
@@ -357,6 +357,7 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Adds stake to an account. Errors if the addition overflows.
 	fn add_stake(account_id: &T::AccountId, amount: T::TokenAmount) -> Result<T::TokenAmount, Error<T>> {
 		Stakes::<T>::try_mutate(
 			account_id, 
@@ -366,34 +367,43 @@ impl<T: Config> Pallet<T> {
 			})
 	}
 
-	fn remove_stake(account_id: &T::AccountId, amount: T::TokenAmount) -> Result<T::TokenAmount, Error<T>> {
-		let bond = Self::bond(account_id);
+	/// Subtracts an amount from the account's staked token. If the account has insufficient staked tokens, or if the 
+	/// remaining balance would be less than the bonded amount, returns an [Error::InsufficientStake]
+	fn subtract_stake(account_id: &T::AccountId, amount: T::TokenAmount) -> Result<T::TokenAmount, Error<T>> {
+		let bond = Self::get_bond(account_id);
 		Stakes::<T>::try_mutate(
 			account_id, 
 			|rec| {
-				rec.try_remove_stake(&amount).ok_or(Error::<T>::InsufficientStake)?;
-				ensure!(rec.stake >= bond, Error::<T>::InsufficientStake);
+				rec.try_subtract_stake(&amount).ok_or(Error::InsufficientStake)?;
+				ensure!(rec.stake >= bond, Error::InsufficientStake);
 				Ok(rec.stake)
 			})
 	}
 
+	/// Checks that the call orginates from the witnesser by delegating to the configured implementation of 
+	/// `
 	fn ensure_witnessed(origin: OriginFor<T>) -> Result<<T::EnsureWitnessed as EnsureOrigin<OriginFor<T>>>::Success, BadOrigin> {
 		T::EnsureWitnessed::ensure_origin(origin)
 	}
 
+	/// Returns the total stake associated with this account.
 	pub fn get_total_stake(account: &T::AccountId) -> T::TokenAmount {
 		Stakes::<T>::get(account).stake
 	}
 
+	/// Returns the amount of stake an account can withdraw via a `claim`. Equal to the total stake minus any bond that 
+	/// applies to this account. 
 	pub fn get_claimable_stake(account: &T::AccountId) -> T::TokenAmount {
-		Self::get_total_stake(account).saturating_sub(Self::bond(account))
+		Self::get_total_stake(account).saturating_sub(Self::get_bond(account))
 	}
 
+	/// Checks if the account is currently a validator.
 	pub fn is_validator(account: &T::AccountId) -> bool {
 		T::ValidatorProvider::is_validator(account)
 	}
 
-	fn bond(account: &T::AccountId) -> T::TokenAmount {
+	/// Gets the bond amount for the current epoch. If no bond has been set, returns zero.
+	fn get_bond(account: &T::AccountId) -> T::TokenAmount {
 		if Self::is_validator(account) {
 			T::BondProvider::current_bond()
 		} else {
@@ -401,6 +411,10 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	/// Sets the `retired` flag associated with the account, sigalling that the account no longer wishes to participate
+	/// in validator auctions. 
+	/// 
+	/// Returns an error if the account has already been retired, or if the account has no stake associated. 
 	fn retire(account: &T::AccountId) -> Result<(), Error::<T>> {
 		Stakes::<T>::try_mutate_exists(account, |maybe_account| {
 			match maybe_account.as_mut() {
@@ -416,11 +430,15 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
+	/// Checks if an account has signalled their intention to retire as a validator. If the account has never staked
+	/// any tokens, returns [Error::AccountNotStaked]. 
 	pub fn is_retired(account: &T::AccountId) -> Result<bool, Error::<T>> {
 		Stakes::<T>::try_get(account).map(|s| s.retired).map_err(|_| Error::AccountNotStaked)
 	}
 }
 
+/// This implementation of [pallet_cf_validator::CandidateProvider] simply returns a list of `(account_id, stake)` for
+/// all non-retired accounts.
 impl<T: Config> pallet_cf_validator::CandidateProvider for Pallet<T> {
 	type ValidatorId = T::AccountId;
 	type Stake = T::TokenAmount;
