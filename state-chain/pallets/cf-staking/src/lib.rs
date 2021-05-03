@@ -9,7 +9,8 @@ mod tests;
 use frame_support::{ensure, error::BadOrigin, traits::EnsureOrigin};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
-use cf_traits::{Witnesser, BondProvider, ValidatorProvider};
+use sp_std::prelude::*;
+use cf_traits::{BondProvider, ValidatorProvider};
 
 use codec::FullCodec;
 use sp_runtime::{traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub, One, Saturating, Zero}};

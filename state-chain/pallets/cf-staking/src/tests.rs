@@ -226,6 +226,10 @@ fn cannot_claim_bond() {
 			StakeManager::claim(Origin::signed(ALICE), 1, ETH_DUMMY_ADDR),
 			<Error<Test>>::InsufficientStake
 		);
+
+		// Once she is no longer a validator, Alice can claim her stake.
+		validator_provider::Mock::reset();
+		assert_ok!(StakeManager::claim(Origin::signed(ALICE), 100, ETH_DUMMY_ADDR));
 	});
 }
 
