@@ -82,8 +82,10 @@ impl<O, N> StateMachine<O, N>
         }
     }
 
-    pub fn broadcast(&self, _data: Message) {
-        unimplemented!()
+    pub fn broadcast(&mut self, message: Message) {
+        for peer_id in self.peers.keys() {
+            self.network.write_notification(*peer_id, self.protocol.clone(), message.clone());
+        }
     }
 }
 
@@ -175,7 +177,9 @@ impl Communication for Interface {
     }
 
     fn broadcast(&self, data: Message) {
-        todo!()
+        if let Err(e) = self.0.unbounded_send((vec![], data)) {
+            debug!("Failed to broadcast message to channel {:?}", e);
+        }
     }
 }
 
@@ -198,8 +202,12 @@ impl<O, N> Future for NetworkBridge<O, N>
         loop {
             match this.worker.poll_next_unpin(cx) {
                 Poll::Ready(Some((peer_ids, message))) => {
-                    for peer_id in peer_ids {
-                        this.state_machine.send_message(peer_id, message.clone());
+                    if peer_ids.is_empty() {
+                        this.state_machine.broadcast(message.clone());
+                    } else {
+                        for peer_id in peer_ids {
+                            this.state_machine.send_message(peer_id, message.clone());
+                        }
                     }
                 },
                 // TODO Handle close of stream
@@ -269,12 +277,12 @@ mod tests {
     #[derive(Clone, Default)]
     struct TestNetworkInner {
         event_senders: Vec<UnboundedSender<Event>>,
-        last_notification: Option<(Vec<u8>, Vec<u8>)>,
+        notifications: Vec<(Vec<u8>, Vec<u8>)>,
     }
 
     impl NetworkT for TestNetwork {
         fn write_notification(&self, who: PeerId, _protocol: Cow<'static, str>, message: Vec<u8>) {
-            self.inner.lock().unwrap().last_notification = Some((who.to_bytes(), message));
+            self.inner.lock().unwrap().notifications.push((who.to_bytes(), message));
         }
 
         fn event_stream(&self) -> Pin<Box<dyn Stream<Item=Event> + Send>> {
@@ -352,7 +360,7 @@ mod tests {
                     }
 
                     if let Some(notification) = network.inner.lock()
-                        .unwrap().last_notification.as_ref() {
+                        .unwrap().notifications.pop().as_ref() {
                         assert_eq!(notification.clone(), (peer.to_bytes(), b"this rocks".to_vec()));
                         break;
                     }
@@ -361,4 +369,68 @@ mod tests {
             Poll::Ready(())
         }));
     }
+
+    #[test]
+    fn broadcast_message_to_peers() {
+        let network = TestNetwork::default();
+        let protocol = Cow::Borrowed("/chainflip-protocol");
+        let observer = Arc::new(TestObserver::default());
+        let (mut bridge, comms) = NetworkBridge::new(
+            observer.clone(),
+            network.clone(),
+            protocol.clone());
+
+        let peer = PeerId::random();
+        let peer_1 = PeerId::random();
+
+        // Register peers
+        let mut event_sender = network.inner.lock()
+            .unwrap()
+            .event_senders
+            .pop()
+            .unwrap();
+
+        let msg = Event::NotificationStreamOpened {
+            remote: peer.clone(),
+            protocol: protocol.clone(),
+            role: ObservedRole::Authority,
+        };
+        event_sender.start_send(msg).expect("Event stream is unbounded");
+
+        let msg = Event::NotificationStreamOpened {
+            remote: peer_1.clone(),
+            protocol: protocol.clone(),
+            role: ObservedRole::Authority,
+        };
+
+        event_sender.start_send(msg).expect("Event stream is unbounded");
+
+        block_on(poll_fn(|cx| {
+            let mut sent = false;
+            loop {
+                if let Poll::Ready(()) = bridge.poll_unpin(cx) {
+                    unreachable!("we should have a new network event");
+                }
+
+                let o = observer.inner.lock().unwrap();
+
+                if sent {
+                    let notifications: &Vec<(Vec<u8>, Vec<u8>)> = &network.inner.lock().unwrap().notifications;
+                    assert_eq!(notifications[0], (peer.to_bytes(), b"this rocks".to_vec()));
+                    assert_eq!(notifications[1], (peer_1.to_bytes(), b"this rocks".to_vec()));
+                    break;
+                }
+
+                if let Some(_) = &o.0 {
+                    if !sent {
+                        comms.lock().unwrap().broadcast(b"this rocks".to_vec());
+                        sent = true;
+                    }
+                }
+
+            }
+            Poll::Ready(())
+        }));
+    }
+
 }
