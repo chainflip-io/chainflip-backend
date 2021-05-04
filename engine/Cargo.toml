@@ -31,6 +31,8 @@ serde_json = "1.0"
 anyhow = "1.0"
 chainflip-common = { path = "../common" }
 config = "0.11.0"
+log = { version = "0.4.14" }
+env_logger = { version = "0.8.3" }
 
 
 [dev-dependencies]
