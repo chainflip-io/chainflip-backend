@@ -1,6 +1,11 @@
+use log::info;
+
 mod mq;
 mod p2p;
 
 fn main() {
-    println!("Hello");
+    // init the logger
+    env_logger::init();
+
+    info!("Start your engines!")
 }
