@@ -29,7 +29,6 @@ tokio-stream = "0.1.5"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 anyhow = "1.0"
-hex = "0.4.3"
 
 substrate-subxt = { version = "0.15 "}
 
@@ -38,6 +37,9 @@ sp-core = "*"
 sp-keyring = "*"
 frame-system = "*"
 codec = { package = "parity-scale-codec", version = "2.1", default-features = false, features = ["derive", "full"] }
+config = "0.11.0"
+log = { version = "0.4.14" }
+env_logger = { version = "0.8.3" }
 
 
 # Local deps

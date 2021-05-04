@@ -4,16 +4,24 @@ use tokio::sync::Mutex;
 
 use crate::mq::{nats_client::NatsMQClient, IMQClient, Options};
 
+use log::info;
+
 mod mq;
 mod p2p;
 mod sc_observer;
+mod settings;
 mod witness;
+
+use settings::Settings;
 
 #[tokio::main]
 async fn main() {
-    println!("Hello from the CFE!");
+    // init the logger
+    env_logger::init();
 
-    // start the engines
+    info!("Start your engines!");
+
+    let settings = Settings::new().expect("Failed to initialise settings");
 
     // set up the message queue
     // TODO: Use a config file:
