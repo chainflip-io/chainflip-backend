@@ -127,7 +127,7 @@ impl<C: Communication + Sync + Send + 'static> RpcApi
             if let Ok(peer_id) = bs58::decode(peer_id.as_bytes()).into_vec() {
                 if let Ok(peer_id) = PeerId::from_bytes(&*peer_id) {
                     if let Some(message) = message {
-                        self.comms.lock().unwrap().send_message(peer_id, message.into_bytes());
+                        self.comms.lock().unwrap().send_message(&peer_id, message.into_bytes());
                         return Ok(200);
                     }
                 }
@@ -173,28 +173,86 @@ impl<C: Communication + Sync + Send + 'static> RpcApi
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use sc_rpc::testing::TaskExecutor;
     use jsonrpc_core::{Notification, Output, types::Params};
     use sp_core::Decode;
+    use std::collections::HashMap;
 
-    struct TestCommunication;
-    impl cf_p2p::Communication for TestCommunication {
-        fn send_message(&mut self, peer_id: PeerId, data: Message) {}
-        fn broadcast(&self, data: Message) {}
+    struct P2P {
+        nodes: HashMap<PeerId, Node>,
+    }
+    impl P2P {
+        fn new() -> Self {
+            P2P {
+                nodes: HashMap::new()
+            }
+        }
+
+        fn get_node(&mut self, peer_id: &PeerId) -> Option<&Node> {
+            self.nodes.get(peer_id)
+        }
+
+        fn create_node(&mut self) -> PeerId {
+            let node = Node::new();
+            let peer_id = node.peer_id;
+            self.nodes.insert(peer_id, node);
+            peer_id
+        }
+
+        fn broadcast(&mut self, data: Message) {
+            for (_, node) in &self.nodes {
+                node.communications.lock().unwrap().broadcast(data.clone());
+            }
+        }
+
+        fn send_message(&mut self, peer_id: &PeerId, data: Message) {
+            if let Some(node) = self.nodes.get(&peer_id) {
+                node.communications.lock().unwrap().send_message(peer_id, data.clone());
+            }
+        }
     }
 
-    fn setup_io_handler() -> (jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>, Arc<P2PStream<Vec<u8>>>) {
-        let executor = Arc::new(TaskExecutor);
-        let (rpc_params, stream) = RpcParams::new(executor);
-        let rpc = Rpc::new(Arc::new(Mutex::new(TestCommunication)), Arc::new(rpc_params));
-        let mut io = jsonrpc_core::MetaIoHandler::default();
-        io.extend_with(RpcApi::to_delegate(rpc));
+    struct Node {
+        peer_id: PeerId,
+        io: jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>,
+        communications: Arc<Mutex<Communications>>,
+    }
 
-        (io, stream)
+    struct Communications {
+        stream: Arc<P2PStream<Vec<u8>>>,
+    }
+
+    impl Communication for Communications {
+        fn send_message(&mut self, peer_id: &PeerId, data: Message) {
+            let subscribers = self.stream.subscribers.lock().unwrap();
+            for mut subscriber in subscribers.iter() {
+                subscriber.unbounded_send(data.clone());
+            }
+        }
+
+        fn broadcast(&self, data: Message) {
+            let subscribers = self.stream.subscribers.lock().unwrap();
+            for mut subscriber in subscribers.iter() {
+                subscriber.unbounded_send(data.clone());
+            }
+        }
+    }
+
+    impl Node {
+        fn new() -> Self {
+            let executor = Arc::new(TaskExecutor);
+            let (rpc_params, stream) = RpcParams::new(executor);
+            let mut io = jsonrpc_core::MetaIoHandler::default();
+            let communications = Communications { stream };
+            let communications = Arc::new(Mutex::new(communications));
+            let rpc = Rpc::new(communications.clone(), Arc::new(rpc_params));
+            io.extend_with(RpcApi::to_delegate(rpc));
+
+            Node { peer_id: PeerId::random(), io, communications }
+        }
     }
 
     fn setup_session() -> (sc_rpc::Metadata, jsonrpc_core::futures::sync::mpsc::Receiver<String>) {
@@ -205,11 +263,12 @@ mod tests {
 
     #[test]
     fn subscribe_and_unsubscribe() {
-        let (io,  _) = setup_io_handler();
+        let node= Node::new();
+
         let (meta, _) = setup_session();
 
         let sub_request = r#"{"jsonrpc":"2.0","method":"cf_p2p_subscribeNotifications","params":[],"id":1}"#;
-        let resp = io.handle_request_sync(sub_request, meta.clone());
+        let resp = node.io.handle_request_sync(sub_request, meta.clone());
         let resp: Output = serde_json::from_str(&resp.unwrap()).unwrap();
 
         let sub_id = match resp {
@@ -222,19 +281,19 @@ mod tests {
             sub_id
         );
         assert_eq!(
-            io.handle_request_sync(&unsub_req, meta.clone()),
+            node.io.handle_request_sync(&unsub_req, meta.clone()),
             Some(r#"{"jsonrpc":"2.0","result":true,"id":1}"#.into()),
         );
 
         assert_eq!(
-            io.handle_request_sync(&unsub_req, meta),
+            node.io.handle_request_sync(&unsub_req, meta),
             Some(r#"{"jsonrpc":"2.0","result":false,"id":1}"#.into()),
         );
     }
 
     #[test]
     fn send_message() {
-        let (io,  _) = setup_io_handler();
+        let node= Node::new();
 
         let peer = PeerId::random();
         let request = format!(
@@ -242,12 +301,12 @@ mod tests {
             peer.to_base58(), "hello",
         );
         let meta = sc_rpc::Metadata::default();
-        assert_eq!(io.handle_request_sync(&request, meta), Some("{\"jsonrpc\":\"2.0\",\"result\":200,\"id\":1}".to_string()));
+        assert_eq!(node.io.handle_request_sync(&request, meta), Some("{\"jsonrpc\":\"2.0\",\"result\":200,\"id\":1}".to_string()));
     }
 
     #[test]
     fn broadcast_message() {
-        let (io,  _) = setup_io_handler();
+        let node= Node::new();
 
         let peer = PeerId::random();
         let request = format!(
@@ -255,25 +314,24 @@ mod tests {
             "hello",
         );
         let meta = sc_rpc::Metadata::default();
-        assert_eq!(io.handle_request_sync(&request, meta), Some("{\"jsonrpc\":\"2.0\",\"result\":200,\"id\":1}".to_string()));
+        assert_eq!(node.io.handle_request_sync(&request, meta), Some("{\"jsonrpc\":\"2.0\",\"result\":200,\"id\":1}".to_string()));
     }
 
     #[test]
     fn subscribe_and_listen_for_messages() {
-        let (io,  stream) = setup_io_handler();
+        let mut p2p = P2P::new();
+        let peer_id = p2p.create_node();
+        let node = p2p.get_node(&peer_id).unwrap();
         let (meta, receiver) = setup_session();
 
         let sub_request = r#"{"jsonrpc":"2.0","method":"cf_p2p_subscribeNotifications","params":[],"id":1}"#;
-        let resp = io.handle_request_sync(sub_request, meta.clone());
+        let resp = node.io.handle_request_sync(sub_request, meta.clone());
         let mut resp: serde_json::Value = serde_json::from_str(&resp.unwrap()).unwrap();
         let sub_id: String = serde_json::from_value(resp["result"].take()).unwrap();
 
         // Simulate a message being received from the peer
         let message: Vec<u8> = vec![1,2,3];
-        let subscribers = stream.subscribers.lock().unwrap();
-        for mut subscriber in subscribers.iter() {
-            subscriber.unbounded_send(message.clone());
-        }
+        p2p.send_message(&peer_id, message.clone());
 
         // We should get a notification of this event
         let recv = receiver.take(1).wait().flatten().collect::<Vec<_>>();
@@ -288,6 +346,62 @@ mod tests {
 
         assert_eq!(recv.method, "cf_p2p_notifications");
         assert_eq!(recv_sub_id, sub_id);
+        assert_eq!(recv_message, message);
+    }
+
+    #[test]
+    fn subscribe_and_listen_for_broadcast() {
+        // Create a node and subscribe to it
+        let mut p2p = P2P::new();
+        let peer_id = p2p.create_node();
+        let node = p2p.get_node(&peer_id).unwrap();
+
+        let (meta, receiver) = setup_session();
+        let sub_request = r#"{"jsonrpc":"2.0","method":"cf_p2p_subscribeNotifications","params":[],"id":1}"#;
+        let resp = node.io.handle_request_sync(sub_request, meta.clone());
+        let mut resp: serde_json::Value = serde_json::from_str(&resp.unwrap()).unwrap();
+        let sub_id: String = serde_json::from_value(resp["result"].take()).unwrap();
+
+        // Create another node and subscribe to it
+        let peer_id_1 = p2p.create_node();
+        let node_1 = p2p.get_node(&peer_id).unwrap();
+        let (meta_1, receiver_1) = setup_session();
+        let sub_request_1 = r#"{"jsonrpc":"2.0","method":"cf_p2p_subscribeNotifications","params":[],"id":1}"#;
+        let resp_1 = node_1.io.handle_request_sync(sub_request_1, meta_1.clone());
+        let mut resp_1: serde_json::Value = serde_json::from_str(&resp_1.unwrap()).unwrap();
+        let sub_id_1: String = serde_json::from_value(resp_1["result"].take()).unwrap();
+
+        // Simulate a message being received from the peer
+        let message: Vec<u8> = vec![1,2,3];
+        p2p.broadcast(message.clone());
+
+        // We should get a notification of this event
+        let recv = receiver.take(1).wait().flatten().collect::<Vec<_>>();
+        let recv: Notification = serde_json::from_str(&recv[0]).unwrap();
+        let mut json_map = match recv.params {
+            Params::Map(json_map) => json_map,
+            _ => panic!(),
+        };
+
+        let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
+        let recv_message: Vec<u8> = serde_json::from_value(json_map["result"].take()).unwrap();
+
+        assert_eq!(recv.method, "cf_p2p_notifications");
+        assert_eq!(recv_sub_id, sub_id);
+        assert_eq!(recv_message, message.clone());
+
+        let recv = receiver_1.take(1).wait().flatten().collect::<Vec<_>>();
+        let recv: Notification = serde_json::from_str(&recv[0]).unwrap();
+        let mut json_map = match recv.params {
+            Params::Map(json_map) => json_map,
+            _ => panic!(),
+        };
+
+        let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
+        let recv_message: Vec<u8> = serde_json::from_value(json_map["result"].take()).unwrap();
+
+        assert_eq!(recv.method, "cf_p2p_notifications");
+        assert_eq!(recv_sub_id, sub_id_1);
         assert_eq!(recv_message, message);
     }
 }
