@@ -1,0 +1,7 @@
+# Default configurations for the CFE
+
+[message_queue]
+# can also be IP
+hostname = "localhost"
+port = "9944"
+
