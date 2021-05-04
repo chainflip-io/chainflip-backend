@@ -46,10 +46,16 @@ async fn subscribe_to_events<M: 'static + IMQClient + Send + Sync>(
     let mut sub = EventSubscription::new(sub, decoder);
     loop {
         let raw_event = if let Some(res_event) = sub.next().await {
-            res_event?
+            match res_event {
+                Ok(evt) => evt,
+                Err(e) => {
+                    println!("Next event could not be read: {}", e);
+                    continue;
+                }
+            }
         } else {
-            println!("No event found on the state chain");
-            continue;
+            println!("No further events from the state chain.");
+            return Ok(());
         };
 
         let mq_c = mq_client.clone();
