@@ -12,6 +12,7 @@ use futures::{StreamExt, TryStreamExt};
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use jsonrpc_core::futures::Sink;
 use cf_p2p::Observer;
+use log::debug;
 
 #[rpc]
 pub trait RpcApi {
@@ -86,19 +87,21 @@ impl RpcParams {
 }
 
 impl Observer for RpcParams {
-    fn new_peer(&self, peer_id: &PeerId) {
-        // self.stream.
+    fn new_peer(&self, _peer_id: &PeerId) {
+
     }
 
-    fn disconnected(&self, peer_id: &PeerId) {
-        //self.stream
+    fn disconnected(&self, _peer_id: &PeerId) {
+
     }
 
     // Notify subscribers of message received, yes we are not filtering yet
-    fn received(&self, peer_id: &PeerId, messages: Message) {
+    fn received(&self, _peer_id: &PeerId, messages: Message) {
         let subscribers = self.stream.subscribers.lock().unwrap();
-        for mut subscriber in subscribers.iter() {
-            subscriber.unbounded_send(messages.clone());
+        for subscriber in subscribers.iter() {
+            if let Err(e) = subscriber.unbounded_send(messages.clone()) {
+                debug!("Failed to send message: {:?}", e);
+            }
         }
     }
 }

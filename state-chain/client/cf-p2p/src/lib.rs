@@ -93,15 +93,15 @@ struct OutgoingMessagesWorker {
     rx: UnboundedReceiver<(Vec<PeerId>, Message)>,
 }
 
-struct Sender(UnboundedSender<(Vec<PeerId>, Message)>);
-
-impl Sender {
-    fn send(&self, peer_id: PeerId, message: Message) {
-        if let Err(e) = self.0.unbounded_send((vec![peer_id], message)) {
-            debug!("Failed to send message {:?}", e);
-        }
-    }
-}
+// struct Sender(UnboundedSender<(Vec<PeerId>, Message)>);
+//
+// impl Sender {
+//     fn send(&self, peer_id: PeerId, message: Message) {
+//         if let Err(e) = self.0.unbounded_send((vec![peer_id], message)) {
+//             debug!("Failed to send message {:?}", e);
+//         }
+//     }
+// }
 
 impl Unpin for OutgoingMessagesWorker {}
 
@@ -131,13 +131,10 @@ impl Stream for OutgoingMessagesWorker {
 }
 
 pub struct NetworkBridge<O: Observer, N: NetworkT> {
-    network: N,
     state_machine: StateMachine<O, N>,
     network_event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
     protocol: Cow<'static, str>,
     worker: OutgoingMessagesWorker,
-    sender: UnboundedSender<(Vec<PeerId>, Message)>,
-    communication: Arc<Mutex<Interface>>,
 }
 
 impl<O, N> NetworkBridge<O, N>
@@ -151,13 +148,10 @@ impl<O, N> NetworkBridge<O, N>
         let (worker, sender) = OutgoingMessagesWorker::new();
         let communication = Arc::new(Mutex::new(Interface(sender.clone())));
         (NetworkBridge {
-            network: network.clone(),
             state_machine,
             network_event_stream,
             protocol: protocol.clone(),
             worker,
-            sender: sender.clone(),
-            communication: communication.clone(),
         }, communication.clone())
     }
 }
@@ -221,13 +215,13 @@ impl<O, N> Future for NetworkBridge<O, N>
         loop {
             match this.network_event_stream.poll_next_unpin(cx) {
                 Poll::Ready(Some(event)) => match event {
-                    Event::SyncConnected { remote } => {
+                    Event::SyncConnected { remote: _ } => {
 
                     }
-                    Event::SyncDisconnected { remote } => {
+                    Event::SyncDisconnected { remote: _ } => {
 
                     }
-                    Event::NotificationStreamOpened { remote, protocol, role } => {
+                    Event::NotificationStreamOpened { remote, protocol, role: _ } => {
                         if protocol != this.protocol {
                             continue;
                         }
@@ -355,7 +349,7 @@ mod tests {
 
                 if let Some(_) = &o.0  {
                     if !sent {
-                        comms.lock().unwrap().send_message(peer, b"this rocks".to_vec());
+                        comms.lock().unwrap().send_message(&peer, b"this rocks".to_vec());
                         sent = true;
                     }
 
