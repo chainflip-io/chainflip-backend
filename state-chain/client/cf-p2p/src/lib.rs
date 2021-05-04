@@ -163,15 +163,15 @@ impl<O, N> NetworkBridge<O, N>
 }
 
 pub trait Communication {
-    fn send_message(&mut self, peer_id: PeerId, data: Message);
+    fn send_message(&mut self, peer_id: &PeerId, data: Message);
     fn broadcast(&self, data: Message);
 }
 
 pub struct Interface(UnboundedSender<(Vec<PeerId>, Message)>);
 
 impl Communication for Interface {
-    fn send_message(&mut self, peer_id: PeerId, data: Message) {
-        if let Err(e) = self.0.unbounded_send((vec![peer_id], data)) {
+    fn send_message(&mut self, peer_id: &PeerId, data: Message) {
+        if let Err(e) = self.0.unbounded_send((vec![*peer_id], data)) {
             debug!("Failed to push message to channel {:?}", e);
         }
     }
