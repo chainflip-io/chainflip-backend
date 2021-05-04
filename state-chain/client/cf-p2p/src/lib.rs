@@ -13,12 +13,12 @@ use std::sync::Mutex;
 pub type Message = Vec<u8>;
 
 pub trait NetworkT : Clone {
-    fn write_notification(&self, who: PeerId, protocol: Cow<'static, str>, message: Vec<u8>);
+    fn write_notification(&self, who: PeerId, protocol: Cow<'static, str>, message: Message);
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>>;
 }
 
 impl<B: BlockT, H: ExHashT> NetworkT for Arc<NetworkService<B, H>> {
-    fn write_notification(&self, target: PeerId, protocol: Cow<'static, str>, message: Vec<u8>) {
+    fn write_notification(&self, target: PeerId, protocol: Cow<'static, str>, message: Message) {
         NetworkService::write_notification(self, target, protocol, message)
     }
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
@@ -316,7 +316,7 @@ mod tests {
         let network = TestNetwork::default();
         let protocol = Cow::Borrowed("/chainflip-protocol");
         let observer = Arc::new(TestObserver::default());
-        let (mut bridge, comms) = NetworkBridge::new(
+        let (mut bridge, communications) = NetworkBridge::new(
             observer.clone(),
             network.clone(),
             protocol.clone());
@@ -349,7 +349,7 @@ mod tests {
 
                 if let Some(_) = &o.0  {
                     if !sent {
-                        comms.lock().unwrap().send_message(&peer, b"this rocks".to_vec());
+                        communications.lock().unwrap().send_message(&peer, b"this rocks".to_vec());
                         sent = true;
                     }
 

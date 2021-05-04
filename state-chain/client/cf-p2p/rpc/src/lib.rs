@@ -34,7 +34,7 @@ pub trait RpcApi {
     fn subscribe_notifications(
         &self,
         metadata: Self::Metadata,
-        subscriber: Subscriber<Vec<u8>>
+        subscriber: Subscriber<Message>
     );
 
     /// Unsubscribe from receiving notifications
@@ -70,12 +70,12 @@ impl<T> P2PStream<T> {
 }
 
 pub struct RpcParams {
-    stream: Arc<P2PStream<Vec<u8>>>,
+    stream: Arc<P2PStream<Message>>,
     manager: SubscriptionManager,
 }
 
 impl RpcParams {
-    pub fn new<E>(executor: Arc<E>) -> (Self, Arc<P2PStream<Vec<u8>>>)
+    pub fn new<E>(executor: Arc<E>) -> (Self, Arc<P2PStream<Message>>)
         where E: Executor<Box<(dyn Future<Item = (), Error = ()> + Send)>> + Send + Sync + 'static,
     {
         let stream = Arc::new(P2PStream::new());
@@ -152,7 +152,7 @@ impl<C: Communication + Sync + Send + 'static> RpcApi
     fn subscribe_notifications(
         &self,
         _metadata: Self::Metadata,
-        subscriber: Subscriber<Vec<u8>>
+        subscriber: Subscriber<Message>
     ) {
         let stream = self.params.stream.subscribe()
             .map(|x| Ok::<_,()>(x))
@@ -225,7 +225,7 @@ mod tests {
     }
 
     struct Communications {
-        stream: Arc<P2PStream<Vec<u8>>>,
+        stream: Arc<P2PStream<Message>>,
     }
 
     impl Communication for Communications {
@@ -333,7 +333,7 @@ mod tests {
         let sub_id: String = serde_json::from_value(resp["result"].take()).unwrap();
 
         // Simulate a message being received from the peer
-        let message: Vec<u8> = vec![1,2,3];
+        let message: Message = vec![1,2,3];
         p2p.send_message(&peer_id, message.clone());
 
         // We should get a notification of this event
@@ -345,7 +345,7 @@ mod tests {
         };
 
         let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
-        let recv_message: Vec<u8> = serde_json::from_value(json_map["result"].take()).unwrap();
+        let recv_message: Message = serde_json::from_value(json_map["result"].take()).unwrap();
 
         assert_eq!(recv.method, "cf_p2p_notifications");
         assert_eq!(recv_sub_id, sub_id);
@@ -375,7 +375,7 @@ mod tests {
         let sub_id_1: String = serde_json::from_value(resp_1["result"].take()).unwrap();
 
         // Simulate a message being received from the peer
-        let message: Vec<u8> = vec![1,2,3];
+        let message: Message = vec![1,2,3];
         p2p.broadcast(message.clone());
 
         // We should get a notification of this event
@@ -387,7 +387,7 @@ mod tests {
         };
 
         let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
-        let recv_message: Vec<u8> = serde_json::from_value(json_map["result"].take()).unwrap();
+        let recv_message: Message = serde_json::from_value(json_map["result"].take()).unwrap();
 
         assert_eq!(recv.method, "cf_p2p_notifications");
         assert_eq!(recv_sub_id, sub_id);
@@ -401,7 +401,7 @@ mod tests {
         };
 
         let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
-        let recv_message: Vec<u8> = serde_json::from_value(json_map["result"].take()).unwrap();
+        let recv_message: Message = serde_json::from_value(json_map["result"].take()).unwrap();
 
         assert_eq!(recv.method, "cf_p2p_notifications");
         assert_eq!(recv_sub_id, sub_id_1);
