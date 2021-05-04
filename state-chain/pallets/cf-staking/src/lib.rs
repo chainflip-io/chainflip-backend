@@ -345,7 +345,7 @@ pub mod pallet {
 		/// Stake amount caused overflow on addition. Should never happen.
 		StakeOverflow,
 
-		/// An account tried to post a signature to an alread-signed claim. 
+		/// An account tried to post a signature to an already-signed claim. 
 		SignatureAlreadyIssued,
 
 		/// Can't retire an account if it's already retired.
