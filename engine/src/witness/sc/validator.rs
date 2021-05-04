@@ -2,27 +2,17 @@
 
 use std::marker::PhantomData;
 
-use chainflip_common::types::addresses::{Address, EthereumAddress};
-use codec::{Codec, Decode, Encode};
-use hex;
-use serde::{Deserialize, Serialize};
-use substrate_subxt::{
-    module,
-    sp_runtime::{app_crypto::RuntimePublic, traits::Member},
-    system::System,
-    Event,
-};
+use codec::Decode;
+use pallet_cf_validator::{EpochIndex, ValidatorSize};
+use substrate_subxt::{module, system::System, Event};
 
 #[module]
 pub trait Validator: System {}
 
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct MaximumValidatorsChangedEvent<V: Validator> {
-    // There is a type alias type ValidatorSize = u32;
-    // ideally we use that, not sure if there's a better way than making
-    // that type pub
-    pub before: u32,
-    pub now: u32,
+    pub before: ValidatorSize,
+    pub now: ValidatorSize,
     pub _phantom: PhantomData<V>,
 }
 
@@ -35,7 +25,7 @@ pub struct EpochDurationChangedEvent<V: Validator> {
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct AuctionStartedEvent<V: Validator> {
     // TODO:  Ideally we use V::EpochIndex here, however we do that
-    pub epoch_index: u32,
+    pub epoch_index: EpochIndex,
 
     pub _phantom: PhantomData<V>,
 }
@@ -43,7 +33,7 @@ pub struct AuctionStartedEvent<V: Validator> {
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct AuctionEndedEvent<V: Validator> {
     // TODO:  Ideally we use V::EpochIndex here, however we do that
-    pub epoch_index: u32,
+    pub epoch_index: EpochIndex,
 
     pub _phantom: PhantomData<V>,
 }
@@ -53,10 +43,10 @@ pub struct ForceRotationRequestedEvent<V: Validator> {
     pub _phantom: PhantomData<V>,
 }
 
+#[cfg(test)]
 mod tests {
 
-    use pallet_cf_validator::{Config, Event};
-    use substrate_subxt::RawEvent;
+    use pallet_cf_validator::Config;
 
     use crate::witness::sc::runtime::StateChainRuntime;
     use codec::Encode;

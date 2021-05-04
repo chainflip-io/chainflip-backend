@@ -1,16 +1,7 @@
 // Implements support for the staking module
 
-use std::marker::PhantomData;
-
-use chainflip_common::types::addresses::{Address, EthereumAddress};
-use codec::{Codec, Decode, Encode};
-use serde::{Deserialize, Serialize};
-use substrate_subxt::{
-    module,
-    sp_runtime::{app_crypto::RuntimePublic, traits::Member},
-    system::System,
-    Event,
-};
+use codec::Decode;
+use substrate_subxt::{module, system::System, Event};
 
 use sp_core::ecdsa::Signature;
 
@@ -73,8 +64,8 @@ mod tests {
 
     use crate::witness::sc::runtime::StateChainRuntime;
     use codec::Encode;
-    use pallet_cf_staking::{Config, Event};
-    use state_chain_runtime::{Runtime as SCRuntime, RuntimeApiImpl};
+    use pallet_cf_staking::Config;
+    use state_chain_runtime::Runtime as SCRuntime;
 
     use sp_keyring::AccountKeyring;
 

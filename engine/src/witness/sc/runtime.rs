@@ -72,7 +72,7 @@ impl Session for StateChainRuntime {
 
 impl Sudo for StateChainRuntime {}
 
-// Must implement the custom events for the runtime
+// ==== Custom events from pallets need to be implemented for the runtime ====
 
 impl staking::Staking for StateChainRuntime {}
 

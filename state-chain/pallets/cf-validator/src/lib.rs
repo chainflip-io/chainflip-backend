@@ -15,8 +15,8 @@ pub use pallet::*;
 use sp_runtime::traits::{Convert, OpaqueKeys};
 use sp_std::prelude::*;
 
-type ValidatorSize = u32;
-type EpochIndex = u32;
+pub type ValidatorSize = u32;
+pub type EpochIndex = u32;
 
 pub trait ValidatorHandler<ValidatorId> {
     fn on_new_session(
