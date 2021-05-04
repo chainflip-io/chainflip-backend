@@ -11,7 +11,7 @@ use log::warn;
 use futures::{StreamExt, TryStreamExt};
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use jsonrpc_core::futures::Sink;
-use cf_p2p::Observer;
+use cf_p2p::ObserverT;
 use log::debug;
 
 #[rpc]
@@ -86,7 +86,7 @@ impl RpcParams {
     }
 }
 
-impl Observer for RpcParams {
+impl ObserverT for RpcParams {
     fn new_peer(&self, _peer_id: &PeerId) {
 
     }

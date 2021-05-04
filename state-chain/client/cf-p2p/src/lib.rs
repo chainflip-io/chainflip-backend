@@ -26,32 +26,32 @@ impl<B: BlockT, H: ExHashT> NetworkT for Arc<NetworkService<B, H>> {
     }
 }
 
-pub trait Observer {
+pub trait ObserverT {
     fn new_peer(&self, peer_id: &PeerId);
     fn disconnected(&self, peer_id: &PeerId);
     fn received(&self, peer_id: &PeerId, messages: Message);
 }
 
 pub struct DeafObserver;
-impl Observer for DeafObserver {
+impl ObserverT for DeafObserver {
     fn new_peer(&self, _peer_id: &PeerId) {}
     fn disconnected(&self, _peer_id: &PeerId) {}
     fn received(&self, _peer_id: &PeerId, _messages: Message) {}
 }
 
-struct StateMachine<O: Observer, N: NetworkT> {
-    observer: Arc<O>,
-    network: N,
+struct StateMachine<Observer: ObserverT, Network: NetworkT> {
+    observer: Arc<Observer>,
+    network: Network,
     peers: HashMap<PeerId, ()>,
     protocol: Cow<'static, str>,
 }
 
-impl<O, N> StateMachine<O, N>
+impl<Observer, Network> StateMachine<Observer, Network>
     where
-        O: Observer,
-        N: NetworkT,
+        Observer: ObserverT,
+        Network: NetworkT,
 {
-    pub fn new(observer: Arc<O>, network: N, protocol: Cow<'static, str>) -> Self {
+    pub fn new(observer: Arc<Observer>, network: Network, protocol: Cow<'static, str>) -> Self {
         StateMachine {
             observer,
             network,
@@ -130,19 +130,19 @@ impl Stream for OutgoingMessagesWorker {
     }
 }
 
-pub struct NetworkBridge<O: Observer, N: NetworkT> {
-    state_machine: StateMachine<O, N>,
+pub struct NetworkBridge<Observer: ObserverT, Network: NetworkT> {
+    state_machine: StateMachine<Observer, Network>,
     network_event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
     protocol: Cow<'static, str>,
     worker: OutgoingMessagesWorker,
 }
 
-impl<O, N> NetworkBridge<O, N>
+impl<Observer, Network> NetworkBridge<Observer, Network>
     where
-        O: Observer,
-        N: NetworkT,
+        Observer: ObserverT,
+        Network: NetworkT,
 {
-    pub fn new(observer: Arc<O>, network: N, protocol: Cow<'static, str>) -> (Self, Arc<Mutex<Interface>>) {
+    pub fn new(observer: Arc<Observer>, network: Network, protocol: Cow<'static, str>) -> (Self, Arc<Mutex<Interface>>) {
         let state_machine = StateMachine::new(observer, network.clone(), protocol.clone());
         let network_event_stream = Box::pin(network.event_stream());
         let (worker, sender) = OutgoingMessagesWorker::new();
@@ -177,16 +177,16 @@ impl Communication for Interface {
     }
 }
 
-impl<O, N> Unpin for NetworkBridge<O, N>
+impl<Observer, Network> Unpin for NetworkBridge<Observer, Network>
     where
-        O: Observer,
-        N: NetworkT, {}
+        Observer: ObserverT,
+        Network: NetworkT, {}
 
 
-impl<O, N> Future for NetworkBridge<O, N>
+impl<Observer, Network> Future for NetworkBridge<Observer, Network>
     where
-        O: Observer,
-        N: NetworkT,
+        Observer: ObserverT,
+        Network: NetworkT,
 {
     type Output = ();
 
@@ -297,7 +297,7 @@ mod tests {
                              Option<Vec<u8>>,
                              Option<(Vec<u8>, Vec<u8>)>);
 
-    impl Observer for TestObserver {
+    impl ObserverT for TestObserver {
         fn new_peer(&self, peer_id: &PeerId) {
             self.inner.lock().unwrap().0 = Some(peer_id.to_bytes());
         }
