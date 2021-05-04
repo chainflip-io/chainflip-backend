@@ -368,7 +368,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Subtracts an amount from the account's staked token. If the account has insufficient staked tokens, or if the 
-	/// remaining balance would be less than the bonded amount, returns an [Error::InsufficientStake]
+	/// remaining balance would be less than the bonded amount, returns an [InsufficientStake](Error::InsufficientStake) error.
 	fn subtract_stake(account_id: &T::AccountId, amount: T::TokenAmount) -> Result<T::TokenAmount, Error<T>> {
 		let bond = Self::get_bond(account_id);
 		Stakes::<T>::try_mutate(
@@ -381,7 +381,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Checks that the call orginates from the witnesser by delegating to the configured implementation of 
-	/// `
+	/// `[EnsureWitnessed](cf_traits::EnsureWitnessed)`.
 	fn ensure_witnessed(origin: OriginFor<T>) -> Result<<T::EnsureWitnessed as EnsureOrigin<OriginFor<T>>>::Success, BadOrigin> {
 		T::EnsureWitnessed::ensure_origin(origin)
 	}
