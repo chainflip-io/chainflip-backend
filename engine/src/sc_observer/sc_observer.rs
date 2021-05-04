@@ -20,7 +20,7 @@ pub async fn start<M: 'static + IMQClient + Send + Sync>(
     mq_client: Arc<Mutex<M>>,
     subxt_settings: settings::Subxt,
 ) {
-    info!("Begin subsribing to state chain events");
+    info!("Begin subscribing to state chain events");
 
     let subxt_client = create_subxt_client(subxt_settings)
         .await

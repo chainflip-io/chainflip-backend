@@ -33,7 +33,7 @@ async fn main() {
 
     info!("Start the engines! :broom: :broom: ");
 
-    sc_observer::sc_observer::start(mq_client.clone()).await;
+    sc_observer::sc_observer::start(mq_client.clone(), settings.subxt).await;
 
     // start witnessing other chains
     witness::witness::start(mq_client.clone()).await;
