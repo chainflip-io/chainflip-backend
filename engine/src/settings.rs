@@ -3,14 +3,21 @@ use config::{Config, ConfigError, File};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
-struct MessageQueue {
-    hostname: String,
-    port: u32,
+pub struct MessageQueue {
+    pub hostname: String,
+    pub port: u32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Subxt {
+    pub hostname: String,
+    pub port: u32,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct Settings {
-    message_queue: MessageQueue,
+    pub message_queue: MessageQueue,
+    pub subxt: Subxt,
 }
 
 impl Settings {

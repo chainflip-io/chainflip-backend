@@ -19,17 +19,19 @@ async fn main() {
     // init the logger
     env_logger::init();
 
-    info!("Start your engines!");
-
     let settings = Settings::new().expect("Failed to initialise settings");
 
     // set up the message queue
-    // TODO: Use a config file:
-    let options = Options {
-        url: "localhost:9944".to_string(),
+    let mq_options = Options {
+        url: format!(
+            "{}:{}",
+            settings.message_queue.hostname, settings.message_queue.port
+        ),
     };
-    let mq_client = NatsMQClient::connect(options).await.unwrap();
+    let mq_client = NatsMQClient::connect(mq_options).await.unwrap();
     let mq_client = Arc::new(Mutex::new(*mq_client));
+
+    info!("Start the engines! :broom: :broom: ");
 
     sc_observer::sc_observer::start(mq_client.clone()).await;
 
