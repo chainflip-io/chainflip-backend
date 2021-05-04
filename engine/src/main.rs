@@ -1,20 +1,11 @@
-use std::collections::HashMap;
-
-extern crate config;
-
 mod mq;
 mod p2p;
+mod settings;
+
+use settings::Settings;
 
 fn main() {
-    let mut config_options = config::Config::default();
-    config_options
-        .merge(config::File::with_name("../config/Default"))
-        .expect("Could load default config");
+    let settings = Settings::new().expect("Failed to initialise settings");
 
-    println!(
-        "{:?}",
-        config_options
-            .try_into::<HashMap<String, String>>()
-            .unwrap()
-    );
+    println!("{:?}", settings);
 }

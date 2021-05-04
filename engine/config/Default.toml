@@ -1,5 +1,7 @@
-[message_queue]
-host_name = "asdfas"
-port = "8080"
+# Default configurations for the CFE
 
-# More stuff comes down here
+[message_queue]
+# can also be IP
+hostname = "localhost"
+port = "9944"
+
