@@ -48,9 +48,10 @@ mod tests {
 
     use pallet_cf_validator::Config;
 
-    use crate::witness::sc::runtime::StateChainRuntime;
     use codec::Encode;
     use state_chain_runtime::Runtime as SCRuntime;
+
+    use crate::sc_observer::runtime::StateChainRuntime;
 
     use super::*;
 

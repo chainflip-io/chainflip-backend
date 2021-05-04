@@ -60,9 +60,10 @@ pub struct ClaimSignatureIssuedEvent<S: Staking> {
 
 #[cfg(test)]
 mod tests {
+    use crate::sc_observer::runtime::StateChainRuntime;
+
     use super::*;
 
-    use crate::witness::sc::runtime::StateChainRuntime;
     use codec::Encode;
     use pallet_cf_staking::Config;
     use state_chain_runtime::Runtime as SCRuntime;

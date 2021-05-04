@@ -102,20 +102,7 @@ fn subject_from_raw_event(event: &RawEvent) -> Option<Subject> {
 #[cfg(test)]
 mod tests {
 
-    use nats_test_server::NatsTestServer;
-
-    use crate::mq::mq_mock::MockMQ;
-
     use super::*;
-
-    #[tokio::test]
-    async fn run_test() {
-        let server = NatsTestServer::build().spawn();
-        let test_mq_client = MockMQ::new(&server).await;
-        let test_mq_client = Arc::new(Mutex::new(test_mq_client));
-
-        start(test_mq_client).await;
-    }
 
     #[test]
     fn subject_from_raw_event_test() {

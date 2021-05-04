@@ -6,6 +6,7 @@ use crate::mq::{nats_client::NatsMQClient, IMQClient, Options};
 
 mod mq;
 mod p2p;
+mod sc_observer;
 mod witness;
 
 #[tokio::main]
@@ -22,6 +23,8 @@ async fn main() {
     let mq_client = NatsMQClient::connect(options).await.unwrap();
     let mq_client = Arc::new(Mutex::new(*mq_client));
 
-    // start observing the state chain and witnessing other chains
+    sc_observer::sc_observer::start(mq_client.clone()).await;
+
+    // start witnessing other chains
     witness::witness::start(mq_client.clone()).await;
 }

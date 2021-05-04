@@ -49,9 +49,3 @@ pallet-cf-staking = { path = "../state-chain/pallets/cf-staking" }
 [dev-dependencies]
 nats_test_server = "0.3.0"
 frame-support = "*"
-
-[features]
-default = ['std']
-std = [
-    'state-chain-runtime/std',
-]
