@@ -234,17 +234,27 @@ fn cannot_claim_bond() {
 }
 
 #[test]
-fn can_signal_retirement() {
+fn test_retirement() {
 	new_test_ext().execute_with(|| {
 		validator_provider::Mock::add_validator(ALICE);
 
-		// Need to be staked in order to retire.
+		// Need to be staked in order to retire or activate.
 		assert_noop!(StakeManager::retire_account(Origin::signed(ALICE)), <Error<Test>>::AccountNotStaked);
+		assert_noop!(StakeManager::activate_account(Origin::signed(ALICE)), <Error<Test>>::AccountNotStaked);
 
 		// Try again with some stake, should succeed this time. 
 		assert_ok!(StakeManager::staked(Origin::root(), ALICE, 100, ETH_DUMMY_ADDR));
 		assert_ok!(StakeManager::retire_account(Origin::signed(ALICE)));
 
 		assert!(StakeManager::is_retired(&ALICE).unwrap());
+
+		// Can't retire if already retired
+		assert_noop!(StakeManager::retire_account(Origin::signed(ALICE)), <Error<Test>>::AlreadyRetired);
+
+		// Reactivate the account
+		assert_ok!(StakeManager::activate_account(Origin::signed(ALICE)));
+
+		// Already activated, can't do so again
+		assert_noop!(StakeManager::activate_account(Origin::signed(ALICE)), <Error<Test>>::AlreadyActive);
 	});
 }

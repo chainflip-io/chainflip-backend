@@ -285,6 +285,7 @@ pub mod pallet {
 		}
 
 		/// Signals a validator's intent to withdraw their stake after the next auction and desist from future auctions.
+		/// Should only be called by accounts that are active (ie. not already retired).
 		#[pallet::weight(10_000)]
 		pub fn retire_account(
 			origin: OriginFor<T>,
@@ -294,6 +295,21 @@ pub mod pallet {
 			Self::retire(&who)?;
 
 			Self::deposit_event(Event::AccountRetired(who));
+
+			Ok(().into())
+		}
+
+		/// Signals a retired validator's intent to re-activate their stake and participate in the next validator auction.
+		/// Should only be called if the account is in a retired state. 
+		#[pallet::weight(10_000)]
+		pub fn activate_account(
+			origin: OriginFor<T>,
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+
+			Self::activate(&who)?;
+
+			Self::deposit_event(Event::AccountActivated(who));
 
 			Ok(().into())
 		}
@@ -318,8 +334,11 @@ pub mod pallet {
 		/// A claim signature has been issued by the signer module. [issuer, amount, nonce, address, signature]
 		ClaimSignatureIssued(AccountId<T>, T::TokenAmount, T::Nonce, T::EthereumAddress, <T::EthereumCrypto as RuntimePublic>::Signature),
 
-		/// An account has retired and will no longer take part in auctions [who].
-		AccountRetired(AccountId<T>)
+		/// An account has retired and will no longer take part in auctions. [who]
+		AccountRetired(AccountId<T>),
+
+		/// A previously retired account  has been re-activated. [who]
+		AccountActivated(AccountId<T>)
 	}
 
 	#[pallet::error]
@@ -351,8 +370,11 @@ pub mod pallet {
 		/// Can't retire an account if it's already retired.
 		AlreadyRetired,
 
-		/// Certain action can only be performed if the account has stake associated with it. 
-		AccountNotStaked
+		/// Certain actions can only be performed if the account has stake associated with it. 
+		AccountNotStaked,
+
+		/// Can't activate an account unless it's in a retired state.
+		AlreadyActive
 	}
 }
 
@@ -411,8 +433,8 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Sets the `retired` flag associated with the account, sigalling that the account no longer wishes to participate
-	/// in validator auctions. 
+	/// Sets the `retired` flag associated with the account to true, signalling that the account no longer wishes to
+	/// participate in validator auctions. 
 	/// 
 	/// Returns an error if the account has already been retired, or if the account has no stake associated. 
 	fn retire(account: &T::AccountId) -> Result<(), Error::<T>> {
@@ -423,6 +445,25 @@ impl<T: Config> Pallet<T> {
 						Err(Error::AlreadyRetired)?;
 					}
 					account.retired = true;
+					Ok(())
+				}
+				None => Err(Error::AccountNotStaked)?,
+			}
+		})
+	}
+
+	/// Sets the `retired` flag associated with the account to false, signalling that the account wishes to come
+	/// out of retirement.
+	/// 
+	/// Returns an error if the account is not retired, or if the account has no stake associated. 
+	fn activate(account: &T::AccountId) -> Result<(), Error::<T>> {
+		Stakes::<T>::try_mutate_exists(account, |maybe_account| {
+			match maybe_account.as_mut() {
+				Some(account) => {
+					if !account.retired {
+						Err(Error::AlreadyActive)?;
+					}
+					account.retired = false;
 					Ok(())
 				}
 				None => Err(Error::AccountNotStaked)?,
