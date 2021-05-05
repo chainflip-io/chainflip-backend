@@ -78,7 +78,7 @@ pub struct ClaimSignatureIssuedEvent<S: Staking> {
 }
 
 /// Wrapper for all Staking event types
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum StakingEvent<S: Staking> {
     ClaimSigRequestedEvent(ClaimSigRequestedEvent<S>),
 

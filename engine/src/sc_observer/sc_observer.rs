@@ -1,15 +1,12 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use chainflip_common::types::coin::Coin;
-use codec::Decode;
-use substrate_subxt::{Client, ClientBuilder, EventSubscription, RawEvent};
+use substrate_subxt::{Client, ClientBuilder, EventSubscription};
 
 use tokio::sync::Mutex;
 
 use crate::{
     mq::{IMQClient, Subject},
-    sc_observer::sc_event::subxt_event_from_sc_event,
     settings,
 };
 
@@ -17,11 +14,7 @@ use log::{debug, error, info, trace};
 
 use super::{
     runtime::StateChainRuntime,
-    sc_event::subject_from_raw_event,
-    staking::{
-        ClaimSigRequestedEvent, ClaimSignatureIssuedEvent, ClaimedEvent, StakeRefundEvent,
-        StakedEvent,
-    },
+    sc_event::{sc_event_from_raw_event, subject_from_raw_event},
 };
 
 /// Kick off the state chain observer process
@@ -84,7 +77,7 @@ async fn subscribe_to_events<M: 'static + IMQClient + Send + Sync>(
         let subject: Option<Subject> = subject_from_raw_event(&raw_event);
 
         if let Some(subject) = subject {
-            let message = subxt_event_from_sc_event(raw_event)?;
+            let message = sc_event_from_raw_event(raw_event)?;
             match message {
                 Some(event) => {
                     // Publish the message to the message queue

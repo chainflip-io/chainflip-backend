@@ -1,5 +1,3 @@
-use self::{runtime::StateChainRuntime, staking::StakingEvent, validator::ValidatorEvent};
-
 pub mod sc_observer;
 
 /// The state chain runtime client type definitions

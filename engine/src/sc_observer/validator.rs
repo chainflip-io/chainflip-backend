@@ -47,7 +47,7 @@ pub struct ForceRotationRequestedEvent<V: Validator> {
 }
 
 /// Wrapper for all Validator events
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ValidatorEvent<V: Validator> {
     MaximumValidatorsChangedEvent(MaximumValidatorsChangedEvent<V>),
 
