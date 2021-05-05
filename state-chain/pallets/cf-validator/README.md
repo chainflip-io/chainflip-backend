@@ -10,7 +10,9 @@ This pallet manages the rotation of validators that have staked on Chainflip.
 
 - Validator: A node that has staked an amount of `FLIP` ERC20 token.
 - Validator ID: TBC
-- Epoch: A period in blocks in which a constant set of validators ensure the network.
+- Epoch: A period in blocks in which a constant set of validators ensure the network. Each Epoch consists of two sessions,
+  a regular trading session and the auction session to prepare the validator set for the next Epoch.
+- Session: A session as defined by the session pallet. Each Epoch consists of two sessions.
 - Rotation: The process of rotating the validator sets, also referred to as the auction.
 - Sudo: A single account that is also called the "sudo key" which allows "privileged functions"
 

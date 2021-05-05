@@ -159,6 +159,10 @@ pub mod pallet {
 	#[pallet::getter(fn max_validators)]
 	pub(super) type SizeValidatorSet<T: Config> = StorageValue<_, ValidatorSize, ValueQuery>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn is_auction_phase)]
+	pub(super) type IsAuctionPhase<T: Config> = StorageValue<_, bool, ValueQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub size_validator_set: ValidatorSize,
@@ -222,19 +226,19 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 /// Provides the new set of validators to the session module when session is being rotated.
 impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 	// On rotation this is called #3
-	fn new_session(new_index: u32) -> Option<Vec<T::ValidatorId>> {
+	fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
 		debug!("planning new_session({})", new_index);
 		Self::new_session(new_index)
 	}
 
 	// On rotation this is called #1
-	fn end_session(end_index: u32) {
+	fn end_session(end_index: SessionIndex) {
 		debug!("starting start_session({})", end_index);
 		Self::end_session(end_index)
 	}
 
 	// On rotation this is called #2
-	fn start_session(start_index: u32) {
+	fn start_session(start_index: SessionIndex) {
 		debug!("ending end_session({})", start_index);
 		Self::start_session(start_index);
 	}
@@ -260,12 +264,27 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 	}
 }
 
-type Stake<T: Config> = <<T as Config>::CandidateProvider as CandidateProvider>::Stake;
+type Stake<T> = <<T as Config>::CandidateProvider as CandidateProvider>::Stake;
+
+type SessionIndex = u32; 
 
 impl<T: Config> Pallet<T> {
 
-	fn new_session(new_index: EpochIndex) -> Option<Vec<T::ValidatorId>> {
-		debug!("Creating a new session {}", new_index);
+	/// This returns validators for the *next* session and is called at the *beginning* of the current session.
+	///
+	/// If we are at the beginning of a non-auction session, the next session will be an auction session, so we return
+	/// `None` to indicate that the validator set remains unchanged. Otherwise, the set is considered changed even if 
+	/// the new set of validators is the same as the old one.  
+	///
+	/// If we are the beginning of an auction session, we need to run the auction to set the validators for the upcoming
+	/// Epoch. 
+	fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
+		if !Self::is_auction_phase() {
+			// TODO: Deposit an event here? 
+			return None
+		}
+
+		debug!("Creating a new auction-phase session {}", new_index);
 		Self::deposit_event(Event::AuctionStarted(new_index));
 		let candidates = T::CandidateProvider::get_candidates();
 		let new_validators = Self::run_auction(candidates);
@@ -273,11 +292,19 @@ impl<T: Config> Pallet<T> {
 		new_validators
 	}
 
-	fn end_session(end_index: EpochIndex) {
-		debug!("Ending a session {}", end_index);
+	/// The end of the session is triggered, we alternate between regular trading sessions and auction sessions. 
+	fn end_session(end_index: SessionIndex) {
+		IsAuctionPhase::<T>::mutate(|is_auction| {
+			if *is_auction {
+				debug!("Ending the auction session {}", end_index);
+			} else {
+				debug!("Ending the trading session {}", end_index);
+			}
+			*is_auction = !*is_auction;
+		});
 	}
 
-	fn start_session(start_index: EpochIndex) {
+	fn start_session(start_index: SessionIndex) {
 		debug!("Starting a new session {}", start_index);
 	}
 
@@ -295,14 +322,16 @@ impl<T: Config> Pallet<T> {
 				return Some(    candidates);
 			}
 		}
-		None
+		Some(vec![])
 	}
 
 	pub fn should_end_session(now: T::BlockNumber) -> bool {
 		if Force::<T>::get() {
 			Force::<T>::set(false);
-			true
-		} else {
+			return true
+		} 
+		
+		if !Self::is_auction_phase() {
 			let epoch_blocks = BlocksPerEpoch::<T>::get();
 			if epoch_blocks == Zero::zero() {
 				return false;
@@ -312,6 +341,10 @@ impl<T: Config> Pallet<T> {
 			let end = diff >= epoch_blocks;
 			if end { LastBlockNumber::<T>::set(now); }
 			end
+		} else {
+			// TODO: This is an auction session, so we can only transition to the next session if the auction is 
+			// completed successfully
+			todo!()
 		}
 	}
 
