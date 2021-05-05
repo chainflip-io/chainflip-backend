@@ -5,12 +5,26 @@ name: chainflip-engine-pr
 steps:
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<< pull_request >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # Pull request check and build
+  - name: format-engine
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    commands:
+      - rustfmt
   - name: check-engine
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
       SCCACHE_DIR: /cache
     commands:
       - SKIP_WASM_BUILD=1 cargo check --release --bin chainflip-engine
+      - sccache -s
+    volumes:
+      - name: cache
+        path: /cache
+  - name: test-engine
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    environment:
+      SCCACHE_DIR: /cache
+    commands:
+      - SKIP_WASM_BUILD=1 cargo test --release --bin chainflip-engine
       - sccache -s
     volumes:
       - name: cache
