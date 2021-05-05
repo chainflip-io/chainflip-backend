@@ -96,6 +96,7 @@ pub mod pallet {
 		NoValidators,
 		InvalidEpoch,
 		InvalidValidatorSetSize,
+		InvalidAuction,
 	}
 
 	// Pallet implements [`Hooks`] trait to define some logic to execute in some context.
@@ -141,6 +142,16 @@ pub mod pallet {
 			Self::deposit_event(Event::ForceRotationRequested());
 			Ok(().into())
 		}
+
+		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		pub(super) fn confirm_auction(
+			origin: OriginFor<T>,
+			index: EpochIndex,
+		) -> DispatchResultWithPostInfo {
+			ensure_signed(origin)?;
+			ensure!(Some(index) == AuctionToConfirm::<T>::get(), Error::<T>::InvalidAuction);
+			Ok(().into())
+		}
 	}
 
 	#[pallet::storage]
@@ -163,10 +174,15 @@ pub mod pallet {
 	#[pallet::getter(fn is_auction_phase)]
 	pub(super) type IsAuctionPhase<T: Config> = StorageValue<_, bool, ValueQuery>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn auction_confirmed)]
+	pub(super) type AuctionToConfirm<T: Config> = StorageValue<_, EpochIndex, OptionQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub size_validator_set: ValidatorSize,
 		pub epoch_number_of_blocks: T::BlockNumber,
+
 	}
 
 	#[cfg(feature = "std")]
@@ -277,18 +293,21 @@ impl<T: Config> Pallet<T> {
 	/// the new set of validators is the same as the old one.  
 	///
 	/// If we are the beginning of an auction session, we need to run the auction to set the validators for the upcoming
-	/// Epoch. 
+	/// Epoch.
+	///
+	/// `AuctionStarted` is emitted and the rotation from auction to trading phases will wait on a
+	/// confirmation via the `auction_confirmed` extrinsic
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
 		if !Self::is_auction_phase() {
-			// TODO: Deposit an event here? 
+			Self::deposit_event(Event::AuctionEnded(new_index));
 			return None
 		}
 
 		debug!("Creating a new auction-phase session {}", new_index);
 		Self::deposit_event(Event::AuctionStarted(new_index));
+		AuctionToConfirm::<T>::set(Some(new_index));
 		let candidates = T::CandidateProvider::get_candidates();
 		let new_validators = Self::run_auction(candidates);
-		Self::deposit_event(Event::AuctionEnded(new_index));
 		new_validators
 	}
 
@@ -319,19 +338,25 @@ impl<T: Config> Pallet<T> {
 			let candidates = candidates.get(0..max_size as usize);
 			if let Some(candidates) = candidates {
 				let candidates: Vec<T::ValidatorId> = candidates.iter().map(|i| i.0.clone()).collect();
-				return Some(    candidates);
+				return Some(candidates);
 			}
 		}
 		Some(vec![])
 	}
 
+	/// Check if we have a forced session for this block.  If not, if we are in the "auction" phase
+	/// then we would rotate only with a confirmation of that auction else we would count blocks to
+	/// see if the epoch has come to end
 	pub fn should_end_session(now: T::BlockNumber) -> bool {
 		if Force::<T>::get() {
 			Force::<T>::set(false);
 			return true
-		} 
-		
-		if !Self::is_auction_phase() {
+		}
+
+		if Self::is_auction_phase() && Self::auction_confirmed().is_some() {
+			AuctionToConfirm::<T>::set(None);
+			true
+		} else {
 			let epoch_blocks = BlocksPerEpoch::<T>::get();
 			if epoch_blocks == Zero::zero() {
 				return false;
@@ -341,10 +366,6 @@ impl<T: Config> Pallet<T> {
 			let end = diff >= epoch_blocks;
 			if end { LastBlockNumber::<T>::set(now); }
 			end
-		} else {
-			// TODO: This is an auction session, so we can only transition to the next session if the auction is 
-			// completed successfully
-			todo!()
 		}
 	}
 
