@@ -1,4 +1,11 @@
+use self::{runtime::StateChainRuntime, staking::StakingEvent, validator::ValidatorEvent};
+
 pub mod sc_observer;
+
+/// The state chain runtime client type definitions
+pub mod runtime;
+
+mod sc_event;
 
 // ==== Pallet support for the sc-observer =====
 
@@ -8,5 +15,7 @@ pub mod staking;
 /// Validator pallet support for substrate-subxt
 pub mod validator;
 
-/// The state chain runtime client type definitions
-pub mod runtime;
+pub enum SCEvent {
+    ValidatorEvent(ValidatorEvent<StateChainRuntime>),
+    StakingEvent(StakingEvent<StateChainRuntime>),
+}

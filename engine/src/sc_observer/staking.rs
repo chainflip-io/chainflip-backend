@@ -1,53 +1,70 @@
 // Implements support for the staking module
 
-use codec::Decode;
-use substrate_subxt::{module, system::System, Event};
+use std::marker::PhantomData;
 
+use codec::{Decode, Encode};
+use substrate_subxt::{module, sp_core::crypto::AccountId32, system::System, Event};
+
+use serde::{Deserialize, Serialize};
 use sp_core::ecdsa::Signature;
+
+use super::{runtime::StateChainRuntime, SCEvent};
 
 #[module]
 pub trait Staking: System {}
 
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+// The order of these fields matter for decoding
+#[derive(Clone, Debug, Eq, PartialEq, Event, Encode, Decode, Serialize, Deserialize)]
 pub struct ClaimSigRequestedEvent<S: Staking> {
     /// The AccountId of the validator wanting to claim
-    pub who: <S as System>::AccountId,
+    pub who: AccountId32,
 
     pub eth_address: [u8; 20],
 
     pub nonce: u64,
 
     pub amount: u128,
-}
 
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+    pub _phantom: PhantomData<S>,
+}
+// The order of these fields matter for decoding
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct StakedEvent<S: Staking> {
-    pub who: <S as System>::AccountId,
+    pub who: AccountId32,
 
     pub stake_added: u128,
 
     pub total_stake: u128,
+
+    pub _phantom: PhantomData<S>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+// The order of these fields matter for decoding
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct ClaimedEvent<S: Staking> {
-    pub who: <S as System>::AccountId,
+    pub who: AccountId32,
 
     pub amount: u128,
+
+    pub _phantom: PhantomData<S>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+// The order of these fields matter for decoding
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct StakeRefundEvent<S: Staking> {
-    pub who: <S as System>::AccountId,
+    pub who: AccountId32,
 
     pub amount: u128,
 
     pub eth_address: [u8; 20],
+
+    pub _phantom: PhantomData<S>,
 }
 
+// The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct ClaimSignatureIssuedEvent<S: Staking> {
-    pub who: <S as System>::AccountId,
+    pub who: AccountId32,
 
     pub amount: u128,
 
@@ -56,6 +73,51 @@ pub struct ClaimSignatureIssuedEvent<S: Staking> {
     pub eth_address: [u8; 20],
 
     pub signature: Signature,
+
+    pub _phantom: PhantomData<S>,
+}
+
+/// Wrapper for all Staking event types
+pub enum StakingEvent<S: Staking> {
+    ClaimSigRequestedEvent(ClaimSigRequestedEvent<S>),
+
+    ClaimSignatureIssuedEvent(ClaimSignatureIssuedEvent<S>),
+
+    StakedEvent(StakedEvent<S>),
+
+    StakeRefundEvent(StakeRefundEvent<S>),
+
+    ClaimedEvent(ClaimedEvent<S>),
+}
+
+impl From<ClaimSigRequestedEvent<StateChainRuntime>> for SCEvent {
+    fn from(claim_sig_requested: ClaimSigRequestedEvent<StateChainRuntime>) -> Self {
+        SCEvent::StakingEvent(StakingEvent::ClaimSigRequestedEvent(claim_sig_requested))
+    }
+}
+
+impl From<ClaimSignatureIssuedEvent<StateChainRuntime>> for SCEvent {
+    fn from(claim_sig_issued: ClaimSignatureIssuedEvent<StateChainRuntime>) -> Self {
+        SCEvent::StakingEvent(StakingEvent::ClaimSignatureIssuedEvent(claim_sig_issued))
+    }
+}
+
+impl From<ClaimedEvent<StateChainRuntime>> for SCEvent {
+    fn from(claimed: ClaimedEvent<StateChainRuntime>) -> Self {
+        SCEvent::StakingEvent(StakingEvent::ClaimedEvent(claimed))
+    }
+}
+
+impl From<StakedEvent<StateChainRuntime>> for SCEvent {
+    fn from(staked: StakedEvent<StateChainRuntime>) -> Self {
+        SCEvent::StakingEvent(StakingEvent::StakedEvent(staked))
+    }
+}
+
+impl From<StakeRefundEvent<StateChainRuntime>> for SCEvent {
+    fn from(stake_refund: StakeRefundEvent<StateChainRuntime>) -> Self {
+        SCEvent::StakingEvent(StakingEvent::StakeRefundEvent(stake_refund))
+    }
 }
 
 #[cfg(test)]

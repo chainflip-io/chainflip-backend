@@ -2,27 +2,30 @@
 
 use std::marker::PhantomData;
 
-use codec::Decode;
+use codec::{Decode, Encode};
 use pallet_cf_validator::{EpochIndex, ValidatorSize};
+use serde::{Deserialize, Serialize};
 use substrate_subxt::{module, system::System, Event};
+
+use super::{runtime::StateChainRuntime, SCEvent};
 
 #[module]
 pub trait Validator: System {}
 
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct MaximumValidatorsChangedEvent<V: Validator> {
     pub before: ValidatorSize,
     pub now: ValidatorSize,
     pub _phantom: PhantomData<V>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct EpochDurationChangedEvent<V: Validator> {
     pub from: V::BlockNumber,
     pub to: V::BlockNumber,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct AuctionStartedEvent<V: Validator> {
     // TODO:  Ideally we use V::EpochIndex here, however we do that
     pub epoch_index: EpochIndex,
@@ -30,7 +33,7 @@ pub struct AuctionStartedEvent<V: Validator> {
     pub _phantom: PhantomData<V>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct AuctionEndedEvent<V: Validator> {
     // TODO:  Ideally we use V::EpochIndex here, however we do that
     pub epoch_index: EpochIndex,
@@ -38,9 +41,58 @@ pub struct AuctionEndedEvent<V: Validator> {
     pub _phantom: PhantomData<V>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct ForceRotationRequestedEvent<V: Validator> {
     pub _phantom: PhantomData<V>,
+}
+
+/// Wrapper for all Validator events
+pub enum ValidatorEvent<V: Validator> {
+    MaximumValidatorsChangedEvent(MaximumValidatorsChangedEvent<V>),
+
+    EpochDurationChangedEvent(EpochDurationChangedEvent<V>),
+
+    AuctionStartedEvent(AuctionStartedEvent<V>),
+
+    AuctionEndedEvent(AuctionEndedEvent<V>),
+
+    ForceRotationRequestedEvent(ForceRotationRequestedEvent<V>),
+}
+
+impl From<MaximumValidatorsChangedEvent<StateChainRuntime>> for SCEvent {
+    fn from(max_validators_changed: MaximumValidatorsChangedEvent<StateChainRuntime>) -> Self {
+        SCEvent::ValidatorEvent(ValidatorEvent::MaximumValidatorsChangedEvent(
+            max_validators_changed,
+        ))
+    }
+}
+
+impl From<EpochDurationChangedEvent<StateChainRuntime>> for SCEvent {
+    fn from(epoch_duration_changed: EpochDurationChangedEvent<StateChainRuntime>) -> Self {
+        SCEvent::ValidatorEvent(ValidatorEvent::EpochDurationChangedEvent(
+            epoch_duration_changed,
+        ))
+    }
+}
+
+impl From<AuctionStartedEvent<StateChainRuntime>> for SCEvent {
+    fn from(auction_started: AuctionStartedEvent<StateChainRuntime>) -> Self {
+        SCEvent::ValidatorEvent(ValidatorEvent::AuctionStartedEvent(auction_started))
+    }
+}
+
+impl From<AuctionEndedEvent<StateChainRuntime>> for SCEvent {
+    fn from(auction_ended: AuctionEndedEvent<StateChainRuntime>) -> Self {
+        SCEvent::ValidatorEvent(ValidatorEvent::AuctionEndedEvent(auction_ended))
+    }
+}
+
+impl From<ForceRotationRequestedEvent<StateChainRuntime>> for SCEvent {
+    fn from(force_rotation_requested: ForceRotationRequestedEvent<StateChainRuntime>) -> Self {
+        SCEvent::ValidatorEvent(ValidatorEvent::ForceRotationRequestedEvent(
+            force_rotation_requested,
+        ))
+    }
 }
 
 #[cfg(test)]

@@ -9,7 +9,7 @@ pub struct MessageQueue {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Subxt {
+pub struct StateChain {
     pub hostname: String,
     pub port: u32,
 }
@@ -17,7 +17,7 @@ pub struct Subxt {
 #[derive(Debug, Deserialize)]
 pub struct Settings {
     pub message_queue: MessageQueue,
-    pub subxt: Subxt,
+    pub state_chain: StateChain,
 }
 
 impl Settings {

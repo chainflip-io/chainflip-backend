@@ -33,9 +33,9 @@ anyhow = "1.0"
 substrate-subxt = { version = "0.15 "}
 
 # substrate deps
-sp-core = "*"
-sp-keyring = "*"
-frame-system = "*"
+sp-core = "3.0.0"
+sp-keyring = "3.0.0"
+frame-system = "3.0.0"
 codec = { package = "parity-scale-codec", version = "2.1", default-features = false, features = ["derive", "full"] }
 config = "0.11.0"
 log = { version = "0.4.14" }
@@ -50,4 +50,4 @@ pallet-cf-staking = { path = "../state-chain/pallets/cf-staking" }
 
 [dev-dependencies]
 nats_test_server = "0.3.0"
-frame-support = "*"
+frame-support = "3.0.0"

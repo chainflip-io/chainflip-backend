@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use chainflip_common::types::coin::Coin;
+use codec::Decode;
 use substrate_subxt::{Client, ClientBuilder, EventSubscription, RawEvent};
 
 use tokio::sync::Mutex;
@@ -13,12 +14,19 @@ use crate::{
 
 use log::{error, info, trace};
 
-use super::runtime::StateChainRuntime;
+use super::{
+    runtime::StateChainRuntime,
+    staking::{
+        ClaimSigRequestedEvent, ClaimSignatureIssuedEvent, ClaimedEvent, StakeRefundEvent,
+        StakedEvent,
+    },
+    SCEvent,
+};
 
 /// Kick off the state chain observer process
 pub async fn start<M: 'static + IMQClient + Send + Sync>(
     mq_client: Arc<Mutex<M>>,
-    subxt_settings: settings::Subxt,
+    subxt_settings: settings::StateChain,
 ) {
     info!("Begin subscribing to state chain events");
 
@@ -32,20 +40,21 @@ pub async fn start<M: 'static + IMQClient + Send + Sync>(
 }
 
 /// Create a substrate subxt client over the StateChainRuntime
-async fn create_subxt_client(subxt_settings: settings::Subxt) -> Result<Client<StateChainRuntime>> {
+async fn create_subxt_client(
+    subxt_settings: settings::StateChain,
+) -> Result<Client<StateChainRuntime>> {
     let client = ClientBuilder::<StateChainRuntime>::new()
-        // ideally don't use this, but we currently have a few types that aren't even used (transactions pallet), so this is to save
-        // defining types for them.
         .set_url(format!(
             "ws://{}:{}",
             subxt_settings.hostname, subxt_settings.port
         ))
-        .skip_type_sizes_check()
         .build()
         .await?;
 
     Ok(client)
 }
+
+
 
 async fn subscribe_to_events<M: 'static + IMQClient + Send + Sync>(
     mq_client: Arc<Mutex<M>>,
@@ -92,69 +101,20 @@ async fn subscribe_to_events<M: 'static + IMQClient + Send + Sync>(
     }
 }
 
-/// Returns the subject to publish the data of a raw event to
-fn subject_from_raw_event(event: &RawEvent) -> Option<Subject> {
-    let subject = match event.module.as_str() {
-        "System" => None,
-        "Staking" => match event.variant.as_str() {
-            "ClaimSigRequested" => Some(Subject::Claim),
-            // All Stake refunds are ETH, how are these refunds coming out though? as batches or individual txs?
-            "StakeRefund" => Some(Subject::Batch(Coin::ETH)),
-            "ClaimSignatureIssued" => Some(Subject::Claim),
-            // This doesn't need to go anywhere, this is just a confirmation emitted, perhaps for block explorers
-            "Claimed" => None,
-            _ => None,
-        },
-        "Validator" => match event.variant.as_str() {
-            "AuctionEnded" => None,
-            "AuctionStarted" => None,
-            "ForceRotationRequested" => Some(Subject::Rotate),
-            "EpochDurationChanged" => None,
-            _ => None,
-        },
-        _ => None,
-    };
-    subject
-}
-
 #[cfg(test)]
 mod tests {
 
-    use crate::settings::Subxt;
+    use crate::settings::StateChain;
 
     use super::*;
 
     #[tokio::test]
     #[ignore = "depends on running state chain at the specifed url"]
     async fn create_subxt_client_test() {
-        let subxt_settings = Subxt {
+        let subxt_settings = StateChain {
             hostname: "localhost".to_string(),
             port: 9944,
         };
         assert!(create_subxt_client(subxt_settings).await.is_ok())
-    }
-
-    #[test]
-    fn subject_from_raw_event_test() {
-        // test success case
-        let raw_event = substrate_subxt::RawEvent {
-            // Module and variant are defined by the state chain node
-            module: "Staking".to_string(),
-            variant: "ClaimSigRequested".to_string(),
-            data: "Test data".as_bytes().to_owned(),
-        };
-
-        let subject = subject_from_raw_event(&raw_event);
-        assert_eq!(subject, Some(Subject::Claim));
-
-        // test "fail" case
-        let raw_event_invalid = substrate_subxt::RawEvent {
-            // Module and variant are defined by the state chain node
-            module: "NotAModule".to_string(),
-            variant: "NotAVariant".to_string(),
-            data: "Test data".as_bytes().to_owned(),
-        };
-        let subject = subject_from_raw_event(&raw_event_invalid);
-        assert_eq!(subject, None);
     }
 }

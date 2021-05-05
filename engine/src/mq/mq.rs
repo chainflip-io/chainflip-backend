@@ -50,6 +50,7 @@ pub enum Subject {
     Rotate,
 }
 
+// Used to create the subject that the MQ publishes to
 impl fmt::Display for Subject {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self {
