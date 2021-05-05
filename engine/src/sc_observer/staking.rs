@@ -8,7 +8,7 @@ use substrate_subxt::{module, sp_core::crypto::AccountId32, system::System, Even
 use serde::{Deserialize, Serialize};
 use sp_core::ecdsa::Signature;
 
-use super::{runtime::StateChainRuntime, SCEvent};
+use super::{runtime::StateChainRuntime, sc_event::SCEvent};
 
 #[module]
 pub trait Staking: System {}
@@ -62,7 +62,7 @@ pub struct StakeRefundEvent<S: Staking> {
 }
 
 // The order of these fields matter for decoding
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct ClaimSignatureIssuedEvent<S: Staking> {
     pub who: AccountId32,
 
@@ -78,6 +78,7 @@ pub struct ClaimSignatureIssuedEvent<S: Staking> {
 }
 
 /// Wrapper for all Staking event types
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum StakingEvent<S: Staking> {
     ClaimSigRequestedEvent(ClaimSigRequestedEvent<S>),
 
@@ -162,6 +163,7 @@ mod tests {
             eth_address,
             nonce: 123u64,
             amount: 123u128,
+            _phantom: PhantomData,
         };
 
         assert_eq!(decoded_event, expecting);
@@ -186,6 +188,7 @@ mod tests {
             who,
             stake_added: 100u128,
             total_stake: 150u128,
+            _phantom: PhantomData,
         };
 
         assert_eq!(decoded_event, expecting);
@@ -209,6 +212,7 @@ mod tests {
         let expecting = ClaimedEvent {
             who,
             amount: 150u128,
+            _phantom: PhantomData,
         };
 
         assert_eq!(decoded_event, expecting);
@@ -238,6 +242,7 @@ mod tests {
             who,
             amount: 150u128,
             eth_address,
+            _phantom: PhantomData,
         };
 
         assert_eq!(decoded_event, expecting);
@@ -281,6 +286,7 @@ mod tests {
             nonce: 1u64,
             eth_address,
             signature: sig,
+            _phantom: PhantomData,
         };
 
         assert_eq!(decoded_event, expecting);

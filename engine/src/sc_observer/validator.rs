@@ -7,7 +7,7 @@ use pallet_cf_validator::{EpochIndex, ValidatorSize};
 use serde::{Deserialize, Serialize};
 use substrate_subxt::{module, system::System, Event};
 
-use super::{runtime::StateChainRuntime, SCEvent};
+use super::{runtime::StateChainRuntime, sc_event::SCEvent};
 
 #[module]
 pub trait Validator: System {}
@@ -47,6 +47,7 @@ pub struct ForceRotationRequestedEvent<V: Validator> {
 }
 
 /// Wrapper for all Validator events
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ValidatorEvent<V: Validator> {
     MaximumValidatorsChangedEvent(MaximumValidatorsChangedEvent<V>),
 

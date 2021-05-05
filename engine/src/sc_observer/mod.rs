@@ -14,8 +14,3 @@ pub mod staking;
 
 /// Validator pallet support for substrate-subxt
 pub mod validator;
-
-pub enum SCEvent {
-    ValidatorEvent(ValidatorEvent<StateChainRuntime>),
-    StakingEvent(StakingEvent<StateChainRuntime>),
-}

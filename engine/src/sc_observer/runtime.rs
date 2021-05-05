@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use substrate_subxt::{
     balances::{AccountData, Balances},
     extrinsic::DefaultExtra,
@@ -27,7 +27,7 @@ use super::{staking, validator};
 // Runtime template for use in decoding by subxt
 
 /// Concrete type definitions compatible with the state chain node
-#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct StateChainRuntime;
 
 impl Runtime for StateChainRuntime {

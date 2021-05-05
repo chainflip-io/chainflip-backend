@@ -4,16 +4,26 @@ use substrate_subxt::RawEvent;
 
 use crate::mq::Subject;
 
+use anyhow::Result;
+
 use super::{
     runtime::StateChainRuntime,
     staking::{
         ClaimSigRequestedEvent, ClaimSignatureIssuedEvent, ClaimedEvent, StakeRefundEvent,
-        StakedEvent,
+        StakedEvent, StakingEvent,
     },
-    SCEvent,
+    validator::ValidatorEvent,
 };
 
-async fn subxt_event_from_sc_event(raw_event: RawEvent) -> Result<Option<SCEvent>> {
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SCEvent {
+    ValidatorEvent(ValidatorEvent<StateChainRuntime>),
+    StakingEvent(StakingEvent<StateChainRuntime>),
+}
+
+pub(super) fn subxt_event_from_sc_event(raw_event: RawEvent) -> Result<Option<SCEvent>> {
     let event = match raw_event.module.as_str() {
         "System" => Ok(None),
         "Staking" => match raw_event.variant.as_str() {
@@ -50,7 +60,7 @@ async fn subxt_event_from_sc_event(raw_event: RawEvent) -> Result<Option<SCEvent
 }
 
 /// Returns the subject to publish the data of a raw event to
-fn subject_from_raw_event(event: &RawEvent) -> Option<Subject> {
+pub(super) fn subject_from_raw_event(event: &RawEvent) -> Option<Subject> {
     let subject = match event.module.as_str() {
         "System" => None,
         "Staking" => match event.variant.as_str() {

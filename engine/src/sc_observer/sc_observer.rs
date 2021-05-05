@@ -9,18 +9,19 @@ use tokio::sync::Mutex;
 
 use crate::{
     mq::{IMQClient, Subject},
+    sc_observer::sc_event::subxt_event_from_sc_event,
     settings,
 };
 
-use log::{error, info, trace};
+use log::{debug, error, info, trace};
 
 use super::{
     runtime::StateChainRuntime,
+    sc_event::subject_from_raw_event,
     staking::{
         ClaimSigRequestedEvent, ClaimSignatureIssuedEvent, ClaimedEvent, StakeRefundEvent,
         StakedEvent,
     },
-    SCEvent,
 };
 
 /// Kick off the state chain observer process
@@ -54,8 +55,6 @@ async fn create_subxt_client(
     Ok(client)
 }
 
-
-
 async fn subscribe_to_events<M: 'static + IMQClient + Send + Sync>(
     mq_client: Arc<Mutex<M>>,
     subxt_client: Client<StateChainRuntime>,
@@ -85,16 +84,28 @@ async fn subscribe_to_events<M: 'static + IMQClient + Send + Sync>(
         let subject: Option<Subject> = subject_from_raw_event(&raw_event);
 
         if let Some(subject) = subject {
-            match mq_c.lock().await.publish(subject, &raw_event.data).await {
-                Err(_) => {
-                    error!(
-                        "Could not publish message `{:?}` to subject `{}`",
-                        raw_event.data,
-                        subject.to_string()
-                    );
+            let message = subxt_event_from_sc_event(raw_event)?;
+            match message {
+                Some(event) => {
+                    // Publish the message to the message queue
+                    match mq_c.lock().await.publish(subject, &event).await {
+                        Err(_) => {
+                            error!(
+                                "Could not publish message `{:?}` to subject `{}`",
+                                event,
+                                subject.to_string()
+                            );
+                        }
+                        Ok(_) => trace!("Event: {:#?} pushed to message queue", event),
+                    };
                 }
-                Ok(_) => trace!("Event: {:#?} pushed to message queue", raw_event.data),
-            };
+                None => {
+                    debug!(
+                        "Event decoding for an event under subject: {} doesn't exist",
+                        subject
+                    )
+                }
+            }
         } else {
             trace!("Not routing event {:?} to message queue", raw_event);
         };
