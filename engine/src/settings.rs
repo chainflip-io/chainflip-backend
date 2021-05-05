@@ -7,7 +7,6 @@ struct MessageQueue {
     hostname: String,
     port: u32,
 }
-// test
 
 #[derive(Debug, Deserialize)]
 pub struct Settings {
