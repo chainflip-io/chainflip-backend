@@ -123,3 +123,26 @@ volumes:
       path: /mnt/chainflip-build-runner/sccache
 image_pull_secrets:
   - dockerconfigjson
+
+---
+kind: pipeline
+type: docker
+name: chainflip-rust-base
+
+steps:
+  - name: rust-base
+    image: plugins/docker
+    settings:
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+      repo: ghcr.io/chainflip-io/chainflip-backend/rust-base
+      dockerfile: Dockerfile.rust-base
+      registry: ghcr.io
+      tags: latest
+      cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    when:
+      paths:
+        - Dockerfile.rust-base
+        - .drone.yml
