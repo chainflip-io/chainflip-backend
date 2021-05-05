@@ -356,11 +356,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		if Self::is_auction_phase() {
-			if Self::auction_confirmed().is_some() {
-				AuctionToConfirm::<T>::set(None);
-				return true
-			}
-			false
+			Self::auction_confirmed().is_none()
 		} else {
 			let epoch_blocks = BlocksPerEpoch::<T>::get();
 			if epoch_blocks == Zero::zero() {
