@@ -91,6 +91,16 @@ steps:
     volumes:
       - name: cache
         path: /cache
+  - name: test-chainflip-backend
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    environment:
+      SCCACHE_DIR: /cache
+    commands:
+      - cargo test --release
+      - sccache -s
+    volumes:
+      - name: cache
+        path: /cache
   - name: publish-state-chain-node
     image: plugins/ansible
     settings:
