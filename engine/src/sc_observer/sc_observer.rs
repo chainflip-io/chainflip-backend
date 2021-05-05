@@ -59,18 +59,13 @@ async fn subscribe_to_events<M: 'static + IMQClient + Send + Sync>(
         .expect("Could not subscribe to state chain events");
     let decoder = subxt_client.events_decoder();
     let mut sub = EventSubscription::new(sub, decoder);
-    loop {
-        let raw_event = if let Some(res_event) = sub.next().await {
-            match res_event {
-                Ok(evt) => evt,
-                Err(e) => {
-                    error!("Next event could not be read: {}", e);
-                    continue;
-                }
+    while let Some(res_event) = sub.next().await {
+        let raw_event = match res_event {
+            Ok(raw_event) => raw_event,
+            Err(e) => {
+                error!("Next event could not be read: {}", e);
+                continue;
             }
-        } else {
-            info!("No further events from the state chain.");
-            return Ok(());
         };
 
         let subject: Option<Subject> = subject_from_raw_event(&raw_event);
@@ -102,6 +97,7 @@ async fn subscribe_to_events<M: 'static + IMQClient + Send + Sync>(
             trace!("Not routing event {:?} to message queue", raw_event);
         };
     }
+    Ok(())
 }
 
 #[cfg(test)]
