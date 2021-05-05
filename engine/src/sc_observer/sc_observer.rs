@@ -73,7 +73,6 @@ async fn subscribe_to_events<M: 'static + IMQClient + Send + Sync>(
             return Ok(());
         };
 
-        let mq_c = mq_client.clone();
         let subject: Option<Subject> = subject_from_raw_event(&raw_event);
 
         if let Some(subject) = subject {
@@ -81,7 +80,7 @@ async fn subscribe_to_events<M: 'static + IMQClient + Send + Sync>(
             match message {
                 Some(event) => {
                     // Publish the message to the message queue
-                    match mq_c.lock().await.publish(subject, &event).await {
+                    match mq_client.lock().await.publish(subject, &event).await {
                         Err(_) => {
                             error!(
                                 "Could not publish message `{:?}` to subject `{}`",
