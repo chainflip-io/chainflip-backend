@@ -25,6 +25,7 @@ thread_local! {
 	pub static CURRENT_EPOCH: RefCell<u64> = RefCell::new(0);
 	pub static CURRENT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 	pub static NEXT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
+	pub static CHANGED: RefCell<bool> = RefCell::new(false);
 }
 
 pub struct TestValidatorHandler;
@@ -41,11 +42,10 @@ impl ValidatorHandler<u64> for TestValidatorHandler {
 		current_validators: Vec<u64>,
 		next_validators: Vec<u64>,
 	) {
-		if changed {
-			CURRENT_EPOCH.with(|e| *e.borrow_mut() += 1);
-			CURRENT_VALIDATORS.with(|l| *l.borrow_mut() = current_validators);
-			NEXT_VALIDATORS.with(|l| *l.borrow_mut() = next_validators);
-		}
+		CHANGED.with(|e| *e.borrow_mut() = changed);
+		CURRENT_EPOCH.with(|e| *e.borrow_mut() += 1);
+		CURRENT_VALIDATORS.with(|l| *l.borrow_mut() = current_validators);
+		NEXT_VALIDATORS.with(|l| *l.borrow_mut() = next_validators);
 	}
 	fn on_before_session_ending() {
 		// Nothing for the moment
