@@ -20,7 +20,7 @@ steps:
     environment:
       SCCACHE_DIR: /cache
     commands:
-      - cargo test --release --bin state-chain-node
+      - cargo test --release --workspace state-chain
       - sccache -s
     volumes:
       - name: cache

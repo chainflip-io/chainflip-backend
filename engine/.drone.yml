@@ -20,7 +20,7 @@ steps:
     environment:
       SCCACHE_DIR: /cache
     commands:
-      - cargo test --release --bin chainflip-engine
+      - cargo test --release --workspace chainflip-engine
       - sccache -s
     volumes:
       - name: cache
