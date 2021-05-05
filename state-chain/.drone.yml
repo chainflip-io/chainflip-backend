@@ -5,31 +5,7 @@ name: chainflip-state-chain-pr
 steps:
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<< pull_request >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # Pull request check and build
-  - name: format-engine
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    commands:
-      - rustfmt
-  - name: check-state-chain
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_DIR: /cache
-    commands:
-      - SKIP_WASM_BUILD=1 cargo check --release --bin state-chain-node
-      - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
-  - name: test-state-chain
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_DIR: /cache
-    commands:
-      - SKIP_WASM_BUILD=1 cargo test --release --bin state-chain-node
-      - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
-  - name: compile-state-chain
+  - name: build-state-chain
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
       SCCACHE_DIR: /cache
@@ -39,6 +15,30 @@ steps:
     volumes:
       - name: cache
         path: /cache
+  - name: test-state-chain
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    environment:
+      SCCACHE_DIR: /cache
+    commands:
+      - cargo test --release --bin state-chain-node
+      - sccache -s
+    volumes:
+      - name: cache
+        path: /cache
+  - name: check-state-chain
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    environment:
+      SCCACHE_DIR: /cache
+    commands:
+      - cargo check --release --bin state-chain-node
+      - sccache -s
+    volumes:
+      - name: cache
+        path: /cache
+  - name: format-engine
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    commands:
+      - cargo fmt --all -- --check
 
 # Config
 trigger:
