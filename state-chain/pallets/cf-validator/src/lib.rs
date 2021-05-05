@@ -150,6 +150,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
 			ensure!(Some(index) == AuctionToConfirm::<T>::get(), Error::<T>::InvalidAuction);
+			AuctionToConfirm::<T>::set(None);
 			Ok(().into())
 		}
 	}
