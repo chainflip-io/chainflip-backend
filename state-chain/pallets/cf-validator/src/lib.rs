@@ -18,22 +18,22 @@ use log::{debug};
 type ValidatorSize = u32;
 type EpochIndex = u32;
 
-pub trait ValidatorHandler<ValidatorId> {
-	fn on_new_session(
-		changed: bool,
-		current_validators: Vec<ValidatorId>,
-		next_validators: Vec<ValidatorId>
-	);
-	fn on_before_session_ending();
-}
+/// This handler can be implemented in order to hook into Epoch lifecycle events.
+pub trait EpochTransitionHandler {
+	/// The id type used for the validators. 
+	type ValidatorId;
 
-impl<ValidatorId> ValidatorHandler<ValidatorId> for () {
-	fn on_new_session(
-		_changed: bool,
-		_current_validators: Vec<ValidatorId>,
-		_next_validators: Vec<ValidatorId>
-	) {}
-	fn on_before_session_ending() {}
+	/// Triggered at the start of a new Epoch.
+	fn on_new_epoch(new_validators: Vec<Self::ValidatorId>);
+
+	/// Triggered at the start of the auction phase.
+	fn on_new_auction(outgoing_validators: Vec<Self::ValidatorId>);
+
+	/// Triggered before the end of the trading phase and the start of the auction.
+	fn on_before_auction();
+
+	/// Triggered after the end of the auction, before a new Epoch.
+	fn on_before_epoch_ending();
 }
 
 pub trait CandidateProvider {
@@ -68,11 +68,12 @@ pub mod pallet {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		type ValidatorId: Eq + Ord + Clone;
-		// type Stake: Eq + Ord + Copy;
+
 		/// A provider for our validators
 		type CandidateProvider: CandidateProvider<ValidatorId=Self::ValidatorId>;
-		/// A handler for callbacks
-		type ValidatorHandler: ValidatorHandler<Self::ValidatorId>;
+		
+		/// A handler for epoch lifecycle events
+		type EpochTransitionHandler: EpochTransitionHandler<ValidatorId=Self::ValidatorId>;
 
 		#[pallet::constant]
 		type MinEpoch: Get<<Self as frame_system::Config>::BlockNumber>;
@@ -207,24 +208,28 @@ impl<T: Config> pallet_session::SessionHandler<T::ValidatorId> for Pallet<T> {
 	fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(T::ValidatorId, Ks)]) {}
 
 	fn on_new_session<Ks: OpaqueKeys>(
-		changed: bool,
+		_changed: bool,
 		validators: &[(T::ValidatorId, Ks)],
-		queued_validators: &[(T::ValidatorId, Ks)],
+		_queued_validators: &[(T::ValidatorId, Ks)],
 	) {
 		let current_validators = validators.iter()
 			.map(|(id, _)| id.clone())
 			.collect::<Vec<T::ValidatorId>>();
 
-		let next_validators = queued_validators.iter()
-			.map(|(id, _)| id.clone())
-			.collect::<Vec<T::ValidatorId>>();
-
-		T::ValidatorHandler::on_new_session(changed, current_validators, next_validators);
+		if Self::is_auction_phase() {
+			T::EpochTransitionHandler::on_new_auction(current_validators);
+		} else {
+			T::EpochTransitionHandler::on_new_epoch(current_validators);
+		}
 	}
 
 	/// Triggered before [`SessionManager::end_session`] handler
 	fn on_before_session_ending() {
-		T::ValidatorHandler::on_before_session_ending();
+		if Self::is_auction_phase() {
+			T::EpochTransitionHandler::on_before_epoch_ending();
+		} else {
+			T::EpochTransitionHandler::on_before_auction();
+		}
 	}
 
 	fn on_disabled(_validator_index: usize) {
