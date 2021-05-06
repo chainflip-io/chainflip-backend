@@ -1,8 +1,9 @@
 # This Dockfile provides the base image to perform all tasks
 # related to our Rust projects. Our CI needs a properly configured
 # environment so we can guarantee consistancy between projects.
-FROM rust as rust-substrate-base
+FROM gitpod/workspace-full as rust-substrate-base
 
+USER root
 # Substrate and rust compiler dependencies.
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && apt-get -y install --no-install-recommends \
@@ -26,3 +27,5 @@ ENV RUSTC_WRAPPER=sccache
 # Download and set nightly as the default Rust compiler
 RUN rustup default nightly-2021-03-24 \
     && rustup target add wasm32-unknown-unknown --toolchain nightly-2021-03-24 
+
+USER gitpod
