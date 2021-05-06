@@ -6,7 +6,7 @@ use substrate_subxt::{Client, ClientBuilder, EventSubscription};
 use tokio::sync::Mutex;
 
 use crate::{
-    mq::{IMQClient, Subject},
+    mq::{nats_client::NatsMQClient, IMQClient, Options, Subject},
     settings,
 };
 
@@ -18,17 +18,16 @@ use super::{
 };
 
 /// Kick off the state chain observer process
-pub async fn start<M: 'static + IMQClient + Send + Sync>(
-    mq_client: Arc<Mutex<M>>,
-    subxt_settings: settings::StateChain,
-) {
+pub async fn start(mq_options: Options, subxt_settings: settings::StateChain) {
     info!("Begin subscribing to state chain events");
+
+    let mq_client = NatsMQClient::connect(mq_options).await.unwrap();
 
     let subxt_client = create_subxt_client(subxt_settings)
         .await
         .expect("Could not create subxt client");
 
-    subscribe_to_events(mq_client, subxt_client)
+    subscribe_to_events(*mq_client, subxt_client)
         .await
         .expect("Could not subscribe to state chain events");
 }
@@ -48,8 +47,8 @@ async fn create_subxt_client(
     Ok(client)
 }
 
-async fn subscribe_to_events<M: 'static + IMQClient + Send + Sync>(
-    mq_client: Arc<Mutex<M>>,
+async fn subscribe_to_events<M: 'static + IMQClient>(
+    mq_client: M,
     subxt_client: Client<StateChainRuntime>,
 ) -> Result<()> {
     // subscribe to all finalised events, and then redirect them
@@ -75,7 +74,7 @@ async fn subscribe_to_events<M: 'static + IMQClient + Send + Sync>(
             match message {
                 Some(event) => {
                     // Publish the message to the message queue
-                    match mq_client.lock().await.publish(subject, &event).await {
+                    match mq_client.publish(subject, &event).await {
                         Err(_) => {
                             error!(
                                 "Could not publish message `{:?}` to subject `{}`",
