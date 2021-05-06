@@ -1,5 +1,6 @@
 use chainflip_common::types::coin::Coin;
 use codec::Decode;
+use serde_json::ser::State;
 use substrate_subxt::RawEvent;
 
 use crate::mq::Subject;
@@ -8,68 +9,93 @@ use anyhow::Result;
 
 use super::{
     runtime::StateChainRuntime,
-    staking::{
-        ClaimSigRequestedEvent, ClaimSignatureIssuedEvent, ClaimedEvent, StakeRefundEvent,
-        StakedEvent, StakingEvent,
-    },
-    validator::{
-        AuctionEndedEvent, AuctionStartedEvent, EpochDurationChangedEvent,
-        ForceRotationRequestedEvent, MaximumValidatorsChangedEvent, ValidatorEvent,
-    },
+    // staking::{
+    //     ClaimSigRequestedEvent, ClaimSignatureIssuedEvent, ClaimedEvent, StakeRefundEvent,
+    //     StakedEvent, StakingEvent,
+    // },
+    staking::{ClaimSigRequestedEvent, StakeRefundEvent},
+    // validator::{
+    //     AuctionEndedEvent, AuctionStartedEvent, EpochDurationChangedEvent,
+    //     ForceRotationRequestedEvent, MaximumValidatorsChangedEvent, ValidatorEvent,
+    // },
 };
 
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum SCEvent {
-    ValidatorEvent(ValidatorEvent<StateChainRuntime>),
-    StakingEvent(StakingEvent<StateChainRuntime>),
+// #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+// pub enum SCEvent {
+//     ValidatorEvent(ValidatorEvent<StateChainRuntime>),
+//     StakingEvent(StakingEvent<StateChainRuntime>),
+// }
+
+// #[derive(Serialize, Deserialize)]
+pub struct SCEvent<E: Serialize + DeserializeOwned> {
+    event: E,
 }
 
+impl<E: Serialize + DeserializeOwned> SCEvent<E> {
+    pub fn new(event: E) -> Self {
+        Self { event }
+    }
+}
+
+pub trait ISCEvent {}
+
+pub trait StakingEvent: ISCEvent {}
+
+impl StakingEvent for SCEvent<ClaimSigRequestedEvent<StateChainRuntime>> {}
+impl ISCEvent for SCEvent<ClaimSigRequestedEvent<StateChainRuntime>> {}
+
+impl StakingEvent for SCEvent<StakeRefundEvent<StateChainRuntime>> {}
+impl ISCEvent for SCEvent<StakeRefundEvent<StateChainRuntime>> {}
+
 /// Decode a raw event (substrate codec) into a SCEvent wrapper enum
-pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEvent>> {
-    let event = match raw_event.module.as_str() {
+pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<Box<dyn ISCEvent>>> {
+    let event: Result<Option<Box<dyn ISCEvent>>> = match raw_event.module.as_str() {
         "Staking" => match raw_event.variant.as_str() {
-            "ClaimSigRequested" => Ok(Some(
-                ClaimSigRequestedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
-                    .into(),
-            )),
-            "StakeRefund" => Ok(Some(
-                StakeRefundEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
-            )),
-            "ClaimSignatureIssued" => Ok(Some(
-                ClaimSignatureIssuedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
-                    .into(),
-            )),
-            "Claimed" => Ok(Some(
-                ClaimedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
-            )),
-            "Staked" => Ok(Some(
-                StakedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
-            )),
-            _ => Ok(None),
+            "ClaimSigRequested" => Ok(Some(Box::new(SCEvent::new(ClaimSigRequestedEvent::<
+                StateChainRuntime,
+            >::decode(
+                &mut &raw_event.data[..]
+            )?)))),
+            "StakeRefund" => Ok(Some(Box::new(SCEvent::new(StakeRefundEvent::<
+                StateChainRuntime,
+            >::decode(
+                &mut &raw_event.data[..]
+            )?)))),
+            // "ClaimSignatureIssued" => Ok(Some(
+            //     ClaimSignatureIssuedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
+            //         .into(),
+            // )),
+            // "Claimed" => Ok(Some(
+            //     ClaimedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
+            // )),
+            // "Staked" => Ok(Some(
+            //     StakedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
+            // )),
+            // _ => Ok(None),
         },
         "Validator" => match raw_event.variant.as_str() {
-            "AuctionEnded" => Ok(Some(
-                AuctionEndedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
-            )),
-            "AuctionStarted" => Ok(Some(
-                AuctionStartedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
-            )),
-            "ForceRotationRequested" => Ok(Some(
-                ForceRotationRequestedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
-                    .into(),
-            )),
-            "EpochDurationChanged" => Ok(Some(
-                EpochDurationChangedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
-                    .into(),
-            )),
-            "MaximumValidatorsChanged" => Ok(Some(
-                MaximumValidatorsChangedEvent::<StateChainRuntime>::decode(
-                    &mut &raw_event.data[..],
-                )?
-                .into(),
-            )),
+            // "AuctionEnded" => Ok(Some(
+            //     AuctionEndedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
+            // )),
+            // "AuctionStarted" => Ok(Some(
+            //     AuctionStartedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
+            // )),
+            // "ForceRotationRequested" => Ok(Some(
+            //     ForceRotationRequestedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
+            //         .into(),
+            // )),
+            // "EpochDurationChanged" => Ok(Some(
+            //     EpochDurationChangedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
+            //         .into(),
+            // )),
+            // "MaximumValidatorsChanged" => Ok(Some(
+            //     MaximumValidatorsChangedEvent::<StateChainRuntime>::decode(
+            //         &mut &raw_event.data[..],
+            //     )?
+            //     .into(),
+            // )),
             _ => Ok(None),
         },
         _ => Ok(None),

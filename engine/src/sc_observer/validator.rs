@@ -46,55 +46,55 @@ pub struct ForceRotationRequestedEvent<V: Validator> {
     pub _phantom: PhantomData<V>,
 }
 
-/// Wrapper for all Validator events
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum ValidatorEvent<V: Validator> {
-    MaximumValidatorsChangedEvent(MaximumValidatorsChangedEvent<V>),
+// / Wrapper for all Validator events
+// #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+// pub enum ValidatorEvent<V: Validator> {
+//     MaximumValidatorsChangedEvent(MaximumValidatorsChangedEvent<V>),
 
-    EpochDurationChangedEvent(EpochDurationChangedEvent<V>),
+//     EpochDurationChangedEvent(EpochDurationChangedEvent<V>),
 
-    AuctionStartedEvent(AuctionStartedEvent<V>),
+//     AuctionStartedEvent(AuctionStartedEvent<V>),
 
-    AuctionEndedEvent(AuctionEndedEvent<V>),
+//     AuctionEndedEvent(AuctionEndedEvent<V>),
 
-    ForceRotationRequestedEvent(ForceRotationRequestedEvent<V>),
-}
+//     ForceRotationRequestedEvent(ForceRotationRequestedEvent<V>),
+// }
 
-impl From<MaximumValidatorsChangedEvent<StateChainRuntime>> for SCEvent {
-    fn from(max_validators_changed: MaximumValidatorsChangedEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::MaximumValidatorsChangedEvent(
-            max_validators_changed,
-        ))
-    }
-}
+// impl From<MaximumValidatorsChangedEvent<StateChainRuntime>> for SCEvent {
+//     fn from(max_validators_changed: MaximumValidatorsChangedEvent<StateChainRuntime>) -> Self {
+//         SCEvent::ValidatorEvent(ValidatorEvent::MaximumValidatorsChangedEvent(
+//             max_validators_changed,
+//         ))
+//     }
+// }
 
-impl From<EpochDurationChangedEvent<StateChainRuntime>> for SCEvent {
-    fn from(epoch_duration_changed: EpochDurationChangedEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::EpochDurationChangedEvent(
-            epoch_duration_changed,
-        ))
-    }
-}
+// impl From<EpochDurationChangedEvent<StateChainRuntime>> for SCEvent {
+//     fn from(epoch_duration_changed: EpochDurationChangedEvent<StateChainRuntime>) -> Self {
+//         SCEvent::ValidatorEvent(ValidatorEvent::EpochDurationChangedEvent(
+//             epoch_duration_changed,
+//         ))
+//     }
+// }
 
-impl From<AuctionStartedEvent<StateChainRuntime>> for SCEvent {
-    fn from(auction_started: AuctionStartedEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::AuctionStartedEvent(auction_started))
-    }
-}
+// impl From<AuctionStartedEvent<StateChainRuntime>> for SCEvent {
+//     fn from(auction_started: AuctionStartedEvent<StateChainRuntime>) -> Self {
+//         SCEvent::ValidatorEvent(ValidatorEvent::AuctionStartedEvent(auction_started))
+//     }
+// }
 
-impl From<AuctionEndedEvent<StateChainRuntime>> for SCEvent {
-    fn from(auction_ended: AuctionEndedEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::AuctionEndedEvent(auction_ended))
-    }
-}
+// impl From<AuctionEndedEvent<StateChainRuntime>> for SCEvent {
+//     fn from(auction_ended: AuctionEndedEvent<StateChainRuntime>) -> Self {
+//         SCEvent::ValidatorEvent(ValidatorEvent::AuctionEndedEvent(auction_ended))
+//     }
+// }
 
-impl From<ForceRotationRequestedEvent<StateChainRuntime>> for SCEvent {
-    fn from(force_rotation_requested: ForceRotationRequestedEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::ForceRotationRequestedEvent(
-            force_rotation_requested,
-        ))
-    }
-}
+// impl From<ForceRotationRequestedEvent<StateChainRuntime>> for SCEvent {
+//     fn from(force_rotation_requested: ForceRotationRequestedEvent<StateChainRuntime>) -> Self {
+//         SCEvent::ValidatorEvent(ValidatorEvent::ForceRotationRequestedEvent(
+//             force_rotation_requested,
+//         ))
+//     }
+// }
 
 #[cfg(test)]
 mod tests {

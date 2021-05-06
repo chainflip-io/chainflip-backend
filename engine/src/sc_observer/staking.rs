@@ -77,49 +77,49 @@ pub struct ClaimSignatureIssuedEvent<S: Staking> {
     pub _phantom: PhantomData<S>,
 }
 
-/// Wrapper for all Staking event types
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum StakingEvent<S: Staking> {
-    ClaimSigRequestedEvent(ClaimSigRequestedEvent<S>),
+// /// Wrapper for all Staking event types
+// #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+// pub enum StakingEvent<S: Staking> {
+//     ClaimSigRequestedEvent(ClaimSigRequestedEvent<S>),
 
-    ClaimSignatureIssuedEvent(ClaimSignatureIssuedEvent<S>),
+//     ClaimSignatureIssuedEvent(ClaimSignatureIssuedEvent<S>),
 
-    StakedEvent(StakedEvent<S>),
+//     StakedEvent(StakedEvent<S>),
 
-    StakeRefundEvent(StakeRefundEvent<S>),
+//     StakeRefundEvent(StakeRefundEvent<S>),
 
-    ClaimedEvent(ClaimedEvent<S>),
-}
+//     ClaimedEvent(ClaimedEvent<S>),
+// }
 
-impl From<ClaimSigRequestedEvent<StateChainRuntime>> for SCEvent {
-    fn from(claim_sig_requested: ClaimSigRequestedEvent<StateChainRuntime>) -> Self {
-        SCEvent::StakingEvent(StakingEvent::ClaimSigRequestedEvent(claim_sig_requested))
-    }
-}
+// impl From<ClaimSigRequestedEvent<StateChainRuntime>> for SCEvent {
+//     fn from(claim_sig_requested: ClaimSigRequestedEvent<StateChainRuntime>) -> Self {
+//         SCEvent::StakingEvent(StakingEvent::ClaimSigRequestedEvent(claim_sig_requested))
+//     }
+// }
 
-impl From<ClaimSignatureIssuedEvent<StateChainRuntime>> for SCEvent {
-    fn from(claim_sig_issued: ClaimSignatureIssuedEvent<StateChainRuntime>) -> Self {
-        SCEvent::StakingEvent(StakingEvent::ClaimSignatureIssuedEvent(claim_sig_issued))
-    }
-}
+// impl From<ClaimSignatureIssuedEvent<StateChainRuntime>> for SCEvent {
+//     fn from(claim_sig_issued: ClaimSignatureIssuedEvent<StateChainRuntime>) -> Self {
+//         SCEvent::StakingEvent(StakingEvent::ClaimSignatureIssuedEvent(claim_sig_issued))
+//     }
+// }
 
-impl From<ClaimedEvent<StateChainRuntime>> for SCEvent {
-    fn from(claimed: ClaimedEvent<StateChainRuntime>) -> Self {
-        SCEvent::StakingEvent(StakingEvent::ClaimedEvent(claimed))
-    }
-}
+// impl From<ClaimedEvent<StateChainRuntime>> for SCEvent {
+//     fn from(claimed: ClaimedEvent<StateChainRuntime>) -> Self {
+//         SCEvent::StakingEvent(StakingEvent::ClaimedEvent(claimed))
+//     }
+// }
 
-impl From<StakedEvent<StateChainRuntime>> for SCEvent {
-    fn from(staked: StakedEvent<StateChainRuntime>) -> Self {
-        SCEvent::StakingEvent(StakingEvent::StakedEvent(staked))
-    }
-}
+// impl From<StakedEvent<StateChainRuntime>> for SCEvent {
+//     fn from(staked: StakedEvent<StateChainRuntime>) -> Self {
+//         SCEvent::StakingEvent(StakingEvent::StakedEvent(staked))
+//     }
+// }
 
-impl From<StakeRefundEvent<StateChainRuntime>> for SCEvent {
-    fn from(stake_refund: StakeRefundEvent<StateChainRuntime>) -> Self {
-        SCEvent::StakingEvent(StakingEvent::StakeRefundEvent(stake_refund))
-    }
-}
+// impl From<StakeRefundEvent<StateChainRuntime>> for SCEvent {
+//     fn from(stake_refund: StakeRefundEvent<StateChainRuntime>) -> Self {
+//         SCEvent::StakingEvent(StakingEvent::StakeRefundEvent(stake_refund))
+//     }
+// }
 
 #[cfg(test)]
 mod tests {
