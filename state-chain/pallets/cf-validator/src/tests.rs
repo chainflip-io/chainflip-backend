@@ -160,13 +160,10 @@ fn bring_forward_session() {
 		);
 		// We have no current validators in first rotation
 		assert_eq!(mock::current_validators().len(), 0);
-		// We will have our 3 candidates in the "auction" phase
-		assert_eq!(mock::next_validators().len(), 3);
-		// This should be 1 as we have moved epoch blocks
-		assert_eq!(TestValidatorHandler::get_current_epoch(), 1);
+		assert_eq!(mock::next_validators().len(), 0);
 
-		// We have a new set in the auction session
-		assert_ne!(mock::current_validators(), mock::next_validators());
+		// Validator set hasn't changed.
+		assert_eq!(mock::current_validators(), mock::next_validators());
 
 		// Add another candidate with a higher bid.
 		CANDIDATES.with(|cell| cell.borrow_mut().push((4, 4)));
@@ -185,7 +182,6 @@ fn bring_forward_session() {
 		);
 
 		assert_eq!(mock::current_validators().len(), 3);
-		assert_eq!(TestValidatorHandler::get_current_epoch(), 1);
 		assert_eq!(mock::next_validators().len(), 3);
 		// Validator set change has been queued
 		assert_ne!(mock::current_validators(), mock::next_validators());
@@ -204,9 +200,8 @@ fn bring_forward_session() {
 		);
 
 		assert_eq!(mock::current_validators().len(), 3);
-		assert_eq!(TestValidatorHandler::get_current_epoch(), 2);
 		assert_eq!(mock::next_validators().len(), 3);
-		// No change in validators.
+		// No change in validators. 
 		assert_eq!(mock::current_validators(), mock::next_validators());
 		// assert_eq!(mock::next_validators()[0], 4);  // Session 4 is now next up
 	});
