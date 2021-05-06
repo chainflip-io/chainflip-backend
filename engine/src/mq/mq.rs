@@ -7,6 +7,7 @@ use futures::Stream;
 use serde::{de::DeserializeOwned, Serialize};
 
 /// Contains various general message queue options
+#[derive(Debug, Clone)]
 pub struct Options {
     pub url: String,
 }
