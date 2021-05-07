@@ -145,7 +145,7 @@ fn you_have_to_be_priviledged() {
 		// Run through the sudo extrinsics to be sure they are what they are
 		assert_noop!(ValidatorManager::set_epoch(Origin::signed(ALICE), Zero::zero()), BadOrigin);
 		assert_noop!(ValidatorManager::set_validator_target_size(Origin::signed(ALICE), Zero::zero()), BadOrigin);
-		assert_noop!(ValidatorManager::force_rotation(Origin::signed(ALICE)), BadOrigin);
+		assert_noop!(ValidatorManager::force_auction(Origin::signed(ALICE)), BadOrigin);
 	});
 }
 
@@ -258,12 +258,12 @@ fn force_auction() {
 		// No rotation, no candidates
 		assert_eq!(mock::outgoing_validators().len(), 0);
 		// Force rotation for next block
-		assert_ok!(ValidatorManager::force_rotation(Origin::root()));
+		assert_ok!(ValidatorManager::force_auction(Origin::root()));
 		run_to_block(block_number + 1);
 		assert_eq!(
 			events(),
 			[
-				mock::Event::pallet_cf_validator(crate::Event::ForceRotationRequested()),
+				mock::Event::pallet_cf_validator(crate::Event::ForceAuctionRequested()),
 				mock::Event::pallet_cf_validator(crate::Event::AuctionStarted(2)),
 				mock::Event::pallet_session(pallet_session::Event::NewSession(1)),
 			]

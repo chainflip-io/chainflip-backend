@@ -90,7 +90,8 @@ pub mod pallet {
 		EpochChanged(T::BlockNumber, T::BlockNumber),
 		MaximumValidatorsChanged(ValidatorSize, ValidatorSize),
 		AuctionConfirmed(EpochIndex),
-		ForceRotationRequested(),
+		/// A new auction has been forced
+		ForceAuctionRequested(),
 	}
 
 	#[pallet::error]
@@ -136,12 +137,12 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-		pub(super) fn force_rotation(
+		pub(super) fn force_auction(
 			origin: OriginFor<T>,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			Force::<T>::set(true);
-			Self::deposit_event(Event::ForceRotationRequested());
+			Self::deposit_event(Event::ForceAuctionRequested());
 			Ok(().into())
 		}
 
