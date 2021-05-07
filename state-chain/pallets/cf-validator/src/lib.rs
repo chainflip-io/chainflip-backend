@@ -89,6 +89,7 @@ pub mod pallet {
 		NewEpoch(EpochIndex),
 		EpochChanged(T::BlockNumber, T::BlockNumber),
 		MaximumValidatorsChanged(ValidatorSize, ValidatorSize),
+		AuctionConfirmed(EpochIndex),
 		ForceRotationRequested(),
 	}
 
@@ -152,6 +153,7 @@ pub mod pallet {
 			ensure_signed(origin)?;
 			ensure!(Some(index) == AuctionToConfirm::<T>::get(), Error::<T>::InvalidAuction);
 			AuctionToConfirm::<T>::set(None);
+			Self::deposit_event(Event::AuctionConfirmed(index));
 			Ok(().into())
 		}
 	}
