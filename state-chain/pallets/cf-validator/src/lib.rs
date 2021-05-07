@@ -305,9 +305,7 @@ impl<T: Config> Pallet<T> {
 	/// confirmation via the `auction_confirmed` extrinsic
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
 		if !Self::is_auction_phase() {
-			if let Some(index) = AuctionToConfirm::<T>::get() {
-				Self::deposit_event(Event::AuctionEnded(index));
-			}
+			//Self::deposit_event(Event::AuctionEnded(index));
 			return None
 		}
 

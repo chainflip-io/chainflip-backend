@@ -147,6 +147,8 @@ fn bring_forward_session() {
 		assert_eq!(mock::current_validators().len(), 0);
 		// Move a session forward
 		run_to_block(block_number);
+
+		// This should move us into the "auction" phase, which would be epoch index '2'
 		assert_eq!(
 			events(),
 			[
@@ -158,57 +160,91 @@ fn bring_forward_session() {
 				mock::Event::pallet_session(pallet_session::Event::NewSession(1)),
 			]
 		);
-		// We have no current validators in first rotation
+		// We have no current validators nor outgoing in first rotation as there were none in genesis
 		assert_eq!(mock::current_validators().len(), 0);
-		assert_eq!(mock::next_validators().len(), 0);
+		assert_eq!(mock::outgoing_validators().len(), 0);
+
+		// Move an epoch forward, as we are in an auction phase we shouldn't move forward and
+		// hence no events
+		block_number += epoch;
+		run_to_block(block_number);
+		assert_eq!(events(), []);
 
 		// Validator set hasn't changed.
-		assert_eq!(mock::current_validators(), mock::next_validators());
+		assert_eq!(mock::current_validators(), mock::outgoing_validators());
 
-		// Add another candidate with a higher bid.
-		CANDIDATES.with(|cell| cell.borrow_mut().push((4, 4)));
-		CANDIDATES.with(|cell| cell.borrow_mut().push((5, 0)));
+		// Confirm auction, call extrinsic `confirm_auction`
+		// Just to see if it fails
+		assert_noop!(ValidatorManager::confirm_auction(Origin::signed(ALICE), 1), Error::<Test>::InvalidAuction);
+		assert_ok!(ValidatorManager::confirm_auction(Origin::signed(ALICE), 2));
 
-		// Move a session forward
-		block_number += epoch;
+		// Move a block forward and session '2' should now be "trading" phase or validating
+		block_number += 1;
 		run_to_block(block_number);
 		assert_eq!(
 			events(),
 			[
-				mock::Event::pallet_cf_validator(crate::Event::AuctionStarted(3)),
-				mock::Event::pallet_cf_validator(crate::Event::AuctionEnded(3)),
 				mock::Event::pallet_session(pallet_session::Event::NewSession(2)),
 			]
 		);
 
-		assert_eq!(mock::current_validators().len(), 3);
-		assert_eq!(mock::next_validators().len(), 3);
-		// Validator set change has been queued
-		assert_ne!(mock::current_validators(), mock::next_validators());
-		// assert_eq!(mock::next_validators()[0], 3);  // Session 3 is now next up
+		let mut current = mock::current_validators();
+		let mut outgoing = mock::outgoing_validators();
+		// We should have our validators, as we had none before we would see none in 'outgoing'
+		assert_eq!(current.len(), 3);
+		assert_eq!(outgoing.len(), 0);
 
-		// Move a session forward
-		block_number += epoch;
-		run_to_block(block_number);
-		assert_eq!(
-			events(),
-			[
-				mock::Event::pallet_cf_validator(crate::Event::AuctionStarted(4)),
-				mock::Event::pallet_cf_validator(crate::Event::AuctionEnded(4)),
-				mock::Event::pallet_session(pallet_session::Event::NewSession(3)),
-			]
-		);
+		// Repeat a few auctions now...
+		for idx in 0..2 {
+			// Calculate some session indexes, we are already on 3, so the next is 4
+			let auction_idx = 4 + (idx * 2);
+			let session_idx = auction_idx - 1;
+			block_number += epoch;
+			// Move another session forward
+			run_to_block(block_number);
 
-		assert_eq!(mock::current_validators().len(), 3);
-		assert_eq!(mock::next_validators().len(), 3);
-		// No change in validators. 
-		assert_eq!(mock::current_validators(), mock::next_validators());
-		// assert_eq!(mock::next_validators()[0], 4);  // Session 4 is now next up
+			// This should move us into the "auction" phase
+			assert_eq!(
+				events(),
+				[
+					// Auction started
+					mock::Event::pallet_cf_validator(crate::Event::AuctionStarted(auction_idx)),
+					// Internally pallet-session starts a new session
+					mock::Event::pallet_session(pallet_session::Event::NewSession(session_idx)),
+				]
+			);
+
+			// We should see current set of validators not changing even though we have a new session idx
+			assert_eq!(current, mock::current_validators());
+			// and this would be reflected in outgoing and current
+			assert_eq!(mock::outgoing_validators(), mock::current_validators());
+
+			// Confirm auction, call extrinsic `confirm_auction`
+			// Just to see if it fails
+			assert_noop!(ValidatorManager::confirm_auction(Origin::signed(ALICE), 1), Error::<Test>::InvalidAuction);
+			assert_ok!(ValidatorManager::confirm_auction(Origin::signed(ALICE), auction_idx));
+
+			// Move a block forward and next session should now be "trading" phase or validating
+			block_number += 1;
+			run_to_block(block_number);
+			assert_eq!(
+				events(),
+				[
+					mock::Event::pallet_session(pallet_session::Event::NewSession(session_idx + 1)),
+				]
+			);
+
+			// Should be new set of validators
+			assert_ne!(current, mock::current_validators());
+			current = mock::current_validators();
+			assert_ne!(outgoing, mock::outgoing_validators());
+			outgoing = mock::outgoing_validators();
+		}
 	});
 }
 
 #[test]
-fn force_rotation() {
+fn force_auction() {
 	new_test_ext().execute_with(|| {
 		// We are after 3 validators, the mock is set up for 3
 		assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), 3));
@@ -229,7 +265,7 @@ fn force_rotation() {
 		// Run forward 2 blocks
 		run_to_block(block_number);
 		// No rotation, no candidates
-		assert_eq!(mock::next_validators().len(), 0);
+		assert_eq!(mock::outgoing_validators().len(), 0);
 		// Force rotation for next block
 		assert_ok!(ValidatorManager::force_rotation(Origin::root()));
 		run_to_block(block_number + 1);
@@ -238,12 +274,9 @@ fn force_rotation() {
 			[
 				mock::Event::pallet_cf_validator(crate::Event::ForceRotationRequested()),
 				mock::Event::pallet_cf_validator(crate::Event::AuctionStarted(2)),
-				mock::Event::pallet_cf_validator(crate::Event::AuctionEnded(2)),
 				mock::Event::pallet_session(pallet_session::Event::NewSession(1)),
 			]
 		);
-		// Hello there candidates
-		assert_eq!(mock::next_validators().len(), 3);
 	});
 }
 
@@ -252,44 +285,53 @@ fn push_back_session() {
 	new_test_ext().execute_with(|| {
 		// We are after 3 validators, the mock is set up for 3
 		assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), 3));
-		assert_eq!(
-			last_event(),
-			mock::Event::pallet_cf_validator(crate::Event::MaximumValidatorsChanged(0, 3)),
-		);
 		// Check we get rotation
 		let epoch = 2;
 		let mut block_number = epoch;
 		assert_ok!(ValidatorManager::set_epoch(Origin::root(), epoch));
-		assert_eq!(
-			last_event(),
-			mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, epoch)),
-		);
 		run_to_block(block_number);
-		assert_eq!(mock::current_validators().len(), 0);
-		assert_eq!(mock::next_validators().len(), 3);
+		// This should move us into the "auction" phase, which would be epoch index '2'
+		assert_eq!(
+			events(),
+			[
+				mock::Event::pallet_cf_validator(crate::Event::MaximumValidatorsChanged(0, 3)),
+				mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, epoch)),
+				// Auction started for group '2'
+				mock::Event::pallet_cf_validator(crate::Event::AuctionStarted(2)),
+				// Group '1' are now validators
+				mock::Event::pallet_session(pallet_session::Event::NewSession(1)),
+			]
+		);
+
+		// Confirm auction and complete auction
+		assert_ok!(ValidatorManager::confirm_auction(Origin::signed(ALICE), 2));
+		block_number += 1;
+		run_to_block(block_number);
+		assert_eq!(
+			events(),
+			[
+				mock::Event::pallet_session(pallet_session::Event::NewSession(session_idx + 1)),
+			]
+		);
+
 		// Push back rotation by an epoch so we should see no rotation now for the last epoch
 		assert_ok!(ValidatorManager::set_epoch(Origin::root(), epoch * 2));
-		assert_eq!(
-			last_event(),
-			mock::Event::pallet_cf_validator(crate::Event::EpochChanged(epoch, epoch * 2)),
-		);
 		block_number += epoch;
 		run_to_block(block_number);
-		assert_eq!(mock::current_validators().len(), 0);
-		assert_eq!(mock::next_validators().len(), 3);
+		assert_eq!(events(), [
+			mock::Event::pallet_cf_validator(crate::Event::EpochChanged(epoch, epoch * 2)),
+		]);
 		// Clear the event queue
 		System::reset_events();
 		// Move forward and now it should rotate
 		block_number += epoch;
 		run_to_block(block_number);
-		assert_eq!(mock::current_validators().len(), 3);
-		assert_eq!(mock::next_validators().len(), 3);
 		assert_eq!(
 			events(),
 			[
-				mock::Event::pallet_cf_validator(crate::Event::AuctionStarted(3)),
-				mock::Event::pallet_cf_validator(crate::Event::AuctionEnded(3)),
-				mock::Event::pallet_session(pallet_session::Event::NewSession(2)),
+				// Auction started
+				mock::Event::pallet_cf_validator(crate::Event::AuctionStarted(4)),
+				mock::Event::pallet_session(pallet_session::Event::NewSession(3)),
 			]
 		);
 	});
@@ -316,7 +358,7 @@ fn limit_validator_set_size() {
 		System::reset_events();
 		run_to_block(block_number);
 		assert_eq!(mock::current_validators().len(), 0);
-		assert_eq!(mock::next_validators().len(), 3);
+		assert_eq!(mock::outgoing_validators().len(), 3);
 		assert_eq!(
 			events(),
 			[
@@ -330,7 +372,7 @@ fn limit_validator_set_size() {
 		block_number += epoch;
 		run_to_block(block_number);
 		assert_eq!(mock::current_validators().len(), 3);
-		assert_eq!(mock::next_validators().len(), 2);
+		assert_eq!(mock::outgoing_validators().len(), 2);
 		assert_eq!(
 			events(),
 			[
@@ -344,7 +386,7 @@ fn limit_validator_set_size() {
 		block_number += epoch;
 		run_to_block(block_number);
 		assert_eq!(mock::current_validators().len(), 2);
-		assert_eq!(mock::next_validators().len(), 2);
+		assert_eq!(mock::outgoing_validators().len(), 2);
 		assert_eq!(
 			events(),
 			[
