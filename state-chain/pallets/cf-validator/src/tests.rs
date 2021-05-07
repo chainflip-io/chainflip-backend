@@ -357,43 +357,76 @@ fn limit_validator_set_size() {
 		// Clear the event queue
 		System::reset_events();
 		run_to_block(block_number);
-		assert_eq!(mock::current_validators().len(), 0);
-		assert_eq!(mock::outgoing_validators().len(), 3);
 		assert_eq!(
 			events(),
 			[
 				mock::Event::pallet_cf_validator(crate::Event::AuctionStarted(2)),
-				mock::Event::pallet_cf_validator(crate::Event::AuctionEnded(2)),
 				mock::Event::pallet_session(pallet_session::Event::NewSession(1)),
 			]
 		);
+
+		// Confirm auction and complete auction
+		assert_ok!(ValidatorManager::confirm_auction(Origin::signed(ALICE), 2));
+		block_number += 1;
+		run_to_block(block_number);
+		assert_eq!(
+			events(),
+			[
+				mock::Event::pallet_session(pallet_session::Event::NewSession(2)),
+			]
+		);
+
 		// Reduce size of validator set, we should see next set of candidates reduced from 3 to 2
 		assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), 2));
 		block_number += epoch;
 		run_to_block(block_number);
-		assert_eq!(mock::current_validators().len(), 3);
-		assert_eq!(mock::outgoing_validators().len(), 2);
+
 		assert_eq!(
 			events(),
 			[
 				mock::Event::pallet_cf_validator(crate::Event::MaximumValidatorsChanged(3, 2)),
-				mock::Event::pallet_cf_validator(crate::Event::AuctionStarted(3)),
-				mock::Event::pallet_cf_validator(crate::Event::AuctionEnded(3)),
-				mock::Event::pallet_session(pallet_session::Event::NewSession(2)),
-			]
-		);
-		// One more to see the rotation maintain the new set size of 2
-		block_number += epoch;
-		run_to_block(block_number);
-		assert_eq!(mock::current_validators().len(), 2);
-		assert_eq!(mock::outgoing_validators().len(), 2);
-		assert_eq!(
-			events(),
-			[
 				mock::Event::pallet_cf_validator(crate::Event::AuctionStarted(4)),
-				mock::Event::pallet_cf_validator(crate::Event::AuctionEnded(4)),
 				mock::Event::pallet_session(pallet_session::Event::NewSession(3)),
 			]
 		);
+
+		// Confirm auction and complete auction
+		assert_ok!(ValidatorManager::confirm_auction(Origin::signed(ALICE), 4));
+		block_number += 1;
+		run_to_block(block_number);
+		assert_eq!(
+			events(),
+			[
+				mock::Event::pallet_session(pallet_session::Event::NewSession(4)),
+			]
+		);
+
+		assert_eq!(mock::current_validators().len(), 2);
+		assert_eq!(mock::outgoing_validators().len(), 3);
+
+		// One more to see the rotation maintain the new set size of 2
+		block_number += epoch;
+		run_to_block(block_number);
+		assert_eq!(
+			events(),
+			[
+				mock::Event::pallet_cf_validator(crate::Event::AuctionStarted(6)),
+				mock::Event::pallet_session(pallet_session::Event::NewSession(5)),
+			]
+		);
+
+		// Confirm auction and complete auction
+		assert_ok!(ValidatorManager::confirm_auction(Origin::signed(ALICE), 6));
+		block_number += 1;
+		run_to_block(block_number);
+		assert_eq!(
+			events(),
+			[
+				mock::Event::pallet_session(pallet_session::Event::NewSession(6)),
+			]
+		);
+
+		assert_eq!(mock::current_validators().len(), 2);
+		assert_eq!(mock::outgoing_validators().len(), 2);
 	});
 }
