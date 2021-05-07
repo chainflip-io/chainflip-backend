@@ -40,7 +40,7 @@ codec = { package = "parity-scale-codec", version = "2.1", default-features = fa
 config = "0.11.0"
 log = { version = "0.4.14" }
 env_logger = { version = "0.8.3" }
-
+parking_lot = "0.11"
 
 # Local deps
 chainflip-common = { path = "../common" }

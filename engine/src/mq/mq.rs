@@ -49,6 +49,8 @@ pub enum Subject {
     Stake,
     Claim,
     Rotate,
+    P2PIncoming,
+    P2POutgoing,
 }
 
 // Used to create the subject that the MQ publishes to
@@ -75,6 +77,12 @@ impl fmt::Display for Subject {
             }
             Subject::Rotate => {
                 write!(f, "rotate")
+            }
+            Subject::P2PIncoming => {
+                write!(f, "p2p_incoming")
+            }
+            Subject::P2POutgoing => {
+                write!(f, "p2p_outgoing")
             }
         }
     }

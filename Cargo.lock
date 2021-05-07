@@ -919,6 +919,7 @@ dependencies = [
  "pallet-cf-staking",
  "pallet-cf-validator",
  "parity-scale-codec 2.1.1",
+ "parking_lot 0.11.1",
  "serde 1.0.125",
  "serde_json",
  "sp-core",
