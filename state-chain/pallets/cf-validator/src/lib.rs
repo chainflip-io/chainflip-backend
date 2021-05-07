@@ -1,7 +1,3 @@
-// Code mostly taken from here: https://github.com/gautamdhameja/substrate-validator-set
-// modifications to it, such as validation (since we're not using sudo to add validators)
-// will come later
-
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(test)]
@@ -36,6 +32,7 @@ pub trait EpochTransitionHandler {
 	fn on_before_epoch_ending();
 }
 
+/// Something that can provide us a list of candidates with their corresponding stakes
 pub trait CandidateProvider {
 	type ValidatorId: Eq + Ord + Clone;
 	type Stake: Eq + Ord + Copy;
@@ -43,6 +40,7 @@ pub trait CandidateProvider {
 	fn get_candidates() -> Vec<(Self::ValidatorId, Self::Stake)>;
 }
 
+/// Empty impl of [`CandidateProvider`]
 impl CandidateProvider for () {
 	type ValidatorId = u32;
 	type Stake = u32;
@@ -67,17 +65,21 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// A type to identify a validator
 		type ValidatorId: Eq + Ord + Clone;
 
-		/// A provider for our validators
+		/// A provider for our candidates
 		type CandidateProvider: CandidateProvider<ValidatorId=Self::ValidatorId>;
 		
 		/// A handler for epoch lifecycle events
 		type EpochTransitionHandler: EpochTransitionHandler<ValidatorId=Self::ValidatorId>;
 
+		/// Minimum amount of blocks an epoch can run for
 		#[pallet::constant]
 		type MinEpoch: Get<<Self as frame_system::Config>::BlockNumber>;
 
+		/// Minimum amount of validators we will want in a set
 		#[pallet::constant]
 		type MinValidatorSetSize: Get<u64>;
 	}
@@ -85,10 +87,15 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
+		/// An auction phase has started \[epoch_index\]
 		AuctionStarted(EpochIndex),
+		/// A new epoch has started \[epoch_index\]
 		NewEpoch(EpochIndex),
+		/// The number of blocks has changed for our epoch \[from, to\]
 		EpochChanged(T::BlockNumber, T::BlockNumber),
+		/// The number of validators in a set has been changed \[from, to\]
 		MaximumValidatorsChanged(ValidatorSize, ValidatorSize),
+		/// The auction has been confirmed off-chain \[epoch_index\]
 		AuctionConfirmed(EpochIndex),
 		/// A new auction has been forced
 		ForceAuctionRequested(),
@@ -96,18 +103,25 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
+		// TODO We need to handle condition when we have no candidates
 		NoValidators,
+		/// Epoch blocknumber supplied is invalid
 		InvalidEpoch,
+		/// Validator set size provided is invalid
 		InvalidValidatorSetSize,
+		/// Invalid auction index used in confirmation
 		InvalidAuction,
 	}
 
-	// Pallet implements [`Hooks`] trait to define some logic to execute in some context.
+	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// Sets the number of blocks an epoch should run for
+		/// The dispatch origin of this function must be root.
+		/// TODO work out weights
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
 		pub(super) fn set_epoch(
 			origin: OriginFor<T>,
@@ -122,6 +136,9 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Sets the size of our validate set size
+		/// The dispatch origin of this function must be root.
+		/// TODO work out weights
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
 		pub(super) fn set_validator_target_size(
 			origin: OriginFor<T>,
@@ -136,6 +153,9 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Force an auction phase.  The next block will run an auction.
+		/// The dispatch origin of this function must be root.
+		/// TODO work out weights
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
 		pub(super) fn force_auction(
 			origin: OriginFor<T>,
@@ -146,6 +166,10 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// When we are in an auction phase we will need to wait for off-chain confirmation
+		/// of the epoch index already emitted with [AuctionStarted]
+		/// The dispatch origin of this function must be signed.
+		/// TODO work out weights
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
 		pub(super) fn confirm_auction(
 			origin: OriginFor<T>,
@@ -159,26 +183,32 @@ pub mod pallet {
 		}
 	}
 
+	/// Force auction on next block
 	#[pallet::storage]
 	#[pallet::getter(fn force)]
 	pub(super) type Force<T: Config> = StorageValue<_, bool, ValueQuery>;
 
+	/// The block number for the last epoch
 	#[pallet::storage]
 	#[pallet::getter(fn last_block_number)]
 	pub(super) type LastBlockNumber<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
+	/// The number of blocks an epoch runs for
 	#[pallet::storage]
 	#[pallet::getter(fn epoch_number_of_blocks)]
 	pub(super) type BlocksPerEpoch<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
+	/// The maximum number of validators we want
 	#[pallet::storage]
 	#[pallet::getter(fn max_validators)]
 	pub(super) type SizeValidatorSet<T: Config> = StorageValue<_, ValidatorSize, ValueQuery>;
 
+	/// Whether we are in an auction
 	#[pallet::storage]
 	#[pallet::getter(fn is_auction_phase)]
 	pub(super) type IsAuctionPhase<T: Config> = StorageValue<_, bool, ValueQuery>;
 
+	/// Epoch index of auction we are waiting for confirmation for
 	#[pallet::storage]
 	#[pallet::getter(fn auction_confirmed)]
 	pub(super) type AuctionToConfirm<T: Config> = StorageValue<_, EpochIndex, OptionQuery>;
@@ -187,7 +217,6 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config> {
 		pub size_validator_set: ValidatorSize,
 		pub epoch_number_of_blocks: T::BlockNumber,
-
 	}
 
 	#[cfg(feature = "std")]
@@ -208,9 +237,14 @@ pub mod pallet {
 }
 
 impl<T: Config> pallet_session::SessionHandler<T::ValidatorId> for Pallet<T> {
+
+	/// TODO look at the key management
 	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[];
 	fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(T::ValidatorId, Ks)]) {}
 
+	/// A new session has started.  As we are either one of the two states, auction or trading,
+	/// we forward the validator set to [EpochTransitionHandler::on_new_auction] or
+	/// [EpochTransitionHandler::on_new_epoch]
 	fn on_new_session<Ks: OpaqueKeys>(
 		_changed: bool,
 		validators: &[(T::ValidatorId, Ks)],
@@ -227,7 +261,7 @@ impl<T: Config> pallet_session::SessionHandler<T::ValidatorId> for Pallet<T> {
 		}
 	}
 
-	/// Triggered before [`SessionManager::end_session`] handler
+	/// Triggered before \[`SessionManager::end_session`\] handler
 	fn on_before_session_ending() {
 		if Self::is_auction_phase() {
 			T::EpochTransitionHandler::on_before_epoch_ending();
@@ -236,6 +270,7 @@ impl<T: Config> pallet_session::SessionHandler<T::ValidatorId> for Pallet<T> {
 		}
 	}
 
+	/// TODO handle this at some point
 	fn on_disabled(_validator_index: usize) {
 		// TBD
 	}
@@ -250,19 +285,19 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 
 /// Provides the new set of validators to the session module when session is being rotated.
 impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
-	// On rotation this is called #3
+	/// Prepare candiates for a new session
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
 		debug!("planning new_session({})", new_index);
 		Self::new_session(new_index)
 	}
 
-	// On rotation this is called #1
+	/// The current session is ending
 	fn end_session(end_index: SessionIndex) {
 		debug!("starting start_session({})", end_index);
 		Self::end_session(end_index)
 	}
 
-	// On rotation this is called #2
+	/// The session is starting
 	fn start_session(start_index: SessionIndex) {
 		debug!("ending end_session({})", start_index);
 		Self::start_session(start_index);

@@ -15,6 +15,7 @@ pub use frame_support::{
 };
 use frame_system::offchain::SendTransactionTypes;
 use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
+use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
 use pallet_grandpa::fg_primitives;
 use pallet_session::historical as session_historical;
 pub use pallet_timestamp::Call as TimestampCall;
@@ -140,9 +141,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type MinEpoch = MinEpoch;
 	type MinValidatorSetSize = MinValidatorSetSize;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
-	// type Stake = u64;
 	type CandidateProvider = pallet_cf_staking::Pallet<Self>;
-	type ValidatorHandler = ();
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime where
