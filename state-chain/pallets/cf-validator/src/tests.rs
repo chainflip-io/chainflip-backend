@@ -25,6 +25,7 @@ fn confirm_and_complete_auction(block_number: &mut u64, idx: EpochIndex) {
 	assert_eq!(
 		events(),
 		[
+			mock::Event::pallet_cf_validator(crate::Event::AuctionEnded(idx)),
 			mock::Event::pallet_session(pallet_session::Event::NewSession(idx)),
 		]
 	);
