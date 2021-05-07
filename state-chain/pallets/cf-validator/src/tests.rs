@@ -310,7 +310,7 @@ fn push_back_session() {
 		assert_eq!(
 			events(),
 			[
-				mock::Event::pallet_session(pallet_session::Event::NewSession(session_idx + 1)),
+				mock::Event::pallet_session(pallet_session::Event::NewSession(2)),
 			]
 		);
 
