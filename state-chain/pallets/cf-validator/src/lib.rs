@@ -86,7 +86,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		AuctionStarted(EpochIndex),
-		AuctionEnded(EpochIndex),
+		NewEpoch(EpochIndex),
 		EpochChanged(T::BlockNumber, T::BlockNumber),
 		MaximumValidatorsChanged(ValidatorSize, ValidatorSize),
 		ForceRotationRequested(),
@@ -305,7 +305,7 @@ impl<T: Config> Pallet<T> {
 	/// confirmation via the `auction_confirmed` extrinsic
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
 		if !Self::is_auction_phase() {
-			Self::deposit_event(Event::AuctionEnded(new_index - 1));
+			Self::deposit_event(Event::NewEpoch(new_index - 1));
 			return None
 		}
 
