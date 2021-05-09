@@ -24,7 +24,7 @@ fn estimation_on_next_session() {
 		// Confirm we have the event of the change to 2
 		assert_eq!(
 			last_event(),
-			mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, 2)),
+			mock::Event::pallet_cf_validator(crate::Event::EpochDurationChanged(0, 2)),
 		);
 		// Simple math to confirm we can work out 3 plus 2
 		assert_eq!(ValidatorManager::estimate_next_session_rotation(3), Some(5));
@@ -63,7 +63,7 @@ fn changing_epoch() {
 		// Confirm we have an event for the change from 0 to 2
 		assert_eq!(
 			last_event(),
-			mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, 2)),
+			mock::Event::pallet_cf_validator(crate::Event::EpochDurationChanged(0, 2)),
 		);
 		// We throw up an error if we try to set it to the current
 		assert_noop!(ValidatorManager::set_epoch(Origin::root(), 2), Error::<Test>::InvalidEpoch);
@@ -81,7 +81,7 @@ fn sessions_do_end() {
 		// Confirm we have the event for the change from 0 to 2
 		assert_eq!(
 			last_event(),
-			mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, 2)),
+			mock::Event::pallet_cf_validator(crate::Event::EpochDurationChanged(0, 2)),
 		);
 		// We should now be able to end a session on block 2
 		assert!(ValidatorManager::should_end_session(2));
@@ -135,7 +135,7 @@ fn bring_forward_session() {
 			events(),
 			[
 				mock::Event::pallet_cf_validator(crate::Event::MaximumValidatorsChanged(0, 3)),
-				mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, 2)),
+				mock::Event::pallet_cf_validator(crate::Event::EpochDurationChanged(0, 2)),
 				mock::Event::pallet_cf_validator(crate::Event::AuctionStarted(2)),
 				mock::Event::pallet_cf_validator(crate::Event::AuctionEnded(2)),
 				mock::Event::pallet_session(pallet_session::Event::NewSession(1)),
@@ -197,7 +197,7 @@ fn force_rotation() {
 		assert_ok!(ValidatorManager::set_epoch(Origin::root(), epoch));
 		assert_eq!(
 			last_event(),
-			mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, 10)),
+			mock::Event::pallet_cf_validator(crate::Event::EpochDurationChanged(0, 10)),
 		);
 		// Clear the event queue
 		System::reset_events();
@@ -237,7 +237,7 @@ fn push_back_session() {
 		assert_ok!(ValidatorManager::set_epoch(Origin::root(), epoch));
 		assert_eq!(
 			last_event(),
-			mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, epoch)),
+			mock::Event::pallet_cf_validator(crate::Event::EpochDurationChanged(0, epoch)),
 		);
 		run_to_block(block_number);
 		assert_eq!(mock::current_validators().len(), 0);
@@ -246,7 +246,7 @@ fn push_back_session() {
 		assert_ok!(ValidatorManager::set_epoch(Origin::root(), epoch * 2));
 		assert_eq!(
 			last_event(),
-			mock::Event::pallet_cf_validator(crate::Event::EpochChanged(epoch, epoch * 2)),
+			mock::Event::pallet_cf_validator(crate::Event::EpochDurationChanged(epoch, epoch * 2)),
 		);
 		block_number += epoch;
 		run_to_block(block_number);
@@ -285,7 +285,7 @@ fn limit_validator_set_size() {
 		assert_ok!(ValidatorManager::set_epoch(Origin::root(), epoch));
 		assert_eq!(
 			last_event(),
-			mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, epoch)),
+			mock::Event::pallet_cf_validator(crate::Event::EpochDurationChanged(0, epoch)),
 		);
 		// Clear the event queue
 		System::reset_events();

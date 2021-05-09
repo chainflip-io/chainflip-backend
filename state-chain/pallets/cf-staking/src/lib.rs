@@ -11,7 +11,7 @@ use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 
 use codec::FullCodec;
-use sp_runtime::{traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub, One}};
+use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub, One};
 
 #[frame_support::pallet]
 pub mod pallet {
