@@ -15,7 +15,6 @@ pub use frame_support::{
 };
 use frame_system::offchain::SendTransactionTypes;
 use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
-use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
 use pallet_grandpa::fg_primitives;
 use pallet_session::historical as session_historical;
 pub use pallet_timestamp::Call as TimestampCall;
