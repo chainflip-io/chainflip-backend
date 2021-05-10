@@ -22,7 +22,7 @@ pub enum RelayerError {}
 #[async_trait]
 pub trait EventSink<E>
 where
-    E: Send,
+    E: Send + Sync,
 {
     /// Accepts an event and does something, returning a result to indicate success.
     async fn process_event(&self, event: E) -> Result<()>;
@@ -31,7 +31,7 @@ where
 /// Implement this for each contract for which you want to subscribe to events.
 pub trait EventSource {
     /// The Event type expected from this contract. Likely to be an enum of all possible events.
-    type Event: Send + Copy;
+    type Event: Send + Copy + Sync;
 
     /// Returns an eth filter for the events from the contract, starting at the given
     /// block number.

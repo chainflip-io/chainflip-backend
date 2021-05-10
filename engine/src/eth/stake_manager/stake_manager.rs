@@ -28,6 +28,14 @@ pub enum StakingEvent {
         /// The amount of FLIP that was staked.
         ethabi::Uint,
     ),
+
+    /// `Claimed(nodeId, amount)` event
+    Claimed(
+        /// The node id of the validator that claimed their FLIP
+        ethabi::Uint,
+        /// The amount of FLIP that was claimed
+        ethabi::Uint,
+    ),
 }
 
 impl StakeManager {
