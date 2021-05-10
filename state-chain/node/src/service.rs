@@ -27,6 +27,8 @@ type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;
 type FullSelectChain = sc_consensus::LongestChain<FullBackend, Block>;
 
+const CHAINFLIP_P2P: &str = "/chainflip-protocol";
+
 pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponents<
 	FullClient, FullBackend, FullSelectChain,
 	sp_consensus::DefaultImportQueue<Block, FullClient>,
@@ -145,7 +147,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	let (p2p, comms) = NetworkBridge::new(
 		rpc_params.clone(),
 		network.clone(),
-		Cow::Borrowed("/chainflip-protocol"));
+		Cow::Borrowed(CHAINFLIP_P2P));
 
 	let rpc_extensions_builder = {
 		let client = client.clone();
