@@ -114,3 +114,14 @@ impl<S: EventSource> EthEventStreamer<S> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[tokio::test]
+    async fn try_subscribe_to_events() {
+        let sm_event_stream = EthEventStreamBuilder::new("http://localhost:8545").build().await;
+    }
+}

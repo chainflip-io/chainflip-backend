@@ -4,6 +4,9 @@ mod mq;
 mod p2p;
 mod settings;
 
+// Blockchains
+mod eth;
+
 use settings::Settings;
 
 fn main() {

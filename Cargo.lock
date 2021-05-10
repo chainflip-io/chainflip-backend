@@ -880,6 +880,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-nats",
+ "async-std",
  "async-stream",
  "async-trait",
  "chainflip-common",
@@ -896,6 +897,7 @@ dependencies = [
  "thiserror",
  "tokio 1.5.0",
  "tokio-stream",
+ "web3",
 ]
 
 [[package]]
