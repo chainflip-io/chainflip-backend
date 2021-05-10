@@ -8,7 +8,7 @@ use crate::{
     p2p::{self, P2PMessage},
 };
 
-use super::{P2PMessageCommand, P2PNetworkClient};
+use super::{CommandSendMessage, P2PNetworkClient};
 
 /// Intermediates P2P events between MQ and P2P interface
 pub struct P2PConductor<MQ, P2P>
@@ -18,7 +18,7 @@ where
 {
     mq: MQ,
     p2p: P2P,
-    stream: Pin<Box<dyn Stream<Item = Result<P2PMessageCommand, anyhow::Error>>>>,
+    stream: Pin<Box<dyn Stream<Item = Result<CommandSendMessage, anyhow::Error>>>>,
 }
 
 impl<MQ, P2P> P2PConductor<MQ, P2P>
@@ -28,9 +28,9 @@ where
 {
     pub async fn new(mq: MQ, p2p: P2P) -> Self {
         let stream = mq
-            .subscribe::<P2PMessageCommand>(Subject::P2POutgoing)
+            .subscribe::<CommandSendMessage>(Subject::P2POutgoing)
             .await
-            .unwrap();
+            .expect("P2P Conductor could not subscribe to MQ");
 
         let stream = pin_message_stream(stream);
 
@@ -38,7 +38,7 @@ where
     }
 
     pub async fn start(mut self) {
-        type Msg = Either<Result<P2PMessageCommand, anyhow::Error>, P2PMessage>;
+        type Msg = Either<Result<CommandSendMessage, anyhow::Error>, P2PMessage>;
 
         let mq_stream = self.stream.map(|x| Msg::Left(x));
 
@@ -51,7 +51,7 @@ where
         while let Some(x) = stream.next().await {
             match x {
                 Either::Left(outgoing) => {
-                    if let Ok(P2PMessageCommand { destination, data }) = outgoing {
+                    if let Ok(CommandSendMessage { destination, data }) = outgoing {
                         self.p2p.send(&destination, &data);
                     }
                 }
@@ -76,7 +76,7 @@ mod tests {
 
     use crate::{
         mq::mq_mock::MockMQ,
-        p2p::{mock::NetworkMock, P2PMessageCommand, ValidatorId},
+        p2p::{mock::NetworkMock, CommandSendMessage, ValidatorId},
     };
 
     use super::*;
@@ -114,7 +114,7 @@ mod tests {
 
         let msg = String::from("hello");
 
-        let message = P2PMessageCommand {
+        let message = CommandSendMessage {
             destination: ID_2,
             data: Vec::from(msg.as_bytes()),
         };

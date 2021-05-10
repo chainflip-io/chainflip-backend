@@ -27,8 +27,10 @@ pub struct P2PMessage {
     data: Vec<u8>,
 }
 
+/// A command to the conductor to send message `data` to
+/// validator `destination`
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct P2PMessageCommand {
+struct CommandSendMessage {
     destination: ValidatorId,
     data: Vec<u8>,
 }
