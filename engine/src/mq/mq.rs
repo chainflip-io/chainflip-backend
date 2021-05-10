@@ -7,18 +7,23 @@ use futures::Stream;
 use serde::{de::DeserializeOwned, Serialize};
 
 /// Contains various general message queue options
+#[derive(Debug, Clone)]
 pub struct Options {
     pub url: String,
 }
 
 /// Interface for a message queue
-#[async_trait(?Send)]
+#[async_trait]
 pub trait IMQClient {
     /// Open a connection to the message queue
     async fn connect(opts: Options) -> Result<Box<Self>>;
 
     /// Publish something to a particular subject
-    async fn publish<M: Serialize>(&self, subject: Subject, message: &'_ M) -> Result<()>;
+    async fn publish<M: 'static + Serialize + Sync>(
+        &self,
+        subject: Subject,
+        message: &'_ M,
+    ) -> Result<()>;
 
     /// Subscribe to a subject
     async fn subscribe<M: DeserializeOwned>(
@@ -35,7 +40,7 @@ pub fn pin_message_stream<M>(stream: Box<dyn Stream<Item = M>>) -> Pin<Box<dyn S
     stream.into()
 }
 /// Subjects that can be published / subscribed to
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Subject {
     Witness(Coin),
     Quote(Coin),
@@ -43,8 +48,10 @@ pub enum Subject {
     Broadcast(Coin),
     Stake,
     Claim,
+    Rotate,
 }
 
+// Used to create the subject that the MQ publishes to
 impl fmt::Display for Subject {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self {
@@ -65,6 +72,9 @@ impl fmt::Display for Subject {
             }
             Subject::Claim => {
                 write!(f, "claim")
+            }
+            Subject::Rotate => {
+                write!(f, "rotate")
             }
         }
     }

@@ -15,8 +15,8 @@ use sp_std::prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};
 use log::{debug};
 
-type ValidatorSize = u32;
-type EpochIndex = u32;
+pub type ValidatorSize = u32;
+pub type EpochIndex = u32;
 
 pub trait ValidatorHandler<ValidatorId> {
 	fn on_new_session(
@@ -80,7 +80,7 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		AuctionStarted(EpochIndex),
 		AuctionEnded(EpochIndex),
-		EpochChanged(T::BlockNumber, T::BlockNumber),
+		EpochDurationChanged(T::BlockNumber, T::BlockNumber),
 		MaximumValidatorsChanged(ValidatorSize, ValidatorSize),
 		ForceRotationRequested(),
 	}
@@ -108,7 +108,7 @@ pub mod pallet {
 			let old_epoch = BlocksPerEpoch::<T>::get();
 			ensure!(old_epoch != number_of_blocks, Error::<T>::InvalidEpoch);
 			BlocksPerEpoch::<T>::set(number_of_blocks);
-			Self::deposit_event(Event::EpochChanged(old_epoch, number_of_blocks));
+			Self::deposit_event(Event::EpochDurationChanged(old_epoch, number_of_blocks));
 			Ok(().into())
 		}
 
