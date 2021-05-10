@@ -41,7 +41,8 @@ config = "0.11.0"
 log = { version = "0.4.14" }
 env_logger = { version = "0.8.3" }
 web3 = { version = "0.15" }
-async-std = { version = "1.9", features = ["attributes", "tokio1", "tokio02"] }
+async-std = { version = "1.9", features = ["attributes", "tokio1"] }
+tokio-compat-02 = "0.2"
 
 
 # Local deps

@@ -2,6 +2,7 @@ use super::{EventSink, EventSource, Result};
 use async_std::task;
 use futures::{future::join_all, stream, StreamExt};
 use std::time::Duration;
+use tokio_compat_02::FutureExt;
 use web3::types::{BlockNumber, SyncState};
 
 pub struct EthEventStreamer<S: EventSource> {
@@ -34,7 +35,11 @@ impl<S: EventSource> EthEventStreamBuilder<S> {
         if self.event_sinks.is_empty() {
             anyhow::bail!("Can't build a stream with no sink.")
         } else {
-            let transport = ::web3::transports::WebSocket::new(self.url.as_str()).await?;
+            // this is using tokio 0.2 :( , how to push it up to tokio1???
+            let transport = ::web3::transports::WebSocket::new(self.url.as_str())
+                // TODO: Remove this compat once the websocket dep uses tokio1
+                .compat()
+                .await?;
 
             Ok(EthEventStreamer {
                 web3_client: ::web3::Web3::new(transport),
@@ -118,10 +123,39 @@ impl<S: EventSource> EthEventStreamer<S> {
 #[cfg(test)]
 mod tests {
 
+    use crate::eth::stake_manager::stake_manager::{StakeManager, StakingEvent};
+
     use super::*;
+
+    use async_trait::async_trait;
+
+    const CONTRACT_ADDRESS: &'static str = "0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f";
+
+    pub struct MySink {}
+
+    #[async_trait]
+    impl EventSink<StakingEvent> for MySink {
+        async fn process_event(&self, event: StakingEvent) -> Result<()> {
+            println!("Processing event: {:#?}", event);
+            Ok(())
+        }
+    }
 
     #[tokio::test]
     async fn try_subscribe_to_events() {
-        let sm_event_stream = EthEventStreamBuilder::new("http://localhost:8545").build().await;
+        let stake_manager = StakeManager::load(CONTRACT_ADDRESS).unwrap();
+        let my_sink = MySink {};
+        let sm_event_stream = EthEventStreamBuilder::new("ws://localhost:8545", stake_manager);
+        let sm_event_stream = sm_event_stream.with_sink(my_sink).build().await.unwrap();
+
+        println!("Starting the eth event streamer");
+        sm_event_stream.run(Some(1)).await.unwrap();
+
+        println!("Done sm_event stream");
+        // let
+        //     .with_sink(my_sink)
+        //     .build()
+        //     .await
+        //     .unwrap();
     }
 }

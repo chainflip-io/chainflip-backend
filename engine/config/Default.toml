@@ -8,3 +8,7 @@ port = "4222"
 [state_chain]
 hostname = "localhost"
 port = "9944"
+
+[eth]
+# TODO: make this 2 hostname and port
+url = "localhost:8545"
