@@ -2,7 +2,7 @@
 image:
   file: .gitpod.Dockerfile
 tasks:
-  - prebuild: cargo check --release
+  - prebuild: cargo check
 
 github:
   prebuilds:
