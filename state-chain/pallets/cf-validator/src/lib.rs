@@ -10,9 +10,20 @@ use sp_runtime::traits::{Convert, OpaqueKeys};
 use sp_std::prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};
 use log::{debug};
+use std::convert::From;
+use frame_support::pallet_prelude::*;
 
 type ValidatorSize = u32;
-type EpochIndex = u32;
+type SessionIndex = u32;
+
+#[derive(Encode, Decode, Clone, Copy, RuntimeDebug, Default, PartialEq, Eq)]
+pub struct EpochIndex(u32);
+
+impl From<SessionIndex> for EpochIndex {
+	fn from(i: SessionIndex) -> Self {
+		EpochIndex(i/2)
+	}
+}
 
 /// This handler can be implemented in order to hook into Epoch lifecycle events.
 pub trait EpochTransitionHandler {
@@ -53,7 +64,6 @@ impl CandidateProvider for () {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 	use frame_support::sp_runtime::SaturatedConversion;
 
@@ -123,7 +133,7 @@ pub mod pallet {
 		/// The dispatch origin of this function must be root.
 		/// TODO work out weights
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-		pub(super) fn set_epoch(
+		pub(super) fn set_blocks_for_epoch(
 			origin: OriginFor<T>,
 			number_of_blocks: T::BlockNumber,
 		) -> DispatchResultWithPostInfo {
@@ -188,7 +198,7 @@ pub mod pallet {
 	#[pallet::getter(fn force)]
 	pub(super) type Force<T: Config> = StorageValue<_, bool, ValueQuery>;
 
-	/// The block number for the last epoch
+	/// The starting block number for the current epoch
 	#[pallet::storage]
 	#[pallet::getter(fn last_block_number)]
 	pub(super) type LastBlockNumber<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
@@ -326,10 +336,7 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 
 type Stake<T> = <<T as Config>::CandidateProvider as CandidateProvider>::Stake;
 
-type SessionIndex = u32; 
-
 impl<T: Config> Pallet<T> {
-
 	/// This returns validators for the *next* session and is called at the *beginning* of the current session.
 	///
 	/// If we are at the beginning of a non-auction session, the next session will be an auction session, so we return
@@ -343,13 +350,13 @@ impl<T: Config> Pallet<T> {
 	/// confirmation via the `auction_confirmed` extrinsic
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
 		if !Self::is_auction_phase() {
-			Self::deposit_event(Event::NewEpoch(new_index - 1));
+			Self::deposit_event(Event::NewEpoch(new_index.into()));
 			return None
 		}
 
 		debug!("Creating a new auction-phase session {}", new_index);
-		Self::deposit_event(Event::AuctionStarted(new_index));
-		AuctionToConfirm::<T>::set(Some(new_index));
+		Self::deposit_event(Event::AuctionStarted(new_index.into()));
+		AuctionToConfirm::<T>::set(Some(new_index.into()));
 		let candidates = T::CandidateProvider::get_candidates();
 		let new_validators = Self::run_auction(candidates);
 		new_validators
