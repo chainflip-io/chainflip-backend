@@ -17,7 +17,7 @@ type ValidatorSize = u32;
 type SessionIndex = u32;
 
 #[derive(Encode, Decode, Clone, Copy, RuntimeDebug, Default, PartialEq, Eq)]
-pub struct EpochIndex(u32);
+pub struct EpochIndex(SessionIndex);
 
 impl From<SessionIndex> for EpochIndex {
 	fn from(i: SessionIndex) -> Self {
@@ -102,7 +102,7 @@ pub mod pallet {
 		/// A new epoch has started \[epoch_index\]
 		NewEpoch(EpochIndex),
 		/// The number of blocks has changed for our epoch \[from, to\]
-		EpochChanged(T::BlockNumber, T::BlockNumber),
+		EpochDurationChanged(T::BlockNumber, T::BlockNumber),
 		/// The number of validators in a set has been changed \[from, to\]
 		MaximumValidatorsChanged(ValidatorSize, ValidatorSize),
 		/// The auction has been confirmed off-chain \[epoch_index\]
@@ -142,7 +142,7 @@ pub mod pallet {
 			let old_epoch = BlocksPerEpoch::<T>::get();
 			ensure!(old_epoch != number_of_blocks, Error::<T>::InvalidEpoch);
 			BlocksPerEpoch::<T>::set(number_of_blocks);
-			Self::deposit_event(Event::EpochChanged(old_epoch, number_of_blocks));
+			Self::deposit_event(Event::EpochDurationChanged(old_epoch, number_of_blocks));
 			Ok(().into())
 		}
 

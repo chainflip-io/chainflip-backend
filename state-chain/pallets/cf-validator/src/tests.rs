@@ -41,11 +41,11 @@ fn confirm_and_complete_auction(block_number: &mut u64, idx: Option<EpochIndex>)
 
 fn get_auction_epoch_idx(event: mock::Event) -> Option<EpochIndex> {
 	if let mock::Event::pallet_cf_validator(event) = event {
-		if let crate::Event::AuctionStarted(idx) = event {
+		if let crate::Event::AuctionStarted(idx) = event.into() {
 			return Some(idx)
 		}
 	}
-	None
+	panic!("Expected AuctionStarted event");
 }
 
 #[test]
@@ -56,7 +56,7 @@ fn estimation_on_next_session() {
 		// Confirm we have the event of the change to 2
 		assert_eq!(
 			last_event(),
-			mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, 2)),
+			mock::Event::pallet_cf_validator(crate::Event::EpochDurationChanged(0, 2)),
 		);
 		// Simple math to confirm we can work out 3 plus 2
 		assert_eq!(ValidatorManager::estimate_next_session_rotation(3), Some(5));
@@ -96,7 +96,7 @@ fn changing_epoch() {
 		// Confirm we have an event for the change from 0 to 2
 		assert_eq!(
 			last_event(),
-			mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, 2)),
+			mock::Event::pallet_cf_validator(crate::Event::EpochDurationChanged(0, 2)),
 		);
 		// We throw up an error if we try to set it to the current
 		assert_noop!(ValidatorManager::set_blocks_for_epoch(Origin::root(), 2), Error::<Test>::InvalidEpoch);
@@ -114,7 +114,7 @@ fn sessions_do_end() {
 		// Confirm we have the event for the change from 0 to 2
 		assert_eq!(
 			last_event(),
-			mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, 2)),
+			mock::Event::pallet_cf_validator(crate::Event::EpochDurationChanged(0, 2)),
 		);
 		// We should now be able to end a session on block 2
 		assert!(ValidatorManager::should_end_session(2));
@@ -185,7 +185,7 @@ fn bring_forward_session() {
 		let auction_idx = get_auction_epoch_idx(ev.pop().expect("event expected"));
 		assert_eq!(auction_idx, Some(FIRST_EPOCH));
 
-		assert_eq!(ev.pop(), Some(mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, 2))));
+		assert_eq!(ev.pop(), Some(mock::Event::pallet_cf_validator(crate::Event::EpochDurationChanged(0, 2))));
 		assert_eq!(ev.pop(), Some(mock::Event::pallet_cf_validator(crate::Event::MaximumValidatorsChanged(0, 3))));
 
 		// We have no current validators nor outgoing in first rotation as there were none in genesis
@@ -254,7 +254,7 @@ fn force_auction() {
 		assert_ok!(ValidatorManager::set_blocks_for_epoch(Origin::root(), epoch));
 		assert_eq!(
 			last_event(),
-			mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, 10)),
+			mock::Event::pallet_cf_validator(crate::Event::EpochDurationChanged(0, 10)),
 		);
 		// Clear the event queue
 		System::reset_events();
@@ -287,7 +287,7 @@ fn push_back_session() {
 			events(),
 			[
 				mock::Event::pallet_cf_validator(crate::Event::MaximumValidatorsChanged(0, 3)),
-				mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, epoch)),
+				mock::Event::pallet_cf_validator(crate::Event::EpochDurationChanged(0, epoch)),
 			]
 		);
 
@@ -305,7 +305,7 @@ fn push_back_session() {
 		block_number += epoch;
 		run_to_block(block_number);
 		assert_eq!(events(), [
-			mock::Event::pallet_cf_validator(crate::Event::EpochChanged(epoch, epoch * 2)),
+			mock::Event::pallet_cf_validator(crate::Event::EpochDurationChanged(epoch, epoch * 2)),
 		]);
 		// Clear the event queue
 		System::reset_events();
@@ -334,7 +334,7 @@ fn limit_validator_set_size() {
 		assert_ok!(ValidatorManager::set_blocks_for_epoch(Origin::root(), epoch));
 		assert_eq!(
 			last_event(),
-			mock::Event::pallet_cf_validator(crate::Event::EpochChanged(0, epoch)),
+			mock::Event::pallet_cf_validator(crate::Event::EpochDurationChanged(0, epoch)),
 		);
 		// Clear the event queue
 		System::reset_events();
