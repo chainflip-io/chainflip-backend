@@ -330,7 +330,7 @@ impl pallet_cf_staking::Config for Runtime {
 	type Event = Event;
 	type Call = Call;
 
-	type StakedAmount = FlipBalance;
+	type TokenAmount = FlipBalance;
 
 	// TODO: check this against the address type used in the StakeManager
 	type EthereumAddress = [u8; 20];
