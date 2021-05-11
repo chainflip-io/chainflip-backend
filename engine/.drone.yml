@@ -129,7 +129,7 @@ steps:
         The latest `engine` compile has failed.
         Logs: {{build.link}}
         Duration: `{{since build.started}}`
-        Responsible parties: <@464710706567053313>, <@401244824440799233>, <@472886957920485386>, <@261113437642424320>
+        Responsible parties: <@464710706567053313>, <@261113437642424320>
 
 # Config
 trigger:
