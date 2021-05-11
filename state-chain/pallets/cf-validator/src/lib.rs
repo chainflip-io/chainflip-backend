@@ -11,7 +11,7 @@ use sp_std::prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};
 use log::{debug};
 use frame_support::pallet_prelude::*;
-use frame_support::traits::ValidatorSet;
+use cf_traits::EpochInfo;
 
 type ValidatorSize = u32;
 type SessionIndex = u32;
@@ -23,16 +23,6 @@ impl From<SessionIndex> for EpochIndex {
 	fn from(i: SessionIndex) -> Self {
 		EpochIndex(i/2)
 	}
-}
-
-pub trait EpochInfo {
-	type ValidatorId;
-	type Bond;
-
-	fn current_validators() -> Vec<Self::ValidatorId>;
-	fn next_validators() -> Vec<Self::ValidatorId>;
-	fn bond() -> Self::Bond;
-	fn index() -> EpochIndex;
 }
 
 /// This handler can be implemented in order to hook into Epoch lifecycle events.
@@ -91,9 +81,6 @@ pub mod pallet {
 		
 		/// A handler for epoch lifecycle events
 		type EpochTransitionHandler: EpochTransitionHandler<ValidatorId=Self::ValidatorId>;
-
-		/// A type for a bond
-		type Bond: Default + Parameter;
 
 		/// Minimum amount of blocks an epoch can run for
 		#[pallet::constant]
@@ -241,7 +228,8 @@ pub mod pallet {
 	/// Current bond value
 	#[pallet::storage]
 	#[pallet::getter(fn current_bond)]
-	pub(super) type CurrentBond<T: Config> = StorageValue<_, T::Bond, ValueQuery>;
+	pub(super) type CurrentBond<T: Config> = StorageValue<_, Stake<T>, ValueQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub size_validator_set: ValidatorSize,
@@ -267,22 +255,28 @@ pub mod pallet {
 
 impl<T:Config> EpochInfo for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
-	type Bond = ();
+	type Amount = <<T as Config>::CandidateProvider as CandidateProvider>::Stake;
+	type EpochIndex = EpochIndex;
 
 	fn current_validators() -> Vec<Self::ValidatorId> {
-		<pallet_session::Module<T>>::validators();
-		vec![]
+		<pallet_session::Module<T>>::validators()
 	}
 
 	fn next_validators() -> Vec<Self::ValidatorId> {
-		todo!()
+		if Self::is_auction_phase() {
+			return <pallet_session::Module<T>>::queued_keys()
+				.into_iter()
+				.map(|(k, _)| k)
+				.collect()
+		}
+		vec![]
 	}
 
-	fn bond() -> Self::Bond {
+	fn bond() -> Self::Amount {
 		CurrentBond::<T>::get()
 	}
 
-	fn index() -> EpochIndex {
+	fn epoch_index() -> EpochIndex {
 		CurrentEpoch::<T>::get()
 	}
 }
@@ -391,7 +385,6 @@ impl<T: Config> Pallet<T> {
 	/// confirmation via the `auction_confirmed` extrinsic
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
 		if !Self::is_auction_phase() {
-			CurrentEpoch::<T>::set(new_index.into());
 			Self::deposit_event(Event::NewEpoch(new_index.into()));
 			CurrentEpoch::<T>::set(new_index.into());
 			return None
