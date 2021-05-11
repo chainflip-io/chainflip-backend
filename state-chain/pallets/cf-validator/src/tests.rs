@@ -37,6 +37,9 @@ fn confirm_and_complete_auction(block_number: &mut u64, idx: Option<EpochIndex>)
 			mock::Event::pallet_session(pallet_session::Event::NewSession(idx.0 * 2)),
 		]
 	);
+
+	// Confirm we have set the epoch index after moving on
+	assert_eq!(ValidatorManager::epoch_index(), idx);
 }
 
 fn get_auction_epoch_idx(event: mock::Event) -> Option<EpochIndex> {
@@ -128,22 +131,24 @@ fn building_a_candidate_list() {
 	new_test_ext().execute_with(|| {
 		// We are after 3 validators, the mock is set up for 3
 		assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), 3));
-		let mut candidates: Vec<(u64, u64)> = vec![(1, 2), (2, 3), (3, 4)];
+		let lowest_stake = 2;
+		let mut candidates: Vec<(u64, u64)> = vec![(1, lowest_stake), (2, 3), (3, 4)];
 		let winners: HashSet<u64> = [1, 2, 3].iter().cloned().collect();
 
 		// Run an auction and get our candidate validators, should be 3
-		let maybe_validators = ValidatorManager::run_auction(candidates.clone());
+		let (maybe_validators, bond) = ValidatorManager::run_auction(candidates.clone());
 		assert_eq!(maybe_validators.map(|v| v.iter().cloned().collect()), Some(winners.clone()));
+		assert_eq!(bond, lowest_stake);
 
 		// Add a low bid, should not change the validator set.
 		candidates.push((4, 1));
-		let maybe_validators = ValidatorManager::run_auction(candidates.clone());
+		let (maybe_validators, _) = ValidatorManager::run_auction(candidates.clone());
 		assert_eq!(maybe_validators.map(|v| v.iter().cloned().collect()), Some(winners.clone()));
 
 		// Add a high bid, should alter the winners
 		candidates.push((5, 5));
 		let winners: HashSet<u64> = [2, 3, 5].iter().cloned().collect();
-		let maybe_validators = ValidatorManager::run_auction(candidates.clone());
+		let (maybe_validators, _) = ValidatorManager::run_auction(candidates.clone());
 		assert_eq!(maybe_validators.map(|v| v.iter().cloned().collect()), Some(winners.clone()));
 	});
 }
@@ -208,10 +213,16 @@ fn bring_forward_session() {
 
 		let mut current = mock::current_validators();
 		let mut outgoing = mock::outgoing_validators();
+
+		assert_eq!(current, ValidatorManager::current_validators());
+		// Until we are in an auction phase we wouldn't have any candidates
+		assert!(ValidatorManager::next_validators().is_empty());
+
 		// We should have our validators, as we had none before we would see none in 'outgoing'
 		assert_eq!(current.len(), 3);
 		assert_eq!(outgoing.len(), 0);
-
+		// On each auction are candidates are increasing stake so we should see 'bond' increase
+		let mut bond = 0;
 		// Repeat a few epochs 2..4
 		for epoch_idx in 2..4u32 {
 			block_number += epoch;
@@ -228,7 +239,15 @@ fn bring_forward_session() {
 			// and this would be reflected in outgoing and current
 			assert_eq!(mock::outgoing_validators(), mock::current_validators());
 
+			// We are in the auction phase and would expect to see our candidates in `next_validators()`
+			assert_eq!(current, ValidatorManager::current_validators());
+			assert_ne!(current, ValidatorManager::next_validators());
+
 			confirm_and_complete_auction(&mut block_number, auction_idx);
+
+			// Confirm the bond is increasing
+			assert!(bond < ValidatorManager::bond());
+			bond = ValidatorManager::bond();
 
 			// Should be new set of validators
 			assert_ne!(current, mock::current_validators());

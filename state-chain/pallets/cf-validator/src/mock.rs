@@ -133,7 +133,6 @@ impl Config for Test {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
 	type MinValidatorSetSize = MinValidatorSetSize;
-	type ValidatorId = u64;
 	type CandidateProvider = TestCandidateProvider;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
 }
