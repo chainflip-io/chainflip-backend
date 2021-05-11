@@ -57,7 +57,7 @@ pub enum StakingEvent {
 }
 
 impl StakeManager {
-    /// Loads the contract abi to get event definitions.
+    /// Loads the contract abi to get event definitions
     pub fn load(deployed_address: &str) -> Result<Self> {
         let abi_bytes = std::include_bytes!("../abis/StakeManager.json");
         let contract = ethabi::Contract::load(abi_bytes.as_ref())?;
@@ -68,16 +68,28 @@ impl StakeManager {
         })
     }
 
-    /// Event definition for the 'Staked' event.
+    /// Event definition for the 'Staked' event
     pub fn staked_event_definition(&self) -> &ethabi::Event {
         self.get_event("Staked")
             .expect("StakeManager contract should provide 'Staked' event.")
     }
 
-    /// Event definition for the 'Staked' event.
+    /// Event definition for the 'Staked' event
     pub fn claimed_event_definition(&self) -> &ethabi::Event {
         self.get_event("Claimed")
             .expect("StakeManager contract should provide 'Claimed' event. ")
+    }
+
+    /// Event definition for the 'EmissionChanged' event
+    pub fn emission_changed_event_definition(&self) -> &ethabi::Event {
+        self.get_event("EmissionChanged")
+            .expect("StakeManager contract should provide 'EmissionChanged' event")
+    }
+
+    /// Event definition for the 'MinStakeChanged' event
+    pub fn min_stake_changed_event_definition(&self) -> &ethabi::Event {
+        self.get_event("MinStakeChanged")
+            .expect("StakeManager contract should provide 'MinStakeChanged' event")
     }
 
     // Get the event type definition from the contract abi
@@ -101,6 +113,8 @@ impl EventSource for StakeManager {
             .first()
             .ok_or_else(|| EventProducerError::EmptyTopics)?
             .clone();
+
+        println!("Here's the log: {:#?}", log);
 
         let raw_log = ethabi::RawLog {
             topics: log.topics,
@@ -128,6 +142,7 @@ impl EventSource for StakeManager {
             // TODO: Finish this
             _ if sig == self.claimed_event_definition().signature() => {
                 println!("Hello, this is a claimed event");
+                println!("{:#?}", raw_log);
                 let event = StakingEvent::Claimed(U256([0, 1, 3, 5]), U256([123, 0, 0, 0]));
                 Ok(event)
             }
@@ -139,11 +154,23 @@ impl EventSource for StakeManager {
 #[cfg(test)]
 mod tests {
 
-    use crate::eth::EthEventStreamBuilder;
+    use web3::types::H256;
 
     use super::*;
 
     const CONTRACT_ADDRESS: &'static str = "0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f";
+
+    const STAKED_EVENT_SIG: &'static str =
+        "0x925435fa7e37e5d9555bb18ce0d62bb9627d0846942e58e5291e9a2dded462ed";
+
+    const CLAIMED_EVENT_SIG: &'static str =
+        "0xc83b5086ce94ec8d5a88a9f5fea4b18a522bb238ed0d2d8abd959549a80c16b8";
+
+    const EMISSION_CHANGED_EVENT_SIG: &'static str =
+        "0x0b0b5ed18390ab49777844d5fcafb9865c74095ceb3e73cc57d1fbcc926103b5";
+
+    const MIN_STAKE_CHANGED_EVENT_SIG: &'static str =
+        "0xca11c8a4c461b60c9f485404c272650c2aaae260b2067d72e9924abb68556593";
 
     const STAKED_LOG: &'static str = r#"{
         "logIndex": "0x2",
@@ -162,7 +189,23 @@ mod tests {
     }"#;
 
     const CLAIMED_LOG: &'static str = r#"{
+        "logIndex": "0x2",
+        "transactionIndex": "0x0",
+        "transactionHash": "0x75349046f12736cf7887f07d6e0b9b0d77334aa63b1d4f024349c72c73f9592e",
+        "blockHash": "0x76cc3567874b42ed341a06b157beb9f98e3afc000c7dd29438c8f5be36080bf2",
+        "blockNumber": "0x8",
+        "address": "0xead5de9c41543e4babb09f9fe4f79153c036044f",
+        "data": "0x000000000000000000000000000000000000000000000817090f1518090e0303",
+        "topics": [
+            "0xc83b5086ce94ec8d5a88a9f5fea4b18a522bb238ed0d2d8abd959549a80c16b8",
+            "0x0000000000000000000000000000000000000000000000000000000000003039"
+        ],
+        "type": "mined",
+        "removed": false
+    }"#;
 
+    const EMISSION_CHANGED_LOG: &'static str = r#"{
+       "test""
     }"#;
 
     #[test]
@@ -188,10 +231,62 @@ mod tests {
         Ok(())
     }
 
-    // #[test]
-    // fn test_claimed_log_parsing() -> anyhow::Result<()> {
-    //     let log: web3::types::Log = serde_json::from_str(CLAIMED_LOG)?;
+    #[test]
+    fn test_claimed_log_parsing() -> anyhow::Result<()> {
+        let log: web3::types::Log = serde_json::from_str(CLAIMED_LOG)?;
 
-    //     Ok(())
-    // }
+        let sm = StakeManager::load(CONTRACT_ADDRESS)?;
+
+        match sm.parse_event(log)? {
+            StakingEvent::Claimed(node_id, amount) => {
+                assert_eq!(node_id, web3::types::U256::from(12321));
+                assert_eq!(amount, web3::types::U256::exp10(23));
+            }
+            _ => panic!("Expected Staking::Claimed, got a different variant"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn emission_changed_log_parsing() -> anyhow::Result<()> {
+        let log: web3::types::Log = serde_json::from_str(EMISSION_CHANGED_LOG)?;
+
+        let sm = StakeManager::load(CONTRACT_ADDRESS)?;
+
+        
+
+        Ok(())
+    }
+
+    #[test]
+    fn abi_topic_sigs() -> anyhow::Result<()> {
+        let sm = StakeManager::load(CONTRACT_ADDRESS)?;
+
+        // Staked event
+        let staked_sig = sm.staked_event_definition().signature();
+        let expected =
+            H256::from_str(STAKED_EVENT_SIG).expect("Couldn't cast staked event sig to H256");
+        assert_eq!(staked_sig, expected, "Staked event doesn't match signature");
+
+        // Claimed event
+        let claimed_sig = sm.claimed_event_definition().signature();
+        let expected =
+            H256::from_str(CLAIMED_EVENT_SIG).expect("Couldn't cast claimed event sig to H256");
+        assert_eq!(claimed_sig, expected);
+
+        // Emission changed event
+        let emission_changed_sig = sm.emission_changed_event_definition().signature();
+        let expected = H256::from_str(EMISSION_CHANGED_EVENT_SIG)
+            .expect("Couldn't cast emission changed event sig to H256");
+        assert_eq!(emission_changed_sig, expected);
+
+        // Min stake changed
+        let min_stake_changed_sig = sm.min_stake_changed_event_definition().signature();
+        let expected = H256::from_str(MIN_STAKE_CHANGED_EVENT_SIG)
+            .expect("Couldn't case min stake changed event sig to H256");
+        assert_eq!(min_stake_changed_sig, expected);
+
+        Ok(())
+    }
 }
