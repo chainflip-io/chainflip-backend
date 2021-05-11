@@ -10,7 +10,6 @@ use sp_runtime::traits::{Convert, OpaqueKeys, AtLeast32BitUnsigned};
 use sp_std::prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};
 use log::{debug};
-use std::convert::From;
 use frame_support::pallet_prelude::*;
 use cf_traits::EpochInfo;
 
