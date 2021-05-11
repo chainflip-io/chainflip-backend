@@ -1,3 +1,5 @@
+/// Contains the information required to use the StakeManger contract as a source for
+/// the EthEventStreamer
 use core::str::FromStr;
 
 use crate::eth::{decode_log_param, EventProducerError, EventSource};
@@ -34,6 +36,22 @@ pub enum StakingEvent {
         /// The node id of the validator that claimed their FLIP
         ethabi::Uint,
         /// The amount of FLIP that was claimed
+        ethabi::Uint,
+    ),
+
+    /// `EmissionChanged(oldEmissionPerBlock, newEmissionPerBlock)`
+    EmissionChanged(
+        /// Old emission per block
+        ethabi::Uint,
+        /// New emission per block
+        ethabi::Uint,
+    ),
+
+    /// `MinStakeChanged(oldMinStake, newMinStake)`
+    MinStakeChanged(
+        /// Old minimum stake
+        ethabi::Uint,
+        /// New minimum stake
         ethabi::Uint,
     ),
 }
@@ -113,7 +131,7 @@ mod tests {
 
     const CONTRACT_ADDRESS: &'static str = "0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f";
 
-    const LOG_JSON: &'static str = r#"{
+    const STAKED_LOG: &'static str = r#"{
         "logIndex": "0x2",
         "transactionIndex": "0x0",
         "transactionHash": "0x75349046f12736cf7887f07d6e0b9b0d77334aa63b1d4f024349c72c73f9592e",
@@ -127,6 +145,10 @@ mod tests {
         ],
         "type": "mined",
         "removed": false
+    }"#;
+
+    const CLAIMED_LOG: &'static str = r#"{
+
     }"#;
 
     #[test]
@@ -148,16 +170,26 @@ mod tests {
     }
 
     #[test]
-    fn test_log_parsing() -> anyhow::Result<()> {
-        let log: web3::types::Log = serde_json::from_str(LOG_JSON)?;
+    fn test_staked_log_parsing() -> anyhow::Result<()> {
+        let log: web3::types::Log = serde_json::from_str(STAKED_LOG)?;
 
         let sm = StakeManager::load(CONTRACT_ADDRESS)?;
 
-        let StakingEvent::Staked(node_id, amount) = sm.parse_event(log)?;
-
-        assert_eq!(node_id, web3::types::U256::from(12321));
-        assert_eq!(amount, web3::types::U256::exp10(23));
+        match sm.parse_event(log)? {
+            StakingEvent::Staked(node_id, amount) => {
+                assert_eq!(node_id, web3::types::U256::from(12321));
+                assert_eq!(amount, web3::types::U256::exp10(23));
+            }
+            _ => panic!("Expected StakingEvent::Staked, got a different variant"),
+        }
 
         Ok(())
     }
+
+    // #[test]
+    // fn test_claimed_log_parsing() -> anyhow::Result<()> {
+    //     let log: web3::types::Log = serde_json::from_str(CLAIMED_LOG)?;
+
+    //     Ok(())
+    // }
 }
