@@ -9,7 +9,7 @@ use super::*;
 use serde::{Deserialize, Serialize};
 use web3::{
     ethabi,
-    types::{BlockNumber, FilterBuilder, H160},
+    types::{BlockNumber, FilterBuilder, H160, U256},
 };
 
 use anyhow::Result;
@@ -74,6 +74,13 @@ impl StakeManager {
             .expect("StakeManager contract should provide 'Staked' event.")
     }
 
+    /// Event definition for the 'Staked' event.
+    pub fn claimed_event_definition(&self) -> &ethabi::Event {
+        self.get_event("Claimed")
+            .expect("StakeManager contract should provide 'Claimed' event. ")
+    }
+
+    // Get the event type definition from the contract abi
     fn get_event(&self, name: &str) -> Result<&ethabi::Event> {
         Ok(self.contract.event(name)?)
     }
@@ -108,6 +115,7 @@ impl EventSource for StakeManager {
 
         match sig {
             _ if sig == self.staked_event_definition().signature() => {
+                println!("Hello, this is a staked event");
                 let log = self.staked_event_definition().parse_log(raw_log)?;
 
                 let event = StakingEvent::Staked(
@@ -115,6 +123,12 @@ impl EventSource for StakeManager {
                     decode_log_param(&log, "amount")?,
                 );
 
+                Ok(event)
+            }
+            // TODO: Finish this
+            _ if sig == self.claimed_event_definition().signature() => {
+                println!("Hello, this is a claimed event");
+                let event = StakingEvent::Claimed(U256([0, 1, 3, 5]), U256([123, 0, 0, 0]));
                 Ok(event)
             }
             s => Err(EventProducerError::UnexpectedEvent(s))?,
@@ -150,18 +164,6 @@ mod tests {
     const CLAIMED_LOG: &'static str = r#"{
 
     }"#;
-
-    #[test]
-    fn testing_stuff() {
-        let contract = StakeManager::load(CONTRACT_ADDRESS).unwrap();
-
-        let stuff = contract.staked_event_definition();
-
-        // this currently returns the param types of the staked event. Look into this
-        println!("Here's a staked event definition: {:#?}", stuff);
-
-        // How do I read the real events???
-    }
 
     #[test]
     fn test_load_contract() {
