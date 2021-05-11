@@ -3,5 +3,8 @@
 [message_queue]
 # can also be IP
 hostname = "localhost"
-port = "9944"
+port = "4222"
 
+[state_chain]
+hostname = "localhost"
+port = "9944"

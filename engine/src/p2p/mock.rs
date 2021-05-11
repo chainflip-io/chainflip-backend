@@ -1,61 +1,83 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, sync::Arc};
 
-use crossbeam_channel::{Receiver, Sender, TrySendError};
+use futures::Stream;
+use parking_lot::Mutex;
 
-use super::{Message, P2PNetworkClient, ValidatorId};
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-pub(super) struct NetworkMock {
+use super::{P2PMessage, P2PNetworkClient, ValidatorId};
+
+use async_trait::async_trait;
+
+pub(super) struct P2PClientMock {
     id: ValidatorId,
-    pub(super) receiver: Receiver<Message>,
-    network_inner: Arc<Mutex<NetworkInner>>,
+    pub(super) receiver: Option<UnboundedReceiver<P2PMessage>>,
+    network_inner: Arc<Mutex<NetworkMockInner>>,
 }
 
-impl NetworkMock {
-    pub fn new(id: ValidatorId, network_inner: Arc<Mutex<NetworkInner>>) -> Self {
-        let (sender, receiver) = crossbeam_channel::unbounded();
+impl P2PClientMock {
+    pub fn new(id: ValidatorId, network_inner: Arc<Mutex<NetworkMockInner>>) -> Self {
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
-        network_inner.lock().unwrap().register(&id, sender);
+        network_inner.lock().register(&id, sender);
 
-        NetworkMock {
+        P2PClientMock {
             id,
-            receiver,
+            receiver: Some(receiver),
             network_inner,
         }
     }
 }
 
-impl P2PNetworkClient for NetworkMock {
+#[async_trait]
+impl P2PNetworkClient for P2PClientMock {
     fn broadcast(&self, data: &[u8]) {
-        self.network_inner.lock().unwrap().broadcast(&self.id, data);
+        self.network_inner.lock().broadcast(&self.id, data);
     }
 
     fn send(&self, to: &ValidatorId, data: &[u8]) {
-        self.network_inner.lock().unwrap().send(&self.id, to, data);
+        self.network_inner.lock().send(&self.id, to, data);
+    }
+
+    fn take_receiver(&mut self) -> Option<UnboundedReceiver<P2PMessage>> {
+        self.receiver.take()
     }
 }
 
-pub struct NetworkInner {
-    clients: HashMap<ValidatorId, Sender<Message>>,
+pub(super) struct NetworkMock(Arc<Mutex<NetworkMockInner>>);
+
+impl NetworkMock {
+    pub fn new() -> Self {
+        let inner = NetworkMockInner::new();
+        let inner = Arc::new(Mutex::new(inner));
+
+        NetworkMock(inner)
+    }
+
+    pub fn new_client(&self, id: ValidatorId) -> P2PClientMock {
+        P2PClientMock::new(id, Arc::clone(&self.0))
+    }
 }
 
-impl NetworkInner {
-    pub fn new() -> Self {
-        NetworkInner {
+pub struct NetworkMockInner {
+    clients: HashMap<ValidatorId, UnboundedSender<P2PMessage>>,
+}
+
+impl NetworkMockInner {
+    fn new() -> Self {
+        NetworkMockInner {
             clients: HashMap::new(),
         }
     }
 
     /// Register validator, so we know how to contact them
-    fn register(&mut self, id: &ValidatorId, sender: Sender<Message>) {
+    fn register(&mut self, id: &ValidatorId, sender: UnboundedSender<P2PMessage>) {
         let added = self.clients.insert(id.to_owned(), sender).is_none();
         assert!(added, "Cannot insert the same validator more than once");
     }
 
     fn broadcast(&self, from: &ValidatorId, data: &[u8]) {
-        let m = Message {
+        let m = P2PMessage {
             sender_id: from.to_owned(),
             data: data.to_owned(),
         };
@@ -63,12 +85,9 @@ impl NetworkInner {
         for (id, sender) in &self.clients {
             // Do not send to ourselves
             if id != from {
-                match sender.try_send(m.clone()) {
+                match sender.send(m.clone()) {
                     Ok(()) => (),
-                    Err(TrySendError::Full(_)) => {
-                        panic!("channel is full");
-                    }
-                    Err(TrySendError::Disconnected(_)) => {
+                    Err(_) => {
                         panic!("channel is disconnected");
                     }
                 }
@@ -78,18 +97,20 @@ impl NetworkInner {
 
     /// Send to a specific `validator` only
     fn send(&self, from: &ValidatorId, to: &ValidatorId, data: &[u8]) {
-        let m = Message {
+        let m = P2PMessage {
             sender_id: from.to_owned(),
             data: data.to_owned(),
         };
 
-        match self.clients.get(to).unwrap().try_send(m) {
-            Ok(()) => (),
-            Err(TrySendError::Full(_)) => {
-                panic!("channel is full");
-            }
-            Err(TrySendError::Disconnected(_)) => {
-                panic!("channel is disconnected");
+        match self.clients.get(to) {
+            Some(client) => match client.send(m) {
+                Ok(()) => {}
+                Err(_) => {
+                    panic!("channel is disconnected");
+                }
+            },
+            None => {
+                eprintln!("Client not connected: {}", to);
             }
         }
     }

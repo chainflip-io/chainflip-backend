@@ -1,3 +1,7 @@
+// Code mostly taken from here: https://github.com/gautamdhameja/substrate-validator-set
+// modifications to it, such as validation (since we're not using sudo to add validators)
+// will come later
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(test)]
@@ -18,7 +22,7 @@ type ValidatorSize = u32;
 type SessionIndex = u32;
 
 #[derive(Encode, Decode, Clone, Copy, RuntimeDebug, Default, PartialEq, Eq)]
-pub struct EpochIndex(u32);
+pub struct EpochIndex(SessionIndex);
 
 impl From<SessionIndex> for EpochIndex {
 	fn from(i: SessionIndex) -> Self {
@@ -38,7 +42,7 @@ pub trait EpochInfo {
 
 /// This handler can be implemented in order to hook into Epoch lifecycle events.
 pub trait EpochTransitionHandler {
-	/// The id type used for the validators. 
+	/// The id type used for the validators.
 	type ValidatorId;
 
 	/// Triggered at the start of a new Epoch.
@@ -92,7 +96,7 @@ pub mod pallet {
 
 		/// A provider for our candidates
 		type CandidateProvider: CandidateProvider<ValidatorId=Self::ValidatorId>;
-		
+
 		/// A handler for epoch lifecycle events
 		type EpochTransitionHandler: EpochTransitionHandler<ValidatorId=Self::ValidatorId>;
 
@@ -116,7 +120,7 @@ pub mod pallet {
 		/// A new epoch has started \[epoch_index\]
 		NewEpoch(EpochIndex),
 		/// The number of blocks has changed for our epoch \[from, to\]
-		EpochChanged(T::BlockNumber, T::BlockNumber),
+		EpochDurationChanged(T::BlockNumber, T::BlockNumber),
 		/// The number of validators in a set has been changed \[from, to\]
 		MaximumValidatorsChanged(ValidatorSize, ValidatorSize),
 		/// The auction has been confirmed off-chain \[epoch_index\]
@@ -156,7 +160,7 @@ pub mod pallet {
 			let old_epoch = BlocksPerEpoch::<T>::get();
 			ensure!(old_epoch != number_of_blocks, Error::<T>::InvalidEpoch);
 			BlocksPerEpoch::<T>::set(number_of_blocks);
-			Self::deposit_event(Event::EpochChanged(old_epoch, number_of_blocks));
+			Self::deposit_event(Event::EpochDurationChanged(old_epoch, number_of_blocks));
 			Ok(().into())
 		}
 
@@ -386,8 +390,8 @@ impl<T: Config> Pallet<T> {
 	/// This returns validators for the *next* session and is called at the *beginning* of the current session.
 	///
 	/// If we are at the beginning of a non-auction session, the next session will be an auction session, so we return
-	/// `None` to indicate that the validator set remains unchanged. Otherwise, the set is considered changed even if 
-	/// the new set of validators is the same as the old one.  
+	/// `None` to indicate that the validator set remains unchanged. Otherwise, the set is considered changed even if
+	/// the new set of validators is the same as the old one.
 	///
 	/// If we are the beginning of an auction session, we need to run the auction to set the validators for the upcoming
 	/// Epoch.
@@ -409,7 +413,7 @@ impl<T: Config> Pallet<T> {
 		new_validators
 	}
 
-	/// The end of the session is triggered, we alternate between regular trading sessions and auction sessions. 
+	/// The end of the session is triggered, we alternate between regular trading sessions and auction sessions.
 	fn end_session(end_index: SessionIndex) {
 		IsAuctionPhase::<T>::mutate(|is_auction| {
 			if *is_auction {

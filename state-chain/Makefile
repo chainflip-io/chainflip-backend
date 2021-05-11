@@ -45,3 +45,7 @@ run-charlie:
 .PHONY: purge-chain
 purge-chain:
 	./scripts/purge-chain.sh
+
+.PHONY: purge-chain-debug
+purge-chain-debug:
+	./scripts/purge-chain-debug.sh
