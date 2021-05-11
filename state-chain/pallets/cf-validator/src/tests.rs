@@ -142,8 +142,9 @@ fn building_a_candidate_list() {
 
 		// Add a low bid, should not change the validator set.
 		candidates.push((4, 1));
-		let (maybe_validators, _) = ValidatorManager::run_auction(candidates.clone());
+		let (maybe_validators, bond) = ValidatorManager::run_auction(candidates.clone());
 		assert_eq!(maybe_validators.map(|v| v.iter().cloned().collect()), Some(winners.clone()));
+		assert_eq!(bond, lowest_stake);
 
 		// Add a high bid, should alter the winners
 		candidates.push((5, 5));
