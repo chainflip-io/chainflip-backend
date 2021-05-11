@@ -8,5 +8,5 @@ github:
     branches: true
     pullRequestsFromForks: true
     addBadge: true
-    addComment: true
+    addComment: false
     pullRequests: true
