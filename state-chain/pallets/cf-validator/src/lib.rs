@@ -1,3 +1,7 @@
+// Code mostly taken from here: https://github.com/gautamdhameja/substrate-validator-set
+// modifications to it, such as validation (since we're not using sudo to add validators)
+// will come later
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(test)]
@@ -6,12 +10,13 @@ mod mock;
 mod tests;
 
 pub use pallet::*;
-use sp_runtime::traits::{Convert, OpaqueKeys};
+use sp_runtime::traits::{Convert, OpaqueKeys, AtLeast32BitUnsigned};
 use sp_std::prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};
 use log::{debug};
 use std::convert::From;
 use frame_support::pallet_prelude::*;
+use cf_traits::EpochInfo;
 
 type ValidatorSize = u32;
 type SessionIndex = u32;
@@ -27,7 +32,7 @@ impl From<SessionIndex> for EpochIndex {
 
 /// This handler can be implemented in order to hook into Epoch lifecycle events.
 pub trait EpochTransitionHandler {
-	/// The id type used for the validators. 
+	/// The id type used for the validators.
 	type ValidatorId;
 
 	/// Triggered at the start of a new Epoch.
@@ -46,7 +51,7 @@ pub trait EpochTransitionHandler {
 /// Something that can provide us a list of candidates with their corresponding stakes
 pub trait CandidateProvider {
 	type ValidatorId: Eq + Ord + Clone;
-	type Stake: Eq + Ord + Copy;
+	type Stake: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 
 	fn get_candidates() -> Vec<(Self::ValidatorId, Self::Stake)>;
 }
@@ -72,16 +77,13 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	pub trait Config: frame_system::Config + pallet_session::Config {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-		/// A type to identify a validator
-		type ValidatorId: Eq + Ord + Clone;
-
 		/// A provider for our candidates
 		type CandidateProvider: CandidateProvider<ValidatorId=Self::ValidatorId>;
-		
+
 		/// A handler for epoch lifecycle events
 		type EpochTransitionHandler: EpochTransitionHandler<ValidatorId=Self::ValidatorId>;
 
@@ -115,7 +117,7 @@ pub mod pallet {
 	pub enum Error<T> {
 		// TODO We need to handle condition when we have no candidates
 		NoValidators,
-		/// Epoch blocknumber supplied is invalid
+		/// Epoch block number supplied is invalid
 		InvalidEpoch,
 		/// Validator set size provided is invalid
 		InvalidValidatorSetSize,
@@ -223,6 +225,16 @@ pub mod pallet {
 	#[pallet::getter(fn auction_confirmed)]
 	pub(super) type AuctionToConfirm<T: Config> = StorageValue<_, EpochIndex, OptionQuery>;
 
+	/// Current epoch index
+	#[pallet::storage]
+	#[pallet::getter(fn current_epoch)]
+	pub(super) type CurrentEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
+
+	/// Current bond value
+	#[pallet::storage]
+	#[pallet::getter(fn current_bond)]
+	pub(super) type CurrentBond<T: Config> = StorageValue<_, Stake<T>, ValueQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub size_validator_set: ValidatorSize,
@@ -243,6 +255,34 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {}
+	}
+}
+
+impl<T:Config> EpochInfo for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
+	type Amount = <<T as Config>::CandidateProvider as CandidateProvider>::Stake;
+	type EpochIndex = EpochIndex;
+
+	fn current_validators() -> Vec<Self::ValidatorId> {
+		<pallet_session::Module<T>>::validators()
+	}
+
+	fn next_validators() -> Vec<Self::ValidatorId> {
+		if Self::is_auction_phase() {
+			return <pallet_session::Module<T>>::queued_keys()
+				.into_iter()
+				.map(|(k, _)| k)
+				.collect()
+		}
+		vec![]
+	}
+
+	fn bond() -> Self::Amount {
+		CurrentBond::<T>::get()
+	}
+
+	fn epoch_index() -> EpochIndex {
+		CurrentEpoch::<T>::get()
 	}
 }
 
@@ -295,7 +335,7 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 
 /// Provides the new set of validators to the session module when session is being rotated.
 impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
-	/// Prepare candiates for a new session
+	/// Prepare candidates for a new session
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
 		debug!("planning new_session({})", new_index);
 		Self::new_session(new_index)
@@ -340,8 +380,8 @@ impl<T: Config> Pallet<T> {
 	/// This returns validators for the *next* session and is called at the *beginning* of the current session.
 	///
 	/// If we are at the beginning of a non-auction session, the next session will be an auction session, so we return
-	/// `None` to indicate that the validator set remains unchanged. Otherwise, the set is considered changed even if 
-	/// the new set of validators is the same as the old one.  
+	/// `None` to indicate that the validator set remains unchanged. Otherwise, the set is considered changed even if
+	/// the new set of validators is the same as the old one.
 	///
 	/// If we are the beginning of an auction session, we need to run the auction to set the validators for the upcoming
 	/// Epoch.
@@ -351,6 +391,7 @@ impl<T: Config> Pallet<T> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
 		if !Self::is_auction_phase() {
 			Self::deposit_event(Event::NewEpoch(new_index.into()));
+			CurrentEpoch::<T>::set(new_index.into());
 			return None
 		}
 
@@ -358,11 +399,12 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::AuctionStarted(new_index.into()));
 		AuctionToConfirm::<T>::set(Some(new_index.into()));
 		let candidates = T::CandidateProvider::get_candidates();
-		let new_validators = Self::run_auction(candidates);
+		let (new_validators, bond) = Self::run_auction(candidates);
+		CurrentBond::<T>::set(bond);
 		new_validators
 	}
 
-	/// The end of the session is triggered, we alternate between regular trading sessions and auction sessions. 
+	/// The end of the session is triggered, we alternate between regular trading sessions and auction sessions.
 	fn end_session(end_index: SessionIndex) {
 		IsAuctionPhase::<T>::mutate(|is_auction| {
 			if *is_auction {
@@ -378,9 +420,10 @@ impl<T: Config> Pallet<T> {
 		debug!("Starting a new session {}", start_index);
 	}
 
-	pub fn run_auction(mut candidates: Vec<(T::ValidatorId, Stake<T>)>) -> Option<Vec<T::ValidatorId>> {
+	pub fn run_auction(mut candidates: Vec<(T::ValidatorId, Stake<T>)>) -> (Option<Vec<T::ValidatorId>>, Stake<T>) {
 		// A basic auction algorithm.  We sort by stake amount and take the top of the validator
 		// set size and let session pallet do the rest
+		// On completing the auction our list of validators and the bond returned
 		// Space here to add other prioritisation parameters
 		if !candidates.is_empty() {
 			candidates.sort_unstable_by_key(|k| k.1);
@@ -388,11 +431,14 @@ impl<T: Config> Pallet<T> {
 			let max_size = SizeValidatorSet::<T>::get();
 			let candidates = candidates.get(0..max_size as usize);
 			if let Some(candidates) = candidates {
-				let candidates: Vec<T::ValidatorId> = candidates.iter().map(|i| i.0.clone()).collect();
-				return Some(candidates);
+				if let Some((_, bond)) = candidates.last() {
+					let candidates: Vec<T::ValidatorId> = candidates.iter().map(|i| i.0.clone()).collect();
+					return (Some(candidates), bond.clone());
+				}
 			}
 		}
-		Some(vec![])
+
+		(Some(vec![]), Zero::zero())
 	}
 
 	/// Check if we have a forced session for this block.  If not, if we are in the "auction" phase

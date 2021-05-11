@@ -139,7 +139,6 @@ impl pallet_cf_validator::Config for Runtime {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
 	type MinValidatorSetSize = MinValidatorSetSize;
-	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type CandidateProvider = pallet_cf_staking::Pallet<Self>;
 }
 
