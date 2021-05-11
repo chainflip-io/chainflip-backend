@@ -16,13 +16,27 @@ pub trait Witnesser {
 	fn witness(who: Self::AccountId, call: Self::Call) -> DispatchResultWithPostInfo;
 }
 
-/// Something that can provide information on the current validator bond amount.
-pub trait BondProvider {
-	/// The denomination of the bonded token.
+pub trait EpochInfo {
+	/// The id type used for the validators.
+	type ValidatorId;
+	/// An amount
 	type Amount;
+	/// The index of an epoch
+	type EpochIndex;
 
-	/// Returns the bond amount for the current Epoch.
-	fn current_bond() -> Self::Amount;
+	/// The current set of validators
+	fn current_validators() -> Vec<Self::ValidatorId>;
+
+	/// If we are in auction phase then the proposed set to validate once the auction is
+	/// confirmed else an empty vector
+	fn next_validators() -> Vec<Self::ValidatorId>;
+
+	/// The amount to be used as bond, this is the minimum stake needed to get into the
+	/// candidate validator set
+	fn bond() -> Self::Amount;
+
+	/// The current epoch we are in
+	fn epoch_index() -> Self::EpochIndex;
 }
 
 pub trait ValidatorProvider {
