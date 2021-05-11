@@ -139,7 +139,6 @@ trigger:
     - push
   paths:
     - engine/*
-
 node:
   builder: "true"
 volumes:
