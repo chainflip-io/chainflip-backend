@@ -28,14 +28,14 @@ impl Subscription {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl IMQClient for NatsMQClient {
     async fn connect(opts: Options) -> Result<Box<Self>> {
         let conn = async_nats::connect(opts.url.as_str()).await?;
         Ok(Box::new(NatsMQClient { conn }))
     }
 
-    async fn publish<M: Serialize>(&self, subject: Subject, message: &'_ M) -> Result<()> {
+    async fn publish<M: Serialize + Sync>(&self, subject: Subject, message: &'_ M) -> Result<()> {
         let bytes = serde_json::to_string(message)?;
         let bytes = bytes.as_bytes();
         self.conn.publish(&subject.to_string(), bytes).await?;

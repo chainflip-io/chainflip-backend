@@ -17,8 +17,7 @@ log = "0.4"
 # Note: Keep this in sync with the SCALE version used by subxt
 parity-scale-codec = { version = "2.0", features = ["derive"] }
 serde = {version = "1.0", features = ["derive"]}
-# Use a git ref until version 0.15 is published...
-substrate-subxt = { git = "https://github.com/paritytech/substrate-subxt", rev = "b37d8ecd5a05d0913e5d0fce346bdc37074d71e1" }
+substrate-subxt = { version = "0.15" }
 thiserror = "1.0"
 web3 = {version = "0.15"}
 
