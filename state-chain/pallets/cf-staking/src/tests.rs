@@ -1,5 +1,5 @@
 use crate::{mock::*, Stakes, Pallet, Error, PendingClaims, Config};
-use frame_support::{assert_err, assert_noop, assert_ok, error::BadOrigin};
+use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 use sp_core::ecdsa::Signature;
 
 fn assert_event_sequence<T: frame_system::Config, E: Into<T::Event>>(expected: Vec<E>) 
@@ -54,6 +54,14 @@ fn staked_amount_is_added_and_subtracted() {
 		// Check the pending claims
 		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().amount, claim_a);
 		assert_eq!(PendingClaims::<Test>::get(BOB).unwrap().amount, claim_b);
+
+		assert_event_sequence::<Test, _>(vec![
+			crate::Event::Staked(ALICE, stake_a1, stake_a1),
+			crate::Event::Staked(ALICE, stake_a2, stake_a1 + stake_a2),
+			crate::Event::Staked(BOB, stake_b, stake_b),
+			crate::Event::ClaimSigRequested(ALICE, ETH_DUMMY_ADDR, 1, claim_a),
+			crate::Event::ClaimSigRequested(BOB, ETH_DUMMY_ADDR, 1, claim_b),
+		]);
 	});
 }
 
@@ -74,10 +82,6 @@ fn claiming_unclaimable_is_err() {
 		// Stake some FLIP.
 		assert_ok!(StakeManager::staked(Origin::root(), ALICE, stake, ETH_DUMMY_ADDR));
 
-		// assert_event_sequence::<Test, _>(vec![
-		// 	crate::Event::Staked(ALICE, stake, stake),
-		// ]);
-
 		// Claim FLIP from another account.
 		assert_noop!(
 			StakeManager::claim(Origin::signed(BOB), stake, ETH_DUMMY_ADDR), 
@@ -86,6 +90,10 @@ fn claiming_unclaimable_is_err() {
 		
 		// Make sure storage hasn't been touched.
 		assert_eq!(Pallet::<Test>::get_total_stake(&ALICE), stake);
+
+		assert_event_sequence::<Test, _>(vec![
+			crate::Event::Staked(ALICE, stake, stake),
+		]);
 	});
 }
 
@@ -139,6 +147,12 @@ fn staked_and_claimed_events_must_match() {
 
 		// Valid Claimed Event from Ethereum.
 		assert_ok!(StakeManager::claimed(Origin::root(), ALICE, stake));
+
+		assert_event_sequence::<Test, _>(vec![
+			crate::Event::Staked(ALICE, stake, stake),
+			crate::Event::ClaimSigRequested(ALICE, ETH_DUMMY_ADDR, 1, stake),
+			crate::Event::Claimed(ALICE, stake),
+		]);
 	});
 }
 
@@ -169,12 +183,27 @@ fn sigature_is_inserted() {
 
 		// Check storage for the signature, should not be there.
 		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().signature, None);
+
+		// Get the nonce
+		let nonce = if let Event::pallet_cf_staking(crate::Event::ClaimSigRequested( _, _, nonce, _ )) =
+			frame_system::Pallet::<Test>::events().last().unwrap().event
+		{
+			nonce
+		} else {
+			panic!("Expected ClaimSigRequested event with nonce.")
+		};
 		
 		// Insert a signature.
-		assert_ok!(StakeManager::post_claim_signature(Origin::signed(ALICE), ALICE, stake, 0, ETH_DUMMY_ADDR, sig.clone()));
+		assert_ok!(StakeManager::post_claim_signature(Origin::signed(ALICE), ALICE, stake, nonce, ETH_DUMMY_ADDR, sig.clone()));
 
 		// Check storage for the signature.
-		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().signature, Some(sig));
+		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().signature, Some(sig.clone()));
+
+		assert_event_sequence::<Test, _>(vec![
+			crate::Event::Staked(ALICE, stake, stake),
+			crate::Event::ClaimSigRequested(ALICE, ETH_DUMMY_ADDR, nonce, stake),
+			crate::Event::ClaimSignatureIssued(ALICE, stake, nonce, ETH_DUMMY_ADDR, sig.clone()),
+		]);
 	});
 }
 
@@ -256,5 +285,24 @@ fn test_retirement() {
 
 		// Already activated, can't do so again
 		assert_noop!(StakeManager::activate_account(Origin::signed(ALICE)), <Error<Test>>::AlreadyActive);
+
+		assert_event_sequence::<Test, _>(vec![
+			crate::Event::AccountRetired(ALICE),
+			crate::Event::AccountActivated(ALICE),
+		]);
 	});
+}
+
+#[test]
+fn test_refund() {
+	let CHARLIE: <Test as frame_system::Config>::AccountId = 666u64;
+	let stake = 100u128;
+
+	// Staking an unknown account should not trigger an error.
+	assert_ok!(StakeManager::staked(Origin::root(), CHARLIE, stake, ETH_DUMMY_ADDR));
+
+	// But the stake will be refunded.
+	assert_event_sequence::<Test, _>(vec![
+		crate::Event::StakeRefund(CHARLIE, stake, ETH_DUMMY_ADDR),
+	]);
 }
