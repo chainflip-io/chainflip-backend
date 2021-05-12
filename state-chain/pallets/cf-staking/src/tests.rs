@@ -149,7 +149,7 @@ fn sigature_is_inserted() {
 		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().signature, None);
 		
 		// Insert a signature.
-		assert_ok!(StakeManager::post_claim_signature(Origin::none(), ALICE, stake, 0, ETH_DUMMY_ADDR, sig.clone()));
+		assert_ok!(StakeManager::post_claim_signature(Origin::signed(ALICE), ALICE, stake, 0, ETH_DUMMY_ADDR, sig.clone()));
 
 		// Check storage for the signature.
 		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().signature, Some(sig));

@@ -67,8 +67,6 @@ impl Config for Test {
 
 	type EthereumCrypto = Public;
 
-	type UnsignedPriority = UnsignedPriority;
-
 	type EnsureWitnessed = MockEnsureWitnessed;
 
 	type Witnesser = MockWitnesser;
