@@ -12,8 +12,10 @@ pub mod stake_manager_sink;
 
 use anyhow::{Context, Result};
 
+/// Set up the eth event streamer for the StakeManager contract, and start it
 pub async fn start_stake_manager_witness(settings: settings::Settings) -> Result<()> {
-    println!("Starting stake manager witness");
+    log::info!("Starting the stake manager witness");
+
     let stake_manager = StakeManager::load(settings.eth.stake_manager_eth_address.as_str())?;
 
     let mq_options = Options {

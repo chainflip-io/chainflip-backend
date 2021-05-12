@@ -7,6 +7,8 @@ use async_trait::async_trait;
 
 use super::stake_manager::StakingEvent;
 
+/// A sink that can be used with an EthEventStreamer instance
+/// Pushes events to the message queue
 pub struct StakeManagerSink<M: IMQClient + Send + Sync> {
     mq_client: M,
 }
@@ -24,8 +26,17 @@ impl<M: IMQClient + Send + Sync> StakeManagerSink<M> {
 #[async_trait]
 impl<M: IMQClient + Send + Sync> EventSink<StakingEvent> for StakeManagerSink<M> {
     async fn process_event(&self, event: StakingEvent) -> anyhow::Result<()> {
-        // TODO: Ensure the events go to the correct queue, there are several StakingEvent variants
-        self.mq_client.publish(Subject::Stake, &event).await?;
+        let subject: Option<Subject> = match event {
+            StakingEvent::Claimed(_, _) => Some(Subject::StakeManagerClaim),
+            StakingEvent::Staked(_, _) => Some(Subject::StakeManagerStake),
+            StakingEvent::EmissionChanged(_, _) => None,
+            StakingEvent::MinStakeChanged(_, _) => None,
+        };
+        if subject.is_none() {
+            log::trace!("Not publishing event: {:?} to MQ", &event);
+        } else {
+            self.mq_client.publish(subject.unwrap(), &event).await?;
+        }
         Ok(())
     }
 }

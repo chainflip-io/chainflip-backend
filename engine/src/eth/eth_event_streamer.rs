@@ -50,7 +50,6 @@ impl<S: EventSource> EthEventStreamBuilder<S> {
         if self.event_sinks.is_empty() {
             anyhow::bail!("Can't build a stream with no sink.")
         } else {
-            // this is using tokio 0.2 :( , how to push it up to tokio1???
             let transport = ::web3::transports::WebSocket::new(self.url.as_str())
                 // TODO: Remove this compat once the websocket dep uses tokio1
                 .compat()
@@ -69,15 +68,11 @@ impl<S: EventSource> EthEventStreamer<S> {
     /// Create a stream of Ethereum log events. If `from_block` is `None`, starts at the pending block.
     pub async fn run(&self, from_block: Option<u64>) -> Result<()> {
         // Make sure the eth node is fully synced
-        // TODO: Is this necessary???
-        // let mut sync_stream = self.web3_client.eth_subscribe().subscribe_syncing().await?;
         loop {
             match self.web3_client.eth().syncing().await? {
                 SyncState::Syncing(info) => log::info!("Waiting for eth node to sync: {:?}", info),
                 SyncState::NotSyncing => {
                     log::info!("Eth node is synced, subscribing to log events.");
-                    // TODO: ??
-                    // sync_stream.unsubscribe().await?;
                     break;
                 }
             }
@@ -150,7 +145,7 @@ mod tests {
     const CONTRACT_ADDRESS: &'static str = "0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f";
 
     #[tokio::test]
-    #[ignore = "Depends on a running ganache instance, runs forever, useful for testing incoming events"]
+    #[ignore = "Depends on a running ganache instance, runs forever, useful for manually testing / observing incoming events"]
     async fn subscribe_to_stake_manager_events() {
         let stake_manager = StakeManager::load(CONTRACT_ADDRESS).unwrap();
         // create in memory nats server

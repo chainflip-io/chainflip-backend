@@ -1,9 +1,5 @@
-use std::sync::Arc;
-
 use anyhow::Result;
 use substrate_subxt::{Client, ClientBuilder, EventSubscription};
-
-use tokio::sync::Mutex;
 
 use crate::{
     mq::{nats_client::NatsMQClient, IMQClient, Options, Subject},
