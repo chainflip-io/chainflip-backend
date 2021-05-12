@@ -5,6 +5,20 @@ name: chainflip-state-chain-pr
 steps:
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<< pull_request >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # Pull request check and build
+  - name: format-engine
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    commands:
+      - cargo fmt --all -- --check
+  - name: check-state-chain
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    environment:
+      SCCACHE_DIR: /cache
+    commands:
+      - cargo check --release --bin state-chain-node
+      - sccache -s
+    volumes:
+      - name: cache
+        path: /cache
   - name: build-state-chain
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
@@ -25,20 +39,6 @@ steps:
     volumes:
       - name: cache
         path: /cache
-  - name: check-state-chain
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_DIR: /cache
-    commands:
-      - cargo check --release --bin state-chain-node
-      - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
-  - name: format-engine
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    commands:
-      - cargo fmt --all -- --check
 
 # Config
 trigger:
