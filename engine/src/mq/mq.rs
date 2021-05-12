@@ -52,6 +52,8 @@ pub enum Subject {
     StakeManagerStake,
     /// Claim events coming from the State chain
     StateChainClaim,
+    /// Claim issued event from the state chain
+    StateChainClaimIssued,
     /// Claim events from the Stake manager contract
     StakeManagerClaim,
     Rotate,
@@ -89,6 +91,9 @@ impl fmt::Display for Subject {
             Subject::StakeManagerStake => {
                 write!(f, "stake_manager_stake")
             }
+            Subject::StateChainClaimIssued => {
+                write!(f, "state_chain_claim_issued")
+            }
         }
     }
 }
@@ -115,12 +120,12 @@ mod test {
         assert_eq!(stake_subject.to_string(), "stake_manager_stake");
 
         let sc_stake_subject = Subject::StateChainStake;
-        assert_eq!(stake_subject.to_string(), "state_chain_stake");
+        assert_eq!(sc_stake_subject.to_string(), "state_chain_stake");
 
         let claim_subject = Subject::StakeManagerClaim;
         assert_eq!(claim_subject.to_string(), "stake_manager_claim");
 
         let sc_claim_subject = Subject::StateChainClaim;
-        assert_eq!(claim_subject.to_string(), "state_chain_claim");
+        assert_eq!(sc_claim_subject.to_string(), "state_chain_claim");
     }
 }
