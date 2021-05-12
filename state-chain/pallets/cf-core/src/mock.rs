@@ -67,6 +67,8 @@ impl pallet_cf_core::Config for Test {
 
 	type Crypto = Public;
 
+	type EthereumPubKey = Public;
+
 	type LiquidityPubKey = Public;
 
 	type OutputAddress = ();
