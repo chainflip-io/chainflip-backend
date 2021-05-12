@@ -149,7 +149,7 @@ mod tests {
         let sm_event_stream = sm_event_stream.with_sink(my_sink).build().await.unwrap();
 
         println!("Starting the eth event streamer");
-        sm_event_stream.run(Some(1)).await.unwrap();
+        sm_event_stream.run(Some(0)).await.unwrap();
 
         println!("Done sm_event stream");
         // let

@@ -77,11 +77,12 @@ impl StakeManager {
     /// Event definition for the 'Staked' event
     pub fn claimed_event_definition(&self) -> &ethabi::Event {
         self.get_event("Claimed")
-            .expect("StakeManager contract should provide 'Claimed' event. ")
+            .expect("StakeManager contract should provide 'Claimed' event.")
     }
 
     /// Event definition for the 'EmissionChanged' event
     pub fn emission_changed_event_definition(&self) -> &ethabi::Event {
+        println!("Getting emission changed event definition");
         self.get_event("EmissionChanged")
             .expect("StakeManager contract should provide 'EmissionChanged' event")
     }
@@ -114,7 +115,7 @@ impl EventSource for StakeManager {
             .ok_or_else(|| EventProducerError::EmptyTopics)?
             .clone();
 
-        println!("Here's the log: {:#?}", log);
+        println!("Here's the log: {:?}", log);
 
         let raw_log = ethabi::RawLog {
             topics: log.topics,
@@ -129,21 +130,40 @@ impl EventSource for StakeManager {
 
         match sig {
             _ if sig == self.staked_event_definition().signature() => {
-                println!("Hello, this is a staked event");
                 let log = self.staked_event_definition().parse_log(raw_log)?;
 
                 let event = StakingEvent::Staked(
                     decode_log_param(&log, "nodeID")?,
                     decode_log_param(&log, "amount")?,
                 );
-
                 Ok(event)
             }
-            // TODO: Finish this
             _ if sig == self.claimed_event_definition().signature() => {
-                println!("Hello, this is a claimed event");
-                println!("{:#?}", raw_log);
-                let event = StakingEvent::Claimed(U256([0, 1, 3, 5]), U256([123, 0, 0, 0]));
+                let log = self.claimed_event_definition().parse_log(raw_log)?;
+                let event = StakingEvent::Claimed(
+                    decode_log_param(&log, "nodeID")?,
+                    decode_log_param(&log, "amount")?,
+                );
+                Ok(event)
+            }
+            _ if sig == self.emission_changed_event_definition().signature() => {
+                let log = self
+                    .emission_changed_event_definition()
+                    .parse_log(raw_log)?;
+                let event = StakingEvent::EmissionChanged(
+                    decode_log_param(&log, "oldEmissionPerBlock")?,
+                    decode_log_param(&log, "newEmissionPerBlock")?,
+                );
+                Ok(event)
+            }
+            _ if sig == self.min_stake_changed_event_definition().signature() => {
+                let log = self
+                    .min_stake_changed_event_definition()
+                    .parse_log(raw_log)?;
+                let event = StakingEvent::MinStakeChanged(
+                    decode_log_param(&log, "oldMinStake")?,
+                    decode_log_param(&log, "newMinStake")?,
+                );
                 Ok(event)
             }
             s => Err(EventProducerError::UnexpectedEvent(s))?,
@@ -205,7 +225,33 @@ mod tests {
     }"#;
 
     const EMISSION_CHANGED_LOG: &'static str = r#"{
-       "test""
+        "logIndex": "0x1",
+        "transactionIndex": "0x0",
+        "transactionHash": "0x7af92dc418df27bc847d356e661cdbca8b3151c3a955285772a636e463c1fcc6",
+        "blockHash": "0x66fc9a99f990797191c355827c0c9a8072c4cccd73efd955058cc937960158b3",
+        "blockNumber": "0x8",
+        "address": "0xead5de9c41543e4babb09f9fe4f79153c036044f",
+        "data": "0x0000000000000000000000000000000000000000000000004dd32eacf3e5865b0e8bd531546b78a905c50cef76254047d5dcba9fa11f3f317451c3e8652e5aef",
+        "topics": [
+            "0x0b0b5ed18390ab49777844d5fcafb9865c74095ceb3e73cc57d1fbcc926103b5"
+        ],
+        "type": "mined",
+        "removed": false
+    }"#;
+
+    const MIN_STAKE_CHANGED_LOG: &'static str = r#"{
+        "logIndex": "0x0",
+        "transactionIndex": "0x0",
+        "transactionHash": "0x72309e2654dc768118b5ebfe81892a4e3429896be20c1860aa8fba43eb96ffc4",
+        "blockHash": "0x9ee882cc67521ed1ad8d2ef0c7a337353a27742c365fc0865b5874b0b2bb57d8",
+        "blockNumber": "0x8",
+        "address": "0xead5de9c41543e4babb09f9fe4f79153c036044f",
+        "data": "0x000000000000000000000000000000000000000000000878678326eac9000000000000000000000000000000000000000000000000000000000000000000c698",
+        "topics": [
+            "0xca11c8a4c461b60c9f485404c272650c2aaae260b2067d72e9924abb68556593"
+        ],
+        "type": "mined",
+        "removed": false
     }"#;
 
     #[test]
@@ -239,8 +285,11 @@ mod tests {
 
         match sm.parse_event(log)? {
             StakingEvent::Claimed(node_id, amount) => {
-                assert_eq!(node_id, web3::types::U256::from(12321));
-                assert_eq!(amount, web3::types::U256::exp10(23));
+                assert_eq!(node_id, web3::types::U256::from_dec_str("12345").unwrap());
+                assert_eq!(
+                    amount,
+                    web3::types::U256::from_dec_str("38203859740316448719619").unwrap()
+                );
             }
             _ => panic!("Expected Staking::Claimed, got a different variant"),
         }
@@ -254,7 +303,36 @@ mod tests {
 
         let sm = StakeManager::load(CONTRACT_ADDRESS)?;
 
-        
+        match sm.parse_event(log)? {
+            StakingEvent::EmissionChanged(old_emission_per_block, new_emission_per_block) => {
+                assert_eq!(
+                    old_emission_per_block,
+                    U256::from_dec_str("5607877281367557723").unwrap()
+                );
+                assert_eq!(new_emission_per_block, U256::from_dec_str("6579443024069621580110813774705758985587161661791333414420007985268583717615").unwrap());
+            }
+            _ => panic!("Expected Staking::EmissionChanged, got a different variant"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn min_stake_changed_log_parsing() -> anyhow::Result<()> {
+        let log: web3::types::Log = serde_json::from_str(MIN_STAKE_CHANGED_LOG)?;
+
+        let sm = StakeManager::load(CONTRACT_ADDRESS)?;
+
+        match sm.parse_event(log)? {
+            StakingEvent::MinStakeChanged(old_min_stake, new_min_stake) => {
+                assert_eq!(
+                    old_min_stake,
+                    U256::from_dec_str("40000000000000000000000").unwrap()
+                );
+                assert_eq!(new_min_stake, U256::from_dec_str("50840").unwrap());
+            }
+            _ => panic!("Expected Staking::MinStakeChanged, got a different variant"),
+        }
 
         Ok(())
     }
