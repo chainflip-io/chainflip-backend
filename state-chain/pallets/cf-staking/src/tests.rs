@@ -295,14 +295,16 @@ fn test_retirement() {
 
 #[test]
 fn test_refund() {
-	const CHARLIE: <Test as frame_system::Config>::AccountId = 666u64;
-	let stake = 100u128;
+	new_test_ext().execute_with(|| {
+		const CHARLIE: <Test as frame_system::Config>::AccountId = 666u64;
+		let stake = 100u128;
 
-	// Staking an unknown account should not trigger an error.
-	assert_ok!(StakeManager::staked(Origin::root(), CHARLIE, stake, ETH_DUMMY_ADDR));
+		// Staking an unknown account should not trigger an error.
+		assert_ok!(StakeManager::staked(Origin::root(), CHARLIE, stake, ETH_DUMMY_ADDR));
 
-	// But the stake will be refunded.
-	assert_event_sequence::<Test, _>(vec![
-		crate::Event::StakeRefund(CHARLIE, stake, ETH_DUMMY_ADDR),
-	]);
+		// But the stake will be refunded.
+		assert_event_sequence::<Test, _>(vec![
+			crate::Event::StakeRefund(CHARLIE, stake, ETH_DUMMY_ADDR),
+		]);
+	});
 }
