@@ -9,7 +9,7 @@ use super::*;
 use serde::{Deserialize, Serialize};
 use web3::{
     ethabi,
-    types::{BlockNumber, FilterBuilder, H160, U256},
+    types::{BlockNumber, FilterBuilder, H160},
 };
 
 use anyhow::Result;
@@ -82,7 +82,6 @@ impl StakeManager {
 
     /// Event definition for the 'EmissionChanged' event
     pub fn emission_changed_event_definition(&self) -> &ethabi::Event {
-        println!("Getting emission changed event definition");
         self.get_event("EmissionChanged")
             .expect("StakeManager contract should provide 'EmissionChanged' event")
     }
@@ -114,8 +113,6 @@ impl EventSource for StakeManager {
             .first()
             .ok_or_else(|| EventProducerError::EmptyTopics)?
             .clone();
-
-        println!("Here's the log: {:?}", log);
 
         let raw_log = ethabi::RawLog {
             topics: log.topics,
@@ -174,7 +171,7 @@ impl EventSource for StakeManager {
 #[cfg(test)]
 mod tests {
 
-    use web3::types::H256;
+    use web3::types::{H256, U256};
 
     use super::*;
 

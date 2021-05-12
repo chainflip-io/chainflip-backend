@@ -1,6 +1,6 @@
 use crate::{
     eth::EventSink,
-    mq::mq::{self, IMQClient, Subject},
+    mq::mq::{self, IMQClient, Options, Subject},
 };
 
 use async_trait::async_trait;
@@ -12,10 +12,10 @@ pub struct StakeManagerSink<M: IMQClient + Send + Sync> {
 }
 
 impl<M: IMQClient + Send + Sync> StakeManagerSink<M> {
-    async fn new(&self, mq_options: mq::Options) -> Self {
+    pub async fn new(mq_options: mq::Options) -> Self {
         let mq_client = *M::connect(mq_options)
             .await
-            .expect("StakeManagerSink cannot create message queue client");
+            .expect("StakeManagerSink cannot connect to message queue");
 
         StakeManagerSink { mq_client }
     }
@@ -24,7 +24,24 @@ impl<M: IMQClient + Send + Sync> StakeManagerSink<M> {
 #[async_trait]
 impl<M: IMQClient + Send + Sync> EventSink<StakingEvent> for StakeManagerSink<M> {
     async fn process_event(&self, event: StakingEvent) -> anyhow::Result<()> {
+        // TODO: Ensure the events go to the correct queue, there is not just one event type
         self.mq_client.publish(Subject::Stake, &event).await?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::mq::nats_client::NatsMQClient;
+
+    use super::*;
+
+    #[tokio::test]
+    // Ensure it doesn't panic
+    async fn create_stake_manager_sink() {
+        let server = nats_test_server::NatsTestServer::build().spawn();
+        let addr = server.address().to_string();
+        let options = Options { url: addr };
+        StakeManagerSink::<NatsMQClient>::new(options).await;
     }
 }

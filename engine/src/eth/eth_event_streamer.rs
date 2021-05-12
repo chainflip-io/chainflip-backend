@@ -5,6 +5,21 @@ use std::time::Duration;
 use tokio_compat_02::FutureExt;
 use web3::types::{BlockNumber, SyncState};
 
+/// Steams events from a particular ETH Source, such as a smart contract
+/// into a particular event sink. For example:
+/// ```
+/// let stake_manager = StakeManager::load(CONTRACT_ADDRESS).unwrap();
+///         // create in memory nats server
+///         let nats_server = nats_test_server::NatsTestServer::build().spawn();
+///         let addr = nats_server.address().to_string();
+///         let options = Options { url: addr };
+///         // create the sink, which pushes events to the MQ
+///         let sm_sink = StakeManagerSink::<NatsMQClient>::new(options).await;
+///         let sm_event_stream = EthEventStreamBuilder::new("ws://localhost:8545", stake_manager);
+///         let sm_event_stream = sm_event_stream.with_sink(sm_sink).build().await.unwrap();
+///         // Start streaming events from the source to the sink
+///         sm_event_stream.run(Some(0)).await.unwrap();
+/// ```
 pub struct EthEventStreamer<S: EventSource> {
     web3_client: ::web3::Web3<::web3::transports::WebSocket>,
     event_source: S,
@@ -54,12 +69,14 @@ impl<S: EventSource> EthEventStreamer<S> {
     /// Create a stream of Ethereum log events. If `from_block` is `None`, starts at the pending block.
     pub async fn run(&self, from_block: Option<u64>) -> Result<()> {
         // Make sure the eth node is fully synced
+        // TODO: Is this necessary???
         // let mut sync_stream = self.web3_client.eth_subscribe().subscribe_syncing().await?;
         loop {
             match self.web3_client.eth().syncing().await? {
                 SyncState::Syncing(info) => log::info!("Waiting for eth node to sync: {:?}", info),
                 SyncState::NotSyncing => {
                     log::info!("Eth node is synced, subscribing to log events.");
+                    // TODO: ??
                     // sync_stream.unsubscribe().await?;
                     break;
                 }
@@ -123,39 +140,28 @@ impl<S: EventSource> EthEventStreamer<S> {
 #[cfg(test)]
 mod tests {
 
-    use crate::eth::stake_manager::stake_manager::{StakeManager, StakingEvent};
+    use crate::{
+        eth::stake_manager::{stake_manager::StakeManager, stake_manager_sink::StakeManagerSink},
+        mq::{nats_client::NatsMQClient, Options},
+    };
 
     use super::*;
 
-    use async_trait::async_trait;
-
     const CONTRACT_ADDRESS: &'static str = "0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f";
 
-    pub struct MySink {}
-
-    #[async_trait]
-    impl EventSink<StakingEvent> for MySink {
-        async fn process_event(&self, event: StakingEvent) -> Result<()> {
-            println!("Processing event: {:#?}", event);
-            Ok(())
-        }
-    }
-
     #[tokio::test]
-    async fn try_subscribe_to_events() {
+    #[ignore = "Depends on a running ganache instance, runs forever, useful for testing incoming events"]
+    async fn subscribe_to_stake_manager_events() {
         let stake_manager = StakeManager::load(CONTRACT_ADDRESS).unwrap();
-        let my_sink = MySink {};
+        // create in memory nats server
+        let nats_server = nats_test_server::NatsTestServer::build().spawn();
+        let addr = nats_server.address().to_string();
+        let options = Options { url: addr };
+        // create the sink, which pushes events to the MQ
+        let sm_sink = StakeManagerSink::<NatsMQClient>::new(options).await;
         let sm_event_stream = EthEventStreamBuilder::new("ws://localhost:8545", stake_manager);
-        let sm_event_stream = sm_event_stream.with_sink(my_sink).build().await.unwrap();
+        let sm_event_stream = sm_event_stream.with_sink(sm_sink).build().await.unwrap();
 
-        println!("Starting the eth event streamer");
         sm_event_stream.run(Some(0)).await.unwrap();
-
-        println!("Done sm_event stream");
-        // let
-        //     .with_sink(my_sink)
-        //     .build()
-        //     .await
-        //     .unwrap();
     }
 }
