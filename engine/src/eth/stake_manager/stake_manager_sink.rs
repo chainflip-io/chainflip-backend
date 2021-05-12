@@ -1,6 +1,6 @@
 use crate::{
     eth::EventSink,
-    mq::mq::{self, IMQClient, Options, Subject},
+    mq::mq::{self, IMQClient, Subject},
 };
 
 use async_trait::async_trait;
@@ -24,7 +24,7 @@ impl<M: IMQClient + Send + Sync> StakeManagerSink<M> {
 #[async_trait]
 impl<M: IMQClient + Send + Sync> EventSink<StakingEvent> for StakeManagerSink<M> {
     async fn process_event(&self, event: StakingEvent) -> anyhow::Result<()> {
-        // TODO: Ensure the events go to the correct queue, there is not just one event type
+        // TODO: Ensure the events go to the correct queue, there are several StakingEvent variants
         self.mq_client.publish(Subject::Stake, &event).await?;
         Ok(())
     }
@@ -32,7 +32,7 @@ impl<M: IMQClient + Send + Sync> EventSink<StakingEvent> for StakeManagerSink<M>
 
 #[cfg(test)]
 mod tests {
-    use crate::mq::nats_client::NatsMQClient;
+    use crate::mq::{mq::Options, nats_client::NatsMQClient};
 
     use super::*;
 

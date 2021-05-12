@@ -2,13 +2,14 @@
 /// the EthEventStreamer
 use core::str::FromStr;
 
-use crate::eth::{decode_log_param, EventProducerError, EventSource};
+use crate::eth::{EventProducerError, EventSource};
 
 use super::*;
 
 use serde::{Deserialize, Serialize};
 use web3::{
-    ethabi,
+    contract::tokens::Tokenizable,
+    ethabi::{self, Log},
     types::{BlockNumber, FilterBuilder, H160},
 };
 
@@ -166,6 +167,18 @@ impl EventSource for StakeManager {
             s => Err(EventProducerError::UnexpectedEvent(s))?,
         }
     }
+}
+
+// Helper method to decode the parameters from an ETH log
+fn decode_log_param<T: Tokenizable>(log: &Log, param_name: &str) -> Result<T> {
+    let token = &log
+        .params
+        .iter()
+        .find(|&p| p.name == param_name)
+        .ok_or_else(|| EventProducerError::MissingParam(String::from(param_name)))?
+        .value;
+
+    Ok(Tokenizable::from_token(token.clone())?)
 }
 
 #[cfg(test)]

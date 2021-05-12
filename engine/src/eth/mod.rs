@@ -8,11 +8,9 @@ pub use eth_event_streamer::{EthEventStreamBuilder, EthEventStreamer};
 
 use thiserror::Error;
 
-use web3::{
-    contract::tokens::Tokenizable,
-    ethabi::Log,
-    types::{BlockNumber, FilterBuilder, H256},
-};
+use web3::types::{BlockNumber, FilterBuilder, H256};
+
+use crate::{mq::Options, settings::Settings};
 
 /// The `Error` type for errors specific to this module.
 #[derive(Error, Debug)]
@@ -56,13 +54,10 @@ pub enum EventProducerError {
     MissingParam(String),
 }
 
-pub fn decode_log_param<T: Tokenizable>(log: &Log, param_name: &str) -> Result<T> {
-    let token = &log
-        .params
-        .iter()
-        .find(|&p| p.name == param_name)
-        .ok_or_else(|| EventProducerError::MissingParam(String::from(param_name)))?
-        .value;
-
-    Ok(Tokenizable::from_token(token.clone())?)
+/// Start all the ETH components
+pub async fn start(settings: Settings) {
+    log::info!("Starting the ETH components");
+    stake_manager::start_stake_manager_witness(settings)
+        .await
+        .expect("Could not start the StakeManager witness");
 }
