@@ -13,8 +13,9 @@ use super::{
         StakedEvent, StakingEvent,
     },
     validator::{
-        AuctionEndedEvent, AuctionStartedEvent, EpochDurationChangedEvent,
-        ForceRotationRequestedEvent, MaximumValidatorsChangedEvent, ValidatorEvent,
+        AuctionConfirmedEvent, AuctionStartedEvent, EpochDurationChangedEvent,
+		ForceAuctionRequestedEvent, MaximumValidatorsChangedEvent, ValidatorEvent,
+		NewEpochEvent
     },
 };
 
@@ -51,13 +52,13 @@ pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEv
         },
         "Validator" => match raw_event.variant.as_str() {
             "AuctionEnded" => Ok(Some(
-                AuctionEndedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
+                AuctionConfirmedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
             )),
             "AuctionStarted" => Ok(Some(
                 AuctionStartedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
             )),
             "ForceRotationRequested" => Ok(Some(
-                ForceRotationRequestedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
+                ForceAuctionRequestedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
                     .into(),
             )),
             "EpochDurationChanged" => Ok(Some(
@@ -69,7 +70,11 @@ pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEv
                     &mut &raw_event.data[..],
                 )?
                 .into(),
-            )),
+			)),
+			"NewEpoch" => Ok(Some(
+				NewEpochEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
+					.into(),
+			)),
             _ => Ok(None),
         },
         _ => Ok(None),

@@ -82,6 +82,8 @@ impl pallet_cf_core::Config for Test {
 	type Ticker = ();
 
 	type TxHash = ();
+
+	type EthereumPubKey = Public;
 }
 
 // Build genesis storage according to the mock runtime.

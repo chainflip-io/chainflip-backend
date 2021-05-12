@@ -12,11 +12,12 @@ use frame_support::sp_runtime::traits::{Saturating, Zero};
 use log::{debug};
 use frame_support::pallet_prelude::*;
 use cf_traits::EpochInfo;
+use serde::{Serialize, Deserialize};
 
 pub type ValidatorSize = u32;
 type SessionIndex = u32;
 
-#[derive(Encode, Decode, Clone, Copy, RuntimeDebug, Default, PartialEq, Eq)]
+#[derive(Encode, Decode, Clone, Copy, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EpochIndex(SessionIndex);
 
 impl From<SessionIndex> for EpochIndex {
