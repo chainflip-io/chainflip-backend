@@ -232,8 +232,8 @@ fn witnessing_witnesses() {
 fn cannot_claim_bond() {
 	new_test_ext().execute_with(|| {
 		let stake = 200u128;
-		bond_provider::Mock::set_bond(100);
-		validator_provider::Mock::add_validator(ALICE);
+		epoch_info::Mock::set_bond(100);
+		epoch_info::Mock::add_validator(ALICE);
 
 		// Alice and Bob stake the same amount, only alice is a validator. 
 		assert_ok!(StakeManager::staked(Origin::root(), ALICE, stake, ETH_DUMMY_ADDR));
@@ -257,7 +257,7 @@ fn cannot_claim_bond() {
 		);
 
 		// Once she is no longer a validator, Alice can claim her stake.
-		validator_provider::Mock::reset();
+		epoch_info::Mock::clear_validators();
 		assert_ok!(StakeManager::claim(Origin::signed(ALICE), 100, ETH_DUMMY_ADDR));
 	});
 }
@@ -265,7 +265,7 @@ fn cannot_claim_bond() {
 #[test]
 fn test_retirement() {
 	new_test_ext().execute_with(|| {
-		validator_provider::Mock::add_validator(ALICE);
+		epoch_info::Mock::add_validator(ALICE);
 
 		// Need to be staked in order to retire or activate.
 		assert_noop!(StakeManager::retire_account(Origin::signed(ALICE)), <Error<Test>>::AccountNotStaked);
@@ -295,7 +295,7 @@ fn test_retirement() {
 
 #[test]
 fn test_refund() {
-	let CHARLIE: <Test as frame_system::Config>::AccountId = 666u64;
+	const CHARLIE: <Test as frame_system::Config>::AccountId = 666u64;
 	let stake = 100u128;
 
 	// Staking an unknown account should not trigger an error.

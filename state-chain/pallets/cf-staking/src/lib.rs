@@ -10,7 +10,7 @@ use frame_support::{ensure, error::BadOrigin, traits::EnsureOrigin};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
-use cf_traits::{BondProvider, ValidatorProvider};
+use cf_traits::EpochInfo;
 
 use codec::FullCodec;
 use sp_runtime::{traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub, One, Saturating, Zero}};
@@ -72,9 +72,9 @@ pub mod pallet {
 			Call=<Self as Config>::Call, 
 			AccountId=<Self as frame_system::Config>::AccountId>;
 		
-		type BondProvider: BondProvider<Amount=Self::TokenAmount>;
-
-		type ValidatorProvider: ValidatorProvider<ValidatorId=<Self as frame_system::Config>::AccountId>;
+		type EpochInfo: EpochInfo<
+			ValidatorId=<Self as frame_system::Config>::AccountId,
+			Amount=Self::TokenAmount>;
 	}
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
@@ -421,13 +421,13 @@ impl<T: Config> Pallet<T> {
 
 	/// Checks if the account is currently a validator.
 	pub fn is_validator(account: &T::AccountId) -> bool {
-		T::ValidatorProvider::is_validator(account)
+		T::EpochInfo::is_validator(account)
 	}
 
-	/// Gets the bond amount for the current epoch. If no bond has been set, returns zero.
+	/// Gets the bond amount for the current epoch. If the account is not a validator account, returns zero.
 	fn get_bond(account: &T::AccountId) -> T::TokenAmount {
 		if Self::is_validator(account) {
-			T::BondProvider::current_bond()
+			T::EpochInfo::bond()
 		} else {
 			Zero::zero()
 		}

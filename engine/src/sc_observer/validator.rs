@@ -3,11 +3,17 @@
 use std::marker::PhantomData;
 
 use codec::{Decode, Encode};
-use pallet_cf_validator::{EpochIndex, ValidatorSize};
+use pallet_cf_validator::ValidatorSize;
 use serde::{Deserialize, Serialize};
 use substrate_subxt::{module, system::System, Event};
 
 use super::{runtime::StateChainRuntime, sc_event::SCEvent};
+
+/// The Epoch index will never exceed the max value of a u32.
+///
+/// Defining this here avoids having to derive `Serialize` and `Deserialize` on the EpochIndex wrapper type defined in 
+/// the pallet. 
+type EpochIndex = u32;
 
 #[module]
 pub trait Validator: System {}

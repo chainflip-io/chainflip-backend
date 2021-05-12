@@ -1,4 +1,3 @@
-#![feature(trivial_bounds)]
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
@@ -34,6 +33,7 @@ use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify,
 };
 use sp_std::prelude::*;
+use sp_std::marker::PhantomData;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
@@ -140,6 +140,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type MinEpoch = MinEpoch;
 	type MinValidatorSetSize = MinValidatorSetSize;
 	type CandidateProvider = pallet_cf_staking::Pallet<Self>;
+	type EpochTransitionHandler = PhantomData<Runtime>;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime where
@@ -331,18 +332,14 @@ impl pallet_cf_staking::Config for Runtime {
 	type Call = Call;
 
 	type TokenAmount = FlipBalance;
-
 	// TODO: check this against the address type used in the StakeManager
 	type EthereumAddress = [u8; 20];
-
 	// TODO: check this against the nonce type used in the StakeManager
 	type Nonce = u64;
-
 	type EthereumCrypto = ecdsa::Public;
-
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
-
 	type Witnesser = pallet_cf_witness::Pallet<Runtime>;
+	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
 }
 
 construct_runtime!(
