@@ -5,10 +5,10 @@ name: chainflip-state-chain-pr
 steps:
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<< pull_request >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # Pull request check and build
-  - name: format-engine
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    commands:
-      - cargo fmt --all -- --check
+#  - name: format-engine
+#    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+#    commands:
+#      - cargo fmt --all -- --check
   - name: check-state-chain
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:

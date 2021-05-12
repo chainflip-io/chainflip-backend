@@ -5,10 +5,11 @@ name: chainflip-engine-pr
 steps:
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<< pull_request >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # Pull request check and build
-  - name: format-chainflip-engine
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    commands:
-      - cargo fmt --all -- --check
+#  TODO: define formatting rules
+#  - name: format-chainflip-engine
+#    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+#    commands:
+#      - cargo fmt --all -- --check
   - name: check-chainflip-engine
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
