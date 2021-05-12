@@ -34,7 +34,8 @@ steps:
     environment:
       SCCACHE_DIR: /cache
     commands:
-      - cargo test --release --workspace state-chain
+      - cd state-chain
+      - cargo test --release
       - sccache -s
     volumes:
       - name: cache
