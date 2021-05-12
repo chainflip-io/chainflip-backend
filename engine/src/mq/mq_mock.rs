@@ -66,6 +66,9 @@ impl IMQClient for MockMQ {
     ) -> anyhow::Result<Box<dyn Stream<Item = anyhow::Result<M>>>> {
         let sub = self.conn.subscribe(&subject.to_string()).await?;
 
+        // NOTE: can we have more than one type of message on the same channel?
+        // Should the messages of the wrong type be filtered out?
+
         let subscription = Subscription { inner: sub };
         let stream = subscription.into_stream().map(|bytes| {
             serde_json::from_slice(&bytes[..]).context("Message deserialization failed.")

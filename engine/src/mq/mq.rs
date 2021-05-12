@@ -57,6 +57,8 @@ pub enum Subject {
     /// Claim events from the Stake manager contract
     StakeManagerClaim,
     Rotate,
+    P2PIncoming,
+    P2POutgoing,
 }
 
 // TODO: Make this a separate trait, not `fmt::Display` - https://github.com/chainflip-io/chainflip-backend/issues/63
@@ -93,6 +95,12 @@ impl fmt::Display for Subject {
             }
             Subject::StateChainClaimIssued => {
                 write!(f, "state_chain_claim_issued")
+            }
+            Subject::P2PIncoming => {
+                write!(f, "p2p_incoming")
+            }
+            Subject::P2POutgoing => {
+                write!(f, "p2p_outgoing")
             }
         }
     }

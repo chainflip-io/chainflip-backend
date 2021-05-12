@@ -5,17 +5,7 @@ name: chainflip-engine-pr
 steps:
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<< pull_request >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # Pull request check and build
-  - name: check-engine
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_DIR: /cache
-    commands:
-      - SKIP_WASM_BUILD=1 cargo check --release --bin chainflip-engine
-      - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
-  - name: compile-engine
+  - name: build-chainflip-engine
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
       SCCACHE_DIR: /cache
@@ -25,6 +15,30 @@ steps:
     volumes:
       - name: cache
         path: /cache
+  - name: test-chainflip-engine
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    environment:
+      SCCACHE_DIR: /cache
+    commands:
+      - cargo test --release --workspace chainflip-engine
+      - sccache -s
+    volumes:
+      - name: cache
+        path: /cache
+  - name: check-chainflip-engine
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    environment:
+      SCCACHE_DIR: /cache
+    commands:
+      - cargo check --release --bin chainflip-engine
+      - sccache -s
+    volumes:
+      - name: cache
+        path: /cache
+  - name: format-chainflip-engine
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    commands:
+      - cargo fmt --all -- --check
 
 # Config
 trigger:
@@ -73,6 +87,16 @@ steps:
       SCCACHE_DIR: /cache
     commands:
       - cargo build --release --bin chainflip-engine
+      - sccache -s
+    volumes:
+      - name: cache
+        path: /cache
+  - name: test-chainflip-backend
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    environment:
+      SCCACHE_DIR: /cache
+    commands:
+      - cargo test --release
       - sccache -s
     volumes:
       - name: cache

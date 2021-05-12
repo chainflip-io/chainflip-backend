@@ -36,6 +36,7 @@ env_logger = { version = "0.8.3" }
 web3 = { version = "0.15" }
 async-std = { version = "1.9", features = ["attributes", "tokio1"] }
 tokio-compat-02 = "0.2"
+parking_lot = "0.11"
 
 # substrate deps
 sp-core = "3.0.0"
