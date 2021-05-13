@@ -1,5 +1,6 @@
-/// Contains the information required to use the StakeManger contract as a source for
-/// the EthEventStreamer
+//! Contains the information required to use the StakeManger contract as a source for
+//! the EthEventStreamer
+
 use core::str::FromStr;
 
 use crate::eth::{EventProducerError, EventSource};
