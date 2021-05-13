@@ -12,11 +12,12 @@ use frame_support::sp_runtime::traits::{Saturating, Zero};
 use log::{debug};
 use frame_support::pallet_prelude::*;
 use cf_traits::EpochInfo;
+use serde::{Serialize, Deserialize};
 
-type ValidatorSize = u32;
+pub type ValidatorSize = u32;
 type SessionIndex = u32;
 
-#[derive(Encode, Decode, Clone, Copy, RuntimeDebug, Default, PartialEq, Eq)]
+#[derive(Encode, Decode, Clone, Copy, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EpochIndex(SessionIndex);
 
 impl From<SessionIndex> for EpochIndex {
@@ -31,16 +32,20 @@ pub trait EpochTransitionHandler {
 	type ValidatorId;
 
 	/// Triggered at the start of a new Epoch.
-	fn on_new_epoch(new_validators: Vec<Self::ValidatorId>);
+	fn on_new_epoch(_new_validators: Vec<Self::ValidatorId>) {}
 
 	/// Triggered at the start of the auction phase.
-	fn on_new_auction(outgoing_validators: Vec<Self::ValidatorId>);
+	fn on_new_auction(_outgoing_validators: Vec<Self::ValidatorId>) {}
 
 	/// Triggered before the end of the trading phase and the start of the auction.
-	fn on_before_auction();
+	fn on_before_auction() {}
 
 	/// Triggered after the end of the auction, before a new Epoch.
-	fn on_before_epoch_ending();
+	fn on_before_epoch_ending() {}
+}
+
+impl<T: pallet_session::Config> EpochTransitionHandler for PhantomData<T> {
+	type ValidatorId = T::ValidatorId;
 }
 
 /// Something that can provide us a list of candidates with their corresponding stakes
@@ -230,6 +235,10 @@ pub mod pallet {
 	#[pallet::getter(fn current_bond)]
 	pub(super) type CurrentBond<T: Config> = StorageValue<_, Stake<T>, ValueQuery>;
 
+	/// Validator lookup
+	#[pallet::storage]
+	pub(super) type ValidatorLookup<T: Config> = StorageMap< _, Identity, T::ValidatorId, ()>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub size_validator_set: ValidatorSize,
@@ -278,6 +287,10 @@ impl<T:Config> EpochInfo for Pallet<T> {
 
 	fn epoch_index() -> EpochIndex {
 		CurrentEpoch::<T>::get()
+	}
+
+	fn is_validator(account: &Self::ValidatorId) -> bool {
+		ValidatorLookup::<T>::contains_key(account)
 	}
 }
 
@@ -375,8 +388,8 @@ impl<T: Config> Pallet<T> {
 	/// This returns validators for the *next* session and is called at the *beginning* of the current session.
 	///
 	/// If we are at the beginning of a non-auction session, the next session will be an auction session, so we return
-	/// `None` to indicate that the validator set remains unchanged. Otherwise, the set is considered changed even if 
-	/// the new set of validators is the same as the old one.  
+	/// `None` to indicate that the validator set remains unchanged. Otherwise, the set would be considered changed even 
+	/// if the new set of validators matches the old one.  
 	///
 	/// If we are the beginning of an auction session, we need to run the auction to set the validators for the upcoming
 	/// Epoch.
@@ -387,6 +400,10 @@ impl<T: Config> Pallet<T> {
 		if !Self::is_auction_phase() {
 			Self::deposit_event(Event::NewEpoch(new_index.into()));
 			CurrentEpoch::<T>::set(new_index.into());
+			ValidatorLookup::<T>::remove_all();
+			for validator in <pallet_session::Module<T>>::validators() {
+				ValidatorLookup::<T>::insert(validator, ());
+			}
 			return None
 		}
 

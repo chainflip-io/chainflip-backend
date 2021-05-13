@@ -9,8 +9,7 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
 
-pub(super) mod bond_provider;
-pub(super) mod validator_provider;
+pub(super) mod epoch_info;
 pub(super) mod witnesser;
 pub(super) mod ensure_witnessed;
 
@@ -72,9 +71,7 @@ impl Config for Test {
 
 	type Witnesser = witnesser::Mock;
 
-	type BondProvider = bond_provider::Mock;
-
-	type ValidatorProvider = validator_provider::Mock;
+	type EpochInfo = epoch_info::Mock;
 } 
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
@@ -86,6 +83,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 	// Seed with two active accounts.
 	ext.execute_with(|| {
+		System::set_block_number(1);
 		Account::<Test>::insert(ALICE, AccountInfo::default());
 		Account::<Test>::insert(BOB, AccountInfo::default());
 	});

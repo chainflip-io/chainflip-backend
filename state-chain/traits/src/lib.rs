@@ -27,6 +27,9 @@ pub trait EpochInfo {
 	/// The current set of validators
 	fn current_validators() -> Vec<Self::ValidatorId>;
 
+	/// Checks if the account is currently a validator.
+	fn is_validator(account: &Self::ValidatorId) -> bool;
+
 	/// If we are in auction phase then the proposed set to validate once the auction is
 	/// confirmed else an empty vector
 	fn next_validators() -> Vec<Self::ValidatorId>;
@@ -37,15 +40,4 @@ pub trait EpochInfo {
 
 	/// The current epoch we are in
 	fn epoch_index() -> Self::EpochIndex;
-}
-
-pub trait ValidatorProvider {
-	/// The id type used for the validators. 
-	type ValidatorId;
-
-	/// Returns a list of validators for the current Epoch. 
-	fn current_validators() -> Vec<Self::ValidatorId>;
-
-	/// Checks if the account is currently a validator.
-	fn is_validator(account: &Self::ValidatorId) -> bool;
 }
