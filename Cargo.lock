@@ -244,7 +244,6 @@ dependencies = [
  "futures-lite",
  "num_cpus",
  "once_cell",
- "tokio 0.2.25",
  "tokio 1.5.0",
 ]
 
@@ -5661,25 +5660,6 @@ dependencies = [
  "libc",
  "mach",
  "winapi 0.3.9",
-]
-
-[[package]]
-name = "relayer"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-std",
- "async-trait",
- "env_logger 0.8.3",
- "futures 0.3.14",
- "hex",
- "log",
- "parity-scale-codec 2.1.1",
- "serde 1.0.125",
- "serde_json",
- "substrate-subxt",
- "thiserror",
- "web3",
 ]
 
 [[package]]
