@@ -12,10 +12,6 @@ use web3::types::{BlockNumber, FilterBuilder, H256};
 
 use crate::{mq::Options, settings::Settings};
 
-/// The `Error` type for errors specific to this module.
-#[derive(Error, Debug)]
-pub enum RelayerError {}
-
 /// Something that accepts and processes events asychronously.
 #[async_trait]
 pub trait EventSink<E>
