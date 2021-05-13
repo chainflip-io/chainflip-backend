@@ -24,7 +24,7 @@ pub async fn start_stake_manager_witness(settings: settings::Settings) -> Result
             settings.message_queue.hostname, settings.message_queue.port
         ),
     };
-    let sm_sink = StakeManagerSink::<NatsMQClient>::new(mq_options).await;
+    let sm_sink = StakeManagerSink::<NatsMQClient>::new(mq_options).await?;
     let eth_node_ws_url = format!(
         "ws://{}:{}",
         settings.eth.hostname, settings.message_queue.port
