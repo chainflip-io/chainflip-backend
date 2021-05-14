@@ -33,6 +33,7 @@ use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify,
 };
 use sp_std::prelude::*;
+use sp_std::marker::PhantomData;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
@@ -138,10 +139,8 @@ impl pallet_cf_validator::Config for Runtime {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
 	type MinValidatorSetSize = MinValidatorSetSize;
-	type ValidatorId = <Self as frame_system::Config>::AccountId;
-	type Stake = u64;
-	type CandidateProvider = ();
-	type ValidatorHandler = ();
+	type CandidateProvider = pallet_cf_staking::Pallet<Self>;
+	type EpochTransitionHandler = PhantomData<Runtime>;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime where
@@ -332,19 +331,15 @@ impl pallet_cf_staking::Config for Runtime {
 	type Event = Event;
 	type Call = Call;
 
-	type StakedAmount = FlipBalance;
-
+	type TokenAmount = FlipBalance;
 	// TODO: check this against the address type used in the StakeManager
 	type EthereumAddress = [u8; 20];
-
 	// TODO: check this against the nonce type used in the StakeManager
 	type Nonce = u64;
-
 	type EthereumCrypto = ecdsa::Public;
-
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
-
 	type Witnesser = pallet_cf_witness::Pallet<Runtime>;
+	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
 }
 
 construct_runtime!(

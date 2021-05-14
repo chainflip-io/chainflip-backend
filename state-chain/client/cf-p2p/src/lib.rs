@@ -384,8 +384,12 @@ mod tests {
 
                 if sent {
                     let notifications: &Vec<(Vec<u8>, Vec<u8>)> = &network.inner.lock().unwrap().notifications;
-                    assert_eq!(notifications[0], (peer.to_bytes(), b"this rocks".to_vec()));
-                    assert_eq!(notifications[1], (peer_1.to_bytes(), b"this rocks".to_vec()));
+                    let peer_ids: Vec<PeerId> = notifications.into_iter().map(|(id, _)| PeerId::from_bytes(id).unwrap()).collect();
+                    assert_eq!(peer_ids.len(), 2);
+                    assert!(peer_ids.contains(&peer));
+                    assert!(peer_ids.contains(&peer_1));
+                    assert_eq!(notifications[0].1, b"this rocks".to_vec());
+                    assert_eq!(notifications[1].1, b"this rocks".to_vec());
                     break;
                 }
 

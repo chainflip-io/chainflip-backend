@@ -21,32 +21,11 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 thread_local! {
-	pub static SESSION_CHANGED: RefCell<bool> = RefCell::new(false);
+	pub static CANDIDATE_IDX: RefCell<u64> = RefCell::new(0);
+	pub static CURRENT_EPOCH: RefCell<u64> = RefCell::new(0);
 	pub static CURRENT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
-	pub static NEXT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
-}
-
-pub struct TestValidatorHandler;
-
-impl ValidatorHandler<u64> for TestValidatorHandler {
-	fn on_new_session(
-		changed: bool,
-		current_validators: Vec<u64>,
-		next_validators: Vec<u64>,
-	) {
-		SESSION_CHANGED.with(|l| *l.borrow_mut() = changed);
-
-		CURRENT_VALIDATORS.with(|l|
-			*l.borrow_mut() = current_validators
-		);
-
-		NEXT_VALIDATORS.with(|l|
-			*l.borrow_mut() = next_validators
-		);
-	}
-	fn on_before_session_ending() {
-		// Nothing for the moment
-	}
+	pub static OUTGOING_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
+	pub static CHANGED: RefCell<bool> = RefCell::new(false);
 }
 
 construct_runtime!(
@@ -112,11 +91,37 @@ impl pallet_session::Config for Test {
 	type WeightInfo = ();
 }
 
+pub struct TestEpochTransitionHandler;
+
+impl EpochTransitionHandler for TestEpochTransitionHandler {
+	type ValidatorId = u64;
+	fn on_new_epoch(new_validators: Vec<Self::ValidatorId>) {
+		CURRENT_VALIDATORS.with(|l|
+			*l.borrow_mut() = new_validators
+		);
+	}
+	fn on_new_auction(outgoing_validators: Vec<Self::ValidatorId>) {
+		OUTGOING_VALIDATORS.with(|l|
+			*l.borrow_mut() = outgoing_validators
+		);
+	}
+	fn on_before_auction() {}
+	fn on_before_epoch_ending() {}
+}
+
 pub struct TestCandidateProvider;
 
-impl CandidateProvider<u64, u64> for TestCandidateProvider {
-	fn get_candidates(index: EpochIndex) -> Vec<(u64, u64)> {
-		vec![(index as u64, 1), (index as u64, 2), (index as u64, 3)]
+impl CandidateProvider for TestCandidateProvider {
+	type ValidatorId = u64;
+	type Stake = u64;
+
+	fn get_candidates() -> Vec<(Self::ValidatorId, Self::Stake)> {
+		CANDIDATE_IDX.with(|l| {
+			let idx = *l.borrow();
+			let candidates = vec![(idx, idx), (idx + 1, idx + 1), (idx + 2, idx + 2)];
+			*l.borrow_mut() = idx + 1;
+			candidates
+		})
 	}
 }
 parameter_types! {
@@ -128,10 +133,8 @@ impl Config for Test {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
 	type MinValidatorSetSize = MinValidatorSetSize;
-	type ValidatorId = u64;
-	type Stake = u64;
 	type CandidateProvider = TestCandidateProvider;
-	type ValidatorHandler = TestValidatorHandler;
+	type EpochTransitionHandler = TestEpochTransitionHandler;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
@@ -142,21 +145,18 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
-
 pub fn current_validators() -> Vec<u64> {
 	CURRENT_VALIDATORS.with(|l| l.borrow().to_vec())
 }
 
-pub fn next_validators() -> Vec<u64> {
-	NEXT_VALIDATORS.with(|l| l.borrow().to_vec())
+pub fn outgoing_validators() -> Vec<u64> {
+	OUTGOING_VALIDATORS.with(|l| l.borrow().to_vec())
 }
 
 pub fn run_to_block(n: u64) {
 	while System::block_number() < n {
 		Session::on_finalize(System::block_number());
-		System::on_finalize(System::block_number());
 		System::set_block_number(System::block_number() + 1);
-		System::on_initialize(System::block_number());
 		Session::on_initialize(System::block_number());
 	}
 }
