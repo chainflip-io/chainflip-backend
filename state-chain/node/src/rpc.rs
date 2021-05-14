@@ -29,14 +29,14 @@ pub struct FullDeps<C, P, T> {
 /// Instantiate all full RPC extensions.
 pub fn create_full<C, P, T>(
 	deps: FullDeps<C, P, T>,
-	params: Arc<cf_p2p_rpc::RpcParams>,
+	params: Arc<cf_p2p_rpc::RpcCore>,
 ) -> jsonrpc_core::IoHandler<sc_rpc::Metadata> where
 	C: ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block> + HeaderMetadata<Block, Error=BlockChainError> + 'static,
 	C: Send + Sync + 'static,
 	C::Api: BlockBuilder<Block>,
 	P: TransactionPool + 'static,
-	T: cf_p2p::Communication + Send + Sync + 'static,
+	T: cf_p2p::Messaging + Send + Sync + 'static,
 {
 
 	let mut io = jsonrpc_core::IoHandler::default();

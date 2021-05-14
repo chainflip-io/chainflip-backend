@@ -13,7 +13,7 @@ use sc_finality_grandpa::SharedVoterState;
 use sc_keystore::LocalKeystore;
 use std::borrow::Cow;
 use cf_p2p::NetworkBridge;
-use cf_p2p_rpc::RpcParams;
+use cf_p2p_rpc::RpcCore;
 
 // Our native executor instance.
 native_executor_instance!(
@@ -142,7 +142,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 
 	let subscription_task_executor =
 		sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle());
-	let (rpc_params, _) = RpcParams::new(Arc::new(subscription_task_executor));
+	let (rpc_params, _) = RpcCore::new(Arc::new(subscription_task_executor));
 	let rpc_params = Arc::new(rpc_params);
 	let (p2p, comms) = NetworkBridge::new(
 		rpc_params.clone(),
