@@ -131,7 +131,50 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 	))
 }
 
+/// Create a local testnet for Chainflip
+/// We would have 2 validators at Genesis, Alice and Bob
+/// Alice would also be Sudo
+/// Subsequent validators would need to be added via the session pallet
+pub fn chainflip_local_testnet_config() -> Result<ChainSpec, String> {
+	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
+
+	Ok(ChainSpec::from_genesis(
+		// Name
+		"Chainflip local Testnet",
+		// ID
+		"chainflip_local_testnet",
+		ChainType::Local,
+		move || testnet_genesis(
+			wasm_binary,
+			// Initial PoA authorities
+			vec![
+				authority_keys_from_seed("Alice"),
+				authority_keys_from_seed("Bob"),
+			],
+			// Sudo account
+			get_account_id_from_seed::<sr25519::Public>("Alice"),
+			// Pre-funded accounts
+			vec![
+				get_account_id_from_seed::<sr25519::Public>("Alice"),
+				get_account_id_from_seed::<sr25519::Public>("Bob"),
+			],
+			true,
+		),
+		// Bootnodes
+		vec![],
+		// Telemetry
+		None,
+		// Protocol ID
+		None,
+		// Properties
+		None,
+		// Extensions
+		None,
+	))
+}
 /// Configure initial storage state for FRAME modules.
+/// 100800 blocks for 7 days at 6 second blocks
+/// 150 validator limit
 fn testnet_genesis(
 	wasm_binary: &[u8],
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>,
@@ -146,8 +189,8 @@ fn testnet_genesis(
 			changes_trie_config: Default::default(),
 		}),
 		pallet_cf_validator: Some(ValidatorConfig {
-			size_validator_set: 2,
-			epoch_number_of_blocks: 2
+			size_validator_set: 150,
+			epoch_number_of_blocks: 100800
 		}),
 		pallet_session: Some(SessionConfig {
 			keys: initial_authorities.iter().map(|x| {
