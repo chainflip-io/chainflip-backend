@@ -153,7 +153,9 @@ mod tests {
         let addr = nats_server.address().to_string();
         let options = Options { url: addr };
         // create the sink, which pushes events to the MQ
-        let sm_sink = StakeManagerSink::<NatsMQClient>::new(options).await;
+        let sm_sink = StakeManagerSink::<NatsMQClient>::new(options)
+            .await
+            .unwrap();
         let sm_event_stream = EthEventStreamBuilder::new("ws://localhost:8545", stake_manager);
         let sm_event_stream = sm_event_stream.with_sink(sm_sink).build().await.unwrap();
 

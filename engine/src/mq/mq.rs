@@ -119,14 +119,11 @@ mod test {
         let broadcast_subject = Subject::Broadcast(Coin::BTC);
         assert_eq!(broadcast_subject.to_string(), "broadcast.BTC");
 
-        let stake_subject = Subject::StakeManagerStake;
-        assert_eq!(stake_subject.to_string(), "stake_manager_stake");
+        let stake_manager_subject = Subject::StakeManager;
+        assert_eq!(stake_manager_subject.to_string(), "stake_manager");
 
         let sc_stake_subject = Subject::StateChainStake;
         assert_eq!(sc_stake_subject.to_string(), "state_chain_stake");
-
-        let claim_subject = Subject::StakeManagerClaim;
-        assert_eq!(claim_subject.to_string(), "stake_manager_claim");
 
         let sc_claim_subject = Subject::StateChainClaim;
         assert_eq!(sc_claim_subject.to_string(), "state_chain_claim");

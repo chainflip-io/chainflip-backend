@@ -52,6 +52,8 @@ mod tests {
         let server = nats_test_server::NatsTestServer::build().spawn();
         let addr = server.address().to_string();
         let options = Options { url: addr };
-        StakeManagerSink::<NatsMQClient>::new(options).await;
+        StakeManagerSink::<NatsMQClient>::new(options)
+            .await
+            .unwrap();
     }
 }
