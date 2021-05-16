@@ -46,16 +46,14 @@ pub enum Subject {
     Quote(Coin),
     Batch(Coin),
     Broadcast(Coin),
+    /// Stake events coming from the Stake manager contract
+    StakeManager,
     /// Stake events coming from the State chain
     StateChainStake,
-    /// Stake events coming from the Stake manager contract
-    StakeManagerStake,
     /// Claim events coming from the State chain
     StateChainClaim,
     /// Claim issued event from the state chain
     StateChainClaimIssued,
-    /// Claim events from the Stake manager contract
-    StakeManagerClaim,
     Rotate,
     P2PIncoming,
     P2POutgoing,
@@ -78,8 +76,8 @@ impl fmt::Display for Subject {
             Subject::Broadcast(coin) => {
                 write!(f, "broadcast.{}", coin.to_string())
             }
-            Subject::StakeManagerClaim => {
-                write!(f, "stake_manager_claim")
+            Subject::StakeManager => {
+                write!(f, "stake_manager")
             }
             Subject::StateChainClaim => {
                 write!(f, "state_chain_claim")
@@ -89,9 +87,6 @@ impl fmt::Display for Subject {
             }
             Subject::StateChainStake => {
                 write!(f, "state_chain_stake")
-            }
-            Subject::StakeManagerStake => {
-                write!(f, "stake_manager_stake")
             }
             Subject::StateChainClaimIssued => {
                 write!(f, "state_chain_claim_issued")

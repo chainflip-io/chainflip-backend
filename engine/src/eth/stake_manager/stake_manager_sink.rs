@@ -27,8 +27,7 @@ impl<M: IMQClient + Send + Sync> StakeManagerSink<M> {
 impl<M: IMQClient + Send + Sync> EventSink<StakingEvent> for StakeManagerSink<M> {
     async fn process_event(&self, event: StakingEvent) -> anyhow::Result<()> {
         let subject: Option<Subject> = match event {
-            StakingEvent::Claimed(_, _) => Some(Subject::StakeManagerClaim),
-            StakingEvent::Staked(_, _) => Some(Subject::StakeManagerStake),
+            StakingEvent::Claimed(_, _) | StakingEvent::Staked(_, _) => Some(Subject::StakeManager),
             StakingEvent::EmissionChanged(_, _) => None,
             StakingEvent::MinStakeChanged(_, _) => None,
         };
