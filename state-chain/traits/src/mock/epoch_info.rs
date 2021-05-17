@@ -1,5 +1,7 @@
 use std::cell::RefCell;
-use super::AccountId;
+use crate::EpochInfo;
+
+type AccountId = u64;
 
 pub struct Mock;
 
@@ -26,7 +28,7 @@ impl Mock {
 	}
 }
 
-impl cf_traits::EpochInfo for Mock {
+impl EpochInfo for Mock {
 	type ValidatorId = AccountId;
 	type Amount = u128;
 	type EpochIndex = u64;

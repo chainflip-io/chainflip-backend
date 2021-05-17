@@ -1,4 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+mod mock;
+pub use mock::epoch_info;
 
 use frame_support::dispatch::{DispatchResultWithPostInfo, Dispatchable};
 use sp_std::prelude::*;

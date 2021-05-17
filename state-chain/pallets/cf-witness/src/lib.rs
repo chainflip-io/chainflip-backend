@@ -9,16 +9,17 @@ mod mock;
 mod tests;
 
 use bitvec::prelude::*;
-use codec::FullCodec;
+use cf_traits::EpochInfo;
+use codec::{Decode, Encode, FullCodec};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, Dispatchable},
+	ensure,
 	pallet_prelude::Member,
 	traits::EnsureOrigin,
 	Hashable,
 };
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
-use cf_traits::EpochInfo;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -45,17 +46,14 @@ pub mod pallet {
 			+ GetDispatchInfo
 			+ From<frame_system::Call<Self>>;
 
-		type Epoch: Member + FullCodec + AtLeast32BitUnsigned + Default;
+		type Epoch: Member + Copy + FullCodec + AtLeast32BitUnsigned + Default;
 
 		type ValidatorId: Member
 			+ FullCodec
 			+ From<<Self as frame_system::Config>::AccountId>
 			+ Into<<Self as frame_system::Config>::AccountId>;
 
-		type EpochInfo: EpochInfo<
-			ValidatorId = Self::ValidatorId,
-			EpochIndex = Self::Epoch
-		>;
+		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, EpochIndex = Self::Epoch>;
 	}
 
 	/// Alias for the `Epoch` type defined by the `ValidatorProvider`.
@@ -73,9 +71,22 @@ pub mod pallet {
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
 
+	/// `Calls` contains the call to be dispatched.
 	#[pallet::storage]
-	pub type Calls<T: Config> =
-		StorageDoubleMap<_, Blake2_128Concat, Epoch<T>, Identity, CallHash, Vec<u8>>;
+	pub type Calls<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		Epoch<T>,
+		Identity,
+		CallHash,
+		<T as Config>::Call,
+		OptionQuery,
+	>;
+
+	/// `Votes` is a tally of votes for each registered call.
+	#[pallet::storage]
+	pub type Votes<T: Config> =
+		StorageDoubleMap<_, Twox64Concat, Epoch<T>, Identity, CallHash, Vec<u8>>;
 
 	/// Defines a unique index for each validator for every epoch.
 	#[pallet::storage]
@@ -114,6 +125,9 @@ pub mod pallet {
 
 		/// A witness call has been executed [call_sig, result].
 		WitnessExecuted(CallHash, DispatchResult),
+
+		/// Some external event has been witnessed [call_sig, who, num_votes]
+		CallRegistered(CallHash),
 	}
 
 	#[pallet::error]
@@ -126,24 +140,27 @@ pub mod pallet {
 
 		/// A witness vote was cast twice by the same validator.
 		DuplicateWitness,
+
+		/// An attempt has been made to register a vote for an already-registered call.
+		DuplicateRegistration,
+
+		/// A an attempt has been made to dispatch or vote for a call that has not been registered.
+		UnregisteredCall,
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Called as a witness of some external event. The `call` parameter is an extrinsic that will be dispatched 
-		/// when the configured voting threshold is reached. This can be thought of as a vote for the encoded 
-		/// [`Call`](crate::Pallet::Call) value.
+		/// Vote for the hash of a call. The corresponding call must be registered prior to being witnessed.
+		///
+		/// If the witness threshold is passed, dispatches the call.
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-		pub fn witness(
-			origin: OriginFor<T>,
-			call: Box<<T as Config>::Call>,
-		) -> DispatchResultWithPostInfo {
+		pub fn witness(origin: OriginFor<T>, call_hash: CallHash) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
-			Self::do_witness(who, *call)
+			Self::do_witness(who, call_hash)
 		}
 
-		/// Called to register an dispatchable `call` to vote on. The `call` will be dispatched when the configured 
+		/// Called to register an dispatchable `call` to vote on. The `call` will be dispatched when the configured
 		/// voting threshold is reached.
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
 		pub fn register(
@@ -152,19 +169,10 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let _ = ensure_none(origin)?;
 
-			Self::do_register(*call)
-		}
+			let call_hash = Self::try_register(*call)?;
+			Self::deposit_event(Event::CallRegistered(call_hash));
 
-		/// Vote for the hash of a call. This is meaningless without a corresponding `register` extrinsic to store the 
-		/// `Call` that is being voted on.
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-		pub fn vote(
-			origin: OriginFor<T>,
-			call_hash: CallHash,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-
-			Self::do_vote(who, call_hash)
+			Ok(().into())
 		}
 	}
 
@@ -198,50 +206,49 @@ impl<T: Config> Pallet<T> {
 	///
 	fn do_witness(
 		who: <T as frame_system::Config>::AccountId,
-		call: <T as Config>::Call,
+		call_hash: CallHash,
 	) -> DispatchResultWithPostInfo {
 		let epoch: Epoch<T> = CurrentEpoch::<T>::get();
 		let num_validators = NumValidators::<T>::get() as usize;
+
+		// Make sure the call has been registered.
+		ensure!(
+			Calls::<T>::contains_key(&epoch, &call_hash),
+			Error::<T>::UnregisteredCall
+		);
 
 		// Look up the signer in the list of validators
 		let index =
 			ValidatorIndex::<T>::get(&epoch, &who).ok_or(Error::<T>::UnauthorizedWitness)? as usize;
 
 		// Register the vote
-		let call_hash = Hashable::blake2_256(&call);
-		let num_votes = Calls::<T>::try_mutate::<_, _, _, Error<T>, _>(
-			&epoch,
-			&call_hash,
-			|buffer| {
-				// If there is no storage item, create an empty one.
-				if buffer.is_none() {
-					let empty_mask = BitVec::<Msb0, u8>::repeat(false, num_validators);
-					*buffer = Some(empty_mask.into_vec())
-				}
+		let num_votes = Votes::<T>::try_mutate::<_,_,_,Error::<T>,_>(&epoch, &call_hash, |buffer| {
+			// If there is no storage item, create an empty one.
+			if buffer.is_none() {
+				let empty_mask = BitVec::<Msb0, u8>::repeat(false, num_validators);
+				*buffer = Some(empty_mask.into_vec())
+			}
 
-				let bytes = buffer
-					.as_mut()
-					.expect("Checked for none condition above, this will never panic;");
+			let bytes = buffer
+				.as_mut()
+				.expect("Checked for none condition above, this will never panic;");
 
-				// Convert to an addressable bitmask
-				let bits = VoteMask::from_slice_mut(bytes)
+			// Convert to an addressable bitmask
+			let bits = VoteMask::from_slice_mut(bytes)
 				.expect("Only panics if the slice size exceeds the max; The number of validators should never exceed this;");
 
-				// Return an error if already voted, otherwise set the indexed bit to `true` to indicate a vote.
-				if bits[index] {
-					Err(Error::<T>::DuplicateWitness)?
-				} else {
-					let mut vote = bits
-						.get_mut(index)
-						.ok_or(Error::<T>::ValidatorIndexOutOfBounds)?;
-					*vote = true;
-				}
+			// Return an error if already voted, otherwise set the indexed bit to `true` to indicate a vote.
+			if bits[index] {
+				Err(Error::<T>::DuplicateWitness)?
+			} else {
+				let mut vote = bits
+					.get_mut(index)
+					.ok_or(Error::<T>::ValidatorIndexOutOfBounds)?;
+				*vote = true;
+			}
 
-				Ok(bits.count_ones())
-			},
-		)?;
-
-		let threshold = ConsensusThreshold::<T>::get() as usize;
+			Ok(bits.count_ones())
+		})?;
 
 		Self::deposit_event(Event::<T>::WitnessReceived(
 			call_hash,
@@ -250,30 +257,75 @@ impl<T: Config> Pallet<T> {
 		));
 
 		// Check if threshold is reached and, if so, apply the voted-on Call.
-		if num_votes == threshold {
+		let threshold = ConsensusThreshold::<T>::get() as usize;
+		
+		let post_dispatch_info = if num_votes == threshold {
 			Self::deposit_event(Event::<T>::ThresholdReached(
 				call_hash,
 				num_votes as VoteCount,
 			));
-			let result = call.dispatch((RawOrigin::WitnessThreshold).into());
-			Self::deposit_event(Event::<T>::WitnessExecuted(
-				call_hash,
-				result.map(|_| ()).map_err(|e| e.error),
-			));
-		}
+			Self::maybe_dispatch_call(&call_hash)?
+		} else {
+			().into()
+		};
 
-		Ok(().into())
+		Ok(post_dispatch_info)
 	}
 
-	fn do_register(call: <T as Config>::Call) -> DispatchResultWithPostInfo {
-		todo!()
+	/// Registers a call for future dispatch. 
+	/// 
+	/// If the call has already been registered, returns a `DuplicateRegistration` error.
+	fn try_register(call: <T as Config>::Call) -> Result<CallHash, Error<T>> {
+		let epoch: Epoch<T> = CurrentEpoch::<T>::get();
+		let call_hash = Self::call_hash(&call);
+
+		Calls::<T>::try_mutate(&epoch, &call_hash, |existing_call| {
+			*existing_call = match existing_call {
+				Some(_) => Err(Error::<T>::DuplicateRegistration),
+				None => Ok(Some(call)),
+			}?;
+			Ok(())
+		})?;
+
+		Ok(call_hash)
 	}
 
-	fn do_vote(
-		who: <T as frame_system::Config>::AccountId,
-		call_hash: CallHash,
-	) -> DispatchResultWithPostInfo {
-		todo!()
+	/// Registers a call for future dispatch. 
+	///
+	/// Doesn't care if the call has already been registered.
+	fn do_register(call: <T as Config>::Call) -> CallHash {
+		let epoch: Epoch<T> = CurrentEpoch::<T>::get();
+		let call_hash = Self::call_hash(&call);
+		Calls::<T>::insert(&epoch, &call_hash, call);
+
+		call_hash
+	}
+
+	/// Dispatches a stored call.
+	///
+	/// If no call has been stored against the provided hash, returns an `UnregisteredCall` error.
+	///
+	/// Note the dispatch is made from this pallet's `WitnessThreshold` origin.
+	fn maybe_dispatch_call(call_hash: &CallHash) -> DispatchResultWithPostInfo {
+		let epoch = CurrentEpoch::<T>::get();
+
+		let call = Calls::<T>::get(epoch, call_hash)
+			.ok_or(Error::<T>::UnregisteredCall)?;
+
+		let dispatch_result = call.dispatch((RawOrigin::WitnessThreshold).into());
+		Self::deposit_event(Event::<T>::WitnessExecuted(
+			call_hash.clone(),
+			dispatch_result.map(|_| ()).map_err(|e| e.error),
+		));
+
+		let post_dispatch_info = dispatch_result.unwrap_or_else(|err| err.post_info);
+
+		Ok(post_dispatch_info)
+	}
+
+	/// Computes the hash of a call.
+	fn call_hash(call: &<T as Config>::Call) -> CallHash {
+		Hashable::blake2_256(call)
 	}
 }
 
@@ -282,7 +334,10 @@ impl<T: pallet::Config> cf_traits::Witnesser for Pallet<T> {
 	type Call = <T as pallet::Config>::Call;
 
 	fn witness(who: Self::AccountId, call: Self::Call) -> DispatchResultWithPostInfo {
-		Self::do_witness(who.into(), call)
+		// Ignore the duplicate registration attempt for internal calls.
+		let call_hash = Self::do_register(call);
+		Self::do_witness(who.into(), call_hash)?;
+		Ok(().into())
 	}
 }
 
@@ -319,6 +374,7 @@ impl<T: Config> pallet_cf_validator::EpochTransitionHandler for Pallet<T> {
 	fn on_new_epoch(new_validators: Vec<Self::ValidatorId>) {
 		let epoch = T::EpochInfo::epoch_index();
 
+		CurrentEpoch::<T>::set(epoch);
 		for (i, v) in new_validators.iter().enumerate() {
 			ValidatorIndex::<T>::insert(&epoch, (*v).clone().into(), i as u16)
 		}

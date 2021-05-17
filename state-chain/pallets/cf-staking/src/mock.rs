@@ -4,12 +4,12 @@ use sp_core::H256;
 use frame_support::{parameter_types};
 use sp_runtime::{app_crypto, testing::Header, traits::{BlakeTwo256, IdentityLookup}};
 use frame_system::{Account, AccountInfo};
+use cf_traits::epoch_info;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
 
-pub(super) mod epoch_info;
 pub(super) mod witnesser;
 pub(super) mod ensure_witnessed;
 

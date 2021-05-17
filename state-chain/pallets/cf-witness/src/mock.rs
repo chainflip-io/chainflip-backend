@@ -62,6 +62,8 @@ impl pallet_cf_witness::Config for Test {
 
 	type Epoch = u64;
 	type ValidatorId = AccountId;
+
+	type EpochInfo = cf_traits::epoch_info::Mock;
 }
 
 impl dummy::Config for Test {
