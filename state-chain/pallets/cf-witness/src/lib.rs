@@ -130,8 +130,9 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Called as a witness of some external event. The call parameter is the resultant extrinsic. This can be
-		/// thought of as a vote for the encoded [`Call`](crate::Pallet::Call) value.
+		/// Called as a witness of some external event. The `call` parameter is an extrinsic that will be dispatched 
+		/// when the configured voting threshold is reached. This can be thought of as a vote for the encoded 
+		/// [`Call`](crate::Pallet::Call) value.
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
 		pub fn witness(
 			origin: OriginFor<T>,
@@ -140,6 +141,30 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 
 			Self::do_witness(who, *call)
+		}
+
+		/// Called to register an dispatchable `call` to vote on. The `call` will be dispatched when the configured 
+		/// voting threshold is reached.
+		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		pub fn register(
+			origin: OriginFor<T>,
+			call: Box<<T as Config>::Call>,
+		) -> DispatchResultWithPostInfo {
+			let _ = ensure_none(origin)?;
+
+			Self::do_register(*call)
+		}
+
+		/// Vote for the hash of a call. This is meaningless without a corresponding `register` extrinsic to store the 
+		/// `Call` that is being voted on.
+		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		pub fn vote(
+			origin: OriginFor<T>,
+			call_hash: CallHash,
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+
+			Self::do_vote(who, call_hash)
 		}
 	}
 
@@ -238,6 +263,17 @@ impl<T: Config> Pallet<T> {
 		}
 
 		Ok(().into())
+	}
+
+	fn do_register(call: <T as Config>::Call) -> DispatchResultWithPostInfo {
+		todo!()
+	}
+
+	fn do_vote(
+		who: <T as frame_system::Config>::AccountId,
+		call_hash: CallHash,
+	) -> DispatchResultWithPostInfo {
+		todo!()
 	}
 }
 
