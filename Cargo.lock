@@ -833,6 +833,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "cf-p2p"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "futures 0.3.14",
+ "log",
+ "sc-network",
+ "sp-runtime",
+]
+
+[[package]]
+name = "cf-p2p-rpc"
+version = "0.1.0"
+dependencies = [
+ "bs58",
+ "cf-p2p",
+ "futures 0.3.14",
+ "jsonrpc-core 15.1.0",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "jsonrpc-pubsub",
+ "log",
+ "sc-network",
+ "sc-rpc",
+ "serde 1.0.125",
+ "serde_json",
+ "sp-core",
+]
+
+[[package]]
 name = "cf-traits"
 version = "0.1.0"
 dependencies = [
@@ -6494,6 +6524,7 @@ dependencies = [
  "hash-db",
  "jsonrpc-core 15.1.0",
  "jsonrpc-pubsub",
+ "lazy_static",
  "log",
  "parity-scale-codec 2.1.1",
  "parking_lot 0.11.1",
@@ -7899,6 +7930,8 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 name = "state-chain-node"
 version = "0.1.0"
 dependencies = [
+ "cf-p2p",
+ "cf-p2p-rpc",
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "jsonrpc-core 15.1.0",
