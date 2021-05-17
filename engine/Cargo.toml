@@ -37,6 +37,7 @@ web3 = { version = "0.15" }
 async-std = { version = "1.9", features = ["attributes", "tokio1"] }
 tokio-compat-02 = "0.2"
 parking_lot = "0.11"
+cmd_lib = "1.0.13"
 
 # substrate deps
 sp-core = "3.0.0"
