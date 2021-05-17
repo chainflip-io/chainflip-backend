@@ -2,7 +2,7 @@
 //! In order for these tests to work, setup must be completed first
 
 use std::{
-    io::{BufRead, BufReader, Error, ErrorKind},
+    io::{BufRead, BufReader, Error, ErrorKind, Write},
     process::{Command, Stdio},
 };
 
@@ -12,23 +12,63 @@ use cmd_lib::*;
 
 #[test]
 fn setup() -> anyhow::Result<()> {
-    let _ = env_logger::init();
     println!("Pull the latest chainflip-eth-contracts repo");
+    // use_builtin_cmd!(echo, info);
 
     // TODO: If the directory already exists, delete it.
 
-    let status_clone_eth = Command::new("sh")
-        .arg("-c")
-        .arg("git clone https://github.com/chainflip-io/chainflip-eth-contracts.git eth-contracts/")
-        .status()
-        .expect("Could not clone eth repo");
+    // let status_clone_eth = Command::new("sh")
+    //     .arg("-c")
+    //     .arg("git clone https://github.com/chainflip-io/chainflip-eth-contracts.git eth-contracts/")
+    //     .status()
+    //     .expect("Could not clone eth repo");
 
-    println!("status: {:#?}", status_clone_eth);
+    cmd_lib::set_debug(true);
 
-    let brownie_setup_and_test = Command::new("sh")
-        .arg("-c")
-        .arg("cd eth-contracts && poetry shell && poetry install && brownie pm install OpenZeppelin/openzeppelin-contracts@4.0.0 && brownie test tests/unit/stakeManager/test_registerClaim.py")
-        .status();
+    run_cmd!(
+        echo "Cloning eth contracts repo";
+        git clone "https://github.com/chainflip-io/chainflip-eth-contracts.git" "eth-contracts/";
+        cd "eth-contracts"
+    )?;
+
+    let mut poetry_shell = Command::new("poetry")
+        .arg("shell")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()?;
+
+    run_cmd!(
+        echo 
+    )
+
+    let poetry_shell_in = poetry_shell.stdin.as_mut().unwrap();
+
+    poetry_shell_in.write_all(b"poetry install").unwrap();
+
+    let reader = BufReader::new(poetry_shell.stdout.unwrap());
+
+    reader
+        .lines()
+        .filter_map(|line| line.ok())
+        .for_each(|line| println!("{}", line));
+
+    // println!("Poetry stuff: {:#?}", brownie_stuff);
+
+    // run_cmd!(
+    //     echo "Setup brownie";
+    //     cd "eth-contracts";
+    //     poetry shell;
+    //     poetry install;
+    // )?;
+
+    // let
+
+    // println!("status: {:#?}", status_clone_eth);
+
+    // let brownie_setup_and_test = Command::new("sh")
+    //     .arg("-c")
+    //     .arg("cd eth-contracts && poetry shell && poetry install && brownie pm install OpenZeppelin/openzeppelin-contracts@4.0.0 && brownie test tests/unit/stakeManager/test_registerClaim.py")
+    //     .status();
     // .arg("poetry shell")
     // .arg("poetry install")
     // .arg("brownie pm install OpenZeppelin/openzeppelin-contracts@4.0.0")
@@ -43,7 +83,7 @@ fn setup() -> anyhow::Result<()> {
     //     )
     // })?;
 
-    println!("brownie setup and test run");
+    // println!("brownie setup and test run");
 
     // let reader = BufReader::new(brownie_setup_and_test);
 
@@ -52,7 +92,7 @@ fn setup() -> anyhow::Result<()> {
     //     .filter_map(|line| line.ok())
     //     .for_each(|line| println!("{}", line));
 
-    println!("Here's the brownie output: {:#?}", brownie_setup_and_test);
+    // println!("Here's the brownie output: {:#?}", brownie_setup_and_test);
 
     Ok(())
 }
