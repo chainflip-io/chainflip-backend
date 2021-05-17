@@ -1,4 +1,4 @@
-use sp_core::{Pair, Public, sr25519};
+use sp_core::{Pair, Public, sr25519, crypto::UncheckedInto};
 use state_chain_runtime::{
 	AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig,
 	SudoConfig, SystemConfig, WASM_BINARY, Signature, ValidatorConfig, SessionConfig, opaque::SessionKeys
@@ -132,8 +132,8 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 }
 
 /// Create a local testnet for Chainflip
-/// We would have 2 validators at Genesis, Alice and Bob
-/// Alice would also be Sudo
+/// We would have 2 validators at Genesis; Chas and Dave https://en.wikipedia.org/wiki/Chas_%26_Dave
+/// Chas would also be Sudo
 /// Subsequent validators would need to be added via the session pallet
 pub fn chainflip_local_testnet_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
@@ -148,15 +148,23 @@ pub fn chainflip_local_testnet_config() -> Result<ChainSpec, String> {
 			wasm_binary,
 			// Initial PoA authorities
 			vec![
-				authority_keys_from_seed("Alice"),
-				authority_keys_from_seed("Bob"),
+				(
+					hex_literal::hex!["b0ca1173a03cc8db1163872255af2a6093dfb124bbb979d8818b0576809cd80a"].into(),
+					hex_literal::hex!["b0ca1173a03cc8db1163872255af2a6093dfb124bbb979d8818b0576809cd80a"].unchecked_into(),
+					hex_literal::hex!["25582067d09bc511afc4e52d19f1a7fd71acb9ee36c64b8c49a2065a65fd2656"].unchecked_into(),
+				),
+				(
+					hex_literal::hex!["a6ea043d8b3984886f55bd2ffb617ab192ce984b894ff87ca4d7341370b97c6b"].into(),
+					hex_literal::hex!["a6ea043d8b3984886f55bd2ffb617ab192ce984b894ff87ca4d7341370b97c6b"].unchecked_into(),
+					hex_literal::hex!["07ce8c1a138d10773fb7df3005511550a4c9ded0f6648693f3ca94d0be0bb022"].unchecked_into(),
+				),
 			],
 			// Sudo account
-			get_account_id_from_seed::<sr25519::Public>("Alice"),
+			hex_literal::hex!["b0ca1173a03cc8db1163872255af2a6093dfb124bbb979d8818b0576809cd80a"].into(),
 			// Pre-funded accounts
 			vec![
-				get_account_id_from_seed::<sr25519::Public>("Alice"),
-				get_account_id_from_seed::<sr25519::Public>("Bob"),
+				hex_literal::hex!["b0ca1173a03cc8db1163872255af2a6093dfb124bbb979d8818b0576809cd80a"].into(),
+				hex_literal::hex!["a6ea043d8b3984886f55bd2ffb617ab192ce984b894ff87ca4d7341370b97c6b"].into(),
 			],
 			true,
 		),
