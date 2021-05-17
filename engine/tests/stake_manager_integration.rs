@@ -8,6 +8,8 @@ use std::{
 
 use anyhow::Result;
 
+use cmd_lib::*;
+
 #[test]
 fn setup() -> anyhow::Result<()> {
     let _ = env_logger::init();
