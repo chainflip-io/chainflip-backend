@@ -41,7 +41,44 @@
         "type": "uint256"
       }
     ],
-    "name": "Claimed",
+    "name": "ClaimExecuted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "nodeID",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "staker",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint48",
+        "name": "startTime",
+        "type": "uint48"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint48",
+        "name": "expiryTime",
+        "type": "uint48"
+      }
+    ],
+    "name": "ClaimRegistered",
     "type": "event"
   },
   {
@@ -102,81 +139,27 @@
     "type": "event"
   },
   {
-    "inputs": [
+    "inputs": [],
+    "name": "CLAIM_DELAY",
+    "outputs": [
       {
-        "components": [
-          {
-            "internalType": "uint256",
-            "name": "msgHash",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "sig",
-            "type": "uint256"
-          }
-        ],
-        "internalType": "struct IShared.SigData",
-        "name": "sigData",
-        "type": "tuple"
-      },
-      {
-        "internalType": "uint256",
-        "name": "nodeID",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "staker",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
+        "internalType": "uint48",
+        "name": "",
+        "type": "uint48"
       }
     ],
-    "name": "claim",
-    "outputs": [],
-    "stateMutability": "nonpayable",
+    "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [
       {
-        "components": [
-          {
-            "internalType": "uint256",
-            "name": "msgHash",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "sig",
-            "type": "uint256"
-          }
-        ],
-        "internalType": "struct IShared.SigData",
-        "name": "sigData",
-        "type": "tuple"
-      },
-      {
-        "internalType": "uint256[]",
-        "name": "nodeIDs",
-        "type": "uint256[]"
-      },
-      {
-        "internalType": "address[]",
-        "name": "stakers",
-        "type": "address[]"
-      },
-      {
-        "internalType": "uint256[]",
-        "name": "amounts",
-        "type": "uint256[]"
+        "internalType": "uint256",
+        "name": "nodeID",
+        "type": "uint256"
       }
     ],
-    "name": "claimBatch",
+    "name": "executeClaim",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -269,6 +252,47 @@
     "inputs": [
       {
         "internalType": "uint256",
+        "name": "nodeID",
+        "type": "uint256"
+      }
+    ],
+    "name": "getPendingClaim",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "staker",
+            "type": "address"
+          },
+          {
+            "internalType": "uint48",
+            "name": "startTime",
+            "type": "uint48"
+          },
+          {
+            "internalType": "uint48",
+            "name": "expiryTime",
+            "type": "uint48"
+          }
+        ],
+        "internalType": "struct StakeManager.Claim",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
         "name": "blocksIntoFuture",
         "type": "uint256"
       }
@@ -282,6 +306,51 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "msgHash",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "sig",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct IShared.SigData",
+        "name": "sigData",
+        "type": "tuple"
+      },
+      {
+        "internalType": "uint256",
+        "name": "nodeID",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "staker",
+        "type": "address"
+      },
+      {
+        "internalType": "uint48",
+        "name": "expiryTime",
+        "type": "uint48"
+      }
+    ],
+    "name": "registerClaim",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {

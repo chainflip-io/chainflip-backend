@@ -33,8 +33,22 @@ pub enum StakingEvent {
         ethabi::Uint,
     ),
 
-    /// `Claimed(nodeId, amount)` event
-    Claimed(
+    /// `ClaimRegistered(nodeId, amount, staker, startTime, expiryTime)` event
+    ClaimRegistered(
+        /// Node id of the validator registering the claim
+        ethabi::Uint,
+        /// Amount the validator is claiming
+        ethabi::Uint,
+        /// The ETH address of the validator, used to stake their FLIP
+        ethabi::Address,
+        /// The start time of the claim
+        ethabi::Uint,
+        /// The expiry time of the claim
+        ethabi::Uint,
+    ),
+
+    /// `ClaimExecuted(nodeId, amount)` event
+    ClaimExecuted(
         /// The node id of the validator that claimed their FLIP
         ethabi::Uint,
         /// The amount of FLIP that was claimed
@@ -76,9 +90,15 @@ impl StakeManager {
             .expect("StakeManager contract should provide 'Staked' event.")
     }
 
-    /// Event definition for the 'Staked' event
-    pub fn claimed_event_definition(&self) -> &ethabi::Event {
-        self.get_event("Claimed")
+    /// Event definition for the 'ClaimRegistered' event
+    pub fn claim_registered_event_definition(&self) -> &ethabi::Event {
+        self.get_event("ClaimRegistered")
+            .expect("StakeManager contract should provide 'ClaimRegistered' event")
+    }
+
+    /// Event definition for the 'ClaimExecuted' event
+    pub fn claim_executed_event_definition(&self) -> &ethabi::Event {
+        self.get_event("ClaimExecuted")
             .expect("StakeManager contract should provide 'Claimed' event.")
     }
 
@@ -137,9 +157,9 @@ impl EventSource for StakeManager {
                 );
                 Ok(event)
             }
-            _ if sig == self.claimed_event_definition().signature() => {
-                let log = self.claimed_event_definition().parse_log(raw_log)?;
-                let event = StakingEvent::Claimed(
+            _ if sig == self.claim_executed_event_definition().signature() => {
+                let log = self.claim_executed_event_definition().parse_log(raw_log)?;
+                let event = StakingEvent::ClaimExecuted(
                     decode_log_param(&log, "nodeID")?,
                     decode_log_param(&log, "amount")?,
                 );
@@ -165,7 +185,23 @@ impl EventSource for StakeManager {
                 );
                 Ok(event)
             }
-            s => Err(EventProducerError::UnexpectedEvent(s))?,
+            _ if sig == self.claim_registered_event_definition().signature() => {
+                let log = self
+                    .claim_registered_event_definition()
+                    .parse_log(raw_log)?;
+                let event = StakingEvent::ClaimRegistered(
+                    decode_log_param(&log, "nodeID")?,
+                    decode_log_param(&log, "amount")?,
+                    decode_log_param(&log, "staker")?,
+                    decode_log_param(&log, "startTime")?,
+                    decode_log_param(&log, "expiryTime")?,
+                );
+                Ok(event)
+            }
+            s => {
+                println!("Here's the missing s: {:?}", s);
+                Err(EventProducerError::UnexpectedEvent(s))?
+            }
         }
     }
 }
@@ -194,8 +230,12 @@ mod tests {
     const STAKED_EVENT_SIG: &'static str =
         "0x925435fa7e37e5d9555bb18ce0d62bb9627d0846942e58e5291e9a2dded462ed";
 
-    const CLAIMED_EVENT_SIG: &'static str =
-        "0xc83b5086ce94ec8d5a88a9f5fea4b18a522bb238ed0d2d8abd959549a80c16b8";
+    // Not actually sure this is correct atm
+    const CLAIM_REGISTERED_EVENT_SIG: &'static str =
+        "0x824ad91f900dab5b5b547a9d07aff90b18f830f24f0d0e97b0d750fc71879d4c";
+
+    const CLAIM_EXECUTED_EVENT_SIG: &'static str =
+        "0x749a1f8d41c63e7123adac0637a8c06d2e0d0412d454a0edf7708ba27e86c697";
 
     const EMISSION_CHANGED_EVENT_SIG: &'static str =
         "0x0b0b5ed18390ab49777844d5fcafb9865c74095ceb3e73cc57d1fbcc926103b5";
@@ -219,7 +259,23 @@ mod tests {
         "removed": false
     }"#;
 
-    const CLAIMED_LOG: &'static str = r#"{
+    const CLAIM_REGISTERED_LOG: &'static str = r#"{
+        "logIndex": "0x0",
+        "transactionIndex": "0x0",
+        "transactionHash": "0x372ce28df138b10b90dfd3defe0eb0720f033a215ef6fd3361565dba0c204aeb",
+        "blockHash": "0x54c69b27b63ec87b959863087fc0adfa30ea657f49933a550b2bcd85e015a44d",
+        "blockNumber": "0x9",
+        "address": "0xead5de9c41543e4babb09f9fe4f79153c036044f",
+        "data": "0x00000000000000000000000000000000000000000000000000000000000000010000000000000000000000009dbe382b57bcdc2aabc874130e120a3e7de09bda0000000000000000000000000000000000000000000000000000000060a466fc0000000000000000000000000000000000000000000000000000000060a709fc",
+        "topics": [
+            "0x824ad91f900dab5b5b547a9d07aff90b18f830f24f0d0e97b0d750fc71879d4c",
+            "0x0000000000000000000000000000000000000000000000000000000000003039"
+        ],
+        "type": "mined",
+        "removed": false
+    }"#;
+
+    const CLAIM_EXECUTED_LOG: &'static str = r#"{
         "logIndex": "0x2",
         "transactionIndex": "0x0",
         "transactionHash": "0x75349046f12736cf7887f07d6e0b9b0d77334aa63b1d4f024349c72c73f9592e",
@@ -289,20 +345,50 @@ mod tests {
     }
 
     #[test]
-    fn test_claimed_log_parsing() -> anyhow::Result<()> {
-        let log: web3::types::Log = serde_json::from_str(CLAIMED_LOG)?;
+    fn test_claim_registered_log_parsing() -> anyhow::Result<()> {
+        let log: web3::types::Log = serde_json::from_str(CLAIM_REGISTERED_LOG)?;
 
         let sm = StakeManager::load(CONTRACT_ADDRESS)?;
 
         match sm.parse_event(log)? {
-            StakingEvent::Claimed(node_id, amount) => {
+            StakingEvent::ClaimRegistered(node_id, amount, staker, start_time, expiry_time) => {
+                assert_eq!(node_id, web3::types::U256::from_dec_str("12345").unwrap());
+                assert_eq!(amount, web3::types::U256::from_dec_str("1").unwrap());
+                assert_eq!(
+                    staker,
+                    web3::types::H160::from_str("0x9dbe382b57bcdc2aabc874130e120a3e7de09bda")
+                        .unwrap()
+                );
+                assert_eq!(
+                    start_time,
+                    web3::types::U256::from_dec_str("1621387004").unwrap()
+                );
+                assert_eq!(
+                    expiry_time,
+                    web3::types::U256::from_dec_str("1621559804").unwrap()
+                );
+            }
+            _ => panic!("Expected Staking::ClaimRegistered, got a different variant"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_claimed_log_parsing() -> anyhow::Result<()> {
+        let log: web3::types::Log = serde_json::from_str(CLAIM_EXECUTED_LOG)?;
+
+        let sm = StakeManager::load(CONTRACT_ADDRESS)?;
+
+        match sm.parse_event(log)? {
+            StakingEvent::ClaimExecuted(node_id, amount) => {
                 assert_eq!(node_id, web3::types::U256::from_dec_str("12345").unwrap());
                 assert_eq!(
                     amount,
                     web3::types::U256::from_dec_str("38203859740316448719619").unwrap()
                 );
             }
-            _ => panic!("Expected Staking::Claimed, got a different variant"),
+            _ => panic!("Expected Staking::ClaimExecuted, got a different variant"),
         }
 
         Ok(())
@@ -358,11 +444,17 @@ mod tests {
             H256::from_str(STAKED_EVENT_SIG).expect("Couldn't cast staked event sig to H256");
         assert_eq!(staked_sig, expected, "Staked event doesn't match signature");
 
+        // ClaimRegistered event
+        let claim_registered_sig = sm.claim_registered_event_definition().signature();
+        let expected = H256::from_str(CLAIM_REGISTERED_EVENT_SIG)
+            .expect("Couldn't cast claim_registered sig to H256");
+        assert_eq!(claim_registered_sig, expected);
+
         // Claimed event
-        let claimed_sig = sm.claimed_event_definition().signature();
-        let expected =
-            H256::from_str(CLAIMED_EVENT_SIG).expect("Couldn't cast claimed event sig to H256");
-        assert_eq!(claimed_sig, expected);
+        let claim_executed_sig = sm.claim_executed_event_definition().signature();
+        let expected = H256::from_str(CLAIM_EXECUTED_EVENT_SIG)
+            .expect("Couldn't cast claimed event sig to H256");
+        assert_eq!(claim_executed_sig, expected);
 
         // Emission changed event
         let emission_changed_sig = sm.emission_changed_event_definition().signature();
