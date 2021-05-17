@@ -1,12 +1,19 @@
+
 image:
   file: .gitpod.Dockerfile
 tasks:
-  - prebuild: SCCACHE_DIR=/cache cargo check --release
+  - prebuild: cargo check
 
 github:
   prebuilds:
     branches: true
     pullRequestsFromForks: true
     addBadge: true
-    addComment: true
+    addComment: false
     pullRequests: true
+
+vscode:
+  extensions:
+    - matklad.rust-analyzer
+    - serayuzgur.crates
+    - tamasfe.even-better-toml

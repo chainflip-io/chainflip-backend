@@ -1,6 +1,5 @@
 {
     "search.exclude": {
         "**/target": true
-    },
-    "rust-analyzer.updates.channel": "nightly"
+    }
 }

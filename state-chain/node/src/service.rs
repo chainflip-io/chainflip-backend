@@ -11,6 +11,9 @@ pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use sc_finality_grandpa::SharedVoterState;
 use sc_keystore::LocalKeystore;
+use std::borrow::Cow;
+use cf_p2p::NetworkBridge;
+use cf_p2p_rpc::RpcCore;
 
 // Our native executor instance.
 native_executor_instance!(
@@ -23,6 +26,8 @@ native_executor_instance!(
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;
 type FullSelectChain = sc_consensus::LongestChain<FullBackend, Block>;
+
+const CHAINFLIP_P2P: &str = "/chainflip-protocol";
 
 pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponents<
 	FullClient, FullBackend, FullSelectChain,
@@ -135,6 +140,15 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
 
+	let subscription_task_executor =
+		sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle());
+	let (rpc_params, _) = RpcCore::new(Arc::new(subscription_task_executor));
+	let rpc_params = Arc::new(rpc_params);
+	let (p2p, comms) = NetworkBridge::new(
+		rpc_params.clone(),
+		network.clone(),
+		Cow::Borrowed(CHAINFLIP_P2P));
+
 	let rpc_extensions_builder = {
 		let client = client.clone();
 		let pool = transaction_pool.clone();
@@ -144,9 +158,10 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 				client: client.clone(),
 				pool: pool.clone(),
 				deny_unsafe,
+				comms: comms.clone(),
 			};
 
-			crate::rpc::create_full(deps)
+			crate::rpc::create_full(deps, rpc_params.clone())
 		})
 	};
 
@@ -214,6 +229,11 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		keystore,
 		is_authority: role.is_network_authority(),
 	};
+
+	task_manager.spawn_essential_handle().spawn_blocking(
+		"cf-p2p",
+		p2p
+	);
 
 	if enable_grandpa {
 		// start the full GRANDPA voter

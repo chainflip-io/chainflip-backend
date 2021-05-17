@@ -4474,6 +4474,7 @@ dependencies = [
  "cf-traits",
  "frame-support",
  "frame-system",
+ "pallet-cf-validator",
  "parity-scale-codec 2.1.1",
  "serde 1.0.125",
  "sp-core",
@@ -4486,6 +4487,7 @@ dependencies = [
 name = "pallet-cf-validator"
 version = "0.0.1"
 dependencies = [
+ "cf-traits",
  "frame-support",
  "frame-system",
  "log",
