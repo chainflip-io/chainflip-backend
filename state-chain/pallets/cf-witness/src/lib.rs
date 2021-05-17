@@ -16,9 +16,9 @@ use frame_support::{
 	traits::EnsureOrigin,
 	Hashable,
 };
-use pallet_session::SessionHandler;
-use sp_runtime::traits::{AtLeast32BitUnsigned, Zero};
-use sp_std::{ops::AddAssign, prelude::*};
+use sp_runtime::traits::AtLeast32BitUnsigned;
+use sp_std::prelude::*;
+use cf_traits::EpochInfo;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -51,6 +51,11 @@ pub mod pallet {
 			+ FullCodec
 			+ From<<Self as frame_system::Config>::AccountId>
 			+ Into<<Self as frame_system::Config>::AccountId>;
+
+		type EpochInfo: EpochInfo<
+			ValidatorId = Self::ValidatorId,
+			EpochIndex = Self::Epoch
+		>;
 	}
 
 	/// Alias for the `Epoch` type defined by the `ValidatorProvider`.
@@ -72,12 +77,13 @@ pub mod pallet {
 	pub type Calls<T: Config> =
 		StorageDoubleMap<_, Blake2_128Concat, Epoch<T>, Identity, CallHash, Vec<u8>>;
 
+	/// Defines a unique index for each validator for every epoch.
 	#[pallet::storage]
 	pub(super) type ValidatorIndex<T: Config> = StorageDoubleMap<
 		_,
-		Blake2_128Concat,
+		Twox64Concat,
 		Epoch<T>,
-		Identity,
+		Blake2_128Concat,
 		<T as frame_system::Config>::AccountId,
 		u16,
 	>;
@@ -271,35 +277,14 @@ where
 	}
 }
 
-/// Implementation of [SessionHandler](pallet_session::SessionHandler) to update
-/// the current list of validators and the current epoch.
-impl<T, ValidatorId> SessionHandler<ValidatorId> for Pallet<T>
-where
-	T: Config,
-	ValidatorId: Clone + Into<<T as frame_system::Config>::AccountId>,
-{
-	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[];
+impl<T: Config> pallet_cf_validator::EpochTransitionHandler for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
 
-	fn on_genesis_session<Ks: sp_runtime::traits::OpaqueKeys>(validators: &[(ValidatorId, Ks)]) {
-		for (i, (v, _k)) in validators.iter().enumerate() {
-			ValidatorIndex::<T>::insert(<T as Config>::Epoch::zero(), (*v).clone().into(), i as u16)
+	fn on_new_epoch(new_validators: Vec<Self::ValidatorId>) {
+		let epoch = T::EpochInfo::epoch_index();
+
+		for (i, v) in new_validators.iter().enumerate() {
+			ValidatorIndex::<T>::insert(&epoch, (*v).clone().into(), i as u16)
 		}
-	}
-
-	fn on_new_session<Ks: sp_runtime::traits::OpaqueKeys>(
-		_changed: bool,
-		_validators: &[(ValidatorId, Ks)],
-		queued_validators: &[(ValidatorId, Ks)],
-	) {
-		CurrentEpoch::<T>::mutate(|e| e.add_assign(1u32.into()));
-
-		for (i, (v, _k)) in queued_validators.iter().enumerate() {
-			ValidatorIndex::<T>::insert(<T as Config>::Epoch::zero(), (*v).clone().into(), i as u16)
-		}
-	}
-
-	fn on_disabled(_validator_index: usize) {
-		// Reduce threshold?
-		todo!()
 	}
 }
