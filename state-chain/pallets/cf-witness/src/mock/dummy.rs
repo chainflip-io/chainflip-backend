@@ -1,6 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-/// Based on the substrate example template pallet
+//! Based on the substrate example template pallet.
+//!
+//! This exists purely as a mock pallet to be used for testing the witness pallet.
 
 pub use pallet::*;
 
@@ -17,12 +19,13 @@ pub mod pallet {
 
 		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
 		type Call: From<Call<Self>> + IsType<<Self as frame_system::Config>::Call>;
-		
+
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 
 		type Witnesser: cf_traits::Witnesser<
-			Call=<Self as Config>::Call, 
-			AccountId=<Self as frame_system::Config>::AccountId>;
+			Call = <Self as Config>::Call,
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
 	}
 
 	#[pallet::pallet]
@@ -40,7 +43,7 @@ pub mod pallet {
 		/// parameters. [something, who]
 		ValueIncremented(u32),
 	}
-	
+
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Error names should be descriptive.
@@ -53,7 +56,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
 	#[pallet::call]
-	impl<T:Config> Pallet<T> {
+	impl<T: Config> Pallet<T> {
 		/// An example dispatchable that takes a singles value as a parameter, writes the value to
 		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
@@ -84,7 +87,7 @@ pub mod pallet {
 					// Update the value in storage with the incremented result.
 					<Something<T>>::put(new);
 					Ok(().into())
-				},
+				}
 			}
 		}
 	}
