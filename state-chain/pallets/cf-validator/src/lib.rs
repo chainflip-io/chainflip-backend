@@ -5,6 +5,9 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
 pub use pallet::*;
 use sp_runtime::traits::{Convert, OpaqueKeys, AtLeast32BitUnsigned};
 use sp_std::prelude::*;
