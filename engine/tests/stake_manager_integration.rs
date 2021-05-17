@@ -1,100 +1,47 @@
 //! This tests integration with the StakeManager contract
 //! In order for these tests to work, setup must be completed first
 
-use std::{
-    io::{BufRead, BufReader, Error, ErrorKind, Write},
-    process::{Command, Stdio},
-};
-
 use anyhow::Result;
+use async_nats::Options;
 
 use cmd_lib::*;
 
+use chainflip_common::*;
+
+use chainflip_engine::*;
+
 #[test]
-fn setup() -> anyhow::Result<()> {
-    println!("Pull the latest chainflip-eth-contracts repo");
-    // use_builtin_cmd!(echo, info);
-
-    // TODO: If the directory already exists, delete it.
-
-    // let status_clone_eth = Command::new("sh")
-    //     .arg("-c")
-    //     .arg("git clone https://github.com/chainflip-io/chainflip-eth-contracts.git eth-contracts/")
-    //     .status()
-    //     .expect("Could not clone eth repo");
-
-    cmd_lib::set_debug(true);
-
-    run_cmd!(
-        echo "Cloning eth contracts repo";
-        git clone "https://github.com/chainflip-io/chainflip-eth-contracts.git" "eth-contracts/";
-        cd "eth-contracts"
-    )?;
-
-    let mut poetry_shell = Command::new("poetry")
-        .arg("shell")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()?;
-
-    run_cmd!(
-        echo 
-    )
-
-    let poetry_shell_in = poetry_shell.stdin.as_mut().unwrap();
-
-    poetry_shell_in.write_all(b"poetry install").unwrap();
-
-    let reader = BufReader::new(poetry_shell.stdout.unwrap());
-
-    reader
-        .lines()
-        .filter_map(|line| line.ok())
-        .for_each(|line| println!("{}", line));
-
-    // println!("Poetry stuff: {:#?}", brownie_stuff);
-
-    // run_cmd!(
-    //     echo "Setup brownie";
-    //     cd "eth-contracts";
-    //     poetry shell;
-    //     poetry install;
-    // )?;
-
-    // let
-
-    // println!("status: {:#?}", status_clone_eth);
-
-    // let brownie_setup_and_test = Command::new("sh")
-    //     .arg("-c")
-    //     .arg("cd eth-contracts && poetry shell && poetry install && brownie pm install OpenZeppelin/openzeppelin-contracts@4.0.0 && brownie test tests/unit/stakeManager/test_registerClaim.py")
-    //     .status();
-    // .arg("poetry shell")
-    // .arg("poetry install")
-    // .arg("brownie pm install OpenZeppelin/openzeppelin-contracts@4.0.0")
-    // .arg("brownie test tests/unit/stakeManager/test_registerClaim.py")
-    // .stdout(Stdio::piped())
-    // .status();
-
-    // .ok_or_else(|| {
-    //     Error::new(
-    //         ErrorKind::Other,
-    //         "Could not run all these setup brownie commands :sad_face:",
-    //     )
-    // })?;
-
-    // println!("brownie setup and test run");
-
-    // let reader = BufReader::new(brownie_setup_and_test);
-
-    // reader
-    //     .lines()
-    //     .filter_map(|line| line.ok())
-    //     .for_each(|line| println!("{}", line));
-
-    // println!("Here's the brownie output: {:#?}", brownie_setup_and_test);
-
-    Ok(())
+pub fn my_test() {
+    println!("Hello");
+    let mq_c = chainflip_engine::mq::mq::NatsMQClient::new();
 }
+
+// pub fn my_test {
+//     let coin = chainflip_common::
+// }
+
+// Subscribe to execute claim events
+// async fn setup_client() -> Box<NatsMQClient> {
+
+//     let options = Options {
+//         url: "http://localhost:4222".to_string(),
+//     };
+
+//     NatsMQClient::connect(options).await.unwrap()
+// }
+
+// #[test]
+// fn setup() -> anyhow::Result<()> {
+//     println!("Pull the latest chainflip-eth-contracts repo");
+
+//     cmd_lib::set_debug(true);
+
+//     run_cmd!(
+//         cd ./tests/eth-contracts;
+//         poetry run brownie test "tests/unit/stakeManager/test_executeClaim.py";
+//     )?;
+
+//     Ok(())
+// }
 
 // Only test particular tests from the brownie test suite
