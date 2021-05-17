@@ -324,7 +324,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Computes the hash of a call.
-	fn call_hash(call: &<T as Config>::Call) -> CallHash {
+	pub fn call_hash(call: &<T as Config>::Call) -> CallHash {
 		Hashable::blake2_256(call)
 	}
 }
