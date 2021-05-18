@@ -2,7 +2,7 @@
 //! In order for these tests to work, setup must be completed first
 
 use anyhow::Result;
-use async_nats::Options;
+use chainflip_engine::mq::{nats_client::NatsMQClient, IMQClient, Options};
 
 use cmd_lib::*;
 
@@ -10,10 +10,17 @@ use chainflip_common::*;
 
 use chainflip_engine::*;
 
-#[test]
-pub fn my_test() {
-    println!("Hello");
-    let mq_c = chainflip_engine::mq::mq::NatsMQClient::new();
+#[tokio::test]
+pub async fn test_execute_claim_integration() {
+    println!("Integration test StakeManager contract");
+    let mq_options = Options {
+        url: "localhost:4422".to_string(),
+    };
+    let mq_c = *NatsMQClient::connect(mq_options).await.unwrap();
+
+    // let stream = mq_c.subscribe(Subject::StakeManager).await.unwrap();
+
+    // println!("Subscribed to stream successfully");
 }
 
 // pub fn my_test {

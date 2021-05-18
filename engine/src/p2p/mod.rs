@@ -41,6 +41,11 @@ mod tests {
     use super::mock::*;
     use super::*;
 
+    async fn receive_with_timeout<T>(mut receiver: UnboundedReceiver<T>) -> Option<T> {
+        let fut = receiver.recv();
+        tokio::time::timeout(std::time::Duration::from_millis(5), fut).await.unwrap_or(None)
+    }
+
     #[tokio::test]
     async fn test_p2p_mock_send() {
         let network = NetworkMock::new();
@@ -53,19 +58,19 @@ mod tests {
 
         drop(network);
 
-        let mut receiver_1 = clients[1].take_receiver().unwrap();
+        let receiver_1 = clients[1].take_receiver().unwrap();
 
         assert_eq!(
-            receiver_1.recv().await.unwrap(),
-            P2PMessage {
+            receive_with_timeout(receiver_1).await,
+            Some(P2PMessage {
                 sender_id: 0,
                 data: data.clone()
-            }
+            })
         );
 
-        let mut receiver_2 = clients[1].take_receiver().unwrap();
+        let receiver_2 = clients[2].take_receiver().unwrap();
 
-        assert_eq!(receiver_2.recv().await, None);
+        assert_eq!(receive_with_timeout(receiver_2).await, None);
     }
 
     #[tokio::test]

@@ -34,7 +34,7 @@ pub struct AuctionStartedEvent<V: Validator> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
-pub struct AuctionEndedEvent<V: Validator> {
+pub struct AuctionConfirmedEvent<V: Validator> {
     // TODO:  Ideally we use V::EpochIndex here, however we do that
     pub epoch_index: EpochIndex,
 
@@ -42,7 +42,15 @@ pub struct AuctionEndedEvent<V: Validator> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
-pub struct ForceRotationRequestedEvent<V: Validator> {
+pub struct ForceAuctionRequestedEvent<V: Validator> {
+    pub _phantom: PhantomData<V>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
+pub struct NewEpochEvent<V: Validator> {
+    // TODO:  Ideally we use V::EpochIndex here, however we do that
+    pub epoch_index: EpochIndex,
+
     pub _phantom: PhantomData<V>,
 }
 
@@ -55,9 +63,11 @@ pub enum ValidatorEvent<V: Validator> {
 
     AuctionStartedEvent(AuctionStartedEvent<V>),
 
-    AuctionEndedEvent(AuctionEndedEvent<V>),
+    AuctionConfirmedEvent(AuctionConfirmedEvent<V>),
 
-    ForceRotationRequestedEvent(ForceRotationRequestedEvent<V>),
+    ForceAuctionRequestedEvent(ForceAuctionRequestedEvent<V>),
+
+    NewEpochEvent(NewEpochEvent<V>),
 }
 
 impl From<MaximumValidatorsChangedEvent<StateChainRuntime>> for SCEvent {
@@ -82,17 +92,23 @@ impl From<AuctionStartedEvent<StateChainRuntime>> for SCEvent {
     }
 }
 
-impl From<AuctionEndedEvent<StateChainRuntime>> for SCEvent {
-    fn from(auction_ended: AuctionEndedEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::AuctionEndedEvent(auction_ended))
+impl From<AuctionConfirmedEvent<StateChainRuntime>> for SCEvent {
+    fn from(auction_ended: AuctionConfirmedEvent<StateChainRuntime>) -> Self {
+        SCEvent::ValidatorEvent(ValidatorEvent::AuctionConfirmedEvent(auction_ended))
     }
 }
 
-impl From<ForceRotationRequestedEvent<StateChainRuntime>> for SCEvent {
-    fn from(force_rotation_requested: ForceRotationRequestedEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::ForceRotationRequestedEvent(
+impl From<ForceAuctionRequestedEvent<StateChainRuntime>> for SCEvent {
+    fn from(force_rotation_requested: ForceAuctionRequestedEvent<StateChainRuntime>) -> Self {
+        SCEvent::ValidatorEvent(ValidatorEvent::ForceAuctionRequestedEvent(
             force_rotation_requested,
         ))
+    }
+}
+
+impl From<NewEpochEvent<StateChainRuntime>> for SCEvent {
+    fn from(auction_ended: NewEpochEvent<StateChainRuntime>) -> Self {
+        SCEvent::ValidatorEvent(ValidatorEvent::NewEpochEvent(auction_ended))
     }
 }
 
@@ -130,7 +146,7 @@ mod tests {
     fn auction_started_decoding() {
         // AuctionStarted(EpochIndex)
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_validator::Event::<SCRuntime>::AuctionStarted(1).into();
+            pallet_cf_validator::Event::<SCRuntime>::AuctionStarted(1.into()).into();
 
         let encoded_auction_started = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped
@@ -141,7 +157,7 @@ mod tests {
                 .unwrap();
 
         let expecting = AuctionStartedEvent {
-            epoch_index: 1,
+            epoch_index: 1.into(),
             _phantom: PhantomData,
         };
 
@@ -149,21 +165,43 @@ mod tests {
     }
 
     #[test]
-    fn auction_ended_decoding() {
-        // AuctionEnded(EpochIndex)
+    fn auction_confirmed_decoding() {
+        // AuctionConfirmed(EpochIndex)
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_validator::Event::<SCRuntime>::AuctionEnded(1).into();
+            pallet_cf_validator::Event::<SCRuntime>::AuctionConfirmed(1.into()).into();
 
-        let encoded_auction_ended = event.encode();
+        let encoded_auction_confirmed = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped
-        let encoded_auction_ended = encoded_auction_ended[2..].to_vec();
+        let encoded_auction_confirmed = encoded_auction_confirmed[2..].to_vec();
 
         let decoded_event =
-            AuctionEndedEvent::<StateChainRuntime>::decode(&mut &encoded_auction_ended[..])
+            AuctionConfirmedEvent::<StateChainRuntime>::decode(&mut &encoded_auction_confirmed[..])
                 .unwrap();
 
-        let expecting = AuctionEndedEvent {
-            epoch_index: 1,
+        let expecting = AuctionConfirmedEvent {
+            epoch_index: 1.into(),
+            _phantom: PhantomData,
+        };
+
+        assert_eq!(decoded_event, expecting);
+    }
+
+    #[test]
+    fn new_epoch_decoding() {
+        // AuctionConfirmed(EpochIndex)
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_validator::Event::<SCRuntime>::NewEpoch(1.into()).into();
+
+        let encoded_new_epoch = event.encode();
+        // the first 2 bytes are (module_index, event_variant_index), these can be stripped
+        let encoded_new_epoch = encoded_new_epoch[2..].to_vec();
+
+        let decoded_event =
+            NewEpochEvent::<StateChainRuntime>::decode(&mut &encoded_new_epoch[..])
+                .unwrap();
+
+        let expecting = NewEpochEvent {
+            epoch_index: 1.into(),
             _phantom: PhantomData,
         };
 
@@ -197,18 +235,18 @@ mod tests {
     #[test]
     fn force_rotation_requested_decoding() {
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_validator::Event::<SCRuntime>::ForceRotationRequested().into();
+            pallet_cf_validator::Event::<SCRuntime>::ForceAuctionRequested().into();
 
         let encodeded_force_rotation = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped
         let encodeded_force_rotation = encodeded_force_rotation[2..].to_vec();
 
-        let decoded_event = ForceRotationRequestedEvent::<StateChainRuntime>::decode(
+        let decoded_event = ForceAuctionRequestedEvent::<StateChainRuntime>::decode(
             &mut &encodeded_force_rotation[..],
         )
         .unwrap();
 
-        let expecting = ForceRotationRequestedEvent {
+        let expecting = ForceAuctionRequestedEvent {
             _phantom: PhantomData,
         };
 

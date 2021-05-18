@@ -21,6 +21,7 @@ version = '2.0'
 [dependencies]
 # Internal deps
 cf-traits = { path = '../../traits', default-features = false }
+pallet-cf-validator = { path = '../cf-validator', default-features = false }
 
 # Non-substrate external deps
 
@@ -39,6 +40,7 @@ sp-io = { default-features = false, version = '3.0.0' }
 default = ['std']
 std = [
     'cf-traits/std',
+    'pallet-cf-validator/std',
     'codec/std',
     'frame-support/std',
     'frame-system/std',

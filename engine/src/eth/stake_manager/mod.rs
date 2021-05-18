@@ -1,11 +1,9 @@
-use crate::{
-    eth::{
-        stake_manager::{stake_manager::StakeManager, stake_manager_sink::StakeManagerSink},
-        EthEventStreamBuilder,
-    },
-    mq::{nats_client::NatsMQClient, Options},
-    settings,
-};
+use crate::eth::stake_manager::stake_manager::StakeManager;
+use crate::eth::stake_manager::stake_manager_sink::StakeManagerSink;
+use crate::eth::EthEventStreamBuilder;
+use crate::mq::nats_client::NatsMQClient;
+use crate::mq::Options;
+use crate::settings;
 
 pub mod stake_manager;
 pub mod stake_manager_sink;
