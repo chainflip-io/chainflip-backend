@@ -56,7 +56,7 @@ pub mod pallet {
 		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, EpochIndex = Self::Epoch>;
 	}
 
-	/// Alias for the `Epoch` type defined by the `ValidatorProvider`.
+	/// Alias for the `Epoch` configuration type.
 	pub(super) type Epoch<T> = <T as Config>::Epoch;
 
 	/// A hash to index the call by.
@@ -169,8 +169,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let _ = ensure_none(origin)?;
 
-			let call_hash = Self::try_register(*call)?;
-			Self::deposit_event(Event::CallRegistered(call_hash));
+			let _call_hash = Self::try_register(*call)?;
 
 			Ok(().into())
 		}
@@ -190,7 +189,10 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// Do the actual witnessing.
 	///
-	/// Think of this a vote for some action (represented by a runtime `call`) to be taken. At a high level:
+	/// Think of this a vote for some action (represented by a `call_hash` that maps to a runtime `call`) to be taken.
+	/// The action must be registered before it can be voted on (see [register](Call::register)).
+	///
+	/// At a high level:
 	///
 	/// 1. Look up the account id in the list of validators.
 	/// 2. Get the list of votes for the call, or an empty list if this is the first vote.
@@ -282,7 +284,10 @@ impl<T: Config> Pallet<T> {
 		Calls::<T>::try_mutate(&epoch, &call_hash, |existing_call| {
 			*existing_call = match existing_call {
 				Some(_) => Err(Error::<T>::DuplicateRegistration),
-				None => Ok(Some(call)),
+				None => {
+					Self::deposit_event(Event::CallRegistered(call_hash));
+					Ok(Some(call))
+				},
 			}?;
 			Ok(())
 		})?;
@@ -294,11 +299,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Doesn't care if the call has already been registered.
 	fn do_register(call: <T as Config>::Call) -> CallHash {
-		let epoch: Epoch<T> = CurrentEpoch::<T>::get();
-		let call_hash = Self::call_hash(&call);
-		Calls::<T>::insert(&epoch, &call_hash, call);
-
-		call_hash
+		Self::try_register(call.clone()).unwrap_or_else(|_| Self::call_hash(&call))
 	}
 
 	/// Dispatches a stored call.
@@ -372,7 +373,7 @@ impl<T: Config> pallet_cf_validator::EpochTransitionHandler for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 
 	fn on_new_epoch(new_validators: Vec<Self::ValidatorId>) {
-		let epoch = T::EpochInfo::epoch_index();
+		let epoch = T::EpochInfo::current_epoch();
 
 		CurrentEpoch::<T>::set(epoch);
 		for (i, v) in new_validators.iter().enumerate() {
