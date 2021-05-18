@@ -1,17 +1,6 @@
-use crate::mq::Options;
-
 use log::info;
 
-mod mq;
-mod p2p;
-mod sc_observer;
-mod settings;
-mod witness;
-
-// Blockchains
-mod eth;
-
-use settings::Settings;
+use chainflip_engine::{eth, mq::Options, sc_observer, settings::Settings, witness};
 
 #[tokio::main]
 async fn main() {
