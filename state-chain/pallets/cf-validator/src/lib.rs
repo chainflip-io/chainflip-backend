@@ -17,6 +17,13 @@ use frame_support::pallet_prelude::*;
 use cf_traits::EpochInfo;
 use serde::{Serialize, Deserialize};
 
+pub trait WeightInfo {
+	fn set_blocks_for_epoch() -> Weight;
+	fn set_validator_target_size() -> Weight;
+	fn force_auction() -> Weight;
+	fn confirm_auction() -> Weight;
+}
+
 pub type ValidatorSize = u32;
 type SessionIndex = u32;
 
@@ -97,6 +104,8 @@ pub mod pallet {
 		/// Minimum amount of validators we will want in a set
 		#[pallet::constant]
 		type MinValidatorSetSize: Get<u64>;
+
+		type ValidatorWeightInfo: WeightInfo;
 	}
 
 	#[pallet::event]
@@ -136,8 +145,9 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Sets the number of blocks an epoch should run for
 		/// The dispatch origin of this function must be root.
-		/// TODO work out weights
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		#[pallet::weight(
+			T::ValidatorWeightInfo::set_blocks_for_epoch()
+		)]
 		pub(super) fn set_blocks_for_epoch(
 			origin: OriginFor<T>,
 			number_of_blocks: T::BlockNumber,
@@ -153,8 +163,9 @@ pub mod pallet {
 
 		/// Sets the size of our validate set size
 		/// The dispatch origin of this function must be root.
-		/// TODO work out weights
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		#[pallet::weight(
+			T::ValidatorWeightInfo::set_validator_target_size()
+		)]
 		pub(super) fn set_validator_target_size(
 			origin: OriginFor<T>,
 			size: ValidatorSize,
@@ -170,8 +181,9 @@ pub mod pallet {
 
 		/// Force an auction phase.  The next block will run an auction.
 		/// The dispatch origin of this function must be root.
-		/// TODO work out weights
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		#[pallet::weight(
+			T::ValidatorWeightInfo::force_auction()
+		)]
 		pub(super) fn force_auction(
 			origin: OriginFor<T>,
 		) -> DispatchResultWithPostInfo {
@@ -184,8 +196,9 @@ pub mod pallet {
 		/// When we are in an auction phase we will need to wait for off-chain confirmation
 		/// of the epoch index already emitted with [AuctionStarted]
 		/// The dispatch origin of this function must be signed.
-		/// TODO work out weights
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		#[pallet::weight(
+			T::ValidatorWeightInfo::confirm_auction()
+		)]
 		pub(super) fn confirm_auction(
 			origin: OriginFor<T>,
 			index: EpochIndex,
