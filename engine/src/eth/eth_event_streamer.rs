@@ -6,20 +6,8 @@ use tokio_compat_02::FutureExt;
 use web3::types::{BlockNumber, SyncState};
 
 /// Steams events from a particular ETH Source, such as a smart contract
-/// into a particular event sink. For example:
-/// ```
-/// let stake_manager = StakeManager::load(CONTRACT_ADDRESS).unwrap();
-/// // create in memory nats server
-/// let nats_server = nats_test_server::NatsTestServer::build().spawn();
-/// let addr = nats_server.address().to_string();
-/// let options = Options { url: addr };
-/// // create the sink, which pushes events to the MQ
-/// let sm_sink = StakeManagerSink::<NatsMQClient>::new(options).await;
-/// let sm_event_stream = EthEventStreamBuilder::new("ws://localhost:8545", stake_manager);
-/// let sm_event_stream = sm_event_stream.with_sink(sm_sink).build().await.unwrap();
-/// // Start streaming events from the source to the sink
-/// sm_event_stream.run(Some(0)).await.unwrap();
-/// ```
+/// into a particular event sink
+/// For example, see stake_manager/mod.rs
 pub struct EthEventStreamer<S: EventSource> {
     web3_client: ::web3::Web3<::web3::transports::WebSocket>,
     event_source: S,
