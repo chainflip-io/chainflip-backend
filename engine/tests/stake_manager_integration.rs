@@ -49,6 +49,6 @@ pub async fn test_execute_claim_integration() {
                 U256::from_dec_str("40000000000000000000000").unwrap()
             );
         }
-        _ => println!("Staking event that isn't claim_executed"),
+        _ => panic!("Staking event that isn't ClaimExecuted"),
     };
 }

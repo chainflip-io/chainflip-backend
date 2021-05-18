@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # todo: check that it doesn't exist, if it does, then force pull latest
-git clone https://github.com/chainflip-io/chainflip-eth-contracts.git ../eth-contracts/
+git clone https://github.com/chainflip-io/chainflip-eth-contracts.git ./eth-contracts/
 
 # install poetry // create a docker file for this??
 
