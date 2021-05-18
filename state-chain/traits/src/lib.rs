@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-mod mock;
-pub use mock::epoch_info;
+
+pub mod mock;
 
 use frame_support::dispatch::{DispatchResultWithPostInfo, Dispatchable};
 use sp_std::prelude::*;
@@ -41,5 +41,5 @@ pub trait EpochInfo {
 	fn bond() -> Self::Amount;
 
 	/// The current epoch we are in
-	fn epoch_index() -> Self::EpochIndex;
+	fn current_epoch() -> Self::EpochIndex;
 }
