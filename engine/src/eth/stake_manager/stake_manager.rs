@@ -5,8 +5,6 @@ use core::str::FromStr;
 
 use crate::eth::{EventProducerError, EventSource};
 
-use super::*;
-
 use serde::{Deserialize, Serialize};
 use web3::{
     contract::tokens::Tokenizable,

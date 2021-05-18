@@ -10,7 +10,7 @@ use thiserror::Error;
 
 use web3::types::{BlockNumber, FilterBuilder, H256};
 
-use crate::{mq::Options, settings::Settings};
+use crate::settings::Settings;
 
 /// Something that accepts and processes events asychronously.
 #[async_trait]
