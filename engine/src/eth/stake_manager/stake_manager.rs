@@ -99,7 +99,7 @@ impl StakeManager {
     /// Event definition for the 'ClaimExecuted' event
     pub fn claim_executed_event_definition(&self) -> &ethabi::Event {
         self.get_event("ClaimExecuted")
-            .expect("StakeManager contract should provide 'Claimed' event.")
+            .expect("StakeManager contract should provide 'ClaimExecuted' event.")
     }
 
     /// Event definition for the 'EmissionChanged' event
@@ -198,10 +198,7 @@ impl EventSource for StakeManager {
                 );
                 Ok(event)
             }
-            s => {
-                println!("Here's the missing s: {:?}", s);
-                Err(EventProducerError::UnexpectedEvent(s))?
-            }
+            s => Err(EventProducerError::UnexpectedEvent(s))?,
         }
     }
 }
@@ -230,7 +227,6 @@ mod tests {
     const STAKED_EVENT_SIG: &'static str =
         "0x925435fa7e37e5d9555bb18ce0d62bb9627d0846942e58e5291e9a2dded462ed";
 
-    // Not actually sure this is correct atm
     const CLAIM_REGISTERED_EVENT_SIG: &'static str =
         "0x824ad91f900dab5b5b547a9d07aff90b18f830f24f0d0e97b0d750fc71879d4c";
 
@@ -278,14 +274,14 @@ mod tests {
     const CLAIM_EXECUTED_LOG: &'static str = r#"{
         "logIndex": "0x2",
         "transactionIndex": "0x0",
-        "transactionHash": "0x75349046f12736cf7887f07d6e0b9b0d77334aa63b1d4f024349c72c73f9592e",
-        "blockHash": "0x76cc3567874b42ed341a06b157beb9f98e3afc000c7dd29438c8f5be36080bf2",
-        "blockNumber": "0x8",
+        "transactionHash": "0x9be0b3ab66177a80eb856772f3dff82f0d4e63c912d1f53f9ae032e68b177079",
+        "blockHash": "0xc15512efc63fa6926658ba2a37b8b0930fbfb663fa7fe725b1e7f1dfaf17df54",
+        "blockNumber": "0xa",
         "address": "0xead5de9c41543e4babb09f9fe4f79153c036044f",
-        "data": "0x000000000000000000000000000000000000000000000817090f1518090e0303",
+        "data": "0x0000000000000000000000000000000000000000000000000000000000000049",
         "topics": [
-            "0xc83b5086ce94ec8d5a88a9f5fea4b18a522bb238ed0d2d8abd959549a80c16b8",
-            "0x0000000000000000000000000000000000000000000000000000000000003039"
+            "0x749a1f8d41c63e7123adac0637a8c06d2e0d0412d454a0edf7708ba27e86c697",
+            "0x000000000000000000000000000000000000000000000000000000000000e8b0"
         ],
         "type": "mined",
         "removed": false
@@ -375,18 +371,15 @@ mod tests {
     }
 
     #[test]
-    fn test_claimed_log_parsing() -> anyhow::Result<()> {
+    fn test_claim_executed_log_parsing() -> anyhow::Result<()> {
         let log: web3::types::Log = serde_json::from_str(CLAIM_EXECUTED_LOG)?;
 
         let sm = StakeManager::load(CONTRACT_ADDRESS)?;
 
         match sm.parse_event(log)? {
             StakingEvent::ClaimExecuted(node_id, amount) => {
-                assert_eq!(node_id, web3::types::U256::from_dec_str("12345").unwrap());
-                assert_eq!(
-                    amount,
-                    web3::types::U256::from_dec_str("38203859740316448719619").unwrap()
-                );
+                assert_eq!(node_id, web3::types::U256::from_dec_str("59568").unwrap());
+                assert_eq!(amount, web3::types::U256::from_dec_str("73").unwrap());
             }
             _ => panic!("Expected Staking::ClaimExecuted, got a different variant"),
         }
