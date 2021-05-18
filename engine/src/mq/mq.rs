@@ -46,13 +46,20 @@ pub enum Subject {
     Quote(Coin),
     Batch(Coin),
     Broadcast(Coin),
-    Stake,
-    Claim,
+    /// Stake events coming from the Stake manager contract
+    StakeManager,
+    /// Stake events coming from the State chain
+    StateChainStake,
+    /// Claim events coming from the State chain
+    StateChainClaim,
+    /// Claim issued event from the state chain
+    StateChainClaimIssued,
     Rotate,
     P2PIncoming,
     P2POutgoing,
 }
 
+// TODO: Make this a separate trait, not `fmt::Display` - https://github.com/chainflip-io/chainflip-backend/issues/63
 // Used to create the subject that the MQ publishes to
 impl fmt::Display for Subject {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -69,14 +76,20 @@ impl fmt::Display for Subject {
             Subject::Broadcast(coin) => {
                 write!(f, "broadcast.{}", coin.to_string())
             }
-            Subject::Stake => {
-                write!(f, "stake")
+            Subject::StakeManager => {
+                write!(f, "stake_manager")
             }
-            Subject::Claim => {
-                write!(f, "claim")
+            Subject::StateChainClaim => {
+                write!(f, "state_chain_claim")
             }
             Subject::Rotate => {
                 write!(f, "rotate")
+            }
+            Subject::StateChainStake => {
+                write!(f, "state_chain_stake")
+            }
+            Subject::StateChainClaimIssued => {
+                write!(f, "state_chain_claim_issued")
             }
             Subject::P2PIncoming => {
                 write!(f, "p2p_incoming")
@@ -106,10 +119,13 @@ mod test {
         let broadcast_subject = Subject::Broadcast(Coin::BTC);
         assert_eq!(broadcast_subject.to_string(), "broadcast.BTC");
 
-        let stake_subject = Subject::Stake;
-        assert_eq!(stake_subject.to_string(), "stake");
+        let stake_manager_subject = Subject::StakeManager;
+        assert_eq!(stake_manager_subject.to_string(), "stake_manager");
 
-        let claim_subject = Subject::Claim;
-        assert_eq!(claim_subject.to_string(), "claim");
+        let sc_stake_subject = Subject::StateChainStake;
+        assert_eq!(sc_stake_subject.to_string(), "state_chain_stake");
+
+        let sc_claim_subject = Subject::StateChainClaim;
+        assert_eq!(sc_claim_subject.to_string(), "state_chain_claim");
     }
 }

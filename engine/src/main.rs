@@ -8,6 +8,9 @@ mod sc_observer;
 mod settings;
 mod witness;
 
+// Blockchains
+mod eth;
+
 use settings::Settings;
 
 #[tokio::main]
@@ -27,7 +30,9 @@ async fn main() {
 
     info!("Start the engines! :broom: :broom: ");
 
-    sc_observer::sc_observer::start(mq_options.clone(), settings.state_chain).await;
+    sc_observer::sc_observer::start(mq_options.clone(), settings.clone().state_chain).await;
+
+    eth::start(settings).await;
 
     // start witnessing other chains
     witness::witness::start(mq_options).await;

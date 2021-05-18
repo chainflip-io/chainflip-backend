@@ -244,7 +244,6 @@ dependencies = [
  "futures-lite",
  "num_cpus",
  "once_cell",
- "tokio 0.2.25",
  "tokio 1.5.0",
 ]
 
@@ -834,6 +833,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "cf-p2p"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "futures 0.3.14",
+ "log",
+ "sc-network",
+ "sp-runtime",
+]
+
+[[package]]
+name = "cf-p2p-rpc"
+version = "0.1.0"
+dependencies = [
+ "bs58",
+ "cf-p2p",
+ "futures 0.3.14",
+ "jsonrpc-core 15.1.0",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "jsonrpc-pubsub",
+ "log",
+ "sc-network",
+ "sc-rpc",
+ "serde 1.0.125",
+ "serde_json",
+ "sp-core",
+]
+
+[[package]]
 name = "cf-traits"
 version = "0.1.0"
 dependencies = [
@@ -903,6 +932,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-nats",
+ "async-std",
  "async-stream",
  "async-trait",
  "chainflip-common",
@@ -914,6 +944,7 @@ dependencies = [
  "futures 0.3.14",
  "futures-core",
  "futures-util",
+ "hex",
  "log",
  "nats_test_server",
  "pallet-cf-staking",
@@ -928,7 +959,9 @@ dependencies = [
  "substrate-subxt",
  "thiserror",
  "tokio 1.5.0",
+ "tokio-compat-02",
  "tokio-stream",
+ "web3",
 ]
 
 [[package]]
@@ -5662,25 +5695,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "relayer"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-std",
- "async-trait",
- "env_logger 0.8.3",
- "futures 0.3.14",
- "hex",
- "log",
- "parity-scale-codec 2.1.1",
- "serde 1.0.125",
- "serde_json",
- "substrate-subxt",
- "thiserror",
- "web3",
-]
-
-[[package]]
 name = "remove_dir_all"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6510,6 +6524,7 @@ dependencies = [
  "hash-db",
  "jsonrpc-core 15.1.0",
  "jsonrpc-pubsub",
+ "lazy_static",
  "log",
  "parity-scale-codec 2.1.1",
  "parking_lot 0.11.1",
@@ -7915,6 +7930,8 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 name = "state-chain-node"
 version = "0.1.0"
 dependencies = [
+ "cf-p2p",
+ "cf-p2p-rpc",
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "jsonrpc-core 15.1.0",
@@ -8472,6 +8489,20 @@ dependencies = [
  "bytes 0.4.12",
  "futures 0.1.31",
  "tokio-io",
+]
+
+[[package]]
+name = "tokio-compat-02"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7d4237822b7be8fff0a7a27927462fad435dcb6650f95cea9e946bf6bdc7e07"
+dependencies = [
+ "bytes 0.5.6",
+ "once_cell",
+ "pin-project-lite 0.2.6",
+ "tokio 0.2.25",
+ "tokio 1.5.0",
+ "tokio-stream",
 ]
 
 [[package]]

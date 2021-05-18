@@ -87,10 +87,10 @@ pub(super) fn subject_from_raw_event(event: &RawEvent) -> Option<Subject> {
     let subject = match event.module.as_str() {
         "System" => None,
         "Staking" => match event.variant.as_str() {
-            "ClaimSigRequested" => Some(Subject::Claim),
+            "ClaimSigRequested" => Some(Subject::StateChainClaim),
             // All Stake refunds are ETH, how are these refunds coming out though? as batches or individual txs?
             "StakeRefund" => Some(Subject::Batch(Coin::ETH)),
-            "ClaimSignatureIssued" => Some(Subject::Claim),
+            "ClaimSignatureIssued" => Some(Subject::StateChainClaimIssued),
             // This doesn't need to go anywhere, this is just a confirmation emitted, perhaps for block explorers
             "Claimed" => None,
             _ => None,
@@ -132,7 +132,7 @@ mod tests {
         };
 
         let subject = subject_from_raw_event(&raw_event);
-        assert_eq!(subject, Some(Subject::Claim));
+        assert_eq!(subject, Some(Subject::StateChainClaim));
 
         // test "fail" case
         let raw_event_invalid = substrate_subxt::RawEvent {

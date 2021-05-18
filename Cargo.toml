@@ -13,5 +13,4 @@ members = [
   'state-chain/traits',
   'common',
   'engine',
-  'relayer',
 ]
