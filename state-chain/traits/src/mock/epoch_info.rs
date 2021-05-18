@@ -2,36 +2,57 @@ use std::cell::RefCell;
 use crate::EpochInfo;
 
 type AccountId = u64;
-
 pub struct Mock;
 
 thread_local! {
 	pub static CURRENT_VALIDATORS: RefCell<Vec<AccountId>> = RefCell::new(vec![]);
+	pub static NEXT_VALIDATORS: RefCell<Vec<AccountId>> = RefCell::new(vec![]);
 	pub static BOND: RefCell<u128> = RefCell::new(0);
+	pub static EPOCH: RefCell<u32> = RefCell::new(0);
 }
 
 impl Mock {
+	/// Get the current number of validators.
 	pub fn validator_count() -> usize {
 		CURRENT_VALIDATORS.with(|cell| cell.borrow().len())
 	}
 
+	/// Add a validator to the current validators.
 	pub fn add_validator(account: AccountId) {
 		CURRENT_VALIDATORS.with(|cell| cell.borrow_mut().push(account))
 	}
 
-	pub fn clear_validators() {
-		CURRENT_VALIDATORS.with(|cell| cell.borrow_mut().clear())
+	/// Queue a validator. Adds the validator to the set of next validators.
+	pub fn queue_validator(account: AccountId) {
+		NEXT_VALIDATORS.with(|cell| cell.borrow_mut().push(account))
 	}
 
+	/// Clears the current and next validators.
+	pub fn clear_validators() {
+		CURRENT_VALIDATORS.with(|cell| cell.borrow_mut().clear());
+		NEXT_VALIDATORS.with(|cell| cell.borrow_mut().clear());
+	}
+
+	/// Set the bond amount.
 	pub fn set_bond(bond: u128) {
 		BOND.with(|cell| *(cell.borrow_mut()) = bond);
+	}
+
+	/// Set the epoch.
+	pub fn set_epoch(epoch: u32) {
+		EPOCH.with(|cell| *(cell.borrow_mut()) = epoch);
+	}
+
+	/// Increment the epoch.
+	pub fn incr_epoch() {
+		EPOCH.with(|cell| *(cell.borrow_mut()) += 1);
 	}
 }
 
 impl EpochInfo for Mock {
 	type ValidatorId = AccountId;
 	type Amount = u128;
-	type EpochIndex = u64;
+	type EpochIndex = u32;
 
 	fn current_validators() -> Vec<Self::ValidatorId> {
 		CURRENT_VALIDATORS.with(|cell| cell.borrow().clone())
@@ -42,15 +63,14 @@ impl EpochInfo for Mock {
 	}
 	
 	fn bond() -> Self::Amount {
-		BOND.with(|cell| cell.borrow().clone())
+		BOND.with(|cell| *cell.borrow())
 	}
 
-	// The following two are not used by the staking pallet
 	fn next_validators() -> Vec<Self::ValidatorId> {
-		unimplemented!()
+		NEXT_VALIDATORS.with(|cell| cell.borrow().clone())
 	}
 
-	fn epoch_index() -> Self::EpochIndex {
-		unimplemented!()
+	fn current_epoch() -> Self::EpochIndex {
+		EPOCH.with(|cell| *cell.borrow())
 	}
 }

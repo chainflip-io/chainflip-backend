@@ -1,8 +1,21 @@
 use crate::{mock::dummy::pallet as pallet_dummy, mock::*, Votes, Error, VoteMask, Config, Pallet};
 use frame_support::{assert_noop, assert_ok, dispatch::DispatchResultWithPostInfo};
 
-fn witness_call<T: Config>(who: T::AccountId, call: <T as Config>::Call) -> DispatchResultWithPostInfo {
-	<Pallet<T> as cf_traits::Witnesser>::witness(who.into(), call)
+fn assert_event_sequence<T: frame_system::Config>(expected: Vec<T::Event>) 
+{
+	let events = frame_system::Pallet::<T>::events()
+		.into_iter()
+		.rev()
+		.take(expected.len())
+		.rev()
+		.map(|e| e.event)
+		.collect::<Vec<_>>();
+	
+	assert_eq!(events, expected)
+}
+
+fn pop_last_event() -> Event {
+	frame_system::Pallet::<Test>::events().pop().expect("Expected an event").event
 }
 
 #[test]
@@ -88,5 +101,35 @@ fn only_validators_can_witness() {
 			Witnesser::witness(Origin::signed(DEIRDRE), call_hash),
 			Error::<Test>::UnauthorizedWitness
 		);
+	});
+}
+
+#[test]
+fn witness_via_witnesser_trait() {
+	new_test_ext().execute_with(|| {
+		let answer = 42;
+		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value(
+			answer,
+		)));
+		let call_hash = Witnesser::call_hash(call.as_ref());
+
+		assert_ok!(<Pallet<Test> as cf_traits::Witnesser>::witness(ALISSA.into(), *call.clone()));
+		assert_ok!(<Pallet<Test> as cf_traits::Witnesser>::witness(BOBSON.into(), *call.clone()));
+
+		let dispatch_result = if let Event::pallet_cf_witness(crate::Event::WitnessExecuted(_, dispatch_result)) = pop_last_event() {
+			assert_ok!(dispatch_result);
+			dispatch_result
+		} else {
+			panic!("Expected WitnessExecuted event!")
+		};
+
+		assert_event_sequence::<Test>(vec![
+			crate::Event::CallRegistered(call_hash).into(),
+			crate::Event::WitnessReceived(call_hash, ALISSA, 1).into(),
+			crate::Event::WitnessReceived(call_hash, BOBSON, 2).into(),
+			crate::Event::ThresholdReached(call_hash, 2).into(),
+			dummy::Event::<Test>::ValueIncremented(answer).into(),
+			crate::Event::WitnessExecuted(call_hash, dispatch_result).into(),
+		]);
 	});
 }

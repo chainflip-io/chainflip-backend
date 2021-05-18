@@ -1,6 +1,7 @@
 use crate::{mock::*, Stakes, Pallet, Error, PendingClaims, Config};
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 use sp_core::ecdsa::Signature;
+use cf_traits::mock::epoch_info;
 
 fn assert_event_sequence<T: frame_system::Config, E: Into<T::Event>>(expected: Vec<E>) 
 {

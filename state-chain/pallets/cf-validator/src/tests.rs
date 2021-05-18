@@ -7,10 +7,10 @@ use frame_support::{assert_ok, assert_noop};
 
 // Constants
 const ALICE: u64 = 100;
-const INVALID_EPOCH: EpochIndex = EpochIndex(0);
-const FIRST_EPOCH: EpochIndex = EpochIndex(1);
-const SECOND_EPOCH: EpochIndex = EpochIndex(2);
-const THIRD_EPOCH: EpochIndex = EpochIndex(3);
+const INVALID_EPOCH: EpochIndex = 0;
+const FIRST_EPOCH: EpochIndex = 1;
+const SECOND_EPOCH: EpochIndex = 2;
+const THIRD_EPOCH: EpochIndex = 3;
 
 fn events() -> Vec<mock::Event> {
 	let evt = System::events().into_iter().map(|evt| evt.event).collect::<Vec<_>>();
@@ -33,12 +33,12 @@ fn confirm_and_complete_auction(block_number: &mut u64, idx: EpochIndex) {
 			mock::Event::pallet_cf_validator(crate::Event::AuctionConfirmed(idx)),
 			mock::Event::pallet_cf_validator(crate::Event::NewEpoch(idx)),
 			// An epoch is 2 sessions so easy math
-			mock::Event::pallet_session(pallet_session::Event::NewSession(idx.0 * 2)),
+			mock::Event::pallet_session(pallet_session::Event::NewSession(idx * 2)),
 		]
 	);
 
 	// Confirm we have set the epoch index after moving on
-	assert_eq!(ValidatorManager::epoch_index(), idx);
+	assert_eq!(ValidatorManager::current_epoch(), idx);
 }
 
 fn get_auction_epoch_idx(event: mock::Event) -> EpochIndex {
@@ -232,7 +232,7 @@ fn bring_forward_session() {
 			// Pop off session event
 			ev.pop();
 			let auction_idx = get_auction_epoch_idx(ev.pop().expect("event expected"));
-			assert_eq!(auction_idx, EpochIndex(epoch_idx));
+			assert_eq!(auction_idx, epoch_idx);
 
 			// We should see current set of validators not changing even though we have a new session idx
 			assert_eq!(current, mock::current_validators());

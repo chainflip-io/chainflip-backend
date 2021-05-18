@@ -321,10 +321,9 @@ impl pallet_cf_witness::Config for Runtime {
 	type Event = Event;
 	type Origin = Origin;
 	type Call = Call;
-
-	// TODO: use Epoch anf ValidatorId definitions from validator rotation pallet
-	type Epoch = u64;
+	type Epoch = pallet_cf_validator::EpochIndex;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
+	type EpochInfo = Validator;
 }
 
 impl pallet_cf_staking::Config for Runtime {
@@ -338,8 +337,8 @@ impl pallet_cf_staking::Config for Runtime {
 	type Nonce = u64;
 	type EthereumCrypto = ecdsa::Public;
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
-	type Witnesser = pallet_cf_witness::Pallet<Runtime>;
-	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
+	type Witnesser = Witness;
+	type EpochInfo = Validator;
 }
 
 construct_runtime!(

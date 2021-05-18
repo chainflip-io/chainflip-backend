@@ -5,6 +5,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup}, testing::Header,
 };
 use frame_system as system;
+use cf_traits::{EpochInfo, mock::epoch_info};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -60,10 +61,10 @@ impl pallet_cf_witness::Config for Test {
 	type Origin = Origin;
 	type Call = Call;
 
-	type Epoch = u64;
+	type Epoch = <epoch_info::Mock as EpochInfo>::EpochIndex;
 	type ValidatorId = AccountId;
 
-	type EpochInfo = cf_traits::epoch_info::Mock;
+	type EpochInfo = epoch_info::Mock;
 }
 
 impl dummy::Config for Test {
@@ -82,8 +83,11 @@ pub const DEIRDRE: <Test as frame_system::Config>::AccountId = 987u64;
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext : sp_io::TestExternalities = system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
 
-	// Seed with three active validators and set the consensus threshold to two.
 	ext.execute_with(|| {
+		// This is required to log events.
+		System::set_block_number(1);
+
+		// Seed with three active validators and set the consensus threshold to two.
 		pallet_cf_witness::ValidatorIndex::<Test>::insert(0, ALISSA, 0);
 		pallet_cf_witness::ValidatorIndex::<Test>::insert(0, BOBSON, 1);
 		pallet_cf_witness::ValidatorIndex::<Test>::insert(0, CHARLEMAGNE, 2);

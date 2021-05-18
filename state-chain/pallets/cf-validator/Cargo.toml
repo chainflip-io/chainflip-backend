@@ -25,14 +25,10 @@ sp-core = { default-features = false, version = '3.0.0' }
 pallet-session = { default-features = false, version = '3.0.0' }
 log = { version = "0.4.14", default-features = false }
 
-[dev-dependencies]
-sp-std = { version = "3.0.0", default-features = false }
-sp-io = { version = "3.0.0", default-features = false }
-sp-core = { default-features = false, version = '3.0.0' }
-
 [features]
 default = ['std']
 std = [
+    'cf-traits/std',
     'codec/std',
     'frame-support/std',
     'frame-system/std',

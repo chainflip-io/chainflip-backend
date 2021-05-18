@@ -146,7 +146,7 @@ mod tests {
     fn auction_started_decoding() {
         // AuctionStarted(EpochIndex)
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_validator::Event::<SCRuntime>::AuctionStarted(1.into()).into();
+            pallet_cf_validator::Event::<SCRuntime>::AuctionStarted(1).into();
 
         let encoded_auction_started = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped
@@ -157,7 +157,7 @@ mod tests {
                 .unwrap();
 
         let expecting = AuctionStartedEvent {
-            epoch_index: 1.into(),
+            epoch_index: 1,
             _phantom: PhantomData,
         };
 
@@ -168,7 +168,7 @@ mod tests {
     fn auction_confirmed_decoding() {
         // AuctionConfirmed(EpochIndex)
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_validator::Event::<SCRuntime>::AuctionConfirmed(1.into()).into();
+            pallet_cf_validator::Event::<SCRuntime>::AuctionConfirmed(1).into();
 
         let encoded_auction_confirmed = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped
@@ -179,7 +179,7 @@ mod tests {
                 .unwrap();
 
         let expecting = AuctionConfirmedEvent {
-            epoch_index: 1.into(),
+            epoch_index: 1,
             _phantom: PhantomData,
         };
 
@@ -190,7 +190,7 @@ mod tests {
     fn new_epoch_decoding() {
         // AuctionConfirmed(EpochIndex)
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_validator::Event::<SCRuntime>::NewEpoch(1.into()).into();
+            pallet_cf_validator::Event::<SCRuntime>::NewEpoch(1).into();
 
         let encoded_new_epoch = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped
@@ -201,7 +201,7 @@ mod tests {
                 .unwrap();
 
         let expecting = NewEpochEvent {
-            epoch_index: 1.into(),
+            epoch_index: 1,
             _phantom: PhantomData,
         };
 
