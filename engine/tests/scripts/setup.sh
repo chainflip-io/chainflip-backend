@@ -13,5 +13,8 @@ git clone https://github.com/chainflip-io/chainflip-eth-contracts.git ../eth-con
 # start nats
 # docker run -p 4222:4222 -p 8222:8222 -ti -d nats:latest
 
+# Start the CFE
+# cargo run engine
+
 # this doesn't seem required at this stage??
 # (cd ../eth-contracts/ ; poetry run 'brownie pm install OpenZeppelin/openzeppelin-contracts@4.0.0')

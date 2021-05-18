@@ -1,4 +1,4 @@
-mod stake_manager;
+pub mod stake_manager;
 
 mod eth_event_streamer;
 
