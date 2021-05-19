@@ -493,8 +493,8 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	pub fn estimate_next_session_rotation(now: T::BlockNumber) -> Option<T::BlockNumber> {
-		let epoch_blocks = BlocksPerEpoch::<T>::get();
-		Some(now + epoch_blocks)
+	/// As we don't know when we will get confirmation on an auction we will need to return `None`
+	pub fn estimate_next_session_rotation(_now: T::BlockNumber) -> Option<T::BlockNumber> {
+		None
 	}
 }
