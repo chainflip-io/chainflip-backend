@@ -156,7 +156,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Sets the size of our validate set size
+		/// Sets the size of our validate set size and will be only effective in the next auction
 		/// The dispatch origin of this function must be root.
 		#[pallet::weight(
 			T::ValidatorWeightInfo::set_validator_target_size()

@@ -168,9 +168,10 @@ fn you_have_to_be_priviledged() {
 fn bring_forward_session() {
 	new_test_ext().execute_with(|| {
 		// We are after 3 validators, the mock is set up for 3
-		assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), 3));
+		let mut set_size = 10;
+		assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), set_size));
 		// Set block length of epoch to 2
-		let epoch = 2;
+		let mut epoch = 2;
 		let mut block_number = epoch;
 		assert_ok!(ValidatorManager::set_blocks_for_epoch(Origin::root(), epoch));
 		assert_eq!(mock::current_validators().len(), 0);
@@ -184,7 +185,7 @@ fn bring_forward_session() {
 		assert_eq!(auction_idx, FIRST_EPOCH);
 
 		assert_eq!(ev.pop(), Some(mock::Event::pallet_cf_validator(crate::Event::EpochDurationChanged(0, 2))));
-		assert_eq!(ev.pop(), Some(mock::Event::pallet_cf_validator(crate::Event::MaximumValidatorsChanged(0, 3))));
+		assert_eq!(ev.pop(), Some(mock::Event::pallet_cf_validator(crate::Event::MaximumValidatorsChanged(0, set_size))));
 
 		// We have no current validators nor outgoing in first rotation as there were none in genesis
 		assert_eq!(mock::current_validators().len(), 0);
@@ -217,8 +218,8 @@ fn bring_forward_session() {
 		assert_eq!(outgoing.len(), 0);
 		// On each auction are candidates are increasing stake so we should see 'bond' increase
 		let mut bond = 0;
-		// Repeat a few epochs 2..4
-		for epoch_idx in 2..4u32 {
+		// Repeat a few epochs
+		for epoch_idx in 2 .. 10 {
 			block_number += epoch;
 			// Move another session forward
 			run_to_block(block_number);
@@ -238,6 +239,13 @@ fn bring_forward_session() {
 			assert_ne!(current, ValidatorManager::next_validators());
 
 			confirm_and_complete_auction(&mut block_number, auction_idx);
+			// Reduce the size for the next auction
+			set_size -= 1;
+			assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), set_size));
+
+			// Increase the size of the epoch
+			epoch += 1;
+			assert_ok!(ValidatorManager::set_blocks_for_epoch(Origin::root(), epoch));
 
 			// Confirm the bond is increasing
 			assert!(bond < ValidatorManager::bond());
