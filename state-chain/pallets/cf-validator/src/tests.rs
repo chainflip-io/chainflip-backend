@@ -77,6 +77,24 @@ fn changing_validator_size() {
 }
 
 #[test]
+fn validate_candidates() {
+	new_test_ext().execute_with(|| {
+		let min_size = 2;
+		// Assert our minimum is set to 2
+		assert_eq!(<Test as Config>::MinValidatorSetSize::get(), min_size);
+		// Remove those with zero amount
+		let candidates = vec![(1, 2), (2, 0), (3, 100)];
+		assert_eq!(ValidatorManager::validate(candidates), vec![(1, 2), (3, 100)]);
+		// Candidate with id of '100' is not in the session key set
+		let candidates = vec![(1, 2), (2, 2), (BAD_VALIDATOR_ID, 100)];
+		assert_eq!(ValidatorManager::validate(candidates), vec![(1, 2), (2, 2)]);
+		// After this we end up with less than 'min_size' we should end up empty handed
+		let candidates = vec![(1, 2), (2, 0), (BAD_VALIDATOR_ID, 100)];
+		assert_eq!(ValidatorManager::validate(candidates), vec![]);
+	});
+}
+
+#[test]
 fn changing_epoch() {
 	new_test_ext().execute_with(|| {
 		// Confirm we have a minimum epoch of 1 block
@@ -114,34 +132,6 @@ fn sessions_do_end() {
 		assert!(!ValidatorManager::should_end_session(1));
 	});
 }
-
-//#[test]
-// fn building_a_candidate_list() {
-// 	new_test_ext().execute_with(|| {
-// 		// We are after 3 validators, the mock is set up for 3
-// 		assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), 3));
-// 		let lowest_stake = 2;
-// 		let mut candidates: Vec<(u64, u64)> = vec![(1, lowest_stake), (2, 3), (3, 4)];
-// 		let winners: HashSet<u64> = [1, 2, 3].iter().cloned().collect();
-//
-// 		// Run an auction and get our candidate validators, should be 3
-// 		let (maybe_validators, bond) = ValidatorManager::run_auction(candidates.clone());
-// 		assert_eq!(maybe_validators.map(|v| v.iter().cloned().collect()), Some(winners.clone()));
-// 		assert_eq!(bond, lowest_stake);
-//
-// 		// Add a low bid, should not change the validator set.
-// 		candidates.push((4, 1));
-// 		let (maybe_validators, bond) = ValidatorManager::run_auction(candidates.clone());
-// 		assert_eq!(maybe_validators.map(|v| v.iter().cloned().collect()), Some(winners.clone()));
-// 		assert_eq!(bond, lowest_stake);
-//
-// 		// Add a high bid, should alter the winners
-// 		candidates.push((5, 5));
-// 		let winners: HashSet<u64> = [2, 3, 5].iter().cloned().collect();
-// 		let (maybe_validators, _) = ValidatorManager::run_auction(candidates.clone());
-// 		assert_eq!(maybe_validators.map(|v| v.iter().cloned().collect()), Some(winners.clone()));
-// 	});
-// }
 
 #[test]
 fn have_optional_validators_on_genesis() {
@@ -208,8 +198,9 @@ fn bring_forward_session() {
 		// Until we are in an auction phase we wouldn't have any candidates
 		assert!(ValidatorManager::next_validators().is_empty());
 
-		// We should have our validators, as we had none before we would see none in 'outgoing'
-		assert_eq!(current.len(), 3);
+		// We should have our validators except the first as theu have 0 staked,
+		// as we had none before we would see none in 'outgoing'
+		assert_eq!(current.len(), 2);
 		assert_eq!(outgoing.len(), 0);
 		// On each auction are candidates are increasing stake so we should see 'bond' increase
 		let mut bond = 0;
@@ -331,7 +322,8 @@ fn push_back_session() {
 #[test]
 fn limit_validator_set_size() {
 	new_test_ext().execute_with(|| {
-		// We are after 3 validators, the mock is set up for 3
+		// We are after 3 validators, the mock is set up for 3, the first one will be dropped
+		// during validation in the auction phase
 		assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), 3));
 		assert_eq!(
 			last_event(),
@@ -367,8 +359,9 @@ fn limit_validator_set_size() {
 
 		confirm_and_complete_auction(&mut block_number, SECOND_EPOCH);
 
+		// We should expect 2 outgoing as we dropped one in the auction due to stake of 0
 		assert_eq!(mock::current_validators().len(), 2);
-		assert_eq!(mock::outgoing_validators().len(), 3);
+		assert_eq!(mock::outgoing_validators().len(), 2);
 
 		// One more to see the rotation maintain the new set size of 2
 		block_number += epoch;

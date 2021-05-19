@@ -17,6 +17,7 @@ use frame_support::pallet_prelude::*;
 use cf_traits::{EpochInfo, Auction, CandidateProvider};
 use serde::{Serialize, Deserialize};
 use frame_support::traits::ValidatorRegistration;
+use sp_std::cmp::min;
 
 pub trait WeightInfo {
 	fn set_blocks_for_epoch() -> Weight;
@@ -481,7 +482,7 @@ impl<T: Config> Auction for Pallet<T> {
 		// Set of rules to validate validators
 		// Rule #1 - If we have a stake at 0 then please leave
 		candidates.retain(|(_, amount)| amount > &0u32.into() );
-		// Rule #2 - They have a key in the session set
+		// Rule #2 - They are registered
 		candidates.retain(|(id, _)| Self::Registrar::is_registered(id));
 		// Rule #3 - If we have less than our min set size we return an empty vector
 		if (candidates.len() as u64) < T::MinValidatorSetSize::get() { return vec![] };
@@ -497,7 +498,7 @@ impl<T: Config> Auction for Pallet<T> {
 		if !candidates.is_empty() {
 			candidates.sort_unstable_by_key(|k| k.1);
 			candidates.reverse();
-			let max_size = SizeValidatorSet::<T>::get();
+			let max_size = min(SizeValidatorSet::<T>::get(), candidates.len() as u32);
 			let candidates = candidates.get(0..max_size as usize);
 			if let Some(candidates) = candidates {
 				if let Some((_, bond)) = candidates.last() {
