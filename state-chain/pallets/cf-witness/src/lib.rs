@@ -1,5 +1,35 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+//! A pallet that abstracts the notion of witnessing an external event.
+//!
+//! Based loosely on parity's own [`pallet_multisig`](https://github.com/paritytech/substrate/tree/master/frame/multisig).
+//!
+//! ## Usage
+//!
+//! ### Witnessing a an event.
+//!
+//! Witnessing can be thought of as voting on an action (represented by a `call`) triggered by some external event. It
+//! is a two-step process:
+//!
+//! 1. Submit a [`register`](pallet::Pallet::register) extrinsic as an *unsigned* transaction.
+//! 2. Submit a [`witness`](pallet::Pallet::witness) extrinsic as a *signed* transaction.
+//!
+//! The first step registers the actual `call` to be voted on, and the latter references the `call` via its `blake2_256`
+//! hash. When a configured threshold is reached, the previously-stored `call` is dispatched.
+//!
+//! Note that calls *must* have a unique hash so that the votes don't clash.
+//!
+//! ### Restricting target calls
+//!
+//! This crate also provides [`EnsureWitnessed`](EnsureWitnessed), an implementation of [`EnsureOrigin`](EnsureOrigin)
+//! that can be used to restrict an extrinsic so that it can only be dispatched via witness consensus.
+//!
+//! Note again that each call that is voted on should have a unique hash, and therefore the call arguments should have
+//! some form of entropy to ensure that each the call is idempotent.
+//!
+//! See the README for instructions on how to integrate this pallet with the runtime.
+//!
+
 pub use pallet::*;
 
 #[cfg(test)]
@@ -99,17 +129,20 @@ pub mod pallet {
 		u16,
 	>;
 
-	// TODO: This param should probably be managed in the sessions pallet. (The *active* validator set and
-	// therefore the threshold might change due to unavailable nodes, slashing etc.)
+	/// The current threshold for reaching consensus.
+	/// TODO: This param should probably be managed in the sessions pallet. (The *active* validator set and
+	/// therefore the threshold might change due to unavailable nodes, slashing etc.)
 	#[pallet::storage]
 	pub(super) type ConsensusThreshold<T> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::storage]
 	pub(super) type NumValidators<T> = StorageValue<_, u32, ValueQuery>;
 
+	/// The current epoch index.
 	#[pallet::storage]
 	pub(super) type CurrentEpoch<T: Config> = StorageValue<_, Epoch<T>, ValueQuery>;
 
+	/// No hooks are implemented for this pallet.
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
@@ -224,33 +257,37 @@ impl<T: Config> Pallet<T> {
 			ValidatorIndex::<T>::get(&epoch, &who).ok_or(Error::<T>::UnauthorizedWitness)? as usize;
 
 		// Register the vote
-		let num_votes = Votes::<T>::try_mutate::<_,_,_,Error::<T>,_>(&epoch, &call_hash, |buffer| {
-			// If there is no storage item, create an empty one.
-			if buffer.is_none() {
-				let empty_mask = BitVec::<Msb0, u8>::repeat(false, num_validators);
-				*buffer = Some(empty_mask.into_vec())
-			}
+		let num_votes = Votes::<T>::try_mutate::<_, _, _, Error<T>, _>(
+			&epoch,
+			&call_hash,
+			|buffer| {
+				// If there is no storage item, create an empty one.
+				if buffer.is_none() {
+					let empty_mask = BitVec::<Msb0, u8>::repeat(false, num_validators);
+					*buffer = Some(empty_mask.into_vec())
+				}
 
-			let bytes = buffer
-				.as_mut()
-				.expect("Checked for none condition above, this will never panic;");
+				let bytes = buffer
+					.as_mut()
+					.expect("Checked for none condition above, this will never panic;");
 
-			// Convert to an addressable bitmask
-			let bits = VoteMask::from_slice_mut(bytes)
+				// Convert to an addressable bitmask
+				let bits = VoteMask::from_slice_mut(bytes)
 				.expect("Only panics if the slice size exceeds the max; The number of validators should never exceed this;");
 
-			// Return an error if already voted, otherwise set the indexed bit to `true` to indicate a vote.
-			if bits[index] {
-				Err(Error::<T>::DuplicateWitness)?
-			} else {
-				let mut vote = bits
-					.get_mut(index)
-					.ok_or(Error::<T>::ValidatorIndexOutOfBounds)?;
-				*vote = true;
-			}
+				// Return an error if already voted, otherwise set the indexed bit to `true` to indicate a vote.
+				if bits[index] {
+					Err(Error::<T>::DuplicateWitness)?
+				} else {
+					let mut vote = bits
+						.get_mut(index)
+						.ok_or(Error::<T>::ValidatorIndexOutOfBounds)?;
+					*vote = true;
+				}
 
-			Ok(bits.count_ones())
-		})?;
+				Ok(bits.count_ones())
+			},
+		)?;
 
 		Self::deposit_event(Event::<T>::WitnessReceived(
 			call_hash,
@@ -260,7 +297,7 @@ impl<T: Config> Pallet<T> {
 
 		// Check if threshold is reached and, if so, apply the voted-on Call.
 		let threshold = ConsensusThreshold::<T>::get() as usize;
-		
+
 		let post_dispatch_info = if num_votes == threshold {
 			Self::deposit_event(Event::<T>::ThresholdReached(
 				call_hash,
@@ -274,8 +311,8 @@ impl<T: Config> Pallet<T> {
 		Ok(post_dispatch_info)
 	}
 
-	/// Registers a call for future dispatch. 
-	/// 
+	/// Registers a call for future dispatch.
+	///
 	/// If the call has already been registered, returns a `DuplicateRegistration` error.
 	fn try_register(call: <T as Config>::Call) -> Result<CallHash, Error<T>> {
 		let epoch: Epoch<T> = CurrentEpoch::<T>::get();
@@ -287,7 +324,7 @@ impl<T: Config> Pallet<T> {
 				None => {
 					Self::deposit_event(Event::CallRegistered(call_hash));
 					Ok(Some(call))
-				},
+				}
 			}?;
 			Ok(())
 		})?;
@@ -295,7 +332,7 @@ impl<T: Config> Pallet<T> {
 		Ok(call_hash)
 	}
 
-	/// Registers a call for future dispatch. 
+	/// Registers a call for future dispatch.
 	///
 	/// Doesn't care if the call has already been registered.
 	fn do_register(call: <T as Config>::Call) -> CallHash {
@@ -310,8 +347,7 @@ impl<T: Config> Pallet<T> {
 	fn maybe_dispatch_call(call_hash: &CallHash) -> DispatchResultWithPostInfo {
 		let epoch = CurrentEpoch::<T>::get();
 
-		let call = Calls::<T>::get(epoch, call_hash)
-			.ok_or(Error::<T>::UnregisteredCall)?;
+		let call = Calls::<T>::get(epoch, call_hash).ok_or(Error::<T>::UnregisteredCall)?;
 
 		let dispatch_result = call.dispatch((RawOrigin::WitnessThreshold).into());
 		Self::deposit_event(Event::<T>::WitnessExecuted(
