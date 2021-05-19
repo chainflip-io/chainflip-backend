@@ -22,6 +22,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 
 type Amount = u64;
 type ValidatorId = u64;
+pub const BAD_VALIDATOR_ID: ValidatorId = 100;
 
 impl WeightInfo for () {
 	fn set_blocks_for_epoch() -> u64 { 0 as Weight }
@@ -157,8 +158,8 @@ impl Config for Test {
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
-	fn is_registered(_id: &ValidatorId) -> bool {
-		true
+	fn is_registered(id: &ValidatorId) -> bool {
+		*id != BAD_VALIDATOR_ID
 	}
 }
 
