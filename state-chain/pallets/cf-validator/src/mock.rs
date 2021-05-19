@@ -20,6 +20,8 @@ use std::cell::RefCell;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
+type Amount = u64;
+
 impl WeightInfo for () {
 	fn set_blocks_for_epoch() -> u64 { 0 as Weight }
 
@@ -123,9 +125,9 @@ pub struct TestCandidateProvider;
 
 impl CandidateProvider for TestCandidateProvider {
 	type ValidatorId = u64;
-	type Stake = u64;
+	type Amount = Amount;
 
-	fn get_candidates() -> Vec<(Self::ValidatorId, Self::Stake)> {
+	fn get_candidates() -> Vec<(Self::ValidatorId, Self::Amount)> {
 		CANDIDATE_IDX.with(|l| {
 			let idx = *l.borrow();
 			let candidates = vec![(idx, idx), (idx + 1, idx + 1), (idx + 2, idx + 2)];
@@ -146,6 +148,8 @@ impl Config for Test {
 	type CandidateProvider = TestCandidateProvider;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
 	type ValidatorWeightInfo = ();
+	type Amount = Amount;
+	type Auction = ValidatorManager;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

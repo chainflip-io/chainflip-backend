@@ -8,7 +8,7 @@ pub trait Witnesser {
 	/// The type of accounts that can witness.
 	type AccountId;
 
-	/// The call type of the runtime. 
+	/// The call type of the runtime.
 	type Call: Dispatchable;
 
 	/// Witness an event. The event is represented by a call, which should be
@@ -40,4 +40,26 @@ pub trait EpochInfo {
 
 	/// The current epoch we are in
 	fn epoch_index() -> Self::EpochIndex;
+}
+
+/// Something that can provide us a list of candidates with their corresponding stakes
+pub trait CandidateProvider {
+	type ValidatorId;
+	type Amount;
+
+	fn get_candidates() -> Vec<(Self::ValidatorId, Self::Amount)>;
+}
+
+pub trait Auction {
+	/// The id type used for the validators.
+	type ValidatorId;
+	/// An amount
+	type Amount;
+
+	/// Validate before running the auction the set of validators
+	/// An empty vector is a bad bunch
+	fn validate(candidates: Vec<(Self::ValidatorId, Self::Amount)>) -> Vec<(Self::ValidatorId, Self::Amount)>;
+
+	/// Run an auction with a set of validators returning the set of validators and the bond amount
+	fn run(candidates: Vec<(Self::ValidatorId, Self::Amount)>) -> (Vec<Self::ValidatorId>, Self::Amount);
 }
