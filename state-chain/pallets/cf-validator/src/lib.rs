@@ -128,6 +128,8 @@ pub mod pallet {
 		InvalidValidatorSetSize,
 		/// Invalid auction index used in confirmation
 		InvalidAuction,
+		/// FailedForceAuction
+		FailedForceAuction,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -180,6 +182,7 @@ pub mod pallet {
 		pub(super) fn force_auction(
 			origin: OriginFor<T>,
 		) -> DispatchResultWithPostInfo {
+			ensure!(!Self::is_auction_phase(), Error::<T>::FailedForceAuction);
 			ensure_root(origin)?;
 			Force::<T>::set(true);
 			Self::deposit_event(Event::ForceAuctionRequested());

@@ -286,6 +286,32 @@ fn force_auction() {
 }
 
 #[test]
+fn force_auction_in_auction() {
+	new_test_ext().execute_with(|| {
+		// We are after 3 validators, the mock is set up for 3
+		assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), 3));
+		// Check we get rotation
+		let epoch = 2;
+		let block_number = epoch;
+		assert_ok!(ValidatorManager::set_blocks_for_epoch(Origin::root(), epoch));
+		assert_eq!(
+			events(),
+			[
+				mock::Event::pallet_cf_validator(crate::Event::MaximumValidatorsChanged(0, 3)),
+				mock::Event::pallet_cf_validator(crate::Event::EpochDurationChanged(0, epoch)),
+			]
+		);
+
+		run_to_block(block_number);
+		let mut ev: Vec<mock::Event> = events();
+		// Pop off session event
+		ev.pop();
+		assert_eq!(ev.pop(), Some(mock::Event::pallet_cf_validator(crate::Event::AuctionStarted(FIRST_EPOCH))));
+		// Force rotation, failing as we are in an auction
+		assert_noop!(ValidatorManager::force_auction(Origin::root()), Error::<Test>::FailedForceAuction);
+	});
+}
+#[test]
 fn push_back_session() {
 	new_test_ext().execute_with(|| {
 		// We are after 3 validators, the mock is set up for 3
