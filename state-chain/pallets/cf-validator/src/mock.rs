@@ -21,6 +21,7 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 type Amount = u64;
+type ValidatorId = u64;
 
 impl WeightInfo for () {
 	fn set_blocks_for_epoch() -> u64 { 0 as Weight }
@@ -94,7 +95,7 @@ impl pallet_session::Config for Test {
 	type ShouldEndSession = ValidatorManager;
 	type SessionManager = ValidatorManager;
 	type SessionHandler = ValidatorManager;
-	type ValidatorId = u64;
+	type ValidatorId = ValidatorId;
 	type ValidatorIdOf = ConvertInto;
 	type Keys = MockSessionKeys;
 	type Event = Event;
@@ -106,7 +107,7 @@ impl pallet_session::Config for Test {
 pub struct TestEpochTransitionHandler;
 
 impl EpochTransitionHandler for TestEpochTransitionHandler {
-	type ValidatorId = u64;
+	type ValidatorId = ValidatorId;
 	fn on_new_epoch(new_validators: Vec<Self::ValidatorId>) {
 		CURRENT_VALIDATORS.with(|l|
 			*l.borrow_mut() = new_validators
@@ -124,7 +125,7 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 pub struct TestCandidateProvider;
 
 impl CandidateProvider for TestCandidateProvider {
-	type ValidatorId = u64;
+	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 
 	fn get_candidates() -> Vec<(Self::ValidatorId, Self::Amount)> {
@@ -149,7 +150,16 @@ impl Config for Test {
 	type EpochTransitionHandler = TestEpochTransitionHandler;
 	type ValidatorWeightInfo = ();
 	type Amount = Amount;
+	// Use the pallet's implementation
 	type Auction = ValidatorManager;
+	// Mock out the registrar
+	type Registrar = Test;
+}
+
+impl ValidatorRegistration<ValidatorId> for Test {
+	fn is_registered(_id: &ValidatorId) -> bool {
+		true
+	}
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

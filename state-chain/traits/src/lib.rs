@@ -2,6 +2,7 @@
 
 use frame_support::dispatch::{DispatchResultWithPostInfo, Dispatchable};
 use sp_std::prelude::*;
+use frame_support::traits::ValidatorRegistration;
 
 /// A trait abstracting the functionality of the witnesser
 pub trait Witnesser {
@@ -55,7 +56,8 @@ pub trait Auction {
 	type ValidatorId;
 	/// An amount
 	type Amount;
-
+	/// A registrar to validate keys
+	type Registrar: ValidatorRegistration<Self::ValidatorId>;
 	/// Validate before running the auction the set of validators
 	/// An empty vector is a bad bunch
 	fn validate(candidates: Vec<(Self::ValidatorId, Self::Amount)>) -> Vec<(Self::ValidatorId, Self::Amount)>;

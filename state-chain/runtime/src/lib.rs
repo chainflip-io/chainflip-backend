@@ -144,6 +144,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type ValidatorWeightInfo = weights::pallet_cf_validator::WeightInfo<Runtime>;
 	type Amount = FlipBalance;
 	type Auction = Validator;
+	type Registrar = Session;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime where

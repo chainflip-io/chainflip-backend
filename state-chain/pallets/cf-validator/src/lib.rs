@@ -93,7 +93,9 @@ pub mod pallet {
 
 		type Amount: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 
-		type Auction: Auction<ValidatorId=Self::ValidatorId, Amount=Self::Amount>;
+		type Registrar: ValidatorRegistration<Self::ValidatorId>;
+
+		type Auction: Auction<ValidatorId=Self::ValidatorId, Amount=Self::Amount, Registrar=Self::Registrar>;
 	}
 
 	#[pallet::event]
@@ -473,13 +475,14 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> Auction for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
+	type Registrar = T::Registrar;
 
 	fn validate(mut candidates: Vec<(Self::ValidatorId, Self::Amount)>) -> Vec<(Self::ValidatorId, Self::Amount)> {
 		// Set of rules to validate validators
 		// Rule #1 - If we have a stake at 0 then please leave
 		candidates.retain(|(_, amount)| amount > &0u32.into() );
 		// Rule #2 - They have a key in the session set
-		candidates.retain(|(id, _)| <pallet_session::Module<T>>::is_registered(id));
+		candidates.retain(|(id, _)| Self::Registrar::is_registered(id));
 		// Rule #3 - If we have less than our min set size we return an empty vector
 		if (candidates.len() as u64) < T::MinValidatorSetSize::get() { return vec![] };
 
