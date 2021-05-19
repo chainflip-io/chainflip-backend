@@ -95,6 +95,17 @@ fn validate_candidates() {
 }
 
 #[test]
+fn run_auction() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), 100));
+		// A group of validators, we should see the order from high to low and the bond being 10
+		// as it's the lowest
+		let candidates = vec![(1, 1000), (3, 10), (2, 100)];
+		assert_eq!(ValidatorManager::run_auction(candidates), (vec![1, 2, 3], 10));
+	});
+}
+
+#[test]
 fn changing_epoch() {
 	new_test_ext().execute_with(|| {
 		// Confirm we have a minimum epoch of 1 block
