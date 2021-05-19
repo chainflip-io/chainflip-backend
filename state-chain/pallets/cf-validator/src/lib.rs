@@ -238,7 +238,7 @@ pub mod pallet {
 
 	/// Epoch index of auction we are waiting for confirmation for
 	#[pallet::storage]
-	#[pallet::getter(fn auction_confirmed)]
+	#[pallet::getter(fn auction_to_confirm)]
 	pub(super) type AuctionToConfirm<T: Config> = StorageValue<_, EpochIndex, OptionQuery>;
 
 	/// Current epoch index
@@ -411,7 +411,7 @@ impl<T: Config> Pallet<T> {
 	/// Epoch.
 	///
 	/// `AuctionStarted` is emitted and the rotation from auction to trading phases will wait on a
-	/// confirmation via the `auction_confirmed` extrinsic
+	/// confirmation via the `auction_to_confirm` extrinsic
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
 		if !Self::is_auction_phase() {
 			Self::deposit_event(Event::NewEpoch(new_index.into()));
@@ -479,7 +479,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		if Self::is_auction_phase() {
-			Self::auction_confirmed().is_none()
+			Self::auction_to_confirm().is_none()
 		} else {
 			let epoch_blocks = BlocksPerEpoch::<T>::get();
 			if epoch_blocks == Zero::zero() {
