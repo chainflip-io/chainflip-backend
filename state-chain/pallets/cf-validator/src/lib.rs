@@ -415,14 +415,14 @@ impl<T: Config> Pallet<T> {
 		}
 
 		debug!("Creating a new auction-phase session {}", new_index);
-		let candidates = T::Auction::validate(T::CandidateProvider::get_candidates());
+		let candidates = T::Auction::validate_auction(T::CandidateProvider::get_candidates());
 		if candidates.len() == 0 {
 			Self::deposit_event(Event::AuctionNonStarter(new_index.into()));
 			return None
 		}
 		Self::deposit_event(Event::AuctionStarted(new_index.into()));
 		AuctionToConfirm::<T>::set(Some(new_index.into()));
-		let (new_validators, bond) = T::Auction::run(candidates);
+		let (new_validators, bond) = T::Auction::run_auction(candidates);
 		CurrentBond::<T>::set(bond);
 		Some(new_validators)
 	}
@@ -478,7 +478,7 @@ impl<T: Config> Auction for Pallet<T> {
 	type Amount = T::Amount;
 	type Registrar = T::Registrar;
 
-	fn validate(mut candidates: Vec<(Self::ValidatorId, Self::Amount)>) -> Vec<(Self::ValidatorId, Self::Amount)> {
+	fn validate_auction(mut candidates: Vec<(Self::ValidatorId, Self::Amount)>) -> Vec<(Self::ValidatorId, Self::Amount)> {
 		// Set of rules to validate validators
 		// Rule #1 - If we have a stake at 0 then please leave
 		candidates.retain(|(_, amount)| amount > &0u32.into() );
@@ -490,7 +490,7 @@ impl<T: Config> Auction for Pallet<T> {
 		candidates
 	}
 
-	fn run(mut candidates: Vec<(Self::ValidatorId, Self::Amount)>) -> (Vec<Self::ValidatorId>, Self::Amount) {
+	fn run_auction(mut candidates: Vec<(Self::ValidatorId, Self::Amount)>) -> (Vec<Self::ValidatorId>, Self::Amount) {
 		// A basic auction algorithm.  We sort by stake amount and take the top of the validator
 		// set size and let session pallet do the rest
 		// On completing the auction our list of validators and the bond returned

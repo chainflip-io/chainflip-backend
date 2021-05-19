@@ -60,8 +60,8 @@ pub trait Auction {
 	type Registrar: ValidatorRegistration<Self::ValidatorId>;
 	/// Validate before running the auction the set of validators
 	/// An empty vector is a bad bunch
-	fn validate(candidates: Vec<(Self::ValidatorId, Self::Amount)>) -> Vec<(Self::ValidatorId, Self::Amount)>;
+	fn validate_auction(candidates: Vec<(Self::ValidatorId, Self::Amount)>) -> Vec<(Self::ValidatorId, Self::Amount)>;
 
 	/// Run an auction with a set of validators returning the set of validators and the bond amount
-	fn run(candidates: Vec<(Self::ValidatorId, Self::Amount)>) -> (Vec<Self::ValidatorId>, Self::Amount);
+	fn run_auction(candidates: Vec<(Self::ValidatorId, Self::Amount)>) -> (Vec<Self::ValidatorId>, Self::Amount);
 }
