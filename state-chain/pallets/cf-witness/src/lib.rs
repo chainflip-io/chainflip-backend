@@ -251,6 +251,11 @@ impl<OuterOrigin> EnsureOrigin<OuterOrigin> for EnsureWitnessed where
 			Err(o) => Err(o)
 		}
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> OuterOrigin {
+		todo!()
+	}
 }
 
 /// Implementation of [SessionHandler](pallet_session::SessionHandler) to update

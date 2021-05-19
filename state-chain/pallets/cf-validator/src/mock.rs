@@ -20,6 +20,16 @@ use std::cell::RefCell;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
+impl WeightInfo for () {
+	fn set_blocks_for_epoch() -> u64 { 0 as Weight }
+
+	fn set_validator_target_size() -> u64 { 0 as Weight }
+
+	fn force_auction() -> u64 { 0 as Weight }
+
+	fn confirm_auction() -> u64 { 0 as Weight }
+}
+
 thread_local! {
 	pub static CANDIDATE_IDX: RefCell<u64> = RefCell::new(0);
 	pub static CURRENT_EPOCH: RefCell<u64> = RefCell::new(0);
@@ -135,6 +145,7 @@ impl Config for Test {
 	type MinValidatorSetSize = MinValidatorSetSize;
 	type CandidateProvider = TestCandidateProvider;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
+	type ValidatorWeightInfo = ();
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
