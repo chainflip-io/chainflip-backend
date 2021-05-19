@@ -1,13 +1,13 @@
 //! This tests integration with the StakeManager contract
 //! In order for these tests to work, setup must be completed first
 
-use anyhow::Result;
+use std::str::FromStr;
+
 use chainflip_engine::{
     eth::stake_manager::stake_manager::StakingEvent,
     mq::{nats_client::NatsMQClient, pin_message_stream, IMQClient, Options, Subject},
 };
 
-use sp_core::crypto::UncheckedInto;
 use tokio_stream::StreamExt;
 
 use cmd_lib::*;
@@ -35,20 +35,42 @@ pub async fn test_execute_claim_integration() {
     run_cmd!(
         pwd;
         cd ./tests/eth-contracts;
-        poetry run brownie test tests/unit/stakeManager/test_executeClaim.py;
+        poetry run brownie test tests/unit/stakeManagerWitness/test_executeClaim.py;
     )
     .unwrap();
 
+    println!("Running command complete");
     let first_item = stream.next().await.unwrap().unwrap();
+    println!("Event is: {:#?}", first_item);
     match first_item {
-        StakingEvent::ClaimExecuted(node_id, amount) => {
-            println!("ClaimExecuted({}, {})", node_id, amount);
+        StakingEvent::Staked(node_id, amount) => {
+            println!("Staked({}, {})", node_id, amount);
             assert_eq!(node_id, U256::from_dec_str("12345").unwrap());
             assert_eq!(
                 amount,
                 U256::from_dec_str("40000000000000000000000").unwrap()
             );
         }
-        _ => panic!("Staking event that isn't ClaimExecuted"),
+        _ => panic!("Staking event that isn't Staked"),
     };
+
+    let second_item = stream.next().await.unwrap().unwrap();
+    println!("Second event is: {:#?}", second_item);
+    match second_item {
+        StakingEvent::ClaimRegistered(node_id, amount, address, start_time, end_time) => {
+            println!("ClaimRegistered({}, {})", node_id, amount);
+            assert_eq!(node_id, U256::from_dec_str("1").unwrap());
+            assert_eq!(amount, U256::from_dec_str("1").unwrap());
+            assert_eq!(
+                address,
+                web3::types::H160::from_str("0x9dbe382b57bcdc2aabc874130e120a3e7de09bda").unwrap()
+            );
+            // These are not determinstic, would be good to use a test with deterministic amounts
+            // assert_eq!(start_time, U256::from_dec_str("1621570067").unwrap());
+            // assert_eq!(end_time, U256::from_dec_str("1621570072").unwrap());
+        }
+        _ => panic!("Staking event that isn't ClaimExecuted"),
+    }
+
+    // TODO: Add timeouts on some of these futures, should be quick quick
 }
