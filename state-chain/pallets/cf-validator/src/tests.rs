@@ -37,6 +37,8 @@ fn confirm_and_complete_auction(block_number: &mut u64, idx: EpochIndex) {
 
 	// Confirm we have set the epoch index after moving on
 	assert_eq!(ValidatorManager::epoch_index(), idx);
+	// We should fail in confirming the second time
+	assert_noop!(ValidatorManager::confirm_auction(Origin::signed(ALICE), idx), Error::<Test>::InvalidAuction);
 }
 
 fn get_auction_epoch_idx(event: mock::Event) -> EpochIndex {
@@ -311,6 +313,7 @@ fn force_auction_in_auction() {
 		assert_noop!(ValidatorManager::force_auction(Origin::root()), Error::<Test>::FailedForceAuction);
 	});
 }
+
 #[test]
 fn push_back_session() {
 	new_test_ext().execute_with(|| {
