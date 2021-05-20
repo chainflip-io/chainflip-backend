@@ -32,16 +32,21 @@ pub async fn test_execute_claim_integration() {
     let mut stream = pin_message_stream(stream);
 
     // this will block, and only when the test is finished, will we read from the mq
+    // TODO: Remove the checkout kyle/stakeManagerWitnessTests once it's merged to the eth repo
     run_cmd!(
         pwd;
         cd ./tests/eth-contracts;
-        poetry run brownie test tests/unit/stakeManagerWitness/test_executeClaim.py;
+        git checkout kyle/stakeManagerWitnessTests;
+        git pull;
+        poetry run brownie test tests/external/test_executeClaim.py;
     )
     .unwrap();
 
-    println!("Running command complete");
-    let first_item = stream.next().await.unwrap().unwrap();
-    println!("Event is: {:#?}", first_item);
+    println!("Running brownie test completed. Events can now be read");
+
+    // The events should already be on the mq before events are being read. If we timeout it's most likely the engine isn't actually running
+    let first_item = tokio::time::timeout(std::time::Duration::from_secs(2), stream.next());
+    let first_item = first_item.await.unwrap().unwrap().unwrap();
     match first_item {
         StakingEvent::Staked(node_id, amount) => {
             println!("Staked({}, {})", node_id, amount);
@@ -54,23 +59,24 @@ pub async fn test_execute_claim_integration() {
         _ => panic!("Staking event that isn't Staked"),
     };
 
-    let second_item = stream.next().await.unwrap().unwrap();
-    println!("Second event is: {:#?}", second_item);
+    let second_item = tokio::time::timeout(std::time::Duration::from_secs(2), stream.next());
+    let second_item = second_item.await.unwrap().unwrap().unwrap();
     match second_item {
-        StakingEvent::ClaimRegistered(node_id, amount, address, start_time, end_time) => {
+        StakingEvent::ClaimRegistered(node_id, amount, address, _start_time, _end_time) => {
             println!("ClaimRegistered({}, {})", node_id, amount);
-            assert_eq!(node_id, U256::from_dec_str("1").unwrap());
-            assert_eq!(amount, U256::from_dec_str("1").unwrap());
+            assert_eq!(node_id, U256::from_dec_str("12345").unwrap());
+            assert_eq!(
+                amount,
+                U256::from_dec_str("40000000000000000000000").unwrap()
+            );
             assert_eq!(
                 address,
-                web3::types::H160::from_str("0x9dbe382b57bcdc2aabc874130e120a3e7de09bda").unwrap()
+                web3::types::H160::from_str("0xf588b889948a4a902590425770057e202b34b5bd").unwrap()
             );
             // These are not determinstic, would be good to use a test with deterministic amounts
             // assert_eq!(start_time, U256::from_dec_str("1621570067").unwrap());
             // assert_eq!(end_time, U256::from_dec_str("1621570072").unwrap());
         }
-        _ => panic!("Staking event that isn't ClaimExecuted"),
+        _ => panic!("Staking event that isn't ClaimRegistered"),
     }
-
-    // TODO: Add timeouts on some of these futures, should be quick quick
 }
