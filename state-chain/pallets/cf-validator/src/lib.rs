@@ -12,9 +12,9 @@ pub use pallet::*;
 use sp_runtime::traits::{Convert, OpaqueKeys, AtLeast32BitUnsigned};
 use sp_std::prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};
-use log::{debug};
+use log::{debug, warn};
 use frame_support::pallet_prelude::*;
-use cf_traits::{EpochInfo, Auction, CandidateProvider};
+use cf_traits::{EpochInfo, Auction, CandidateProvider, ValidatorSet, ValidatorProposal};
 use serde::{Serialize, Deserialize};
 use frame_support::traits::ValidatorRegistration;
 use sp_std::cmp::min;
@@ -116,6 +116,8 @@ pub mod pallet {
 		ForceAuctionRequested(),
 		/// An auction has not started
 		AuctionNonStarter(EpochIndex),
+		/// An auction has not completed
+		AuctionNotCompleted(EpochIndex)
 	}
 
 	#[pallet::error]
@@ -423,11 +425,24 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::AuctionNonStarter(new_index.into()));
 			return None
 		}
-		Self::deposit_event(Event::AuctionStarted(new_index.into()));
-		AuctionToConfirm::<T>::set(Some(new_index.into()));
-		let (new_validators, bond) = T::Auction::run_auction(candidates);
-		CurrentBond::<T>::set(bond);
-		Some(new_validators)
+
+		// Run an auction to get a proposed list of validators and the bond
+		let proposal = T::Auction::run_auction(candidates);
+
+		// Complete auction with proposal
+		match T::Auction::complete_auction(&proposal) {
+			Ok(_) => {
+				Self::deposit_event(Event::AuctionStarted(new_index.into()));
+				AuctionToConfirm::<T>::set(Some(new_index.into()));
+				CurrentBond::<T>::set(proposal.1);
+				Some(proposal.0)
+			}
+			Err(e) => {
+				warn!("Proposal failed for auction: {}", e);
+				Self::deposit_event(Event::AuctionNotCompleted(new_index.into()));
+				None
+			}
+		}
 	}
 
 	/// The end of the session is triggered, we alternate between regular trading sessions and auction sessions. 
@@ -512,5 +527,16 @@ impl<T: Config> Auction for Pallet<T> {
 		}
 
 		(vec![], Zero::zero())
+	}
+
+	fn complete_auction(proposal: &ValidatorProposal<Self>) -> Result<(), &str> {
+		// Rule #1 - we end up with a bond of 0 so we abort
+		if proposal.1.is_zero() {
+			return Err("Bond is zero");
+		}
+
+		// Rule #... more rules here
+
+		Ok(())
 	}
 }

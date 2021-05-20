@@ -51,6 +51,11 @@ pub trait CandidateProvider {
 	fn get_candidates() -> Vec<(Self::ValidatorId, Self::Amount)>;
 }
 
+/// A set of validators and their stake
+pub type ValidatorSet<T> = Vec<(<T as Auction>::ValidatorId, <T as Auction>::Amount)>;
+/// A proposal of validators after an auction with bond amount
+pub type ValidatorProposal<T> = (Vec<<T as Auction>::ValidatorId>, <T as Auction>::Amount);
+
 pub trait Auction {
 	/// The id type used for the validators.
 	type ValidatorId;
@@ -60,8 +65,11 @@ pub trait Auction {
 	type Registrar: ValidatorRegistration<Self::ValidatorId>;
 	/// Validate before running the auction the set of validators
 	/// An empty vector is a bad bunch
-	fn validate_auction(candidates: Vec<(Self::ValidatorId, Self::Amount)>) -> Vec<(Self::ValidatorId, Self::Amount)>;
+	fn validate_auction(candidates: ValidatorSet<Self>) -> ValidatorSet<Self>;
 
-	/// Run an auction with a set of validators returning the set of validators and the bond amount
-	fn run_auction(candidates: Vec<(Self::ValidatorId, Self::Amount)>) -> (Vec<Self::ValidatorId>, Self::Amount);
+	/// Run an auction with a set of validators returning the a proposed set of validators with the bond amount
+	fn run_auction(candidates: ValidatorSet<Self>) -> ValidatorProposal<Self>;
+
+	/// Complete an auction with a set of validators and accept this set and the bond for the next epoch
+	fn complete_auction(proposal: &ValidatorProposal<Self>) -> Result<(), &str>;
 }
