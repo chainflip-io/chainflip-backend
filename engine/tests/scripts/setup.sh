@@ -1,17 +1,15 @@
 #!/bin/bash
 
-# run from /engine/tests (important for the relative paths to work)
-
-# Start the ganache network in docker - for some reason, it really doesn't like this
-# docker run -d -p 8545:8545 --name ganache trufflesuite/ganache-cli
-
-
-# npm install -g ganache
+# ============================================================= 
+# Script to setup for integration tests of the StakeManager witness
+# - Run from /engine/tests (important for the relative paths to work)
+# 
+# =============================================================
 
 # --mount type=bind,src=`pwd`/relayer/tests/ganache-db,dst=/db,ro \
 # --db /db/.test-chain
 
-# Tests don't seem to work if the mnemonic is not passed in?
+# NB: Mnemonic must be passed in
 docker run -it -d \
     -p 8545:8545 \
     --name ganache \
@@ -34,7 +32,9 @@ else
     ( cd eth-contracts ; git pull)
 fi
 
+# ensure we have the poetry deps
 cd eth-contracts
 poetry run poetry install
 
+echo "Ready to run StakeManager witness integration tests"
 # after this is done, the tests can run
