@@ -12,9 +12,9 @@ pub use pallet::*;
 use sp_runtime::traits::{Convert, OpaqueKeys, AtLeast32BitUnsigned};
 use sp_std::prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};
-use log::{debug, warn};
+use log::{debug};
 use frame_support::pallet_prelude::*;
-use cf_traits::{EpochInfo, Auction, CandidateProvider, ValidatorSet, ValidatorProposal};
+use cf_traits::{EpochInfo, Auction, CandidateProvider, ValidatorSet, ValidatorProposal, AuctionError};
 use serde::{Serialize, Deserialize};
 use frame_support::traits::ValidatorRegistration;
 use sp_std::cmp::min;
@@ -436,7 +436,11 @@ impl<T: Config> Pallet<T> {
 				Some(proposal.0)
 			}
 			Err(e) => {
-				warn!("Proposal failed for auction: {}", e);
+				match e {
+					AuctionError::BondIsZero => {
+						debug!("Bond is zero");
+					}
+				}
 				Self::deposit_event(Event::AuctionNotCompleted(new_index.into()));
 				None
 			}
@@ -527,10 +531,10 @@ impl<T: Config> Auction for Pallet<T> {
 		(vec![], Zero::zero())
 	}
 
-	fn complete_auction(proposal: &ValidatorProposal<Self>) -> Result<(), &str> {
+	fn complete_auction(proposal: &ValidatorProposal<Self>) -> Result<(), AuctionError> {
 		// Rule #1 - we end up with a bond of 0 so we abort
 		if proposal.1.is_zero() {
-			return Err("Bond is zero");
+			return Err(AuctionError::BondIsZero);
 		}
 
 		// Rule #... more rules here

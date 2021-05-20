@@ -56,6 +56,11 @@ pub type ValidatorSet<T> = Vec<(<T as Auction>::ValidatorId, <T as Auction>::Amo
 /// A proposal of validators after an auction with bond amount
 pub type ValidatorProposal<T> = (Vec<<T as Auction>::ValidatorId>, <T as Auction>::Amount);
 
+#[derive(Debug, PartialEq)]
+pub enum AuctionError {
+	BondIsZero,
+}
+
 pub trait Auction {
 	/// The id type used for the validators.
 	type ValidatorId;
@@ -71,5 +76,5 @@ pub trait Auction {
 	fn run_auction(candidates: ValidatorSet<Self>) -> ValidatorProposal<Self>;
 
 	/// Complete an auction with a set of validators and accept this set and the bond for the next epoch
-	fn complete_auction(proposal: &ValidatorProposal<Self>) -> Result<(), &str>;
+	fn complete_auction(proposal: &ValidatorProposal<Self>) -> Result<(), AuctionError>;
 }

@@ -109,6 +109,21 @@ mod test {
 	}
 
 	#[test]
+	fn confirm_auction() {
+		new_test_ext().execute_with(|| {
+			// Propose a set that will fail the confirmation, at the moment the rule is 0 bond which
+			// isn't possible as this is a rule in `validate_auction`.  We would hope to have more
+			// conditions here to confirm auction such as whether the validator is online or possibly
+			// a blacklist/whitelist
+			assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), 100));
+			let candidates = vec![(1, 1000), (3, 0), (2, 100)];
+			let candidates = ValidatorManager::run_auction(candidates);
+			assert_eq!(candidates, (vec![1, 2, 3], 0));
+			assert_eq!(ValidatorManager::complete_auction(&candidates).unwrap_err(), AuctionError::BondIsZero);
+		});
+	}
+
+	#[test]
 	fn changing_epoch() {
 		new_test_ext().execute_with(|| {
 			// Confirm we have a minimum epoch of 1 block
