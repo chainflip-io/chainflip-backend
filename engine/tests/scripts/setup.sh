@@ -6,15 +6,14 @@
 # 
 # =============================================================
 
-# --mount type=bind,src=`pwd`/relayer/tests/ganache-db,dst=/db,ro \
-# --db /db/.test-chain
-
 # NB: Mnemonic must be passed in
 docker run -it -d \
     -p 8545:8545 \
     --name ganache \
+    --mount type=bind,src=`pwd`/eth-db,dst=/db \
     trufflesuite/ganache-cli:latest \
-        --mnemonic chainflip
+        --mnemonic chainflip \
+        --db /db/.test-chain
 
 # start nats
 docker run -p 4222:4222 -p 8222:8222 -ti -d --name nats nats:latest
@@ -23,6 +22,7 @@ docker run -p 4222:4222 -p 8222:8222 -ti -d --name nats nats:latest
 sleep 5s;
 
 # from inside /engine: (needs the config files where they are)
+# TODO: Use the built binary
 (cd .. ; cargo run) &
 
 # todo: check that it doesn't exist, if it does, then force pull latest
@@ -37,4 +37,3 @@ cd eth-contracts
 poetry run poetry install
 
 echo "Ready to run StakeManager witness integration tests"
-# after this is done, the tests can run

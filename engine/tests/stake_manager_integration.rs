@@ -33,20 +33,23 @@ pub async fn test_execute_claim_integration() {
 
     // this will block, and only when the test is finished, will we read from the mq
     // TODO: Remove the checkout kyle/stakeManagerWitnessTests once it's merged to the eth repo
-    run_cmd!(
-        pwd;
-        cd ./tests/eth-contracts;
-        git checkout kyle/stakeManagerWitnessTests;
-        git pull;
-        poetry run brownie test tests/external/test_executeClaim.py;
-    )
-    .unwrap();
+    // run_cmd!(
+    //     pwd;
+    //     cd ./tests/eth-contracts;
+    //     git checkout kyle/stakeManagerWitnessTests;
+    //     git pull;
+    //     poetry run brownie test tests/external/test_executeClaim.py;
+    // )
+    // .unwrap();
 
     println!("Running brownie test completed. Events can now be read");
 
-    // The events should already be on the mq before events are being read. If we timeout it's most likely the engine isn't actually running
     let first_item = tokio::time::timeout(std::time::Duration::from_secs(2), stream.next());
-    let first_item = first_item.await.unwrap().unwrap().unwrap();
+    let first_item = first_item
+        .await
+        .expect("Check the CFE is running")
+        .unwrap()
+        .unwrap();
     match first_item {
         StakingEvent::Staked(node_id, amount) => {
             println!("Staked({}, {})", node_id, amount);
@@ -60,7 +63,11 @@ pub async fn test_execute_claim_integration() {
     };
 
     let second_item = tokio::time::timeout(std::time::Duration::from_secs(2), stream.next());
-    let second_item = second_item.await.unwrap().unwrap().unwrap();
+    let second_item = second_item
+        .await
+        .expect("Check the CFE is running")
+        .unwrap()
+        .unwrap();
     match second_item {
         StakingEvent::ClaimRegistered(node_id, amount, address, _start_time, _end_time) => {
             println!("ClaimRegistered({}, {})", node_id, amount);
