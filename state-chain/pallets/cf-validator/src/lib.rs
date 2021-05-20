@@ -34,7 +34,7 @@ pub struct EpochIndex(SessionIndex);
 
 impl From<SessionIndex> for EpochIndex {
 	fn from(i: SessionIndex) -> Self {
-		EpochIndex(i/2)
+		EpochIndex(i / 2)
 	}
 }
 
@@ -122,7 +122,6 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		// TODO We need to handle condition when we have no candidates
 		NoValidators,
 		/// Epoch block number supplied is invalid
 		InvalidEpoch,
@@ -143,7 +142,7 @@ pub mod pallet {
 		/// Sets the number of blocks an epoch should run for
 		/// The dispatch origin of this function must be root.
 		#[pallet::weight(
-			T::ValidatorWeightInfo::set_blocks_for_epoch()
+		T::ValidatorWeightInfo::set_blocks_for_epoch()
 		)]
 		pub(super) fn set_blocks_for_epoch(
 			origin: OriginFor<T>,
@@ -161,7 +160,7 @@ pub mod pallet {
 		/// Sets the size of our validate set size and will be only effective in the next auction
 		/// The dispatch origin of this function must be root.
 		#[pallet::weight(
-			T::ValidatorWeightInfo::set_validator_target_size()
+		T::ValidatorWeightInfo::set_validator_target_size()
 		)]
 		pub(super) fn set_validator_target_size(
 			origin: OriginFor<T>,
@@ -179,7 +178,7 @@ pub mod pallet {
 		/// Force an auction phase.  The next block will run an auction.
 		/// The dispatch origin of this function must be root.
 		#[pallet::weight(
-			T::ValidatorWeightInfo::force_auction()
+		T::ValidatorWeightInfo::force_auction()
 		)]
 		pub(super) fn force_auction(
 			origin: OriginFor<T>,
@@ -195,7 +194,7 @@ pub mod pallet {
 		/// of the epoch index already emitted with [AuctionStarted]
 		/// The dispatch origin of this function must be signed.
 		#[pallet::weight(
-			T::ValidatorWeightInfo::confirm_auction()
+		T::ValidatorWeightInfo::confirm_auction()
 		)]
 		pub(super) fn confirm_auction(
 			origin: OriginFor<T>,
@@ -251,7 +250,7 @@ pub mod pallet {
 
 	/// Validator lookup
 	#[pallet::storage]
-	pub(super) type ValidatorLookup<T: Config> = StorageMap< _, Identity, T::ValidatorId, ()>;
+	pub(super) type ValidatorLookup<T: Config> = StorageMap<_, Identity, T::ValidatorId, ()>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -276,7 +275,7 @@ pub mod pallet {
 	}
 }
 
-impl<T:Config> EpochInfo for Pallet<T> {
+impl<T: Config> EpochInfo for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
 	type EpochIndex = EpochIndex;
@@ -290,7 +289,7 @@ impl<T:Config> EpochInfo for Pallet<T> {
 			return <pallet_session::Module<T>>::queued_keys()
 				.into_iter()
 				.map(|(k, _)| k)
-				.collect()
+				.collect();
 		}
 		vec![]
 	}
@@ -309,7 +308,6 @@ impl<T:Config> EpochInfo for Pallet<T> {
 }
 
 impl<T: Config> pallet_session::SessionHandler<T::ValidatorId> for Pallet<T> {
-
 	/// TODO look at the key management
 	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[];
 	fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(T::ValidatorId, Ks)]) {}
@@ -416,14 +414,14 @@ impl<T: Config> Pallet<T> {
 			for validator in <pallet_session::Module<T>>::validators() {
 				ValidatorLookup::<T>::insert(validator, ());
 			}
-			return None
+			return None;
 		}
 
 		debug!("Creating a new auction-phase session {}", new_index);
 		let candidates = T::Auction::validate_auction(T::CandidateProvider::get_candidates());
-		if candidates.len() == 0 {
+		if candidates.len().is_zero() {
 			Self::deposit_event(Event::AuctionNonStarter(new_index.into()));
-			return None
+			return None;
 		}
 
 		// Run an auction to get a proposed list of validators and the bond
@@ -467,7 +465,7 @@ impl<T: Config> Pallet<T> {
 	pub fn should_end_session(now: T::BlockNumber) -> bool {
 		if Force::<T>::get() {
 			Force::<T>::set(false);
-			return true
+			return true;
 		}
 
 		if Self::is_auction_phase() {
@@ -496,19 +494,19 @@ impl<T: Config> Auction for Pallet<T> {
 	type Amount = T::Amount;
 	type Registrar = T::Registrar;
 
-	fn validate_auction(mut candidates: Vec<(Self::ValidatorId, Self::Amount)>) -> Vec<(Self::ValidatorId, Self::Amount)> {
+	fn validate_auction(mut candidates: ValidatorSet<Self>) -> ValidatorSet<Self> {
 		// Set of rules to validate validators
 		// Rule #1 - If we have a stake at 0 then please leave
-		candidates.retain(|(_, amount)| amount > &0u32.into() );
+		candidates.retain(|(_, amount)| !amount.is_zero());
 		// Rule #2 - They are registered
 		candidates.retain(|(id, _)| Self::Registrar::is_registered(id));
 		// Rule #3 - If we have less than our min set size we return an empty vector
-		if (candidates.len() as u64) < T::MinValidatorSetSize::get() { return vec![] };
+		if (candidates.len() as u64) < T::MinValidatorSetSize::get() { return vec![]; };
 
 		candidates
 	}
 
-	fn run_auction(mut candidates: Vec<(Self::ValidatorId, Self::Amount)>) -> (Vec<Self::ValidatorId>, Self::Amount) {
+	fn run_auction(mut candidates: ValidatorSet<Self>) -> ValidatorProposal<Self> {
 		// A basic auction algorithm.  We sort by stake amount and take the top of the validator
 		// set size and let session pallet do the rest
 		// On completing the auction our list of validators and the bond returned

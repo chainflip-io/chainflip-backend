@@ -3,6 +3,7 @@ mod test {
 	use crate::{Error, mock::*};
 	use sp_runtime::traits::{BadOrigin, Zero};
 	use frame_support::{assert_ok, assert_noop};
+
 	// Constants
 	const ALICE: u64 = 100;
 	const INVALID_EPOCH: EpochIndex = EpochIndex(0);
@@ -44,7 +45,7 @@ mod test {
 	fn get_auction_epoch_idx(event: mock::Event) -> EpochIndex {
 		if let mock::Event::pallet_cf_validator(event) = event {
 			if let crate::Event::AuctionStarted(idx) = event.into() {
-				return idx
+				return idx;
 			}
 		}
 		panic!("Expected AuctionStarted event");
