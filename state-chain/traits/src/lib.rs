@@ -55,7 +55,7 @@ pub trait Permissions {
 	/// The id used for an account
 	type AccountId;
 	/// A level or scope of permission
-	type Scope;
+	type Scope: PartialOrd;
 	/// Our verifier
 	type Verifier: PermissionVerifier;
 
@@ -65,6 +65,8 @@ pub trait Permissions {
 	fn set_scope(account: Self::AccountId, scope: Self::Scope) -> Result<(), PermissionError>;
 	/// Revoke all permissions from account
 	fn revoke(account: Self::AccountId) -> Result<(), PermissionError>;
+	/// The scope for the account
+	fn has_scope(account: Self::AccountId, scope: Self::Scope) -> Result<bool, PermissionError>;
 }
 
 /// Handler to verify change of scopes

@@ -81,6 +81,7 @@ pub mod pallet {
 	use super::*;
 	use frame_system::pallet_prelude::*;
 	use frame_support::sp_runtime::SaturatedConversion;
+	use cf_traits::Permissions;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -106,6 +107,8 @@ pub mod pallet {
 		type MinValidatorSetSize: Get<u64>;
 
 		type ValidatorWeightInfo: WeightInfo;
+
+		type Permissions: Permissions<AccountId=Self::AccountId, Scope=u64>;
 	}
 
 	#[pallet::event]
@@ -135,6 +138,8 @@ pub mod pallet {
 		InvalidValidatorSetSize,
 		/// Invalid auction index used in confirmation
 		InvalidAuction,
+		/// Permission required
+		PermissionRequired,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -203,7 +208,8 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			index: EpochIndex,
 		) -> DispatchResultWithPostInfo {
-			ensure_signed(origin)?;
+			let who = ensure_signed(origin)?;
+			T::Permissions::has_scope(who, 1);
 			ensure!(Some(index) == AuctionToConfirm::<T>::get(), Error::<T>::InvalidAuction);
 			AuctionToConfirm::<T>::set(None);
 			Self::deposit_event(Event::AuctionConfirmed(index));

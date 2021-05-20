@@ -1,6 +1,6 @@
 use super::Permissions;
 use crate::mock::*;
-use frame_support::{assert_ok, assert_noop};
+use frame_support::assert_ok;
 use cf_traits::PermissionError;
 
 const ALICE: u64 = 100;
@@ -17,6 +17,7 @@ fn set_scope() {
 		assert_ok!(PermissionsManager::set_scope(BOB, SCOPE_2));
 		assert_eq!(PermissionsManager::scope(BOB).unwrap(), SCOPE_2);
 		assert_eq!(PermissionsManager::scope(ALICE).unwrap(), SCOPE_2);
+		assert!(PermissionsManager::has_scope(ALICE, SCOPE_2).unwrap());
 		assert_eq!(PermissionsManager::set_scope(BAD_ACTOR, SCOPE_1).unwrap_err(),
 				   PermissionError::FailedToSetScope);
 		assert_eq!(PermissionsManager::scope(CHARLIE).unwrap_err(),

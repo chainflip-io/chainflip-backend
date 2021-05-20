@@ -38,6 +38,8 @@ use sp_std::marker::PhantomData;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 use sp_transaction_pool::TransactionPriority;
+use pallet_cf_permissions::Config;
+use cf_traits::PermissionVerifier;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -129,6 +131,22 @@ pub fn native_version() -> NativeVersion {
 	}
 }
 
+// Permissions pallet
+type Scope = u64;
+impl PermissionVerifier for Runtime {
+	type AccountId = AccountId;
+	type Scope = Scope;
+
+	fn verify_scope(account: &Self::AccountId, _scope: &Self::Scope) -> bool {
+		true
+	}
+}
+
+impl pallet_cf_permissions::Config for Runtime {
+	type Scope = Scope;
+	type Verifier = Self;
+}
+
 // FIXME: These would be changed
 parameter_types! {
 	pub const MinEpoch: BlockNumber = 1;
@@ -142,6 +160,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type CandidateProvider = pallet_cf_staking::Pallet<Self>;
 	type EpochTransitionHandler = PhantomData<Runtime>;
 	type ValidatorWeightInfo = weights::pallet_cf_validator::WeightInfo<Runtime>;
+	type Permissions = pallet_cf_permissions::Pallet<Self>;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime where
@@ -356,6 +375,7 @@ construct_runtime!(
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
 		Historical: session_historical::{Module},
 		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
+		PermissionsManager: pallet_cf_permissions::{Module, Call, Storage},
 		Aura: pallet_aura::{Module, Config<T>},
 		Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},

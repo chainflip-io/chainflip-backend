@@ -70,7 +70,7 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> Permissions for Pallet<T> {
+impl<T: Config> Permissions for Pallet<T> where <T as pallet::Config>::Scope: PartialOrd {
 	type AccountId = T::AccountId;
 	type Scope = T::Scope;
 	type Verifier = T::Verifier;
@@ -99,4 +99,14 @@ impl<T: Config> Permissions for Pallet<T> {
 			Err(PermissionError::AccountNotFound)
 		}
 	}
+
+	fn has_scope(account: Self::AccountId, scope: Self::Scope) -> Result<bool, PermissionError> {
+		match Scopes::<T>::try_get(account) {
+			Ok(s) => {
+				Ok(s >= scope)
+			},
+			Err(_) => Err(PermissionError::AccountNotFound),
+		}
+	}
+
 }
