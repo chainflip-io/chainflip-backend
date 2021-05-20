@@ -41,3 +41,18 @@ pub trait EpochInfo {
 	/// The current epoch we are in
 	fn epoch_index() -> Self::EpochIndex;
 }
+
+/// Scope or permissions for accounts
+trait Permissions {
+	/// The id used for an account
+	type AccountId;
+	/// A level or scope of permission
+	type Scope;
+
+	/// The scope for the account
+	fn scope(&self, account: Self::AccountId);
+	/// At the scope for the account
+	fn set_scope(&self, account: Self::AccountId, scope: Self::Scope);
+	/// Revoke all permissions from account
+	fn revoke(&self, account: Self::AccountId);
+}
