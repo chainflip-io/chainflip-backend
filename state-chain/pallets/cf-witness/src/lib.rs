@@ -44,20 +44,20 @@ use codec::{Decode, Encode, FullCodec};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, Dispatchable},
 	ensure,
-	pallet_prelude::Member,
-	traits::EnsureOrigin,
+	pallet_prelude::{InvalidTransaction, Member, ValidTransaction},
+	traits::{EnsureOrigin, Get, IsSubType},
+	unsigned::TransactionValidityError,
 	Hashable,
 };
-use sp_runtime::traits::AtLeast32BitUnsigned;
+use sp_runtime::traits::{AtLeast32BitUnsigned, SignedExtension};
+use sp_runtime::transaction_validity::TransactionValidity;
+use sp_std::marker::PhantomData;
 use sp_std::prelude::*;
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{
-		dispatch::{DispatchResult, Dispatchable, GetDispatchInfo, PostDispatchInfo},
-		pallet_prelude::*,
-	};
+	use frame_support::{dispatch::{DispatchResult, Dispatchable, GetDispatchInfo, PostDispatchInfo}, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
@@ -74,7 +74,7 @@ pub mod pallet {
 			+ FullCodec
 			+ Dispatchable<Origin = <Self as Config>::Origin, PostInfo = PostDispatchInfo>
 			+ GetDispatchInfo
-			+ From<frame_system::Call<Self>>;
+			+ IsSubType<Call<Self>>;
 
 		type Epoch: Member + Copy + FullCodec + AtLeast32BitUnsigned + Default;
 
@@ -84,6 +84,10 @@ pub mod pallet {
 			+ Into<<Self as frame_system::Config>::AccountId>;
 
 		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, EpochIndex = Self::Epoch>;
+
+		/// The priority of witness registration extrinsics. Note this is *added* any base priority.
+		#[pallet::constant]
+		type WitnessRegistrationPriority: Get<TransactionPriority>;
 	}
 
 	/// Alias for the `Epoch` configuration type.
@@ -414,6 +418,100 @@ impl<T: Config> pallet_cf_validator::EpochTransitionHandler for Pallet<T> {
 		CurrentEpoch::<T>::set(epoch);
 		for (i, v) in new_validators.iter().enumerate() {
 			ValidatorIndex::<T>::insert(&epoch, (*v).clone().into(), i as u16)
+		}
+	}
+}
+
+#[derive(Encode, Decode, Clone, Eq, PartialEq, Default)]
+pub struct WitnessCheck<T: Config>(PhantomData<T>);
+
+/// Type alias for the top-level runtime call enum.
+type RuntimeCall<T> = <T as Config>::Call;
+
+/// Type alias for this pallet's call sub-enum.
+type PalletCall<T> = Call<T>;
+
+impl<T: Config> WitnessCheck<T> {
+	/// Validation logic for the [`register`](pallet::Pallet::register) extrinsic.
+	///
+	/// Rejects the extrinsic if the signer is not currently a validator.
+	///
+	/// Otherwise: 
+	/// - adds the call hash as a `provides` tag so that corresponding witness txs can depend on this.
+	/// - raises the priority.
+	/// - disables propagation, ie. the transaction will not be gossiped, each validator *must* register the call
+	///   independently.
+	fn validate_register_extrinsic(who: &T::ValidatorId, call: &RuntimeCall<T>) -> TransactionValidity {
+		if !T::EpochInfo::is_validator(who) {
+			Err(InvalidTransaction::Custom(NOT_A_VALIDATOR).into())
+		} else {
+			let call_hash = Pallet::<T>::call_hash(call);
+			ValidTransaction::with_tag_prefix("WitnessReg")
+				// This makes sure that only one copyof the registration makes it into the ready queue.
+				.and_provides(call_hash)
+				// Note this will be *added* to any other priorities
+				.priority(T::WitnessRegistrationPriority::get())
+				// Don't propagate: validators need to submit their own registration tx.
+				.propagate(false)
+				.build()
+		}
+	}
+
+	/// Validation logic for the [`witness`](pallet::Pallet::witness) extrinsic.
+	///
+	/// The validation never fails; all this does is add the call hash as a `requires` tag to ensure that this tx
+	/// only reaches a block if the corresponding `register` extrinsic has been received.
+	fn validate_witness_extrinsic(call_hash: &CallHash) -> TransactionValidity {
+		ValidTransaction::with_tag_prefix("WitnessReg")
+			.and_requires(call_hash)
+			.build()
+	}
+}
+
+impl<T: Config + Send + Sync> sp_std::fmt::Debug for WitnessCheck<T> {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		write!(f, "WitnessCheck")
+	}
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		Ok(())
+	}
+}
+
+/// Invalid transaction custom error. Returned when a non-validator tries to call `register`.
+const NOT_A_VALIDATOR: u8 = 128;
+
+impl<T: Config + Send + Sync> SignedExtension for WitnessCheck<T> {
+	const IDENTIFIER: &'static str = "Witness";
+	type AccountId = <T as frame_system::Config>::AccountId;
+	type Call = RuntimeCall<T>;
+	type AdditionalSigned = ();
+	type Pre = ();
+
+	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
+		Ok(())
+	}
+
+	fn validate(
+		&self,
+		who: &Self::AccountId,
+		call: &Self::Call,
+		_info: &sp_runtime::traits::DispatchInfoOf<Self::Call>,
+		_len: usize,
+	) -> frame_support::unsigned::TransactionValidity {
+		if let Some(pallet_call) = IsSubType::<PalletCall<T>>::is_sub_type(call) {
+			match pallet_call {
+				PalletCall::<T>::register(_) => {
+					Self::validate_register_extrinsic(&who.clone().into(), call)
+				},
+				PalletCall::<T>::witness(call_hash) => {
+					Self::validate_witness_extrinsic(&call_hash)
+				},
+				_ => Ok(ValidTransaction::default()),
+			}
+		} else {
+			Ok(ValidTransaction::default())
 		}
 	}
 }

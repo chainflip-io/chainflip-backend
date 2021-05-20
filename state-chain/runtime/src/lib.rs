@@ -317,6 +317,10 @@ impl pallet_sudo::Config for Runtime {
 	type Call = Call;
 }
 
+parameter_types! {
+	pub const WitnessRegistrationPriority: TransactionPriority = 100;
+}
+
 impl pallet_cf_witness::Config for Runtime {
 	type Event = Event;
 	type Origin = Origin;
@@ -324,6 +328,7 @@ impl pallet_cf_witness::Config for Runtime {
 	type Epoch = pallet_cf_validator::EpochIndex;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type EpochInfo = Validator;
+	type WitnessRegistrationPriority = WitnessRegistrationPriority;
 }
 
 impl pallet_cf_staking::Config for Runtime {
@@ -382,6 +387,7 @@ pub type SignedExtra = (
 	frame_system::CheckEra<Runtime>,
 	frame_system::CheckNonce<Runtime>,
 	frame_system::CheckWeight<Runtime>,
+	pallet_cf_witness::WitnessCheck<Runtime>,
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
