@@ -1,22 +1,17 @@
-use super::*;
-use crate as pallet_cf_validator;
+use super::{PermissionVerifier, Config};
+use crate as pallet_cf_permissions;
 use sp_core::{H256};
+
 use sp_runtime::{
-	Perbill,
-	impl_opaque_keys,
 	traits::{
 		BlakeTwo256,
 		IdentityLookup,
-		ConvertInto,
 	},
 	testing::{
 		Header,
-		UintAuthorityId,
 	},
 };
-use frame_support::{parameter_types, construct_runtime, traits::{OnInitialize, OnFinalize}};
-use std::cell::RefCell;
-
+use frame_support::{parameter_types, construct_runtime, traits::GenesisBuild};
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -27,7 +22,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Permissions: pallet_cf_permissions::{Module, Call, Storage, Event<T>},
+		PermissionsManager: pallet_cf_permissions::{Module, Call, Storage},
 	}
 );
 
@@ -59,28 +54,27 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ();
 }
 
-impl_opaque_keys! {
-	pub struct MockSessionKeys {
-		pub dummy: UintAuthorityId,
+pub const BAD_ACTOR: u64 = 200;
+
+pub struct Verifier;
+impl PermissionVerifier for Verifier {
+	type AccountId = u64;
+	type Scope = u64;
+
+	fn verify_scope(account: &Self::AccountId, _scope: &Self::Scope) -> bool {
+		*account != BAD_ACTOR
 	}
 }
 
 impl Config for Test {
-	type Event = Event;
+	type Scope = u64;
+	type Verifier = Verifier;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	frame_system::GenesisConfig::default().assimilate_storage::<Test>(&mut t).unwrap();
-	let mut ext = sp_io::TestExternalities::new(t);
-	ext.execute_with(|| System::set_block_number(1));
-	ext
-}
-
-pub fn run_to_block(n: u64) {
-	while System::block_number() < n {
-		//Session::on_finalize(System::block_number());
-		System::set_block_number(System::block_number() + 1);
-		//Session::on_initialize(System::block_number());
-	}
+	pallet_cf_permissions::GenesisConfig::<Test>{
+		scopes: vec![],
+	}.assimilate_storage(&mut t).unwrap();
+	t.into()
 }

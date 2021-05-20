@@ -42,17 +42,37 @@ pub trait EpochInfo {
 	fn epoch_index() -> Self::EpochIndex;
 }
 
+#[derive(Debug, PartialEq)]
+pub enum PermissionError {
+	/// Failure in setting scope for an account
+	FailedToSetScope,
+	/// Failure to find the account
+	AccountNotFound,
+}
+
 /// Scope or permissions for accounts
-trait Permissions {
+pub trait Permissions {
 	/// The id used for an account
 	type AccountId;
 	/// A level or scope of permission
 	type Scope;
+	/// Our verifier
+	type Verifier: PermissionVerifier;
 
 	/// The scope for the account
-	fn scope(&self, account: Self::AccountId);
+	fn scope(account: Self::AccountId) -> Result<Self::Scope, PermissionError>;
 	/// At the scope for the account
-	fn set_scope(&self, account: Self::AccountId, scope: Self::Scope);
+	fn set_scope(account: Self::AccountId, scope: Self::Scope) -> Result<(), PermissionError>;
 	/// Revoke all permissions from account
-	fn revoke(&self, account: Self::AccountId);
+	fn revoke(account: Self::AccountId) -> Result<(), PermissionError>;
+}
+
+/// Handler to verify change of scopes
+pub trait PermissionVerifier {
+	/// The id used for an account
+	type AccountId;
+	/// A level or scope of permission
+	type Scope;
+	/// Verify that we are happy this account has this scope
+	fn verify_scope(account: &Self::AccountId, scope: &Self::Scope) -> bool;
 }
