@@ -18,8 +18,7 @@ set -e
 #
 ## start nats
 #docker run -p 4222:4222 -p 8222:8222 -ti -d --name nats nats:latest
-apt-get install python-dev   # for python2.x installs
-apt-get install python3.7-dev
+apt-get install -y python3.7-dev
 # docker run -p 4223:4223 -p 8223:8223 -d --name nats-streaming nats-streaming -p 4223 -m 8223
 if ! which poetry; then
   curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python -
