@@ -29,7 +29,7 @@ impl<S: EventSource> EthEventStreamBuilder<S> {
         }
     }
 
-    pub fn with_sink<E: 'static + EventSink<S::Event>>(mut self, sink: E) -> Self {
+    pub fn  with_sink<E: 'static + EventSink<S::Event>>(mut self, sink: E) -> Self {
         self.event_sinks.push(Box::new(sink));
         self
     }
