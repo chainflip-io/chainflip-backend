@@ -1,5 +1,6 @@
 #!/bin/bash
 
+set -e
 # ============================================================= 
 # Script to setup for integration tests of the StakeManager witness
 # - Run from /engine/tests (important for the relative paths to work)
