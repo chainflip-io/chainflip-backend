@@ -10,10 +10,8 @@
 docker run -it -d \
     -p 8545:8545 \
     --name ganache \
-    --mount type=bind,src=`pwd`/eth-db,dst=/db \
     trufflesuite/ganache-cli:latest \
-        --mnemonic chainflip \
-        --db /db/.test-chain
+        --mnemonic chainflip
 
 # start nats
 docker run -p 4222:4222 -p 8222:8222 -ti -d --name nats nats:latest
