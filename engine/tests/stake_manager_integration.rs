@@ -1,6 +1,6 @@
 //! This tests integration with the StakeManager contract
-//! In order for these tests to work, setup must be completed first
-#![cfg(test)]
+//! In order for these tests to work, nats and ganache with the preloaded db
+//! in `./eth-db` must be loaded in
 
 use std::str::FromStr;
 
@@ -10,6 +10,7 @@ use chainflip_engine::{
     settings::{self, Settings},
 };
 
+use config::{Config, ConfigError, File};
 use tokio_stream::StreamExt;
 
 use web3::types::U256;
@@ -21,9 +22,20 @@ pub async fn setup_mq(mq_settings: settings::MessageQueue) -> Box<NatsMQClient> 
     NatsMQClient::connect(mq_options).await.unwrap()
 }
 
+// Creating the settings to be used for tests
+pub fn test_settings() -> Result<Settings, ConfigError> {
+    let mut s = Config::new();
+
+    // Start off by merging in the "default" configuration file
+    s.merge(File::with_name("config/testing.toml"))?;
+
+    // You can deserialize (and thus freeze) the entire configuration as
+    s.try_into()
+}
+
 #[tokio::test]
 pub async fn test_all_stake_manager_events() {
-    let settings = Settings::new_test().unwrap();
+    let settings = test_settings().unwrap();
     let mq_c = setup_mq(settings.clone().message_queue).await;
 
     // subscribe before pushing events to the queue
@@ -35,13 +47,12 @@ pub async fn test_all_stake_manager_events() {
     println!("Subscribing to eth events");
     // this future contains an infinite loop, so we must end it's life
     let sm_future = eth::stake_manager::start_stake_manager_witness(settings);
-    match tokio::time::timeout(std::time::Duration::from_secs(2), sm_future).await {
+    match tokio::time::timeout(std::time::Duration::from_secs(1), sm_future).await {
         // We just want the future to end, it should already have done it's job in 2 secs
         _ => {}
     }
 
     let mut stream = pin_message_stream(stream);
-    println!("Getting first event");
     match stream.next().await.unwrap().unwrap() {
         StakingEvent::Staked(node_id, amount) => {
             assert_eq!(node_id, U256::from_dec_str("12345").unwrap());

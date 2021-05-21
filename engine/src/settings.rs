@@ -47,18 +47,6 @@ impl Settings {
         // You can deserialize (and thus freeze) the entire configuration as
         s.try_into()
     }
-
-    /// Creating the settings to be used for tests
-    // TODO: cfg test ?
-    pub fn new_test() -> Result<Self, ConfigError> {
-        let mut s = Config::new();
-
-        // Start off by merging in the "default" configuration file
-        s.merge(File::with_name("config/testing.toml"))?;
-
-        // You can deserialize (and thus freeze) the entire configuration as
-        s.try_into()
-    }
 }
 
 #[cfg(test)]
