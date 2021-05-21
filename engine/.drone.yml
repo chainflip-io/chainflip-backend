@@ -77,8 +77,6 @@ steps:
   - name: run-tests
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python -
-      - source $HOME/.poetry/env
       - chmod +x ./engine/tests/scripts/setup.sh
       - ./engine/tests/scripts/setup.sh
       - cargo test -p chainflip-engine --test stake_manager_integration

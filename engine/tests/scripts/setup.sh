@@ -20,7 +20,11 @@ set -e
 #docker run -p 4222:4222 -p 8222:8222 -ti -d --name nats nats:latest
 
 # docker run -p 4223:4223 -p 8223:8223 -d --name nats-streaming nats-streaming -p 4223 -m 8223
+if which poetry; then
+  curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python -
+  source $HOME/.poetry/env
 
+fi
 # let ganache and nats start accepting connections before starting the cfe
 sleep 5s;
 
