@@ -80,7 +80,9 @@ steps:
       - chmod +x ./engine/tests/scripts/setup.sh
       - ./engine/tests/scripts/setup.sh
       - cargo test -p chainflip-engine --test stake_manager_integration
-
+    volumes:
+      - name: cache
+        path: /cache
 
 # Config
 trigger:
@@ -88,3 +90,7 @@ trigger:
     - push
 image_pull_secrets:
   - dockerconfigjson
+volumes:
+  - name: cache
+    host:
+      path: /mnt/chainflip-build-runner/sccache
