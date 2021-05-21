@@ -33,7 +33,8 @@ sleep 5s;
 
 # todo: check that it doesn't exist, if it does, then force pull latest
 if [ ! -d "./eth-contracts" ]; then
-    git clone https://github.com/chainflip-io/chainflip-eth-contracts.git ./eth-contracts/    
+    git clone https://github.com/chainflip-io/chainflip-eth-contracts.git ./eth-contracts/
+    git checkout ci/lower-pyton-version
 else
     ( cd eth-contracts ; git pull)
 fi
