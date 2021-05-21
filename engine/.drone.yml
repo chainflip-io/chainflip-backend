@@ -57,3 +57,33 @@ volumes:
       path: /mnt/chainflip-build-runner/sccache
 image_pull_secrets:
   - dockerconfigjson
+
+---
+kind: pipeline
+type: docker
+name: cfe-integration-tests
+
+services:
+  - image: trufflesuite/ganache-cli:latest
+    name: ganache
+    ports: [8545]
+    command:
+      - --mnemonic chainflip
+  - image: nats:latest
+    ports: [4222,8222]
+    name: nats
+
+steps:
+  - name: run-tests
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    commands:
+      - ./tests/scripts/setup.sh
+      - cargo test -p chainflip-engine --test stake_manager_integration
+
+
+# Config
+trigger:
+  event:
+    - push
+image_pull_secrets:
+  - dockerconfigjson
