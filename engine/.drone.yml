@@ -77,6 +77,7 @@ steps:
   - name: run-tests
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
+      - chmod +x ./engine/tests/scripts/setup.sh
       - ./engine/tests/scripts/setup.sh
       - cargo test -p chainflip-engine --test stake_manager_integration
 
