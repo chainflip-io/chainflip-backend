@@ -47,10 +47,9 @@ pub async fn test_all_stake_manager_events() {
     println!("Subscribing to eth events");
     // this future contains an infinite loop, so we must end it's life
     let sm_future = eth::stake_manager::start_stake_manager_witness(settings);
-    match tokio::time::timeout(std::time::Duration::from_secs(1), sm_future).await {
-        // We just want the future to end, it should already have done it's job in 2 secs
-        _ => {}
-    }
+
+    // We just want the future to end, it should already have done it's job in 1 second
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(1), sm_future).await;
 
     let mut stream = pin_message_stream(stream);
     match stream.next().await.unwrap().unwrap() {
