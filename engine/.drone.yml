@@ -79,9 +79,11 @@ steps:
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
       - SCCACHE_REDIS="redis://redis-headless:6379/rust" sccache --start-server
+      - sccache -s
       - chmod +x ./engine/tests/scripts/setup.sh
       - ./engine/tests/scripts/setup.sh
-      - cargo test -p chainflip-engine --test stake-manager-integration-tests
+      - cargo test -p chainflip-engine --test test_all_stake_manager_events
+#      - cargo test -p chainflip-engine --test stake-manager-integration-tests
     resources:
       limits:
         cpu: 3000
