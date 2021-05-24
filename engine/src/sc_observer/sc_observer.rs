@@ -9,6 +9,7 @@ use crate::{
 use log::{debug, error, info, trace};
 
 use super::{
+    create_subxt_client,
     runtime::StateChainRuntime,
     sc_event::{sc_event_from_raw_event, subject_from_raw_event},
 };
@@ -26,21 +27,6 @@ pub async fn start(mq_options: Options, subxt_settings: settings::StateChain) {
     subscribe_to_events(*mq_client, subxt_client)
         .await
         .expect("Could not subscribe to state chain events");
-}
-
-/// Create a substrate subxt client over the StateChainRuntime
-async fn create_subxt_client(
-    subxt_settings: settings::StateChain,
-) -> Result<Client<StateChainRuntime>> {
-    let client = ClientBuilder::<StateChainRuntime>::new()
-        .set_url(format!(
-            "ws://{}:{}",
-            subxt_settings.hostname, subxt_settings.port
-        ))
-        .build()
-        .await?;
-
-    Ok(client)
 }
 
 async fn subscribe_to_events<M: 'static + IMQClient>(

@@ -1,0 +1,51 @@
+// first we need to connect to the state chain
+
+// We need to use the keys of the state chain (need the filepath to these)
+
+// we need to be able to read from the message queue
+
+// We need to be able to submit extrinsics (signed and unsigned to the state chain)
+
+// Start with submitting an extrinsic of the easiest kind
+
+use sp_keyring::AccountKeyring;
+
+use substrate_subxt::{Client, ClientBuilder, PairSigner};
+
+use super::{create_subxt_client, runtime::StateChainRuntime};
+use crate::mq::IMQClient;
+
+/// Broadcasts events to the state chain by submitting 'extrinsics'
+pub struct SCBroadcaster<M: IMQClient + Send + Sync> {
+    mq_client: M,
+    sc_client: Client<StateChainRuntime>,
+}
+
+impl<M: IMQClient + Send + Sync> SCBroadcaster<M> {
+    pub async fn new(settings: Settings) -> Self {
+        // TODO: Change this to be the keys from the state chain
+        let signer = PairSigner::new(AccountKeyring::Alice.pair());
+        let client = ClientBuilder::<StateChainRuntime>::new()
+            .build()
+            .await
+            .unwrap();
+
+        let sc_client = create_subxt_client(settings.state_chain).await.unwrap();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn test_new_broadcaster() {
+        let settings = {
+            
+        }
+        let broadcaster = SCBroadcaster::new();
+
+        // didn't panic, yay!
+    }
+}
