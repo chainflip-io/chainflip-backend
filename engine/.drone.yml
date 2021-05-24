@@ -82,7 +82,7 @@ steps:
       - sccache -s
       - chmod +x ./engine/tests/scripts/setup.sh
       - ./engine/tests/scripts/setup.sh
-      - cargo test -p chainflip-engine --test test_all_stake_manager_events
+      - cargo test -p chainflip-engine --test stake_manager_integration
 #      - cargo test -p chainflip-engine --test stake-manager-integration-tests
     resources:
       limits:
