@@ -19,7 +19,7 @@ steps:
   - name: check-chainflip-engine
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - SCCACHE_REDIS="redis://redis-headless:6379/rust" sccache --start-server
+      - SCCACHE_REDIS="redis://redis-headless:6379/" sccache --start-server
       - sccache -s
       - cargo check --release --bin chainflip-engine
       - sccache -s
@@ -29,7 +29,7 @@ steps:
   - name: build-chainflip-engine
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - SCCACHE_REDIS="redis://redis-headless:6379/rust" sccache --start-server
+      - SCCACHE_REDIS="redis://redis-headless:6379/" sccache --start-server
       - cargo build --release --bin chainflip-engine
       - sccache -s
     resources:
@@ -38,7 +38,7 @@ steps:
   - name: test-chainflip-engine
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - SCCACHE_REDIS="redis://redis-headless:6379/rust" sccache --start-server
+      - SCCACHE_REDIS="redis://redis-headless:6379/" sccache --start-server
       - cargo test --release
       - sccache -s
     resources:
@@ -78,7 +78,7 @@ steps:
   - name: run-tests
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - SCCACHE_REDIS="redis://redis-headless:6379/rust" sccache --start-server
+      - SCCACHE_REDIS="redis://redis-headless:6379/" sccache --start-server
       - sccache -s
       - chmod +x ./engine/tests/scripts/setup.sh
       - ./engine/tests/scripts/setup.sh

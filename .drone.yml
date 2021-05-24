@@ -90,7 +90,7 @@ steps:
   - name: compile-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - SCCACHE_REDIS="redis://redis-headless:6379/rust" sccache --start-server
+      - SCCACHE_REDIS="redis://redis-headless:6379/" sccache --start-server
       - cargo build --release
       - sccache -s
     resources:
@@ -99,7 +99,7 @@ steps:
   - name: test-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - SCCACHE_REDIS="redis://redis-headless:6379/rust" sccache --start-server
+      - SCCACHE_REDIS="redis://redis-headless:6379/" sccache --start-server
       - cargo test --release
       - sccache -s
     resources:
