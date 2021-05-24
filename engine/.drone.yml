@@ -55,8 +55,8 @@ trigger:
   paths:
     - engine/**/*.rs
 
-node:
-  builder: "true"
+node_selector:
+  type: "ci"
 volumes:
   - name: cache
     host:

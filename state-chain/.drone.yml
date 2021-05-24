@@ -53,8 +53,8 @@ trigger:
   paths:
     - state-chain/**/*.rs
 
-node:
-  builder: "true"
+node_selector:
+  type: "ci"
 volumes:
   - name: cache
     host:
