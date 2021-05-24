@@ -25,7 +25,7 @@ hex-literal = {optional = true, version = '0.3.1'}
 serde = {features = ['derive'], optional = true, version = '1.0.119'}
 
 # Chainflip dependencies
-pallet-cf-validator = { path = "../pallets/cf-validator", default-features = false }
+pallet-cf-validator = { version = '0.0.1', path = "../pallets/cf-validator", default-features = false }
 pallet-cf-staking = { path = "../pallets/cf-staking", default-features = false }
 pallet-cf-witness = { path = "../pallets/cf-witness", default-features = false}
 
@@ -67,6 +67,8 @@ runtime-benchmarks = [
   'frame-system/runtime-benchmarks',
   'pallet-timestamp/runtime-benchmarks',
   'sp-runtime/runtime-benchmarks',
+  'pallet-cf-witness/runtime-benchmarks',
+  'pallet-cf-validator/runtime-benchmarks',
 ]
 std = [
   'codec/std',

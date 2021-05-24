@@ -1,6 +1,6 @@
 #!/bin/sh
 
-../target/release/state-chain-node \
+cargo run -p state-chain-node -- \
   --base-path /tmp/charlie \
   --chain local \
   --charlie \

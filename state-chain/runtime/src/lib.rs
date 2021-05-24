@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
-
+mod weights;
 // A few exports that help ease life for downstream crates.
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
@@ -141,6 +141,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type MinValidatorSetSize = MinValidatorSetSize;
 	type CandidateProvider = pallet_cf_staking::Pallet<Self>;
 	type EpochTransitionHandler = PhantomData<Runtime>;
+	type ValidatorWeightInfo = weights::pallet_cf_validator::WeightInfo<Runtime>;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime where
@@ -548,6 +549,7 @@ impl_runtime_apis! {
 
 			add_benchmark!(params, batches, frame_system, SystemBench::<Runtime>);
 			add_benchmark!(params, batches, pallet_timestamp, Timestamp);
+			add_benchmark!(params, batches, pallet_cf_validator, Validator);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)
