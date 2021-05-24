@@ -17,9 +17,8 @@ steps:
 #      - cargo fmt --all -- --check
   - name: check-state-chain
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_REDIS: "redis://redis-headless:6379/sccache"
     commands:
+      - SCCACHE_REDIS="redis://redis-headless:6379/rust" sccache --start-server
       - cargo check --release --bin state-chain-node
       - sccache -s
     resources:
@@ -27,9 +26,8 @@ steps:
         cpu: 2000
   - name: build-state-chain
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_REDIS: "redis://redis-headless:6379/sccache"
     commands:
+      - SCCACHE_REDIS="redis://redis-headless:6379/rust" sccache --start-server
       - cargo build --release --bin state-chain-node
       - sccache -s
     resources:
@@ -37,9 +35,8 @@ steps:
         cpu: 2000
   - name: test-state-chain
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_REDIS: "redis://redis-headless:6379/sccache"
     commands:
+      - SCCACHE_REDIS="redis://redis-headless:6379/rust" sccache --start-server
       - cargo test --release
       - sccache -s
     resources:
