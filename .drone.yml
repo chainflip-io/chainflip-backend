@@ -96,7 +96,7 @@ steps:
       - sccache -s
     resources:
       limits:
-        cpu: 2000m
+        cpu: 2000
   - name: test-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
@@ -106,7 +106,7 @@ steps:
       - sccache -s
     resources:
       limits:
-        cpu: 2000m
+        cpu: 2000
 #  - name: publish-state-chain-node
 #    image: plugins/ansible
 #    settings:

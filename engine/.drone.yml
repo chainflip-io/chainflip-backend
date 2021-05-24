@@ -26,7 +26,7 @@ steps:
       - sccache -s
     resources:
       limits:
-        cpu: 2000m
+        cpu: 2000
   - name: build-chainflip-engine
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
@@ -36,7 +36,7 @@ steps:
       - sccache -s
     resources:
       limits:
-        cpu: 2000m
+        cpu: 2000
   - name: test-chainflip-engine
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
@@ -46,7 +46,7 @@ steps:
       - sccache -s
     resources:
       limits:
-        cpu: 2000m
+        cpu: 2000
 
 
 # Config
@@ -89,7 +89,7 @@ steps:
       - cargo test -p chainflip-engine --test stake-manager-integration-tests
     resources:
       limits:
-        cpu: 3000m
+        cpu: 3000
 
 # Config
 trigger:
