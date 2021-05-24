@@ -94,9 +94,9 @@ steps:
     commands:
       - cargo build --release
       - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
+    resources:
+      limits:
+        cpu: 2000m
   - name: test-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
@@ -104,9 +104,9 @@ steps:
     commands:
       - cargo test --release
       - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
+    resources:
+      limits:
+        cpu: 2000m
 #  - name: publish-state-chain-node
 #    image: plugins/ansible
 #    settings:
@@ -160,9 +160,5 @@ trigger:
 node_selector:
   type: "ci"
 
-volumes:
-  - name: cache
-    host:
-      path: /mnt/chainflip-build-runner/sccache
 image_pull_secrets:
   - dockerconfigjson

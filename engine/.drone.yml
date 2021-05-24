@@ -21,11 +21,12 @@ steps:
     environment:
       SCCACHE_REDIS: "redis://redis-headless:6379/sccache"
     commands:
+      - sccache -s
       - cargo check --release --bin chainflip-engine
       - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
+    resources:
+      limits:
+        cpu: 2000m
   - name: build-chainflip-engine
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
@@ -33,9 +34,9 @@ steps:
     commands:
       - cargo build --release --bin chainflip-engine
       - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
+    resources:
+      limits:
+        cpu: 2000m
   - name: test-chainflip-engine
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
@@ -43,9 +44,9 @@ steps:
     commands:
       - cargo test --release
       - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
+    resources:
+      limits:
+        cpu: 2000m
 
 
 # Config
@@ -57,10 +58,7 @@ trigger:
 
 node_selector:
   type: "ci"
-volumes:
-  - name: cache
-    host:
-      path: /mnt/chainflip-build-runner/sccache
+
 image_pull_secrets:
   - dockerconfigjson
 
@@ -82,13 +80,16 @@ services:
 steps:
   - name: run-tests
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    environment:
+      SCCACHE_REDIS: "redis://redis-headless:6379/sccache"
     commands:
+      - sccache -s
       - chmod +x ./engine/tests/scripts/setup.sh
       - ./engine/tests/scripts/setup.sh
-      - cargo test -p chainflip-engine --test stake_manager_integration
-    volumes:
-      - name: cache
-        path: /cache
+      - cargo test -p chainflip-engine --test stake-manager-integration-tests
+    resources:
+      limits:
+        cpu: 3000m
 
 # Config
 trigger:
@@ -96,7 +97,3 @@ trigger:
     - push
 image_pull_secrets:
   - dockerconfigjson
-volumes:
-  - name: cache
-    host:
-      path: /mnt/chainflip-build-runner/sccache
