@@ -27,7 +27,7 @@ pub fn test_settings() -> Result<Settings, ConfigError> {
     let mut s = Config::new();
 
     // Start off by merging in the "default" configuration file
-    s.merge(File::with_name("config/testing.toml"))?;
+    s.merge(File::with_name("config/Testing.toml"))?;
 
     // You can deserialize (and thus freeze) the entire configuration as
     s.try_into()
