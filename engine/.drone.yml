@@ -66,7 +66,7 @@ image_pull_secrets:
 
 ---
 kind: pipeline
-type: docker
+type: kubernetes
 name: cfe-integration-tests
 
 services:

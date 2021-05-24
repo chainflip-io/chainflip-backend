@@ -155,8 +155,11 @@ trigger:
     - push
   paths:
     - state-chain/*
+
+
 node_selector:
   type: "ci"
+
 volumes:
   - name: cache
     host:
