@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e
-# ============================================================= 
+# =============================================================
 # Script to setup for integration tests of the StakeManager witness
 # - Run from /engine/tests (important for the relative paths to work)
 # 
@@ -33,14 +33,13 @@ sleep 5s;
 
 # todo: check that it doesn't exist, if it does, then force pull latest
 if [ ! -d "./eth-contracts" ]; then
-    git clone https://github.com/chainflip-io/chainflip-eth-contracts.git ./eth-contracts/
+    git clone https://github.com/chainflip-io/chainflip-eth-contracts.git ./eth-contracts/    
 else
     ( cd eth-contracts ; git pull)
 fi
 
 # ensure we have the poetry deps
 cd eth-contracts
-git checkout ci/lower-pyton-version
 poetry run poetry install
 
 echo "Ready to run StakeManager witness integration tests"
