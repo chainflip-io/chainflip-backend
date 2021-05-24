@@ -1,7 +1,37 @@
+kind: secret
+name: docker_username
+get:
+  path: repo-secret
+  name: docker_username
+---
+kind: secret
+name: docker_password
+get:
+  path: repo-secret
+  name: docker_password
+---
+kind: secret
+name: discord_webhook_id
+get:
+  path: repo-secret
+  name: discord_webhook_id
+---
+kind: secret
+name: discord_webhook_token
+get:
+  path: repo-secret
+  name: discord_webhook_token
+---
+kind: secret
+name: dockerconfigjson
+get:
+  path: dockerconfigjson
+  name: .dockerconfigjson
+---
 # Run checks on infrastructure configuration prior to merge.
 kind: pipeline
 name: ci-checks
-type: docker
+type: kubernetes
 
 steps:
   - name: lint-drone-yml
@@ -35,7 +65,7 @@ image_pull_secrets:
 ---
 
 kind: pipeline
-type: docker
+type: kubernetes
 name: chainflip-state-chain
 
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<< main >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -77,26 +107,26 @@ steps:
     volumes:
       - name: cache
         path: /cache
-  - name: publish-state-chain-node
-    image: plugins/ansible
-    settings:
-      verbose: 2
-      playbook: .ansible/staging/playbook.yml
-      inventory: .ansible/staging/inventory/all
-      extra_vars:
-        target: state-chain-node
-      private_key:
-        from_secret: ansible_staging_private_key
-  - name: publish-chainflip-engine
-    image: plugins/ansible
-    settings:
-      verbose: 2
-      playbook: .ansible/staging/playbook.yml
-      inventory: .ansible/staging/inventory/all
-      extra_vars:
-        target: chainflip-engine
-      private_key:
-        from_secret: ansible_staging_private_key
+#  - name: publish-state-chain-node
+#    image: plugins/ansible
+#    settings:
+#      verbose: 2
+#      playbook: .ansible/staging/playbook.yml
+#      inventory: .ansible/staging/inventory/all
+#      extra_vars:
+#        target: state-chain-node
+#      private_key:
+#        from_secret: ansible_staging_private_key
+#  - name: publish-chainflip-engine
+#    image: plugins/ansible
+#    settings:
+#      verbose: 2
+#      playbook: .ansible/staging/playbook.yml
+#      inventory: .ansible/staging/inventory/all
+#      extra_vars:
+#        target: chainflip-engine
+#      private_key:
+#        from_secret: ansible_staging_private_key
   - name: notify
     image: appleboy/drone-discord
     when:
