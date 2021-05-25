@@ -44,6 +44,21 @@ impl Settings {
 }
 
 #[cfg(test)]
+pub mod test_utils {
+    use super::*;
+
+    pub fn create_test_settings() -> Result<Settings, ConfigError> {
+        let mut s = Config::new();
+
+        // Start off by merging in the "default" configuration file
+        s.merge(File::with_name("config/default.toml"))?;
+
+        // You can deserialize (and thus freeze) the entire configuration as
+        s.try_into()
+    }
+}
+
+#[cfg(test)]
 mod tests {
 
     use super::*;

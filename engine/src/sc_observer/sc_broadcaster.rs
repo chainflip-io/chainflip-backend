@@ -12,8 +12,11 @@ use sp_keyring::AccountKeyring;
 
 use substrate_subxt::{Client, ClientBuilder, PairSigner};
 
-use super::{create_subxt_client, runtime::StateChainRuntime};
-use crate::mq::IMQClient;
+use super::{helpers::create_subxt_client, runtime::StateChainRuntime};
+use crate::{
+    mq::{nats_client::NatsMQClient, IMQClient},
+    settings::Settings,
+};
 
 /// Broadcasts events to the state chain by submitting 'extrinsics'
 pub struct SCBroadcaster<M: IMQClient + Send + Sync> {
@@ -31,20 +34,44 @@ impl<M: IMQClient + Send + Sync> SCBroadcaster<M> {
             .unwrap();
 
         let sc_client = create_subxt_client(settings.state_chain).await.unwrap();
+
+        let mq_client = M::connect(settings.message_queue).await.unwrap();
+
+        SCBroadcaster {
+            mq_client,
+            sc_client,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
 
+    use state_chain_runtime::UncheckedExtrinsic;
+
     use super::*;
+
+    #[tokio::test]
+    async fn submit_xt_test() {
+        let client = ClientBuilder::<StateChainRuntime>::new()
+            .build()
+            .await
+            .unwrap();
+
+        //         let extrinsic = UncheckedExtrinsic {
+        // "
+        //             function:
+        //         };
+
+        client.submit_extrinsic(extrinsic)
+    }
 
     #[test]
     fn test_new_broadcaster() {
-        let settings = {
-            
-        }
-        let broadcaster = SCBroadcaster::new();
+        // let settings = {
+
+        // }
+        // let broadcaster = SCBroadcaster::new();
 
         // didn't panic, yay!
     }
