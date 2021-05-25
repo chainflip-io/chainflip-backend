@@ -87,13 +87,13 @@ mod test {
 			assert_eq!(<Test as Config>::MinValidatorSetSize::get(), min_size);
 			// Remove those with zero amount
 			let candidates = vec![(1, 2), (2, 0), (3, 100)];
-			assert_eq!(ValidatorManager::validate_auction(candidates), vec![(1, 2), (3, 100)]);
+			assert_eq!(ValidatorManager::validate_auction(candidates), Ok(vec![(1, 2), (3, 100)]));
 			// Candidate with id of '100' is not in the session key set
 			let candidates = vec![(1, 2), (2, 2), (BAD_VALIDATOR_ID, 100)];
-			assert_eq!(ValidatorManager::validate_auction(candidates), vec![(1, 2), (2, 2)]);
+			assert_eq!(ValidatorManager::validate_auction(candidates), Ok(vec![(1, 2), (2, 2)]));
 			// After this we end up with less than 'min_size' we should end up empty handed
 			let candidates = vec![(1, 2), (2, 0), (BAD_VALIDATOR_ID, 100)];
-			assert_eq!(ValidatorManager::validate_auction(candidates), vec![]);
+			assert_eq!(ValidatorManager::validate_auction(candidates), Err(AuctionError::MinValidatorSize));
 		});
 	}
 
@@ -104,7 +104,7 @@ mod test {
 			// A group of validators, we should see the order from high to low and the bond being 10
 			// as it's the lowest
 			let candidates = vec![(1, 1000), (3, 10), (2, 100)];
-			assert_eq!(ValidatorManager::run_auction(candidates), (vec![1, 2, 3], 10));
+			assert_eq!(ValidatorManager::run_auction(candidates), Ok((vec![1, 2, 3], 10)));
 		});
 	}
 
@@ -118,8 +118,8 @@ mod test {
 			assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), 100));
 			let candidates = vec![(1, 1000), (3, 0), (2, 100)];
 			let candidates = ValidatorManager::run_auction(candidates);
-			assert_eq!(candidates, (vec![1, 2, 3], 0));
-			assert_eq!(ValidatorManager::complete_auction(&candidates).unwrap_err(), AuctionError::BondIsZero);
+			assert_eq!(candidates, Ok((vec![1, 2, 3], 0)));
+			assert_eq!(ValidatorManager::complete_auction(candidates.unwrap()).unwrap_err(), AuctionError::BondIsZero);
 		});
 	}
 
