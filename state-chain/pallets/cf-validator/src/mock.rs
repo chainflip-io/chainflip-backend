@@ -132,7 +132,7 @@ impl CandidateProvider for TestCandidateProvider {
 	fn get_candidates() -> Vec<(Self::ValidatorId, Self::Amount)> {
 		CANDIDATE_IDX.with(|l| {
 			let idx = *l.borrow();
-			let candidates = vec![(idx, idx), (idx + 1, idx + 1), (idx + 2, idx + 2)];
+			let candidates = vec![(idx, idx), (idx + 1, idx + 1), (idx + 2, idx + 2), (idx + 3, idx + 3)];
 			*l.borrow_mut() = idx + 1;
 			candidates
 		})

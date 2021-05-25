@@ -183,7 +183,7 @@ mod test {
 	#[test]
 	fn bring_forward_session() {
 		new_test_ext().execute_with(|| {
-			// We are after 3 validators, the mock is set up for 3
+			// We are after 4 validators, the mock is set up for 4
 			let mut set_size = 10;
 			assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), set_size));
 			// Set block length of epoch to 2
@@ -230,7 +230,7 @@ mod test {
 
 			// We should have our validators except the first as theu have 0 staked,
 			// as we had none before we would see none in 'outgoing'
-			assert_eq!(current.len(), 2);
+			assert_eq!(current.len(), 3);
 			assert_eq!(outgoing.len(), 0);
 			// On each auction are candidates are increasing stake so we should see 'bond' increase
 			let mut bond = 0;
@@ -279,7 +279,7 @@ mod test {
 	#[test]
 	fn force_auction() {
 		new_test_ext().execute_with(|| {
-			// We are after 3 validators, the mock is set up for 3
+			// We are after 4 validators, the mock is set up for 4
 			assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), 3));
 			assert_eq!(
 				last_event(),
@@ -314,7 +314,7 @@ mod test {
 	#[test]
 	fn force_auction_in_auction() {
 		new_test_ext().execute_with(|| {
-			// We are after 3 validators, the mock is set up for 3
+			// We are after 4 validators, the mock is set up for 4
 			assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), 3));
 			// Check we get rotation
 			let epoch = 2;
@@ -341,7 +341,7 @@ mod test {
 	#[test]
 	fn push_back_session() {
 		new_test_ext().execute_with(|| {
-			// We are after 3 validators, the mock is set up for 3
+			// We are after 4 validators, the mock is set up for 4
 			assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), 3));
 			// Check we get rotation
 			let epoch = 2;
@@ -386,12 +386,12 @@ mod test {
 	#[test]
 	fn limit_validator_set_size() {
 		new_test_ext().execute_with(|| {
-			// We are after 3 validators, the mock is set up for 3, the first one will be dropped
+			// We are after 4 validators, the mock is set up for 4, the first one will be dropped
 			// during validation in the auction phase
-			assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), 3));
+			assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), 4));
 			assert_eq!(
 				last_event(),
-				mock::Event::pallet_cf_validator(crate::Event::MaximumValidatorsChanged(0, 3)),
+				mock::Event::pallet_cf_validator(crate::Event::MaximumValidatorsChanged(0, 4)),
 			);
 			// Run a rotation
 			let epoch = 2;
@@ -410,7 +410,7 @@ mod test {
 			assert_eq!(ev.pop(), Some(mock::Event::pallet_cf_validator(crate::Event::AuctionStarted(FIRST_EPOCH))));
 			confirm_and_complete_auction(&mut block_number, FIRST_EPOCH);
 
-			// Reduce size of validator set, we should see next set of candidates reduced from 3 to 2
+			// Reduce size of validator set, we should see next set of candidates reduced from 4 to 2
 			assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), 2));
 			block_number += epoch;
 			run_to_block(block_number);
@@ -419,13 +419,13 @@ mod test {
 			// Pop off session event
 			ev.pop();
 			assert_eq!(ev.pop(), Some(mock::Event::pallet_cf_validator(crate::Event::AuctionStarted(SECOND_EPOCH))));
-			assert_eq!(ev.pop(), Some(mock::Event::pallet_cf_validator(crate::Event::MaximumValidatorsChanged(3, 2))));
+			assert_eq!(ev.pop(), Some(mock::Event::pallet_cf_validator(crate::Event::MaximumValidatorsChanged(4, 2))));
 
 			confirm_and_complete_auction(&mut block_number, SECOND_EPOCH);
 
-			// We should expect 2 outgoing as we dropped one in the auction due to stake of 0
+			// We should expect 3 outgoing as we dropped one in the auction due to stake of 0
 			assert_eq!(mock::current_validators().len(), 2);
-			assert_eq!(mock::outgoing_validators().len(), 2);
+			assert_eq!(mock::outgoing_validators().len(), 3);
 
 			// One more to see the rotation maintain the new set size of 2
 			block_number += epoch;
