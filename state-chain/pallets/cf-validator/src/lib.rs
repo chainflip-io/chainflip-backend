@@ -203,10 +203,16 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			index: EpochIndex,
 		) -> DispatchResultWithPostInfo {
-			ensure_signed(origin)?;
+			let who = ensure_signed(origin)?;
 			ensure!(Some(index) == AuctionToConfirm::<T>::get(), Error::<T>::InvalidAuction);
 			AuctionToConfirm::<T>::set(None);
 			Self::deposit_event(Event::AuctionConfirmed(index));
+			Ok(().into())
+		}
+
+		#[pallet::weight(10_000)]
+		pub fn set_keys(origin: OriginFor<T>, keys: T::Keys, proof: Vec<u8>) -> DispatchResultWithPostInfo {
+			<pallet_session::Module<T>>::set_keys(origin, keys, proof)?;
 			Ok(().into())
 		}
 	}
@@ -294,6 +300,7 @@ impl<T:Config> EpochInfo for Pallet<T> {
 				.map(|(k, _)| k)
 				.collect()
 		}
+
 		vec![]
 	}
 
