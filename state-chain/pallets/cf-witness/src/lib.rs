@@ -1,5 +1,34 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+//! A pallet that abstracts the notion of witnessing an external event.
+//!
+//! Based loosely on parity's own [`pallet_multisig`](https://github.com/paritytech/substrate/tree/master/frame/multisig).
+//!
+//! ## Usage
+//!
+//! ### Witnessing a an event.
+//!
+//! Witnessing can be thought of as voting on an action (represented by a `call`) triggered by some external event.
+//!
+//! Witnessing happens via the signed [`witness`](pallet::Pallet::witness) extrinsic including the encoded `call` to be
+//! dispatched. 
+//!
+//! If the encoded call is not already stored, it is stored against its hash. A vote is then counted on behalf of the 
+//! signing validator account. When a configured threshold is reached, the previously-stored `call` is dispatched.
+//!
+//! Note that calls *must* have a unique hash so that the votes don't clash.
+//!
+//! ### Restricting target calls
+//!
+//! This crate also provides [`EnsureWitnessed`](EnsureWitnessed), an implementation of [`EnsureOrigin`](EnsureOrigin)
+//! that can be used to restrict an extrinsic so that it can only be dispatched via witness consensus.
+//!
+//! Note again that each call that is voted on should have a unique hash, and therefore the call arguments should have
+//! some form of entropy to ensure that each the call is idempotent.
+//!
+//! See the README for instructions on how to integrate this pallet with the runtime.
+//!
+
 pub use pallet::*;
 
 #[cfg(test)]
@@ -53,7 +82,7 @@ pub mod pallet {
 			+ Into<<Self as frame_system::Config>::AccountId>;
 	}
 
-	/// Alias for the `Epoch` type defined by the `ValidatorProvider`.
+	/// Alias for the `Epoch` configuration type.
 	pub(super) type Epoch<T> = <T as Config>::Epoch;
 
 	/// A hash to index the call by.
@@ -68,10 +97,12 @@ pub mod pallet {
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
 
+	/// A lookup mapping (epoch, call_hash) to a bitmask representing the votes for each validator. 
 	#[pallet::storage]
 	pub type Calls<T: Config> =
 		StorageDoubleMap<_, Blake2_128Concat, Epoch<T>, Identity, CallHash, Vec<u8>>;
 
+	/// Defines a unique index for each validator for every epoch.
 	#[pallet::storage]
 	pub(super) type ValidatorIndex<T: Config> = StorageDoubleMap<
 		_,
@@ -82,17 +113,21 @@ pub mod pallet {
 		u16,
 	>;
 
-	// TODO: This param should probably be managed in the sessions pallet. (The *active* validator set and
-	// therefore the threshold might change due to unavailable nodes, slashing etc.)
+	/// The current threshold for reaching consensus.
+	/// TODO: This param should probably be managed in the sessions pallet. (The *active* validator set and
+	/// therefore the threshold might change due to unavailable nodes, slashing etc.)
 	#[pallet::storage]
 	pub(super) type ConsensusThreshold<T> = StorageValue<_, u32, ValueQuery>;
 
+	/// The number of active validators.
 	#[pallet::storage]
 	pub(super) type NumValidators<T> = StorageValue<_, u32, ValueQuery>;
 
+	/// The current epoch index.
 	#[pallet::storage]
 	pub(super) type CurrentEpoch<T: Config> = StorageValue<_, Epoch<T>, ValueQuery>;
 
+	/// No hooks are implemented for this pallet.
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
@@ -124,8 +159,10 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Called as a witness of some external event. The call parameter is the resultant extrinsic. This can be
-		/// thought of as a vote for the encoded [`Call`](crate::Pallet::Call) value.
+		/// Called as a witness of some external event. 
+		///
+		/// The provided `call` will be dispatched when the configured threshold number of validtors have submitted an
+		/// identical transaction. This can be thought of as a vote for the encoded [`Call`](crate::Pallet::Call) value.
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
 		pub fn witness(
 			origin: OriginFor<T>,
