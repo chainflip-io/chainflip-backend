@@ -203,7 +203,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			index: EpochIndex,
 		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
+			ensure_signed(origin)?;
 			ensure!(Some(index) == AuctionToConfirm::<T>::get(), Error::<T>::InvalidAuction);
 			AuctionToConfirm::<T>::set(None);
 			Self::deposit_event(Event::AuctionConfirmed(index));
@@ -211,7 +211,7 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(10_000)]
-		pub fn set_keys(origin: OriginFor<T>, keys: T::Keys, proof: Vec<u8>) -> DispatchResultWithPostInfo {
+		pub(super) fn set_keys(origin: OriginFor<T>, keys: T::Keys, proof: Vec<u8>) -> DispatchResultWithPostInfo {
 			<pallet_session::Module<T>>::set_keys(origin, keys, proof)?;
 			Ok(().into())
 		}
