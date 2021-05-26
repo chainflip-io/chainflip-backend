@@ -18,8 +18,7 @@ set -e
 #
 ## start nats
 # docker run -p 4222:4222 -p 8222:8222 -ti -d --name nats nats:latest
-add-apt-repository ppa:deadsnakes/ppa
-apt-get install -y python3.7-dev3
+apt-get install -y python3
 if ! which poetry; then
   curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python -
   source $HOME/.poetry/env
