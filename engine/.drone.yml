@@ -1,5 +1,11 @@
+kind: secret
+name: dockerconfigjson
+get:
+  path: dockerconfigjson
+  name: .dockerconfigjson
+---
 kind: pipeline
-type: docker
+type: kubernetes
 name: chainflip-engine-pr
 
 steps:
