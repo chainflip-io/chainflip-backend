@@ -71,6 +71,9 @@ pub type DigestItem = generic::DigestItem<Hash>;
 
 pub type FlipBalance = u128;
 
+/// The type used as an epoch index.
+pub type EpochIndex = u32;
+
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
 /// of data like extrinsics, allowing for them to continue syncing the network through upgrades
@@ -142,6 +145,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type CandidateProvider = pallet_cf_staking::Pallet<Self>;
 	type EpochTransitionHandler = PhantomData<Runtime>;
 	type ValidatorWeightInfo = weights::pallet_cf_validator::WeightInfo<Runtime>;
+	type EpochIndex = EpochIndex;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime where
@@ -322,10 +326,9 @@ impl pallet_cf_witness::Config for Runtime {
 	type Event = Event;
 	type Origin = Origin;
 	type Call = Call;
-
-	// TODO: use Epoch anf ValidatorId definitions from validator rotation pallet
-	type Epoch = u64;
+	type Epoch = EpochIndex;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
+	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 }
 
 impl pallet_cf_staking::Config for Runtime {

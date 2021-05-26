@@ -139,6 +139,8 @@ parameter_types! {
 	pub const MinValidatorSetSize: u64 = 2;
 }
 
+pub(super) type EpochIndex = u32;
+
 impl Config for Test {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
@@ -146,6 +148,7 @@ impl Config for Test {
 	type CandidateProvider = TestCandidateProvider;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
 	type ValidatorWeightInfo = ();
+	type EpochIndex = EpochIndex;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
