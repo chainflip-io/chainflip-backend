@@ -24,55 +24,55 @@ pub struct SCBroadcaster<M: IMQClient + Send + Sync> {
     sc_client: Client<StateChainRuntime>,
 }
 
-impl<M: IMQClient + Send + Sync> SCBroadcaster<M> {
-    pub async fn new(settings: Settings) -> Self {
-        // TODO: Change this to be the keys from the state chain
-        let signer = PairSigner::new(AccountKeyring::Alice.pair());
-        let client = ClientBuilder::<StateChainRuntime>::new()
-            .build()
-            .await
-            .unwrap();
+// impl<M: IMQClient + Send + Sync> SCBroadcaster<M> {
+//     pub async fn new(settings: Settings) -> Self {
+//         // TODO: Change this to be the keys from the state chain
+//         let signer = PairSigner::new(AccountKeyring::Alice.pair());
+//         let client = ClientBuilder::<StateChainRuntime>::new()
+//             .build()
+//             .await
+//             .unwrap();
 
-        let sc_client = create_subxt_client(settings.state_chain).await.unwrap();
+//         let sc_client = create_subxt_client(settings.state_chain).await.unwrap();
 
-        let mq_client = M::connect(settings.message_queue).await.unwrap();
+//         let mq_client = M::connect(settings.message_queue).await.unwrap();
 
-        SCBroadcaster {
-            mq_client,
-            sc_client,
-        }
-    }
-}
+//         SCBroadcaster {
+//             mq_client,
+//             sc_client,
+//         }
+//     }
+// }
 
-#[cfg(test)]
-mod tests {
+// #[cfg(test)]
+// mod tests {
 
-    use state_chain_runtime::UncheckedExtrinsic;
+//     use state_chain_runtime::UncheckedExtrinsic;
 
-    use super::*;
+//     use super::*;
 
-    #[tokio::test]
-    async fn submit_xt_test() {
-        let client = ClientBuilder::<StateChainRuntime>::new()
-            .build()
-            .await
-            .unwrap();
+//     // #[tokio::test]
+//     // async fn submit_xt_test() {
+//     //     let client = ClientBuilder::<StateChainRuntime>::new()
+//     //         .build()
+//     //         .await
+//     //         .unwrap();
 
-        //         let extrinsic = UncheckedExtrinsic {
-        // "
-        //             function:
-        //         };
+//     //     //         let extrinsic = UncheckedExtrinsic {
+//     //     // "
+//     //     //             function:
+//     //     //         };
 
-        client.submit_extrinsic(extrinsic)
-    }
+//     //     client.submit_extrinsic(extrinsic)
+//     // }
 
-    #[test]
-    fn test_new_broadcaster() {
-        // let settings = {
+//     #[test]
+//     fn test_new_broadcaster() {
+//         // let settings = {
 
-        // }
-        // let broadcaster = SCBroadcaster::new();
+//         // }
+//         // let broadcaster = SCBroadcaster::new();
 
-        // didn't panic, yay!
-    }
-}
+//         // didn't panic, yay!
+//     }
+// }

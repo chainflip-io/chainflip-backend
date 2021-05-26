@@ -2,14 +2,11 @@
 
 use anyhow::Result;
 
-use super::{runtime::StateChainRuntime};
+use super::runtime::StateChainRuntime;
 
-use crate::{settings};
+use crate::settings;
 
-use substrate_subxt::{
-    Client, ClientBuilder
-};
-
+use substrate_subxt::{Client, ClientBuilder};
 
 /// Create a substrate subxt client over the StateChainRuntime
 pub async fn create_subxt_client(
@@ -32,11 +29,11 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    #[ignore = "requires running state chain to connect to"]
     async fn can_create_subxt_client() {
-        let settings = settings::test_utils::create_test_settings().unwrap();
+        let settings = settings::test_utils::new_test_settings().unwrap();
 
         let client = create_subxt_client(settings.state_chain).await;
         assert!(client.is_ok());
-
     }
 }

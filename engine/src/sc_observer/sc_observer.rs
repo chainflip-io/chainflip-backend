@@ -2,25 +2,25 @@ use anyhow::Result;
 use substrate_subxt::{Client, ClientBuilder, EventSubscription};
 
 use crate::{
-    mq::{nats_client::NatsMQClient, IMQClient, Options, Subject},
-    settings,
+    mq::{nats_client::NatsMQClient, IMQClient, Subject},
+    settings::{self, Settings},
 };
 
 use log::{debug, error, info, trace};
 
 use super::{
-    create_subxt_client,
+    helpers::create_subxt_client,
     runtime::StateChainRuntime,
     sc_event::{sc_event_from_raw_event, subject_from_raw_event},
 };
 
 /// Kick off the state chain observer process
-pub async fn start(mq_options: Options, subxt_settings: settings::StateChain) {
+pub async fn start(settings: Settings) {
     info!("Begin subscribing to state chain events");
 
-    let mq_client = NatsMQClient::connect(mq_options).await.unwrap();
+    let mq_client = NatsMQClient::connect(settings.message_queue).await.unwrap();
 
-    let subxt_client = create_subxt_client(subxt_settings)
+    let subxt_client = create_subxt_client(settings.state_chain)
         .await
         .expect("Could not create subxt client");
 

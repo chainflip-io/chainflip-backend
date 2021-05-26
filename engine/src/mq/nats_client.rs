@@ -1,4 +1,4 @@
-use super::{IMQClient, Options, Subject};
+use super::{IMQClient, Subject};
 use anyhow::Context;
 use anyhow::Result;
 use async_nats;
@@ -6,6 +6,8 @@ use async_stream::stream;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use tokio_stream::{Stream, StreamExt};
+
+use crate::settings;
 
 // This will likely have a private field containing the underlying mq client
 #[derive(Clone)]
@@ -30,8 +32,9 @@ impl Subscription {
 
 #[async_trait]
 impl IMQClient for NatsMQClient {
-    async fn connect(opts: Options) -> Result<Box<Self>> {
-        let conn = async_nats::connect(opts.url.as_str()).await?;
+    async fn connect(mq_settings: settings::MessageQueue) -> Result<Box<Self>> {
+        let url = format!("http://{}:{}", mq_settings.hostname, mq_settings.port);
+        let conn = async_nats::connect(url.as_str()).await?;
         Ok(Box::new(NatsMQClient { conn }))
     }
 
@@ -78,11 +81,12 @@ mod test {
     struct TestMessage(String);
 
     async fn setup_client() -> Box<NatsMQClient> {
-        let options = Options {
-            url: "http://localhost:4222".to_string(),
+        let mq_settings = settings::MessageQueue {
+            hostname: "localhost".to_string(),
+            port: 4222,
         };
 
-        NatsMQClient::connect(options).await.unwrap()
+        NatsMQClient::connect(mq_settings).await.unwrap()
     }
 
     #[ignore = "Depends on Nats being online"]
