@@ -109,26 +109,6 @@ impl<T: pallet_session::Config> EpochTransitionHandler for PhantomData<T> {
 	type ValidatorId = T::ValidatorId;
 }
 
-/// Providing a list of candidates with their corresponding stakes
-pub trait CandidateProvider {
-	type ValidatorId: Eq + Ord + Clone;
-	type Stake: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
-	/// Get a set of candidates
-	///
-	/// Provide a set of validators with their stakes
-	fn get_candidates() -> Vec<(Self::ValidatorId, Self::Stake)>;
-}
-
-/// Empty impl of [`CandidateProvider`]
-impl CandidateProvider for () {
-	type ValidatorId = u32;
-	type Stake = u32;
-
-	fn get_candidates() -> Vec<(Self::ValidatorId, Self::Stake)> {
-		vec![]
-	}
-}
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
