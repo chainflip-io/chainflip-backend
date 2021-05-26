@@ -1,5 +1,11 @@
+kind: secret
+name: dockerconfigjson
+get:
+  path: dockerconfigjson
+  name: .dockerconfigjson
+---
 kind: pipeline
-type: docker
+type: kubernetes
 name: chainflip-state-chain-pr
 
 steps:
@@ -12,33 +18,24 @@ steps:
   - name: check-state-chain
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
-      SCCACHE_DIR: /cache
+      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo check --release --bin state-chain-node
       - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
   - name: build-state-chain
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
-      SCCACHE_DIR: /cache
+      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo build --release --bin state-chain-node
       - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
   - name: test-state-chain
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
-      SCCACHE_DIR: /cache
+      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo test --release
       - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
 
 # Config
 trigger:
@@ -47,11 +44,8 @@ trigger:
   paths:
     - state-chain/**/*.rs
 
-node:
-  builder: "true"
-volumes:
-  - name: cache
-    host:
-      path: /mnt/chainflip-build-runner/sccache
 image_pull_secrets:
   - dockerconfigjson
+
+node_selector:
+  type: ci
