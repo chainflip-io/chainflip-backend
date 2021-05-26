@@ -62,6 +62,9 @@ trigger:
 image_pull_secrets:
   - dockerconfigjson
 
+node_selector:
+  type: ci
+
 ---
 
 kind: pipeline
@@ -90,23 +93,17 @@ steps:
   - name: compile-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
-      SCCACHE_DIR: /cache
+      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo build --release
       - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
   - name: test-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
-      SCCACHE_DIR: /cache
+      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo test --release
       - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
 #  - name: publish-state-chain-node
 #    image: plugins/ansible
 #    settings:
@@ -155,11 +152,9 @@ trigger:
     - push
   paths:
     - state-chain/*
-node:
-  builder: "true"
-volumes:
-  - name: cache
-    host:
-      path: /mnt/chainflip-build-runner/sccache
+
 image_pull_secrets:
   - dockerconfigjson
+
+node_selector:
+  type: ci
