@@ -1,5 +1,48 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+//! # Chainflip Validator Module
+//!
+//! A module to manage the validator set for the Chainflip State Chain
+//!
+//! - [`Config`]
+//! - [`Call`]
+//! - [`Module`]
+//!
+//! ## Overview
+//!
+//! The module contains functionality to manage the validator set used to ensure the Chainflip
+//! State Chain network.  It extends on the functionality offered by the `session` pallet provided by
+//! Parity.  There are two types of sessions; an Epoch session in which we have a constant set of validators
+//! and an Auction session in which we continue with our current validator set and request a set of
+//! candidates for validation.  Once validated and confirmed become our new set of validators within the
+//! Epoch session.
+//!
+//! ## Terminology
+//!
+//! - **Validator:** A node that has staked an amount of `FLIP` ERC20 token.
+//!
+//! - **Validator ID:** Equivalent to an Account ID
+//!
+//! - **Epoch:** A period in blocks in which a constant set of validators ensure the network.
+//!
+//! - **Auction** A non defined period of blocks in which we continue with the existing validators
+//!   and assess the new candidate set of their validity as validators.  This period is closed when
+//!   `confirm_auction` is called and the candidate set are now the new validating set.
+//!
+//! - **Session:** A session as defined by the `session` pallet. We have two sessions; Epoch which has
+//!   a fixed number of blocks set with `set_blocks_for_epoch` and an Auction session which is of an
+//!   undetermined number of blocks.
+//!
+//! - **Sudo:** A single account that is also called the "sudo key" which allows "privileged functions"
+//!
+//! ### Dispatchable Functions
+//!
+//! - `set_blocks_for_epoch` - Set the number of blocks an Epoch should run for.
+//! - `set_validator_target_size` - Set the target size for a validator set.
+//! - `force_auction` - Force an auction to start on the next block.
+//! - `confirm_auction` - Confirm that any dependencies for the auction have been confirmed.
+//!
+
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -34,19 +77,25 @@ pub struct EpochIndex(SessionIndex);
 
 impl From<SessionIndex> for EpochIndex {
 	fn from(i: SessionIndex) -> Self {
-		EpochIndex(i / 2)
+		EpochIndex(i/2)
 	}
 }
 
-/// This handler can be implemented in order to hook into Epoch lifecycle events.
+/// Handler for Epoch life cycle events.
 pub trait EpochTransitionHandler {
-	/// The id type used for the validators. 
+	/// The id type used for the validators.
 	type ValidatorId;
 
-	/// Triggered at the start of a new Epoch.
+	/// A new epoch has started
+	///
+	/// The new set of validator `new_validators` are now validating
 	fn on_new_epoch(_new_validators: Vec<Self::ValidatorId>) {}
 
-	/// Triggered at the start of the auction phase.
+	/// We have entered an auction phase
+	///
+	/// The existing validators remain validating and these are shared as `outgoing_validators`
+	/// Obviously the new set of candidates for the auction would be very similar if not
+	/// the same as the outgoing set
 	fn on_new_auction(_outgoing_validators: Vec<Self::ValidatorId>) {}
 
 	/// Triggered before the end of the trading phase and the start of the auction.
@@ -60,12 +109,31 @@ impl<T: pallet_session::Config> EpochTransitionHandler for PhantomData<T> {
 	type ValidatorId = T::ValidatorId;
 }
 
+/// Providing a list of candidates with their corresponding stakes
+pub trait CandidateProvider {
+	type ValidatorId: Eq + Ord + Clone;
+	type Stake: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
+	/// Get a set of candidates
+	///
+	/// Provide a set of validators with their stakes
+	fn get_candidates() -> Vec<(Self::ValidatorId, Self::Stake)>;
+}
+
+/// Empty impl of [`CandidateProvider`]
+impl CandidateProvider for () {
+	type ValidatorId = u32;
+	type Stake = u32;
+
+	fn get_candidates() -> Vec<(Self::ValidatorId, Self::Stake)> {
+		vec![]
+	}
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_system::pallet_prelude::*;
 	use frame_support::sp_runtime::SaturatedConversion;
-	use cf_traits::Auction;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -139,10 +207,12 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+
 		/// Sets the number of blocks an epoch should run for
+		///
 		/// The dispatch origin of this function must be root.
 		#[pallet::weight(
-		T::ValidatorWeightInfo::set_blocks_for_epoch()
+			T::ValidatorWeightInfo::set_blocks_for_epoch()
 		)]
 		pub(super) fn set_blocks_for_epoch(
 			origin: OriginFor<T>,
@@ -157,10 +227,11 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Sets the size of our validate set size and will be only effective in the next auction
+		/// Sets the size of our validate set size
+		///
 		/// The dispatch origin of this function must be root.
 		#[pallet::weight(
-		T::ValidatorWeightInfo::set_validator_target_size()
+			T::ValidatorWeightInfo::set_validator_target_size()
 		)]
 		pub(super) fn set_validator_target_size(
 			origin: OriginFor<T>,
@@ -176,9 +247,10 @@ pub mod pallet {
 		}
 
 		/// Force an auction phase.  The next block will run an auction.
+		///
 		/// The dispatch origin of this function must be root.
 		#[pallet::weight(
-		T::ValidatorWeightInfo::force_auction()
+			T::ValidatorWeightInfo::force_auction()
 		)]
 		pub(super) fn force_auction(
 			origin: OriginFor<T>,
@@ -190,11 +262,12 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// When we are in an auction phase we will need to wait for off-chain confirmation
+		/// When we are in an auction phase we will need to wait for a confirmation
 		/// of the epoch index already emitted with [AuctionStarted]
+		///
 		/// The dispatch origin of this function must be signed.
 		#[pallet::weight(
-		T::ValidatorWeightInfo::confirm_auction()
+			T::ValidatorWeightInfo::confirm_auction()
 		)]
 		pub(super) fn confirm_auction(
 			origin: OriginFor<T>,
@@ -308,6 +381,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 }
 
 impl<T: Config> pallet_session::SessionHandler<T::ValidatorId> for Pallet<T> {
+
 	/// TODO look at the key management
 	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[];
 	fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(T::ValidatorId, Ks)]) {}
@@ -397,9 +471,9 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 impl<T: Config> Pallet<T> {
 	/// This returns validators for the *next* session and is called at the *beginning* of the current session.
 	///
-	/// If we are at the beginning of a non-auction session, the next session will be an auction session, so we return
+	/// If we are at the beginning of an epoch session, the next session will be an auction session, so we return
 	/// `None` to indicate that the validator set remains unchanged. Otherwise, the set would be considered changed even 
-	/// if the new set of validators matches the old one.  
+	/// if the new set of validators matches the old one.
 	///
 	/// If we are the beginning of an auction session, we need to run the auction to set the validators for the upcoming
 	/// Epoch.
@@ -434,7 +508,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// The end of the session is triggered, we alternate between regular trading sessions and auction sessions. 
+	/// The end of the session is triggered, we alternate between epoch sessions and auction sessions.
 	fn end_session(end_index: SessionIndex) {
 		IsAuctionPhase::<T>::mutate(|is_auction| {
 			if *is_auction {

@@ -1,74 +1,41 @@
-# CF-Validator Pallet
+# Chainflip Validator Module
 
-A work-in-progress implementation of validation rotation for Chainflip.
+A module to manage the validator set for the Chainflip State Chain
+
+- [`Config`]
+- [`Call`]
+- [`Module`]
 
 ## Overview
 
-This pallet manages the rotation of validators that have staked on Chainflip.
+The module contains functionality to manage the validator set used to ensure the Chainflip
+State Chain network.  It extends on the functionality offered by the `session` pallet provided by
+Parity.  There are two types of sessions; an Epoch session in which we have a constant set of validators
+and an Auction session in which we continue with our current validator set and request a set of
+candidates for validation.  Once validated and confirmed become our new set of validators within the
+Epoch session.
 
 ## Terminology
 
-- Validator: A node that has staked an amount of `FLIP` ERC20 token.
-- Validator ID: TBC
-- Epoch: A period in blocks in which a constant set of validators ensure the network. Each Epoch consists of two sessions,
-  a regular trading session and the auction session to prepare the validator set for the next Epoch.
-- Session: A session as defined by the session pallet. Each Epoch consists of two sessions.
-- Rotation: The process of rotating the validator sets, also referred to as the auction.
-- Sudo: A single account that is also called the "sudo key" which allows "privileged functions"
+- **Validator:** A node that has staked an amount of `FLIP` ERC20 token.
 
-## Goals
+- **Validator ID:** Equivalent to an Account ID
 
-- Compile a list of viable validators
-- Rotate a set of validators at each auction
+- **Epoch:** A period in blocks in which a constant set of validators ensure the network.
 
-## Candidates
+- **Auction** A non defined period of blocks in which we continue with the existing validators
+  and assess the new candidate set of their validity as validators.  This period is closed when
+  `confirm_auction` is called and the candidate set are now the new validating set.
 
-A list of candidates are required to be proposed as the next set of validators. These candidates would be provided by
-the `cf-staking` pallet based on the requirements set within the same pallet. A maximum set size would be first proposed
-as a candidate list and would be scheduled as the next+1 validator set.
+- **Session:** A session as defined by the `session` pallet. We have two sessions; Epoch which has
+  a fixed number of blocks set with `set_blocks_for_epoch` and an Auction session which is of an
+  undetermined number of blocks.
 
-## Rotation
-
-On rotation at specified session the previous candidate list would be switched with the current validating set and the
-next+1 validator set would be set as the next set.
-
-## Interface
+- **Sudo:** A single account that is also called the "sudo key" which allows "privileged functions"
 
 ### Dispatchable Functions
 
-```
-// Set days for epoch, sudo call
-fn set_epoch(number_of_blocks: BlockNumber)
-// Set size of validator set, sudo call
-fn set_validator_size(size: ValidatorSize)
-// Forces a rotation, sudo call
-fn force_rotation()
-```
-
-### Genesis Configuration
-
-An optional set of validators can be set as initial validators.
-
-## Storage
-
-```
-EpochNumberOfBlocks: BlockNumber
-SizeValidatorSet: u32
-```
-
-## Events
-
-```
-AuctionStarted()
-AuctionEnded()
-EpochDurationChanged(from: Days, to:Day)
-SizeValidatorSetChanged(from: u32, to: u32)
-```
-
-## Reference Docs
-
-You can view the reference docs for this pallet by running:
-
-```sh
-cargo doc --open
-```
+- `set_blocks_for_epoch` - Set the number of blocks an Epoch should run for.
+- `set_validator_target_size` - Set the target size for a validator set.
+- `force_auction` - Force an auction to start on the next block.
+- `confirm_auction` - Confirm that any dependencies for the auction have been confirmed.
