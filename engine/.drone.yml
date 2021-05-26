@@ -53,8 +53,8 @@ steps:
 trigger:
   event:
     - pull_request
-  paths:
-    - engine/**/*.rs
+#  paths:
+#    - engine/**/*.rs
 
 node_selector:
   type: "ci"
@@ -90,7 +90,7 @@ steps:
 #      - cargo test -p chainflip-engine --test stake-manager-integration-tests
     resources:
       limits:
-        cpu: 3000
+        cpu: 2000
 
 # Config
 trigger:
@@ -98,3 +98,6 @@ trigger:
     - push
 image_pull_secrets:
   - dockerconfigjson
+
+node_selector:
+  type: "ci"
