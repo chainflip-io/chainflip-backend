@@ -11,6 +11,8 @@ use sp_core::ecdsa::Signature;
 
 use super::{runtime::StateChainRuntime, sc_event::SCEvent};
 
+type TokenAmount = u128;
+
 // StakeManager in the state chain runtime
 #[module]
 pub trait StakeManager: System {}
@@ -18,10 +20,24 @@ pub trait StakeManager: System {}
 /// Funds have been staked to an account via the StakeManager smart contract
 #[derive(Call, Encode)]
 pub struct StakedCall<T: StakeManager> {
-    account_id: AccountId32,
-    amount: u128,
-    refund_address: [u8; 20],
+    /// Runtime marker
     _runtime: PhantomData<T>,
+
+    /// Call arguments
+    account_id: AccountId32,
+    amount: TokenAmount,
+    refund_address: [u8; 20],
+}
+
+#[derive(Call, Encode)]
+pub struct WitnessStakedCall<T: StakeManager> {
+    /// runtime marker
+    _runtime: PhantomData<T>,
+
+    /// Call arguments
+    staker_account_id: AccountId32,
+    amount: TokenAmount,
+    refund_address: [u8; 20],
 }
 
 // The order of these fields matter for decoding

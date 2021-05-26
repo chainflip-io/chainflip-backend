@@ -51,34 +51,43 @@ mod tests {
 
     use super::*;
 
-    use crate::sc_observer::staking::StakedCallExt;
+    use crate::sc_observer::staking::{StakedCallExt, WitnessStakedCallExt};
     use crate::settings;
     use crate::settings::StateChain;
+
+    use substrate_subxt::system::AccountStoreExt;
 
     #[tokio::test]
     async fn submit_xt_test() {
         let settings = settings::test_utils::new_test_settings().unwrap();
         let subxt_client = create_subxt_client(settings.state_chain).await.unwrap();
 
-        let signer = PairSigner::new(AccountKeyring::Alice.pair());
+        // let signer = PairSigner::new(AccountKeyring::Alice.pair());
 
-        // let signer: substrate_subxt::Signer = substrate_subxt::PairSigner
-        let dest = AccountKeyring::Bob.to_account_id();
-
-        let account_id_32 = AccountKeyring::Charlie.to_account_id();
+        let alice = AccountKeyring::Alice.to_account_id();
 
         let eth_address: [u8; 20] = [
             00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01,
         ];
 
-        let origin: Origin = Origin::from(Some(AccountKeyring::Charlie.to_account_id()));
+        let alice_account = subxt_client.account(&alice, None).await.unwrap();
+
+        // let result = subxt_client
+        //     .witness_staked(&signer, alice, 100u128, eth_address)
+        //     .await;
 
         // TODO: Ensure this is actually correct.
-        let result = subxt_client
-            .staked(&signer, account_id_32, 100u128, eth_address)
-            .await;
+        // let result = subxt_client
+        //     .staked(
+        //         &signer,
+        //         account_id_32.clone(),
+        //         account_id_32,
+        //         100u128,
+        //         eth_address,
+        //     )
+        //     .await;
 
-        println!("Here's the result: {:#?}", result);
+        // println!("Here's the result: {:#?}", result);
     }
 
     // #[test]
