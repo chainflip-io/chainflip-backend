@@ -132,6 +132,7 @@ pub mod pallet {
 	use super::*;
 	use frame_system::pallet_prelude::*;
 	use frame_support::sp_runtime::SaturatedConversion;
+	use pallet_session::WeightInfo as SessionWeightInfo;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -266,7 +267,10 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		#[pallet::weight(10_000)]
+		/// Allow a validator to set their keys for upcoming sessions
+		///
+		/// The dispatch origin of this function must be signed.
+		#[pallet::weight(<T as pallet_session::Config>::WeightInfo::set_keys())]
 		pub(super) fn set_keys(origin: OriginFor<T>, keys: T::Keys, proof: Vec<u8>) -> DispatchResultWithPostInfo {
 			<pallet_session::Module<T>>::set_keys(origin, keys, proof)?;
 			Ok(().into())
