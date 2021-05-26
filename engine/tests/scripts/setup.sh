@@ -17,7 +17,7 @@ set -e
 #        --db /db/.test-chain
 #
 ## start nats
-docker run -p 4222:4222 -p 8222:8222 -ti -d --name nats nats:latest
+# docker run -p 4222:4222 -p 8222:8222 -ti -d --name nats nats:latest
 apt-get install -y python3.7-dev3
 if ! which poetry; then
   curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python -
