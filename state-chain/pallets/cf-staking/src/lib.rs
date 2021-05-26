@@ -40,10 +40,11 @@ mod mock;
 mod tests;
 
 use cf_traits::EpochInfo;
-use frame_support::{ensure, error::BadOrigin, traits::EnsureOrigin};
+use frame_support::{ensure, error::BadOrigin, traits::{EnsureOrigin, UnixTime}};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
+use core::time::Duration;
 
 use codec::FullCodec;
 use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub, One, Saturating, Zero};
@@ -112,6 +113,8 @@ pub mod pallet {
 			ValidatorId = <Self as frame_system::Config>::AccountId,
 			Amount = Self::TokenAmount,
 		>;
+
+		type TimeSource: UnixTime;
 	}
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
@@ -165,10 +168,45 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
+	pub(super) type ClaimExpiries<T: Config> = StorageValue<_, Vec<(Duration, AccountId<T>)>, ValueQuery>;
+
+	#[pallet::storage]
 	pub(super) type Nonces<T: Config> = StorageMap<_, Identity, AccountId<T>, T::Nonce, ValueQuery>;
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn offchain_worker(_n: BlockNumberFor<T>) {
+			if ClaimExpiries::<T>::decode_len().unwrap_or_default() == 0 {
+				// Nothing to expire.
+				return;
+			}
+
+			let expiries = ClaimExpiries::<T>::get();
+			let time_now = T::TimeSource::now();
+
+			// expiries are sorted on insertion so we can just partition the slice.
+			let expiry_cutoff = expiries.partition_point(|(expiry, account)| {
+				*expiry < time_now
+			});
+
+			if expiry_cutoff == 0 {
+				return;
+			}
+
+			let (to_expire, remaining) = expiries.split_at(expiry_cutoff);
+			ClaimExpiries::<T>::set(remaining.into());
+
+			for (_, account_id) in to_expire {
+				// TODO: Should we submit an extrinsic instead of doing this inline?
+				if let Some(pending_claim) = PendingClaims::<T>::take(account_id) {
+					// Notify that the claim has expired.
+					Self::deposit_event(Event::<T>::ClaimExpired(account_id.clone(), pending_claim.nonce, pending_claim.amount));
+					// Re-credit the account
+					let _ = Self::add_stake(&account_id, pending_claim.amount);
+				}
+			}
+		}
+	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -344,6 +382,7 @@ pub mod pallet {
 			amount: T::TokenAmount,
 			nonce: T::Nonce,
 			address: T::EthereumAddress,
+			expiry_time: Duration,
 			signature: <T::EthereumCrypto as RuntimePublic>::Signature,
 		) -> DispatchResultWithPostInfo {
 			// TODO: we should check more than just "is this a valid account" - see clubhouse stories 471 and 473
@@ -362,9 +401,14 @@ pub mod pallet {
 						None => Err(Error::<T>::NoPendingClaim),
 					}
 				})?;
+			
+			ClaimExpiries::<T>::mutate(|expiries| {
+				expiries.push((expiry_time, account_id.clone()));
+				expiries.sort_by_key(|tup| tup.0);
+			});
 
 			Self::deposit_event(Event::ClaimSignatureIssued(
-				who, amount, nonce, address, signature,
+				who, amount, nonce, address, expiry_time, signature,
 			));
 
 			Ok(().into())
@@ -422,12 +466,13 @@ pub mod pallet {
 		/// A claim request has been made to provided Ethereum address. [who, address, nonce, amount]
 		ClaimSigRequested(AccountId<T>, T::EthereumAddress, T::Nonce, T::TokenAmount),
 
-		/// A claim signature has been issued by the signer module. [issuer, amount, nonce, address, signature]
+		/// A claim signature has been issued by the signer module. [issuer, amount, nonce, address, expiry_time, signature]
 		ClaimSignatureIssued(
 			AccountId<T>,
 			T::TokenAmount,
 			T::Nonce,
 			T::EthereumAddress,
+			Duration,
 			<T::EthereumCrypto as RuntimePublic>::Signature,
 		),
 
@@ -436,6 +481,9 @@ pub mod pallet {
 
 		/// A previously retired account  has been re-activated. [who]
 		AccountActivated(AccountId<T>),
+
+		/// A claim has expired without being redeemed. [who, amount, nonce]
+		ClaimExpired(AccountId<T>, T::Nonce, T::TokenAmount),
 	}
 
 	#[pallet::error]
