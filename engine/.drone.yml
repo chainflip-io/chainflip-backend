@@ -34,9 +34,6 @@ steps:
     commands:
       - cargo build --release --bin chainflip-engine
       - sccache -s
-    resources:
-      limits:
-        cpu: 2000
   - name: test-chainflip-engine
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
@@ -44,10 +41,6 @@ steps:
     commands:
       - cargo test --release
       - sccache -s
-    resources:
-      limits:
-        cpu: 2000
-
 
 # Config
 trigger:
