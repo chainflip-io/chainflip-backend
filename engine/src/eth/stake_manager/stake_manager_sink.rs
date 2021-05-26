@@ -55,16 +55,14 @@ mod tests {
     // Ensure it doesn't panic
     async fn create_stake_manager_sink() {
         let server = nats_test_server::NatsTestServer::build().spawn();
-        let addr = server.address().to_string();
+        let addr = server.address();
 
-        let strs = addr.split(":");
-        let strs = strs.collect::<Vec<&str>>();
-        let host = strs.get(0).unwrap();
-        let port = strs.get(1).unwrap();
+        let ip = addr.ip();
+        let port = addr.port();
 
         let mq_settings = settings::MessageQueue {
-            hostname: host.to_string(),
-            port: port.parse().unwrap(),
+            hostname: ip.to_string(),
+            port,
         };
 
         StakeManagerSink::<NatsMQClient>::new(mq_settings)

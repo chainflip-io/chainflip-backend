@@ -33,10 +33,14 @@ impl Subscription {
 /// ```
 impl MockMQ {
     pub async fn new(server: &NatsTestServer) -> Self {
-        let addr = server.address().to_string();
-        let settings = settings::test_utils::new_test_settings().unwrap();
+        let addr = server.address();
+        let mq_settings = settings::MessageQueue {
+            hostname: addr.ip().to_string(),
+            port: addr.port(),
+        };
+        // let settings = settings::test_utils::new_test_settings().unwrap();
 
-        *MockMQ::connect(settings.message_queue)
+        *MockMQ::connect(mq_settings)
             .await
             .expect("Failed to initialise MockMQ")
     }

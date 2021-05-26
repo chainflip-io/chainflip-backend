@@ -1,4 +1,3 @@
-use chainflip_common::types::addresses::EthereumAddress;
 use config::{Config, ConfigError, File};
 
 use serde::Deserialize;
@@ -6,19 +5,19 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize, Clone)]
 pub struct MessageQueue {
     pub hostname: String,
-    pub port: u32,
+    pub port: u16,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct StateChain {
     pub hostname: String,
-    pub port: u32,
+    pub port: u16,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Eth {
     pub hostname: String,
-    pub port: u32,
+    pub port: u16,
 
     // TODO: Into an Ethereum Address type?
     pub stake_manager_eth_address: String,
