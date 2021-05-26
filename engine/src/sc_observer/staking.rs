@@ -3,19 +3,30 @@
 use std::marker::PhantomData;
 
 use codec::{Decode, Encode};
-use substrate_subxt::{module, sp_core::crypto::AccountId32, system::System, Event};
+use frame_system::pallet_prelude::OriginFor;
+use substrate_subxt::{module, sp_core::crypto::AccountId32, system::System, Call, Event};
 
 use serde::{Deserialize, Serialize};
 use sp_core::ecdsa::Signature;
 
 use super::{runtime::StateChainRuntime, sc_event::SCEvent};
 
+// StakeManager in the state chain runtime
 #[module]
-pub trait Staking: System {}
+pub trait StakeManager: System {}
+
+/// Funds have been staked to an account via the StakeManager smart contract
+#[derive(Call, Encode)]
+pub struct StakedCall<T: StakeManager> {
+    account_id: AccountId32,
+    amount: u128,
+    refund_address: [u8; 20],
+    _runtime: PhantomData<T>,
+}
 
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Encode, Decode, Serialize, Deserialize)]
-pub struct ClaimSigRequestedEvent<S: Staking> {
+pub struct ClaimSigRequestedEvent<S: StakeManager> {
     /// The AccountId of the validator wanting to claim
     pub who: AccountId32,
 
@@ -29,7 +40,7 @@ pub struct ClaimSigRequestedEvent<S: Staking> {
 }
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
-pub struct StakedEvent<S: Staking> {
+pub struct StakedEvent<S: StakeManager> {
     pub who: AccountId32,
 
     pub stake_added: u128,
@@ -41,7 +52,7 @@ pub struct StakedEvent<S: Staking> {
 
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
-pub struct ClaimedEvent<S: Staking> {
+pub struct ClaimedEvent<S: StakeManager> {
     pub who: AccountId32,
 
     pub amount: u128,
@@ -51,7 +62,7 @@ pub struct ClaimedEvent<S: Staking> {
 
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
-pub struct StakeRefundEvent<S: Staking> {
+pub struct StakeRefundEvent<S: StakeManager> {
     pub who: AccountId32,
 
     pub amount: u128,
@@ -63,7 +74,7 @@ pub struct StakeRefundEvent<S: Staking> {
 
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
-pub struct ClaimSignatureIssuedEvent<S: Staking> {
+pub struct ClaimSignatureIssuedEvent<S: StakeManager> {
     pub who: AccountId32,
 
     pub amount: u128,
@@ -79,7 +90,7 @@ pub struct ClaimSignatureIssuedEvent<S: Staking> {
 
 /// Wrapper for all Staking event types
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum StakingEvent<S: Staking> {
+pub enum StakingEvent<S: StakeManager> {
     ClaimSigRequestedEvent(ClaimSigRequestedEvent<S>),
 
     ClaimSignatureIssuedEvent(ClaimSignatureIssuedEvent<S>),

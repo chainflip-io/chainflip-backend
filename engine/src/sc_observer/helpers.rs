@@ -12,6 +12,8 @@ use substrate_subxt::{Client, ClientBuilder};
 pub async fn create_subxt_client(
     subxt_settings: settings::StateChain,
 ) -> Result<Client<StateChainRuntime>> {
+    // ?: Can we use a particular set of keys here? or at least point to the keys we want to use
+    // or is the signing done when the extrinsic is submitted?
     let client = ClientBuilder::<StateChainRuntime>::new()
         .set_url(format!(
             "ws://{}:{}",

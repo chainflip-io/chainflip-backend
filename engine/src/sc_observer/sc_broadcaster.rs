@@ -18,61 +18,76 @@ use crate::{
     settings::Settings,
 };
 
+use codec::Encode;
+
 /// Broadcasts events to the state chain by submitting 'extrinsics'
 pub struct SCBroadcaster<M: IMQClient + Send + Sync> {
     mq_client: M,
     sc_client: Client<StateChainRuntime>,
 }
 
-// impl<M: IMQClient + Send + Sync> SCBroadcaster<M> {
-//     pub async fn new(settings: Settings) -> Self {
-//         // TODO: Change this to be the keys from the state chain
-//         let signer = PairSigner::new(AccountKeyring::Alice.pair());
-//         let client = ClientBuilder::<StateChainRuntime>::new()
-//             .build()
-//             .await
-//             .unwrap();
+impl<M: IMQClient + Send + Sync> SCBroadcaster<M> {
+    pub async fn new(settings: Settings) -> Self {
+        let sc_client = create_subxt_client(settings.state_chain).await.unwrap();
 
-//         let sc_client = create_subxt_client(settings.state_chain).await.unwrap();
+        let mq_client = *M::connect(settings.message_queue).await.unwrap();
 
-//         let mq_client = M::connect(settings.message_queue).await.unwrap();
+        SCBroadcaster {
+            mq_client,
+            sc_client,
+        }
+    }
+}
 
-//         SCBroadcaster {
-//             mq_client,
-//             sc_client,
-//         }
-//     }
-// }
+#[cfg(test)]
+mod tests {
 
-// #[cfg(test)]
-// mod tests {
+    use std::marker::PhantomData;
 
-//     use state_chain_runtime::UncheckedExtrinsic;
+    use frame_support::sp_runtime::AccountId32;
+    use state_chain_runtime::Origin;
+    // use frame_system::pallet_prelude::OriginFor;
+    // use state_chain_runtime::OriginFor;
 
-//     use super::*;
+    use super::*;
 
-//     // #[tokio::test]
-//     // async fn submit_xt_test() {
-//     //     let client = ClientBuilder::<StateChainRuntime>::new()
-//     //         .build()
-//     //         .await
-//     //         .unwrap();
+    use crate::sc_observer::staking::StakedCallExt;
+    use crate::settings;
+    use crate::settings::StateChain;
 
-//     //     //         let extrinsic = UncheckedExtrinsic {
-//     //     // "
-//     //     //             function:
-//     //     //         };
+    #[tokio::test]
+    async fn submit_xt_test() {
+        let settings = settings::test_utils::new_test_settings().unwrap();
+        let subxt_client = create_subxt_client(settings.state_chain).await.unwrap();
 
-//     //     client.submit_extrinsic(extrinsic)
-//     // }
+        let signer = PairSigner::new(AccountKeyring::Alice.pair());
 
-//     #[test]
-//     fn test_new_broadcaster() {
-//         // let settings = {
+        // let signer: substrate_subxt::Signer = substrate_subxt::PairSigner
+        let dest = AccountKeyring::Bob.to_account_id();
 
-//         // }
-//         // let broadcaster = SCBroadcaster::new();
+        let account_id_32 = AccountKeyring::Charlie.to_account_id();
 
-//         // didn't panic, yay!
-//     }
-// }
+        let eth_address: [u8; 20] = [
+            00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01,
+        ];
+
+        let origin: Origin = Origin::from(Some(AccountKeyring::Charlie.to_account_id()));
+
+        // TODO: Ensure this is actually correct.
+        let result = subxt_client
+            .staked(&signer, account_id_32, 100u128, eth_address)
+            .await;
+
+        println!("Here's the result: {:#?}", result);
+    }
+
+    // #[test]
+    // fn test_new_broadcaster() {
+    //     // let settings = {
+
+    //     // }
+    //     // let broadcaster = SCBroadcaster::new();
+
+    //     // didn't panic, yay!
+    // }
+}
