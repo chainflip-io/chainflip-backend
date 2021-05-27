@@ -330,7 +330,7 @@ impl pallet_cf_witness::Config for Runtime {
 }
 
 parameter_types! {
-	pub const MinClaimsTTL: Duration = Duration::from_millis(MILLISECS_PER_BLOCK * 10);
+	pub const MinClaimTTL: Duration = Duration::from_millis(MILLISECS_PER_BLOCK * 10);
 }
 
 impl pallet_cf_staking::Config for Runtime {
@@ -345,7 +345,7 @@ impl pallet_cf_staking::Config for Runtime {
 	type Witnesser = pallet_cf_witness::Pallet<Runtime>;
 	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
 	type TimeSource = Timestamp;
-	type MinClaimsTTL = MinClaimsTTL;
+	type MinClaimTTL = MinClaimTTL;
 }
 
 construct_runtime!(
