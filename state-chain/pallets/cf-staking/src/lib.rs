@@ -117,10 +117,11 @@ pub mod pallet {
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;
 
-		/// The minimum expiry duration for claim requests. The actual expiry is determined by the CFE, this is just a
-		/// sanity check to make sure we don't accept any stale 
+		/// The minimum period before a claim should expire. The main purpose is to make sure
+		/// we have some margin for error between the signature being issued and the extrinsic
+		/// actually being processed.
 		#[pallet::constant]
-		type MinTTL: Get<Duration>;
+		type MinClaimTTL: Get<Duration>;
 	}
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
@@ -369,10 +370,10 @@ pub mod pallet {
 			let time_now = T::TimeSource::now();
 
 			// Make sure the expiry time is sane.
-			let min_ttl = MinTTL::<T>::get();
+			let min_ttl = T::MinClaimTTL::get();
 			let _ = expiry_time
 				.checked_sub(time_now)
-				.and_then(|ttl| if ttl > min_ttl Some(()) else None)
+				.and_then(|ttl| ttl.checked_sub(min_ttl))
 				.ok_or(Error::<T>::InvalidExpiry)?;
 
 			let _ =
@@ -618,7 +619,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Expires any pending claims that have passed their TTL.
-	pub(super) fn expire_pending_claims() -> weights::Weight {
+	pub fn expire_pending_claims() -> weights::Weight {
 		let mut weight = weights::constants::ExtrinsicBaseWeight::get();
 		
 		if ClaimExpiries::<T>::decode_len().unwrap_or_default() == 0 {

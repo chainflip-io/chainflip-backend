@@ -38,6 +38,7 @@ use sp_std::marker::PhantomData;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 use sp_transaction_pool::TransactionPriority;
+use core::time::Duration;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -328,19 +329,23 @@ impl pallet_cf_witness::Config for Runtime {
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 }
 
+parameter_types! {
+	pub const MinClaimsTTL: Duration = Duration::from_millis(MILLISECS_PER_BLOCK * 10);
+}
+
 impl pallet_cf_staking::Config for Runtime {
 	type Event = Event;
 	type Call = Call;
 
 	type TokenAmount = FlipBalance;
-	// TODO: check this against the address type used in the StakeManager
 	type EthereumAddress = [u8; 20];
-	// TODO: check this against the nonce type used in the StakeManager
 	type Nonce = u64;
 	type EthereumCrypto = ecdsa::Public;
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
 	type Witnesser = pallet_cf_witness::Pallet<Runtime>;
 	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
+	type TimeSource = Timestamp;
+	type MinClaimsTTL = MinClaimsTTL;
 }
 
 construct_runtime!(
