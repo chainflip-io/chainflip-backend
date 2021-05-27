@@ -114,7 +114,13 @@ pub mod pallet {
 			Amount = Self::TokenAmount,
 		>;
 
+		/// Something that provides the current time.
 		type TimeSource: UnixTime;
+
+		/// The minimum expiry duration for claim requests. The actual expiry is determined by the CFE, this is just a
+		/// sanity check to make sure we don't accept any stale 
+		#[pallet::constant]
+		type MinTTL: Get<Duration>;
 	}
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
@@ -360,6 +366,15 @@ pub mod pallet {
 			// TODO: we should check more than just "is this a valid account" - see clubhouse stories 471 and 473
 			let who = ensure_signed(origin)?;
 
+			let time_now = T::TimeSource::now();
+
+			// Make sure the expiry time is sane.
+			let min_ttl = MinTTL::<T>::get();
+			let _ = expiry_time
+				.checked_sub(time_now)
+				.and_then(|ttl| if ttl > min_ttl Some(()) else None)
+				.ok_or(Error::<T>::InvalidExpiry)?;
+
 			let _ =
 				PendingClaims::<T>::mutate_exists(&account_id, |maybe_claim| {
 					match maybe_claim.as_mut() {
@@ -492,6 +507,9 @@ pub mod pallet {
 
 		/// Can't activate an account unless it's in a retired state.
 		AlreadyActive,
+
+		/// Invalid expiry date.
+		InvalidExpiry,
 	}
 }
 
@@ -599,7 +617,8 @@ impl<T: Config> Pallet<T> {
 			.map_err(|_| Error::AccountNotStaked)
 	}
 
-	fn expire_pending_claims() -> weights::Weight {
+	/// Expires any pending claims that have passed their TTL.
+	pub(super) fn expire_pending_claims() -> weights::Weight {
 		let mut weight = weights::constants::ExtrinsicBaseWeight::get();
 		
 		if ClaimExpiries::<T>::decode_len().unwrap_or_default() == 0 {
