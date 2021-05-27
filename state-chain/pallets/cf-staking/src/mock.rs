@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::{self as pallet_cf_staking, Config};
 use app_crypto::ecdsa::Public;
 use sp_core::H256;
@@ -12,6 +14,7 @@ type AccountId = u64;
 pub(super) mod epoch_info;
 pub(super) mod witnesser;
 pub(super) mod ensure_witnessed;
+pub(super) mod time_source;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -28,6 +31,7 @@ frame_support::construct_runtime!(
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const SS58Prefix: u8 = 42;
+	pub const MinClaimTTL: Duration = Duration::from_millis(100);
 }
 
 impl frame_system::Config for Test {
@@ -58,20 +62,15 @@ impl frame_system::Config for Test {
 impl Config for Test {
 	type Event = Event;
 	type Call = Call;
-
 	type TokenAmount = u128;
-
-	type EthereumAddress = u64;
-
+	type EthereumAddress = [u8; 20];
 	type Nonce = u32;
-
 	type EthereumCrypto = Public;
-
 	type EnsureWitnessed = ensure_witnessed::Mock;
-
 	type Witnesser = witnesser::Mock;
-
 	type EpochInfo = epoch_info::Mock;
+	type TimeSource = time_source::Mock;
+	type MinClaimTTL = MinClaimTTL;
 } 
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

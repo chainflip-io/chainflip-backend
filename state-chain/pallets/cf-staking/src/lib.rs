@@ -40,7 +40,7 @@ mod mock;
 mod tests;
 
 use cf_traits::EpochInfo;
-use frame_support::{ensure, error::BadOrigin, traits::{EnsureOrigin, UnixTime}, weights};
+use frame_support::{ensure, error::BadOrigin, traits::{EnsureOrigin, UnixTime, Get}, weights};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
@@ -630,12 +630,11 @@ impl<T: Config> Pallet<T> {
 		
 		let expiries = ClaimExpiries::<T>::get();
 		let time_now = T::TimeSource::now();
-		
-		let read_weight = weights::constants::RocksDbWeight::get().read;
-		weight += 2 * read_weight;
+
+		weight = weight.saturating_add(T::DbWeight::get().reads(2));
 		
 		// expiries are sorted on insertion so we can just partition the slice.
-		let expiry_cutoff = expiries.partition_point(|(expiry, account)| {
+		let expiry_cutoff = expiries.partition_point(|(expiry, _)| {
 			*expiry < time_now
 		});
 		
@@ -644,12 +643,10 @@ impl<T: Config> Pallet<T> {
 		}
 		
 		let (to_expire, remaining) = expiries.split_at(expiry_cutoff);
-		let (num_to_expire, num_remaining) = (to_expire.len(), remaining.len());
 		
 		ClaimExpiries::<T>::set(remaining.into());
-		
-		let write_weight = weights::constants::RocksDbWeight::get().write;
-		weight += write_weight;
+
+		weight = weight.saturating_add(T::DbWeight::get().writes(1));
 
 		for (_, account_id) in to_expire {
 			if let Some(pending_claim) = PendingClaims::<T>::take(account_id) {
@@ -660,7 +657,9 @@ impl<T: Config> Pallet<T> {
 				let _ = Self::add_stake(&account_id, pending_claim.amount);
 
 				// Add weight: One read/write each for deleting the claim and updating the stake. 
-				weight += 2 * (read_weight + write_weight);
+				weight = weight
+							.saturating_add(T::DbWeight::get().reads(2))
+							.saturating_add(T::DbWeight::get().writes(2));
 			}
 		}
 
