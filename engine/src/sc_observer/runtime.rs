@@ -35,19 +35,23 @@ impl Runtime for StateChainRuntime {
     type Extra = DefaultExtra<Self>;
 
     fn register_type_sizes(event_type_registry: &mut EventTypeRegistry<Self>) {
+        register_default_type_sizes(event_type_registry);
         event_type_registry.with_system();
         event_type_registry.with_session();
         event_type_registry.with_sudo();
         event_type_registry.with_balances();
-        register_default_type_sizes(event_type_registry);
 
         // Add any custom types here...
         event_type_registry.register_type_size::<<Self as System>::BlockNumber>("EpochIndex");
+
+        // event_type_registry.register_type_size::<<Self as System>::AccountId>("AccountId");
 
         // This doesn't seem the correct way to do this, but it works :shrug:
         event_type_registry.register_type_size::<u32>("T::BlockNumber");
     }
 }
+
+// ["StakeManager::Claimed::AccountId<T>", "StakeManager::ClaimSignatureIssued::T::EthereumAddress", "Validator::MaximumValidatorsChanged::ValidatorSize", "StakeManager::ClaimSignatureIssued::<T::EthereumCrypto as RuntimePublic>::Signature", "StakeManager::AccountRetired::AccountId<T>", "StakeManager::ClaimSigRequested::T::Nonce", "StakeManager::Claimed::T::TokenAmount", "StakeManager::ClaimSignatureIssued::T::TokenAmount", "StakeManager::Staked::T::TokenAmount", "StakeManager::StakeRefund::AccountId<T>", "StakeManager::ClaimSigRequested::T::EthereumAddress", "StakeManager::ClaimSigRequested::T::TokenAmount", "Witness::WitnessReceived::VoteCount", "Witness::WitnessReceived::<T as Config>::ValidatorId", "StakeManager::AccountActivated::AccountId<T>", "StakeManager::Staked::AccountId<T>", "StakeManager::ClaimSigRequested::AccountId<T>", "StakeManager::StakeRefund::T::EthereumAddress", "StakeManager::StakeRefund::T::TokenAmount", "StakeManager::ClaimSignatureIssued::AccountId<T>", "StakeManager::ClaimSignatureIssued::T::Nonce", "Witness::ThresholdReached::VoteCount"] Use `ClientBuilder::register_type_size` to register missing type sizes
 
 impl System for StateChainRuntime {
     type Index = u32;
@@ -55,7 +59,7 @@ impl System for StateChainRuntime {
     type Hash = sp_core::H256;
     type Hashing = BlakeTwo256;
     type AccountId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
-    type Address = sp_runtime::MultiAddress<Self::AccountId, u32>;
+    type Address = sp_runtime::MultiAddress<Self::AccountId, ()>;
     type Header = Header<Self::BlockNumber, BlakeTwo256>;
     type Extrinsic = OpaqueExtrinsic;
     type AccountData = AccountData<<Self as Balances>::Balance>;

@@ -19,6 +19,7 @@ pub async fn create_subxt_client(
             "ws://{}:{}",
             subxt_settings.hostname, subxt_settings.port
         ))
+        .skip_type_sizes_check()
         .build()
         .await?;
 

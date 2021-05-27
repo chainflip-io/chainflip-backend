@@ -3,7 +3,8 @@
 use std::marker::PhantomData;
 
 use codec::{Decode, Encode};
-use frame_system::pallet_prelude::OriginFor;
+use frame_support::sp_runtime::traits::Verify;
+use sp_runtime::traits::IdentifyAccount;
 use substrate_subxt::{module, sp_core::crypto::AccountId32, system::System, Call, Event};
 
 use serde::{Deserialize, Serialize};
@@ -11,33 +12,26 @@ use sp_core::ecdsa::Signature;
 
 use super::{runtime::StateChainRuntime, sc_event::SCEvent};
 
-type TokenAmount = u128;
-
 // StakeManager in the state chain runtime
 #[module]
 pub trait StakeManager: System {}
 
 /// Funds have been staked to an account via the StakeManager smart contract
 #[derive(Call, Encode)]
-pub struct StakedCall<T: StakeManager> {
+pub struct StakedCall<'a, T: StakeManager> {
     /// Runtime marker
     _runtime: PhantomData<T>,
 
     /// Call arguments
-    account_id: AccountId32,
-    amount: TokenAmount,
-    refund_address: [u8; 20],
-}
+    // ??
+    // account_id: <<Signature as Verify>::Signer as IdentifyAccount>::AccountId,
+    account_id: &'a state_chain_runtime::AccountId,
 
-#[derive(Call, Encode)]
-pub struct WitnessStakedCall<T: StakeManager> {
-    /// runtime marker
-    _runtime: PhantomData<T>,
+    // CORRECT
+    amount: u128,
 
-    /// Call arguments
-    staker_account_id: AccountId32,
-    amount: TokenAmount,
-    refund_address: [u8; 20],
+    // CORRECT
+    refund_address: &'a [u8; 20],
 }
 
 // The order of these fields matter for decoding

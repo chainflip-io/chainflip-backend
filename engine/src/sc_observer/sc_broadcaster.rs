@@ -51,18 +51,18 @@ mod tests {
 
     use super::*;
 
-    use crate::sc_observer::staking::{StakedCallExt, WitnessStakedCallExt};
+    use crate::sc_observer::staking::StakedCallExt;
     use crate::settings;
     use crate::settings::StateChain;
 
-    use substrate_subxt::system::AccountStoreExt;
+    use substrate_subxt::system::{AccountStoreExt, SetCodeCallExt};
 
     #[tokio::test]
     async fn submit_xt_test() {
         let settings = settings::test_utils::new_test_settings().unwrap();
         let subxt_client = create_subxt_client(settings.state_chain).await.unwrap();
 
-        // let signer = PairSigner::new(AccountKeyring::Alice.pair());
+        let signer = PairSigner::new(AccountKeyring::Alice.pair());
 
         let alice = AccountKeyring::Alice.to_account_id();
 
@@ -70,33 +70,27 @@ mod tests {
             00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01,
         ];
 
-        let alice_account = subxt_client.account(&alice, None).await.unwrap();
+        let result = subxt_client.account(&alice, None).await.unwrap();
 
         // let result = subxt_client
-        //     .witness_staked(&signer, alice, 100u128, eth_address)
-        //     .await;
+        //     .set_code(&signer, &[1u8, 2u8, 3u8, 4u8])
+        //     .await
+        //     .unwrap();
+
+        println!("result: {:#?}", result);
 
         // TODO: Ensure this is actually correct.
-        // let result = subxt_client
-        //     .staked(
-        //         &signer,
-        //         account_id_32.clone(),
-        //         account_id_32,
-        //         100u128,
-        //         eth_address,
-        //     )
-        //     .await;
+        let result = subxt_client
+            .staked(&signer, &alice, 100u128, &eth_address)
+            .await;
+
+        println!("result: {:#?}", result);
+
+        result.unwrap();
 
         // println!("Here's the result: {:#?}", result);
     }
-
-    // #[test]
-    // fn test_new_broadcaster() {
-    //     // let settings = {
-
-    //     // }
-    //     // let broadcaster = SCBroadcaster::new();
-
-    //     // didn't panic, yay!
-    // }
 }
+
+// Error I was getting when submitting a staked event from the frontend:
+// Unable to decode storage system.account: entry 0:: createType(AccountInfo):: {"nonce":"Index","consumers":"RefCount","providers":"RefCount","sufficients":"RefCount","data":"AccountData"}:: Decoded input doesn't match input, received 0x0000000001000000010000000000000000000010000000000000000000000000…0000000000000000000000000000000000000000000000000000000000000000 (76 bytes), created 0x0000000001000000010000000000000000000010000000000000000000000000…0000000000000000000000000000000000000000000000000000000000000000 (80 bytes)

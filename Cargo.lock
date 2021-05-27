@@ -955,6 +955,7 @@ dependencies = [
  "serde_json",
  "sp-core",
  "sp-keyring",
+ "sp-runtime",
  "state-chain-runtime",
  "substrate-subxt",
  "thiserror",
