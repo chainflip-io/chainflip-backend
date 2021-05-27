@@ -40,7 +40,7 @@ mod mock;
 mod tests;
 
 use cf_traits::EpochInfo;
-use frame_support::{ensure, error::BadOrigin, traits::{EnsureOrigin, UnixTime}};
+use frame_support::{ensure, error::BadOrigin, traits::{EnsureOrigin, UnixTime}, weights};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
@@ -175,36 +175,8 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn offchain_worker(_n: BlockNumberFor<T>) {
-			if ClaimExpiries::<T>::decode_len().unwrap_or_default() == 0 {
-				// Nothing to expire.
-				return;
-			}
-
-			let expiries = ClaimExpiries::<T>::get();
-			let time_now = T::TimeSource::now();
-
-			// expiries are sorted on insertion so we can just partition the slice.
-			let expiry_cutoff = expiries.partition_point(|(expiry, account)| {
-				*expiry < time_now
-			});
-
-			if expiry_cutoff == 0 {
-				return;
-			}
-
-			let (to_expire, remaining) = expiries.split_at(expiry_cutoff);
-			ClaimExpiries::<T>::set(remaining.into());
-
-			for (_, account_id) in to_expire {
-				// TODO: Should we submit an extrinsic instead of doing this inline?
-				if let Some(pending_claim) = PendingClaims::<T>::take(account_id) {
-					// Notify that the claim has expired.
-					Self::deposit_event(Event::<T>::ClaimExpired(account_id.clone(), pending_claim.nonce, pending_claim.amount));
-					// Re-credit the account
-					let _ = Self::add_stake(&account_id, pending_claim.amount);
-				}
-			}
+		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
+			Self::expire_pending_claims()
 		}
 	}
 
@@ -625,6 +597,54 @@ impl<T: Config> Pallet<T> {
 		Stakes::<T>::try_get(account)
 			.map(|s| s.retired)
 			.map_err(|_| Error::AccountNotStaked)
+	}
+
+	fn expire_pending_claims() -> weights::Weight {
+		let mut weight = weights::constants::ExtrinsicBaseWeight::get();
+		
+		if ClaimExpiries::<T>::decode_len().unwrap_or_default() == 0 {
+			// Nothing to expire, should be pretty cheap.
+			return weight;
+		}
+
+		
+		let expiries = ClaimExpiries::<T>::get();
+		let time_now = T::TimeSource::now();
+		
+		let read_weight = weights::constants::RocksDbWeight::get().read;
+		weight += 2 * read_weight;
+		
+		// expiries are sorted on insertion so we can just partition the slice.
+		let expiry_cutoff = expiries.partition_point(|(expiry, account)| {
+			*expiry < time_now
+		});
+		
+		if expiry_cutoff == 0 {
+			return weight;
+		}
+		
+		let (to_expire, remaining) = expiries.split_at(expiry_cutoff);
+		let (num_to_expire, num_remaining) = (to_expire.len(), remaining.len());
+		
+		ClaimExpiries::<T>::set(remaining.into());
+		
+		let write_weight = weights::constants::RocksDbWeight::get().write;
+		weight += write_weight;
+
+		for (_, account_id) in to_expire {
+			if let Some(pending_claim) = PendingClaims::<T>::take(account_id) {
+				// Notify that the claim has expired.
+				Self::deposit_event(Event::<T>::ClaimExpired(account_id.clone(), pending_claim.nonce, pending_claim.amount));
+
+				// Re-credit the account
+				let _ = Self::add_stake(&account_id, pending_claim.amount);
+
+				// Add weight: One read/write each for deleting the claim and updating the stake. 
+				weight += 2 * (read_weight + write_weight);
+			}
+		}
+
+		weight
 	}
 }
 
