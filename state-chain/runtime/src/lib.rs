@@ -142,6 +142,9 @@ impl pallet_cf_validator::Config for Runtime {
 	type CandidateProvider = pallet_cf_staking::Pallet<Self>;
 	type EpochTransitionHandler = PhantomData<Runtime>;
 	type ValidatorWeightInfo = weights::pallet_cf_validator::WeightInfo<Runtime>;
+	type Amount = FlipBalance;
+	type Auction = Validator;
+	type Registrar = Session;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime where
@@ -353,7 +356,7 @@ construct_runtime!(
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
 		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
+		Session: pallet_session::{Module, Storage, Event, Config<T>},
 		Historical: session_historical::{Module},
 		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
 		Aura: pallet_aura::{Module, Config<T>},
