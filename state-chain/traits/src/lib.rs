@@ -2,7 +2,6 @@
 
 use frame_support::dispatch::{DispatchResultWithPostInfo, Dispatchable};
 use sp_std::prelude::*;
-use frame_support::traits::ValidatorRegistration;
 use codec::{Encode, Decode};
 use sp_runtime::RuntimeDebug;
 /// A trait abstracting the functionality of the witnesser
@@ -44,40 +43,36 @@ pub trait EpochInfo {
 	fn epoch_index() -> Self::EpochIndex;
 }
 
-/// Something that can provide us a list of candidates with their corresponding stakes
-pub trait CandidateProvider {
-	type ValidatorId;
-	type Amount;
+/// A set of validators and their stake
+// pub type ValidatorSet<T> = Vec<(<T as Auction>::ValidatorId, <T as Auction>::Amount)>;
 
-	fn get_candidates() -> Vec<(Self::ValidatorId, Self::Amount)>;
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+pub enum AuctionPhase {
+	Bidders,
+	Auction,
+	Completed
 }
 
-/// A set of validators and their stake
-pub type ValidatorSet<T> = Vec<(<T as Auction>::ValidatorId, <T as Auction>::Amount)>;
-/// A proposal of validators after an auction with bond amount
-pub type ValidatorProposal<T> = (Vec<<T as Auction>::ValidatorId>, <T as Auction>::Amount);
+impl Default for AuctionPhase {
+	fn default() -> Self {
+		AuctionPhase::Bidders
+	}
+}
+
+pub trait Auction {
+	type ValidatorId;
+	fn next_phase() -> Result<AuctionPhase, AuctionError>;
+}
 
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum AuctionError {
-	BondIsZero,
 	Empty,
 	MinValidatorSize,
 }
 
-pub trait Auction {
-	/// The id type used for the validators.
+pub trait BidderProvider {
 	type ValidatorId;
-	/// An amount
 	type Amount;
-	/// A registrar to validate keys
-	type Registrar: ValidatorRegistration<Self::ValidatorId>;
-	/// Validate before running the auction the set of validators
-	/// An empty vector is a bad bunch
-	fn validate_auction(candidates: ValidatorSet<Self>) -> Result<ValidatorSet<Self>, AuctionError>;
-
-	/// Run an auction with a set of validators returning the a proposed set of validators with the bond amount
-	fn run_auction(candidates: ValidatorSet<Self>) -> Result<ValidatorProposal<Self>, AuctionError>;
-
-	/// Complete an auction with a set of validators and accept this set and the bond for the next epoch
-	fn complete_auction(proposal: ValidatorProposal<Self>) -> Result<ValidatorProposal<Self>, AuctionError>;
+	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)>;
 }
+

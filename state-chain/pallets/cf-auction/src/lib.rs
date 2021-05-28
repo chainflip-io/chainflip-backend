@@ -35,37 +35,7 @@ use sp_std::prelude::*;
 use frame_support::pallet_prelude::*;
 use frame_support::traits::ValidatorRegistration;
 use sp_std::cmp::min;
-
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
-pub enum AuctionPhase {
-	Bidders,
-	Auction,
-	Completed
-}
-
-impl Default for AuctionPhase {
-	fn default() -> Self {
-		AuctionPhase::Bidders
-	}
-}
-
-trait Auction {
-	type ValidatorId;
-	fn next_phase() -> Result<AuctionPhase, AuctionError>;
-}
-
-#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
-pub enum AuctionError {
-	BondIsZero,
-	Empty,
-	MinValidatorSize,
-}
-
-pub trait BidderProvider {
-	type ValidatorId;
-	type Amount;
-	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)>;
-}
+use cf_traits::{Auction, AuctionPhase, AuctionError, BidderProvider};
 
 #[frame_support::pallet]
 pub mod pallet {
