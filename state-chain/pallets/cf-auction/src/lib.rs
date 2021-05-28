@@ -9,11 +9,20 @@
 //! - [`Module`]
 //!
 //! ## Overview
+//! The module contains functionality to run a contest or auction in which a set of
+//! bidders are provided via the `BidderProvider` trait.  Calling `next_phase()` we push forward the
+//! state of our auction.  First we are looking for `Bidders` with which we validate their suitability
+//! for the next phase `Auction`.  During this phase we run an auction which selects a list of winners
+//! sets a minimum bid of what was need to get in the winning list and set the state to `Completed`.
+//! The caller would then finally call `next_phase()` to clear the auction in which it would move to
+//! `Bidders` waiting for the next auction to be started.
 //!
 //! ## Terminology
-//!
-//! ### Dispatchable Functions
-//!
+//! - **Bidder:** An entity that has placed a bid and would hope to be included in the winning set
+//! - **Winners:** Those bidders that have been evaluated and have been included in the the winning set
+//! - **Minimum Bid:** The minimum bid required to be included in the Winners set
+//! - **Auction Range:** A range specifying the minimum number of bidders we require and an upper range
+//!	  specifying the maximum size for the winning set
 
 #[cfg(test)]
 mod mock;
@@ -23,7 +32,6 @@ mod tests;
 pub use pallet::*;
 use sp_runtime::traits::{AtLeast32BitUnsigned, Zero};
 use sp_std::prelude::*;
-use log::{debug};
 use frame_support::pallet_prelude::*;
 use frame_support::traits::ValidatorRegistration;
 use sp_std::cmp::min;
@@ -53,8 +61,10 @@ pub enum AuctionError {
 	MinValidatorSize,
 }
 
-pub trait BidderProvider<ValidatorId, Amount> {
-	fn get_bidders() -> Vec<(ValidatorId, Amount)>;
+pub trait BidderProvider {
+	type ValidatorId;
+	type Amount;
+	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)>;
 }
 
 #[frame_support::pallet]
@@ -71,7 +81,7 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		type Amount: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 		type ValidatorId: Member + Parameter;
-		type BidderProvider: BidderProvider<Self::ValidatorId, Self::Amount>;
+		type BidderProvider: BidderProvider<ValidatorId=Self::ValidatorId, Amount=Self::Amount>;
 		type Registrar: ValidatorRegistration<Self::ValidatorId>;
 	}
 
@@ -81,81 +91,112 @@ pub mod pallet {
 
 	/// Current phase
 	#[pallet::storage]
+	#[pallet::getter(fn current_phase)]
 	pub(super) type CurrentPhase<T: Config> = StorageValue<_, AuctionPhase, ValueQuery>;
 
 	/// Current bond value
 	#[pallet::storage]
-	pub(super) type CurrentBond<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
+	#[pallet::getter(fn minimum_bid)]
+	pub(super) type MinimumBid<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
 
-	/// The working list of bidders
+	/// The list of current bidders for the auction
 	#[pallet::storage]
+	#[pallet::getter(fn bidders)]
 	pub(super) type Bidders<T: Config> = StorageValue<_, Vec<(T::ValidatorId, T::Amount)>, ValueQuery>;
 
+	/// The list of our winners for this auction
 	#[pallet::storage]
+	#[pallet::getter(fn winners)]
 	pub(super) type Winners<T: Config> = StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
 
-	/// Size range for bidders (min, max)
+	/// Size range for number of bidders in auction (min, max)
 	#[pallet::storage]
-	pub(super) type BidderSizeRange<T: Config> = StorageValue<_, (u32, u32), ValueQuery>;
+	#[pallet::getter(fn auction_size_range)]
+	pub(super) type AuctionSizeRange<T: Config> = StorageValue<_, (u32, u32), ValueQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {}
 }
 
-impl<T: Config> Auction for Pallet<T> {
-	type ValidatorId = ();
+impl<T: Config> Pallet<T> {
+	/// Set a range for our auction, a range describing minimum number required and maximum allowed
+	fn set_auction_size(range: (u32, u32)) -> Result<(), &'static str>{
+		if range.0 == 0 || range.1 == 0 || range.0 == range.1 {
+			return Err("Invalid range");
+		}
 
-	// This would be called to move to the next phase or continue in the current phase
+		Ok(<AuctionSizeRange<T>>::put(range))
+	}
+}
+
+impl<T: Config> Auction for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
+
+	/// Move our auction process to the next phase, if possible and returns the next phase
+	///
+	/// At each phase we assess the bidders based on a fixed set of criteria which results
+	/// in us arriving at a winning list and a bond set for this auction
 	fn next_phase() -> Result<AuctionPhase, AuctionError> {
-		match <CurrentPhase<T>>::get() {
+
+		return match <CurrentPhase<T>>::get() {
+			// Run some basic rules on what we consider as valid bidders
+			// At the moment this includes checking that their bid is more than 0, which
+			// shouldn't be possible and whether they have registered their session keys
+			// to be able to actual join the validating set.  If we manage to pass these tests
+			// we kill the last set of winners stored, set the bond to 0, store this set of
+			// bidders and change our state ready for an 'Auction' to be ran
 			AuctionPhase::Bidders => {
 				let mut bidders = T::BidderProvider::get_bidders();
-				// Rule #1 - If we have a stake at 0 then please leave
+				// Rule #1 - If we have a bid at 0 then please leave
 				bidders.retain(|(_, amount)| !amount.is_zero());
 				// Rule #2 - They are registered
 				bidders.retain(|(id, _)| T::Registrar::is_registered(id));
-				// Rule #3 - Confirm we have our set size, TODO
-				if (bidders.len() as u32) < <BidderSizeRange<T>>::get().0 {
+				// Rule #3 - Confirm we have our set size
+				if (bidders.len() as u32) < <AuctionSizeRange<T>>::get().0 {
 					return Err(AuctionError::MinValidatorSize)
 				};
 
 				<Winners<T>>::kill();
+				<MinimumBid<T>>::kill();
 				<Bidders<T>>::put(bidders);
-				let phase = AuctionPhase::Auction;
-				<CurrentPhase<T>>::put(phase);
+				<CurrentPhase<T>>::put(AuctionPhase::Auction);
 
-				return Ok(phase);
+				Ok(AuctionPhase::Auction)
 			},
+			// We sort by bid and cut the size of the set based on auction size range
+			// If we have a valid set, within the size range, we store this set as the
+			// 'winners' of this auction, change the state to 'Completed' and store the
+			// minimum bid needed to be included in the set.
 			AuctionPhase::Auction => {
 				let mut bidders = <Bidders<T>>::get();
-
 				if !bidders.is_empty() {
 					bidders.sort_unstable_by_key(|k| k.1);
 					bidders.reverse();
-					let max_size = min(<BidderSizeRange<T>>::get().1, bidders.len() as u32);
+					let max_size = min(<AuctionSizeRange<T>>::get().1, bidders.len() as u32);
 					let bidders = bidders.get(0..max_size as usize);
 					if let Some(bidders) = bidders {
-						if let Some((_, bond)) = bidders.last() {
+						if let Some((_, min_bid)) = bidders.last() {
 							let winners: Vec<T::ValidatorId> = bidders.iter().map(|i| i.0.clone()).collect();
 
+							<MinimumBid<T>>::put(min_bid);
 							<Winners<T>>::put(winners);
-							<Bidders<T>>::kill();
-							let phase = AuctionPhase::Completed;
-							<CurrentPhase<T>>::put(phase);
+							<CurrentPhase<T>>::put(AuctionPhase::Completed);
 
-							return Ok(phase);
+							return Ok(AuctionPhase::Completed);
 						}
 					}
 				}
 
 				return Err(AuctionError::Empty);
 			},
+			// Things have gone well and we have a set of 'Winners', congratulations.
+			// We are ready to call this an auction a day resetting the bidders in storage and
+			// setting the state ready for a new set of 'Bidders'
 			AuctionPhase::Completed => {
-				let phase = AuctionPhase::Bidders;
-				<CurrentPhase<T>>::put(phase);
+				<Bidders<T>>::kill();
+				<CurrentPhase<T>>::put(AuctionPhase::Bidders);
+				Ok(AuctionPhase::Bidders)
 			}
-		}
-
-		Ok(<CurrentPhase<T>>::get())
+		};
 	}
 }

@@ -15,9 +15,14 @@ use frame_support::traits::ValidatorRegistration;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
+use std::cell::RefCell;
 
 type Amount = u64;
 type ValidatorId = u64;
+
+thread_local! {
+	pub static BIDDER_SET: RefCell<Vec<(ValidatorId, Amount)>> = RefCell::new(vec![]);
+}
 
 construct_runtime!(
 	pub enum Test where
@@ -26,8 +31,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Auction: pallet_cf_auction::{Module, Storage},
-		// Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
+		AuctionPallet: pallet_cf_auction::{Module, Storage},
 	}
 );
 
@@ -63,20 +67,23 @@ impl Config for Test {
 	type Amount = Amount;
 	type ValidatorId = ValidatorId;
 	type BidderProvider = TestBidderProvider;
-	type Registrar = Self;
+	type Registrar = Test;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
-	fn is_registered(id: &ValidatorId) -> bool {
+	fn is_registered(_id: &ValidatorId) -> bool {
 		true
 	}
 }
 
 pub struct TestBidderProvider;
 
-impl<ValidatorId, Amount> BidderProvider<ValidatorId, Amount> for TestBidderProvider {
-	fn get_bidders() -> Vec<(ValidatorId, Amount)> {
-		vec![]
+impl BidderProvider for TestBidderProvider {
+	type ValidatorId = ValidatorId;
+	type Amount = Amount;
+
+	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
+		BIDDER_SET.with(|l| l.borrow().to_vec())
 	}
 }
 
