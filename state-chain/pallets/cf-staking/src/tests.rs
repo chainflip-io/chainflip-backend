@@ -1,5 +1,5 @@
 use crate::{mock::*, Stakes, Pallet, Error, PendingClaims, Config};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use frame_support::{assert_noop, assert_ok, error::BadOrigin, traits::UnixTime};
 use sp_core::ecdsa::Signature;
 
@@ -23,7 +23,7 @@ fn assert_event_sequence<T: frame_system::Config, E: Into<T::Event>>(expected: V
 	assert_eq!(events, expected)
 }
 
-fn expiry_after<T: Config>(duration: Duration) -> Duration {
+fn time_after<T: Config>(duration: Duration) -> Duration {
 	<T::TimeSource as UnixTime>::now() + duration
 }
 
@@ -199,7 +199,7 @@ fn signature_is_inserted() {
 		};
 		
 		// Insert a signature.
-		let expiry = expiry_after::<Test>(Duration::from_secs(10));
+		let expiry = time_after::<Test>(Duration::from_secs(10));
 		assert_ok!(StakeManager::post_claim_signature(
 			Origin::signed(ALICE),
 			ALICE,
@@ -327,26 +327,23 @@ fn claim_expiry() {
 	new_test_ext().execute_with(|| {
 		let stake = 45u128;
 		let sig = Signature::from_slice(&[1u8; 65]);
+		let nonce = 1;
+
+		// Start the time at the 10-second mark.
+		time_source::Mock::reset_to(Duration::from_secs(10));
 
 		// Stake some FLIP.
 		assert_ok!(StakeManager::staked(Origin::root(), ALICE, stake, ETH_DUMMY_ADDR));
 		assert_ok!(StakeManager::staked(Origin::root(), BOB, stake, ETH_DUMMY_ADDR));
+		assert_ok!(StakeManager::staked(Origin::root(), CHARLIE, stake, ETH_DUMMY_ADDR));
 
 		// Claim it.
 		assert_ok!(StakeManager::claim(Origin::signed(ALICE), stake, ETH_DUMMY_ADDR));
 		assert_ok!(StakeManager::claim(Origin::signed(BOB), stake, ETH_DUMMY_ADDR));
-
-		// Get the nonce
-		let nonce = if let Event::pallet_cf_staking(crate::Event::ClaimSigRequested( _, _, nonce, _ )) =
-			frame_system::Pallet::<Test>::events().last().unwrap().event
-			{
-			nonce
-			} else {
-			panic!("Expected ClaimSigRequested event with nonce.")
-		};
+		assert_ok!(StakeManager::claim(Origin::signed(CHARLIE), stake, ETH_DUMMY_ADDR));
 
 		// Insert a signature with expiry in the past.
-		let expiry = Duration::from_secs(10);
+		let expiry = Duration::from_secs(1);
 		assert_noop!(
 			StakeManager::post_claim_signature(
 				Origin::signed(ALICE),
@@ -360,7 +357,7 @@ fn claim_expiry() {
 		);
 
 		// Insert a signature with imminent expiry.
-		let expiry = expiry_after::<Test>(Duration::from_millis(1));
+		let expiry = time_after::<Test>(Duration::from_millis(1));
 		assert_noop!(
 			StakeManager::post_claim_signature(
 				Origin::signed(ALICE),
@@ -373,8 +370,8 @@ fn claim_expiry() {
 			<Error<Test>>::InvalidExpiry
 		);
 
-		// Finally a valid expiry.
-		let expiry = expiry_after::<Test>(Duration::from_millis(101));
+		// Finally a valid expiry (minimum set to 100ms in the mock).
+		let expiry = time_after::<Test>(Duration::from_millis(101));
 		assert_ok!(
 			StakeManager::post_claim_signature(
 				Origin::signed(ALICE),
@@ -386,8 +383,8 @@ fn claim_expiry() {
 				sig.clone())
 		);
 
-		// Don't expire bob
-		let expiry = expiry_after::<Test>(Duration::from_secs(60 * 60));
+		// Set a longer expiry time for Bob.
+		let expiry = time_after::<Test>(Duration::from_secs(2));
 		assert_ok!(
 			StakeManager::post_claim_signature(
 				Origin::signed(BOB),
@@ -399,23 +396,37 @@ fn claim_expiry() {
 				sig.clone())
 		);
 
+		// Race condition: Charlie's expiry is shorter than Bob's even though his signature is added after.
+		let expiry = time_after::<Test>(Duration::from_millis(500));
+		assert_ok!(
+			StakeManager::post_claim_signature(
+				Origin::signed(ALICE),
+				CHARLIE,
+				stake,
+				nonce,
+				ETH_DUMMY_ADDR,
+				expiry,
+				sig.clone())
+		);
+
 		Pallet::<Test>::expire_pending_claims();
 		
-		// Should not have expired yet.
+		// Clock hasn't moved, nothing should have expired.
 		assert!(PendingClaims::<Test>::contains_key(ALICE));
 		assert!(PendingClaims::<Test>::contains_key(BOB));
+		assert!(PendingClaims::<Test>::contains_key(CHARLIE));
 		
-		// Now we set a fake time to pretend 1 second has elapsed.
-		let ten_seconds_ago = <<Test as Config>::TimeSource as UnixTime>::now() - Duration::from_secs(1);
-		time_source::Mock::set_fake_time(ten_seconds_ago);
-
-		// Now it should expire Alice but not Bob
+		// Tick the clock forward by 1 sec and expire.
+		time_source::Mock::tick(Duration::from_secs(1));
 		Pallet::<Test>::expire_pending_claims();
 
+		// It should expire Alice and Charlie's claims but not Bob's.
 		assert_event_sequence::<Test, _>(vec![
 			crate::Event::ClaimExpired(ALICE, nonce, stake),
+			crate::Event::ClaimExpired(CHARLIE, nonce, stake),
 		]);
 		assert!(!PendingClaims::<Test>::contains_key(ALICE));
 		assert!(PendingClaims::<Test>::contains_key(BOB));
+		assert!(!PendingClaims::<Test>::contains_key(CHARLIE));
 	});
 }

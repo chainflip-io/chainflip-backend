@@ -75,16 +75,18 @@ impl Config for Test {
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
+pub const CHARLIE: <Test as frame_system::Config>::AccountId = 789u64;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
 
-	// Seed with two active accounts.
+	// Seed with three active accounts.
 	ext.execute_with(|| {
 		System::set_block_number(1);
 		Account::<Test>::insert(ALICE, AccountInfo::default());
 		Account::<Test>::insert(BOB, AccountInfo::default());
+		Account::<Test>::insert(CHARLIE, AccountInfo::default());
 	});
 
 	ext

@@ -51,7 +51,9 @@ use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub, One, Satu
 
 #[frame_support::pallet]
 pub mod pallet {
-	use super::*;
+	use std::collections::VecDeque;
+
+use super::*;
 	use cf_traits::Witnesser;
 	use frame_support::pallet_prelude::*;
 	use frame_system::{pallet_prelude::*, Account};
@@ -389,9 +391,18 @@ pub mod pallet {
 						None => Err(Error::<T>::NoPendingClaim),
 					}
 				})?;
-			
+
 			ClaimExpiries::<T>::mutate(|expiries| {
+				// We want to ensure this list remains sorted such that the head of the list contains the oldest pending
+				// claim (ie. the first to be expired). This means we put the new value on the back of the list since
+				// it's quite likely this is the most recent. We then run a stable sort, which is most effient when
+				// values are already close to being sorted.
+				// So we need to reverse the list, push the *young* value to the front, reverse it again, then sort.
+				// We could have used a VecDeque here to have a FIFO queue but VecDeque doesn't support `decode_len`
+				// which is used during the expiry check to avoid decoding the whole list.
+				expiries.reverse();
 				expiries.push((expiry_time, account_id.clone()));
+				expiries.reverse();
 				expiries.sort_by_key(|tup| tup.0);
 			});
 
@@ -633,7 +644,7 @@ impl<T: Config> Pallet<T> {
 
 		weight = weight.saturating_add(T::DbWeight::get().reads(2));
 		
-		// expiries are sorted on insertion so we can just partition the slice.
+		// Expiries are sorted on insertion so we can just partition the slice.
 		let expiry_cutoff = expiries.partition_point(|(expiry, _)| {
 			*expiry < time_now
 		});
