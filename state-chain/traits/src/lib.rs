@@ -59,9 +59,17 @@ impl Default for AuctionPhase {
 	}
 }
 
+pub type Bid<T> = (<T as Auction>::ValidatorId, <T as Auction>::Amount);
+
 pub trait Auction {
 	type ValidatorId;
+	type Amount;
+
+	fn phase() -> AuctionPhase;
 	fn next_phase() -> Result<AuctionPhase, AuctionError>;
+	fn bidders() -> Vec<Bid<Self>>;
+	fn winners() -> Vec<Self::ValidatorId>;
+	fn minimum_bid() -> Self::Amount;
 }
 
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
