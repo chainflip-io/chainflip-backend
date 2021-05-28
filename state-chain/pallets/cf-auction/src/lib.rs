@@ -35,7 +35,7 @@ use sp_std::prelude::*;
 use frame_support::pallet_prelude::*;
 use frame_support::traits::ValidatorRegistration;
 use sp_std::cmp::min;
-use cf_traits::{Auction, AuctionPhase, AuctionError, BidderProvider};
+use cf_traits::{Auction, AuctionPhase, AuctionError, BidderProvider, Bid};
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -53,6 +53,7 @@ pub mod pallet {
 		type ValidatorId: Member + Parameter;
 		type BidderProvider: BidderProvider<ValidatorId=Self::ValidatorId, Amount=Self::Amount>;
 		type Registrar: ValidatorRegistration<Self::ValidatorId>;
+		type AuctionIndex: Clone + Copy;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -84,8 +85,52 @@ pub mod pallet {
 	#[pallet::getter(fn auction_size_range)]
 	pub(super) type AuctionSizeRange<T: Config> = StorageValue<_, (u32, u32), ValueQuery>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn auction_size_range)]
+	pub(super) type AuctionIndex<T: Config> = StorageValue<_, T::AuctionIndex, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn auction_size_range)]
+	pub(super) type AuctionToConfirm<T: Config> = StorageValue<_, T::AuctionIndex, OptionQuery>;
+
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {}
+
+	#[pallet::event]
+	#[pallet::generate_deposit(pub (super) fn deposit_event)]
+	pub enum Event<T: Config> {
+		/// An auction phase has started \[epoch_index\]
+		AuctionStarted(T::AuctionIndex),
+		/// An auction has a set of winners
+		AuctionCompleted(T::AuctionIndex),
+		/// The auction has been confirmed off-chain \[epoch_index\]
+		AuctionConfirmed(T::AuctionIndex),
+		/// An auction has not completed
+		AuctionNotCompleted(AuctionError)
+	}
+
+	#[pallet::error]
+	pub enum Error<T> {
+		/// Invalid auction index used in confirmation
+		InvalidAuction,
+	}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
+		#[pallet::weight(
+			10_000
+		)]
+		pub(super) fn confirm_auction(
+			origin: OriginFor<T>,
+			index: T::AuctionIndex,
+		) -> DispatchResultWithPostInfo {
+			ensure_signed(origin)?;
+			ensure!(Some(index) == AuctionToConfirm::<T>::get(), Error::<T>::InvalidAuction);
+			AuctionToConfirm::<T>::set(None);
+			Self::deposit_event(Event::AuctionConfirmed(index));
+			Ok(().into())
+		}
+	}
 }
 
 impl<T: Config> Pallet<T> {
@@ -101,6 +146,21 @@ impl<T: Config> Pallet<T> {
 
 impl<T: Config> Auction for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
+	type Amount = T::Amount;
+
+	fn phase() -> AuctionPhase { <CurrentPhase<T>>::get() }
+
+	fn bidders() -> Vec<Bid<Self>> {
+		<Bidders<T>>::get()
+	}
+
+	fn winners() -> Vec<Self::ValidatorId> {
+		<Winners<T>>::get()
+	}
+
+	fn minimum_bid() -> Self::Amount {
+		<MinimumBid<T>>::get()
+	}
 
 	/// Move our auction process to the next phase, if possible and returns the next phase
 	///
@@ -131,6 +191,9 @@ impl<T: Config> Auction for Pallet<T> {
 				<Bidders<T>>::put(bidders);
 				<CurrentPhase<T>>::put(AuctionPhase::Auction);
 
+				<AuctionIndex<T>>::mutate(|idx| idx + 1);
+				Self::deposit_event(Event::AuctionStarted(<AuctionIndex<T>>::get()));
+
 				Ok(AuctionPhase::Auction)
 			},
 			// We sort by bid and cut the size of the set based on auction size range
@@ -151,6 +214,9 @@ impl<T: Config> Auction for Pallet<T> {
 							<MinimumBid<T>>::put(min_bid);
 							<Winners<T>>::put(winners);
 							<CurrentPhase<T>>::put(AuctionPhase::Completed);
+
+							<AuctionIndex<T>>::mutate(|idx| idx + 1);
+							Self::deposit_event(Event::AuctionCompleted(<AuctionIndex<T>>::get()));
 
 							return Ok(AuctionPhase::Completed);
 						}

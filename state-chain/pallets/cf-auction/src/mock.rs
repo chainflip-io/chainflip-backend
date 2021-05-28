@@ -31,7 +31,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		AuctionPallet: pallet_cf_auction::{Module, Storage},
+		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>},
 	}
 );
 
