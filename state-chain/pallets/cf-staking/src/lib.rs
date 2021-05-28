@@ -51,9 +51,7 @@ use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub, One, Satu
 
 #[frame_support::pallet]
 pub mod pallet {
-	use std::collections::VecDeque;
-
-use super::*;
+	use super::*;
 	use cf_traits::Witnesser;
 	use frame_support::pallet_prelude::*;
 	use frame_system::{pallet_prelude::*, Account};
