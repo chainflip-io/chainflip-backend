@@ -7,10 +7,10 @@ use frame_support::{assert_ok, assert_noop};
 
 // Constants
 const ALICE: u64 = 100;
-const INVALID_EPOCH: EpochIndex = EpochIndex(0);
-const FIRST_EPOCH: EpochIndex = EpochIndex(1);
-const SECOND_EPOCH: EpochIndex = EpochIndex(2);
-const THIRD_EPOCH: EpochIndex = EpochIndex(3);
+const INVALID_EPOCH: EpochIndex = 666u32;
+const FIRST_EPOCH: EpochIndex = 0u32;
+const SECOND_EPOCH: EpochIndex = 1u32;
+const THIRD_EPOCH: EpochIndex = 2u32;
 
 fn events() -> Vec<mock::Event> {
 	let evt = System::events().into_iter().map(|evt| evt.event).collect::<Vec<_>>();
@@ -31,14 +31,14 @@ fn confirm_and_complete_auction(block_number: &mut u64, idx: EpochIndex) {
 		events(),
 		[
 			mock::Event::pallet_cf_validator(crate::Event::AuctionConfirmed(idx)),
-			mock::Event::pallet_cf_validator(crate::Event::NewEpoch(idx)),
+			mock::Event::pallet_cf_validator(crate::Event::NewEpoch(idx + 1)),
 			// An epoch is 2 sessions so easy math
-			mock::Event::pallet_session(pallet_session::Event::NewSession(idx.0 * 2)),
+			mock::Event::pallet_session(pallet_session::Event::NewSession((idx + 1) * 2)),
 		]
 	);
 
 	// Confirm we have set the epoch index after moving on
-	assert_eq!(ValidatorManager::epoch_index(), idx);
+	assert_eq!(ValidatorManager::epoch_index(), idx + 1);
 }
 
 fn get_auction_epoch_idx(event: mock::Event) -> EpochIndex {
@@ -223,8 +223,8 @@ fn bring_forward_session() {
 		assert_eq!(outgoing.len(), 0);
 		// On each auction are candidates are increasing stake so we should see 'bond' increase
 		let mut bond = 0;
-		// Repeat a few epochs 2..4
-		for epoch_idx in 2..4u32 {
+		// Repeat a few epochs starting at the next index.
+		for epoch_idx in (auction_idx + 1)..(auction_idx + 3) {
 			block_number += epoch;
 			// Move another session forward
 			run_to_block(block_number);
@@ -232,7 +232,7 @@ fn bring_forward_session() {
 			// Pop off session event
 			ev.pop();
 			let auction_idx = get_auction_epoch_idx(ev.pop().expect("event expected"));
-			assert_eq!(auction_idx, EpochIndex(epoch_idx));
+			assert_eq!(auction_idx, epoch_idx);
 
 			// We should see current set of validators not changing even though we have a new session idx
 			assert_eq!(current, mock::current_validators());

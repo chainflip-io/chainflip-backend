@@ -38,6 +38,7 @@ mod mock;
 mod tests;
 
 use bitvec::prelude::*;
+use cf_traits::EpochInfo;
 use codec::FullCodec;
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, Dispatchable},
@@ -45,9 +46,8 @@ use frame_support::{
 	traits::EnsureOrigin,
 	Hashable,
 };
-use pallet_session::SessionHandler;
-use sp_runtime::traits::{AtLeast32BitUnsigned, Zero};
-use sp_std::{ops::AddAssign, prelude::*};
+use sp_runtime::traits::AtLeast32BitUnsigned;
+use sp_std::prelude::*;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -74,12 +74,14 @@ pub mod pallet {
 			+ GetDispatchInfo
 			+ From<frame_system::Call<Self>>;
 
-		type Epoch: Member + FullCodec + AtLeast32BitUnsigned + Default;
+		type Epoch: Member + FullCodec + Copy + AtLeast32BitUnsigned + Default;
 
 		type ValidatorId: Member
 			+ FullCodec
 			+ From<<Self as frame_system::Config>::AccountId>
 			+ Into<<Self as frame_system::Config>::AccountId>;
+
+		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, EpochIndex = Self::Epoch>;
 	}
 
 	/// Alias for the `Epoch` configuration type.
@@ -99,16 +101,16 @@ pub mod pallet {
 
 	/// A lookup mapping (epoch, call_hash) to a bitmask representing the votes for each validator. 
 	#[pallet::storage]
-	pub type Calls<T: Config> =
-		StorageDoubleMap<_, Blake2_128Concat, Epoch<T>, Identity, CallHash, Vec<u8>>;
+	pub type Votes<T: Config> =
+		StorageDoubleMap<_, Twox64Concat, Epoch<T>, Identity, CallHash, Vec<u8>>;
 
 	/// Defines a unique index for each validator for every epoch.
 	#[pallet::storage]
 	pub(super) type ValidatorIndex<T: Config> = StorageDoubleMap<
 		_,
-		Blake2_128Concat,
+		Twox64Concat,
 		Epoch<T>,
-		Identity,
+		Blake2_128Concat,
 		<T as frame_system::Config>::AccountId,
 		u16,
 	>;
@@ -215,7 +217,7 @@ impl<T: Config> Pallet<T> {
 
 		// Register the vote
 		let call_hash = Hashable::blake2_256(&call);
-		let num_votes = Calls::<T>::try_mutate::<_, _, _, Error<T>, _>(
+		let num_votes = Votes::<T>::try_mutate::<_, _, _, Error<T>, _>(
 			&epoch,
 			&call_hash,
 			|buffer| {
@@ -247,8 +249,6 @@ impl<T: Config> Pallet<T> {
 			},
 		)?;
 
-		let threshold = ConsensusThreshold::<T>::get() as usize;
-
 		Self::deposit_event(Event::<T>::WitnessReceived(
 			call_hash,
 			who.into(),
@@ -256,7 +256,8 @@ impl<T: Config> Pallet<T> {
 		));
 
 		// Check if threshold is reached and, if so, apply the voted-on Call.
-		if num_votes == threshold {
+		let threshold = ConsensusThreshold::<T>::get() as usize;
+		let post_dispatch_info = if num_votes == threshold {
 			Self::deposit_event(Event::<T>::ThresholdReached(
 				call_hash,
 				num_votes as VoteCount,
@@ -266,9 +267,12 @@ impl<T: Config> Pallet<T> {
 				call_hash,
 				result.map(|_| ()).map_err(|e| e.error),
 			));
-		}
+			result.unwrap_or_else(|err| err.post_info)
+		} else {
+			().into()
+		};
 
-		Ok(().into())
+		Ok(post_dispatch_info)
 	}
 }
 
@@ -309,39 +313,19 @@ where
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> OuterOrigin {
-		todo!()
+		RawOrigin::WitnessThreshold.into()
 	}
 }
 
-/// Implementation of [SessionHandler](pallet_session::SessionHandler) to update
-/// the current list of validators and the current epoch.
-impl<T, ValidatorId> SessionHandler<ValidatorId> for Pallet<T>
-where
-	T: Config,
-	ValidatorId: Clone + Into<<T as frame_system::Config>::AccountId>,
-{
-	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[];
+impl<T: Config> pallet_cf_validator::EpochTransitionHandler for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
 
-	fn on_genesis_session<Ks: sp_runtime::traits::OpaqueKeys>(validators: &[(ValidatorId, Ks)]) {
-		for (i, (v, _k)) in validators.iter().enumerate() {
-			ValidatorIndex::<T>::insert(<T as Config>::Epoch::zero(), (*v).clone().into(), i as u16)
+	fn on_new_epoch(new_validators: Vec<Self::ValidatorId>) {
+		let epoch = T::EpochInfo::epoch_index();
+		CurrentEpoch::<T>::set(epoch);
+
+		for (i, v) in new_validators.iter().enumerate() {
+			ValidatorIndex::<T>::insert(&epoch, (*v).clone().into(), i as u16)
 		}
-	}
-
-	fn on_new_session<Ks: sp_runtime::traits::OpaqueKeys>(
-		_changed: bool,
-		_validators: &[(ValidatorId, Ks)],
-		queued_validators: &[(ValidatorId, Ks)],
-	) {
-		CurrentEpoch::<T>::mutate(|e| e.add_assign(1u32.into()));
-
-		for (i, (v, _k)) in queued_validators.iter().enumerate() {
-			ValidatorIndex::<T>::insert(<T as Config>::Epoch::zero(), (*v).clone().into(), i as u16)
-		}
-	}
-
-	fn on_disabled(_validator_index: usize) {
-		// Reduce threshold?
-		todo!()
 	}
 }
