@@ -16,6 +16,7 @@ use sp_runtime::{
 };
 use frame_support::{parameter_types, construct_runtime, traits::{OnInitialize, OnFinalize}};
 use std::cell::RefCell;
+use cf_traits::Bid;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -40,6 +41,7 @@ thread_local! {
 	pub static CURRENT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 	pub static OUTGOING_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 	pub static CHANGED: RefCell<bool> = RefCell::new(false);
+	pub static PHASE: RefCell<AuctionPhase> =  RefCell::new(AuctionPhase::Bidders);
 }
 
 construct_runtime!(
@@ -123,36 +125,70 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 	fn on_before_epoch_ending() {}
 }
 
-pub struct TestCandidateProvider;
-
-impl CandidateProvider for TestCandidateProvider {
-	type ValidatorId = ValidatorId;
-	type Amount = Amount;
-
-	fn get_candidates() -> Vec<(Self::ValidatorId, Self::Amount)> {
-		CANDIDATE_IDX.with(|l| {
-			let idx = *l.borrow();
-			let candidates = vec![(idx, idx), (idx + 1, idx + 1), (idx + 2, idx + 2), (idx + 3, idx + 3)];
-			*l.borrow_mut() = idx + 1;
-			candidates
-		})
-	}
-}
 parameter_types! {
 	pub const MinEpoch: u64 = 1;
 	pub const MinValidatorSetSize: u64 = 2;
+}
+
+pub struct DummyAuction;
+
+fn next(phase: AuctionPhase) -> AuctionPhase {
+	return match phase {
+		AuctionPhase::Bidders => {
+			AuctionPhase::Auction
+		},
+		AuctionPhase::Auction => {
+			AuctionPhase::Completed
+		},
+		AuctionPhase::Completed => {
+			AuctionPhase::Bidders
+		}
+	}
+}
+
+impl Auction for DummyAuction {
+	type ValidatorId = ValidatorId;
+	type Amount = Amount;
+
+	fn next_phase() -> Result<AuctionPhase, AuctionError> {
+		PHASE.with(|l| {
+			*l.borrow_mut() = match *l.borrow_mut() {
+				AuctionPhase::Bidders => {
+					AuctionPhase::Auction
+				},
+				AuctionPhase::Auction => {
+					AuctionPhase::Completed
+				},
+				AuctionPhase::Completed => {
+					AuctionPhase::Bidders
+				}
+			};
+			Ok(*l.borrow_mut())
+		})
+	}
+
+	fn bidders() -> Vec<Bid<Self>> {
+		vec![(1,1), (2,2)]
+	}
+
+	fn winners() -> Vec<Self::ValidatorId> {
+		vec![1, 2]
+	}
+
+	fn minimum_bid() -> Self::Amount {
+		1
+	}
 }
 
 impl Config for Test {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
 	type MinValidatorSetSize = MinValidatorSetSize;
-	type CandidateProvider = TestCandidateProvider;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
 	type ValidatorWeightInfo = ();
 	type Amount = Amount;
 	// Use the pallet's implementation
-	type Auction = ValidatorManager;
+	type Auction = DummyAuction;
 	// Mock out the registrar
 	type Registrar = Test;
 }

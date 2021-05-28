@@ -57,7 +57,7 @@ use sp_std::prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};
 use log::{debug};
 use frame_support::pallet_prelude::*;
-use cf_traits::{EpochInfo, Auction, CandidateProvider, ValidatorSet, ValidatorProposal, AuctionError};
+use cf_traits::{EpochInfo, Auction, AuctionPhase, AuctionError};
 use serde::{Serialize, Deserialize};
 use frame_support::traits::ValidatorRegistration;
 use sp_std::cmp::min;
@@ -125,9 +125,6 @@ pub mod pallet {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-		/// A provider for our candidates
-		type CandidateProvider: CandidateProvider<ValidatorId=Self::ValidatorId, Amount=Self::Amount>;
-
 		/// A handler for epoch lifecycle events
 		type EpochTransitionHandler: EpochTransitionHandler<ValidatorId=Self::ValidatorId>;
 
@@ -145,7 +142,7 @@ pub mod pallet {
 
 		type Registrar: ValidatorRegistration<Self::ValidatorId>;
 
-		type Auction: Auction<ValidatorId=Self::ValidatorId, Amount=Self::Amount, Registrar=Self::Registrar>;
+		type Auction: Auction<ValidatorId=Self::ValidatorId>;
 	}
 
 	#[pallet::event]
@@ -472,31 +469,54 @@ impl<T: Config> Pallet<T> {
 	/// `AuctionStarted` is emitted and the rotation from auction to trading phases will wait on a
 	/// confirmation via the `auction_to_confirm` extrinsic
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
-		if !Self::is_auction_phase() {
-			Self::deposit_event(Event::NewEpoch(new_index.into()));
-			CurrentEpoch::<T>::set(new_index.into());
-			ValidatorLookup::<T>::remove_all();
-			for validator in <pallet_session::Module<T>>::validators() {
-				ValidatorLookup::<T>::insert(validator, ());
-			}
-			return None;
-		}
 
-		match T::Auction::validate_auction(T::CandidateProvider::get_candidates())
-			.and_then(T::Auction::run_auction)
-			.and_then(|proposal| T::Auction::complete_auction(proposal)) {
-			Ok(proposal) => {
-				Self::deposit_event(Event::AuctionStarted(new_index.into()));
-				AuctionToConfirm::<T>::set(Some(new_index.into()));
-				CurrentBond::<T>::set(proposal.1);
-				Some(proposal.0)
+		return match T::Auction::next_phase()  {
+			Ok(phase) => {
+				match phase {
+					// We have moved to `Bidders` this means we have a winning set
+					// let's make them the next set
+					AuctionPhase::Bidders => {
+						Some(T::Auction::winners())
+					},
+					AuctionPhase::Auction => {
+						None
+					},
+					AuctionPhase::Completed  => {
+						None
+					},
+				}
 			},
 			Err(e) => {
-				debug!("AuctionError: {:?}", e);
-				Self::deposit_event(Event::AuctionNotCompleted(e));
 				None
-			},
-		}
+			}
+		};
+
+
+		// if !Self::is_auction_phase() {
+		// 	Self::deposit_event(Event::NewEpoch(new_index.into()));
+		// 	CurrentEpoch::<T>::set(new_index.into());
+		// 	ValidatorLookup::<T>::remove_all();
+		// 	for validator in <pallet_session::Module<T>>::validators() {
+		// 		ValidatorLookup::<T>::insert(validator, ());
+		// 	}
+		// 	return None;
+		// }
+		//
+		// match T::Auction::validate_auction(T::CandidateProvider::get_candidates())
+		// 	.and_then(T::Auction::run_auction)
+		// 	.and_then(|proposal| T::Auction::complete_auction(proposal)) {
+		// 	Ok(proposal) => {
+		// 		Self::deposit_event(Event::AuctionStarted(new_index.into()));
+		// 		AuctionToConfirm::<T>::set(Some(new_index.into()));
+		// 		CurrentBond::<T>::set(proposal.1);
+		// 		Some(proposal.0)
+		// 	},
+		// 	Err(e) => {
+		// 		debug!("AuctionError: {:?}", e);
+		// 		Self::deposit_event(Event::AuctionNotCompleted(e));
+		// 		None
+		// 	},
+		// }
 	}
 
 	/// The end of the session is triggered, we alternate between epoch sessions and auction sessions.
@@ -542,55 +562,5 @@ impl<T: Config> Pallet<T> {
 	/// As we don't know when we will get confirmation on an auction we will need to return `None`
 	pub fn estimate_next_session_rotation(_now: T::BlockNumber) -> Option<T::BlockNumber> {
 		None
-	}
-}
-
-impl<T: Config> Auction for Pallet<T> {
-	type ValidatorId = T::ValidatorId;
-	type Amount = T::Amount;
-	type Registrar = T::Registrar;
-
-	fn validate_auction(mut candidates: ValidatorSet<Self>) -> Result<ValidatorSet<Self>, AuctionError> {
-		// Set of rules to validate validators
-		// Rule #1 - If we have a stake at 0 then please leave
-		candidates.retain(|(_, amount)| !amount.is_zero());
-		// Rule #2 - They are registered
-		candidates.retain(|(id, _)| Self::Registrar::is_registered(id));
-		// Rule #3 - If we have less than our min set size we return an empty vector
-		if (candidates.len() as u64) < T::MinValidatorSetSize::get() { return Err(AuctionError::MinValidatorSize) };
-
-		Ok(candidates)
-	}
-
-	fn run_auction(mut candidates: ValidatorSet<Self>) -> Result<ValidatorProposal<Self>, AuctionError> {
-		// A basic auction algorithm.  We sort by stake amount and take the top of the validator
-		// set size and let session pallet do the rest
-		// On completing the auction our list of validators and the bond returned
-		// Space here to add other prioritisation parameters
-		if !candidates.is_empty() {
-			candidates.sort_unstable_by_key(|k| k.1);
-			candidates.reverse();
-			let max_size = min(SizeValidatorSet::<T>::get(), candidates.len() as u32);
-			let candidates = candidates.get(0..max_size as usize);
-			if let Some(candidates) = candidates {
-				if let Some((_, bond)) = candidates.last() {
-					let candidates: Vec<T::ValidatorId> = candidates.iter().map(|i| i.0.clone()).collect();
-					return Ok((candidates, bond.clone()));
-				}
-			}
-		}
-
-		Err(AuctionError::Empty)
-	}
-
-	fn complete_auction(proposal: ValidatorProposal<Self>) -> Result<ValidatorProposal<Self>, AuctionError> {
-		// Rule #1 - we end up with a bond of 0 so we abort
-		if proposal.1.is_zero() {
-			return Err(AuctionError::BondIsZero);
-		}
-
-		// Rule #... more rules here
-
-		Ok(proposal)
 	}
 }
