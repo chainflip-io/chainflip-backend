@@ -20,6 +20,10 @@ use std::cell::RefCell;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
+type Amount = u64;
+type ValidatorId = u64;
+pub const BAD_VALIDATOR_ID: ValidatorId = 100;
+
 impl WeightInfo for () {
 	fn set_blocks_for_epoch() -> u64 { 0 as Weight }
 
@@ -92,7 +96,7 @@ impl pallet_session::Config for Test {
 	type ShouldEndSession = ValidatorManager;
 	type SessionManager = ValidatorManager;
 	type SessionHandler = ValidatorManager;
-	type ValidatorId = u64;
+	type ValidatorId = ValidatorId;
 	type ValidatorIdOf = ConvertInto;
 	type Keys = MockSessionKeys;
 	type Event = Event;
@@ -104,7 +108,7 @@ impl pallet_session::Config for Test {
 pub struct TestEpochTransitionHandler;
 
 impl EpochTransitionHandler for TestEpochTransitionHandler {
-	type ValidatorId = u64;
+	type ValidatorId = ValidatorId;
 	fn on_new_epoch(new_validators: Vec<Self::ValidatorId>) {
 		CURRENT_VALIDATORS.with(|l|
 			*l.borrow_mut() = new_validators
@@ -122,13 +126,13 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 pub struct TestCandidateProvider;
 
 impl CandidateProvider for TestCandidateProvider {
-	type ValidatorId = u64;
-	type Stake = u64;
+	type ValidatorId = ValidatorId;
+	type Amount = Amount;
 
-	fn get_candidates() -> Vec<(Self::ValidatorId, Self::Stake)> {
+	fn get_candidates() -> Vec<(Self::ValidatorId, Self::Amount)> {
 		CANDIDATE_IDX.with(|l| {
 			let idx = *l.borrow();
-			let candidates = vec![(idx, idx), (idx + 1, idx + 1), (idx + 2, idx + 2)];
+			let candidates = vec![(idx, idx), (idx + 1, idx + 1), (idx + 2, idx + 2), (idx + 3, idx + 3)];
 			*l.borrow_mut() = idx + 1;
 			candidates
 		})
@@ -149,6 +153,17 @@ impl Config for Test {
 	type EpochTransitionHandler = TestEpochTransitionHandler;
 	type ValidatorWeightInfo = ();
 	type EpochIndex = EpochIndex;
+	type Amount = Amount;
+	// Use the pallet's implementation
+	type Auction = ValidatorManager;
+	// Mock out the registrar
+	type Registrar = Test;
+}
+
+impl ValidatorRegistration<ValidatorId> for Test {
+	fn is_registered(id: &ValidatorId) -> bool {
+		*id != BAD_VALIDATOR_ID
+	}
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

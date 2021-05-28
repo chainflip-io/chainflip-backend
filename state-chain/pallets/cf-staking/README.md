@@ -1,6 +1,6 @@
 # Chainflip staking pallet
 
-This is a work-in-progress implementation of Chainflip staking functionality.
+This pallet implements Chainflip staking functionality.
 
 ## Assumptions
 
