@@ -430,3 +430,28 @@ fn claim_expiry() {
 		assert!(!PendingClaims::<Test>::contains_key(CHARLIE));
 	});
 }
+
+#[test]
+fn no_claims_during_auction() {
+	new_test_ext().execute_with(|| {
+		let stake = 45u128;
+		epoch_info::Mock::set_is_auction_phase(true);
+
+		// Staking during an auction is OK.
+		assert_ok!(StakeManager::staked(
+			Origin::root(),
+			ALICE,
+			stake,
+			ETH_DUMMY_ADDR
+		));
+
+		// Claiming during an auction isn't OK.
+		assert_noop!(StakeManager::claim(
+				Origin::signed(ALICE),
+				stake,
+				ETH_DUMMY_ADDR
+			),
+			<Error<Test>>::NoClaimsDuringAuctionPhase
+		);
+	});
+}
