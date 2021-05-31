@@ -39,12 +39,17 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use frame_support::{ensure, error::BadOrigin, traits::{EnsureOrigin, UnixTime, Get}, weights};
+use cf_traits::{CandidateProvider, EpochInfo};
+use core::time::Duration;
+use frame_support::{
+	ensure,
+	error::BadOrigin,
+	traits::{EnsureOrigin, Get, UnixTime},
+	weights,
+};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
-use core::time::Duration;
-use cf_traits::{EpochInfo, CandidateProvider};
 
 use codec::FullCodec;
 use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub, One, Saturating, Zero};
@@ -175,7 +180,8 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
-	pub(super) type ClaimExpiries<T: Config> = StorageValue<_, Vec<(Duration, AccountId<T>)>, ValueQuery>;
+	pub(super) type ClaimExpiries<T: Config> =
+		StorageValue<_, Vec<(Duration, AccountId<T>)>, ValueQuery>;
 
 	#[pallet::storage]
 	pub(super) type Nonces<T: Config> = StorageMap<_, Identity, AccountId<T>, T::Nonce, ValueQuery>;
@@ -256,6 +262,12 @@ pub mod pallet {
 			address: T::EthereumAddress,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
+
+			// No new claim requests can be processed if we're currently in an auction phase.
+			ensure!(
+				!T::EpochInfo::is_auction_phase(),
+				Error::<T>::NoClaimsDuringAuctionPhase
+			);
 
 			// If a claim already exists, return an error. The validator must either redeem their claim voucher
 			// or wait until expiry before creating a new claim.
@@ -405,7 +417,12 @@ pub mod pallet {
 			});
 
 			Self::deposit_event(Event::ClaimSignatureIssued(
-				who, amount, nonce, address, expiry_time, signature,
+				who,
+				amount,
+				nonce,
+				address,
+				expiry_time,
+				signature,
 			));
 
 			Ok(().into())
@@ -520,6 +537,9 @@ pub mod pallet {
 
 		/// Invalid expiry date.
 		InvalidExpiry,
+
+		/// Cannot make a claim request while an auction is being resolved.
+		NoClaimsDuringAuctionPhase,
 	}
 }
 
@@ -630,29 +650,26 @@ impl<T: Config> Pallet<T> {
 	/// Expires any pending claims that have passed their TTL.
 	pub fn expire_pending_claims() -> weights::Weight {
 		let mut weight = weights::constants::ExtrinsicBaseWeight::get();
-		
+
 		if ClaimExpiries::<T>::decode_len().unwrap_or_default() == 0 {
 			// Nothing to expire, should be pretty cheap.
 			return weight;
 		}
 
-		
 		let expiries = ClaimExpiries::<T>::get();
 		let time_now = T::TimeSource::now();
 
 		weight = weight.saturating_add(T::DbWeight::get().reads(2));
-		
+
 		// Expiries are sorted on insertion so we can just partition the slice.
-		let expiry_cutoff = expiries.partition_point(|(expiry, _)| {
-			*expiry < time_now
-		});
-		
+		let expiry_cutoff = expiries.partition_point(|(expiry, _)| *expiry < time_now);
+
 		if expiry_cutoff == 0 {
 			return weight;
 		}
-		
+
 		let (to_expire, remaining) = expiries.split_at(expiry_cutoff);
-		
+
 		ClaimExpiries::<T>::set(remaining.into());
 
 		weight = weight.saturating_add(T::DbWeight::get().writes(1));
@@ -660,15 +677,19 @@ impl<T: Config> Pallet<T> {
 		for (_, account_id) in to_expire {
 			if let Some(pending_claim) = PendingClaims::<T>::take(account_id) {
 				// Notify that the claim has expired.
-				Self::deposit_event(Event::<T>::ClaimExpired(account_id.clone(), pending_claim.nonce, pending_claim.amount));
+				Self::deposit_event(Event::<T>::ClaimExpired(
+					account_id.clone(),
+					pending_claim.nonce,
+					pending_claim.amount,
+				));
 
 				// Re-credit the account
 				let _ = Self::add_stake(&account_id, pending_claim.amount);
 
-				// Add weight: One read/write each for deleting the claim and updating the stake. 
+				// Add weight: One read/write each for deleting the claim and updating the stake.
 				weight = weight
-							.saturating_add(T::DbWeight::get().reads(2))
-							.saturating_add(T::DbWeight::get().writes(2));
+					.saturating_add(T::DbWeight::get().reads(2))
+					.saturating_add(T::DbWeight::get().writes(2));
 			}
 		}
 
@@ -681,7 +702,7 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> CandidateProvider for Pallet<T> {
 	type ValidatorId = T::AccountId;
 	type Amount = T::TokenAmount;
-	
+
 	fn get_candidates() -> Vec<(Self::ValidatorId, Self::Amount)> {
 		Stakes::<T>::iter()
 			.filter_map(

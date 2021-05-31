@@ -5,6 +5,7 @@ use sp_std::prelude::*;
 use frame_support::traits::ValidatorRegistration;
 use codec::{Encode, Decode};
 use sp_runtime::RuntimeDebug;
+
 /// A trait abstracting the functionality of the witnesser
 pub trait Witnesser {
 	/// The type of accounts that can witness.
@@ -42,6 +43,9 @@ pub trait EpochInfo {
 
 	/// The current epoch we are in
 	fn epoch_index() -> Self::EpochIndex;
+
+	/// Whether or not we are currently in the auction resolution phase of the current Epoch.
+	fn is_auction_phase() -> bool;
 }
 
 /// Something that can provide us a list of candidates with their corresponding stakes
