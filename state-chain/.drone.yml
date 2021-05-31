@@ -22,6 +22,10 @@ steps:
     commands:
       - cargo check --release --bin state-chain-node
       - sccache -s
+    resources:
+      limits:
+        cpu: 2000
+        memory: 3.5GiB
   - name: build-state-chain
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:

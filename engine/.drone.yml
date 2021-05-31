@@ -23,6 +23,10 @@ steps:
     commands:
       - cargo check --release --bin chainflip-engine
       - sccache -s
+    resources:
+      limits:
+        cpu: 2000
+        memory: 3.5GiB
   - name: build-chainflip-engine
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
