@@ -82,6 +82,7 @@ steps:
     resources:
       limits:
         cpu: 3000
+        memory: 4GiB
 
 # Config
 trigger:
