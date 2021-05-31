@@ -55,3 +55,8 @@ image_pull_secrets:
 
 node_selector:
   type: ci
+
+tolerations:
+  - key: workloadKind
+    operator: Exists
+    effect: NoSchedule
