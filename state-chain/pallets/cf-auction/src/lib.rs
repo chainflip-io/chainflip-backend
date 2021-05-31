@@ -135,6 +135,7 @@ pub mod pallet {
 impl<T: Config> Auction for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
+	type BidderProvider = T::BidderProvider;
 
 	fn set_auction_size(range: AuctionRange) -> Result<(), AuctionError> {
 		if range.0 == 0 || range.1 == 0 || range.0 == range.1 {
@@ -147,11 +148,11 @@ impl<T: Config> Auction for Pallet<T> {
 
 	fn phase() -> AuctionPhase { <CurrentPhase<T>>::get() }
 
-	/// Move our auction process to the next phase, if possible and returns the next phase
+	/// Move our auction process to the next phase returning success with phase completed
 	///
 	/// At each phase we assess the bidders based on a fixed set of criteria which results
 	/// in us arriving at a winning list and a bond set for this auction
-	fn next_phase() -> Result<AuctionPhase, AuctionError> {
+	fn process() -> Result<AuctionPhase, AuctionError> {
 
 		return match <CurrentPhase<T>>::get() {
 			// Run some basic rules on what we consider as valid bidders
@@ -167,7 +168,7 @@ impl<T: Config> Auction for Pallet<T> {
 				// Rule #2 - They are registered
 				bidders.retain(|(id, _)| T::Registrar::is_registered(id));
 				// Rule #3 - Confirm we have our set size
-				if (bidders.len() as u16) < <AuctionSizeRange<T>>::get().0 {
+				if (bidders.len() as u32) < <AuctionSizeRange<T>>::get().0 {
 					return Err(AuctionError::MinValidatorSize)
 				};
 
@@ -179,7 +180,7 @@ impl<T: Config> Auction for Pallet<T> {
 				<CurrentAuctionIndex<T>>::mutate(|idx| *idx + One::one());
 				Self::deposit_event(Event::AuctionStarted(<CurrentAuctionIndex<T>>::get()));
 
-				Ok(AuctionPhase::Auction)
+				Ok(AuctionPhase::Bidders)
 			},
 			// We sort by bid and cut the size of the set based on auction size range
 			// If we have a valid set, within the size range, we store this set as the
@@ -190,7 +191,7 @@ impl<T: Config> Auction for Pallet<T> {
 				if !bidders.is_empty() {
 					bidders.sort_unstable_by_key(|k| k.1);
 					bidders.reverse();
-					let max_size = min(<AuctionSizeRange<T>>::get().1, bidders.len() as u16);
+					let max_size = min(<AuctionSizeRange<T>>::get().1, bidders.len() as u32);
 					let bidders = bidders.get(0..max_size as usize);
 					if let Some(bidders) = bidders {
 						if let Some((_, min_bid)) = bidders.last() {
@@ -203,7 +204,7 @@ impl<T: Config> Auction for Pallet<T> {
 							<CurrentAuctionIndex<T>>::mutate(|idx| *idx + One::one());
 							Self::deposit_event(Event::AuctionCompleted(<CurrentAuctionIndex<T>>::get()));
 
-							return Ok(AuctionPhase::Completed);
+							return Ok(AuctionPhase::Auction);
 						}
 					}
 				}
@@ -218,7 +219,7 @@ impl<T: Config> Auction for Pallet<T> {
 				<CurrentPhase<T>>::put(AuctionPhase::Bidders);
 				Self::deposit_event(Event::AwaitingBidders);
 
-				Ok(AuctionPhase::Bidders)
+				Ok(AuctionPhase::Completed)
 			}
 		};
 	}
