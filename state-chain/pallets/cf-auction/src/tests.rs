@@ -19,7 +19,7 @@ mod test {
 			// Check we are in the bidders phase
 			assert_eq!(AuctionPallet::current_phase(), AuctionPhase::Bidders);
 			// Now move to the next phase, this should be the auction phase
-			assert_eq!(AuctionPallet::next_phase(), Ok(AuctionPhase::Auction));
+			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::Bidders));
 			// Read storage to confirm has been changed to Auction
 			assert_eq!(AuctionPallet::current_phase(), AuctionPhase::Auction);
 			// Having moved into the auction phase we should have our list of bidders filtered
@@ -30,7 +30,7 @@ mod test {
 			assert_eq!(AuctionPallet::minimum_bid(), 0);
 			// And again to the next phase, however we should see an error as we haven't set our
 			// auction size as an `AuctionError::Empty`
-			assert_eq!(AuctionPallet::next_phase(), Err(AuctionError::Empty));
+			assert_eq!(AuctionPallet::process(), Err(AuctionError::Empty));
 			// In order to move forward we will need to set our auction set size
 			// First test the call failing, range would have a 0 value or have equal values for min and max
 			assert_eq!(AuctionPallet::set_auction_size((0, 0)), Err(AuctionError::InvalidRange));
@@ -41,14 +41,14 @@ mod test {
 			// With that sorted we would move on to completing the auction
 			// Expecting the phase to change, a set of winners, the bidder list and a bond value set
 			// to our min bid
-			assert_eq!(AuctionPallet::next_phase(), Ok(AuctionPhase::Completed));
+			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::Auction));
 			assert_eq!(AuctionPallet::current_phase(), AuctionPhase::Completed);
 			assert_eq!(AuctionPallet::bidders(), vec![min_bid, joe_bid, max_bid]);
 			assert_eq!(AuctionPallet::winners(), vec![max_bid.0, joe_bid.0, min_bid.0]);
 			assert_eq!(AuctionPallet::minimum_bid(), min_bid.1);
 
 			// and finally we complete the process, clearing the bidders
-			assert_eq!(AuctionPallet::next_phase(), Ok(AuctionPhase::Bidders));
+			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::Completed));
 			assert_eq!(AuctionPallet::current_phase(), AuctionPhase::Bidders);
 			assert!(AuctionPallet::bidders().is_empty());
 		});

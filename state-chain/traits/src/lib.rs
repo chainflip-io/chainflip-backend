@@ -60,15 +60,16 @@ impl Default for AuctionPhase {
 }
 
 pub type Bid<T> = (<T as Auction>::ValidatorId, <T as Auction>::Amount);
-pub type AuctionRange = (u16, u16);
+pub type AuctionRange = (u32, u32);
 
 pub trait Auction {
 	type ValidatorId;
 	type Amount;
+	type BidderProvider;
 
 	fn set_auction_size(range: AuctionRange) -> Result<(), AuctionError>;
 	fn phase() -> AuctionPhase;
-	fn next_phase() -> Result<AuctionPhase, AuctionError>;
+	fn process() -> Result<AuctionPhase, AuctionError>;
 	fn bidders() -> Vec<Bid<Self>>;
 	fn winners() -> Vec<Self::ValidatorId>;
 	fn minimum_bid() -> Self::Amount;
