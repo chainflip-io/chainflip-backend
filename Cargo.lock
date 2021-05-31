@@ -868,6 +868,8 @@ version = "0.1.0"
 dependencies = [
  "frame-support",
  "frame-system",
+ "parity-scale-codec 2.1.1",
+ "sp-runtime",
  "sp-std 3.0.0",
 ]
 
