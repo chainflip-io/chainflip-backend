@@ -65,6 +65,10 @@ image_pull_secrets:
 node_selector:
   type: ci
 
+tolerations:
+  - key: "workloadKind"
+    operator: "Equal"
+    value: "ci"
 ---
 
 kind: pipeline
@@ -90,6 +94,10 @@ steps:
       paths:
         - Dockerfile.rust-base
         - .drone.yml
+    resources:
+      limits:
+        cpu: 2000
+        memory: 3.5GiB
   - name: compile-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
@@ -150,11 +158,14 @@ trigger:
     - main
   event:
     - push
-  paths:
-    - state-chain/*
 
 image_pull_secrets:
   - dockerconfigjson
 
 node_selector:
   type: ci
+
+tolerations:
+  - key: "workloadKind"
+    operator: "Equal"
+    value: "ci"
