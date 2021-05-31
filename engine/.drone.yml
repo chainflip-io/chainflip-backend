@@ -52,7 +52,10 @@ image_pull_secrets:
   - dockerconfigjson
 node_selector:
   type: ci
-
+tolerations:
+  - key: "workloadKind"
+    operator: "Equal"
+    value: "ci"
 
 ---
 kind: pipeline
@@ -95,6 +98,6 @@ node_selector:
   type: ci
 
 tolerations:
-  - key: workloadKind
-    operator: Exists
-    effect: NoSchedule
+  - key: "workloadKind"
+    operator: "Equal"
+    value: "ci"
