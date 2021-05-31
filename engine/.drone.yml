@@ -19,25 +19,25 @@ steps:
   - name: check-chainflip-engine
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
-      SCCACHE_REDIS: "redis://redis-headless:6379/"
+      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
-      - sccache -s
       - cargo check --release --bin chainflip-engine
       - sccache -s
     resources:
       limits:
         cpu: 2000
+        memory: 3.5GiB
   - name: build-chainflip-engine
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
-      SCCACHE_REDIS: "redis://redis-headless:6379/"
+      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo build --release --bin chainflip-engine
       - sccache -s
   - name: test-chainflip-engine
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
-      SCCACHE_REDIS: "redis://redis-headless:6379/"
+      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo test --release
       - sccache -s
@@ -46,51 +46,12 @@ steps:
 trigger:
   event:
     - pull_request
-#  paths:
-#    - engine/**/*.rs
+  paths:
+    - engine/**/*.rs
 
-node_selector:
-  type: "ci"
 
 image_pull_secrets:
   - dockerconfigjson
 
----
-kind: pipeline
-type: kubernetes
-name: cfe-integration-tests
-
-services:
-  - image: trufflesuite/ganache-cli:latest
-    name: ganache
-    ports: [8545]
-    command:
-      - ganache-cli --mnemonic chainflip
-  - image: nats:latest
-    ports: [4222,8222]
-    name: nats
-
-steps:
-  - name: run-tests
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_REDIS: "redis://redis-headless:6379/"
-    commands:
-      - sccache -s
-      - chmod +x ./engine/tests/scripts/setup.sh
-      - ./engine/tests/scripts/setup.sh
-      - cargo test -p chainflip-engine --test stake_manager_integration -- --nocapture
-#      - cargo test -p chainflip-engine --test stake-manager-integration-tests
-    resources:
-      limits:
-        cpu: 2000
-
-# Config
-trigger:
-  event:
-    - push
-image_pull_secrets:
-  - dockerconfigjson
-
 node_selector:
-  type: "ci"
+  type: ci

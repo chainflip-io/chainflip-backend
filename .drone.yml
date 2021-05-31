@@ -62,6 +62,9 @@ trigger:
 image_pull_secrets:
   - dockerconfigjson
 
+node_selector:
+  type: ci
+
 ---
 
 kind: pipeline
@@ -87,26 +90,24 @@ steps:
       paths:
         - Dockerfile.rust-base
         - .drone.yml
+    resources:
+      limits:
+        cpu: 2000
+        memory: 3.5GiB
   - name: compile-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
-      SCCACHE_REDIS: "redis://redis-headless:6379/"
+      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo build --release
       - sccache -s
-    resources:
-      limits:
-        cpu: 2000
   - name: test-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
-      SCCACHE_REDIS: "redis://redis-headless:6379/"
+      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo test --release
       - sccache -s
-    resources:
-      limits:
-        cpu: 2000
 #  - name: publish-state-chain-node
 #    image: plugins/ansible
 #    settings:
@@ -153,12 +154,9 @@ trigger:
     - main
   event:
     - push
-  paths:
-    - state-chain/*
-
-
-node_selector:
-  type: "ci"
 
 image_pull_secrets:
   - dockerconfigjson
+
+node_selector:
+  type: ci
