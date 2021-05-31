@@ -55,7 +55,6 @@ node_selector:
   type: ci
 
 tolerations:
-  - key: workloadKind
-    value: ci
-    operator: Exists
-    effect: NoSchedule
+  - key: "workloadKind"
+    operator: "Equal"
+    value: "ci"
