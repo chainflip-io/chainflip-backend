@@ -64,10 +64,12 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ();
 }
 impl Config for Test {
+	type Event = Event;
 	type Amount = Amount;
 	type ValidatorId = ValidatorId;
 	type BidderProvider = TestBidderProvider;
 	type Registrar = Test;
+	type AuctionIndex = u32;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {

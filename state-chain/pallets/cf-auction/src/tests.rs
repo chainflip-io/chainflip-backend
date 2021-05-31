@@ -33,8 +33,8 @@ mod test {
 			assert_eq!(AuctionPallet::next_phase(), Err(AuctionError::Empty));
 			// In order to move forward we will need to set our auction set size
 			// First test the call failing, range would have a 0 value or have equal values for min and max
-			assert_eq!(AuctionPallet::set_auction_size((0, 0)), Err("Invalid range"));
-			assert_eq!(AuctionPallet::set_auction_size((1, 1)), Err("Invalid range"));
+			assert_eq!(AuctionPallet::set_auction_size((0, 0)), Err(AuctionError::InvalidRange));
+			assert_eq!(AuctionPallet::set_auction_size((1, 1)), Err(AuctionError::InvalidRange));
 			assert_ok!(AuctionPallet::set_auction_size(auction_range));
 			// Check storage for auction range
 			assert_eq!(AuctionPallet::auction_size_range(), auction_range);

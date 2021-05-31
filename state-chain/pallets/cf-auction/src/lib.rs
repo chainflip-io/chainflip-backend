@@ -30,18 +30,19 @@ mod mock;
 mod tests;
 
 pub use pallet::*;
-use sp_runtime::traits::{AtLeast32BitUnsigned, Zero};
+use sp_runtime::traits::{AtLeast32BitUnsigned, Zero, One};
 use sp_std::prelude::*;
 use frame_support::pallet_prelude::*;
 use frame_support::traits::ValidatorRegistration;
 use sp_std::cmp::min;
-use cf_traits::{Auction, AuctionPhase, AuctionError, BidderProvider, Bid};
+use cf_traits::{Auction, AuctionPhase, AuctionError, BidderProvider, Bid, AuctionRange};
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_system::pallet_prelude::*;
 	use frame_support::traits::ValidatorRegistration;
+	use sp_std::ops::Add;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -49,11 +50,12 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		type Amount: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 		type ValidatorId: Member + Parameter;
 		type BidderProvider: BidderProvider<ValidatorId=Self::ValidatorId, Amount=Self::Amount>;
 		type Registrar: ValidatorRegistration<Self::ValidatorId>;
-		type AuctionIndex: Clone + Copy;
+		type AuctionIndex: Member + Parameter + Default + Add + One + Copy;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -83,30 +85,27 @@ pub mod pallet {
 	/// Size range for number of bidders in auction (min, max)
 	#[pallet::storage]
 	#[pallet::getter(fn auction_size_range)]
-	pub(super) type AuctionSizeRange<T: Config> = StorageValue<_, (u32, u32), ValueQuery>;
+	pub(super) type AuctionSizeRange<T: Config> = StorageValue<_, AuctionRange, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn auction_size_range)]
-	pub(super) type AuctionIndex<T: Config> = StorageValue<_, T::AuctionIndex, ValueQuery>;
+	#[pallet::getter(fn current_auction_index)]
+	pub(super) type CurrentAuctionIndex<T: Config> = StorageValue<_, T::AuctionIndex, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn auction_size_range)]
+	#[pallet::getter(fn auction_to_confirm)]
 	pub(super) type AuctionToConfirm<T: Config> = StorageValue<_, T::AuctionIndex, OptionQuery>;
-
-	#[pallet::call]
-	impl<T: Config> Pallet<T> {}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// An auction phase has started \[epoch_index\]
+		/// An auction phase has started \[auction_index\]
 		AuctionStarted(T::AuctionIndex),
 		/// An auction has a set of winners
 		AuctionCompleted(T::AuctionIndex),
-		/// The auction has been confirmed off-chain \[epoch_index\]
+		/// The auction has been confirmed off-chain \[auction_index\]
 		AuctionConfirmed(T::AuctionIndex),
-		/// An auction has not completed
-		AuctionNotCompleted(AuctionError)
+		/// Awaiting bidders for the auction
+		AwaitingBidders,
 	}
 
 	#[pallet::error]
@@ -133,34 +132,20 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> Pallet<T> {
-	/// Set a range for our auction, a range describing minimum number required and maximum allowed
-	fn set_auction_size(range: (u32, u32)) -> Result<(), &'static str>{
-		if range.0 == 0 || range.1 == 0 || range.0 == range.1 {
-			return Err("Invalid range");
-		}
-
-		Ok(<AuctionSizeRange<T>>::put(range))
-	}
-}
-
 impl<T: Config> Auction for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
 
+	fn set_auction_size(range: AuctionRange) -> Result<(), AuctionError> {
+		if range.0 == 0 || range.1 == 0 || range.0 == range.1 {
+			return Err(AuctionError::InvalidRange);
+		}
+
+		<AuctionSizeRange<T>>::put(range);
+		Ok(())
+	}
+
 	fn phase() -> AuctionPhase { <CurrentPhase<T>>::get() }
-
-	fn bidders() -> Vec<Bid<Self>> {
-		<Bidders<T>>::get()
-	}
-
-	fn winners() -> Vec<Self::ValidatorId> {
-		<Winners<T>>::get()
-	}
-
-	fn minimum_bid() -> Self::Amount {
-		<MinimumBid<T>>::get()
-	}
 
 	/// Move our auction process to the next phase, if possible and returns the next phase
 	///
@@ -182,7 +167,7 @@ impl<T: Config> Auction for Pallet<T> {
 				// Rule #2 - They are registered
 				bidders.retain(|(id, _)| T::Registrar::is_registered(id));
 				// Rule #3 - Confirm we have our set size
-				if (bidders.len() as u32) < <AuctionSizeRange<T>>::get().0 {
+				if (bidders.len() as u16) < <AuctionSizeRange<T>>::get().0 {
 					return Err(AuctionError::MinValidatorSize)
 				};
 
@@ -191,8 +176,8 @@ impl<T: Config> Auction for Pallet<T> {
 				<Bidders<T>>::put(bidders);
 				<CurrentPhase<T>>::put(AuctionPhase::Auction);
 
-				<AuctionIndex<T>>::mutate(|idx| idx + 1);
-				Self::deposit_event(Event::AuctionStarted(<AuctionIndex<T>>::get()));
+				<CurrentAuctionIndex<T>>::mutate(|idx| *idx + One::one());
+				Self::deposit_event(Event::AuctionStarted(<CurrentAuctionIndex<T>>::get()));
 
 				Ok(AuctionPhase::Auction)
 			},
@@ -205,7 +190,7 @@ impl<T: Config> Auction for Pallet<T> {
 				if !bidders.is_empty() {
 					bidders.sort_unstable_by_key(|k| k.1);
 					bidders.reverse();
-					let max_size = min(<AuctionSizeRange<T>>::get().1, bidders.len() as u32);
+					let max_size = min(<AuctionSizeRange<T>>::get().1, bidders.len() as u16);
 					let bidders = bidders.get(0..max_size as usize);
 					if let Some(bidders) = bidders {
 						if let Some((_, min_bid)) = bidders.last() {
@@ -215,8 +200,8 @@ impl<T: Config> Auction for Pallet<T> {
 							<Winners<T>>::put(winners);
 							<CurrentPhase<T>>::put(AuctionPhase::Completed);
 
-							<AuctionIndex<T>>::mutate(|idx| idx + 1);
-							Self::deposit_event(Event::AuctionCompleted(<AuctionIndex<T>>::get()));
+							<CurrentAuctionIndex<T>>::mutate(|idx| *idx + One::one());
+							Self::deposit_event(Event::AuctionCompleted(<CurrentAuctionIndex<T>>::get()));
 
 							return Ok(AuctionPhase::Completed);
 						}
@@ -231,8 +216,22 @@ impl<T: Config> Auction for Pallet<T> {
 			AuctionPhase::Completed => {
 				<Bidders<T>>::kill();
 				<CurrentPhase<T>>::put(AuctionPhase::Bidders);
+				Self::deposit_event(Event::AwaitingBidders);
+
 				Ok(AuctionPhase::Bidders)
 			}
 		};
+	}
+
+	fn bidders() -> Vec<Bid<Self>> {
+		<Bidders<T>>::get()
+	}
+
+	fn winners() -> Vec<Self::ValidatorId> {
+		<Winners<T>>::get()
+	}
+
+	fn minimum_bid() -> Self::Amount {
+		<MinimumBid<T>>::get()
 	}
 }
