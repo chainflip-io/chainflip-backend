@@ -16,14 +16,13 @@ use sp_runtime::{
 };
 use frame_support::{parameter_types, construct_runtime, traits::{OnInitialize, OnFinalize}};
 use std::cell::RefCell;
-use cf_traits::Bid;
+use cf_traits::{BidderProvider};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 type Amount = u64;
 type ValidatorId = u64;
-pub const BAD_VALIDATOR_ID: ValidatorId = 100;
 
 impl WeightInfo for () {
 	fn set_blocks_for_epoch() -> u64 { 0 as Weight }
@@ -37,11 +36,12 @@ impl WeightInfo for () {
 
 thread_local! {
 	pub static CANDIDATE_IDX: RefCell<u64> = RefCell::new(0);
-	pub static CURRENT_EPOCH: RefCell<u64> = RefCell::new(0);
 	pub static CURRENT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 	pub static OUTGOING_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
-	pub static CHANGED: RefCell<bool> = RefCell::new(false);
 	pub static PHASE: RefCell<AuctionPhase> =  RefCell::new(AuctionPhase::Bidders);
+	pub static BIDDERS: RefCell<Vec<(u64, u64)>> = RefCell::new(vec![]);
+	pub static WINNERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
+
 }
 
 construct_runtime!(
@@ -53,6 +53,7 @@ construct_runtime!(
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		ValidatorManager: pallet_cf_validator::{Module, Call, Storage, Event<T>},
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
+		AuctionManager: pallet_cf_auction::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -107,6 +108,38 @@ impl pallet_session::Config for Test {
 	type WeightInfo = ();
 }
 
+impl pallet_cf_auction::Config for Test {
+	type Event = Event;
+	type Amount = Amount;
+	type ValidatorId = ValidatorId;
+	type BidderProvider = TestBidderProvider;
+	type Registrar = Test;
+	type AuctionIndex = u32;
+}
+
+impl ValidatorRegistration<ValidatorId> for Test {
+	fn is_registered(_id: &ValidatorId) -> bool {
+		true
+	}
+}
+
+pub struct TestBidderProvider;
+
+impl BidderProvider for TestBidderProvider {
+	type ValidatorId = ValidatorId;
+	type Amount = Amount;
+
+	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
+		let idx = CANDIDATE_IDX.with(|idx| {
+			let new_idx = *idx.borrow_mut() + 1;
+			*idx.borrow_mut() = new_idx;
+			new_idx
+		});
+
+		vec![(1 + idx, 1), (2 + idx, 2)]
+	}
+}
+
 pub struct TestEpochTransitionHandler;
 
 impl EpochTransitionHandler for TestEpochTransitionHandler {
@@ -127,58 +160,83 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 
 parameter_types! {
 	pub const MinEpoch: u64 = 1;
-	pub const MinValidatorSetSize: u64 = 2;
+	pub const MinValidatorSetSize: u32 = 2;
 }
 
-pub struct DummyAuction;
-
-fn next(phase: AuctionPhase) -> AuctionPhase {
-	return match phase {
-		AuctionPhase::Bidders => {
-			AuctionPhase::Auction
-		},
-		AuctionPhase::Auction => {
-			AuctionPhase::Completed
-		},
-		AuctionPhase::Completed => {
-			AuctionPhase::Bidders
-		}
-	}
-}
-
-impl Auction for DummyAuction {
-	type ValidatorId = ValidatorId;
-	type Amount = Amount;
-
-	fn next_phase() -> Result<AuctionPhase, AuctionError> {
-		PHASE.with(|l| {
-			*l.borrow_mut() = match *l.borrow_mut() {
-				AuctionPhase::Bidders => {
-					AuctionPhase::Auction
-				},
-				AuctionPhase::Auction => {
-					AuctionPhase::Completed
-				},
-				AuctionPhase::Completed => {
-					AuctionPhase::Bidders
-				}
-			};
-			Ok(*l.borrow_mut())
-		})
-	}
-
-	fn bidders() -> Vec<Bid<Self>> {
-		vec![(1,1), (2,2)]
-	}
-
-	fn winners() -> Vec<Self::ValidatorId> {
-		vec![1, 2]
-	}
-
-	fn minimum_bid() -> Self::Amount {
-		1
-	}
-}
+// pub struct DummyAuction;
+//
+// fn next(phase: AuctionPhase) -> AuctionPhase {
+// 	return match phase {
+// 		AuctionPhase::Bidders => {
+// 			AuctionPhase::Auction
+// 		},
+// 		AuctionPhase::Auction => {
+// 			AuctionPhase::Completed
+// 		},
+// 		AuctionPhase::Completed => {
+// 			AuctionPhase::Bidders
+// 		}
+// 	}
+// }
+//
+// impl Auction for DummyAuction {
+// 	type ValidatorId = ValidatorId;
+// 	type Amount = Amount;
+// 	type BidderProvider = TestBidderProvider;
+//
+// 	fn set_auction_size(_range: (u32, u32)) -> Result<(), AuctionError> {
+// 		Ok(())
+// 	}
+//
+// 	fn phase() -> AuctionPhase {
+// 		PHASE.with(|l| {
+// 			*l.borrow_mut()
+// 		})
+// 	}
+//
+// 	fn process() -> Result<AuctionPhase, AuctionError> {
+// 		PHASE.with(|l| {
+// 			let (next, processed) =
+// 				match *l.borrow_mut() {
+// 					AuctionPhase::Bidders => {
+// 						(AuctionPhase::Auction, AuctionPhase::Bidders)
+// 					}
+// 					AuctionPhase::Auction => {
+// 						// Simple auction, all bidders get in
+// 						WINNERS.with(|l| {
+// 							let mut winners = vec![];
+// 							for (id, _) in Self::BidderProvider::get_bidders() {
+// 								winners.push(id);
+// 							}
+// 							*l.borrow_mut() = winners;
+// 						});
+//
+// 						(AuctionPhase::Completed, AuctionPhase::Auction)
+// 					},
+// 					AuctionPhase::Completed => {
+// 						(AuctionPhase::Bidders, AuctionPhase::Completed)
+// 					}
+// 				};
+//
+// 			*l.borrow_mut() = next;
+//
+// 			Ok(processed)
+// 		})
+// 	}
+//
+// 	fn bidders() -> Vec<Bid<Self>> {
+// 		Self::BidderProvider::get_bidders()
+// 	}
+//
+// 	fn winners() -> Vec<Self::ValidatorId> {
+// 		WINNERS.with(|l| l.borrow().to_vec())
+// 	}
+//
+// 	fn minimum_bid() -> Self::Amount {
+// 		1
+// 	}
+// }
+//
 
 impl Config for Test {
 	type Event = Event;
@@ -188,15 +246,7 @@ impl Config for Test {
 	type ValidatorWeightInfo = ();
 	type Amount = Amount;
 	// Use the pallet's implementation
-	type Auction = DummyAuction;
-	// Mock out the registrar
-	type Registrar = Test;
-}
-
-impl ValidatorRegistration<ValidatorId> for Test {
-	fn is_registered(id: &ValidatorId) -> bool {
-		*id != BAD_VALIDATOR_ID
-	}
+	type Auction = AuctionManager;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
@@ -209,10 +259,6 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 
 pub fn current_validators() -> Vec<u64> {
 	CURRENT_VALIDATORS.with(|l| l.borrow().to_vec())
-}
-
-pub fn outgoing_validators() -> Vec<u64> {
-	OUTGOING_VALIDATORS.with(|l| l.borrow().to_vec())
 }
 
 pub fn run_to_block(n: u64) {
