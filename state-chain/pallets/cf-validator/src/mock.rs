@@ -179,7 +179,7 @@ impl Config for Test {
 	type EpochIndex = EpochIndex;
 	type Amount = Amount;
 	// Use the pallet's implementation
-	type Auction = AuctionManager;
+	type Auction = AuctionPallet;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
