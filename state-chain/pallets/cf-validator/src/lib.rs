@@ -139,7 +139,7 @@ pub mod pallet {
 		/// The number of blocks has changed for our epoch \[from, to\]
 		EpochDurationChanged(T::BlockNumber, T::BlockNumber),
 		/// A new epoch has been forced
-		ForceEpochRequested(),
+		ForceRotationRequested(),
 	}
 
 	#[pallet::error]
@@ -191,7 +191,7 @@ pub mod pallet {
 			ensure!(T::Auction::phase() == AuctionPhase::Bidders, Error::<T>::DuringRotation);
 			ensure_root(origin)?;
 			Force::<T>::set(true);
-			Self::deposit_event(Event::ForceEpochRequested());
+			Self::deposit_event(Event::ForceRotationRequested());
 			Ok(().into())
 		}
 
