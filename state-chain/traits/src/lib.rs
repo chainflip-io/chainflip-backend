@@ -83,6 +83,7 @@ pub enum AuctionError {
 	Empty,
 	MinValidatorSize,
 	InvalidRange,
+	NotConfirmed,
 }
 
 pub trait BidderProvider {

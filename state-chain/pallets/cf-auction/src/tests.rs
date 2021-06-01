@@ -49,7 +49,12 @@ mod test {
 			assert_eq!(AuctionPallet::bidders(), vec![min_bid, joe_bid, max_bid]);
 			assert_eq!(AuctionPallet::winners(), vec![max_bid.0, joe_bid.0, min_bid.0]);
 			assert_eq!(AuctionPallet::minimum_bid(), min_bid.1);
-
+			// Just leaves us to confirm this auction, if we try to process this we will get an error
+			// until is confirmed
+			assert_eq!(AuctionPallet::process(), Err(AuctionError::NotConfirmed));
+			// Confirm the auction
+			let auction_idx = AuctionPallet::current_auction_index();
+			assert_ok!(AuctionPallet::confirm_auction(Origin::signed(100), auction_idx));
 			// and finally we complete the process, clearing the bidders
 			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::Completed));
 			assert_eq!(AuctionPallet::current_phase(), AuctionPhase::Bidders);
