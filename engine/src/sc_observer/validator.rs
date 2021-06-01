@@ -3,14 +3,16 @@
 use std::marker::PhantomData;
 
 use codec::{Decode, Encode};
-use pallet_cf_validator::{EpochIndex, ValidatorSize};
-use serde::{Deserialize, Serialize};
-use substrate_subxt::{module, system::System, Event};
+use pallet_cf_validator::ValidatorSize;
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use substrate_subxt::{module, system::System, Event, sp_runtime::traits::Member};
 
 use super::{runtime::StateChainRuntime, sc_event::SCEvent};
 
 #[module]
-pub trait Validator: System {}
+pub trait Validator: System {
+    type EpochIndex: Member + Encode + Decode + Serialize + DeserializeOwned;
+}
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct MaximumValidatorsChangedEvent<V: Validator> {
@@ -27,18 +29,12 @@ pub struct EpochDurationChangedEvent<V: Validator> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct AuctionStartedEvent<V: Validator> {
-    // TODO:  Ideally we use V::EpochIndex here, however we do that
-    pub epoch_index: EpochIndex,
-
-    pub _phantom: PhantomData<V>,
+    pub epoch_index: V::EpochIndex,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct AuctionConfirmedEvent<V: Validator> {
-    // TODO:  Ideally we use V::EpochIndex here, however we do that
-    pub epoch_index: EpochIndex,
-
-    pub _phantom: PhantomData<V>,
+    pub epoch_index: V::EpochIndex,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
@@ -48,10 +44,7 @@ pub struct ForceAuctionRequestedEvent<V: Validator> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct NewEpochEvent<V: Validator> {
-    // TODO:  Ideally we use V::EpochIndex here, however we do that
-    pub epoch_index: EpochIndex,
-
-    pub _phantom: PhantomData<V>,
+    pub epoch_index: V::EpochIndex,
 }
 
 /// Wrapper for all Validator events
@@ -146,7 +139,7 @@ mod tests {
     fn auction_started_decoding() {
         // AuctionStarted(EpochIndex)
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_validator::Event::<SCRuntime>::AuctionStarted(1.into()).into();
+            pallet_cf_validator::Event::<SCRuntime>::AuctionStarted(1).into();
 
         let encoded_auction_started = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped
@@ -157,8 +150,7 @@ mod tests {
                 .unwrap();
 
         let expecting = AuctionStartedEvent {
-            epoch_index: 1.into(),
-            _phantom: PhantomData,
+            epoch_index: 1,
         };
 
         assert_eq!(decoded_event, expecting);
@@ -168,7 +160,7 @@ mod tests {
     fn auction_confirmed_decoding() {
         // AuctionConfirmed(EpochIndex)
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_validator::Event::<SCRuntime>::AuctionConfirmed(1.into()).into();
+            pallet_cf_validator::Event::<SCRuntime>::AuctionConfirmed(1).into();
 
         let encoded_auction_confirmed = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped
@@ -179,8 +171,7 @@ mod tests {
                 .unwrap();
 
         let expecting = AuctionConfirmedEvent {
-            epoch_index: 1.into(),
-            _phantom: PhantomData,
+            epoch_index: 1,
         };
 
         assert_eq!(decoded_event, expecting);
@@ -190,7 +181,7 @@ mod tests {
     fn new_epoch_decoding() {
         // AuctionConfirmed(EpochIndex)
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_validator::Event::<SCRuntime>::NewEpoch(1.into()).into();
+            pallet_cf_validator::Event::<SCRuntime>::NewEpoch(1).into();
 
         let encoded_new_epoch = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped
@@ -201,8 +192,7 @@ mod tests {
                 .unwrap();
 
         let expecting = NewEpochEvent {
-            epoch_index: 1.into(),
-            _phantom: PhantomData,
+            epoch_index: 1,
         };
 
         assert_eq!(decoded_event, expecting);

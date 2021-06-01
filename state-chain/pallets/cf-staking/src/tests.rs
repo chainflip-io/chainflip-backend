@@ -2,6 +2,7 @@ use crate::{mock::*, Stakes, Pallet, Error, PendingClaims, Config};
 use std::time::Duration;
 use frame_support::{assert_noop, assert_ok, error::BadOrigin, traits::UnixTime};
 use sp_core::ecdsa::Signature;
+use cf_traits::mocks::epoch_info;
 
 const ETH_DUMMY_ADDR: <Test as Config>::EthereumAddress = [42u8; 20];
 
