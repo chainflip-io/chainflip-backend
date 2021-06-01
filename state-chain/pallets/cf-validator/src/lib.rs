@@ -359,6 +359,8 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 						None
 					},
 					// Successfully completed the auction process, return the set to session pallet
+					// On next session these will become the validators, just left to complete the
+					// process
 					AuctionPhase::Auction => {
 						Some(T::Auction::winners())
 					},
