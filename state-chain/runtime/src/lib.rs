@@ -144,6 +144,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type Registrar = Session;
 	type ValidatorId = AccountId;
 	type MinAuctionSize = MinAuctionSize;
+	type Confirmation = Auction;
 }
 
 // FIXME: These would be changed
