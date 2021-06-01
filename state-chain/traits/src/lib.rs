@@ -78,6 +78,10 @@ pub trait Auction {
 	fn minimum_bid() -> Self::Amount;
 }
 
+pub trait AuctionConfirmation {
+	fn confirmed() -> bool;
+}
+
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum AuctionError {
 	Empty,

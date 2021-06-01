@@ -53,8 +53,7 @@ mod test {
 			// until is confirmed
 			assert_eq!(AuctionPallet::process(), Err(AuctionError::NotConfirmed));
 			// Confirm the auction
-			let auction_idx = AuctionPallet::current_auction_index();
-			assert_ok!(AuctionPallet::confirm_auction(Origin::signed(100), auction_idx));
+			CONFIRM.with(|l| { *l.borrow_mut() = true });
 			// and finally we complete the process, clearing the bidders
 			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::Completed));
 			assert_eq!(AuctionPallet::current_phase(), AuctionPhase::Bidders);

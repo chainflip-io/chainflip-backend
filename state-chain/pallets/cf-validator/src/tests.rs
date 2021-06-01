@@ -58,6 +58,8 @@ mod test {
 			// Move forward by 1 block
 			run_to_block(3);
 			assert_eq!(AuctionPallet::phase(), AuctionPhase::Completed);
+			// Confirm the auction
+			CONFIRM.with(|l| { *l.borrow_mut() = true });
 			// Move forward by 1 block
 			run_to_block(4);
 			assert_eq!(AuctionPallet::phase(), AuctionPhase::Bidders);
@@ -118,21 +120,29 @@ mod test {
 			assert_eq!(<ValidatorManager as EpochInfo>::next_validators(), AuctionPallet::winners());
 			// Complete the cycle
 			run_to_block(12);
-			assert_eq!(AuctionManager::phase(), AuctionPhase::Bidders);
-			let winners = AuctionManager::winners();
+			// As we haven't confirmed the auction we would still be in the same phase
+			assert_eq!(AuctionPallet::phase(), AuctionPhase::Completed);
+			run_to_block(13);
+			// and still...
+			assert_eq!(AuctionPallet::phase(), AuctionPhase::Completed);
+			// Confirm the auction
+			CONFIRM.with(|l| { *l.borrow_mut() = true });
+			run_to_block(14);
+			assert_eq!(AuctionPallet::phase(), AuctionPhase::Bidders);
+			let winners = AuctionPallet::winners();
 			// We do now see our winners as the set of validators
 			assert_eq!(<ValidatorManager as EpochInfo>::current_validators(), winners);
 			// Our old winners remain
 			assert_eq!(<ValidatorManager as EpochInfo>::next_validators(), winners);
 			// Force an auction at the next block
 			assert_ok!(ValidatorManager::force_rotation(Origin::root()));
-			run_to_block(13);
+			run_to_block(15);
 			// A new auction starts
 			assert_eq!(AuctionPallet::phase(), AuctionPhase::Auction);
 			// We should still see the old winners validating
 			assert_eq!(<ValidatorManager as EpochInfo>::current_validators(), winners);
 			assert_eq!(<ValidatorManager as EpochInfo>::next_validators(), winners);
-			run_to_block(14);
+			run_to_block(16);
 			// Finalised auction
 			assert_eq!(AuctionPallet::phase(), AuctionPhase::Completed);
 			// Current validators still remain
@@ -141,7 +151,7 @@ mod test {
 			let next = <ValidatorManager as EpochInfo>::next_validators();
 			assert_ne!(next, <ValidatorManager as EpochInfo>::current_validators());
 			// Complete cycle and see our new set become validators
-			run_to_block(15);
+			run_to_block(17);
 			assert_eq!(next, <ValidatorManager as EpochInfo>::current_validators());
 		});
 	}

@@ -35,7 +35,7 @@ use sp_std::prelude::*;
 use frame_support::pallet_prelude::*;
 use frame_support::traits::ValidatorRegistration;
 use sp_std::cmp::min;
-use cf_traits::{Auction, AuctionPhase, AuctionError, BidderProvider, Bid, AuctionRange};
+use cf_traits::{Auction, AuctionPhase, AuctionError, BidderProvider, Bid, AuctionRange, AuctionConfirmation};
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -43,6 +43,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use frame_support::traits::ValidatorRegistration;
 	use sp_std::ops::Add;
+	use cf_traits::AuctionConfirmation;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -65,6 +66,8 @@ pub mod pallet {
 		/// Minimum amount of bidders
 		#[pallet::constant]
 		type MinAuctionSize: Get<u32>;
+		/// Confirmation of auction
+		type Confirmation: AuctionConfirmation;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -169,6 +172,12 @@ pub mod pallet {
 	}
 }
 
+impl<T: Config> AuctionConfirmation for Pallet<T> {
+	fn confirmed() -> bool {
+		<AuctionToConfirm::<T>>::get().is_some()
+	}
+}
+
 impl<T: Config> Auction for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
@@ -269,7 +278,7 @@ impl<T: Config> Auction for Pallet<T> {
 			// We are ready to call this an auction a day resetting the bidders in storage and
 			// setting the state ready for a new set of 'Bidders'
 			AuctionPhase::Completed => {
-				if <AuctionToConfirm::<T>>::get().is_some() {
+				if !T::Confirmation::confirmed() {
 					return Err(AuctionError::NotConfirmed);
 				}
 

@@ -16,7 +16,7 @@ use sp_runtime::{
 };
 use frame_support::{parameter_types, construct_runtime, traits::{OnInitialize, OnFinalize}};
 use std::cell::RefCell;
-use cf_traits::{BidderProvider};
+use cf_traits::{BidderProvider, AuctionConfirmation};
 use frame_support::traits::ValidatorRegistration;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -42,7 +42,7 @@ thread_local! {
 	pub static PHASE: RefCell<AuctionPhase> =  RefCell::new(AuctionPhase::Bidders);
 	pub static BIDDERS: RefCell<Vec<(u64, u64)>> = RefCell::new(vec![]);
 	pub static WINNERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
-
+	pub static CONFIRM: RefCell<bool> = RefCell::new(false);
 }
 
 construct_runtime!(
@@ -121,6 +121,7 @@ impl pallet_cf_auction::Config for Test {
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
+	type Confirmation = TestConfirmation;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
@@ -143,6 +144,13 @@ impl BidderProvider for TestBidderProvider {
 		});
 
 		vec![(1 + idx, 1), (2 + idx, 2)]
+	}
+}
+
+pub struct TestConfirmation;
+impl AuctionConfirmation for TestConfirmation {
+	fn confirmed() -> bool {
+		CONFIRM.with(|l| *l.borrow())
 	}
 }
 

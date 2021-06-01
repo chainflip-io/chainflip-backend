@@ -22,6 +22,7 @@ type ValidatorId = u64;
 
 thread_local! {
 	pub static BIDDER_SET: RefCell<Vec<(ValidatorId, Amount)>> = RefCell::new(vec![]);
+	pub static CONFIRM: RefCell<bool> = RefCell::new(false);
 }
 
 construct_runtime!(
@@ -76,6 +77,7 @@ impl Config for Test {
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
+	type Confirmation = Test;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
@@ -92,6 +94,12 @@ impl BidderProvider for TestBidderProvider {
 
 	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
 		BIDDER_SET.with(|l| l.borrow().to_vec())
+	}
+}
+
+impl AuctionConfirmation for Test {
+	fn confirmed() -> bool {
+		CONFIRM.with(|l| *l.borrow())
 	}
 }
 
