@@ -56,6 +56,9 @@ pub mod pallet {
 		type BidderProvider: BidderProvider<ValidatorId=Self::ValidatorId, Amount=Self::Amount>;
 		type Registrar: ValidatorRegistration<Self::ValidatorId>;
 		type AuctionIndex: Member + Parameter + Default + Add + One + Copy;
+		/// Minimum amount of bidders
+		#[pallet::constant]
+		type MinAuctionSize: Get<u32>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -106,12 +109,15 @@ pub mod pallet {
 		AuctionConfirmed(T::AuctionIndex),
 		/// Awaiting bidders for the auction
 		AwaitingBidders,
+		/// The auction range upper limit has changed \[before, after\]
+		AuctionRangeChanged(AuctionRange, AuctionRange),
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Invalid auction index used in confirmation
 		InvalidAuction,
+		InvalidRange,
 	}
 
 	#[pallet::call]
@@ -129,6 +135,29 @@ pub mod pallet {
 			Self::deposit_event(Event::AuctionConfirmed(index));
 			Ok(().into())
 		}
+
+		/// Sets the size of our auction range
+		///
+		/// The dispatch origin of this function must be root.
+		#[pallet::weight(
+			10_000
+		)]
+		pub(super) fn set_auction_size_range(
+			origin: OriginFor<T>,
+			range: AuctionRange,
+		) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+
+			match Self::set_auction_range(range) {
+				Ok(old) => {
+					Self::deposit_event(Event::AuctionRangeChanged(old, range));
+					Ok(().into())
+				},
+				Err(_) => {
+					Err(Error::<T>::InvalidRange.into())
+				},
+			}
+		}
 	}
 }
 
@@ -137,13 +166,25 @@ impl<T: Config> Auction for Pallet<T> {
 	type Amount = T::Amount;
 	type BidderProvider = T::BidderProvider;
 
-	fn set_auction_size(range: AuctionRange) -> Result<(), AuctionError> {
-		if range.0 == 0 || range.1 == 0 || range.0 == range.1 {
+	fn auction_range() -> AuctionRange {
+		<AuctionSizeRange<T>>::get()
+	}
+
+	/// Set new auction range, returning on success the old value
+	fn set_auction_range(range: AuctionRange) -> Result<AuctionRange, AuctionError> {
+		let (low, high) = range;
+
+		if low == high || low < T::MinAuctionSize::get() || high < T::MinAuctionSize::get() {
+			return Err(AuctionError::InvalidRange);
+		}
+
+		let old = <AuctionSizeRange<T>>::get();
+		if old == range {
 			return Err(AuctionError::InvalidRange);
 		}
 
 		<AuctionSizeRange<T>>::put(range);
-		Ok(())
+		Ok(old)
 	}
 
 	fn phase() -> AuctionPhase { <CurrentPhase<T>>::get() }

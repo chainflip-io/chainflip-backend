@@ -63,6 +63,11 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 }
+
+parameter_types! {
+	pub const MinAuctionSize: u32 = 2;
+}
+
 impl Config for Test {
 	type Event = Event;
 	type Amount = Amount;
@@ -70,6 +75,7 @@ impl Config for Test {
 	type BidderProvider = TestBidderProvider;
 	type Registrar = Test;
 	type AuctionIndex = u32;
+	type MinAuctionSize = MinAuctionSize;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {

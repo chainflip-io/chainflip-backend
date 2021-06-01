@@ -69,7 +69,8 @@ pub trait Auction {
 	type Amount;
 	type BidderProvider;
 
-	fn set_auction_size(range: AuctionRange) -> Result<(), AuctionError>;
+	fn auction_range() -> AuctionRange;
+	fn set_auction_range(range: AuctionRange) -> Result<AuctionRange, AuctionError>;
 	fn phase() -> AuctionPhase;
 	fn process() -> Result<AuctionPhase, AuctionError>;
 	fn bidders() -> Vec<Bid<Self>>;

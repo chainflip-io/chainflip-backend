@@ -15,8 +15,7 @@ mod test {
 		new_test_ext().execute_with(|| {
 			// Run through the sudo extrinsics to be sure they are what they are
 			assert_noop!(ValidatorManager::set_blocks_for_epoch(Origin::signed(ALICE), Zero::zero()), BadOrigin);
-			assert_noop!(ValidatorManager::set_validator_target_size(Origin::signed(ALICE), Zero::zero()), BadOrigin);
-			assert_noop!(ValidatorManager::force_auction(Origin::signed(ALICE)), BadOrigin);
+			assert_noop!(ValidatorManager::force_rotation(Origin::signed(ALICE)), BadOrigin);
 		});
 	}
 
@@ -40,38 +39,17 @@ mod test {
 	}
 
 	#[test]
-	fn changing_validator_size() {
-		new_test_ext().execute_with(|| {
-			// Assert our minimum is set to 2
-			assert_eq!(<Test as Config>::MinValidatorSetSize::get(), 2);
-			// Check we are throwing up an error when we send anything less than the minimum of 2
-			assert_noop!(ValidatorManager::set_validator_target_size(Origin::root(), 0), Error::<Test>::InvalidValidatorSetSize);
-			assert_noop!(ValidatorManager::set_validator_target_size(Origin::root(), 1), Error::<Test>::InvalidValidatorSetSize);
-			// This should now work
-			assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), 100));
-			// Confirm we have an event with the change of 0 to 2
-			assert_eq!(
-				last_event(),
-				mock::Event::pallet_cf_validator(crate::Event::MaximumValidatorsChanged(100)),
-			);
-
-			// We throw up an error if we try to set it to the current
-			assert_noop!(ValidatorManager::set_validator_target_size(Origin::root(), 2), Error::<Test>::InvalidValidatorSetSize);
-		});
-	}
-
-	#[test]
 	fn should_end_session() {
 		new_test_ext().execute_with(|| {
 			let set_size = 10;
-			assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), set_size));
+			assert_ok!(AuctionManager::set_auction_range((2, set_size)));
 			// Set block length of epoch to 10
 			let epoch = 10;
 			assert_ok!(ValidatorManager::set_blocks_for_epoch(Origin::root(), epoch));
 			// If we are in the bidder phase we should check if we have a force auction or
 			// epoch has expired
-			// Test force auction
-			assert_ok!(ValidatorManager::force_auction(Origin::root()));
+			// Test force rotation
+			assert_ok!(ValidatorManager::force_rotation(Origin::root()));
 			// Test we are in the bidder phase
 			assert_eq!(AuctionManager::phase(), AuctionPhase::Bidders);
 			// Move forward by 1 block, we have a block already
@@ -94,9 +72,8 @@ mod test {
 			// We should have started another auction phase
 			assert_eq!(AuctionManager::phase(), AuctionPhase::Auction);
 			// Let's check we can't alter the state of the pallet during this period
-			assert_noop!(ValidatorManager::force_auction(Origin::root()), Error::<Test>::DuringAuction);
-			assert_noop!(ValidatorManager::set_validator_target_size(Origin::root(), 1), Error::<Test>::DuringAuction);
-			assert_noop!(ValidatorManager::set_blocks_for_epoch(Origin::root(), 10), Error::<Test>::DuringAuction);
+			assert_noop!(ValidatorManager::force_rotation(Origin::root()), Error::<Test>::DuringRotation);
+			assert_noop!(ValidatorManager::set_blocks_for_epoch(Origin::root(), 10), Error::<Test>::DuringRotation);
 			// Run to next block and phase moves on
 			run_to_block(11);
 			assert_eq!(AuctionManager::phase(), AuctionPhase::Completed);
@@ -112,7 +89,7 @@ mod test {
 		// ran through an auction and that the winners of this auction become the validating set
 		new_test_ext().execute_with(|| {
 			let set_size = 10;
-			assert_ok!(ValidatorManager::set_validator_target_size(Origin::root(), set_size));
+			assert_ok!(AuctionManager::set_auction_range((2, set_size)));
 			// Set block length of epoch to 10
 			let epoch = 10;
 			assert_ok!(ValidatorManager::set_blocks_for_epoch(Origin::root(), epoch));
@@ -148,7 +125,7 @@ mod test {
 			// Our old winners remain
 			assert_eq!(<ValidatorManager as EpochInfo>::next_validators(), winners);
 			// Force an auction at the next block
-			assert_ok!(ValidatorManager::force_auction(Origin::root()));
+			assert_ok!(ValidatorManager::force_rotation(Origin::root()));
 			run_to_block(13);
 			// A new auction starts
 			assert_eq!(AuctionManager::phase(), AuctionPhase::Auction);

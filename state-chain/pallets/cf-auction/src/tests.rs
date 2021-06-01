@@ -1,7 +1,10 @@
 mod test {
 	use crate::*;
 	use crate::{mock::*};
-	use frame_support::{assert_ok};
+	use frame_support::{assert_ok, assert_noop};
+	fn last_event() -> mock::Event {
+		frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
+	}
 
 	#[test]
 	fn run_through_phases() {
@@ -15,7 +18,7 @@ mod test {
 				*l.borrow_mut() = vec![invalid_bid, min_bid, joe_bid, max_bid]
 			});
 
-			let auction_range = (1, 100);
+			let auction_range = (2, 100);
 			// Check we are in the bidders phase
 			assert_eq!(AuctionPallet::current_phase(), AuctionPhase::Bidders);
 			// Now move to the next phase, this should be the auction phase
@@ -33,9 +36,9 @@ mod test {
 			assert_eq!(AuctionPallet::process(), Err(AuctionError::Empty));
 			// In order to move forward we will need to set our auction set size
 			// First test the call failing, range would have a 0 value or have equal values for min and max
-			assert_eq!(AuctionPallet::set_auction_size((0, 0)), Err(AuctionError::InvalidRange));
-			assert_eq!(AuctionPallet::set_auction_size((1, 1)), Err(AuctionError::InvalidRange));
-			assert_ok!(AuctionPallet::set_auction_size(auction_range));
+			assert_eq!(AuctionPallet::set_auction_range((0, 0)), Err(AuctionError::InvalidRange));
+			assert_eq!(AuctionPallet::set_auction_range((1, 1)), Err(AuctionError::InvalidRange));
+			assert_ok!(AuctionPallet::set_auction_range(auction_range));
 			// Check storage for auction range
 			assert_eq!(AuctionPallet::auction_size_range(), auction_range);
 			// With that sorted we would move on to completing the auction
@@ -51,6 +54,27 @@ mod test {
 			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::Completed));
 			assert_eq!(AuctionPallet::current_phase(), AuctionPhase::Bidders);
 			assert!(AuctionPallet::bidders().is_empty());
+		});
+	}
+
+	#[test]
+	fn changing_range() {
+		new_test_ext().execute_with(|| {
+			// Assert our minimum is set to 2
+			assert_eq!(<Test as Config>::MinAuctionSize::get(), 2);
+			// Check we are throwing up an error when we send anything less than the minimum of 2
+			assert_noop!(AuctionPallet::set_auction_size_range(Origin::root(), (0, 0)), Error::<Test>::InvalidRange);
+			assert_noop!(AuctionPallet::set_auction_size_range(Origin::root(), (1, 2)), Error::<Test>::InvalidRange);
+			// This should now work
+			assert_ok!(AuctionPallet::set_auction_size_range(Origin::root(), (2, 100)));
+			// Confirm we have an event
+			assert_eq!(
+				last_event(),
+				mock::Event::pallet_cf_auction(crate::Event::AuctionRangeChanged((0, 0), (2, 100))),
+			);
+			//
+			// We throw up an error if we try to set it to the current
+			assert_noop!(AuctionPallet::set_auction_size_range(Origin::root(), (2, 100)), Error::<Test>::InvalidRange);
 		});
 	}
 }

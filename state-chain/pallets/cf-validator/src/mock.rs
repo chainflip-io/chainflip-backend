@@ -17,6 +17,7 @@ use sp_runtime::{
 use frame_support::{parameter_types, construct_runtime, traits::{OnInitialize, OnFinalize}};
 use std::cell::RefCell;
 use cf_traits::{BidderProvider};
+use frame_support::traits::ValidatorRegistration;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -108,6 +109,10 @@ impl pallet_session::Config for Test {
 	type WeightInfo = ();
 }
 
+parameter_types! {
+	pub const MinAuctionSize: u32 = 2;
+}
+
 impl pallet_cf_auction::Config for Test {
 	type Event = Event;
 	type Amount = Amount;
@@ -115,6 +120,7 @@ impl pallet_cf_auction::Config for Test {
 	type BidderProvider = TestBidderProvider;
 	type Registrar = Test;
 	type AuctionIndex = u32;
+	type MinAuctionSize = MinAuctionSize;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
@@ -168,7 +174,6 @@ pub(super) type EpochIndex = u32;
 impl Config for Test {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
-	type MinValidatorSetSize = MinValidatorSetSize;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
 	type ValidatorWeightInfo = ();
 	type EpochIndex = EpochIndex;

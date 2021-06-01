@@ -100,7 +100,6 @@ impl<T: pallet_session::Config> EpochTransitionHandler for PhantomData<T> {
 pub mod pallet {
 	use super::*;
 	use frame_system::pallet_prelude::*;
-	use frame_support::sp_runtime::SaturatedConversion;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 
 	#[pallet::pallet]
@@ -118,10 +117,6 @@ pub mod pallet {
 		/// Minimum amount of blocks an epoch can run for
 		#[pallet::constant]
 		type MinEpoch: Get<<Self as frame_system::Config>::BlockNumber>;
-
-		/// Minimum amount of validators we will want in a set
-		#[pallet::constant]
-		type MinValidatorSetSize: Get<u32>;
 
 		type ValidatorWeightInfo: WeightInfo;
 
@@ -143,10 +138,8 @@ pub mod pallet {
 		NewEpoch(T::EpochIndex),
 		/// The number of blocks has changed for our epoch \[from, to\]
 		EpochDurationChanged(T::BlockNumber, T::BlockNumber),
-		/// The number of validators in a set has been changed \[from, to\]
-		MaximumValidatorsChanged(ValidatorSize),
-		/// A new auction has been forced
-		ForceAuctionRequested(),
+		/// A new epoch has been forced
+		ForceEpochRequested(),
 	}
 
 	#[pallet::error]
@@ -154,10 +147,8 @@ pub mod pallet {
 		NoValidators,
 		/// Epoch block number supplied is invalid
 		InvalidEpoch,
-		/// Validator set size provided is invalid
-		InvalidValidatorSetSize,
 		/// During an auction we can't update certain state
-		DuringAuction,
+		DuringRotation,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -178,7 +169,7 @@ pub mod pallet {
 			number_of_blocks: T::BlockNumber,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			ensure!(T::Auction::phase() == AuctionPhase::Bidders, Error::<T>::DuringAuction);
+			ensure!(T::Auction::phase() == AuctionPhase::Bidders, Error::<T>::DuringRotation);
 			ensure!(number_of_blocks >= T::MinEpoch::get(), Error::<T>::InvalidEpoch);
 			let old_epoch = BlocksPerEpoch::<T>::get();
 			ensure!(old_epoch != number_of_blocks, Error::<T>::InvalidEpoch);
@@ -187,43 +178,20 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Sets the size of our validate set size
+		/// Force a new epoch.  From the next block we will try to move to a new epoch and rotate
+		/// our validators.
 		///
 		/// The dispatch origin of this function must be root.
 		#[pallet::weight(
-			T::ValidatorWeightInfo::set_validator_target_size()
+			10_000
 		)]
-		pub(super) fn set_validator_target_size(
-			origin: OriginFor<T>,
-			size: ValidatorSize,
-		) -> DispatchResultWithPostInfo {
-			ensure_root(origin)?;
-			ensure!(T::Auction::phase() == AuctionPhase::Bidders, Error::<T>::DuringAuction);
-			ensure!(size >= T::MinValidatorSetSize::get().saturated_into(), Error::<T>::InvalidValidatorSetSize);
-			match T::Auction::set_auction_size((T::MinValidatorSetSize::get(), size)) {
-				Ok(_) => {
-					Self::deposit_event(Event::MaximumValidatorsChanged(size));
-					Ok(().into())
-				},
-				Err(_) => {
-					Err(Error::<T>::InvalidValidatorSetSize.into())
-				},
-			}
-		}
-
-		/// Force an auction phase.  The next block will run an auction.
-		///
-		/// The dispatch origin of this function must be root.
-		#[pallet::weight(
-			T::ValidatorWeightInfo::force_auction()
-		)]
-		pub(super) fn force_auction(
+		pub(super) fn force_rotation(
 			origin: OriginFor<T>,
 		) -> DispatchResultWithPostInfo {
-			ensure!(T::Auction::phase() == AuctionPhase::Bidders, Error::<T>::DuringAuction);
+			ensure!(T::Auction::phase() == AuctionPhase::Bidders, Error::<T>::DuringRotation);
 			ensure_root(origin)?;
 			Force::<T>::set(true);
-			Self::deposit_event(Event::ForceAuctionRequested());
+			Self::deposit_event(Event::ForceEpochRequested());
 			Ok(().into())
 		}
 
@@ -251,11 +219,6 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn epoch_number_of_blocks)]
 	pub(super) type BlocksPerEpoch<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
-
-	/// Epoch index of auction we are waiting for confirmation for
-	#[pallet::storage]
-	#[pallet::getter(fn auction_to_confirm)]
-	pub(super) type AuctionToConfirm<T: Config> = StorageValue<_, T::EpochIndex, OptionQuery>;
 
 	/// Current epoch index
 	#[pallet::storage]

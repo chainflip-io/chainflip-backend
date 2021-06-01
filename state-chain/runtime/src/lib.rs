@@ -132,6 +132,10 @@ pub fn native_version() -> NativeVersion {
 	}
 }
 
+parameter_types! {
+	pub const MinAuctionSize: u32 = 2;
+}
+
 impl pallet_cf_auction::Config for Runtime {
 	type Event = Event;
 	type Amount = FlipBalance;
@@ -139,18 +143,17 @@ impl pallet_cf_auction::Config for Runtime {
 	type AuctionIndex = u64;
 	type Registrar = Session;
 	type ValidatorId = AccountId;
+	type MinAuctionSize = MinAuctionSize;
 }
 
 // FIXME: These would be changed
 parameter_types! {
 	pub const MinEpoch: BlockNumber = 1;
-	pub const MinValidatorSetSize: u32 = 2;
 }
 
 impl pallet_cf_validator::Config for Runtime {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
-	type MinValidatorSetSize = MinValidatorSetSize;
 	type EpochTransitionHandler = PhantomData<Runtime>;
 	type ValidatorWeightInfo = weights::pallet_cf_validator::WeightInfo<Runtime>;
 	type EpochIndex = EpochIndex;
