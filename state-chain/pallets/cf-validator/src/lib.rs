@@ -52,7 +52,7 @@ mod tests;
 mod benchmarking;
 
 pub use pallet::*;
-use sp_runtime::traits::{Convert, OpaqueKeys, AtLeast32BitUnsigned};
+use sp_runtime::traits::{Convert, OpaqueKeys, AtLeast32BitUnsigned, One};
 use sp_std::prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};
 use log::{debug};
@@ -71,15 +71,6 @@ pub trait WeightInfo {
 
 pub type ValidatorSize = u32;
 type SessionIndex = u32;
-
-#[derive(Encode, Decode, Clone, Copy, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EpochIndex(SessionIndex);
-
-impl From<SessionIndex> for EpochIndex {
-	fn from(i: SessionIndex) -> Self {
-		EpochIndex(i/2)
-	}
-}
 
 /// Handler for Epoch life cycle events.
 pub trait EpochTransitionHandler {
@@ -141,6 +132,12 @@ pub mod pallet {
 
 		type ValidatorWeightInfo: WeightInfo;
 
+		type EpochIndex: Member 
+			+ codec::FullCodec 
+			+ Copy 
+			+ AtLeast32BitUnsigned 
+			+ Default;
+		
 		type Amount: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 
 		type Registrar: ValidatorRegistration<Self::ValidatorId>;
@@ -152,19 +149,19 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// An auction phase has started \[epoch_index\]
-		AuctionStarted(EpochIndex),
+		AuctionStarted(T::EpochIndex),
 		/// A new epoch has started \[epoch_index\]
-		NewEpoch(EpochIndex),
+		NewEpoch(T::EpochIndex),
 		/// The number of blocks has changed for our epoch \[from, to\]
 		EpochDurationChanged(T::BlockNumber, T::BlockNumber),
 		/// The number of validators in a set has been changed \[from, to\]
 		MaximumValidatorsChanged(ValidatorSize, ValidatorSize),
 		/// The auction has been confirmed off-chain \[epoch_index\]
-		AuctionConfirmed(EpochIndex),
+		AuctionConfirmed(T::EpochIndex),
 		/// A new auction has been forced
 		ForceAuctionRequested(),
 		/// An auction has not started
-		AuctionNonStarter(EpochIndex),
+		AuctionNonStarter(T::EpochIndex),
 		/// An auction has not completed
 		AuctionNotCompleted(AuctionError)
 	}
@@ -252,7 +249,7 @@ pub mod pallet {
 		)]
 		pub(super) fn confirm_auction(
 			origin: OriginFor<T>,
-			index: EpochIndex,
+			index: T::EpochIndex,
 		) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
 			ensure!(Some(index) == AuctionToConfirm::<T>::get(), Error::<T>::InvalidAuction);
@@ -299,12 +296,12 @@ pub mod pallet {
 	/// Epoch index of auction we are waiting for confirmation for
 	#[pallet::storage]
 	#[pallet::getter(fn auction_to_confirm)]
-	pub(super) type AuctionToConfirm<T: Config> = StorageValue<_, EpochIndex, OptionQuery>;
+	pub(super) type AuctionToConfirm<T: Config> = StorageValue<_, T::EpochIndex, OptionQuery>;
 
 	/// Current epoch index
 	#[pallet::storage]
 	#[pallet::getter(fn current_epoch)]
-	pub(super) type CurrentEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
+	pub(super) type CurrentEpoch<T: Config> = StorageValue<_, T::EpochIndex, ValueQuery>;
 
 	/// Current bond value
 	#[pallet::storage]
@@ -341,7 +338,7 @@ pub mod pallet {
 impl<T: Config> EpochInfo for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
-	type EpochIndex = EpochIndex;
+	type EpochIndex = T::EpochIndex;
 
 	fn current_validators() -> Vec<Self::ValidatorId> {
 		<pallet_session::Module<T>>::validators()
@@ -362,7 +359,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		CurrentBond::<T>::get()
 	}
 
-	fn epoch_index() -> EpochIndex {
+	fn epoch_index() -> Self::EpochIndex {
 		CurrentEpoch::<T>::get()
 	}
 
@@ -423,19 +420,19 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 	/// Prepare candidates for a new session
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
 		debug!("planning new_session({})", new_index);
-		Self::new_session(new_index)
+		Self::new_session()
 	}
 
 	/// The current session is ending
 	fn end_session(end_index: SessionIndex) {
-		debug!("starting start_session({})", end_index);
-		Self::end_session(end_index)
+		debug!("ending end_session({})", end_index);
+		Self::end_session()
 	}
 
 	/// The session is starting
 	fn start_session(start_index: SessionIndex) {
-		debug!("ending end_session({})", start_index);
-		Self::start_session(start_index);
+		debug!("starting start_session({})", start_index);
+		Self::start_session();
 	}
 }
 
@@ -471,10 +468,10 @@ impl<T: Config> Pallet<T> {
 	///
 	/// `AuctionStarted` is emitted and the rotation from auction to trading phases will wait on a
 	/// confirmation via the `auction_to_confirm` extrinsic
-	fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
+	fn new_session() -> Option<Vec<T::ValidatorId>> {
+		let epoch_index = CurrentEpoch::<T>::get();
 		if !Self::is_auction_phase() {
-			Self::deposit_event(Event::NewEpoch(new_index.into()));
-			CurrentEpoch::<T>::set(new_index.into());
+			Self::deposit_event(Event::NewEpoch(epoch_index));
 			ValidatorLookup::<T>::remove_all();
 			for validator in <pallet_session::Module<T>>::validators() {
 				ValidatorLookup::<T>::insert(validator, ());
@@ -486,8 +483,8 @@ impl<T: Config> Pallet<T> {
 			.and_then(T::Auction::run_auction)
 			.and_then(|proposal| T::Auction::complete_auction(proposal)) {
 			Ok(proposal) => {
-				Self::deposit_event(Event::AuctionStarted(new_index.into()));
-				AuctionToConfirm::<T>::set(Some(new_index.into()));
+				Self::deposit_event(Event::AuctionStarted(epoch_index));
+				AuctionToConfirm::<T>::set(Some(epoch_index));
 				CurrentBond::<T>::set(proposal.1);
 				Some(proposal.0)
 			},
@@ -500,19 +497,21 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// The end of the session is triggered, we alternate between epoch sessions and auction sessions.
-	fn end_session(end_index: SessionIndex) {
+	fn end_session() {
+		let epoch_index = CurrentEpoch::<T>::get();
 		IsAuctionPhase::<T>::mutate(|is_auction| {
 			if *is_auction {
-				debug!("Ending the auction session {}", end_index);
+				debug!("Ending the auction session {:?}", epoch_index);
+				CurrentEpoch::<T>::set(epoch_index + One::one());
 			} else {
-				debug!("Ending the trading session {}", end_index);
+				debug!("Ending the trading session {:?}", epoch_index);
 			}
 			*is_auction = !*is_auction;
 		});
 	}
 
-	fn start_session(start_index: SessionIndex) {
-		debug!("Starting a new session {}", start_index);
+	fn start_session() {
+		debug!("Starting a new session");
 	}
 
 	/// Check if we have a forced session for this block.  If not, if we are in the "auction" phase
