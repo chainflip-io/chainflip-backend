@@ -54,7 +54,7 @@ construct_runtime!(
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		ValidatorManager: pallet_cf_validator::{Module, Call, Storage, Event<T>},
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
-		AuctionManager: pallet_cf_auction::{Module, Call, Storage, Event<T>},
+		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>},
 	}
 );
 
