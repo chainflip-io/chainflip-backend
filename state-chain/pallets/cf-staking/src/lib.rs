@@ -43,7 +43,7 @@ use frame_support::{ensure, error::BadOrigin, traits::EnsureOrigin};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
-use cf_traits::{EpochInfo, CandidateProvider};
+use cf_traits::{EpochInfo, BidderProvider};
 
 use codec::FullCodec;
 use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub, One, Saturating, Zero};
@@ -582,11 +582,11 @@ impl<T: Config> Pallet<T> {
 
 /// This implementation of [pallet_cf_validator::CandidateProvider] simply returns a list of `(account_id, stake)` for
 /// all non-retired accounts.
-impl<T: Config> CandidateProvider for Pallet<T> {
+impl<T: Config> BidderProvider for Pallet<T> {
 	type ValidatorId = T::AccountId;
 	type Amount = T::TokenAmount;
 	
-	fn get_candidates() -> Vec<(Self::ValidatorId, Self::Amount)> {
+	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
 		Stakes::<T>::iter()
 			.filter_map(
 				|(acct, StakeRecord { stake, retired })| {
