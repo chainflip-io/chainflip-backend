@@ -133,6 +133,10 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+
+		/// Confirms a running auction that is valid
+		///
+		/// The dispatch origin of this function must be signed
 		#[pallet::weight(
 			10_000
 		)]

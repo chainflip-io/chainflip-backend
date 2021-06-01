@@ -45,9 +45,8 @@ pub trait EpochInfo {
 	fn epoch_index() -> Self::EpochIndex;
 }
 
-/// A set of validators and their stake
-// pub type ValidatorSet<T> = Vec<(<T as Auction>::ValidatorId, <T as Auction>::Amount)>;
-
+/// The phase of an Auction. At the start we are waiting on bidders, we then run an auction and
+/// finally it is completed
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub enum AuctionPhase {
 	Bidders,
@@ -61,27 +60,47 @@ impl Default for AuctionPhase {
 	}
 }
 
+/// A bid represented by a validator and the amount they wish to bid
 pub type Bid<T> = (<T as Auction>::ValidatorId, <T as Auction>::Amount);
+/// A range of min, max for our winning set
 pub type AuctionRange = (u32, u32);
 
+/// An Auction
+///
+/// An auction is broken down into three phases described by `AuctionPhase`
+/// At the start we look for bidders provided by `BidderProvider` from which an auction is ran
+/// This results in a set of winners and a minimum bid after the auction.  After each successful
+/// call of `process()` the phase will transition else resulting in an error and preventing to move
+/// on.  An confirmation is looked to before completing the auction with the `AuctionConfirmation`
+/// trait.
 pub trait Auction {
 	type ValidatorId;
 	type Amount;
 	type BidderProvider;
 
+	/// Range describing auction set size
 	fn auction_range() -> AuctionRange;
+	/// Set the auction range
 	fn set_auction_range(range: AuctionRange) -> Result<AuctionRange, AuctionError>;
+	/// The current phase we find ourselves in
 	fn phase() -> AuctionPhase;
+	/// Move the process forward by one step, returns the phase completed or error
 	fn process() -> Result<AuctionPhase, AuctionError>;
+	/// The current set of bidders
 	fn bidders() -> Vec<Bid<Self>>;
+	/// The current/final set of winners
 	fn winners() -> Vec<Self::ValidatorId>;
+	/// The minimum bid needed to be included in the winners set
 	fn minimum_bid() -> Self::Amount;
 }
 
+/// Confirmation of an auction
 pub trait AuctionConfirmation {
+	/// To confirm that the auction is valid and can continue
 	fn confirmed() -> bool;
 }
 
+/// An error has occurred during an auction
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum AuctionError {
 	Empty,
@@ -90,6 +109,7 @@ pub enum AuctionError {
 	NotConfirmed,
 }
 
+/// Providing bidders for our auction
 pub trait BidderProvider {
 	type ValidatorId;
 	type Amount;

@@ -12,10 +12,10 @@
 //!
 //! The module contains functionality to manage the validator set used to ensure the Chainflip
 //! State Chain network.  It extends on the functionality offered by the `session` pallet provided by
-//! Parity.  There are two types of sessions; an Epoch session in which we have a constant set of validators
-//! and an Auction session in which we continue with our current validator set and request a set of
-//! candidates for validation.  Once validated and confirmed become our new set of validators within the
-//! Epoch session.
+//! Parity.  At every epoch block length, or if forced, the `Auction` pallet proposes a set of new
+//! validators.  The process of auction runs over 2 blocks to achieve a finalised candidate set and
+//! anytime after this, based on confirmation of the auction(see `AuctionConfirmation`) the new set
+//! will become the validating set.
 //!
 //! ## Terminology
 //!
@@ -26,21 +26,18 @@
 //! - **Epoch:** A period in blocks in which a constant set of validators ensure the network.
 //!
 //! - **Auction** A non defined period of blocks in which we continue with the existing validators
-//!   and assess the new candidate set of their validity as validators.  This period is closed when
-//!   `confirm_auction` is called and the candidate set are now the new validating set.
+//!   and assess the new candidate set of their validity as validators.  This functionality is provided
+//!   by the `Auction` pallet.  We rotate the set of validators on each `AuctionPhase::Completed` phase
+//!   completed by the `Auction` pallet.
 //!
-//! - **Session:** A session as defined by the `session` pallet. We have two sessions; Epoch which has
-//!   a fixed number of blocks set with `set_blocks_for_epoch` and an Auction session which is of an
-//!   undetermined number of blocks.
+//! - **Session:** A session as defined by the `session` pallet.
 //!
 //! - **Sudo:** A single account that is also called the "sudo key" which allows "privileged functions"
 //!
 //! ### Dispatchable Functions
 //!
 //! - `set_blocks_for_epoch` - Set the number of blocks an Epoch should run for.
-//! - `set_validator_target_size` - Set the target size for a validator set.
-//! - `force_auction` - Force an auction to start on the next block.
-//! - `confirm_auction` - Confirm that any dependencies for the auction have been confirmed.
+//! - `force_rotation` - Force a rotation of validators to start on the next block.
 //!
 
 #[cfg(test)]
@@ -61,7 +58,7 @@ use cf_traits::{EpochInfo, Auction, AuctionPhase};
 pub trait WeightInfo {
 	fn set_blocks_for_epoch() -> Weight;
 	fn set_validator_target_size() -> Weight;
-	fn force_auction() -> Weight;
+	fn force_rotation() -> Weight;
 	fn confirm_auction() -> Weight;
 }
 
@@ -118,16 +115,20 @@ pub mod pallet {
 		#[pallet::constant]
 		type MinEpoch: Get<<Self as frame_system::Config>::BlockNumber>;
 
+		/// Benchmark stuff
 		type ValidatorWeightInfo: WeightInfo;
 
+		/// An index describing the epoch
 		type EpochIndex: Member
 			+ codec::FullCodec
 			+ Copy
 			+ AtLeast32BitUnsigned
 			+ Default;
 
+		/// An amount
 		type Amount: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 
+		/// An auction type
 		type Auction: Auction<ValidatorId=Self::ValidatorId, Amount=Self::Amount>;
 	}
 
