@@ -125,10 +125,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type NumValidators<T> = StorageValue<_, u32, ValueQuery>;
 
-	/// The current epoch index.
-	#[pallet::storage]
-	pub(super) type CurrentEpoch<T: Config> = StorageValue<_, Epoch<T>, ValueQuery>;
-
 	/// No hooks are implemented for this pallet.
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
@@ -208,7 +204,7 @@ impl<T: Config> Pallet<T> {
 		who: <T as frame_system::Config>::AccountId,
 		call: <T as Config>::Call,
 	) -> DispatchResultWithPostInfo {
-		let epoch: Epoch<T> = CurrentEpoch::<T>::get();
+		let epoch: Epoch<T> = T::EpochInfo::epoch_index();
 		let num_validators = NumValidators::<T>::get() as usize;
 
 		// Look up the signer in the list of validators
@@ -322,7 +318,6 @@ impl<T: Config> pallet_cf_validator::EpochTransitionHandler for Pallet<T> {
 
 	fn on_new_epoch(new_validators: Vec<Self::ValidatorId>) {
 		let epoch = T::EpochInfo::epoch_index();
-		CurrentEpoch::<T>::set(epoch);
 
 		for (i, v) in new_validators.iter().enumerate() {
 			ValidatorIndex::<T>::insert(&epoch, (*v).clone().into(), i as u16)
