@@ -77,6 +77,7 @@ pub trait Auction {
 	type ValidatorId;
 	type Amount;
 	type BidderProvider;
+	type Confirmation: AuctionConfirmation;
 
 	/// Range describing auction set size
 	fn auction_range() -> AuctionRange;

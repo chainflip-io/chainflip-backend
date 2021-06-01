@@ -186,6 +186,7 @@ impl<T: Config> Auction for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
 	type BidderProvider = T::BidderProvider;
+	type Confirmation = T::Confirmation;
 
 	fn auction_range() -> AuctionRange {
 		<AuctionSizeRange<T>>::get()
@@ -282,7 +283,7 @@ impl<T: Config> Auction for Pallet<T> {
 			// We are ready to call this an auction a day resetting the bidders in storage and
 			// setting the state ready for a new set of 'Bidders'
 			AuctionPhase::Completed => {
-				if !T::Confirmation::confirmed() {
+				if !Self::Confirmation::confirmed() {
 					return Err(AuctionError::NotConfirmed);
 				}
 
