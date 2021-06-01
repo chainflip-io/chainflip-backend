@@ -28,11 +28,7 @@ type ValidatorId = u64;
 impl WeightInfo for () {
 	fn set_blocks_for_epoch() -> u64 { 0 as Weight }
 
-	fn set_validator_target_size() -> u64 { 0 as Weight }
-
 	fn force_rotation() -> u64 { 0 as Weight }
-
-	fn confirm_auction() -> u64 { 0 as Weight }
 }
 
 thread_local! {

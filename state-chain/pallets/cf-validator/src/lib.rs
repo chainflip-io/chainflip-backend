@@ -57,9 +57,7 @@ use cf_traits::{EpochInfo, Auction, AuctionPhase};
 
 pub trait WeightInfo {
 	fn set_blocks_for_epoch() -> Weight;
-	fn set_validator_target_size() -> Weight;
 	fn force_rotation() -> Weight;
-	fn confirm_auction() -> Weight;
 }
 
 pub type ValidatorSize = u32;
