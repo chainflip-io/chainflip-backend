@@ -70,15 +70,6 @@ pub trait WeightInfo {
 pub type ValidatorSize = u32;
 type SessionIndex = u32;
 
-#[derive(Encode, Decode, Clone, Copy, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EpochIndex(SessionIndex);
-
-impl From<SessionIndex> for EpochIndex {
-	fn from(i: SessionIndex) -> Self {
-		EpochIndex(i/2)
-	}
-}
-
 /// Handler for Epoch life cycle events.
 pub trait EpochTransitionHandler {
 	/// The id type used for the validators.
@@ -136,6 +127,12 @@ pub mod pallet {
 
 		type ValidatorWeightInfo: WeightInfo;
 
+		type EpochIndex: Member
+			+ codec::FullCodec
+			+ Copy
+			+ AtLeast32BitUnsigned
+			+ Default;
+
 		type Amount: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 
 		type Auction: Auction<ValidatorId=Self::ValidatorId, Amount=Self::Amount>;
@@ -145,7 +142,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A new epoch has started \[epoch_index\]
-		NewEpoch(EpochIndex),
+		NewEpoch(T::EpochIndex),
 		/// The number of blocks has changed for our epoch \[from, to\]
 		EpochDurationChanged(T::BlockNumber, T::BlockNumber),
 		/// The number of validators in a set has been changed \[from, to\]
@@ -257,15 +254,15 @@ pub mod pallet {
 	#[pallet::getter(fn epoch_number_of_blocks)]
 	pub(super) type BlocksPerEpoch<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
-		/// Epoch index of auction we are waiting for confirmation for
+	/// Epoch index of auction we are waiting for confirmation for
 	#[pallet::storage]
 	#[pallet::getter(fn auction_to_confirm)]
-	pub(super) type AuctionToConfirm<T: Config> = StorageValue<_, EpochIndex, OptionQuery>;
+	pub(super) type AuctionToConfirm<T: Config> = StorageValue<_, T::EpochIndex, OptionQuery>;
 
 	/// Current epoch index
 	#[pallet::storage]
 	#[pallet::getter(fn current_epoch)]
-	pub(super) type CurrentEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
+	pub(super) type CurrentEpoch<T: Config> = StorageValue<_, T::EpochIndex, ValueQuery>;
 
 	/// Validator lookup
 	#[pallet::storage]
@@ -295,7 +292,7 @@ pub mod pallet {
 impl<T: Config> EpochInfo for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
-	type EpochIndex = EpochIndex;
+	type EpochIndex = T::EpochIndex;
 
 	fn current_validators() -> Vec<Self::ValidatorId> {
 		<pallet_session::Module<T>>::validators()
@@ -316,7 +313,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		T::Auction::minimum_bid()
 	}
 
-	fn epoch_index() -> EpochIndex {
+	fn epoch_index() -> Self::EpochIndex {
 		CurrentEpoch::<T>::get()
 	}
 }

@@ -163,80 +163,7 @@ parameter_types! {
 	pub const MinValidatorSetSize: u32 = 2;
 }
 
-// pub struct DummyAuction;
-//
-// fn next(phase: AuctionPhase) -> AuctionPhase {
-// 	return match phase {
-// 		AuctionPhase::Bidders => {
-// 			AuctionPhase::Auction
-// 		},
-// 		AuctionPhase::Auction => {
-// 			AuctionPhase::Completed
-// 		},
-// 		AuctionPhase::Completed => {
-// 			AuctionPhase::Bidders
-// 		}
-// 	}
-// }
-//
-// impl Auction for DummyAuction {
-// 	type ValidatorId = ValidatorId;
-// 	type Amount = Amount;
-// 	type BidderProvider = TestBidderProvider;
-//
-// 	fn set_auction_size(_range: (u32, u32)) -> Result<(), AuctionError> {
-// 		Ok(())
-// 	}
-//
-// 	fn phase() -> AuctionPhase {
-// 		PHASE.with(|l| {
-// 			*l.borrow_mut()
-// 		})
-// 	}
-//
-// 	fn process() -> Result<AuctionPhase, AuctionError> {
-// 		PHASE.with(|l| {
-// 			let (next, processed) =
-// 				match *l.borrow_mut() {
-// 					AuctionPhase::Bidders => {
-// 						(AuctionPhase::Auction, AuctionPhase::Bidders)
-// 					}
-// 					AuctionPhase::Auction => {
-// 						// Simple auction, all bidders get in
-// 						WINNERS.with(|l| {
-// 							let mut winners = vec![];
-// 							for (id, _) in Self::BidderProvider::get_bidders() {
-// 								winners.push(id);
-// 							}
-// 							*l.borrow_mut() = winners;
-// 						});
-//
-// 						(AuctionPhase::Completed, AuctionPhase::Auction)
-// 					},
-// 					AuctionPhase::Completed => {
-// 						(AuctionPhase::Bidders, AuctionPhase::Completed)
-// 					}
-// 				};
-//
-// 			*l.borrow_mut() = next;
-//
-// 			Ok(processed)
-// 		})
-// 	}
-//
-// 	fn bidders() -> Vec<Bid<Self>> {
-// 		Self::BidderProvider::get_bidders()
-// 	}
-//
-// 	fn winners() -> Vec<Self::ValidatorId> {
-// 		WINNERS.with(|l| l.borrow().to_vec())
-// 	}
-//
-// 	fn minimum_bid() -> Self::Amount {
-// 		1
-// 	}
-// }
-//
+pub(super) type EpochIndex = u32;
 
 impl Config for Test {
 	type Event = Event;
@@ -244,6 +171,7 @@ impl Config for Test {
 	type MinValidatorSetSize = MinValidatorSetSize;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
 	type ValidatorWeightInfo = ();
+	type EpochIndex = EpochIndex;
 	type Amount = Amount;
 	// Use the pallet's implementation
 	type Auction = AuctionManager;
