@@ -57,8 +57,6 @@ use sp_std::prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};
 use frame_support::pallet_prelude::*;
 use cf_traits::{EpochInfo, Auction, AuctionPhase};
-use serde::{Serialize, Deserialize};
-use frame_support::traits::ValidatorRegistration;
 
 pub trait WeightInfo {
 	fn set_blocks_for_epoch() -> Weight;
