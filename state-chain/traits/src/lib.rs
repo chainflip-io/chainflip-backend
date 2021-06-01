@@ -93,6 +93,8 @@ pub trait Auction {
 	fn winners() -> Vec<Self::ValidatorId>;
 	/// The minimum bid needed to be included in the winners set
 	fn minimum_bid() -> Self::Amount;
+	/// Abort this auction
+	fn abort();
 }
 
 /// Confirmation of an auction

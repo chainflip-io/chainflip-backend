@@ -12,9 +12,10 @@ The module contains functionality to run a contest or auction in which a set of
 bidders are provided via the `BidderProvider` trait.  Calling `process()` we push forward the
 state of our auction.  First we are looking for `Bidders` with which we validate their suitability
 for the next phase `Auction`.  During this phase we run an auction which selects a list of winners
-sets a minimum bid of what was need to get in the winning list and set the state to `Completed`.  
+sets a minimum bid of what was need to get in the winning list and set the state to `Completed`.
 The caller would then finally call `process()` to clear the auction in which it would move to
-`Bidders` waiting for the next auction to be started.
+`Bidders` waiting for the next auction to be started.  At any point in time the auction can be
+aborted returning state to `Bidders`
 
 ## Terminology
 

@@ -81,4 +81,33 @@ mod test {
 			assert_noop!(AuctionPallet::set_auction_size_range(Origin::root(), (2, 100)), Error::<Test>::InvalidRange);
 		});
 	}
+
+	#[test]
+	fn kill_them_all() {
+		new_test_ext().execute_with(|| {
+			// Create a test set of bidders
+			BIDDER_SET.with(|l| {
+				*l.borrow_mut() = vec![(2, 2), (3, 100)]
+			});
+
+			let auction_range = (2, 100);
+			assert_ok!(AuctionPallet::set_auction_range(auction_range));
+			// Check we are in the bidders phase
+			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::Bidders));
+			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::Auction));
+			assert!(!AuctionPallet::winners().is_empty());
+			assert!(!AuctionPallet::bidders().is_empty());
+			assert!(AuctionPallet::minimum_bid() > 0);
+			assert!(AuctionPallet::auction_to_confirm().is_some());
+			// Kill it
+			AuctionPallet::abort();
+			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::Bidders));
+			assert!(AuctionPallet::winners().is_empty());
+			// assert!(AuctionPallet::bidders().is_empty());
+			assert!(AuctionPallet::minimum_bid() == 0);
+			assert!(AuctionPallet::auction_to_confirm().is_none());
+			// Confirm the auction
+			CONFIRM.with(|l| { *l.borrow_mut() = true });
+		});
+	}
 }
