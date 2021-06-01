@@ -30,7 +30,7 @@ impl WeightInfo for () {
 
 	fn set_validator_target_size() -> u64 { 0 as Weight }
 
-	fn force_auction() -> u64 { 0 as Weight }
+	fn force_rotation() -> u64 { 0 as Weight }
 
 	fn confirm_auction() -> u64 { 0 as Weight }
 }
