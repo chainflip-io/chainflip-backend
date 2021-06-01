@@ -4500,6 +4500,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-flip"
+version = "0.1.0"
+dependencies = [
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec 2.1.1",
+ "serde 1.0.125",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+]
+
+[[package]]
 name = "pallet-cf-staking"
 version = "0.1.0"
 dependencies = [
