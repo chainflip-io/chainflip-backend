@@ -51,6 +51,8 @@ chainflip-common = { path = "../common" }
 state-chain-runtime = { path = "../state-chain/runtime" }
 pallet-cf-validator = { path = "../state-chain/pallets/cf-validator" }
 pallet-cf-staking = { path = "../state-chain/pallets/cf-staking" }
+pallet-cf-auction = { path = "../state-chain/pallets/cf-auction" }
+cf-traits = { path = '../state-chain/traits', default-features = false }
 
 [dev-dependencies]
 nats_test_server = "0.3.0"
