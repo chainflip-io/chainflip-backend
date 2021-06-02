@@ -1,4 +1,3 @@
-use chainflip_common::types::addresses::EthereumAddress;
 use config::{Config, ConfigError, File};
 
 use serde::Deserialize;
@@ -6,19 +5,19 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize, Clone)]
 pub struct MessageQueue {
     pub hostname: String,
-    pub port: u32,
+    pub port: u16,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct StateChain {
     pub hostname: String,
-    pub port: u32,
+    pub port: u16,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Eth {
     pub hostname: String,
-    pub port: u32,
+    pub port: u16,
 
     // TODO: Into an Ethereum Address type?
     pub stake_manager_eth_address: String,
@@ -37,6 +36,21 @@ impl Settings {
 
         // Start off by merging in the "default" configuration file
         s.merge(File::with_name("config/default.toml"))?;
+
+        // You can deserialize (and thus freeze) the entire configuration as
+        s.try_into()
+    }
+}
+
+#[cfg(test)]
+pub mod test_utils {
+    use super::*;
+
+    pub fn new_test_settings() -> Result<Settings, ConfigError> {
+        let mut s = Config::new();
+
+        // Start off by merging in the "testing" configuration file
+        s.merge(File::with_name("config/testing.toml"))?;
 
         // You can deserialize (and thus freeze) the entire configuration as
         s.try_into()

@@ -3,7 +3,7 @@ use crate::{
         stake_manager::{stake_manager::StakeManager, stake_manager_sink::StakeManagerSink},
         EthEventStreamBuilder,
     },
-    mq::{nats_client::NatsMQClient, Options},
+    mq::{nats_client::NatsMQClient},
     settings,
 };
 
@@ -18,16 +18,10 @@ pub async fn start_stake_manager_witness(settings: settings::Settings) -> Result
 
     let stake_manager = StakeManager::load(settings.eth.stake_manager_eth_address.as_str())?;
 
-    let mq_options = Options {
-        url: format!(
-            "{}:{}",
-            settings.message_queue.hostname, settings.message_queue.port
-        ),
-    };
-    let sm_sink = StakeManagerSink::<NatsMQClient>::new(mq_options).await?;
+    let sm_sink = StakeManagerSink::<NatsMQClient>::new(settings.message_queue).await?;
     let eth_node_ws_url = format!(
         "ws://{}:{}",
-        settings.eth.hostname, settings.message_queue.port
+        settings.eth.hostname, settings.eth.port
     );
     let sm_event_stream = EthEventStreamBuilder::new(eth_node_ws_url.as_str(), stake_manager);
     let sm_event_stream = sm_event_stream.with_sink(sm_sink).build().await?;
