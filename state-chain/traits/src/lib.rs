@@ -83,3 +83,22 @@ pub trait Auction {
 	/// Complete an auction with a set of validators and accept this set and the bond for the next epoch
 	fn complete_auction(proposal: ValidatorProposal<Self>) -> Result<ValidatorProposal<Self>, AuctionError>;
 }
+
+pub trait Action {}
+
+pub trait Reporter {
+	type AccountId;
+	type Action: Action;
+
+	fn report(account_id: &Self::AccountId, action: Self::Action) -> Result<(), JudgementError>;
+}
+
+pub enum JudgementError {
+	AccountNotFound,
+}
+
+pub trait Judgement<T: Reporter, BlockNumber> {
+	fn liveliness(account_id: &T::AccountId) -> Result<BlockNumber, JudgementError>;
+	fn report_for(account_id: &T::AccountId) -> Result<Vec<T::Action>, JudgementError>;
+	fn clean_all(account_id: &T::AccountId) -> Result<(), JudgementError>;
+}

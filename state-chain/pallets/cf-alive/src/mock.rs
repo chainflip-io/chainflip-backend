@@ -60,8 +60,13 @@ impl frame_system::Config for Test {
 parameter_types! {
 }
 
+#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+pub struct Behaviour;
+
+impl Action for Behaviour {}
 impl Config for Test {
     type Event = Event;
+    type Action = Behaviour;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

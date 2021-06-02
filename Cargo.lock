@@ -4489,6 +4489,7 @@ dependencies = [
 name = "pallet-cf-alive"
 version = "0.0.1"
 dependencies = [
+ "cf-traits",
  "frame-support",
  "frame-system",
  "log",
