@@ -38,6 +38,8 @@ steps:
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     commands:
       - drone lint --trusted
+      - drone lint --trusted engine
+      - drone lint --trusted state-chain
   - name: rust-base
     image: plugins/docker
     settings:
@@ -114,8 +116,6 @@ steps:
       - sccache -s
   - name: build-state-chain-node
     image: plugins/docker
-    depends_on:
-      - test-chainflip-backend
     settings:
       username:
         from_secret: docker_username
@@ -128,8 +128,6 @@ steps:
       cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
   - name: build-chainflip-engine
     image: plugins/docker
-    depends_on:
-      - test-chainflip-backend
     settings:
       username:
         from_secret: docker_username
