@@ -91,8 +91,10 @@ mod test {
 			});
 
 			let auction_range = (2, 100);
+			CONFIRM.with(|l| { *l.borrow_mut() = true });
 			assert_ok!(AuctionPallet::set_auction_range(auction_range));
-			// Check we are in the bidders phase
+			assert!(AuctionPallet::bidders().is_empty());
+			assert!(AuctionPallet::auction_to_confirm().is_none());
 			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::Bidders));
 			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::Auction));
 			assert!(!AuctionPallet::winners().is_empty());
@@ -101,13 +103,10 @@ mod test {
 			assert!(AuctionPallet::auction_to_confirm().is_some());
 			// Kill it
 			AuctionPallet::abort();
-			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::Bidders));
+			assert_eq!(AuctionPallet::phase(), AuctionPhase::Bidders);
 			assert!(AuctionPallet::winners().is_empty());
-			// assert!(AuctionPallet::bidders().is_empty());
+			assert!(AuctionPallet::bidders().is_empty());
 			assert!(AuctionPallet::minimum_bid() == 0);
-			assert!(AuctionPallet::auction_to_confirm().is_none());
-			// Confirm the auction
-			CONFIRM.with(|l| { *l.borrow_mut() = true });
 		});
 	}
 }

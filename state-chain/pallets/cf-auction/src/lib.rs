@@ -50,22 +50,6 @@ pub mod pallet {
 	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(_);
 
-	#[pallet::genesis_config]
-	pub struct GenesisConfig {}
-
-	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
-		fn default() -> Self {
-			Self {}
-		}
-	}
-
-	// The build of genesis for the pallet.
-	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
-		fn build(&self) {}
-	}
-
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The event type
@@ -328,11 +312,11 @@ impl<T: Config> Auction for Pallet<T> {
 	}
 
 	fn abort() {
-		<Bidders<T>>::take();
-		<Winners<T>>::take();
+		<Winners<T>>::kill();
+		<Bidders<T>>::kill();
 		<CurrentPhase<T>>::put(AuctionPhase::Bidders);
-		<AuctionToConfirm::<T>>::take();
-		<MinimumBid::<T>>::take();
+		<AuctionToConfirm::<T>>::kill();
+		<MinimumBid::<T>>::kill();
 		Self::deposit_event(Event::AuctionAborted(<CurrentAuctionIndex<T>>::get()));
 	}
 }

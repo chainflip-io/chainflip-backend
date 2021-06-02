@@ -937,6 +937,7 @@ dependencies = [
  "async-std",
  "async-stream",
  "async-trait",
+ "cf-traits",
  "chainflip-common",
  "config",
  "crossbeam-channel",
@@ -949,6 +950,7 @@ dependencies = [
  "hex",
  "log",
  "nats_test_server",
+ "pallet-cf-auction",
  "pallet-cf-staking",
  "pallet-cf-validator",
  "parity-scale-codec 2.1.1",
@@ -4486,6 +4488,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-auction"
+version = "0.0.1"
+dependencies = [
+ "cf-traits",
+ "frame-support",
+ "frame-system",
+ "log",
+ "parity-scale-codec 2.1.1",
+ "serde 1.0.125",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std 3.0.0",
+]
+
+[[package]]
 name = "pallet-cf-core"
 version = "0.1.0"
 dependencies = [
@@ -4524,6 +4542,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log",
+ "pallet-cf-auction",
  "pallet-session",
  "parity-scale-codec 2.1.1",
  "serde 1.0.125",
@@ -4542,7 +4561,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "pallet-session",
+ "pallet-cf-validator",
  "parity-scale-codec 2.1.1",
  "serde 1.0.125",
  "sp-core",
@@ -7985,6 +8004,7 @@ dependencies = [
  "pallet-aura",
  "pallet-authorship",
  "pallet-balances",
+ "pallet-cf-auction",
  "pallet-cf-staking",
  "pallet-cf-validator",
  "pallet-cf-witness",
