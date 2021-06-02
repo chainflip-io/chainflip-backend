@@ -2,9 +2,9 @@
 
 use std::marker::PhantomData;
 
-use codec::{Decode, Encode};
-use frame_support::sp_runtime::traits::Verify;
-use sp_runtime::traits::IdentifyAccount;
+use codec::{Decode, Encode, FullCodec};
+use frame_support::{pallet_prelude::*, sp_runtime::traits::Verify};
+use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub};
 use substrate_subxt::{module, sp_core::crypto::AccountId32, system::System, Call, Event};
 
 use serde::{Deserialize, Serialize};
@@ -14,7 +14,32 @@ use super::{runtime::StateChainRuntime, sc_event::SCEvent};
 
 // StakeManager in the state chain runtime
 #[module]
-pub trait StakeManager: System {}
+pub trait StakeManager: System {
+    /// Numeric type denomination for the staked asset.
+    type TokenAmount: Member
+        + FullCodec
+        + Copy
+        + Default
+        + AtLeast32BitUnsigned
+        + MaybeSerializeDeserialize
+        + CheckedSub;
+
+    /// Ethereum address type, should correspond to [u8; 20], but defined globally for the runtime.
+    type EthereumAddress: Member + FullCodec + Copy;
+
+    type Nonce: Member
+        + FullCodec
+        + Copy
+        + Default
+        + AtLeast32BitUnsigned
+        + MaybeSerializeDeserialize
+        + CheckedSub;
+}
+
+#[derive(Call, Encode)]
+pub struct MinExt<T: StakeManager> {
+    _runtime: PhantomData<T>,
+}
 
 /// Funds have been staked to an account via the StakeManager smart contract
 #[derive(Call, Encode)]
@@ -27,11 +52,21 @@ pub struct StakedCall<'a, T: StakeManager> {
     // account_id: <<Signature as Verify>::Signer as IdentifyAccount>::AccountId,
     account_id: &'a state_chain_runtime::AccountId,
 
-    // CORRECT
-    amount: u128,
+    amount: T::TokenAmount,
 
-    // CORRECT
-    refund_address: &'a [u8; 20],
+    refund_address: &'a T::EthereumAddress,
+}
+
+#[derive(Call, Encode)]
+pub struct WitnessStakedCall<T: StakeManager> {
+    /// Runtime marker
+    _runtime: PhantomData<T>,
+
+    staker_account_id: AccountId32,
+
+    amount: T::TokenAmount,
+
+    refund_address: T::EthereumAddress,
 }
 
 // The order of these fields matter for decoding

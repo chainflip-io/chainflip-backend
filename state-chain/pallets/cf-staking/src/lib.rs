@@ -136,6 +136,11 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
+        #[pallet::weight(0)]
+        pub fn min_ext(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+            Ok(().into())
+        }
+
         /// Witness that a `Staked` event was emitted by the `StakeManager` smart contract.
         #[pallet::weight(10_000)]
         pub fn witness_staked(

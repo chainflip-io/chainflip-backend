@@ -44,9 +44,10 @@ frame-system = "3.0.0"
 sp-core = "3.0.0"
 sp-keyring = "3.0.0"
 substrate-subxt = {version = "0.15"}
+# substrate-subxt = {path = "/Users/kaz/Documents/Chainflip/substrate-subxt/"}
 # TODO: Fix
-sp-runtime = "*"
 frame-support = "*"
+sp-runtime = "*"
 
 # Local deps
 chainflip-common = {path = "../common"}

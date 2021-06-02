@@ -51,11 +51,11 @@ mod tests {
 
     use super::*;
 
-    use crate::sc_observer::staking::StakedCallExt;
+    use crate::sc_observer::staking::{MinExtCallExt, StakedCallExt, WitnessStakedCallExt};
     use crate::settings;
     use crate::settings::StateChain;
 
-    use substrate_subxt::system::{AccountStoreExt, SetCodeCallExt};
+    use substrate_subxt::system::AccountStoreExt;
 
     #[tokio::test]
     async fn submit_xt_test() {
@@ -70,23 +70,31 @@ mod tests {
             00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01,
         ];
 
-        let result = subxt_client.account(&alice, None).await.unwrap();
+        let result = subxt_client.account(&alice, None).await;
+
+        println!("result: {:#?}", result);
 
         // let result = subxt_client
         //     .set_code(&signer, &[1u8, 2u8, 3u8, 4u8])
         //     .await
         //     .unwrap();
 
-        println!("result: {:#?}", result);
+        let result = subxt_client.min_ext(&signer).await;
+
+        println!("Result: {:#?}", result);
+
+        // let result = subxt_client
+        //     .witness_staked(&signer, alice, 123u128, eth_address)
+        //     .await;
 
         // TODO: Ensure this is actually correct.
-        let result = subxt_client
-            .staked(&signer, &alice, 100u128, &eth_address)
-            .await;
+        // let result = subxt_client
+        //     .staked(&signer, &alice, 100u128, &eth_address)
+        //     .await;
 
-        println!("result: {:#?}", result);
+        // println!("result: {:#?}", result);
 
-        result.unwrap();
+        // result.unwrap();
 
         // println!("Here's the result: {:#?}", result);
     }

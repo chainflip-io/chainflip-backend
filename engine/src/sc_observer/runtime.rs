@@ -1,3 +1,4 @@
+use frame_system::AccountInfo;
 use serde::{Deserialize, Serialize};
 use substrate_subxt::{
     balances::{AccountData, Balances},
@@ -44,14 +45,11 @@ impl Runtime for StateChainRuntime {
         // Add any custom types here...
         event_type_registry.register_type_size::<<Self as System>::BlockNumber>("EpochIndex");
 
-        // event_type_registry.register_type_size::<<Self as System>::AccountId>("AccountId");
+        // event_type_registry.register_type_size::<[u8; 80]>("AccountInfo");
 
-        // This doesn't seem the correct way to do this, but it works :shrug:
         event_type_registry.register_type_size::<u32>("T::BlockNumber");
     }
 }
-
-// ["StakeManager::Claimed::AccountId<T>", "StakeManager::ClaimSignatureIssued::T::EthereumAddress", "Validator::MaximumValidatorsChanged::ValidatorSize", "StakeManager::ClaimSignatureIssued::<T::EthereumCrypto as RuntimePublic>::Signature", "StakeManager::AccountRetired::AccountId<T>", "StakeManager::ClaimSigRequested::T::Nonce", "StakeManager::Claimed::T::TokenAmount", "StakeManager::ClaimSignatureIssued::T::TokenAmount", "StakeManager::Staked::T::TokenAmount", "StakeManager::StakeRefund::AccountId<T>", "StakeManager::ClaimSigRequested::T::EthereumAddress", "StakeManager::ClaimSigRequested::T::TokenAmount", "Witness::WitnessReceived::VoteCount", "Witness::WitnessReceived::<T as Config>::ValidatorId", "StakeManager::AccountActivated::AccountId<T>", "StakeManager::Staked::AccountId<T>", "StakeManager::ClaimSigRequested::AccountId<T>", "StakeManager::StakeRefund::T::EthereumAddress", "StakeManager::StakeRefund::T::TokenAmount", "StakeManager::ClaimSignatureIssued::AccountId<T>", "StakeManager::ClaimSignatureIssued::T::Nonce", "Witness::ThresholdReached::VoteCount"] Use `ClientBuilder::register_type_size` to register missing type sizes
 
 impl System for StateChainRuntime {
     type Index = u32;
@@ -77,7 +75,11 @@ impl Session for StateChainRuntime {
 impl Sudo for StateChainRuntime {}
 
 // ==== Custom events from pallets need to be implemented for the runtime ====
-impl staking::StakeManager for StateChainRuntime {}
+impl staking::StakeManager for StateChainRuntime {
+    type TokenAmount = u128;
+    type EthereumAddress = [u8; 20];
+    type Nonce = u32;
+}
 
 impl validator::Validator for StateChainRuntime {}
 
