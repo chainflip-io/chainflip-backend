@@ -114,8 +114,6 @@ steps:
       - sccache -s
   - name: build-state-chain-node
     image: plugins/docker
-    depends_on:
-      - test-chainflip-backend
     settings:
       username:
         from_secret: docker_username
@@ -128,8 +126,6 @@ steps:
       cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
   - name: build-chainflip-engine
     image: plugins/docker
-    depends_on:
-      - test-chainflip-backend
     settings:
       username:
         from_secret: docker_username
