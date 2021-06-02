@@ -291,7 +291,7 @@ mod tests {
             nonce: 1u64,
             eth_address,
             signature: sig,
-            expiry: expiry,
+            expiry,
             _phantom: PhantomData,
         };
 
