@@ -38,6 +38,8 @@ steps:
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     commands:
       - drone lint --trusted
+      - drone lint --trusted engine
+      - drone lint --trusted state-chain
   - name: rust-base
     image: plugins/docker
     settings:
@@ -62,6 +64,13 @@ trigger:
 image_pull_secrets:
   - dockerconfigjson
 
+node_selector:
+  type: ci
+
+tolerations:
+  - key: "workloadKind"
+    operator: "Equal"
+    value: "ci"
 ---
 
 kind: pipeline
@@ -87,26 +96,48 @@ steps:
       paths:
         - Dockerfile.rust-base
         - .drone.yml
+    resources:
+      limits:
+        cpu: 2000
+        memory: 3.5GiB
   - name: compile-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
-      SCCACHE_DIR: /cache
+      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo build --release
       - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
   - name: test-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
-      SCCACHE_DIR: /cache
+      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo test --release
       - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
+  - name: build-state-chain-node
+    image: plugins/docker
+    settings:
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+      repo: ghcr.io/chainflip-io/chainflip-backend/state-chain-node
+      dockerfile: Dockerfile.state-chain-node
+      registry: ghcr.io
+      tags: latest
+      cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
+  - name: build-chainflip-engine
+    image: plugins/docker
+    settings:
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+      repo: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine
+      dockerfile: Dockerfile.chainflip-engine
+      registry: ghcr.io
+      tags: latest
+      cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
 #  - name: publish-state-chain-node
 #    image: plugins/ansible
 #    settings:
@@ -153,13 +184,14 @@ trigger:
     - main
   event:
     - push
-  paths:
-    - state-chain/*
-node:
-  builder: "true"
-volumes:
-  - name: cache
-    host:
-      path: /mnt/chainflip-build-runner/sccache
+
 image_pull_secrets:
   - dockerconfigjson
+
+node_selector:
+  type: ci
+
+tolerations:
+  - key: "workloadKind"
+    operator: "Equal"
+    value: "ci"

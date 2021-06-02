@@ -38,6 +38,7 @@ use sp_std::marker::PhantomData;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 use sp_transaction_pool::TransactionPriority;
+use core::time::Duration;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -70,6 +71,9 @@ pub type Hash = sp_core::H256;
 pub type DigestItem = generic::DigestItem<Hash>;
 
 pub type FlipBalance = u128;
+
+/// The type used as an epoch index.
+pub type EpochIndex = u32;
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
@@ -142,6 +146,10 @@ impl pallet_cf_validator::Config for Runtime {
 	type CandidateProvider = pallet_cf_staking::Pallet<Self>;
 	type EpochTransitionHandler = PhantomData<Runtime>;
 	type ValidatorWeightInfo = weights::pallet_cf_validator::WeightInfo<Runtime>;
+	type EpochIndex = EpochIndex;
+	type Amount = FlipBalance;
+	type Auction = Validator;
+	type Registrar = Session;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime where
@@ -322,10 +330,13 @@ impl pallet_cf_witness::Config for Runtime {
 	type Event = Event;
 	type Origin = Origin;
 	type Call = Call;
-
-	// TODO: use Epoch anf ValidatorId definitions from validator rotation pallet
-	type Epoch = u64;
+	type Epoch = EpochIndex;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
+	type EpochInfo = pallet_cf_validator::Pallet<Self>;
+}
+
+parameter_types! {
+	pub const MinClaimTTL: Duration = Duration::from_millis(MILLISECS_PER_BLOCK * 10);
 }
 
 impl pallet_cf_staking::Config for Runtime {
@@ -333,14 +344,14 @@ impl pallet_cf_staking::Config for Runtime {
 	type Call = Call;
 
 	type TokenAmount = FlipBalance;
-	// TODO: check this against the address type used in the StakeManager
 	type EthereumAddress = [u8; 20];
-	// TODO: check this against the nonce type used in the StakeManager
 	type Nonce = u64;
 	type EthereumCrypto = ecdsa::Public;
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
 	type Witnesser = pallet_cf_witness::Pallet<Runtime>;
 	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
+	type TimeSource = Timestamp;
+	type MinClaimTTL = MinClaimTTL;
 }
 
 construct_runtime!(
@@ -353,7 +364,7 @@ construct_runtime!(
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
 		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
+		Session: pallet_session::{Module, Storage, Event, Config<T>},
 		Historical: session_historical::{Module},
 		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
 		Aura: pallet_aura::{Module, Config<T>},
