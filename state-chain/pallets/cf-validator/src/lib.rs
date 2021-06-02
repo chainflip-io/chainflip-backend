@@ -366,6 +366,10 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	fn is_validator(account: &Self::ValidatorId) -> bool {
 		ValidatorLookup::<T>::contains_key(account)
 	}
+
+	fn is_auction_phase() -> bool {
+		Self::is_auction_phase()
+	}
 }
 
 impl<T: Config> pallet_session::SessionHandler<T::ValidatorId> for Pallet<T> {

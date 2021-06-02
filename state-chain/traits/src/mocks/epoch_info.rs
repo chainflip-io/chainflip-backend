@@ -9,6 +9,7 @@ thread_local! {
 	pub static NEXT_VALIDATORS: RefCell<Vec<AccountId>> = RefCell::new(vec![]);
 	pub static BOND: RefCell<u128> = RefCell::new(0);
 	pub static EPOCH: RefCell<u32> = RefCell::new(0);
+	pub static IS_AUCTION: RefCell<bool> = RefCell::new(false);
 }
 
 impl Mock {
@@ -47,6 +48,10 @@ impl Mock {
 	pub fn incr_epoch() {
 		EPOCH.with(|cell| *(cell.borrow_mut()) += 1);
 	}
+
+	pub fn set_is_auction_phase(is_auction: bool) {
+		IS_AUCTION.with(|cell| *(cell.borrow_mut()) = is_auction);
+	}
 }
 
 impl EpochInfo for Mock {
@@ -72,5 +77,9 @@ impl EpochInfo for Mock {
 
 	fn epoch_index() -> Self::EpochIndex {
 		EPOCH.with(|cell| *cell.borrow())
+	}
+
+	fn is_auction_phase() -> bool {
+		IS_AUCTION.with(|cell| *cell.borrow())
 	}
 } 
