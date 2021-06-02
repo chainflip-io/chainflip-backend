@@ -112,6 +112,34 @@ steps:
     commands:
       - cargo test --release
       - sccache -s
+  - name: build-state-chain-node
+    image: plugins/docker
+    depends_on:
+      - test-chainflip-backend
+    settings:
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+      repo: ghcr.io/chainflip-io/chainflip-backend/state-chain-node
+      dockerfile: Dockerfile.state-chain-node
+      registry: ghcr.io
+      tags: latest
+      cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
+  - name: build-chainflip-engine
+    image: plugins/docker
+    depends_on:
+      - test-chainflip-backend
+    settings:
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+      repo: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine
+      dockerfile: Dockerfile.chainflip-engine
+      registry: ghcr.io
+      tags: latest
+      cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
 #  - name: publish-state-chain-node
 #    image: plugins/ansible
 #    settings:
