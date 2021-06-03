@@ -81,7 +81,6 @@ steps:
       - |
         chmod +x ./engine/tests/scripts/setup.sh;
         ./engine/tests/scripts/setup.sh;
-        poetry run brownie run deploy_and all_stakeManager_events;
         cargo test -p chainflip-engine --test stake_manager_integration -- --nocapture;
 #      - cargo test -p chainflip-engine --test stake-manager-integration-tests
     resources:

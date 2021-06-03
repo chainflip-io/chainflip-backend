@@ -7,15 +7,6 @@ set -e
 #
 # =============================================================
 
-# NB: Mnemonic must be passed in
-#docker run -it -d \
-#    -p 8545:8545 \
-#    --name ganache \
-#    --mount type=bind,src=`pwd`/eth-db,dst=/db \
-#    trufflesuite/ganache-cli:latest \
-#        --mnemonic chainflip \
-#        --db /db/.test-chain
-#
 ## start nats
 # docker run -p 4222:4222 -p 8222:8222 -ti -d --name nats nats:latest
 if ! which poetry; then
@@ -24,10 +15,6 @@ if ! which poetry; then
 fi
 # let ganache and nats start accepting connections before starting the cfe
 sleep 5s;
-
-# from inside /engine: (needs the config files where they are)
-# TODO: Use the built binary
-# (cd .. ; cargo run) &
 
 # todo: check that it doesn't exist, if it does, then force pull latest
 if [ ! -d "./eth-contracts" ]; then
@@ -39,5 +26,8 @@ fi
 # ensure we have the poetry deps
 cd eth-contracts
 poetry run poetry install
+
+# run the brownie script to generate events for the cfe to read
+poetry run brownie run deploy_and all_stakeManager_events
 
 echo "Ready to run StakeManager witness integration tests"
