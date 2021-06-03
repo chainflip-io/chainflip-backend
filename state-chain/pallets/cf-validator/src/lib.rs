@@ -147,7 +147,7 @@ pub mod pallet {
 		/// Epoch block number supplied is invalid
 		InvalidEpoch,
 		/// During an auction we can't update certain state
-		DuringRotation,
+		AuctionInProgress,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -168,7 +168,7 @@ pub mod pallet {
 			number_of_blocks: T::BlockNumber,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			ensure!(T::Auction::phase() == AuctionPhase::Bidders, Error::<T>::DuringRotation);
+			ensure!(T::Auction::waiting_on_bids(), Error::<T>::AuctionInProgress);
 			ensure!(number_of_blocks >= T::MinEpoch::get(), Error::<T>::InvalidEpoch);
 			let old_epoch = BlocksPerEpoch::<T>::get();
 			ensure!(old_epoch != number_of_blocks, Error::<T>::InvalidEpoch);
@@ -187,7 +187,7 @@ pub mod pallet {
 		pub(super) fn force_rotation(
 			origin: OriginFor<T>,
 		) -> DispatchResultWithPostInfo {
-			ensure!(T::Auction::phase() == AuctionPhase::Bidders, Error::<T>::DuringRotation);
+			ensure!(T::Auction::is_auction_live(), Error::<T>::AuctionInProgress);
 			ensure_root(origin)?;
 			Force::<T>::set(true);
 			Self::deposit_event(Event::ForceRotationRequested());
@@ -296,7 +296,7 @@ impl<T: Config> pallet_session::SessionHandler<T::ValidatorId> for Pallet<T> {
 			.map(|(id, _)| id.clone())
 			.collect::<Vec<T::ValidatorId>>();
 
-		if T::Auction::phase() != AuctionPhase::Completed {
+		if T::Auction::phase() != AuctionPhase::WinnersSelected {
 			T::EpochTransitionHandler::on_new_auction(current_validators);
 		} else {
 			T::EpochTransitionHandler::on_new_epoch(current_validators);
@@ -305,7 +305,7 @@ impl<T: Config> pallet_session::SessionHandler<T::ValidatorId> for Pallet<T> {
 
 	/// Triggered before \[`SessionManager::end_session`\] handler
 	fn on_before_session_ending() {
-		if T::Auction::phase() != AuctionPhase::Completed {
+		if T::Auction::phase() != AuctionPhase::WinnersSelected {
 			T::EpochTransitionHandler::on_before_epoch_ending();
 		} else {
 			T::EpochTransitionHandler::on_before_auction();
@@ -321,8 +321,8 @@ impl<T: Config> pallet_session::SessionHandler<T::ValidatorId> for Pallet<T> {
 /// Indicates to the session module if the session should be rotated.
 impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 	fn should_end_session(now: T::BlockNumber) -> bool {
-
-		if T::Auction::phase() == AuctionPhase::Bidders {
+		// If we are waiting on bids let's see if we want to start a new process
+		if T::Auction::waiting_on_bids() {
 
 			if Force::<T>::get() {
 				Force::<T>::set(false);
@@ -341,6 +341,7 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 			return end;
 		}
 
+		// The process has started so let's move it on, see `new_session()`
 		true
 	}
 }
@@ -354,17 +355,17 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 			Ok(phase) => {
 				match phase {
 					// Successfully acquired bidders for the auction, nothing to do here
-					AuctionPhase::Bidders => {
+					AuctionPhase::WaitingForBids => {
 						None
-					},
+					}
 					// Successfully completed the auction process, return the set to session pallet
 					// On next session these will become the validators, just left to complete the
 					// process
-					AuctionPhase::Auction => {
+					AuctionPhase::BidsTaken => {
 						Some(T::Auction::winners())
-					},
+					}
 					// Successfully completed the process, update state
-					AuctionPhase::Completed => {
+					AuctionPhase::WinnersSelected => {
 						Self::deposit_event(Event::NewEpoch(new_index.into()));
 						CurrentEpoch::<T>::set(new_index.into());
 						ValidatorLookup::<T>::remove_all();

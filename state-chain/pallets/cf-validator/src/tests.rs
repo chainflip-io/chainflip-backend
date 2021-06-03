@@ -51,37 +51,37 @@ mod test {
 			// Test force rotation
 			assert_ok!(ValidatorManager::force_rotation(Origin::root()));
 			// Test we are in the bidder phase
-			assert_eq!(AuctionPallet::phase(), AuctionPhase::Bidders);
+			assert_eq!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
 			// Move forward by 1 block, we have a block already
 			run_to_block(2);
-			assert_eq!(AuctionPallet::phase(), AuctionPhase::Auction);
+			assert_eq!(AuctionPallet::phase(), AuctionPhase::BidsTaken);
 			// Move forward by 1 block
 			run_to_block(3);
-			assert_eq!(AuctionPallet::phase(), AuctionPhase::Completed);
+			assert_eq!(AuctionPallet::phase(), AuctionPhase::WinnersSelected);
 			// Confirm the auction
 			CONFIRM.with(|l| { *l.borrow_mut() = true });
 			// Move forward by 1 block
 			run_to_block(4);
-			assert_eq!(AuctionPallet::phase(), AuctionPhase::Bidders);
+			assert_eq!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
 			// Move forward by 1 block, we should sit in the non-auction phase 'Bidders'
 			run_to_block(5);
-			assert_eq!(AuctionPallet::phase(), AuctionPhase::Bidders);
+			assert_eq!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
 			// Epoch is block 10 so let's test an epoch cycle to provoke an auction
 			// This should be the same state
 			run_to_block(9);
-			assert_eq!(AuctionPallet::phase(), AuctionPhase::Bidders);
+			assert_eq!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
 			run_to_block(10);
 			// We should have started another auction phase
-			assert_eq!(AuctionPallet::phase(), AuctionPhase::Auction);
+			assert_eq!(AuctionPallet::phase(), AuctionPhase::BidsTaken);
 			// Let's check we can't alter the state of the pallet during this period
-			assert_noop!(ValidatorManager::force_rotation(Origin::root()), Error::<Test>::DuringRotation);
-			assert_noop!(ValidatorManager::set_blocks_for_epoch(Origin::root(), 10), Error::<Test>::DuringRotation);
+			assert_noop!(ValidatorManager::force_rotation(Origin::root()), Error::<Test>::AuctionInProgress);
+			assert_noop!(ValidatorManager::set_blocks_for_epoch(Origin::root(), 10), Error::<Test>::AuctionInProgress);
 			// Run to next block and phase moves on
 			run_to_block(11);
-			assert_eq!(AuctionPallet::phase(), AuctionPhase::Completed);
+			assert_eq!(AuctionPallet::phase(), AuctionPhase::WinnersSelected);
 			// Finally back to the start again
 			run_to_block(12);
-			assert_eq!(AuctionPallet::phase(), AuctionPhase::Bidders);
+			assert_eq!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
 		});
 	}
 
@@ -98,21 +98,21 @@ mod test {
 			assert_eq!(mock::current_validators().len(), 0);
 
 			// ---------- Run Auction
-			assert_eq!(AuctionPallet::phase(), AuctionPhase::Bidders);
+			assert_eq!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
 			// Move forward a block
 			run_to_block(2);
-			assert_eq!(AuctionPallet::phase(), AuctionPhase::Bidders);
+			assert_eq!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
 			// There are no validators as we are nice and fresh
 			assert!(<ValidatorManager as EpochInfo>::current_validators().is_empty());
 			assert!(<ValidatorManager as EpochInfo>::next_validators().is_empty());
 			// Run to the epoch
 			run_to_block(10);
 			// We should have now completed an auction have a set of winners to pass as validators
-			assert_eq!(AuctionPallet::phase(), AuctionPhase::Auction);
+			assert_eq!(AuctionPallet::phase(), AuctionPhase::BidsTaken);
 			assert!(<ValidatorManager as EpochInfo>::current_validators().is_empty());
 			assert!(<ValidatorManager as EpochInfo>::next_validators().is_empty());
 			run_to_block(11);
-			assert_eq!(AuctionPallet::phase(), AuctionPhase::Completed);
+			assert_eq!(AuctionPallet::phase(), AuctionPhase::WinnersSelected);
 			// Continue with our current validator set, as we had none should be empty
 			// TODO add genesis validators to mock
 			assert!(<ValidatorManager as EpochInfo>::current_validators().is_empty());
@@ -121,14 +121,14 @@ mod test {
 			// Complete the cycle
 			run_to_block(12);
 			// As we haven't confirmed the auction we would still be in the same phase
-			assert_eq!(AuctionPallet::phase(), AuctionPhase::Completed);
+			assert_eq!(AuctionPallet::phase(), AuctionPhase::WinnersSelected);
 			run_to_block(13);
 			// and still...
-			assert_eq!(AuctionPallet::phase(), AuctionPhase::Completed);
+			assert_eq!(AuctionPallet::phase(), AuctionPhase::WinnersSelected);
 			// Confirm the auction
 			CONFIRM.with(|l| { *l.borrow_mut() = true });
 			run_to_block(14);
-			assert_eq!(AuctionPallet::phase(), AuctionPhase::Bidders);
+			assert_eq!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
 			let winners = AuctionPallet::winners();
 			// We do now see our winners as the set of validators
 			assert_eq!(<ValidatorManager as EpochInfo>::current_validators(), winners);
@@ -138,13 +138,13 @@ mod test {
 			assert_ok!(ValidatorManager::force_rotation(Origin::root()));
 			run_to_block(15);
 			// A new auction starts
-			assert_eq!(AuctionPallet::phase(), AuctionPhase::Auction);
+			assert_eq!(AuctionPallet::phase(), AuctionPhase::BidsTaken);
 			// We should still see the old winners validating
 			assert_eq!(<ValidatorManager as EpochInfo>::current_validators(), winners);
 			assert_eq!(<ValidatorManager as EpochInfo>::next_validators(), winners);
 			run_to_block(16);
 			// Finalised auction
-			assert_eq!(AuctionPallet::phase(), AuctionPhase::Completed);
+			assert_eq!(AuctionPallet::phase(), AuctionPhase::WinnersSelected);
 			// Current validators still remain
 			assert_eq!(<ValidatorManager as EpochInfo>::current_validators(), winners);
 			// Our next set are new validators

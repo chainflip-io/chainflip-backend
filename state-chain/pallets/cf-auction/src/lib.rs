@@ -108,14 +108,14 @@ pub mod pallet {
 	/// The auction we are waiting for confirmation
 	#[pallet::storage]
 	#[pallet::getter(fn auction_to_confirm)]
-	pub(super) type AuctionToConfirm<T: Config> = StorageValue<_, T::AuctionIndex, OptionQuery>;
+	pub(super) type AuctionToConfirm<T: Config> = StorageValue<_, bool, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// An auction phase has started \[auction_index\]
 		AuctionStarted(T::AuctionIndex),
-		/// An auction has a set of winners
+		/// An auction has a set of winners \[auction_index\]
 		AuctionCompleted(T::AuctionIndex),
 		/// The auction has been confirmed off-chain \[auction_index\]
 		AuctionConfirmed(T::AuctionIndex),
@@ -123,7 +123,7 @@ pub mod pallet {
 		AwaitingBidders,
 		/// The auction range upper limit has changed \[before, after\]
 		AuctionRangeChanged(AuctionRange, AuctionRange),
-		/// The auction was aborted
+		/// The auction was aborted \[auction_index\]
 		AuctionAborted(T::AuctionIndex),
 	}
 
@@ -148,8 +148,9 @@ pub mod pallet {
 			index: T::AuctionIndex,
 		) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
-			ensure!(Some(index) == AuctionToConfirm::<T>::get(), Error::<T>::InvalidAuction);
-			AuctionToConfirm::<T>::set(None);
+			ensure!(AuctionToConfirm::<T>::get(), Error::<T>::InvalidAuction);
+			ensure!(index == CurrentAuctionIndex::<T>::get(), Error::<T>::InvalidAuction);
+			AuctionToConfirm::<T>::set(false);
 			Self::deposit_event(Event::AuctionConfirmed(index));
 			Ok(().into())
 		}
@@ -181,7 +182,7 @@ pub mod pallet {
 
 impl<T: Config> AuctionConfirmation for Pallet<T> {
 	fn confirmed() -> bool {
-		<AuctionToConfirm::<T>>::get().is_some()
+		<AuctionToConfirm::<T>>::get()
 	}
 }
 
@@ -214,6 +215,10 @@ impl<T: Config> Auction for Pallet<T> {
 
 	fn phase() -> AuctionPhase { <CurrentPhase<T>>::get() }
 
+	fn waiting_on_bids() -> bool {
+		Self::phase() == AuctionPhase::WaitingForBids
+	}
+
 	/// Move our auction process to the next phase returning success with phase completed
 	///
 	/// At each phase we assess the bidders based on a fixed set of criteria which results
@@ -227,7 +232,7 @@ impl<T: Config> Auction for Pallet<T> {
 			// to be able to actual join the validating set.  If we manage to pass these tests
 			// we kill the last set of winners stored, set the bond to 0, store this set of
 			// bidders and change our state ready for an 'Auction' to be ran
-			AuctionPhase::Bidders => {
+			AuctionPhase::WaitingForBids => {
 				let mut bidders = T::BidderProvider::get_bidders();
 				// Rule #1 - If we have a bid at 0 then please leave
 				bidders.retain(|(_, amount)| !amount.is_zero());
@@ -241,23 +246,22 @@ impl<T: Config> Auction for Pallet<T> {
 				<Winners<T>>::kill();
 				<MinimumBid<T>>::kill();
 				<Bidders<T>>::put(bidders);
-				<CurrentPhase<T>>::put(AuctionPhase::Auction);
+				<CurrentPhase<T>>::put(AuctionPhase::BidsTaken);
+				<AuctionToConfirm::<T>>::set(true);
 
 				<CurrentAuctionIndex<T>>::mutate(|idx| {
 					*idx + One::one()
 				});
 
-				<AuctionToConfirm::<T>>::put(<CurrentAuctionIndex<T>>::get());
-
 				Self::deposit_event(Event::AuctionStarted(<CurrentAuctionIndex<T>>::get()));
 
-				Ok(AuctionPhase::Bidders)
+				Ok(AuctionPhase::WaitingForBids)
 			},
 			// We sort by bid and cut the size of the set based on auction size range
 			// If we have a valid set, within the size range, we store this set as the
 			// 'winners' of this auction, change the state to 'Completed' and store the
 			// minimum bid needed to be included in the set.
-			AuctionPhase::Auction => {
+			AuctionPhase::BidsTaken => {
 				let mut bidders = <Bidders<T>>::get();
 				if !bidders.is_empty() {
 					bidders.sort_unstable_by_key(|k| k.1);
@@ -270,12 +274,11 @@ impl<T: Config> Auction for Pallet<T> {
 
 							<MinimumBid<T>>::put(min_bid);
 							<Winners<T>>::put(winners);
-							<CurrentPhase<T>>::put(AuctionPhase::Completed);
+							<CurrentPhase<T>>::put(AuctionPhase::WinnersSelected);
 
-							<CurrentAuctionIndex<T>>::mutate(|idx| *idx + One::one());
 							Self::deposit_event(Event::AuctionCompleted(<CurrentAuctionIndex<T>>::get()));
 
-							return Ok(AuctionPhase::Auction);
+							return Ok(AuctionPhase::BidsTaken);
 						}
 					}
 				}
@@ -285,16 +288,16 @@ impl<T: Config> Auction for Pallet<T> {
 			// Things have gone well and we have a set of 'Winners', congratulations.
 			// We are ready to call this an auction a day resetting the bidders in storage and
 			// setting the state ready for a new set of 'Bidders'
-			AuctionPhase::Completed => {
+			AuctionPhase::WinnersSelected => {
 				if !Self::Confirmation::confirmed() {
 					return Err(AuctionError::NotConfirmed);
 				}
 
 				<Bidders<T>>::kill();
-				<CurrentPhase<T>>::put(AuctionPhase::Bidders);
+				<CurrentPhase<T>>::put(AuctionPhase::WaitingForBids);
 				Self::deposit_event(Event::AwaitingBidders);
 
-				Ok(AuctionPhase::Completed)
+				Ok(AuctionPhase::WinnersSelected)
 			}
 		};
 	}
@@ -314,7 +317,7 @@ impl<T: Config> Auction for Pallet<T> {
 	fn abort() {
 		<Winners<T>>::kill();
 		<Bidders<T>>::kill();
-		<CurrentPhase<T>>::put(AuctionPhase::Bidders);
+		<CurrentPhase<T>>::put(AuctionPhase::WaitingForBids);
 		<AuctionToConfirm::<T>>::kill();
 		<MinimumBid::<T>>::kill();
 		Self::deposit_event(Event::AuctionAborted(<CurrentAuctionIndex<T>>::get()));

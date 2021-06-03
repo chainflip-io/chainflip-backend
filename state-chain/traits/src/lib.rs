@@ -49,14 +49,14 @@ pub trait EpochInfo {
 /// finally it is completed
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub enum AuctionPhase {
-	Bidders,
-	Auction,
-	Completed
+	WaitingForBids,
+	BidsTaken,
+	WinnersSelected,
 }
 
 impl Default for AuctionPhase {
 	fn default() -> Self {
-		AuctionPhase::Bidders
+		AuctionPhase::WaitingForBids
 	}
 }
 
@@ -85,6 +85,8 @@ pub trait Auction {
 	fn set_auction_range(range: AuctionRange) -> Result<AuctionRange, AuctionError>;
 	/// The current phase we find ourselves in
 	fn phase() -> AuctionPhase;
+	/// Are we in an auction?
+	fn waiting_on_bids() -> bool;
 	/// Move the process forward by one step, returns the phase completed or error
 	fn process() -> Result<AuctionPhase, AuctionError>;
 	/// The current set of bidders

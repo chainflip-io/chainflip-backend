@@ -35,7 +35,7 @@ thread_local! {
 	pub static CANDIDATE_IDX: RefCell<u64> = RefCell::new(0);
 	pub static CURRENT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 	pub static OUTGOING_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
-	pub static PHASE: RefCell<AuctionPhase> =  RefCell::new(AuctionPhase::Bidders);
+	pub static PHASE: RefCell<AuctionPhase> =  RefCell::new(AuctionPhase::WaitingForBids);
 	pub static BIDDERS: RefCell<Vec<(u64, u64)>> = RefCell::new(vec![]);
 	pub static WINNERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 	pub static CONFIRM: RefCell<bool> = RefCell::new(false);
