@@ -187,7 +187,7 @@ pub mod pallet {
 		pub(super) fn force_rotation(
 			origin: OriginFor<T>,
 		) -> DispatchResultWithPostInfo {
-			ensure!(T::Auction::is_auction_live(), Error::<T>::AuctionInProgress);
+			ensure!(T::Auction::waiting_on_bids(), Error::<T>::AuctionInProgress);
 			ensure_root(origin)?;
 			Force::<T>::set(true);
 			Self::deposit_event(Event::ForceRotationRequested());
