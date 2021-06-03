@@ -47,6 +47,10 @@ impl Runtime for StateChainRuntime {
 
         // event_type_registry.register_type_size::<[u8; 80]>("AccountInfo");
 
+        event_type_registry.register_type_size::<<Self as System>::Address>("Address");
+
+        event_type_registry.register_type_size::<<Self as System>::Address>("LookupSource");
+
         event_type_registry.register_type_size::<u32>("T::BlockNumber");
     }
 }

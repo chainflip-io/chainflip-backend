@@ -43,8 +43,8 @@ codec = {package = "parity-scale-codec", version = "2.1", default-features = fal
 frame-system = "3.0.0"
 sp-core = "3.0.0"
 sp-keyring = "3.0.0"
-substrate-subxt = {version = "0.15"}
-# substrate-subxt = {path = "/Users/kaz/Documents/Chainflip/substrate-subxt/"}
+# substrate-subxt = {version = "0.15"}
+substrate-subxt = {path = "/Users/kaz/Documents/Chainflip/substrate-subxt/"}
 # TODO: Fix
 frame-support = "*"
 sp-runtime = "*"

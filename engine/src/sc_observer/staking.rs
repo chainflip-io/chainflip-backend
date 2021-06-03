@@ -38,7 +38,7 @@ pub trait StakeManager: System {
 
 #[derive(Call, Encode)]
 pub struct MinExt<T: StakeManager> {
-    _runtime: PhantomData<T>,
+    pub _runtime: PhantomData<T>,
 }
 
 /// Funds have been staked to an account via the StakeManager smart contract
