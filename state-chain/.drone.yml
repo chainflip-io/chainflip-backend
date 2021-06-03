@@ -46,7 +46,7 @@ trigger:
   event:
     - pull_request
   paths:
-    - state-chain/**/*.rs
+    - state-chain/**/*.rsasdfadsdf
 
 image_pull_secrets:
   - dockerconfigjson
