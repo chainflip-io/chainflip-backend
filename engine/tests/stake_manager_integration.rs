@@ -51,7 +51,7 @@ pub async fn test_all_stake_manager_events() {
 
     println!("Connecting to tokio");
     // We just want the future to end, it should already have done it's job in 1 second
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(1), sm_future).await;
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(10), sm_future).await;
     println!("Connected");
 
     let mut stream = pin_message_stream(stream);
