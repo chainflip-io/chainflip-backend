@@ -102,7 +102,7 @@ impl<T: Config> Reporter for Pallet<T> {
 
 impl<T: Config> Judgement<Pallet<T>, T::BlockNumber> for Pallet<T> {
 	fn liveliness(account_id: &T::AccountId) -> Result<T::BlockNumber, JudgementError> {
-		Self::liveliness(account_id).or(JudgementError::AccountNotFound)
+		Self::last_know_liveliness(account_id).ok_or(JudgementError::AccountNotFound)
 	}
 
 	fn report_for(account_id: &T::AccountId) -> Result<Vec<<Pallet<T> as Reporter>::Action>, JudgementError> {
@@ -110,7 +110,11 @@ impl<T: Config> Judgement<Pallet<T>, T::BlockNumber> for Pallet<T> {
 	}
 
 	fn clean_all(account_id: &T::AccountId) -> Result<(), JudgementError> {
-		// <LastKnownLiveliness<T>>::try_
-		todo!()
+		if <Actions<T>>::contains_key(account_id) {
+			<Actions<T>>::remove(account_id);
+			return Ok(());
+		}
+
+		Err(JudgementError::AccountNotFound)
 	}
 }
