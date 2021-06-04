@@ -63,7 +63,6 @@ parameter_types! {
 #[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct Behaviour(pub Vec<u8>);
 
-impl Action for Behaviour {}
 impl Config for Test {
     type Event = Event;
     type Action = Behaviour;

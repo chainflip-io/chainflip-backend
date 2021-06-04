@@ -33,7 +33,7 @@ mod tests;
 pub use pallet::*;
 use sp_std::prelude::*;
 use frame_support::pallet_prelude::*;
-use cf_traits::{Reporter, Action, Judgement, JudgementError};
+use cf_traits::{Reporter, Judgement, JudgementError};
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -50,7 +50,7 @@ pub mod pallet {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// The action type
-		type Action: Action + Member + FullCodec + Default;
+		type Action: Member + FullCodec + Default;
 	}
 
 	/// Pallet implements [`Hooks`] trait

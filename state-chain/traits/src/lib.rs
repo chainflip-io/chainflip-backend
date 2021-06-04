@@ -84,14 +84,13 @@ pub trait Auction {
 	fn complete_auction(proposal: ValidatorProposal<Self>) -> Result<ValidatorProposal<Self>, AuctionError>;
 }
 
-pub trait Action {}
 /// The Reporter trait which whitelists accounts to be reported on. Until whitelisted the account
 /// is not reported on
 pub trait Reporter {
 	/// The account
 	type AccountId;
 	/// An action or behaviour
-	type Action: Action;
+	type Action;
 
 	/// Add an account to be whitelisted
 	fn add_account(account_id: &Self::AccountId) -> Result<(), JudgementError>;
