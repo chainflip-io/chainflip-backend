@@ -61,7 +61,7 @@ parameter_types! {
 }
 
 #[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
-pub struct Behaviour;
+pub struct Behaviour(pub Vec<u8>);
 
 impl Action for Behaviour {}
 impl Config for Test {
@@ -75,4 +75,10 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
     let mut ext = sp_io::TestExternalities::new(t);
     ext.execute_with(|| System::set_block_number(1));
     ext
+}
+
+pub fn run_to_block(n: u64) {
+    while System::block_number() < n {
+        System::set_block_number(System::block_number() + 1);
+    }
 }
