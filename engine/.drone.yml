@@ -67,6 +67,8 @@ services:
     name: ganache
     ports: [8545]
     entrypoint:
+      - "node"
+      - "/app/ganache-core.docker.cli.js"
       - "--mnemonic chainflip"
   - image: nats:latest
     ports: [4222,8222]
