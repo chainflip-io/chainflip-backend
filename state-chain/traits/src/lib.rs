@@ -85,24 +85,36 @@ pub trait Auction {
 }
 
 pub trait Action {}
-
+/// The Reporter trait which whitelists accounts to be reported on. Until whitelisted the account
+/// is not reported on
 pub trait Reporter {
+	/// The account
 	type AccountId;
+	/// An action or behaviour
 	type Action: Action;
 
+	/// Add an account to be whitelisted
 	fn add_account(account_id: &Self::AccountId) -> Result<(), JudgementError>;
+	/// Remove the account from the whitelist
 	fn remove_account(account_id: &Self::AccountId) -> Result<(), JudgementError>;
+	/// Report on behaviour for this account
 	fn report(account_id: &Self::AccountId, action: Self::Action) -> Result<(), JudgementError>;
 }
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum JudgementError {
+	/// Account is not found in the whitelist
 	AccountNotFound,
+	/// This account occurs in the whitelist
 	AccountExists,
 }
 
+/// The Judgement trait provides reports and liveliness checks for an account
 pub trait Judgement<T: Reporter, BlockNumber> {
+	/// Liveliness expressed in `BlockNumber`
 	fn liveliness(account_id: &T::AccountId) -> Result<BlockNumber, JudgementError>;
+	/// A report for an account
 	fn report_for(account_id: &T::AccountId) -> Result<Vec<T::Action>, JudgementError>;
+	/// Clean the state for the account
 	fn clean_all(account_id: &T::AccountId) -> Result<(), JudgementError>;
 }

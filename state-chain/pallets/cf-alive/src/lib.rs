@@ -2,16 +2,27 @@
 
 //! # Chainflip Alive Module
 //!
-//! A module to manage liveness for the Chainflip State Chain
+//! A module to manage liveliness for the Chainflip State Chain
 //!
 //! - [`Config`]
 //! - [`Call`]
 //! - [`Module`]
 //!
 //! ## Overview
+//! The module contains functionality to track behaviour of accounts and provides a good indication
+//! of an account's liveliness.  The rules determining what is good or bad behaviour is outside the
+//! scope of this pallet and this pallet is solely responsible in tracking and storing the
+//! behavioural data. Actions, or behaviours, are stored and indexed by the account id of the
+//! validator. The last behaviour recorded for a validator would be used as its last know 'live'
+//! time and hence serve as a strong indicator of its liveliness in terms of an operational node.
+//! In order to prevent spamming a whitelist of accounts is controlled in which before reporting
+//! behaviour for an account the account has to be explicitly added using `add_account()` and
+//! removed with `remove_account()`.  Liveliness is stored separately, in the `LastKnownLiveliness`
+//! storage map, from the tracked behaviour to maintain this indicator after cleaning the
+//! behavioural data on an account.
 //!
 //! ## Terminology
-//! - **Liveness:**
+//! - **Liveness:** - the last block number we have had a report on an account for
 //!
 
 #[cfg(test)]
@@ -71,6 +82,10 @@ impl<T: Config> Reporter for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Action = T::Action;
 
+	/// Add an account to our whitelist
+	///
+	/// An account is added with an empty report and its liveliness is recorded at this block number
+	/// A `JudgementError::AccountExits` if this account is already whitelisted
 	fn add_account(account_id: &Self::AccountId) -> Result<(), JudgementError> {
 		if <Actions<T>>::contains_key(account_id) {
 			return Err(JudgementError::AccountExists);
@@ -80,6 +95,10 @@ impl<T: Config> Reporter for Pallet<T> {
 		Ok(())
 	}
 
+	/// Remove an account from our whitelist
+	///
+	/// An account is removed and its liveliness is reset
+	/// A `JudgementError::AccountExits` if this account is not already whitelisted
 	fn remove_account(account_id: &Self::AccountId) -> Result<(), JudgementError> {
 		if !<Actions<T>>::contains_key(account_id) {
 			return Err(JudgementError::AccountNotFound);
@@ -89,8 +108,9 @@ impl<T: Config> Reporter for Pallet<T> {
 		Ok(())
 	}
 
-	/// Report an action from an account.  We store the action to storage and mark this as the last
-	/// block number we have seen activity from this account
+	/// Report an action from an account.
+	///
+	/// We store the action and record the current block number as liveliness for this account
 	fn report(account_id: &Self::AccountId, action: Self::Action) -> Result<(), JudgementError> {
 		<Actions<T>>::try_mutate(account_id, |actions| {
 			match actions.as_mut() {
@@ -118,14 +138,26 @@ impl<T: Config> Reporter for Pallet<T> {
 }
 
 impl<T: Config> Judgement<Pallet<T>, T::BlockNumber> for Pallet<T> {
+	/// Return the liveliness of an account
+	///
+	/// Liveliness is defined as the last block number
+	/// An error returns if the account is not whitelisted
 	fn liveliness(account_id: &T::AccountId) -> Result<T::BlockNumber, JudgementError> {
 		Self::last_know_liveliness(account_id).ok_or(JudgementError::AccountNotFound)
 	}
 
+	/// Return a report on this account
+	///
+	/// The report consists of a vector of behaviours recorded
+	/// An error returns if the account is not whitelisted
 	fn report_for(account_id: &T::AccountId) -> Result<Vec<<Pallet<T> as Reporter>::Action>, JudgementError> {
 		Self::actions(account_id).ok_or(JudgementError::AccountNotFound)
 	}
 
+	/// Clean out the report for this account
+	///
+	/// The report is cleared for this account
+	/// An error returns is this account is not whitelisted
 	fn clean_all(account_id: &T::AccountId) -> Result<(), JudgementError> {
 		if <Actions<T>>::contains_key(account_id) {
 			<Actions<T>>::insert(account_id, Vec::<T::Action>::new());
