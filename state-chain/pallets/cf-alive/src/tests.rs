@@ -1,7 +1,7 @@
 mod test {
     use crate::*;
     use crate::{mock::*};
-    use frame_support::{assert_ok, assert_noop};
+    use frame_support::{assert_ok};
 
     const ALICE: u64 = 100;
     const BOB: u64 = 101;

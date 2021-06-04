@@ -23,7 +23,6 @@ pub use pallet::*;
 use sp_std::prelude::*;
 use frame_support::pallet_prelude::*;
 use cf_traits::{Reporter, Action, Judgement, JudgementError};
-use sp_core::crypto::Ss58AddressFormat::JupiterAccount;
 
 #[frame_support::pallet]
 pub mod pallet {
