@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use chainflip_engine::{
     eth::{self, stake_manager::stake_manager::StakingEvent},
-    mq::{nats_client::NatsMQClient, pin_message_stream, IMQClient, Options, Subject},
+    mq::{nats_client::NatsMQClient, pin_message_stream, IMQClient, Subject},
     settings::{self, Settings},
 };
 
@@ -16,10 +16,7 @@ use tokio_stream::StreamExt;
 use web3::types::U256;
 
 pub async fn setup_mq(mq_settings: settings::MessageQueue) -> Box<NatsMQClient> {
-    let mq_options = Options {
-        url: format!("{}:{}", mq_settings.hostname, mq_settings.port),
-    };
-    NatsMQClient::connect(mq_options).await.unwrap()
+    NatsMQClient::connect(mq_settings).await.unwrap()
 }
 
 // Creating the settings to be used for tests
@@ -50,10 +47,10 @@ pub async fn test_all_stake_manager_events() {
     println!("Subscribed");
 
     println!("Connecting to tokio");
-    // We just want the future to end, it should already have done it's job in 1 second
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(10), sm_future).await;
-    println!("Connected");
+    // We just want the future to end, it should already have done it's job in this time
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(4), sm_future).await;
 
+    println!("What's the next event?");
     let mut stream = pin_message_stream(stream);
     match stream.next().await.unwrap().unwrap() {
         StakingEvent::Staked(node_id, amount) => {
@@ -77,8 +74,9 @@ pub async fn test_all_stake_manager_events() {
                 address,
                 web3::types::H160::from_str("0x4726b1555bf7ab73553be4eb3cfe15376d0db188").unwrap()
             );
-            assert_eq!(start_time, U256::from_dec_str("1621727544").unwrap());
-            assert_eq!(end_time, U256::from_dec_str("1621900344").unwrap());
+            // these aren't determinstic, so exclude from the test
+            // assert_eq!(start_time, U256::from_dec_str("1621727544").unwrap());
+            // assert_eq!(end_time, U256::from_dec_str("1621900344").unwrap());
         }
         _ => panic!("Was expecting ClaimRegistered event"),
     }

@@ -1,5 +1,21 @@
-use crate::{Error, Calls, VoteMask, Event as WitnesserEvent, mock::*, mock::dummy::pallet as pallet_dummy};
-use frame_support::{assert_ok, assert_noop};
+use crate::{mock::dummy::pallet as pallet_dummy, mock::*, Votes, Error, VoteMask, Config, Pallet};
+use frame_support::{assert_noop, assert_ok, dispatch::DispatchResultWithPostInfo};
+
+fn assert_event_sequence<T: frame_system::Config>(expected: Vec<T::Event>) {
+	let events = frame_system::Pallet::<T>::events()
+		.into_iter()
+		.rev()
+		.take(expected.len())
+		.rev()
+		.map(|e| e.event)
+		.collect::<Vec<_>>();
+
+	assert_eq!(events, expected)
+}
+
+fn pop_last_event() -> Event {
+	frame_system::Pallet::<Test>::events().pop().expect("Expected an event").event
+}
 
 #[test]
 fn call_on_threshold() {
@@ -13,6 +29,13 @@ fn call_on_threshold() {
 
 		// Vote again, we should reach the threshold and dispatch the call.
 		assert_ok!(Witnesser::witness(Origin::signed(BOBSON), call.clone()));
+		let dispatch_result = if let Event::pallet_cf_witness(crate::Event::WitnessExecuted(_, dispatch_result)) = pop_last_event() {
+			assert_ok!(dispatch_result);
+			dispatch_result
+		} else {
+			panic!("Expected WitnessExecuted event!")
+		};
+
 		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(answer));
 
 		// Vote again, should count the vote but the call should not be dispatched again.
@@ -21,9 +44,19 @@ fn call_on_threshold() {
 
 		// Check the deposited event to get the vote count.
 		let call_hash = frame_support::Hashable::blake2_256(&*call);
-		let stored_vec = Calls::<Test>::get(0, call_hash).unwrap_or(vec![]);
+		let stored_vec = Votes::<Test>::get(0, call_hash).unwrap_or(vec![]);
 		let votes = VoteMask::from_slice(stored_vec.as_slice()).unwrap();
 		assert_eq!(votes.count_ones(), 3);
+
+
+		assert_event_sequence::<Test>(vec![
+			crate::Event::WitnessReceived(call_hash, ALISSA, 1).into(),
+			crate::Event::WitnessReceived(call_hash, BOBSON, 2).into(),
+			crate::Event::ThresholdReached(call_hash, 2).into(),
+			dummy::Event::<Test>::ValueIncremented(answer).into(),
+			crate::Event::WitnessExecuted(call_hash, dispatch_result).into(),
+			crate::Event::WitnessReceived(call_hash, CHARLEMAGNE, 3).into(),
+		]);
 	});
 }
 

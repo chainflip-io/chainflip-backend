@@ -143,6 +143,8 @@ parameter_types! {
 	pub const MinValidatorSetSize: u64 = 2;
 }
 
+pub(super) type EpochIndex = u32;
+
 impl Config for Test {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
@@ -150,6 +152,7 @@ impl Config for Test {
 	type CandidateProvider = TestCandidateProvider;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
 	type ValidatorWeightInfo = ();
+	type EpochIndex = EpochIndex;
 	type Amount = Amount;
 	// Use the pallet's implementation
 	type Auction = ValidatorManager;

@@ -1,6 +1,4 @@
-use log::info;
-
-use chainflip_engine::{eth, mq::Options, sc_observer, settings::Settings, witness};
+use chainflip_engine::{eth, sc_observer, settings::Settings, witness};
 
 #[tokio::main]
 async fn main() {
@@ -9,20 +7,12 @@ async fn main() {
 
     let settings = Settings::new().expect("Failed to initialise settings");
 
-    // set up the message queue
-    let mq_options = Options {
-        url: format!(
-            "{}:{}",
-            settings.message_queue.hostname, settings.message_queue.port
-        ),
-    };
+    log::info!("Start the engines! :broom: :broom: ");
 
-    info!("Start the engines! :broom: :broom: ");
+    sc_observer::sc_observer::start(settings.clone()).await;
 
-    sc_observer::sc_observer::start(mq_options.clone(), settings.clone().state_chain).await;
-
-    eth::start(settings).await;
+    eth::start(settings.clone()).await;
 
     // start witnessing other chains
-    witness::witness::start(mq_options).await;
+    witness::witness::start(settings.message_queue).await;
 }

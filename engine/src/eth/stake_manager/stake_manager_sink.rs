@@ -1,6 +1,7 @@
 use crate::{
     eth::EventSink,
     mq::mq::{self, IMQClient, Subject},
+    settings,
 };
 
 use async_trait::async_trait;
@@ -16,8 +17,8 @@ pub struct StakeManagerSink<M: IMQClient + Send + Sync> {
 }
 
 impl<M: IMQClient + Send + Sync> StakeManagerSink<M> {
-    pub async fn new(mq_options: mq::Options) -> Result<Self> {
-        let mq_client = *M::connect(mq_options).await?;
+    pub async fn new(mq_settings: settings::MessageQueue) -> Result<Self> {
+        let mq_client = *M::connect(mq_settings).await?;
 
         Ok(StakeManagerSink { mq_client })
     }
@@ -36,7 +37,8 @@ impl<M: IMQClient + Send + Sync> EventSink<StakingEvent> for StakeManagerSink<M>
 
 #[cfg(test)]
 mod tests {
-    use crate::mq::{mq::Options, nats_client::NatsMQClient};
+
+    use crate::mq::nats_client::NatsMQClient;
 
     use super::*;
 
@@ -44,9 +46,17 @@ mod tests {
     // Ensure it doesn't panic
     async fn create_stake_manager_sink() {
         let server = nats_test_server::NatsTestServer::build().spawn();
-        let addr = server.address().to_string();
-        let options = Options { url: addr };
-        StakeManagerSink::<NatsMQClient>::new(options)
+        let addr = server.address();
+
+        let ip = addr.ip();
+        let port = addr.port();
+
+        let mq_settings = settings::MessageQueue {
+            hostname: ip.to_string(),
+            port,
+        };
+
+        StakeManagerSink::<NatsMQClient>::new(mq_settings)
             .await
             .unwrap();
     }
