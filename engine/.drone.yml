@@ -63,11 +63,9 @@ type: kubernetes
 name: chainflip-engine-integration-tests
 
 services:
-  - image: trufflesuite/ganache-cli:latest
+  - image: ghcr.io/chainflip-io/ganache-cli
     name: ganache
     ports: [8545]
-    command:
-      - "ganache-cli --mnemonic chainflip"
   - image: nats:latest
     ports: [4222,8222]
     name: nats
