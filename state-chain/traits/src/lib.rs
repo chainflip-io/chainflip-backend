@@ -90,11 +90,15 @@ pub trait Reporter {
 	type AccountId;
 	type Action: Action;
 
+	fn add_account(account_id: &Self::AccountId) -> Result<(), JudgementError>;
+	fn remove_account(account_id: &Self::AccountId) -> Result<(), JudgementError>;
 	fn report(account_id: &Self::AccountId, action: Self::Action) -> Result<(), JudgementError>;
 }
 
+#[derive(Debug, Eq, PartialEq)]
 pub enum JudgementError {
 	AccountNotFound,
+	AccountExists,
 }
 
 pub trait Judgement<T: Reporter, BlockNumber> {

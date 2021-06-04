@@ -72,6 +72,24 @@ impl<T: Config> Reporter for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Action = T::Action;
 
+	fn add_account(account_id: &Self::AccountId) -> Result<(), JudgementError> {
+		if <Actions<T>>::contains_key(account_id) {
+			return Err(JudgementError::AccountExists);
+		}
+		<LastKnownLiveliness<T>>::insert(account_id, T::BlockNumber::default());
+		<Actions<T>>::insert(account_id, Vec::<T::Action>::new());
+		Ok(())
+	}
+
+	fn remove_account(account_id: &Self::AccountId) -> Result<(), JudgementError> {
+		if !<Actions<T>>::contains_key(account_id) {
+			return Err(JudgementError::AccountNotFound);
+		}
+
+		<Actions<T>>::remove(account_id);
+		Ok(())
+	}
+
 	/// Report an action from an account.  We store the action to storage and mark this as the last
 	/// block number we have seen activity from this account
 	fn report(account_id: &Self::AccountId, action: Self::Action) -> Result<(), JudgementError> {
@@ -111,7 +129,7 @@ impl<T: Config> Judgement<Pallet<T>, T::BlockNumber> for Pallet<T> {
 
 	fn clean_all(account_id: &T::AccountId) -> Result<(), JudgementError> {
 		if <Actions<T>>::contains_key(account_id) {
-			<Actions<T>>::remove(account_id);
+			<Actions<T>>::insert(account_id, Vec::<T::Action>::new());
 			return Ok(());
 		}
 
