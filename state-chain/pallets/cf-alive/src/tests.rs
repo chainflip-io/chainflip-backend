@@ -6,10 +6,6 @@ mod test {
     const ALICE: u64 = 100;
     const BOB: u64 = 101;
 
-    fn last_event() -> mock::Event {
-        frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
-    }
-
     #[test]
     fn report_them() {
         new_test_ext().execute_with(|| {
