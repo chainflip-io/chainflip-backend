@@ -4513,6 +4513,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
+ "sp-std 3.0.0",
 ]
 
 [[package]]
@@ -7991,6 +7992,7 @@ dependencies = [
 name = "state-chain-runtime"
 version = "0.1.0"
 dependencies = [
+ "cf-traits",
  "frame-benchmarking",
  "frame-executive",
  "frame-support",
