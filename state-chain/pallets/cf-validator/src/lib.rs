@@ -276,6 +276,10 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	fn epoch_index() -> Self::EpochIndex {
 		CurrentEpoch::<T>::get()
 	}
+
+	fn is_auction_phase() -> bool {
+		!T::Auction::waiting_on_bids()
+	}
 }
 
 impl<T: Config> pallet_session::SessionHandler<T::ValidatorId> for Pallet<T> {
