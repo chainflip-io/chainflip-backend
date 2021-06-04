@@ -74,6 +74,7 @@ services:
     ports: [4222,8222]
     name: nats
 
+
 steps:
   - name: run-tests
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
@@ -92,7 +93,9 @@ steps:
 # Config
 trigger:
   event:
-    - push
+    - cron
+  cron:
+    - nightly
 
 image_pull_secrets:
   - dockerconfigjson
