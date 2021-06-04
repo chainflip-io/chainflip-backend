@@ -67,7 +67,7 @@ services:
     name: ganache
     ports: [8545]
     entrypoint:
-      - "ganache-cli --mnemonic chainflip"
+      - "--mnemonic chainflip"
   - image: nats:latest
     ports: [4222,8222]
     name: nats
