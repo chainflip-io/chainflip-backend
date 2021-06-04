@@ -39,7 +39,13 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use frame_support::{ensure, error::BadOrigin, traits::EnsureOrigin};
+use core::time::Duration;
+use frame_support::{
+	ensure,
+	error::BadOrigin,
+	traits::{EnsureOrigin, Get, UnixTime},
+	weights,
+};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
@@ -112,6 +118,15 @@ pub mod pallet {
 			ValidatorId = <Self as frame_system::Config>::AccountId,
 			Amount = Self::TokenAmount,
 		>;
+
+		/// Something that provides the current time.
+		type TimeSource: UnixTime;
+
+		/// The minimum period before a claim should expire. The main purpose is to make sure
+		/// we have some margin for error between the signature being issued and the extrinsic
+		/// actually being processed.
+		#[pallet::constant]
+		type MinClaimTTL: Get<Duration>;
 	}
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
@@ -165,10 +180,18 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
+	pub(super) type ClaimExpiries<T: Config> =
+		StorageValue<_, Vec<(Duration, AccountId<T>)>, ValueQuery>;
+
+	#[pallet::storage]
 	pub(super) type Nonces<T: Config> = StorageMap<_, Identity, AccountId<T>, T::Nonce, ValueQuery>;
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
+			Self::expire_pending_claims()
+		}
+	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -239,6 +262,12 @@ pub mod pallet {
 			address: T::EthereumAddress,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
+
+			// No new claim requests can be processed if we're currently in an auction phase.
+			ensure!(
+				!T::EpochInfo::is_auction_phase(),
+				Error::<T>::NoClaimsDuringAuctionPhase
+			);
 
 			// If a claim already exists, return an error. The validator must either redeem their claim voucher
 			// or wait until expiry before creating a new claim.
@@ -344,10 +373,20 @@ pub mod pallet {
 			amount: T::TokenAmount,
 			nonce: T::Nonce,
 			address: T::EthereumAddress,
+			expiry_time: Duration,
 			signature: <T::EthereumCrypto as RuntimePublic>::Signature,
 		) -> DispatchResultWithPostInfo {
 			// TODO: we should check more than just "is this a valid account" - see clubhouse stories 471 and 473
 			let who = ensure_signed(origin)?;
+
+			let time_now = T::TimeSource::now();
+
+			// Make sure the expiry time is sane.
+			let min_ttl = T::MinClaimTTL::get();
+			let _ = expiry_time
+				.checked_sub(time_now)
+				.and_then(|ttl| ttl.checked_sub(min_ttl))
+				.ok_or(Error::<T>::InvalidExpiry)?;
 
 			let _ =
 				PendingClaims::<T>::mutate_exists(&account_id, |maybe_claim| {
@@ -363,8 +402,27 @@ pub mod pallet {
 					}
 				})?;
 
+			ClaimExpiries::<T>::mutate(|expiries| {
+				// We want to ensure this list remains sorted such that the head of the list contains the oldest pending
+				// claim (ie. the first to be expired). This means we put the new value on the back of the list since
+				// it's quite likely this is the most recent. We then run a stable sort, which is most effient when
+				// values are already close to being sorted.
+				// So we need to reverse the list, push the *young* value to the front, reverse it again, then sort.
+				// We could have used a VecDeque here to have a FIFO queue but VecDeque doesn't support `decode_len`
+				// which is used during the expiry check to avoid decoding the whole list.
+				expiries.reverse();
+				expiries.push((expiry_time, account_id.clone()));
+				expiries.reverse();
+				expiries.sort_by_key(|tup| tup.0);
+			});
+
 			Self::deposit_event(Event::ClaimSignatureIssued(
-				who, amount, nonce, address, signature,
+				who,
+				amount,
+				nonce,
+				address,
+				expiry_time,
+				signature,
 			));
 
 			Ok(().into())
@@ -422,12 +480,13 @@ pub mod pallet {
 		/// A claim request has been made to provided Ethereum address. [who, address, nonce, amount]
 		ClaimSigRequested(AccountId<T>, T::EthereumAddress, T::Nonce, T::TokenAmount),
 
-		/// A claim signature has been issued by the signer module. [issuer, amount, nonce, address, signature]
+		/// A claim signature has been issued by the signer module. [issuer, amount, nonce, address, expiry_time, signature]
 		ClaimSignatureIssued(
 			AccountId<T>,
 			T::TokenAmount,
 			T::Nonce,
 			T::EthereumAddress,
+			Duration,
 			<T::EthereumCrypto as RuntimePublic>::Signature,
 		),
 
@@ -436,6 +495,9 @@ pub mod pallet {
 
 		/// A previously retired account  has been re-activated. [who]
 		AccountActivated(AccountId<T>),
+
+		/// A claim has expired without being redeemed. [who, amount, nonce]
+		ClaimExpired(AccountId<T>, T::Nonce, T::TokenAmount),
 	}
 
 	#[pallet::error]
@@ -472,6 +534,12 @@ pub mod pallet {
 
 		/// Can't activate an account unless it's in a retired state.
 		AlreadyActive,
+
+		/// Invalid expiry date.
+		InvalidExpiry,
+
+		/// Cannot make a claim request while an auction is being resolved.
+		NoClaimsDuringAuctionPhase,
 	}
 }
 
@@ -577,6 +645,55 @@ impl<T: Config> Pallet<T> {
 		Stakes::<T>::try_get(account)
 			.map(|s| s.retired)
 			.map_err(|_| Error::AccountNotStaked)
+	}
+
+	/// Expires any pending claims that have passed their TTL.
+	pub fn expire_pending_claims() -> weights::Weight {
+		let mut weight = weights::constants::ExtrinsicBaseWeight::get();
+
+		if ClaimExpiries::<T>::decode_len().unwrap_or_default() == 0 {
+			// Nothing to expire, should be pretty cheap.
+			return weight;
+		}
+
+		let expiries = ClaimExpiries::<T>::get();
+		let time_now = T::TimeSource::now();
+
+		weight = weight.saturating_add(T::DbWeight::get().reads(2));
+
+		// Expiries are sorted on insertion so we can just partition the slice.
+		let expiry_cutoff = expiries.partition_point(|(expiry, _)| *expiry < time_now);
+
+		if expiry_cutoff == 0 {
+			return weight;
+		}
+
+		let (to_expire, remaining) = expiries.split_at(expiry_cutoff);
+
+		ClaimExpiries::<T>::set(remaining.into());
+
+		weight = weight.saturating_add(T::DbWeight::get().writes(1));
+
+		for (_, account_id) in to_expire {
+			if let Some(pending_claim) = PendingClaims::<T>::take(account_id) {
+				// Notify that the claim has expired.
+				Self::deposit_event(Event::<T>::ClaimExpired(
+					account_id.clone(),
+					pending_claim.nonce,
+					pending_claim.amount,
+				));
+
+				// Re-credit the account
+				let _ = Self::add_stake(&account_id, pending_claim.amount);
+
+				// Add weight: One read/write each for deleting the claim and updating the stake.
+				weight = weight
+					.saturating_add(T::DbWeight::get().reads(2))
+					.saturating_add(T::DbWeight::get().writes(2));
+			}
+		}
+
+		weight
 	}
 }
 

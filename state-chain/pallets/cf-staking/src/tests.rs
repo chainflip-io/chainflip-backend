@@ -1,7 +1,10 @@
 use crate::{mock::*, Stakes, Pallet, Error, PendingClaims, Config};
-use frame_support::{assert_noop, assert_ok, error::BadOrigin};
+use std::time::Duration;
+use frame_support::{assert_noop, assert_ok, error::BadOrigin, traits::UnixTime};
 use sp_core::ecdsa::Signature;
 use cf_traits::mocks::epoch_info;
+
+const ETH_DUMMY_ADDR: <Test as Config>::EthereumAddress = [42u8; 20];
 
 fn assert_event_sequence<T: frame_system::Config, E: Into<T::Event>>(expected: Vec<E>) 
 {
@@ -21,7 +24,9 @@ fn assert_event_sequence<T: frame_system::Config, E: Into<T::Event>>(expected: V
 	assert_eq!(events, expected)
 }
 
-const ETH_DUMMY_ADDR: <Test as Config>::EthereumAddress = 0u64;
+fn time_after<T: Config>(duration: Duration) -> Duration {
+	<T::TimeSource as UnixTime>::now() + duration
+}
 
 #[test]
 fn staked_amount_is_added_and_subtracted() {
@@ -171,7 +176,7 @@ fn multisig_endpoints_cant_be_called_from_invalid_origins() {
 }
 
 #[test]
-fn sigature_is_inserted() {
+fn signature_is_inserted() {
 	new_test_ext().execute_with(|| {
 		let stake = 45u128;
 		let sig = Signature::from_slice(&[1u8; 65]);
@@ -195,7 +200,15 @@ fn sigature_is_inserted() {
 		};
 		
 		// Insert a signature.
-		assert_ok!(StakeManager::post_claim_signature(Origin::signed(ALICE), ALICE, stake, nonce, ETH_DUMMY_ADDR, sig.clone()));
+		let expiry = time_after::<Test>(Duration::from_secs(10));
+		assert_ok!(StakeManager::post_claim_signature(
+			Origin::signed(ALICE),
+			ALICE,
+			stake,
+			nonce,
+			ETH_DUMMY_ADDR,
+			expiry,
+			sig.clone()));
 
 		// Check storage for the signature.
 		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().signature, Some(sig.clone()));
@@ -203,7 +216,7 @@ fn sigature_is_inserted() {
 		assert_event_sequence::<Test, _>(vec![
 			crate::Event::Staked(ALICE, stake, stake),
 			crate::Event::ClaimSigRequested(ALICE, ETH_DUMMY_ADDR, nonce, stake),
-			crate::Event::ClaimSignatureIssued(ALICE, stake, nonce, ETH_DUMMY_ADDR, sig.clone()),
+			crate::Event::ClaimSignatureIssued(ALICE, stake, nonce, ETH_DUMMY_ADDR, expiry, sig.clone()),
 		]);
 	});
 }
@@ -307,5 +320,139 @@ fn test_refund() {
 		assert_event_sequence::<Test, _>(vec![
 			crate::Event::StakeRefund(CHARLIE, stake, ETH_DUMMY_ADDR),
 		]);
+	});
+}
+
+#[test]
+fn claim_expiry() {
+	new_test_ext().execute_with(|| {
+		let stake = 45u128;
+		let sig = Signature::from_slice(&[1u8; 65]);
+		let nonce = 1;
+
+		// Start the time at the 10-second mark.
+		time_source::Mock::reset_to(Duration::from_secs(10));
+
+		// Stake some FLIP.
+		assert_ok!(StakeManager::staked(Origin::root(), ALICE, stake, ETH_DUMMY_ADDR));
+		assert_ok!(StakeManager::staked(Origin::root(), BOB, stake, ETH_DUMMY_ADDR));
+		assert_ok!(StakeManager::staked(Origin::root(), CHARLIE, stake, ETH_DUMMY_ADDR));
+
+		// Claim it.
+		assert_ok!(StakeManager::claim(Origin::signed(ALICE), stake, ETH_DUMMY_ADDR));
+		assert_ok!(StakeManager::claim(Origin::signed(BOB), stake, ETH_DUMMY_ADDR));
+		assert_ok!(StakeManager::claim(Origin::signed(CHARLIE), stake, ETH_DUMMY_ADDR));
+
+		// Insert a signature with expiry in the past.
+		let expiry = Duration::from_secs(1);
+		assert_noop!(
+			StakeManager::post_claim_signature(
+				Origin::signed(ALICE),
+				ALICE,
+				stake,
+				nonce,
+				ETH_DUMMY_ADDR,
+				expiry,
+				sig.clone()), 
+			<Error<Test>>::InvalidExpiry
+		);
+
+		// Insert a signature with imminent expiry.
+		let expiry = time_after::<Test>(Duration::from_millis(1));
+		assert_noop!(
+			StakeManager::post_claim_signature(
+				Origin::signed(ALICE),
+				ALICE,
+				stake,
+				nonce,
+				ETH_DUMMY_ADDR,
+				expiry,
+				sig.clone()), 
+			<Error<Test>>::InvalidExpiry
+		);
+
+		// Finally a valid expiry (minimum set to 100ms in the mock).
+		let expiry = time_after::<Test>(Duration::from_millis(101));
+		assert_ok!(
+			StakeManager::post_claim_signature(
+				Origin::signed(ALICE),
+				ALICE,
+				stake,
+				nonce,
+				ETH_DUMMY_ADDR,
+				expiry,
+				sig.clone())
+		);
+
+		// Set a longer expiry time for Bob.
+		let expiry = time_after::<Test>(Duration::from_secs(2));
+		assert_ok!(
+			StakeManager::post_claim_signature(
+				Origin::signed(BOB),
+				BOB,
+				stake,
+				nonce,
+				ETH_DUMMY_ADDR,
+				expiry,
+				sig.clone())
+		);
+
+		// Race condition: Charlie's expiry is shorter than Bob's even though his signature is added after.
+		let expiry = time_after::<Test>(Duration::from_millis(500));
+		assert_ok!(
+			StakeManager::post_claim_signature(
+				Origin::signed(ALICE),
+				CHARLIE,
+				stake,
+				nonce,
+				ETH_DUMMY_ADDR,
+				expiry,
+				sig.clone())
+		);
+
+		Pallet::<Test>::expire_pending_claims();
+		
+		// Clock hasn't moved, nothing should have expired.
+		assert!(PendingClaims::<Test>::contains_key(ALICE));
+		assert!(PendingClaims::<Test>::contains_key(BOB));
+		assert!(PendingClaims::<Test>::contains_key(CHARLIE));
+		
+		// Tick the clock forward by 1 sec and expire.
+		time_source::Mock::tick(Duration::from_secs(1));
+		Pallet::<Test>::expire_pending_claims();
+
+		// It should expire Alice and Charlie's claims but not Bob's.
+		assert_event_sequence::<Test, _>(vec![
+			crate::Event::ClaimExpired(ALICE, nonce, stake),
+			crate::Event::ClaimExpired(CHARLIE, nonce, stake),
+		]);
+		assert!(!PendingClaims::<Test>::contains_key(ALICE));
+		assert!(PendingClaims::<Test>::contains_key(BOB));
+		assert!(!PendingClaims::<Test>::contains_key(CHARLIE));
+	});
+}
+
+#[test]
+fn no_claims_during_auction() {
+	new_test_ext().execute_with(|| {
+		let stake = 45u128;
+		epoch_info::Mock::set_is_auction_phase(true);
+
+		// Staking during an auction is OK.
+		assert_ok!(StakeManager::staked(
+			Origin::root(),
+			ALICE,
+			stake,
+			ETH_DUMMY_ADDR
+		));
+
+		// Claiming during an auction isn't OK.
+		assert_noop!(StakeManager::claim(
+				Origin::signed(ALICE),
+				stake,
+				ETH_DUMMY_ADDR
+			),
+			<Error<Test>>::NoClaimsDuringAuctionPhase
+		);
 	});
 }

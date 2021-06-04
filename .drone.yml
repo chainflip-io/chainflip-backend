@@ -38,6 +38,8 @@ steps:
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     commands:
       - drone lint --trusted
+      - drone lint --trusted engine
+      - drone lint --trusted state-chain
   - name: rust-base
     image: plugins/docker
     settings:
@@ -112,6 +114,30 @@ steps:
     commands:
       - cargo test --release
       - sccache -s
+  - name: build-state-chain-node
+    image: plugins/docker
+    settings:
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+      repo: ghcr.io/chainflip-io/chainflip-backend/state-chain-node
+      dockerfile: Dockerfile.state-chain-node
+      registry: ghcr.io
+      tags: latest
+      cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
+  - name: build-chainflip-engine
+    image: plugins/docker
+    settings:
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+      repo: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine
+      dockerfile: Dockerfile.chainflip-engine
+      registry: ghcr.io
+      tags: latest
+      cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
 #  - name: publish-state-chain-node
 #    image: plugins/ansible
 #    settings:

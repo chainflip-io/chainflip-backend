@@ -1,6 +1,7 @@
 // Implements support for the staking module
 
 use std::marker::PhantomData;
+use std::time::Duration;
 
 use codec::{Decode, Encode};
 use substrate_subxt::{module, sp_core::crypto::AccountId32, system::System, Event};
@@ -71,6 +72,8 @@ pub struct ClaimSignatureIssuedEvent<S: Staking> {
     pub nonce: u64,
 
     pub eth_address: [u8; 20],
+    
+    pub expiry: Duration,
 
     pub signature: Signature,
 
@@ -259,6 +262,7 @@ mod tests {
         let sig: [u8; 65] = [0; 65];
 
         let sig = Signature(sig);
+        let expiry = Duration::from_secs(1);
 
         let event: <SCRuntime as Config>::Event =
             pallet_cf_staking::Event::<SCRuntime>::ClaimSignatureIssued(
@@ -266,6 +270,7 @@ mod tests {
                 150u128,
                 1u64,
                 eth_address,
+                expiry,
                 sig.clone(),
             )
             .into();
@@ -286,6 +291,7 @@ mod tests {
             nonce: 1u64,
             eth_address,
             signature: sig,
+            expiry,
             _phantom: PhantomData,
         };
 
