@@ -1,3 +1,3 @@
 FROM trufflesuite/ganache-cli
 
-CMD ganache-cli --mnemonic chainflip
+ENTRYPOINT ["node", "/app/ganache-core.docker.cli.js", "--mnemonic", "chainflip"]
