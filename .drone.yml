@@ -1,13 +1,45 @@
+kind: secret
+name: docker_username
+get:
+  path: repo-secret
+  name: docker_username
+---
+kind: secret
+name: docker_password
+get:
+  path: repo-secret
+  name: docker_password
+---
+kind: secret
+name: discord_webhook_id
+get:
+  path: repo-secret
+  name: discord_webhook_id
+---
+kind: secret
+name: discord_webhook_token
+get:
+  path: repo-secret
+  name: discord_webhook_token
+---
+kind: secret
+name: dockerconfigjson
+get:
+  path: dockerconfigjson
+  name: .dockerconfigjson
+---
 # Run checks on infrastructure configuration prior to merge.
 kind: pipeline
 name: ci-checks
-type: docker
+type: kubernetes
 
 steps:
   - name: lint-drone-yml
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     commands:
       - drone lint --trusted
+      - drone lint --trusted engine
+      - drone lint --trusted state-chain
   - name: rust-base
     image: plugins/docker
     settings:
@@ -32,10 +64,17 @@ trigger:
 image_pull_secrets:
   - dockerconfigjson
 
+node_selector:
+  type: ci
+
+tolerations:
+  - key: "workloadKind"
+    operator: "Equal"
+    value: "ci"
 ---
 
 kind: pipeline
-type: docker
+type: kubernetes
 name: chainflip-state-chain
 
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<< main >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -57,46 +96,68 @@ steps:
       paths:
         - Dockerfile.rust-base
         - .drone.yml
+    resources:
+      limits:
+        cpu: 2000
+        memory: 3.5GiB
   - name: compile-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
-      SCCACHE_DIR: /cache
+      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo build --release
       - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
   - name: test-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
-      SCCACHE_DIR: /cache
+      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo test --release
       - sccache -s
-    volumes:
-      - name: cache
-        path: /cache
-  - name: publish-state-chain-node
-    image: plugins/ansible
+  - name: build-state-chain-node
+    image: plugins/docker
     settings:
-      verbose: 2
-      playbook: .ansible/staging/playbook.yml
-      inventory: .ansible/staging/inventory/all
-      extra_vars:
-        target: state-chain-node
-      private_key:
-        from_secret: ansible_staging_private_key
-  - name: publish-chainflip-engine
-    image: plugins/ansible
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+      repo: ghcr.io/chainflip-io/chainflip-backend/state-chain-node
+      dockerfile: Dockerfile.state-chain-node
+      registry: ghcr.io
+      tags: latest
+      cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
+  - name: build-chainflip-engine
+    image: plugins/docker
     settings:
-      verbose: 2
-      playbook: .ansible/staging/playbook.yml
-      inventory: .ansible/staging/inventory/all
-      extra_vars:
-        target: chainflip-engine
-      private_key:
-        from_secret: ansible_staging_private_key
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+      repo: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine
+      dockerfile: Dockerfile.chainflip-engine
+      registry: ghcr.io
+      tags: latest
+      cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
+#  - name: publish-state-chain-node
+#    image: plugins/ansible
+#    settings:
+#      verbose: 2
+#      playbook: .ansible/staging/playbook.yml
+#      inventory: .ansible/staging/inventory/all
+#      extra_vars:
+#        target: state-chain-node
+#      private_key:
+#        from_secret: ansible_staging_private_key
+#  - name: publish-chainflip-engine
+#    image: plugins/ansible
+#    settings:
+#      verbose: 2
+#      playbook: .ansible/staging/playbook.yml
+#      inventory: .ansible/staging/inventory/all
+#      extra_vars:
+#        target: chainflip-engine
+#      private_key:
+#        from_secret: ansible_staging_private_key
   - name: notify
     image: appleboy/drone-discord
     when:
@@ -123,13 +184,14 @@ trigger:
     - main
   event:
     - push
-  paths:
-    - state-chain/*
-node:
-  builder: "true"
-volumes:
-  - name: cache
-    host:
-      path: /mnt/chainflip-build-runner/sccache
+
 image_pull_secrets:
   - dockerconfigjson
+
+node_selector:
+  type: ci
+
+tolerations:
+  - key: "workloadKind"
+    operator: "Equal"
+    value: "ci"

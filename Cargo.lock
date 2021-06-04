@@ -868,6 +868,8 @@ version = "0.1.0"
 dependencies = [
  "frame-support",
  "frame-system",
+ "parity-scale-codec 2.1.1",
+ "sp-runtime",
  "sp-std 3.0.0",
 ]
 
@@ -4518,6 +4520,7 @@ name = "pallet-cf-validator"
 version = "0.0.1"
 dependencies = [
  "cf-traits",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "log",
@@ -4536,9 +4539,10 @@ version = "0.1.0"
 dependencies = [
  "bitvec 0.20.4",
  "cf-traits",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
- "pallet-session",
+ "pallet-cf-validator",
  "parity-scale-codec 2.1.1",
  "serde 1.0.125",
  "sp-core",
@@ -7934,6 +7938,7 @@ dependencies = [
  "cf-p2p-rpc",
  "frame-benchmarking",
  "frame-benchmarking-cli",
+ "hex-literal",
  "jsonrpc-core 15.1.0",
  "jsonrpc-core-client",
  "jsonrpc-derive",

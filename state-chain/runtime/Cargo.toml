@@ -67,6 +67,8 @@ runtime-benchmarks = [
   'frame-system/runtime-benchmarks',
   'pallet-timestamp/runtime-benchmarks',
   'sp-runtime/runtime-benchmarks',
+  'pallet-cf-witness/runtime-benchmarks',
+  'pallet-cf-validator/runtime-benchmarks',
 ]
 std = [
   'codec/std',

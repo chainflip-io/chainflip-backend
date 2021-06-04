@@ -1,10 +1,12 @@
-use super::{IMQClient, Options, Subject};
+use super::{IMQClient, Subject};
 use anyhow::Context;
 use async_nats;
 use async_stream::stream;
 use async_trait::async_trait;
 use nats_test_server::NatsTestServer;
 use tokio_stream::{Stream, StreamExt};
+
+use crate::settings;
 
 pub struct MockMQ {
     conn: async_nats::Connection,
@@ -31,10 +33,14 @@ impl Subscription {
 /// ```
 impl MockMQ {
     pub async fn new(server: &NatsTestServer) -> Self {
-        let addr = server.address().to_string();
-        let options = Options { url: addr };
+        let addr = server.address();
+        let mq_settings = settings::MessageQueue {
+            hostname: addr.ip().to_string(),
+            port: addr.port(),
+        };
+        // let settings = settings::test_utils::new_test_settings().unwrap();
 
-        *MockMQ::connect(options)
+        *MockMQ::connect(mq_settings)
             .await
             .expect("Failed to initialise MockMQ")
     }
@@ -44,8 +50,9 @@ impl MockMQ {
 impl IMQClient for MockMQ {
     /// This should never really be called by testing functions, instead tests should use
     /// MockMQ::new()
-    async fn connect(opts: Options) -> anyhow::Result<Box<Self>> {
-        let conn = async_nats::connect(opts.url.as_str()).await?;
+    async fn connect(mq_settings: settings::MessageQueue) -> anyhow::Result<Box<Self>> {
+        let url = format!("http://{}:{}", mq_settings.hostname, mq_settings.port);
+        let conn = async_nats::connect(url.as_str()).await?;
         Ok(Box::new(MockMQ { conn }))
     }
 

@@ -1,4 +1,4 @@
-use sp_core::{Pair, Public, sr25519};
+use sp_core::{Pair, Public, sr25519, crypto::UncheckedInto};
 use state_chain_runtime::{
 	AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig,
 	SudoConfig, SystemConfig, WASM_BINARY, Signature, ValidatorConfig, SessionConfig, opaque::SessionKeys
@@ -131,7 +131,58 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 	))
 }
 
+/// Create a local testnet for Chainflip
+/// We would have 2 validators at Genesis; Chas and Dave https://en.wikipedia.org/wiki/Chas_%26_Dave
+/// Chas would also be Sudo
+/// Subsequent validators would need to be added via the session pallet
+pub fn chainflip_local_testnet_config() -> Result<ChainSpec, String> {
+	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
+
+	Ok(ChainSpec::from_genesis(
+		// Name
+		"Chainflip local Testnet",
+		// ID
+		"chainflip_local_testnet",
+		ChainType::Local,
+		move || testnet_genesis(
+			wasm_binary,
+			// Initial PoA authorities
+			vec![
+				(
+					hex_literal::hex!["b0ca1173a03cc8db1163872255af2a6093dfb124bbb979d8818b0576809cd80a"].into(),
+					hex_literal::hex!["b0ca1173a03cc8db1163872255af2a6093dfb124bbb979d8818b0576809cd80a"].unchecked_into(),
+					hex_literal::hex!["25582067d09bc511afc4e52d19f1a7fd71acb9ee36c64b8c49a2065a65fd2656"].unchecked_into(),
+				),
+				(
+					hex_literal::hex!["a6ea043d8b3984886f55bd2ffb617ab192ce984b894ff87ca4d7341370b97c6b"].into(),
+					hex_literal::hex!["a6ea043d8b3984886f55bd2ffb617ab192ce984b894ff87ca4d7341370b97c6b"].unchecked_into(),
+					hex_literal::hex!["07ce8c1a138d10773fb7df3005511550a4c9ded0f6648693f3ca94d0be0bb022"].unchecked_into(),
+				),
+			],
+			// Sudo account
+			hex_literal::hex!["b0ca1173a03cc8db1163872255af2a6093dfb124bbb979d8818b0576809cd80a"].into(),
+			// Pre-funded accounts
+			vec![
+				hex_literal::hex!["b0ca1173a03cc8db1163872255af2a6093dfb124bbb979d8818b0576809cd80a"].into(),
+				hex_literal::hex!["a6ea043d8b3984886f55bd2ffb617ab192ce984b894ff87ca4d7341370b97c6b"].into(),
+			],
+			true,
+		),
+		// Bootnodes
+		vec![],
+		// Telemetry
+		None,
+		// Protocol ID
+		None,
+		// Properties
+		None,
+		// Extensions
+		None,
+	))
+}
 /// Configure initial storage state for FRAME modules.
+/// 100800 blocks for 7 days at 6 second blocks
+/// 150 validator limit
 fn testnet_genesis(
 	wasm_binary: &[u8],
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>,
@@ -146,8 +197,8 @@ fn testnet_genesis(
 			changes_trie_config: Default::default(),
 		}),
 		pallet_cf_validator: Some(ValidatorConfig {
-			size_validator_set: 2,
-			epoch_number_of_blocks: 2
+			size_validator_set: 150,
+			epoch_number_of_blocks: 100800
 		}),
 		pallet_session: Some(SessionConfig {
 			keys: initial_authorities.iter().map(|x| {

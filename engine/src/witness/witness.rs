@@ -1,6 +1,6 @@
-use crate::mq::Options;
+use crate::settings;
 
-pub async fn start(mq_options: Options) {
+pub async fn start(mq_settings: settings::MessageQueue) {
     // Start the witness processes...
     ()
 }

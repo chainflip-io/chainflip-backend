@@ -76,7 +76,9 @@ impl Sudo for StateChainRuntime {}
 
 impl staking::Staking for StateChainRuntime {}
 
-impl validator::Validator for StateChainRuntime {}
+impl validator::Validator for StateChainRuntime {
+    type EpochIndex = u32;
+}
 
 #[cfg(test)]
 mod tests {
