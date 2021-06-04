@@ -72,8 +72,9 @@ pub async fn test_all_stake_manager_events() {
                 address,
                 web3::types::H160::from_str("0x4726b1555bf7ab73553be4eb3cfe15376d0db188").unwrap()
             );
-            assert_eq!(start_time, U256::from_dec_str("1621727544").unwrap());
-            assert_eq!(end_time, U256::from_dec_str("1621900344").unwrap());
+            // these aren't determinstic, so exclude from the test
+            // assert_eq!(start_time, U256::from_dec_str("1621727544").unwrap());
+            // assert_eq!(end_time, U256::from_dec_str("1621900344").unwrap());
         }
         _ => panic!("Was expecting ClaimRegistered event"),
     }
