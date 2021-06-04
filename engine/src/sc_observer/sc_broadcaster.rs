@@ -54,7 +54,7 @@ mod tests {
 
     use super::*;
 
-    use crate::sc_observer::staking::{MinExt, MinExtCallExt, StakedCallExt, WitnessStakedCallExt};
+    use crate::sc_observer::staking::{MinExtCallExt, StakedCallExt, WitnessStakedCallExt};
     use crate::settings;
     use crate::settings::StateChain;
 
@@ -124,7 +124,7 @@ mod tests {
     #[tokio::test]
     async fn test_transfer_example() {
         let signer = PairSigner::new(AccountKeyring::Alice.pair());
-        let dest = AccountKeyring::Bob.to_account_id().into();
+        let dest = AccountKeyring::Alice.to_account_id().into();
 
         let client = ClientBuilder::<StateChainRuntime>::new()
             .skip_type_sizes_check()
@@ -134,8 +134,6 @@ mod tests {
         let result = client.transfer(&signer, &dest, 10_000).await;
 
         println!("The result is: {:#?}", result);
-
-        // let result = client.set_code(&signer, &[1u8, 2u8, 3u8, 4u8]).await;
 
         // println!("The result is: {:#?}", result);
 
@@ -147,55 +145,49 @@ mod tests {
         // Ok(())
     }
 
-    // #[tokio::test]
-    // async fn submit_xt_test() {
-    //     let settings = settings::test_utils::new_test_settings().unwrap();
-    //     let subxt_client = create_subxt_client(settings.state_chain).await.unwrap();
-    //     // let ecdsa_signer = sp_runtime::app_crypto::ecdsa::Pair::default();
-    //     // let signer = PairSigner::new(AccountKeyring:);
+    #[tokio::test]
+    async fn submit_xt_test() {
+        let settings = settings::test_utils::new_test_settings().unwrap();
+        let subxt_client = create_subxt_client(settings.state_chain).await.unwrap();
+        // let ecdsa_signer = sp_runtime::app_crypto::ecdsa::Pair::default();
+        let signer = PairSigner::new(AccountKeyring::Alice.pair());
 
-    //     let pub_ecdsa = sp_runtime::app_crypto::ecdsa::Public::default();
+        let alice = AccountKeyring::Alice.to_account_id();
 
-    //     let multi_signer = MultiSigner::Ecdsa(pub_ecdsa);
+        // let bob_multi = sp_runtime::MultiAddress::Address32(bob.into());
 
-    //     let alice = AccountKeyring::Alice.to_account_id();
+        let eth_address: [u8; 20] = [
+            00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01,
+        ];
 
-    //     let bob = AccountKeyring::Bob.to_account_id();
+        // let result = subxt_client.transfer(&signer, &bob_multi, 12).await;
 
-    //     let bob_multi = sp_runtime::MultiAddress::Address32(bob.into());
+        // println!("result: {:#?}", result);
 
-    //     let eth_address: [u8; 20] = [
-    //         00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01,
-    //     ];
+        let result = subxt_client
+            .set_code(&signer, &[0u8, 0u8, 0u8, 0u8])
+            .await
+            .unwrap();
 
-    //     let result = subxt_client.transfer(&signer, &bob_multi, 12).await;
+        // let result = subxt_client.min_ext(&signer).await;
 
-    //     println!("result: {:#?}", result);
+        println!("Result: {:#?}", result);
 
-    //     // let result = subxt_client
-    //     //     .set_code(&signer, &[1u8, 2u8, 3u8, 4u8])
-    //     //     .await
-    //     //     .unwrap();
+        // let result = subxt_client
+        //     .witness_staked(&signer, alice, 123u128, eth_address)
+        //     .await;
 
-    //     let result = subxt_client.min_ext(&signer).await;
+        // TODO: Ensure this is actually correct.
+        // let result = subxt_client
+        //     .staked(&signer, &alice, 100u128, &eth_address)
+        //     .await;
 
-    //     println!("Result: {:#?}", result);
+        // println!("result: {:#?}", result);
 
-    //     // let result = subxt_client
-    //     //     .witness_staked(&signer, alice, 123u128, eth_address)
-    //     //     .await;
+        // result.unwrap();
 
-    //     // TODO: Ensure this is actually correct.
-    //     // let result = subxt_client
-    //     //     .staked(&signer, &alice, 100u128, &eth_address)
-    //     //     .await;
-
-    //     // println!("result: {:#?}", result);
-
-    //     // result.unwrap();
-
-    //     // println!("Here's the result: {:#?}", result);
-    // }
+        // println!("Here's the result: {:#?}", result);
+    }
 }
 
 // Error I was getting when submitting a staked event from the frontend:

@@ -37,7 +37,7 @@ pub trait StakeManager: System {
 }
 
 #[derive(Call, Encode)]
-pub struct MinExt<T: StakeManager> {
+pub struct MinExtCall<T: StakeManager> {
     pub _runtime: PhantomData<T>,
 }
 
