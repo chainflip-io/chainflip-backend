@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use futures::StreamExt;
 use itertools::Itertools;
 use log::*;
@@ -10,7 +8,7 @@ use rand::{
 
 // use parking_lot::Mutex;
 use crate::{
-    mq::{mq_mock2::MQMock2, pin_message_stream, IMQClient, Subject},
+    mq::{mq_mock::{MQMock, MQMockClientFactory}, pin_message_stream, IMQClient, Subject},
     p2p::{mock::NetworkMock, P2PConductor},
     signing::client::MultisigInstruction,
 };
@@ -140,9 +138,9 @@ async fn distributed_signing() {
             let p2p_client = network.new_client(i);
 
             async move {
-                let message_queue = MQMock2::new();
+                let mq = MQMock::new();
 
-                let mc = message_queue.get_client();
+                let mc = mq.get_client();
 
                 let conductor = P2PConductor::new(mc, i, p2p_client).await;
 
@@ -153,21 +151,20 @@ async fn distributed_signing() {
                     share_count: n,
                 };
 
-                let mc = message_queue.get_client();
-                let mc2 = message_queue.get_client();
+                // let mc = message_queue.get_client();
+                // let mc2 = message_queue.get_client();
 
-                // TODO: Pass something that implements MQClientCreator instead
+                let mq_factory = MQMockClientFactory::new(mq.clone());
 
-                let client = MultisigClient::new(mc, mc2, i, params);
+                let client = MultisigClient::new(mq_factory, i, params);
 
                 // "ready to sign" emitted here
                 let client_fut = client.run();
 
-                let mc = message_queue.get_client();
+                let mc = mq.get_client();
 
                 (
                     mc,
-                    message_queue,
                     futures::future::join(conductor_fut, client_fut),
                 )
             }
@@ -179,13 +176,10 @@ async fn distributed_signing() {
     let mut futs = vec![];
     let mut mc_clients = vec![];
 
-    // Keep servers on the stack, so they keep running
-    let mut servers = vec![];
 
-    for (mc, server, fut) in results {
+    for (mc, fut) in results {
         futs.push(fut);
         mc_clients.push(mc);
-        servers.push(server);
     }
 
     futures::join!(

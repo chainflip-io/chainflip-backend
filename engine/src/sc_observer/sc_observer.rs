@@ -2,7 +2,7 @@ use anyhow::Result;
 use substrate_subxt::{Client, ClientBuilder, EventSubscription};
 
 use crate::{
-    mq::{nats_client::NatsMQClient, IMQClient, Subject},
+    mq::{nats_client::NatsMQClientFactory, IMQClient, IMQClientFactory, Subject},
     settings::{self, Settings},
 };
 
@@ -17,7 +17,9 @@ use super::{
 pub async fn start(settings: Settings) {
     info!("Begin subscribing to state chain events");
 
-    let mq_client = NatsMQClient::connect(settings.message_queue).await.unwrap();
+    let mq_client_builder = NatsMQClientFactory::new(settings.message_queue);
+
+    let mq_client = mq_client_builder.connect().await.unwrap();
 
     let subxt_client = create_subxt_client(settings.state_chain)
         .await

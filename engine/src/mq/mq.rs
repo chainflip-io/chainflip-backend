@@ -8,11 +8,16 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::settings;
 
+#[async_trait]
+pub trait IMQClientFactory<IMQ: IMQClient> {
+    async fn connect(&self) -> anyhow::Result<Box<IMQ>>;
+}
+
 /// Interface for a message queue
 #[async_trait]
 pub trait IMQClient {
     /// Open a connection to the message queue
-    async fn connect(opts: settings::MessageQueue) -> Result<Box<Self>>;
+    // async fn connect(opts: settings::MessageQueue) -> Result<Box<Self>>;
 
     /// Publish something to a particular subject
     async fn publish<M: 'static + Serialize + Sync>(

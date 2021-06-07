@@ -1,12 +1,16 @@
 mod client_inner;
 
-use std::time::Duration;
+use std::{marker::PhantomData, time::Duration};
 
+use crate::mq::{IMQClient, IMQClientFactory, Subject};
+use anyhow::Result;
 use futures::{future::Either, StreamExt};
+use futures::select;
 use log::*;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::{
-    mq::{pin_message_stream, IMQClient, Subject},
+    mq::{pin_message_stream},
     p2p::P2PMessage,
     signing::client::client_inner::InnerSignal,
 };
@@ -38,36 +42,38 @@ pub enum MultisigEvent {
     MessageSigned(MessageHash),
 }
 
-pub struct MultisigClient<MQ>
+pub struct MultisigClient<MQ, F>
 where
-    MQ: IMQClient + Send + Sync + 'static,
+    MQ: IMQClient,
+    F: IMQClientFactory<MQ>,
 {
-    mq: MQ,
-    mq2: Option<MQ>, // TODO: remove mq2
+    factory: F,
     inner_event_receiver: Option<mpsc::UnboundedReceiver<InnerEvent>>,
     signer_idx: usize,
     inner: MultisigClientInner,
+    _data: PhantomData<MQ>,
 }
 
 // How long we keep individual signing phases around
 // before expiring them
 const PHASE_TIMEOUT: Duration = Duration::from_secs(20);
 
-impl<MQ> MultisigClient<MQ>
+impl<MQ, F> MultisigClient<MQ, F>
 where
-    MQ: IMQClient + Send + Sync + 'static,
+    MQ: IMQClient,
+    F: IMQClientFactory<MQ>,
 {
     // mq2 is used for sending p2p messages (TODO: pass in the server's address instead, so we
     // can create as many MQ clients as we want)
-    pub fn new(mq: MQ, mq2: MQ, idx: usize, params: Parameters) -> Self {
+    pub fn new(factory: F, idx: usize, params: Parameters) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
 
         MultisigClient {
-            mq,
-            mq2: Some(mq2),
+            factory,
             inner: MultisigClientInner::new(idx, params, tx, PHASE_TIMEOUT),
             signer_idx: idx,
             inner_event_receiver: Some(rx),
+            _data: PhantomData
         }
     }
 
@@ -107,29 +113,32 @@ where
         //   - this module will process messages by reading the buffer
 
         let receiver = self.inner_event_receiver.take().unwrap();
-        let mq = self.mq2.take().unwrap();
 
-        let events_fut = MultisigClient::process_inner_events(receiver, mq);
+        let mq = *self.factory.connect().await.unwrap();
 
-        // let cleanup_fut = async move {
+        let events_fut = MultisigClient::<_, F>::process_inner_events(receiver, mq);
 
-        //     loop {
-        //         tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+        let (cleanup_tx, cleanup_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
 
-        //         self.inner.cleanup();
-        //     }
+        let cleanup_fut = async move {
 
-        // };
+            loop {
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                cleanup_tx.send(()).unwrap();
+            }
+        };
+
+        let cleanup_stream = UnboundedReceiverStream::new(cleanup_rx);
+
+        let mq = *self.factory.connect().await.unwrap();
 
         let other_fut = async move {
-            let stream1 = self
-                .mq
+            let stream1 = mq
                 .subscribe::<P2PMessage>(Subject::P2PIncoming)
                 .await
                 .unwrap();
 
-            let stream2 = self
-                .mq
+            let stream2 = mq
                 .subscribe::<MultisigInstruction>(Subject::MultisigInstruction)
                 .await
                 .unwrap();
@@ -138,8 +147,7 @@ where
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
 
             // issue a message that we've subscribed
-            self.mq
-                .publish(Subject::MultisigEvent, &MultisigEvent::ReadyToKeygen)
+            mq.publish(Subject::MultisigEvent, &MultisigEvent::ReadyToKeygen)
                 .await
                 .expect("Signing module failed to publish readiness");
 
@@ -147,26 +155,44 @@ where
 
             let stream2 = pin_message_stream(stream2);
 
-            let mut stream =
-                futures::stream::select(stream1.map(Either::Left), stream2.map(Either::Right));
+            enum OtherEvents {
+                Instruction(Result<MultisigInstruction>),
+                Cleanup(()),
+            }
+
+            enum Events {
+                P2P(Result<P2PMessage>),
+                Other(OtherEvents)
+            }
+
+            let s1 = stream1.map(Events::P2P);
+            let s2 = stream2.map(|x| Events::Other(OtherEvents::Instruction(x)));
+            let s3 = cleanup_stream.map(|_| Events::Other(OtherEvents::Cleanup(())));
+
+            let stream_inner = futures::stream::select(s2, s3);
+            let mut stream_outer = futures::stream::select(s1, stream_inner);
 
             trace!("[{}] subscribed to MQ", self.signer_idx);
 
             // TODO: call cleanup from time to time
 
-            while let Some(msg) = stream.next().await {
+            while let Some(msg) = stream_outer.next().await {
                 match msg {
-                    Either::Left(Ok(p2p_message)) => {
+                    Events::P2P(Ok(p2p_message)) => {
                         self.inner.process_p2p_mq_message(p2p_message);
                     }
-                    Either::Left(Err(err)) => {
+                    Events::P2P(Err(err)) => {
                         warn!("Ignoring channel error: {}", err);
                     }
-                    Either::Right(Ok(instruction)) => {
+                    Events::Other(OtherEvents::Instruction(Ok(instruction))) => {
                         self.inner.process_multisig_instruction(instruction);
                     }
-                    Either::Right(Err(err)) => {
+                    Events::Other(OtherEvents::Instruction(Err(err))) => {
                         warn!("Ignoring channel error: {}", err);
+                    }
+                    Events::Other(OtherEvents::Cleanup(())) => {
+                        info!("Cleaning up multisig states");
+                        self.inner.cleanup();
                     }
                 }
             }
@@ -174,6 +200,6 @@ where
             error!("NO MORE MESSAGES");
         };
 
-        futures::join!(events_fut, other_fut);
+        futures::join!(events_fut, other_fut, cleanup_fut);
     }
 }

@@ -52,7 +52,9 @@ mod tests {
 
     async fn receive_with_timeout<T>(mut receiver: UnboundedReceiver<T>) -> Option<T> {
         let fut = receiver.recv();
-        tokio::time::timeout(std::time::Duration::from_millis(5), fut).await.unwrap_or(None)
+        tokio::time::timeout(std::time::Duration::from_millis(5), fut)
+            .await
+            .unwrap_or(None)
     }
 
     #[tokio::test]

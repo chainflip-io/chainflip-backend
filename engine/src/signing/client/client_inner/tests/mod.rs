@@ -326,8 +326,6 @@ async fn keygen_secret2_gets_delayed() {
     let bc1_vec = phase1.bc1_vec.clone();
     let sec2_vec = phase2.sec2_vec.clone();
 
-    info!("start the test");
-
     let c1 = &mut clients_p1[0];
     assert_eq!(c1.keygen_state.stage, KeygenStage::AwaitingBroadcast1);
 
@@ -408,8 +406,6 @@ async fn signing_local_sig_gets_delayed() {
     init_logs_once();
 
     let mut states = generate_valid_keygen_data().await;
-
-    error!("START THE TEST");
 
     let phase2 = &states.sign_phase2;
     let phase3 = &states.sign_phase3;

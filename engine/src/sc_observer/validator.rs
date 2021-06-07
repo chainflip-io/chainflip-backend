@@ -4,8 +4,8 @@ use std::marker::PhantomData;
 
 use codec::{Decode, Encode};
 use pallet_cf_validator::ValidatorSize;
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use substrate_subxt::{module, system::System, Event, sp_runtime::traits::Member};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use substrate_subxt::{module, sp_runtime::traits::Member, system::System, Event};
 
 use super::{runtime::StateChainRuntime, sc_event::SCEvent};
 
@@ -149,9 +149,7 @@ mod tests {
             AuctionStartedEvent::<StateChainRuntime>::decode(&mut &encoded_auction_started[..])
                 .unwrap();
 
-        let expecting = AuctionStartedEvent {
-            epoch_index: 1,
-        };
+        let expecting = AuctionStartedEvent { epoch_index: 1 };
 
         assert_eq!(decoded_event, expecting);
     }
@@ -170,9 +168,7 @@ mod tests {
             AuctionConfirmedEvent::<StateChainRuntime>::decode(&mut &encoded_auction_confirmed[..])
                 .unwrap();
 
-        let expecting = AuctionConfirmedEvent {
-            epoch_index: 1,
-        };
+        let expecting = AuctionConfirmedEvent { epoch_index: 1 };
 
         assert_eq!(decoded_event, expecting);
     }
@@ -188,12 +184,9 @@ mod tests {
         let encoded_new_epoch = encoded_new_epoch[2..].to_vec();
 
         let decoded_event =
-            NewEpochEvent::<StateChainRuntime>::decode(&mut &encoded_new_epoch[..])
-                .unwrap();
+            NewEpochEvent::<StateChainRuntime>::decode(&mut &encoded_new_epoch[..]).unwrap();
 
-        let expecting = NewEpochEvent {
-            epoch_index: 1,
-        };
+        let expecting = NewEpochEvent { epoch_index: 1 };
 
         assert_eq!(decoded_event, expecting);
     }

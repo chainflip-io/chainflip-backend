@@ -77,10 +77,7 @@ mod tests {
 
     use nats_test_server::NatsTestServer;
 
-    use crate::{
-        mq::mq_mock::MockMQ,
-        p2p::{mock::NetworkMock, P2PMessageCommand, ValidatorId},
-    };
+    use crate::{mq::mq_mock::MQMock, p2p::{mock::NetworkMock, P2PMessageCommand, ValidatorId}};
 
     use super::*;
 
@@ -98,17 +95,21 @@ mod tests {
 
         // Validator 1 setup
         const ID_1: ValidatorId = 1;
-        let server = NatsTestServer::build().spawn();
-        let mc1 = MockMQ::new(&server).await;
-        let mc1_copy = MockMQ::new(&server).await;
+        // let server = NatsTestServer::build().spawn();
+
+        let mq = MQMock::new();
+
+        let mc1 = mq.get_client();
+        let mc1_copy = mq.get_client();
         let p2p_client_1 = network.new_client(ID_1);
         let conductor_1 = P2PConductor::new(mc1, 1, p2p_client_1).await;
 
         // Validator 2 setup
         const ID_2: ValidatorId = 2;
-        let server2 = NatsTestServer::build().spawn();
-        let mc2 = MockMQ::new(&server2).await;
-        let mc2_copy = MockMQ::new(&server2).await;
+
+        let mq = MQMock::new();
+        let mc2 = mq.get_client();
+        let mc2_copy = mq.get_client();
         let p2p_client_2 = network.new_client(ID_2);
         let conductor_2 = P2PConductor::new(mc2, 2, p2p_client_2).await;
 
