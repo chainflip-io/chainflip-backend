@@ -13,8 +13,8 @@ use super::client_inner::{InnerEvent, MultisigMessage, SigningDataWrapper};
 use crate::{
     p2p::P2PMessageCommand,
     signing::{
-        bitcoin_schnorr::{Keys, LocalSig, Parameters, SharedKeys, Signature},
         client::client_inner::InnerSignal,
+        crypto::{Keys, LocalSig, Parameters, SharedKeys, Signature},
         utils,
     },
 };

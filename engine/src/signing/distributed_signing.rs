@@ -8,14 +8,17 @@ use rand::{
 
 // use parking_lot::Mutex;
 use crate::{
-    mq::{mq_mock::{MQMock, MQMockClientFactory}, pin_message_stream, IMQClient, Subject},
+    mq::{
+        mq_mock::{MQMock, MQMockClientFactory},
+        pin_message_stream, IMQClient, Subject,
+    },
     p2p::{mock::NetworkMock, P2PConductor},
     signing::client::MultisigInstruction,
 };
 
 use super::{
-    bitcoin_schnorr::Parameters,
     client::{MultisigClient, MultisigEvent},
+    Parameters,
 };
 
 async fn coordinate_signing(mc_clients: Vec<impl IMQClient>, active_indices: &[usize]) {
@@ -163,10 +166,7 @@ async fn distributed_signing() {
 
                 let mc = mq.get_client();
 
-                (
-                    mc,
-                    futures::future::join(conductor_fut, client_fut),
-                )
+                (mc, futures::future::join(conductor_fut, client_fut))
             }
         })
         .collect_vec();
@@ -175,7 +175,6 @@ async fn distributed_signing() {
 
     let mut futs = vec![];
     let mut mc_clients = vec![];
-
 
     for (mc, fut) in results {
         futs.push(fut);

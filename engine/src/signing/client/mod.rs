@@ -4,20 +4,15 @@ use std::{marker::PhantomData, time::Duration};
 
 use crate::mq::{IMQClient, IMQClientFactory, Subject};
 use anyhow::Result;
-use futures::{future::Either, StreamExt};
-use futures::select;
+use futures::StreamExt;
 use log::*;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
-use crate::{
-    mq::{pin_message_stream},
-    p2p::P2PMessage,
-    signing::client::client_inner::InnerSignal,
-};
+use crate::{mq::pin_message_stream, p2p::P2PMessage, signing::client::client_inner::InnerSignal};
 
 use self::client_inner::{InnerEvent, MultisigClientInner};
 
-use super::{bitcoin_schnorr::Parameters, MessageHash};
+use super::{MessageHash, Parameters};
 
 use tokio::sync::mpsc;
 
@@ -73,7 +68,7 @@ where
             inner: MultisigClientInner::new(idx, params, tx, PHASE_TIMEOUT),
             signer_idx: idx,
             inner_event_receiver: Some(rx),
-            _data: PhantomData
+            _data: PhantomData,
         }
     }
 
@@ -121,7 +116,6 @@ where
         let (cleanup_tx, cleanup_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
 
         let cleanup_fut = async move {
-
             loop {
                 tokio::time::sleep(Duration::from_secs(10)).await;
                 cleanup_tx.send(()).unwrap();
@@ -162,7 +156,7 @@ where
 
             enum Events {
                 P2P(Result<P2PMessage>),
-                Other(OtherEvents)
+                Other(OtherEvents),
             }
 
             let s1 = stream1.map(Events::P2P);

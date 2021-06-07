@@ -19,8 +19,7 @@ pub struct StakeManagerSink<M: IMQClient + Send + Sync> {
 impl<M: IMQClient + Send + Sync> StakeManagerSink<M> {
     pub async fn new<F: IMQClientFactory<M> + Send + Sync>(
         mq_factory: F,
-    ) -> Result<StakeManagerSink<M>>
-    {
+    ) -> Result<StakeManagerSink<M>> {
         let mq_client = *mq_factory.connect().await?;
 
         Ok(StakeManagerSink { mq_client })
@@ -50,7 +49,10 @@ impl<M: IMQClient + Send + Sync> EventSink<StakingEvent> for StakeManagerSink<M>
 #[cfg(test)]
 mod tests {
 
-    use crate::mq::{self, nats_client::{NatsMQClient, NatsMQClientFactory}};
+    use crate::mq::{
+        self,
+        nats_client::{NatsMQClient, NatsMQClientFactory},
+    };
 
     use super::*;
 

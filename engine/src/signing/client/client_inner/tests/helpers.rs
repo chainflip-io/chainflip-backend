@@ -1,25 +1,23 @@
-use std::{collections::HashMap, ops::Mul, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
-use futures::executor::LocalPool;
-use itertools::Itertools;
 use log::{error, info};
-use tokio::{runtime::Runtime, sync::mpsc::UnboundedReceiver};
+use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::{
     p2p::{P2PMessage, P2PMessageCommand},
     signing::{
-        bitcoin_schnorr::{LocalSig, Parameters},
         client::{
             client_inner::{
                 client_inner::{
                     Broadcast1, KeyGenMessage, KeygenStage, MultisigMessage, Secret2, SigningData,
                     SigningDataWrapper,
                 },
-                signing_state::{SigningStage, SigningState},
+                signing_state::SigningStage,
                 InnerEvent, InnerSignal, MultisigClientInner,
             },
             MultisigInstruction,
         },
+        crypto::{LocalSig, Parameters},
     },
 };
 

@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::{mq::pin_message_stream};
+use crate::mq::pin_message_stream;
 
 use super::{IMQClient, IMQClientFactory};
 use anyhow::{Context, Result};
@@ -38,21 +38,18 @@ impl MQMock {
 }
 
 pub struct MQMockClientFactory {
-    mq: MQMock
+    mq: MQMock,
 }
 
 impl MQMockClientFactory {
-
-    pub fn new(mq : MQMock) -> Self {
-        MQMockClientFactory {mq}
+    pub fn new(mq: MQMock) -> Self {
+        MQMockClientFactory { mq }
     }
 }
 
 #[async_trait]
 impl IMQClientFactory<MQMockClient> for MQMockClientFactory {
-
     async fn connect(&self) -> anyhow::Result<Box<MQMockClient>> {
-        
         Ok(Box::new(self.mq.get_client()))
     }
 }

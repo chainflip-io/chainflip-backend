@@ -3,9 +3,7 @@ use std::time::Duration;
 use crate::{
     p2p::{P2PMessage, P2PMessageCommand, ValidatorId},
     signing::{
-        bitcoin_schnorr::{KeyGenBroadcastMessage1, LocalSig, Parameters},
-        client::MultisigInstruction,
-        MessageHash,
+        client::MultisigInstruction, KeyGenBroadcastMessage1, LocalSig, MessageHash, Parameters,
     },
 };
 

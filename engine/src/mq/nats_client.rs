@@ -43,7 +43,6 @@ impl NatsMQClientFactory {
 
 #[async_trait]
 impl IMQClientFactory<NatsMQClient> for NatsMQClientFactory {
-
     async fn connect(&self) -> anyhow::Result<Box<NatsMQClient>> {
         let url = format!(
             "http://{}:{}",
@@ -110,7 +109,10 @@ mod test {
             port: 4222,
         };
 
-        NatsMQClientFactory::new(mq_settings).connect().await.unwrap()
+        NatsMQClientFactory::new(mq_settings)
+            .connect()
+            .await
+            .unwrap()
     }
 
     #[ignore = "Depends on Nats being online"]

@@ -6,7 +6,7 @@ use std::{
 use log::*;
 use tokio::sync::mpsc;
 
-use crate::signing::{bitcoin_schnorr::Parameters, MessageHash};
+use crate::signing::{crypto::Parameters, MessageHash};
 
 use super::{
     client_inner::{InnerEvent, SigningDataWrapper},

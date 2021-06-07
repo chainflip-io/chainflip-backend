@@ -6,15 +6,14 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use lazy_static::lazy_static;
 
 use crate::{
-    p2p::{P2PMessage, P2PMessageCommand, ValidatorId},
+    p2p::{P2PMessage, ValidatorId},
     signing::{
-        bitcoin_schnorr::{Keys, Parameters},
         client::{
             client_inner::{
                 client_inner::KeygenStage,
                 signing_state::SigningStage,
                 tests::helpers::{
-                    bc1_to_p2p_signing, generate_valid_keygen_data, print_next_message,
+                    bc1_to_p2p_signing, generate_valid_keygen_data,
                     recv_next_signal_message_skipping, sec2_to_p2p_keygen, sec2_to_p2p_signing,
                     sig_to_p2p,
                 },
@@ -22,10 +21,10 @@ use crate::{
             },
             MultisigInstruction, PHASE_TIMEOUT,
         },
+        crypto::{Keys, Parameters},
     },
 };
 
-use helpers::ValidKeygenStates;
 
 use super::{
     client_inner::{KeyGenMessage, MultisigClientInner, MultisigMessage, SigningDataWrapper},

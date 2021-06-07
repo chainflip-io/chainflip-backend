@@ -1,10 +1,6 @@
 use crate::{
     p2p::ValidatorId,
-    signing::{
-        self,
-        bitcoin_schnorr::{KeyGenBroadcastMessage1, Keys, Parameters},
-        utils,
-    },
+    signing::{utils, KeyGenBroadcastMessage1, Keys, Parameters},
 };
 
 use super::{

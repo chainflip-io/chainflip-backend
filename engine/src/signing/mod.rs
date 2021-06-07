@@ -1,5 +1,5 @@
-mod bitcoin_schnorr;
 mod client;
+mod crypto;
 mod error;
 mod utils;
 
@@ -8,7 +8,7 @@ mod distributed_signing;
 
 pub use client::MultisigClient;
 
-use bitcoin_schnorr::{Keys, Parameters, SharedKeys};
+use crypto::{KeyGenBroadcastMessage1, Keys, LocalSig, Parameters, SharedKeys, Signature};
 
 use curv::elliptic::curves::secp256_k1::GE;
 use curv::{
@@ -17,8 +17,6 @@ use curv::{
 };
 
 pub type MessageHash = Vec<u8>;
-
-use crate::signing::bitcoin_schnorr::{LocalSig, Signature};
 
 // TODO: move to examples directory
 

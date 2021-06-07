@@ -77,7 +77,10 @@ mod tests {
 
     use nats_test_server::NatsTestServer;
 
-    use crate::{mq::mq_mock::MQMock, p2p::{mock::NetworkMock, P2PMessageCommand, ValidatorId}};
+    use crate::{
+        mq::mq_mock::MQMock,
+        p2p::{mock::NetworkMock, P2PMessageCommand, ValidatorId},
+    };
 
     use super::*;
 

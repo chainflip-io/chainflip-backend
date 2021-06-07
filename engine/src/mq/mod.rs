@@ -1,7 +1,6 @@
 pub mod mq;
 pub mod nats_client;
 
-
 // Re export everything
 pub use mq::*;
 
