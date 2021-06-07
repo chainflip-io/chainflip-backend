@@ -14,6 +14,15 @@ use web3::types::{BlockNumber, FilterBuilder, H256};
 
 use crate::settings::Settings;
 
+#[async_trait]
+pub trait Broadcast {
+    // do we need to do any signing here? or do we *just* broadcast? let's go with the latter for now
+
+    // TODO: this should return a Hash, not a String - but the hash needs to be generic across chains.
+    // Do some chains not emit a hash? they may in the future so perhaps String is better?
+    async fn broadcast(msg: Vec<u8>) -> Result<String>;
+}
+
 /// Something that accepts and processes events asychronously.
 #[async_trait]
 pub trait EventSink<E>

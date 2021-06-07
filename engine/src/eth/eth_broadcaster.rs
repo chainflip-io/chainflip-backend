@@ -3,6 +3,10 @@ use crate::{mq::IMQClient, settings};
 use anyhow::Result;
 use tokio_compat_02::FutureExt;
 
+use super::Broadcast;
+
+use async_trait::async_trait;
+
 // Read events from the broadcast.eth queue, and then broadcast them
 
 pub struct EthBroadcaster<M: IMQClient + Send + Sync> {
@@ -28,6 +32,15 @@ impl<M: IMQClient + Send + Sync> EthBroadcaster<M> {
     }
 }
 
+#[async_trait]
+impl<M: IMQClient + Send + Sync> Broadcast for EthBroadcaster<M> {
+    async fn broadcast(msg: Vec<u8>) -> Result<String> {
+        println!("Hello!");
+
+        Ok("hello".to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -35,11 +48,19 @@ mod tests {
 
     use super::*;
 
+    pub async fn new_eth_broadcaster<M: IMQClient + Send + Sync>() -> Result<EthBroadcaster<M>> {
+        let settings = settings::test_utils::new_test_settings().unwrap();
+        let eth_broadcaster = EthBroadcaster::<NatsMQClient>::new(settings).await;
+        eth_broadcaster
+    }
+
     #[tokio::test]
     #[ignore = "requires mq and eth node setup"]
     async fn test_eth_broadcaster_new() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-        let eth_broadcaster = EthBroadcaster::<NatsMQClient>::new(settings).await;
         assert!(eth_broadcaster.is_ok());
     }
+
+    #[tokio::test]
+    #[ignore = "requires eth node setup"]
+    async fn test_eth_broadcast() {}
 }
