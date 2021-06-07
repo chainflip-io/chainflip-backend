@@ -62,9 +62,14 @@ pub enum EventProducerError {
 }
 
 /// Start all the ETH components
-pub async fn start(settings: Settings) {
+pub async fn start(settings: Settings) -> anyhow::Result<()> {
     log::info!("Starting the ETH components");
     stake_manager::start_stake_manager_witness(settings)
         .await
         .expect("Could not start the StakeManager witness");
+
+    // TODO: Start the eth broadcaster??
+    // eth_broadcaster::run().await?;
+
+    Ok(())
 }
