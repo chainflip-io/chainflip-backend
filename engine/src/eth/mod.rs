@@ -20,7 +20,7 @@ pub trait Broadcast {
 
     // TODO: this should return a Hash, not a String - but the hash needs to be generic across chains.
     // Do some chains not emit a hash? they may in the future so perhaps String is better?
-    async fn broadcast(msg: Vec<u8>) -> Result<String>;
+    async fn broadcast(&self, msg: Vec<u8>) -> Result<String>;
 }
 
 /// Something that accepts and processes events asychronously.
