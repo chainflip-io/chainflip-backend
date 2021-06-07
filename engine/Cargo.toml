@@ -33,6 +33,9 @@ hex = "0.4.3"
 config = "0.11.0"
 log = { version = "0.4.14" }
 env_logger = { version = "0.8.3" }
+rand = "0.7.3"
+itertools = "0.10"
+lazy_static = "1.4"
 web3 = { version = "0.15" }
 async-std = { version = "1.9", features = ["attributes", "tokio1"] }
 tokio-compat-02 = "0.2"
@@ -45,12 +48,16 @@ frame-system = "3.0.0"
 codec = { package = "parity-scale-codec", version = "2.1", default-features = false, features = ["derive", "full"] }
 substrate-subxt = { version = "0.15 "}
 
-
 # Local deps
 chainflip-common = { path = "../common" }
 state-chain-runtime = { path = "../state-chain/runtime" }
 pallet-cf-validator = { path = "../state-chain/pallets/cf-validator" }
 pallet-cf-staking = { path = "../state-chain/pallets/cf-staking" }
+
+[dependencies.curv]
+git = "https://github.com/KZen-networks/curv"
+tag = "v0.6.2"
+features = ["rust-gmp-kzen"]
 
 [dev-dependencies]
 nats_test_server = "0.3.0"

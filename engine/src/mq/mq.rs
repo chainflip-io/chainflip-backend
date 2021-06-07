@@ -53,6 +53,8 @@ pub enum Subject {
     Rotate,
     P2PIncoming,
     P2POutgoing,
+    MultisigInstruction,
+    MultisigEvent,
 }
 
 // TODO: Make this a separate trait, not `fmt::Display` - https://github.com/chainflip-io/chainflip-backend/issues/63
@@ -92,6 +94,18 @@ impl fmt::Display for Subject {
             }
             Subject::P2POutgoing => {
                 write!(f, "p2p_outgoing")
+            }
+            Subject::P2PIncoming => {
+                write!(f, "p2p_incoming")
+            }
+            Subject::P2POutgoing => {
+                write!(f, "p2p_outgoing")
+            }
+            Subject::MultisigInstruction => {
+                write!(f, "multisig_instructions")
+            }
+            Subject::MultisigEvent => {
+                write!(f, "multisig_event")
             }
         }
     }

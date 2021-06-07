@@ -1,5 +1,10 @@
 use chainflip_engine::{eth, sc_observer, settings::Settings, witness};
 
+mod mq;
+mod p2p;
+mod settings;
+mod signing;
+
 #[tokio::main]
 async fn main() {
     // init the logger
