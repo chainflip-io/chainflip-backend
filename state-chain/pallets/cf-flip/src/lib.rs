@@ -13,13 +13,13 @@
 //! Imbalances are not very intuitive but the idea is this: if you want to manipulate the balance of FLIP in the
 //! system, there always needs to be an equal and opposite
 //!
-//! A [PositiveImbalance] means that there is an excess of funds *in the accounts* that need to be accounted for. This
-//! requires a corresponding [NegativeImbalance]. A [NegativeImbalance] means there is an excess of funds *outside of
-//! the accounts* that requires a corresponding [PositiveImbalance]. If the imbalances are not canceled against each
+//! A [Surplus] means that there is an excess of funds *in the accounts* that needs to be reconciled. This
+//! requires a corresponding [Deficit]. A [Deficit] means there is an excess of funds *outside of
+//! the accounts* that requires a corresponding [Surplus]. If the imbalances are not canceled against each
 //! other, the [imbalances::RevertImbalance] implementation ensures that any excess funds are reverted to their source.
 //!
 //! ### Example
-//! A [burn](Pallet::burn) creates a [PositiveImbalance], since the total issuance has been reduced without
+//! A [burn](Pallet::burn) creates a [Surplus], since the total issuance has been reduced without
 //! changing the amounts held in the accounts. The accounts hold *more*  funds than there should be, so the imbalance is
 //! *positive*. This can be counteracted by [debiting](Pallet::debit) an account. The net effect is as if the account's
 //! tokens were burned.
@@ -40,7 +40,7 @@
 //! )
 //! ```
 //!
-//! If the [PositiveImbalance] created by the burn goes out of scope, the change is reverted, effectively minting the
+//! If the [Surplus] created by the burn goes out of scope, the change is reverted, effectively minting the
 //! tokens and adding them back to the total issuance.
 
 #[cfg(test)]
@@ -58,7 +58,7 @@ use frame_support::{
 	ensure,
 	traits::{Get, Imbalance, SignedImbalance},
 };
-use imbalances::{NegativeImbalance, PositiveImbalance};
+use imbalances::{Deficit, Surplus};
 
 use codec::{Codec, Decode, Encode};
 use sp_runtime::{DispatchError, RuntimeDebug, traits::{
@@ -181,39 +181,39 @@ impl<Balance: Saturating + Copy + Ord> FlipAccount<Balance> {
 	}
 }
 
-type FlipImbalance<T> = SignedImbalance<<T as Config>::Balance, PositiveImbalance<T>>;
+type FlipImbalance<T> = SignedImbalance<<T as Config>::Balance, Surplus<T>>;
 
-impl<T: Config> From<PositiveImbalance<T>> for FlipImbalance<T> {
-	fn from(p: PositiveImbalance<T>) -> Self {
+impl<T: Config> From<Surplus<T>> for FlipImbalance<T> {
+	fn from(p: Surplus<T>) -> Self {
 		SignedImbalance::Positive(p)
 	}
 }
 
-impl<T: Config> From<NegativeImbalance<T>> for FlipImbalance<T> {
-	fn from(n: NegativeImbalance<T>) -> Self {
+impl<T: Config> From<Deficit<T>> for FlipImbalance<T> {
+	fn from(n: Deficit<T>) -> Self {
 		SignedImbalance::Negative(n)
 	}
 }
 
 impl<T: Config> Pallet<T> {
 	/// Debits an account's staked balance. Ignores restricted funds, so can be used for slashing.
-	fn debit(account_id: &T::AccountId, amount: T::Balance) -> NegativeImbalance<T> {
+	fn debit(account_id: &T::AccountId, amount: T::Balance) -> Deficit<T> {
 		Account::<T>::mutate(account_id, |account| {
 			let deducted = account.stake.min(amount);
 			account.stake = account.stake.saturating_sub(deducted);
-			NegativeImbalance::from_acct(deducted, account_id.clone())
+			Deficit::from_acct(deducted, account_id.clone())
 		})
 	}
 
 	/// Credits an account with some staked funds. If the amount provided would result in overflow, does nothing.
-	fn credit(account_id: &T::AccountId, amount: T::Balance) -> PositiveImbalance<T> {
+	fn credit(account_id: &T::AccountId, amount: T::Balance) -> Surplus<T> {
 		Account::<T>::mutate(account_id, |account| {
 			match account.stake.checked_add(&amount) {
 				Some(result) => {
 					account.stake = result;
-					PositiveImbalance::from_acct(amount, account_id.clone())
+					Surplus::from_acct(amount, account_id.clone())
 				}
-				None => PositiveImbalance::zero(),
+				None => Surplus::zero(),
 			}
 		})
 	}
@@ -245,7 +245,7 @@ impl<T: Config> Pallet<T> {
 	/// [imbalances::RevertImbalance].
 	pub fn settle(
 		account_id: &T::AccountId,
-		imbalance: SignedImbalance<T::Balance, PositiveImbalance<T>>,
+		imbalance: SignedImbalance<T::Balance, Surplus<T>>,
 	) {
 		let settlement_source = ImbalanceSource::Account(account_id.clone());
 		let (from, to, amount) = match &imbalance {
@@ -268,9 +268,9 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Decreases total issuance and returns a corresponding imbalance that must be reconciled.
-	fn burn(mut amount: T::Balance) -> PositiveImbalance<T> {
+	fn burn(mut amount: T::Balance) -> Surplus<T> {
 		if amount.is_zero() {
-			return PositiveImbalance::zero();
+			return Surplus::zero();
 		}
 		TotalIssuance::<T>::mutate(|issued| {
 			*issued = issued.checked_sub(&amount).unwrap_or_else(|| {
@@ -278,13 +278,13 @@ impl<T: Config> Pallet<T> {
 				Zero::zero()
 			});
 		});
-		PositiveImbalance::from_burn(amount)
+		Surplus::from_burn(amount)
 	}
 
 	/// Increases total issuance and returns a corresponding imbalance that must be reconciled.
-	fn mint(mut amount: T::Balance) -> NegativeImbalance<T> {
+	fn mint(mut amount: T::Balance) -> Deficit<T> {
 		if amount.is_zero() {
-			return NegativeImbalance::zero();
+			return Deficit::zero();
 		}
 		TotalIssuance::<T>::mutate(|issued| {
 			*issued = issued.checked_add(&amount).unwrap_or_else(|| {
@@ -292,17 +292,17 @@ impl<T: Config> Pallet<T> {
 				T::Balance::max_value()
 			})
 		});
-		NegativeImbalance::from_mint(amount)
+		Deficit::from_mint(amount)
 	}
 
 	/// Create some funds that have been added to the chain from outside.
-	fn bridge_in(amount: T::Balance) -> NegativeImbalance<T> {
-		NegativeImbalance::from_offchain(amount)
+	fn bridge_in(amount: T::Balance) -> Deficit<T> {
+		Deficit::from_offchain(amount)
 	}
 
 	/// Send some funds off-chain.
-	fn bridge_out(amount: T::Balance) -> PositiveImbalance<T> {
-		PositiveImbalance::from_offchain(amount)
+	fn bridge_out(amount: T::Balance) -> Surplus<T> {
+		Surplus::from_offchain(amount)
 	}
 
 	/// 

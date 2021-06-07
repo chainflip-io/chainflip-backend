@@ -19,18 +19,18 @@ pub enum ImbalanceSource<AccountId> {
 }
 
 /// Opaque, move-only struct with private fields that serves as a token denoting that funds have been added from
-/// *somewhere*, and that we need to account for this by cancelling it against a corresponding [NegativeImbalance].
+/// *somewhere*, and that we need to account for this by cancelling it against a corresponding [Deficit].
 #[must_use]
 #[derive(RuntimeDebug, PartialEq, Eq)]
-pub struct PositiveImbalance<T: Config> {
+pub struct Surplus<T: Config> {
 	amount: T::Balance,
 	pub(super) source: ImbalanceSource<T::AccountId>,
 }
 
-impl<T: Config> PositiveImbalance<T> {
+impl<T: Config> Surplus<T> {
 	/// Create a new positive imbalance.
 	pub(super) fn new(amount: T::Balance, source: ImbalanceSource<T::AccountId>) -> Self {
-		PositiveImbalance { amount, source, }
+		Surplus { amount, source, }
 	}
 
 	pub fn from_burn(amount: T::Balance) -> Self {
@@ -47,18 +47,18 @@ impl<T: Config> PositiveImbalance<T> {
 }
 
 /// Opaque, move-only struct with private fields that serves as a token denoting that funds have been removed to
-/// *somewhere*, and that we need to account for this by cancelling it against a correspnding [PositiveImbalance].
+/// *somewhere*, and that we need to account for this by cancelling it against a correspnding [Surplus].
 #[must_use]
 #[derive(RuntimeDebug, PartialEq, Eq)]
-pub struct NegativeImbalance<T: Config> {
+pub struct Deficit<T: Config> {
 	amount: T::Balance,
 	pub(super) source: ImbalanceSource<T::AccountId>,
 }
 
-impl<T: Config> NegativeImbalance<T> {
+impl<T: Config> Deficit<T> {
 	/// Create a new negative imbalance from a balance.
 	pub(super) fn new(amount: T::Balance, source: ImbalanceSource<T::AccountId>) -> Self {
-		NegativeImbalance { amount, source }
+		Deficit { amount, source }
 	}
 
 	pub fn from_mint(amount: T::Balance) -> Self {
@@ -74,14 +74,14 @@ impl<T: Config> NegativeImbalance<T> {
 	}
 }
 
-impl<T: Config> TryDrop for PositiveImbalance<T> {
+impl<T: Config> TryDrop for Surplus<T> {
 	fn try_drop(self) -> result::Result<(), Self> {
 		self.drop_zero()
 	}
 }
 
-impl<T: Config> Imbalance<T::Balance> for PositiveImbalance<T> {
-	type Opposite = NegativeImbalance<T>;
+impl<T: Config> Imbalance<T::Balance> for Surplus<T> {
+	type Opposite = Deficit<T>;
 
 	fn zero() -> Self {
 		Self {
@@ -124,7 +124,7 @@ impl<T: Config> Imbalance<T::Balance> for PositiveImbalance<T> {
 		if a >= b {
 			Ok(Self::new(a - b, s_a))
 		} else {
-			Err(NegativeImbalance::new(b - a, s_b))
+			Err(Deficit::new(b - a, s_b))
 		}
 	}
 	fn peek(&self) -> T::Balance {
@@ -132,14 +132,14 @@ impl<T: Config> Imbalance<T::Balance> for PositiveImbalance<T> {
 	}
 }
 
-impl<T: Config> TryDrop for NegativeImbalance<T> {
+impl<T: Config> TryDrop for Deficit<T> {
 	fn try_drop(self) -> result::Result<(), Self> {
 		self.drop_zero()
 	}
 }
 
-impl<T: Config> Imbalance<T::Balance> for NegativeImbalance<T> {
-	type Opposite = PositiveImbalance<T>;
+impl<T: Config> Imbalance<T::Balance> for Deficit<T> {
+	type Opposite = Surplus<T>;
 
 	fn zero() -> Self {
 		Self {
@@ -182,7 +182,7 @@ impl<T: Config> Imbalance<T::Balance> for NegativeImbalance<T> {
 		if a >= b {
 			Ok(Self::new(a - b, s_a))
 		} else {
-			Err(PositiveImbalance::new(b - a, s_b))
+			Err(Surplus::new(b - a, s_b))
 		}
 	}
 	fn peek(&self) -> T::Balance {
@@ -195,7 +195,7 @@ pub trait RevertImbalance {
 	fn revert(&mut self);
 }
 
-impl<T: Config> RevertImbalance for PositiveImbalance<T> {
+impl<T: Config> RevertImbalance for Surplus<T> {
 	fn revert(&mut self) {
 		match &self.source {
 			ImbalanceSource::External => {
@@ -219,7 +219,7 @@ impl<T: Config> RevertImbalance for PositiveImbalance<T> {
 	}
 }
 
-impl<T: Config> RevertImbalance for NegativeImbalance<T> {
+impl<T: Config> RevertImbalance for Deficit<T> {
 	fn revert(&mut self) {
 		match &self.source {
 			ImbalanceSource::External => {
@@ -242,13 +242,13 @@ impl<T: Config> RevertImbalance for NegativeImbalance<T> {
 	}
 }
 
-impl<T: Config> Drop for PositiveImbalance<T> {
+impl<T: Config> Drop for Surplus<T> {
 	fn drop(&mut self) {
 		<Self as RevertImbalance>::revert(self)
 	}
 }
 
-impl<T: Config> Drop for NegativeImbalance<T> {
+impl<T: Config> Drop for Deficit<T> {
 	fn drop(&mut self) {
 		<Self as RevertImbalance>::revert(self)
 	}
