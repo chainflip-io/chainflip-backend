@@ -62,7 +62,7 @@ use imbalances::{Surplus, Deficit};
 
 use codec::{Codec, Decode, Encode};
 use sp_runtime::{DispatchError, RuntimeDebug, traits::{
-		AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedSub, MaybeSerializeDeserialize,
+		AtLeast32BitUnsigned, MaybeSerializeDeserialize,
 		Saturating, Zero,
 	}};
 use sp_std::{fmt::Debug, prelude::*};
@@ -192,17 +192,17 @@ impl<Balance: Saturating + Copy + Ord> FlipAccount<Balance> {
 	}
 }
 
-type FlipImbalance<T> = SignedImbalance<<T as Config>::Balance, Deficit<T>>;
+type FlipImbalance<T> = SignedImbalance<<T as Config>::Balance, Surplus<T>>;
 
-impl<T: Config> From<Deficit<T>> for FlipImbalance<T> {
-	fn from(p: Deficit<T>) -> Self {
-		SignedImbalance::Positive(p)
+impl<T: Config> From<Surplus<T>> for FlipImbalance<T> {
+	fn from(surplus: Surplus<T>) -> Self {
+		SignedImbalance::Positive(surplus)
 	}
 }
 
-impl<T: Config> From<Surplus<T>> for FlipImbalance<T> {
-	fn from(n: Surplus<T>) -> Self {
-		SignedImbalance::Negative(n)
+impl<T: Config> From<Deficit<T>> for FlipImbalance<T> {
+	fn from(deficit: Deficit<T>) -> Self {
+		SignedImbalance::Negative(deficit)
 	}
 }
 
@@ -234,15 +234,15 @@ impl<T: Config> Pallet<T> {
 		imbalance: FlipImbalance<T>,
 	) -> Result<(), FlipImbalance<T>> {
 		match imbalance {
-			SignedImbalance::Positive(p) => {
-				let amount = p.peek();
-				p.offset(Self::debit(account_id, amount))
+			SignedImbalance::Positive(surplus) => {
+				let amount = surplus.peek();
+				surplus.offset(Self::credit(account_id, amount))
 					.map(SignedImbalance::Positive)
 					.unwrap_or_else(SignedImbalance::Negative)
 			}
-			SignedImbalance::Negative(n) => {
-				let amount = n.peek();
-				n.offset(Self::credit(account_id, amount))
+			SignedImbalance::Negative(deficit) => {
+				let amount = deficit.peek();
+				deficit.offset(Self::debit(account_id, amount))
 					.map(SignedImbalance::Negative)
 					.unwrap_or_else(SignedImbalance::Positive)
 			}
@@ -252,22 +252,22 @@ impl<T: Config> Pallet<T> {
 
 	/// Settles an imbalance against an account. Any excess is reverted to source according to the rules defined in
 	/// [imbalances::RevertImbalance].
-	pub fn settle(
-		account_id: &T::AccountId,
-		imbalance: SignedImbalance<T::Balance, Deficit<T>>,
-	) {
+	pub fn settle(account_id: &T::AccountId, imbalance: FlipImbalance<T>) {
 		let settlement_source = ImbalanceSource::Account(account_id.clone());
 		let (from, to, amount) = match &imbalance {
-			SignedImbalance::Positive(p) => (settlement_source, p.source.clone(), p.peek()),
-			SignedImbalance::Negative(n) => (n.source.clone(), settlement_source, n.peek()),
+			SignedImbalance::Positive(surplus) => (surplus.source.clone(), settlement_source, surplus.peek()),
+			SignedImbalance::Negative(deficit) => (settlement_source, deficit.source.clone(), deficit.peek()),
 		};
 
 		let (settled, reverted) = Self::try_settle(account_id, imbalance)
+			// In the case of success, nothing to revert.
 			.map(|_| (amount, Zero::zero()))
+			// In case of failure, calculate the remainder.
 			.unwrap_or_else(|remaining| {
+				// Note `remaining` will be dropped and automatically reverted at the end of this block.
 				let (source, remainder) = match remaining {
-					SignedImbalance::Positive(p) => (p.source.clone(), p.peek()),
-					SignedImbalance::Negative(n) => (n.source.clone(), n.peek()),
+					SignedImbalance::Positive(surplus) => (surplus.source.clone(), surplus.peek()),
+					SignedImbalance::Negative(deficit) => (deficit.source.clone(), deficit.peek()),
 				};
 				Self::deposit_event(Event::<T>::RemainingImbalance(source, remainder));
 				(amount.saturating_sub(remainder), remainder)
@@ -302,7 +302,7 @@ impl<T: Config> cf_traits::Emissions for Pallet<T> {
 	type Balance = T::Balance;
 
 	fn burn_from(account_id: &Self::AccountId, amount: Self::Balance) {
-		let _ = Self::settle(account_id, Self::burn(amount).into());
+		Self::settle(account_id, Self::burn(amount).into());
 	}
 
 	fn try_burn_from(
@@ -318,7 +318,7 @@ impl<T: Config> cf_traits::Emissions for Pallet<T> {
 	}
 
 	fn mint_to(account_id: &Self::AccountId, amount: Self::Balance) {
-		let _ = Self::settle(account_id, Self::mint(amount).into());
+		Self::settle(account_id, Self::mint(amount).into());
 	}
 
 	fn vaporise(amount: Self::Balance) {
@@ -349,7 +349,7 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 		);
 
 		let incoming = Self::bridge_in(amount);
-		Self::settle(account_id, SignedImbalance::Negative(incoming));
+		Self::settle(account_id, SignedImbalance::Positive(incoming));
 		Ok(())
 	}
 
