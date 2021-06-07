@@ -51,7 +51,13 @@ impl FromStr for BitcoinAddress {
     ///
     /// assert!(BitcoinAddress::from_str("invalid").is_err());
     /// ```
+    #[deprecated = "BROKEN: Could mistake a bs58 encoded address as bech32 encoded and fail, if the
+        bs58 encoding result begins with bc1,BC1,tb1, or TB1. I didn't remove this code as that would cause
+        large parts of common to fail to compile. If needed use an external library to do this stuff."
+    ]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        panic!(); // See deprecated
+
         let bech32_network = match find_bech32_prefix(s) {
             // note that upper or lowercase is allowed but NOT mixed case
             "bc" | "BC" => Some(Network::Mainnet),
