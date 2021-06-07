@@ -6,7 +6,7 @@
 use crate::{self as Flip, Config};
 use frame_support::traits::{Imbalance, TryDrop};
 use sp_runtime::{
-	traits::{Saturating, Zero},
+	traits::{Bounded, CheckedAdd, CheckedSub, Saturating, Zero},
 	RuntimeDebug,
 };
 use sp_std::{mem, result};
@@ -20,7 +20,7 @@ pub enum ImbalanceSource<AccountId> {
 
 /// Opaque, move-only struct with private fields that serves as a token denoting that funds have been added from
 /// *somewhere*, and that we need to account for this by cancelling it against a corresponding [Deficit].
-#[must_use]
+#[must_use = "This surplus needs to be reconciled - if not any remaining imblance will be reverted."]
 #[derive(RuntimeDebug, PartialEq, Eq)]
 pub struct Surplus<T: Config> {
 	amount: T::Balance,
@@ -28,27 +28,50 @@ pub struct Surplus<T: Config> {
 }
 
 impl<T: Config> Surplus<T> {
-	/// Create a new positive imbalance.
-	pub(super) fn new(amount: T::Balance, source: ImbalanceSource<T::AccountId>) -> Self {
+	/// Create a new surplus.
+	fn new(amount: T::Balance, source: ImbalanceSource<T::AccountId>) -> Self {
 		Surplus { amount, source, }
 	}
 
-	pub fn from_burn(amount: T::Balance) -> Self {
+	/// Funds surplus from minting new funds. This surplus needs to be allocated somewhere or the mint will be
+	// [reverted](RevertImbalance).
+	pub(super) fn from_mint(mut amount: T::Balance) -> Self {
+		if amount.is_zero() {
+			return Self::new(Zero::zero(), ImbalanceSource::Emissions);
+		}
+		Flip::TotalIssuance::<T>::mutate(|total| {
+			*total = total.checked_add(&amount).unwrap_or_else(|| {
+				amount = T::Balance::max_value() - *total;
+				T::Balance::max_value()
+			})
+		});
 		Self::new(amount, ImbalanceSource::Emissions)
 	}
 
-	pub fn from_acct(amount: T::Balance, account_id: T::AccountId) -> Self {
-		Self::new(amount, ImbalanceSource::Account(account_id))
+	/// Funds surplus from an account.
+	///
+	/// Usually means that funds have been debited from an account.
+	pub(super) fn from_acct(account_id: &T::AccountId, amount: T::Balance) -> Self {
+		Flip::Account::<T>::mutate(account_id, |account| {
+			let deducted = account.stake.min(amount);
+			account.stake = account.stake.saturating_sub(deducted);
+			Flip::OnchainFunds::<T>::mutate(|total| *total = total.saturating_sub(deducted));
+			Self::new(deducted, ImbalanceSource::Account(account_id.clone()))
+		})
 	}
 
-	pub fn from_offchain(amount: T::Balance) -> Self {
+	/// Funds surplus from offchain. 
+	///
+	/// Means we have received funds from offchain; there will now be a surplus that needs to be allocated somewhere.
+	pub(super) fn from_offchain(amount: T::Balance) -> Self {
+		Flip::OffchainFunds::<T>::mutate(|total| *total = total.saturating_sub(amount));
 		Self::new(amount, ImbalanceSource::External)
 	}
 }
 
 /// Opaque, move-only struct with private fields that serves as a token denoting that funds have been removed to
-/// *somewhere*, and that we need to account for this by cancelling it against a correspnding [Surplus].
-#[must_use]
+/// *somewhere*, and that we need to account for this by cancelling it against a corresponding [Surplus].
+#[must_use = "This deficit needs to be reconciled - if not any remaining imblance will be reverted."]
 #[derive(RuntimeDebug, PartialEq, Eq)]
 pub struct Deficit<T: Config> {
 	amount: T::Balance,
@@ -56,20 +79,47 @@ pub struct Deficit<T: Config> {
 }
 
 impl<T: Config> Deficit<T> {
-	/// Create a new negative imbalance from a balance.
-	pub(super) fn new(amount: T::Balance, source: ImbalanceSource<T::AccountId>) -> Self {
+	/// Create a new deficit from a balance.
+	fn new(amount: T::Balance, source: ImbalanceSource<T::AccountId>) -> Self {
 		Deficit { amount, source }
 	}
 
-	pub fn from_mint(amount: T::Balance) -> Self {
+	/// Burn funds, creating a corresponding deficit. The deficit needs to be applied somewhere or the burn will be
+	/// [reverted](RevertImbalance).
+	pub(super) fn from_burn(mut amount: T::Balance) -> Self {
+		if amount.is_zero() {
+			return Self::new(Zero::zero(), ImbalanceSource::Emissions);
+		}
+		Flip::TotalIssuance::<T>::mutate(|issued| {
+			*issued = issued.checked_sub(&amount).unwrap_or_else(|| {
+				amount = *issued;
+				Zero::zero()
+			});
+		});
 		Self::new(amount, ImbalanceSource::Emissions)
 	}
 
-	pub fn from_acct(amount: T::Balance, account_id: T::AccountId) -> Self {
-		Self::new(amount, ImbalanceSource::Account(account_id))
+	/// Funds deficit from an account. 
+	///
+	/// Usually means that funds have been credited to an account.
+	pub(super) fn from_acct(account_id: &T::AccountId, amount: T::Balance) -> Self {
+		Flip::Account::<T>::mutate(account_id, |account| {
+			match account.stake.checked_add(&amount) {
+				Some(result) => {
+					account.stake = result;
+					Flip::OnchainFunds::<T>::mutate(|total| *total = total.saturating_add(amount));
+					Self::new(amount, ImbalanceSource::Account(account_id.clone()))
+				}
+				None => Self::new(Zero::zero(), ImbalanceSource::Account(account_id.clone()))
+			}
+		})
 	}
 
-	pub fn from_offchain(amount: T::Balance) -> Self {
+	/// Funds deficit from offchain. 
+	///
+	/// Means that funds have been sent offchain; we need to apply the resulting deficit somewhere.
+	pub(super) fn from_offchain(amount: T::Balance) -> Self {
+		Flip::OffchainFunds::<T>::mutate(|total| *total = total.saturating_add(amount));
 		Self::new(amount, ImbalanceSource::External)
 	}
 }
@@ -199,14 +249,15 @@ impl<T: Config> RevertImbalance for Surplus<T> {
 	fn revert(&mut self) {
 		match &self.source {
 			ImbalanceSource::External => {
-				// Some funds were bridged onto the chain but couldn't be allocated to an account. If this happens,
-				// forget them since they had no on-chain source to begin with.
-				// TODO: Allocate these to some 'error' account?
+				// Some funds were bridged onto the chain but weren't be allocated to an account. For all intents and
+				// purposes they are still offchain.
+				// TODO: Allocate these to some 'error' account? Eg. for refunds.
+				Flip::OffchainFunds::<T>::mutate(|total| *total = total.saturating_add(self.amount));
 			}
 			ImbalanceSource::Emissions => {
-				// This means some funds were burned without specifying the source. If this happens, we
-				// add this back on to the total issuance again.
-				Flip::TotalIssuance::<T>::mutate(|v| *v = v.saturating_add(self.amount))
+				// This means some Flip were minted without allocating them somewhere. We revert by burning
+				// them again.
+				Flip::TotalIssuance::<T>::mutate(|v| *v = v.saturating_sub(self.amount))
 			}
 			ImbalanceSource::Account(account_id) => {
 				// This means we added funds to an account but didn't specify a source. Deduct the funds from
@@ -224,12 +275,12 @@ impl<T: Config> RevertImbalance for Deficit<T> {
 		match &self.source {
 			ImbalanceSource::External => {
 				// This means we tried to move funds off-chain but didn't move them *from* anywhere
-				// log::error!("Accounting error: Funds moved off-chain without accounting for it on-chain.");
+				Flip::OffchainFunds::<T>::mutate(|total| *total = total.saturating_sub(self.amount));
 			},
 			ImbalanceSource::Emissions => {
-				// This means some Flip were minted without allocating them somewhere. We revert by burning
-				// them again.
-				Flip::TotalIssuance::<T>::mutate(|v| *v = v.saturating_sub(self.amount))
+				// This means some funds were burned without specifying the source. If this happens, we
+				// add this back on to the total issuance again.
+				Flip::TotalIssuance::<T>::mutate(|v| *v = v.saturating_add(self.amount))
 			}
 			ImbalanceSource::Account(account_id) => {
 				// This means we deducted funds from an account and did nothing with them. Re-credit the funds to
