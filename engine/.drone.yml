@@ -47,7 +47,7 @@ trigger:
   event:
     - pull_request
   paths:
-    - engine/**/*.rshasdfs
+    - engine/**/*.rs
 image_pull_secrets:
   - dockerconfigjson
 node_selector:
