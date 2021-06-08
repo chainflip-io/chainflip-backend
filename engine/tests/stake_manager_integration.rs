@@ -46,7 +46,7 @@ pub async fn test_all_stake_manager_events() {
     let sm_future = eth::stake_manager::start_stake_manager_witness(settings);
 
     // We just want the future to end, it should already have done it's job in 1 second
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(4), sm_future).await;
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(1), sm_future).await;
 
     println!("What's the next event?");
     let mut stream = pin_message_stream(stream);
