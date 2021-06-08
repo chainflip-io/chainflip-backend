@@ -13,13 +13,10 @@ use crate::{
         pin_message_stream, IMQClient, Subject,
     },
     p2p::{mock::NetworkMock, P2PConductor},
-    signing::client::MultisigInstruction,
+    signing::{client::MultisigInstruction, crypto::Parameters},
 };
 
-use super::{
-    client::{MultisigClient, MultisigEvent},
-    Parameters,
-};
+use super::client::{MultisigClient, MultisigEvent};
 
 async fn coordinate_signing(mc_clients: Vec<impl IMQClient>, active_indices: &[usize]) {
     // subscribe to "ready to sign"
@@ -86,12 +83,12 @@ async fn coordinate_signing(mc_clients: Vec<impl IMQClient>, active_indices: &[u
         .await
         .expect("Could not publish");
 
-        // mc.publish(
-        //     Subject::MultisigInstruction,
-        //     &MultisigInstruction::Sign(data2.clone()),
-        // )
-        // .await
-        // .expect("Could not publish");
+        mc.publish(
+            Subject::MultisigInstruction,
+            &MultisigInstruction::Sign(data2.clone(), active_indices.to_vec()),
+        )
+        .await
+        .expect("Could not publish");
     }
 
     // TODO: add a timeout here
@@ -116,9 +113,6 @@ async fn distributed_signing() {
 
     let t = 3;
     let n = 6;
-
-    // let t = 1;
-    // let n = 3;
 
     let mut rng = StdRng::seed_from_u64(0);
 

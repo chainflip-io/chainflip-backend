@@ -64,31 +64,6 @@ impl SigningStateManager {
         sender_id: usize,
         wdata: SigningDataWrapper,
     ) {
-        // enum SigningStage {
-        //     Idle,
-        //     AwaitingBroadcast1,
-        //     Phase2,
-        //     SharedSecretReady,
-        // }
-
-        // All of the messages we expect to receive are:
-        // BC1, Secret2, LocalSig
-
-        // M deemed not known if we are not currently processing it *and* it is not in the list of
-        // recently processed messages. (I.e. a message signed a long time ago is treated the same
-        // way as a malicious one.)
-
-        // If M is not known, we wait a minute or so (T1) before discarding it (and slashing the sender)
-        // If a signing request has been received, we start processing M, popping all of the packets
-        // for M from the queue.
-
-        // For Idle, we delay Broadcast1 messages
-        // For AwaitingBroadcast1 stage, we process Broadcast1 and delay Secret
-        // For Phase2 stage, we process Secret2 and delay LocalSig
-        // For SharedSecretReady, we process LocalSig, nothing to delay
-
-        // -----------------------------------------------------------------------------------
-
         let SigningDataWrapper { data, message } = wdata;
 
         debug!(
@@ -96,15 +71,9 @@ impl SigningStateManager {
             String::from_utf8_lossy(&message)
         );
 
-        // it is possible that the key is not ready yet...
-
         let key = self.signing_key.clone();
 
         let p2p_sender = self.p2p_sender.clone();
-
-        // We've received a p2p message. We might not have a record for this message yet,
-        // in which case we should create the record, but delay processing the data until
-        // we receive a request to sign it (TODO !!!).
 
         match self.signing_states.entry(message.clone()) {
             Entry::Occupied(mut state) => {

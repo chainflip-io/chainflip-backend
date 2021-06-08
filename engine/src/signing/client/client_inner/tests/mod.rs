@@ -1,6 +1,5 @@
 mod helpers;
 
-use log::*;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use lazy_static::lazy_static;
@@ -10,7 +9,7 @@ use crate::{
     signing::{
         client::{
             client_inner::{
-                client_inner::KeygenStage,
+                keygen_state::KeygenStage,
                 signing_state::SigningStage,
                 tests::helpers::{
                     bc1_to_p2p_signing, generate_valid_keygen_data,
@@ -25,48 +24,10 @@ use crate::{
     },
 };
 
-
 use super::{
     client_inner::{KeyGenMessage, MultisigClientInner, MultisigMessage, SigningDataWrapper},
     InnerEvent,
 };
-
-// - For signing, phase1 should be delayed if no request to sign (RTS)
-// - If RTS is recieved shortly after, phase1 should be processed
-// - If still no RTS, the sender of phase1 should be penalized
-// - Any phase1 after RTS should be processed
-
-/// For signing, phase1 should be delayed if no request to sign (RTS)
-#[test]
-fn phase1_before_rts_should_be_delayed() {
-
-    // Initialize state as:
-    // 1. ready to sign
-    // 2. haven't received RTS
-
-    // As a result:
-    // (1) no message should be processed (at the very least, it should not trigger "phase2")
-    // (2) the message should be recorded, so it can be processed later
-
-    // How to test:
-    // Option 1: Check that we are still in stage 1. Then send RTS and test that we've advanced into stage2.
-    // Option 2: ???
-
-    // let params = Parameters {t: 1, n: 2};
-    // let p2p_sender = ...;
-    // let ssm = SigningStateManager(params, p2p_sender);
-    // let m = "Message";
-
-    // let bc1 = create_bc1(m);
-
-    // process_filtered_or_delay_signing_message(sender1, bc1)
-
-    // assert: ssm is still in "awaiting signing request" stage
-
-    // ssm.on_signing_request(m)
-
-    // assert: ssm is in "phase2" (n=2)
-}
 
 fn create_bc1(signer_idx: usize) -> Broadcast1 {
     let key = Keys::phase1_create(signer_idx);
@@ -81,10 +42,7 @@ fn create_bc1(signer_idx: usize) -> Broadcast1 {
 
 use std::{sync::Once, time::Duration};
 
-use super::{
-    client_inner::{Broadcast1, SigningData},
-    signing_state_manager::SigningStateManager,
-};
+use super::{client_inner::Broadcast1, signing_state_manager::SigningStateManager};
 
 static INIT: Once = Once::new();
 
@@ -101,7 +59,7 @@ fn init_logs_once() {
 
 struct TestContext {
     ssm: SigningStateManager,
-    event_receiver: UnboundedReceiver<InnerEvent>,
+    _event_receiver: UnboundedReceiver<InnerEvent>,
 }
 
 impl TestContext {
@@ -121,7 +79,7 @@ impl TestContext {
 
         TestContext {
             ssm,
-            event_receiver: p2p_receiver,
+            _event_receiver: p2p_receiver,
         }
     }
 }
@@ -480,7 +438,7 @@ async fn request_to_sign_before_key_ready() {
     );
 }
 
-// TODO: make sure that we don't process p2p data at index signer_id which is our own!
+// 
 
 // What needs to be tested (unit tests)
 // DONE:
@@ -490,8 +448,9 @@ async fn request_to_sign_before_key_ready() {
 
 // TO DO:
 // - Delayed data expires on timeout
-// - Signing phases do timeout
+// - Signing phases do timeout (only tested for BC1 currently)
 // - Parties cannot send two messages for the same phase of signing/keygen
 // - When unable to make progress, the state (Signing/Keygen) should be correctly reset
 // (i.e. past failures don't impact future signing ceremonies)
 // - Should be able to generate new signing keys
+// - make sure that we don't process p2p data at index signer_id which is our own

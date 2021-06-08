@@ -16,7 +16,7 @@
     @license GPL-3.0+ <https://github.com/KZen-networks/multisig-schnorr/blob/master/LICENSE>
 */
 /// following the variant used in bip-schnorr: https://github.com/sipa/bips/blob/bip-schnorr/bip-schnorr.mediawiki
-use crate::signing::error::Error::{self, InvalidKey, InvalidSS, InvalidSig};
+use super::error::Error::{self, InvalidKey, InvalidSS, InvalidSig};
 
 use curv::arithmetic::traits::*;
 
@@ -29,10 +29,7 @@ use curv::cryptographic_primitives::hashing::traits::Hash;
 use curv::cryptographic_primitives::secret_sharing::feldman_vss::VerifiableSS;
 use curv::BigInt;
 
-use log::{debug, trace};
 use serde::{Deserialize, Serialize};
-
-// TODO: see if it is better to import the library instead
 
 type GE = curv::elliptic::curves::secp256_k1::GE;
 type FE = curv::elliptic::curves::secp256_k1::FE;
@@ -105,13 +102,6 @@ impl Keys {
                 ) == bc1_vec[i].com
             })
             .all(|x| x == true);
-
-        trace!(
-            "Share at indices, parties: {:?}, share count: {:?}",
-            parties,
-            params.share_count
-        );
-
         let (vss_scheme, secret_shares) = VerifiableSS::share_at_indices(
             params.threshold,
             params.share_count,
@@ -139,8 +129,6 @@ impl Keys {
 
         let correct_ss_verify = (0..y_vec.len())
             .map(|i| {
-                trace!("  validating share from [{}] as player {}", i, index);
-                // info!("Commitments: {:#?}", vss_scheme_vec[i].commitments);
                 vss_scheme_vec[i]
                     .validate_share(&secret_shares_vec[i], *index)
                     .is_ok()
@@ -148,11 +136,8 @@ impl Keys {
             })
             .all(|x| x == true);
 
-        // let correct_ss_verify = false;
-
         match correct_ss_verify {
             true => {
-                trace!("Correct ss verify");
                 let mut y_vec_iter = y_vec.iter();
                 let y0 = y_vec_iter.next().unwrap();
                 let y = y_vec_iter.fold(y0.clone(), |acc, x| acc + x);

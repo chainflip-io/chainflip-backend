@@ -49,10 +49,7 @@ impl<M: IMQClient + Send + Sync> EventSink<StakingEvent> for StakeManagerSink<M>
 #[cfg(test)]
 mod tests {
 
-    use crate::mq::{
-        self,
-        nats_client::{NatsMQClient, NatsMQClientFactory},
-    };
+    use crate::mq::nats_client::{NatsMQClient, NatsMQClientFactory};
 
     use super::*;
 

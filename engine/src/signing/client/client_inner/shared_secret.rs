@@ -1,17 +1,14 @@
 use crate::{
     p2p::ValidatorId,
-    signing::{utils, KeyGenBroadcastMessage1, Keys, Parameters},
+    signing::{
+        client::client_inner::utils,
+        crypto::{BigInt, KeyGenBroadcastMessage1, Keys, Parameters, VerifiableSS, FE, GE},
+    },
 };
 
 use super::{
     client_inner::{Broadcast1, Secret2},
     signing_state::KeygenResult,
-};
-
-use curv::{
-    cryptographic_primitives::secret_sharing::feldman_vss::VerifiableSS,
-    elliptic::curves::secp256_k1::{FE, GE},
-    BigInt,
 };
 
 use log::*;
@@ -62,19 +59,6 @@ impl SharedSecretState {
         self.bc1_vec.push(bc1.bc1);
         self.blind_vec.push(bc1.blind);
         self.y_vec.push(bc1.y_i);
-
-        // TODO: We should make sure that we ignore indexes that are no longer relevent
-
-        {
-
-            // if self.signer_idx == 1 {
-            // let mut order = self.phase1_order.clone();
-            // order.sort_unstable();
-            // trace!("[{}] bc1 senders: {:?}", self.signer_idx, order);
-            // trace!("[{}] Needed: {}/{}", self.signer_idx, self.bc1_vec.len(), self.min_parties);
-
-            // }
-        }
 
         let full = self.bc1_vec.len() == self.min_parties;
 

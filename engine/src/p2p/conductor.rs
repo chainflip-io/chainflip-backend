@@ -75,8 +75,6 @@ mod tests {
 
     use std::time::Duration;
 
-    use nats_test_server::NatsTestServer;
-
     use crate::{
         mq::mq_mock::MQMock,
         p2p::{mock::NetworkMock, P2PMessageCommand, ValidatorId},
@@ -98,7 +96,6 @@ mod tests {
 
         // Validator 1 setup
         const ID_1: ValidatorId = 1;
-        // let server = NatsTestServer::build().spawn();
 
         let mq = MQMock::new();
 
@@ -127,12 +124,6 @@ mod tests {
         };
 
         let write_fut = async move {
-            // For whatever reason when NatsTestServer is used (does not seem to be
-            // the case for the real nats server), there is a few millisecond window
-            // right after I've subscribed to the stream before I actually start
-            // getting messages (i.e. some messages might be dropped if I don't wait)
-            tokio::time::sleep(Duration::from_millis(50)).await;
-
             mc1_copy
                 .publish(Subject::P2POutgoing, &message)
                 .await

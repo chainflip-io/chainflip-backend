@@ -6,8 +6,6 @@ use chainflip_common::types::coin::Coin;
 use futures::Stream;
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::settings;
-
 #[async_trait]
 pub trait IMQClientFactory<IMQ: IMQClient> {
     async fn connect(&self) -> anyhow::Result<Box<IMQ>>;
@@ -41,6 +39,7 @@ pub fn pin_message_stream<M>(stream: Box<dyn Stream<Item = M>>) -> Pin<Box<dyn S
     stream.into()
 }
 /// Subjects that can be published / subscribed to
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Subject {
     Witness(Coin),
@@ -93,12 +92,6 @@ impl fmt::Display for Subject {
             }
             Subject::StateChainClaimIssued => {
                 write!(f, "state_chain_claim_issued")
-            }
-            Subject::P2PIncoming => {
-                write!(f, "p2p_incoming")
-            }
-            Subject::P2POutgoing => {
-                write!(f, "p2p_outgoing")
             }
             Subject::P2PIncoming => {
                 write!(f, "p2p_incoming")

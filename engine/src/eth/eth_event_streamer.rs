@@ -140,8 +140,6 @@ mod tests {
     #[ignore = "Depends on a running ganache instance, runs forever, useful for manually testing / observing incoming events"]
     async fn subscribe_to_stake_manager_events() {
         let stake_manager = StakeManager::load(CONTRACT_ADDRESS).unwrap();
-        // create in memory nats server
-        let nats_server = nats_test_server::NatsTestServer::build().spawn();
 
         let mq_settings = settings::test_utils::new_test_settings()
             .unwrap()

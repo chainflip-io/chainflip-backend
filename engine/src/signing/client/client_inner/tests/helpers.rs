@@ -9,9 +9,10 @@ use crate::{
         client::{
             client_inner::{
                 client_inner::{
-                    Broadcast1, KeyGenMessage, KeygenStage, MultisigMessage, Secret2, SigningData,
+                    Broadcast1, KeyGenMessage, MultisigMessage, Secret2, SigningData,
                     SigningDataWrapper,
                 },
+                keygen_state::KeygenStage,
                 signing_state::SigningStage,
                 InnerEvent, InnerSignal, MultisigClientInner,
             },

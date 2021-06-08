@@ -1,9 +1,5 @@
 use std::time::Instant;
 
-use curv::{
-    cryptographic_primitives::secret_sharing::feldman_vss::VerifiableSS,
-    elliptic::curves::secp256_k1::GE,
-};
 use itertools::Itertools;
 use log::*;
 use tokio::sync::mpsc;
@@ -13,9 +9,8 @@ use super::client_inner::{InnerEvent, MultisigMessage, SigningDataWrapper};
 use crate::{
     p2p::P2PMessageCommand,
     signing::{
-        client::client_inner::InnerSignal,
-        crypto::{Keys, LocalSig, Parameters, SharedKeys, Signature},
-        utils,
+        client::client_inner::{utils, InnerSignal},
+        crypto::{Keys, LocalSig, Parameters, SharedKeys, Signature, VerifiableSS, GE},
     },
 };
 
@@ -42,7 +37,6 @@ pub(super) enum SigningStage {
 pub(super) struct SigningState {
     signer_idx: usize,
     pub(super) message: Vec<u8>,
-    // TODO: avoid copying this
     /// The key might not be available yet, as we might want to
     /// keep some state even before we've finalized keygen
     signing_key: Option<KeygenResult>,
@@ -152,32 +146,35 @@ impl SigningState {
         let verify_local_sig =
             LocalSig::verify_local_sigs(&self.local_sigs, &parties_index_vec, &key.vss, &ss.vss);
 
-        // TODO: reset the signing process instead
-        let vss_sum_local_sigs = verify_local_sig.expect("verification failed");
+        match verify_local_sig {
+            Ok(vss_sum_local_sigs) => {
+                // each party / dealer can generate the signature
+                let signature = Signature::generate(
+                    &vss_sum_local_sigs,
+                    &self.local_sigs,
+                    &parties_index_vec,
+                    ss.y_sum,
+                );
+                let verify_sig = signature.verify(&self.message, &key.y_sum);
+                assert!(verify_sig.is_ok());
 
-        // each party / dealer can generate the signature
-        let signature = Signature::generate(
-            &vss_sum_local_sigs,
-            &self.local_sigs,
-            &parties_index_vec,
-            ss.y_sum,
-        );
-        let verify_sig = signature.verify(&self.message, &key.y_sum);
-        assert!(verify_sig.is_ok());
-
-        if verify_sig.is_ok() {
-            info!("Generated signature is correct! 🎉🎉🎉");
-            let _ = self
-                .event_sender
-                .send(InnerEvent::InnerSignal(InnerSignal::MessageSigned(
-                    self.message.clone(),
-                )));
+                if verify_sig.is_ok() {
+                    info!("Generated signature is correct! 🎉");
+                    let _ = self.event_sender.send(InnerEvent::InnerSignal(
+                        InnerSignal::MessageSigned(self.message.clone()),
+                    ));
+                }
+            }
+            Err(_) => {
+                // TODO: emit a signal and remove local state
+                warn!("Invalid local signatures, aborting. ❌");
+            }
         }
     }
 
     fn process_delayed(&mut self) {
         while let Some((sender_id, msg)) = self.delayed_data.pop() {
-            debug!("Processing a delayed message from [{}]", sender_id);
+            trace!("Processing a delayed message from [{}]", sender_id);
             self.process_signing_message(sender_id, msg);
         }
     }
@@ -197,7 +194,7 @@ impl SigningState {
         self.stage = stage;
         let elapsed = self.cur_phase_timestamp.elapsed();
         self.cur_phase_timestamp = Instant::now();
-        info!(
+        debug!(
             "Entering phase {:?}. Previous phase took: {:?}",
             stage, elapsed
         );
@@ -217,7 +214,7 @@ impl SigningState {
 
         let msg = MultisigMessage::SigningMessage(bc1);
 
-        debug!("[{}] Signing: created BC1", self.signer_idx);
+        trace!("[{}] Signing: created BC1", self.signer_idx);
 
         self.broadcast(msg);
 
@@ -225,7 +222,7 @@ impl SigningState {
     }
 
     fn add_delayed(&mut self, sender_id: usize, data: SigningData) {
-        debug!("Added a delayed message");
+        trace!("Added a delayed message");
         self.delayed_data.push((sender_id, data));
     }
 
@@ -285,14 +282,11 @@ impl SigningState {
                 self.add_delayed(sender_id, SigningData::LocalSig(sig));
             }
             (SigningStage::AwaitingLocalSig3, SigningData::LocalSig(sig)) => {
-                debug!("[{}] Received Local Sig", self.signer_idx);
+                trace!("[{}] Received Local Sig", self.signer_idx);
 
                 self.on_local_sig_received(sender_id, sig);
             }
             _ => {
-                // TODO: make sure we only penalize node that don't submit data
-                // in a timely manner (but not necessarily before we've advanced
-                // to the next phase)
                 warn!("Dropping unexpected message for stage {:?}", self.stage);
             }
         }
@@ -386,6 +380,6 @@ impl SigningState {
 
         self.broadcast(msg);
 
-        info!("[{}] generated local sig!", self.signer_idx);
+        debug!("[{}] generated local sig!", self.signer_idx);
     }
 }

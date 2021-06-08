@@ -2,25 +2,19 @@ mod client_inner;
 
 use std::{marker::PhantomData, time::Duration};
 
-use crate::mq::{IMQClient, IMQClientFactory, Subject};
+use crate::mq::{pin_message_stream, IMQClient, IMQClientFactory, Subject};
 use anyhow::Result;
 use futures::StreamExt;
 use log::*;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
-use crate::{mq::pin_message_stream, p2p::P2PMessage, signing::client::client_inner::InnerSignal};
+use crate::p2p::P2PMessage;
 
-use self::client_inner::{InnerEvent, MultisigClientInner};
+use self::client_inner::{InnerEvent, InnerSignal, MultisigClientInner};
 
-use super::{MessageHash, Parameters};
+use super::{crypto::Parameters, MessageHash};
 
 use tokio::sync::mpsc;
-
-// MultisigClient
-// has two "big" states: KeyGen, Signing
-// listens to multisig messages: KeyGenMessage, SigningMessage
-// Rejects messages not for its current state
-// We should probably save keygen messages just in case our node is behind, so we could process them later
 
 use serde::{Deserialize, Serialize};
 
@@ -58,8 +52,6 @@ where
     MQ: IMQClient,
     F: IMQClientFactory<MQ>,
 {
-    // mq2 is used for sending p2p messages (TODO: pass in the server's address instead, so we
-    // can create as many MQ clients as we want)
     pub fn new(factory: F, idx: usize, params: Parameters) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
 
@@ -76,7 +68,6 @@ where
         while let Some(event) = receiver.recv().await {
             match event {
                 InnerEvent::P2PMessageCommand(msg) => {
-                    // debug!("[{}] sending a message to [{}]", idx, msg.destination);
                     // TODO: do not send one by one
                     if let Err(err) = mq.publish(Subject::P2POutgoing, &msg).await {
                         error!("Could not publish message to MQ: {}", err);
@@ -92,21 +83,12 @@ where
                         .await
                         .expect("Failed to publish");
                 }
-                _ => {
-                    error!("Should process event");
-                }
             }
         }
     }
 
-    /// Start listening on the p2p connection
+    /// Start listening on the p2p connection and MQ
     pub async fn run(mut self) {
-        // Should listen to:
-        // - MQ messages
-        // - p2p messages
-        //   - p2p messages should be saved to a buffer
-        //   - this module will process messages by reading the buffer
-
         let receiver = self.inner_event_receiver.take().unwrap();
 
         let mq = *self.factory.connect().await.unwrap();
