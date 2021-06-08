@@ -1,3 +1,4 @@
+#![feature(assert_matches)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 //! # Chainflip Auction Module
@@ -9,14 +10,20 @@
 //! - [`Module`]
 //!
 //! ## Overview
-//! The module contains functionality to run a contest or auction in which a set of
-//! bidders are provided via the `BidderProvider` trait.  Calling `process()` we push forward the
-//! state of our auction.  First we are looking for `Bidders` with which we validate their suitability
-//! for the next phase `Auction`.  During this phase we run an auction which selects a list of winners
-//! sets a minimum bid of what was need to get in the winning list and set the state to `Completed`.
-//! The caller would then finally call `process()` to clear the auction in which it would move to
-//! `Bidders` waiting for the next auction to be started.  At any point in time the auction can be
-//! aborted returning state to `Bidders`
+//! The module contains functionality to run a contest or auction in which a set of bidders are
+//! provided via the `BidderProvider` trait.  Calling `Auction::process()` we push forward the state
+//! of our auction.
+//!
+//! First we are looking for bidders in the `AuctionPhase::WaitingForBids` phase in which we
+//! validate their suitability for the next phase `AuctionPhase::BidsTaken`.
+//! During the `AuctionPhase::BidsTaken` phase we run an auction which selects a list of winners and
+//! sets the state to `WinnersSelected` and giving us our winners and the minimum bid.
+//! The caller would then finally call `Auction::process()` to finalise the auction, this can only
+//! happen on confirmation via the `AuctionConfirmation` trait. From which it would move to
+//! `WaitingForBids` for the next auction to be started.
+//!
+//! At any point in time the auction can be aborted using `Auction::abort()` returning state to
+//! `WaitingForBids`.
 //!
 //! ## Terminology
 //! - **Bidder:** An entity that has placed a bid and would hope to be included in the winning set
@@ -29,6 +36,8 @@
 mod mock;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+#[macro_use] extern crate assert_matches;
 
 pub use pallet::*;
 use sp_runtime::traits::{AtLeast32BitUnsigned, Zero, One};
@@ -36,7 +45,7 @@ use sp_std::prelude::*;
 use frame_support::pallet_prelude::*;
 use frame_support::traits::ValidatorRegistration;
 use sp_std::cmp::min;
-use cf_traits::{Auction, AuctionPhase, AuctionError, BidderProvider, Bid, AuctionRange, AuctionConfirmation};
+use cf_traits::{Auction, AuctionPhase, AuctionError, BidderProvider, AuctionRange, AuctionConfirmation};
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -55,7 +64,7 @@ pub mod pallet {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// An amount for a bid
-		type Amount: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
+		type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 		/// An identity for a validator
 		type ValidatorId: Member + Parameter;
 		/// Providing bidders
@@ -78,22 +87,7 @@ pub mod pallet {
 	/// Current phase of the auction
 	#[pallet::storage]
 	#[pallet::getter(fn current_phase)]
-	pub(super) type CurrentPhase<T: Config> = StorageValue<_, AuctionPhase, ValueQuery>;
-
-	/// The minimum bid required to be in the winning set
-	#[pallet::storage]
-	#[pallet::getter(fn minimum_bid)]
-	pub(super) type MinimumBid<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
-
-	/// The list of current bidders for the auction
-	#[pallet::storage]
-	#[pallet::getter(fn bidders)]
-	pub(super) type Bidders<T: Config> = StorageValue<_, Vec<(T::ValidatorId, T::Amount)>, ValueQuery>;
-
-	/// The list of our winners for this auction
-	#[pallet::storage]
-	#[pallet::getter(fn winners)]
-	pub(super) type Winners<T: Config> = StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
+	pub(super) type CurrentPhase<T: Config> = StorageValue<_, AuctionPhase<T::ValidatorId, T::Amount>, ValueQuery>;
 
 	/// Size range for number of bidders in auction (min, max)
 	#[pallet::storage]
@@ -200,7 +194,10 @@ impl<T: Config> Auction for Pallet<T> {
 	fn set_auction_range(range: AuctionRange) -> Result<AuctionRange, AuctionError> {
 		let (low, high) = range;
 
-		if low == high || low < T::MinAuctionSize::get() || high < T::MinAuctionSize::get() {
+		if low == high
+			|| low < T::MinAuctionSize::get()
+			|| high < T::MinAuctionSize::get()
+			|| high < low {
 			return Err(AuctionError::InvalidRange);
 		}
 
@@ -213,7 +210,7 @@ impl<T: Config> Auction for Pallet<T> {
 		Ok(old)
 	}
 
-	fn phase() -> AuctionPhase { <CurrentPhase<T>>::get() }
+	fn phase() -> AuctionPhase<Self::ValidatorId, Self::Amount> { <CurrentPhase<T>>::get() }
 
 	fn waiting_on_bids() -> bool {
 		Self::phase() == AuctionPhase::WaitingForBids
@@ -223,7 +220,7 @@ impl<T: Config> Auction for Pallet<T> {
 	///
 	/// At each phase we assess the bidders based on a fixed set of criteria which results
 	/// in us arriving at a winning list and a bond set for this auction
-	fn process() -> Result<AuctionPhase, AuctionError> {
+	fn process() -> Result<AuctionPhase<Self::ValidatorId, Self::Amount>, AuctionError> {
 
 		return match <CurrentPhase<T>>::get() {
 			// Run some basic rules on what we consider as valid bidders
@@ -243,10 +240,8 @@ impl<T: Config> Auction for Pallet<T> {
 					return Err(AuctionError::MinValidatorSize)
 				};
 
-				<Winners<T>>::kill();
-				<MinimumBid<T>>::kill();
-				<Bidders<T>>::put(bidders);
-				<CurrentPhase<T>>::put(AuctionPhase::BidsTaken);
+				let phase = AuctionPhase::BidsTaken(bidders);
+				<CurrentPhase<T>>::put(phase.clone());
 				<AuctionToConfirm::<T>>::set(true);
 
 				<CurrentAuctionIndex<T>>::mutate(|idx| {
@@ -255,14 +250,13 @@ impl<T: Config> Auction for Pallet<T> {
 
 				Self::deposit_event(Event::AuctionStarted(<CurrentAuctionIndex<T>>::get()));
 
-				Ok(AuctionPhase::BidsTaken)
+				Ok(phase)
 			},
 			// We sort by bid and cut the size of the set based on auction size range
 			// If we have a valid set, within the size range, we store this set as the
 			// 'winners' of this auction, change the state to 'Completed' and store the
 			// minimum bid needed to be included in the set.
-			AuctionPhase::BidsTaken => {
-				let mut bidders = <Bidders<T>>::get();
+			AuctionPhase::BidsTaken(mut bidders) => {
 				if !bidders.is_empty() {
 					bidders.sort_unstable_by_key(|k| k.1);
 					bidders.reverse();
@@ -271,14 +265,12 @@ impl<T: Config> Auction for Pallet<T> {
 					if let Some(bidders) = bidders {
 						if let Some((_, min_bid)) = bidders.last() {
 							let winners: Vec<T::ValidatorId> = bidders.iter().map(|i| i.0.clone()).collect();
-
-							<MinimumBid<T>>::put(min_bid);
-							<Winners<T>>::put(winners);
-							<CurrentPhase<T>>::put(AuctionPhase::WinnersSelected);
+							let phase = AuctionPhase::WinnersSelected((winners, *min_bid));
+							<CurrentPhase<T>>::put(phase.clone());
 
 							Self::deposit_event(Event::AuctionCompleted(<CurrentAuctionIndex<T>>::get()));
 
-							return Ok(AuctionPhase::WinnersSelected);
+							return Ok(phase);
 						}
 					}
 				}
@@ -288,12 +280,11 @@ impl<T: Config> Auction for Pallet<T> {
 			// Things have gone well and we have a set of 'Winners', congratulations.
 			// We are ready to call this an auction a day resetting the bidders in storage and
 			// setting the state ready for a new set of 'Bidders'
-			AuctionPhase::WinnersSelected => {
+			AuctionPhase::WinnersSelected(_) => {
 				if !Self::Confirmation::confirmed() {
 					return Err(AuctionError::NotConfirmed);
 				}
 
-				<Bidders<T>>::kill();
 				<CurrentPhase<T>>::put(AuctionPhase::WaitingForBids);
 				Self::deposit_event(Event::AwaitingBidders);
 
@@ -302,24 +293,9 @@ impl<T: Config> Auction for Pallet<T> {
 		};
 	}
 
-	fn bidders() -> Vec<Bid<Self>> {
-		<Bidders<T>>::get()
-	}
-
-	fn winners() -> Vec<Self::ValidatorId> {
-		<Winners<T>>::get()
-	}
-
-	fn minimum_bid() -> Self::Amount {
-		<MinimumBid<T>>::get()
-	}
-
 	fn abort() {
-		<Winners<T>>::kill();
-		<Bidders<T>>::kill();
 		<CurrentPhase<T>>::put(AuctionPhase::WaitingForBids);
 		<AuctionToConfirm::<T>>::kill();
-		<MinimumBid::<T>>::kill();
 		Self::deposit_event(Event::AuctionAborted(<CurrentAuctionIndex<T>>::get()));
 	}
 }

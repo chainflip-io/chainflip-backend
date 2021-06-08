@@ -22,8 +22,8 @@ use frame_support::traits::ValidatorRegistration;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-type Amount = u64;
-type ValidatorId = u64;
+pub type Amount = u64;
+pub type ValidatorId = u64;
 
 impl WeightInfo for () {
 	fn set_blocks_for_epoch() -> u64 { 0 as Weight }
@@ -34,7 +34,7 @@ impl WeightInfo for () {
 thread_local! {
 	pub static CANDIDATE_IDX: RefCell<u64> = RefCell::new(0);
 	pub static CURRENT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
-	pub static PHASE: RefCell<AuctionPhase> =  RefCell::new(AuctionPhase::WaitingForBids);
+	pub static PHASE: RefCell<AuctionPhase<ValidatorId, Amount>> =  RefCell::new(AuctionPhase::WaitingForBids);
 	pub static BIDDERS: RefCell<Vec<(u64, u64)>> = RefCell::new(vec![]);
 	pub static WINNERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 	pub static CONFIRM: RefCell<bool> = RefCell::new(false);

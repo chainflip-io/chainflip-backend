@@ -1,3 +1,4 @@
+#![feature(assert_matches)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 //! # Chainflip Validator Module
@@ -44,6 +45,8 @@
 mod mock;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+#[macro_use] extern crate assert_matches;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -256,7 +259,10 @@ impl<T: Config> EpochInfo for Pallet<T> {
     }
 
     fn bond() -> Self::Amount {
-        T::Auction::minimum_bid()
+        match T::Auction::phase() {
+            AuctionPhase::WinnersSelected((_, min_bid)) => min_bid,
+            _ => Zero::zero()
+        }
     }
 
     fn epoch_index() -> Self::EpochIndex {
@@ -304,7 +310,7 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
                 Self::should_end_session(now) &&
                     T::Auction::process().and(T::Auction::process()).is_ok()
             }
-            AuctionPhase::WinnersSelected => {
+            AuctionPhase::WinnersSelected(_) => {
                 // Confirmation of winners, we need to finally process them
                 // This checks whether this is confirmable via the `AuctionConfirmation` trait
                 T::Auction::process().is_ok()
@@ -335,6 +341,15 @@ impl<T: Config> Pallet<T> {
 
         return end;
     }
+
+    /// Generate our validator lookup list
+    fn generate_lookup() {
+        // Update our internal list of validators
+        ValidatorLookup::<T>::remove_all();
+        for validator in <pallet_session::Module<T>>::validators() {
+            ValidatorLookup::<T>::insert(validator, ());
+        }
+    }
 }
 
 /// Provides the new set of validators to the session module when session is being rotated.
@@ -343,8 +358,8 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
     fn new_session(_new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
         return match T::Auction::phase() {
             // Successfully completed the process, these are the next set of validators to be used
-            AuctionPhase::WinnersSelected => {
-                Some(T::Auction::winners())
+            AuctionPhase::WinnersSelected((winners, _)) => {
+                Some(winners)
             }
             // A rotation has occurred, we emit an event of the new epoch and compile a list of
             // validators for validator lookup
@@ -356,11 +371,7 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
                 });
                 // Emit an event
                 Self::deposit_event(Event::NewEpoch(new_epoch));
-                // Update our internal list of validators
-                ValidatorLookup::<T>::remove_all();
-                for validator in <pallet_session::Module<T>>::validators() {
-                    ValidatorLookup::<T>::insert(validator, ());
-                }
+                Self::generate_lookup();
 
                 None
             }
@@ -374,6 +385,7 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
     /// The session is starting
     fn start_session(_start_index: SessionIndex) {}
 }
+
 
 impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
     fn estimate_next_session_rotation(_now: T::BlockNumber) -> Option<T::BlockNumber> {

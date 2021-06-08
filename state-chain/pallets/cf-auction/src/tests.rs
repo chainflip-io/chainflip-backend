@@ -2,6 +2,7 @@ mod test {
 	use crate::*;
 	use crate::{mock::*};
 	use frame_support::{assert_ok, assert_noop};
+
 	fn last_event() -> mock::Event {
 		frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
 	}
@@ -11,26 +12,21 @@ mod test {
 		new_test_ext().execute_with(|| {
 			// Create a test set of bidders
 			let invalid_bid = (1, 0);
-			let min_bid = (2, 2);
+			let low_bid = (2, 2);
 			let joe_bid = (3, 100);
 			let max_bid = (4, 101);
 			BIDDER_SET.with(|l| {
-				*l.borrow_mut() = vec![invalid_bid, min_bid, joe_bid, max_bid]
+				*l.borrow_mut() = vec![invalid_bid, low_bid, joe_bid, max_bid]
 			});
 
 			let auction_range = (2, 100);
 			// Check we are in the bidders phase
 			assert_eq!(AuctionPallet::current_phase(), AuctionPhase::WaitingForBids);
-			// Now move to the next phase, this should be the auction phase
-			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken));
-			// Read storage to confirm has been changed to Auction
-			assert_eq!(AuctionPallet::current_phase(), AuctionPhase::BidsTaken);
-			// Having moved into the auction phase we should have our list of bidders filtered
-			// Check storage is what we assume
-			assert_eq!(AuctionPallet::bidders(), vec![min_bid, joe_bid, max_bid]);
-			// We should however have no outstanding winners or bond stored
-			assert!(AuctionPallet::winners().is_empty());
-			assert_eq!(AuctionPallet::minimum_bid(), 0);
+			// Now move to the next phase, this should be the BidsTaken phase
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(bidders)) if bidders == vec![low_bid, joe_bid, max_bid]);
+			// Read storage to confirm has been changed to BidsTaken
+			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::BidsTaken(bidders) if bidders == vec![low_bid, joe_bid, max_bid]);
+			// Having moved into the BidsTaken phase we should have our list of bidders filtered
 			// And again to the next phase, however we should see an error as we haven't set our
 			// auction size as an `AuctionError::Empty`
 			assert_eq!(AuctionPallet::process(), Err(AuctionError::Empty));
@@ -44,20 +40,20 @@ mod test {
 			// With that sorted we would move on to completing the auction
 			// Expecting the phase to change, a set of winners, the bidder list and a bond value set
 			// to our min bid
-			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::WinnersSelected));
-			assert_eq!(AuctionPallet::current_phase(), AuctionPhase::WinnersSelected);
-			assert_eq!(AuctionPallet::bidders(), vec![min_bid, joe_bid, max_bid]);
-			assert_eq!(AuctionPallet::winners(), vec![max_bid.0, joe_bid.0, min_bid.0]);
-			assert_eq!(AuctionPallet::minimum_bid(), min_bid.1);
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WinnersSelected((winners, min_bid)))
+				if winners == vec![max_bid.0, joe_bid.0, low_bid.0] && min_bid == low_bid.1
+			);
+			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::WinnersSelected((winners, min_bid))
+				if winners == vec![max_bid.0, joe_bid.0, low_bid.0] && min_bid == low_bid.1
+			);
 			// Just leaves us to confirm this auction, if we try to process this we will get an error
 			// until is confirmed
-			assert_eq!(AuctionPallet::process(), Err(AuctionError::NotConfirmed));
+			assert_matches!(AuctionPallet::process(), Err(AuctionError::NotConfirmed));
 			// Confirm the auction
 			CONFIRM.with(|l| { *l.borrow_mut() = true });
 			// and finally we complete the process, clearing the bidders
-			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::WaitingForBids));
-			assert_eq!(AuctionPallet::current_phase(), AuctionPhase::WaitingForBids);
-			assert!(AuctionPallet::bidders().is_empty());
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WaitingForBids));
+			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::WaitingForBids);
 		});
 	}
 
@@ -93,20 +89,16 @@ mod test {
 			let auction_range = (2, 100);
 			CONFIRM.with(|l| { *l.borrow_mut() = true });
 			assert_ok!(AuctionPallet::set_auction_range(auction_range));
-			assert!(AuctionPallet::bidders().is_empty());
 			assert!(!AuctionPallet::auction_to_confirm());
-			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken));
-			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::WinnersSelected));
-			assert!(!AuctionPallet::winners().is_empty());
-			assert!(!AuctionPallet::bidders().is_empty());
-			assert!(AuctionPallet::minimum_bid() > 0);
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(_)));
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WinnersSelected(_)));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected((winners, min_bid))
+				if !winners.is_empty() && min_bid > 0
+			);
 			assert!(AuctionPallet::auction_to_confirm());
 			// Kill it
 			AuctionPallet::abort();
 			assert_eq!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
-			assert!(AuctionPallet::winners().is_empty());
-			assert!(AuctionPallet::bidders().is_empty());
-			assert!(AuctionPallet::minimum_bid() == 0);
 		});
 	}
 }

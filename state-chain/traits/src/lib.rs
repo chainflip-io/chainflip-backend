@@ -51,21 +51,21 @@ pub trait EpochInfo {
 
 /// The phase of an Auction. At the start we are waiting on bidders, we then run an auction and
 /// finally it is completed
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
-pub enum AuctionPhase {
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub enum AuctionPhase<ValidatorId, Amount> {
 	WaitingForBids,
-	BidsTaken,
-	WinnersSelected,
+	BidsTaken(Vec<Bid<ValidatorId, Amount>>),
+	WinnersSelected((Vec<ValidatorId>, Amount)),
 }
 
-impl Default for AuctionPhase {
+impl<ValidatorId, Amount> Default for AuctionPhase<ValidatorId, Amount> {
 	fn default() -> Self {
 		AuctionPhase::WaitingForBids
 	}
 }
 
 /// A bid represented by a validator and the amount they wish to bid
-pub type Bid<T> = (<T as Auction>::ValidatorId, <T as Auction>::Amount);
+pub type Bid<ValidatorId, Amount> = (ValidatorId, Amount);
 /// A range of min, max for our winning set
 pub type AuctionRange = (u32, u32);
 
@@ -88,17 +88,11 @@ pub trait Auction {
 	/// Set the auction range
 	fn set_auction_range(range: AuctionRange) -> Result<AuctionRange, AuctionError>;
 	/// The current phase we find ourselves in
-	fn phase() -> AuctionPhase;
+	fn phase() -> AuctionPhase<Self::ValidatorId, Self::Amount>;
 	/// Are we in an auction?
 	fn waiting_on_bids() -> bool;
 	/// Move the process forward by one step, returns the phase completed or error
-	fn process() -> Result<AuctionPhase, AuctionError>;
-	/// The current set of bidders
-	fn bidders() -> Vec<Bid<Self>>;
-	/// The current/final set of winners
-	fn winners() -> Vec<Self::ValidatorId>;
-	/// The minimum bid needed to be included in the winners set
-	fn minimum_bid() -> Self::Amount;
+	fn process() -> Result<AuctionPhase<Self::ValidatorId, Self::Amount>, AuctionError>;
 	/// Abort this auction
 	fn abort();
 }
