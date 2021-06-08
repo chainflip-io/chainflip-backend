@@ -24,7 +24,7 @@ pub fn test_settings() -> Result<Settings, ConfigError> {
     let mut s = Config::new();
 
     // Start off by merging in the "default" configuration file
-    s.merge(File::with_name("config/testing.toml"))?;
+    s.merge(File::with_name("config/Testing.toml"))?;
 
     // You can deserialize (and thus freeze) the entire configuration as
     s.try_into()
@@ -44,6 +44,7 @@ pub async fn test_all_stake_manager_events() {
     println!("Subscribing to eth events");
     // this future contains an infinite loop, so we must end it's life
     let sm_future = eth::stake_manager::start_stake_manager_witness(settings);
+    println!("Subscribed");
 
     // We just want the future to end, it should already have done it's job in 1 second
     let _ = tokio::time::timeout(std::time::Duration::from_secs(1), sm_future).await;

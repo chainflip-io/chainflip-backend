@@ -36,7 +36,7 @@ impl Settings {
         let mut s = Config::new();
 
         // Start off by merging in the "default" configuration file
-        s.merge(File::with_name("config/default.toml"))?;
+        s.merge(File::with_name("config/Default.toml"))?;
 
         // Add in the current environment file
         // Default to testing env - this is optional, without it, it'll just use the default
