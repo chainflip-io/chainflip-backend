@@ -22,7 +22,7 @@ mod test {
 			// Check we are in the bidders phase
 			assert_eq!(AuctionPallet::current_phase(), AuctionPhase::WaitingForBids);
 			// Now move to the next phase, this should be the auction phase
-			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::WaitingForBids));
+			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken));
 			// Read storage to confirm has been changed to Auction
 			assert_eq!(AuctionPallet::current_phase(), AuctionPhase::BidsTaken);
 			// Having moved into the auction phase we should have our list of bidders filtered
@@ -44,7 +44,7 @@ mod test {
 			// With that sorted we would move on to completing the auction
 			// Expecting the phase to change, a set of winners, the bidder list and a bond value set
 			// to our min bid
-			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken));
+			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::WinnersSelected));
 			assert_eq!(AuctionPallet::current_phase(), AuctionPhase::WinnersSelected);
 			assert_eq!(AuctionPallet::bidders(), vec![min_bid, joe_bid, max_bid]);
 			assert_eq!(AuctionPallet::winners(), vec![max_bid.0, joe_bid.0, min_bid.0]);
@@ -55,7 +55,7 @@ mod test {
 			// Confirm the auction
 			CONFIRM.with(|l| { *l.borrow_mut() = true });
 			// and finally we complete the process, clearing the bidders
-			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::WinnersSelected));
+			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::WaitingForBids));
 			assert_eq!(AuctionPallet::current_phase(), AuctionPhase::WaitingForBids);
 			assert!(AuctionPallet::bidders().is_empty());
 		});
@@ -95,8 +95,8 @@ mod test {
 			assert_ok!(AuctionPallet::set_auction_range(auction_range));
 			assert!(AuctionPallet::bidders().is_empty());
 			assert!(!AuctionPallet::auction_to_confirm());
-			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::WaitingForBids));
 			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken));
+			assert_eq!(AuctionPallet::process(), Ok(AuctionPhase::WinnersSelected));
 			assert!(!AuctionPallet::winners().is_empty());
 			assert!(!AuctionPallet::bidders().is_empty());
 			assert!(AuctionPallet::minimum_bid() > 0);

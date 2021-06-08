@@ -255,7 +255,7 @@ impl<T: Config> Auction for Pallet<T> {
 
 				Self::deposit_event(Event::AuctionStarted(<CurrentAuctionIndex<T>>::get()));
 
-				Ok(AuctionPhase::WaitingForBids)
+				Ok(AuctionPhase::BidsTaken)
 			},
 			// We sort by bid and cut the size of the set based on auction size range
 			// If we have a valid set, within the size range, we store this set as the
@@ -278,7 +278,7 @@ impl<T: Config> Auction for Pallet<T> {
 
 							Self::deposit_event(Event::AuctionCompleted(<CurrentAuctionIndex<T>>::get()));
 
-							return Ok(AuctionPhase::BidsTaken);
+							return Ok(AuctionPhase::WinnersSelected);
 						}
 					}
 				}
@@ -297,7 +297,7 @@ impl<T: Config> Auction for Pallet<T> {
 				<CurrentPhase<T>>::put(AuctionPhase::WaitingForBids);
 				Self::deposit_event(Event::AwaitingBidders);
 
-				Ok(AuctionPhase::WinnersSelected)
+				Ok(AuctionPhase::WaitingForBids)
 			}
 		};
 	}
