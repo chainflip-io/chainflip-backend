@@ -12,14 +12,10 @@ use thiserror::Error;
 
 use web3::types::{BlockNumber, FilterBuilder, H256};
 
-use crate::settings::Settings;
+use crate::{mq::nats_client::NatsMQClient, settings::Settings};
 
 #[async_trait]
 pub trait Broadcast {
-    // do we need to do any signing here? or do we *just* broadcast? let's go with the latter for now
-
-    // TODO: this should return a Hash, not a String - but the hash needs to be generic across chains.
-    // Do some chains not emit a hash? they may in the future so perhaps String is better?
     async fn broadcast(&self, msg: Vec<u8>) -> Result<String>;
 }
 
@@ -64,12 +60,13 @@ pub enum EventProducerError {
 /// Start all the ETH components
 pub async fn start(settings: Settings) -> anyhow::Result<()> {
     log::info!("Starting the ETH components");
-    stake_manager::start_stake_manager_witness(settings)
-        .await
-        .expect("Could not start the StakeManager witness");
+    let sm_witness_future = stake_manager::start_stake_manager_witness(settings.clone());
 
-    // TODO: Start the eth broadcaster??
-    // eth_broadcaster::run().await?;
+    let eth_broadcaster_future = eth_broadcaster::start_eth_broadcaster::<NatsMQClient>(settings);
+
+    let result = futures::join!(sm_witness_future, eth_broadcaster_future);
+    result.0?;
+    result.1?;
 
     Ok(())
 }
