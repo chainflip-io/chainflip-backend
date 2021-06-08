@@ -1,4 +1,5 @@
-use crate as pallet_cf_flip;
+use crate::{self as pallet_cf_flip, TotalIssuance, OffchainFunds, OnchainFunds};
+use cf_traits::StakeTransfer;
 use frame_support::parameter_types;
 use frame_system::{Account, AccountInfo};
 use sp_core::H256;
@@ -64,9 +65,45 @@ impl pallet_cf_flip::Config for Test {
 }
 
 // Build genesis storage according to the mock runtime.
+pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
+pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
+pub const CHARLIE: <Test as frame_system::Config>::AccountId = 789u64;
+
+pub fn check_balance_integrity() {
+	assert_eq!(
+		TotalIssuance::<Test>::get(),
+		OffchainFunds::<Test>::get() + OnchainFunds::<Test>::get()
+	);
+
+	assert_eq!(
+		pallet_cf_flip::Account::<Test>::iter_values().map(|account| account.total()).sum::<u128>(),
+		OnchainFunds::<Test>::get()
+	);
+}
+
+// Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	frame_system::GenesisConfig::default()
+	let mut ext: sp_io::TestExternalities = frame_system::GenesisConfig::default()
 		.build_storage::<Test>()
 		.unwrap()
-		.into()
+		.into();
+
+	// Seed with three active accounts.
+	ext.execute_with(|| {
+		System::set_block_number(1);
+		Account::<Test>::insert(ALICE, AccountInfo::default());
+		Account::<Test>::insert(BOB, AccountInfo::default());
+		Account::<Test>::insert(CHARLIE, AccountInfo::default());
+		TotalIssuance::<Test>::set(1_000);
+		OffchainFunds::<Test>::set(1_000);
+		OnchainFunds::<Test>::set(0);
+
+		<Flip as StakeTransfer>::credit_stake(&ALICE, 100);
+		<Flip as StakeTransfer>::credit_stake(&BOB, 50);
+
+		assert_eq!(OffchainFunds::<Test>::get(), 850);
+		check_balance_integrity();
+	});
+
+	ext
 }

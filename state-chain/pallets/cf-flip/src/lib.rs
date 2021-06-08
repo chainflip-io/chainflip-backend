@@ -11,37 +11,26 @@
 //! ## Imbalances
 //!
 //! Imbalances are not very intuitive but the idea is this: if you want to manipulate the balance of FLIP in the
-//! system, there always needs to be an equal and opposite
+//! system, there always need to be two equal and opposite [Imbalance]s. Any excess is reverted according to the
+//! implementation of [imbalances::RevertImbalance] when the imbalance is dropped.
 //!
-//! A [Deficit] means that there is an excess of funds *in the accounts* that needs to be reconciled. This
-//! requires a corresponding [Surplus]. A [Surplus] means there is an excess of funds *outside of
-//! the accounts* that requires a corresponding [Deficit]. If the imbalances are not canceled against each
-//! other, the [imbalances::RevertImbalance] implementation ensures that any excess funds are reverted to their source.
+//! A [Deficit] means that there is an excess of funds *in the accounts* that needs to be reconciled. Either we have
+//! credited some funds to an account, or we have debited funds from some external source without putting them anywhere.
+//! Think of it like this: if we credit an account, we need to pay for it somehow. Either by debiting from another, or
+//! by minting some tokens, or by bridging them from outside (aka. staking).
+//!
+//! A [Surplus] is (unsurprisingly) the opposite: it means there is an excess of funds *outside of the accounts*. Maybe
+//! an account has been debited some amount, or we have minted some tokens. These to be allocated somewhere.
 //!
 //! ### Example
-//! A [burn](Pallet::burn) creates a [Deficit], since the total issuance has been reduced without
-//! changing the amounts held in the accounts. The accounts hold *more*  funds than there should be, so the imbalance is
-//! *positive*. This can be counteracted by [debiting](Pallet::debit) an account. The net effect is as if the account's
-//! tokens were burned.
 //!
-//! ```
-//! // let (account_id, amount) = (something);
-//! let burn_imbalance = Pallet::<T>::burn(&account_id, amount);
-//! let debit_imbalance = Pallet::<T>::debit(&account_id, amount);
-//! burn_imbalance.offset(debit_imbalance);
+//! A [burn](Pallet::burn) creates a [Deficit]: the total issuance has been reduced so we need a [Surplus] from
+//! somewhere that we can offset against this. Usually, we want to debit an account to burn (slash) funds. We may also
+//! want to burn funds that are held in trading pools, for example. In this case we might withdraw from a pool to create
+//! a surplus to offset the burn (not implemented yet).
 //!
-//! // Alternatively:
-//! Pallet::<T>::burn(account_id, amount).offset(Pallet::<T>::debit(&account_id, amount));
-//!
-//! // Or even:
-//! Pallet::<T>::settle(
-//!    &account_id,
-//!    Pallet::<T>::burn(&account_id, amount).into()
-//! )
-//! ```
-//!
-//! If the [Deficit] created by the burn goes out of scope, the change is reverted, effectively minting the
-//! tokens and adding them back to the total issuance.
+//! If the [Deficit] created by the burn goes out of scope without being offset, the change is reverted, effectively
+//! minting the tokens and adding them back to the total issuance.
 
 #[cfg(test)]
 mod mock;
@@ -349,6 +338,10 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 
 	fn stakeable_balance(account_id: &T::AccountId) -> Self::Balance {
 		Account::<T>::get(account_id).total()
+	}
+
+	fn claimable_balance(account_id: &T::AccountId) -> Self::Balance {
+		Account::<T>::get(account_id).free_to_claim()
 	}
 
 	fn credit_stake(account_id: &Self::AccountId, amount: Self::Balance) -> Self::Balance {

@@ -61,12 +61,15 @@ impl<T: Config> Surplus<T> {
 		})
 	}
 
-	/// Funds surplus from offchain. 
+	/// Funds surplus from offchain.
 	///
 	/// Means we have received funds from offchain; there will now be a surplus that needs to be allocated somewhere.
 	pub(super) fn from_offchain(amount: T::Balance) -> Self {
-		Flip::OffchainFunds::<T>::mutate(|total| *total = total.saturating_sub(amount));
-		Self::new(amount, ImbalanceSource::External)
+		Flip::OffchainFunds::<T>::mutate(|total| {
+			let deducted = (*total).min(amount);
+			*total = total.saturating_sub(deducted);
+			Self::new(deducted, ImbalanceSource::External)
+		})
 	}
 }
 
@@ -116,12 +119,20 @@ impl<T: Config> Deficit<T> {
 		})
 	}
 
-	/// Funds deficit from offchain. 
+	/// Funds deficit from offchain.
 	///
 	/// Means that funds have been sent offchain; we need to apply the resulting deficit somewhere.
 	pub(super) fn from_offchain(amount: T::Balance) -> Self {
-		Flip::OffchainFunds::<T>::mutate(|total| *total = total.saturating_add(amount));
-		Self::new(amount, ImbalanceSource::External)
+		let added = Flip::OffchainFunds::<T>::mutate(|total| {
+			match total.checked_add(&amount) {
+				Some(result) => {
+					*total = result;
+					amount
+				},
+				None => Zero::zero()
+			}
+		});
+		Self::new(added, ImbalanceSource::External)
 	}
 }
 
@@ -261,10 +272,11 @@ impl<T: Config> RevertImbalance for Surplus<T> {
 				Flip::TotalIssuance::<T>::mutate(|v| *v = v.saturating_sub(self.amount))
 			}
 			ImbalanceSource::Account(account_id) => {
-				// This means we added funds to an account but didn't specify a source. Deduct the funds from
+				// This means we took funds from an account but didn't put them anywhere. Add the funds back to
 				// the account again.
+				Flip::OnchainFunds::<T>::mutate(|total| *total = total.saturating_add(self.amount));
 				Flip::Account::<T>::mutate(account_id, |acct| {
-					acct.stake = acct.stake.saturating_sub(self.amount)
+					acct.stake = acct.stake.saturating_add(self.amount)
 				})
 			}
 		};
@@ -284,10 +296,10 @@ impl<T: Config> RevertImbalance for Deficit<T> {
 				Flip::TotalIssuance::<T>::mutate(|v| *v = v.saturating_add(self.amount))
 			}
 			ImbalanceSource::Account(account_id) => {
-				// This means we deducted funds from an account and did nothing with them. Re-credit the funds to
-				// the account.
+				// This means we added funds to an account without specifying a source. Deduct them again.
+				Flip::OnchainFunds::<T>::mutate(|total| *total = total.saturating_sub(self.amount));
 				Flip::Account::<T>::mutate(account_id, |acct| {
-					acct.stake = acct.stake.saturating_add(self.amount)
+					acct.stake = acct.stake.saturating_sub(self.amount)
 				})
 			},
 		};

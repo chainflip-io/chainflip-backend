@@ -95,6 +95,9 @@ pub trait StakeTransfer {
 	/// An account's tokens that are free to be staked.
 	fn stakeable_balance(account_id: &Self::AccountId) -> Self::Balance;
 
+	/// An account's tokens that are free to be claimed.
+	fn claimable_balance(account_id: &Self::AccountId) -> Self::Balance;
+
 	/// Credit an account with stake from off-chain. Returns the total stake in the account.
 	fn credit_stake(account_id: &Self::AccountId, amount: Self::Balance) -> Self::Balance;
 
