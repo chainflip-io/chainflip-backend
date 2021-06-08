@@ -7,14 +7,11 @@ set -ex
 #
 # =============================================================
 
-## start nats
-# docker run -p 4222:4222 -p 8222:8222 -ti -d --name nats nats:latest
 if ! which poetry; then
   curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python3 -
   source $HOME/.poetry/env
 fi
 
-# todo: check that it doesn't exist, if it does, then force pull latest
 if [ ! -d "./eth-contracts" ]; then
     git clone https://github.com/chainflip-io/chainflip-eth-contracts.git ./eth-contracts/
 else
