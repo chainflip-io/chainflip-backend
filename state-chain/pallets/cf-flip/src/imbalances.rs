@@ -4,6 +4,7 @@
 // of the inner member.
 
 use crate::{self as Flip, Config};
+use codec::{Decode, Encode};
 use frame_support::traits::{Imbalance, TryDrop};
 use sp_runtime::{
 	traits::{Bounded, CheckedAdd, CheckedSub, Saturating, Zero},
@@ -11,7 +12,7 @@ use sp_runtime::{
 };
 use sp_std::{mem, result};
 
-#[derive(RuntimeDebug, PartialEq, Eq, Clone)]
+#[derive(RuntimeDebug, PartialEq, Eq, Clone, Encode, Decode)]
 pub enum ImbalanceSource<AccountId> {
 	External,
 	Account(AccountId),

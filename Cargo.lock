@@ -4523,6 +4523,7 @@ dependencies = [
  "cf-traits",
  "frame-support",
  "frame-system",
+ "pallet-cf-flip",
  "pallet-cf-validator",
  "parity-scale-codec 2.1.1",
  "serde 1.0.125",

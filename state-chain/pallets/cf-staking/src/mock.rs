@@ -1,6 +1,7 @@
-use std::time::Duration;
+use std::{marker::PhantomData, time::Duration};
 
 use crate::{self as pallet_cf_staking, Config};
+use pallet_cf_flip;
 use app_crypto::ecdsa::Public;
 use sp_core::H256;
 use frame_support::{parameter_types};
@@ -24,6 +25,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Flip: pallet_cf_flip::{Module, Call, Storage, Event<T>},
 		StakeManager: pallet_cf_staking::{Module, Call, Storage, Event<T>},
 	}
 );
@@ -59,10 +61,19 @@ impl frame_system::Config for Test {
 	type SS58Prefix = SS58Prefix;
 }
 
-impl Config for Test {
+parameter_types! {
+	pub const ExistentialDeposit: u128 = 10;
+}
+
+impl pallet_cf_flip::Config for Test {
+	type Event = Event;
+	type Balance = u128;
+	type ExistentialDeposit = ExistentialDeposit;
+}
+
+impl pallet_cf_staking::Config for Test {
 	type Event = Event;
 	type Call = Call;
-	type TokenAmount = u128;
 	type EthereumAddress = [u8; 20];
 	type Nonce = u32;
 	type EthereumCrypto = Public;
@@ -71,7 +82,9 @@ impl Config for Test {
 	type EpochInfo = epoch_info::Mock;
 	type TimeSource = time_source::Mock;
 	type MinClaimTTL = MinClaimTTL;
-} 
+	type Balance = u128;
+	type Flip = Flip;
+}
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;

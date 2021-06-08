@@ -60,7 +60,7 @@ use frame_support::{
 };
 use imbalances::{Surplus, Deficit};
 
-use codec::{Codec, Decode, Encode};
+use codec::{Decode, Encode};
 use sp_runtime::{DispatchError, RuntimeDebug, traits::{
 		AtLeast32BitUnsigned, MaybeSerializeDeserialize,
 		Saturating, Zero,
@@ -69,7 +69,7 @@ use sp_std::{fmt::Debug, prelude::*};
 
 pub use pallet::*;
 
-use crate::imbalances::ImbalanceSource;
+pub use crate::imbalances::ImbalanceSource;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -86,7 +86,6 @@ pub mod pallet {
 		type Balance: Parameter
 			+ Member
 			+ AtLeast32BitUnsigned
-			+ Codec
 			+ Default
 			+ Copy
 			+ MaybeSerializeDeserialize
@@ -98,7 +97,6 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	/// Funds belonging to on-chain accounts.
@@ -207,6 +205,21 @@ impl<T: Config> From<Deficit<T>> for FlipImbalance<T> {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Total funds stored in an account.
+	pub fn total_balance_of(account_id: &T::AccountId) -> T::Balance {
+		Account::<T>::get(account_id).total()
+	}
+
+	/// Sets the validator bond for an account.
+	pub fn set_validator_bond(account_id: &T::AccountId, amount: T::Balance) {
+		Account::<T>::mutate_exists(account_id, |maybe_account| {
+			match maybe_account.as_mut() {
+				Some(account) => account.validator_bond = amount,
+				None => {},
+			}
+		})
+	}
+
 	/// Slashable funds for an account.
 	pub fn slashable_funds(account_id: &T::AccountId) -> T::Balance {
 		Account::<T>::get(account_id).total().saturating_sub(T::ExistentialDeposit::get())
@@ -338,19 +351,10 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 		Account::<T>::get(account_id).total()
 	}
 
-	fn credit_stake(
-		account_id: &Self::AccountId,
-		amount: Self::Balance,
-	) -> Result<(), DispatchError> {
-		// Make sure account exists.
-		ensure!(
-			Account::<T>::contains_key(account_id),
-			DispatchError::from(Error::<T>::UnknownAccount)
-		);
-
+	fn credit_stake(account_id: &Self::AccountId, amount: Self::Balance) -> Self::Balance {
 		let incoming = Self::bridge_in(amount);
 		Self::settle(account_id, SignedImbalance::Positive(incoming));
-		Ok(())
+		Self::total_balance_of(account_id)
 	}
 
 	fn try_claim(

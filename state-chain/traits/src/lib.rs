@@ -95,10 +95,8 @@ pub trait StakeTransfer {
 	/// An account's tokens that are free to be staked.
 	fn stakeable_balance(account_id: &Self::AccountId) -> Self::Balance;
 
-	/// Credit an account with stake from off-chain. Returns an Error if the amount violates the total issuance
-	/// of the token.
-	fn credit_stake(account_id: &Self::AccountId, amount: Self::Balance)
-		-> Result<(), DispatchError>;
+	/// Credit an account with stake from off-chain. Returns the total stake in the account.
+	fn credit_stake(account_id: &Self::AccountId, amount: Self::Balance) -> Self::Balance;
 
 	/// Reserves funds for a claim, if enough claimable funds are available.
 	///
