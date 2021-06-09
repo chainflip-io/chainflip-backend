@@ -35,7 +35,7 @@ impl<T: Config> Surplus<T> {
 	}
 
 	/// Funds surplus from minting new funds. This surplus needs to be allocated somewhere or the mint will be
-	// [reverted](RevertImbalance).
+	/// [reverted](RevertImbalance).
 	pub(super) fn from_mint(mut amount: T::Balance) -> Self {
 		if amount.is_zero() {
 			return Self::new(Zero::zero(), ImbalanceSource::Emissions);
