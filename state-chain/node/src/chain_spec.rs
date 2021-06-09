@@ -143,7 +143,7 @@ pub fn chainflip_local_testnet_config() -> Result<ChainSpec, String> {
 		"Chainflip local Testnet",
 		// ID
 		"chainflip_local_testnet",
-		ChainType::Local,
+		ChainType::Live,
 		move || testnet_genesis(
 			wasm_binary,
 			// Initial PoA authorities
