@@ -1,4 +1,4 @@
-use chainflip_engine::{eth, sc_observer, settings::Settings, witness};
+use chainflip_engine::{eth, sc_observer, settings::Settings};
 
 #[tokio::main]
 async fn main() {
@@ -12,7 +12,4 @@ async fn main() {
     sc_observer::sc_observer::start(settings.clone()).await;
 
     eth::start(settings.clone()).await;
-
-    // start witnessing other chains
-    witness::witness::start(settings.message_queue).await;
 }
