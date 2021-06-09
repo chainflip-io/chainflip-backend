@@ -8003,7 +8003,7 @@ dependencies = [
  "hex-literal",
  "pallet-aura",
  "pallet-authorship",
- "pallet-balances",
+ "pallet-cf-flip",
  "pallet-cf-staking",
  "pallet-cf-validator",
  "pallet-cf-witness",

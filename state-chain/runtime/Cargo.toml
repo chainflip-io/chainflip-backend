@@ -29,6 +29,7 @@ cf-traits = { path = "../traits", default-features = false }
 pallet-cf-validator = { path = "../pallets/cf-validator", default-features = false }
 pallet-cf-staking = { path = "../pallets/cf-staking", default-features = false }
 pallet-cf-witness = { path = "../pallets/cf-witness", default-features = false}
+pallet-cf-flip = { path = "../pallets/cf-flip", default-features = false}
 
 # Substrate dependencies
 frame-benchmarking = {default-features = false, optional = true, version = '3.0.0'}
@@ -38,7 +39,6 @@ frame-system = {default-features = false, version = '3.0.0'}
 frame-system-benchmarking = {default-features = false, optional = true, version = '3.0.0'}
 frame-system-rpc-runtime-api = {default-features = false, version = '3.0.0'}
 pallet-aura = {default-features = false, version = '3.0.0'}
-pallet-balances = { default-features = false, version = '3.0.0' }
 pallet-authorship = {default-features = false, version = '3.0.0'}
 pallet-grandpa = {default-features = false, version = '3.0.0'}
 pallet-offences = {default-features = false, version = '3.0.0'}
@@ -101,4 +101,5 @@ std = [
   'pallet-cf-validator/std',
   'pallet-cf-staking/std',
   'pallet-cf-witness/std',
+  'pallet-cf-flip/std',
 ]

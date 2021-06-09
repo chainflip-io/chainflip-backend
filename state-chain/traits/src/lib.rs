@@ -2,7 +2,7 @@
 
 pub mod mocks;
 
-use codec::{Codec, Decode, Encode, FullCodec, FullEncode};
+use codec::{Decode, Encode};
 use frame_support::dispatch::{DispatchResultWithPostInfo, Dispatchable};
 use frame_support::traits::ValidatorRegistration;
 use sp_runtime::{DispatchError, RuntimeDebug};

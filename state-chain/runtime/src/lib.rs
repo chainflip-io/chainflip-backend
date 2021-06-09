@@ -17,7 +17,6 @@ use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthority
 use pallet_grandpa::fg_primitives;
 use pallet_session::historical as session_historical;
 pub use pallet_timestamp::Call as TimestampCall;
-pub use pallet_balances::Call as BalancesCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{OpaqueMetadata, crypto::KeyTypeId, ecdsa};
@@ -234,7 +233,7 @@ impl frame_system::Config for Runtime {
 	/// What to do if an account is fully reaped from the system.
 	type OnKilledAccount = ();
 	/// The data to be stored in an account.
-	type AccountData = pallet_balances::AccountData<Balance>;
+	type AccountData = ();
 	/// Weight information for the extrinsics of this pallet.
 	type SystemWeightInfo = ();
 	/// This is used as an identifier of the chain. 42 is the generic substrate prefix.
@@ -267,23 +266,6 @@ impl pallet_grandpa::Config for Runtime {
 	type HandleEquivocation = ();
 
 	type WeightInfo = ();
-}
-
-parameter_types! {
-	pub const ExistentialDeposit: u128 = 500;
-	pub const MaxLocks: u32 = 50;
-}
-
-impl pallet_balances::Config for Runtime {
-	type MaxLocks = MaxLocks;
-	/// The type for recording an account's balance.
-	type Balance = Balance;
-	/// The ubiquitous event type.
-	type Event = Event;
-	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
-	type AccountStore = System;
-	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -321,6 +303,16 @@ impl pallet_authorship::Config for Runtime {
 	type EventHandler = ();
 }
 
+parameter_types! {
+	pub const ExistentialDeposit: u128 = 500;
+}
+
+impl pallet_cf_flip::Config for Runtime {
+	type Event = Event;
+	type Balance = FlipBalance;
+	type ExistentialDeposit = ExistentialDeposit;
+}
+
 impl pallet_sudo::Config for Runtime {
 	type Event = Event;
 	type Call = Call;
@@ -343,7 +335,8 @@ impl pallet_cf_staking::Config for Runtime {
 	type Event = Event;
 	type Call = Call;
 
-	type TokenAmount = FlipBalance;
+	type Balance = FlipBalance;
+	type Flip = Flip;
 	type EthereumAddress = [u8; 20];
 	type Nonce = u64;
 	type EthereumCrypto = ecdsa::Public;
@@ -363,7 +356,6 @@ construct_runtime!(
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
 		Session: pallet_session::{Module, Storage, Event, Config<T>},
 		Historical: session_historical::{Module},
 		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
@@ -374,6 +366,7 @@ construct_runtime!(
 		Offences: pallet_offences::{Module, Call, Storage, Event},
 		Witness: pallet_cf_witness::{Module, Call, Event<T>, Origin},
 		StakeManager: pallet_cf_staking::{Module, Call, Event<T>},
+		Flip: pallet_cf_flip::{Module, Event<T>},
 	}
 );
 
