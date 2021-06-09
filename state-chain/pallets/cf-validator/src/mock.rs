@@ -18,6 +18,7 @@ use frame_support::{parameter_types, construct_runtime, traits::{OnInitialize, O
 use std::cell::RefCell;
 use cf_traits::{BidderProvider, AuctionConfirmation};
 use frame_support::traits::ValidatorRegistration;
+use pallet_cf_auction::AuctionPhase;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;

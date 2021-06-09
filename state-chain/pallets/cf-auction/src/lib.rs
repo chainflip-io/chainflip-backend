@@ -47,7 +47,7 @@ use sp_std::prelude::*;
 use frame_support::pallet_prelude::*;
 use frame_support::traits::ValidatorRegistration;
 use sp_std::cmp::min;
-use cf_traits::{Auction, AuctionPhase, AuctionError, BidderProvider, AuctionRange, AuctionConfirmation};
+use cf_traits::{Auction, AuctionError, BidderProvider, AuctionRange, AuctionConfirmation};
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -175,6 +175,24 @@ pub mod pallet {
 	}
 }
 
+/// A bid represented by a validator and the amount they wish to bid
+type Bid<ValidatorId, Amount> = (ValidatorId, Amount);
+
+/// The phase of an Auction. At the start we are waiting on bidders, we then run an auction and
+/// finally it is completed
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub enum AuctionPhase<ValidatorId, Amount> {
+	WaitingForBids,
+	BidsTaken(Vec<Bid<ValidatorId, Amount>>),
+	WinnersSelected((Vec<ValidatorId>, Amount)),
+}
+
+impl<ValidatorId, Amount> Default for AuctionPhase<ValidatorId, Amount> {
+	fn default() -> Self {
+		AuctionPhase::WaitingForBids
+	}
+}
+
 impl<T: Config> AuctionConfirmation for Pallet<T> {
 	fn confirmed() -> bool {
 		<AuctionToConfirm::<T>>::get()
@@ -186,6 +204,7 @@ impl<T: Config> Auction for Pallet<T> {
 	type Amount = T::Amount;
 	type BidderProvider = T::BidderProvider;
 	type Confirmation = T::Confirmation;
+	type Phase = AuctionPhase<T::ValidatorId, T::Amount>;
 
 	fn auction_range() -> AuctionRange {
 		<AuctionSizeRange<T>>::get()

@@ -58,7 +58,8 @@ use sp_runtime::traits::{Convert, OpaqueKeys, AtLeast32BitUnsigned, One};
 use sp_std::prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};
 use frame_support::pallet_prelude::*;
-use cf_traits::{EpochInfo, Auction, AuctionPhase};
+use cf_traits::{EpochInfo, Auction};
+use pallet_cf_auction::AuctionPhase;
 
 pub trait WeightInfo {
 	fn set_blocks_for_epoch() -> Weight;
@@ -118,9 +119,11 @@ pub mod pallet {
 		/// An amount
 		type Amount: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 
-        /// An auction type
-        type Auction: Auction<ValidatorId=Self::ValidatorId, Amount=Self::Amount>;
-    }
+		/// An auction type
+		type Auction: Auction<ValidatorId=Self::ValidatorId,
+								Amount=Self::Amount,
+								Phase=AuctionPhase<Self::ValidatorId, Self::Amount>>;
+	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]

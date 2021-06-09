@@ -3,6 +3,7 @@ mod test {
 	use crate::{Error, mock::*};
 	use sp_runtime::traits::{BadOrigin, Zero};
 	use frame_support::{assert_ok, assert_noop};
+	use pallet_cf_auction::AuctionPhase as AuctionPhase;
 
 	const ALICE: u64 = 100;
 
