@@ -124,7 +124,7 @@ steps:
       repo: ghcr.io/chainflip-io/chainflip-backend/state-chain-node
       dockerfile: Dockerfile.state-chain-node
       registry: ghcr.io
-      tags: latest
+      tags: bootstrap
       cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
   - name: build-chainflip-engine
     image: plugins/docker
@@ -180,8 +180,8 @@ steps:
 
 # Config
 trigger:
-  branch:
-    - main
+#  branch:
+#    - main
   event:
     - push
 
