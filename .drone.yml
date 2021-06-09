@@ -112,7 +112,7 @@ steps:
     environment:
       SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
-      - cargo test --release
+      - cargo test --lib --release
       - sccache -s
   - name: build-state-chain-node
     image: plugins/docker
@@ -188,6 +188,53 @@ trigger:
 image_pull_secrets:
   - dockerconfigjson
 
+node_selector:
+  type: ci
+
+tolerations:
+  - key: "workloadKind"
+    operator: "Equal"
+    value: "ci"
+
+---
+kind: pipeline
+type: kubernetes
+name: chainflip-backend-nightly
+
+services:
+  - image: trufflesuite/ganache-cli:latest
+    name: ganache
+    ports: [8545]
+    entrypoint:
+      - "node"
+      - "/app/ganache-core.docker.cli.js"
+      - "--mnemonic chainflip"
+  - image: nats:latest
+    ports: [4222,8222]
+    name: nats
+
+
+steps:
+  - name: run-tests
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    environment:
+      SCCACHE_REDIS: "redis://redis-headless:6379/"
+    commands:
+      - cargo test --release
+    resources:
+      limits:
+        cpu: 3000
+        memory: 4GiB
+
+# Config
+trigger:
+  event:
+    - cron
+  cron:
+    - nightly
+
+image_pull_secrets:
+  - dockerconfigjson
 node_selector:
   type: ci
 

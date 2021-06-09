@@ -1,6 +1,8 @@
-mod stake_manager;
+pub mod stake_manager;
 
 mod eth_event_streamer;
+
+mod eth_broadcaster;
 
 pub use anyhow::Result;
 use async_trait::async_trait;
@@ -10,7 +12,12 @@ use thiserror::Error;
 
 use web3::types::{BlockNumber, FilterBuilder, H256};
 
-use crate::settings::Settings;
+use crate::{mq::nats_client::NatsMQClient, settings::Settings};
+
+#[async_trait]
+pub trait Broadcast {
+    async fn broadcast(&self, msg: Vec<u8>) -> Result<String>;
+}
 
 /// Something that accepts and processes events asychronously.
 #[async_trait]
@@ -51,9 +58,15 @@ pub enum EventProducerError {
 }
 
 /// Start all the ETH components
-pub async fn start(settings: Settings) {
+pub async fn start(settings: Settings) -> anyhow::Result<()> {
     log::info!("Starting the ETH components");
-    stake_manager::start_stake_manager_witness(settings)
-        .await
-        .expect("Could not start the StakeManager witness");
+    let sm_witness_future = stake_manager::start_stake_manager_witness(settings.clone());
+
+    let eth_broadcaster_future = eth_broadcaster::start_eth_broadcaster::<NatsMQClient>(settings);
+
+    let result = futures::join!(sm_witness_future, eth_broadcaster_future);
+    result.0?;
+    result.1?;
+
+    Ok(())
 }
