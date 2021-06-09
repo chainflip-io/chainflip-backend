@@ -1,91 +1,19 @@
 {
+  "EpochIndex": "u32",
+  "ValidatorSize": "u32",
+  "VoteCount": "u32",
+  "TokenAmount": "u128",
+  "Nonce": "u64",
+  "Duration": "u64",
+  "AccountInfo": "AccountInfoWithDualRefCount",
   "Address": "MultiAddress",
   "LookupSource": "MultiAddress",
-  "SwapQuote": {
-    "id": "String",
-    "timestamp": "u128",
-    "input": "String",
-    "input_address": "String",
-    "input_address_id": "String",
-    "return_address": "Option<String>",
-    "output": "String",
-    "output_address": "String",
-    "effective_price": "String",
-    "slippage_limit": "String"
-  },
-  "DepositQuote": {
-    "id": "String",
-    "timestamp": "u128",
-    "staker_id": "String",
-    "coin_type": "String",
-    "coin_input_address": "String",
-    "coin_input_address_id": "String",
-    "coin_return_address": "Option<String>",
-    "loki_input_address": "String",
-    "loki_input_address_id": "String",
-    "loki_return_address": "Option<String>"
-  },
-  "WithdrawRequest": {
-    "id": "String",
-    "staker_id": "String",
-    "pool": "String",
-    "loki_address": "String",
-    "other_address": "String",
-    "timestamp": "u128",
-    "fraction": "u32",
-    "signature": "String"
-  },
-  "Witness": {
-    "id": "String",
-    "timestamp": "u128",
-    "quote_id": "String",
-    "transaction_id": "String",
-    "transaction_block_number": "u64",
-    "transaction_index": "u64",
-    "amount": "u128",
-    "coin": "String"
-  },
-  "PoolChange": {
-    "id": "String",
-    "coin": "String",
-    "depth_change": "i128",
-    "loki_depth_change": "i128"
-  },
-  "Deposit": {
-    "id": "String",
-    "pool_change_tx": "String",
-    "quote_tx": "String",
-    "witness_txs": "Vec<String>",
-    "staker_id": "String",
-    "pool": "String",
-    "loki_amount": "u128",
-    "other_amount": "u128"
-  },
-  "Withdraw": {
-    "id": "String",
-    "timestamp": "u128",
-    "request_id": "String",
-    "output_txs": "Vec<String>"
-  },
-  "Output": {
-    "id": "String",
-    "timestamp": "u128",
-    "quote_tx": "String",
-    "witness_txs": "Vec<String>",
-    "pool_change_txs": "Vec<String>",
-    "coin": "String",
-    "address": "String",
-    "amount": "u128"
-  },
-  "OutputSent": {
-    "id": "String",
-    "timestamp": "u128",
-    "output_txs": "Vec<String>",
-    "coin": "String",
-    "address": "String",
-    "amount": "u128",
-    "fee": "u128",
-    "transaction_id": "String"
-  },
-  "WitnessPayload": "String"
+  "Amount": "TokenAmount",
+  "AuctionError": {
+    "_enum": [
+      "BondIsZero",
+      "Empty",
+      "MinValidatorSize"
+    ]
+  }
 }

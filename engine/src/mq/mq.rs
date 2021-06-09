@@ -38,10 +38,14 @@ pub fn pin_message_stream<M>(stream: Box<dyn Stream<Item = M>>) -> Pin<Box<dyn S
 /// Subjects that can be published / subscribed to
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Subject {
+    // TODO: This should be `Chain` and not Coin
     Witness(Coin),
     Quote(Coin),
     Batch(Coin),
     Broadcast(Coin),
+
+    // broadcaster pushes tx hashes here after being broadcast
+    BroadcastSuccess(Coin),
     /// Stake events coming from the Stake manager contract
     StakeManager,
     /// Stake events coming from the State chain
@@ -71,6 +75,9 @@ impl fmt::Display for Subject {
             }
             Subject::Broadcast(coin) => {
                 write!(f, "broadcast.{}", coin.to_string())
+            }
+            Subject::BroadcastSuccess(coin) => {
+                write!(f, "broadcast_success.{}", coin.to_string())
             }
             Subject::StakeManager => {
                 write!(f, "stake_manager")

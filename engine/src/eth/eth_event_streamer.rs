@@ -58,7 +58,9 @@ impl<S: EventSource> EthEventStreamer<S> {
         // Make sure the eth node is fully synced
         loop {
             match self.web3_client.eth().syncing().await? {
-                SyncState::Syncing(info) => log::info!("Waiting for eth node to sync: {:?}", info),
+                SyncState::Syncing(info) => {
+                    log::info!("Waiting for eth node to sync: {:?}", info);
+                }
                 SyncState::NotSyncing => {
                     log::info!("Eth node is synced, subscribing to log events.");
                     break;
@@ -125,7 +127,7 @@ mod tests {
 
     use crate::{
         eth::stake_manager::{stake_manager::StakeManager, stake_manager_sink::StakeManagerSink},
-        mq::{nats_client::NatsMQClient},
+        mq::nats_client::NatsMQClient,
         settings,
     };
 
@@ -137,10 +139,10 @@ mod tests {
     #[ignore = "Depends on a running ganache instance, runs forever, useful for manually testing / observing incoming events"]
     async fn subscribe_to_stake_manager_events() {
         let stake_manager = StakeManager::load(CONTRACT_ADDRESS).unwrap();
-        // create in memory nats server
-        let nats_server = nats_test_server::NatsTestServer::build().spawn();
 
-        let mq_settings = settings::test_utils::new_test_settings().unwrap().message_queue;
+        let mq_settings = settings::test_utils::new_test_settings()
+            .unwrap()
+            .message_queue;
         // create the sink, which pushes events to the MQ
         let sm_sink = StakeManagerSink::<NatsMQClient>::new(mq_settings)
             .await
