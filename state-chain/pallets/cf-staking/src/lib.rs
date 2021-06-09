@@ -81,7 +81,12 @@ pub mod pallet {
 		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
 		type Call: From<Call<Self>> + IsType<<Self as frame_system::Config>::Call>;
 
-		type Balance: Member + FullCodec + Copy + AtLeast32BitUnsigned;
+		type Balance: Parameter
+			+ Member
+			+ AtLeast32BitUnsigned
+			+ Default
+			+ Copy
+			+ MaybeSerializeDeserialize;
 		
 		/// The Flip token implementation.
 		type Flip: StakeTransfer<
@@ -158,6 +163,77 @@ pub mod pallet {
 		}
 	}
 
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event<T: Config> {
+		/// A validator has staked some FLIP on the Ethereum chain. [validator_id, stake_added, total_stake]
+		Staked(AccountId<T>, FlipBalance<T>, FlipBalance<T>),
+
+		/// A validator has claimed their FLIP on the Ethereum chain. [validator_id, claimed_amount]
+		ClaimSettled(AccountId<T>, FlipBalance<T>),
+
+		/// The staked amount should be refunded to the provided Ethereum address. [node_id, refund_amount, address]
+		StakeRefund(AccountId<T>, FlipBalance<T>, T::EthereumAddress),
+
+		/// A claim request has been made to provided Ethereum address. [who, address, nonce, amount]
+		ClaimSigRequested(AccountId<T>, T::EthereumAddress, T::Nonce, FlipBalance<T>),
+
+		/// A claim signature has been issued by the signer module. [issuer, amount, nonce, address, expiry_time, signature]
+		ClaimSignatureIssued(
+			AccountId<T>,
+			FlipBalance<T>,
+			T::Nonce,
+			T::EthereumAddress,
+			Duration,
+			<T::EthereumCrypto as RuntimePublic>::Signature,
+		),
+
+		/// An account has retired and will no longer take part in auctions. [who]
+		AccountRetired(AccountId<T>),
+
+		/// A previously retired account  has been re-activated. [who]
+		AccountActivated(AccountId<T>),
+
+		/// A claim has expired without being redeemed. [who, nonce, amount]
+		ClaimExpired(AccountId<T>, T::Nonce, FlipBalance<T>),
+	}
+
+	#[pallet::error]
+	pub enum Error<T> {
+		/// The account is not known.
+		UnknownAccount,
+
+		/// An invalid claim has been witnessed: the account has no pending claims.
+		NoPendingClaim,
+
+		/// An invalid claim has been witnessed: the amount claimed does not match the pending claim amount.
+		InvalidClaimAmount,
+
+		/// The claimant tried to claim despite having a claim already pending.
+		PendingClaim,
+
+		/// The claimant tried to claim more funds than were available.
+		ClaimOverflow,
+
+		/// Stake amount violated the total issuance of the token.
+		StakeOverflow,
+
+		/// An account tried to post a signature to an already-signed claim.
+		SignatureAlreadyIssued,
+
+		/// Can't retire an account if it's already retired.
+		AlreadyRetired,
+
+		/// Can't activate an account unless it's in a retired state.
+		AlreadyActive,
+
+		/// Invalid expiry date.
+		InvalidExpiry,
+
+		/// Cannot make a claim request while an auction is being resolved.
+		NoClaimsDuringAuctionPhase,
+	}
+
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Witness that a `Staked` event was emitted by the `StakeManager` smart contract.
@@ -193,12 +269,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			Self::ensure_witnessed(origin)?;
 
-			let new_total = T::Flip::credit_stake(&account_id, amount);
-
-			// Staking implicitly activates the account.
-			AccountRetired::<T>::mutate(&account_id, |retired| *retired = false);
-
-			Self::deposit_event(Event::Staked(account_id, amount, new_total));
+			Self::stake_account(&account_id, amount);
 
 			Ok(().into())
 		}
@@ -426,75 +497,27 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::event]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
-		/// A validator has staked some FLIP on the Ethereum chain. [validator_id, stake_added, total_stake]
-		Staked(AccountId<T>, FlipBalance<T>, FlipBalance<T>),
-
-		/// A validator has claimed their FLIP on the Ethereum chain. [validator_id, claimed_amount]
-		ClaimSettled(AccountId<T>, FlipBalance<T>),
-
-		/// The staked amount should be refunded to the provided Ethereum address. [node_id, refund_amount, address]
-		StakeRefund(AccountId<T>, FlipBalance<T>, T::EthereumAddress),
-
-		/// A claim request has been made to provided Ethereum address. [who, address, nonce, amount]
-		ClaimSigRequested(AccountId<T>, T::EthereumAddress, T::Nonce, FlipBalance<T>),
-
-		/// A claim signature has been issued by the signer module. [issuer, amount, nonce, address, expiry_time, signature]
-		ClaimSignatureIssued(
-			AccountId<T>,
-			FlipBalance<T>,
-			T::Nonce,
-			T::EthereumAddress,
-			Duration,
-			<T::EthereumCrypto as RuntimePublic>::Signature,
-		),
-
-		/// An account has retired and will no longer take part in auctions. [who]
-		AccountRetired(AccountId<T>),
-
-		/// A previously retired account  has been re-activated. [who]
-		AccountActivated(AccountId<T>),
-
-		/// A claim has expired without being redeemed. [who, nonce, amount]
-		ClaimExpired(AccountId<T>, T::Nonce, FlipBalance<T>),
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub genesis_stakers: Vec<(AccountId<T>, T::Balance)>,
 	}
 
-	#[pallet::error]
-	pub enum Error<T> {
-		/// The account is not known.
-		UnknownAccount,
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self {
+				genesis_stakers: vec![],
+			}
+		}
+	}
 
-		/// An invalid claim has been witnessed: the account has no pending claims.
-		NoPendingClaim,
-
-		/// An invalid claim has been witnessed: the amount claimed does not match the pending claim amount.
-		InvalidClaimAmount,
-
-		/// The claimant tried to claim despite having a claim already pending.
-		PendingClaim,
-
-		/// The claimant tried to claim more funds than were available.
-		ClaimOverflow,
-
-		/// Stake amount violated the total issuance of the token.
-		StakeOverflow,
-
-		/// An account tried to post a signature to an already-signed claim.
-		SignatureAlreadyIssued,
-
-		/// Can't retire an account if it's already retired.
-		AlreadyRetired,
-
-		/// Can't activate an account unless it's in a retired state.
-		AlreadyActive,
-
-		/// Invalid expiry date.
-		InvalidExpiry,
-
-		/// Cannot make a claim request while an auction is being resolved.
-		NoClaimsDuringAuctionPhase,
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			for (staker, amount) in self.genesis_stakers.iter() {
+				Pallet::<T>::stake_account(staker, *amount);
+			}
+		}
 	}
 }
 
@@ -505,6 +528,16 @@ impl<T: Config> Pallet<T> {
 		origin: OriginFor<T>,
 	) -> Result<<T::EnsureWitnessed as EnsureOrigin<OriginFor<T>>>::Success, BadOrigin> {
 		T::EnsureWitnessed::ensure_origin(origin)
+	}
+
+	/// Add stake to an account, activating the account if it is in retired state.
+	fn stake_account(account_id: &T::AccountId, amount: T::Balance) {
+		let new_total = T::Flip::credit_stake(&account_id, amount);
+
+		// Staking implicitly activates the account. Ignore the error.
+		let _ = AccountRetired::<T>::mutate(&account_id, |retired| *retired = false);
+
+		Self::deposit_event(Event::Staked(account_id.clone(), amount, new_total));
 	}
 
 	/// Sets the `retired` flag associated with the account to true, signalling that the account no longer wishes to

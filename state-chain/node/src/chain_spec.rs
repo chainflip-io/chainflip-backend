@@ -1,7 +1,8 @@
 use sp_core::{Pair, Public, sr25519, crypto::UncheckedInto};
 use state_chain_runtime::{
-	AccountId, AuraConfig, GenesisConfig, GrandpaConfig,
-	SudoConfig, SystemConfig, WASM_BINARY, Signature, ValidatorConfig, SessionConfig, opaque::SessionKeys
+	AccountId, AuraConfig, GenesisConfig, GrandpaConfig, FlipConfig, StakingConfig,
+	SudoConfig, SystemConfig, WASM_BINARY, Signature, ValidatorConfig, SessionConfig, opaque::SessionKeys,
+	FlipBalance
 };
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_finality_grandpa::AuthorityId as GrandpaId;
@@ -10,6 +11,10 @@ use sc_service::ChainType;
 
 // The URL for the telemetry server.
 // const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
+
+const TOKEN_ISSUANCE: FlipBalance = 90_000_000;
+const TOKEN_FRACTIONS: FlipBalance = 1_000_000_000_000_000_000;
+const TOTAL_ISSUANCE: FlipBalance = TOKEN_ISSUANCE * TOKEN_FRACTIONS;
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
@@ -61,6 +66,8 @@ pub fn development_config() -> Result<ChainSpec, String> {
 			],
 			// Sudo account
 			get_account_id_from_seed::<sr25519::Public>("Alice"),
+			// Total issuance
+			TOTAL_ISSUANCE,
 			// Pre-funded accounts
 			vec![
 				get_account_id_from_seed::<sr25519::Public>("Alice"),
@@ -101,6 +108,8 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 			],
 			// Sudo account
 			get_account_id_from_seed::<sr25519::Public>("Alice"),
+			// Total issuance
+			TOTAL_ISSUANCE,
 			// Pre-funded accounts
 			vec![
 				get_account_id_from_seed::<sr25519::Public>("Alice"),
@@ -161,6 +170,8 @@ pub fn chainflip_local_testnet_config() -> Result<ChainSpec, String> {
 			],
 			// Sudo account
 			hex_literal::hex!["b0ca1173a03cc8db1163872255af2a6093dfb124bbb979d8818b0576809cd80a"].into(),
+			// Total issuance
+			TOTAL_ISSUANCE,
 			// Pre-funded accounts
 			vec![
 				hex_literal::hex!["b0ca1173a03cc8db1163872255af2a6093dfb124bbb979d8818b0576809cd80a"].into(),
@@ -187,6 +198,7 @@ fn testnet_genesis(
 	wasm_binary: &[u8],
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>,
 	root_key: AccountId,
+	total_issuance: FlipBalance,
 	endowed_accounts: Vec<AccountId>,
 	_enable_println: bool,
 ) -> GenesisConfig {
@@ -204,6 +216,14 @@ fn testnet_genesis(
 			keys: initial_authorities.iter().map(|x| {
 				(x.0.clone(), x.0.clone(), session_keys(x.1.clone(), x.2.clone()))
 			}).collect::<Vec<_>>(),
+		}),
+		pallet_cf_flip: Some(FlipConfig {
+			total_issuance,
+		}),
+		pallet_cf_staking: Some(StakingConfig {
+			genesis_stakers: endowed_accounts.iter()
+				.map(|acct| (acct.clone(), TOTAL_ISSUANCE / 100))
+				.collect::<Vec<(AccountId, FlipBalance)>>()
 		}),
 		pallet_aura: Some(AuraConfig {
 			authorities: vec![],

@@ -365,8 +365,8 @@ construct_runtime!(
 		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
 		Witness: pallet_cf_witness::{Module, Call, Event<T>, Origin},
-		StakeManager: pallet_cf_staking::{Module, Call, Event<T>},
-		Flip: pallet_cf_flip::{Module, Event<T>},
+		Staking: pallet_cf_staking::{Module, Call, Event<T>, Config<T>},
+		Flip: pallet_cf_flip::{Module, Event<T>, Config<T>},
 	}
 );
 

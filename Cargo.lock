@@ -4507,7 +4507,6 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "pallet-balances",
  "parity-scale-codec 2.1.1",
  "serde 1.0.125",
  "sp-core",

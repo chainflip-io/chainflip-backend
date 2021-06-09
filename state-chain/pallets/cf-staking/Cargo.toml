@@ -31,9 +31,9 @@ frame-system = { default-features = false, version = '3.0.0' }
 sp-runtime = { default-features = false, version = '3.0.0' }
 sp-core = { default-features = false, version = '3.0.0' }
 sp-std = { default-features = false, version = '3.0.0' }
+serde = { default-features = false, version = '1.0.119' }
 
 [dev-dependencies]
-serde = { version = "1.0.119" }
 sp-io = { default-features = false, version = '3.0.0' }
 pallet-cf-flip = { path = '../cf-flip', default-features = false }
 
@@ -48,4 +48,5 @@ std = [
     'sp-runtime/std',
     'sp-core/std',
     'sp-std/std',
+    'serde/std',
 ]

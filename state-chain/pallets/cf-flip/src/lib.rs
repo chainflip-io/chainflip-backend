@@ -139,6 +139,25 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		// No external calls for this pallet.
 	}
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub total_issuance: T::Balance,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self { total_issuance: Zero::zero() }
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			TotalIssuance::<T>::set(self.total_issuance);
+		}
+	}
 }
 
 /// All balance information for a Flip account.
