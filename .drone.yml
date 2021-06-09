@@ -112,7 +112,7 @@ steps:
     environment:
       SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
-      - cargo test --release
+      - cargo test --lib --release
       - sccache -s
   - name: build-state-chain-node
     image: plugins/docker
@@ -182,8 +182,11 @@ steps:
 trigger:
   branch:
     - main
+    - cron
   event:
     - push
+  cron:
+    - nightly
 
 image_pull_secrets:
   - dockerconfigjson
