@@ -155,10 +155,6 @@ pub struct FlipAccount<Amount> {
 
 	/// Amount that is bonded due to validator status and cannot be withdrawn.
 	validator_bond: Amount,
-
-	/// Amount of tokens that originated from a vesting contract - these are subject to special treatment when
-	/// withdrawn.
-	vesting: Amount,
 }
 
 impl<Balance: Saturating + Copy + Ord> FlipAccount<Balance> {
@@ -167,15 +163,9 @@ impl<Balance: Saturating + Copy + Ord> FlipAccount<Balance> {
 		self.stake
 	}
 
-	/// Includes vesting funds, excludes the bond.
+	/// Excludes the bond.
 	fn liquid(&self) -> Balance {
 		self.stake.saturating_sub(self.validator_bond)
-	}
-
-	/// Funds that have no vesting or bonding restrictions.
-	fn free_to_claim(&self) -> Balance {
-		self.stake
-			.saturating_sub(self.validator_bond.max(self.vesting))
 	}
 }
 
@@ -341,7 +331,7 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 	}
 
 	fn claimable_balance(account_id: &T::AccountId) -> Self::Balance {
-		Account::<T>::get(account_id).free_to_claim()
+		Account::<T>::get(account_id).liquid()
 	}
 
 	fn credit_stake(account_id: &Self::AccountId, amount: Self::Balance) -> Self::Balance {
@@ -350,26 +340,9 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 		Self::total_balance_of(account_id)
 	}
 
-	fn try_claim(
-		account_id: &Self::AccountId,
-		amount: Self::Balance,
-	) -> Result<(), DispatchError> {
+	fn try_claim(account_id: &Self::AccountId, amount: Self::Balance) -> Result<(), DispatchError> {
 		ensure!(
-			amount <= Account::<T>::get(account_id).free_to_claim(),
-			DispatchError::from(Error::<T>::InsufficientLiquidity)
-		);
-
-		// TODO: add explicit claims source.
-		Self::settle(account_id, Self::bridge_out(amount).into());
-		Ok(())
-	}
-
-	fn try_claim_vesting(
-		account_id: &Self::AccountId,
-		amount: Self::Balance,
-	) -> Result<(), DispatchError> {
-		ensure!(
-			amount <= Account::<T>::get(account_id).liquid(),
+			amount <= Self::claimable_balance(account_id),
 			DispatchError::from(Error::<T>::InsufficientLiquidity)
 		);
 
