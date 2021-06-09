@@ -38,11 +38,6 @@ impl Settings {
         // Start off by merging in the "default" configuration file
         s.merge(File::with_name("config/Default.toml"))?;
 
-        // Add in the current environment file
-        // Default to testing env - this is optional, without it, it'll just use the default
-        let env = env::var("RUN_MODE").unwrap_or_else(|_| "testing".into());
-        s.merge(File::with_name(&format!("config/{}", env)).required(false))?;
-
         // You can deserialize (and thus freeze) the entire configuration as
         s.try_into()
     }
@@ -68,18 +63,21 @@ mod tests {
 
     use super::*;
 
-    // #[test]
-    // fn init_config() {
-    //     let settings = Settings::new();
-    //     assert!(settings.is_ok());
+    #[test]
+    fn init_config() {
+        let settings = Settings::new();
+        assert!(settings.is_ok());
 
-    //     let settings = settings.unwrap();
-    //     assert_eq!(settings.message_queue.hostname, "localhost");
-    // }
+        let settings = settings.unwrap();
+        assert_eq!(settings.message_queue.hostname, "localhost");
+    }
 
     #[test]
-    #[ignore = "testing isn't any different to default, so no point testing it at the moment"]
     fn test_init_config_with_testing_config() {
-        todo!();
+        let test_settings = test_utils::new_test_settings();
+        assert!(test_settings.is_ok());
+
+        let test_settings = test_settings.unwrap();
+        assert_eq!(test_settings.message_queue.hostname, "localhost");
     }
 }
