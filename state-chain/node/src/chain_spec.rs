@@ -66,8 +66,6 @@ pub fn development_config() -> Result<ChainSpec, String> {
 			],
 			// Sudo account
 			get_account_id_from_seed::<sr25519::Public>("Alice"),
-			// Total issuance
-			TOTAL_ISSUANCE,
 			// Pre-funded accounts
 			vec![
 				get_account_id_from_seed::<sr25519::Public>("Alice"),
@@ -108,8 +106,6 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 			],
 			// Sudo account
 			get_account_id_from_seed::<sr25519::Public>("Alice"),
-			// Total issuance
-			TOTAL_ISSUANCE,
 			// Pre-funded accounts
 			vec![
 				get_account_id_from_seed::<sr25519::Public>("Alice"),
@@ -170,8 +166,6 @@ pub fn chainflip_local_testnet_config() -> Result<ChainSpec, String> {
 			],
 			// Sudo account
 			hex_literal::hex!["b0ca1173a03cc8db1163872255af2a6093dfb124bbb979d8818b0576809cd80a"].into(),
-			// Total issuance
-			TOTAL_ISSUANCE,
 			// Pre-funded accounts
 			vec![
 				hex_literal::hex!["b0ca1173a03cc8db1163872255af2a6093dfb124bbb979d8818b0576809cd80a"].into(),
@@ -198,7 +192,6 @@ fn testnet_genesis(
 	wasm_binary: &[u8],
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>,
 	root_key: AccountId,
-	total_issuance: FlipBalance,
 	endowed_accounts: Vec<AccountId>,
 	_enable_println: bool,
 ) -> GenesisConfig {
@@ -218,7 +211,7 @@ fn testnet_genesis(
 			}).collect::<Vec<_>>(),
 		}),
 		pallet_cf_flip: Some(FlipConfig {
-			total_issuance,
+			total_issuance: TOTAL_ISSUANCE,
 		}),
 		pallet_cf_staking: Some(StakingConfig {
 			genesis_stakers: endowed_accounts.iter()
