@@ -98,7 +98,7 @@ fn staked_amount_is_added_and_subtracted() {
 #[test]
 fn claiming_unclaimable_is_err() {
 	new_test_ext().execute_with(|| {
-		const STAKE: u128 = 100_000;
+		const STAKE: u128 = 100;
 
 		// Claim FLIP before it is staked.
 		assert_noop!(

@@ -100,6 +100,10 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		Account::<Test>::insert(ALICE, AccountInfo::default());
 		Account::<Test>::insert(BOB, AccountInfo::default());
 		Account::<Test>::insert(CHARLIE, AccountInfo::default());
+
+		pallet_cf_flip::TotalIssuance::<Test>::set(1_000);
+		pallet_cf_flip::OffchainFunds::<Test>::set(1_000);
+		pallet_cf_flip::OnchainFunds::<Test>::set(0);
 	});
 
 	ext
