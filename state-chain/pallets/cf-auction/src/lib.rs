@@ -36,8 +36,10 @@
 mod mock;
 #[cfg(test)]
 mod tests;
+
 #[cfg(test)]
-#[macro_use] extern crate assert_matches;
+#[macro_use]
+extern crate assert_matches;
 
 pub use pallet::*;
 use sp_runtime::traits::{AtLeast32BitUnsigned, Zero, One};
@@ -130,12 +132,11 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-
 		/// Confirms a running auction that is valid
 		///
 		/// The dispatch origin of this function must be signed
 		#[pallet::weight(
-			10_000
+		10_000
 		)]
 		pub(super) fn confirm_auction(
 			origin: OriginFor<T>,
@@ -153,7 +154,7 @@ pub mod pallet {
 		///
 		/// The dispatch origin of this function must be root.
 		#[pallet::weight(
-			10_000
+		10_000
 		)]
 		pub(super) fn set_auction_size_range(
 			origin: OriginFor<T>,
@@ -165,10 +166,10 @@ pub mod pallet {
 				Ok(old) => {
 					Self::deposit_event(Event::AuctionRangeChanged(old, range));
 					Ok(().into())
-				},
+				}
 				Err(_) => {
 					Err(Error::<T>::InvalidRange.into())
-				},
+				}
 			}
 		}
 	}
@@ -221,7 +222,6 @@ impl<T: Config> Auction for Pallet<T> {
 	/// At each phase we assess the bidders based on a fixed set of criteria which results
 	/// in us arriving at a winning list and a bond set for this auction
 	fn process() -> Result<AuctionPhase<Self::ValidatorId, Self::Amount>, AuctionError> {
-
 		return match <CurrentPhase<T>>::get() {
 			// Run some basic rules on what we consider as valid bidders
 			// At the moment this includes checking that their bid is more than 0, which
@@ -237,7 +237,7 @@ impl<T: Config> Auction for Pallet<T> {
 				bidders.retain(|(id, _)| T::Registrar::is_registered(id));
 				// Rule #3 - Confirm we have our set size
 				if (bidders.len() as u32) < <AuctionSizeRange<T>>::get().0 {
-					return Err(AuctionError::MinValidatorSize)
+					return Err(AuctionError::MinValidatorSize);
 				};
 
 				let phase = AuctionPhase::BidsTaken(bidders);
@@ -251,7 +251,7 @@ impl<T: Config> Auction for Pallet<T> {
 				Self::deposit_event(Event::AuctionStarted(<CurrentAuctionIndex<T>>::get()));
 
 				Ok(phase)
-			},
+			}
 			// We sort by bid and cut the size of the set based on auction size range
 			// If we have a valid set, within the size range, we store this set as the
 			// 'winners' of this auction, change the state to 'Completed' and store the
@@ -276,7 +276,7 @@ impl<T: Config> Auction for Pallet<T> {
 				}
 
 				return Err(AuctionError::Empty);
-			},
+			}
 			// Things have gone well and we have a set of 'Winners', congratulations.
 			// We are ready to call this an auction a day resetting the bidders in storage and
 			// setting the state ready for a new set of 'Bidders'

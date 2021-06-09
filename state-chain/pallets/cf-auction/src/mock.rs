@@ -10,11 +10,12 @@ use sp_runtime::{
 		Header,
 	},
 };
-use frame_support::{parameter_types, construct_runtime,};
+use frame_support::{parameter_types, construct_runtime};
 use frame_support::traits::ValidatorRegistration;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
+
 use std::cell::RefCell;
 
 type Amount = u64;
