@@ -39,7 +39,7 @@ steps:
     environment:
       SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
-      - cargo test --release
+      - cargo test -p chainflip-engine --lib --release
       - sccache -s
 
 # Config
