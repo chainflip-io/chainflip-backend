@@ -1,4 +1,4 @@
-use crate::{self as pallet_cf_flip, TotalIssuance, OffchainFunds, OnchainFunds};
+use crate::{self as pallet_cf_flip, TotalIssuance, OffchainFunds};
 use cf_traits::StakeTransfer;
 use frame_support::parameter_types;
 use frame_system::{Account, AccountInfo};
@@ -71,13 +71,8 @@ pub const CHARLIE: <Test as frame_system::Config>::AccountId = 789u64;
 
 pub fn check_balance_integrity() {
 	assert_eq!(
-		TotalIssuance::<Test>::get(),
-		OffchainFunds::<Test>::get() + OnchainFunds::<Test>::get()
-	);
-
-	assert_eq!(
 		pallet_cf_flip::Account::<Test>::iter_values().map(|account| account.total()).sum::<u128>(),
-		OnchainFunds::<Test>::get()
+		Flip::onchain_funds()
 	);
 }
 
@@ -96,7 +91,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		Account::<Test>::insert(CHARLIE, AccountInfo::default());
 		TotalIssuance::<Test>::set(1_000);
 		OffchainFunds::<Test>::set(1_000);
-		OnchainFunds::<Test>::set(0);
 
 		<Flip as StakeTransfer>::credit_stake(&ALICE, 100);
 		<Flip as StakeTransfer>::credit_stake(&BOB, 50);

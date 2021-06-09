@@ -99,11 +99,6 @@ pub mod pallet {
 	#[pallet::getter(fn total_issuance)]
 	pub type TotalIssuance<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
-	/// The total number of tokens currently on-chain.
-	#[pallet::storage]
-	#[pallet::getter(fn onchain_funds)]
-	pub type OnchainFunds<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
-
 	/// The number of tokens currently off-chain.
 	#[pallet::storage]
 	#[pallet::getter(fn offchain_funds)]
@@ -184,6 +179,11 @@ impl<T: Config> From<Deficit<T>> for FlipImbalance<T> {
 }
 
 impl<T: Config> Pallet<T> {
+	/// The total number of tokens currently on-chain.
+	pub fn onchain_funds() -> T::Balance {
+		TotalIssuance::<T>::get() - OffchainFunds::<T>::get()
+	}
+	
 	/// Total funds stored in an account.
 	pub fn total_balance_of(account_id: &T::AccountId) -> T::Balance {
 		Account::<T>::get(account_id).total()

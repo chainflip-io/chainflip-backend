@@ -56,7 +56,6 @@ impl<T: Config> Surplus<T> {
 		Flip::Account::<T>::mutate(account_id, |account| {
 			let deducted = account.stake.min(amount);
 			account.stake = account.stake.saturating_sub(deducted);
-			Flip::OnchainFunds::<T>::mutate(|total| *total = total.saturating_sub(deducted));
 			Self::new(deducted, ImbalanceSource::Account(account_id.clone()))
 		})
 	}
@@ -111,7 +110,6 @@ impl<T: Config> Deficit<T> {
 			match account.stake.checked_add(&amount) {
 				Some(result) => {
 					account.stake = result;
-					Flip::OnchainFunds::<T>::mutate(|total| *total = total.saturating_add(amount));
 					Self::new(amount, ImbalanceSource::Account(account_id.clone()))
 				}
 				None => Self::new(Zero::zero(), ImbalanceSource::Account(account_id.clone()))
@@ -274,7 +272,6 @@ impl<T: Config> RevertImbalance for Surplus<T> {
 			ImbalanceSource::Account(account_id) => {
 				// This means we took funds from an account but didn't put them anywhere. Add the funds back to
 				// the account again.
-				Flip::OnchainFunds::<T>::mutate(|total| *total = total.saturating_add(self.amount));
 				Flip::Account::<T>::mutate(account_id, |acct| {
 					acct.stake = acct.stake.saturating_add(self.amount)
 				})
@@ -297,7 +294,6 @@ impl<T: Config> RevertImbalance for Deficit<T> {
 			}
 			ImbalanceSource::Account(account_id) => {
 				// This means we added funds to an account without specifying a source. Deduct them again.
-				Flip::OnchainFunds::<T>::mutate(|total| *total = total.saturating_sub(self.amount));
 				Flip::Account::<T>::mutate(account_id, |acct| {
 					acct.stake = acct.stake.saturating_sub(self.amount)
 				})

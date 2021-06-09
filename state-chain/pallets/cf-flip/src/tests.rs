@@ -1,6 +1,6 @@
 use std::mem;
 
-use crate::{Config, Error, OffchainFunds, OnchainFunds, TotalIssuance, mock::*};
+use crate::{Config, Error, OffchainFunds, TotalIssuance, mock::*};
 use frame_support::traits::Imbalance;
 use cf_traits::{Emissions, StakeTransfer};
 use frame_support::{assert_noop, assert_ok};
@@ -233,7 +233,7 @@ fn test_vaporise() {
 
 		// Can't vaporise on-chain funds - maximum possible will be taken from offchain.
 		<Flip as Emissions>::vaporise(10_000);
-		assert_eq!(<Flip as Emissions>::total_issuance(), OnchainFunds::<Test>::get());
+		assert_eq!(<Flip as Emissions>::total_issuance(), Flip::onchain_funds());
 
 		check_balance_integrity();
 	});
