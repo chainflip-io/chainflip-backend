@@ -9,16 +9,17 @@ In order to run the integration there is setup required:
 
 - Running Nats instance
 - Eth network (most of the time this will be a local ganache network in Docker) with a deployed StakeManager contract
-- CFE binary running
-- Cloned eth contracts repo ??? -> This may not be required if we use a pre-populated db which, ideally, we do
+  - [Script](https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/scripts/deploy_and.py) that creates the events expected by the test
 
-The [setup script](scripts/setup.sh) does this for you.
+This should be done by the CI, and by the [setup script](scripts/setup.sh) (which is run by the CI)
 
 ## How It Works
 
 The current tests work be checking that expected events arrive as expected from a particular expected subject on the message queue. This tests everything from message decoding, to the message routing.
 
 This is done using a message queue client spawned within the test function, that polls the queue for events. After events are received they can be deserialized and compared to the expected events.
+
+# Running Subsets of Tests
 
 ## Running All Tests
 
