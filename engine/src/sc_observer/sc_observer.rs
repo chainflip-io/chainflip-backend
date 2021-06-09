@@ -19,7 +19,7 @@ pub async fn start(settings: Settings) {
 
     let mq_client_builder = NatsMQClientFactory::new(settings.message_queue);
 
-    let mq_client = mq_client_builder.connect().await.unwrap();
+    let mq_client = mq_client_builder.create().await.unwrap();
 
     let subxt_client = create_subxt_client(settings.state_chain)
         .await

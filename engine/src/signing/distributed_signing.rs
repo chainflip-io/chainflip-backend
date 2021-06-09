@@ -6,7 +6,6 @@ use rand::{
     SeedableRng,
 };
 
-// use parking_lot::Mutex;
 use crate::{
     mq::{
         mq_mock::{MQMock, MQMockClientFactory},
@@ -18,9 +17,9 @@ use crate::{
 
 use super::client::{MultisigClient, MultisigEvent};
 
-async fn coordinate_signing(mc_clients: Vec<impl IMQClient>, active_indices: &[usize]) {
+async fn coordinate_signing(mq_clients: Vec<impl IMQClient>, active_indices: &[usize]) {
     // subscribe to "ready to sign"
-    let streams = mc_clients
+    let streams = mq_clients
         .iter()
         .map(|mc| {
             let mc = mc.clone();
@@ -49,7 +48,7 @@ async fn coordinate_signing(mc_clients: Vec<impl IMQClient>, active_indices: &[u
 
     ready_to_keygen.await;
 
-    for mc in &mc_clients {
+    for mc in &mq_clients {
         trace!("published keygen instruction");
         mc.publish(Subject::MultisigInstruction, &MultisigInstruction::KeyGen)
             .await
@@ -74,7 +73,7 @@ async fn coordinate_signing(mc_clients: Vec<impl IMQClient>, active_indices: &[u
 
     // Only some clients should receive the instruction to sign
     for i in active_indices {
-        let mc = &mc_clients[*i - 1];
+        let mc = &mq_clients[*i - 1];
 
         mc.publish(
             Subject::MultisigInstruction,

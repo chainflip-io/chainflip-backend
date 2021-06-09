@@ -20,7 +20,7 @@ use super::{client_inner::SigningData, shared_secret::SharedSecretState};
 pub(super) struct KeygenResult {
     pub(super) keys: Keys,
     pub(super) shared_keys: SharedKeys,
-    pub(super) y_sum: GE, // multisig pubkey
+    pub(super) aggregate_pubkey: GE,
     pub(super) vss: Vec<VerifiableSS<GE>>,
 }
 
@@ -90,9 +90,13 @@ impl SigningState {
         self.stage
     }
 
-    pub(super) fn init_local_sig(&mut self) -> LocalSig {
-        // This is where we compute local shares of the signatures and distribute them
+    fn record_local_sig(&mut self, signer_id: usize, sig: LocalSig) {
+        self.local_sigs_order.push(signer_id);
+        self.local_sigs.push(sig);
+    }
 
+    /// This is where we compute local shares of the signatures and distribute them
+    pub(super) fn init_local_sig(&mut self) -> LocalSig {
         let own_idx = self.signer_idx;
         let key = &self.signing_key.as_ref().expect("must have key");
 
@@ -103,15 +107,13 @@ impl SigningState {
 
         let local_sig = LocalSig::compute(&self.message, &ss.shared_keys, &key.shared_keys);
 
-        self.local_sigs_order.push(own_idx);
-        self.local_sigs.push(local_sig.clone());
+        self.record_local_sig(own_idx, local_sig.clone());
 
         local_sig
     }
 
     fn on_local_sig_received(&mut self, signer_id: usize, local_sig: LocalSig) {
-        self.local_sigs_order.push(signer_id);
-        self.local_sigs.push(local_sig);
+        self.record_local_sig(signer_id, local_sig);
 
         let full = self.local_sigs.len() == self.sss.params.share_count;
 
@@ -122,7 +124,7 @@ impl SigningState {
     }
 
     fn on_local_sigs_collected(&self) {
-        info!("Collected all local sigs ✅✅✅");
+        debug!("Collected all local sigs ✅✅✅");
 
         let key = self.signing_key.as_ref().expect("must have key");
 
@@ -153,9 +155,9 @@ impl SigningState {
                     &vss_sum_local_sigs,
                     &self.local_sigs,
                     &parties_index_vec,
-                    ss.y_sum,
+                    ss.aggregate_pubkey,
                 );
-                let verify_sig = signature.verify(&self.message, &key.y_sum);
+                let verify_sig = signature.verify(&self.message, &key.aggregate_pubkey);
                 assert!(verify_sig.is_ok());
 
                 if verify_sig.is_ok() {

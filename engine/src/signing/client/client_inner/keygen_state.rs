@@ -32,7 +32,7 @@ pub struct KeygenState {
     pub delayed_next_stage_data: Vec<(ValidatorId, KeyGenMessage)>,
 }
 
-/// A command to the other module to send data to a particilar node
+/// A command to the other module to send data to a particular node
 struct MessageToSend {
     pub(super) to: ValidatorId,
     pub(super) data: Vec<u8>,
@@ -173,7 +173,7 @@ impl KeygenState {
 
     fn send(&self, messages: Vec<MessageToSend>) {
         for MessageToSend { to, data } in messages {
-            // debug!("[{}] sending a message to [{}]", self.signer_idx, to);
+            trace!("[{}] sending a message to [{}]", self.signer_idx, to);
             let message = P2PMessageCommand {
                 destination: to,
                 data,
@@ -182,7 +182,7 @@ impl KeygenState {
             let event = InnerEvent::P2PMessageCommand(message);
 
             if let Err(err) = self.event_sender.send(event) {
-                error!("Could not send p2p: {}", err);
+                error!("Could not send p2p message command: {}", err);
             }
         }
     }
@@ -202,7 +202,7 @@ impl KeygenState {
             let event = InnerEvent::P2PMessageCommand(message);
 
             if let Err(err) = self.event_sender.send(event) {
-                error!("Could not send p2p: {}", err);
+                error!("Could not send p2p message command: {}", err);
             }
         }
     }

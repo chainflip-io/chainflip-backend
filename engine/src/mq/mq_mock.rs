@@ -14,11 +14,13 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_stream::StreamExt;
 
+/// In-memory message queue to be used in tests
 #[derive(Clone)]
 pub struct MQMock {
     topics: Arc<Mutex<HashMap<String, Vec<UnboundedSender<String>>>>>,
 }
 
+/// Client for MQMock
 pub struct MQMockClient {
     topics: Arc<Mutex<HashMap<String, Vec<UnboundedSender<String>>>>>,
 }
@@ -37,6 +39,7 @@ impl MQMock {
     }
 }
 
+/// Factory that knows how to create instances of MQMockClient
 pub struct MQMockClientFactory {
     mq: MQMock,
 }
@@ -49,17 +52,13 @@ impl MQMockClientFactory {
 
 #[async_trait]
 impl IMQClientFactory<MQMockClient> for MQMockClientFactory {
-    async fn connect(&self) -> anyhow::Result<Box<MQMockClient>> {
+    async fn create(&self) -> anyhow::Result<Box<MQMockClient>> {
         Ok(Box::new(self.mq.get_client()))
     }
 }
 
 #[async_trait]
 impl IMQClient for MQMockClient {
-    // async fn connect(_opts: settings::MessageQueue) -> Result<Box<Self>> {
-    //     todo!();
-    // }
-
     async fn publish<M: 'static + serde::Serialize + Sync>(
         &self,
         subject: super::Subject,

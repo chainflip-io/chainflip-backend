@@ -40,7 +40,7 @@ where
     inner_event_receiver: Option<mpsc::UnboundedReceiver<InnerEvent>>,
     signer_idx: usize,
     inner: MultisigClientInner,
-    _data: PhantomData<MQ>,
+    _mq: PhantomData<MQ>,
 }
 
 // How long we keep individual signing phases around
@@ -60,7 +60,7 @@ where
             inner: MultisigClientInner::new(idx, params, tx, PHASE_TIMEOUT),
             signer_idx: idx,
             inner_event_receiver: Some(rx),
-            _data: PhantomData,
+            _mq: PhantomData,
         }
     }
 
@@ -91,7 +91,7 @@ where
     pub async fn run(mut self) {
         let receiver = self.inner_event_receiver.take().unwrap();
 
-        let mq = *self.factory.connect().await.unwrap();
+        let mq = *self.factory.create().await.unwrap();
 
         let events_fut = MultisigClient::<_, F>::process_inner_events(receiver, mq);
 
@@ -106,7 +106,7 @@ where
 
         let cleanup_stream = UnboundedReceiverStream::new(cleanup_rx);
 
-        let mq = *self.factory.connect().await.unwrap();
+        let mq = *self.factory.create().await.unwrap();
 
         let other_fut = async move {
             let stream1 = mq
@@ -127,10 +127,6 @@ where
                 .await
                 .expect("Signing module failed to publish readiness");
 
-            let stream1 = pin_message_stream(stream1);
-
-            let stream2 = pin_message_stream(stream2);
-
             enum OtherEvents {
                 Instruction(Result<MultisigInstruction>),
                 Cleanup(()),
@@ -140,6 +136,9 @@ where
                 P2P(Result<P2PMessage>),
                 Other(OtherEvents),
             }
+
+            let stream1 = pin_message_stream(stream1);
+            let stream2 = pin_message_stream(stream2);
 
             let s1 = stream1.map(Events::P2P);
             let s2 = stream2.map(|x| Events::Other(OtherEvents::Instruction(x)));

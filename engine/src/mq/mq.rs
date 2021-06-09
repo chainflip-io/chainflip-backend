@@ -8,15 +8,12 @@ use serde::{de::DeserializeOwned, Serialize};
 
 #[async_trait]
 pub trait IMQClientFactory<IMQ: IMQClient> {
-    async fn connect(&self) -> anyhow::Result<Box<IMQ>>;
+    async fn create(&self) -> anyhow::Result<Box<IMQ>>;
 }
 
 /// Interface for a message queue
 #[async_trait]
 pub trait IMQClient {
-    /// Open a connection to the message queue
-    // async fn connect(opts: settings::MessageQueue) -> Result<Box<Self>>;
-
     /// Publish something to a particular subject
     async fn publish<M: 'static + Serialize + Sync>(
         &self,
@@ -100,7 +97,7 @@ impl fmt::Display for Subject {
                 write!(f, "p2p_outgoing")
             }
             Subject::MultisigInstruction => {
-                write!(f, "multisig_instructions")
+                write!(f, "multisig_instruction")
             }
             Subject::MultisigEvent => {
                 write!(f, "multisig_event")

@@ -163,11 +163,10 @@ impl MultisigClientInner {
                 // even when we are generating a new key (for example,
                 // we should be able to receive phase1 messages before we've
                 // finalized the signing key locally)
-                self.signing_manager
-                    .maybe_process_signing_data(sender_id, msg);
+                self.signing_manager.process_signing_data(sender_id, msg);
             }
             Err(_) => {
-                warn!("Invalid multisig message, discarding");
+                warn!("Cannot parse multisig message, discarding");
             }
         }
     }

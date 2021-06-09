@@ -55,15 +55,8 @@ impl SigningStateManager {
         self.signing_key = Some(signing_key);
     }
 
-    /// This is a method, because:
-    /// - it needs access to the key
-    /// - it needs p2p sender
-    /// -
-    pub(super) fn maybe_process_signing_data(
-        &mut self,
-        sender_id: usize,
-        wdata: SigningDataWrapper,
-    ) {
+    /// Process signing data, generating new state if necessary
+    pub(super) fn process_signing_data(&mut self, sender_id: usize, wdata: SigningDataWrapper) {
         let SigningDataWrapper { data, message } = wdata;
 
         debug!(

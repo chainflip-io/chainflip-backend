@@ -36,7 +36,6 @@ fn create_bc1(signer_idx: usize) -> Broadcast1 {
 
     let y_i = key.y_i;
 
-    // Q: can we distribute bc1 and blind at the same time?
     Broadcast1 { bc1, blind, y_i }
 }
 
@@ -122,7 +121,7 @@ fn should_process_delayed_bc1_after_rts() {
         message: msg.clone(),
     };
 
-    ssm.maybe_process_signing_data(signer_idx, wdata);
+    ssm.process_signing_data(signer_idx, wdata);
 
     let state = ssm.get_state_for(&msg);
 
@@ -161,7 +160,7 @@ fn sign_request_is_required_to_proceed() {
             message: msg.clone(),
         };
 
-        ssm.maybe_process_signing_data(signer_idx, wdata);
+        ssm.process_signing_data(signer_idx, wdata);
     }
 
     {
@@ -172,7 +171,7 @@ fn sign_request_is_required_to_proceed() {
             message: msg.clone(),
         };
 
-        ssm.maybe_process_signing_data(signer_idx, wdata);
+        ssm.process_signing_data(signer_idx, wdata);
     }
 
     let state = ssm.get_state_for(&msg).unwrap();
@@ -438,7 +437,7 @@ async fn request_to_sign_before_key_ready() {
     );
 }
 
-// 
+//
 
 // What needs to be tested (unit tests)
 // DONE:

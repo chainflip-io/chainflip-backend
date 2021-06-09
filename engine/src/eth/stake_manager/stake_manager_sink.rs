@@ -17,11 +17,7 @@ pub struct StakeManagerSink<M: IMQClient + Send + Sync> {
 }
 
 impl<M: IMQClient + Send + Sync> StakeManagerSink<M> {
-    pub async fn new<F: IMQClientFactory<M> + Send + Sync>(
-        mq_factory: F,
-    ) -> Result<StakeManagerSink<M>> {
-        let mq_client = *mq_factory.connect().await?;
-
+    pub async fn new(mq_client: M) -> Result<StakeManagerSink<M>> {
         Ok(StakeManagerSink { mq_client })
     }
 }
@@ -69,7 +65,9 @@ mod tests {
 
         let factory = NatsMQClientFactory::new(mq_settings);
 
-        StakeManagerSink::<NatsMQClient>::new(factory)
+        let mq_client = *factory.create().await.unwrap();
+
+        StakeManagerSink::<NatsMQClient>::new(mq_client)
             .await
             .unwrap();
     }

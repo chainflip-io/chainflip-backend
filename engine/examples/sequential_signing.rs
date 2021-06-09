@@ -24,9 +24,6 @@ pub fn keygen_t_n_parties(
         blind_vec.push(blind);
     }
 
-    // Values bc1_i and y_i are broadcast
-    // bc1_i are blinded commitments to y_i???
-
     let y_vec = (0..n.clone())
         .map(|i| party_keys_vec[i].y_i.clone())
         .collect::<Vec<GE>>();

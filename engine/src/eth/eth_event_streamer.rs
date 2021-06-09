@@ -146,8 +146,10 @@ mod tests {
             .message_queue;
 
         let factory = NatsMQClientFactory::new(mq_settings);
+
+        let mq_client = *factory.create().await.unwrap();
         // create the sink, which pushes events to the MQ
-        let sm_sink = StakeManagerSink::<NatsMQClient>::new(factory)
+        let sm_sink = StakeManagerSink::<NatsMQClient>::new(mq_client)
             .await
             .unwrap();
         let sm_event_stream = EthEventStreamBuilder::new("ws://localhost:8545", stake_manager);

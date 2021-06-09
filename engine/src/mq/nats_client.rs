@@ -43,7 +43,7 @@ impl NatsMQClientFactory {
 
 #[async_trait]
 impl IMQClientFactory<NatsMQClient> for NatsMQClientFactory {
-    async fn connect(&self) -> anyhow::Result<Box<NatsMQClient>> {
+    async fn create(&self) -> anyhow::Result<Box<NatsMQClient>> {
         let url = format!(
             "http://{}:{}",
             self.mq_settings.hostname, self.mq_settings.port
@@ -55,12 +55,6 @@ impl IMQClientFactory<NatsMQClient> for NatsMQClientFactory {
 
 #[async_trait]
 impl IMQClient for NatsMQClient {
-    // async fn connect(mq_settings: settings::MessageQueue) -> Result<Box<Self>> {
-    //     let url = format!("http://{}:{}", mq_settings.hostname, mq_settings.port);
-    //     let conn = async_nats::connect(url.as_str()).await?;
-    //     Ok(Box::new(NatsMQClient { conn }))
-    // }
-
     async fn publish<M: Serialize + Sync>(&self, subject: Subject, message: &'_ M) -> Result<()> {
         let bytes = serde_json::to_string(message)?;
         let bytes = bytes.as_bytes();
@@ -110,7 +104,7 @@ mod test {
         };
 
         NatsMQClientFactory::new(mq_settings)
-            .connect()
+            .create()
             .await
             .unwrap()
     }

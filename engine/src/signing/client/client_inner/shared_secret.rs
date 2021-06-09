@@ -24,7 +24,7 @@ pub struct SharedSecretState {
     // Phase 2
     vss_vec: Vec<VerifiableSS<GE>>,
     ss_vec: Vec<FE>,
-    // Order in which the first broadcasts came i
+    // Order in which the first broadcasts came in
     phase2_order: Vec<usize>,
     pub params: Parameters,
     min_parties: usize,
@@ -44,7 +44,7 @@ impl SharedSecretState {
 
         let y_i = self.key.y_i;
 
-        // Q: can we distribute bc1 and blind at the same time?
+        // TODO: (Q) can we distribute bc1 and blind at the same time?
         Broadcast1 { bc1, blind, y_i }
     }
 
@@ -94,8 +94,6 @@ impl SharedSecretState {
             Ok((vss_scheme, secret_shares, _idx)) => {
                 debug!("[{}] phase 1 successful ✅", self.signer_idx);
 
-                // Share vss_scheme with everyone (?)
-
                 assert_eq!(secret_shares.len(), parties.len());
 
                 // Share secret shares with the right parties
@@ -116,7 +114,7 @@ impl SharedSecretState {
                 }
             }
             Err(err) => {
-                println!("Error: {}", err);
+                error!("Could not verify phase1 keygen: {}", err);
                 // TODO: abort current signing process, or, more likely, ignore the player?
             }
         }
@@ -171,14 +169,14 @@ impl SharedSecretState {
                 let key = KeygenResult {
                     keys: self.key.clone(),
                     shared_keys,
-                    y_sum,
+                    aggregate_pubkey: y_sum,
                     vss: self.vss_vec.clone(),
                 };
 
                 return Ok(key);
             }
             Err(err) => {
-                error!("Error: {}", err);
+                error!("Vss verification failure: {}", err);
                 return Err(());
             }
         }

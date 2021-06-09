@@ -134,7 +134,7 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
     for rx in &mut rxs {
         let mut sec2_map = HashMap::new();
 
-        // Should generate two messages
+        // Should generate two messages (one for each of the other two parties)
         for _ in 0u32..2 {
             let (dest, sec2) = recv_secret2_keygen(rx).await;
             sec2_map.insert(dest, sec2);
