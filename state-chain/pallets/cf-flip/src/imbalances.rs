@@ -75,7 +75,7 @@ impl<T: Config> Surplus<T> {
 
 /// Opaque, move-only struct with private fields that serves as a token denoting that funds have been removed to
 /// *somewhere*, and that we need to account for this by cancelling it against a corresponding [Surplus].
-#[must_use = "This deficit needs to be reconciled - if not any remaining imblance will be reverted."]
+#[must_use = "This deficit needs to be reconciled - if not any remaining imbalance will be reverted."]
 #[derive(RuntimeDebug, PartialEq, Eq)]
 pub struct Deficit<T: Config> {
 	amount: T::Balance,
