@@ -1,6 +1,6 @@
 use sp_core::{Pair, Public, sr25519, crypto::UncheckedInto};
 use state_chain_runtime::{
-	AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig,
+	AccountId, AuraConfig, GenesisConfig, GrandpaConfig,
 	SudoConfig, SystemConfig, WASM_BINARY, Signature, ValidatorConfig, SessionConfig, opaque::SessionKeys
 };
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -204,10 +204,6 @@ fn testnet_genesis(
 			keys: initial_authorities.iter().map(|x| {
 				(x.0.clone(), x.0.clone(), session_keys(x.1.clone(), x.2.clone()))
 			}).collect::<Vec<_>>(),
-		}),
-		pallet_balances: Some(BalancesConfig {
-			// Configure endowed accounts with initial balance of 1 << 60.
-			balances: endowed_accounts.iter().cloned().map(|k|(k, 1 << 60)).collect(),
 		}),
 		pallet_aura: Some(AuraConfig {
 			authorities: vec![],
