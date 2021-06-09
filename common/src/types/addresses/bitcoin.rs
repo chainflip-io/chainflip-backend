@@ -51,88 +51,11 @@ impl FromStr for BitcoinAddress {
     ///
     /// assert!(BitcoinAddress::from_str("invalid").is_err());
     /// ```
-    #[deprecated = "BROKEN: Could mistake a bs58 encoded address as bech32 encoded and fail, if the
-        bs58 encoding result begins with bc1,BC1,tb1, or TB1. I didn't remove this code as that would cause
-        large parts of common to fail to compile. If needed use an external library to do this stuff."
-    ]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        panic!(); // See deprecated
-
-        let bech32_network = match find_bech32_prefix(s) {
-            // note that upper or lowercase is allowed but NOT mixed case
-            "bc" | "BC" => Some(Network::Mainnet),
-            "tb" | "TB" => Some(Network::Testnet),
-            _ => None,
-        };
-
-        if let Some(network) = bech32_network {
-            // decode as bech32
-            let (_, payload) = bech32::decode(s).map_err(|_| "Failed to decode address")?;
-            if payload.is_empty() {
-                return Err("Empty payload");
-            }
-
-            // Get the script version and program (converted from 5-bit to 8-bit)
-            let (version, program): (bech32::u5, Vec<u8>) = {
-                let (v, p5) = payload.split_at(1);
-                (
-                    v[0],
-                    bech32::FromBase32::from_base32(p5).map_err(|_| "Failed to decode program")?,
-                )
-            };
-
-            // Generic segwit checks.
-            if version.to_u8() > 16 {
-                return Err("Invalid witness version");
-            }
-            if program.len() < 2 || program.len() > 40 {
-                return Err("Invalid witness program length");
-            }
-
-            // Specific segwit v0 check.
-            if version.to_u8() == 0 && (program.len() != 20 && program.len() != 32) {
-                return Err("Invalid Segwit v0 program length");
-            }
-
-            let address_type = match version.to_u8() {
-                0 => match program.len() {
-                    20 => Some(BitcoinAddressType::P2wpkh),
-                    32 => Some(BitcoinAddressType::P2wsh),
-                    _ => None,
-                },
-                _ => None,
-            };
-
-            return Ok(BitcoinAddress {
-                address: s.to_string(),
-                address_type,
-                network,
-            });
-        }
-
-        // Base58
-        let data = bs58::decode(s)
-            .with_check(None)
-            .into_vec()
-            .map_err(|_| "Failed to decode address")?;
-
-        if data.len() != 21 {
-            return Err("Invalid address length");
-        }
-
-        let (network, address_type) = match data[0] {
-            0 => (Network::Mainnet, BitcoinAddressType::P2pkh),
-            5 => (Network::Mainnet, BitcoinAddressType::P2sh),
-            111 => (Network::Testnet, BitcoinAddressType::P2pkh),
-            196 => (Network::Testnet, BitcoinAddressType::P2sh),
-            _ => return Err("Invalid version"),
-        };
-
-        Ok(BitcoinAddress {
-            address: s.to_string(),
-            address_type: Some(address_type),
-            network,
-        })
+        // Old impl could mistake a bs58 encoded address as bech32 encoded and fail, if the
+        // bs58 encoding result begins with bc1,BC1,tb1, or TB1. I didn't remove this code entirely as that would cause
+        // large parts of common to fail to compile. If needed use an external library to do this stuff.
+        todo!()
     }
 }
 
