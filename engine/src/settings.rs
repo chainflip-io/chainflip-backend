@@ -51,7 +51,7 @@ pub mod test_utils {
         let mut s = Config::new();
 
         // Start off by merging in the "testing" configuration file
-        s.merge(File::with_name("config/testing.toml"))?;
+        s.merge(File::with_name("config/Testing.toml"))?;
 
         // You can deserialize (and thus freeze) the entire configuration as
         s.try_into()
