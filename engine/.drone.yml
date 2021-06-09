@@ -93,7 +93,7 @@ steps:
 # Config
 trigger:
   paths:
-    - engine/tests/**.rs
+    - engine/tests/*.rs
 
 image_pull_secrets:
   - dockerconfigjson
