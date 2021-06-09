@@ -76,16 +76,12 @@ impl<M: IMQClient + Send + Sync> Broadcast for EthBroadcaster<M> {
     async fn broadcast(&self, tx: Vec<u8>) -> Result<String> {
         // sends raw transaction and waits for transaction to be confirmed - in this case we just
         // return the hash immediately - the state chain handles stalling
-        let receipt = self
+        let tx_hash = self
             .web3_client
-            .send_raw_transaction_with_confirmation(
-                tx.into(),
-                std::time::Duration::from_secs(10),
-                0,
-            )
+            .eth()
+            .send_raw_transaction(tx.into())
             .await?;
 
-        let tx_hash = receipt.transaction_hash;
         self.mq_client
             .publish(Subject::BroadcastSuccess(Coin::ETH), &tx_hash)
             .await?;
