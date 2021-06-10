@@ -1,8 +1,7 @@
-use chainflip_common::types::coin::Coin;
 use codec::Decode;
 use substrate_subxt::RawEvent;
 
-use crate::mq::Subject;
+use crate::{mq::Subject, types::chain::Chain};
 
 use anyhow::Result;
 
@@ -88,7 +87,7 @@ pub(super) fn subject_from_raw_event(event: &RawEvent) -> Option<Subject> {
         "Staking" => match event.variant.as_str() {
             "ClaimSigRequested" => Some(Subject::StateChainClaim),
             // All Stake refunds are ETH, how are these refunds coming out though? as batches or individual txs?
-            "StakeRefund" => Some(Subject::Batch(Coin::ETH)),
+            "StakeRefund" => Some(Subject::Batch(Chain::ETH)),
             "ClaimSignatureIssued" => Some(Subject::StateChainClaimIssued),
             // This doesn't need to go anywhere, this is just a confirmation emitted, perhaps for block explorers
             "Claimed" => None,
