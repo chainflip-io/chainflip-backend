@@ -49,12 +49,29 @@ pub trait EpochInfo {
 	fn is_auction_phase() -> bool;
 }
 
+/// The phase of an Auction. At the start we are waiting on bidders, we then run an auction and
+/// finally it is completed
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub enum AuctionPhase<ValidatorId, Amount> {
+	WaitingForBids,
+	BidsTaken(Vec<Bid<ValidatorId, Amount>>),
+	WinnersSelected((Vec<ValidatorId>, Amount)),
+}
+
+impl<ValidatorId, Amount> Default for AuctionPhase<ValidatorId, Amount> {
+	fn default() -> Self {
+		AuctionPhase::WaitingForBids
+	}
+}
+
+/// A bid represented by a validator and the amount they wish to bid
+pub type Bid<ValidatorId, Amount> = (ValidatorId, Amount);
 /// A range of min, max for our winning set
 pub type AuctionRange = (u32, u32);
 
 /// An Auction
 ///
-/// An auction is broken down into three phases described by a `Phase`
+/// An auction is broken down into three phases described by `AuctionPhase`
 /// At the start we look for bidders provided by `BidderProvider` from which an auction is ran
 /// This results in a set of winners and a minimum bid after the auction.  After each successful
 /// call of `process()` the phase will transition else resulting in an error and preventing to move
@@ -63,20 +80,19 @@ pub type AuctionRange = (u32, u32);
 pub trait Auction {
 	type ValidatorId;
 	type Amount;
-	type BidderProvider: BidderProvider;
+	type BidderProvider;
 	type Confirmation: AuctionConfirmation;
-	type Phase;
 
 	/// Range describing auction set size
 	fn auction_range() -> AuctionRange;
 	/// Set the auction range
 	fn set_auction_range(range: AuctionRange) -> Result<AuctionRange, AuctionError>;
 	/// The current phase we find ourselves in
-	fn phase() -> Self::Phase;
+	fn phase() -> AuctionPhase<Self::ValidatorId, Self::Amount>;
 	/// Are we in an auction?
 	fn waiting_on_bids() -> bool;
 	/// Move the process forward by one step, returns the phase completed or error
-	fn process() -> Result<Self::Phase, AuctionError>;
+	fn process() -> Result<AuctionPhase<Self::ValidatorId, Self::Amount>, AuctionError>;
 	/// Abort this auction
 	fn abort();
 }
