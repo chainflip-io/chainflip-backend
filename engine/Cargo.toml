@@ -49,6 +49,7 @@ substrate-subxt = {version = "0.15 "}
 pallet-cf-staking = {path = "../state-chain/pallets/cf-staking"}
 pallet-cf-validator = {path = "../state-chain/pallets/cf-validator"}
 state-chain-runtime = {path = "../state-chain/runtime"}
+cf-traits = {path = "../state-chain/traits"}
 
 [dev-dependencies]
 frame-support = "3.0.0"
