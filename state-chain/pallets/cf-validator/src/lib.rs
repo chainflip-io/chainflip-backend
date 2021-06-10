@@ -280,24 +280,12 @@ impl<T: Config> pallet_session::SessionHandler<T::ValidatorId> for Pallet<T> {
 	/// TODO look at the key management
 	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[];
 	fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(T::ValidatorId, Ks)]) {}
-
-	/// A new session has started.
-	///
-	/// Forward the current validators [EpochTransitionHandler::on_new_epoch]
 	fn on_new_session<Ks: OpaqueKeys>(
 		_changed: bool,
 		validators: &[(T::ValidatorId, Ks)],
 		_queued_validators: &[(T::ValidatorId, Ks)],
-	) {
-		let current_validators = validators.iter()
-			.map(|(id, _)| id.clone())
-			.collect::<Vec<T::ValidatorId>>();
-
-		T::EpochTransitionHandler::on_new_epoch(current_validators);
-	}
-
+	) {}
 	fn on_before_session_ending() {}
-
 	fn on_disabled(_validator_index: usize) {}
 }
 
