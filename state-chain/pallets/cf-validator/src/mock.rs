@@ -34,7 +34,7 @@ impl WeightInfo for () {
 thread_local! {
 	pub static CANDIDATE_IDX: RefCell<u64> = RefCell::new(0);
 	pub static CURRENT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
-	pub static PHASE: RefCell<AuctionPhase<ValidatorId, Amount>> =  RefCell::new(AuctionPhase::WaitingForBids);
+	pub static PHASE: RefCell<AuctionPhase<ValidatorId, Amount>> =  RefCell::new(AuctionPhase::default());
 	pub static BIDDERS: RefCell<Vec<(u64, u64)>> = RefCell::new(vec![]);
 	pub static WINNERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 	pub static CONFIRM: RefCell<bool> = RefCell::new(false);
@@ -153,7 +153,8 @@ pub struct TestEpochTransitionHandler;
 
 impl EpochTransitionHandler for TestEpochTransitionHandler {
 	type ValidatorId = ValidatorId;
-	fn on_new_epoch(new_validators: Vec<Self::ValidatorId>) {
+	type Amount = Amount;
+	fn on_new_epoch(new_validators: Vec<Self::ValidatorId>, _min_bid: Self::Amount) {
 		CURRENT_VALIDATORS.with(|l|
 			*l.borrow_mut() = new_validators
 		);

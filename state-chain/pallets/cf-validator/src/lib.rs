@@ -72,15 +72,16 @@ type SessionIndex = u32;
 pub trait EpochTransitionHandler {
 	/// The id type used for the validators.
 	type ValidatorId;
-
+	type Amount;
 	/// A new epoch has started
 	///
 	/// The new set of validator `new_validators` are now validating
-	fn on_new_epoch(_new_validators: Vec<Self::ValidatorId>) {}
+	fn on_new_epoch(_new_validators: Vec<Self::ValidatorId>, _new_bond: Self::Amount) {}
 }
 
-impl<T: pallet_session::Config> EpochTransitionHandler for PhantomData<T> {
+impl<T: Config> EpochTransitionHandler for PhantomData<T> {
 	type ValidatorId = T::ValidatorId;
+	type Amount = T::Amount;
 }
 
 #[frame_support::pallet]
@@ -99,7 +100,7 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// A handler for epoch lifecycle events
-		type EpochTransitionHandler: EpochTransitionHandler<ValidatorId=Self::ValidatorId>;
+		type EpochTransitionHandler: EpochTransitionHandler<ValidatorId=Self::ValidatorId, Amount=Self::Amount>;
 
 		/// Minimum amount of blocks an epoch can run for
 		#[pallet::constant]
@@ -282,7 +283,7 @@ impl<T: Config> pallet_session::SessionHandler<T::ValidatorId> for Pallet<T> {
 	fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(T::ValidatorId, Ks)]) {}
 	fn on_new_session<Ks: OpaqueKeys>(
 		_changed: bool,
-		validators: &[(T::ValidatorId, Ks)],
+		_validators: &[(T::ValidatorId, Ks)],
 		_queued_validators: &[(T::ValidatorId, Ks)],
 	) {}
 	fn on_before_session_ending() {}
@@ -294,7 +295,7 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 	fn should_end_session(now: T::BlockNumber) -> bool {
 		// If we are waiting on bids let's see if we want to start a new rotation
 		return match T::Auction::phase() {
-			AuctionPhase::WaitingForBids => {
+			AuctionPhase::WaitingForBids(_, _) => {
 				// If the session should end, run through an auction
 				// two steps- validate and select winners
 				Self::should_rotate(now) &&
@@ -353,7 +354,7 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 			}
 			// A rotation has occurred, we emit an event of the new epoch and compile a list of
 			// validators for validator lookup
-			AuctionPhase::WaitingForBids => {
+			AuctionPhase::WaitingForBids(winners, min_bid) => {
 				// Calculate our new epoch index
 				let new_epoch = CurrentEpoch::<T>::mutate(|epoch| {
 					*epoch = epoch.saturating_add(One::one());
@@ -361,8 +362,10 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 				});
 				// Emit an event
 				Self::deposit_event(Event::NewEpoch(new_epoch));
+				// Generate our lookup list of validators
 				Self::generate_lookup();
-
+				// Our trait callback
+				T::EpochTransitionHandler::on_new_epoch(winners, min_bid);
 				None
 			}
 			// Return

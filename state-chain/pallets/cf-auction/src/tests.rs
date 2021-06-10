@@ -21,7 +21,7 @@ mod test {
 
 			let auction_range = (2, 100);
 			// Check we are in the bidders phase
-			assert_eq!(AuctionPallet::current_phase(), AuctionPhase::WaitingForBids);
+			assert_eq!(AuctionPallet::current_phase(), AuctionPhase::default());
 			// Now move to the next phase, this should be the BidsTaken phase
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(bidders)) if bidders == vec![low_bid, joe_bid, max_bid]);
 			// Read storage to confirm has been changed to BidsTaken
@@ -52,8 +52,8 @@ mod test {
 			// Confirm the auction
 			CONFIRM.with(|l| { *l.borrow_mut() = true });
 			// and finally we complete the process, clearing the bidders
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WaitingForBids));
-			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::WaitingForBids);
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WaitingForBids(_, _)));
+			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::WaitingForBids(_, _));
 		});
 	}
 
@@ -98,7 +98,7 @@ mod test {
 			assert!(AuctionPallet::auction_to_confirm());
 			// Kill it
 			AuctionPallet::abort();
-			assert_eq!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
+			assert_eq!(AuctionPallet::phase(), AuctionPhase::default());
 		});
 	}
 }

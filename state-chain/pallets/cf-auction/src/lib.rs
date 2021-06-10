@@ -48,6 +48,7 @@ use frame_support::pallet_prelude::*;
 use frame_support::traits::ValidatorRegistration;
 use sp_std::cmp::min;
 use cf_traits::{Auction, AuctionPhase, AuctionError, BidderProvider, AuctionRange, AuctionConfirmation};
+use frame_support::sp_std::mem;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -214,7 +215,7 @@ impl<T: Config> Auction for Pallet<T> {
 	fn phase() -> AuctionPhase<Self::ValidatorId, Self::Amount> { <CurrentPhase<T>>::get() }
 
 	fn waiting_on_bids() -> bool {
-		Self::phase() == AuctionPhase::WaitingForBids
+		mem::discriminant(&Self::phase()) == mem::discriminant(&AuctionPhase::default())
 	}
 
 	/// Move our auction process to the next phase returning success with phase completed
@@ -229,7 +230,7 @@ impl<T: Config> Auction for Pallet<T> {
 			// to be able to actual join the validating set.  If we manage to pass these tests
 			// we kill the last set of winners stored, set the bond to 0, store this set of
 			// bidders and change our state ready for an 'Auction' to be ran
-			AuctionPhase::WaitingForBids => {
+			AuctionPhase::WaitingForBids(_, _) => {
 				let mut bidders = T::BidderProvider::get_bidders();
 				// Rule #1 - If we have a bid at 0 then please leave
 				bidders.retain(|(_, amount)| !amount.is_zero());
@@ -280,21 +281,22 @@ impl<T: Config> Auction for Pallet<T> {
 			// Things have gone well and we have a set of 'Winners', congratulations.
 			// We are ready to call this an auction a day resetting the bidders in storage and
 			// setting the state ready for a new set of 'Bidders'
-			AuctionPhase::WinnersSelected(_, _) => {
+			AuctionPhase::WinnersSelected(winners, min_bid) => {
 				if !Self::Confirmation::confirmed() {
 					return Err(AuctionError::NotConfirmed);
 				}
 
-				<CurrentPhase<T>>::put(AuctionPhase::WaitingForBids);
+				let phase = AuctionPhase::WaitingForBids(winners, min_bid);
+				<CurrentPhase<T>>::put(phase.clone());
 				Self::deposit_event(Event::AwaitingBidders);
 
-				Ok(AuctionPhase::WaitingForBids)
+				Ok(phase)
 			}
 		};
 	}
 
 	fn abort() {
-		<CurrentPhase<T>>::put(AuctionPhase::WaitingForBids);
+		<CurrentPhase<T>>::put(AuctionPhase::default());
 		<AuctionToConfirm::<T>>::kill();
 		Self::deposit_event(Event::AuctionAborted(<CurrentAuctionIndex<T>>::get()));
 	}
