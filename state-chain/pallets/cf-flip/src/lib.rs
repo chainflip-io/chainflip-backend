@@ -156,6 +156,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			TotalIssuance::<T>::set(self.total_issuance);
+			OffchainFunds::<T>::set(self.total_issuance);
 		}
 	}
 }
