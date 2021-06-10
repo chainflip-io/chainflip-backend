@@ -1,6 +1,5 @@
 use std::{collections::HashMap, sync::Arc};
 
-use futures::Stream;
 use parking_lot::Mutex;
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};

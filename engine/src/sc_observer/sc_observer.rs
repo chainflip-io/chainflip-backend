@@ -72,11 +72,12 @@ async fn subscribe_to_events<M: 'static + IMQClient>(
                 Some(event) => {
                     // Publish the message to the message queue
                     match mq_client.publish(subject, &event).await {
-                        Err(_) => {
+                        Err(err) => {
                             error!(
-                                "Could not publish message `{:?}` to subject `{}`",
+                                "Could not publish message `{:?}` to subject `{}`. Error: {}",
                                 event,
-                                subject.to_string()
+                                subject.to_string(),
+                                err
                             );
                         }
                         Ok(_) => trace!("Event: {:#?} pushed to message queue", event),

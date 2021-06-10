@@ -11,7 +11,9 @@ async fn main() {
 
     sc_observer::sc_observer::start(settings.clone()).await;
 
-    eth::start(settings.clone()).await;
+    eth::start(settings.clone())
+        .await
+        .expect("Should start ETH client");
 
     // start witnessing other chains
     witness::witness::start(settings.message_queue).await;
