@@ -27,3 +27,6 @@ chainflip-engine/config/**/local.toml
 
 .vscode
 .idea
+
+# created by cargo-deny check --graph
+graph

@@ -2,7 +2,10 @@ mod client_inner;
 
 use std::{marker::PhantomData, time::Duration};
 
-use crate::mq::{pin_message_stream, IMQClient, IMQClientFactory, Subject};
+use crate::{
+    mq::{pin_message_stream, IMQClient, IMQClientFactory, Subject},
+    p2p::ValidatorId,
+};
 use anyhow::Result;
 use futures::StreamExt;
 use log::*;
@@ -12,23 +15,53 @@ use crate::p2p::P2PMessage;
 
 use self::client_inner::{InnerEvent, InnerSignal, MultisigClientInner};
 
-use super::{crypto::Parameters, MessageHash};
+use super::{crypto::Parameters, MessageHash, MessageInfo};
 
 use tokio::sync::mpsc;
 
 use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Copy)]
+pub struct KeyId(pub u64);
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct KeygenInfo {
+    id: KeyId,
+    signers: Vec<ValidatorId>,
+}
+
+impl KeygenInfo {
+    pub fn new(id: KeyId, signers: Vec<ValidatorId>) -> Self {
+        KeygenInfo { id, signers }
+    }
+}
+
+/// Note that this is different from `AuctionInfo` as
+/// not every multisig party will participate in
+/// any given ceremony
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SigningInfo {
+    id: KeyId,
+    signers: Vec<ValidatorId>,
+}
+
+impl SigningInfo {
+    pub fn new(id: KeyId, signers: Vec<ValidatorId>) -> Self {
+        SigningInfo { id, signers }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub enum MultisigInstruction {
-    KeyGen,
-    Sign(/* message */ Vec<u8>, /* signers */ Vec<usize>),
+    KeyGen(KeygenInfo),
+    Sign(MessageHash, SigningInfo),
 }
 
 #[derive(Serialize, Deserialize)]
 pub enum MultisigEvent {
     ReadyToKeygen,
     ReadyToSign,
-    MessageSigned(MessageHash),
+    MessageSigned(MessageInfo),
 }
 
 pub struct MultisigClient<MQ, F>

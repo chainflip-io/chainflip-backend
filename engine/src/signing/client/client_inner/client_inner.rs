@@ -1,21 +1,18 @@
 use std::time::Duration;
 
 use crate::{
-    p2p::{P2PMessage, P2PMessageCommand},
+    p2p::{P2PMessage, P2PMessageCommand, ValidatorId},
     signing::{
-        client::MultisigInstruction,
+        client::{KeyId, MultisigInstruction},
         crypto::{BigInt, KeyGenBroadcastMessage1, LocalSig, Parameters, VerifiableSS, FE, GE},
-        MessageHash,
+        MessageInfo,
     },
 };
 
 use log::*;
 use tokio::sync::mpsc::UnboundedSender;
 
-use super::{
-    keygen_state::{KeygenStage, KeygenState},
-    signing_state_manager::SigningStateManager,
-};
+use super::{keygen_manager::KeygenManager, signing_state_manager::SigningStateManager};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub(super) enum SigningData {
@@ -32,15 +29,39 @@ impl From<Broadcast1> for SigningData {
 
 /// Protocol data plus the message to sign
 #[derive(Serialize, Deserialize, Debug)]
-pub struct SigningDataWrapper {
+pub struct SigningDataWrapped {
     pub(super) data: SigningData,
-    pub(super) message: MessageHash,
+    pub(super) message: MessageInfo,
+}
+
+impl SigningDataWrapped {
+    pub(super) fn new<S>(data: S, message: MessageInfo) -> Self
+    where
+        S: Into<SigningData>,
+    {
+        SigningDataWrapped {
+            data: data.into(),
+            message,
+        }
+    }
+}
+
+impl From<SigningDataWrapped> for MultisigMessage {
+    fn from(wrapped: SigningDataWrapped) -> Self {
+        MultisigMessage::SigningMessage(wrapped)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum MultisigMessage {
-    KeyGenMessage(KeyGenMessage),
-    SigningMessage(SigningDataWrapper),
+    KeyGenMessage(KeyGenMessageWrapped),
+    SigningMessage(SigningDataWrapped),
+}
+
+impl From<LocalSig> for SigningData {
+    fn from(sig: LocalSig) -> Self {
+        SigningData::LocalSig(sig)
+    }
 }
 
 use serde::{Deserialize, Serialize};
@@ -63,6 +84,36 @@ impl From<Secret2> for KeyGenMessage {
     }
 }
 
+impl From<Secret2> for SigningData {
+    fn from(sec2: Secret2) -> Self {
+        SigningData::Secret2(sec2)
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct KeyGenMessageWrapped {
+    pub(super) key_id: KeyId,
+    pub(super) message: KeyGenMessage,
+}
+
+impl KeyGenMessageWrapped {
+    pub fn new<M>(key_id: KeyId, m: M) -> Self
+    where
+        M: Into<KeyGenMessage>,
+    {
+        KeyGenMessageWrapped {
+            key_id,
+            message: m.into(),
+        }
+    }
+}
+
+impl From<KeyGenMessageWrapped> for MultisigMessage {
+    fn from(wrapped: KeyGenMessageWrapped) -> Self {
+        MultisigMessage::KeyGenMessage(wrapped)
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum KeyGenMessage {
     Broadcast1(Broadcast1),
@@ -80,7 +131,7 @@ impl From<Broadcast1> for KeyGenMessage {
 #[derive(Debug, PartialEq)]
 pub enum InnerSignal {
     KeyReady,
-    MessageSigned(MessageHash),
+    MessageSigned(MessageInfo),
 }
 
 #[derive(Debug, PartialEq)]
@@ -91,26 +142,31 @@ pub enum InnerEvent {
 
 #[derive(Clone)]
 pub struct MultisigClientInner {
-    // TODO: might have two(?) keygen states during vault rotation
-    pub keygen_state: KeygenState,
+    keygen: KeygenManager,
     params: Parameters,
-    signer_idx: usize,
+    id: ValidatorId,
     pub signing_manager: SigningStateManager,
 }
 
 impl MultisigClientInner {
     pub fn new(
-        idx: usize,
+        id: ValidatorId,
         params: Parameters,
         tx: UnboundedSender<InnerEvent>,
         phase_timeout: Duration,
     ) -> Self {
         MultisigClientInner {
-            keygen_state: KeygenState::new(idx, params, tx.clone()),
+            keygen: KeygenManager::new(params, id, tx.clone()),
             params,
-            signer_idx: idx,
-            signing_manager: SigningStateManager::new(params, idx, tx, phase_timeout),
+            id,
+            // MAXIM: id is wrong here (below)...
+            signing_manager: SigningStateManager::new(params, id, tx, phase_timeout),
         }
+    }
+
+    #[cfg(test)]
+    pub fn get_keygen(&self) -> &KeygenManager {
+        &self.keygen
     }
 
     pub fn cleanup(&mut self) {
@@ -120,23 +176,30 @@ impl MultisigClientInner {
 
     pub fn process_multisig_instruction(&mut self, instruction: MultisigInstruction) {
         match instruction {
-            MultisigInstruction::KeyGen => {
+            MultisigInstruction::KeyGen(epoch) => {
                 // For now disable generating a new key when we already have one
 
-                debug!("[{}] Received keygen instruction", self.signer_idx);
+                debug!("[{}] Received keygen instruction", self.id);
 
-                self.keygen_state.initiate_keygen();
+                self.keygen.on_keygen_request(epoch);
             }
-            MultisigInstruction::Sign(data, parties) => {
-                debug!("[{}] Received sign instruction", self.signer_idx);
+            MultisigInstruction::Sign(hash, sign_info) => {
+                debug!("[{}] Received sign instruction", self.id);
+                let key_id = sign_info.id;
 
-                // TODO: We should be able to start receiving signing data even
-                // before we have the key locally!
-                match self.keygen_state.stage {
-                    KeygenStage::KeyReady => {
-                        self.signing_manager.on_request_to_sign(data, &parties);
+                let key = self.keygen.get_key_by_id(key_id);
+
+                match key {
+                    Some(key) => {
+                        self.signing_manager
+                            .on_request_to_sign(hash, key.clone(), sign_info);
                     }
-                    _ => {
+                    None => {
+                        // We don't have the key yet, but already received
+                        // a signing requiest using it. The solution is to
+                        // delay the request a little bit, replay it once the key
+                        // is ready.
+
                         // TODO: add a queue of messages to sign
                         warn!("Failed attempt to sign: key not ready");
                     }
@@ -154,9 +217,7 @@ impl MultisigClientInner {
                 // NOTE: we should be able to process Keygen messages
                 // even when we are "signing"... (for example, if we want to
                 // generate a new key)
-                if let Some(key) = self.keygen_state.process_keygen_message(sender_id, msg) {
-                    self.signing_manager.set_key(key);
-                }
+                self.keygen.process_keygen_message(sender_id, msg);
             }
             Ok(MultisigMessage::SigningMessage(msg)) => {
                 // NOTE: we should be able to process Signing messages

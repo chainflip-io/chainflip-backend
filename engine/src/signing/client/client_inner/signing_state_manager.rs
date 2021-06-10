@@ -6,18 +6,17 @@ use std::{
 use log::*;
 use tokio::sync::mpsc;
 
-use crate::signing::{crypto::Parameters, MessageHash};
+use crate::signing::{client::SigningInfo, crypto::Parameters, MessageHash, MessageInfo};
 
 use super::{
-    client_inner::{InnerEvent, SigningDataWrapper},
+    client_inner::{InnerEvent, SigningDataWrapped},
     signing_state::{KeygenResult, SigningState},
 };
 
 /// Manages multiple signing states for multiple signing processes
 #[derive(Clone)]
 pub struct SigningStateManager {
-    signing_key: Option<KeygenResult>,
-    signing_states: HashMap<MessageHash, SigningState>,
+    signing_states: HashMap<MessageInfo, SigningState>,
     params: Parameters,
     signer_idx: usize,
     p2p_sender: mpsc::UnboundedSender<InnerEvent>,
@@ -35,7 +34,6 @@ impl SigningStateManager {
     ) -> Self {
         SigningStateManager {
             signing_states: HashMap::new(),
-            signing_key: None,
             params,
             signer_idx,
             p2p_sender,
@@ -44,37 +42,34 @@ impl SigningStateManager {
     }
 
     #[cfg(test)]
-    pub(super) fn get_state_for(&self, message: &[u8]) -> Option<&SigningState> {
+    pub(super) fn get_state_for(&self, message: &MessageInfo) -> Option<&SigningState> {
         self.signing_states.get(message)
     }
 
-    /// Note that the key can be added later to make sure that we
-    /// can start recording signing data even before we finished
-    /// the last step of keygen locally.
-    pub(super) fn set_key(&mut self, signing_key: KeygenResult) {
-        self.signing_key = Some(signing_key);
-    }
-
     /// Process signing data, generating new state if necessary
-    pub(super) fn process_signing_data(&mut self, sender_id: usize, wdata: SigningDataWrapper) {
-        let SigningDataWrapper { data, message } = wdata;
+    pub(super) fn process_signing_data(&mut self, sender_id: usize, wdata: SigningDataWrapped) {
+        let SigningDataWrapped { data, message } = wdata;
 
         debug!(
             "receiving signing data for message: {}",
-            String::from_utf8_lossy(&message)
+            String::from_utf8_lossy(&message.hash.0)
         );
-
-        let key = self.signing_key.clone();
 
         let p2p_sender = self.p2p_sender.clone();
 
         match self.signing_states.entry(message.clone()) {
             Entry::Occupied(mut state) => {
+                trace!("Already have state for message");
                 // We already have state for the provided message, so
                 // process it normally
                 state.get_mut().process_signing_message(sender_id, data);
             }
             Entry::Vacant(entry) => {
+                trace!("Creating new state for message");
+                // We might already have the key, but let's just make it
+                // `on_request_to_sign`'s responsibility to set the key
+                let key = None;
+
                 // Create state, but in Idle state
                 let state = entry.insert(SigningState::new(
                     self.signer_idx,
@@ -89,29 +84,43 @@ impl SigningStateManager {
         }
     }
 
-    pub(super) fn on_request_to_sign(&mut self, message: Vec<u8>, active_parties: &[usize]) {
+    pub(super) fn on_request_to_sign(
+        &mut self,
+        data: MessageHash,
+        key: KeygenResult,
+        sign_info: SigningInfo,
+    ) {
         debug!(
             "initiating signing for message: {}",
-            String::from_utf8_lossy(&message)
+            String::from_utf8_lossy(&data.0)
         );
 
-        match self.signing_states.entry(message.clone()) {
+        let key_id = sign_info.id;
+
+        let mi = MessageInfo { hash: data, key_id };
+
+        match self.signing_states.entry(mi.clone()) {
             Entry::Occupied(mut entry) => {
+                trace!("Already have signing state for message");
                 // Already have some data for this message
-                entry.get_mut().on_request_to_sign(active_parties);
+                let entry = entry.get_mut();
+
+                entry.set_key(key);
+                entry.on_request_to_sign(sign_info);
             }
             Entry::Vacant(entry) => {
                 // Initiate signing state
-                let key = self.signing_key.clone();
+                trace!("Creating new signing state for message");
+                let key = Some(key);
                 let p2p_sender = self.p2p_sender.clone();
                 let entry = entry.insert(SigningState::new(
                     self.signer_idx,
                     key,
                     self.params,
                     p2p_sender,
-                    message,
+                    mi,
                 ));
-                entry.on_request_to_sign(active_parties);
+                entry.on_request_to_sign(sign_info);
             }
         }
     }

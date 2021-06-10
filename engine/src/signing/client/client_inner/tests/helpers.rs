@@ -9,20 +9,23 @@ use crate::{
         client::{
             client_inner::{
                 client_inner::{
-                    Broadcast1, KeyGenMessage, MultisigMessage, Secret2, SigningData,
-                    SigningDataWrapper,
+                    Broadcast1, KeyGenMessage, KeyGenMessageWrapped, MultisigMessage, Secret2,
+                    SigningData, SigningDataWrapped,
                 },
                 keygen_state::KeygenStage,
                 signing_state::SigningStage,
                 InnerEvent, InnerSignal, MultisigClientInner,
             },
-            MultisigInstruction,
+            KeyId, KeygenInfo, MultisigInstruction, SigningInfo,
         },
         crypto::{LocalSig, Parameters},
+        MessageHash, MessageInfo,
     },
 };
 
 use lazy_static::lazy_static;
+
+use super::AUCTION_ID;
 
 /// Clients generated bc1, but haven't sent them
 pub(super) struct KeygenPhase1Data {
@@ -35,6 +38,10 @@ pub(super) struct KeygenPhase2Data {
     pub(super) clients: Vec<MultisigClientInner>,
     /// The key in the map is the index of the desitnation node
     pub(super) sec2_vec: Vec<HashMap<usize, Secret2>>,
+}
+
+pub(super) struct KeygenPhase3Data {
+    pub(super) clients: Vec<MultisigClientInner>,
 }
 
 /// Clients received a request to sign and generated BC1, not broadcast yet
@@ -60,6 +67,7 @@ pub(super) struct SigningPhase3Data {
 pub(super) struct ValidKeygenStates {
     pub(super) keygen_phase1: KeygenPhase1Data,
     pub(super) keygen_phase2: KeygenPhase2Data,
+    pub(super) key_ready: KeygenPhase3Data,
     pub(super) sign_phase1: SigningPhase1Data,
     pub(super) sign_phase2: SigningPhase2Data,
     pub(super) sign_phase3: SigningPhase3Data,
@@ -77,6 +85,23 @@ lazy_static! {
 }
 
 const TEST_PHASE_TIMEOUT: Duration = Duration::from_secs(5);
+
+pub fn keygen_stage_for(client: &MultisigClientInner, key_id: KeyId) -> Option<KeygenStage> {
+    client.get_keygen().get_stage_for(key_id)
+}
+
+pub fn keygen_delayed_count(client: &MultisigClientInner, key_id: KeyId) -> usize {
+    client.get_keygen().get_delayed_count(key_id)
+}
+
+pub fn signing_delayed_count(client: &MultisigClientInner, mi: &MessageInfo) -> usize {
+    // We assert that the state exists in this case
+    let state = client
+        .signing_manager
+        .get_state_for(mi)
+        .expect("state should exist");
+    state.delayed_count()
+}
 
 pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
     let instant = std::time::Instant::now();
@@ -96,8 +121,16 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
 
     // Generate phase 1 data
 
+    let key_id = KeyId(0);
+
+    let signers: Vec<_> = (1..=3).into_iter().collect();
+    let auction_info = KeygenInfo {
+        id: key_id,
+        signers,
+    };
+
     for c in &mut clients {
-        c.process_multisig_instruction(MultisigInstruction::KeyGen);
+        c.process_multisig_instruction(MultisigInstruction::KeyGen(auction_info.clone()));
     }
 
     let mut bc1_vec = vec![];
@@ -126,7 +159,10 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
     }
 
     for c in &clients {
-        assert_eq!(c.keygen_state.stage, KeygenStage::AwaitingSecret2);
+        assert_eq!(
+            keygen_stage_for(c, key_id),
+            Some(KeygenStage::AwaitingSecret2)
+        );
     }
 
     let mut sec2_vec = vec![];
@@ -179,24 +215,37 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
         );
     }
 
+    let keygen_phase3 = KeygenPhase3Data {
+        clients: clients.clone(),
+    };
+
     // *** Send a request to sign and generate BC1 to be distributed ***
 
-    let message_to_sign = "Chainflip".as_bytes().to_vec();
+    let message_to_sign = MessageHash("Chainflip".as_bytes().to_vec());
+    let message_info = MessageInfo {
+        hash: message_to_sign.clone(),
+        key_id,
+    };
 
     // NOTE: only parties 1 and 2 will participate in signing
     let active_parties = vec![1, 2];
+
+    let sign_info = SigningInfo {
+        id: key_id,
+        signers: active_parties.clone(),
+    };
 
     for idx in &active_parties {
         let c = &mut clients[idx - 1];
 
         c.process_multisig_instruction(MultisigInstruction::Sign(
             message_to_sign.clone(),
-            active_parties.clone(),
+            sign_info.clone(),
         ));
 
         assert_eq!(
             c.signing_manager
-                .get_state_for(&message_to_sign)
+                .get_state_for(&message_info)
                 .unwrap()
                 .get_stage(),
             SigningStage::AwaitingBroadcast1
@@ -224,7 +273,7 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
     for sender_idx in &active_parties {
         let bc1 = bc1_vec[sender_idx - 1].clone();
 
-        let m = bc1_to_p2p_signing(bc1, *sender_idx, &message_to_sign);
+        let m = bc1_to_p2p_signing(bc1, *sender_idx, &message_info);
 
         for receiver_idx in &active_parties {
             if receiver_idx != sender_idx {
@@ -267,7 +316,7 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
             if sender_idx != receiver_idx {
                 let sec2 = sec2_vec[sender_idx - 1].get(receiver_idx).unwrap().clone();
 
-                let m = sec2_to_p2p_signing(sec2, *sender_idx, &message_to_sign);
+                let m = sec2_to_p2p_signing(sec2, *sender_idx, &message_info);
 
                 clients[receiver_idx - 1].process_p2p_mq_message(m);
             }
@@ -278,7 +327,7 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
         let c = &mut clients[idx - 1];
         assert_eq!(
             c.signing_manager
-                .get_state_for(&message_to_sign)
+                .get_state_for(&message_info)
                 .unwrap()
                 .get_stage(),
             SigningStage::AwaitingLocalSig3
@@ -308,6 +357,7 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
     ValidKeygenStates {
         keygen_phase1,
         keygen_phase2,
+        key_ready: keygen_phase3,
         sign_phase1,
         sign_phase2,
         sign_phase3,
@@ -391,8 +441,12 @@ async fn recv_multisig_message(rx: &mut UnboundedReceiver<InnerEvent>) -> (usize
 async fn recv_bc1_keygen(rx: &mut UnboundedReceiver<InnerEvent>) -> Broadcast1 {
     let (_, m) = recv_multisig_message(rx).await;
 
-    if let MultisigMessage::KeyGenMessage(KeyGenMessage::Broadcast1(bc1)) = m {
-        return bc1;
+    if let MultisigMessage::KeyGenMessage(wrapped) = m {
+        let KeyGenMessageWrapped { message, .. } = wrapped;
+
+        if let KeyGenMessage::Broadcast1(bc1) = message {
+            return bc1;
+        }
     }
 
     error!("Received message is not Broadcast1 (keygen)");
@@ -402,7 +456,7 @@ async fn recv_bc1_keygen(rx: &mut UnboundedReceiver<InnerEvent>) -> Broadcast1 {
 async fn recv_bc1_signing(rx: &mut UnboundedReceiver<InnerEvent>) -> Broadcast1 {
     let (_, m) = recv_multisig_message(rx).await;
 
-    if let MultisigMessage::SigningMessage(SigningDataWrapper { data, .. }) = m {
+    if let MultisigMessage::SigningMessage(SigningDataWrapped { data, .. }) = m {
         if let SigningData::Broadcast1(bc1) = data {
             return bc1;
         }
@@ -415,7 +469,7 @@ async fn recv_bc1_signing(rx: &mut UnboundedReceiver<InnerEvent>) -> Broadcast1 
 async fn recv_local_sig(rx: &mut UnboundedReceiver<InnerEvent>) -> LocalSig {
     let (_, m) = recv_multisig_message(rx).await;
 
-    if let MultisigMessage::SigningMessage(SigningDataWrapper { data, .. }) = m {
+    if let MultisigMessage::SigningMessage(SigningDataWrapped { data, .. }) = m {
         if let SigningData::LocalSig(sig) = data {
             return sig;
         }
@@ -428,8 +482,12 @@ async fn recv_local_sig(rx: &mut UnboundedReceiver<InnerEvent>) -> LocalSig {
 async fn recv_secret2_keygen(rx: &mut UnboundedReceiver<InnerEvent>) -> (usize, Secret2) {
     let (dest, m) = recv_multisig_message(rx).await;
 
-    if let MultisigMessage::KeyGenMessage(KeyGenMessage::Secret2(sec2)) = m {
-        return (dest, sec2);
+    if let MultisigMessage::KeyGenMessage(wrapped) = m {
+        let KeyGenMessageWrapped { message, .. } = wrapped;
+
+        if let KeyGenMessage::Secret2(sec2) = message {
+            return (dest, sec2);
+        }
     }
 
     error!("Received message is not Secret2 (keygen)");
@@ -439,7 +497,7 @@ async fn recv_secret2_keygen(rx: &mut UnboundedReceiver<InnerEvent>) -> (usize, 
 async fn recv_secret2_signing(rx: &mut UnboundedReceiver<InnerEvent>) -> (usize, Secret2) {
     let (dest, m) = recv_multisig_message(rx).await;
 
-    if let MultisigMessage::SigningMessage(SigningDataWrapper { data, .. }) = m {
+    if let MultisigMessage::SigningMessage(SigningDataWrapped { data, .. }) = m {
         if let SigningData::Secret2(sec2) = data {
             return (dest, sec2);
         }
@@ -451,13 +509,8 @@ async fn recv_secret2_signing(rx: &mut UnboundedReceiver<InnerEvent>) -> (usize,
 
 // Do the necessary wrapping so Secret2 can be sent
 // via the clients interface
-pub fn sec2_to_p2p_signing(sec2: Secret2, sender_idx: usize, msg: &[u8]) -> P2PMessage {
-    let sec2 = SigningData::Secret2(sec2);
-
-    let wrapped = SigningDataWrapper {
-        data: sec2,
-        message: msg.to_owned(),
-    };
+pub fn sec2_to_p2p_signing(sec2: Secret2, sender_idx: usize, mi: &MessageInfo) -> P2PMessage {
+    let wrapped = SigningDataWrapped::new(sec2, mi.clone());
 
     let data = MultisigMessage::SigningMessage(wrapped);
     let data = serde_json::to_vec(&data).unwrap();
@@ -470,9 +523,9 @@ pub fn sec2_to_p2p_signing(sec2: Secret2, sender_idx: usize, msg: &[u8]) -> P2PM
 // Do the necessary wrapping so Secret2 can be sent
 // via the clients interface
 pub fn sec2_to_p2p_keygen(sec2: Secret2, sender_idx: usize) -> P2PMessage {
-    let sec2 = KeyGenMessage::Secret2(sec2);
+    let wrapped = KeyGenMessageWrapped::new(AUCTION_ID, sec2);
 
-    let data = MultisigMessage::KeyGenMessage(sec2);
+    let data = MultisigMessage::from(wrapped);
     let data = serde_json::to_vec(&data).unwrap();
     P2PMessage {
         sender_id: sender_idx,
@@ -481,7 +534,9 @@ pub fn sec2_to_p2p_keygen(sec2: Secret2, sender_idx: usize) -> P2PMessage {
 }
 
 fn bc1_to_p2p_keygen(bc1: Broadcast1, sender_idx: usize) -> P2PMessage {
-    let data = MultisigMessage::KeyGenMessage(KeyGenMessage::Broadcast1(bc1));
+    let wrapped = KeyGenMessageWrapped::new(AUCTION_ID, bc1);
+
+    let data = MultisigMessage::from(wrapped);
     let data = serde_json::to_vec(&data).unwrap();
     P2PMessage {
         sender_id: sender_idx,
@@ -489,13 +544,10 @@ fn bc1_to_p2p_keygen(bc1: Broadcast1, sender_idx: usize) -> P2PMessage {
     }
 }
 
-pub fn bc1_to_p2p_signing(bc1: Broadcast1, sender_idx: usize, msg: &[u8]) -> P2PMessage {
+pub fn bc1_to_p2p_signing(bc1: Broadcast1, sender_idx: usize, mi: &MessageInfo) -> P2PMessage {
     let bc1 = SigningData::Broadcast1(bc1);
 
-    let wrapped = SigningDataWrapper {
-        data: bc1,
-        message: msg.to_owned(),
-    };
+    let wrapped = SigningDataWrapped::new(bc1, mi.clone());
 
     let data = MultisigMessage::SigningMessage(wrapped);
     let data = serde_json::to_vec(&data).unwrap();
@@ -505,13 +557,8 @@ pub fn bc1_to_p2p_signing(bc1: Broadcast1, sender_idx: usize, msg: &[u8]) -> P2P
     }
 }
 
-pub fn sig_to_p2p(sig: LocalSig, sender_idx: usize, msg: &[u8]) -> P2PMessage {
-    let data = SigningData::LocalSig(sig);
-
-    let wrapped = SigningDataWrapper {
-        data,
-        message: msg.to_owned(),
-    };
+pub fn sig_to_p2p(sig: LocalSig, sender_idx: usize, mi: &MessageInfo) -> P2PMessage {
+    let wrapped = SigningDataWrapped::new(sig, mi.clone());
 
     let data = MultisigMessage::SigningMessage(wrapped);
     let data = serde_json::to_vec(&data).unwrap();

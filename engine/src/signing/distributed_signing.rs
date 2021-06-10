@@ -15,7 +15,13 @@ use crate::{
     signing::{client::MultisigInstruction, crypto::Parameters},
 };
 
-use super::client::{MultisigClient, MultisigEvent};
+use super::{
+    client::{KeyId, KeygenInfo, MultisigClient, MultisigEvent, SigningInfo},
+    MessageHash,
+};
+
+/// Number of parties participating in keygen
+const N_PARTIES: usize = 6;
 
 async fn coordinate_signing(mq_clients: Vec<impl IMQClient>, active_indices: &[usize]) {
     // subscribe to "ready to sign"
@@ -48,14 +54,22 @@ async fn coordinate_signing(mq_clients: Vec<impl IMQClient>, active_indices: &[u
 
     ready_to_keygen.await;
 
+    let key_id = KeyId(0);
+    let signers = (1..=N_PARTIES).into_iter().collect_vec();
+
+    let auction_info = KeygenInfo::new(key_id, signers);
+
     for mc in &mq_clients {
         trace!("published keygen instruction");
-        mc.publish(Subject::MultisigInstruction, &MultisigInstruction::KeyGen)
-            .await
-            .expect("Could not publish");
+        mc.publish(
+            Subject::MultisigInstruction,
+            &MultisigInstruction::KeyGen(auction_info.clone()),
+        )
+        .await
+        .expect("Could not publish");
     }
 
-    // TODO: investigate why this is necessary (remove if it is not)
+    // // TODO: investigate why this is necessary (remove if it is not)
     let ready_to_sign = async {
         for s in &mut streams {
             while let Some(evt) = s.next().await {
@@ -68,8 +82,10 @@ async fn coordinate_signing(mq_clients: Vec<impl IMQClient>, active_indices: &[u
 
     ready_to_sign.await;
 
-    let data = Vec::from("Chainflip".as_bytes());
-    let data2 = Vec::from("Chainflip2".as_bytes());
+    let data = MessageHash(Vec::from("Chainflip".as_bytes()));
+    let data2 = MessageHash(Vec::from("Chainflip2".as_bytes()));
+
+    let sign_info = SigningInfo::new(key_id, active_indices.to_vec());
 
     // Only some clients should receive the instruction to sign
     for i in active_indices {
@@ -77,14 +93,14 @@ async fn coordinate_signing(mq_clients: Vec<impl IMQClient>, active_indices: &[u
 
         mc.publish(
             Subject::MultisigInstruction,
-            &MultisigInstruction::Sign(data.clone(), active_indices.to_vec()),
+            &MultisigInstruction::Sign(data.clone(), sign_info.clone()),
         )
         .await
         .expect("Could not publish");
 
         mc.publish(
             Subject::MultisigInstruction,
-            &MultisigInstruction::Sign(data2.clone(), active_indices.to_vec()),
+            &MultisigInstruction::Sign(data2.clone(), sign_info.clone()),
         )
         .await
         .expect("Could not publish");
@@ -111,25 +127,24 @@ async fn distributed_signing() {
     env_logger::init();
 
     let t = 3;
-    let n = 6;
 
     let mut rng = StdRng::seed_from_u64(0);
 
     // Parties (from 1..=n that will participate in the signing process)
-    let mut active_indices = (1..=n).into_iter().choose_multiple(&mut rng, t + 1); // make sure that it works for t+k (k!=1)
+    let mut active_indices = (1..=N_PARTIES).into_iter().choose_multiple(&mut rng, t + 1); // make sure that it works for t+k (k!=1)
     active_indices.sort_unstable();
 
     info!("Active parties: {:?}", active_indices);
 
     assert!(active_indices.len() > t);
-    assert!(active_indices.len() <= n);
+    assert!(active_indices.len() <= N_PARTIES);
 
     // Create a fake network
     let network = NetworkMock::new();
 
     // Start message queues for each party
 
-    let mc_futs = (1..=n)
+    let mc_futs = (1..=N_PARTIES)
         .map(|i| {
             let p2p_client = network.new_client(i);
 
@@ -144,7 +159,7 @@ async fn distributed_signing() {
 
                 let params = Parameters {
                     threshold: t,
-                    share_count: n,
+                    share_count: N_PARTIES,
                 };
 
                 // let mc = message_queue.get_client();

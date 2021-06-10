@@ -4,7 +4,10 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     p2p::{P2PMessageCommand, ValidatorId},
-    signing::crypto::Parameters,
+    signing::{
+        client::{client_inner::client_inner::KeyGenMessageWrapped, KeyId},
+        crypto::Parameters,
+    },
 };
 
 use super::{
@@ -14,7 +17,7 @@ use super::{
     InnerEvent,
 };
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum KeygenStage {
     Uninitialized,
     AwaitingBroadcast1,
@@ -24,12 +27,14 @@ pub enum KeygenStage {
 
 #[derive(Clone)]
 pub struct KeygenState {
-    pub stage: KeygenStage,
+    stage: KeygenStage,
     sss: SharedSecretState,
     event_sender: UnboundedSender<InnerEvent>,
     signer_idx: usize,
     params: Parameters,
-    pub delayed_next_stage_data: Vec<(ValidatorId, KeyGenMessage)>,
+    delayed_next_stage_data: Vec<(ValidatorId, KeyGenMessage)>,
+    key_id: KeyId,
+    pub(super) key: Option<KeygenResult>,
 }
 
 /// A command to the other module to send data to a particular node
@@ -39,49 +44,37 @@ struct MessageToSend {
 }
 
 impl KeygenState {
-    pub(super) fn new(
+    pub(super) fn initiate(
         idx: usize,
         params: Parameters,
+        key_id: KeyId,
         event_sender: UnboundedSender<InnerEvent>,
     ) -> Self {
         let min_parties = params.share_count;
-        KeygenState {
+        let mut state = KeygenState {
             stage: KeygenStage::Uninitialized,
             sss: SharedSecretState::new(idx, params, min_parties),
             event_sender,
             delayed_next_stage_data: Vec::new(),
             signer_idx: idx,
             params,
-        }
-    }
+            key: None,
+            key_id,
+        };
 
-    /// Participate in a threshold signature generation procedure
-    pub(super) fn initiate_keygen(&mut self) {
-        match self.stage {
-            KeygenStage::Uninitialized => {
-                self.initiate_keygen_inner();
-            }
-            _ => {
-                // TODO: allow subsequent keys to be generated
-                warn!("Unexpected keygen request");
-            }
-        }
+        state.initiate_keygen_inner();
+
+        state
     }
 
     /// Returned value will signal that the key is ready
-    pub(super) fn process_keygen_message(
-        &mut self,
-        sender_id: usize,
-        msg: KeyGenMessage,
-    ) -> Option<KeygenResult> {
+    pub(super) fn process_keygen_message(&mut self, sender_id: usize, msg: KeyGenMessage) {
         trace!(
-            "[{}] received message from [{}]",
+            "[{}] received message from [{}]: {:?}",
             self.signer_idx,
-            sender_id
+            sender_id,
+            &msg
         );
-
-        // Key to return in case it was created here
-        let mut result_key = None;
 
         match (&self.stage, msg) {
             (KeygenStage::Uninitialized, KeyGenMessage::Broadcast1(bc1)) => {
@@ -116,7 +109,8 @@ impl KeygenState {
                         info!("[{}] SHARED KEY IS READY 👍", self.signer_idx);
 
                         self.stage = KeygenStage::KeyReady;
-                        result_key = Some(key);
+
+                        self.key = Some(key.clone());
 
                         let _ = self
                             .event_sender
@@ -125,11 +119,12 @@ impl KeygenState {
                 }
             }
             _ => {
-                warn!("Unexpected keygen message for stage: {:?}", self.stage);
+                warn!(
+                    "[{}] Unexpected keygen message for stage: {:?}",
+                    self.signer_idx, self.stage
+                );
             }
         }
-
-        return result_key;
     }
 
     fn initiate_keygen_inner(&mut self) {
@@ -139,7 +134,9 @@ impl KeygenState {
 
         let bc1 = self.sss.init_phase1();
 
-        let msg = MultisigMessage::KeyGenMessage(KeyGenMessage::Broadcast1(bc1));
+        let wrapped = KeyGenMessageWrapped::new(self.key_id, bc1);
+
+        let msg = MultisigMessage::from(wrapped);
 
         self.keygen_broadcast(msg);
 
@@ -156,8 +153,8 @@ impl KeygenState {
                 let msgs = msgs
                     .into_iter()
                     .map(|(idx, secret2)| {
-                        let secret2 =
-                            MultisigMessage::KeyGenMessage(KeyGenMessage::Secret2(secret2));
+                        let wrapped = KeyGenMessageWrapped::new(self.key_id, secret2);
+                        let secret2 = MultisigMessage::from(wrapped);
                         let data = serde_json::to_vec(&secret2).unwrap();
                         MessageToSend { to: idx, data }
                     })
@@ -212,5 +209,15 @@ impl KeygenState {
             trace!("Processing a delayed message from [{}]", sender_id);
             self.process_keygen_message(sender_id, msg);
         }
+    }
+
+    #[cfg(test)]
+    pub fn delayed_count(&self) -> usize {
+        self.delayed_next_stage_data.len()
+    }
+
+    #[cfg(test)]
+    pub fn get_stage(&self) -> KeygenStage {
+        self.stage
     }
 }

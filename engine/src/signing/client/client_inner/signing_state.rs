@@ -4,13 +4,17 @@ use itertools::Itertools;
 use log::*;
 use tokio::sync::mpsc;
 
-use super::client_inner::{InnerEvent, MultisigMessage, SigningDataWrapper};
+use super::client_inner::{InnerEvent, MultisigMessage, SigningDataWrapped};
 
 use crate::{
     p2p::P2PMessageCommand,
     signing::{
-        client::client_inner::{utils, InnerSignal},
+        client::{
+            client_inner::{utils, InnerSignal},
+            SigningInfo,
+        },
         crypto::{Keys, LocalSig, Parameters, SharedKeys, Signature, VerifiableSS, GE},
+        MessageInfo,
     },
 };
 
@@ -36,13 +40,13 @@ pub(super) enum SigningStage {
 #[derive(Clone)]
 pub(super) struct SigningState {
     signer_idx: usize,
-    pub(super) message: Vec<u8>,
+    pub(super) message_info: MessageInfo,
     /// The key might not be available yet, as we might want to
     /// keep some state even before we've finalized keygen
     signing_key: Option<KeygenResult>,
     stage: SigningStage,
-    /// Indices of participants who should participate
-    active_parties: Option<Vec<usize>>,
+    /// Indices(?) of participants who should participate
+    signers: Option<Vec<usize>>,
     pub(super) sss: SharedSecretState,
     pub(super) shared_secret: Option<KeygenResult>,
     pub(super) local_sigs: Vec<LocalSig>,
@@ -59,7 +63,7 @@ impl SigningState {
         signing_key: Option<KeygenResult>,
         params: Parameters,
         p2p_sender: mpsc::UnboundedSender<InnerEvent>,
-        message: Vec<u8>,
+        mi: MessageInfo,
     ) -> Self {
         // Note that params are different for shared secret during the signing state (TODO: investigate why?)
         let params = Parameters {
@@ -71,10 +75,10 @@ impl SigningState {
 
         SigningState {
             signer_idx: idx,
-            message,
+            message_info: mi,
             signing_key,
             stage: SigningStage::Idle,
-            active_parties: None,
+            signers: None,
             sss: SharedSecretState::new(idx, params, min_parties),
             shared_secret: None,
             local_sigs_order: vec![],
@@ -88,6 +92,11 @@ impl SigningState {
     #[cfg(test)]
     pub(super) fn get_stage(&self) -> SigningStage {
         self.stage
+    }
+
+    #[cfg(test)]
+    pub(super) fn delayed_count(&self) -> usize {
+        self.delayed_data.len()
     }
 
     fn record_local_sig(&mut self, signer_id: usize, sig: LocalSig) {
@@ -105,7 +114,8 @@ impl SigningState {
             .as_ref()
             .expect("must have shared secret");
 
-        let local_sig = LocalSig::compute(&self.message, &ss.shared_keys, &key.shared_keys);
+        let local_sig =
+            LocalSig::compute(&self.message_info.hash.0, &ss.shared_keys, &key.shared_keys);
 
         self.record_local_sig(own_idx, local_sig.clone());
 
@@ -157,13 +167,13 @@ impl SigningState {
                     &parties_index_vec,
                     ss.aggregate_pubkey,
                 );
-                let verify_sig = signature.verify(&self.message, &key.aggregate_pubkey);
+                let verify_sig = signature.verify(&self.message_info.hash.0, &key.aggregate_pubkey);
                 assert!(verify_sig.is_ok());
 
                 if verify_sig.is_ok() {
                     info!("Generated signature is correct! 🎉");
                     let _ = self.event_sender.send(InnerEvent::InnerSignal(
-                        InnerSignal::MessageSigned(self.message.clone()),
+                        InnerSignal::MessageSigned(self.message_info.clone()),
                     ));
                 }
             }
@@ -202,19 +212,21 @@ impl SigningState {
         );
     }
 
-    pub fn on_request_to_sign(&mut self, active_parties: &[usize]) {
+    pub fn set_key(&mut self, key: KeygenResult) {
+        self.signing_key = Some(key);
+    }
+
+    pub fn on_request_to_sign(&mut self, info: SigningInfo) {
         self.update_stage(SigningStage::AwaitingBroadcast1);
 
-        self.active_parties = Some(active_parties.to_vec());
+        let SigningInfo { id: _, signers } = info;
+
+        self.signers = Some(signers);
 
         let bc1 = self.sss.init_phase1();
         let bc1 = SigningData::Broadcast1(bc1);
-        let bc1 = SigningDataWrapper {
-            data: bc1,
-            message: self.message.clone(),
-        };
-
-        let msg = MultisigMessage::SigningMessage(bc1);
+        let bc1 = SigningDataWrapped::new(bc1, self.message_info.clone());
+        let msg = MultisigMessage::from(bc1);
 
         trace!("[{}] Signing: created BC1", self.signer_idx);
 
@@ -229,14 +241,14 @@ impl SigningState {
     }
 
     pub fn process_signing_message(&mut self, sender_id: usize, msg: SigningData) {
-        if let (SigningStage::Idle, SigningData::Broadcast1(_)) = (self.stage, &msg) {
+        if let SigningStage::Idle = self.stage {
             // do nothing yet
         } else {
+            // MAXIM: need to make sure (add tests) that for any combination state/message we don't crash!
+            // (it's happened a few times during development)
+
             // Ignore if the the sender is not in active_parties
-            let active_parties = self
-                .active_parties
-                .as_ref()
-                .expect("should know active parties");
+            let active_parties = self.signers.as_ref().expect("should know active parties");
 
             if !active_parties.contains(&sender_id) {
                 warn!(
@@ -307,12 +319,8 @@ impl SigningState {
                 let msgs = msgs
                     .into_iter()
                     .map(|(idx, secret2)| {
-                        let secret2 = SigningData::Secret2(secret2);
-                        let secret2 = SigningDataWrapper {
-                            data: secret2,
-                            message: self.message.clone(),
-                        };
-                        let secret2 = MultisigMessage::SigningMessage(secret2);
+                        let secret2 = SigningDataWrapped::new(secret2, self.message_info.clone());
+                        let secret2 = MultisigMessage::from(secret2);
                         let data = serde_json::to_vec(&secret2).unwrap();
                         P2PMessageCommand {
                             destination: idx,
@@ -342,10 +350,7 @@ impl SigningState {
         // TODO: see if there is a way to publish a bunch of messages
         // at once and whether that makes any difference performance-wise}
 
-        let active_parties = self
-            .active_parties
-            .as_ref()
-            .expect("should know active parties");
+        let active_parties = self.signers.as_ref().expect("should know active parties");
 
         for idx in active_parties {
             if *idx == self.signer_idx {
@@ -373,9 +378,9 @@ impl SigningState {
         let local_sig = self.init_local_sig();
 
         let local_sig = SigningData::LocalSig(local_sig);
-        let local_sig = SigningDataWrapper {
+        let local_sig = SigningDataWrapped {
             data: local_sig,
-            message: self.message.clone(),
+            message: self.message_info.clone(),
         };
 
         let msg = MultisigMessage::SigningMessage(local_sig);
