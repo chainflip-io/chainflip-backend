@@ -7,10 +7,6 @@ use chainflip_engine::{
     witness,
 };
 
-mod mq;
-mod p2p;
-mod settings;
-
 #[tokio::main]
 async fn main() {
     // init the logger
