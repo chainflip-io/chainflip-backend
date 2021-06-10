@@ -60,7 +60,7 @@ tolerations:
 ---
 kind: pipeline
 type: kubernetes
-name: chainflip-engine-integration-tests
+name: chainflip-engine-integration-tests-pr
 
 services:
   - image: trufflesuite/ganache-cli:latest
@@ -80,7 +80,7 @@ steps:
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
       SCCACHE_REDIS: "redis://redis-headless:6379/"
-    commands: 
+    commands:
         - chmod +x ./engine/tests/scripts/setup.sh;
         - ./engine/tests/scripts/setup.sh;
         - cargo test -p chainflip-engine --test stake_manager_integration -- --nocapture;
@@ -92,10 +92,8 @@ steps:
 
 # Config
 trigger:
-  event:
-    - cron
-  cron:
-    - nightly
+  paths:
+    - engine/tests/*.rs
 
 image_pull_secrets:
   - dockerconfigjson

@@ -93,8 +93,7 @@ impl IMQClient for MockMQ {
 // Ensure the mock can do it's ting
 mod test {
     use super::*;
-    use crate::mq::pin_message_stream;
-    use chainflip_common::types::coin::Coin;
+    use crate::{mq::pin_message_stream, types::chain::Chain};
     use serde::{Deserialize, Serialize};
 
     #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -103,7 +102,7 @@ mod test {
     async fn subscribe_test_inner(mock_client: MockMQ) {
         let test_message = TestMessage(String::from("I SAW A TRANSACTION"));
 
-        let subject = Subject::Witness(Coin::ETH);
+        let subject = Subject::Witness(Chain::ETH);
 
         let stream = mock_client.subscribe::<TestMessage>(subject).await.unwrap();
 
