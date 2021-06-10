@@ -35,6 +35,7 @@ async fn create_subxt_client(
     subxt_settings: settings::StateChain,
 ) -> Result<Client<StateChainRuntime>> {
     let client = ClientBuilder::<StateChainRuntime>::new()
+        .skip_type_sizes_check()
         .set_url(format!(
             "ws://{}:{}",
             subxt_settings.hostname, subxt_settings.port

@@ -11,7 +11,7 @@ use tokio_stream::{Stream, StreamExt};
 use crate::settings;
 
 // This will likely have a private field containing the underlying mq client
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct NatsMQClient {
     /// The nats.rs Connection to the Nats server
     conn: async_nats::Connection,

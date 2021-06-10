@@ -1,4 +1,5 @@
 use config::{Config, ConfigError, File};
+use std::env;
 
 use serde::Deserialize;
 
@@ -35,7 +36,7 @@ impl Settings {
         let mut s = Config::new();
 
         // Start off by merging in the "default" configuration file
-        s.merge(File::with_name("config/default.toml"))?;
+        s.merge(File::with_name("config/Default.toml"))?;
 
         // You can deserialize (and thus freeze) the entire configuration as
         s.try_into()
@@ -50,7 +51,7 @@ pub mod test_utils {
         let mut s = Config::new();
 
         // Start off by merging in the "testing" configuration file
-        s.merge(File::with_name("config/testing.toml"))?;
+        s.merge(File::with_name("config/Testing.toml"))?;
 
         // You can deserialize (and thus freeze) the entire configuration as
         s.try_into()
@@ -64,10 +65,19 @@ mod tests {
 
     #[test]
     fn init_config() {
-        // let settings = Settings::new();
-        // assert!(settings.is_ok());
+        let settings = Settings::new();
+        assert!(settings.is_ok());
 
-        // let settings = settings.unwrap();
-        // assert_eq!(settings.message_queue.hostname, "localhost");
+        let settings = settings.unwrap();
+        assert_eq!(settings.message_queue.hostname, "localhost");
+    }
+
+    #[test]
+    fn test_init_config_with_testing_config() {
+        let test_settings = test_utils::new_test_settings();
+        assert!(test_settings.is_ok());
+
+        let test_settings = test_settings.unwrap();
+        assert_eq!(test_settings.message_queue.hostname, "localhost");
     }
 }

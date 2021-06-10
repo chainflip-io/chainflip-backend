@@ -18,7 +18,6 @@ use anyhow::{Context, Result};
 /// Set up the eth event streamer for the StakeManager contract, and start it
 pub async fn start_stake_manager_witness(settings: settings::Settings) -> Result<()> {
     log::info!("Starting the stake manager witness");
-
     let stake_manager = StakeManager::load(settings.eth.stake_manager_eth_address.as_str())?;
 
     let factory = NatsMQClientFactory::new(settings.message_queue);

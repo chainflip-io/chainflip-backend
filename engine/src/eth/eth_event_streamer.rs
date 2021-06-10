@@ -58,7 +58,9 @@ impl<S: EventSource> EthEventStreamer<S> {
         // Make sure the eth node is fully synced
         loop {
             match self.web3_client.eth().syncing().await? {
-                SyncState::Syncing(info) => log::info!("Waiting for eth node to sync: {:?}", info),
+                SyncState::Syncing(info) => {
+                    log::info!("Waiting for eth node to sync: {:?}", info);
+                }
                 SyncState::NotSyncing => {
                     log::info!("Eth node is synced, subscribing to log events.");
                     break;
