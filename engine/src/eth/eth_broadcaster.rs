@@ -1,10 +1,10 @@
 use crate::{
     mq::{pin_message_stream, IMQClient, Subject},
     settings,
+    types::chain::Chain,
 };
 
 use anyhow::Result;
-use chainflip_common::types::coin::Coin;
 use tokio_compat_02::FutureExt;
 
 use super::Broadcast;
@@ -49,7 +49,7 @@ impl<M: IMQClient + Send + Sync> EthBroadcaster<M> {
     async fn run(&self) -> Result<()> {
         let stream = self
             .mq_client
-            .subscribe::<Vec<u8>>(Subject::Broadcast(Coin::ETH))
+            .subscribe::<Vec<u8>>(Subject::Broadcast(Chain::ETH))
             .await?;
 
         let mut stream = pin_message_stream(stream);
@@ -83,7 +83,7 @@ impl<M: IMQClient + Send + Sync> Broadcast for EthBroadcaster<M> {
             .await?;
 
         self.mq_client
-            .publish(Subject::BroadcastSuccess(Coin::ETH), &tx_hash)
+            .publish(Subject::BroadcastSuccess(Chain::ETH), &tx_hash)
             .await?;
 
         Ok(tx_hash.to_string())
