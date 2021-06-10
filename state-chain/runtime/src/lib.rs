@@ -344,6 +344,7 @@ impl pallet_cf_witness::Config for Runtime {
 	type Epoch = EpochIndex;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
+	type Amount = FlipBalance;
 }
 
 parameter_types! {
