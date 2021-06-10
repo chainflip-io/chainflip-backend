@@ -309,7 +309,7 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 			AuctionPhase::WaitingForBids => {
 				// If the session should end, run through an auction
 				// two steps- validate and select winners
-				Self::should_end_session(now) &&
+				Self::should_rotate(now) &&
 					T::Auction::process().and(T::Auction::process()).is_ok()
 			}
 			AuctionPhase::WinnersSelected(_, _) => {
@@ -326,7 +326,7 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 impl<T: Config> Pallet<T> {
 	/// Check whether we should based on either a force rotation or we have reach the epoch
 	/// block number
-	fn should_end_session(now: T::BlockNumber) -> bool {
+	fn should_rotate(now: T::BlockNumber) -> bool {
 		if Force::<T>::get() {
 			Force::<T>::set(false);
 			return true;
