@@ -18,7 +18,6 @@ use web3::types::U256;
 pub async fn setup_mq(mq_settings: settings::MessageQueue) -> Box<NatsMQClient> {
     NatsMQClient::connect(mq_settings).await.unwrap()
 }
-log::info!("Start the engines! :broom: :broom: ");
 
 // Creating the settings to be used for tests
 pub fn test_settings() -> Result<Settings, ConfigError> {
