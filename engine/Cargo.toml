@@ -51,6 +51,7 @@ pallet-cf-validator = {path = "../state-chain/pallets/cf-validator"}
 pallet-cf-auction = {path = "../state-chain/pallets/cf-auction"}
 cf-traits = {path = "../state-chain/traits"}
 state-chain-runtime = {path = "../state-chain/runtime"}
+cf-traits = {path = "../state-chain/traits"}
 
 [dev-dependencies]
 frame-support = "3.0.0"
