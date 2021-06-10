@@ -1,12 +1,11 @@
-use std::{marker::PhantomData, time::Duration};
+use std::time::Duration;
 
-use crate::{self as pallet_cf_staking, Config};
+use crate as pallet_cf_staking;
 use pallet_cf_flip;
 use app_crypto::ecdsa::Public;
 use sp_core::H256;
 use frame_support::{parameter_types};
-use sp_runtime::{app_crypto, testing::Header, traits::{BlakeTwo256, IdentityLookup}};
-use frame_system::{Account, AccountInfo};
+use sp_runtime::{BuildStorage, app_crypto, testing::Header, traits::{BlakeTwo256, IdentityLookup}};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -25,8 +24,8 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Flip: pallet_cf_flip::{Module, Call, Storage, Event<T>},
-		StakeManager: pallet_cf_staking::{Module, Call, Storage, Event<T>},
+		Flip: pallet_cf_flip::{Module, Call, Config<T>, Storage, Event<T>},
+		Staking: pallet_cf_staking::{Module, Call, Config<T>, Storage, Event<T>},
 	}
 );
 
@@ -92,17 +91,20 @@ pub const CHARLIE: <Test as frame_system::Config>::AccountId = 789u64;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
+	let config = GenesisConfig {
+		frame_system: Default::default(),
+		pallet_cf_flip: Some(FlipConfig {
+			total_issuance: 1_000,
+		}),
+		pallet_cf_staking: Some(StakingConfig{
+			genesis_stakers: vec![],
+		}),
+	};
 
-	// Seed with three active accounts.
+	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
+
 	ext.execute_with(|| {
 		System::set_block_number(1);
-		Account::<Test>::insert(ALICE, AccountInfo::default());
-		Account::<Test>::insert(BOB, AccountInfo::default());
-		Account::<Test>::insert(CHARLIE, AccountInfo::default());
-
-		pallet_cf_flip::TotalIssuance::<Test>::set(1_000);
-		pallet_cf_flip::OffchainFunds::<Test>::set(1_000);
 	});
 
 	ext

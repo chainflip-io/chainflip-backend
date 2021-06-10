@@ -1,12 +1,8 @@
-use crate::{self as pallet_cf_flip, TotalIssuance, OffchainFunds};
+use crate as pallet_cf_flip;
 use cf_traits::StakeTransfer;
 use frame_support::parameter_types;
-use frame_system::{Account, AccountInfo};
 use sp_core::H256;
-use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
-};
+use sp_runtime::{BuildStorage, testing::Header, traits::{BlakeTwo256, IdentityLookup}};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -20,7 +16,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Flip: pallet_cf_flip::{Module, Call, Storage, Event<T>},
+		Flip: pallet_cf_flip::{Module, Call, Config<T>, Storage, Event<T>},
 	}
 );
 
@@ -78,24 +74,23 @@ pub fn check_balance_integrity() {
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities = frame_system::GenesisConfig::default()
-		.build_storage::<Test>()
-		.unwrap()
-		.into();
+	let config = GenesisConfig {
+		frame_system: Default::default(),
+		pallet_cf_flip: Some(FlipConfig {
+			total_issuance: 1_000,
+		}),
+	};
 
-	// Seed with three active accounts.
+	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
+
 	ext.execute_with(|| {
 		System::set_block_number(1);
-		Account::<Test>::insert(ALICE, AccountInfo::default());
-		Account::<Test>::insert(BOB, AccountInfo::default());
-		Account::<Test>::insert(CHARLIE, AccountInfo::default());
-		TotalIssuance::<Test>::set(1_000);
-		OffchainFunds::<Test>::set(1_000);
 
+		// Seed with two staked accounts.
 		<Flip as StakeTransfer>::credit_stake(&ALICE, 100);
 		<Flip as StakeTransfer>::credit_stake(&BOB, 50);
 
-		assert_eq!(OffchainFunds::<Test>::get(), 850);
+		assert_eq!(Flip::offchain_funds(), 850);
 		check_balance_integrity();
 	});
 
