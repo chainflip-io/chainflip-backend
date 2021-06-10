@@ -92,6 +92,8 @@ steps:
 
 # Config
 trigger:
+  event:
+    - pull_request
   paths:
     - engine/tests/*.rs
 
