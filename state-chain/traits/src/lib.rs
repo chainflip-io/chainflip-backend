@@ -55,7 +55,7 @@ pub trait EpochInfo {
 pub enum AuctionPhase<ValidatorId, Amount> {
 	WaitingForBids,
 	BidsTaken(Vec<Bid<ValidatorId, Amount>>),
-	WinnersSelected((Vec<ValidatorId>, Amount)),
+	WinnersSelected(Vec<ValidatorId>, Amount),
 }
 
 impl<ValidatorId, Amount> Default for AuctionPhase<ValidatorId, Amount> {

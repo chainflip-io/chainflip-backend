@@ -40,10 +40,10 @@ mod test {
 			// With that sorted we would move on to completing the auction
 			// Expecting the phase to change, a set of winners, the bidder list and a bond value set
 			// to our min bid
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WinnersSelected((winners, min_bid)))
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WinnersSelected(winners, min_bid))
 				if winners == vec![max_bid.0, joe_bid.0, low_bid.0] && min_bid == low_bid.1
 			);
-			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::WinnersSelected((winners, min_bid))
+			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::WinnersSelected(winners, min_bid)
 				if winners == vec![max_bid.0, joe_bid.0, low_bid.0] && min_bid == low_bid.1
 			);
 			// Just leaves us to confirm this auction, if we try to process this we will get an error
@@ -91,8 +91,8 @@ mod test {
 			assert_ok!(AuctionPallet::set_auction_range(auction_range));
 			assert!(!AuctionPallet::auction_to_confirm());
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(_)));
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WinnersSelected(_)));
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected((winners, min_bid))
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WinnersSelected(_, _)));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(winners, min_bid)
 				if !winners.is_empty() && min_bid > 0
 			);
 			assert!(AuctionPallet::auction_to_confirm());

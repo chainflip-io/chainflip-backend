@@ -11,7 +11,7 @@ mod test {
 	}
 
 	fn assert_winners() -> Vec<ValidatorId> {
-		assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected((winners, _)) => {
+		assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(winners, _) => {
 			winners
 		})
 	}
@@ -60,7 +60,7 @@ mod test {
 			assert_eq!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
 			// Move forward by 1 block, we have a block already
 			run_to_block(2);
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(_));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(_, _));
 			// Confirm the auction
 			CONFIRM.with(|l| { *l.borrow_mut() = true });
 			// Move forward by 1 block
@@ -75,7 +75,7 @@ mod test {
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids);
 			run_to_block(10);
 			// We should have started another auction
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(_));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(_, _));
 			// Let's check we can't alter the state of the pallet during this period
 			assert_noop!(ValidatorManager::force_rotation(Origin::root()), Error::<Test>::AuctionInProgress);
 			assert_noop!(ValidatorManager::set_blocks_for_epoch(Origin::root(), 10), Error::<Test>::AuctionInProgress);
@@ -122,10 +122,10 @@ mod test {
 			// Complete the cycle
 			run_to_block(12);
 			// As we haven't confirmed the auction we would still be in the same phase
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(_));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(_, _));
 			run_to_block(13);
 			// and still...
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(_));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(_, _));
 			// Confirm the auction
 			CONFIRM.with(|l| { *l.borrow_mut() = true });
 			run_to_block(14);

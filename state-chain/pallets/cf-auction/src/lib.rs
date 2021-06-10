@@ -265,7 +265,7 @@ impl<T: Config> Auction for Pallet<T> {
 					if let Some(bidders) = bidders {
 						if let Some((_, min_bid)) = bidders.last() {
 							let winners: Vec<T::ValidatorId> = bidders.iter().map(|i| i.0.clone()).collect();
-							let phase = AuctionPhase::WinnersSelected((winners, *min_bid));
+							let phase = AuctionPhase::WinnersSelected(winners, *min_bid);
 							<CurrentPhase<T>>::put(phase.clone());
 
 							Self::deposit_event(Event::AuctionCompleted(<CurrentAuctionIndex<T>>::get()));
@@ -280,7 +280,7 @@ impl<T: Config> Auction for Pallet<T> {
 			// Things have gone well and we have a set of 'Winners', congratulations.
 			// We are ready to call this an auction a day resetting the bidders in storage and
 			// setting the state ready for a new set of 'Bidders'
-			AuctionPhase::WinnersSelected(_) => {
+			AuctionPhase::WinnersSelected(_, _) => {
 				if !Self::Confirmation::confirmed() {
 					return Err(AuctionError::NotConfirmed);
 				}
