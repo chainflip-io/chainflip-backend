@@ -36,8 +36,10 @@ pub struct NatsMQClientFactory {
 }
 
 impl NatsMQClientFactory {
-    pub fn new(mq_settings: settings::MessageQueue) -> Self {
-        NatsMQClientFactory { mq_settings }
+    pub fn new(mq_settings: &settings::MessageQueue) -> Self {
+        NatsMQClientFactory {
+            mq_settings: mq_settings.clone(),
+        }
     }
 }
 
@@ -103,7 +105,7 @@ mod test {
             port: 4222,
         };
 
-        NatsMQClientFactory::new(mq_settings)
+        NatsMQClientFactory::new(&mq_settings)
             .create()
             .await
             .unwrap()

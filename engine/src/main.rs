@@ -24,7 +24,7 @@ async fn main() {
 
     eth::start(settings.clone()).await;
 
-    let mq_factory = NatsMQClientFactory::new(settings.message_queue.clone());
+    let mq_factory = NatsMQClientFactory::new(&settings.message_queue);
 
     // TODO: clients need to be able to update their signer idx dynamically
     let signer_idx = 0;

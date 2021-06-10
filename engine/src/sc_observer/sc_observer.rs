@@ -17,7 +17,7 @@ use super::{
 pub async fn start(settings: Settings) {
     info!("Begin subscribing to state chain events");
 
-    let mq_client_builder = NatsMQClientFactory::new(settings.message_queue);
+    let mq_client_builder = NatsMQClientFactory::new(&settings.message_queue);
 
     let mq_client = mq_client_builder.create().await.unwrap();
 

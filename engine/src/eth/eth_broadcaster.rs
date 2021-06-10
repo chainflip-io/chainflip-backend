@@ -15,8 +15,9 @@ use futures::StreamExt;
 
 pub async fn start_eth_broadcaster<M: IMQClient + Send + Sync>(
     settings: settings::Settings,
+    mq_client: M,
 ) -> anyhow::Result<()> {
-    let eth_broadcaster = EthBroadcaster::<M>::new(settings).await?;
+    let eth_broadcaster = EthBroadcaster::<M>::new(settings, mq_client).await?;
 
     eth_broadcaster.run().await?;
 
@@ -30,9 +31,7 @@ pub struct EthBroadcaster<M: IMQClient + Send + Sync> {
 }
 
 impl<M: IMQClient + Send + Sync> EthBroadcaster<M> {
-    async fn new(settings: settings::Settings) -> Result<Self> {
-        let mq_client = *M::connect(settings.message_queue).await?;
-
+    async fn new(settings: settings::Settings, mq_client: M) -> Result<Self> {
         let eth_node_ws_url = format!("ws://{}:{}", settings.eth.hostname, settings.eth.port);
         let transport = ::web3::transports::WebSocket::new(eth_node_ws_url.as_str())
             // TODO: Remove this compat once the websocket dep uses tokio1
@@ -93,7 +92,10 @@ impl<M: IMQClient + Send + Sync> Broadcast for EthBroadcaster<M> {
 #[cfg(test)]
 mod tests {
 
-    use crate::mq::nats_client::NatsMQClient;
+    use crate::mq::{
+        nats_client::{NatsMQClient, NatsMQClientFactory},
+        IMQClientFactory,
+    };
 
     use super::*;
 
@@ -108,23 +110,27 @@ mod tests {
     // A reverting tx that will fail trying to send 1000.0 ETH from 0x9dbE382B57bCdc2aAbC874130E120a3E7dE09bDa to 0x55024FA7C8217B88d16B240d09F76C6581245a94:
     static REVERTING_TX: &str = "f86d018504a817c8008252089455024fa7c8217b88d16b240d09f76c6581245a94893635c9adc5dea00000801ca049c86a1429efcd6de51c7a27d65d58690ec77c133b60cb492cb3c693f097fb23a0790061e0df154f4e82984d641afbb66d127a90fab66c555b69cb718f81538367";
 
-    pub async fn new_eth_broadcaster<M: IMQClient + Send + Sync>() -> Result<EthBroadcaster<M>> {
+    pub async fn new_eth_broadcaster() -> Result<EthBroadcaster<NatsMQClient>> {
         let settings = settings::test_utils::new_test_settings().unwrap();
-        let eth_broadcaster = EthBroadcaster::<M>::new(settings).await;
+
+        let factory = NatsMQClientFactory::new(&settings.message_queue);
+        let mq_client = *factory.create().await.unwrap();
+
+        let eth_broadcaster = EthBroadcaster::<NatsMQClient>::new(settings, mq_client).await;
         eth_broadcaster
     }
 
     #[tokio::test]
     #[ignore = "requires mq and eth node setup"]
     async fn test_eth_broadcaster_new() {
-        let eth_broadcaster = new_eth_broadcaster::<NatsMQClient>().await;
+        let eth_broadcaster = new_eth_broadcaster().await;
         assert!(eth_broadcaster.is_ok());
     }
 
     #[tokio::test]
     #[ignore = "requires fresh eth node setup with `chainflip` mnemonic"]
     async fn test_eth_broadcast_success() {
-        let eth_broadcaster = new_eth_broadcaster::<NatsMQClient>().await.unwrap();
+        let eth_broadcaster = new_eth_broadcaster().await.unwrap();
 
         let bytes = hex::decode(SUCCESS_TX).unwrap();
 
@@ -136,7 +142,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "requires fresh eth node setup with `chainflip` mnemonic"]
     async fn test_eth_broadcast_revert() {
-        let eth_broadcaster = new_eth_broadcaster::<NatsMQClient>().await.unwrap();
+        let eth_broadcaster = new_eth_broadcaster().await.unwrap();
 
         let bytes = hex::decode(REVERTING_TX).unwrap();
 

@@ -147,7 +147,7 @@ mod tests {
             .unwrap()
             .message_queue;
 
-        let factory = NatsMQClientFactory::new(mq_settings);
+        let factory = NatsMQClientFactory::new(&mq_settings);
 
         let mq_client = *factory.create().await.unwrap();
         // create the sink, which pushes events to the MQ

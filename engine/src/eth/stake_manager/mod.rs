@@ -20,7 +20,7 @@ pub async fn start_stake_manager_witness(settings: settings::Settings) -> Result
     log::info!("Starting the stake manager witness");
     let stake_manager = StakeManager::load(settings.eth.stake_manager_eth_address.as_str())?;
 
-    let factory = NatsMQClientFactory::new(settings.message_queue);
+    let factory = NatsMQClientFactory::new(&settings.message_queue);
 
     let mq_client = *factory.create().await?;
 

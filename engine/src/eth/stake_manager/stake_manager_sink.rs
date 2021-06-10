@@ -54,7 +54,7 @@ mod tests {
             port,
         };
 
-        let factory = NatsMQClientFactory::new(mq_settings);
+        let factory = NatsMQClientFactory::new(&mq_settings);
 
         let mq_client = *factory.create().await.unwrap();
 
