@@ -13,7 +13,8 @@ use super::{
     },
     validator::{
         AuctionConfirmedEvent, AuctionStartedEvent, EpochDurationChangedEvent,
-        ForceAuctionRequestedEvent, MaximumValidatorsChangedEvent, NewEpochEvent, ValidatorEvent,
+        ForceRotationRequestedEvent, AuctionRangeChangedEvent, ValidatorEvent,
+        NewEpochEvent
     },
 };
 
@@ -57,15 +58,15 @@ pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEv
                 AuctionStartedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
             )),
             "ForceRotationRequested" => Ok(Some(
-                ForceAuctionRequestedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
+                ForceRotationRequestedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
                     .into(),
             )),
             "EpochDurationChanged" => Ok(Some(
                 EpochDurationChangedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
                     .into(),
             )),
-            "MaximumValidatorsChanged" => Ok(Some(
-                MaximumValidatorsChangedEvent::<StateChainRuntime>::decode(
+            "AuctionRangeChanged" => Ok(Some(
+                AuctionRangeChangedEvent::<StateChainRuntime>::decode(
                     &mut &raw_event.data[..],
                 )?
                 .into(),

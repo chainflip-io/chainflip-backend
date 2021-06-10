@@ -197,7 +197,6 @@ fn testnet_genesis(
 			changes_trie_config: Default::default(),
 		}),
 		pallet_cf_validator: Some(ValidatorConfig {
-			size_validator_set: 150,
 			epoch_number_of_blocks: 100800
 		}),
 		pallet_session: Some(SessionConfig {
