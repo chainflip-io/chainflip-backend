@@ -72,7 +72,7 @@ mod test {
     use core::panic;
     use std::time::Duration;
 
-    use chainflip_common::types::coin::Coin;
+    use crate::types::chain::Chain;
     use serde::Deserialize;
 
     use crate::mq::pin_message_stream;
@@ -103,7 +103,7 @@ mod test {
         let nats_client = setup_client().await;
         let res = nats_client
             .publish(
-                Subject::Witness(Coin::ETH),
+                Subject::Witness(Chain::ETH),
                 &TestMessage(String::from("hello")),
             )
             .await;
@@ -113,7 +113,7 @@ mod test {
     async fn subscribe_test_inner(nats_client: Box<NatsMQClient>) {
         let test_message = TestMessage(String::from("I SAW A TRANSACTION"));
 
-        let subject = Subject::Witness(Coin::ETH);
+        let subject = Subject::Witness(Chain::ETH);
 
         let stream = nats_client.subscribe::<TestMessage>(subject).await.unwrap();
 
