@@ -1,7 +1,8 @@
 use sp_core::{Pair, Public, sr25519, crypto::UncheckedInto};
 use state_chain_runtime::{
-	AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig,
-	SudoConfig, SystemConfig, WASM_BINARY, Signature, ValidatorConfig, SessionConfig, opaque::SessionKeys
+	AccountId, AuraConfig, GenesisConfig, GrandpaConfig, FlipConfig, StakingConfig,
+	SudoConfig, SystemConfig, WASM_BINARY, Signature, ValidatorConfig, SessionConfig, opaque::SessionKeys,
+	FlipBalance
 };
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_finality_grandpa::AuthorityId as GrandpaId;
@@ -10,6 +11,10 @@ use sc_service::ChainType;
 
 // The URL for the telemetry server.
 // const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
+
+const TOKEN_ISSUANCE: FlipBalance = 90_000_000;
+const TOKEN_FRACTIONS: FlipBalance = 1_000_000_000_000_000_000;
+const TOTAL_ISSUANCE: FlipBalance = TOKEN_ISSUANCE * TOKEN_FRACTIONS;
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
@@ -204,9 +209,13 @@ fn testnet_genesis(
 				(x.0.clone(), x.0.clone(), session_keys(x.1.clone(), x.2.clone()))
 			}).collect::<Vec<_>>(),
 		}),
-		pallet_balances: Some(BalancesConfig {
-			// Configure endowed accounts with initial balance of 1 << 60.
-			balances: endowed_accounts.iter().cloned().map(|k|(k, 1 << 60)).collect(),
+		pallet_cf_flip: Some(FlipConfig {
+			total_issuance: TOTAL_ISSUANCE,
+		}),
+		pallet_cf_staking: Some(StakingConfig {
+			genesis_stakers: endowed_accounts.iter()
+				.map(|acct| (acct.clone(), TOTAL_ISSUANCE / 100))
+				.collect::<Vec<(AccountId, FlipBalance)>>()
 		}),
 		pallet_aura: Some(AuraConfig {
 			authorities: vec![],

@@ -2,10 +2,13 @@
 
 pub mod mocks;
 
-use frame_support::dispatch::{DispatchResultWithPostInfo, Dispatchable};
+use codec::{Decode, Encode};
+use frame_support::{
+	dispatch::{DispatchResultWithPostInfo, Dispatchable}, 
+	traits::ValidatorRegistration,
+};
+use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
-use codec::{Encode, Decode};
-use sp_runtime::RuntimeDebug;
 
 /// A trait abstracting the functionality of the witnesser
 pub trait Witnesser {
@@ -123,3 +126,55 @@ pub trait BidderProvider {
 	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)>;
 }
 
+pub trait StakeTransfer {
+	type AccountId;
+	type Balance;
+
+	/// An account's tokens that are free to be staked.
+	fn stakeable_balance(account_id: &Self::AccountId) -> Self::Balance;
+
+	/// An account's tokens that are free to be claimed.
+	fn claimable_balance(account_id: &Self::AccountId) -> Self::Balance;
+
+	/// Credit an account with stake from off-chain. Returns the total stake in the account.
+	fn credit_stake(account_id: &Self::AccountId, amount: Self::Balance) -> Self::Balance;
+
+	/// Reserves funds for a claim, if enough claimable funds are available.
+	///
+	/// Note this function makes no assumptions about how many claims may be pending simultaneously: if enough funds
+	/// are available, it succeeds. Otherwise, it fails.
+	fn try_claim(
+		account_id: &Self::AccountId,
+		amount: Self::Balance,
+	) -> Result<(), DispatchError>;
+
+	/// Performs any necessary settlement once a claim has been confirmed off-chain.
+	fn settle_claim(amount: Self::Balance);
+
+	/// Reverts a pending claim in the case of an expiry or cancellation.
+	fn revert_claim(account_id: &Self::AccountId, amount: Self::Balance);
+}
+
+/// Trait for managing token emissions.
+pub trait Emissions {
+	type AccountId;
+	type Balance;
+
+	/// Burn up to `amount` of funds, or as much funds are available.
+	fn burn_from(account_id: &Self::AccountId, amount: Self::Balance);
+
+	/// Burn some funds from an account, if enough are available.
+	fn try_burn_from(
+		account_id: &Self::AccountId,
+		amount: Self::Balance,
+	) -> Result<(), DispatchError>;
+
+	/// Mint funds to an account.
+	fn mint_to(account_id: &Self::AccountId, amount: Self::Balance);
+
+	/// Burn funds from some external (non-account) source. Use with care.
+	fn vaporise(amount: Self::Balance);
+
+	/// Returns the total issuance.
+	fn total_issuance() -> Self::Balance;
+}

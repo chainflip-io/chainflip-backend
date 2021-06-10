@@ -4483,12 +4483,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-flip"
+version = "0.1.0"
+dependencies = [
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec 2.1.1",
+ "serde 1.0.125",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-staking"
 version = "0.1.0"
 dependencies = [
  "cf-traits",
  "frame-support",
  "frame-system",
+ "pallet-cf-flip",
  "pallet-cf-validator",
  "parity-scale-codec 2.1.1",
  "serde 1.0.125",
@@ -7935,6 +7952,7 @@ dependencies = [
 name = "state-chain-runtime"
 version = "0.1.0"
 dependencies = [
+ "cf-traits",
  "frame-benchmarking",
  "frame-executive",
  "frame-support",
@@ -7944,8 +7962,8 @@ dependencies = [
  "hex-literal",
  "pallet-aura",
  "pallet-authorship",
- "pallet-balances",
  "pallet-cf-auction",
+ "pallet-cf-flip",
  "pallet-cf-staking",
  "pallet-cf-validator",
  "pallet-cf-witness",
