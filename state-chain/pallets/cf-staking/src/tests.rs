@@ -18,15 +18,17 @@ fn time_after<T: Config>(duration: Duration) -> Duration {
 macro_rules! assert_event_stack {
 	($($pat:pat $( => $test:block )? ),*) => {
 		let mut events = frame_system::Pallet::<Test>::events()
-			.into_iter()
-			.map(|e| e.event)
+		.into_iter()
+		.map(|e| e.event)
 			.collect::<Vec<_>>();
 
 		$(
 			let actual = events.pop().expect("Expected an event.");
 			#[allow(irrefutable_let_patterns)]
 			if let $pat = actual {
-				// ok
+				$(
+					$test
+				)?
 			} else {
 				assert!(false, "Expected event {:?}. Got {:?}", stringify!($pat), actual);
 			}
@@ -37,58 +39,61 @@ macro_rules! assert_event_stack {
 #[test]
 fn staked_amount_is_added_and_subtracted() {
 	new_test_ext().execute_with(|| {
-		let (stake_a1, stake_a2) = (45u128, 21u128);
-		let claim_a = 44u128;
-		let stake_b = 78u128;
-		let claim_b = 78u128;
+		const STAKE_A1: u128 = 45;
+		const STAKE_A2: u128 = 21;
+		const CLAIM_A: u128 = 44;
+		const STAKE_B: u128 = 78;
+		const CLAIM_B: u128 = 78;
 
 		// Dispatch a signed extrinsic to stake some FLIP.
-		assert_ok!(Staking::staked(Origin::root(), ALICE, stake_a1, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE_A1, ETH_DUMMY_ADDR));
 		// Read pallet storage and assert the balance was added.
-		assert_eq!(Flip::total_balance_of(&ALICE), stake_a1);
+		assert_eq!(Flip::total_balance_of(&ALICE), STAKE_A1);
 
 		// Add some more
-		assert_ok!(Staking::staked(Origin::root(), ALICE, stake_a2, ETH_DUMMY_ADDR));
-		assert_ok!(Staking::staked(Origin::root(), BOB, stake_b, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE_A2, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::staked(Origin::root(), BOB, STAKE_B, ETH_DUMMY_ADDR));
 
 		// Check storage again.
-		assert_eq!(Flip::total_balance_of(&ALICE), stake_a1 + stake_a2);
-		assert_eq!(Flip::total_balance_of(&BOB), stake_b);
+		assert_eq!(Flip::total_balance_of(&ALICE), STAKE_A1 + STAKE_A2);
+		assert_eq!(Flip::total_balance_of(&BOB), STAKE_B);
 
 		// Now claim some FLIP.
-		assert_ok!(Staking::claim(Origin::signed(ALICE), claim_a, ETH_DUMMY_ADDR));
-		assert_ok!(Staking::claim(Origin::signed(BOB), claim_b, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(ALICE), CLAIM_A, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(BOB), CLAIM_B, ETH_DUMMY_ADDR));
 
 		// Make sure it was subtracted.
-		assert_eq!(Flip::total_balance_of(&ALICE), stake_a1 + stake_a2 - claim_a);
-		assert_eq!(Flip::total_balance_of(&BOB), stake_b - claim_b);
+		assert_eq!(Flip::total_balance_of(&ALICE), STAKE_A1 + STAKE_A2 - CLAIM_A);
+		assert_eq!(Flip::total_balance_of(&BOB), STAKE_B - CLAIM_B);
 
 		// Check the pending claims
-		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().amount, claim_a);
-		assert_eq!(PendingClaims::<Test>::get(BOB).unwrap().amount, claim_b);
+		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().amount, CLAIM_A);
+		assert_eq!(PendingClaims::<Test>::get(BOB).unwrap().amount, CLAIM_B);
 
 		assert_event_stack!(
-			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(BOB, _, 1, amount)) => {
-				assert_eq!(claim_b, amount);
+			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(BOB, _, nonce, amount)) => {
+				assert_eq!(CLAIM_B, amount);
+				assert_eq!(1, nonce);
 			},
 			_, // claim debited from BOB
-			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _, 1, amount)) => {
-				assert_eq!(claim_a, amount);
+			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _, nonce, amount)) => {
+				assert_eq!(CLAIM_A, amount);
+				assert_eq!(1, nonce);
 			},
 			_, // claim debited from ALICE
 			Event::pallet_cf_staking(crate::Event::Staked(BOB, staked, total)) => {
-				assert_eq!(staked, stake_b);
-				assert_eq!(total, stake_b);
+				assert_eq!(staked, STAKE_B);
+				assert_eq!(total, STAKE_B);
 			},
 			_, // stake credited to BOB
 			Event::pallet_cf_staking(crate::Event::Staked(ALICE, staked, total)) => {
-				assert_eq!(staked, stake_a2);
-				assert_eq!(total, stake_a1 + stake_a2);
+				assert_eq!(staked, STAKE_A2);
+				assert_eq!(total, STAKE_A1 + STAKE_A2);
 			},
 			_, // stake credited to ALICE
 			Event::pallet_cf_staking(crate::Event::Staked(ALICE, staked, total)) => {
-				assert_eq!(staked, stake_a1);
-				assert_eq!(total, stake_a1);
+				assert_eq!(staked, STAKE_A1);
+				assert_eq!(total, STAKE_A1);
 			},
 			_ // stake credited to ALICE
 		);
@@ -161,34 +166,34 @@ fn cannot_double_claim() {
 #[test]
 fn staked_and_claimed_events_must_match() {
 	new_test_ext().execute_with(|| {
-		let stake = 45u128;
+		const STAKE: u128 = 45;
 
 		// Stake some FLIP.
-		assert_ok!(Staking::staked(Origin::root(), ALICE, stake, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_DUMMY_ADDR));
 
 		// Claim it.
-		assert_ok!(Staking::claim(Origin::signed(ALICE), stake, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR));
 
 		// Invalid Claimed Event from Ethereum: wrong account.
-		assert_noop!(Staking::claimed(Origin::root(), BOB, stake), <Error<Test>>::NoPendingClaim);
+		assert_noop!(Staking::claimed(Origin::root(), BOB, STAKE), <Error<Test>>::NoPendingClaim);
 
 		// Invalid Claimed Event from Ethereum: wrong amount.
-		assert_noop!(Staking::claimed(Origin::root(), ALICE, stake - 1), <Error<Test>>::InvalidClaimAmount);
+		assert_noop!(Staking::claimed(Origin::root(), ALICE, STAKE - 1), <Error<Test>>::InvalidClaimAmount);
 
 		// Valid Claimed Event from Ethereum.
-		assert_ok!(Staking::claimed(Origin::root(), ALICE, stake));
+		assert_ok!(Staking::claimed(Origin::root(), ALICE, STAKE));
 
 		assert_event_stack!(
 			Event::pallet_cf_staking(crate::Event::ClaimSettled(ALICE, claimed_amount)) => {
-				assert_eq!(claimed_amount, stake);
+				assert_eq!(claimed_amount, STAKE);
 			},
-			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _, nonce, stake)) => {
+			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _, nonce, STAKE)) => {
 				assert_eq!(nonce, 1);
 			},
 			_, // Claim debited from account
 			Event::pallet_cf_staking(crate::Event::Staked(ALICE, added, total)) => { 
-				assert_eq!(added, stake);
-				assert_eq!(total, stake);
+				assert_eq!(added, STAKE);
+				assert_eq!(total, STAKE);
 			}
 		);
 	});
@@ -197,27 +202,27 @@ fn staked_and_claimed_events_must_match() {
 #[test]
 fn multisig_endpoints_cant_be_called_from_invalid_origins() {
 	new_test_ext().execute_with(|| {
-		let stake = 1u128;
+		const STAKE: u128 = 45;
 
-		assert_noop!(Staking::staked(Origin::none(), ALICE, stake, ETH_DUMMY_ADDR), BadOrigin);
-		assert_noop!(Staking::staked(Origin::signed(Default::default()), ALICE, stake, ETH_DUMMY_ADDR), BadOrigin);
+		assert_noop!(Staking::staked(Origin::none(), ALICE, STAKE, ETH_DUMMY_ADDR), BadOrigin);
+		assert_noop!(Staking::staked(Origin::signed(Default::default()), ALICE, STAKE, ETH_DUMMY_ADDR), BadOrigin);
 
-		assert_noop!(Staking::claimed(Origin::none(), ALICE, stake), BadOrigin);
-		assert_noop!(Staking::claimed(Origin::signed(Default::default()), ALICE, stake), BadOrigin);
+		assert_noop!(Staking::claimed(Origin::none(), ALICE, STAKE), BadOrigin);
+		assert_noop!(Staking::claimed(Origin::signed(Default::default()), ALICE, STAKE), BadOrigin);
 	});
 }
 
 #[test]
 fn signature_is_inserted() {
 	new_test_ext().execute_with(|| {
-		let stake = 45u128;
+		const STAKE: u128 = 45;
 		let sig = Signature::from_slice(&[1u8; 65]);
 
 		// Stake some FLIP.
-		assert_ok!(Staking::staked(Origin::root(), ALICE, stake, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_DUMMY_ADDR));
 
 		// Claim it.
-		assert_ok!(Staking::claim(Origin::signed(ALICE), stake, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR));
 
 		// Check storage for the signature, should not be there.
 		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().signature, None);
@@ -236,7 +241,7 @@ fn signature_is_inserted() {
 		assert_ok!(Staking::post_claim_signature(
 			Origin::signed(ALICE),
 			ALICE,
-			stake,
+			STAKE,
 			nonce,
 			ETH_DUMMY_ADDR,
 			expiry,
@@ -247,13 +252,13 @@ fn signature_is_inserted() {
 
 		assert_event_stack!(
 			Event::pallet_cf_staking(crate::Event::ClaimSignatureIssued(ALICE, ..)),
-			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _, n, stake)) => {
+			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _, n, STAKE)) => {
 				assert_eq!(n, nonce);
 			},
 			_,
 			Event::pallet_cf_staking(crate::Event::Staked(ALICE, added, total)) => { 
-				assert_eq!(added, stake);
-				assert_eq!(total, stake);
+				assert_eq!(added, STAKE);
+				assert_eq!(total, STAKE);
 			}
 		);
 	});
@@ -283,30 +288,30 @@ fn witnessing_witnesses() {
 #[test]
 fn cannot_claim_bond() {
 	new_test_ext().execute_with(|| {
-		let stake = 200u128;
-		let bond = 100u128;
-		epoch_info::Mock::set_bond(100);
+		const STAKE: u128 = 200;
+		const BOND: u128 = 102;
+		epoch_info::Mock::set_bond(BOND);
 		epoch_info::Mock::add_validator(ALICE);
 
 		// Alice and Bob stake the same amount. 
-		assert_ok!(Staking::staked(Origin::root(), ALICE, stake, ETH_DUMMY_ADDR));
-		assert_ok!(Staking::staked(Origin::root(), BOB, stake, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::staked(Origin::root(), BOB, STAKE, ETH_DUMMY_ADDR));
 
 		// Alice becomes a validator
-		Flip::set_validator_bond(&ALICE, bond);
+		Flip::set_validator_bond(&ALICE, BOND);
 
 		// Bob can withdraw all, but not Alice.
-		assert_ok!(Staking::claim(Origin::signed(BOB), stake, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(BOB), STAKE, ETH_DUMMY_ADDR));
 		assert_noop!(
-			Staking::claim(Origin::signed(ALICE), stake, ETH_DUMMY_ADDR),
+			Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR),
 			FlipError::InsufficientLiquidity
 		);
 
 		// Alice *can* withdraw 100
-		assert_ok!(Staking::claim(Origin::signed(ALICE), 100, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE - BOND, ETH_DUMMY_ADDR));
 
 		// Even if she claims, the remaining 100 are blocked
-		assert_ok!(Staking::claimed(Origin::root(), ALICE, 100));
+		assert_ok!(Staking::claimed(Origin::root(), ALICE, STAKE - BOND));
 		assert_noop!(
 			Staking::claim(Origin::signed(ALICE), 1, ETH_DUMMY_ADDR),
 			FlipError::InsufficientLiquidity
@@ -314,7 +319,7 @@ fn cannot_claim_bond() {
 
 		// Once she is no longer bonded, Alice can claim her stake.
 		Flip::set_validator_bond(&ALICE, 0u128);
-		assert_ok!(Staking::claim(Origin::signed(ALICE), 100, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(ALICE), BOND, ETH_DUMMY_ADDR));
 	});
 }
 
@@ -352,7 +357,7 @@ fn test_retirement() {
 #[test]
 fn claim_expiry() {
 	new_test_ext().execute_with(|| {
-		let stake = 45u128;
+		const STAKE: u128 = 45;
 		let sig = Signature::from_slice(&[1u8; 65]);
 		let nonce = 1;
 
@@ -360,14 +365,14 @@ fn claim_expiry() {
 		time_source::Mock::reset_to(Duration::from_secs(10));
 
 		// Stake some FLIP.
-		assert_ok!(Staking::staked(Origin::root(), ALICE, stake, ETH_DUMMY_ADDR));
-		assert_ok!(Staking::staked(Origin::root(), BOB, stake, ETH_DUMMY_ADDR));
-		assert_ok!(Staking::staked(Origin::root(), CHARLIE, stake, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::staked(Origin::root(), BOB, STAKE, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::staked(Origin::root(), CHARLIE, STAKE, ETH_DUMMY_ADDR));
 
 		// Claim it.
-		assert_ok!(Staking::claim(Origin::signed(ALICE), stake, ETH_DUMMY_ADDR));
-		assert_ok!(Staking::claim(Origin::signed(BOB), stake, ETH_DUMMY_ADDR));
-		assert_ok!(Staking::claim(Origin::signed(CHARLIE), stake, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(BOB), STAKE, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(CHARLIE), STAKE, ETH_DUMMY_ADDR));
 
 		// Insert a signature with expiry in the past.
 		let expiry = Duration::from_secs(1);
@@ -375,7 +380,7 @@ fn claim_expiry() {
 			Staking::post_claim_signature(
 				Origin::signed(ALICE),
 				ALICE,
-				stake,
+				STAKE,
 				nonce,
 				ETH_DUMMY_ADDR,
 				expiry,
@@ -389,7 +394,7 @@ fn claim_expiry() {
 			Staking::post_claim_signature(
 				Origin::signed(ALICE),
 				ALICE,
-				stake,
+				STAKE,
 				nonce,
 				ETH_DUMMY_ADDR,
 				expiry,
@@ -403,7 +408,7 @@ fn claim_expiry() {
 			Staking::post_claim_signature(
 				Origin::signed(ALICE),
 				ALICE,
-				stake,
+				STAKE,
 				nonce,
 				ETH_DUMMY_ADDR,
 				expiry,
@@ -416,7 +421,7 @@ fn claim_expiry() {
 			Staking::post_claim_signature(
 				Origin::signed(BOB),
 				BOB,
-				stake,
+				STAKE,
 				nonce,
 				ETH_DUMMY_ADDR,
 				expiry,
@@ -429,7 +434,7 @@ fn claim_expiry() {
 			Staking::post_claim_signature(
 				Origin::signed(ALICE),
 				CHARLIE,
-				stake,
+				STAKE,
 				nonce,
 				ETH_DUMMY_ADDR,
 				expiry,
@@ -450,11 +455,11 @@ fn claim_expiry() {
 		// It should expire Alice and Charlie's claims but not Bob's.
 		assert_event_stack!(
 			Event::pallet_cf_flip(FlipEvent::BalanceSettled(
-				ImbalanceSource::External, ImbalanceSource::Account(CHARLIE), 45, 0)),
-			Event::pallet_cf_staking(crate::Event::ClaimExpired(CHARLIE, _, 45)),
+				ImbalanceSource::External, ImbalanceSource::Account(CHARLIE), STAKE, 0)),
+			Event::pallet_cf_staking(crate::Event::ClaimExpired(CHARLIE, _, STAKE)),
 			Event::pallet_cf_flip(FlipEvent::BalanceSettled(
-				ImbalanceSource::External, ImbalanceSource::Account(ALICE), 45, 0)),
-			Event::pallet_cf_staking(crate::Event::ClaimExpired(ALICE, _, 45))
+				ImbalanceSource::External, ImbalanceSource::Account(ALICE), STAKE, 0)),
+			Event::pallet_cf_staking(crate::Event::ClaimExpired(ALICE, _, STAKE))
 		);
 		assert!(!PendingClaims::<Test>::contains_key(ALICE));
 		assert!(PendingClaims::<Test>::contains_key(BOB));
@@ -483,6 +488,33 @@ fn no_claims_during_auction() {
 				ETH_DUMMY_ADDR
 			),
 			<Error<Test>>::NoClaimsDuringAuctionPhase
+		);
+	});
+}
+
+#[test]
+fn test_claim_all() {
+	new_test_ext().execute_with(|| {
+		const STAKE: u128 = 100;
+		const BOND: u128 = 55;
+
+		// Stake some FLIP.
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_DUMMY_ADDR));
+
+		// Alice becomes a validator.
+		Flip::set_validator_bond(&ALICE, BOND);
+
+		// Claim all available funds.
+		assert_ok!(Staking::claim_all(Origin::signed(ALICE), ETH_DUMMY_ADDR));
+
+		// We should have a claim for the full staked amount minus the bond.
+		assert_event_stack!(
+			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _, _, amount)) => {
+				assert_eq!(STAKE - BOND, amount);
+			},
+			_, // claim debited from ALICE
+			Event::pallet_cf_staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
+			_ // stake credited to ALICE
 		);
 	});
 }
