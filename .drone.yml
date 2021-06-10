@@ -65,7 +65,7 @@ steps:
         - .drone.yml
 
 #  Performs all unit tests
-  - name: test-state-chain
+  - name: test-validator-package
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
       - cargo test --lib --release
