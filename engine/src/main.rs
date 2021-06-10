@@ -8,6 +8,7 @@ async fn main() {
     let settings = Settings::new().expect("Failed to initialise settings");
 
     log::info!("Start the engines! :broom: :broom: ");
+    log::info!("Start the engines! :broom: :broom: ");
 
     sc_observer::sc_observer::start(settings.clone()).await;
 
