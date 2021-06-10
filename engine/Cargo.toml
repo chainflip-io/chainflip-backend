@@ -48,6 +48,8 @@ substrate-subxt = {version = "0.15 "}
 # Local deps
 pallet-cf-staking = {path = "../state-chain/pallets/cf-staking"}
 pallet-cf-validator = {path = "../state-chain/pallets/cf-validator"}
+pallet-cf-auction = {path = "../state-chain/pallets/cf-auction"}
+cf-traits = {path = "../state-chain/traits"}
 state-chain-runtime = {path = "../state-chain/runtime"}
 
 [dev-dependencies]

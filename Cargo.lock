@@ -196,6 +196,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "assert_matches"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b34d609dfbaf33d6889b2b7106d3ca345eacad44200913df5ba02bfd31d2ba9"
+
+[[package]]
 name = "async-attributes"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -898,6 +904,7 @@ dependencies = [
  "async-std",
  "async-stream",
  "async-trait",
+ "cf-traits",
  "config",
  "crossbeam-channel",
  "env_logger 0.8.3",
@@ -909,6 +916,7 @@ dependencies = [
  "hex",
  "log",
  "nats_test_server",
+ "pallet-cf-auction",
  "pallet-cf-staking",
  "pallet-cf-validator",
  "parity-scale-codec 2.1.1",
@@ -4444,6 +4452,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-auction"
+version = "0.0.1"
+dependencies = [
+ "assert_matches",
+ "cf-traits",
+ "frame-support",
+ "frame-system",
+ "log",
+ "parity-scale-codec 2.1.1",
+ "serde 1.0.125",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-core"
 version = "0.1.0"
 dependencies = [
@@ -4470,7 +4495,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-std 3.0.0",
+ "sp-std",
 ]
 
 [[package]]
@@ -4494,11 +4519,13 @@ dependencies = [
 name = "pallet-cf-validator"
 version = "0.0.1"
 dependencies = [
+ "assert_matches",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
  "log",
+ "pallet-cf-auction",
  "pallet-session",
  "parity-scale-codec 2.1.1",
  "serde 1.0.125",
@@ -7935,6 +7962,7 @@ dependencies = [
  "hex-literal",
  "pallet-aura",
  "pallet-authorship",
+ "pallet-cf-auction",
  "pallet-cf-flip",
  "pallet-cf-staking",
  "pallet-cf-validator",
