@@ -22,7 +22,7 @@ steps:
       SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo check --release --bin chainflip-engine
-      - sccache -s
+      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
     resources:
       limits:
         cpu: 2000
@@ -33,14 +33,14 @@ steps:
       SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo build --release --bin chainflip-engine
-      - sccache -s
+      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
   - name: test-chainflip-engine
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     environment:
       SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo test -p chainflip-engine --lib --release
-      - sccache -s
+      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
 # Config
 trigger:
