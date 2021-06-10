@@ -8,6 +8,10 @@ kind: pipeline
 type: kubernetes
 name: chainflip-engine-pr
 
+environment:
+  SCCACHE_REDIS: redis://redis-headless:6379/
+  SCCACHE_CACHE_SIZE: 4G
+
 steps:
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<< pull_request >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # Pull request check and build
@@ -18,26 +22,20 @@ steps:
 #      - cargo fmt --all -- --check
   - name: check-chainflip-engine
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
-      - cargo check --release --bin chainflip-engine
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
+      - cargo check --release --bin chainflip-engine
     resources:
       limits:
         cpu: 2000
         memory: 3.5GiB
   - name: build-chainflip-engine
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo build --release --bin chainflip-engine
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
   - name: test-chainflip-engine
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo test -p chainflip-engine --lib --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
@@ -46,8 +44,8 @@ steps:
 trigger:
   event:
     - pull_request
-  paths:
-    - engine/**/*.rs
+#  paths:
+#    - engine/**/*.rs
 image_pull_secrets:
   - dockerconfigjson
 node_selector:
@@ -62,6 +60,10 @@ kind: pipeline
 type: kubernetes
 name: chainflip-engine-integration-tests-pr
 
+environment:
+  SCCACHE_REDIS: redis://redis-headless:6379/
+  SCCACHE_CACHE_SIZE: 4G
+
 services:
   - image: trufflesuite/ganache-cli:latest
     name: ganache
@@ -74,12 +76,9 @@ services:
     ports: [4222,8222]
     name: nats
 
-
 steps:
   - name: run-tests
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_REDIS: "redis://redis-headless:6379/"
     commands:
         - chmod +x ./engine/tests/scripts/setup.sh;
         - ./engine/tests/scripts/setup.sh;

@@ -8,6 +8,10 @@ kind: pipeline
 type: kubernetes
 name: chainflip-state-chain-pr
 
+environment:
+  SCCACHE_REDIS: redis://redis-headless:6379/
+  SCCACHE_CACHE_SIZE: 4G
+
 steps:
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<< pull_request >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # Pull request check and build
@@ -17,26 +21,20 @@ steps:
 #      - cargo fmt --all -- --check
   - name: check-state-chain
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
-      - cargo check --release --bin state-chain-node
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
+      - cargo check --release --bin state-chain-node
     resources:
       limits:
         cpu: 2000
         memory: 3.5GiB
   - name: build-state-chain
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo build --release --bin state-chain-node
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
   - name: test-state-chain
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo test --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi

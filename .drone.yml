@@ -77,6 +77,10 @@ kind: pipeline
 type: kubernetes
 name: chainflip-state-chain
 
+environment:
+  SCCACHE_REDIS: redis://redis-headless:6379/
+  SCCACHE_CACHE_SIZE: 4G
+
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<< main >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # Merge to master build and publish
 steps:
@@ -102,15 +106,11 @@ steps:
         memory: 3.5GiB
   - name: compile-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo build --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
   - name: test-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo test --lib --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
@@ -138,26 +138,6 @@ steps:
       registry: ghcr.io
       tags: latest
       cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
-#  - name: publish-state-chain-node
-#    image: plugins/ansible
-#    settings:
-#      verbose: 2
-#      playbook: .ansible/staging/playbook.yml
-#      inventory: .ansible/staging/inventory/all
-#      extra_vars:
-#        target: state-chain-node
-#      private_key:
-#        from_secret: ansible_staging_private_key
-#  - name: publish-chainflip-engine
-#    image: plugins/ansible
-#    settings:
-#      verbose: 2
-#      playbook: .ansible/staging/playbook.yml
-#      inventory: .ansible/staging/inventory/all
-#      extra_vars:
-#        target: chainflip-engine
-#      private_key:
-#        from_secret: ansible_staging_private_key
   - name: notify
     image: appleboy/drone-discord
     when:
@@ -213,12 +193,13 @@ services:
     ports: [4222,8222]
     name: nats
 
+environment:
+  SCCACHE_REDIS: redis://redis-headless:6379/
+  SCCACHE_CACHE_SIZE: 4G
 
 steps:
   - name: run-tests
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_REDIS: "redis://redis-headless:6379/"
     commands:
       - cargo test --release
     resources:
