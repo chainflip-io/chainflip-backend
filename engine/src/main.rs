@@ -32,5 +32,4 @@ async fn main() {
     let signing_client = signing::MultisigClient::new(mq_factory, signer_idx, params);
 
     signing_client.run().await;
-
 }
