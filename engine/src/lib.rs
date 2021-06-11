@@ -4,7 +4,5 @@ pub mod sc_observer;
 pub mod settings;
 pub mod signing;
 pub mod types;
-pub mod witness;
-
 // Blockchains
 pub mod eth;

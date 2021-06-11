@@ -4,7 +4,6 @@ use chainflip_engine::{
     sc_observer,
     settings::Settings,
     signing::{self, crypto::Parameters},
-    witness,
 };
 
 #[tokio::main]
@@ -32,10 +31,6 @@ async fn main() {
 
     let signing_client = signing::MultisigClient::new(mq_factory, signer_idx, params);
 
-    let _ = futures::join!(
-        signing_client.run(),
-        witness::witness::start(settings.message_queue)
-    );
+    signing_client.run().await;
 
-    // start witnessing other chains
 }

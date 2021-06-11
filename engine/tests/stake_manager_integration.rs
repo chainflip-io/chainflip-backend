@@ -68,7 +68,7 @@ pub async fn test_all_stake_manager_events() {
     };
 
     match stream.next().await.unwrap().unwrap() {
-        StakingEvent::ClaimRegistered(node_id, amount, address, start_time, end_time) => {
+        StakingEvent::ClaimRegistered(node_id, amount, address, _start_time, _end_time) => {
             assert_eq!(node_id, U256::from_dec_str("12345").unwrap());
             assert_eq!(
                 amount,

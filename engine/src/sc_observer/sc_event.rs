@@ -8,12 +8,13 @@ use anyhow::Result;
 use super::{
     runtime::StateChainRuntime,
     staking::{
-        ClaimSigRequestedEvent, ClaimSignatureIssuedEvent, ClaimedEvent, StakeRefundEvent,
+        ClaimSigRequestedEvent, ClaimSignatureIssuedEvent, ClaimSettledEvent, StakeRefundEvent,
         StakedEvent, StakingEvent,
     },
     validator::{
         AuctionConfirmedEvent, AuctionStartedEvent, EpochDurationChangedEvent,
-        ForceAuctionRequestedEvent, MaximumValidatorsChangedEvent, NewEpochEvent, ValidatorEvent,
+        ForceRotationRequestedEvent, AuctionRangeChangedEvent, ValidatorEvent,
+        NewEpochEvent
     },
 };
 
@@ -41,7 +42,7 @@ pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEv
                     .into(),
             )),
             "Claimed" => Ok(Some(
-                ClaimedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
+                ClaimSettledEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
             )),
             "Staked" => Ok(Some(
                 StakedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
@@ -57,15 +58,15 @@ pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEv
                 AuctionStartedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
             )),
             "ForceRotationRequested" => Ok(Some(
-                ForceAuctionRequestedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
+                ForceRotationRequestedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
                     .into(),
             )),
             "EpochDurationChanged" => Ok(Some(
                 EpochDurationChangedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
                     .into(),
             )),
-            "MaximumValidatorsChanged" => Ok(Some(
-                MaximumValidatorsChangedEvent::<StateChainRuntime>::decode(
+            "AuctionRangeChanged" => Ok(Some(
+                AuctionRangeChangedEvent::<StateChainRuntime>::decode(
                     &mut &raw_event.data[..],
                 )?
                 .into(),
@@ -148,7 +149,7 @@ mod tests {
         let who = AccountKeyring::Alice.to_account_id();
 
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_staking::Event::<SCRuntime>::Claimed(who.clone(), 150u128).into();
+            pallet_cf_staking::Event::<SCRuntime>::ClaimSettled(who.clone(), 150u128).into();
 
         let encoded_claimed = event.encode();
 
@@ -165,7 +166,7 @@ mod tests {
         assert!(sc_event.is_ok());
         let sc_event = sc_event.unwrap();
 
-        let expected: SCEvent = ClaimedEvent {
+        let expected: SCEvent = ClaimSettledEvent {
             who,
             amount: 150u128,
             _phantom: PhantomData,

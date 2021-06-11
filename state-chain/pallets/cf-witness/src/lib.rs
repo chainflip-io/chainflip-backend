@@ -82,6 +82,8 @@ pub mod pallet {
 			+ Into<<Self as frame_system::Config>::AccountId>;
 
 		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, EpochIndex = Self::Epoch>;
+
+		type Amount: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 	}
 
 	/// Alias for the `Epoch` configuration type.
@@ -315,8 +317,9 @@ where
 
 impl<T: Config> pallet_cf_validator::EpochTransitionHandler for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
+	type Amount = T::Amount;
 
-	fn on_new_epoch(new_validators: Vec<Self::ValidatorId>) {
+	fn on_new_epoch(new_validators: Vec<Self::ValidatorId>, _new_bond: Self::Amount) {
 		let epoch = T::EpochInfo::epoch_index();
 
 		for (i, v) in new_validators.iter().enumerate() {
