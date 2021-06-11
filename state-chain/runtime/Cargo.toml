@@ -103,4 +103,5 @@ std = [
   'pallet-cf-staking/std',
   'pallet-cf-witness/std',
   'pallet-cf-flip/std',
+  'pallet-cf-auction/std',
 ]
