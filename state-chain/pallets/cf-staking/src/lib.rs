@@ -35,14 +35,23 @@ mod mock;
 mod tests;
 
 use core::time::Duration;
-use frame_support::{dispatch::DispatchResultWithPostInfo, ensure, error::BadOrigin, traits::{EnsureOrigin, Get, UnixTime}, weights};
+use frame_support::{
+	debug,
+	dispatch::DispatchResultWithPostInfo,
+	ensure,
+	error::BadOrigin, 
+	traits::{
+		EnsureOrigin, Get, HandleLifetime, UnixTime
+	}, 
+	weights
+};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
 use cf_traits::{EpochInfo, BidderProvider, StakeTransfer};
 
 use codec::FullCodec;
-use sp_runtime::{DispatchError, traits::{AtLeast32BitUnsigned, CheckedSub, One}};
+use sp_runtime::{DispatchError, traits::{AtLeast32BitUnsigned, CheckedSub, One, Zero}};
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -328,7 +337,7 @@ pub mod pallet {
 		///
 		/// Note that calling this doesn't initiate any protocol changes - the `claim` has already been authorised
 		/// by validator multisig. This merely signals that the claimant has in fact redeemed their funds via the
-		/// `StakeManager` contract.
+		/// `StakeManager` contract and allows us finalise any on-chain cleanup.
 		///
 		/// ## Error conditions:
 		///
@@ -356,8 +365,16 @@ pub mod pallet {
 			PendingClaims::<T>::remove(&account_id);
 			T::Flip::settle_claim(claimed_amount);
 
-			Self::deposit_event(Event::ClaimSettled(account_id, claimed_amount));
+			if T::Flip::stakeable_balance(&account_id).is_zero() {
+				frame_system::Provider::<T>::killed(&account_id).unwrap_or_else(|e| {
+					// This shouldn't happen, and not much we can do if it does except fix it on a subsequent release.
+					// Consequences are minor.
+					debug::error!("Unexpected reference count error while reaping the account {:?}: {:?}.", account_id, e);
+				})
+			}
 
+			Self::deposit_event(Event::ClaimSettled(account_id, claimed_amount));
+			
 			Ok(().into())
 		}
 
@@ -494,8 +511,12 @@ impl<T: Config> Pallet<T> {
 		T::EnsureWitnessed::ensure_origin(origin)
 	}
 
-	/// Add stake to an account, activating the account if it is in retired state.
+	/// Add stake to an account, creating the account if it doesn't exist, and activating the account if it is in retired state.
 	fn stake_account(account_id: &T::AccountId, amount: T::Balance) {
+		if !frame_system::Pallet::<T>::account_exists(account_id) {
+			frame_system::Provider::<T>::created(account_id);
+		}
+
 		let new_total = T::Flip::credit_stake(&account_id, amount);
 
 		// Staking implicitly activates the account. Ignore the error.

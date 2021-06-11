@@ -4718,20 +4718,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-cf-core"
-version = "0.1.0"
-dependencies = [
- "frame-support",
- "frame-system",
- "parity-scale-codec 2.1.1",
- "serde 1.0.125",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
 name = "pallet-cf-flip"
 version = "0.1.0"
 dependencies = [

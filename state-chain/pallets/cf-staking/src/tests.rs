@@ -45,6 +45,10 @@ fn staked_amount_is_added_and_subtracted() {
 		const STAKE_B: u128 = 78;
 		const CLAIM_B: u128 = 78;
 
+		// Accounts don't exist yet.
+		assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
+		assert!(!frame_system::Pallet::<Test>::account_exists(&BOB));
+
 		// Dispatch a signed extrinsic to stake some FLIP.
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE_A1, ETH_DUMMY_ADDR));
 		// Read pallet storage and assert the balance was added.
@@ -53,6 +57,10 @@ fn staked_amount_is_added_and_subtracted() {
 		// Add some more
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE_A2, ETH_DUMMY_ADDR));
 		assert_ok!(Staking::staked(Origin::root(), BOB, STAKE_B, ETH_DUMMY_ADDR));
+
+		// Both accounts should now be created. 
+		assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
+		assert!(frame_system::Pallet::<Test>::account_exists(&BOB));
 
 		// Check storage again.
 		assert_eq!(Flip::total_balance_of(&ALICE), STAKE_A1 + STAKE_A2);
@@ -86,6 +94,7 @@ fn staked_amount_is_added_and_subtracted() {
 				assert_eq!(total, STAKE_B);
 			},
 			_, // stake credited to BOB
+			Event::frame_system(frame_system::Event::NewAccount(BOB)),
 			Event::pallet_cf_staking(crate::Event::Staked(ALICE, staked, total)) => {
 				assert_eq!(staked, STAKE_A2);
 				assert_eq!(total, STAKE_A1 + STAKE_A2);
@@ -95,7 +104,8 @@ fn staked_amount_is_added_and_subtracted() {
 				assert_eq!(staked, STAKE_A1);
 				assert_eq!(total, STAKE_A1);
 			},
-			_ // stake credited to ALICE
+			_, // stake credited to ALICE
+			Event::frame_system(frame_system::Event::NewAccount(ALICE))
 		);
 	});
 }
@@ -168,8 +178,14 @@ fn staked_and_claimed_events_must_match() {
 	new_test_ext().execute_with(|| {
 		const STAKE: u128 = 45;
 
+		// Account doesn't exist yet.
+		assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
+
 		// Stake some FLIP.
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_DUMMY_ADDR));
+
+		// The act of staking creates the account.
+		assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
 
 		// Claim it.
 		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR));
@@ -183,10 +199,14 @@ fn staked_and_claimed_events_must_match() {
 		// Valid Claimed Event from Ethereum.
 		assert_ok!(Staking::claimed(Origin::root(), ALICE, STAKE));
 
+		// The account balance is now zero, it should have been reaped.
+		assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
+
 		assert_event_stack!(
 			Event::pallet_cf_staking(crate::Event::ClaimSettled(ALICE, claimed_amount)) => {
 				assert_eq!(claimed_amount, STAKE);
 			},
+			Event::frame_system(frame_system::Event::KilledAccount(ALICE)),
 			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _, nonce, STAKE)) => {
 				assert_eq!(nonce, 1);
 			},
@@ -194,7 +214,9 @@ fn staked_and_claimed_events_must_match() {
 			Event::pallet_cf_staking(crate::Event::Staked(ALICE, added, total)) => { 
 				assert_eq!(added, STAKE);
 				assert_eq!(total, STAKE);
-			}
+			},
+			_, // stake credited to ALICE
+			Event::frame_system(frame_system::Event::NewAccount(ALICE))
 		);
 	});
 }
