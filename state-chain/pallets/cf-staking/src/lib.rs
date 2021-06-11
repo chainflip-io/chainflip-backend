@@ -633,7 +633,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-/// This implementation of [pallet_cf_validator::CandidateProvider] simply returns a list of `(account_id, stake)` for
+/// This implementation of [pallet_cf_validator::BidderProvider] simply returns a list of `(account_id, stake)` for
 /// all non-retired accounts.
 impl<T: Config> BidderProvider for Pallet<T> {
 	type ValidatorId = T::AccountId;
