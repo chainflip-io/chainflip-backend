@@ -202,7 +202,7 @@ fn testnet_genesis(
 			changes_trie_config: Default::default(),
 		}),
 		pallet_cf_validator: Some(ValidatorConfig {
-			epoch_number_of_blocks: 100800
+			epoch_number_of_blocks: 100800 // 7 days based on 6 second blocks
 		}),
 		pallet_session: Some(SessionConfig {
 			keys: initial_authorities.iter().map(|x| {
