@@ -35,14 +35,14 @@ mod mock;
 mod tests;
 
 use core::time::Duration;
-use frame_support::{ensure, error::BadOrigin, traits::{EnsureOrigin, Get, UnixTime}, weights};
+use frame_support::{dispatch::DispatchResultWithPostInfo, ensure, error::BadOrigin, traits::{EnsureOrigin, Get, UnixTime}, weights};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
 use cf_traits::{EpochInfo, BidderProvider, StakeTransfer};
 
 use codec::FullCodec;
-use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, One};
+use sp_runtime::{DispatchError, traits::{AtLeast32BitUnsigned, CheckedSub, One}};
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -248,9 +248,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = Call::staked(staker_account_id, amount, refund_address);
-
 			T::Witnesser::witness(who, call.into())?;
-
 			Ok(().into())
 		}
 
@@ -268,9 +266,7 @@ pub mod pallet {
 			refund_address: T::EthereumAddress,
 		) -> DispatchResultWithPostInfo {
 			Self::ensure_witnessed(origin)?;
-
 			Self::stake_account(&account_id, amount);
-
 			Ok(().into())
 		}
 
@@ -297,51 +293,21 @@ pub mod pallet {
 			address: T::EthereumAddress,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-
-			// No new claim requests can be processed if we're currently in an auction phase.
-			ensure!(
-				!T::EpochInfo::is_auction_phase(),
-				Error::<T>::NoClaimsDuringAuctionPhase
-			);
-
-			// If a claim already exists, return an error. The validator must either redeem their claim voucher
-			// or wait until expiry before creating a new claim.
-			ensure!(
-				!PendingClaims::<T>::contains_key(&who),
-				Error::<T>::PendingClaim
-			);
-
-			// Throw an error if the validator tries to claim too much. Otherwise decrement the stake by the
-			// amount claimed.
-			T::Flip::try_claim(&who, amount)?;
-
-			// Don't check for overflow here - we don't expect more than 2^32 claims.
-			let nonce = Nonces::<T>::mutate(&who, |nonce| {
-				*nonce += T::Nonce::one();
-				*nonce
-			});
-
-			// Insert a pending claim without a signature.
-			PendingClaims::<T>::insert(
-				&who,
-				ClaimDetails {
-					amount,
-					nonce,
-					address,
-					signature: None,
-				},
-			);
-
-			// Emit the event requesting that the CFE generate the claim voucher.
-			Self::deposit_event(Event::<T>::ClaimSigRequested(
-				who.clone(),
-				address,
-				nonce,
-				amount,
-			));
-
+			Self::do_claim(&who, amount, address)?;
 			Ok(().into())
 		}
+
+		#[pallet::weight(10_000)]
+		pub fn claim_all(
+			origin: OriginFor<T>,
+			address: T::EthereumAddress,
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			let claimable = T::Flip::claimable_balance(&who);
+			Self::do_claim(&who, claimable, address)?;
+			Ok(().into())
+		}
+
 
 		/// Witness that a `Claimed` event was emitted by the `StakeManager` smart contract.
 		///
@@ -354,9 +320,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = Call::claimed(account_id, claimed_amount);
-
 			T::Witnesser::witness(who, call.into())?;
-
 			Ok(().into())
 		}
 
@@ -538,6 +502,55 @@ impl<T: Config> Pallet<T> {
 		let _ = AccountRetired::<T>::mutate(&account_id, |retired| *retired = false);
 
 		Self::deposit_event(Event::Staked(account_id.clone(), amount, new_total));
+	}
+
+	fn do_claim(
+		account_id: &T::AccountId,
+		amount: T::Balance,
+		address: T::EthereumAddress) -> Result<(), DispatchError> {
+		// No new claim requests can be processed if we're currently in an auction phase.
+		ensure!(
+			!T::EpochInfo::is_auction_phase(),
+			Error::<T>::NoClaimsDuringAuctionPhase
+		);
+
+		// If a claim already exists, return an error. The validator must either redeem their claim voucher
+		// or wait until expiry before creating a new claim.
+		ensure!(
+			!PendingClaims::<T>::contains_key(account_id),
+			Error::<T>::PendingClaim
+		);
+
+		// Throw an error if the validator tries to claim too much. Otherwise decrement the stake by the
+		// amount claimed.
+		T::Flip::try_claim(account_id, amount)?;
+
+		// Don't check for overflow here - we don't expect more than 2^32 claims.
+		let nonce = Nonces::<T>::mutate(account_id, |nonce| {
+			*nonce += T::Nonce::one();
+			*nonce
+		});
+
+		// Insert a pending claim without a signature.
+		PendingClaims::<T>::insert(
+			account_id,
+			ClaimDetails {
+				amount,
+				nonce,
+				address,
+				signature: None,
+			},
+		);
+
+		// Emit the event requesting that the CFE generate the claim voucher.
+		Self::deposit_event(Event::<T>::ClaimSigRequested(
+			account_id.clone(),
+			address,
+			nonce,
+			amount,
+		));
+
+		Ok(())
 	}
 
 	/// Sets the `retired` flag associated with the account to true, signalling that the account no longer wishes to
