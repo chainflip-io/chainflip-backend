@@ -17,8 +17,12 @@
 //! - The claimant who is a current validator is subject to the bond - an amount equal to the current bond is locked
 //!   and cannot be claimed. For example if an account has 120 FLIP staked, and the current bond is 40 FLIP, their
 //!   claimable balance would be 80 FLIP.
-//! - If the account has sufficient funds,
-//! - TODO: we could have a convenience extrinsic `claim_all_claimable` that delegates to claim and withdraws all funds.
+//! - An event is emitted with the claim parameters that need to be signed by the CFE signing module.
+//! - Once a valid signature is generated, this is posted to the state chain along with the expiry timestamp.
+//!
+//! ## Claim expiry
+//!
+//! - When a claim expires, it will no longer be claimable on ethereum, so is re-credited to the originating account. 
 //!
 //! ## Retiring
 //!
@@ -26,6 +30,11 @@
 //! - Any active account can make a signed call to the [`retire`](Pallet::retire_account) extrinsic to change their status to
 //!   retired.
 //! - Only active accounts should be included as active bidders for the auction.
+//!
+//! ## Account creation and deletion
+//!
+//! - When a staker adds stake for the first time, this creates an account.
+//! - When a user claims all remaining funds, their account is deleted.
 //!
 
 #[cfg(test)]
@@ -181,9 +190,6 @@ pub mod pallet {
 		/// A validator has claimed their FLIP on the Ethereum chain. [validator_id, claimed_amount]
 		ClaimSettled(AccountId<T>, FlipBalance<T>),
 
-		/// The staked amount should be refunded to the provided Ethereum address. [node_id, refund_amount, address]
-		StakeRefund(AccountId<T>, FlipBalance<T>, T::EthereumAddress),
-
 		/// A claim request has been made to provided Ethereum address. [who, address, nonce, amount]
 		ClaimSigRequested(AccountId<T>, T::EthereumAddress, T::Nonce, FlipBalance<T>),
 
@@ -221,12 +227,6 @@ pub mod pallet {
 		/// The claimant tried to claim despite having a claim already pending.
 		PendingClaim,
 
-		/// The claimant tried to claim more funds than were available.
-		ClaimOverflow,
-
-		/// Stake amount violated the total issuance of the token.
-		StakeOverflow,
-
 		/// An account tried to post a signature to an already-signed claim.
 		SignatureAlreadyIssued,
 
@@ -263,7 +263,7 @@ pub mod pallet {
 
 		/// Funds have been staked to an account via the StakeManager smart contract.
 		///
-		/// If the account doesn't exist, an event is emitted to trigger a refund to the provided eth address.
+		/// If the account doesn't exist, we create it.
 		///
 		/// **This call can only be dispatched from the configured witness origin.**
 		#[pallet::weight(10_000)]
@@ -306,6 +306,9 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Get *all* FLIP that is held for me by the system, signed by my validator key.
+		///
+		/// Same as [claim] except calculate the maximum claimable amount and submits a claim for that.
 		#[pallet::weight(10_000)]
 		pub fn claim_all(
 			origin: OriginFor<T>,
