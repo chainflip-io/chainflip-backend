@@ -153,4 +153,15 @@ mod test {
 			assert_eq!(<ValidatorManager as EpochInfo>::current_validators(), winners);
 		});
 	}
+
+	#[test]
+	fn genesis() {
+		// As we are forcing an auction on genesis we should see an auction ran over block 1 and 2
+		// Confirm we are in the waiting state
+		new_test_ext().execute_with(|| {
+			CONFIRM.with(|l| { *l.borrow_mut() = true });
+			run_to_block(3);
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(..));
+		});
+	}
 }

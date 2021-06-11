@@ -223,6 +223,7 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub epoch_number_of_blocks: T::BlockNumber,
+		pub force: bool,
 	}
 
 	#[cfg(feature = "std")]
@@ -230,6 +231,7 @@ pub mod pallet {
 		fn default() -> Self {
 			Self {
 				epoch_number_of_blocks: Zero::zero(),
+				force: false,
 			}
 		}
 	}
@@ -237,7 +239,10 @@ pub mod pallet {
 	// The build of genesis for the pallet.
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
-		fn build(&self) {}
+		fn build(&self) {
+			BlocksPerEpoch::<T>::set(self.epoch_number_of_blocks);
+			Force::<T>::set(self.force);
+		}
 	}
 }
 
@@ -279,7 +284,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 
 impl<T: Config> pallet_session::SessionHandler<T::ValidatorId> for Pallet<T> {
 	/// TODO look at the key management
-	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[];
+	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[sp_runtime::key_types::DUMMY];
 	fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(T::ValidatorId, Ks)]) {}
 	fn on_new_session<Ks: OpaqueKeys>(
 		_changed: bool,
@@ -350,8 +355,8 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 		return match T::Auction::phase() {
 			// Successfully completed the process, these are the next set of validators to be used
 			AuctionPhase::WinnersSelected(winners, _) => {
-				Some(winners)
-			}
+				Some(winners)			}
+
 			// A rotation has occurred, we emit an event of the new epoch and compile a list of
 			// validators for validator lookup
 			AuctionPhase::WaitingForBids(winners, min_bid) => {

@@ -174,6 +174,29 @@ pub mod pallet {
 			}
 		}
 	}
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig {
+		pub auction_size_range: AuctionRange,
+	}
+
+	#[cfg(feature = "std")]
+	impl Default for GenesisConfig {
+		fn default() -> Self {
+			Self {
+				auction_size_range: (Zero::zero(), Zero::zero()),
+			}
+		}
+	}
+
+	// The build of genesis for the pallet.
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+		fn build(&self) {
+			AuctionSizeRange::<T>::set(self.auction_size_range);
+		}
+	}
+
 }
 
 impl<T: Config> AuctionConfirmation for Pallet<T> {

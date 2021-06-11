@@ -15,6 +15,8 @@ use sc_service::ChainType;
 const TOKEN_ISSUANCE: FlipBalance = 90_000_000;
 const TOKEN_FRACTIONS: FlipBalance = 1_000_000_000_000_000_000;
 const TOTAL_ISSUANCE: FlipBalance = TOKEN_ISSUANCE * TOKEN_FRACTIONS;
+const MIN_VALIDATORS: u32 = 3;
+const MAX_VALIDATORS: u32 = 150;
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
@@ -202,7 +204,10 @@ fn testnet_genesis(
 			changes_trie_config: Default::default(),
 		}),
 		pallet_cf_validator: Some(ValidatorConfig {
-			epoch_number_of_blocks: 100800 // 7 days based on 6 second blocks
+			epoch_number_of_blocks: 100800, // 7 days based on 6 second blocks
+			// Force a rotation at genesis, this equates to the genesis stakers running
+			// an auction
+			force: true,
 		}),
 		pallet_session: Some(SessionConfig {
 			keys: initial_authorities.iter().map(|x| {
@@ -216,6 +221,9 @@ fn testnet_genesis(
 			genesis_stakers: endowed_accounts.iter()
 				.map(|acct| (acct.clone(), TOTAL_ISSUANCE / 100))
 				.collect::<Vec<(AccountId, FlipBalance)>>()
+		}),
+		pallet_cf_auction: Some(AuctionConfig {
+			auction_size_range: (MIN_VALIDATORS, MAX_VALIDATORS),
 		}),
 		pallet_aura: Some(AuraConfig {
 			authorities: vec![],

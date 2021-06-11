@@ -32,6 +32,9 @@ impl WeightInfo for () {
 }
 
 thread_local! {
+	// These are first set of candidates we would provide from the `BidderProvider` trait
+	// We build our genesis with these and then we should see after genesis that they remain
+	pub static GENESIS_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![1, 2]);
 	pub static CANDIDATE_IDX: RefCell<u64> = RefCell::new(0);
 	pub static CURRENT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 	pub static PHASE: RefCell<AuctionPhase<ValidatorId, Amount>> =  RefCell::new(AuctionPhase::default());
@@ -47,7 +50,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		ValidatorManager: pallet_cf_validator::{Module, Call, Storage, Event<T>},
+		ValidatorManager: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
 		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>},
 	}
@@ -84,6 +87,12 @@ impl frame_system::Config for Test {
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
 		pub dummy: UintAuthorityId,
+	}
+}
+
+impl From<UintAuthorityId> for MockSessionKeys {
+	fn from(dummy: UintAuthorityId) -> Self {
+		Self { dummy }
 	}
 }
 
@@ -180,9 +189,24 @@ impl Config for Test {
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
+
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	frame_system::GenesisConfig::default().assimilate_storage::<Test>(&mut t).unwrap();
-	let mut ext = sp_io::TestExternalities::new(t);
+	// let keys: Vec<_> = GENESIS_VALIDATORS.with(|l|
+	// 	l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
+	// );
+	//
+	// pallet_session::GenesisConfig::<Test> {
+	// 	keys
+	// }.assimilate_storage(&mut t).unwrap();
+
+
+	pallet_cf_validator::GenesisConfig::<Test> {
+		epoch_number_of_blocks: 100,
+		force: true
+	}.assimilate_storage(&mut t).unwrap();
+
+	let mut ext: sp_io::TestExternalities = sp_io::TestExternalities::new(t);
+
 	ext.execute_with(|| System::set_block_number(1));
 	ext
 }
