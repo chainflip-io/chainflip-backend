@@ -1,3 +1,4 @@
+use super::IMQClientFactory;
 use super::{IMQClient, Subject};
 use anyhow::Context;
 use anyhow::Result;
@@ -30,14 +31,32 @@ impl Subscription {
     }
 }
 
+pub struct NatsMQClientFactory {
+    mq_settings: settings::MessageQueue,
+}
+
+impl NatsMQClientFactory {
+    pub fn new(mq_settings: &settings::MessageQueue) -> Self {
+        NatsMQClientFactory {
+            mq_settings: mq_settings.clone(),
+        }
+    }
+}
+
 #[async_trait]
-impl IMQClient for NatsMQClient {
-    async fn connect(mq_settings: settings::MessageQueue) -> Result<Box<Self>> {
-        let url = format!("http://{}:{}", mq_settings.hostname, mq_settings.port);
+impl IMQClientFactory<NatsMQClient> for NatsMQClientFactory {
+    async fn create(&self) -> anyhow::Result<Box<NatsMQClient>> {
+        let url = format!(
+            "http://{}:{}",
+            self.mq_settings.hostname, self.mq_settings.port
+        );
         let conn = async_nats::connect(url.as_str()).await?;
         Ok(Box::new(NatsMQClient { conn }))
     }
+}
 
+#[async_trait]
+impl IMQClient for NatsMQClient {
     async fn publish<M: Serialize + Sync>(&self, subject: Subject, message: &'_ M) -> Result<()> {
         let bytes = serde_json::to_string(message)?;
         let bytes = bytes.as_bytes();
@@ -86,7 +105,10 @@ mod test {
             port: 4222,
         };
 
-        NatsMQClient::connect(mq_settings).await.unwrap()
+        NatsMQClientFactory::new(&mq_settings)
+            .create()
+            .await
+            .unwrap()
     }
 
     #[ignore = "Depends on Nats being online"]
