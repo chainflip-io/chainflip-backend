@@ -1,13 +1,13 @@
 use sp_core::{Pair, Public, sr25519, crypto::UncheckedInto};
 use state_chain_runtime::{
 	AccountId, AuraConfig, GenesisConfig, GrandpaConfig, FlipConfig, StakingConfig,
-	SudoConfig, SystemConfig, WASM_BINARY, Signature, ValidatorConfig, SessionConfig, opaque::SessionKeys,
+	SudoConfig, SystemConfig, AuctionConfig, WASM_BINARY, Signature, ValidatorConfig, SessionConfig, opaque::SessionKeys,
 	FlipBalance
 };
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{Verify, IdentifyAccount};
-use sc_service::ChainType;
+use sc_service::{ChainType, Properties};
 
 // The URL for the telemetry server.
 // const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
@@ -182,7 +182,7 @@ pub fn chainflip_local_testnet_config() -> Result<ChainSpec, String> {
 		// Protocol ID
 		None,
 		// Properties
-		None,
+		Some(chainflip_properties()),
 		// Extensions
 		None,
 	))
@@ -237,3 +237,15 @@ fn testnet_genesis(
 		}),
 	}
 }
+
+pub fn chainflip_properties() -> Properties {
+	let mut properties = Properties::new();
+
+	properties.insert("ss58Format".into(), 28.into());
+	properties.insert("tokenDecimals".into(), 18.into());
+	properties.insert("tokenSymbol".into(), "FLIP".into());
+	properties.insert("color".into(), "#61CFAA".into());
+
+	properties
+}
+
