@@ -1,6 +1,5 @@
 use std::{collections::HashMap, sync::Arc};
 
-use futures::Stream;
 use parking_lot::Mutex;
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -9,9 +8,9 @@ use super::{P2PMessage, P2PNetworkClient, ValidatorId};
 
 use async_trait::async_trait;
 
-pub(super) struct P2PClientMock {
+pub struct P2PClientMock {
     id: ValidatorId,
-    pub(super) receiver: Option<UnboundedReceiver<P2PMessage>>,
+    pub receiver: Option<UnboundedReceiver<P2PMessage>>,
     network_inner: Arc<Mutex<NetworkMockInner>>,
 }
 
@@ -44,7 +43,7 @@ impl P2PNetworkClient for P2PClientMock {
     }
 }
 
-pub(super) struct NetworkMock(Arc<Mutex<NetworkMockInner>>);
+pub struct NetworkMock(Arc<Mutex<NetworkMockInner>>);
 
 impl NetworkMock {
     pub fn new() -> Self {

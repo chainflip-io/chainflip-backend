@@ -1,7 +1,10 @@
+// Note: we temporary allow mock in non-test code
 #[cfg(test)]
-mod mock;
+pub mod mock;
 
 mod conductor;
+
+pub use conductor::P2PConductor;
 
 use serde::{Deserialize, Serialize};
 
@@ -19,12 +22,18 @@ pub trait P2PNetworkClient {
     fn take_receiver(&mut self) -> Option<UnboundedReceiver<P2PMessage>>;
 }
 
-type ValidatorId = usize;
+pub type ValidatorId = usize;
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct P2PMessage {
-    sender_id: ValidatorId,
-    data: Vec<u8>,
+    pub sender_id: ValidatorId,
+    pub data: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct P2PMessageCommand {
+    pub destination: ValidatorId,
+    pub data: Vec<u8>,
 }
 
 /// A command to the conductor to send message `data` to
@@ -43,7 +52,9 @@ mod tests {
 
     async fn receive_with_timeout<T>(mut receiver: UnboundedReceiver<T>) -> Option<T> {
         let fut = receiver.recv();
-        tokio::time::timeout(std::time::Duration::from_millis(5), fut).await.unwrap_or(None)
+        tokio::time::timeout(std::time::Duration::from_millis(5), fut)
+            .await
+            .unwrap_or(None)
     }
 
     #[tokio::test]
