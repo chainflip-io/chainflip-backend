@@ -12,7 +12,13 @@ use thiserror::Error;
 
 use web3::types::{BlockNumber, FilterBuilder, H256};
 
-use crate::{mq::nats_client::NatsMQClient, settings::Settings};
+use crate::{
+    mq::{
+        nats_client::{NatsMQClient, NatsMQClientFactory},
+        IMQClientFactory,
+    },
+    settings::Settings,
+};
 
 #[async_trait]
 pub trait Broadcast {
@@ -62,7 +68,11 @@ pub async fn start(settings: Settings) -> anyhow::Result<()> {
     log::info!("Starting the ETH components");
     let sm_witness_future = stake_manager::start_stake_manager_witness(settings.clone());
 
-    let eth_broadcaster_future = eth_broadcaster::start_eth_broadcaster::<NatsMQClient>(settings);
+    let factory = NatsMQClientFactory::new(&settings.message_queue);
+    let mq_client = *factory.create().await.unwrap();
+
+    let eth_broadcaster_future =
+        eth_broadcaster::start_eth_broadcaster::<NatsMQClient>(settings, mq_client);
 
     let result = futures::join!(sm_witness_future, eth_broadcaster_future);
     result.0?;
