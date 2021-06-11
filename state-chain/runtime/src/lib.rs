@@ -368,6 +368,8 @@ construct_runtime!(
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
+		Flip: pallet_cf_flip::{Module, Event<T>, Config<T>},
+		Staking: pallet_cf_staking::{Module, Call, Event<T>, Config<T>},
 		Session: pallet_session::{Module, Storage, Event, Config<T>},
 		Historical: session_historical::{Module},
 		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
@@ -377,8 +379,6 @@ construct_runtime!(
 		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
 		Witness: pallet_cf_witness::{Module, Call, Event<T>, Origin},
-		Staking: pallet_cf_staking::{Module, Call, Event<T>, Config<T>},
-		Flip: pallet_cf_flip::{Module, Event<T>, Config<T>},
 		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>},
 	}
 );
