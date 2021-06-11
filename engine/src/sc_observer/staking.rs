@@ -72,7 +72,7 @@ pub struct ClaimSignatureIssuedEvent<S: Staking> {
     pub nonce: u64,
 
     pub eth_address: [u8; 20],
-    
+
     pub expiry: Duration,
 
     pub signature: Signature,

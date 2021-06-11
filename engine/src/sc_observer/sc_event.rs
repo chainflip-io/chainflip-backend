@@ -8,12 +8,12 @@ use anyhow::Result;
 use super::{
     runtime::StateChainRuntime,
     staking::{
-        ClaimSigRequestedEvent, ClaimSignatureIssuedEvent, ClaimSettledEvent, StakeRefundEvent,
+        ClaimSettledEvent, ClaimSigRequestedEvent, ClaimSignatureIssuedEvent, StakeRefundEvent,
         StakedEvent, StakingEvent,
     },
     validator::{
-        AuctionConfirmedEvent, AuctionStartedEvent, EpochDurationChangedEvent,
-        ForceAuctionRequestedEvent, MaximumValidatorsChangedEvent, NewEpochEvent, ValidatorEvent,
+        AuctionConfirmedEvent, AuctionRangeChangedEvent, AuctionStartedEvent,
+        EpochDurationChangedEvent, ForceRotationRequestedEvent, NewEpochEvent, ValidatorEvent,
     },
 };
 
@@ -57,18 +57,16 @@ pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEv
                 AuctionStartedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
             )),
             "ForceRotationRequested" => Ok(Some(
-                ForceAuctionRequestedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
+                ForceRotationRequestedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
                     .into(),
             )),
             "EpochDurationChanged" => Ok(Some(
                 EpochDurationChangedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
                     .into(),
             )),
-            "MaximumValidatorsChanged" => Ok(Some(
-                MaximumValidatorsChangedEvent::<StateChainRuntime>::decode(
-                    &mut &raw_event.data[..],
-                )?
-                .into(),
+            "AuctionRangeChanged" => Ok(Some(
+                AuctionRangeChangedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
+                    .into(),
             )),
             "NewEpoch" => Ok(Some(
                 NewEpochEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),

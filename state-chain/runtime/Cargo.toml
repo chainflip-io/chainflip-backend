@@ -29,7 +29,8 @@ cf-traits = { path = "../traits", default-features = false }
 pallet-cf-validator = { path = "../pallets/cf-validator", default-features = false }
 pallet-cf-staking = { path = "../pallets/cf-staking", default-features = false }
 pallet-cf-witness = { path = "../pallets/cf-witness", default-features = false}
-pallet-cf-flip = { path = "../pallets/cf-flip", default-features = false}
+pallet-cf-flip = { path = "../pallets/cf-flip", default-features = false }
+pallet-cf-auction = { path = "../pallets/cf-auction", default-features = false }
 
 # Substrate dependencies
 frame-benchmarking = {default-features = false, optional = true, version = '3.0.0'}

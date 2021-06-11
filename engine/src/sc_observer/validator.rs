@@ -2,10 +2,10 @@
 
 use std::marker::PhantomData;
 
+use cf_traits::AuctionRange;
 use codec::{Decode, Encode};
-use pallet_cf_validator::ValidatorSize;
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use substrate_subxt::{module, system::System, Event, sp_runtime::traits::Member};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use substrate_subxt::{module, sp_runtime::traits::Member, system::System, Event};
 
 use super::{runtime::StateChainRuntime, sc_event::SCEvent};
 
@@ -15,9 +15,9 @@ pub trait Validator: System {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
-pub struct MaximumValidatorsChangedEvent<V: Validator> {
-    pub before: ValidatorSize,
-    pub now: ValidatorSize,
+pub struct AuctionRangeChangedEvent<V: Validator> {
+    pub before: AuctionRange,
+    pub now: AuctionRange,
     pub _phantom: PhantomData<V>,
 }
 
@@ -38,7 +38,7 @@ pub struct AuctionConfirmedEvent<V: Validator> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
-pub struct ForceAuctionRequestedEvent<V: Validator> {
+pub struct ForceRotationRequestedEvent<V: Validator> {
     pub _phantom: PhantomData<V>,
 }
 
@@ -50,7 +50,7 @@ pub struct NewEpochEvent<V: Validator> {
 /// Wrapper for all Validator events
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ValidatorEvent<V: Validator> {
-    MaximumValidatorsChangedEvent(MaximumValidatorsChangedEvent<V>),
+    AuctionRangeChangedEvent(AuctionRangeChangedEvent<V>),
 
     EpochDurationChangedEvent(EpochDurationChangedEvent<V>),
 
@@ -58,15 +58,15 @@ pub enum ValidatorEvent<V: Validator> {
 
     AuctionConfirmedEvent(AuctionConfirmedEvent<V>),
 
-    ForceAuctionRequestedEvent(ForceAuctionRequestedEvent<V>),
+    ForceAuctionRequestedEvent(ForceRotationRequestedEvent<V>),
 
     NewEpochEvent(NewEpochEvent<V>),
 }
 
-impl From<MaximumValidatorsChangedEvent<StateChainRuntime>> for SCEvent {
-    fn from(max_validators_changed: MaximumValidatorsChangedEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::MaximumValidatorsChangedEvent(
-            max_validators_changed,
+impl From<AuctionRangeChangedEvent<StateChainRuntime>> for SCEvent {
+    fn from(auction_range_changed: AuctionRangeChangedEvent<StateChainRuntime>) -> Self {
+        SCEvent::ValidatorEvent(ValidatorEvent::AuctionRangeChangedEvent(
+            auction_range_changed,
         ))
     }
 }
@@ -91,8 +91,8 @@ impl From<AuctionConfirmedEvent<StateChainRuntime>> for SCEvent {
     }
 }
 
-impl From<ForceAuctionRequestedEvent<StateChainRuntime>> for SCEvent {
-    fn from(force_rotation_requested: ForceAuctionRequestedEvent<StateChainRuntime>) -> Self {
+impl From<ForceRotationRequestedEvent<StateChainRuntime>> for SCEvent {
+    fn from(force_rotation_requested: ForceRotationRequestedEvent<StateChainRuntime>) -> Self {
         SCEvent::ValidatorEvent(ValidatorEvent::ForceAuctionRequestedEvent(
             force_rotation_requested,
         ))
@@ -139,7 +139,7 @@ mod tests {
     fn auction_started_decoding() {
         // AuctionStarted(EpochIndex)
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_validator::Event::<SCRuntime>::AuctionStarted(1).into();
+            pallet_cf_auction::Event::<SCRuntime>::AuctionStarted(1).into();
 
         let encoded_auction_started = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped
@@ -149,9 +149,7 @@ mod tests {
             AuctionStartedEvent::<StateChainRuntime>::decode(&mut &encoded_auction_started[..])
                 .unwrap();
 
-        let expecting = AuctionStartedEvent {
-            epoch_index: 1,
-        };
+        let expecting = AuctionStartedEvent { epoch_index: 1 };
 
         assert_eq!(decoded_event, expecting);
     }
@@ -160,7 +158,7 @@ mod tests {
     fn auction_confirmed_decoding() {
         // AuctionConfirmed(EpochIndex)
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_validator::Event::<SCRuntime>::AuctionConfirmed(1).into();
+            pallet_cf_auction::Event::<SCRuntime>::AuctionConfirmed(1).into();
 
         let encoded_auction_confirmed = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped
@@ -170,9 +168,7 @@ mod tests {
             AuctionConfirmedEvent::<StateChainRuntime>::decode(&mut &encoded_auction_confirmed[..])
                 .unwrap();
 
-        let expecting = AuctionConfirmedEvent {
-            epoch_index: 1,
-        };
+        let expecting = AuctionConfirmedEvent { epoch_index: 1 };
 
         assert_eq!(decoded_event, expecting);
     }
@@ -188,34 +184,31 @@ mod tests {
         let encoded_new_epoch = encoded_new_epoch[2..].to_vec();
 
         let decoded_event =
-            NewEpochEvent::<StateChainRuntime>::decode(&mut &encoded_new_epoch[..])
-                .unwrap();
+            NewEpochEvent::<StateChainRuntime>::decode(&mut &encoded_new_epoch[..]).unwrap();
 
-        let expecting = NewEpochEvent {
-            epoch_index: 1,
-        };
+        let expecting = NewEpochEvent { epoch_index: 1 };
 
         assert_eq!(decoded_event, expecting);
     }
 
     #[test]
-    fn max_validators_changed_decoding() {
-        // MaximumValidatorsChanged(ValidatorSize, ValidatorSize)
+    fn auction_ranged_changed_decoding() {
+        // AuctionRangeChanged(AuctionRange, AuctionRange)
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_validator::Event::<SCRuntime>::MaximumValidatorsChanged(1, 4).into();
+            pallet_cf_auction::Event::<SCRuntime>::AuctionRangeChanged((0, 1), (0, 2)).into();
 
-        let encoded_max_validators_changed = event.encode();
+        let encoded_auction_range_changed = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped
-        let encoded_max_validators_changed = encoded_max_validators_changed[2..].to_vec();
+        let encoded_auction_range_changed = encoded_auction_range_changed[2..].to_vec();
 
-        let decoded_event = MaximumValidatorsChangedEvent::<StateChainRuntime>::decode(
-            &mut &encoded_max_validators_changed[..],
+        let decoded_event = AuctionRangeChangedEvent::<StateChainRuntime>::decode(
+            &mut &encoded_auction_range_changed[..],
         )
         .unwrap();
 
-        let expecting = MaximumValidatorsChangedEvent {
-            before: 1,
-            now: 4,
+        let expecting = AuctionRangeChangedEvent {
+            before: (0, 1),
+            now: (0, 2),
             _phantom: PhantomData,
         };
 
@@ -225,18 +218,18 @@ mod tests {
     #[test]
     fn force_rotation_requested_decoding() {
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_validator::Event::<SCRuntime>::ForceAuctionRequested().into();
+            pallet_cf_validator::Event::<SCRuntime>::ForceRotationRequested().into();
 
         let encodeded_force_rotation = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped
         let encodeded_force_rotation = encodeded_force_rotation[2..].to_vec();
 
-        let decoded_event = ForceAuctionRequestedEvent::<StateChainRuntime>::decode(
+        let decoded_event = ForceRotationRequestedEvent::<StateChainRuntime>::decode(
             &mut &encodeded_force_rotation[..],
         )
         .unwrap();
 
-        let expecting = ForceAuctionRequestedEvent {
+        let expecting = ForceRotationRequestedEvent {
             _phantom: PhantomData,
         };
 

@@ -6,7 +6,10 @@ use std::str::FromStr;
 
 use chainflip_engine::{
     eth::{self, stake_manager::stake_manager::StakingEvent},
-    mq::{nats_client::NatsMQClient, pin_message_stream, IMQClient, Subject},
+    mq::{
+        nats_client::{NatsMQClient, NatsMQClientFactory},
+        pin_message_stream, IMQClient, IMQClientFactory, Subject,
+    },
     settings::{self, Settings},
 };
 
@@ -16,7 +19,9 @@ use tokio_stream::StreamExt;
 use web3::types::U256;
 
 pub async fn setup_mq(mq_settings: settings::MessageQueue) -> Box<NatsMQClient> {
-    NatsMQClient::connect(mq_settings).await.unwrap()
+    let factory = NatsMQClientFactory::new(&mq_settings);
+
+    factory.create().await.unwrap()
 }
 
 // Creating the settings to be used for tests

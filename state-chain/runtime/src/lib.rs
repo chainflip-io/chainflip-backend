@@ -132,23 +132,34 @@ pub fn native_version() -> NativeVersion {
 	}
 }
 
+parameter_types! {
+	pub const MinAuctionSize: u32 = 2;
+}
+
+impl pallet_cf_auction::Config for Runtime {
+	type Event = Event;
+	type Amount = FlipBalance;
+	type BidderProvider = pallet_cf_staking::Pallet<Self>;
+	type AuctionIndex = u64;
+	type Registrar = Session;
+	type ValidatorId = AccountId;
+	type MinAuctionSize = MinAuctionSize;
+	type Confirmation = Auction;
+}
+
 // FIXME: These would be changed
 parameter_types! {
 	pub const MinEpoch: BlockNumber = 1;
-	pub const MinValidatorSetSize: u64 = 2;
 }
 
 impl pallet_cf_validator::Config for Runtime {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
-	type MinValidatorSetSize = MinValidatorSetSize;
-	type CandidateProvider = pallet_cf_staking::Pallet<Self>;
 	type EpochTransitionHandler = PhantomData<Runtime>;
 	type ValidatorWeightInfo = weights::pallet_cf_validator::WeightInfo<Runtime>;
 	type EpochIndex = EpochIndex;
 	type Amount = FlipBalance;
-	type Auction = Validator;
-	type Registrar = Session;
+	type Auction = Auction;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime where
@@ -325,6 +336,7 @@ impl pallet_cf_witness::Config for Runtime {
 	type Epoch = EpochIndex;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
+	type Amount = FlipBalance;
 }
 
 parameter_types! {
@@ -367,6 +379,7 @@ construct_runtime!(
 		Witness: pallet_cf_witness::{Module, Call, Event<T>, Origin},
 		Staking: pallet_cf_staking::{Module, Call, Event<T>, Config<T>},
 		Flip: pallet_cf_flip::{Module, Event<T>, Config<T>},
+		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>},
 	}
 );
 
