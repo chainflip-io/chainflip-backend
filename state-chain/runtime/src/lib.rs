@@ -242,7 +242,7 @@ impl frame_system::Config for Runtime {
 	/// What to do if a new account is created.
 	type OnNewAccount = ();
 	/// What to do if an account is fully reaped from the system.
-	type OnKilledAccount = ();
+	type OnKilledAccount = Flip;
 	/// The data to be stored in an account.
 	type AccountData = ();
 	/// Weight information for the extrinsics of this pallet.

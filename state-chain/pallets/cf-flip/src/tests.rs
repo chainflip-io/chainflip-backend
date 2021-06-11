@@ -1,7 +1,7 @@
 use std::mem;
 
 use crate::{Config, Error, OffchainFunds, TotalIssuance, mock::*};
-use frame_support::traits::Imbalance;
+use frame_support::traits::{Imbalance, OnKilledAccount, HandleLifetime};
 use cf_traits::{Emissions, StakeTransfer};
 use frame_support::{assert_noop, assert_ok};
 
@@ -235,6 +235,16 @@ fn test_vaporise() {
 		<Flip as Emissions>::vaporise(10_000);
 		assert_eq!(<Flip as Emissions>::total_issuance(), Flip::onchain_funds());
 
+		check_balance_integrity();
+	});
+}
+
+#[test]
+fn account_deletion_burns_balance() {
+	new_test_ext().execute_with(|| {
+		frame_system::Provider::<Test>::killed(&BOB);
+		assert_eq!(<Flip as Emissions>::total_issuance(), 950);
+		assert_eq!(Flip::total_balance_of(&BOB), 0);
 		check_balance_integrity();
 	});
 }
