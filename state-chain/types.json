@@ -4,7 +4,7 @@
   "VoteCount": "u32",
   "TokenAmount": "u128",
   "Nonce": "u64",
-  "Duration": "u64",
+  "Duration": "(u64,u32)",
   "AccountInfo": "AccountInfoWithDualRefCount",
   "Address": "MultiAddress",
   "LookupSource": "MultiAddress",
