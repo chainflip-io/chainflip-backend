@@ -1,6 +1,6 @@
 use crate as pallet_cf_flip;
 use cf_traits::StakeTransfer;
-use frame_support::parameter_types;
+use frame_support::{parameter_types, traits::HandleLifetime};
 use sp_core::H256;
 use sp_runtime::{BuildStorage, testing::Header, traits::{BlakeTwo256, IdentityLookup}};
 
@@ -45,7 +45,7 @@ impl frame_system::Config for Test {
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
 	type OnNewAccount = ();
-	type OnKilledAccount = ();
+	type OnKilledAccount = Flip;
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
 }
@@ -87,6 +87,8 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		System::set_block_number(1);
 
 		// Seed with two staked accounts.
+		frame_system::Provider::<Test>::created(&ALICE);
+		frame_system::Provider::<Test>::created(&BOB);
 		<Flip as StakeTransfer>::credit_stake(&ALICE, 100);
 		<Flip as StakeTransfer>::credit_stake(&BOB, 50);
 

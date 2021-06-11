@@ -44,8 +44,8 @@ mod benchmarking;
 mod imbalances;
 
 use frame_support::{
-	ensure,
-	traits::{Get, Imbalance, SignedImbalance},
+	ensure, 
+	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance}
 };
 use imbalances::{Surplus, Deficit};
 
@@ -378,4 +378,13 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 		Self::settle(account_id, Self::bridge_in(amount).into());
 		// claim reverts automatically when dropped
 	}
+}
+
+/// Implementation of `OnKilledAccount` ensures that we reconcile any flip dust remaining in the account by burning it.
+impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
+    fn on_killed_account(account_id: &T::AccountId) {
+		let dust = Self::total_balance_of(account_id);
+        <Self as cf_traits::Emissions>::burn_from(account_id, dust);
+		Account::<T>::remove(account_id);
+    }
 }

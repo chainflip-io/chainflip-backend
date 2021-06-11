@@ -4,8 +4,7 @@ pub mod mocks;
 
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::{DispatchResultWithPostInfo, Dispatchable}, 
-	traits::ValidatorRegistration,
+	dispatch::{DispatchResultWithPostInfo, Dispatchable},
 };
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
