@@ -12,6 +12,5 @@ members = [
   'state-chain/pallets/cf-validator',
   'state-chain/runtime',
   'state-chain/traits',
-  'common',
   'engine',
 ]
