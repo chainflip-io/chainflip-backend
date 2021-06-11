@@ -17,7 +17,9 @@ async fn main() {
 
     sc_observer::sc_observer::start(settings.clone()).await;
 
-    eth::start(settings.clone()).await;
+    eth::start(settings.clone())
+        .await
+        .expect("Should start ETH client");
 
     let mq_factory = NatsMQClientFactory::new(&settings.message_queue);
 
