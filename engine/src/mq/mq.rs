@@ -6,14 +6,14 @@ use async_trait::async_trait;
 use futures::Stream;
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::settings;
+#[async_trait]
+pub trait IMQClientFactory<IMQ: IMQClient> {
+    async fn create(&self) -> anyhow::Result<Box<IMQ>>;
+}
 
 /// Interface for a message queue
 #[async_trait]
 pub trait IMQClient {
-    /// Open a connection to the message queue
-    async fn connect(opts: settings::MessageQueue) -> Result<Box<Self>>;
-
     /// Publish something to a particular subject
     async fn publish<M: 'static + Serialize + Sync>(
         &self,
@@ -36,6 +36,7 @@ pub fn pin_message_stream<M>(stream: Box<dyn Stream<Item = M>>) -> Pin<Box<dyn S
     stream.into()
 }
 /// Subjects that can be published / subscribed to
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Subject {
     Witness(Chain),
@@ -56,6 +57,8 @@ pub enum Subject {
     Rotate,
     P2PIncoming,
     P2POutgoing,
+    MultisigInstruction,
+    MultisigEvent,
 }
 
 // TODO: Make this a separate trait, not `fmt::Display` - https://github.com/chainflip-io/chainflip-backend/issues/63
@@ -98,6 +101,12 @@ impl fmt::Display for Subject {
             }
             Subject::P2POutgoing => {
                 write!(f, "p2p_outgoing")
+            }
+            Subject::MultisigInstruction => {
+                write!(f, "multisig_instruction")
+            }
+            Subject::MultisigEvent => {
+                write!(f, "multisig_event")
             }
         }
     }

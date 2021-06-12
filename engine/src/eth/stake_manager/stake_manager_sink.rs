@@ -1,6 +1,6 @@
 use crate::{
     eth::EventSink,
-    mq::mq::{self, IMQClient, Subject},
+    mq::mq::{self, IMQClient, IMQClientFactory, Subject},
     settings,
 };
 
@@ -17,9 +17,7 @@ pub struct StakeManagerSink<M: IMQClient + Send + Sync> {
 }
 
 impl<M: IMQClient + Send + Sync> StakeManagerSink<M> {
-    pub async fn new(mq_settings: settings::MessageQueue) -> Result<Self> {
-        let mq_client = *M::connect(mq_settings).await?;
-
+    pub async fn new(mq_client: M) -> Result<StakeManagerSink<M>> {
         Ok(StakeManagerSink { mq_client })
     }
 }
@@ -38,7 +36,7 @@ impl<M: IMQClient + Send + Sync> EventSink<StakingEvent> for StakeManagerSink<M>
 #[cfg(test)]
 mod tests {
 
-    use crate::mq::nats_client::NatsMQClient;
+    use crate::mq::nats_client::{NatsMQClient, NatsMQClientFactory};
 
     use super::*;
 
@@ -56,7 +54,11 @@ mod tests {
             port,
         };
 
-        StakeManagerSink::<NatsMQClient>::new(mq_settings)
+        let factory = NatsMQClientFactory::new(&mq_settings);
+
+        let mq_client = *factory.create().await.unwrap();
+
+        StakeManagerSink::<NatsMQClient>::new(mq_client)
             .await
             .unwrap();
     }

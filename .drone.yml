@@ -1,3 +1,4 @@
+# Secrets
 kind: secret
 name: docker_username
 get:
@@ -28,18 +29,24 @@ get:
   path: dockerconfigjson
   name: .dockerconfigjson
 ---
-# Run checks on infrastructure configuration prior to merge.
+
+# Runs on every PR
 kind: pipeline
-name: ci-checks
+name: chainflip-backend-checks
 type: kubernetes
 
+environment:
+  SCCACHE_REDIS: redis://redis-headless:6379/
+  SCCACHE_CACHE_SIZE: 14G
+
 steps:
+#  Checks the the .drone.yml file is formatted correctly
   - name: lint-drone-yml
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     commands:
       - drone lint --trusted
-      - drone lint --trusted engine
-      - drone lint --trusted state-chain
+
+#  Builds the base image for running build jobs
   - name: rust-base
     image: plugins/docker
     settings:
@@ -56,6 +63,13 @@ steps:
       paths:
         - Dockerfile.rust-base
         - .drone.yml
+
+#  Performs all unit tests
+  - name: test-validator-package
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    commands:
+      - cargo test --lib --release
+      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
 trigger:
   event:
@@ -72,14 +86,17 @@ tolerations:
     operator: "Equal"
     value: "ci"
 ---
-
+# Runs when PR is merged to main
 kind: pipeline
 type: kubernetes
 name: chainflip-state-chain
 
-# <<<<<<<<<<<<<<<<<<<<<<<<<<<<< main >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-# Merge to master build and publish
+environment:
+  SCCACHE_REDIS: redis://redis-headless:6379/
+  SCCACHE_CACHE_SIZE: 14G
+
 steps:
+#  Builds the base image for running build jobs
   - name: rust-base
     image: plugins/docker
     settings:
@@ -96,24 +113,22 @@ steps:
       paths:
         - Dockerfile.rust-base
         - .drone.yml
-    resources:
-      limits:
-        cpu: 2000
-        memory: 3.5GiB
+
+#  Compiles the entire backend
   - name: compile-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo build --release
-      - sccache -s
+      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
+
+#  Compiles runs all unit tests
   - name: test-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_REDIS: redis://redis-headless:6379/
     commands:
       - cargo test --lib --release
-      - sccache -s
+      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
+
+#  Create docker image for state-chain-node
   - name: build-state-chain-node
     image: plugins/docker
     settings:
@@ -126,6 +141,8 @@ steps:
       registry: ghcr.io
       tags: bootstrap
       cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
+
+#  Create docker image for chainflip-engine
   - name: build-chainflip-engine
     image: plugins/docker
     settings:
@@ -138,26 +155,8 @@ steps:
       registry: ghcr.io
       tags: latest
       cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
-#  - name: publish-state-chain-node
-#    image: plugins/ansible
-#    settings:
-#      verbose: 2
-#      playbook: .ansible/staging/playbook.yml
-#      inventory: .ansible/staging/inventory/all
-#      extra_vars:
-#        target: state-chain-node
-#      private_key:
-#        from_secret: ansible_staging_private_key
-#  - name: publish-chainflip-engine
-#    image: plugins/ansible
-#    settings:
-#      verbose: 2
-#      playbook: .ansible/staging/playbook.yml
-#      inventory: .ansible/staging/inventory/all
-#      extra_vars:
-#        target: chainflip-engine
-#      private_key:
-#        from_secret: ansible_staging_private_key
+
+#  Create docker image for chainflip-engine
   - name: notify
     image: appleboy/drone-discord
     when:
@@ -197,9 +196,14 @@ tolerations:
     value: "ci"
 
 ---
+#  Runs all tests at night
 kind: pipeline
 type: kubernetes
 name: chainflip-backend-nightly
+
+environment:
+  SCCACHE_REDIS: redis://redis-headless:6379/
+  SCCACHE_CACHE_SIZE: 14G
 
 services:
   - image: trufflesuite/ganache-cli:latest
@@ -217,14 +221,8 @@ services:
 steps:
   - name: run-tests
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    environment:
-      SCCACHE_REDIS: "redis://redis-headless:6379/"
     commands:
       - cargo test --release
-    resources:
-      limits:
-        cpu: 3000
-        memory: 4GiB
 
 # Config
 trigger:
@@ -235,6 +233,7 @@ trigger:
 
 image_pull_secrets:
   - dockerconfigjson
+
 node_selector:
   type: ci
 
