@@ -2,30 +2,21 @@
 
 This pallet implements Chainflip staking functionality.
 
-## Assumptions
-
-Some simplifying assumptions have been made for now, and will need to be addressed as the project advances:
-
-- Assume Signature requests always succeed and result in a valid claim voucher being issued.
-- Claim vouchers don't expire - to do this we need to be able to query the current Ethereum block number.
-- Witness MultiSig is simulated using `ensure_root`.
-
 ## Purpose
 
 This pallet manages staking and claiming of stakes, including:
 
 - Receiving witnesses of events occurring in Chainflip's `StakeManager` Ethereum contract and updating validator's stakes accordingly.
-- Processing claim requests
+- Processing claim requests.
+- Expiring claims.
+- Account creation when stakers stake for the first time. 
+- Account deletion when stakers claim all remaining funds. 
 
 ### Staking
 
-In order to stake, a prospective validator must:
-
-- Have a running state chain node and associated account ID.
-- Stake `FLIP` token through the `StakeManager` contract on Ethereum, specifying:
+In order to join the network and bid for a validator slot participants must stake `FLIP` token through the `StakeManager` contract on Ethereum, specifying:
     1. the amount they wish to stake
-    2. their account ID on the state chain network
-    3. an address on the ethereum network to which their stake can be returned in the event that they specify an invalid account ID.
+    2. a valid account ID on the state chain network
 
 ### Claiming
 
@@ -45,7 +36,11 @@ Once the CFE has generated a valid signature for a claim, it should be posted ba
 
 ### Traits
 
-This pallet depends on the `Witnesser` defined in [traits](../../traits). See [cf-witness](../cf-witness) for an implementation.
+This pallet depends on foreign implementations of the following [traits](../../traits):
+
+- `Witnesser`. See the [Witness](../cf-witness) pallet for an implementation.
+- `StakeTransfer`. See the [Flip](../cf-flip) pallet for an implementation.
+- `EpochInfo`. See the [Validator](../cf-validator) pallet for an implementation.
 
 ### Pallets
 
@@ -53,7 +48,8 @@ This pallet does not depend on any other FRAME pallet or externally developed mo
 
 ### Genesis Configuration
 
-This pallet does not have any genesis configuration.
+Requires a list of genesis stakers as a vec of tuples (`Vec<(AccountId<T>, T::Balance)>`). Each account in the list is staked in to the network
+as if they had been staked through validator consensus.
 
 ## Reference Docs
 
@@ -67,8 +63,6 @@ cargo doc --open
 
 Some future improvements:
 
-- Address all TODO and QUESTION items mentioned in the code.
-- Address the abovementioned assumptions where appropriate.
 - Add Ethereum crypto primitives for signature verification.
 - Pre-encode the claim data according to the required eth encoding and store the encoded claim for easier signature verification (the claim sig is made over an ethereum-compatible encoding of the parameters)
 - Store pending claims in a hash lookup so the signer doesn't have to re-submit all the params through the `post_claim_signature` extrinsic.
