@@ -29,6 +29,12 @@ get:
   path: dockerconfigjson
   name: .dockerconfigjson
 ---
+kind: secret
+name: drone_token
+get:
+  path: repo-secret
+  name: drone_token
+---
 
 # Runs on every PR
 kind: pipeline
@@ -236,6 +242,38 @@ image_pull_secrets:
 
 node_selector:
   type: ci
+
+tolerations:
+  - key: "workloadKind"
+    operator: "Equal"
+    value: "ci"
+---
+kind: pipeline
+type: kubernetes
+name: build-preview-environment
+
+steps:
+  - name: trigger
+    image: plugins/downstream
+    settings:
+      server: http://drone
+      token:
+        from_secret: drone_token
+      params:
+        CREATE: true
+        NAME: $DRONE_PULL_REQUEST
+      fork: true
+      wait: true
+      repositories:
+        - chainflip-io/chainflip-cluster
+
+# Config
+trigger:
+  event:
+    - pull_request
+
+image_pull_secrets:
+  - dockerconfigjson
 
 tolerations:
   - key: "workloadKind"
