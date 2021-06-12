@@ -185,8 +185,8 @@ steps:
 
 # Config
 trigger:
-#  branch:
-#    - main
+  branch:
+    - main
   event:
     - push
 
@@ -260,8 +260,8 @@ steps:
       token:
         from_secret: drone_token
       params:
-        CREATE: true
-        NAME: $DRONE_PULL_REQUEST
+        - CREATE=true
+        - NAME=$DRONE_PULL_REQUEST
       fork: true
       wait: true
       repositories:
