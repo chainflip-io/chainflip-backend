@@ -355,7 +355,8 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 		return match T::Auction::phase() {
 			// Successfully completed the process, these are the next set of validators to be used
 			AuctionPhase::WinnersSelected(winners, _) => {
-				Some(winners)			}
+				Some(winners)
+			}
 
 			// A rotation has occurred, we emit an event of the new epoch and compile a list of
 			// validators for validator lookup
