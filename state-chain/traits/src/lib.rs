@@ -3,9 +3,7 @@
 pub mod mocks;
 
 use codec::{Decode, Encode};
-use frame_support::{
-	dispatch::{DispatchResultWithPostInfo, Dispatchable},
-};
+use frame_support::dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable};
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
 
@@ -15,7 +13,7 @@ pub trait Witnesser {
 	type AccountId;
 
 	/// The call type of the runtime.
-	type Call: Dispatchable;
+	type Call: UnfilteredDispatchable;
 
 	/// Witness an event. The event is represented by a call, which should be
 	/// dispatched when a threshold number of witnesses have been made.
