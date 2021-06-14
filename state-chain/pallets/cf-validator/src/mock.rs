@@ -31,6 +31,10 @@ impl WeightInfo for () {
 	fn force_rotation() -> u64 { 0 as Weight }
 }
 
+pub static MIN_AUCTION_SIZE : u32 = 2;
+pub static MAX_AUCTION_SIZE : u32 = 150;
+pub static EPOCH_BLOCKS: u64 = 100;
+
 thread_local! {
 	// These are first set of candidates we would provide from the `BidderProvider` trait
 	// We build our genesis with these and then we should see after genesis that they remain
@@ -147,7 +151,7 @@ impl BidderProvider for TestBidderProvider {
 			new_idx
 		});
 
-		vec![(1 + idx, 1), (2 + idx, 2)]
+		vec![(idx, 1), (1 + idx, 2)]
 	}
 }
 
@@ -193,13 +197,14 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
 	pallet_cf_validator::GenesisConfig::<Test> {
-		epoch_number_of_blocks: 100,
+		epoch_number_of_blocks: EPOCH_BLOCKS,
 		force: true
 	}.assimilate_storage(&mut t).unwrap();
 
-	pallet_cf_auction::GenesisConfig {
-		auction_size_range: (2, 150),
-	}.assimilate_storage::<Test>(&mut t).unwrap();
+	let genesis = pallet_cf_auction::GenesisConfig {
+		auction_size_range: (MIN_AUCTION_SIZE, MAX_AUCTION_SIZE),
+	};
+	GenesisBuild::<Test>::assimilate_storage(&genesis,&mut t).unwrap();
 
 	let mut ext: sp_io::TestExternalities = sp_io::TestExternalities::new(t);
 
@@ -207,9 +212,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
-pub fn current_validators() -> Vec<u64> {
-	CURRENT_VALIDATORS.with(|l| l.borrow().to_vec())
-}
+pub fn genesis_validators() -> Vec<u64> { GENESIS_VALIDATORS.with(|l| l.borrow().to_vec()) }
 
 pub fn run_to_block(n: u64) {
 	while System::block_number() < n {
