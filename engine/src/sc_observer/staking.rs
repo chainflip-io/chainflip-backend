@@ -42,7 +42,7 @@ pub struct StakedEvent<S: Staking> {
 
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
-pub struct ClaimedEvent<S: Staking> {
+pub struct ClaimSettledEvent<S: Staking> {
     pub who: AccountId32,
 
     pub amount: u128,
@@ -72,7 +72,7 @@ pub struct ClaimSignatureIssuedEvent<S: Staking> {
     pub nonce: u64,
 
     pub eth_address: [u8; 20],
-    
+
     pub expiry: Duration,
 
     pub signature: Signature,
@@ -91,7 +91,7 @@ pub enum StakingEvent<S: Staking> {
 
     StakeRefundEvent(StakeRefundEvent<S>),
 
-    ClaimedEvent(ClaimedEvent<S>),
+    ClaimSettledEvent(ClaimSettledEvent<S>),
 }
 
 impl From<ClaimSigRequestedEvent<StateChainRuntime>> for SCEvent {
@@ -106,9 +106,9 @@ impl From<ClaimSignatureIssuedEvent<StateChainRuntime>> for SCEvent {
     }
 }
 
-impl From<ClaimedEvent<StateChainRuntime>> for SCEvent {
-    fn from(claimed: ClaimedEvent<StateChainRuntime>) -> Self {
-        SCEvent::StakingEvent(StakingEvent::ClaimedEvent(claimed))
+impl From<ClaimSettledEvent<StateChainRuntime>> for SCEvent {
+    fn from(claimed: ClaimSettledEvent<StateChainRuntime>) -> Self {
+        SCEvent::StakingEvent(StakingEvent::ClaimSettledEvent(claimed))
     }
 }
 
@@ -202,7 +202,7 @@ mod tests {
         let who = AccountKeyring::Alice.to_account_id();
 
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_staking::Event::<SCRuntime>::Claimed(who.clone(), 150u128).into();
+            pallet_cf_staking::Event::<SCRuntime>::ClaimSettled(who.clone(), 150u128).into();
 
         let encoded_claimed = event.encode();
 
@@ -210,9 +210,9 @@ mod tests {
         let encoded_claimed = encoded_claimed[2..].to_vec();
 
         let decoded_event =
-            ClaimedEvent::<StateChainRuntime>::decode(&mut &encoded_claimed[..]).unwrap();
+            ClaimSettledEvent::<StateChainRuntime>::decode(&mut &encoded_claimed[..]).unwrap();
 
-        let expecting = ClaimedEvent {
+        let expecting = ClaimSettledEvent {
             who,
             amount: 150u128,
             _phantom: PhantomData,

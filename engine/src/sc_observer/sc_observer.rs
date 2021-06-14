@@ -2,7 +2,7 @@ use anyhow::Result;
 use substrate_subxt::{Client, ClientBuilder, EventSubscription};
 
 use crate::{
-    mq::{nats_client::NatsMQClient, IMQClient, Subject},
+    mq::{nats_client::NatsMQClientFactory, IMQClient, IMQClientFactory, Subject},
     settings::{self, Settings},
 };
 
@@ -17,7 +17,9 @@ use super::{
 pub async fn start(settings: Settings) {
     info!("Begin subscribing to state chain events");
 
-    let mq_client = NatsMQClient::connect(settings.message_queue).await.unwrap();
+    let mq_client_builder = NatsMQClientFactory::new(&settings.message_queue);
+
+    let mq_client = mq_client_builder.create().await.unwrap();
 
     let subxt_client = create_subxt_client(settings.state_chain)
         .await
@@ -72,11 +74,12 @@ async fn subscribe_to_events<M: 'static + IMQClient>(
                 Some(event) => {
                     // Publish the message to the message queue
                     match mq_client.publish(subject, &event).await {
-                        Err(_) => {
+                        Err(err) => {
                             error!(
-                                "Could not publish message `{:?}` to subject `{}`",
+                                "Could not publish message `{:?}` to subject `{}`. Error: {}",
                                 event,
-                                subject.to_string()
+                                subject.to_string(),
+                                err
                             );
                         }
                         Ok(_) => trace!("Event: {:#?} pushed to message queue", event),
