@@ -11,9 +11,9 @@
 //! Witnessing can be thought of as voting on an action (represented by a `call`) triggered by some external event.
 //!
 //! Witnessing happens via the signed [`witness`](pallet::Pallet::witness) extrinsic including the encoded `call` to be
-//! dispatched. 
+//! dispatched.
 //!
-//! If the encoded call is not already stored, it is stored against its hash. A vote is then counted on behalf of the 
+//! If the encoded call is not already stored, it is stored against its hash. A vote is then counted on behalf of the
 //! signing validator account. When a configured threshold is reached, the previously-stored `call` is dispatched.
 //!
 //! Note that calls *must* have a unique hash so that the votes don't clash.
@@ -41,7 +41,9 @@ use bitvec::prelude::*;
 use cf_traits::EpochInfo;
 use codec::FullCodec;
 use frame_support::{
-	dispatch::{DispatchResultWithPostInfo, Dispatchable},
+	dispatch::{
+		DispatchResult, GetDispatchInfo, DispatchResultWithPostInfo, UnfilteredDispatchable
+	},
 	pallet_prelude::Member,
 	traits::EnsureOrigin,
 	Hashable,
@@ -52,10 +54,7 @@ use sp_std::prelude::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{
-		dispatch::{DispatchResult, Dispatchable, GetDispatchInfo, PostDispatchInfo},
-		pallet_prelude::*,
-	};
+	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
@@ -70,9 +69,8 @@ pub mod pallet {
 		/// The overarching call type.
 		type Call: Member
 			+ FullCodec
-			+ Dispatchable<Origin = <Self as Config>::Origin, PostInfo = PostDispatchInfo>
-			+ GetDispatchInfo
-			+ From<frame_system::Call<Self>>;
+			+ UnfilteredDispatchable<Origin = <Self as Config>::Origin>
+			+ GetDispatchInfo;
 
 		type Epoch: Member + FullCodec + Copy + AtLeast32BitUnsigned + Default;
 
@@ -260,7 +258,7 @@ impl<T: Config> Pallet<T> {
 				call_hash,
 				num_votes as VoteCount,
 			));
-			let result = call.dispatch((RawOrigin::WitnessThreshold).into());
+			let result = call.dispatch_bypass_filter((RawOrigin::WitnessThreshold).into());
 			Self::deposit_event(Event::<T>::WitnessExecuted(
 				call_hash,
 				result.map(|_| ()).map_err(|e| e.error),

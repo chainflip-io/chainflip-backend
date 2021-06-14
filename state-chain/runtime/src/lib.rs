@@ -138,6 +138,7 @@ parameter_types! {
 
 impl pallet_cf_auction::Config for Runtime {
 	type Event = Event;
+	type Call = Call;
 	type Amount = FlipBalance;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
 	type AuctionIndex = u64;
@@ -145,6 +146,8 @@ impl pallet_cf_auction::Config for Runtime {
 	type ValidatorId = AccountId;
 	type MinAuctionSize = MinAuctionSize;
 	type Confirmation = Auction;
+	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
+	type Witnesser = pallet_cf_witness::Pallet<Runtime>;
 }
 
 // FIXME: These would be changed
@@ -346,7 +349,6 @@ parameter_types! {
 impl pallet_cf_staking::Config for Runtime {
 	type Event = Event;
 	type Call = Call;
-
 	type Balance = FlipBalance;
 	type Flip = Flip;
 	type EthereumAddress = [u8; 20];

@@ -56,7 +56,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use frame_support::traits::ValidatorRegistration;
 	use sp_std::ops::Add;
-	use cf_traits::AuctionConfirmation;
+	use cf_traits::{AuctionConfirmation, Witnesser};
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -66,6 +66,8 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
+		type Call: From<Call<Self>> + IsType<<Self as frame_system::Config>::Call>;
 		/// An amount for a bid
 		type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 		/// An identity for a validator
@@ -81,6 +83,13 @@ pub mod pallet {
 		type MinAuctionSize: Get<u32>;
 		/// Confirmation of auction
 		type Confirmation: AuctionConfirmation;
+		/// Provides an origin check for witness transactions.
+		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
+		/// An implementation of the witnesser, allows us to define witness_* helper extrinsics.
+		type Witnesser: Witnesser<
+			Call = <Self as Config>::Call,
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -134,17 +143,26 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Confirms a running auction that is valid
+		/// Witness that a running auction is valid.
+		#[pallet::weight(10_000)]
+		pub fn witness_auction_confirmation(
+			origin: OriginFor<T>,
+			index: T::AuctionIndex,
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			let call = Call::<T>::confirm_auction(index);
+			T::Witnesser::witness(who, call.into())
+		}
+
+		/// Confirms a running auction that is valid.
 		///
-		/// The dispatch origin of this function must be signed
-		#[pallet::weight(
-		10_000
-		)]
+		/// **This call can only be dispatched from the configured witness origin.**
+		#[pallet::weight(10_000)]
 		pub(super) fn confirm_auction(
 			origin: OriginFor<T>,
 			index: T::AuctionIndex,
 		) -> DispatchResultWithPostInfo {
-			ensure_signed(origin)?;
+			T::EnsureWitnessed::ensure_origin(origin)?;
 			ensure!(AuctionToConfirm::<T>::get(), Error::<T>::InvalidAuction);
 			ensure!(index == CurrentAuctionIndex::<T>::get(), Error::<T>::InvalidAuction);
 			AuctionToConfirm::<T>::set(false);
@@ -155,9 +173,7 @@ pub mod pallet {
 		/// Sets the size of our auction range
 		///
 		/// The dispatch origin of this function must be root.
-		#[pallet::weight(
-		10_000
-		)]
+		#[pallet::weight(10_000)]
 		pub(super) fn set_auction_size_range(
 			origin: OriginFor<T>,
 			range: AuctionRange,

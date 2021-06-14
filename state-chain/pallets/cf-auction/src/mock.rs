@@ -1,5 +1,6 @@
 use super::*;
 use crate as pallet_cf_auction;
+use frame_system::{RawOrigin, ensure_root};
 use sp_core::{H256};
 use sp_runtime::{
 	traits::{
@@ -66,12 +67,35 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ();
 }
 
+pub struct MockEnsureWitness;
+
+impl EnsureOrigin<Origin> for MockEnsureWitness {
+	type Success = ();
+
+	fn try_origin(o: Origin) -> Result<Self::Success, Origin> {
+		ensure_root(o).or(Err(RawOrigin::None.into()))
+	}
+}
+
+pub struct WitnesserMock;
+
+impl cf_traits::Witnesser for WitnesserMock {
+	type AccountId = u64;
+	type Call = Call;
+
+	fn witness(_who: Self::AccountId, _call: Self::Call) -> DispatchResultWithPostInfo {
+		// We don't intend to test this, it's just to keep the compiler happy.
+		unimplemented!()
+	}
+}
+
 parameter_types! {
 	pub const MinAuctionSize: u32 = 2;
 }
 
 impl Config for Test {
 	type Event = Event;
+	type Call = Call;
 	type Amount = Amount;
 	type ValidatorId = ValidatorId;
 	type BidderProvider = TestBidderProvider;
@@ -79,6 +103,8 @@ impl Config for Test {
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
 	type Confirmation = Test;
+	type EnsureWitnessed = MockEnsureWitness;
+	type Witnesser = WitnesserMock;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
