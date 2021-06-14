@@ -90,7 +90,8 @@ pub mod pallet {
 	/// Current phase of the auction
 	#[pallet::storage]
 	#[pallet::getter(fn current_phase)]
-	pub(super) type CurrentPhase<T: Config> = StorageValue<_, AuctionPhase<T::ValidatorId, T::Amount>, ValueQuery>;
+	pub(super) type CurrentPhase<T: Config> =
+		StorageValue<_, AuctionPhase<T::ValidatorId, T::Amount>, ValueQuery>;
 
 	/// Size range for number of bidders in auction (min, max)
 	#[pallet::storage]

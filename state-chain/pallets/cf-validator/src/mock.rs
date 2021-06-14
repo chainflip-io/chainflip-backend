@@ -212,7 +212,9 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
-pub fn genesis_validators() -> Vec<u64> { GENESIS_VALIDATORS.with(|l| l.borrow().to_vec()) }
+pub fn genesis_validators() -> Vec<u64> {
+	GENESIS_VALIDATORS.with(|l| l.borrow().to_vec())
+}
 
 pub fn run_to_block(n: u64) {
 	while System::block_number() < n {

@@ -100,7 +100,8 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// A handler for epoch lifecycle events
-		type EpochTransitionHandler: EpochTransitionHandler<ValidatorId=Self::ValidatorId, Amount=Self::Amount>;
+		type EpochTransitionHandler: EpochTransitionHandler<ValidatorId=Self::ValidatorId,
+															Amount=Self::Amount>;
 
 		/// Minimum amount of blocks an epoch can run for
 		#[pallet::constant]
@@ -190,7 +191,8 @@ pub mod pallet {
 		///
 		/// The dispatch origin of this function must be signed.
 		#[pallet::weight(< T as pallet_session::Config >::WeightInfo::set_keys())]
-		pub(super) fn set_keys(origin: OriginFor<T>, keys: T::Keys, proof: Vec<u8>) -> DispatchResultWithPostInfo {
+		pub(super) fn set_keys(origin: OriginFor<T>, keys: T::Keys, proof: Vec<u8>)
+			-> DispatchResultWithPostInfo {
 			<pallet_session::Module<T>>::set_keys(origin, keys, proof)?;
 			Ok(().into())
 		}
@@ -300,13 +302,13 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 	fn should_end_session(now: T::BlockNumber) -> bool {
 		// If we are waiting on bids let's see if we want to start a new rotation
 		return match T::Auction::phase() {
-			AuctionPhase::WaitingForBids(_, _) => {
+			AuctionPhase::WaitingForBids(..) => {
 				// If the session should end, run through an auction
 				// two steps- validate and select winners
 				Self::should_rotate(now) &&
 					T::Auction::process().and(T::Auction::process()).is_ok()
 			}
-			AuctionPhase::WinnersSelected(_, _) => {
+			AuctionPhase::WinnersSelected(..) => {
 				// Confirmation of winners, we need to finally process them
 				// This checks whether this is confirmable via the `AuctionConfirmation` trait
 				T::Auction::process().is_ok()

@@ -23,9 +23,11 @@ mod test {
 			// Check we are in the bidders phase
 			assert_eq!(AuctionPallet::current_phase(), AuctionPhase::default());
 			// Now move to the next phase, this should be the BidsTaken phase
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(bidders)) if bidders == vec![low_bid, joe_bid, max_bid]);
+			assert_matches!(AuctionPallet::process(),
+				Ok(AuctionPhase::BidsTaken(bidders)) if bidders == vec![low_bid, joe_bid, max_bid]);
 			// Read storage to confirm has been changed to BidsTaken
-			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::BidsTaken(bidders) if bidders == vec![low_bid, joe_bid, max_bid]);
+			assert_matches!(AuctionPallet::current_phase(),
+				AuctionPhase::BidsTaken(bidders) if bidders == vec![low_bid, joe_bid, max_bid]);
 			// Having moved into the BidsTaken phase we should have our list of bidders filtered
 			// And again to the next phase, however we should see an error as we haven't set our
 			// auction size as an `AuctionError::Empty`
@@ -52,8 +54,8 @@ mod test {
 			// Confirm the auction
 			CONFIRM.with(|l| { *l.borrow_mut() = true });
 			// and finally we complete the process, clearing the bidders
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WaitingForBids(_, _)));
-			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::WaitingForBids(_, _));
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WaitingForBids(..)));
+			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::WaitingForBids(..));
 		});
 	}
 
@@ -63,8 +65,10 @@ mod test {
 			// Assert our minimum is set to 2
 			assert_eq!(<Test as Config>::MinAuctionSize::get(), 2);
 			// Check we are throwing up an error when we send anything less than the minimum of 2
-			assert_noop!(AuctionPallet::set_auction_size_range(Origin::root(), (0, 0)), Error::<Test>::InvalidRange);
-			assert_noop!(AuctionPallet::set_auction_size_range(Origin::root(), (1, 2)), Error::<Test>::InvalidRange);
+			assert_noop!(AuctionPallet::set_auction_size_range(Origin::root(), (0, 0)),
+						Error::<Test>::InvalidRange);
+			assert_noop!(AuctionPallet::set_auction_size_range(Origin::root(), (1, 2)),
+						Error::<Test>::InvalidRange);
 			// This should now work
 			assert_ok!(AuctionPallet::set_auction_size_range(Origin::root(), (2, 100)));
 			// Confirm we have an event
@@ -74,7 +78,8 @@ mod test {
 			);
 			//
 			// We throw up an error if we try to set it to the current
-			assert_noop!(AuctionPallet::set_auction_size_range(Origin::root(), (2, 100)), Error::<Test>::InvalidRange);
+			assert_noop!(AuctionPallet::set_auction_size_range(Origin::root(), (2, 100)),
+						Error::<Test>::InvalidRange);
 		});
 	}
 
@@ -91,7 +96,7 @@ mod test {
 			assert_ok!(AuctionPallet::set_auction_range(auction_range));
 			assert!(!AuctionPallet::auction_to_confirm());
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(_)));
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WinnersSelected(_, _)));
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WinnersSelected(..)));
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(winners, min_bid)
 				if !winners.is_empty() && min_bid > 0
 			);

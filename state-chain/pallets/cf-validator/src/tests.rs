@@ -26,7 +26,9 @@ mod test {
 	fn you_have_to_be_priviledged() {
 		new_test_ext().execute_with(|| {
 			// Run through the sudo extrinsics to be sure they are what they are
-			assert_noop!(ValidatorManager::set_blocks_for_epoch(Origin::signed(ALICE), Zero::zero()), BadOrigin);
+			assert_noop!(ValidatorManager::set_blocks_for_epoch(Origin::signed(ALICE),
+						Zero::zero()),
+						BadOrigin);
 			assert_noop!(ValidatorManager::force_rotation(Origin::signed(ALICE)), BadOrigin);
 		});
 	}
@@ -37,7 +39,8 @@ mod test {
 			// Confirm we have a minimum epoch of 1 block
 			assert_eq!(<Test as Config>::MinEpoch::get(), 1);
 			// Throw up an error if we supply anything less than this
-			assert_noop!(ValidatorManager::set_blocks_for_epoch(Origin::root(), 0), Error::<Test>::InvalidEpoch);
+			assert_noop!(ValidatorManager::set_blocks_for_epoch(Origin::root(), 0),
+						Error::<Test>::InvalidEpoch);
 			// This should work as 2 > 1
 			assert_ok!(ValidatorManager::set_blocks_for_epoch(Origin::root(), 2));
 			// Confirm we have an event for the change from 0 to 2
@@ -46,7 +49,8 @@ mod test {
 				mock::Event::pallet_cf_validator(crate::Event::EpochDurationChanged(EPOCH_BLOCKS, 2)),
 			);
 			// We throw up an error if we try to set it to the current
-			assert_noop!(ValidatorManager::set_blocks_for_epoch(Origin::root(), 2), Error::<Test>::InvalidEpoch);
+			assert_noop!(ValidatorManager::set_blocks_for_epoch(Origin::root(), 2),
+						Error::<Test>::InvalidEpoch);
 		});
 	}
 
@@ -63,31 +67,33 @@ mod test {
 			// Test force rotation
 			assert_ok!(ValidatorManager::force_rotation(Origin::root()));
 			// Test we are in the bidder phase
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(_, _));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
 			// Move forward by 1 block, we have a block already
 			run_to_block(2);
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(_, _));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(..));
 			// Confirm the auction
 			CONFIRM.with(|l| { *l.borrow_mut() = true });
 			// Move forward by 1 block
 			run_to_block(3);
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(_, _));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
 			// Move forward by 1 block, we should sit in the non-auction phase 'WaitingForBids'
 			run_to_block(5);
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(_, _));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
 			// Epoch is block 10 so let's test an epoch cycle to provoke an auction
 			// This should be the same state
 			run_to_block(9);
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(_, _));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
 			run_to_block(10);
 			// We should have started another auction
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(_, _));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(..));
 			// Let's check we can't alter the state of the pallet during this period
-			assert_noop!(ValidatorManager::force_rotation(Origin::root()), Error::<Test>::AuctionInProgress);
-			assert_noop!(ValidatorManager::set_blocks_for_epoch(Origin::root(), 10), Error::<Test>::AuctionInProgress);
+			assert_noop!(ValidatorManager::force_rotation(Origin::root()),
+						Error::<Test>::AuctionInProgress);
+			assert_noop!(ValidatorManager::set_blocks_for_epoch(Origin::root(), 10),
+						Error::<Test>::AuctionInProgress);
 			// Finally back to the start again
 			run_to_block(11);
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(_, _));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
 		});
 	}
 
@@ -108,16 +114,16 @@ mod test {
 			assert_ok!(ValidatorManager::set_blocks_for_epoch(Origin::root(), epoch));
 			// Our genesis validators, hello.
 			assert_sort(&mut <ValidatorManager as EpochInfo>::current_validators(),
-					   &mut mock::genesis_validators());
+						&mut mock::genesis_validators());
 			// ---------- Run Auction
 			// Confirm we are in the waiting state
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(_, _));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
 			// Move forward 2 blocks
 			run_to_block(5);
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(_, _));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
 			// We have 2 validators, the genesis set sitting in next
 			assert_sort(&mut <ValidatorManager as EpochInfo>::next_validators(),
-					   &mut mock::genesis_validators());
+						&mut mock::genesis_validators());
 			// Run to the epoch
 			run_to_block(10);
 			// We should have now completed an auction have a set of winners to pass as validators
@@ -126,7 +132,8 @@ mod test {
 			assert_sort(&mut <ValidatorManager as EpochInfo>::current_validators(),
 						&mut mock::genesis_validators());
 			// and the winners are
-			assert_sort(&mut <ValidatorManager as EpochInfo>::next_validators(), &mut winners);
+			assert_sort(&mut <ValidatorManager as EpochInfo>::next_validators(),
+						&mut winners);
 			// run more block to make them validators
 			run_to_block(11);
 			// rotation won't happen until we have a confirmed auction, so the current set are still
@@ -134,37 +141,42 @@ mod test {
 			assert_sort(&mut <ValidatorManager as EpochInfo>::current_validators(),
 						&mut mock::genesis_validators());
 			// Confirm we are still in the same phase
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(_, _));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(..));
 			run_to_block(12);
 			// and still...
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(_, _));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(..));
 			// Confirm the auction
 			CONFIRM.with(|l| { *l.borrow_mut() = true });
 			run_to_block(13);
 			// A rotation has occurred
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(_, _));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
 			// Confirm our new epoch, we had one at genesis remember
 			assert_eq!(<ValidatorManager as EpochInfo>::epoch_index(), 2);
 			// We do now see our winners as the set of validators
-			assert_sort(&mut <ValidatorManager as EpochInfo>::current_validators(), &mut winners);
+			assert_sort(&mut <ValidatorManager as EpochInfo>::current_validators(),
+						&mut winners);
 			// Our old winners remain
-			assert_sort(&mut <ValidatorManager as EpochInfo>::next_validators(), &mut winners);
+			assert_sort(&mut <ValidatorManager as EpochInfo>::next_validators(),
+						&mut winners);
 			// Force an auction at the next block
 			assert_ok!(ValidatorManager::force_rotation(Origin::root()));
 			run_to_block(14);
 			// A new auction starts
 			// We should still see the old winners validating
-			assert_sort(&mut <ValidatorManager as EpochInfo>::current_validators(), &mut winners);
+			assert_sort(&mut <ValidatorManager as EpochInfo>::current_validators(),
+						&mut winners);
 			// Our new winners are
 			// We should still see the old winners validating
 			let mut winners = assert_winners();
-			assert_sort(&mut <ValidatorManager as EpochInfo>::next_validators(), &mut winners);
+			assert_sort(&mut <ValidatorManager as EpochInfo>::next_validators(),
+						&mut winners);
 			run_to_block(15);
 			// Finalised auction, waiting for bids again
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(_, _));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
 			assert_eq!(<ValidatorManager as EpochInfo>::epoch_index(), 3);
 			// We have the new set of validators
-			assert_sort(&mut <ValidatorManager as EpochInfo>::current_validators(), &mut winners);
+			assert_sort(&mut <ValidatorManager as EpochInfo>::current_validators(),
+						&mut winners);
 		});
 	}
 
