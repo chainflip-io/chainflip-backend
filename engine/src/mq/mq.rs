@@ -1,19 +1,19 @@
 use std::{fmt, pin::Pin};
 
+use crate::types::chain::Chain;
 use anyhow::Result;
 use async_trait::async_trait;
-use chainflip_common::types::coin::Coin;
 use futures::Stream;
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::settings;
+#[async_trait]
+pub trait IMQClientFactory<IMQ: IMQClient> {
+    async fn create(&self) -> anyhow::Result<Box<IMQ>>;
+}
 
 /// Interface for a message queue
 #[async_trait]
 pub trait IMQClient {
-    /// Open a connection to the message queue
-    async fn connect(opts: settings::MessageQueue) -> Result<Box<Self>>;
-
     /// Publish something to a particular subject
     async fn publish<M: 'static + Serialize + Sync>(
         &self,
@@ -36,12 +36,16 @@ pub fn pin_message_stream<M>(stream: Box<dyn Stream<Item = M>>) -> Pin<Box<dyn S
     stream.into()
 }
 /// Subjects that can be published / subscribed to
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Subject {
-    Witness(Coin),
-    Quote(Coin),
-    Batch(Coin),
-    Broadcast(Coin),
+    Witness(Chain),
+    Quote(Chain),
+    Batch(Chain),
+    Broadcast(Chain),
+
+    // broadcaster pushes tx hashes here after being broadcast
+    BroadcastSuccess(Chain),
     /// Stake events coming from the Stake manager contract
     StakeManager,
     /// Stake events coming from the State chain
@@ -53,6 +57,8 @@ pub enum Subject {
     Rotate,
     P2PIncoming,
     P2POutgoing,
+    MultisigInstruction,
+    MultisigEvent,
 }
 
 // TODO: Make this a separate trait, not `fmt::Display` - https://github.com/chainflip-io/chainflip-backend/issues/63
@@ -60,17 +66,20 @@ pub enum Subject {
 impl fmt::Display for Subject {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self {
-            Subject::Witness(coin) => {
-                write!(f, "witness.{}", coin.to_string())
+            Subject::Witness(chain) => {
+                write!(f, "witness.{}", chain.to_string())
             }
-            Subject::Quote(coin) => {
-                write!(f, "quote.{}", coin.to_string())
+            Subject::Quote(chain) => {
+                write!(f, "quote.{}", chain.to_string())
             }
-            Subject::Batch(coin) => {
-                write!(f, "batch.{}", coin.to_string())
+            Subject::Batch(chain) => {
+                write!(f, "batch.{}", chain.to_string())
             }
-            Subject::Broadcast(coin) => {
-                write!(f, "broadcast.{}", coin.to_string())
+            Subject::Broadcast(chain) => {
+                write!(f, "broadcast.{}", chain.to_string())
+            }
+            Subject::BroadcastSuccess(chain) => {
+                write!(f, "broadcast_success.{}", chain.to_string())
             }
             Subject::StakeManager => {
                 write!(f, "stake_manager")
@@ -93,6 +102,12 @@ impl fmt::Display for Subject {
             Subject::P2POutgoing => {
                 write!(f, "p2p_outgoing")
             }
+            Subject::MultisigInstruction => {
+                write!(f, "multisig_instruction")
+            }
+            Subject::MultisigEvent => {
+                write!(f, "multisig_event")
+            }
         }
     }
 }
@@ -103,16 +118,16 @@ mod test {
 
     #[test]
     fn channel_to_string() {
-        let witness_subject = Subject::Witness(Coin::BTC);
+        let witness_subject = Subject::Witness(Chain::BTC);
         assert_eq!(witness_subject.to_string(), "witness.BTC");
 
-        let quote_subject = Subject::Quote(Coin::ETH);
+        let quote_subject = Subject::Quote(Chain::ETH);
         assert_eq!(quote_subject.to_string(), "quote.ETH");
 
-        let batch_subject = Subject::Batch(Coin::OXEN);
+        let batch_subject = Subject::Batch(Chain::OXEN);
         assert_eq!(batch_subject.to_string(), "batch.OXEN");
 
-        let broadcast_subject = Subject::Broadcast(Coin::BTC);
+        let broadcast_subject = Subject::Broadcast(Chain::BTC);
         assert_eq!(broadcast_subject.to_string(), "broadcast.BTC");
 
         let stake_manager_subject = Subject::StakeManager;

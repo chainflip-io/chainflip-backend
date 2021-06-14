@@ -1,3 +1,4 @@
+use super::IMQClientFactory;
 use super::{IMQClient, Subject};
 use anyhow::Context;
 use anyhow::Result;
@@ -10,7 +11,7 @@ use tokio_stream::{Stream, StreamExt};
 use crate::settings;
 
 // This will likely have a private field containing the underlying mq client
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct NatsMQClient {
     /// The nats.rs Connection to the Nats server
     conn: async_nats::Connection,
@@ -30,14 +31,32 @@ impl Subscription {
     }
 }
 
+pub struct NatsMQClientFactory {
+    mq_settings: settings::MessageQueue,
+}
+
+impl NatsMQClientFactory {
+    pub fn new(mq_settings: &settings::MessageQueue) -> Self {
+        NatsMQClientFactory {
+            mq_settings: mq_settings.clone(),
+        }
+    }
+}
+
 #[async_trait]
-impl IMQClient for NatsMQClient {
-    async fn connect(mq_settings: settings::MessageQueue) -> Result<Box<Self>> {
-        let url = format!("http://{}:{}", mq_settings.hostname, mq_settings.port);
+impl IMQClientFactory<NatsMQClient> for NatsMQClientFactory {
+    async fn create(&self) -> anyhow::Result<Box<NatsMQClient>> {
+        let url = format!(
+            "http://{}:{}",
+            self.mq_settings.hostname, self.mq_settings.port
+        );
         let conn = async_nats::connect(url.as_str()).await?;
         Ok(Box::new(NatsMQClient { conn }))
     }
+}
 
+#[async_trait]
+impl IMQClient for NatsMQClient {
     async fn publish<M: Serialize + Sync>(&self, subject: Subject, message: &'_ M) -> Result<()> {
         let bytes = serde_json::to_string(message)?;
         let bytes = bytes.as_bytes();
@@ -72,7 +91,7 @@ mod test {
     use core::panic;
     use std::time::Duration;
 
-    use chainflip_common::types::coin::Coin;
+    use crate::types::chain::Chain;
     use serde::Deserialize;
 
     use crate::mq::pin_message_stream;
@@ -86,7 +105,10 @@ mod test {
             port: 4222,
         };
 
-        NatsMQClient::connect(mq_settings).await.unwrap()
+        NatsMQClientFactory::new(&mq_settings)
+            .create()
+            .await
+            .unwrap()
     }
 
     #[ignore = "Depends on Nats being online"]
@@ -103,7 +125,7 @@ mod test {
         let nats_client = setup_client().await;
         let res = nats_client
             .publish(
-                Subject::Witness(Coin::ETH),
+                Subject::Witness(Chain::ETH),
                 &TestMessage(String::from("hello")),
             )
             .await;
@@ -113,7 +135,7 @@ mod test {
     async fn subscribe_test_inner(nats_client: Box<NatsMQClient>) {
         let test_message = TestMessage(String::from("I SAW A TRANSACTION"));
 
-        let subject = Subject::Witness(Coin::ETH);
+        let subject = Subject::Witness(Chain::ETH);
 
         let stream = nats_client.subscribe::<TestMessage>(subject).await.unwrap();
 

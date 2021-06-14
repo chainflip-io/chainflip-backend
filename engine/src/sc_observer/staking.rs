@@ -1,6 +1,7 @@
 // Implements support for the staking module
 
 use std::marker::PhantomData;
+use std::time::Duration;
 
 use codec::{Decode, Encode, FullCodec};
 use frame_support::{pallet_prelude::*, sp_runtime::traits::Verify};
@@ -97,7 +98,7 @@ pub struct StakedEvent<S: StakeManager> {
 
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
-pub struct ClaimedEvent<S: StakeManager> {
+pub struct ClaimSettledEvent<S: StakeManager> {
     pub who: AccountId32,
 
     pub amount: u128,
@@ -128,6 +129,8 @@ pub struct ClaimSignatureIssuedEvent<S: StakeManager> {
 
     pub eth_address: [u8; 20],
 
+    pub expiry: Duration,
+
     pub signature: Signature,
 
     pub _phantom: PhantomData<S>,
@@ -144,7 +147,7 @@ pub enum StakingEvent<S: StakeManager> {
 
     StakeRefundEvent(StakeRefundEvent<S>),
 
-    ClaimedEvent(ClaimedEvent<S>),
+    ClaimSettledEvent(ClaimSettledEvent<S>),
 }
 
 impl From<ClaimSigRequestedEvent<StateChainRuntime>> for SCEvent {
@@ -159,9 +162,9 @@ impl From<ClaimSignatureIssuedEvent<StateChainRuntime>> for SCEvent {
     }
 }
 
-impl From<ClaimedEvent<StateChainRuntime>> for SCEvent {
-    fn from(claimed: ClaimedEvent<StateChainRuntime>) -> Self {
-        SCEvent::StakingEvent(StakingEvent::ClaimedEvent(claimed))
+impl From<ClaimSettledEvent<StateChainRuntime>> for SCEvent {
+    fn from(claimed: ClaimSettledEvent<StateChainRuntime>) -> Self {
+        SCEvent::StakingEvent(StakingEvent::ClaimSettledEvent(claimed))
     }
 }
 
@@ -255,7 +258,7 @@ mod tests {
         let who = AccountKeyring::Alice.to_account_id();
 
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_staking::Event::<SCRuntime>::Claimed(who.clone(), 150u128).into();
+            pallet_cf_staking::Event::<SCRuntime>::ClaimSettled(who.clone(), 150u128).into();
 
         let encoded_claimed = event.encode();
 
@@ -263,9 +266,9 @@ mod tests {
         let encoded_claimed = encoded_claimed[2..].to_vec();
 
         let decoded_event =
-            ClaimedEvent::<StateChainRuntime>::decode(&mut &encoded_claimed[..]).unwrap();
+            ClaimSettledEvent::<StateChainRuntime>::decode(&mut &encoded_claimed[..]).unwrap();
 
-        let expecting = ClaimedEvent {
+        let expecting = ClaimSettledEvent {
             who,
             amount: 150u128,
             _phantom: PhantomData,
@@ -315,6 +318,7 @@ mod tests {
         let sig: [u8; 65] = [0; 65];
 
         let sig = Signature(sig);
+        let expiry = Duration::from_secs(1);
 
         let event: <SCRuntime as Config>::Event =
             pallet_cf_staking::Event::<SCRuntime>::ClaimSignatureIssued(
@@ -322,6 +326,7 @@ mod tests {
                 150u128,
                 1u64,
                 eth_address,
+                expiry,
                 sig.clone(),
             )
             .into();
@@ -342,6 +347,7 @@ mod tests {
             nonce: 1u64,
             eth_address,
             signature: sig,
+            expiry,
             _phantom: PhantomData,
         };
 

@@ -14,23 +14,36 @@ use substrate_subxt::{Client, ClientBuilder, PairSigner};
 
 use super::{helpers::create_subxt_client, runtime::StateChainRuntime};
 use crate::{
-    mq::{nats_client::NatsMQClient, IMQClient},
+    mq::{
+        nats_client::{NatsMQClient, NatsMQClientFactory},
+        IMQClient, IMQClientFactory,
+    },
     settings::Settings,
 };
 
 use codec::Encode;
 
+/// TODO: make this generic again
 /// Broadcasts events to the state chain by submitting 'extrinsics'
-pub struct SCBroadcaster<M: IMQClient + Send + Sync> {
-    mq_client: M,
+// pub struct SCBroadcaster<M: IMQClient + Send + Sync> {
+//     mq_client: M,
+//     sc_client: Client<StateChainRuntime>,
+// }
+
+pub struct SCBroadcaster {
+    mq_client: NatsMQClient,
     sc_client: Client<StateChainRuntime>,
 }
 
-impl<M: IMQClient + Send + Sync> SCBroadcaster<M> {
+impl SCBroadcaster {
     pub async fn new(settings: Settings) -> Self {
         let sc_client = create_subxt_client(settings.state_chain).await.unwrap();
 
-        let mq_client = *M::connect(settings.message_queue).await.unwrap();
+        // TODO: Use the factory better here now
+        // let mq_client = *M::connect(settings.message_queue).await.unwrap();
+
+        let mq_client_factory = NatsMQClientFactory::new(&settings.message_queue);
+        let mq_client = *mq_client_factory.create().await.unwrap();
 
         SCBroadcaster {
             mq_client,

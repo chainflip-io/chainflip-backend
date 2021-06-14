@@ -1,17 +1,20 @@
-use crate::{self as pallet_cf_staking, Config};
+use std::time::Duration;
+
+use crate as pallet_cf_staking;
+use pallet_cf_flip;
 use app_crypto::ecdsa::Public;
 use sp_core::H256;
 use frame_support::{parameter_types};
-use sp_runtime::{app_crypto, testing::Header, traits::{BlakeTwo256, IdentityLookup}};
-use frame_system::{Account, AccountInfo};
+use sp_runtime::{BuildStorage, app_crypto, testing::Header, traits::{BlakeTwo256, IdentityLookup}};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
 
-pub(super) mod epoch_info;
+use cf_traits::mocks::epoch_info;
 pub(super) mod witnesser;
 pub(super) mod ensure_witnessed;
+pub(super) mod time_source;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -21,13 +24,15 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		StakeManager: pallet_cf_staking::{Module, Call, Storage, Event<T>},
+		Flip: pallet_cf_flip::{Module, Call, Config<T>, Storage, Event<T>},
+		Staking: pallet_cf_staking::{Module, Call, Config<T>, Storage, Event<T>},
 	}
 );
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const SS58Prefix: u8 = 42;
+	pub const MinClaimTTL: Duration = Duration::from_millis(100);
 }
 
 impl frame_system::Config for Test {
@@ -55,37 +60,51 @@ impl frame_system::Config for Test {
 	type SS58Prefix = SS58Prefix;
 }
 
-impl Config for Test {
+parameter_types! {
+	pub const ExistentialDeposit: u128 = 10;
+}
+
+impl pallet_cf_flip::Config for Test {
+	type Event = Event;
+	type Balance = u128;
+	type ExistentialDeposit = ExistentialDeposit;
+}
+
+impl pallet_cf_staking::Config for Test {
 	type Event = Event;
 	type Call = Call;
-
-	type TokenAmount = u128;
-
-	type EthereumAddress = u64;
-
+	type EthereumAddress = [u8; 20];
 	type Nonce = u32;
-
 	type EthereumCrypto = Public;
-
 	type EnsureWitnessed = ensure_witnessed::Mock;
-
 	type Witnesser = witnesser::Mock;
-
 	type EpochInfo = epoch_info::Mock;
-} 
+	type TimeSource = time_source::Mock;
+	type MinClaimTTL = MinClaimTTL;
+	type Balance = u128;
+	type Flip = Flip;
+}
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
+pub const CHARLIE: <Test as frame_system::Config>::AccountId = 789u64;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
+	let config = GenesisConfig {
+		frame_system: Default::default(),
+		pallet_cf_flip: Some(FlipConfig {
+			total_issuance: 1_000,
+		}),
+		pallet_cf_staking: Some(StakingConfig{
+			genesis_stakers: vec![],
+		}),
+	};
 
-	// Seed with two active accounts.
+	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
+
 	ext.execute_with(|| {
 		System::set_block_number(1);
-		Account::<Test>::insert(ALICE, AccountInfo::default());
-		Account::<Test>::insert(BOB, AccountInfo::default());
 	});
 
 	ext

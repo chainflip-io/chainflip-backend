@@ -85,7 +85,9 @@ impl staking::StakeManager for StateChainRuntime {
     type Nonce = u32;
 }
 
-impl validator::Validator for StateChainRuntime {}
+impl validator::Validator for StateChainRuntime {
+    type EpochIndex = u32;
+}
 
 #[cfg(test)]
 mod tests {

@@ -88,3 +88,7 @@ in your pallet that delegates to the witness pallet).
 Some ideas for future improvements:
 
 - Wrap the VoteMask operations in a nicer api that provides transparent Encode/Decode and methods for eg. vote counts.
+- Make the consensus threshold configurable by sudo (and/or update it during session rotations depending on the number
+  of validators)
+- Pruning of old witness votes (could be implemented in a hook or sth.)
+- Supporting witnessing during transition periods (ie. witnessing with the incoming and outgoing validator sets).

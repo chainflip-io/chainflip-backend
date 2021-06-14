@@ -1,129 +1,136 @@
-use super::{IMQClient, Subject};
-use anyhow::Context;
-use async_nats;
-use async_stream::stream;
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    sync::Arc,
+};
+
+use crate::mq::pin_message_stream;
+
+use super::{IMQClient, IMQClientFactory};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
-use nats_test_server::NatsTestServer;
-use tokio_stream::{Stream, StreamExt};
+use log::*;
+use parking_lot::Mutex;
+use tokio::sync::mpsc::UnboundedSender;
+use tokio_stream::wrappers::UnboundedReceiverStream;
+use tokio_stream::StreamExt;
 
-use crate::settings;
-
-pub struct MockMQ {
-    conn: async_nats::Connection,
+/// In-memory message queue to be used in tests
+#[derive(Clone)]
+pub struct MQMock {
+    topics: Arc<Mutex<HashMap<String, Vec<UnboundedSender<String>>>>>,
 }
 
-struct Subscription {
-    inner: async_nats::Subscription,
+/// Client for MQMock
+pub struct MQMockClient {
+    topics: Arc<Mutex<HashMap<String, Vec<UnboundedSender<String>>>>>,
 }
 
-impl Subscription {
-    pub fn into_stream(self) -> impl Stream<Item = Vec<u8>> {
-        stream! {
-            while let Some(m) = self.inner.next().await {
-                yield m.data;
-            }
+impl MQMock {
+    pub fn new() -> Self {
+        MQMock {
+            topics: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    pub fn get_client(&self) -> MQMockClient {
+        MQMockClient {
+            topics: Arc::clone(&self.topics),
         }
     }
 }
 
-/// # Using MockMQ
-/// ```
-/// let server = NatsTestServer::build().spawn();
-/// let mock_mq = MockMQ::new(&server).await;
-/// ```
-impl MockMQ {
-    pub async fn new(server: &NatsTestServer) -> Self {
-        let addr = server.address();
-        let mq_settings = settings::MessageQueue {
-            hostname: addr.ip().to_string(),
-            port: addr.port(),
-        };
-        // let settings = settings::test_utils::new_test_settings().unwrap();
+/// Factory that knows how to create instances of MQMockClient
+pub struct MQMockClientFactory {
+    mq: MQMock,
+}
 
-        *MockMQ::connect(mq_settings)
-            .await
-            .expect("Failed to initialise MockMQ")
+impl MQMockClientFactory {
+    pub fn new(mq: MQMock) -> Self {
+        MQMockClientFactory { mq }
     }
 }
 
 #[async_trait]
-impl IMQClient for MockMQ {
-    /// This should never really be called by testing functions, instead tests should use
-    /// MockMQ::new()
-    async fn connect(mq_settings: settings::MessageQueue) -> anyhow::Result<Box<Self>> {
-        let url = format!("http://{}:{}", mq_settings.hostname, mq_settings.port);
-        let conn = async_nats::connect(url.as_str()).await?;
-        Ok(Box::new(MockMQ { conn }))
+impl IMQClientFactory<MQMockClient> for MQMockClientFactory {
+    async fn create(&self) -> anyhow::Result<Box<MQMockClient>> {
+        Ok(Box::new(self.mq.get_client()))
     }
+}
 
+#[async_trait]
+impl IMQClient for MQMockClient {
     async fn publish<M: 'static + serde::Serialize + Sync>(
         &self,
         subject: super::Subject,
         message: &'_ M,
-    ) -> anyhow::Result<()> {
-        let bytes = serde_json::to_string(message)?;
-        let bytes = bytes.as_bytes();
-        self.conn.publish(&subject.to_string(), bytes).await?;
-        Ok(())
+    ) -> Result<()> {
+        let subject = subject.to_string();
+
+        match self.topics.lock().entry(subject) {
+            Entry::Occupied(entry) => {
+                let data = serde_json::to_string(message).unwrap();
+                for sender in entry.get() {
+                    sender.send(data.clone()).unwrap();
+                }
+                Ok(())
+            }
+            Entry::Vacant(_entry) => {
+                // dropping message
+                warn!("Dropping a message published into a topic with no subscribers");
+                Ok(())
+            }
+        }
     }
 
     async fn subscribe<M: serde::de::DeserializeOwned>(
         &self,
         subject: super::Subject,
-    ) -> anyhow::Result<Box<dyn Stream<Item = anyhow::Result<M>>>> {
-        let sub = self.conn.subscribe(&subject.to_string()).await?;
+    ) -> Result<Box<dyn futures::Stream<Item = Result<M>>>> {
+        let subject = subject.to_string();
 
-        // NOTE: can we have more than one type of message on the same channel?
-        // Should the messages of the wrong type be filtered out?
+        let mut topics = self.topics.lock();
+        let entry = topics.entry(subject).or_default();
 
-        let subscription = Subscription { inner: sub };
-        let stream = subscription.into_stream().map(|bytes| {
-            serde_json::from_slice(&bytes[..]).context("Message deserialization failed.")
-        });
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        entry.push(tx);
 
-        Ok(Box::new(stream))
+        let rx =
+            UnboundedReceiverStream::new(rx).map(|x| serde_json::from_str(&x).context("subscribe"));
+
+        return Ok(Box::new(rx));
     }
 
-    async fn close(&self) -> anyhow::Result<()> {
-        let conn = self.conn.close().await?;
-        Ok(conn)
+    async fn close(&self) -> Result<()> {
+        todo!()
     }
 }
 
-// Ensure the mock can do it's ting
-mod test {
-    use super::*;
-    use crate::mq::pin_message_stream;
-    use chainflip_common::types::coin::Coin;
-    use serde::{Deserialize, Serialize};
+#[tokio::test]
+async fn test_own_mq() {
+    let mq = MQMock::new();
 
-    #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-    struct TestMessage(String);
+    let c1 = mq.get_client();
+    let c2 = mq.get_client();
+    let c3 = mq.get_client();
 
-    async fn subscribe_test_inner(mock_client: MockMQ) {
-        let test_message = TestMessage(String::from("I SAW A TRANSACTION"));
+    let stream2 = c2
+        .subscribe::<String>(super::Subject::P2PIncoming)
+        .await
+        .unwrap();
+    let mut stream2 = pin_message_stream(stream2);
 
-        let subject = Subject::Witness(Coin::ETH);
+    let stream3 = c3
+        .subscribe::<String>(super::Subject::P2PIncoming)
+        .await
+        .unwrap();
+    let mut stream3 = pin_message_stream(stream3);
 
-        let stream = mock_client.subscribe::<TestMessage>(subject).await.unwrap();
+    let msg = "Test".to_string();
 
-        mock_client.publish(subject, &test_message).await.unwrap();
+    c1.publish(super::Subject::P2PIncoming, &msg.clone())
+        .await
+        .unwrap();
 
-        let mut stream = pin_message_stream(stream);
-
-        match tokio::time::timeout(std::time::Duration::from_millis(100), stream.next()).await {
-            Ok(Some(m)) => assert_eq!(m.unwrap(), test_message),
-            Ok(None) => panic!("Unexpected error: stream returned early."),
-            Err(_) => panic!("Nats stream timed out."),
-        };
-    }
-
-    // Use the nats test server instead of the running nats instance
-    #[tokio::test]
-    async fn subscribe_mock_mq() {
-        let server = NatsTestServer::build().spawn();
-        let mock_client = MockMQ::new(&server).await;
-
-        subscribe_test_inner(mock_client).await;
-    }
+    assert_eq!(stream2.next().await.unwrap().unwrap(), msg.clone());
+    assert_eq!(stream3.next().await.unwrap().unwrap(), msg.clone());
 }
