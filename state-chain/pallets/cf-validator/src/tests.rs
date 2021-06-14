@@ -180,9 +180,9 @@ mod test {
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(mut winners, min_bid) => {
 				GENESIS_VALIDATORS.with(|genesis_validators| {
 					let genesis_validators = &mut *genesis_validators.borrow_mut();
-					let genesis_validators = genesis_validators.sort();
-					let winners = winners.sort();
-					assert_eq!(genesis_validators, winners);
+					genesis_validators.sort();
+					winners.sort();
+					assert_eq!(*genesis_validators, winners);
 					assert_eq!(min_bid, 1);
 				});
 			});
@@ -192,7 +192,9 @@ mod test {
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(mut winners, min_bid) => {
 				CURRENT_VALIDATORS.with(|current_validators| {
 					let current_validators = &mut *current_validators.borrow_mut();
-					assert_eq!(current_validators.sort(), winners.sort());
+					current_validators.sort();
+					winners.sort();
+					assert_eq!(*current_validators, winners);
 					assert_eq!(min_bid, 1);
 				});
 			});
