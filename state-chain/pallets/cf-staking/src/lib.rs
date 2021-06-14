@@ -520,7 +520,10 @@ impl<T: Config> Pallet<T> {
 	/// Add stake to an account, creating the account if it doesn't exist, and activating the account if it is in retired state.
 	fn stake_account(account_id: &T::AccountId, amount: T::Balance) {
 		if !frame_system::Pallet::<T>::account_exists(account_id) {
-			frame_system::Provider::<T>::created(account_id);
+			frame_system::Provider::<T>::created(account_id).unwrap_or_else(|e| {
+				// The standard impl of this in the system pallet never fails.
+				debug::error!("Unexpected error when creating an account upon staking: {:?}", e);
+			});
 		}
 
 		let new_total = T::Flip::credit_stake(&account_id, amount);
