@@ -191,19 +191,15 @@ impl Config for Test {
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	// let keys: Vec<_> = GENESIS_VALIDATORS.with(|l|
-	// 	l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
-	// );
-	//
-	// pallet_session::GenesisConfig::<Test> {
-	// 	keys
-	// }.assimilate_storage(&mut t).unwrap();
-
 
 	pallet_cf_validator::GenesisConfig::<Test> {
 		epoch_number_of_blocks: 100,
 		force: true
 	}.assimilate_storage(&mut t).unwrap();
+
+	pallet_cf_auction::GenesisConfig {
+		auction_size_range: (2, 150),
+	}.assimilate_storage::<Test>(&mut t).unwrap();
 
 	let mut ext: sp_io::TestExternalities = sp_io::TestExternalities::new(t);
 
