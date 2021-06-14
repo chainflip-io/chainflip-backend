@@ -22,7 +22,7 @@
 //!
 //! ## Claim expiry
 //!
-//! - When a claim expires, it will no longer be claimable on ethereum, so is re-credited to the originating account. 
+//! - When a claim expires, it will no longer be claimable on ethereum, so is re-credited to the originating account.
 //!
 //! ## Retiring
 //!
@@ -129,7 +129,7 @@ pub mod pallet {
 		/// Provides an origin check for witness transactions.
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 
-		/// An implementation of the witnesser to enable
+		/// An implementation of the witnesser, allows us to define witness_* helper extrinsics.
 		type Witnesser: Witnesser<
 			Call = <Self as Config>::Call,
 			AccountId = <Self as frame_system::Config>::AccountId,
