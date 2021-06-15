@@ -91,6 +91,8 @@ pub mod pallet {
 
 	pub type Retired = bool;
 
+	pub type EthTransactionHash = [u8; 32];
+
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// Standard Event type.
@@ -224,8 +226,8 @@ pub mod pallet {
 		/// An invalid claim has been witnessed: the account has no pending claims.
 		NoPendingClaim,
 
-		/// An invalid claim has been witnessed: the amount claimed does not match the pending claim amount.
-		InvalidClaimAmount,
+		/// An invalid claim has been witnessed: the amount claimed, or the nonce, does not match the pending claim.
+		InvalidClaimDetails,
 
 		/// The claimant tried to claim despite having a claim already pending.
 		PendingClaim,
@@ -256,10 +258,12 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			staker_account_id: AccountId<T>,
 			amount: FlipBalance<T>,
+			// TODO: remove this. Leaving it here for now for compatibility with CFE.
 			refund_address: T::EthereumAddress,
+			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = Call::staked(staker_account_id, amount, refund_address);
+			let call = Call::staked(staker_account_id, amount, refund_address, tx_hash);
 			T::Witnesser::witness(who, call.into())?;
 			Ok(().into())
 		}
@@ -274,8 +278,10 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			account_id: T::AccountId,
 			amount: FlipBalance<T>,
-			// TODO: remove this. Leaving it here for now for compatibility
+			// TODO: remove this. Leaving it here for now for compatibility with CFE.
 			refund_address: T::EthereumAddress,
+			// Required to ensure this call is unique.
+			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			Self::ensure_witnessed(origin)?;
 			Self::stake_account(&account_id, amount);
@@ -332,9 +338,10 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
 			claimed_amount: FlipBalance<T>,
+			claimed_nonce: T::Nonce,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = Call::claimed(account_id, claimed_amount);
+			let call = Call::claimed(account_id, claimed_amount, claimed_nonce);
 			T::Witnesser::witness(who, call.into())?;
 			Ok(().into())
 		}
@@ -357,6 +364,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
 			claimed_amount: FlipBalance<T>,
+			claimed_nonce: T::Nonce,
 		) -> DispatchResultWithPostInfo {
 			Self::ensure_witnessed(origin)?;
 
@@ -364,8 +372,8 @@ pub mod pallet {
 				PendingClaims::<T>::get(&account_id).ok_or(Error::<T>::NoPendingClaim)?;
 
 			ensure!(
-				claimed_amount == claim_details.amount,
-				Error::<T>::InvalidClaimAmount
+				claimed_amount == claim_details.amount && claimed_nonce == claim_details.nonce,
+				Error::<T>::InvalidClaimDetails
 			);
 
 			PendingClaims::<T>::remove(&account_id);
@@ -520,7 +528,10 @@ impl<T: Config> Pallet<T> {
 	/// Add stake to an account, creating the account if it doesn't exist, and activating the account if it is in retired state.
 	fn stake_account(account_id: &T::AccountId, amount: T::Balance) {
 		if !frame_system::Pallet::<T>::account_exists(account_id) {
-			frame_system::Provider::<T>::created(account_id);
+			frame_system::Provider::<T>::created(account_id).unwrap_or_else(|e| {
+				// The standard impl of this in the system pallet never fails.
+				debug::error!("Unexpected error when creating an account upon staking: {:?}", e);
+			});
 		}
 
 		let new_total = T::Flip::credit_stake(&account_id, amount);
