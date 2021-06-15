@@ -1,11 +1,15 @@
 {
+  "ValidatorId": "AccountId",
+  "AuctionIndex": "u64",
+  "FlipBalance": "u128",
+  "AuctionRange": "(u32, u32)",
   "EpochIndex": "u32",
+  "AccountInfo": "AccountInfoWithDualRefCount",
   "ValidatorSize": "u32",
   "VoteCount": "u32",
   "TokenAmount": "u128",
   "Nonce": "u64",
-  "Duration": "(u64,u32)",
-  "AccountInfo": "AccountInfoWithDualRefCount",
+  "Duration": "(u64, u32)",
   "Address": "MultiAddress",
   "LookupSource": "MultiAddress",
   "Amount": "TokenAmount",
@@ -14,6 +18,20 @@
       "BondIsZero",
       "Empty",
       "MinValidatorSize"
+    ]
+  },
+  "ImbalanceSource": {
+    "_enum": [
+      "External",
+      "Account(AccountId)",
+      "Emissions"
+    ]
+  },
+  "AuctionPhase": {
+    "_enum": [
+      "WaitingForBids(Vec<ValidatorId>, Amount)",
+      "BidsTaken(Vec<(ValidatorId, Amount)>)",
+      "WinnersSelected(Vec<ValidatorId>, Amount)"
     ]
   }
 }
