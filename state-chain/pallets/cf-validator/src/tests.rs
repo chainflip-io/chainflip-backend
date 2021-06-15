@@ -3,6 +3,7 @@ mod test {
 	use crate::{Error, mock::*};
 	use sp_runtime::traits::{BadOrigin, Zero};
 	use frame_support::{assert_ok, assert_noop};
+	use cf_traits::AuctionConfirmation;
 
 	const ALICE: u64 = 100;
 
@@ -24,7 +25,7 @@ mod test {
 
 	#[test]
 	fn you_have_to_be_priviledged() {
-		new_test_ext().execute_with(|| {
+		new_test_ext(false).execute_with(|| {
 			// Run through the sudo extrinsics to be sure they are what they are
 			assert_noop!(ValidatorManager::set_blocks_for_epoch(Origin::signed(ALICE),
 						Zero::zero()),
@@ -35,7 +36,7 @@ mod test {
 
 	#[test]
 	fn changing_epoch() {
-		new_test_ext().execute_with(|| {
+		new_test_ext(false).execute_with(|| {
 			// Confirm we have a minimum epoch of 1 block
 			assert_eq!(<Test as Config>::MinEpoch::get(), 1);
 			// Throw up an error if we supply anything less than this
@@ -56,7 +57,7 @@ mod test {
 
 	#[test]
 	fn should_end_session() {
-		new_test_ext().execute_with(|| {
+		new_test_ext(false).execute_with(|| {
 			let set_size = 10;
 			assert_ok!(AuctionPallet::set_auction_range((2, set_size)));
 			// Set block length of epoch to 10
@@ -72,7 +73,7 @@ mod test {
 			run_to_block(2);
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(..));
 			// Confirm the auction
-			CONFIRM.with(|l| { *l.borrow_mut() = true });
+			TestConfirmation::set_awaiting_confirmation(false);
 			// Move forward by 1 block
 			run_to_block(3);
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
@@ -91,6 +92,8 @@ mod test {
 						Error::<Test>::AuctionInProgress);
 			assert_noop!(ValidatorManager::set_blocks_for_epoch(Origin::root(), 10),
 						Error::<Test>::AuctionInProgress);
+			// Confirm the auction
+			TestConfirmation::set_awaiting_confirmation(false);
 			// Finally back to the start again
 			run_to_block(11);
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
@@ -101,12 +104,10 @@ mod test {
 	fn rotation() {
 		// We expect from our `DummyAuction` that we will have our bidders which are then
 		// ran through an auction and that the winners of this auction become the validating set
-		new_test_ext().execute_with(|| {
+		new_test_ext(true).execute_with(|| {
 			// Run past genesis and the force auction
 			// Provide a confirmation when we run the auction
-			CONFIRM.with(|l| { *l.borrow_mut() = true });
 			run_to_block(3);
-			CONFIRM.with(|l| { *l.borrow_mut() = false });
 			let set_size = 10;
 			assert_ok!(AuctionPallet::set_auction_range((2, set_size)));
 			// Set block length of epoch to 10
@@ -184,10 +185,8 @@ mod test {
 	fn genesis() {
 		// As we are forcing an auction on genesis we should see an auction ran over block 1 and 2
 		// Confirm we are in the waiting state
-		new_test_ext().execute_with(|| {
-			// Provide a confirmation when we run the auction
-			CONFIRM.with(|l| { *l.borrow_mut() = true });
-			run_to_block(2);
+		new_test_ext(true).execute_with(|| {
+			run_to_block(3);
 			// We should have ran through an auction and have a set of winners and a min bid
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(mut winners, min_bid) => {
 				GENESIS_VALIDATORS.with(|genesis_validators| {
@@ -198,9 +197,9 @@ mod test {
 					assert_eq!(min_bid, 1);
 				});
 			});
-			// Move to block 3 and we now have the new set, or rather the genesis set
+			// Move to block 2 and we now have the new set, or rather the genesis set
 			// Let's check we have our set validating
-			run_to_block(3);
+			run_to_block(2);
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(mut winners, min_bid) => {
 				CURRENT_VALIDATORS.with(|current_validators| {
 					let current_validators = &mut *current_validators.borrow_mut();

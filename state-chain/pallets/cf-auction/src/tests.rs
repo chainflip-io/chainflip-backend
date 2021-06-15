@@ -48,11 +48,12 @@ mod test {
 			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::WinnersSelected(winners, min_bid)
 				if winners == vec![max_bid.0, joe_bid.0, low_bid.0] && min_bid == low_bid.1
 			);
+			assert!(Test::awaiting_confirmation());
 			// Just leaves us to confirm this auction, if we try to process this we will get an error
 			// until is confirmed
 			assert_matches!(AuctionPallet::process(), Err(AuctionError::NotConfirmed));
 			// Confirm the auction
-			CONFIRM.with(|l| { *l.borrow_mut() = true });
+			Test::set_awaiting_confirmation(false);
 			// and finally we complete the process, clearing the bidders
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WaitingForBids(..)));
 			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::WaitingForBids(..));
@@ -92,15 +93,15 @@ mod test {
 			});
 
 			let auction_range = (2, 100);
-			CONFIRM.with(|l| { *l.borrow_mut() = true });
 			assert_ok!(AuctionPallet::set_auction_range(auction_range));
-			assert!(!AuctionPallet::auction_to_confirm());
+			assert!(!Test::awaiting_confirmation());
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(_)));
+			assert!(Test::awaiting_confirmation());
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WinnersSelected(..)));
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(winners, min_bid)
 				if !winners.is_empty() && min_bid > 0
 			);
-			assert!(AuctionPallet::auction_to_confirm());
+
 			// Kill it
 			AuctionPallet::abort();
 			assert_eq!(AuctionPallet::phase(), AuctionPhase::default());

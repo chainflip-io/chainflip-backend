@@ -54,9 +54,9 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>},
 		ValidatorManager: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
-		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -126,7 +126,7 @@ pub struct MockEnsureWitness;
 impl EnsureOrigin<Origin> for MockEnsureWitness {
 	type Success = ();
 
-	fn try_origin(o: Origin) -> Result<Self::Success, Origin> {
+	fn try_origin(_o: Origin) -> Result<Self::Success, Origin> {
 		// We don't intend to test this, it's just to keep the compiler happy.
 		unimplemented!()
 	}
@@ -183,8 +183,12 @@ impl BidderProvider for TestBidderProvider {
 
 pub struct TestConfirmation;
 impl AuctionConfirmation for TestConfirmation {
-	fn confirmed() -> bool {
+	fn awaiting_confirmation() -> bool {
 		CONFIRM.with(|l| *l.borrow())
+	}
+
+	fn set_awaiting_confirmation(b: bool) {
+		CONFIRM.with(|l| *l.borrow_mut() = b);
 	}
 }
 
@@ -216,21 +220,22 @@ impl Config for Test {
 	type Amount = Amount;
 	// Use the pallet's implementation
 	type Auction = AuctionPallet;
+	type Confirmation = TestConfirmation;
 }
 
-pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
+pub(crate) fn new_test_ext(run_auction: bool) -> sp_io::TestExternalities {
 
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-
-	pallet_cf_validator::GenesisConfig::<Test> {
-		epoch_number_of_blocks: EPOCH_BLOCKS,
-		force: true
-	}.assimilate_storage(&mut t).unwrap();
 
 	let genesis = pallet_cf_auction::GenesisConfig {
 		auction_size_range: (MIN_AUCTION_SIZE, MAX_AUCTION_SIZE),
 	};
 	GenesisBuild::<Test>::assimilate_storage(&genesis,&mut t).unwrap();
+
+	pallet_cf_validator::GenesisConfig::<Test> {
+		epoch_number_of_blocks: EPOCH_BLOCKS,
+		run_auction
+	}.assimilate_storage(&mut t).unwrap();
 
 	let mut ext: sp_io::TestExternalities = sp_io::TestExternalities::new(t);
 

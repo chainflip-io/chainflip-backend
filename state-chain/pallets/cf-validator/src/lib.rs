@@ -89,6 +89,7 @@ pub mod pallet {
 	use super::*;
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
+	use cf_traits::AuctionConfirmation;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -122,6 +123,8 @@ pub mod pallet {
 
         /// An auction type
         type Auction: Auction<ValidatorId=Self::ValidatorId, Amount=Self::Amount>;
+
+		type Confirmation: AuctionConfirmation;
     }
 
 	#[pallet::event]
@@ -225,7 +228,7 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub epoch_number_of_blocks: T::BlockNumber,
-		pub force: bool,
+		pub run_auction: bool,
 	}
 
 	#[cfg(feature = "std")]
@@ -233,7 +236,7 @@ pub mod pallet {
 		fn default() -> Self {
 			Self {
 				epoch_number_of_blocks: Zero::zero(),
-				force: false,
+				run_auction: false,
 			}
 		}
 	}
@@ -243,7 +246,15 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			BlocksPerEpoch::<T>::set(self.epoch_number_of_blocks);
-			Force::<T>::set(self.force);
+			// Run an auction from genesis
+			if self.run_auction {
+				if T::Auction::process().is_ok() {
+					// Confirm auction
+					T::Confirmation::set_awaiting_confirmation(false);
+				} else {
+					panic!("Failed to run through Auction genesis");
+				}
+			}
 		}
 	}
 }
