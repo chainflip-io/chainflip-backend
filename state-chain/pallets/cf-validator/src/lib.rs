@@ -237,7 +237,9 @@ pub mod pallet {
 	// The build of genesis for the pallet.
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
-		fn build(&self) {}
+		fn build(&self) {
+			Pallet::<T>::generate_lookup();
+		}
 	}
 }
 
@@ -355,17 +357,21 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 			// A rotation has occurred, we emit an event of the new epoch and compile a list of
 			// validators for validator lookup
 			AuctionPhase::WaitingForBids(winners, min_bid) => {
-				// Calculate our new epoch index
-				let new_epoch = CurrentEpoch::<T>::mutate(|epoch| {
-					*epoch = epoch.saturating_add(One::one());
-					*epoch
-				});
-				// Emit an event
-				Self::deposit_event(Event::NewEpoch(new_epoch));
-				// Generate our lookup list of validators
-				Self::generate_lookup();
-				// Our trait callback
-				T::EpochTransitionHandler::on_new_epoch(winners, min_bid);
+				// If we have a set of winners
+				if !winners.is_empty() {
+					// Calculate our new epoch index
+					let new_epoch = CurrentEpoch::<T>::mutate(|epoch| {
+						*epoch = epoch.saturating_add(One::one());
+						*epoch
+					});
+					// Emit an event
+					Self::deposit_event(Event::NewEpoch(new_epoch));
+					// Generate our lookup list of validators
+					Self::generate_lookup();
+					// Our trait callback
+					T::EpochTransitionHandler::on_new_epoch(winners, min_bid);
+				}
+				
 				None
 			}
 			// Return
