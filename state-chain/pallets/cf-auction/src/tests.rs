@@ -50,7 +50,7 @@ mod test {
 			// until is confirmed
 			assert_matches!(AuctionPallet::process(), Err(AuctionError::NotConfirmed));
 			// Confirm the auction
-			CONFIRM.with(|l| { *l.borrow_mut() = true });
+			Test::set_awaiting_confirmation(false);
 			// and finally we complete the process, clearing the bidders
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WaitingForBids(_, _)));
 			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::WaitingForBids(_, _));
@@ -87,15 +87,13 @@ mod test {
 			});
 
 			let auction_range = (2, 100);
-			CONFIRM.with(|l| { *l.borrow_mut() = true });
 			assert_ok!(AuctionPallet::set_auction_range(auction_range));
-			assert!(!AuctionPallet::auction_to_confirm());
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(_)));
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WinnersSelected(_, _)));
+			assert!(Test::awaiting_confirmation());
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(winners, min_bid)
 				if !winners.is_empty() && min_bid > 0
 			);
-			assert!(AuctionPallet::auction_to_confirm());
 			// Kill it
 			AuctionPallet::abort();
 			assert_eq!(AuctionPallet::phase(), AuctionPhase::default());
