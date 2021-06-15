@@ -210,6 +210,12 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
 			AuctionSizeRange::<T>::set(self.auction_size_range);
+			// Run through an auction
+			if Pallet::<T>::process()
+				.and(Pallet::<T>::process())
+				.and(Pallet::<T>::process()).is_err() {
+				panic!("Genesis auction failed");
+			}
 		}
 	}
 }
