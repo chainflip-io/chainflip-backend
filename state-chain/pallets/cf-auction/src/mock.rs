@@ -125,8 +125,13 @@ impl BidderProvider for TestBidderProvider {
 }
 
 impl AuctionConfirmation for Test {
-	fn confirmed() -> bool {
+
+	fn awaiting_confirmation() -> bool {
 		CONFIRM.with(|l| *l.borrow())
+	}
+
+	fn set_awaiting_confirmation(waiting: bool) {
+		CONFIRM.with(|l| *l.borrow_mut() = waiting);
 	}
 }
 
