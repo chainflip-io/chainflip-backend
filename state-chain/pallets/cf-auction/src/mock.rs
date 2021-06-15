@@ -13,17 +13,28 @@ use sp_runtime::{
 };
 use frame_support::{parameter_types, construct_runtime};
 use frame_support::traits::ValidatorRegistration;
+use sp_runtime::BuildStorage;
+use std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-use std::cell::RefCell;
-
 type Amount = u64;
 type ValidatorId = u64;
 
+pub const LOW_BID: (ValidatorId, Amount) = (2, 2);
+pub const JOE_BID: (ValidatorId, Amount) = (3, 100);
+pub const MAX_BID: (ValidatorId, Amount) = (4, 101);
+pub const INVALID_BID: (ValidatorId, Amount) = (1, 0);
+
+pub const MIN_AUCTION_SIZE : u32 = 2;
+pub const MAX_AUCTION_SIZE : u32 = 150;
+
 thread_local! {
-	pub static BIDDER_SET: RefCell<Vec<(ValidatorId, Amount)>> = RefCell::new(vec![]);
+	// A set of bidders, we initialise this with the proposed genesis bidders
+	pub static BIDDER_SET: RefCell<Vec<(ValidatorId, Amount)>> = RefCell::new(vec![
+		INVALID_BID, LOW_BID, JOE_BID, MAX_BID
+	]);
 	pub static CONFIRM: RefCell<bool> = RefCell::new(false);
 }
 
@@ -34,7 +45,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>},
+		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
 	}
 );
 
@@ -136,9 +147,18 @@ impl AuctionConfirmation for Test {
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	frame_system::GenesisConfig::default().assimilate_storage::<Test>(&mut t).unwrap();
-	let mut ext = sp_io::TestExternalities::new(t);
-	ext.execute_with(|| System::set_block_number(1));
+	let config = GenesisConfig {
+		frame_system: Default::default(),
+		pallet_cf_auction: Some(AuctionPalletConfig {
+			auction_size_range: (MIN_AUCTION_SIZE, MAX_AUCTION_SIZE),
+		}),
+	};
+
+	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
+
+	ext.execute_with(|| {
+		System::set_block_number(1);
+	});
+
 	ext
 }
