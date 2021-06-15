@@ -123,7 +123,7 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 				get_account_id_from_seed::<sr25519::Public>("Eve//stash"),
 				get_account_id_from_seed::<sr25519::Public>("Ferdie//stash"),
 			],
-			true,
+			false,
 		),
 		// Bootnodes
 		vec![],
@@ -201,7 +201,7 @@ pub fn chainflip_local_testnet_config() -> Result<ChainSpec, String> {
 				// Happy
 				hex_literal::hex!["7e6eb0b15c1767360fdad63d6ff78a97374355b00b4d3511a522b1a8688a661d"].into(),
 			],
-			true,
+			false,
 		),
 		// Bootnodes
 		vec![],
@@ -223,7 +223,7 @@ fn testnet_genesis(
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>,
 	root_key: AccountId,
 	endowed_accounts: Vec<AccountId>,
-	_enable_println: bool,
+	dev: bool,
 ) -> GenesisConfig {
 	GenesisConfig {
 		frame_system: Some(SystemConfig {
@@ -248,7 +248,7 @@ fn testnet_genesis(
 				.collect::<Vec<(AccountId, FlipBalance)>>()
 		}),
 		pallet_cf_auction: Some(AuctionConfig {
-			auction_size_range: (MIN_VALIDATORS, MAX_VALIDATORS),
+			auction_size_range: (if dev { 1 } else { MIN_VALIDATORS }, MAX_VALIDATORS),
 		}),
 		pallet_aura: Some(AuraConfig {
 			authorities: vec![],
