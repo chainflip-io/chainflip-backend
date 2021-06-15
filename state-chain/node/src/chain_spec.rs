@@ -1,6 +1,6 @@
 use sp_core::{Pair, Public, sr25519, crypto::UncheckedInto};
 use state_chain_runtime::{
-	AccountId, AuraConfig, GenesisConfig, GrandpaConfig, FlipConfig, StakingConfig,
+	AccountId, AuraConfig, GenesisConfig, GrandpaConfig, FlipConfig, StakingConfig, AuctionConfig,
 	SudoConfig, SystemConfig, WASM_BINARY, Signature, ValidatorConfig, SessionConfig, opaque::SessionKeys,
 	FlipBalance
 };
