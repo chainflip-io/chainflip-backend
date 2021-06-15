@@ -41,8 +41,8 @@ mod test {
 			// Confirm the auction
 			Test::set_awaiting_confirmation(false);
 			// and finally we complete the process, clearing the bidders
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WaitingForBids(_, _)));
-			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::WaitingForBids(_, _));
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WaitingForBids(..)));
+			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::WaitingForBids(..));
 		});
 	}
 
@@ -78,7 +78,7 @@ mod test {
 			let auction_range = (2, 100);
 			assert_ok!(AuctionPallet::set_auction_range(auction_range));
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(_)));
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WinnersSelected(_, _)));
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WinnersSelected(..)));
 			assert!(Test::awaiting_confirmation());
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(winners, min_bid)
 				if !winners.is_empty() && min_bid > 0
