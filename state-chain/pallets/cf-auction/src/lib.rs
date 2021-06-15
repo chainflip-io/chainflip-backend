@@ -212,9 +212,13 @@ pub mod pallet {
 			AuctionSizeRange::<T>::set(self.auction_size_range);
 			// Run through an auction
 			if Pallet::<T>::process()
-				.and(Pallet::<T>::process())
-				.and(Pallet::<T>::process()).is_err() {
-				panic!("Genesis auction failed");
+				.and(Pallet::<T>::process()).is_ok() {
+				T::Confirmation::set_awaiting_confirmation(false);
+				if let Err(err) = Pallet::<T>::process() {
+					panic!("Failed to confirm auction: {:?}", err);
+				}
+			} else {
+				panic!("Failed selecting winners in auction");
 			}
 		}
 	}
