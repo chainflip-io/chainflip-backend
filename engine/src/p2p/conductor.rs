@@ -7,12 +7,13 @@ use crate::{
 };
 
 use super::{P2PMessageCommand, P2PNetworkClient};
+use crate::p2p::ValidatorId;
 
 /// Intermediates P2P events between MQ and P2P interface
 pub struct P2PConductor<MQ, P2P>
 where
     MQ: IMQClient + Send,
-    P2P: P2PNetworkClient,
+    P2P: P2PNetworkClient<ValidatorId>,
 {
     mq: MQ,
     p2p: P2P,
@@ -23,7 +24,7 @@ where
 impl<MQ, P2P> P2PConductor<MQ, P2P>
 where
     MQ: IMQClient + Send,
-    P2P: P2PNetworkClient + Send,
+    P2P: P2PNetworkClient<ValidatorId> + Send,
 {
     pub async fn new(mq: MQ, idx: usize, p2p: P2P) -> Self {
         let stream = mq
@@ -46,7 +47,7 @@ where
 
         let mq_stream = mq_stream.map(Msg::Left);
 
-        let receiver = self.p2p.take_receiver().unwrap();
+        let receiver = self.p2p.take_receiver().await.unwrap();
 
         let p2p_stream = UnboundedReceiverStream::new(receiver).map(Msg::Right);
 

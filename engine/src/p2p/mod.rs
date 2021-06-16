@@ -3,6 +3,7 @@
 pub mod mock;
 
 mod conductor;
+mod rpc;
 
 pub use conductor::P2PConductor;
 
@@ -10,19 +11,33 @@ use serde::{Deserialize, Serialize};
 
 use async_trait::async_trait;
 use tokio::sync::mpsc::UnboundedReceiver;
+use crate::p2p::rpc::Base58;
+
+pub enum P2PNetworkClientError {
+    Format,
+    Rpc
+}
+
+type StatusCode = u64;
 
 #[async_trait]
-pub trait P2PNetworkClient {
+pub trait P2PNetworkClient<B: Base58> {
     /// Broadcast to all validators on the network
-    fn broadcast(&self, data: &[u8]);
+    async fn broadcast(&self, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError>;
 
     /// Send to a specific `validator` only
-    fn send(&self, to: &ValidatorId, data: &[u8]);
+    async fn send(&self, to: &B, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError>;
 
-    fn take_receiver(&mut self) -> Option<UnboundedReceiver<P2PMessage>>;
+    async fn take_receiver(&mut self) -> Option<UnboundedReceiver<P2PMessage>>;
 }
 
 pub type ValidatorId = usize;
+
+impl Base58 for ValidatorId {
+    fn to_base58(&self) -> String {
+        "".to_string()
+    }
+}
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct P2PMessage {
@@ -65,11 +80,13 @@ mod tests {
         let mut clients: Vec<_> = (0..3).map(|i| network.new_client(i)).collect();
 
         // (0) sends to (1); (1) should receive one, (2) receives none
+
         clients[0].send(&1, &data);
 
         drop(network);
 
-        let receiver_1 = clients[1].take_receiver().unwrap();
+        let receiver_1 =
+            P2PNetworkClient::<ValidatorId>::take_receiver(&mut clients[1]).await.unwrap();
 
         assert_eq!(
             receive_with_timeout(receiver_1).await,
@@ -79,7 +96,8 @@ mod tests {
             })
         );
 
-        let receiver_2 = clients[2].take_receiver().unwrap();
+        let receiver_2 =
+            P2PNetworkClient::<ValidatorId>::take_receiver(&mut clients[2]).await.unwrap();
 
         assert_eq!(receive_with_timeout(receiver_2).await, None);
     }
@@ -92,8 +110,11 @@ mod tests {
         let mut clients: Vec<_> = (0..3).map(|i| network.new_client(i)).collect();
 
         // (1) broadcasts; (0) and (2) should receive one message
-        clients[1].broadcast(&data);
-        let mut receiver_0 = clients[0].take_receiver().unwrap();
+        P2PNetworkClient::<ValidatorId>::broadcast(&clients[1], &data);
+
+        let mut receiver_0 =
+            P2PNetworkClient::<ValidatorId>::take_receiver(&mut clients[0]).await.unwrap();
+
         assert_eq!(
             receiver_0.recv().await,
             Some(P2PMessage {
@@ -101,7 +122,10 @@ mod tests {
                 data: data.clone()
             })
         );
-        let mut receiver_2 = clients[2].take_receiver().unwrap();
+
+        let mut receiver_2 =
+            P2PNetworkClient::<ValidatorId>::take_receiver(&mut clients[2]).await.unwrap();
+
         assert_eq!(
             receiver_2.recv().await,
             Some(P2PMessage {

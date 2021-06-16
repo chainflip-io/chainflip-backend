@@ -24,7 +24,7 @@ async-trait = "0.1.49"
 config = "0.11.0"
 crossbeam-channel = "0.5.1"
 env_logger = {version = "0.8.3"}
-futures = "0.3.14"
+futures = {version = "0.3.14", features = ["compat"]}
 futures-core = "0.3.14"
 futures-util = "0.3.14"
 hex = "0.4.3"
@@ -40,6 +40,8 @@ tokio = {version = "1.5.0", features = ["full"]}
 tokio-compat-02 = "0.2"
 tokio-stream = "0.1.5"
 web3 = {version = "0.15"}
+jsonrpc-core = {version = "17.1.0"}
+jsonrpc-core-client = {version = "17.1.0", default-features = false, features = ["http"]}
 
 # substrate deps
 sp-core = "3.0.0"
@@ -54,6 +56,7 @@ pallet-cf-validator = {path = "../state-chain/pallets/cf-validator"}
 pallet-cf-auction = {path = "../state-chain/pallets/cf-auction"}
 cf-traits = {path = "../state-chain/traits"}
 state-chain-runtime = {path = "../state-chain/runtime"}
+cf-p2p-rpc = {path = "../state-chain/client/cf-p2p/rpc"}
 
 [dependencies.curv]
 git = "https://github.com/KZen-networks/curv"

@@ -7,6 +7,8 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use super::{P2PMessage, P2PNetworkClient, ValidatorId};
 
 use async_trait::async_trait;
+use crate::p2p::rpc::Base58;
+use crate::p2p::{StatusCode, P2PNetworkClientError};
 
 pub struct P2PClientMock {
     id: ValidatorId,
@@ -29,16 +31,18 @@ impl P2PClientMock {
 }
 
 #[async_trait]
-impl P2PNetworkClient for P2PClientMock {
-    fn broadcast(&self, data: &[u8]) {
+impl<B: Base58 + Send + Sync> P2PNetworkClient<B> for P2PClientMock {
+    async fn broadcast(&self, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError> {
         self.network_inner.lock().broadcast(&self.id, data);
+        Ok(200)
     }
 
-    fn send(&self, to: &ValidatorId, data: &[u8]) {
-        self.network_inner.lock().send(&self.id, to, data);
+    async fn send(&self, to: &B, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError> {
+        // self.network_inner.lock().send(&self.id, to, data);
+        Ok(200)
     }
 
-    fn take_receiver(&mut self) -> Option<UnboundedReceiver<P2PMessage>> {
+    async fn take_receiver(&mut self) -> Option<UnboundedReceiver<P2PMessage>> {
         self.receiver.take()
     }
 }
