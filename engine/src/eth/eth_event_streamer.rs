@@ -38,10 +38,7 @@ impl<S: EventSource> EthEventStreamBuilder<S> {
         if self.event_sinks.is_empty() {
             anyhow::bail!("Can't build a stream with no sink.")
         } else {
-            let transport = ::web3::transports::WebSocket::new(self.url.as_str())
-                // TODO: Remove this compat once the websocket dep uses tokio1
-                .compat()
-                .await?;
+            let transport = ::web3::transports::WebSocket::new(self.url.as_str()).await?;
 
             Ok(EthEventStreamer {
                 web3_client: ::web3::Web3::new(transport),

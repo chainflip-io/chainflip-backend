@@ -33,10 +33,7 @@ pub struct EthBroadcaster<M: IMQClient + Send + Sync> {
 impl<M: IMQClient + Send + Sync> EthBroadcaster<M> {
     async fn new(settings: settings::Settings, mq_client: M) -> Result<Self> {
         let eth_node_ws_url = format!("ws://{}:{}", settings.eth.hostname, settings.eth.port);
-        let transport = ::web3::transports::WebSocket::new(eth_node_ws_url.as_str())
-            // TODO: Remove this compat once the websocket dep uses tokio1
-            .compat()
-            .await?;
+        let transport = ::web3::transports::WebSocket::new(eth_node_ws_url.as_str()).await?;
         let web3_client = ::web3::Web3::new(transport);
 
         Ok(EthBroadcaster {
