@@ -64,8 +64,9 @@ impl<M: IMQClient + Send + Sync> EthBroadcaster<M> {
             }
         }
 
-        log::info!("ETH broadcaster has stopped");
-        Ok(())
+        let err_msg = "ETH broadcaster has stopped!";
+        log::error!("{}", err_msg);
+        Err(anyhow::Error::msg(err_msg))
     }
 }
 
