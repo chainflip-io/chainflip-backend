@@ -1742,7 +1742,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "53d4e679d6864bc26210feb5cf044e245741cd9d7701b35c00440a6e84d61399"
 dependencies = [
  "anyhow",
- "ethereum-types",
+ "ethereum-types 0.10.0",
  "hex 0.4.3",
  "serde 1.0.125",
  "serde_json",
@@ -1765,16 +1765,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "ethbloom"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "779864b9c7f7ead1f092972c3257496c6a84b46dba2ce131dd8a282cb2cc5972"
+dependencies = [
+ "crunchy",
+ "fixed-hash",
+ "impl-rlp",
+ "impl-serde",
+ "tiny-keccak",
+]
+
+[[package]]
 name = "ethereum-types"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05dc5f0df4915fa6dff7f975a8366ecfaaa8959c74235469495153e7bb1b280e"
 dependencies = [
- "ethbloom",
+ "ethbloom 0.10.0",
  "fixed-hash",
  "impl-rlp",
  "impl-serde",
  "primitive-types 0.8.0",
+ "uint",
+]
+
+[[package]]
+name = "ethereum-types"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f64b5df66a228d85e4b17e5d6c6aa43b0310898ffe8a85988c4c032357aaabfd"
+dependencies = [
+ "ethbloom 0.11.0",
+ "fixed-hash",
+ "impl-rlp",
+ "impl-serde",
+ "primitive-types 0.9.0",
  "uint",
 ]
 
@@ -4738,11 +4765,13 @@ name = "pallet-cf-staking"
 version = "0.1.0"
 dependencies = [
  "cf-traits",
+ "ethereum-types 0.11.0",
  "frame-support",
  "frame-system",
  "pallet-cf-flip",
  "pallet-cf-validator",
  "parity-scale-codec 2.1.1",
+ "rlp",
  "serde 1.0.125",
  "sp-core",
  "sp-io",
@@ -5451,6 +5480,7 @@ checksum = "2415937401cb030a2a0a4d922483f945fa068f52a7dbb22ce0fe5f2b6f6adace"
 dependencies = [
  "fixed-hash",
  "impl-codec 0.5.0",
+ "impl-rlp",
  "impl-serde",
  "uint",
 ]
@@ -9878,7 +9908,7 @@ dependencies = [
  "base64 0.13.0",
  "derive_more",
  "ethabi",
- "ethereum-types",
+ "ethereum-types 0.10.0",
  "futures 0.3.14",
  "futures-timer 3.0.2",
  "hex 0.4.3",

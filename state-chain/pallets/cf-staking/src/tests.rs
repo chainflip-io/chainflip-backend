@@ -1,4 +1,4 @@
-use crate::{Config, Error, Pallet, PendingClaims, mock::*, pallet};
+use crate::{ClaimDetails, ClaimDetailsFor, Config, Error, EthereumAddress, Pallet, PendingClaims, eth_encoding::ClaimRequestPayload, mock::*, pallet};
 use std::time::Duration;
 use frame_support::{assert_noop, assert_ok, error::BadOrigin, traits::UnixTime};
 use sp_core::ecdsa::Signature;
@@ -8,7 +8,7 @@ use pallet_cf_flip::ImbalanceSource;
 type FlipError = pallet_cf_flip::Error<Test>;
 type FlipEvent = pallet_cf_flip::Event<Test>;
 
-const ETH_DUMMY_ADDR: <Test as Config>::EthereumAddress = [42u8; 20];
+const ETH_DUMMY_ADDR: EthereumAddress = [42u8; 20];
 const TX_HASH: pallet::EthTransactionHash = [211; 32];
 
 fn time_after<T: Config>(duration: Duration) -> Duration {
@@ -80,15 +80,9 @@ fn staked_amount_is_added_and_subtracted() {
 		assert_eq!(PendingClaims::<Test>::get(BOB).unwrap().amount, CLAIM_B);
 
 		assert_event_stack!(
-			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(BOB, _, nonce, amount)) => {
-				assert_eq!(CLAIM_B, amount);
-				assert_eq!(1, nonce);
-			},
+			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(BOB, _payload)),
 			_, // claim debited from BOB
-			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _, nonce, amount)) => {
-				assert_eq!(CLAIM_A, amount);
-				assert_eq!(1, nonce);
-			},
+			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _payload)),
 			_, // claim debited from ALICE
 			Event::pallet_cf_staking(crate::Event::Staked(BOB, staked, total)) => {
 				assert_eq!(staked, STAKE_B);
@@ -211,9 +205,7 @@ fn staked_and_claimed_events_must_match() {
 				assert_eq!(claimed_amount, STAKE);
 			},
 			Event::frame_system(frame_system::Event::KilledAccount(ALICE)),
-			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _, nonce, STAKE)) => {
-				assert_eq!(nonce, 1);
-			},
+			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _payload)),
 			_, // Claim debited from account
 			Event::pallet_cf_staking(crate::Event::Staked(ALICE, added, total)) => { 
 				assert_eq!(added, STAKE);
@@ -252,15 +244,10 @@ fn signature_is_inserted() {
 
 		// Check storage for the signature, should not be there.
 		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().signature, None);
-
-		// Get the nonce
-		let nonce = if let Event::pallet_cf_staking(crate::Event::ClaimSigRequested( _, _, nonce, _ )) =
-			frame_system::Pallet::<Test>::events().last().unwrap().event
-		{
-			nonce
-		} else {
-			panic!("Expected ClaimSigRequested event with nonce.")
-		};
+		
+		// Nonce should be 1.
+		let nonce = PendingClaims::<Test>::get(ALICE).unwrap().nonce;
+		assert_eq!(nonce, 1);
 		
 		// Insert a signature.
 		let expiry = time_after::<Test>(Duration::from_secs(10));
@@ -278,9 +265,7 @@ fn signature_is_inserted() {
 
 		assert_event_stack!(
 			Event::pallet_cf_staking(crate::Event::ClaimSignatureIssued(ALICE, ..)),
-			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _, n, STAKE)) => {
-				assert_eq!(n, nonce);
-			},
+			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _payload)),
 			_,
 			Event::pallet_cf_staking(crate::Event::Staked(ALICE, added, total)) => { 
 				assert_eq!(added, STAKE);
@@ -536,12 +521,25 @@ fn test_claim_all() {
 
 		// We should have a claim for the full staked amount minus the bond.
 		assert_event_stack!(
-			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _, _, amount)) => {
-				assert_eq!(STAKE - BOND, amount);
-			},
+			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _)),
 			_, // claim debited from ALICE
 			Event::pallet_cf_staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
 			_ // stake credited to ALICE
 		);
 	});
+}
+
+#[test]
+fn test_claim_payload() {
+	let claim_details: ClaimDetailsFor<Test> = ClaimDetails {
+		amount: 1234567890u128,
+		nonce: 123,
+		address: ALICE,
+		expiry: Duration::from_secs(10),
+		signature: None,
+	};
+	let runtime_payload = ClaimRequestPayload::<Test>::from((&ALICE, &claim_details));
+
+	// Compare with web3 impl generated from ABI json.
+	let web3_payload = todo!();
 }

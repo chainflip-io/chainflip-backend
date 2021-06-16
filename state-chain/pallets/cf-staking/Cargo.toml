@@ -18,6 +18,8 @@ pallet-cf-validator = { path = '../cf-validator', default-features = false }
 
 # Non-substrate external deps
 codec = {default-features = false, features = ['derive'], package = 'parity-scale-codec', version = '2.0.0'}
+rlp = { default-features = false, version = '0.5' }
+ethereum-types = { default-features = false, features = ['rlp', 'serialize'], version = "0.11"}
 
 # Substrate deps
 frame-support = { default-features = false, version = '3.0.0' }
