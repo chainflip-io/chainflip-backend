@@ -96,7 +96,10 @@ async fn subscribe_to_events<M: 'static + IMQClient>(
             trace!("Not routing event {:?} to message queue", raw_event);
         };
     }
-    Ok(())
+
+    let err_msg = "State Chain Observer stopped subscribing to events!";
+    log::error!("{}", err_msg);
+    Err(anyhow::Error::msg(err_msg))
 }
 
 #[cfg(test)]
