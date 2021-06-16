@@ -56,12 +56,15 @@ impl SCBroadcaster {
 mod tests {
 
     use std::marker::PhantomData;
+    use std::str::FromStr;
 
     use frame_support::sp_runtime::AccountId32;
-    use sp_runtime::MultiSigner;
-    use state_chain_runtime::Origin;
-    use substrate_subxt::extrinsic::{self, SignedPayload};
-    use substrate_subxt::{DefaultNodeRuntime, EventSubscription};
+    use sp_core::{sr25519, Pair, Public, H256};
+    use sp_runtime::traits::{IdentifyAccount, Verify};
+    use sp_runtime::{MultiSignature, MultiSigner};
+    use state_chain_runtime::{AccountId, Origin};
+    use substrate_subxt::extrinsic::{self, CheckGenesis, SignedPayload};
+    use substrate_subxt::{DefaultNodeRuntime, EventSubscription, SignedExtension};
     // use frame_system::pallet_prelude::OriginFor;
     // use state_chain_runtime::OriginFor;
 
@@ -72,27 +75,9 @@ mod tests {
     use crate::settings::StateChain;
 
     use substrate_subxt::balances::{TransferCall, TransferCallExt, TransferEvent};
+    use substrate_subxt::sudo::SudoCallExt;
     use substrate_subxt::system::SetCodeCallExt;
     use substrate_subxt::Signer;
-
-    // use substrate_subxt::extrinsic;
-
-    // #[tokio::test]
-    // async fn create_raw_payload_test() {
-
-    //     let alice = AccountKeyring::Alice.to_account_id();
-    //     let account_nonce = self.account(alice).await.unwrap().nonce;
-    //     let version = self.runtime_version.spec_version;
-    //     let genesis_hash = self.genesis_hash;
-    //     let call = self
-    //         .metadata()
-    //         .module_with_calls(&call.module)
-    //         .and_then(|module| module.call(&call.function, call.args))?;
-    //     let extra: extrinsic::DefaultExtra<T> =
-    //         extrinsic::DefaultExtra::new(version, account_nonce, genesis_hash);
-    //     let raw_payload = SignedPayload::new(call, extra.extra())?;
-    //     Ok(raw_payload.encode())
-    // }
 
     #[tokio::test]
     async fn create_raw_payload_test() {
@@ -102,6 +87,23 @@ mod tests {
         // println!("Here's the metadata: {:#?}", metadata);
     }
 
+    #[tokio::test]
+    async fn check_genesis() {
+        let settings = settings::test_utils::new_test_settings().unwrap();
+        let subxt_client = create_subxt_client(settings.state_chain).await.unwrap();
+
+        let genesis_from_client = subxt_client.genesis();
+        println!("Genesis from client: {:#?}", genesis_from_client);
+        let gen_checker = substrate_subxt::extrinsic::CheckGenesis::<StateChainRuntime>(
+            PhantomData,
+            H256::from_str("0x91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c4")
+                .unwrap(),
+        );
+
+        let result = gen_checker.additional_signed();
+
+        println!("Result is: {:#?}", result);
+    }
     // #[tokio::test]
     // async fn broadcast_raw_data() {
     //     let settings = settings::test_utils::new_test_settings().unwrap();
@@ -134,28 +136,21 @@ mod tests {
     //     println!("signed data = {:#?}", &signed_data);
     // }
 
-    #[tokio::test]
-    async fn test_transfer_example() {
-        let signer = PairSigner::new(AccountKeyring::Alice.pair());
-        let dest = AccountKeyring::Alice.to_account_id().into();
+    /// Generate a crypto pair from seed.
+    pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
+        TPublic::Pair::from_string(&format!("//{}", seed), None)
+            .expect("static values are valid; qed")
+            .public()
+    }
 
-        let client = ClientBuilder::<StateChainRuntime>::new()
-            .skip_type_sizes_check()
-            .build()
-            .await
-            .unwrap();
-        let result = client.transfer(&signer, &dest, 10_000).await;
+    type AccountPublic = <MultiSignature as Verify>::Signer;
 
-        println!("The result is: {:#?}", result);
-
-        // println!("The result is: {:#?}", result);
-
-        // if let Some(event) = result.transfer()? {
-        //     println!("Balance transfer success: value: {:?}", event.amount);
-        // } else {
-        //     println!("Failed to find Balances::Transfer Event");
-        // }
-        // Ok(())
+    /// Generate an account ID from seed.
+    pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId
+    where
+        AccountPublic: From<<TPublic::Pair as Pair>::Public>,
+    {
+        AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
     }
 
     #[tokio::test]
@@ -167,15 +162,17 @@ mod tests {
 
         let alice = AccountKeyring::Alice.to_account_id();
 
+        println!("account id alice: {}", alice);
+
+        let alice_from_seed = get_account_id_from_seed::<sr25519::Public>("Alice");
+
+        println!("Alice from seed: {:#?}", alice_from_seed);
+
         // let bob_multi = sp_runtime::MultiAddress::Address32(bob.into());
 
         let eth_address: [u8; 20] = [
             00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01,
         ];
-
-        // let result = subxt_client.transfer(&signer, &bob_multi, 12).await;
-
-        // println!("result: {:#?}", result);
 
         let result = subxt_client
             .set_code(&signer, &[0u8, 0u8, 0u8, 0u8])
@@ -205,3 +202,5 @@ mod tests {
 
 // Error I was getting when submitting a staked event from the frontend:
 // Unable to decode storage system.account: entry 0:: createType(AccountInfo):: {"nonce":"Index","consumers":"RefCount","providers":"RefCount","sufficients":"RefCount","data":"AccountData"}:: Decoded input doesn't match input, received 0x0000000001000000010000000000000000000010000000000000000000000000…0000000000000000000000000000000000000000000000000000000000000000 (76 bytes), created 0x0000000001000000010000000000000000000010000000000000000000000000…0000000000000000000000000000000000000000000000000000000000000000 (80 bytes)
+
+// Unable to decode storage system.account: entry 0:: createType(AccountInfo):: {"nonce":"Index","consumers":"RefCount","providers":"RefCount","data":"AccountData"}:: Decoded input doesn't match input, received 0x000000000100000001000000 (12 bytes), created 0x0000000001000000010000000000000000000000000000000000000000000000…0000000000000000000000000000000000000000000000000000000000000000 (76 bytes)

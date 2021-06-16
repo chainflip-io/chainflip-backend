@@ -67,6 +67,7 @@ impl System for StateChainRuntime {
     type AccountData = AccountData<<Self as Balances>::Balance>;
 }
 
+// TODO: Remove this, we no longer have a balances pallet
 impl Balances for StateChainRuntime {
     type Balance = u128;
 }
