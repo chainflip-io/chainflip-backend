@@ -61,6 +61,7 @@ pub enum Subject {
     MultisigEvent,
 }
 
+/// Convert an object to a to a subject string (currently Nats compatible)
 pub trait SubjectName {
     fn to_subject_name(&self) -> String;
 }
