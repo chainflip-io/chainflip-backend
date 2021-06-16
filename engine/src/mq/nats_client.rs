@@ -1,5 +1,5 @@
-use super::IMQClientFactory;
 use super::{IMQClient, Subject};
+use super::{IMQClientFactory, SubjectName};
 use anyhow::Context;
 use anyhow::Result;
 use async_nats;
@@ -60,7 +60,7 @@ impl IMQClient for NatsMQClient {
     async fn publish<M: Serialize + Sync>(&self, subject: Subject, message: &'_ M) -> Result<()> {
         let bytes = serde_json::to_string(message)?;
         let bytes = bytes.as_bytes();
-        self.conn.publish(&subject.to_string(), bytes).await?;
+        self.conn.publish(&subject.to_subject_name(), bytes).await?;
         Ok(())
     }
 
@@ -68,7 +68,7 @@ impl IMQClient for NatsMQClient {
         &self,
         subject: Subject,
     ) -> Result<Box<dyn Stream<Item = Result<M>>>> {
-        let sub = self.conn.subscribe(&subject.to_string()).await?;
+        let sub = self.conn.subscribe(&subject.to_subject_name()).await?;
 
         let subscription = Subscription { inner: sub };
         let stream = subscription.into_stream().map(|bytes| {
