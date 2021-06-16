@@ -46,7 +46,7 @@ codec = {package = "parity-scale-codec", version = "2.1", default-features = fal
 frame-system = "3.0.0"
 sp-core = "3.0.0"
 sp-keyring = "3.0.0"
-substrate-subxt = {version = "0.15 "}
+substrate-subxt = {version = "0.15"}
 
 # Local deps
 cf-traits = {path = "../state-chain/traits"}
