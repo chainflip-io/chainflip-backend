@@ -5,7 +5,6 @@ use crate::{
 };
 
 use anyhow::Result;
-use tokio_compat_02::FutureExt;
 
 use super::Broadcast;
 

@@ -2,7 +2,6 @@ use super::{EventSink, EventSource, Result};
 use async_std::task;
 use futures::{future::join_all, stream, StreamExt};
 use std::time::Duration;
-use tokio_compat_02::FutureExt;
 use web3::types::{BlockNumber, SyncState};
 
 /// Steams events from a particular ETH Source, such as a smart contract
