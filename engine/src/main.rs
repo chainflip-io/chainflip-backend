@@ -5,22 +5,31 @@ use chainflip_engine::{
     settings::Settings,
     signing::{self, crypto::Parameters},
 };
-use std::{io::Write, net::TcpListener};
+// use std::{io::Write, net::TcpListener};
+
+use async_std::net::TcpListener;
+use futures::{AsyncWriteExt, StreamExt};
 
 async fn health_check(port: u16) {
     let bind_address = format!("127.0.0.1:{}", port);
     let listener = TcpListener::bind(bind_address)
+        .await
         .expect(format!("Could not bind TCP listener to port {}", port).as_str());
 
-    // just return a 200 response on a request
-    for stream in listener.incoming() {
-        let mut stream = stream.expect("Could not open health TCP stream");
+    let mut incoming = listener.incoming();
+
+    while let Some(stream) = incoming.next().await {
+        let mut stream = stream.expect("Could not open CFE health check TCP stream");
         let http_200_response = "HTTP/1.1 200 OK\r\n\r\n";
         stream
             .write(http_200_response.as_bytes())
-            .expect("Error writing to health check stream");
-        log::trace!("Responding to health check: CFE is healthy :heart: ");
-        stream.flush().expect("Error flushing health check stream");
+            .await
+            .expect("Could not write to health check stream");
+        log::trace!("Responded to health check: CFE is healthy :heart: ");
+        stream
+            .flush()
+            .await
+            .expect("Could not flush health check TCP stream");
     }
 }
 
