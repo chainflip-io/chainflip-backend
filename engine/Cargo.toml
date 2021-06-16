@@ -23,14 +23,14 @@ async-stream = "0.3.0"
 async-trait = "0.1.49"
 config = "0.11.0"
 crossbeam-channel = "0.5.1"
-env_logger = {version = "0.8.3"}
+env_logger = "0.8.3"
 futures = "0.3.14"
 futures-core = "0.3.14"
 futures-util = "0.3.14"
 hex = "0.4.3"
 itertools = "0.10"
 lazy_static = "1.4"
-log = {version = "0.4.14"}
+log = "0.4.14"
 parking_lot = "0.11"
 rand = "0.7.3"
 serde = {version = "1.0", features = ["derive"]}
@@ -39,14 +39,14 @@ thiserror = "1.0.24"
 tokio = {version = "1.5.0", features = ["full"]}
 tokio-compat-02 = "0.2"
 tokio-stream = "0.1.5"
-web3 = {version = "0.16.0"}
+web3 = "0.16.0"
 
 # substrate deps
 codec = {package = "parity-scale-codec", version = "2.1", default-features = false, features = ["derive", "full"]}
 frame-system = "3.0.0"
 sp-core = "3.0.0"
 sp-keyring = "3.0.0"
-substrate-subxt = {version = "0.15"}
+substrate-subxt = "0.15"
 
 # Local deps
 cf-traits = {path = "../state-chain/traits"}
