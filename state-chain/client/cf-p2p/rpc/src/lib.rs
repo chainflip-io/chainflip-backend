@@ -37,7 +37,7 @@ pub trait RpcApi {
     fn subscribe_notifications(
         &self,
         metadata: Self::Metadata,
-        subscriber: Subscriber<RpcEvent>
+        subscriber: Subscriber<P2pEvent>
     );
 
     /// Unsubscribe from receiving notifications
@@ -75,7 +75,7 @@ impl<T> P2PStream<T> {
 }
 
 /// An event stream over type `RpcEvent`
-type EventStream = Arc<P2PStream<RpcEvent>>;
+type EventStream = Arc<P2PStream<P2pEvent>>;
 
 /// Our core bridge between p2p events and our RPC subscribers
 pub struct RpcCore {
@@ -86,7 +86,7 @@ pub struct RpcCore {
 type RpcPeerId = String;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum RpcEvent {
+pub enum P2pEvent {
     Received(RpcPeerId, Message),
     PeerConnected(RpcPeerId),
     PeerDisconnected(RpcPeerId),
@@ -104,7 +104,7 @@ impl RpcCore {
     }
 
     /// Notify to our subscribers
-    fn notify(&self, event: RpcEvent) {
+    fn notify(&self, event: P2pEvent) {
         let subscribers = self.stream.subscribers.lock().unwrap();
         for subscriber in subscribers.iter() {
             if let Err(e) = subscriber.unbounded_send(event.clone()) {
@@ -117,15 +117,15 @@ impl RpcCore {
 /// Observe p2p events and notify subscribers
 impl NetworkObserver for RpcCore {
     fn new_peer(&self, peer_id: &PeerId) {
-        self.notify(RpcEvent::PeerConnected(peer_id.to_base58()));
+        self.notify(P2pEvent::PeerConnected(peer_id.to_base58()));
     }
 
     fn disconnected(&self, peer_id: &PeerId) {
-        self.notify(RpcEvent::PeerDisconnected(peer_id.to_base58()));
+        self.notify(P2pEvent::PeerDisconnected(peer_id.to_base58()));
     }
 
     fn received(&self, peer_id: &PeerId, messages: Message) {
-        self.notify(RpcEvent::Received(peer_id.to_base58(), messages.clone()));
+        self.notify(P2pEvent::Received(peer_id.to_base58(), messages.clone()));
     }
 }
 
@@ -173,7 +173,7 @@ impl<C: Messaging + Sync + Send + 'static> RpcApi
     fn subscribe_notifications(
         &self,
         _metadata: Self::Metadata,
-        subscriber: Subscriber<RpcEvent>
+        subscriber: Subscriber<P2pEvent>
     ) {
         let stream = self.core.stream.subscribe()
             .map(|x| Ok::<_,()>(x))
@@ -258,7 +258,7 @@ mod tests {
             let subscribers = self.stream.subscribers.lock().unwrap();
             for subscriber in subscribers.iter() {
                 if let Err(e) = subscriber.unbounded_send(
-                    RpcEvent::Received(peer_id.to_base58(), data.clone())) {
+                    P2pEvent::Received(peer_id.to_base58(), data.clone())) {
                     debug!("Failed to send message {:?}", e);
                 }
             }
@@ -269,7 +269,7 @@ mod tests {
             let subscribers = self.stream.subscribers.lock().unwrap();
             for subscriber in subscribers.iter() {
                 if let Err(e) = subscriber.unbounded_send(
-                    RpcEvent::Received("".to_string(), data.clone())) {
+                    P2pEvent::Received("".to_string(), data.clone())) {
                     debug!("Failed to send message {:?}", e);
                 }
             }
@@ -291,7 +291,7 @@ mod tests {
             Node { peer_id: PeerId::random(), io, messenger, stream: stream.clone() }
         }
 
-        fn notify(&self, event: RpcEvent) {
+        fn notify(&self, event: P2pEvent) {
             let subscribers = self.stream.subscribers.lock().unwrap();
             for subscriber in subscribers.iter() {
                 if let Err(e) = subscriber.unbounded_send(event.clone()) {
@@ -409,12 +409,12 @@ mod tests {
         };
 
         let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
-        let recv_message: RpcEvent = serde_json::from_value(json_map["result"].take()).unwrap();
+        let recv_message: P2pEvent = serde_json::from_value(json_map["result"].take()).unwrap();
         assert_eq!(recv.method, "cf_p2p_notifications");
         assert_eq!(recv_sub_id, sub_id);
 
         match recv_message {
-            RpcEvent::Received(_, recv_message) => {
+            P2pEvent::Received(_, recv_message) => {
                 assert_eq!(recv_message, message);
             },
             _ => panic!()
@@ -466,12 +466,12 @@ mod tests {
         };
 
         let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
-        let recv_message: RpcEvent = serde_json::from_value(json_map["result"].take()).unwrap();
+        let recv_message: P2pEvent = serde_json::from_value(json_map["result"].take()).unwrap();
 
         assert_eq!(recv.method, "cf_p2p_notifications");
         assert_eq!(recv_sub_id, sub_id);
         match recv_message {
-            RpcEvent::Received(_, recv_message) => {
+            P2pEvent::Received(_, recv_message) => {
                 assert_eq!(recv_message, message);
             },
             _ => panic!()
@@ -485,12 +485,12 @@ mod tests {
         };
 
         let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
-        let recv_message: RpcEvent = serde_json::from_value(json_map["result"].take()).unwrap();
+        let recv_message: P2pEvent = serde_json::from_value(json_map["result"].take()).unwrap();
 
         assert_eq!(recv.method, "cf_p2p_notifications");
         assert_eq!(recv_sub_id, sub_id_1);
         match recv_message {
-            RpcEvent::Received(_, recv_message) => {
+            P2pEvent::Received(_, recv_message) => {
                 assert_eq!(recv_message, message);
             },
             _ => panic!()
@@ -515,8 +515,8 @@ mod tests {
         let mut resp: serde_json::Value = serde_json::from_str(&resp.unwrap()).unwrap();
         let sub_id: String = serde_json::from_value(resp["result"].take()).unwrap();
 
-        node.notify(RpcEvent::PeerConnected(peer_id.to_base58()));
-        node.notify(RpcEvent::PeerDisconnected(peer_id.to_base58()));
+        node.notify(P2pEvent::PeerConnected(peer_id.to_base58()));
+        node.notify(P2pEvent::PeerDisconnected(peer_id.to_base58()));
 
         // We should get a notification for the two events
         let recv = receiver.take(2).wait().flatten().collect::<Vec<_>>();
@@ -530,7 +530,7 @@ mod tests {
             };
 
             let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
-            let recv_message: RpcEvent = serde_json::from_value(json_map["result"].take()).unwrap();
+            let recv_message: P2pEvent = serde_json::from_value(json_map["result"].take()).unwrap();
             assert_eq!(recv.method, "cf_p2p_notifications");
             assert_eq!(recv_sub_id, sub_id);
             events.push(recv_message);
@@ -539,13 +539,13 @@ mod tests {
         assert_eq!(events.len(), 2);
 
         match events[0].clone() {
-            RpcEvent::PeerConnected(recv_peer_id) => {
+            P2pEvent::PeerConnected(recv_peer_id) => {
                 assert_eq!(recv_peer_id, peer_id.to_base58());
             },
             _ => panic!()
         }
         match events[1].clone() {
-            RpcEvent::PeerDisconnected(recv_peer_id) => {
+            P2pEvent::PeerDisconnected(recv_peer_id) => {
                 assert_eq!(recv_peer_id, peer_id.to_base58());
             },
             _ => panic!()
