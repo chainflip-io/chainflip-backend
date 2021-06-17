@@ -9,16 +9,28 @@ use chainflip_engine::{
 
 use async_std::net::TcpListener;
 use futures::{AsyncReadExt, AsyncWriteExt, StreamExt};
+use tokio::{select, sync::oneshot::Sender};
 
-async fn health_check(port: u16) {
+async fn health_check(port: u16) -> Sender<()> {
     let bind_address = format!("127.0.0.1:{}", port);
     let listener = TcpListener::bind(bind_address)
         .await
         .expect(format!("Could not bind TCP listener to port {}", port).as_str());
 
+    let (tx, mut rx) = tokio::sync::oneshot::channel::<()>();
+
     tokio::spawn(async move {
         let mut incoming = listener.incoming();
-        while let Some(stream) = incoming.next().await {
+        loop {
+            let stream = select! {
+                Ok(()) = &mut rx => {
+                    println!("Shutting down health check gracefully");
+                    log::info!("Shutting down health check gracefully");
+                    break;
+                },
+                Some(stream) = incoming.next() => stream,
+            };
+
             let mut stream = stream.expect("Could not open CFE health check TCP stream");
             let mut buffer = [0; 1024];
             // read the stream into the buffer
@@ -52,6 +64,8 @@ async fn health_check(port: u16) {
             }
         }
     });
+
+    return tx;
 }
 
 #[tokio::main]
@@ -62,7 +76,8 @@ async fn main() {
 
     let settings = Settings::new().expect("Failed to initialise settings");
 
-    health_check(settings.engine.health_check_port).await;
+    // can use this sender to shut down the health check gracefully
+    let _sender = health_check(settings.engine.health_check_port).await;
 
     sc_observer::sc_observer::start(settings.clone()).await;
 
@@ -88,11 +103,17 @@ async fn main() {
 #[cfg(test)]
 mod test {
 
+    use std::time::Duration;
+
+    use tokio::time;
+
     use super::*;
 
     #[tokio::test]
     #[ignore = "runs forever"]
     async fn health_check_test() {
-        health_check(5555u16).await;
+        let sender = health_check(5555u16).await;
+        time::sleep(Duration::from_millis(10000)).await;
+        sender.send(()).unwrap();
     }
 }
