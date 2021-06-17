@@ -7,7 +7,6 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use super::{P2PMessage, P2PNetworkClient, ValidatorId};
 
 use async_trait::async_trait;
-use crate::p2p::rpc::Base58;
 use crate::p2p::{StatusCode, P2PNetworkClientError};
 use jsonrpc_core_client::TypedSubscriptionStream;
 use cf_p2p_rpc::P2pEvent;

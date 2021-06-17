@@ -1,5 +1,5 @@
 use futures::{future::Either, Stream};
-use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
+use tokio_stream::{StreamExt};
 
 use crate::{
     mq::{pin_message_stream, IMQClient, Subject},
@@ -57,7 +57,7 @@ where
             match x {
                 Either::Left(outgoing) => {
                     if let Ok(P2PMessageCommand { destination, data }) = outgoing {
-                        self.p2p.send(&destination, &data);
+                        self.p2p.send(&destination, &data).await.unwrap();
                     }
                 }
                 Either::Right(incoming) => {

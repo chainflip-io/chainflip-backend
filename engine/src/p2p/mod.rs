@@ -86,7 +86,7 @@ mod tests {
 
         // (0) sends to (1); (1) should receive one, (2) receives none
 
-        clients[0].send(&1, &data);
+        clients[0].send(&1, &data).await.unwrap();
 
         drop(network);
 
@@ -112,7 +112,7 @@ mod tests {
         let mut clients: Vec<_> = (0..3).map(|i| network.new_client(i)).collect();
 
         // (1) broadcasts; (0) and (2) should receive one message
-        P2PNetworkClient::<ValidatorId>::broadcast(&clients[1], &data);
+        P2PNetworkClient::<ValidatorId>::broadcast(&clients[1], &data).await.unwrap();
 
         let mut stream_0 =
             P2PNetworkClient::<ValidatorId>::take_stream(&mut clients[0]).await.unwrap();

@@ -1,12 +1,10 @@
-use futures::{Future, Stream};
-use jsonrpc_core_client::{RpcError, RpcChannel, TypedClient, TypedSubscriptionStream, RpcResult};
+use futures::{Future};
+use jsonrpc_core_client::{RpcChannel, TypedClient, TypedSubscriptionStream, RpcResult};
 use crate::p2p::{P2PNetworkClient, P2PMessage, P2PNetworkClientError, StatusCode};
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use jsonrpc_core_client::transports::http::connect;
 use tokio_compat_02::FutureExt;
 use async_trait::async_trait;
 use std::str;
-use crate::p2p::ValidatorId;
 use cf_p2p_rpc::P2pEvent;
 
 pub trait Base58 {
