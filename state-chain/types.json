@@ -5,7 +5,12 @@
   "TokenAmount": "u128",
   "Nonce": "u64",
   "Duration": "(u64,u32)",
-  "AccountInfo": "AccountInfoWithDualRefCount",
+  "AccountInfo": {
+    "nonce": "Index",
+    "consumers": "RefCount",
+    "providers": "RefCount",
+    "data": "()"
+  },
   "Address": "MultiAddress",
   "LookupSource": "MultiAddress",
   "Amount": "TokenAmount",

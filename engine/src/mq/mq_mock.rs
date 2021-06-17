@@ -5,7 +5,7 @@ use std::{
 
 use crate::mq::pin_message_stream;
 
-use super::{IMQClient, IMQClientFactory};
+use super::{IMQClient, IMQClientFactory, SubjectName};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use log::*;
@@ -64,7 +64,7 @@ impl IMQClient for MQMockClient {
         subject: super::Subject,
         message: &'_ M,
     ) -> Result<()> {
-        let subject = subject.to_string();
+        let subject = subject.to_subject_name();
 
         match self.topics.lock().entry(subject) {
             Entry::Occupied(entry) => {
@@ -86,7 +86,7 @@ impl IMQClient for MQMockClient {
         &self,
         subject: super::Subject,
     ) -> Result<Box<dyn futures::Stream<Item = Result<M>>>> {
-        let subject = subject.to_string();
+        let subject = subject.to_subject_name();
 
         let mut topics = self.topics.lock();
         let entry = topics.entry(subject).or_default();
