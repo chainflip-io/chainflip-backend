@@ -1,4 +1,4 @@
-use std::{fmt, pin::Pin};
+use std::pin::Pin;
 
 use crate::types::chain::Chain;
 use anyhow::Result;
