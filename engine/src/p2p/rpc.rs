@@ -22,9 +22,11 @@ impl Base58 for () {
 	}
 }
 
+type Subscribers = Vec<(TypedSubscriptionStream<P2pEvent>, UnboundedSender<P2PMessage>)>;
+
 struct GlueClient<'a> {
 	url: &'a str,
-	subscribers: Arc<Mutex<Vec<UnboundedSender<P2PMessage>>>>,
+	subscribers: Arc<Mutex<Subscribers>>,
 }
 
 impl<'a> GlueClient<'a> {
@@ -83,10 +85,17 @@ impl<'a, NodeId> P2PNetworkClient<NodeId> for GlueClient<'a>
 		client.send(to.to_base58(), msg.to_string()).await.map_err(|_| P2PNetworkClientError::Rpc)
 	}
 
-	async fn take_receiver(&mut self) -> Option<UnboundedReceiver<P2PMessage>> {
+	async fn take_receiver(&mut self) -> Result<UnboundedReceiver<P2PMessage>, P2PNetworkClientError> {
+		let client: P2PClient = FutureExt::compat(connect(self.url))
+			.await
+			.map_err(|_| P2PNetworkClientError::Rpc)?;
+
+		let stream = client.subscribe_notifications().map_err(|_| P2PNetworkClientError::Rpc)?;
+
 		let (tx, rx) = unbounded_channel();
-		self.subscribers.lock().unwrap().push(tx);
-		Some(rx)
+		self.subscribers.lock().unwrap().push((stream, tx));
+
+		Ok(rx)
 	}
 }
 
@@ -149,8 +158,11 @@ mod tests {
 
 	#[tokio::test]
 	async fn should_work() {
-		let client: P2PClient = FutureExt::compat(connect(&"http://localhost:9933")).await.unwrap();
-		let result = client.send("123".to_string(), "hello".to_string()).await;
-		assert_eq!(result.unwrap(), 200);
+		let mut glue_client = GlueClient::new(&"http://localhost:9933");
+
+		if let Some(receiver) =
+			P2PNetworkClient::<ValidatorId>::take_receiver(&mut glue_client).await {
+
+		}
 	}
 }

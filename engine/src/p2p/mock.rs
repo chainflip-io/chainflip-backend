@@ -38,12 +38,12 @@ impl<B: Base58 + Send + Sync> P2PNetworkClient<B> for P2PClientMock {
     }
 
     async fn send(&self, to: &B, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError> {
-        // self.network_inner.lock().send(&self.id, to, data);
+        //FIXME self.network_inner.lock().send(&self.id, to, data);
         Ok(200)
     }
 
-    async fn take_receiver(&mut self) -> Option<UnboundedReceiver<P2PMessage>> {
-        self.receiver.take()
+    async fn take_receiver(&mut self) -> Result<UnboundedReceiver<P2PMessage>, P2PNetworkClientError> {
+        Ok(self.receiver.take().unwrap())
     }
 }
 

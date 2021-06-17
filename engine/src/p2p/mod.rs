@@ -13,6 +13,7 @@ use async_trait::async_trait;
 use tokio::sync::mpsc::UnboundedReceiver;
 use crate::p2p::rpc::Base58;
 
+#[derive(Debug)]
 pub enum P2PNetworkClientError {
     Format,
     Rpc
@@ -28,7 +29,7 @@ pub trait P2PNetworkClient<B: Base58> {
     /// Send to a specific `validator` only
     async fn send(&self, to: &B, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError>;
 
-    async fn take_receiver(&mut self) -> Option<UnboundedReceiver<P2PMessage>>;
+    async fn take_receiver(&mut self) -> Result<UnboundedReceiver<P2PMessage>, P2PNetworkClientError>;
 }
 
 pub type ValidatorId = usize;
