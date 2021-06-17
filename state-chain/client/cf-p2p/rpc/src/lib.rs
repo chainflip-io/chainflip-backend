@@ -85,7 +85,7 @@ pub struct RpcCore {
 
 type RpcPeerId = String;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum P2pEvent {
     Received(RpcPeerId, Message),
     PeerConnected(RpcPeerId),

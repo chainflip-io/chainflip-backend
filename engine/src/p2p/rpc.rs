@@ -8,9 +8,6 @@ use async_trait::async_trait;
 use std::str;
 use crate::p2p::ValidatorId;
 use cf_p2p_rpc::P2pEvent;
-use std::task::{Context, Poll};
-use std::pin::Pin;
-use std::sync::{Arc, Mutex};
 
 pub trait Base58 {
 	fn to_base58(&self) -> String;
@@ -22,18 +19,14 @@ impl Base58 for () {
 	}
 }
 
-type Subscribers = Vec<(TypedSubscriptionStream<P2pEvent>, UnboundedSender<P2PMessage>)>;
-
 struct GlueClient<'a> {
 	url: &'a str,
-	subscribers: Arc<Mutex<Subscribers>>,
 }
 
 impl<'a> GlueClient<'a> {
 	pub fn new(url: &'a str) -> Self {
 		GlueClient {
 			url,
-			subscribers: Arc::new(Mutex::new(vec![])),
 		}
 	}
 }
@@ -85,17 +78,12 @@ impl<'a, NodeId> P2PNetworkClient<NodeId> for GlueClient<'a>
 		client.send(to.to_base58(), msg.to_string()).await.map_err(|_| P2PNetworkClientError::Rpc)
 	}
 
-	async fn take_receiver(&mut self) -> Result<UnboundedReceiver<P2PMessage>, P2PNetworkClientError> {
+	async fn take_stream(&mut self) -> Result<TypedSubscriptionStream<P2pEvent>, P2PNetworkClientError> {
 		let client: P2PClient = FutureExt::compat(connect(self.url))
 			.await
 			.map_err(|_| P2PNetworkClientError::Rpc)?;
 
-		let stream = client.subscribe_notifications().map_err(|_| P2PNetworkClientError::Rpc)?;
-
-		let (tx, rx) = unbounded_channel();
-		self.subscribers.lock().unwrap().push((stream, tx));
-
-		Ok(rx)
+		client.subscribe_notifications().map_err(|_| P2PNetworkClientError::Rpc)
 	}
 }
 
@@ -137,7 +125,7 @@ impl P2PClient {
 	// Subscribe to receive notifications
 	pub fn subscribe_notifications(
 		&self,
-	) -> RpcResult<impl Stream<Item=RpcResult<P2pEvent>>>
+	) -> RpcResult<TypedSubscriptionStream<P2pEvent>>
 	{
 		let args_tuple = ();
 		self.inner.subscribe(
@@ -159,10 +147,10 @@ mod tests {
 	#[tokio::test]
 	async fn should_work() {
 		let mut glue_client = GlueClient::new(&"http://localhost:9933");
-
-		if let Some(receiver) =
-			P2PNetworkClient::<ValidatorId>::take_receiver(&mut glue_client).await {
-
-		}
+		//
+		// if let Some(receiver) =
+		// 	P2PNetworkClient::<ValidatorId>::take_receiver(&mut glue_client).await {
+		//
+		// }
 	}
 }

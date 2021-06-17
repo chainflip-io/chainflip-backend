@@ -8,6 +8,8 @@ use crate::{
 
 use super::{P2PMessageCommand, P2PNetworkClient};
 use crate::p2p::ValidatorId;
+use cf_p2p_rpc::P2pEvent;
+use jsonrpc_core_client::RpcError;
 
 /// Intermediates P2P events between MQ and P2P interface
 pub struct P2PConductor<MQ, P2P>
@@ -41,15 +43,13 @@ where
     }
 
     pub async fn start(mut self) {
-        type Msg = Either<Result<P2PMessageCommand, anyhow::Error>, P2PMessage>;
+        type Msg = Either<Result<P2PMessageCommand, anyhow::Error>, Result<P2pEvent, RpcError>>;
 
         let mq_stream = pin_message_stream(self.stream);
 
         let mq_stream = mq_stream.map(Msg::Left);
 
-        let receiver = self.p2p.take_receiver().await.unwrap();
-
-        let p2p_stream = UnboundedReceiverStream::new(receiver).map(Msg::Right);
+        let p2p_stream = self.p2p.take_stream().await.unwrap().map(Msg::Right);
 
         let mut stream = futures::stream::select(mq_stream, p2p_stream);
 
@@ -61,10 +61,12 @@ where
                     }
                 }
                 Either::Right(incoming) => {
-                    self.mq
-                        .publish(Subject::P2PIncoming, &incoming)
-                        .await
-                        .unwrap();
+                    if let Ok(incoming) = incoming {
+                        self.mq
+                            .publish::<P2PMessage>(Subject::P2PIncoming, &incoming.into())
+                            .await
+                            .unwrap()
+                    }
                 }
             }
         }
