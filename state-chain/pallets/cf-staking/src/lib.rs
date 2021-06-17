@@ -87,7 +87,7 @@ pub mod pallet {
 
 	pub type FlipBalance<T> = <T as Config>::Balance;
 
-	pub type ClaimDetailsFor<T: Config> = ClaimDetails<
+	pub type ClaimDetailsFor<T> = ClaimDetails<
 		FlipBalance<T>,
 		<T as Config>::Nonce,
 		EthereumAddress,
