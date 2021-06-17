@@ -70,19 +70,19 @@ impl SubjectName for Subject {
     fn to_subject_name(&self) -> String {
         match &self {
             Subject::Witness(chain) => {
-                format!("witness.{}", chain.to_string())
+                format!("witness.{}", chain)
             }
             Subject::Quote(chain) => {
-                format!("quote.{}", chain.to_string())
+                format!("quote.{}", chain)
             }
             Subject::Batch(chain) => {
-                format!("batch.{}", chain.to_string())
+                format!("batch.{}", chain)
             }
             Subject::Broadcast(chain) => {
-                format!("broadcast.{}", chain.to_string())
+                format!("broadcast.{}", chain)
             }
             Subject::BroadcastSuccess(chain) => {
-                format!("broadcast_success.{}", chain.to_string())
+                format!("broadcast_success.{}", chain)
             }
             Subject::StakeManager => {
                 format!("stake_manager")
