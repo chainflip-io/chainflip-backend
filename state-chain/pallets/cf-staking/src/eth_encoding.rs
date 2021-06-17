@@ -1,10 +1,10 @@
 use core::time::Duration;
-use sp_runtime::traits::UniqueSaturatedInto;
+use sp_runtime::traits::{Hash, Keccak256, UniqueSaturatedInto};
+use sp_std::prelude::*;
 use sp_std::marker::PhantomData;
 
 use super::{ClaimDetailsFor, Config};
 use ethereum_types::{self, Address, U256};
-use sp_core::hashing::keccak_256;
 
 const CLAIM_FN_SIG: &'static str =
 	"registerClaim((uint256,uint256,uint256),bytes32,uint256,address,uint48)";
@@ -123,7 +123,7 @@ impl FunctionSelector {
 	/// Converts an ethereum function signature to its selector.
 	fn from_fn_sig(fn_sig: &str) -> Self {
 		let mut buffer = [0u8; 4];
-		let hash = keccak_256(fn_sig.as_bytes());
+		let hash = Keccak256::hash(fn_sig.as_bytes());
 		buffer.copy_from_slice(&hash[..4]);
 		FunctionSelector(buffer)
 	}
