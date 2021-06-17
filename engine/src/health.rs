@@ -71,6 +71,7 @@ mod test {
 
     use super::*;
 
+    // TODO: Make this a real test
     #[tokio::test]
     #[ignore = "runs for 10 seconds"]
     async fn health_check_test() {
