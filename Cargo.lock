@@ -1752,6 +1752,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "ethabi"
+version = "14.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c52991643379afc90bfe2df3c64d53983e59c35a82ba6e75c997cfc2880d8524"
+dependencies = [
+ "anyhow",
+ "ethereum-types 0.11.0",
+ "hex 0.4.3",
+ "serde 1.0.125",
+ "serde_json",
+ "sha3 0.9.1",
+ "thiserror",
+ "uint",
+]
+
+[[package]]
 name = "ethbloom"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4765,13 +4781,13 @@ name = "pallet-cf-staking"
 version = "0.1.0"
 dependencies = [
  "cf-traits",
+ "ethabi 14.0.0",
  "ethereum-types 0.11.0",
  "frame-support",
  "frame-system",
  "pallet-cf-flip",
  "pallet-cf-validator",
  "parity-scale-codec 2.1.1",
- "rlp",
  "serde 1.0.125",
  "sp-core",
  "sp-io",
@@ -9907,7 +9923,7 @@ dependencies = [
  "async-native-tls",
  "base64 0.13.0",
  "derive_more",
- "ethabi",
+ "ethabi 13.0.0",
  "ethereum-types 0.10.0",
  "futures 0.3.14",
  "futures-timer 3.0.2",

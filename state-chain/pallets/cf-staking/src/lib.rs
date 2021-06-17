@@ -64,8 +64,6 @@ use cf_traits::{EpochInfo, BidderProvider, StakeTransfer};
 use codec::FullCodec;
 use sp_runtime::{DispatchError, traits::{AtLeast32BitUnsigned, CheckedSub, One, Zero}};
 
-use crate::eth_encoding::ClaimRequestPayload;
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -89,7 +87,7 @@ pub mod pallet {
 
 	pub type FlipBalance<T> = <T as Config>::Balance;
 
-	pub type ClaimDetailsFor<T> = ClaimDetails<
+	pub type ClaimDetailsFor<T: Config> = ClaimDetails<
 		FlipBalance<T>,
 		<T as Config>::Nonce,
 		EthereumAddress,
@@ -587,7 +585,7 @@ impl<T: Config> Pallet<T> {
 				expiry,
 				signature: None,
 			};
-		let payload = ClaimRequestPayload::<T>::from((account_id, &details)).to_encoded();
+		let payload = eth_encoding::encode_claim_request::<T>(account_id, &details);
 		PendingClaims::<T>::insert(account_id, details);
 
 		// Emit the event requesting that the CFE generate the claim voucher.

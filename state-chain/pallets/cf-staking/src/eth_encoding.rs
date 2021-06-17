@@ -1,51 +1,69 @@
-use codec::Encode;
 use core::time::Duration;
-use ethereum_types::H256;
 use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::marker::PhantomData;
 
 use super::{ClaimDetailsFor, Config};
 use ethereum_types::{self, Address, U256};
-use rlp::Encodable;
 use sp_core::hashing::keccak_256;
 
-const CLAIM_FN_SIG: &'static str = "registerClaim((uint256,uint256,uint256),bytes32,uint256,address,uint48)";
+const CLAIM_FN_SIG: &'static str =
+	"registerClaim((uint256,uint256,uint256),bytes32,uint256,address,uint48)";
 
-/// Converts an ethereum function signature
-fn selector_from_fn_sig(fn_sig: &str) -> [u8; 4] {
-	let mut buffer = [0u8; 4];
-	let hash = keccak_256(fn_sig.as_bytes());
-	buffer.copy_from_slice(&hash[..4]);
-	buffer
+pub(crate) fn encode_claim_request<T: Config>(
+	account_id: &T::AccountId,
+	claim_details: &ClaimDetailsFor<T>,
+) -> Vec<u8> {
+	ClaimRequestPayload::<T>::from((account_id, claim_details)).abi_encode()
 }
 
-pub(crate) struct ClaimRequestPayload<T> {
-	selector: [u8; 4],
+/// A very simple trait for encoding to an ethereum ABI-compatible byte representation.
+trait EthAbiEncode {
+	/// The number of bytes returned, once encoded.
+	///
+	/// This is used to initialise the byte buffer to avoid unnecessary allocations.
+	const ENCODED_SIZE: usize;
+
+	/// Encode the contents of `self` onto the end of the provided buffer.
+	fn encode_to(&self, buffer: &mut Vec<u8>);
+
+	fn abi_encode(&self) -> Vec<u8> {
+		let mut bytes = Vec::with_capacity(Self::ENCODED_SIZE);
+		self.encode_to(&mut bytes);
+
+		bytes
+	}
+}
+
+/// The payload to be signed for the `registerClaim` StakeManager contract call.
+struct ClaimRequestPayload<T> {
+	selector: FunctionSelector,
 	sig_data: SigData,
-	node_id: H256,
+	node_id: Bytes32,
 	amount: U256,
 	staker: Address,
-	expiry_time: ExpiryU48,
+	expiry_time: ExpirySecs,
 	_phantom: PhantomData<T>,
 }
 
-impl<T: Config> ClaimRequestPayload<T> {
-	pub fn to_encoded(&self) -> Vec<u8> {
-		rlp::encode(self).to_vec()
+impl<T: Config> EthAbiEncode for ClaimRequestPayload<T> {
+	const ENCODED_SIZE: usize = FunctionSelector::ENCODED_SIZE
+		+ SigData::ENCODED_SIZE
+		+ Bytes32::ENCODED_SIZE
+		+ U256::ENCODED_SIZE
+		+ Address::ENCODED_SIZE
+		+ ExpirySecs::ENCODED_SIZE;
+
+	fn encode_to(&self, buffer: &mut Vec<u8>) {
+		self.selector.encode_to(buffer);
+		self.sig_data.encode_to(buffer);
+		self.node_id.encode_to(buffer);
+		self.amount.encode_to(buffer);
+		self.staker.encode_to(buffer);
+		self.expiry_time.encode_to(buffer);
 	}
 }
 
-impl<T: Config> Encodable for ClaimRequestPayload<T> {
-	fn rlp_append(&self, s: &mut rlp::RlpStream) {
-		Encodable::rlp_append(&FixedSizeArrayWrapper(self.selector), s);
-		Encodable::rlp_append(&self.sig_data, s);
-		Encodable::rlp_append(&self.node_id, s);
-		Encodable::rlp_append(&self.amount, s);
-		Encodable::rlp_append(&self.staker, s);
-		Encodable::rlp_append(&self.expiry_time, s);
-	}
-}
-
+/// Analog for the SigData struct defined in solidity.
 struct SigData(U256, U256, U256);
 
 impl SigData {
@@ -54,34 +72,86 @@ impl SigData {
 	}
 }
 
-impl Encodable for SigData {
-	fn rlp_append(&self, s: &mut rlp::RlpStream) {
-		Encodable::rlp_append(&self.0, s);
-		Encodable::rlp_append(&self.1, s);
-		Encodable::rlp_append(&self.2, s);
+impl EthAbiEncode for SigData {
+	const ENCODED_SIZE: usize = U256::ENCODED_SIZE * 3;
+
+	fn encode_to(&self, buffer: &mut Vec<u8>) {
+		self.0.encode_to(buffer);
+		self.1.encode_to(buffer);
+		self.2.encode_to(buffer);
 	}
 }
 
-struct FixedSizeArrayWrapper<const S: usize>([u8; S]);
+struct Bytes32([u8; 32]);
 
-impl<const S: usize> Encodable for FixedSizeArrayWrapper<S> {
-	fn rlp_append(&self, s: &mut rlp::RlpStream) {
-		Encodable::rlp_append(&&self.0[..], s)
+impl EthAbiEncode for Bytes32 {
+	const ENCODED_SIZE: usize = 32;
+
+	fn encode_to(&self, buffer: &mut Vec<u8>) {
+		buffer.extend_from_slice(&self.0[..]);
+	}
+}
+
+impl EthAbiEncode for U256 {
+	const ENCODED_SIZE: usize = 32;
+
+	fn encode_to(&self, buffer: &mut Vec<u8>) {
+		let mut bytes = [0u8; Self::ENCODED_SIZE];
+		self.to_big_endian(&mut bytes[..]);
+		buffer.extend_from_slice(&bytes[..]);
+	}
+}
+
+impl EthAbiEncode for Address {
+	const ENCODED_SIZE: usize = 32;
+
+	fn encode_to(&self, buffer: &mut Vec<u8>) {
+		const ADDRESS_LEN: usize = 20;
+		// For some reason can't use Self::ENCODED_SIZE here:
+		const PADDING_SIZE: usize = 32 - ADDRESS_LEN;
+
+		buffer.extend(&[0u8; PADDING_SIZE]);
+		buffer.extend(self.as_bytes());
+	}
+}
+
+/// Wrapper for a 4-byte ethereum function selector.
+struct FunctionSelector([u8; 4]);
+
+impl FunctionSelector {
+	/// Converts an ethereum function signature to its selector.
+	fn from_fn_sig(fn_sig: &str) -> Self {
+		let mut buffer = [0u8; 4];
+		let hash = keccak_256(fn_sig.as_bytes());
+		buffer.copy_from_slice(&hash[..4]);
+		FunctionSelector(buffer)
+	}
+}
+
+impl EthAbiEncode for FunctionSelector {
+	const ENCODED_SIZE: usize = 4;
+
+	fn encode_to(&self, buffer: &mut Vec<u8>) {
+		buffer.extend_from_slice(&self.0[..])
 	}
 }
 
 /// Stake expiry is measured in seconds, encoded as a uint48 in ethereum.
-struct ExpiryU48(u64);
+///
+/// Note that even though the expiry seconds are declared as uint48, they encode to a full 32-byte word in abi terms.
+struct ExpirySecs(u64);
 
-impl Encodable for ExpiryU48 {
-	fn rlp_append(&self, s: &mut rlp::RlpStream) {
-		Encodable::rlp_append(&&self.0.to_be_bytes()[2..], s)
+impl From<Duration> for ExpirySecs {
+	fn from(d: Duration) -> Self {
+		Self(d.as_secs())
 	}
 }
 
-impl From<Duration> for ExpiryU48 {
-	fn from(d: Duration) -> Self {
-		Self(d.as_secs())
+impl EthAbiEncode for ExpirySecs {
+	const ENCODED_SIZE: usize = 32;
+
+	fn encode_to(&self, buffer: &mut Vec<u8>) {
+		U256::from(self.0).encode_to(buffer)
 	}
 }
 
@@ -92,7 +162,7 @@ impl<T: Config> From<(&T::AccountId, &ClaimDetailsFor<T>)> for ClaimRequestPaylo
 		let amount: u128 = claim_details.amount.unique_saturated_into();
 
 		Self {
-			selector: selector_from_fn_sig(CLAIM_FN_SIG),
+			selector: FunctionSelector::from_fn_sig(CLAIM_FN_SIG),
 			sig_data: SigData::null_with_nonce(nonce),
 			node_id: account_id_to_node_id::<T>(account_id),
 			amount: amount.into(),
@@ -103,13 +173,16 @@ impl<T: Config> From<(&T::AccountId, &ClaimDetailsFor<T>)> for ClaimRequestPaylo
 	}
 }
 
-fn account_id_to_node_id<T: Config>(account_id: &T::AccountId) -> H256{
-	let account_bytes = account_id.using_encoded(|bytes| bytes.to_vec());
-	let mut node_id = [0u8; 32];
+/// Converts one of our account ids to the corresponding ethereum bytes32 ethereum abi type. If the AccountId type
+/// encodes to more than 32 bytes, it is truncated. If it encode to fewer bytes, they are right-padded with zeros.
+fn account_id_to_node_id<T: Config>(account_id: &T::AccountId) -> Bytes32 {
+	// Abuse parity SCALE to get to the raw bytes.
+	let account_bytes = codec::Encode::using_encoded(account_id, |bytes| bytes.to_vec());
 
+	let mut node_id = [0u8; 32];
 	match account_bytes.len() {
 		len if len < 32 => {
-			node_id[(32 - len)..].copy_from_slice(&account_bytes[..]);
+			node_id[..len].copy_from_slice(&account_bytes[..]);
 		}
 		len if len > 32 => {
 			node_id.copy_from_slice(&account_bytes[..32]);
@@ -119,5 +192,5 @@ fn account_id_to_node_id<T: Config>(account_id: &T::AccountId) -> H256{
 		}
 	};
 
-	H256::from(node_id)
+	Bytes32(node_id)
 }
