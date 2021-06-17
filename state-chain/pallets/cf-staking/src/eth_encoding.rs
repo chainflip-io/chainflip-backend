@@ -9,6 +9,7 @@ use sp_core::hashing::keccak_256;
 const CLAIM_FN_SIG: &'static str =
 	"registerClaim((uint256,uint256,uint256),bytes32,uint256,address,uint48)";
 
+/// Takes claim request details for an account and encodes the payload that needs to be signed for a claim request.
 pub(crate) fn encode_claim_request<T: Config>(
 	account_id: &T::AccountId,
 	claim_details: &ClaimDetailsFor<T>,
