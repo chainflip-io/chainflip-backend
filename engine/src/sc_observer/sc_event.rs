@@ -7,7 +7,7 @@ use anyhow::Result;
 
 use super::{
     runtime::StateChainRuntime,
-    staking::{
+    stake_manager::{
         ClaimSettledEvent, ClaimSigRequestedEvent, ClaimSignatureIssuedEvent, StakeRefundEvent,
         StakedEvent, StakingEvent,
     },

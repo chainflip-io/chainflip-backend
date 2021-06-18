@@ -1,4 +1,4 @@
-use std::{fmt, pin::Pin};
+use std::pin::Pin;
 
 use crate::types::chain::Chain;
 use anyhow::Result;
@@ -61,52 +61,55 @@ pub enum Subject {
     MultisigEvent,
 }
 
-// TODO: Make this a separate trait, not `fmt::Display` - https://github.com/chainflip-io/chainflip-backend/issues/63
-// Used to create the subject that the MQ publishes to
-impl fmt::Display for Subject {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+/// Convert an object to a to a subject string (currently Nats compatible)
+pub trait SubjectName {
+    fn to_subject_name(&self) -> String;
+}
+
+impl SubjectName for Subject {
+    fn to_subject_name(&self) -> String {
         match &self {
             Subject::Witness(chain) => {
-                write!(f, "witness.{}", chain.to_string())
+                format!("witness.{}", chain)
             }
             Subject::Quote(chain) => {
-                write!(f, "quote.{}", chain.to_string())
+                format!("quote.{}", chain)
             }
             Subject::Batch(chain) => {
-                write!(f, "batch.{}", chain.to_string())
+                format!("batch.{}", chain)
             }
             Subject::Broadcast(chain) => {
-                write!(f, "broadcast.{}", chain.to_string())
+                format!("broadcast.{}", chain)
             }
             Subject::BroadcastSuccess(chain) => {
-                write!(f, "broadcast_success.{}", chain.to_string())
+                format!("broadcast_success.{}", chain)
             }
             Subject::StakeManager => {
-                write!(f, "stake_manager")
+                format!("stake_manager")
             }
             Subject::StateChainClaim => {
-                write!(f, "state_chain_claim")
+                format!("state_chain_claim")
             }
             Subject::Rotate => {
-                write!(f, "rotate")
+                format!("rotate")
             }
             Subject::StateChainStake => {
-                write!(f, "state_chain_stake")
+                format!("state_chain_stake")
             }
             Subject::StateChainClaimIssued => {
-                write!(f, "state_chain_claim_issued")
+                format!("state_chain_claim_issued")
             }
             Subject::P2PIncoming => {
-                write!(f, "p2p_incoming")
+                format!("p2p_incoming")
             }
             Subject::P2POutgoing => {
-                write!(f, "p2p_outgoing")
+                format!("p2p_outgoing")
             }
             Subject::MultisigInstruction => {
-                write!(f, "multisig_instruction")
+                format!("multisig_instruction")
             }
             Subject::MultisigEvent => {
-                write!(f, "multisig_event")
+                format!("multisig_event")
             }
         }
     }
@@ -117,26 +120,26 @@ mod test {
     use super::*;
 
     #[test]
-    fn channel_to_string() {
+    fn channel_to_subject_name() {
         let witness_subject = Subject::Witness(Chain::BTC);
-        assert_eq!(witness_subject.to_string(), "witness.BTC");
+        assert_eq!(witness_subject.to_subject_name(), "witness.BTC");
 
         let quote_subject = Subject::Quote(Chain::ETH);
-        assert_eq!(quote_subject.to_string(), "quote.ETH");
+        assert_eq!(quote_subject.to_subject_name(), "quote.ETH");
 
         let batch_subject = Subject::Batch(Chain::OXEN);
-        assert_eq!(batch_subject.to_string(), "batch.OXEN");
+        assert_eq!(batch_subject.to_subject_name(), "batch.OXEN");
 
         let broadcast_subject = Subject::Broadcast(Chain::BTC);
-        assert_eq!(broadcast_subject.to_string(), "broadcast.BTC");
+        assert_eq!(broadcast_subject.to_subject_name(), "broadcast.BTC");
 
         let stake_manager_subject = Subject::StakeManager;
-        assert_eq!(stake_manager_subject.to_string(), "stake_manager");
+        assert_eq!(stake_manager_subject.to_subject_name(), "stake_manager");
 
         let sc_stake_subject = Subject::StateChainStake;
-        assert_eq!(sc_stake_subject.to_string(), "state_chain_stake");
+        assert_eq!(sc_stake_subject.to_subject_name(), "state_chain_stake");
 
         let sc_claim_subject = Subject::StateChainClaim;
-        assert_eq!(sc_claim_subject.to_string(), "state_chain_claim");
+        assert_eq!(sc_claim_subject.to_subject_name(), "state_chain_claim");
     }
 }

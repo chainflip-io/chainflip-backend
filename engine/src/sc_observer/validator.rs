@@ -5,9 +5,9 @@ use std::marker::PhantomData;
 use cf_traits::AuctionRange;
 use codec::{Decode, Encode};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use substrate_subxt::{module, sp_runtime::traits::Member, system::System, Event};
+use substrate_subxt::{module, sp_runtime::traits::Member, Event};
 
-use super::{runtime::StateChainRuntime, sc_event::SCEvent};
+use super::{runtime::StateChainRuntime, sc_event::SCEvent, system::System};
 
 #[module]
 pub trait Validator: System {

@@ -15,7 +15,7 @@ use super::{runtime::StateChainRuntime, sc_event::SCEvent};
 
 // StakeManager in the state chain runtime
 #[module]
-pub trait StakeManager: System {
+pub trait StakeManager {
     /// Numeric type denomination for the staked asset.
     type TokenAmount: Member
         + FullCodec

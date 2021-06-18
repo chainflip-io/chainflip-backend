@@ -2,7 +2,7 @@ use anyhow::Result;
 use substrate_subxt::{Client, ClientBuilder, EventSubscription};
 
 use crate::{
-    mq::{nats_client::NatsMQClientFactory, IMQClient, IMQClientFactory, Subject},
+    mq::{nats_client::NatsMQClientFactory, IMQClient, IMQClientFactory, Subject, SubjectName},
     settings::{self, Settings},
 };
 
@@ -63,7 +63,7 @@ async fn subscribe_to_events<M: 'static + IMQClient>(
                             error!(
                                 "Could not publish message `{:?}` to subject `{}`. Error: {}",
                                 event,
-                                subject.to_string(),
+                                subject.to_subject_name(),
                                 err
                             );
                         }
@@ -73,7 +73,7 @@ async fn subscribe_to_events<M: 'static + IMQClient>(
                 None => {
                     debug!(
                         "Event decoding for an event under subject: {} doesn't exist",
-                        subject
+                        subject.to_subject_name()
                     )
                 }
             }
@@ -81,7 +81,10 @@ async fn subscribe_to_events<M: 'static + IMQClient>(
             trace!("Not routing event {:?} to message queue", raw_event);
         };
     }
-    Ok(())
+
+    let err_msg = "State Chain Observer stopped subscribing to events!";
+    log::error!("{}", err_msg);
+    Err(anyhow::Error::msg(err_msg))
 }
 
 #[cfg(test)]

@@ -70,7 +70,7 @@ mod tests {
 
     use super::*;
 
-    use crate::sc_observer::staking::{MinExtCallExt, StakedCallExt, WitnessStakedCallExt};
+    use crate::sc_observer::stake_manager::{MinExtCallExt, StakedCallExt, WitnessStakedCallExt};
     use crate::settings;
     use crate::settings::StateChain;
 
@@ -104,71 +104,14 @@ mod tests {
 
         println!("Result is: {:#?}", result);
     }
-    // #[tokio::test]
-    // async fn broadcast_raw_data() {
-    //     let settings = settings::test_utils::new_test_settings().unwrap();
-    //     let subxt_client = create_subxt_client(settings.state_chain).await.unwrap();
-    //     let data = "0x2bb96f6ff718b272b42f7ded0f6d30b979bfefcb368fd5663f645b766b61aefb";
-    //     let expected_data_after_signed = "0xa1018400d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d011a20d5f1685e79632c3a9acf843ef918353f4177e04aea95189dc156d819262a1a67c0a108be8fb971787088c40b2ae1bb0f6fbcd8e9aa01a553249c6ae53c816502080d00";
-    //     let signer = PairSigner::new(AccountKeyring::Alice.pair());
-
-    //     let genesis_hash = "xc786272a77bc0d76c9836073b0917cd34b0e012ab83538";
-
-    //     let runtime_version = "0x4073746174652d636861696e2d6e6f64654073746174652d636861696e2d6e6f646501000000640000000100000024df6acb689907609b0300000037e397fc7c91f5e40100000040fe3ad401f8959a04000000d2bc9897eed08f1502000000f78b278be53f454c02000000dd718d5cc53262d401000000ab3c0572291feb8b01000000ed99c5acb25eedf502000000bc9d89904f5b923f0100000001000000";
-
-    //     let call = TransferCall {
-    //         _runtime: PhantomData,
-    //     };
-
-    //     let signed_xt = extrinsic::create_signed(
-    //         runtime_version.into(),
-    //         genesis_hash.into(),
-    //         0.into(),
-    //         call.encode(),
-    //         &signer,
-    //     )
-    //     .await;
-
-    //     // let signed = signer.sign(call);
-
-    //     // let result = subxt_client.submit(&signer).await;
-
-    //     println!("signed data = {:#?}", &signed_data);
-    // }
-
-    /// Generate a crypto pair from seed.
-    pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
-        TPublic::Pair::from_string(&format!("//{}", seed), None)
-            .expect("static values are valid; qed")
-            .public()
-    }
-
-    type AccountPublic = <MultiSignature as Verify>::Signer;
-
-    /// Generate an account ID from seed.
-    pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId
-    where
-        AccountPublic: From<<TPublic::Pair as Pair>::Public>,
-    {
-        AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
-    }
 
     #[tokio::test]
     async fn submit_xt_test() {
         let settings = settings::test_utils::new_test_settings().unwrap();
         let subxt_client = create_subxt_client(settings.state_chain).await.unwrap();
-        // let ecdsa_signer = sp_runtime::app_crypto::ecdsa::Pair::default();
         let signer = PairSigner::new(AccountKeyring::Alice.pair());
 
         let alice = AccountKeyring::Alice.to_account_id();
-
-        println!("account id alice: {}", alice);
-
-        let alice_from_seed = get_account_id_from_seed::<sr25519::Public>("Alice");
-
-        println!("Alice from seed: {:#?}", alice_from_seed);
-
-        // let bob_multi = sp_runtime::MultiAddress::Address32(bob.into());
 
         let eth_address: [u8; 20] = [
             00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01,
@@ -182,21 +125,6 @@ mod tests {
         // let result = subxt_client.min_ext(&signer).await;
 
         println!("Result: {:#?}", result);
-
-        // let result = subxt_client
-        //     .witness_staked(&signer, alice, 123u128, eth_address)
-        //     .await;
-
-        // TODO: Ensure this is actually correct.
-        // let result = subxt_client
-        //     .staked(&signer, &alice, 100u128, &eth_address)
-        //     .await;
-
-        // println!("result: {:#?}", result);
-
-        // result.unwrap();
-
-        // println!("Here's the result: {:#?}", result);
     }
 }
 
@@ -204,3 +132,19 @@ mod tests {
 // Unable to decode storage system.account: entry 0:: createType(AccountInfo):: {"nonce":"Index","consumers":"RefCount","providers":"RefCount","sufficients":"RefCount","data":"AccountData"}:: Decoded input doesn't match input, received 0x0000000001000000010000000000000000000010000000000000000000000000…0000000000000000000000000000000000000000000000000000000000000000 (76 bytes), created 0x0000000001000000010000000000000000000010000000000000000000000000…0000000000000000000000000000000000000000000000000000000000000000 (80 bytes)
 
 // Unable to decode storage system.account: entry 0:: createType(AccountInfo):: {"nonce":"Index","consumers":"RefCount","providers":"RefCount","data":"AccountData"}:: Decoded input doesn't match input, received 0x000000000100000001000000 (12 bytes), created 0x0000000001000000010000000000000000000000000000000000000000000000…0000000000000000000000000000000000000000000000000000000000000000 (76 bytes)
+
+// pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
+//     TPublic::Pair::from_string(&format!("//{}", seed), None)
+//         .expect("static values are valid; qed")
+//         .public()
+// }
+
+// type AccountPublic = <MultiSignature as Verify>::Signer;
+
+// /// Generate an account ID from seed.
+// pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId
+// where
+//     AccountPublic: From<<TPublic::Pair as Pair>::Public>,
+// {
+//     AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
+// }

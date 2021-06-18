@@ -1,34 +1,13 @@
-use frame_system::AccountInfo;
-use serde::{Deserialize, Serialize};
-use substrate_subxt::{
-    balances::{AccountData, Balances},
-    extrinsic::DefaultExtra,
-    register_default_type_sizes,
-    session::Session,
-    sp_runtime::{
-        self,
-        generic::Header,
-        traits::{BlakeTwo256, IdentifyAccount, Verify},
-        MultiSignature,
-    },
-    sudo::Sudo,
-    system::System,
-    BasicSessionKeys, EventTypeRegistry, Runtime,
+use sp_runtime::{
+    generic,
+    traits::{BlakeTwo256, IdentifyAccount, Verify},
+    MultiSignature, OpaqueExtrinsic,
 };
+use substrate_subxt::system::System;
 
-use substrate_subxt::{
-    balances::BalancesEventTypeRegistry, session::SessionEventTypeRegistry,
-    sudo::SudoEventTypeRegistry, system::SystemEventTypeRegistry,
-};
+use super::{stake_manager, system, validator};
 
-use substrate_subxt::sp_runtime::OpaqueExtrinsic;
-
-use super::{staking, validator};
-
-// Runtime template for use in decoding by subxt
-
-/// Concrete type definitions compatible with the state chain node
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StateChainRuntime;
 
 impl Runtime for StateChainRuntime {
@@ -36,66 +15,30 @@ impl Runtime for StateChainRuntime {
     type Extra = DefaultExtra<Self>;
 
     fn register_type_sizes(event_type_registry: &mut EventTypeRegistry<Self>) {
-        register_default_type_sizes(event_type_registry);
-        event_type_registry.with_system();
+        event_type_registry.with_balances();
         event_type_registry.with_session();
         event_type_registry.with_sudo();
-        event_type_registry.with_balances();
-
-        // Add any custom types here...
-        event_type_registry.register_type_size::<<Self as System>::BlockNumber>("EpochIndex");
-
-        // event_type_registry.register_type_size::<[u8; 80]>("AccountInfo");
-
-        event_type_registry.register_type_size::<<Self as System>::Address>("Address");
-
-        event_type_registry.register_type_size::<<Self as System>::Address>("LookupSource");
-
-        event_type_registry.register_type_size::<u32>("T::BlockNumber");
+        register_default_type_sizes(event_type_registry);
     }
 }
 
 impl System for StateChainRuntime {
     type Index = u32;
+
     type BlockNumber = u32;
+
     type Hash = sp_core::H256;
+
     type Hashing = BlakeTwo256;
+
     type AccountId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
+
     type Address = sp_runtime::MultiAddress<Self::AccountId, ()>;
-    type Header = Header<Self::BlockNumber, BlakeTwo256>;
+
+    type Header = generic::Header<Self::BlockNumber, BlakeTwo256>;
+
+    // Not sure on this one - grabbed from subxt
     type Extrinsic = OpaqueExtrinsic;
-    type AccountData = AccountData<<Self as Balances>::Balance>;
-}
 
-// TODO: Remove this, we no longer have a balances pallet
-impl Balances for StateChainRuntime {
-    type Balance = u128;
-}
-
-impl Session for StateChainRuntime {
-    type ValidatorId = <Self as System>::AccountId;
-    type Keys = BasicSessionKeys;
-}
-
-impl Sudo for StateChainRuntime {}
-
-// ==== Custom events from pallets need to be implemented for the runtime ====
-impl staking::StakeManager for StateChainRuntime {
-    type TokenAmount = u128;
-    type EthereumAddress = [u8; 20];
-    type Nonce = u32;
-}
-
-impl validator::Validator for StateChainRuntime {
-    type EpochIndex = u32;
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn can_register_state_chain_runtime() {
-        EventTypeRegistry::<StateChainRuntime>::new();
-    }
+    type AccountData = ();
 }
