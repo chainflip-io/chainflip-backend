@@ -342,8 +342,15 @@ impl pallet_cf_witness::Config for Runtime {
 	type Amount = FlipBalance;
 }
 
+/// Claims go live 48 hours after registration, so we need to allow enough time beyond that.
+const SECS_IN_AN_HOUR: u64 = 3600;
+const REGISTRATION_DELAY: u64 = 48 * SECS_IN_AN_HOUR;
+
 parameter_types! {
-	pub const MinClaimTTL: Duration = Duration::from_millis(MILLISECS_PER_BLOCK * 10);
+	/// 4 days. When a claim is signed, there needs to be enough time left to be able to cash it in.
+	pub const MinClaimTTL: Duration = Duration::from_secs(2 * REGISTRATION_DELAY);
+	/// 6 days.
+	pub const ClaimTTL: Duration = Duration::from_secs(3 * REGISTRATION_DELAY);
 }
 
 impl pallet_cf_staking::Config for Runtime {
@@ -351,7 +358,6 @@ impl pallet_cf_staking::Config for Runtime {
 	type Call = Call;
 	type Balance = FlipBalance;
 	type Flip = Flip;
-	type EthereumAddress = [u8; 20];
 	type Nonce = u64;
 	type EthereumCrypto = ecdsa::Public;
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
@@ -359,6 +365,7 @@ impl pallet_cf_staking::Config for Runtime {
 	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
 	type TimeSource = Timestamp;
 	type MinClaimTTL = MinClaimTTL;
+	type ClaimTTL = ClaimTTL;
 }
 
 construct_runtime!(

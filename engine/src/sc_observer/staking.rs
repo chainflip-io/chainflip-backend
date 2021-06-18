@@ -20,11 +20,7 @@ pub struct ClaimSigRequestedEvent<S: Staking> {
     /// The AccountId of the validator wanting to claim
     pub who: AccountId32,
 
-    pub eth_address: [u8; 20],
-
-    pub nonce: u64,
-
-    pub amount: u128,
+    pub msg_hash: [u8; 32],
 
     pub _phantom: PhantomData<S>,
 }
@@ -139,15 +135,12 @@ mod tests {
     #[test]
     fn claim_sig_requested_decode_test() {
         let who = AccountKeyring::Alice.to_account_id();
-        let eth_address: [u8; 20] = [
-            00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01,
-        ];
+        let msg_hash = [21u8; 32];
+
         let event: <SCRuntime as Config>::Event =
             pallet_cf_staking::Event::<SCRuntime>::ClaimSigRequested(
                 who.clone(),
-                eth_address,
-                123u64,
-                123u128,
+                msg_hash,
             )
             .into();
 
@@ -163,9 +156,7 @@ mod tests {
 
         let expecting = ClaimSigRequestedEvent {
             who,
-            eth_address,
-            nonce: 123u64,
-            amount: 123u128,
+            msg_hash,
             _phantom: PhantomData,
         };
 

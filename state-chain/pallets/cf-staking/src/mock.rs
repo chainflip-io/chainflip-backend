@@ -33,6 +33,7 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const SS58Prefix: u8 = 42;
 	pub const MinClaimTTL: Duration = Duration::from_millis(100);
+	pub const ClaimTTL: Duration = Duration::from_millis(1000);
 }
 
 impl frame_system::Config for Test {
@@ -73,7 +74,6 @@ impl pallet_cf_flip::Config for Test {
 impl pallet_cf_staking::Config for Test {
 	type Event = Event;
 	type Call = Call;
-	type EthereumAddress = [u8; 20];
 	type Nonce = u32;
 	type EthereumCrypto = Public;
 	type EnsureWitnessed = ensure_witnessed::Mock;
@@ -81,11 +81,12 @@ impl pallet_cf_staking::Config for Test {
 	type EpochInfo = epoch_info::Mock;
 	type TimeSource = time_source::Mock;
 	type MinClaimTTL = MinClaimTTL;
+	type ClaimTTL = ClaimTTL;
 	type Balance = u128;
 	type Flip = Flip;
 }
 
-pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
+pub const ALICE: <Test as frame_system::Config>::AccountId = 123123u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
 pub const CHARLIE: <Test as frame_system::Config>::AccountId = 789u64;
 

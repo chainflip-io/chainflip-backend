@@ -43,6 +43,8 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+mod eth_encoding;
+
 use core::time::Duration;
 use frame_support::{
 	debug,
@@ -60,7 +62,10 @@ use sp_std::prelude::*;
 use cf_traits::{EpochInfo, BidderProvider, StakeTransfer};
 
 use codec::FullCodec;
-use sp_runtime::{DispatchError, traits::{AtLeast32BitUnsigned, CheckedSub, One, Zero}};
+use sp_runtime::{
+	traits::{AtLeast32BitUnsigned, CheckedSub, Hash, Keccak256, One, Zero},
+	DispatchError,
+};
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -72,11 +77,14 @@ pub mod pallet {
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
 
+	pub type EthereumAddress = [u8; 20];
+
 	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 	pub struct ClaimDetails<Amount, Nonce, EthereumAddress, Signature> {
 		pub(super) amount: Amount,
 		pub(super) nonce: Nonce,
 		pub(super) address: EthereumAddress,
+		pub(super) expiry: Duration,
 		pub(super) signature: Option<Signature>,
 	}
 
@@ -85,7 +93,7 @@ pub mod pallet {
 	pub type ClaimDetailsFor<T> = ClaimDetails<
 		FlipBalance<T>,
 		<T as Config>::Nonce,
-		<T as Config>::EthereumAddress,
+		EthereumAddress,
 		<<T as Config>::EthereumCrypto as RuntimePublic>::Signature,
 	>;
 
@@ -112,9 +120,6 @@ pub mod pallet {
 		type Flip: StakeTransfer<
 			AccountId=<Self as frame_system::Config>::AccountId,
 			Balance=Self::Balance>;
-
-		/// Ethereum address type, should correspond to [u8; 20], but defined globally for the runtime.
-		type EthereumAddress: Member + FullCodec + Copy;
 
 		/// A Nonce type to be used for claim nonces.
 		type Nonce: Member
@@ -151,6 +156,10 @@ pub mod pallet {
 		/// actually being processed.
 		#[pallet::constant]
 		type MinClaimTTL: Get<Duration>;
+
+		/// TTL for a claim from the moment of issue.
+		#[pallet::constant]
+		type ClaimTTL: Get<Duration>;
 	}
 
 	#[pallet::pallet]
@@ -193,17 +202,17 @@ pub mod pallet {
 		ClaimSettled(AccountId<T>, FlipBalance<T>),
 
 		/// The staked amount should be refunded to the provided Ethereum address. [node_id, refund_amount, address]
-		StakeRefund(AccountId<T>, FlipBalance<T>, T::EthereumAddress),
+		StakeRefund(AccountId<T>, FlipBalance<T>, EthereumAddress),
 
-		/// A claim request has been made to provided Ethereum address. [who, address, nonce, amount]
-		ClaimSigRequested(AccountId<T>, T::EthereumAddress, T::Nonce, FlipBalance<T>),
+		/// A claim request has been validated and needs to be signed. [node_id, msg_hash]
+		ClaimSigRequested(AccountId<T>, [u8; 32]),
 
 		/// A claim signature has been issued by the signer module. [issuer, amount, nonce, address, expiry_time, signature]
 		ClaimSignatureIssued(
 			AccountId<T>,
 			FlipBalance<T>,
 			T::Nonce,
-			T::EthereumAddress,
+			EthereumAddress,
 			Duration,
 			<T::EthereumCrypto as RuntimePublic>::Signature,
 		),
@@ -259,7 +268,7 @@ pub mod pallet {
 			staker_account_id: AccountId<T>,
 			amount: FlipBalance<T>,
 			// TODO: remove this. Leaving it here for now for compatibility with CFE.
-			refund_address: T::EthereumAddress,
+			refund_address: EthereumAddress,
 			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -279,7 +288,7 @@ pub mod pallet {
 			account_id: T::AccountId,
 			amount: FlipBalance<T>,
 			// TODO: remove this. Leaving it here for now for compatibility with CFE.
-			refund_address: T::EthereumAddress,
+			refund_address: EthereumAddress,
 			// Required to ensure this call is unique.
 			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
@@ -308,7 +317,7 @@ pub mod pallet {
 		pub fn claim(
 			origin: OriginFor<T>,
 			amount: FlipBalance<T>,
-			address: T::EthereumAddress,
+			address: EthereumAddress,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			Self::do_claim(&who, amount, address)?;
@@ -321,7 +330,7 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn claim_all(
 			origin: OriginFor<T>,
-			address: T::EthereumAddress,
+			address: EthereumAddress,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let claimable = T::Flip::claimable_balance(&who);
@@ -355,8 +364,8 @@ pub mod pallet {
 		/// ## Error conditions:
 		///
 		/// - NoPendingClaim(Error::NoPendingClaim): The provided account does not have any claims pending.
-		/// - InvalidClaimAmount(Error::InvalidClaimAmount): The amount provided does not match that of the pending
-		///   claim.
+		/// - InvalidClaimDetails(Error::InvalidClaimDetails): The nonce or amount provided does not match that of the 
+		///   pending claim.
 		///
 		/// **This call can only be dispatched from the configured witness origin.**
 		#[pallet::weight(10_000)]
@@ -403,7 +412,7 @@ pub mod pallet {
 			account_id: AccountId<T>,
 			amount: FlipBalance<T>,
 			nonce: T::Nonce,
-			address: T::EthereumAddress,
+			address: EthereumAddress,
 			expiry_time: Duration,
 			signature: <T::EthereumCrypto as RuntimePublic>::Signature,
 		) -> DispatchResultWithPostInfo {
@@ -545,7 +554,8 @@ impl<T: Config> Pallet<T> {
 	fn do_claim(
 		account_id: &T::AccountId,
 		amount: T::Balance,
-		address: T::EthereumAddress) -> Result<(), DispatchError> {
+		address: EthereumAddress,
+	) -> Result<(), DispatchError> {
 		// No new claim requests can be processed if we're currently in an auction phase.
 		ensure!(
 			!T::EpochInfo::is_auction_phase(),
@@ -570,23 +580,20 @@ impl<T: Config> Pallet<T> {
 		});
 
 		// Insert a pending claim without a signature.
-		PendingClaims::<T>::insert(
-			account_id,
-			ClaimDetails {
+		let expiry = T::TimeSource::now() + T::ClaimTTL::get();
+		let details = ClaimDetails {
 				amount,
 				nonce,
 				address,
+				expiry,
 				signature: None,
-			},
-		);
+			};
+		let payload = eth_encoding::encode_claim_request::<T>(account_id, &details);
+		let msg_hash = Keccak256::hash(&payload[..]).to_fixed_bytes();
+		PendingClaims::<T>::insert(account_id, details);
 
 		// Emit the event requesting that the CFE generate the claim voucher.
-		Self::deposit_event(Event::<T>::ClaimSigRequested(
-			account_id.clone(),
-			address,
-			nonce,
-			amount,
-		));
+		Self::deposit_event(Event::<T>::ClaimSigRequested(account_id.clone(), msg_hash));
 
 		Ok(())
 	}

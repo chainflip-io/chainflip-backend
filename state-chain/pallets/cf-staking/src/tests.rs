@@ -1,14 +1,18 @@
-use crate::{Config, Error, Pallet, PendingClaims, mock::*, pallet};
-use std::time::Duration;
-use frame_support::{assert_noop, assert_ok, error::BadOrigin, traits::UnixTime};
-use sp_core::ecdsa::Signature;
+use crate::{
+	eth_encoding, mock::*, pallet, ClaimDetails, ClaimDetailsFor, Config, Error, EthereumAddress,
+	Pallet, PendingClaims,
+};
 use cf_traits::mocks::epoch_info;
+use codec::Encode;
+use frame_support::{assert_noop, assert_ok, error::BadOrigin, traits::UnixTime};
 use pallet_cf_flip::ImbalanceSource;
+use sp_core::ecdsa::Signature;
+use std::time::Duration;
 
 type FlipError = pallet_cf_flip::Error<Test>;
 type FlipEvent = pallet_cf_flip::Event<Test>;
 
-const ETH_DUMMY_ADDR: <Test as Config>::EthereumAddress = [42u8; 20];
+const ETH_DUMMY_ADDR: EthereumAddress = [42u8; 20];
 const TX_HASH: pallet::EthTransactionHash = [211; 32];
 
 fn time_after<T: Config>(duration: Duration) -> Duration {
@@ -80,15 +84,9 @@ fn staked_amount_is_added_and_subtracted() {
 		assert_eq!(PendingClaims::<Test>::get(BOB).unwrap().amount, CLAIM_B);
 
 		assert_event_stack!(
-			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(BOB, _, nonce, amount)) => {
-				assert_eq!(CLAIM_B, amount);
-				assert_eq!(1, nonce);
-			},
+			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(BOB, _payload)),
 			_, // claim debited from BOB
-			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _, nonce, amount)) => {
-				assert_eq!(CLAIM_A, amount);
-				assert_eq!(1, nonce);
-			},
+			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _payload)),
 			_, // claim debited from ALICE
 			Event::pallet_cf_staking(crate::Event::Staked(BOB, staked, total)) => {
 				assert_eq!(staked, STAKE_B);
@@ -211,9 +209,7 @@ fn staked_and_claimed_events_must_match() {
 				assert_eq!(claimed_amount, STAKE);
 			},
 			Event::frame_system(frame_system::Event::KilledAccount(ALICE)),
-			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _, nonce, STAKE)) => {
-				assert_eq!(nonce, 1);
-			},
+			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _payload)),
 			_, // Claim debited from account
 			Event::pallet_cf_staking(crate::Event::Staked(ALICE, added, total)) => { 
 				assert_eq!(added, STAKE);
@@ -252,15 +248,10 @@ fn signature_is_inserted() {
 
 		// Check storage for the signature, should not be there.
 		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().signature, None);
-
-		// Get the nonce
-		let nonce = if let Event::pallet_cf_staking(crate::Event::ClaimSigRequested( _, _, nonce, _ )) =
-			frame_system::Pallet::<Test>::events().last().unwrap().event
-		{
-			nonce
-		} else {
-			panic!("Expected ClaimSigRequested event with nonce.")
-		};
+		
+		// Nonce should be 1.
+		let nonce = PendingClaims::<Test>::get(ALICE).unwrap().nonce;
+		assert_eq!(nonce, 1);
 		
 		// Insert a signature.
 		let expiry = time_after::<Test>(Duration::from_secs(10));
@@ -278,9 +269,7 @@ fn signature_is_inserted() {
 
 		assert_event_stack!(
 			Event::pallet_cf_staking(crate::Event::ClaimSignatureIssued(ALICE, ..)),
-			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _, n, STAKE)) => {
-				assert_eq!(n, nonce);
-			},
+			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _payload)),
 			_,
 			Event::pallet_cf_staking(crate::Event::Staked(ALICE, added, total)) => { 
 				assert_eq!(added, STAKE);
@@ -536,12 +525,105 @@ fn test_claim_all() {
 
 		// We should have a claim for the full staked amount minus the bond.
 		assert_event_stack!(
-			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _, _, amount)) => {
-				assert_eq!(STAKE - BOND, amount);
-			},
+			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _)),
 			_, // claim debited from ALICE
 			Event::pallet_cf_staking(crate::Event::Staked(ALICE, STAKE, STAKE)),
 			_ // stake credited to ALICE
 		);
 	});
+}
+
+#[test]
+fn test_claim_payload() {
+	use ethabi::{Token, Address};
+	// const ABI_JSON: &'static [u8; 8648] = std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json");
+	const ABI_JSON: &'static str = r#"[
+		{
+			"inputs": [
+			{
+				"components": [
+				{
+					"internalType": "uint256",
+					"name": "msgHash",
+					"type": "uint256"
+				},
+				{
+					"internalType": "uint256",
+					"name": "sig",
+					"type": "uint256"
+				},
+				{
+					"internalType": "uint256",
+					"name": "nonce",
+					"type": "uint256"
+				}
+				],
+				"internalType": "struct IShared.SigData",
+				"name": "sigData",
+				"type": "tuple"
+			},
+			{
+				"internalType": "uint256",
+				"name": "nodeID",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "staker",
+				"type": "address"
+			},
+			{
+				"internalType": "uint48",
+				"name": "expiryTime",
+				"type": "uint48"
+			}
+			],
+			"name": "registerClaim",
+			"outputs": [],
+			"stateMutability": "nonpayable",
+			"type": "function"
+		}
+	]"#;
+	const EXPIRY_SECS: u64 = 10;
+	const AMOUNT: u128 = 1234567890;
+	const NONCE:u32 = 6;
+
+	let stake_manager = ethabi::Contract::load(ABI_JSON.as_bytes()).unwrap();
+	let register_claim = stake_manager.function("registerClaim").unwrap();
+
+	let claim_details: ClaimDetailsFor<Test> = ClaimDetails {
+		amount: AMOUNT,
+		nonce: NONCE,
+		address: ETH_DUMMY_ADDR,
+		expiry: Duration::from_secs(EXPIRY_SECS),
+		signature: None,
+	};
+	let runtime_payload = eth_encoding::encode_claim_request::<Test>(&ALICE, &claim_details);
+
+	assert_eq!(
+		// Our encoding:
+		runtime_payload,
+		// "Canoncial" encoding based on the abi definition above and using the ethabi crate:
+		register_claim.encode_input(&vec![
+			// sigData: SigData(uint, uint, uint)
+			Token::Tuple(vec![
+				Token::Uint(ethabi::Uint::zero()), 
+				Token::Uint(ethabi::Uint::zero()), 
+				Token::Uint(ethabi::Uint::from(NONCE))
+			]),
+			// nodeId: bytes32
+			Token::FixedBytes(ALICE.using_encoded(|bytes| bytes.to_vec())),
+			// amount: uint
+			Token::Uint(ethabi::Uint::from(AMOUNT)),
+			// staker: address
+			Token::Address(Address::from(ETH_DUMMY_ADDR)),
+			// epiryTime: uint48
+			Token::Uint(ethabi::Uint::from(EXPIRY_SECS)),
+		]).unwrap()
+	);
 }
