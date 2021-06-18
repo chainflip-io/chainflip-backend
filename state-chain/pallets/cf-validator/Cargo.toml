@@ -46,6 +46,7 @@ std = [
     'log/std',
     'pallet-session/std',
     'frame-benchmarking/std',
+    'pallet-cf-auction/std',
 ]
 runtime-benchmarks = [
     'frame-benchmarking',

@@ -11,12 +11,16 @@ use sp_std::prelude::*;
 pub trait Witnesser {
 	/// The type of accounts that can witness.
 	type AccountId;
-
 	/// The call type of the runtime.
 	type Call: UnfilteredDispatchable;
 
-	/// Witness an event. The event is represented by a call, which should be
-	/// dispatched when a threshold number of witnesses have been made.
+	/// Witness an event. The event is represented by a call, which is dispatched when a threshold number of witnesses
+	/// have been made.
+	///
+	/// **IMPORTANT** 
+	/// The encoded `call` and its arguments are expected to be *unique*. If necessary this should be enforced by adding
+	/// a salt or nonce to the function arguments.
+	/// **IMPORTANT**
 	fn witness(who: Self::AccountId, call: Self::Call) -> DispatchResultWithPostInfo;
 }
 
@@ -104,7 +108,9 @@ pub trait Auction {
 /// Confirmation of an auction
 pub trait AuctionConfirmation {
 	/// To confirm that the auction is valid and can continue
-	fn confirmed() -> bool;
+	fn awaiting_confirmation() -> bool;
+	/// Awaiting confirmation
+	fn set_awaiting_confirmation(waiting: bool);
 }
 
 /// An error has occurred during an auction

@@ -164,7 +164,7 @@ pub mod pallet {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			ensure!(AuctionToConfirm::<T>::get(), Error::<T>::InvalidAuction);
 			ensure!(index == CurrentAuctionIndex::<T>::get(), Error::<T>::InvalidAuction);
-			AuctionToConfirm::<T>::set(false);
+			Self::set_awaiting_confirmation(true);
 			Self::deposit_event(Event::AuctionConfirmed(index));
 			Ok(().into())
 		}
@@ -190,11 +190,48 @@ pub mod pallet {
 			}
 		}
 	}
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig {
+		pub auction_size_range: AuctionRange,
+	}
+
+	#[cfg(feature = "std")]
+	impl Default for GenesisConfig {
+		fn default() -> Self {
+			Self {
+				auction_size_range: (Zero::zero(), Zero::zero()),
+			}
+		}
+	}
+
+	// The build of genesis for the pallet.
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+		fn build(&self) {
+			AuctionSizeRange::<T>::set(self.auction_size_range);
+			// Run through an auction
+			if Pallet::<T>::process()
+				.and(Pallet::<T>::process()).is_ok() {
+				T::Confirmation::set_awaiting_confirmation(false);
+				if let Err(err) = Pallet::<T>::process() {
+					panic!("Failed to confirm auction: {:?}", err);
+				}
+			} else {
+				panic!("Failed selecting winners in auction");
+			}
+		}
+	}
 }
 
 impl<T: Config> AuctionConfirmation for Pallet<T> {
-	fn confirmed() -> bool {
-		<AuctionToConfirm::<T>>::get()
+
+	fn awaiting_confirmation() -> bool {
+		AuctionToConfirm::<T>::get()
+	}
+
+	fn set_awaiting_confirmation(waiting: bool) {
+		AuctionToConfirm::<T>::set(waiting);
 	}
 }
 
@@ -259,7 +296,7 @@ impl<T: Config> Auction for Pallet<T> {
 
 				let phase = AuctionPhase::BidsTaken(bidders);
 				<CurrentPhase<T>>::put(phase.clone());
-				<AuctionToConfirm::<T>>::set(true);
+				Self::Confirmation::set_awaiting_confirmation(true);
 
 				<CurrentAuctionIndex<T>>::mutate(|idx| {
 					*idx + One::one()
@@ -298,7 +335,7 @@ impl<T: Config> Auction for Pallet<T> {
 			// We are ready to call this an auction a day resetting the bidders in storage and
 			// setting the state ready for a new set of 'Bidders'
 			AuctionPhase::WinnersSelected(winners, min_bid) => {
-				if !Self::Confirmation::confirmed() {
+				if Self::Confirmation::awaiting_confirmation() {
 					return Err(AuctionError::NotConfirmed);
 				}
 
