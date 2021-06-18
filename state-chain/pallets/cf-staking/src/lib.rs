@@ -62,7 +62,10 @@ use sp_std::prelude::*;
 use cf_traits::{EpochInfo, BidderProvider, StakeTransfer};
 
 use codec::FullCodec;
-use sp_runtime::{DispatchError, traits::{AtLeast32BitUnsigned, CheckedSub, One, Zero}};
+use sp_runtime::{
+	traits::{AtLeast32BitUnsigned, CheckedSub, Hash, Keccak256, One, Zero},
+	DispatchError,
+};
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -201,8 +204,8 @@ pub mod pallet {
 		/// The staked amount should be refunded to the provided Ethereum address. [node_id, refund_amount, address]
 		StakeRefund(AccountId<T>, FlipBalance<T>, EthereumAddress),
 
-		/// A claim request has been validated and needs to be signed. [node_id, payload]
-		ClaimSigRequested(AccountId<T>, Vec<u8>),
+		/// A claim request has been validated and needs to be signed. [node_id, msg_hash]
+		ClaimSigRequested(AccountId<T>, [u8; 32]),
 
 		/// A claim signature has been issued by the signer module. [issuer, amount, nonce, address, expiry_time, signature]
 		ClaimSignatureIssued(
@@ -586,10 +589,11 @@ impl<T: Config> Pallet<T> {
 				signature: None,
 			};
 		let payload = eth_encoding::encode_claim_request::<T>(account_id, &details);
+		let msg_hash = Keccak256::hash(&payload[..]).to_fixed_bytes();
 		PendingClaims::<T>::insert(account_id, details);
 
 		// Emit the event requesting that the CFE generate the claim voucher.
-		Self::deposit_event(Event::<T>::ClaimSigRequested(account_id.clone(), payload));
+		Self::deposit_event(Event::<T>::ClaimSigRequested(account_id.clone(), msg_hash));
 
 		Ok(())
 	}
