@@ -94,7 +94,7 @@ mod tests {
         let mut stream_1 = clients[1].take_stream().await.unwrap();
 
         assert_eq!(
-            stream_1.next().await.unwrap(),
+            receive_with_timeout(stream_1.into_inner()).await.unwrap(),
             P2PMessage {
                 sender_id: 0,
                 data: data.clone(),
@@ -103,7 +103,7 @@ mod tests {
 
         let mut stream_2 = clients[2].take_stream().await.unwrap();
 
-        assert!(stream_2.next().await.is_none());
+        assert_eq!(receive_with_timeout(stream_2.into_inner()).await, None);
     }
 
     #[tokio::test]
@@ -119,7 +119,7 @@ mod tests {
         let mut stream_0 = clients[0].take_stream().await.unwrap();
 
         assert_eq!(
-            stream_0.next().await.unwrap(),
+            receive_with_timeout(stream_0.into_inner()).await.unwrap(),
             P2PMessage {
                 sender_id: 1,
                 data: data.clone(),
@@ -129,7 +129,7 @@ mod tests {
         let mut stream_2 = clients[2].take_stream().await.unwrap();
 
         assert_eq!(
-            stream_2.next().await.unwrap(),
+            receive_with_timeout(stream_2.into_inner()).await.unwrap(),
             P2PMessage {
                 sender_id: 1,
                 data: data.clone(),
