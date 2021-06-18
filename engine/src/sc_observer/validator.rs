@@ -5,13 +5,19 @@ use std::marker::PhantomData;
 use cf_traits::AuctionRange;
 use codec::{Decode, Encode};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use substrate_subxt::{module, sp_runtime::traits::Member, Event};
+use substrate_subxt::{module, sp_runtime::traits::Member, Call, Event};
 
-use super::{runtime::StateChainRuntime, sc_event::SCEvent, system::System};
+use super::{runtime::StateChainRuntime, sc_event::SCEvent};
 
 #[module]
-pub trait Validator: System {
+pub trait Validator: substrate_subxt::system::System {
     type EpochIndex: Member + Encode + Decode + Serialize + DeserializeOwned;
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Decode, Encode, Serialize, Deserialize)]
+pub struct ForceRotationCall<T: Validator> {
+    /// Runtime marker
+    _runtime: PhantomData<T>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]

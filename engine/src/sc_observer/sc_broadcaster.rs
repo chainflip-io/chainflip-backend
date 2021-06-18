@@ -71,10 +71,10 @@ mod tests {
     use super::*;
 
     use crate::sc_observer::stake_manager::{MinExtCallExt, StakedCallExt, WitnessStakedCallExt};
+    use crate::sc_observer::validator::ForceRotationCallExt;
     use crate::settings;
     use crate::settings::StateChain;
 
-    use substrate_subxt::balances::{TransferCall, TransferCallExt, TransferEvent};
     use substrate_subxt::sudo::SudoCallExt;
     use substrate_subxt::system::SetCodeCallExt;
     use substrate_subxt::Signer;
@@ -83,8 +83,6 @@ mod tests {
     async fn create_raw_payload_test() {
         let settings = settings::test_utils::new_test_settings().unwrap();
         let subxt_client = create_subxt_client(settings.state_chain).await.unwrap();
-
-        // println!("Here's the metadata: {:#?}", metadata);
     }
 
     #[tokio::test]
@@ -117,14 +115,13 @@ mod tests {
             00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01,
         ];
 
-        let result = subxt_client
-            .set_code(&signer, &[0u8, 0u8, 0u8, 0u8])
-            .await
-            .unwrap();
+        // let result = subxt_client
+        //     .set_code(&signer, &[0u8, 0u8, 0u8, 0u8])
+        //     .await
+        //     .unwrap();
 
-        // let result = subxt_client.min_ext(&signer).await;
-
-        println!("Result: {:#?}", result);
+        let result = subxt_client.force_rotation(&signer).await;
+        println!("Result is: {:#?}", result);
     }
 }
 
