@@ -4,7 +4,12 @@
   "FlipBalance": "u128",
   "AuctionRange": "(u32, u32)",
   "EpochIndex": "u32",
-  "AccountInfo": "AccountInfoWithDualRefCount",
+  "AccountInfo":  {
+    "nonce": "Index",
+    "consumers": "RefCount",
+    "providers": "RefCount",
+    "data": "()"
+  },
   "ValidatorSize": "u32",
   "VoteCount": "u32",
   "TokenAmount": "u128",
