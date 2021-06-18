@@ -40,12 +40,7 @@ impl From<P2pEvent> for P2PMessage {
 					data: msg,
 				}
 			}
-			P2pEvent::PeerConnected(peer_id) => {
-				P2PMessage {
-					sender_id: peer_id.parse().unwrap_or(0),
-					data: vec![],
-				}
-			}
+			P2pEvent::PeerConnected(peer_id) |
 			P2pEvent::PeerDisconnected(peer_id) => {
 				P2PMessage {
 					sender_id: peer_id.parse().unwrap_or(0),
@@ -57,7 +52,6 @@ impl From<P2pEvent> for P2PMessage {
 }
 
 struct GlueClientStream {
-	// inner: TypedSubscriptionStream<P2pEvent>,
 	inner: Pin<Box<dyn Stream<Item = RpcResult<P2pEvent>> + Send>>,
 }
 
@@ -181,15 +175,67 @@ impl P2PClient {
 mod tests {
 	use super::*;
 	use jsonrpc_core_client::transports::http::connect;
-	use tokio_compat_02::FutureExt;
+	use jsonrpc_http_server::*;
+	use jsonrpc_core::{Error, ErrorCode, IoHandler, Params, Value};
+	use serde_json::json;
 
-	#[tokio::test]
-	async fn should_work() {
-		let mut glue_client = GlueClient::new(&"http://localhost:9933");
-		//
-		// if let Some(receiver) =
-		// 	P2PNetworkClient::<ValidatorId>::take_receiver(&mut glue_client).await {
-		//
-		// }
+	fn id<T>(t: T) -> T {
+		t
+	}
+
+	struct TestServer {
+		uri: String,
+		server: Option<Server>,
+	}
+
+	impl TestServer {
+		fn serve<F: FnOnce(ServerBuilder) -> ServerBuilder>(alter: F) -> Self {
+			let builder = ServerBuilder::new(io()).rest_api(RestApi::Unsecure);
+
+			let server = alter(builder).start_http(&"127.0.0.1:0".parse().unwrap()).unwrap();
+			let uri = format!("http://{}", server.address());
+
+			TestServer {
+				uri,
+				server: Some(server),
+			}
+		}
+
+		fn stop(&mut self) {
+			let server = self.server.take();
+			if let Some(server) = server {
+				server.close();
+			}
+		}
+	}
+
+	fn io() -> IoHandler {
+		let mut io = IoHandler::default();
+		io.add_sync_method("p2p_send", |params: Params| match params.parse::<(String, String,)>() {
+			_ => Ok(json!(200)),
+		});
+		io.add_sync_method("p2p_broadcast", |params: Params| match params.parse::<(String,)>() {
+			_ => Ok(json!(200)),
+		});
+
+		io
+	}
+
+	#[test]
+	fn client_api() {
+		let server = TestServer::serve(id);
+
+		let mut glue_client = GlueClient::new(&server.uri);
+		let run = async {
+			let result = glue_client.send(&100,"disco".as_bytes()).await;
+			assert!(result.is_ok(), "Should receive OK for sending message to peer");
+			let result =
+				P2PNetworkClient::<usize, GlueClientStream>::broadcast(&glue_client,"disco".as_bytes()).await;
+			assert!(result.is_ok(), "Should receive OK for broadcasting message");
+			let result =
+				P2PNetworkClient::<usize, GlueClientStream>::take_stream(&mut glue_client).await;
+			assert!(result.is_ok(), "Should subscribe OK");
+		};
+		tokio::runtime::Runtime::new().unwrap().block_on(run);
 	}
 }
