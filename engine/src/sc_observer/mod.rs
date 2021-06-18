@@ -18,12 +18,7 @@ mod helpers;
 
 // ==== Pallet support for the state chain =====
 
-/// System pallet support for substrate-subxt but without the subxt bs
-pub mod system;
-
-/// Session pallet support for substrate-subxt, not dependent on Balances
-pub mod session;
 /// Staking pallet support for substrate-subxt
-pub mod stake_manager;
+pub mod staking;
 /// Validator pallet support for substrate-subxt
 pub mod validator;

@@ -20,7 +20,7 @@ use core::fmt::Debug;
 
 use codec::{Decode, Encode};
 
-use super::{stake_manager, system, validator};
+use super::{staking, validator};
 
 use serde::{Deserialize, Serialize};
 
@@ -94,7 +94,7 @@ impl validator::Validator for StateChainRuntime {
     type EpochIndex = u32;
 }
 
-impl stake_manager::StakeManager for StateChainRuntime {
+impl staking::Staking for StateChainRuntime {
     type TokenAmount = u128;
 
     type EthereumAddress = [u8; 20];

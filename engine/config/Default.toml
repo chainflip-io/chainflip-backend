@@ -6,7 +6,7 @@ hostname = "localhost"
 port = "4222"
 
 [state_chain]
-hostname = "localhost"
+hostname = "test"
 port = "9944"
 
 [eth]

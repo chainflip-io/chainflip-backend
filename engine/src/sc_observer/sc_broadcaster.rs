@@ -70,11 +70,12 @@ mod tests {
 
     use super::*;
 
-    use crate::sc_observer::stake_manager::{MinExtCallExt, StakedCallExt, WitnessStakedCallExt};
+    use crate::sc_observer::staking::{StakedCallExt, WitnessStakedCallExt};
     use crate::sc_observer::validator::ForceRotationCallExt;
     use crate::settings;
     use crate::settings::StateChain;
 
+    use hex_literal::hex;
     use substrate_subxt::sudo::SudoCallExt;
     use substrate_subxt::system::SetCodeCallExt;
     use substrate_subxt::Signer;
@@ -86,41 +87,42 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn check_genesis() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-        let subxt_client = create_subxt_client(settings.state_chain).await.unwrap();
-
-        let genesis_from_client = subxt_client.genesis();
-        println!("Genesis from client: {:#?}", genesis_from_client);
-        let gen_checker = substrate_subxt::extrinsic::CheckGenesis::<StateChainRuntime>(
-            PhantomData,
-            H256::from_str("0x91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c4")
-                .unwrap(),
-        );
-
-        let result = gen_checker.additional_signed();
-
-        println!("Result is: {:#?}", result);
-    }
-
-    #[tokio::test]
     async fn submit_xt_test() {
         let settings = settings::test_utils::new_test_settings().unwrap();
         let subxt_client = create_subxt_client(settings.state_chain).await.unwrap();
-        let signer = PairSigner::new(AccountKeyring::Alice.pair());
 
-        let alice = AccountKeyring::Alice.to_account_id();
+        let hex_lit = hex!("");
+
+        let keyring = sp_keyring::sr25519::sr25519::Pair::from_seed(&hex_lit);
+
+        let signer = PairSigner::new(keyring);
 
         let eth_address: [u8; 20] = [
             00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01,
         ];
 
-        // let result = subxt_client
-        //     .set_code(&signer, &[0u8, 0u8, 0u8, 0u8])
-        //     .await
-        //     .unwrap();
+        let tx_hash: [u8; 32] = [
+            00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01, 01, 01,
+            01, 01, 01, 01, 01, 01, 01, 01, 01, 01,
+        ];
 
-        let result = subxt_client.force_rotation(&signer).await;
+        let account_id_bashful = AccountId32::from_str("").unwrap();
+
+        //     staker_account_id: AccountId32,
+
+        // amount: T::TokenAmount,
+
+        // refund_address: T::EthereumAddress,
+
+        let result = subxt_client
+            .witness_staked(
+                &signer,
+                account_id_bashful,
+                10000000u128,
+                eth_address,
+                tx_hash,
+            )
+            .await;
         println!("Result is: {:#?}", result);
     }
 }

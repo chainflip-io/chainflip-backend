@@ -898,6 +898,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "hex 0.4.3",
+ "hex-literal",
  "httparse",
  "itertools 0.10.0",
  "lazy_static",
