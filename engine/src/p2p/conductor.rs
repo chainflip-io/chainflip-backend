@@ -8,25 +8,27 @@ use crate::{
 
 use super::{P2PMessageCommand, P2PNetworkClient};
 use crate::p2p::ValidatorId;
-use cf_p2p_rpc::P2pEvent;
-use jsonrpc_core_client::RpcError;
+use std::marker::PhantomData;
 
 /// Intermediates P2P events between MQ and P2P interface
-pub struct P2PConductor<MQ, P2P>
+pub struct P2PConductor<MQ, P2P, S>
 where
     MQ: IMQClient + Send,
-    P2P: P2PNetworkClient<ValidatorId>,
+    S: Stream<Item=P2PMessage>,
+    P2P: P2PNetworkClient<ValidatorId, S>,
 {
     mq: MQ,
     p2p: P2P,
     idx: usize, // TODO: validator id?
     stream: Box<dyn Stream<Item = Result<P2PMessageCommand, anyhow::Error>>>,
+    marker: PhantomData<S>,
 }
 
-impl<MQ, P2P> P2PConductor<MQ, P2P>
+impl<MQ, P2P, S> P2PConductor<MQ, P2P, S>
 where
     MQ: IMQClient + Send,
-    P2P: P2PNetworkClient<ValidatorId> + Send,
+    S: Stream<Item=P2PMessage> + Unpin,
+    P2P: P2PNetworkClient<ValidatorId, S> + Send,
 {
     pub async fn new(mq: MQ, idx: usize, p2p: P2P) -> Self {
         let stream = mq
@@ -39,11 +41,12 @@ where
             p2p,
             idx,
             stream,
+            marker: PhantomData
         }
     }
 
     pub async fn start(mut self) {
-        type Msg = Either<Result<P2PMessageCommand, anyhow::Error>, Result<P2pEvent, RpcError>>;
+        type Msg = Either<Result<P2PMessageCommand, anyhow::Error>, P2PMessage>;
 
         let mq_stream = pin_message_stream(self.stream);
 
@@ -61,12 +64,10 @@ where
                     }
                 }
                 Either::Right(incoming) => {
-                    if let Ok(incoming) = incoming {
-                        self.mq
-                            .publish::<P2PMessage>(Subject::P2PIncoming, &incoming.into())
-                            .await
-                            .unwrap()
-                    }
+                    self.mq
+                        .publish::<P2PMessage>(Subject::P2PIncoming, &incoming)
+                        .await
+                        .unwrap()
                 }
             }
         }

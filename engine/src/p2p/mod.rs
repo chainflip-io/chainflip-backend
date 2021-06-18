@@ -12,9 +12,8 @@ use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
 use tokio::sync::mpsc::UnboundedReceiver;
 use crate::p2p::rpc::Base58;
-use jsonrpc_core_client::TypedSubscriptionStream;
-use cf_p2p_rpc::P2pEvent;
 use futures::stream::StreamExt;
+use futures::Stream;
 
 #[derive(Debug)]
 pub enum P2PNetworkClientError {
@@ -25,14 +24,16 @@ pub enum P2PNetworkClientError {
 type StatusCode = u64;
 
 #[async_trait]
-pub trait P2PNetworkClient<B: Base58> {
+pub trait P2PNetworkClient<B: Base58, S: Stream<Item=P2PMessage>> {
     /// Broadcast to all validators on the network
     async fn broadcast(&self, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError>;
 
     /// Send to a specific `validator` only
     async fn send(&self, to: &B, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError>;
 
-    async fn take_stream(&mut self) -> Result<TypedSubscriptionStream<P2pEvent>, P2PNetworkClientError>;
+    async fn take_stream(&mut self) -> Result<S, P2PNetworkClientError> {
+        Err(P2PNetworkClientError::Rpc)
+    }
 }
 
 pub type ValidatorId = usize;
@@ -90,16 +91,17 @@ mod tests {
 
         drop(network);
 
-        let mut stream_1 =
-            P2PNetworkClient::<ValidatorId>::take_stream(&mut clients[1]).await.unwrap();
+        let mut stream_1 = clients[1].take_stream().await.unwrap();
 
         assert_eq!(
-            stream_1.next().await.unwrap().unwrap(),
-            P2pEvent::Received(0.to_string(), data.clone())
+            stream_1.next().await.unwrap(),
+            P2PMessage {
+                sender_id: 0,
+                data: data.clone(),
+            }
         );
 
-        let mut stream_2 =
-            P2PNetworkClient::<ValidatorId>::take_stream(&mut clients[2]).await.unwrap();
+        let mut stream_2 = clients[2].take_stream().await.unwrap();
 
         assert!(stream_2.next().await.is_none());
     }
@@ -112,22 +114,26 @@ mod tests {
         let mut clients: Vec<_> = (0..3).map(|i| network.new_client(i)).collect();
 
         // (1) broadcasts; (0) and (2) should receive one message
-        P2PNetworkClient::<ValidatorId>::broadcast(&clients[1], &data).await.unwrap();
+        clients[1].broadcast(&data).await.unwrap();
 
-        let mut stream_0 =
-            P2PNetworkClient::<ValidatorId>::take_stream(&mut clients[0]).await.unwrap();
+        let mut stream_0 = clients[0].take_stream().await.unwrap();
 
         assert_eq!(
-            stream_0.next().await.unwrap().unwrap(),
-            P2pEvent::Received(1.to_string(), data.clone())
+            stream_0.next().await.unwrap(),
+            P2PMessage {
+                sender_id: 1,
+                data: data.clone(),
+            }
         );
 
-        let mut stream_2 =
-            P2PNetworkClient::<ValidatorId>::take_stream(&mut clients[2]).await.unwrap();
+        let mut stream_2 = clients[2].take_stream().await.unwrap();
 
         assert_eq!(
-            stream_2.next().await.unwrap().unwrap(),
-            P2pEvent::Received(1.to_string(), data.clone())
+            stream_2.next().await.unwrap(),
+            P2PMessage {
+                sender_id: 1,
+                data: data.clone(),
+            }
         );
     }
 }

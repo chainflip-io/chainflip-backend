@@ -1,4 +1,4 @@
-use futures::{Future};
+use futures::{Future, Stream, StreamExt};
 use jsonrpc_core_client::{RpcChannel, TypedClient, TypedSubscriptionStream, RpcResult};
 use crate::p2p::{P2PNetworkClient, P2PMessage, P2PNetworkClientError, StatusCode};
 use jsonrpc_core_client::transports::http::connect;
@@ -6,6 +6,8 @@ use tokio_compat_02::FutureExt;
 use async_trait::async_trait;
 use std::str;
 use cf_p2p_rpc::P2pEvent;
+use std::task::{Context, Poll};
+use std::pin::Pin;
 
 pub trait Base58 {
 	fn to_base58(&self) -> String;
@@ -54,9 +56,45 @@ impl From<P2pEvent> for P2PMessage {
 	}
 }
 
+struct GlueClientStream {
+	// inner: TypedSubscriptionStream<P2pEvent>,
+	inner: Pin<Box<dyn Stream<Item = RpcResult<P2pEvent>> + Send>>,
+}
+
+impl GlueClientStream {
+	pub fn new(stream: TypedSubscriptionStream<P2pEvent>) -> Self {
+		GlueClientStream {
+			inner: Box::pin(stream),
+		}
+	}
+}
+
+impl Stream for GlueClientStream {
+	type Item = P2PMessage;
+
+	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+		let this = &mut *self;
+		loop {
+			match this.inner.poll_next_unpin(cx) {
+				Poll::Ready(Some(result)) => {
+					if let Ok(result) = result {
+						return Poll::Ready(Some(result.into()))
+					}
+				}
+				Poll::Ready(None) => return Poll::Ready(
+					None
+				),
+				Poll::Pending => break
+			}
+		}
+
+		Poll::Pending
+	}
+}
+
 #[async_trait]
-impl<'a, NodeId> P2PNetworkClient<NodeId> for GlueClient<'a>
-	where NodeId: Base58 + Send + Sync,
+impl<'a, NodeId> P2PNetworkClient<NodeId, GlueClientStream> for GlueClient<'a>
+	where NodeId: Base58 + Send + Sync
 {
 	async fn broadcast(&self, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError> {
 		let msg = str::from_utf8(data).map_err(|_| P2PNetworkClientError::Format)?;
@@ -76,12 +114,15 @@ impl<'a, NodeId> P2PNetworkClient<NodeId> for GlueClient<'a>
 		client.send(to.to_base58(), msg.to_string()).await.map_err(|_| P2PNetworkClientError::Rpc)
 	}
 
-	async fn take_stream(&mut self) -> Result<TypedSubscriptionStream<P2pEvent>, P2PNetworkClientError> {
+	async fn take_stream(&mut self) ->  Result<GlueClientStream, P2PNetworkClientError> {
 		let client: P2PClient = FutureExt::compat(connect(self.url))
 			.await
 			.map_err(|_| P2PNetworkClientError::Rpc)?;
 
-		client.subscribe_notifications().map_err(|_| P2PNetworkClientError::Rpc)
+		let sub = client.subscribe_notifications()
+			.map_err(|_| P2PNetworkClientError::Rpc)?;
+
+		Ok(GlueClientStream::new(sub))
 	}
 }
 
