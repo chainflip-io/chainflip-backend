@@ -388,7 +388,7 @@ construct_runtime!(
 		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
 		Witness: pallet_cf_witness::{Module, Call, Event<T>, Origin},
-		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>},
+		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
 	}
 );
 

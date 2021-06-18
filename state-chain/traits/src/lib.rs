@@ -108,7 +108,9 @@ pub trait Auction {
 /// Confirmation of an auction
 pub trait AuctionConfirmation {
 	/// To confirm that the auction is valid and can continue
-	fn confirmed() -> bool;
+	fn awaiting_confirmation() -> bool;
+	/// Awaiting confirmation
+	fn set_awaiting_confirmation(waiting: bool);
 }
 
 /// An error has occurred during an auction
