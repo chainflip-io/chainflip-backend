@@ -1,5 +1,6 @@
 use chainflip_engine::{
     eth,
+    health::health_check,
     mq::nats_client::NatsMQClientFactory,
     sc_observer,
     settings::Settings,
@@ -8,12 +9,14 @@ use chainflip_engine::{
 
 #[tokio::main]
 async fn main() {
-    // init the logger
     env_logger::init();
+
+    log::info!("Start the engines! :broom: :broom: ");
 
     let settings = Settings::new().expect("Failed to initialise settings");
 
-    log::info!("Start the engines! :broom: :broom: ");
+    // can use this sender to shut down the health check gracefully
+    let _sender = health_check(settings.engine.health_check_port).await;
 
     sc_observer::sc_observer::start(settings.clone()).await;
 

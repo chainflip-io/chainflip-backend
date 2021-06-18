@@ -8,52 +8,41 @@ mod test {
 	}
 
 	#[test]
+	fn genesis() {
+		new_test_ext().execute_with(|| {
+			// We should have our genesis validators, which would have been provided by
+			// `BidderProvider`
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(winners, min_bid)
+				if winners == vec![MAX_BID.0, JOE_BID.0, LOW_BID.0] && min_bid == LOW_BID.1
+			);
+		});
+	}
+	#[test]
 	fn run_through_phases() {
 		new_test_ext().execute_with(|| {
-			// Create a test set of bidders
-			let invalid_bid = (1, 0);
-			let low_bid = (2, 2);
-			let joe_bid = (3, 100);
-			let max_bid = (4, 101);
-			BIDDER_SET.with(|l| {
-				*l.borrow_mut() = vec![invalid_bid, low_bid, joe_bid, max_bid]
-			});
-
-			let auction_range = (2, 100);
 			// Check we are in the bidders phase
-			assert_eq!(AuctionPallet::current_phase(), AuctionPhase::default());
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
 			// Now move to the next phase, this should be the BidsTaken phase
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(bidders)) if bidders == vec![low_bid, joe_bid, max_bid]);
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(bidders)) if bidders == vec![LOW_BID, JOE_BID, MAX_BID]);
 			// Read storage to confirm has been changed to BidsTaken
-			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::BidsTaken(bidders) if bidders == vec![low_bid, joe_bid, max_bid]);
+			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::BidsTaken(bidders) if bidders == vec![LOW_BID, JOE_BID, MAX_BID]);
 			// Having moved into the BidsTaken phase we should have our list of bidders filtered
-			// And again to the next phase, however we should see an error as we haven't set our
-			// auction size as an `AuctionError::Empty`
-			assert_eq!(AuctionPallet::process(), Err(AuctionError::Empty));
-			// In order to move forward we will need to set our auction set size
-			// First test the call failing, range would have a 0 value or have equal values for min and max
-			assert_eq!(AuctionPallet::set_auction_range((0, 0)), Err(AuctionError::InvalidRange));
-			assert_eq!(AuctionPallet::set_auction_range((1, 1)), Err(AuctionError::InvalidRange));
-			assert_ok!(AuctionPallet::set_auction_range(auction_range));
-			// Check storage for auction range
-			assert_eq!(AuctionPallet::auction_size_range(), auction_range);
-			// With that sorted we would move on to completing the auction
 			// Expecting the phase to change, a set of winners, the bidder list and a bond value set
 			// to our min bid
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WinnersSelected(winners, min_bid))
-				if winners == vec![max_bid.0, joe_bid.0, low_bid.0] && min_bid == low_bid.1
+				if winners == vec![MAX_BID.0, JOE_BID.0, LOW_BID.0] && min_bid == LOW_BID.1
 			);
 			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::WinnersSelected(winners, min_bid)
-				if winners == vec![max_bid.0, joe_bid.0, low_bid.0] && min_bid == low_bid.1
+				if winners == vec![MAX_BID.0, JOE_BID.0, LOW_BID.0] && min_bid == LOW_BID.1
 			);
 			// Just leaves us to confirm this auction, if we try to process this we will get an error
 			// until is confirmed
 			assert_matches!(AuctionPallet::process(), Err(AuctionError::NotConfirmed));
 			// Confirm the auction
-			CONFIRM.with(|l| { *l.borrow_mut() = true });
+			Test::set_awaiting_confirmation(false);
 			// and finally we complete the process, clearing the bidders
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WaitingForBids(_, _)));
-			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::WaitingForBids(_, _));
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WaitingForBids(..)));
+			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::WaitingForBids(..));
 		});
 	}
 
@@ -70,7 +59,7 @@ mod test {
 			// Confirm we have an event
 			assert_eq!(
 				last_event(),
-				mock::Event::pallet_cf_auction(crate::Event::AuctionRangeChanged((0, 0), (2, 100))),
+				mock::Event::pallet_cf_auction(crate::Event::AuctionRangeChanged((MIN_AUCTION_SIZE, MAX_AUCTION_SIZE), (2, 100))),
 			);
 			//
 			// We throw up an error if we try to set it to the current
@@ -83,19 +72,17 @@ mod test {
 		new_test_ext().execute_with(|| {
 			// Create a test set of bidders
 			BIDDER_SET.with(|l| {
-				*l.borrow_mut() = vec![(2, 2), (3, 100)]
+				*l.borrow_mut() = vec![LOW_BID, JOE_BID]
 			});
 
 			let auction_range = (2, 100);
-			CONFIRM.with(|l| { *l.borrow_mut() = true });
 			assert_ok!(AuctionPallet::set_auction_range(auction_range));
-			assert!(!AuctionPallet::auction_to_confirm());
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(_)));
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WinnersSelected(_, _)));
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WinnersSelected(..)));
+			assert!(Test::awaiting_confirmation());
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(winners, min_bid)
 				if !winners.is_empty() && min_bid > 0
 			);
-			assert!(AuctionPallet::auction_to_confirm());
 			// Kill it
 			AuctionPallet::abort();
 			assert_eq!(AuctionPallet::phase(), AuctionPhase::default());
