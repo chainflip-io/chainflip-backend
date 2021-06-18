@@ -13,6 +13,7 @@
   "Address": "MultiAddress",
   "LookupSource": "MultiAddress",
   "Amount": "TokenAmount",
+  "EthTransactionHash": "[u8;32]",
   "AuctionError": {
     "_enum": [
       "BondIsZero",
