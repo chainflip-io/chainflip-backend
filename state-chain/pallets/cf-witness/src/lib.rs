@@ -231,15 +231,17 @@ impl<T: Config> Pallet<T> {
 				let bits = VoteMask::from_slice_mut(bytes)
 				.expect("Only panics if the slice size exceeds the max; The number of validators should never exceed this;");
 
+				// Get a reference to the existing vote.
+				let mut vote = bits
+					.get_mut(index)
+					.ok_or(Error::<T>::ValidatorIndexOutOfBounds)?;
+				
 				// Return an error if already voted, otherwise set the indexed bit to `true` to indicate a vote.
-				if bits[index] {
+				if *vote {
 					Err(Error::<T>::DuplicateWitness)?
-				} else {
-					let mut vote = bits
-						.get_mut(index)
-						.ok_or(Error::<T>::ValidatorIndexOutOfBounds)?;
-					*vote = true;
 				}
+				
+				*vote = true;
 
 				Ok(bits.count_ones())
 			},
