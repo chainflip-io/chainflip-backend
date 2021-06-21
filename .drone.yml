@@ -148,7 +148,9 @@ steps:
       build_args_from_env:
         - SERVICE
       registry: ghcr.io
-      tags: latest
+      tags:
+        - latest
+        - $DRONE_COMMIT_SHA
       cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
 
 #  Create docker image for chainflip-engine
