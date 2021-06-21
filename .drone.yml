@@ -106,9 +106,9 @@ steps:
   - name: rust-base
     image: plugins/docker
     settings:
-      username:
+      username: &docker_username
         from_secret: docker_username
-      password:
+      password: &docker_password
         from_secret: docker_password
       repo: ghcr.io/chainflip-io/chainflip-backend/rust-base
       dockerfile: Dockerfile.rust-base
@@ -139,26 +139,34 @@ steps:
     image: plugins/docker
     environment:
       SERVICE: state-chain-node
-    settings: &settings
-      username:
-        from_secret: docker_username
-      password:
-        from_secret: docker_password
-      repo: ghcr.io/chainflip-io/chainflip-backend/$SERVICE
-      build_args_from_env:
-        - SERVICE
+    settings:
+      username: *docker_username
+      password: *docker_password
       registry: ghcr.io
+      repo: ghcr.io/chainflip-io/chainflip-backend/state-chain-node
+      cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
       tags:
         - latest
         - $DRONE_COMMIT_SHA
-      cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
+      build_args_from_env:
+        - SERVICE
 
 #  Create docker image for chainflip-engine
   - name: build-chainflip-engine
     image: plugins/docker
     environment:
       SERVICE: chainflip-engine
-    settings: *settings
+    settings:
+      username: *docker_username
+      password: *docker_password
+      registry: ghcr.io
+      repo: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine
+      cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
+      tags:
+        - latest
+        - $DRONE_COMMIT_SHA
+      build_args_from_env:
+        - SERVICE
 
 #  Create docker image for chainflip-engine
   - name: notify
