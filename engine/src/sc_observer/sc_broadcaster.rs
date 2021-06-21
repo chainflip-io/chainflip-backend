@@ -70,7 +70,7 @@ impl SCBroadcaster {
     pub async fn run(&self) -> Result<()> {
         // read in Stakemanager events'
 
-        let alice_signer = PairSigner::new(AccountKeyring::Alice.pair());
+        // let alice_signer = PairSigner::new(AccountKeyring::Alice.pair());
 
         let stream = self
             .mq_client
@@ -85,16 +85,16 @@ impl SCBroadcaster {
         let event = event.unwrap().unwrap();
 
         let tx_hash = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        match event {
-            StakeManagerEvent::Staked(node_id, amount) => {
-                log::trace!("Sending witness staked to state chain");
-                self.sc_client
-                    .witness_staked(&alice_signer, node_id, amount, tx_hash);
-            }
-            _ => {
-                log::warn!("Staking event not supported for SC broadcaster");
-            }
-        }
+        // match event {
+        //     StakeManagerEvent::Staked(node_id, amount) => {
+        //         log::trace!("Sending witness staked to state chain");
+        //         self.sc_client
+        //             .witness_staked(&alice_signer, node_id, amount, tx_hash);
+        //     }
+        //     _ => {
+        //         log::warn!("Staking event not supported for SC broadcaster");
+        //     }
+        // }
 
         let err_msg = "State Chain Broadcaster has stopped running!";
         log::error!("{}", err_msg);
@@ -129,12 +129,6 @@ mod tests {
     use substrate_subxt::system::SetCodeCallExt;
     use substrate_subxt::Signer;
 
-    #[tokio::test]
-    async fn create_raw_payload_test() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-        let subxt_client = create_subxt_client(settings.state_chain).await.unwrap();
-    }
-
     // TODO: Use the SC broadcaster struct instead
     #[tokio::test]
     #[ignore = "depends on running state chain"]
@@ -159,7 +153,6 @@ mod tests {
                 &signer,
                 AccountKeyring::Alice.to_account_id(),
                 10000000u128,
-                eth_address,
                 tx_hash,
             )
             .await;
@@ -170,5 +163,6 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "needs stuff"]
     async fn sc_broadcaster_subscribe() {}
 }
