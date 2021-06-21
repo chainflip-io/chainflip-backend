@@ -175,7 +175,6 @@ steps:
       status:
         - failure
     settings:
-      avatar_url: https://png2.cleanpng.com/sh/809888174adf1a2f743a77fa1d63b2c9/L0KzQYm3VsE4N6dmkZH0aYP2gLBuTgNifaN0hp99aHWwfLF5hL1wbl55gNc2cnnxd8S0hglmNaVtfZ98aXzwccPwjPxqd58yTdQ7NnW4RbK3gcA2a2IzSaM9OUe6RYe4VcI6Omg6T6UDMES0QXB3jvc=/kisspng-sauron-the-lord-of-the-rings-eye-the-silmarillion-5b26e55a0a05c1.1149775615292757380411.png
       username: Sauron
       webhook_id:
         from_secret: discord_webhook_id
