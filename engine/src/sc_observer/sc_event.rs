@@ -46,6 +46,7 @@ pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEv
             "Staked" => Ok(Some(
                 StakedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
             )),
+            // TODO: Add the new Staking events here
             _ => Ok(None),
         },
         "Validator" => match raw_event.variant.as_str() {
@@ -79,7 +80,7 @@ pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEv
 }
 
 /// Returns the subject to publish the data of a raw event to
-pub(super) fn subject_from_raw_event(event: &RawEvent) -> Option<Subject> {
+pub(super) fn raw_event_to_subject(event: &RawEvent) -> Option<Subject> {
     let subject = match event.module.as_str() {
         "System" => None,
         "Staking" => match event.variant.as_str() {
@@ -118,7 +119,7 @@ mod tests {
     use state_chain_runtime::Runtime as SCRuntime;
 
     #[test]
-    fn subject_from_raw_event_test() {
+    fn raw_event_to_subject_test() {
         // test success case
         let raw_event = substrate_subxt::RawEvent {
             // Module and variant are defined by the state chain node
@@ -127,7 +128,7 @@ mod tests {
             data: "Test data".as_bytes().to_owned(),
         };
 
-        let subject = subject_from_raw_event(&raw_event);
+        let subject = raw_event_to_subject(&raw_event);
         assert_eq!(subject, Some(Subject::StateChainClaim));
 
         // test "fail" case
@@ -137,7 +138,7 @@ mod tests {
             variant: "NotAVariant".to_string(),
             data: "Test data".as_bytes().to_owned(),
         };
-        let subject = subject_from_raw_event(&raw_event_invalid);
+        let subject = raw_event_to_subject(&raw_event_invalid);
         assert_eq!(subject, None);
     }
 
@@ -166,7 +167,7 @@ mod tests {
         let expected: SCEvent = ClaimSettledEvent {
             who,
             amount: 150u128,
-            _phantom: PhantomData,
+            _runtime: PhantomData,
         }
         .into();
 

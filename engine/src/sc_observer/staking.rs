@@ -11,6 +11,9 @@ use sp_core::ecdsa::Signature;
 
 use super::{runtime::StateChainRuntime, sc_event::SCEvent};
 
+type Nonce = u64;
+type FlipBalance = u128;
+
 #[module]
 pub trait Staking: System {}
 
@@ -22,18 +25,18 @@ pub struct ClaimSigRequestedEvent<S: Staking> {
 
     pub msg_hash: [u8; 32],
 
-    pub _phantom: PhantomData<S>,
+    pub _runtime: PhantomData<S>,
 }
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct StakedEvent<S: Staking> {
     pub who: AccountId32,
 
-    pub stake_added: u128,
+    pub stake_added: FlipBalance,
 
-    pub total_stake: u128,
+    pub total_stake: FlipBalance,
 
-    pub _phantom: PhantomData<S>,
+    pub _runtime: PhantomData<S>,
 }
 
 // The order of these fields matter for decoding
@@ -41,9 +44,9 @@ pub struct StakedEvent<S: Staking> {
 pub struct ClaimSettledEvent<S: Staking> {
     pub who: AccountId32,
 
-    pub amount: u128,
+    pub amount: FlipBalance,
 
-    pub _phantom: PhantomData<S>,
+    pub _runtime: PhantomData<S>,
 }
 
 // The order of these fields matter for decoding
@@ -51,11 +54,11 @@ pub struct ClaimSettledEvent<S: Staking> {
 pub struct StakeRefundEvent<S: Staking> {
     pub who: AccountId32,
 
-    pub amount: u128,
+    pub amount: FlipBalance,
 
     pub eth_address: [u8; 20],
 
-    pub _phantom: PhantomData<S>,
+    pub _runtime: PhantomData<S>,
 }
 
 // The order of these fields matter for decoding
@@ -63,9 +66,9 @@ pub struct StakeRefundEvent<S: Staking> {
 pub struct ClaimSignatureIssuedEvent<S: Staking> {
     pub who: AccountId32,
 
-    pub amount: u128,
+    pub amount: FlipBalance,
 
-    pub nonce: u64,
+    pub nonce: Nonce,
 
     pub eth_address: [u8; 20],
 
@@ -73,21 +76,52 @@ pub struct ClaimSignatureIssuedEvent<S: Staking> {
 
     pub signature: Signature,
 
-    pub _phantom: PhantomData<S>,
+    pub _runtime: PhantomData<S>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
+pub struct AccountRetired<S: Staking> {
+    pub who: AccountId32,
+
+    pub _runtime: PhantomData<S>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
+pub struct AccountActivated<S: Staking> {
+    pub who: AccountId32,
+
+    pub _runtime: PhantomData<S>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
+pub struct ClaimExpired<S: Staking> {
+    pub who: AccountId32,
+
+    pub nonce: Nonce,
+
+    pub flip_balance: FlipBalance,
+
+    pub _runtime: PhantomData<S>,
 }
 
 /// Wrapper for all Staking event types
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum StakingEvent<S: Staking> {
+    StakedEvent(StakedEvent<S>),
+
+    ClaimSettledEvent(ClaimSettledEvent<S>),
+
+    StakeRefundEvent(StakeRefundEvent<S>),
+
     ClaimSigRequestedEvent(ClaimSigRequestedEvent<S>),
 
     ClaimSignatureIssuedEvent(ClaimSignatureIssuedEvent<S>),
 
-    StakedEvent(StakedEvent<S>),
+    AccountRetired(AccountRetired<S>),
 
-    StakeRefundEvent(StakeRefundEvent<S>),
+    AccountActivated(AccountActivated<S>),
 
-    ClaimSettledEvent(ClaimSettledEvent<S>),
+    ClaimExpired(ClaimExpired<S>),
 }
 
 impl From<ClaimSigRequestedEvent<StateChainRuntime>> for SCEvent {
@@ -120,6 +154,24 @@ impl From<StakeRefundEvent<StateChainRuntime>> for SCEvent {
     }
 }
 
+impl From<AccountRetired<StateChainRuntime>> for SCEvent {
+    fn from(account_retired: AccountRetired<StateChainRuntime>) -> Self {
+        SCEvent::StakingEvent(StakingEvent::AccountRetired(account_retired))
+    }
+}
+
+impl From<AccountActivated<StateChainRuntime>> for SCEvent {
+    fn from(account_activated: AccountActivated<StateChainRuntime>) -> Self {
+        SCEvent::StakingEvent(StakingEvent::AccountActivated(account_activated))
+    }
+}
+
+impl From<ClaimExpired<StateChainRuntime>> for SCEvent {
+    fn from(claim_expired: ClaimExpired<StateChainRuntime>) -> Self {
+        SCEvent::StakingEvent(StakingEvent::ClaimExpired(claim_expired))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::sc_observer::runtime::StateChainRuntime;
@@ -138,11 +190,7 @@ mod tests {
         let msg_hash = [21u8; 32];
 
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_staking::Event::<SCRuntime>::ClaimSigRequested(
-                who.clone(),
-                msg_hash,
-            )
-            .into();
+            pallet_cf_staking::Event::<SCRuntime>::ClaimSigRequested(who.clone(), msg_hash).into();
 
         let encoded_claim_sig_requested = event.encode();
 
@@ -157,7 +205,7 @@ mod tests {
         let expecting = ClaimSigRequestedEvent {
             who,
             msg_hash,
-            _phantom: PhantomData,
+            _runtime: PhantomData,
         };
 
         assert_eq!(decoded_event, expecting);
@@ -182,7 +230,7 @@ mod tests {
             who,
             stake_added: 100u128,
             total_stake: 150u128,
-            _phantom: PhantomData,
+            _runtime: PhantomData,
         };
 
         assert_eq!(decoded_event, expecting);
@@ -206,7 +254,7 @@ mod tests {
         let expecting = ClaimSettledEvent {
             who,
             amount: 150u128,
-            _phantom: PhantomData,
+            _runtime: PhantomData,
         };
 
         assert_eq!(decoded_event, expecting);
@@ -236,7 +284,7 @@ mod tests {
             who,
             amount: 150u128,
             eth_address,
-            _phantom: PhantomData,
+            _runtime: PhantomData,
         };
 
         assert_eq!(decoded_event, expecting);
@@ -283,9 +331,11 @@ mod tests {
             eth_address,
             signature: sig,
             expiry,
-            _phantom: PhantomData,
+            _runtime: PhantomData,
         };
 
         assert_eq!(decoded_event, expecting);
     }
+
+    // TOOD: Tests for the new events
 }

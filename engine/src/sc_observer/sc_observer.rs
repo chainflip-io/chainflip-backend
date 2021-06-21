@@ -10,7 +10,7 @@ use log::{debug, error, info, trace};
 
 use super::{
     runtime::StateChainRuntime,
-    sc_event::{sc_event_from_raw_event, subject_from_raw_event},
+    sc_event::{raw_event_to_subject, sc_event_from_raw_event},
 };
 
 /// Kick off the state chain observer process
@@ -66,7 +66,7 @@ async fn subscribe_to_events<M: 'static + IMQClient>(
             }
         };
 
-        let subject: Option<Subject> = subject_from_raw_event(&raw_event);
+        let subject: Option<Subject> = raw_event_to_subject(&raw_event);
 
         if let Some(subject) = subject {
             let message = sc_event_from_raw_event(raw_event)?;
