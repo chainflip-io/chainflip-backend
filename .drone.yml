@@ -104,6 +104,9 @@ environment:
 steps:
 #  Builds the base image for running build jobs
   - name: rust-base
+    resources:
+      limits:
+        cpu: 3
     image: plugins/docker
     settings:
       username: &docker_username
