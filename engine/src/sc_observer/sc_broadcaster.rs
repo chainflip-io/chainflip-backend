@@ -8,18 +8,28 @@
 
 // Start with submitting an extrinsic of the easiest kind
 
+use futures::pin_mut;
+use sp_core::Pair;
 use sp_keyring::AccountKeyring;
 
 use substrate_subxt::{Client, ClientBuilder, PairSigner};
+use tokio_stream::StreamExt;
+
+use substrate_subxt::Signer;
 
 use super::{helpers::create_subxt_client, runtime::StateChainRuntime};
 use crate::{
+    eth::stake_manager::stake_manager::StakingEvent,
     mq::{
         nats_client::{NatsMQClient, NatsMQClientFactory},
-        IMQClient, IMQClientFactory,
+        pin_message_stream, IMQClient, IMQClientFactory, Subject,
     },
     settings::Settings,
 };
+
+use crate::sc_observer::staking::{StakedCallExt, WitnessStakedCallExt};
+
+use anyhow::Result;
 
 use codec::Encode;
 
@@ -33,6 +43,9 @@ use codec::Encode;
 pub struct SCBroadcaster {
     mq_client: NatsMQClient,
     sc_client: Client<StateChainRuntime>,
+    // do we want to load in the keys here? how can we ensure signing with the correct
+    // stuff
+    signer: (),
 }
 
 impl SCBroadcaster {
@@ -42,13 +55,48 @@ impl SCBroadcaster {
         // TODO: Use the factory better here now
         // let mq_client = *M::connect(settings.message_queue).await.unwrap();
 
+        // TODO: Read in the keys from a file
+        let alice_signer = PairSigner::new(AccountKeyring::Alice.pair());
+
         let mq_client_factory = NatsMQClientFactory::new(&settings.message_queue);
         let mq_client = *mq_client_factory.create().await.unwrap();
 
         SCBroadcaster {
             mq_client,
             sc_client,
+            signer: alice_signer,
         }
+    }
+
+    pub async fn run(&self) -> Result<()> {
+        // read in Stakemanager events
+
+        let stream = self
+            .mq_client
+            .subscribe::<StakingEvent>(Subject::StakeManager)
+            .await?;
+
+        let mut stream = pin_message_stream(stream);
+
+        let event = stream.next().await;
+        println!("Get next event: {:#?}", event);
+
+        let event = event.unwrap().unwrap();
+
+        match event {
+            StakingEvent::Staked(node_id, amount) => {
+                log::trace!("Sending witness staked to state chain");
+                self.sc_client.witness_staked();
+            }
+
+            _ => {
+                log::warn!("Staking event not supported for SC broadcaster");
+            }
+        }
+
+        let err_msg = "State Chain Broadcaster has stopped running!";
+        log::error!("{}", err_msg);
+        Err(anyhow::Error::msg(err_msg))
     }
 }
 
@@ -70,7 +118,6 @@ mod tests {
 
     use super::*;
 
-    use crate::sc_observer::staking::{StakedCallExt, WitnessStakedCallExt};
     use crate::sc_observer::validator::ForceRotationCallExt;
     use crate::settings;
     use crate::settings::StateChain;
@@ -86,6 +133,7 @@ mod tests {
         let subxt_client = create_subxt_client(settings.state_chain).await.unwrap();
     }
 
+    // TODO: Use the SC broadcaster struct instead
     #[tokio::test]
     #[ignore = "depends on running state chain"]
     async fn submit_xt_test() {
@@ -118,6 +166,9 @@ mod tests {
 
         assert!(result.is_ok());
     }
+
+    #[tokio::test]
+    async fn sc_broadcaster_subscribe() {}
 }
 
 // Error I was getting when submitting a staked event from the frontend:
