@@ -1,5 +1,0 @@
-FROM ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-
-COPY target/release/chainflip-engine /usr/local/bin
-
-ENTRYPOINT chainflip-engine

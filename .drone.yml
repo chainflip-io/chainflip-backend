@@ -29,6 +29,12 @@ get:
   path: dockerconfigjson
   name: .dockerconfigjson
 ---
+kind: secret
+name: drone_token
+get:
+  path: repo-secret
+  name: drone_token
+---
 
 # Runs on every PR
 kind: pipeline
@@ -89,7 +95,7 @@ tolerations:
 # Runs when PR is merged to main
 kind: pipeline
 type: kubernetes
-name: chainflip-state-chain
+name: chainflip-backend
 
 environment:
   SCCACHE_REDIS: redis://redis-headless:6379/
@@ -131,30 +137,28 @@ steps:
 #  Create docker image for state-chain-node
   - name: build-state-chain-node
     image: plugins/docker
-    settings:
+    environment:
+      SERVICE: state-chain-node
+    settings: &settings
       username:
         from_secret: docker_username
       password:
         from_secret: docker_password
-      repo: ghcr.io/chainflip-io/chainflip-backend/state-chain-node
-      dockerfile: Dockerfile.state-chain-node
+      repo: ghcr.io/chainflip-io/chainflip-backend/$SERVICE
+      build_args_from_env:
+        - SERVICE
       registry: ghcr.io
-      tags: latest
+      tags:
+        - latest
+        - $DRONE_COMMIT_SHA
       cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
 
 #  Create docker image for chainflip-engine
   - name: build-chainflip-engine
     image: plugins/docker
-    settings:
-      username:
-        from_secret: docker_username
-      password:
-        from_secret: docker_password
-      repo: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine
-      dockerfile: Dockerfile.chainflip-engine
-      registry: ghcr.io
-      tags: latest
-      cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
+    environment:
+      SERVICE: chainflip-engine
+    settings: *settings
 
 #  Create docker image for chainflip-engine
   - name: notify
