@@ -91,21 +91,19 @@ impl<'a, NodeId> P2PNetworkClient<NodeId, GlueClientStream> for GlueClient<'a>
 	where NodeId: Base58 + Send + Sync
 {
 	async fn broadcast(&self, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError> {
-		let msg = str::from_utf8(data).map_err(|_| P2PNetworkClientError::Format)?;
 		let client: P2PClient = FutureExt::compat(connect(self.url))
 			.await
 			.map_err(|_| P2PNetworkClientError::Rpc)?;
 
-		client.broadcast(msg.to_string()).await.map_err(|_| P2PNetworkClientError::Rpc)
+		client.broadcast(data.into()).await.map_err(|_| P2PNetworkClientError::Rpc)
 	}
 
 	async fn send(&self, to: &NodeId, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError> {
-		let msg = str::from_utf8(data).map_err(|_| P2PNetworkClientError::Format)?;
 		let client: P2PClient = FutureExt::compat(connect(self.url))
 			.await
 			.map_err(|_| P2PNetworkClientError::Rpc)?;
 
-		client.send(to.to_base58(), msg.to_string()).await.map_err(|_| P2PNetworkClientError::Rpc)
+		client.send(to.to_base58(), data.into()).await.map_err(|_| P2PNetworkClientError::Rpc)
 	}
 
 	async fn take_stream(&mut self) ->  Result<GlueClientStream, P2PNetworkClientError> {
@@ -142,7 +140,7 @@ impl P2PClient {
 	pub fn send(
 		&self,
 		peer_id: String,
-		message: String,
+		message: Vec<u8>,
 	) -> impl Future<Output=RpcResult<u64>> {
 		let args = (peer_id, message);
 		self.inner.call_method("p2p_send", "u64", args)
@@ -150,7 +148,7 @@ impl P2PClient {
 
 	/// Broadcast a message to the p2p network returning a HTTP status code
 	/// impl Future<Output = RpcResult<R>>
-	pub fn broadcast(&self, message: String) -> impl Future<Output=RpcResult<u64>> {
+	pub fn broadcast(&self, message: Vec<u8>) -> impl Future<Output=RpcResult<u64>> {
 		let args = (message, );
 		self.inner.call_method("p2p_broadcast", "u64", args)
 	}
@@ -211,10 +209,10 @@ mod tests {
 
 	fn io() -> IoHandler {
 		let mut io = IoHandler::default();
-		io.add_sync_method("p2p_send", |params: Params| match params.parse::<(String, String,)>() {
+		io.add_sync_method("p2p_send", |params: Params| match params.parse::<(String, Vec<u8>,)>() {
 			_ => Ok(json!(200)),
 		});
-		io.add_sync_method("p2p_broadcast", |params: Params| match params.parse::<(String,)>() {
+		io.add_sync_method("p2p_broadcast", |params: Params| match params.parse::<(Vec<u8>,)>() {
 			_ => Ok(json!(200)),
 		});
 
