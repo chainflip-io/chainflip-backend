@@ -185,8 +185,8 @@ steps:
 
 # Config
 trigger:
-#  branch:
-#    - main
+  branch:
+    - main
   event:
     - push
 

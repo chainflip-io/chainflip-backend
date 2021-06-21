@@ -22,3 +22,5 @@ RUN chown -R $APP_USER:$APP_USER ${APP}/data
 
 USER $APP_USER
 WORKDIR ${APP}
+
+ENTRYPOINT ["./run"]
