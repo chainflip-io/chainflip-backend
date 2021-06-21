@@ -18,6 +18,7 @@ use frame_support::{parameter_types, construct_runtime, traits::{OnInitialize, O
 use std::cell::RefCell;
 use cf_traits::{BidderProvider, AuctionConfirmation};
 use frame_support::traits::ValidatorRegistration;
+use sp_runtime::BuildStorage;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -30,6 +31,10 @@ impl WeightInfo for () {
 
 	fn force_rotation() -> u64 { 0 as Weight }
 }
+
+pub const MIN_AUCTION_SIZE : u32 = 2;
+pub const MAX_AUCTION_SIZE : u32 = 150;
+pub const EPOCH_BLOCKS: u64 = 100;
 
 thread_local! {
 	pub static CANDIDATE_IDX: RefCell<u64> = RefCell::new(0);
@@ -47,9 +52,9 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		ValidatorManager: pallet_cf_validator::{Module, Call, Storage, Event<T>},
+		ValidatorPallet: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
-		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>},
+		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
 	}
 );
 
@@ -92,9 +97,9 @@ parameter_types! {
 }
 
 impl pallet_session::Config for Test {
-	type ShouldEndSession = ValidatorManager;
-	type SessionManager = ValidatorManager;
-	type SessionHandler = ValidatorManager;
+	type ShouldEndSession = ValidatorPallet;
+	type SessionManager = ValidatorPallet;
+	type SessionHandler = ValidatorPallet;
 	type ValidatorId = ValidatorId;
 	type ValidatorIdOf = ConvertInto;
 	type Keys = MockSessionKeys;
@@ -170,11 +175,15 @@ impl BidderProvider for TestBidderProvider {
 
 pub struct TestConfirmation;
 impl AuctionConfirmation for TestConfirmation {
-	fn confirmed() -> bool {
+
+	fn awaiting_confirmation() -> bool {
 		CONFIRM.with(|l| *l.borrow())
 	}
-}
 
+	fn set_awaiting_confirmation(waiting: bool) {
+		CONFIRM.with(|l| *l.borrow_mut() = waiting);
+	}
+}
 pub struct TestEpochTransitionHandler;
 
 impl EpochTransitionHandler for TestEpochTransitionHandler {
@@ -206,10 +215,23 @@ impl Config for Test {
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	frame_system::GenesisConfig::default().assimilate_storage::<Test>(&mut t).unwrap();
-	let mut ext = sp_io::TestExternalities::new(t);
-	ext.execute_with(|| System::set_block_number(1));
+	let config = GenesisConfig {
+		frame_system: Default::default(),
+		pallet_session: None,
+		pallet_cf_validator: Some(ValidatorPalletConfig {
+			epoch_number_of_blocks: EPOCH_BLOCKS,
+		}),
+		pallet_cf_auction: Some(AuctionPalletConfig {
+			auction_size_range: (MIN_AUCTION_SIZE, MAX_AUCTION_SIZE),
+		}),
+	};
+
+	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
+
+	ext.execute_with(|| {
+		System::set_block_number(1);
+	});
+
 	ext
 }
 

@@ -18,6 +18,7 @@ pallet-cf-validator = { path = '../cf-validator', default-features = false }
 
 # Non-substrate external deps
 codec = {default-features = false, features = ['derive'], package = 'parity-scale-codec', version = '2.0.0'}
+ethereum-types = { default-features = false, version = "0.11"}
 
 # Substrate deps
 frame-support = { default-features = false, version = '3.0.0' }
@@ -30,6 +31,7 @@ serde = { default-features = false, version = '1.0.119' }
 [dev-dependencies]
 sp-io = { version = '3.0.0' }
 pallet-cf-flip = { path = '../cf-flip' }
+ethabi = { version = '14.0' }
 
 [features]
 default = ['std']
