@@ -1,4 +1,3 @@
-FROM ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest as builder
 FROM debian:buster-slim
 
 ARG SERVICE=""
@@ -16,7 +15,7 @@ RUN groupadd $APP_USER \
     && useradd -g $APP_USER $APP_USER \
     && mkdir -p ${APP}/data
 
-COPY --from=builder /state-chain-node/data/state-chain-node ${APP}/run
+COPY target/release/$SERVICE ${APP}/run
 
 RUN chown -R $APP_USER:$APP_USER ${APP}
 RUN chown -R $APP_USER:$APP_USER ${APP}/data
