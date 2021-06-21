@@ -49,6 +49,9 @@ steps:
 #  Checks the the .drone.yml file is formatted correctly
   - name: lint-drone-yml
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+    resources:
+      limits:
+        cpu: 3
     commands:
       - drone lint --trusted
 
