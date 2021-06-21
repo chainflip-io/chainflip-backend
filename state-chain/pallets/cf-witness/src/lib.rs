@@ -325,6 +325,7 @@ impl<T: Config> pallet_cf_validator::EpochTransitionHandler for Pallet<T> {
 			ValidatorIndex::<T>::insert(&epoch, (*v).clone().into(), i as u16);
 			total += 1;
 		}
+		NumValidators::<T>::set(total);
 		// Assume all validators are live at the start of an Epoch.
 		ConsensusThreshold::<T>::mutate(|thresh| *thresh = total * 2 / 3 + 1)
 	}
