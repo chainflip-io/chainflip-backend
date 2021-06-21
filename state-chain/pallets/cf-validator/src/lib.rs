@@ -238,6 +238,10 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
+			// The auction pallet should have ran through an auction
+			if let AuctionPhase::WaitingForBids(winners, min_bid) = T::Auction::phase() {
+				T::EpochTransitionHandler::on_new_epoch(winners, min_bid);
+			}
 			Pallet::<T>::generate_lookup();
 		}
 	}
