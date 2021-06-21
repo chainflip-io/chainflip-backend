@@ -51,7 +51,7 @@ steps:
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     resources:
       limits:
-        cpu: 3000m
+        cpu: 3000
     commands:
       - drone lint --trusted
 
@@ -109,7 +109,7 @@ steps:
   - name: rust-base
     resources:
       limits:
-        cpu: 3000m
+        cpu: 3000
     image: plugins/docker
     settings:
       username: &docker_username
