@@ -22,7 +22,7 @@ pub struct StakeManager {
 
 /// Represents the events that are expected from the StakeManager contract.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum StakingEvent {
+pub enum StakeManagerEvent {
     /// The `Staked(nodeId, amount)` event.
     Staked(
         /// The node id of the validator that submitted the stake.
@@ -119,7 +119,7 @@ impl StakeManager {
 }
 
 impl EventSource for StakeManager {
-    type Event = StakingEvent;
+    type Event = StakeManagerEvent;
 
     fn filter_builder(&self, block: BlockNumber) -> FilterBuilder {
         FilterBuilder::default()
@@ -149,7 +149,7 @@ impl EventSource for StakeManager {
             _ if sig == self.staked_event_definition().signature() => {
                 let log = self.staked_event_definition().parse_log(raw_log)?;
 
-                let event = StakingEvent::Staked(
+                let event = StakeManagerEvent::Staked(
                     decode_log_param(&log, "nodeID")?,
                     decode_log_param(&log, "amount")?,
                 );
@@ -157,7 +157,7 @@ impl EventSource for StakeManager {
             }
             _ if sig == self.claim_executed_event_definition().signature() => {
                 let log = self.claim_executed_event_definition().parse_log(raw_log)?;
-                let event = StakingEvent::ClaimExecuted(
+                let event = StakeManagerEvent::ClaimExecuted(
                     decode_log_param(&log, "nodeID")?,
                     decode_log_param(&log, "amount")?,
                 );
@@ -167,7 +167,7 @@ impl EventSource for StakeManager {
                 let log = self
                     .emission_changed_event_definition()
                     .parse_log(raw_log)?;
-                let event = StakingEvent::EmissionChanged(
+                let event = StakeManagerEvent::EmissionChanged(
                     decode_log_param(&log, "oldEmissionPerBlock")?,
                     decode_log_param(&log, "newEmissionPerBlock")?,
                 );
@@ -177,7 +177,7 @@ impl EventSource for StakeManager {
                 let log = self
                     .min_stake_changed_event_definition()
                     .parse_log(raw_log)?;
-                let event = StakingEvent::MinStakeChanged(
+                let event = StakeManagerEvent::MinStakeChanged(
                     decode_log_param(&log, "oldMinStake")?,
                     decode_log_param(&log, "newMinStake")?,
                 );
@@ -187,7 +187,7 @@ impl EventSource for StakeManager {
                 let log = self
                     .claim_registered_event_definition()
                     .parse_log(raw_log)?;
-                let event = StakingEvent::ClaimRegistered(
+                let event = StakeManagerEvent::ClaimRegistered(
                     decode_log_param(&log, "nodeID")?,
                     decode_log_param(&log, "amount")?,
                     decode_log_param(&log, "staker")?,
@@ -328,11 +328,11 @@ mod tests {
         let sm = StakeManager::load(CONTRACT_ADDRESS)?;
 
         match sm.parse_event(log)? {
-            StakingEvent::Staked(node_id, amount) => {
+            StakeManagerEvent::Staked(node_id, amount) => {
                 assert_eq!(node_id, web3::types::U256::from(12321));
                 assert_eq!(amount, web3::types::U256::exp10(23));
             }
-            _ => panic!("Expected StakingEvent::Staked, got a different variant"),
+            _ => panic!("Expected StakeManagerEvent::Staked, got a different variant"),
         }
 
         Ok(())
@@ -345,7 +345,13 @@ mod tests {
         let sm = StakeManager::load(CONTRACT_ADDRESS)?;
 
         match sm.parse_event(log)? {
-            StakingEvent::ClaimRegistered(node_id, amount, staker, start_time, expiry_time) => {
+            StakeManagerEvent::ClaimRegistered(
+                node_id,
+                amount,
+                staker,
+                start_time,
+                expiry_time,
+            ) => {
                 assert_eq!(node_id, web3::types::U256::from_dec_str("12345").unwrap());
                 assert_eq!(amount, web3::types::U256::from_dec_str("1").unwrap());
                 assert_eq!(
@@ -375,7 +381,7 @@ mod tests {
         let sm = StakeManager::load(CONTRACT_ADDRESS)?;
 
         match sm.parse_event(log)? {
-            StakingEvent::ClaimExecuted(node_id, amount) => {
+            StakeManagerEvent::ClaimExecuted(node_id, amount) => {
                 assert_eq!(node_id, web3::types::U256::from_dec_str("59568").unwrap());
                 assert_eq!(amount, web3::types::U256::from_dec_str("73").unwrap());
             }
@@ -392,7 +398,7 @@ mod tests {
         let sm = StakeManager::load(CONTRACT_ADDRESS)?;
 
         match sm.parse_event(log)? {
-            StakingEvent::EmissionChanged(old_emission_per_block, new_emission_per_block) => {
+            StakeManagerEvent::EmissionChanged(old_emission_per_block, new_emission_per_block) => {
                 assert_eq!(
                     old_emission_per_block,
                     U256::from_dec_str("5607877281367557723").unwrap()
@@ -412,7 +418,7 @@ mod tests {
         let sm = StakeManager::load(CONTRACT_ADDRESS)?;
 
         match sm.parse_event(log)? {
-            StakingEvent::MinStakeChanged(old_min_stake, new_min_stake) => {
+            StakeManagerEvent::MinStakeChanged(old_min_stake, new_min_stake) => {
                 assert_eq!(
                     old_min_stake,
                     U256::from_dec_str("40000000000000000000000").unwrap()

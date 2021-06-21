@@ -13,7 +13,9 @@ use sp_core::ecdsa::Signature;
 
 use super::{runtime::StateChainRuntime, sc_event::SCEvent};
 
-// Staking in the state chain runtime
+type Nonce = u64;
+type FlipBalance = u128;
+
 #[module]
 pub trait Staking: System {
     /// Numeric type denomination for the staked asset.
@@ -38,20 +40,20 @@ pub trait Staking: System {
 }
 
 /// Funds have been staked to an account via the Staking smart contract
-#[derive(Call, Encode)]
-pub struct StakedCall<'a, T: Staking> {
-    /// Runtime marker
-    _runtime: PhantomData<T>,
+// #[derive(Call, Encode)]
+// pub struct StakedCall<'a, T: Staking> {
+//     /// Runtime marker
+//     _runtime: PhantomData<T>,
 
-    /// Call arguments
-    // ??
-    // account_id: <<Signature as Verify>::Signer as IdentifyAccount>::AccountId,
-    account_id: &'a state_chain_runtime::AccountId,
+//     /// Call arguments
+//     // ??
+//     // account_id: <<Signature as Verify>::Signer as IdentifyAccount>::AccountId,
+//     account_id: &'a state_chain_runtime::AccountId,
 
-    amount: T::TokenAmount,
+//     amount: T::TokenAmount,
 
-    refund_address: &'a T::EthereumAddress,
-}
+//     refund_address: &'a T::EthereumAddress,
+// }
 
 #[derive(Call, Encode)]
 pub struct WitnessStakedCall<T: Staking> {
@@ -61,9 +63,6 @@ pub struct WitnessStakedCall<T: Staking> {
     staker_account_id: AccountId32,
 
     amount: T::TokenAmount,
-
-    // TODO: Remove this - not required on state chain, so don't need it here
-    refund_address: T::EthereumAddress,
 
     tx_hash: [u8; 32],
 }
@@ -76,18 +75,18 @@ pub struct ClaimSigRequestedEvent<S: Staking> {
 
     pub msg_hash: [u8; 32],
 
-    pub _phantom: PhantomData<S>,
+    pub _runtime: PhantomData<S>,
 }
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct StakedEvent<S: Staking> {
     pub who: AccountId32,
 
-    pub stake_added: u128,
+    pub stake_added: FlipBalance,
 
-    pub total_stake: u128,
+    pub total_stake: FlipBalance,
 
-    pub _phantom: PhantomData<S>,
+    pub _runtime: PhantomData<S>,
 }
 
 // The order of these fields matter for decoding
@@ -95,9 +94,9 @@ pub struct StakedEvent<S: Staking> {
 pub struct ClaimSettledEvent<S: Staking> {
     pub who: AccountId32,
 
-    pub amount: u128,
+    pub amount: FlipBalance,
 
-    pub _phantom: PhantomData<S>,
+    pub _runtime: PhantomData<S>,
 }
 
 // The order of these fields matter for decoding
@@ -105,11 +104,11 @@ pub struct ClaimSettledEvent<S: Staking> {
 pub struct StakeRefundEvent<S: Staking> {
     pub who: AccountId32,
 
-    pub amount: u128,
+    pub amount: FlipBalance,
 
     pub eth_address: [u8; 20],
 
-    pub _phantom: PhantomData<S>,
+    pub _runtime: PhantomData<S>,
 }
 
 // The order of these fields matter for decoding
@@ -117,9 +116,9 @@ pub struct StakeRefundEvent<S: Staking> {
 pub struct ClaimSignatureIssuedEvent<S: Staking> {
     pub who: AccountId32,
 
-    pub amount: u128,
+    pub amount: FlipBalance,
 
-    pub nonce: u64,
+    pub nonce: Nonce,
 
     pub eth_address: [u8; 20],
 
@@ -127,21 +126,52 @@ pub struct ClaimSignatureIssuedEvent<S: Staking> {
 
     pub signature: Signature,
 
-    pub _phantom: PhantomData<S>,
+    pub _runtime: PhantomData<S>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
+pub struct AccountRetired<S: Staking> {
+    pub who: AccountId32,
+
+    pub _runtime: PhantomData<S>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
+pub struct AccountActivated<S: Staking> {
+    pub who: AccountId32,
+
+    pub _runtime: PhantomData<S>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
+pub struct ClaimExpired<S: Staking> {
+    pub who: AccountId32,
+
+    pub nonce: Nonce,
+
+    pub flip_balance: FlipBalance,
+
+    pub _runtime: PhantomData<S>,
 }
 
 /// Wrapper for all Staking event types
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum StakingEvent<S: Staking> {
+    StakedEvent(StakedEvent<S>),
+
+    ClaimSettledEvent(ClaimSettledEvent<S>),
+
+    StakeRefundEvent(StakeRefundEvent<S>),
+
     ClaimSigRequestedEvent(ClaimSigRequestedEvent<S>),
 
     ClaimSignatureIssuedEvent(ClaimSignatureIssuedEvent<S>),
 
-    StakedEvent(StakedEvent<S>),
+    AccountRetired(AccountRetired<S>),
 
-    StakeRefundEvent(StakeRefundEvent<S>),
+    AccountActivated(AccountActivated<S>),
 
-    ClaimSettledEvent(ClaimSettledEvent<S>),
+    ClaimExpired(ClaimExpired<S>),
 }
 
 impl From<ClaimSigRequestedEvent<StateChainRuntime>> for SCEvent {
@@ -174,6 +204,24 @@ impl From<StakeRefundEvent<StateChainRuntime>> for SCEvent {
     }
 }
 
+impl From<AccountRetired<StateChainRuntime>> for SCEvent {
+    fn from(account_retired: AccountRetired<StateChainRuntime>) -> Self {
+        SCEvent::StakingEvent(StakingEvent::AccountRetired(account_retired))
+    }
+}
+
+impl From<AccountActivated<StateChainRuntime>> for SCEvent {
+    fn from(account_activated: AccountActivated<StateChainRuntime>) -> Self {
+        SCEvent::StakingEvent(StakingEvent::AccountActivated(account_activated))
+    }
+}
+
+impl From<ClaimExpired<StateChainRuntime>> for SCEvent {
+    fn from(claim_expired: ClaimExpired<StateChainRuntime>) -> Self {
+        SCEvent::StakingEvent(StakingEvent::ClaimExpired(claim_expired))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::sc_observer::runtime::StateChainRuntime;
@@ -186,17 +234,17 @@ mod tests {
 
     use sp_keyring::AccountKeyring;
 
+    const ETH_ADDRESS: [u8; 20] = [
+        00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01,
+    ];
+
     #[test]
     fn claim_sig_requested_decode_test() {
         let who = AccountKeyring::Alice.to_account_id();
         let msg_hash = [21u8; 32];
 
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_staking::Event::<SCRuntime>::ClaimSigRequested(
-                who.clone(),
-                msg_hash,
-            )
-            .into();
+            pallet_cf_staking::Event::<SCRuntime>::ClaimSigRequested(who.clone(), msg_hash).into();
 
         let encoded_claim_sig_requested = event.encode();
 
@@ -211,7 +259,7 @@ mod tests {
         let expecting = ClaimSigRequestedEvent {
             who,
             msg_hash,
-            _phantom: PhantomData,
+            _runtime: PhantomData,
         };
 
         assert_eq!(decoded_event, expecting);
@@ -236,7 +284,7 @@ mod tests {
             who,
             stake_added: 100u128,
             total_stake: 150u128,
-            _phantom: PhantomData,
+            _runtime: PhantomData,
         };
 
         assert_eq!(decoded_event, expecting);
@@ -260,7 +308,7 @@ mod tests {
         let expecting = ClaimSettledEvent {
             who,
             amount: 150u128,
-            _phantom: PhantomData,
+            _runtime: PhantomData,
         };
 
         assert_eq!(decoded_event, expecting);
@@ -270,12 +318,8 @@ mod tests {
     fn stake_refund_decode_test() {
         let who = AccountKeyring::Alice.to_account_id();
 
-        let eth_address: [u8; 20] = [
-            00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01,
-        ];
-
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_staking::Event::<SCRuntime>::StakeRefund(who.clone(), 150u128, eth_address)
+            pallet_cf_staking::Event::<SCRuntime>::StakeRefund(who.clone(), 150u128, ETH_ADDRESS)
                 .into();
 
         let encoded_stake_refund = event.encode();
@@ -289,8 +333,8 @@ mod tests {
         let expecting = StakeRefundEvent {
             who,
             amount: 150u128,
-            eth_address,
-            _phantom: PhantomData,
+            eth_address: ETH_ADDRESS,
+            _runtime: PhantomData,
         };
 
         assert_eq!(decoded_event, expecting);
@@ -299,10 +343,6 @@ mod tests {
     #[test]
     fn claim_sig_issued_decode_test() {
         let who = AccountKeyring::Alice.to_account_id();
-
-        let eth_address: [u8; 20] = [
-            00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01,
-        ];
 
         let sig: [u8; 65] = [0; 65];
 
@@ -314,7 +354,7 @@ mod tests {
                 who.clone(),
                 150u128,
                 1u64,
-                eth_address,
+                ETH_ADDRESS,
                 expiry,
                 sig.clone(),
             )
@@ -334,10 +374,87 @@ mod tests {
             who,
             amount: 150u128,
             nonce: 1u64,
-            eth_address,
+            eth_address: ETH_ADDRESS,
             signature: sig,
             expiry,
-            _phantom: PhantomData,
+            _runtime: PhantomData,
+        };
+
+        assert_eq!(decoded_event, expecting);
+    }
+
+    #[test]
+    fn account_retired_decode_test() {
+        let who = AccountKeyring::Alice.to_account_id();
+
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_staking::Event::<SCRuntime>::AccountRetired(who.clone()).into();
+
+        let encoded_account_retired = event.encode();
+
+        // the first 2 bytes are (module_index, event_variant_index), these can be stripped
+        let encoded_account_retired = encoded_account_retired[2..].to_vec();
+
+        let decoded_event =
+            AccountRetired::<StateChainRuntime>::decode(&mut &encoded_account_retired[..]).unwrap();
+
+        let expecting = AccountRetired {
+            who,
+            _runtime: PhantomData,
+        };
+
+        assert_eq!(decoded_event, expecting);
+    }
+
+    #[test]
+    fn account_activated_decode_test() {
+        let who = AccountKeyring::Alice.to_account_id();
+
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_staking::Event::<SCRuntime>::AccountActivated(who.clone()).into();
+
+        let encoded_account_activated = event.encode();
+
+        // the first 2 bytes are (module_index, event_variant_index), these can be stripped
+        let encoded_account_activated = encoded_account_activated[2..].to_vec();
+
+        let decoded_event =
+            AccountActivated::<StateChainRuntime>::decode(&mut &encoded_account_activated[..])
+                .unwrap();
+
+        let expecting = AccountActivated {
+            who,
+            _runtime: PhantomData,
+        };
+
+        assert_eq!(decoded_event, expecting);
+    }
+
+    #[test]
+    fn claim_expired_decode_test() {
+        let who = AccountKeyring::Alice.to_account_id();
+
+        let nonce = 123u64;
+
+        let flip_balance = 1000u128;
+
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_staking::Event::<SCRuntime>::ClaimExpired(who.clone(), nonce, flip_balance)
+                .into();
+
+        let encoded_account_retired = event.encode();
+
+        // the first 2 bytes are (module_index, event_variant_index), these can be stripped
+        let encoded_account_retired = encoded_account_retired[2..].to_vec();
+
+        let decoded_event =
+            ClaimExpired::<StateChainRuntime>::decode(&mut &encoded_account_retired[..]).unwrap();
+
+        let expecting = ClaimExpired {
+            who,
+            nonce,
+            flip_balance,
+            _runtime: PhantomData,
         };
 
         assert_eq!(decoded_event, expecting);

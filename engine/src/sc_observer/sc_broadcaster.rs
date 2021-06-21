@@ -19,7 +19,7 @@ use substrate_subxt::Signer;
 
 use super::{helpers::create_subxt_client, runtime::StateChainRuntime};
 use crate::{
-    eth::stake_manager::stake_manager::StakingEvent,
+    eth::stake_manager::stake_manager::StakeManagerEvent,
     mq::{
         nats_client::{NatsMQClient, NatsMQClientFactory},
         pin_message_stream, IMQClient, IMQClientFactory, Subject,
@@ -27,7 +27,7 @@ use crate::{
     settings::Settings,
 };
 
-use crate::sc_observer::staking::{StakedCallExt, WitnessStakedCallExt};
+use crate::sc_observer::staking::WitnessStakedCallExt;
 
 use anyhow::Result;
 
@@ -45,7 +45,7 @@ pub struct SCBroadcaster {
     sc_client: Client<StateChainRuntime>,
     // do we want to load in the keys here? how can we ensure signing with the correct
     // stuff
-    signer: (),
+    // signer: PairSigner<Runtime??, sp_core::sr25519::Pair>,
 }
 
 impl SCBroadcaster {
@@ -56,7 +56,6 @@ impl SCBroadcaster {
         // let mq_client = *M::connect(settings.message_queue).await.unwrap();
 
         // TODO: Read in the keys from a file
-        let alice_signer = PairSigner::new(AccountKeyring::Alice.pair());
 
         let mq_client_factory = NatsMQClientFactory::new(&settings.message_queue);
         let mq_client = *mq_client_factory.create().await.unwrap();
@@ -64,16 +63,18 @@ impl SCBroadcaster {
         SCBroadcaster {
             mq_client,
             sc_client,
-            signer: alice_signer,
+            // signer: alice_signer,
         }
     }
 
     pub async fn run(&self) -> Result<()> {
-        // read in Stakemanager events
+        // read in Stakemanager events'
+
+        let alice_signer = PairSigner::new(AccountKeyring::Alice.pair());
 
         let stream = self
             .mq_client
-            .subscribe::<StakingEvent>(Subject::StakeManager)
+            .subscribe::<StakeManagerEvent>(Subject::StakeManager)
             .await?;
 
         let mut stream = pin_message_stream(stream);
@@ -83,12 +84,13 @@ impl SCBroadcaster {
 
         let event = event.unwrap().unwrap();
 
+        let tx_hash = "0x0000000000000000000000000000000000000000000000000000000000000000";
         match event {
-            StakingEvent::Staked(node_id, amount) => {
+            StakeManagerEvent::Staked(node_id, amount) => {
                 log::trace!("Sending witness staked to state chain");
-                self.sc_client.witness_staked();
+                self.sc_client
+                    .witness_staked(&alice_signer, node_id, amount, tx_hash);
             }
-
             _ => {
                 log::warn!("Staking event not supported for SC broadcaster");
             }
@@ -170,24 +172,3 @@ mod tests {
     #[tokio::test]
     async fn sc_broadcaster_subscribe() {}
 }
-
-// Error I was getting when submitting a staked event from the frontend:
-// Unable to decode storage system.account: entry 0:: createType(AccountInfo):: {"nonce":"Index","consumers":"RefCount","providers":"RefCount","sufficients":"RefCount","data":"AccountData"}:: Decoded input doesn't match input, received 0x0000000001000000010000000000000000000010000000000000000000000000…0000000000000000000000000000000000000000000000000000000000000000 (76 bytes), created 0x0000000001000000010000000000000000000010000000000000000000000000…0000000000000000000000000000000000000000000000000000000000000000 (80 bytes)
-
-// Unable to decode storage system.account: entry 0:: createType(AccountInfo):: {"nonce":"Index","consumers":"RefCount","providers":"RefCount","data":"AccountData"}:: Decoded input doesn't match input, received 0x000000000100000001000000 (12 bytes), created 0x0000000001000000010000000000000000000000000000000000000000000000…0000000000000000000000000000000000000000000000000000000000000000 (76 bytes)
-
-// pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
-//     TPublic::Pair::from_string(&format!("//{}", seed), None)
-//         .expect("static values are valid; qed")
-//         .public()
-// }
-
-// type AccountPublic = <MultiSignature as Verify>::Signer;
-
-// /// Generate an account ID from seed.
-// pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId
-// where
-//     AccountPublic: From<<TPublic::Pair as Pair>::Public>,
-// {
-//     AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
-// }
