@@ -1,7 +1,7 @@
 use futures::{Future, Stream, StreamExt};
 use jsonrpc_core_client::{RpcChannel, TypedClient, TypedSubscriptionStream, RpcResult};
 use crate::p2p::{P2PNetworkClient, P2PMessage, P2PNetworkClientError, StatusCode};
-use jsonrpc_core_client::transports::http::connect;
+use jsonrpc_core_client::transports::ws::connect;
 use tokio_compat_02::FutureExt;
 use async_trait::async_trait;
 use std::str;
@@ -19,12 +19,12 @@ impl Base58 for () {
 	}
 }
 
-struct GlueClient<'a> {
-	url: &'a str,
+struct GlueClient {
+	url: url::Url,
 }
 
-impl<'a> GlueClient<'a> {
-	pub fn new(url: &'a str) -> Self {
+impl GlueClient {
+	pub fn new(url: url::Url) -> Self {
 		GlueClient {
 			url,
 		}
@@ -87,11 +87,11 @@ impl Stream for GlueClientStream {
 }
 
 #[async_trait]
-impl<'a, NodeId> P2PNetworkClient<NodeId, GlueClientStream> for GlueClient<'a>
+impl<NodeId> P2PNetworkClient<NodeId, GlueClientStream> for GlueClient
 	where NodeId: Base58 + Send + Sync
 {
 	async fn broadcast(&self, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError> {
-		let client: P2PClient = FutureExt::compat(connect(self.url))
+		let client: P2PClient = FutureExt::compat(connect(&self.url))
 			.await
 			.map_err(|_| P2PNetworkClientError::Rpc)?;
 
@@ -99,7 +99,7 @@ impl<'a, NodeId> P2PNetworkClient<NodeId, GlueClientStream> for GlueClient<'a>
 	}
 
 	async fn send(&self, to: &NodeId, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError> {
-		let client: P2PClient = FutureExt::compat(connect(self.url))
+		let client: P2PClient = FutureExt::compat(connect(&self.url))
 			.await
 			.map_err(|_| P2PNetworkClientError::Rpc)?;
 
@@ -107,7 +107,7 @@ impl<'a, NodeId> P2PNetworkClient<NodeId, GlueClientStream> for GlueClient<'a>
 	}
 
 	async fn take_stream(&mut self) ->  Result<GlueClientStream, P2PNetworkClientError> {
-		let client: P2PClient = FutureExt::compat(connect(self.url))
+		let client: P2PClient = FutureExt::compat(connect(&self.url))
 			.await
 			.map_err(|_| P2PNetworkClientError::Rpc)?;
 
@@ -172,37 +172,24 @@ impl P2PClient {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use jsonrpc_core_client::transports::http::connect;
-	use jsonrpc_http_server::*;
+	use jsonrpc_ws_server::{ServerBuilder, Server};
 	use jsonrpc_core::{Error, ErrorCode, IoHandler, Params, Value};
 	use serde_json::json;
 
-	fn id<T>(t: T) -> T {
-		t
-	}
-
 	struct TestServer {
-		uri: String,
+		url: url::Url,
 		server: Option<Server>,
 	}
 
 	impl TestServer {
-		fn serve<F: FnOnce(ServerBuilder) -> ServerBuilder>(alter: F) -> Self {
-			let builder = ServerBuilder::new(io()).rest_api(RestApi::Unsecure);
-
-			let server = alter(builder).start_http(&"127.0.0.1:0".parse().unwrap()).unwrap();
-			let uri = format!("http://{}", server.address());
+		fn serve() -> Self {
+			let server = ServerBuilder::new(io())
+				.start(&"0.0.0.0:3030".parse().unwrap())
+				.expect("This should start");
 
 			TestServer {
-				uri,
+				url: url::Url::parse("ws://127.0.0.1:3030").unwrap(),
 				server: Some(server),
-			}
-		}
-
-		fn stop(&mut self) {
-			let server = self.server.take();
-			if let Some(server) = server {
-				server.close();
 			}
 		}
 	}
@@ -221,9 +208,8 @@ mod tests {
 
 	#[test]
 	fn client_api() {
-		let server = TestServer::serve(id);
-
-		let mut glue_client = GlueClient::new(&server.uri);
+		let server = TestServer::serve();
+		let mut glue_client = GlueClient::new(server.url);
 		let run = async {
 			let result = glue_client.send(&100,"disco".as_bytes()).await;
 			assert!(result.is_ok(), "Should receive OK for sending message to peer");
