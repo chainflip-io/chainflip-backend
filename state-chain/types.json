@@ -1,6 +1,7 @@
 {
   "ValidatorId": "AccountId",
   "AuctionIndex": "u64",
+  "AuctionRange": "(u32,u32)",
   "FlipBalance": "u128",
   "AuctionRange": "(u32, u32)",
   "EpochIndex": "u32",
@@ -11,6 +12,7 @@
     "data": "()"
   },
   "ValidatorSize": "u32",
+  "CallHash": "[u8;32]",
   "VoteCount": "u32",
   "TokenAmount": "u128",
   "Nonce": "u64",
@@ -19,6 +21,8 @@
   "LookupSource": "MultiAddress",
   "Amount": "TokenAmount",
   "EthTransactionHash": "[u8;32]",
+  "EthereumAddress": "[u8;20]",
+  "Signature": "Bytes",
   "AuctionError": {
     "_enum": [
       "BondIsZero",
