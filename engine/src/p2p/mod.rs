@@ -12,7 +12,6 @@ use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
 use tokio::sync::mpsc::UnboundedReceiver;
 use crate::p2p::rpc::Base58;
-use futures::stream::StreamExt;
 use futures::Stream;
 
 #[derive(Debug)]
@@ -91,7 +90,7 @@ mod tests {
 
         drop(network);
 
-        let mut stream_1 = clients[1].take_stream().await.unwrap();
+        let stream_1 = clients[1].take_stream().await.unwrap();
 
         assert_eq!(
             receive_with_timeout(stream_1.into_inner()).await.unwrap(),
@@ -101,7 +100,7 @@ mod tests {
             }
         );
 
-        let mut stream_2 = clients[2].take_stream().await.unwrap();
+        let stream_2 = clients[2].take_stream().await.unwrap();
 
         assert_eq!(receive_with_timeout(stream_2.into_inner()).await, None);
     }
@@ -116,7 +115,7 @@ mod tests {
         // (1) broadcasts; (0) and (2) should receive one message
         clients[1].broadcast(&data).await.unwrap();
 
-        let mut stream_0 = clients[0].take_stream().await.unwrap();
+        let stream_0 = clients[0].take_stream().await.unwrap();
 
         assert_eq!(
             receive_with_timeout(stream_0.into_inner()).await.unwrap(),
@@ -126,7 +125,7 @@ mod tests {
             }
         );
 
-        let mut stream_2 = clients[2].take_stream().await.unwrap();
+        let stream_2 = clients[2].take_stream().await.unwrap();
 
         assert_eq!(
             receive_with_timeout(stream_2.into_inner()).await.unwrap(),
