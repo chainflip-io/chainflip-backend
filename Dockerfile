@@ -1,7 +1,7 @@
 FROM debian:buster-slim
 
 ARG SERVICE=""
-ARG APP=/state-chain/data
+ARG APP=/$SERVICE/data
 
 ENV TZ=Etc/UTC \
     APP_USER=chainflip
