@@ -49,6 +49,9 @@ steps:
 #  Checks the the .drone.yml file is formatted correctly
   - name: lint-drone-yml
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+    resources:
+      limits:
+        cpu: 3000
     commands:
       - drone lint --trusted
 
@@ -104,6 +107,9 @@ environment:
 steps:
 #  Builds the base image for running build jobs
   - name: rust-base
+    resources:
+      limits:
+        cpu: 3000
     image: plugins/docker
     settings:
       username: &docker_username
