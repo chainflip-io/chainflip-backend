@@ -8,8 +8,8 @@ use anyhow::Result;
 use super::{
     runtime::StateChainRuntime,
     staking::{
-        ClaimSettledEvent, ClaimSigRequestedEvent, ClaimSignatureIssuedEvent, StakeRefundEvent,
-        StakedEvent, StakingEvent,
+        AccountActivated, AccountRetired, ClaimExpired, ClaimSettledEvent, ClaimSigRequestedEvent,
+        ClaimSignatureIssuedEvent, StakeRefundEvent, StakedEvent, StakingEvent,
     },
     validator::{
         AuctionConfirmedEvent, AuctionRangeChangedEvent, AuctionStartedEvent,
@@ -29,24 +29,33 @@ pub enum SCEvent {
 pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEvent>> {
     let event = match raw_event.module.as_str() {
         "Staking" => match raw_event.variant.as_str() {
-            "ClaimSigRequested" => Ok(Some(
-                ClaimSigRequestedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
-                    .into(),
+            "Staked" => Ok(Some(
+                StakedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
+            )),
+            "ClaimedSettled" => Ok(Some(
+                ClaimSettledEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
             )),
             "StakeRefund" => Ok(Some(
                 StakeRefundEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
             )),
+            "ClaimSigRequested" => Ok(Some(
+                ClaimSigRequestedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
+                    .into(),
+            )),
+
             "ClaimSignatureIssued" => Ok(Some(
                 ClaimSignatureIssuedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
                     .into(),
             )),
-            "Claimed" => Ok(Some(
-                ClaimSettledEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
+            "AccountRetired" => Ok(Some(
+                AccountRetired::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
             )),
-            "Staked" => Ok(Some(
-                StakedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
+            "AccountActivated" => Ok(Some(
+                AccountActivated::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
             )),
-            // TODO: Add the new Staking events here
+            "ClaimExpired" => Ok(Some(
+                ClaimExpired::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
+            )),
             _ => Ok(None),
         },
         "Validator" => match raw_event.variant.as_str() {
@@ -156,7 +165,7 @@ mod tests {
 
         let raw_event = RawEvent {
             module: "Staking".to_string(),
-            variant: "Claimed".to_string(),
+            variant: "ClaimedSettled".to_string(),
             data: encoded_claimed,
         };
 
