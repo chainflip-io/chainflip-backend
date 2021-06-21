@@ -87,15 +87,13 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "depends on running state chain"]
     async fn submit_xt_test() {
         let settings = settings::test_utils::new_test_settings().unwrap();
         let subxt_client = create_subxt_client(settings.state_chain).await.unwrap();
 
-        let hex_lit = hex!("");
-
-        let keyring = sp_keyring::sr25519::sr25519::Pair::from_seed(&hex_lit);
-
-        let signer = PairSigner::new(keyring);
+        let alice = AccountKeyring::Alice.pair();
+        let signer = PairSigner::new(alice);
 
         let eth_address: [u8; 20] = [
             00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01,
@@ -106,24 +104,19 @@ mod tests {
             01, 01, 01, 01, 01, 01, 01, 01, 01, 01,
         ];
 
-        let account_id_bashful = AccountId32::from_str("").unwrap();
-
-        //     staker_account_id: AccountId32,
-
-        // amount: T::TokenAmount,
-
-        // refund_address: T::EthereumAddress,
-
         let result = subxt_client
             .witness_staked(
                 &signer,
-                account_id_bashful,
+                AccountKeyring::Alice.to_account_id(),
                 10000000u128,
                 eth_address,
                 tx_hash,
             )
             .await;
+
         println!("Result is: {:#?}", result);
+
+        assert!(result.is_ok());
     }
 }
 
