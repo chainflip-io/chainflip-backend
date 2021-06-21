@@ -7,7 +7,7 @@ ENV TZ=Etc/UTC \
     APP_USER=chainflip
 
 RUN apt-get update \
-    && apt-get install -y ca-certificates tzdata \
+    && apt-get install -y ca-certificates tzdata curl \
     && rm -rf /var/lib/apt/lists/*
 
 
