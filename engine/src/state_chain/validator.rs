@@ -119,7 +119,7 @@ mod tests {
     use codec::Encode;
     use state_chain_runtime::Runtime as SCRuntime;
 
-    use crate::sc_observer::runtime::StateChainRuntime;
+    use crate::state_chain::runtime::StateChainRuntime;
 
     use super::*;
 

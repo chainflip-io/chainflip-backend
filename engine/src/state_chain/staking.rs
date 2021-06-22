@@ -237,7 +237,7 @@ impl From<ClaimExpired<StateChainRuntime>> for SCEvent {
 
 #[cfg(test)]
 mod tests {
-    use crate::sc_observer::runtime::StateChainRuntime;
+    use crate::state_chain::runtime::StateChainRuntime;
 
     use super::*;
 
