@@ -12,6 +12,7 @@ use futures::pin_mut;
 use sp_core::Pair;
 use sp_keyring::AccountKeyring;
 
+use sp_runtime::AccountId32;
 use substrate_subxt::{Client, ClientBuilder, PairSigner};
 use tokio_stream::StreamExt;
 
@@ -68,9 +69,9 @@ impl SCBroadcaster {
     }
 
     pub async fn run(&self) -> Result<()> {
-        // read in Stakemanager events'
+        let alice_signer = PairSigner::new(AccountKeyring::Alice.pair());
 
-        // let alice_signer = PairSigner::new(AccountKeyring::Alice.pair());
+        let alice: AccountId32 = AccountKeyring::Alice.to_account_id();
 
         let stream = self
             .mq_client
@@ -84,17 +85,17 @@ impl SCBroadcaster {
 
         let event = event.unwrap().unwrap();
 
-        let tx_hash = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        // match event {
-        //     StakeManagerEvent::Staked(node_id, amount) => {
-        //         log::trace!("Sending witness staked to state chain");
-        //         self.sc_client
-        //             .witness_staked(&alice_signer, node_id, amount, tx_hash);
-        //     }
-        //     _ => {
-        //         log::warn!("Staking event not supported for SC broadcaster");
-        //     }
-        // }
+        match event {
+            // TODO: Use the actual node id, after eth contracts updated
+            StakeManagerEvent::Staked(_node_id, amount, tx_hash) => {
+                log::trace!("Sending witness staked to state chain");
+                self.sc_client
+                    .witness_staked(&alice_signer, alice, amount, tx_hash);
+            }
+            _ => {
+                log::warn!("Staking event not supported for SC broadcaster");
+            }
+        }
 
         let err_msg = "State Chain Broadcaster has stopped running!";
         log::error!("{}", err_msg);
