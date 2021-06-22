@@ -34,6 +34,8 @@ async fn main() {
         threshold: 99,
     };
 
+    // TODO: Wire up state chain broadcaster
+
     let signing_client = signing::MultisigClient::new(mq_factory, signer_idx, params);
 
     signing_client.run().await;
