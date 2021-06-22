@@ -3,6 +3,7 @@ pub mod stake_manager;
 mod eth_event_streamer;
 
 mod eth_broadcaster;
+mod eth_tx_encoder;
 
 pub use anyhow::Result;
 use async_trait::async_trait;

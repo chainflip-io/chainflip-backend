@@ -8,7 +8,7 @@ use crate::eth::{EventProducerError, EventSource};
 use serde::{Deserialize, Serialize};
 use web3::{
     contract::tokens::Tokenizable,
-    ethabi::{self, Log},
+    ethabi::{self, Function, Log},
     types::{BlockNumber, FilterBuilder, H160},
 };
 
@@ -16,7 +16,7 @@ use anyhow::Result;
 
 /// A wrapper for the StakeManager Ethereum contract.
 pub struct StakeManager {
-    deployed_address: H160,
+    pub deployed_address: H160,
     contract: ethabi::Contract,
 }
 
@@ -115,6 +115,13 @@ impl StakeManager {
     // Get the event type definition from the contract abi
     fn get_event(&self, name: &str) -> Result<&ethabi::Event> {
         Ok(self.contract.event(name)?)
+    }
+
+    /// Extracts a reference to the "registerClaim" function definition. Panics if it can't be found.
+    pub fn register_claim(&self) -> &Function {
+        self.contract
+            .function("registerClaim")
+            .expect("Function 'register_claim' should be defined in the StakeManager abi.")
     }
 }
 
