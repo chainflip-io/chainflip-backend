@@ -466,9 +466,12 @@ mod tests {
                     old_emission_per_block,
                     U256::from_dec_str("5607877281367557723").unwrap()
                 );
-                assert_eq!(new_emission_per_block, U256::from_dec_str("6579443024069621580110813774705758985587161661791333414420007985268583717615").unwrap());
+                assert_eq!(
+                    new_emission_per_block,
+                    U256::from_dec_str("1869292427122519296").unwrap()
+                );
                 let expected_hash = H256::from_str(
-                    "0x7af92dc418df27bc847d356e661cdbca8b3151c3a955285772a636e463c1fcc6",
+                    "0xc33000ba8e13e574b813521aa88f879af50470ddd3fceb0712bc31d4c83bd6ef",
                 )
                 .unwrap()
                 .to_fixed_bytes();
