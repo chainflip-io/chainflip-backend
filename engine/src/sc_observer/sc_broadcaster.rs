@@ -69,10 +69,6 @@ impl SCBroadcaster {
     }
 
     pub async fn run(&self) -> Result<()> {
-        let alice_signer = PairSigner::new(AccountKeyring::Alice.pair());
-
-        let alice: AccountId32 = AccountKeyring::Alice.to_account_id();
-
         let stream = self
             .mq_client
             .subscribe::<StakeManagerEvent>(Subject::StakeManager)
@@ -80,42 +76,42 @@ impl SCBroadcaster {
 
         let mut stream = pin_message_stream(stream);
 
+        // TOOD: Loop through the events here, pushing each as they come
         let event = stream.next().await;
         println!("Get next event: {:#?}", event);
 
         let event = event.unwrap().unwrap();
 
-        match event {
-            // TODO: Use the actual node id, after eth contracts updated
-            StakeManagerEvent::Staked(_node_id, amount, tx_hash) => {
-                log::trace!("Sending witness staked to state chain");
-                self.sc_client
-                    .witness_staked(&alice_signer, alice, amount, tx_hash);
-            }
-            _ => {
-                log::warn!("Staking event not supported for SC broadcaster");
-            }
-        }
+        self.push_event(event).await?;
 
         let err_msg = "State Chain Broadcaster has stopped running!";
         log::error!("{}", err_msg);
         Err(anyhow::Error::msg(err_msg))
     }
+
+    async fn push_event(&self, event: StakeManagerEvent) -> Result<()> {
+        let alice_signer = PairSigner::new(AccountKeyring::Alice.pair());
+
+        let alice: AccountId32 = AccountKeyring::Alice.to_account_id();
+        match event {
+            // TODO: Use the actual node id, after eth contracts updated
+            StakeManagerEvent::Staked(_node_id, amount, tx_hash) => {
+                log::trace!("Sending witness staked to state chain");
+                let result = self
+                    .sc_client
+                    .witness_staked(&alice_signer, alice, amount, tx_hash);
+                println!("Result is {:#?}", result.await);
+            }
+            _ => {
+                log::warn!("Staking event not supported for SC broadcaster");
+            }
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
-
-    use std::marker::PhantomData;
-    use std::str::FromStr;
-
-    use frame_support::sp_runtime::AccountId32;
-    use sp_core::{sr25519, Pair, Public, H256};
-    use sp_runtime::traits::{IdentifyAccount, Verify};
-    use sp_runtime::{MultiSignature, MultiSigner};
-    use state_chain_runtime::{AccountId, Origin};
-    use substrate_subxt::extrinsic::{self, CheckGenesis, SignedPayload};
-    use substrate_subxt::{DefaultNodeRuntime, EventSubscription, SignedExtension};
     // use frame_system::pallet_prelude::OriginFor;
     // use state_chain_runtime::OriginFor;
 
@@ -129,6 +125,11 @@ mod tests {
     use substrate_subxt::sudo::SudoCallExt;
     use substrate_subxt::system::SetCodeCallExt;
     use substrate_subxt::Signer;
+
+    const TX_HASH: [u8; 32] = [
+        00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01, 02, 01, 02,
+        01, 02, 01, 02, 01, 02, 01, 02, 01,
+    ];
 
     // TODO: Use the SC broadcaster struct instead
     #[tokio::test]
@@ -164,6 +165,14 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "needs stuff"]
-    async fn sc_broadcaster_subscribe() {}
+    #[ignore = "depends on running state chain"]
+    async fn sc_broadcaster_push_event() {
+        let settings = settings::test_utils::new_test_settings().unwrap();
+
+        let sc_broadcaster = SCBroadcaster::new(settings).await;
+
+        let staked_event = StakeManagerEvent::Staked(100, 100, TX_HASH);
+
+        sc_broadcaster.push_event(staked_event);
+    }
 }

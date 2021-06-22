@@ -351,10 +351,16 @@ mod tests {
         let sm = StakeManager::load(CONTRACT_ADDRESS)?;
 
         match sm.parse_event(log)? {
-            StakeManagerEvent::Staked(node_id, amount) => {
+            StakeManagerEvent::Staked(node_id, amount, tx_hash) => {
                 assert_eq!(node_id, 12321);
                 let base: u128 = 10;
                 assert_eq!(amount, base.pow(23) as u128);
+                let expected_hash = H256::from_str(
+                    "0x75349046f12736cf7887f07d6e0b9b0d77334aa63b1d4f024349c72c73f9592e",
+                )
+                .unwrap()
+                .to_fixed_bytes();
+                assert_eq!(tx_hash, expected_hash);
             }
             _ => panic!("Expected StakeManagerEvent::Staked, got a different variant"),
         }
@@ -375,6 +381,7 @@ mod tests {
                 staker,
                 start_time,
                 expiry_time,
+                tx_hash,
             ) => {
                 assert_eq!(node_id, web3::types::U256::from_dec_str("12345").unwrap());
                 assert_eq!(amount, web3::types::U256::from_dec_str("1").unwrap());
@@ -391,6 +398,12 @@ mod tests {
                     expiry_time,
                     web3::types::U256::from_dec_str("1621559804").unwrap()
                 );
+                let expected_hash = H256::from_str(
+                    "0x372ce28df138b10b90dfd3defe0eb0720f033a215ef6fd3361565dba0c204aeb",
+                )
+                .unwrap()
+                .to_fixed_bytes();
+                assert_eq!(tx_hash, expected_hash)
             }
             _ => panic!("Expected Staking::ClaimRegistered, got a different variant"),
         }
@@ -409,9 +422,15 @@ mod tests {
         println!("here's the claim exec sig: {:#?}", claim_exec_sig);
 
         match sm.parse_event(log)? {
-            StakeManagerEvent::ClaimExecuted(node_id, amount) => {
+            StakeManagerEvent::ClaimExecuted(node_id, amount, tx_hash) => {
                 assert_eq!(node_id, 59568);
                 assert_eq!(amount, 73);
+                let expected_hash = H256::from_str(
+                    "0x9be0b3ab66177a80eb856772f3dff82f0d4e63c912d1f53f9ae032e68b177079",
+                )
+                .unwrap()
+                .to_fixed_bytes();
+                assert_eq!(tx_hash, expected_hash);
             }
             _ => panic!("Expected Staking::ClaimExecuted, got a different variant"),
         }
@@ -426,12 +445,22 @@ mod tests {
         let sm = StakeManager::load(CONTRACT_ADDRESS)?;
 
         match sm.parse_event(log)? {
-            StakeManagerEvent::EmissionChanged(old_emission_per_block, new_emission_per_block) => {
+            StakeManagerEvent::EmissionChanged(
+                old_emission_per_block,
+                new_emission_per_block,
+                tx_hash,
+            ) => {
                 assert_eq!(
                     old_emission_per_block,
                     U256::from_dec_str("5607877281367557723").unwrap()
                 );
                 assert_eq!(new_emission_per_block, U256::from_dec_str("6579443024069621580110813774705758985587161661791333414420007985268583717615").unwrap());
+                let expected_hash = H256::from_str(
+                    "0x7af92dc418df27bc847d356e661cdbca8b3151c3a955285772a636e463c1fcc6",
+                )
+                .unwrap()
+                .to_fixed_bytes();
+                assert_eq!(tx_hash, expected_hash);
             }
             _ => panic!("Expected Staking::EmissionChanged, got a different variant"),
         }
@@ -446,12 +475,18 @@ mod tests {
         let sm = StakeManager::load(CONTRACT_ADDRESS)?;
 
         match sm.parse_event(log)? {
-            StakeManagerEvent::MinStakeChanged(old_min_stake, new_min_stake) => {
+            StakeManagerEvent::MinStakeChanged(old_min_stake, new_min_stake, tx_hash) => {
                 assert_eq!(
                     old_min_stake,
                     U256::from_dec_str("40000000000000000000000").unwrap()
                 );
                 assert_eq!(new_min_stake, U256::from_dec_str("50840").unwrap());
+                let expected_hash = H256::from_str(
+                    "0x72309e2654dc768118b5ebfe81892a4e3429896be20c1860aa8fba43eb96ffc4",
+                )
+                .unwrap()
+                .to_fixed_bytes();
+                assert_eq!(tx_hash, expected_hash);
             }
             _ => panic!("Expected Staking::MinStakeChanged, got a different variant"),
         }
