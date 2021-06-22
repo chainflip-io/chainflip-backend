@@ -2,9 +2,9 @@ use chainflip_engine::{
     eth,
     health::health_check,
     mq::nats_client::NatsMQClientFactory,
-    sc_observer,
     settings::Settings,
     signing::{self, crypto::Parameters},
+    state_chain,
 };
 
 #[tokio::main]
@@ -18,7 +18,7 @@ async fn main() {
     // can use this sender to shut down the health check gracefully
     let _sender = health_check(settings.engine.health_check_port).await;
 
-    sc_observer::sc_observer::start(settings.clone()).await;
+    state_chain::sc_observer::start(settings.clone()).await;
 
     eth::start(settings.clone())
         .await

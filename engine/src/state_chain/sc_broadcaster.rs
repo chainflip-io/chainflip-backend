@@ -28,7 +28,7 @@ use crate::{
     settings::Settings,
 };
 
-use crate::sc_observer::staking::{WitnessClaimedCallExt, WitnessStakedCallExt};
+use crate::state_chain::staking::{WitnessClaimedCallExt, WitnessStakedCallExt};
 
 use anyhow::Result;
 
@@ -125,9 +125,9 @@ mod tests {
 
     use super::*;
 
-    use crate::sc_observer::validator::ForceRotationCallExt;
     use crate::settings;
     use crate::settings::StateChain;
+    use crate::state_chain::validator::ForceRotationCallExt;
 
     use hex_literal::hex;
     use substrate_subxt::sudo::SudoCallExt;
