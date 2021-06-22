@@ -229,7 +229,7 @@ pub mod pallet {
 		/// An invalid claim has been witnessed: the account has no pending claims.
 		NoPendingClaim,
 
-		/// An invalid claim has been witnessed: the amount claimed, or the nonce, does not match the pending claim.
+		/// An invalid claim has been witnessed: the amount claimed, does not match the pending claim.
 		InvalidClaimDetails,
 
 		/// The claimant tried to claim despite having a claim already pending.
@@ -279,7 +279,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			account_id: T::AccountId,
 			amount: FlipBalance<T>,
-			// Required to ensure this call is unique.
+			// Required to ensure this call is unique per staking event.
 			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			Self::ensure_witnessed(origin)?;
@@ -336,10 +336,10 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
 			claimed_amount: FlipBalance<T>,
-			claimed_nonce: T::Nonce,
+			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = Call::claimed(account_id, claimed_amount, claimed_nonce);
+			let call = Call::claimed(account_id, claimed_amount, tx_hash);
 			T::Witnesser::witness(who, call.into())?;
 			Ok(().into())
 		}
@@ -352,9 +352,8 @@ pub mod pallet {
 		///
 		/// ## Error conditions:
 		///
-		/// - NoPendingClaim(Error::NoPendingClaim): The provided account does not have any claims pending.
-		/// - InvalidClaimDetails(Error::InvalidClaimDetails): The nonce or amount provided does not match that of the
-		///   pending claim.
+		/// - [NoPendingClaim](Error::NoPendingClaim)
+		/// - [InvalidClaimDetails](Error::InvalidClaimDetails)
 		///
 		/// **This call can only be dispatched from the configured witness origin.**
 		#[pallet::weight(10_000)]
@@ -362,7 +361,8 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
 			claimed_amount: FlipBalance<T>,
-			claimed_nonce: T::Nonce,
+			// Required to ensure this call is unique per claim event.
+			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			Self::ensure_witnessed(origin)?;
 
@@ -370,7 +370,7 @@ pub mod pallet {
 				PendingClaims::<T>::get(&account_id).ok_or(Error::<T>::NoPendingClaim)?;
 
 			ensure!(
-				claimed_amount == claim_details.amount && claimed_nonce == claim_details.nonce,
+				claimed_amount == claim_details.amount,
 				Error::<T>::InvalidClaimDetails
 			);
 

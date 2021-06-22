@@ -175,7 +175,7 @@ fn cannot_double_claim() {
 		);
 
 		// Redeem the first claim.
-		assert_ok!(Staking::claimed(Origin::root(), ALICE, stake_a1, 1));
+		assert_ok!(Staking::claimed(Origin::root(), ALICE, stake_a1, TX_HASH));
 
 		// Should now be able to claim the rest.
 		assert_ok!(Staking::claim(
@@ -185,7 +185,7 @@ fn cannot_double_claim() {
 		));
 
 		// Redeem the rest.
-		assert_ok!(Staking::claimed(Origin::root(), ALICE, stake_a2, 2));
+		assert_ok!(Staking::claimed(Origin::root(), ALICE, stake_a2, TX_HASH));
 
 		// Remaining stake should be zero
 		assert_eq!(Flip::total_balance_of(&ALICE), 0u128);
@@ -211,24 +211,24 @@ fn staked_and_claimed_events_must_match() {
 
 		// Invalid Claimed Event from Ethereum: wrong account.
 		assert_noop!(
-			Staking::claimed(Origin::root(), BOB, STAKE, 1),
+			Staking::claimed(Origin::root(), BOB, STAKE, TX_HASH),
 			<Error<Test>>::NoPendingClaim
 		);
 
 		// Invalid Claimed Event from Ethereum: wrong amount.
 		assert_noop!(
-			Staking::claimed(Origin::root(), ALICE, STAKE - 1, 1),
+			Staking::claimed(Origin::root(), ALICE, STAKE - 1, TX_HASH),
 			<Error<Test>>::InvalidClaimDetails
 		);
 
 		// Invalid Claimed Event from Ethereum: wrong nonce.
 		assert_noop!(
-			Staking::claimed(Origin::root(), ALICE, STAKE - 1, 100),
+			Staking::claimed(Origin::root(), ALICE, STAKE - 1, TX_HASH),
 			<Error<Test>>::InvalidClaimDetails
 		);
 
 		// Valid Claimed Event from Ethereum.
-		assert_ok!(Staking::claimed(Origin::root(), ALICE, STAKE, 1));
+		assert_ok!(Staking::claimed(Origin::root(), ALICE, STAKE, TX_HASH));
 
 		// The account balance is now zero, it should have been reaped.
 		assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
@@ -264,9 +264,12 @@ fn multisig_endpoints_cant_be_called_from_invalid_origins() {
 			BadOrigin
 		);
 
-		assert_noop!(Staking::claimed(Origin::none(), ALICE, STAKE, 1), BadOrigin);
 		assert_noop!(
-			Staking::claimed(Origin::signed(Default::default()), ALICE, STAKE, 1),
+			Staking::claimed(Origin::none(), ALICE, STAKE, TX_HASH),
+			BadOrigin
+		);
+		assert_noop!(
+			Staking::claimed(Origin::signed(Default::default()), ALICE, STAKE, TX_HASH),
 			BadOrigin
 		);
 	});
@@ -382,7 +385,12 @@ fn cannot_claim_bond() {
 		));
 
 		// Even if she claims, the remaining 100 are blocked
-		assert_ok!(Staking::claimed(Origin::root(), ALICE, STAKE - BOND, 1));
+		assert_ok!(Staking::claimed(
+			Origin::root(),
+			ALICE,
+			STAKE - BOND,
+			TX_HASH
+		));
 		assert_noop!(
 			Staking::claim(Origin::signed(ALICE), 1, ETH_DUMMY_ADDR),
 			FlipError::InsufficientLiquidity
