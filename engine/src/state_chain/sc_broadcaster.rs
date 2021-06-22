@@ -16,6 +16,7 @@ use sp_runtime::AccountId32;
 use substrate_subxt::{Client, ClientBuilder, PairSigner};
 use tokio_stream::StreamExt;
 
+use std::str::FromStr;
 use substrate_subxt::Signer;
 
 use super::{helpers::create_subxt_client, runtime::StateChainRuntime};
@@ -179,7 +180,8 @@ mod tests {
 
         let sc_broadcaster = SCBroadcaster::new(settings).await;
 
-        let staked_event = StakeManagerEvent::Staked(100, 100, TX_HASH);
+        let node_id = AccountId32::from_str("59568").unwrap();
+        let staked_event = StakeManagerEvent::Staked(node_id, 100, TX_HASH);
 
         sc_broadcaster.push_event(staked_event);
     }

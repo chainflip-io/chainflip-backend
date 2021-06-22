@@ -362,7 +362,8 @@ mod tests {
 
         match sm.parse_event(log)? {
             StakeManagerEvent::Staked(node_id, amount, tx_hash) => {
-                assert_eq!(node_id, 12321);
+                let expected_node_id = AccountId32::from_str("12321").unwrap();
+                assert_eq!(node_id, expected_node_id);
                 let base: u128 = 10;
                 assert_eq!(amount, base.pow(23) as u128);
                 let expected_hash = H256::from_str(
@@ -433,7 +434,8 @@ mod tests {
 
         match sm.parse_event(log)? {
             StakeManagerEvent::ClaimExecuted(node_id, amount, tx_hash) => {
-                assert_eq!(node_id, 59568);
+                let expected_node_id = AccountId32::from_str("59568").unwrap();
+                assert_eq!(node_id, expected_node_id);
                 assert_eq!(amount, 73);
                 let expected_hash = H256::from_str(
                     "0x9be0b3ab66177a80eb856772f3dff82f0d4e63c912d1f53f9ae032e68b177079",
