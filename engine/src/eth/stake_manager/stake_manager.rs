@@ -167,7 +167,7 @@ impl EventSource for StakeManager {
             _ if sig == self.staked_event_definition().signature() => {
                 let log = self.staked_event_definition().parse_log(raw_log)?;
                 let event = StakeManagerEvent::Staked(
-                    decode_log_param::<ethabi::Uint>(&log, "nodeID")?.as_u128(),
+                    decode_log_param::<ethabi::FixedBytes>(&log, "nodeID")?,
                     decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
                     tx_hash_bytes,
                 );
@@ -176,7 +176,7 @@ impl EventSource for StakeManager {
             _ if sig == self.claim_executed_event_definition().signature() => {
                 let log = self.claim_executed_event_definition().parse_log(raw_log)?;
                 let event = StakeManagerEvent::ClaimExecuted(
-                    decode_log_param::<ethabi::Uint>(&log, "nodeID")?.as_u128(),
+                    decode_log_param::<ethabi::FixedBytes>(&log, "nodeID")?.as_u128(),
                     decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
                     tx_hash_bytes,
                 );
@@ -246,13 +246,13 @@ mod tests {
     const CONTRACT_ADDRESS: &'static str = "0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f";
 
     const STAKED_EVENT_SIG: &'static str =
-        "0x925435fa7e37e5d9555bb18ce0d62bb9627d0846942e58e5291e9a2dded462ed";
+        "0x23581b9afdc2170a53868d0b64508f096844aa55c3ad98caf14032a91c41cc52";
 
     const CLAIM_REGISTERED_EVENT_SIG: &'static str =
-        "0x824ad91f900dab5b5b547a9d07aff90b18f830f24f0d0e97b0d750fc71879d4c";
+        "0x2f73775f2573d45f5b0ed0064eb65f631ac9e568a52807221c44ca9d358a9cee";
 
     const CLAIM_EXECUTED_EVENT_SIG: &'static str =
-        "0x749a1f8d41c63e7123adac0637a8c06d2e0d0412d454a0edf7708ba27e86c697";
+        "0xac96f597a44ad425c6eedf6e4c8327fd959c9d912fa8d027fb54313e59f247c8";
 
     const EMISSION_CHANGED_EVENT_SIG: &'static str =
         "0x0b0b5ed18390ab49777844d5fcafb9865c74095ceb3e73cc57d1fbcc926103b5";
@@ -261,35 +261,33 @@ mod tests {
         "0xca11c8a4c461b60c9f485404c272650c2aaae260b2067d72e9924abb68556593";
 
     const STAKED_LOG: &'static str = r#"{
-        "logIndex": "0x2",
-        "transactionIndex": "0x0",
-        "transactionHash": "0x75349046f12736cf7887f07d6e0b9b0d77334aa63b1d4f024349c72c73f9592e",
-        "blockHash": "0x76cc3567874b42ed341a06b157beb9f98e3afc000c7dd29438c8f5be36080bf2",
-        "blockNumber": "0x8",
-        "address": "0xead5de9c41543e4babb09f9fe4f79153c036044f",
-        "data": "0x00000000000000000000000000000000000000000000152d02c7e14af6800000",
+        "address": "0x85c0d660ea89da58c05996eb8fb7a444b3543f11",
+        "blockHash": "0x90c9130d55361350e0cb72fe436987fedd22111e9e554259124526ca60ddebd5",
+        "blockNumber": "0x8669f5",
+        "data": "0x000000000000000000000000000000000000000000000878678326eac90000000000000000000000000000000000000000000000000000000000000000000001",
+        "logIndex": "0x8",
+        "removed": false,
         "topics": [
-            "0x925435fa7e37e5d9555bb18ce0d62bb9627d0846942e58e5291e9a2dded462ed",
-            "0x0000000000000000000000000000000000000000000000000000000000003021"
+            "0x23581b9afdc2170a53868d0b64508f096844aa55c3ad98caf14032a91c41cc52",
+            "0x0000000000000000000000000000000000000000000000000000000000003039"
         ],
-        "type": "mined",
-        "removed": false
+        "transactionHash": "0x3a4b2643b00b579c493f9ed171bebbac1173dd195fde1a2c4ef8f69b55a7da43",
+        "transactionIndex": "0x12"
     }"#;
 
     const CLAIM_REGISTERED_LOG: &'static str = r#"{
-        "logIndex": "0x0",
-        "transactionIndex": "0x0",
-        "transactionHash": "0x372ce28df138b10b90dfd3defe0eb0720f033a215ef6fd3361565dba0c204aeb",
-        "blockHash": "0x54c69b27b63ec87b959863087fc0adfa30ea657f49933a550b2bcd85e015a44d",
-        "blockNumber": "0x9",
-        "address": "0xead5de9c41543e4babb09f9fe4f79153c036044f",
-        "data": "0x00000000000000000000000000000000000000000000000000000000000000010000000000000000000000009dbe382b57bcdc2aabc874130e120a3e7de09bda0000000000000000000000000000000000000000000000000000000060a466fc0000000000000000000000000000000000000000000000000000000060a709fc",
+        "address": "0x85c0d660ea89da58c05996eb8fb7a444b3543f11",
+        "blockHash": "0xa634f3f33c765cd850b8972d539db5b4c6385d862a89a8d15fdbc25db3eec19a",
+        "blockNumber": "0x8669f6",
+        "data": "0x0000000000000000000000000000000000000000000002d2cd2bb7a39860000000000000000000000000000073d669c173d88ccb01f6daab3a3304af7a1b22c10000000000000000000000000000000000000000000000000000000060d4910f0000000000000000000000000000000000000000000000000000000060d73402",
+        "logIndex": "0x5",
+        "removed": false,
         "topics": [
-            "0x824ad91f900dab5b5b547a9d07aff90b18f830f24f0d0e97b0d750fc71879d4c",
+            "0x2f73775f2573d45f5b0ed0064eb65f631ac9e568a52807221c44ca9d358a9cee",
             "0x0000000000000000000000000000000000000000000000000000000000003039"
         ],
-        "type": "mined",
-        "removed": false
+        "transactionHash": "0x4e3f3296f3baff3763bd2beb9cdfa6ddeb996c409f746f0450093712f2417185",
+        "transactionIndex": "0x14"
     }"#;
 
     const CLAIM_EXECUTED_LOG: &'static str = r#"{
