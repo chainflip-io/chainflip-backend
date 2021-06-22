@@ -34,10 +34,10 @@
     ]
   },
   "AuctionPhase": {
-    "_enum": [
-      "WaitingForBids(Vec<ValidatorId>, Amount)",
-      "BidsTaken(Vec<(ValidatorId, Amount)>)",
-      "WinnersSelected(Vec<ValidatorId>, Amount)"
-    ]
+    "_enum": {
+      "WaitingForBids": "(Vec<ValidatorId>, Amount)",
+      "BidsTaken": "(Vec<(ValidatorId, Amount)>)",
+      "WinnersSelected": "(Vec<ValidatorId>, Amount)"
+    }
   }
 }
