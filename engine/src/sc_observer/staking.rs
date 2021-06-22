@@ -67,6 +67,19 @@ pub struct WitnessStakedCall<T: Staking> {
     tx_hash: [u8; 32],
 }
 
+#[derive(Call, Encode)]
+pub struct WitnessClaimedCall<T: Staking> {
+    /// Runtime marker
+    _runtime: PhantomData<T>,
+
+    // Account id of the claiming account
+    account_id: AccountId32,
+
+    amount: T::TokenAmount,
+
+    tx_hash: [u8; 32],
+}
+
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Encode, Decode, Serialize, Deserialize)]
 pub struct ClaimSigRequestedEvent<S: Staking> {

@@ -28,7 +28,7 @@ use crate::{
     settings::Settings,
 };
 
-use crate::sc_observer::staking::WitnessStakedCallExt;
+use crate::sc_observer::staking::{WitnessClaimedCallExt, WitnessStakedCallExt};
 
 use anyhow::Result;
 
@@ -96,11 +96,19 @@ impl SCBroadcaster {
         match event {
             // TODO: Use the actual node id, after eth contracts updated
             StakeManagerEvent::Staked(_node_id, amount, tx_hash) => {
-                log::trace!("Sending witness staked to state chain");
+                log::trace!("Sending witness_staked to state chain");
                 let result = self
                     .sc_client
                     .witness_staked(&alice_signer, alice, amount, tx_hash);
-                println!("Result is {:#?}", result.await);
+                println!("Result of witness_staked xt is: {:#?}", result.await);
+            }
+            StakeManagerEvent::ClaimExecuted(_node_id, amount, tx_hash) => {
+                log::trace!("Sending claim_executed to the state chain");
+                // claim executed
+                let result = self
+                    .sc_client
+                    .witness_claimed(&alice_signer, alice, amount, tx_hash);
+                println!("The result of witness_claimed xt is: {:#?}", result.await);
             }
             _ => {
                 log::warn!("Staking event not supported for SC broadcaster");
