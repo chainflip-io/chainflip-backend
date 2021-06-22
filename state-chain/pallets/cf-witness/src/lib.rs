@@ -231,6 +231,8 @@ impl<T: Config> Pallet<T> {
 				let bits = VoteMask::from_slice_mut(bytes)
 				.expect("Only panics if the slice size exceeds the max; The number of validators should never exceed this;");
 
+				let mut vote_count = bits.count_ones();
+
 				// Get a reference to the existing vote.
 				let mut vote = bits
 					.get_mut(index)
@@ -241,9 +243,10 @@ impl<T: Config> Pallet<T> {
 					Err(Error::<T>::DuplicateWitness)?
 				}
 				
+				vote_count += 1;
 				*vote = true;
 
-				Ok(bits.count_ones())
+				Ok(vote_count)
 			},
 		)?;
 
