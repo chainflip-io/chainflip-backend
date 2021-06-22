@@ -359,7 +359,7 @@ pub mod pallet {
 		///
 		/// ## Error conditions:
 		///
-		/// - [NoPendingClaim](Error::NoPendingClaim
+		/// - [NoPendingClaim](Error::NoPendingClaim)
 		/// - [InvalidClaimDetails](Error::InvalidClaimDetails)
 		///
 		/// **This call can only be dispatched from the configured witness origin.**
