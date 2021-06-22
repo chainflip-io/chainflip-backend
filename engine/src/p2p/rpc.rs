@@ -4,7 +4,6 @@ use crate::p2p::{P2PNetworkClient, P2PMessage, P2PNetworkClientError, StatusCode
 use jsonrpc_core_client::transports::ws::connect;
 use tokio_compat_02::FutureExt;
 use async_trait::async_trait;
-use std::str;
 use cf_p2p_rpc::P2PEvent;
 use std::task::{Context, Poll};
 use std::pin::Pin;
