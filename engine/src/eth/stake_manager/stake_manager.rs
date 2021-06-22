@@ -2,10 +2,12 @@
 //! the EthEventStreamer
 
 use core::str::FromStr;
+use std::convert::TryInto;
 
 use crate::eth::{EventProducerError, EventSource};
 
 use serde::{Deserialize, Serialize};
+use sp_runtime::AccountId32;
 use web3::{
     contract::tokens::Tokenizable,
     ethabi::{self, ethereum_types, Log},
@@ -23,12 +25,12 @@ pub struct StakeManager {
 // TODO: ClaimRegistered, EmissionChanged, MinStakeChanged, not used
 // so they are just using the ethabi encoding atm
 /// Represents the events that are expected from the StakeManager contract.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StakeManagerEvent {
     /// The `Staked(nodeId, amount)` event.
     Staked(
         /// The node id of the validator that submitted the stake.
-        u128,
+        AccountId32,
         /// The amount of FLIP that was staked.
         u128,
         /// Transaction hash that created the event
@@ -54,7 +56,7 @@ pub enum StakeManagerEvent {
     /// `ClaimExecuted(nodeId, amount)` event
     ClaimExecuted(
         /// The node id of the validator that claimed their FLIP
-        u128,
+        AccountId32,
         /// The amount of FLIP that was claimed
         u128,
         /// Transaction hash that created the event
@@ -166,8 +168,13 @@ impl EventSource for StakeManager {
         match sig {
             _ if sig == self.staked_event_definition().signature() => {
                 let log = self.staked_event_definition().parse_log(raw_log)?;
+                let account_bytes: [u8; 32] =
+                    decode_log_param::<ethabi::FixedBytes>(&log, "nodeID")?
+                        .try_into()
+                        .expect("fuck");
+                let account_id = AccountId32::new(account_bytes);
                 let event = StakeManagerEvent::Staked(
-                    decode_log_param::<ethabi::FixedBytes>(&log, "nodeID")?,
+                    account_id,
                     decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
                     tx_hash_bytes,
                 );
@@ -175,8 +182,13 @@ impl EventSource for StakeManager {
             }
             _ if sig == self.claim_executed_event_definition().signature() => {
                 let log = self.claim_executed_event_definition().parse_log(raw_log)?;
+                let account_bytes: [u8; 32] =
+                    decode_log_param::<ethabi::FixedBytes>(&log, "nodeID")?
+                        .try_into()
+                        .expect("fuck");
+                let account_id = AccountId32::new(account_bytes);
                 let event = StakeManagerEvent::ClaimExecuted(
-                    decode_log_param::<ethabi::FixedBytes>(&log, "nodeID")?.as_u128(),
+                    account_id,
                     decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
                     tx_hash_bytes,
                 );

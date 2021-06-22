@@ -38,7 +38,7 @@ where
 /// Implement this for each contract for which you want to subscribe to events.
 pub trait EventSource {
     /// The Event type expected from this contract. Likely to be an enum of all possible events.
-    type Event: Send + Copy + Sync;
+    type Event: Clone + Send + Sync;
 
     /// Returns an eth filter for the events from the contract, starting at the given
     /// block number.
