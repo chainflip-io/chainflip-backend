@@ -2,7 +2,7 @@ use crate::{mq::{IMQClient, Subject, pin_message_stream}, sc_observer::{runtime:
 use super::stake_manager::stake_manager::StakeManager;
 
 use anyhow::Result;
-use futures::StreamExt;
+use futures::{TryFutureExt, StreamExt};
 use serde::{Serialize, Deserialize};
 use web3::{ethabi::Token, types::Address};
 
@@ -14,12 +14,13 @@ pub struct TxDetails {
     data: Vec<u8>,
 }
 
+#[derive(Clone)]
 struct RegisterClaimEncoder<M: IMQClient> {
     mq_client: M,
     stake_manager: StakeManager,
 }
 
-impl<M: IMQClient> RegisterClaimEncoder<M> {
+impl<M: IMQClient + Clone> RegisterClaimEncoder<M> {
     fn new(stake_manager_address: &str, mq_client: M) -> Result<Self> {
         let stake_manager = StakeManager::load(stake_manager_address)?;
         
@@ -40,17 +41,21 @@ impl<M: IMQClient> RegisterClaimEncoder<M> {
         subscription.for_each_concurrent(None, |msg| async {
             match msg {
                 Ok(evt) => {
-                    match self.build_and_send_tx(evt).await {
-                        Ok(_) => {
-                            log::debug!("{} built and send to broadcaster.", stringify!(ClaimSignatureIssuedEvent));
+                    match self.build_tx(evt) {
+                        Ok(tx_details) => {
+                            self.mq_client.publish(Subject::Broadcast(Chain::ETH), &tx_details).await
                         },
                         Err(err) => {
-                            log::error!("Could not process {}: {}", stringify!(ClaimSignatureIssuedEvent), err);
+                            log::error!("Failed to build {} for {}.", stringify!(TxDetails), stringify!(ClaimSignatureIssuedEvent));
+                            Ok(())
                         },
                     }
+                    .unwrap_or_else(|err| {
+                        log::error!("Could not process {}: {}", stringify!(ClaimSignatureIssuedEvent), err);
+                    });
                 },
                 Err(e) => {
-                    log::error!("Unable to process claim request: {:?}.", e)
+                    log::error!("Unable to process claim request: {:?}.", e);
                 },
             }
         }).await;
@@ -58,7 +63,7 @@ impl<M: IMQClient> RegisterClaimEncoder<M> {
         Ok(())
     }
 
-    async fn build_and_send_tx(&self, event: ClaimSignatureIssuedEvent<StateChainRuntime>) -> Result<()> {
+    fn build_tx(&self, event: ClaimSignatureIssuedEvent<StateChainRuntime>) -> Result<TxDetails> {
         let params = [
             Token::Tuple(vec![ // SigData
                 Token::Uint(todo!("msgHash needs to be emitted from state chain")), // msgHash
@@ -73,11 +78,9 @@ impl<M: IMQClient> RegisterClaimEncoder<M> {
 
         let tx_data = self.stake_manager.register_claim().encode_input(&params[..])?;
 
-        let tx_details = TxDetails {
+        Ok(TxDetails {
             contract_address: self.stake_manager.deployed_address,
             data: tx_data.into(),
-        };
-
-        self.mq_client.publish(Subject::Broadcast(Chain::ETH), &tx_details).await?;
+        })
     }
 }

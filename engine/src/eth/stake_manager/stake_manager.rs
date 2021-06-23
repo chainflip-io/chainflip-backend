@@ -14,6 +14,7 @@ use web3::{
 
 use anyhow::Result;
 
+#[derive(Clone)]
 /// A wrapper for the StakeManager Ethereum contract.
 pub struct StakeManager {
     pub deployed_address: H160,
