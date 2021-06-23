@@ -3,7 +3,6 @@
   "AuctionIndex": "u64",
   "AuctionRange": "(u32,u32)",
   "FlipBalance": "u128",
-  "AuctionRange": "(u32, u32)",
   "EpochIndex": "u32",
   "AccountInfo":  {
     "nonce": "Index",
