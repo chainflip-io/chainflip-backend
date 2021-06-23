@@ -46,7 +46,7 @@ environment:
   SCCACHE_CACHE_SIZE: 14G
 
 steps:
-#  Checks the the .drone.yml file is formatted correctly
+  #  Checks the the .drone.yml file is formatted correctly
   - name: lint-drone-yml
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     resources:
@@ -55,7 +55,7 @@ steps:
     commands:
       - drone lint --trusted
 
-#  Builds the base image for running build jobs
+  #  Builds the base image for running build jobs
   - name: rust-base
     image: plugins/docker
     settings:
@@ -73,7 +73,7 @@ steps:
         - Dockerfile.rust-base
         - .drone.yml
 
-#  Performs all unit tests
+  #  Performs all unit tests
   - name: test-validator-package
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
@@ -105,7 +105,7 @@ environment:
   SCCACHE_CACHE_SIZE: 14G
 
 steps:
-#  Builds the base image for running build jobs
+  #  Builds the base image for running build jobs
   - name: rust-base
     resources:
       limits:
@@ -126,14 +126,14 @@ steps:
         - Dockerfile.rust-base
         - .drone.yml
 
-#  Compiles the entire backend
+  #  Compiles the entire backend
   - name: compile-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
       - cargo build --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
-#  Compiles runs all unit tests
+  #  Compiles runs all unit tests
   - name: test-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
@@ -141,7 +141,7 @@ steps:
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
       - echo -n "latest,$DRONE_COMMIT_SHA" > .tags
 
-#  Create docker image for state-chain-node
+  #  Create docker image for state-chain-node
   - name: build-state-chain-node
     image: plugins/docker
     environment:
@@ -155,7 +155,7 @@ steps:
       build_args_from_env:
         - SERVICE
 
-#  Create docker image for chainflip-engine
+  #  Create docker image for chainflip-engine
   - name: build-chainflip-engine
     image: plugins/docker
     environment:
@@ -169,7 +169,91 @@ steps:
       build_args_from_env:
         - SERVICE
 
-#  Create docker image for chainflip-engine
+  #  Create docker image for chainflip-engine
+  - name: notify
+    image: appleboy/drone-discord
+    when:
+      status:
+        - failure
+    settings:
+      username: Sauron
+      webhook_id:
+        from_secret: discord_webhook_id
+      webhook_token:
+        from_secret: discord_webhook_token
+      message: |
+        ⚠️ Build Failure ⚠️
+
+        The latest `chainflip-backend` compile has failed.
+        Logs: {{build.link}}
+        Duration: `{{since build.started}}`
+        Responsible parties: <@401244824440799233>, <@472886957920485386>, <@464710706567053313>, <@261113437642424320>
+
+# Config
+trigger:
+  branch:
+    - release/*
+  event:
+    - push
+
+image_pull_secrets:
+  - dockerconfigjson
+
+node_selector:
+  type: ci
+
+tolerations:
+  - key: "workloadKind"
+    operator: "Equal"
+    value: "ci"
+
+---
+# Runs when PR is merged to main
+kind: pipeline
+type: kubernetes
+name: chainflip-backend-main
+
+environment:
+  SCCACHE_REDIS: redis://redis-headless:6379/
+  SCCACHE_CACHE_SIZE: 14G
+
+steps:
+  #  Builds the base image for running build jobs
+  - name: rust-base
+    resources:
+      limits:
+        cpu: 3000
+    image: plugins/docker
+    settings:
+      username: &docker_username
+        from_secret: docker_username
+      password: &docker_password
+        from_secret: docker_password
+      repo: ghcr.io/chainflip-io/chainflip-backend/rust-base
+      dockerfile: Dockerfile.rust-base
+      registry: ghcr.io
+      tags: latest
+      cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    when:
+      paths:
+        - Dockerfile.rust-base
+        - .drone.yml
+
+  #  Compiles the entire backend
+  - name: compile-chainflip-backend
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    commands:
+      - cargo build --release
+      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
+
+  #  Compiles runs all unit tests
+  - name: test-chainflip-backend
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    commands:
+      - cargo test --lib --release
+      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
+
+  #  Create docker image for chainflip-engine
   - name: notify
     image: appleboy/drone-discord
     when:
