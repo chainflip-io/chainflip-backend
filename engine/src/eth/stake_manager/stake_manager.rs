@@ -40,7 +40,7 @@ pub enum StakeManagerEvent {
     /// `ClaimRegistered(nodeId, amount, staker, startTime, expiryTime)` event
     ClaimRegistered(
         /// Node id of the validator registering the claim
-        ethabi::Uint,
+        AccountId32,
         /// Amount the validator is claiming
         ethabi::Uint,
         /// The ETH address of the validator, used to stake their FLIP
@@ -171,7 +171,7 @@ impl EventSource for StakeManager {
                 let account_bytes: [u8; 32] =
                     decode_log_param::<ethabi::FixedBytes>(&log, "nodeID")?
                         .try_into()
-                        .expect("fuck");
+                        .expect("could not cast into [u8;32]");
                 let account_id = AccountId32::new(account_bytes);
                 let event = StakeManagerEvent::Staked(
                     account_id,
@@ -185,7 +185,7 @@ impl EventSource for StakeManager {
                 let account_bytes: [u8; 32] =
                     decode_log_param::<ethabi::FixedBytes>(&log, "nodeID")?
                         .try_into()
-                        .expect("fuck");
+                        .expect("could not cast into [u8;32]");
                 let account_id = AccountId32::new(account_bytes);
                 let event = StakeManagerEvent::ClaimExecuted(
                     account_id,
@@ -221,8 +221,14 @@ impl EventSource for StakeManager {
                 let log = self
                     .claim_registered_event_definition()
                     .parse_log(raw_log)?;
+
+                let account_bytes: [u8; 32] =
+                    decode_log_param::<ethabi::FixedBytes>(&log, "nodeID")?
+                        .try_into()
+                        .expect("could not parse into FixedBytes");
+                let account_id = AccountId32::new(account_bytes);
                 let event = StakeManagerEvent::ClaimRegistered(
-                    decode_log_param(&log, "nodeID")?,
+                    account_id,
                     decode_log_param(&log, "amount")?,
                     decode_log_param(&log, "staker")?,
                     decode_log_param(&log, "startTime")?,
@@ -303,19 +309,18 @@ mod tests {
     }"#;
 
     const CLAIM_EXECUTED_LOG: &'static str = r#"{
-        "logIndex": "0x2",
-        "transactionIndex": "0x0",
-        "transactionHash": "0x9be0b3ab66177a80eb856772f3dff82f0d4e63c912d1f53f9ae032e68b177079",
-        "blockHash": "0xc15512efc63fa6926658ba2a37b8b0930fbfb663fa7fe725b1e7f1dfaf17df54",
-        "blockNumber": "0xa",
-        "address": "0xead5de9c41543e4babb09f9fe4f79153c036044f",
-        "data": "0x0000000000000000000000000000000000000000000000000000000000000049",
+        "address": "0xe0fb3e945afacbd5f604eba6dbe9be4486d1926b",
+        "blockHash": "0x491d175abcae9fb7a96266614d4494f8cec3a5f77092d4a4b4992de816354544",
+        "blockNumber": "0x867c7a",
+        "data": "0x0000000000000000000000000000000000000000000002d2cd2bb7a398600000",
+        "logIndex": "0x19",
+        "removed": false,
         "topics": [
-            "0x749a1f8d41c63e7123adac0637a8c06d2e0d0412d454a0edf7708ba27e86c697",
-            "0x000000000000000000000000000000000000000000000000000000000000e8b0"
+            "0xac96f597a44ad425c6eedf6e4c8327fd959c9d912fa8d027fb54313e59f247c8",
+            "0x0000000000000000000000000000000000000000000000000000000000003039"
         ],
-        "type": "mined",
-        "removed": false
+        "transactionHash": "0x99264107b21be2fb9beb1e4e8d47dc431df6696651f1937ece635a7960849605",
+        "transactionIndex": "0xe"
     }"#;
 
     const EMISSION_CHANGED_LOG: &'static str = r#"{
@@ -393,23 +398,30 @@ mod tests {
                 expiry_time,
                 tx_hash,
             ) => {
-                assert_eq!(node_id, web3::types::U256::from_dec_str("12345").unwrap());
-                assert_eq!(amount, web3::types::U256::from_dec_str("1").unwrap());
+                assert_eq!(
+                    node_id,
+                    AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
+                        .unwrap()
+                );
+                assert_eq!(
+                    amount,
+                    web3::types::U256::from_dec_str("13333333333333334032384").unwrap()
+                );
                 assert_eq!(
                     staker,
-                    web3::types::H160::from_str("0x9dbe382b57bcdc2aabc874130e120a3e7de09bda")
+                    web3::types::H160::from_str("0x73d669c173d88ccb01f6daab3a3304af7a1b22c1")
                         .unwrap()
                 );
                 assert_eq!(
                     start_time,
-                    web3::types::U256::from_dec_str("1621387004").unwrap()
+                    web3::types::U256::from_dec_str("1624543503").unwrap()
                 );
                 assert_eq!(
                     expiry_time,
-                    web3::types::U256::from_dec_str("1621559804").unwrap()
+                    web3::types::U256::from_dec_str("1624716290").unwrap()
                 );
                 let expected_hash = H256::from_str(
-                    "0x372ce28df138b10b90dfd3defe0eb0720f033a215ef6fd3361565dba0c204aeb",
+                    "0x4e3f3296f3baff3763bd2beb9cdfa6ddeb996c409f746f0450093712f2417185",
                 )
                 .unwrap()
                 .to_fixed_bytes();
