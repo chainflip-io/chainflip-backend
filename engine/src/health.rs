@@ -6,7 +6,7 @@ use crate::settings;
 
 /// Health check function for the CFE
 /// allowing external services to query, ensuring it's online
-/// Returns a HTTP 200 resonse to any request on 127.0.0.1:{port}/health
+/// Returns a HTTP 200 response to any request on {hostname}:{port}/health
 /// Method returns a Sender, allowing graceful termination of the infinite loop
 pub async fn health_check(health_check_settings: settings::HealthCheck) -> Sender<()> {
     let bind_address = format!(
