@@ -60,7 +60,10 @@ impl SCBroadcaster {
         // TODO: Read in the keys from a file
 
         let mq_client_factory = NatsMQClientFactory::new(&settings.message_queue);
-        let mq_client = *mq_client_factory.create().await.unwrap();
+        let mq_client = *mq_client_factory
+            .create()
+            .await
+            .expect("Could not create MQ client");
 
         SCBroadcaster {
             mq_client,
@@ -83,38 +86,37 @@ impl SCBroadcaster {
 
         let event = event.unwrap().unwrap();
 
-        self.push_event(event).await?;
+        self.submit_event(event).await?;
 
         let err_msg = "State Chain Broadcaster has stopped running!";
         log::error!("{}", err_msg);
         Err(anyhow::Error::msg(err_msg))
     }
 
-    async fn push_event(&self, event: StakeManagerEvent) -> Result<()> {
+    /// Submit an event to the state chain, return the tx_hash
+    async fn submit_event(&self, event: StakeManagerEvent) -> Result<()> {
         let alice_signer = PairSigner::new(AccountKeyring::Alice.pair());
 
-        let alice: AccountId32 = AccountKeyring::Alice.to_account_id();
         match event {
-            // TODO: Use the actual node id, after eth contracts updated
-            StakeManagerEvent::Staked(_node_id, amount, tx_hash) => {
+            StakeManagerEvent::Staked(node_id, amount, tx_hash) => {
                 log::trace!("Sending witness_staked to state chain");
                 let result = self
                     .sc_client
-                    .witness_staked(&alice_signer, alice, amount, tx_hash);
+                    .witness_staked(&alice_signer, node_id, amount, tx_hash);
                 println!("Result of witness_staked xt is: {:#?}", result.await);
             }
-            StakeManagerEvent::ClaimExecuted(_node_id, amount, tx_hash) => {
+            StakeManagerEvent::ClaimExecuted(node_id, amount, tx_hash) => {
                 log::trace!("Sending claim_executed to the state chain");
                 // claim executed
-                let result = self
-                    .sc_client
-                    .witness_claimed(&alice_signer, alice, amount, tx_hash);
+                let result =
+                    self.sc_client
+                        .witness_claimed(&alice_signer, node_id, amount, tx_hash);
                 println!("The result of witness_claimed xt is: {:#?}", result.await);
             }
             _ => {
                 log::warn!("Staking event not supported for SC broadcaster");
             }
-        }
+        };
         Ok(())
     }
 }
@@ -175,14 +177,17 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "depends on running state chain"]
-    async fn sc_broadcaster_push_event() {
+    async fn sc_broadcaster_submit_event() {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
         let sc_broadcaster = SCBroadcaster::new(settings).await;
 
-        let node_id = AccountId32::from_str("59568").unwrap();
-        let staked_event = StakeManagerEvent::Staked(node_id, 100, TX_HASH);
+        let staked_node_id =
+            AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU").unwrap();
+        let staked_event = StakeManagerEvent::Staked(staked_node_id, 100, TX_HASH);
 
-        sc_broadcaster.push_event(staked_event);
+        let result = sc_broadcaster.submit_event(staked_event).await;
+
+        println!("Result: ")
     }
 }
