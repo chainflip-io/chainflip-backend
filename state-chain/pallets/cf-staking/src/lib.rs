@@ -45,19 +45,21 @@ mod tests;
 
 mod eth_encoding;
 
-use cf_traits::{BidderProvider, EpochInfo, StakeTransfer};
 use core::time::Duration;
 use frame_support::{
 	debug,
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
-	error::BadOrigin,
-	traits::{EnsureOrigin, Get, HandleLifetime, UnixTime},
-	weights,
+	error::BadOrigin, 
+	traits::{
+		EnsureOrigin, Get, HandleLifetime, UnixTime
+	}, 
+	weights
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
+use cf_traits::{EpochInfo, BidderProvider, StakeTransfer};
 
 use codec::FullCodec;
 use sp_runtime::{
@@ -113,12 +115,11 @@ pub mod pallet {
 			+ Default
 			+ Copy
 			+ MaybeSerializeDeserialize;
-
+		
 		/// The Flip token implementation.
 		type Flip: StakeTransfer<
-			AccountId = <Self as frame_system::Config>::AccountId,
-			Balance = Self::Balance,
-		>;
+			AccountId=<Self as frame_system::Config>::AccountId,
+			Balance=Self::Balance>;
 
 		/// A Nonce type to be used for claim nonces.
 		type Nonce: Member
@@ -169,8 +170,13 @@ pub mod pallet {
 		StorageMap<_, Identity, AccountId<T>, Retired, ValueQuery>;
 
 	#[pallet::storage]
-	pub(super) type PendingClaims<T: Config> =
-		StorageMap<_, Identity, AccountId<T>, ClaimDetailsFor<T>, OptionQuery>;
+	pub(super) type PendingClaims<T: Config> = StorageMap<
+		_,
+		Identity,
+		AccountId<T>,
+		ClaimDetailsFor<T>,
+		OptionQuery,
+	>;
 
 	#[pallet::storage]
 	pub(super) type ClaimExpiries<T: Config> =
@@ -299,7 +305,7 @@ pub mod pallet {
 		///
 		/// - [PendingClaim](Error::PendingClaim): The account may not have a claim already pending. Any pending
 		///   claim must be finalized or expired before a new claim can be requested.
-		/// - [NoClaimsDuringAuctionPhase](Error::NoClaimsDuringAuctionPhase): No claims can be processed during
+		/// - [NoClaimsDuringAuctionPhase](Error::NoClaimsDuringAuctionPhase): No claims can be processed during 
 		///   auction.
 		/// - [InsufficientLiquidity](pallet_cf_flip::Error::InsufficientStake): The amount requested exceeds available
 		///   funds.
@@ -327,6 +333,7 @@ pub mod pallet {
 			Self::do_claim(&who, claimable, address)?;
 			Ok(().into())
 		}
+
 
 		/// Witness that a `Claimed` event was emitted by the `StakeManager` smart contract.
 		///
@@ -381,16 +388,12 @@ pub mod pallet {
 				frame_system::Provider::<T>::killed(&account_id).unwrap_or_else(|e| {
 					// This shouldn't happen, and not much we can do if it does except fix it on a subsequent release.
 					// Consequences are minor.
-					debug::error!(
-						"Unexpected reference count error while reaping the account {:?}: {:?}.",
-						account_id,
-						e
-					);
+					debug::error!("Unexpected reference count error while reaping the account {:?}: {:?}.", account_id, e);
 				})
 			}
 
 			Self::deposit_event(Event::ClaimSettled(account_id, claimed_amount));
-
+			
 			Ok(().into())
 		}
 
@@ -532,10 +535,7 @@ impl<T: Config> Pallet<T> {
 		if !frame_system::Pallet::<T>::account_exists(account_id) {
 			frame_system::Provider::<T>::created(account_id).unwrap_or_else(|e| {
 				// The standard impl of this in the system pallet never fails.
-				debug::error!(
-					"Unexpected error when creating an account upon staking: {:?}",
-					e
-				);
+				debug::error!("Unexpected error when creating an account upon staking: {:?}", e);
 			});
 		}
 
@@ -578,12 +578,12 @@ impl<T: Config> Pallet<T> {
 		// Insert a pending claim without a signature.
 		let expiry = T::TimeSource::now() + T::ClaimTTL::get();
 		let details = ClaimDetails {
-			amount,
-			nonce,
-			address,
-			expiry,
-			signature: None,
-		};
+				amount,
+				nonce,
+				address,
+				expiry,
+				signature: None,
+			};
 		let payload = eth_encoding::encode_claim_request::<T>(account_id, &details);
 		let msg_hash = Keccak256::hash(&payload[..]).to_fixed_bytes();
 		PendingClaims::<T>::insert(account_id, details);
@@ -599,18 +599,16 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Returns an error if the account has already been retired, or if the account has no stake associated.
 	fn retire(account_id: &T::AccountId) -> Result<(), Error<T>> {
-		AccountRetired::<T>::try_mutate_exists(account_id, |maybe_status| {
-			match maybe_status.as_mut() {
-				Some(retired) => {
-					if *retired {
-						Err(Error::AlreadyRetired)?;
-					}
-					*retired = true;
-					Self::deposit_event(Event::AccountRetired(account_id.clone()));
-					Ok(())
+		AccountRetired::<T>::try_mutate_exists(account_id, |maybe_status| match maybe_status.as_mut() {
+			Some(retired) => {
+				if *retired {
+					Err(Error::AlreadyRetired)?;
 				}
-				None => Err(Error::UnknownAccount)?,
+				*retired = true;
+				Self::deposit_event(Event::AccountRetired(account_id.clone()));
+				Ok(())
 			}
+			None => Err(Error::UnknownAccount)?,
 		})
 	}
 
@@ -619,25 +617,24 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Returns an error if the account is not retired, or if the account has no stake associated.
 	fn activate(account_id: &T::AccountId) -> Result<(), Error<T>> {
-		AccountRetired::<T>::try_mutate_exists(account_id, |maybe_status| {
-			match maybe_status.as_mut() {
-				Some(retired) => {
-					if !*retired {
-						Err(Error::AlreadyActive)?;
-					}
-					*retired = false;
-					Self::deposit_event(Event::AccountActivated(account_id.clone()));
-					Ok(())
+		AccountRetired::<T>::try_mutate_exists(account_id, |maybe_status| match maybe_status.as_mut() {
+			Some(retired) => {
+				if !*retired {
+					Err(Error::AlreadyActive)?;
 				}
-				None => Err(Error::UnknownAccount)?,
+				*retired = false;
+				Self::deposit_event(Event::AccountActivated(account_id.clone()));
+				Ok(())
 			}
+			None => Err(Error::UnknownAccount)?,
 		})
 	}
 
 	/// Checks if an account has signalled their intention to retire as a validator. If the account has never staked
 	/// any tokens, returns [Error::UnknownAccount].
 	pub fn is_retired(account: &T::AccountId) -> Result<bool, Error<T>> {
-		AccountRetired::<T>::try_get(account).map_err(|_| Error::UnknownAccount)
+		AccountRetired::<T>::try_get(account)
+			.map_err(|_| Error::UnknownAccount)
 	}
 
 	/// Expires any pending claims that have passed their TTL.
@@ -695,17 +692,19 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> BidderProvider for Pallet<T> {
 	type ValidatorId = T::AccountId;
 	type Amount = T::Balance;
-
+	
 	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
 		AccountRetired::<T>::iter()
-			.filter_map(|(acct, retired)| {
-				if retired {
-					None
-				} else {
-					let stake = T::Flip::stakeable_balance(&acct);
-					Some((acct, stake))
-				}
-			})
+			.filter_map(
+				|(acct, retired)| {
+					if retired {
+						None
+					} else {
+						let stake = T::Flip::stakeable_balance(&acct);
+						Some((acct, stake))
+					}
+				},
+			)
 			.collect()
 	}
 }
