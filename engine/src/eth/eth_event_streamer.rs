@@ -105,15 +105,6 @@ impl<S: EventSource> EthEventStreamer<S> {
                         result.unwrap()
                     }
                 }
-                // Ok(event) => {
-                //     join_all(self.event_sinks.iter().map(|sink| async move {
-                //         // let mut event_c = event.clone();
-                //         sink.process_event(&event)
-                //             .await
-                //             .map_err(|e| log::error!("Error while processing event:\n{}", e))
-                //     }))
-                //     .await;
-                // }
                 Err(e) => log::error!("Unable to parse event: {}.", e),
             }
         });

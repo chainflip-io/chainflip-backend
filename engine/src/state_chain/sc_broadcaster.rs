@@ -8,24 +8,18 @@
 
 // Start with submitting an extrinsic of the easiest kind
 
-use futures::pin_mut;
 use sp_core::Pair;
 use sp_keyring::AccountKeyring;
 
-use sp_runtime::AccountId32;
-use substrate_subxt::{Client, ClientBuilder, PairSigner};
+use substrate_subxt::{Client, PairSigner};
 use tokio_stream::StreamExt;
 
-use std::{fs, str::FromStr};
-use substrate_subxt::Signer;
+use std::fs;
 
 use super::{helpers::create_subxt_client, runtime::StateChainRuntime};
 use crate::{
     eth::stake_manager::stake_manager::StakeManagerEvent,
-    mq::{
-        nats_client::{NatsMQClient, NatsMQClientFactory},
-        pin_message_stream, IMQClient, IMQClientFactory, Subject,
-    },
+    mq::{pin_message_stream, IMQClient, Subject},
     settings::Settings,
 };
 
@@ -33,17 +27,13 @@ use crate::state_chain::staking::{WitnessClaimedCallExt, WitnessStakedCallExt};
 
 use anyhow::Result;
 
-use codec::Encode;
-
 pub struct SCBroadcaster<MQ>
 where
     MQ: IMQClient + Send + Sync,
 {
     mq_client: MQ,
     sc_client: Client<StateChainRuntime>,
-    // do we want to load in the keys here? how can we ensure signing with the correct
-    // stuff
-    // signer: PairSigner<Runtime??, sp_core::sr25519::Pair>,
+    signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
 }
 
 impl<MQ> SCBroadcaster<MQ>
@@ -55,15 +45,19 @@ where
             .await
             .unwrap();
 
-        let key = fs::read_to_string(settings.state_chain.signing_key_path)
+        let seed = fs::read_to_string(settings.state_chain.signing_key_path)
             .expect("Can't read in signing key");
 
-        println!("The key is: {:#?}", key);
+        // remove the quotes that are in the file, as if entered from polkadot js
+        let seed = seed.replace("\"", "");
+
+        let pair = sp_core::sr25519::Pair::from_phrase(&seed, None).unwrap().0;
+        let signer: PairSigner<_, sp_core::sr25519::Pair> = PairSigner::new(pair);
 
         SCBroadcaster {
             mq_client,
             sc_client,
-            // signer: alice_signer,
+            signer,
         }
     }
 
@@ -118,14 +112,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    // use frame_system::pallet_prelude::OriginFor;
-    // use state_chain_runtime::OriginFor;
 
     use super::*;
 
-    use crate::settings;
-    use crate::settings::StateChain;
-    use crate::state_chain::validator::ForceRotationCallExt;
+    use crate::settings::{self};
 
     const TX_HASH: [u8; 32] = [
         00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01, 02, 01, 02,
@@ -143,7 +133,7 @@ mod tests {
             .await
             .expect("Could not create MQ client");
 
-        let sc_broadcaster = SCBroadcaster::new(settings, *mq_client).await;
+        SCBroadcaster::new(settings, *mq_client).await;
     }
 
     // TODO: Use the SC broadcaster struct instead
@@ -155,10 +145,6 @@ mod tests {
 
         let alice = AccountKeyring::Alice.pair();
         let signer = PairSigner::new(alice);
-
-        let eth_address: [u8; 20] = [
-            00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01,
-        ];
 
         let tx_hash: [u8; 32] = [
             00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01, 01, 01,
@@ -199,6 +185,6 @@ mod tests {
 
         let result = sc_broadcaster.submit_event(staked_event).await;
 
-        println!("Result: ")
+        println!("Result: {:#?}", result);
     }
 }

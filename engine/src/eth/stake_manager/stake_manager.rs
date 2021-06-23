@@ -171,7 +171,7 @@ impl EventSource for StakeManager {
                 let account_bytes: [u8; 32] =
                     decode_log_param::<ethabi::FixedBytes>(&log, "nodeID")?
                         .try_into()
-                        .expect("could not cast into [u8;32]");
+                        .expect("could not cast into nodeID from Staked event to [u8;32]");
                 let account_id = AccountId32::new(account_bytes);
                 let event = StakeManagerEvent::Staked(
                     account_id,
@@ -185,7 +185,7 @@ impl EventSource for StakeManager {
                 let account_bytes: [u8; 32] =
                     decode_log_param::<ethabi::FixedBytes>(&log, "nodeID")?
                         .try_into()
-                        .expect("could not cast into [u8;32]");
+                        .expect("could not cast nodeID from ClaimExecuted event to [u8;32]");
                 let account_id = AccountId32::new(account_bytes);
                 let event = StakeManagerEvent::ClaimExecuted(
                     account_id,
@@ -433,9 +433,7 @@ mod tests {
         Ok(())
     }
 
-    // TODO: Update the event once there is one on rinkeby
     #[test]
-    #[ignore = "needs updated event type"]
     fn test_claim_executed_log_parsing() -> anyhow::Result<()> {
         let log: web3::types::Log = serde_json::from_str(CLAIM_EXECUTED_LOG)?;
 
