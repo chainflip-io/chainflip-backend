@@ -71,8 +71,8 @@ where
 {
     factory: F,
     inner_event_receiver: Option<mpsc::UnboundedReceiver<InnerEvent>>,
-    signer_idx: usize,
     inner: MultisigClientInner,
+    id: ValidatorId,
     _mq: PhantomData<MQ>,
 }
 
@@ -85,14 +85,14 @@ where
     MQ: IMQClient,
     F: IMQClientFactory<MQ>,
 {
-    pub fn new(factory: F, idx: usize, params: Parameters) -> Self {
+    pub fn new(factory: F, id: ValidatorId, params: Parameters) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
 
         MultisigClient {
             factory,
-            inner: MultisigClientInner::new(idx, params, tx, PHASE_TIMEOUT),
-            signer_idx: idx,
+            inner: MultisigClientInner::new(id.clone(), params, tx, PHASE_TIMEOUT),
             inner_event_receiver: Some(rx),
+            id,
             _mq: PhantomData,
         }
     }
@@ -180,7 +180,7 @@ where
             let stream_inner = futures::stream::select(s2, s3);
             let mut stream_outer = futures::stream::select(s1, stream_inner);
 
-            trace!("[{}] subscribed to MQ", self.signer_idx);
+            trace!("[{:?}] subscribed to MQ", self.id);
 
             // TODO: call cleanup from time to time
 

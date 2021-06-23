@@ -11,9 +11,9 @@ use crate::{
                 keygen_state::KeygenStage,
                 signing_state::SigningStage,
                 tests::helpers::{
-                    bc1_to_p2p_signing, generate_valid_keygen_data, keygen_delayed_count,
-                    keygen_stage_for, recv_next_signal_message_skipping, sec2_to_p2p_keygen,
-                    sec2_to_p2p_signing, sig_to_p2p, signing_delayed_count,
+                    generate_valid_keygen_data, keygen_delayed_count, keygen_stage_for,
+                    recv_next_signal_message_skipping, sec2_to_p2p_keygen, sec2_to_p2p_signing,
+                    sig_to_p2p, signing_delayed_count,
                 },
                 InnerSignal,
             },
@@ -25,26 +25,36 @@ use crate::{
 };
 
 use super::client_inner::{
-    KeyGenMessage, KeyGenMessageWrapped, MultisigClientInner, MultisigMessage, SigningDataWrapped,
+    KeyGenMessageWrapped, KeygenData, MultisigClientInner, MultisigMessage, SigningDataWrapped,
 };
 
 // The id to be used by default
-const AUCTION_ID: KeyId = KeyId(0);
+const KEY_ID: KeyId = KeyId(0);
+
+lazy_static! {
+    static ref VALIDATOR_IDS: Vec<ValidatorId> = vec![
+        ValidatorId("1".to_string()),
+        ValidatorId("2".to_string()),
+        ValidatorId("3".to_string()),
+    ];
+    static ref SIGNER_IDS: Vec<ValidatorId> =
+        vec![VALIDATOR_IDS[0].clone(), VALIDATOR_IDS[1].clone()];
+}
 
 lazy_static! {
     static ref MESSAGE: Vec<u8> = "Chainflip".as_bytes().to_vec();
     static ref MESSAGE_HASH: MessageHash = MessageHash(MESSAGE.clone());
     static ref MESSAGE_INFO: MessageInfo = MessageInfo {
         hash: MESSAGE_HASH.clone(),
-        key_id: AUCTION_ID
+        key_id: KEY_ID
     };
     static ref SIGN_INFO: SigningInfo = SigningInfo {
-        id: AUCTION_ID,
-        signers: vec![1, 2]
+        id: KEY_ID,
+        signers: SIGNER_IDS.clone()
     };
-    static ref AUCTION_INFO: KeygenInfo = KeygenInfo {
-        id: AUCTION_ID,
-        signers: vec![1, 2, 3]
+    static ref KEYGEN_INFO: KeygenInfo = KeygenInfo {
+        id: KEY_ID,
+        signers: VALIDATOR_IDS.clone()
     };
 }
 
@@ -87,7 +97,7 @@ async fn should_await_bc1_after_rts() {
 
     let key = c1
         .get_keygen()
-        .get_key_by_id(AUCTION_ID)
+        .get_key_info_by_id(KEY_ID)
         .expect("no key")
         .to_owned();
 
@@ -115,18 +125,16 @@ async fn should_process_delayed_bc1_after_rts() {
 
     let wdata = SigningDataWrapped::new(bc1, MESSAGE_INFO.clone());
 
-    c1.signing_manager.process_signing_data(2, wdata);
+    c1.signing_manager
+        .process_signing_data(VALIDATOR_IDS[1].clone(), wdata);
 
-    assert_eq!(
-        get_stage_for_msg(&c1, &MESSAGE_INFO),
-        Some(SigningStage::Idle)
-    );
+    assert_eq!(get_stage_for_msg(&c1, &MESSAGE_INFO), None);
 
     assert_eq!(signing_delayed_count(&c1, &MESSAGE_INFO), 1);
 
     let key = c1
         .get_keygen()
-        .get_key_by_id(AUCTION_ID)
+        .get_key_info_by_id(KEY_ID)
         .expect("no key")
         .to_owned();
 
@@ -147,17 +155,20 @@ fn signing_data_expire() {
     todo!();
 }
 
-fn create_keygen_p2p_message<M>(sender_id: ValidatorId, message: M) -> P2PMessage
+fn create_keygen_p2p_message<M>(sender_id: &ValidatorId, message: M) -> P2PMessage
 where
-    M: Into<KeyGenMessage>,
+    M: Into<KeygenData>,
 {
-    let wrapped = KeyGenMessageWrapped::new(AUCTION_ID, message.into());
+    let wrapped = KeyGenMessageWrapped::new(KEY_ID, message.into());
 
     let ms_message = MultisigMessage::from(wrapped);
 
     let data = serde_json::to_vec(&ms_message).unwrap();
 
-    P2PMessage { sender_id, data }
+    P2PMessage {
+        sender_id: sender_id.clone(),
+        data,
+    }
 }
 
 #[test]
@@ -169,34 +180,34 @@ fn bc1_gets_delayed_until_keygen_request() {
 
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
 
-    let mut client = MultisigClientInner::new(1, params, tx, PHASE_TIMEOUT);
+    let mut client = MultisigClientInner::new(VALIDATOR_IDS[0].clone(), params, tx, PHASE_TIMEOUT);
 
-    assert_eq!(keygen_stage_for(&client, AUCTION_ID), None);
+    assert_eq!(keygen_stage_for(&client, KEY_ID), None);
 
-    let message = create_keygen_p2p_message(2, create_bc1(2));
+    let message = create_keygen_p2p_message(&VALIDATOR_IDS[1], create_bc1(2));
     client.process_p2p_mq_message(message);
 
-    assert_eq!(keygen_stage_for(&client, AUCTION_ID), None);
-    assert_eq!(keygen_delayed_count(&client, AUCTION_ID), 1);
+    assert_eq!(keygen_stage_for(&client, KEY_ID), None);
+    assert_eq!(keygen_delayed_count(&client, KEY_ID), 1);
 
     // Keygen instruction should advance the stage and process delayed messages
 
-    let keygen = MultisigInstruction::KeyGen(AUCTION_INFO.clone());
+    let keygen = MultisigInstruction::KeyGen(KEYGEN_INFO.clone());
 
     client.process_multisig_instruction(keygen);
 
     assert_eq!(
-        keygen_stage_for(&client, AUCTION_ID),
+        keygen_stage_for(&client, KEY_ID),
         Some(KeygenStage::AwaitingBroadcast1)
     );
-    assert_eq!(keygen_delayed_count(&client, AUCTION_ID), 0);
+    assert_eq!(keygen_delayed_count(&client, KEY_ID), 0);
 
     // One more message should advance the stage (share_count = 3)
-    let message = create_keygen_p2p_message(3, create_bc1(3));
+    let message = create_keygen_p2p_message(&VALIDATOR_IDS[2], create_bc1(3));
     client.process_p2p_mq_message(message);
 
     assert_eq!(
-        keygen_stage_for(&client, AUCTION_ID),
+        keygen_stage_for(&client, KEY_ID),
         Some(KeygenStage::AwaitingSecret2)
     );
 }
@@ -217,24 +228,22 @@ fn delayed_signing_bc1_gets_removed() {
 
     let timeout = Duration::from_millis(1);
 
-    let mut client = MultisigClientInner::new(1, params, tx, timeout);
+    let mut client = MultisigClientInner::new(VALIDATOR_IDS[0].clone(), params, tx, timeout);
 
     // Create delayed BC1
     let bc1 = create_bc1(2).into();
-    let m = bc1_to_p2p_signing(bc1, 2, &MESSAGE_INFO);
+    let m = helpers::bc1_to_p2p_signing(bc1, &VALIDATOR_IDS[1], &MESSAGE_INFO);
     client.process_p2p_mq_message(m);
 
-    assert_eq!(
-        get_stage_for_msg(&client, &MESSAGE_INFO),
-        Some(SigningStage::Idle)
-    );
+    assert_eq!(get_stage_for_msg(&client, &MESSAGE_INFO), None);
+    assert_eq!(signing_delayed_count(&client, &MESSAGE_INFO), 1);
 
     // Wait for the data to expire
     std::thread::sleep(timeout);
 
     client.cleanup();
 
-    assert_eq!(get_stage_for_msg(&client, &MESSAGE_INFO), None);
+    assert_eq!(signing_delayed_count(&client, &MESSAGE_INFO), 0);
 }
 
 #[tokio::test]
@@ -261,10 +270,10 @@ async fn keygen_secret2_gets_delayed() {
     );
 
     // Secret sent from client 2 to client 1
-    let sec2 = sec2_vec[1].get(&1).unwrap().clone();
+    let sec2 = sec2_vec[1].get(&VALIDATOR_IDS[0]).unwrap().clone();
 
     // We should not process it immediately
-    let message = create_keygen_p2p_message(2, sec2);
+    let message = create_keygen_p2p_message(&VALIDATOR_IDS[1].clone(), sec2);
 
     c1.process_p2p_mq_message(message);
 
@@ -275,10 +284,10 @@ async fn keygen_secret2_gets_delayed() {
     );
 
     // Process incoming bc1_vec, so we can advance to the next phase
-    let message = create_keygen_p2p_message(2, bc1_vec[1].clone());
+    let message = create_keygen_p2p_message(&VALIDATOR_IDS[1], bc1_vec[1].clone());
     c1.process_p2p_mq_message(message);
 
-    let message = create_keygen_p2p_message(3, bc1_vec[2].clone());
+    let message = create_keygen_p2p_message(&VALIDATOR_IDS[2], bc1_vec[2].clone());
     c1.process_p2p_mq_message(message);
 
     assert_eq!(
@@ -306,9 +315,9 @@ async fn signing_secret2_gets_delayed() {
         Some(SigningStage::AwaitingBroadcast1)
     );
 
-    let sec2 = phase2.sec2_vec[1].get(&1).unwrap().clone();
+    let sec2 = phase2.sec2_vec[1].get(&VALIDATOR_IDS[0]).unwrap().clone();
 
-    let m = sec2_to_p2p_signing(sec2, 2, &MESSAGE_INFO);
+    let m = sec2_to_p2p_signing(sec2, &VALIDATOR_IDS[1], &MESSAGE_INFO);
 
     c1.process_p2p_mq_message(m);
 
@@ -320,7 +329,7 @@ async fn signing_secret2_gets_delayed() {
     // Finally c1 receives bc1 and able to advance to phase2
     let bc1 = phase1.bc1_vec[1].clone();
 
-    let m = bc1_to_p2p_signing(bc1, 2, &MESSAGE_INFO);
+    let m = helpers::bc1_to_p2p_signing(bc1, &VALIDATOR_IDS[1], &MESSAGE_INFO);
 
     c1.process_p2p_mq_message(m);
 
@@ -344,7 +353,7 @@ async fn signing_local_sig_gets_delayed() {
     let mut c1_p2 = phase2.clients[0].clone();
     let local_sig = phase3.local_sigs[1].clone();
 
-    let m = sig_to_p2p(local_sig, 2, &MESSAGE_INFO);
+    let m = sig_to_p2p(local_sig, &VALIDATOR_IDS[1], &MESSAGE_INFO);
 
     c1_p2.process_p2p_mq_message(m);
 
@@ -354,9 +363,9 @@ async fn signing_local_sig_gets_delayed() {
     );
 
     // Send Secret2 to be able to process delayed LocalSig
-    let sec2 = phase2.sec2_vec[1].get(&1).unwrap().clone();
+    let sec2 = phase2.sec2_vec[1].get(&VALIDATOR_IDS[0]).unwrap().clone();
 
-    let m = sec2_to_p2p_signing(sec2, 2, &MESSAGE_INFO);
+    let m = sec2_to_p2p_signing(sec2, &VALIDATOR_IDS[1], &MESSAGE_INFO);
 
     c1_p2.process_p2p_mq_message(m);
 
@@ -377,7 +386,6 @@ async fn request_to_sign_before_key_ready() {
     init_logs_once();
 
     let key_id = KeyId(0);
-    let message_hash = MessageHash(MESSAGE.clone());
 
     let states = generate_valid_keygen_data().await;
 
@@ -391,33 +399,36 @@ async fn request_to_sign_before_key_ready() {
     // BC1 for siging arrives before the key is ready
     let bc1_sign = states.sign_phase1.bc1_vec[1].clone();
 
-    let m = bc1_to_p2p_signing(bc1_sign, 2, &MESSAGE_INFO);
+    let m = helpers::bc1_to_p2p_signing(bc1_sign, &VALIDATOR_IDS[1], &MESSAGE_INFO);
 
     c1.process_p2p_mq_message(m);
 
-    assert_eq!(
-        get_stage_for_msg(&c1, &MESSAGE_INFO),
-        Some(SigningStage::Idle)
-    );
+    assert_eq!(get_stage_for_msg(&c1, &MESSAGE_INFO), None);
 
     // Finalize key generation and make sure we can make progress on signing the message
 
-    let sec2_1 = states.keygen_phase2.sec2_vec[1].get(&1).unwrap().clone();
-    let m = sec2_to_p2p_keygen(sec2_1, 2);
+    let sec2_1 = states.keygen_phase2.sec2_vec[1]
+        .get(&VALIDATOR_IDS[0])
+        .unwrap()
+        .clone();
+    let m = sec2_to_p2p_keygen(sec2_1, &VALIDATOR_IDS[1]);
     c1.process_p2p_mq_message(m);
 
-    let sec2_2 = states.keygen_phase2.sec2_vec[2].get(&1).unwrap().clone();
-    let m = sec2_to_p2p_keygen(sec2_2, 3);
+    let sec2_2 = states.keygen_phase2.sec2_vec[2]
+        .get(&VALIDATOR_IDS[0])
+        .unwrap()
+        .clone();
+    let m = sec2_to_p2p_keygen(sec2_2, &VALIDATOR_IDS[2]);
     c1.process_p2p_mq_message(m);
 
     assert_eq!(keygen_stage_for(&c1, key_id), Some(KeygenStage::KeyReady));
 
-    assert_eq!(
-        get_stage_for_msg(&c1, &MESSAGE_INFO),
-        Some(SigningStage::Idle)
-    );
+    assert_eq!(get_stage_for_msg(&c1, &MESSAGE_INFO), None);
 
-    c1.process_multisig_instruction(MultisigInstruction::Sign(message_hash, SIGN_INFO.clone()));
+    c1.process_multisig_instruction(MultisigInstruction::Sign(
+        MESSAGE_HASH.clone(),
+        SIGN_INFO.clone(),
+    ));
 
     // We only need one BC1 (the delayed one) to proceed
     assert_eq!(
@@ -426,20 +437,79 @@ async fn request_to_sign_before_key_ready() {
     );
 }
 
+/// Test that we can have more than one key simultaneously
 #[tokio::test]
-#[ignore = "unfinished"]
-async fn basic_key_rotation() {
+async fn can_have_multiple_keys() {
     init_logs_once();
 
     let states = generate_valid_keygen_data().await;
 
-    error!("TEST BEGINS");
-
     // Start with clients that already have an aggregate key
+    let mut c1 = states.key_ready.clients[0].clone();
+
+    let next_key_id = KeyId(1);
+
+    let keygen_info = KeygenInfo {
+        id: next_key_id,
+        signers: KEYGEN_INFO.signers.clone(),
+    };
+
+    c1.process_multisig_instruction(MultisigInstruction::KeyGen(keygen_info));
+
+    assert_eq!(keygen_stage_for(&c1, KEY_ID), Some(KeygenStage::KeyReady));
+    assert_eq!(
+        keygen_stage_for(&c1, next_key_id),
+        Some(KeygenStage::AwaitingBroadcast1)
+    );
+}
+
+/// Request to sign contains signer ids not associated with the key.
+/// Expected outcome: no crash, state not created
+#[tokio::test]
+async fn unknown_signer_ids_gracefully_handled() {
+    init_logs_once();
+
+    let states = generate_valid_keygen_data().await;
 
     let mut c1 = states.key_ready.clients[0].clone();
 
-    // c1.process_multisig_instruction(MultisigInstruction::KeyGen(Epoch(1)));
+    // Note the unknown validator id
+    let signers = vec![VALIDATOR_IDS[0].clone(), ValidatorId::new(200)];
+
+    let info = SigningInfo {
+        id: KeyId(0),
+        signers,
+    };
+
+    c1.process_multisig_instruction(MultisigInstruction::Sign(MESSAGE_HASH.clone(), info));
+
+    assert_eq!(get_stage_for_msg(&c1, &MESSAGE_INFO), None);
+}
+
+#[tokio::test]
+async fn cannot_create_key_for_known_id() {
+    init_logs_once();
+
+    let mut states = generate_valid_keygen_data().await;
+
+    let mut c1 = states.key_ready.clients[0].clone();
+
+    assert_eq!(keygen_stage_for(&c1, KEY_ID), Some(KeygenStage::KeyReady));
+
+    // Send a new keygen request for the same key id
+    let next_key_id = KEY_ID;
+
+    let keygen_info = KeygenInfo {
+        id: next_key_id,
+        signers: KEYGEN_INFO.signers.clone(),
+    };
+    c1.process_multisig_instruction(MultisigInstruction::KeyGen(keygen_info));
+
+    // Previous state should be unaffected
+    assert_eq!(keygen_stage_for(&c1, KEY_ID), Some(KeygenStage::KeyReady));
+
+    // No message should be sent as a result
+    helpers::assert_channel_empty(&mut states.rxs[0]).await;
 }
 
 // INFO: We should be able to continue signing with the old key. When key rotation happens,
@@ -462,8 +532,6 @@ async fn basic_key_rotation() {
 // (i.e. past failures don't impact future signing ceremonies)
 // - Should be able to generate new signing keys
 // - make sure that we don't process p2p data at index signer_id which is our own
-
-// MAXIM: test that we can't repeat the same key_id
-// MAXIM: test that there is no interaction between different key_ids
-// MAXIM: test that we clean up states that didn't result in a key
-// MAXIM: test that we penalize the offending node
+// - test that we penalize the offending nodes
+// - test that there is no interaction between different key_ids
+// - test that we clean up states that didn't result in a key

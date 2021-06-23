@@ -138,11 +138,7 @@ mod tests {
         let msg_hash = [21u8; 32];
 
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_staking::Event::<SCRuntime>::ClaimSigRequested(
-                who.clone(),
-                msg_hash,
-            )
-            .into();
+            pallet_cf_staking::Event::<SCRuntime>::ClaimSigRequested(who.clone(), msg_hash).into();
 
         let encoded_claim_sig_requested = event.encode();
 

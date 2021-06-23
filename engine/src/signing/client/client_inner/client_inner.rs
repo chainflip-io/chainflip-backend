@@ -1,18 +1,21 @@
-use std::time::Duration;
+use std::{collections::HashMap, fmt::Display, time::Duration};
 
 use crate::{
     p2p::{P2PMessage, P2PMessageCommand, ValidatorId},
     signing::{
-        client::{KeyId, MultisigInstruction},
+        client::{KeyId, MultisigInstruction, SigningInfo},
         crypto::{BigInt, KeyGenBroadcastMessage1, LocalSig, Parameters, VerifiableSS, FE, GE},
-        MessageInfo,
+        MessageHash, MessageInfo,
     },
 };
 
 use log::*;
 use tokio::sync::mpsc::UnboundedSender;
 
-use super::{keygen_manager::KeygenManager, signing_state_manager::SigningStateManager};
+use super::{
+    keygen_manager::KeygenManager, signing_state::KeygenResultInfo,
+    signing_state_manager::SigningStateManager,
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub(super) enum SigningData {
@@ -24,6 +27,17 @@ pub(super) enum SigningData {
 impl From<Broadcast1> for SigningData {
     fn from(bc1: Broadcast1) -> Self {
         SigningData::Broadcast1(bc1)
+    }
+}
+
+impl Display for SigningData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // We are not interested in the extact contents most of the time
+        match self {
+            SigningData::Broadcast1(_) => write!(f, "Signing::Broadcast"),
+            SigningData::Secret2(_) => write!(f, "Signing::Secret"),
+            SigningData::LocalSig(_) => write!(f, "Signing::LocalSig"),
+        }
     }
 }
 
@@ -78,9 +92,9 @@ pub struct Secret2 {
     pub(super) secret_share: FE,
 }
 
-impl From<Secret2> for KeyGenMessage {
+impl From<Secret2> for KeygenData {
     fn from(sec2: Secret2) -> Self {
-        KeyGenMessage::Secret2(sec2)
+        KeygenData::Secret2(sec2)
     }
 }
 
@@ -93,13 +107,13 @@ impl From<Secret2> for SigningData {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct KeyGenMessageWrapped {
     pub(super) key_id: KeyId,
-    pub(super) message: KeyGenMessage,
+    pub(super) message: KeygenData,
 }
 
 impl KeyGenMessageWrapped {
     pub fn new<M>(key_id: KeyId, m: M) -> Self
     where
-        M: Into<KeyGenMessage>,
+        M: Into<KeygenData>,
     {
         KeyGenMessageWrapped {
             key_id,
@@ -115,14 +129,23 @@ impl From<KeyGenMessageWrapped> for MultisigMessage {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum KeyGenMessage {
+pub enum KeygenData {
     Broadcast1(Broadcast1),
     Secret2(Secret2),
 }
 
-impl From<Broadcast1> for KeyGenMessage {
+impl From<Broadcast1> for KeygenData {
     fn from(bc1: Broadcast1) -> Self {
-        KeyGenMessage::Broadcast1(bc1)
+        KeygenData::Broadcast1(bc1)
+    }
+}
+
+impl Display for KeygenData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            KeygenData::Broadcast1(_) => write!(f, "Keygen::Broadcast"),
+            KeygenData::Secret2(_) => write!(f, "Keygen::Secret"),
+        }
     }
 }
 
@@ -146,6 +169,9 @@ pub struct MultisigClientInner {
     params: Parameters,
     id: ValidatorId,
     pub signing_manager: SigningStateManager,
+    /// Requests awaiting a key
+    // TODO: make sure this is cleaned up on timeout
+    pending_requests_to_sign: HashMap<KeyId, Vec<(MessageHash, SigningInfo)>>,
 }
 
 impl MultisigClientInner {
@@ -156,11 +182,11 @@ impl MultisigClientInner {
         phase_timeout: Duration,
     ) -> Self {
         MultisigClientInner {
-            keygen: KeygenManager::new(params, id, tx.clone()),
+            keygen: KeygenManager::new(params, id.clone(), tx.clone()),
             params,
-            id,
-            // MAXIM: id is wrong here (below)...
+            id: id.clone(),
             signing_manager: SigningStateManager::new(params, id, tx, phase_timeout),
+            pending_requests_to_sign: Default::default(),
         }
     }
 
@@ -174,20 +200,33 @@ impl MultisigClientInner {
         self.signing_manager.cleanup();
     }
 
+    fn add_pending(&mut self, data: MessageHash, sign_info: SigningInfo) {
+        debug!("[{}] delaying a request to sign", self.id);
+
+        // TODO: check for duplicates?
+
+        let entry = self
+            .pending_requests_to_sign
+            .entry(sign_info.id)
+            .or_default();
+
+        entry.push((data, sign_info));
+    }
+
     pub fn process_multisig_instruction(&mut self, instruction: MultisigInstruction) {
         match instruction {
-            MultisigInstruction::KeyGen(epoch) => {
+            MultisigInstruction::KeyGen(keygen_info) => {
                 // For now disable generating a new key when we already have one
 
                 debug!("[{}] Received keygen instruction", self.id);
 
-                self.keygen.on_keygen_request(epoch);
+                self.keygen.on_keygen_request(keygen_info);
             }
             MultisigInstruction::Sign(hash, sign_info) => {
                 debug!("[{}] Received sign instruction", self.id);
                 let key_id = sign_info.id;
 
-                let key = self.keygen.get_key_by_id(key_id);
+                let key = self.keygen.get_key_info_by_id(key_id);
 
                 match key {
                     Some(key) => {
@@ -195,15 +234,20 @@ impl MultisigClientInner {
                             .on_request_to_sign(hash, key.clone(), sign_info);
                     }
                     None => {
-                        // We don't have the key yet, but already received
-                        // a signing requiest using it. The solution is to
-                        // delay the request a little bit, replay it once the key
-                        // is ready.
-
-                        // TODO: add a queue of messages to sign
-                        warn!("Failed attempt to sign: key not ready");
+                        // the key is not ready, delay until it is
+                        self.add_pending(hash, sign_info);
                     }
                 }
+            }
+        }
+    }
+
+    fn process_pending(&mut self, key_id: KeyId, key_info: KeygenResultInfo) {
+        if let Some(reqs) = self.pending_requests_to_sign.remove(&key_id) {
+            debug!("Processing pending requests to sign, count: {}", reqs.len());
+            for (data, info) in reqs {
+                self.signing_manager
+                    .on_request_to_sign(data, key_info.clone(), info)
             }
         }
     }
@@ -217,7 +261,12 @@ impl MultisigClientInner {
                 // NOTE: we should be able to process Keygen messages
                 // even when we are "signing"... (for example, if we want to
                 // generate a new key)
-                self.keygen.process_keygen_message(sender_id, msg);
+
+                let key_id = msg.key_id;
+
+                if let Some(key) = self.keygen.process_keygen_message(sender_id, msg) {
+                    self.process_pending(key_id, key);
+                }
             }
             Ok(MultisigMessage::SigningMessage(msg)) => {
                 // NOTE: we should be able to process Signing messages

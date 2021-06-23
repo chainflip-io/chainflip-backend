@@ -1,16 +1,22 @@
-use std::time::Instant;
+use std::{sync::Arc, time::Instant};
 
 use itertools::Itertools;
 use log::*;
 use tokio::sync::mpsc;
 
-use super::client_inner::{InnerEvent, MultisigMessage, SigningDataWrapped};
+use super::{
+    client_inner::{InnerEvent, MultisigMessage, SigningDataWrapped},
+    utils::ValidatorMaps,
+};
 
 use crate::{
-    p2p::P2PMessageCommand,
+    p2p::{P2PMessageCommand, ValidatorId},
     signing::{
         client::{
-            client_inner::{utils, InnerSignal},
+            client_inner::{
+                utils::{self},
+                InnerSignal,
+            },
             SigningInfo,
         },
         crypto::{Keys, LocalSig, Parameters, SharedKeys, Signature, VerifiableSS, GE},
@@ -28,10 +34,29 @@ pub(super) struct KeygenResult {
     pub(super) vss: Vec<VerifiableSS<GE>>,
 }
 
+// TODO: combine the two Arcs?
+#[derive(Clone)]
+pub(super) struct KeygenResultInfo {
+    pub key: Arc<KeygenResult>,
+    pub validator_map: Arc<ValidatorMaps>,
+}
+
+impl KeygenResultInfo {
+    pub(super) fn get_idx(&self, id: &ValidatorId) -> Option<usize> {
+        self.validator_map.get_idx(id)
+    }
+
+    pub(super) fn get_id(&self, idx: usize) -> ValidatorId {
+        // providing an invalid idx is considered a programmer error here
+        self.validator_map
+            .get_id(idx)
+            .expect("invalid index")
+            .clone()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) enum SigningStage {
-    /// Have not received a request to sign from our node
-    Idle,
     AwaitingBroadcast1,
     AwaitingSecret2,
     AwaitingLocalSig3,
@@ -39,14 +64,15 @@ pub(super) enum SigningStage {
 
 #[derive(Clone)]
 pub(super) struct SigningState {
+    id: ValidatorId,
     signer_idx: usize,
     pub(super) message_info: MessageInfo,
-    /// The key might not be available yet, as we might want to
-    /// keep some state even before we've finalized keygen
-    signing_key: Option<KeygenResult>,
+    /// The result of the relevant keygen ceremony
+    key_info: KeygenResultInfo,
     stage: SigningStage,
-    /// Indices(?) of participants who should participate
-    signers: Option<Vec<usize>>,
+    /// Indices of participants who should participate
+    signer_idxs: Vec<usize>,
+    signer_ids: Vec<ValidatorId>,
     pub(super) sss: SharedSecretState,
     pub(super) shared_secret: Option<KeygenResult>,
     pub(super) local_sigs: Vec<LocalSig>,
@@ -58,35 +84,42 @@ pub(super) struct SigningState {
 }
 
 impl SigningState {
-    pub(super) fn new(
+    pub(super) fn on_request_to_sign(
+        id: ValidatorId,
         idx: usize,
-        signing_key: Option<KeygenResult>,
+        signer_idxs: Vec<usize>,
+        key_info: KeygenResultInfo,
         params: Parameters,
         p2p_sender: mpsc::UnboundedSender<InnerEvent>,
         mi: MessageInfo,
+        si: SigningInfo,
     ) -> Self {
-        // Note that params are different for shared secret during the signing state (TODO: investigate why?)
+        // Note that params are different for shared secret during the signing state
         let params = Parameters {
             threshold: params.threshold,
             share_count: params.threshold + 1,
         };
 
-        let min_parties = params.threshold + 1;
-
-        SigningState {
+        let mut state = SigningState {
+            id,
             signer_idx: idx,
             message_info: mi,
-            signing_key,
-            stage: SigningStage::Idle,
-            signers: None,
-            sss: SharedSecretState::new(idx, params, min_parties),
+            key_info,
+            stage: SigningStage::AwaitingBroadcast1,
+            signer_idxs,
+            signer_ids: si.signers,
+            sss: SharedSecretState::new(idx, params),
             shared_secret: None,
             local_sigs_order: vec![],
             local_sigs: vec![],
             event_sender: p2p_sender,
             delayed_data: vec![],
             cur_phase_timestamp: Instant::now(),
-        }
+        };
+
+        state.on_request_to_sign_inner();
+
+        state
     }
 
     #[cfg(test)]
@@ -99,6 +132,19 @@ impl SigningState {
         self.delayed_data.len()
     }
 
+    /// We want to be able to control how our id is printed in tests
+    #[cfg(test)]
+    fn us(&self) -> String {
+        self.signer_idx.to_string()
+    }
+
+    /// We don't want to print our id in production. Generating an empty
+    /// string should not result in memory allocation, and therefore should be fast
+    #[cfg(not(test))]
+    fn us(&self) -> String {
+        String::default()
+    }
+
     fn record_local_sig(&mut self, signer_id: usize, sig: LocalSig) {
         self.local_sigs_order.push(signer_id);
         self.local_sigs.push(sig);
@@ -107,7 +153,7 @@ impl SigningState {
     /// This is where we compute local shares of the signatures and distribute them
     pub(super) fn init_local_sig(&mut self) -> LocalSig {
         let own_idx = self.signer_idx;
-        let key = &self.signing_key.as_ref().expect("must have key");
+        let key = &self.key_info.key;
 
         let ss = self
             .shared_secret
@@ -136,7 +182,7 @@ impl SigningState {
     fn on_local_sigs_collected(&self) {
         debug!("Collected all local sigs ✅✅✅");
 
-        let key = self.signing_key.as_ref().expect("must have key");
+        let key = &self.key_info.key;
 
         let ss = self
             .shared_secret
@@ -187,14 +233,13 @@ impl SigningState {
     fn process_delayed(&mut self) {
         while let Some((sender_id, msg)) = self.delayed_data.pop() {
             trace!("Processing a delayed message from [{}]", sender_id);
-            self.process_signing_message(sender_id, msg);
+            self.process_signing_message_inner(sender_id, msg);
         }
     }
 
     fn update_stage(&mut self, stage: SigningStage) {
         // Make sure that the transition is valid
         match (self.stage, stage) {
-            (SigningStage::Idle, SigningStage::AwaitingBroadcast1) => {}
             (SigningStage::AwaitingBroadcast1, SigningStage::AwaitingSecret2) => {}
             (SigningStage::AwaitingSecret2, SigningStage::AwaitingLocalSig3) => {}
             _ => {
@@ -212,23 +257,14 @@ impl SigningState {
         );
     }
 
-    pub fn set_key(&mut self, key: KeygenResult) {
-        self.signing_key = Some(key);
-    }
-
-    pub fn on_request_to_sign(&mut self, info: SigningInfo) {
-        self.update_stage(SigningStage::AwaitingBroadcast1);
-
-        let SigningInfo { id: _, signers } = info;
-
-        self.signers = Some(signers);
-
+    fn on_request_to_sign_inner(&mut self) {
         let bc1 = self.sss.init_phase1();
         let bc1 = SigningData::Broadcast1(bc1);
+
+        trace!("[{}] Generated {}", self.us(), &bc1);
+
         let bc1 = SigningDataWrapped::new(bc1, self.message_info.clone());
         let msg = MultisigMessage::from(bc1);
-
-        trace!("[{}] Signing: created BC1", self.signer_idx);
 
         self.broadcast(msg);
 
@@ -240,31 +276,30 @@ impl SigningState {
         self.delayed_data.push((sender_id, data));
     }
 
-    pub fn process_signing_message(&mut self, sender_id: usize, msg: SigningData) {
-        if let SigningStage::Idle = self.stage {
-            // do nothing yet
+    pub fn process_signing_message(&mut self, sender_id: ValidatorId, msg: SigningData) {
+        let sender_idx = self.key_info.get_idx(&sender_id);
+
+        if let Some(idx) = sender_idx {
+            self.process_signing_message_inner(idx, msg);
         } else {
-            // MAXIM: need to make sure (add tests) that for any combination state/message we don't crash!
-            // (it's happened a few times during development)
+        }
+    }
 
-            // Ignore if the the sender is not in active_parties
-            let active_parties = self.signers.as_ref().expect("should know active parties");
-
-            if !active_parties.contains(&sender_id) {
-                warn!(
-                    "Ignoring a message from sender not in active_parties: {}",
-                    sender_id
-                );
-                return;
-            }
+    pub fn process_signing_message_inner(&mut self, sender_id: usize, msg: SigningData) {
+        let active_parties = &self.signer_idxs;
+        // Ignore if the the sender is not in active_parties
+        if !active_parties.contains(&sender_id) {
+            warn!(
+                "Ignoring a message from sender not in active_parties: {}",
+                sender_id
+            );
+            return;
         }
 
+        trace!("[{}] received {} from [{}]", self.us(), &msg, sender_id);
+
         match (self.stage, msg) {
-            (SigningStage::Idle, SigningData::Broadcast1(bc1)) => {
-                self.add_delayed(sender_id, SigningData::Broadcast1(bc1));
-            }
             (SigningStage::AwaitingBroadcast1, SigningData::Broadcast1(bc1)) => {
-                trace!("[{}] received bc1 from [{}]", self.signer_idx, sender_id);
                 if self.sss.process_broadcast1(sender_id, bc1) {
                     self.signing_phase2();
                     self.process_delayed(); // Process delayed Secret2
@@ -274,16 +309,10 @@ impl SigningState {
                 self.add_delayed(sender_id, SigningData::Secret2(sec2));
             }
             (SigningStage::AwaitingSecret2, SigningData::Secret2(sec2)) => {
-                trace!(
-                    "[{}] received secret2 from [{}]",
-                    self.signer_idx,
-                    sender_id
-                );
-
                 if self.sss.process_phase2(sender_id, sec2) {
-                    info!("[{}] Phase 2 (signing) successful ✅✅", self.signer_idx);
+                    info!("[{}] Phase 2 (signing) successful ✅✅", self.us());
                     if let Ok(key) = self.sss.init_phase3() {
-                        info!("[{}] SHARED SECRET IS READY 👍", self.signer_idx);
+                        info!("[{}] SHARED SECRET IS READY 👍", self.us());
 
                         self.shared_secret = Some(key);
 
@@ -296,8 +325,6 @@ impl SigningState {
                 self.add_delayed(sender_id, SigningData::LocalSig(sig));
             }
             (SigningStage::AwaitingLocalSig3, SigningData::LocalSig(sig)) => {
-                trace!("[{}] Received Local Sig", self.signer_idx);
-
                 self.on_local_sig_received(sender_id, sig);
             }
             _ => {
@@ -322,8 +349,11 @@ impl SigningState {
                         let secret2 = SigningDataWrapped::new(secret2, self.message_info.clone());
                         let secret2 = MultisigMessage::from(secret2);
                         let data = serde_json::to_vec(&secret2).unwrap();
+
+                        let id = self.key_info.get_id(idx);
+
                         P2PMessageCommand {
-                            destination: idx,
+                            destination: id,
                             data,
                         }
                     })
@@ -350,17 +380,15 @@ impl SigningState {
         // TODO: see if there is a way to publish a bunch of messages
         // at once and whether that makes any difference performance-wise}
 
-        let active_parties = self.signers.as_ref().expect("should know active parties");
-
-        for idx in active_parties {
-            if *idx == self.signer_idx {
+        for id in &self.signer_ids {
+            if *id == self.id {
                 continue;
             }
 
-            trace!("[{}] sending bc1 to [{}]", self.signer_idx, idx);
+            trace!("[{}] sending bc1 to [{}]", self.us(), id);
 
             let msg = P2PMessageCommand {
-                destination: *idx,
+                destination: id.clone(),
                 data: serde_json::to_vec(&data).unwrap(),
             };
 
@@ -378,6 +406,9 @@ impl SigningState {
         let local_sig = self.init_local_sig();
 
         let local_sig = SigningData::LocalSig(local_sig);
+
+        debug!("[{}] generated {}!", self.us(), &local_sig);
+
         let local_sig = SigningDataWrapped {
             data: local_sig,
             message: self.message_info.clone(),
@@ -386,7 +417,5 @@ impl SigningState {
         let msg = MultisigMessage::SigningMessage(local_sig);
 
         self.broadcast(msg);
-
-        debug!("[{}] generated local sig!", self.signer_idx);
     }
 }

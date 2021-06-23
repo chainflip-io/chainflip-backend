@@ -58,7 +58,7 @@ state-chain-runtime = {path = "../state-chain/runtime"}
 [dependencies.curv]
 features = ["rust-gmp-kzen"]
 git = "https://github.com/KZen-networks/curv"
-tag = "v0.6.2"
+tag = "v0.7.0"
 
 [dev-dependencies]
 frame-support = "3.0.0"

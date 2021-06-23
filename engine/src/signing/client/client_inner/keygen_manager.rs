@@ -1,19 +1,26 @@
-use std::collections::{hash_map::Entry, HashMap};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    sync::Arc,
+};
 
 use crate::{
     p2p::ValidatorId,
     signing::{
-        client::{KeyId, KeygenInfo},
+        client::{client_inner::utils::get_index_mapping, KeyId, KeygenInfo},
         crypto::Parameters,
     },
 };
 
 use super::{
-    client_inner::{Broadcast1, KeyGenMessage, KeyGenMessageWrapped},
+    client_inner::{Broadcast1, KeyGenMessageWrapped, KeygenData},
     keygen_state::KeygenState,
-    signing_state::KeygenResult,
+    signing_state::{KeygenResult, KeygenResultInfo},
+    utils::{get_our_idx, ValidatorMaps},
     InnerEvent,
 };
+
+#[cfg(test)]
+use super::keygen_state::KeygenStage;
 
 use log::*;
 use tokio::sync::mpsc::UnboundedSender;
@@ -76,30 +83,36 @@ impl KeygenManager {
 
     // Get the key that was generated as the result of
     // a keygen ceremony between the winners of auction `id`
-    pub(super) fn get_key_by_id(&self, id: KeyId) -> Option<&KeygenResult> {
+    pub(super) fn get_key_info_by_id(&self, id: KeyId) -> Option<&KeygenResultInfo> {
         let entry = self.keygen_states.get(&id)?;
 
-        entry.key.as_ref()
+        entry.key_info.as_ref()
     }
 
-    pub(super) fn process_keygen_message(&mut self, sender_id: usize, msg: KeyGenMessageWrapped) {
+    pub(super) fn process_keygen_message(
+        &mut self,
+        sender_id: ValidatorId,
+        msg: KeyGenMessageWrapped,
+    ) -> Option<KeygenResultInfo> {
         let KeyGenMessageWrapped { key_id, message } = msg;
 
         match self.keygen_states.entry(key_id) {
             Entry::Occupied(mut state) => {
                 // We have entry, process normally
-                state.get_mut().process_keygen_message(sender_id, message);
+                return state.get_mut().process_keygen_message(sender_id, message);
             }
             Entry::Vacant(_) => match message {
-                KeyGenMessage::Broadcast1(bc1) => {
+                KeygenData::Broadcast1(bc1) => {
                     trace!("Delaying keygen bc1 for key id: {:?}", key_id);
                     self.add_delayed(key_id, sender_id, bc1);
                 }
-                KeyGenMessage::Secret2(_) => {
+                KeygenData::Secret2(_) => {
                     warn!("Unexpected keygen secret2 for key id: {:?}", key_id);
                 }
             },
         };
+
+        return None;
     }
 
     fn add_delayed(&mut self, key_id: KeyId, sender_id: ValidatorId, bc1: Broadcast1) {
@@ -118,14 +131,17 @@ impl KeygenManager {
                 // State should not have been created prior to receiving a keygen request
                 warn!("Ignoring a keygen request for a known key_id: {:?}", key_id);
             }
-            Entry::Vacant(entry) => match get_our_idx(&signers, self.our_id) {
+            Entry::Vacant(entry) => match get_our_idx(&signers, &self.our_id) {
                 Some(idx) => {
-                    debug!(
-                        "Creating new keygen state for key id: {:?}, our idx: {:?}",
-                        key_id, self.our_id
+                    let idx_map = get_index_mapping(&signers);
+
+                    let state = KeygenState::initiate(
+                        idx,
+                        self.params,
+                        idx_map,
+                        key_id,
+                        self.event_sender.clone(),
                     );
-                    let state =
-                        KeygenState::initiate(idx, self.params, key_id, self.event_sender.clone());
 
                     let state = entry.insert(state);
 
@@ -136,7 +152,7 @@ impl KeygenManager {
                         state.process_keygen_message(sender_id, msg.into());
                     }
 
-                    assert!(self.delayed_messages.get(&key_id).is_none());
+                    debug_assert!(self.delayed_messages.get(&key_id).is_none());
                 }
                 None => {
                     error!("Unexpected keygen request w/o us as participants")
@@ -144,14 +160,4 @@ impl KeygenManager {
             },
         }
     }
-}
-
-fn get_our_idx(signers: &Vec<ValidatorId>, id: ValidatorId) -> Option<usize> {
-    // sort validators and find our index
-
-    let mut signers = signers.clone();
-
-    signers.sort();
-
-    signers.iter().find(|s| *s == &id).copied()
 }
