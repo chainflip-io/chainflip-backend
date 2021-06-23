@@ -1,9 +1,9 @@
 use anyhow::Result;
-use substrate_subxt::{Client, ClientBuilder, EventSubscription};
+use substrate_subxt::{Client, EventSubscription};
 
 use crate::{
     mq::{nats_client::NatsMQClientFactory, IMQClient, IMQClientFactory, Subject, SubjectName},
-    settings::{self, Settings},
+    settings::Settings,
 };
 
 use log::{debug, error, info, trace};
@@ -90,7 +90,7 @@ async fn subscribe_to_events<M: 'static + IMQClient>(
 #[cfg(test)]
 mod tests {
 
-    use crate::settings::StateChain;
+    use crate::settings;
 
     use super::*;
 

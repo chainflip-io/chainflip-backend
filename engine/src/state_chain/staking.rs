@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use std::time::Duration;
 
 use codec::{Decode, Encode, FullCodec};
-use frame_support::{pallet_prelude::*, sp_runtime::traits::Verify};
+use frame_support::pallet_prelude::*;
 use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub};
 use substrate_subxt::{module, sp_core::crypto::AccountId32, system::System, Call, Event};
 

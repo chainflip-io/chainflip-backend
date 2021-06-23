@@ -1,7 +1,6 @@
 use crate::{
     eth::EventSink,
-    mq::mq::{self, IMQClient, IMQClientFactory, Subject},
-    settings,
+    mq::mq::{IMQClient, Subject},
 };
 
 use async_trait::async_trait;
@@ -36,7 +35,13 @@ impl<M: IMQClient + Send + Sync> EventSink<StakeManagerEvent> for StakeManagerSi
 #[cfg(test)]
 mod tests {
 
-    use crate::mq::nats_client::{NatsMQClient, NatsMQClientFactory};
+    use crate::{
+        mq::{
+            nats_client::{NatsMQClient, NatsMQClientFactory},
+            IMQClientFactory,
+        },
+        settings,
+    };
 
     use super::*;
 

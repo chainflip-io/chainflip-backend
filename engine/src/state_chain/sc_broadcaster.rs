@@ -9,7 +9,6 @@
 // Start with submitting an extrinsic of the easiest kind
 
 use sp_core::Pair;
-use sp_keyring::AccountKeyring;
 
 use substrate_subxt::{Client, PairSigner};
 use tokio_stream::StreamExt;
@@ -69,13 +68,15 @@ where
 
         let mut stream = pin_message_stream(stream);
 
-        // TOOD: Loop through the events here, pushing each as they come
-        let event = stream.next().await;
-        println!("Get next event: {:#?}", event);
-
-        let event = event.unwrap().unwrap();
-
-        self.submit_event(event).await?;
+        while let Some(event) = stream.next().await {
+            match event {
+                Ok(event) => self.submit_event(event).await?,
+                Err(e) => {
+                    log::error!("Could not read event from StakeManager event stream: {}", e);
+                    return Err(e);
+                }
+            }
+        }
 
         let err_msg = "State Chain Broadcaster has stopped running!";
         log::error!("{}", err_msg);
@@ -84,26 +85,21 @@ where
 
     /// Submit an event to the state chain, return the tx_hash
     async fn submit_event(&self, event: StakeManagerEvent) -> Result<()> {
-        let alice_signer = PairSigner::new(AccountKeyring::Alice.pair());
-
         match event {
             StakeManagerEvent::Staked(node_id, amount, tx_hash) => {
                 log::trace!("Sending witness_staked to state chain");
-                let result = self
-                    .sc_client
-                    .witness_staked(&alice_signer, node_id, amount, tx_hash);
-                println!("Result of witness_staked xt is: {:#?}", result.await);
+                self.sc_client
+                    .witness_staked(&self.signer, node_id, amount, tx_hash)
+                    .await?;
             }
             StakeManagerEvent::ClaimExecuted(node_id, amount, tx_hash) => {
                 log::trace!("Sending claim_executed to the state chain");
-                // claim executed
-                let result =
-                    self.sc_client
-                        .witness_claimed(&alice_signer, node_id, amount, tx_hash);
-                println!("The result of witness_claimed xt is: {:#?}", result.await);
+                self.sc_client
+                    .witness_claimed(&self.signer, node_id, amount, tx_hash)
+                    .await?;
             }
             _ => {
-                log::warn!("Staking event not supported for SC broadcaster");
+                log::warn!("Staking event: {:?} can not be submitted currently", event);
             }
         };
         Ok(())
@@ -113,9 +109,17 @@ where
 #[cfg(test)]
 mod tests {
 
+    use std::str::FromStr;
+
     use super::*;
 
-    use crate::settings::{self};
+    use crate::{
+        mq::{nats_client::NatsMQClientFactory, IMQClientFactory},
+        settings::{self},
+    };
+
+    use sp_keyring::AccountKeyring;
+    use sp_runtime::AccountId32;
 
     const TX_HASH: [u8; 32] = [
         00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01, 02, 01, 02,

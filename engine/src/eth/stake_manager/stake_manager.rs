@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use sp_runtime::AccountId32;
 use web3::{
     contract::tokens::Tokenizable,
-    ethabi::{self, ethereum_types, Log},
+    ethabi::{self, Log},
     types::{BlockNumber, FilterBuilder, H160},
 };
 
@@ -438,18 +438,16 @@ mod tests {
         let log: web3::types::Log = serde_json::from_str(CLAIM_EXECUTED_LOG)?;
 
         let sm = StakeManager::load(CONTRACT_ADDRESS)?;
-        println!("Stake manager loaded in");
-
-        let claim_exec_sig = sm.claim_executed_event_definition().signature();
-        println!("here's the claim exec sig: {:#?}", claim_exec_sig);
 
         match sm.parse_event(log)? {
             StakeManagerEvent::ClaimExecuted(node_id, amount, tx_hash) => {
-                let expected_node_id = AccountId32::from_str("59568").unwrap();
+                let expected_node_id =
+                    AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
+                        .unwrap();
                 assert_eq!(node_id, expected_node_id);
-                assert_eq!(amount, 73);
+                assert_eq!(amount, 13333333333333334032384);
                 let expected_hash = H256::from_str(
-                    "0x9be0b3ab66177a80eb856772f3dff82f0d4e63c912d1f53f9ae032e68b177079",
+                    "0x99264107b21be2fb9beb1e4e8d47dc431df6696651f1937ece635a7960849605",
                 )
                 .unwrap()
                 .to_fixed_bytes();

@@ -1,6 +1,6 @@
 use super::{EventSink, EventSource, Result};
 use async_std::task;
-use futures::{future::join_all, stream, StreamExt};
+use futures::{stream, StreamExt};
 use std::time::Duration;
 use web3::types::{BlockNumber, SyncState};
 

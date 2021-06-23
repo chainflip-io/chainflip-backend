@@ -44,13 +44,12 @@ web3 = "0.16.0"
 
 # substrate deps
 codec = {package = "parity-scale-codec", version = "2.1", default-features = false, features = ["derive", "full"]}
+frame-support = "3.0.0"
 frame-system = "3.0.0"
 sp-core = "3.0.0"
 sp-keyring = "3.0.0"
+sp-runtime = "3.0.0"
 substrate-subxt = "0.15"
-# TODO: Fix
-frame-support = "*"
-sp-runtime = "*"
 
 # Local deps
 cf-traits = {path = "../state-chain/traits"}

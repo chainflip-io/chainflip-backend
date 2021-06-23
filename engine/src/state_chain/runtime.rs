@@ -9,7 +9,6 @@ use sp_runtime::{
 use substrate_subxt::{
     extrinsic::{
         CheckEra, CheckGenesis, CheckNonce, CheckSpecVersion, CheckTxVersion, CheckWeight,
-        DefaultExtra,
     },
     register_default_type_sizes,
     system::System,
@@ -76,7 +75,6 @@ impl<T: System + Clone + Debug + Eq + Send + Sync> SignedExtension for SCDefault
 
     fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
         self.extra().additional_signed()
-        
     }
 }
 
