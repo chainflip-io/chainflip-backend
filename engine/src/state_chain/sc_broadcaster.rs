@@ -1,13 +1,3 @@
-// first we need to connect to the state chain
-
-// We need to use the keys of the state chain (need the filepath to these)
-
-// we need to be able to read from the message queue
-
-// We need to be able to submit extrinsics (signed and unsigned to the state chain)
-
-// Start with submitting an extrinsic of the easiest kind
-
 use sp_core::Pair;
 
 use substrate_subxt::{Client, PairSigner};
@@ -127,6 +117,7 @@ mod tests {
     ];
 
     #[tokio::test]
+    #[ignore = "depends on running mq and state chain"]
     async fn can_create_sc_broadcaster() {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
