@@ -42,5 +42,18 @@
       "BidsTaken": "(Vec<(ValidatorId, Amount)>)",
       "WinnersSelected": "(Vec<ValidatorId>, Amount)"
     }
+  },
+  "Retired": "bool",
+  "Signature": "H256",
+  "ClaimDetailsFor": {
+    "amount": "FlipBalance",
+    "nonce": "Nonce",
+    "address": "EthereumAddress",
+    "expiry": "Duration",
+    "signature": "Option<Signature>" 
+  },
+  "FlipAccount": {
+    "stake": "FlipBalance",
+    "validator_bond": "FlipBalance"
   }
 }
