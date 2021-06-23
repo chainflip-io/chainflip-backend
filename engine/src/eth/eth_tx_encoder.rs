@@ -2,17 +2,16 @@ use crate::{mq::{IMQClient, Subject, pin_message_stream}, sc_observer::{runtime:
 use super::stake_manager::stake_manager::StakeManager;
 
 use anyhow::Result;
-use futures::{StreamExt, TryStreamExt};
-use tokio::pin;
-use web3::{Transport, api::{Accounts, Eth, Namespace}, contract::{Options}, ethabi::{Contract, Function, Token, Uint}, signing::Key, types::{Bytes, TransactionRequest}};
+use futures::StreamExt;
+use serde::{Serialize, Deserialize};
+use web3::{ethabi::Token, types::Address};
 
 const TX_CONFIRMATIONS: usize = 6;
 
-pub async fn eth_tx_encoder<M: IMQClient + Send + Sync>(
-    stake_manager_address: &str,
-    mq_client: M,
-) -> anyhow::Result<()> {
-    Ok(())
+#[derive(Serialize, Deserialize)]
+pub struct TxDetails {
+    contract_address: Address,
+    data: Vec<u8>,
 }
 
 struct RegisterClaimEncoder<M: IMQClient> {
@@ -40,8 +39,15 @@ impl<M: IMQClient> RegisterClaimEncoder<M> {
 
         subscription.for_each_concurrent(None, |msg| async {
             match msg {
-                Ok(msg) => {
-                    self.build_and_send_tx(msg).await;
+                Ok(evt) => {
+                    match self.build_and_send_tx(evt).await {
+                        Ok(_) => {
+                            log::debug!("{} built and send to broadcaster.", stringify!(ClaimSignatureIssuedEvent));
+                        },
+                        Err(err) => {
+                            log::error!("Could not process {}: {}", stringify!(ClaimSignatureIssuedEvent), err);
+                        },
+                    }
                 },
                 Err(e) => {
                     log::error!("Unable to process claim request: {:?}.", e)
@@ -67,12 +73,11 @@ impl<M: IMQClient> RegisterClaimEncoder<M> {
 
         let tx_data = self.stake_manager.register_claim().encode_input(&params[..])?;
 
-        let tx_request = TransactionRequest {
-            to: Some(self.stake_manager.deployed_address),
-            data: Some(tx_data.into()),
-            ..Default::default()
+        let tx_details = TxDetails {
+            contract_address: self.stake_manager.deployed_address,
+            data: tx_data.into(),
         };
 
-        self.mq_client.publish(Subject::Broadcast(Chain::ETH), &tx_request);
+        self.mq_client.publish(Subject::Broadcast(Chain::ETH), &tx_details).await?;
     }
 }
