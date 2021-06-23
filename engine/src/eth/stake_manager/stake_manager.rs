@@ -360,12 +360,13 @@ mod tests {
 
         match sm.parse_event(log)? {
             StakeManagerEvent::Staked(node_id, amount, tx_hash) => {
-                let expected_node_id = AccountId32::from_str("12321").unwrap();
+                let expected_node_id =
+                    AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
+                        .unwrap();
                 assert_eq!(node_id, expected_node_id);
-                let base: u128 = 10;
-                assert_eq!(amount, base.pow(23) as u128);
+                assert_eq!(amount, 40000000000000000000000u128);
                 let expected_hash = H256::from_str(
-                    "0x75349046f12736cf7887f07d6e0b9b0d77334aa63b1d4f024349c72c73f9592e",
+                    "0x3a4b2643b00b579c493f9ed171bebbac1173dd195fde1a2c4ef8f69b55a7da43",
                 )
                 .unwrap()
                 .to_fixed_bytes();
