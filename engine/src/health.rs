@@ -15,7 +15,7 @@ pub async fn health_check(health_check_settings: settings::HealthCheck) -> Sende
     );
     let listener = TcpListener::bind(bind_address.clone())
         .await
-        .expect(format!("Could not bind TCP listener to port {}", bind_address).as_str());
+        .expect(format!("Could not bind TCP listener to {}", bind_address).as_str());
 
     let (tx, mut rx) = tokio::sync::oneshot::channel::<()>();
 
