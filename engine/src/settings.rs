@@ -12,6 +12,7 @@ pub struct MessageQueue {
 pub struct StateChain {
     pub hostname: String,
     pub port: u16,
+    pub signing_key_path: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]

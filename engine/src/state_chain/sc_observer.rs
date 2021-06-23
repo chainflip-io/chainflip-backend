@@ -97,10 +97,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "depends on running state chain at the specifed url"]
     async fn create_subxt_client_test() {
-        let subxt_settings = StateChain {
-            hostname: "localhost".to_string(),
-            port: 9944,
-        };
-        assert!(create_subxt_client(subxt_settings).await.is_ok())
+        let test_settings = settings::test_utils::new_test_settings().unwrap();
+        assert!(create_subxt_client(test_settings.state_chain).await.is_ok())
     }
 }

@@ -16,7 +16,7 @@ use sp_runtime::AccountId32;
 use substrate_subxt::{Client, ClientBuilder, PairSigner};
 use tokio_stream::StreamExt;
 
-use std::str::FromStr;
+use std::{fs, str::FromStr};
 use substrate_subxt::Signer;
 
 use super::{helpers::create_subxt_client, runtime::StateChainRuntime};
@@ -35,35 +35,30 @@ use anyhow::Result;
 
 use codec::Encode;
 
-/// TODO: make this generic again
-/// Broadcasts events to the state chain by submitting 'extrinsics'
-// pub struct SCBroadcaster<M: IMQClient + Send + Sync> {
-//     mq_client: M,
-//     sc_client: Client<StateChainRuntime>,
-// }
-
-pub struct SCBroadcaster {
-    mq_client: NatsMQClient,
+pub struct SCBroadcaster<MQ>
+where
+    MQ: IMQClient + Send + Sync,
+{
+    mq_client: MQ,
     sc_client: Client<StateChainRuntime>,
     // do we want to load in the keys here? how can we ensure signing with the correct
     // stuff
     // signer: PairSigner<Runtime??, sp_core::sr25519::Pair>,
 }
 
-impl SCBroadcaster {
-    pub async fn new(settings: Settings) -> Self {
-        let sc_client = create_subxt_client(settings.state_chain).await.unwrap();
-
-        // TODO: Use the factory better here now
-        // let mq_client = *M::connect(settings.message_queue).await.unwrap();
-
-        // TODO: Read in the keys from a file
-
-        let mq_client_factory = NatsMQClientFactory::new(&settings.message_queue);
-        let mq_client = *mq_client_factory
-            .create()
+impl<MQ> SCBroadcaster<MQ>
+where
+    MQ: IMQClient + Send + Sync,
+{
+    pub async fn new(settings: Settings, mq_client: MQ) -> Self {
+        let sc_client = create_subxt_client(settings.state_chain.clone())
             .await
-            .expect("Could not create MQ client");
+            .unwrap();
+
+        let key = fs::read_to_string(settings.state_chain.signing_key_path)
+            .expect("Can't read in signing key");
+
+        println!("The key is: {:#?}", key);
 
         SCBroadcaster {
             mq_client,
@@ -132,15 +127,24 @@ mod tests {
     use crate::settings::StateChain;
     use crate::state_chain::validator::ForceRotationCallExt;
 
-    use hex_literal::hex;
-    use substrate_subxt::sudo::SudoCallExt;
-    use substrate_subxt::system::SetCodeCallExt;
-    use substrate_subxt::Signer;
-
     const TX_HASH: [u8; 32] = [
         00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01, 02, 01, 02,
         01, 02, 01, 02, 01, 02, 01, 02, 01,
     ];
+
+    #[tokio::test]
+    async fn can_create_sc_broadcaster() {
+        let settings = settings::test_utils::new_test_settings().unwrap();
+
+        let mq_factory = NatsMQClientFactory::new(&settings.message_queue);
+
+        let mq_client = mq_factory
+            .create()
+            .await
+            .expect("Could not create MQ client");
+
+        let sc_broadcaster = SCBroadcaster::new(settings, *mq_client).await;
+    }
 
     // TODO: Use the SC broadcaster struct instead
     #[tokio::test]
@@ -180,7 +184,14 @@ mod tests {
     async fn sc_broadcaster_submit_event() {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let sc_broadcaster = SCBroadcaster::new(settings).await;
+        let mq_factory = NatsMQClientFactory::new(&settings.message_queue);
+
+        let mq_client = mq_factory
+            .create()
+            .await
+            .expect("Could not create MQ client");
+
+        let sc_broadcaster = SCBroadcaster::new(settings, *mq_client).await;
 
         let staked_node_id =
             AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU").unwrap();
