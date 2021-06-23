@@ -16,7 +16,7 @@ async fn main() {
     let settings = Settings::new().expect("Failed to initialise settings");
 
     // can use this sender to shut down the health check gracefully
-    let _sender = health_check(settings.engine.health_check_port).await;
+    let _sender = health_check(settings.clone().health_check).await;
 
     sc_observer::sc_observer::start(settings.clone()).await;
 
