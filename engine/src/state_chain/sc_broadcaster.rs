@@ -77,13 +77,23 @@ where
     async fn submit_event(&self, event: StakeManagerEvent) -> Result<()> {
         match event {
             StakeManagerEvent::Staked(node_id, amount, tx_hash) => {
-                log::trace!("Sending witness_staked to state chain");
+                log::trace!(
+                    "Sending witness_staked({:?}, {}, {:?}) to state chain",
+                    node_id,
+                    amount,
+                    tx_hash
+                );
                 self.sc_client
                     .witness_staked(&self.signer, node_id, amount, tx_hash)
                     .await?;
             }
             StakeManagerEvent::ClaimExecuted(node_id, amount, tx_hash) => {
-                log::trace!("Sending claim_executed to the state chain");
+                log::trace!(
+                    "Sending claim_executed({:?}, {}, {:?}) to the state chain",
+                    node_id,
+                    amount,
+                    tx_hash
+                );
                 self.sc_client
                     .witness_claimed(&self.signer, node_id, amount, tx_hash)
                     .await?;

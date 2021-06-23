@@ -8,7 +8,7 @@ port = "4222"
 [state_chain]
 hostname = "localhost"
 port = "9944"
-signing_key_path = "./tests/test_keystore/alice_key"
+signing_key_path = ""
 
 [eth]
 hostname = "localhost"
