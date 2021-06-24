@@ -212,13 +212,14 @@ steps:
     depends_on:
       - test-chainflip-backend
     settings:
-      username: Tesnet Bot
+      username: s/Testnet/Testnet
       webhook_id:
         from_secret: discord_webhook_id
       webhook_token:
         from_secret: discord_webhook_token
       message: >
         ⚠️ Testnet Reboot In Progress ⚠️
+        Testnet will be recreated in 5m0s
 
 # Destroy the testnet
   - name: destroy
@@ -228,6 +229,8 @@ steps:
       - clone-cluster
       - test-chainflip-backend
     commands:
+      - echo Waiting for 5 minutes
+      - sleep 300
       - cd cluster/applications/staging/chainflip-validator
       - ./build.sh --branch=testnet --destroy --rpc
 
@@ -256,7 +259,7 @@ steps:
     depends_on:
       - create
     settings:
-      username: Tesnet Bot
+      username: s/Testnet/Testnet
       webhook_id:
         from_secret: discord_webhook_id
       webhook_token:
@@ -274,7 +277,7 @@ steps:
       status:
         - failure
     settings:
-      username: Tesnet Bot
+      username: s/Testnet/Testnet
       webhook_id:
         from_secret: discord_webhook_id
       webhook_token:
@@ -283,6 +286,7 @@ steps:
         ❌ Testnet Reboot Failure ❌
         Commit hash: `{{build.commit}}`
         Build: {{build.link}}
+        <@508234815254953985> sort it out!!
 
 service_account_name: drone-runner-kube
 
