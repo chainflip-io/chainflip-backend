@@ -213,7 +213,6 @@ steps:
   - name: create
     pull: always
     environment:
-      DEBUG: TRUE
       INFURA_URL:
         from_secret: rinkeby_infura_url
       DOCKER_CONFIG_JSON:
@@ -221,6 +220,8 @@ steps:
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     commands:
       - cd cluster/applications/staging/chainflip-validator
+      - helm repo add chartmuseum http://chartmuseum:8080
+      - helm dependency update
       - ./build.sh --branch=testnet --rpc
 
 service_account_name: drone-runner-kube
