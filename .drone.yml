@@ -101,10 +101,10 @@ tolerations:
     operator: "Equal"
     value: "ci"
 ---
-# Runs when PR is merged to main
+# Runs when PR is merged to release branch
 kind: pipeline
 type: kubernetes
-name: chainflip-backend-plum
+name: chainflip-backend-release
 
 environment:
   SCCACHE_REDIS: redis://redis-headless:6379/
