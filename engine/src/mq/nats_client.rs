@@ -31,6 +31,7 @@ impl Subscription {
     }
 }
 
+#[derive(Clone)]
 pub struct NatsMQClientFactory {
     mq_settings: settings::MessageQueue,
 }

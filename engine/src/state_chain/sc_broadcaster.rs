@@ -8,13 +8,31 @@ use std::fs;
 use super::{helpers::create_subxt_client, runtime::StateChainRuntime};
 use crate::{
     eth::stake_manager::stake_manager::StakeManagerEvent,
-    mq::{pin_message_stream, IMQClient, Subject},
+    mq::{pin_message_stream, IMQClient, IMQClientFactory, Subject},
     settings::Settings,
 };
 
 use crate::state_chain::staking::{WitnessClaimedCallExt, WitnessStakedCallExt};
 
 use anyhow::Result;
+
+pub async fn start<IMQ, IMQF>(settings: &Settings, mq_factory: IMQF)
+where
+    IMQ: IMQClient + Sync + Send,
+    IMQF: IMQClientFactory<IMQ>,
+{
+    let mq_client = *mq_factory
+        .create()
+        .await
+        .expect("Should create message queue client");
+
+    let sc_broadcaster = SCBroadcaster::new(&settings, mq_client).await;
+
+    sc_broadcaster
+        .run()
+        .await
+        .expect("SC Broadcaster has died!");
+}
 
 pub struct SCBroadcaster<MQ>
 where
