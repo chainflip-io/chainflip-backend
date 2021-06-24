@@ -213,7 +213,7 @@ steps:
       webhook_token:
         from_secret: discord_webhook_token
       message: >
-        ⚠️ Testnet Reboot In Progress⚠️
+        ⚠️ Testnet Reboot In Progress ⚠️
 
 # Destroy the testnet
   - name: destroy
@@ -249,7 +249,7 @@ steps:
         from_secret: discord_webhook_token
       message: |
         ✅ Testnet Reboot Successful ✅
-        Testnet released with commit hash: `$DRONE_COMMIT_SHA`
+        Testnet released with commit hash: `{{build.commit}}`
 
 # Notify devs Testnet has failed to launch
   - name: notify-testnet-failure
@@ -265,7 +265,7 @@ steps:
         from_secret: discord_webhook_token
       message: |
         ❌ Testnet Reboot Failure ❌
-        Commit hash: `$DRONE_COMMIT_SHA`
+        Commit hash: `{{build.commit}}`
         Build: {{build.link}}
 
 service_account_name: drone-runner-kube
