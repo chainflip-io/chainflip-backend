@@ -29,12 +29,12 @@ impl<MQ> SCBroadcaster<MQ>
 where
     MQ: IMQClient + Send + Sync,
 {
-    pub async fn new(settings: Settings, mq_client: MQ) -> Self {
+    pub async fn new(settings: &Settings, mq_client: MQ) -> Self {
         let sc_client = create_subxt_client(settings.state_chain.clone())
             .await
             .unwrap();
 
-        let seed = fs::read_to_string(settings.state_chain.signing_key_path)
+        let seed = fs::read_to_string(settings.state_chain.signing_key_path.clone())
             .expect("Can't read in signing key");
 
         // remove the quotes that are in the file, as if entered from polkadot js

@@ -132,6 +132,14 @@ impl StakeManager {
     }
 }
 
+// get the node_id from the log and return as AccountId32
+fn node_id_from_log(log: &Log) -> Result<AccountId32> {
+    let account_bytes: [u8; 32] = decode_log_param::<ethabi::FixedBytes>(&log, "nodeID")?
+        .try_into()
+        .map_err(|_| anyhow::Error::msg("Could not cast FixedBytes nodeID into [u8;32]"))?;
+    Ok(AccountId32::new(account_bytes))
+}
+
 impl EventSource for StakeManager {
     type Event = StakeManagerEvent;
 
@@ -148,9 +156,9 @@ impl EventSource for StakeManager {
             .ok_or_else(|| EventProducerError::EmptyTopics)?
             .clone();
 
-        let tx_hash = log
-            .transaction_hash
-            .expect("Log should contain a transaction hash");
+        let tx_hash = log.transaction_hash.ok_or(anyhow::Error::msg(
+            "Could not get transaction hash from ETH log",
+        ))?;
 
         let tx_hash_bytes = tx_hash.to_fixed_bytes();
 
@@ -168,11 +176,7 @@ impl EventSource for StakeManager {
         match sig {
             _ if sig == self.staked_event_definition().signature() => {
                 let log = self.staked_event_definition().parse_log(raw_log)?;
-                let account_bytes: [u8; 32] =
-                    decode_log_param::<ethabi::FixedBytes>(&log, "nodeID")?
-                        .try_into()
-                        .expect("could not cast into nodeID from Staked event to [u8;32]");
-                let account_id = AccountId32::new(account_bytes);
+                let account_id = node_id_from_log(&log)?;
                 let event = StakeManagerEvent::Staked(
                     account_id,
                     decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
@@ -182,11 +186,7 @@ impl EventSource for StakeManager {
             }
             _ if sig == self.claim_executed_event_definition().signature() => {
                 let log = self.claim_executed_event_definition().parse_log(raw_log)?;
-                let account_bytes: [u8; 32] =
-                    decode_log_param::<ethabi::FixedBytes>(&log, "nodeID")?
-                        .try_into()
-                        .expect("could not cast nodeID from ClaimExecuted event to [u8;32]");
-                let account_id = AccountId32::new(account_bytes);
+                let account_id = node_id_from_log(&log)?;
                 let event = StakeManagerEvent::ClaimExecuted(
                     account_id,
                     decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
@@ -221,12 +221,7 @@ impl EventSource for StakeManager {
                 let log = self
                     .claim_registered_event_definition()
                     .parse_log(raw_log)?;
-
-                let account_bytes: [u8; 32] =
-                    decode_log_param::<ethabi::FixedBytes>(&log, "nodeID")?
-                        .try_into()
-                        .expect("could not parse into FixedBytes");
-                let account_id = AccountId32::new(account_bytes);
+                let account_id = node_id_from_log(&log)?;
                 let event = StakeManagerEvent::ClaimRegistered(
                     account_id,
                     decode_log_param(&log, "amount")?,

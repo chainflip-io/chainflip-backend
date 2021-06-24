@@ -98,11 +98,9 @@ impl<S: EventSource> EthEventStreamer<S> {
             match parse_result {
                 Ok(event) => {
                     for sink in self.event_sinks.iter() {
-                        let result = sink
-                            .process_event(event.clone())
+                        sink.process_event(event.clone())
                             .await
-                            .map_err(|e| log::error!("Error while processing event:\n{}", e));
-                        result.unwrap()
+                            .map_err(|e| log::error!("Error while processing event:\n{}", e))?;
                     }
                 }
                 Err(e) => log::error!("Unable to parse event: {}.", e),
