@@ -2,7 +2,7 @@
 //! the EthEventStreamer
 
 use core::str::FromStr;
-use std::convert::TryInto;
+use std::{convert::TryInto, fmt::Display};
 
 use crate::eth::{EventProducerError, EventSource};
 
@@ -82,6 +82,57 @@ pub enum StakeManagerEvent {
         /// Transaction hash that created the event
         tx_hash: [u8; 32],
     },
+}
+
+impl Display for StakeManagerEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            StakeManagerEvent::Staked {
+                account_id,
+                amount,
+                tx_hash,
+            } => write!(f, "Staked({:?}, {}, {:?}", account_id, amount, tx_hash),
+            StakeManagerEvent::ClaimRegistered {
+                account_id,
+                amount,
+                staker,
+                start_time,
+                expiry_time,
+                tx_hash,
+            } => write!(
+                f,
+                "ClaimRegistered({:?}, {}, {}, {}, {}, {:?}",
+                account_id, amount, staker, start_time, expiry_time, tx_hash
+            ),
+            StakeManagerEvent::ClaimExecuted {
+                account_id,
+                amount,
+                tx_hash,
+            } => write!(
+                f,
+                "ClaimExecuted({:?}, {}, {:?}",
+                account_id, amount, tx_hash
+            ),
+            StakeManagerEvent::EmissionChanged {
+                old_emission_per_block,
+                new_emission_per_block,
+                tx_hash,
+            } => write!(
+                f,
+                "EmissionChanged({}, {}, {:?}",
+                old_emission_per_block, new_emission_per_block, tx_hash
+            ),
+            StakeManagerEvent::MinStakeChanged {
+                old_min_stake,
+                new_min_stake,
+                tx_hash,
+            } => write!(
+                f,
+                "MinStakeChanged({}, {}, {:?}",
+                old_min_stake, new_min_stake, tx_hash
+            ),
+        }
+    }
 }
 
 impl StakeManager {
