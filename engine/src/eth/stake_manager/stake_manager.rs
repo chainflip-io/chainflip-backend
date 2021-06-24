@@ -28,60 +28,60 @@ pub struct StakeManager {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StakeManagerEvent {
     /// The `Staked(nodeId, amount)` event.
-    Staked(
+    Staked {
         /// The node id of the validator that submitted the stake.
-        AccountId32,
+        account_id: AccountId32,
         /// The amount of FLIP that was staked.
-        u128,
+        amount: u128,
         /// Transaction hash that created the event
-        [u8; 32],
-    ),
+        tx_hash: [u8; 32],
+    },
 
     /// `ClaimRegistered(nodeId, amount, staker, startTime, expiryTime)` event
-    ClaimRegistered(
+    ClaimRegistered {
         /// Node id of the validator registering the claim
-        AccountId32,
+        account_id: AccountId32,
         /// Amount the validator is claiming
-        ethabi::Uint,
+        amount: ethabi::Uint,
         /// The ETH address of the validator, used to stake their FLIP
-        ethabi::Address,
+        staker: ethabi::Address,
         /// The start time of the claim
-        ethabi::Uint,
+        start_time: ethabi::Uint,
         /// The expiry time of the claim
-        ethabi::Uint,
+        expiry_time: ethabi::Uint,
         /// Transaction hash that created the event
-        [u8; 32],
-    ),
+        tx_hash: [u8; 32],
+    },
 
     /// `ClaimExecuted(nodeId, amount)` event
-    ClaimExecuted(
+    ClaimExecuted {
         /// The node id of the validator that claimed their FLIP
-        AccountId32,
+        account_id: AccountId32,
         /// The amount of FLIP that was claimed
-        u128,
+        amount: u128,
         /// Transaction hash that created the event
-        [u8; 32],
-    ),
+        tx_hash: [u8; 32],
+    },
 
     /// `EmissionChanged(oldEmissionPerBlock, newEmissionPerBlock)`
-    EmissionChanged(
+    EmissionChanged {
         /// Old emission per block
-        ethabi::Uint,
+        old_emission_per_block: ethabi::Uint,
         /// New emission per block
-        ethabi::Uint,
+        new_emission_per_block: ethabi::Uint,
         /// Transaction hash that created the event
-        [u8; 32],
-    ),
+        tx_hash: [u8; 32],
+    },
 
     /// `MinStakeChanged(oldMinStake, newMinStake)`
-    MinStakeChanged(
+    MinStakeChanged {
         /// Old minimum stake
-        ethabi::Uint,
+        old_min_stake: ethabi::Uint,
         /// New minimum stake
-        ethabi::Uint,
+        new_min_stake: ethabi::Uint,
         /// Transaction hash that created the event
-        [u8; 32],
-    ),
+        tx_hash: [u8; 32],
+    },
 }
 
 impl StakeManager {
@@ -156,11 +156,12 @@ impl EventSource for StakeManager {
             .ok_or_else(|| EventProducerError::EmptyTopics)?
             .clone();
 
-        let tx_hash = log.transaction_hash.ok_or(anyhow::Error::msg(
-            "Could not get transaction hash from ETH log",
-        ))?;
-
-        let tx_hash_bytes = tx_hash.to_fixed_bytes();
+        let tx_hash = log
+            .transaction_hash
+            .ok_or(anyhow::Error::msg(
+                "Could not get transaction hash from ETH log",
+            ))?
+            .to_fixed_bytes();
 
         let raw_log = ethabi::RawLog {
             topics: log.topics,
@@ -177,21 +178,21 @@ impl EventSource for StakeManager {
             _ if sig == self.staked_event_definition().signature() => {
                 let log = self.staked_event_definition().parse_log(raw_log)?;
                 let account_id = node_id_from_log(&log)?;
-                let event = StakeManagerEvent::Staked(
+                let event = StakeManagerEvent::Staked {
                     account_id,
-                    decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
-                    tx_hash_bytes,
-                );
+                    amount: decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
+                    tx_hash,
+                };
                 Ok(event)
             }
             _ if sig == self.claim_executed_event_definition().signature() => {
                 let log = self.claim_executed_event_definition().parse_log(raw_log)?;
                 let account_id = node_id_from_log(&log)?;
-                let event = StakeManagerEvent::ClaimExecuted(
+                let event = StakeManagerEvent::ClaimExecuted {
                     account_id,
-                    decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
-                    tx_hash_bytes,
-                );
+                    amount: decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
+                    tx_hash,
+                };
                 Ok(event)
             }
             // The rest of the events are left in ethabi form, not required by other components (yet)
@@ -199,22 +200,22 @@ impl EventSource for StakeManager {
                 let log = self
                     .emission_changed_event_definition()
                     .parse_log(raw_log)?;
-                let event = StakeManagerEvent::EmissionChanged(
-                    decode_log_param(&log, "oldEmissionPerBlock")?,
-                    decode_log_param(&log, "newEmissionPerBlock")?,
-                    tx_hash_bytes,
-                );
+                let event = StakeManagerEvent::EmissionChanged {
+                    old_emission_per_block: decode_log_param(&log, "oldEmissionPerBlock")?,
+                    new_emission_per_block: decode_log_param(&log, "newEmissionPerBlock")?,
+                    tx_hash,
+                };
                 Ok(event)
             }
             _ if sig == self.min_stake_changed_event_definition().signature() => {
                 let log = self
                     .min_stake_changed_event_definition()
                     .parse_log(raw_log)?;
-                let event = StakeManagerEvent::MinStakeChanged(
-                    decode_log_param(&log, "oldMinStake")?,
-                    decode_log_param(&log, "newMinStake")?,
-                    tx_hash_bytes,
-                );
+                let event = StakeManagerEvent::MinStakeChanged {
+                    old_min_stake: decode_log_param(&log, "oldMinStake")?,
+                    new_min_stake: decode_log_param(&log, "newMinStake")?,
+                    tx_hash,
+                };
                 Ok(event)
             }
             _ if sig == self.claim_registered_event_definition().signature() => {
@@ -222,14 +223,14 @@ impl EventSource for StakeManager {
                     .claim_registered_event_definition()
                     .parse_log(raw_log)?;
                 let account_id = node_id_from_log(&log)?;
-                let event = StakeManagerEvent::ClaimRegistered(
+                let event = StakeManagerEvent::ClaimRegistered {
                     account_id,
-                    decode_log_param(&log, "amount")?,
-                    decode_log_param(&log, "staker")?,
-                    decode_log_param(&log, "startTime")?,
-                    decode_log_param(&log, "expiryTime")?,
-                    tx_hash_bytes,
-                );
+                    amount: decode_log_param(&log, "amount")?,
+                    staker: decode_log_param(&log, "staker")?,
+                    start_time: decode_log_param(&log, "startTime")?,
+                    expiry_time: decode_log_param(&log, "expiryTime")?,
+                    tx_hash,
+                };
                 Ok(event)
             }
             s => Err(EventProducerError::UnexpectedEvent(s))?,
@@ -359,11 +360,15 @@ mod tests {
         let sm = StakeManager::load(CONTRACT_ADDRESS)?;
 
         match sm.parse_event(log)? {
-            StakeManagerEvent::Staked(node_id, amount, tx_hash) => {
-                let expected_node_id =
+            StakeManagerEvent::Staked {
+                account_id,
+                amount,
+                tx_hash,
+            } => {
+                let expected_account_id =
                     AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
                         .unwrap();
-                assert_eq!(node_id, expected_node_id);
+                assert_eq!(account_id, expected_account_id);
                 assert_eq!(amount, 40000000000000000000000u128);
                 let expected_hash = H256::from_str(
                     "0x3a4b2643b00b579c493f9ed171bebbac1173dd195fde1a2c4ef8f69b55a7da43",
@@ -385,16 +390,16 @@ mod tests {
         let sm = StakeManager::load(CONTRACT_ADDRESS)?;
 
         match sm.parse_event(log)? {
-            StakeManagerEvent::ClaimRegistered(
-                node_id,
+            StakeManagerEvent::ClaimRegistered {
+                account_id,
                 amount,
                 staker,
                 start_time,
                 expiry_time,
                 tx_hash,
-            ) => {
+            } => {
                 assert_eq!(
-                    node_id,
+                    account_id,
                     AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
                         .unwrap()
                 );
@@ -435,11 +440,15 @@ mod tests {
         let sm = StakeManager::load(CONTRACT_ADDRESS)?;
 
         match sm.parse_event(log)? {
-            StakeManagerEvent::ClaimExecuted(node_id, amount, tx_hash) => {
+            StakeManagerEvent::ClaimExecuted {
+                account_id,
+                amount,
+                tx_hash,
+            } => {
                 let expected_node_id =
                     AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
                         .unwrap();
-                assert_eq!(node_id, expected_node_id);
+                assert_eq!(account_id, expected_node_id);
                 assert_eq!(amount, 13333333333333334032384);
                 let expected_hash = H256::from_str(
                     "0x99264107b21be2fb9beb1e4e8d47dc431df6696651f1937ece635a7960849605",
@@ -461,11 +470,11 @@ mod tests {
         let sm = StakeManager::load(CONTRACT_ADDRESS)?;
 
         match sm.parse_event(log)? {
-            StakeManagerEvent::EmissionChanged(
+            StakeManagerEvent::EmissionChanged {
                 old_emission_per_block,
                 new_emission_per_block,
                 tx_hash,
-            ) => {
+            } => {
                 assert_eq!(
                     old_emission_per_block,
                     U256::from_dec_str("5607877281367557723").unwrap()
@@ -494,7 +503,11 @@ mod tests {
         let sm = StakeManager::load(CONTRACT_ADDRESS)?;
 
         match sm.parse_event(log)? {
-            StakeManagerEvent::MinStakeChanged(old_min_stake, new_min_stake, tx_hash) => {
+            StakeManagerEvent::MinStakeChanged {
+                old_min_stake,
+                new_min_stake,
+                tx_hash,
+            } => {
                 assert_eq!(
                     old_min_stake,
                     U256::from_dec_str("40000000000000000000000").unwrap()

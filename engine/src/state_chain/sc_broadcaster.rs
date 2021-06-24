@@ -76,26 +76,34 @@ where
     /// Submit an event to the state chain, return the tx_hash
     async fn submit_event(&self, event: StakeManagerEvent) -> Result<()> {
         match event {
-            StakeManagerEvent::Staked(node_id, amount, tx_hash) => {
+            StakeManagerEvent::Staked {
+                account_id,
+                amount,
+                tx_hash,
+            } => {
                 log::trace!(
                     "Sending witness_staked({:?}, {}, {:?}) to state chain",
-                    node_id,
+                    account_id,
                     amount,
                     tx_hash
                 );
                 self.sc_client
-                    .witness_staked(&self.signer, node_id, amount, tx_hash)
+                    .witness_staked(&self.signer, account_id, amount, tx_hash)
                     .await?;
             }
-            StakeManagerEvent::ClaimExecuted(node_id, amount, tx_hash) => {
+            StakeManagerEvent::ClaimExecuted {
+                account_id,
+                amount,
+                tx_hash,
+            } => {
                 log::trace!(
                     "Sending claim_executed({:?}, {}, {:?}) to the state chain",
-                    node_id,
+                    account_id,
                     amount,
                     tx_hash
                 );
                 self.sc_client
-                    .witness_claimed(&self.signer, node_id, amount, tx_hash)
+                    .witness_claimed(&self.signer, account_id, amount, tx_hash)
                     .await?;
             }
             _ => {
@@ -138,7 +146,7 @@ mod tests {
             .await
             .expect("Could not create MQ client");
 
-        SCBroadcaster::new(settings, *mq_client).await;
+        SCBroadcaster::new(&settings, *mq_client).await;
     }
 
     // TODO: Use the SC broadcaster struct instead
@@ -182,11 +190,15 @@ mod tests {
             .await
             .expect("Could not create MQ client");
 
-        let sc_broadcaster = SCBroadcaster::new(settings, *mq_client).await;
+        let sc_broadcaster = SCBroadcaster::new(&settings, *mq_client).await;
 
         let staked_node_id =
             AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU").unwrap();
-        let staked_event = StakeManagerEvent::Staked(staked_node_id, 100, TX_HASH);
+        let staked_event = StakeManagerEvent::Staked {
+            account_id: staked_node_id,
+            amount: 100,
+            tx_hash: TX_HASH,
+        };
 
         let result = sc_broadcaster.submit_event(staked_event).await;
 
