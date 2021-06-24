@@ -101,10 +101,10 @@ tolerations:
     operator: "Equal"
     value: "ci"
 ---
-# Runs when PR is merged to main
+# Runs when PR is merged to release branch
 kind: pipeline
 type: kubernetes
-name: chainflip-backend-plum
+name: chainflip-backend-release
 
 environment:
   SCCACHE_REDIS: redis://redis-headless:6379/
@@ -131,6 +131,13 @@ steps:
       paths:
         - Dockerfile.rust-base
         - .drone.yml
+
+  #  Compiles the entire backend
+  - name: compile-chainflip-backend
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    commands:
+      - cargo build --release
+      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
   #  Compiles runs all unit tests
   - name: test-chainflip-backend
