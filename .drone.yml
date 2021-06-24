@@ -272,8 +272,8 @@ service_account_name: drone-runner-kube
 
 # Config
 trigger:
-#  branch:
-#    - release/*
+  branch:
+    - release/*
   event:
     - push
 
