@@ -205,6 +205,7 @@ steps:
         from_secret: dockerconfigjson
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     commands:
+      - cd cluster/applications/staging/chainflip-validator
       - ./build.sh --branch=testnet --destroy
   - name: create
     pull: always
@@ -215,6 +216,7 @@ steps:
         from_secret: dockerconfigjson
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     commands:
+      - cd cluster/applications/staging/chainflip-validator
       - ./build.sh --branch=testnet
 
 
