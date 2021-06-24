@@ -213,6 +213,7 @@ steps:
   - name: create
     pull: always
     environment:
+      DEBUG: TRUE
       INFURA_URL:
         from_secret: rinkeby_infura_url
       DOCKER_CONFIG_JSON:
