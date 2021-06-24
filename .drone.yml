@@ -135,6 +135,8 @@ steps:
   #  Compiles the entire backend
   - name: compile-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    depends_on:
+      - rust-base
     commands:
       - cargo build --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
@@ -143,7 +145,7 @@ steps:
   - name: test-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     depends_on:
-      - rust-base
+      - compile-chainflip-backend
     commands:
       - cargo test --lib --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
