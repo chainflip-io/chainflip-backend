@@ -132,13 +132,6 @@ steps:
         - Dockerfile.rust-base
         - .drone.yml
 
-  #  Compiles the entire backend
-  - name: compile-chainflip-backend
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    commands:
-      - cargo build --release
-      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
-
   #  Compiles runs all unit tests
   - name: test-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
@@ -198,6 +191,8 @@ steps:
 # Get the latest cluster repo
   - name: clone-cluster
     image: alpine/git
+    depends_on:
+      - test-chainflip-backend
     commands:
       - git clone https://github.com/chainflip-io/chainflip-cluster.git cluster
       - cd cluster/applications/staging/chainflip-validator
@@ -206,6 +201,8 @@ steps:
 # Notify devs that Testnet is going down
   - name: notify-testnet-down
     image: appleboy/drone-discord
+    depends_on:
+      - test-chainflip-backend
     settings:
       username: Tesnet Bot
       webhook_id:
@@ -219,6 +216,8 @@ steps:
   - name: destroy
     pull: always
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+    depends_on:
+      - test-chainflip-backend
     commands:
       - cd cluster/applications/staging/chainflip-validator
       - ./build.sh --branch=testnet --destroy --rpc
@@ -226,6 +225,8 @@ steps:
 # Create new testnet
   - name: create
     pull: always
+    depends_on:
+      - destroy
     environment:
       INFURA_URL:
         from_secret: rinkeby_infura_url
@@ -418,3 +419,40 @@ tolerations:
   - key: "workloadKind"
     operator: "Equal"
     value: "ci"
+
+
+---
+kind: pipeline
+name: test-paralle
+type: kubernetes
+
+steps:
+  - name: test-state-chain
+    image: alpine/git
+    commands:
+      - sleep 5
+  - name: build-sc
+    image: alpine/git
+    commands:
+      - sleep 5
+  - name: build-engine
+    image: alpine/git
+    commands:
+      - sleep 5
+  - name: destroy
+    image: alpine/git
+    depends_on:
+      - test-state-chain
+    commands:
+      - sleep 5
+  - name: create
+    depends_on:
+      - destroy
+      - build-engine
+    image: alpine/git
+    commands:
+      - sleep 5
+
+trigger:
+  event:
+    - push
