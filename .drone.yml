@@ -220,7 +220,7 @@ steps:
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     commands:
       - cd cluster/applications/staging/chainflip-validator
-      - helm repo add chartmuseum http://chartmuseum:8080
+      - helm repo add chartmuseum http://chartmuseum.chartmuseum:8080
       - helm dependency update
       - ./build.sh --branch=testnet --rpc
 
