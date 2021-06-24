@@ -1,6 +1,6 @@
 use super::{EventSink, EventSource, Result};
 use async_std::task;
-use futures::{stream, StreamExt};
+use futures::{future::join_all, stream, StreamExt};
 use std::time::Duration;
 use web3::types::{BlockNumber, SyncState};
 
@@ -97,11 +97,15 @@ impl<S: EventSource> EthEventStreamer<S> {
         let processing_loop_fut = event_stream.for_each_concurrent(None, |parse_result| async {
             match parse_result {
                 Ok(event) => {
-                    for sink in self.event_sinks.iter() {
-                        sink.process_event(event.clone())
-                            .await
-                            .unwrap_or_else(|e| log::error!("Could not process event: {:?}", e));
-                    }
+                    join_all(self.event_sinks.iter().map(|sink| {
+                        let event = event.clone();
+                        async move {
+                            sink.process_event(event)
+                                .await
+                                .map_err(|e| log::error!("Error while processing event:\n{}", e))
+                        }
+                    }))
+                    .await;
                 }
                 Err(e) => log::error!("Unable to parse event: {}.", e),
             }

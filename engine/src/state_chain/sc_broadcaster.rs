@@ -127,7 +127,7 @@ where
             StakeManagerEvent::MinStakeChanged { .. }
             | StakeManagerEvent::EmissionChanged { .. }
             | StakeManagerEvent::ClaimRegistered { .. } => {
-                log::warn!("{:?} is not to be submitted to the State Chain", event);
+                log::warn!("{} is not to be submitted to the State Chain", event);
             }
         };
         Ok(())
