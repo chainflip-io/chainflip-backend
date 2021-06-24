@@ -427,6 +427,10 @@ name: test-paralle
 type: kubernetes
 
 steps:
+  - name: rust-base
+    image: alpine/git
+    commands:
+      - sleep 5
   - name: test-state-chain
     image: alpine/git
     commands:
