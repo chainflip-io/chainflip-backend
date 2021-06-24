@@ -433,9 +433,13 @@ steps:
       - sleep 5
   - name: build-sc
     image: alpine/git
+    depends_on:
+      - test-state-chain
     commands:
       - sleep 5
   - name: build-engine
+    depends_on:
+      - test-state-chain
     image: alpine/git
     commands:
       - sleep 5
