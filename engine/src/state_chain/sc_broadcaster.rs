@@ -124,8 +124,10 @@ where
                     .witness_claimed(&self.signer, account_id, amount, tx_hash)
                     .await?;
             }
-            _ => {
-                log::warn!("Staking event: {:?} can not be submitted currently", event);
+            StakeManagerEvent::MinStakeChanged { .. }
+            | StakeManagerEvent::EmissionChanged { .. }
+            | StakeManagerEvent::ClaimRegistered { .. } => {
+                log::warn!("{:?} is not to be submitted to the State Chain", event);
             }
         };
         Ok(())
