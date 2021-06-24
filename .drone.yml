@@ -35,6 +35,12 @@ get:
   path: repo-secret
   name: drone_token
 ---
+kind: secret
+name: rinkeby_infura_url
+get:
+  path: repo-secret
+  name: rinkeby_infura_url
+---
 
 # Runs on every PR
 kind: pipeline
@@ -196,17 +202,14 @@ steps:
       - git clone https://github.com/chainflip-io/chainflip-cluster.git cluster
       - cd cluster/applications/staging/chainflip-validator
       - chmod +x ./build.sh
-  - name: destroy
-    pull: always
-    environment:
-      INFURA_URL:
-        from_secret: rinkeby_infura_url
-      DOCKER_CONFIG_JSON:
-        from_secret: dockerconfigjson
-    image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
-    commands:
-      - cd cluster/applications/staging/chainflip-validator
-      - ./build.sh --branch=testnet --destroy
+
+#  - name: destroy
+#    pull: always
+#    image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+#    commands:
+#      - cd cluster/applications/staging/chainflip-validator
+#      - ./build.sh --branch=testnet --destroy --rpc
+
   - name: create
     pull: always
     environment:
@@ -217,7 +220,7 @@ steps:
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     commands:
       - cd cluster/applications/staging/chainflip-validator
-      - ./build.sh --branch=testnet
+      - ./build.sh --branch=testnet --rpc
 
 service_account_name: drone-runner-kube
 
