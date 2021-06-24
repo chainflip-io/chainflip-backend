@@ -2,9 +2,9 @@ use chainflip_engine::{
     eth,
     health::health_check,
     mq::nats_client::NatsMQClientFactory,
-    sc_observer,
     settings::Settings,
     signing::{self, crypto::Parameters},
+    state_chain::{self},
 };
 
 #[tokio::main]
@@ -18,13 +18,14 @@ async fn main() {
     // can use this sender to shut down the health check gracefully
     let _sender = health_check(settings.clone().health_check).await;
 
-    sc_observer::sc_observer::start(settings.clone()).await;
+    let mq_factory = NatsMQClientFactory::new(&settings.message_queue);
+
+    state_chain::sc_observer::start(settings.clone()).await;
+    state_chain::sc_broadcaster::start(&settings, mq_factory.clone()).await;
 
     eth::start(settings.clone())
         .await
         .expect("Should start ETH client");
-
-    let mq_factory = NatsMQClientFactory::new(&settings.message_queue);
 
     // TODO: clients need to be able to update their signer idx dynamically
     let signer_idx = 0;
