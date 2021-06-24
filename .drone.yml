@@ -195,6 +195,13 @@ steps:
 #        Duration: `{{since build.started}}`
 #        Responsible parties: <@401244824440799233>, <@472886957920485386>, <@464710706567053313>, <@261113437642424320>
 #
+  - name: clone-cluster
+    image: alpine/git
+    commands:
+      - git clone https://github.com/chainflip-io/chainflip-cluster.git cluster
+      - cd cluster/applications/staging/chainflip-validator
+      - chmod +x ./build.sh
+
   - name: notify-testnet-down
     image: appleboy/drone-discord
     settings:
@@ -205,13 +212,6 @@ steps:
         from_secret: discord_webhook_token
       message: >
         ⚠️ Testnet Reboot In Progress⚠️
-
-  - name: clone-cluster
-    image: alpine/git
-    commands:
-      - git clone https://github.com/chainflip-io/chainflip-cluster.git cluster
-      - cd cluster/applications/staging/chainflip-validator
-      - chmod +x ./build.sh
 
   - name: destroy
     pull: always
@@ -232,7 +232,7 @@ steps:
       - cd cluster/applications/staging/chainflip-validator
       - helm repo add chartmuseum http://chartmuseum.chartmuseum:8080
       - helm dependency update
-      - ./build.sh --branch=testnet --rpc
+      - ./build.sh --branch=testnet --tag=$DRONE_COMMIT_SHA --rpc
 
   - name: notify-testnet-up
     image: appleboy/drone-discord
@@ -242,8 +242,9 @@ steps:
         from_secret: discord_webhook_id
       webhook_token:
         from_secret: discord_webhook_token
-      message: >
-        ✅ Testnet Reboot Successful✅
+      message: |
+        ✅ Testnet Reboot Successful ✅
+        Testnet released with commit hash: `$DRONE_COMMIT_SHA`
 
   - name: notify-testnet-failure
     image: appleboy/drone-discord
@@ -256,8 +257,10 @@ steps:
         from_secret: discord_webhook_id
       webhook_token:
         from_secret: discord_webhook_token
-      message: >
+      message: |
         ❌ Testnet Reboot Failure ❌
+        Commit hash: `$DRONE_COMMIT_SHA`
+        Build: {{build.link}}
 
 service_account_name: drone-runner-kube
 
