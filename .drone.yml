@@ -35,6 +35,12 @@ get:
   path: repo-secret
   name: drone_token
 ---
+kind: secret
+name: rinkeby_infura_url
+get:
+  path: repo-secret
+  name: rinkeby_infura_url
+---
 
 # Runs on every PR
 kind: pipeline
@@ -126,16 +132,11 @@ steps:
         - Dockerfile.rust-base
         - .drone.yml
 
-  #  Compiles the entire backend
-  - name: compile-chainflip-backend
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    commands:
-      - cargo build --release
-      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
-
   #  Compiles runs all unit tests
   - name: test-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    depends_on:
+      - rust-base
     commands:
       - cargo test --lib --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
@@ -144,6 +145,8 @@ steps:
   #  Create docker image for state-chain-node
   - name: build-state-chain-node
     image: plugins/docker
+    depends_on:
+      - test-chainflip-backend
     environment:
       SERVICE: state-chain-node
     settings:
@@ -158,6 +161,8 @@ steps:
   #  Create docker image for chainflip-engine
   - name: build-chainflip-engine
     image: plugins/docker
+    depends_on:
+      - test-chainflip-backend
     environment:
       SERVICE: chainflip-engine
     settings:
@@ -172,6 +177,8 @@ steps:
   #  Create docker image for chainflip-engine
   - name: notify
     image: appleboy/drone-discord
+    depends_on:
+      - test-chainflip-backend
     when:
       status:
         - failure
@@ -188,6 +195,100 @@ steps:
         Logs: {{build.link}}
         Duration: `{{since build.started}}`
         Responsible parties: <@401244824440799233>, <@472886957920485386>, <@464710706567053313>, <@261113437642424320>
+
+# Get the latest cluster repo
+  - name: clone-cluster
+    image: alpine/git
+    depends_on:
+      - test-chainflip-backend
+    commands:
+      - git clone https://github.com/chainflip-io/chainflip-cluster.git cluster
+      - cd cluster/applications/staging/chainflip-validator
+      - chmod +x ./build.sh
+
+# Notify devs that Testnet is going down
+  - name: notify-testnet-down
+    image: appleboy/drone-discord
+    depends_on:
+      - test-chainflip-backend
+    settings:
+      username: Testnet Bot
+      webhook_id:
+        from_secret: discord_webhook_id
+      webhook_token:
+        from_secret: discord_webhook_token
+      message: >
+        ⚠️ Testnet Reboot In Progress ⚠️
+        Testnet will be recreated in 5m0s
+
+# Destroy the testnet
+  - name: destroy
+    pull: always
+    image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+    depends_on:
+      - clone-cluster
+      - test-chainflip-backend
+    commands:
+      - echo Waiting for 5 minutes
+      - sleep 300
+      - cd cluster/applications/staging/chainflip-validator
+      - ./build.sh --branch=testnet --destroy --rpc
+
+# Create new testnet
+  - name: create
+    pull: always
+    depends_on:
+      - build-state-chain-node
+      - build-chainflip-engine
+      - destroy
+    environment:
+      INFURA_URL:
+        from_secret: rinkeby_infura_url
+      DOCKER_CONFIG_JSON:
+        from_secret: dockerconfigjson
+    image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+    commands:
+      - cd cluster/applications/staging/chainflip-validator
+      - helm repo add chartmuseum http://chartmuseum.chartmuseum:8080
+      - helm dependency update
+      - ./build.sh --branch=testnet --tag=$DRONE_COMMIT_SHA --rpc
+
+# Notify devs Testnet is up
+  - name: notify-testnet-up
+    image: appleboy/drone-discord
+    depends_on:
+      - create
+    settings:
+      username: Testnet Bot
+      webhook_id:
+        from_secret: discord_webhook_id
+      webhook_token:
+        from_secret: discord_webhook_token
+      message: |
+        ✅ Testnet Reboot Successful ✅
+        Testnet released with commit hash: `{{build.commit}}`
+
+# Notify devs Testnet has failed to launch
+  - name: notify-testnet-failure
+    image: appleboy/drone-discord
+    depends_on:
+      - create
+    when:
+      status:
+        - failure
+    settings:
+      username: Testnet Bot
+      webhook_id:
+        from_secret: discord_webhook_id
+      webhook_token:
+        from_secret: discord_webhook_token
+      message: |
+        ❌ Testnet Reboot Failure ❌
+        Commit hash: `{{build.commit}}`
+        Build: {{build.link}}
+        <@508234815254953985> sort it out!!
+
+service_account_name: drone-runner-kube
 
 # Config
 trigger:
@@ -238,13 +339,6 @@ steps:
       paths:
         - Dockerfile.rust-base
         - .drone.yml
-
-  #  Compiles the entire backend
-  - name: compile-chainflip-backend
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    commands:
-      - cargo build --release
-      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
   #  Compiles runs all unit tests
   - name: test-chainflip-backend
