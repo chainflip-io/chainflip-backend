@@ -24,8 +24,9 @@ pub struct Eth {
 }
 
 #[derive(Debug, Deserialize, Clone)]
-pub struct Engine {
-    pub health_check_port: u16,
+pub struct HealthCheck {
+    pub hostname: String,
+    pub port: u16,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -33,7 +34,7 @@ pub struct Settings {
     pub message_queue: MessageQueue,
     pub state_chain: StateChain,
     pub eth: Eth,
-    pub engine: Engine,
+    pub health_check: HealthCheck,
 }
 
 impl Settings {

@@ -15,5 +15,6 @@ port = "8545"
 # Address used on the Ganache/Brownie tests
 stake_manager_eth_address = "0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f"
 
-[engine]
-health_check_port = 5555
+[health_check]
+hostname = "127.0.0.1"
+port = 5555
