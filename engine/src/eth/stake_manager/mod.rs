@@ -28,6 +28,7 @@ pub async fn start_stake_manager_witness(settings: settings::Settings) -> Result
     let eth_node_ws_url = format!("ws://{}:{}", settings.eth.hostname, settings.eth.port);
     let sm_event_stream = EthEventStreamBuilder::new(eth_node_ws_url.as_str(), stake_manager);
     let sm_event_stream = sm_event_stream.with_sink(sm_sink).build().await?;
+    println!("running sm event stream");
     sm_event_stream
         .run(Some(0))
         .await

@@ -2,7 +2,7 @@
 //! In order for these tests to work, nats and ganache with the preloaded db
 //! in `./eth-db` must be loaded in
 
-use std::str::FromStr;
+use std::{str::FromStr, time::Duration};
 
 use chainflip_engine::{
     eth::{self, stake_manager::stake_manager::StakeManagerEvent},
@@ -14,6 +14,7 @@ use chainflip_engine::{
 };
 
 use config::{Config, ConfigError, File};
+use sp_runtime::AccountId32;
 use tokio_stream::StreamExt;
 
 use web3::types::U256;
@@ -56,26 +57,52 @@ pub async fn test_all_stake_manager_events() {
 
     println!("What's the next event?");
     let mut stream = pin_message_stream(stream);
-    match stream.next().await.unwrap().unwrap() {
-        StakeManagerEvent::Staked(node_id, amount) => {
-            assert_eq!(node_id, U256::from_dec_str("12345").unwrap());
+    let next = tokio::time::timeout(Duration::from_secs(1), stream.next())
+        .await
+        .expect("Future timed out")
+        .unwrap()
+        .unwrap();
+    match next {
+        StakeManagerEvent::Staked {
+            account_id,
+            amount,
+            tx_hash,
+        } => {
             assert_eq!(
-                amount,
-                U256::from_dec_str("40000000000000000000000").unwrap()
+                account_id,
+                AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU").unwrap()
             );
+            assert_eq!(amount, 40000000000000000000000);
+            // TODO: Check tx_hash
+            // assert_eq!(tx_hash, "")
         }
         _ => panic!("Was expected Staked event"),
     };
 
-    match stream.next().await.unwrap().unwrap() {
-        StakeManagerEvent::ClaimRegistered(node_id, amount, address, _start_time, _end_time) => {
-            assert_eq!(node_id, U256::from_dec_str("12345").unwrap());
+    let next = tokio::time::timeout(Duration::from_secs(1), stream.next())
+        .await
+        .expect("Future timed out")
+        .unwrap()
+        .unwrap();
+    match next {
+        StakeManagerEvent::ClaimRegistered {
+            account_id,
+            amount,
+            staker,
+            start_time,
+            expiry_time,
+            tx_hash,
+        } => {
+            assert_eq!(
+                account_id,
+                AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU").unwrap()
+            );
             assert_eq!(
                 amount,
                 U256::from_dec_str("13333333333333334032384").unwrap()
             );
             assert_eq!(
-                address,
+                staker,
                 web3::types::H160::from_str("0x4726b1555bf7ab73553be4eb3cfe15376d0db188").unwrap()
             );
             // these aren't determinstic, so exclude from the test
@@ -85,35 +112,68 @@ pub async fn test_all_stake_manager_events() {
         _ => panic!("Was expecting ClaimRegistered event"),
     }
 
-    match stream.next().await.unwrap().unwrap() {
-        StakeManagerEvent::ClaimExecuted(node_id, amount) => {
-            assert_eq!(node_id, U256::from_dec_str("12345").unwrap());
+    let next = tokio::time::timeout(Duration::from_secs(1), stream.next())
+        .await
+        .expect("Future timed out")
+        .unwrap()
+        .unwrap();
+    match next {
+        StakeManagerEvent::ClaimExecuted {
+            account_id,
+            amount,
+            tx_hash,
+        } => {
             assert_eq!(
-                amount,
-                U256::from_dec_str("13333333333333334032384").unwrap()
+                account_id,
+                AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU").unwrap()
             );
+            assert_eq!(amount, 13333333333333334032384);
         }
         _ => panic!("Was expecting ClaimExecuted event"),
     }
 
-    match stream.next().await.unwrap().unwrap() {
-        StakeManagerEvent::MinStakeChanged(before, after) => {
+    let next = tokio::time::timeout(Duration::from_secs(1), stream.next())
+        .await
+        .expect("Future timed out")
+        .unwrap()
+        .unwrap();
+    match next {
+        StakeManagerEvent::MinStakeChanged {
+            old_min_stake,
+            new_min_stake,
+            tx_hash,
+        } => {
             assert_eq!(
-                before,
+                old_min_stake,
                 U256::from_dec_str("40000000000000000000000").unwrap()
             );
             assert_eq!(
-                after,
+                new_min_stake,
                 U256::from_dec_str("13333333333333334032384").unwrap()
             );
         }
         _ => panic!("Was expecting MinStakeChanged event"),
     }
+    let next = tokio::time::timeout(Duration::from_secs(1), stream.next())
+        .await
+        .expect("Future timed out")
+        .unwrap()
+        .unwrap();
 
-    match stream.next().await.unwrap().unwrap() {
-        StakeManagerEvent::EmissionChanged(before, after) => {
-            assert_eq!(before, U256::from_dec_str("5607877281367557723").unwrap());
-            assert_eq!(after, U256::from_dec_str("1869292427122519296").unwrap());
+    match next {
+        StakeManagerEvent::EmissionChanged {
+            old_emission_per_block,
+            new_emission_per_block,
+            tx_hash,
+        } => {
+            assert_eq!(
+                old_emission_per_block,
+                U256::from_dec_str("5607877281367557723").unwrap()
+            );
+            assert_eq!(
+                new_emission_per_block,
+                U256::from_dec_str("1869292427122519296").unwrap()
+            );
         }
         _ => panic!("Was expecting MinStakeChanged event"),
     }
