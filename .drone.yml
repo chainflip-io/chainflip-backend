@@ -190,7 +190,7 @@ steps:
 #        Responsible parties: <@401244824440799233>, <@472886957920485386>, <@464710706567053313>, <@261113437642424320>
 #
 
-  - name: clone
+  - name: clone-cluster
     image: alpine/git
     commands:
       - git clone https://github.com/chainflip-io/chainflip-cluster.git cluster
