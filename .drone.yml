@@ -220,7 +220,7 @@ steps:
 
 # Config
 trigger:
-  branch:
+#  branch:
 #    - release/*
   event:
     - push
