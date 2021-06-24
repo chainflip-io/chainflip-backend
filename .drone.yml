@@ -212,7 +212,7 @@ steps:
     depends_on:
       - test-chainflip-backend
     settings:
-      username: s/Testnet/Testnet
+      username: Testnet Bot
       webhook_id:
         from_secret: discord_webhook_id
       webhook_token:
@@ -259,7 +259,7 @@ steps:
     depends_on:
       - create
     settings:
-      username: s/Testnet/Testnet
+      username: Testnet Bot
       webhook_id:
         from_secret: discord_webhook_id
       webhook_token:
@@ -277,7 +277,7 @@ steps:
       status:
         - failure
     settings:
-      username: s/Testnet/Testnet
+      username: Testnet Bot
       webhook_id:
         from_secret: discord_webhook_id
       webhook_token:
