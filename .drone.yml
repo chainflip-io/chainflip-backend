@@ -195,6 +195,16 @@ steps:
 #        Duration: `{{since build.started}}`
 #        Responsible parties: <@401244824440799233>, <@472886957920485386>, <@464710706567053313>, <@261113437642424320>
 #
+  - name: notify-testnet-down
+    image: appleboy/drone-discord
+    settings:
+      username: Tesnet Bot
+      webhook_id:
+        from_secret: discord_webhook_id
+      webhook_token:
+        from_secret: discord_webhook_token
+      message: >
+        ⚠️ Testnet Reboot In Progress⚠️
 
   - name: clone-cluster
     image: alpine/git
@@ -223,6 +233,31 @@ steps:
       - helm repo add chartmuseum http://chartmuseum.chartmuseum:8080
       - helm dependency update
       - ./build.sh --branch=testnet --rpc
+
+  - name: notify-testnet-up
+    image: appleboy/drone-discord
+    settings:
+      username: Tesnet Bot
+      webhook_id:
+        from_secret: discord_webhook_id
+      webhook_token:
+        from_secret: discord_webhook_token
+      message: >
+        ✅ Testnet Reboot Successful✅
+
+  - name: notify-testnet-failure
+    image: appleboy/drone-discord
+    when:
+      status:
+        - failure
+    settings:
+      username: Tesnet Bot
+      webhook_id:
+        from_secret: discord_webhook_id
+      webhook_token:
+        from_secret: discord_webhook_token
+      message: >
+        ❌ Testnet Reboot Failure ❌
 
 service_account_name: drone-runner-kube
 
