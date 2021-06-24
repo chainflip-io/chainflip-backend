@@ -512,6 +512,25 @@ async fn cannot_create_key_for_known_id() {
     helpers::assert_channel_empty(&mut states.rxs[0]).await;
 }
 
+// Simply test the we don't crash when we receive unexpected validator id
+#[tokio::test]
+async fn keygen_message_from_invalid_validator() {
+    let states = generate_valid_keygen_data().await;
+
+    let mut c1 = states.keygen_phase1.clients[0].clone();
+
+    assert_eq!(
+        keygen_stage_for(&c1, KEY_ID),
+        Some(KeygenStage::AwaitingBroadcast1)
+    );
+
+    let invalid_validator = ValidatorId::new(4);
+
+    let msg = create_keygen_p2p_message(&invalid_validator, create_bc1(2));
+
+    c1.process_p2p_mq_message(msg);
+}
+
 // INFO: We should be able to continue signing with the old key. When key rotation happens,
 // we need to create a new key. A node is likely to remain a validator, so it needs to be
 // able to transfer funds from the old key to the new one. SC will send us a command to

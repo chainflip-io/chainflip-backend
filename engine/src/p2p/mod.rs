@@ -34,7 +34,7 @@ impl ValidatorId {
 
 impl std::fmt::Display for ValidatorId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "vid({})", self.0)
+        write!(f, "ValidatorId({})", self.0)
     }
 }
 

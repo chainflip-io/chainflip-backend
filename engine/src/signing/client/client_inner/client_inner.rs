@@ -32,7 +32,7 @@ impl From<Broadcast1> for SigningData {
 
 impl Display for SigningData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // We are not interested in the extact contents most of the time
+        // We are not interested in the exact contents most of the time
         match self {
             SigningData::Broadcast1(_) => write!(f, "Signing::Broadcast"),
             SigningData::Secret2(_) => write!(f, "Signing::Secret"),
@@ -195,6 +195,7 @@ impl MultisigClientInner {
         &self.keygen
     }
 
+    /// Clean up expired states
     pub fn cleanup(&mut self) {
         // TODO: cleanup keygen states as well
         self.signing_manager.cleanup();
@@ -213,6 +214,7 @@ impl MultisigClientInner {
         entry.push((data, sign_info));
     }
 
+    /// Process `instruction` issued internally (i.e. from SC or another local module)
     pub fn process_multisig_instruction(&mut self, instruction: MultisigInstruction) {
         match instruction {
             MultisigInstruction::KeyGen(keygen_info) => {
@@ -252,6 +254,7 @@ impl MultisigClientInner {
         }
     }
 
+    /// Process message from another validator
     pub fn process_p2p_mq_message(&mut self, msg: P2PMessage) {
         let P2PMessage { sender_id, data } = msg;
         let msg: Result<MultisigMessage, _> = serde_json::from_slice(&data);

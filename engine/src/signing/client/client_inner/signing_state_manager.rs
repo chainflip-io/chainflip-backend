@@ -170,7 +170,7 @@ impl SigningStateManager {
             }
             Entry::Vacant(entry) => {
                 // We have the key and have received a request to sign
-                trace!("Creating new signing state for message");
+                trace!("Creating new signing state for message: {:?}", mi.hash);
                 let p2p_sender = self.p2p_sender.clone();
 
                 let state = SigningState::on_request_to_sign(

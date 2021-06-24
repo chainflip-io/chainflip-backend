@@ -1,7 +1,4 @@
-use std::{
-    collections::{hash_map::Entry, HashMap},
-    sync::Arc,
-};
+use std::collections::{hash_map::Entry, HashMap};
 
 use crate::{
     p2p::ValidatorId,
@@ -14,8 +11,8 @@ use crate::{
 use super::{
     client_inner::{Broadcast1, KeyGenMessageWrapped, KeygenData},
     keygen_state::KeygenState,
-    signing_state::{KeygenResult, KeygenResultInfo},
-    utils::{get_our_idx, ValidatorMaps},
+    signing_state::KeygenResultInfo,
+    utils::get_our_idx,
     InnerEvent,
 };
 
@@ -25,11 +22,18 @@ use super::keygen_state::KeygenStage;
 use log::*;
 use tokio::sync::mpsc::UnboundedSender;
 
+/// Contains states (`KeygenState`) for different key ids. Responsible for directing
+/// incoming messages to the relevant instance of `KeygenState`. Delays processing of
+/// Broadcast1 messages before a corresponding keygen request is received.
 #[derive(Clone)]
 pub struct KeygenManager {
+    /// States for each key id
     keygen_states: HashMap<KeyId, KeygenState>,
+    /// Used to propagate events upstream
     event_sender: UnboundedSender<InnerEvent>,
+    /// Multisig parameters
     params: Parameters,
+    /// Validator id of our node
     our_id: ValidatorId,
     /// Storage for delayed data (only Broadcast1 makes sense here).
     /// We choose not to store it inside KeygenState, as having KeygenState currently
@@ -145,7 +149,7 @@ impl KeygenManager {
 
                     let state = entry.insert(state);
 
-                    // Process delayed messages:
+                    // Process delayed messages for `key_id`
                     let messages = self.delayed_messages.remove(&key_id).unwrap_or_default();
 
                     for (sender_id, msg) in messages {

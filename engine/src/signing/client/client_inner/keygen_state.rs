@@ -34,9 +34,9 @@ pub struct KeygenState {
     event_sender: UnboundedSender<InnerEvent>,
     signer_idx: usize,
     /// Mapping from sender indexes to validator ids and back
-    index_maps: Arc<ValidatorMaps>,
+    maps_for_validator_id_and_idx: Arc<ValidatorMaps>,
     /// All valid signer indexes (1..=n)
-    all_idxs: Vec<usize>,
+    all_signer_idxs: Vec<usize>,
     delayed_next_stage_data: Vec<(ValidatorId, KeygenData)>,
     key_id: KeyId,
     pub(super) key_info: Option<KeygenResultInfo>,
@@ -56,18 +56,18 @@ impl KeygenState {
         key_id: KeyId,
         event_sender: UnboundedSender<InnerEvent>,
     ) -> Self {
-        let all_idxs = (1..=params.share_count).collect_vec();
+        let all_signer_idxs = (1..=params.share_count).collect_vec();
 
         let mut state = KeygenState {
             stage: KeygenStage::AwaitingBroadcast1,
             sss: SharedSecretState::new(idx, params),
             event_sender,
             signer_idx: idx,
-            all_idxs,
+            all_signer_idxs,
             delayed_next_stage_data: Vec::new(),
             key_id,
             key_info: None,
-            index_maps: Arc::new(idx_map),
+            maps_for_validator_id_and_idx: Arc::new(idx_map),
         };
 
         state.initiate_keygen_inner();
@@ -76,13 +76,14 @@ impl KeygenState {
     }
 
     /// Get index in the (sorted) array of all signers
-    fn validator_id_to_signer_idx(&self, id: &ValidatorId) -> usize {
-        let idx = self.index_maps.get_idx(&id).unwrap();
-        idx
+    fn validator_id_to_signer_idx(&self, id: &ValidatorId) -> Option<usize> {
+        self.maps_for_validator_id_and_idx.get_idx(&id)
     }
 
     fn signer_idx_to_validator_id(&self, idx: usize) -> &ValidatorId {
-        let id = self.index_maps.get_id(idx).unwrap();
+        // Should be safe to unwrap because the `idx` is carefully
+        // chosen by our on module
+        let id = self.maps_for_validator_id_and_idx.get_id(idx).unwrap();
         id
     }
 
@@ -94,7 +95,17 @@ impl KeygenState {
     ) -> Option<KeygenResultInfo> {
         trace!("[{}] received {} from [{}]", self.us(), &msg, sender_id);
 
-        let signer_idx = self.validator_id_to_signer_idx(&sender_id);
+        let signer_idx = match self.validator_id_to_signer_idx(&sender_id) {
+            Some(idx) => idx,
+            None => {
+                warn!(
+                    "[{}] Keygen message is ignored for invalid validator id: {}",
+                    self.us(),
+                    sender_id
+                );
+                return None;
+            }
+        };
 
         match (&self.stage, msg) {
             (KeygenStage::AwaitingBroadcast1, KeygenData::Broadcast1(bc1)) => {
@@ -117,7 +128,7 @@ impl KeygenState {
 
                         let key_info = KeygenResultInfo {
                             key: Arc::new(key),
-                            validator_map: Arc::clone(&self.index_maps),
+                            validator_map: Arc::clone(&self.maps_for_validator_id_and_idx),
                         };
 
                         self.key_info = Some(key_info.clone());
@@ -164,7 +175,7 @@ impl KeygenState {
         self.stage = KeygenStage::AwaitingSecret2;
 
         // We require all parties to be active during keygen
-        match self.sss.init_phase2(&self.all_idxs) {
+        match self.sss.init_phase2(&self.all_signer_idxs) {
             Ok(msgs) => {
                 let msgs = msgs
                     .into_iter()
@@ -206,7 +217,7 @@ impl KeygenState {
 
     fn keygen_broadcast(&self, msg: MultisigMessage) {
         // TODO: see if there is a way to publish a bunch of messages
-        for idx in &self.all_idxs {
+        for idx in &self.all_signer_idxs {
             if *idx == self.signer_idx {
                 continue;
             }

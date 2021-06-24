@@ -524,7 +524,7 @@ async fn recv_secret2_signing(rx: &mut UnboundedReceiver<InnerEvent>) -> (Valida
 pub fn sec2_to_p2p_signing(sec2: Secret2, sender_id: &ValidatorId, mi: &MessageInfo) -> P2PMessage {
     let wrapped = SigningDataWrapped::new(sec2, mi.clone());
 
-    let data = MultisigMessage::SigningMessage(wrapped);
+    let data = MultisigMessage::from(wrapped);
     let data = serde_json::to_vec(&data).unwrap();
     P2PMessage {
         sender_id: sender_id.clone(),
@@ -565,7 +565,7 @@ pub fn bc1_to_p2p_signing(
 
     let wrapped = SigningDataWrapped::new(bc1, mi.clone());
 
-    let data = MultisigMessage::SigningMessage(wrapped);
+    let data = MultisigMessage::from(wrapped);
     let data = serde_json::to_vec(&data).unwrap();
     P2PMessage {
         sender_id: sender_id.clone(),
@@ -576,7 +576,7 @@ pub fn bc1_to_p2p_signing(
 pub fn sig_to_p2p(sig: LocalSig, sender_id: &ValidatorId, mi: &MessageInfo) -> P2PMessage {
     let wrapped = SigningDataWrapped::new(sig, mi.clone());
 
-    let data = MultisigMessage::SigningMessage(wrapped);
+    let data = MultisigMessage::from(wrapped);
     let data = serde_json::to_vec(&data).unwrap();
     P2PMessage {
         sender_id: sender_id.clone(),
