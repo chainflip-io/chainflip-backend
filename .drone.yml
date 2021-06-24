@@ -135,6 +135,8 @@ steps:
   #  Compiles runs all unit tests
   - name: test-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    depends_on:
+      - rust-base
     commands:
       - cargo test --lib --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
@@ -143,6 +145,8 @@ steps:
   #  Create docker image for state-chain-node
   - name: build-state-chain-node
     image: plugins/docker
+    depends_on:
+      - test-chainflip-backend
     environment:
       SERVICE: state-chain-node
     settings:
@@ -157,6 +161,8 @@ steps:
   #  Create docker image for chainflip-engine
   - name: build-chainflip-engine
     image: plugins/docker
+    depends_on:
+      - test-chainflip-backend
     environment:
       SERVICE: chainflip-engine
     settings:
@@ -171,6 +177,8 @@ steps:
   #  Create docker image for chainflip-engine
   - name: notify
     image: appleboy/drone-discord
+    depends_on:
+      - test-chainflip-backend
     when:
       status:
         - failure
@@ -226,6 +234,8 @@ steps:
   - name: create
     pull: always
     depends_on:
+      - build-state-chain-node
+      - build-chainflip-engine
       - destroy
     environment:
       INFURA_URL:
@@ -242,6 +252,8 @@ steps:
 # Notify devs Testnet is up
   - name: notify-testnet-up
     image: appleboy/drone-discord
+    depends_on:
+      - create
     settings:
       username: Tesnet Bot
       webhook_id:
@@ -255,6 +267,8 @@ steps:
 # Notify devs Testnet has failed to launch
   - name: notify-testnet-failure
     image: appleboy/drone-discord
+    depends_on:
+      - create
     when:
       status:
         - failure
@@ -320,13 +334,6 @@ steps:
       paths:
         - Dockerfile.rust-base
         - .drone.yml
-
-  #  Compiles the entire backend
-  - name: compile-chainflip-backend
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    commands:
-      - cargo build --release
-      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
   #  Compiles runs all unit tests
   - name: test-chainflip-backend
@@ -419,48 +426,3 @@ tolerations:
   - key: "workloadKind"
     operator: "Equal"
     value: "ci"
-
-
----
-kind: pipeline
-name: test-paralle
-type: kubernetes
-
-steps:
-  - name: rust-base
-    image: alpine/git
-    commands:
-      - sleep 5
-  - name: test-state-chain
-    image: alpine/git
-    commands:
-      - sleep 5
-  - name: build-sc
-    image: alpine/git
-    depends_on:
-      - test-state-chain
-    commands:
-      - sleep 5
-  - name: build-engine
-    depends_on:
-      - test-state-chain
-    image: alpine/git
-    commands:
-      - sleep 5
-  - name: destroy
-    image: alpine/git
-    depends_on:
-      - test-state-chain
-    commands:
-      - sleep 5
-  - name: create
-    depends_on:
-      - destroy
-      - build-engine
-    image: alpine/git
-    commands:
-      - sleep 5
-
-trigger:
-  event:
-    - push
