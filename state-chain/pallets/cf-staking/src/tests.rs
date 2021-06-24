@@ -250,32 +250,26 @@ fn signature_is_inserted() {
 		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().signature, None);
 		
 		// Nonce should be 1.
-		let nonce = PendingClaims::<Test>::get(ALICE).unwrap().nonce;
-		assert_eq!(nonce, 1);
-		
-		// Insert a signature.
-		let expiry = time_after::<Test>(Duration::from_secs(10));
-		assert_ok!(Staking::post_claim_signature(
-			Origin::signed(ALICE),
-			ALICE,
-			STAKE,
-			nonce,
-			ETH_DUMMY_ADDR,
-			expiry,
-			sig.clone()));
+		let claim = PendingClaims::<Test>::get(ALICE).unwrap();
+		assert_eq!(claim.nonce, 1);
+
+		assert_event_stack!(
+			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, msg_hash)) => {
+				// Insert a signature.
+				assert_ok!(Staking::post_claim_signature(
+					Origin::signed(BOB),
+					ALICE,
+					msg_hash.into(),
+					sig.clone()));
+			}
+		);
+
+		assert_event_stack!(
+			Event::pallet_cf_staking(crate::Event::ClaimSignatureIssued(..))
+		);
 
 		// Check storage for the signature.
 		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().signature, Some(sig.clone()));
-
-		assert_event_stack!(
-			Event::pallet_cf_staking(crate::Event::ClaimSignatureIssued(ALICE, ..)),
-			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, _payload)),
-			_,
-			Event::pallet_cf_staking(crate::Event::Staked(ALICE, added, total)) => { 
-				assert_eq!(added, STAKE);
-				assert_eq!(total, STAKE);
-			}
-		);
 	});
 }
 
@@ -373,112 +367,93 @@ fn test_retirement() {
 fn claim_expiry() {
 	new_test_ext().execute_with(|| {
 		const STAKE: u128 = 45;
+		const START_TIME: Duration = Duration::from_secs(10);
 		let sig = Signature::from_slice(&[1u8; 65]);
 		let nonce = 1;
 
 		// Start the time at the 10-second mark.
-		time_source::Mock::reset_to(Duration::from_secs(10));
+		time_source::Mock::reset_to(START_TIME);
 
 		// Stake some FLIP.
-		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, TX_HASH));
-		assert_ok!(Staking::staked(Origin::root(), BOB, STAKE, TX_HASH));
-		assert_ok!(Staking::staked(Origin::root(), CHARLIE, STAKE, TX_HASH));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_DUMMY_ADDR, TX_HASH));
+		assert_ok!(Staking::staked(Origin::root(), BOB, STAKE, ETH_DUMMY_ADDR, TX_HASH));
 
-		// Claim it.
+		// Alice claims immediately.
 		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR));
+
+		// Bob claims a little later.
+		time_source::Mock::tick(Duration::from_millis(200));
 		assert_ok!(Staking::claim(Origin::signed(BOB), STAKE, ETH_DUMMY_ADDR));
-		assert_ok!(Staking::claim(Origin::signed(CHARLIE), STAKE, ETH_DUMMY_ADDR));
 
-		// Insert a signature with expiry in the past.
-		let expiry = Duration::from_secs(1);
+		let msg_hash_alice = PendingClaims::<Test>::get(ALICE).unwrap().msg_hash.unwrap();
+		let msg_hash_bob = PendingClaims::<Test>::get(BOB).unwrap().msg_hash.unwrap();
+
+		// We can't insert a sig if the claim has expired.
+		time_source::Mock::reset_to(START_TIME);
+		time_source::Mock::tick(Duration::from_secs(1));
 		assert_noop!(
 			Staking::post_claim_signature(
-				Origin::signed(ALICE),
+				Origin::signed(BOB),
 				ALICE,
-				STAKE,
-				nonce,
-				ETH_DUMMY_ADDR,
-				expiry,
+				msg_hash_alice,
 				sig.clone()), 
-			<Error<Test>>::InvalidExpiry
+			<Error<Test>>::SignatureTooLate
 		);
-
-		// Insert a signature with imminent expiry.
-		let expiry = time_after::<Test>(Duration::from_millis(1));
+		
+		// We can't insert a sig if expiry is too close either.
+		time_source::Mock::reset_to(START_TIME);
+		time_source::Mock::tick(Duration::from_millis(950));
 		assert_noop!(
 			Staking::post_claim_signature(
-				Origin::signed(ALICE),
+				Origin::signed(BOB),
 				ALICE,
-				STAKE,
-				nonce,
-				ETH_DUMMY_ADDR,
-				expiry,
+				msg_hash_alice,
 				sig.clone()), 
-			<Error<Test>>::InvalidExpiry
+			<Error<Test>>::SignatureTooLate
 		);
 
-		// Finally a valid expiry (minimum set to 100ms in the mock).
-		let expiry = time_after::<Test>(Duration::from_millis(101));
-		assert_ok!(
-			Staking::post_claim_signature(
-				Origin::signed(ALICE),
-				ALICE,
-				STAKE,
-				nonce,
-				ETH_DUMMY_ADDR,
-				expiry,
-				sig.clone())
-		);
-
-		// Set a longer expiry time for Bob.
-		let expiry = time_after::<Test>(Duration::from_secs(2));
+		// If we stay within the defined bounds, we can claim.
+		time_source::Mock::reset_to(START_TIME);
+		time_source::Mock::tick(Duration::from_millis(200));
 		assert_ok!(
 			Staking::post_claim_signature(
 				Origin::signed(BOB),
-				BOB,
-				STAKE,
-				nonce,
-				ETH_DUMMY_ADDR,
-				expiry,
+				ALICE,
+				msg_hash_alice,
 				sig.clone())
 		);
 
-		// Race condition: Charlie's expiry is shorter than Bob's even though his signature is added after.
-		let expiry = time_after::<Test>(Duration::from_millis(500));
-		assert_ok!(
-			Staking::post_claim_signature(
-				Origin::signed(ALICE),
-				CHARLIE,
-				STAKE,
-				nonce,
-				ETH_DUMMY_ADDR,
-				expiry,
-				sig.clone())
-		);
-
+		// Trigger expiry.
 		Pallet::<Test>::expire_pending_claims();
 		
-		// Clock hasn't moved, nothing should have expired.
+		// Nothing should have expired yet.
 		assert!(PendingClaims::<Test>::contains_key(ALICE));
 		assert!(PendingClaims::<Test>::contains_key(BOB));
-		assert!(PendingClaims::<Test>::contains_key(CHARLIE));
 		
 		// Tick the clock forward by 1 sec and expire.
 		time_source::Mock::tick(Duration::from_secs(1));
 		Pallet::<Test>::expire_pending_claims();
 
-		// It should expire Alice and Charlie's claims but not Bob's.
+		// Alice should have expired but not Bob.
+		assert!(!PendingClaims::<Test>::contains_key(ALICE));
+		assert!(PendingClaims::<Test>::contains_key(BOB));
 		assert_event_stack!(
-			Event::pallet_cf_flip(FlipEvent::BalanceSettled(
-				ImbalanceSource::External, ImbalanceSource::Account(CHARLIE), STAKE, 0)),
-			Event::pallet_cf_staking(crate::Event::ClaimExpired(CHARLIE, _, STAKE)),
 			Event::pallet_cf_flip(FlipEvent::BalanceSettled(
 				ImbalanceSource::External, ImbalanceSource::Account(ALICE), STAKE, 0)),
 			Event::pallet_cf_staking(crate::Event::ClaimExpired(ALICE, _, STAKE))
 		);
-		assert!(!PendingClaims::<Test>::contains_key(ALICE));
-		assert!(PendingClaims::<Test>::contains_key(BOB));
-		assert!(!PendingClaims::<Test>::contains_key(CHARLIE));
+
+		// Tick forward again and expire.
+		time_source::Mock::tick(Duration::from_secs(1));
+		Pallet::<Test>::expire_pending_claims();
+
+		// Bob's (unsigned) claim should now be expired too.
+		assert!(!PendingClaims::<Test>::contains_key(BOB));
+		assert_event_stack!(
+			Event::pallet_cf_flip(FlipEvent::BalanceSettled(
+				ImbalanceSource::External, ImbalanceSource::Account(BOB), STAKE, 0)),
+			Event::pallet_cf_staking(crate::Event::ClaimExpired(BOB, _, STAKE))
+		);
 	});
 }
 
@@ -596,6 +571,7 @@ fn test_claim_payload() {
 	let register_claim = stake_manager.function("registerClaim").unwrap();
 
 	let claim_details: ClaimDetailsFor<Test> = ClaimDetails {
+		msg_hash: None,
 		amount: AMOUNT,
 		nonce: NONCE,
 		address: ETH_DUMMY_ADDR,
