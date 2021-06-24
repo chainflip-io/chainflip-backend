@@ -203,12 +203,12 @@ steps:
       - cd cluster/applications/staging/chainflip-validator
       - chmod +x ./build.sh
 
-#  - name: destroy
-#    pull: always
-#    image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
-#    commands:
-#      - cd cluster/applications/staging/chainflip-validator
-#      - ./build.sh --branch=testnet --destroy --rpc
+  - name: destroy
+    pull: always
+    image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+    commands:
+      - cd cluster/applications/staging/chainflip-validator
+      - ./build.sh --branch=testnet --destroy --rpc
 
   - name: create
     pull: always
