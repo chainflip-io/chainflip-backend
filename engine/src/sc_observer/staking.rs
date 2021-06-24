@@ -14,13 +14,16 @@ use super::{runtime::StateChainRuntime, sc_event::SCEvent};
 #[module]
 pub trait Staking: System {}
 
+type MsgHash = [u8; 32];
+type EthereumAddress = [u8; 20];
+
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Encode, Decode, Serialize, Deserialize)]
 pub struct ClaimSigRequestedEvent<S: Staking> {
     /// The AccountId of the validator wanting to claim
     pub who: AccountId32,
 
-    pub msg_hash: [u8; 32],
+    pub msg_hash: MsgHash,
 
     pub _phantom: PhantomData<S>,
 }
@@ -53,7 +56,7 @@ pub struct StakeRefundEvent<S: Staking> {
 
     pub amount: u128,
 
-    pub eth_address: [u8; 20],
+    pub eth_address: EthereumAddress,
 
     pub _phantom: PhantomData<S>,
 }
@@ -61,17 +64,19 @@ pub struct StakeRefundEvent<S: Staking> {
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct ClaimSignatureIssuedEvent<S: Staking> {
+    pub msg_hash: MsgHash,
+
+    pub nonce: u64,
+
+    pub signature: Signature,
+
     pub who: AccountId32,
 
     pub amount: u128,
 
-    pub nonce: u64,
-
-    pub eth_address: [u8; 20],
+    pub eth_address: EthereumAddress,
 
     pub expiry: Duration,
-
-    pub signature: Signature,
 
     pub _phantom: PhantomData<S>,
 }
@@ -131,6 +136,7 @@ mod tests {
     use state_chain_runtime::Runtime as SCRuntime;
 
     use sp_keyring::AccountKeyring;
+    use sp_core::H256;
 
     #[test]
     fn claim_sig_requested_decode_test() {
@@ -246,10 +252,9 @@ mod tests {
     fn claim_sig_issued_decode_test() {
         let who = AccountKeyring::Alice.to_account_id();
 
-        let eth_address: [u8; 20] = [
-            00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01,
-        ];
+        let eth_address = [0u8; 20];
 
+        let msg_hash = [0u8; 32];
         let sig: [u8; 65] = [0; 65];
 
         let sig = Signature(sig);
@@ -257,12 +262,13 @@ mod tests {
 
         let event: <SCRuntime as Config>::Event =
             pallet_cf_staking::Event::<SCRuntime>::ClaimSignatureIssued(
+                H256::from_slice(&msg_hash[..]),
+                1u64,
+                sig.clone(),
                 who.clone(),
                 150u128,
-                1u64,
                 eth_address,
                 expiry,
-                sig.clone(),
             )
             .into();
 
@@ -277,11 +283,12 @@ mod tests {
         .unwrap();
 
         let expecting = ClaimSignatureIssuedEvent {
+            msg_hash,
+            nonce: 1u64,
+            signature: sig,
             who,
             amount: 150u128,
-            nonce: 1u64,
             eth_address,
-            signature: sig,
             expiry,
             _phantom: PhantomData,
         };
