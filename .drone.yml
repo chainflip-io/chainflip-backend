@@ -219,6 +219,7 @@ steps:
       - cd cluster/applications/staging/chainflip-validator
       - ./build.sh --branch=testnet
 
+service_account_name: drone-runner-kube
 
 # Config
 trigger:
