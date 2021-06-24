@@ -27,6 +27,7 @@ pub struct ClaimSigRequestedEvent<S: Staking> {
 
     pub _runtime: PhantomData<S>,
 }
+
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct StakedEvent<S: Staking> {

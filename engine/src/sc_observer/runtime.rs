@@ -49,6 +49,10 @@ impl Runtime for StateChainRuntime {
     }
 }
 
+impl Auction for StateChainRuntime {
+    type AuctionIndex = u64;
+}
+
 impl System for StateChainRuntime {
     type Index = u32;
     type BlockNumber = u32;

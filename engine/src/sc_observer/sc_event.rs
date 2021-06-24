@@ -6,13 +6,13 @@ use crate::{mq::Subject, types::chain::Chain};
 use anyhow::Result;
 
 use super::{
+    auction::{AuctionConfirmedEvent, AuctionRangeChangedEvent, AuctionStartedEvent},
     runtime::StateChainRuntime,
     staking::{
         AccountActivated, AccountRetired, ClaimExpired, ClaimSettledEvent, ClaimSigRequestedEvent,
         ClaimSignatureIssuedEvent, StakeRefundEvent, StakedEvent, StakingEvent,
     },
     validator::{
-        AuctionConfirmedEvent, AuctionRangeChangedEvent, AuctionStartedEvent,
         EpochDurationChangedEvent, ForceRotationRequestedEvent, NewEpochEvent, ValidatorEvent,
     },
 };
@@ -42,7 +42,6 @@ pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEv
                 ClaimSigRequestedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
                     .into(),
             )),
-
             "ClaimSignatureIssued" => Ok(Some(
                 ClaimSignatureIssuedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
                     .into(),
@@ -59,13 +58,6 @@ pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEv
             _ => Ok(None),
         },
         "Validator" => match raw_event.variant.as_str() {
-            "AuctionEnded" => Ok(Some(
-                AuctionConfirmedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
-                    .into(),
-            )),
-            "AuctionStarted" => Ok(Some(
-                AuctionStartedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
-            )),
             "ForceRotationRequested" => Ok(Some(
                 ForceRotationRequestedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
                     .into(),
@@ -74,13 +66,26 @@ pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEv
                 EpochDurationChangedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
                     .into(),
             )),
-            "AuctionRangeChanged" => Ok(Some(
-                AuctionRangeChangedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
-                    .into(),
-            )),
             "NewEpoch" => Ok(Some(
                 NewEpochEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
             )),
+            "Auction" => match raw_event.variant.as_str() {
+                "AuctionEnded" => Ok(Some(
+                    AuctionConfirmedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
+                        .into(),
+                )),
+                "AuctionStarted" => Ok(Some(
+                    AuctionStartedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
+                        .into(),
+                )),
+                "AuctionRangeChanged" => Ok(Some(
+                    AuctionRangeChangedEvent::<StateChainRuntime>::decode(
+                        &mut &raw_event.data[..],
+                    )?
+                    .into(),
+                )),
+                _ => Ok(None),
+            },
             _ => Ok(None),
         },
         _ => Ok(None),
