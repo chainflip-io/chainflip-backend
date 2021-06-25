@@ -13,7 +13,7 @@ use async_trait::async_trait;
 use futures::StreamExt;
 
 pub async fn start_eth_broadcaster<M: IMQClient + Send + Sync>(
-    settings: settings::Settings,
+    settings: &settings::Settings,
     mq_client: M,
 ) -> anyhow::Result<()> {
     let eth_broadcaster = EthBroadcaster::<M>::new(settings, mq_client).await?;
@@ -30,7 +30,7 @@ pub struct EthBroadcaster<M: IMQClient + Send + Sync> {
 }
 
 impl<M: IMQClient + Send + Sync> EthBroadcaster<M> {
-    async fn new(settings: settings::Settings, mq_client: M) -> Result<Self> {
+    async fn new(settings: &settings::Settings, mq_client: M) -> Result<Self> {
         let eth_node_ws_url = format!("ws://{}:{}", settings.eth.hostname, settings.eth.port);
         let transport = ::web3::transports::WebSocket::new(eth_node_ws_url.as_str()).await?;
         let web3_client = ::web3::Web3::new(transport);
@@ -113,7 +113,7 @@ mod tests {
         let factory = NatsMQClientFactory::new(&settings.message_queue);
         let mq_client = *factory.create().await.unwrap();
 
-        let eth_broadcaster = EthBroadcaster::<NatsMQClient>::new(settings, mq_client).await;
+        let eth_broadcaster = EthBroadcaster::<NatsMQClient>::new(&settings, mq_client).await;
         eth_broadcaster
     }
 

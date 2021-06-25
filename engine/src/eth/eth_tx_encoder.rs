@@ -1,4 +1,4 @@
-use crate::{mq::{IMQClient, Subject, pin_message_stream}, sc_observer::{runtime::StateChainRuntime, staking::ClaimSignatureIssuedEvent}, types::chain::Chain};
+use crate::{mq::{IMQClient, Subject, pin_message_stream}, sc_observer::{runtime::StateChainRuntime, staking::ClaimSignatureIssuedEvent}, settings, types::chain::Chain};
 use super::stake_manager::stake_manager::StakeManager;
 
 use anyhow::Result;
@@ -6,6 +6,17 @@ use futures::StreamExt;
 use serde::{Serialize, Deserialize};
 use web3::{ethabi::Token, types::Address};
 
+pub async fn start<M: IMQClient + Clone>(settings: &settings::Settings, mq_client: M) -> Result<()> {
+    let encoder = RegisterClaimEncoder::new(
+        settings.eth.stake_manager_eth_address.as_ref(), 
+        mq_client)?;
+
+    encoder.run().await?;
+
+    Ok(())
+}
+
+/// Details of a transaction to be broadcast to ethereum. 
 #[derive(Serialize, Deserialize)]
 pub struct TxDetails {
     contract_address: Address,
@@ -19,7 +30,7 @@ struct RegisterClaimEncoder<M: IMQClient> {
 }
 
 impl<M: IMQClient + Clone> RegisterClaimEncoder<M> {
-    fn new(stake_manager_address: &str, mq_client: M) -> Result<Self> {
+    pub fn new(stake_manager_address: &str, mq_client: M) -> Result<Self> {
         let stake_manager = StakeManager::load(stake_manager_address)?;
         
         Ok(Self {
@@ -28,7 +39,7 @@ impl<M: IMQClient + Clone> RegisterClaimEncoder<M> {
         })
     }
 
-    async fn run(self) -> Result<()> {
+    pub async fn run(self) -> Result<()> {
         let subscription = self
             .mq_client
             .subscribe::<ClaimSignatureIssuedEvent<StateChainRuntime>>(Subject::StateChainClaim)

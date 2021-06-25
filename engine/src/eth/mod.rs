@@ -73,9 +73,11 @@ pub async fn start(settings: Settings) -> anyhow::Result<()> {
     let mq_client = *factory.create().await.unwrap();
 
     let eth_broadcaster_future =
-        eth_broadcaster::start_eth_broadcaster::<NatsMQClient>(settings, mq_client);
+        eth_broadcaster::start_eth_broadcaster::<NatsMQClient>(&settings, mq_client.clone());
 
-    let result = futures::join!(sm_witness_future, eth_broadcaster_future);
+    let eth_tx_encoder_future = eth_tx_encoder::start(&settings, mq_client.clone());
+
+    let result = futures::join!(sm_witness_future, eth_broadcaster_future, eth_tx_encoder_future);
     result.0?;
     result.1?;
 
