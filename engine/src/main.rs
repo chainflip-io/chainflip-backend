@@ -2,9 +2,10 @@ use chainflip_engine::{
     eth,
     health::health_check,
     mq::nats_client::NatsMQClientFactory,
+    p2p::ValidatorId,
     settings::Settings,
     signing::{self, crypto::Parameters},
-    state_chain::{self},
+    state_chain,
 };
 
 #[tokio::main]
@@ -27,8 +28,8 @@ async fn main() {
         .await
         .expect("Should start ETH client");
 
-    // TODO: clients need to be able to update their signer idx dynamically
-    let signer_idx = 0;
+    // TODO: read the key for config/file
+    let signer_idx = ValidatorId("0".to_string());
 
     let params = Parameters {
         share_count: 150,
