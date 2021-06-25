@@ -318,7 +318,7 @@ services:
       - "node"
       - "/app/ganache-core.docker.cli.js"
       - "--mnemonic brownie"
-      - "--fork https://mainnet.infura.io/v3/WEB3_INFURA_PROJECT_ID"
+      - "--fork https://mainnet.infura.io/v3/$WEB3_INFURA_PROJECT_ID"
       - "--gasLimit 12000000"
       - "--accounts 10"
       - "--hardfork istanbul"
