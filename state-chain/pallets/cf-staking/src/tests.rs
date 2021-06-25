@@ -1,11 +1,11 @@
 use crate::{
-	eth_encoding, mock::*, pallet, ClaimDetails, ClaimDetailsFor, Config, Error, EthereumAddress,
+	eth_encoding, mock::*, pallet, ClaimDetails, ClaimDetailsFor, Error, EthereumAddress,
 	Pallet, PendingClaims,
 };
 use cf_traits::mocks::epoch_info;
 use codec::Encode;
 use ethereum_types::U256;
-use frame_support::{assert_noop, assert_ok, error::BadOrigin, traits::UnixTime};
+use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 use pallet_cf_flip::ImbalanceSource;
 use std::time::Duration;
 
@@ -364,14 +364,13 @@ fn claim_expiry() {
 	new_test_ext().execute_with(|| {
 		const STAKE: u128 = 45;
 		const START_TIME: Duration = Duration::from_secs(10);
-		let nonce = 1;
 
 		// Start the time at the 10-second mark.
 		time_source::Mock::reset_to(START_TIME);
 
 		// Stake some FLIP.
-		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_DUMMY_ADDR, TX_HASH));
-		assert_ok!(Staking::staked(Origin::root(), BOB, STAKE, ETH_DUMMY_ADDR, TX_HASH));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, TX_HASH));
+		assert_ok!(Staking::staked(Origin::root(), BOB, STAKE, TX_HASH));
 
 		// Alice claims immediately.
 		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR));
@@ -381,7 +380,6 @@ fn claim_expiry() {
 		assert_ok!(Staking::claim(Origin::signed(BOB), STAKE, ETH_DUMMY_ADDR));
 
 		let msg_hash_alice = PendingClaims::<Test>::get(ALICE).unwrap().msg_hash.unwrap();
-		let msg_hash_bob = PendingClaims::<Test>::get(BOB).unwrap().msg_hash.unwrap();
 
 		// We can't insert a sig if the claim has expired.
 		time_source::Mock::reset_to(START_TIME);

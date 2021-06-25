@@ -21,11 +21,6 @@ use crate::{
     settings::Settings,
 };
 
-#[async_trait]
-pub trait Broadcast {
-    async fn broadcast(&self, msg: Vec<u8>) -> Result<String>;
-}
-
 /// Something that accepts and processes events asychronously.
 #[async_trait]
 pub trait EventSink<E>

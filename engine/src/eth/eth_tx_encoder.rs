@@ -11,23 +11,23 @@ use futures::StreamExt;
 use serde::{Serialize, Deserialize};
 use web3::{ethabi::Token, types::Address};
 
+/// Helper function, constructs and runs the [RegisterClaimEncoder] asynchronously.
 pub async fn start<M: IMQClient + Clone>(settings: &settings::Settings, mq_client: M) -> Result<()> {
     let encoder = RegisterClaimEncoder::new(
         settings.eth.stake_manager_eth_address.as_ref(), 
         mq_client)?;
 
-    encoder.run().await?;
-
-    Ok(())
+    encoder.run().await
 }
 
 /// Details of a transaction to be broadcast to ethereum. 
-#[derive(Serialize, Deserialize)]
-pub struct TxDetails {
-    contract_address: Address,
-    data: Vec<u8>,
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(super) struct TxDetails {
+    pub contract_address: Address,
+    pub data: Vec<u8>,
 }
 
+/// Reads [ClaimSignatureIssuedEvent]s off the message queue and encodes the function call to the stake manager.
 #[derive(Clone)]
 struct RegisterClaimEncoder<M: IMQClient> {
     mq_client: M,
@@ -35,7 +35,7 @@ struct RegisterClaimEncoder<M: IMQClient> {
 }
 
 impl<M: IMQClient + Clone> RegisterClaimEncoder<M> {
-    pub fn new(stake_manager_address: &str, mq_client: M) -> Result<Self> {
+    fn new(stake_manager_address: &str, mq_client: M) -> Result<Self> {
         let stake_manager = StakeManager::load(stake_manager_address)?;
         
         Ok(Self {
@@ -44,7 +44,7 @@ impl<M: IMQClient + Clone> RegisterClaimEncoder<M> {
         })
     }
 
-    pub async fn run(self) -> Result<()> {
+    async fn run(self) -> Result<()> {
         let subscription = self
             .mq_client
             .subscribe::<ClaimSignatureIssuedEvent<StateChainRuntime>>(Subject::StateChainClaim)
@@ -54,30 +54,30 @@ impl<M: IMQClient + Clone> RegisterClaimEncoder<M> {
 
         subscription.for_each_concurrent(None, |msg| async {
             match msg {
-                Ok(evt) => {
+                Ok(ref evt) => {
                     match self.build_tx(evt) {
-                        Ok(tx_details) => {
-                            self.mq_client.publish(Subject::Broadcast(Chain::ETH), &tx_details).await
+                        Ok(ref tx_details) => {
+                            self.mq_client.publish(Subject::Broadcast(Chain::ETH), tx_details).await
+                                .unwrap_or_else(|err| {
+                                    log::error!("Could not process {}: {}", stringify!(ClaimSignatureIssuedEvent), err);
+                                });
                         },
                         Err(err) => {
-                            log::error!("Failed to build {} for {}: {:?}", stringify!(TxDetails), stringify!(ClaimSignatureIssuedEvent), err);
-                            Ok(())
+                            log::error!("Failed to build {} for {:?}: {:?}", stringify!(TxDetails), evt, err);
                         },
                     }
-                    .unwrap_or_else(|err| {
-                        log::error!("Could not process {}: {}", stringify!(ClaimSignatureIssuedEvent), err);
-                    });
                 },
                 Err(e) => {
                     log::error!("Unable to process claim request: {:?}.", e);
                 },
             }
         }).await;
-        
+
+        log::info!("{} has stopped.", stringify!(RegisterClaimEncoder));
         Ok(())
     }
 
-    fn build_tx(&self, event: ClaimSignatureIssuedEvent<StateChainRuntime>) -> Result<TxDetails> {
+    fn build_tx(&self, event: &ClaimSignatureIssuedEvent<StateChainRuntime>) -> Result<TxDetails> {
         let params = [
             Token::Tuple(vec![ // SigData
                 Token::Uint(event.msg_hash), // msgHash
@@ -113,11 +113,11 @@ mod test_eth_tx_encoder {
 
     #[async_trait]
     impl IMQClient for MockMqClient {
-        async fn publish<M: 'static + Serialize + Sync>( &self, subject: Subject, message: &'_ M) -> Result<()> {
+        async fn publish<M: 'static + Serialize + Sync>( &self, _subject: Subject, _message: &'_ M) -> Result<()> {
             unimplemented!()
         }
 
-        async fn subscribe<M: frame_support::sp_runtime::DeserializeOwned>( &self, subject: Subject, ) 
+        async fn subscribe<M: frame_support::sp_runtime::DeserializeOwned>( &self, _subject: Subject, ) 
         -> Result<Box<dyn futures::Stream<Item = Result<M>>>> {
             unimplemented!()
         }
@@ -145,6 +145,6 @@ mod test_eth_tx_encoder {
             _phantom: Default::default(),
         };
         
-        let _ = encoder.build_tx(event).expect("Unable to encode tx details");
+        let _ = encoder.build_tx(&event).expect("Unable to encode tx details");
     }
 }
