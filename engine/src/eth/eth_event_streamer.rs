@@ -93,13 +93,16 @@ impl<S: EventSource> EthEventStreamer<S> {
 
         let event_stream = log_stream.map(|log_result| self.event_source.parse_event(log_result?));
 
-        let processing_loop = event_stream.for_each_concurrent(None, |parse_result| async {
+        let processing_loop_fut = event_stream.for_each_concurrent(None, |parse_result| async {
             match parse_result {
                 Ok(event) => {
-                    join_all(self.event_sinks.iter().map(|sink| async move {
-                        sink.process_event(event)
-                            .await
-                            .map_err(|e| log::error!("Error while processing event:\n{}", e))
+                    join_all(self.event_sinks.iter().map(|sink| {
+                        let event = event.clone();
+                        async move {
+                            sink.process_event(event)
+                                .await
+                                .map_err(|e| log::error!("Error while processing event:\n{}", e))
+                        }
                     }))
                     .await;
                 }
@@ -107,13 +110,13 @@ impl<S: EventSource> EthEventStreamer<S> {
             }
         });
 
-        log::info!("Subscribed. Listening for events.");
+        log::info!("ETH event streamer listening for events...");
 
-        processing_loop.await;
+        processing_loop_fut.await;
 
-        log::info!("Subscription ended.");
-
-        Ok(())
+        let err_msg = "ETH event streamer has stopped!";
+        log::error!("{}", err_msg);
+        Err(anyhow::Error::msg(err_msg))
     }
 }
 

@@ -3,9 +3,9 @@ use chainflip_engine::{
     health::health_check,
     mq::nats_client::NatsMQClientFactory,
     p2p::ValidatorId,
-    sc_observer,
     settings::Settings,
     signing::{self, crypto::Parameters},
+    state_chain,
 };
 
 #[tokio::main]
@@ -17,15 +17,16 @@ async fn main() {
     let settings = Settings::new().expect("Failed to initialise settings");
 
     // can use this sender to shut down the health check gracefully
-    let _sender = health_check(settings.engine.health_check_port).await;
+    let _sender = health_check(settings.clone().health_check).await;
 
-    sc_observer::sc_observer::start(settings.clone()).await;
+    let mq_factory = NatsMQClientFactory::new(&settings.message_queue);
+
+    state_chain::sc_observer::start(settings.clone()).await;
+    state_chain::sc_broadcaster::start(&settings, mq_factory.clone()).await;
 
     eth::start(settings.clone())
         .await
         .expect("Should start ETH client");
-
-    let mq_factory = NatsMQClientFactory::new(&settings.message_queue);
 
     // TODO: read the key for config/file
     let signer_idx = ValidatorId("0".to_string());
