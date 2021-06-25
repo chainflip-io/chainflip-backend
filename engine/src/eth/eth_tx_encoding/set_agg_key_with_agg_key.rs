@@ -1,7 +1,7 @@
 use crate::{
     eth::key_manager::KeyManager,
     mq::{pin_message_stream, IMQClient, Subject},
-    sc_observer::{runtime::StateChainRuntime, validator::AuctionConfirmedEvent},
+    state_chain::{runtime::StateChainRuntime, validator::AuctionConfirmedEvent},
     settings,
     types::chain::Chain,
 };
@@ -125,6 +125,7 @@ mod test_eth_tx_encoder {
         }
     }
 
+    #[ignore = "Not fully implemented"]
     #[test]
     fn test_tx_build() {
         let fake_address = hex::encode([12u8; 20]);
