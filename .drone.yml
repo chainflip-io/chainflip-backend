@@ -114,6 +114,8 @@ steps:
   - name: notify-testnet-up
     image: appleboy/drone-discord
     when:
+      branch:
+        - develop
       paths:
         - engine/config/Default.toml
         - state-chain/types.json
