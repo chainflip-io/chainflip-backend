@@ -55,7 +55,7 @@ impl<M: IMQClient + Clone> RegisterClaimEncoder<M> {
                             self.mq_client.publish(Subject::Broadcast(Chain::ETH), &tx_details).await
                         },
                         Err(err) => {
-                            log::error!("Failed to build {} for {}.", stringify!(TxDetails), stringify!(ClaimSignatureIssuedEvent));
+                            log::error!("Failed to build {} for {}: {:?}", stringify!(TxDetails), stringify!(ClaimSignatureIssuedEvent), err);
                             Ok(())
                         },
                     }
