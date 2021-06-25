@@ -233,6 +233,7 @@ steps:
   - name: destroy
     pull: always
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+    failure: ignore
     depends_on:
       - clone-cluster
       - test-chainflip-backend
