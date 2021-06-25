@@ -275,7 +275,7 @@ steps:
         from_secret: discord_webhook_token
       message: |
         ✅ Testnet Reboot Successful ✅
-        Testnet released with commit hash: `{{build.commit}}`
+        Testnet released with commit hash: `{{commit.sha}}`
 
 # Notify devs Testnet has failed to launch
   - name: notify-testnet-failure
@@ -293,7 +293,7 @@ steps:
         from_secret: discord_webhook_token
       message: |
         ❌ Testnet Reboot Failure ❌
-        Commit hash: `{{build.commit}}`
+        Commit hash: `{{commit.sha}}`
         Build: {{build.link}}
         <@508234815254953985> sort it out!!
 
