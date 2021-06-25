@@ -111,7 +111,7 @@ environment:
 
 steps:
 # Notify when files change
-  - name: notify-testnet-up
+  - name: notify-file-change
     image: appleboy/drone-discord
     when:
       paths:
