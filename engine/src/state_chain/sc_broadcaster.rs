@@ -193,8 +193,6 @@ mod tests {
             )
             .await;
 
-        println!("Result is: {:#?}", result);
-
         assert!(result.is_ok());
     }
 

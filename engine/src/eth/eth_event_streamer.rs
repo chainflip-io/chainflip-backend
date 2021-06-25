@@ -51,7 +51,6 @@ impl<S: EventSource> EthEventStreamBuilder<S> {
 impl<S: EventSource> EthEventStreamer<S> {
     /// Create a stream of Ethereum log events. If `from_block` is `None`, starts at the pending block.
     pub async fn run(&self, from_block: Option<u64>) -> Result<()> {
-        println!("running event streamer");
         // Make sure the eth node is fully synced
         loop {
             match self.web3_client.eth().syncing().await? {
@@ -75,8 +74,6 @@ impl<S: EventSource> EthEventStreamer<S> {
         } else {
             Vec::new()
         };
-
-        println!("Past logs len: {}", past_logs.len());
 
         // This is the filter for the subscription. Explicitly set it to start at the pending block
         // since this is what happens in most cases anyway.
@@ -115,9 +112,7 @@ impl<S: EventSource> EthEventStreamer<S> {
         });
 
         log::info!("ETH event streamer listening for events...");
-        println!("Run eth event loop");
         processing_loop_fut.await;
-        println!("End event loop");
 
         let err_msg = "ETH event streamer has stopped!";
         log::error!("{}", err_msg);

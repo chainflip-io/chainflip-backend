@@ -47,17 +47,14 @@ pub async fn test_all_stake_manager_events() {
         .await
         .unwrap();
 
-    println!("Subscribing to eth events");
     // this future contains an infinite loop, so we must end it's life
     let sm_future = eth::stake_manager::start_stake_manager_witness(settings);
-    println!("Subscribed");
 
     // We just want the future to end, it should already have done it's job in 1 second
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(1), sm_future).await;
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(3), sm_future).await;
 
-    println!("What's the next event?");
     let mut stream = pin_message_stream(stream);
-    let next = tokio::time::timeout(Duration::from_secs(1), stream.next())
+    let next = tokio::time::timeout(Duration::from_secs(3), stream.next())
         .await
         .expect("Future timed out")
         .unwrap()
@@ -66,15 +63,13 @@ pub async fn test_all_stake_manager_events() {
         StakeManagerEvent::Staked {
             account_id,
             amount,
-            tx_hash,
+            ..
         } => {
             assert_eq!(
                 account_id,
                 AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU").unwrap()
             );
             assert_eq!(amount, 40000000000000000000000);
-            // TODO: Check tx_hash
-            // assert_eq!(tx_hash, "")
         }
         _ => panic!("Was expected Staked event"),
     };
@@ -89,9 +84,7 @@ pub async fn test_all_stake_manager_events() {
             account_id,
             amount,
             staker,
-            start_time,
-            expiry_time,
-            tx_hash,
+            ..
         } => {
             assert_eq!(
                 account_id,
@@ -103,11 +96,8 @@ pub async fn test_all_stake_manager_events() {
             );
             assert_eq!(
                 staker,
-                web3::types::H160::from_str("0x4726b1555bf7ab73553be4eb3cfe15376d0db188").unwrap()
+                web3::types::H160::from_str("0x33a4622b82d4c04a53e170c638b944ce27cffce3").unwrap()
             );
-            // these aren't determinstic, so exclude from the test
-            // assert_eq!(start_time, U256::from_dec_str("1621727544").unwrap());
-            // assert_eq!(end_time, U256::from_dec_str("1621900344").unwrap());
         }
         _ => panic!("Was expecting ClaimRegistered event"),
     }
@@ -121,7 +111,7 @@ pub async fn test_all_stake_manager_events() {
         StakeManagerEvent::ClaimExecuted {
             account_id,
             amount,
-            tx_hash,
+            ..
         } => {
             assert_eq!(
                 account_id,
@@ -141,7 +131,7 @@ pub async fn test_all_stake_manager_events() {
         StakeManagerEvent::MinStakeChanged {
             old_min_stake,
             new_min_stake,
-            tx_hash,
+            ..
         } => {
             assert_eq!(
                 old_min_stake,
@@ -164,7 +154,7 @@ pub async fn test_all_stake_manager_events() {
         StakeManagerEvent::EmissionChanged {
             old_emission_per_block,
             new_emission_per_block,
-            tx_hash,
+            ..
         } => {
             assert_eq!(
                 old_emission_per_block,

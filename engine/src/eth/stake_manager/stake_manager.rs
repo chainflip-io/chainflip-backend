@@ -201,7 +201,6 @@ impl EventSource for StakeManager {
     }
 
     fn parse_event(&self, log: web3::types::Log) -> Result<Self::Event> {
-        println!("Parsing event");
         let sig = log
             .topics
             .first()

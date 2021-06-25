@@ -308,7 +308,8 @@ services:
     entrypoint:
       - "node"
       - "/app/ganache-core.docker.cli.js"
-      - "--mnemonic chainflip"
+      - "--mnemonic brownie"
+      - "--network mainnet-fork"
   - image: nats:latest
     ports: [4222,8222]
     name: nats

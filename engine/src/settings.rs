@@ -22,6 +22,7 @@ pub struct Eth {
 
     // TODO: Into an Ethereum Address type?
     pub stake_manager_eth_address: String,
+    pub sync_from_block: u64,
 }
 
 #[derive(Debug, Deserialize, Clone)]
