@@ -1,9 +1,6 @@
-use crate::{
-    p2p::ValidatorId,
-    signing::{
-        client::client_inner::utils,
-        crypto::{BigInt, KeyGenBroadcastMessage1, Keys, Parameters, VerifiableSS, FE, GE},
-    },
+use crate::signing::{
+    client::client_inner::utils,
+    crypto::{BigInt, KeyGenBroadcastMessage1, Keys, Parameters, VerifiableSS, FE, GE},
 };
 
 use super::{
@@ -27,7 +24,6 @@ pub struct SharedSecretState {
     // Order in which the first broadcasts came in
     phase2_order: Vec<usize>,
     pub params: Parameters,
-    min_parties: usize,
     signer_idx: usize,
 }
 
@@ -50,7 +46,10 @@ impl SharedSecretState {
 
     pub(super) fn process_broadcast1(&mut self, sender_id: usize, bc1: Broadcast1) -> bool {
         if self.phase1_order.contains(&sender_id) {
-            error!("Received bc1 from the same sender id: {}", sender_id);
+            error!(
+                "[{}] Received bc1 from the same sender idx: {}",
+                self.signer_idx, sender_id
+            );
             return false;
         }
 
@@ -60,7 +59,7 @@ impl SharedSecretState {
         self.blind_vec.push(bc1.blind);
         self.y_vec.push(bc1.y_i);
 
-        let full = self.bc1_vec.len() == self.min_parties;
+        let full = self.bc1_vec.len() == self.params.share_count;
 
         if full {
             // Reorganise all of our state, so they are ordered based on party idx
@@ -72,10 +71,7 @@ impl SharedSecretState {
         full
     }
 
-    pub(super) fn init_phase2(
-        &mut self,
-        parties: &[usize],
-    ) -> Result<Vec<(ValidatorId, Secret2)>, ()> {
+    pub(super) fn init_phase2(&mut self, parties: &[usize]) -> Result<Vec<(usize, Secret2)>, ()> {
         trace!("[{}] entering phase 2", self.signer_idx);
 
         let bc1_vec = &self.bc1_vec;
@@ -130,7 +126,7 @@ impl SharedSecretState {
         self.vss_vec.push(vss);
         self.ss_vec.push(secret_share);
 
-        let full = self.vss_vec.len() == self.min_parties;
+        let full = self.vss_vec.len() == self.params.share_count;
 
         if full {
             utils::reorg_vector(&mut self.vss_vec, &self.phase2_order);
@@ -182,8 +178,7 @@ impl SharedSecretState {
         }
     }
 
-    /// `min_parties`: how many parties need to participate
-    pub fn new(idx: usize, params: Parameters, min_parties: usize) -> Self {
+    pub fn new(idx: usize, params: Parameters) -> Self {
         let key = Keys::phase1_create(idx);
 
         SharedSecretState {
@@ -196,7 +191,6 @@ impl SharedSecretState {
             phase1_order: vec![],
             phase2_order: vec![],
             params,
-            min_parties,
             signer_idx: idx,
         }
     }
