@@ -41,7 +41,6 @@ get:
   path: repo-secret
   name: rinkeby_infura_url
 ---
-
 # Runs on every PR
 kind: pipeline
 name: chainflip-backend-checks
@@ -101,7 +100,7 @@ tolerations:
     operator: "Equal"
     value: "ci"
 ---
-# Runs when PR is merged to release branch
+# Runs when PR is merged to release branch and develop
 kind: pipeline
 type: kubernetes
 name: chainflip-backend-release
@@ -226,8 +225,8 @@ steps:
         from_secret: discord_webhook_id
       webhook_token:
         from_secret: discord_webhook_token
-      message: >
-        ⚠️ Testnet Reboot In Progress ⚠️
+      message: |
+        ⚠️ Testnet Reboot In Progress: `{{commit.branch}}` ⚠️
         Testnet will be recreated in 5m0s
 
 # Destroy the testnet
@@ -241,7 +240,7 @@ steps:
       - echo Waiting for 5 minutes
       - sleep 300
       - cd cluster/applications/staging/chainflip-validator
-      - ./build.sh --branch=testnet --destroy --rpc
+      - ./build.sh --branch=$DRONE_COMMIT_BRANCH --destroy --rpc
 
 # Create new testnet
   - name: create
@@ -260,7 +259,7 @@ steps:
       - cd cluster/applications/staging/chainflip-validator
       - helm repo add chartmuseum http://chartmuseum.chartmuseum:8080
       - helm dependency update
-      - ./build.sh --branch=testnet --tag=$DRONE_COMMIT_SHA --rpc
+      - ./build.sh --branch=$DRONE_COMMIT_BRANCH --tag=$DRONE_COMMIT_SHA --rpc
 
 # Notify devs Testnet is up
   - name: notify-testnet-up
@@ -274,7 +273,7 @@ steps:
       webhook_token:
         from_secret: discord_webhook_token
       message: |
-        ✅ Testnet Reboot Successful ✅
+        ✅ Testnet Reboot Successful: `{{commit.branch}}` ✅
         Testnet released with commit hash: `{{commit.sha}}`
 
 # Notify devs Testnet has failed to launch
@@ -294,6 +293,7 @@ steps:
       message: |
         ❌ Testnet Reboot Failure ❌
         Commit hash: `{{commit.sha}}`
+        Branch: `{{commit.branch}}`
         Build: {{build.link}}
         <@508234815254953985> sort it out!!
 
@@ -303,6 +303,7 @@ service_account_name: drone-runner-kube
 trigger:
   branch:
     - release/*
+    - develop
   event:
     - push
 
