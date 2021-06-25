@@ -1,7 +1,7 @@
 use std::{collections::HashMap, time::Duration};
 
 use itertools::Itertools;
-use log::{error, info, warn};
+use log::*;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::{

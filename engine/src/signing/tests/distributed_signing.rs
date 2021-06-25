@@ -12,13 +12,13 @@ use crate::{
         pin_message_stream, IMQClient, Subject,
     },
     p2p::{mock::NetworkMock, P2PConductor, ValidatorId},
-    signing::{client::MultisigInstruction, crypto::Parameters},
 };
 
 use lazy_static::lazy_static;
 
-use super::{
-    client::{KeyId, KeygenInfo, MultisigClient, MultisigEvent, SigningInfo},
+use crate::signing::{
+    client::{KeyId, KeygenInfo, MultisigClient, MultisigEvent, MultisigInstruction, SigningInfo},
+    crypto::Parameters,
     MessageHash,
 };
 

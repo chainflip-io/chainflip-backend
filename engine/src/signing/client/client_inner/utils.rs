@@ -37,6 +37,7 @@ fn reorg_vector_works() {
 #[derive(Clone, Debug)]
 pub(super) struct ValidatorMaps {
     id_to_idx: HashMap<ValidatorId, usize>,
+    // TODO: create SortedVec and use it here:
     // Sorted Validator Ids
     validator_ids: Vec<ValidatorId>,
 }

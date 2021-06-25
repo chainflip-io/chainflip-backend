@@ -2,7 +2,7 @@ mod client;
 pub mod crypto;
 
 #[cfg(test)]
-mod distributed_signing;
+mod tests;
 
 pub use client::MultisigClient;
 

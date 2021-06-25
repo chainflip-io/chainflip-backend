@@ -1,6 +1,7 @@
 mod helpers;
 
 use lazy_static::lazy_static;
+#[allow(unused_imports)]
 use log::*;
 
 use crate::{
