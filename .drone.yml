@@ -322,6 +322,7 @@ services:
       - "--gasLimit 12000000"
       - "--accounts 10"
       - "--hardfork istanbul"
+      - "--chainId 1337"
   - image: nats:latest
     ports: [4222,8222]
     name: nats
