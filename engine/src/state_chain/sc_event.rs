@@ -166,7 +166,7 @@ mod tests {
         let expected: SCEvent = ClaimSettledEvent {
             who,
             amount: 150u128,
-            _phantom: PhantomData,
+            _runtime: PhantomData,
         }
         .into();
 
