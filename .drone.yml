@@ -35,6 +35,12 @@ get:
   path: repo-secret
   name: drone_token
 ---
+kind: secret
+name: web3_infura_project_id
+get:
+  path: repo-secret
+  name: web3_infura_project_id
+---
 
 # Runs on every PR
 kind: pipeline
@@ -305,11 +311,18 @@ services:
   - image: trufflesuite/ganache-cli:latest
     name: ganache
     ports: [8545]
+    environment:
+      WEB3_INFURA_PROJECT_ID:
+        from_secret: web3_infura_project_id
     entrypoint:
       - "node"
       - "/app/ganache-core.docker.cli.js"
       - "--mnemonic brownie"
-      - "--network mainnet-fork"
+      - "--fork https://mainnet.infura.io/v3/WEB3_INFURA_PROJECT_ID"
+      - "--gasLimit 12000000"
+      - "--accounts 10"
+      - "--hardfork istanbul"
+      - "--chainId 1"
   - image: nats:latest
     ports: [4222,8222]
     name: nats
