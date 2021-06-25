@@ -1,5 +1,5 @@
 use crate::{
-    eth::eth_tx_encoder::TxDetails,
+    eth::eth_tx_encoding::ContractCallDetails,
     mq::{pin_message_stream, IMQClient, Subject},
     settings,
     types::chain::Chain,
@@ -45,7 +45,7 @@ impl From<&settings::Settings> for EthClientBuilder {
     }
 }
 
-/// Reads [TxDetails] off the message queue and constructs, signs, and sends the tx to the ethereum network. 
+/// Reads [ContractCallDetails] off the message queue and constructs, signs, and sends the tx to the ethereum network. 
 #[derive(Debug)]
 struct EthBroadcaster<M: IMQClient + Send + Sync, T: Transport> {
     mq_client: M,
@@ -65,7 +65,7 @@ impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
     async fn run(&self) -> Result<()> {
         let subscription = self
             .mq_client
-            .subscribe::<TxDetails>(Subject::Broadcast(Chain::ETH))
+            .subscribe::<ContractCallDetails>(Subject::Broadcast(Chain::ETH))
             .await?;
 
         let subscription = pin_message_stream(subscription);
@@ -95,7 +95,7 @@ impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
     }
 
     /// Sign and broadcast a transaction
-    async fn sign_and_broadcast(&self, tx_details: &TxDetails) -> Result<H256> {
+    async fn sign_and_broadcast(&self, tx_details: &ContractCallDetails) -> Result<H256> {
         let tx_params = TransactionParameters {
             to: Some(tx_details.contract_address),
             data: tx_details.data.clone().into(),

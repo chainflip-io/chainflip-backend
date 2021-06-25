@@ -1,7 +1,7 @@
-use super::stake_manager::stake_manager::StakeManager;
 use crate::{
+    eth::key_manager::KeyManager,
     mq::{pin_message_stream, IMQClient, Subject},
-    sc_observer::{runtime::StateChainRuntime, staking::ClaimSignatureIssuedEvent},
+    sc_observer::{runtime::StateChainRuntime, validator::AuctionConfirmedEvent},
     settings,
     types::chain::Chain,
 };
@@ -11,10 +11,10 @@ use futures::StreamExt;
 use serde::{Serialize, Deserialize};
 use web3::{ethabi::Token, types::Address};
 
-/// Helper function, constructs and runs the [RegisterClaimEncoder] asynchronously.
+/// Helper function, constructs and runs the [SetAggKeyWithAggKeyEncoder] asynchronously.
 pub async fn start<M: IMQClient + Clone>(settings: &settings::Settings, mq_client: M) -> Result<()> {
-    let encoder = RegisterClaimEncoder::new(
-        settings.eth.stake_manager_eth_address.as_ref(), 
+    let encoder = SetAggKeyWithAggKeyEncoder::new(
+        settings.eth.key_manager_eth_address.as_ref(), 
         mq_client)?;
 
     encoder.run().await
@@ -27,27 +27,27 @@ pub(super) struct TxDetails {
     pub data: Vec<u8>,
 }
 
-/// Reads [ClaimSignatureIssuedEvent]s off the message queue and encodes the function call to the stake manager.
+/// Reads [AuctionConfirmedEvent]s off the message queue and encodes the function call to the stake manager.
 #[derive(Clone)]
-struct RegisterClaimEncoder<M: IMQClient> {
+struct SetAggKeyWithAggKeyEncoder<M: IMQClient> {
     mq_client: M,
-    stake_manager: StakeManager,
+    key_manager: KeyManager,
 }
 
-impl<M: IMQClient + Clone> RegisterClaimEncoder<M> {
-    fn new(stake_manager_address: &str, mq_client: M) -> Result<Self> {
-        let stake_manager = StakeManager::load(stake_manager_address)?;
+impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
+    fn new(key_manager_address: &str, mq_client: M) -> Result<Self> {
+        let key_manager = KeyManager::load(key_manager_address)?;
         
         Ok(Self {
             mq_client,
-            stake_manager,
+            key_manager,
         })
     }
 
     async fn run(self) -> Result<()> {
         let subscription = self
             .mq_client
-            .subscribe::<ClaimSignatureIssuedEvent<StateChainRuntime>>(Subject::StateChainClaim)
+            .subscribe::<AuctionConfirmedEvent<StateChainRuntime>>(Subject::Rotate)
             .await?;
         
         let subscription = pin_message_stream(subscription);
@@ -59,7 +59,7 @@ impl<M: IMQClient + Clone> RegisterClaimEncoder<M> {
                         Ok(ref tx_details) => {
                             self.mq_client.publish(Subject::Broadcast(Chain::ETH), tx_details).await
                                 .unwrap_or_else(|err| {
-                                    log::error!("Could not process {}: {}", stringify!(ClaimSignatureIssuedEvent), err);
+                                    log::error!("Could not process {}: {}", stringify!(AuctionConfirmedEvent), err);
                                 });
                         },
                         Err(err) => {
@@ -73,27 +73,28 @@ impl<M: IMQClient + Clone> RegisterClaimEncoder<M> {
             }
         }).await;
 
-        log::info!("{} has stopped.", stringify!(RegisterClaimEncoder));
+        log::info!("{} has stopped.", stringify!(SetAggKeyWithAggKeyEncoder));
         Ok(())
     }
 
-    fn build_tx(&self, event: &ClaimSignatureIssuedEvent<StateChainRuntime>) -> Result<TxDetails> {
+    fn build_tx(&self, event: &AuctionConfirmedEvent<StateChainRuntime>) -> Result<TxDetails> {
         let params = [
             Token::Tuple(vec![ // SigData
-                Token::Uint(event.msg_hash), // msgHash
-                Token::Uint(event.nonce.into()),// nonce
-                Token::Uint(event.signature) // sig
+                Token::Uint(todo!()), // msgHash
+                Token::Uint(todo!()),// nonce
+                Token::Uint(todo!()) // sig
             ]),
-            Token::FixedBytes(AsRef::<[u8; 32]>::as_ref(&event.who).to_vec()), // nodeId
-            Token::Uint(event.amount.into()), // amount
-            Token::Address(event.eth_address.into()), // staker
-            Token::Uint(event.expiry.as_secs().into()) // expiryTime
+            Token::Tuple(vec![ // Key
+                Token::Uint(todo!()), // msgHash
+                Token::Uint(todo!()),// nonce
+                Token::Address(todo!()) // sig
+            ]),
         ];
 
-        let tx_data = self.stake_manager.register_claim().encode_input(&params[..])?;
+        let tx_data = self.key_manager.set_agg_key_with_agg_key().encode_input(&params[..])?;
 
         Ok(TxDetails {
-            contract_address: self.stake_manager.deployed_address,
+            contract_address: self.key_manager.deployed_address,
             data: tx_data.into(),
         })
     }
@@ -103,10 +104,7 @@ impl<M: IMQClient + Clone> RegisterClaimEncoder<M> {
 mod test_eth_tx_encoder {
     use super::*;
     use async_trait::async_trait;
-    use frame_support::sp_runtime::AccountId32;
     use hex;
-    use std::time::Duration;
-    use web3::ethabi::ethereum_types::U256;
 
     #[derive(Clone)]
     struct MockMqClient;
@@ -130,19 +128,12 @@ mod test_eth_tx_encoder {
     #[test]
     fn test_tx_build() {
         let fake_address = hex::encode([12u8; 20]);
-        let encoder = RegisterClaimEncoder::new(
+        let encoder = SetAggKeyWithAggKeyEncoder::new(
             &fake_address[..],
             MockMqClient).expect("Unable to intialise encoder");
         
-        let event = ClaimSignatureIssuedEvent::<StateChainRuntime> {
-            msg_hash: U256::zero(),
-            nonce: 1,
-            signature: U256::zero(),
-            who: AccountId32::new([2u8; 32]),
-            amount: 1u128,
-            eth_address: [1u8; 20],
-            expiry: Duration::from_secs(0),
-            _phantom: Default::default(),
+        let event = AuctionConfirmedEvent::<StateChainRuntime> {
+            epoch_index: 1,
         };
         
         let _ = encoder.build_tx(&event).expect("Unable to encode tx details");
