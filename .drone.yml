@@ -327,8 +327,11 @@ services:
     ports: [4222,8222]
     name: nats
 
-
 steps:
+  - name: stakemanager-events-setup
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    commands:
+      - sh ./engine/tests/scripts/setup.sh
   - name: run-tests
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
