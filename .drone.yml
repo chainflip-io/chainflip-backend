@@ -227,7 +227,8 @@ steps:
         from_secret: discord_webhook_token
       message: |
         ⚠️ Testnet Reboot In Progress: `{{commit.branch}}` ⚠️
-        Testnet will be recreated in 5m0s
+        Testnet will be recreated in 2m0s
+        To cancel this build head here: {{build.link}}
 
 # Destroy the testnet
   - name: destroy
@@ -238,8 +239,8 @@ steps:
       - clone-cluster
       - test-chainflip-backend
     commands:
-      - echo Waiting for 5 minutes
-      - sleep 300
+      - echo Waiting for 2 minutes
+      - sleep 120
       - cd cluster/applications/staging/chainflip-validator
       - ./build.sh --branch=$DRONE_COMMIT_BRANCH --destroy --rpc
 
