@@ -39,8 +39,7 @@ pub type ValidatorId = usize;
 
 impl Base58 for ValidatorId {
     fn to_base58(&self) -> String {
-        // TODO implementation
-        "".to_string()
+        self.to_string()
     }
 }
 
