@@ -4,18 +4,19 @@ use std::marker::PhantomData;
 use std::time::Duration;
 
 use codec::{Decode, Encode};
+use sp_core::U256;
 use substrate_subxt::{module, sp_core::crypto::AccountId32, system::System, Event};
 
 use serde::{Deserialize, Serialize};
-use sp_core::ecdsa::Signature;
 
 use super::{runtime::StateChainRuntime, sc_event::SCEvent};
 
 #[module]
 pub trait Staking: System {}
 
-type MsgHash = [u8; 32];
+type MsgHash = U256;
 type EthereumAddress = [u8; 20];
+type Signature = U256;
 
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Encode, Decode, Serialize, Deserialize)]
@@ -136,12 +137,12 @@ mod tests {
     use state_chain_runtime::Runtime as SCRuntime;
 
     use sp_keyring::AccountKeyring;
-    use sp_core::H256;
+    use sp_core::U256;
 
     #[test]
     fn claim_sig_requested_decode_test() {
         let who = AccountKeyring::Alice.to_account_id();
-        let msg_hash = [21u8; 32];
+        let msg_hash = MsgHash::from([21u8; 32]);
 
         let event: <SCRuntime as Config>::Event =
             pallet_cf_staking::Event::<SCRuntime>::ClaimSigRequested(
@@ -253,16 +254,13 @@ mod tests {
         let who = AccountKeyring::Alice.to_account_id();
 
         let eth_address = [0u8; 20];
-
-        let msg_hash = [0u8; 32];
-        let sig: [u8; 65] = [0; 65];
-
-        let sig = Signature(sig);
+        let msg_hash = U256::from([0u8; 32]);
+        let sig = U256::zero();
         let expiry = Duration::from_secs(1);
 
         let event: <SCRuntime as Config>::Event =
             pallet_cf_staking::Event::<SCRuntime>::ClaimSignatureIssued(
-                H256::from_slice(&msg_hash[..]),
+                msg_hash,
                 1u64,
                 sig.clone(),
                 who.clone(),

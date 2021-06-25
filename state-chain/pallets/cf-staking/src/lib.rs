@@ -66,7 +66,7 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, CheckedSub, Hash, Keccak256, One, Zero},
 	DispatchError,
 };
-use sp_core::H256;
+use sp_core::U256;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -74,18 +74,18 @@ pub mod pallet {
 	use cf_traits::Witnesser;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::app_crypto::RuntimePublic;
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
 
 	pub type EthereumAddress = [u8; 20];
+	pub type AggKeySignature = U256;
 
 	/// Details of a claim request required to build the call to StakeManager's 'requestClaim' function.
 	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
-	pub struct ClaimDetails<Amount, Nonce, Signature> {
-		pub(super) msg_hash: Option<H256>,
+	pub struct ClaimDetails<Amount, Nonce> {
+		pub(super) msg_hash: Option<U256>,
 		pub(super) nonce: Nonce,
-		pub(super) signature: Option<Signature>,
+		pub(super) signature: Option<AggKeySignature>,
 		pub(super) amount: Amount,
 		pub(super) address: EthereumAddress,
 		pub(super) expiry: Duration,
@@ -96,7 +96,6 @@ pub mod pallet {
 	pub type ClaimDetailsFor<T> = ClaimDetails<
 		FlipBalance<T>,
 		<T as Config>::Nonce,
-		<<T as Config>::EthereumCrypto as RuntimePublic>::Signature,
 	>;
 
 	pub type Retired = bool;
@@ -131,9 +130,6 @@ pub mod pallet {
 			+ AtLeast32BitUnsigned
 			+ MaybeSerializeDeserialize
 			+ CheckedSub;
-
-		/// A type representing ethereum cryptographic primitives.
-		type EthereumCrypto: Member + FullCodec + RuntimePublic;
 
 		/// Provides an origin check for witness transactions.
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
@@ -207,13 +203,13 @@ pub mod pallet {
 		StakeRefund(AccountId<T>, FlipBalance<T>, EthereumAddress),
 
 		/// A claim request has been validated and needs to be signed. [node_id, msg_hash]
-		ClaimSigRequested(AccountId<T>, [u8; 32]),
+		ClaimSigRequested(AccountId<T>, U256),
 
 		/// A claim signature has been issued by the signer module. [msg_hash, nonce, sig, node_id, amount, eth_addr, expiry_time]
 		ClaimSignatureIssued(
-			H256,
+			U256,
 			T::Nonce,
-			<T::EthereumCrypto as RuntimePublic>::Signature,
+			AggKeySignature,
 			AccountId<T>,
 			FlipBalance<T>,
 			EthereumAddress,
@@ -409,8 +405,8 @@ pub mod pallet {
 		pub fn post_claim_signature(
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
-			msg_hash: H256,
-			signature: <T::EthereumCrypto as RuntimePublic>::Signature,
+			msg_hash: U256,
+			signature: AggKeySignature,
 		) -> DispatchResultWithPostInfo {
 			// TODO: we should check more than just "is this a valid account" - see clubhouse stories 471 and 473
 			let _ = ensure_signed(origin)?;
@@ -572,8 +568,8 @@ impl<T: Config> Pallet<T> {
 		
 		// Compute the message hash to be signed.
 		let payload = eth_encoding::encode_claim_request::<T>(account_id, &details);
-		let msg_hash = Keccak256::hash(&payload[..]).to_fixed_bytes();
-		details.msg_hash = Some(msg_hash.into());
+		let msg_hash: U256 = Keccak256::hash(&payload[..]).as_bytes().into();
+		details.msg_hash = Some(msg_hash);
 
 		// Store the params for later.
 		PendingClaims::<T>::insert(account_id, details);

@@ -2,11 +2,9 @@ use crate::{mq::{IMQClient, Subject, pin_message_stream}, sc_observer::{runtime:
 use super::stake_manager::stake_manager::StakeManager;
 
 use anyhow::Result;
-use futures::{TryFutureExt, StreamExt};
+use futures::StreamExt;
 use serde::{Serialize, Deserialize};
 use web3::{ethabi::Token, types::Address};
-
-const TX_CONFIRMATIONS: usize = 6;
 
 #[derive(Serialize, Deserialize)]
 pub struct TxDetails {
@@ -66,9 +64,9 @@ impl<M: IMQClient + Clone> RegisterClaimEncoder<M> {
     fn build_tx(&self, event: ClaimSignatureIssuedEvent<StateChainRuntime>) -> Result<TxDetails> {
         let params = [
             Token::Tuple(vec![ // SigData
-                Token::Uint(todo!("msgHash needs to be emitted from state chain")), // msgHash
+                Token::Uint(event.msg_hash.into()), // msgHash
                 Token::Uint(event.nonce.into()),// nonce
-                Token::Uint(todo!("Signature is currently a 512-bit hash, should be 256 bits")) // sig
+                Token::Uint(event.signature.into()) // sig
             ]),
             Token::FixedBytes(AsRef::<[u8; 32]>::as_ref(&event.who).to_vec()), // nodeId
             Token::Uint(event.amount.into()), // amount

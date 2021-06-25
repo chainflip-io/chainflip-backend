@@ -4,20 +4,17 @@ use crate::{
 };
 use cf_traits::mocks::epoch_info;
 use codec::Encode;
+use ethereum_types::U256;
 use frame_support::{assert_noop, assert_ok, error::BadOrigin, traits::UnixTime};
 use pallet_cf_flip::ImbalanceSource;
-use sp_core::ecdsa::Signature;
 use std::time::Duration;
 
 type FlipError = pallet_cf_flip::Error<Test>;
 type FlipEvent = pallet_cf_flip::Event<Test>;
 
+const ETH_DUMMY_SIG: U256 = U256::zero();
 const ETH_DUMMY_ADDR: EthereumAddress = [42u8; 20];
-const TX_HASH: pallet::EthTransactionHash = [211; 32];
-
-fn time_after<T: Config>(duration: Duration) -> Duration {
-	<T::TimeSource as UnixTime>::now() + duration
-}
+const TX_HASH: pallet::EthTransactionHash = [211u8; 32];
 
 /// Checks the deposited events, in reverse order (reverse order mainly because it makes the macro easier to write).
 macro_rules! assert_event_stack {
@@ -238,7 +235,6 @@ fn multisig_endpoints_cant_be_called_from_invalid_origins() {
 fn signature_is_inserted() {
 	new_test_ext().execute_with(|| {
 		const STAKE: u128 = 45;
-		let sig = Signature::from_slice(&[1u8; 65]);
 
 		// Stake some FLIP.
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, TX_HASH));
@@ -260,7 +256,7 @@ fn signature_is_inserted() {
 					Origin::signed(BOB),
 					ALICE,
 					msg_hash.into(),
-					sig.clone()));
+					ETH_DUMMY_SIG));
 			}
 		);
 
@@ -269,7 +265,7 @@ fn signature_is_inserted() {
 		);
 
 		// Check storage for the signature.
-		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().signature, Some(sig.clone()));
+		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().signature, Some(ETH_DUMMY_SIG));
 	});
 }
 
@@ -368,7 +364,6 @@ fn claim_expiry() {
 	new_test_ext().execute_with(|| {
 		const STAKE: u128 = 45;
 		const START_TIME: Duration = Duration::from_secs(10);
-		let sig = Signature::from_slice(&[1u8; 65]);
 		let nonce = 1;
 
 		// Start the time at the 10-second mark.
@@ -396,7 +391,7 @@ fn claim_expiry() {
 				Origin::signed(BOB),
 				ALICE,
 				msg_hash_alice,
-				sig.clone()), 
+				ETH_DUMMY_SIG), 
 			<Error<Test>>::SignatureTooLate
 		);
 		
@@ -408,7 +403,7 @@ fn claim_expiry() {
 				Origin::signed(BOB),
 				ALICE,
 				msg_hash_alice,
-				sig.clone()), 
+				ETH_DUMMY_SIG), 
 			<Error<Test>>::SignatureTooLate
 		);
 
@@ -420,7 +415,7 @@ fn claim_expiry() {
 				Origin::signed(BOB),
 				ALICE,
 				msg_hash_alice,
-				sig.clone())
+				ETH_DUMMY_SIG)
 		);
 
 		// Trigger expiry.
