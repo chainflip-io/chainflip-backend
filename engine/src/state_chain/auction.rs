@@ -157,8 +157,12 @@ mod tests {
 
     #[test]
     fn auction_completed_decoding() {
+        let alice = sp_keyring::AccountKeyring::Alice.to_account_id();
+        let bob = sp_keyring::AccountKeyring::Bob.to_account_id();
+
+        let validator_ids = vec![alice, bob];
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_auction::Event::<SCRuntime>::AuctionCompleted(1).into();
+            pallet_cf_auction::Event::<SCRuntime>::AuctionCompleted(1, validator_ids).into();
 
         let encoded_auction_completed = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped
@@ -168,7 +172,10 @@ mod tests {
             AuctionCompletedEvent::<StateChainRuntime>::decode(&mut &encoded_auction_completed[..])
                 .unwrap();
 
-        let expecting = AuctionCompletedEvent { auction_index: 1 };
+        let expecting = AuctionCompletedEvent {
+            auction_index: 1,
+            validators: vec![alice, bob],
+        };
 
         assert_eq!(decoded_event, expecting);
     }
