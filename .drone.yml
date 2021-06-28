@@ -47,7 +47,7 @@ name: chainflip-backend-checks
 type: kubernetes
 
 environment:
-  SCCACHE_REDIS: redis://redis-headless:6379/
+  SCCACHE_REDIS: redis://drone-redis-headless:6379/
   SCCACHE_CACHE_SIZE: 14G
 
 steps:
@@ -106,7 +106,7 @@ type: kubernetes
 name: chainflip-backend-release
 
 environment:
-  SCCACHE_REDIS: redis://redis-headless:6379/
+  SCCACHE_REDIS: redis://drone-redis-headless:6379/
   SCCACHE_CACHE_SIZE: 14G
 
 steps:
@@ -345,7 +345,7 @@ type: kubernetes
 name: chainflip-backend-main
 
 environment:
-  SCCACHE_REDIS: redis://redis-headless:6379/
+  SCCACHE_REDIS: redis://drone-redis-headless:6379/
   SCCACHE_CACHE_SIZE: 14G
 
 steps:
@@ -429,7 +429,7 @@ type: kubernetes
 name: chainflip-backend-nightly
 
 environment:
-  SCCACHE_REDIS: redis://redis-headless:6379/
+  SCCACHE_REDIS: redis://drone-redis-headless:6379/
   SCCACHE_CACHE_SIZE: 14G
 
 services:
