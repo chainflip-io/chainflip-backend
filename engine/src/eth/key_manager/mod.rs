@@ -76,7 +76,7 @@ impl KeyManager {
         })
     }
 
-    /// Extracts a reference to the "registerClaim" function definition. Panics if it can't be found.
+    /// Extracts a reference to the "setAggKeyWithAggKey" function definition. Panics if it can't be found.
     pub fn set_agg_key_with_agg_key(&self) -> &Function {
         self.contract
             .function("setAggKeyWithAggKey")
