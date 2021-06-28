@@ -13,6 +13,8 @@ use super::{runtime::StateChainRuntime, sc_event::SCEvent};
 #[module]
 pub trait Auction: System {
     type AuctionIndex: Member + Parameter + Default + Add + One + Copy + MaybeSerializeDeserialize;
+
+    type ValidatorId: Member + Parameter + MaybeSerializeDeserialize;
 }
 
 #[derive(Call, Encode)]
@@ -30,6 +32,8 @@ pub struct AuctionStartedEvent<A: Auction> {
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct AuctionCompletedEvent<A: Auction> {
     pub auction_index: A::AuctionIndex,
+
+    pub validators: Vec<A::ValidatorId>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]

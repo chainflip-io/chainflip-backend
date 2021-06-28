@@ -91,6 +91,8 @@ impl Runtime for StateChainRuntime {
 
 impl auction::Auction for StateChainRuntime {
     type AuctionIndex = u64;
+
+    type ValidatorId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
 }
 
 impl validator::Validator for StateChainRuntime {
