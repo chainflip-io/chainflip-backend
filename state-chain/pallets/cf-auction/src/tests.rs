@@ -35,6 +35,10 @@ mod test {
 			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::WinnersSelected(winners, min_bid)
 				if winners == vec![MAX_BID.0, JOE_BID.0, LOW_BID.0] && min_bid == LOW_BID.1
 			);
+			assert_eq!(
+				last_event(),
+				mock::Event::pallet_cf_auction(crate::Event::AuctionCompleted(0, vec![MAX_BID.0, JOE_BID.0, LOW_BID.0])),
+			);
 			// Just leaves us to confirm this auction, if we try to process this we will get an error
 			// until is confirmed
 			assert_matches!(AuctionPallet::process(), Err(AuctionError::NotConfirmed));
