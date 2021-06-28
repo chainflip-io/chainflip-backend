@@ -907,6 +907,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "rand 0.7.3",
+ "secp256k1",
  "serde 1.0.126",
  "serde_json",
  "sp-core",

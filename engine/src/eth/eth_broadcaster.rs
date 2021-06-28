@@ -1,3 +1,5 @@
+use std::{path::Path, str::FromStr};
+
 use crate::{
     eth::eth_tx_encoding::ContractCallDetails,
     mq::{pin_message_stream, IMQClient, Subject},
@@ -6,6 +8,7 @@ use crate::{
 };
 
 use anyhow::Result;
+use secp256k1::SecretKey;
 use web3::{Transport, Web3, ethabi::ethereum_types::H256, signing::SecretKeyRef, transports::WebSocket, types::TransactionParameters};
 
 use futures::StreamExt;
@@ -15,9 +18,16 @@ pub async fn start_eth_broadcaster<M: IMQClient + Send + Sync>(
     settings: &settings::Settings,
     mq_client: M,
 ) -> anyhow::Result<()> {
-    let eth_broadcaster = EthBroadcaster::<M, _>::new(settings.into(), mq_client).await?;
+    let secret_key = secret_key_from_file(Path::new(settings.eth.private_key_file.as_str()))?;
+    let eth_broadcaster = EthBroadcaster::<M, _>::new(settings.into(), mq_client, secret_key).await?;
 
     eth_broadcaster.run().await
+}
+
+/// Retrieves a private key from a file. The file should contain just the hex-encoded key, nothing else.
+fn secret_key_from_file(filename: &Path) -> Result<SecretKey> {
+    let key = String::from_utf8(std::fs::read(filename)?)?;
+    Ok(SecretKey::from_str(&key[..])?) //.context(format!("Reading secret key from file {:?}", filename))
 }
 
 /// Adapter struct to build the ethereum web3 client from settings.
@@ -50,18 +60,25 @@ impl From<&settings::Settings> for EthClientBuilder {
 struct EthBroadcaster<M: IMQClient + Send + Sync, T: Transport> {
     mq_client: M,
     web3_client: Web3<T>,
+    secret_key: SecretKey,
 }
 
 impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
-    async fn new(builder: EthClientBuilder, mq_client: M) -> Result<Self> {
+    async fn new(
+        builder: EthClientBuilder,
+        mq_client: M,
+        secret_key: SecretKey,
+    ) -> Result<Self> {
         let web3_client = builder.ws_client().await?;
 
         Ok(EthBroadcaster {
             mq_client,
             web3_client,
+            secret_key,
         })
     }
 
+    /// Consumes [TxDetails] messages from the `Broadcast` queue and signs and broadcasts the transaction to ethereum.
     async fn run(&self) -> Result<()> {
         let subscription = self
             .mq_client
@@ -90,7 +107,7 @@ impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
         })
         .await;
 
-        log::info!("{} has stopped.", stringify!(EthBroadcaster));
+        log::error!("{} has stopped.", stringify!(EthBroadcaster));
         Ok(())
     }
 
@@ -102,7 +119,7 @@ impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
             .. Default::default()
         };
 
-        let key = SecretKeyRef::new(todo!("Figure out how to get hold of this."));
+        let key = SecretKeyRef::from(&self.secret_key);
         let signed = self.web3_client.accounts().sign_transaction(tx_params, key).await?;
 
         let tx_hash = self
@@ -135,8 +152,9 @@ mod tests {
 
         let factory = NatsMQClientFactory::new(&settings.message_queue);
         let mq_client = *factory.create().await.unwrap();
+        let secret = SecretKey::from_slice(&[3u8; 32]).unwrap();
 
-        let eth_broadcaster = EthBroadcaster::<NatsMQClient, _>::new((&settings).into(), mq_client).await;
+        let eth_broadcaster = EthBroadcaster::<NatsMQClient, _>::new((&settings).into(), mq_client, secret).await;
         eth_broadcaster
     }
 
