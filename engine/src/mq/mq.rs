@@ -35,6 +35,7 @@ pub trait IMQClient {
 pub fn pin_message_stream<M>(stream: Box<dyn Stream<Item = M>>) -> Pin<Box<dyn Stream<Item = M>>> {
     stream.into()
 }
+
 /// Subjects that can be published / subscribed to
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -54,6 +55,12 @@ pub enum Subject {
     StateChainClaim,
     /// Claim issued event from the state chain
     StateChainClaimIssued,
+
+    // Events coming from the respective SC pallets
+    SCAuction,
+    SCValidator,
+    SCStaking,
+
     Rotate,
     P2PIncoming,
     P2POutgoing,
@@ -111,6 +118,9 @@ impl SubjectName for Subject {
             Subject::MultisigEvent => {
                 format!("multisig_event")
             }
+            Subject::SCAuction => format!("sc_auction"),
+            Subject::SCValidator => format!("sc_validator"),
+            Subject::SCStaking => format!("sc_staking"),
         }
     }
 }

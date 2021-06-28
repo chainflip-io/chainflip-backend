@@ -1,11 +1,11 @@
 use std::{marker::PhantomData, ops::Add};
 
 use cf_traits::AuctionRange;
-use codec::{Codec, Decode, Encode};
+use codec::{Decode, Encode};
 
 use frame_support::{pallet_prelude::MaybeSerializeDeserialize, Parameter};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use sp_runtime::traits::{AtLeast32BitUnsigned, One, Zero};
+use serde::{Deserialize, Serialize};
+use sp_runtime::traits::One;
 use substrate_subxt::{module, sp_runtime::traits::Member, system::System, Event};
 
 use super::{runtime::StateChainRuntime, sc_event::SCEvent};
@@ -160,5 +160,15 @@ mod tests {
         };
 
         assert_eq!(decoded_event, expecting);
+    }
+
+    #[test]
+    fn auction_completed_decoding() {
+        todo!()
+    }
+
+    #[test]
+    fn auction_aborted_decoding() {
+        todo!()
     }
 }

@@ -1,7 +1,7 @@
 use codec::Decode;
 use substrate_subxt::RawEvent;
 
-use crate::{mq::Subject, types::chain::Chain};
+use crate::mq::Subject;
 
 use anyhow::Result;
 
@@ -71,23 +71,20 @@ pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEv
             "NewEpoch" => Ok(Some(
                 NewEpochEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
             )),
-            "Auction" => match raw_event.variant.as_str() {
-                "AuctionEnded" => Ok(Some(
-                    AuctionConfirmedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
-                        .into(),
-                )),
-                "AuctionStarted" => Ok(Some(
-                    AuctionStartedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
-                        .into(),
-                )),
-                "AuctionRangeChanged" => Ok(Some(
-                    AuctionRangeChangedEvent::<StateChainRuntime>::decode(
-                        &mut &raw_event.data[..],
-                    )?
+            _ => Ok(None),
+        },
+        "Auction" => match raw_event.variant.as_str() {
+            "AuctionEnded" => Ok(Some(
+                AuctionConfirmedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
                     .into(),
-                )),
-                _ => Ok(None),
-            },
+            )),
+            "AuctionStarted" => Ok(Some(
+                AuctionStartedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
+            )),
+            "AuctionRangeChanged" => Ok(Some(
+                AuctionRangeChangedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
+                    .into(),
+            )),
             _ => Ok(None),
         },
         _ => Ok(None),
@@ -98,24 +95,9 @@ pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEv
 /// Returns the subject to publish the data of a raw event to
 pub(super) fn raw_event_to_subject(event: &RawEvent) -> Option<Subject> {
     let subject = match event.module.as_str() {
-        "System" => None,
-        "Staking" => match event.variant.as_str() {
-            "ClaimSigRequested" => Some(Subject::StateChainClaim),
-            // All Stake refunds are ETH, how are these refunds coming out though? as batches or individual txs?
-            "StakeRefund" => Some(Subject::Batch(Chain::ETH)),
-            "ClaimSignatureIssued" => Some(Subject::StateChainClaimIssued),
-            // This doesn't need to go anywhere, this is just a confirmation emitted, perhaps for block explorers
-            "Claimed" => None,
-            _ => None,
-        },
-        "Validator" => match event.variant.as_str() {
-            "AuctionEnded" => None,
-            "AuctionStarted" => None,
-            "ForceRotationRequested" => Some(Subject::Rotate),
-            "EpochDurationChanged" => None,
-            "MaximumValidatorsChanged" => None,
-            _ => None,
-        },
+        "Auction" => Some(Subject::SCAuction),
+        "Staking" => Some(Subject::SCStaking),
+        "Validator" => Some(Subject::SCValidator),
         _ => None,
     };
     subject

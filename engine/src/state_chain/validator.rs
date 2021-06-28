@@ -2,7 +2,6 @@
 
 use std::marker::PhantomData;
 
-use cf_traits::AuctionRange;
 use codec::{Decode, Encode};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use substrate_subxt::{module, sp_runtime::traits::Member, Call, Event};
