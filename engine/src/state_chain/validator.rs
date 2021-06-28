@@ -78,7 +78,7 @@ impl_validator_event_enum!(
     EpochDurationChangedEvent,
     AuctionStartedEvent,
     AuctionConfirmedEvent,
-    ForceAuctionRequestedEvent,
+    ForceRotationRequestedEvent,
     NewEpochEvent
 );
 
