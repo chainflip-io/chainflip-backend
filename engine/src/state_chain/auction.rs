@@ -160,7 +160,7 @@ mod tests {
         let alice = sp_keyring::AccountKeyring::Alice.to_account_id();
         let bob = sp_keyring::AccountKeyring::Bob.to_account_id();
 
-        let validator_ids = vec![alice, bob];
+        let validator_ids = vec![alice.clone(), bob.clone()];
         let event: <SCRuntime as Config>::Event =
             pallet_cf_auction::Event::<SCRuntime>::AuctionCompleted(1, validator_ids).into();
 
