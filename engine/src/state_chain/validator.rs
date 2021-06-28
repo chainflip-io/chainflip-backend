@@ -53,63 +53,34 @@ pub struct NewEpochEvent<V: Validator> {
     pub epoch_index: V::EpochIndex,
 }
 
-/// Wrapper for all Validator events
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum ValidatorEvent<V: Validator> {
-    AuctionRangeChangedEvent(AuctionRangeChangedEvent<V>),
+/// Derives an enum for the listed events and corresponding implementations of `From`.
+macro_rules! impl_validator_event_enum {
+    ( $( $name:tt ),+ ) => {
+        #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+        pub enum ValidatorEvent<Runtime: Validator> {
+            $(
+                $name($name<Runtime>),
+            )+
+        }
 
-    EpochDurationChangedEvent(EpochDurationChangedEvent<V>),
-
-    AuctionStartedEvent(AuctionStartedEvent<V>),
-
-    AuctionConfirmedEvent(AuctionConfirmedEvent<V>),
-
-    ForceAuctionRequestedEvent(ForceRotationRequestedEvent<V>),
-
-    NewEpochEvent(NewEpochEvent<V>),
+        $(
+            impl From<$name<StateChainRuntime>> for SCEvent {
+                fn from(staking_event: $name<StateChainRuntime>) -> Self {
+                    SCEvent::ValidatorEvent(ValidatorEvent::$name(staking_event))
+                }
+            }
+        )+
+    };
 }
 
-impl From<AuctionRangeChangedEvent<StateChainRuntime>> for SCEvent {
-    fn from(auction_range_changed: AuctionRangeChangedEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::AuctionRangeChangedEvent(
-            auction_range_changed,
-        ))
-    }
-}
-
-impl From<EpochDurationChangedEvent<StateChainRuntime>> for SCEvent {
-    fn from(epoch_duration_changed: EpochDurationChangedEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::EpochDurationChangedEvent(
-            epoch_duration_changed,
-        ))
-    }
-}
-
-impl From<AuctionStartedEvent<StateChainRuntime>> for SCEvent {
-    fn from(auction_started: AuctionStartedEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::AuctionStartedEvent(auction_started))
-    }
-}
-
-impl From<AuctionConfirmedEvent<StateChainRuntime>> for SCEvent {
-    fn from(auction_ended: AuctionConfirmedEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::AuctionConfirmedEvent(auction_ended))
-    }
-}
-
-impl From<ForceRotationRequestedEvent<StateChainRuntime>> for SCEvent {
-    fn from(force_rotation_requested: ForceRotationRequestedEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::ForceAuctionRequestedEvent(
-            force_rotation_requested,
-        ))
-    }
-}
-
-impl From<NewEpochEvent<StateChainRuntime>> for SCEvent {
-    fn from(auction_ended: NewEpochEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::NewEpochEvent(auction_ended))
-    }
-}
+impl_validator_event_enum!(
+    AuctionRangeChangedEvent,
+    EpochDurationChangedEvent,
+    AuctionStartedEvent,
+    AuctionConfirmedEvent,
+    ForceRotationRequestedEvent,
+    NewEpochEvent
+);
 
 #[cfg(test)]
 mod tests {
