@@ -58,58 +58,34 @@ pub struct AuctionAbortedEvent<A: Auction> {
     pub auction_index: A::AuctionIndex,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum AuctionEvent<A: Auction> {
-    AuctionStartedEvent(AuctionStartedEvent<A>),
+/// Derives an enum for the listed events and corresponding implementations of `From`.
+macro_rules! impl_auction_event_enum {
+    ( $( $name:tt ),+ ) => {
+        #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+        pub enum AuctionEvent<Runtime: Auction> {
+            $(
+                $name($name<Runtime>),
+            )+
+        }
 
-    AuctionConfirmedEvent(AuctionConfirmedEvent<A>),
-
-    AuctionRangeChangedEvent(AuctionRangeChangedEvent<A>),
-
-    AuctionCompletedEvent(AuctionCompletedEvent<A>),
-
-    AuctionAbortedEvent(AuctionAbortedEvent<A>),
-
-    AwaitingBiddersEvent(AwaitingBiddersEvent<A>),
+        $(
+            impl From<$name<StateChainRuntime>> for SCEvent {
+                fn from(auction_event: $name<StateChainRuntime>) -> Self {
+                    SCEvent::AuctionEvent(AuctionEvent::$name(auction_event))
+                }
+            }
+        )+
+    };
 }
 
-impl From<AuctionRangeChangedEvent<StateChainRuntime>> for SCEvent {
-    fn from(auction_range_changed: AuctionRangeChangedEvent<StateChainRuntime>) -> Self {
-        SCEvent::AuctionEvent(AuctionEvent::AuctionRangeChangedEvent(
-            auction_range_changed,
-        ))
-    }
-}
-
-impl From<AuctionStartedEvent<StateChainRuntime>> for SCEvent {
-    fn from(auction_started: AuctionStartedEvent<StateChainRuntime>) -> Self {
-        SCEvent::AuctionEvent(AuctionEvent::AuctionStartedEvent(auction_started))
-    }
-}
-
-impl From<AuctionConfirmedEvent<StateChainRuntime>> for SCEvent {
-    fn from(auction_ended: AuctionConfirmedEvent<StateChainRuntime>) -> Self {
-        SCEvent::AuctionEvent(AuctionEvent::AuctionConfirmedEvent(auction_ended))
-    }
-}
-
-impl From<AwaitingBiddersEvent<StateChainRuntime>> for SCEvent {
-    fn from(awaiting_bidders: AwaitingBiddersEvent<StateChainRuntime>) -> Self {
-        SCEvent::AuctionEvent(AuctionEvent::AwaitingBiddersEvent(awaiting_bidders))
-    }
-}
-
-impl From<AuctionAbortedEvent<StateChainRuntime>> for SCEvent {
-    fn from(auction_aborted: AuctionAbortedEvent<StateChainRuntime>) -> Self {
-        SCEvent::AuctionEvent(AuctionEvent::AuctionAbortedEvent(auction_aborted))
-    }
-}
-
-impl From<AuctionCompletedEvent<StateChainRuntime>> for SCEvent {
-    fn from(auction_completed: AuctionCompletedEvent<StateChainRuntime>) -> Self {
-        SCEvent::AuctionEvent(AuctionEvent::AuctionCompletedEvent(auction_completed))
-    }
-}
+impl_auction_event_enum!(
+    AuctionStartedEvent,
+    AuctionCompletedEvent,
+    AuctionConfirmedEvent,
+    AwaitingBiddersEvent,
+    AuctionRangeChangedEvent,
+    AuctionAbortedEvent
+);
 
 #[cfg(test)]
 mod tests {

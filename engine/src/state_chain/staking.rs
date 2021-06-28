@@ -152,73 +152,36 @@ pub struct ClaimExpired<S: Staking> {
     pub _runtime: PhantomData<S>,
 }
 
-/// Wrapper for all Staking event types
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum StakingEvent<S: Staking> {
-    StakedEvent(StakedEvent<S>),
+/// Derives an enum for the listed events and corresponding implementations of `From`.
+macro_rules! impl_staking_event_enum {
+    ( $( $name:tt ),+ ) => {
+        #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+        pub enum StakingEvent<S: Staking> {
+            $(
+                $name($name<S>),
+            )+
+        }
 
-    ClaimSettledEvent(ClaimSettledEvent<S>),
-
-    StakeRefundEvent(StakeRefundEvent<S>),
-
-    ClaimSigRequestedEvent(ClaimSigRequestedEvent<S>),
-
-    ClaimSignatureIssuedEvent(ClaimSignatureIssuedEvent<S>),
-
-    AccountRetired(AccountRetired<S>),
-
-    AccountActivated(AccountActivated<S>),
-
-    ClaimExpired(ClaimExpired<S>),
+        $(
+            impl From<$name<StateChainRuntime>> for SCEvent {
+                fn from(staking_event: $name<StateChainRuntime>) -> Self {
+                    SCEvent::StakingEvent(StakingEvent::$name(staking_event))
+                }
+            }
+        )+
+    };
 }
 
-impl From<ClaimSigRequestedEvent<StateChainRuntime>> for SCEvent {
-    fn from(claim_sig_requested: ClaimSigRequestedEvent<StateChainRuntime>) -> Self {
-        SCEvent::StakingEvent(StakingEvent::ClaimSigRequestedEvent(claim_sig_requested))
-    }
-}
-
-impl From<ClaimSignatureIssuedEvent<StateChainRuntime>> for SCEvent {
-    fn from(claim_sig_issued: ClaimSignatureIssuedEvent<StateChainRuntime>) -> Self {
-        SCEvent::StakingEvent(StakingEvent::ClaimSignatureIssuedEvent(claim_sig_issued))
-    }
-}
-
-impl From<ClaimSettledEvent<StateChainRuntime>> for SCEvent {
-    fn from(claimed: ClaimSettledEvent<StateChainRuntime>) -> Self {
-        SCEvent::StakingEvent(StakingEvent::ClaimSettledEvent(claimed))
-    }
-}
-
-impl From<StakedEvent<StateChainRuntime>> for SCEvent {
-    fn from(staked: StakedEvent<StateChainRuntime>) -> Self {
-        SCEvent::StakingEvent(StakingEvent::StakedEvent(staked))
-    }
-}
-
-impl From<StakeRefundEvent<StateChainRuntime>> for SCEvent {
-    fn from(stake_refund: StakeRefundEvent<StateChainRuntime>) -> Self {
-        SCEvent::StakingEvent(StakingEvent::StakeRefundEvent(stake_refund))
-    }
-}
-
-impl From<AccountRetired<StateChainRuntime>> for SCEvent {
-    fn from(account_retired: AccountRetired<StateChainRuntime>) -> Self {
-        SCEvent::StakingEvent(StakingEvent::AccountRetired(account_retired))
-    }
-}
-
-impl From<AccountActivated<StateChainRuntime>> for SCEvent {
-    fn from(account_activated: AccountActivated<StateChainRuntime>) -> Self {
-        SCEvent::StakingEvent(StakingEvent::AccountActivated(account_activated))
-    }
-}
-
-impl From<ClaimExpired<StateChainRuntime>> for SCEvent {
-    fn from(claim_expired: ClaimExpired<StateChainRuntime>) -> Self {
-        SCEvent::StakingEvent(StakingEvent::ClaimExpired(claim_expired))
-    }
-}
+impl_staking_event_enum!(
+    StakedEvent,
+    ClaimSettledEvent,
+    StakeRefundEvent,
+    ClaimSigRequestedEvent,
+    ClaimSignatureIssuedEvent,
+    AccountRetired,
+    AccountActivated,
+    ClaimExpired
+);
 
 #[cfg(test)]
 mod tests {
