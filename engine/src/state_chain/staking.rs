@@ -39,22 +39,6 @@ pub trait Staking: System {
         + CheckedSub;
 }
 
-/// Funds have been staked to an account via the Staking smart contract
-// #[derive(Call, Encode)]
-// pub struct StakedCall<'a, T: Staking> {
-//     /// Runtime marker
-//     _runtime: PhantomData<T>,
-
-//     /// Call arguments
-//     // ??
-//     // account_id: <<Signature as Verify>::Signer as IdentifyAccount>::AccountId,
-//     account_id: &'a state_chain_runtime::AccountId,
-
-//     amount: T::TokenAmount,
-
-//     refund_address: &'a T::EthereumAddress,
-// }
-
 #[derive(Call, Encode)]
 pub struct WitnessStakedCall<T: Staking> {
     /// Runtime marker

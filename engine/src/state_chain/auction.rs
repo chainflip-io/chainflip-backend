@@ -16,8 +16,8 @@ pub trait Auction: System {
 }
 
 #[derive(Call, Encode)]
-pub struct WitnessAuctionConfirmationCall<A: Auction> {
-    auction_index: A::AuctionIndex,
+pub struct WitnessAuctionConfirmationCall<T: Auction> {
+    auction_index: T::AuctionIndex,
 }
 
 // The order of these fields matter for decoding
