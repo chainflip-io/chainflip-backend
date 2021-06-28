@@ -16,7 +16,6 @@ where
 {
     mq: MQ,
     p2p: P2P,
-    idx: usize, // TODO: validator id?
     stream: Box<dyn Stream<Item = Result<P2PMessageCommand, anyhow::Error>>>,
 }
 
@@ -25,18 +24,13 @@ where
     MQ: IMQClient + Send,
     P2P: P2PNetworkClient + Send,
 {
-    pub async fn new(mq: MQ, idx: usize, p2p: P2P) -> Self {
+    pub async fn new(mq: MQ, p2p: P2P) -> Self {
         let stream = mq
             .subscribe::<P2PMessageCommand>(Subject::P2POutgoing)
             .await
             .unwrap();
 
-        P2PConductor {
-            mq,
-            p2p,
-            idx,
-            stream,
-        }
+        P2PConductor { mq, p2p, stream }
     }
 
     pub async fn start(mut self) {
@@ -95,23 +89,23 @@ mod tests {
         // lot of tests. Will need to fix this.
 
         // Validator 1 setup
-        const ID_1: ValidatorId = 1;
+        let id_1: ValidatorId = ValidatorId::new(1);
 
         let mq = MQMock::new();
 
         let mc1 = mq.get_client();
         let mc1_copy = mq.get_client();
-        let p2p_client_1 = network.new_client(ID_1);
-        let conductor_1 = P2PConductor::new(mc1, 1, p2p_client_1).await;
+        let p2p_client_1 = network.new_client(id_1);
+        let conductor_1 = P2PConductor::new(mc1, p2p_client_1).await;
 
         // Validator 2 setup
-        const ID_2: ValidatorId = 2;
+        let id_2: ValidatorId = ValidatorId::new(2);
 
         let mq = MQMock::new();
         let mc2 = mq.get_client();
         let mc2_copy = mq.get_client();
-        let p2p_client_2 = network.new_client(ID_2);
-        let conductor_2 = P2PConductor::new(mc2, 2, p2p_client_2).await;
+        let p2p_client_2 = network.new_client(id_2.clone());
+        let conductor_2 = P2PConductor::new(mc2, p2p_client_2).await;
 
         let conductor_fut_1 = timeout(Duration::from_millis(100), conductor_1.start());
         let conductor_fut_2 = timeout(Duration::from_millis(100), conductor_2.start());
@@ -119,7 +113,7 @@ mod tests {
         let msg = String::from("hello");
 
         let message = P2PMessageCommand {
-            destination: ID_2,
+            destination: id_2,
             data: Vec::from(msg.as_bytes()),
         };
 
