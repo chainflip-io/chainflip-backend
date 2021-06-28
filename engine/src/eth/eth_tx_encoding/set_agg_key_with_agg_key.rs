@@ -103,35 +103,19 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
 #[cfg(test)]
 mod test_eth_tx_encoder {
     use super::*;
-    use async_trait::async_trait;
     use hex;
 
-    #[derive(Clone)]
-    struct MockMqClient;
-
-    #[async_trait]
-    impl IMQClient for MockMqClient {
-        async fn publish<M: 'static + Serialize + Sync>( &self, _subject: Subject, _message: &'_ M) -> Result<()> {
-            unimplemented!()
-        }
-
-        async fn subscribe<M: frame_support::sp_runtime::DeserializeOwned>( &self, _subject: Subject, ) 
-        -> Result<Box<dyn futures::Stream<Item = Result<M>>>> {
-            unimplemented!()
-        }
-
-        async fn close(&self) -> Result<()> {
-            unimplemented!()
-        }
-    }
+    use crate::mq::mq_mock::MQMock;
 
     #[ignore = "Not fully implemented"]
     #[test]
     fn test_tx_build() {
         let fake_address = hex::encode([12u8; 20]);
+        let mq = MQMock::new();
+
         let encoder = SetAggKeyWithAggKeyEncoder::new(
             &fake_address[..],
-            MockMqClient).expect("Unable to intialise encoder");
+            mq.get_client()).expect("Unable to intialise encoder");
         
         let event = AuctionConfirmedEvent::<StateChainRuntime> {
             epoch_index: 1,
