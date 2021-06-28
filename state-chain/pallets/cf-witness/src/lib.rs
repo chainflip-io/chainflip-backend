@@ -231,17 +231,22 @@ impl<T: Config> Pallet<T> {
 				let bits = VoteMask::from_slice_mut(bytes)
 				.expect("Only panics if the slice size exceeds the max; The number of validators should never exceed this;");
 
-				// Return an error if already voted, otherwise set the indexed bit to `true` to indicate a vote.
-				if bits[index] {
-					Err(Error::<T>::DuplicateWitness)?
-				} else {
-					let mut vote = bits
-						.get_mut(index)
-						.ok_or(Error::<T>::ValidatorIndexOutOfBounds)?;
-					*vote = true;
-				}
+				let mut vote_count = bits.count_ones();
 
-				Ok(bits.count_ones())
+				// Get a reference to the existing vote.
+				let mut vote = bits
+					.get_mut(index)
+					.ok_or(Error::<T>::ValidatorIndexOutOfBounds)?;
+				
+				// Return an error if already voted, otherwise set the indexed bit to `true` to indicate a vote.
+				if *vote {
+					Err(Error::<T>::DuplicateWitness)?
+				}
+				
+				vote_count += 1;
+				*vote = true;
+
+				Ok(vote_count)
 			},
 		)?;
 
@@ -325,6 +330,7 @@ impl<T: Config> pallet_cf_validator::EpochTransitionHandler for Pallet<T> {
 			ValidatorIndex::<T>::insert(&epoch, (*v).clone().into(), i as u16);
 			total += 1;
 		}
+		NumValidators::<T>::set(total);
 		// Assume all validators are live at the start of an Epoch.
 		ConsensusThreshold::<T>::mutate(|thresh| *thresh = total * 2 / 3 + 1)
 	}

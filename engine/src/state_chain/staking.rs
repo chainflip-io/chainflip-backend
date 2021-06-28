@@ -3,8 +3,10 @@
 use std::marker::PhantomData;
 use std::time::Duration;
 
-use codec::{Decode, Encode};
-use substrate_subxt::{module, sp_core::crypto::AccountId32, system::System, Event};
+use codec::{Decode, Encode, FullCodec};
+use frame_support::pallet_prelude::*;
+use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub};
+use substrate_subxt::{module, sp_core::crypto::AccountId32, system::System, Call, Event};
 
 use serde::{Deserialize, Serialize};
 use sp_core::ecdsa::Signature;
@@ -15,7 +17,68 @@ type Nonce = u64;
 type FlipBalance = u128;
 
 #[module]
-pub trait Staking: System {}
+pub trait Staking: System {
+    /// Numeric type denomination for the staked asset.
+    type TokenAmount: Member
+        + FullCodec
+        + Copy
+        + Default
+        + AtLeast32BitUnsigned
+        + MaybeSerializeDeserialize
+        + CheckedSub;
+
+    /// Ethereum address type, should correspond to [u8; 20], but defined globally for the runtime.
+    type EthereumAddress: Member + FullCodec + Copy;
+
+    type Nonce: Member
+        + FullCodec
+        + Copy
+        + Default
+        + AtLeast32BitUnsigned
+        + MaybeSerializeDeserialize
+        + CheckedSub;
+}
+
+/// Funds have been staked to an account via the Staking smart contract
+// #[derive(Call, Encode)]
+// pub struct StakedCall<'a, T: Staking> {
+//     /// Runtime marker
+//     _runtime: PhantomData<T>,
+
+//     /// Call arguments
+//     // ??
+//     // account_id: <<Signature as Verify>::Signer as IdentifyAccount>::AccountId,
+//     account_id: &'a state_chain_runtime::AccountId,
+
+//     amount: T::TokenAmount,
+
+//     refund_address: &'a T::EthereumAddress,
+// }
+
+#[derive(Call, Encode)]
+pub struct WitnessStakedCall<T: Staking> {
+    /// Runtime marker
+    _runtime: PhantomData<T>,
+
+    staker_account_id: AccountId32,
+
+    amount: T::TokenAmount,
+
+    tx_hash: [u8; 32],
+}
+
+#[derive(Call, Encode)]
+pub struct WitnessClaimedCall<T: Staking> {
+    /// Runtime marker
+    _runtime: PhantomData<T>,
+
+    // Account id of the claiming account
+    account_id: AccountId32,
+
+    amount: T::TokenAmount,
+
+    tx_hash: [u8; 32],
+}
 
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Encode, Decode, Serialize, Deserialize)]
@@ -175,7 +238,7 @@ impl From<ClaimExpired<StateChainRuntime>> for SCEvent {
 
 #[cfg(test)]
 mod tests {
-    use crate::sc_observer::runtime::StateChainRuntime;
+    use crate::state_chain::runtime::StateChainRuntime;
 
     use super::*;
 

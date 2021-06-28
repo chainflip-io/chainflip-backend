@@ -39,6 +39,7 @@ pub const EPOCH_BLOCKS: u64 = 100;
 thread_local! {
 	pub static CANDIDATE_IDX: RefCell<u64> = RefCell::new(0);
 	pub static CURRENT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
+	pub static MIN_BID: RefCell<u64> = RefCell::new(0);
 	pub static PHASE: RefCell<AuctionPhase<ValidatorId, Amount>> =  RefCell::new(AuctionPhase::default());
 	pub static BIDDERS: RefCell<Vec<(u64, u64)>> = RefCell::new(vec![]);
 	pub static WINNERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
@@ -52,9 +53,9 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		ValidatorPallet: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
 		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
+		ValidatorPallet: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
 	}
 );
 
@@ -189,9 +190,12 @@ pub struct TestEpochTransitionHandler;
 impl EpochTransitionHandler for TestEpochTransitionHandler {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
-	fn on_new_epoch(new_validators: Vec<Self::ValidatorId>, _min_bid: Self::Amount) {
+	fn on_new_epoch(new_validators: Vec<Self::ValidatorId>, min_bid: Self::Amount) {
 		CURRENT_VALIDATORS.with(|l|
 			*l.borrow_mut() = new_validators
+		);
+		MIN_BID.with(|l|
+			*l.borrow_mut() = min_bid
 		);
 	}
 }
@@ -238,6 +242,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 pub fn current_validators() -> Vec<u64> {
 	CURRENT_VALIDATORS.with(|l| l.borrow().to_vec())
 }
+pub fn min_bid() -> u64 { MIN_BID.with(|l| *l.borrow())}
 
 pub fn run_to_block(n: u64) {
 	while System::block_number() < n {

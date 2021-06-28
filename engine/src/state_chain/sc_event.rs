@@ -6,6 +6,7 @@ use crate::{mq::Subject, types::chain::Chain};
 use anyhow::Result;
 
 use super::{
+    auction::AuctionEvent,
     auction::{AuctionConfirmedEvent, AuctionRangeChangedEvent, AuctionStartedEvent},
     runtime::StateChainRuntime,
     staking::{
@@ -21,6 +22,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SCEvent {
+    AuctionEvent(AuctionEvent<StateChainRuntime>),
     ValidatorEvent(ValidatorEvent<StateChainRuntime>),
     StakingEvent(StakingEvent<StateChainRuntime>),
 }

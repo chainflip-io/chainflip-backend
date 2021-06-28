@@ -1,9 +1,9 @@
 use std::{marker::PhantomData, ops::Add};
 
 use cf_traits::AuctionRange;
-use codec::{Decode, Encode};
+use codec::{Codec, Decode, Encode};
 
-use frame_support::Parameter;
+use frame_support::{pallet_prelude::MaybeSerializeDeserialize, Parameter};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sp_runtime::traits::{AtLeast32BitUnsigned, One, Zero};
 use substrate_subxt::{module, sp_runtime::traits::Member, system::System, Event};
@@ -12,7 +12,7 @@ use super::{runtime::StateChainRuntime, sc_event::SCEvent};
 
 #[module]
 pub trait Auction: System {
-    type AuctionIndex: Member + Parameter + Default + Add + One + Copy;
+    type AuctionIndex: Member + Parameter + Default + Add + One + Copy + MaybeSerializeDeserialize;
 }
 
 // The order of these fields matter for decoding
@@ -33,7 +33,7 @@ pub struct AuctionConfirmedEvent<A: Auction> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
-pub struct AwaitingBidders<A: Auction> {
+pub struct AwaitingBiddersEvent<A: Auction> {
     _runtime: PhantomData<A>,
 }
 
@@ -45,16 +45,21 @@ pub struct AuctionRangeChangedEvent<A: Auction> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
-pub struct AuctionAborted<A: Auction> {
+pub struct AuctionAbortedEvent<A: Auction> {
     pub auction_index: A::AuctionIndex,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum AuctionEvent<A: Auction> {
     AuctionStartedEvent(AuctionStartedEvent<A>),
 
     AuctionConfirmedEvent(AuctionConfirmedEvent<A>),
 
     AuctionRangeChangedEvent(AuctionRangeChangedEvent<A>),
+
+    AuctionAbortedEvent(AuctionAbortedEvent<A>),
+
+    AwaitingBiddersEvent(AwaitingBiddersEvent<A>),
 }
 
 impl From<AuctionRangeChangedEvent<StateChainRuntime>> for SCEvent {
@@ -74,6 +79,18 @@ impl From<AuctionStartedEvent<StateChainRuntime>> for SCEvent {
 impl From<AuctionConfirmedEvent<StateChainRuntime>> for SCEvent {
     fn from(auction_ended: AuctionConfirmedEvent<StateChainRuntime>) -> Self {
         SCEvent::AuctionEvent(AuctionEvent::AuctionConfirmedEvent(auction_ended))
+    }
+}
+
+impl From<AwaitingBiddersEvent<StateChainRuntime>> for SCEvent {
+    fn from(awaiting_bidders: AwaitingBiddersEvent<StateChainRuntime>) -> Self {
+        SCEvent::AuctionEvent(AuctionEvent::AwaitingBiddersEvent(awaiting_bidders))
+    }
+}
+
+impl From<AuctionAbortedEvent<StateChainRuntime>> for SCEvent {
+    fn from(auction_aborted: AuctionAbortedEvent<StateChainRuntime>) -> Self {
+        SCEvent::AuctionEvent(AuctionEvent::AuctionAbortedEvent(auction_aborted))
     }
 }
 

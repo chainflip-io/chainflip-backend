@@ -1,14 +1,15 @@
 use anyhow::Result;
-use substrate_subxt::{Client, ClientBuilder, EventSubscription};
+use substrate_subxt::{Client, EventSubscription};
 
 use crate::{
     mq::{nats_client::NatsMQClientFactory, IMQClient, IMQClientFactory, Subject, SubjectName},
-    settings::{self, Settings},
+    settings::Settings,
 };
 
 use log::{debug, error, info, trace};
 
 use super::{
+    helpers::create_subxt_client,
     runtime::StateChainRuntime,
     sc_event::{raw_event_to_subject, sc_event_from_raw_event},
 };
@@ -28,22 +29,6 @@ pub async fn start(settings: Settings) {
     subscribe_to_events(*mq_client, subxt_client)
         .await
         .expect("Could not subscribe to state chain events");
-}
-
-/// Create a substrate subxt client over the StateChainRuntime
-async fn create_subxt_client(
-    subxt_settings: settings::StateChain,
-) -> Result<Client<StateChainRuntime>> {
-    let client = ClientBuilder::<StateChainRuntime>::new()
-        .skip_type_sizes_check()
-        .set_url(format!(
-            "ws://{}:{}",
-            subxt_settings.hostname, subxt_settings.port
-        ))
-        .build()
-        .await?;
-
-    Ok(client)
 }
 
 async fn subscribe_to_events<M: 'static + IMQClient>(
@@ -105,17 +90,14 @@ async fn subscribe_to_events<M: 'static + IMQClient>(
 #[cfg(test)]
 mod tests {
 
-    use crate::settings::StateChain;
+    use crate::settings;
 
     use super::*;
 
     #[tokio::test]
     #[ignore = "depends on running state chain at the specifed url"]
     async fn create_subxt_client_test() {
-        let subxt_settings = StateChain {
-            hostname: "localhost".to_string(),
-            port: 9944,
-        };
-        assert!(create_subxt_client(subxt_settings).await.is_ok())
+        let test_settings = settings::test_utils::new_test_settings().unwrap();
+        assert!(create_subxt_client(test_settings.state_chain).await.is_ok())
     }
 }
