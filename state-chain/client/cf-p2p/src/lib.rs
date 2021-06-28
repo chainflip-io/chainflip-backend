@@ -12,6 +12,21 @@ use std::sync::Mutex;
 use core::iter;
 
 pub type Message = Vec<u8>;
+pub const CHAINFLIP_P2P_PROTOCOL_NAME: &str = "/chainflip-protocol";
+
+pub fn p2p_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
+    sc_network::config::NonDefaultSetConfig {
+        notifications_protocol: CHAINFLIP_P2P_PROTOCOL_NAME.into(),
+        // Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
+        max_notification_size: 1024 * 1024,
+        set_config: sc_network::config::SetConfig {
+            in_peers: 0,
+            out_peers: 0,
+            reserved_nodes: Vec::new(),
+            non_reserved_mode: sc_network::config::NonReservedPeerMode::Deny,
+        },
+    }
+}
 
 pub trait PeerNetwork : Clone {
     /// Adds the peer to the set of peers to be connected to with this protocol.
