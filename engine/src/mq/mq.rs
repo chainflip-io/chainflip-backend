@@ -49,12 +49,6 @@ pub enum Subject {
     BroadcastSuccess(Chain),
     /// Stake events coming from the Stake manager contract
     StakeManager,
-    /// Stake events coming from the State chain
-    StateChainStake,
-    /// Claim events coming from the State chain
-    StateChainClaim,
-    /// Claim issued event from the state chain
-    StateChainClaimIssued,
 
     // Events coming from the respective SC pallets
     SCAuction,
@@ -94,17 +88,8 @@ impl SubjectName for Subject {
             Subject::StakeManager => {
                 format!("stake_manager")
             }
-            Subject::StateChainClaim => {
-                format!("state_chain_claim")
-            }
             Subject::Rotate => {
                 format!("rotate")
-            }
-            Subject::StateChainStake => {
-                format!("state_chain_stake")
-            }
-            Subject::StateChainClaimIssued => {
-                format!("state_chain_claim_issued")
             }
             Subject::P2PIncoming => {
                 format!("p2p_incoming")
@@ -145,11 +130,5 @@ mod test {
 
         let stake_manager_subject = Subject::StakeManager;
         assert_eq!(stake_manager_subject.to_subject_name(), "stake_manager");
-
-        let sc_stake_subject = Subject::StateChainStake;
-        assert_eq!(sc_stake_subject.to_subject_name(), "state_chain_stake");
-
-        let sc_claim_subject = Subject::StateChainClaim;
-        assert_eq!(sc_claim_subject.to_subject_name(), "state_chain_claim");
     }
 }

@@ -57,6 +57,8 @@ pub enum AuctionEvent<A: Auction> {
 
     AuctionRangeChangedEvent(AuctionRangeChangedEvent<A>),
 
+    AuctionCompletedEvent(AuctionCompletedEvent<A>),
+
     AuctionAbortedEvent(AuctionAbortedEvent<A>),
 
     AwaitingBiddersEvent(AwaitingBiddersEvent<A>),
@@ -91,6 +93,12 @@ impl From<AwaitingBiddersEvent<StateChainRuntime>> for SCEvent {
 impl From<AuctionAbortedEvent<StateChainRuntime>> for SCEvent {
     fn from(auction_aborted: AuctionAbortedEvent<StateChainRuntime>) -> Self {
         SCEvent::AuctionEvent(AuctionEvent::AuctionAbortedEvent(auction_aborted))
+    }
+}
+
+impl From<AuctionCompletedEvent<StateChainRuntime>> for SCEvent {
+    fn from(auction_completed: AuctionCompletedEvent<StateChainRuntime>) -> Self {
+        SCEvent::AuctionEvent(AuctionEvent::AuctionCompletedEvent(auction_completed))
     }
 }
 
@@ -139,7 +147,7 @@ mod tests {
     }
 
     #[test]
-    fn auction_ranged_changed_decoding() {
+    fn auction_range_changed_decoding() {
         // AuctionRangeChanged(AuctionRange, AuctionRange)
         let event: <SCRuntime as Config>::Event =
             pallet_cf_auction::Event::<SCRuntime>::AuctionRangeChanged((0, 1), (0, 2)).into();
@@ -164,11 +172,57 @@ mod tests {
 
     #[test]
     fn auction_completed_decoding() {
-        todo!()
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_auction::Event::<SCRuntime>::AuctionCompleted(1).into();
+
+        let encoded_auction_completed = event.encode();
+        // the first 2 bytes are (module_index, event_variant_index), these can be stripped
+        let encoded_auction_completed = encoded_auction_completed[2..].to_vec();
+
+        let decoded_event =
+            AuctionCompletedEvent::<StateChainRuntime>::decode(&mut &encoded_auction_completed[..])
+                .unwrap();
+
+        let expecting = AuctionCompletedEvent { auction_index: 1 };
+
+        assert_eq!(decoded_event, expecting);
     }
 
     #[test]
     fn auction_aborted_decoding() {
-        todo!()
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_auction::Event::<SCRuntime>::AuctionAborted(1).into();
+
+        let encoded_auction_aborted = event.encode();
+        // the first 2 bytes are (module_index, event_variant_index), these can be stripped
+        let encoded_auction_aborted = encoded_auction_aborted[2..].to_vec();
+
+        let decoded_event =
+            AuctionAbortedEvent::<StateChainRuntime>::decode(&mut &encoded_auction_aborted[..])
+                .unwrap();
+
+        let expecting = AuctionAbortedEvent { auction_index: 1 };
+
+        assert_eq!(decoded_event, expecting);
+    }
+
+    #[test]
+    fn awaiting_bidders() {
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_auction::Event::<SCRuntime>::AwaitingBidders.into();
+
+        let awaiting_bidders_encoded = event.encode();
+        // the first 2 bytes are (module_index, event_variant_index), these can be stripped
+        let awaiting_bidders_encoded = awaiting_bidders_encoded[2..].to_vec();
+
+        let decoded_event =
+            AwaitingBiddersEvent::<StateChainRuntime>::decode(&mut &awaiting_bidders_encoded[..])
+                .unwrap();
+
+        let expecting = AwaitingBiddersEvent {
+            _runtime: PhantomData,
+        };
+
+        assert_eq!(decoded_event, expecting);
     }
 }

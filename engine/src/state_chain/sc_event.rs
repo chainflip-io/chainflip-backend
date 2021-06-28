@@ -7,7 +7,10 @@ use anyhow::Result;
 
 use super::{
     auction::AuctionEvent,
-    auction::{AuctionConfirmedEvent, AuctionRangeChangedEvent, AuctionStartedEvent},
+    auction::{
+        AuctionAbortedEvent, AuctionCompletedEvent, AuctionConfirmedEvent,
+        AuctionRangeChangedEvent, AuctionStartedEvent,
+    },
     runtime::StateChainRuntime,
     staking::{
         AccountActivated, AccountRetired, ClaimExpired, ClaimSettledEvent, ClaimSigRequestedEvent,
@@ -85,6 +88,13 @@ pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEv
                 AuctionRangeChangedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
                     .into(),
             )),
+            "AuctionCompleted" => Ok(Some(
+                AuctionCompletedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
+                    .into(),
+            )),
+            "AuctionAborted" => Ok(Some(
+                AuctionAbortedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
+            )),
             _ => Ok(None),
         },
         _ => Ok(None),
@@ -127,7 +137,7 @@ mod tests {
         };
 
         let subject = raw_event_to_subject(&raw_event);
-        assert_eq!(subject, Some(Subject::StateChainClaim));
+        assert_eq!(subject, Some(Subject::SCStaking));
 
         // test "fail" case
         let raw_event_invalid = substrate_subxt::RawEvent {
