@@ -20,7 +20,7 @@ impl TempEventMapper {
 
         let auction_confirmed_event_stream = mq_client
             .subscribe::<auction::AuctionCompletedEvent<StateChainRuntime>>(
-                Subject::AuctionConfirmed,
+                Subject::AuctionCompleted,
             )
             .await
             .unwrap();
@@ -34,7 +34,7 @@ impl TempEventMapper {
                 let validators: Vec<_> = event
                     .validators
                     .iter()
-                    .map(|v| p2p::ValidatorId(v.to_account_id()))
+                    .map(|v| p2p::ValidatorId(v.to_string()))
                     .collect();
 
                 let key_gen_info = KeygenInfo::new(KeyId(event.auction_index), validators);
