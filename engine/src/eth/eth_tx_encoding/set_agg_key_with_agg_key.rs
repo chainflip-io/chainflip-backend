@@ -2,6 +2,7 @@ use crate::{
     eth::key_manager::KeyManager,
     mq::{pin_message_stream, IMQClient, Subject},
     settings,
+    signing::{KeyId, MessageHash, MultisigInstruction, SigningInfo},
     state_chain::{auction::AuctionConfirmedEvent, runtime::StateChainRuntime},
     types::chain::Chain,
 };
@@ -9,6 +10,8 @@ use crate::{
 use anyhow::Result;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
+use sp_core::Hasher;
+use sp_runtime::traits::Keccak256;
 use web3::{
     ethabi::{Token, Uint},
     types::Address,
@@ -138,8 +141,18 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
             .for_each_concurrent(None, |event| async {
                 let event = event.expect("Should be an event");
                 let empty_tx = self.build_base_tx(&event).expect("should be a valid tx");
+
+                let hash = Keccak256::hash(&empty_tx[..]);
+                let message_hash = MessageHash(hash.as_bytes().to_vec());
+
+                // TODO: Use the correct KeyId and vector of validators here.
+                // Question, why do we even care who the validators are, should this be encapsulated by
+                // the signing module?
+                let signing_info = SigningInfo::new(KeyId(1), vec![]);
+                let signing_instruction = MultisigInstruction::Sign(message_hash, signing_info);
+
                 self.mq_client
-                    .publish(Subject::SetAggKey, &empty_tx)
+                    .publish(Subject::MultisigInstruction, &signing_instruction)
                     .await
                     .expect("Should publish to MQ");
             })
