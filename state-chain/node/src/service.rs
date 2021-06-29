@@ -12,7 +12,7 @@ use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use sc_finality_grandpa::SharedVoterState;
 use sc_keystore::LocalKeystore;
 use std::borrow::Cow;
-use cf_p2p::NetworkBridge;
+use cf_p2p::{NetworkBridge, CHAINFLIP_P2P_PROTOCOL_NAME};
 use cf_p2p_rpc::RpcCore;
 
 // Our native executor instance.
@@ -26,8 +26,6 @@ native_executor_instance!(
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;
 type FullSelectChain = sc_consensus::LongestChain<FullBackend, Block>;
-
-const CHAINFLIP_P2P: &str = "/chainflip-protocol";
 
 pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponents<
 	FullClient, FullBackend, FullSelectChain,
@@ -114,6 +112,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		};
 	}
 
+	config.network.extra_sets.push(cf_p2p::p2p_peers_set_config());
 	config.network.extra_sets.push(sc_finality_grandpa::grandpa_peers_set_config());
 
 	let (network, network_status_sinks, system_rpc_tx, network_starter) =
@@ -147,7 +146,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	let (p2p, comms) = NetworkBridge::new(
 		rpc_params.clone(),
 		network.clone(),
-		Cow::Borrowed(CHAINFLIP_P2P));
+		Cow::Borrowed(CHAINFLIP_P2P_PROTOCOL_NAME));
 
 	let rpc_extensions_builder = {
 		let client = client.clone();

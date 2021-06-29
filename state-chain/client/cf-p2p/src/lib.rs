@@ -2,17 +2,37 @@ use std::collections::HashMap;
 use futures::{Stream, Future, StreamExt};
 use std::task::{Context, Poll};
 use std::pin::Pin;
-use sc_network::{PeerId, Event, NetworkService, ExHashT};
+use sc_network::{PeerId, Event, NetworkService, ExHashT, multiaddr};
 use sp_runtime::{traits::Block as BlockT};
 use sp_runtime::sp_std::sync::Arc;
 use std::borrow::Cow;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use log::{debug};
 use std::sync::Mutex;
+use core::iter;
 
 pub type Message = Vec<u8>;
+pub const CHAINFLIP_P2P_PROTOCOL_NAME: &str = "/chainflip-protocol";
+
+pub fn p2p_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
+    sc_network::config::NonDefaultSetConfig {
+        notifications_protocol: CHAINFLIP_P2P_PROTOCOL_NAME.into(),
+        // Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
+        max_notification_size: 1024 * 1024,
+        set_config: sc_network::config::SetConfig {
+            in_peers: 0,
+            out_peers: 0,
+            reserved_nodes: Vec::new(),
+            non_reserved_mode: sc_network::config::NonReservedPeerMode::Deny,
+        },
+    }
+}
 
 pub trait PeerNetwork : Clone {
+    /// Adds the peer to the set of peers to be connected to with this protocol.
+    fn add_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>);
+    /// Removes the peer from the set of peers to be connected to with this protocol.
+    fn remove_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>);
     /// Write notification to network to peer id, over protocol
     fn write_notification(&self, who: PeerId, protocol: Cow<'static, str>, message: Message);
     /// Network event stream
@@ -20,9 +40,28 @@ pub trait PeerNetwork : Clone {
 }
 
 impl<B: BlockT, H: ExHashT> PeerNetwork for Arc<NetworkService<B, H>> {
+    fn add_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>) {
+        let addr = iter::once(multiaddr::Protocol::P2p(who.into()))
+            .collect::<multiaddr::Multiaddr>();
+        let result = NetworkService::add_peers_to_reserved_set(self, protocol, iter::once(addr).collect());
+        if let Err(err) = result {
+            log::error!(target: "p2p", "add_set_reserved failed: {}", err);
+        }
+    }
+
+    fn remove_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>) {
+        let addr = iter::once(multiaddr::Protocol::P2p(who.into()))
+            .collect::<multiaddr::Multiaddr>();
+        let result = NetworkService::remove_peers_from_reserved_set(self, protocol, iter::once(addr).collect());
+        if let Err(err) = result {
+            log::error!(target: "p2p", "remove_set_reserved failed: {}", err);
+        }
+    }
+
     fn write_notification(&self, target: PeerId, protocol: Cow<'static, str>, message: Message) {
         NetworkService::write_notification(self, target, protocol, message)
     }
+
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
         Box::pin(NetworkService::event_stream(self, "network-chainflip"))
     }
@@ -191,8 +230,12 @@ impl<Observer, Network> Future for NetworkBridge<Observer, Network>
         loop {
             match this.network_event_stream.poll_next_unpin(cx) {
                 Poll::Ready(Some(event)) => match event {
-                    Event::SyncConnected { remote: _ } => {}
-                    Event::SyncDisconnected { remote: _ } => {}
+                    Event::SyncConnected { remote } => {
+                        this.state_machine.network.add_set_reserved(remote, this.protocol.clone());
+                    }
+                    Event::SyncDisconnected { remote } => {
+                        this.state_machine.network.remove_set_reserved(remote, this.protocol.clone());
+                    }
                     Event::NotificationStreamOpened { remote, protocol, role: _ } => {
                         if protocol != this.protocol {
                             continue;
@@ -249,6 +292,10 @@ mod tests {
     }
 
     impl PeerNetwork for TestNetwork {
+        fn add_set_reserved(&self, _who: PeerId, _protocol: Cow<'static, str>) {}
+
+        fn remove_set_reserved(&self, _who: PeerId, _protocol: Cow<'static, str>) {}
+
         fn write_notification(&self, who: PeerId, _protocol: Cow<'static, str>, message: Vec<u8>) {
             self.inner.lock().unwrap().notifications.push((who.to_bytes(), message));
         }

@@ -1,4 +1,3 @@
-#![feature(assert_matches)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 //! # Chainflip Auction Module
