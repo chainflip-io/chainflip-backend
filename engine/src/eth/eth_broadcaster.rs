@@ -87,23 +87,22 @@ impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
 
         let subscription = pin_message_stream(subscription);
 
-        subscription
-            .for_each_concurrent(None, |msg| async {
-                match msg {
-                    Ok(ref tx_details) => {
-                        match self.sign_and_broadcast(tx_details).await {
-                            Ok(hash) => {
-                                log::debug!("Transaction for {:?} broadcasted successfully: {:?}", tx_details, hash);
-                            },
-                            Err(err) => {
-                                log::error!("Failed to broadcast transaction {:?}: {:?}", tx_details, err);
-                            },
-                        }
-                    }
-                    Err(e) => {
-                        log::error!("Unable to broadcast message: {:?}.", e);
+        subscription.for_each_concurrent(None, |msg| async {
+            match msg {
+                Ok(ref tx_details) => {
+                    match self.sign_and_broadcast(tx_details).await {
+                        Ok(hash) => {
+                            log::debug!("Transaction for {:?} broadcasted successfully: {:?}", tx_details, hash);
+                        },
+                        Err(err) => {
+                            log::error!("Failed to broadcast transaction {:?}: {:?}", tx_details, err);
+                        },
                     }
                 }
+                Err(e) => {
+                    log::error!("Unable to broadcast message: {:?}.", e);
+                }
+            }
         })
         .await;
 
