@@ -121,8 +121,8 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// An auction phase has started \[auction_index\]
 		AuctionStarted(T::AuctionIndex),
-		/// An auction has a set of winners \[auction_index\]
-		AuctionCompleted(T::AuctionIndex),
+		/// An auction has a set of winners \[auction_index, winners\]
+		AuctionCompleted(T::AuctionIndex, Vec<T::ValidatorId>),
 		/// The auction has been confirmed off-chain \[auction_index\]
 		AuctionConfirmed(T::AuctionIndex),
 		/// Awaiting bidders for the auction
@@ -319,10 +319,10 @@ impl<T: Config> Auction for Pallet<T> {
 					if let Some(bidders) = bidders {
 						if let Some((_, min_bid)) = bidders.last() {
 							let winners: Vec<T::ValidatorId> = bidders.iter().map(|i| i.0.clone()).collect();
-							let phase = AuctionPhase::WinnersSelected(winners, *min_bid);
+							let phase = AuctionPhase::WinnersSelected(winners.clone(), *min_bid);
 							<CurrentPhase<T>>::put(phase.clone());
 
-							Self::deposit_event(Event::AuctionCompleted(<CurrentAuctionIndex<T>>::get()));
+							Self::deposit_event(Event::AuctionCompleted(<CurrentAuctionIndex<T>>::get(), winners));
 
 							return Ok(phase);
 						}

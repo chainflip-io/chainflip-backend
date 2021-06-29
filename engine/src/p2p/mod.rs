@@ -35,7 +35,21 @@ pub trait P2PNetworkClient<B: Base58, S: Stream<Item=P2PMessage>> {
     }
 }
 
-pub type ValidatorId = usize;
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize, Eq, PartialOrd, Ord, Hash)]
+pub struct ValidatorId(pub String);
+
+#[cfg(test)]
+impl ValidatorId {
+    pub fn new<T: ToString>(id: T) -> Self {
+        ValidatorId(id.to_string())
+    }
+}
+
+impl std::fmt::Display for ValidatorId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ValidatorId({})", self.0)
+    }
+}
 
 impl Base58 for ValidatorId {
     fn to_base58(&self) -> String {
@@ -66,6 +80,8 @@ struct CommandSendMessage {
 #[cfg(test)]
 mod tests {
 
+    use itertools::Itertools;
+
     use super::mock::*;
     use super::*;
 
@@ -81,11 +97,15 @@ mod tests {
         let network = NetworkMock::new();
 
         let data = vec![1, 2, 3];
-        let mut clients: Vec<_> = (0..3).map(|i| network.new_client(i)).collect();
+        let validator_ids = (0..3).map(|i| ValidatorId(i.to_string())).collect_vec();
+
+        let mut clients = validator_ids
+            .iter()
+            .map(|id| network.new_client(id.clone()))
+            .collect_vec();
 
         // (0) sends to (1); (1) should receive one, (2) receives none
-
-        clients[0].send(&1, &data).await.unwrap();
+        clients[0].send(&validator_ids[1], &data).await.unwrap();
 
         drop(network);
 
@@ -93,10 +113,10 @@ mod tests {
 
         assert_eq!(
             receive_with_timeout(stream_1.into_inner()).await.unwrap(),
-            P2PMessage {
-                sender_id: 0,
-                data: data.clone(),
-            }
+            Some(P2PMessage {
+                sender_id: validator_ids[0].clone(),
+                data: data.clone()
+            })
         );
 
         let stream_2 = clients[2].take_stream().await.unwrap();
@@ -109,7 +129,11 @@ mod tests {
         let network = NetworkMock::new();
 
         let data = vec![3, 2, 1];
-        let mut clients: Vec<_> = (0..3).map(|i| network.new_client(i)).collect();
+        let validator_ids = (0..3).map(|i| ValidatorId(i.to_string())).collect_vec();
+        let mut clients = validator_ids
+            .iter()
+            .map(|id| network.new_client(id.clone()))
+            .collect_vec();
 
         // (1) broadcasts; (0) and (2) should receive one message
         clients[1].broadcast(&data).await.unwrap();
@@ -118,20 +142,20 @@ mod tests {
 
         assert_eq!(
             receive_with_timeout(stream_0.into_inner()).await.unwrap(),
-            P2PMessage {
-                sender_id: 1,
-                data: data.clone(),
-            }
+            Some(P2PMessage {
+                sender_id: validator_ids[1].clone(),
+                data: data.clone()
+            })
         );
 
         let stream_2 = clients[2].take_stream().await.unwrap();
 
         assert_eq!(
             receive_with_timeout(stream_2.into_inner()).await.unwrap(),
-            P2PMessage {
-                sender_id: 1,
-                data: data.clone(),
-            }
+            Some(P2PMessage {
+                sender_id: validator_ids[1].clone(),
+                data: data.clone()
+            })
         );
     }
 }

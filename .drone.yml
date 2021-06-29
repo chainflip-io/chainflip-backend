@@ -29,7 +29,18 @@ get:
   path: dockerconfigjson
   name: .dockerconfigjson
 ---
-
+kind: secret
+name: drone_token
+get:
+  path: repo-secret
+  name: drone_token
+---
+kind: secret
+name: rinkeby_infura_url
+get:
+  path: repo-secret
+  name: rinkeby_infura_url
+---
 # Runs on every PR
 kind: pipeline
 name: chainflip-backend-checks
@@ -40,13 +51,16 @@ environment:
   SCCACHE_CACHE_SIZE: 14G
 
 steps:
-#  Checks the the .drone.yml file is formatted correctly
+  #  Checks the the .drone.yml file is formatted correctly
   - name: lint-drone-yml
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+    resources:
+      limits:
+        cpu: 3000
     commands:
       - drone lint --trusted
 
-#  Builds the base image for running build jobs
+  #  Builds the base image for running build jobs
   - name: rust-base
     image: plugins/docker
     settings:
@@ -64,7 +78,7 @@ steps:
         - Dockerfile.rust-base
         - .drone.yml
 
-#  Performs all unit tests
+  #  Performs all unit tests
   - name: test-validator-package
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
@@ -86,23 +100,44 @@ tolerations:
     operator: "Equal"
     value: "ci"
 ---
-# Runs when PR is merged to main
+# Runs when PR is merged to release branch and develop
 kind: pipeline
 type: kubernetes
-name: chainflip-state-chain
+name: chainflip-backend-release
 
 environment:
   SCCACHE_REDIS: redis://redis-headless:6379/
   SCCACHE_CACHE_SIZE: 14G
 
 steps:
+# Notify when files change
+  - name: notify-file-change
+    image: appleboy/drone-discord
+    when:
+      paths:
+        - engine/config/Default.toml
+        - state-chain/types.json
+    settings:
+      username: Testnet Bot
+      webhook_id:
+        from_secret: discord_webhook_id
+      webhook_token:
+        from_secret: discord_webhook_token
+      message: |
+        ℹ Config updated ℹ
+        Please update your [types.json](https://github.com/chainflip-io/chainflip-backend/blob/develop/state-chain/types.json)
+        and/or [Default.toml](https://github.com/chainflip-io/chainflip-backend/blob/develop/engine/config/Default.toml)
+
 #  Builds the base image for running build jobs
   - name: rust-base
+    resources:
+      limits:
+        cpu: 3000
     image: plugins/docker
     settings:
-      username:
+      username: &docker_username
         from_secret: docker_username
-      password:
+      password: &docker_password
         from_secret: docker_password
       repo: ghcr.io/chainflip-io/chainflip-backend/rust-base
       dockerfile: Dockerfile.rust-base
@@ -114,56 +149,248 @@ steps:
         - Dockerfile.rust-base
         - .drone.yml
 
-#  Compiles the entire backend
+  #  Compiles the entire backend
+  - name: compile-chainflip-backend
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    depends_on:
+      - rust-base
+    commands:
+      - cargo build --release
+      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
+
+  #  Compiles runs all unit tests
+  - name: test-chainflip-backend
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    depends_on:
+      - compile-chainflip-backend
+    commands:
+      - cargo test --lib --release
+      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
+      - echo -n "latest,$DRONE_COMMIT_SHA" > .tags
+
+  #  Create docker image for state-chain-node
+  - name: build-state-chain-node
+    image: plugins/docker
+    depends_on:
+      - test-chainflip-backend
+    environment:
+      SERVICE: state-chain-node
+    settings:
+      username: *docker_username
+      password: *docker_password
+      registry: ghcr.io
+      repo: ghcr.io/chainflip-io/chainflip-backend/state-chain-node
+      cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
+      build_args_from_env:
+        - SERVICE
+
+  #  Create docker image for chainflip-engine
+  - name: build-chainflip-engine
+    image: plugins/docker
+    depends_on:
+      - test-chainflip-backend
+    environment:
+      SERVICE: chainflip-engine
+    settings:
+      username: *docker_username
+      password: *docker_password
+      registry: ghcr.io
+      repo: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine
+      cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
+      build_args_from_env:
+        - SERVICE
+
+  #  Create docker image for chainflip-engine
+  - name: notify
+    image: appleboy/drone-discord
+    depends_on:
+      - test-chainflip-backend
+    when:
+      status:
+        - failure
+    settings:
+      username: Sauron
+      webhook_id:
+        from_secret: discord_webhook_id
+      webhook_token:
+        from_secret: discord_webhook_token
+      message: |
+        ⚠️ Build Failure ⚠️
+
+        The latest `chainflip-backend` compile has failed.
+        Logs: {{build.link}}
+        Duration: `{{since build.started}}`
+        Responsible parties: <@401244824440799233>, <@472886957920485386>, <@464710706567053313>, <@261113437642424320>
+
+# Get the latest cluster repo
+  - name: clone-cluster
+    image: alpine/git
+    depends_on:
+      - test-chainflip-backend
+    commands:
+      - git clone https://github.com/chainflip-io/chainflip-cluster.git cluster
+      - cd cluster/applications/staging/chainflip-validator
+      - chmod +x ./build.sh
+
+# Notify devs that Testnet is going down
+  - name: notify-testnet-down
+    image: appleboy/drone-discord
+    depends_on:
+      - test-chainflip-backend
+    settings:
+      username: Testnet Bot
+      webhook_id:
+        from_secret: discord_webhook_id
+      webhook_token:
+        from_secret: discord_webhook_token
+      message: |
+        ⚠️ Testnet Reboot In Progress: `{{commit.branch}}` ⚠️
+        Testnet will be recreated in 2m0s
+        To cancel this build head here: {{build.link}}
+
+# Destroy the testnet
+  - name: destroy
+    pull: always
+    image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+    failure: ignore
+    depends_on:
+      - clone-cluster
+      - test-chainflip-backend
+    commands:
+      - echo Waiting for 2 minutes
+      - sleep 120
+      - cd cluster/applications/staging/chainflip-validator
+      - ./build.sh --branch=$DRONE_COMMIT_BRANCH --destroy --rpc
+
+# Create new testnet
+  - name: create
+    pull: always
+    depends_on:
+      - build-state-chain-node
+      - build-chainflip-engine
+      - destroy
+    environment:
+      INFURA_URL:
+        from_secret: rinkeby_infura_url
+      DOCKER_CONFIG_JSON:
+        from_secret: dockerconfigjson
+    image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+    commands:
+      - cd cluster/applications/staging/chainflip-validator
+      - helm repo add chartmuseum http://chartmuseum.chartmuseum:8080
+      - helm dependency update
+      - ./build.sh --branch=$DRONE_COMMIT_BRANCH --tag=$DRONE_COMMIT_SHA --rpc
+
+# Notify devs Testnet is up
+  - name: notify-testnet-up
+    image: appleboy/drone-discord
+    depends_on:
+      - create
+    settings:
+      username: Testnet Bot
+      webhook_id:
+        from_secret: discord_webhook_id
+      webhook_token:
+        from_secret: discord_webhook_token
+      message: |
+        ✅ Testnet Reboot Successful: `{{commit.branch}}` ✅
+        Testnet released with commit hash: `{{commit.sha}}`
+
+# Notify devs Testnet has failed to launch
+  - name: notify-testnet-failure
+    image: appleboy/drone-discord
+    depends_on:
+      - create
+    when:
+      status:
+        - failure
+    settings:
+      username: Testnet Bot
+      webhook_id:
+        from_secret: discord_webhook_id
+      webhook_token:
+        from_secret: discord_webhook_token
+      message: |
+        ❌ Testnet Reboot Failure ❌
+        Commit hash: `{{commit.sha}}`
+        Branch: `{{commit.branch}}`
+        Build: {{build.link}}
+        <@508234815254953985> sort it out!!
+
+service_account_name: drone-runner-kube
+
+# Config
+trigger:
+  branch:
+    - release/*
+    - develop
+  event:
+    - push
+
+image_pull_secrets:
+  - dockerconfigjson
+
+node_selector:
+  type: ci
+
+tolerations:
+  - key: "workloadKind"
+    operator: "Equal"
+    value: "ci"
+
+---
+# Runs when PR is merged to main
+kind: pipeline
+type: kubernetes
+name: chainflip-backend-main
+
+environment:
+  SCCACHE_REDIS: redis://redis-headless:6379/
+  SCCACHE_CACHE_SIZE: 14G
+
+steps:
+  #  Builds the base image for running build jobs
+  - name: rust-base
+    resources:
+      limits:
+        cpu: 3000
+    image: plugins/docker
+    settings:
+      username: &docker_username
+        from_secret: docker_username
+      password: &docker_password
+        from_secret: docker_password
+      repo: ghcr.io/chainflip-io/chainflip-backend/rust-base
+      dockerfile: Dockerfile.rust-base
+      registry: ghcr.io
+      tags: latest
+      cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    when:
+      paths:
+        - Dockerfile.rust-base
+        - .drone.yml
+
+  #  Compiles the entire backend
   - name: compile-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
       - cargo build --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
-#  Compiles runs all unit tests
+  #  Compiles runs all unit tests
   - name: test-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
       - cargo test --lib --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
-#  Create docker image for state-chain-node
-  - name: build-state-chain-node
-    image: plugins/docker
-    settings:
-      username:
-        from_secret: docker_username
-      password:
-        from_secret: docker_password
-      repo: ghcr.io/chainflip-io/chainflip-backend/state-chain-node
-      dockerfile: Dockerfile.state-chain-node
-      registry: ghcr.io
-      tags: latest
-      cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
-
-#  Create docker image for chainflip-engine
-  - name: build-chainflip-engine
-    image: plugins/docker
-    settings:
-      username:
-        from_secret: docker_username
-      password:
-        from_secret: docker_password
-      repo: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine
-      dockerfile: Dockerfile.chainflip-engine
-      registry: ghcr.io
-      tags: latest
-      cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
-
-#  Create docker image for chainflip-engine
+  #  Create docker image for chainflip-engine
   - name: notify
     image: appleboy/drone-discord
     when:
       status:
         - failure
     settings:
-      avatar_url: https://png2.cleanpng.com/sh/809888174adf1a2f743a77fa1d63b2c9/L0KzQYm3VsE4N6dmkZH0aYP2gLBuTgNifaN0hp99aHWwfLF5hL1wbl55gNc2cnnxd8S0hglmNaVtfZ98aXzwccPwjPxqd58yTdQ7NnW4RbK3gcA2a2IzSaM9OUe6RYe4VcI6Omg6T6UDMES0QXB3jvc=/kisspng-sauron-the-lord-of-the-rings-eye-the-silmarillion-5b26e55a0a05c1.1149775615292757380411.png
       username: Sauron
       webhook_id:
         from_secret: discord_webhook_id

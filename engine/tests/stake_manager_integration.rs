@@ -5,7 +5,7 @@
 use std::str::FromStr;
 
 use chainflip_engine::{
-    eth::{self, stake_manager::stake_manager::StakingEvent},
+    eth::{self, stake_manager::stake_manager::StakeManagerEvent},
     mq::{
         nats_client::{NatsMQClient, NatsMQClientFactory},
         pin_message_stream, IMQClient, IMQClientFactory, Subject,
@@ -42,7 +42,7 @@ pub async fn test_all_stake_manager_events() {
 
     // subscribe before pushing events to the queue
     let stream = mq_c
-        .subscribe::<StakingEvent>(Subject::StakeManager)
+        .subscribe::<StakeManagerEvent>(Subject::StakeManager)
         .await
         .unwrap();
 
@@ -57,7 +57,7 @@ pub async fn test_all_stake_manager_events() {
     println!("What's the next event?");
     let mut stream = pin_message_stream(stream);
     match stream.next().await.unwrap().unwrap() {
-        StakingEvent::Staked(node_id, amount) => {
+        StakeManagerEvent::Staked(node_id, amount) => {
             assert_eq!(node_id, U256::from_dec_str("12345").unwrap());
             assert_eq!(
                 amount,
@@ -68,7 +68,7 @@ pub async fn test_all_stake_manager_events() {
     };
 
     match stream.next().await.unwrap().unwrap() {
-        StakingEvent::ClaimRegistered(node_id, amount, address, _start_time, _end_time) => {
+        StakeManagerEvent::ClaimRegistered(node_id, amount, address, _start_time, _end_time) => {
             assert_eq!(node_id, U256::from_dec_str("12345").unwrap());
             assert_eq!(
                 amount,
@@ -86,7 +86,7 @@ pub async fn test_all_stake_manager_events() {
     }
 
     match stream.next().await.unwrap().unwrap() {
-        StakingEvent::ClaimExecuted(node_id, amount) => {
+        StakeManagerEvent::ClaimExecuted(node_id, amount) => {
             assert_eq!(node_id, U256::from_dec_str("12345").unwrap());
             assert_eq!(
                 amount,
@@ -97,7 +97,7 @@ pub async fn test_all_stake_manager_events() {
     }
 
     match stream.next().await.unwrap().unwrap() {
-        StakingEvent::MinStakeChanged(before, after) => {
+        StakeManagerEvent::MinStakeChanged(before, after) => {
             assert_eq!(
                 before,
                 U256::from_dec_str("40000000000000000000000").unwrap()
@@ -111,7 +111,7 @@ pub async fn test_all_stake_manager_events() {
     }
 
     match stream.next().await.unwrap().unwrap() {
-        StakingEvent::EmissionChanged(before, after) => {
+        StakeManagerEvent::EmissionChanged(before, after) => {
             assert_eq!(before, U256::from_dec_str("5607877281367557723").unwrap());
             assert_eq!(after, U256::from_dec_str("1869292427122519296").unwrap());
         }

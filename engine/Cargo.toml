@@ -49,10 +49,12 @@ url = "1.7.2"
 
 # substrate deps
 codec = {package = "parity-scale-codec", version = "2.1", default-features = false, features = ["derive", "full"]}
+frame-support = "3.0.0"
 frame-system = "3.0.0"
 sp-core = "3.0.0"
 sp-keyring = "3.0.0"
-substrate-subxt = { package = "substrate-subxt", git = "https://github.com/paritytech/substrate-subxt.git", rev = "08a3e65" }
+sp-runtime = "3.0.0"
+substrate-subxt = "0.15"
 
 # Local deps
 cf-traits = {path = "../state-chain/traits"}
@@ -65,7 +67,7 @@ cf-p2p-rpc = {path = "../state-chain/client/cf-p2p/rpc"}
 [dependencies.curv]
 features = ["rust-gmp-kzen"]
 git = "https://github.com/KZen-networks/curv"
-tag = "v0.6.2"
+tag = "v0.7.0"
 
 [dev-dependencies]
 frame-support = "3.0.0"

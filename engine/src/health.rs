@@ -2,15 +2,20 @@ use async_std::net::TcpListener;
 use futures::{AsyncReadExt, AsyncWriteExt, StreamExt};
 use tokio::{select, sync::oneshot::Sender};
 
+use crate::settings;
+
 /// Health check function for the CFE
 /// allowing external services to query, ensuring it's online
-/// Returns a HTTP 200 resonse to any request on 127.0.0.1:{port}/health
+/// Returns a HTTP 200 response to any request on {hostname}:{port}/health
 /// Method returns a Sender, allowing graceful termination of the infinite loop
-pub async fn health_check(port: u16) -> Sender<()> {
-    let bind_address = format!("127.0.0.1:{}", port);
-    let listener = TcpListener::bind(bind_address)
+pub async fn health_check(health_check_settings: settings::HealthCheck) -> Sender<()> {
+    let bind_address = format!(
+        "{}:{}",
+        health_check_settings.hostname, health_check_settings.port
+    );
+    let listener = TcpListener::bind(bind_address.clone())
         .await
-        .expect(format!("Could not bind TCP listener to port {}", port).as_str());
+        .expect(format!("Could not bind TCP listener to {}", bind_address).as_str());
 
     let (tx, mut rx) = tokio::sync::oneshot::channel::<()>();
 
@@ -71,11 +76,12 @@ mod test {
 
     use super::*;
 
-    // TODO: Make this a real test
+    // TODO: Make this a real test, perhaps by using reqwest to ping the health check endpoint
     #[tokio::test]
     #[ignore = "runs for 10 seconds"]
     async fn health_check_test() {
-        let sender = health_check(5555u16).await;
+        let test_settings = settings::test_utils::new_test_settings().unwrap();
+        let sender = health_check(test_settings.health_check).await;
         time::sleep(Duration::from_millis(10000)).await;
         sender.send(()).unwrap();
     }

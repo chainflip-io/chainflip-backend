@@ -38,6 +38,7 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 use sp_transaction_pool::TransactionPriority;
 use core::time::Duration;
+use cf_traits::Witnesser;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -158,7 +159,7 @@ parameter_types! {
 impl pallet_cf_validator::Config for Runtime {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
-	type EpochTransitionHandler = PhantomData<Runtime>;
+	type EpochTransitionHandler = pallet_cf_witness::Pallet<Runtime>;
 	type ValidatorWeightInfo = weights::pallet_cf_validator::WeightInfo<Runtime>;
 	type EpochIndex = EpochIndex;
 	type Amount = FlipBalance;
@@ -377,18 +378,18 @@ construct_runtime!(
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
-		Flip: pallet_cf_flip::{Module, Event<T>, Config<T>},
-		Staking: pallet_cf_staking::{Module, Call, Event<T>, Config<T>},
+		Flip: pallet_cf_flip::{Module, Event<T>, Storage, Config<T>},
+		Staking: pallet_cf_staking::{Module, Call, Storage, Event<T>, Config<T>},
 		Session: pallet_session::{Module, Storage, Event, Config<T>},
 		Historical: session_historical::{Module},
+		Witness: pallet_cf_witness::{Module, Call, Event<T>, Origin},
+		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
 		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
 		Aura: pallet_aura::{Module, Config<T>},
 		Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
 		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
-		Witness: pallet_cf_witness::{Module, Call, Event<T>, Origin},
-		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
 	}
 );
 

@@ -1,5 +1,0 @@
-FROM ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-
-COPY target/release/state-chain-node /usr/local/bin
-
-ENTRYPOINT state-chain-node

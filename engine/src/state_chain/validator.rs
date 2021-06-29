@@ -5,13 +5,19 @@ use std::marker::PhantomData;
 use cf_traits::AuctionRange;
 use codec::{Decode, Encode};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use substrate_subxt::{module, sp_runtime::traits::Member, system::System, Event};
+use substrate_subxt::{module, sp_runtime::traits::Member, Call, Event};
 
 use super::{runtime::StateChainRuntime, sc_event::SCEvent};
 
 #[module]
-pub trait Validator: System {
+pub trait Validator: substrate_subxt::system::System {
     type EpochIndex: Member + Encode + Decode + Serialize + DeserializeOwned;
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Call, Decode, Encode, Serialize, Deserialize)]
+pub struct ForceRotationCall<T: Validator> {
+    /// Runtime marker
+    _runtime: PhantomData<T>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
@@ -47,63 +53,34 @@ pub struct NewEpochEvent<V: Validator> {
     pub epoch_index: V::EpochIndex,
 }
 
-/// Wrapper for all Validator events
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum ValidatorEvent<V: Validator> {
-    AuctionRangeChangedEvent(AuctionRangeChangedEvent<V>),
+/// Derives an enum for the listed events and corresponding implementations of `From`.
+macro_rules! impl_validator_event_enum {
+    ( $( $name:tt ),+ ) => {
+        #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+        pub enum ValidatorEvent<Runtime: Validator> {
+            $(
+                $name($name<Runtime>),
+            )+
+        }
 
-    EpochDurationChangedEvent(EpochDurationChangedEvent<V>),
-
-    AuctionStartedEvent(AuctionStartedEvent<V>),
-
-    AuctionConfirmedEvent(AuctionConfirmedEvent<V>),
-
-    ForceAuctionRequestedEvent(ForceRotationRequestedEvent<V>),
-
-    NewEpochEvent(NewEpochEvent<V>),
+        $(
+            impl From<$name<StateChainRuntime>> for SCEvent {
+                fn from(staking_event: $name<StateChainRuntime>) -> Self {
+                    SCEvent::ValidatorEvent(ValidatorEvent::$name(staking_event))
+                }
+            }
+        )+
+    };
 }
 
-impl From<AuctionRangeChangedEvent<StateChainRuntime>> for SCEvent {
-    fn from(auction_range_changed: AuctionRangeChangedEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::AuctionRangeChangedEvent(
-            auction_range_changed,
-        ))
-    }
-}
-
-impl From<EpochDurationChangedEvent<StateChainRuntime>> for SCEvent {
-    fn from(epoch_duration_changed: EpochDurationChangedEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::EpochDurationChangedEvent(
-            epoch_duration_changed,
-        ))
-    }
-}
-
-impl From<AuctionStartedEvent<StateChainRuntime>> for SCEvent {
-    fn from(auction_started: AuctionStartedEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::AuctionStartedEvent(auction_started))
-    }
-}
-
-impl From<AuctionConfirmedEvent<StateChainRuntime>> for SCEvent {
-    fn from(auction_ended: AuctionConfirmedEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::AuctionConfirmedEvent(auction_ended))
-    }
-}
-
-impl From<ForceRotationRequestedEvent<StateChainRuntime>> for SCEvent {
-    fn from(force_rotation_requested: ForceRotationRequestedEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::ForceAuctionRequestedEvent(
-            force_rotation_requested,
-        ))
-    }
-}
-
-impl From<NewEpochEvent<StateChainRuntime>> for SCEvent {
-    fn from(auction_ended: NewEpochEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::NewEpochEvent(auction_ended))
-    }
-}
+impl_validator_event_enum!(
+    AuctionRangeChangedEvent,
+    EpochDurationChangedEvent,
+    AuctionStartedEvent,
+    AuctionConfirmedEvent,
+    ForceRotationRequestedEvent,
+    NewEpochEvent
+);
 
 #[cfg(test)]
 mod tests {
@@ -113,7 +90,7 @@ mod tests {
     use codec::Encode;
     use state_chain_runtime::Runtime as SCRuntime;
 
-    use crate::sc_observer::runtime::StateChainRuntime;
+    use crate::state_chain::runtime::StateChainRuntime;
 
     use super::*;
 
