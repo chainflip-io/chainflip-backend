@@ -6,6 +6,7 @@ use chainflip_engine::{
     settings::Settings,
     signing::{self, crypto::Parameters},
     state_chain,
+    temp_event_mapper::TempEventMapper,
 };
 
 #[tokio::main]
@@ -37,6 +38,8 @@ async fn main() {
     };
 
     let signing_client = signing::MultisigClient::new(mq_factory, signer_idx, params);
+
+    TempEventMapper::run(&settings).await;
 
     signing_client.run().await;
 }
