@@ -157,10 +157,61 @@ pub enum InnerSignal {
     MessageSigned(MessageInfo),
 }
 
+/// Holds extra info about keygen failure (but not the reason)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct KeygenFailure {
+    pub key_id: KeyId,
+    pub bad_nodes: Vec<ValidatorId>,
+}
+
+/// The untimate result of a keygen ceremony
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum KeygenOutcome {
+    Success,
+    Unauthorised(KeygenFailure),
+    /// Abandoned as we couldn't make progress for a long time
+    Timeout(KeygenFailure),
+    /// Invalid data has been submitted, can't proceed
+    Invalid(KeygenFailure),
+}
+
+impl KeygenOutcome {
+    /// Helper method to create KeygenOutcome::Unauthorised
+    pub fn unauthorised(key_id: KeyId, bad_nodes: impl Into<Vec<ValidatorId>>) -> Self {
+        KeygenOutcome::Unauthorised(KeygenFailure {
+            key_id,
+            bad_nodes: bad_nodes.into(),
+        })
+    }
+
+    /// Helper method to create KeygenOutcome::Timeout
+    pub fn timeout(key_id: KeyId, bad_nodes: impl Into<Vec<ValidatorId>>) -> Self {
+        KeygenOutcome::Timeout(KeygenFailure {
+            key_id,
+            bad_nodes: bad_nodes.into(),
+        })
+    }
+
+    /// Helper method to create KeygenOutcome::Invalid
+    pub fn invalid(key_id: KeyId, bad_nodes: impl Into<Vec<ValidatorId>>) -> Self {
+        KeygenOutcome::Invalid(KeygenFailure {
+            key_id,
+            bad_nodes: bad_nodes.into(),
+        })
+    }
+}
+
+impl From<KeygenOutcome> for InnerEvent {
+    fn from(ko: KeygenOutcome) -> Self {
+        InnerEvent::KeygenResult(ko)
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum InnerEvent {
     P2PMessageCommand(P2PMessageCommand),
     InnerSignal(InnerSignal),
+    KeygenResult(KeygenOutcome),
 }
 
 #[derive(Clone)]
@@ -182,7 +233,7 @@ impl MultisigClientInner {
         phase_timeout: Duration,
     ) -> Self {
         MultisigClientInner {
-            keygen: KeygenManager::new(params, id.clone(), tx.clone()),
+            keygen: KeygenManager::new(params, id.clone(), tx.clone(), phase_timeout.clone()),
             params,
             id: id.clone(),
             signing_manager: SigningStateManager::new(params, id, tx, phase_timeout),
@@ -195,9 +246,17 @@ impl MultisigClientInner {
         &self.keygen
     }
 
+    /// Change the time we wait until deleting all unresolved states
+    #[cfg(test)]
+    pub fn set_timeout(&mut self, phase_timeout: Duration) {
+        self.keygen.set_timeout(phase_timeout);
+        self.signing_manager.set_timeout(phase_timeout);
+    }
+
     /// Clean up expired states
     pub fn cleanup(&mut self) {
         // TODO: cleanup keygen states as well
+        self.keygen.cleanup();
         self.signing_manager.cleanup();
     }
 

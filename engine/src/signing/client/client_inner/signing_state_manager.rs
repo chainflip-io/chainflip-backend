@@ -75,6 +75,11 @@ impl SigningStateManager {
         bc_count + other_count
     }
 
+    #[cfg(test)]
+    pub fn set_timeout(&mut self, phase_timeout: Duration) {
+        self.phase_timeout = phase_timeout;
+    }
+
     fn add_delayed(&mut self, mi: MessageInfo, bc1_entry: (ValidatorId, Broadcast1)) {
         trace!("Signing manager adds delayed bc1");
         let entry = self
@@ -208,7 +213,7 @@ impl SigningStateManager {
         });
 
         self.signing_states.retain(|_msg, state| {
-            if state.cur_phase_timestamp.elapsed() > timeout {
+            if state.last_progress_timestamp.elapsed() > timeout {
                 // TODO: successful ceremonies should clean up themselves!
                 warn!("Signing state expired and should be abandoned");
                 // TODO: send a signal
