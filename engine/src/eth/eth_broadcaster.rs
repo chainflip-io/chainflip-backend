@@ -27,7 +27,7 @@ pub async fn start_eth_broadcaster<M: IMQClient + Send + Sync>(
 /// Retrieves a private key from a file. The file should contain just the hex-encoded key, nothing else.
 fn secret_key_from_file(filename: &Path) -> Result<SecretKey> {
     let key = String::from_utf8(std::fs::read(filename)?)?;
-    Ok(SecretKey::from_str(&key[..])?) //.context(format!("Reading secret key from file {:?}", filename))
+    Ok(SecretKey::from_str(&key[..])?)
 }
 
 /// Adapter struct to build the ethereum web3 client from settings.

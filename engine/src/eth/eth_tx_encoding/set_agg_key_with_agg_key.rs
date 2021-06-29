@@ -85,9 +85,9 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
                 Token::Uint(todo!()) // sig
             ]),
             Token::Tuple(vec![ // Key
-                Token::Uint(todo!()), // msgHash
-                Token::Uint(todo!()),// nonce
-                Token::Address(todo!()) // sig
+                Token::Uint(todo!()), // pubkeyX
+                Token::Uint(todo!()),// pubkeyYparity
+                Token::Address(todo!()) // nonceTimesGAddr
             ]),
         ];
 
