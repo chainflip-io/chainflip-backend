@@ -118,54 +118,54 @@ impl SubjectName for Subject {
             }
             // === Auction events ===
             Subject::AuctionStarted => {
-                format!("auction_started")
+                format!("auction.auction_started")
             }
             Subject::AuctionConfirmed => {
-                format!("auction_confirmed")
+                format!("auction.auction_confirmed")
             }
             Subject::AuctionCompleted => {
-                format!("auction_completed")
+                format!("auction.auction_completed")
             }
             Subject::AuctionAborted => {
-                format!("auction_aborted")
+                format!("auction.auction_aborted")
             }
             Subject::AuctionRangeChanged => {
-                format!("auction_range_changed")
+                format!("auction.auction_range_changed")
             }
             Subject::AwaitingBidders => {
-                format!("awaiting_bidders")
+                format!("auction.awaiting_bidders")
             }
             // === Validator events ===
             Subject::ForceRotationRequested => {
-                format!("force_rotation_requested")
+                format!("validator.force_rotation_requested")
             }
             Subject::EpochDurationChanged => {
-                format!("epoch_duration_changed")
+                format!("validator.epoch_duration_changed")
             }
             Subject::NewEpoch => {
-                format!("new_epoch")
+                format!("validator.new_epoch")
             }
             // === Staking events ===
             Subject::ClaimSigRequested => {
-                format!("claim_sig_requested")
+                format!("staking.claim_sig_requested")
             }
             Subject::Staked => {
-                format!("staked")
+                format!("staking.staked")
             }
             Subject::ClaimSettled => {
-                format!("claim_settled")
+                format!("staking.claim_settled")
             }
             Subject::StakeRefund => {
-                format!("stake_refund")
+                format!("staking.stake_refund")
             }
             Subject::ClaimSignatureIssued => {
-                format!("auction_started")
+                format!("staking.auction_started")
             }
             Subject::AccountRetired => {
-                format!("account_retired")
+                format!("staking.account_retired")
             }
             Subject::AccountActivated => {
-                format!("account_activated")
+                format!("staking.account_activated")
             }
         }
     }
