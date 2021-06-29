@@ -21,6 +21,7 @@ pub struct MQMock {
 }
 
 /// Client for MQMock
+#[derive(Clone)]
 pub struct MQMockClient {
     topics: Arc<Mutex<HashMap<String, Vec<UnboundedSender<String>>>>>,
 }

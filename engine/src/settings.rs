@@ -22,6 +22,8 @@ pub struct Eth {
 
     // TODO: Into an Ethereum Address type?
     pub stake_manager_eth_address: String,
+    pub key_manager_eth_address: String,
+    pub private_key_file: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]
