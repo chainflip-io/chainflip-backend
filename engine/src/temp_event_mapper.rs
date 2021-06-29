@@ -20,7 +20,7 @@ impl TempEventMapper {
 
         let auction_confirmed_event_stream = mq_client
             .subscribe::<auction::AuctionCompletedEvent<StateChainRuntime>>(
-                Subject::AuctionConfirmed,
+                Subject::AuctionCompleted,
             )
             .await
             .unwrap();
