@@ -3,42 +3,39 @@
 #![recursion_limit = "256"]
 mod weights;
 // A few exports that help ease life for downstream crates.
+use core::time::Duration;
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
-	StorageValue,
 	traits::{KeyOwnerProofSystem, Randomness},
 	weights::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
 		IdentityFee, Weight,
 	},
+	StorageValue,
 };
 use frame_system::offchain::SendTransactionTypes;
-use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
 use pallet_grandpa::fg_primitives;
+use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
 use pallet_session::historical as session_historical;
 pub use pallet_timestamp::Call as TimestampCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{OpaqueMetadata, crypto::KeyTypeId, ecdsa};
-use sp_runtime::{
-	ApplyExtrinsicResult, create_runtime_str, generic,
-	impl_opaque_keys,
-	MultiSignature, transaction_validity::{TransactionSource, TransactionValidity},
-};
-pub use sp_runtime::{Perbill, Permill};
-#[cfg(any(feature = "std", test))]
-pub use sp_runtime::BuildStorage;
+use sp_core::{crypto::KeyTypeId, ecdsa, OpaqueMetadata};
 use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify,
 };
+#[cfg(any(feature = "std", test))]
+pub use sp_runtime::BuildStorage;
+use sp_runtime::{
+	create_runtime_str, generic, impl_opaque_keys,
+	transaction_validity::{TransactionSource, TransactionValidity},
+	ApplyExtrinsicResult, MultiSignature,
+};
+pub use sp_runtime::{Perbill, Permill};
 use sp_std::prelude::*;
-use sp_std::marker::PhantomData;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
-use sp_transaction_pool::TransactionPriority;
-use core::time::Duration;
-use cf_traits::Witnesser;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -166,7 +163,8 @@ impl pallet_cf_validator::Config for Runtime {
 	type Auction = Auction;
 }
 
-impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime where
+impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
+where
 	Call: From<LocalCall>,
 {
 	type Extrinsic = UncheckedExtrinsic;
@@ -271,7 +269,7 @@ impl pallet_grandpa::Config for Runtime {
 	type KeyOwnerProofSystem = Historical;
 
 	type KeyOwnerProof =
-	<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
+		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
 
 	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
 		KeyTypeId,

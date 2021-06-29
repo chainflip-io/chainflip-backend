@@ -14,6 +14,9 @@ mod helpers;
 
 // ==== Pallet support for the state chain =====
 
+/// Auction pallet support for substrate-subxt
+pub mod auction;
+
 /// Staking pallet support for substrate-subxt
 pub mod staking;
 /// Validator pallet support for substrate-subxt

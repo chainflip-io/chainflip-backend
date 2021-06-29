@@ -1,18 +1,22 @@
 use codec::Decode;
 use substrate_subxt::RawEvent;
 
-use crate::{mq::Subject, types::chain::Chain};
+use crate::mq::Subject;
 
 use anyhow::Result;
 
 use super::{
+    auction::AuctionEvent,
+    auction::{
+        AuctionAbortedEvent, AuctionCompletedEvent, AuctionConfirmedEvent,
+        AuctionRangeChangedEvent, AuctionStartedEvent, AwaitingBiddersEvent,
+    },
     runtime::StateChainRuntime,
     staking::{
-        ClaimSettledEvent, ClaimSigRequestedEvent, ClaimSignatureIssuedEvent, StakeRefundEvent,
-        StakedEvent, StakingEvent,
+        AccountActivated, AccountRetired, ClaimExpired, ClaimSettledEvent, ClaimSigRequestedEvent,
+        ClaimSignatureIssuedEvent, StakeRefundEvent, StakedEvent, StakingEvent,
     },
     validator::{
-        AuctionConfirmedEvent, AuctionRangeChangedEvent, AuctionStartedEvent,
         EpochDurationChangedEvent, ForceRotationRequestedEvent, NewEpochEvent, ValidatorEvent,
     },
 };
@@ -21,6 +25,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SCEvent {
+    AuctionEvent(AuctionEvent<StateChainRuntime>),
     ValidatorEvent(ValidatorEvent<StateChainRuntime>),
     StakingEvent(StakingEvent<StateChainRuntime>),
 }
@@ -29,33 +34,35 @@ pub enum SCEvent {
 pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEvent>> {
     let event = match raw_event.module.as_str() {
         "Staking" => match raw_event.variant.as_str() {
-            "ClaimSigRequested" => Ok(Some(
-                ClaimSigRequestedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
-                    .into(),
+            "Staked" => Ok(Some(
+                StakedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
+            )),
+            "ClaimedSettled" => Ok(Some(
+                ClaimSettledEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
             )),
             "StakeRefund" => Ok(Some(
                 StakeRefundEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
+            )),
+            "ClaimSigRequested" => Ok(Some(
+                ClaimSigRequestedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
+                    .into(),
             )),
             "ClaimSignatureIssued" => Ok(Some(
                 ClaimSignatureIssuedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
                     .into(),
             )),
-            "Claimed" => Ok(Some(
-                ClaimSettledEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
+            "AccountRetired" => Ok(Some(
+                AccountRetired::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
             )),
-            "Staked" => Ok(Some(
-                StakedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
+            "AccountActivated" => Ok(Some(
+                AccountActivated::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
+            )),
+            "ClaimExpired" => Ok(Some(
+                ClaimExpired::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
             )),
             _ => Ok(None),
         },
         "Validator" => match raw_event.variant.as_str() {
-            "AuctionEnded" => Ok(Some(
-                AuctionConfirmedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
-                    .into(),
-            )),
-            "AuctionStarted" => Ok(Some(
-                AuctionStartedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
-            )),
             "ForceRotationRequested" => Ok(Some(
                 ForceRotationRequestedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
                     .into(),
@@ -64,12 +71,36 @@ pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEv
                 EpochDurationChangedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
                     .into(),
             )),
+            "NewEpoch" => Ok(Some(
+                NewEpochEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
+            )),
+            _ => Ok(None),
+        },
+        "Auction" => match raw_event.variant.as_str() {
+            "AuctionEnded" => Ok(Some(
+                AuctionConfirmedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
+                    .into(),
+            )),
+            "AuctionStarted" => Ok(Some(
+                AuctionStartedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
+            )),
             "AuctionRangeChanged" => Ok(Some(
                 AuctionRangeChangedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
                     .into(),
             )),
-            "NewEpoch" => Ok(Some(
-                NewEpochEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
+            "AuctionCompleted" => Ok(Some(
+                AuctionCompletedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
+                    .into(),
+            )),
+            "AuctionAborted" => Ok(Some(
+                AuctionAbortedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
+            )),
+            "AwaitingBidders" => Ok(Some(
+                AwaitingBiddersEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
+            )),
+            "AuctionConfirmed" => Ok(Some(
+                AuctionConfirmedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
+                    .into(),
             )),
             _ => Ok(None),
         },
@@ -79,29 +110,35 @@ pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEv
 }
 
 /// Returns the subject to publish the data of a raw event to
-pub(super) fn subject_from_raw_event(event: &RawEvent) -> Option<Subject> {
-    let subject = match event.module.as_str() {
-        "System" => None,
+pub(super) fn raw_event_to_subject(event: &RawEvent) -> Option<Subject> {
+    match event.module.as_str() {
+        "Auction" => match event.variant.as_str() {
+            "AuctionStarted" => Some(Subject::AuctionStarted),
+            "AuctionConfirmed" => Some(Subject::AuctionConfirmed),
+            "AuctionCompleted" => Some(Subject::AuctionCompleted),
+            "AuctionAborted" => Some(Subject::AuctionAborted),
+            "AuctionRangeChanged" => Some(Subject::AuctionRangeChanged),
+            "AwaitingBidders" => Some(Subject::AwaitingBidders),
+            _ => None,
+        },
         "Staking" => match event.variant.as_str() {
-            "ClaimSigRequested" => Some(Subject::StateChainClaim),
-            // All Stake refunds are ETH, how are these refunds coming out though? as batches or individual txs?
-            "StakeRefund" => Some(Subject::Batch(Chain::ETH)),
-            "ClaimSignatureIssued" => Some(Subject::StateChainClaimIssued),
-            // This doesn't need to go anywhere, this is just a confirmation emitted, perhaps for block explorers
-            "Claimed" => None,
+            "ClaimSigRequested" => Some(Subject::ClaimSigRequested),
+            "Staked" => Some(Subject::Staked),
+            "ClaimSettled" => Some(Subject::ClaimSettled),
+            "StakeRefund" => Some(Subject::StakeRefund),
+            "ClaimSignatureIssued" => Some(Subject::ClaimSignatureIssued),
+            "AccountRetired" => Some(Subject::AccountRetired),
+            "AccountActivated" => Some(Subject::AccountActivated),
             _ => None,
         },
         "Validator" => match event.variant.as_str() {
-            "AuctionEnded" => None,
-            "AuctionStarted" => None,
-            "ForceRotationRequested" => Some(Subject::Rotate),
-            "EpochDurationChanged" => None,
-            "MaximumValidatorsChanged" => None,
+            "ForceRotationRequested" => Some(Subject::ForceRotationRequested),
+            "EpochDurationChanged" => Some(Subject::EpochDurationChanged),
+            "NewEpoch" => Some(Subject::NewEpoch),
             _ => None,
         },
         _ => None,
-    };
-    subject
+    }
 }
 
 #[cfg(test)]
@@ -118,7 +155,7 @@ mod tests {
     use state_chain_runtime::Runtime as SCRuntime;
 
     #[test]
-    fn subject_from_raw_event_test() {
+    fn raw_event_to_subject_test() {
         // test success case
         let raw_event = substrate_subxt::RawEvent {
             // Module and variant are defined by the state chain node
@@ -127,8 +164,8 @@ mod tests {
             data: "Test data".as_bytes().to_owned(),
         };
 
-        let subject = subject_from_raw_event(&raw_event);
-        assert_eq!(subject, Some(Subject::StateChainClaim));
+        let subject = raw_event_to_subject(&raw_event);
+        assert_eq!(subject, Some(Subject::ClaimSigRequested));
 
         // test "fail" case
         let raw_event_invalid = substrate_subxt::RawEvent {
@@ -137,7 +174,7 @@ mod tests {
             variant: "NotAVariant".to_string(),
             data: "Test data".as_bytes().to_owned(),
         };
-        let subject = subject_from_raw_event(&raw_event_invalid);
+        let subject = raw_event_to_subject(&raw_event_invalid);
         assert_eq!(subject, None);
     }
 
@@ -155,7 +192,7 @@ mod tests {
 
         let raw_event = RawEvent {
             module: "Staking".to_string(),
-            variant: "Claimed".to_string(),
+            variant: "ClaimedSettled".to_string(),
             data: encoded_claimed,
         };
 
