@@ -292,6 +292,10 @@ mod tests {
     }
 
     impl PeerNetwork for TestNetwork {
+        fn add_set_reserved(&self, _who: PeerId, _protocol: Cow<'static, str>) {}
+
+        fn remove_set_reserved(&self, _who: PeerId, _protocol: Cow<'static, str>) {}
+
         fn write_notification(&self, who: PeerId, _protocol: Cow<'static, str>, message: Vec<u8>) {
             self.inner.lock().unwrap().notifications.push((who.to_bytes(), message));
         }
