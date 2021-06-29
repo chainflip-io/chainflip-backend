@@ -171,7 +171,7 @@ impl SubjectName for Subject {
                 format!("staking.stake_refund")
             }
             Subject::ClaimSignatureIssued => {
-                format!("staking.auction_started")
+                format!("staking.claim_signature_issued")
             }
             Subject::AccountRetired => {
                 format!("staking.account_retired")
