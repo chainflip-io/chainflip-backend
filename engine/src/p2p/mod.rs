@@ -3,6 +3,7 @@
 pub mod mock;
 
 mod conductor;
+mod rpc;
 
 pub use conductor::P2PConductor;
 
@@ -10,16 +11,28 @@ use serde::{Deserialize, Serialize};
 
 use async_trait::async_trait;
 use tokio::sync::mpsc::UnboundedReceiver;
+use crate::p2p::rpc::Base58;
+use futures::Stream;
+
+#[derive(Debug)]
+pub enum P2PNetworkClientError {
+    Format,
+    Rpc
+}
+
+type StatusCode = u64;
 
 #[async_trait]
-pub trait P2PNetworkClient {
+pub trait P2PNetworkClient<B: Base58, S: Stream<Item=P2PMessage>> {
     /// Broadcast to all validators on the network
-    fn broadcast(&self, data: &[u8]);
+    async fn broadcast(&self, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError>;
 
     /// Send to a specific `validator` only
-    fn send(&self, to: &ValidatorId, data: &[u8]);
+    async fn send(&self, to: &B, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError>;
 
-    fn take_receiver(&mut self) -> Option<UnboundedReceiver<P2PMessage>>;
+    async fn take_stream(&mut self) -> Result<S, P2PNetworkClientError> {
+        Err(P2PNetworkClientError::Rpc)
+    }
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize, Eq, PartialOrd, Ord, Hash)]
@@ -35,6 +48,12 @@ impl ValidatorId {
 impl std::fmt::Display for ValidatorId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "ValidatorId({})", self.0)
+    }
+}
+
+impl Base58 for ValidatorId {
+    fn to_base58(&self) -> String {
+        self.to_string()
     }
 }
 
@@ -86,23 +105,23 @@ mod tests {
             .collect_vec();
 
         // (0) sends to (1); (1) should receive one, (2) receives none
-        clients[0].send(&validator_ids[1], &data);
+        clients[0].send(&validator_ids[1], &data).await.unwrap();
 
         drop(network);
 
-        let receiver_1 = clients[1].take_receiver().unwrap();
+        let stream_1 = clients[1].take_stream().await.unwrap();
 
         assert_eq!(
-            receive_with_timeout(receiver_1).await,
+            receive_with_timeout(stream_1.into_inner()).await,
             Some(P2PMessage {
                 sender_id: validator_ids[0].clone(),
                 data: data.clone()
             })
         );
 
-        let receiver_2 = clients[2].take_receiver().unwrap();
+        let stream_2 = clients[2].take_stream().await.unwrap();
 
-        assert_eq!(receive_with_timeout(receiver_2).await, None);
+        assert_eq!(receive_with_timeout(stream_2.into_inner()).await, None);
     }
 
     #[tokio::test]
@@ -117,18 +136,22 @@ mod tests {
             .collect_vec();
 
         // (1) broadcasts; (0) and (2) should receive one message
-        clients[1].broadcast(&data);
-        let mut receiver_0 = clients[0].take_receiver().unwrap();
+        clients[1].broadcast(&data).await.unwrap();
+
+        let stream_0 = clients[0].take_stream().await.unwrap();
+
         assert_eq!(
-            receiver_0.recv().await,
+            receive_with_timeout(stream_0.into_inner()).await,
             Some(P2PMessage {
                 sender_id: validator_ids[1].clone(),
                 data: data.clone()
             })
         );
-        let mut receiver_2 = clients[2].take_receiver().unwrap();
+
+        let stream_2 = clients[2].take_stream().await.unwrap();
+
         assert_eq!(
-            receiver_2.recv().await,
+            receive_with_timeout(stream_2.into_inner()).await,
             Some(P2PMessage {
                 sender_id: validator_ids[1].clone(),
                 data: data.clone()
