@@ -5,11 +5,11 @@ use std::time::Duration;
 
 use codec::{Decode, Encode, FullCodec};
 use frame_support::pallet_prelude::*;
+use sp_core::U256;
 use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub};
 use substrate_subxt::{module, sp_core::crypto::AccountId32, system::System, Call, Event};
 
 use serde::{Deserialize, Serialize};
-use sp_core::ecdsa::Signature;
 
 use super::{runtime::StateChainRuntime, sc_event::SCEvent};
 
@@ -64,13 +64,17 @@ pub struct WitnessClaimedCall<T: Staking> {
     tx_hash: [u8; 32],
 }
 
+type MsgHash = U256;
+type EthereumAddress = [u8; 20];
+type Signature = U256;
+
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Encode, Decode, Serialize, Deserialize)]
 pub struct ClaimSigRequestedEvent<S: Staking> {
     /// The AccountId of the validator wanting to claim
     pub who: AccountId32,
 
-    pub msg_hash: [u8; 32],
+    pub msg_hash: MsgHash,
 
     pub _runtime: PhantomData<S>,
 }
@@ -104,7 +108,7 @@ pub struct StakeRefundEvent<S: Staking> {
 
     pub amount: FlipBalance,
 
-    pub eth_address: [u8; 20],
+    pub eth_address: EthereumAddress,
 
     pub _runtime: PhantomData<S>,
 }
@@ -112,17 +116,19 @@ pub struct StakeRefundEvent<S: Staking> {
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct ClaimSignatureIssuedEvent<S: Staking> {
+    pub msg_hash: MsgHash,
+
+    pub nonce: u64,
+
+    pub signature: Signature,
+
     pub who: AccountId32,
 
     pub amount: FlipBalance,
 
-    pub nonce: Nonce,
-
-    pub eth_address: [u8; 20],
+    pub eth_address: EthereumAddress,
 
     pub expiry: Duration,
-
-    pub signature: Signature,
 
     pub _runtime: PhantomData<S>,
 }
@@ -194,6 +200,7 @@ mod tests {
     use state_chain_runtime::Runtime as SCRuntime;
 
     use sp_keyring::AccountKeyring;
+    use sp_core::U256;
 
     const ETH_ADDRESS: [u8; 20] = [
         00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01,
@@ -202,7 +209,7 @@ mod tests {
     #[test]
     fn claim_sig_requested_decode_test() {
         let who = AccountKeyring::Alice.to_account_id();
-        let msg_hash = [21u8; 32];
+        let msg_hash = MsgHash::from([21u8; 32]);
 
         let event: <SCRuntime as Config>::Event =
             pallet_cf_staking::Event::<SCRuntime>::ClaimSigRequested(who.clone(), msg_hash).into();
@@ -305,19 +312,19 @@ mod tests {
     fn claim_sig_issued_decode_test() {
         let who = AccountKeyring::Alice.to_account_id();
 
-        let sig: [u8; 65] = [0; 65];
-
-        let sig = Signature(sig);
+        let msg_hash = U256::from([0u8; 32]);
+        let sig = U256::zero();
         let expiry = Duration::from_secs(1);
 
         let event: <SCRuntime as Config>::Event =
             pallet_cf_staking::Event::<SCRuntime>::ClaimSignatureIssued(
+                msg_hash,
+                1u64,
+                sig.clone(),
                 who.clone(),
                 150u128,
-                1u64,
                 ETH_ADDRESS,
                 expiry,
-                sig.clone(),
             )
             .into();
 
@@ -332,11 +339,12 @@ mod tests {
         .unwrap();
 
         let expecting = ClaimSignatureIssuedEvent {
+            msg_hash,
+            nonce: 1u64,
+            signature: sig,
             who,
             amount: 150u128,
-            nonce: 1u64,
             eth_address: ETH_ADDRESS,
-            signature: sig,
             expiry,
             _runtime: PhantomData,
         };

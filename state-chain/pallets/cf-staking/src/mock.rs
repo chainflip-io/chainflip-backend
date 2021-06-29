@@ -75,7 +75,6 @@ impl pallet_cf_staking::Config for Test {
 	type Event = Event;
 	type Call = Call;
 	type Nonce = u32;
-	type EthereumCrypto = Public;
 	type EnsureWitnessed = ensure_witnessed::Mock;
 	type Witnesser = witnesser::Mock;
 	type EpochInfo = epoch_info::Mock;

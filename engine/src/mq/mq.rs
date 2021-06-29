@@ -76,6 +76,9 @@ pub enum Subject {
     P2POutgoing,
     MultisigInstruction,
     MultisigEvent,
+    /// Published by the signing module to notify SC about
+    /// the outcome of a keygen ceremony
+    KeygenResult,
 }
 
 /// Convert an object to a to a subject string (currently Nats compatible)
@@ -104,6 +107,7 @@ impl SubjectName for Subject {
             Subject::StakeManager => {
                 format!("stake_manager")
             }
+            // === Signing ===
             Subject::P2PIncoming => {
                 format!("p2p_incoming")
             }
@@ -115,6 +119,9 @@ impl SubjectName for Subject {
             }
             Subject::MultisigEvent => {
                 format!("multisig_event")
+            }
+            Subject::KeygenResult => {
+                format!("keygen_result")
             }
             // === Auction events ===
             Subject::AuctionStarted => {

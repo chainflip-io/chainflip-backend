@@ -1,5 +1,7 @@
 use super::*;
 
+use std::time::Duration;
+
 #[test]
 fn bc1_gets_delayed_until_keygen_request() {
     let params = Parameters {
@@ -62,7 +64,6 @@ async fn keygen_message_from_invalid_validator() {
 
 #[tokio::test]
 async fn keygen_secret2_gets_delayed() {
-
     let states = generate_valid_keygen_data().await;
 
     // auciton id is always 0 for generate_valid_keygen_data
@@ -113,7 +114,6 @@ async fn keygen_secret2_gets_delayed() {
 /// Test that we can have more than one key simultaneously
 #[tokio::test]
 async fn can_have_multiple_keys() {
-
     let states = generate_valid_keygen_data().await;
 
     // Start with clients that already have an aggregate key
@@ -137,7 +137,6 @@ async fn can_have_multiple_keys() {
 
 #[tokio::test]
 async fn cannot_create_key_for_known_id() {
-
     let mut states = generate_valid_keygen_data().await;
 
     let mut c1 = states.key_ready.clients[0].clone();
@@ -158,4 +157,173 @@ async fn cannot_create_key_for_known_id() {
 
     // No message should be sent as a result
     helpers::assert_channel_empty(&mut states.rxs[0]).await;
+}
+
+/// Test that if keygen state times out (without keygen request), we slash senders
+#[tokio::test]
+async fn no_keygen_request() {
+    init_logs_once();
+
+    let mut states = generate_valid_keygen_data().await;
+
+    let mut c1 = states.keygen_phase1.clients[0].clone();
+
+    let bc1 = create_bc1(2);
+
+    // We have not received a keygen request for KeyId 1
+    let message = helpers::bc1_to_p2p_keygen(bc1, KeyId(1), &VALIDATOR_IDS[1]);
+
+    c1.process_p2p_mq_message(message);
+
+    c1.set_timeout(Duration::from_secs(0));
+    c1.cleanup();
+
+    let mut rx = &mut states.rxs[0];
+
+    // TODO: nodes should be non-empty
+    assert_eq!(
+        helpers::recv_next_inner_event(&mut rx).await,
+        InnerEvent::KeygenResult(KeygenOutcome::unauthorised(KeyId(1), vec![]))
+    );
+}
+
+/// Test that if keygen state times out during phase 1 (with keygen request present), we slash non-senders
+#[tokio::test]
+async fn phase1_timeout() {
+    let mut states = generate_valid_keygen_data().await;
+
+    init_logs_once();
+
+    let mut c1 = states.keygen_phase1.clients[0].clone();
+
+    assert_eq!(
+        helpers::keygen_stage_for(&c1, KEY_ID),
+        Some(KeygenStage::AwaitingBroadcast1)
+    );
+
+    let bc1 = states.keygen_phase1.bc1_vec[1].clone();
+
+    let message = helpers::bc1_to_p2p_keygen(bc1, KEY_ID, &VALIDATOR_IDS[1]);
+
+    c1.process_p2p_mq_message(message);
+
+    c1.set_timeout(Duration::from_secs(0));
+    c1.cleanup();
+
+    let mut rx = &mut states.rxs[0];
+
+    // TODO: nodes should be non-empty
+    assert_eq!(
+        helpers::recv_next_inner_event(&mut rx).await,
+        InnerEvent::KeygenResult(KeygenOutcome::timeout(KEY_ID, vec![]))
+    );
+
+    assert_eq!(helpers::keygen_stage_for(&c1, KEY_ID), None);
+}
+
+/// Test that if keygen state times out during phase 2 (with keygen request present), we slash non-senders
+#[tokio::test]
+async fn phase2_timeout() {
+    let mut states = generate_valid_keygen_data().await;
+
+    init_logs_once();
+
+    let mut c1 = states.keygen_phase2.clients[0].clone();
+
+    assert_eq!(
+        helpers::keygen_stage_for(&c1, KEY_ID),
+        Some(KeygenStage::AwaitingSecret2)
+    );
+
+    let sec2 = states.keygen_phase2.sec2_vec[1]
+        .get(&VALIDATOR_IDS[0])
+        .unwrap()
+        .clone();
+
+    let message = helpers::sec2_to_p2p_keygen(sec2, &VALIDATOR_IDS[1]);
+
+    c1.process_p2p_mq_message(message);
+
+    c1.set_timeout(Duration::from_secs(0));
+    c1.cleanup();
+
+    let mut rx = &mut states.rxs[0];
+
+    // TODO: nodes should be non-empty
+    assert_eq!(
+        helpers::recv_next_inner_event(&mut rx).await,
+        InnerEvent::KeygenResult(KeygenOutcome::timeout(KEY_ID, vec![]))
+    );
+
+    assert_eq!(helpers::keygen_stage_for(&c1, KEY_ID), None);
+}
+
+/// That that parties that send invalid bc1s get reported
+#[tokio::test]
+async fn invalid_bc1() {
+    let mut states = generate_valid_keygen_data().await;
+
+    init_logs_once();
+
+    let mut c1 = states.keygen_phase1.clients[0].clone();
+
+    // This BC1 is valid
+    let bc1_a = states.keygen_phase1.bc1_vec[1].clone();
+    let message_a = helpers::bc1_to_p2p_keygen(bc1_a.clone(), KEY_ID, &VALIDATOR_IDS[1]);
+    c1.process_p2p_mq_message(message_a);
+
+    // This BC1 is invalid
+    let bc1_b = helpers::create_invalid_bc1();
+    let message_b = helpers::bc1_to_p2p_keygen(bc1_b, KEY_ID, &VALIDATOR_IDS[2]);
+    c1.process_p2p_mq_message(message_b);
+
+    let mut rx = &mut states.rxs[0];
+
+    assert_eq!(
+        helpers::recv_next_inner_event(&mut rx).await,
+        InnerEvent::KeygenResult(KeygenOutcome::invalid(KEY_ID, vec![]))
+    );
+
+    c1.set_timeout(Duration::from_secs(0));
+    c1.cleanup();
+
+    assert_eq!(helpers::keygen_stage_for(&c1, KEY_ID), None);
+}
+
+/// That that parties that send invalid sec2s get reported
+#[tokio::test]
+async fn invalid_sec2() {
+    let mut states = generate_valid_keygen_data().await;
+
+    init_logs_once();
+
+    let mut c1 = states.keygen_phase2.clients[0].clone();
+
+    // This Sec2 is valid
+    let sec2_a = states.keygen_phase2.sec2_vec[1]
+        .get(&VALIDATOR_IDS[0])
+        .unwrap()
+        .clone();
+    let message_a = helpers::sec2_to_p2p_keygen(sec2_a.clone(), &VALIDATOR_IDS[1]);
+    c1.process_p2p_mq_message(message_a);
+
+    // This Sec2 is not for us, so it is invalid
+    let sec2_b = states.keygen_phase2.sec2_vec[1]
+        .get(&VALIDATOR_IDS[2])
+        .unwrap()
+        .clone();
+    let message_b = helpers::sec2_to_p2p_keygen(sec2_b, &VALIDATOR_IDS[2]);
+    c1.process_p2p_mq_message(message_b);
+
+    let mut rx = &mut states.rxs[0];
+
+    assert_eq!(
+        helpers::recv_next_inner_event(&mut rx).await,
+        InnerEvent::KeygenResult(KeygenOutcome::invalid(KEY_ID, vec![]))
+    );
+
+    c1.set_timeout(Duration::from_secs(0));
+    c1.cleanup();
+
+    assert_eq!(helpers::keygen_stage_for(&c1, KEY_ID), None);
 }

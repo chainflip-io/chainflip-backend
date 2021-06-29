@@ -19,7 +19,7 @@ use crate::{
             },
             KeyId, KeygenInfo, MultisigInstruction, SigningInfo,
         },
-        crypto::{LocalSig, Parameters},
+        crypto::{Keys, LocalSig, Parameters},
         MessageHash, MessageInfo,
     },
 };
@@ -150,7 +150,7 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
     for sender_idx in 0..=2 {
         let bc1 = bc1_vec[sender_idx].clone();
         let id = &validator_ids[sender_idx];
-        let m = bc1_to_p2p_keygen(bc1, id);
+        let m = bc1_to_p2p_keygen(bc1, KEY_ID, id);
 
         for receiver_idx in 0..=2 {
             if receiver_idx != sender_idx {
@@ -382,6 +382,7 @@ pub async fn assert_channel_empty(rx: &mut UnboundedReceiver<InnerEvent>) {
     assert!(tokio::time::timeout(dur, fut).await.is_err());
 }
 
+#[allow(dead_code)]
 pub async fn print_next_message(rx: &mut UnboundedReceiver<InnerEvent>) {
     let dur = std::time::Duration::from_millis(10);
 
@@ -394,6 +395,9 @@ pub async fn print_next_message(rx: &mut UnboundedReceiver<InnerEvent>) {
             }
             InnerEvent::InnerSignal(s) => {
                 eprintln!("{:?}", s);
+            }
+            InnerEvent::KeygenResult(res) => {
+                eprintln!("{:?}", res);
             }
         }
     };
@@ -421,6 +425,21 @@ pub async fn recv_next_signal_message_skipping(
     }
 }
 
+/// Asserts that InnerEvent is in the queue and returns it
+pub async fn recv_next_inner_event(rx: &mut UnboundedReceiver<InnerEvent>) -> InnerEvent {
+    let dur = std::time::Duration::from_millis(10);
+
+    let res = tokio::time::timeout(dur, rx.recv())
+        .await
+        .ok()
+        .expect("timeout");
+
+    if let Some(event) = res {
+        return event;
+    }
+    panic!("Expected Inner Event");
+}
+
 pub async fn recv_p2p_message(rx: &mut UnboundedReceiver<InnerEvent>) -> P2PMessageCommand {
     let dur = std::time::Duration::from_millis(10);
 
@@ -431,11 +450,11 @@ pub async fn recv_p2p_message(rx: &mut UnboundedReceiver<InnerEvent>) -> P2PMess
         .unwrap();
 
     match res {
-        InnerEvent::InnerSignal(_) => {
-            error!("Unexpected InnerSignal");
+        InnerEvent::P2PMessageCommand(m) => m,
+        _ => {
+            error!("Unexpected InnerEvent");
             panic!();
         }
-        InnerEvent::P2PMessageCommand(m) => m,
     }
 }
 
@@ -545,8 +564,8 @@ pub fn sec2_to_p2p_keygen(sec2: Secret2, sender_id: &ValidatorId) -> P2PMessage 
     }
 }
 
-fn bc1_to_p2p_keygen(bc1: Broadcast1, sender_id: &ValidatorId) -> P2PMessage {
-    let wrapped = KeyGenMessageWrapped::new(KEY_ID, bc1);
+pub fn bc1_to_p2p_keygen(bc1: Broadcast1, key_id: KeyId, sender_id: &ValidatorId) -> P2PMessage {
+    let wrapped = KeyGenMessageWrapped::new(key_id, bc1);
 
     let data = MultisigMessage::from(wrapped);
     let data = serde_json::to_vec(&data).unwrap();
@@ -582,4 +601,53 @@ pub fn sig_to_p2p(sig: LocalSig, sender_id: &ValidatorId, mi: &MessageInfo) -> P
         sender_id: sender_id.clone(),
         data,
     }
+}
+
+pub fn create_keygen_p2p_message<M>(sender_id: &ValidatorId, message: M) -> P2PMessage
+where
+    M: Into<KeygenData>,
+{
+    let wrapped = KeyGenMessageWrapped::new(KEY_ID, message.into());
+
+    let ms_message = MultisigMessage::from(wrapped);
+
+    let data = serde_json::to_vec(&ms_message).unwrap();
+
+    P2PMessage {
+        sender_id: sender_id.clone(),
+        data,
+    }
+}
+
+pub(super) fn get_stage_for_msg(
+    c: &MultisigClientInner,
+    message_info: &MessageInfo,
+) -> Option<SigningStage> {
+    c.signing_manager
+        .get_state_for(message_info)
+        .map(|s| s.get_stage())
+}
+
+pub fn create_bc1(signer_idx: usize) -> Broadcast1 {
+    let key = Keys::phase1_create(signer_idx);
+
+    let (bc1, blind) = key.phase1_broadcast();
+
+    let y_i = key.y_i;
+
+    Broadcast1 { bc1, blind, y_i }
+}
+
+pub fn create_invalid_bc1() -> Broadcast1 {
+    let key = Keys::phase1_create(0);
+
+    let key2 = Keys::phase1_create(0);
+
+    let (_, blind) = key.phase1_broadcast();
+
+    let (bc1, _) = key2.phase1_broadcast();
+
+    let y_i = key.y_i;
+
+    Broadcast1 { bc1, blind, y_i }
 }

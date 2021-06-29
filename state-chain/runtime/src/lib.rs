@@ -358,7 +358,6 @@ impl pallet_cf_staking::Config for Runtime {
 	type Balance = FlipBalance;
 	type Flip = Flip;
 	type Nonce = u64;
-	type EthereumCrypto = ecdsa::Public;
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
 	type Witnesser = pallet_cf_witness::Pallet<Runtime>;
 	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
