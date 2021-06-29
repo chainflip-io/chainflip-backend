@@ -9,7 +9,7 @@ use super::{
     auction::AuctionEvent,
     auction::{
         AuctionAbortedEvent, AuctionCompletedEvent, AuctionConfirmedEvent,
-        AuctionRangeChangedEvent, AuctionStartedEvent,
+        AuctionRangeChangedEvent, AuctionStartedEvent, AwaitingBiddersEvent,
     },
     runtime::StateChainRuntime,
     staking::{
@@ -95,6 +95,13 @@ pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEv
             "AuctionAborted" => Ok(Some(
                 AuctionAbortedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
             )),
+            "AwaitingBidders" => Ok(Some(
+                AwaitingBiddersEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
+            )),
+            "AuctionConfirmed" => Ok(Some(
+                AuctionConfirmedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
+                    .into(),
+            )),
             _ => Ok(None),
         },
         _ => Ok(None),
@@ -104,13 +111,34 @@ pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEv
 
 /// Returns the subject to publish the data of a raw event to
 pub(super) fn raw_event_to_subject(event: &RawEvent) -> Option<Subject> {
-    let subject = match event.module.as_str() {
-        "Auction" => Some(Subject::SCAuction),
-        "Staking" => Some(Subject::SCStaking),
-        "Validator" => Some(Subject::SCValidator),
+    match event.module.as_str() {
+        "Auction" => match event.variant.as_str() {
+            "AuctionStarted" => Some(Subject::AuctionStarted),
+            "AuctionConfirmed" => Some(Subject::AuctionConfirmed),
+            "AuctionCompleted" => Some(Subject::AuctionCompleted),
+            "AuctionAborted" => Some(Subject::AuctionAborted),
+            "AuctionRangeChanged" => Some(Subject::AuctionRangeChanged),
+            "AwaitingBidders" => Some(Subject::AwaitingBidders),
+            _ => None,
+        },
+        "Staking" => match event.variant.as_str() {
+            "ClaimSigRequested" => Some(Subject::ClaimSigRequested),
+            "Staked" => Some(Subject::Staked),
+            "ClaimSettled" => Some(Subject::ClaimSettled),
+            "StakeRefund" => Some(Subject::StakeRefund),
+            "ClaimSignatureIssued" => Some(Subject::ClaimSignatureIssued),
+            "AccountRetired" => Some(Subject::AccountRetired),
+            "AccountActivated" => Some(Subject::AccountActivated),
+            _ => None,
+        },
+        "Validator" => match event.variant.as_str() {
+            "ForceRotationRequested" => Some(Subject::ForceRotationRequested),
+            "EpochDurationChanged" => Some(Subject::EpochDurationChanged),
+            "NewEpoch" => Some(Subject::NewEpoch),
+            _ => None,
+        },
         _ => None,
-    };
-    subject
+    }
 }
 
 #[cfg(test)]
@@ -137,7 +165,7 @@ mod tests {
         };
 
         let subject = raw_event_to_subject(&raw_event);
-        assert_eq!(subject, Some(Subject::SCStaking));
+        assert_eq!(subject, Some(Subject::ClaimSigRequested));
 
         // test "fail" case
         let raw_event_invalid = substrate_subxt::RawEvent {

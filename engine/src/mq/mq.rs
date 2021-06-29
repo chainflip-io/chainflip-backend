@@ -50,12 +50,28 @@ pub enum Subject {
     /// Stake events coming from the Stake manager contract
     StakeManager,
 
-    // Events coming from the respective SC pallets
-    SCAuction,
-    SCValidator,
-    SCStaking,
+    // Auction pallet events
+    AuctionStarted,
+    AuctionConfirmed,
+    AuctionCompleted,
+    AuctionAborted,
+    AuctionRangeChanged,
+    AwaitingBidders,
 
-    Rotate,
+    // Validator pallet events
+    ForceRotationRequested,
+    EpochDurationChanged,
+    NewEpoch,
+
+    // Staking pallet events
+    ClaimSigRequested,
+    Staked,
+    ClaimSettled,
+    StakeRefund,
+    ClaimSignatureIssued,
+    AccountRetired,
+    AccountActivated,
+
     P2PIncoming,
     P2POutgoing,
     MultisigInstruction,
@@ -88,9 +104,6 @@ impl SubjectName for Subject {
             Subject::StakeManager => {
                 format!("stake_manager")
             }
-            Subject::Rotate => {
-                format!("rotate")
-            }
             Subject::P2PIncoming => {
                 format!("p2p_incoming")
             }
@@ -103,9 +116,57 @@ impl SubjectName for Subject {
             Subject::MultisigEvent => {
                 format!("multisig_event")
             }
-            Subject::SCAuction => format!("sc_auction"),
-            Subject::SCValidator => format!("sc_validator"),
-            Subject::SCStaking => format!("sc_staking"),
+            // === Auction events ===
+            Subject::AuctionStarted => {
+                format!("auction_started")
+            }
+            Subject::AuctionConfirmed => {
+                format!("auction_confirmed")
+            }
+            Subject::AuctionCompleted => {
+                format!("auction_completed")
+            }
+            Subject::AuctionAborted => {
+                format!("auction_aborted")
+            }
+            Subject::AuctionRangeChanged => {
+                format!("auction_range_changed")
+            }
+            Subject::AwaitingBidders => {
+                format!("awaiting_bidders")
+            }
+            // === Validator events ===
+            Subject::ForceRotationRequested => {
+                format!("force_rotation_requested")
+            }
+            Subject::EpochDurationChanged => {
+                format!("epoch_duration_changed")
+            }
+            Subject::NewEpoch => {
+                format!("new_epoch")
+            }
+            // === Staking events ===
+            Subject::ClaimSigRequested => {
+                format!("claim_sig_requested")
+            }
+            Subject::Staked => {
+                format!("staked")
+            }
+            Subject::ClaimSettled => {
+                format!("claim_settled")
+            }
+            Subject::StakeRefund => {
+                format!("stake_refund")
+            }
+            Subject::ClaimSignatureIssued => {
+                format!("auction_started")
+            }
+            Subject::AccountRetired => {
+                format!("account_retired")
+            }
+            Subject::AccountActivated => {
+                format!("account_activated")
+            }
         }
     }
 }
