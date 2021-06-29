@@ -72,6 +72,8 @@ pub enum Subject {
     AccountRetired,
     AccountActivated,
 
+    SetAggKey,
+
     P2PIncoming,
     P2POutgoing,
     MultisigInstruction,
@@ -106,6 +108,9 @@ impl SubjectName for Subject {
             }
             Subject::StakeManager => {
                 format!("stake_manager")
+            }
+            Subject::SetAggKey => {
+                format!("set_agg_key")
             }
             // === Signing ===
             Subject::P2PIncoming => {
