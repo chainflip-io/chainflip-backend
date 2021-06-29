@@ -27,6 +27,14 @@ pub struct SharedSecretState {
     signer_idx: usize,
 }
 
+/// Indicates whether we've collected all data
+/// necessary to proceed to the next stage
+pub enum StageStatus {
+    Full,
+    MadeProgress,
+    Ignored,
+}
+
 impl SharedSecretState {
     pub(super) fn init_phase1(&mut self) -> Broadcast1 {
         let (bc1, blind) = self.key.phase1_broadcast();
@@ -44,13 +52,13 @@ impl SharedSecretState {
         Broadcast1 { bc1, blind, y_i }
     }
 
-    pub(super) fn process_broadcast1(&mut self, sender_id: usize, bc1: Broadcast1) -> bool {
+    pub(super) fn process_broadcast1(&mut self, sender_id: usize, bc1: Broadcast1) -> StageStatus {
         if self.phase1_order.contains(&sender_id) {
             error!(
                 "[{}] Received bc1 from the same sender idx: {}",
                 self.signer_idx, sender_id
             );
-            return false;
+            return StageStatus::Ignored;
         }
 
         self.phase1_order.push(sender_id);
@@ -66,9 +74,10 @@ impl SharedSecretState {
             utils::reorg_vector(&mut self.bc1_vec, &self.phase1_order);
             utils::reorg_vector(&mut self.blind_vec, &self.phase1_order);
             utils::reorg_vector(&mut self.y_vec, &self.phase1_order);
+            return StageStatus::Full;
         }
 
-        full
+        StageStatus::MadeProgress
     }
 
     pub(super) fn init_phase2(&mut self, parties: &[usize]) -> Result<Vec<(usize, Secret2)>, ()> {
@@ -111,17 +120,26 @@ impl SharedSecretState {
             }
             Err(err) => {
                 error!("Could not verify phase1 keygen: {}", err);
-                // TODO: abort current signing process, or, more likely, ignore the player?
+                // TODO: abort current signing process
+                return Err(());
             }
         }
 
         return Ok(messages);
     }
 
-    pub(super) fn process_phase2(&mut self, sender_id: usize, sec2: Secret2) -> bool {
+    pub(super) fn process_phase2(&mut self, sender_idx: usize, sec2: Secret2) -> StageStatus {
+        if self.phase2_order.contains(&sender_idx) {
+            error!(
+                "[{}] Received sec2 from the same sender idx: {}",
+                self.signer_idx, sender_idx
+            );
+            return StageStatus::Ignored;
+        }
+
         let Secret2 { vss, secret_share } = sec2;
 
-        self.phase2_order.push(sender_id);
+        self.phase2_order.push(sender_idx);
 
         self.vss_vec.push(vss);
         self.ss_vec.push(secret_share);
@@ -131,9 +149,10 @@ impl SharedSecretState {
         if full {
             utils::reorg_vector(&mut self.vss_vec, &self.phase2_order);
             utils::reorg_vector(&mut self.ss_vec, &self.phase2_order);
+            return StageStatus::Full;
         }
 
-        full
+        StageStatus::MadeProgress
     }
 
     pub(super) fn init_phase3(&mut self) -> Result<KeygenResult, ()> {

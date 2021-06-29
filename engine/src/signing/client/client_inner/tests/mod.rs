@@ -7,26 +7,21 @@ use lazy_static::lazy_static;
 use log::*;
 
 use super::client_inner::*;
+use helpers::*;
+
+use super::keygen_state::KeygenStage;
+use super::signing_state::SigningStage;
 
 use crate::{
-    p2p::{P2PMessage, ValidatorId},
+    p2p::ValidatorId,
     signing::{
-        client::{
-            client_inner::{
-                keygen_state::KeygenStage,
-                signing_state::SigningStage,
-                tests::helpers::{
-                    generate_valid_keygen_data, keygen_delayed_count, keygen_stage_for,
-                    recv_next_signal_message_skipping, sec2_to_p2p_keygen, sec2_to_p2p_signing,
-                    sig_to_p2p, signing_delayed_count,
-                },
-            },
-            KeyId, KeygenInfo, MultisigInstruction, SigningInfo, PHASE_TIMEOUT,
-        },
-        crypto::{Keys, Parameters},
+        client::{KeyId, KeygenInfo, MultisigInstruction, SigningInfo, PHASE_TIMEOUT},
+        crypto::Parameters,
         MessageHash, MessageInfo,
     },
 };
+
+use std::{sync::Once, time::Duration};
 
 // The id to be used by default
 const KEY_ID: KeyId = KeyId(0);
@@ -58,24 +53,11 @@ lazy_static! {
     };
 }
 
-fn create_bc1(signer_idx: usize) -> Broadcast1 {
-    let key = Keys::phase1_create(signer_idx);
-
-    let (bc1, blind) = key.phase1_broadcast();
-
-    let y_i = key.y_i;
-
-    Broadcast1 { bc1, blind, y_i }
-}
-
-use std::{sync::Once, time::Duration};
-
-use super::client_inner::Broadcast1;
-
 static INIT: Once = Once::new();
 
 /// Initializes the logger and does only once
 /// (doing otherwise would result in error)
+#[allow(dead_code)]
 fn init_logs_once() {
     INIT.call_once(|| {
         env_logger::builder()
@@ -83,28 +65,6 @@ fn init_logs_once() {
             .format_module_path(false)
             .init();
     })
-}
-
-fn create_keygen_p2p_message<M>(sender_id: &ValidatorId, message: M) -> P2PMessage
-where
-    M: Into<KeygenData>,
-{
-    let wrapped = KeyGenMessageWrapped::new(KEY_ID, message.into());
-
-    let ms_message = MultisigMessage::from(wrapped);
-
-    let data = serde_json::to_vec(&ms_message).unwrap();
-
-    P2PMessage {
-        sender_id: sender_id.clone(),
-        data,
-    }
-}
-
-fn get_stage_for_msg(c: &MultisigClientInner, message_info: &MessageInfo) -> Option<SigningStage> {
-    c.signing_manager
-        .get_state_for(message_info)
-        .map(|s| s.get_stage())
 }
 
 // INFO: We should be able to continue signing with the old key. When key rotation happens,

@@ -13,7 +13,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::p2p::P2PMessage;
 
-use self::client_inner::{InnerEvent, InnerSignal, MultisigClientInner};
+use self::client_inner::{InnerEvent, InnerSignal, KeygenOutcome, MultisigClientInner};
 
 use super::{crypto::Parameters, MessageHash, MessageInfo};
 
@@ -62,6 +62,7 @@ pub enum MultisigEvent {
     ReadyToKeygen,
     ReadyToSign,
     MessageSigned(MessageInfo),
+    KeygenResult(KeygenOutcome),
 }
 
 pub struct MultisigClient<MQ, F>
@@ -113,6 +114,11 @@ where
                 }
                 InnerEvent::InnerSignal(InnerSignal::MessageSigned(msg)) => {
                     mq.publish(Subject::MultisigEvent, &MultisigEvent::MessageSigned(msg))
+                        .await
+                        .expect("Failed to publish");
+                }
+                InnerEvent::KeygenResult(res) => {
+                    mq.publish(Subject::MultisigEvent, &MultisigEvent::KeygenResult(res))
                         .await
                         .expect("Failed to publish");
                 }

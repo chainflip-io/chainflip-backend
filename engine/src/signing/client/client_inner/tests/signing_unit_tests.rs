@@ -4,7 +4,6 @@ use super::*;
 /// to receive Broadcast1 messages
 #[tokio::test]
 async fn should_await_bc1_after_rts() {
-
     let states = generate_valid_keygen_data().await;
 
     let mut c1 = states.key_ready.clients[0].clone();
@@ -27,7 +26,6 @@ async fn should_await_bc1_after_rts() {
 /// BC1 messages get processed if we receive RTS shortly after
 #[tokio::test]
 async fn should_process_delayed_bc1_after_rts() {
-
     let states = generate_valid_keygen_data().await;
 
     let mut c1 = states.key_ready.clients[0].clone();
@@ -97,7 +95,6 @@ fn delayed_signing_bc1_gets_removed() {
 
 #[tokio::test]
 async fn signing_secret2_gets_delayed() {
-
     let states = generate_valid_keygen_data().await;
 
     let phase1 = &states.sign_phase1;
@@ -140,7 +137,6 @@ async fn signing_secret2_gets_delayed() {
 
 #[tokio::test]
 async fn signing_local_sig_gets_delayed() {
-
     let mut states = generate_valid_keygen_data().await;
 
     let phase2 = &states.sign_phase2;
@@ -173,7 +169,6 @@ async fn signing_local_sig_gets_delayed() {
 /// Request to sign should be delayed until the key is ready
 #[tokio::test]
 async fn request_to_sign_before_key_ready() {
-
     let key_id = KeyId(0);
 
     let states = generate_valid_keygen_data().await;
@@ -230,7 +225,6 @@ async fn request_to_sign_before_key_ready() {
 /// Expected outcome: no crash, state not created
 #[tokio::test]
 async fn unknown_signer_ids_gracefully_handled() {
-
     let states = generate_valid_keygen_data().await;
 
     let mut c1 = states.key_ready.clients[0].clone();
