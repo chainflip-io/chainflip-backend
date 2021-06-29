@@ -1,6 +1,6 @@
 use futures::{Future, Stream, StreamExt};
 use jsonrpc_core_client::{RpcChannel, TypedClient, TypedSubscriptionStream, RpcResult};
-use crate::p2p::{P2PNetworkClient, P2PMessage, P2PNetworkClientError, StatusCode};
+use crate::p2p::{P2PNetworkClient, P2PMessage, P2PNetworkClientError, StatusCode, ValidatorId};
 use jsonrpc_core_client::transports::ws::connect;
 use tokio_compat_02::FutureExt;
 use async_trait::async_trait;
@@ -35,14 +35,14 @@ impl From<P2PEvent> for P2PMessage {
         match p2p_event {
             P2PEvent::Received(peer_id, msg) => {
                 P2PMessage {
-                    sender_id: peer_id.parse().unwrap_or(0),
+                    sender_id: ValidatorId::new(peer_id),
                     data: msg,
                 }
             }
             P2PEvent::PeerConnected(peer_id) |
             P2PEvent::PeerDisconnected(peer_id) => {
                 P2PMessage {
-                    sender_id: peer_id.parse().unwrap_or(0),
+                    sender_id: ValidatorId::new(peer_id),
                     data: vec![],
                 }
             }
@@ -210,13 +210,13 @@ mod tests {
         let server = TestServer::serve();
         let mut glue_client = GlueClient::new(server.url);
         let run = async {
-            let result = glue_client.send(&100,"disco".as_bytes()).await;
+            let result = glue_client.send(&ValidatorId::new("100"),"disco".as_bytes()).await;
             assert!(result.is_ok(), "Should receive OK for sending message to peer");
             let result =
-                P2PNetworkClient::<usize, GlueClientStream>::broadcast(&glue_client,"disco".as_bytes()).await;
+                P2PNetworkClient::<ValidatorId, GlueClientStream>::broadcast(&glue_client,"disco".as_bytes()).await;
             assert!(result.is_ok(), "Should receive OK for broadcasting message");
             let result =
-                P2PNetworkClient::<usize, GlueClientStream>::take_stream(&mut glue_client).await;
+                P2PNetworkClient::<ValidatorId, GlueClientStream>::take_stream(&mut glue_client).await;
             assert!(result.is_ok(), "Should subscribe OK");
         };
         tokio::runtime::Runtime::new().unwrap().block_on(run);

@@ -112,7 +112,7 @@ mod tests {
         let stream_1 = clients[1].take_stream().await.unwrap();
 
         assert_eq!(
-            receive_with_timeout(stream_1.into_inner()).await.unwrap(),
+            receive_with_timeout(stream_1.into_inner()).await,
             Some(P2PMessage {
                 sender_id: validator_ids[0].clone(),
                 data: data.clone()
@@ -141,7 +141,7 @@ mod tests {
         let stream_0 = clients[0].take_stream().await.unwrap();
 
         assert_eq!(
-            receive_with_timeout(stream_0.into_inner()).await.unwrap(),
+            receive_with_timeout(stream_0.into_inner()).await,
             Some(P2PMessage {
                 sender_id: validator_ids[1].clone(),
                 data: data.clone()
@@ -151,7 +151,7 @@ mod tests {
         let stream_2 = clients[2].take_stream().await.unwrap();
 
         assert_eq!(
-            receive_with_timeout(stream_2.into_inner()).await.unwrap(),
+            receive_with_timeout(stream_2.into_inner()).await,
             Some(P2PMessage {
                 sender_id: validator_ids[1].clone(),
                 data: data.clone()
