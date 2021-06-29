@@ -140,8 +140,8 @@ impl KeygenManager {
         });
 
         for event in events_to_send {
-            if let Err(_) = self.event_sender.send(event) {
-                error!("Unable to send event");
+            if let Err(err) = self.event_sender.send(event) {
+                error!("Unable to send event, error: {}", err);
             }
         }
     }

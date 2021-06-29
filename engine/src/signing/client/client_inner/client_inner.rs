@@ -164,7 +164,7 @@ pub struct KeygenFailure {
     pub bad_nodes: Vec<ValidatorId>,
 }
 
-/// The untimate result of a keygen ceremony
+/// The final result of a keygen ceremony
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum KeygenOutcome {
     Success,
