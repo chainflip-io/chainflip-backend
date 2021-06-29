@@ -72,6 +72,8 @@ pub enum Subject {
     AccountRetired,
     AccountActivated,
 
+    // TODO: Replace with the actual subject that the new agg key event is published to
+    FakeNewAggKey,
     SetAggKey,
 
     P2PIncoming,
@@ -178,6 +180,9 @@ impl SubjectName for Subject {
             }
             Subject::AccountActivated => {
                 format!("staking.account_activated")
+            }
+            Subject::FakeNewAggKey => {
+                format!("fake_agg_key_subject")
             }
         }
     }
