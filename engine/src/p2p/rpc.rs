@@ -35,14 +35,14 @@ impl From<P2PEvent> for P2PMessage {
         match p2p_event {
             P2PEvent::Received(peer_id, msg) => {
                 P2PMessage {
-                    sender_id: ValidatorId::new(peer_id),
+                    sender_id: ValidatorId(peer_id),
                     data: msg,
                 }
             }
             P2PEvent::PeerConnected(peer_id) |
             P2PEvent::PeerDisconnected(peer_id) => {
                 P2PMessage {
-                    sender_id: ValidatorId::new(peer_id),
+                    sender_id: ValidatorId(peer_id),
                     data: vec![],
                 }
             }
