@@ -112,9 +112,6 @@ impl SubjectName for Subject {
             Subject::StakeManager => {
                 format!("stake_manager")
             }
-            Subject::SetAggKey => {
-                format!("set_agg_key")
-            }
             // === Signing ===
             Subject::P2PIncoming => {
                 format!("p2p_incoming")
@@ -184,6 +181,9 @@ impl SubjectName for Subject {
             }
             Subject::FakeNewAggKey => {
                 format!("fake_agg_key_subject")
+            }
+            Subject::FakeNewAggKeySigningComplete => {
+                format!("fake_new_agg_key_signing_complete")
             }
         }
     }
