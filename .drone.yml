@@ -78,13 +78,14 @@ steps:
         - Dockerfile.rust-base
         - .drone.yml
 
-  #  Checks
+#  Performs all unit tests
   - name: check-validator-package
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - cargo check --all-targets
+      - cargo check --all-target
+      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
-  #  Performs all unit tests
+#  Performs all unit tests
   - name: test-validator-package
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
@@ -164,17 +165,13 @@ steps:
       - cargo build --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
-  #  Checks
-  - name: check-validator-package
+  #  Compiles runs all unit tests
+  - name: test-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    depends_on:
+      - compile-chainflip-backend
     commands:
-      - cargo check --all-targets
-
-  #  Performs all unit tests
-  - name: test-validator-package
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    commands:
-      - cargo test --lib
+      - cargo test --lib --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
       - echo -n "latest,$DRONE_COMMIT_SHA" > .tags
 
@@ -391,7 +388,7 @@ steps:
   - name: test-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - cargo test --lib
+      - cargo test --lib --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
   #  Create docker image for chainflip-engine
