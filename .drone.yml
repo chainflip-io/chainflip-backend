@@ -56,7 +56,7 @@ steps:
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     resources:
       limits:
-        cpu: 3000
+        cpu: 4000
     commands:
       - drone lint --trusted
 
@@ -78,11 +78,17 @@ steps:
         - Dockerfile.rust-base
         - .drone.yml
 
+  #  Checks
+  - name: check-validator-package
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    commands:
+      - cargo check --all-targets
+
   #  Performs all unit tests
   - name: test-validator-package
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - cargo test --lib --release
+      - cargo test --lib
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
 trigger:
@@ -132,7 +138,7 @@ steps:
   - name: rust-base
     resources:
       limits:
-        cpu: 3000
+        cpu: 4000
     image: plugins/docker
     settings:
       username: &docker_username
@@ -158,13 +164,17 @@ steps:
       - cargo build --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
-  #  Compiles runs all unit tests
-  - name: test-chainflip-backend
+  #  Checks
+  - name: check-validator-package
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    depends_on:
-      - compile-chainflip-backend
     commands:
-      - cargo test --lib --release
+      - cargo check --all-targets
+
+  #  Performs all unit tests
+  - name: test-validator-package
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    commands:
+      - cargo test --lib
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
       - echo -n "latest,$DRONE_COMMIT_SHA" > .tags
 
@@ -353,7 +363,7 @@ steps:
   - name: rust-base
     resources:
       limits:
-        cpu: 3000
+        cpu: 4000
     image: plugins/docker
     settings:
       username: &docker_username
@@ -381,7 +391,7 @@ steps:
   - name: test-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - cargo test --lib --release
+      - cargo test --lib
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
   #  Create docker image for chainflip-engine
