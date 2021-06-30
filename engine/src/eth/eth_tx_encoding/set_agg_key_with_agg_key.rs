@@ -41,6 +41,12 @@ pub(super) struct TxDetails {
 #[derive(Serialize, Deserialize)]
 pub struct FakeNewAggKey(u64, String);
 
+#[derive(Serialize, Deserialize)]
+pub struct FakeNewAggKeySigningComplete {
+    hash: MessageHash,
+    sig: Vec<u8>,
+}
+
 /// Reads [AuctionConfirmedEvent]s off the message queue and encodes the function call to the stake manager.
 #[derive(Clone)]
 struct SetAggKeyWithAggKeyEncoder<M: IMQClient> {
@@ -69,50 +75,47 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
     }
 
     async fn run(self) -> Result<()> {
+        // from here we are getting signed message hashses
         let subscription = self
             .mq_client
-            .subscribe::<AuctionConfirmedEvent<StateChainRuntime>>(Subject::SetAggKey)
+            .subscribe::<FakeNewAggKeySigningComplete>(Subject::FakeNewAggKeySigningComplete)
             .await?;
 
         let subscription = pin_message_stream(subscription);
 
         subscription
             .for_each_concurrent(None, |msg| async {
+                // in here we need to:
+                // 1. Get the data from the message hash that was signed (using the `messages` field)
+                // 2. Call build_tx with the required info
+                // 3. Send it on its way to the eth broadcaster
                 match msg {
-                    Ok(ref evt) => match self.build_tx(evt) {
-                        Ok(ref tx_details) => {
-                            self.mq_client
-                                .publish(Subject::Broadcast(Chain::ETH), tx_details)
-                                .await
-                                .unwrap_or_else(|err| {
-                                    log::error!(
-                                        "Could not process {}: {}",
-                                        stringify!(AuctionConfirmedEvent),
-                                        err
-                                    );
-                                });
-                        }
-                        Err(err) => {
-                            log::error!(
-                                "Failed to build {} for {:?}: {:?}",
-                                stringify!(TxDetails),
-                                evt,
-                                err
-                            );
-                        }
-                    },
-                    Err(e) => {
-                        log::error!("Unable to process claim request: {:?}.", e);
+                    Ok(ref msg) => {
+                        let signed_data_for_msg = self.messages.get(&msg.hash).expect("should have been stored when asked to sign");
+                        match self.build_tx(msg) {
+                            Ok(ref tx_details) => {
+                                self.mq_client
+                                    .publish(Subject::Broadcast(Chain::ETH), tx_details)
+                                    .await
+                                    .unwrap_or_else(|err| {
+                                        log::error!("Could not process");
+                                    });
+                            }
+                            Err(err) => {
+                                log::error!("failed to build")
+                            }
                     }
                 }
-            })
-            .await;
+                Err(e) => {
+                    log::error!("Unable to process claim request: {:?}.", e);
+                }
+            }).await;
 
-        log::info!("{} has stopped.", stringify!(SetAggKeyWithAggKeyEncoder));
+        log::error!("ARGAADFADFLAKJSLKFJAS;DKFAS;JF");
         Ok(())
     }
 
-    fn build_tx(&self, event: &AuctionConfirmedEvent<StateChainRuntime>) -> Result<TxDetails> {
+    fn build_tx(&self, event: &FakeNewAggKeySigningComplete) -> Result<TxDetails> {
         let params = [
             Token::Tuple(vec![
                 // SigData

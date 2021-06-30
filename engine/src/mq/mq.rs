@@ -74,7 +74,8 @@ pub enum Subject {
 
     // TODO: Replace with the actual subject that the new agg key event is published to
     FakeNewAggKey,
-    SetAggKey,
+    // TODO: Replace with the actual subject that the signed messages are published to
+    FakeNewAggKeySigningComplete,
 
     P2PIncoming,
     P2POutgoing,
