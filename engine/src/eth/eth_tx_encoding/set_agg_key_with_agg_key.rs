@@ -25,10 +25,14 @@ pub async fn start<M: IMQClient + Clone>(
     settings: &settings::Settings,
     mq_client: M,
 ) -> Result<()> {
-    let encoder =
+    let mut encoder =
         SetAggKeyWithAggKeyEncoder::new(settings.eth.key_manager_eth_address.as_ref(), mq_client)?;
 
-    encoder.run().await
+    let run_build_agg_key_fut = encoder.clone().run_build_and_emit_set_agg_key_txs();
+    let run_tx_constructor_fut = encoder.run_tx_constructor();
+
+    // first fut is the only one that returns a Result, so just use that
+    futures::join!(run_build_agg_key_fut, run_tx_constructor_fut).0
 }
 
 /// Details of a transaction to be broadcast to ethereum.
@@ -38,6 +42,7 @@ pub(super) struct TxDetails {
     pub data: Vec<u8>,
 }
 
+// TODO: Use the actual event emitted by the signing module when a new key is created
 #[derive(Serialize, Deserialize)]
 pub struct FakeNewAggKey {
     pub pubkey_x: [u8; 32],
@@ -91,7 +96,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         })
     }
 
-    async fn run(self) -> Result<()> {
+    async fn run_build_and_emit_set_agg_key_txs(self) -> Result<()> {
         // from here we are getting signed message hashses
         let subscription = self
             .mq_client
@@ -117,11 +122,11 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
                                     .publish(Subject::Broadcast(Chain::ETH), tx_details)
                                     .await
                                     .unwrap_or_else(|err| {
-                                        log::error!("Could not process");
+                                        log::error!("Could not process: {:#?}", err);
                                     });
                             }
                             Err(err) => {
-                                log::error!("failed to build")
+                                log::error!("Failed to build: {:#?}", err);
                             }
                         }
                     }
@@ -132,7 +137,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
             })
             .await;
 
-        log::error!("ARGAADFADFLAKJSLKFJAS;DKFAS;JF");
+        log::error!("Oh no, the ");
         Ok(())
     }
 
@@ -169,7 +174,8 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
 
     // temporary process (will be handled by SC eventually) that creating the payload to be signed by the multisig process
     async fn run_tx_constructor(&mut self) {
-        // get events from the mq that need to be constructed
+        // A new agg key has been emitted. Now we need to create the ethereum transaction to update the key
+        // in the smart contract
         let new_agg_key_created_stream = self
             .mq_client
             .subscribe::<FakeNewAggKey>(Subject::FakeNewAggKey)
@@ -178,8 +184,6 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
 
         let mut new_agg_key_created_stream = pin_message_stream(new_agg_key_created_stream);
 
-        // Cannot use for_each_concurrent because we need to move a &mut self, and then push updates
-        // to that ref
         while let Some(event) = new_agg_key_created_stream.next().await {
             let event = event.expect("Should be an event");
             let (encoded_fn_params, param_container) = self
@@ -208,7 +212,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         }
     }
 
-    // Temporary a CFE method, this will be moved to the state chain
+    // Temporarily a CFE method, this will be moved to the state chain
     fn build_encoded_fn_params(&self, event: &FakeNewAggKey) -> Result<(Vec<u8>, ParamContainer)> {
         let zero = [0u8; 32];
 
@@ -225,8 +229,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         let params = [
             Token::Tuple(vec![
                 // SigData
-                Token::Uint(zero.into()), // msgHash
-                // TODO: Acutally get the nonce
+                Token::Uint(zero.into()),  // msgHash
                 Token::Uint(nonce.into()), // nonce
                 Token::Uint(zero.into()),  // sig
             ]),
