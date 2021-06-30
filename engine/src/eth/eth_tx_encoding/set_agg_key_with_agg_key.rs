@@ -6,7 +6,6 @@ use crate::{
     p2p::ValidatorId,
     settings,
     signing::{KeyId, MessageHash, MultisigInstruction, SigningInfo},
-    state_chain::{auction::AuctionConfirmedEvent, runtime::StateChainRuntime},
     types::chain::Chain,
 };
 
@@ -15,10 +14,7 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use sp_core::Hasher;
 use sp_runtime::traits::Keccak256;
-use web3::{
-    ethabi::{Token, Uint},
-    types::Address,
-};
+use web3::{ethabi::Token, types::Address};
 
 /// Helper function, constructs and runs the [SetAggKeyWithAggKeyEncoder] asynchronously.
 pub async fn start<M: IMQClient + Clone>(
@@ -137,7 +133,9 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
             })
             .await;
 
-        log::error!("Oh no, the ");
+        log::error!(
+            "Oh no, the run_build_and_emit_set_agg_key_txs process has ended again :sad_face:"
+        );
         Ok(())
     }
 
@@ -193,7 +191,8 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
             let hash = Keccak256::hash(&encoded_fn_params[..]);
             let message_hash = FakeMessageHash(hash.into());
 
-            // store the hash and the encoded_fn_params
+            // store key: parameters, so we can fetch the parameters again, after the payload
+            // has been signed by the signing module
             self.messages
                 .entry(message_hash.clone())
                 .or_insert(param_container);
