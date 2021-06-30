@@ -131,6 +131,13 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
                                     .unwrap_or_else(|err| {
                                         log::error!("Could not process: {:#?}", err);
                                     });
+                                // here we assume the key was update successfully
+                                // TODO update the state to reflect the update key
+                                // update curr key id
+                                // curr = next
+                                // next = None
+                                self
+                                // update
                             }
                             Err(err) => {
                                 log::error!("Failed to build: {:#?}", err);
