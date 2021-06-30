@@ -1,6 +1,9 @@
+use std::collections::HashMap;
+
 use crate::{
     eth::key_manager::KeyManager,
     mq::{pin_message_stream, IMQClient, Subject},
+    p2p::ValidatorId,
     settings,
     signing::{KeyId, MessageHash, MultisigInstruction, SigningInfo},
     state_chain::{auction::AuctionConfirmedEvent, runtime::StateChainRuntime},
@@ -43,6 +46,12 @@ pub struct FakeNewAggKey(u64, String);
 struct SetAggKeyWithAggKeyEncoder<M: IMQClient> {
     mq_client: M,
     key_manager: KeyManager,
+    // maps the MessageHash which gets sent to the signer with the data that the MessageHash is a hash of
+    messages: HashMap<MessageHash, Vec<u8>>,
+    // On genesis, where do these validators come from, to allow for the first key update
+    validators: HashMap<KeyId, Vec<ValidatorId>>,
+    curr_signing_key_id: Option<u64>,
+    next_key_id: Option<u64>,
 }
 
 impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
@@ -52,6 +61,10 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         Ok(Self {
             mq_client,
             key_manager,
+            messages: HashMap::new(),
+            validators: HashMap::new(),
+            curr_signing_key_id: None,
+            next_key_id: None,
         })
     }
 
@@ -127,7 +140,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
     }
 
     // temporary process (will be handled by SC eventually) that creating the payload to be signed by the multisig process
-    async fn run_tx_constructor(&self) {
+    async fn run_tx_constructor(&mut self) {
         // get events from the mq that need to be constructed
         let new_agg_key_created_stream = self
             .mq_client
@@ -135,32 +148,38 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
             .await
             .unwrap();
 
-        let new_agg_key_created_stream = pin_message_stream(new_agg_key_created_stream);
+        let mut new_agg_key_created_stream = pin_message_stream(new_agg_key_created_stream);
 
-        new_agg_key_created_stream
-            .for_each_concurrent(None, |event| async {
-                let event = event.expect("Should be an event");
-                let empty_tx = self.build_base_tx(&event).expect("should be a valid tx");
+        // Cannot use for_each_concurrent because we need to move a &mut self, and then push updates
+        // to that ref
+        while let Some(event) = new_agg_key_created_stream.next().await {
+            let event = event.expect("Should be an event");
+            let encoded_fn_params = self
+                .build_encoded_fn_params(&event)
+                .expect("should be a valid encoded params");
 
-                let hash = Keccak256::hash(&empty_tx[..]);
-                let message_hash = MessageHash(hash.as_bytes().to_vec());
+            let hash = Keccak256::hash(&encoded_fn_params[..]);
+            let message_hash = MessageHash(hash.as_bytes().to_vec());
 
-                // TODO: Use the correct KeyId and vector of validators here.
-                // Question, why do we even care who the validators are, should this be encapsulated by
-                // the signing module?
-                let signing_info = SigningInfo::new(KeyId(1), vec![]);
-                let signing_instruction = MultisigInstruction::Sign(message_hash, signing_info);
+            // store the hash and the encoded_fn_params
+            self.messages
+                .entry(message_hash.clone())
+                .or_insert(encoded_fn_params);
 
-                self.mq_client
-                    .publish(Subject::MultisigInstruction, &signing_instruction)
-                    .await
-                    .expect("Should publish to MQ");
-            })
-            .await;
+            // TODO: Use the correct KeyId and vector of validators here.
+            // how do we get the subset of signers from the OLD key, in order to use? Need to be collected from somewhere
+            let signing_info = SigningInfo::new(KeyId(1), vec![]);
+            let signing_instruction = MultisigInstruction::Sign(message_hash, signing_info);
+
+            self.mq_client
+                .publish(Subject::MultisigInstruction, &signing_instruction)
+                .await
+                .expect("Should publish to MQ");
+        }
     }
 
     // Temporary a CFE method, this will be moved to the state chain
-    fn build_base_tx(&self, event: &FakeNewAggKey) -> Result<Vec<u8>> {
+    fn build_encoded_fn_params(&self, event: &FakeNewAggKey) -> Result<Vec<u8>> {
         let zero = [0u8; 32];
 
         // TODO: Work out how to use an sequential nonce
