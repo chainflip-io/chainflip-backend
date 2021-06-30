@@ -16,9 +16,15 @@ port = "8545"
 # Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
 private_key_file = "/run/secrets/eth_private_key"
 # Address used on the Ganache/Brownie tests
-stake_manager_eth_address = "0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f"
 key_manager_eth_address = "0xdBa9b6065Deb6Cc057BC779fF6736709ecBa3409"
+stake_manager_eth_address = "0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f"
 
 [health_check]
 hostname = "0.0.0.0"
 port = 5555
+
+[signing]
+init_validator_ids = [
+  "alice",
+  "bob",
+]

@@ -21,8 +21,11 @@ pub async fn start<M: IMQClient + Clone>(
     settings: &settings::Settings,
     mq_client: M,
 ) -> Result<()> {
-    let mut encoder =
-        SetAggKeyWithAggKeyEncoder::new(settings.eth.key_manager_eth_address.as_ref(), mq_client)?;
+    let mut encoder = SetAggKeyWithAggKeyEncoder::new(
+        settings.eth.key_manager_eth_address.as_ref(),
+        settings.signing.init_validators.clone(),
+        mq_client,
+    )?;
 
     let run_build_agg_key_fut = encoder.clone().run_build_and_emit_set_agg_key_txs();
     let run_tx_constructor_fut = encoder.run_tx_constructor();
@@ -79,15 +82,23 @@ struct ParamContainer {
 }
 
 impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
-    fn new(key_manager_address: &str, mq_client: M) -> Result<Self> {
+    fn new(
+        key_manager_address: &str,
+        init_validators: Vec<ValidatorId>,
+        mq_client: M,
+    ) -> Result<Self> {
         let key_manager = KeyManager::load(key_manager_address)?;
 
+        let mut init_validators_hash_map = HashMap::new();
+        init_validators_hash_map
+            .entry(KeyId(0))
+            .or_insert(init_validators);
         Ok(Self {
             mq_client,
             key_manager,
             messages: HashMap::new(),
-            validators: HashMap::new(),
-            curr_signing_key_id: None,
+            validators: init_validators_hash_map,
+            curr_signing_key_id: Some(0),
             next_key_id: None,
         })
     }
@@ -260,33 +271,54 @@ mod test_eth_tx_encoder {
     #[test]
     fn test_tx_build() {
         let fake_address = hex::encode([12u8; 20]);
+        let settings = settings::test_utils::new_test_settings().unwrap();
         let mq = MQMock::new();
 
-        let encoder = SetAggKeyWithAggKeyEncoder::new(&fake_address[..], mq.get_client())
-            .expect("Unable to intialise encoder");
+        let encoder = SetAggKeyWithAggKeyEncoder::new(
+            &fake_address[..],
+            settings.signing.init_validators,
+            mq.get_client(),
+        )
+        .expect("Unable to intialise encoder");
 
-        let event = AuctionConfirmedEvent::<StateChainRuntime> { auction_index: 1 };
+        let event = FakeNewAggKeySigningComplete {
+            hash: FakeMessageHash([0; 32]),
+            sig: [0; 32],
+        };
+
+        let param_container = ParamContainer {
+            nonce: 3u64,
+            pubkey_x: [0; 32],
+            pubkey_y_parity: [0; 32],
+            nonce_times_g_addr: [0; 20],
+        };
 
         let _ = encoder
-            .build_tx(&event)
+            .build_tx(&event, &param_container)
             .expect("Unable to encode tx details");
     }
 
     #[test]
     fn test_tx_build_base() {
         let fake_address = hex::encode([12u8; 20]);
+        let settings = settings::test_utils::new_test_settings().unwrap();
         let mq = MQMock::new();
 
-        let encoder = SetAggKeyWithAggKeyEncoder::new(&fake_address[..], mq.get_client())
-            .expect("Unable to intialise encoder");
+        let encoder = SetAggKeyWithAggKeyEncoder::new(
+            &fake_address[..],
+            settings.signing.init_validators,
+            mq.get_client(),
+        )
+        .expect("Unable to intialise encoder");
 
-        let event = FakeNewAggKey(
-            23,
-            "this is a new secret key, don't tell anyone about it".to_string(),
-        );
+        let event = FakeNewAggKey {
+            pubkey_x: [0; 32],
+            pubkey_y_parity: [0; 32],
+            nonce_times_g_addr: [0; 20],
+        };
 
         let _ = encoder
-            .build_base_tx(&event)
+            .build_encoded_fn_params(&event)
             .expect("Unable to encode tx details");
     }
 }
