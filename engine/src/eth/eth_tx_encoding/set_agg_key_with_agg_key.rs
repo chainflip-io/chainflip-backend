@@ -378,6 +378,29 @@ mod test_eth_tx_encoder {
 
         println!("pubkey y parity: {:?}", pubkey_y_parity);
 
+        // does this have to be related to the "private key"? -> if it does, we can use the keys from the python
+        // tests in tests/consts.py
+        // nonce
+        let k_hex = "d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285";
+        let k = SecretKey::from_str(k_hex).unwrap();
+
+        let k_times_g = PublicKey::from_secret_key(&s, &k);
+        let k_times_g_pub: [u8; 64] = k_times_g.serialize_uncompressed()[1..]
+            .try_into()
+            .expect("Should be a valid pubkey");
+
+        // calculate nonce times g addr
+        let nonce_times_g_addr = Keccak256::hash(&k_times_g_pub).as_bytes().to_owned();
+        // take the last 160bits (20 bytes)
+        let from = nonce_times_g_addr.len() - 20;
+        let nonce_times_g_addr: [u8; 20] = nonce_times_g_addr[from..]
+            .try_into()
+            .expect("should only be 20 bytes long");
+
+        let hex_addr = hex::encode(nonce_times_g_addr);
+
+        println!("Hex addr: {:?}", hex_addr);
+
         let pubkey_x: [u8; 32] = pubkey_bytes[1..]
             .try_into()
             .expect("should be a valid pubkey");
