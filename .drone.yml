@@ -47,7 +47,7 @@ name: chainflip-backend-checks
 type: kubernetes
 
 environment:
-  SCCACHE_REDIS: redis://drone-redis-headless:6379/
+  SCCACHE_REDIS: redis://drone-redis-replicas:6379/
   SCCACHE_CACHE_SIZE: 14G
 
 steps:
