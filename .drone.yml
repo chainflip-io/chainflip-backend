@@ -107,7 +107,6 @@ steps:
 #        -p cf-traits
 #        -- --check
 #      - *sccache_cmd
-
 #  Performs all unit tests
   - name: test-validator-package
     image: *base_latest
