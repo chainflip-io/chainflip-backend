@@ -17,13 +17,16 @@ codec = { default-features = false, features = ['derive'], package = 'parity-sca
 frame-system = { default-features = false, version = '3.0.0' }
 frame-support = { default-features = false, version = '3.0.0' }
 frame-benchmarking = { default-features = false, optional = true, version = '3.1.0' }
+serde = { version = "1.0.119" }
+sp-runtime = { default-features = false, version = '3.0.0' }
 sp-std = { default-features = false, version = '3.0.0' }
 
+# Internal deps
+cf-traits = { path = '../../traits', default-features = false }
+
 [dev-dependencies]
-serde = { version = "1.0.119" }
 sp-core = { default-features = false, version = '3.0.0' }
 sp-io = { default-features = false, version = '3.0.0' }
-sp-runtime = { default-features = false, version = '3.0.0' }
 
 [features]
 default = ['std']
@@ -33,6 +36,7 @@ std = [
 	'frame-system/std',
 	'frame-benchmarking/std',
 	'sp-std/std',
+	'cf-traits/std',
 ]
 runtime-benchmarks = [
 	'frame-benchmarking',

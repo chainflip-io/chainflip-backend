@@ -1,8 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-/// Edit this file to define custom logic or remove it if it is not needed.
-/// Learn more about FRAME and the core library of Substrate FRAME pallets:
-/// <https://substrate.dev/docs/en/knowledgebase/runtime/frame>
+//! A pallet for managing the FLIP emissions schedule.
 
 pub use pallet::*;
 
@@ -15,93 +13,144 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
+use cf_traits::Emissions;
+use codec::FullCodec;
+use sp_runtime::traits::{AtLeast32BitUnsigned, Zero};
+
 #[frame_support::pallet]
 pub mod pallet {
+	use super::*;
+	use cf_traits::Witnesser;
 	use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
+
+	pub type EthTransactionHash = [u8; 32];
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
+		type Call: From<Call<Self>> + IsType<<Self as frame_system::Config>::Call>;
+
+		/// The Flip token denomination.
+		type FlipBalance: Member
+			+ FullCodec
+			+ Default
+			+ MaybeSerializeDeserialize
+			+ AtLeast32BitUnsigned;
+
+		/// An implmentation of the [Emissions] trait.
+		type Emissions: Emissions<Balance = Self::FlipBalance, AccountId = Self::AccountId>;
+
+		/// Provides an origin check for witness transactions.
+		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
+
+		/// An implementation of the witnesser, allows us to define witness_* helper extrinsics.
+		type Witnesser: Witnesser<Call = <Self as Config>::Call, AccountId = Self::AccountId>;
+
+		/// How frequently to mint.
+		#[pallet::constant]
+		type MintFrequency: Get<Self::BlockNumber>;
 	}
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
-	// The pallet's runtime storage items.
-	// https://substrate.dev/docs/en/knowledgebase/runtime/storage
 	#[pallet::storage]
-	#[pallet::getter(fn something)]
-	// Learn more about declaring storage items:
-	// https://substrate.dev/docs/en/knowledgebase/runtime/storage#declaring-storage-items
-	pub type Something<T> = StorageValue<_, u32>;
+	#[pallet::getter(fn emissions_per_block)]
+	/// The amount of Flip to mint per block.
+	pub type EmissionPerBlock<T: Config> = StorageValue<_, T::FlipBalance, ValueQuery>;
 
-	// Pallets use events to inform users when important changes are made.
-	// https://substrate.dev/docs/en/knowledgebase/runtime/events
+	#[pallet::storage]
+	#[pallet::getter(fn last_mint_block)]
+	/// The block number at which we last minted Flip.
+	pub type LastMintBlock<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Event documentation should end with an array that provides descriptive names for event
 		/// parameters. [something, who]
-		SomethingStored(u32, T::AccountId),
+		EmissionsDistributed(BlockNumberFor<T>, T::FlipBalance),
 	}
 
 	// Errors inform users that something went wrong.
 	#[pallet::error]
-	pub enum Error<T> {
-		/// Error names should be descriptive.
-		NoneValue,
-		/// Errors should have helpful documentation associated with them.
-		StorageOverflow,
-	}
+	pub enum Error<T> {}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(current_block: BlockNumberFor<T>) -> frame_support::weights::Weight {
+			let mut weight = frame_support::weights::Weight::zero();
 
-	// Dispatchable functions allows users to interact with the pallet and invoke state changes.
-	// These functions materialize as "extrinsics", which are often compared to transactions.
-	// Dispatchable functions must be annotated with a weight and must return a DispatchResult.
+			let last_mint_block = LastMintBlock::<T>::get();
+			let mint_frequency = T::MintFrequency::get();
+			weight = weight.saturating_add(T::DbWeight::get().reads(2));
+
+			if (current_block - last_mint_block) % mint_frequency == Zero::zero() {
+				todo!("Print some billz.")
+			}
+
+			weight
+		}
+	}
+
 	#[pallet::call]
-	impl<T:Config> Pallet<T> {
-		/// An example dispatchable that takes a singles value as a parameter, writes the value to
-		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
-		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
-		pub fn do_something(origin: OriginFor<T>, something: u32) -> DispatchResultWithPostInfo {
-			// Check that the extrinsic was signed and get the signer.
-			// This function will return an error if the extrinsic is not signed.
-			// https://substrate.dev/docs/en/knowledgebase/runtime/origin
-			let who = ensure_signed(origin)?;
+	impl<T: Config> Pallet<T> {
+		/// Apply a new emission rate.
+		#[pallet::weight(10_000)]
+		pub fn emission_rate_changed(
+			origin: OriginFor<T>,
+			emissions_per_block: T::FlipBalance,
+			_tx_hash: EthTransactionHash,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			// Update storage.
-			<Something<T>>::put(something);
-
-			// Emit an event.
-			Self::deposit_event(Event::SomethingStored(something, who));
-			// Return a successful DispatchResultWithPostInfo
-			Ok(().into())
+			todo!("Check validity and update the emission rate.");
 		}
 
-		/// An example dispatchable that may throw a custom error.
-		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1))]
-		pub fn cause_error(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			let _who = ensure_signed(origin)?;
+		/// A proxy call for witnessing an emission rate update from the StakeManager contract.
+		#[pallet::weight(10_000)]
+		pub fn witness_emission_rate_changed(
+			origin: OriginFor<T>,
+			emissions_per_block: T::FlipBalance,
+			tx_hash: EthTransactionHash,
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			let call = Call::emission_rate_changed(emissions_per_block, tx_hash);
+			T::Witnesser::witness(who, call.into())?;
+			Ok(().into())
+		}
+	}
 
-			// Read a value from storage.
-			match <Something<T>>::get() {
-				// Return an error if the value has not been set.
-				None => Err(Error::<T>::NoneValue)?,
-				Some(old) => {
-					// Increment the value read from storage; will error in the event of overflow.
-					let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
-					// Update the value in storage with the incremented result.
-					<Something<T>>::put(new);
-					Ok(().into())
-				},
-			}
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		/// Emission rate at genesis.
+		pub emission_per_block: T::FlipBalance,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			// 10% annual issuance
+			let annual_issuance = T::Emissions::total_issuance() / T::FlipBalance::from(10);
+			let seconds_per_year = T::FlipBalance::from(31_557_600); // Thank you google.
+			let blocks_per_year = seconds_per_year / 6; // Assume 6-second target block size.
+			let emission_per_block = annual_issuance / blocks_per_year;
+
+			Self { emission_per_block }
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			EmissionPerBlock::<T>::set(self.emission_per_block);
 		}
 	}
 }
