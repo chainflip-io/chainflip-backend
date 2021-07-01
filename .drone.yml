@@ -104,7 +104,24 @@ steps:
         -- --check
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
-#  Performs all unit tests
+  #  Format checks
+  - name: fmt-validator-package
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    commands:
+      - >
+        cargo fmt -p chainflip-engine
+        -p cf-p2p
+        -p cf-p2p-rpc
+        -p pallet-cf-auction
+        -p pallet-cf-flip
+        -p pallet-cf-staking
+        -p pallet-cf-validator
+        -p pallet-cf-witness
+        -p cf-traits
+        -- --check
+      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
+
+  #  Performs all unit tests
   - name: test-validator-package
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
