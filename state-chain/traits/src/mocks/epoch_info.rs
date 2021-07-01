@@ -1,5 +1,5 @@
-use std::cell::RefCell;
 use crate::EpochInfo;
+use std::cell::RefCell;
 
 type AccountId = u64;
 pub struct Mock;
@@ -82,4 +82,4 @@ impl EpochInfo for Mock {
 	fn is_auction_phase() -> bool {
 		IS_AUCTION.with(|cell| *cell.borrow())
 	}
-} 
+}

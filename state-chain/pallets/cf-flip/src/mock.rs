@@ -2,7 +2,11 @@ use crate as pallet_cf_flip;
 use cf_traits::StakeTransfer;
 use frame_support::{parameter_types, traits::HandleLifetime};
 use sp_core::H256;
-use sp_runtime::{BuildStorage, testing::Header, traits::{BlakeTwo256, IdentityLookup}};
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
+};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -67,7 +71,9 @@ pub const CHARLIE: <Test as frame_system::Config>::AccountId = 789u64;
 
 pub fn check_balance_integrity() {
 	assert_eq!(
-		pallet_cf_flip::Account::<Test>::iter_values().map(|account| account.total()).sum::<u128>(),
+		pallet_cf_flip::Account::<Test>::iter_values()
+			.map(|account| account.total())
+			.sum::<u128>(),
 		Flip::onchain_funds()
 	);
 }

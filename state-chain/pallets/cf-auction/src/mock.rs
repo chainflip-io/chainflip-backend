@@ -1,19 +1,14 @@
 use super::*;
 use crate as pallet_cf_auction;
-use frame_system::{RawOrigin, ensure_root};
-use sp_core::{H256};
-use sp_runtime::{
-	traits::{
-		BlakeTwo256,
-		IdentityLookup,
-	},
-	testing::{
-		Header,
-	},
-};
-use frame_support::{parameter_types, construct_runtime};
 use frame_support::traits::ValidatorRegistration;
+use frame_support::{construct_runtime, parameter_types};
+use frame_system::{ensure_root, RawOrigin};
+use sp_core::H256;
 use sp_runtime::BuildStorage;
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+};
 use std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -27,8 +22,8 @@ pub const JOE_BID: (ValidatorId, Amount) = (3, 100);
 pub const MAX_BID: (ValidatorId, Amount) = (4, 101);
 pub const INVALID_BID: (ValidatorId, Amount) = (1, 0);
 
-pub const MIN_AUCTION_SIZE : u32 = 2;
-pub const MAX_AUCTION_SIZE : u32 = 150;
+pub const MIN_AUCTION_SIZE: u32 = 2;
+pub const MAX_AUCTION_SIZE: u32 = 150;
 
 thread_local! {
 	// A set of bidders, we initialise this with the proposed genesis bidders
@@ -136,7 +131,6 @@ impl BidderProvider for TestBidderProvider {
 }
 
 impl AuctionConfirmation for Test {
-
 	fn awaiting_confirmation() -> bool {
 		CONFIRM.with(|l| *l.borrow())
 	}

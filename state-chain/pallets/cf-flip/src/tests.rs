@@ -1,10 +1,9 @@
 use std::mem;
 
-use crate::{Config, Error, OffchainFunds, TotalIssuance, mock::*};
-use frame_support::traits::{Imbalance, OnKilledAccount, HandleLifetime};
+use crate::{mock::*, Config, Error, OffchainFunds, TotalIssuance};
 use cf_traits::{Emissions, StakeTransfer};
+use frame_support::traits::{HandleLifetime, Imbalance, OnKilledAccount};
 use frame_support::{assert_noop, assert_ok};
-
 
 #[test]
 fn account_to_account() {
@@ -46,7 +45,7 @@ fn mint_external() {
 		mem::drop(Flip::mint(50).offset(Flip::bridge_out(50)));
 		assert_eq!(TotalIssuance::<Test>::get(), 1050);
 		check_balance_integrity();
-		
+
 		mem::drop(Flip::bridge_out(50).offset(Flip::mint(50)));
 		assert_eq!(TotalIssuance::<Test>::get(), 1100);
 		check_balance_integrity();
@@ -60,7 +59,7 @@ fn burn_external() {
 		mem::drop(Flip::burn(50).offset(Flip::bridge_in(50)));
 		assert_eq!(TotalIssuance::<Test>::get(), 950);
 		check_balance_integrity();
-		
+
 		mem::drop(Flip::bridge_in(50).offset(Flip::burn(50)));
 		assert_eq!(TotalIssuance::<Test>::get(), 900);
 		check_balance_integrity();
@@ -75,7 +74,6 @@ fn burn_from_account() {
 		assert_eq!(Flip::total_balance_of(&ALICE), 90);
 		assert_eq!(TotalIssuance::<Test>::get(), 990);
 		check_balance_integrity();
-
 	});
 }
 
@@ -176,7 +174,6 @@ fn stake_transfers() {
 	});
 }
 
-
 #[test]
 fn simple_burn() {
 	new_test_ext().execute_with(|| {
@@ -213,7 +210,10 @@ fn cant_burn_too_much() {
 		assert_eq!(Flip::total_balance_of(&ALICE), 50);
 
 		// The slashable balance doesn't include the existential deposit.
-		assert_eq!(Flip::slashable_funds(&ALICE), 50 - <Test as Config>::ExistentialDeposit::get());
+		assert_eq!(
+			Flip::slashable_funds(&ALICE),
+			50 - <Test as Config>::ExistentialDeposit::get()
+		);
 
 		// Force through a burn of all remaining burnable tokens, including the existential deposit.
 		<Flip as Emissions>::burn_from(&ALICE, 51);
