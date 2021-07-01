@@ -17,7 +17,10 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use sp_core::Hasher;
 use sp_runtime::traits::Keccak256;
+use std::str::FromStr;
 use web3::{ethabi::Token, types::Address};
+
+use secp256k1::{PublicKey, Secp256k1, SecretKey};
 
 /// Helper function, constructs and runs the [SetAggKeyWithAggKeyEncoder] asynchronously.
 pub async fn start<M: IMQClient + Clone>(
@@ -81,7 +84,7 @@ struct SetAggKeyWithAggKeyEncoder<M: IMQClient> {
 #[derive(Clone)]
 struct ParamContainer {
     pub key_id: KeyId,
-    pub nonce: u64,
+    pub nonce: [u8; 32],
     pub pubkey_x: [u8; 32],
     pub pubkey_y_parity: u8,
     pub nonce_times_g_addr: [u8; 20],
@@ -261,7 +264,60 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
     //     })
     // }
 
-    fn generate_crypto_parts(pubkey: secp256k1::PublicKey, nonce: u64) {}
+    fn generate_crypto_parts(
+        &self,
+        pubkey: secp256k1::PublicKey,
+    ) -> ([u8; 32], u8, [u8; 32], [u8; 20]) {
+        let s = secp256k1::Secp256k1::signing_only();
+
+        // we don't need the secret, we have the public key
+
+        // compressed form, means first byte is the y valence
+        let pubkey_bytes: [u8; 33] = pubkey.serialize();
+        let pubkey_y_parity_byte = pubkey_bytes[0];
+        let pubkey_y_parity = if pubkey_y_parity_byte == 2 { 0u8 } else { 1u8 };
+
+        let pubkey_x: [u8; 32] = pubkey_bytes[1..]
+            .try_into()
+            .expect("should be a valid pubkey");
+
+        println!("pubkey y parity: {:?}", pubkey_y_parity);
+
+        // does this have to be related to the "private key"? -> if it does, we can use the keys from the python
+        // tests in tests/consts.py
+        // nonce
+        // I think we can generate this randomly??
+        // I *think* this is the nonce. And we can generate a uint (256) randomly
+        // after all, this is 64 / 2 (2 chars per byte) * 8 (bits per byte) = 256
+        // TODO: generate this randomly (crypto-secure)
+        let k_hex = "d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285";
+        let k = SecretKey::from_str(k_hex).unwrap();
+
+        let s = Secp256k1::signing_only();
+        let k_times_g = PublicKey::from_secret_key(&s, &k);
+
+        // this is really just the nonce
+        let k_times_g_pub: [u8; 64] = k_times_g.serialize_uncompressed()[1..]
+            .try_into()
+            .expect("Should be a valid pubkey");
+
+        // not actually sure this is correct, but this makes it 256 bits and resembles k?
+        let nonce: [u8; 32] = k_times_g.serialize()[1..]
+            .try_into()
+            .expect("should be valid pubkey");
+
+        // calculate nonce times g addr
+        let nonce_times_g_addr = Keccak256::hash(&k_times_g_pub).as_bytes().to_owned();
+        // take the last 160bits (20 bytes)
+        let from = nonce_times_g_addr.len() - 20;
+        let nonce_times_g_addr: [u8; 20] = nonce_times_g_addr[from..]
+            .try_into()
+            .expect("should only be 20 bytes long");
+
+        let hex_addr = hex::encode(nonce_times_g_addr);
+
+        return (pubkey_x, pubkey_y_parity, nonce, nonce_times_g_addr);
+    }
 
     // Temporarily a CFE method, this will be moved to the state chain
     fn build_encoded_fn_params(
@@ -270,18 +326,15 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
     ) -> Result<(Vec<u8>, ParamContainer)> {
         let zero = [0u8; 32];
 
-        // let pubkey_x: [u8; 32] = keygen_success.key.into();
-        // println!("Here's the pub key: {:#?}", key);
-
-        // TODO: Work out how to use an sequential nonce
-        let nonce = rand::random::<u64>();
+        let (pubkey_x, pubkey_y_parity, nonce, nonce_times_g_addr) =
+            self.generate_crypto_parts(keygen_success.key);
 
         let param_container = ParamContainer {
             key_id: keygen_success.key_id,
             nonce,
-            pubkey_x: zero,
-            pubkey_y_parity: 1u8,
-            nonce_times_g_addr: [0u8; 20],
+            pubkey_x,
+            pubkey_y_parity,
+            nonce_times_g_addr,
         };
 
         let params = [
@@ -293,9 +346,9 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
             ]),
             Token::Tuple(vec![
                 // Key
-                Token::Uint(todo!()),    // pubkeyX
-                Token::Uint(todo!()),    // pubkeyYparity
-                Token::Address(todo!()), // nonceTimesGAddr
+                Token::Uint(pubkey_x.into()),              // pubkeyX
+                Token::Uint(pubkey_y_parity.into()),       // pubkeyYparity
+                Token::Address(nonce_times_g_addr.into()), // nonceTimesGAddr
             ]),
         ];
 
@@ -314,7 +367,6 @@ mod test_eth_tx_encoder {
     use hex;
 
     use crate::mq::mq_mock::MQMock;
-    use std::str::FromStr;
 
     // #[ignore = "Not fully implemented"]
     // #[test]
@@ -348,11 +400,9 @@ mod test_eth_tx_encoder {
     //         .expect("Unable to encode tx details");
     // }
 
-    use secp256k1::{PublicKey, Secp256k1, SecretKey};
-
     // THIS CRYPTO COMES FROM crypto.py in Schnorr from the smart contracts repository
     #[test]
-    fn test_crypto() {
+    fn secp256k1_sanity_check() {
         let s = secp256k1::Secp256k1::signing_only();
 
         let sk = secp256k1::SecretKey::from_str(
@@ -368,42 +418,31 @@ mod test_eth_tx_encoder {
         )
         .unwrap();
 
-        // sanity check to ensure libs are working as expected
+        // for sanity
         assert_eq!(pubkey_from_sk, pubkey);
+    }
 
-        // compressed form, means first byte is the y valence
-        let pubkey_bytes: [u8; 33] = pubkey.serialize();
-        let pubkey_y_parity_byte = pubkey_bytes[0];
-        let pubkey_y_parity = if pubkey_y_parity_byte == 2 { 0u8 } else { 1u8 };
+    #[test]
+    fn test_crypto_parts() {
+        let fake_address = hex::encode([12u8; 20]);
+        let settings = settings::test_utils::new_test_settings().unwrap();
 
-        println!("pubkey y parity: {:?}", pubkey_y_parity);
+        let mq = MQMock::new();
+        let mq_c = mq.get_client();
 
-        // does this have to be related to the "private key"? -> if it does, we can use the keys from the python
-        // tests in tests/consts.py
-        // nonce
-        let k_hex = "d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285";
-        let k = SecretKey::from_str(k_hex).unwrap();
+        let encoder = SetAggKeyWithAggKeyEncoder::new(
+            &fake_address[..],
+            settings.signing.init_validators,
+            mq_c,
+        )
+        .unwrap();
 
-        let k_times_g = PublicKey::from_secret_key(&s, &k);
-        let k_times_g_pub: [u8; 64] = k_times_g.serialize_uncompressed()[1..]
-            .try_into()
-            .expect("Should be a valid pubkey");
+        let pubkey = secp256k1::PublicKey::from_str(
+            "0218845781f631c48f1c9709e23092067d06837f30aa0cd0544ac887fe91ddd166",
+        )
+        .unwrap();
 
-        // calculate nonce times g addr
-        let nonce_times_g_addr = Keccak256::hash(&k_times_g_pub).as_bytes().to_owned();
-        // take the last 160bits (20 bytes)
-        let from = nonce_times_g_addr.len() - 20;
-        let nonce_times_g_addr: [u8; 20] = nonce_times_g_addr[from..]
-            .try_into()
-            .expect("should only be 20 bytes long");
-
-        let hex_addr = hex::encode(nonce_times_g_addr);
-
-        println!("Hex addr: {:?}", hex_addr);
-
-        let pubkey_x: [u8; 32] = pubkey_bytes[1..]
-            .try_into()
-            .expect("should be a valid pubkey");
+        encoder.generate_crypto_parts(pubkey);
     }
 
     // #[test]
