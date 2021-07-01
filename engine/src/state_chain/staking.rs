@@ -199,8 +199,8 @@ mod tests {
     use pallet_cf_staking::Config;
     use state_chain_runtime::Runtime as SCRuntime;
 
-    use sp_keyring::AccountKeyring;
     use sp_core::U256;
+    use sp_keyring::AccountKeyring;
 
     const ETH_ADDRESS: [u8; 20] = [
         00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01,

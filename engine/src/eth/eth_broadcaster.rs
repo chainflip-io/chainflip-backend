@@ -9,7 +9,10 @@ use crate::{
 
 use anyhow::Result;
 use secp256k1::SecretKey;
-use web3::{Transport, Web3, ethabi::ethereum_types::H256, signing::SecretKeyRef, transports::WebSocket, types::TransactionParameters};
+use web3::{
+    ethabi::ethereum_types::H256, signing::SecretKeyRef, transports::WebSocket,
+    types::TransactionParameters, Transport, Web3,
+};
 
 use futures::StreamExt;
 
@@ -19,7 +22,8 @@ pub async fn start_eth_broadcaster<M: IMQClient + Send + Sync>(
     mq_client: M,
 ) -> anyhow::Result<()> {
     let secret_key = secret_key_from_file(Path::new(settings.eth.private_key_file.as_str()))?;
-    let eth_broadcaster = EthBroadcaster::<M, _>::new(settings.into(), mq_client, secret_key).await?;
+    let eth_broadcaster =
+        EthBroadcaster::<M, _>::new(settings.into(), mq_client, secret_key).await?;
 
     eth_broadcaster.run().await
 }
@@ -55,7 +59,7 @@ impl From<&settings::Settings> for EthClientBuilder {
     }
 }
 
-/// Reads [ContractCallDetails] off the message queue and constructs, signs, and sends the tx to the ethereum network. 
+/// Reads [ContractCallDetails] off the message queue and constructs, signs, and sends the tx to the ethereum network.
 #[derive(Debug)]
 struct EthBroadcaster<M: IMQClient + Send + Sync, T: Transport> {
     mq_client: M,
@@ -64,11 +68,7 @@ struct EthBroadcaster<M: IMQClient + Send + Sync, T: Transport> {
 }
 
 impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
-    async fn new(
-        builder: EthClientBuilder,
-        mq_client: M,
-        secret_key: SecretKey,
-    ) -> Result<Self> {
+    async fn new(builder: EthClientBuilder, mq_client: M, secret_key: SecretKey) -> Result<Self> {
         let web3_client = builder.ws_client().await?;
 
         Ok(EthBroadcaster {
@@ -87,24 +87,31 @@ impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
 
         let subscription = pin_message_stream(subscription);
 
-        subscription.for_each_concurrent(None, |msg| async {
-            match msg {
-                Ok(ref tx_details) => {
-                    match self.sign_and_broadcast(tx_details).await {
+        subscription
+            .for_each_concurrent(None, |msg| async {
+                match msg {
+                    Ok(ref tx_details) => match self.sign_and_broadcast(tx_details).await {
                         Ok(hash) => {
-                            log::debug!("Transaction for {:?} broadcasted successfully: {:?}", tx_details, hash);
-                        },
+                            log::debug!(
+                                "Transaction for {:?} broadcasted successfully: {:?}",
+                                tx_details,
+                                hash
+                            );
+                        }
                         Err(err) => {
-                            log::error!("Failed to broadcast transaction {:?}: {:?}", tx_details, err);
-                        },
+                            log::error!(
+                                "Failed to broadcast transaction {:?}: {:?}",
+                                tx_details,
+                                err
+                            );
+                        }
+                    },
+                    Err(e) => {
+                        log::error!("Unable to broadcast message: {:?}.", e);
                     }
                 }
-                Err(e) => {
-                    log::error!("Unable to broadcast message: {:?}.", e);
-                }
-            }
-        })
-        .await;
+            })
+            .await;
 
         log::error!("{} has stopped.", stringify!(EthBroadcaster));
         Ok(())
@@ -115,18 +122,22 @@ impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
         let tx_params = TransactionParameters {
             to: Some(tx_details.contract_address),
             data: tx_details.data.clone().into(),
-            .. Default::default()
+            ..Default::default()
         };
 
         let key = SecretKeyRef::from(&self.secret_key);
-        let signed = self.web3_client.accounts().sign_transaction(tx_params, key).await?;
+        let signed = self
+            .web3_client
+            .accounts()
+            .sign_transaction(tx_params, key)
+            .await?;
 
         let tx_hash = self
             .web3_client
             .eth()
             .send_raw_transaction(signed.raw_transaction)
             .await?;
-        
+
         // TODO: do we need something to tie the broadcasted item back to the original tx request?
         self.mq_client
             .publish(Subject::BroadcastSuccess(Chain::ETH), &tx_hash)
@@ -153,7 +164,8 @@ mod tests {
         let mq_client = *factory.create().await.unwrap();
         let secret = SecretKey::from_slice(&[3u8; 32]).unwrap();
 
-        let eth_broadcaster = EthBroadcaster::<NatsMQClient, _>::new((&settings).into(), mq_client, secret).await;
+        let eth_broadcaster =
+            EthBroadcaster::<NatsMQClient, _>::new((&settings).into(), mq_client, secret).await;
         eth_broadcaster
     }
 

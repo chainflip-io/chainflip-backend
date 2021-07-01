@@ -2,12 +2,12 @@ use std::{collections::HashMap, sync::Arc};
 
 use parking_lot::Mutex;
 
-use tokio::sync::mpsc::{UnboundedSender};
+use tokio::sync::mpsc::UnboundedSender;
 
 use super::{P2PMessage, P2PNetworkClient, ValidatorId};
 
+use crate::p2p::{P2PNetworkClientError, StatusCode};
 use async_trait::async_trait;
-use crate::p2p::{StatusCode, P2PNetworkClientError};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 pub struct P2PClientMock {
@@ -37,12 +37,18 @@ impl P2PNetworkClient<ValidatorId, UnboundedReceiverStream<P2PMessage>> for P2PC
         Ok(200)
     }
 
-    async fn send(&self, to: &ValidatorId, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError> {
+    async fn send(
+        &self,
+        to: &ValidatorId,
+        data: &[u8],
+    ) -> Result<StatusCode, P2PNetworkClientError> {
         self.network_inner.lock().send(&self.id, to, data);
         Ok(200)
     }
 
-    async fn take_stream(&mut self) -> Result<UnboundedReceiverStream<P2PMessage>, P2PNetworkClientError> {
+    async fn take_stream(
+        &mut self,
+    ) -> Result<UnboundedReceiverStream<P2PMessage>, P2PNetworkClientError> {
         self.receiver.take().ok_or(P2PNetworkClientError::Rpc)
     }
 }
