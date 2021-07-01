@@ -30,6 +30,8 @@ pub async fn start<M: IMQClient + Clone>(
         mq_client,
     )?;
 
+    Ok(())
+
     // let run_build_agg_key_fut = encoder.clone().run_build_and_emit_set_agg_key_txs();
     // let run_tx_constructor_fut = encoder.run_tx_constructor();
 
@@ -346,37 +348,62 @@ mod test_eth_tx_encoder {
     //         .expect("Unable to encode tx details");
     // }
 
+    use secp256k1::{PublicKey, Secp256k1, SecretKey};
+
+    // THIS CRYPTO COMES FROM crypto.py in Schnorr from the smart contracts repository
     #[test]
     fn test_crypto() {
-        let pubkey = secp256k1::PublicKey::from_str(
-            "B33CC9EDC096D0A83416964BD3C6247B8FECD256E4EFA7870D2C854BDEB33390",
+        let s = secp256k1::Secp256k1::signing_only();
+
+        let sk = secp256k1::SecretKey::from_str(
+            "01010101010101010001020304050607ffff0000ffff00006363636363636363",
         )
         .unwrap();
 
-        println!("the public key is: {:?}", pubkey);
-    }
+        let pubkey_from_sk = PublicKey::from_secret_key(&s, &sk);
 
-    #[test]
-    fn test_build_encodings() {
-        let fake_address = hex::encode([12u8; 20]);
-        let settings = settings::test_utils::new_test_settings().unwrap();
-        let mq = MQMock::new();
-
-        let encoder = SetAggKeyWithAggKeyEncoder::new(
-            &fake_address[..],
-            settings.signing.init_validators,
-            mq.get_client(),
+        // these keys should be derivable from each other.
+        let pubkey = secp256k1::PublicKey::from_str(
+            "0218845781f631c48f1c9709e23092067d06837f30aa0cd0544ac887fe91ddd166",
         )
-        .expect("Unable to intialise encoder");
+        .unwrap();
 
-        let event = FakeNewAggKey {
-            pubkey_x: [0; 32],
-            pubkey_y_parity: [0; 32],
-            nonce_times_g_addr: [0; 20],
-        };
+        // sanity check to ensure libs are working as expected
+        assert_eq!(pubkey_from_sk, pubkey);
 
-        let _ = encoder
-            .build_encoded_fn_params(&event)
-            .expect("Unable to encode tx details");
+        // compressed form, means first byte is the y valence
+        let pubkey_bytes: [u8; 33] = pubkey.serialize();
+        let pubkey_y_parity_byte = pubkey_bytes[0];
+        let pubkey_y_parity = if pubkey_y_parity_byte == 2 { 0u8 } else { 1u8 };
+
+        println!("pubkey y parity: {:?}", pubkey_y_parity);
+
+        let pubkey_x: [u8; 32] = pubkey_bytes[1..]
+            .try_into()
+            .expect("should be a valid pubkey");
     }
+
+    // #[test]
+    // fn test_build_encodings() {
+    //     let fake_address = hex::encode([12u8; 20]);
+    //     let settings = settings::test_utils::new_test_settings().unwrap();
+    //     let mq = MQMock::new();
+
+    //     let encoder = SetAggKeyWithAggKeyEncoder::new(
+    //         &fake_address[..],
+    //         settings.signing.init_validators,
+    //         mq.get_client(),
+    //     )
+    //     .expect("Unable to intialise encoder");
+
+    //     let event = FakeNewAggKey {
+    //         pubkey_x: [0; 32],
+    //         pubkey_y_parity: [0; 32],
+    //         nonce_times_g_addr: [0; 20],
+    //     };
+
+    //     let _ = encoder
+    //         .build_encoded_fn_params(&event)
+    //         .expect("Unable to encode tx details");
+    // }
 }
