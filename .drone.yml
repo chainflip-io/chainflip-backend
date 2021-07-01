@@ -117,7 +117,7 @@ steps:
 
 trigger:
   event:
-    - pull_request
+    - pushg
 
 image_pull_secrets:
   - dockerconfigjson
