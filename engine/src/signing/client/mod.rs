@@ -15,7 +15,10 @@ use crate::p2p::P2PMessage;
 
 use self::client_inner::{InnerEvent, InnerSignal, KeygenOutcome, MultisigClientInner};
 
-use super::{crypto::Parameters, MessageHash, MessageInfo};
+use super::{
+    crypto::{Parameters, Signature},
+    MessageHash, MessageInfo,
+};
 
 use tokio::sync::mpsc;
 
@@ -61,7 +64,7 @@ pub enum MultisigInstruction {
 pub enum MultisigEvent {
     ReadyToKeygen,
     ReadyToSign,
-    MessageSigned(MessageInfo),
+    MessageSigned(MessageInfo, Signature),
     KeygenResult(KeygenOutcome),
 }
 
@@ -112,10 +115,13 @@ where
                         .await
                         .expect("Signing module failed to publish readiness");
                 }
-                InnerEvent::InnerSignal(InnerSignal::MessageSigned(msg)) => {
-                    mq.publish(Subject::MultisigEvent, &MultisigEvent::MessageSigned(msg))
-                        .await
-                        .expect("Failed to publish");
+                InnerEvent::InnerSignal(InnerSignal::MessageSigned(msg, sig)) => {
+                    mq.publish(
+                        Subject::MultisigEvent,
+                        &MultisigEvent::MessageSigned(msg, sig),
+                    )
+                    .await
+                    .expect("Failed to publish");
                 }
                 InnerEvent::KeygenResult(res) => {
                     mq.publish(Subject::MultisigEvent, &MultisigEvent::KeygenResult(res))

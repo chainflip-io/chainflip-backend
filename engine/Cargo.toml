@@ -40,7 +40,13 @@ serde_json = "1.0"
 thiserror = "1.0.24"
 tokio = {version = "1.5.0", features = ["full"]}
 tokio-stream = "0.1.5"
+jsonrpc-core = {version = "17.1.0"}
+jsonrpc-core-client = {version = "17.1.0", default-features = false, features = ["http", "ws"]}
+jsonrpc-http-server = "17.1.0"
+jsonrpc-ws-server = "17.1.0"
 web3 = "0.16.0"
+tokio-compat-02 = "0.2.0"
+url = "1.7.2"
 
 # substrate deps
 codec = {package = "parity-scale-codec", version = "2.1", default-features = false, features = ["derive", "full"]}
@@ -57,6 +63,7 @@ pallet-cf-auction = {path = "../state-chain/pallets/cf-auction"}
 pallet-cf-staking = {path = "../state-chain/pallets/cf-staking"}
 pallet-cf-validator = {path = "../state-chain/pallets/cf-validator"}
 state-chain-runtime = {path = "../state-chain/runtime"}
+cf-p2p-rpc = {path = "../state-chain/client/cf-p2p/rpc"}
 
 [dependencies.curv]
 features = ["rust-gmp-kzen"]

@@ -3,7 +3,11 @@
 use core::str::FromStr;
 
 use serde::{Deserialize, Serialize};
-use web3::{contract::tokens::Tokenizable, ethabi::{self, Function, Token}, types::{H160}};
+use web3::{
+    contract::tokens::Tokenizable,
+    ethabi::{self, Function, Token},
+    types::H160,
+};
 
 use anyhow::Result;
 
@@ -28,7 +32,9 @@ impl Tokenizable for ChainflipKey {
     {
         if let Token::Tuple(members) = token {
             if members.len() != 3 {
-                Err(web3::contract::Error::InvalidOutputType(stringify!(ChainflipKey).to_owned()))
+                Err(web3::contract::Error::InvalidOutputType(
+                    stringify!(ChainflipKey).to_owned(),
+                ))
             } else {
                 Ok(ChainflipKey {
                     pub_key_x: ethabi::Uint::from_token(members[0].clone())?,
@@ -37,15 +43,18 @@ impl Tokenizable for ChainflipKey {
                 })
             }
         } else {
-            Err(web3::contract::Error::InvalidOutputType(stringify!(ChainflipKey).to_owned()))
+            Err(web3::contract::Error::InvalidOutputType(
+                stringify!(ChainflipKey).to_owned(),
+            ))
         }
     }
 
     fn into_token(self) -> ethabi::Token {
-        Token::Tuple(vec![ // Key
-            Token::Uint(self.pub_key_x), // msgHash
-            Token::Uint(self.pub_key_y_parity),// nonce
-            Token::Address(self.nonce_times_g_addr) // sig
+        Token::Tuple(vec![
+            // Key
+            Token::Uint(self.pub_key_x),             // msgHash
+            Token::Uint(self.pub_key_y_parity),      // nonce
+            Token::Address(self.nonce_times_g_addr), // sig
         ])
     }
 }
