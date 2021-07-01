@@ -276,6 +276,17 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         let nonce_times_g_addr = Keccak256::hash(&k_times_g_pub).as_bytes().to_owned();
         // take the last 160bits (20 bytes)
         let from = nonce_times_g_addr.len() - 20;
+
+        // is this just r ???? it seems that way
+        // https://docs.decred.org/research/schnorr-signatures/
+        // #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+        // pub struct Signature {
+        //     // This is `s` in other literature
+        //     pub sigma: FE,
+        //     // This is `r` in other literature
+        //     pub v: GE,
+        // }
+        // how do we get the nonce theN???????
         let nonce_times_g_addr: [u8; 20] = nonce_times_g_addr[from..]
             .try_into()
             .expect("should only be 20 bytes long");
