@@ -1,11 +1,12 @@
 use crate::{self as pallet_cf_witness};
-use sp_core::H256;
+use cf_traits::{mocks, EpochInfo};
 use frame_support::parameter_types;
-use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup}, testing::Header,
-};
 use frame_system as system;
-use cf_traits::{EpochInfo, mocks};
+use sp_core::H256;
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -80,7 +81,10 @@ pub const DEIRDRE: <Test as frame_system::Config>::AccountId = 987u64;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext : sp_io::TestExternalities = system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
+	let mut ext: sp_io::TestExternalities = system::GenesisConfig::default()
+		.build_storage::<Test>()
+		.unwrap()
+		.into();
 
 	ext.execute_with(|| {
 		// This is required to log events.

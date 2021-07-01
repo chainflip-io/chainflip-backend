@@ -17,7 +17,7 @@ pub trait Witnesser {
 	/// Witness an event. The event is represented by a call, which is dispatched when a threshold number of witnesses
 	/// have been made.
 	///
-	/// **IMPORTANT** 
+	/// **IMPORTANT**
 	/// The encoded `call` and its arguments are expected to be *unique*. If necessary this should be enforced by adding
 	/// a salt or nonce to the function arguments.
 	/// **IMPORTANT**
@@ -146,10 +146,7 @@ pub trait StakeTransfer {
 	///
 	/// Note this function makes no assumptions about how many claims may be pending simultaneously: if enough funds
 	/// are available, it succeeds. Otherwise, it fails.
-	fn try_claim(
-		account_id: &Self::AccountId,
-		amount: Self::Balance,
-	) -> Result<(), DispatchError>;
+	fn try_claim(account_id: &Self::AccountId, amount: Self::Balance) -> Result<(), DispatchError>;
 
 	/// Performs any necessary settlement once a claim has been confirmed off-chain.
 	fn settle_claim(amount: Self::Balance);
