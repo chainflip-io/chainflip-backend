@@ -44,16 +44,16 @@ mod benchmarking;
 mod imbalances;
 
 use frame_support::{
-	ensure, 
-	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance}
+	ensure,
+	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
 };
-use imbalances::{Surplus, Deficit};
+use imbalances::{Deficit, Surplus};
 
 use codec::{Decode, Encode};
-use sp_runtime::{DispatchError, RuntimeDebug, traits::{
-		AtLeast32BitUnsigned, MaybeSerializeDeserialize,
-		Saturating, Zero,
-	}};
+use sp_runtime::{
+	traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, Zero},
+	DispatchError, RuntimeDebug,
+};
 use sp_std::{fmt::Debug, prelude::*};
 
 pub use pallet::*;
@@ -148,7 +148,9 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { total_issuance: Zero::zero() }
+			Self {
+				total_issuance: Zero::zero(),
+			}
 		}
 	}
 
@@ -203,7 +205,7 @@ impl<T: Config> Pallet<T> {
 	pub fn onchain_funds() -> T::Balance {
 		TotalIssuance::<T>::get() - OffchainFunds::<T>::get()
 	}
-	
+
 	/// Total funds stored in an account.
 	pub fn total_balance_of(account_id: &T::AccountId) -> T::Balance {
 		Account::<T>::get(account_id).total()
@@ -211,17 +213,17 @@ impl<T: Config> Pallet<T> {
 
 	/// Sets the validator bond for an account.
 	pub fn set_validator_bond(account_id: &T::AccountId, amount: T::Balance) {
-		Account::<T>::mutate_exists(account_id, |maybe_account| {
-			match maybe_account.as_mut() {
-				Some(account) => account.validator_bond = amount,
-				None => {},
-			}
+		Account::<T>::mutate_exists(account_id, |maybe_account| match maybe_account.as_mut() {
+			Some(account) => account.validator_bond = amount,
+			None => {}
 		})
 	}
 
 	/// Slashable funds for an account.
 	pub fn slashable_funds(account_id: &T::AccountId) -> T::Balance {
-		Account::<T>::get(account_id).total().saturating_sub(T::ExistentialDeposit::get())
+		Account::<T>::get(account_id)
+			.total()
+			.saturating_sub(T::ExistentialDeposit::get())
 	}
 
 	/// Debits an account's staked balance. Ignores restricted funds, so can be used for slashing.
@@ -232,7 +234,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Credits an account with some staked funds. If the amount provided would result in overflow, does nothing.
-	/// 
+	///
 	/// Crediting an account creates a deficit since we need to take the credited funds from somewhere. In a sense we
 	/// have spent money we don't have.
 	fn credit(account_id: &T::AccountId, amount: T::Balance) -> Deficit<T> {
@@ -248,13 +250,15 @@ impl<T: Config> Pallet<T> {
 		match imbalance {
 			SignedImbalance::Positive(surplus) => {
 				let amount = surplus.peek();
-				surplus.offset(Self::credit(account_id, amount))
+				surplus
+					.offset(Self::credit(account_id, amount))
 					.map(SignedImbalance::Positive)
 					.unwrap_or_else(SignedImbalance::Negative)
 			}
 			SignedImbalance::Negative(deficit) => {
 				let amount = deficit.peek();
-				deficit.offset(Self::debit(account_id, amount))
+				deficit
+					.offset(Self::debit(account_id, amount))
 					.map(SignedImbalance::Negative)
 					.unwrap_or_else(SignedImbalance::Positive)
 			}
@@ -267,8 +271,12 @@ impl<T: Config> Pallet<T> {
 	pub fn settle(account_id: &T::AccountId, imbalance: FlipImbalance<T>) {
 		let settlement_source = ImbalanceSource::Account(account_id.clone());
 		let (from, to, amount) = match &imbalance {
-			SignedImbalance::Positive(surplus) => (surplus.source.clone(), settlement_source, surplus.peek()),
-			SignedImbalance::Negative(deficit) => (settlement_source, deficit.source.clone(), deficit.peek()),
+			SignedImbalance::Positive(surplus) => {
+				(surplus.source.clone(), settlement_source, surplus.peek())
+			}
+			SignedImbalance::Negative(deficit) => {
+				(settlement_source, deficit.source.clone(), deficit.peek())
+			}
 		};
 
 		let (settled, reverted) = Self::try_settle(account_id, imbalance)
@@ -382,9 +390,9 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 
 /// Implementation of `OnKilledAccount` ensures that we reconcile any flip dust remaining in the account by burning it.
 impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
-    fn on_killed_account(account_id: &T::AccountId) {
+	fn on_killed_account(account_id: &T::AccountId) {
 		let dust = Self::total_balance_of(account_id);
-        <Self as cf_traits::Emissions>::burn_from(account_id, dust);
+		<Self as cf_traits::Emissions>::burn_from(account_id, dust);
 		Account::<T>::remove(account_id);
-    }
+	}
 }

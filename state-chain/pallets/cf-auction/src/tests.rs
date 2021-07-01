@@ -1,10 +1,13 @@
 mod test {
+	use crate::mock::*;
 	use crate::*;
-	use crate::{mock::*};
-	use frame_support::{assert_ok, assert_noop};
+	use frame_support::{assert_noop, assert_ok};
 
 	fn last_event() -> mock::Event {
-		frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
+		frame_system::Pallet::<Test>::events()
+			.pop()
+			.expect("Event expected")
+			.event
 	}
 
 	#[test]
@@ -56,18 +59,33 @@ mod test {
 			// Assert our minimum is set to 2
 			assert_eq!(<Test as Config>::MinAuctionSize::get(), 2);
 			// Check we are throwing up an error when we send anything less than the minimum of 2
-			assert_noop!(AuctionPallet::set_auction_size_range(Origin::root(), (0, 0)), Error::<Test>::InvalidRange);
-			assert_noop!(AuctionPallet::set_auction_size_range(Origin::root(), (1, 2)), Error::<Test>::InvalidRange);
+			assert_noop!(
+				AuctionPallet::set_auction_size_range(Origin::root(), (0, 0)),
+				Error::<Test>::InvalidRange
+			);
+			assert_noop!(
+				AuctionPallet::set_auction_size_range(Origin::root(), (1, 2)),
+				Error::<Test>::InvalidRange
+			);
 			// This should now work
-			assert_ok!(AuctionPallet::set_auction_size_range(Origin::root(), (2, 100)));
+			assert_ok!(AuctionPallet::set_auction_size_range(
+				Origin::root(),
+				(2, 100)
+			));
 			// Confirm we have an event
 			assert_eq!(
 				last_event(),
-				mock::Event::pallet_cf_auction(crate::Event::AuctionRangeChanged((MIN_AUCTION_SIZE, MAX_AUCTION_SIZE), (2, 100))),
+				mock::Event::pallet_cf_auction(crate::Event::AuctionRangeChanged(
+					(MIN_AUCTION_SIZE, MAX_AUCTION_SIZE),
+					(2, 100)
+				)),
 			);
 			//
 			// We throw up an error if we try to set it to the current
-			assert_noop!(AuctionPallet::set_auction_size_range(Origin::root(), (2, 100)), Error::<Test>::InvalidRange);
+			assert_noop!(
+				AuctionPallet::set_auction_size_range(Origin::root(), (2, 100)),
+				Error::<Test>::InvalidRange
+			);
 		});
 	}
 
@@ -75,14 +93,15 @@ mod test {
 	fn kill_them_all() {
 		new_test_ext().execute_with(|| {
 			// Create a test set of bidders
-			BIDDER_SET.with(|l| {
-				*l.borrow_mut() = vec![LOW_BID, JOE_BID]
-			});
+			BIDDER_SET.with(|l| *l.borrow_mut() = vec![LOW_BID, JOE_BID]);
 
 			let auction_range = (2, 100);
 			assert_ok!(AuctionPallet::set_auction_range(auction_range));
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(_)));
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WinnersSelected(..)));
+			assert_matches!(
+				AuctionPallet::process(),
+				Ok(AuctionPhase::WinnersSelected(..))
+			);
 			assert!(Test::awaiting_confirmation());
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(winners, min_bid)
 				if !winners.is_empty() && min_bid > 0
