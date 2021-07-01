@@ -1,1 +1,1 @@
-License: Unlicense
+# Chainflip Emissions Pallet

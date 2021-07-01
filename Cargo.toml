@@ -10,6 +10,7 @@ members = [
   'state-chain/pallets/cf-staking',
   'state-chain/pallets/cf-validator',
   'state-chain/pallets/cf-auction',
+  'state-chain/pallets/cf-emissions',
   'state-chain/runtime',
   'state-chain/traits',
   'engine',
