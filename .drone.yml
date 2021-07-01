@@ -129,6 +129,7 @@ tolerations:
   - key: "workloadKind"
     operator: "Equal"
     value: "ci"
+
 ---
 # Runs when PR is merged to release branch and develop
 kind: pipeline
