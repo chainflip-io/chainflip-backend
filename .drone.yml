@@ -78,11 +78,28 @@ steps:
         - Dockerfile.rust-base
         - .drone.yml
 
-#  Performs all unit tests
-  - name: check-validator-package
+##  Performs all unit tests
+#  - name: check-validator-package
+#    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+#    commands:
+#      - cargo check --all-targets
+#      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
+
+#  Format checks
+  - name: fmt-validator-package
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - cargo check --all-targets
+      - >
+        cargo fmt -p chainflip-engine
+        -p cf-p2p
+        -p cf-p2p-rpc
+        -p pallet-cf-auction
+        -p pallet-cf-flip
+        -p pallet-cf-staking
+        -p pallet-cf-validator
+        -p pallet-cf-witness
+        -p cf-traits
+        -- --check
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
 #  Performs all unit tests
