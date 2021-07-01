@@ -56,17 +56,17 @@ environment:
 
 steps:
   #  Checks the the .drone.yml file is formatted correctly
-  - name: lint-drone-yml
-    image: *master
-    resources:
-      limits:
-        cpu: 4000
-    commands:
-      - drone lint --trusted
+#  - name: lint-drone-yml
+#    image: *master
+#    resources:
+#      limits:
+#        cpu: 4000
+#    commands:
+#      - drone lint --trusted
 #    when:
 #      paths:
 #        - .drone.yml
-
+#
 #  #  Builds the base image for running build jobs
 #  - name: rust-base
 #    image: plugins/docker
@@ -107,17 +107,17 @@ steps:
 #        -p cf-traits
 #        -- --check
 #      - *sccache_cmd
-#
-##  Performs all unit tests
-#  - name: test-validator-package
-#    image: *base_latest
-#    commands:
-#      - cargo test --lib
-#      - *sccache_cmd
+
+#  Performs all unit tests
+  - name: test-validator-package
+    image: *base_latest
+    commands:
+      - cargo test --lib
+      - *sccache_cmd
 
 trigger:
   event:
-    - push
+    - pull_request
 
 image_pull_secrets:
   - dockerconfigjson
