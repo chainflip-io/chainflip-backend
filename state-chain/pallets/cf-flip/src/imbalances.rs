@@ -16,7 +16,7 @@ use sp_std::{mem, result};
 pub enum ImbalanceSource<AccountId> {
 	External,
 	Account(AccountId),
-	Emissions
+	Emissions,
 }
 
 /// Opaque, move-only struct with private fields that serves as a token denoting that funds have been added from
@@ -31,7 +31,7 @@ pub struct Surplus<T: Config> {
 impl<T: Config> Surplus<T> {
 	/// Create a new surplus.
 	fn new(amount: T::Balance, source: ImbalanceSource<T::AccountId>) -> Self {
-		Surplus { amount, source, }
+		Surplus { amount, source }
 	}
 
 	/// Funds surplus from minting new funds. This surplus needs to be allocated somewhere or the mint will be
@@ -102,7 +102,7 @@ impl<T: Config> Deficit<T> {
 		Self::new(amount, ImbalanceSource::Emissions)
 	}
 
-	/// Funds deficit from an account. 
+	/// Funds deficit from an account.
 	///
 	/// Usually means that funds have been credited to an account.
 	pub(super) fn from_acct(account_id: &T::AccountId, amount: T::Balance) -> Self {
@@ -112,7 +112,7 @@ impl<T: Config> Deficit<T> {
 					account.stake = result;
 					Self::new(amount, ImbalanceSource::Account(account_id.clone()))
 				}
-				None => Self::new(Zero::zero(), ImbalanceSource::Account(account_id.clone()))
+				None => Self::new(Zero::zero(), ImbalanceSource::Account(account_id.clone())),
 			}
 		})
 	}
@@ -121,14 +121,12 @@ impl<T: Config> Deficit<T> {
 	///
 	/// Means that funds have been sent offchain; we need to apply the resulting deficit somewhere.
 	pub(super) fn from_offchain(amount: T::Balance) -> Self {
-		let added = Flip::OffchainFunds::<T>::mutate(|total| {
-			match total.checked_add(&amount) {
-				Some(result) => {
-					*total = result;
-					amount
-				},
-				None => Zero::zero()
+		let added = Flip::OffchainFunds::<T>::mutate(|total| match total.checked_add(&amount) {
+			Some(result) => {
+				*total = result;
+				amount
 			}
+			None => Zero::zero(),
 		});
 		Self::new(added, ImbalanceSource::External)
 	}
@@ -262,7 +260,9 @@ impl<T: Config> RevertImbalance for Surplus<T> {
 				// Some funds were bridged onto the chain but weren't be allocated to an account. For all intents and
 				// purposes they are still offchain.
 				// TODO: Allocate these to some 'error' account? Eg. for refunds.
-				Flip::OffchainFunds::<T>::mutate(|total| *total = total.saturating_add(self.amount));
+				Flip::OffchainFunds::<T>::mutate(|total| {
+					*total = total.saturating_add(self.amount)
+				});
 			}
 			ImbalanceSource::Emissions => {
 				// This means some Flip were minted without allocating them somewhere. We revert by burning
@@ -285,8 +285,10 @@ impl<T: Config> RevertImbalance for Deficit<T> {
 		match &self.source {
 			ImbalanceSource::External => {
 				// This means we tried to move funds off-chain but didn't move them *from* anywhere
-				Flip::OffchainFunds::<T>::mutate(|total| *total = total.saturating_sub(self.amount));
-			},
+				Flip::OffchainFunds::<T>::mutate(|total| {
+					*total = total.saturating_sub(self.amount)
+				});
+			}
 			ImbalanceSource::Emissions => {
 				// This means some funds were burned without specifying the source. If this happens, we
 				// add this back on to the total issuance again.
@@ -297,7 +299,7 @@ impl<T: Config> RevertImbalance for Deficit<T> {
 				Flip::Account::<T>::mutate(account_id, |acct| {
 					acct.stake = acct.stake.saturating_sub(self.amount)
 				})
-			},
+			}
 		};
 	}
 }

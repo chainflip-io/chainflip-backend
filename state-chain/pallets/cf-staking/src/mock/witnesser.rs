@@ -1,7 +1,7 @@
-use std::cell::RefCell;
-use frame_support::dispatch::Dispatchable;
 use super::AccountId;
 use super::*;
+use frame_support::dispatch::Dispatchable;
+use std::cell::RefCell;
 
 pub struct Mock;
 
@@ -24,7 +24,10 @@ impl cf_traits::Witnesser for Mock {
 	type AccountId = AccountId;
 	type Call = Call;
 
-	fn witness(_who: Self::AccountId, call: Self::Call) -> frame_support::dispatch::DispatchResultWithPostInfo {
+	fn witness(
+		_who: Self::AccountId,
+		call: Self::Call,
+	) -> frame_support::dispatch::DispatchResultWithPostInfo {
 		let count = WITNESS_VOTES.with(|votes| {
 			let mut votes = votes.borrow_mut();
 			votes.push(call.clone());
