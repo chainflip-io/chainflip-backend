@@ -1,12 +1,12 @@
-use futures::{Future, Stream, StreamExt};
-use jsonrpc_core_client::{RpcChannel, TypedClient, TypedSubscriptionStream, RpcResult};
-use crate::p2p::{P2PNetworkClient, P2PMessage, P2PNetworkClientError, StatusCode, ValidatorId};
-use jsonrpc_core_client::transports::ws::connect;
-use tokio_compat_02::FutureExt;
+use crate::p2p::{P2PMessage, P2PNetworkClient, P2PNetworkClientError, StatusCode, ValidatorId};
 use async_trait::async_trait;
 use cf_p2p_rpc::P2PEvent;
-use std::task::{Context, Poll};
+use futures::{Future, Stream, StreamExt};
+use jsonrpc_core_client::transports::ws::connect;
+use jsonrpc_core_client::{RpcChannel, RpcResult, TypedClient, TypedSubscriptionStream};
 use std::pin::Pin;
+use std::task::{Context, Poll};
+use tokio_compat_02::FutureExt;
 
 pub trait Base58 {
     fn to_base58(&self) -> String;
@@ -24,28 +24,21 @@ struct GlueClient {
 
 impl GlueClient {
     pub fn new(url: url::Url) -> Self {
-        GlueClient {
-            url,
-        }
+        GlueClient { url }
     }
 }
 
 impl From<P2PEvent> for P2PMessage {
     fn from(p2p_event: P2PEvent) -> Self {
         match p2p_event {
-            P2PEvent::Received(peer_id, msg) => {
-                P2PMessage {
-                    sender_id: ValidatorId(peer_id),
-                    data: msg,
-                }
-            }
-            P2PEvent::PeerConnected(peer_id) |
-            P2PEvent::PeerDisconnected(peer_id) => {
-                P2PMessage {
-                    sender_id: ValidatorId(peer_id),
-                    data: vec![],
-                }
-            }
+            P2PEvent::Received(peer_id, msg) => P2PMessage {
+                sender_id: ValidatorId(peer_id),
+                data: msg,
+            },
+            P2PEvent::PeerConnected(peer_id) | P2PEvent::PeerDisconnected(peer_id) => P2PMessage {
+                sender_id: ValidatorId(peer_id),
+                data: vec![],
+            },
         }
     }
 }
@@ -71,13 +64,11 @@ impl Stream for GlueClientStream {
             match this.inner.poll_next_unpin(cx) {
                 Poll::Ready(Some(result)) => {
                     if let Ok(result) = result {
-                        return Poll::Ready(Some(result.into()))
+                        return Poll::Ready(Some(result.into()));
                     }
                 }
-                Poll::Ready(None) => return Poll::Ready(
-                    None
-                ),
-                Poll::Pending => break
+                Poll::Ready(None) => return Poll::Ready(None),
+                Poll::Pending => break,
             }
         }
 
@@ -87,14 +78,18 @@ impl Stream for GlueClientStream {
 
 #[async_trait]
 impl<NodeId> P2PNetworkClient<NodeId, GlueClientStream> for GlueClient
-    where NodeId: Base58 + Send + Sync
+where
+    NodeId: Base58 + Send + Sync,
 {
     async fn broadcast(&self, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError> {
         let client: P2PClient = FutureExt::compat(connect(&self.url))
             .await
             .map_err(|_| P2PNetworkClientError::Rpc)?;
 
-        client.broadcast(data.into()).await.map_err(|_| P2PNetworkClientError::Rpc)
+        client
+            .broadcast(data.into())
+            .await
+            .map_err(|_| P2PNetworkClientError::Rpc)
     }
 
     async fn send(&self, to: &NodeId, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError> {
@@ -102,15 +97,19 @@ impl<NodeId> P2PNetworkClient<NodeId, GlueClientStream> for GlueClient
             .await
             .map_err(|_| P2PNetworkClientError::Rpc)?;
 
-        client.send(to.to_base58(), data.into()).await.map_err(|_| P2PNetworkClientError::Rpc)
+        client
+            .send(to.to_base58(), data.into())
+            .await
+            .map_err(|_| P2PNetworkClientError::Rpc)
     }
 
-    async fn take_stream(&mut self) ->  Result<GlueClientStream, P2PNetworkClientError> {
+    async fn take_stream(&mut self) -> Result<GlueClientStream, P2PNetworkClientError> {
         let client: P2PClient = FutureExt::compat(connect(&self.url))
             .await
             .map_err(|_| P2PNetworkClientError::Rpc)?;
 
-        let sub = client.subscribe_notifications()
+        let sub = client
+            .subscribe_notifications()
             .map_err(|_| P2PNetworkClientError::Rpc)?;
 
         Ok(GlueClientStream::new(sub))
@@ -136,27 +135,20 @@ impl P2PClient {
         }
     }
     /// Send a message to peer id returning a HTTP status code
-    pub fn send(
-        &self,
-        peer_id: String,
-        message: Vec<u8>,
-    ) -> impl Future<Output=RpcResult<u64>> {
+    pub fn send(&self, peer_id: String, message: Vec<u8>) -> impl Future<Output = RpcResult<u64>> {
         let args = (peer_id, message);
         self.inner.call_method("p2p_send", "u64", args)
     }
 
     /// Broadcast a message to the p2p network returning a HTTP status code
     /// impl Future<Output = RpcResult<R>>
-    pub fn broadcast(&self, message: Vec<u8>) -> impl Future<Output=RpcResult<u64>> {
-        let args = (message, );
+    pub fn broadcast(&self, message: Vec<u8>) -> impl Future<Output = RpcResult<u64>> {
+        let args = (message,);
         self.inner.call_method("p2p_broadcast", "u64", args)
     }
 
     // Subscribe to receive notifications
-    pub fn subscribe_notifications(
-        &self,
-    ) -> RpcResult<TypedSubscriptionStream<P2PEvent>>
-    {
+    pub fn subscribe_notifications(&self) -> RpcResult<TypedSubscriptionStream<P2PEvent>> {
         let args_tuple = ();
         self.inner.subscribe(
             "cf_p2p_subscribeNotifications",
@@ -171,8 +163,8 @@ impl P2PClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use jsonrpc_ws_server::{ServerBuilder, Server};
     use jsonrpc_core::{IoHandler, Params};
+    use jsonrpc_ws_server::{Server, ServerBuilder};
     use serde_json::json;
 
     struct TestServer {
@@ -195,11 +187,15 @@ mod tests {
 
     fn io() -> IoHandler {
         let mut io = IoHandler::default();
-        io.add_sync_method("p2p_send", |params: Params| match params.parse::<(String, Vec<u8>,)>() {
-            _ => Ok(json!(200)),
+        io.add_sync_method("p2p_send", |params: Params| {
+            match params.parse::<(String, Vec<u8>)>() {
+                _ => Ok(json!(200)),
+            }
         });
-        io.add_sync_method("p2p_broadcast", |params: Params| match params.parse::<(Vec<u8>,)>() {
-            _ => Ok(json!(200)),
+        io.add_sync_method("p2p_broadcast", |params: Params| {
+            match params.parse::<(Vec<u8>,)>() {
+                _ => Ok(json!(200)),
+            }
         });
 
         io
@@ -210,13 +206,22 @@ mod tests {
         let server = TestServer::serve();
         let mut glue_client = GlueClient::new(server.url);
         let run = async {
-            let result = glue_client.send(&ValidatorId::new("100"),"disco".as_bytes()).await;
-            assert!(result.is_ok(), "Should receive OK for sending message to peer");
-            let result =
-                P2PNetworkClient::<ValidatorId, GlueClientStream>::broadcast(&glue_client,"disco".as_bytes()).await;
+            let result = glue_client
+                .send(&ValidatorId::new("100"), "disco".as_bytes())
+                .await;
+            assert!(
+                result.is_ok(),
+                "Should receive OK for sending message to peer"
+            );
+            let result = P2PNetworkClient::<ValidatorId, GlueClientStream>::broadcast(
+                &glue_client,
+                "disco".as_bytes(),
+            )
+            .await;
             assert!(result.is_ok(), "Should receive OK for broadcasting message");
             let result =
-                P2PNetworkClient::<ValidatorId, GlueClientStream>::take_stream(&mut glue_client).await;
+                P2PNetworkClient::<ValidatorId, GlueClientStream>::take_stream(&mut glue_client)
+                    .await;
             assert!(result.is_ok(), "Should subscribe OK");
         };
         tokio::runtime::Runtime::new().unwrap().block_on(run);

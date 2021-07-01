@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use web3::types::Address;
 
 pub(crate) mod set_agg_key_with_agg_key;

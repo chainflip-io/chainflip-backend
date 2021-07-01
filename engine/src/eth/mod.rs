@@ -1,5 +1,5 @@
-pub mod stake_manager;
 pub mod key_manager;
+pub mod stake_manager;
 
 mod eth_event_streamer;
 
@@ -71,9 +71,14 @@ pub async fn start(settings: Settings) -> anyhow::Result<()> {
     let eth_broadcaster_future =
         eth_broadcaster::start_eth_broadcaster::<NatsMQClient>(&settings, mq_client.clone());
 
-    let eth_tx_encoder_future = eth_tx_encoding::set_agg_key_with_agg_key::start(&settings, mq_client.clone());
+    let eth_tx_encoder_future =
+        eth_tx_encoding::set_agg_key_with_agg_key::start(&settings, mq_client.clone());
 
-    let result = futures::join!(sm_witness_future, eth_broadcaster_future, eth_tx_encoder_future);
+    let result = futures::join!(
+        sm_witness_future,
+        eth_broadcaster_future,
+        eth_tx_encoder_future
+    );
     result.0?;
     result.1?;
 

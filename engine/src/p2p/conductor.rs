@@ -1,5 +1,5 @@
 use futures::{future::Either, Stream};
-use tokio_stream::{StreamExt};
+use tokio_stream::StreamExt;
 
 use crate::{
     mq::{pin_message_stream, IMQClient, Subject},
@@ -14,7 +14,7 @@ use std::marker::PhantomData;
 pub struct P2PConductor<MQ, P2P, S>
 where
     MQ: IMQClient + Send,
-    S: Stream<Item=P2PMessage>,
+    S: Stream<Item = P2PMessage>,
     P2P: P2PNetworkClient<ValidatorId, S>,
 {
     mq: MQ,
@@ -26,7 +26,7 @@ where
 impl<MQ, P2P, S> P2PConductor<MQ, P2P, S>
 where
     MQ: IMQClient + Send,
-    S: Stream<Item=P2PMessage> + Unpin,
+    S: Stream<Item = P2PMessage> + Unpin,
     P2P: P2PNetworkClient<ValidatorId, S> + Send,
 {
     pub async fn new(mq: MQ, p2p: P2P) -> Self {
@@ -35,7 +35,12 @@ where
             .await
             .unwrap();
 
-        P2PConductor { mq, p2p, stream, marker: PhantomData }
+        P2PConductor {
+            mq,
+            p2p,
+            stream,
+            marker: PhantomData,
+        }
     }
 
     pub async fn start(mut self) {
