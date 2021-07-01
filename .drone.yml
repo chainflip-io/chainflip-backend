@@ -67,53 +67,53 @@ steps:
       paths:
         - .drone.yml
 
-  #  Builds the base image for running build jobs
-  - name: rust-base
-    image: plugins/docker
-    settings:
-      username:
-        from_secret: docker_username
-      password:
-        from_secret: docker_password
-      repo: *base
-      cache_from: *base_latest
-      dockerfile: Dockerfile.rust-base
-      registry: ghcr.io
-      tags: latest
-    when:
-      paths:
-        - Dockerfile.rust-base
-
-##  Checks all targets
-  - name: check-validator-package
-    image: *base_latest
-    commands:
-      - cargo check --all-targets
-      - *sccache_cmd
-
-#  Format checks
-  - name: fmt-validator-package
-    image: *base_latest
-    commands:
-      - >
-        cargo fmt -p chainflip-engine
-        -p cf-p2p
-        -p cf-p2p-rpc
-        -p pallet-cf-auction
-        -p pallet-cf-flip
-        -p pallet-cf-staking
-        -p pallet-cf-validator
-        -p pallet-cf-witness
-        -p cf-traits
-        -- --check
-      - *sccache_cmd
-
-#  Performs all unit tests
-  - name: test-validator-package
-    image: *base_latest
-    commands:
-      - cargo test --lib
-      - *sccache_cmd
+#  #  Builds the base image for running build jobs
+#  - name: rust-base
+#    image: plugins/docker
+#    settings:
+#      username:
+#        from_secret: docker_username
+#      password:
+#        from_secret: docker_password
+#      repo: *base
+#      cache_from: *base_latest
+#      dockerfile: Dockerfile.rust-base
+#      registry: ghcr.io
+#      tags: latest
+#    when:
+#      paths:
+#        - Dockerfile.rust-base
+#
+###  Checks all targets
+#  - name: check-validator-package
+#    image: *base_latest
+#    commands:
+#      - cargo check --all-targets
+#      - *sccache_cmd
+#
+##  Format checks
+#  - name: fmt-validator-package
+#    image: *base_latest
+#    commands:
+#      - >
+#        cargo fmt -p chainflip-engine
+#        -p cf-p2p
+#        -p cf-p2p-rpc
+#        -p pallet-cf-auction
+#        -p pallet-cf-flip
+#        -p pallet-cf-staking
+#        -p pallet-cf-validator
+#        -p pallet-cf-witness
+#        -p cf-traits
+#        -- --check
+#      - *sccache_cmd
+#
+##  Performs all unit tests
+#  - name: test-validator-package
+#    image: *base_latest
+#    commands:
+#      - cargo test --lib
+#      - *sccache_cmd
 
 trigger:
   event:
