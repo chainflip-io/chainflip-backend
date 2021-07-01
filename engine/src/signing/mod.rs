@@ -4,7 +4,10 @@ pub mod crypto;
 #[cfg(test)]
 mod tests;
 
-pub use client::{KeyId, KeygenInfo, MultisigClient, MultisigInstruction, SigningInfo};
+pub use client::{
+    KeyId, KeygenInfo, KeygenOutcome, KeygenSuccess, MultisigClient, MultisigEvent,
+    MultisigInstruction, SigningInfo,
+};
 
 use serde::{Deserialize, Serialize};
 

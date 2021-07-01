@@ -5,7 +5,10 @@ use crate::{
     mq::{pin_message_stream, IMQClient, Subject},
     p2p::ValidatorId,
     settings,
-    signing::{KeyId, MessageHash, MultisigInstruction, SigningInfo},
+    signing::{
+        KeyId, KeygenOutcome, KeygenSuccess, MessageHash, MultisigEvent, MultisigInstruction,
+        SigningInfo,
+    },
     types::chain::Chain,
 };
 
@@ -27,11 +30,11 @@ pub async fn start<M: IMQClient + Clone>(
         mq_client,
     )?;
 
-    let run_build_agg_key_fut = encoder.clone().run_build_and_emit_set_agg_key_txs();
-    let run_tx_constructor_fut = encoder.run_tx_constructor();
+    // let run_build_agg_key_fut = encoder.clone().run_build_and_emit_set_agg_key_txs();
+    // let run_tx_constructor_fut = encoder.run_tx_constructor();
 
     // first fut is the only one that returns a Result, so just use that
-    futures::join!(run_build_agg_key_fut, run_tx_constructor_fut).0
+    // futures::join!(run_build_agg_key_fut).0
 }
 
 /// Details of a transaction to be broadcast to ethereum.
@@ -75,9 +78,10 @@ struct SetAggKeyWithAggKeyEncoder<M: IMQClient> {
 
 #[derive(Clone)]
 struct ParamContainer {
+    pub key_id: KeyId,
     pub nonce: u64,
     pub pubkey_x: [u8; 32],
-    pub pubkey_y_parity: [u8; 32],
+    pub pubkey_y_parity: u8,
     pub nonce_times_g_addr: [u8; 20],
 }
 
@@ -103,144 +107,179 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         })
     }
 
-    async fn run_build_and_emit_set_agg_key_txs(self) -> Result<()> {
-        // from here we are getting signed message hashses
-        let subscription = self
+    async fn process_multi_sig_event_stream(&mut self) {
+        let multisig_event_stream = self
             .mq_client
-            .subscribe::<FakeNewAggKeySigningComplete>(Subject::FakeNewAggKeySigningComplete)
-            .await?;
-
-        let subscription = pin_message_stream(subscription);
-
-        subscription
-            .for_each_concurrent(None, |msg| async {
-                match msg {
-                    Ok(ref msg) => {
-                        // 1. Get the data from the message hash that was signed (using the `messages` field)
-                        let params = self
-                            .messages
-                            .get(&msg.hash)
-                            .expect("should have been stored when asked to sign");
-                        // 2. Call build_tx with the required info
-                        match self.build_tx(msg, params) {
-                            Ok(ref tx_details) => {
-                                // 3. Send it on its way to the eth broadcaster
-                                self.mq_client
-                                    .publish(Subject::Broadcast(Chain::ETH), tx_details)
-                                    .await
-                                    .unwrap_or_else(|err| {
-                                        log::error!("Could not process: {:#?}", err);
-                                    });
-                                // here we assume the key was update successfully
-                                // TODO update the state to reflect the update key
-                                // update curr key id
-                                // curr = next
-                                // next = None
-                                self
-                                // update
-                            }
-                            Err(err) => {
-                                log::error!("Failed to build: {:#?}", err);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        log::error!("Unable to process claim request: {:?}.", e);
-                    }
-                }
-            })
-            .await;
-
-        log::error!(
-            "Oh no, the run_build_and_emit_set_agg_key_txs process has ended again :sad_face:"
-        );
-        Ok(())
-    }
-
-    fn build_tx(
-        &self,
-        msg: &FakeNewAggKeySigningComplete,
-        params: &ParamContainer,
-    ) -> Result<TxDetails> {
-        let params = [
-            Token::Tuple(vec![
-                // SigData
-                Token::Uint(msg.hash.0.into()),   // msgHash
-                Token::Uint(params.nonce.into()), // nonce
-                Token::Uint(msg.sig.into()),      // sig
-            ]),
-            Token::Tuple(vec![
-                // Key
-                Token::Uint(params.pubkey_x.into()), // pubkeyX
-                Token::Uint(params.pubkey_y_parity.into()), // pubkeyYparity
-                Token::Address(params.nonce_times_g_addr.into()), // nonceTimesGAddr
-            ]),
-        ];
-
-        let tx_data = self
-            .key_manager
-            .set_agg_key_with_agg_key()
-            .encode_input(&params[..])?;
-
-        Ok(TxDetails {
-            contract_address: self.key_manager.deployed_address,
-            data: tx_data.into(),
-        })
-    }
-
-    // temporary process (will be handled by SC eventually) that creating the payload to be signed by the multisig process
-    async fn run_tx_constructor(&mut self) {
-        // A new agg key has been emitted. Now we need to create the ethereum transaction to update the key
-        // in the smart contract
-        let new_agg_key_created_stream = self
-            .mq_client
-            .subscribe::<FakeNewAggKey>(Subject::FakeNewAggKey)
+            .subscribe::<MultisigEvent>(Subject::MultisigEvent)
             .await
             .unwrap();
 
-        let mut new_agg_key_created_stream = pin_message_stream(new_agg_key_created_stream);
+        let mut multisig_event_stream = pin_message_stream(multisig_event_stream);
 
-        while let Some(event) = new_agg_key_created_stream.next().await {
-            let event = event.expect("Should be an event");
-            let (encoded_fn_params, param_container) = self
-                .build_encoded_fn_params(&event)
-                .expect("should be a valid encoded params");
-
-            let hash = Keccak256::hash(&encoded_fn_params[..]);
-            let message_hash = FakeMessageHash(hash.into());
-
-            // store key: parameters, so we can fetch the parameters again, after the payload
-            // has been signed by the signing module
-            self.messages
-                .entry(message_hash.clone())
-                .or_insert(param_container);
-
-            // TODO: Use the correct KeyId and vector of validators here.
-            // how do we get the subset of signers from the OLD key, in order to use? Need to be collected from somewhere
-            let signing_info = SigningInfo::new(KeyId(1), vec![]);
-            // TODO: remove this cast when MessageHash wraps a [u8; 32]
-            let message_hash = MessageHash(message_hash.0.to_vec());
-            let signing_instruction = MultisigInstruction::Sign(message_hash, signing_info);
-
-            self.mq_client
-                .publish(Subject::MultisigInstruction, &signing_instruction)
-                .await
-                .expect("Should publish to MQ");
+        while let Some(event) = multisig_event_stream.next().await {
+            match event {
+                Ok(event) => {
+                    match event {
+                        MultisigEvent::KeygenResult(key_outcome) => {
+                            match key_outcome {
+                                KeygenOutcome::Success(keygen_success) => {
+                                    self.handle_keygen_success(keygen_success).await;
+                                }
+                                // TODO: Be more granular with log messages here
+                                _ => {
+                                    log::error!("Signing module returned error generating key")
+                                }
+                            }
+                        }
+                        MultisigEvent::MessageSigned(msg, sig) => {
+                            // message signed result
+                        }
+                        _ => {
+                            log::trace!("Discarding non keygen result or message signed event")
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::error!("Error reading event from multisig event stream");
+                }
+            }
         }
     }
 
+    async fn handle_keygen_success(&mut self, keygen_success: KeygenSuccess) {
+        // process the keygensuccess
+        let (encoded_fn_params, param_container) = self
+            .build_encoded_fn_params(&keygen_success)
+            .expect("should be a valid encoded params");
+
+        let hash = Keccak256::hash(&encoded_fn_params[..]);
+        let message_hash = FakeMessageHash(hash.into());
+
+        // store key: parameters, so we can fetch the parameters again, after the payload
+        // has been signed by the signing module
+        self.messages
+            .entry(message_hash.clone())
+            .or_insert(param_container);
+
+        // TODO: Use the correct KeyId and vector of validators here.
+        // how do we get the subset of signers from the OLD key, in order to use? Need to be collected from somewhere
+        let signing_info = SigningInfo::new(KeyId(1), vec![]);
+        // TODO: remove this cast when MessageHash wraps a [u8; 32]
+        let message_hash = MessageHash(message_hash.0.to_vec());
+        let signing_instruction = MultisigInstruction::Sign(message_hash, signing_info);
+
+        self.mq_client
+            .publish(Subject::MultisigInstruction, &signing_instruction)
+            .await
+            .expect("Should publish to MQ");
+    }
+
+    // async fn run_build_and_emit_set_agg_key_txs(self) -> Result<()> {
+    //     // from here we are getting signed message hashses
+    //     let subscription = self
+    //         .mq_client
+    //         .subscribe::<MultisigEvent>(Subject::MultisigEvent)
+    //         .await?;
+
+    //     let subscription = pin_message_stream(subscription);
+
+    //     subscription
+    //         .for_each_concurrent(None, |msg| async {
+    //             match msg {
+    //                 Ok(ref msg) => {
+    //                     // 1. Get the data from the message hash that was signed (using the `messages` field)
+    //                     let params = self
+    //                         .messages
+    //                         .get(&msg.hash)
+    //                         .expect("should have been stored when asked to sign");
+    //                     // 2. Call build_tx with the required info
+    //                     match self.build_tx(msg, params) {
+    //                         Ok(ref tx_details) => {
+    //                             // 3. Send it on its way to the eth broadcaster
+    //                             self.mq_client
+    //                                 .publish(Subject::Broadcast(Chain::ETH), tx_details)
+    //                                 .await
+    //                                 .unwrap_or_else(|err| {
+    //                                     log::error!("Could not process: {:#?}", err);
+    //                                 });
+    //                             // here we assume the key was update successfully
+    //                             // TODO update the state to reflect the update key
+    //                             // update curr key id
+    //                             // curr = next
+    //                             // next = None
+    //                             self
+    //                             // update
+    //                         }
+    //                         Err(err) => {
+    //                             log::error!("Failed to build: {:#?}", err);
+    //                         }
+    //                     }
+    //                 }
+    //                 Err(e) => {
+    //                     log::error!("Unable to process claim request: {:?}.", e);
+    //                 }
+    //             }
+    //         })
+    //         .await;
+
+    //     log::error!(
+    //         "Oh no, the run_build_and_emit_set_agg_key_txs process has ended again :sad_face:"
+    //     );
+    //     Ok(())
+    // }
+
+    // fn build_tx(
+    //     &self,
+    //     msg: &FakeNewAggKeySigningComplete,
+    //     params: &ParamContainer,
+    // ) -> Result<TxDetails> {
+    //     let params = [
+    //         Token::Tuple(vec![
+    //             // SigData
+    //             Token::Uint(msg.hash.0.into()),   // msgHash
+    //             Token::Uint(params.nonce.into()), // nonce
+    //             Token::Uint(msg.sig.into()),      // sig
+    //         ]),
+    //         Token::Tuple(vec![
+    //             // Key
+    //             Token::Uint(params.pubkey_x.into()), // pubkeyX
+    //             Token::Uint(params.pubkey_y_parity.into()), // pubkeyYparity
+    //             Token::Address(params.nonce_times_g_addr.into()), // nonceTimesGAddr
+    //         ]),
+    //     ];
+
+    //     let tx_data = self
+    //         .key_manager
+    //         .set_agg_key_with_agg_key()
+    //         .encode_input(&params[..])?;
+
+    //     Ok(TxDetails {
+    //         contract_address: self.key_manager.deployed_address,
+    //         data: tx_data.into(),
+    //     })
+    // }
+
+    fn generate_crypto_parts(pubkey: secp256k1::PublicKey, nonce: u64) {}
+
     // Temporarily a CFE method, this will be moved to the state chain
-    fn build_encoded_fn_params(&self, event: &FakeNewAggKey) -> Result<(Vec<u8>, ParamContainer)> {
+    fn build_encoded_fn_params(
+        &self,
+        keygen_success: &KeygenSuccess,
+    ) -> Result<(Vec<u8>, ParamContainer)> {
         let zero = [0u8; 32];
+
+        // let pubkey_x: [u8; 32] = keygen_success.key.into();
+        // println!("Here's the pub key: {:#?}", key);
 
         // TODO: Work out how to use an sequential nonce
         let nonce = rand::random::<u64>();
 
         let param_container = ParamContainer {
+            key_id: keygen_success.key_id,
             nonce,
-            pubkey_x: event.pubkey_x,
-            pubkey_y_parity: event.pubkey_y_parity,
-            nonce_times_g_addr: event.nonce_times_g_addr,
+            pubkey_x: zero,
+            pubkey_y_parity: 1u8,
+            nonce_times_g_addr: [0u8; 20],
         };
 
         let params = [
@@ -252,9 +291,9 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
             ]),
             Token::Tuple(vec![
                 // Key
-                Token::Uint(event.pubkey_x.into()), // pubkeyX
-                Token::Uint(event.pubkey_y_parity.into()), // pubkeyYparity
-                Token::Address(event.nonce_times_g_addr.into()), // nonceTimesGAddr
+                Token::Uint(todo!()),    // pubkeyX
+                Token::Uint(todo!()),    // pubkeyYparity
+                Token::Address(todo!()), // nonceTimesGAddr
             ]),
         ];
 
@@ -273,40 +312,52 @@ mod test_eth_tx_encoder {
     use hex;
 
     use crate::mq::mq_mock::MQMock;
+    use std::str::FromStr;
 
-    #[ignore = "Not fully implemented"]
+    // #[ignore = "Not fully implemented"]
+    // #[test]
+    // fn test_tx_build() {
+    //     let fake_address = hex::encode([12u8; 20]);
+    //     let settings = settings::test_utils::new_test_settings().unwrap();
+    //     let mq = MQMock::new();
+
+    //     let encoder = SetAggKeyWithAggKeyEncoder::new(
+    //         &fake_address[..],
+    //         settings.signing.init_validators,
+    //         mq.get_client(),
+    //     )
+    //     .expect("Unable to intialise encoder");
+
+    //     let event = FakeNewAggKeySigningComplete {
+    //         hash: FakeMessageHash([0; 32]),
+    //         sig: [0; 32],
+    //     };
+
+    //     let param_container = ParamContainer {
+    //         key_id: KeyId(1),
+    //         nonce: 3u64,
+    //         pubkey_x: [0; 32],
+    //         pubkey_y_parity: [0; 32],
+    //         nonce_times_g_addr: [0; 20],
+    //     };
+
+    //     let _ = encoder
+    //         .build_tx(&event, &param_container)
+    //         .expect("Unable to encode tx details");
+    // }
+
     #[test]
-    fn test_tx_build() {
-        let fake_address = hex::encode([12u8; 20]);
-        let settings = settings::test_utils::new_test_settings().unwrap();
-        let mq = MQMock::new();
-
-        let encoder = SetAggKeyWithAggKeyEncoder::new(
-            &fake_address[..],
-            settings.signing.init_validators,
-            mq.get_client(),
+    fn test_crypto() {
+        let pubkey = secp256k1::PublicKey::from_str(
+            "B33CC9EDC096D0A83416964BD3C6247B8FECD256E4EFA7870D2C854BDEB33390",
         )
-        .expect("Unable to intialise encoder");
+        .unwrap();
 
-        let event = FakeNewAggKeySigningComplete {
-            hash: FakeMessageHash([0; 32]),
-            sig: [0; 32],
-        };
-
-        let param_container = ParamContainer {
-            nonce: 3u64,
-            pubkey_x: [0; 32],
-            pubkey_y_parity: [0; 32],
-            nonce_times_g_addr: [0; 20],
-        };
-
-        let _ = encoder
-            .build_tx(&event, &param_container)
-            .expect("Unable to encode tx details");
+        println!("the public key is: {:?}", pubkey);
     }
 
     #[test]
-    fn test_tx_build_base() {
+    fn test_build_encodings() {
         let fake_address = hex::encode([12u8; 20]);
         let settings = settings::test_utils::new_test_settings().unwrap();
         let mq = MQMock::new();

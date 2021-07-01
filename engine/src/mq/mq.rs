@@ -72,14 +72,10 @@ pub enum Subject {
     AccountRetired,
     AccountActivated,
 
-    // TODO: Replace with the actual subject that the new agg key event is published to
-    FakeNewAggKey,
-    // TODO: Replace with the actual subject that the signed messages are published to
-    FakeNewAggKeySigningComplete,
-
     P2PIncoming,
     P2POutgoing,
     MultisigInstruction,
+    // both signing and keygen events come from here
     MultisigEvent,
     /// Published by the signing module to notify SC about
     /// the outcome of a keygen ceremony
@@ -178,12 +174,6 @@ impl SubjectName for Subject {
             }
             Subject::AccountActivated => {
                 format!("staking.account_activated")
-            }
-            Subject::FakeNewAggKey => {
-                format!("fake_agg_key_subject")
-            }
-            Subject::FakeNewAggKeySigningComplete => {
-                format!("fake_new_agg_key_signing_complete")
             }
         }
     }
