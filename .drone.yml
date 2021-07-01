@@ -59,6 +59,9 @@ steps:
         cpu: 4000
     commands:
       - drone lint --trusted
+    when:
+      paths:
+        - .drone.yml
 
   #  Builds the base image for running build jobs
   - name: rust-base
