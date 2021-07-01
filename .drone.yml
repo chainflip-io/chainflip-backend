@@ -1,5 +1,17 @@
 # Secrets
 kind: secret
+name: aws_access_key_id
+get:
+  path: repo-secret
+  name: aws_access_key_id
+---
+kind: secret
+name: aws_secret_access_key
+get:
+  path: repo-secret
+  name: aws_secret_access_key
+---
+kind: secret
 name: docker_username
 get:
   path: repo-secret
@@ -183,7 +195,29 @@ steps:
     commands:
       - cargo test --lib --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
+
+  - name: prepare-files
+    image: busybox
+    depends_on:
+      - test-chainflip-backend
+    commands:
       - echo -n "latest,$DRONE_COMMIT_SHA" > .tags
+      - mkdir bin
+      - cp target/release/state-chain-node bin
+      - cp target/release/chainflip-engine bin
+
+  - name: upload-binaries
+    image: plugins/s3
+    depends_on:
+      - prepare-files
+    settings:
+      bucket: chainflip-drone-ci-cache
+      access_key:
+        from_secret: aws_access_key_id
+      secret_key:
+        from_secret: aws_secret_access_key
+      source: bin/**/*
+      target: /bin/${DRONE_COMMIT_SHA}
 
   #  Create docker image for state-chain-node
   - name: build-state-chain-node
