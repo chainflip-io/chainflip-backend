@@ -9,21 +9,21 @@ pub use conductor::P2PConductor;
 
 use serde::{Deserialize, Serialize};
 
-use async_trait::async_trait;
-use tokio::sync::mpsc::UnboundedReceiver;
 use crate::p2p::rpc::Base58;
+use async_trait::async_trait;
 use futures::Stream;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 #[derive(Debug)]
 pub enum P2PNetworkClientError {
     Format,
-    Rpc
+    Rpc,
 }
 
 type StatusCode = u64;
 
 #[async_trait]
-pub trait P2PNetworkClient<B: Base58, S: Stream<Item=P2PMessage>> {
+pub trait P2PNetworkClient<B: Base58, S: Stream<Item = P2PMessage>> {
     /// Broadcast to all validators on the network
     async fn broadcast(&self, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError>;
 
