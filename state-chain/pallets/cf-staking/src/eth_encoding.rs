@@ -1,7 +1,7 @@
 use core::time::Duration;
 use sp_runtime::traits::{Hash, Keccak256, UniqueSaturatedInto};
-use sp_std::prelude::*;
 use sp_std::marker::PhantomData;
+use sp_std::prelude::*;
 
 use super::{ClaimDetailsFor, Config};
 use ethereum_types::{self, Address, U256};

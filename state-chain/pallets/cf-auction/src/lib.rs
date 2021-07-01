@@ -40,22 +40,24 @@ mod tests;
 #[macro_use]
 extern crate assert_matches;
 
-pub use pallet::*;
-use sp_runtime::traits::{AtLeast32BitUnsigned, Zero, One};
-use sp_std::prelude::*;
+use cf_traits::{
+	Auction, AuctionConfirmation, AuctionError, AuctionPhase, AuctionRange, BidderProvider,
+};
 use frame_support::pallet_prelude::*;
-use frame_support::traits::ValidatorRegistration;
-use sp_std::cmp::min;
-use cf_traits::{Auction, AuctionPhase, AuctionError, BidderProvider, AuctionRange, AuctionConfirmation};
 use frame_support::sp_std::mem;
+use frame_support::traits::ValidatorRegistration;
+pub use pallet::*;
+use sp_runtime::traits::{AtLeast32BitUnsigned, One, Zero};
+use sp_std::cmp::min;
+use sp_std::prelude::*;
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_system::pallet_prelude::*;
-	use frame_support::traits::ValidatorRegistration;
-	use sp_std::ops::Add;
 	use cf_traits::{AuctionConfirmation, Witnesser};
+	use frame_support::traits::ValidatorRegistration;
+	use frame_system::pallet_prelude::*;
+	use sp_std::ops::Add;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -72,7 +74,7 @@ pub mod pallet {
 		/// An identity for a validator
 		type ValidatorId: Member + Parameter;
 		/// Providing bidders
-		type BidderProvider: BidderProvider<ValidatorId=Self::ValidatorId, Amount=Self::Amount>;
+		type BidderProvider: BidderProvider<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 		/// To confirm we have a session key registered for a validator
 		type Registrar: ValidatorRegistration<Self::ValidatorId>;
 		/// An index for the current auction
@@ -98,7 +100,8 @@ pub mod pallet {
 	/// Current phase of the auction
 	#[pallet::storage]
 	#[pallet::getter(fn current_phase)]
-	pub(super) type CurrentPhase<T: Config> = StorageValue<_, AuctionPhase<T::ValidatorId, T::Amount>, ValueQuery>;
+	pub(super) type CurrentPhase<T: Config> =
+		StorageValue<_, AuctionPhase<T::ValidatorId, T::Amount>, ValueQuery>;
 
 	/// Size range for number of bidders in auction (min, max)
 	#[pallet::storage]
@@ -162,7 +165,10 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			ensure!(AuctionToConfirm::<T>::get(), Error::<T>::InvalidAuction);
-			ensure!(index == CurrentAuctionIndex::<T>::get(), Error::<T>::InvalidAuction);
+			ensure!(
+				index == CurrentAuctionIndex::<T>::get(),
+				Error::<T>::InvalidAuction
+			);
 			Self::set_awaiting_confirmation(true);
 			Self::deposit_event(Event::AuctionConfirmed(index));
 			Ok(().into())
@@ -183,9 +189,7 @@ pub mod pallet {
 					Self::deposit_event(Event::AuctionRangeChanged(old, range));
 					Ok(().into())
 				}
-				Err(_) => {
-					Err(Error::<T>::InvalidRange.into())
-				}
+				Err(_) => Err(Error::<T>::InvalidRange.into()),
 			}
 		}
 	}
@@ -210,8 +214,7 @@ pub mod pallet {
 		fn build(&self) {
 			AuctionSizeRange::<T>::set(self.auction_size_range);
 			// Run through an auction
-			if Pallet::<T>::process()
-				.and(Pallet::<T>::process()).is_ok() {
+			if Pallet::<T>::process().and(Pallet::<T>::process()).is_ok() {
 				T::Confirmation::set_awaiting_confirmation(false);
 				if let Err(err) = Pallet::<T>::process() {
 					panic!("Failed to confirm auction: {:?}", err);
@@ -224,7 +227,6 @@ pub mod pallet {
 }
 
 impl<T: Config> AuctionConfirmation for Pallet<T> {
-
 	fn awaiting_confirmation() -> bool {
 		AuctionToConfirm::<T>::get()
 	}
@@ -251,7 +253,8 @@ impl<T: Config> Auction for Pallet<T> {
 		if low == high
 			|| low < T::MinAuctionSize::get()
 			|| high < T::MinAuctionSize::get()
-			|| high < low {
+			|| high < low
+		{
 			return Err(AuctionError::InvalidRange);
 		}
 
@@ -264,7 +267,9 @@ impl<T: Config> Auction for Pallet<T> {
 		Ok(old)
 	}
 
-	fn phase() -> AuctionPhase<Self::ValidatorId, Self::Amount> { <CurrentPhase<T>>::get() }
+	fn phase() -> AuctionPhase<Self::ValidatorId, Self::Amount> {
+		<CurrentPhase<T>>::get()
+	}
 
 	fn waiting_on_bids() -> bool {
 		mem::discriminant(&Self::phase()) == mem::discriminant(&AuctionPhase::default())
@@ -297,9 +302,7 @@ impl<T: Config> Auction for Pallet<T> {
 				<CurrentPhase<T>>::put(phase.clone());
 				Self::Confirmation::set_awaiting_confirmation(true);
 
-				<CurrentAuctionIndex<T>>::mutate(|idx| {
-					*idx + One::one()
-				});
+				<CurrentAuctionIndex<T>>::mutate(|idx| *idx + One::one());
 
 				Self::deposit_event(Event::AuctionStarted(<CurrentAuctionIndex<T>>::get()));
 
@@ -317,11 +320,15 @@ impl<T: Config> Auction for Pallet<T> {
 					let bidders = bidders.get(0..max_size as usize);
 					if let Some(bidders) = bidders {
 						if let Some((_, min_bid)) = bidders.last() {
-							let winners: Vec<T::ValidatorId> = bidders.iter().map(|i| i.0.clone()).collect();
+							let winners: Vec<T::ValidatorId> =
+								bidders.iter().map(|i| i.0.clone()).collect();
 							let phase = AuctionPhase::WinnersSelected(winners.clone(), *min_bid);
 							<CurrentPhase<T>>::put(phase.clone());
 
-							Self::deposit_event(Event::AuctionCompleted(<CurrentAuctionIndex<T>>::get(), winners));
+							Self::deposit_event(Event::AuctionCompleted(
+								<CurrentAuctionIndex<T>>::get(),
+								winners,
+							));
 
 							return Ok(phase);
 						}
@@ -349,7 +356,7 @@ impl<T: Config> Auction for Pallet<T> {
 
 	fn abort() {
 		<CurrentPhase<T>>::put(AuctionPhase::default());
-		<AuctionToConfirm::<T>>::kill();
+		<AuctionToConfirm<T>>::kill();
 		Self::deposit_event(Event::AuctionAborted(<CurrentAuctionIndex<T>>::get()));
 	}
 }
