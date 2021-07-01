@@ -79,7 +79,6 @@ steps:
     when:
       paths:
         - Dockerfile.rust-base
-        - .drone.yml
 
 ##  Performs all unit tests
 #  - name: check-validator-package
