@@ -16,18 +16,19 @@ mod benchmarking;
 
 use cf_traits::{Emissions, EpochInfo, RewardsDistribution, Witnesser};
 use codec::FullCodec;
+use frame_support::{traits::Get, weights};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
-use sp_runtime::{DispatchError, SaturatedConversion, traits::{AtLeast32BitUnsigned, CheckedMul, Zero}};
+use sp_runtime::{
+	traits::{AtLeast32BitUnsigned, CheckedMul, Zero},
+	DispatchError, SaturatedConversion,
+};
 use sp_std::marker::PhantomData;
 use sp_std::ops::Div;
-use frame_support::{weights, traits::Get};
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{
-		dispatch::DispatchResultWithPostInfo, pallet_prelude::*,
-	};
+	use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 
 	pub type EthTransactionHash = [u8; 32];
@@ -174,7 +175,7 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Determines if we should 
+	/// Determines if we should
 	fn should_mint(block_number: T::BlockNumber) -> (bool, Weight) {
 		let mint_frequency = T::MintFrequency::get();
 		let blocks_elapsed = block_number - LastMintBlock::<T>::get();
@@ -191,7 +192,8 @@ impl<T: Config> Pallet<T> {
 		let blocks_elapsed = block_number - LastMintBlock::<T>::get();
 		let blocks_elapsed = T::FlipBalance::unique_saturated_from(blocks_elapsed);
 
-		let reward_amount = EmissionPerBlock::<T>::get().checked_mul(&blocks_elapsed)
+		let reward_amount = EmissionPerBlock::<T>::get()
+			.checked_mul(&blocks_elapsed)
 			.ok_or(T::DbWeight::get().reads(3))?;
 		let reward_amount = reward_amount + Dust::<T>::get();
 
