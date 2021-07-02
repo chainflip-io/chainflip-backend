@@ -36,7 +36,7 @@ pub struct HealthCheck {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Signing {
-    pub init_validators: Vec<ValidatorId>,
+    pub genesis_validator_ids: Vec<ValidatorId>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
