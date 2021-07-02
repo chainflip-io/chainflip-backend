@@ -219,6 +219,7 @@ steps:
         from_secret: aws_secret_access_key
       source: bin/**/*
       target: /bin/${DRONE_COMMIT_SHA}
+      strip_prefix: bin/
 
   #  Create docker image for state-chain-node
   - name: build-state-chain-node
