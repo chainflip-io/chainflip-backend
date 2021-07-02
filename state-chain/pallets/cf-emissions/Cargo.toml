@@ -28,6 +28,7 @@ cf-traits = { path = '../../traits', default-features = false }
 [dev-dependencies]
 sp-core = { default-features = false, version = '3.0.0' }
 sp-io = { default-features = false, version = '3.0.0' }
+pallet-cf-flip = { path = '../cf-flip', default-features = false }
 
 [features]
 default = ['std']
@@ -36,7 +37,9 @@ std = [
 	'frame-support/std',
 	'frame-system/std',
 	'frame-benchmarking/std',
+	'sp-arithmetic/std',
 	'sp-std/std',
+	'sp-runtime/std',
 	'cf-traits/std',
 ]
 runtime-benchmarks = [

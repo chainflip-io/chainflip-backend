@@ -4869,6 +4869,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "pallet-cf-flip",
  "parity-scale-codec",
  "serde 1.0.126",
  "sp-arithmetic",

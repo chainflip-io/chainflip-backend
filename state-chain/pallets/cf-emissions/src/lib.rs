@@ -16,11 +16,11 @@ mod benchmarking;
 
 use cf_traits::{Emissions, EpochInfo, RewardsDistribution, Witnesser};
 use codec::FullCodec;
-use frame_support::{traits::Get, weights};
+use frame_support::traits::Get;
 use sp_arithmetic::traits::UniqueSaturatedFrom;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, CheckedMul, Zero},
-	DispatchError, SaturatedConversion,
+	SaturatedConversion,
 };
 use sp_std::marker::PhantomData;
 use sp_std::ops::Div;
@@ -205,6 +205,8 @@ impl<T: Config> Pallet<T> {
 		LastMintBlock::<T>::set(block_number);
 		Dust::<T>::set(remainder);
 
+		Self::deposit_event(Event::EmissionsDistributed(block_number, reward_amount));
+
 		let weight = exec_weight + T::DbWeight::get().reads_writes(3, 2);
 		Ok(weight)
 	}
@@ -224,7 +226,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-struct NaiveRewardsDistribution<T>(PhantomData<T>);
+pub struct NaiveRewardsDistribution<T>(PhantomData<T>);
 
 impl<T: Config> RewardsDistribution for NaiveRewardsDistribution<T> {
 	type Balance = T::FlipBalance;

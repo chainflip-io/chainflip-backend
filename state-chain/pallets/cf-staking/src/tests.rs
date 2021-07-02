@@ -2,7 +2,7 @@ use crate::{
 	eth_encoding, mock::*, pallet, ClaimDetails, ClaimDetailsFor, Error, EthereumAddress, Pallet,
 	PendingClaims,
 };
-use cf_traits::mocks::epoch_info;
+use cf_traits::mocks::{epoch_info, time_source};
 use codec::Encode;
 use ethereum_types::U256;
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
@@ -316,7 +316,7 @@ fn signature_is_inserted() {
 #[test]
 fn witnessing_witnesses() {
 	new_test_ext().execute_with(|| {
-		witnesser::Mock::set_threshold(2);
+		MockWitnesser::set_threshold(2);
 
 		// Bob votes
 		assert_ok!(Staking::witness_staked(
@@ -327,7 +327,7 @@ fn witnessing_witnesses() {
 		));
 
 		// Should be one vote but not staked yet.
-		let count = witnesser::Mock::get_vote_count();
+		let count = MockWitnesser::get_vote_count();
 		assert_eq!(count, 1);
 		assert_eq!(Flip::total_balance_of(&ALICE), 0);
 
