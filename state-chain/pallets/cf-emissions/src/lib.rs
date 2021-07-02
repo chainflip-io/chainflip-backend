@@ -130,7 +130,9 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			todo!("Check validity and update the emission rate.");
+			EmissionPerBlock::<T>::set(emissions_per_block);
+
+			Ok(().into())
 		}
 
 		/// A proxy call for witnessing an emission rate update from the StakeManager contract.
