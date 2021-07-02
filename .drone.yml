@@ -233,7 +233,6 @@ steps:
       password: *docker_password
       registry: ghcr.io
       repo: ghcr.io/chainflip-io/chainflip-backend/state-chain-node
-      cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
       build_args_from_env:
         - SERVICE
 
@@ -249,7 +248,6 @@ steps:
       password: *docker_password
       registry: ghcr.io
       repo: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine
-      cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
       build_args_from_env:
         - SERVICE
 
