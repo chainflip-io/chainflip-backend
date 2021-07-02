@@ -257,6 +257,8 @@ impl LocalSig {
 pub struct Signature {
     // This is `s` in other literature
     pub sigma: FE,
+
+    // v is actually k?
     // This is `r` in other literature
     pub v: GE,
 }

@@ -143,7 +143,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
     // 2. Store the tx parameters in state for use later
     // 3. Create a Signing Instruction
     // 4. Push this instruction to the MQ for the signing module to pick up
-    fn handle_keygen_success(&mut self, keygen_success: KeygenSuccess) {
+    async fn handle_keygen_success(&mut self, keygen_success: KeygenSuccess) {
         // process the keygensuccess
         let (encoded_fn_params, param_container) = self
             .build_encoded_fn_params(&keygen_success)
@@ -157,7 +157,10 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         self.messages.insert(message_hash.clone(), param_container);
 
         // Use *all* the validators for now
-        let signing_info = SigningInfo::new(curr_signing_key_id.expect("KeyId should be set here"), self.validators);
+        let signing_info = SigningInfo::new(
+            curr_signing_key_id.expect("KeyId should be set here"),
+            self.validators,
+        );
 
         let message_hash = MessageHash(message_hash.0.to_vec());
         let signing_instruction = MultisigInstruction::Sign(message_hash, signing_info);
@@ -175,8 +178,6 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
     // 4. Update the current key id, with the new key id returned by the signing module, so we know which key to sign with
     // from now onwards, until the next successful key rotation
     async fn handle_set_agg_key_message_signed(&self, msg: MessageInfo, sig: Signature) {
-        // TODO: We can get the key id here from MessageInfo :)
-
         // 1. Get the data from the message hash that was signed (using the `messages` field)
         let msg: FakeMessageHash = FakeMessageHash(msg.hash.0.try_into().unwrap());
         let params = self
@@ -243,6 +244,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
 
     fn generate_crypto_parts(
         &self,
+        // there should be a nonce used to generate this public key?
         pubkey: secp256k1::PublicKey,
         k_hex: [u8; 32],
     ) -> ([u8; 32], u8, [u8; 20]) {
@@ -289,6 +291,8 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         // generate the nonce, and pass it in to generate_crypto_parts
         // TODO: generate this randomly (crypto-secure)
         // this is "khex" on the smart contract
+        // Actually, this shouldn't be generated here, it comes from `r` = `kG`, we only need to use kG to generate
+        // `nonce_time_g_addr`
         let nonce: [u8; 32] =
             hex::decode("d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285")
                 .unwrap()
@@ -325,12 +329,14 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         // Question:
         // This nonce is pushed *encoded* to the signing module. The module is using some
         // "k" to compute the signature, it can't "see into" this encoded eth tx, so how does it
-        // sign over with the correct 'k'
+        // sign over with the correct 'k' ??
 
         let tx_data = self
             .key_manager
             .set_agg_key_with_agg_key()
             .encode_input(&params[..])?;
+
+        println!("The tx data: {:?}", tx_data);
 
         return Ok((tx_data, param_container));
     }
@@ -399,7 +405,6 @@ mod test_eth_tx_encoder {
     //         .expect("Unable to encode tx details");
     // }
 
-    // THIS CRYPTO COMES FROM crypto.py in Schnorr from the smart contracts repository
     #[test]
     fn secp256k1_sanity_check() {
         let s = secp256k1::Secp256k1::signing_only();
@@ -441,7 +446,13 @@ mod test_eth_tx_encoder {
         )
         .unwrap();
 
-        encoder.generate_crypto_parts(pubkey);
+        let nonce: [u8; 32] =
+            hex::decode("d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285")
+                .unwrap()
+                .try_into()
+                .unwrap();
+
+        let () = encoder.generate_crypto_parts(pubkey, nonce);
     }
 
     // #[test]
