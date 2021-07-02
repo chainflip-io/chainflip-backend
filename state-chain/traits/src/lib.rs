@@ -3,7 +3,7 @@
 pub mod mocks;
 
 use codec::{Decode, Encode};
-use frame_support::dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable};
+use frame_support::dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight};
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
 
@@ -177,4 +177,16 @@ pub trait Emissions {
 
 	/// Returns the total issuance.
 	fn total_issuance() -> Self::Balance;
+}
+
+/// Distribute rewards to 
+pub trait RewardsDistribution {
+	/// The type of the token being distributed.
+	type Balance;
+
+	/// Distribute some rewards. Returns any remainder that couldn't be evenly allocated.
+	fn distribute(amount: Self::Balance) -> Self::Balance;
+
+	/// The execution weight of calling the distribution function.
+	fn execution_weight() -> Weight;
 }
