@@ -244,7 +244,7 @@ impl MultisigClientInner {
             keygen: KeygenManager::new(params, id.clone(), tx.clone(), phase_timeout.clone()),
             params,
             id: id.clone(),
-            signing_manager: SigningStateManager::new(params, id, phase_timeout),
+            signing_manager: SigningStateManager::new(params, id, tx, phase_timeout),
             pending_requests_to_sign: Default::default(),
         }
     }
