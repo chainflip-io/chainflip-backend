@@ -211,6 +211,7 @@ steps:
     depends_on:
       - prepare-files
     settings:
+      region: eu-central-1
       bucket: chainflip-drone-ci-cache
       access_key:
         from_secret: aws_access_key_id
@@ -223,7 +224,7 @@ steps:
   - name: build-state-chain-node
     image: plugins/docker
     depends_on:
-      - test-chainflip-backend
+      - prepare-files
     environment:
       SERVICE: state-chain-node
     settings:
@@ -239,7 +240,7 @@ steps:
   - name: build-chainflip-engine
     image: plugins/docker
     depends_on:
-      - test-chainflip-backend
+      - prepare-files
     environment:
       SERVICE: chainflip-engine
     settings:
