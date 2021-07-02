@@ -179,7 +179,7 @@ pub trait Emissions {
 	fn total_issuance() -> Self::Balance;
 }
 
-/// Distribute rewards to 
+/// Distribute rewards somehow.
 pub trait RewardsDistribution {
 	/// The type of the token being distributed.
 	type Balance;

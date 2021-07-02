@@ -1,4 +1,5 @@
-#[macro_export] macro_rules! impl_mock_witnesser_for_account_and_call_types {
+#[macro_export]
+macro_rules! impl_mock_witnesser_for_account_and_call_types {
 	($account_id:ty, $call:ty) => {
 		use frame_support::dispatch::Dispatchable;
 		use std::cell::RefCell;

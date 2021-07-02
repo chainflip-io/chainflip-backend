@@ -1,4 +1,5 @@
-#[macro_export] macro_rules! impl_mock_ensure_witnessed_for_origin {
+#[macro_export]
+macro_rules! impl_mock_ensure_witnessed_for_origin {
 	($origin:ty) => {
 		use frame_support::traits::EnsureOrigin;
 		use frame_system::{ensure_root, RawOrigin};
