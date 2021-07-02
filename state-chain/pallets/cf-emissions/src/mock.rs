@@ -6,12 +6,13 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-use cf_traits::mocks::{epoch_info, witnesser};
+use cf_traits::mocks::epoch_info;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -21,8 +22,8 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Emissions: pallet_cf_emissions::{Module, Call, Storage, Event<T>},
-		Flip: pallet_cf_flip::{Module, Call, Storage, Event<T>},
+		Flip: pallet_cf_flip::{Module, Call, Config<T>, Storage, Event<T>},
+		Emissions: pallet_cf_emissions::{Module, Call, Config<T>, Storage, Event<T>},
 	}
 );
 
@@ -66,8 +67,10 @@ impl pallet_cf_flip::Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 }
 
+pub const MINT_FREQUENCY: u64 = 5;
+
 parameter_types! {
-	pub const MintFrequency: u64 = 5;
+	pub const MintFrequency: u64 = MINT_FREQUENCY;
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
@@ -86,9 +89,24 @@ impl pallet_cf_emissions::Config for Test {
 }
 
 // Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	system::GenesisConfig::default()
-		.build_storage::<Test>()
-		.unwrap()
-		.into()
+pub fn new_test_ext(
+	validators: Vec<u64>,
+	issuance: Option<u128>,
+	emissions: Option<u128>,
+) -> sp_io::TestExternalities {
+	let total_issuance = issuance.unwrap_or(1_000u128);
+	let config = GenesisConfig {
+		frame_system: Default::default(),
+		pallet_cf_flip: Some(FlipConfig { total_issuance }),
+		pallet_cf_emissions: Some(EmissionsConfig {
+			emission_per_block: emissions.unwrap_or(total_issuance / 100),
+			// 12 makes for nicer maths than the default which is 13
+			eth_block_time: 12,
+			native_block_time: 6,
+		}),
+	};
+	for v in validators {
+		epoch_info::Mock::add_validator(v);
+	}
+	config.build_storage().unwrap().into()
 }

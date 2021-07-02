@@ -23,7 +23,6 @@ use sp_runtime::{
 	SaturatedConversion,
 };
 use sp_std::marker::PhantomData;
-use sp_std::ops::Div;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -81,6 +80,11 @@ pub mod pallet {
 	pub type EmissionPerBlock<T: Config> = StorageValue<_, T::FlipBalance, ValueQuery>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn block_time_ratio)]
+	/// The ratio of eth block time to our native block time, expressed as a tuple.
+	pub type BlockTimeRatio<T: Config> = StorageValue<_, (u32, u32), ValueQuery>;
+
+	#[pallet::storage]
 	#[pallet::getter(fn last_mint_block)]
 	/// The block number at which we last minted Flip.
 	pub type LastMintBlock<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
@@ -109,7 +113,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
-			let (should_mint, mut weight) = Self::should_mint(current_block);
+			let (should_mint, mut weight) = Self::should_mint_at(current_block);
 
 			if should_mint {
 				weight += Self::mint_rewards_for_block(current_block).unwrap_or_else(|w| w);
@@ -125,11 +129,12 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn emission_rate_changed(
 			origin: OriginFor<T>,
-			emissions_per_block: T::FlipBalance,
+			emissions_per_eth_block: T::FlipBalance,
 			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
+			let emissions_per_block = Self::convert_emissions_rate(emissions_per_eth_block);
 			EmissionPerBlock::<T>::set(emissions_per_block);
 
 			Ok(().into())
@@ -139,11 +144,11 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn witness_emission_rate_changed(
 			origin: OriginFor<T>,
-			emissions_per_block: T::FlipBalance,
+			emissions_per_eth_block: T::FlipBalance,
 			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = Call::emission_rate_changed(emissions_per_block, tx_hash);
+			let call = Call::emission_rate_changed(emissions_per_eth_block, tx_hash);
 			T::Witnesser::witness(who, call.into())?;
 			Ok(().into())
 		}
@@ -153,18 +158,18 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config> {
 		/// Emission rate at genesis.
 		pub emission_per_block: T::FlipBalance,
+		pub eth_block_time: u32,
+		pub native_block_time: u32,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			// 10% annual issuance
-			let annual_issuance = T::Emissions::total_issuance().div(10u32.into());
-			let seconds_per_year = 31_557_600u32; // Thank you google.
-			let blocks_per_year = seconds_per_year / 6u32; // Assume 6-second target block size.
-			let emission_per_block = annual_issuance.div(blocks_per_year.into());
-
-			Self { emission_per_block }
+			Self {
+				emission_per_block: Zero::zero(),
+				eth_block_time: 13,
+				native_block_time: 6,
+			}
 		}
 	}
 
@@ -172,19 +177,36 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			EmissionPerBlock::<T>::set(self.emission_per_block);
+			BlockTimeRatio::<T>::set((self.eth_block_time, self.native_block_time));
 		}
 	}
 }
 
 impl<T: Config> Pallet<T> {
-	/// Determines if we should
-	fn should_mint(block_number: T::BlockNumber) -> (bool, Weight) {
+	/// Converts the emissions rate per eth block to emissions per state chain block.
+	fn convert_emissions_rate(emissions_per_eth_block: T::FlipBalance) -> T::FlipBalance {
+		let (eth_block_time, native_block_time) = BlockTimeRatio::<T>::get();
+
+		emissions_per_eth_block * T::FlipBalance::from(native_block_time)
+			/ T::FlipBalance::from(eth_block_time)
+	}
+
+	/// Determines if we should mint at block number `block_number`.
+	fn should_mint_at(block_number: T::BlockNumber) -> (bool, Weight) {
 		let mint_frequency = T::MintFrequency::get();
 		let blocks_elapsed = block_number - LastMintBlock::<T>::get();
-		let result = blocks_elapsed % mint_frequency == Zero::zero();
+		let should_mint = Self::should_mint(blocks_elapsed, mint_frequency);
 		let weight = T::DbWeight::get().reads(2);
 
-		(result, weight)
+		(should_mint, weight)
+	}
+
+	/// Checks if we should mint.
+	fn should_mint(
+		blocks_elapsed_since_last_mint: T::BlockNumber,
+		mint_frequency: T::BlockNumber,
+	) -> bool {
+		blocks_elapsed_since_last_mint >= mint_frequency
 	}
 
 	/// Based on the last block at which rewards were minted, calculates how much issuance needs to be
@@ -213,12 +235,14 @@ impl<T: Config> Pallet<T> {
 		Ok(weight)
 	}
 
+	/// A naive distribution function that iterates through the validators and credits each with an equal portion
+	/// of the provided `FlipBalance`.
 	fn distribute_to_validators(amount: T::FlipBalance) -> T::FlipBalance {
 		let validators = T::Validators::current_validators();
 		let num_validators: T::FlipBalance = (validators.len() as u32).into();
 		let reward_per_validator = amount / num_validators;
 		let actual_issuance = reward_per_validator * num_validators;
-		let remainder = actual_issuance - amount;
+		let remainder = amount - actual_issuance;
 
 		for validator in validators {
 			T::Emissions::mint_to(&validator, reward_per_validator);
@@ -228,6 +252,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
+/// A simple implementation of [RewardsDistribution] that uses [Pallet::distribute_to_validators].
 pub struct NaiveRewardsDistribution<T>(PhantomData<T>);
 
 impl<T: Config> RewardsDistribution for NaiveRewardsDistribution<T> {

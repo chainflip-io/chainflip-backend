@@ -4877,6 +4877,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "tuples",
 ]
 
 [[package]]
@@ -9516,6 +9517,12 @@ name = "try-lock"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
+
+[[package]]
+name = "tuples"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8ec693bccff01984a625ccd4f15f674698cc4160e7b1df94c9099c98a98b527"
 
 [[package]]
 name = "twox-hash"
