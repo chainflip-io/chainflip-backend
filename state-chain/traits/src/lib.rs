@@ -190,3 +190,12 @@ pub trait RewardsDistribution {
 	/// The execution weight of calling the distribution function.
 	fn execution_weight() -> Weight;
 }
+
+/// Allow triggering of emissions.
+pub trait EmissionsTrigger {
+	/// The runtime's block number type.
+	type BlockNumber;
+
+	/// Trigger emissions.
+	fn trigger_emissions(block_number: Self::BlockNumber);
+}

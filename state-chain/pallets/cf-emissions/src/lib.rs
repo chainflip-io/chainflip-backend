@@ -3,6 +3,7 @@
 //! A pallet for managing the FLIP emissions schedule.
 
 use frame_support::dispatch::Weight;
+use frame_system::pallet_prelude::BlockNumberFor;
 pub use pallet::*;
 
 #[cfg(test)]
@@ -14,7 +15,7 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-use cf_traits::{Emissions, EpochInfo, RewardsDistribution, Witnesser};
+use cf_traits::{Emissions, EmissionsTrigger, EpochInfo, RewardsDistribution, Witnesser};
 use codec::FullCodec;
 use frame_support::traits::Get;
 use sp_arithmetic::traits::UniqueSaturatedFrom;
@@ -252,7 +253,8 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-/// A simple implementation of [RewardsDistribution] that uses [Pallet::distribute_to_validators].
+/// A simple implementation of [RewardsDistribution] that iterates through the validator set and credits each with their
+/// share of the emisson amount.
 pub struct NaiveRewardsDistribution<T>(PhantomData<T>);
 
 impl<T: Config> RewardsDistribution for NaiveRewardsDistribution<T> {
@@ -266,5 +268,13 @@ impl<T: Config> RewardsDistribution for NaiveRewardsDistribution<T> {
 		// 1 Read to get the list of validators, and 1 read/write to update each balance.
 		let rw: u64 = T::Validators::current_validators().len().saturated_into();
 		T::DbWeight::get().reads_writes(rw + 1, rw)
+	}
+}
+
+impl<T: Config> EmissionsTrigger for Pallet<T> {
+	type BlockNumber = BlockNumberFor<T>;
+	
+	fn trigger_emissions(block_number: Self::BlockNumber) {
+		let _ = Self::mint_rewards_for_block(block_number);
 	}
 }
