@@ -241,3 +241,129 @@ async fn unknown_signer_ids_gracefully_handled() {
 
     assert_eq!(get_stage_for_msg(&c1, &MESSAGE_INFO), None);
 }
+
+// Test that the sign state times out without a sign request
+#[tokio::test]
+async fn no_sign_request() {
+    init_logs_once();
+
+    let mut states = generate_valid_keygen_data().await;
+
+    let mut c1 = states.sign_phase1.clients[0].clone();
+
+    let bc1 = create_bc1(2);
+
+    // We have not received a sign request for KeyId 1
+    let key_id = KeyId(1);
+    let message_info = MessageInfo {
+        hash: MESSAGE_HASH.clone(),
+        key_id: key_id,
+    };
+    assert_ne!(
+        KEY_ID, key_id,
+        "Signing request key must be different from one used in generate_valid_keygen_data"
+    );
+    let message = helpers::bc1_to_p2p_signing(bc1, &SIGNER_IDS[1], &message_info);
+
+    c1.process_p2p_mq_message(message);
+
+    // check that the message is in the delay buffer
+    assert_eq!(c1.signing_manager.get_delayed_count(&message_info), 1);
+
+    c1.set_timeout(Duration::from_secs(0));
+    c1.cleanup();
+
+    //let mut rx = &mut states.rxs[0];
+    // TODO: Cleanup needs to send signal and we detect it here.
+    // assert_eq!(
+    //     helpers::recv_next_inner_event(&mut rx).await,
+    //     InnerEvent::KeygenResult(KeygenOutcome::unauthorised(KeyId(1), vec![]))
+    // );
+
+    // we check to see that it was dropped from the buffer
+    assert_eq!(c1.signing_manager.get_delayed_count(&message_info), 0);
+}
+
+/// Test that if signing state times out during phase 1 (with sign request present)
+#[tokio::test]
+async fn phase1_timeout() {
+    let states = generate_valid_keygen_data().await;
+    init_logs_once();
+
+    let mut c1 = states.sign_phase1.clients[0].clone();
+
+    assert_eq!(
+        c1.signing_manager
+            .get_state_for(&MESSAGE_INFO)
+            .unwrap()
+            .get_stage(),
+        SigningStage::AwaitingBroadcast1
+    );
+
+    // send a signing request to a client
+    let bc1 = states.sign_phase1.bc1_vec[1].clone();
+    let id = &SIGNER_IDS[1];
+    let message = helpers::bc1_to_p2p_signing(bc1, id, &MESSAGE_INFO);
+    c1.process_p2p_mq_message(message);
+
+    c1.set_timeout(Duration::from_secs(0));
+    c1.cleanup();
+
+    // TODO: Cleanup needs to send signal and we detect it here.
+
+    assert!(c1.signing_manager.get_state_for(&MESSAGE_INFO).is_none());
+}
+
+/// Test that if signing state times out during phase 2 (with sign request present)
+#[tokio::test]
+async fn phase2_timeout() {
+    let states = generate_valid_keygen_data().await;
+
+    init_logs_once();
+
+    let mut c1 = states.sign_phase2.clients[0].clone();
+
+    assert_eq!(
+        c1.signing_manager
+            .get_state_for(&MESSAGE_INFO)
+            .unwrap()
+            .get_stage(),
+        SigningStage::AwaitingSecret2
+    );
+
+    // because we only have 2 clients in the signing test, we cant test receiving a secret 2 before timeout.
+
+    c1.set_timeout(Duration::from_secs(0));
+    c1.cleanup();
+
+    // TODO: Cleanup needs to send signal and we detect it here.
+
+    assert!(c1.signing_manager.get_state_for(&MESSAGE_INFO).is_none());
+}
+
+/// Test that if signing state times out during phase 3 (with sign request present)
+#[tokio::test]
+async fn phase3_timeout() {
+    let states = generate_valid_keygen_data().await;
+
+    init_logs_once();
+
+    let mut c1 = states.sign_phase3.clients[0].clone();
+
+    assert_eq!(
+        c1.signing_manager
+            .get_state_for(&MESSAGE_INFO)
+            .unwrap()
+            .get_stage(),
+        SigningStage::AwaitingLocalSig3
+    );
+
+    // because we only have 2 clients in the signing test, we cant test receiving a local sig before timeout.
+
+    c1.set_timeout(Duration::from_secs(0));
+    c1.cleanup();
+
+    // TODO: Cleanup needs to send signal and we detect it here.
+
+    assert!(c1.signing_manager.get_state_for(&MESSAGE_INFO).is_none());
+}

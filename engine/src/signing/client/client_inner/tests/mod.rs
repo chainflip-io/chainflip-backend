@@ -32,8 +32,11 @@ lazy_static! {
         ValidatorId("2".to_string()),
         ValidatorId("3".to_string()),
     ];
-    static ref SIGNER_IDS: Vec<ValidatorId> =
-        vec![VALIDATOR_IDS[0].clone(), VALIDATOR_IDS[1].clone()];
+    static ref SIGNER_IDXS: Vec<usize> = vec![0, 1];
+    static ref SIGNER_IDS: Vec<ValidatorId> = SIGNER_IDXS
+        .iter()
+        .map(|idx| VALIDATOR_IDS[*idx].clone())
+        .collect();
 }
 
 lazy_static! {
