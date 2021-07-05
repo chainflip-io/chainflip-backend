@@ -16,7 +16,7 @@ use crate::{
             client_inner::{
                 shared_secret::StageStatus,
                 utils::{self},
-                InnerSignal,
+                SigningOutcome,
             },
             SigningInfo,
         },
@@ -226,8 +226,8 @@ impl SigningState {
 
                 if verify_sig.is_ok() {
                     info!("Generated signature is correct! 🎉");
-                    let _ = self.event_sender.send(InnerEvent::InnerSignal(
-                        InnerSignal::MessageSigned(self.message_info.clone(), signature),
+                    let _ = self.event_sender.send(InnerEvent::SigningResult(
+                        SigningOutcome::MessageSigned(self.message_info.clone(), signature),
                     ));
                 }
             }

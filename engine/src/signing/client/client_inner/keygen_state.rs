@@ -21,7 +21,7 @@ use crate::{
 };
 
 use super::{
-    client_inner::{InnerSignal, KeygenData, MultisigMessage},
+    client_inner::{KeygenData, MultisigMessage},
     shared_secret::SharedSecretState,
     signing_state::KeygenResultInfo,
     utils::ValidatorMaps,
@@ -165,9 +165,6 @@ impl KeygenState {
                             };
 
                             self.key_info = Some(key_info.clone());
-
-                            // TODO: remove this as KeygenOutcome subsumes it
-                            self.send_event(InnerEvent::InnerSignal(InnerSignal::KeyReady));
 
                             return Some(key_info);
                         } else {
