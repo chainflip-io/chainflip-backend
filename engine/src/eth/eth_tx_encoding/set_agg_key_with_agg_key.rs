@@ -58,8 +58,8 @@ struct SetAggKeyWithAggKeyEncoder<M: IMQClient> {
     messages: HashMap<FakeMessageHash, ParamContainer>,
     // On genesis, where do these validators come from, to allow for the first key update
     validators: HashMap<KeyId, Vec<ValidatorId>>,
-    curr_signing_key_id: Option<u64>,
-    next_key_id: Option<u64>,
+    curr_signing_key_id: Option<KeyId>,
+    next_key_id: Option<KeyId>,
 }
 
 #[derive(Clone)]
@@ -88,7 +88,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
             key_manager,
             messages: HashMap::new(),
             validators: genesis_validator_ids_hash_map,
-            curr_signing_key_id: Some(0),
+            curr_signing_key_id: Some(KeyId(0)),
             next_key_id: None,
         })
     }
@@ -157,9 +157,13 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         self.messages.insert(message_hash.clone(), param_container);
 
         // Use *all* the validators for now
+        let key_id = self.curr_signing_key_id.expect("KeyId should be set here");
         let signing_info = SigningInfo::new(
-            curr_signing_key_id.expect("KeyId should be set here"),
-            self.validators,
+            key_id,
+            self.validators
+                .get(&key_id)
+                .expect("validators should exist for current KeyId")
+                .clone(),
         );
 
         let message_hash = MessageHash(message_hash.0.to_vec());
@@ -177,8 +181,9 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
     // 3. Push this transaction to the Broadcast(Chain::ETH) subject, to be broadcast by the ETH Broadcaster
     // 4. Update the current key id, with the new key id returned by the signing module, so we know which key to sign with
     // from now onwards, until the next successful key rotation
-    async fn handle_set_agg_key_message_signed(&self, msg: MessageInfo, sig: Signature) {
+    async fn handle_set_agg_key_message_signed(&mut self, msg: MessageInfo, sig: Signature) {
         // 1. Get the data from the message hash that was signed (using the `messages` field)
+        let key_id = msg.key_id;
         let msg: FakeMessageHash = FakeMessageHash(msg.hash.0.try_into().unwrap());
         let params = self
             .messages
@@ -196,7 +201,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
                     });
                 // here we assume the key was update successfully
                 // update curr key id
-                self.curr_signing_key_id = Some(msg.key_id);
+                self.curr_signing_key_id = Some(key_id);
                 // reset
                 self.next_key_id = None;
             }
