@@ -1,4 +1,7 @@
-use std::collections::{hash_map::Entry, HashMap};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    time::{Duration, Instant},
+};
 
 use crate::{
     p2p::ValidatorId,
@@ -13,7 +16,7 @@ use super::{
     keygen_state::KeygenState,
     signing_state::KeygenResultInfo,
     utils::get_our_idx,
-    InnerEvent,
+    InnerEvent, KeygenOutcome,
 };
 
 #[cfg(test)]
@@ -39,7 +42,9 @@ pub struct KeygenManager {
     /// We choose not to store it inside KeygenState, as having KeygenState currently
     /// implies that we have received the relevant keygen request
     /// (and know all parties involved), which is not always the case.
-    delayed_messages: HashMap<KeyId, Vec<(ValidatorId, Broadcast1)>>,
+    delayed_messages: HashMap<KeyId, (Instant, Vec<(ValidatorId, Broadcast1)>)>,
+    /// Abandon state for a given keygen if we can't make progress for longer than this
+    phase_timeout: Duration,
 }
 
 impl KeygenManager {
@@ -47,6 +52,7 @@ impl KeygenManager {
         params: Parameters,
         our_id: ValidatorId,
         event_sender: UnboundedSender<InnerEvent>,
+        phase_timeout: Duration,
     ) -> Self {
         KeygenManager {
             keygen_states: Default::default(),
@@ -54,35 +60,8 @@ impl KeygenManager {
             event_sender,
             params,
             our_id,
+            phase_timeout,
         }
-    }
-
-    #[cfg(test)]
-    pub fn get_state_for(&self, key_id: KeyId) -> Option<&KeygenState> {
-        self.keygen_states.get(&key_id)
-    }
-
-    #[cfg(test)]
-    pub fn get_stage_for(&self, key_id: KeyId) -> Option<KeygenStage> {
-        self.get_state_for(key_id).map(|s| s.get_stage())
-    }
-
-    #[cfg(test)]
-    pub fn get_delayed_count(&self, key_id: KeyId) -> usize {
-        // BC1s are stored separately from the state
-        let bc_count = self
-            .delayed_messages
-            .get(&key_id)
-            .map(|v| v.len())
-            .unwrap_or(0);
-
-        let other_count = self
-            .keygen_states
-            .get(&key_id)
-            .map(|s| s.delayed_count())
-            .unwrap_or(0);
-
-        bc_count + other_count
     }
 
     // Get the key that was generated as the result of
@@ -120,8 +99,51 @@ impl KeygenManager {
     }
 
     fn add_delayed(&mut self, key_id: KeyId, sender_id: ValidatorId, bc1: Broadcast1) {
-        let entry = self.delayed_messages.entry(key_id).or_default();
-        entry.push((sender_id, bc1));
+        let entry = self
+            .delayed_messages
+            .entry(key_id)
+            .or_insert((Instant::now(), Vec::new()));
+        entry.1.push((sender_id, bc1));
+    }
+
+    /// Remove all pending state that hasn't been updated for
+    /// longer than `self.phase_timeout`
+    pub fn cleanup(&mut self) {
+        let timeout = self.phase_timeout;
+
+        let mut events_to_send = vec![];
+
+        self.delayed_messages.retain(|key_id, (t, _)| {
+            if t.elapsed() > timeout {
+                warn!(
+                    "Keygen state expired w/o keygen request for id: {:?}",
+                    key_id
+                );
+
+                let event = InnerEvent::from(KeygenOutcome::unauthorised(*key_id, vec![]));
+
+                events_to_send.push(event);
+                return false;
+            }
+            true
+        });
+
+        self.keygen_states.retain(|key_id, state| {
+            if state.last_message_timestamp.elapsed() > timeout {
+                warn!("Keygen state expired for key id: {:?}", key_id);
+                let event = InnerEvent::from(KeygenOutcome::timeout(*key_id, vec![]));
+
+                events_to_send.push(event);
+                return false;
+            }
+            true
+        });
+
+        for event in events_to_send {
+            if let Err(err) = self.event_sender.send(event) {
+                error!("Unable to send event, error: {}", err);
+            }
+        }
     }
 
     pub fn on_keygen_request(&mut self, ki: KeygenInfo) {
@@ -150,10 +172,10 @@ impl KeygenManager {
                     let state = entry.insert(state);
 
                     // Process delayed messages for `key_id`
-                    let messages = self.delayed_messages.remove(&key_id).unwrap_or_default();
-
-                    for (sender_id, msg) in messages {
-                        state.process_keygen_message(sender_id, msg.into());
+                    if let Some((_, messages)) = self.delayed_messages.remove(&key_id) {
+                        for (sender_id, msg) in messages {
+                            state.process_keygen_message(sender_id, msg.into());
+                        }
                     }
 
                     debug_assert!(self.delayed_messages.get(&key_id).is_none());
@@ -163,5 +185,37 @@ impl KeygenManager {
                 }
             },
         }
+    }
+}
+
+#[cfg(test)]
+impl KeygenManager {
+    pub fn get_state_for(&self, key_id: KeyId) -> Option<&KeygenState> {
+        self.keygen_states.get(&key_id)
+    }
+
+    pub fn get_stage_for(&self, key_id: KeyId) -> Option<KeygenStage> {
+        self.get_state_for(key_id).map(|s| s.get_stage())
+    }
+
+    pub fn set_timeout(&mut self, phase_timeout: Duration) {
+        self.phase_timeout = phase_timeout;
+    }
+
+    pub fn get_delayed_count(&self, key_id: KeyId) -> usize {
+        // BC1s are stored separately from the state
+        let bc_count = self
+            .delayed_messages
+            .get(&key_id)
+            .map(|v| v.1.len())
+            .unwrap_or(0);
+
+        let other_count = self
+            .keygen_states
+            .get(&key_id)
+            .map(|s| s.delayed_count())
+            .unwrap_or(0);
+
+        bc_count + other_count
     }
 }

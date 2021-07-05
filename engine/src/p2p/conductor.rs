@@ -1,5 +1,5 @@
 use futures::{future::Either, Stream};
-use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
+use tokio_stream::StreamExt;
 
 use crate::{
     mq::{pin_message_stream, IMQClient, Subject},
@@ -7,22 +7,27 @@ use crate::{
 };
 
 use super::{P2PMessageCommand, P2PNetworkClient};
+use crate::p2p::ValidatorId;
+use std::marker::PhantomData;
 
 /// Intermediates P2P events between MQ and P2P interface
-pub struct P2PConductor<MQ, P2P>
+pub struct P2PConductor<MQ, P2P, S>
 where
     MQ: IMQClient + Send,
-    P2P: P2PNetworkClient,
+    S: Stream<Item = P2PMessage>,
+    P2P: P2PNetworkClient<ValidatorId, S>,
 {
     mq: MQ,
     p2p: P2P,
     stream: Box<dyn Stream<Item = Result<P2PMessageCommand, anyhow::Error>>>,
+    marker: PhantomData<S>,
 }
 
-impl<MQ, P2P> P2PConductor<MQ, P2P>
+impl<MQ, P2P, S> P2PConductor<MQ, P2P, S>
 where
     MQ: IMQClient + Send,
-    P2P: P2PNetworkClient + Send,
+    S: Stream<Item = P2PMessage> + Unpin,
+    P2P: P2PNetworkClient<ValidatorId, S> + Send,
 {
     pub async fn new(mq: MQ, p2p: P2P) -> Self {
         let stream = mq
@@ -30,7 +35,12 @@ where
             .await
             .unwrap();
 
-        P2PConductor { mq, p2p, stream }
+        P2PConductor {
+            mq,
+            p2p,
+            stream,
+            marker: PhantomData,
+        }
     }
 
     pub async fn start(mut self) {
@@ -40,9 +50,7 @@ where
 
         let mq_stream = mq_stream.map(Msg::Left);
 
-        let receiver = self.p2p.take_receiver().unwrap();
-
-        let p2p_stream = UnboundedReceiverStream::new(receiver).map(Msg::Right);
+        let p2p_stream = self.p2p.take_stream().await.unwrap().map(Msg::Right);
 
         let mut stream = futures::stream::select(mq_stream, p2p_stream);
 
@@ -50,12 +58,12 @@ where
             match x {
                 Either::Left(outgoing) => {
                     if let Ok(P2PMessageCommand { destination, data }) = outgoing {
-                        self.p2p.send(&destination, &data);
+                        self.p2p.send(&destination, &data).await.unwrap();
                     }
                 }
                 Either::Right(incoming) => {
                     self.mq
-                        .publish(Subject::P2PIncoming, &incoming)
+                        .publish::<P2PMessage>(Subject::P2PIncoming, &incoming)
                         .await
                         .unwrap();
                 }

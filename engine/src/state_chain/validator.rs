@@ -2,7 +2,6 @@
 
 use std::marker::PhantomData;
 
-use cf_traits::AuctionRange;
 use codec::{Decode, Encode};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use substrate_subxt::{module, sp_runtime::traits::Member, Call, Event};
@@ -21,26 +20,9 @@ pub struct ForceRotationCall<T: Validator> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
-pub struct AuctionRangeChangedEvent<V: Validator> {
-    pub before: AuctionRange,
-    pub now: AuctionRange,
-    pub _phantom: PhantomData<V>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct EpochDurationChangedEvent<V: Validator> {
     pub from: V::BlockNumber,
     pub to: V::BlockNumber,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
-pub struct AuctionStartedEvent<V: Validator> {
-    pub epoch_index: V::EpochIndex,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
-pub struct AuctionConfirmedEvent<V: Validator> {
-    pub epoch_index: V::EpochIndex,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
@@ -53,63 +35,31 @@ pub struct NewEpochEvent<V: Validator> {
     pub epoch_index: V::EpochIndex,
 }
 
-/// Wrapper for all Validator events
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum ValidatorEvent<V: Validator> {
-    AuctionRangeChangedEvent(AuctionRangeChangedEvent<V>),
+/// Derives an enum for the listed events and corresponding implementations of `From`.
+macro_rules! impl_validator_event_enum {
+    ( $( $name:tt ),+ ) => {
+        #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+        pub enum ValidatorEvent<Runtime: Validator> {
+            $(
+                $name($name<Runtime>),
+            )+
+        }
 
-    EpochDurationChangedEvent(EpochDurationChangedEvent<V>),
-
-    AuctionStartedEvent(AuctionStartedEvent<V>),
-
-    AuctionConfirmedEvent(AuctionConfirmedEvent<V>),
-
-    ForceAuctionRequestedEvent(ForceRotationRequestedEvent<V>),
-
-    NewEpochEvent(NewEpochEvent<V>),
+        $(
+            impl From<$name<StateChainRuntime>> for SCEvent {
+                fn from(staking_event: $name<StateChainRuntime>) -> Self {
+                    SCEvent::ValidatorEvent(ValidatorEvent::$name(staking_event))
+                }
+            }
+        )+
+    };
 }
 
-impl From<AuctionRangeChangedEvent<StateChainRuntime>> for SCEvent {
-    fn from(auction_range_changed: AuctionRangeChangedEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::AuctionRangeChangedEvent(
-            auction_range_changed,
-        ))
-    }
-}
-
-impl From<EpochDurationChangedEvent<StateChainRuntime>> for SCEvent {
-    fn from(epoch_duration_changed: EpochDurationChangedEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::EpochDurationChangedEvent(
-            epoch_duration_changed,
-        ))
-    }
-}
-
-impl From<AuctionStartedEvent<StateChainRuntime>> for SCEvent {
-    fn from(auction_started: AuctionStartedEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::AuctionStartedEvent(auction_started))
-    }
-}
-
-impl From<AuctionConfirmedEvent<StateChainRuntime>> for SCEvent {
-    fn from(auction_ended: AuctionConfirmedEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::AuctionConfirmedEvent(auction_ended))
-    }
-}
-
-impl From<ForceRotationRequestedEvent<StateChainRuntime>> for SCEvent {
-    fn from(force_rotation_requested: ForceRotationRequestedEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::ForceAuctionRequestedEvent(
-            force_rotation_requested,
-        ))
-    }
-}
-
-impl From<NewEpochEvent<StateChainRuntime>> for SCEvent {
-    fn from(auction_ended: NewEpochEvent<StateChainRuntime>) -> Self {
-        SCEvent::ValidatorEvent(ValidatorEvent::NewEpochEvent(auction_ended))
-    }
-}
+impl_validator_event_enum!(
+    EpochDurationChangedEvent,
+    ForceRotationRequestedEvent,
+    NewEpochEvent
+);
 
 #[cfg(test)]
 mod tests {
@@ -142,44 +92,6 @@ mod tests {
     }
 
     #[test]
-    fn auction_started_decoding() {
-        // AuctionStarted(EpochIndex)
-        let event: <SCRuntime as Config>::Event =
-            pallet_cf_auction::Event::<SCRuntime>::AuctionStarted(1).into();
-
-        let encoded_auction_started = event.encode();
-        // the first 2 bytes are (module_index, event_variant_index), these can be stripped
-        let encoded_auction_started = encoded_auction_started[2..].to_vec();
-
-        let decoded_event =
-            AuctionStartedEvent::<StateChainRuntime>::decode(&mut &encoded_auction_started[..])
-                .unwrap();
-
-        let expecting = AuctionStartedEvent { epoch_index: 1 };
-
-        assert_eq!(decoded_event, expecting);
-    }
-
-    #[test]
-    fn auction_confirmed_decoding() {
-        // AuctionConfirmed(EpochIndex)
-        let event: <SCRuntime as Config>::Event =
-            pallet_cf_auction::Event::<SCRuntime>::AuctionConfirmed(1).into();
-
-        let encoded_auction_confirmed = event.encode();
-        // the first 2 bytes are (module_index, event_variant_index), these can be stripped
-        let encoded_auction_confirmed = encoded_auction_confirmed[2..].to_vec();
-
-        let decoded_event =
-            AuctionConfirmedEvent::<StateChainRuntime>::decode(&mut &encoded_auction_confirmed[..])
-                .unwrap();
-
-        let expecting = AuctionConfirmedEvent { epoch_index: 1 };
-
-        assert_eq!(decoded_event, expecting);
-    }
-
-    #[test]
     fn new_epoch_decoding() {
         // AuctionConfirmed(EpochIndex)
         let event: <SCRuntime as Config>::Event =
@@ -193,30 +105,6 @@ mod tests {
             NewEpochEvent::<StateChainRuntime>::decode(&mut &encoded_new_epoch[..]).unwrap();
 
         let expecting = NewEpochEvent { epoch_index: 1 };
-
-        assert_eq!(decoded_event, expecting);
-    }
-
-    #[test]
-    fn auction_ranged_changed_decoding() {
-        // AuctionRangeChanged(AuctionRange, AuctionRange)
-        let event: <SCRuntime as Config>::Event =
-            pallet_cf_auction::Event::<SCRuntime>::AuctionRangeChanged((0, 1), (0, 2)).into();
-
-        let encoded_auction_range_changed = event.encode();
-        // the first 2 bytes are (module_index, event_variant_index), these can be stripped
-        let encoded_auction_range_changed = encoded_auction_range_changed[2..].to_vec();
-
-        let decoded_event = AuctionRangeChangedEvent::<StateChainRuntime>::decode(
-            &mut &encoded_auction_range_changed[..],
-        )
-        .unwrap();
-
-        let expecting = AuctionRangeChangedEvent {
-            before: (0, 1),
-            now: (0, 2),
-            _phantom: PhantomData,
-        };
 
         assert_eq!(decoded_event, expecting);
     }

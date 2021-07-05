@@ -14,6 +14,7 @@ use crate::{
     signing::{
         client::{
             client_inner::{
+                shared_secret::StageStatus,
                 utils::{self},
                 InnerSignal,
             },
@@ -80,7 +81,11 @@ pub(super) struct SigningState {
     event_sender: mpsc::UnboundedSender<InnerEvent>,
     /// Store data here if case it can't be consumed immediately
     pub(super) delayed_data: Vec<(usize, SigningData)>,
-    pub(super) cur_phase_timestamp: Instant,
+    /// Time at which we transitioned to the current phase
+    cur_phase_timestamp: Instant,
+    /// The last time at which we made any progress (i.e. received
+    /// useful data from peers)
+    pub(super) last_progress_timestamp: Instant,
 }
 
 impl SigningState {
@@ -100,6 +105,8 @@ impl SigningState {
             share_count: params.threshold + 1,
         };
 
+        let now = Instant::now();
+
         let mut state = SigningState {
             id,
             signer_idx: idx,
@@ -114,7 +121,8 @@ impl SigningState {
             local_sigs: vec![],
             event_sender: p2p_sender,
             delayed_data: vec![],
-            cur_phase_timestamp: Instant::now(),
+            cur_phase_timestamp: now,
+            last_progress_timestamp: now,
         };
 
         state.on_request_to_sign_inner();
@@ -219,7 +227,7 @@ impl SigningState {
                 if verify_sig.is_ok() {
                     info!("Generated signature is correct! 🎉");
                     let _ = self.event_sender.send(InnerEvent::InnerSignal(
-                        InnerSignal::MessageSigned(self.message_info.clone()),
+                        InnerSignal::MessageSigned(self.message_info.clone(), signature),
                     ));
                 }
             }
@@ -228,6 +236,10 @@ impl SigningState {
                 warn!("Invalid local signatures, aborting. ❌");
             }
         }
+    }
+
+    fn update_progress_timestamp(&mut self) {
+        self.last_progress_timestamp = Instant::now();
     }
 
     fn process_delayed(&mut self) {
@@ -300,25 +312,35 @@ impl SigningState {
 
         match (self.stage, msg) {
             (SigningStage::AwaitingBroadcast1, SigningData::Broadcast1(bc1)) => {
-                if self.sss.process_broadcast1(sender_id, bc1) {
-                    self.signing_phase2();
-                    self.process_delayed(); // Process delayed Secret2
+                match self.sss.process_broadcast1(sender_id, bc1) {
+                    StageStatus::Full => {
+                        self.update_progress_timestamp();
+                        self.signing_phase2();
+                        self.process_delayed(); // Process delayed Secret2
+                    }
+                    StageStatus::MadeProgress => self.update_progress_timestamp(),
+                    StageStatus::Ignored => { /* do nothing */ }
                 }
             }
             (SigningStage::AwaitingBroadcast1, SigningData::Secret2(sec2)) => {
                 self.add_delayed(sender_id, SigningData::Secret2(sec2));
             }
             (SigningStage::AwaitingSecret2, SigningData::Secret2(sec2)) => {
-                if self.sss.process_phase2(sender_id, sec2) {
-                    info!("[{}] Phase 2 (signing) successful ✅✅", self.us());
-                    if let Ok(key) = self.sss.init_phase3() {
-                        info!("[{}] SHARED SECRET IS READY 👍", self.us());
+                match self.sss.process_phase2(sender_id, sec2) {
+                    StageStatus::Full => {
+                        info!("[{}] Phase 2 (signing) successful ✅✅", self.us());
+                        self.update_progress_timestamp();
+                        if let Ok(key) = self.sss.init_phase3() {
+                            info!("[{}] SHARED SECRET IS READY 👍", self.us());
 
-                        self.shared_secret = Some(key);
+                            self.shared_secret = Some(key);
 
-                        self.init_local_sigs_phase();
-                        self.process_delayed(); // Process delayed LocalSig
+                            self.init_local_sigs_phase();
+                            self.process_delayed(); // Process delayed LocalSig
+                        }
                     }
+                    StageStatus::MadeProgress => self.update_progress_timestamp(),
+                    StageStatus::Ignored => { /* do nothing */ }
                 }
             }
             (SigningStage::AwaitingSecret2, SigningData::LocalSig(sig)) => {

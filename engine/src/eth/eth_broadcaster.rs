@@ -1,88 +1,149 @@
+use std::{path::Path, str::FromStr};
+
 use crate::{
+    eth::eth_tx_encoding::ContractCallDetails,
     mq::{pin_message_stream, IMQClient, Subject},
     settings,
     types::chain::Chain,
 };
 
 use anyhow::Result;
-
-use super::Broadcast;
-
-use async_trait::async_trait;
+use secp256k1::SecretKey;
+use web3::{
+    ethabi::ethereum_types::H256, signing::SecretKeyRef, transports::WebSocket,
+    types::TransactionParameters, Transport, Web3,
+};
 
 use futures::StreamExt;
 
+/// Helper function, constructs and runs the [EthBroadcaster] asynchronously.
 pub async fn start_eth_broadcaster<M: IMQClient + Send + Sync>(
-    settings: settings::Settings,
+    settings: &settings::Settings,
     mq_client: M,
 ) -> anyhow::Result<()> {
-    let eth_broadcaster = EthBroadcaster::<M>::new(settings, mq_client).await?;
+    let secret_key = secret_key_from_file(Path::new(settings.eth.private_key_file.as_str()))?;
+    let eth_broadcaster =
+        EthBroadcaster::<M, _>::new(settings.into(), mq_client, secret_key).await?;
 
-    eth_broadcaster.run().await?;
-
-    Ok(())
+    eth_broadcaster.run().await
 }
 
+/// Retrieves a private key from a file. The file should contain just the hex-encoded key, nothing else.
+fn secret_key_from_file(filename: &Path) -> Result<SecretKey> {
+    let key = String::from_utf8(std::fs::read(filename)?)?;
+    Ok(SecretKey::from_str(&key[..])?)
+}
+
+/// Adapter struct to build the ethereum web3 client from settings.
+struct EthClientBuilder {
+    hostname: String,
+    port: u16,
+}
+
+impl EthClientBuilder {
+    pub fn new(hostname: String, port: u16) -> Self {
+        Self { hostname, port }
+    }
+
+    /// Builds a web3 ethereum client with websocket transport.
+    pub async fn ws_client(&self) -> Result<Web3<WebSocket>> {
+        let url = format!("ws://{}:{}", self.hostname, self.port);
+        let transport = web3::transports::WebSocket::new(url.as_str()).await?;
+        Ok(Web3::new(transport))
+    }
+}
+
+impl From<&settings::Settings> for EthClientBuilder {
+    fn from(settings: &settings::Settings) -> Self {
+        EthClientBuilder::new(settings.eth.hostname.clone(), settings.eth.port)
+    }
+}
+
+/// Reads [ContractCallDetails] off the message queue and constructs, signs, and sends the tx to the ethereum network.
 #[derive(Debug)]
-pub struct EthBroadcaster<M: IMQClient + Send + Sync> {
+struct EthBroadcaster<M: IMQClient + Send + Sync, T: Transport> {
     mq_client: M,
-    web3_client: ::web3::Web3<::web3::transports::WebSocket>,
+    web3_client: Web3<T>,
+    secret_key: SecretKey,
 }
 
-impl<M: IMQClient + Send + Sync> EthBroadcaster<M> {
-    async fn new(settings: settings::Settings, mq_client: M) -> Result<Self> {
-        let eth_node_ws_url = format!("ws://{}:{}", settings.eth.hostname, settings.eth.port);
-        let transport = ::web3::transports::WebSocket::new(eth_node_ws_url.as_str()).await?;
-        let web3_client = ::web3::Web3::new(transport);
+impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
+    async fn new(builder: EthClientBuilder, mq_client: M, secret_key: SecretKey) -> Result<Self> {
+        let web3_client = builder.ws_client().await?;
 
         Ok(EthBroadcaster {
             mq_client,
             web3_client,
+            secret_key,
         })
     }
 
+    /// Consumes [TxDetails] messages from the `Broadcast` queue and signs and broadcasts the transaction to ethereum.
     async fn run(&self) -> Result<()> {
-        let stream = self
+        let subscription = self
             .mq_client
-            .subscribe::<Vec<u8>>(Subject::Broadcast(Chain::ETH))
+            .subscribe::<ContractCallDetails>(Subject::Broadcast(Chain::ETH))
             .await?;
 
-        let mut stream = pin_message_stream(stream);
+        let subscription = pin_message_stream(subscription);
 
-        while let Some(msg) = stream.next().await {
-            match msg {
-                Ok(msg) => {
-                    let _tx_hash = self.broadcast(msg).await?;
+        subscription
+            .for_each_concurrent(None, |msg| async {
+                match msg {
+                    Ok(ref tx_details) => match self.sign_and_broadcast(tx_details).await {
+                        Ok(hash) => {
+                            log::debug!(
+                                "Transaction for {:?} broadcasted successfully: {:?}",
+                                tx_details,
+                                hash
+                            );
+                        }
+                        Err(err) => {
+                            log::error!(
+                                "Failed to broadcast transaction {:?}: {:?}",
+                                tx_details,
+                                err
+                            );
+                        }
+                    },
+                    Err(e) => {
+                        log::error!("Unable to broadcast message: {:?}.", e);
+                    }
                 }
-                Err(err) => {
-                    log::error!("Error reading next item from broadcast queue: {:?}", err);
-                }
-            }
-        }
+            })
+            .await;
 
-        let err_msg = "ETH broadcaster has stopped!";
-        log::error!("{}", err_msg);
-        Err(anyhow::Error::msg(err_msg))
+        log::error!("{} has stopped.", stringify!(EthBroadcaster));
+        Ok(())
     }
-}
 
-#[async_trait]
-impl<M: IMQClient + Send + Sync> Broadcast for EthBroadcaster<M> {
-    /// Broadcast an RLP encoded signed transaction
-    async fn broadcast(&self, tx: Vec<u8>) -> Result<String> {
-        // sends raw transaction and waits for transaction to be confirmed - in this case we just
-        // return the hash immediately - the state chain handles stalling
+    /// Sign and broadcast a transaction
+    async fn sign_and_broadcast(&self, tx_details: &ContractCallDetails) -> Result<H256> {
+        let tx_params = TransactionParameters {
+            to: Some(tx_details.contract_address),
+            data: tx_details.data.clone().into(),
+            ..Default::default()
+        };
+
+        let key = SecretKeyRef::from(&self.secret_key);
+        let signed = self
+            .web3_client
+            .accounts()
+            .sign_transaction(tx_params, key)
+            .await?;
+
         let tx_hash = self
             .web3_client
             .eth()
-            .send_raw_transaction(tx.into())
+            .send_raw_transaction(signed.raw_transaction)
             .await?;
 
+        // TODO: do we need something to tie the broadcasted item back to the original tx request?
         self.mq_client
             .publish(Subject::BroadcastSuccess(Chain::ETH), &tx_hash)
             .await?;
 
-        Ok(tx_hash.to_string())
+        Ok(tx_hash)
     }
 }
 
@@ -96,24 +157,15 @@ mod tests {
 
     use super::*;
 
-    // NB: These two transactions depend on having a ganache network using the mnemonic `chainflip`
-    // These also have to be run on a fresh instance of ganache, and executed in order
-    // 1. test_eth_broadcast_success() and 2. test_eth_broadcast_revert()
-    // , since the nonces for these txs must
-
-    // A successful tx that will send 1.2345e-14 ETH from 0x9dbE382B57bCdc2aAbC874130E120a3E7dE09bDa to 0x4726b1555bF7AB73553Be4eb3cfE15376D0dB188:
-    static SUCCESS_TX: &str = "f866808504a817c800825208944726b1555bf7ab73553be4eb3cfe15376d0db188823039801ca0b68916d2dc645ee4555c83bcdf40ac259b3e6f2ca78bcf56bff0c04466655b27a061ecc588392aa2ea755a5e05dc4ad3ea3a67d569d920de16c9b408255153301f";
-
-    // A reverting tx that will fail trying to send 1000.0 ETH from 0x9dbE382B57bCdc2aAbC874130E120a3E7dE09bDa to 0x55024FA7C8217B88d16B240d09F76C6581245a94:
-    static REVERTING_TX: &str = "f86d018504a817c8008252089455024fa7c8217b88d16b240d09f76c6581245a94893635c9adc5dea00000801ca049c86a1429efcd6de51c7a27d65d58690ec77c133b60cb492cb3c693f097fb23a0790061e0df154f4e82984d641afbb66d127a90fab66c555b69cb718f81538367";
-
-    pub async fn new_eth_broadcaster() -> Result<EthBroadcaster<NatsMQClient>> {
+    async fn new_eth_broadcaster() -> Result<EthBroadcaster<NatsMQClient, WebSocket>> {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
         let factory = NatsMQClientFactory::new(&settings.message_queue);
         let mq_client = *factory.create().await.unwrap();
+        let secret = SecretKey::from_slice(&[3u8; 32]).unwrap();
 
-        let eth_broadcaster = EthBroadcaster::<NatsMQClient>::new(settings, mq_client).await;
+        let eth_broadcaster =
+            EthBroadcaster::<NatsMQClient, _>::new((&settings).into(), mq_client, secret).await;
         eth_broadcaster
     }
 
@@ -122,30 +174,5 @@ mod tests {
     async fn test_eth_broadcaster_new() {
         let eth_broadcaster = new_eth_broadcaster().await;
         assert!(eth_broadcaster.is_ok());
-    }
-
-    #[tokio::test]
-    #[ignore = "requires fresh eth node setup with `chainflip` mnemonic"]
-    async fn test_eth_broadcast_success() {
-        let eth_broadcaster = new_eth_broadcaster().await.unwrap();
-
-        let bytes = hex::decode(SUCCESS_TX).unwrap();
-
-        let result = eth_broadcaster.broadcast(bytes).await;
-
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    #[ignore = "requires fresh eth node setup with `chainflip` mnemonic"]
-    async fn test_eth_broadcast_revert() {
-        let eth_broadcaster = new_eth_broadcaster().await.unwrap();
-
-        let bytes = hex::decode(REVERTING_TX).unwrap();
-
-        let result = eth_broadcaster.broadcast(bytes).await;
-
-        // Should fail as we are trying to send more funds than we have.
-        assert!(result.is_err());
     }
 }

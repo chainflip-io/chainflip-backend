@@ -45,23 +45,22 @@ mod tests;
 
 mod eth_encoding;
 
+use cf_traits::{BidderProvider, EpochInfo, StakeTransfer};
 use core::time::Duration;
 use frame_support::{
 	debug,
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
-	error::BadOrigin, 
-	traits::{
-		EnsureOrigin, Get, HandleLifetime, UnixTime
-	}, 
-	weights
+	error::BadOrigin,
+	traits::{EnsureOrigin, Get, HandleLifetime, UnixTime},
+	weights,
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
-use cf_traits::{EpochInfo, BidderProvider, StakeTransfer};
 
 use codec::FullCodec;
+use sp_core::U256;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, CheckedSub, Hash, Keccak256, One, Zero},
 	DispatchError,
@@ -73,29 +72,26 @@ pub mod pallet {
 	use cf_traits::Witnesser;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::app_crypto::RuntimePublic;
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
 
 	pub type EthereumAddress = [u8; 20];
+	pub type AggKeySignature = U256;
 
+	/// Details of a claim request required to build the call to StakeManager's 'requestClaim' function.
 	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
-	pub struct ClaimDetails<Amount, Nonce, EthereumAddress, Signature> {
-		pub(super) amount: Amount,
+	pub struct ClaimDetails<Amount, Nonce> {
+		pub(super) msg_hash: Option<U256>,
 		pub(super) nonce: Nonce,
+		pub(super) signature: Option<AggKeySignature>,
+		pub(super) amount: Amount,
 		pub(super) address: EthereumAddress,
 		pub(super) expiry: Duration,
-		pub(super) signature: Option<Signature>,
 	}
 
 	pub type FlipBalance<T> = <T as Config>::Balance;
 
-	pub type ClaimDetailsFor<T> = ClaimDetails<
-		FlipBalance<T>,
-		<T as Config>::Nonce,
-		EthereumAddress,
-		<<T as Config>::EthereumCrypto as RuntimePublic>::Signature,
-	>;
+	pub type ClaimDetailsFor<T> = ClaimDetails<FlipBalance<T>, <T as Config>::Nonce>;
 
 	pub type Retired = bool;
 
@@ -115,11 +111,12 @@ pub mod pallet {
 			+ Default
 			+ Copy
 			+ MaybeSerializeDeserialize;
-		
+
 		/// The Flip token implementation.
 		type Flip: StakeTransfer<
-			AccountId=<Self as frame_system::Config>::AccountId,
-			Balance=Self::Balance>;
+			AccountId = <Self as frame_system::Config>::AccountId,
+			Balance = Self::Balance,
+		>;
 
 		/// A Nonce type to be used for claim nonces.
 		type Nonce: Member
@@ -129,9 +126,6 @@ pub mod pallet {
 			+ AtLeast32BitUnsigned
 			+ MaybeSerializeDeserialize
 			+ CheckedSub;
-
-		/// A type representing ethereum cryptographic primitives.
-		type EthereumCrypto: Member + FullCodec + RuntimePublic;
 
 		/// Provides an origin check for witness transactions.
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
@@ -170,13 +164,8 @@ pub mod pallet {
 		StorageMap<_, Identity, AccountId<T>, Retired, ValueQuery>;
 
 	#[pallet::storage]
-	pub(super) type PendingClaims<T: Config> = StorageMap<
-		_,
-		Identity,
-		AccountId<T>,
-		ClaimDetailsFor<T>,
-		OptionQuery,
-	>;
+	pub(super) type PendingClaims<T: Config> =
+		StorageMap<_, Identity, AccountId<T>, ClaimDetailsFor<T>, OptionQuery>;
 
 	#[pallet::storage]
 	pub(super) type ClaimExpiries<T: Config> =
@@ -205,16 +194,17 @@ pub mod pallet {
 		StakeRefund(AccountId<T>, FlipBalance<T>, EthereumAddress),
 
 		/// A claim request has been validated and needs to be signed. [node_id, msg_hash]
-		ClaimSigRequested(AccountId<T>, [u8; 32]),
+		ClaimSigRequested(AccountId<T>, U256),
 
-		/// A claim signature has been issued by the signer module. [issuer, amount, nonce, address, expiry_time, signature]
+		/// A claim signature has been issued by the signer module. [msg_hash, nonce, sig, node_id, amount, eth_addr, expiry_time]
 		ClaimSignatureIssued(
+			U256,
+			T::Nonce,
+			AggKeySignature,
 			AccountId<T>,
 			FlipBalance<T>,
-			T::Nonce,
 			EthereumAddress,
 			Duration,
-			<T::EthereumCrypto as RuntimePublic>::Signature,
 		),
 
 		/// An account has retired and will no longer take part in auctions. [who]
@@ -250,8 +240,8 @@ pub mod pallet {
 		/// Can't activate an account unless it's in a retired state.
 		AlreadyActive,
 
-		/// Invalid expiry date.
-		InvalidExpiry,
+		/// Signature posted too close to expiry time or for an already-expired claim.
+		SignatureTooLate,
 
 		/// Cannot make a claim request while an auction is being resolved.
 		NoClaimsDuringAuctionPhase,
@@ -305,7 +295,7 @@ pub mod pallet {
 		///
 		/// - [PendingClaim](Error::PendingClaim): The account may not have a claim already pending. Any pending
 		///   claim must be finalized or expired before a new claim can be requested.
-		/// - [NoClaimsDuringAuctionPhase](Error::NoClaimsDuringAuctionPhase): No claims can be processed during 
+		/// - [NoClaimsDuringAuctionPhase](Error::NoClaimsDuringAuctionPhase): No claims can be processed during
 		///   auction.
 		/// - [InsufficientLiquidity](pallet_cf_flip::Error::InsufficientStake): The amount requested exceeds available
 		///   funds.
@@ -333,7 +323,6 @@ pub mod pallet {
 			Self::do_claim(&who, claimable, address)?;
 			Ok(().into())
 		}
-
 
 		/// Witness that a `Claimed` event was emitted by the `StakeManager` smart contract.
 		///
@@ -388,12 +377,16 @@ pub mod pallet {
 				frame_system::Provider::<T>::killed(&account_id).unwrap_or_else(|e| {
 					// This shouldn't happen, and not much we can do if it does except fix it on a subsequent release.
 					// Consequences are minor.
-					debug::error!("Unexpected reference count error while reaping the account {:?}: {:?}.", account_id, e);
+					debug::error!(
+						"Unexpected reference count error while reaping the account {:?}: {:?}.",
+						account_id,
+						e
+					);
 				})
 			}
 
 			Self::deposit_event(Event::ClaimSettled(account_id, claimed_amount));
-			
+
 			Ok(().into())
 		}
 
@@ -406,59 +399,47 @@ pub mod pallet {
 		pub fn post_claim_signature(
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
-			amount: FlipBalance<T>,
-			nonce: T::Nonce,
-			address: EthereumAddress,
-			expiry_time: Duration,
-			signature: <T::EthereumCrypto as RuntimePublic>::Signature,
+			msg_hash: U256,
+			signature: AggKeySignature,
 		) -> DispatchResultWithPostInfo {
 			// TODO: we should check more than just "is this a valid account" - see clubhouse stories 471 and 473
-			let who = ensure_signed(origin)?;
+			let _ = ensure_signed(origin)?;
 
 			let time_now = T::TimeSource::now();
 
-			// Make sure the expiry time is sane.
+			let mut claim_details =
+				PendingClaims::<T>::get(&account_id).ok_or(Error::<T>::NoPendingClaim)?;
+
+			ensure!(
+				claim_details.signature.is_none(),
+				Error::<T>::SignatureAlreadyIssued
+			);
+			ensure!(
+				claim_details.msg_hash == Some(msg_hash),
+				Error::<T>::InvalidClaimDetails
+			);
+
+			// Make sure the expiry time is still sane.
 			let min_ttl = T::MinClaimTTL::get();
-			let _ = expiry_time
+			claim_details
+				.expiry
 				.checked_sub(time_now)
 				.and_then(|ttl| ttl.checked_sub(min_ttl))
-				.ok_or(Error::<T>::InvalidExpiry)?;
+				.ok_or(Error::<T>::SignatureTooLate)?;
 
-			let _ =
-				PendingClaims::<T>::mutate_exists(&account_id, |maybe_claim| {
-					match maybe_claim.as_mut() {
-						Some(claim) => match claim.signature {
-							Some(_) => Err(Error::<T>::SignatureAlreadyIssued),
-							None => {
-								claim.signature = Some(signature.clone());
-								Ok(())
-							}
-						},
-						None => Err(Error::<T>::NoPendingClaim),
-					}
-				})?;
+			// Insert the signature and notify the CFE.
+			claim_details.signature = Some(signature.clone());
 
-			ClaimExpiries::<T>::mutate(|expiries| {
-				// We want to ensure this list remains sorted such that the head of the list contains the oldest pending
-				// claim (ie. the first to be expired). This means we put the new value on the back of the list since
-				// it's quite likely this is the most recent. We then run a stable sort, which is most effient when
-				// values are already close to being sorted.
-				// So we need to reverse the list, push the *young* value to the front, reverse it again, then sort.
-				// We could have used a VecDeque here to have a FIFO queue but VecDeque doesn't support `decode_len`
-				// which is used during the expiry check to avoid decoding the whole list.
-				expiries.reverse();
-				expiries.push((expiry_time, account_id.clone()));
-				expiries.reverse();
-				expiries.sort_by_key(|tup| tup.0);
-			});
+			PendingClaims::<T>::insert(&account_id, claim_details.clone());
 
 			Self::deposit_event(Event::ClaimSignatureIssued(
-				who,
-				amount,
-				nonce,
-				address,
-				expiry_time,
+				msg_hash,
+				claim_details.nonce,
 				signature,
+				account_id,
+				claim_details.amount,
+				claim_details.address,
+				claim_details.expiry,
 			));
 
 			Ok(().into())
@@ -535,7 +516,10 @@ impl<T: Config> Pallet<T> {
 		if !frame_system::Pallet::<T>::account_exists(account_id) {
 			frame_system::Provider::<T>::created(account_id).unwrap_or_else(|e| {
 				// The standard impl of this in the system pallet never fails.
-				debug::error!("Unexpected error when creating an account upon staking: {:?}", e);
+				debug::error!(
+					"Unexpected error when creating an account upon staking: {:?}",
+					e
+				);
 			});
 		}
 
@@ -575,17 +559,24 @@ impl<T: Config> Pallet<T> {
 			*nonce
 		});
 
-		// Insert a pending claim without a signature.
+		// Set expiry and build the claim parameters.
 		let expiry = T::TimeSource::now() + T::ClaimTTL::get();
-		let details = ClaimDetails {
-				amount,
-				nonce,
-				address,
-				expiry,
-				signature: None,
-			};
+		Self::register_claim_expiry(account_id.clone(), expiry);
+		let mut details = ClaimDetails {
+			msg_hash: None,
+			nonce,
+			signature: None,
+			amount,
+			address,
+			expiry,
+		};
+
+		// Compute the message hash to be signed.
 		let payload = eth_encoding::encode_claim_request::<T>(account_id, &details);
-		let msg_hash = Keccak256::hash(&payload[..]).to_fixed_bytes();
+		let msg_hash: U256 = Keccak256::hash(&payload[..]).as_bytes().into();
+		details.msg_hash = Some(msg_hash);
+
+		// Store the params for later.
 		PendingClaims::<T>::insert(account_id, details);
 
 		// Emit the event requesting that the CFE generate the claim voucher.
@@ -599,16 +590,18 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Returns an error if the account has already been retired, or if the account has no stake associated.
 	fn retire(account_id: &T::AccountId) -> Result<(), Error<T>> {
-		AccountRetired::<T>::try_mutate_exists(account_id, |maybe_status| match maybe_status.as_mut() {
-			Some(retired) => {
-				if *retired {
-					Err(Error::AlreadyRetired)?;
+		AccountRetired::<T>::try_mutate_exists(account_id, |maybe_status| {
+			match maybe_status.as_mut() {
+				Some(retired) => {
+					if *retired {
+						Err(Error::AlreadyRetired)?;
+					}
+					*retired = true;
+					Self::deposit_event(Event::AccountRetired(account_id.clone()));
+					Ok(())
 				}
-				*retired = true;
-				Self::deposit_event(Event::AccountRetired(account_id.clone()));
-				Ok(())
+				None => Err(Error::UnknownAccount)?,
 			}
-			None => Err(Error::UnknownAccount)?,
 		})
 	}
 
@@ -617,24 +610,43 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Returns an error if the account is not retired, or if the account has no stake associated.
 	fn activate(account_id: &T::AccountId) -> Result<(), Error<T>> {
-		AccountRetired::<T>::try_mutate_exists(account_id, |maybe_status| match maybe_status.as_mut() {
-			Some(retired) => {
-				if !*retired {
-					Err(Error::AlreadyActive)?;
+		AccountRetired::<T>::try_mutate_exists(account_id, |maybe_status| {
+			match maybe_status.as_mut() {
+				Some(retired) => {
+					if !*retired {
+						Err(Error::AlreadyActive)?;
+					}
+					*retired = false;
+					Self::deposit_event(Event::AccountActivated(account_id.clone()));
+					Ok(())
 				}
-				*retired = false;
-				Self::deposit_event(Event::AccountActivated(account_id.clone()));
-				Ok(())
+				None => Err(Error::UnknownAccount)?,
 			}
-			None => Err(Error::UnknownAccount)?,
 		})
 	}
 
 	/// Checks if an account has signalled their intention to retire as a validator. If the account has never staked
 	/// any tokens, returns [Error::UnknownAccount].
 	pub fn is_retired(account: &T::AccountId) -> Result<bool, Error<T>> {
-		AccountRetired::<T>::try_get(account)
-			.map_err(|_| Error::UnknownAccount)
+		AccountRetired::<T>::try_get(account).map_err(|_| Error::UnknownAccount)
+	}
+
+	/// Registers the expiry time for an account's pending claim. At the provided time, any pending claims
+	/// for the account are expired.
+	fn register_claim_expiry(account_id: T::AccountId, expiry: Duration) {
+		ClaimExpiries::<T>::mutate(|expiries| {
+			// We want to ensure this list remains sorted such that the head of the list contains the oldest pending
+			// claim (ie. the first to be expired). This means we put the new value on the back of the list since
+			// it's quite likely this is the most recent. We then run a stable sort, which is most effient when
+			// values are already close to being sorted.
+			// So we need to reverse the list, push the *young* value to the front, reverse it again, then sort.
+			// We could have used a VecDeque here to have a FIFO queue but VecDeque doesn't support `decode_len`
+			// which is used during the expiry check to avoid decoding the whole list.
+			expiries.reverse();
+			expiries.push((expiry, account_id));
+			expiries.reverse();
+			expiries.sort_by_key(|tup| tup.0);
+		});
 	}
 
 	/// Expires any pending claims that have passed their TTL.
@@ -692,19 +704,17 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> BidderProvider for Pallet<T> {
 	type ValidatorId = T::AccountId;
 	type Amount = T::Balance;
-	
+
 	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
 		AccountRetired::<T>::iter()
-			.filter_map(
-				|(acct, retired)| {
-					if retired {
-						None
-					} else {
-						let stake = T::Flip::stakeable_balance(&acct);
-						Some((acct, stake))
-					}
-				},
-			)
+			.filter_map(|(acct, retired)| {
+				if retired {
+					None
+				} else {
+					let stake = T::Flip::stakeable_balance(&acct);
+					Some((acct, stake))
+				}
+			})
 			.collect()
 	}
 }

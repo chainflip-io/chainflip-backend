@@ -35,6 +35,7 @@ pub trait IMQClient {
 pub fn pin_message_stream<M>(stream: Box<dyn Stream<Item = M>>) -> Pin<Box<dyn Stream<Item = M>>> {
     stream.into()
 }
+
 /// Subjects that can be published / subscribed to
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -48,17 +49,38 @@ pub enum Subject {
     BroadcastSuccess(Chain),
     /// Stake events coming from the Stake manager contract
     StakeManager,
-    /// Stake events coming from the State chain
-    StateChainStake,
-    /// Claim events coming from the State chain
-    StateChainClaim,
-    /// Claim issued event from the state chain
-    StateChainClaimIssued,
-    Rotate,
+
+    // Auction pallet events
+    AuctionStarted,
+    AuctionConfirmed,
+    AuctionCompleted,
+    AuctionAborted,
+    AuctionRangeChanged,
+    AwaitingBidders,
+
+    // Validator pallet events
+    ForceRotationRequested,
+    EpochDurationChanged,
+    NewEpoch,
+
+    // Staking pallet events
+    ClaimSigRequested,
+    Staked,
+    ClaimSettled,
+    StakeRefund,
+    ClaimSignatureIssued,
+    AccountRetired,
+    AccountActivated,
+
+    SetAggKey,
+
     P2PIncoming,
     P2POutgoing,
     MultisigInstruction,
     MultisigEvent,
+    /// Published by the signing module to notify SC about
+    /// the outcome of a keygen ceremony
+    KeygenResult,
 }
 
 /// Convert an object to a to a subject string (currently Nats compatible)
@@ -87,18 +109,10 @@ impl SubjectName for Subject {
             Subject::StakeManager => {
                 format!("stake_manager")
             }
-            Subject::StateChainClaim => {
-                format!("state_chain_claim")
+            Subject::SetAggKey => {
+                format!("set_agg_key")
             }
-            Subject::Rotate => {
-                format!("rotate")
-            }
-            Subject::StateChainStake => {
-                format!("state_chain_stake")
-            }
-            Subject::StateChainClaimIssued => {
-                format!("state_chain_claim_issued")
-            }
+            // === Signing ===
             Subject::P2PIncoming => {
                 format!("p2p_incoming")
             }
@@ -110,6 +124,60 @@ impl SubjectName for Subject {
             }
             Subject::MultisigEvent => {
                 format!("multisig_event")
+            }
+            Subject::KeygenResult => {
+                format!("keygen_result")
+            }
+            // === Auction events ===
+            Subject::AuctionStarted => {
+                format!("auction.auction_started")
+            }
+            Subject::AuctionConfirmed => {
+                format!("auction.auction_confirmed")
+            }
+            Subject::AuctionCompleted => {
+                format!("auction.auction_completed")
+            }
+            Subject::AuctionAborted => {
+                format!("auction.auction_aborted")
+            }
+            Subject::AuctionRangeChanged => {
+                format!("auction.auction_range_changed")
+            }
+            Subject::AwaitingBidders => {
+                format!("auction.awaiting_bidders")
+            }
+            // === Validator events ===
+            Subject::ForceRotationRequested => {
+                format!("validator.force_rotation_requested")
+            }
+            Subject::EpochDurationChanged => {
+                format!("validator.epoch_duration_changed")
+            }
+            Subject::NewEpoch => {
+                format!("validator.new_epoch")
+            }
+            // === Staking events ===
+            Subject::ClaimSigRequested => {
+                format!("staking.claim_sig_requested")
+            }
+            Subject::Staked => {
+                format!("staking.staked")
+            }
+            Subject::ClaimSettled => {
+                format!("staking.claim_settled")
+            }
+            Subject::StakeRefund => {
+                format!("staking.stake_refund")
+            }
+            Subject::ClaimSignatureIssued => {
+                format!("staking.claim_signature_issued")
+            }
+            Subject::AccountRetired => {
+                format!("staking.account_retired")
+            }
+            Subject::AccountActivated => {
+                format!("staking.account_activated")
             }
         }
     }
@@ -135,11 +203,5 @@ mod test {
 
         let stake_manager_subject = Subject::StakeManager;
         assert_eq!(stake_manager_subject.to_subject_name(), "stake_manager");
-
-        let sc_stake_subject = Subject::StateChainStake;
-        assert_eq!(sc_stake_subject.to_subject_name(), "state_chain_stake");
-
-        let sc_claim_subject = Subject::StateChainClaim;
-        assert_eq!(sc_claim_subject.to_subject_name(), "state_chain_claim");
     }
 }

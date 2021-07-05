@@ -1,5 +1,17 @@
 # Secrets
 kind: secret
+name: aws_access_key_id
+get:
+  path: repo-secret
+  name: aws_access_key_id
+---
+kind: secret
+name: aws_secret_access_key
+get:
+  path: repo-secret
+  name: aws_secret_access_key
+---
+kind: secret
 name: docker_username
 get:
   path: repo-secret
@@ -53,7 +65,7 @@ name: chainflip-backend-checks
 type: kubernetes
 
 environment:
-  SCCACHE_REDIS: redis://redis-headless:6379/
+  SCCACHE_REDIS: redis://drone-redis-headless:6379/
   SCCACHE_CACHE_SIZE: 14G
 
 steps:
@@ -84,6 +96,23 @@ steps:
         - Dockerfile.rust-base
         - .drone.yml
 
+  #  Format checks
+  - name: fmt-validator-package
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    commands:
+      - >
+        cargo fmt -p chainflip-engine
+        -p cf-p2p
+        -p cf-p2p-rpc
+        -p pallet-cf-auction
+        -p pallet-cf-flip
+        -p pallet-cf-staking
+        -p pallet-cf-validator
+        -p pallet-cf-witness
+        -p cf-traits
+        -- --check
+      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
+
   #  Performs all unit tests
   - name: test-validator-package
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
@@ -112,7 +141,7 @@ type: kubernetes
 name: chainflip-backend-release
 
 environment:
-  SCCACHE_REDIS: redis://redis-headless:6379/
+  SCCACHE_REDIS: redis://drone-redis-headless:6379/
   SCCACHE_CACHE_SIZE: 14G
 
 steps:
@@ -172,13 +201,37 @@ steps:
     commands:
       - cargo test --lib --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
+
+  - name: prepare-files
+    image: busybox
+    depends_on:
+      - test-chainflip-backend
+    commands:
       - echo -n "latest,$DRONE_COMMIT_SHA" > .tags
+      - mkdir bin
+      - cp target/release/state-chain-node bin
+      - cp target/release/chainflip-engine bin
+
+  - name: upload-binaries
+    image: plugins/s3
+    depends_on:
+      - prepare-files
+    settings:
+      region: eu-central-1
+      bucket: chainflip-drone-ci-cache
+      access_key:
+        from_secret: aws_access_key_id
+      secret_key:
+        from_secret: aws_secret_access_key
+      source: bin/**/*
+      target: /bin/${DRONE_COMMIT_SHA}
+      strip_prefix: bin/
 
   #  Create docker image for state-chain-node
   - name: build-state-chain-node
     image: plugins/docker
     depends_on:
-      - test-chainflip-backend
+      - prepare-files
     environment:
       SERVICE: state-chain-node
     settings:
@@ -186,7 +239,6 @@ steps:
       password: *docker_password
       registry: ghcr.io
       repo: ghcr.io/chainflip-io/chainflip-backend/state-chain-node
-      cache_from: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:latest
       build_args_from_env:
         - SERVICE
 
@@ -194,7 +246,7 @@ steps:
   - name: build-chainflip-engine
     image: plugins/docker
     depends_on:
-      - test-chainflip-backend
+      - prepare-files
     environment:
       SERVICE: chainflip-engine
     settings:
@@ -202,7 +254,6 @@ steps:
       password: *docker_password
       registry: ghcr.io
       repo: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine
-      cache_from: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:latest
       build_args_from_env:
         - SERVICE
 
@@ -351,7 +402,7 @@ type: kubernetes
 name: chainflip-backend-main
 
 environment:
-  SCCACHE_REDIS: redis://redis-headless:6379/
+  SCCACHE_REDIS: redis://drone-redis-headless:6379/
   SCCACHE_CACHE_SIZE: 14G
 
 steps:
@@ -435,7 +486,7 @@ type: kubernetes
 name: chainflip-backend-nightly
 
 environment:
-  SCCACHE_REDIS: redis://redis-headless:6379/
+  SCCACHE_REDIS: redis://drone-redis-headless:6379/
   SCCACHE_CACHE_SIZE: 14G
 
 services:
