@@ -16,7 +16,7 @@
     @license GPL-3.0+ <https://github.com/KZen-networks/multisig-schnorr/blob/master/LICENSE>
 */
 /// following the variant used in bip-schnorr: https://github.com/sipa/bips/blob/bip-schnorr/bip-schnorr.mediawiki
-use super::error::Error::{self, InvalidKey, InvalidSS, InvalidSig};
+use super::error::{InvalidKey, InvalidSS, InvalidSig};
 
 use curv::arithmetic::traits::*;
 
@@ -29,6 +29,7 @@ use curv::cryptographic_primitives::hashing::traits::Hash;
 use curv::cryptographic_primitives::secret_sharing::feldman_vss::VerifiableSS;
 use curv::BigInt;
 
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 type GE = curv::elliptic::curves::secp256_k1::GE;
@@ -88,20 +89,28 @@ impl Keys {
         y_vec: &Vec<GE>,
         bc1_vec: &Vec<KeyGenBroadcastMessage1>,
         parties: &[usize],
-    ) -> Result<(VerifiableSS<GE>, Vec<FE>, usize), Error> {
+    ) -> Result<(VerifiableSS<GE>, Vec<FE>, usize), InvalidKey> {
         // test length:
         assert_eq!(blind_vec.len(), params.share_count);
         assert_eq!(bc1_vec.len(), params.share_count);
         assert_eq!(y_vec.len(), params.share_count);
         // test decommitments
-        let correct_key_correct_decom_all = (0..bc1_vec.len())
-            .map(|i| {
-                HashCommitment::create_commitment_with_user_defined_randomness(
+        let invalid_decom_indexes = (0..bc1_vec.len())
+            .into_iter()
+            .filter_map(|i| {
+                let valid = HashCommitment::create_commitment_with_user_defined_randomness(
                     &y_vec[i].bytes_compressed_to_big_int(),
                     &blind_vec[i],
-                ) == bc1_vec[i].com
+                ) == bc1_vec[i].com;
+                if valid {
+                    None
+                } else {
+                    // signer indexes are their array indexes + 1
+                    Some(i + 1)
+                }
             })
-            .all(|x| x == true);
+            .collect_vec();
+
         let (vss_scheme, secret_shares) = VerifiableSS::share_at_indices(
             params.threshold,
             params.share_count,
@@ -109,9 +118,9 @@ impl Keys {
             &parties,
         );
 
-        match correct_key_correct_decom_all {
-            true => Ok((vss_scheme, secret_shares, self.party_index.clone())),
-            false => Err(InvalidKey),
+        match invalid_decom_indexes.len() {
+            0 => Ok((vss_scheme, secret_shares, self.party_index.clone())),
+            _ => Err(InvalidKey(invalid_decom_indexes)),
         }
     }
 
@@ -122,29 +131,35 @@ impl Keys {
         secret_shares_vec: &Vec<FE>,
         vss_scheme_vec: &Vec<VerifiableSS<GE>>,
         index: &usize,
-    ) -> Result<SharedKeys, Error> {
+    ) -> Result<SharedKeys, InvalidSS> {
         assert_eq!(y_vec.len(), params.share_count);
         assert_eq!(secret_shares_vec.len(), params.share_count);
         assert_eq!(vss_scheme_vec.len(), params.share_count);
 
-        let correct_ss_verify = (0..y_vec.len())
-            .map(|i| {
-                vss_scheme_vec[i]
+        let invalid_idxs = (0..y_vec.len())
+            .into_iter()
+            .filter_map(|i| {
+                let valid = vss_scheme_vec[i]
                     .validate_share(&secret_shares_vec[i], *index)
                     .is_ok()
-                    && vss_scheme_vec[i].commitments[0] == y_vec[i]
+                    && vss_scheme_vec[i].commitments[0] == y_vec[i];
+                if valid {
+                    None
+                } else {
+                    Some(i + 1)
+                }
             })
-            .all(|x| x == true);
+            .collect_vec();
 
-        match correct_ss_verify {
-            true => {
+        match invalid_idxs.len() {
+            0 => {
                 let mut y_vec_iter = y_vec.iter();
                 let y0 = y_vec_iter.next().unwrap();
                 let y = y_vec_iter.fold(y0.clone(), |acc, x| acc + x);
                 let x_i = secret_shares_vec.iter().fold(FE::zero(), |acc, x| acc + x);
                 Ok(SharedKeys { y, x_i })
             }
-            false => Err(InvalidSS),
+            _ => Err(InvalidSS(invalid_idxs)),
         }
     }
 
@@ -206,7 +221,7 @@ impl LocalSig {
         parties_index_vec: &[usize],
         vss_private_keys: &Vec<VerifiableSS<GE>>,
         vss_ephemeral_keys: &Vec<VerifiableSS<GE>>,
-    ) -> Result<VerifiableSS<GE>, Error> {
+    ) -> Result<VerifiableSS<GE>, InvalidSS> {
         //parties_index_vec is a vector with indices of the parties that are participating and provided gamma_i for this step
         // test that enough parties are in this round
         assert!(parties_index_vec.len() > vss_private_keys[0].parameters.threshold);
@@ -248,7 +263,8 @@ impl LocalSig {
 
         match correct_ss_verify.iter().all(|x| x.clone() == true) {
             true => Ok(vss_sum),
-            false => Err(InvalidSS),
+            // TODO: provide failing parties
+            false => Err(InvalidSS(vec![])),
         }
     }
 }
@@ -279,7 +295,7 @@ impl Signature {
         Signature { sigma, v }
     }
 
-    pub fn verify(&self, message: &[u8], pubkey_y: &GE) -> Result<(), Error> {
+    pub fn verify(&self, message: &[u8], pubkey_y: &GE) -> Result<(), InvalidSig> {
         let e_bn = HSha256::create_hash(&[
             &self.v.bytes_compressed_to_big_int(),
             &pubkey_y.bytes_compressed_to_big_int(),
@@ -295,7 +311,10 @@ impl Signature {
         if e_y_plus_v == sigma_g {
             Ok(())
         } else {
-            Err(InvalidSig)
+            // Note: I don't think we can provide failing parties here
+            // (the assumption is that this can't fail provided all of
+            // the previous steps didn't fail)
+            Err(InvalidSig(vec![]))
         }
     }
 }

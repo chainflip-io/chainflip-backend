@@ -330,7 +330,7 @@ impl SigningState {
                     StageStatus::Full => {
                         info!("[{}] Phase 2 (signing) successful ✅✅", self.us());
                         self.update_progress_timestamp();
-                        if let Ok(key) = self.sss.init_phase3() {
+                        if let Ok(key) = self.sss.finalize_phase2() {
                             info!("[{}] SHARED SECRET IS READY 👍", self.us());
 
                             self.shared_secret = Some(key);

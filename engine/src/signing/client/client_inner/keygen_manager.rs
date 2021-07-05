@@ -22,6 +22,7 @@ use super::{
 #[cfg(test)]
 use super::keygen_state::KeygenStage;
 
+use itertools::Itertools;
 use log::*;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -113,14 +114,16 @@ impl KeygenManager {
 
         let mut events_to_send = vec![];
 
-        self.delayed_messages.retain(|key_id, (t, _)| {
+        self.delayed_messages.retain(|key_id, (t, bc1_vec)| {
             if t.elapsed() > timeout {
                 warn!(
                     "Keygen state expired w/o keygen request for id: {:?}",
                     key_id
                 );
 
-                let event = InnerEvent::from(KeygenOutcome::unauthorised(*key_id, vec![]));
+                let bad_validators = bc1_vec.iter().map(|(vid, _)| vid).cloned().collect_vec();
+
+                let event = InnerEvent::from(KeygenOutcome::unauthorised(*key_id, bad_validators));
 
                 events_to_send.push(event);
                 return false;
@@ -131,7 +134,9 @@ impl KeygenManager {
         self.keygen_states.retain(|key_id, state| {
             if state.last_message_timestamp.elapsed() > timeout {
                 warn!("Keygen state expired for key id: {:?}", key_id);
-                let event = InnerEvent::from(KeygenOutcome::timeout(*key_id, vec![]));
+
+                let late_nodes = state.awaited_parites();
+                let event = InnerEvent::from(KeygenOutcome::timeout(*key_id, late_nodes));
 
                 events_to_send.push(event);
                 return false;
