@@ -390,7 +390,7 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
         _ => panic!("Unexpected event"),
     };
 
-    info!("Elapsed: {:?}", instant.elapsed());
+    info!("generate_valid_keygen_data took: {:?}", instant.elapsed());
 
     ValidKeygenStates {
         keygen_phase1,

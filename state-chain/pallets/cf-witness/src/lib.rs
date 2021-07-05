@@ -42,7 +42,7 @@ use cf_traits::EpochInfo;
 use codec::FullCodec;
 use frame_support::{
 	dispatch::{
-		DispatchResult, GetDispatchInfo, DispatchResultWithPostInfo, UnfilteredDispatchable
+		DispatchResult, DispatchResultWithPostInfo, GetDispatchInfo, UnfilteredDispatchable,
 	},
 	pallet_prelude::Member,
 	traits::EnsureOrigin,
@@ -99,7 +99,7 @@ pub mod pallet {
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
 
-	/// A lookup mapping (epoch, call_hash) to a bitmask representing the votes for each validator. 
+	/// A lookup mapping (epoch, call_hash) to a bitmask representing the votes for each validator.
 	#[pallet::storage]
 	pub type Votes<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, Epoch<T>, Identity, CallHash, Vec<u8>>;
@@ -157,7 +157,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Called as a witness of some external event. 
+		/// Called as a witness of some external event.
 		///
 		/// The provided `call` will be dispatched when the configured threshold number of validtors have submitted an
 		/// identical transaction. This can be thought of as a vote for the encoded [`Call`](crate::Pallet::Call) value.
@@ -237,12 +237,12 @@ impl<T: Config> Pallet<T> {
 				let mut vote = bits
 					.get_mut(index)
 					.ok_or(Error::<T>::ValidatorIndexOutOfBounds)?;
-				
+
 				// Return an error if already voted, otherwise set the indexed bit to `true` to indicate a vote.
 				if *vote {
 					Err(Error::<T>::DuplicateWitness)?
 				}
-				
+
 				vote_count += 1;
 				*vote = true;
 

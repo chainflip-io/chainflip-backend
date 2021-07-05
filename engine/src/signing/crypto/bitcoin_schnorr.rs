@@ -255,11 +255,9 @@ impl LocalSig {
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Signature {
-    // This is `s` in other literature
+    /// This is `s` in other literature
     pub sigma: FE,
-
-    // v is actually k?
-    // This is `r` in other literature
+    /// This is `r` in other literature
     pub v: GE,
 }
 

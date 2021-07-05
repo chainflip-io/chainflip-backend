@@ -1,6 +1,6 @@
-use frame_support::traits::EnsureOrigin;
-use frame_system::{RawOrigin, ensure_root};
 use super::*;
+use frame_support::traits::EnsureOrigin;
+use frame_system::{ensure_root, RawOrigin};
 
 pub struct Mock;
 
