@@ -21,6 +21,7 @@ use crate::{
     },
 };
 
+use std::convert::TryInto;
 use std::{sync::Once, time::Duration};
 
 // The id to be used by default
@@ -37,12 +38,20 @@ lazy_static! {
 }
 
 lazy_static! {
-    static ref MESSAGE: Vec<u8> = "Chainflip".as_bytes().to_vec();
+    static ref MESSAGE: [u8; 32] = "Chainflip:Chainflip:Chainflip:01"
+        .as_bytes()
+        .try_into()
+        .unwrap();
     static ref MESSAGE_HASH: MessageHash = MessageHash(MESSAGE.clone());
     static ref MESSAGE_INFO: MessageInfo = MessageInfo {
         hash: MESSAGE_HASH.clone(),
         key_id: KEY_ID
     };
+        /// Just in case we need to test signing two messages
+    static ref MESSAGE2: [u8; 32] = "Chainflip:Chainflip:Chainflip:02"
+        .as_bytes()
+        .try_into()
+        .unwrap();
     static ref SIGN_INFO: SigningInfo = SigningInfo {
         id: KEY_ID,
         signers: SIGNER_IDS.clone()

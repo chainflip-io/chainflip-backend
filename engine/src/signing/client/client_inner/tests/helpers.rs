@@ -231,7 +231,7 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
 
     // *** Send a request to sign and generate BC1 to be distributed ***
 
-    let message_to_sign = MessageHash("Chainflip".as_bytes().to_vec());
+    let message_to_sign = MessageHash(super::MESSAGE.clone());
     let message_info = MessageInfo {
         hash: message_to_sign.clone(),
         key_id,
