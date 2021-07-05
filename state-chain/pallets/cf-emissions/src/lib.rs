@@ -33,6 +33,19 @@ pub mod pallet {
 
 	pub type EthTransactionHash = [u8; 32];
 
+	#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+	pub struct EthToNative(u32, u32);
+
+	impl EthToNative {
+		pub fn convert_eth_to_native<T: Config>(&self, amount: T::FlipBalance) -> T::FlipBalance {
+			amount * T::FlipBalance::from(self.1) / T::FlipBalance::from(self.0)
+		}
+
+		pub fn convert_native_to_eth<T: Config>(&self, amount: T::FlipBalance) -> T::FlipBalance {
+			amount * T::FlipBalance::from(self.0) / T::FlipBalance::from(self.1)
+		}
+	}
+
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -83,7 +96,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn block_time_ratio)]
 	/// The ratio of eth block time to our native block time, expressed as a tuple.
-	pub type BlockTimeRatio<T: Config> = StorageValue<_, (u32, u32), ValueQuery>;
+	pub type BlockTimeRatio<T: Config> = StorageValue<_, EthToNative, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn last_mint_block)]
@@ -99,8 +112,7 @@ pub mod pallet {
 	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Event documentation should end with an array that provides descriptive names for event
-		/// parameters. [something, who]
+		/// Emissions have been distributed. [block_number, amount_minted]
 		EmissionsDistributed(BlockNumberFor<T>, T::FlipBalance),
 	}
 
@@ -178,7 +190,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			EmissionPerBlock::<T>::set(self.emission_per_block);
-			BlockTimeRatio::<T>::set((self.eth_block_time, self.native_block_time));
+			BlockTimeRatio::<T>::set(EthToNative(self.eth_block_time, self.native_block_time));
 		}
 	}
 }
@@ -186,10 +198,8 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// Converts the emissions rate per eth block to emissions per state chain block.
 	fn convert_emissions_rate(emissions_per_eth_block: T::FlipBalance) -> T::FlipBalance {
-		let (eth_block_time, native_block_time) = BlockTimeRatio::<T>::get();
-
-		emissions_per_eth_block * T::FlipBalance::from(native_block_time)
-			/ T::FlipBalance::from(eth_block_time)
+		let ratio = Self::block_time_ratio();
+		ratio.convert_eth_to_native::<T>(emissions_per_eth_block)
 	}
 
 	/// Determines if we should mint at block number `block_number`.
@@ -219,7 +229,7 @@ impl<T: Config> Pallet<T> {
 
 		let reward_amount = EmissionPerBlock::<T>::get()
 			.checked_mul(&blocks_elapsed)
-			.ok_or(T::DbWeight::get().reads(3))?;
+			.ok_or(T::DbWeight::get().reads(2))?;
 		let reward_amount = reward_amount + Dust::<T>::get();
 
 		// Do the distribution.
