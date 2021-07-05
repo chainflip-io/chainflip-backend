@@ -116,6 +116,28 @@ mod test_block_rewards {
 }
 
 #[test]
+fn test_() {
+	const EMISSION_RATE: u128 = 10;
+
+	new_test_ext(vec![1, 2], None, Some(EMISSION_RATE)).execute_with(|| {
+		const BLOCK_NUMBER: u64 = 5;
+
+		let before = Flip::<Test>::total_issuance();
+		let _weights = Pallet::<Test>::mint_rewards_for_block(BLOCK_NUMBER);
+		let after = Flip::<Test>::total_issuance();
+
+		assert_eq!(before + EMISSION_RATE * BLOCK_NUMBER as u128, after);
+
+		// Minting again at the same block should have no effect.
+		let before = after;
+		let _weights = Pallet::<Test>::mint_rewards_for_block(BLOCK_NUMBER);
+		let after = Flip::<Test>::total_issuance();
+
+		assert_eq!(before, after);
+	});
+}
+
+#[test]
 fn test_block_time_conversion() {
 	new_test_ext(vec![], None, None).execute_with(|| {
 		// Our blocks are twice as a fast (half the time) so emission rate should be half.
