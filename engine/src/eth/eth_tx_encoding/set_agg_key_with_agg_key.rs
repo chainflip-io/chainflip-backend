@@ -20,6 +20,10 @@ use sp_runtime::traits::Keccak256;
 use std::str::FromStr;
 use web3::{ethabi::Token, types::Address};
 
+use curv::{
+    arithmetic::Converter,
+    elliptic::curves::{secp256_k1::Secp256k1Point, traits::ECPoint},
+};
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 
 /// Helper function, constructs and runs the [SetAggKeyWithAggKeyEncoder] asynchronously.
@@ -65,10 +69,9 @@ struct SetAggKeyWithAggKeyEncoder<M: IMQClient> {
 #[derive(Clone)]
 struct ParamContainer {
     pub key_id: KeyId,
-    pub nonce: [u8; 32],
+    pub key_nonce: [u8; 32],
     pub pubkey_x: [u8; 32],
     pub pubkey_y_parity: u8,
-    pub nonce_times_g_addr: [u8; 20],
 }
 
 impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
@@ -145,6 +148,9 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
     // 4. Push this instruction to the MQ for the signing module to pick up
     async fn handle_keygen_success(&mut self, keygen_success: KeygenSuccess) {
         // process the keygensuccess
+
+        // Question: Why do we have to encode the params in the eth format. We could just serialize the params from a struct
+        // and then sign that. This would make it much clearer than going back and forth between ETH encoding.
         let (encoded_fn_params, param_container) = self
             .build_encoded_fn_params(&keygen_success)
             .expect("should be a valid encoded params");
@@ -175,6 +181,18 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
             .expect("Should publish to MQ");
     }
 
+    // TODO: Clean up
+    fn point_to_pubkey(&self, point: Secp256k1Point) -> PublicKey {
+        let bytes: [u8; 32] = point
+            .x_coor()
+            .expect("should be a valid point")
+            .to_bytes()
+            .try_into()
+            .expect("Should be a valid point");
+
+        PublicKey::from_slice(&bytes).expect("Should be valid pubkey")
+    }
+
     // When the signed message has been received we must:
     // 1. Get the parameters (`ParameterContainer`) that we stored in state (and submitted to the signing module in encoded form) earlier
     // 2. Build a valid ethereum encoded transaction using the message hash and signature returned by the Signing module
@@ -183,6 +201,9 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
     // from now onwards, until the next successful key rotation
     async fn handle_set_agg_key_message_signed(&mut self, msg: MessageInfo, sig: Signature) {
         // 1. Get the data from the message hash that was signed (using the `messages` field)
+        let k_g = self.point_to_pubkey(sig.v);
+        let nonce_times_g_addr = self.nonce_times_g_addr_from_v(k_g);
+
         let key_id = msg.key_id;
         let msg: FakeMessageHash = FakeMessageHash(msg.hash.0.try_into().unwrap());
         let params = self
@@ -190,7 +211,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
             .get(&msg)
             .expect("should have been stored when asked to sign");
         // 2. Call build_tx with the required info
-        match self.build_tx(&msg, &sig, params) {
+        match self.build_tx(&msg, &sig, nonce_times_g_addr, params) {
             Ok(ref tx_details) => {
                 // 3. Send it on its way to the eth broadcaster
                 self.mq_client
@@ -215,24 +236,25 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         &self,
         msg: &FakeMessageHash,
         sig: &Signature,
+        nonce_times_g_addr: [u8; 20],
         params: &ParamContainer,
     ) -> Result<TxDetails> {
         let sig_scalar =
             serde_json::to_string(&sig.sigma).expect("Failed to serialize the sig scalar");
         let sig_scalar: [u8; 32] = sig_scalar.as_bytes().try_into().unwrap();
+
         let params = [
+            // SigData
             Token::Tuple(vec![
-                // SigData
-                Token::Uint(msg.0.into()),        // msgHash
-                Token::Uint(params.nonce.into()), // nonce
-                // this 's' / sigma from the `Signature`
-                Token::Uint(sig_scalar.into()), // sig
+                Token::Uint(msg.0.into()),                 // msgHash
+                Token::Uint(params.key_nonce.into()),      // key nonce
+                Token::Uint(sig_scalar.into()),            // sig - this is 's' in the literature
+                Token::Address(nonce_times_g_addr.into()), // nonceTimesGAddr
             ]),
+            // Key
             Token::Tuple(vec![
-                // Key
-                Token::Uint(params.pubkey_x.into()), // pubkeyX
+                Token::Uint(params.pubkey_x.into()),        // pubkeyX
                 Token::Uint(params.pubkey_y_parity.into()), // pubkeyYparity
-                Token::Address(params.nonce_times_g_addr.into()), // nonceTimesGAddr
             ]),
         ];
 
@@ -247,103 +269,92 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         })
     }
 
-    fn generate_crypto_parts(
-        &self,
-        // there should be a nonce used to generate this public key?
-        pubkey: secp256k1::PublicKey,
-        k_hex: [u8; 32],
-    ) -> ([u8; 32], u8, [u8; 20]) {
-        // compressed form, means first byte is the y valence
-        let pubkey_bytes: [u8; 33] = pubkey.serialize();
-        let pubkey_y_parity_byte = pubkey_bytes[0];
-        let pubkey_y_parity = if pubkey_y_parity_byte == 2 { 0u8 } else { 1u8 };
-
-        let pubkey_x: [u8; 32] = pubkey_bytes[1..]
-            .try_into()
-            .expect("should be a valid pubkey");
-
-        let k = SecretKey::from_slice(&k_hex).unwrap();
-
+    /// v is 'r' in the literature. r = k * G where k is the nonce and G is the address generator
+    fn nonce_times_g_addr_from_v(&self, v: secp256k1::PublicKey) -> [u8; 20] {
         let s = Secp256k1::signing_only();
 
-        // this is 'r' -> we should expect this to be the same r as when the sig returns??
-        let k_times_g = PublicKey::from_secret_key(&s, &k);
-
-        let k_times_g_pub: [u8; 64] = k_times_g.serialize_uncompressed()[1..]
+        let v_pub: [u8; 64] = v.serialize_uncompressed()[1..]
             .try_into()
             .expect("Should be a valid pubkey");
 
-        // calculate nonce times g addr
-        let nonce_times_g_addr = Keccak256::hash(&k_times_g_pub).as_bytes().to_owned();
+        // calculate nonce times g addr - the hash over
+        let nonce_times_g_addr_hash = Keccak256::hash(&v_pub).as_bytes().to_owned();
 
         // take the last 160bits (20 bytes)
-        let from = nonce_times_g_addr.len() - 20;
-        let nonce_times_g_addr: [u8; 20] = nonce_times_g_addr[from..]
+        let nonce_times_g_addr: [u8; 20] = nonce_times_g_addr_hash[140..]
             .try_into()
             .expect("should only be 20 bytes long");
 
-        // nonce is k
-        return (pubkey_x, pubkey_y_parity, nonce_times_g_addr);
+        return nonce_times_g_addr;
     }
 
-    // Temporarily a CFE method, this will be moved to the state chain
+    // This has nothing to do with building an ETH transaction.
+    // We encode the tx like this, in eth format, because this is how the contract will
+    // serialise the data to verify the signature over the message hash
     fn build_encoded_fn_params(
         &self,
         keygen_success: &KeygenSuccess,
     ) -> Result<(Vec<u8>, ParamContainer)> {
-        let zero = [0u8; 32];
+        let pubkey = keygen_success.key;
 
-        // generate the nonce, and pass it in to generate_crypto_parts
-        // TODO: generate this randomly (crypto-secure)
-        // this is "khex" on the smart contract
-        // Actually, this shouldn't be generated here, it comes from `r` = `kG`, we only need to use kG to generate
-        // `nonce_time_g_addr`
-        let nonce: [u8; 32] =
-            hex::decode("d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285")
-                .unwrap()
-                .try_into()
-                .unwrap();
-
-        let (pubkey_x, pubkey_y_parity, nonce_times_g_addr) =
-            self.generate_crypto_parts(keygen_success.key, nonce);
+        let pubkey_bytes: [u8; 33] = pubkey.serialize();
+        let pubkey_y_parity_byte = pubkey_bytes[0];
+        let pubkey_y_parity = if pubkey_y_parity_byte == 2 { 0u8 } else { 1u8 };
+        let pubkey_x: [u8; 32] = pubkey_bytes[1..].try_into().expect("Is valid pubkey");
 
         let param_container = ParamContainer {
             key_id: keygen_success.key_id,
-            nonce,
             pubkey_x,
             pubkey_y_parity,
-            nonce_times_g_addr,
+            key_nonce: [0u8; 32],
         };
 
-        // this payload, gets signed by the CFE signing module
-        let params = [
-            Token::Tuple(vec![
-                // SigData - required for a valid ETH tx
-                Token::Uint(zero.into()),  // msgHash
-                Token::Uint(zero.into()),  // sig
-                Token::Uint(nonce.into()), // nonce
-            ]),
-            Token::Tuple(vec![
-                // New key - the stuff we need to update the key in the KeyManager contract
-                Token::Uint(pubkey_x.into()),              // pubkeyX
-                Token::Uint(pubkey_y_parity.into()),       // pubkeyYparity
-                Token::Address(nonce_times_g_addr.into()), // nonceTimesGAddr
-            ]),
-        ];
+        // key nonce???? we should have a nonce for the key here... is it derived or related to key id in anyway?
+        // why do we have key nonce and key id?
+        let params = self.set_agg_key_with_agg_key_param_constructor(
+            [0u8; 32],
+            3u64,
+            [0u8; 32],
+            [0u8; 20],
+            pubkey_x,
+            pubkey_y_parity,
+        );
 
-        // Question:
-        // This nonce is pushed *encoded* to the signing module. The module is using some
-        // "k" to compute the signature, it can't "see into" this encoded eth tx, so how does it
-        // sign over with the correct 'k' ??
-
+        // Serialize the data using eth encoding so the KeyManager contract can serialize the data in the same way
+        // in order to verify the signature
         let tx_data = self
             .key_manager
             .set_agg_key_with_agg_key()
             .encode_input(&params[..])?;
 
-        println!("The tx data: {:?}", tx_data);
-
         return Ok((tx_data, param_container));
+    }
+
+    // not sure if key nonce should be u64...
+    // sig = s in the literature. The scalar of the signature
+    fn set_agg_key_with_agg_key_param_constructor(
+        &self,
+        msg_hash: [u8; 32],
+        key_nonce: u64,
+        sig: [u8; 32],
+        nonce_times_g_addr: [u8; 20],
+        pubkey_x: [u8; 32],
+        pubkey_y_parity: u8,
+    ) -> [Token; 2] {
+        [
+            // SigData
+            Token::Tuple(vec![
+                Token::Uint(msg_hash.into()),              // msgHash
+                Token::Uint(key_nonce.into()),             // key nonce
+                Token::Uint(sig.into()), // sig - this 's' in the literature, the signature scalar
+                Token::Address(nonce_times_g_addr.into()), // nonceTimesGAddr - this is r in the literature
+            ]),
+            // Key - the signing module will sign over the params, containing this
+            Token::Tuple(vec![
+                Token::Uint(pubkey_x.into()),        // pubkeyX
+                Token::Uint(pubkey_y_parity.into()), // pubkeyYparity
+            ]),
+        ]
     }
 }
 
@@ -374,9 +385,56 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
 #[cfg(test)]
 mod test_eth_tx_encoder {
     use super::*;
+    use curv::arithmetic::Converter;
     use hex;
 
     use crate::mq::mq_mock::MQMock;
+
+    #[test]
+    fn test_point_to_pubkey() {
+        // let fake_address = hex::encode([12u8; 20]);
+        // let settings = settings::test_utils::new_test_settings().unwrap();
+
+        // let mq = MQMock::new();
+        // let mq_c = mq.get_client();
+
+        // let encoder = SetAggKeyWithAggKeyEncoder::new(
+        //     &fake_address[..],
+        //     settings.signing.genesis_validator_ids,
+        //     mq_c,
+        // )
+        // .unwrap();
+
+        // Serialized point: "{\"x\":\"8d13221e3a7326a34dd45214ba80116dd142e4b5ff3ce66a8dc7bfa0378b795\",\"y\":\"5d41ac1477614b5c0848d50dbd565ea2807bcba1df0df07a8217e9f7f7c2be88\"}"
+        const BASE_POINT2_X: [u8; 32] = [
+            0x08, 0xd1, 0x32, 0x21, 0xe3, 0xa7, 0x32, 0x6a, 0x34, 0xdd, 0x45, 0x21, 0x4b, 0xa8,
+            0x01, 0x16, 0xdd, 0x14, 0x2e, 0x4b, 0x5f, 0xf3, 0xce, 0x66, 0xa8, 0xdc, 0x7b, 0xfa,
+            0x03, 0x78, 0xb7, 0x95,
+        ];
+        const BASE_POINT2_Y: [u8; 32] = [
+            0x5d, 0x41, 0xac, 0x14, 0x77, 0x61, 0x4b, 0x5c, 0x08, 0x48, 0xd5, 0x0d, 0xbd, 0x56,
+            0x5e, 0xa2, 0x80, 0x7b, 0xcb, 0xa1, 0xdf, 0x0d, 0xf0, 0x7a, 0x82, 0x17, 0xe9, 0xf7,
+            0xf7, 0xc2, 0xbe, 0x88,
+        ];
+
+        let x_direct_hex = hex::encode(&BASE_POINT2_X);
+        println!("x direct hex: {:?}", x_direct_hex);
+
+        let big_int_x = curv::BigInt::from_bytes(&BASE_POINT2_X);
+        let big_int_y = curv::BigInt::from_bytes(&BASE_POINT2_Y);
+        let point: Secp256k1Point = Secp256k1Point::from_coor(&big_int_x, &big_int_y);
+
+        println!("x coor: {:?}", point.x_coor());
+        // Must go to bytes and then hex::encode, bigint.hex() tends to drop a character which is very annoying
+        let x_point = point.x_coor().unwrap().to_bytes();
+        let x_point_hex = hex::encode(x_point);
+        println!("xpoint hex {:#?}, len: {}", x_point_hex, x_point_hex.len());
+
+        // let bytes = hex::decode(x_point.clone()).unwrap();
+        // prepend 0x04 to represent the uncompressed key
+
+        // println!("bytes: {:#?}", bytes);
+    }
 
     // #[ignore = "Not fully implemented"]
     // #[test]
@@ -431,34 +489,34 @@ mod test_eth_tx_encoder {
         assert_eq!(pubkey_from_sk, pubkey);
     }
 
-    #[test]
-    fn test_crypto_parts() {
-        let fake_address = hex::encode([12u8; 20]);
-        let settings = settings::test_utils::new_test_settings().unwrap();
+    // #[test]
+    // fn test_crypto_parts() {
+    //     let fake_address = hex::encode([12u8; 20]);
+    //     let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let mq = MQMock::new();
-        let mq_c = mq.get_client();
+    //     let mq = MQMock::new();
+    //     let mq_c = mq.get_client();
 
-        let encoder = SetAggKeyWithAggKeyEncoder::new(
-            &fake_address[..],
-            settings.signing.genesis_validator_ids,
-            mq_c,
-        )
-        .unwrap();
+    //     let encoder = SetAggKeyWithAggKeyEncoder::new(
+    //         &fake_address[..],
+    //         settings.signing.genesis_validator_ids,
+    //         mq_c,
+    //     )
+    //     .unwrap();
 
-        let pubkey = secp256k1::PublicKey::from_str(
-            "0218845781f631c48f1c9709e23092067d06837f30aa0cd0544ac887fe91ddd166",
-        )
-        .unwrap();
+    //     let pubkey = secp256k1::PublicKey::from_str(
+    //         "0218845781f631c48f1c9709e23092067d06837f30aa0cd0544ac887fe91ddd166",
+    //     )
+    //     .unwrap();
 
-        let nonce: [u8; 32] =
-            hex::decode("d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285")
-                .unwrap()
-                .try_into()
-                .unwrap();
+    //     let nonce: [u8; 32] =
+    //         hex::decode("d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285")
+    //             .unwrap()
+    //             .try_into()
+    //             .unwrap();
 
-        let () = encoder.generate_crypto_parts(pubkey, nonce);
-    }
+    //     let () = encoder.generate_crypto_parts(pubkey, nonce);
+    // }
 
     // #[test]
     // fn test_build_encodings() {
