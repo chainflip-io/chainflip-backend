@@ -358,30 +358,6 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
     }
 }
 
-// /**
-//  * @notice  Set a new aggregate key. Requires a signature from the current aggregate key
-//  * @param sigData   The keccak256 hash over the msg (uint) (which is the calldata
-//  *                  for this function with empty msgHash and sig) and sig over that hash
-//  *                  from the current aggregate key (uint)
-//  * @param newKey    The new aggregate key to be set. The x component of the pubkey (uint),
-//  *                  the parity of the y component (uint8), and the nonce times G (address)
-//  */
-// function setAggKeyWithAggKey(
-//     SigData calldata sigData,
-//     Key calldata newKey
-// ) external override nzKey(newKey) validSig(
-//     sigData,
-//     keccak256(abi.encodeWithSelector(
-//         this.setAggKeyWithAggKey.selector,
-//         SigData(0, 0, sigData.nonce),
-//         newKey
-//     )),
-//     KeyID.Agg
-// ) {
-//     emit KeyChange(true, _keyIDToKey[KeyID.Agg], newKey);
-//     _keyIDToKey[KeyID.Agg] = newKey;
-// }
-
 #[cfg(test)]
 mod test_eth_tx_encoder {
     use super::*;
