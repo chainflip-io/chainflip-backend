@@ -28,10 +28,16 @@ const KEY_ID: KeyId = KeyId(0);
 
 lazy_static! {
     static ref VALIDATOR_IDS: Vec<ValidatorId> = vec![
-        ValidatorId("1".to_string()),
-        ValidatorId("2".to_string()),
-        ValidatorId("3".to_string()),
+        ValidatorId::new(1),
+        ValidatorId::new(2),
+        ValidatorId::new(3),
     ];
+    static ref UNEXPECTED_VALIDATOR_ID: ValidatorId = ValidatorId(
+        "unexpected|unexpected|unexpected"
+            .as_bytes()
+            .try_into()
+            .unwrap()
+    );
     static ref SIGNER_IDS: Vec<ValidatorId> =
         vec![VALIDATOR_IDS[0].clone(), VALIDATOR_IDS[1].clone()];
 }

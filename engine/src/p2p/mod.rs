@@ -5,6 +5,8 @@ pub mod mock;
 mod conductor;
 mod rpc;
 
+use std::convert::TryInto;
+
 pub use conductor::P2PConductor;
 
 use serde::{Deserialize, Serialize};
@@ -12,7 +14,6 @@ use serde::{Deserialize, Serialize};
 use crate::p2p::rpc::Base58;
 use async_trait::async_trait;
 use futures::Stream;
-use tokio::sync::mpsc::UnboundedReceiver;
 
 #[derive(Debug)]
 pub enum P2PNetworkClientError {
@@ -36,24 +37,49 @@ pub trait P2PNetworkClient<B: Base58, S: Stream<Item = P2PMessage>> {
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize, Eq, PartialOrd, Ord, Hash)]
-pub struct ValidatorId(pub String);
+pub struct ValidatorId(pub [u8; 32]);
 
-#[cfg(test)]
 impl ValidatorId {
+    // A convenience method to quickly generate different validator ids
+    // from a string of any size that is no larger that 32 bytes
+    #[cfg(test)]
     pub fn new<T: ToString>(id: T) -> Self {
-        ValidatorId(id.to_string())
+        let id_str = id.to_string();
+        let id_bytes = id_str.as_bytes();
+
+        let mut id: [u8; 32] = [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ];
+
+        for (idx, byte) in id_bytes.iter().enumerate() {
+            id[idx] = *byte;
+        }
+
+        ValidatorId(id)
+    }
+
+    pub fn from_base58(id: &str) -> anyhow::Result<Self> {
+        let id = bs58::decode(&id)
+            .into_vec()
+            .map_err(|_| anyhow::format_err!("Invalid base58"))?;
+        let id = id
+            .try_into()
+            .map_err(|_| anyhow::format_err!("Invalid id size"))?;
+
+        Ok(ValidatorId(id))
     }
 }
 
 impl std::fmt::Display for ValidatorId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ValidatorId({})", self.0)
+        write!(f, "ValidatorId({})", self.to_base58())
     }
 }
 
 impl Base58 for ValidatorId {
     fn to_base58(&self) -> String {
-        self.to_string()
+        bs58::encode(&self.0).into_string()
     }
 }
 
@@ -81,6 +107,7 @@ struct CommandSendMessage {
 mod tests {
 
     use itertools::Itertools;
+    use tokio::sync::mpsc::UnboundedReceiver;
 
     use super::mock::*;
     use super::*;
@@ -97,7 +124,7 @@ mod tests {
         let network = NetworkMock::new();
 
         let data = vec![1, 2, 3];
-        let validator_ids = (0..3).map(|i| ValidatorId(i.to_string())).collect_vec();
+        let validator_ids = (0..3).map(|i| ValidatorId::new(i)).collect_vec();
 
         let mut clients = validator_ids
             .iter()
@@ -129,7 +156,7 @@ mod tests {
         let network = NetworkMock::new();
 
         let data = vec![3, 2, 1];
-        let validator_ids = (0..3).map(|i| ValidatorId(i.to_string())).collect_vec();
+        let validator_ids = (0..3).map(|i| ValidatorId::new(i)).collect_vec();
         let mut clients = validator_ids
             .iter()
             .map(|id| network.new_client(id.clone()))

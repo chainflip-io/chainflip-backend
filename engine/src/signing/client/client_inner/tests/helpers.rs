@@ -109,9 +109,7 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
         share_count: 3,
     };
 
-    let validator_ids = (1..=3)
-        .map(|idx| ValidatorId(idx.to_string()))
-        .collect_vec();
+    let validator_ids = (1..=3).map(|idx| ValidatorId::new(idx)).collect_vec();
 
     let (mut clients, mut rxs): (Vec<_>, Vec<_>) = validator_ids
         .iter()

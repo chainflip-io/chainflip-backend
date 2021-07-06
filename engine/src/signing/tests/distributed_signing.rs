@@ -26,10 +26,8 @@ use crate::signing::{
 const N_PARTIES: usize = 2;
 lazy_static! {
     static ref SIGNERS: Vec<usize> = (1..=N_PARTIES).collect();
-    static ref VALIDATOR_IDS: Vec<ValidatorId> = SIGNERS
-        .iter()
-        .map(|idx| ValidatorId(idx.to_string()))
-        .collect();
+    static ref VALIDATOR_IDS: Vec<ValidatorId> =
+        SIGNERS.iter().map(|idx| ValidatorId::new(idx)).collect();
 }
 
 async fn coordinate_signing(mq_clients: Vec<impl IMQClient>, active_indices: &[usize]) {
