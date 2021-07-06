@@ -288,7 +288,6 @@ async fn no_sign_request() {
 #[tokio::test]
 async fn phase1_timeout() {
     let states = generate_valid_keygen_data().await;
-    init_logs_once();
 
     let mut c1 = states.sign_phase1.clients[0].clone();
 
@@ -319,8 +318,6 @@ async fn phase1_timeout() {
 async fn phase2_timeout() {
     let states = generate_valid_keygen_data().await;
 
-    init_logs_once();
-
     let mut c1 = states.sign_phase2.clients[0].clone();
 
     assert_eq!(
@@ -346,8 +343,6 @@ async fn phase2_timeout() {
 async fn phase3_timeout() {
     let states = generate_valid_keygen_data().await;
 
-    init_logs_once();
-
     let mut c1 = states.sign_phase3.clients[0].clone();
 
     assert_eq!(
@@ -366,4 +361,76 @@ async fn phase3_timeout() {
     // TODO: Cleanup needs to send signal and we detect it here.
 
     assert!(c1.signing_manager.get_state_for(&MESSAGE_INFO).is_none());
+}
+
+// test that a request to sign for a key id that is already in use
+#[tokio::test]
+async fn cannot_create_sign_for_known_id() {
+    let states = generate_valid_keygen_data().await;
+
+    let mut c1 = states.sign_phase3.clients[0].clone();
+
+    assert_eq!(
+        c1.signing_manager
+            .get_state_for(&MESSAGE_INFO)
+            .unwrap()
+            .get_stage(),
+        SigningStage::AwaitingLocalSig3
+    );
+
+    // send a signing request to a client
+    let bc1 = states.sign_phase1.bc1_vec[1].clone();
+    let id = &SIGNER_IDS[1];
+    let message = helpers::bc1_to_p2p_signing(bc1, id, &MESSAGE_INFO);
+    c1.process_p2p_mq_message(message);
+
+    // Previous state should be unaffected
+    assert_eq!(
+        c1.signing_manager
+            .get_state_for(&MESSAGE_INFO)
+            .unwrap()
+            .get_stage(),
+        SigningStage::AwaitingLocalSig3
+    );
+}
+
+// test that a sign request from a client that is not in the current selection is ignored
+#[tokio::test]
+async fn sign_request_from_invalid_validator() {
+    let states = generate_valid_keygen_data().await;
+
+    let mut c1 = states.sign_phase1.clients[0].clone();
+
+    assert_eq!(
+        c1.signing_manager
+            .get_state_for(&MESSAGE_INFO)
+            .unwrap()
+            .get_stage(),
+        SigningStage::AwaitingBroadcast1
+    );
+
+    let invalid_validator = VALIDATOR_IDS[2].clone();
+    // make sure that the id is indeed invalid
+    assert_eq!(
+        SIGNER_IDS.iter().position(|id| id == &invalid_validator),
+        None,
+        "invalid_validator id {}, must not be in the SIGNER_IDS",
+        invalid_validator
+    );
+
+    // send the request to sign with the invalid ID
+    let bc1 = states.sign_phase1.bc1_vec[1].clone();
+    let id = &invalid_validator;
+    let message = helpers::bc1_to_p2p_signing(bc1, id, &MESSAGE_INFO);
+    c1.process_p2p_mq_message(message);
+
+    // just check that we didn't crash.
+    assert_eq!(
+        c1.signing_manager
+            .get_state_for(&MESSAGE_INFO)
+            .unwrap()
+            .get_stage(),
+        SigningStage::AwaitingBroadcast1
+    );
+    //TODO: report the invalid id.
 }
