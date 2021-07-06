@@ -90,8 +90,8 @@ async fn coordinate_signing(mq_clients: Vec<impl IMQClient>, active_indices: &[u
 
     ready_to_sign.await;
 
-    let data = MessageHash(Vec::from("Chainflip".as_bytes()));
-    let data2 = MessageHash(Vec::from("Chainflip2".as_bytes()));
+    let data = MessageHash(super::fixtures::MESSAGE.clone());
+    let data2 = MessageHash(super::fixtures::MESSAGE2.clone());
 
     let signer_ids = active_indices
         .iter()
