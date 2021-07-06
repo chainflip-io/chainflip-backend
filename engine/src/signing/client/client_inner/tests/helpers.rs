@@ -352,13 +352,13 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
         local_sigs: local_sigs.clone(),
     };
 
-    for sender_idx in &active_idxs {
+    for sender_idx in SIGNER_IDXS.iter() {
         let local_sig = local_sigs[*sender_idx].clone();
         let id = &validator_ids[*sender_idx];
 
-        let m = sig_to_p2p(local_sig, id, &message_info);
+        let m = sig_to_p2p(local_sig, id, &MESSAGE_INFO);
 
-        for receiver_idx in &active_idxs {
+        for receiver_idx in SIGNER_IDXS.iter() {
             if receiver_idx != sender_idx {
                 clients[*receiver_idx].process_p2p_mq_message(m.clone());
             }
