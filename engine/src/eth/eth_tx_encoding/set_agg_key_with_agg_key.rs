@@ -49,17 +49,13 @@ pub(super) struct TxDetails {
     pub data: Vec<u8>,
 }
 
-// TODO: Use signing::MessageHash once it's updated to use [u8; 32]
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
-pub struct FakeMessageHash(pub [u8; 32]);
-
 /// Reads [AuctionConfirmedEvent]s off the message queue and encodes the function call to the stake manager.
 #[derive(Clone)]
 struct SetAggKeyWithAggKeyEncoder<M: IMQClient> {
     mq_client: M,
     key_manager: KeyManager,
     // maps the MessageHash which gets sent to the signer with the data that the MessageHash is a hash of
-    messages: HashMap<FakeMessageHash, ParamContainer>,
+    messages: HashMap<MessageHash, ParamContainer>,
     // On genesis, where do these validators come from, to allow for the first key update
     validators: HashMap<KeyId, Vec<ValidatorId>>,
     curr_signing_key_id: Option<KeyId>,
@@ -156,7 +152,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
             .expect("should be a valid encoded params");
 
         let hash = Keccak256::hash(&encoded_fn_params[..]);
-        let message_hash = FakeMessageHash(hash.into());
+        let message_hash = MessageHash(hash.0);
 
         // store key: parameters, so we can fetch the parameters again, after the payload
         // has been signed by the signing module
@@ -172,7 +168,6 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
                 .clone(),
         );
 
-        let message_hash = MessageHash(message_hash.0.to_vec());
         let signing_instruction = MultisigInstruction::Sign(message_hash, signing_info);
 
         self.mq_client
@@ -181,11 +176,10 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
             .expect("Should publish to MQ");
     }
 
-    // TODO: Clean up
     fn point_to_pubkey(&self, point: Secp256k1Point) -> PublicKey {
         let bytes: [u8; 32] = point
             .x_coor()
-            .expect("should be a valid point")
+            .expect("Should be a valid point")
             .to_bytes()
             .try_into()
             .expect("Should be a valid point");
@@ -205,13 +199,13 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         let nonce_times_g_addr = self.nonce_times_g_addr_from_v(k_g);
 
         let key_id = msg.key_id;
-        let msg: FakeMessageHash = FakeMessageHash(msg.hash.0.try_into().unwrap());
+        let msg_hash = msg.hash;
         let params = self
             .messages
-            .get(&msg)
+            .get(&msg_hash)
             .expect("should have been stored when asked to sign");
         // 2. Call build_tx with the required info
-        match self.build_tx(&msg, &sig, nonce_times_g_addr, params) {
+        match self.build_tx(&msg_hash, &sig, nonce_times_g_addr, params) {
             Ok(ref tx_details) => {
                 // 3. Send it on its way to the eth broadcaster
                 self.mq_client
@@ -234,7 +228,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
 
     fn build_tx(
         &self,
-        msg: &FakeMessageHash,
+        msg: &MessageHash,
         sig: &Signature,
         nonce_times_g_addr: [u8; 20],
         params: &ParamContainer,
@@ -300,8 +294,6 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
             key_nonce: [0u8; 32],
         };
 
-        // key nonce???? we should have a nonce for the key here... is it derived or related to key id in anyway?
-        // why do we have key nonce and key id?
         let params = self.set_agg_key_with_agg_key_param_constructor(
             [0u8; 32],
             [0u8; 32],
@@ -311,20 +303,20 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
             pubkey_y_parity,
         );
 
-        let tx_data = self.encode_params_key_manager_fn(params)?;
+        let encoded_data = self.encode_params_key_manager_fn(params)?;
 
-        return Ok((tx_data, param_container));
+        return Ok((encoded_data, param_container));
     }
 
     fn encode_params_key_manager_fn(&self, params: [Token; 2]) -> Result<Vec<u8>> {
         // Serialize the data using eth encoding so the KeyManager contract can serialize the data in the same way
         // in order to verify the signature
-        let tx_data = self
+        let encoded_data = self
             .key_manager
             .set_agg_key_with_agg_key()
             .encode_input(&params[..])?;
 
-        return Ok(tx_data);
+        return Ok(encoded_data);
     }
 
     // not sure if key nonce should be u64...
