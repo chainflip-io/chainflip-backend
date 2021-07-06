@@ -47,10 +47,7 @@ impl ValidatorId {
         let id_str = id.to_string();
         let id_bytes = id_str.as_bytes();
 
-        let mut id: [u8; 32] = [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0,
-        ];
+        let mut id: [u8; 32] = [0; 32];
 
         for (idx, byte) in id_bytes.iter().enumerate() {
             id[idx] = *byte;

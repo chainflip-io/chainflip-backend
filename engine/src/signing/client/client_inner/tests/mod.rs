@@ -21,6 +21,7 @@ use crate::{
     },
 };
 
+use std::convert::TryInto;
 use std::{sync::Once, time::Duration};
 
 // The id to be used by default

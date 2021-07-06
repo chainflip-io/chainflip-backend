@@ -30,10 +30,7 @@ async fn main() {
         .expect("Should start ETH client");
 
     // TODO: read the key for config/file
-    let signer_idx = ValidatorId([
-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
-        0, 1,
-    ]);
+    let signer_idx = ValidatorId([0; 32]);
 
     let params = Parameters {
         share_count: 150,
