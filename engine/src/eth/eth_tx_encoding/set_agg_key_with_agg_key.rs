@@ -143,10 +143,6 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
     // 3. Create a Signing Instruction
     // 4. Push this instruction to the MQ for the signing module to pick up
     async fn handle_keygen_success(&mut self, keygen_success: KeygenSuccess) {
-        // process the keygensuccess
-
-        // Question: Why do we have to encode the params in the eth format. We could just serialize the params from a struct
-        // and then sign that. This would make it much clearer than going back and forth between ETH encoding.
         let (encoded_fn_params, param_container) = self
             .build_encoded_fn_params(&keygen_success)
             .expect("should be a valid encoded params");
@@ -256,8 +252,6 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
 
     /// v is 'r' in the literature. r = k * G where k is the nonce and G is the address generator
     fn nonce_times_g_addr_from_v(&self, v: secp256k1::PublicKey) -> [u8; 20] {
-        let s = Secp256k1::signing_only();
-
         let v_pub: [u8; 64] = v.serialize_uncompressed()[1..]
             .try_into()
             .expect("Should be a valid pubkey");
@@ -273,6 +267,16 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         return nonce_times_g_addr;
     }
 
+    // Take a secp256k1 pubkey and return the pubkey_x and pubkey_y_parity
+    fn destructure_pubkey(&self, pubkey: secp256k1::PublicKey) -> ([u8; 32], u8) {
+        let pubkey_bytes: [u8; 33] = pubkey.serialize();
+        let pubkey_y_parity_byte = pubkey_bytes[0];
+        let pubkey_y_parity = if pubkey_y_parity_byte == 2 { 0u8 } else { 1u8 };
+        let pubkey_x: [u8; 32] = pubkey_bytes[1..].try_into().expect("Is valid pubkey");
+
+        return (pubkey_x, pubkey_y_parity);
+    }
+
     // This has nothing to do with building an ETH transaction.
     // We encode the tx like this, in eth format, because this is how the contract will
     // serialise the data to verify the signature over the message hash
@@ -282,10 +286,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
     ) -> Result<(Vec<u8>, ParamContainer)> {
         let pubkey = keygen_success.key;
 
-        let pubkey_bytes: [u8; 33] = pubkey.serialize();
-        let pubkey_y_parity_byte = pubkey_bytes[0];
-        let pubkey_y_parity = if pubkey_y_parity_byte == 2 { 0u8 } else { 1u8 };
-        let pubkey_x: [u8; 32] = pubkey_bytes[1..].try_into().expect("Is valid pubkey");
+        let (pubkey_x, pubkey_y_parity) = self.destructure_pubkey(pubkey);
 
         let param_container = ParamContainer {
             key_id: keygen_success.key_id,
@@ -359,19 +360,6 @@ mod test_eth_tx_encoder {
 
     #[test]
     fn test_point_to_pubkey() {
-        // let fake_address = hex::encode([12u8; 20]);
-        // let settings = settings::test_utils::new_test_settings().unwrap();
-
-        // let mq = MQMock::new();
-        // let mq_c = mq.get_client();
-
-        // let encoder = SetAggKeyWithAggKeyEncoder::new(
-        //     &fake_address[..],
-        //     settings.signing.genesis_validator_ids,
-        //     mq_c,
-        // )
-        // .unwrap();
-
         // Serialized point: "{\"x\":\"8d13221e3a7326a34dd45214ba80116dd142e4b5ff3ce66a8dc7bfa0378b795\",\"y\":\"5d41ac1477614b5c0848d50dbd565ea2807bcba1df0df07a8217e9f7f7c2be88\"}"
         const BASE_POINT2_X: [u8; 32] = [
             0x08, 0xd1, 0x32, 0x21, 0xe3, 0xa7, 0x32, 0x6a, 0x34, 0xdd, 0x45, 0x21, 0x4b, 0xa8,
@@ -405,49 +393,62 @@ mod test_eth_tx_encoder {
 
     #[test]
     fn test_message_hashing() {
+        // The data is generated from: https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/integration/keyManager/test_setKey_setKey.py
+
         // let test_message =
-        // messageHashHex as an int int("{messageHashHex}", 16)),
+        // messageHashHex as an int int("{messageHashHex}", 16)), s / sig scalar, key nonce, nonce_times_g_addr
         // [103704540780501116108228706996498255309184683516754026165217031971735709557632, 71531180451393840211582948655188152052529157363863150697290720522319604804394, 2, '02eDd8421D87B7c0eE433D3AFAd3aa2Ef039f27a']
+        // params used:
+        // AGG_PRIV_HEX_1 = "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba"
+        // AGG_K_HEX_1 = "d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285"
+        // AGG_SIGNER_1 = Signer(AGG_PRIV_HEX_1, AGG_K_HEX_1, AGG, nonces)
+
+        let mq = MQMock::new();
+
+        let mq_client = mq.get_client();
+
+        let settings = settings::test_utils::new_test_settings().unwrap();
+
+        let encoder = SetAggKeyWithAggKeyEncoder::new(
+            settings.eth.key_manager_eth_address.as_str(),
+            settings.signing.genesis_validator_ids,
+            mq_client,
+        )
+        .unwrap();
+
+        let s = secp256k1::Secp256k1::signing_only();
+
+        let sk = secp256k1::SecretKey::from_str(
+            "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba",
+        )
+        .unwrap();
+
+        let pubkey_from_sk = PublicKey::from_secret_key(&s, &sk);
+
+        let (pubkey_x, pubkey_y_parity) = encoder.destructure_pubkey(pubkey_from_sk);
+
+        let params = encoder.set_agg_key_with_agg_key_param_constructor(
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 20],
+            pubkey_x,
+            pubkey_y_parity,
+        );
+
+        let encoded_bytes = encoder.encode_params_key_manager_fn(params);
+
+        println!("Here's the encoded bytes: {:#?}", encoded_bytes);
+
+        // let params = set_agg_key_with_agg_key_param_constructor()
     }
-
-    // #[ignore = "Not fully implemented"]
-    // #[test]
-    // fn test_tx_build() {
-    //     let fake_address = hex::encode([12u8; 20]);
-    //     let settings = settings::test_utils::new_test_settings().unwrap();
-    //     let mq = MQMock::new();
-
-    //     let encoder = SetAggKeyWithAggKeyEncoder::new(
-    //         &fake_address[..],
-    //         settings.signing.genesis_validator_ids,
-    //         mq.get_client(),
-    //     )
-    //     .expect("Unable to intialise encoder");
-
-    //     let event = FakeNewAggKeySigningComplete {
-    //         hash: FakeMessageHash([0; 32]),
-    //         sig: [0; 32],
-    //     };
-
-    //     let param_container = ParamContainer {
-    //         key_id: KeyId(1),
-    //         nonce: 3u64,
-    //         pubkey_x: [0; 32],
-    //         pubkey_y_parity: [0; 32],
-    //         nonce_times_g_addr: [0; 20],
-    //     };
-
-    //     let _ = encoder
-    //         .build_tx(&event, &param_container)
-    //         .expect("Unable to encode tx details");
-    // }
 
     #[test]
     fn secp256k1_sanity_check() {
         let s = secp256k1::Secp256k1::signing_only();
 
         let sk = secp256k1::SecretKey::from_str(
-            "01010101010101010001020304050607ffff0000ffff00006363636363636363",
+            "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba",
         )
         .unwrap();
 
@@ -455,64 +456,11 @@ mod test_eth_tx_encoder {
 
         // these keys should be derivable from each other.
         let pubkey = secp256k1::PublicKey::from_str(
-            "0218845781f631c48f1c9709e23092067d06837f30aa0cd0544ac887fe91ddd166",
+            "0331b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae",
         )
         .unwrap();
 
         // for sanity
         assert_eq!(pubkey_from_sk, pubkey);
     }
-
-    // #[test]
-    // fn test_crypto_parts() {
-    //     let fake_address = hex::encode([12u8; 20]);
-    //     let settings = settings::test_utils::new_test_settings().unwrap();
-
-    //     let mq = MQMock::new();
-    //     let mq_c = mq.get_client();
-
-    //     let encoder = SetAggKeyWithAggKeyEncoder::new(
-    //         &fake_address[..],
-    //         settings.signing.genesis_validator_ids,
-    //         mq_c,
-    //     )
-    //     .unwrap();
-
-    //     let pubkey = secp256k1::PublicKey::from_str(
-    //         "0218845781f631c48f1c9709e23092067d06837f30aa0cd0544ac887fe91ddd166",
-    //     )
-    //     .unwrap();
-
-    //     let nonce: [u8; 32] =
-    //         hex::decode("d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285")
-    //             .unwrap()
-    //             .try_into()
-    //             .unwrap();
-
-    //     let () = encoder.generate_crypto_parts(pubkey, nonce);
-    // }
-
-    // #[test]
-    // fn test_build_encodings() {
-    //     let fake_address = hex::encode([12u8; 20]);
-    //     let settings = settings::test_utils::new_test_settings().unwrap();
-    //     let mq = MQMock::new();
-
-    //     let encoder = SetAggKeyWithAggKeyEncoder::new(
-    //         &fake_address[..],
-    //         settings.signing.genesis_validator_ids,
-    //         mq.get_client(),
-    //     )
-    //     .expect("Unable to intialise encoder");
-
-    //     let event = FakeNewAggKey {
-    //         pubkey_x: [0; 32],
-    //         pubkey_y_parity: [0; 32],
-    //         nonce_times_g_addr: [0; 20],
-    //     };
-
-    //     let _ = encoder
-    //         .build_encoded_fn_params(&event)
-    //         .expect("Unable to encode tx details");
-    // }
 }

@@ -24,7 +24,7 @@ hostname = "127.0.0.1"
 port = 5555
 
 [signing]
-init_validator_ids = [
+genesis_validator_ids = [
   "alice",
   "bob",
 ]
