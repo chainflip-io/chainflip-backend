@@ -475,14 +475,25 @@ mod test_eth_tx_encoder {
             .unwrap()
         );
 
-        // let params = encoder.set_agg_key_with_agg_key_param_constructor(
-        //     hash_junk_bytes.try_into().unwrap(),
-        //     [0u8; 32],
-        //     [0u8; 32],
-        //     [0u8; 20],
-        //     pubkey_x,
-        //     pubkey_y_parity,
-        // );
+        // encoded and hashed is correct
+
+        // hash_junk_bytes.try_into().unwrap(),
+        let params = encoder.set_agg_key_with_agg_key_param_constructor(
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 20],
+            pubkey_x,
+            pubkey_y_parity,
+        );
+
+        let encoded = encoder.encode_params_key_manager_fn(params).unwrap();
+        let hex_params = hex::encode(&encoded);
+        println!("hex params: {:#?}", hex_params);
+        // hex
+        let call_data_no_sig_from_contract = "24969d5d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000031b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae0000000000000000000000000000000000000000000000000000000000000001";
+
+        assert_eq!(call_data_no_sig_from_contract, hex_params);
     }
 
     #[test]
