@@ -89,10 +89,10 @@ impl KeygenState {
     }
 
     /// Get ids of validators who haven't sent the data for the current stage
-    pub fn awaited_parites(&self) -> Vec<ValidatorId> {
+    pub fn awaited_parties(&self) -> Vec<ValidatorId> {
         let awaited_idxs = match self.stage {
             KeygenStage::AwaitingBroadcast1 | KeygenStage::AwaitingSecret2 => {
-                self.sss.awaited_parites()
+                self.sss.awaited_parties()
             }
             KeygenStage::KeyReady | KeygenStage::Abandoned => vec![],
         };
@@ -229,7 +229,7 @@ impl KeygenState {
                 let blamed_ids = self.signer_idxs_to_validator_ids(blamed_idxs);
 
                 error!(
-                    "phase2 keygen error for key: {:?}, blamed parties: {:?}",
+                    "phase2 keygen error for key: {:?}, blamed validators: {:?}",
                     self.key_id, &blamed_ids
                 );
 

@@ -121,6 +121,8 @@ impl KeygenManager {
                     key_id
                 );
 
+                // We never received a keygen request for this key, so any parties
+                // that tried to initiate a new ceremony are deemed malicious
                 let bad_validators = bc1_vec.iter().map(|(vid, _)| vid).cloned().collect_vec();
 
                 let event = InnerEvent::from(KeygenOutcome::unauthorised(*key_id, bad_validators));
@@ -135,7 +137,7 @@ impl KeygenManager {
             if state.last_message_timestamp.elapsed() > timeout {
                 warn!("Keygen state expired for key id: {:?}", key_id);
 
-                let late_nodes = state.awaited_parites();
+                let late_nodes = state.awaited_parties();
                 let event = InnerEvent::from(KeygenOutcome::timeout(*key_id, late_nodes));
 
                 events_to_send.push(event);

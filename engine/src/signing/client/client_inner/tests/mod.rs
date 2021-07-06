@@ -87,8 +87,8 @@ fn init_logs_once() {
 // - Delayed data expires on timeout
 // - Parties cannot send two messages for the same phase
 // - make sure that we don't process p2p data at index signer_id which is our own
-// - test that we penalize offending nodes
+// - test that we emit events that allow for penalisation of offending nodes to occur
 // [Keygen]
 // - Parties cannot send two messages for the same phase
 // - make sure that we don't process p2p data at index signer_id which is our own
-// - test that we penalize offending nodes
+// - test that we emit events that allow for penalisation of offending nodes to occur

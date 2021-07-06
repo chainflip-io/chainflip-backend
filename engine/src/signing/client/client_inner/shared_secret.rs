@@ -199,7 +199,7 @@ impl SharedSecretState {
     }
 
     /// Get indexes of validators who haven't sent the data for the current stage
-    pub fn awaited_parites(&self) -> Vec<usize> {
+    pub fn awaited_parties(&self) -> Vec<usize> {
         let received_idxs = match self.stage {
             SharedSecretStage::AwaitingBroadcast1 => &self.phase1_order,
             SharedSecretStage::AwaitingSecret2 => &self.phase2_order,

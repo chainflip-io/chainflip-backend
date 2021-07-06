@@ -23,7 +23,7 @@ impl fmt::Display for InvalidSS {
 impl std::error::Error for InvalidSS {}
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct InvalidSig(pub Vec<usize> /* blamed parties */);
+pub struct InvalidSig;
 
 impl fmt::Display for InvalidSig {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

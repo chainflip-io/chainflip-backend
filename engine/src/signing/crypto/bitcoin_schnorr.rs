@@ -311,10 +311,7 @@ impl Signature {
         if e_y_plus_v == sigma_g {
             Ok(())
         } else {
-            // Note: I don't think we can provide failing parties here
-            // (the assumption is that this can't fail provided all of
-            // the previous steps didn't fail)
-            Err(InvalidSig(vec![]))
+            Err(InvalidSig)
         }
     }
 }
