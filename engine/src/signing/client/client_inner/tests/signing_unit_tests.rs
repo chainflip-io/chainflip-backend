@@ -314,7 +314,7 @@ async fn phase1_timeout() {
     assert!(c1.signing_manager.get_state_for(&MESSAGE_INFO).is_none());
 }
 
-/// Test that if signing state times out during phase 2 (with sign request present)
+/// Test that signing state times out during phase 2
 #[tokio::test]
 async fn phase2_timeout() {
     let states = generate_valid_keygen_data().await;
