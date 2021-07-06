@@ -227,7 +227,7 @@ impl SigningState {
                 if verify_sig.is_ok() {
                     info!("Generated signature is correct! 🎉");
                     let _ = self.event_sender.send(InnerEvent::InnerSignal(
-                        InnerSignal::MessageSigned(self.message_info.clone()),
+                        InnerSignal::MessageSigned(self.message_info.clone(), signature),
                     ));
                 }
             }

@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Instant};
 
+use curv::elliptic::curves::traits::ECPoint;
 use itertools::Itertools;
 use log::*;
 use tokio::sync::mpsc::UnboundedSender;
@@ -9,7 +10,9 @@ use crate::{
     signing::{
         client::{
             client_inner::{
-                client_inner::KeyGenMessageWrapped, shared_secret::StageStatus, KeygenOutcome,
+                client_inner::{KeyGenMessageWrapped, KeygenSuccess},
+                shared_secret::StageStatus,
+                KeygenOutcome,
             },
             KeyId,
         },
@@ -147,6 +150,15 @@ impl KeygenState {
 
                             self.stage = KeygenStage::KeyReady;
 
+                            let keygen_success = KeygenSuccess {
+                                key_id: self.key_id,
+                                key: key.aggregate_pubkey.get_element(),
+                            };
+
+                            self.send_event(InnerEvent::KeygenResult(KeygenOutcome::Success(
+                                keygen_success,
+                            )));
+
                             let key_info = KeygenResultInfo {
                                 key: Arc::new(key),
                                 validator_map: Arc::clone(&self.maps_for_validator_id_and_idx),
@@ -154,6 +166,7 @@ impl KeygenState {
 
                             self.key_info = Some(key_info.clone());
 
+                            // TODO: remove this as KeygenOutcome subsumes it
                             self.send_event(InnerEvent::InnerSignal(InnerSignal::KeyReady));
 
                             return Some(key_info);
