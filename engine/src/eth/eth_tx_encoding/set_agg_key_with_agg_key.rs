@@ -405,6 +405,11 @@ mod test_eth_tx_encoder {
         // AGG_SIGNER_1 = Signer(AGG_PRIV_HEX_1, AGG_K_HEX_1, AGG, nonces)
         // JUNK_HEX_PAD = 0000000000000000000000000000000000000000000000000000000000003039
 
+        // We move to these keys
+        // AGG_PRIV_HEX_2 = "bbade2da39cfc81b1b64b6a2d66531ed74dd01803dc5b376ce7ad548bbe23608"
+        // AGG_K_HEX_2 = "ecb77b2eb59614237e5646b38bdf03cbdbdce61c874fdee6e228edaa26f01f5d"
+        // AGG_SIGNER_2 = Signer(AGG_PRIV_HEX_2, AGG_K_HEX_2, AGG, nonces)
+
         // Pub data
         // [22479114112312168431982914496826057754130808976066989807481484372215659188398, 1]
 
@@ -422,60 +427,65 @@ mod test_eth_tx_encoder {
         .unwrap();
 
         let s = secp256k1::Secp256k1::signing_only();
-
-        let sk = secp256k1::SecretKey::from_str(
+        let sk_1 = secp256k1::SecretKey::from_str(
             "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba",
         )
         .unwrap();
 
-        let hex_junk_int = "0000000000000000000000000000000000000000000000000000000000003039";
+        let sk_2 = secp256k1::SecretKey::from_str(
+            "bbade2da39cfc81b1b64b6a2d66531ed74dd01803dc5b376ce7ad548bbe23608",
+        )
+        .unwrap();
 
-        let junk_bytes = hex::decode(hex_junk_int).unwrap();
+        // This stuff doesn't really matter now, the final thing is what we care about
+        // let hex_junk_int = "0000000000000000000000000000000000000000000000000000000000003039";
 
-        let hash_junk_bytes = Keccak256::hash(&junk_bytes);
-        println!("hash junk byte: {:?}", hash_junk_bytes);
+        // let junk_bytes = hex::decode(hex_junk_int).unwrap();
 
-        // expected value from python contract testing code
-        let expected: [u8; 32] =
-            hex::decode("e546b0a52c2879744f6def0fb483d581dc6d205de83af8440456804dd8b62380")
-                .unwrap()
-                .try_into()
-                .unwrap();
-        assert_eq!(hash_junk_bytes.0, expected);
+        // let hash_junk_bytes = Keccak256::hash(&junk_bytes);
+        // println!("hash junk byte: {:?}", hash_junk_bytes);
 
-        use num::bigint::Sign;
-        let big_int_hash_be = num::BigInt::from_bytes_be(Sign::Plus, &hash_junk_bytes.0);
+        // // expected value from python contract testing code
+        // let expected: [u8; 32] =
+        //     hex::decode("e546b0a52c2879744f6def0fb483d581dc6d205de83af8440456804dd8b62380")
+        //         .unwrap()
+        //         .try_into()
+        //         .unwrap();
+        // assert_eq!(hash_junk_bytes.0, expected);
 
-        println!("Be big int hash: {:?}", big_int_hash_be);
+        // use num::bigint::Sign;
+        // let big_int_hash_be = num::BigInt::from_bytes_be(Sign::Plus, &hash_junk_bytes.0);
 
-        // the python code stores hashes as BigInt, so that's what we'll use to assert over
-        // we are able to hash the message to the same big int as expected in the contract. yay.
-        assert_eq!(
-            big_int_hash_be,
-            BigInt::from_str(
-                "103704540780501116108228706996498255309184683516754026165217031971735709557632"
-            )
-            .unwrap()
-        );
+        // println!("Be big int hash: {:?}", big_int_hash_be);
 
-        let pubkey_from_sk = PublicKey::from_secret_key(&s, &sk);
+        // // the python code stores hashes as BigInt, so that's what we'll use to assert over
+        // // we are able to hash the message to the same big int as expected in the contract. yay.
+        // assert_eq!(
+        //     big_int_hash_be,
+        //     BigInt::from_str(
+        //         "103704540780501116108228706996498255309184683516754026165217031971735709557632"
+        //     )
+        //     .unwrap()
+        // );
 
-        let (pubkey_x, pubkey_y_parity) = encoder.destructure_pubkey(pubkey_from_sk);
-        let big_int_pubkey = BigInt::from_bytes_be(Sign::Plus, &pubkey_x);
-        println!("big int pubkey: {:#?}", big_int_pubkey);
-        println!("pubkey y parity: {:#?}", pubkey_y_parity);
+        // // let big_int_pubkey = BigInt::from_bytes_be(Sign::Plus, &pubkey_x);
+        // println!("big int pubkey: {:#?}", big_int_pubkey);
+        // println!("pubkey y parity: {:#?}", pubkey_y_parity);
 
-        // expected from test_verifySignature_rev_nonceTimesGeneratorAddress_zero
-        assert_eq!(pubkey_y_parity, 1);
-        assert_eq!(
-            big_int_pubkey,
-            BigInt::from_str(
-                "22479114112312168431982914496826057754130808976066989807481484372215659188398"
-            )
-            .unwrap()
-        );
+        // // expected from test_verifySignature_rev_nonceTimesGeneratorAddress_zero
+        // assert_eq!(pubkey_y_parity, 1);
+        // assert_eq!(
+        //     big_int_pubkey,
+        //     BigInt::from_str(
+        //         "22479114112312168431982914496826057754130808976066989807481484372215659188398"
+        //     )
+        //     .unwrap()
+        // );
 
-        // encoded and hashed is correct
+        // we rotate to key 2, so this is the pubkey we want to sign over
+        let pubkey_from_sk_2 = PublicKey::from_secret_key(&s, &sk_2);
+
+        let (pubkey_x, pubkey_y_parity) = encoder.destructure_pubkey(pubkey_from_sk_2);
 
         // hash_junk_bytes.try_into().unwrap(),
         let params = encoder.set_agg_key_with_agg_key_param_constructor(
@@ -491,9 +501,50 @@ mod test_eth_tx_encoder {
         let hex_params = hex::encode(&encoded);
         println!("hex params: {:#?}", hex_params);
         // hex
-        let call_data_no_sig_from_contract = "24969d5d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000031b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae0000000000000000000000000000000000000000000000000000000000000001";
-
+        let call_data_no_sig_from_contract = "24969d5d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001";
         assert_eq!(call_data_no_sig_from_contract, hex_params);
+        let hex_call_data_no_sig = hex::decode(&call_data_no_sig_from_contract).unwrap();
+        // this is what the signing module does
+        let hash_hex_call_data_no_sig = Keccak256::hash(&hex_call_data_no_sig).0;
+
+        // sig data from contract, we aren't testing signing
+        // [19838331578708755702960229198816480402256567085479269042839672688267843389518, 86256580123538456061655860770396085945007591306530617821168588559087896188216, 0, '02eDd8421D87B7c0eE433D3AFAd3aa2Ef039f27a']
+        let message_hash: [u8; 32] = BigInt::from_str(
+            "19838331578708755702960229198816480402256567085479269042839672688267843389518",
+        )
+        .unwrap()
+        .to_bytes_be()
+        .1
+        .try_into()
+        .unwrap();
+
+        let message_hash = MessageHash(message_hash);
+
+        let sig: [u8; 32] = BigInt::from_str(
+            "86256580123538456061655860770396085945007591306530617821168588559087896188216",
+        )
+        .unwrap()
+        .to_bytes_be()
+        .1
+        .try_into()
+        .unwrap();
+
+        let param_container = ParamContainer {
+            key_id: KeyId(0),
+            key_nonce: [0u8; 32],
+            pubkey_x,
+            pubkey_y_parity,
+        };
+
+        let y_parity = 0u8;
+        let nonce_times_g_addr = hex::decode("02eDd8421D87B7c0eE433D3AFAd3aa2Ef039f27a")
+            .unwrap()
+            .try_into()
+            .unwrap();
+
+        let eth_input_from_receipt = "0x24969d5d2bdc19071c7994f088103dbf8d5476d6deb6d55ee005a2f510dc7640055cc84ebeb37e87509e15cd88b19fa224441c56acc0e143cb25b9fd1e57fdafed215538000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002edd8421d87b7c0ee433d3afad3aa2ef039f27a1742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001";
+
+        let built_tx = encoder.build_tx(&message_hash, sig, nonce_times_g_addr, param_container);
     }
 
     #[test]
