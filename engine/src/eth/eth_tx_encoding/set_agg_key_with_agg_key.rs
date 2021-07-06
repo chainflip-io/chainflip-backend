@@ -243,25 +243,16 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
             serde_json::to_string(&sig.sigma).expect("Failed to serialize the sig scalar");
         let sig_scalar: [u8; 32] = sig_scalar.as_bytes().try_into().unwrap();
 
-        let params = [
-            // SigData
-            Token::Tuple(vec![
-                Token::Uint(msg.0.into()),                 // msgHash
-                Token::Uint(params.key_nonce.into()),      // key nonce
-                Token::Uint(sig_scalar.into()),            // sig - this is 's' in the literature
-                Token::Address(nonce_times_g_addr.into()), // nonceTimesGAddr
-            ]),
-            // Key
-            Token::Tuple(vec![
-                Token::Uint(params.pubkey_x.into()),        // pubkeyX
-                Token::Uint(params.pubkey_y_parity.into()), // pubkeyYparity
-            ]),
-        ];
+        let params = self.set_agg_key_with_agg_key_param_constructor(
+            msg.0,
+            sig_scalar,
+            params.key_nonce,
+            nonce_times_g_addr,
+            params.pubkey_x,
+            params.pubkey_y_parity,
+        );
 
-        let tx_data = self
-            .key_manager
-            .set_agg_key_with_agg_key()
-            .encode_input(&params[..])?;
+        let tx_data = self.encode_params_key_manager_fn(params)?;
 
         Ok(TxDetails {
             contract_address: self.key_manager.deployed_address,
@@ -313,13 +304,19 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         // why do we have key nonce and key id?
         let params = self.set_agg_key_with_agg_key_param_constructor(
             [0u8; 32],
-            3u64,
+            [0u8; 32],
             [0u8; 32],
             [0u8; 20],
             pubkey_x,
             pubkey_y_parity,
         );
 
+        let tx_data = self.encode_params_key_manager_fn(params)?;
+
+        return Ok((tx_data, param_container));
+    }
+
+    fn encode_params_key_manager_fn(&self, params: [Token; 2]) -> Result<Vec<u8>> {
         // Serialize the data using eth encoding so the KeyManager contract can serialize the data in the same way
         // in order to verify the signature
         let tx_data = self
@@ -327,7 +324,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
             .set_agg_key_with_agg_key()
             .encode_input(&params[..])?;
 
-        return Ok((tx_data, param_container));
+        return Ok(tx_data);
     }
 
     // not sure if key nonce should be u64...
@@ -335,18 +332,20 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
     fn set_agg_key_with_agg_key_param_constructor(
         &self,
         msg_hash: [u8; 32],
-        key_nonce: u64,
         sig: [u8; 32],
+        key_nonce: [u8; 32],
         nonce_times_g_addr: [u8; 20],
         pubkey_x: [u8; 32],
         pubkey_y_parity: u8,
     ) -> [Token; 2] {
+        // These are two arguments, SigData and Key from:
+        // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol
         [
             // SigData
             Token::Tuple(vec![
                 Token::Uint(msg_hash.into()),              // msgHash
-                Token::Uint(key_nonce.into()),             // key nonce
                 Token::Uint(sig.into()), // sig - this 's' in the literature, the signature scalar
+                Token::Uint(key_nonce.into()), // key nonce
                 Token::Address(nonce_times_g_addr.into()), // nonceTimesGAddr - this is r in the literature
             ]),
             // Key - the signing module will sign over the params, containing this
@@ -410,6 +409,13 @@ mod test_eth_tx_encoder {
         // prepend 0x04 to represent the uncompressed key
 
         // println!("bytes: {:#?}", bytes);
+    }
+
+    #[test]
+    fn test_message_hashing() {
+        // let test_message =
+        // messageHashHex as an int int("{messageHashHex}", 16)),
+        // [103704540780501116108228706996498255309184683516754026165217031971735709557632, 71531180451393840211582948655188152052529157363863150697290720522319604804394, 2, '02eDd8421D87B7c0eE433D3AFAd3aa2Ef039f27a']
     }
 
     // #[ignore = "Not fully implemented"]
