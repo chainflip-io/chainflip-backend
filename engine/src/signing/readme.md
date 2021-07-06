@@ -22,8 +22,10 @@ graph TD;
 MultisigClient-->MultisigClientInner;
 MultisigClientInner-->SigningStateManager;
 MultisigClientInner-->KeygenManager;
-SigningStateManager-->SigningState-->SharedSecretState;
-KeygenManager-->KeygenState-->SharedSecretState;
+SigningStateManager-->SigningState;
+SigningState-->SharedSecretState;
+KeygenManager-->KeygenState;
+KeygenState-->SharedSecretState
 ```
 
 >viewable in markdown preview enhanced or with "GitHub + Mermaid" chrome extension.
