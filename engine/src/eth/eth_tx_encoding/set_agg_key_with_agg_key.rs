@@ -355,6 +355,7 @@ mod test_eth_tx_encoder {
     use super::*;
     use curv::arithmetic::Converter;
     use hex;
+    use num::BigInt;
 
     use crate::mq::mq_mock::MQMock;
 
@@ -396,11 +397,16 @@ mod test_eth_tx_encoder {
         // The data is generated from: https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/integration/keyManager/test_setKey_setKey.py
 
         // messageHashHex as an int int("{messageHashHex}", 16)), s / sig scalar, key nonce, nonce_times_g_addr
+        //  85719446582889643476728275386669501643157597193370273856506913038565260038237L
         // [103704540780501116108228706996498255309184683516754026165217031971735709557632, 71531180451393840211582948655188152052529157363863150697290720522319604804394, 2, '02eDd8421D87B7c0eE433D3AFAd3aa2Ef039f27a']
         // params used:
         // AGG_PRIV_HEX_1 = "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba"
         // AGG_K_HEX_1 = "d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285"
         // AGG_SIGNER_1 = Signer(AGG_PRIV_HEX_1, AGG_K_HEX_1, AGG, nonces)
+        // JUNK_HEX_PAD = 0000000000000000000000000000000000000000000000000000000000003039
+
+        // Pub data
+        // [22479114112312168431982914496826057754130808976066989807481484372215659188398, 1]
 
         let mq = MQMock::new();
 
@@ -422,29 +428,61 @@ mod test_eth_tx_encoder {
         )
         .unwrap();
 
+        let hex_junk_int = "0000000000000000000000000000000000000000000000000000000000003039";
+
+        let junk_bytes = hex::decode(hex_junk_int).unwrap();
+
+        let hash_junk_bytes = Keccak256::hash(&junk_bytes);
+        println!("hash junk byte: {:?}", hash_junk_bytes);
+
+        // expected value from python contract testing code
+        let expected: [u8; 32] =
+            hex::decode("e546b0a52c2879744f6def0fb483d581dc6d205de83af8440456804dd8b62380")
+                .unwrap()
+                .try_into()
+                .unwrap();
+        assert_eq!(hash_junk_bytes.0, expected);
+
+        use num::bigint::Sign;
+        let big_int_hash_be = num::BigInt::from_bytes_be(Sign::Plus, &hash_junk_bytes.0);
+
+        println!("Be big int hash: {:?}", big_int_hash_be);
+
+        // the python code stores hashes as BigInt, so that's what we'll use to assert over
+        // we are able to hash the message to the same big int as expected in the contract. yay.
+        assert_eq!(
+            big_int_hash_be,
+            BigInt::from_str(
+                "103704540780501116108228706996498255309184683516754026165217031971735709557632"
+            )
+            .unwrap()
+        );
+
         let pubkey_from_sk = PublicKey::from_secret_key(&s, &sk);
 
         let (pubkey_x, pubkey_y_parity) = encoder.destructure_pubkey(pubkey_from_sk);
+        let big_int_pubkey = BigInt::from_bytes_be(Sign::Plus, &pubkey_x);
+        println!("big int pubkey: {:#?}", big_int_pubkey);
+        println!("pubkey y parity: {:#?}", pubkey_y_parity);
 
-        let params = encoder.set_agg_key_with_agg_key_param_constructor(
-            [0u8; 32],
-            [0u8; 32],
-            [0u8; 32],
-            [0u8; 20],
-            pubkey_x,
-            pubkey_y_parity,
+        // expected from test_verifySignature_rev_nonceTimesGeneratorAddress_zero
+        assert_eq!(pubkey_y_parity, 1);
+        assert_eq!(
+            big_int_pubkey,
+            BigInt::from_str(
+                "22479114112312168431982914496826057754130808976066989807481484372215659188398"
+            )
+            .unwrap()
         );
 
-        let encoded_bytes = encoder.encode_params_key_manager_fn(params).unwrap();
-        let hash = Keccak256::hash(&encoded_bytes);
-
-        println!("Here's the hash: {:#?}", hash);
-        let hash: [u8; 32] = hash.0[2..].try_into().unwrap();
-
-        let hash_hex = hex::decode(hash).unwrap();
-        println!("Hash hex: {:#?}", hash_hex);
-
-        // let params = set_agg_key_with_agg_key_param_constructor()
+        // let params = encoder.set_agg_key_with_agg_key_param_constructor(
+        //     hash_junk_bytes.try_into().unwrap(),
+        //     [0u8; 32],
+        //     [0u8; 32],
+        //     [0u8; 20],
+        //     pubkey_x,
+        //     pubkey_y_parity,
+        // );
     }
 
     #[test]
