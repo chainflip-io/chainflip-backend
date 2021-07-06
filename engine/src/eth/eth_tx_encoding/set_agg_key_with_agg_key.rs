@@ -395,7 +395,6 @@ mod test_eth_tx_encoder {
     fn test_message_hashing() {
         // The data is generated from: https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/integration/keyManager/test_setKey_setKey.py
 
-        // let test_message =
         // messageHashHex as an int int("{messageHashHex}", 16)), s / sig scalar, key nonce, nonce_times_g_addr
         // [103704540780501116108228706996498255309184683516754026165217031971735709557632, 71531180451393840211582948655188152052529157363863150697290720522319604804394, 2, '02eDd8421D87B7c0eE433D3AFAd3aa2Ef039f27a']
         // params used:
@@ -436,9 +435,14 @@ mod test_eth_tx_encoder {
             pubkey_y_parity,
         );
 
-        let encoded_bytes = encoder.encode_params_key_manager_fn(params);
+        let encoded_bytes = encoder.encode_params_key_manager_fn(params).unwrap();
+        let hash = Keccak256::hash(&encoded_bytes);
 
-        println!("Here's the encoded bytes: {:#?}", encoded_bytes);
+        println!("Here's the hash: {:#?}", hash);
+        let hash: [u8; 32] = hash.0[2..].try_into().unwrap();
+
+        let hash_hex = hex::decode(hash).unwrap();
+        println!("Hash hex: {:#?}", hash_hex);
 
         // let params = set_agg_key_with_agg_key_param_constructor()
     }
