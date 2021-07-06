@@ -366,6 +366,23 @@ impl pallet_cf_staking::Config for Runtime {
 	type ClaimTTL = ClaimTTL;
 }
 
+parameter_types! {
+	pub const MintFrequency: u32 = 10 * MINUTES;
+}
+
+impl pallet_cf_emissions::Config for Runtime {
+	type Event = Event;
+	type Call = Call;
+	type FlipBalance = FlipBalance;
+	type Emissions = pallet_cf_flip::Pallet<Runtime>;
+	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
+	type Witnesser = pallet_cf_witness::Pallet<Runtime>;
+	type RewardsDistribution = pallet_cf_emissions::NaiveRewardsDistribution<Runtime>;
+	type Validators = pallet_cf_validator::Pallet<Runtime>;
+	type MintFrequency = MintFrequency;
+}
+
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -376,6 +393,7 @@ construct_runtime!(
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
 		Flip: pallet_cf_flip::{Module, Event<T>, Storage, Config<T>},
+		Emissions: pallet_cf_emissions::{Module, Call, Event<T>, Config<T>},
 		Staking: pallet_cf_staking::{Module, Call, Storage, Event<T>, Config<T>},
 		Session: pallet_session::{Module, Storage, Event, Config<T>},
 		Historical: session_historical::{Module},

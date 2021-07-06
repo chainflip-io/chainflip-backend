@@ -31,6 +31,7 @@ pallet-cf-staking = { path = "../pallets/cf-staking", default-features = false }
 pallet-cf-witness = { path = "../pallets/cf-witness", default-features = false}
 pallet-cf-flip = { path = "../pallets/cf-flip", default-features = false }
 pallet-cf-auction = { path = "../pallets/cf-auction", default-features = false }
+pallet-cf-emissions = { path = "../pallets/cf-emissions", default-features = false }
 
 # Substrate dependencies
 frame-benchmarking = {default-features = false, optional = true, version = '3.0.0'}
@@ -103,4 +104,6 @@ std = [
   'pallet-cf-staking/std',
   'pallet-cf-witness/std',
   'pallet-cf-flip/std',
+  'pallet-cf-auction/std',
+  'pallet-cf-emissions/std',
 ]

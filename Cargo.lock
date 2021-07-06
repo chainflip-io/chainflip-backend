@@ -8579,6 +8579,7 @@ dependencies = [
  "pallet-aura",
  "pallet-authorship",
  "pallet-cf-auction",
+ "pallet-cf-emissions",
  "pallet-cf-flip",
  "pallet-cf-staking",
  "pallet-cf-validator",
