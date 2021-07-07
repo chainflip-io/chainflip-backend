@@ -300,7 +300,7 @@ async fn phase1_timeout() {
         SigningStage::AwaitingBroadcast1
     );
 
-    // send a signing request to a client
+    // send a bc1 to a client
     let bc1 = states.sign_phase1.bc1_vec[1].clone();
     let id = &SIGNER_IDS[1];
     let message = helpers::bc1_to_p2p_signing(bc1, id, &MESSAGE_INFO);
@@ -436,4 +436,39 @@ async fn sign_request_from_invalid_validator() {
         SigningStage::AwaitingBroadcast1
     );
     //TODO: report the invalid id.
+}
+
+// Test that a bc1 with an incorrect hash is ignored
+#[tokio::test]
+async fn bc1_with_invalid_hash() {
+    let states = generate_valid_keygen_data().await;
+
+    let mut c1 = states.sign_phase1.clients[0].clone();
+
+    assert_eq!(
+        c1.signing_manager
+            .get_state_for(&MESSAGE_INFO)
+            .unwrap()
+            .get_stage(),
+        SigningStage::AwaitingBroadcast1
+    );
+
+    // send a bc1 to the client with the message hash from message 2 instead
+    let bc1 = states.sign_phase1.bc1_vec[1].clone();
+    let id = &SIGNER_IDS[1];
+    let mi = MessageInfo {
+        hash: MessageHash(MESSAGE2.clone()),
+        key_id: KEY_ID,
+    };
+    let message = helpers::bc1_to_p2p_signing(bc1, id, &mi);
+    c1.process_p2p_mq_message(message);
+
+    // make sure we did not advance the stage
+    assert_eq!(
+        c1.signing_manager
+            .get_state_for(&MESSAGE_INFO)
+            .unwrap()
+            .get_stage(),
+        SigningStage::AwaitingBroadcast1
+    );
 }
