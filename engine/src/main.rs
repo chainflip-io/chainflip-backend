@@ -17,17 +17,14 @@ async fn main() {
 
     let settings = Settings::new().expect("Failed to initialise settings");
 
-    // can use this sender to shut down the health check gracefully
-    let _sender = health_check(settings.clone().health_check).await;
+    tokio::spawn(health_check(settings.clone().health_check));
 
     let mq_factory = NatsMQClientFactory::new(&settings.message_queue);
 
-    state_chain::sc_observer::start(settings.clone()).await;
-    state_chain::sc_broadcaster::start(&settings, mq_factory.clone()).await;
+    let sc_o_fut = state_chain::sc_observer::start(settings.clone());
+    let sc_b_fut = state_chain::sc_broadcaster::start(&settings, mq_factory.clone());
 
-    eth::start(settings.clone())
-        .await
-        .expect("Should start ETH client");
+    let eth_fut = eth::start(settings.clone());
 
     // TODO: read the key for config/file
     let signer_idx = ValidatorId([0; 32]);
@@ -39,7 +36,15 @@ async fn main() {
 
     let signing_client = signing::MultisigClient::new(mq_factory, signer_idx, params);
 
-    TempEventMapper::run(&settings).await;
+    let temp_event_map_fut = TempEventMapper::run(&settings);
 
-    signing_client.run().await;
+    let signing_client_fut = signing_client.run();
+
+    futures::join!(
+        sc_o_fut,
+        sc_b_fut,
+        eth_fut,
+        temp_event_map_fut,
+        signing_client_fut
+    );
 }
