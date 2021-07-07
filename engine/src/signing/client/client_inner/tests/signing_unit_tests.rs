@@ -438,9 +438,9 @@ async fn sign_request_from_invalid_validator() {
     //TODO: report the invalid id.
 }
 
-// Test that a bc1 with an incorrect hash is ignored
+// Test that a bc1 with a different message hash does not effect a sign in progress
 #[tokio::test]
-async fn bc1_with_invalid_hash() {
+async fn bc1_with_different_hash() {
     let states = generate_valid_keygen_data().await;
 
     let mut c1 = states.sign_phase1.clients[0].clone();
@@ -460,10 +460,14 @@ async fn bc1_with_invalid_hash() {
         hash: MessageHash(MESSAGE2.clone()),
         key_id: KEY_ID,
     };
+    assert_ne!(
+        mi.hash, MESSAGE_INFO.hash,
+        "MESSAGE and MESSAGE2 need to have different hashes"
+    );
     let message = helpers::bc1_to_p2p_signing(bc1, id, &mi);
     c1.process_p2p_mq_message(message);
 
-    // make sure we did not advance the stage
+    // make sure we did not advance the stage of message 1
     assert_eq!(
         c1.signing_manager
             .get_state_for(&MESSAGE_INFO)
