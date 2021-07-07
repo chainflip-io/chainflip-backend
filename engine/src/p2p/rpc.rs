@@ -4,6 +4,7 @@ use cf_p2p_rpc::P2PEvent;
 use futures::{Future, Stream, StreamExt};
 use jsonrpc_core_client::transports::ws::connect;
 use jsonrpc_core_client::{RpcChannel, RpcResult, TypedClient, TypedSubscriptionStream};
+use std::convert::TryInto;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio_compat_02::FutureExt;
@@ -32,11 +33,13 @@ impl From<P2PEvent> for P2PMessage {
     fn from(p2p_event: P2PEvent) -> Self {
         match p2p_event {
             P2PEvent::Received(peer_id, msg) => P2PMessage {
-                sender_id: ValidatorId(peer_id),
+                sender_id: ValidatorId::from_base58(&peer_id)
+                    .expect("valid 58 encoding of peer id"),
                 data: msg,
             },
             P2PEvent::PeerConnected(peer_id) | P2PEvent::PeerDisconnected(peer_id) => P2PMessage {
-                sender_id: ValidatorId(peer_id),
+                sender_id: ValidatorId::from_base58(&peer_id)
+                    .expect("valid 58 encoding of peer id"),
                 data: vec![],
             },
         }

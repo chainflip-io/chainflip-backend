@@ -34,7 +34,7 @@ impl TempEventMapper {
                 let validators: Vec<_> = event
                     .validators
                     .iter()
-                    .map(|v| p2p::ValidatorId(v.to_string()))
+                    .map(|v| p2p::ValidatorId(v.clone().into()))
                     .collect();
 
                 let key_gen_info = KeygenInfo::new(KeyId(event.auction_index), validators);
