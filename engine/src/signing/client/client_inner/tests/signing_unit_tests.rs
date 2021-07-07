@@ -248,9 +248,9 @@ async fn unknown_signer_ids_gracefully_handled() {
 async fn no_sign_request() {
     init_logs_once();
 
-    let mut states = generate_valid_keygen_data().await;
+    let states = generate_valid_keygen_data().await;
 
-    let mut c1 = states.sign_phase1.clients[0].clone();
+    let mut c1 = states.key_ready.clients[0].clone();
 
     let bc1 = create_bc1(2);
 
@@ -329,7 +329,7 @@ async fn phase2_timeout() {
         SigningStage::AwaitingSecret2
     );
 
-    // because we only have 2 clients in the signing test, we cant test receiving a secret 2 before timeout.
+    // Because we only have 2 clients in the signing test, we cant test receiving another secret 2 before timeout.
 
     c1.set_timeout(Duration::from_secs(0));
     c1.cleanup();
@@ -339,7 +339,7 @@ async fn phase2_timeout() {
     assert!(c1.signing_manager.get_state_for(&MESSAGE_INFO).is_none());
 }
 
-/// Test that if signing state times out during phase 3 (with sign request present)
+/// Test that signing state times out during phase 3
 #[tokio::test]
 async fn phase3_timeout() {
     let states = generate_valid_keygen_data().await;
@@ -364,9 +364,9 @@ async fn phase3_timeout() {
     assert!(c1.signing_manager.get_state_for(&MESSAGE_INFO).is_none());
 }
 
-// test that a request to sign for a key id that is already in use
+// test that a request to sign for a message that is already in use
 #[tokio::test]
-async fn cannot_create_sign_for_known_id() {
+async fn cannot_create_duplicate_sign_request() {
     let states = generate_valid_keygen_data().await;
 
     let mut c1 = states.sign_phase3.clients[0].clone();
@@ -380,10 +380,13 @@ async fn cannot_create_sign_for_known_id() {
     );
 
     // send a signing request to a client
-    let bc1 = states.sign_phase1.bc1_vec[1].clone();
-    let id = &SIGNER_IDS[1];
-    let message = helpers::bc1_to_p2p_signing(bc1, id, &MESSAGE_INFO);
-    c1.process_p2p_mq_message(message);
+    c1.process_multisig_instruction(MultisigInstruction::Sign(
+        MessageHash(MESSAGE.clone()),
+        SigningInfo {
+            id: KEY_ID,
+            signers: SIGNER_IDS.clone(),
+        },
+    ));
 
     // Previous state should be unaffected
     assert_eq!(
@@ -412,20 +415,19 @@ async fn sign_request_from_invalid_validator() {
 
     let invalid_validator = VALIDATOR_IDS[2].clone();
     // make sure that the id is indeed invalid
-    assert_eq!(
-        SIGNER_IDS.iter().position(|id| id == &invalid_validator),
-        None,
+    assert!(
+        !SIGNER_IDS.contains(&invalid_validator),
         "invalid_validator id {}, must not be in the SIGNER_IDS",
         invalid_validator
     );
 
-    // send the request to sign with the invalid ID
+    // send the bc1 with the invalid ID
     let bc1 = states.sign_phase1.bc1_vec[1].clone();
     let id = &invalid_validator;
     let message = helpers::bc1_to_p2p_signing(bc1, id, &MESSAGE_INFO);
     c1.process_p2p_mq_message(message);
 
-    // just check that we didn't crash.
+    // just check that we didn't advance to the next phase
     assert_eq!(
         c1.signing_manager
             .get_state_for(&MESSAGE_INFO)
