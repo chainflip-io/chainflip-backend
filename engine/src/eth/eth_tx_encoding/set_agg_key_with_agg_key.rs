@@ -17,7 +17,6 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use sp_core::Hasher;
 use sp_runtime::traits::Keccak256;
-use std::str::FromStr;
 use web3::{ethabi::Token, types::Address};
 
 use curv::{
@@ -27,7 +26,7 @@ use curv::{
         traits::{ECPoint, ECScalar},
     },
 };
-use secp256k1::{PublicKey, Secp256k1, SecretKey};
+use secp256k1::PublicKey;
 
 /// Helper function, constructs and runs the [SetAggKeyWithAggKeyEncoder] asynchronously.
 pub async fn start<M: IMQClient + Clone>(
@@ -171,14 +170,32 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
     }
 
     fn point_to_pubkey(&self, point: Secp256k1Point) -> PublicKey {
-        let bytes: [u8; 32] = point
+        let bytes_x: [u8; 32] = point
             .x_coor()
-            .expect("Should be a valid point")
+            .expect("Valid point should have an x coordinate")
             .to_bytes()
             .try_into()
-            .expect("Should be a valid point");
+            .expect("Valid point x_coor should contain only 32 bytes");
 
-        PublicKey::from_slice(&bytes).expect("Should be valid pubkey")
+        let bytes_x = &mut bytes_x.to_vec();
+
+        let bytes_y: [u8; 32] = point
+            .y_coor()
+            .expect("valid point should have a y coordinate")
+            .to_bytes()
+            .try_into()
+            .expect("should be 32 bytes");
+
+        let bytes_y = &mut bytes_y.to_vec();
+
+        let mut bytes = Vec::new();
+        bytes.push(0x04);
+        bytes.append(bytes_x);
+        bytes.append(bytes_y);
+
+        let pubkey = PublicKey::from_slice(&bytes);
+
+        return pubkey.expect("Should be valid pubkey");
     }
 
     // When the signed message has been received we must:
@@ -209,7 +226,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
                     .unwrap_or_else(|err| {
                         log::error!("Could not process: {:#?}", err);
                     });
-                // here we assume the key was update successfully
+                // here (for now) we assume the key was update successfully
                 // update curr key id
                 self.curr_signing_key_id = Some(key_id);
                 // reset
@@ -228,7 +245,12 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         nonce_times_g_addr: [u8; 20],
         params: &ParamContainer,
     ) -> Result<TxDetails> {
-        let s: [u8; 32] = sig.sigma.to_big_int().to_bytes().try_into().unwrap();
+        let s: [u8; 32] = sig
+            .sigma
+            .to_big_int()
+            .to_bytes()
+            .try_into()
+            .expect("Should be a valid Signature scalar");
         let params = self.set_agg_key_with_agg_key_param_constructor(
             msg.0,
             s,
@@ -259,7 +281,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         // take the last 160bits (20 bytes)
         let nonce_times_g_addr: [u8; 20] = nonce_times_g_addr_hash[140..]
             .try_into()
-            .expect("should only be 20 bytes long");
+            .expect("Should only be 20 bytes long");
 
         return nonce_times_g_addr;
     }
@@ -350,11 +372,12 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
 #[cfg(test)]
 mod test_eth_tx_encoder {
     use super::*;
-    use curv::{arithmetic::Converter, elliptic::curves::secp256_k1::Secp256k1Scalar};
+    use curv::arithmetic::Converter;
     use hex;
     use num::BigInt;
+    use std::str::FromStr;
 
-    use crate::{mq::mq_mock::MQMock, signing};
+    use crate::mq::mq_mock::MQMock;
 
     #[test]
     fn test_point_to_pubkey() {
@@ -370,23 +393,34 @@ mod test_eth_tx_encoder {
             0xf7, 0xc2, 0xbe, 0x88,
         ];
 
-        let x_direct_hex = hex::encode(&BASE_POINT2_X);
-        println!("x direct hex: {:?}", x_direct_hex);
-
         let big_int_x = curv::BigInt::from_bytes(&BASE_POINT2_X);
         let big_int_y = curv::BigInt::from_bytes(&BASE_POINT2_Y);
         let point: Secp256k1Point = Secp256k1Point::from_coor(&big_int_x, &big_int_y);
 
-        println!("x coor: {:?}", point.x_coor());
-        // Must go to bytes and then hex::encode, bigint.hex() tends to drop a character which is very annoying
-        let x_point = point.x_coor().unwrap().to_bytes();
-        let x_point_hex = hex::encode(x_point);
-        println!("xpoint hex {:#?}, len: {}", x_point_hex, x_point_hex.len());
+        // assert on point to pubkey
+        let mq = MQMock::new();
 
-        // let bytes = hex::decode(x_point.clone()).unwrap();
-        // prepend 0x04 to represent the uncompressed key
+        let mq_client = mq.get_client();
 
-        // println!("bytes: {:#?}", bytes);
+        let settings = settings::test_utils::new_test_settings().unwrap();
+
+        let encoder = SetAggKeyWithAggKeyEncoder::new(
+            settings.eth.key_manager_eth_address.as_str(),
+            settings.signing.genesis_validator_ids,
+            mq_client,
+        )
+        .unwrap();
+
+        // we rotate to key 2, so this is the pubkey we want to sign over
+        let expected_pubkey = PublicKey::from_str(
+            "0218845781f631c48f1c9709e23092067d06837f30aa0cd0544ac887fe91ddd166",
+        )
+        .unwrap();
+
+        let pubkey = encoder.point_to_pubkey(point);
+        println!("expected pubkey: {}", expected_pubkey);
+        println!("got pubkey: {}", pubkey);
+        assert_eq!(pubkey, expected_pubkey);
     }
 
     #[test]
