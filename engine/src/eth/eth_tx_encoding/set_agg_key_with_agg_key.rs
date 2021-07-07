@@ -22,7 +22,10 @@ use web3::{ethabi::Token, types::Address};
 
 use curv::{
     arithmetic::Converter,
-    elliptic::curves::{secp256_k1::Secp256k1Point, traits::ECPoint},
+    elliptic::curves::{
+        secp256_k1::Secp256k1Point,
+        traits::{ECPoint, ECScalar},
+    },
 };
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 
@@ -201,7 +204,8 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
             .get(&msg_hash)
             .expect("should have been stored when asked to sign");
         // 2. Call build_tx with the required info
-        match self.build_tx(&msg_hash, &sig, nonce_times_g_addr, params) {
+
+        match self.build_tx(&msg_hash, sig, nonce_times_g_addr, params) {
             Ok(ref tx_details) => {
                 // 3. Send it on its way to the eth broadcaster
                 self.mq_client
@@ -229,13 +233,11 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         nonce_times_g_addr: [u8; 20],
         params: &ParamContainer,
     ) -> Result<TxDetails> {
-        let sig_scalar =
-            serde_json::to_string(&sig.sigma).expect("Failed to serialize the sig scalar");
-        let sig_scalar: [u8; 32] = sig_scalar.as_bytes().try_into().unwrap();
-
+        // TODO: Ensure this serialization is correct
+        let sig_scalar: [u8; 32] = sig.sigma.to_big_int().to_bytes().try_into().unwrap();
         let params = self.set_agg_key_with_agg_key_param_constructor(
             msg.0,
-            sig_scalar,
+            sig,
             params.key_nonce,
             nonce_times_g_addr,
             params.pubkey_x,
@@ -353,11 +355,11 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
 #[cfg(test)]
 mod test_eth_tx_encoder {
     use super::*;
-    use curv::arithmetic::Converter;
+    use curv::{arithmetic::Converter, elliptic::curves::secp256_k1::Secp256k1Scalar};
     use hex;
     use num::BigInt;
 
-    use crate::mq::mq_mock::MQMock;
+    use crate::{mq::mq_mock::MQMock, signing};
 
     #[test]
     fn test_point_to_pubkey() {
@@ -397,8 +399,7 @@ mod test_eth_tx_encoder {
         // The data is generated from: https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/integration/keyManager/test_setKey_setKey.py
 
         // messageHashHex as an int int("{messageHashHex}", 16)), s / sig scalar, key nonce, nonce_times_g_addr
-        //  85719446582889643476728275386669501643157597193370273856506913038565260038237L
-        // [103704540780501116108228706996498255309184683516754026165217031971735709557632, 71531180451393840211582948655188152052529157363863150697290720522319604804394, 2, '02eDd8421D87B7c0eE433D3AFAd3aa2Ef039f27a']
+        // [19838331578708755702960229198816480402256567085479269042839672688267843389518, 86256580123538456061655860770396085945007591306530617821168588559087896188216, 0, '02eDd8421D87B7c0eE433D3AFAd3aa2Ef039f27a']
         // params used:
         // AGG_PRIV_HEX_1 = "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba"
         // AGG_K_HEX_1 = "d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285"
@@ -437,51 +438,6 @@ mod test_eth_tx_encoder {
         )
         .unwrap();
 
-        // This stuff doesn't really matter now, the final thing is what we care about
-        // let hex_junk_int = "0000000000000000000000000000000000000000000000000000000000003039";
-
-        // let junk_bytes = hex::decode(hex_junk_int).unwrap();
-
-        // let hash_junk_bytes = Keccak256::hash(&junk_bytes);
-        // println!("hash junk byte: {:?}", hash_junk_bytes);
-
-        // // expected value from python contract testing code
-        // let expected: [u8; 32] =
-        //     hex::decode("e546b0a52c2879744f6def0fb483d581dc6d205de83af8440456804dd8b62380")
-        //         .unwrap()
-        //         .try_into()
-        //         .unwrap();
-        // assert_eq!(hash_junk_bytes.0, expected);
-
-        // use num::bigint::Sign;
-        // let big_int_hash_be = num::BigInt::from_bytes_be(Sign::Plus, &hash_junk_bytes.0);
-
-        // println!("Be big int hash: {:?}", big_int_hash_be);
-
-        // // the python code stores hashes as BigInt, so that's what we'll use to assert over
-        // // we are able to hash the message to the same big int as expected in the contract. yay.
-        // assert_eq!(
-        //     big_int_hash_be,
-        //     BigInt::from_str(
-        //         "103704540780501116108228706996498255309184683516754026165217031971735709557632"
-        //     )
-        //     .unwrap()
-        // );
-
-        // // let big_int_pubkey = BigInt::from_bytes_be(Sign::Plus, &pubkey_x);
-        // println!("big int pubkey: {:#?}", big_int_pubkey);
-        // println!("pubkey y parity: {:#?}", pubkey_y_parity);
-
-        // // expected from test_verifySignature_rev_nonceTimesGeneratorAddress_zero
-        // assert_eq!(pubkey_y_parity, 1);
-        // assert_eq!(
-        //     big_int_pubkey,
-        //     BigInt::from_str(
-        //         "22479114112312168431982914496826057754130808976066989807481484372215659188398"
-        //     )
-        //     .unwrap()
-        // );
-
         // we rotate to key 2, so this is the pubkey we want to sign over
         let pubkey_from_sk_2 = PublicKey::from_secret_key(&s, &sk_2);
 
@@ -500,7 +456,7 @@ mod test_eth_tx_encoder {
         let encoded = encoder.encode_params_key_manager_fn(params).unwrap();
         let hex_params = hex::encode(&encoded);
         println!("hex params: {:#?}", hex_params);
-        // hex
+        // hex - from smart contract tests
         let call_data_no_sig_from_contract = "24969d5d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001";
         assert_eq!(call_data_no_sig_from_contract, hex_params);
         let hex_call_data_no_sig = hex::decode(&call_data_no_sig_from_contract).unwrap();
@@ -520,13 +476,9 @@ mod test_eth_tx_encoder {
 
         let message_hash = MessageHash(message_hash);
 
-        let sig: [u8; 32] = BigInt::from_str(
+        let sig: num::BigInt = BigInt::from_str(
             "86256580123538456061655860770396085945007591306530617821168588559087896188216",
         )
-        .unwrap()
-        .to_bytes_be()
-        .1
-        .try_into()
         .unwrap();
 
         let param_container = ParamContainer {
@@ -542,9 +494,44 @@ mod test_eth_tx_encoder {
             .try_into()
             .unwrap();
 
-        let eth_input_from_receipt = "0x24969d5d2bdc19071c7994f088103dbf8d5476d6deb6d55ee005a2f510dc7640055cc84ebeb37e87509e15cd88b19fa224441c56acc0e143cb25b9fd1e57fdafed215538000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002edd8421d87b7c0ee433d3afad3aa2ef039f27a1742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001";
+        let eth_input_from_receipt = "24969d5d2bdc19071c7994f088103dbf8d5476d6deb6d55ee005a2f510dc7640055cc84ebeb37e87509e15cd88b19fa224441c56acc0e143cb25b9fd1e57fdafed215538000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002edd8421d87b7c0ee433d3afad3aa2ef039f27a1742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001";
 
-        let built_tx = encoder.build_tx(&message_hash, sig, nonce_times_g_addr, param_container);
+        // to big endian bytes then into the curv type
+        let curv_sig_big_int = curv::BigInt::from_bytes(&sig.to_bytes_be().1);
+
+        // TODO: Create some utils to clean this up
+        // v = r = k * G. In the contract we use:
+        let k = "d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285";
+        let k_as_sk = secp256k1::SecretKey::from_str(k).unwrap();
+        let k_times_g = PublicKey::from_secret_key(&s, &k_as_sk);
+        let k_times_g_bytes: [u8; 32] = k_times_g.serialize()[1..].try_into().unwrap();
+
+        // this is the struct of the Signature returned from the signing module
+        let sig = Signature {
+            sigma: curv::elliptic::curves::traits::ECScalar::from(&curv_sig_big_int),
+            v: Secp256k1Point::from_bytes(&k_times_g_bytes).unwrap(),
+        };
+
+        // this is what build_tx does
+        let params = encoder.set_agg_key_with_agg_key_param_constructor(
+            message_hash.0,
+            // don't think we need this sig
+            sig,
+            param_container.key_nonce,
+            nonce_times_g_addr,
+            param_container.pubkey_x,
+            param_container.pubkey_y_parity,
+        );
+
+        let tx_data = encoder
+            .build_tx(&message_hash, sig, nonce_times_g_addr, &param_container)
+            .unwrap()
+            .data;
+
+        let tx_data = encoder.encode_params_key_manager_fn(params).unwrap();
+        assert_eq!(eth_input_from_receipt.to_string(), hex::encode(&tx_data));
+
+        // let built_tx = encoder.build_tx(&message_hash, sig, nonce_times_g_addr, param_container);
     }
 
     #[test]
