@@ -904,6 +904,7 @@ dependencies = [
  "async-std",
  "async-stream",
  "async-trait",
+ "bs58",
  "cf-p2p-rpc",
  "cf-traits",
  "config",

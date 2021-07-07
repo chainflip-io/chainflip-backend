@@ -83,6 +83,8 @@ mod tests {
     #[test]
     fn init_config() {
         let settings = Settings::new();
+        println!("settings: {:?}", settings);
+        println!("array: {:?}", [0u8; 32]);
         assert!(settings.is_ok());
 
         let settings = settings.unwrap();
