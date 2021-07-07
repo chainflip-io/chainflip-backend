@@ -81,9 +81,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         let key_manager = KeyManager::load(key_manager_address)?;
 
         let mut genesis_validator_ids_hash_map = HashMap::new();
-        genesis_validator_ids_hash_map
-            .entry(KeyId(0))
-            .or_insert(genesis_validator_ids);
+        genesis_validator_ids_hash_map.insert(KeyId(0), genesis_validator_ids);
         Ok(Self {
             mq_client,
             key_manager,
