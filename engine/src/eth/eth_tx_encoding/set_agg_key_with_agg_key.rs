@@ -112,29 +112,24 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
 
         while let Some(event) = multisig_event_stream.next().await {
             match event {
-                Ok(event) => {
-                    match event {
-                        MultisigEvent::KeygenResult(key_outcome) => {
-                            match key_outcome {
-                                KeygenOutcome::Success(keygen_success) => {
-                                    self.handle_keygen_success(keygen_success).await;
-                                }
-                                // TODO: Be more granular with log messages here
-                                _ => {
-                                    log::error!("Signing module returned error generating key")
-                                }
-                            }
-                        }
-                        MultisigEvent::MessageSigned(msg, sig) => {
-                            self.handle_set_agg_key_message_signed(msg, sig).await;
+                Ok(event) => match event {
+                    MultisigEvent::KeygenResult(key_outcome) => match key_outcome {
+                        KeygenOutcome::Success(keygen_success) => {
+                            self.handle_keygen_success(keygen_success).await;
                         }
                         _ => {
-                            log::trace!("Discarding non keygen result or message signed event")
+                            log::error!("Signing module returned error generating key")
                         }
+                    },
+                    MultisigEvent::MessageSigned(msg, sig) => {
+                        self.handle_set_agg_key_message_signed(msg, sig).await;
                     }
-                }
+                    _ => {
+                        log::trace!("Discarding non keygen result or message signed event")
+                    }
+                },
                 Err(e) => {
-                    log::error!("Error reading event from multisig event stream");
+                    log::error!("Error reading event from multisig event stream: {:?}", e);
                 }
             }
         }
@@ -203,8 +198,8 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
             .messages
             .get(&msg_hash)
             .expect("should have been stored when asked to sign");
-        // 2. Call build_tx with the required info
 
+        // 2. Call build_tx with the required info
         match self.build_tx(&msg_hash, &sig, nonce_times_g_addr, params) {
             Ok(ref tx_details) => {
                 // 3. Send it on its way to the eth broadcaster
@@ -233,7 +228,6 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         nonce_times_g_addr: [u8; 20],
         params: &ParamContainer,
     ) -> Result<TxDetails> {
-        // TODO: Ensure this serialization is correct
         let s: [u8; 32] = sig.sigma.to_big_int().to_bytes().try_into().unwrap();
         let params = self.set_agg_key_with_agg_key_param_constructor(
             msg.0,
@@ -253,6 +247,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
     }
 
     /// v is 'r' in the literature. r = k * G where k is the nonce and G is the address generator
+    /// i.e. k * G is the pubkey generated from secret key "k"
     fn nonce_times_g_addr_from_v(&self, v: secp256k1::PublicKey) -> [u8; 20] {
         let v_pub: [u8; 64] = v.serialize_uncompressed()[1..]
             .try_into()
@@ -398,8 +393,10 @@ mod test_eth_tx_encoder {
     fn test_message_hashing() {
         // The data is generated from: https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/integration/keyManager/test_setKey_setKey.py
 
+        // sig data from contract, we aren't testing signing, so we use these values, generated from the contract tests
         // messageHashHex as an int int("{messageHashHex}", 16)), s / sig scalar, key nonce, nonce_times_g_addr
         // [19838331578708755702960229198816480402256567085479269042839672688267843389518, 86256580123538456061655860770396085945007591306530617821168588559087896188216, 0, '02eDd8421D87B7c0eE433D3AFAd3aa2Ef039f27a']
+
         // params used:
         // AGG_PRIV_HEX_1 = "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba"
         // AGG_K_HEX_1 = "d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285"
@@ -459,12 +456,7 @@ mod test_eth_tx_encoder {
         // hex - from smart contract tests
         let call_data_no_sig_from_contract = "24969d5d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001";
         assert_eq!(call_data_no_sig_from_contract, hex_params);
-        let hex_call_data_no_sig = hex::decode(&call_data_no_sig_from_contract).unwrap();
-        // this is what the signing module does
-        let hash_hex_call_data_no_sig = Keccak256::hash(&hex_call_data_no_sig).0;
 
-        // sig data from contract, we aren't testing signing
-        // [19838331578708755702960229198816480402256567085479269042839672688267843389518, 86256580123538456061655860770396085945007591306530617821168588559087896188216, 0, '02eDd8421D87B7c0eE433D3AFAd3aa2Ef039f27a']
         let message_hash: [u8; 32] = BigInt::from_str(
             "19838331578708755702960229198816480402256567085479269042839672688267843389518",
         )
@@ -517,8 +509,6 @@ mod test_eth_tx_encoder {
         let eth_input_from_receipt = "24969d5d2bdc19071c7994f088103dbf8d5476d6deb6d55ee005a2f510dc7640055cc84ebeb37e87509e15cd88b19fa224441c56acc0e143cb25b9fd1e57fdafed215538000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002edd8421d87b7c0ee433d3afad3aa2ef039f27a1742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001";
 
         assert_eq!(eth_input_from_receipt.to_string(), hex::encode(&tx_data));
-
-        // let built_tx = encoder.build_tx(&message_hash, sig, nonce_times_g_addr, param_container);
     }
 
     #[test]
