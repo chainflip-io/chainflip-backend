@@ -15,7 +15,7 @@ use crate::{
                 },
                 keygen_state::KeygenStage,
                 signing_state::SigningStage,
-                InnerEvent, InnerSignal, KeygenOutcome, MultisigClientInner,
+                InnerEvent, KeygenOutcome, MultisigClientInner, SigningOutcome,
             },
             KeyId, KeygenInfo, MultisigInstruction, SigningInfo,
         },
@@ -210,21 +210,20 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
         }
     }
 
-    let pubkey = match recv_next_inner_event(&mut rxs[0]).await {
-        InnerEvent::KeygenResult(KeygenOutcome::Success(key_data)) => key_data.key,
-        _ => panic!("Unexpected inner event"),
-    };
-
-    for r in &mut rxs {
-        assert_eq!(
-            recv_next_signal_message_skipping(r).await,
-            Some(InnerSignal::KeyReady)
-        );
+    let mut pubkeys = vec![];
+    for mut r in &mut rxs {
+        let pubkey = match recv_next_inner_event(&mut r).await {
+            InnerEvent::KeygenResult(KeygenOutcome::Success(key_data)) => key_data.key,
+            _ => panic!("Unexpected inner event"),
+        };
+        pubkeys.push(pubkey);
     }
+    assert_eq!(pubkeys[0].serialize(), pubkeys[1].serialize());
+    assert_eq!(pubkeys[1].serialize(), pubkeys[2].serialize());
 
     let keygen_phase3 = KeygenPhase3Data {
         clients: clients.clone(),
-        pubkey,
+        pubkey: pubkeys[0],
     };
 
     // *** Send a request to sign and generate BC1 to be distributed ***
@@ -366,7 +365,7 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
     let event = recv_next_inner_event(&mut rxs[0]).await;
 
     let signature = match event {
-        InnerEvent::InnerSignal(InnerSignal::MessageSigned(_message_info, sig)) => sig,
+        InnerEvent::SigningResult(SigningOutcome::MessageSigned(_message_info, sig)) => sig,
         _ => panic!("Unexpected event"),
     };
 
@@ -402,7 +401,7 @@ pub async fn print_next_message(rx: &mut UnboundedReceiver<InnerEvent>) {
             InnerEvent::P2PMessageCommand(P2PMessageCommand { destination, .. }) => {
                 eprintln!("P2PMessageCommand [ destination: {} ]", destination);
             }
-            InnerEvent::InnerSignal(s) => {
+            InnerEvent::SigningResult(s) => {
                 eprintln!("{:?}", s);
             }
             InnerEvent::KeygenResult(res) => {
@@ -422,13 +421,13 @@ pub async fn print_next_message(rx: &mut UnboundedReceiver<InnerEvent>) {
 /// Skip all non-signal messages
 pub async fn recv_next_signal_message_skipping(
     rx: &mut UnboundedReceiver<InnerEvent>,
-) -> Option<InnerSignal> {
+) -> Option<SigningOutcome> {
     let dur = std::time::Duration::from_millis(10);
 
     loop {
         let res = tokio::time::timeout(dur, rx.recv()).await.ok()??;
 
-        if let InnerEvent::InnerSignal(s) = res {
+        if let InnerEvent::SigningResult(s) = res {
             return Some(s);
         }
     }
@@ -460,8 +459,8 @@ pub async fn recv_p2p_message(rx: &mut UnboundedReceiver<InnerEvent>) -> P2PMess
 
     match res {
         InnerEvent::P2PMessageCommand(m) => m,
-        _ => {
-            error!("Unexpected InnerEvent");
+        e => {
+            error!("Unexpected InnerEvent: {:?}", e);
             panic!();
         }
     }

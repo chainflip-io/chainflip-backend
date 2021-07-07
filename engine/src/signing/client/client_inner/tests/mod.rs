@@ -91,20 +91,13 @@ fn init_logs_once() {
 // generate a new key for epoch X (and attempt number?). Requests to sign should also
 // contain the epoch.
 
-// What needs to be tested (unit tests)
-// DONE:
-// - Delaying works correctly for Keygen::BC1, Keygen::Secret2, Signing:BC1, Signing::Secret2, Signing::LocalSig
-// - BC1 messages are processed after a timely RTS (and can lead to phase 2)
-// - RTS is required to proceed to the next phase
-
-// TO DO:
+// TO DO (unit tests):
+// [Signing]
 // - Delayed data expires on timeout
-// - Signing phases do timeout (only tested for BC1 currently)
-// - Parties cannot send two messages for the same phase of signing/keygen
-// - When unable to make progress, the state (Signing/Keygen) should be correctly reset
-// (i.e. past failures don't impact future signing ceremonies)
-// - Should be able to generate new signing keys
+// - Parties cannot send two messages for the same phase
 // - make sure that we don't process p2p data at index signer_id which is our own
-// - test that we penalize the offending nodes
-// - test that there is no interaction between different key_ids
-// - test that we clean up states that didn't result in a key
+// - test that we emit events that allow for penalisation of offending nodes to occur
+// [Keygen]
+// - Parties cannot send two messages for the same phase
+// - make sure that we don't process p2p data at index signer_id which is our own
+// - test that we emit events that allow for penalisation of offending nodes to occur

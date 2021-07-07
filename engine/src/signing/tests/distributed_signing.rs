@@ -75,19 +75,6 @@ async fn coordinate_signing(mq_clients: Vec<impl IMQClient>, active_indices: &[u
         .expect("Could not publish");
     }
 
-    // // TODO: investigate why this is necessary (remove if it is not)
-    let ready_to_sign = async {
-        for s in &mut streams {
-            while let Some(evt) = s.next().await {
-                if let Ok(MultisigEvent::ReadyToSign) = evt {
-                    break;
-                }
-            }
-        }
-    };
-
-    ready_to_sign.await;
-
     let data = MessageHash(super::fixtures::MESSAGE.clone());
     let data2 = MessageHash(super::fixtures::MESSAGE2.clone());
 

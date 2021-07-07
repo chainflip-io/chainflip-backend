@@ -162,7 +162,7 @@ async fn signing_local_sig_gets_delayed() {
     c1_p2.process_p2p_mq_message(m);
 
     match recv_next_signal_message_skipping(&mut states.rxs[0]).await {
-        Some(InnerSignal::MessageSigned(_, _)) => { /* all good */ }
+        Some(SigningOutcome::MessageSigned(_, _)) => { /* all good */ }
         _ => panic!("Expected MessageSigned signal"),
     }
 }
