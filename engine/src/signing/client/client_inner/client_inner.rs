@@ -165,7 +165,6 @@ pub struct KeygenFailure {
     pub bad_nodes: Vec<ValidatorId>,
 }
 
-// WHAT IS THE NONCE / K USED TO GENERATE THIS KEY
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KeygenSuccess {
     pub key_id: KeyId,
