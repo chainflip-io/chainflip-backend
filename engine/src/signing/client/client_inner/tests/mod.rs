@@ -33,14 +33,17 @@ lazy_static! {
         ValidatorId::new(2),
         ValidatorId::new(3),
     ];
+    static ref SIGNER_IDXS: Vec<usize> = vec![0, 1];
+    static ref SIGNER_IDS: Vec<ValidatorId> = SIGNER_IDXS
+        .iter()
+        .map(|idx| VALIDATOR_IDS[*idx].clone())
+        .collect();
     static ref UNEXPECTED_VALIDATOR_ID: ValidatorId = ValidatorId(
         "unexpected|unexpected|unexpected"
             .as_bytes()
             .try_into()
             .unwrap()
     );
-    static ref SIGNER_IDS: Vec<ValidatorId> =
-        vec![VALIDATOR_IDS[0].clone(), VALIDATOR_IDS[1].clone()];
 }
 
 lazy_static! {

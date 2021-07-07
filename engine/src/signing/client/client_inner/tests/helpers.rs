@@ -26,7 +26,7 @@ use crate::{
 
 use lazy_static::lazy_static;
 
-use super::KEY_ID;
+use super::{KEY_ID, MESSAGE_HASH, MESSAGE_INFO, SIGNER_IDXS, SIGN_INFO};
 
 /// Clients generated bc1, but haven't sent them
 pub(super) struct KeygenPhase1Data {
@@ -229,35 +229,18 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
 
     // *** Send a request to sign and generate BC1 to be distributed ***
 
-    let message_to_sign = MessageHash(super::MESSAGE.clone());
-    let message_info = MessageInfo {
-        hash: message_to_sign.clone(),
-        key_id,
-    };
-
-    // NOTE: only parties 1 and 2 will participate in signing
-
-    let active_idxs = [0, 1]; // indexes into `validator_ids` (not signer_idx!)
-
-    let sign_info = SigningInfo {
-        id: key_id,
-        signers: active_idxs
-            .iter()
-            .map(|i| validator_ids[*i].clone())
-            .collect_vec(),
-    };
-
-    for idx in &active_idxs {
+    // NOTE: only parties 1 and 2 will participate in signing (SIGNER_IDXS)
+    for idx in SIGNER_IDXS.iter() {
         let c = &mut clients[*idx];
 
         c.process_multisig_instruction(MultisigInstruction::Sign(
-            message_to_sign.clone(),
-            sign_info.clone(),
+            MESSAGE_HASH.clone(),
+            SIGN_INFO.clone(),
         ));
 
         assert_eq!(
             c.signing_manager
-                .get_state_for(&message_info)
+                .get_state_for(&MESSAGE_INFO)
                 .unwrap()
                 .get_stage(),
             SigningStage::AwaitingBroadcast1
@@ -266,7 +249,7 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
 
     let mut bc1_vec = vec![];
 
-    for idx in &active_idxs {
+    for idx in SIGNER_IDXS.iter() {
         let rx = &mut rxs[*idx];
 
         let bc1 = recv_bc1_signing(rx).await;
@@ -281,14 +264,13 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
     assert_channel_empty(&mut rxs[0]).await;
 
     // *** Broadcast BC1 messages to advance to Phase2 ***
-
-    for sender_idx in &active_idxs {
+    for sender_idx in SIGNER_IDXS.iter() {
         let bc1 = bc1_vec[*sender_idx].clone();
         let id = &validator_ids[*sender_idx];
 
-        let m = bc1_to_p2p_signing(bc1, id, &message_info);
+        let m = bc1_to_p2p_signing(bc1, id, &MESSAGE_INFO);
 
-        for receiver_idx in &active_idxs {
+        for receiver_idx in SIGNER_IDXS.iter() {
             if receiver_idx != sender_idx {
                 clients[*receiver_idx].process_p2p_mq_message(m.clone());
             }
@@ -299,7 +281,7 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
 
     let mut sec2_vec = vec![];
 
-    for idx in &active_idxs {
+    for idx in SIGNER_IDXS.iter() {
         let rx = &mut rxs[*idx];
 
         let mut sec2_map = HashMap::new();
@@ -324,26 +306,26 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
 
     // *** Distribute Secret2 messages ***
 
-    for sender_idx in &active_idxs {
-        for receiver_idx in &active_idxs {
+    for sender_idx in SIGNER_IDXS.iter() {
+        for receiver_idx in SIGNER_IDXS.iter() {
             if sender_idx != receiver_idx {
                 let receiver_id = &validator_ids[*receiver_idx];
 
                 let sec2 = sec2_vec[*sender_idx].get(receiver_id).unwrap().clone();
 
                 let id = &validator_ids[*sender_idx];
-                let m = sec2_to_p2p_signing(sec2, id, &message_info);
+                let m = sec2_to_p2p_signing(sec2, id, &MESSAGE_INFO);
 
                 clients[*receiver_idx].process_p2p_mq_message(m);
             }
         }
     }
 
-    for idx in &active_idxs {
+    for idx in SIGNER_IDXS.iter() {
         let c = &mut clients[*idx];
         assert_eq!(
             c.signing_manager
-                .get_state_for(&message_info)
+                .get_state_for(&MESSAGE_INFO)
                 .unwrap()
                 .get_stage(),
             SigningStage::AwaitingLocalSig3
@@ -354,7 +336,7 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
 
     let mut local_sigs = vec![];
 
-    for idx in &active_idxs {
+    for idx in SIGNER_IDXS.iter() {
         let rx = &mut rxs[*idx];
 
         let sig = recv_local_sig(rx).await;
@@ -368,13 +350,13 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
         local_sigs: local_sigs.clone(),
     };
 
-    for sender_idx in &active_idxs {
+    for sender_idx in SIGNER_IDXS.iter() {
         let local_sig = local_sigs[*sender_idx].clone();
         let id = &validator_ids[*sender_idx];
 
-        let m = sig_to_p2p(local_sig, id, &message_info);
+        let m = sig_to_p2p(local_sig, id, &MESSAGE_INFO);
 
-        for receiver_idx in &active_idxs {
+        for receiver_idx in SIGNER_IDXS.iter() {
             if receiver_idx != sender_idx {
                 clients[*receiver_idx].process_p2p_mq_message(m.clone());
             }
