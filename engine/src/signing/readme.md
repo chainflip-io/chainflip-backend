@@ -28,7 +28,7 @@ KeygenManager-->KeygenState;
 KeygenState-->SharedSecretState
 ```
 
->viewable in markdown preview enhanced or with "GitHub + Mermaid" chrome extension.
+>viewable in "markdown preview enhanced" VSCode extension or with "GitHub + Mermaid" chrome extension.
 
 ### `MultisigClient`
 
@@ -43,27 +43,54 @@ Once a procedure is complete, it will send an `InnerEvent::InnerSignal` with the
 
 ### `SigningStateManager`
 
-Routes the messages to the correct `SigningState` process, so multiple signs can happen at once. Also handles buffering/delaying requested signs if the `SigningState` is not ready to sign it yet.
+Routes the messages to the correct `SigningState` process, so multiple signs can happen at once. 
+Handles buffering/delaying bc1's if the `SigningState` does not exist for the sign request yet.
 Runs a cleanup when told. The cleanup checks for timeouts.
 If a timeout happens, the manager shows a warning, no blame is issued.
 
 ### `SigningState`
 
 The `SigningState` takes the message and progresses the signing procedure using the `SharedSecretState`.
+Once the `SharedSecretState` is done, it sends an `InnerEvent::SigningResult` with the outcome.
 It also handles buffering incoming `Secret2`s and `LocalSig`s until the `SigningStage` in in the state to use them.
 
 ### `KeygenManager`
 
 Routes the messages to the correct `KeygenState` process, so multiple keygens can happen at once.
+Handles buffering/delaying bc1's if the `KeygenState` does not exist for the sign request yet.
 Runs a cleanup when told. The cleanup checks for timeouts.
-If a timeout happens, the manager shows a warning, no blame is issued.
+If a timeout happens, it sends the `InnerEvent` `KeygenOutcome::Timeout` or `KeygenOutcome::Unauthorised` with a list of the `bad_nodes` to blame.
 
 ### `KeygenState`
 
 The `KeygenState` takes the message and progresses the Keygen procedure using the `SharedSecretState`.
+Once the `SharedSecretState` is done, it sends an `InnerEvent::KeygenResult` with the outcome.
 It also handles buffering incoming `Secret2`s until the `KeygenState` in in the state to use them.
 
 ## `SharedSecretState`
+
+```mermaid
+graph TD;
+Idle--bc1-->AwaitingKR[Awaiting Keygen Request];
+Idle--keygen request-->AwaitingBc1[Awaiting BC1];
+AwaitingKR--timeout-->Timeout1[Failure: report senders of bc1];
+AwaitingKR--keygen request-->AwaitingBc1;
+AwaitingBc1--All BC1s collected-->Finalise1[Finalise phase 1];
+Finalise1--valid-->AwaitSec2[Awaiting Secret2];
+Finalise1--invalid-->InvalidBC1[Failure: Report senders of invalid bc1];
+AwaitSec2--all Secret2s collected-->Finalise2[Finalise phase 2];
+AwaitSec2--timeout-->Timeout2[Failure: report slow parties];
+Finalise2--valid-->KeyReady[Key Ready];
+Finalise2--invalid-->InvalidSec2[Failure: report senders of invalid Secret2];
+AwaitingBc1--timeout-->Timeout2;
+
+style Timeout1 stroke:#f66,stroke-width:2px
+style Timeout2 stroke:#f66,stroke-width:2px
+style InvalidBC1 stroke:#f66,stroke-width:2px
+style InvalidSec2 stroke:#f66,stroke-width:2px
+```
+
+>viewable in "markdown preview enhanced" VSCode extension or with "GitHub + Mermaid" chrome extension.
 
 ### phase 1
 
@@ -75,23 +102,17 @@ If the `SharedSecretState` gets a duplicate idx, it shows an error with the idx 
 
 In Phase 2 it verifies the accumulated secrets and creates a `Secret2` for each validator.
 Then sends the `Secret2` to each of the corresponding validators and stores its own secret.
-If the verify was unsuccessful, it returns an error and relies on the parent to abandon the keygen.(todo).
-The id of the culprit is not calculated. No blame is issued. (todo).
-We then wait for all the `shared_secrets` to come in from the other validators. Once full it moves to phase 3.
-
-### phase 3
-
-In phase 3 it will verify `shared_secrets` and construct the key pair.
-If it is valid and being used by the `keygen_state`, then it will go to `KeygenStage::KeyReady`.
-Once again it relies on the parent to abandon the process if invalid and no blame is issued. (todo).
+If the verify was unsuccessful, it returns an error and relies on the parent to abandon the keygen.
+We then wait for all the `shared_secrets` to come in from the other validators. Once full it will verify them and construct the key pair.
+If it is valid then it will go to `SharedSecretStage::Done`.
+Once again it relies on the parent to abandon the process if invalid.
 
 ### Local Sigs
 
-If the `SharedSecretState` is being used by the `SingingState`, then `SingingState` will continue to the `AwaitingLocalSig3` after phase 3.
+If the `SharedSecretState` is being used by the `SingingState`, then `SingingState` will continue to the `AwaitingLocalSig3` after phase 2.
 While in `AwaitingLocalSig3`  it collects the signatures from all of the validators and its self.
 Once full, it aggregates them and verifies it using the aggregated public key generated in phase 2.
 If the verification fails, it shows a warning and no blame is issued. (todo)
-Should there be a failure state in `SigningStage` so it can be cleaned up? Does the SigningStateManager just wait for timeout.
 
 ### bitcoin_schnorr.rs
 
@@ -100,38 +121,3 @@ Contains part of the Multisig Schnorr library. Implementation for `Keys`, `Local
 ### TODO
 
 - Move todo list from `client_inner/tests/mod.rs` to here?
-
-## Tests
-
-### Keygen tests
-
-- bc1_gets_delayed_until_keygen_request
-- keygen_message_from_invalid_validator
-- keygen_secret2_gets_delayed
-- can_have_multiple_keys
-- cannot_create_key_for_known_id
-- no_keygen_request
-- phase1_timeout
-- phase2_timeout
-- invalid_bc1
-- invalid_sec2
-
-### Signing tests
-
-- should_await_bc1_after_rts
-- should_process_delayed_bc1_after_rts
-- delayed_signing_bc1_gets_removed
-- signing_secret2_gets_delayed
-- signing_local_sig_gets_delayed
-- request_to_sign_before_key_ready
-- unknown_signer_ids_gracefully_handled
-- no_sign_request
-- phase1_timeout
-- phase2_timeout
-- phase3_timeout (local_sig_timeout)
-- sign_request_from_invalid_validator
-- cannot_create_sign_for_known_id
-
-### Client tests
-
-- distributed_signing (ignore)
