@@ -162,8 +162,6 @@ async fn cannot_create_key_for_known_id() {
 /// Test that if keygen state times out (without keygen request), we slash senders
 #[tokio::test]
 async fn no_keygen_request() {
-    init_logs_once();
-
     let mut states = generate_valid_keygen_data().await;
 
     let mut c1 = states.keygen_phase1.clients[0].clone();
@@ -191,8 +189,6 @@ async fn no_keygen_request() {
 #[tokio::test]
 async fn phase1_timeout() {
     let mut states = generate_valid_keygen_data().await;
-
-    init_logs_once();
 
     let mut c1 = states.keygen_phase1.clients[0].clone();
 
@@ -225,8 +221,6 @@ async fn phase1_timeout() {
 #[tokio::test]
 async fn phase2_timeout() {
     let mut states = generate_valid_keygen_data().await;
-
-    init_logs_once();
 
     let mut c1 = states.keygen_phase2.clients[0].clone();
 
@@ -263,8 +257,6 @@ async fn phase2_timeout() {
 async fn invalid_bc1() {
     let mut states = generate_valid_keygen_data().await;
 
-    init_logs_once();
-
     let mut c1 = states.keygen_phase1.clients[0].clone();
 
     // This BC1 is valid
@@ -294,8 +286,6 @@ async fn invalid_bc1() {
 #[tokio::test]
 async fn invalid_sec2() {
     let mut states = generate_valid_keygen_data().await;
-
-    init_logs_once();
 
     let mut c1 = states.keygen_phase2.clients[0].clone();
 
