@@ -18,6 +18,8 @@
 /// following the variant used in bip-schnorr: https://github.com/sipa/bips/blob/bip-schnorr/bip-schnorr.mediawiki
 use super::error::{InvalidKey, InvalidSS, InvalidSig};
 
+// TODO: add tests for this module?
+
 use curv::arithmetic::traits::*;
 
 use curv::elliptic::curves::traits::*;
