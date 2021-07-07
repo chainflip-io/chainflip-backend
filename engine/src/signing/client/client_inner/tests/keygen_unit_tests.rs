@@ -55,9 +55,9 @@ async fn keygen_message_from_invalid_validator() {
         Some(KeygenStage::AwaitingBroadcast1)
     );
 
-    let invalid_validator = ValidatorId::new(4);
+    let invalid_validator = &UNEXPECTED_VALIDATOR_ID;
 
-    let msg = create_keygen_p2p_message(&invalid_validator, create_bc1(2));
+    let msg = create_keygen_p2p_message(invalid_validator, create_bc1(2));
 
     c1.process_p2p_mq_message(msg);
 }
@@ -168,8 +168,10 @@ async fn no_keygen_request() {
 
     let bc1 = create_bc1(2);
 
+    let bad_validator = &VALIDATOR_IDS[1];
+
     // We have not received a keygen request for KeyId 1
-    let message = helpers::bc1_to_p2p_keygen(bc1, KeyId(1), &VALIDATOR_IDS[1]);
+    let message = helpers::bc1_to_p2p_keygen(bc1, KeyId(1), bad_validator);
 
     c1.process_p2p_mq_message(message);
 
@@ -178,10 +180,12 @@ async fn no_keygen_request() {
 
     let mut rx = &mut states.rxs[0];
 
-    // TODO: nodes should be non-empty
     assert_eq!(
         helpers::recv_next_inner_event(&mut rx).await,
-        InnerEvent::KeygenResult(KeygenOutcome::unauthorised(KeyId(1), vec![]))
+        InnerEvent::KeygenResult(KeygenOutcome::unauthorised(
+            KeyId(1),
+            vec![bad_validator.clone()]
+        ))
     );
 }
 
@@ -208,10 +212,11 @@ async fn phase1_timeout() {
 
     let mut rx = &mut states.rxs[0];
 
-    // TODO: nodes should be non-empty
+    let late_node = VALIDATOR_IDS[2].clone();
+
     assert_eq!(
         helpers::recv_next_inner_event(&mut rx).await,
-        InnerEvent::KeygenResult(KeygenOutcome::timeout(KEY_ID, vec![]))
+        InnerEvent::KeygenResult(KeygenOutcome::timeout(KEY_ID, vec![late_node]))
     );
 
     assert_eq!(helpers::keygen_stage_for(&c1, KEY_ID), None);
@@ -243,10 +248,11 @@ async fn phase2_timeout() {
 
     let mut rx = &mut states.rxs[0];
 
-    // TODO: nodes should be non-empty
+    let late_node = VALIDATOR_IDS[2].clone();
+
     assert_eq!(
         helpers::recv_next_inner_event(&mut rx).await,
-        InnerEvent::KeygenResult(KeygenOutcome::timeout(KEY_ID, vec![]))
+        InnerEvent::KeygenResult(KeygenOutcome::timeout(KEY_ID, vec![late_node]))
     );
 
     assert_eq!(helpers::keygen_stage_for(&c1, KEY_ID), None);
@@ -265,15 +271,16 @@ async fn invalid_bc1() {
     c1.process_p2p_mq_message(message_a);
 
     // This BC1 is invalid
+    let bad_node = VALIDATOR_IDS[2].clone();
     let bc1_b = helpers::create_invalid_bc1();
-    let message_b = helpers::bc1_to_p2p_keygen(bc1_b, KEY_ID, &VALIDATOR_IDS[2]);
+    let message_b = helpers::bc1_to_p2p_keygen(bc1_b, KEY_ID, &bad_node);
     c1.process_p2p_mq_message(message_b);
 
     let mut rx = &mut states.rxs[0];
 
     assert_eq!(
         helpers::recv_next_inner_event(&mut rx).await,
-        InnerEvent::KeygenResult(KeygenOutcome::invalid(KEY_ID, vec![]))
+        InnerEvent::KeygenResult(KeygenOutcome::invalid(KEY_ID, vec![bad_node]))
     );
 
     c1.set_timeout(Duration::from_secs(0));
@@ -297,19 +304,20 @@ async fn invalid_sec2() {
     let message_a = helpers::sec2_to_p2p_keygen(sec2_a.clone(), &VALIDATOR_IDS[1]);
     c1.process_p2p_mq_message(message_a);
 
+    let bad_node = VALIDATOR_IDS[2].clone();
     // This Sec2 is not for us, so it is invalid
     let sec2_b = states.keygen_phase2.sec2_vec[1]
         .get(&VALIDATOR_IDS[2])
         .unwrap()
         .clone();
-    let message_b = helpers::sec2_to_p2p_keygen(sec2_b, &VALIDATOR_IDS[2]);
+    let message_b = helpers::sec2_to_p2p_keygen(sec2_b, &bad_node);
     c1.process_p2p_mq_message(message_b);
 
     let mut rx = &mut states.rxs[0];
 
     assert_eq!(
         helpers::recv_next_inner_event(&mut rx).await,
-        InnerEvent::KeygenResult(KeygenOutcome::invalid(KEY_ID, vec![]))
+        InnerEvent::KeygenResult(KeygenOutcome::invalid(KEY_ID, vec![bad_node]))
     );
 
     c1.set_timeout(Duration::from_secs(0));

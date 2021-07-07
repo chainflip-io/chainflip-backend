@@ -9,6 +9,6 @@ mod utils;
 #[cfg(test)]
 mod tests;
 
-pub(super) use client_inner::{InnerEvent, InnerSignal, MultisigClientInner};
+pub(super) use client_inner::{InnerEvent, MultisigClientInner, SigningOutcome};
 
 pub use client_inner::{KeygenOutcome, KeygenSuccess};

@@ -154,8 +154,7 @@ impl Display for KeygenData {
 /// public interfaces will return this to indicate
 /// that something potentially interesting has happened
 #[derive(Debug, PartialEq)]
-pub enum InnerSignal {
-    KeyReady,
+pub enum SigningOutcome {
     MessageSigned(MessageInfo, Signature),
 }
 
@@ -219,7 +218,7 @@ impl From<KeygenOutcome> for InnerEvent {
 #[derive(Debug, PartialEq)]
 pub enum InnerEvent {
     P2PMessageCommand(P2PMessageCommand),
-    InnerSignal(InnerSignal),
+    SigningResult(SigningOutcome),
     KeygenResult(KeygenOutcome),
 }
 

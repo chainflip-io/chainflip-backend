@@ -26,10 +26,8 @@ use crate::signing::{
 const N_PARTIES: usize = 2;
 lazy_static! {
     static ref SIGNERS: Vec<usize> = (1..=N_PARTIES).collect();
-    static ref VALIDATOR_IDS: Vec<ValidatorId> = SIGNERS
-        .iter()
-        .map(|idx| ValidatorId(idx.to_string()))
-        .collect();
+    static ref VALIDATOR_IDS: Vec<ValidatorId> =
+        SIGNERS.iter().map(|idx| ValidatorId::new(idx)).collect();
 }
 
 async fn coordinate_signing(mq_clients: Vec<impl IMQClient>, active_indices: &[usize]) {
@@ -76,19 +74,6 @@ async fn coordinate_signing(mq_clients: Vec<impl IMQClient>, active_indices: &[u
         .await
         .expect("Could not publish");
     }
-
-    // // TODO: investigate why this is necessary (remove if it is not)
-    let ready_to_sign = async {
-        for s in &mut streams {
-            while let Some(evt) = s.next().await {
-                if let Ok(MultisigEvent::ReadyToSign) = evt {
-                    break;
-                }
-            }
-        }
-    };
-
-    ready_to_sign.await;
 
     let data = MessageHash(super::fixtures::MESSAGE.clone());
     let data2 = MessageHash(super::fixtures::MESSAGE2.clone());
