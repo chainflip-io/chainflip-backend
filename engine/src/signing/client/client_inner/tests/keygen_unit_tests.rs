@@ -55,9 +55,9 @@ async fn keygen_message_from_invalid_validator() {
         Some(KeygenStage::AwaitingBroadcast1)
     );
 
-    let invalid_validator = ValidatorId::new(4);
+    let invalid_validator = &UNEXPECTED_VALIDATOR_ID;
 
-    let msg = create_keygen_p2p_message(&invalid_validator, create_bc1(2));
+    let msg = create_keygen_p2p_message(invalid_validator, create_bc1(2));
 
     c1.process_p2p_mq_message(msg);
 }
