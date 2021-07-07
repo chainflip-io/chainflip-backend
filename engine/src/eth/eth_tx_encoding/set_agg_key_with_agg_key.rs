@@ -205,7 +205,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
             .expect("should have been stored when asked to sign");
         // 2. Call build_tx with the required info
 
-        match self.build_tx(&msg_hash, sig, nonce_times_g_addr, params) {
+        match self.build_tx(&msg_hash, &sig, nonce_times_g_addr, params) {
             Ok(ref tx_details) => {
                 // 3. Send it on its way to the eth broadcaster
                 self.mq_client
@@ -234,10 +234,10 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         params: &ParamContainer,
     ) -> Result<TxDetails> {
         // TODO: Ensure this serialization is correct
-        let sig_scalar: [u8; 32] = sig.sigma.to_big_int().to_bytes().try_into().unwrap();
+        let s: [u8; 32] = sig.sigma.to_big_int().to_bytes().try_into().unwrap();
         let params = self.set_agg_key_with_agg_key_param_constructor(
             msg.0,
-            sig,
+            s,
             params.key_nonce,
             nonce_times_g_addr,
             params.pubkey_x,
@@ -488,13 +488,10 @@ mod test_eth_tx_encoder {
             pubkey_y_parity,
         };
 
-        let y_parity = 0u8;
         let nonce_times_g_addr = hex::decode("02eDd8421D87B7c0eE433D3AFAd3aa2Ef039f27a")
             .unwrap()
             .try_into()
             .unwrap();
-
-        let eth_input_from_receipt = "24969d5d2bdc19071c7994f088103dbf8d5476d6deb6d55ee005a2f510dc7640055cc84ebeb37e87509e15cd88b19fa224441c56acc0e143cb25b9fd1e57fdafed215538000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002edd8421d87b7c0ee433d3afad3aa2ef039f27a1742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001";
 
         // to big endian bytes then into the curv type
         let curv_sig_big_int = curv::BigInt::from_bytes(&sig.to_bytes_be().1);
@@ -512,23 +509,13 @@ mod test_eth_tx_encoder {
             v: Secp256k1Point::from_bytes(&k_times_g_bytes).unwrap(),
         };
 
-        // this is what build_tx does
-        let params = encoder.set_agg_key_with_agg_key_param_constructor(
-            message_hash.0,
-            // don't think we need this sig
-            sig,
-            param_container.key_nonce,
-            nonce_times_g_addr,
-            param_container.pubkey_x,
-            param_container.pubkey_y_parity,
-        );
-
         let tx_data = encoder
-            .build_tx(&message_hash, sig, nonce_times_g_addr, &param_container)
+            .build_tx(&message_hash, &sig, nonce_times_g_addr, &param_container)
             .unwrap()
             .data;
 
-        let tx_data = encoder.encode_params_key_manager_fn(params).unwrap();
+        let eth_input_from_receipt = "24969d5d2bdc19071c7994f088103dbf8d5476d6deb6d55ee005a2f510dc7640055cc84ebeb37e87509e15cd88b19fa224441c56acc0e143cb25b9fd1e57fdafed215538000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002edd8421d87b7c0ee433d3afad3aa2ef039f27a1742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001";
+
         assert_eq!(eth_input_from_receipt.to_string(), hex::encode(&tx_data));
 
         // let built_tx = encoder.build_tx(&message_hash, sig, nonce_times_g_addr, param_container);
