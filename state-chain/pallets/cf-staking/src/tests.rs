@@ -276,6 +276,10 @@ fn multisig_endpoints_cant_be_called_from_invalid_origins() {
 fn signature_is_inserted() {
 	new_test_ext().execute_with(|| {
 		const STAKE: u128 = 45;
+		const START_TIME: Duration = Duration::from_secs(10);
+
+		// Start the time at the 10-second mark.
+		time_source::Mock::reset_to(START_TIME);
 
 		// Stake some FLIP.
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, TX_HASH));
@@ -288,7 +292,7 @@ fn signature_is_inserted() {
 
 		// Nonce should be 1.
 		let claim = PendingClaims::<Test>::get(ALICE).unwrap();
-		assert_eq!(claim.nonce, 1);
+		assert_eq!(claim.nonce, 10000000000);
 
 		assert_event_stack!(
 			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, msg_hash)) => {
@@ -634,7 +638,7 @@ fn test_claim_payload() {
 	]"#;
 	const EXPIRY_SECS: u64 = 10;
 	const AMOUNT: u128 = 1234567890;
-	const NONCE: u32 = 6;
+	const NONCE: u128 = 6;
 
 	let stake_manager = ethabi::Contract::load(ABI_JSON.as_bytes()).unwrap();
 	let register_claim = stake_manager.function("registerClaim").unwrap();

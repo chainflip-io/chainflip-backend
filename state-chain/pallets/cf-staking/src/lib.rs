@@ -47,6 +47,7 @@ mod eth_encoding;
 
 use cf_traits::{BidderProvider, EpochInfo, StakeTransfer};
 use core::time::Duration;
+use sp_std::convert::TryInto;
 use frame_support::{
 	debug,
 	dispatch::DispatchResultWithPostInfo,
@@ -171,9 +172,6 @@ pub mod pallet {
 	pub(super) type ClaimExpiries<T: Config> =
 		StorageValue<_, Vec<(Duration, AccountId<T>)>, ValueQuery>;
 
-	#[pallet::storage]
-	pub(super) type Nonces<T: Config> = StorageMap<_, Identity, AccountId<T>, T::Nonce, ValueQuery>;
-
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
@@ -245,6 +243,9 @@ pub mod pallet {
 
 		/// Cannot make a claim request while an auction is being resolved.
 		NoClaimsDuringAuctionPhase,
+
+		/// Error during generateing a unique nonce
+		FailedToGenerateNonce,
 	}
 
 	#[pallet::call]
@@ -553,11 +554,8 @@ impl<T: Config> Pallet<T> {
 		// amount claimed.
 		T::Flip::try_claim(account_id, amount)?;
 
-		// Don't check for overflow here - we don't expect more than 2^32 claims.
-		let nonce = Nonces::<T>::mutate(account_id, |nonce| {
-			*nonce += T::Nonce::one();
-			*nonce
-		});
+		// Try to generate a nonce
+		let nonce = Self::generate_nonce()?;
 
 		// Set expiry and build the claim parameters.
 		let expiry = T::TimeSource::now() + T::ClaimTTL::get();
@@ -583,6 +581,16 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::<T>::ClaimSigRequested(account_id.clone(), msg_hash));
 
 		Ok(())
+	}
+
+	/// Generates a unique nonce for the StakeManager conctract.
+	fn generate_nonce() -> Result<T::Nonce, Error<T>> {
+	    let u64_nonce = T::TimeSource::now().as_nanos() as u64;
+		if let Some(nonce) = u64_nonce.try_into().ok() {
+			Ok(nonce)
+		} else {
+			Err(Error::FailedToGenerateNonce)
+		}
 	}
 
 	/// Sets the `retired` flag associated with the account to true, signalling that the account no longer wishes to
