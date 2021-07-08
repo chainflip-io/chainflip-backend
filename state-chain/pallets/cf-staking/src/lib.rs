@@ -585,6 +585,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Generates a unique nonce for the StakeManager conctract.
 	fn generate_nonce() -> Result<T::Nonce, Error<T>> {
+		// For now, we expect the nonce to be an u64 to stay compatible with the CFE
 	    let u64_nonce = T::TimeSource::now().as_nanos() as u64;
 		if let Some(nonce) = u64_nonce.try_into().ok() {
 			Ok(nonce)
