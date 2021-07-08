@@ -383,14 +383,7 @@ impl SigningState {
                     StageStatus::Full => {
                         info!("[{}] Phase 2 (signing) successful ✅✅", self.us());
                         self.update_progress_timestamp();
-                        if let Ok(key) = self.sss.finalize_phase2() {
-                            info!("[{}] SHARED SECRET IS READY 👍", self.us());
-
-                            self.shared_secret = Some(key);
-
-                            self.init_local_sigs_phase();
-                            self.process_delayed(); // Process delayed LocalSig
-                        }
+                        self.finalize_phase2();
                     }
                     StageStatus::MadeProgress => self.update_progress_timestamp(),
                     StageStatus::Ignored => { /* do nothing */ }
@@ -489,6 +482,33 @@ impl SigningState {
 
             if let Err(err) = self.event_sender.send(event) {
                 error!("Could not send p2p message: {}", err);
+            }
+        }
+    }
+
+    fn finalize_phase2(&mut self) {
+        match self.sss.finalize_phase2() {
+            Ok(key) => {
+                info!("[{}] SHARED KEY IS READY 👍", self.us());
+
+                self.shared_secret = Some(key);
+
+                self.init_local_sigs_phase();
+                self.process_delayed(); // Process delayed LocalSig
+            }
+            Err(InvalidSS(blamed_idxs)) => {
+                error!(
+                    "Invalid Phase2 keygen data, abandoning state for message_info: {:?}",
+                    self.message_info
+                );
+                self.stage = SigningStage::Abandoned;
+
+                let blamed_ids = self.signer_idxs_to_validator_ids(blamed_idxs);
+
+                self.send_event(InnerEvent::SigningResult(SigningOutcome::invalid(
+                    self.message_info,
+                    blamed_ids,
+                )));
             }
         }
     }

@@ -158,9 +158,8 @@ pub struct SigningFailure {
     pub bad_nodes: Vec<ValidatorId>,
 }
 
-/// public interfaces will return this to indicate
-/// that something potentially interesting has happened
-#[derive(Debug, PartialEq)]
+/// The final result of a Signing ceremony
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SigningOutcome {
     MessageSigned(MessageInfo, Signature),
     Unauthorised(SigningFailure),

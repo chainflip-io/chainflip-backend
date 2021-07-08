@@ -63,7 +63,8 @@ pub enum MultisigInstruction {
 #[derive(Serialize, Deserialize)]
 pub enum MultisigEvent {
     ReadyToKeygen,
-    MessageSigned(MessageInfo, Signature),
+    MessageSigningResult(SigningOutcome),
+    //MessageSigned(MessageInfo, Signature),
     KeygenResult(KeygenOutcome),
 }
 
@@ -109,10 +110,10 @@ where
                         error!("Could not publish message to MQ: {}", err);
                     }
                 }
-                InnerEvent::SigningResult(SigningOutcome::MessageSigned(msg, sig)) => {
+                InnerEvent::SigningResult(res) => {
                     mq.publish(
                         Subject::MultisigEvent,
-                        &MultisigEvent::MessageSigned(msg, sig),
+                        &MultisigEvent::MessageSigningResult(res),
                     )
                     .await
                     .expect("Failed to publish");

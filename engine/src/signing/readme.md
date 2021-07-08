@@ -114,6 +114,31 @@ While in `AwaitingLocalSig3`  it collects the signatures from all of the validat
 Once full, it aggregates them and verifies it using the aggregated public key generated in phase 2.
 If the verification fails, it shows a warning and no blame is issued. (todo)
 
+```mermaid
+graph TD;
+Idle--bc1-->AwaitingKR[Awaiting Signing Request];
+Idle--Signing request-->AwaitingBc1[Awaiting BC1];
+AwaitingKR--timeout-->Timeout1[Failure: report senders of bc1];
+AwaitingKR--Signing request-->AwaitingBc1;
+AwaitingBc1--All BC1s collected-->Finalise1[Finalise phase 1];
+Finalise1--valid-->AwaitSec2[Awaiting Secret2];
+Finalise1--invalid-->InvalidBC1[Failure: Report senders of invalid bc1];
+AwaitSec2--all Secret2s collected-->Finalise2[Finalise phase 2];
+AwaitSec2--timeout-->Timeout2[Failure: report slow parties];
+Finalise2--valid-->AwaitingLocalSig3[Awaiting Local Sigs];
+Finalise2--invalid-->InvalidSec2[Failure: report senders of invalid Secret2];
+AwaitingBc1--timeout-->Timeout2;
+AwaitingLocalSig3--All Local Sigs Collected-->Finalise3[Verify Local Sigs];
+AwaitingLocalSig3--timeout-->Timeout2;
+Finalise3--valid-->MessageSigned;
+Finalise3--invalid-->InvalidLS[Failure: Report senders of invalid local sig]
+
+classDef Error stroke:#f66,stroke-width:2px;
+class InvalidLS,InvalidSec2,InvalidBC1,Timeout2,Timeout1 Error
+```
+
+>Flow chart of message signing ceremony used by the `SigningState`
+
 ### bitcoin_schnorr.rs
 
 Contains part of the Multisig Schnorr library. Implementation for `Keys`, `LocalSig` and `Signature`, used by the `SharedSecretState`.
