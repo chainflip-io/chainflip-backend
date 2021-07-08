@@ -677,7 +677,6 @@ impl<T: Config> Pallet<T> {
 		]"#;
 
 		let stake_manager = ethabi::Contract::load(ABI_JSON.as_bytes())?;
-		let d = serde_json::Deserializer::from_slice(ABI_JSON.as_bytes());
 		let stake_manager : ethabi::Contract = serde_json::from_str(ABI_JSON)?;
 		let register_claim = stake_manager.function("registerClaim")?;
 
