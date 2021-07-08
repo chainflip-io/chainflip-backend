@@ -25,16 +25,11 @@ async fn main() {
 
     let eth_fut = eth::start(settings.clone());
 
-    let signer_idx = state_chain::node_id::get_peer_id(&settings.state_chain)
+    // TODO: read the key for config/file
+    let signer_id = state_chain::node_id::get_peer_id(&settings.state_chain)
         .await
         .expect("Should receive a ValidatorId");
-
-    let params = Parameters {
-        share_count: 150,
-        threshold: 99,
-    };
-
-    let signing_client = signing::MultisigClient::new(mq_factory, signer_idx, params);
+    let signing_client = signing::MultisigClient::new(mq_factory, signer_id);
 
     let temp_event_map_fut = TempEventMapper::run(&settings);
 
