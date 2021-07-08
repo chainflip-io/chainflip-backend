@@ -19,6 +19,9 @@ pallet-cf-validator = { path = '../cf-validator', default-features = false }
 # Non-substrate external deps
 codec = {default-features = false, features = ['derive'], package = 'parity-scale-codec', version = '2.0.0'}
 ethereum-types = { default-features = false, version = "0.11"}
+ethabi = { default-features = false, features = ['serde_json', 'serde'], path = '/home/andy/Projects/ethabi-chainflip/ethabi' }
+#serde_json = { version = "1.0", optional = true }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 
 # Substrate deps
 frame-support = { default-features = false, version = '3.0.0' }
@@ -31,7 +34,7 @@ serde = { default-features = false, version = '1.0.119' }
 [dev-dependencies]
 sp-io = { version = '3.0.0' }
 pallet-cf-flip = { path = '../cf-flip' }
-ethabi = { version = '14.0' }
+#ethabi = { version = '14.0' }
 
 [features]
 default = ['std']
@@ -45,4 +48,5 @@ std = [
     'sp-core/std',
     'sp-std/std',
     'serde/std',
+    'ethabi/std',
 ]
