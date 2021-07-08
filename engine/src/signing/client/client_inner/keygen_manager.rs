@@ -107,6 +107,7 @@ impl KeygenManager {
         entry.1.push((sender_id, bc1));
     }
 
+    /// check all states for timeouts and abandonment then remove them
     pub fn cleanup(&mut self) {
         let mut events_to_send = vec![];
 
@@ -156,6 +157,7 @@ impl KeygenManager {
         }
     }
 
+    /// Start the keygen ceremony
     pub fn on_keygen_request(&mut self, ki: KeygenInfo) {
         let KeygenInfo {
             id: key_id,

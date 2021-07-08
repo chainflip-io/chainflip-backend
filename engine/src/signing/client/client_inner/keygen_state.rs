@@ -349,6 +349,7 @@ impl KeygenState {
         }
     }
 
+    /// check is the KeygenStage is Abandoned
     pub fn is_abandoned(&self) -> bool {
         match self.stage {
             KeygenStage::Abandoned => true,
