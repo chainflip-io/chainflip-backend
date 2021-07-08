@@ -23,9 +23,6 @@ pallet-cf-validator = { path = '../cf-validator', default-features = false }
 codec = {default-features = false, features = ['derive'], package = 'parity-scale-codec', version = '2.0.0'}
 ethereum-types = { default-features = false, version = "0.11"}
 ethabi = { default-features = false, git = 'https://github.com/chainflip-io/ethabi' }
-#ethabi = { default-features = false, features = ['serde_json', 'serde'], path = '/home/andy/Projects/ethabi-chainflip/ethabi' }
-#serde = { version = "1.0", default-features = false, features = ["alloc"] }
-#serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 
 # Substrate deps
 frame-support = { default-features = false, version = '3.0.0' }
