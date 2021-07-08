@@ -123,7 +123,6 @@ pub mod pallet {
 		/// A Nonce type to be used for claim nonces.
 		type Nonce: Member
 			+ FullCodec
-			+ Bounded
 			+ Copy
 			+ Default
 			+ AtLeast32BitUnsigned
