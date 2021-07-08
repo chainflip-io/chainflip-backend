@@ -292,7 +292,7 @@ fn signature_is_inserted() {
 
 		// Nonce should be 1.
 		let claim = PendingClaims::<Test>::get(ALICE).unwrap();
-		assert_eq!(claim.nonce, 10000000000);
+		assert_eq!(claim.nonce, START_TIME.as_nanos() as u64);
 
 		assert_event_stack!(
 			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, msg_hash)) => {
