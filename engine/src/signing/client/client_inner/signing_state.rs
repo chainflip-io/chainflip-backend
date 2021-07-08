@@ -43,6 +43,7 @@ pub(super) struct KeygenResult {
 pub(super) struct KeygenResultInfo {
     pub key: Arc<KeygenResult>,
     pub validator_map: Arc<ValidatorMaps>,
+    pub params: Parameters,
 }
 
 impl KeygenResultInfo {
@@ -97,15 +98,21 @@ impl SigningState {
         idx: usize,
         signer_idxs: Vec<usize>,
         key_info: KeygenResultInfo,
-        params: Parameters,
         p2p_sender: mpsc::UnboundedSender<InnerEvent>,
         mi: MessageInfo,
         si: SigningInfo,
     ) -> Self {
-        // Note that params are different for shared secret during the signing state
+        // Note that params for shared secret are different for signing
+        // from that for keygen.
+        // A secret will be shared between *all* signing parties
+        // and would require full participation to "reconstruct" it
+        // (i.e. t = n - 1)
+        let threshold = key_info.params.threshold;
+        let share_count = threshold + 1;
+
         let params = Parameters {
-            threshold: params.threshold,
-            share_count: params.threshold + 1,
+            threshold,
+            share_count,
         };
 
         let now = Instant::now();

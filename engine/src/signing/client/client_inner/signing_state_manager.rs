@@ -24,7 +24,6 @@ use super::{
 #[derive(Clone)]
 pub struct SigningStateManager {
     signing_states: HashMap<MessageInfo, SigningState>,
-    params: Parameters,
     id: ValidatorId,
     p2p_sender: mpsc::UnboundedSender<InnerEvent>,
     /// Max lifetime of any phase before it expires
@@ -37,14 +36,12 @@ pub struct SigningStateManager {
 
 impl SigningStateManager {
     pub(super) fn new(
-        params: Parameters,
         id: ValidatorId,
         p2p_sender: mpsc::UnboundedSender<InnerEvent>,
         phase_timeout: Duration,
     ) -> Self {
         SigningStateManager {
             signing_states: HashMap::new(),
-            params,
             id,
             p2p_sender,
             phase_timeout,
@@ -183,7 +180,6 @@ impl SigningStateManager {
                     our_idx,
                     signer_idxs,
                     key_info,
-                    self.params,
                     p2p_sender,
                     mi.clone(),
                     sign_info,
