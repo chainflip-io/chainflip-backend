@@ -72,11 +72,10 @@ pub enum Subject {
     AccountRetired,
     AccountActivated,
 
-    SetAggKey,
-
     P2PIncoming,
     P2POutgoing,
     MultisigInstruction,
+    // both signing and keygen events come from here
     MultisigEvent,
     /// Published by the signing module to notify SC about
     /// the outcome of a keygen ceremony
@@ -108,9 +107,6 @@ impl SubjectName for Subject {
             }
             Subject::StakeManager => {
                 format!("stake_manager")
-            }
-            Subject::SetAggKey => {
-                format!("set_agg_key")
             }
             // === Signing ===
             Subject::P2PIncoming => {
