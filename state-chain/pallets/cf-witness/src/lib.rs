@@ -331,7 +331,13 @@ impl<T: Config> pallet_cf_validator::EpochTransitionHandler for Pallet<T> {
 			total += 1;
 		}
 		NumValidators::<T>::set(total);
+
+		let calc_threshold = |total: u32| -> u32 {
+			let doubled = total * 2;
+            if doubled % 3 == 0 { doubled / 3 } else { doubled / 3 + 1 }
+		};
+
 		// Assume all validators are live at the start of an Epoch.
-		ConsensusThreshold::<T>::mutate(|thresh| *thresh = total * 2 / 3 + 1)
+		ConsensusThreshold::<T>::mutate(|thresh| *thresh = calc_threshold(total))
 	}
 }
