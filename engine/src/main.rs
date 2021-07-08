@@ -26,8 +26,7 @@ async fn main() {
 
     let eth_fut = eth::start(settings.clone());
 
-    // TODO: read the key for config/file
-    let signer_idx = ValidatorId([0; 32]);
+    let signer_idx = state_chain::node_id::get_node_id(settings.clone().state_chain).await;
 
     let params = Parameters {
         share_count: 150,

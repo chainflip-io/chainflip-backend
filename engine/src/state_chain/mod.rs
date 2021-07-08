@@ -13,7 +13,7 @@ mod sc_event;
 mod helpers;
 
 /// Contains method to get the nodes state chain id on initialisation
-mod node_id;
+pub mod node_id;
 
 // ==== Pallet support for the state chain =====
 
