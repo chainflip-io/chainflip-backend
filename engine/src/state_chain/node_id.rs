@@ -1,8 +1,9 @@
 use crate::{p2p::ValidatorId, settings};
 use reqwest::header;
-use substrate_subxt::*;
 
 use serde::Deserialize;
+
+use anyhow::Result;
 
 #[derive(Deserialize, Debug)]
 struct PeerId {
@@ -12,7 +13,7 @@ struct PeerId {
 
 /// Get the peer id from the state chain via RPC
 /// and return as ValidatorId type
-pub async fn get_peer_id(state_chain_settings: settings::StateChain) -> ValidatorId {
+pub async fn get_peer_id(state_chain_settings: settings::StateChain) -> Result<ValidatorId> {
     const PEER_ID_RPC: &'static str = "system_localPeerId";
 
     let state_chain_peer_rpc = format!(
@@ -29,20 +30,12 @@ pub async fn get_peer_id(state_chain_settings: settings::StateChain) -> Validato
         .default_headers(headers)
         .build()
         .expect("Client should be constructed");
-    let resp = client
-        .post(state_chain_peer_rpc)
-        .send()
-        .await
-        .expect("Should get a response from state chain");
+    let resp = client.post(state_chain_peer_rpc).send().await?;
 
-    let peer_id = resp
-        .json::<PeerId>()
-        .await
-        .expect("Deserialization of `system_localPeerId` response should succeed");
+    let peer_id = resp.json::<PeerId>().await?;
 
-    let validator_id =
-        ValidatorId::from_base58(&peer_id.result).expect("Should be a valid validator id");
-    return validator_id;
+    let validator_id = ValidatorId::from_base58(&peer_id.result)?;
+    return Ok(validator_id);
 }
 
 #[cfg(test)]
@@ -56,6 +49,6 @@ mod tests {
     async fn test_get_peer_id() {
         let test_settings = settings::test_utils::new_test_settings().unwrap();
 
-        get_peer_id(test_settings.state_chain).await;
+        get_peer_id(test_settings.state_chain).await.unwrap();
     }
 }
