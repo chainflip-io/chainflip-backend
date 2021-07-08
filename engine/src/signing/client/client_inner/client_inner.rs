@@ -4,7 +4,9 @@ use crate::{
     p2p::{P2PMessage, P2PMessageCommand, ValidatorId},
     signing::{
         client::{KeyId, MultisigInstruction, SigningInfo},
-        crypto::{BigInt, KeyGenBroadcastMessage1, LocalSig, Parameters, VerifiableSS, FE, GE},
+        crypto::{
+            BigInt, KeyGenBroadcastMessage1, LocalSig, Parameters, Signature, VerifiableSS, FE, GE,
+        },
         MessageHash, MessageInfo,
     },
 };
@@ -152,9 +154,8 @@ impl Display for KeygenData {
 /// public interfaces will return this to indicate
 /// that something potentially interesting has happened
 #[derive(Debug, PartialEq)]
-pub enum InnerSignal {
-    KeyReady,
-    MessageSigned(MessageInfo),
+pub enum SigningOutcome {
+    MessageSigned(MessageInfo, Signature),
 }
 
 /// Holds extra info about keygen failure (but not the reason)
@@ -164,10 +165,16 @@ pub struct KeygenFailure {
     pub bad_nodes: Vec<ValidatorId>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct KeygenSuccess {
+    pub key_id: KeyId,
+    pub key: secp256k1::PublicKey,
+}
+
 /// The final result of a keygen ceremony
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum KeygenOutcome {
-    Success,
+    Success(KeygenSuccess),
     Unauthorised(KeygenFailure),
     /// Abandoned as we couldn't make progress for a long time
     Timeout(KeygenFailure),
@@ -210,7 +217,7 @@ impl From<KeygenOutcome> for InnerEvent {
 #[derive(Debug, PartialEq)]
 pub enum InnerEvent {
     P2PMessageCommand(P2PMessageCommand),
-    InnerSignal(InnerSignal),
+    SigningResult(SigningOutcome),
     KeygenResult(KeygenOutcome),
 }
 
@@ -255,7 +262,6 @@ impl MultisigClientInner {
 
     /// Clean up expired states
     pub fn cleanup(&mut self) {
-        // TODO: cleanup keygen states as well
         self.keygen.cleanup();
         self.signing_manager.cleanup();
     }

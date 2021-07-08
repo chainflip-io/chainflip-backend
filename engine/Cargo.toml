@@ -21,6 +21,7 @@ async-nats = "0.9.12"
 async-std = {version = "1.9", features = ["attributes", "tokio1"]}
 async-stream = "0.3.0"
 async-trait = "0.1.49"
+bs58 = "0.4"
 config = "0.11.0"
 crossbeam-channel = "0.5.1"
 env_logger = "0.8.3"
@@ -30,23 +31,25 @@ futures-util = "0.3.14"
 hex = "0.4.3"
 httparse = "1.4.1"
 itertools = "0.10"
-lazy_static = "1.4"
-log = "0.4.14"
-parking_lot = "0.11"
-rand = "0.7.3"
-secp256k1 ="0.20"
-serde = {version = "1.0", features = ["derive"]}
-serde_json = "1.0"
-thiserror = "1.0.24"
-tokio = {version = "1.5.0", features = ["full"]}
-tokio-stream = "0.1.5"
 jsonrpc-core = {version = "17.1.0"}
 jsonrpc-core-client = {version = "17.1.0", default-features = false, features = ["http", "ws"]}
 jsonrpc-http-server = "17.1.0"
 jsonrpc-ws-server = "17.1.0"
-web3 = "0.16.0"
+lazy_static = "1.4"
+log = "0.4.14"
+num = "0.4.0"
+parking_lot = "0.11"
+rand = "0.7.3"
+reqwest = {version = "0.11.4", features = ["json"]}
+secp256k1 = "0.20"
+serde = {version = "1.0", features = ["derive"]}
+serde_json = "1.0"
+thiserror = "1.0.24"
+tokio = {version = "1.5.0", features = ["full"]}
 tokio-compat-02 = "0.2.0"
+tokio-stream = "0.1.5"
 url = "1.7.2"
+web3 = "0.16.0"
 
 # substrate deps
 codec = {package = "parity-scale-codec", version = "2.1", default-features = false, features = ["derive", "full"]}
@@ -58,12 +61,12 @@ sp-runtime = "3.0.0"
 substrate-subxt = "0.15"
 
 # Local deps
+cf-p2p-rpc = {path = "../state-chain/client/cf-p2p/rpc"}
 cf-traits = {path = "../state-chain/traits"}
 pallet-cf-auction = {path = "../state-chain/pallets/cf-auction"}
 pallet-cf-staking = {path = "../state-chain/pallets/cf-staking"}
 pallet-cf-validator = {path = "../state-chain/pallets/cf-validator"}
 state-chain-runtime = {path = "../state-chain/runtime"}
-cf-p2p-rpc = {path = "../state-chain/client/cf-p2p/rpc"}
 
 [dependencies.curv]
 features = ["rust-gmp-kzen"]

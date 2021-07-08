@@ -13,9 +13,14 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::p2p::P2PMessage;
 
-use self::client_inner::{InnerEvent, InnerSignal, KeygenOutcome, MultisigClientInner};
+use self::client_inner::{InnerEvent, MultisigClientInner, SigningOutcome};
 
-use super::{crypto::Parameters, MessageHash, MessageInfo};
+pub use client_inner::{KeygenOutcome, KeygenSuccess};
+
+use super::{
+    crypto::{Parameters, Signature},
+    MessageHash, MessageInfo,
+};
 
 use tokio::sync::mpsc;
 
@@ -60,8 +65,7 @@ pub enum MultisigInstruction {
 #[derive(Serialize, Deserialize)]
 pub enum MultisigEvent {
     ReadyToKeygen,
-    ReadyToSign,
-    MessageSigned(MessageInfo),
+    MessageSigned(MessageInfo, Signature),
     KeygenResult(KeygenOutcome),
 }
 
@@ -107,15 +111,13 @@ where
                         error!("Could not publish message to MQ: {}", err);
                     }
                 }
-                InnerEvent::InnerSignal(InnerSignal::KeyReady) => {
-                    mq.publish(Subject::MultisigEvent, &MultisigEvent::ReadyToSign)
-                        .await
-                        .expect("Signing module failed to publish readiness");
-                }
-                InnerEvent::InnerSignal(InnerSignal::MessageSigned(msg)) => {
-                    mq.publish(Subject::MultisigEvent, &MultisigEvent::MessageSigned(msg))
-                        .await
-                        .expect("Failed to publish");
+                InnerEvent::SigningResult(SigningOutcome::MessageSigned(msg, sig)) => {
+                    mq.publish(
+                        Subject::MultisigEvent,
+                        &MultisigEvent::MessageSigned(msg, sig),
+                    )
+                    .await
+                    .expect("Failed to publish");
                 }
                 InnerEvent::KeygenResult(res) => {
                     mq.publish(Subject::MultisigEvent, &MultisigEvent::KeygenResult(res))

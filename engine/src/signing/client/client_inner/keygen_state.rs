@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Instant};
 
+use curv::elliptic::curves::traits::ECPoint;
 use itertools::Itertools;
 use log::*;
 use tokio::sync::mpsc::UnboundedSender;
@@ -9,16 +10,18 @@ use crate::{
     signing::{
         client::{
             client_inner::{
-                client_inner::KeyGenMessageWrapped, shared_secret::StageStatus, KeygenOutcome,
+                client_inner::{KeyGenMessageWrapped, KeygenSuccess},
+                shared_secret::StageStatus,
+                KeygenOutcome,
             },
             KeyId,
         },
-        crypto::Parameters,
+        crypto::{InvalidKey, InvalidSS, Parameters},
     },
 };
 
 use super::{
-    client_inner::{InnerSignal, KeygenData, MultisigMessage},
+    client_inner::{KeygenData, MultisigMessage},
     shared_secret::SharedSecretState,
     signing_state::KeygenResultInfo,
     utils::ValidatorMaps,
@@ -85,6 +88,24 @@ impl KeygenState {
         state
     }
 
+    /// Get ids of validators who haven't sent the data for the current stage
+    pub fn awaited_parties(&self) -> Vec<ValidatorId> {
+        let awaited_idxs = match self.stage {
+            KeygenStage::AwaitingBroadcast1 | KeygenStage::AwaitingSecret2 => {
+                self.sss.awaited_parties()
+            }
+            KeygenStage::KeyReady | KeygenStage::Abandoned => vec![],
+        };
+
+        let awaited_ids = awaited_idxs
+            .into_iter()
+            .map(|idx| self.signer_idx_to_validator_id(idx))
+            .cloned()
+            .collect_vec();
+
+        awaited_ids
+    }
+
     /// Get index in the (sorted) array of all signers
     fn validator_id_to_signer_idx(&self, id: &ValidatorId) -> Option<usize> {
         self.maps_for_validator_id_and_idx.get_idx(&id)
@@ -127,7 +148,6 @@ impl KeygenState {
                     StageStatus::Full => {
                         self.update_progress_timestamp();
                         self.finalise_phase1();
-                        self.process_delayed();
                     }
                     StageStatus::MadeProgress => self.update_progress_timestamp(),
                     StageStatus::Ignored => { /* do nothing */ }
@@ -142,33 +162,8 @@ impl KeygenState {
                     StageStatus::Full => {
                         trace!("[{}] Phase 2 (keygen) successful ✅✅", self.us());
                         self.update_progress_timestamp();
-                        if let Ok(key) = self.sss.init_phase3() {
-                            info!("[{}] SHARED KEY IS READY 👍", self.us());
 
-                            self.stage = KeygenStage::KeyReady;
-
-                            let key_info = KeygenResultInfo {
-                                key: Arc::new(key),
-                                validator_map: Arc::clone(&self.maps_for_validator_id_and_idx),
-                            };
-
-                            self.key_info = Some(key_info.clone());
-
-                            self.send_event(InnerEvent::InnerSignal(InnerSignal::KeyReady));
-
-                            return Some(key_info);
-                        } else {
-                            error!(
-                                "Invalid Phase2 keygen data, abandoning state for key: {:?}",
-                                self.key_id
-                            );
-                            self.stage = KeygenStage::Abandoned;
-
-                            self.send_event(InnerEvent::KeygenResult(KeygenOutcome::invalid(
-                                self.key_id,
-                                vec![],
-                            )));
-                        }
+                        return self.finalize_phase2();
                     }
                     StageStatus::MadeProgress => {
                         self.update_progress_timestamp();
@@ -225,18 +220,76 @@ impl KeygenState {
                     .collect_vec();
 
                 self.send(msgs);
-            }
-            Err(_) => {
-                error!("phase2 keygen error for key: {:?}", self.key_id);
 
+                self.process_delayed();
+            }
+            Err(InvalidKey(blamed_idxs)) => {
                 self.stage = KeygenStage::Abandoned;
 
-                // TODO: need to provide responsible nodes
-                let event = InnerEvent::KeygenResult(KeygenOutcome::invalid(self.key_id, vec![]));
+                let blamed_ids = self.signer_idxs_to_validator_ids(blamed_idxs);
+
+                error!(
+                    "phase2 keygen error for key: {:?}, blamed validators: {:?}",
+                    self.key_id, &blamed_ids
+                );
+
+                let event =
+                    InnerEvent::KeygenResult(KeygenOutcome::invalid(self.key_id, blamed_ids));
 
                 self.send_event(event);
             }
         }
+    }
+
+    fn finalize_phase2(&mut self) -> Option<KeygenResultInfo> {
+        match self.sss.finalize_phase2() {
+            Ok(key) => {
+                info!("[{}] SHARED KEY IS READY 👍", self.us());
+
+                self.stage = KeygenStage::KeyReady;
+
+                let keygen_success = KeygenSuccess {
+                    key_id: self.key_id,
+                    key: key.aggregate_pubkey.get_element(),
+                };
+
+                self.send_event(InnerEvent::KeygenResult(KeygenOutcome::Success(
+                    keygen_success,
+                )));
+
+                let key_info = KeygenResultInfo {
+                    key: Arc::new(key),
+                    validator_map: Arc::clone(&self.maps_for_validator_id_and_idx),
+                };
+
+                self.key_info = Some(key_info.clone());
+
+                return Some(key_info);
+            }
+            Err(InvalidSS(blamed_idxs)) => {
+                error!(
+                    "Invalid Phase2 keygen data, abandoning state for key: {:?}",
+                    self.key_id
+                );
+                self.stage = KeygenStage::Abandoned;
+
+                let blamed_ids = self.signer_idxs_to_validator_ids(blamed_idxs);
+
+                self.send_event(InnerEvent::KeygenResult(KeygenOutcome::invalid(
+                    self.key_id,
+                    blamed_ids,
+                )));
+            }
+        }
+
+        None
+    }
+
+    fn signer_idxs_to_validator_ids(&self, idxs: Vec<usize>) -> Vec<ValidatorId> {
+        idxs.into_iter()
+            .map(|idx| self.signer_idx_to_validator_id(idx))
+            .cloned()
+            .collect()
     }
 
     fn send_event(&self, event: InnerEvent) {

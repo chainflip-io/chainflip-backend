@@ -4,12 +4,15 @@ pub mod crypto;
 #[cfg(test)]
 mod tests;
 
-pub use client::{KeyId, KeygenInfo, MultisigClient, MultisigInstruction};
+pub use client::{
+    KeyId, KeygenInfo, KeygenOutcome, KeygenSuccess, MultisigClient, MultisigEvent,
+    MultisigInstruction, SigningInfo,
+};
 
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
-pub struct MessageHash(pub Vec<u8>);
+pub struct MessageHash(pub [u8; 32]);
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
 pub struct MessageInfo {

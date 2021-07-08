@@ -16,7 +16,7 @@ use crate::{
             client_inner::{
                 shared_secret::StageStatus,
                 utils::{self},
-                InnerSignal,
+                SigningOutcome,
             },
             SigningInfo,
         },
@@ -226,8 +226,8 @@ impl SigningState {
 
                 if verify_sig.is_ok() {
                     info!("Generated signature is correct! 🎉");
-                    let _ = self.event_sender.send(InnerEvent::InnerSignal(
-                        InnerSignal::MessageSigned(self.message_info.clone()),
+                    let _ = self.event_sender.send(InnerEvent::SigningResult(
+                        SigningOutcome::MessageSigned(self.message_info.clone(), signature),
                     ));
                 }
             }
@@ -330,7 +330,7 @@ impl SigningState {
                     StageStatus::Full => {
                         info!("[{}] Phase 2 (signing) successful ✅✅", self.us());
                         self.update_progress_timestamp();
-                        if let Ok(key) = self.sss.init_phase3() {
+                        if let Ok(key) = self.sss.finalize_phase2() {
                             info!("[{}] SHARED SECRET IS READY 👍", self.us());
 
                             self.shared_secret = Some(key);

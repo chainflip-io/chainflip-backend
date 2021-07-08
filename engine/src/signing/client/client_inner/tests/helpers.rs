@@ -15,18 +15,18 @@ use crate::{
                 },
                 keygen_state::KeygenStage,
                 signing_state::SigningStage,
-                InnerEvent, InnerSignal, MultisigClientInner,
+                InnerEvent, KeygenOutcome, MultisigClientInner, SigningOutcome,
             },
             KeyId, KeygenInfo, MultisigInstruction, SigningInfo,
         },
-        crypto::{Keys, LocalSig, Parameters},
+        crypto::{Keys, LocalSig, Parameters, Signature},
         MessageHash, MessageInfo,
     },
 };
 
 use lazy_static::lazy_static;
 
-use super::KEY_ID;
+use super::{KEY_ID, MESSAGE_HASH, MESSAGE_INFO, SIGNER_IDXS, SIGN_INFO};
 
 /// Clients generated bc1, but haven't sent them
 pub(super) struct KeygenPhase1Data {
@@ -43,6 +43,7 @@ pub(super) struct KeygenPhase2Data {
 
 pub(super) struct KeygenPhase3Data {
     pub(super) clients: Vec<MultisigClientInner>,
+    pub(super) pubkey: secp256k1::PublicKey,
 }
 
 /// Clients received a request to sign and generated BC1, not broadcast yet
@@ -72,6 +73,7 @@ pub(super) struct ValidKeygenStates {
     pub(super) sign_phase1: SigningPhase1Data,
     pub(super) sign_phase2: SigningPhase2Data,
     pub(super) sign_phase3: SigningPhase3Data,
+    pub(super) signature: Signature,
     pub(super) rxs: Vec<UnboundedReceiver<InnerEvent>>,
 }
 
@@ -107,9 +109,7 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
         share_count: 3,
     };
 
-    let validator_ids = (1..=3)
-        .map(|idx| ValidatorId(idx.to_string()))
-        .collect_vec();
+    let validator_ids = (1..=3).map(|idx| ValidatorId::new(idx)).collect_vec();
 
     let (mut clients, mut rxs): (Vec<_>, Vec<_>) = validator_ids
         .iter()
@@ -210,48 +210,36 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
         }
     }
 
-    for r in &mut rxs {
-        assert_eq!(
-            Some(InnerEvent::InnerSignal(InnerSignal::KeyReady)),
-            r.recv().await
-        );
+    let mut pubkeys = vec![];
+    for mut r in &mut rxs {
+        let pubkey = match recv_next_inner_event(&mut r).await {
+            InnerEvent::KeygenResult(KeygenOutcome::Success(key_data)) => key_data.key,
+            _ => panic!("Unexpected inner event"),
+        };
+        pubkeys.push(pubkey);
     }
+    assert_eq!(pubkeys[0].serialize(), pubkeys[1].serialize());
+    assert_eq!(pubkeys[1].serialize(), pubkeys[2].serialize());
 
     let keygen_phase3 = KeygenPhase3Data {
         clients: clients.clone(),
+        pubkey: pubkeys[0],
     };
 
     // *** Send a request to sign and generate BC1 to be distributed ***
 
-    let message_to_sign = MessageHash("Chainflip".as_bytes().to_vec());
-    let message_info = MessageInfo {
-        hash: message_to_sign.clone(),
-        key_id,
-    };
-
-    // NOTE: only parties 1 and 2 will participate in signing
-
-    let active_idxs = [0, 1]; // indexes into `validator_ids` (not signer_idx!)
-
-    let sign_info = SigningInfo {
-        id: key_id,
-        signers: active_idxs
-            .iter()
-            .map(|i| validator_ids[*i].clone())
-            .collect_vec(),
-    };
-
-    for idx in &active_idxs {
+    // NOTE: only parties 1 and 2 will participate in signing (SIGNER_IDXS)
+    for idx in SIGNER_IDXS.iter() {
         let c = &mut clients[*idx];
 
         c.process_multisig_instruction(MultisigInstruction::Sign(
-            message_to_sign.clone(),
-            sign_info.clone(),
+            MESSAGE_HASH.clone(),
+            SIGN_INFO.clone(),
         ));
 
         assert_eq!(
             c.signing_manager
-                .get_state_for(&message_info)
+                .get_state_for(&MESSAGE_INFO)
                 .unwrap()
                 .get_stage(),
             SigningStage::AwaitingBroadcast1
@@ -260,7 +248,7 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
 
     let mut bc1_vec = vec![];
 
-    for idx in &active_idxs {
+    for idx in SIGNER_IDXS.iter() {
         let rx = &mut rxs[*idx];
 
         let bc1 = recv_bc1_signing(rx).await;
@@ -275,14 +263,13 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
     assert_channel_empty(&mut rxs[0]).await;
 
     // *** Broadcast BC1 messages to advance to Phase2 ***
-
-    for sender_idx in &active_idxs {
+    for sender_idx in SIGNER_IDXS.iter() {
         let bc1 = bc1_vec[*sender_idx].clone();
         let id = &validator_ids[*sender_idx];
 
-        let m = bc1_to_p2p_signing(bc1, id, &message_info);
+        let m = bc1_to_p2p_signing(bc1, id, &MESSAGE_INFO);
 
-        for receiver_idx in &active_idxs {
+        for receiver_idx in SIGNER_IDXS.iter() {
             if receiver_idx != sender_idx {
                 clients[*receiver_idx].process_p2p_mq_message(m.clone());
             }
@@ -293,7 +280,7 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
 
     let mut sec2_vec = vec![];
 
-    for idx in &active_idxs {
+    for idx in SIGNER_IDXS.iter() {
         let rx = &mut rxs[*idx];
 
         let mut sec2_map = HashMap::new();
@@ -318,26 +305,26 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
 
     // *** Distribute Secret2 messages ***
 
-    for sender_idx in &active_idxs {
-        for receiver_idx in &active_idxs {
+    for sender_idx in SIGNER_IDXS.iter() {
+        for receiver_idx in SIGNER_IDXS.iter() {
             if sender_idx != receiver_idx {
                 let receiver_id = &validator_ids[*receiver_idx];
 
                 let sec2 = sec2_vec[*sender_idx].get(receiver_id).unwrap().clone();
 
                 let id = &validator_ids[*sender_idx];
-                let m = sec2_to_p2p_signing(sec2, id, &message_info);
+                let m = sec2_to_p2p_signing(sec2, id, &MESSAGE_INFO);
 
                 clients[*receiver_idx].process_p2p_mq_message(m);
             }
         }
     }
 
-    for idx in &active_idxs {
+    for idx in SIGNER_IDXS.iter() {
         let c = &mut clients[*idx];
         assert_eq!(
             c.signing_manager
-                .get_state_for(&message_info)
+                .get_state_for(&MESSAGE_INFO)
                 .unwrap()
                 .get_stage(),
             SigningStage::AwaitingLocalSig3
@@ -348,7 +335,7 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
 
     let mut local_sigs = vec![];
 
-    for idx in &active_idxs {
+    for idx in SIGNER_IDXS.iter() {
         let rx = &mut rxs[*idx];
 
         let sig = recv_local_sig(rx).await;
@@ -362,7 +349,27 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
         local_sigs: local_sigs.clone(),
     };
 
-    info!("Elapsed: {}", instant.elapsed().as_millis());
+    for sender_idx in SIGNER_IDXS.iter() {
+        let local_sig = local_sigs[*sender_idx].clone();
+        let id = &validator_ids[*sender_idx];
+
+        let m = sig_to_p2p(local_sig, id, &MESSAGE_INFO);
+
+        for receiver_idx in SIGNER_IDXS.iter() {
+            if receiver_idx != sender_idx {
+                clients[*receiver_idx].process_p2p_mq_message(m.clone());
+            }
+        }
+    }
+
+    let event = recv_next_inner_event(&mut rxs[0]).await;
+
+    let signature = match event {
+        InnerEvent::SigningResult(SigningOutcome::MessageSigned(_message_info, sig)) => sig,
+        _ => panic!("Unexpected event"),
+    };
+
+    info!("generate_valid_keygen_data took: {:?}", instant.elapsed());
 
     ValidKeygenStates {
         keygen_phase1,
@@ -371,6 +378,7 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
         sign_phase1,
         sign_phase2,
         sign_phase3,
+        signature,
         rxs,
     }
 }
@@ -393,7 +401,7 @@ pub async fn print_next_message(rx: &mut UnboundedReceiver<InnerEvent>) {
             InnerEvent::P2PMessageCommand(P2PMessageCommand { destination, .. }) => {
                 eprintln!("P2PMessageCommand [ destination: {} ]", destination);
             }
-            InnerEvent::InnerSignal(s) => {
+            InnerEvent::SigningResult(s) => {
                 eprintln!("{:?}", s);
             }
             InnerEvent::KeygenResult(res) => {
@@ -413,13 +421,13 @@ pub async fn print_next_message(rx: &mut UnboundedReceiver<InnerEvent>) {
 /// Skip all non-signal messages
 pub async fn recv_next_signal_message_skipping(
     rx: &mut UnboundedReceiver<InnerEvent>,
-) -> Option<InnerSignal> {
+) -> Option<SigningOutcome> {
     let dur = std::time::Duration::from_millis(10);
 
     loop {
         let res = tokio::time::timeout(dur, rx.recv()).await.ok()??;
 
-        if let InnerEvent::InnerSignal(s) = res {
+        if let InnerEvent::SigningResult(s) = res {
             return Some(s);
         }
     }
@@ -451,8 +459,8 @@ pub async fn recv_p2p_message(rx: &mut UnboundedReceiver<InnerEvent>) -> P2PMess
 
     match res {
         InnerEvent::P2PMessageCommand(m) => m,
-        _ => {
-            error!("Unexpected InnerEvent");
+        e => {
+            error!("Unexpected InnerEvent: {:?}", e);
             panic!();
         }
     }

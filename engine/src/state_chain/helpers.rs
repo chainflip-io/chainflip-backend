@@ -15,7 +15,7 @@ pub async fn create_subxt_client(
     let client = ClientBuilder::<StateChainRuntime>::new()
         .set_url(format!(
             "ws://{}:{}",
-            state_chain_settings.hostname, state_chain_settings.port
+            state_chain_settings.hostname, state_chain_settings.ws_port
         ))
         .skip_type_sizes_check()
         .build()

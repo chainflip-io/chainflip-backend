@@ -21,6 +21,7 @@ use crate::{
     },
 };
 
+use std::convert::TryInto;
 use std::{sync::Once, time::Duration};
 
 // The id to be used by default
@@ -28,21 +29,38 @@ const KEY_ID: KeyId = KeyId(0);
 
 lazy_static! {
     static ref VALIDATOR_IDS: Vec<ValidatorId> = vec![
-        ValidatorId("1".to_string()),
-        ValidatorId("2".to_string()),
-        ValidatorId("3".to_string()),
+        ValidatorId::new(1),
+        ValidatorId::new(2),
+        ValidatorId::new(3),
     ];
-    static ref SIGNER_IDS: Vec<ValidatorId> =
-        vec![VALIDATOR_IDS[0].clone(), VALIDATOR_IDS[1].clone()];
+    static ref SIGNER_IDXS: Vec<usize> = vec![0, 1];
+    static ref SIGNER_IDS: Vec<ValidatorId> = SIGNER_IDXS
+        .iter()
+        .map(|idx| VALIDATOR_IDS[*idx].clone())
+        .collect();
+    static ref UNEXPECTED_VALIDATOR_ID: ValidatorId = ValidatorId(
+        "unexpected|unexpected|unexpected"
+            .as_bytes()
+            .try_into()
+            .unwrap()
+    );
 }
 
 lazy_static! {
-    static ref MESSAGE: Vec<u8> = "Chainflip".as_bytes().to_vec();
+    static ref MESSAGE: [u8; 32] = "Chainflip:Chainflip:Chainflip:01"
+        .as_bytes()
+        .try_into()
+        .unwrap();
     static ref MESSAGE_HASH: MessageHash = MessageHash(MESSAGE.clone());
     static ref MESSAGE_INFO: MessageInfo = MessageInfo {
         hash: MESSAGE_HASH.clone(),
         key_id: KEY_ID
     };
+        /// Just in case we need to test signing two messages
+    static ref MESSAGE2: [u8; 32] = "Chainflip:Chainflip:Chainflip:02"
+        .as_bytes()
+        .try_into()
+        .unwrap();
     static ref SIGN_INFO: SigningInfo = SigningInfo {
         id: KEY_ID,
         signers: SIGNER_IDS.clone()
@@ -73,20 +91,13 @@ fn init_logs_once() {
 // generate a new key for epoch X (and attempt number?). Requests to sign should also
 // contain the epoch.
 
-// What needs to be tested (unit tests)
-// DONE:
-// - Delaying works correctly for Keygen::BC1, Keygen::Secret2, Signing:BC1, Signing::Secret2, Signing::LocalSig
-// - BC1 messages are processed after a timely RTS (and can lead to phase 2)
-// - RTS is required to proceed to the next phase
-
-// TO DO:
+// TO DO (unit tests):
+// [Signing]
 // - Delayed data expires on timeout
-// - Signing phases do timeout (only tested for BC1 currently)
-// - Parties cannot send two messages for the same phase of signing/keygen
-// - When unable to make progress, the state (Signing/Keygen) should be correctly reset
-// (i.e. past failures don't impact future signing ceremonies)
-// - Should be able to generate new signing keys
+// - Parties cannot send two messages for the same phase
 // - make sure that we don't process p2p data at index signer_id which is our own
-// - test that we penalize the offending nodes
-// - test that there is no interaction between different key_ids
-// - test that we clean up states that didn't result in a key
+// - test that we emit events that allow for penalisation of offending nodes to occur
+// [Keygen]
+// - Parties cannot send two messages for the same phase
+// - make sure that we don't process p2p data at index signer_id which is our own
+// - test that we emit events that allow for penalisation of offending nodes to occur
