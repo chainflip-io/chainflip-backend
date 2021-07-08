@@ -49,6 +49,6 @@ mod tests {
     async fn test_get_peer_id() {
         let test_settings = settings::test_utils::new_test_settings().unwrap();
 
-        get_peer_id(test_settings.state_chain).await.unwrap();
+        get_peer_id(&test_settings.state_chain).await.unwrap();
     }
 }
