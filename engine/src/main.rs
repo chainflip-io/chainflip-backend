@@ -26,7 +26,7 @@ async fn main() {
 
     let eth_fut = eth::start(settings.clone());
 
-    let signer_idx = state_chain::node_id::get_node_id(settings.clone().state_chain).await;
+    let signer_idx = state_chain::node_id::get_peer_id(settings.clone().state_chain).await;
 
     let params = Parameters {
         share_count: 150,

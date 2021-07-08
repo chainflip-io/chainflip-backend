@@ -10,7 +10,9 @@ struct PeerId {
     result: String,
 }
 
-pub async fn get_node_id(state_chain_settings: settings::StateChain) -> ValidatorId {
+/// Get the peer id from the state chain via RPC
+/// and return as ValidatorId type
+pub async fn get_peer_id(state_chain_settings: settings::StateChain) -> ValidatorId {
     const PEER_ID_RPC: &'static str = "system_localPeerId";
 
     let state_chain_peer_rpc = format!(
@@ -26,10 +28,17 @@ pub async fn get_node_id(state_chain_settings: settings::StateChain) -> Validato
     let client = reqwest::Client::builder()
         .default_headers(headers)
         .build()
-        .unwrap();
-    let resp = client.post(state_chain_peer_rpc).send().await.unwrap();
+        .expect("Client should be constructed");
+    let resp = client
+        .post(state_chain_peer_rpc)
+        .send()
+        .await
+        .expect("Should get a response from state chain");
 
-    let peer_id = resp.json::<PeerId>().await.unwrap();
+    let peer_id = resp
+        .json::<PeerId>()
+        .await
+        .expect("Deserialization of `system_localPeerId` response should succeed");
 
     let validator_id =
         ValidatorId::from_base58(&peer_id.result).expect("Should be a valid validator id");
@@ -43,9 +52,10 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_get_node_id() {
+    #[ignore = "depends on running state chain"]
+    async fn test_get_peer_id() {
         let test_settings = settings::test_utils::new_test_settings().unwrap();
 
-        get_node_id(test_settings.state_chain).await;
+        get_peer_id(test_settings.state_chain).await;
     }
 }
