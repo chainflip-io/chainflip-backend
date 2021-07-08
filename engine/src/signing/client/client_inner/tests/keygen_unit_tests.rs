@@ -4,14 +4,9 @@ use std::time::Duration;
 
 #[test]
 fn bc1_gets_delayed_until_keygen_request() {
-    let params = Parameters {
-        threshold: 1,
-        share_count: 3,
-    };
-
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
 
-    let mut client = MultisigClientInner::new(VALIDATOR_IDS[0].clone(), params, tx, PHASE_TIMEOUT);
+    let mut client = MultisigClientInner::new(VALIDATOR_IDS[0].clone(), tx, PHASE_TIMEOUT);
 
     assert_eq!(keygen_stage_for(&client, KEY_ID), None);
 

@@ -27,14 +27,9 @@ async fn main() {
     let eth_fut = eth::start(settings.clone());
 
     // TODO: read the key for config/file
-    let signer_idx = ValidatorId([0; 32]);
+    let signer_id = ValidatorId([0; 32]);
 
-    let params = Parameters {
-        share_count: 150,
-        threshold: 99,
-    };
-
-    let signing_client = signing::MultisigClient::new(mq_factory, signer_idx, params);
+    let signing_client = signing::MultisigClient::new(mq_factory, signer_id);
 
     let temp_event_map_fut = TempEventMapper::run(&settings);
 

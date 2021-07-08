@@ -7,7 +7,7 @@ use crate::{
     p2p::ValidatorId,
     signing::{
         client::{client_inner::utils::get_index_mapping, KeyId, KeygenInfo},
-        crypto::Parameters,
+        crypto,
     },
 };
 
@@ -35,8 +35,6 @@ pub struct KeygenManager {
     keygen_states: HashMap<KeyId, KeygenState>,
     /// Used to propagate events upstream
     event_sender: UnboundedSender<InnerEvent>,
-    /// Multisig parameters
-    params: Parameters,
     /// Validator id of our node
     our_id: ValidatorId,
     /// Storage for delayed data (only Broadcast1 makes sense here).
@@ -50,7 +48,6 @@ pub struct KeygenManager {
 
 impl KeygenManager {
     pub fn new(
-        params: Parameters,
         our_id: ValidatorId,
         event_sender: UnboundedSender<InnerEvent>,
         phase_timeout: Duration,
@@ -59,7 +56,6 @@ impl KeygenManager {
             keygen_states: Default::default(),
             delayed_messages: Default::default(),
             event_sender,
-            params,
             our_id,
             phase_timeout,
         }
@@ -168,9 +164,17 @@ impl KeygenManager {
                 Some(idx) => {
                     let idx_map = get_index_mapping(&signers);
 
+                    let share_count = signers.len();
+                    let threshold = threshold_from_share_count(share_count);
+
+                    let params = crypto::Parameters {
+                        threshold,
+                        share_count,
+                    };
+
                     let state = KeygenState::initiate(
                         idx,
-                        self.params,
+                        params,
                         idx_map,
                         key_id,
                         self.event_sender.clone(),
@@ -193,6 +197,31 @@ impl KeygenManager {
             },
         }
     }
+}
+
+/// Note that the resulting `threshold` is the maximum number
+/// of parties *not* enough to generate a signature,
+/// i.e. at least `t+1` parties are required.
+/// This follow the notation in the multisig library that
+/// we are using and in the corresponding literature.
+fn threshold_from_share_count(share_count: usize) -> usize {
+    let doubled = share_count * 2;
+
+    if doubled % 3 == 0 {
+        doubled / 3 - 1
+    } else {
+        doubled / 3
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn check_threshold_calculation() {
+    assert_eq!(threshold_from_share_count(150), 99);
+    assert_eq!(threshold_from_share_count(100), 66);
+    assert_eq!(threshold_from_share_count(90), 59);
+    assert_eq!(threshold_from_share_count(3), 1);
+    assert_eq!(threshold_from_share_count(4), 2);
 }
 
 #[cfg(test)]

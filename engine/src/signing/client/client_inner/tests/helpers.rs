@@ -104,18 +104,13 @@ pub fn signing_delayed_count(client: &MultisigClientInner, mi: &MessageInfo) -> 
 pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
     let instant = std::time::Instant::now();
 
-    let params = Parameters {
-        threshold: 1,
-        share_count: 3,
-    };
-
     let validator_ids = (1..=3).map(|idx| ValidatorId::new(idx)).collect_vec();
 
     let (mut clients, mut rxs): (Vec<_>, Vec<_>) = validator_ids
         .iter()
         .map(|id| {
             let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-            let c = MultisigClientInner::new(id.clone(), params, tx, TEST_PHASE_TIMEOUT);
+            let c = MultisigClientInner::new(id.clone(), tx, TEST_PHASE_TIMEOUT);
             (c, rx)
         })
         .unzip();
