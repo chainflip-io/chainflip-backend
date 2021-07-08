@@ -20,7 +20,10 @@ use crate::{
             },
             SigningInfo,
         },
-        crypto::{Keys, LocalSig, Parameters, SharedKeys, Signature, VerifiableSS, GE},
+        crypto::{
+            InvalidKey, InvalidSS, Keys, LocalSig, Parameters, SharedKeys, Signature, VerifiableSS,
+            GE,
+        },
         MessageInfo,
     },
 };
@@ -153,6 +156,45 @@ impl SigningState {
         String::default()
     }
 
+    /// Get ids of validators who haven't sent the data for the current stage
+    pub fn awaited_parties(&self) -> Vec<ValidatorId> {
+        let awaited_idxs = match self.stage {
+            SigningStage::AwaitingBroadcast1 | SigningStage::AwaitingSecret2 => {
+                self.sss.awaited_parties()
+            }
+            SigningStage::AwaitingLocalSig3 => {
+                let received_idxs = &self.local_sigs_order;
+                let mut idxs: Vec<usize> = (1..=self.sss.params.share_count).collect();
+                idxs.retain(|idx| !received_idxs.contains(idx));
+                idxs
+            }
+        };
+
+        let awaited_ids = awaited_idxs
+            .into_iter()
+            .map(|idx| self.signer_idx_to_validator_id(idx))
+            .collect_vec();
+
+        awaited_ids
+    }
+
+    /// Get index in the (sorted) array of all signers
+    fn validator_id_to_signer_idx(&self, id: &ValidatorId) -> Option<usize> {
+        self.key_info.get_idx(&id)
+    }
+
+    fn signer_idx_to_validator_id(&self, idx: usize) -> ValidatorId {
+        // chosen by our on module
+        let id = self.key_info.get_id(idx);
+        id
+    }
+
+    fn send_event(&self, event: InnerEvent) {
+        if let Err(err) = self.event_sender.send(event) {
+            error!("Could not send inner event: {}", err);
+        }
+    }
+
     fn record_local_sig(&mut self, signer_id: usize, sig: LocalSig) {
         self.local_sigs_order.push(signer_id);
         self.local_sigs.push(sig);
@@ -231,9 +273,20 @@ impl SigningState {
                     ));
                 }
             }
-            Err(_) => {
-                // TODO: emit a signal and remove local state
-                warn!("Invalid local signatures, aborting. ❌");
+            Err(InvalidSS(blamed_idxs)) => {
+                let blamed_ids = self.signer_idxs_to_validator_ids(blamed_idxs);
+
+                error!(
+                    "Local Sigs verify error for message: {:?}, blamed validators: {:?}",
+                    self.message_info, &blamed_ids
+                );
+
+                let event = InnerEvent::SigningResult(SigningOutcome::invalid(
+                    self.message_info.clone(),
+                    blamed_ids,
+                ));
+
+                self.send_event(event);
             }
         }
     }
@@ -383,10 +436,28 @@ impl SigningState {
 
                 self.send(msgs)
             }
-            Err(_) => {
-                error!("phase2 keygen error")
+            Err(InvalidKey(blamed_idxs)) => {
+                let blamed_ids = self.signer_idxs_to_validator_ids(blamed_idxs);
+
+                error!(
+                    "phase2 signing error for message: {:?}, blamed validators: {:?}",
+                    self.message_info, &blamed_ids
+                );
+
+                let event = InnerEvent::SigningResult(SigningOutcome::invalid(
+                    self.message_info.clone(),
+                    blamed_ids,
+                ));
+
+                self.send_event(event);
             }
         }
+    }
+
+    fn signer_idxs_to_validator_ids(&self, idxs: Vec<usize>) -> Vec<ValidatorId> {
+        idxs.into_iter()
+            .map(|idx| self.signer_idx_to_validator_id(idx))
+            .collect()
     }
 
     fn send(&self, msgs: Vec<P2PMessageCommand>) {
