@@ -282,6 +282,9 @@ async fn invalid_bc1() {
     c1.cleanup();
 
     assert_eq!(helpers::keygen_stage_for(&c1, KEY_ID), None);
+
+    // make sure the timeout is not triggered for the abandoned keygen
+    assert_eq!(helpers::check_for_inner_event(&mut rx).await, None);
 }
 
 /// That that parties that send invalid sec2s get reported
@@ -319,4 +322,7 @@ async fn invalid_sec2() {
     c1.cleanup();
 
     assert_eq!(helpers::keygen_stage_for(&c1, KEY_ID), None);
+
+    // make sure the timeout is not triggered for the abandoned keygen
+    assert_eq!(helpers::check_for_inner_event(&mut rx).await, None);
 }

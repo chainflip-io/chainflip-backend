@@ -430,17 +430,20 @@ pub async fn recv_next_signal_message_skipping(
 
 /// Asserts that InnerEvent is in the queue and returns it
 pub async fn recv_next_inner_event(rx: &mut UnboundedReceiver<InnerEvent>) -> InnerEvent {
-    let dur = std::time::Duration::from_millis(10);
-
-    let res = tokio::time::timeout(dur, rx.recv())
-        .await
-        .ok()
-        .expect("timeout");
+    let res = check_for_inner_event(rx).await;
 
     if let Some(event) = res {
         return event;
     }
     panic!("Expected Inner Event");
+}
+
+/// checks for an InnerEvent in the que with a short timeout, returns the InnerEvent if there is one.
+pub async fn check_for_inner_event(rx: &mut UnboundedReceiver<InnerEvent>) -> Option<InnerEvent> {
+    let dur = std::time::Duration::from_millis(10);
+    let res = tokio::time::timeout(dur, rx.recv()).await;
+    let opt = res.ok()?;
+    opt
 }
 
 pub async fn recv_p2p_message(rx: &mut UnboundedReceiver<InnerEvent>) -> P2PMessageCommand {
