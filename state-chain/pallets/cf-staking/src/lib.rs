@@ -677,8 +677,6 @@ impl<T: Config> Pallet<T> {
 		]"#;
 
 		let stake_manager = ethabi::Contract::load(ABI_JSON.as_bytes())?;
-		let d = serde_json::Deserializer::from_slice(ABI_JSON.as_bytes());
-		let stake_manager : ethabi::Contract = serde_json::from_str(ABI_JSON)?;
 		let register_claim = stake_manager.function("registerClaim")?;
 
 		register_claim
@@ -698,8 +696,6 @@ impl<T: Config> Pallet<T> {
 				// expiryTime: uint48
 				Token::Uint(claim_details.expiry.as_secs().into()),
 			])
-
-		Ok(Vec::<u8>::new())
 	}
 	/// Sets the `retired` flag associated with the account to false, signalling that the account wishes to come
 	/// out of retirement.
