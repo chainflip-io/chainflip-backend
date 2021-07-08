@@ -63,7 +63,7 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, CheckedSub, Hash, Keccak256, One, Zero},
 	DispatchError,
 };
-use ethabi::Bytes;
+use ethabi::{Bytes, Function, Param, ParamType};
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -527,6 +527,7 @@ impl<T: Config> Pallet<T> {
 			});
 		}
 
+		let v: Vec<u8> = vec![];
 		let new_total = T::Flip::credit_stake(&account_id, amount);
 
 		// Staking implicitly activates the account. Ignore the error.
@@ -622,80 +623,67 @@ impl<T: Config> Pallet<T> {
 	) -> ethabi::Result<Bytes> {
 
 		use ethabi::{Address, Token};
-		use serde_json::Deserializer;
-		const ABI_JSON: &'static str = r#"[
-			{
-				"inputs": [
-				{
-					"components": [
-					{
-						"internalType": "uint256",
-						"name": "msgHash",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "sig",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "nonce",
-						"type": "uint256"
-					}
-					],
-					"internalType": "struct IShared.SigData",
-					"name": "sigData",
-					"type": "tuple"
-				},
-				{
-					"internalType": "uint256",
-					"name": "nodeID",
-					"type": "bytes32"
-				},
-				{
-					"internalType": "uint256",
-					"name": "amount",
-					"type": "uint256"
-				},
-				{
-					"internalType": "address",
-					"name": "staker",
-					"type": "address"
-				},
-				{
-					"internalType": "uint48",
-					"name": "expiryTime",
-					"type": "uint48"
-				}
-				],
-				"name": "registerClaim",
-				"outputs": [],
-				"stateMutability": "nonpayable",
-				"type": "function"
-			}
-		]"#;
 
-		let stake_manager = ethabi::Contract::load(ABI_JSON.as_bytes())?;
-		let register_claim = stake_manager.function("registerClaim")?;
+		//function registerClaim(
+		//         SigData calldata sigData,
+		//         bytes32 nodeID,
+		//         uint amount,
+		//         address staker,
+		//         uint48 expiryTime
+		//     ) external override nzBytes32(nodeID) nzUint(amount) nzAddr(staker) noFish validSig(
+		//
 
-		register_claim
-			.encode_input(&vec![
-				// sigData: SigData(uint, uint, uint)
-				Token::Tuple(vec![
-					Token::Uint(ethabi::Uint::zero()),
-					Token::Uint(ethabi::Uint::zero()),
-					Token::Uint(claim_details.nonce.into())
-				]),
-				// nodeId: bytes32
-				Token::FixedBytes(account_id.using_encoded(|bytes| bytes.to_vec())),
-				// amount: uint
-				Token::Uint(claim_details.amount.into()),
-				// staker: address
-				Token::Address(Address::from(claim_details.address)),
-				// expiryTime: uint48
-				Token::Uint(claim_details.expiry.as_secs().into()),
-			])
+		let register_claim_fn = Function {
+			name: String::from("registerClaim"),
+			inputs: vec![
+				Param {
+					name: String::from("sigData"),
+					kind: ParamType::Tuple(vec![
+						Param {
+							name: String::from("msgHash"),
+							kind: ParamType::Uint(64),
+						},
+						Param {
+							name: String::from("sig"),
+							kind: ParamType::Uint(64),
+						},
+						Param {
+							name: String::from("nonce"),
+							kind: ParamType::Uint(64),
+						}
+					])
+				},
+				Param { name: String::from("nodeID"), kind: ParamType::FixedBytes(32) },
+				Param { name: String::from("amount"), kind: ParamType::Uint(64) },
+				Param { name: String::from("staker"), kind: ParamType::Address },
+				Param { name: String::from("expiryTime"), kind: ParamType::Uint(48) },
+			],
+			outputs: vec![],
+			constant: false,
+		};
+
+		// compile only, remove
+		Ok(Vec::<u8>::new())
+		// let stake_manager = ethabi::Contract::load(ABI_JSON.as_bytes())?;
+		// let register_claim = stake_manager.function("registerClaim")?;
+		//
+		// register_claim
+		// 	.encode_input(&vec![
+		// 		// sigData: SigData(uint, uint, uint)
+		// 		Token::Tuple(vec![
+		// 			Token::Uint(ethabi::Uint::zero()),
+		// 			Token::Uint(ethabi::Uint::zero()),
+		// 			Token::Uint(claim_details.nonce.into())
+		// 		]),
+		// 		// nodeId: bytes32
+		// 		Token::FixedBytes(account_id.using_encoded(|bytes| bytes.to_vec())),
+		// 		// amount: uint
+		// 		Token::Uint(claim_details.amount.into()),
+		// 		// staker: address
+		// 		Token::Address(Address::from(claim_details.address)),
+		// 		// expiryTime: uint48
+		// 		Token::Uint(claim_details.expiry.as_secs().into()),
+		// 	])
 	}
 	/// Sets the `retired` flag associated with the account to false, signalling that the account wishes to come
 	/// out of retirement.
