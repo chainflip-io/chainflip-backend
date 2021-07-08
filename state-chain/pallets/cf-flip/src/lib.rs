@@ -42,6 +42,9 @@ mod tests;
 mod benchmarking;
 
 mod imbalances;
+mod on_charge_transaction;
+
+pub use on_charge_transaction::FlipTransactionPayment;
 
 use frame_support::{
 	ensure,
