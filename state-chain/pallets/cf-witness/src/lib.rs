@@ -334,7 +334,11 @@ impl<T: Config> pallet_cf_validator::EpochTransitionHandler for Pallet<T> {
 
 		let calc_threshold = |total: u32| -> u32 {
 			let doubled = total * 2;
-            if doubled % 3 == 0 { doubled / 3 } else { doubled / 3 + 1 }
+			if doubled % 3 == 0 {
+				doubled / 3
+			} else {
+				doubled / 3 + 1
+			}
 		};
 
 		// Assume all validators are live at the start of an Epoch.
