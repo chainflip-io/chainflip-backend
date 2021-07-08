@@ -638,7 +638,7 @@ fn test_claim_payload() {
 	]"#;
 	const EXPIRY_SECS: u64 = 10;
 	const AMOUNT: u128 = 1234567890;
-	const NONCE: u128 = 6;
+	const NONCE: u64 = 6;
 
 	let stake_manager = ethabi::Contract::load(ABI_JSON.as_bytes()).unwrap();
 	let register_claim = stake_manager.function("registerClaim").unwrap();

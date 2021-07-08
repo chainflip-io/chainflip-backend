@@ -244,7 +244,7 @@ pub mod pallet {
 		/// Cannot make a claim request while an auction is being resolved.
 		NoClaimsDuringAuctionPhase,
 
-		/// Error during generateing a unique nonce
+		/// Error during the generation of a nonce
 		FailedToGenerateNonce,
 	}
 
