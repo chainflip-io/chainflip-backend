@@ -2,6 +2,8 @@ use config::{Config, ConfigError, File};
 
 use serde::Deserialize;
 
+use crate::p2p::ValidatorId;
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct MessageQueue {
     pub hostname: String,
@@ -33,11 +35,17 @@ pub struct HealthCheck {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+pub struct Signing {
+    pub genesis_validator_ids: Vec<ValidatorId>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct Settings {
     pub message_queue: MessageQueue,
     pub state_chain: StateChain,
     pub eth: Eth,
     pub health_check: HealthCheck,
+    pub signing: Signing,
 }
 
 impl Settings {
