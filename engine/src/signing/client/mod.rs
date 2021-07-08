@@ -13,7 +13,9 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::p2p::P2PMessage;
 
-use self::client_inner::{InnerEvent, KeygenOutcome, MultisigClientInner, SigningOutcome};
+use self::client_inner::{InnerEvent, MultisigClientInner, SigningOutcome};
+
+pub use client_inner::{KeygenOutcome, KeygenSuccess};
 
 use super::{crypto::Signature, MessageHash, MessageInfo};
 

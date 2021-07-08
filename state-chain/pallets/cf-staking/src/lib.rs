@@ -62,7 +62,9 @@ use sp_std::prelude::*;
 use codec::FullCodec;
 use sp_core::U256;
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, CheckedSub, Hash, Keccak256, One, Zero},
+	traits::{
+		AtLeast32BitUnsigned, Bounded, CheckedSub, Hash, Keccak256, One, UniqueSaturatedInto, Zero,
+	},
 	DispatchError,
 };
 
@@ -170,9 +172,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type ClaimExpiries<T: Config> =
 		StorageValue<_, Vec<(Duration, AccountId<T>)>, ValueQuery>;
-
-	#[pallet::storage]
-	pub(super) type Nonces<T: Config> = StorageMap<_, Identity, AccountId<T>, T::Nonce, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -553,11 +552,8 @@ impl<T: Config> Pallet<T> {
 		// amount claimed.
 		T::Flip::try_claim(account_id, amount)?;
 
-		// Don't check for overflow here - we don't expect more than 2^32 claims.
-		let nonce = Nonces::<T>::mutate(account_id, |nonce| {
-			*nonce += T::Nonce::one();
-			*nonce
-		});
+		// Try to generate a nonce
+		let nonce = Self::generate_nonce();
 
 		// Set expiry and build the claim parameters.
 		let expiry = T::TimeSource::now() + T::ClaimTTL::get();
@@ -583,6 +579,13 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::<T>::ClaimSigRequested(account_id.clone(), msg_hash));
 
 		Ok(())
+	}
+
+	/// Generates a unique nonce for the StakeManager contract.
+	fn generate_nonce() -> T::Nonce {
+		// For now, we expect the nonce to be an u64 to stay compatible with the CFE
+		let u64_nonce = T::TimeSource::now().as_nanos() as u64;
+		u64_nonce.unique_saturated_into()
 	}
 
 	/// Sets the `retired` flag associated with the account to true, signalling that the account no longer wishes to
