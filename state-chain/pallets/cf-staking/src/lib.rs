@@ -698,8 +698,6 @@ impl<T: Config> Pallet<T> {
 				// expiryTime: uint48
 				Token::Uint(claim_details.expiry.as_secs().into()),
 			])
-
-		Ok(Vec::<u8>::new())
 	}
 	/// Sets the `retired` flag associated with the account to false, signalling that the account wishes to come
 	/// out of retirement.
