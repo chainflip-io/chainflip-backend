@@ -639,18 +639,9 @@ impl<T: Config> Pallet<T> {
 				Param {
 					name: String::from("sigData"),
 					kind: ParamType::Tuple(vec![
-						Param {
-							name: String::from("msgHash"),
-							kind: ParamType::Uint(64),
-						},
-						Param {
-							name: String::from("sig"),
-							kind: ParamType::Uint(64),
-						},
-						Param {
-							name: String::from("nonce"),
-							kind: ParamType::Uint(64),
-						}
+						ParamType::Uint(64),
+						ParamType::Uint(64),
+						ParamType::Uint(64),
 					])
 				},
 				Param { name: String::from("nodeID"), kind: ParamType::FixedBytes(32) },
