@@ -47,7 +47,6 @@ mod eth_encoding;
 
 use cf_traits::{BidderProvider, EpochInfo, StakeTransfer};
 use core::time::Duration;
-use sp_std::convert::TryInto;
 use frame_support::{
 	debug,
 	dispatch::DispatchResultWithPostInfo,
@@ -62,7 +61,12 @@ use sp_std::prelude::*;
 
 use codec::FullCodec;
 use sp_core::U256;
-use sp_runtime::{DispatchError, traits::{AtLeast32BitUnsigned, CheckedSub, Hash, Keccak256, One, UniqueSaturatedInto, Zero, Bounded}};
+use sp_runtime::{
+	traits::{
+		AtLeast32BitUnsigned, Bounded, CheckedSub, Hash, Keccak256, One, UniqueSaturatedInto, Zero,
+	},
+	DispatchError,
+};
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -581,7 +585,7 @@ impl<T: Config> Pallet<T> {
 	/// Generates a unique nonce for the StakeManager contract.
 	fn generate_nonce() -> T::Nonce {
 		// For now, we expect the nonce to be an u64 to stay compatible with the CFE
-	    let u64_nonce = T::TimeSource::now().as_nanos() as u64;
+		let u64_nonce = T::TimeSource::now().as_nanos() as u64;
 		u64_nonce.unique_saturated_into()
 	}
 
