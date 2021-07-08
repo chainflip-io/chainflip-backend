@@ -349,6 +349,13 @@ impl KeygenState {
         }
     }
 
+    pub fn is_abandoned(&self) -> bool {
+        match self.stage {
+            KeygenStage::Abandoned => true,
+            _ => false,
+        }
+    }
+
     #[cfg(test)]
     pub fn delayed_count(&self) -> usize {
         self.delayed_next_stage_data.len()

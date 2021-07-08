@@ -107,13 +107,15 @@ impl KeygenManager {
         entry.1.push((sender_id, bc1));
     }
 
-    /// Remove all pending state that hasn't been updated for
-    /// longer than `self.phase_timeout`
     pub fn cleanup(&mut self) {
-        let timeout = self.phase_timeout;
-
         let mut events_to_send = vec![];
 
+        // remove all states that have become abandoned (events have already been sent)
+        self.keygen_states.retain(|_, state| !state.is_abandoned());
+
+        let timeout = self.phase_timeout;
+        // Remove all pending state that hasn't been updated for
+        // longer than `self.phase_timeout`
         self.delayed_messages.retain(|key_id, (t, bc1_vec)| {
             if t.elapsed() > timeout {
                 warn!(
@@ -133,6 +135,7 @@ impl KeygenManager {
             true
         });
 
+        // remove any active states that are taking too long
         self.keygen_states.retain(|key_id, state| {
             if state.last_message_timestamp.elapsed() > timeout {
                 warn!("Keygen state expired for key id: {:?}", key_id);
