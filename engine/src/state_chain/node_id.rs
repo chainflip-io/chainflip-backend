@@ -13,7 +13,7 @@ struct PeerId {
 
 /// Get the peer id from the state chain via RPC
 /// and return as ValidatorId type
-pub async fn get_peer_id(state_chain_settings: settings::StateChain) -> Result<ValidatorId> {
+pub async fn get_peer_id(state_chain_settings: &settings::StateChain) -> Result<ValidatorId> {
     const PEER_ID_RPC: &'static str = "system_localPeerId";
 
     let state_chain_peer_rpc = format!(

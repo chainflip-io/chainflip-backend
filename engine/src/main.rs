@@ -25,7 +25,7 @@ async fn main() {
 
     let eth_fut = eth::start(settings.clone());
 
-    let signer_idx = state_chain::node_id::get_peer_id(settings.clone().state_chain)
+    let signer_idx = state_chain::node_id::get_peer_id(&settings.state_chain)
         .await
         .expect("Should receive a ValidatorId");
 
