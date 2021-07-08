@@ -447,10 +447,8 @@ pub async fn recv_next_inner_event(rx: &mut UnboundedReceiver<InnerEvent>) -> In
 pub async fn check_for_inner_event(rx: &mut UnboundedReceiver<InnerEvent>) -> Option<InnerEvent> {
     let dur = std::time::Duration::from_millis(10);
     let res = tokio::time::timeout(dur, rx.recv()).await;
-    match res {
-        Ok(ie) => ie,
-        Err(_) => None,
-    }
+    let opt = res.ok()?;
+    opt
 }
 
 pub async fn recv_p2p_message(rx: &mut UnboundedReceiver<InnerEvent>) -> P2PMessageCommand {
