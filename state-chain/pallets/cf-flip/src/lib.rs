@@ -66,6 +66,9 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
+	/// A 4-byte identifier for different reserves.
+	pub type ReserveId = [u8; 4];
+
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
@@ -93,6 +96,12 @@ pub mod pallet {
 	#[pallet::getter(fn account)]
 	pub type Account<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, FlipAccount<T::Balance>, ValueQuery>;
+
+	/// Funds belonging to on-chain reserves.
+	#[pallet::storage]
+	#[pallet::getter(fn reserve)]
+	pub type Reserve<T: Config> =
+		StorageMap<_, Identity, ReserveId, T::Balance, ValueQuery>;
 
 	/// The total number of tokens issued.
 	#[pallet::storage]
@@ -269,7 +278,7 @@ impl<T: Config> Pallet<T> {
 	/// Settles an imbalance against an account. Any excess is reverted to source according to the rules defined in
 	/// [imbalances::RevertImbalance].
 	pub fn settle(account_id: &T::AccountId, imbalance: FlipImbalance<T>) {
-		let settlement_source = ImbalanceSource::Account(account_id.clone());
+		let settlement_source = ImbalanceSource::from_acct(account_id.clone());
 		let (from, to, amount) = match &imbalance {
 			SignedImbalance::Positive(surplus) => {
 				(surplus.source.clone(), settlement_source, surplus.peek())
