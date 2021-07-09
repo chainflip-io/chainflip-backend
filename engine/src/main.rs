@@ -2,7 +2,6 @@ use chainflip_engine::{
     eth,
     health::health_check,
     mq::nats_client::NatsMQClientFactory,
-    p2p::ValidatorId,
     settings::Settings,
     signing::{self, crypto::Parameters},
     state_chain,
@@ -27,14 +26,10 @@ async fn main() {
     let eth_fut = eth::start(settings.clone());
 
     // TODO: read the key for config/file
-    let signer_idx = ValidatorId([0; 32]);
-
-    let params = Parameters {
-        share_count: 150,
-        threshold: 99,
-    };
-
-    let signing_client = signing::MultisigClient::new(mq_factory, signer_idx, params);
+    let signer_id = state_chain::node_id::get_peer_id(&settings.state_chain)
+        .await
+        .expect("Should receive a ValidatorId");
+    let signing_client = signing::MultisigClient::new(mq_factory, signer_id);
 
     let temp_event_map_fut = TempEventMapper::run(&settings);
 

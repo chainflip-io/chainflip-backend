@@ -155,14 +155,9 @@ async fn distributed_signing() {
 
                 let conductor_fut = conductor.start();
 
-                let params = Parameters {
-                    threshold: t,
-                    share_count: N_PARTIES,
-                };
-
                 let mq_factory = MQMockClientFactory::new(mq.clone());
 
-                let client = MultisigClient::new(mq_factory, VALIDATOR_IDS[i - 1].clone(), params);
+                let client = MultisigClient::new(mq_factory, VALIDATOR_IDS[i - 1].clone());
 
                 // "ready to sign" emitted here
                 let client_fut = client.run();

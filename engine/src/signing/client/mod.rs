@@ -17,10 +17,7 @@ use self::client_inner::{InnerEvent, MultisigClientInner, SigningOutcome};
 
 pub use client_inner::{KeygenOutcome, KeygenSuccess};
 
-use super::{
-    crypto::{Parameters, Signature},
-    MessageHash, MessageInfo,
-};
+use super::{crypto::Signature, MessageHash, MessageInfo};
 
 use tokio::sync::mpsc;
 
@@ -90,12 +87,12 @@ where
     MQ: IMQClient,
     F: IMQClientFactory<MQ>,
 {
-    pub fn new(factory: F, id: ValidatorId, params: Parameters) -> Self {
+    pub fn new(factory: F, id: ValidatorId) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
 
         MultisigClient {
             factory,
-            inner: MultisigClientInner::new(id.clone(), params, tx, PHASE_TIMEOUT),
+            inner: MultisigClientInner::new(id.clone(), tx, PHASE_TIMEOUT),
             inner_event_receiver: Some(rx),
             id,
             _mq: PhantomData,

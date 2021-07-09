@@ -104,18 +104,13 @@ pub fn signing_delayed_count(client: &MultisigClientInner, mi: &MessageInfo) -> 
 pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
     let instant = std::time::Instant::now();
 
-    let params = Parameters {
-        threshold: 1,
-        share_count: 3,
-    };
-
     let validator_ids = (1..=3).map(|idx| ValidatorId::new(idx)).collect_vec();
 
     let (mut clients, mut rxs): (Vec<_>, Vec<_>) = validator_ids
         .iter()
         .map(|id| {
             let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-            let c = MultisigClientInner::new(id.clone(), params, tx, TEST_PHASE_TIMEOUT);
+            let c = MultisigClientInner::new(id.clone(), tx, TEST_PHASE_TIMEOUT);
             (c, rx)
         })
         .unzip();
@@ -435,17 +430,20 @@ pub async fn recv_next_signal_message_skipping(
 
 /// Asserts that InnerEvent is in the queue and returns it
 pub async fn recv_next_inner_event(rx: &mut UnboundedReceiver<InnerEvent>) -> InnerEvent {
-    let dur = std::time::Duration::from_millis(10);
-
-    let res = tokio::time::timeout(dur, rx.recv())
-        .await
-        .ok()
-        .expect("timeout");
+    let res = check_for_inner_event(rx).await;
 
     if let Some(event) = res {
         return event;
     }
     panic!("Expected Inner Event");
+}
+
+/// checks for an InnerEvent in the que with a short timeout, returns the InnerEvent if there is one.
+pub async fn check_for_inner_event(rx: &mut UnboundedReceiver<InnerEvent>) -> Option<InnerEvent> {
+    let dur = std::time::Duration::from_millis(10);
+    let res = tokio::time::timeout(dur, rx.recv()).await;
+    let opt = res.ok()?;
+    opt
 }
 
 pub async fn recv_p2p_message(rx: &mut UnboundedReceiver<InnerEvent>) -> P2PMessageCommand {

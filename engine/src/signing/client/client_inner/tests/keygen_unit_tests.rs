@@ -4,14 +4,9 @@ use std::time::Duration;
 
 #[test]
 fn bc1_gets_delayed_until_keygen_request() {
-    let params = Parameters {
-        threshold: 1,
-        share_count: 3,
-    };
-
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
 
-    let mut client = MultisigClientInner::new(VALIDATOR_IDS[0].clone(), params, tx, PHASE_TIMEOUT);
+    let mut client = MultisigClientInner::new(VALIDATOR_IDS[0].clone(), tx, PHASE_TIMEOUT);
 
     assert_eq!(keygen_stage_for(&client, KEY_ID), None);
 
@@ -287,6 +282,9 @@ async fn invalid_bc1() {
     c1.cleanup();
 
     assert_eq!(helpers::keygen_stage_for(&c1, KEY_ID), None);
+
+    // make sure the timeout is not triggered for the abandoned keygen
+    assert_eq!(helpers::check_for_inner_event(&mut rx).await, None);
 }
 
 /// That that parties that send invalid sec2s get reported
@@ -324,4 +322,7 @@ async fn invalid_sec2() {
     c1.cleanup();
 
     assert_eq!(helpers::keygen_stage_for(&c1, KEY_ID), None);
+
+    // make sure the timeout is not triggered for the abandoned keygen
+    assert_eq!(helpers::check_for_inner_event(&mut rx).await, None);
 }

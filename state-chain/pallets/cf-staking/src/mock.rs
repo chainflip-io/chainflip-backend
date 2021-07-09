@@ -79,7 +79,7 @@ impl pallet_cf_flip::Config for Test {
 impl pallet_cf_staking::Config for Test {
 	type Event = Event;
 	type Call = Call;
-	type Nonce = u32;
+	type Nonce = u64;
 	type EnsureWitnessed = ensure_witnessed::Mock;
 	type Witnesser = witnesser::Mock;
 	type EpochInfo = epoch_info::Mock;

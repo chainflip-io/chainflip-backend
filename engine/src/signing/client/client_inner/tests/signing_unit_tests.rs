@@ -66,16 +66,11 @@ async fn should_process_delayed_bc1_after_rts() {
 /// be removed and the sender should be penalised.
 #[test]
 fn delayed_signing_bc1_gets_removed() {
-    // Setup
-    let params = Parameters {
-        threshold: 1,
-        share_count: 3,
-    };
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
 
     let timeout = Duration::from_millis(1);
 
-    let mut client = MultisigClientInner::new(VALIDATOR_IDS[0].clone(), params, tx, timeout);
+    let mut client = MultisigClientInner::new(VALIDATOR_IDS[0].clone(), tx, timeout);
 
     // Create delayed BC1
     let bc1 = create_bc1(2).into();

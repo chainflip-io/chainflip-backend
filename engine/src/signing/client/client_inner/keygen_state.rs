@@ -49,6 +49,9 @@ pub struct KeygenState {
     all_signer_idxs: Vec<usize>,
     delayed_next_stage_data: Vec<(ValidatorId, KeygenData)>,
     key_id: KeyId,
+    /// Multisig parameters are only stored here so we can put
+    /// them inside `KeygenResultInfo` when we create the key
+    params: Parameters,
     pub(super) key_info: Option<KeygenResultInfo>,
     /// Last time we were able to make progress
     pub(super) last_message_timestamp: Instant,
@@ -72,13 +75,14 @@ impl KeygenState {
 
         let mut state = KeygenState {
             stage: KeygenStage::AwaitingBroadcast1,
-            sss: SharedSecretState::new(idx, params),
+            sss: SharedSecretState::new(idx, params.clone()),
             event_sender,
             signer_idx: idx,
             all_signer_idxs,
             delayed_next_stage_data: Vec::new(),
             key_id,
             key_info: None,
+            params,
             maps_for_validator_id_and_idx: Arc::new(idx_map),
             last_message_timestamp: Instant::now(),
         };
@@ -260,6 +264,7 @@ impl KeygenState {
                 let key_info = KeygenResultInfo {
                     key: Arc::new(key),
                     validator_map: Arc::clone(&self.maps_for_validator_id_and_idx),
+                    params: self.params,
                 };
 
                 self.key_info = Some(key_info.clone());
@@ -346,6 +351,14 @@ impl KeygenState {
                 sender_id
             );
             self.process_keygen_message(sender_id, msg);
+        }
+    }
+
+    /// check is the KeygenStage is Abandoned
+    pub fn is_abandoned(&self) -> bool {
+        match self.stage {
+            KeygenStage::Abandoned => true,
+            _ => false,
         }
     }
 
