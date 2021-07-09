@@ -12,9 +12,6 @@ mod sc_event;
 /// Contains helper methods for state chain code
 mod helpers;
 
-/// Contains method to get the nodes state chain id on initialisation
-pub mod node_id;
-
 // ==== Pallet support for the state chain =====
 
 /// Auction pallet support for substrate-subxt
