@@ -263,10 +263,20 @@ impl LocalSig {
             })
             .collect::<Vec<bool>>();
 
+        let invalid_idxs = (0..parties_index_vec.len())
+            .into_iter()
+            .filter_map(|i| {
+                if correct_ss_verify[i] {
+                    None
+                } else {
+                    Some(i + 1)
+                }
+            })
+            .collect_vec();
+
         match correct_ss_verify.iter().all(|x| x.clone() == true) {
             true => Ok(vss_sum),
-            // TODO: provide failing parties
-            false => Err(InvalidSS(vec![])),
+            false => Err(InvalidSS(invalid_idxs)),
         }
     }
 }

@@ -13,9 +13,9 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::p2p::P2PMessage;
 
-use self::client_inner::{InnerEvent, MultisigClientInner, SigningOutcome};
+use self::client_inner::{InnerEvent, MultisigClientInner};
 
-pub use client_inner::{KeygenOutcome, KeygenSuccess};
+pub use client_inner::{KeygenOutcome, KeygenSuccess, SigningOutcome, SigningSuccess};
 
 use super::{crypto::Signature, MessageHash, MessageInfo};
 
@@ -63,7 +63,6 @@ pub enum MultisigInstruction {
 pub enum MultisigEvent {
     ReadyToKeygen,
     MessageSigningResult(SigningOutcome),
-    //MessageSigned(MessageInfo, Signature),
     KeygenResult(KeygenOutcome),
 }
 

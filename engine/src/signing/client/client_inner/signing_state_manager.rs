@@ -3,13 +3,17 @@ use std::{
     time::Duration,
 };
 
+use itertools::Itertools;
 use log::*;
 use tokio::sync::mpsc;
 
 use crate::{
     p2p::ValidatorId,
     signing::{
-        client::{client_inner::client_inner::SigningData, SigningInfo},
+        client::{
+            client_inner::{client_inner::SigningData, SigningOutcome},
+            SigningInfo,
+        },
         crypto::Parameters,
         MessageHash, MessageInfo,
     },
@@ -115,7 +119,7 @@ impl SigningStateManager {
     fn process_delayed(&mut self, mi: &MessageInfo) {
         if let Some((_t, messages)) = self.delayed_messages.remove(mi) {
             for (sender, bc1) in messages {
-                debug!("Processing delayed signging bc1");
+                debug!("Processing delayed signing bc1");
 
                 let wdata = SigningDataWrapped {
                     data: bc1.into(),
@@ -168,7 +172,7 @@ impl SigningStateManager {
 
         match self.signing_states.entry(mi.clone()) {
             Entry::Occupied(_) => {
-                warn!("Ingoring a request to sign the same message again");
+                warn!("Ignoring a request to sign the same message again");
             }
             Entry::Vacant(entry) => {
                 // We have the key and have received a request to sign
@@ -192,31 +196,53 @@ impl SigningStateManager {
         }
     }
 
+    /// check all states for timeouts and abandonment then remove them
     pub(super) fn cleanup(&mut self) {
-        // for every state, check if it expired
+        let mut events_to_send = vec![];
 
-        info!("cleanup");
+        // remove all active states that have become abandoned or finished (SigningOutcome have already been sent)
+        self.signing_states
+            .retain(|_, state| !state.is_abandoned() && !state.is_finished());
 
         let timeout = self.phase_timeout;
-
-        self.delayed_messages.retain(|_key, (t, _)| {
+        // for every pending state, check if it expired
+        self.delayed_messages.retain(|message_info, (t, bc1_vec)| {
             if t.elapsed() > timeout {
                 warn!("BC1 for signing expired");
-                // TODO: send a signal
+
+                // We never received a Signing request for this message, so any parties
+                // that tried to initiate a new ceremony are deemed malicious
+                let bad_validators = bc1_vec.iter().map(|(vid, _)| vid).cloned().collect_vec();
+                let event = InnerEvent::from(SigningOutcome::unauthorised(
+                    message_info.clone(),
+                    bad_validators,
+                ));
+                events_to_send.push(event);
                 return false;
             }
             true
         });
 
-        self.signing_states.retain(|_msg, state| {
+        // for every active state, check if it expired
+        self.signing_states.retain(|message_info, state| {
             if state.last_progress_timestamp.elapsed() > timeout {
                 // TODO: successful ceremonies should clean up themselves!
                 warn!("Signing state expired and should be abandoned");
-                // TODO: send a signal
+
+                let late_nodes = state.awaited_parties();
+                let event =
+                    InnerEvent::from(SigningOutcome::timeout(message_info.clone(), late_nodes));
+                events_to_send.push(event);
                 return false;
             }
             true
         });
+
+        for event in events_to_send {
+            if let Err(err) = self.p2p_sender.send(event) {
+                error!("Unable to send event, error: {}", err);
+            }
+        }
     }
 }
 

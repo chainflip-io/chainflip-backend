@@ -158,10 +158,16 @@ pub struct SigningFailure {
     pub bad_nodes: Vec<ValidatorId>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SigningSuccess {
+    pub message_info: MessageInfo,
+    pub sig: Signature,
+}
+
 /// The final result of a Signing ceremony
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SigningOutcome {
-    MessageSigned(MessageInfo, Signature),
+    MessageSigned(SigningSuccess),
     Unauthorised(SigningFailure),
     /// Abandoned as we couldn't make progress for a long time
     Timeout(SigningFailure),
@@ -170,6 +176,11 @@ pub enum SigningOutcome {
 }
 
 impl SigningOutcome {
+    /// Helper method to create SigningOutcome::MessageSigned
+    pub fn success(message_info: MessageInfo, sig: Signature) -> Self {
+        SigningOutcome::MessageSigned(SigningSuccess { message_info, sig })
+    }
+
     /// Helper method to create SigningOutcome::Unauthorised
     pub fn unauthorised(message_info: MessageInfo, bad_nodes: impl Into<Vec<ValidatorId>>) -> Self {
         SigningOutcome::Unauthorised(SigningFailure {

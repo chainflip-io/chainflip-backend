@@ -65,6 +65,8 @@ pub(super) enum SigningStage {
     AwaitingBroadcast1,
     AwaitingSecret2,
     AwaitingLocalSig3,
+    Finished,
+    Abandoned,
 }
 
 #[derive(Clone)]
@@ -175,6 +177,8 @@ impl SigningState {
                 idxs.retain(|idx| !received_idxs.contains(idx));
                 idxs
             }
+            SigningStage::Abandoned => vec![],
+            SigningStage::Finished => vec![],
         };
 
         let awaited_ids = awaited_idxs
@@ -183,11 +187,6 @@ impl SigningState {
             .collect_vec();
 
         awaited_ids
-    }
-
-    /// Get index in the (sorted) array of all signers
-    fn validator_id_to_signer_idx(&self, id: &ValidatorId) -> Option<usize> {
-        self.key_info.get_idx(&id)
     }
 
     fn signer_idx_to_validator_id(&self, idx: usize) -> ValidatorId {
@@ -236,7 +235,7 @@ impl SigningState {
         }
     }
 
-    fn on_local_sigs_collected(&self) {
+    fn on_local_sigs_collected(&mut self) {
         debug!("Collected all local sigs ✅✅✅");
 
         let key = &self.key_info.key;
@@ -275,13 +274,18 @@ impl SigningState {
 
                 if verify_sig.is_ok() {
                     info!("Generated signature is correct! 🎉");
-                    let _ = self.event_sender.send(InnerEvent::SigningResult(
-                        SigningOutcome::MessageSigned(self.message_info.clone(), signature),
-                    ));
+                    let _ =
+                        self.event_sender
+                            .send(InnerEvent::SigningResult(SigningOutcome::success(
+                                self.message_info.clone(),
+                                signature,
+                            )));
                 }
+                self.update_stage(SigningStage::Finished);
             }
             Err(InvalidSS(blamed_idxs)) => {
                 let blamed_ids = self.signer_idxs_to_validator_ids(blamed_idxs);
+                self.update_stage(SigningStage::Abandoned);
 
                 error!(
                     "Local Sigs verify error for message: {:?}, blamed validators: {:?}",
@@ -314,6 +318,10 @@ impl SigningState {
         match (self.stage, stage) {
             (SigningStage::AwaitingBroadcast1, SigningStage::AwaitingSecret2) => {}
             (SigningStage::AwaitingSecret2, SigningStage::AwaitingLocalSig3) => {}
+            (SigningStage::AwaitingBroadcast1, SigningStage::Abandoned) => {}
+            (SigningStage::AwaitingSecret2, SigningStage::Abandoned) => {}
+            (SigningStage::AwaitingLocalSig3, SigningStage::Abandoned) => {}
+            (SigningStage::AwaitingLocalSig3, SigningStage::Finished) => {}
             _ => {
                 error!("Invalid transition from {:?} to {:?}", self.stage, stage);
                 panic!();
@@ -401,6 +409,9 @@ impl SigningState {
             }
             (SigningStage::AwaitingLocalSig3, SigningData::LocalSig(sig)) => {
                 self.on_local_sig_received(sender_id, sig);
+            }
+            (SigningStage::Abandoned, data) => {
+                warn!("Dropping {} for abandoned Signing state", data);
             }
             _ => {
                 warn!("Dropping unexpected message for stage {:?}", self.stage);
@@ -508,12 +519,12 @@ impl SigningState {
                     "Invalid Phase2 keygen data, abandoning state for message_info: {:?}",
                     self.message_info
                 );
-                self.stage = SigningStage::Abandoned;
+                self.update_stage(SigningStage::Abandoned);
 
                 let blamed_ids = self.signer_idxs_to_validator_ids(blamed_idxs);
 
                 self.send_event(InnerEvent::SigningResult(SigningOutcome::invalid(
-                    self.message_info,
+                    self.message_info.clone(),
                     blamed_ids,
                 )));
             }
@@ -537,5 +548,21 @@ impl SigningState {
         let msg = MultisigMessage::SigningMessage(local_sig);
 
         self.broadcast(msg);
+    }
+
+    /// check is the SigningStage is Abandoned
+    pub fn is_abandoned(&self) -> bool {
+        match self.stage {
+            SigningStage::Abandoned => true,
+            _ => false,
+        }
+    }
+
+    /// check is the SigningStage is Finished
+    pub fn is_finished(&self) -> bool {
+        match self.stage {
+            SigningStage::Finished => true,
+            _ => false,
+        }
     }
 }

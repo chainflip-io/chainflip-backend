@@ -7,7 +7,7 @@ use crate::{
     settings,
     signing::{
         crypto::Signature, KeyId, KeygenOutcome, KeygenSuccess, MessageHash, MessageInfo,
-        MultisigEvent, MultisigInstruction, SigningInfo,
+        MultisigEvent, MultisigInstruction, SigningInfo, SigningOutcome, SigningSuccess,
     },
     types::chain::Chain,
 };
@@ -118,9 +118,15 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
                             log::error!("Signing module returned error generating key")
                         }
                     },
-                    MultisigEvent::MessageSigned(msg, sig) => {
-                        self.handle_set_agg_key_message_signed(msg, sig).await;
-                    }
+                    MultisigEvent::MessageSigningResult(signing_outcome) => match signing_outcome {
+                        SigningOutcome::MessageSigned(signing_success) => {
+                            self.handle_set_agg_key_message_signed(signing_success)
+                                .await;
+                        }
+                        _ => {
+                            log::error!("Signing module returned error signing message")
+                        }
+                    },
                     _ => {
                         log::trace!("Discarding non keygen result or message signed event")
                     }
@@ -202,13 +208,15 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
     // 3. Push this transaction to the Broadcast(Chain::ETH) subject, to be broadcast by the ETH Broadcaster
     // 4. Update the current key id, with the new key id returned by the signing module, so we know which key to sign with
     // from now onwards, until the next successful key rotation
-    async fn handle_set_agg_key_message_signed(&mut self, msg: MessageInfo, sig: Signature) {
+    async fn handle_set_agg_key_message_signed(&mut self, signing_success: SigningSuccess) {
         // 1. Get the data from the message hash that was signed (using the `messages` field)
+        let sig = signing_success.sig;
+        let message_info = signing_success.message_info;
         let k_g = self.point_to_pubkey(sig.v);
         let nonce_times_g_addr = self.nonce_times_g_addr_from_v(k_g);
 
-        let key_id = msg.key_id;
-        let msg_hash = msg.hash;
+        let key_id = message_info.key_id;
+        let msg_hash = message_info.hash;
         let params = self
             .messages
             .get(&msg_hash)
