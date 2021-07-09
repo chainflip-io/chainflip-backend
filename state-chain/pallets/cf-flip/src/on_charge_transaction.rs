@@ -2,9 +2,6 @@
 //!
 //! The Chainflip network is permissioned and as such the main reasons for fees are (a) to encourage 'good'
 //! behaviour and (b) to ensure that only staked actors can submit extrinsics to the network.
-//!
-//! Tips are ignored.
-//!
 
 use crate::{imbalances::Surplus, Config as FlipConfig, Pallet as Flip};
 use frame_support::{pallet_prelude::InvalidTransaction, traits::Imbalance};
@@ -14,6 +11,10 @@ use sp_runtime::traits::{DispatchInfoOf, Zero};
 use sp_std::marker::PhantomData;
 
 /// Marker struct for implementation of [OnChargeTransaction].
+///
+/// Fees are burned. 
+/// Tips are ignored.
+/// Any excess fees are refunded to the caller.
 pub struct FlipTransactionPayment<T>(PhantomData<T>);
 
 impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransactionPayment<T> {
@@ -52,9 +53,9 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 			// It's possible the account was deleted during extrinsic execution. If this is the case,
 			// we shouldn't refund anything, we can just burn all fees in escrow.
 			let to_burn = if frame_system::Pallet::<T>::account_exists(who) {
-				surplus.peek()
-			} else {
 				corrected_fee
+			} else {
+				surplus.peek()
 			};
 
 			// If there is a difference this will be reconciled when the result goes out of scope.

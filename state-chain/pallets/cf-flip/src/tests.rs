@@ -2,7 +2,7 @@ use std::mem;
 
 use crate::{mock::*, Config, Error, OffchainFunds, TotalIssuance};
 use cf_traits::{Emissions, StakeTransfer};
-use frame_support::traits::{HandleLifetime, Imbalance, OnKilledAccount};
+use frame_support::traits::{HandleLifetime, Imbalance};
 use frame_support::{assert_noop, assert_ok};
 
 #[test]
@@ -242,9 +242,137 @@ fn test_vaporise() {
 #[test]
 fn account_deletion_burns_balance() {
 	new_test_ext().execute_with(|| {
-		frame_system::Provider::<Test>::killed(&BOB);
+		frame_system::Provider::<Test>::killed(&BOB).unwrap();
 		assert_eq!(<Flip as Emissions>::total_issuance(), 950);
 		assert_eq!(Flip::total_balance_of(&BOB), 0);
 		check_balance_integrity();
 	});
+}
+
+#[cfg(test)]
+mod test_tx_payments {
+	use crate::FlipTransactionPayment;
+	use frame_support::dispatch::GetDispatchInfo;
+	use pallet_transaction_payment::OnChargeTransaction;
+
+	use super::*;
+
+	const CALL: &Call = &Call::System(frame_system::Call::remark(vec![])); // call doesn't matter
+
+	#[test]
+	fn test_zero_fee() {
+		new_test_ext().execute_with(|| {
+			assert!(
+				FlipTransactionPayment::<Test>::withdraw_fee(
+					&ALICE,
+					CALL,
+					&CALL.get_dispatch_info(),
+					0,
+					0,
+				)
+				.expect("Alice can afford the fee.")
+				.is_none()
+			);
+		});
+	}
+
+	#[test]
+	fn test_fee_payment() {
+		new_test_ext().execute_with(|| {
+			const FEE: FlipBalance = 1;
+			const TIP: FlipBalance = 2; // tips should be ignored
+
+			let escrow = FlipTransactionPayment::<Test>::withdraw_fee(
+				&ALICE,
+				CALL,
+				&CALL.get_dispatch_info(),
+				FEE,
+				TIP,
+			)
+			.expect("Alice can afford the fee.");
+
+			// Fee is in escrow.
+			assert_eq!(escrow.as_ref().map(|fee| fee.peek()), Some(FEE));
+			// Issuance unchanged.
+			assert_eq!(<Flip as Emissions>::total_issuance(), 1000);
+
+			FlipTransactionPayment::<Test>::correct_and_deposit_fee(
+				&ALICE,
+				&CALL.get_dispatch_info(),
+				&().into(),
+				FEE,
+				TIP,
+				escrow,
+			)
+			.expect("Fee correction never fails.");
+
+			check_balance_integrity();
+			// Alice paid the fee.
+			assert_eq!(Flip::total_balance_of(&ALICE), 99);
+			// Fee was burned.
+			assert_eq!(<Flip as Emissions>::total_issuance(), 999);
+		});
+	}
+
+	#[test]
+	fn test_fee_unaffordable() {
+		new_test_ext().execute_with(|| {
+			const FEE: FlipBalance = 101; // what a rip-off
+			const TIP: FlipBalance = 2; // tips should be ignored
+
+			FlipTransactionPayment::<Test>::withdraw_fee(
+				&ALICE,
+				CALL,
+				&CALL.get_dispatch_info(),
+				FEE,
+				TIP,
+			)
+			.expect_err("Alice can't afford the fee.");
+
+			check_balance_integrity();
+			// Alice paid no fee.
+			assert_eq!(Flip::total_balance_of(&ALICE), 100);
+			// Nothing was burned.
+			assert_eq!(<Flip as Emissions>::total_issuance(), 1000);
+		});
+	}
+
+	#[test]
+	fn test_partial_refund() {
+		new_test_ext().execute_with(|| {
+			const PRE_FEE: FlipBalance = 10;
+			const POST_FEE: FlipBalance = 7;
+			const TIP: FlipBalance = 2; // tips should be ignored
+
+			let escrow = FlipTransactionPayment::<Test>::withdraw_fee(
+				&ALICE,
+				CALL,
+				&CALL.get_dispatch_info(),
+				PRE_FEE,
+				TIP,
+			)
+			.expect("Alice can afford the fee.");
+
+			// Fee is in escrow.
+			assert_eq!(escrow.as_ref().map(|fee| fee.peek()), Some(PRE_FEE));
+			// Issuance unchanged.
+			assert_eq!(<Flip as Emissions>::total_issuance(), 1000);
+
+			FlipTransactionPayment::<Test>::correct_and_deposit_fee(
+				&ALICE,
+				&CALL.get_dispatch_info(),
+				&().into(),
+				POST_FEE,
+				TIP,
+				escrow,
+			)
+			.expect("Fee correction never fails.");
+
+			check_balance_integrity();
+			// Alice paid the adjusted fee.
+			assert_eq!(Flip::total_balance_of(&ALICE), 100 - POST_FEE);
+			// The fee was bured.
+			assert_eq!(<Flip as Emissions>::total_issuance(), 1000 - POST_FEE);
+		});
+	}
 }
