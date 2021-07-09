@@ -35,7 +35,7 @@ fn reorg_vector_works() {
 
 /// Mappings from signer_idx to Validator Id and back
 #[derive(Clone, Debug)]
-pub(super) struct ValidatorMaps {
+pub struct ValidatorMaps {
     id_to_idx: HashMap<ValidatorId, usize>,
     // TODO: create SortedVec and use it here:
     // Sorted Validator Ids
@@ -43,11 +43,11 @@ pub(super) struct ValidatorMaps {
 }
 
 impl ValidatorMaps {
-    pub(super) fn get_idx(&self, id: &ValidatorId) -> Option<usize> {
+    pub fn get_idx(&self, id: &ValidatorId) -> Option<usize> {
         self.id_to_idx.get(id).copied()
     }
 
-    pub(super) fn get_id(&self, idx: usize) -> Option<&ValidatorId> {
+    pub fn get_id(&self, idx: usize) -> Option<&ValidatorId> {
         let idx = idx.checked_sub(1)?;
         self.validator_ids.get(idx)
     }
