@@ -6,7 +6,7 @@
 //!
 //! Provides some low-level helpers for creating balance updates that maintain the accounting of funds.
 //!
-//! Exposes higher-level operations via the [cf_traits::StakeTransfer] and [cf_traits::Emissions] traits.
+//! Exposes higher-level operations via the [cf_traits::StakeTransfer] and [cf_traits::Issuance] traits.
 //!
 //! ## Imbalances
 //!
@@ -320,7 +320,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> cf_traits::Emissions for Pallet<T> {
+impl<T: Config> cf_traits::Issuance for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = T::Balance;
 
@@ -395,7 +395,7 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
 		let dust = Self::total_balance_of(account_id);
-		<Self as cf_traits::Emissions>::burn_from(account_id, dust);
+		<Self as cf_traits::Issuance>::burn_from(account_id, dust);
 		Account::<T>::remove(account_id);
 	}
 }
