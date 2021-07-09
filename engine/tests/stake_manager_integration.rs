@@ -50,20 +50,18 @@ pub async fn test_all_stake_manager_events() {
     // this future contains an infinite loop, so we must end it's life
     let sm_future = eth::stake_manager::start_stake_manager_witness(settings);
 
-    // We just want the future to end, it should already have done it's job in 1 second
+    // We just want the future to end, it should already have done it's job
     let _ = tokio::time::timeout(std::time::Duration::from_secs(3), sm_future).await;
 
     let mut stream = pin_message_stream(stream);
-    let next = tokio::time::timeout(Duration::from_secs(3), stream.next())
+    let next = tokio::time::timeout(Duration::from_secs(1), stream.next())
         .await
         .expect("Future timed out")
         .unwrap()
         .unwrap();
     match next {
         StakeManagerEvent::Staked {
-            account_id,
-            amount,
-            ..
+            account_id, amount, ..
         } => {
             assert_eq!(
                 account_id,
@@ -109,9 +107,7 @@ pub async fn test_all_stake_manager_events() {
         .unwrap();
     match next {
         StakeManagerEvent::ClaimExecuted {
-            account_id,
-            amount,
-            ..
+            account_id, amount, ..
         } => {
             assert_eq!(
                 account_id,
