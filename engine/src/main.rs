@@ -2,11 +2,13 @@ use chainflip_engine::{
     eth,
     health::health_check,
     mq::nats_client::NatsMQClientFactory,
+    p2p::ValidatorId,
     settings::Settings,
     signing::{self, crypto::Parameters},
     state_chain,
     temp_event_mapper::TempEventMapper,
 };
+use sp_core::Pair;
 
 #[tokio::main]
 async fn main() {
@@ -20,12 +22,14 @@ async fn main() {
 
     let mq_factory = NatsMQClientFactory::new(&settings.message_queue);
 
+    let signer = state_chain::get_signer_from_file(&settings.state_chain.signing_key_path);
+    let my_pubkey = signer.signer().public();
+    let signer_id = ValidatorId(my_pubkey.0);
     let sc_o_fut = state_chain::sc_observer::start(settings.clone());
-    let sc_b_fut = state_chain::sc_broadcaster::start(&settings, mq_factory.clone());
+    let sc_b_fut = state_chain::sc_broadcaster::start(&settings, signer, mq_factory.clone());
 
     let eth_fut = eth::start(settings.clone());
 
-    let signer_id = settings.clone().signing.my_id;
     let signing_client = signing::MultisigClient::new(mq_factory, signer_id);
 
     let temp_event_map_fut = TempEventMapper::run(&settings);

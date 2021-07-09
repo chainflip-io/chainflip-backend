@@ -37,8 +37,6 @@ pub struct HealthCheck {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Signing {
-    /// CFE needs to know who they are
-    pub my_id: ValidatorId,
     /// This includes my_id if I'm part of genesis validator set
     pub genesis_validator_ids: Vec<ValidatorId>,
 }
