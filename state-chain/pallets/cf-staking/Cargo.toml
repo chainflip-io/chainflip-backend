@@ -35,7 +35,6 @@ serde = { default-features = false, version = '1.0.119' }
 [dev-dependencies]
 sp-io = { version = '3.0.0' }
 pallet-cf-flip = { path = '../cf-flip' }
-#ethabi = { version = '14.0' }
 
 [features]
 default = ['std']
