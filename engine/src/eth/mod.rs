@@ -61,7 +61,7 @@ pub enum EventProducerError {
 }
 
 /// Start all the ETH components
-pub async fn start(settings: Settings) -> anyhow::Result<()> {
+pub async fn start(settings: Settings) {
     log::info!("Starting the ETH components");
     let sm_witness_future = stake_manager::start_stake_manager_witness(settings.clone());
 
@@ -79,8 +79,6 @@ pub async fn start(settings: Settings) -> anyhow::Result<()> {
         eth_broadcaster_future,
         eth_tx_encoder_future
     );
-    result.0?;
-    result.1?;
-
-    Ok(())
+    result.0.expect("Broadcaster should exit without error");
+    result.1.expect("Eth tx encoder should exit without error");
 }

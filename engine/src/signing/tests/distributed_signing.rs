@@ -26,10 +26,8 @@ use crate::signing::{
 const N_PARTIES: usize = 2;
 lazy_static! {
     static ref SIGNERS: Vec<usize> = (1..=N_PARTIES).collect();
-    static ref VALIDATOR_IDS: Vec<ValidatorId> = SIGNERS
-        .iter()
-        .map(|idx| ValidatorId(idx.to_string()))
-        .collect();
+    static ref VALIDATOR_IDS: Vec<ValidatorId> =
+        SIGNERS.iter().map(|idx| ValidatorId::new(idx)).collect();
 }
 
 async fn coordinate_signing(mq_clients: Vec<impl IMQClient>, active_indices: &[usize]) {
@@ -77,21 +75,8 @@ async fn coordinate_signing(mq_clients: Vec<impl IMQClient>, active_indices: &[u
         .expect("Could not publish");
     }
 
-    // // TODO: investigate why this is necessary (remove if it is not)
-    let ready_to_sign = async {
-        for s in &mut streams {
-            while let Some(evt) = s.next().await {
-                if let Ok(MultisigEvent::ReadyToSign) = evt {
-                    break;
-                }
-            }
-        }
-    };
-
-    ready_to_sign.await;
-
-    let data = MessageHash(Vec::from("Chainflip".as_bytes()));
-    let data2 = MessageHash(Vec::from("Chainflip2".as_bytes()));
+    let data = MessageHash(super::fixtures::MESSAGE.clone());
+    let data2 = MessageHash(super::fixtures::MESSAGE2.clone());
 
     let signer_ids = active_indices
         .iter()
@@ -170,14 +155,9 @@ async fn distributed_signing() {
 
                 let conductor_fut = conductor.start();
 
-                let params = Parameters {
-                    threshold: t,
-                    share_count: N_PARTIES,
-                };
-
                 let mq_factory = MQMockClientFactory::new(mq.clone());
 
-                let client = MultisigClient::new(mq_factory, VALIDATOR_IDS[i - 1].clone(), params);
+                let client = MultisigClient::new(mq_factory, VALIDATOR_IDS[i - 1].clone());
 
                 // "ready to sign" emitted here
                 let client_fut = client.run();

@@ -7,7 +7,7 @@ use crate::{
     p2p::ValidatorId,
     signing::{
         client::{client_inner::utils::get_index_mapping, KeyId, KeygenInfo},
-        crypto::Parameters,
+        crypto,
     },
 };
 
@@ -22,6 +22,7 @@ use super::{
 #[cfg(test)]
 use super::keygen_state::KeygenStage;
 
+use itertools::Itertools;
 use log::*;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -34,8 +35,6 @@ pub struct KeygenManager {
     keygen_states: HashMap<KeyId, KeygenState>,
     /// Used to propagate events upstream
     event_sender: UnboundedSender<InnerEvent>,
-    /// Multisig parameters
-    params: Parameters,
     /// Validator id of our node
     our_id: ValidatorId,
     /// Storage for delayed data (only Broadcast1 makes sense here).
@@ -49,7 +48,6 @@ pub struct KeygenManager {
 
 impl KeygenManager {
     pub fn new(
-        params: Parameters,
         our_id: ValidatorId,
         event_sender: UnboundedSender<InnerEvent>,
         phase_timeout: Duration,
@@ -58,7 +56,6 @@ impl KeygenManager {
             keygen_states: Default::default(),
             delayed_messages: Default::default(),
             event_sender,
-            params,
             our_id,
             phase_timeout,
         }
@@ -106,21 +103,28 @@ impl KeygenManager {
         entry.1.push((sender_id, bc1));
     }
 
-    /// Remove all pending state that hasn't been updated for
-    /// longer than `self.phase_timeout`
+    /// check all states for timeouts and abandonment then remove them
     pub fn cleanup(&mut self) {
-        let timeout = self.phase_timeout;
-
         let mut events_to_send = vec![];
 
-        self.delayed_messages.retain(|key_id, (t, _)| {
+        // remove all states that have become abandoned (events have already been sent)
+        self.keygen_states.retain(|_, state| !state.is_abandoned());
+
+        let timeout = self.phase_timeout;
+        // Remove all pending state that hasn't been updated for
+        // longer than `self.phase_timeout`
+        self.delayed_messages.retain(|key_id, (t, bc1_vec)| {
             if t.elapsed() > timeout {
                 warn!(
                     "Keygen state expired w/o keygen request for id: {:?}",
                     key_id
                 );
 
-                let event = InnerEvent::from(KeygenOutcome::unauthorised(*key_id, vec![]));
+                // We never received a keygen request for this key, so any parties
+                // that tried to initiate a new ceremony are deemed malicious
+                let bad_validators = bc1_vec.iter().map(|(vid, _)| vid).cloned().collect_vec();
+
+                let event = InnerEvent::from(KeygenOutcome::unauthorised(*key_id, bad_validators));
 
                 events_to_send.push(event);
                 return false;
@@ -128,10 +132,13 @@ impl KeygenManager {
             true
         });
 
+        // remove any active states that are taking too long
         self.keygen_states.retain(|key_id, state| {
             if state.last_message_timestamp.elapsed() > timeout {
                 warn!("Keygen state expired for key id: {:?}", key_id);
-                let event = InnerEvent::from(KeygenOutcome::timeout(*key_id, vec![]));
+
+                let late_nodes = state.awaited_parties();
+                let event = InnerEvent::from(KeygenOutcome::timeout(*key_id, late_nodes));
 
                 events_to_send.push(event);
                 return false;
@@ -146,6 +153,7 @@ impl KeygenManager {
         }
     }
 
+    /// Start the keygen ceremony
     pub fn on_keygen_request(&mut self, ki: KeygenInfo) {
         let KeygenInfo {
             id: key_id,
@@ -161,9 +169,17 @@ impl KeygenManager {
                 Some(idx) => {
                     let idx_map = get_index_mapping(&signers);
 
+                    let share_count = signers.len();
+                    let threshold = threshold_from_share_count(share_count);
+
+                    let params = crypto::Parameters {
+                        threshold,
+                        share_count,
+                    };
+
                     let state = KeygenState::initiate(
                         idx,
-                        self.params,
+                        params,
                         idx_map,
                         key_id,
                         self.event_sender.clone(),
@@ -186,6 +202,31 @@ impl KeygenManager {
             },
         }
     }
+}
+
+/// Note that the resulting `threshold` is the maximum number
+/// of parties *not* enough to generate a signature,
+/// i.e. at least `t+1` parties are required.
+/// This follow the notation in the multisig library that
+/// we are using and in the corresponding literature.
+fn threshold_from_share_count(share_count: usize) -> usize {
+    let doubled = share_count * 2;
+
+    if doubled % 3 == 0 {
+        doubled / 3 - 1
+    } else {
+        doubled / 3
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn check_threshold_calculation() {
+    assert_eq!(threshold_from_share_count(150), 99);
+    assert_eq!(threshold_from_share_count(100), 66);
+    assert_eq!(threshold_from_share_count(90), 59);
+    assert_eq!(threshold_from_share_count(3), 1);
+    assert_eq!(threshold_from_share_count(4), 2);
 }
 
 #[cfg(test)]

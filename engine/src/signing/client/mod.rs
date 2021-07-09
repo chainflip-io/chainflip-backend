@@ -13,12 +13,11 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::p2p::P2PMessage;
 
-use self::client_inner::{InnerEvent, InnerSignal, KeygenOutcome, MultisigClientInner};
+use self::client_inner::{InnerEvent, MultisigClientInner, SigningOutcome};
 
-use super::{
-    crypto::{Parameters, Signature},
-    MessageHash, MessageInfo,
-};
+pub use client_inner::{KeygenOutcome, KeygenSuccess};
+
+use super::{crypto::Signature, MessageHash, MessageInfo};
 
 use tokio::sync::mpsc;
 
@@ -63,7 +62,6 @@ pub enum MultisigInstruction {
 #[derive(Serialize, Deserialize)]
 pub enum MultisigEvent {
     ReadyToKeygen,
-    ReadyToSign,
     MessageSigned(MessageInfo, Signature),
     KeygenResult(KeygenOutcome),
 }
@@ -89,12 +87,12 @@ where
     MQ: IMQClient,
     F: IMQClientFactory<MQ>,
 {
-    pub fn new(factory: F, id: ValidatorId, params: Parameters) -> Self {
+    pub fn new(factory: F, id: ValidatorId) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
 
         MultisigClient {
             factory,
-            inner: MultisigClientInner::new(id.clone(), params, tx, PHASE_TIMEOUT),
+            inner: MultisigClientInner::new(id.clone(), tx, PHASE_TIMEOUT),
             inner_event_receiver: Some(rx),
             id,
             _mq: PhantomData,
@@ -110,12 +108,7 @@ where
                         error!("Could not publish message to MQ: {}", err);
                     }
                 }
-                InnerEvent::InnerSignal(InnerSignal::KeyReady) => {
-                    mq.publish(Subject::MultisigEvent, &MultisigEvent::ReadyToSign)
-                        .await
-                        .expect("Signing module failed to publish readiness");
-                }
-                InnerEvent::InnerSignal(InnerSignal::MessageSigned(msg, sig)) => {
+                InnerEvent::SigningResult(SigningOutcome::MessageSigned(msg, sig)) => {
                     mq.publish(
                         Subject::MultisigEvent,
                         &MultisigEvent::MessageSigned(msg, sig),

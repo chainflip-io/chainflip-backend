@@ -7,8 +7,9 @@ port = "4222"
 
 [state_chain]
 hostname = "localhost"
-port = "9944"
+rpc_port = "4399"
 signing_key_path = "./tests/test_keystore/alice_key"
+ws_port = "9944"
 
 [eth]
 hostname = "localhost"
@@ -23,3 +24,9 @@ sync_from_block = 12703650
 [health_check]
 hostname = "127.0.0.1"
 port = 5555
+
+[signing]
+genesis_validator_ids = [
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+]

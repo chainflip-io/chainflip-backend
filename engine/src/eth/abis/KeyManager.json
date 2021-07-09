@@ -12,11 +12,6 @@
             "internalType": "uint8",
             "name": "pubKeyYParity",
             "type": "uint8"
-          },
-          {
-            "internalType": "address",
-            "name": "nonceTimesGAddr",
-            "type": "address"
           }
         ],
         "internalType": "struct IShared.Key",
@@ -34,11 +29,6 @@
             "internalType": "uint8",
             "name": "pubKeyYParity",
             "type": "uint8"
-          },
-          {
-            "internalType": "address",
-            "name": "nonceTimesGAddr",
-            "type": "address"
           }
         ],
         "internalType": "struct IShared.Key",
@@ -69,11 +59,6 @@
             "internalType": "uint8",
             "name": "pubKeyYParity",
             "type": "uint8"
-          },
-          {
-            "internalType": "address",
-            "name": "nonceTimesGAddr",
-            "type": "address"
           }
         ],
         "indexed": false,
@@ -92,11 +77,6 @@
             "internalType": "uint8",
             "name": "pubKeyYParity",
             "type": "uint8"
-          },
-          {
-            "internalType": "address",
-            "name": "nonceTimesGAddr",
-            "type": "address"
           }
         ],
         "indexed": false,
@@ -123,11 +103,6 @@
             "internalType": "uint8",
             "name": "pubKeyYParity",
             "type": "uint8"
-          },
-          {
-            "internalType": "address",
-            "name": "nonceTimesGAddr",
-            "type": "address"
           }
         ],
         "internalType": "struct IShared.Key",
@@ -153,11 +128,6 @@
             "internalType": "uint8",
             "name": "pubKeyYParity",
             "type": "uint8"
-          },
-          {
-            "internalType": "address",
-            "name": "nonceTimesGAddr",
-            "type": "address"
           }
         ],
         "internalType": "struct IShared.Key",
@@ -223,6 +193,11 @@
             "internalType": "uint256",
             "name": "nonce",
             "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddr",
+            "type": "address"
           }
         ],
         "internalType": "struct IShared.SigData",
@@ -269,6 +244,11 @@
             "internalType": "uint256",
             "name": "nonce",
             "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddr",
+            "type": "address"
           }
         ],
         "internalType": "struct IShared.SigData",
@@ -286,11 +266,6 @@
             "internalType": "uint8",
             "name": "pubKeyYParity",
             "type": "uint8"
-          },
-          {
-            "internalType": "address",
-            "name": "nonceTimesGAddr",
-            "type": "address"
           }
         ],
         "internalType": "struct IShared.Key",
@@ -321,6 +296,11 @@
             "internalType": "uint256",
             "name": "nonce",
             "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddr",
+            "type": "address"
           }
         ],
         "internalType": "struct IShared.SigData",
@@ -338,11 +318,6 @@
             "internalType": "uint8",
             "name": "pubKeyYParity",
             "type": "uint8"
-          },
-          {
-            "internalType": "address",
-            "name": "nonceTimesGAddr",
-            "type": "address"
           }
         ],
         "internalType": "struct IShared.Key",
@@ -373,6 +348,11 @@
             "internalType": "uint256",
             "name": "nonce",
             "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddr",
+            "type": "address"
           }
         ],
         "internalType": "struct IShared.SigData",
@@ -390,11 +370,6 @@
             "internalType": "uint8",
             "name": "pubKeyYParity",
             "type": "uint8"
-          },
-          {
-            "internalType": "address",
-            "name": "nonceTimesGAddr",
-            "type": "address"
           }
         ],
         "internalType": "struct IShared.Key",

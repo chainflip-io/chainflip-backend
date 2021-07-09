@@ -154,8 +154,7 @@ impl Display for KeygenData {
 /// public interfaces will return this to indicate
 /// that something potentially interesting has happened
 #[derive(Debug, PartialEq)]
-pub enum InnerSignal {
-    KeyReady,
+pub enum SigningOutcome {
     MessageSigned(MessageInfo, Signature),
 }
 
@@ -218,14 +217,13 @@ impl From<KeygenOutcome> for InnerEvent {
 #[derive(Debug, PartialEq)]
 pub enum InnerEvent {
     P2PMessageCommand(P2PMessageCommand),
-    InnerSignal(InnerSignal),
+    SigningResult(SigningOutcome),
     KeygenResult(KeygenOutcome),
 }
 
 #[derive(Clone)]
 pub struct MultisigClientInner {
     keygen: KeygenManager,
-    params: Parameters,
     id: ValidatorId,
     pub signing_manager: SigningStateManager,
     /// Requests awaiting a key
@@ -234,17 +232,11 @@ pub struct MultisigClientInner {
 }
 
 impl MultisigClientInner {
-    pub fn new(
-        id: ValidatorId,
-        params: Parameters,
-        tx: UnboundedSender<InnerEvent>,
-        phase_timeout: Duration,
-    ) -> Self {
+    pub fn new(id: ValidatorId, tx: UnboundedSender<InnerEvent>, phase_timeout: Duration) -> Self {
         MultisigClientInner {
-            keygen: KeygenManager::new(params, id.clone(), tx.clone(), phase_timeout.clone()),
-            params,
+            keygen: KeygenManager::new(id.clone(), tx.clone(), phase_timeout.clone()),
             id: id.clone(),
-            signing_manager: SigningStateManager::new(params, id, tx, phase_timeout),
+            signing_manager: SigningStateManager::new(id, tx, phase_timeout),
             pending_requests_to_sign: Default::default(),
         }
     }
