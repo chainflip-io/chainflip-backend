@@ -77,7 +77,7 @@ cf_traits::impl_mock_witnesser_for_account_and_call_types!(AccountId, Call);
 impl pallet_cf_staking::Config for Test {
 	type Event = Event;
 	type Call = Call;
-	type Nonce = u32;
+	type Nonce = u64;
 	type EnsureWitnessed = MockEnsureWitnessed;
 	type Witnesser = MockWitnesser;
 	type EpochInfo = epoch_info::Mock;
@@ -90,7 +90,6 @@ impl pallet_cf_staking::Config for Test {
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123123u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
-pub const CHARLIE: <Test as frame_system::Config>::AccountId = 789u64;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
