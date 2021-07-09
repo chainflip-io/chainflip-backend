@@ -4,9 +4,7 @@ use crate::{
     p2p::{P2PMessage, P2PMessageCommand, ValidatorId},
     signing::{
         client::{KeyId, MultisigInstruction, SigningInfo},
-        crypto::{
-            BigInt, KeyGenBroadcastMessage1, LocalSig, Parameters, Signature, VerifiableSS, FE, GE,
-        },
+        crypto::{BigInt, KeyGenBroadcastMessage1, LocalSig, Signature, VerifiableSS, FE, GE},
         MessageHash, MessageInfo,
     },
 };
@@ -15,7 +13,7 @@ use log::*;
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::{
-    keygen_manager::KeygenManager, signing_state::KeygenResultInfo,
+    common::KeygenResultInfo, key_store::KeyStore, keygen_manager::KeygenManager,
     signing_state_manager::SigningStateManager,
 };
 
@@ -223,8 +221,9 @@ pub enum InnerEvent {
 
 #[derive(Clone)]
 pub struct MultisigClientInner {
-    keygen: KeygenManager,
     id: ValidatorId,
+    key_store: KeyStore,
+    keygen: KeygenManager,
     pub signing_manager: SigningStateManager,
     /// Requests awaiting a key
     // TODO: make sure this is cleaned up on timeout
@@ -234,8 +233,9 @@ pub struct MultisigClientInner {
 impl MultisigClientInner {
     pub fn new(id: ValidatorId, tx: UnboundedSender<InnerEvent>, phase_timeout: Duration) -> Self {
         MultisigClientInner {
-            keygen: KeygenManager::new(id.clone(), tx.clone(), phase_timeout.clone()),
             id: id.clone(),
+            key_store: KeyStore::new(),
+            keygen: KeygenManager::new(id.clone(), tx.clone(), phase_timeout.clone()),
             signing_manager: SigningStateManager::new(id, tx, phase_timeout),
             pending_requests_to_sign: Default::default(),
         }
@@ -244,6 +244,11 @@ impl MultisigClientInner {
     #[cfg(test)]
     pub fn get_keygen(&self) -> &KeygenManager {
         &self.keygen
+    }
+
+    #[cfg(test)]
+    pub fn get_key(&self, key_id: KeyId) -> Option<&KeygenResultInfo> {
+        self.key_store.get_key(key_id)
     }
 
     /// Change the time we wait until deleting all unresolved states
@@ -286,7 +291,7 @@ impl MultisigClientInner {
                 debug!("[{}] Received sign instruction", self.id);
                 let key_id = sign_info.id;
 
-                let key = self.keygen.get_key_info_by_id(key_id);
+                let key = self.key_store.get_key(key_id);
 
                 match key {
                     Some(key) => {
@@ -302,6 +307,7 @@ impl MultisigClientInner {
         }
     }
 
+    /// Process requests to sign that required `key_id`
     fn process_pending(&mut self, key_id: KeyId, key_info: KeygenResultInfo) {
         if let Some(reqs) = self.pending_requests_to_sign.remove(&key_id) {
             debug!("Processing pending requests to sign, count: {}", reqs.len());
@@ -310,6 +316,11 @@ impl MultisigClientInner {
                     .on_request_to_sign(data, key_info.clone(), info)
             }
         }
+    }
+
+    fn on_key_generated(&mut self, key_id: KeyId, key: KeygenResultInfo) {
+        self.key_store.set_key(key_id, key.clone());
+        self.process_pending(key_id, key);
     }
 
     /// Process message from another validator
@@ -326,7 +337,9 @@ impl MultisigClientInner {
                 let key_id = msg.key_id;
 
                 if let Some(key) = self.keygen.process_keygen_message(sender_id, msg) {
-                    self.process_pending(key_id, key);
+                    self.on_key_generated(key_id, key);
+                    // NOTE: we could already delete the state here, but it is
+                    // not necessary as it will be deleted by "cleanup"
                 }
             }
             Ok(MultisigMessage::SigningMessage(msg)) => {
