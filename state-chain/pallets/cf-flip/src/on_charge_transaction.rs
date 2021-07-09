@@ -12,7 +12,7 @@ use sp_std::marker::PhantomData;
 
 /// Marker struct for implementation of [OnChargeTransaction].
 ///
-/// Fees are burned. 
+/// Fees are burned.
 /// Tips are ignored.
 /// Any excess fees are refunded to the caller.
 pub struct FlipTransactionPayment<T>(PhantomData<T>);

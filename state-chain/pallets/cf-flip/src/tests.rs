@@ -262,17 +262,15 @@ mod test_tx_payments {
 	#[test]
 	fn test_zero_fee() {
 		new_test_ext().execute_with(|| {
-			assert!(
-				FlipTransactionPayment::<Test>::withdraw_fee(
-					&ALICE,
-					CALL,
-					&CALL.get_dispatch_info(),
-					0,
-					0,
-				)
-				.expect("Alice can afford the fee.")
-				.is_none()
-			);
+			assert!(FlipTransactionPayment::<Test>::withdraw_fee(
+				&ALICE,
+				CALL,
+				&CALL.get_dispatch_info(),
+				0,
+				0,
+			)
+			.expect("Alice can afford the fee.")
+			.is_none());
 		});
 	}
 
