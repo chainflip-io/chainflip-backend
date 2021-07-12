@@ -1,16 +1,13 @@
 use chainflip_engine::{
-    eth,
-    health::health_check,
-    mq::nats_client::NatsMQClientFactory,
-    settings::Settings,
-    signing::{self, crypto::Parameters},
-    state_chain,
-    temp_event_mapper::TempEventMapper,
+    eth, health::health_check, mq::nats_client::NatsMQClientFactory, settings::Settings, signing,
+    state_chain, temp_event_mapper::TempEventMapper,
 };
 
 #[tokio::main]
 async fn main() {
-    env_logger::init();
+    let res = log4rs::init_file("./config/log4rs.yml", Default::default());
+    println!("res: {:?}", res);
+    res.unwrap();
 
     log::info!("Start the engines! :broom: :broom: ");
 
@@ -25,7 +22,6 @@ async fn main() {
 
     let eth_fut = eth::start(settings.clone());
 
-    // TODO: read the key for config/file
     let signer_id = state_chain::node_id::get_peer_id(&settings.state_chain)
         .await
         .expect("Should receive a ValidatorId");
@@ -42,4 +38,13 @@ async fn main() {
         temp_event_map_fut,
         signing_client_fut
     );
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn test_example_log_file_valid() {
+        log4rs::init_file("config/log4rs.example.yml", Default::default()).unwrap();
+    }
 }
