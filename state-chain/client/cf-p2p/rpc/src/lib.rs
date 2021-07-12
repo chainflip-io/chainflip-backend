@@ -205,6 +205,7 @@ mod tests {
 	use jsonrpc_core::{types::Params, Notification, Output};
 	use sc_rpc::testing::TaskExecutor;
 	use std::collections::HashMap;
+	use sc_network::config::PublicKey;
 
 	/// Our network of nodes
 	struct P2P {
@@ -322,6 +323,25 @@ mod tests {
 		let (tx, rx) = jsonrpc_core::futures::sync::mpsc::channel(2);
 		let meta = sc_rpc::Metadata::new(tx);
 		(meta, rx)
+	}
+
+	#[test]
+	fn validator_id_to_peer_id() {
+		use sp_core::crypto::Ss58Codec;
+		use sp_core::ed25519::Public;
+
+		let validator_id = "5G9NWJ5P9uk7am24yCKeLZJqXWW6hjuMyRJDmw4ofqxG8Js2";
+		let public = Public::from_ss58check(validator_id).unwrap();
+
+		let peer_id = PeerId::from_bytes(&public.0).unwrap();
+		// PeerId::from_public_key(PublicKey::Ed25519(public.0.into()));
+		let peace = true;
+		// let mut output = [0; 100];
+		// let b = peer_id.as_bytes();
+		// let c = b.len();
+		// let decoded = bs58::decode(&peer_id.as_bytes()).into(&mut output);
+		// let validatorId = "";
+
 	}
 
 	#[test]
