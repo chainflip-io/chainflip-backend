@@ -248,6 +248,18 @@ impl<T: Config> Imbalance<T::Balance> for Deficit<T> {
 	}
 }
 
+impl<T: Config> Default for Surplus<T> {
+	fn default() -> Self {
+		Self::zero()
+	}
+}
+
+impl<T: Config> Default for Deficit<T> {
+	fn default() -> Self {
+		Self::zero()
+	}
+}
+
 /// Reverts any remaining imbalance that hasn't been canceled out with an opposite imbalance.
 pub trait RevertImbalance {
 	fn revert(&mut self);

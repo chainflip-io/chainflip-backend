@@ -22,6 +22,7 @@ cf-traits = { path = '../../traits', default-features = false }
 frame-benchmarking = {default-features = false, optional = true, version = '3.1.0' }
 frame-support = {default-features = false, version = '3.0.0' }
 frame-system = {default-features = false, version = '3.0.0' }
+pallet-transaction-payment = {default-features = false, version = '3.0.0'}
 sp-runtime = { default-features = false, version = '3.0.0' }
 sp-std = { default-features = false, version = '3.0.0' }
 serde = { default-features = false, version = '1.0.119' }
@@ -38,6 +39,7 @@ std = [
     'frame-support/std',
     'frame-system/std',
     'frame-benchmarking/std',
+    'pallet-transaction-payment/std',
     'sp-runtime/std',
     'sp-std/std',
     'serde/std'

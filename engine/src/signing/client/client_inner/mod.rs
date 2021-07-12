@@ -1,4 +1,6 @@
 mod client_inner;
+mod common;
+mod key_store;
 mod keygen_manager;
 mod keygen_state;
 mod shared_secret;
@@ -9,6 +11,6 @@ mod utils;
 #[cfg(test)]
 mod tests;
 
-pub(super) use client_inner::{InnerEvent, MultisigClientInner, SigningOutcome};
+pub(super) use client_inner::{InnerEvent, MultisigClientInner};
 
-pub use client_inner::{KeygenOutcome, KeygenSuccess};
+pub use client_inner::{KeygenOutcome, KeygenSuccess, SigningOutcome, SigningSuccess};
