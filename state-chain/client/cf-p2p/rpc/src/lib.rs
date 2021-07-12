@@ -8,15 +8,15 @@ use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use log::{debug, warn};
+use sc_network::config::identity::ed25519;
+use sc_network::config::PublicKey;
 use sc_network::PeerId;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use sp_core::ed25519::Public;
 use std::marker::Send;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
-use sc_network::config::identity::ed25519;
-use sp_core::ed25519::Public;
-use sc_network::config::PublicKey;
 
 type ValidatorId = String;
 
@@ -216,9 +216,9 @@ mod tests {
 	use super::*;
 	use jsonrpc_core::{types::Params, Notification, Output};
 	use sc_network::config::identity::ed25519;
-	use sp_core::ed25519::Public;
 	use sc_network::config::PublicKey;
 	use sc_rpc::testing::TaskExecutor;
+	use sp_core::ed25519::Public;
 	use std::collections::HashMap;
 
 	/// Our network of nodes
