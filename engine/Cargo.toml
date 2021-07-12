@@ -34,8 +34,9 @@ jsonrpc-core = {version = "17.1.0"}
 jsonrpc-core-client = {version = "17.1.0", default-features = false, features = ["http", "ws"]}
 jsonrpc-http-server = "17.1.0"
 jsonrpc-ws-server = "17.1.0"
+kv-log-macro = {version = "1.0.7"}
 lazy_static = "1.4"
-log = "0.4.14"
+log = {version = "0.4.14"}
 log4rs = {version = "1.0.0", features = ["json_encoder"]}
 num = "0.4.0"
 parking_lot = "0.11"
@@ -44,6 +45,9 @@ reqwest = {version = "0.11.4", features = ["json"]}
 secp256k1 = "0.20"
 serde = {version = "1.0", features = ["derive"]}
 serde_json = "1.0"
+slog = {version = "2.7.0"}
+slog-async = {version = "2.6.0"}
+slog-json = {version = "2.3.0"}
 thiserror = "1.0.24"
 tokio = {version = "1.5.0", features = ["full"]}
 tokio-compat-02 = "0.2.0"

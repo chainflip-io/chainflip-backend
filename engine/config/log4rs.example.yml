@@ -12,8 +12,8 @@ appenders:
     kind: file
     path: "human.log"
     encoder:
-      # datetime level - message \n
-      pattern: "{d} {l} - {m}{n}"
+      # highlight according to log level (datetime level - message newline)
+      pattern: "{h({d} {l} - {m}{n})}"
 
 root:
   level: info

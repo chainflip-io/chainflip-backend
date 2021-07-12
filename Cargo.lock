@@ -928,6 +928,7 @@ dependencies = [
  "jsonrpc-core-client 17.1.0",
  "jsonrpc-http-server 17.1.0",
  "jsonrpc-ws-server 17.1.0",
+ "kv-log-macro",
  "lazy_static",
  "log 0.4.14",
  "log4rs",
@@ -943,6 +944,9 @@ dependencies = [
  "secp256k1",
  "serde 1.0.126",
  "serde_json",
+ "slog",
+ "slog-async",
+ "slog-json",
  "sp-core",
  "sp-keyring",
  "sp-runtime",
@@ -7863,6 +7867,36 @@ name = "slab"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f173ac3d1a7e3b28003f40de0b5ce7fe2710f9b9dc3fc38664cebee46b3b6527"
+
+[[package]]
+name = "slog"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8347046d4ebd943127157b94d63abb990fcf729dc4e9978927fdf4ac3c998d06"
+
+[[package]]
+name = "slog-async"
+version = "2.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c60813879f820c85dbc4eabf3269befe374591289019775898d56a81a804fbdc"
+dependencies = [
+ "crossbeam-channel",
+ "slog",
+ "take_mut",
+ "thread_local",
+]
+
+[[package]]
+name = "slog-json"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ddc0d2aff1f8f325ef660d9a0eb6e6dcd20b30b3f581a5897f58bf42d061c37a"
+dependencies = [
+ "chrono",
+ "serde 1.0.126",
+ "serde_json",
+ "slog",
+]
 
 [[package]]
 name = "smallvec"
