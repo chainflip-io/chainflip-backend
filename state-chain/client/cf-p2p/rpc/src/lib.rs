@@ -14,15 +14,20 @@ use serde_json::json;
 use std::marker::Send;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
+use sc_network::config::identity::ed25519;
+use sp_core::ed25519::Public;
+use sc_network::config::PublicKey;
+
+type ValidatorId = String;
 
 #[rpc]
 pub trait RpcApi {
 	/// RPC Metadata
 	type Metadata;
 
-	/// Send a message to peer id returning a HTTP status code
+	/// Send a message to validator id returning a HTTP status code
 	#[rpc(name = "p2p_send")]
-	fn send(&self, peer_id: String, message: String) -> Result<u64>;
+	fn send(&self, validator_id: ValidatorId, message: String) -> Result<u64>;
 
 	/// Broadcast a message to the p2p network returning a HTTP status code
 	#[rpc(name = "p2p_broadcast")]
@@ -139,12 +144,19 @@ impl<C: Messaging> Rpc<C> {
 	}
 }
 
+fn peer_id_from_validator_id(validator_id: &ValidatorId) -> std::result::Result<PeerId, &str> {
+	Public::from_str(validator_id)
+		.map_err(|_| "failed parsing")
+		.and_then(|p| ed25519::PublicKey::decode(&p.0).map_err(|_| "failed decoding"))
+		.and_then(|p| Ok(PeerId::from_public_key(PublicKey::Ed25519(p))))
+}
+
 /// Impl of the `RpcApi` - send, broadcast and subscribe to notifications
 impl<C: Messaging + Sync + Send + 'static> RpcApi for Rpc<C> {
 	type Metadata = sc_rpc::Metadata;
 
-	fn send(&self, peer_id: String, message: String) -> Result<u64> {
-		if let Ok(peer_id) = PeerId::from_str(&peer_id) {
+	fn send(&self, validator_id: ValidatorId, message: String) -> Result<u64> {
+		if let Ok(peer_id) = peer_id_from_validator_id(&validator_id) {
 			return if self
 				.messaging
 				.lock()
@@ -203,9 +215,11 @@ impl<C: Messaging + Sync + Send + 'static> RpcApi for Rpc<C> {
 mod tests {
 	use super::*;
 	use jsonrpc_core::{types::Params, Notification, Output};
+	use sc_network::config::identity::ed25519;
+	use sp_core::ed25519::Public;
+	use sc_network::config::PublicKey;
 	use sc_rpc::testing::TaskExecutor;
 	use std::collections::HashMap;
-	use sc_network::config::PublicKey;
 
 	/// Our network of nodes
 	struct P2P {
@@ -327,21 +341,13 @@ mod tests {
 
 	#[test]
 	fn validator_id_to_peer_id() {
-		use sp_core::crypto::Ss58Codec;
-		use sp_core::ed25519::Public;
-
 		let validator_id = "5G9NWJ5P9uk7am24yCKeLZJqXWW6hjuMyRJDmw4ofqxG8Js2";
-		let public = Public::from_ss58check(validator_id).unwrap();
-
-		let peer_id = PeerId::from_bytes(&public.0).unwrap();
-		// PeerId::from_public_key(PublicKey::Ed25519(public.0.into()));
-		let peace = true;
-		// let mut output = [0; 100];
-		// let b = peer_id.as_bytes();
-		// let c = b.len();
-		// let decoded = bs58::decode(&peer_id.as_bytes()).into(&mut output);
-		// let validatorId = "";
-
+		let expected_peer_id = "12D3KooWMxxmtYRoBr5yMGfXdunkZ3goE4fZsMuJJMRAm3UdySxg";
+		let public = Public::from_str(validator_id).unwrap();
+		let ed25519 = ed25519::PublicKey::decode(&public.0).unwrap();
+		let peer_id = PeerId::from_public_key(PublicKey::Ed25519(ed25519));
+		let bs58 = peer_id.to_base58();
+		assert_eq!(bs58, expected_peer_id);
 	}
 
 	#[test]
