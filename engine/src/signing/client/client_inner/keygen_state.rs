@@ -358,6 +358,14 @@ impl KeygenState {
         }
     }
 
+    /// check is the KeygenStage is in the KeyReady stage
+    pub fn is_finished(&self) -> bool {
+        match self.stage {
+            KeygenStage::KeyReady => true,
+            _ => false,
+        }
+    }
+
     #[cfg(test)]
     pub fn delayed_count(&self) -> usize {
         self.delayed_next_stage_data.len()

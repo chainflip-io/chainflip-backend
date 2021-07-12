@@ -149,11 +149,65 @@ impl Display for KeygenData {
     }
 }
 
-/// public interfaces will return this to indicate
-/// that something potentially interesting has happened
-#[derive(Debug, PartialEq)]
+/// Holds extra info about signing failure (but not the reason)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SigningFailure {
+    pub message_info: MessageInfo,
+    pub bad_nodes: Vec<ValidatorId>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SigningSuccess {
+    pub message_info: MessageInfo,
+    pub sig: Signature,
+}
+
+/// The final result of a Signing ceremony
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SigningOutcome {
-    MessageSigned(MessageInfo, Signature),
+    MessageSigned(SigningSuccess),
+    Unauthorised(SigningFailure),
+    /// Abandoned as we couldn't make progress for a long time
+    Timeout(SigningFailure),
+    /// Invalid data has been submitted, can't proceed
+    Invalid(SigningFailure),
+}
+
+impl SigningOutcome {
+    /// Helper method to create SigningOutcome::MessageSigned
+    pub fn success(message_info: MessageInfo, sig: Signature) -> Self {
+        SigningOutcome::MessageSigned(SigningSuccess { message_info, sig })
+    }
+
+    /// Helper method to create SigningOutcome::Unauthorised
+    pub fn unauthorised(message_info: MessageInfo, bad_nodes: impl Into<Vec<ValidatorId>>) -> Self {
+        SigningOutcome::Unauthorised(SigningFailure {
+            message_info,
+            bad_nodes: bad_nodes.into(),
+        })
+    }
+
+    /// Helper method to create SigningOutcome::Timeout
+    pub fn timeout(message_info: MessageInfo, bad_nodes: impl Into<Vec<ValidatorId>>) -> Self {
+        SigningOutcome::Timeout(SigningFailure {
+            message_info,
+            bad_nodes: bad_nodes.into(),
+        })
+    }
+
+    /// Helper method to create SigningOutcome::Invalid
+    pub fn invalid(message_info: MessageInfo, bad_nodes: impl Into<Vec<ValidatorId>>) -> Self {
+        SigningOutcome::Invalid(SigningFailure {
+            message_info,
+            bad_nodes: bad_nodes.into(),
+        })
+    }
+}
+
+impl From<SigningOutcome> for InnerEvent {
+    fn from(so: SigningOutcome) -> Self {
+        InnerEvent::SigningResult(so)
+    }
 }
 
 /// Holds extra info about keygen failure (but not the reason)

@@ -360,7 +360,9 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
     let event = recv_next_inner_event(&mut rxs[0]).await;
 
     let signature = match event {
-        InnerEvent::SigningResult(SigningOutcome::MessageSigned(_message_info, sig)) => sig,
+        InnerEvent::SigningResult(SigningOutcome::MessageSigned(signing_success)) => {
+            signing_success.sig
+        }
         _ => panic!("Unexpected event"),
     };
 
