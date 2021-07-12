@@ -379,9 +379,9 @@ steps:
     depends_on:
       - create
     commands:
-      - kubectl get pods
-      - kubectl logs -l app.kubernetes.io/name=chainflip-engine
-      - kubectl logs -l app.kubernetes.io/name=state-chain-node
+      - kubectl get pods -n $DRONE_COMMIT_BRANCH
+      - kubectl logs -l app.kubernetes.io/name=chainflip-engine -n $DRONE_COMMIT_BRANCH
+      - kubectl logs -l app.kubernetes.io/name=state-chain-node -n $DRONE_COMMIT_BRANCH
       - cd cluster/applications/staging/chainflip-validator
       - ./build.sh --branch=$DRONE_COMMIT_BRANCH --destroy --rpc
 
