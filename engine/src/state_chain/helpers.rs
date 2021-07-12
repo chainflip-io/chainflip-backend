@@ -65,8 +65,6 @@ pub fn get_signer_from_seed_file(
 #[cfg(test)]
 mod tests {
 
-    use std::convert::TryInto;
-
     use super::*;
 
     #[tokio::test]
