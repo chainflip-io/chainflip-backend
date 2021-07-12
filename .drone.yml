@@ -373,6 +373,9 @@ steps:
     pull: always
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     failure: ignore
+    when:
+      status:
+        - failure
     depends_on:
       - create
     commands:
