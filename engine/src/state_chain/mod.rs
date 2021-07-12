@@ -12,7 +12,7 @@ mod sc_event;
 /// Contains helper methods for state chain code
 mod helpers;
 
-pub use helpers::get_signer_from_file;
+pub use helpers::get_signer_from_privkey_file;
 
 // ==== Pallet support for the state chain =====
 

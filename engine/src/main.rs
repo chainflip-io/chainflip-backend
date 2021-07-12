@@ -1,12 +1,6 @@
 use chainflip_engine::{
-    eth,
-    health::health_check,
-    mq::nats_client::NatsMQClientFactory,
-    p2p::ValidatorId,
-    settings::Settings,
-    signing::{self, crypto::Parameters},
-    state_chain,
-    temp_event_mapper::TempEventMapper,
+    eth, health::health_check, mq::nats_client::NatsMQClientFactory, p2p::ValidatorId,
+    settings::Settings, signing, state_chain, temp_event_mapper::TempEventMapper,
 };
 use sp_core::Pair;
 
@@ -22,7 +16,9 @@ async fn main() {
 
     let mq_factory = NatsMQClientFactory::new(&settings.message_queue);
 
-    let signer = state_chain::get_signer_from_file(&settings.state_chain.signing_key_path);
+    // This can be the same filepath as the p2p key --node-key-file <file> on the state chain
+    // which won't necessarily always be the case, i.e. if we no longer have PeerId == ValidatorId
+    let signer = state_chain::get_signer_from_privkey_file(&settings.state_chain.signing_key_path);
     let my_pubkey = signer.signer().public();
     let signer_id = ValidatorId(my_pubkey.0);
     let sc_o_fut = state_chain::sc_observer::start(settings.clone());
