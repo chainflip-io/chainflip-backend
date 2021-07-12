@@ -627,14 +627,14 @@ impl<T: Config> Pallet<T> {
 				Param::new(
 					"sigData",
 					ParamType::Tuple(vec![
-						ParamType::Uint(64),
-						ParamType::Uint(64),
-						ParamType::Uint(64),
+						ParamType::Uint(256),
+						ParamType::Uint(256),
+						ParamType::Uint(256),
 						ParamType::Address,
 					]),
 				),
 				Param::new("nodeID", ParamType::FixedBytes(32)),
-				Param::new("amount", ParamType::Uint(64)),
+				Param::new("amount", ParamType::Uint(256)),
 				Param::new("staker", ParamType::Address),
 				Param::new("expiryTime", ParamType::Uint(48)),
 			],
@@ -648,6 +648,7 @@ impl<T: Config> Pallet<T> {
 				Token::Uint(ethabi::Uint::zero()),
 				Token::Uint(ethabi::Uint::zero()),
 				Token::Uint(claim_details.nonce.into()),
+				Token::Address(Address::from(claim_details.address)),
 			]),
 			// nodeId: bytes32
 			Token::FixedBytes(account_id.using_encoded(|bytes| bytes.to_vec())),
