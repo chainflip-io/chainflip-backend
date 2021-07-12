@@ -5,9 +5,8 @@ use chainflip_engine::{
 
 #[tokio::main]
 async fn main() {
-    let res = log4rs::init_file("./config/log4rs.yml", Default::default());
-    println!("res: {:?}", res);
-    res.unwrap();
+    log4rs::init_file("./config/log4rs.yml", Default::default())
+        .expect("Should have logging configuration at config/log4rs.yml");
 
     log::info!("Start the engines! :broom: :broom: ");
 

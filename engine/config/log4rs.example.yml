@@ -2,7 +2,6 @@
 refresh_rate: 30 seconds
 
 appenders:
-  # An appender named "stdout" that writes to stdout
   json_file:
     kind: file
     path: 'json.log'
@@ -16,8 +15,6 @@ appenders:
       # datetime level - message \n
       pattern: "{d} {l} - {m}{n}"
 
-  
-# Set the default logging level to "warn" and attach the "stdout" appender to the root
 root:
   level: info
   appenders:
