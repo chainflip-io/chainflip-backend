@@ -1,4 +1,6 @@
 mod client_inner;
+mod common;
+mod key_store;
 mod keygen_manager;
 mod keygen_state;
 mod shared_secret;

@@ -13,8 +13,8 @@ use crate::{
 
 use super::{
     client_inner::{Broadcast1, KeyGenMessageWrapped, KeygenData},
+    common::KeygenResultInfo,
     keygen_state::KeygenState,
-    signing_state::KeygenResultInfo,
     utils::get_our_idx,
     InnerEvent, KeygenOutcome,
 };
@@ -59,14 +59,6 @@ impl KeygenManager {
             our_id,
             phase_timeout,
         }
-    }
-
-    // Get the key that was generated as the result of
-    // a keygen ceremony between the winners of auction `id`
-    pub(super) fn get_key_info_by_id(&self, id: KeyId) -> Option<&KeygenResultInfo> {
-        let entry = self.keygen_states.get(&id)?;
-
-        entry.key_info.as_ref()
     }
 
     pub(super) fn process_keygen_message(

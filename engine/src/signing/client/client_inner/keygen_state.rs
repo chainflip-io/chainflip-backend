@@ -22,8 +22,8 @@ use crate::{
 
 use super::{
     client_inner::{KeygenData, MultisigMessage},
+    common::KeygenResultInfo,
     shared_secret::SharedSecretState,
-    signing_state::KeygenResultInfo,
     utils::ValidatorMaps,
     InnerEvent,
 };
@@ -52,7 +52,6 @@ pub struct KeygenState {
     /// Multisig parameters are only stored here so we can put
     /// them inside `KeygenResultInfo` when we create the key
     params: Parameters,
-    pub(super) key_info: Option<KeygenResultInfo>,
     /// Last time we were able to make progress
     pub(super) last_message_timestamp: Instant,
 }
@@ -81,7 +80,6 @@ impl KeygenState {
             all_signer_idxs,
             delayed_next_stage_data: Vec::new(),
             key_id,
-            key_info: None,
             params,
             maps_for_validator_id_and_idx: Arc::new(idx_map),
             last_message_timestamp: Instant::now(),
@@ -266,8 +264,6 @@ impl KeygenState {
                     validator_map: Arc::clone(&self.maps_for_validator_id_and_idx),
                     params: self.params,
                 };
-
-                self.key_info = Some(key_info.clone());
 
                 return Some(key_info);
             }
