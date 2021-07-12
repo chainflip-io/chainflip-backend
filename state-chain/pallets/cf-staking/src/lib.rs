@@ -572,7 +572,7 @@ impl<T: Config> Pallet<T> {
 		};
 
 		// Compute the message hash to be signed.
-		match Self::encode_claim_request(account_id, &details) {
+		match Self::try_encode_claim_request(account_id, &details) {
 			Ok(payload) => {
 				let msg_hash: U256 = Keccak256::hash(&payload[..]).as_bytes().into();
 				details.msg_hash = Some(msg_hash);
@@ -616,7 +616,7 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	fn encode_claim_request(
+	fn try_encode_claim_request(
 		account_id: &T::AccountId,
 		claim_details: &ClaimDetailsFor<T>,
 	) -> ethabi::Result<Bytes> {
