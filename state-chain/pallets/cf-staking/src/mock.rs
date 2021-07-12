@@ -1,12 +1,10 @@
 use std::time::Duration;
 
 use crate as pallet_cf_staking;
-use app_crypto::ecdsa::Public;
 use frame_support::parameter_types;
 use pallet_cf_flip;
 use sp_core::H256;
 use sp_runtime::{
-	app_crypto,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
@@ -92,7 +90,6 @@ impl pallet_cf_staking::Config for Test {
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123123u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
-pub const CHARLIE: <Test as frame_system::Config>::AccountId = 789u64;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {

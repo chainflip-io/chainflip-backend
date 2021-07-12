@@ -1,6 +1,5 @@
 use crate::{
-	mock::*, pallet, ClaimDetails, ClaimDetailsFor, Error, EthereumAddress, Pallet,
-	PendingClaims,
+	mock::*, pallet, ClaimDetails, ClaimDetailsFor, Error, EthereumAddress, Pallet, PendingClaims,
 };
 use cf_traits::mocks::epoch_info;
 use codec::Encode;
@@ -583,7 +582,8 @@ fn test_claim_all() {
 #[test]
 fn test_claim_payload() {
 	use ethabi::{Address, Token};
-	const ABI_JSON: &[u8; 11016] = std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json");
+	const ABI_JSON: &[u8; 11435] =
+		std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json");
 	const EXPIRY_SECS: u64 = 10;
 	const AMOUNT: u128 = 1234567890;
 

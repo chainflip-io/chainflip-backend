@@ -61,9 +61,7 @@ use codec::{Encode, FullCodec};
 use ethabi::{Bytes, Function, Param, ParamType};
 use sp_core::U256;
 use sp_runtime::{
-	traits::{
-		AtLeast32BitUnsigned, Bounded, CheckedSub, Hash, Keccak256, One, UniqueSaturatedInto, Zero,
-	},
+	traits::{AtLeast32BitUnsigned, CheckedSub, Hash, Keccak256, UniqueSaturatedInto, Zero},
 	DispatchError,
 };
 
