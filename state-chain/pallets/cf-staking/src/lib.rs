@@ -630,6 +630,7 @@ impl<T: Config> Pallet<T> {
 						ParamType::Uint(64),
 						ParamType::Uint(64),
 						ParamType::Uint(64),
+						ParamType::Address,
 					]),
 				),
 				Param::new("nodeID", ParamType::FixedBytes(32)),
