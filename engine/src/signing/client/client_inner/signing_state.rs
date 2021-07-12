@@ -236,7 +236,6 @@ impl SigningState {
                     ss.aggregate_pubkey,
                 );
                 let verify_sig = signature.verify(&self.message_info.hash.0, &key.aggregate_pubkey);
-                assert!(verify_sig.is_ok());
 
                 if verify_sig.is_ok() {
                     info!("Generated signature is correct! 🎉");
@@ -244,6 +243,21 @@ impl SigningState {
                         self.message_info.clone(),
                         signature,
                     )));
+                } else {
+                    self.update_stage(SigningStage::Abandoned);
+
+                    error!(
+                        "Local Sigs verify error for message: {:?}",
+                        self.message_info
+                    );
+
+                    // TODO: find the parties that are to blame for the verify failure
+                    let event = InnerEvent::SigningResult(SigningOutcome::invalid(
+                        self.message_info.clone(),
+                        vec![],
+                    ));
+
+                    self.send_event(event);
                 }
                 self.update_stage(SigningStage::Finished);
             }

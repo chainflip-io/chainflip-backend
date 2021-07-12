@@ -132,10 +132,11 @@ AwaitingBc1--timeout <br>phase1_timeout-->Timeout2;
 AwaitingLocalSig3==All Local Sigs Collected<br>signing_local_sig_gets_delayed==>Finalise3[Verify Local Sigs];
 AwaitingLocalSig3--timeout<br>phase3_timeout-->Timeout2;
 Finalise3==valid==>MessageSigned;
+Finalise3--generated signature verify failure-->InvalidSig[Failure: send invalid signal with no blame]
 Finalise3--invalid<br>invalid_local_sig-->InvalidLS[Failure: Report senders of invalid local sig]
 
 classDef Error stroke:#f66,stroke-width:2px;
-class InvalidLS,InvalidSec2,InvalidBC1,Timeout2,Timeout1 Error
+class InvalidLS,InvalidSec2,InvalidBC1,Timeout2,Timeout1,InvalidSig Error
 ```
 
 >Flow chart of message signing ceremony used by the `SigningState`. Also shows unit test names in links.
