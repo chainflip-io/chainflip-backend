@@ -1,4 +1,4 @@
-[
+  [
     {
       "inputs": [
         {
@@ -332,6 +332,11 @@
               "internalType": "uint256",
               "name": "nonce",
               "type": "uint256"
+            },
+            {
+              "internalType": "address",
+              "name": "kTimesGAddr",
+              "type": "address"
             }
           ],
           "internalType": "struct IShared.SigData",
@@ -382,6 +387,11 @@
               "internalType": "uint256",
               "name": "nonce",
               "type": "uint256"
+            },
+            {
+              "internalType": "address",
+              "name": "kTimesGAddr",
+              "type": "address"
             }
           ],
           "internalType": "struct IShared.SigData",
@@ -417,6 +427,11 @@
               "internalType": "uint256",
               "name": "nonce",
               "type": "uint256"
+            },
+            {
+              "internalType": "address",
+              "name": "kTimesGAddr",
+              "type": "address"
             }
           ],
           "internalType": "struct IShared.SigData",
