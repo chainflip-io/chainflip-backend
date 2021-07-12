@@ -124,6 +124,8 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
                                 .await;
                         }
                         _ => {
+                            // TODO: Use the reported bad nodes in the SigningOutcome / SigningFailure
+                            // TODO: retry signing with a different subset of signers
                             log::error!("Signing module returned error signing message")
                         }
                     },

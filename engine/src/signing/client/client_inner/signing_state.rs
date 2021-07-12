@@ -190,7 +190,6 @@ impl SigningState {
     }
 
     fn signer_idx_to_validator_id(&self, idx: usize) -> ValidatorId {
-        // chosen by our on module
         let id = self.key_info.get_id(idx);
         id
     }
@@ -274,12 +273,10 @@ impl SigningState {
 
                 if verify_sig.is_ok() {
                     info!("Generated signature is correct! 🎉");
-                    let _ =
-                        self.event_sender
-                            .send(InnerEvent::SigningResult(SigningOutcome::success(
-                                self.message_info.clone(),
-                                signature,
-                            )));
+                    self.send_event(InnerEvent::SigningResult(SigningOutcome::success(
+                        self.message_info.clone(),
+                        signature,
+                    )));
                 }
                 self.update_stage(SigningStage::Finished);
             }
@@ -411,7 +408,10 @@ impl SigningState {
                 self.on_local_sig_received(sender_id, sig);
             }
             (SigningStage::Abandoned, data) => {
-                warn!("Dropping {} for abandoned Signing state", data);
+                warn!(
+                    "Dropping {} for abandoned Signing state, Message: {:?}",
+                    data, self.message_info
+                );
             }
             _ => {
                 warn!("Dropping unexpected message for stage {:?}", self.stage);
@@ -461,6 +461,8 @@ impl SigningState {
                 ));
 
                 self.send_event(event);
+
+                self.update_stage(SigningStage::Abandoned);
             }
         }
     }
