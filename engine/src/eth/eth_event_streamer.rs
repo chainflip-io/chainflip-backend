@@ -50,13 +50,18 @@ impl<S: EventSource> EthEventStreamBuilder<S> {
 impl<S: EventSource> EthEventStreamer<S> {
     /// Create a stream of Ethereum log events. If `from_block` is `None`, starts at the pending block.
     pub async fn run(&self, from_block: Option<u64>) -> Result<()> {
+        println!("Starting sm event stream");
         // Make sure the eth node is fully synced
         loop {
+            println!("Get the syncing state of the eth node");
+            // NB: We are stuck awaiting on this. Probs due to ganache stuck in error state
             match self.web3_client.eth().syncing().await? {
                 SyncState::Syncing(info) => {
+                    println!("Waiting for eth node to sync");
                     log::info!("Waiting for eth node to sync: {:?}", info);
                 }
                 SyncState::NotSyncing => {
+                    println!("Eth node not syncing");
                     log::info!("Eth node is synced, subscribing to log events.");
                     break;
                 }
@@ -64,15 +69,19 @@ impl<S: EventSource> EthEventStreamer<S> {
             tokio::time::sleep(Duration::from_secs(4)).await;
         }
 
+        println!("Got sync state");
         // The `fromBlock` parameter doesn't seem to work reliably with subscription streams, so
         // request past block via http and prepend them to the stream manually.
         let past_logs = if let Some(b) = from_block {
             let http_filter = self.event_source.filter_builder(b.into()).build();
 
+            println!("About to get logs");
             self.web3_client.eth().logs(http_filter).await?
         } else {
             Vec::new()
         };
+
+        println!("Past logs len: {}", past_logs.len());
 
         // This is the filter for the subscription. Explicitly set it to start at the pending block
         // since this is what happens in most cases anyway.
@@ -93,6 +102,7 @@ impl<S: EventSource> EthEventStreamer<S> {
 
         let event_stream = log_stream.map(|log_result| self.event_source.parse_event(log_result?));
 
+        println!("About to start the processing loop future");
         let processing_loop_fut = event_stream.for_each_concurrent(None, |parse_result| async {
             match parse_result {
                 Ok(event) => {

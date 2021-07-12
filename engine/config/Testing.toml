@@ -19,7 +19,7 @@ private_key_file = "/run/secrets/eth_private_key"
 # Address used on the Ganache/Brownie tests
 key_manager_eth_address = "0xdBa9b6065Deb6Cc057BC779fF6736709ecBa3409"
 stake_manager_eth_address = "0x6951b5Bd815043E3F842c1b026b0Fa888Cc2DD85"
-sync_from_block = 12703650
+sync_from_block = 12793720
 
 [health_check]
 hostname = "127.0.0.1"
