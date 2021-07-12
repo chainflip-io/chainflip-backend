@@ -8,11 +8,7 @@ async fn should_await_bc1_after_rts() {
 
     let mut c1 = states.key_ready.clients[0].clone();
 
-    let key = c1
-        .get_keygen()
-        .get_key_info_by_id(KEY_ID)
-        .expect("no key")
-        .to_owned();
+    let key = c1.get_key(KEY_ID).expect("no key").to_owned();
 
     c1.signing_manager
         .on_request_to_sign(MESSAGE_HASH.clone(), key, SIGN_INFO.clone());
@@ -43,11 +39,7 @@ async fn should_process_delayed_bc1_after_rts() {
 
     assert_eq!(signing_delayed_count(&c1, &MESSAGE_INFO), 1);
 
-    let key = c1
-        .get_keygen()
-        .get_key_info_by_id(KEY_ID)
-        .expect("no key")
-        .to_owned();
+    let key = c1.get_key(KEY_ID).expect("no key").to_owned();
 
     c1.signing_manager
         .on_request_to_sign(MESSAGE_HASH.clone(), key, SIGN_INFO.clone());

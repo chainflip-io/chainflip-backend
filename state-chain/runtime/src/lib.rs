@@ -382,6 +382,16 @@ impl pallet_cf_emissions::Config for Runtime {
 	type MintFrequency = MintFrequency;
 }
 
+parameter_types! {
+	pub const TransactionByteFee: FlipBalance = 1_000_000;
+}
+
+impl pallet_transaction_payment::Config for Runtime {
+	type OnChargeTransaction = pallet_cf_flip::FlipTransactionPayment<Self>;
+	type TransactionByteFee = TransactionByteFee;
+	type WeightToFee = IdentityFee<FlipBalance>;
+	type FeeMultiplierUpdate = ();
+}
 
 construct_runtime!(
 	pub enum Runtime where
@@ -395,6 +405,7 @@ construct_runtime!(
 		Flip: pallet_cf_flip::{Module, Event<T>, Storage, Config<T>},
 		Emissions: pallet_cf_emissions::{Module, Call, Event<T>, Config<T>},
 		Staking: pallet_cf_staking::{Module, Call, Storage, Event<T>, Config<T>},
+		TransactionPayment: pallet_transaction_payment::{Module, Storage},
 		Session: pallet_session::{Module, Storage, Event, Config<T>},
 		Historical: session_historical::{Module},
 		Witness: pallet_cf_witness::{Module, Call, Event<T>, Origin},

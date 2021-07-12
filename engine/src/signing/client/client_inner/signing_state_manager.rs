@@ -10,14 +10,14 @@ use crate::{
     p2p::ValidatorId,
     signing::{
         client::{client_inner::client_inner::SigningData, SigningInfo},
-        crypto::Parameters,
         MessageHash, MessageInfo,
     },
 };
 
 use super::{
     client_inner::{Broadcast1, InnerEvent, SigningDataWrapped},
-    signing_state::{KeygenResultInfo, SigningState},
+    common::KeygenResultInfo,
+    signing_state::SigningState,
 };
 
 /// Manages multiple signing states for multiple signing processes

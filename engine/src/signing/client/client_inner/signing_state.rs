@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Instant};
+use std::time::Instant;
 
 use itertools::Itertools;
 use log::*;
@@ -6,7 +6,7 @@ use tokio::sync::mpsc;
 
 use super::{
     client_inner::{InnerEvent, MultisigMessage, SigningDataWrapped},
-    utils::ValidatorMaps,
+    common::{KeygenResult, KeygenResultInfo},
 };
 
 use crate::{
@@ -20,42 +20,12 @@ use crate::{
             },
             SigningInfo,
         },
-        crypto::{Keys, LocalSig, Parameters, SharedKeys, Signature, VerifiableSS, GE},
+        crypto::{LocalSig, Parameters, Signature},
         MessageInfo,
     },
 };
 
 use super::{client_inner::SigningData, shared_secret::SharedSecretState};
-
-#[derive(Clone)]
-pub(super) struct KeygenResult {
-    pub(super) keys: Keys,
-    pub(super) shared_keys: SharedKeys,
-    pub(super) aggregate_pubkey: GE,
-    pub(super) vss: Vec<VerifiableSS<GE>>,
-}
-
-// TODO: combine the two Arcs?
-#[derive(Clone)]
-pub(super) struct KeygenResultInfo {
-    pub key: Arc<KeygenResult>,
-    pub validator_map: Arc<ValidatorMaps>,
-    pub params: Parameters,
-}
-
-impl KeygenResultInfo {
-    pub(super) fn get_idx(&self, id: &ValidatorId) -> Option<usize> {
-        self.validator_map.get_idx(id)
-    }
-
-    pub(super) fn get_id(&self, idx: usize) -> ValidatorId {
-        // providing an invalid idx is considered a programmer error here
-        self.validator_map
-            .get_id(idx)
-            .expect("invalid index")
-            .clone()
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) enum SigningStage {

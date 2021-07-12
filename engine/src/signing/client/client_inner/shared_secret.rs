@@ -8,7 +8,7 @@ use crate::signing::{
 
 use super::{
     client_inner::{Broadcast1, Secret2},
-    signing_state::KeygenResult,
+    common::KeygenResult,
 };
 
 use log::*;
