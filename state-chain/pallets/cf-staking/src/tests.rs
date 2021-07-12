@@ -579,3 +579,52 @@ fn test_claim_all() {
 		);
 	});
 }
+
+#[test]
+fn test_claim_payload() {
+	use ethabi::{Address, Token};
+	const ABI_JSON: &[u8; 11016] = std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json");
+	const EXPIRY_SECS: u64 = 10;
+	const AMOUNT: u128 = 1234567890;
+
+	const NONCE: u64 = 6;
+
+	let stake_manager = ethabi::Contract::load(ABI_JSON as &[u8]).unwrap();
+	let register_claim = stake_manager.function("registerClaim").unwrap();
+
+	let claim_details: ClaimDetailsFor<Test> = ClaimDetails {
+		msg_hash: None,
+		amount: AMOUNT,
+		nonce: NONCE,
+		address: ETH_DUMMY_ADDR,
+		expiry: Duration::from_secs(EXPIRY_SECS),
+		signature: None,
+	};
+
+	let runtime_payload = Staking::try_encode_claim_request(&ALICE, &claim_details).unwrap();
+
+	assert_eq!(
+		// Our encoding:
+		runtime_payload,
+		// "Canoncial" encoding based on the abi definition above and using the ethabi crate:
+		register_claim
+			.encode_input(&vec![
+				// sigData: SigData(uint, uint, uint)
+				Token::Tuple(vec![
+					Token::Uint(ethabi::Uint::zero()),
+					Token::Uint(ethabi::Uint::zero()),
+					Token::Uint(ethabi::Uint::from(NONCE)),
+					Token::Address(Address::from(ETH_DUMMY_ADDR)),
+				]),
+				// nodeId: bytes32
+				Token::FixedBytes(ALICE.using_encoded(|bytes| bytes.to_vec())),
+				// amount: uint
+				Token::Uint(ethabi::Uint::from(AMOUNT)),
+				// staker: address
+				Token::Address(Address::from(ETH_DUMMY_ADDR)),
+				// epiryTime: uint48
+				Token::Uint(ethabi::Uint::from(EXPIRY_SECS)),
+			])
+			.unwrap()
+	);
+}
