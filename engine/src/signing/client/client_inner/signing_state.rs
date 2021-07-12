@@ -247,11 +247,10 @@ impl SigningState {
                     self.update_stage(SigningStage::Abandoned);
 
                     error!(
-                        "Local Sigs verify error for message: {:?}",
+                        "Unexpected signature verification failure. This should never happen. {:?}",
                         self.message_info
                     );
 
-                    // TODO: find the parties that are to blame for the verify failure
                     let event = InnerEvent::SigningResult(SigningOutcome::invalid(
                         self.message_info.clone(),
                         vec![],
