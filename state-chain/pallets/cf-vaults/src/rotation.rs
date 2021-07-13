@@ -1,12 +1,14 @@
 use codec::{Encode, Decode};
 use frame_support::RuntimeDebug;
+use std::ops::Add;
 
 pub type NewPublicKey = Vec<u8>;
 pub type BadValidators<ValidatorId> = Vec<ValidatorId>;
+pub type RequestIndex = u32;
 
-pub trait IncrementingIndex: std::ops::Add + Sized {
-	fn is_valid(&self, idx: Self) -> bool;
-	fn next(&mut self) -> Self;
+pub trait Index<T: Add> {
+	fn is_valid(idx: T) -> bool;
+	fn next() -> T;
 }
 
 pub trait RequestResponse<Request, Response> {

@@ -31,8 +31,6 @@ use sp_std::prelude::*;
 use crate::rotation::*;
 use std::ops::Add;
 
-type RequestIndex = u32;
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -72,7 +70,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
 	#[pallet::storage]
-	#[pallet::getter(fn auction_size_range)]
+	#[pallet::getter(fn request_idx)]
 	pub(super) type RequestIdx<T: Config> = StorageValue<_, RequestIndex, ValueQuery>;
 
 	#[pallet::event]
@@ -116,7 +114,7 @@ pub mod pallet {
 
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			ensure!(RequestIdx::<T>::get().is_valid(request_id), Error::<T>::InvalidRequestIdx);
+			ensure!(Self::is_valid(request_id), Error::<T>::InvalidRequestIdx);
 			Ok(().into())
 		}
 
@@ -139,7 +137,7 @@ pub mod pallet {
 			response: ValidatorRotationResponse,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			ensure!(RequestIdx::<T>::get().is_valid(request_id), Error::<T>::InvalidRequestIdx);
+			ensure!(Self::is_valid(request_id), Error::<T>::InvalidRequestIdx);
 			Ok(().into())
 		}
 	}
@@ -161,14 +159,13 @@ pub mod pallet {
 	}
 }
 
-impl IncrementingIndex for RequestIndex {
-	fn is_valid(&self, idx: Self) -> bool {
-		*self == idx
+impl<T: Config> Index<RequestIndex> for Pallet<T> {
+	fn is_valid(idx: RequestIndex) -> bool {
+		RequestIdx::<T>::get() == idx
 	}
 
-	fn next(&mut self) -> Self {
-		*self = self.add(1);
-		*self
+	fn next() -> RequestIndex {
+		RequestIdx::<T>::mutate(|idx| *idx + 1)
 	}
 }
 
