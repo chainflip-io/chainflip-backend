@@ -29,8 +29,10 @@ use frame_support::traits::ValidatorRegistration;
 pub use pallet::*;
 use sp_runtime::traits::{AtLeast32BitUnsigned, One, Zero};
 use sp_std::prelude::*;
+use crate::rotation::*;
+use std::ops::Add;
 
-type RequestIdx = u32;
+type RequestIndex = u32;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -123,3 +125,22 @@ pub mod pallet {
 		fn build(&self) {}
 	}
 }
+
+impl IncrementingIndex for RequestIndex {
+	fn is_valid(&self, idx: Self) -> bool {
+		*self == idx
+	}
+
+	fn next(&mut self) -> Self {
+		*self = self.add(1);
+		*self
+	}
+}
+
+// impl<T: Config> KeyRotation<ValidatorId> for Pallet<T> {
+// 	type AuctionPenalty = T::AuctionPenalty;
+// 	type KeyGenRequestResponse = ();
+// 	type Construct = ();
+// 	type ConstructionHandler = ();
+// 	type ValidatorRotationRequestResponse = ();
+// }

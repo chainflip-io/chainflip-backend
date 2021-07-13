@@ -4,6 +4,11 @@ use frame_support::RuntimeDebug;
 type NewPublicKey = Vec<u8>;
 type BadValidators<ValidatorId> = Vec<ValidatorId>;
 
+pub trait IncrementingIndex: std::ops::Add + Sized {
+	fn is_valid(&self, idx: Self) -> bool;
+	fn next(&mut self) -> Self;
+}
+
 pub trait RequestResponse<Request, Response> {
 	fn request(&self, request: Request);
 	fn response(&self, response: Response);
