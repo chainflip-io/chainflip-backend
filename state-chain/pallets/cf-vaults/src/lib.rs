@@ -129,6 +129,18 @@ pub mod pallet {
 			request_id: RequestIndex,
 			response: ValidatorRotationResponse,
 		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			let call = Call::<T>::vault_rotation_response(request_id, response);
+			T::Witnesser::witness(who, call.into())
+		}
+
+		#[pallet::weight(10_000)]
+		pub fn vault_rotation_response(
+			origin: OriginFor<T>,
+			request_id: RequestIndex,
+			response: ValidatorRotationResponse,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureWitnessed::ensure_origin(origin)?;
 			ensure!(RequestIdx::<T>::get().is_valid(request_id), Error::<T>::InvalidRequestIdx);
 			Ok(().into())
 		}
