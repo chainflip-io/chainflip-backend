@@ -179,7 +179,7 @@ pub struct SigningFailure {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SigningSuccess {
     pub message_info: MessageInfo,
-    pub sig: SchnorrSignature, // This is the signature that should change
+    pub sig: SchnorrSignature,
 }
 
 /// The final result of a Signing ceremony
