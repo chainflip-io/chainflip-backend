@@ -12,6 +12,7 @@
 //!
 //! ## Terminology
 //! - **Vault:** An entity
+mod rotation;
 
 #[cfg(test)]
 mod mock;
@@ -22,75 +23,20 @@ mod tests;
 #[macro_use]
 extern crate assert_matches;
 
-use cf_traits::{
-	Auction, AuctionConfirmation, AuctionError, AuctionPhase, AuctionRange, BidderProvider,
-};
 use frame_support::pallet_prelude::*;
 use frame_support::sp_std::mem;
 use frame_support::traits::ValidatorRegistration;
 pub use pallet::*;
 use sp_runtime::traits::{AtLeast32BitUnsigned, One, Zero};
-use sp_std::cmp::min;
 use sp_std::prelude::*;
 
 type RequestIdx = u32;
-
-pub trait Construct<ValidatorId> {
-	// Start the construction phase.  When complete `ConstructionHandler::on_completion()`
-	// would be used to notify that this is complete
-	fn start_construction_phase(keygen_response: KeygenResponse<ValidatorId>);
-}
-
-pub trait ConstructionHandler {
-	// Construction phase complete
-	// fn on_completion(completed: Result<CompletedConstruct, CompletedConstructError>);
-}
-
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum ChainParams {
-	// Ethereum blockchain
-	//
-	// The value is the call data encoded for the final transaction
-	// to request the key rotation via `setAggKeyWithAggKey`
-	Ethereum(Vec<u8>),
-}
-
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct KeygenRequest<ValidatorId> {
-	// Chain
-	chain: ChainParams,
-	// validator_candidates - the set from which we would like to generate the key
-	validator_candidates: Vec<ValidatorId>,
-}
-
-type NewPublicKey = Vec<u8>;
-type BadValidators<ValidatorId> = Vec<ValidatorId>;
-
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum KeygenResponse<ValidatorId> {
-	// The KGC has completed successfully with a new public key
-	Success(NewPublicKey),
-	// Something went wrong and it has failed.
-	// Re-run the auction minus the bad validators
-	Failure(BadValidators<ValidatorId>),
-}
-
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct ValidatorRotationRequest {
-	chain: ChainParams,
-}
-
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct ValidatorRotationResponse {
-	old_key: Vec<u8>,
-	new_key: Vec<u8>,
-	tx: Vec<u8>
-}
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_system::pallet_prelude::*;
+	use crate::rotation::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
