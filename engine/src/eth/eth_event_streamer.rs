@@ -36,8 +36,9 @@ impl<S: EventSource> EthEventStreamBuilder<S> {
         if self.event_sinks.is_empty() {
             anyhow::bail!("Can't build a stream with no sink.")
         } else {
+            log::info!("Creating WS transport");
             let transport = ::web3::transports::WebSocket::new(self.url.as_str()).await?;
-
+            log::info!("Created WS transport");
             Ok(EthEventStreamer {
                 web3_client: ::web3::Web3::new(transport),
                 event_source: self.event_source,
@@ -144,20 +145,20 @@ mod tests {
     #[tokio::test]
     #[ignore = "Depends on a running ganache instance, runs forever, useful for manually testing / observing incoming events"]
     async fn subscribe_to_stake_manager_events() {
+        env_logger::init();
         let stake_manager = StakeManager::load(CONTRACT_ADDRESS).unwrap();
 
-        let mq_settings = settings::test_utils::new_test_settings()
-            .unwrap()
-            .message_queue;
+        let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let factory = NatsMQClientFactory::new(&mq_settings);
+        let factory = NatsMQClientFactory::new(&settings.message_queue);
 
         let mq_client = *factory.create().await.unwrap();
         // create the sink, which pushes events to the MQ
         let sm_sink = StakeManagerSink::<NatsMQClient>::new(mq_client)
             .await
             .unwrap();
-        let sm_event_stream = EthEventStreamBuilder::new("ws://localhost:8545", stake_manager);
+        let ws_eth_url = format!("wss://{}:{}", settings.eth.hostname, settings.eth.port);
+        let sm_event_stream = EthEventStreamBuilder::new(&ws_eth_url, stake_manager);
         let sm_event_stream = sm_event_stream.with_sink(sm_sink).build().await.unwrap();
 
         sm_event_stream.run(Some(0)).await.unwrap();
