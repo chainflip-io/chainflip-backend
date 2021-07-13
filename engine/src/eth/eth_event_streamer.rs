@@ -84,6 +84,7 @@ impl<S: EventSource> EthEventStreamer<S> {
             .filter_builder(BlockNumber::Pending)
             .build();
 
+        log::info!("Eth_subscribe to future logs");
         let future_logs = self
             .web3_client
             .eth_subscribe()
@@ -96,6 +97,7 @@ impl<S: EventSource> EthEventStreamer<S> {
 
         let event_stream = log_stream.map(|log_result| self.event_source.parse_event(log_result?));
 
+        log::info!("Create the processing loop future");
         let processing_loop_fut = event_stream.for_each_concurrent(None, |parse_result| async {
             match parse_result {
                 Ok(event) => {
