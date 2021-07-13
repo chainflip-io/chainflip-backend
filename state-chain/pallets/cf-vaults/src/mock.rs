@@ -62,10 +62,24 @@ impl frame_system::Config for Test {
 parameter_types! {
 }
 
+pub struct TestConstructor;
+impl Construct<ValidatorId> for TestConstructor {
+	fn start_construction_phase(_keygen_response: KeygenResponse<ValidatorId>) {
+		todo!()
+	}
+}
+
+pub struct TestConstructorHandler;
+impl ConstructionHandler for TestConstructorHandler {
+
+}
+
 impl Config for Test {
 	type Event = Event;
 	type Amount = Amount;
 	type ValidatorId = ValidatorId;
+	type Constructor = TestConstructor;
+	type ConstructorHandler = TestConstructorHandler;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
