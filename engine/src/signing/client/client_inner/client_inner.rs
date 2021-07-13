@@ -4,7 +4,10 @@ use crate::{
     p2p::{P2PMessage, P2PMessageCommand, ValidatorId},
     signing::{
         client::{KeyId, MultisigInstruction, SigningInfo},
-        crypto::{BigInt, KeyGenBroadcastMessage1, LocalSig, Signature, VerifiableSS, FE, GE},
+        crypto::{
+            BigInt, ECPoint, ECScalar, KeyGenBroadcastMessage1, LocalSig, Signature, VerifiableSS,
+            FE, GE,
+        },
         MessageHash, MessageInfo,
     },
 };
@@ -16,6 +19,23 @@ use super::{
     common::KeygenResultInfo, key_store::KeyStore, keygen_manager::KeygenManager,
     signing_state_manager::SigningStateManager,
 };
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SchnorrSignature {
+    /// Scalar component
+    // s: secp256k1::SecretKey,
+    pub s: [u8; 32],
+    /// Point component
+    pub r: secp256k1::PublicKey,
+}
+
+impl From<Signature> for SchnorrSignature {
+    fn from(sig: Signature) -> Self {
+        let s: [u8; 32] = sig.sigma.get_element().as_ref().clone();
+        let r = sig.v.get_element();
+        SchnorrSignature { s, r }
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub(super) enum SigningData {
@@ -159,7 +179,7 @@ pub struct SigningFailure {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SigningSuccess {
     pub message_info: MessageInfo,
-    pub sig: Signature,
+    pub sig: SchnorrSignature,
 }
 
 /// The final result of a Signing ceremony
@@ -176,6 +196,8 @@ pub enum SigningOutcome {
 impl SigningOutcome {
     /// Helper method to create SigningOutcome::MessageSigned
     pub fn success(message_info: MessageInfo, sig: Signature) -> Self {
+        let sig = SchnorrSignature::from(sig);
+
         SigningOutcome::MessageSigned(SigningSuccess { message_info, sig })
     }
 
