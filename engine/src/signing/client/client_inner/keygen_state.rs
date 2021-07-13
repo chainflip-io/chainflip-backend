@@ -1,6 +1,5 @@
 use std::{sync::Arc, time::Instant};
 
-use curv::elliptic::curves::traits::ECPoint;
 use itertools::Itertools;
 use log::*;
 use tokio::sync::mpsc::UnboundedSender;
@@ -16,7 +15,7 @@ use crate::{
             },
             KeyId,
         },
-        crypto::{InvalidKey, InvalidSS, Parameters},
+        crypto::{ECPoint, InvalidKey, InvalidSS, Parameters},
     },
 };
 

@@ -17,7 +17,7 @@ use self::client_inner::{InnerEvent, MultisigClientInner};
 
 pub use client_inner::{KeygenOutcome, KeygenSuccess, SigningOutcome, SigningSuccess};
 
-use super::{crypto::Signature, MessageHash, MessageInfo};
+use super::MessageHash;
 
 use tokio::sync::mpsc;
 
