@@ -1,8 +1,8 @@
 use codec::{Encode, Decode};
 use frame_support::RuntimeDebug;
 
-type NewPublicKey = Vec<u8>;
-type BadValidators<ValidatorId> = Vec<ValidatorId>;
+pub type NewPublicKey = Vec<u8>;
+pub type BadValidators<ValidatorId> = Vec<ValidatorId>;
 
 pub trait IncrementingIndex: std::ops::Add + Sized {
 	fn is_valid(&self, idx: Self) -> bool;
@@ -16,30 +16,25 @@ pub trait RequestResponse<Request, Response> {
 pub trait Construct<ValidatorId> {
 	// Start the construction phase.  When complete `ConstructionHandler::on_completion()`
 	// would be used to notify that this is complete
-	fn start_construction_phase(keygen_response: KeygenResponse<ValidatorId>);
+	fn start_construction_phase(response: KeygenResponse<ValidatorId>);
 }
 
-pub trait ConstructionHandler {
+pub trait ConstructionManager {
 	// Construction phase complete
 	// fn on_completion(completed: Result<CompletedConstruct, CompletedConstructError>);
 }
-
-pub trait KeyGenRequestResponse<T>
-	: RequestResponse<KeygenRequest<T>, KeygenResponse<T>> {}
-
-pub trait ValidatorRotationRequestResponse<T>
-	: RequestResponse<ValidatorRotationRequest, ValidatorRotationResponse> {}
 
 pub trait AuctionPenalty<ValidatorId> {
 	fn penalise(bad_validators: BadValidators<ValidatorId>);
 }
 
+
 pub trait KeyRotation<ValidatorId> {
 	type AuctionPenalty: AuctionPenalty<ValidatorId>;
-	type KeyGenRequestResponse: KeyGenRequestResponse<ValidatorId>;
-	type Construct: Construct<ValidatorId>;
-	type ConstructionHandler: ConstructionHandler;
-	type ValidatorRotationRequestResponse: ValidatorRotationRequestResponse<ValidatorId>;
+	type KeyGeneration: RequestResponse<KeygenRequest<ValidatorId>, KeygenResponse<ValidatorId>>;
+	type Construct: Construct<KeygenResponse<ValidatorId>>;
+	type ConstructionManager: ConstructionManager;
+	type Rotation: RequestResponse<ValidatorRotationRequest, ValidatorRotationResponse>;
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]

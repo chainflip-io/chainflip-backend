@@ -71,7 +71,7 @@ impl Construct<ValidatorId> for MockConstructor {
 }
 
 pub struct MockConstructorHandler;
-impl ConstructionHandler for MockConstructorHandler {
+impl ConstructionManager for MockConstructorHandler {
 
 }
 
@@ -97,6 +97,14 @@ impl cf_traits::Witnesser for MockWitnesser {
 	}
 }
 
+pub struct MockAuctionPenalty;
+
+impl AuctionPenalty<ValidatorId> for MockAuctionPenalty {
+	fn penalise(bad_validators: crate::rotation::BadValidators<ValidatorId>) {
+		todo!()
+	}
+}
+
 impl Config for Test {
 	type Event = Event;
 	type Call = Call;
@@ -106,6 +114,7 @@ impl Config for Test {
 	type ConstructorHandler = MockConstructorHandler;
 	type EnsureWitnessed = MockEnsureWitness;
 	type Witnesser = MockWitnesser;
+	type AuctionPenalty = MockAuctionPenalty;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

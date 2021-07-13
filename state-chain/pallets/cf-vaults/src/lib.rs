@@ -56,8 +56,7 @@ pub mod pallet {
 		/// Our constructor
 		type Constructor: Construct<Self::ValidatorId>;
 		/// Our constructor handler
-		type ConstructorHandler: ConstructionHandler;
-
+		type ConstructorHandler: ConstructionManager;
 		/// Provides an origin check for witness transactions.
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 		/// An implementation of the witnesser, allows us to define witness_* helper extrinsics.
@@ -65,7 +64,7 @@ pub mod pallet {
 			Call = <Self as Config>::Call,
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
-		// type AuctionPenalty: AuctionPenalty<Self::ValidatorId>;
+		type AuctionPenalty: AuctionPenalty<Self::ValidatorId>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -109,7 +108,6 @@ pub mod pallet {
 			T::Witnesser::witness(who, call.into())
 		}
 
-		// A response back from the CFE, good or bad but never ugly.
 		#[pallet::weight(10_000)]
 		pub fn keygen_response(
 			origin: OriginFor<T>,
@@ -174,10 +172,43 @@ impl IncrementingIndex for RequestIndex {
 	}
 }
 
-// impl<T: Config> KeyRotation<ValidatorId> for Pallet<T> {
-// 	type AuctionPenalty = T::AuctionPenalty;
-// 	type KeyGenRequestResponse = ();
-// 	type Construct = ();
-// 	type ConstructionHandler = ();
-// 	type ValidatorRotationRequestResponse = ();
-// }
+// pub struct KeyGenerationRequestResponse<T> { marker: PhantomData<T> }
+impl<T: Config> RequestResponse<KeygenRequest<T::ValidatorId>, KeygenResponse<T::ValidatorId>> for Pallet<T> {
+	fn request(&self, request: KeygenRequest<T::ValidatorId>) {
+		todo!()
+	}
+
+	fn response(&self, response: KeygenResponse<T::ValidatorId>) {
+		todo!()
+	}
+}
+
+impl<T: Config> RequestResponse<ValidatorRotationRequest, ValidatorRotationResponse> for Pallet<T> {
+	fn request(&self, request: ValidatorRotationRequest) {
+		todo!()
+	}
+
+	fn response(&self, response: ValidatorRotationResponse) {
+		todo!()
+	}
+}
+
+pub struct Constructor<ValidatorId> { marker: PhantomData<ValidatorId> }
+impl<ValidatorId> Construct<ValidatorId> for Constructor<ValidatorId> {
+	fn start_construction_phase(response: KeygenResponse<ValidatorId>) {
+		todo!()
+	}
+}
+
+pub struct ConstructionHandler;
+
+impl ConstructionManager for ConstructionHandler {
+}
+
+impl<T: Config> KeyRotation<T::ValidatorId> for Pallet<T> {
+	type AuctionPenalty = T::AuctionPenalty;
+	type KeyGeneration = Self;
+	type Construct = Constructor<KeygenResponse<T::ValidatorId>>;
+	type ConstructionManager = ConstructionHandler;
+	type Rotation = Self;
+}
