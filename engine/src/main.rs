@@ -4,7 +4,7 @@ use chainflip_engine::{
 };
 use sp_core::Pair;
 
-#[tokio::main]
+#[async_std::main]
 async fn main() {
     env_logger::init();
 
