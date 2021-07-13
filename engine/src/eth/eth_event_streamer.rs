@@ -36,8 +36,9 @@ impl<S: EventSource> EthEventStreamBuilder<S> {
         if self.event_sinks.is_empty() {
             anyhow::bail!("Can't build a stream with no sink.")
         } else {
+            log::info!("Creating WS transport");
             let transport = ::web3::transports::WebSocket::new(self.url.as_str()).await?;
-
+            log::info!("Created WS transport");
             Ok(EthEventStreamer {
                 web3_client: ::web3::Web3::new(transport),
                 event_source: self.event_source,
