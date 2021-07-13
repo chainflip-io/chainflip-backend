@@ -1,6 +1,5 @@
 use std::{sync::Arc, time::Instant};
 
-use curv::elliptic::curves::traits::ECPoint;
 use itertools::Itertools;
 use log::*;
 use tokio::sync::mpsc::UnboundedSender;
@@ -16,14 +15,14 @@ use crate::{
             },
             KeyId,
         },
-        crypto::{InvalidKey, InvalidSS, Parameters},
+        crypto::{ECPoint, InvalidKey, InvalidSS, Parameters},
     },
 };
 
 use super::{
     client_inner::{KeygenData, MultisigMessage},
+    common::KeygenResultInfo,
     shared_secret::SharedSecretState,
-    signing_state::KeygenResultInfo,
     utils::ValidatorMaps,
     InnerEvent,
 };
@@ -52,7 +51,6 @@ pub struct KeygenState {
     /// Multisig parameters are only stored here so we can put
     /// them inside `KeygenResultInfo` when we create the key
     params: Parameters,
-    pub(super) key_info: Option<KeygenResultInfo>,
     /// Last time we were able to make progress
     pub(super) last_message_timestamp: Instant,
 }
@@ -81,7 +79,6 @@ impl KeygenState {
             all_signer_idxs,
             delayed_next_stage_data: Vec::new(),
             key_id,
-            key_info: None,
             params,
             maps_for_validator_id_and_idx: Arc::new(idx_map),
             last_message_timestamp: Instant::now(),
@@ -267,8 +264,6 @@ impl KeygenState {
                     params: self.params,
                 };
 
-                self.key_info = Some(key_info.clone());
-
                 return Some(key_info);
             }
             Err(InvalidSS(blamed_idxs)) => {
@@ -358,6 +353,14 @@ impl KeygenState {
     pub fn is_abandoned(&self) -> bool {
         match self.stage {
             KeygenStage::Abandoned => true,
+            _ => false,
+        }
+    }
+
+    /// check is the KeygenStage is in the KeyReady stage
+    pub fn is_finished(&self) -> bool {
+        match self.stage {
+            KeygenStage::KeyReady => true,
             _ => false,
         }
     }

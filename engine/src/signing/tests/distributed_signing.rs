@@ -109,7 +109,7 @@ async fn coordinate_signing(mq_clients: Vec<impl IMQClient>, active_indices: &[u
         let stream = &mut streams[i - 1];
 
         while let Some(evt) = stream.next().await {
-            if let Ok(MultisigEvent::MessageSigned(_, _)) = evt {
+            if let Ok(MultisigEvent::MessageSigningResult(_)) = evt {
                 info!("Message is signed!");
                 break;
             }

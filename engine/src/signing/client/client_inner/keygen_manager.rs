@@ -13,8 +13,8 @@ use crate::{
 
 use super::{
     client_inner::{Broadcast1, KeyGenMessageWrapped, KeygenData},
+    common::KeygenResultInfo,
     keygen_state::KeygenState,
-    signing_state::KeygenResultInfo,
     utils::get_our_idx,
     InnerEvent, KeygenOutcome,
 };
@@ -61,14 +61,6 @@ impl KeygenManager {
         }
     }
 
-    // Get the key that was generated as the result of
-    // a keygen ceremony between the winners of auction `id`
-    pub(super) fn get_key_info_by_id(&self, id: KeyId) -> Option<&KeygenResultInfo> {
-        let entry = self.keygen_states.get(&id)?;
-
-        entry.key_info.as_ref()
-    }
-
     pub(super) fn process_keygen_message(
         &mut self,
         sender_id: ValidatorId,
@@ -107,8 +99,9 @@ impl KeygenManager {
     pub fn cleanup(&mut self) {
         let mut events_to_send = vec![];
 
-        // remove all states that have become abandoned (events have already been sent)
-        self.keygen_states.retain(|_, state| !state.is_abandoned());
+        // remove all states that have become abandoned or finished (KeygenOutcome have already been sent)
+        self.keygen_states
+            .retain(|_, state| !state.is_abandoned() && !state.is_finished());
 
         let timeout = self.phase_timeout;
         // Remove all pending state that hasn't been updated for

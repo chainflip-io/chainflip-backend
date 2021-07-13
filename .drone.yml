@@ -368,6 +368,23 @@ steps:
         Build: {{build.link}}
         <@508234815254953985> sort it out!!
 
+  # Destroy the testnet on failure
+  - name: destroy-on-failure
+    pull: always
+    image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+    failure: ignore
+    when:
+      status:
+        - failure
+    depends_on:
+      - create
+    commands:
+      - kubectl get pods -n $DRONE_COMMIT_BRANCH
+      - kubectl logs -l app.kubernetes.io/name=chainflip-engine -n $DRONE_COMMIT_BRANCH
+      - kubectl logs -l app.kubernetes.io/name=state-chain-node -n $DRONE_COMMIT_BRANCH
+      - cd cluster/applications/staging/chainflip-validator
+      - ./build.sh --branch=$DRONE_COMMIT_BRANCH --destroy --rpc
+
 service_account_name: drone-runner-kube
 
 # Config
