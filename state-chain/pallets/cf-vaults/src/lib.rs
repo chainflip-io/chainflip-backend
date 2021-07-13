@@ -172,7 +172,6 @@ impl IncrementingIndex for RequestIndex {
 	}
 }
 
-// pub struct KeyGenerationRequestResponse<T> { marker: PhantomData<T> }
 impl<T: Config> RequestResponse<KeygenRequest<T::ValidatorId>, KeygenResponse<T::ValidatorId>> for Pallet<T> {
 	fn request(&self, request: KeygenRequest<T::ValidatorId>) {
 		todo!()
