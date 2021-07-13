@@ -63,24 +63,49 @@ impl frame_system::Config for Test {
 parameter_types! {
 }
 
-pub struct TestConstructor;
-impl Construct<ValidatorId> for TestConstructor {
+pub struct MockConstructor;
+impl Construct<ValidatorId> for MockConstructor {
 	fn start_construction_phase(_keygen_response: KeygenResponse<ValidatorId>) {
 		todo!()
 	}
 }
 
-pub struct TestConstructorHandler;
-impl ConstructionHandler for TestConstructorHandler {
+pub struct MockConstructorHandler;
+impl ConstructionHandler for MockConstructorHandler {
 
+}
+
+pub struct MockEnsureWitness;
+
+impl EnsureOrigin<Origin> for MockEnsureWitness {
+	type Success = ();
+
+	fn try_origin(o: Origin) -> Result<Self::Success, Origin> {
+		ensure_root(o).or(Err(RawOrigin::None.into()))
+	}
+}
+
+pub struct MockWitnesser;
+
+impl cf_traits::Witnesser for MockWitnesser {
+	type AccountId = u64;
+	type Call = Call;
+
+	fn witness(_who: Self::AccountId, _call: Self::Call) -> DispatchResultWithPostInfo {
+		// We don't intend to test this, it's just to keep the compiler happy.
+		unimplemented!()
+	}
 }
 
 impl Config for Test {
 	type Event = Event;
+	type Call = Call;
 	type Amount = Amount;
 	type ValidatorId = ValidatorId;
-	type Constructor = TestConstructor;
-	type ConstructorHandler = TestConstructorHandler;
+	type Constructor = MockConstructor;
+	type ConstructorHandler = MockConstructorHandler;
+	type EnsureWitnessed = MockEnsureWitness;
+	type Witnesser = MockWitnesser;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

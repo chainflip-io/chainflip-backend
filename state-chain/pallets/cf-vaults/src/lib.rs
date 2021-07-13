@@ -24,8 +24,7 @@ mod tests;
 extern crate assert_matches;
 
 use frame_support::pallet_prelude::*;
-use frame_support::sp_std::mem;
-use frame_support::traits::ValidatorRegistration;
+use cf_traits::Witnesser;
 pub use pallet::*;
 use sp_runtime::traits::{AtLeast32BitUnsigned, One, Zero};
 use sp_std::prelude::*;
@@ -48,6 +47,8 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
+		type Call: From<Call<Self>> + IsType<<Self as frame_system::Config>::Call>;
 		/// An amount for a bid
 		type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 		/// An identity for a validator
@@ -56,11 +57,24 @@ pub mod pallet {
 		type Constructor: Construct<Self::ValidatorId>;
 		/// Our constructor handler
 		type ConstructorHandler: ConstructionHandler;
+
+		/// Provides an origin check for witness transactions.
+		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
+		/// An implementation of the witnesser, allows us to define witness_* helper extrinsics.
+		type Witnesser: Witnesser<
+			Call = <Self as Config>::Call,
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
+		// type AuctionPenalty: AuctionPenalty<Self::ValidatorId>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+
+	#[pallet::storage]
+	#[pallet::getter(fn auction_size_range)]
+	pub(super) type RequestIdx<T: Config> = StorageValue<_, RequestIndex, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -68,11 +82,11 @@ pub mod pallet {
 		// Request a KGC from the CFE
 		// request_id - a unique indicator of this request and should be used throughout the lifetime of this request
 		// request - our keygen request
-		KeygenRequestEvent(RequestIdx, KeygenRequest<T::ValidatorId>),
+		KeygenRequestEvent(RequestIndex, KeygenRequest<T::ValidatorId>),
 		// Request a rotation
-		ValidatorRotationRequest(RequestIdx, ValidatorRotationRequest),
+		ValidatorRotationRequest(RequestIndex, ValidatorRotationRequest),
 		// The validator set has been rotated
-		VaultRotationCompleted(RequestIdx),
+		VaultRotationCompleted(RequestIndex),
 	}
 
 	#[pallet::error]
@@ -83,18 +97,28 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+
 		#[pallet::weight(10_000)]
-		pub(super) fn call_me(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			Ok(().into())
+		pub fn witness_keygen_response(
+			origin: OriginFor<T>,
+			request_id: RequestIndex,
+			response: KeygenResponse<T::ValidatorId>,
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			let call = Call::<T>::keygen_response(request_id, response);
+			T::Witnesser::witness(who, call.into())
 		}
 
 		// A response back from the CFE, good or bad but never ugly.
 		#[pallet::weight(10_000)]
 		pub fn keygen_response(
 			origin: OriginFor<T>,
-			request_id: RequestIdx,
+			request_id: RequestIndex,
 			response: KeygenResponse<T::ValidatorId>,
+
 		) -> DispatchResultWithPostInfo {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+			ensure!(RequestIdx::<T>::get().is_valid(request_id), Error::<T>::InvalidRequestIdx);
 			Ok(().into())
 		}
 
@@ -102,9 +126,10 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn witness_vault_rotation_response(
 			origin: OriginFor<T>,
-			request_id: RequestIdx,
+			request_id: RequestIndex,
 			response: ValidatorRotationResponse,
 		) -> DispatchResultWithPostInfo {
+			ensure!(RequestIdx::<T>::get().is_valid(request_id), Error::<T>::InvalidRequestIdx);
 			Ok(().into())
 		}
 	}
