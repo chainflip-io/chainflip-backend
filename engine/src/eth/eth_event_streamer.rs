@@ -52,6 +52,7 @@ impl<S: EventSource> EthEventStreamer<S> {
     pub async fn run(&self, from_block: Option<u64>) -> Result<()> {
         // Make sure the eth node is fully synced
         loop {
+            log::info!("Eth node has started syncing...");
             match self.web3_client.eth().syncing().await? {
                 SyncState::Syncing(info) => {
                     log::info!("Waiting for eth node to sync: {:?}", info);
@@ -61,6 +62,8 @@ impl<S: EventSource> EthEventStreamer<S> {
                     break;
                 }
             }
+
+            // TODO: Does this sleep do anything or are we just blocked until synced??
             tokio::time::sleep(Duration::from_secs(4)).await;
         }
 
