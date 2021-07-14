@@ -13,6 +13,7 @@ pub trait Index<T: Add> {
 }
 
 pub trait RequestResponse<Index, Request, Response> {
+	//TODO Do we need the index for request here
 	fn process_request(index: Index, request: Request);
 	fn process_response(index: Index, response: Response);
 }

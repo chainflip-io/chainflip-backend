@@ -98,6 +98,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 
+		// Does this need to be more than 2/3?
 		#[pallet::weight(10_000)]
 		pub fn witness_keygen_response(
 			origin: OriginFor<T>,
@@ -122,6 +123,7 @@ pub mod pallet {
 		}
 
 		// We have witnessed a rotation, my eyes!
+		// Assumption here is that it is 2/3 threshold
 		#[pallet::weight(10_000)]
 		pub fn witness_vault_rotation_response(
 			origin: OriginFor<T>,
@@ -180,6 +182,7 @@ impl<T: Config> Index<RequestIndex> for Pallet<T> {
 
 impl<T: Config> RequestResponse<RequestIndex, KeygenRequest<T::ValidatorId>, KeygenResponse<T::ValidatorId>> for Pallet<T> {
 	fn process_request(index: RequestIndex, request: KeygenRequest<T::ValidatorId>) {
+		// Signal to CFE that we are wanting to start a new key generation
 		Self::deposit_event(Event::KeygenRequestEvent(Self::next(), request));
 	}
 
@@ -190,7 +193,9 @@ impl<T: Config> RequestResponse<RequestIndex, KeygenRequest<T::ValidatorId>, Key
 				T::Constructor::start_construction_phase(index, response, Self);
 			}
 			KeygenResponse::Failure(bad_validators) => {
-				Self::clear();
+				// Abort this key generation request
+				Self::clear(index);
+				// Do as you wish with these, I wash my hands..
 				T::AuctionPenalty::penalise(bad_validators);
 			}
 		}
