@@ -13,7 +13,7 @@ signing_key_file = "./tests/test_keystore/alice_key"
 ws_port = "9944"
 
 [eth]
-hostname = "https://:1ba7328cee5f48ff9214801376018490@rinkeby.infura.io/v3/d6302099124e4ff6943de13ad6dddb40"
+hostname = "rinkeby.infura.io/ws/v3/8225b8de4cc94062959f38e0781586d1"
 port = "80"
 # Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
 private_key_file = "/run/secrets/eth_private_key"

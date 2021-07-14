@@ -152,15 +152,35 @@ mod tests {
 
         let factory = NatsMQClientFactory::new(&settings.message_queue);
 
-        let mq_client = *factory.create().await.unwrap();
+        let mq_client = *factory.create().await.expect("Could not connect to MQ");
         // create the sink, which pushes events to the MQ
         let sm_sink = StakeManagerSink::<NatsMQClient>::new(mq_client)
             .await
             .unwrap();
-        let ws_eth_url = format!("wss://{}:{}", settings.eth.hostname, settings.eth.port);
-        let sm_event_stream = EthEventStreamBuilder::new(&ws_eth_url, stake_manager);
+
+        let ws_url = format!("wss://{}", settings.eth.hostname);
+
+        let sm_event_stream = EthEventStreamBuilder::new(ws_url.as_str(), stake_manager);
         let sm_event_stream = sm_event_stream.with_sink(sm_sink).build().await.unwrap();
 
-        sm_event_stream.run(Some(0)).await.unwrap();
+        // sm_event_stream.run(Some(0)).await.unwrap();
     }
+
+    #[tokio::test]
+    async fn setup_transport() {
+        let transport = ::web3::transports::WebSocket::new(
+            "wss://rinkeby.infura.io/ws/v3/8225b8de4cc94062959f38e0781586d1",
+        )
+        .await
+        .unwrap();
+    }
+
+    // #[tokio::test]
+    // async fn setup_builder() {
+    //     let sm_event_stream = EthEventStreamBuilder::new(
+    //         "wss://rinkeby.infura.io/ws/v3/8225b8de4cc94062959f38e0781586d1",
+    //         stake_manager,
+    //     );
+    //     sm_event_
+    // }
 }
