@@ -204,7 +204,8 @@ impl<T: Config> RequestResponse<RequestIndex, KeygenRequest<T::ValidatorId>, Key
 
 impl<T: Config> RequestResponse<RequestIndex, ValidatorRotationRequest, ValidatorRotationResponse> for Pallet<T> {
 	fn process_request(index: RequestIndex, request: ValidatorRotationRequest) {
-		todo!()
+		// Signal to CFE that we are wanting to start the rotation
+		Self::deposit_event(Event::ValidatorRotationRequest(index, request));
 	}
 
 	fn process_response(index: RequestIndex, response: ValidatorRotationResponse) {
