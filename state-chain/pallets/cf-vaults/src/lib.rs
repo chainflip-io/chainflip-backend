@@ -30,6 +30,7 @@ use sp_runtime::traits::{AtLeast32BitUnsigned, One, Zero};
 use sp_std::prelude::*;
 use crate::rotation::*;
 use std::ops::Add;
+use cf_traits::AuctionConfirmation;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -231,12 +232,4 @@ impl<T: Config> ConstructionManager<RequestIndex> for Pallet<T> {
 			}
 		}
 	}
-}
-
-impl<T: Config> KeyRotation<T::ValidatorId> for Pallet<T> {
-	type AuctionPenalty = T::AuctionPenalty;
-	type KeyGeneration = Self;
-	type Construct = Constructor<KeygenResponse<T::ValidatorId>>;
-	type ConstructionManager = ConstructionHandler;
-	type Rotation = Self;
 }

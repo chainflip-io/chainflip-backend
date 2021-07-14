@@ -34,13 +34,14 @@ pub trait AuctionPenalty<ValidatorId> {
 }
 
 
-pub trait KeyRotation<ValidatorId> {
-	type AuctionPenalty: AuctionPenalty<ValidatorId>;
-	type KeyGeneration: RequestResponse<KeygenRequest<ValidatorId>, KeygenResponse<ValidatorId>>;
-	type Construct: Construct<KeygenResponse<ValidatorId>>;
-	type ConstructionManager: ConstructionManager;
-	type Rotation: RequestResponse<ValidatorRotationRequest, ValidatorRotationResponse>;
-}
+// TODO - should this be broken down into its own trait as opposed in the pallet?
+// pub trait KeyRotation<ValidatorId> {
+// 	type AuctionPenalty: AuctionPenalty<ValidatorId>;
+// 	type KeyGeneration: RequestResponse<KeygenRequest<ValidatorId>, KeygenResponse<ValidatorId>>;
+// 	type Construct: Construct<KeygenResponse<ValidatorId>>;
+// 	type ConstructionManager: ConstructionManager;
+// 	type Rotation: RequestResponse<ValidatorRotationRequest, ValidatorRotationResponse>;
+// }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum ChainParams {
