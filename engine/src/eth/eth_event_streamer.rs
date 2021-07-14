@@ -168,11 +168,33 @@ mod tests {
 
     #[tokio::test]
     async fn setup_transport() {
-        let transport = ::web3::transports::WebSocket::new(
-            "wss://rinkeby.infura.io/ws/v3/8225b8de4cc94062959f38e0781586d1",
-        )
-        .await
-        .unwrap();
+        let h2 = tokio::spawn(async move {
+            println!("Creating transport");
+            let transport = ::web3::transports::WebSocket::new(
+                "wss://rinkeby.infura.io/ws/v3/8225b8de4cc94062959f38e0781586d1",
+            )
+            .await
+            .unwrap();
+            println!("created transport");
+        });
+
+        let h1 = tokio::spawn(async move {
+            loop {
+                // std::thread::sleep(std::time::Duration::from_secs(5));
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                println!("Another 5 seconds gone");
+                // let _ = futures_util::future::ok::<(), ()>(()).await;
+            }
+        });
+
+        futures::join!(h1, h2);
+
+        // tokio::spawn(async move {
+        //     loop {
+        //         std::thread::sleep(std::time::Duration::from_secs(5));
+        //         println!("Nummer zwei: Another 5 seconds gone");
+        //     }
+        // });
     }
 
     // #[tokio::test]
