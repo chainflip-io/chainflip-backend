@@ -16,15 +16,16 @@ pub trait RequestResponse<Index, Request, Response> {
 	fn process_request(index: Index, request: Request);
 	fn process_response(index: Index, response: Response);
 }
-pub trait Construct<ValidatorId> {
+
+pub trait Construct<Index, ValidatorId> {
 	// Start the construction phase.  When complete `ConstructionHandler::on_completion()`
 	// would be used to notify that this is complete
-	fn start_construction_phase(response: KeygenResponse<ValidatorId>);
+	fn start_construction_phase<M: ConstructionManager<Index>>(index: Index, response: KeygenResponse<ValidatorId>, manager: M);
 }
 
-pub trait ConstructionManager {
+pub trait ConstructionManager<Index> {
 	// Construction phase complete
-	// fn on_completion(completed: Result<CompletedConstruct, CompletedConstructError>);
+	fn on_completion(index: Index, err: bool);
 }
 
 pub trait AuctionPenalty<ValidatorId> {
