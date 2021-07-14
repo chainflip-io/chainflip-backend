@@ -111,6 +111,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		frame_system::Provider::<Test>::created(&BOB).unwrap();
 		assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
 		assert!(frame_system::Pallet::<Test>::account_exists(&BOB));
+		assert!(!frame_system::Pallet::<Test>::account_exists(&CHARLIE));
 		<Flip as StakeTransfer>::credit_stake(&ALICE, 100);
 		<Flip as StakeTransfer>::credit_stake(&BOB, 50);
 

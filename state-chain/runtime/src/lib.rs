@@ -374,12 +374,17 @@ impl pallet_cf_emissions::Config for Runtime {
 	type Event = Event;
 	type Call = Call;
 	type FlipBalance = FlipBalance;
-	type Emissions = pallet_cf_flip::Pallet<Runtime>;
+	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
 	type Witnesser = pallet_cf_witness::Pallet<Runtime>;
-	type RewardsDistribution = pallet_cf_emissions::NaiveRewardsDistribution<Runtime>;
+	type RewardsDistribution = pallet_cf_rewards::OnDemandRewardsDistribution<Runtime>;
 	type Validators = pallet_cf_validator::Pallet<Runtime>;
 	type MintFrequency = MintFrequency;
+	type Surplus = pallet_cf_flip::Surplus<Runtime>;
+}
+
+impl pallet_cf_rewards::Config for Runtime {
+	type Event = Event;
 }
 
 parameter_types! {
@@ -404,6 +409,7 @@ construct_runtime!(
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
 		Flip: pallet_cf_flip::{Module, Event<T>, Storage, Config<T>},
 		Emissions: pallet_cf_emissions::{Module, Call, Event<T>, Config<T>},
+		Rewards: pallet_cf_rewards::{Module, Call, Event<T>},
 		Staking: pallet_cf_staking::{Module, Call, Storage, Event<T>, Config<T>},
 		TransactionPayment: pallet_transaction_payment::{Module, Storage},
 		Session: pallet_session::{Module, Storage, Event, Config<T>},

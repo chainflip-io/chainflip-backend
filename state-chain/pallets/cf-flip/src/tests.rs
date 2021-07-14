@@ -1,6 +1,6 @@
 use std::mem;
 
-use crate::{mock::*, Config, Error, OffchainFunds, TotalIssuance};
+use crate::{mock::*, Account as FlipAccount, Config, Error, OffchainFunds, TotalIssuance};
 use cf_traits::{Issuance, StakeTransfer};
 use frame_support::traits::{HandleLifetime, Imbalance};
 use frame_support::{assert_noop, assert_ok};
@@ -18,6 +18,27 @@ fn account_to_account() {
 		assert_eq!(Flip::total_balance_of(&ALICE), 100);
 		assert_eq!(Flip::total_balance_of(&BOB), 50);
 		check_balance_integrity();
+	});
+}
+
+#[test]
+fn test_try_debit() {
+	new_test_ext().execute_with(|| {
+		// Alice's balance is 100, shouldn't be able to debit 101.
+		assert!(Flip::try_debit(&ALICE, 101).is_none());
+		assert_eq!(Flip::total_balance_of(&ALICE), 100);
+
+		// Charlie's balance is zero, trying to debit or checking the balance should not created the account.
+		assert!(Flip::try_debit(&CHARLIE, 1).is_none());
+		assert_eq!(Flip::total_balance_of(&CHARLIE), 0);
+		assert!(!FlipAccount::<Test>::contains_key(&CHARLIE));
+
+		// Using standard `debit` *does* create an account as a side-effect.
+		{
+			let zero_surplus = Flip::debit(&CHARLIE, 1);
+			assert_eq!(zero_surplus.peek(), 0);
+		}
+		assert!(FlipAccount::<Test>::contains_key(&CHARLIE));
 	});
 }
 

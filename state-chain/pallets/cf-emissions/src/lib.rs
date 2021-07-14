@@ -15,15 +15,11 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-use cf_traits::{Emissions, EmissionsTrigger, EpochInfo, RewardsDistribution, Witnesser};
+use cf_traits::{EmissionsTrigger, EpochInfo, Issuance, RewardsDistribution, Witnesser};
 use codec::FullCodec;
-use frame_support::traits::Get;
+use frame_support::traits::{Get, Imbalance};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
-use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, CheckedMul, Zero},
-	SaturatedConversion,
-};
-use sp_std::marker::PhantomData;
+use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedMul, Zero};
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -64,8 +60,15 @@ pub mod pallet {
 			+ AtLeast32BitUnsigned
 			+ UniqueSaturatedFrom<Self::BlockNumber>;
 
-		/// An implmentation of the [Emissions] trait.
-		type Emissions: Emissions<Balance = Self::FlipBalance, AccountId = Self::AccountId>;
+		/// An imbalance type representing freshly minted, unallocated funds.
+		type Surplus: Imbalance<Self::FlipBalance>;
+
+		/// An implmentation of the [Issuance] trait.
+		type Issuance: Issuance<
+			Balance = Self::FlipBalance,
+			AccountId = Self::AccountId,
+			Surplus = Self::Surplus,
+		>;
 
 		/// Provides an origin check for witness transactions.
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
@@ -74,7 +77,10 @@ pub mod pallet {
 		type Witnesser: Witnesser<Call = <Self as Config>::Call, AccountId = Self::AccountId>;
 
 		/// An implementation of `RewardsDistribution` defining how to distribute the emissions.
-		type RewardsDistribution: RewardsDistribution<Balance = Self::FlipBalance>;
+		type RewardsDistribution: RewardsDistribution<
+			Balance = Self::FlipBalance,
+			Surplus = Self::Surplus,
+		>;
 
 		/// Gives access to the current set of validators.
 		type Validators: EpochInfo<ValidatorId = Self::AccountId>;
@@ -102,11 +108,6 @@ pub mod pallet {
 	#[pallet::getter(fn last_mint_block)]
 	/// The block number at which we last minted Flip.
 	pub type LastMintBlock<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
-
-	#[pallet::storage]
-	#[pallet::getter(fn dust)]
-	/// We keep any dust that could not be allocated on the last emission.
-	pub type Dust<T: Config> = StorageValue<_, T::FlipBalance, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::metadata(T::AccountId = "AccountId")]
@@ -230,60 +231,27 @@ impl<T: Config> Pallet<T> {
 		let reward_amount = EmissionPerBlock::<T>::get()
 			.checked_mul(&blocks_elapsed)
 			.ok_or(T::DbWeight::get().reads(2))?;
-		let reward_amount = reward_amount + Dust::<T>::get();
 
-		// Do the distribution.
-		let remainder = T::RewardsDistribution::distribute(reward_amount);
+		// Mint the rewards
+		let reward = T::Issuance::mint(reward_amount);
+
+		// Delegate the distribution.
+		T::RewardsDistribution::distribute(reward);
 		let exec_weight = T::RewardsDistribution::execution_weight();
 
 		// Update this pallet's state.
 		LastMintBlock::<T>::set(block_number);
-		Dust::<T>::set(remainder);
 
 		Self::deposit_event(Event::EmissionsDistributed(block_number, reward_amount));
 
-		let weight = exec_weight + T::DbWeight::get().reads_writes(3, 2);
+		let weight = exec_weight + T::DbWeight::get().reads_writes(2, 1);
 		Ok(weight)
-	}
-
-	/// A naive distribution function that iterates through the validators and credits each with an equal portion
-	/// of the provided `FlipBalance`.
-	fn distribute_to_validators(amount: T::FlipBalance) -> T::FlipBalance {
-		let validators = T::Validators::current_validators();
-		let num_validators: T::FlipBalance = (validators.len() as u32).into();
-		let reward_per_validator = amount / num_validators;
-		let actual_issuance = reward_per_validator * num_validators;
-		let remainder = amount - actual_issuance;
-
-		for validator in validators {
-			T::Emissions::mint_to(&validator, reward_per_validator);
-		}
-
-		remainder
-	}
-}
-
-/// A simple implementation of [RewardsDistribution] that iterates through the validator set and credits each with their
-/// share of the emisson amount.
-pub struct NaiveRewardsDistribution<T>(PhantomData<T>);
-
-impl<T: Config> RewardsDistribution for NaiveRewardsDistribution<T> {
-	type Balance = T::FlipBalance;
-
-	fn distribute(amount: Self::Balance) -> Self::Balance {
-		Pallet::<T>::distribute_to_validators(amount)
-	}
-
-	fn execution_weight() -> Weight {
-		// 1 Read to get the list of validators, and 1 read/write to update each balance.
-		let rw: u64 = T::Validators::current_validators().len().saturated_into();
-		T::DbWeight::get().reads_writes(rw + 1, rw)
 	}
 }
 
 impl<T: Config> EmissionsTrigger for Pallet<T> {
 	type BlockNumber = BlockNumberFor<T>;
-	
+
 	fn trigger_emissions(block_number: Self::BlockNumber) {
 		let _ = Self::mint_rewards_for_block(block_number);
 	}
