@@ -9,6 +9,7 @@ pub type RequestIndex = u32;
 pub trait Index<T: Add> {
 	fn is_valid(idx: T) -> bool;
 	fn next() -> T;
+	fn clear(idx: T);
 }
 
 pub trait RequestResponse<Index, Request, Response> {
@@ -77,3 +78,19 @@ pub struct ValidatorRotationResponse {
 	tx: Vec<u8>
 }
 
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub struct VaultRotation<Index, ValidatorId> {
+	id: Index,
+	keygen_response: Option<KeygenResponse<ValidatorId>>,
+	// completed_construct: CompletedConstruct,
+	// validator_rotation_response: ValidatorRotationResponse,
+}
+
+impl<Index, ValidatorId> VaultRotation<Index, ValidatorId> {
+	pub fn new(id: Index) -> Self {
+		VaultRotation {
+			id,
+			keygen_response: None,
+		}
+	}
+}

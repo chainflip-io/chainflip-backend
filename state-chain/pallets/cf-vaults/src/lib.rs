@@ -73,6 +73,9 @@ pub mod pallet {
 	#[pallet::getter(fn request_idx)]
 	pub(super) type RequestIdx<T: Config> = StorageValue<_, RequestIndex, ValueQuery>;
 
+	#[pallet::storage]
+	pub(super) type VaultRotations<T: Config> = StorageMap<_, Blake2_128Concat, RequestIndex, VaultRotation<RequestIndex, T::ValidatorId>>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -161,11 +164,17 @@ pub mod pallet {
 
 impl<T: Config> Index<RequestIndex> for Pallet<T> {
 	fn is_valid(idx: RequestIndex) -> bool {
-		RequestIdx::<T>::get() == idx
+		VaultRotations::<T>::contains_key(idx)
 	}
 
 	fn next() -> RequestIndex {
-		RequestIdx::<T>::mutate(|idx| *idx + 1)
+		let idx = RequestIdx::<T>::mutate(|idx| *idx + 1);
+		VaultRotations::<T>::insert(idx, VaultRotation::new(idx));
+		idx
+	}
+
+	fn clear(idx: RequestIndex) {
+		VaultRotations::<T>::remove(idx);
 	}
 }
 
