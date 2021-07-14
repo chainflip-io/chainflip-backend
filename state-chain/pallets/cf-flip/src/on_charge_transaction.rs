@@ -32,12 +32,10 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 			return Ok(None);
 		}
 
-		// `debit` will debit the requested amount or less, if less was available.
-		let surplus = Flip::<T>::debit(who, fee);
-		if surplus.peek() != fee {
-			Err(InvalidTransaction::Payment.into())
-		} else {
+		if let Some(surplus) = Flip::<T>::try_debit(who, fee) {
 			Ok(Some(surplus))
+		} else {
+			Err(InvalidTransaction::Payment.into())
 		}
 	}
 

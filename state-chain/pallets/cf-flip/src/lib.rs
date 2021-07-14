@@ -245,6 +245,12 @@ impl<T: Config> Pallet<T> {
 		Surplus::from_acct(account_id, amount)
 	}
 
+	/// Debits an account's staked balance, if sufficient funds are available, otherwise returns `None`. Unlike [debit],
+	/// does not create the account if it doesn't exist.
+	pub fn try_debit(account_id: &T::AccountId, amount: T::Balance) -> Option<Surplus<T>> {
+		Surplus::try_from_acct(account_id, amount)
+	}
+
 	/// Credits an account with some staked funds. If the amount provided would result in overflow, does nothing.
 	///
 	/// Crediting an account creates a deficit since we need to take the credited funds from somewhere. In a sense we
