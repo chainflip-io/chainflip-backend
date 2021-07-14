@@ -10,7 +10,7 @@ use sp_runtime::{
 };
 use std::cell::RefCell;
 use crate::rotation::*;
-use crate::rotation::ChainParams::Ethereum;
+use crate::rotation::ChainParams::{Ethereum, Other};
 use cf_traits::AuctionConfirmation;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -29,7 +29,8 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		VaultsPallet: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config},
+		EthereumVault: pallet_cf_vaults::<Instance1>::{Module, Call, Storage, Event<T>, Config},
+		OtherChainVault: pallet_cf_vaults::<Instance2>::{Module, Call, Storage, Event<T>, Config},
 	}
 );
 
@@ -78,6 +79,16 @@ impl Construct<RequestIndex, ValidatorId> for EthereumConstructor {
 	}
 }
 
+pub struct OtherChainConstructor;
+impl Construct<RequestIndex, ValidatorId> for OtherChainConstructor {
+	type Manager = Test;
+	fn start_construction_phase(index: RequestIndex, response: KeygenResponse<ValidatorId>) {
+		// We would complete the construction and then notify the completion
+		Self::Manager::on_completion(index, Ok(
+			ValidatorRotationRequest::new(Other(vec![]))
+		));
+	}
+}
 
 // Our pallet is awaiting on completion
 impl ConstructionManager<RequestIndex> for Test {
@@ -128,7 +139,7 @@ impl AuctionConfirmation for MockAuctionConfirmation {
 	}
 }
 
-impl Config for Test {
+impl Config<Instance1> for Test {
 	type Event = Event;
 	type Call = Call;
 	type Amount = Amount;
@@ -140,10 +151,24 @@ impl Config for Test {
 	type AuctionConfirmation = MockAuctionConfirmation;
 }
 
+impl Config<Instance2> for Test {
+	type Event = Event;
+	type Call = Call;
+	type Amount = Amount;
+	type ValidatorId = ValidatorId;
+	type Constructor = OtherChainConstructor;
+	type EnsureWitnessed = MockEnsureWitness;
+	type Witnesser = MockWitnesser;
+	type AuctionPenalty = MockAuctionPenalty;
+	type AuctionConfirmation = MockAuctionConfirmation;
+}
+
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		frame_system: Default::default(),
-		pallet_cf_vaults: Some(VaultsPalletConfig {
+		pallet_cf_vaults_Instance1: Some(EthereumVaultConfig {
+		}),
+		pallet_cf_vaults_Instance2: Some(OtherChainVaultConfig {
 		}),
 	};
 

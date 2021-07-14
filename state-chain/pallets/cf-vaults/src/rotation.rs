@@ -50,6 +50,8 @@ pub enum ChainParams {
 	// The value is the call data encoded for the final transaction
 	// to request the key rotation via `setAggKeyWithAggKey`
 	Ethereum(Vec<u8>),
+	// This is a placeholder, not to be used in production
+	Other(Vec<u8>),
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
