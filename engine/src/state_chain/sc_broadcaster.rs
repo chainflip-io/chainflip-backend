@@ -10,11 +10,6 @@ use crate::{
 
 use crate::state_chain::staking::{WitnessClaimedCallExt, WitnessStakedCallExt};
 
-use crate::{p2p::ValidatorId, settings};
-use reqwest::header;
-
-use serde::Deserialize;
-
 use anyhow::Result;
 
 pub async fn start<IMQ, IMQF>(
