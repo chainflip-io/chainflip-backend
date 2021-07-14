@@ -117,7 +117,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			ensure!(Self::is_valid(request_id), Error::<T>::InvalidRequestIdx);
-			Self::process_response(response);
+			Self::process_response(request_id, response);
 			Ok(().into())
 		}
 
@@ -142,7 +142,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			ensure!(Self::is_valid(request_id), Error::<T>::InvalidRequestIdx);
-			Self::process_response(response);
+			Self::process_response(request_id, response);
 			Ok(().into())
 		}
 	}
