@@ -1,5 +1,5 @@
 use chainflip_engine::{
-    eth, health::health_check, mq::nats_client::NatsMQClientFactory, p2p::ValidatorId,
+    eth, health::spawn_health_check, mq::nats_client::NatsMQClientFactory, p2p::ValidatorId,
     settings::Settings, signing, state_chain, temp_event_mapper::TempEventMapper,
 };
 use sp_core::Pair;
@@ -12,7 +12,7 @@ async fn main() {
 
     let settings = Settings::new().expect("Failed to initialise settings");
 
-    tokio::spawn(health_check(settings.clone().health_check));
+    spawn_health_check(settings.clone().health_check).await;
 
     let mq_factory = NatsMQClientFactory::new(&settings.message_queue);
 
