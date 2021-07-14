@@ -61,7 +61,11 @@ where
             .unwrap();
 
         let account_id = signer.account_id();
-        let nonce = sc_client.account(&account_id, None).await.unwrap().nonce;
+        let nonce = sc_client
+            .account(&account_id, None)
+            .await
+            .expect("Should be able to fetch account info")
+            .nonce;
         log::info!("Initial state chain nonce is: {}", nonce);
         signer.set_nonce(nonce);
 
@@ -231,23 +235,6 @@ mod tests {
         };
 
         let result = sc_broadcaster.submit_event(staked_event).await;
-
-        println!("Result: {:#?}", result);
-    }
-
-    #[tokio::test]
-    #[ignore = "depends on running state chain"]
-    async fn sc_broadcaster_get_nonce() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
-        let sc_client = create_subxt_client(settings.state_chain.clone())
-            .await
-            .unwrap();
-
-        let result = sc_client
-            .account(&AccountKeyring::Alice.to_account_id(), None)
-            .await
-            .unwrap()
-            .nonce;
 
         println!("Result: {:#?}", result);
     }
