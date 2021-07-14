@@ -71,18 +71,18 @@ It also handles buffering incoming `Secret2`s until the `KeygenState` in in the 
 
 ```mermaid
 graph TD;
-Idle--bc1-->AwaitingKR[Awaiting Keygen Request];
-Idle--keygen request-->AwaitingBc1[Awaiting BC1];
-AwaitingKR--timeout-->Timeout1[Failure: report senders of bc1];
+Idle--bc1<br>bc1_gets_delayed_until_keygen_request-->AwaitingKR[Awaiting Keygen Request];
+Idle==keygen request<br>keygen_message_from_invalid_validator<br>can_have_multiple_keys<br>cannot_create_key_for_known_id==>AwaitingBc1[Awaiting BC1];
+AwaitingKR--timeout<br>no_keygen_request-->Timeout1[Failure: report senders of bc1];
 AwaitingKR--keygen request-->AwaitingBc1;
-AwaitingBc1--All BC1s collected-->Finalise1[Finalise phase 1];
-Finalise1--valid-->AwaitSec2[Awaiting Secret2];
-Finalise1--invalid-->InvalidBC1[Failure: Report senders of invalid bc1];
-AwaitSec2--all Secret2s collected-->Finalise2[Finalise phase 2];
-AwaitSec2--timeout-->Timeout2[Failure: report slow parties];
-Finalise2--valid-->KeyReady[Key Ready];
-Finalise2--invalid-->InvalidSec2[Failure: report senders of invalid Secret2];
-AwaitingBc1--timeout-->Timeout2;
+AwaitingBc1==All BC1s collected==>Finalise1[Finalise phase 1];
+Finalise1==valid==>AwaitSec2[Awaiting Secret2];
+Finalise1--invalid<br>invalid_bc1-->InvalidBC1[Failure: Report senders of invalid bc1];
+AwaitSec2==all Secret2s collected<br>keygen_secret2_gets_delayed==>Finalise2[Finalise phase 2];
+AwaitSec2--timeout<br>phase2_timeout-->Timeout2[Failure: report slow parties];
+Finalise2==valid==>KeyReady[Key Ready];
+Finalise2--invalid<br>invalid_sec2-->InvalidSec2[Failure: report senders of invalid Secret2];
+AwaitingBc1--timeout<br>phase1_timeout-->Timeout2;
 
 style Timeout1 stroke:#f66,stroke-width:2px
 style Timeout2 stroke:#f66,stroke-width:2px
@@ -113,6 +113,33 @@ If the `SharedSecretState` is being used by the `SingingState`, then `SingingSta
 While in `AwaitingLocalSig3`  it collects the signatures from all of the validators and its self.
 Once full, it aggregates them and verifies it using the aggregated public key generated in phase 2.
 If the verification fails, it shows a warning and no blame is issued. (todo)
+
+```mermaid
+graph TD;
+Idle[Idle]
+Idle--bc1<br>should_process_delayed_bc1_after_rts<br>bc1_with_different_hash-->AwaitingKR[Awaiting Signing Request];
+Idle==Signing request<br>should_await_bc1_after_rts<br>request_to_sign_before_key_ready<br>unknown_signer_ids_gracefully_handled<br>cannot_create_duplicate_sign_request<br>sign_request_from_invalid_validator==>AwaitingBc1[Awaiting BC1];
+AwaitingKR--timeout<br>delayed_signing_bc1_gets_removed-->Timeout1[Failure: report senders of bc1];
+AwaitingKR--Signing request-->AwaitingBc1;
+AwaitingBc1==All BC1s collected==>Finalise1[Finalise phase 1];
+Finalise1==valid==>AwaitSec2[Awaiting Secret2];
+Finalise1--invalid<br>invalid_bc1-->InvalidBC1[Failure: Report senders of invalid bc1];
+AwaitSec2==all Secret2s collected<br>signing_secret2_gets_delayed==>Finalise2[Finalise phase 2];
+AwaitSec2--timeout<br>phase2_timeout-->Timeout2[Failure: report slow parties];
+Finalise2==valid==>AwaitingLocalSig3[Awaiting Local Sigs];
+Finalise2--invalid<br>invalid_secret2-->InvalidSec2[Failure: report senders of invalid Secret2];
+AwaitingBc1--timeout <br>phase1_timeout-->Timeout2;
+AwaitingLocalSig3==All Local Sigs Collected<br>signing_local_sig_gets_delayed==>Finalise3[Verify Local Sigs];
+AwaitingLocalSig3--timeout<br>phase3_timeout-->Timeout2;
+Finalise3==valid==>MessageSigned;
+Finalise3--generated signature verify failure<br>This should never happen-->InvalidSig[Failure: send invalid signal with no blame]
+Finalise3--invalid<br>invalid_local_sig-->InvalidLS[Failure: Report senders of invalid local sig]
+
+classDef Error stroke:#f66,stroke-width:2px;
+class InvalidLS,InvalidSec2,InvalidBC1,Timeout2,Timeout1,InvalidSig Error
+```
+
+>Flow chart of message signing ceremony used by the `SigningState`. Also shows unit test names in links.
 
 ### bitcoin_schnorr.rs
 

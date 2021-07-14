@@ -8,7 +8,7 @@ use crate::settings;
 /// allowing external services to query, ensuring it's online
 /// Returns a HTTP 200 response to any request on {hostname}:{port}/health
 /// Method returns a Sender, allowing graceful termination of the infinite loop
-pub async fn health_check(health_check_settings: settings::HealthCheck) -> Sender<()> {
+pub async fn spawn_health_check(health_check_settings: settings::HealthCheck) -> Sender<()> {
     let bind_address = format!(
         "{}:{}",
         health_check_settings.hostname, health_check_settings.port
@@ -81,7 +81,7 @@ mod test {
     #[ignore = "runs for 10 seconds"]
     async fn health_check_test() {
         let test_settings = settings::test_utils::new_test_settings().unwrap();
-        let sender = health_check(test_settings.health_check).await;
+        let sender = spawn_health_check(test_settings.health_check).await;
         time::sleep(Duration::from_millis(10000)).await;
         sender.send(()).unwrap();
     }
