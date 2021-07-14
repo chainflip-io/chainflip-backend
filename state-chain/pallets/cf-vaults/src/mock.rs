@@ -63,16 +63,22 @@ impl frame_system::Config for Test {
 parameter_types! {
 }
 
+// This would be our chain, let's say Ethereum
+// This would be implemented by the Ethereum instance
 pub struct MockConstructor;
-impl Construct<ValidatorId> for MockConstructor {
-	fn start_construction_phase(_keygen_response: KeygenResponse<ValidatorId>) {
-		todo!()
+impl Construct<RequestIndex, ValidatorId> for MockConstructor {
+	type Manager = MockConstructorHandler;
+	fn start_construction_phase(index: RequestIndex, response: KeygenResponse<ValidatorId>) {
+		// We would complete the construction and then notify the completion
+		Self::Manager::on_completion(index, true);
 	}
 }
 
 pub struct MockConstructorHandler;
-impl ConstructionManager for MockConstructorHandler {
-
+impl ConstructionManager<RequestIndex> for MockConstructorHandler {
+	fn on_completion(index: RequestIndex, err: bool) {
+		assert!(!err);
+	}
 }
 
 pub struct MockEnsureWitness;
@@ -111,7 +117,6 @@ impl Config for Test {
 	type Amount = Amount;
 	type ValidatorId = ValidatorId;
 	type Constructor = MockConstructor;
-	type ConstructorHandler = MockConstructorHandler;
 	type EnsureWitnessed = MockEnsureWitness;
 	type Witnesser = MockWitnesser;
 	type AuctionPenalty = MockAuctionPenalty;

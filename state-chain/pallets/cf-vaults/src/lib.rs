@@ -52,9 +52,7 @@ pub mod pallet {
 		/// An identity for a validator
 		type ValidatorId: Member + Parameter;
 		/// Our constructor
-		type Constructor: Construct<Self::ValidatorId>;
-		/// Our constructor handler
-		type ConstructorHandler: ConstructionManager;
+		type Constructor: Construct<RequestIndex, Self::ValidatorId>;
 		/// Provides an origin check for witness transactions.
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 		/// An implementation of the witnesser, allows us to define witness_* helper extrinsics.
@@ -192,7 +190,7 @@ impl<T: Config> RequestResponse<RequestIndex, KeygenRequest<T::ValidatorId>, Key
 		match response {
 			KeygenResponse::Success(_) => {
 				// Go forth and construct
-				T::Constructor::start_construction_phase(index, response, Self);
+				T::Constructor::start_construction_phase(index, response);
 			}
 			KeygenResponse::Failure(bad_validators) => {
 				// Abort this key generation request
