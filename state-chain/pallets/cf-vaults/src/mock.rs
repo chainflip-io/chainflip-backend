@@ -10,6 +10,7 @@ use sp_runtime::{
 };
 use std::cell::RefCell;
 use crate::rotation::*;
+use crate::rotation::ChainParams::Ethereum;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -70,7 +71,9 @@ impl Construct<RequestIndex, ValidatorId> for EthereumConstructor {
 	type Manager = Test;
 	fn start_construction_phase(index: RequestIndex, response: KeygenResponse<ValidatorId>) {
 		// We would complete the construction and then notify the completion
-		Self::Manager::on_completion(index, true);
+		Self::Manager::on_completion(index, Ok(
+			ValidatorRotationRequest::new(Ethereum(vec![]))
+		));
 	}
 }
 

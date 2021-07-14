@@ -77,6 +77,14 @@ pub struct ValidatorRotationRequest {
 	chain: ChainParams,
 }
 
+impl ValidatorRotationRequest {
+	pub fn new(chain: ChainParams) -> ValidatorRotationRequest {
+		Self {
+			chain
+		}
+	}
+}
+
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct ValidatorRotationResponse {
 	old_key: Vec<u8>,
