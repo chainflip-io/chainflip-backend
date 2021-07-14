@@ -393,8 +393,11 @@ impl SigningState {
                     data, self.message_info
                 );
             }
-            _ => {
-                warn!("Dropping unexpected message for stage {:?}", self.stage);
+            (_, data) => {
+                warn!(
+                    "Dropping unexpected message for stage {:?}, Dropped: {:?}",
+                    self.stage, data
+                );
             }
         }
     }

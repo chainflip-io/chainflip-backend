@@ -27,7 +27,7 @@ use crate::signing::{
 };
 
 /// Number of parties participating in keygen
-const N_PARTIES: usize = 5;
+const N_PARTIES: usize = 10;
 lazy_static! {
     static ref SIGNERS: Vec<usize> = (1..=N_PARTIES).collect();
     static ref VALIDATOR_IDS: Vec<ValidatorId> =
@@ -131,7 +131,9 @@ async fn coordinate_signing(
     loop {
         for i in active_indices {
             let stream = &mut streams[*i - 1];
-            match tokio::time::timeout(Duration::from_millis(1000), stream.next()).await {
+            match tokio::time::timeout(Duration::from_millis(200 * N_PARTIES as u64), stream.next())
+                .await
+            {
                 Ok(Some(Ok(MultisigEvent::MessageSigningResult(
                     SigningOutcome::MessageSigned(_),
                 )))) => {
@@ -167,17 +169,24 @@ async fn coordinate_signing(
 async fn distributed_signing() {
     env_logger::init();
 
-    let t = 1 + ((N_PARTIES - 1) as f64 * 0.66) as usize;
+    // calculate how many parties will be in the signing
+    let doubled = N_PARTIES * 2;
+    let n = {
+        if doubled % 3 == 0 {
+            doubled / 3 - 1
+        } else {
+            doubled / 3
+        }
+    };
 
     let mut rng = StdRng::seed_from_u64(0);
 
     // Parties (from 1..=n that will participate in the signing process)
-    let mut active_indices = (1..=N_PARTIES).into_iter().choose_multiple(&mut rng, t + 1); // make sure that it works for t+k (k!=1)
+    let mut active_indices = (1..=N_PARTIES).into_iter().choose_multiple(&mut rng, n + 1);
     active_indices.sort_unstable();
 
     info!("Active parties: {:?}", active_indices);
 
-    assert!(active_indices.len() > t);
     assert!(active_indices.len() <= N_PARTIES);
 
     // Create a fake network
