@@ -1,4 +1,4 @@
-use substrate_subxt::{Client, PairSigner};
+use substrate_subxt::{system::AccountStoreExt, Client, PairSigner, Signer};
 use tokio_stream::StreamExt;
 
 use super::{helpers::create_subxt_client, runtime::StateChainRuntime};
@@ -9,6 +9,11 @@ use crate::{
 };
 
 use crate::state_chain::staking::{WitnessClaimedCallExt, WitnessStakedCallExt};
+
+use crate::{p2p::ValidatorId, settings};
+use reqwest::header;
+
+use serde::Deserialize;
 
 use anyhow::Result;
 
@@ -25,7 +30,7 @@ pub async fn start<IMQ, IMQF>(
         .await
         .expect("Should create message queue client");
 
-    let sc_broadcaster = SCBroadcaster::new(&settings, signer, mq_client).await;
+    let mut sc_broadcaster = SCBroadcaster::new(&settings, signer, mq_client).await;
 
     sc_broadcaster
         .run()
@@ -48,12 +53,17 @@ where
 {
     pub async fn new(
         settings: &Settings,
-        signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
+        mut signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
         mq_client: MQ,
     ) -> Self {
         let sc_client = create_subxt_client(settings.state_chain.clone())
             .await
             .unwrap();
+
+        let account_id = signer.account_id();
+        let nonce = sc_client.account(&account_id, None).await.unwrap().nonce;
+        log::info!("Initial state chain nonce is: {}", nonce);
+        signer.set_nonce(nonce);
 
         SCBroadcaster {
             mq_client,
@@ -62,7 +72,7 @@ where
         }
     }
 
-    pub async fn run(&self) -> Result<()> {
+    pub async fn run(&mut self) -> Result<()> {
         let stream = self
             .mq_client
             .subscribe::<StakeManagerEvent>(Subject::StakeManager)
@@ -86,7 +96,7 @@ where
     }
 
     /// Submit an event to the state chain, return the tx_hash
-    async fn submit_event(&self, event: StakeManagerEvent) -> Result<()> {
+    async fn submit_event(&mut self, event: StakeManagerEvent) -> Result<()> {
         match event {
             StakeManagerEvent::Staked {
                 account_id,
@@ -102,6 +112,7 @@ where
                 self.sc_client
                     .witness_staked(&self.signer, account_id, amount, tx_hash)
                     .await?;
+                self.signer.increment_nonce();
             }
             StakeManagerEvent::ClaimExecuted {
                 account_id,
@@ -117,6 +128,7 @@ where
                 self.sc_client
                     .witness_claimed(&self.signer, account_id, amount, tx_hash)
                     .await?;
+                self.signer.increment_nonce();
             }
             StakeManagerEvent::MinStakeChanged { .. }
             | StakeManagerEvent::EmissionChanged { .. }
@@ -208,7 +220,7 @@ mod tests {
 
         let alice = AccountKeyring::Alice.pair();
         let pair_signer = PairSigner::new(alice);
-        let sc_broadcaster = SCBroadcaster::new(&settings, pair_signer, *mq_client).await;
+        let mut sc_broadcaster = SCBroadcaster::new(&settings, pair_signer, *mq_client).await;
 
         let staked_node_id =
             AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU").unwrap();
@@ -219,6 +231,23 @@ mod tests {
         };
 
         let result = sc_broadcaster.submit_event(staked_event).await;
+
+        println!("Result: {:#?}", result);
+    }
+
+    #[tokio::test]
+    #[ignore = "depends on running state chain"]
+    async fn sc_broadcaster_get_nonce() {
+        let settings = settings::test_utils::new_test_settings().unwrap();
+        let sc_client = create_subxt_client(settings.state_chain.clone())
+            .await
+            .unwrap();
+
+        let result = sc_client
+            .account(&AccountKeyring::Alice.to_account_id(), None)
+            .await
+            .unwrap()
+            .nonce;
 
         println!("Result: {:#?}", result);
     }
