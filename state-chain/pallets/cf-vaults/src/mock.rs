@@ -67,15 +67,16 @@ parameter_types! {
 // This would be implemented by the Ethereum instance
 pub struct MockConstructor;
 impl Construct<RequestIndex, ValidatorId> for MockConstructor {
-	type Manager = MockConstructorHandler;
+	type Manager = Test;
 	fn start_construction_phase(index: RequestIndex, response: KeygenResponse<ValidatorId>) {
 		// We would complete the construction and then notify the completion
 		Self::Manager::on_completion(index, true);
 	}
 }
 
-pub struct MockConstructorHandler;
-impl ConstructionManager<RequestIndex> for MockConstructorHandler {
+
+// Our pallet is awaiting on completion
+impl ConstructionManager<RequestIndex> for Test {
 	fn on_completion(index: RequestIndex, result: Result<ValidatorRotationRequest, ValidatorRotationError>) {
 
 	}
