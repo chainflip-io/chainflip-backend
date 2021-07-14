@@ -498,8 +498,8 @@ impl SigningState {
             }
             Err(InvalidSS(blamed_idxs)) => {
                 error!(
-                    "Invalid Phase2 keygen data, abandoning state for message_info: {:?}",
-                    self.message_info
+                    "Invalid Phase2 keygen data, abandoning state for message_info: {:?}, Blaming: {:?}",
+                    self.message_info,blamed_idxs
                 );
                 self.update_stage(SigningStage::Abandoned);
 

@@ -71,7 +71,10 @@ where
                         }
                     }
                 }
-                Ok(()) = &mut shutdown_rx =>{break;}
+                Ok(()) = &mut shutdown_rx =>{
+                    log::info!("Shuting down");
+                    break;
+                }
             }
         }
     }

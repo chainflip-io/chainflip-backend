@@ -234,7 +234,10 @@ where
                             }
                         }
                     }
-                    Ok(()) = &mut shutdown_other_fut_rx =>{break;}
+                    Ok(()) = &mut shutdown_other_fut_rx =>{
+                        log::info!("Shuting down");
+                        break;
+                    }
                 }
             }
         };

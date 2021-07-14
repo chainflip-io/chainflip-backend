@@ -27,7 +27,7 @@ use crate::signing::{
 };
 
 /// Number of parties participating in keygen
-const N_PARTIES: usize = 2;
+const N_PARTIES: usize = 5;
 lazy_static! {
     static ref SIGNERS: Vec<usize> = (1..=N_PARTIES).collect();
     static ref VALIDATOR_IDS: Vec<ValidatorId> =
@@ -58,17 +58,27 @@ async fn coordinate_signing(
     let mut streams = futures::future::join_all(streams).await;
 
     // wait until all of the clients have sent the MultisigEvent::ReadyToKeygen signal
-    let ready_to_keygen = async {
+    let mut key_ready_count = 0;
+    loop {
         for s in &mut streams {
-            while let Some(evt) = s.next().await {
-                if let Ok(MultisigEvent::ReadyToKeygen) = evt {
-                    break;
+            match tokio::time::timeout(Duration::from_millis(200 * N_PARTIES as u64), s.next())
+                .await
+            {
+                Ok(Some(Ok(MultisigEvent::ReadyToKeygen))) => {
+                    key_ready_count = key_ready_count + 1;
                 }
+                Err(_) => {
+                    info!("client timed out on ReadyToKeygen.");
+                    return Err(());
+                }
+                _ => {}
             }
         }
-    };
-
-    ready_to_keygen.await;
+        if key_ready_count >= streams.len() {
+            info!("All clients ReadyToKeygen.");
+            break;
+        }
+    }
 
     // get a keygen request ready with all of the VALIDATOR_IDS
     let key_id = KeyId(0);
@@ -120,28 +130,25 @@ async fn coordinate_signing(
     let mut signed_count = 0;
     loop {
         for i in active_indices {
-            let stream = &mut streams[i - 1];
-            match tokio::time::timeout(Duration::from_millis(100), stream.next()).await {
+            let stream = &mut streams[*i - 1];
+            match tokio::time::timeout(Duration::from_millis(1000), stream.next()).await {
                 Ok(Some(Ok(MultisigEvent::MessageSigningResult(
                     SigningOutcome::MessageSigned(_),
                 )))) => {
                     info!("Message is signed from {}", i);
                     signed_count = signed_count + 1;
                 }
-                Ok(Some(Ok(MultisigEvent::MessageSigningResult(SigningOutcome::Invalid(_))))) => {
-                    return Err(());
-                }
-                Ok(Some(Ok(MultisigEvent::MessageSigningResult(
-                    SigningOutcome::Unauthorised(_),
-                )))) => {
-                    return Err(());
-                }
-                Ok(Some(Ok(MultisigEvent::MessageSigningResult(SigningOutcome::Timeout(_))))) => {
+                Ok(Some(Ok(MultisigEvent::MessageSigningResult(_)))) => {
                     return Err(());
                 }
                 Ok(None) => info!("Unexpected error: client stream returned early: {}", i),
                 Err(_) => {
-                    info!("client stream timed out: {}", i);
+                    info!(
+                        "client {} timed out. {}/{} messages signed",
+                        i,
+                        signed_count,
+                        active_indices.len() * 2
+                    );
                     return Err(());
                 }
                 _ => {}
@@ -160,7 +167,7 @@ async fn coordinate_signing(
 async fn distributed_signing() {
     env_logger::init();
 
-    let t = 1;
+    let t = 1 + ((N_PARTIES - 1) as f64 * 0.66) as usize;
 
     let mut rng = StdRng::seed_from_u64(0);
 
