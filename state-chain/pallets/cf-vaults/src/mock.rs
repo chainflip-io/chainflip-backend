@@ -13,8 +13,8 @@ use crate::rotation::*;
 use crate::rotation::ChainParams::{Ethereum, Other};
 use cf_traits::AuctionConfirmation;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-type Block = frame_system::mocking::MockBlock<Test>;
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
+type Block = frame_system::mocking::MockBlock<MockRuntime>;
 
 type Amount = u64;
 type ValidatorId = u64;
@@ -23,7 +23,7 @@ thread_local! {
 }
 
 construct_runtime!(
-	pub enum Test where
+	pub enum MockRuntime where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
@@ -38,7 +38,7 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
 
-impl frame_system::Config for Test {
+impl frame_system::Config for MockRuntime {
 	type BaseCallFilter = ();
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -70,7 +70,7 @@ parameter_types! {
 // This would be implemented by the Ethereum instance
 pub struct EthereumConstructor;
 impl Construct<RequestIndex, ValidatorId> for EthereumConstructor {
-	type Manager = Test;
+	type Manager = MockRuntime;
 	fn start_construction_phase(index: RequestIndex, response: KeygenResponse<ValidatorId>) {
 		// We would complete the construction and then notify the completion
 		Self::Manager::on_completion(index, Ok(
@@ -81,7 +81,7 @@ impl Construct<RequestIndex, ValidatorId> for EthereumConstructor {
 
 pub struct OtherChainConstructor;
 impl Construct<RequestIndex, ValidatorId> for OtherChainConstructor {
-	type Manager = Test;
+	type Manager = MockRuntime;
 	fn start_construction_phase(index: RequestIndex, response: KeygenResponse<ValidatorId>) {
 		// We would complete the construction and then notify the completion
 		Self::Manager::on_completion(index, Ok(
@@ -91,7 +91,7 @@ impl Construct<RequestIndex, ValidatorId> for OtherChainConstructor {
 }
 
 // Our pallet is awaiting on completion
-impl ConstructionManager<RequestIndex> for Test {
+impl ConstructionManager<RequestIndex> for MockRuntime {
 	fn on_completion(index: RequestIndex, result: Result<ValidatorRotationRequest, ValidatorRotationError>) {
 
 	}
@@ -139,18 +139,18 @@ impl AuctionConfirmation for MockAuctionConfirmation {
 	}
 }
 
-impl ChainFlip for Test {
+impl ChainFlip for MockRuntime {
 	type Amount = Amount;
 	type ValidatorId = ValidatorId;
 }
 
-impl AuctionManager<ValidatorId> for Test {
+impl AuctionManager<ValidatorId> for MockRuntime {
 	type AuctionPenalty = MockAuctionPenalty;
 	type AuctionConfirmation = MockAuctionConfirmation;
 }
 
 // Our vault for Ethereum
-impl Config<Instance1> for Test {
+impl Config<Instance1> for MockRuntime {
 	type Event = Event;
 	type Call = Call;
 	type Constructor = EthereumConstructor;
@@ -159,7 +159,7 @@ impl Config<Instance1> for Test {
 }
 
 // Another vault for OtherChain
-impl Config<Instance2> for Test {
+impl Config<Instance2> for MockRuntime {
 	type Event = Event;
 	type Call = Call;
 	type Constructor = OtherChainConstructor;
