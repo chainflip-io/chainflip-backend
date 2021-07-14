@@ -58,12 +58,3 @@ async fn main() {
         signing_client_fut
     );
 }
-
-#[cfg(test)]
-mod tests {
-
-    #[test]
-    fn test_example_log_file_valid() {
-        log4rs::init_file("config/log4rs.example.yml", Default::default()).unwrap();
-    }
-}

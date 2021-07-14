@@ -37,7 +37,6 @@ jsonrpc-ws-server = "17.1.0"
 kv-log-macro = {version = "1.0.7"}
 lazy_static = "1.4"
 log = {version = "0.4.14"}
-log4rs = {version = "1.0.0", features = ["json_encoder"]}
 num = "0.4.0"
 parking_lot = "0.11"
 rand = "0.7.3"
