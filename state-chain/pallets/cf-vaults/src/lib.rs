@@ -26,10 +26,9 @@ extern crate assert_matches;
 use frame_support::pallet_prelude::*;
 use cf_traits::Witnesser;
 pub use pallet::*;
-use sp_runtime::traits::{AtLeast32BitUnsigned, One, Zero};
+use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 use crate::rotation::*;
-use std::ops::Add;
 use cf_traits::AuctionConfirmation;
 
 #[frame_support::pallet]
@@ -39,15 +38,15 @@ pub mod pallet {
 	use crate::rotation::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub (super) trait Store)]
-	pub struct Pallet<T>(_);
+	#[pallet::generate_store(pub(super) trait Store)]
+	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The event type
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
-		type Call: From<Call<Self>> + IsType<<Self as frame_system::Config>::Call>;
+		type Call: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::Call>;
 		/// An amount for a bid
 		type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 		/// An identity for a validator
@@ -58,7 +57,7 @@ pub mod pallet {
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 		/// An implementation of the witnesser, allows us to define witness_* helper extrinsics.
 		type Witnesser: Witnesser<
-			Call = <Self as Config>::Call,
+			Call = <Self as pallet::Config<I>>::Call,
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
 		type AuctionPenalty: AuctionPenalty<Self::ValidatorId>;
@@ -67,18 +66,19 @@ pub mod pallet {
 
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+	}
 
 	#[pallet::storage]
 	#[pallet::getter(fn request_idx)]
-	pub(super) type RequestIdx<T: Config> = StorageValue<_, RequestIndex, ValueQuery>;
+	pub(super) type RequestIdx<T: Config<I>, I: 'static = ()> = StorageValue<_, RequestIndex, ValueQuery>;
 
 	#[pallet::storage]
-	pub(super) type VaultRotations<T: Config> = StorageMap<_, Blake2_128Concat, RequestIndex, VaultRotation<RequestIndex, T::ValidatorId>>;
+	pub(super) type VaultRotations<T: Config<I>, I: 'static = ()> = StorageMap<_, Blake2_128Concat, RequestIndex, VaultRotation<RequestIndex, T::ValidatorId>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
-	pub enum Event<T: Config> {
+	pub enum Event<T: Config<I>, I: 'static = ()> {
 		// Request a KGC from the CFE
 		// request_id - a unique indicator of this request and should be used throughout the lifetime of this request
 		// request - our keygen request
@@ -90,13 +90,13 @@ pub mod pallet {
 	}
 
 	#[pallet::error]
-	pub enum Error<T> {
+	pub enum Error<T, I = ()> {
 		/// An invalid request idx
 		InvalidRequestIdx,
 	}
 
 	#[pallet::call]
-	impl<T: Config> Pallet<T> {
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		// Does this need to be more than 2/3?
 		#[pallet::weight(10_000)]
@@ -106,7 +106,7 @@ pub mod pallet {
 			response: KeygenResponse<T::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = Call::<T>::keygen_response(request_id, response);
+			let call = Call::<T, I>::keygen_response(request_id, response);
 			T::Witnesser::witness(who, call.into())
 		}
 
@@ -118,7 +118,7 @@ pub mod pallet {
 
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			ensure!(Self::is_valid(request_id), Error::<T>::InvalidRequestIdx);
+			ensure!(Self::is_valid(request_id), Error::<T, I>::InvalidRequestIdx);
 			Self::process_response(request_id, response);
 			Ok(().into())
 		}
@@ -132,7 +132,7 @@ pub mod pallet {
 			response: ValidatorRotationResponse,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = Call::<T>::vault_rotation_response(request_id, response);
+			let call = Call::<T, I>::vault_rotation_response(request_id, response);
 			T::Witnesser::witness(who, call.into())
 		}
 
@@ -143,7 +143,7 @@ pub mod pallet {
 			response: ValidatorRotationResponse,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			ensure!(Self::is_valid(request_id), Error::<T>::InvalidRequestIdx);
+			ensure!(Self::is_valid(request_id), Error::<T, I>::InvalidRequestIdx);
 			Self::process_response(request_id, response);
 			Ok(().into())
 		}
@@ -161,28 +161,28 @@ pub mod pallet {
 
 	// The build of genesis for the pallet.
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig {
 		fn build(&self) {}
 	}
 }
 
-impl<T: Config> Index<RequestIndex> for Pallet<T> {
+impl<T: Config<I>, I: 'static> Index<RequestIndex> for Pallet<T, I> {
 	fn is_valid(idx: RequestIndex) -> bool {
-		VaultRotations::<T>::contains_key(idx)
+		VaultRotations::<T, I>::contains_key(idx)
 	}
 
 	fn next() -> RequestIndex {
-		let idx = RequestIdx::<T>::mutate(|idx| *idx + 1);
-		VaultRotations::<T>::insert(idx, VaultRotation::new(idx));
+		let idx = RequestIdx::<T, I>::mutate(|idx| *idx + 1);
+		VaultRotations::<T, I>::insert(idx, VaultRotation::new(idx));
 		idx
 	}
 
 	fn clear(idx: RequestIndex) {
-		VaultRotations::<T>::remove(idx);
+		VaultRotations::<T, I>::remove(idx);
 	}
 }
 
-impl<T: Config> RequestResponse<RequestIndex, KeygenRequest<T::ValidatorId>, KeygenResponse<T::ValidatorId>> for Pallet<T> {
+impl<T: Config<I>, I: 'static> RequestResponse<RequestIndex, KeygenRequest<T::ValidatorId>, KeygenResponse<T::ValidatorId>> for Pallet<T, I> {
 	fn process_request(index: RequestIndex, request: KeygenRequest<T::ValidatorId>) {
 		// Signal to CFE that we are wanting to start a new key generation
 		Self::deposit_event(Event::KeygenRequestEvent(Self::next(), request));
@@ -204,7 +204,7 @@ impl<T: Config> RequestResponse<RequestIndex, KeygenRequest<T::ValidatorId>, Key
 	}
 }
 
-impl<T: Config> RequestResponse<RequestIndex, ValidatorRotationRequest, ValidatorRotationResponse> for Pallet<T> {
+impl<T: Config<I>, I: 'static> RequestResponse<RequestIndex, ValidatorRotationRequest, ValidatorRotationResponse> for Pallet<T, I> {
 	fn process_request(index: RequestIndex, request: ValidatorRotationRequest) {
 		// Signal to CFE that we are wanting to start the rotation
 		Self::deposit_event(Event::ValidatorRotationRequest(index, request));
@@ -220,7 +220,7 @@ impl<T: Config> RequestResponse<RequestIndex, ValidatorRotationRequest, Validato
 	}
 }
 
-impl<T: Config> ConstructionManager<RequestIndex> for Pallet<T> {
+impl<T: Config<I>, I: 'static> ConstructionManager<RequestIndex> for Pallet<T, I> {
 	fn on_completion(index: RequestIndex, result: Result<ValidatorRotationRequest, ValidatorRotationError>) {
 		match result {
 			Ok(request) => {
