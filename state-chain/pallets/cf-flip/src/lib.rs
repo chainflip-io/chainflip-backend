@@ -103,7 +103,7 @@ pub mod pallet {
 	/// Funds belonging to on-chain reserves.
 	#[pallet::storage]
 	#[pallet::getter(fn reserve)]
-	pub type Reserve<T: Config> = StorageMap<_, Identity, ReserveId, T::Balance, ValueQuery>;
+	pub type Reserve<T: Config> = StorageMap<_, Blake2_128Concat, ReserveId, T::Balance, ValueQuery>;
 
 	/// The total number of tokens issued.
 	#[pallet::storage]
@@ -224,7 +224,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Amount of funds allocated to a [Reserve].
-	pub fn reserved_balance(reserve_id: &ReserveId) -> T::Balance {
+	pub fn reserved_balance(reserve_id: ReserveId) -> T::Balance {
 		Reserve::<T>::get(reserve_id)
 	}
 
@@ -243,11 +243,12 @@ impl<T: Config> Pallet<T> {
 			.saturating_sub(T::ExistentialDeposit::get())
 	}
 
-	/// Debits an account's staked balance. Ignores restricted funds, so can be used for slashing. Creates the account
-	/// if it doesn't exist already, so *shouldn't* be exposed via an extrinsic. Should be safe to use with validators
-	/// since they are known to have non-zero bonded funds.
+	/// Debits an account's staked balance. 
 	///
-	/// Use `try_debit` instead when the account mutation can be triggered externally.
+	/// *Warning:* Creates the flip account if it doesn't exist already, but *doesn't* ensure that the `System`-level 
+	/// account exists so should only be used with accounts that are known to exist.
+	///
+	/// Use `try_debit` instead when the existence of the account is unsure.
 	///
 	/// Debiting creates a surplus since we now have some funds that need to be allocated somewhere.
 	pub fn debit(account_id: &T::AccountId, amount: T::Balance) -> Surplus<T> {
@@ -343,10 +344,19 @@ impl<T: Config> Pallet<T> {
 		Deficit::from_offchain(amount)
 	}
 
+	/// Withdraws *up to* `amount` from a reserve.
+	///
+	/// *Warning:* if the reserve does not exist, it will be created as a side effect. 
 	pub fn withdraw_reserves(reserve_id: ReserveId, amount: T::Balance) -> Surplus<T> {
 		Surplus::from_reserve(reserve_id, amount)
 	}
 
+	/// Tries to withdraw funds from a reserve. Fails if the reserve doesn't exist or has insufficient funds.
+	pub fn try_withdraw_reserves(reserve_id: ReserveId, amount: T::Balance) -> Option<Surplus<T>> {
+		Surplus::try_from_reserve(reserve_id, amount)
+	}
+
+	/// Deposit `amount` into the reserve identified by a `reserve_id`. Creates the reserve it it doesn't exist already.
 	pub fn deposit_reserves(reserve_id: ReserveId, amount: T::Balance) -> Deficit<T> {
 		Deficit::from_reserve(reserve_id, amount)
 	}

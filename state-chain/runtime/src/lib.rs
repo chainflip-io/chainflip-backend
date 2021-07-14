@@ -156,7 +156,7 @@ parameter_types! {
 impl pallet_cf_validator::Config for Runtime {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
-	type EpochTransitionHandler = pallet_cf_witness::Pallet<Runtime>;
+	type EpochTransitionHandler = (pallet_cf_rewards::RewardRollover<Runtime>, pallet_cf_witness::Pallet<Runtime>);
 	type ValidatorWeightInfo = weights::pallet_cf_validator::WeightInfo<Runtime>;
 	type EpochIndex = EpochIndex;
 	type Amount = FlipBalance;

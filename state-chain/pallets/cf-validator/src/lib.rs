@@ -71,16 +71,29 @@ type SessionIndex = u32;
 pub trait EpochTransitionHandler {
 	/// The id type used for the validators.
 	type ValidatorId;
-	type Amount;
+	type Amount: Copy;
 	/// A new epoch has started
 	///
 	/// The new set of validator `new_validators` are now validating
-	fn on_new_epoch(_new_validators: Vec<Self::ValidatorId>, _new_bond: Self::Amount) {}
+	fn on_new_epoch(_new_validators: &Vec<Self::ValidatorId>, _new_bond: Self::Amount) {}
 }
 
 impl<T: Config> EpochTransitionHandler for PhantomData<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
+}
+
+impl<
+		T1: EpochTransitionHandler,
+		T2: EpochTransitionHandler<Amount = T1::Amount, ValidatorId = T1::ValidatorId>,
+	> EpochTransitionHandler for (T1, T2)
+{
+	type ValidatorId = T1::ValidatorId;
+	type Amount = T1::Amount;
+	fn on_new_epoch(new_validators: &Vec<Self::ValidatorId>, new_bond: Self::Amount) {
+		T1::on_new_epoch(new_validators, new_bond);
+		T2::on_new_epoch(new_validators, new_bond);
+	}
 }
 
 #[frame_support::pallet]
@@ -239,7 +252,7 @@ pub mod pallet {
 		fn build(&self) {
 			// The auction pallet should have ran through an auction
 			if let AuctionPhase::WaitingForBids(winners, min_bid) = T::Auction::phase() {
-				T::EpochTransitionHandler::on_new_epoch(winners, min_bid);
+				T::EpochTransitionHandler::on_new_epoch(&winners, min_bid);
 			}
 			Pallet::<T>::generate_lookup();
 		}
@@ -372,7 +385,7 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 					// Generate our lookup list of validators
 					Self::generate_lookup();
 					// Our trait callback
-					T::EpochTransitionHandler::on_new_epoch(winners, min_bid);
+					T::EpochTransitionHandler::on_new_epoch(&winners, min_bid);
 				}
 
 				None
