@@ -61,6 +61,7 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
 		type AuctionPenalty: AuctionPenalty<Self::ValidatorId>;
+		type AuctionConfirmation: AuctionConfirmation;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -209,7 +210,12 @@ impl<T: Config> RequestResponse<RequestIndex, ValidatorRotationRequest, Validato
 	}
 
 	fn process_response(index: RequestIndex, response: ValidatorRotationResponse) {
-		todo!()
+		// This request is complete
+		Self::clear(index);
+		// We can now confirm the auction and rotate
+		T::AuctionConfirmation::set_awaiting_confirmation(false);
+		// The process has completed successfully
+		Self::deposit_event(Event::VaultRotationCompleted(index));
 	}
 }
 

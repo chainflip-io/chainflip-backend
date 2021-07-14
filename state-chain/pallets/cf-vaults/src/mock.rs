@@ -11,6 +11,7 @@ use sp_runtime::{
 use std::cell::RefCell;
 use crate::rotation::*;
 use crate::rotation::ChainParams::Ethereum;
+use cf_traits::AuctionConfirmation;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -115,6 +116,18 @@ impl AuctionPenalty<ValidatorId> for MockAuctionPenalty {
 	}
 }
 
+pub struct MockAuctionConfirmation;
+
+impl AuctionConfirmation for MockAuctionConfirmation {
+	fn awaiting_confirmation() -> bool {
+		false
+	}
+
+	fn set_awaiting_confirmation(_waiting: bool) {
+
+	}
+}
+
 impl Config for Test {
 	type Event = Event;
 	type Call = Call;
@@ -124,6 +137,7 @@ impl Config for Test {
 	type EnsureWitnessed = MockEnsureWitness;
 	type Witnesser = MockWitnesser;
 	type AuctionPenalty = MockAuctionPenalty;
+	type AuctionConfirmation = MockAuctionConfirmation;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
