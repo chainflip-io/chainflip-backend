@@ -42,17 +42,11 @@ pub mod pallet {
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
-	pub trait Config<I: 'static = ()>: frame_system::Config {
+	pub trait Config<I: 'static = ()>: frame_system::Config + ChainFlip + AuctionManager<<Self as ChainFlip>::ValidatorId> {
 		/// The event type
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
 		type Call: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::Call>;
-		/// An amount for a bid
-		type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
-		/// An identity for a validator
-		type ValidatorId: Member + Parameter;
-		/// Our constructor
-		type Constructor: Construct<RequestIndex, Self::ValidatorId>;
 		/// Provides an origin check for witness transactions.
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 		/// An implementation of the witnesser, allows us to define witness_* helper extrinsics.
@@ -60,8 +54,8 @@ pub mod pallet {
 			Call = <Self as pallet::Config<I>>::Call,
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
-		type AuctionPenalty: AuctionPenalty<Self::ValidatorId>;
-		type AuctionConfirmation: AuctionConfirmation;
+		/// Our constructor
+		type Constructor: Construct<RequestIndex, Self::ValidatorId>;
 	}
 
 	/// Pallet implements [`Hooks`] trait

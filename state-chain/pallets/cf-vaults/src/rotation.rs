@@ -1,6 +1,10 @@
 use codec::{Encode, Decode};
 use frame_support::RuntimeDebug;
 use std::ops::Add;
+use frame_system::pallet_prelude::*;
+use frame_support::pallet_prelude::*;
+use sp_runtime::traits::AtLeast32BitUnsigned;
+use cf_traits::AuctionConfirmation;
 
 pub type NewPublicKey = Vec<u8>;
 pub type BadValidators<ValidatorId> = Vec<ValidatorId>;
@@ -33,6 +37,18 @@ pub trait AuctionPenalty<ValidatorId> {
 	fn penalise(bad_validators: BadValidators<ValidatorId>);
 }
 
+// A trait covering those things we find dearly in ChainFlip
+pub trait ChainFlip {
+	/// An amount for a bid
+	type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
+	/// An identity for a validator
+	type ValidatorId: Member + Parameter;
+}
+
+pub trait AuctionManager<ValidatorId> {
+	type AuctionPenalty: AuctionPenalty<ValidatorId>;
+	type AuctionConfirmation: AuctionConfirmation;
+}
 
 // TODO - should this be broken down into its own trait as opposed in the pallet?
 // pub trait KeyRotation<ValidatorId> {

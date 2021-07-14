@@ -139,28 +139,32 @@ impl AuctionConfirmation for MockAuctionConfirmation {
 	}
 }
 
-impl Config<Instance1> for Test {
-	type Event = Event;
-	type Call = Call;
+impl ChainFlip for Test {
 	type Amount = Amount;
 	type ValidatorId = ValidatorId;
-	type Constructor = EthereumConstructor;
-	type EnsureWitnessed = MockEnsureWitness;
-	type Witnesser = MockWitnesser;
+}
+
+impl AuctionManager<ValidatorId> for Test {
 	type AuctionPenalty = MockAuctionPenalty;
 	type AuctionConfirmation = MockAuctionConfirmation;
 }
 
+// Our vault for Ethereum
+impl Config<Instance1> for Test {
+	type Event = Event;
+	type Call = Call;
+	type Constructor = EthereumConstructor;
+	type EnsureWitnessed = MockEnsureWitness;
+	type Witnesser = MockWitnesser;
+}
+
+// Another vault for OtherChain
 impl Config<Instance2> for Test {
 	type Event = Event;
 	type Call = Call;
-	type Amount = Amount;
-	type ValidatorId = ValidatorId;
 	type Constructor = OtherChainConstructor;
 	type EnsureWitnessed = MockEnsureWitness;
 	type Witnesser = MockWitnesser;
-	type AuctionPenalty = MockAuctionPenalty;
-	type AuctionConfirmation = MockAuctionConfirmation;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
