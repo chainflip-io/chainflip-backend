@@ -27,7 +27,7 @@ pub trait Construct<Index, ValidatorId> {
 
 pub trait ConstructionManager<Index> {
 	// Construction phase complete
-	fn on_completion(index: Index, err: bool);
+	fn on_completion(index: Index, result: Result<ValidatorRotationRequest, ValidatorRotationError>);
 }
 
 pub trait AuctionPenalty<ValidatorId> {
@@ -67,6 +67,10 @@ pub enum KeygenResponse<ValidatorId> {
 	// Something went wrong and it has failed.
 	// Re-run the auction minus the bad validators
 	Failure(BadValidators<ValidatorId>),
+}
+
+pub enum ValidatorRotationError {
+
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]

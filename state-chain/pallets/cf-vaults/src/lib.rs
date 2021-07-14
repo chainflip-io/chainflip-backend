@@ -213,8 +213,16 @@ impl<T: Config> RequestResponse<RequestIndex, ValidatorRotationRequest, Validato
 }
 
 impl<T: Config> ConstructionManager<RequestIndex> for Pallet<T> {
-	fn on_completion(index: RequestIndex, err: bool) {
-		todo!()
+	fn on_completion(index: RequestIndex, result: Result<ValidatorRotationRequest, ValidatorRotationError>) {
+		match result {
+			Ok(request) => {
+				Self::process_request(index, request);
+			}
+			Err(_) => { //TODO can we use this even?
+				// Abort this key generation request
+				Self::clear(index);
+			}
+		}
 	}
 }
 

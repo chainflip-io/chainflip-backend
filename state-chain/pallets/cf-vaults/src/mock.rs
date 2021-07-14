@@ -76,8 +76,8 @@ impl Construct<RequestIndex, ValidatorId> for MockConstructor {
 
 pub struct MockConstructorHandler;
 impl ConstructionManager<RequestIndex> for MockConstructorHandler {
-	fn on_completion(index: RequestIndex, err: bool) {
-		assert!(!err);
+	fn on_completion(index: RequestIndex, result: Result<ValidatorRotationRequest, ValidatorRotationError>) {
+
 	}
 }
 
