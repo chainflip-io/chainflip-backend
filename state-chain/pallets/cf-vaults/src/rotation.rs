@@ -11,9 +11,9 @@ pub trait Index<T: Add> {
 	fn next() -> T;
 }
 
-pub trait RequestResponse<Request, Response> {
-	fn request(&self, request: Request);
-	fn response(&self, response: Response);
+pub trait RequestResponse<Index, Request, Response> {
+	fn process_request(index: Index, request: Request);
+	fn process_response(index: Index, response: Response);
 }
 pub trait Construct<ValidatorId> {
 	// Start the construction phase.  When complete `ConstructionHandler::on_completion()`

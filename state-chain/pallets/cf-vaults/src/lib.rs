@@ -169,22 +169,30 @@ impl<T: Config> Index<RequestIndex> for Pallet<T> {
 	}
 }
 
-impl<T: Config> RequestResponse<KeygenRequest<T::ValidatorId>, KeygenResponse<T::ValidatorId>> for Pallet<T> {
-	fn request(&self, request: KeygenRequest<T::ValidatorId>) {
-		todo!()
+impl<T: Config> RequestResponse<RequestIndex, KeygenRequest<T::ValidatorId>, KeygenResponse<T::ValidatorId>> for Pallet<T> {
+	fn process_request(index: RequestIndex, request: KeygenRequest<T::ValidatorId>) {
+		Self::deposit_event(Event::KeygenRequestEvent(Self::next(), request));
 	}
 
-	fn response(&self, response: KeygenResponse<T::ValidatorId>) {
-		todo!()
+	fn process_response(index: RequestIndex, response: KeygenResponse<T::ValidatorId>) {
+		match response {
+			KeygenResponse::Success(_) => {
+
+			}
+			KeygenResponse::Failure(bad_validators) => {
+				Self::clear();
+				T::AuctionPenalty::penalise(bad_validators);
+			}
+		}
 	}
 }
 
-impl<T: Config> RequestResponse<ValidatorRotationRequest, ValidatorRotationResponse> for Pallet<T> {
-	fn request(&self, request: ValidatorRotationRequest) {
+impl<T: Config> RequestResponse<RequestIndex, ValidatorRotationRequest, ValidatorRotationResponse> for Pallet<T> {
+	fn process_request(index: RequestIndex, request: ValidatorRotationRequest) {
 		todo!()
 	}
 
-	fn response(&self, response: ValidatorRotationResponse) {
+	fn process_response(index: RequestIndex, response: ValidatorRotationResponse) {
 		todo!()
 	}
 }
