@@ -53,7 +53,7 @@ where
     ) -> Self {
         let sc_client = create_subxt_client(settings.state_chain.clone())
             .await
-            .unwrap();
+            .expect("Could not create subxt client");
 
         let account_id = signer.account_id();
         let nonce = sc_client
