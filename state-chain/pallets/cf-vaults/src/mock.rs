@@ -65,8 +65,8 @@ parameter_types! {
 
 // This would be our chain, let's say Ethereum
 // This would be implemented by the Ethereum instance
-pub struct MockConstructor;
-impl Construct<RequestIndex, ValidatorId> for MockConstructor {
+pub struct EthereumConstructor;
+impl Construct<RequestIndex, ValidatorId> for EthereumConstructor {
 	type Manager = Test;
 	fn start_construction_phase(index: RequestIndex, response: KeygenResponse<ValidatorId>) {
 		// We would complete the construction and then notify the completion
@@ -117,7 +117,7 @@ impl Config for Test {
 	type Call = Call;
 	type Amount = Amount;
 	type ValidatorId = ValidatorId;
-	type Constructor = MockConstructor;
+	type Constructor = EthereumConstructor;
 	type EnsureWitnessed = MockEnsureWitness;
 	type Witnesser = MockWitnesser;
 	type AuctionPenalty = MockAuctionPenalty;
