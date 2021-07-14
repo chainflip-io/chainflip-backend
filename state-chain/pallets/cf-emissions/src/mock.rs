@@ -1,5 +1,7 @@
+use std::marker::PhantomData;
+
 use crate as pallet_cf_emissions;
-use frame_support::parameter_types;
+use frame_support::{parameter_types, traits::Imbalance};
 use frame_system as system;
 use pallet_cf_flip;
 use sp_core::H256;
@@ -12,7 +14,7 @@ use sp_runtime::{
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-use cf_traits::mocks::epoch_info;
+use cf_traits::{RewardsDistribution, mocks::epoch_info};
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -76,14 +78,32 @@ parameter_types! {
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
 cf_traits::impl_mock_witnesser_for_account_and_call_types!(u64, Call);
 
+pub struct MockRewardsDistribution<T>(PhantomData<T>);
+
+impl RewardsDistribution for MockRewardsDistribution<Test> {
+	type Balance = u128;
+	type Surplus = pallet_cf_flip::Surplus<Test>;
+
+	fn distribute(rewards: Self::Surplus) {
+		let reward_amount = rewards.peek();
+		let deposit = Flip::deposit_reserves(*b"RSVR", reward_amount);
+		let _ = rewards.offset(deposit);
+	}
+
+	fn execution_weight() -> frame_support::dispatch::Weight {
+		1
+	}
+}
+
 impl pallet_cf_emissions::Config for Test {
 	type Event = Event;
 	type Call = Call;
 	type FlipBalance = u128;
-	type Emissions = Flip;
+	type Surplus = pallet_cf_flip::Surplus<Test>;
+	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 	type EnsureWitnessed = MockEnsureWitnessed;
 	type Witnesser = MockWitnesser;
-	type RewardsDistribution = pallet_cf_emissions::NaiveRewardsDistribution<Self>;
+	type RewardsDistribution = MockRewardsDistribution<Self>;
 	type Validators = epoch_info::Mock;
 	type MintFrequency = MintFrequency;
 }

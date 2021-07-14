@@ -29,7 +29,6 @@ cf-traits = { path = '../../traits', default-features = false }
 sp-core = { default-features = false, version = '3.0.0' }
 sp-io = { default-features = false, version = '3.0.0' }
 pallet-cf-flip = { path = '../cf-flip' }
-tuples = { version = "1.4" }
 
 [features]
 default = ['std']
