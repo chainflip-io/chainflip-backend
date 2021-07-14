@@ -19,6 +19,8 @@ type Block = frame_system::mocking::MockBlock<MockRuntime>;
 type Amount = u64;
 type ValidatorId = u64;
 
+use ethereum;
+
 thread_local! {
 }
 
@@ -29,6 +31,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		EthereumConstructor: ethereum::{Module, Call, Config, Storage, Event<T>},
 		EthereumVault: pallet_cf_vaults::<Instance1>::{Module, Call, Storage, Event<T>, Config},
 		OtherChainVault: pallet_cf_vaults::<Instance2>::{Module, Call, Storage, Event<T>, Config},
 	}
@@ -68,16 +71,16 @@ parameter_types! {
 
 // This would be our chain, let's say Ethereum
 // This would be implemented by the Ethereum instance
-pub struct EthereumConstructor;
-impl Construct<RequestIndex, ValidatorId> for EthereumConstructor {
-	type Manager = MockRuntime;
-	fn start_construction_phase(index: RequestIndex, response: KeygenResponse<ValidatorId>) {
-		// We would complete the construction and then notify the completion
-		Self::Manager::on_completion(index, Ok(
-			ValidatorRotationRequest::new(Ethereum(vec![]))
-		));
-	}
-}
+// pub struct EthereumConstructor;
+// impl Construct<RequestIndex, ValidatorId> for EthereumConstructor {
+// 	type Manager = MockRuntime;
+// 	fn start_construction_phase(index: RequestIndex, response: KeygenResponse<ValidatorId>) {
+// 		// We would complete the construction and then notify the completion
+// 		Self::Manager::on_completion(index, Ok(
+// 			ValidatorRotationRequest::new(Ethereum(vec![]))
+// 		));
+// 	}
+// }
 
 pub struct OtherChainConstructor;
 impl Construct<RequestIndex, ValidatorId> for OtherChainConstructor {
@@ -149,8 +152,13 @@ impl AuctionManager<ValidatorId> for MockRuntime {
 	type AuctionConfirmation = MockAuctionConfirmation;
 }
 
+impl ethereum::Config for MockRuntime {
+	type Event = Event;
+	type Vaults = Self;
+}
+
 // Our vault for Ethereum
-impl Config<Instance1> for MockRuntime {
+impl pallet_cf_vaults::Config<Instance1> for MockRuntime {
 	type Event = Event;
 	type Call = Call;
 	type Constructor = EthereumConstructor;
@@ -159,7 +167,7 @@ impl Config<Instance1> for MockRuntime {
 }
 
 // Another vault for OtherChain
-impl Config<Instance2> for MockRuntime {
+impl pallet_cf_vaults::Config<Instance2> for MockRuntime {
 	type Event = Event;
 	type Call = Call;
 	type Constructor = OtherChainConstructor;
@@ -170,6 +178,7 @@ impl Config<Instance2> for MockRuntime {
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		frame_system: Default::default(),
+		ethereum: Default::default(),
 		pallet_cf_vaults_Instance1: Some(EthereumVaultConfig {
 		}),
 		pallet_cf_vaults_Instance2: Some(OtherChainVaultConfig {

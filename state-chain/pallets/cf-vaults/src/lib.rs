@@ -18,6 +18,7 @@ mod rotation;
 mod mock;
 #[cfg(test)]
 mod tests;
+mod ethereum;
 
 #[cfg(test)]
 #[macro_use]
