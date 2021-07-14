@@ -5,6 +5,7 @@ use rand::{
     prelude::{IteratorRandom, StdRng},
     SeedableRng,
 };
+use tokio::time::Duration;
 
 use crate::{
     mq::{
@@ -17,7 +18,10 @@ use crate::{
 use lazy_static::lazy_static;
 
 use crate::signing::{
-    client::{KeyId, KeygenInfo, MultisigClient, MultisigEvent, MultisigInstruction, SigningInfo},
+    client::{
+        KeyId, KeygenInfo, MultisigClient, MultisigEvent, MultisigInstruction, SigningInfo,
+        SigningOutcome,
+    },
     crypto::Parameters,
     MessageHash,
 };
@@ -30,8 +34,11 @@ lazy_static! {
         SIGNERS.iter().map(|idx| ValidatorId::new(idx)).collect();
 }
 
-async fn coordinate_signing(mq_clients: Vec<impl IMQClient>, active_indices: &[usize]) {
-    // subscribe to "ready to sign"
+async fn coordinate_signing(
+    mq_clients: Vec<impl IMQClient>,
+    active_indices: &[usize],
+) -> Result<(), ()> {
+    // get all the streams from the clients and subscribe them to MultisigEvent
     let streams = mq_clients
         .iter()
         .map(|mc| {
@@ -47,8 +54,10 @@ async fn coordinate_signing(mq_clients: Vec<impl IMQClient>, active_indices: &[u
         })
         .collect_vec();
 
+    // join all the MultisigEvent streams together
     let mut streams = futures::future::join_all(streams).await;
 
+    // wait until all of the clients have sent the MultisigEvent::ReadyToKeygen signal
     let ready_to_keygen = async {
         for s in &mut streams {
             while let Some(evt) = s.next().await {
@@ -61,10 +70,11 @@ async fn coordinate_signing(mq_clients: Vec<impl IMQClient>, active_indices: &[u
 
     ready_to_keygen.await;
 
+    // get a keygen request ready with all of the VALIDATOR_IDS
     let key_id = KeyId(0);
-
     let auction_info = KeygenInfo::new(key_id, VALIDATOR_IDS.clone());
 
+    // publish the MultisigInstruction::KeyGen to all the clients
     for mc in &mq_clients {
         trace!("published keygen instruction");
         mc.publish(
@@ -78,11 +88,13 @@ async fn coordinate_signing(mq_clients: Vec<impl IMQClient>, active_indices: &[u
     let data = MessageHash(super::fixtures::MESSAGE.clone());
     let data2 = MessageHash(super::fixtures::MESSAGE2.clone());
 
+    // get a list of the signer_ids as a subset of VALIDATOR_IDS with an offset of 1
     let signer_ids = active_indices
         .iter()
         .map(|i| VALIDATOR_IDS[*i - 1].clone())
         .collect_vec();
 
+    // get a signing request ready with the list of signer_ids
     let sign_info = SigningInfo::new(key_id, signer_ids);
 
     // Only some clients should receive the instruction to sign
@@ -104,23 +116,47 @@ async fn coordinate_signing(mq_clients: Vec<impl IMQClient>, active_indices: &[u
         .expect("Could not publish");
     }
 
-    // TODO: add a timeout here
-    for i in active_indices {
-        let stream = &mut streams[i - 1];
-
-        while let Some(evt) = stream.next().await {
-            if let Ok(MultisigEvent::MessageSigningResult(_)) = evt {
-                info!("Message is signed!");
-                break;
-            }
+    // collect all of the signed messages
+    let mut signed_count = 0;
+    loop {
+        for i in active_indices {
+            let stream = &mut streams[i - 1];
+            match tokio::time::timeout(Duration::from_millis(100), stream.next()).await {
+                Ok(Some(Ok(MultisigEvent::MessageSigningResult(
+                    SigningOutcome::MessageSigned(_),
+                )))) => {
+                    info!("Message is signed from {}", i);
+                    signed_count = signed_count + 1;
+                }
+                Ok(Some(Ok(MultisigEvent::MessageSigningResult(SigningOutcome::Invalid(_))))) => {
+                    return Err(());
+                }
+                Ok(Some(Ok(MultisigEvent::MessageSigningResult(
+                    SigningOutcome::Unauthorised(_),
+                )))) => {
+                    return Err(());
+                }
+                Ok(Some(Ok(MultisigEvent::MessageSigningResult(SigningOutcome::Timeout(_))))) => {
+                    return Err(());
+                }
+                Ok(None) => info!("Unexpected error: client stream returned early: {}", i),
+                Err(_) => {
+                    info!("client stream timed out: {}", i);
+                    return Err(());
+                }
+                _ => {}
+            };
+        }
+        // stop the test when all of the MessageSigned have come in
+        if signed_count >= active_indices.len() * 2 {
+            break;
         }
     }
-
-    // TODO: terminate all clients
+    info!("All messages have been signed");
+    return Ok(());
 }
 
 #[tokio::test]
-#[ignore = "currently runs infinitely"]
 async fn distributed_signing() {
     env_logger::init();
 
@@ -141,7 +177,6 @@ async fn distributed_signing() {
     let network = NetworkMock::new();
 
     // Start message queues for each party
-
     let mc_futs = (1..=N_PARTIES)
         .map(|i| {
             let p2p_client = network.new_client(VALIDATOR_IDS[i - 1].clone());
@@ -153,18 +188,29 @@ async fn distributed_signing() {
 
                 let conductor = P2PConductor::new(mc, p2p_client).await;
 
-                let conductor_fut = conductor.start();
+                let (shutdown_conductor_tx, shutdown_conductor_rx) =
+                    tokio::sync::oneshot::channel::<()>();
+
+                let conductor_fut = conductor.start(shutdown_conductor_rx);
 
                 let mq_factory = MQMockClientFactory::new(mq.clone());
 
                 let client = MultisigClient::new(mq_factory, VALIDATOR_IDS[i - 1].clone());
 
+                let (shutdown_client_tx, shutdown_client_rx) =
+                    tokio::sync::oneshot::channel::<()>();
+
                 // "ready to sign" emitted here
-                let client_fut = client.run();
+                let client_fut = client.run(shutdown_client_rx);
 
                 let mc = mq.get_client();
 
-                (mc, futures::future::join(conductor_fut, client_fut))
+                (
+                    mc,
+                    futures::future::join(conductor_fut, client_fut),
+                    shutdown_client_tx,
+                    shutdown_conductor_tx,
+                )
             }
         })
         .collect_vec();
@@ -173,14 +219,27 @@ async fn distributed_signing() {
 
     let mut futs = vec![];
     let mut mc_clients = vec![];
+    let mut shutdown_txs = vec![];
 
-    for (mc, fut) in results {
+    for (mc, fut, shut_client_tx, shut_conduct_tx) in results {
         futs.push(fut);
         mc_clients.push(mc);
+        shutdown_txs.push(shut_client_tx);
+        shutdown_txs.push(shut_conduct_tx);
     }
 
-    futures::join!(
-        futures::future::join_all(futs),
-        coordinate_signing(mc_clients, &active_indices)
-    );
+    let test_fut = async move {
+        // run the signing test and get the result
+        let res = coordinate_signing(mc_clients, &active_indices).await;
+
+        assert_eq!(res, Ok(()), "One of the clients failed to sign the message");
+
+        info!("Graceful shutdown");
+        // send a message to all the clients and the conductors to shut down
+        for tx in shutdown_txs {
+            tx.send(()).unwrap();
+        }
+    };
+
+    futures::join!(futures::future::join_all(futs), test_fut);
 }
