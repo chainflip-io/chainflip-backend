@@ -81,7 +81,7 @@ mod test {
     #[ignore = "runs for 10 seconds"]
     async fn health_check_test() {
         let test_settings = settings::test_utils::new_test_settings().unwrap();
-        let sender = health_check(test_settings.health_check).await;
+        let sender = spawn_health_check(test_settings.health_check).await;
         time::sleep(Duration::from_millis(10000)).await;
         sender.send(()).unwrap();
     }
