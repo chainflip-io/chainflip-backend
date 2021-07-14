@@ -10,7 +10,7 @@ hostname = "localhost"
 p2p_priv_key_file = "./tests/test_keystore/p2p_key"
 rpc_port = "4399"
 signing_key_file = "./tests/test_keystore/alice_key"
-ws_port = "9945"
+ws_port = "9944"
 
 [eth]
 node_endpoint = "wss://network.my_eth_node:80/<secret_key>"
