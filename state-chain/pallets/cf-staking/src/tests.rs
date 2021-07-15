@@ -6,7 +6,7 @@ use cf_traits::mocks::{epoch_info, time_source};
 use codec::Encode;
 use ethereum_types::U256;
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
-use pallet_cf_flip::ImbalanceSource;
+use pallet_cf_flip::{ImbalanceSource, InternalSource};
 use std::time::Duration;
 
 type FlipError = pallet_cf_flip::Error<Test>;
@@ -513,7 +513,7 @@ fn claim_expiry() {
 		assert_event_stack!(
 			Event::pallet_cf_flip(FlipEvent::BalanceSettled(
 				ImbalanceSource::External,
-				ImbalanceSource::Account(ALICE),
+				ImbalanceSource::Internal(InternalSource(ALICE)),
 				STAKE,
 				0
 			)),
@@ -529,7 +529,7 @@ fn claim_expiry() {
 		assert_event_stack!(
 			Event::pallet_cf_flip(FlipEvent::BalanceSettled(
 				ImbalanceSource::External,
-				ImbalanceSource::Account(BOB),
+				ImbalanceSource::Internal(InternalSource(BOB)),
 				STAKE,
 				0
 			)),

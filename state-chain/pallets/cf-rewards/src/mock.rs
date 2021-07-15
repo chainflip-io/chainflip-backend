@@ -1,9 +1,8 @@
 use crate as pallet_cf_rewards;
+use cf_traits::StakeTransfer;
 use sp_core::H256;
-use frame_support::parameter_types;
-use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup}, testing::Header,
-};
+use frame_support::{assert_ok, parameter_types};
+use sp_runtime::{BuildStorage, testing::Header, traits::{BlakeTwo256, IdentityLookup}};
 use frame_system as system;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -17,9 +16,12 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		FlipRewards: pallet_template::{Module, Storage, Event<T>},
+		Flip: pallet_cf_flip::{Module, Event<T>, Storage, Config<T>},
+		FlipRewards: pallet_cf_rewards::{Module, Storage, Event<T>},
 	}
 );
+
+pub type AccountId = u64;
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -37,7 +39,7 @@ impl system::Config for Test {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
@@ -51,11 +53,55 @@ impl system::Config for Test {
 	type SS58Prefix = SS58Prefix;
 }
 
+parameter_types! {
+	pub const ExistentialDeposit: u128 = 10;
+}
+
+impl pallet_cf_flip::Config for Test {
+	type Event = Event;
+	type Balance = u128;
+	type ExistentialDeposit = ExistentialDeposit;
+}
+
 impl pallet_cf_rewards::Config for Test {
 	type Event = Event;
 }
 
+pub fn check_balance_integrity() {
+	let accounts_total = pallet_cf_flip::Account::<Test>::iter_values()
+		.map(|account| account.total())
+		.sum::<u128>();
+	let reserves_total = pallet_cf_flip::Reserve::<Test>::iter_values().sum::<u128>();
+
+	assert_eq!(accounts_total + reserves_total, Flip::onchain_funds());
+
+	// Also check we enough reserves to honour our rewards payout.
+	FlipRewards::ensure_reserves().expect("insufficient reserves");
+}
+
+pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
+pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
+pub const CHARLIE: <Test as frame_system::Config>::AccountId = 789u64;
+
 // Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+pub fn new_test_ext(
+	issuance: Option<u128>,
+	accounts: Vec<(AccountId, u128)>,
+) -> sp_io::TestExternalities {
+	let total_issuance = issuance.unwrap_or(1_000u128);
+	let config = GenesisConfig {
+		frame_system: Default::default(),
+		pallet_cf_flip: Some(FlipConfig { total_issuance }),
+	};
+	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
+	ext.execute_with(|| {
+		let mut beneficiaries = vec![];
+		for (acct, amt) in accounts {
+			<Flip as StakeTransfer>::credit_stake(&acct, amt);
+			beneficiaries.push(acct.clone());
+		}
+		// Rollover to initialize pallet state.
+		assert_ok!(FlipRewards::rollover(&beneficiaries));
+	});
+	ext
 }

@@ -44,7 +44,7 @@ mod benchmarking;
 mod imbalances;
 mod on_charge_transaction;
 
-pub use imbalances::{Deficit, Surplus};
+pub use imbalances::{Deficit, Surplus, ImbalanceSource, InternalSource};
 pub use on_charge_transaction::FlipTransactionPayment;
 
 use frame_support::{
@@ -60,8 +60,6 @@ use sp_runtime::{
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use pallet::*;
-
-pub use crate::imbalances::ImbalanceSource;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -183,12 +181,12 @@ pub struct FlipAccount<Amount> {
 
 impl<Balance: Saturating + Copy + Ord> FlipAccount<Balance> {
 	/// The total balance excludes any funds that are in a pending claim request.
-	fn total(&self) -> Balance {
+	pub fn total(&self) -> Balance {
 		self.stake
 	}
 
 	/// Excludes the bond.
-	fn liquid(&self) -> Balance {
+	pub fn liquid(&self) -> Balance {
 		self.stake.saturating_sub(self.validator_bond)
 	}
 }
