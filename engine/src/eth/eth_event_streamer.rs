@@ -102,6 +102,7 @@ impl<S: EventSource> EthEventStreamer<S> {
         let processing_loop_fut = event_stream.for_each_concurrent(None, |parse_result| async {
             match parse_result {
                 Ok(event) => {
+                    log::debug!("ETH event being processed: {:?}", event);
                     join_all(self.event_sinks.iter().map(|sink| {
                         let event = event.clone();
                         async move {
@@ -142,10 +143,14 @@ mod tests {
 
     const CONTRACT_ADDRESS: &'static str = "0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f";
 
+    fn init() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
+
     #[tokio::test]
     #[ignore = "Depends on a running ganache instance, runs forever, useful for manually testing / observing incoming events"]
     async fn subscribe_to_stake_manager_events() {
-        env_logger::init();
+        init();
         let stake_manager = StakeManager::load(CONTRACT_ADDRESS).unwrap();
 
         let settings = settings::test_utils::new_test_settings().unwrap();
@@ -161,7 +166,10 @@ mod tests {
             EthEventStreamBuilder::new(&settings.eth.node_endpoint, stake_manager);
         let sm_event_stream = sm_event_stream.with_sink(sm_sink).build().await.unwrap();
 
-        // sm_event_stream.run(Some(0)).await.unwrap();
+        sm_event_stream
+            .run(settings.eth.from_block.into())
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
