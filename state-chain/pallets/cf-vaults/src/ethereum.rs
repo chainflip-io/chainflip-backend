@@ -4,6 +4,21 @@ pub use pallet::*;
 use crate::rotation::*;
 use crate::rotation::ChainParams::Ethereum;
 
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub struct EthSigningTxRequest<ValidatorId> {
+	// Payload to be signed by the existing aggregate key
+	payload: Vec<u8>,
+	validators: Vec<ValidatorId>,
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub enum EthSigningTxResponse<ValidatorId> {
+	// Signature
+	Success(Vec<u8>),
+	// Bad validators
+	Error(Vec<ValidatorId>),
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -17,7 +32,7 @@ pub mod pallet {
 	pub trait Config: frame_system::Config + ChainFlip {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-		type Vaults: ConstructionManager<RequestIndex>;
+		type Vaults: ConstructionManager<RequestIndex, <Self as ChainFlip>::ValidatorId>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -27,7 +42,8 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		Nothing(),
+		// Request this payload to be signed by the existing aggregate key
+		EthSignTxRequestEvent(RequestIndex, EthSigningTxRequest<T::ValidatorId>),
 	}
 
 	#[pallet::error]
@@ -38,9 +54,12 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::weight(10_000)]
-		pub(super) fn call_me(
-			origin: OriginFor<T>
+		pub fn eth_signing_tx_response(
+			origin: OriginFor<T>,
+			request_id: RequestIndex,
+			response: EthSigningTxResponse<T::ValidatorId>
 		) -> DispatchResultWithPostInfo {
+			Self::process_response(request_id, response);
 			Ok(().into())
 		}
 	}
@@ -61,6 +80,30 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
+		}
+	}
+}
+
+impl<T: Config> RequestResponse<RequestIndex, EthSigningTxRequest<T::ValidatorId>, EthSigningTxResponse<T::ValidatorId>> for Pallet<T> {
+	fn process_request(index: RequestIndex, request: EthSigningTxRequest<T::ValidatorId>) {
+		// Signal to CFE to sign
+		Self::deposit_event(Event::EthSignTxRequestEvent(index, request));
+	}
+
+	fn process_response(index: RequestIndex, response: EthSigningTxResponse<T::ValidatorId>) {
+		match response {
+			EthSigningTxResponse::Success(signature) => {
+				T::Vaults::on_completion(
+					index,
+					Ok(ValidatorRotationRequest::new(Ethereum(signature)))
+				);
+			}
+			EthSigningTxResponse::Error(bad_validators) => {
+				T::Vaults::on_completion(
+					index,
+					Err(ValidatorRotationError::BadValidators(bad_validators))
+				)
+			}
 		}
 	}
 }
