@@ -115,6 +115,9 @@ steps:
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
 trigger:
+  branch:
+    exclude:
+      - devnet/*
   event:
     - pull_request
 
@@ -313,6 +316,21 @@ steps:
       - cd cluster/applications/staging/chainflip-validator
       - ./build.sh --branch=$DRONE_COMMIT_BRANCH --destroy --rpc
 
+# Destroy the testnet in the source branch
+  - name: destroy-source-testnet
+    pull: always
+    image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+    failure: ignore
+    when:
+      branch:
+        - develop
+    depends_on:
+      - clone-cluster
+      - test-chainflip-backend
+    commands:
+      - cd cluster/applications/staging/chainflip-validator
+      - ./build.sh --branch=$DRONE_SOURCE_BRANCH --destroy --rpc
+
 # Create new testnet
   - name: create
     pull: always
@@ -391,6 +409,7 @@ service_account_name: drone-runner-kube
 trigger:
   branch:
     - release/*
+    - devnet/*
     - develop
   event:
     - push
