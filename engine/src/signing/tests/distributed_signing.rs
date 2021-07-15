@@ -22,12 +22,11 @@ use crate::signing::{
         KeyId, KeygenInfo, MultisigClient, MultisigEvent, MultisigInstruction, SigningInfo,
         SigningOutcome,
     },
-    crypto::Parameters,
     MessageHash,
 };
 
 /// Number of parties participating in keygen
-const N_PARTIES: usize = 10;
+const N_PARTIES: usize = 2;
 lazy_static! {
     static ref SIGNERS: Vec<usize> = (1..=N_PARTIES).collect();
     static ref VALIDATOR_IDS: Vec<ValidatorId> =
@@ -61,7 +60,8 @@ async fn coordinate_signing(
     let mut key_ready_count = 0;
     loop {
         for s in &mut streams {
-            match tokio::time::timeout(Duration::from_millis(1100), s.next()).await {
+            // timeout must be more then 100ms because the client has a sleep(100ms) in its run function.
+            match tokio::time::timeout(Duration::from_millis(110), s.next()).await {
                 Ok(Some(Ok(MultisigEvent::ReadyToKeygen))) => {
                     key_ready_count = key_ready_count + 1;
                 }
@@ -169,8 +169,9 @@ async fn distributed_signing() {
     env_logger::init();
 
     // calculate how many parties will be in the signing (must be exact)
+    // TODO: use the threshold_from_share_count function in keygen manager here.
     let doubled = N_PARTIES * 2;
-    let n = {
+    let t = {
         if doubled % 3 == 0 {
             doubled / 3 - 1
         } else {
@@ -181,7 +182,7 @@ async fn distributed_signing() {
     let mut rng = StdRng::seed_from_u64(0);
 
     // Parties (from 1..=n that will participate in the signing process)
-    let mut active_indices = (1..=N_PARTIES).into_iter().choose_multiple(&mut rng, n + 1);
+    let mut active_indices = (1..=N_PARTIES).into_iter().choose_multiple(&mut rng, t + 1);
     active_indices.sort_unstable();
 
     info!(
@@ -253,7 +254,7 @@ async fn distributed_signing() {
 
         assert_eq!(res, Ok(()), "One of the clients failed to sign the message");
 
-        info!("Graceful shutdown of distributed_signing teat");
+        info!("Graceful shutdown of distributed_signing test");
         // send a message to all the clients and the conductors to shut down
         for tx in shutdown_txs {
             tx.send(()).unwrap();

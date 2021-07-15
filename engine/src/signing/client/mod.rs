@@ -129,7 +129,7 @@ where
                         }
                     }
                 }
-                Ok(()) = &mut shutdown_rx =>{break;}
+                Ok(()) = &mut shutdown_rx =>{log::info!("Shuting down Multisig Client InnerEvent loop");break;}
             }
         }
     }
@@ -158,6 +158,7 @@ where
                         cleanup_tx.send(()).expect("Could not send periotic cleanup command");
                     }
                     Ok(()) = &mut shutdown_rx =>{
+                        log::info!("Shuting down Multisig Client");
                         // send a signal to the other futures to shutdown
                         shutdown_other_fut_tx.send(()).expect("Could not send shutdown command");
                         shutdown_events_fut_tx.send(()).expect("Could not send shutdown command");
@@ -183,7 +184,7 @@ where
                 .expect("Could not subscribe to Subject::MultisigInstruction");
 
             // have to wait for the coordinator to subscribe...
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
             // issue a message that we've subscribed
             mq.publish(Subject::MultisigEvent, &MultisigEvent::ReadyToKeygen)
@@ -235,7 +236,7 @@ where
                         }
                     }
                     Ok(()) = &mut shutdown_other_fut_rx =>{
-                        log::info!("Shuting down Multisig Client");
+                        log::info!("Shuting down Multisig Client OtherEvents loop");
                         break;
                     }
                 }
