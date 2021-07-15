@@ -21,8 +21,7 @@ pub struct StateChain {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Eth {
-    pub hostname: String,
-    pub port: u16,
+    pub node_endpoint: String,
 
     // TODO: Into an Ethereum Address type?
     pub stake_manager_eth_address: String,
