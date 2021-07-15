@@ -107,7 +107,7 @@ pub mod pallet {
 
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			ensure!(Self::is_valid(request_id), Error::<T, I>::InvalidRequestIdx);
+			Self::try_is_valid(request_id)?;
 			Self::process_response(request_id, response);
 			Ok(().into())
 		}
@@ -132,7 +132,7 @@ pub mod pallet {
 			response: ValidatorRotationResponse,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			ensure!(Self::is_valid(request_id), Error::<T, I>::InvalidRequestIdx);
+			Self::try_is_valid(request_id)?;
 			Self::process_response(request_id, response);
 			Ok(().into())
 		}
@@ -155,11 +155,14 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config<I>, I: 'static> Index<RequestIndex> for Pallet<T, I> {
-	fn is_valid(idx: RequestIndex) -> bool {
-		VaultRotations::<T, I>::contains_key(idx)
+impl<T: Config<I>, I: 'static> TryIndex<RequestIndex> for Pallet<T, I> {
+	fn try_is_valid(idx: RequestIndex) -> DispatchResultWithPostInfo {
+		ensure!(VaultRotations::<T, I>::contains_key(idx), Error::<T, I>::InvalidRequestIdx);
+		Ok(().into())
 	}
+}
 
+impl<T: Config<I>, I: 'static> Index<RequestIndex> for Pallet<T, I> {
 	fn next() -> RequestIndex {
 		let idx = RequestIdx::<T, I>::mutate(|idx| *idx + 1);
 		VaultRotations::<T, I>::insert(idx, VaultRotation::new(idx));

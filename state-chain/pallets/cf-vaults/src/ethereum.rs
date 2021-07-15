@@ -32,7 +32,7 @@ pub mod pallet {
 	pub trait Config: frame_system::Config + ChainFlip {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-		type Vaults: ConstructionManager<RequestIndex, <Self as ChainFlip>::ValidatorId>;
+		type Vaults: ConstructionManager<RequestIndex, <Self as ChainFlip>::ValidatorId> + TryIndex<RequestIndex>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -59,6 +59,7 @@ pub mod pallet {
 			request_id: RequestIndex,
 			response: EthSigningTxResponse<T::ValidatorId>
 		) -> DispatchResultWithPostInfo {
+			T::Vaults::is_valid(request_id)?;
 			Self::process_response(request_id, response);
 			Ok(().into())
 		}

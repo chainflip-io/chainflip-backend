@@ -9,8 +9,11 @@ pub type NewPublicKey = Vec<u8>;
 pub type BadValidators<ValidatorId> = Vec<ValidatorId>;
 pub type RequestIndex = u32;
 
+pub trait TryIndex<T> {
+	fn try_is_valid(idx: T) -> DispatchResultWithPostInfo;
+}
+
 pub trait Index<T: Add> {
-	fn is_valid(idx: T) -> bool;
 	fn next() -> T;
 	fn clear(idx: T);
 }
