@@ -102,6 +102,7 @@ pub mod pallet {
 	/// A lookup mapping (epoch, call_hash) to a bitmask representing the votes for each validator.
 	#[pallet::storage]
 	pub type Votes<T: Config> =
+	// SBPM1 Use of identity 
 		StorageDoubleMap<_, Twox64Concat, Epoch<T>, Identity, CallHash, Vec<u8>>;
 
 	/// Defines a unique index for each validator for every epoch.
@@ -263,6 +264,7 @@ impl<T: Config> Pallet<T> {
 				call_hash,
 				num_votes as VoteCount,
 			));
+			// SBPM1 Some comments could help
 			let result = call.dispatch_bypass_filter((RawOrigin::WitnessThreshold).into());
 			Self::deposit_event(Event::<T>::WitnessExecuted(
 				call_hash,
@@ -328,7 +330,9 @@ impl<T: Config> pallet_cf_validator::EpochTransitionHandler for Pallet<T> {
 		let mut total = 0;
 		for (i, v) in new_validators.iter().enumerate() {
 			ValidatorIndex::<T>::insert(&epoch, (*v).clone().into(), i as u16);
+			// SBPM1 Never cleaned?
 			total += 1;
+			// SBPM1 Better way to get length?
 		}
 		NumValidators::<T>::set(total);
 

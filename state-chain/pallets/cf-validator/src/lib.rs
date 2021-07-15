@@ -144,6 +144,7 @@ pub mod pallet {
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+// SBP M1 is that needed?
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -155,6 +156,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			number_of_blocks: T::BlockNumber,
 		) -> DispatchResultWithPostInfo {
+// SBPM1 Not needed, can use DispatchResult
 			ensure_root(origin)?;
 			ensure!(T::Auction::waiting_on_bids(), Error::<T>::AuctionInProgress);
 			ensure!(
@@ -172,7 +174,7 @@ pub mod pallet {
 		/// our validators.
 		///
 		/// The dispatch origin of this function must be root.
-		#[pallet::weight(10_000)]
+		#[pallet::weight(10_000)] // SBPM1 Probably better to implement early
 		pub(super) fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			ensure!(T::Auction::waiting_on_bids(), Error::<T>::AuctionInProgress);
 			ensure_root(origin)?;
@@ -191,6 +193,7 @@ pub mod pallet {
 			proof: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			<pallet_session::Module<T>>::set_keys(origin, keys, proof)?;
+			// SBPM1 No direct usage of keys abstraction?
 			Ok(().into())
 		}
 	}
@@ -218,6 +221,7 @@ pub mod pallet {
 	/// Validator lookup
 	#[pallet::storage]
 	pub(super) type ValidatorLookup<T: Config> = StorageMap<_, Identity, T::ValidatorId, ()>;
+	// SBPM1 Could lead to attack, might be simpler to always use Blake2 as hash algo
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -238,6 +242,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			// The auction pallet should have ran through an auction
+			// SBPM1 Can this happen before genesis?
 			if let AuctionPhase::WaitingForBids(winners, min_bid) = T::Auction::phase() {
 				T::EpochTransitionHandler::on_new_epoch(winners, min_bid);
 			}
@@ -284,6 +289,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 
 impl<T: Config> pallet_session::SessionHandler<T::ValidatorId> for Pallet<T> {
 	/// TODO look at the key management
+	/// SBPM1 Not implemented yet?
 	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[];
 	fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(T::ValidatorId, Ks)]) {}
 	fn on_new_session<Ks: OpaqueKeys>(
@@ -320,8 +326,11 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 impl<T: Config> Pallet<T> {
 	/// Check whether we should based on either a force rotation or we have reach the epoch
 	/// block number
+// SBPM1 Check fn that performs side effects? A bit confusing
 	fn should_rotate(now: T::BlockNumber) -> bool {
 		if Force::<T>::get() {
+
+			// SBPM1 Sounds dangerous: new calls to this in the future will probably break assumptions
 			Force::<T>::set(false);
 			return true;
 		}
@@ -341,10 +350,11 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Generate our validator lookup list
-	fn generate_lookup() {
+	fn generate_lookup() { // Name sounds a bit confusing
 		// Update our internal list of validators
 		ValidatorLookup::<T>::remove_all();
 		for validator in <pallet_session::Module<T>>::validators() {
+			// SBPM1 Direct use of pallet_session, not current_validators?
 			ValidatorLookup::<T>::insert(validator, ());
 		}
 	}
@@ -382,12 +392,15 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 		};
 	}
 
+	// SBPM1 Empty?
+
 	/// The current session is ending
 	fn end_session(_end_index: SessionIndex) {}
 	/// The session is starting
 	fn start_session(_start_index: SessionIndex) {}
 }
 
+// SBPM1 No implementation? Is that necessary?
 impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
 	fn estimate_next_session_rotation(_now: T::BlockNumber) -> Option<T::BlockNumber> {
 		None

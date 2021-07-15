@@ -1,4 +1,7 @@
 //! This is based on the imbalances modules from the balances pallet.
+// SBP M1
+// Can there be some code reuse from this module? Looks like there is significant boilerplat / duplication.
+// Could benefit from more tests?
 
 // wrapping these imbalances in a private module is necessary to ensure absolute privacy
 // of the inner member.
