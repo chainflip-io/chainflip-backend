@@ -72,6 +72,21 @@ steps:
     commands:
       - drone lint --trusted
 
+  - name: notify-testnet-up
+    image: appleboy/drone-discord
+    depends_on:
+      - create
+    settings:
+      username: Testnet Bot
+      webhook_id:
+        from_secret: discord_webhook_id
+      webhook_token:
+        from_secret: discord_webhook_token
+      message: |
+        This is a test
+        [Check the logs here](https://monitor.chainflip.xyz/explore?orgId=1&left=%5B%22now-1h%22,%22now%22,%22Loki%22,%7B%22expr%22:%22%7Bchainflip_xyz_tag%3D%5C%22{{commit.sha}}%5C%22%7D%22%7D%5D)
+
+
   #  Builds the base image for running build jobs
   - name: rust-base
     image: plugins/docker
