@@ -151,7 +151,8 @@ async fn coordinate_signing(
                     );
                     return Err(());
                 }
-                _ => {}
+                _ => { /* Ignore all other messages, just wait for the MessageSigningResult or timeout*/
+                }
             };
         }
         // stop the test when all of the MessageSigned have come in

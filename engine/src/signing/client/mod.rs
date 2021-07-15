@@ -120,12 +120,12 @@ where
                                 &MultisigEvent::MessageSigningResult(res),
                             )
                             .await
-                            .expect("Failed to publish");
+                            .expect("Failed to publish MessageSigningResult");
                         }
                         InnerEvent::KeygenResult(res) => {
                             mq.publish(Subject::MultisigEvent, &MultisigEvent::KeygenResult(res))
                                 .await
-                                .expect("Failed to publish");
+                                .expect("Failed to publish KeygenResult");
                         }
                     }
                 }
