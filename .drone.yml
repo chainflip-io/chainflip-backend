@@ -391,6 +391,7 @@ service_account_name: drone-runner-kube
 trigger:
   branch:
     - release/*
+    - devnet/*
     - develop
   event:
     - push
