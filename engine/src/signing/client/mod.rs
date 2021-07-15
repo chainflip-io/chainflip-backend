@@ -155,12 +155,12 @@ where
             loop {
                 tokio::select! {
                     _ = tokio::time::sleep(Duration::from_secs(10)) =>{
-                        cleanup_tx.send(()).unwrap();
+                        cleanup_tx.send(()).expect("Could not send periotic cleanup command");
                     }
                     Ok(()) = &mut shutdown_rx =>{
                         // send a signal to the other futures to shutdown
-                        shutdown_other_fut_tx.send(()).unwrap();
-                        shutdown_events_fut_tx.send(()).unwrap();
+                        shutdown_other_fut_tx.send(()).expect("Could not send shutdown command");
+                        shutdown_events_fut_tx.send(()).expect("Could not send shutdown command");
                         break;
                     }
                 }
@@ -175,12 +175,12 @@ where
             let stream1 = mq
                 .subscribe::<P2PMessage>(Subject::P2PIncoming)
                 .await
-                .unwrap();
+                .expect("Could not subscribe to Subject::P2PIncoming");
 
             let stream2 = mq
                 .subscribe::<MultisigInstruction>(Subject::MultisigInstruction)
                 .await
-                .unwrap();
+                .expect("Could not subscribe to Subject::MultisigInstruction");
 
             // have to wait for the coordinator to subscribe...
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
@@ -235,7 +235,7 @@ where
                         }
                     }
                     Ok(()) = &mut shutdown_other_fut_rx =>{
-                        log::info!("Shuting down");
+                        log::info!("Shuting down Multisig Client");
                         break;
                     }
                 }

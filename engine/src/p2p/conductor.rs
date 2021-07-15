@@ -60,19 +60,19 @@ where
                     match x {
                         Either::Left(outgoing) => {
                             if let Ok(P2PMessageCommand { destination, data }) = outgoing {
-                                self.p2p.send(&destination, &data).await.unwrap();
+                                self.p2p.send(&destination, &data).await.expect("Could not send outgoing P2PMessageCommand");
                             }
                         }
                         Either::Right(incoming) => {
                             self.mq
                                 .publish::<P2PMessage>(Subject::P2PIncoming, &incoming)
                                 .await
-                                .unwrap();
+                                .expect("Could not publish incoming message to Subject::P2PIncoming");
                         }
                     }
                 }
                 Ok(()) = &mut shutdown_rx =>{
-                    log::info!("Shuting down");
+                    log::info!("Shutting down P2P Conductor");
                     break;
                 }
             }
@@ -146,14 +146,14 @@ mod tests {
             mc1_copy
                 .publish(Subject::P2POutgoing, &message)
                 .await
-                .unwrap();
+                .expect("Could not publish incoming P2PMessageCommand to Subject::P2POutgoing");
         };
 
         let read_fut = async move {
             let stream2 = mc2_copy
                 .subscribe::<P2PMessage>(Subject::P2PIncoming)
                 .await
-                .unwrap();
+                .expect("Could not subscribe to Subject::P2PIncoming");
 
             let mut stream2 = pin_message_stream(stream2);
 

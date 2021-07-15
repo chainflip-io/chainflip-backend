@@ -47,7 +47,7 @@ async fn coordinate_signing(
                 let stream = mc
                     .subscribe::<MultisigEvent>(Subject::MultisigEvent)
                     .await
-                    .expect("Could not subscribe");
+                    .expect("Could not subscribe to Subject::MultisigEvent");
 
                 pin_message_stream(stream)
             }
@@ -61,17 +61,15 @@ async fn coordinate_signing(
     let mut key_ready_count = 0;
     loop {
         for s in &mut streams {
-            match tokio::time::timeout(Duration::from_millis(200 * N_PARTIES as u64), s.next())
-                .await
-            {
+            match tokio::time::timeout(Duration::from_millis(1100), s.next()).await {
                 Ok(Some(Ok(MultisigEvent::ReadyToKeygen))) => {
                     key_ready_count = key_ready_count + 1;
                 }
                 Err(_) => {
-                    info!("client timed out on ReadyToKeygen.");
+                    info!("client timed out on getting to ReadyToKeygen.");
                     return Err(());
                 }
-                _ => {}
+                _ => { /* ignore all other MultisigEvents while we wait */ }
             }
         }
         if key_ready_count >= streams.len() {
@@ -116,14 +114,14 @@ async fn coordinate_signing(
             &MultisigInstruction::Sign(data.clone(), sign_info.clone()),
         )
         .await
-        .expect("Could not publish");
+        .expect("Could not publish MultisigInstruction::Sign message 1");
 
         mc.publish(
             Subject::MultisigInstruction,
             &MultisigInstruction::Sign(data2.clone(), sign_info.clone()),
         )
         .await
-        .expect("Could not publish");
+        .expect("Could not publish MultisigInstruction::Sign message2");
     }
 
     // collect all of the signed messages
@@ -169,7 +167,7 @@ async fn coordinate_signing(
 async fn distributed_signing() {
     env_logger::init();
 
-    // calculate how many parties will be in the signing
+    // calculate how many parties will be in the signing (must be exact)
     let doubled = N_PARTIES * 2;
     let n = {
         if doubled % 3 == 0 {
@@ -185,7 +183,11 @@ async fn distributed_signing() {
     let mut active_indices = (1..=N_PARTIES).into_iter().choose_multiple(&mut rng, n + 1);
     active_indices.sort_unstable();
 
-    info!("Active parties: {:?}", active_indices);
+    info!(
+        "{} Active parties: {:?}",
+        active_indices.len(),
+        active_indices
+    );
 
     assert!(active_indices.len() <= N_PARTIES);
 
@@ -250,7 +252,7 @@ async fn distributed_signing() {
 
         assert_eq!(res, Ok(()), "One of the clients failed to sign the message");
 
-        info!("Graceful shutdown");
+        info!("Graceful shutdown of distributed_signing teat");
         // send a message to all the clients and the conductors to shut down
         for tx in shutdown_txs {
             tx.send(()).unwrap();
