@@ -116,7 +116,7 @@ steps:
 
 trigger:
   branch:
-    excludes:
+    exclude:
       - devnet/*
   event:
     - pull_request
