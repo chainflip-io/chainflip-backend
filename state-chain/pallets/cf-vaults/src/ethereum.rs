@@ -3,6 +3,8 @@ use frame_support::pallet_prelude::*;
 pub use pallet::*;
 use crate::rotation::*;
 use crate::rotation::ChainParams::Ethereum;
+use ethabi::{Bytes, Function, Param, ParamType, Address, Token};
+use sp_core::H160;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct EthSigningTxRequest<ValidatorId> {
@@ -110,9 +112,62 @@ impl<T: Config> RequestResponse<RequestIndex, EthSigningTxRequest<T::ValidatorId
 	}
 }
 
+impl From<Vec<u8>> for ChainParams{
+	fn from(payload: Vec<u8>) -> Self {
+		Ethereum(payload)
+	}
+}
+
 impl<T: Config> Construct<RequestIndex, T::ValidatorId> for Pallet<T> {
 	fn try_start_construction_phase(index: RequestIndex, new_public_key: NewPublicKey, validators: Vec<T::ValidatorId>) -> DispatchResultWithPostInfo {
 		// Create payload for signature here
-		todo!();
+		// function setAggKeyWithAggKey(SigData calldata sigData, Key calldata newKey)
+		match Self::encode_set_agg_key_with_agg_key(new_public_key) {
+			Ok(payload) => {
+				T::Vaults::try_on_completion(index, Ok(
+					ValidatorRotationRequest {
+						chain: payload.into(),
+					}
+				))
+			}
+			Err(_) => {
+				T::Vaults::try_on_completion(index, Err(ValidatorRotationError::FailedConstruct))
+			}
+		}
+	}
+}
+
+impl<T: Config> Pallet<T> {
+	// Encode setAggKeyWithAggKey
+	// This is a long approach as we are working around `no_std` limitations here for the runtime
+	fn encode_set_agg_key_with_agg_key(new_public_key: NewPublicKey) -> ethabi::Result<Bytes> {
+		todo!("Nonce is 0");
+		Function::new(
+			"setAggKeyWithAggKey",
+			vec![
+				Param::new(
+					"sigData",
+					ParamType::Tuple(vec![
+						ParamType::Uint(256),
+						ParamType::Uint(256),
+						ParamType::Uint(256),
+						ParamType::Address,
+					]),
+				),
+				Param::new("newKey", ParamType::FixedBytes(32)),
+			],
+			vec![],
+			false,
+		).encode_input(&vec![
+			// sigData: SigData(uint, uint, uint, address)
+			Token::Tuple(vec![
+				Token::Uint(ethabi::Uint::zero()),
+				Token::Uint(ethabi::Uint::zero()),
+				Token::Uint(ethabi::Uint::zero()),
+				Token::Address(H160::zero()),
+			]),
+			// newKey: bytes32
+			Token::FixedBytes(new_public_key),
+		])
 	}
 }

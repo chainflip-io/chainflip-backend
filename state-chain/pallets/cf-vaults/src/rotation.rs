@@ -91,6 +91,7 @@ pub enum KeygenResponse<ValidatorId> {
 
 pub enum ValidatorRotationError<ValidatorId> {
 	BadValidators(Vec<ValidatorId>),
+	FailedConstruct,
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
