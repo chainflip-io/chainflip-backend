@@ -83,8 +83,8 @@ parameter_types! {
 
 pub struct OtherChainConstructor;
 impl Construct<RequestIndex, ValidatorId> for OtherChainConstructor {
-	fn start_construction_phase(index: RequestIndex, new_public_key: NewPublicKey, validators: Vec<ValidatorId>) {
-		todo!("mock other chain construction phase");
+	fn try_start_construction_phase(index: RequestIndex, new_public_key: NewPublicKey, validators: Vec<ValidatorId>) -> DispatchResultWithPostInfo {
+		todo!("mock other chain construction phase")
 	}
 }
 

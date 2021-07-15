@@ -19,19 +19,19 @@ pub trait Index<T: Add> {
 }
 
 pub trait RequestResponse<Index, Request, Response> {
-	fn process_request(index: Index, request: Request);
-	fn process_response(index: Index, response: Response);
+	fn try_request(index: Index, request: Request) -> DispatchResultWithPostInfo;
+	fn try_response(index: Index, response: Response) -> DispatchResultWithPostInfo;
 }
 
 pub trait Construct<Index, ValidatorId> {
 	// Start the construction phase.  When complete `ConstructionHandler::on_completion()`
 	// would be used to notify that this is complete
-	fn start_construction_phase(index: Index, new_public_key: NewPublicKey, validators: Vec<ValidatorId>);
+	fn try_start_construction_phase(index: Index, new_public_key: NewPublicKey, validators: Vec<ValidatorId>) -> DispatchResultWithPostInfo;
 }
 
 pub trait ConstructionManager<Index, ValidatorId> {
 	// Construction phase complete
-	fn on_completion(index: Index, result: Result<ValidatorRotationRequest, ValidatorRotationError<ValidatorId>>);
+	fn try_on_completion(index: Index, result: Result<ValidatorRotationRequest, ValidatorRotationError<ValidatorId>>) -> DispatchResultWithPostInfo;
 }
 
 pub trait AuctionPenalty<ValidatorId> {
@@ -88,8 +88,8 @@ pub enum KeygenResponse<ValidatorId> {
 	Failure(BadValidators<ValidatorId>),
 }
 
-pub enum ValidatorRotationError {
-
+pub enum ValidatorRotationError<ValidatorId> {
+	BadValidators(Vec<ValidatorId>),
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]

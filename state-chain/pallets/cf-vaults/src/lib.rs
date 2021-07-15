@@ -82,6 +82,7 @@ pub mod pallet {
 	pub enum Error<T, I = ()> {
 		/// An invalid request idx
 		InvalidRequestIdx,
+		VaultRotationCompletionFailed,
 	}
 
 	#[pallet::call]
@@ -108,8 +109,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			Self::try_is_valid(request_id)?;
-			Self::process_response(request_id, response);
-			Ok(().into())
+			Self::try_response(request_id, response)
 		}
 
 		// We have witnessed a rotation, my eyes!
@@ -133,8 +133,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			Self::try_is_valid(request_id)?;
-			Self::process_response(request_id, response);
-			Ok(().into())
+			Self::try_response(request_id, response)
 		}
 	}
 
@@ -174,20 +173,24 @@ impl<T: Config<I>, I: 'static> Index<RequestIndex> for Pallet<T, I> {
 	}
 }
 
-impl<T: Config<I>, I: 'static> RequestResponse<RequestIndex, KeygenRequest<T::ValidatorId>, KeygenResponse<T::ValidatorId>> for Pallet<T, I> {
-	fn process_request(index: RequestIndex, request: KeygenRequest<T::ValidatorId>) {
+impl<T: Config<I>, I: 'static>
+	RequestResponse<RequestIndex, KeygenRequest<T::ValidatorId>, KeygenResponse<T::ValidatorId>>
+	for Pallet<T, I>
+{
+	fn try_request(index: RequestIndex, request: KeygenRequest<T::ValidatorId>) -> DispatchResultWithPostInfo {
 		// Signal to CFE that we are wanting to start a new key generation
 		Self::deposit_event(Event::KeygenRequestEvent(Self::next(), request));
+		Ok(().into())
 	}
 
-	fn process_response(index: RequestIndex, response: KeygenResponse<T::ValidatorId>) {
+	fn try_response(index: RequestIndex, response: KeygenResponse<T::ValidatorId>) -> DispatchResultWithPostInfo {
 		match response {
 			KeygenResponse::Success(new_public_key) => {
 				// Go forth and construct
 				if let Some(validators) =
 					VaultRotations::<T, I>::get(index).and_then(|r|r.validators)
 				{
-					T::Constructor::start_construction_phase(index, new_public_key, validators)
+					T::Constructor::try_start_construction_phase(index, new_public_key, validators)
 				} else {
 					// This shouldn't happen
 					todo!("This shouldn't happen but we need to maybe signal this");
@@ -198,36 +201,49 @@ impl<T: Config<I>, I: 'static> RequestResponse<RequestIndex, KeygenRequest<T::Va
 				Self::clear(index);
 				// Do as you wish with these, I wash my hands..
 				T::AuctionPenalty::penalise(bad_validators);
+
+				Ok(().into())
 			}
 		}
 	}
 }
 
-impl<T: Config<I>, I: 'static> RequestResponse<RequestIndex, ValidatorRotationRequest, ValidatorRotationResponse> for Pallet<T, I> {
-	fn process_request(index: RequestIndex, request: ValidatorRotationRequest) {
+impl<T: Config<I>, I: 'static>
+	RequestResponse<RequestIndex, ValidatorRotationRequest, ValidatorRotationResponse>
+	for Pallet<T, I>
+{
+	fn try_request(index: RequestIndex, request: ValidatorRotationRequest) -> DispatchResultWithPostInfo {
 		// Signal to CFE that we are wanting to start the rotation
 		Self::deposit_event(Event::ValidatorRotationRequest(index, request));
+		Ok(().into())
 	}
 
-	fn process_response(index: RequestIndex, response: ValidatorRotationResponse) {
+	fn try_response(index: RequestIndex, response: ValidatorRotationResponse) -> DispatchResultWithPostInfo {
 		// This request is complete
 		Self::clear(index);
 		// We can now confirm the auction and rotate
 		T::AuctionConfirmation::set_awaiting_confirmation(false);
 		// The process has completed successfully
 		Self::deposit_event(Event::VaultRotationCompleted(index));
+		Ok(().into())
 	}
 }
 
-impl<T: Config<I>, I: 'static> ConstructionManager<RequestIndex> for Pallet<T, I> {
-	fn on_completion(index: RequestIndex, result: Result<ValidatorRotationRequest, ValidatorRotationError>) {
+impl<T: Config<I>, I: 'static> ConstructionManager<RequestIndex, T::ValidatorId> for Pallet<T, I> {
+	fn try_on_completion(
+		index: RequestIndex,
+		result: Result<ValidatorRotationRequest, ValidatorRotationError<T::ValidatorId>>,
+	) -> DispatchResultWithPostInfo {
 		match result {
 			Ok(request) => {
-				Self::process_request(index, request);
+				Self::try_request(index, request)
 			}
-			Err(_) => { //TODO can we use this even?
+			Err(_) => {
+				todo!("can we use this even?");
 				// Abort this key generation request
 				Self::clear(index);
+
+				Err(Error::<T, I>::VaultRotationCompletionFailed.into())
 			}
 		}
 	}

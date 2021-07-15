@@ -59,8 +59,8 @@ pub mod pallet {
 			request_id: RequestIndex,
 			response: EthSigningTxResponse<T::ValidatorId>
 		) -> DispatchResultWithPostInfo {
-			T::Vaults::is_valid(request_id)?;
-			Self::process_response(request_id, response);
+			T::Vaults::try_is_valid(request_id)?;
+			Self::try_response(request_id, response)?;
 			Ok(().into())
 		}
 	}
@@ -86,21 +86,22 @@ pub mod pallet {
 }
 
 impl<T: Config> RequestResponse<RequestIndex, EthSigningTxRequest<T::ValidatorId>, EthSigningTxResponse<T::ValidatorId>> for Pallet<T> {
-	fn process_request(index: RequestIndex, request: EthSigningTxRequest<T::ValidatorId>) {
+	fn try_request(index: RequestIndex, request: EthSigningTxRequest<T::ValidatorId>) -> DispatchResultWithPostInfo {
 		// Signal to CFE to sign
 		Self::deposit_event(Event::EthSignTxRequestEvent(index, request));
+		Ok(().into())
 	}
 
-	fn process_response(index: RequestIndex, response: EthSigningTxResponse<T::ValidatorId>) {
+	fn try_response(index: RequestIndex, response: EthSigningTxResponse<T::ValidatorId>) -> DispatchResultWithPostInfo {
 		match response {
 			EthSigningTxResponse::Success(signature) => {
-				T::Vaults::on_completion(
+				T::Vaults::try_on_completion(
 					index,
 					Ok(ValidatorRotationRequest::new(Ethereum(signature)))
-				);
+				)
 			}
 			EthSigningTxResponse::Error(bad_validators) => {
-				T::Vaults::on_completion(
+				T::Vaults::try_on_completion(
 					index,
 					Err(ValidatorRotationError::BadValidators(bad_validators))
 				)
@@ -110,13 +111,8 @@ impl<T: Config> RequestResponse<RequestIndex, EthSigningTxRequest<T::ValidatorId
 }
 
 impl<T: Config> Construct<RequestIndex, T::ValidatorId> for Pallet<T> {
-
-	type Manager = T::Vaults;
-
-	fn start_construction_phase(index: RequestIndex, response: KeygenResponse<T::ValidatorId>) {
-		// We would complete the construction and then notify the completion
-		Self::Manager::on_completion(index, Ok(
-			ValidatorRotationRequest::new(Ethereum(vec![]))
-		));
+	fn try_start_construction_phase(index: RequestIndex, new_public_key: NewPublicKey, validators: Vec<T::ValidatorId>) -> DispatchResultWithPostInfo {
+		// Create payload for signature here
+		todo!();
 	}
 }
