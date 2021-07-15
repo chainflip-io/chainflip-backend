@@ -115,6 +115,9 @@ steps:
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
 trigger:
+  branch:
+    excludes:
+      - devnet/*
   event:
     - pull_request
 
