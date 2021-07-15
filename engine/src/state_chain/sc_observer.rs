@@ -50,11 +50,13 @@ async fn subscribe_to_events<M: 'static + IMQClient>(
                 continue;
             }
         };
+        log::debug!("SCO received a raw event of: {:?}", raw_event);
 
         let subject: Option<Subject> = raw_event_to_subject(&raw_event);
 
         if let Some(subject) = subject {
             let message = sc_event_from_raw_event(raw_event)?;
+            log::debug!("The parsed event is: {:?}", message);
             match message {
                 Some(event) => {
                     // Publish the message to the message queue

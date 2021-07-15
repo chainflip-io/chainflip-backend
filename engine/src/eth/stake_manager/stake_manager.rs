@@ -141,10 +141,8 @@ impl StakeManager {
     pub fn load(deployed_address: &str) -> Result<Self> {
         log::info!("Loading stake manager contract");
         let abi_bytes = std::include_bytes!("../abis/StakeManager.json");
-        log::info!("Loaded abi bytes: {:?}", abi_bytes);
         let contract = ethabi::Contract::load(abi_bytes.as_ref())?;
 
-        log::info!("Contract loaded, return StakeManager impl");
         Ok(Self {
             deployed_address: H160::from_str(deployed_address)?,
             contract,
