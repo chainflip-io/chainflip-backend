@@ -74,8 +74,6 @@ steps:
 
   - name: notify-testnet-up
     image: appleboy/drone-discord
-    depends_on:
-      - create
     settings:
       username: Testnet Bot
       webhook_id:
