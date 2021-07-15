@@ -169,15 +169,12 @@ mod tests {
     async fn setup_transport() {
         let h2 = tokio::spawn(async move {
             println!("Creating transport");
-            let transport = ::web3::transports::WebSocket::new("ws://localhost:9945")
-                .await
-                .unwrap();
+            let transport = ::web3::transports::WebSocket::new(
+                "wss://rinkeby.infura.io/ws/v3/8225b8de4cc94062959f38e0781586d1",
+            )
+            .await
+            .unwrap();
             println!("created transport");
-            println!("Creating second transport");
-            let transport = ::web3::transports::WebSocket::new("ws://localhost:9945")
-                .await
-                .unwrap();
-            println!("created second transport");
         });
 
         let h1 = tokio::spawn(async move {
