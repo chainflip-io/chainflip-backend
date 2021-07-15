@@ -75,9 +75,9 @@ pub enum ChainParams {
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct KeygenRequest<ValidatorId> {
 	// Chain
-	chain: ChainParams,
+	pub(crate) chain: ChainParams,
 	// validator_candidates - the set from which we would like to generate the key
-	validator_candidates: Vec<ValidatorId>,
+	pub(crate) validator_candidates: Vec<ValidatorId>,
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
@@ -96,7 +96,7 @@ pub enum ValidatorRotationError<ValidatorId> {
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct ValidatorRotationRequest {
-	chain: ChainParams,
+	pub(crate) chain: ChainParams,
 }
 
 impl ValidatorRotationRequest {
@@ -117,18 +117,22 @@ pub struct ValidatorRotationResponse {
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct VaultRotation<Index, ValidatorId> {
 	id: Index,
-	pub validators: Option<Vec<ValidatorId>>,
-	pub new_public_key: Option<NewPublicKey>,
+	pub(crate) keygen_request: KeygenRequest<ValidatorId>,
+	pub(crate) new_public_key: NewPublicKey,
 	// completed_construct: CompletedConstruct,
 	// validator_rotation_response: ValidatorRotationResponse,
 }
 
 impl<Index, ValidatorId> VaultRotation<Index, ValidatorId> {
-	pub fn new(id: Index) -> Self {
+	pub fn new(id: Index, keygen_request: KeygenRequest<ValidatorId>) -> Self {
 		VaultRotation {
 			id,
-			validators: None,
-			new_public_key: None,
+			keygen_request,
+			new_public_key: vec![],
 		}
+	}
+
+	pub fn candidate_validators(&self) -> &Vec<ValidatorId> {
+		&self.keygen_request.validator_candidates
 	}
 }

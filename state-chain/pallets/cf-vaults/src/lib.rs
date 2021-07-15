@@ -82,6 +82,7 @@ pub mod pallet {
 	pub enum Error<T, I = ()> {
 		/// An invalid request idx
 		InvalidRequestIdx,
+		EmptyValidatorSet,
 		VaultRotationCompletionFailed,
 	}
 
@@ -164,7 +165,6 @@ impl<T: Config<I>, I: 'static> TryIndex<RequestIndex> for Pallet<T, I> {
 impl<T: Config<I>, I: 'static> Index<RequestIndex> for Pallet<T, I> {
 	fn next() -> RequestIndex {
 		let idx = RequestIdx::<T, I>::mutate(|idx| *idx + 1);
-		VaultRotations::<T, I>::insert(idx, VaultRotation::new(idx));
 		idx
 	}
 
@@ -173,13 +173,23 @@ impl<T: Config<I>, I: 'static> Index<RequestIndex> for Pallet<T, I> {
 	}
 }
 
+impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	fn new_vault_rotation(keygen_request: KeygenRequest<T::ValidatorId>) -> RequestIndex {
+		let idx = Self::next();
+		VaultRotations::<T, I>::insert(idx, VaultRotation::new(idx, keygen_request));
+		idx
+	}
+}
+
 impl<T: Config<I>, I: 'static>
 	RequestResponse<RequestIndex, KeygenRequest<T::ValidatorId>, KeygenResponse<T::ValidatorId>>
 	for Pallet<T, I>
 {
-	fn try_request(index: RequestIndex, request: KeygenRequest<T::ValidatorId>) -> DispatchResultWithPostInfo {
+	fn try_request(_index: RequestIndex, request: KeygenRequest<T::ValidatorId>) -> DispatchResultWithPostInfo {
 		// Signal to CFE that we are wanting to start a new key generation
-		Self::deposit_event(Event::KeygenRequestEvent(Self::next(), request));
+		ensure!(!request.validator_candidates.is_empty(), Error::<T, I>::EmptyValidatorSet);
+		let idx = Self::new_vault_rotation(request.clone());
+		Self::deposit_event(Event::KeygenRequestEvent(idx, request));
 		Ok(().into())
 	}
 
@@ -187,14 +197,21 @@ impl<T: Config<I>, I: 'static>
 		match response {
 			KeygenResponse::Success(new_public_key) => {
 				// Go forth and construct
-				if let Some(validators) =
-					VaultRotations::<T, I>::get(index).and_then(|r|r.validators)
-				{
-					T::Constructor::try_start_construction_phase(index, new_public_key, validators)
-				} else {
-					// This shouldn't happen
-					todo!("This shouldn't happen but we need to maybe signal this");
-				}
+				VaultRotations::<T, I>::mutate(index, |maybe_vault_rotation| {
+					if let Some(vault_rotation) = maybe_vault_rotation {
+						vault_rotation.new_public_key = new_public_key.to_vec();
+						let validators = vault_rotation.candidate_validators();
+						if validators.is_empty() {
+							// If we have no validators then clear this out, this shouldn't happen
+							Self::clear(index);
+							Err(Error::<T, I>::EmptyValidatorSet.into())
+						} else {
+							T::Constructor::try_start_construction_phase(index, new_public_key, validators.to_vec())
+						}
+					} else {
+						unreachable!("This shouldn't happen but we need to maybe signal this")
+					}
+				})
 			}
 			KeygenResponse::Failure(bad_validators) => {
 				// Abort this key generation request
