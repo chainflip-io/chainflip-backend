@@ -23,6 +23,9 @@ sp-core = { default-features = false, version = '3.0.0' }
 log = { version = "0.4.14", default-features = false }
 serde = { version = "1.0.101", default-features = false, features = ["derive"] }
 
+#Non-substrate external deps
+ethabi = { default-features = false, git = 'https://github.com/chainflip-io/ethabi', rev = 'a53cb47'}
+
 [dev-dependencies]
 sp-std = { version = "3.0.0", default-features = false }
 sp-io = { version = "3.0.0", default-features = false }
@@ -41,4 +44,5 @@ std = [
     'sp-core/std',
     'sp-io/std',
     'log/std',
+    'ethabi/std',
 ]
