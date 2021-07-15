@@ -157,16 +157,15 @@ mod tests {
         let sm_sink = StakeManagerSink::<NatsMQClient>::new(mq_client)
             .await
             .unwrap();
-
-        let ws_url = format!("wss://{}", settings.eth.hostname);
-
-        let sm_event_stream = EthEventStreamBuilder::new(ws_url.as_str(), stake_manager);
+        let sm_event_stream =
+            EthEventStreamBuilder::new(&settings.eth.node_endpoint, stake_manager);
         let sm_event_stream = sm_event_stream.with_sink(sm_sink).build().await.unwrap();
 
         // sm_event_stream.run(Some(0)).await.unwrap();
     }
 
     #[tokio::test]
+    #[ignore = "testing"]
     async fn setup_transport() {
         let h2 = tokio::spawn(async move {
             println!("Creating transport");
