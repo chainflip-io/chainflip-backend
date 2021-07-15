@@ -10,7 +10,7 @@ use sp_runtime::{
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
-type AccountId = u64;
+pub type AccountId = u64;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -84,10 +84,13 @@ pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
 pub const CHARLIE: <Test as frame_system::Config>::AccountId = 789u64;
 
 pub fn check_balance_integrity() {
+	let accounts_total = pallet_cf_flip::Account::<Test>::iter_values()
+		.map(|account| account.total())
+		.sum::<FlipBalance>();
+	let reserves_total = pallet_cf_flip::Reserve::<Test>::iter_values().sum::<FlipBalance>();
+
 	assert_eq!(
-		pallet_cf_flip::Account::<Test>::iter_values()
-			.map(|account| account.total())
-			.sum::<FlipBalance>(),
+		accounts_total + reserves_total,
 		Flip::onchain_funds()
 	);
 }

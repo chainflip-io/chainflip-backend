@@ -135,12 +135,8 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Not enough liquid funds.
 		InsufficientLiquidity,
-
-		/// Not enough funds.
-		InsufficientFunds,
-
-		/// Some operations can only be performed on existing accounts.
-		UnknownAccount,
+		/// Not enough reserves.
+		InsufficientReserves,
 	}
 
 	#[pallet::hooks]
@@ -324,6 +320,10 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::<T>::BalanceSettled(from, to, settled, reverted))
 	}
 
+	pub fn settle_imbalance<I: Into<FlipImbalance<T>>>(account_id: &T::AccountId, imbalance: I) {
+		Self::settle(account_id, imbalance.into())
+	}
+
 	/// Decreases total issuance and returns a corresponding imbalance that must be reconciled.
 	fn burn(amount: T::Balance) -> Deficit<T> {
 		Deficit::from_burn(amount)
@@ -352,8 +352,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Tries to withdraw funds from a reserve. Fails if the reserve doesn't exist or has insufficient funds.
-	pub fn try_withdraw_reserves(reserve_id: ReserveId, amount: T::Balance) -> Option<Surplus<T>> {
-		Surplus::try_from_reserve(reserve_id, amount)
+	pub fn try_withdraw_reserves(reserve_id: ReserveId, amount: T::Balance) -> Result<Surplus<T>, DispatchError> {
+		Surplus::try_from_reserve(reserve_id, amount).ok_or(Error::<T>::InsufficientReserves.into())
 	}
 
 	/// Deposit `amount` into the reserve identified by a `reserve_id`. Creates the reserve it it doesn't exist already.
