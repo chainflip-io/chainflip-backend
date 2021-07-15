@@ -200,7 +200,7 @@ impl<T: Config<I>, I: 'static>
 				// Abort this key generation request
 				Self::clear(index);
 				// Do as you wish with these, I wash my hands..
-				T::AuctionPenalty::penalise(bad_validators);
+				T::Reporter::penalise(bad_validators);
 
 				Ok(().into())
 			}
@@ -222,14 +222,14 @@ impl<T: Config<I>, I: 'static>
 		// This request is complete
 		Self::clear(index);
 		// We can now confirm the auction and rotate
-		T::AuctionConfirmation::set_awaiting_confirmation(false);
+		T::Confirmation::set_awaiting_confirmation(false);
 		// The process has completed successfully
 		Self::deposit_event(Event::VaultRotationCompleted(index));
 		Ok(().into())
 	}
 }
 
-impl<T: Config<I>, I: 'static> ConstructionManager<RequestIndex, T::ValidatorId> for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> ConstructHandler<RequestIndex, T::ValidatorId> for Pallet<T, I> {
 	fn try_on_completion(
 		index: RequestIndex,
 		result: Result<ValidatorRotationRequest, ValidatorRotationError<T::ValidatorId>>,

@@ -29,12 +29,13 @@ pub trait Construct<Index, ValidatorId> {
 	fn try_start_construction_phase(index: Index, new_public_key: NewPublicKey, validators: Vec<ValidatorId>) -> DispatchResultWithPostInfo;
 }
 
-pub trait ConstructionManager<Index, ValidatorId> {
+pub trait ConstructHandler<Index, ValidatorId> {
 	// Construction phase complete
 	fn try_on_completion(index: Index, result: Result<ValidatorRotationRequest, ValidatorRotationError<ValidatorId>>) -> DispatchResultWithPostInfo;
 }
 
-pub trait AuctionPenalty<ValidatorId> {
+pub trait AuctionReporter<ValidatorId> {
+	// Report on bad actors
 	fn penalise(bad_validators: BadValidators<ValidatorId>);
 }
 
@@ -47,8 +48,8 @@ pub trait ChainFlip {
 }
 
 pub trait AuctionManager<ValidatorId> {
-	type AuctionPenalty: AuctionPenalty<ValidatorId>;
-	type AuctionConfirmation: AuctionConfirmation;
+	type Reporter: AuctionReporter<ValidatorId>;
+	type Confirmation: AuctionConfirmation;
 }
 
 // TODO - should this be broken down into its own trait as opposed in the pallet?

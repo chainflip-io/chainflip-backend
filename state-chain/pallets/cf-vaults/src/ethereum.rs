@@ -32,7 +32,7 @@ pub mod pallet {
 	pub trait Config: frame_system::Config + ChainFlip {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-		type Vaults: ConstructionManager<RequestIndex, <Self as ChainFlip>::ValidatorId> + TryIndex<RequestIndex>;
+		type Vaults: ConstructHandler<RequestIndex, <Self as ChainFlip>::ValidatorId> + TryIndex<RequestIndex>;
 	}
 
 	/// Pallet implements [`Hooks`] trait

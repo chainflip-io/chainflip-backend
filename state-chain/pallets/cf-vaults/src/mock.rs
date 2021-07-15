@@ -89,9 +89,9 @@ impl Construct<RequestIndex, ValidatorId> for OtherChainConstructor {
 }
 
 // Our pallet is awaiting on completion
-impl ConstructionManager<RequestIndex> for MockRuntime {
-	fn on_completion(index: RequestIndex, result: Result<ValidatorRotationRequest, ValidatorRotationError>) {
-
+impl ConstructHandler<RequestIndex, ValidatorId> for MockRuntime {
+	fn try_on_completion(index: RequestIndex, result: Result<ValidatorRotationRequest, ValidatorRotationError<ValidatorId>>) -> DispatchResultWithPostInfo {
+		todo!("mock construction manager")
 	}
 }
 
@@ -119,7 +119,7 @@ impl cf_traits::Witnesser for MockWitnesser {
 
 pub struct MockAuctionPenalty;
 
-impl AuctionPenalty<ValidatorId> for MockAuctionPenalty {
+impl AuctionReporter<ValidatorId> for MockAuctionPenalty {
 	fn penalise(bad_validators: crate::rotation::BadValidators<ValidatorId>) {
 		todo!()
 	}
@@ -143,8 +143,8 @@ impl ChainFlip for MockRuntime {
 }
 
 impl AuctionManager<ValidatorId> for MockRuntime {
-	type AuctionPenalty = MockAuctionPenalty;
-	type AuctionConfirmation = MockAuctionConfirmation;
+	type Reporter = MockAuctionPenalty;
+	type Confirmation = MockAuctionConfirmation;
 }
 
 impl ethereum::Config for MockRuntime {
