@@ -11,9 +11,16 @@ use substrate_subxt::{
         CheckEra, CheckGenesis, CheckNonce, CheckSpecVersion, CheckTxVersion, CheckWeight,
     },
     register_default_type_sizes,
+    sudo::Sudo,
+    sudo::SudoEventTypeRegistry,
     system::System,
+    system::SystemEventTypeRegistry,
     EventTypeRegistry, Runtime, SignedExtension, SignedExtra,
 };
+
+use auction::AuctionEventTypeRegistry;
+use staking::StakingEventTypeRegistry;
+use validator::ValidatorEventTypeRegistry;
 
 use core::fmt::Debug;
 
@@ -83,11 +90,18 @@ impl Runtime for StateChainRuntime {
     type Extra = SCDefaultExtra<Self>;
 
     fn register_type_sizes(event_type_registry: &mut EventTypeRegistry<Self>) {
-        // event_type_registry.with_session();
-        // event_type_registry.with_sudo();
+        event_type_registry.with_system();
+        event_type_registry.with_sudo();
         register_default_type_sizes(event_type_registry);
+
+        // Custom pallet event types registered here
+        event_type_registry.with_validator();
+        event_type_registry.with_staking();
+        event_type_registry.with_auction();
     }
 }
+
+impl Sudo for StateChainRuntime {}
 
 impl auction::Auction for StateChainRuntime {
     type AuctionIndex = u64;
@@ -126,4 +140,9 @@ impl System for StateChainRuntime {
     type Extrinsic = OpaqueExtrinsic;
 
     type AccountData = ();
+}
+
+#[test]
+fn can_register_default_runtime_type_sizes() {
+    EventTypeRegistry::<StateChainRuntime>::new();
 }
