@@ -30,7 +30,9 @@ async fn main() {
 
     let temp_event_map_fut = TempEventMapper::run(&settings);
 
-    let signing_client_fut = signing_client.run();
+    let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
+
+    let signing_client_fut = signing_client.run(shutdown_client_rx);
 
     futures::join!(
         sc_o_fut,
