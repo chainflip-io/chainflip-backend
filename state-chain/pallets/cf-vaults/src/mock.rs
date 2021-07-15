@@ -83,12 +83,8 @@ parameter_types! {
 
 pub struct OtherChainConstructor;
 impl Construct<RequestIndex, ValidatorId> for OtherChainConstructor {
-	type Manager = MockRuntime;
-	fn start_construction_phase(index: RequestIndex, response: KeygenResponse<ValidatorId>) {
-		// We would complete the construction and then notify the completion
-		Self::Manager::on_completion(index, Ok(
-			ValidatorRotationRequest::new(Other(vec![]))
-		));
+	fn start_construction_phase(index: RequestIndex, new_public_key: NewPublicKey, validators: Vec<ValidatorId>) {
+		todo!("mock other chain construction phase");
 	}
 }
 

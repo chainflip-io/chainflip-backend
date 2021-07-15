@@ -21,10 +21,9 @@ pub trait RequestResponse<Index, Request, Response> {
 }
 
 pub trait Construct<Index, ValidatorId> {
-	type Manager: ConstructionManager<Index>;
 	// Start the construction phase.  When complete `ConstructionHandler::on_completion()`
 	// would be used to notify that this is complete
-	fn start_construction_phase(index: Index, response: KeygenResponse<ValidatorId>);
+	fn start_construction_phase(index: Index, new_public_key: NewPublicKey, validators: Vec<ValidatorId>);
 }
 
 pub trait ConstructionManager<Index, ValidatorId> {
