@@ -1,19 +1,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use frame_support::pallet_prelude::*;
 pub use pallet::*;
-use sp_runtime::traits::AtLeast32BitUnsigned;
-use sp_std::prelude::*;
 use crate::rotation::*;
-use cf_traits::AuctionConfirmation;
 use crate::rotation::ChainParams::Ethereum;
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{AuctionConfirmation, Witnesser};
-	use frame_support::traits::ValidatorRegistration;
 	use frame_system::pallet_prelude::*;
-	use sp_std::ops::Add;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]

@@ -8,9 +8,8 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-use std::cell::RefCell;
 use crate::rotation::*;
-use crate::rotation::ChainParams::{Ethereum, Other};
+use crate::rotation::ChainParams::Other;
 use cf_traits::AuctionConfirmation;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;

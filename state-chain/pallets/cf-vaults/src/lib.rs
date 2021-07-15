@@ -20,14 +20,9 @@ mod mock;
 mod tests;
 mod ethereum;
 
-#[cfg(test)]
-#[macro_use]
-extern crate assert_matches;
-
 use frame_support::pallet_prelude::*;
 use cf_traits::Witnesser;
 pub use pallet::*;
-use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 use crate::rotation::*;
 use cf_traits::AuctionConfirmation;
@@ -36,7 +31,6 @@ use cf_traits::AuctionConfirmation;
 pub mod pallet {
 	use super::*;
 	use frame_system::pallet_prelude::*;
-	use crate::rotation::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
