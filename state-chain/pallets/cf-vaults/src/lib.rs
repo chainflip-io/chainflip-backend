@@ -179,9 +179,16 @@ impl<T: Config<I>, I: 'static> RequestResponse<RequestIndex, KeygenRequest<T::Va
 
 	fn process_response(index: RequestIndex, response: KeygenResponse<T::ValidatorId>) {
 		match response {
-			KeygenResponse::Success(_) => {
+			KeygenResponse::Success(new_public_key) => {
 				// Go forth and construct
-				T::Constructor::start_construction_phase(index, response);
+				if let Some(validators) =
+					VaultRotations::<T, I>::get(index).and_then(|r|r.validators)
+				{
+					T::Constructor::start_construction_phase(index, new_public_key, validators)
+				} else {
+					// This shouldn't happen
+					todo!("This shouldn't happen but we need to maybe signal this");
+				}
 			}
 			KeygenResponse::Failure(bad_validators) => {
 				// Abort this key generation request

@@ -27,9 +27,9 @@ pub trait Construct<Index, ValidatorId> {
 	fn start_construction_phase(index: Index, response: KeygenResponse<ValidatorId>);
 }
 
-pub trait ConstructionManager<Index> {
+pub trait ConstructionManager<Index, ValidatorId> {
 	// Construction phase complete
-	fn on_completion(index: Index, result: Result<ValidatorRotationRequest, ValidatorRotationError>);
+	fn on_completion(index: Index, result: Result<ValidatorRotationRequest, ValidatorRotationError<ValidatorId>>);
 }
 
 pub trait AuctionPenalty<ValidatorId> {
@@ -113,7 +113,8 @@ pub struct ValidatorRotationResponse {
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct VaultRotation<Index, ValidatorId> {
 	id: Index,
-	keygen_response: Option<KeygenResponse<ValidatorId>>,
+	pub validators: Option<Vec<ValidatorId>>,
+	pub new_public_key: Option<NewPublicKey>,
 	// completed_construct: CompletedConstruct,
 	// validator_rotation_response: ValidatorRotationResponse,
 }
@@ -122,7 +123,8 @@ impl<Index, ValidatorId> VaultRotation<Index, ValidatorId> {
 	pub fn new(id: Index) -> Self {
 		VaultRotation {
 			id,
-			keygen_response: None,
+			validators: None,
+			new_public_key: None,
 		}
 	}
 }
