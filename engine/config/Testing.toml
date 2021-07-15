@@ -13,8 +13,7 @@ signing_key_file = "./tests/test_keystore/alice_key"
 ws_port = "9944"
 
 [eth]
-hostname = "https://:1ba7328cee5f48ff9214801376018490@rinkeby.infura.io/v3/d6302099124e4ff6943de13ad6dddb40"
-port = "80"
+node_endpoint = "wss://network.my_eth_node:80/<secret_key>"
 # Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
 private_key_file = "/run/secrets/eth_private_key"
 # Address used on the Ganache/Brownie tests

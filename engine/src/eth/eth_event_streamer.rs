@@ -152,15 +152,56 @@ mod tests {
 
         let factory = NatsMQClientFactory::new(&settings.message_queue);
 
-        let mq_client = *factory.create().await.unwrap();
+        let mq_client = *factory.create().await.expect("Could not connect to MQ");
         // create the sink, which pushes events to the MQ
         let sm_sink = StakeManagerSink::<NatsMQClient>::new(mq_client)
             .await
             .unwrap();
-        let ws_eth_url = format!("wss://{}:{}", settings.eth.hostname, settings.eth.port);
-        let sm_event_stream = EthEventStreamBuilder::new(&ws_eth_url, stake_manager);
+        let sm_event_stream =
+            EthEventStreamBuilder::new(&settings.eth.node_endpoint, stake_manager);
         let sm_event_stream = sm_event_stream.with_sink(sm_sink).build().await.unwrap();
 
-        sm_event_stream.run(Some(0)).await.unwrap();
+        // sm_event_stream.run(Some(0)).await.unwrap();
     }
+
+    #[tokio::test]
+    #[ignore = "testing"]
+    async fn setup_transport() {
+        let h2 = tokio::spawn(async move {
+            println!("Creating transport");
+            let transport = ::web3::transports::WebSocket::new(
+                "wss://rinkeby.infura.io/ws/v3/8225b8de4cc94062959f38e0781586d1",
+            )
+            .await
+            .unwrap();
+            println!("created transport");
+        });
+
+        let h1 = tokio::spawn(async move {
+            loop {
+                // std::thread::sleep(std::time::Duration::from_secs(5));
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                println!("Another 5 seconds gone");
+                // let _ = futures_util::future::ok::<(), ()>(()).await;
+            }
+        });
+
+        futures::join!(h1, h2);
+
+        // tokio::spawn(async move {
+        //     loop {
+        //         std::thread::sleep(std::time::Duration::from_secs(5));
+        //         println!("Nummer zwei: Another 5 seconds gone");
+        //     }
+        // });
+    }
+
+    // #[tokio::test]
+    // async fn setup_builder() {
+    //     let sm_event_stream = EthEventStreamBuilder::new(
+    //         "wss://rinkeby.infura.io/ws/v3/8225b8de4cc94062959f38e0781586d1",
+    //         stake_manager,
+    //     );
+    //     sm_event_
+    // }
 }
