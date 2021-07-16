@@ -50,10 +50,11 @@ impl<S: EventSource> EthEventStreamBuilder<S> {
 
 impl<S: EventSource> EthEventStreamer<S> {
     /// Create a stream of Ethereum log events. If `from_block` is `None`, starts at the pending block.
+    // TODO: Why is this an Option?
     pub async fn run(&self, from_block: Option<u64>) -> Result<()> {
         // Make sure the eth node is fully synced
+        log::info!("Start syncing ETH node from block: {:?}", from_block);
         loop {
-            log::info!("Eth node has started syncing...");
             match self.web3_client.eth().syncing().await? {
                 SyncState::Syncing(info) => {
                     log::info!("Waiting for eth node to sync: {:?}", info);

@@ -73,6 +73,6 @@ mod tests {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
         let client = create_subxt_client(settings.state_chain).await;
-        assert!(client.is_ok());
+        client.unwrap();
     }
 }

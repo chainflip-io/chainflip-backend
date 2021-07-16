@@ -19,26 +19,26 @@ pub trait Auction: System {
 
 #[derive(Call, Encode)]
 pub struct WitnessAuctionConfirmationCall<T: Auction> {
-    auction_index: T::AuctionIndex,
+    auction_index: <T as Auction>::AuctionIndex,
 }
 
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct AuctionStartedEvent<A: Auction> {
-    pub auction_index: A::AuctionIndex,
+    pub auction_index: <A as Auction>::AuctionIndex,
 }
 
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
-pub struct AuctionCompletedEvent<A: Auction> {
-    pub auction_index: A::AuctionIndex,
+pub struct AuctionCompletedEvent<T: Auction> {
+    pub auction_index: <T as Auction>::AuctionIndex,
 
-    pub validators: Vec<A::ValidatorId>,
+    pub validators: Vec<<T as Auction>::ValidatorId>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct AuctionConfirmedEvent<A: Auction> {
-    pub auction_index: A::AuctionIndex,
+    pub auction_index: <A as Auction>::AuctionIndex,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
@@ -55,7 +55,7 @@ pub struct AuctionRangeChangedEvent<A: Auction> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct AuctionAbortedEvent<A: Auction> {
-    pub auction_index: A::AuctionIndex,
+    pub auction_index: <A as Auction>::AuctionIndex,
 }
 
 /// Derives an enum for the listed events and corresponding implementations of `From`.
