@@ -1,6 +1,5 @@
 use crate::{
-	eth_encoding, mock::*, pallet, ClaimDetails, ClaimDetailsFor, Error, EthereumAddress, Pallet,
-	PendingClaims,
+	mock::*, pallet, ClaimDetails, ClaimDetailsFor, Error, EthereumAddress, Pallet, PendingClaims,
 };
 use cf_traits::mocks::{epoch_info, time_source};
 use codec::Encode;
@@ -583,64 +582,14 @@ fn test_claim_all() {
 #[test]
 fn test_claim_payload() {
 	use ethabi::{Address, Token};
-	// const ABI_JSON: &'static [u8; 8648] = std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json");
-	const ABI_JSON: &'static str = r#"[
-		{
-			"inputs": [
-			{
-				"components": [
-				{
-					"internalType": "uint256",
-					"name": "msgHash",
-					"type": "uint256"
-				},
-				{
-					"internalType": "uint256",
-					"name": "sig",
-					"type": "uint256"
-				},
-				{
-					"internalType": "uint256",
-					"name": "nonce",
-					"type": "uint256"
-				}
-				],
-				"internalType": "struct IShared.SigData",
-				"name": "sigData",
-				"type": "tuple"
-			},
-			{
-				"internalType": "uint256",
-				"name": "nodeID",
-				"type": "bytes32"
-			},
-			{
-				"internalType": "uint256",
-				"name": "amount",
-				"type": "uint256"
-			},
-			{
-				"internalType": "address",
-				"name": "staker",
-				"type": "address"
-			},
-			{
-				"internalType": "uint48",
-				"name": "expiryTime",
-				"type": "uint48"
-			}
-			],
-			"name": "registerClaim",
-			"outputs": [],
-			"stateMutability": "nonpayable",
-			"type": "function"
-		}
-	]"#;
+	const ABI_JSON: &[u8; 11435] =
+		std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json");
 	const EXPIRY_SECS: u64 = 10;
 	const AMOUNT: u128 = 1234567890;
+
 	const NONCE: u64 = 6;
 
-	let stake_manager = ethabi::Contract::load(ABI_JSON.as_bytes()).unwrap();
+	let stake_manager = ethabi::Contract::load(ABI_JSON as &[u8]).unwrap();
 	let register_claim = stake_manager.function("registerClaim").unwrap();
 
 	let claim_details: ClaimDetailsFor<Test> = ClaimDetails {
@@ -651,7 +600,8 @@ fn test_claim_payload() {
 		expiry: Duration::from_secs(EXPIRY_SECS),
 		signature: None,
 	};
-	let runtime_payload = eth_encoding::encode_claim_request::<Test>(&ALICE, &claim_details);
+
+	let runtime_payload = Staking::try_encode_claim_request(&ALICE, &claim_details).unwrap();
 
 	assert_eq!(
 		// Our encoding:
@@ -663,7 +613,8 @@ fn test_claim_payload() {
 				Token::Tuple(vec![
 					Token::Uint(ethabi::Uint::zero()),
 					Token::Uint(ethabi::Uint::zero()),
-					Token::Uint(ethabi::Uint::from(NONCE))
+					Token::Uint(ethabi::Uint::from(NONCE)),
+					Token::Address(Address::from(ETH_DUMMY_ADDR)),
 				]),
 				// nodeId: bytes32
 				Token::FixedBytes(ALICE.using_encoded(|bytes| bytes.to_vec())),

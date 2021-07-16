@@ -155,8 +155,8 @@ pub trait StakeTransfer {
 	fn revert_claim(account_id: &Self::AccountId, amount: Self::Balance);
 }
 
-/// Trait for managing token emissions.
-pub trait Emissions {
+/// Trait for managing token issuance.
+pub trait Issuance {
 	type AccountId;
 	type Balance;
 

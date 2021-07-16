@@ -43,7 +43,7 @@ where
         }
     }
 
-    pub async fn start(mut self) {
+    pub async fn start(mut self, mut shutdown_rx: tokio::sync::oneshot::Receiver<()>) {
         type Msg = Either<Result<P2PMessageCommand, anyhow::Error>, P2PMessage>;
 
         let mq_stream = pin_message_stream(self.stream);
@@ -54,18 +54,26 @@ where
 
         let mut stream = futures::stream::select(mq_stream, p2p_stream);
 
-        while let Some(x) = stream.next().await {
-            match x {
-                Either::Left(outgoing) => {
-                    if let Ok(P2PMessageCommand { destination, data }) = outgoing {
-                        self.p2p.send(&destination, &data).await.unwrap();
+        loop {
+            tokio::select! {
+                Some(x) = stream.next() => {
+                    match x {
+                        Either::Left(outgoing) => {
+                            if let Ok(P2PMessageCommand { destination, data }) = outgoing {
+                                self.p2p.send(&destination, &data).await.expect("Could not send outgoing P2PMessageCommand");
+                            }
+                        }
+                        Either::Right(incoming) => {
+                            self.mq
+                                .publish::<P2PMessage>(Subject::P2PIncoming, &incoming)
+                                .await
+                                .expect("Could not publish incoming message to Subject::P2PIncoming");
+                        }
                     }
                 }
-                Either::Right(incoming) => {
-                    self.mq
-                        .publish::<P2PMessage>(Subject::P2PIncoming, &incoming)
-                        .await
-                        .unwrap();
+                Ok(()) = &mut shutdown_rx =>{
+                    log::info!("Shutting down P2P Conductor");
+                    break;
                 }
             }
         }
@@ -115,8 +123,17 @@ mod tests {
         let p2p_client_2 = network.new_client(id_2.clone());
         let conductor_2 = P2PConductor::new(mc2, p2p_client_2).await;
 
-        let conductor_fut_1 = timeout(Duration::from_millis(100), conductor_1.start());
-        let conductor_fut_2 = timeout(Duration::from_millis(100), conductor_2.start());
+        let (_, shutdown_conductor1_rx) = tokio::sync::oneshot::channel::<()>();
+        let (_, shutdown_conductor2_rx) = tokio::sync::oneshot::channel::<()>();
+
+        let conductor_fut_1 = timeout(
+            Duration::from_millis(100),
+            conductor_1.start(shutdown_conductor1_rx),
+        );
+        let conductor_fut_2 = timeout(
+            Duration::from_millis(100),
+            conductor_2.start(shutdown_conductor2_rx),
+        );
 
         let msg = String::from("hello");
 
@@ -129,14 +146,14 @@ mod tests {
             mc1_copy
                 .publish(Subject::P2POutgoing, &message)
                 .await
-                .unwrap();
+                .expect("Could not publish incoming P2PMessageCommand to Subject::P2POutgoing");
         };
 
         let read_fut = async move {
             let stream2 = mc2_copy
                 .subscribe::<P2PMessage>(Subject::P2PIncoming)
                 .await
-                .unwrap();
+                .expect("Could not subscribe to Subject::P2PIncoming");
 
             let mut stream2 = pin_message_stream(stream2);
 

@@ -115,6 +115,9 @@ steps:
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
 trigger:
+  branch:
+    exclude:
+      - devnet/*
   event:
     - pull_request
 
@@ -346,6 +349,7 @@ steps:
       message: |
         ✅ Testnet Reboot Successful: `{{commit.branch}}` ✅
         Testnet released with commit hash: `{{commit.sha}}`
+        [Check the logs here](https://monitor.chainflip.xyz/explore?orgId=1&left=%5B%22now-1h%22%2C%22now%22%2C%22Loki%22%2C%7B%22expr%22:%22%7Bchainflip_xyz_tag%3D%5C%22{{commit.sha}}%5C%22%7D%22%7D%5D)
 
 # Notify devs Testnet has failed to launch
   - name: notify-testnet-failure
@@ -368,12 +372,30 @@ steps:
         Build: {{build.link}}
         <@508234815254953985> sort it out!!
 
+  # Destroy the testnet on failure
+  - name: destroy-on-failure
+    pull: always
+    image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+    failure: ignore
+    when:
+      status:
+        - failure
+    depends_on:
+      - create
+    commands:
+      - kubectl get pods -n $DRONE_COMMIT_BRANCH
+      - kubectl logs -l app.kubernetes.io/name=chainflip-engine -n $DRONE_COMMIT_BRANCH
+      - kubectl logs -l app.kubernetes.io/name=state-chain-node -n $DRONE_COMMIT_BRANCH
+      - cd cluster/applications/staging/chainflip-validator
+      - ./build.sh --branch=$DRONE_COMMIT_BRANCH --destroy --rpc
+
 service_account_name: drone-runner-kube
 
 # Config
 trigger:
   branch:
     - release/*
+    - devnet/*
     - develop
   event:
     - push

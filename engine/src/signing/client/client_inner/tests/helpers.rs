@@ -10,17 +10,17 @@ use crate::{
         client::{
             client_inner::{
                 client_inner::{
-                    Broadcast1, KeyGenMessageWrapped, KeygenData, MultisigMessage, Secret2,
-                    SigningData, SigningDataWrapped,
+                    Broadcast1, KeyGenMessageWrapped, KeygenData, MultisigMessage,
+                    SchnorrSignature, Secret2, SigningData, SigningDataWrapped,
                 },
                 keygen_state::KeygenStage,
                 signing_state::SigningStage,
                 InnerEvent, KeygenOutcome, MultisigClientInner, SigningOutcome,
             },
-            KeyId, KeygenInfo, MultisigInstruction, SigningInfo,
+            KeyId, KeygenInfo, MultisigInstruction,
         },
-        crypto::{Keys, LocalSig, Parameters, Signature},
-        MessageHash, MessageInfo,
+        crypto::{Keys, LocalSig},
+        MessageInfo,
     },
 };
 
@@ -73,7 +73,7 @@ pub(super) struct ValidKeygenStates {
     pub(super) sign_phase1: SigningPhase1Data,
     pub(super) sign_phase2: SigningPhase2Data,
     pub(super) sign_phase3: SigningPhase3Data,
-    pub(super) signature: Signature,
+    pub(super) signature: SchnorrSignature,
     pub(super) rxs: Vec<UnboundedReceiver<InnerEvent>>,
 }
 
@@ -360,7 +360,9 @@ pub(super) async fn generate_valid_keygen_data() -> ValidKeygenStates {
     let event = recv_next_inner_event(&mut rxs[0]).await;
 
     let signature = match event {
-        InnerEvent::SigningResult(SigningOutcome::MessageSigned(_message_info, sig)) => sig,
+        InnerEvent::SigningResult(SigningOutcome::MessageSigned(signing_success)) => {
+            signing_success.sig
+        }
         _ => panic!("Unexpected event"),
     };
 
