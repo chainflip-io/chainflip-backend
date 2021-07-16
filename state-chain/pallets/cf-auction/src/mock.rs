@@ -9,6 +9,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 };
 use std::cell::RefCell;
+use cf_traits::mocks::auction_handler::Mock as MockHandler;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -29,7 +30,6 @@ thread_local! {
 	pub static BIDDER_SET: RefCell<Vec<(ValidatorId, Amount)>> = RefCell::new(vec![
 		INVALID_BID, LOW_BID, JOE_BID, MAX_BID
 	]);
-	pub static TO_CONFIRM: RefCell<Result<(), AuctionError>> = RefCell::new(Err(AuctionError::NotConfirmed));
 }
 
 construct_runtime!(
@@ -76,25 +76,6 @@ parameter_types! {
 	pub const MinAuctionSize: u32 = 2;
 }
 
-pub struct MockHandler;
-
-// Helper function to clear the confirmation result
-pub(crate) fn clear_confirmation() {
-	TO_CONFIRM.with(|l| *l.borrow_mut() = Ok(()));
-}
-
-impl AuctionHandler<ValidatorId, Amount> for MockHandler {
-	fn on_completed(_winners: Vec<ValidatorId>, _min_bid: Amount) {
-		TO_CONFIRM.with(|l| *l.borrow_mut() = Err(AuctionError::NotConfirmed));
-	}
-
-	fn try_confirmation() -> Result<(), AuctionError> {
-		TO_CONFIRM.with(|l| {
-			(*l.borrow()).clone()
-		})
-	}
-}
-
 impl Config for Test {
 	type Event = Event;
 	type Call = Call;
@@ -104,7 +85,7 @@ impl Config for Test {
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
-	type Handler = MockHandler;
+	type Handler = MockHandler<ValidatorId, Amount>;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
