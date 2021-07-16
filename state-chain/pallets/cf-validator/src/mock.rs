@@ -1,6 +1,6 @@
 use super::*;
 use crate as pallet_cf_validator;
-use cf_traits::{AuctionConfirmation, BidderProvider};
+use cf_traits::BidderProvider;
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -15,6 +15,7 @@ use sp_runtime::{
 	Perbill,
 };
 use std::cell::RefCell;
+use cf_traits::mocks::auction_handler::Mock as MockHandler;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -114,29 +115,6 @@ parameter_types! {
 	pub const MinAuctionSize: u32 = 2;
 }
 
-pub struct MockEnsureWitness;
-
-impl EnsureOrigin<Origin> for MockEnsureWitness {
-	type Success = ();
-
-	fn try_origin(o: Origin) -> Result<Self::Success, Origin> {
-		// We don't intend to test this, it's just to keep the compiler happy.
-		unimplemented!()
-	}
-}
-
-pub struct WitnesserMock;
-
-impl cf_traits::Witnesser for WitnesserMock {
-	type AccountId = u64;
-	type Call = Call;
-
-	fn witness(_who: Self::AccountId, _call: Self::Call) -> DispatchResultWithPostInfo {
-		// We don't intend to test this, it's just to keep the compiler happy.
-		unimplemented!()
-	}
-}
-
 impl pallet_cf_auction::Config for Test {
 	type Event = Event;
 	type Call = Call;
@@ -146,9 +124,7 @@ impl pallet_cf_auction::Config for Test {
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
-	type Confirmation = TestConfirmation;
-	type EnsureWitnessed = MockEnsureWitness;
-	type Witnesser = WitnesserMock;
+	type Handler = MockHandler<ValidatorId, Amount>;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
@@ -174,16 +150,6 @@ impl BidderProvider for TestBidderProvider {
 	}
 }
 
-pub struct TestConfirmation;
-impl AuctionConfirmation for TestConfirmation {
-	fn awaiting_confirmation() -> bool {
-		CONFIRM.with(|l| *l.borrow())
-	}
-
-	fn set_awaiting_confirmation(waiting: bool) {
-		CONFIRM.with(|l| *l.borrow_mut() = waiting);
-	}
-}
 pub struct TestEpochTransitionHandler;
 
 impl EpochTransitionHandler for TestEpochTransitionHandler {
