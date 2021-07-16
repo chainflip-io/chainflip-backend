@@ -8,12 +8,13 @@ mod rpc;
 use std::convert::TryInto;
 
 pub use conductor::P2PConductor;
+pub use rpc::RpcP2PClient;
 
 use serde::{Deserialize, Serialize};
 
-use crate::p2p::rpc::Base58;
 use async_trait::async_trait;
 use futures::Stream;
+use rpc::Base58;
 
 #[derive(Debug)]
 pub enum P2PNetworkClientError {
