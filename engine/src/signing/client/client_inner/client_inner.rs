@@ -4,7 +4,10 @@ use crate::{
     p2p::{P2PMessage, P2PMessageCommand, ValidatorId},
     signing::{
         client::{KeyId, MultisigInstruction, SigningInfo},
-        crypto::{BigInt, KeyGenBroadcastMessage1, LocalSig, Signature, VerifiableSS, FE, GE},
+        crypto::{
+            BigInt, ECPoint, ECScalar, KeyGenBroadcastMessage1, LocalSig, Signature, VerifiableSS,
+            FE, GE,
+        },
         MessageHash, MessageInfo,
     },
 };
@@ -16,6 +19,23 @@ use super::{
     common::KeygenResultInfo, key_store::KeyStore, keygen_manager::KeygenManager,
     signing_state_manager::SigningStateManager,
 };
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SchnorrSignature {
+    /// Scalar component
+    // s: secp256k1::SecretKey,
+    pub s: [u8; 32],
+    /// Point component
+    pub r: secp256k1::PublicKey,
+}
+
+impl From<Signature> for SchnorrSignature {
+    fn from(sig: Signature) -> Self {
+        let s: [u8; 32] = sig.sigma.get_element().as_ref().clone();
+        let r = sig.v.get_element();
+        SchnorrSignature { s, r }
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub(super) enum SigningData {
@@ -149,11 +169,67 @@ impl Display for KeygenData {
     }
 }
 
-/// public interfaces will return this to indicate
-/// that something potentially interesting has happened
-#[derive(Debug, PartialEq)]
+/// Holds extra info about signing failure (but not the reason)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SigningFailure {
+    pub message_info: MessageInfo,
+    pub bad_nodes: Vec<ValidatorId>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SigningSuccess {
+    pub message_info: MessageInfo,
+    pub sig: SchnorrSignature,
+}
+
+/// The final result of a Signing ceremony
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SigningOutcome {
-    MessageSigned(MessageInfo, Signature),
+    MessageSigned(SigningSuccess),
+    Unauthorised(SigningFailure),
+    /// Abandoned as we couldn't make progress for a long time
+    Timeout(SigningFailure),
+    /// Invalid data has been submitted, can't proceed
+    Invalid(SigningFailure),
+}
+
+impl SigningOutcome {
+    /// Helper method to create SigningOutcome::MessageSigned
+    pub fn success(message_info: MessageInfo, sig: Signature) -> Self {
+        let sig = SchnorrSignature::from(sig);
+
+        SigningOutcome::MessageSigned(SigningSuccess { message_info, sig })
+    }
+
+    /// Helper method to create SigningOutcome::Unauthorised
+    pub fn unauthorised(message_info: MessageInfo, bad_nodes: impl Into<Vec<ValidatorId>>) -> Self {
+        SigningOutcome::Unauthorised(SigningFailure {
+            message_info,
+            bad_nodes: bad_nodes.into(),
+        })
+    }
+
+    /// Helper method to create SigningOutcome::Timeout
+    pub fn timeout(message_info: MessageInfo, bad_nodes: impl Into<Vec<ValidatorId>>) -> Self {
+        SigningOutcome::Timeout(SigningFailure {
+            message_info,
+            bad_nodes: bad_nodes.into(),
+        })
+    }
+
+    /// Helper method to create SigningOutcome::Invalid
+    pub fn invalid(message_info: MessageInfo, bad_nodes: impl Into<Vec<ValidatorId>>) -> Self {
+        SigningOutcome::Invalid(SigningFailure {
+            message_info,
+            bad_nodes: bad_nodes.into(),
+        })
+    }
+}
+
+impl From<SigningOutcome> for InnerEvent {
+    fn from(so: SigningOutcome) -> Self {
+        InnerEvent::SigningResult(so)
+    }
 }
 
 /// Holds extra info about keygen failure (but not the reason)

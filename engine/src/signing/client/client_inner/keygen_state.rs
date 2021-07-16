@@ -1,6 +1,5 @@
 use std::{sync::Arc, time::Instant};
 
-use curv::elliptic::curves::traits::ECPoint;
 use itertools::Itertools;
 use log::*;
 use tokio::sync::mpsc::UnboundedSender;
@@ -16,7 +15,7 @@ use crate::{
             },
             KeyId,
         },
-        crypto::{InvalidKey, InvalidSS, Parameters},
+        crypto::{ECPoint, InvalidKey, InvalidSS, Parameters},
     },
 };
 
@@ -354,6 +353,14 @@ impl KeygenState {
     pub fn is_abandoned(&self) -> bool {
         match self.stage {
             KeygenStage::Abandoned => true,
+            _ => false,
+        }
+    }
+
+    /// check is the KeygenStage is in the KeyReady stage
+    pub fn is_finished(&self) -> bool {
+        match self.stage {
+            KeygenStage::KeyReady => true,
             _ => false,
         }
     }

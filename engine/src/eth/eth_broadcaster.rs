@@ -36,26 +36,24 @@ fn secret_key_from_file(filename: &Path) -> Result<SecretKey> {
 
 /// Adapter struct to build the ethereum web3 client from settings.
 struct EthClientBuilder {
-    hostname: String,
-    port: u16,
+    node_endpoint: String,
 }
 
 impl EthClientBuilder {
-    pub fn new(hostname: String, port: u16) -> Self {
-        Self { hostname, port }
+    pub fn new(node_endpoint: String) -> Self {
+        Self { node_endpoint }
     }
 
     /// Builds a web3 ethereum client with websocket transport.
     pub async fn ws_client(&self) -> Result<Web3<WebSocket>> {
-        let url = format!("ws://{}:{}", self.hostname, self.port);
-        let transport = web3::transports::WebSocket::new(url.as_str()).await?;
+        let transport = web3::transports::WebSocket::new(self.node_endpoint.as_str()).await?;
         Ok(Web3::new(transport))
     }
 }
 
 impl From<&settings::Settings> for EthClientBuilder {
     fn from(settings: &settings::Settings) -> Self {
-        EthClientBuilder::new(settings.eth.hostname.clone(), settings.eth.port)
+        EthClientBuilder::new(settings.eth.node_endpoint.clone())
     }
 }
 

@@ -20,7 +20,7 @@ use crate::{
             },
             SigningInfo,
         },
-        crypto::{LocalSig, Parameters, Signature},
+        crypto::{InvalidKey, InvalidSS, LocalSig, Parameters, Signature},
         MessageInfo,
     },
 };
@@ -32,6 +32,8 @@ pub(super) enum SigningStage {
     AwaitingBroadcast1,
     AwaitingSecret2,
     AwaitingLocalSig3,
+    Finished,
+    Abandoned,
 }
 
 #[derive(Clone)]
@@ -130,6 +132,41 @@ impl SigningState {
         String::default()
     }
 
+    /// Get ids of validators who haven't sent the data for the current stage
+    pub fn awaited_parties(&self) -> Vec<ValidatorId> {
+        let awaited_idxs = match self.stage {
+            SigningStage::AwaitingBroadcast1 | SigningStage::AwaitingSecret2 => {
+                self.sss.awaited_parties()
+            }
+            SigningStage::AwaitingLocalSig3 => {
+                let received_idxs = &self.local_sigs_order;
+                let mut idxs: Vec<usize> = (1..=self.sss.params.share_count).collect();
+                idxs.retain(|idx| !received_idxs.contains(idx));
+                idxs
+            }
+            SigningStage::Abandoned => vec![],
+            SigningStage::Finished => vec![],
+        };
+
+        let awaited_ids = awaited_idxs
+            .into_iter()
+            .map(|idx| self.signer_idx_to_validator_id(idx))
+            .collect_vec();
+
+        awaited_ids
+    }
+
+    fn signer_idx_to_validator_id(&self, idx: usize) -> ValidatorId {
+        let id = self.key_info.get_id(idx);
+        id
+    }
+
+    fn send_event(&self, event: InnerEvent) {
+        if let Err(err) = self.event_sender.send(event) {
+            error!("Could not send inner event: {}", err);
+        }
+    }
+
     fn record_local_sig(&mut self, signer_id: usize, sig: LocalSig) {
         self.local_sigs_order.push(signer_id);
         self.local_sigs.push(sig);
@@ -164,7 +201,7 @@ impl SigningState {
         }
     }
 
-    fn on_local_sigs_collected(&self) {
+    fn on_local_sigs_collected(&mut self) {
         debug!("Collected all local sigs ✅✅✅");
 
         let key = &self.key_info.key;
@@ -199,18 +236,45 @@ impl SigningState {
                     ss.aggregate_pubkey,
                 );
                 let verify_sig = signature.verify(&self.message_info.hash.0, &key.aggregate_pubkey);
-                assert!(verify_sig.is_ok());
 
                 if verify_sig.is_ok() {
                     info!("Generated signature is correct! 🎉");
-                    let _ = self.event_sender.send(InnerEvent::SigningResult(
-                        SigningOutcome::MessageSigned(self.message_info.clone(), signature),
+                    self.send_event(InnerEvent::SigningResult(SigningOutcome::success(
+                        self.message_info.clone(),
+                        signature,
+                    )));
+                } else {
+                    self.update_stage(SigningStage::Abandoned);
+
+                    error!(
+                        "Unexpected signature verification failure. This should never happen. {:?}",
+                        self.message_info
+                    );
+
+                    let event = InnerEvent::SigningResult(SigningOutcome::invalid(
+                        self.message_info.clone(),
+                        vec![],
                     ));
+
+                    self.send_event(event);
                 }
+                self.update_stage(SigningStage::Finished);
             }
-            Err(_) => {
-                // TODO: emit a signal and remove local state
-                warn!("Invalid local signatures, aborting. ❌");
+            Err(InvalidSS(blamed_idxs)) => {
+                let blamed_ids = self.signer_idxs_to_validator_ids(blamed_idxs);
+                self.update_stage(SigningStage::Abandoned);
+
+                error!(
+                    "Local Sigs verify error for message: {:?}, blamed validators: {:?}",
+                    self.message_info, &blamed_ids
+                );
+
+                let event = InnerEvent::SigningResult(SigningOutcome::invalid(
+                    self.message_info.clone(),
+                    blamed_ids,
+                ));
+
+                self.send_event(event);
             }
         }
     }
@@ -231,6 +295,10 @@ impl SigningState {
         match (self.stage, stage) {
             (SigningStage::AwaitingBroadcast1, SigningStage::AwaitingSecret2) => {}
             (SigningStage::AwaitingSecret2, SigningStage::AwaitingLocalSig3) => {}
+            (SigningStage::AwaitingBroadcast1, SigningStage::Abandoned) => {}
+            (SigningStage::AwaitingSecret2, SigningStage::Abandoned) => {}
+            (SigningStage::AwaitingLocalSig3, SigningStage::Abandoned) => {}
+            (SigningStage::AwaitingLocalSig3, SigningStage::Finished) => {}
             _ => {
                 error!("Invalid transition from {:?} to {:?}", self.stage, stage);
                 panic!();
@@ -307,14 +375,7 @@ impl SigningState {
                     StageStatus::Full => {
                         info!("[{}] Phase 2 (signing) successful ✅✅", self.us());
                         self.update_progress_timestamp();
-                        if let Ok(key) = self.sss.finalize_phase2() {
-                            info!("[{}] SHARED SECRET IS READY 👍", self.us());
-
-                            self.shared_secret = Some(key);
-
-                            self.init_local_sigs_phase();
-                            self.process_delayed(); // Process delayed LocalSig
-                        }
+                        self.finalize_phase2();
                     }
                     StageStatus::MadeProgress => self.update_progress_timestamp(),
                     StageStatus::Ignored => { /* do nothing */ }
@@ -326,8 +387,17 @@ impl SigningState {
             (SigningStage::AwaitingLocalSig3, SigningData::LocalSig(sig)) => {
                 self.on_local_sig_received(sender_id, sig);
             }
-            _ => {
-                warn!("Dropping unexpected message for stage {:?}", self.stage);
+            (SigningStage::Abandoned, data) => {
+                warn!(
+                    "Dropping {} for abandoned Signing state, Message: {:?}",
+                    data, self.message_info
+                );
+            }
+            (_, data) => {
+                warn!(
+                    "Dropping unexpected message for stage {:?}, Dropped: {:?}",
+                    self.stage, data
+                );
             }
         }
     }
@@ -360,10 +430,30 @@ impl SigningState {
 
                 self.send(msgs)
             }
-            Err(_) => {
-                error!("phase2 keygen error")
+            Err(InvalidKey(blamed_idxs)) => {
+                let blamed_ids = self.signer_idxs_to_validator_ids(blamed_idxs);
+
+                error!(
+                    "phase2 signing error for message: {:?}, blamed validators: {:?}",
+                    self.message_info, &blamed_ids
+                );
+
+                let event = InnerEvent::SigningResult(SigningOutcome::invalid(
+                    self.message_info.clone(),
+                    blamed_ids,
+                ));
+
+                self.send_event(event);
+
+                self.update_stage(SigningStage::Abandoned);
             }
         }
+    }
+
+    fn signer_idxs_to_validator_ids(&self, idxs: Vec<usize>) -> Vec<ValidatorId> {
+        idxs.into_iter()
+            .map(|idx| self.signer_idx_to_validator_id(idx))
+            .collect()
     }
 
     fn send(&self, msgs: Vec<P2PMessageCommand>) {
@@ -399,6 +489,33 @@ impl SigningState {
         }
     }
 
+    fn finalize_phase2(&mut self) {
+        match self.sss.finalize_phase2() {
+            Ok(key) => {
+                info!("[{}] SHARED KEY IS READY 👍", self.us());
+
+                self.shared_secret = Some(key);
+
+                self.init_local_sigs_phase();
+                self.process_delayed(); // Process delayed LocalSig
+            }
+            Err(InvalidSS(blamed_idxs)) => {
+                error!(
+                    "Invalid Phase2 keygen data, abandoning state for message_info: {:?}, Blaming: {:?}",
+                    self.message_info,blamed_idxs
+                );
+                self.update_stage(SigningStage::Abandoned);
+
+                let blamed_ids = self.signer_idxs_to_validator_ids(blamed_idxs);
+
+                self.send_event(InnerEvent::SigningResult(SigningOutcome::invalid(
+                    self.message_info.clone(),
+                    blamed_ids,
+                )));
+            }
+        }
+    }
+
     fn init_local_sigs_phase(&mut self) {
         self.update_stage(SigningStage::AwaitingLocalSig3);
 
@@ -416,5 +533,21 @@ impl SigningState {
         let msg = MultisigMessage::SigningMessage(local_sig);
 
         self.broadcast(msg);
+    }
+
+    /// check is the SigningStage is Abandoned
+    pub fn is_abandoned(&self) -> bool {
+        match self.stage {
+            SigningStage::Abandoned => true,
+            _ => false,
+        }
+    }
+
+    /// check is the SigningStage is Finished
+    pub fn is_finished(&self) -> bool {
+        match self.stage {
+            SigningStage::Finished => true,
+            _ => false,
+        }
     }
 }

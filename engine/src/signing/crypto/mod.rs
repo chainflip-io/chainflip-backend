@@ -12,6 +12,9 @@ pub use error::{InvalidKey, InvalidSS, InvalidSig};
 
 pub use curv::{
     cryptographic_primitives::secret_sharing::feldman_vss::VerifiableSS,
-    elliptic::curves::secp256_k1::{FE, GE},
+    elliptic::curves::{
+        secp256_k1::{FE, GE},
+        traits::{ECPoint, ECScalar},
+    },
     BigInt,
 };

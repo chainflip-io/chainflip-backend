@@ -99,8 +99,9 @@ impl KeygenManager {
     pub fn cleanup(&mut self) {
         let mut events_to_send = vec![];
 
-        // remove all states that have become abandoned (events have already been sent)
-        self.keygen_states.retain(|_, state| !state.is_abandoned());
+        // remove all states that have become abandoned or finished (KeygenOutcome have already been sent)
+        self.keygen_states
+            .retain(|_, state| !state.is_abandoned() && !state.is_finished());
 
         let timeout = self.phase_timeout;
         // Remove all pending state that hasn't been updated for

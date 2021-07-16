@@ -15,13 +15,13 @@ pub struct StateChain {
     pub hostname: String,
     pub ws_port: u16,
     pub rpc_port: u16,
-    pub signing_key_path: String,
+    pub signing_key_file: String,
+    pub p2p_priv_key_file: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Eth {
-    pub hostname: String,
-    pub port: u16,
+    pub node_endpoint: String,
 
     // TODO: Into an Ethereum Address type?
     pub stake_manager_eth_address: String,
@@ -37,6 +37,7 @@ pub struct HealthCheck {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Signing {
+    /// This includes my_id if I'm part of genesis validator set
     pub genesis_validator_ids: Vec<ValidatorId>,
 }
 
@@ -84,16 +85,14 @@ mod tests {
     #[test]
     fn init_config() {
         let settings = Settings::new();
-        assert!(settings.is_ok());
-
         let settings = settings.unwrap();
+
         assert_eq!(settings.message_queue.hostname, "localhost");
     }
 
     #[test]
     fn test_init_config_with_testing_config() {
         let test_settings = test_utils::new_test_settings();
-        assert!(test_settings.is_ok());
 
         let test_settings = test_settings.unwrap();
         assert_eq!(test_settings.message_queue.hostname, "localhost");

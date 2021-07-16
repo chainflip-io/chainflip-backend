@@ -43,8 +43,6 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-mod eth_encoding;
-
 use cf_traits::{BidderProvider, EpochInfo, StakeTransfer};
 use core::time::Duration;
 use frame_support::{
@@ -59,12 +57,11 @@ use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
 
-use codec::FullCodec;
+use codec::{Encode, FullCodec};
+use ethabi::{Bytes, Function, Param, ParamType};
 use sp_core::U256;
 use sp_runtime::{
-	traits::{
-		AtLeast32BitUnsigned, Bounded, CheckedSub, Hash, Keccak256, One, UniqueSaturatedInto, Zero,
-	},
+	traits::{AtLeast32BitUnsigned, CheckedSub, Hash, Keccak256, UniqueSaturatedInto, Zero},
 	DispatchError,
 };
 
@@ -112,7 +109,8 @@ pub mod pallet {
 			+ AtLeast32BitUnsigned
 			+ Default
 			+ Copy
-			+ MaybeSerializeDeserialize;
+			+ MaybeSerializeDeserialize
+			+ Into<U256>;
 
 		/// The Flip token implementation.
 		type Flip: StakeTransfer<
@@ -127,7 +125,8 @@ pub mod pallet {
 			+ Default
 			+ AtLeast32BitUnsigned
 			+ MaybeSerializeDeserialize
-			+ CheckedSub;
+			+ CheckedSub
+			+ Into<U256>;
 
 		/// Provides an origin check for witness transactions.
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
@@ -244,6 +243,9 @@ pub mod pallet {
 
 		/// Cannot make a claim request while an auction is being resolved.
 		NoClaimsDuringAuctionPhase,
+
+		/// Failed to encode the claim transaction
+		EthEncodingFailed,
 	}
 
 	#[pallet::call]
@@ -568,17 +570,21 @@ impl<T: Config> Pallet<T> {
 		};
 
 		// Compute the message hash to be signed.
-		let payload = eth_encoding::encode_claim_request::<T>(account_id, &details);
-		let msg_hash: U256 = Keccak256::hash(&payload[..]).as_bytes().into();
-		details.msg_hash = Some(msg_hash);
+		match Self::try_encode_claim_request(account_id, &details) {
+			Ok(payload) => {
+				let msg_hash: U256 = Keccak256::hash(&payload[..]).as_bytes().into();
+				details.msg_hash = Some(msg_hash);
 
-		// Store the params for later.
-		PendingClaims::<T>::insert(account_id, details);
+				// Store the params for later.
+				PendingClaims::<T>::insert(account_id, details);
 
-		// Emit the event requesting that the CFE generate the claim voucher.
-		Self::deposit_event(Event::<T>::ClaimSigRequested(account_id.clone(), msg_hash));
+				// Emit the event requesting that the CFE generate the claim voucher.
+				Self::deposit_event(Event::<T>::ClaimSigRequested(account_id.clone(), msg_hash));
 
-		Ok(())
+				Ok(())
+			}
+			Err(_) => Err(Error::<T>::EthEncodingFailed.into()),
+		}
 	}
 
 	/// Generates a unique nonce for the StakeManager contract.
@@ -606,6 +612,51 @@ impl<T: Config> Pallet<T> {
 				None => Err(Error::UnknownAccount)?,
 			}
 		})
+	}
+
+	fn try_encode_claim_request(
+		account_id: &T::AccountId,
+		claim_details: &ClaimDetailsFor<T>,
+	) -> ethabi::Result<Bytes> {
+		use ethabi::{Address, Token};
+		let register_claim = Function::new(
+			"registerClaim",
+			vec![
+				Param::new(
+					"sigData",
+					ParamType::Tuple(vec![
+						ParamType::Uint(256),
+						ParamType::Uint(256),
+						ParamType::Uint(256),
+						ParamType::Address,
+					]),
+				),
+				Param::new("nodeID", ParamType::FixedBytes(32)),
+				Param::new("amount", ParamType::Uint(256)),
+				Param::new("staker", ParamType::Address),
+				Param::new("expiryTime", ParamType::Uint(48)),
+			],
+			vec![],
+			false,
+		);
+
+		register_claim.encode_input(&vec![
+			// sigData: SigData(uint, uint, uint)
+			Token::Tuple(vec![
+				Token::Uint(ethabi::Uint::zero()),
+				Token::Uint(ethabi::Uint::zero()),
+				Token::Uint(claim_details.nonce.into()),
+				Token::Address(Address::from(claim_details.address)),
+			]),
+			// nodeId: bytes32
+			Token::FixedBytes(account_id.using_encoded(|bytes| bytes.to_vec())),
+			// amount: uint
+			Token::Uint(claim_details.amount.into()),
+			// staker: address
+			Token::Address(Address::from(claim_details.address)),
+			// expiryTime: uint48
+			Token::Uint(claim_details.expiry.as_secs().into()),
+		])
 	}
 
 	/// Sets the `retired` flag associated with the account to false, signalling that the account wishes to come
