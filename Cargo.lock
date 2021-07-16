@@ -4917,7 +4917,6 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
- "tuples",
 ]
 
 [[package]]
@@ -4929,6 +4928,24 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-transaction-payment",
+ "parity-scale-codec",
+ "serde 1.0.126",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-cf-rewards"
+version = "0.1.0"
+dependencies = [
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-cf-flip",
+ "pallet-cf-validator",
  "parity-scale-codec",
  "serde 1.0.126",
  "sp-core",
@@ -8623,6 +8640,7 @@ dependencies = [
  "pallet-cf-auction",
  "pallet-cf-emissions",
  "pallet-cf-flip",
+ "pallet-cf-rewards",
  "pallet-cf-staking",
  "pallet-cf-validator",
  "pallet-cf-witness",
@@ -9561,12 +9579,6 @@ name = "try-lock"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
-
-[[package]]
-name = "tuples"
-version = "1.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8ec693bccff01984a625ccd4f15f674698cc4160e7b1df94c9099c98a98b527"
 
 [[package]]
 name = "twox-hash"
