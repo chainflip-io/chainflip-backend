@@ -48,25 +48,18 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn offchain_funds)]
 	pub type RewardsEntitlement<T: Config> =
-		StorageMap<_, Identity, ReserveId, T::Balance, ValueQuery>;
+		StorageMap<_, Twox64Concat, ReserveId, T::Balance, ValueQuery>;
 
 	/// Rewards that have actually been apportioned to accounts.
 	#[pallet::storage]
 	#[pallet::getter(fn apportioned_rewards)]
-	pub type ApportionedRewards<T: Config> = StorageDoubleMap<
-		_,
-		Identity,
-		ReserveId,
-		Blake2_128Concat,
-		T::AccountId,
-		T::Balance,
-		ValueQuery,
-	>;
+	pub type ApportionedRewards<T: Config> =
+		StorageDoubleMap<_, Twox64Concat, ReserveId, Blake2_128Concat, T::AccountId, T::Balance>;
 
-	/// The beneficiaries that rewards will be distributed to.
+	/// The number of beneficiaries that rewards will be distributed to this round.
 	#[pallet::storage]
 	#[pallet::getter(fn beneficiaries)]
-	pub type Beneficiaries<T: Config> = StorageValue<_, Vec<T::AccountId>, ValueQuery>;
+	pub type Beneficiaries<T: Config> = StorageMap<_, Twox64Concat, ReserveId, u32, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::metadata(T::AccountId = "AccountId")]
@@ -80,6 +73,8 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Not enough reserves to pay out expected rewards entitlements.
 		InsufficientReserves,
+		/// No current entitlement to any rewards.
+		NoRewardEntitlement,
 	}
 
 	#[pallet::hooks]
@@ -100,26 +95,24 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// The amount of rewards still due to this account.
 	fn rewards_due(account_id: &T::AccountId) -> T::Balance {
-		let num_beneficiaries = Beneficiaries::<T>::decode_len().unwrap_or(0) as u32;
-		if num_beneficiaries == 0 {
-			return Zero::zero()
+		if let Some(already_received) = ApportionedRewards::<T>::get(VALIDATOR_REWARDS, account_id)
+		{
+			Self::rewards_due_each() - already_received
+		} else {
+			Zero::zero()
 		}
-		let total_entitlement = RewardsEntitlement::<T>::get(VALIDATOR_REWARDS);
-		let already_received = ApportionedRewards::<T>::get(VALIDATOR_REWARDS, account_id);
-
-		total_entitlement / T::Balance::from(num_beneficiaries) - already_received
 	}
 
-	/// Credits the full rewards entitlement to an account, up to the maximum reserves available.
-	fn apportion_full_entitlement(account_id: &T::AccountId) {
-		let entitlement = Self::rewards_due(account_id);
-		let reward = Flip::<T>::withdraw_reserves(VALIDATOR_REWARDS, entitlement);
+	/// Credits up to the given amount to an account, depending on available reserves.
+	fn apportion_amount(account_id: &T::AccountId, amount: T::Balance) {
+		let reward = Flip::<T>::withdraw_reserves(VALIDATOR_REWARDS, amount);
 		Self::settle_reward(account_id, reward);
 	}
 
-	/// Credits the full rewards entitlement to an account, up to the maximum reserves available.
+	/// Credits the full rewards entitlement to an account, if enough are available in reserves, otherwise errors.
 	fn try_apportion_full_entitlement(account_id: &T::AccountId) -> Result<(), DispatchError> {
 		let entitlement = Self::rewards_due(account_id);
+		ensure!(!entitlement.is_zero(), Error::<T>::NoRewardEntitlement);
 		let reward = Flip::<T>::try_withdraw_reserves(VALIDATOR_REWARDS, entitlement)?;
 		Self::settle_reward(account_id, reward);
 		Ok(())
@@ -127,37 +120,19 @@ impl<T: Config> Pallet<T> {
 
 	/// Credits a reward amount to an account, up to the maximum reserves available.
 	///
-	/// *Note:* before calling this, you might want to check if sufficient funds are in the reserve.
+	/// *Note:* before calling this, you should:
+	/// (a) check if sufficient funds are in the reserve.
+	/// (b) ensure the account is entitled to the rewards.
 	fn settle_reward(account_id: &T::AccountId, reward: Surplus<T>) {
 		let reward_amount = reward.peek();
-		ApportionedRewards::<T>::mutate(&VALIDATOR_REWARDS, account_id, |balance| {
-			*balance = balance.saturating_add(reward_amount);
-		});
 		Flip::settle_imbalance(account_id, reward);
+		ApportionedRewards::<T>::mutate(&VALIDATOR_REWARDS, account_id, |maybe_balance| {
+			*maybe_balance = maybe_balance.map(|balance| balance.saturating_add(reward_amount));
+		});
 		Self::deposit_event(Event::<T>::RewardsCredited(
 			account_id.clone(),
 			reward_amount,
 		));
-	}
-
-	/// Credits a reward amount to an account, provided enough reserves are available.
-	fn try_apportion_amount(
-		account_id: &T::AccountId,
-		amount: T::Balance,
-	) -> Result<(), DispatchError> {
-		let reward = Flip::<T>::try_withdraw_reserves(VALIDATOR_REWARDS, amount)?;
-		Self::settle_reward(account_id, reward);
-		Ok(())
-	}
-
-	/// Apportion all rewards and any other entitlements.
-	///
-	/// *Note:* This function assumes sufficient reserves are available.
-	fn apportion_outstanding_entitlements() {
-		// Credit each validator with their due rewards.
-		for account_id in Beneficiaries::<T>::get() {
-			Self::apportion_full_entitlement(&account_id);
-		}
 	}
 
 	/// Rolls over to another rewards period with a new set of beneficiaries, provided enough funds are available.
@@ -169,33 +144,47 @@ impl<T: Config> Pallet<T> {
 	/// 5. Updates the list of beneficiaries.
 	pub fn rollover(new_beneficiaries: &Vec<T::AccountId>) -> Result<(), DispatchError> {
 		// Sanity check in case we screwed up with the accounting.
-		Self::ensure_reserves()?;
-		Self::apportion_outstanding_entitlements();
+		ensure!(
+			Self::sufficient_reserves(),
+			Error::<T>::InsufficientReserves
+		);
 
-		// Dust remaining in the reserve.
+		// Credit each validator with their remaining due rewards.
+		for (account_id, already_received) in
+			ApportionedRewards::<T>::drain_prefix(VALIDATOR_REWARDS)
+		{
+			Self::apportion_amount(&account_id, Self::rewards_due_each() - already_received);
+		}
+
+		// Roll over any dust remaining in the reserve.
 		let dust = Flip::<T>::reserved_balance(VALIDATOR_REWARDS);
 		RewardsEntitlement::<T>::insert(VALIDATOR_REWARDS, dust);
 
-		// Reset the accounting.
-		ApportionedRewards::<T>::remove_prefix(VALIDATOR_REWARDS);
-
 		// Set the new beneficiaries
-		Beneficiaries::<T>::set(new_beneficiaries.clone());
+		for account_id in new_beneficiaries {
+			ApportionedRewards::<T>::insert(VALIDATOR_REWARDS, account_id, T::Balance::zero())
+		}
+		Beneficiaries::<T>::insert(VALIDATOR_REWARDS, new_beneficiaries.len() as u32);
 		Ok(())
 	}
 
-	/// Checks if we have enough 
-	fn ensure_reserves() -> Result<(), DispatchError> {
-		let total_entitlements = Beneficiaries::<T>::get()
-			.iter()
-			.fold(Zero::zero(), |total: T::Balance, account_id| {
-				total.saturating_add(Self::rewards_due(account_id))
+	/// The total rewards due to each beneficiary.
+	fn rewards_due_each() -> T::Balance {
+		let num_beneficiaries = Beneficiaries::<T>::get(VALIDATOR_REWARDS);
+		if num_beneficiaries == 0 {
+			return Zero::zero();
+		}
+		RewardsEntitlement::<T>::get(VALIDATOR_REWARDS) / T::Balance::from(num_beneficiaries)
+	}
+
+	/// Checks if we have enough reserves to honour the rewards entitlements.
+	pub fn sufficient_reserves() -> bool {
+		let due_per_beneficiary = Self::rewards_due_each();
+		let total_entitlements = ApportionedRewards::<T>::iter_prefix_values(VALIDATOR_REWARDS)
+			.fold(Zero::zero(), |total: T::Balance, already_received| {
+				total.saturating_add(due_per_beneficiary - already_received)
 			});
-		ensure!(
-			total_entitlements <= Flip::<T>::reserved_balance(VALIDATOR_REWARDS),
-			Error::<T>::InsufficientReserves
-		);
-		Ok(())
+		total_entitlements <= Flip::<T>::reserved_balance(VALIDATOR_REWARDS)
 	}
 }
 

@@ -76,7 +76,7 @@ pub fn check_balance_integrity() {
 	assert_eq!(accounts_total + reserves_total, Flip::onchain_funds());
 
 	// Also check we enough reserves to honour our rewards payout.
-	FlipRewards::ensure_reserves().expect("insufficient reserves");
+	assert!(FlipRewards::sufficient_reserves());
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
