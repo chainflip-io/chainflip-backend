@@ -41,7 +41,7 @@ mod tests;
 extern crate assert_matches;
 
 use cf_traits::{
-	Auction, AuctionConfirmation, AuctionError, AuctionPhase, AuctionRange, BidderProvider,
+	Auction, AuctionError, AuctionPhase, AuctionRange, BidderProvider, AuctionHandler
 };
 use frame_support::pallet_prelude::*;
 use frame_support::sp_std::mem;
@@ -50,13 +50,13 @@ pub use pallet::*;
 use sp_runtime::traits::{AtLeast32BitUnsigned, One, Zero};
 use sp_std::cmp::min;
 use sp_std::prelude::*;
+use frame_system::pallet_prelude::*;
+use frame_support::sp_runtime::offchain::storage_lock::BlockNumberProvider;
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{AuctionConfirmation, Witnesser};
 	use frame_support::traits::ValidatorRegistration;
-	use frame_system::pallet_prelude::*;
 	use sp_std::ops::Add;
 
 	#[pallet::pallet]
@@ -82,15 +82,8 @@ pub mod pallet {
 		/// Minimum amount of bidders
 		#[pallet::constant]
 		type MinAuctionSize: Get<u32>;
-		/// Confirmation of auction
-		type Confirmation: AuctionConfirmation;
-		/// Provides an origin check for witness transactions.
-		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
-		/// An implementation of the witnesser, allows us to define witness_* helper extrinsics.
-		type Witnesser: Witnesser<
-			Call = <Self as Config>::Call,
-			AccountId = <Self as frame_system::Config>::AccountId,
-		>;
+		/// Manage the lifecycle of our auction
+		type Handler: AuctionHandler<Self::ValidatorId, Self::Amount>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -112,11 +105,6 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn current_auction_index)]
 	pub(super) type CurrentAuctionIndex<T: Config> = StorageValue<_, T::AuctionIndex, ValueQuery>;
-
-	/// The auction we are waiting for confirmation
-	#[pallet::storage]
-	#[pallet::getter(fn auction_to_confirm)]
-	pub(super) type AuctionToConfirm<T: Config> = StorageValue<_, bool, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -144,36 +132,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Witness that a running auction is valid.
-		#[pallet::weight(10_000)]
-		pub fn witness_auction_confirmation(
-			origin: OriginFor<T>,
-			index: T::AuctionIndex,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let call = Call::<T>::confirm_auction(index);
-			T::Witnesser::witness(who, call.into())
-		}
-
-		/// Confirms a running auction that is valid.
-		///
-		/// **This call can only be dispatched from the configured witness origin.**
-		#[pallet::weight(10_000)]
-		pub(super) fn confirm_auction(
-			origin: OriginFor<T>,
-			index: T::AuctionIndex,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-			ensure!(AuctionToConfirm::<T>::get(), Error::<T>::InvalidAuction);
-			ensure!(
-				index == CurrentAuctionIndex::<T>::get(),
-				Error::<T>::InvalidAuction
-			);
-			Self::set_awaiting_confirmation(true);
-			Self::deposit_event(Event::AuctionConfirmed(index));
-			Ok(().into())
-		}
-
 		/// Sets the size of our auction range
 		///
 		/// The dispatch origin of this function must be root.
@@ -215,7 +173,6 @@ pub mod pallet {
 			AuctionSizeRange::<T>::set(self.auction_size_range);
 			// Run through an auction
 			if Pallet::<T>::process().and(Pallet::<T>::process()).is_ok() {
-				T::Confirmation::set_awaiting_confirmation(false);
 				if let Err(err) = Pallet::<T>::process() {
 					panic!("Failed to confirm auction: {:?}", err);
 				}
@@ -226,21 +183,10 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> AuctionConfirmation for Pallet<T> {
-	fn awaiting_confirmation() -> bool {
-		AuctionToConfirm::<T>::get()
-	}
-
-	fn set_awaiting_confirmation(waiting: bool) {
-		AuctionToConfirm::<T>::set(waiting);
-	}
-}
-
 impl<T: Config> Auction for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
 	type BidderProvider = T::BidderProvider;
-	type Confirmation = T::Confirmation;
 
 	fn auction_range() -> AuctionRange {
 		<AuctionSizeRange<T>>::get()
@@ -300,12 +246,10 @@ impl<T: Config> Auction for Pallet<T> {
 
 				let phase = AuctionPhase::BidsTaken(bidders);
 				<CurrentPhase<T>>::put(phase.clone());
-				Self::Confirmation::set_awaiting_confirmation(true);
 
 				<CurrentAuctionIndex<T>>::mutate(|idx| *idx + One::one());
 
 				Self::deposit_event(Event::AuctionStarted(<CurrentAuctionIndex<T>>::get()));
-
 				Ok(phase)
 			}
 			// We sort by bid and cut the size of the set based on auction size range
@@ -327,9 +271,10 @@ impl<T: Config> Auction for Pallet<T> {
 
 							Self::deposit_event(Event::AuctionCompleted(
 								<CurrentAuctionIndex<T>>::get(),
-								winners,
+								winners.clone(),
 							));
 
+							T::Handler::on_completed(winners, *min_bid);
 							return Ok(phase);
 						}
 					}
@@ -341,22 +286,36 @@ impl<T: Config> Auction for Pallet<T> {
 			// We are ready to call this an auction a day resetting the bidders in storage and
 			// setting the state ready for a new set of 'Bidders'
 			AuctionPhase::WinnersSelected(winners, min_bid) => {
-				if Self::Confirmation::awaiting_confirmation() {
-					return Err(AuctionError::NotConfirmed);
+				// If this is genesis we auto confirm
+				let result = if frame_system::Pallet::<T>::current_block_number() == Zero::zero() {
+					Ok(())
+				} else {
+					T::Handler::try_confirmation()
+				};
+
+				match result {
+					Ok(_) => {
+						let phase = AuctionPhase::WaitingForBids(winners, min_bid);
+						<CurrentPhase<T>>::put(phase.clone());
+						Self::deposit_event(Event::AuctionConfirmed(CurrentAuctionIndex::<T>::get()));
+						Self::deposit_event(Event::AwaitingBidders);
+						Ok(phase)
+					}
+					Err(err) => {
+						// If this is an abort reset the phase
+						if err == AuctionError::Abort {
+							Self::abort();
+						}
+
+						Err(err)
+					}
 				}
-
-				let phase = AuctionPhase::WaitingForBids(winners, min_bid);
-				<CurrentPhase<T>>::put(phase.clone());
-				Self::deposit_event(Event::AwaitingBidders);
-
-				Ok(phase)
 			}
 		};
 	}
 
 	fn abort() {
 		<CurrentPhase<T>>::put(AuctionPhase::default());
-		<AuctionToConfirm<T>>::kill();
 		Self::deposit_event(Event::AuctionAborted(<CurrentAuctionIndex<T>>::get()));
 	}
 }

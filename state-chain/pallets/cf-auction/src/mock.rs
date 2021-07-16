@@ -2,7 +2,6 @@ use super::*;
 use crate as pallet_cf_auction;
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{construct_runtime, parameter_types};
-use frame_system::{ensure_root, RawOrigin};
 use sp_core::H256;
 use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -30,7 +29,7 @@ thread_local! {
 	pub static BIDDER_SET: RefCell<Vec<(ValidatorId, Amount)>> = RefCell::new(vec![
 		INVALID_BID, LOW_BID, JOE_BID, MAX_BID
 	]);
-	pub static CONFIRM: RefCell<bool> = RefCell::new(false);
+	pub static TO_CONFIRM: RefCell<Result<(), AuctionError>> = RefCell::new(Err(AuctionError::NotConfirmed));
 }
 
 construct_runtime!(
@@ -73,30 +72,27 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ();
 }
 
-pub struct MockEnsureWitness;
-
-impl EnsureOrigin<Origin> for MockEnsureWitness {
-	type Success = ();
-
-	fn try_origin(o: Origin) -> Result<Self::Success, Origin> {
-		ensure_root(o).or(Err(RawOrigin::None.into()))
-	}
-}
-
-pub struct WitnesserMock;
-
-impl cf_traits::Witnesser for WitnesserMock {
-	type AccountId = u64;
-	type Call = Call;
-
-	fn witness(_who: Self::AccountId, _call: Self::Call) -> DispatchResultWithPostInfo {
-		// We don't intend to test this, it's just to keep the compiler happy.
-		unimplemented!()
-	}
-}
-
 parameter_types! {
 	pub const MinAuctionSize: u32 = 2;
+}
+
+pub struct MockHandler;
+
+// Helper function to clear the confirmation result
+pub(crate) fn clear_confirmation() {
+	TO_CONFIRM.with(|l| *l.borrow_mut() = Ok(()));
+}
+
+impl AuctionHandler<ValidatorId, Amount> for MockHandler {
+	fn on_completed(_winners: Vec<ValidatorId>, _min_bid: Amount) {
+		TO_CONFIRM.with(|l| *l.borrow_mut() = Err(AuctionError::NotConfirmed));
+	}
+
+	fn try_confirmation() -> Result<(), AuctionError> {
+		TO_CONFIRM.with(|l| {
+			(*l.borrow()).clone()
+		})
+	}
 }
 
 impl Config for Test {
@@ -108,9 +104,7 @@ impl Config for Test {
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
-	type Confirmation = Test;
-	type EnsureWitnessed = MockEnsureWitness;
-	type Witnesser = WitnesserMock;
+	type Handler = MockHandler;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
@@ -127,16 +121,6 @@ impl BidderProvider for TestBidderProvider {
 
 	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
 		BIDDER_SET.with(|l| l.borrow().to_vec())
-	}
-}
-
-impl AuctionConfirmation for Test {
-	fn awaiting_confirmation() -> bool {
-		CONFIRM.with(|l| *l.borrow())
-	}
-
-	fn set_awaiting_confirmation(waiting: bool) {
-		CONFIRM.with(|l| *l.borrow_mut() = waiting);
 	}
 }
 
