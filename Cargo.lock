@@ -923,6 +923,9 @@ dependencies = [
  "jsonrpc-core-client 17.1.0",
  "jsonrpc-http-server 17.1.0",
  "jsonrpc-ws-server 17.1.0",
+ "jsonrpsee-http-client",
+ "jsonrpsee-types",
+ "jsonrpsee-ws-client",
  "lazy_static",
  "log 0.4.14",
  "nats_test_server",
@@ -943,6 +946,7 @@ dependencies = [
  "sp-runtime",
  "state-chain-runtime",
  "substrate-subxt",
+ "test-env-log",
  "thiserror",
  "tokio 1.7.0",
  "tokio-compat-02",
@@ -8943,6 +8947,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dfed899f0eb03f32ee8c6a0aabdb8a7949659e3466561fc0adf54e26d88c5f4"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "test-env-log"
+version = "0.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3e4b132a630cc8a0d06cfcb400da67adef3d0087a94b3332d4692908f0c2544"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
