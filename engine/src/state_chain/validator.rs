@@ -4,12 +4,12 @@ use std::marker::PhantomData;
 
 use codec::{Decode, Encode};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use substrate_subxt::{module, sp_runtime::traits::Member, Call, Event};
+use substrate_subxt::{module, sp_runtime::traits::Member, system::System, Call, Event};
 
 use super::{runtime::StateChainRuntime, sc_event::SCEvent};
 
 #[module]
-pub trait Validator: substrate_subxt::system::System {
+pub trait Validator: System {
     type EpochIndex: Member + Encode + Decode + Serialize + DeserializeOwned;
 }
 
@@ -21,8 +21,8 @@ pub struct ForceRotationCall<T: Validator> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
 pub struct EpochDurationChangedEvent<V: Validator> {
-    pub from: V::BlockNumber,
-    pub to: V::BlockNumber,
+    pub from: <V as System>::BlockNumber,
+    pub to: <V as System>::BlockNumber,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]

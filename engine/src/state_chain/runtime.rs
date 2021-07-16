@@ -1,10 +1,10 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, time::Duration};
 
 use frame_support::unsigned::TransactionValidityError;
 use sp_runtime::{
     generic::{self, Era},
     traits::{BlakeTwo256, IdentifyAccount, Verify},
-    MultiSignature, OpaqueExtrinsic,
+    AccountId32, MultiSignature, OpaqueExtrinsic,
 };
 use substrate_subxt::{
     extrinsic::{
@@ -17,6 +17,10 @@ use substrate_subxt::{
     system::SystemEventTypeRegistry,
     EventTypeRegistry, Runtime, SignedExtension, SignedExtra,
 };
+
+use pallet_cf_flip::imbalances::ImbalanceSource;
+
+// use state_chain::flip::imbalances::ImbalanceSource;
 
 use auction::AuctionEventTypeRegistry;
 use staking::StakingEventTypeRegistry;
@@ -98,6 +102,26 @@ impl Runtime for StateChainRuntime {
         event_type_registry.with_validator();
         event_type_registry.with_staking();
         event_type_registry.with_auction();
+
+        event_type_registry.register_type_size::<AccountId32>("AccountId<T>");
+        event_type_registry.register_type_size::<u64>("T::AuctionIndex");
+        event_type_registry.register_type_size::<(u32, u32)>("AuctionRange");
+        event_type_registry.register_type_size::<u64>("T::Nonce");
+        event_type_registry.register_type_size::<u64>("T::EpochIndex");
+        event_type_registry.register_type_size::<u32>("T::BlockNumber");
+        event_type_registry.register_type_size::<AccountId32>("T::ValidatorId");
+        event_type_registry.register_type_size::<AccountId32>("<T as Config>::ValidatorId");
+
+        event_type_registry.register_type_size::<u128>("T::Balance");
+        event_type_registry.register_type_size::<Vec<u8>>("OpaqueTimeSlot");
+        event_type_registry.register_type_size::<[u8; 32]>("U256");
+        event_type_registry.register_type_size::<Duration>("Duration");
+        event_type_registry.register_type_size::<u128>("FlipBalance<T>");
+        event_type_registry.register_type_size::<u32>("VoteCount");
+        event_type_registry.register_type_size::<u32>("SessionIndex");
+        event_type_registry.register_type_size::<[u8; 32]>("AggKeySignature");
+        event_type_registry
+            .register_type_size::<ImbalanceSource<AccountId32>>("ImbalanceSource<T::AccountId>")
     }
 }
 
