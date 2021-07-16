@@ -31,11 +31,7 @@ fn test_should_mint_at() {
 mod test_block_rewards {
 	use super::*;
 
-	fn test_with(
-		block_number: u64,
-		emissions_per_block: u128,
-		expected_mint: u128,
-	) {
+	fn test_with(block_number: u64, emissions_per_block: u128, expected_mint: u128) {
 		new_test_ext(vec![1, 2], Some(1000), Some(emissions_per_block)).execute_with(|| {
 			let before = Flip::<Test>::total_issuance();
 			let _weights = Pallet::<Test>::mint_rewards_for_block(block_number);

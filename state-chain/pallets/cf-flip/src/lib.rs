@@ -44,7 +44,7 @@ mod benchmarking;
 mod imbalances;
 mod on_charge_transaction;
 
-pub use imbalances::{Deficit, Surplus, ImbalanceSource, InternalSource};
+pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
 
 use frame_support::{
@@ -101,7 +101,8 @@ pub mod pallet {
 	/// Funds belonging to on-chain reserves.
 	#[pallet::storage]
 	#[pallet::getter(fn reserve)]
-	pub type Reserve<T: Config> = StorageMap<_, Blake2_128Concat, ReserveId, T::Balance, ValueQuery>;
+	pub type Reserve<T: Config> =
+		StorageMap<_, Blake2_128Concat, ReserveId, T::Balance, ValueQuery>;
 
 	/// The total number of tokens issued.
 	#[pallet::storage]
@@ -237,9 +238,9 @@ impl<T: Config> Pallet<T> {
 			.saturating_sub(T::ExistentialDeposit::get())
 	}
 
-	/// Debits an account's staked balance. 
+	/// Debits an account's staked balance.
 	///
-	/// *Warning:* Creates the flip account if it doesn't exist already, but *doesn't* ensure that the `System`-level 
+	/// *Warning:* Creates the flip account if it doesn't exist already, but *doesn't* ensure that the `System`-level
 	/// account exists so should only be used with accounts that are known to exist.
 	///
 	/// Use `try_debit` instead when the existence of the account is unsure.
@@ -344,13 +345,16 @@ impl<T: Config> Pallet<T> {
 
 	/// Withdraws *up to* `amount` from a reserve.
 	///
-	/// *Warning:* if the reserve does not exist, it will be created as a side effect. 
+	/// *Warning:* if the reserve does not exist, it will be created as a side effect.
 	pub fn withdraw_reserves(reserve_id: ReserveId, amount: T::Balance) -> Surplus<T> {
 		Surplus::from_reserve(reserve_id, amount)
 	}
 
 	/// Tries to withdraw funds from a reserve. Fails if the reserve doesn't exist or has insufficient funds.
-	pub fn try_withdraw_reserves(reserve_id: ReserveId, amount: T::Balance) -> Result<Surplus<T>, DispatchError> {
+	pub fn try_withdraw_reserves(
+		reserve_id: ReserveId,
+		amount: T::Balance,
+	) -> Result<Surplus<T>, DispatchError> {
 		Surplus::try_from_reserve(reserve_id, amount).ok_or(Error::<T>::InsufficientReserves.into())
 	}
 

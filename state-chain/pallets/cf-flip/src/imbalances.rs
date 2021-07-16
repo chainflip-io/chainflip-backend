@@ -107,10 +107,7 @@ impl<T: Config> Surplus<T> {
 				Err(())
 			} else {
 				(*balance) = (*balance).saturating_sub(amount);
-				Ok(Self::new(
-					amount,
-					ImbalanceSource::from_reserve(reserve_id),
-				))
+				Ok(Self::new(amount, ImbalanceSource::from_reserve(reserve_id)))
 			}
 		})
 		.ok()
@@ -182,7 +179,7 @@ impl<T: Config> Deficit<T> {
 				Some(result) => {
 					account.stake = result;
 					amount
-				},
+				}
 				None => Zero::zero(),
 			};
 			Self::new(added, ImbalanceSource::from_acct(account_id.clone()))
@@ -201,7 +198,7 @@ impl<T: Config> Deficit<T> {
 				Some(result) => {
 					(*balance) = result;
 					amount
-				},
+				}
 				None => Zero::zero(),
 			};
 			Self::new(added, ImbalanceSource::from_reserve(reserve_id))
@@ -366,12 +363,12 @@ impl<T: Config> RevertImbalance for Surplus<T> {
 				Flip::OffchainFunds::<T>::mutate(|total| {
 					*total = total.saturating_add(self.amount)
 				});
-			},
+			}
 			ImbalanceSource::Emissions => {
 				// This means some Flip were minted without allocating them somewhere. We revert by burning
 				// them again.
 				Flip::TotalIssuance::<T>::mutate(|v| *v = v.saturating_sub(self.amount))
-			},
+			}
 			ImbalanceSource::Internal(internal) => {
 				match internal {
 					InternalSource::Account(account_id) => {
@@ -380,16 +377,16 @@ impl<T: Config> RevertImbalance for Surplus<T> {
 						Flip::Account::<T>::mutate(account_id, |acct| {
 							acct.stake = acct.stake.saturating_add(self.amount)
 						})
-					},
+					}
 					InternalSource::Reserve(reserve_id) => {
 						// This means we took funds from a reserve but didn't put them anywhere. Add the funds back to
 						// the reserve again.
 						Flip::Reserve::<T>::mutate(reserve_id, |rsrv| {
 							*rsrv = rsrv.saturating_add(self.amount)
 						})
-					},
+					}
 				}
-			},
+			}
 		};
 	}
 }
@@ -402,12 +399,12 @@ impl<T: Config> RevertImbalance for Deficit<T> {
 				Flip::OffchainFunds::<T>::mutate(|total| {
 					*total = total.saturating_sub(self.amount)
 				});
-			},
+			}
 			ImbalanceSource::Emissions => {
 				// This means some funds were burned without specifying the source. If this happens, we
 				// add this back on to the total issuance again.
 				Flip::TotalIssuance::<T>::mutate(|v| *v = v.saturating_add(self.amount))
-			},
+			}
 			ImbalanceSource::Internal(internal) => {
 				match internal {
 					InternalSource::Account(account_id) => {
@@ -415,15 +412,15 @@ impl<T: Config> RevertImbalance for Deficit<T> {
 						Flip::Account::<T>::mutate(account_id, |acct| {
 							acct.stake = acct.stake.saturating_sub(self.amount)
 						})
-					},
+					}
 					InternalSource::Reserve(reserve_id) => {
 						// This means we added funds to a reserve without specifying a source. Deduct them again.
 						Flip::Reserve::<T>::mutate(reserve_id, |rsrv| {
 							*rsrv = rsrv.saturating_sub(self.amount)
 						})
-					},
+					}
 				}
-			},
+			}
 		};
 	}
 }

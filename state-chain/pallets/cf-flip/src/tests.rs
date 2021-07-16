@@ -199,8 +199,8 @@ fn stake_transfers() {
 
 #[cfg(test)]
 mod test_issuance {
-	use crate::ReserveId;
 	use super::*;
+	use crate::ReserveId;
 
 	fn burn_from_account(account_id: &AccountId, amount: FlipBalance) {
 		Flip::settle_imbalance(account_id, FlipIssuance::<Test>::burn(amount))
