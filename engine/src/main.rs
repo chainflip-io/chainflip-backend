@@ -36,7 +36,10 @@ async fn main() {
 
     let url = url::Url::parse(&format!("ws://127.0.0.1:{}", ws_port)).expect("valid ws port");
     let p2p_client = RpcP2PClient::new(url);
-    let mq_client = *mq_factory.create().await.expect("lala");
+    let mq_client = *mq_factory
+        .create()
+        .await
+        .expect("Could not connect MQ client");
     let p2p_conductor_fut = P2PConductor::new(mq_client, p2p_client)
         .await
         .start(shutdown_rx);
