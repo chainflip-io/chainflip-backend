@@ -512,7 +512,7 @@ fn claim_expiry() {
 		assert_event_stack!(
 			Event::pallet_cf_flip(FlipEvent::BalanceSettled(
 				ImbalanceSource::External,
-				ImbalanceSource::Internal(InternalSource(ALICE)),
+				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
 				STAKE,
 				0
 			)),
@@ -528,7 +528,7 @@ fn claim_expiry() {
 		assert_event_stack!(
 			Event::pallet_cf_flip(FlipEvent::BalanceSettled(
 				ImbalanceSource::External,
-				ImbalanceSource::Internal(InternalSource(BOB)),
+				ImbalanceSource::Internal(InternalSource::Account(BOB)),
 				STAKE,
 				0
 			)),
