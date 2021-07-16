@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use serde::{Deserialize, Serialize};
+
 use crate::{
     p2p::ValidatorId,
     signing::crypto::{Keys, Parameters, SharedKeys, VerifiableSS, GE},
@@ -7,7 +9,7 @@ use crate::{
 
 use super::utils::ValidatorMaps;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KeygenResult {
     pub keys: Keys,
     pub shared_keys: SharedKeys,
@@ -16,7 +18,7 @@ pub struct KeygenResult {
 }
 
 // TODO: combine the two Arcs?
-#[derive(Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KeygenResultInfo {
     pub key: Arc<KeygenResult>,
     pub validator_map: Arc<ValidatorMaps>,

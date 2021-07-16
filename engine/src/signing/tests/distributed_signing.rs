@@ -13,6 +13,7 @@ use crate::{
         pin_message_stream, IMQClient, Subject,
     },
     p2p::{mock::NetworkMock, P2PConductor, ValidatorId},
+    signing::db::KeyDBMock,
 };
 
 use lazy_static::lazy_static;
@@ -166,7 +167,6 @@ async fn coordinate_signing(
 
 #[tokio::test]
 async fn distributed_signing() {
-    env_logger::init();
 
     // calculate how many parties will be in the signing (must be exact)
     // TODO: use the threshold_from_share_count function in keygen manager here.
@@ -215,7 +215,9 @@ async fn distributed_signing() {
 
                 let mq_factory = MQMockClientFactory::new(mq.clone());
 
-                let client = MultisigClient::new(mq_factory, VALIDATOR_IDS[i - 1].clone());
+                let db = KeyDBMock::new();
+
+                let client = MultisigClient::new(db, mq_factory, VALIDATOR_IDS[i - 1].clone());
 
                 let (shutdown_client_tx, shutdown_client_rx) =
                     tokio::sync::oneshot::channel::<()>();

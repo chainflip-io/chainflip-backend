@@ -47,7 +47,7 @@ pub enum StageStatus {
 }
 
 impl SharedSecretState {
-    pub(super) fn init_phase1(&mut self) -> Broadcast1 {
+    pub fn init_phase1(&mut self) -> Broadcast1 {
         let (bc1, blind) = self.key.phase1_broadcast();
 
         // remember our own value
@@ -63,7 +63,7 @@ impl SharedSecretState {
         Broadcast1 { bc1, blind, y_i }
     }
 
-    pub(super) fn process_broadcast1(&mut self, sender_id: usize, bc1: Broadcast1) -> StageStatus {
+    pub fn process_broadcast1(&mut self, sender_id: usize, bc1: Broadcast1) -> StageStatus {
         if self.phase1_order.contains(&sender_id) {
             error!(
                 "[{}] Received bc1 from the same sender idx: {}",
@@ -91,10 +91,7 @@ impl SharedSecretState {
         StageStatus::MadeProgress
     }
 
-    pub(super) fn init_phase2(
-        &mut self,
-        parties: &[usize],
-    ) -> Result<Vec<(usize, Secret2)>, InvalidKey> {
+    pub fn init_phase2(&mut self, parties: &[usize]) -> Result<Vec<(usize, Secret2)>, InvalidKey> {
         trace!("[{}] entering phase 2", self.signer_idx);
 
         self.stage = SharedSecretStage::AwaitingSecret2;
@@ -137,7 +134,7 @@ impl SharedSecretState {
         })
     }
 
-    pub(super) fn process_phase2(&mut self, sender_idx: usize, sec2: Secret2) -> StageStatus {
+    pub fn process_phase2(&mut self, sender_idx: usize, sec2: Secret2) -> StageStatus {
         if self.phase2_order.contains(&sender_idx) {
             error!(
                 "[{}] Received sec2 from the same sender idx: {}",
@@ -164,7 +161,7 @@ impl SharedSecretState {
         StageStatus::MadeProgress
     }
 
-    pub(super) fn finalize_phase2(&mut self) -> Result<KeygenResult, InvalidSS> {
+    pub fn finalize_phase2(&mut self) -> Result<KeygenResult, InvalidSS> {
         info!("[{}] entering phase 3", self.signer_idx);
 
         self.stage = SharedSecretStage::Done;
