@@ -167,7 +167,6 @@ async fn coordinate_signing(
 
 #[tokio::test]
 async fn distributed_signing() {
-
     // calculate how many parties will be in the signing (must be exact)
     // TODO: use the threshold_from_share_count function in keygen manager here.
     let doubled = N_PARTIES * 2;
