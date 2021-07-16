@@ -89,7 +89,6 @@ pub trait Auction {
 	type ValidatorId;
 	type Amount;
 	type BidderProvider;
-	type Confirmation: AuctionConfirmation;
 
 	/// Range describing auction set size
 	fn auction_range() -> AuctionRange;
@@ -105,21 +104,20 @@ pub trait Auction {
 	fn abort();
 }
 
-/// Confirmation of an auction
-pub trait AuctionConfirmation {
-	/// To confirm that the auction is valid and can continue
-	fn awaiting_confirmation() -> bool;
-	/// Awaiting confirmation
-	fn set_awaiting_confirmation(waiting: bool);
+/// Feedback on auction and confirmation
+pub trait AuctionHandler<ValidatorId, Amount> {
+	fn on_completed(winners: Vec<ValidatorId>, min_bid:Amount);
+	fn try_confirmation() -> Result<(), AuctionError>;
 }
 
 /// An error has occurred during an auction
-#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, Clone, Copy, RuntimeDebug, PartialEq, Eq)]
 pub enum AuctionError {
 	Empty,
 	MinValidatorSize,
 	InvalidRange,
 	NotConfirmed,
+	Abort,
 }
 
 /// Providing bidders for our auction
