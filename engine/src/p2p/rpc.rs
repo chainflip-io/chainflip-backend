@@ -32,14 +32,19 @@ impl RpcP2PClient {
 impl From<P2PEvent> for P2PMessage {
     fn from(p2p_event: P2PEvent) -> Self {
         match p2p_event {
+            // SOMETHING HERE. THE VALIDATOR ID IS NOT BASE 58
             P2PEvent::Received(peer_id, msg) => P2PMessage {
-                sender_id: ValidatorId::from_base58(&peer_id)
-                    .expect("valid 58 encoding of peer id"),
+                sender_id: ValidatorId::from_base58(&peer_id).expect(&format!(
+                    "p2p event received: valid 58 encoding of peer id: {:?}",
+                    peer_id
+                )),
                 data: msg,
             },
             P2PEvent::PeerConnected(peer_id) | P2PEvent::PeerDisconnected(peer_id) => P2PMessage {
-                sender_id: ValidatorId::from_base58(&peer_id)
-                    .expect("valid 58 encoding of peer id"),
+                sender_id: ValidatorId::from_base58(&peer_id).expect(&format!(
+                    "p2p event connected: valid 58 encoding of peer id: {:?}",
+                    peer_id
+                )),
                 data: vec![],
             },
         }
