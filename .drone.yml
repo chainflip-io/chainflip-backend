@@ -350,7 +350,7 @@ steps:
         ✅ Testnet Reboot Successful: `{{commit.branch}}` ✅
         Testnet released with commit hash: `{{commit.sha}}`
         [Check the logs here](https://monitor.chainflip.xyz/explore?orgId=1&left=%5B%22now-1h%22%2C%22now%22%2C%22Loki%22%2C%7B%22expr%22:%22%7Bchainflip_xyz_tag%3D%5C%22{{commit.sha}}%5C%22%7D%22%7D%5D)
-
+        [Bashful Polkadot]("https://polkadot.js.org/apps/?rpc=wss%3A%2F%2Fbashful-{{commit.branch}}#/explorer")
 # Notify devs Testnet has failed to launch
   - name: notify-testnet-failure
     image: appleboy/drone-discord
