@@ -1,6 +1,11 @@
 use chainflip_engine::{
-    eth, health::spawn_health_check, mq::nats_client::NatsMQClientFactory, p2p::ValidatorId,
-    settings::Settings, signing, state_chain, temp_event_mapper::TempEventMapper,
+    eth,
+    health::spawn_health_check,
+    mq::{nats_client::NatsMQClientFactory, IMQClientFactory},
+    p2p::{P2PConductor, RpcP2PClient, ValidatorId},
+    settings::Settings,
+    signing, state_chain,
+    temp_event_mapper::TempEventMapper,
 };
 use sp_core::Pair;
 
@@ -26,6 +31,19 @@ async fn main() {
 
     let eth_fut = eth::start(settings.clone());
 
+    let (_, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+    let ws_port = settings.state_chain.ws_port;
+
+    let url = url::Url::parse(&format!("ws://127.0.0.1:{}", ws_port)).expect("valid ws port");
+    let p2p_client = RpcP2PClient::new(url);
+    let mq_client = *mq_factory
+        .create()
+        .await
+        .expect("Could not connect MQ client");
+    let p2p_conductor_fut = P2PConductor::new(mq_client, p2p_client)
+        .await
+        .start(shutdown_rx);
+
     let signing_client = signing::MultisigClient::new(mq_factory, signer_id);
 
     let temp_event_map_fut = TempEventMapper::run(&settings);
@@ -39,6 +57,7 @@ async fn main() {
         sc_b_fut,
         eth_fut,
         temp_event_map_fut,
-        signing_client_fut
+        p2p_conductor_fut,
+        signing_client_fut,
     );
 }

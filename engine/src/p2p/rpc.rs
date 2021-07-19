@@ -19,13 +19,13 @@ impl Base58 for () {
     }
 }
 
-struct GlueClient {
+pub struct RpcP2PClient {
     url: url::Url,
 }
 
-impl GlueClient {
+impl RpcP2PClient {
     pub fn new(url: url::Url) -> Self {
-        GlueClient { url }
+        RpcP2PClient { url }
     }
 }
 
@@ -46,19 +46,19 @@ impl From<P2PEvent> for P2PMessage {
     }
 }
 
-struct GlueClientStream {
+pub struct RpcP2PClientStream {
     inner: Pin<Box<dyn Stream<Item = RpcResult<P2PEvent>> + Send>>,
 }
 
-impl GlueClientStream {
+impl RpcP2PClientStream {
     pub fn new(stream: TypedSubscriptionStream<P2PEvent>) -> Self {
-        GlueClientStream {
+        RpcP2PClientStream {
             inner: Box::pin(stream),
         }
     }
 }
 
-impl Stream for GlueClientStream {
+impl Stream for RpcP2PClientStream {
     type Item = P2PMessage;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -80,7 +80,7 @@ impl Stream for GlueClientStream {
 }
 
 #[async_trait]
-impl<NodeId> P2PNetworkClient<NodeId, GlueClientStream> for GlueClient
+impl<NodeId> P2PNetworkClient<NodeId, RpcP2PClientStream> for RpcP2PClient
 where
     NodeId: Base58 + Send + Sync,
 {
@@ -106,7 +106,7 @@ where
             .map_err(|_| P2PNetworkClientError::Rpc)
     }
 
-    async fn take_stream(&mut self) -> Result<GlueClientStream, P2PNetworkClientError> {
+    async fn take_stream(&mut self) -> Result<RpcP2PClientStream, P2PNetworkClientError> {
         let client: P2PClient = FutureExt::compat(connect(&self.url))
             .await
             .map_err(|_| P2PNetworkClientError::Rpc)?;
@@ -115,7 +115,7 @@ where
             .subscribe_notifications()
             .map_err(|_| P2PNetworkClientError::Rpc)?;
 
-        Ok(GlueClientStream::new(sub))
+        Ok(RpcP2PClientStream::new(sub))
     }
 }
 
@@ -207,7 +207,7 @@ mod tests {
     #[test]
     fn client_api() {
         let server = TestServer::serve();
-        let mut glue_client = GlueClient::new(server.url);
+        let mut glue_client = RpcP2PClient::new(server.url);
         let run = async {
             let result = glue_client
                 .send(&ValidatorId::new("100"), "disco".as_bytes())
@@ -216,14 +216,14 @@ mod tests {
                 result.is_ok(),
                 "Should receive OK for sending message to peer"
             );
-            let result = P2PNetworkClient::<ValidatorId, GlueClientStream>::broadcast(
+            let result = P2PNetworkClient::<ValidatorId, RpcP2PClientStream>::broadcast(
                 &glue_client,
                 "disco".as_bytes(),
             )
             .await;
             assert!(result.is_ok(), "Should receive OK for broadcasting message");
             let result =
-                P2PNetworkClient::<ValidatorId, GlueClientStream>::take_stream(&mut glue_client)
+                P2PNetworkClient::<ValidatorId, RpcP2PClientStream>::take_stream(&mut glue_client)
                     .await;
             assert!(result.is_ok(), "Should subscribe OK");
         };

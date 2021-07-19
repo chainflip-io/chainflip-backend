@@ -923,6 +923,9 @@ dependencies = [
  "jsonrpc-core-client 17.1.0",
  "jsonrpc-http-server 17.1.0",
  "jsonrpc-ws-server 17.1.0",
+ "jsonrpsee-http-client",
+ "jsonrpsee-types",
+ "jsonrpsee-ws-client",
  "lazy_static",
  "log 0.4.14",
  "nats_test_server",
@@ -943,6 +946,7 @@ dependencies = [
  "sp-runtime",
  "state-chain-runtime",
  "substrate-subxt",
+ "test-env-log",
  "thiserror",
  "tokio 1.7.0",
  "tokio-compat-02",
@@ -8799,8 +8803,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt"
 version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "feb057a856b185f95a2b4dff834604a05c224e44fefa2d98a0a51ce9b2d666d0"
+source = "git+https://github.com/chainflip-io/substrate-subxt?branch=all-phases#4690aee125b683a0b253e4650bd1c1cfc7d7e54b"
 dependencies = [
  "dyn-clone",
  "frame-metadata",
@@ -8832,8 +8835,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt-proc-macro"
 version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9995016a22428cb7ffd83193a03eea32f6158a516a0c130bb60c5e5f6c467c44"
+source = "git+https://github.com/chainflip-io/substrate-subxt?branch=all-phases#4690aee125b683a0b253e4650bd1c1cfc7d7e54b"
 dependencies = [
  "heck",
  "proc-macro-crate 0.1.5",
@@ -8943,6 +8945,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dfed899f0eb03f32ee8c6a0aabdb8a7949659e3466561fc0adf54e26d88c5f4"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "test-env-log"
+version = "0.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3e4b132a630cc8a0d06cfcb400da67adef3d0087a94b3332d4692908f0c2544"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
