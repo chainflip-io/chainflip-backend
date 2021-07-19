@@ -9,6 +9,25 @@ use sp_runtime::DispatchResult;
 pub type NewPublicKey = Vec<u8>;
 pub type BadValidators<ValidatorId> = Vec<ValidatorId>;
 pub type RequestIndex = u32;
+pub type RequestIndexes = Vec<RequestIndex>;
+
+// The state of a rotation, where we have one rotation for all vaults
+pub enum State {
+	Invalid,
+	InProcess,
+	Completed,
+}
+
+// The things that can go wrong
+pub enum RotationError<ValidatorId> {
+	EmptyValidatorSet,
+	InvalidValidators,
+	BadValidators(Vec<ValidatorId>),
+	FailedConstruct,
+	FailedToComplete,
+	KeygenResponseFailed,
+	VaultRotationCompletionFailed,
+}
 
 pub trait TryIndex<T> {
 	fn try_is_valid(idx: T) -> DispatchResult;
