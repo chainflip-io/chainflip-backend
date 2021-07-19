@@ -39,20 +39,20 @@ pub trait Index<T: Add> {
 	fn is_valid(idx: T) -> bool;
 }
 
-pub trait RequestResponse<Index, Request, Response> {
-	fn try_request(index: Index, request: Request) -> DispatchResultWithPostInfo;
-	fn try_response(index: Index, response: Response) -> DispatchResultWithPostInfo;
+pub trait RequestResponse<Index, Request, Response, Error> {
+	fn try_request(index: Index, request: Request) -> Result<(), Error>;
+	fn try_response(index: Index, response: Response) -> Result<(), Error>;
 }
 
-pub trait Construct<Index, ValidatorId> {
+pub trait Construct<Index, ValidatorId, Error> {
 	// Start the construction phase.  When complete `ConstructionHandler::on_completion()`
 	// would be used to notify that this is complete
-	fn try_start_construction_phase(index: Index, new_public_key: NewPublicKey, validators: Vec<ValidatorId>) -> DispatchResultWithPostInfo;
+	fn try_start_construction_phase(index: Index, new_public_key: NewPublicKey, validators: Vec<ValidatorId>) -> Result<(), Error>;
 }
 
-pub trait ConstructHandler<Index, ValidatorId> {
+pub trait ConstructHandler<Index, ValidatorId, Error> {
 	// Construction phase complete
-	fn try_on_completion(index: Index, result: Result<ValidatorRotationRequest, ValidatorRotationError<ValidatorId>>) -> DispatchResultWithPostInfo;
+	fn try_on_completion(index: Index, result: Result<ValidatorRotationRequest, ValidatorRotationError<ValidatorId>>) -> Result<(), Error>;
 }
 
 pub trait AuctionReporter<ValidatorId> {

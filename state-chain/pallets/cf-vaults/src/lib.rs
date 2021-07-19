@@ -51,7 +51,7 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
 		/// Our constructor
-		type Constructor: Construct<RequestIndex, Self::ValidatorId>;
+		type Constructor: Construct<RequestIndex, Self::ValidatorId, RotationError<Self::ValidatorId>>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -77,6 +77,7 @@ pub mod pallet {
 		ValidatorRotationRequest(RequestIndex, ValidatorRotationRequest),
 		// The validator set has been rotated
 		VaultRotationCompleted(RequestIndex),
+		RotationAborted(RequestIndexes),
 	}
 
 	#[pallet::error]
@@ -85,6 +86,8 @@ pub mod pallet {
 		InvalidRequestIdx,
 		EmptyValidatorSet,
 		VaultRotationCompletionFailed,
+		KeygenResponseFailed,
+		VaultRotationFailed,
 	}
 
 	#[pallet::call]
@@ -110,8 +113,11 @@ pub mod pallet {
 
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			ensure!(Self::is_valid(request_id), Error::<T, I>::InvalidRequestIdx);
-			Self::try_response(request_id, response)
+			Self::try_is_valid(request_id)?;
+			match Self::try_response(request_id, response) {
+				Ok(_) => Ok(().into()),
+				Err(e) => Err(e.into())
+			}
 		}
 
 		// We have witnessed a rotation, my eyes!
@@ -134,8 +140,11 @@ pub mod pallet {
 			response: ValidatorRotationResponse,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			ensure!(Self::is_valid(request_id), Error::<T, I>::InvalidRequestIdx);
-			Self::try_response(request_id, response)
+			Self::try_is_valid(request_id)?;
+			match Self::try_response(request_id, response) {
+				Ok(_) => Ok(().into()),
+				Err(e) => Err(e.into())
+			}
 		}
 	}
 
@@ -153,6 +162,27 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig {
 		fn build(&self) {}
+	}
+}
+
+impl<ValidatorId> From<RotationError<ValidatorId>> for DispatchError {
+	fn from(err: RotationError<ValidatorId>) -> Self {
+		DispatchError::BadOrigin
+	}
+}
+
+impl<T: Config<I>, I: 'static> From<RotationError<T::ValidatorId>> for Error<T, I> {
+	fn from(err: RotationError<T::ValidatorId>) -> Self {
+		match err {
+			RotationError::EmptyValidatorSet => Error::<T, I>::EmptyValidatorSet,
+			_ => Error::<T, I>::KeygenResponseFailed
+			// RotationError::InvalidValidators => {}
+			// RotationError::BadValidators(_) => {}
+			// RotationError::FailedConstruct => {}
+			// RotationError::FailedToComplete => {}
+			// RotationError::KeygenResponseFailed => {}
+			// RotationError::VaultRotationCompletionFailed => {}
+		}
 	}
 }
 
@@ -184,21 +214,25 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		VaultRotations::<T, I>::insert(idx, VaultRotation::new(idx, keygen_request));
 		idx
 	}
+
+	fn abort_rotation() {
+		VaultRotations::<T, I>::remove_all();
+	}
 }
 
 impl<T: Config<I>, I: 'static>
-	RequestResponse<RequestIndex, KeygenRequest<T::ValidatorId>, KeygenResponse<T::ValidatorId>>
+	RequestResponse<RequestIndex, KeygenRequest<T::ValidatorId>, KeygenResponse<T::ValidatorId>, RotationError<T::ValidatorId>>
 	for Pallet<T, I>
 {
-	fn try_request(_index: RequestIndex, request: KeygenRequest<T::ValidatorId>) -> DispatchResultWithPostInfo {
+	fn try_request(_index: RequestIndex, request: KeygenRequest<T::ValidatorId>) -> Result<(), RotationError<T::ValidatorId>> {
 		// Signal to CFE that we are wanting to start a new key generation
-		ensure!(!request.validator_candidates.is_empty(), Error::<T, I>::EmptyValidatorSet);
+		ensure!(!request.validator_candidates.is_empty(), RotationError::EmptyValidatorSet);
 		let idx = Self::new_vault_rotation(request.clone());
 		Self::deposit_event(Event::KeygenRequestEvent(idx, request));
-		Ok(().into())
+		Ok(())
 	}
 
-	fn try_response(index: RequestIndex, response: KeygenResponse<T::ValidatorId>) -> DispatchResultWithPostInfo {
+	fn try_response(index: RequestIndex, response: KeygenResponse<T::ValidatorId>) -> Result<(), RotationError<T::ValidatorId>> {
 		match response {
 			KeygenResponse::Success(new_public_key) => {
 				// Go forth and construct
@@ -208,8 +242,8 @@ impl<T: Config<I>, I: 'static>
 						let validators = vault_rotation.candidate_validators();
 						if validators.is_empty() {
 							// If we have no validators then clear this out, this shouldn't happen
-							Self::clear(index);
-							Err(Error::<T, I>::EmptyValidatorSet.into())
+							Self::abort_rotation();
+							Err(RotationError::EmptyValidatorSet)
 						} else {
 							T::Constructor::try_start_construction_phase(index, new_public_key, validators.to_vec())
 						}
@@ -220,27 +254,27 @@ impl<T: Config<I>, I: 'static>
 			}
 			KeygenResponse::Failure(bad_validators) => {
 				// Abort this key generation request
-				Self::clear(index);
+				Self::abort_rotation();
 				// Do as you wish with these, I wash my hands..
 				T::Reporter::penalise(bad_validators);
 
-				Ok(().into())
+				Ok(())
 			}
 		}
 	}
 }
 
 impl<T: Config<I>, I: 'static>
-	RequestResponse<RequestIndex, ValidatorRotationRequest, ValidatorRotationResponse>
+	RequestResponse<RequestIndex, ValidatorRotationRequest, ValidatorRotationResponse, RotationError<T::ValidatorId>>
 	for Pallet<T, I>
 {
-	fn try_request(index: RequestIndex, request: ValidatorRotationRequest) -> DispatchResultWithPostInfo {
+	fn try_request(index: RequestIndex, request: ValidatorRotationRequest) -> Result<(), RotationError<T::ValidatorId>>  {
 		// Signal to CFE that we are wanting to start the rotation
 		Self::deposit_event(Event::ValidatorRotationRequest(index, request));
 		Ok(().into())
 	}
 
-	fn try_response(index: RequestIndex, response: ValidatorRotationResponse) -> DispatchResultWithPostInfo {
+	fn try_response(index: RequestIndex, response: ValidatorRotationResponse) -> Result<(), RotationError<T::ValidatorId>>  {
 		// This request is complete
 		Self::clear(index);
 		// We can now confirm the auction and rotate
@@ -251,11 +285,11 @@ impl<T: Config<I>, I: 'static>
 	}
 }
 
-impl<T: Config<I>, I: 'static> ConstructHandler<RequestIndex, T::ValidatorId> for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> ConstructHandler<RequestIndex, T::ValidatorId, RotationError<T::ValidatorId>> for Pallet<T, I> {
 	fn try_on_completion(
 		index: RequestIndex,
 		result: Result<ValidatorRotationRequest, ValidatorRotationError<T::ValidatorId>>,
-	) -> DispatchResultWithPostInfo {
+	) -> Result<(), RotationError<T::ValidatorId>> {
 		match result {
 			Ok(request) => {
 				Self::try_request(index, request)
@@ -264,8 +298,7 @@ impl<T: Config<I>, I: 'static> ConstructHandler<RequestIndex, T::ValidatorId> fo
 				todo!("can we use this even?");
 				// Abort this key generation request
 				Self::clear(index);
-
-				Err(Error::<T, I>::VaultRotationCompletionFailed.into())
+				Err(RotationError::VaultRotationCompletionFailed)
 			}
 		}
 	}
