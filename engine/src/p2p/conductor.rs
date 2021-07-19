@@ -33,7 +33,7 @@ where
         let stream = mq
             .subscribe::<P2PMessageCommand>(Subject::P2POutgoing)
             .await
-            .unwrap();
+            .expect("Should be able to subscribe to Subject::P2POutgoing");
 
         P2PConductor {
             mq,
@@ -50,7 +50,12 @@ where
 
         let mq_stream = mq_stream.map(Msg::Left);
 
-        let p2p_stream = self.p2p.take_stream().await.unwrap().map(Msg::Right);
+        let p2p_stream = self
+            .p2p
+            .take_stream()
+            .await
+            .expect("Should have p2p stream")
+            .map(Msg::Right);
 
         let mut stream = futures::stream::select(mq_stream, p2p_stream);
 
