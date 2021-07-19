@@ -425,7 +425,7 @@ where
 
         let keygen_success = KeygenSuccess {
             key_id,
-            key: key_info.key.aggregate_pubkey.get_element(),
+            key: key_info.key.get_public_key().get_element(),
         };
 
         if let Err(err) = self

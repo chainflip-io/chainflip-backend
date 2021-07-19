@@ -13,8 +13,13 @@ use super::utils::ValidatorMaps;
 pub struct KeygenResult {
     pub keys: Keys,
     pub shared_keys: SharedKeys,
-    pub aggregate_pubkey: GE,
     pub vss: Vec<VerifiableSS<GE>>,
+}
+
+impl KeygenResult {
+    pub fn get_public_key(&self) -> GE {
+        self.shared_keys.y
+    }
 }
 
 // TODO: combine the two Arcs?

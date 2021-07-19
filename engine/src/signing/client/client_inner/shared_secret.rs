@@ -180,16 +180,9 @@ impl SharedSecretState {
         res.map(|shared_keys| {
             info!("[{}] phase 3 is OK", self.signer_idx);
 
-            let mut y_vec_iter = self.y_vec.iter();
-
-            let head = y_vec_iter.next().unwrap();
-            let tail = y_vec_iter;
-            let y_sum = tail.fold(head.clone(), |acc, x| acc + x);
-
             KeygenResult {
                 keys: self.key.clone(),
                 shared_keys,
-                aggregate_pubkey: y_sum,
                 vss: self.vss_vec.clone(),
             }
         })

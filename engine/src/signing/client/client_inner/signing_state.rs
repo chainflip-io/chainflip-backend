@@ -233,9 +233,9 @@ impl SigningState {
                     &vss_sum_local_sigs,
                     &self.local_sigs,
                     &parties_index_vec,
-                    ss.aggregate_pubkey,
+                    ss.get_public_key(),
                 );
-                let verify_sig = signature.verify(&self.message_info.hash.0, &key.aggregate_pubkey);
+                let verify_sig = signature.verify(&self.message_info.hash.0, &key.get_public_key());
 
                 if verify_sig.is_ok() {
                     info!("Generated signature is correct! 🎉");
