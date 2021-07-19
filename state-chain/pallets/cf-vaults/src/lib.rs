@@ -26,6 +26,7 @@ pub use pallet::*;
 use sp_std::prelude::*;
 use crate::rotation::*;
 use cf_traits::AuctionHandler;
+use sp_runtime::DispatchResult;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -109,7 +110,7 @@ pub mod pallet {
 
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			Self::try_is_valid(request_id)?;
+			ensure!(Self::is_valid(request_id), Error::<T, I>::InvalidRequestIdx);
 			Self::try_response(request_id, response)
 		}
 
@@ -133,7 +134,7 @@ pub mod pallet {
 			response: ValidatorRotationResponse,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			Self::try_is_valid(request_id)?;
+			ensure!(Self::is_valid(request_id), Error::<T, I>::InvalidRequestIdx);
 			Self::try_response(request_id, response)
 		}
 	}
@@ -156,9 +157,9 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> TryIndex<RequestIndex> for Pallet<T, I> {
-	fn try_is_valid(idx: RequestIndex) -> DispatchResultWithPostInfo {
+	fn try_is_valid(idx: RequestIndex) -> DispatchResult {
 		ensure!(VaultRotations::<T, I>::contains_key(idx), Error::<T, I>::InvalidRequestIdx);
-		Ok(().into())
+		Ok(())
 	}
 }
 
@@ -170,6 +171,10 @@ impl<T: Config<I>, I: 'static> Index<RequestIndex> for Pallet<T, I> {
 
 	fn clear(idx: RequestIndex) {
 		VaultRotations::<T, I>::remove(idx);
+	}
+
+	fn is_valid(idx: RequestIndex) -> bool {
+		VaultRotations::<T, I>::contains_key(idx)
 	}
 }
 

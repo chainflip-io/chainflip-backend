@@ -4,18 +4,20 @@ use std::ops::Add;
 use frame_support::pallet_prelude::*;
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use cf_traits::AuctionHandler;
+use sp_runtime::DispatchResult;
 
 pub type NewPublicKey = Vec<u8>;
 pub type BadValidators<ValidatorId> = Vec<ValidatorId>;
 pub type RequestIndex = u32;
 
 pub trait TryIndex<T> {
-	fn try_is_valid(idx: T) -> DispatchResultWithPostInfo;
+	fn try_is_valid(idx: T) -> DispatchResult;
 }
 
 pub trait Index<T: Add> {
 	fn next() -> T;
 	fn clear(idx: T);
+	fn is_valid(idx: T) -> bool;
 }
 
 pub trait RequestResponse<Index, Request, Response> {
