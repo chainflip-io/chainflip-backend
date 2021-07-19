@@ -70,7 +70,7 @@ async fn keygen_secret2_gets_delayed() {
     let mut ctx = helpers::KeygenContext::new();
     let states = ctx.generate().await;
 
-    // auciton id is always 0 for helpers::KeygenContext::generate()
+    // auction id is always 0 for helpers::KeygenContext::generate()
     let key_id = KeyId(0);
 
     let phase1 = &states.keygen_phase1;

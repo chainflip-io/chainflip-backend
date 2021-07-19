@@ -23,7 +23,7 @@ async fn check_signing_db() {
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let restarted_client = MultisigClientInner::new(id, db, tx, PHASE_TIMEOUT);
 
-    // 4. Repalce the client
+    // 4. Replace the client
     ctx.substitute_client_at(0, restarted_client, rx);
 
     // 5. Signing should not crash

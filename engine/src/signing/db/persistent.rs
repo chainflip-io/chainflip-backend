@@ -6,9 +6,9 @@ use log::error;
 
 use crate::signing::{client::KeygenResultInfo, KeyId};
 
-// Database for keys that uses rocksdb
+/// Database for keys that uses rocksdb
 pub struct PersistentKeyDB {
-    //
+    /// Rocksdb database instance
     db: Database,
 }
 
@@ -36,8 +36,6 @@ impl KeyDB for PersistentKeyDB {
         self.db
             .iter(0)
             .filter_map(|(key_id, key)| {
-                // For some reason `try_into` was struggling to infer the
-                // type when `unwrap_or_else` was used here
                 let key_id: &[u8; 8] = match key_id.as_ref().try_into() {
                     Ok(key_id) => Some(key_id),
                     Err(err) => {

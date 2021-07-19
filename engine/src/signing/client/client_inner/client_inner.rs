@@ -305,8 +305,8 @@ where
     key_store: KeyStore<S>,
     keygen: KeygenManager,
     pub signing_manager: SigningStateManager,
-    /// Requests awaiting a key
     tx: UnboundedSender<InnerEvent>,
+        /// Requests awaiting a key
     pending_requests_to_sign: HashMap<KeyId, Vec<(MessageHash, SigningInfo)>>,
 }
 
