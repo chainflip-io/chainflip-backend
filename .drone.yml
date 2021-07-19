@@ -95,7 +95,7 @@ steps:
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
       - >
-        cargo fmt -p chainflip-engine
+        cargo --locked fmt -p chainflip-engine
         -p cf-p2p
         -p cf-p2p-rpc
         -p pallet-cf-auction
@@ -111,7 +111,7 @@ steps:
   - name: test-validator-package
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - cargo test --lib --release
+      - cargo --locked test --lib --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
 trigger:
@@ -187,7 +187,7 @@ steps:
     depends_on:
       - rust-base
     commands:
-      - cargo build --release
+      - cargo --locked build --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
   #  Compiles runs all unit tests
@@ -196,7 +196,7 @@ steps:
     depends_on:
       - compile-chainflip-backend
     commands:
-      - cargo test --lib --release
+      - cargo --locked test --lib --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
   - name: prepare-files
@@ -447,14 +447,14 @@ steps:
   - name: compile-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - cargo build --release
+      - cargo --locked build --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
   #  Compiles runs all unit tests
   - name: test-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - cargo test --lib --release
+      - cargo --locked test --lib --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
   #  Create docker image for chainflip-engine
@@ -522,7 +522,7 @@ steps:
   - name: run-tests
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - cargo test --release
+      - cargo --locked test --release
 
 # Config
 trigger:
