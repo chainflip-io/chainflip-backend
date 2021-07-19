@@ -95,7 +95,7 @@ steps:
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
       - >
-        cargo --locked fmt -p chainflip-engine
+        cargo fmt -p chainflip-engine
         -p cf-p2p
         -p cf-p2p-rpc
         -p pallet-cf-auction
