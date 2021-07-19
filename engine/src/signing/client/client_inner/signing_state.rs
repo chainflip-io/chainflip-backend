@@ -28,7 +28,7 @@ use crate::{
 use super::{client_inner::SigningData, shared_secret::SharedSecretState};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(super) enum SigningStage {
+pub enum SigningStage {
     AwaitingBroadcast1,
     AwaitingSecret2,
     AwaitingLocalSig3,
@@ -37,32 +37,32 @@ pub(super) enum SigningStage {
 }
 
 #[derive(Clone)]
-pub(super) struct SigningState {
+pub struct SigningState {
     id: ValidatorId,
     signer_idx: usize,
-    pub(super) message_info: MessageInfo,
+    pub message_info: MessageInfo,
     /// The result of the relevant keygen ceremony
     key_info: KeygenResultInfo,
     stage: SigningStage,
     /// Indices of participants who should participate
     signer_idxs: Vec<usize>,
     signer_ids: Vec<ValidatorId>,
-    pub(super) sss: SharedSecretState,
-    pub(super) shared_secret: Option<KeygenResult>,
-    pub(super) local_sigs: Vec<LocalSig>,
-    pub(super) local_sigs_order: Vec<usize>,
+    pub sss: SharedSecretState,
+    pub shared_secret: Option<KeygenResult>,
+    pub local_sigs: Vec<LocalSig>,
+    pub local_sigs_order: Vec<usize>,
     event_sender: mpsc::UnboundedSender<InnerEvent>,
     /// Store data here if case it can't be consumed immediately
-    pub(super) delayed_data: Vec<(usize, SigningData)>,
+    pub delayed_data: Vec<(usize, SigningData)>,
     /// Time at which we transitioned to the current phase
     cur_phase_timestamp: Instant,
     /// The last time at which we made any progress (i.e. received
     /// useful data from peers)
-    pub(super) last_progress_timestamp: Instant,
+    pub last_progress_timestamp: Instant,
 }
 
 impl SigningState {
-    pub(super) fn on_request_to_sign(
+    pub fn on_request_to_sign(
         id: ValidatorId,
         idx: usize,
         signer_idxs: Vec<usize>,
@@ -110,12 +110,12 @@ impl SigningState {
     }
 
     #[cfg(test)]
-    pub(super) fn get_stage(&self) -> SigningStage {
+    pub fn get_stage(&self) -> SigningStage {
         self.stage
     }
 
     #[cfg(test)]
-    pub(super) fn delayed_count(&self) -> usize {
+    pub fn delayed_count(&self) -> usize {
         self.delayed_data.len()
     }
 
@@ -173,7 +173,7 @@ impl SigningState {
     }
 
     /// This is where we compute local shares of the signatures and distribute them
-    pub(super) fn init_local_sig(&mut self) -> LocalSig {
+    pub fn init_local_sig(&mut self) -> LocalSig {
         let own_idx = self.signer_idx;
         let key = &self.key_info.key;
 
@@ -233,9 +233,9 @@ impl SigningState {
                     &vss_sum_local_sigs,
                     &self.local_sigs,
                     &parties_index_vec,
-                    ss.aggregate_pubkey,
+                    ss.get_public_key(),
                 );
-                let verify_sig = signature.verify(&self.message_info.hash.0, &key.aggregate_pubkey);
+                let verify_sig = signature.verify(&self.message_info.hash.0, &key.get_public_key());
 
                 if verify_sig.is_ok() {
                     info!("Generated signature is correct! 🎉");

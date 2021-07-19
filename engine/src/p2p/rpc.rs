@@ -4,7 +4,6 @@ use cf_p2p_rpc::P2PEvent;
 use futures::{Future, Stream, StreamExt};
 use jsonrpc_core_client::transports::ws::connect;
 use jsonrpc_core_client::{RpcChannel, RpcResult, TypedClient, TypedSubscriptionStream};
-use std::convert::TryInto;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio_compat_02::FutureExt;

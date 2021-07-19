@@ -1,10 +1,13 @@
+use crate::signing::db::KeyDBMock;
+
 use super::*;
 
 /// After we've received a request to sign, we should immediately be able
 /// to receive Broadcast1 messages
 #[tokio::test]
 async fn should_await_bc1_after_rts() {
-    let states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let states = ctx.generate().await;
 
     let mut c1 = states.key_ready.clients[0].clone();
 
@@ -22,13 +25,15 @@ async fn should_await_bc1_after_rts() {
 /// BC1 messages get processed if we receive RTS shortly after
 #[tokio::test]
 async fn should_process_delayed_bc1_after_rts() {
-    let states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
+    let sign_states = ctx.sign().await;
 
-    let mut c1 = states.key_ready.clients[0].clone();
+    let mut c1 = keygen_states.key_ready.clients[0].clone();
 
     assert!(get_stage_for_msg(&c1, &MESSAGE_INFO).is_none());
 
-    let bc1 = states.sign_phase1.bc1_vec[1].clone();
+    let bc1 = sign_states.sign_phase1.bc1_vec[1].clone();
 
     let wdata = SigningDataWrapped::new(bc1, MESSAGE_INFO.clone());
 
@@ -62,7 +67,7 @@ async fn delayed_signing_bc1_gets_removed() {
 
     let timeout = Duration::from_secs(0);
 
-    let mut client = MultisigClientInner::new(SIGNER_IDS[0].clone(), tx, timeout);
+    let mut client = MultisigClientInner::new(SIGNER_IDS[0].clone(), KeyDBMock::new(), tx, timeout);
 
     // Create delayed BC1
     let bad_node = SIGNER_IDS[1].clone();
@@ -91,10 +96,12 @@ async fn delayed_signing_bc1_gets_removed() {
 
 #[tokio::test]
 async fn signing_secret2_gets_delayed() {
-    let states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let _keygen_states = ctx.generate().await;
+    let sign_states = ctx.sign().await;
 
-    let phase1 = &states.sign_phase1;
-    let phase2 = &states.sign_phase2;
+    let phase1 = &sign_states.sign_phase1;
+    let phase2 = &sign_states.sign_phase2;
 
     // Client in phase1 should be able to receive phase2 data (Secret2)
 
@@ -133,10 +140,12 @@ async fn signing_secret2_gets_delayed() {
 
 #[tokio::test]
 async fn signing_local_sig_gets_delayed() {
-    let mut states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let _keygen_states = ctx.generate().await;
+    let sign_states = ctx.sign().await;
 
-    let phase2 = &states.sign_phase2;
-    let phase3 = &states.sign_phase3;
+    let phase2 = &sign_states.sign_phase2;
+    let phase3 = &sign_states.sign_phase3;
 
     let mut c1_p2 = phase2.clients[0].clone();
     let local_sig = phase3.local_sigs[1].clone();
@@ -157,7 +166,7 @@ async fn signing_local_sig_gets_delayed() {
 
     c1_p2.process_p2p_mq_message(m);
 
-    match recv_next_signal_message_skipping(&mut states.rxs[0]).await {
+    match recv_next_signal_message_skipping(&mut ctx.rxs[0]).await {
         Some(SigningOutcome::MessageSigned(_)) => { /* all good */ }
         _ => panic!("Expected MessageSigned signal"),
     }
@@ -168,9 +177,11 @@ async fn signing_local_sig_gets_delayed() {
 async fn request_to_sign_before_key_ready() {
     let key_id = KeyId(0);
 
-    let states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
+    let states = ctx.sign().await;
 
-    let mut c1 = states.keygen_phase2.clients[0].clone();
+    let mut c1 = keygen_states.keygen_phase2.clients[0].clone();
 
     assert_eq!(
         keygen_stage_for(&c1, key_id),
@@ -188,14 +199,14 @@ async fn request_to_sign_before_key_ready() {
 
     // Finalize key generation and make sure we can make progress on signing the message
 
-    let sec2_1 = states.keygen_phase2.sec2_vec[1]
+    let sec2_1 = keygen_states.keygen_phase2.sec2_vec[1]
         .get(&VALIDATOR_IDS[0])
         .unwrap()
         .clone();
     let m = sec2_to_p2p_keygen(sec2_1, &VALIDATOR_IDS[1]);
     c1.process_p2p_mq_message(m);
 
-    let sec2_2 = states.keygen_phase2.sec2_vec[2]
+    let sec2_2 = keygen_states.keygen_phase2.sec2_vec[2]
         .get(&VALIDATOR_IDS[0])
         .unwrap()
         .clone();
@@ -222,9 +233,10 @@ async fn request_to_sign_before_key_ready() {
 /// Expected outcome: no crash, state not created
 #[tokio::test]
 async fn unknown_signer_ids_gracefully_handled() {
-    let states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
 
-    let mut c1 = states.key_ready.clients[0].clone();
+    let mut c1 = keygen_states.key_ready.clients[0].clone();
 
     // Note the unknown validator id
     let signers = vec![VALIDATOR_IDS[0].clone(), ValidatorId::new(200)];
@@ -242,8 +254,10 @@ async fn unknown_signer_ids_gracefully_handled() {
 /// Test that if signing state times out during phase 1 (with sign request present)
 #[tokio::test]
 async fn phase1_timeout() {
-    let mut states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let _keygen_states = ctx.generate().await;
 
+    let states = ctx.sign().await;
     let mut c1 = states.sign_phase1.clients[0].clone();
 
     assert_eq!(
@@ -261,7 +275,7 @@ async fn phase1_timeout() {
 
     assert_eq!(get_stage_for_msg(&c1, &MESSAGE_INFO), None);
 
-    let mut rx = &mut states.rxs[0];
+    let mut rx = &mut ctx.rxs[0];
 
     let late_node = SIGNER_IDS[1].clone();
     // check that we get the 'timeout' SigningOutcome signal
@@ -279,7 +293,9 @@ async fn phase1_timeout() {
 /// Test that signing state times out during phase 2
 #[tokio::test]
 async fn phase2_timeout() {
-    let mut states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let _keygen_states = ctx.generate().await;
+    let states = ctx.sign().await;
 
     let mut c1 = states.sign_phase2.clients[0].clone();
 
@@ -296,7 +312,7 @@ async fn phase2_timeout() {
     c1.set_timeout(Duration::from_secs(0));
     c1.cleanup();
 
-    let mut rx = &mut states.rxs[0];
+    let mut rx = &mut ctx.rxs[0];
 
     let late_node = SIGNER_IDS[1].clone();
 
@@ -315,7 +331,9 @@ async fn phase2_timeout() {
 /// Test that signing state times out during phase 3
 #[tokio::test]
 async fn phase3_timeout() {
-    let mut states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let _keygen_states = ctx.generate().await;
+    let states = ctx.sign().await;
 
     let mut c1 = states.sign_phase3.clients[0].clone();
 
@@ -332,7 +350,7 @@ async fn phase3_timeout() {
     c1.set_timeout(Duration::from_secs(0));
     c1.cleanup();
 
-    let mut rx = &mut states.rxs[0];
+    let mut rx = &mut ctx.rxs[0];
 
     let late_node = SIGNER_IDS[1].clone();
 
@@ -350,7 +368,9 @@ async fn phase3_timeout() {
 // test that a request to sign for a message that is already in use
 #[tokio::test]
 async fn cannot_create_duplicate_sign_request() {
-    let states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let mut _keygen_states = ctx.generate().await;
+    let states = ctx.sign().await;
 
     let mut c1 = states.sign_phase3.clients[0].clone();
 
@@ -384,7 +404,9 @@ async fn cannot_create_duplicate_sign_request() {
 // test that a sign request from a client that is not in the current selection is ignored
 #[tokio::test]
 async fn sign_request_from_invalid_validator() {
-    let states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let mut _keygen_states = ctx.generate().await;
+    let states = ctx.sign().await;
 
     let mut c1 = states.sign_phase1.clients[0].clone();
 
@@ -424,7 +446,9 @@ async fn sign_request_from_invalid_validator() {
 // Test that a bc1 with a different message hash does not effect a sign in progress
 #[tokio::test]
 async fn bc1_with_different_hash() {
-    let states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let mut _keygen_states = ctx.generate().await;
+    let states = ctx.sign().await;
 
     let mut c1 = states.sign_phase1.clients[0].clone();
 
@@ -463,7 +487,9 @@ async fn bc1_with_different_hash() {
 /// Test that an invalid bc1 is reported
 #[tokio::test]
 async fn invalid_bc1() {
-    let mut states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let _keygen_states = ctx.generate().await;
+    let states = ctx.sign().await;
 
     let mut c1 = states.sign_phase1.clients[0].clone();
 
@@ -490,7 +516,7 @@ async fn invalid_bc1() {
         SigningStage::Abandoned
     );
 
-    let mut rx = &mut states.rxs[0];
+    let mut rx = &mut ctx.rxs[0];
 
     // check that we got the 'invalid' signal
     assert_eq!(
@@ -514,7 +540,9 @@ async fn invalid_bc1() {
 /// Test that an invalid secret2 is reported
 #[tokio::test]
 async fn invalid_secret2() {
-    let mut states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let mut _keygen_state = ctx.generate().await;
+    let states = ctx.sign().await;
 
     let mut c1 = states.sign_phase2.clients[0].clone();
 
@@ -544,7 +572,7 @@ async fn invalid_secret2() {
         SigningStage::Abandoned
     );
 
-    let mut rx = &mut states.rxs[0];
+    let mut rx = &mut ctx.rxs[0];
 
     // check that we got the 'invalid' signal
     assert_eq!(
@@ -568,7 +596,9 @@ async fn invalid_secret2() {
 /// Test that an invalid secret2 is reported
 #[tokio::test]
 async fn invalid_local_sig() {
-    let mut states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let _keygen_states = ctx.generate().await;
+    let states = ctx.sign().await;
 
     let mut c1 = states.sign_phase3.clients[0].clone();
 
@@ -595,7 +625,7 @@ async fn invalid_local_sig() {
         SigningStage::Abandoned
     );
 
-    let mut rx = &mut states.rxs[0];
+    let mut rx = &mut ctx.rxs[0];
 
     // check that we got the 'invalid' signal
     assert_eq!(

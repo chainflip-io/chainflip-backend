@@ -61,7 +61,7 @@ impl KeygenManager {
         }
     }
 
-    pub(super) fn process_keygen_message(
+    pub fn process_keygen_message(
         &mut self,
         sender_id: ValidatorId,
         msg: KeyGenMessageWrapped,
