@@ -13,7 +13,7 @@ if ! which poetry; then
 fi
 
 if [ ! -d "./eth-contracts" ]; then
-    git clone https://github.com/chainflip-io/chainflip-eth-contracts.git ./eth-contracts/
+    git clone git@github.com:chainflip-io/chainflip-eth-contracts.git ./eth-contracts/
 else
     ( cd eth-contracts ; git pull)
 fi

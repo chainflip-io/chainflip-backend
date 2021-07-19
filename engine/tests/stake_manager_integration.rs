@@ -22,7 +22,10 @@ use web3::types::U256;
 pub async fn setup_mq(mq_settings: settings::MessageQueue) -> Box<NatsMQClient> {
     let factory = NatsMQClientFactory::new(&mq_settings);
 
-    factory.create().await.unwrap()
+    factory
+        .create()
+        .await
+        .expect("Failed to create NatsMQClient, do you have NATS running?")
 }
 
 // Creating the settings to be used for tests
@@ -54,7 +57,7 @@ pub async fn test_all_stake_manager_events() {
     let _ = tokio::time::timeout(std::time::Duration::from_secs(3), sm_future).await;
 
     let mut stream = pin_message_stream(stream);
-    let next = tokio::time::timeout(Duration::from_secs(1), stream.next())
+    let next = tokio::time::timeout(Duration::from_secs(120), stream.next())
         .await
         .expect("Future timed out")
         .unwrap()

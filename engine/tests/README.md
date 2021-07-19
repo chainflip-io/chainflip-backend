@@ -2,16 +2,66 @@
 
 This folder contains the "integration tests" (as Cargo calls them) for the CFE. This is treated as a separate module to the rest of the code. Thus code in these tests can only access public methods (and therefore should only test public methods).
 
-## Setup
+## First time setup
 
 In order to run the integration there is setup required:
 
+### Install Brownie
 
-- Running Nats instance
-- Eth network (most of the time this will be a local ganache network in Docker) with a deployed StakeManager contract
-  - [Script](https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/scripts/deploy_and.py) that creates the events expected by the test
+```sh
+sudo apt-get install pip
+pip install eth-brownie
+pip install umbral
+```
 
-This should be done by the CI, and by the [setup script](scripts/setup.sh) (which is run by the CI)
+### Install Node.js and Ganache
+
+```sh
+sudo apt install nodejs
+sudo apt-get update
+sudo apt install npm
+sudo npm install -g ganache-cli
+```
+
+### Install Docker
+
+```sh
+sudo apt install docker.io
+```
+
+### Install Nats
+
+First run docker and then download nats.
+
+```sh
+sudo dockerd
+docker pull nats:latest
+```
+
+## Running the integration test
+
+First get an instance of Docker, Nats and Ganache running
+
+```sh
+sudo dockerd
+sudo docker run -p 4222:4222 -ti nats:latest
+ganache-cli --port 8545 --gasLimit 12000000 --accounts 10 --hardfork istanbul --mnemonic brownie --fork https://mainnet.infura.io/v3/d524462116b640b98a166d08d3170a42 --chainId 1
+```
+
+Then run the [setup script](scripts/setup.sh) that creates the events expected by the test. The script will create a a folder and pull the eth-contracts into it from git, so you may want to run the script from a temp folder somewhere.
+
+```sh
+bash chainflip-backend/engine/tests/scripts/setup.sh
+```
+
+Now we can run the cargo test.
+
+```sh
+cargo test --package chainflip-engine --test stake_manager_integration -- test_all_stake_manager_events --exact --nocapture
+```
+
+>Note: The test is currently broken because of an issue with eth_getLogs crashing Ganache.
+
 
 ## How It Works
 
@@ -45,3 +95,4 @@ To run only a particular integration test you can as so:
 ```sh
 cargo test -p chainflip-engine --test stake_manager_integration
 ```
+
