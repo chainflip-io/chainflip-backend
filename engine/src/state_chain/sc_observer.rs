@@ -1,17 +1,10 @@
-use std::sync::Arc;
-
 use anyhow::Result;
-use substrate_subxt::{
-    events::Raw, system::Phase, Client, EventSubscription, FinalizedEventStorageSubscription,
-    RpcClient,
-};
+use substrate_subxt::{Client, EventSubscription};
 
 use crate::{
     mq::{nats_client::NatsMQClientFactory, IMQClient, IMQClientFactory, Subject, SubjectName},
-    settings::{self, Settings},
+    settings::Settings,
 };
-
-use log::{debug, error, info, trace};
 
 use super::{
     helpers::create_subxt_client,
@@ -21,7 +14,7 @@ use super::{
 
 /// Kick off the state chain observer process
 pub async fn start(settings: Settings) {
-    info!("Begin subscribing to state chain events");
+    log::info!("Begin subscribing to state chain events");
 
     let mq_client_builder = NatsMQClientFactory::new(&settings.message_queue);
 
@@ -40,63 +33,52 @@ async fn subscribe_to_events<M: 'static + IMQClient>(
     mq_client: M,
     subxt_client: Client<StateChainRuntime>,
 ) -> Result<()> {
-    log::info!("Start subscribing to SC events");
     // subscribe to all finalised events, and then redirect them
     let sub = subxt_client
         .subscribe_finalized_events()
         .await
         .expect("Could not subscribe to state chain events");
-
     let decoder = subxt_client.events_decoder();
+    let mut sub = EventSubscription::new(sub, decoder);
+    while let Some(res_event) = sub.next().await {
+        let raw_event = match res_event {
+            Ok(raw_event) => raw_event,
+            Err(e) => {
+                log::error!("Next event could not be read: {}", e);
+                continue;
+            }
+        };
 
-    while let Some(storage_change_set) = sub.next().await {
-        for (_key, data) in storage_change_set.changes {
-            if let Some(data) = data {
-                let raw_events = match decoder.decode_events(&mut &data.0[..]) {
-                    Ok(events) => events,
-                    Err(error) => return Err(anyhow::Error::msg(error.to_string())),
-                };
-                for (phase, raw) in raw_events {
-                    let raw_event = match raw {
-                        Raw::Event(event) => event,
-                        Raw::Error(err) => return Err(anyhow::Error::msg(err.to_string())),
-                    };
+        log::info!("SC Observer receieved raw event of: {:?}", raw_event);
+        let subject: Option<Subject> = raw_event_to_subject(&raw_event);
 
-                    log::debug!("SCO received a raw event of: {:?}", raw_event);
-
-                    let subject: Option<Subject> = raw_event_to_subject(&raw_event);
-
-                    if let Some(subject) = subject {
-                        let message = sc_event_from_raw_event(raw_event)?;
-                        log::debug!("The parsed event is: {:?}", message);
-                        match message {
-                            Some(event) => {
-                                // Publish the message to the message queue
-                                match mq_client.publish(subject, &event).await {
-                                    Err(err) => {
-                                        error!(
+        if let Some(subject) = subject {
+            let message = sc_event_from_raw_event(raw_event)?;
+            match message {
+                Some(event) => {
+                    // Publish the message to the message queue
+                    match mq_client.publish(subject, &event).await {
+                        Err(err) => {
+                            log::error!(
                                 "Could not publish message `{:?}` to subject `{}`. Error: {}",
                                 event,
                                 subject.to_subject_name(),
                                 err
                             );
-                                    }
-                                    Ok(_) => trace!("Event: {:#?} pushed to message queue", event),
-                                };
-                            }
-                            None => {
-                                debug!(
-                                    "Event decoding for an event under subject: {} doesn't exist",
-                                    subject.to_subject_name()
-                                )
-                            }
                         }
-                    } else {
-                        trace!("Not routing event {:?} to message queue", raw_event);
+                        Ok(_) => log::trace!("Event: {:#?} pushed to message queue", event),
                     };
                 }
+                None => {
+                    log::debug!(
+                        "Event decoding for an event under subject: {} doesn't exist",
+                        subject.to_subject_name()
+                    )
+                }
             }
-        }
+        } else {
+            log::trace!("Not routing event {:?} to message queue", raw_event);
+        };
     }
 
     let err_msg = "State Chain Observer stopped subscribing to events!";
@@ -106,21 +88,21 @@ async fn subscribe_to_events<M: 'static + IMQClient>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     use crate::settings;
 
-    use test_env_log::test;
+    use super::*;
 
-    #[tokio::test]
-    async fn subscribe_finalised_all() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
+    fn init() {
+        let _ = env_logger::builder().is_test(true).try_init();
     }
 
-    #[test(tokio::test)]
-    async fn start_observer() {
-        let settings = settings::test_utils::new_test_settings().unwrap();
+    #[tokio::test]
+    #[ignore = "depends on running state chain at the specifed url"]
+    async fn create_subxt_client_test() {
+        init();
+        let test_settings = settings::test_utils::new_test_settings().unwrap();
 
-        start(settings).await;
+        start(test_settings).await;
     }
 }
