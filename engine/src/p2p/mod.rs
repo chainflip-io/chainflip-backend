@@ -56,14 +56,14 @@ impl ValidatorId {
     }
 
     pub fn from_base58(id: &str) -> anyhow::Result<Self> {
-        let id = bs58::decode(&id)
+        let id_decoded = bs58::decode(&id)
             .into_vec()
-            .map_err(|_| anyhow::format_err!("Invalid base58"))?;
-        let id = id
+            .map_err(|_| anyhow::format_err!("Invalid base58, id: {:?}", id))?;
+        let id_bytes = id_decoded
             .try_into()
-            .map_err(|_| anyhow::format_err!("Invalid id size"))?;
+            .map_err(|_| anyhow::format_err!("Invalid id size for id: {:?}", id))?;
 
-        Ok(ValidatorId(id))
+        Ok(ValidatorId(id_bytes))
     }
 }
 
