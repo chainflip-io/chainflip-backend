@@ -66,7 +66,7 @@ sp-runtime = "3.0.0"
 
 # Use our own fork of subxt to resolve this: https://github.com/paritytech/substrate-subxt/issues/288
 # substrate-subxt = "0.15"
-substrate-subxt = {path = "./../../substrate-subxt/"}
+substrate-subxt = {git = "https://github.com/chainflip-io/substrate-subxt", branch = "all-phases"}
 
 # Local deps
 cf-p2p-rpc = {path = "../state-chain/client/cf-p2p/rpc"}

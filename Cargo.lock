@@ -8803,6 +8803,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt"
 version = "0.15.0"
+source = "git+https://github.com/chainflip-io/substrate-subxt?branch=all-phases#4690aee125b683a0b253e4650bd1c1cfc7d7e54b"
 dependencies = [
  "dyn-clone",
  "frame-metadata",
@@ -8834,6 +8835,7 @@ dependencies = [
 [[package]]
 name = "substrate-subxt-proc-macro"
 version = "0.15.0"
+source = "git+https://github.com/chainflip-io/substrate-subxt?branch=all-phases#4690aee125b683a0b253e4650bd1c1cfc7d7e54b"
 dependencies = [
  "heck",
  "proc-macro-crate 0.1.5",
