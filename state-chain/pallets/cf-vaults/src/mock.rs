@@ -80,17 +80,19 @@ parameter_types! {
 // 		));
 // 	}
 // }
+pub enum MockError {
 
+}
 pub struct OtherChainConstructor;
-impl Construct<RequestIndex, ValidatorId> for OtherChainConstructor {
-	fn try_start_construction_phase(index: RequestIndex, new_public_key: NewPublicKey, validators: Vec<ValidatorId>) -> DispatchResultWithPostInfo {
+impl Construct<RequestIndex, ValidatorId, RotationError<ValidatorId>> for OtherChainConstructor {
+	fn try_start_construction_phase(index: RequestIndex, new_public_key: NewPublicKey, validators: Vec<ValidatorId>) -> Result<(), RotationError<ValidatorId>> {
 		todo!("mock other chain construction phase")
 	}
 }
 
 // Our pallet is awaiting on completion
-impl ConstructHandler<RequestIndex, ValidatorId> for MockRuntime {
-	fn try_on_completion(index: RequestIndex, result: Result<ValidatorRotationRequest, ValidatorRotationError<ValidatorId>>) -> DispatchResultWithPostInfo {
+impl ConstructHandler<RequestIndex, ValidatorId, MockError> for MockRuntime {
+	fn try_on_completion(index: RequestIndex, result: Result<ValidatorRotationRequest, ValidatorRotationError<ValidatorId>>) -> Result<(), MockError> {
 		todo!("mock construction manager")
 	}
 }
