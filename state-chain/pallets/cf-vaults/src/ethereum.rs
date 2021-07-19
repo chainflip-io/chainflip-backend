@@ -34,7 +34,7 @@ pub mod pallet {
 	pub trait Config: frame_system::Config + ChainFlip {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-		type Vaults: ConstructHandler<RequestIndex, <Self as ChainFlip>::ValidatorId> + TryIndex<RequestIndex>;
+		type Vaults: ConstructHandler<RequestIndex, <Self as ChainFlip>::ValidatorId, RotationError<Self::ValidatorId>> + TryIndex<RequestIndex>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -51,6 +51,7 @@ pub mod pallet {
 	#[pallet::error]
 	pub enum Error<T> {
 		Invalid,
+		EthSigningTxResponseFailed,
 	}
 
 	#[pallet::call]
@@ -62,8 +63,14 @@ pub mod pallet {
 			response: EthSigningTxResponse<T::ValidatorId>
 		) -> DispatchResultWithPostInfo {
 			T::Vaults::try_is_valid(request_id)?;
-			Self::try_response(request_id, response)?;
-			Ok(().into())
+			match Self::try_response(request_id, response) {
+				Ok(_) => {
+					Ok(().into())
+				}
+				Err(_) => {
+					Err(Error::<T>::EthSigningTxResponseFailed.into())
+				}
+			}
 		}
 	}
 
@@ -87,14 +94,14 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> RequestResponse<RequestIndex, EthSigningTxRequest<T::ValidatorId>, EthSigningTxResponse<T::ValidatorId>> for Pallet<T> {
-	fn try_request(index: RequestIndex, request: EthSigningTxRequest<T::ValidatorId>) -> DispatchResultWithPostInfo {
+impl<T: Config> RequestResponse<RequestIndex, EthSigningTxRequest<T::ValidatorId>, EthSigningTxResponse<T::ValidatorId>, RotationError<T::ValidatorId>> for Pallet<T> {
+	fn try_request(index: RequestIndex, request: EthSigningTxRequest<T::ValidatorId>) -> Result<(), RotationError<T::ValidatorId>> {
 		// Signal to CFE to sign
 		Self::deposit_event(Event::EthSignTxRequestEvent(index, request));
 		Ok(().into())
 	}
 
-	fn try_response(index: RequestIndex, response: EthSigningTxResponse<T::ValidatorId>) -> DispatchResultWithPostInfo {
+	fn try_response(index: RequestIndex, response: EthSigningTxResponse<T::ValidatorId>) -> Result<(), RotationError<T::ValidatorId>> {
 		match response {
 			EthSigningTxResponse::Success(signature) => {
 				T::Vaults::try_on_completion(
@@ -118,8 +125,8 @@ impl From<Vec<u8>> for ChainParams{
 	}
 }
 
-impl<T: Config> Construct<RequestIndex, T::ValidatorId> for Pallet<T> {
-	fn try_start_construction_phase(index: RequestIndex, new_public_key: NewPublicKey, validators: Vec<T::ValidatorId>) -> DispatchResultWithPostInfo {
+impl<T: Config> Construct<RequestIndex, T::ValidatorId, RotationError<T::ValidatorId>> for Pallet<T> {
+	fn try_start_construction_phase(index: RequestIndex, new_public_key: NewPublicKey, validators: Vec<T::ValidatorId>) -> Result<(), RotationError<T::ValidatorId>> {
 		// Create payload for signature here
 		// function setAggKeyWithAggKey(SigData calldata sigData, Key calldata newKey)
 		match Self::encode_set_agg_key_with_agg_key(new_public_key) {
