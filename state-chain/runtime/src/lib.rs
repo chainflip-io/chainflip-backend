@@ -2,6 +2,7 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
 mod weights;
+mod chainflip;
 // A few exports that help ease life for downstream crates.
 use core::time::Duration;
 pub use frame_support::{
@@ -145,7 +146,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type MinAuctionSize = MinAuctionSize;
 	type Confirmation = Auction;
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
-	type Witnesser = pallet_cf_witness::Pallet<Runtime>;
+	type Witnesser = Witnesser;
 }
 
 // FIXME: These would be changed
@@ -156,7 +157,7 @@ parameter_types! {
 impl pallet_cf_validator::Config for Runtime {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
-	type EpochTransitionHandler = (pallet_cf_rewards::RewardRollover<Runtime>, pallet_cf_witness::Pallet<Runtime>);
+	type EpochTransitionHandler = chainflip::ChainflipEpochTransitions;
 	type ValidatorWeightInfo = weights::pallet_cf_validator::WeightInfo<Runtime>;
 	type EpochIndex = EpochIndex;
 	type Amount = FlipBalance;
@@ -359,7 +360,7 @@ impl pallet_cf_staking::Config for Runtime {
 	type Flip = Flip;
 	type Nonce = u64;
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
-	type Witnesser = pallet_cf_witness::Pallet<Runtime>;
+	type Witnesser = Witnesser;
 	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
 	type TimeSource = Timestamp;
 	type MinClaimTTL = MinClaimTTL;
@@ -367,20 +368,16 @@ impl pallet_cf_staking::Config for Runtime {
 }
 
 parameter_types! {
-	pub const MintFrequency: u32 = 10 * MINUTES;
+	pub const MintInterval: u32 = 10 * MINUTES;
 }
 
 impl pallet_cf_emissions::Config for Runtime {
 	type Event = Event;
-	type Call = Call;
 	type FlipBalance = FlipBalance;
-	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
-	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
-	type Witnesser = pallet_cf_witness::Pallet<Runtime>;
-	type RewardsDistribution = pallet_cf_rewards::OnDemandRewardsDistribution<Runtime>;
-	type Validators = pallet_cf_validator::Pallet<Runtime>;
-	type MintFrequency = MintFrequency;
 	type Surplus = pallet_cf_flip::Surplus<Runtime>;
+	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
+	type RewardsDistribution = pallet_cf_rewards::OnDemandRewardsDistribution<Runtime>;
+	type MintInterval = MintInterval;
 }
 
 impl pallet_cf_rewards::Config for Runtime {
@@ -408,13 +405,13 @@ construct_runtime!(
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
 		Flip: pallet_cf_flip::{Module, Event<T>, Storage, Config<T>},
-		Emissions: pallet_cf_emissions::{Module, Call, Event<T>, Config<T>},
+		Emissions: pallet_cf_emissions::{Module, Event<T>, Config<T>},
 		Rewards: pallet_cf_rewards::{Module, Call, Event<T>},
 		Staking: pallet_cf_staking::{Module, Call, Storage, Event<T>, Config<T>},
 		TransactionPayment: pallet_transaction_payment::{Module, Storage},
 		Session: pallet_session::{Module, Storage, Event, Config<T>},
 		Historical: session_historical::{Module},
-		Witness: pallet_cf_witness::{Module, Call, Event<T>, Origin},
+		Witnesser: pallet_cf_witness::{Module, Call, Event<T>, Origin},
 		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
 		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
 		Aura: pallet_aura::{Module, Config<T>},

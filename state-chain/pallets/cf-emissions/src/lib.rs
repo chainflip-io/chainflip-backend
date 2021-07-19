@@ -15,41 +15,22 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-use cf_traits::{EmissionsTrigger, EpochInfo, Issuance, RewardsDistribution, Witnesser};
+use cf_traits::{EmissionsTrigger, Issuance, RewardsDistribution};
 use codec::FullCodec;
 use frame_support::traits::{Get, Imbalance};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
-use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedMul, Zero};
+use sp_runtime::{offchain::storage_lock::BlockNumberProvider, traits::{AtLeast32BitUnsigned, CheckedMul, Zero}};
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*};
-	use frame_system::pallet_prelude::*;
-
-	pub type EthTransactionHash = [u8; 32];
-
-	#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
-	pub struct EthToNative(u32, u32);
-
-	impl EthToNative {
-		pub fn convert_eth_to_native<T: Config>(&self, amount: T::FlipBalance) -> T::FlipBalance {
-			amount * T::FlipBalance::from(self.1) / T::FlipBalance::from(self.0)
-		}
-
-		pub fn convert_native_to_eth<T: Config>(&self, amount: T::FlipBalance) -> T::FlipBalance {
-			amount * T::FlipBalance::from(self.0) / T::FlipBalance::from(self.1)
-		}
-	}
+	use frame_support::pallet_prelude::*;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-
-		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
-		type Call: From<Call<Self>> + IsType<<Self as frame_system::Config>::Call>;
 
 		/// The Flip token denomination.
 		type FlipBalance: Member
@@ -70,24 +51,15 @@ pub mod pallet {
 			Surplus = Self::Surplus,
 		>;
 
-		/// Provides an origin check for witness transactions.
-		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
-
-		/// An implementation of the witnesser, allows us to define witness_* helper extrinsics.
-		type Witnesser: Witnesser<Call = <Self as Config>::Call, AccountId = Self::AccountId>;
-
 		/// An implementation of `RewardsDistribution` defining how to distribute the emissions.
 		type RewardsDistribution: RewardsDistribution<
 			Balance = Self::FlipBalance,
 			Surplus = Self::Surplus,
 		>;
 
-		/// Gives access to the current set of validators.
-		type Validators: EpochInfo<ValidatorId = Self::AccountId>;
-
 		/// How frequently to mint.
 		#[pallet::constant]
-		type MintFrequency: Get<Self::BlockNumber>;
+		type MintInterval: Get<Self::BlockNumber>;
 	}
 
 	#[pallet::pallet]
@@ -98,11 +70,6 @@ pub mod pallet {
 	#[pallet::getter(fn emissions_per_block)]
 	/// The amount of Flip to mint per block.
 	pub type EmissionPerBlock<T: Config> = StorageValue<_, T::FlipBalance, ValueQuery>;
-
-	#[pallet::storage]
-	#[pallet::getter(fn block_time_ratio)]
-	/// The ratio of eth block time to our native block time, expressed as a tuple.
-	pub type BlockTimeRatio<T: Config> = StorageValue<_, EthToNative, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn last_mint_block)]
@@ -138,42 +105,12 @@ pub mod pallet {
 	}
 
 	#[pallet::call]
-	impl<T: Config> Pallet<T> {
-		/// Apply a new emission rate.
-		#[pallet::weight(10_000)]
-		pub fn emission_rate_changed(
-			origin: OriginFor<T>,
-			emissions_per_eth_block: T::FlipBalance,
-			_tx_hash: EthTransactionHash,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			let emissions_per_block = Self::convert_emissions_rate(emissions_per_eth_block);
-			EmissionPerBlock::<T>::set(emissions_per_block);
-
-			Ok(().into())
-		}
-
-		/// A proxy call for witnessing an emission rate update from the StakeManager contract.
-		#[pallet::weight(10_000)]
-		pub fn witness_emission_rate_changed(
-			origin: OriginFor<T>,
-			emissions_per_eth_block: T::FlipBalance,
-			tx_hash: EthTransactionHash,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let call = Call::emission_rate_changed(emissions_per_eth_block, tx_hash);
-			T::Witnesser::witness(who, call.into())?;
-			Ok(().into())
-		}
-	}
+	impl<T: Config> Pallet<T> {}
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		/// Emission rate at genesis.
 		pub emission_per_block: T::FlipBalance,
-		pub eth_block_time: u32,
-		pub native_block_time: u32,
 	}
 
 	#[cfg(feature = "std")]
@@ -181,8 +118,6 @@ pub mod pallet {
 		fn default() -> Self {
 			Self {
 				emission_per_block: Zero::zero(),
-				eth_block_time: 13,
-				native_block_time: 6,
 			}
 		}
 	}
@@ -191,23 +126,16 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			EmissionPerBlock::<T>::set(self.emission_per_block);
-			BlockTimeRatio::<T>::set(EthToNative(self.eth_block_time, self.native_block_time));
 		}
 	}
 }
 
 impl<T: Config> Pallet<T> {
-	/// Converts the emissions rate per eth block to emissions per state chain block.
-	fn convert_emissions_rate(emissions_per_eth_block: T::FlipBalance) -> T::FlipBalance {
-		let ratio = Self::block_time_ratio();
-		ratio.convert_eth_to_native::<T>(emissions_per_eth_block)
-	}
-
 	/// Determines if we should mint at block number `block_number`.
 	fn should_mint_at(block_number: T::BlockNumber) -> (bool, Weight) {
-		let mint_frequency = T::MintFrequency::get();
+		let mint_interval = T::MintInterval::get();
 		let blocks_elapsed = block_number - LastMintBlock::<T>::get();
-		let should_mint = Self::should_mint(blocks_elapsed, mint_frequency);
+		let should_mint = Self::should_mint(blocks_elapsed, mint_interval);
 		let weight = T::DbWeight::get().reads(2);
 
 		(should_mint, weight)
@@ -216,9 +144,9 @@ impl<T: Config> Pallet<T> {
 	/// Checks if we should mint.
 	fn should_mint(
 		blocks_elapsed_since_last_mint: T::BlockNumber,
-		mint_frequency: T::BlockNumber,
+		mint_interval: T::BlockNumber,
 	) -> bool {
-		blocks_elapsed_since_last_mint >= mint_frequency
+		blocks_elapsed_since_last_mint >= mint_interval
 	}
 
 	/// Based on the last block at which rewards were minted, calculates how much issuance needs to be
@@ -250,9 +178,8 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> EmissionsTrigger for Pallet<T> {
-	type BlockNumber = BlockNumberFor<T>;
-
-	fn trigger_emissions(block_number: Self::BlockNumber) {
+	fn trigger_emissions() {
+		let block_number = frame_system::Pallet::<T>::current_block_number();
 		let _ = Self::mint_rewards_for_block(block_number);
 	}
 }

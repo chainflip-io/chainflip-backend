@@ -190,9 +190,6 @@ pub trait RewardsDistribution {
 
 /// Allow triggering of emissions.
 pub trait EmissionsTrigger {
-	/// The runtime's block number type.
-	type BlockNumber;
-
 	/// Trigger emissions.
-	fn trigger_emissions(block_number: Self::BlockNumber);
+	fn trigger_emissions();
 }

@@ -83,19 +83,6 @@ impl<T: Config> EpochTransitionHandler for PhantomData<T> {
 	type Amount = T::Amount;
 }
 
-impl<
-		T1: EpochTransitionHandler,
-		T2: EpochTransitionHandler<Amount = T1::Amount, ValidatorId = T1::ValidatorId>,
-	> EpochTransitionHandler for (T1, T2)
-{
-	type ValidatorId = T1::ValidatorId;
-	type Amount = T1::Amount;
-	fn on_new_epoch(new_validators: &Vec<Self::ValidatorId>, new_bond: Self::Amount) {
-		T1::on_new_epoch(new_validators, new_bond);
-		T2::on_new_epoch(new_validators, new_bond);
-	}
-}
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;

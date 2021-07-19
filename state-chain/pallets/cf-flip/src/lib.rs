@@ -20,14 +20,20 @@
 //! by minting some tokens, or by bridging them from outside (aka. staking).
 //!
 //! A [Surplus] is (unsurprisingly) the opposite: it means there is an excess of funds *outside of the accounts*. Maybe
-//! an account has been debited some amount, or we have minted some tokens. These to be allocated somewhere.
+//! an account has been debited some amount, or we have minted some tokens. These need to be allocated somewhere.
+//!
+//! ## Reserves
+//!
+//! Reserves can be thought of as on-chain accounts, however unlike accounts they have no public key associated. Instead,
+//! a reserve is identified by a four-byte [`ReserveId`]. Reserves can be used to allocate funds internally, for example 
+//! for setting aside funds to be distributed as rewards, or for use as a treasury.
 //!
 //! ### Example
 //!
 //! A [burn](Pallet::burn) creates a [Deficit]: the total issuance has been reduced so we need a [Surplus] from
 //! somewhere that we can offset against this. Usually, we want to debit an account to burn (slash) funds. We may also
-//! want to burn funds that are held in trading pools, for example. In this case we might withdraw from a pool to create
-//! a surplus to offset the burn (not implemented yet).
+//! want to burn funds that are held in a trading pool, for example. In this case we might withdraw from a pool to create
+//! a surplus to offset the burn. The pool's balance might be held in some reserve.
 //!
 //! If the [Deficit] created by the burn goes out of scope without being offset, the change is reverted, effectively
 //! minting the tokens and adding them back to the total issuance.

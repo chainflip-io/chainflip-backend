@@ -15,7 +15,7 @@ mod benchmarking;
 
 use cf_traits::RewardsDistribution;
 use frame_support::{
-	debug, ensure,
+	ensure,
 	traits::{Get, Imbalance},
 };
 use pallet_cf_flip::{Pallet as Flip, ReserveId, Surplus};
@@ -210,15 +210,3 @@ impl<T: Config> RewardsDistribution for OnDemandRewardsDistribution<T> {
 	}
 }
 
-pub struct RewardRollover<T>(PhantomData<T>);
-
-impl<T: Config> pallet_cf_validator::EpochTransitionHandler for RewardRollover<T> {
-	type Amount = T::Balance;
-	type ValidatorId = T::AccountId;
-
-	fn on_new_epoch(new_validators: &Vec<Self::ValidatorId>, _new_bond: Self::Amount) {
-		Pallet::<T>::rollover(new_validators).unwrap_or_else(|err| {
-			debug::error!("Unable to process rewards rollover: {:?}!", err);
-		});
-	}
-}
