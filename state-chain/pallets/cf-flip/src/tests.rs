@@ -248,22 +248,25 @@ mod test_issuance {
 	fn test_reserves() {
 		new_test_ext().execute_with(|| {
 			const TEST_RESERVE: ReserveId = *b"TEST";
+			const INIT_RESERVE_BALANCE: u128 = 0;
+			const DEPOSIT: u128 = 50;
+			const WITHDRAWAL: u128 = 20;
 
 			// Mint to a reserve.
-			mint_to_reserve(TEST_RESERVE, 50);
-			assert_eq!(Flip::reserved_balance(TEST_RESERVE), 50);
-			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1050);
+			mint_to_reserve(TEST_RESERVE, DEPOSIT);
+			assert_eq!(Flip::reserved_balance(TEST_RESERVE), DEPOSIT);
+			assert_eq!(FlipIssuance::<Test>::total_issuance(), INIT_RESERVE_BALANCE + DEPOSIT);
 			check_balance_integrity();
 
 			// Burn some.
-			burn_from_reserve(TEST_RESERVE, 20);
-			assert_eq!(Flip::reserved_balance(TEST_RESERVE), 30);
-			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1080);
+			burn_from_reserve(TEST_RESERVE, WITHDRAWAL);
+			assert_eq!(Flip::reserved_balance(TEST_RESERVE), WITHDRAWAL);
+			assert_eq!(FlipIssuance::<Test>::total_issuance(), INIT_RESERVE_BALANCE + DEPOSIT - WITHDRAWAL);
 
 			// Obliterate the rest.
 			burn_from_reserve(TEST_RESERVE, 1_000_000);
-			assert_eq!(Flip::reserved_balance(TEST_RESERVE), 0);
-			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000);
+			assert_eq!(Flip::reserved_balance(TEST_RESERVE), INIT_RESERVE_BALANCE);
+			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1_000);
 		});
 	}
 
