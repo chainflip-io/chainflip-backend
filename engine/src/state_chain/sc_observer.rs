@@ -66,7 +66,7 @@ async fn subscribe_to_events<M: 'static + IMQClient>(
                                 err
                             );
                         }
-                        Ok(_) => log::trace!("Event: {:#?} pushed to message queue", event),
+                        Ok(_) => log::trace!("Event: {:?} pushed to message queue", event),
                     };
                 }
                 None => {
