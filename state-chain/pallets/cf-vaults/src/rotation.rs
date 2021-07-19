@@ -3,7 +3,7 @@ use frame_support::RuntimeDebug;
 use std::ops::Add;
 use frame_support::pallet_prelude::*;
 use sp_runtime::traits::AtLeast32BitUnsigned;
-use cf_traits::AuctionConfirmation;
+use cf_traits::AuctionHandler;
 
 pub type NewPublicKey = Vec<u8>;
 pub type BadValidators<ValidatorId> = Vec<ValidatorId>;
@@ -47,9 +47,9 @@ pub trait ChainFlip {
 	type ValidatorId: Member + Parameter;
 }
 
-pub trait AuctionManager<ValidatorId> {
+pub trait AuctionManager<ValidatorId, Amount> {
 	type Reporter: AuctionReporter<ValidatorId>;
-	type Confirmation: AuctionConfirmation;
+	type Confirmation: AuctionHandler<ValidatorId, Amount>;
 }
 
 // TODO - should this be broken down into its own trait as opposed in the pallet?

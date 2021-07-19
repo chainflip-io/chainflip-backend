@@ -25,7 +25,7 @@ use cf_traits::Witnesser;
 pub use pallet::*;
 use sp_std::prelude::*;
 use crate::rotation::*;
-use cf_traits::AuctionConfirmation;
+use cf_traits::AuctionHandler;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -37,7 +37,7 @@ pub mod pallet {
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
-	pub trait Config<I: 'static = ()>: frame_system::Config + ChainFlip + AuctionManager<<Self as ChainFlip>::ValidatorId> {
+	pub trait Config<I: 'static = ()>: frame_system::Config + ChainFlip + AuctionManager<<Self as ChainFlip>::ValidatorId, <Self as ChainFlip>::Amount> {
 		/// The event type
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
@@ -239,7 +239,7 @@ impl<T: Config<I>, I: 'static>
 		// This request is complete
 		Self::clear(index);
 		// We can now confirm the auction and rotate
-		T::Confirmation::set_awaiting_confirmation(false);
+		// T::Confirmation::set_awaiting_confirmation(false);
 		// The process has completed successfully
 		Self::deposit_event(Event::VaultRotationCompleted(index));
 		Ok(().into())

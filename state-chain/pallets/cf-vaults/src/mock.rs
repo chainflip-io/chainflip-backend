@@ -10,7 +10,7 @@ use sp_runtime::{
 };
 use crate::rotation::*;
 use crate::rotation::ChainParams::Other;
-use cf_traits::AuctionConfirmation;
+use cf_traits::{AuctionHandler, AuctionError};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
 type Block = frame_system::mocking::MockBlock<MockRuntime>;
@@ -127,13 +127,12 @@ impl AuctionReporter<ValidatorId> for MockAuctionPenalty {
 
 pub struct MockAuctionConfirmation;
 
-impl AuctionConfirmation for MockAuctionConfirmation {
-	fn awaiting_confirmation() -> bool {
-		false
+impl AuctionHandler<ValidatorId, Amount> for MockAuctionConfirmation {
+	fn on_completed(winners: Vec<ValidatorId>, min_bid:Amount) {
+		
 	}
-
-	fn set_awaiting_confirmation(_waiting: bool) {
-
+	fn try_confirmation() -> Result<(), AuctionError> {
+		Ok(())
 	}
 }
 
@@ -142,14 +141,14 @@ impl ChainFlip for MockRuntime {
 	type ValidatorId = ValidatorId;
 }
 
-impl AuctionManager<ValidatorId> for MockRuntime {
+impl AuctionManager<ValidatorId, Amount> for MockRuntime {
 	type Reporter = MockAuctionPenalty;
 	type Confirmation = MockAuctionConfirmation;
 }
 
 impl ethereum::Config for MockRuntime {
 	type Event = Event;
-	type Vaults = Self;
+	type Vaults = EthereumVault;
 }
 
 // Our vault for Ethereum
