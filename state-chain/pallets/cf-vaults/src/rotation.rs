@@ -45,13 +45,14 @@ pub trait RequestResponse<Index, Request, Response, Error> {
 	fn try_response(index: Index, response: Response) -> Result<(), Error>;
 }
 
-pub trait Construct<Index, ValidatorId, Error> {
+pub trait Chain<Index, ValidatorId, Error> {
+	fn chain_params() -> ChainParams;
 	// Start the construction phase.  When complete `ConstructionHandler::on_completion()`
 	// would be used to notify that this is complete
 	fn try_start_construction_phase(index: Index, new_public_key: NewPublicKey, validators: Vec<ValidatorId>) -> Result<(), Error>;
 }
 
-pub trait ConstructHandler<Index, ValidatorId, Error> {
+pub trait ChainEvents<Index, ValidatorId, Error> {
 	// Construction phase complete
 	fn try_on_completion(index: Index, result: Result<ValidatorRotationRequest, ValidatorRotationError<ValidatorId>>) -> Result<(), Error>;
 }

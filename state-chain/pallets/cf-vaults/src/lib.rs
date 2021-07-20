@@ -50,8 +50,8 @@ pub mod pallet {
 			Call = <Self as pallet::Config<I>>::Call,
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
-		/// Our constructor
-		type Constructor: Construct<RequestIndex, Self::ValidatorId, RotationError<Self::ValidatorId>>;
+		/// Our chain
+		type Chain: Chain<RequestIndex, Self::ValidatorId, RotationError<Self::ValidatorId>>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -249,7 +249,7 @@ impl<T: Config<I>, I: 'static>
 							Self::abort_rotation();
 							Err(RotationError::EmptyValidatorSet)
 						} else {
-							T::Constructor::try_start_construction_phase(index, new_public_key, validators.to_vec())
+							T::Chain::try_start_construction_phase(index, new_public_key, validators.to_vec())
 						}
 					} else {
 						unreachable!("This shouldn't happen but we need to maybe signal this")
@@ -272,7 +272,7 @@ impl<T: Config<I>, I: 'static> AuctionHandler<T::ValidatorId, T::Amount> for Pal
 	fn on_completed(winners: Vec<T::ValidatorId>, _: T::Amount) -> Result<(), AuctionError>{
 		// Create a KeyGenRequest
 		let keygen_request = KeygenRequest {
-			chain: ChainParams::Ethereum(vec![]),
+			chain: T::Chain::chain_params(),
 			validator_candidates: winners.clone(),
 		};
 
@@ -309,7 +309,7 @@ impl<T: Config<I>, I: 'static>
 	}
 }
 
-impl<T: Config<I>, I: 'static> ConstructHandler<RequestIndex, T::ValidatorId, RotationError<T::ValidatorId>> for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> ChainEvents<RequestIndex, T::ValidatorId, RotationError<T::ValidatorId>> for Pallet<T, I> {
 	fn try_on_completion(
 		index: RequestIndex,
 		result: Result<ValidatorRotationRequest, ValidatorRotationError<T::ValidatorId>>,

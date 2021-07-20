@@ -30,7 +30,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		EthereumConstructor: ethereum::{Module, Call, Config, Storage, Event<T>},
+		EthereumChain: ethereum::{Module, Call, Config, Storage, Event<T>},
 		EthereumVault: pallet_cf_vaults::<Instance1>::{Module, Call, Storage, Event<T>, Config},
 		OtherChainVault: pallet_cf_vaults::<Instance2>::{Module, Call, Storage, Event<T>, Config},
 	}
@@ -68,30 +68,21 @@ impl frame_system::Config for MockRuntime {
 parameter_types! {
 }
 
-// This would be our chain, let's say Ethereum
-// This would be implemented by the Ethereum instance
-// pub struct EthereumConstructor;
-// impl Construct<RequestIndex, ValidatorId> for EthereumConstructor {
-// 	type Manager = MockRuntime;
-// 	fn start_construction_phase(index: RequestIndex, response: KeygenResponse<ValidatorId>) {
-// 		// We would complete the construction and then notify the completion
-// 		Self::Manager::on_completion(index, Ok(
-// 			ValidatorRotationRequest::new(Ethereum(vec![]))
-// 		));
-// 	}
-// }
-pub enum MockError {
+pub enum MockError {}
 
-}
-pub struct OtherChainConstructor;
-impl Construct<RequestIndex, ValidatorId, RotationError<ValidatorId>> for OtherChainConstructor {
+pub struct OtherChain;
+impl Chain<RequestIndex, ValidatorId, RotationError<ValidatorId>> for OtherChain {
+	fn chain_params() -> ChainParams {
+		todo!()
+	}
+
 	fn try_start_construction_phase(index: RequestIndex, new_public_key: NewPublicKey, validators: Vec<ValidatorId>) -> Result<(), RotationError<ValidatorId>> {
 		todo!("mock other chain construction phase")
 	}
 }
 
 // Our pallet is awaiting on completion
-impl ConstructHandler<RequestIndex, ValidatorId, MockError> for MockRuntime {
+impl ChainEvents<RequestIndex, ValidatorId, MockError> for MockRuntime {
 	fn try_on_completion(index: RequestIndex, result: Result<ValidatorRotationRequest, ValidatorRotationError<ValidatorId>>) -> Result<(), MockError> {
 		todo!("mock construction manager")
 	}
@@ -157,7 +148,7 @@ impl ethereum::Config for MockRuntime {
 impl pallet_cf_vaults::Config<Instance1> for MockRuntime {
 	type Event = Event;
 	type Call = Call;
-	type Constructor = EthereumConstructor;
+	type Chain = EthereumChain;
 	type EnsureWitnessed = MockEnsureWitness;
 	type Witnesser = MockWitnesser;
 }
@@ -166,7 +157,7 @@ impl pallet_cf_vaults::Config<Instance1> for MockRuntime {
 impl pallet_cf_vaults::Config<Instance2> for MockRuntime {
 	type Event = Event;
 	type Call = Call;
-	type Constructor = OtherChainConstructor;
+	type Chain = OtherChain;
 	type EnsureWitnessed = MockEnsureWitness;
 	type Witnesser = MockWitnesser;
 }

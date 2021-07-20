@@ -34,7 +34,7 @@ pub mod pallet {
 	pub trait Config: frame_system::Config + ChainFlip {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-		type Vaults: ConstructHandler<RequestIndex, <Self as ChainFlip>::ValidatorId, RotationError<Self::ValidatorId>> + TryIndex<RequestIndex>;
+		type Vaults: ChainEvents<RequestIndex, <Self as ChainFlip>::ValidatorId, RotationError<Self::ValidatorId>> + TryIndex<RequestIndex>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -121,7 +121,11 @@ impl From<Vec<u8>> for ChainParams{
 	}
 }
 
-impl<T: Config> Construct<RequestIndex, T::ValidatorId, RotationError<T::ValidatorId>> for Pallet<T> {
+impl<T: Config> Chain<RequestIndex, T::ValidatorId, RotationError<T::ValidatorId>> for Pallet<T> {
+	fn chain_params() -> ChainParams {
+		ChainParams::Ethereum(vec![])
+	}
+
 	fn try_start_construction_phase(index: RequestIndex, new_public_key: NewPublicKey, validators: Vec<T::ValidatorId>) -> Result<(), RotationError<T::ValidatorId>> {
 		// Create payload for signature here
 		// function setAggKeyWithAggKey(SigData calldata sigData, Key calldata newKey)
