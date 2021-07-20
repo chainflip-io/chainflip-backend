@@ -4,9 +4,15 @@ use cf_p2p_rpc::P2PEvent;
 use futures::{Future, Stream, StreamExt};
 use jsonrpc_core_client::transports::ws::connect;
 use jsonrpc_core_client::{RpcChannel, RpcResult, TypedClient, TypedSubscriptionStream};
+use libp2p_core::identity::ed25519;
+use libp2p_core::{PeerId, PublicKey};
+use std::collections::HashMap;
 use std::pin::Pin;
+use std::str::FromStr;
 use std::task::{Context, Poll};
 use tokio_compat_02::FutureExt;
+
+use anyhow::Result;
 
 pub trait Base58 {
     fn to_base58(&self) -> String;
@@ -18,13 +24,41 @@ impl Base58 for () {
     }
 }
 
+// TODO: this is duplicated in state-chain/client/cf-p2p/rpc/src/lib.rs
+// TODO: Tests for this
+fn peer_id_from_validator_id(validator_id: &String) -> std::result::Result<PeerId, &str> {
+    sp_core::ed25519::Public::from_str(validator_id)
+        .map_err(|_| "failed parsing")
+        .and_then(|p| ed25519::PublicKey::decode(&p.0).map_err(|_| "failed decoding"))
+        .and_then(|p| Ok(PeerId::from_public_key(PublicKey::Ed25519(p))))
+}
+
 pub struct RpcP2PClient {
     url: url::Url,
+    // base58 PeerId to a ValidatorId
+    peer_to_validator: HashMap<String, ValidatorId>,
+}
+
+fn create_peer_to_validator_mapping(
+    validator_ids: Vec<ValidatorId>,
+) -> Result<HashMap<String, ValidatorId>> {
+    let mapping = HashMap::new();
+
+    for id in validator_ids {
+        let peer_id = peer_id_from_validator_id(&id).unwrap();
+        mapping.insert(peer_id, id);
+    }
+    // Ok(mapping)
 }
 
 impl RpcP2PClient {
-    pub fn new(url: url::Url) -> Self {
-        RpcP2PClient { url }
+    pub fn new(url: url::Url, validator_ids: Vec<ValidatorId>) -> Result<Self> {
+        let peer_to_validator = create_peer_to_validator_mapping(validator_ids)?;
+        // TODO: Initialise this correctly, perhaps on start?
+        Ok(RpcP2PClient {
+            url,
+            peer_to_validator,
+        })
     }
 }
 
