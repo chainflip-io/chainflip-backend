@@ -6,6 +6,7 @@ use codec::{Decode, Encode};
 use frame_support::dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable};
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
+use frame_support::traits::UnixTime;
 
 /// A trait abstracting the functionality of the witnesser
 pub trait Witnesser {
@@ -185,4 +186,11 @@ pub trait Issuance {
 
 	/// Returns the total issuance.
 	fn total_issuance() -> Self::Balance;
+}
+
+pub trait NonceProvider {
+	/// A Nonce type to be used for nonces.
+	type Nonce;
+	/// Generates a unique nonce.
+	fn generate_nonce() -> Self::Nonce;
 }

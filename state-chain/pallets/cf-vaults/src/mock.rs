@@ -11,6 +11,7 @@ use sp_runtime::{
 use crate::rotation::*;
 use crate::rotation::ChainParams::Other;
 use cf_traits::{AuctionConfirmation, AuctionEvents, AuctionError, AuctionPenalty};
+pub(super) mod time_source;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
 type Block = frame_system::mocking::MockBlock<MockRuntime>;
@@ -18,7 +19,7 @@ type Block = frame_system::mocking::MockBlock<MockRuntime>;
 type Amount = u64;
 type ValidatorId = u64;
 
-use ethereum;
+use chains::ethereum;
 
 thread_local! {
 }
@@ -82,11 +83,11 @@ impl Chain<RequestIndex, ValidatorId, RotationError<ValidatorId>> for OtherChain
 }
 
 // Our pallet is awaiting on completion
-impl ChainEvents<RequestIndex, ValidatorId, MockError> for MockRuntime {
-	fn try_on_completion(index: RequestIndex, result: Result<ValidatorRotationRequest, ValidatorRotationError<ValidatorId>>) -> Result<(), MockError> {
-		todo!("mock construction manager")
-	}
-}
+// impl ChainEvents<RequestIndex, ValidatorId, MockError> for MockRuntime {
+// 	fn try_on_completion(index: RequestIndex, result: Result<ValidatorRotationRequest, ValidatorRotationError<ValidatorId>>) -> Result<(), MockError> {
+// 		todo!("mock construction manager")
+// 	}
+// }
 
 pub struct MockEnsureWitness;
 
@@ -159,6 +160,8 @@ impl ethereum::Config for MockRuntime {
 	type Vaults = EthereumVault;
 	type EnsureWitnessed = MockEnsureWitness;
 	type Witnesser = MockWitnesser;
+	type Nonce = u64;
+	type NonceProvider = EthereumVault;
 }
 
 // Our vault for Ethereum
@@ -168,6 +171,8 @@ impl pallet_cf_vaults::Config<Instance1> for MockRuntime {
 	type Chain = EthereumChain;
 	type EnsureWitnessed = MockEnsureWitness;
 	type Witnesser = MockWitnesser;
+	type Nonce = u64;
+	type TimeSource = time_source::Mock;
 }
 
 // Another vault for OtherChain
@@ -177,6 +182,8 @@ impl pallet_cf_vaults::Config<Instance2> for MockRuntime {
 	type Chain = OtherChain;
 	type EnsureWitnessed = MockEnsureWitness;
 	type Witnesser = MockWitnesser;
+	type Nonce = u64;
+	type TimeSource = time_source::Mock;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

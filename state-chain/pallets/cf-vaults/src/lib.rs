@@ -18,19 +18,24 @@ mod rotation;
 mod mock;
 #[cfg(test)]
 mod tests;
-mod ethereum;
+mod chains;
 
 use frame_support::pallet_prelude::*;
-use cf_traits::{Witnesser, AuctionError, AuctionConfirmation, AuctionEvents, AuctionPenalty};
+use cf_traits::{Witnesser, AuctionError, AuctionConfirmation, AuctionEvents, AuctionPenalty, NonceProvider};
 pub use pallet::*;
 use sp_std::prelude::*;
 use crate::rotation::*;
 use sp_runtime::DispatchResult;
+use sp_runtime::traits::UniqueSaturatedInto;
+use frame_support::traits::UnixTime;
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_system::pallet_prelude::*;
+	use frame_support::traits::UnixTime;
+	use codec::FullCodec;
+	use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub};
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -51,6 +56,16 @@ pub mod pallet {
 		>;
 		/// Our chain
 		type Chain: Chain<RequestIndex, Self::ValidatorId, RotationError<Self::ValidatorId>>;
+		/// Our Nonce
+		type Nonce: Member
+			+ FullCodec
+			+ Copy
+			+ Default
+			+ AtLeast32BitUnsigned
+			+ MaybeSerializeDeserialize
+			+ CheckedSub;
+
+		type TimeSource: UnixTime;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -164,6 +179,16 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig {
 		fn build(&self) {}
+	}
+}
+
+impl<T: Config<I>, I: 'static> NonceProvider for Pallet<T, I> {
+	type Nonce = T::Nonce;
+
+	fn generate_nonce() -> Self::Nonce {
+		// For now, we expect the nonce to be an u64 to stay compatible with the CFE
+		let u64_nonce = T::TimeSource::now().as_nanos() as u64;
+		u64_nonce.unique_saturated_into()
 	}
 }
 

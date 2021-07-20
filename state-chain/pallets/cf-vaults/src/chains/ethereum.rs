@@ -5,7 +5,8 @@ use crate::rotation::*;
 use crate::rotation::ChainParams::Ethereum;
 use ethabi::{Bytes, Function, Param, ParamType, Address, Token};
 use sp_core::H160;
-use cf_traits::Witnesser;
+use sp_core::U256;
+use cf_traits::{Witnesser, NonceProvider};
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct EthSigningTxRequest<ValidatorId> {
@@ -26,6 +27,10 @@ pub enum EthSigningTxResponse<ValidatorId> {
 pub mod pallet {
 	use super::*;
 	use frame_system::pallet_prelude::*;
+	use cf_traits::NonceProvider;
+	use frame_support::traits::UnixTime;
+	use codec::FullCodec;
+	use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub};
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -45,6 +50,8 @@ pub mod pallet {
 			Call = <Self as pallet::Config>::Call,
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
+		type Nonce: Into<U256>;
+		type NonceProvider: NonceProvider<Nonce = Self::Nonce>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -192,7 +199,7 @@ impl<T: Config> Pallet<T> {
 			Token::Tuple(vec![
 				Token::Uint(ethabi::Uint::zero()),
 				Token::Uint(ethabi::Uint::zero()),
-				Token::Uint(ethabi::Uint::zero()),
+				Token::Uint(T::NonceProvider::generate_nonce().into()),
 				Token::Address(H160::zero()),
 			]),
 			// newKey: bytes32
