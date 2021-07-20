@@ -65,6 +65,9 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type VaultRotations<T: Config<I>, I: 'static = ()> = StorageMap<_, Blake2_128Concat, RequestIndex, VaultRotation<RequestIndex, T::ValidatorId>>;
 
+	#[pallet::storage]
+	pub(super) type Vault<T: Config<I>, I: 'static = ()> = StorageValue<_, ValidatorRotationResponse, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -306,6 +309,8 @@ impl<T: Config<I>, I: 'static>
 	fn try_response(index: RequestIndex, response: ValidatorRotationResponse) -> Result<(), RotationError<T::ValidatorId>>  {
 		// This request is complete
 		Self::clear(index);
+		// Store for this instance the keys
+		Vault::<T, I>::set(response);
 		Self::deposit_event(Event::VaultRotationCompleted(index));
 		Ok(().into())
 	}

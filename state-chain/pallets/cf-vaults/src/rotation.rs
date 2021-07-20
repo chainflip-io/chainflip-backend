@@ -116,7 +116,7 @@ impl ValidatorRotationRequest {
 	}
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
 pub struct ValidatorRotationResponse {
 	old_key: Vec<u8>,
 	new_key: Vec<u8>,
