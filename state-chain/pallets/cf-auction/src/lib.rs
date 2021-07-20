@@ -58,6 +58,7 @@ pub mod pallet {
 	use super::*;
 	use frame_support::traits::ValidatorRegistration;
 	use sp_std::ops::Add;
+	use cf_traits::{AuctionEvents, AuctionConfirmation};
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -82,8 +83,10 @@ pub mod pallet {
 		/// Minimum amount of bidders
 		#[pallet::constant]
 		type MinAuctionSize: Get<u32>;
-		/// Manage the lifecycle of our auction
-		type Handler: AuctionHandler<Self::ValidatorId, Self::Amount>;
+		/// The lifecycle of our auction
+		type Events: AuctionEvents<Self::ValidatorId, Self::Amount>;
+		/// Confirmation of an auction
+		type Confirmation: AuctionConfirmation;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -274,7 +277,7 @@ impl<T: Config> Auction for Pallet<T> {
 								winners.clone(),
 							));
 
-							T::Handler::on_completed(winners, *min_bid);
+							T::Events::on_completed(winners, *min_bid)?;
 							return Ok(phase);
 						}
 					}
@@ -290,7 +293,7 @@ impl<T: Config> Auction for Pallet<T> {
 				let result = if frame_system::Pallet::<T>::current_block_number() == Zero::zero() {
 					Ok(())
 				} else {
-					T::Handler::try_confirmation()
+					T::Confirmation::try_confirmation()
 				};
 
 				match result {

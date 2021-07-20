@@ -21,11 +21,10 @@ mod tests;
 mod ethereum;
 
 use frame_support::pallet_prelude::*;
-use cf_traits::{Witnesser, AuctionError};
+use cf_traits::{Witnesser, AuctionError, AuctionConfirmation, AuctionEvents, AuctionPenalty};
 pub use pallet::*;
 use sp_std::prelude::*;
 use crate::rotation::*;
-use cf_traits::AuctionHandler;
 use sp_runtime::DispatchResult;
 
 #[frame_support::pallet]
@@ -75,9 +74,10 @@ pub mod pallet {
 		KeygenRequestEvent(RequestIndex, KeygenRequest<T::ValidatorId>),
 		// Request a rotation
 		ValidatorRotationRequest(RequestIndex, ValidatorRotationRequest),
-		// The validator set has been rotated
+		// The vault has been rotated
 		VaultRotationCompleted(RequestIndex),
 		RotationAborted(RequestIndexes),
+		// All vaults have been rotated
 		VaultsRotated,
 	}
 
@@ -260,7 +260,7 @@ impl<T: Config<I>, I: 'static>
 				// Abort this key generation request
 				Self::abort_rotation();
 				// Do as you wish with these, I wash my hands..
-				T::Reporter::penalise(bad_validators);
+				T::Penalty::penalise(bad_validators);
 
 				Ok(())
 			}
@@ -268,7 +268,7 @@ impl<T: Config<I>, I: 'static>
 	}
 }
 
-impl<T: Config<I>, I: 'static> AuctionHandler<T::ValidatorId, T::Amount> for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> AuctionEvents<T::ValidatorId, T::Amount> for Pallet<T, I> {
 	fn on_completed(winners: Vec<T::ValidatorId>, _: T::Amount) -> Result<(), AuctionError>{
 		// Create a KeyGenRequest
 		let keygen_request = KeygenRequest {
@@ -278,7 +278,9 @@ impl<T: Config<I>, I: 'static> AuctionHandler<T::ValidatorId, T::Amount> for Pal
 
 		Self::try_request(Self::next(), keygen_request).map_err(|_| AuctionError::Abort)
 	}
+}
 
+impl<T: Config<I>, I: 'static> AuctionConfirmation for Pallet<T, I> {
 	fn try_confirmation() -> Result<(), AuctionError> {
 		if Self::is_empty() {
 			// We can now confirm the auction and rotate

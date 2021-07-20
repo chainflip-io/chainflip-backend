@@ -15,7 +15,7 @@ use sp_runtime::{
 	Perbill,
 };
 use std::cell::RefCell;
-use cf_traits::mocks::auction_handler::Mock as MockHandler;
+use cf_traits::mocks::auction_events::Mock as MockHandler;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;

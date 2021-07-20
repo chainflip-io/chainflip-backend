@@ -1,4 +1,4 @@
-use crate::{AuctionHandler, AuctionError};
+use crate::{AuctionEvents, AuctionError, AuctionConfirmation};
 use std::cell::RefCell;
 use std::marker::PhantomData;
 
@@ -15,12 +15,14 @@ pub fn clear_confirmation() {
 	TO_CONFIRM.with(|l| *l.borrow_mut() = Ok(()));
 }
 
-impl<ValidatorId, Amount> AuctionHandler<ValidatorId, Amount> for Mock<ValidatorId, Amount> {
+impl<ValidatorId, Amount> AuctionEvents<ValidatorId, Amount> for Mock<ValidatorId, Amount> {
 	fn on_completed(_winners: Vec<ValidatorId>, _min_bid: Amount) -> Result<(), AuctionError> {
 		TO_CONFIRM.with(|l| *l.borrow_mut() = Err(AuctionError::NotConfirmed));
 		Ok(())
 	}
+}
 
+impl<ValidatorId, Amount> AuctionConfirmation for Mock<ValidatorId, Amount> {
 	fn try_confirmation() -> Result<(), AuctionError> {
 		TO_CONFIRM.with(|l| {
 			(*l.borrow()).clone()

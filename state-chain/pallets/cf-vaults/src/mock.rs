@@ -10,7 +10,7 @@ use sp_runtime::{
 };
 use crate::rotation::*;
 use crate::rotation::ChainParams::Other;
-use cf_traits::{AuctionHandler, AuctionError};
+use cf_traits::{AuctionConfirmation, AuctionEvents, AuctionError, AuctionPenalty};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
 type Block = frame_system::mocking::MockBlock<MockRuntime>;
@@ -110,22 +110,35 @@ impl cf_traits::Witnesser for MockWitnesser {
 	}
 }
 
-pub struct MockAuctionPenalty;
+pub struct MockAuctionEvents<ValidatorId, Amount> {
+	_v: PhantomData<ValidatorId>,
+	_a: PhantomData<Amount>,
+}
 
-impl AuctionReporter<ValidatorId> for MockAuctionPenalty {
-	fn penalise(bad_validators: crate::rotation::BadValidators<ValidatorId>) {
-		todo!()
+impl<ValidatorId, Amount> AuctionEvents<ValidatorId, Amount> for MockAuctionEvents<ValidatorId, Amount> {
+	fn on_completed(winners: Vec<ValidatorId>, min_bid:Amount) -> Result<(), AuctionError> {
+		Ok(())
 	}
 }
 
 pub struct MockAuctionConfirmation;
-
-impl AuctionHandler<ValidatorId, Amount> for MockAuctionConfirmation {
-	fn on_completed(winners: Vec<ValidatorId>, min_bid:Amount) -> Result<(), AuctionError> {
-		Ok(())
-	}
+impl AuctionConfirmation for MockAuctionConfirmation {
 	fn try_confirmation() -> Result<(), AuctionError> {
 		Ok(())
+	}
+}
+
+pub struct MockAuctionPenalty<ValidatorId> {
+	_a : PhantomData<ValidatorId>,
+}
+
+impl<ValidatorId> AuctionPenalty<ValidatorId> for MockAuctionPenalty<ValidatorId> {
+	fn abort() {
+		todo!()
+	}
+
+	fn penalise(bad_validators: Vec<ValidatorId>) {
+		todo!()
 	}
 }
 
@@ -135,8 +148,9 @@ impl ChainFlip for MockRuntime {
 }
 
 impl AuctionManager<ValidatorId, Amount> for MockRuntime {
-	type Reporter = MockAuctionPenalty;
+	type Penalty = MockAuctionPenalty<ValidatorId>;
 	type Confirmation = MockAuctionConfirmation;
+	type Events = MockAuctionEvents<ValidatorId, Amount>;
 }
 
 impl ethereum::Config for MockRuntime {

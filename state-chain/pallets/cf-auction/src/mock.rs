@@ -9,7 +9,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 };
 use std::cell::RefCell;
-use cf_traits::mocks::auction_handler::Mock as MockHandler;
+use cf_traits::mocks::auction_events::Mock as MockEventsAndConfirmation;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -85,7 +85,8 @@ impl Config for Test {
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
-	type Handler = MockHandler<ValidatorId, Amount>;
+	type Events = MockEventsAndConfirmation<ValidatorId, Amount>;
+	type Confirmation = MockEventsAndConfirmation<ValidatorId, Amount>;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {

@@ -100,13 +100,23 @@ pub trait Auction {
 	fn waiting_on_bids() -> bool;
 	/// Move the process forward by one step, returns the phase completed or error
 	fn process() -> Result<AuctionPhase<Self::ValidatorId, Self::Amount>, AuctionError>;
+}
+
+pub trait AuctionPenalty<ValidatorId> {
 	/// Abort this auction
 	fn abort();
+	// Report on bad actors
+	fn penalise(bad_validators: Vec<ValidatorId>);
 }
 
 /// Feedback on auction and confirmation
-pub trait AuctionHandler<ValidatorId, Amount> {
+pub trait AuctionEvents<ValidatorId, Amount> {
+	// An auction has completed and the winners and the minimum bid are shared
 	fn on_completed(winners: Vec<ValidatorId>, min_bid:Amount) -> Result<(), AuctionError>;
+}
+
+pub trait AuctionConfirmation {
+	// The caller trys to confirm whether the auction can be confirmed
 	fn try_confirmation() -> Result<(), AuctionError>;
 }
 

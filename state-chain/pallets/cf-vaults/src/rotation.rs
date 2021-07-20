@@ -3,11 +3,10 @@ use frame_support::RuntimeDebug;
 use std::ops::Add;
 use frame_support::pallet_prelude::*;
 use sp_runtime::traits::AtLeast32BitUnsigned;
-use cf_traits::AuctionHandler;
+use cf_traits::{AuctionConfirmation, AuctionEvents, AuctionPenalty};
 use sp_runtime::DispatchResult;
 
 pub type NewPublicKey = Vec<u8>;
-pub type BadValidators<ValidatorId> = Vec<ValidatorId>;
 pub type RequestIndex = u32;
 pub type RequestIndexes = Vec<RequestIndex>;
 
@@ -57,11 +56,6 @@ pub trait ChainEvents<Index, ValidatorId, Error> {
 	fn try_on_completion(index: Index, result: Result<ValidatorRotationRequest, ValidatorRotationError<ValidatorId>>) -> Result<(), Error>;
 }
 
-pub trait AuctionReporter<ValidatorId> {
-	// Report on bad actors
-	fn penalise(bad_validators: BadValidators<ValidatorId>);
-}
-
 // A trait covering those things we find dearly in ChainFlip
 pub trait ChainFlip {
 	/// An amount for a bid
@@ -71,8 +65,9 @@ pub trait ChainFlip {
 }
 
 pub trait AuctionManager<ValidatorId, Amount> {
-	type Reporter: AuctionReporter<ValidatorId>;
-	type Confirmation: AuctionHandler<ValidatorId, Amount>;
+	type Penalty: AuctionPenalty<ValidatorId>;
+	type Confirmation: AuctionConfirmation;
+	type Events: AuctionEvents<ValidatorId, Amount>;
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
@@ -100,7 +95,7 @@ pub enum KeygenResponse<ValidatorId> {
 	Success(NewPublicKey),
 	// Something went wrong and it has failed.
 	// Re-run the auction minus the bad validators
-	Failure(BadValidators<ValidatorId>),
+	Failure(Vec<ValidatorId>),
 }
 
 pub enum ValidatorRotationError<ValidatorId> {
