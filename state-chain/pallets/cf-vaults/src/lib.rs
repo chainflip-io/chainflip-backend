@@ -94,7 +94,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
-		// Does this need to be more than 2/3?
+		// 2/3 threshold from our `new` validators
 		#[pallet::weight(10_000)]
 		pub fn witness_keygen_response(
 			origin: OriginFor<T>,
@@ -120,8 +120,7 @@ pub mod pallet {
 			}
 		}
 
-		// We have witnessed a rotation, my eyes!
-		// Assumption here is that it is 2/3 threshold
+		// 2/3 threshold from our old validators
 		#[pallet::weight(10_000)]
 		pub fn witness_vault_rotation_response(
 			origin: OriginFor<T>,

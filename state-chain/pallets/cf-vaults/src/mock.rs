@@ -155,7 +155,10 @@ impl AuctionManager<ValidatorId, Amount> for MockRuntime {
 
 impl ethereum::Config for MockRuntime {
 	type Event = Event;
+	type Call = Call;
 	type Vaults = EthereumVault;
+	type EnsureWitnessed = MockEnsureWitness;
+	type Witnesser = MockWitnesser;
 }
 
 // Our vault for Ethereum

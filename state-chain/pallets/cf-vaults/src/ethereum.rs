@@ -5,6 +5,7 @@ use crate::rotation::*;
 use crate::rotation::ChainParams::Ethereum;
 use ethabi::{Bytes, Function, Param, ParamType, Address, Token};
 use sp_core::H160;
+use cf_traits::Witnesser;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct EthSigningTxRequest<ValidatorId> {
@@ -35,6 +36,15 @@ pub mod pallet {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		type Vaults: ChainEvents<RequestIndex, <Self as ChainFlip>::ValidatorId, RotationError<Self::ValidatorId>> + TryIndex<RequestIndex>;
+		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
+		type Call: From<Call<Self>> + IsType<<Self as frame_system::Config>::Call>;
+		/// Provides an origin check for witness transactions.
+		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
+		/// An implementation of the witnesser, allows us to define witness_* helper extrinsics.
+		type Witnesser: Witnesser<
+			Call = <Self as pallet::Config>::Call,
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -56,12 +66,25 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+
+		#[pallet::weight(10_000)]
+		pub fn witness_eth_signing_tx_response(
+			origin: OriginFor<T>,
+			request_id: RequestIndex,
+			response: EthSigningTxResponse<T::ValidatorId>,
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			let call = Call::<T>::eth_signing_tx_response(request_id, response);
+			T::Witnesser::witness(who, call.into())
+		}
+
 		#[pallet::weight(10_000)]
 		pub fn eth_signing_tx_response(
 			origin: OriginFor<T>,
 			request_id: RequestIndex,
 			response: EthSigningTxResponse<T::ValidatorId>
 		) -> DispatchResultWithPostInfo {
+			T::EnsureWitnessed::ensure_origin(origin)?;
 			T::Vaults::try_is_valid(request_id)?;
 			match Self::try_response(request_id, response) {
 				Ok(_) => Ok(().into()),
