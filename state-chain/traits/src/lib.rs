@@ -106,7 +106,7 @@ pub trait Auction {
 
 /// Feedback on auction and confirmation
 pub trait AuctionHandler<ValidatorId, Amount> {
-	fn on_completed(winners: Vec<ValidatorId>, min_bid:Amount);
+	fn on_completed(winners: Vec<ValidatorId>, min_bid:Amount) -> Result<(), AuctionError>;
 	fn try_confirmation() -> Result<(), AuctionError>;
 }
 

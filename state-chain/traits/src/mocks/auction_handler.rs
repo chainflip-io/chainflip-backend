@@ -16,8 +16,9 @@ pub fn clear_confirmation() {
 }
 
 impl<ValidatorId, Amount> AuctionHandler<ValidatorId, Amount> for Mock<ValidatorId, Amount> {
-	fn on_completed(_winners: Vec<ValidatorId>, _min_bid: Amount) {
+	fn on_completed(_winners: Vec<ValidatorId>, _min_bid: Amount) -> Result<(), AuctionError> {
 		TO_CONFIRM.with(|l| *l.borrow_mut() = Err(AuctionError::NotConfirmed));
+		Ok(())
 	}
 
 	fn try_confirmation() -> Result<(), AuctionError> {

@@ -130,8 +130,8 @@ impl AuctionReporter<ValidatorId> for MockAuctionPenalty {
 pub struct MockAuctionConfirmation;
 
 impl AuctionHandler<ValidatorId, Amount> for MockAuctionConfirmation {
-	fn on_completed(winners: Vec<ValidatorId>, min_bid:Amount) {
-		
+	fn on_completed(winners: Vec<ValidatorId>, min_bid:Amount) -> Result<(), AuctionError> {
+		Ok(())
 	}
 	fn try_confirmation() -> Result<(), AuctionError> {
 		Ok(())
