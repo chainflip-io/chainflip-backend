@@ -221,6 +221,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn abort_rotation() {
 		Self::deposit_event(Event::RotationAborted(VaultRotations::<T, I>::iter().map(|(k, _)| k).collect()));
 		VaultRotations::<T, I>::remove_all();
+		T::Penalty::abort();
 	}
 }
 
