@@ -78,6 +78,7 @@ pub mod pallet {
 		// The validator set has been rotated
 		VaultRotationCompleted(RequestIndex),
 		RotationAborted(RequestIndexes),
+		VaultsRotated,
 	}
 
 	#[pallet::error]
@@ -110,7 +111,6 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			request_id: RequestIndex,
 			response: KeygenResponse<T::ValidatorId>,
-
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			Self::try_is_valid(request_id)?;
@@ -195,12 +195,15 @@ impl<T: Config<I>, I: 'static> TryIndex<RequestIndex> for Pallet<T, I> {
 
 impl<T: Config<I>, I: 'static> Index<RequestIndex> for Pallet<T, I> {
 	fn next() -> RequestIndex {
-		let idx = RequestIdx::<T, I>::mutate(|idx| *idx + 1);
-		idx
+		RequestIdx::<T, I>::mutate(|idx| *idx + 1)
 	}
 
 	fn clear(idx: RequestIndex) {
 		VaultRotations::<T, I>::remove(idx);
+	}
+
+	fn is_empty() -> bool {
+		VaultRotations::<T, I>::iter().count() == 0
 	}
 
 	fn is_valid(idx: RequestIndex) -> bool {
@@ -216,6 +219,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn abort_rotation() {
+		Self::deposit_event(Event::RotationAborted(VaultRotations::<T, I>::iter().map(|(k, _)| k).collect()));
 		VaultRotations::<T, I>::remove_all();
 	}
 }
@@ -311,9 +315,7 @@ impl<T: Config<I>, I: 'static> ConstructHandler<RequestIndex, T::ValidatorId, Ro
 		result: Result<ValidatorRotationRequest, ValidatorRotationError<T::ValidatorId>>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		match result {
-			Ok(request) => {
-				Self::try_request(index, request)
-			}
+			Ok(request) => Self::try_request(index, request),
 			Err(_) => {
 				todo!("can we use this even?");
 				// Abort this key generation request

@@ -36,6 +36,7 @@ pub trait TryIndex<T> {
 pub trait Index<T: Add> {
 	fn next() -> T;
 	fn clear(idx: T);
+	fn is_empty() -> bool;
 	fn is_valid(idx: T) -> bool;
 }
 
@@ -72,15 +73,6 @@ pub trait AuctionManager<ValidatorId, Amount> {
 	type Reporter: AuctionReporter<ValidatorId>;
 	type Confirmation: AuctionHandler<ValidatorId, Amount>;
 }
-
-// TODO - should this be broken down into its own trait as opposed in the pallet?
-// pub trait KeyRotation<ValidatorId> {
-// 	type AuctionPenalty: AuctionPenalty<ValidatorId>;
-// 	type KeyGeneration: RequestResponse<KeygenRequest<ValidatorId>, KeygenResponse<ValidatorId>>;
-// 	type Construct: Construct<KeygenResponse<ValidatorId>>;
-// 	type ConstructionManager: ConstructionManager;
-// 	type Rotation: RequestResponse<ValidatorRotationRequest, ValidatorRotationResponse>;
-// }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum ChainParams {
