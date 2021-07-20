@@ -40,9 +40,7 @@ mod tests;
 #[macro_use]
 extern crate assert_matches;
 
-use cf_traits::{
-	Auction, AuctionError, AuctionPhase, AuctionRange, BidderProvider, AuctionHandler
-};
+use cf_traits::{Auction, AuctionError, AuctionPhase, AuctionRange, BidderProvider, AuctionPenalty, AuctionEvents, AuctionConfirmation};
 use frame_support::pallet_prelude::*;
 use frame_support::sp_std::mem;
 use frame_support::traits::ValidatorRegistration;
@@ -108,6 +106,11 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn current_auction_index)]
 	pub(super) type CurrentAuctionIndex<T: Config> = StorageValue<_, T::AuctionIndex, ValueQuery>;
+
+	/// The current auction we are in
+	#[pallet::storage]
+	#[pallet::getter(fn bad_validators)]
+	pub(super) type BadValidators<T: Config> = StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -238,11 +241,15 @@ impl<T: Config> Auction for Pallet<T> {
 			// bidders and change our state ready for an 'Auction' to be ran
 			AuctionPhase::WaitingForBids(_, _) => {
 				let mut bidders = T::BidderProvider::get_bidders();
-				// Rule #1 - If we have a bid at 0 then please leave
+				// Rule #1 - They are not bad
+				bidders.retain(|(id, _)| !BadValidators::<T>::get().contains(id));
+				// They aren't bad now
+				BadValidators::<T>::kill();
+				// Rule #2 - If we have a bid at 0 then please leave
 				bidders.retain(|(_, amount)| !amount.is_zero());
-				// Rule #2 - They are registered
+				// Rule #3 - They are registered
 				bidders.retain(|(id, _)| T::Registrar::is_registered(id));
-				// Rule #3 - Confirm we have our set size
+				// Rule #4 - Confirm we have our set size
 				if (bidders.len() as u32) < <AuctionSizeRange<T>>::get().0 {
 					return Err(AuctionError::MinValidatorSize);
 				};
@@ -316,9 +323,15 @@ impl<T: Config> Auction for Pallet<T> {
 			}
 		};
 	}
+}
 
+impl<T: Config> AuctionPenalty<T::ValidatorId> for Pallet<T> {
 	fn abort() {
 		<CurrentPhase<T>>::put(AuctionPhase::default());
 		Self::deposit_event(Event::AuctionAborted(<CurrentAuctionIndex<T>>::get()));
+	}
+
+	fn penalise(bad_validators: Vec<T::ValidatorId>) {
+		BadValidators::<T>::set(bad_validators);
 	}
 }
