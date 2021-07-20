@@ -86,24 +86,6 @@ impl RpcP2PClient {
     }
 }
 
-// impl From<P2PEvent> for P2PMessage {
-//     fn from(p2p_event: P2PEvent) -> Self {
-//         match p2p_event {
-//             // How do we get the mapping into this?
-//             P2PEvent::Received(peer_id, msg) => P2PMessage {
-//                 sender_id: ValidatorId::from_base58(&peer_id)
-//                     .expect("valid 58 encoding of peer id"),
-//                 data: msg,
-//             },
-//             P2PEvent::PeerConnected(peer_id) | P2PEvent::PeerDisconnected(peer_id) => P2PMessage {
-//                 sender_id: ValidatorId::from_base58(&peer_id)
-//                     .expect("valid 58 encoding of peer id"),
-//                 data: vec![],
-//             },
-//         }
-//     }
-// }
-
 pub struct RpcP2PClientStream {
     inner: Pin<Box<dyn Stream<Item = RpcResult<P2PEvent>> + Send>>,
     peer_to_validator_mapping: RpcP2PClientMapping,
@@ -276,7 +258,7 @@ mod tests {
     #[test]
     fn client_api() {
         let server = TestServer::serve();
-        let mut glue_client = RpcP2PClient::new(server.url);
+        let mut glue_client = RpcP2PClient::new(server.url, RpcP2PClientMapping::default());
         let run = async {
             let result = glue_client
                 .send(&ValidatorId::new("100"), "disco".as_bytes())
