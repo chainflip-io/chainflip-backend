@@ -9,8 +9,8 @@ use sp_core::H160;
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct EthSigningTxRequest<ValidatorId> {
 	// Payload to be signed by the existing aggregate key
-	payload: Vec<u8>,
-	validators: Vec<ValidatorId>,
+	pub(crate) payload: Vec<u8>,
+	pub(crate) validators: Vec<ValidatorId>,
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
@@ -64,12 +64,8 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::Vaults::try_is_valid(request_id)?;
 			match Self::try_response(request_id, response) {
-				Ok(_) => {
-					Ok(().into())
-				}
-				Err(_) => {
-					Err(Error::<T>::EthSigningTxResponseFailed.into())
-				}
+				Ok(_) => Ok(().into()),
+				Err(_) => Err(Error::<T>::EthSigningTxResponseFailed.into())
 			}
 		}
 	}
@@ -131,11 +127,10 @@ impl<T: Config> Construct<RequestIndex, T::ValidatorId, RotationError<T::Validat
 		// function setAggKeyWithAggKey(SigData calldata sigData, Key calldata newKey)
 		match Self::encode_set_agg_key_with_agg_key(new_public_key) {
 			Ok(payload) => {
-				T::Vaults::try_on_completion(index, Ok(
-					ValidatorRotationRequest {
-						chain: payload.into(),
-					}
-				))
+				Self::try_request(index, EthSigningTxRequest {
+					validators,
+					payload,
+				})
 			}
 			Err(_) => {
 				T::Vaults::try_on_completion(index, Err(ValidatorRotationError::FailedConstruct))
