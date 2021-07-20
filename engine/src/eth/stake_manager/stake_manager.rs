@@ -147,9 +147,7 @@ impl StakeManager {
                 deployed_address: H160::from_str(deployed_address)?,
                 contract,
             }),
-            Err(e) => {
-                panic!("{}", e);
-            }
+            Err(e) => Err(e),
         }
     }
 
