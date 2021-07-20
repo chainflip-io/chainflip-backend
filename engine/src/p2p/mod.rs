@@ -8,7 +8,7 @@ mod rpc;
 use std::convert::TryInto;
 
 pub use conductor::P2PConductor;
-pub use rpc::RpcP2PClient;
+pub use rpc::{RpcP2PClient, RpcP2PClientMapping};
 
 use serde::{Deserialize, Serialize};
 

@@ -2,7 +2,7 @@ use chainflip_engine::{
     eth,
     health::spawn_health_check,
     mq::{nats_client::NatsMQClientFactory, IMQClientFactory},
-    p2p::{P2PConductor, RpcP2PClient, ValidatorId},
+    p2p::{P2PConductor, RpcP2PClient, RpcP2PClientMapping, ValidatorId},
     settings::Settings,
     signing,
     signing::db::PersistentKeyDB,
@@ -38,7 +38,7 @@ async fn main() {
 
     let url = url::Url::parse(&format!("ws://127.0.0.1:{}", ws_port)).expect("valid ws port");
     // initialise this with the list of validators currently on the chain
-    let p2p_client = RpcP2PClient::new(url);
+    let p2p_client = RpcP2PClient::new(url, RpcP2PClientMapping::default());
     let mq_client = *mq_factory
         .create()
         .await

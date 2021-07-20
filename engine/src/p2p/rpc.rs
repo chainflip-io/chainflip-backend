@@ -35,58 +35,88 @@ fn peer_id_from_validator_id(validator_id: &String) -> std::result::Result<PeerI
 
 pub struct RpcP2PClient {
     url: url::Url,
+    peer_to_validator_mapping: RpcP2PClientMapping,
+}
+
+#[derive(Clone, Debug)]
+pub struct RpcP2PClientMapping {
     // base58 PeerId to a ValidatorId
     peer_to_validator: HashMap<String, ValidatorId>,
 }
 
-fn create_peer_to_validator_mapping(
-    validator_ids: Vec<ValidatorId>,
-) -> Result<HashMap<String, ValidatorId>> {
-    let mapping = HashMap::new();
-
-    for id in validator_ids {
-        let peer_id = peer_id_from_validator_id(&id).unwrap();
-        mapping.insert(peer_id, id);
-    }
-    // Ok(mapping)
-}
-
-impl RpcP2PClient {
-    pub fn new(url: url::Url, validator_ids: Vec<ValidatorId>) -> Result<Self> {
-        let peer_to_validator = create_peer_to_validator_mapping(validator_ids)?;
-        // TODO: Initialise this correctly, perhaps on start?
-        Ok(RpcP2PClient {
-            url,
-            peer_to_validator,
-        })
+impl Default for RpcP2PClientMapping {
+    fn default() -> Self {
+        Self {
+            peer_to_validator: HashMap::default(),
+        }
     }
 }
 
-impl From<P2PEvent> for P2PMessage {
-    fn from(p2p_event: P2PEvent) -> Self {
+impl RpcP2PClientMapping {
+    pub fn new(validator_ids: Vec<ValidatorId>) -> Self {
+        let mut peer_to_validator = HashMap::new();
+
+        for id in validator_ids {
+            let peer_id = peer_id_from_validator_id(&id.to_base58()).unwrap();
+            peer_to_validator.insert(peer_id.to_base58(), id);
+        }
+        Self { peer_to_validator }
+    }
+
+    pub fn from_p2p_event_to_p2p_message(&self, p2p_event: P2PEvent) -> P2PMessage {
         match p2p_event {
             P2PEvent::Received(peer_id, msg) => P2PMessage {
-                sender_id: ValidatorId::from_base58(&peer_id)
-                    .expect("valid 58 encoding of peer id"),
+                sender_id: self.peer_to_validator.get(&peer_id).unwrap().clone(),
                 data: msg,
             },
             P2PEvent::PeerConnected(peer_id) | P2PEvent::PeerDisconnected(peer_id) => P2PMessage {
-                sender_id: ValidatorId::from_base58(&peer_id)
-                    .expect("valid 58 encoding of peer id"),
+                sender_id: self.peer_to_validator.get(&peer_id).unwrap().clone(),
                 data: vec![],
             },
         }
     }
 }
 
+impl RpcP2PClient {
+    pub fn new(url: url::Url, peer_to_validator_mapping: RpcP2PClientMapping) -> Self {
+        RpcP2PClient {
+            url,
+            peer_to_validator_mapping,
+        }
+    }
+}
+
+// impl From<P2PEvent> for P2PMessage {
+//     fn from(p2p_event: P2PEvent) -> Self {
+//         match p2p_event {
+//             // How do we get the mapping into this?
+//             P2PEvent::Received(peer_id, msg) => P2PMessage {
+//                 sender_id: ValidatorId::from_base58(&peer_id)
+//                     .expect("valid 58 encoding of peer id"),
+//                 data: msg,
+//             },
+//             P2PEvent::PeerConnected(peer_id) | P2PEvent::PeerDisconnected(peer_id) => P2PMessage {
+//                 sender_id: ValidatorId::from_base58(&peer_id)
+//                     .expect("valid 58 encoding of peer id"),
+//                 data: vec![],
+//             },
+//         }
+//     }
+// }
+
 pub struct RpcP2PClientStream {
     inner: Pin<Box<dyn Stream<Item = RpcResult<P2PEvent>> + Send>>,
+    peer_to_validator_mapping: RpcP2PClientMapping,
 }
 
 impl RpcP2PClientStream {
-    pub fn new(stream: TypedSubscriptionStream<P2PEvent>) -> Self {
+    pub fn new(
+        stream: TypedSubscriptionStream<P2PEvent>,
+        peer_to_validator_mapping: RpcP2PClientMapping,
+    ) -> Self {
         RpcP2PClientStream {
             inner: Box::pin(stream),
+            peer_to_validator_mapping,
         }
     }
 }
@@ -99,8 +129,11 @@ impl Stream for RpcP2PClientStream {
         loop {
             match this.inner.poll_next_unpin(cx) {
                 Poll::Ready(Some(result)) => {
-                    if let Ok(result) = result {
-                        return Poll::Ready(Some(result.into()));
+                    if let Ok(p2p_event) = result {
+                        return Poll::Ready(Some(
+                            self.peer_to_validator_mapping
+                                .from_p2p_event_to_p2p_message(p2p_event),
+                        ));
                     }
                 }
                 Poll::Ready(None) => return Poll::Ready(None),
@@ -148,7 +181,10 @@ where
             .subscribe_notifications()
             .map_err(|_| P2PNetworkClientError::Rpc)?;
 
-        Ok(RpcP2PClientStream::new(sub))
+        Ok(RpcP2PClientStream::new(
+            sub,
+            self.peer_to_validator_mapping.clone(),
+        ))
     }
 }
 
