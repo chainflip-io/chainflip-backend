@@ -97,7 +97,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
-		// 2/3 threshold from our `new` validators
+		// 2/3 threshold from our old validators
 		#[pallet::weight(10_000)]
 		pub fn witness_keygen_response(
 			origin: OriginFor<T>,
