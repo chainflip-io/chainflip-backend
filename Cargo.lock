@@ -904,6 +904,7 @@ dependencies = [
  "async-std",
  "async-stream",
  "async-trait",
+ "bincode",
  "bs58",
  "cf-p2p-rpc",
  "cf-traits",
@@ -923,6 +924,7 @@ dependencies = [
  "jsonrpc-core-client 17.1.0",
  "jsonrpc-http-server 17.1.0",
  "jsonrpc-ws-server 17.1.0",
+ "kvdb-rocksdb",
  "lazy_static",
  "log 0.4.14",
  "nats_test_server",
@@ -4938,7 +4940,7 @@ name = "pallet-cf-staking"
 version = "0.1.0"
 dependencies = [
  "cf-traits",
- "ethabi 14.0.0",
+ "ethabi 13.0.0",
  "ethereum-types",
  "frame-support",
  "frame-system",
@@ -4950,6 +4952,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "substrate-wasm-builder",
 ]
 
 [[package]]

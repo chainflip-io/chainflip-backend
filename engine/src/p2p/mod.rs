@@ -8,12 +8,13 @@ mod rpc;
 use std::convert::TryInto;
 
 pub use conductor::P2PConductor;
+pub use rpc::RpcP2PClient;
 
 use serde::{Deserialize, Serialize};
 
-use crate::p2p::rpc::Base58;
 use async_trait::async_trait;
 use futures::Stream;
+use rpc::Base58;
 
 #[derive(Debug)]
 pub enum P2PNetworkClientError {
@@ -31,9 +32,7 @@ pub trait P2PNetworkClient<B: Base58, S: Stream<Item = P2PMessage>> {
     /// Send to a specific `validator` only
     async fn send(&self, to: &B, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError>;
 
-    async fn take_stream(&mut self) -> Result<S, P2PNetworkClientError> {
-        Err(P2PNetworkClientError::Rpc)
-    }
+    async fn take_stream(&mut self) -> Result<S, P2PNetworkClientError>;
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize, Eq, PartialOrd, Ord, Hash)]

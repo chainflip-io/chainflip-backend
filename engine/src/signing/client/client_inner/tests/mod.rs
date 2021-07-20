@@ -1,6 +1,9 @@
+mod db_tests;
 mod helpers;
 mod keygen_unit_tests;
 mod signing_unit_tests;
+
+pub use helpers::KeygenPhase1Data;
 
 use lazy_static::lazy_static;
 #[allow(unused_imports)]
@@ -16,7 +19,6 @@ use crate::{
     p2p::ValidatorId,
     signing::{
         client::{KeyId, KeygenInfo, MultisigInstruction, SigningInfo, PHASE_TIMEOUT},
-        crypto::Parameters,
         MessageHash, MessageInfo,
     },
 };

@@ -1,6 +1,5 @@
 use std::{sync::Arc, time::Instant};
 
-use curv::elliptic::curves::traits::ECPoint;
 use itertools::Itertools;
 use log::*;
 use tokio::sync::mpsc::UnboundedSender;
@@ -10,9 +9,7 @@ use crate::{
     signing::{
         client::{
             client_inner::{
-                client_inner::{KeyGenMessageWrapped, KeygenSuccess},
-                shared_secret::StageStatus,
-                KeygenOutcome,
+                client_inner::KeyGenMessageWrapped, shared_secret::StageStatus, KeygenOutcome,
             },
             KeyId,
         },
@@ -53,17 +50,17 @@ pub struct KeygenState {
     /// them inside `KeygenResultInfo` when we create the key
     params: Parameters,
     /// Last time we were able to make progress
-    pub(super) last_message_timestamp: Instant,
+    pub last_message_timestamp: Instant,
 }
 
 /// A command to the other module to send data to a particular node
 struct MessageToSend {
-    pub(super) to_idx: usize,
-    pub(super) data: Vec<u8>,
+    pub to_idx: usize,
+    pub data: Vec<u8>,
 }
 
 impl KeygenState {
-    pub(super) fn initiate(
+    pub fn initiate(
         idx: usize,
         params: Parameters,
         idx_map: ValidatorMaps,
@@ -125,7 +122,7 @@ impl KeygenState {
     }
 
     /// Returned value will signal that the key is ready
-    pub(super) fn process_keygen_message(
+    pub fn process_keygen_message(
         &mut self,
         sender_id: ValidatorId,
         msg: KeygenData,
@@ -249,15 +246,6 @@ impl KeygenState {
                 info!("[{}] SHARED KEY IS READY 👍", self.us());
 
                 self.stage = KeygenStage::KeyReady;
-
-                let keygen_success = KeygenSuccess {
-                    key_id: self.key_id,
-                    key: key.aggregate_pubkey.get_element(),
-                };
-
-                self.send_event(InnerEvent::KeygenResult(KeygenOutcome::Success(
-                    keygen_success,
-                )));
 
                 let key_info = KeygenResultInfo {
                     key: Arc::new(key),

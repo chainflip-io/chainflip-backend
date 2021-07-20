@@ -12,8 +12,7 @@ mod sc_event;
 /// Contains helper methods for state chain code
 mod helpers;
 
-/// Contains method to get the nodes state chain id on initialisation
-pub mod node_id;
+pub use helpers::get_signer_from_privkey_file;
 
 // ==== Pallet support for the state chain =====
 

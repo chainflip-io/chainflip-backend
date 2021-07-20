@@ -6,8 +6,8 @@ use crate::{
     p2p::ValidatorId,
     settings,
     signing::{
-        crypto::Signature, KeyId, KeygenOutcome, KeygenSuccess, MessageHash, MessageInfo,
-        MultisigEvent, MultisigInstruction, SigningInfo, SigningOutcome, SigningSuccess,
+        KeyId, KeygenOutcome, KeygenSuccess, MessageHash, MultisigEvent, MultisigInstruction,
+        SigningInfo, SigningOutcome, SigningSuccess,
     },
     types::chain::Chain,
 };
@@ -18,15 +18,6 @@ use serde::{Deserialize, Serialize};
 use sp_core::Hasher;
 use sp_runtime::traits::Keccak256;
 use web3::{ethabi::Token, types::Address};
-
-use curv::{
-    arithmetic::Converter,
-    elliptic::curves::{
-        secp256_k1::Secp256k1Point,
-        traits::{ECPoint, ECScalar},
-    },
-};
-use secp256k1::PublicKey;
 
 /// Helper function, constructs and runs the [SetAggKeyWithAggKeyEncoder] asynchronously.
 pub async fn start<M: IMQClient + Clone>(
@@ -46,7 +37,7 @@ pub async fn start<M: IMQClient + Clone>(
 
 /// Details of a transaction to be broadcast to ethereum.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub(super) struct TxDetails {
+struct TxDetails {
     pub contract_address: Address,
     pub data: Vec<u8>,
 }
@@ -175,35 +166,6 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
             .expect("Should publish to MQ");
     }
 
-    fn point_to_pubkey(&self, point: Secp256k1Point) -> PublicKey {
-        let bytes_x: [u8; 32] = point
-            .x_coor()
-            .expect("Valid point should have an x coordinate")
-            .to_bytes()
-            .try_into()
-            .expect("Valid point x_coor should contain only 32 bytes");
-
-        let bytes_x = &mut bytes_x.to_vec();
-
-        let bytes_y: [u8; 32] = point
-            .y_coor()
-            .expect("valid point should have a y coordinate")
-            .to_bytes()
-            .try_into()
-            .expect("should be 32 bytes");
-
-        let bytes_y = &mut bytes_y.to_vec();
-
-        let mut bytes = Vec::new();
-        bytes.push(0x04);
-        bytes.append(bytes_x);
-        bytes.append(bytes_y);
-
-        let pubkey = PublicKey::from_slice(&bytes);
-
-        return pubkey.expect("Should be valid pubkey");
-    }
-
     // When the signed message has been received we must:
     // 1. Get the parameters (`ParameterContainer`) that we stored in state (and submitted to the signing module in encoded form) earlier
     // 2. Build a valid ethereum encoded transaction using the message hash and signature returned by the Signing module
@@ -213,9 +175,9 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
     async fn handle_set_agg_key_message_signed(&mut self, signing_success: SigningSuccess) {
         // 1. Get the data from the message hash that was signed (using the `messages` field)
         let sig = signing_success.sig;
+
         let message_info = signing_success.message_info;
-        let k_g = self.point_to_pubkey(sig.v);
-        let nonce_times_g_addr = self.nonce_times_g_addr_from_v(k_g);
+        let nonce_times_g_addr = nonce_times_g_addr_from_r(sig.r);
 
         let key_id = message_info.key_id;
         let msg_hash = message_info.hash;
@@ -225,7 +187,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
             .expect("should have been stored when asked to sign");
 
         // 2. Call build_tx with the required info
-        match self.build_tx(&msg_hash, &sig, nonce_times_g_addr, params) {
+        match self.build_tx(&msg_hash, sig.s, nonce_times_g_addr, params) {
             Ok(ref tx_details) => {
                 // 3. Send it on its way to the eth broadcaster
                 self.mq_client
@@ -249,17 +211,11 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
     fn build_tx(
         &self,
         msg: &MessageHash,
-        sig: &Signature,
+        s: [u8; 32],
         nonce_times_g_addr: [u8; 20],
         params: &ParamContainer,
     ) -> Result<TxDetails> {
-        let s: [u8; 32] = sig
-            .sigma
-            .to_big_int()
-            .to_bytes()
-            .try_into()
-            .expect("Should be a valid Signature scalar");
-        let params = self.set_agg_key_with_agg_key_param_constructor(
+        let params = set_agg_key_with_agg_key_param_constructor(
             msg.0,
             s,
             params.key_nonce,
@@ -276,34 +232,6 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         })
     }
 
-    /// v is 'r' in the literature. r = k * G where k is the nonce and G is the address generator
-    /// i.e. k * G is the pubkey generated from secret key "k"
-    fn nonce_times_g_addr_from_v(&self, v: secp256k1::PublicKey) -> [u8; 20] {
-        let v_pub: [u8; 64] = v.serialize_uncompressed()[1..]
-            .try_into()
-            .expect("Should be a valid pubkey");
-
-        // calculate nonce times g addr - the hash over
-        let nonce_times_g_addr_hash = Keccak256::hash(&v_pub).as_bytes().to_owned();
-
-        // take the last 160bits (20 bytes)
-        let nonce_times_g_addr: [u8; 20] = nonce_times_g_addr_hash[140..]
-            .try_into()
-            .expect("Should only be 20 bytes long");
-
-        return nonce_times_g_addr;
-    }
-
-    // Take a secp256k1 pubkey and return the pubkey_x and pubkey_y_parity
-    fn destructure_pubkey(&self, pubkey: secp256k1::PublicKey) -> ([u8; 32], u8) {
-        let pubkey_bytes: [u8; 33] = pubkey.serialize();
-        let pubkey_y_parity_byte = pubkey_bytes[0];
-        let pubkey_y_parity = if pubkey_y_parity_byte == 2 { 0u8 } else { 1u8 };
-        let pubkey_x: [u8; 32] = pubkey_bytes[1..].try_into().expect("Is valid pubkey");
-
-        return (pubkey_x, pubkey_y_parity);
-    }
-
     // This has nothing to do with building an ETH transaction.
     // We encode the tx like this, in eth format, because this is how the contract will
     // serialise the data to verify the signature over the message hash
@@ -313,7 +241,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
     ) -> Result<(Vec<u8>, ParamContainer)> {
         let pubkey = keygen_success.key;
 
-        let (pubkey_x, pubkey_y_parity) = self.destructure_pubkey(pubkey);
+        let (pubkey_x, pubkey_y_parity) = destructure_pubkey(pubkey);
 
         let param_container = ParamContainer {
             key_id: keygen_success.key_id,
@@ -322,7 +250,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
             key_nonce: [0u8; 32],
         };
 
-        let params = self.set_agg_key_with_agg_key_param_constructor(
+        let params = set_agg_key_with_agg_key_param_constructor(
             [0u8; 32],
             [0u8; 32],
             [0u8; 32],
@@ -346,91 +274,99 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
 
         return Ok(encoded_data);
     }
+}
 
-    // not sure if key nonce should be u64...
-    // sig = s in the literature. The scalar of the signature
-    fn set_agg_key_with_agg_key_param_constructor(
-        &self,
-        msg_hash: [u8; 32],
-        sig: [u8; 32],
-        key_nonce: [u8; 32],
-        nonce_times_g_addr: [u8; 20],
-        pubkey_x: [u8; 32],
-        pubkey_y_parity: u8,
-    ) -> [Token; 2] {
-        // These are two arguments, SigData and Key from:
-        // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol
-        [
-            // SigData
-            Token::Tuple(vec![
-                Token::Uint(msg_hash.into()),              // msgHash
-                Token::Uint(sig.into()), // sig - this 's' in the literature, the signature scalar
-                Token::Uint(key_nonce.into()), // key nonce
-                Token::Address(nonce_times_g_addr.into()), // nonceTimesGAddr - this is r in the literature
-            ]),
-            // Key - the signing module will sign over the params, containing this
-            Token::Tuple(vec![
-                Token::Uint(pubkey_x.into()),        // pubkeyX
-                Token::Uint(pubkey_y_parity.into()), // pubkeyYparity
-            ]),
-        ]
-    }
+// not sure if key nonce should be u64...
+// sig = s in the literature. The scalar of the signature
+fn set_agg_key_with_agg_key_param_constructor(
+    msg_hash: [u8; 32],
+    sig: [u8; 32],
+    key_nonce: [u8; 32],
+    nonce_times_g_addr: [u8; 20],
+    pubkey_x: [u8; 32],
+    pubkey_y_parity: u8,
+) -> [Token; 2] {
+    // These are two arguments, SigData and Key from:
+    // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol
+    [
+        // SigData
+        Token::Tuple(vec![
+            Token::Uint(msg_hash.into()),              // msgHash
+            Token::Uint(sig.into()), // sig - this 's' in the literature, the signature scalar
+            Token::Uint(key_nonce.into()), // key nonce
+            Token::Address(nonce_times_g_addr.into()), // nonceTimesGAddr - this is r in the literature
+        ]),
+        // Key - the signing module will sign over the params, containing this
+        Token::Tuple(vec![
+            Token::Uint(pubkey_x.into()),        // pubkeyX
+            Token::Uint(pubkey_y_parity.into()), // pubkeyYparity
+        ]),
+    ]
+}
+
+/// r = k * G where k is the nonce and G is the generator point
+/// i.e. `k * G` is the "pubkey" generated from "secret key" `k`
+fn nonce_times_g_addr_from_r(r: secp256k1::PublicKey) -> [u8; 20] {
+    let v_pub: [u8; 64] = r.serialize_uncompressed()[1..]
+        .try_into()
+        .expect("Should be a valid pubkey");
+
+    // calculate nonce times g addr - the hash over
+    let nonce_times_g_addr_hash = Keccak256::hash(&v_pub).as_bytes().to_owned();
+
+    // take the last 160bits (20 bytes)
+    let nonce_times_g_addr: [u8; 20] = nonce_times_g_addr_hash[12..]
+        .try_into()
+        .expect("Should only be 20 bytes long");
+
+    return nonce_times_g_addr;
+}
+
+// Take a secp256k1 pubkey and return the pubkey_x and pubkey_y_parity
+fn destructure_pubkey(pubkey: secp256k1::PublicKey) -> ([u8; 32], u8) {
+    let pubkey_bytes: [u8; 33] = pubkey.serialize();
+    let pubkey_y_parity_byte = pubkey_bytes[0];
+    let pubkey_y_parity = if pubkey_y_parity_byte == 2 { 0u8 } else { 1u8 };
+    let pubkey_x: [u8; 32] = pubkey_bytes[1..].try_into().expect("Is valid pubkey");
+
+    return (pubkey_x, pubkey_y_parity);
 }
 
 #[cfg(test)]
 mod test_eth_tx_encoder {
     use super::*;
-    use curv::arithmetic::Converter;
     use hex;
     use num::BigInt;
+    use secp256k1::PublicKey;
     use std::str::FromStr;
 
     use crate::mq::mq_mock::MQMock;
 
+    const AGG_PRIV_HEX_1: &str = "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba";
+    const AGG_PRIV_HEX_2: &str = "bbade2da39cfc81b1b64b6a2d66531ed74dd01803dc5b376ce7ad548bbe23608";
+    const NONCE_TIMES_G_ADDR: &str = "02eDd8421D87B7c0eE433D3AFAd3aa2Ef039f27a";
+    const SIGNATURE_S: &str =
+        "86256580123538456061655860770396085945007591306530617821168588559087896188216";
+    const MESSAGE_HASH: &str =
+        "19838331578708755702960229198816480402256567085479269042839672688267843389518";
+
     #[test]
-    fn test_point_to_pubkey() {
-        // Serialized point: "{\"x\":\"8d13221e3a7326a34dd45214ba80116dd142e4b5ff3ce66a8dc7bfa0378b795\",\"y\":\"5d41ac1477614b5c0848d50dbd565ea2807bcba1df0df07a8217e9f7f7c2be88\"}"
-        const BASE_POINT2_X: [u8; 32] = [
-            0x08, 0xd1, 0x32, 0x21, 0xe3, 0xa7, 0x32, 0x6a, 0x34, 0xdd, 0x45, 0x21, 0x4b, 0xa8,
-            0x01, 0x16, 0xdd, 0x14, 0x2e, 0x4b, 0x5f, 0xf3, 0xce, 0x66, 0xa8, 0xdc, 0x7b, 0xfa,
-            0x03, 0x78, 0xb7, 0x95,
+    fn test_nonce_times_g_addr_from_r() {
+        let s = secp256k1::Secp256k1::signing_only();
+        let sk_1 = secp256k1::SecretKey::from_str(AGG_PRIV_HEX_1).unwrap();
+
+        let pk_2 = PublicKey::from_secret_key(&s, &sk_1);
+
+        let res = nonce_times_g_addr_from_r(pk_2);
+
+        // This value was generated by the test itself. Basically
+        // just making sure that this doesn't change over time
+        // (and that `nonce_times_g_addr_from_r` above does not crash)
+        let expected = [
+            245, 23, 187, 128, 78, 210, 214, 7, 225, 83, 13, 1, 40, 174, 40, 161, 228, 112, 42, 190,
         ];
-        const BASE_POINT2_Y: [u8; 32] = [
-            0x5d, 0x41, 0xac, 0x14, 0x77, 0x61, 0x4b, 0x5c, 0x08, 0x48, 0xd5, 0x0d, 0xbd, 0x56,
-            0x5e, 0xa2, 0x80, 0x7b, 0xcb, 0xa1, 0xdf, 0x0d, 0xf0, 0x7a, 0x82, 0x17, 0xe9, 0xf7,
-            0xf7, 0xc2, 0xbe, 0x88,
-        ];
 
-        let big_int_x = curv::BigInt::from_bytes(&BASE_POINT2_X);
-        let big_int_y = curv::BigInt::from_bytes(&BASE_POINT2_Y);
-        let point: Secp256k1Point = Secp256k1Point::from_coor(&big_int_x, &big_int_y);
-
-        // assert on point to pubkey
-        let mq = MQMock::new();
-
-        let mq_client = mq.get_client();
-
-        let settings = settings::test_utils::new_test_settings().unwrap();
-
-        let encoder = SetAggKeyWithAggKeyEncoder::new(
-            settings.eth.key_manager_eth_address.as_str(),
-            settings.signing.genesis_validator_ids,
-            mq_client,
-        )
-        .unwrap();
-
-        // we rotate to key 2, so this is the pubkey we want to sign over
-        // TODO: Set the actual expected pubkey. THis is not it, it's a random pubkey
-        // (and I'd rather it not be generated from my own implementation)
-        let expected_pubkey = PublicKey::from_str(
-            "0218845781f631c48f1c9709e23092067d06837f30aa0cd0544ac887fe91ddd166",
-        )
-        .unwrap();
-
-        let pubkey = encoder.point_to_pubkey(point);
-        println!("expected pubkey: {}", expected_pubkey);
-        println!("got pubkey: {}", pubkey);
-        // TODO: Add the assert over pubkey and expected
+        assert_eq!(res, expected);
     }
 
     #[test]
@@ -469,23 +405,16 @@ mod test_eth_tx_encoder {
         .unwrap();
 
         let s = secp256k1::Secp256k1::signing_only();
-        let sk_1 = secp256k1::SecretKey::from_str(
-            "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba",
-        )
-        .unwrap();
+        let _sk_1 = secp256k1::SecretKey::from_str(AGG_PRIV_HEX_1).unwrap();
 
-        let sk_2 = secp256k1::SecretKey::from_str(
-            "bbade2da39cfc81b1b64b6a2d66531ed74dd01803dc5b376ce7ad548bbe23608",
-        )
-        .unwrap();
+        let sk_2 = secp256k1::SecretKey::from_str(AGG_PRIV_HEX_2).unwrap();
 
         // we rotate to key 2, so this is the pubkey we want to sign over
-        let pubkey_from_sk_2 = PublicKey::from_secret_key(&s, &sk_2);
+        let pk_2 = PublicKey::from_secret_key(&s, &sk_2);
 
-        let (pubkey_x, pubkey_y_parity) = encoder.destructure_pubkey(pubkey_from_sk_2);
+        let (pubkey_x, pubkey_y_parity) = destructure_pubkey(pk_2);
 
-        // hash_junk_bytes.try_into().unwrap(),
-        let params = encoder.set_agg_key_with_agg_key_param_constructor(
+        let params = set_agg_key_with_agg_key_param_constructor(
             [0u8; 32],
             [0u8; 32],
             [0u8; 32],
@@ -501,21 +430,16 @@ mod test_eth_tx_encoder {
         let call_data_no_sig_from_contract = "24969d5d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001";
         assert_eq!(call_data_no_sig_from_contract, hex_params);
 
-        let message_hash: [u8; 32] = BigInt::from_str(
-            "19838331578708755702960229198816480402256567085479269042839672688267843389518",
-        )
-        .unwrap()
-        .to_bytes_be()
-        .1
-        .try_into()
-        .unwrap();
+        let message_hash: [u8; 32] = BigInt::from_str(MESSAGE_HASH)
+            .unwrap()
+            .to_bytes_be()
+            .1
+            .try_into()
+            .unwrap();
 
         let message_hash = MessageHash(message_hash);
 
-        let sig: num::BigInt = BigInt::from_str(
-            "86256580123538456061655860770396085945007591306530617821168588559087896188216",
-        )
-        .unwrap();
+        let sig: num::BigInt = BigInt::from_str(SIGNATURE_S).unwrap();
 
         let param_container = ParamContainer {
             key_id: KeyId(0),
@@ -524,29 +448,12 @@ mod test_eth_tx_encoder {
             pubkey_y_parity,
         };
 
-        let nonce_times_g_addr = hex::decode("02eDd8421D87B7c0eE433D3AFAd3aa2Ef039f27a")
-            .unwrap()
-            .try_into()
-            .unwrap();
+        let nonce_times_g_addr = hex::decode(NONCE_TIMES_G_ADDR).unwrap().try_into().unwrap();
 
-        // to big endian bytes then into the curv type
-        let curv_sig_big_int = curv::BigInt::from_bytes(&sig.to_bytes_be().1);
-
-        // TODO: Create some utils to clean this up
-        // v = r = k * G. In the contract we use:
-        let k = "d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285";
-        let k_as_sk = secp256k1::SecretKey::from_str(k).unwrap();
-        let k_times_g = PublicKey::from_secret_key(&s, &k_as_sk);
-        let k_times_g_bytes: [u8; 32] = k_times_g.serialize()[1..].try_into().unwrap();
-
-        // this is the struct of the Signature returned from the signing module
-        let sig = Signature {
-            sigma: curv::elliptic::curves::traits::ECScalar::from(&curv_sig_big_int),
-            v: Secp256k1Point::from_bytes(&k_times_g_bytes).unwrap(),
-        };
+        let sigma: [u8; 32] = sig.to_bytes_be().1.try_into().unwrap();
 
         let tx_data = encoder
-            .build_tx(&message_hash, &sig, nonce_times_g_addr, &param_container)
+            .build_tx(&message_hash, sigma, nonce_times_g_addr, &param_container)
             .unwrap()
             .data;
 
@@ -559,10 +466,7 @@ mod test_eth_tx_encoder {
     fn secp256k1_sanity_check() {
         let s = secp256k1::Secp256k1::signing_only();
 
-        let sk = secp256k1::SecretKey::from_str(
-            "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba",
-        )
-        .unwrap();
+        let sk = secp256k1::SecretKey::from_str(AGG_PRIV_HEX_1).unwrap();
 
         let pubkey_from_sk = PublicKey::from_secret_key(&s, &sk);
 

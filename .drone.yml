@@ -111,10 +111,13 @@ steps:
   - name: test-validator-package
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - cargo test --lib --release
+      - cargo test --locked --lib --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
 trigger:
+  branch:
+    exclude:
+      - devnet/*
   event:
     - pull_request
 
@@ -184,7 +187,7 @@ steps:
     depends_on:
       - rust-base
     commands:
-      - cargo build --release
+      - cargo build --locked --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
   #  Compiles runs all unit tests
@@ -193,7 +196,7 @@ steps:
     depends_on:
       - compile-chainflip-backend
     commands:
-      - cargo test --lib --release
+      - cargo test --locked --lib --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
   - name: prepare-files
@@ -346,6 +349,7 @@ steps:
       message: |
         ✅ Testnet Reboot Successful: `{{commit.branch}}` ✅
         Testnet released with commit hash: `{{commit.sha}}`
+        [Check the logs here](https://monitor.chainflip.xyz/explore?orgId=1&left=%5B%22now-1h%22%2C%22now%22%2C%22Loki%22%2C%7B%22expr%22:%22%7Bchainflip_xyz_tag%3D%5C%22{{commit.sha}}%5C%22%7D%22%7D%5D)
 
 # Notify devs Testnet has failed to launch
   - name: notify-testnet-failure
@@ -379,9 +383,9 @@ steps:
     depends_on:
       - create
     commands:
-      - kubectl get pods
-      - kubectl logs -l app.kubernetes.io/name=chainflip-engine
-      - kubectl logs -l app.kubernetes.io/name=state-chain-node
+      - kubectl get pods -n $DRONE_COMMIT_BRANCH
+      - kubectl logs -l app.kubernetes.io/name=chainflip-engine -n $DRONE_COMMIT_BRANCH
+      - kubectl logs -l app.kubernetes.io/name=state-chain-node -n $DRONE_COMMIT_BRANCH
       - cd cluster/applications/staging/chainflip-validator
       - ./build.sh --branch=$DRONE_COMMIT_BRANCH --destroy --rpc
 
@@ -391,6 +395,7 @@ service_account_name: drone-runner-kube
 trigger:
   branch:
     - release/*
+    - devnet/*
     - develop
   event:
     - push
@@ -442,14 +447,14 @@ steps:
   - name: compile-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - cargo build --release
+      - cargo build --locked --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
   #  Compiles runs all unit tests
   - name: test-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - cargo test --lib --release
+      - cargo test --locked --lib --release
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
   #  Create docker image for chainflip-engine
@@ -517,7 +522,7 @@ steps:
   - name: run-tests
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - cargo test --release
+      - cargo test --locked --release
 
 # Config
 trigger:
