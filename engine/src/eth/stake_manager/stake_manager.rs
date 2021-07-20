@@ -4,7 +4,7 @@
 use core::str::FromStr;
 use std::{convert::TryInto, fmt::Display};
 
-use crate::eth::{EventProducerError, EventSource};
+use crate::eth::{utils::is_eth_address, EventProducerError, EventSource};
 
 use serde::{Deserialize, Serialize};
 use sp_runtime::AccountId32;
@@ -142,10 +142,15 @@ impl StakeManager {
         let abi_bytes = std::include_bytes!("../abis/StakeManager.json");
         let contract = ethabi::Contract::load(abi_bytes.as_ref())?;
 
-        Ok(Self {
-            deployed_address: H160::from_str(deployed_address)?,
-            contract,
-        })
+        match is_eth_address(&deployed_address) {
+            Ok(_) => Ok(Self {
+                deployed_address: H160::from_str(deployed_address)?,
+                contract,
+            }),
+            Err(e) => {
+                panic!("{}", e);
+            }
+        }
     }
 
     /// Event definition for the 'Staked' event

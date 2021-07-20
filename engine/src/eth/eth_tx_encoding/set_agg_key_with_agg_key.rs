@@ -2,6 +2,7 @@ use std::{collections::HashMap, convert::TryInto};
 
 use crate::{
     eth::key_manager::KeyManager,
+    eth::utils::is_eth_address,
     mq::{pin_message_stream, IMQClient, Subject},
     p2p::ValidatorId,
     settings,
@@ -69,18 +70,25 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         genesis_validator_ids: Vec<ValidatorId>,
         mq_client: M,
     ) -> Result<Self> {
-        let key_manager = KeyManager::load(key_manager_address)?;
+        match is_eth_address(&key_manager_address) {
+            Ok(_) => {
+                let key_manager = KeyManager::load(key_manager_address)?;
 
-        let mut genesis_validator_ids_hash_map = HashMap::new();
-        genesis_validator_ids_hash_map.insert(KeyId(0), genesis_validator_ids);
-        Ok(Self {
-            mq_client,
-            key_manager,
-            messages: HashMap::new(),
-            validators: genesis_validator_ids_hash_map,
-            curr_signing_key_id: Some(KeyId(0)),
-            next_key_id: None,
-        })
+                let mut genesis_validator_ids_hash_map = HashMap::new();
+                genesis_validator_ids_hash_map.insert(KeyId(0), genesis_validator_ids);
+                Ok(Self {
+                    mq_client,
+                    key_manager,
+                    messages: HashMap::new(),
+                    validators: genesis_validator_ids_hash_map,
+                    curr_signing_key_id: Some(KeyId(0)),
+                    next_key_id: None,
+                })
+            }
+            Err(e) => {
+                panic!("{}", e);
+            }
+        }
     }
 
     /// Read events from the MultisigEvent subject and process them

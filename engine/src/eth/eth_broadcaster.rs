@@ -16,6 +16,8 @@ use web3::{
 
 use futures::StreamExt;
 
+use super::utils::parse_websocket_url;
+
 /// Helper function, constructs and runs the [EthBroadcaster] asynchronously.
 pub async fn start_eth_broadcaster<M: IMQClient + Send + Sync>(
     settings: &settings::Settings,
@@ -41,7 +43,13 @@ struct EthClientBuilder {
 
 impl EthClientBuilder {
     pub fn new(node_endpoint: String) -> Self {
-        Self { node_endpoint }
+        // parse the URL and check that it is a valid websocket url
+        match parse_websocket_url(&node_endpoint) {
+            Ok(_) => return Self { node_endpoint },
+            Err(e) => {
+                panic!("EthClient endpoint URL Invalid: {}", e);
+            }
+        }
     }
 
     /// Builds a web3 ethereum client with websocket transport.

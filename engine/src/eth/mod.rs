@@ -14,6 +14,8 @@ use thiserror::Error;
 
 use web3::types::{BlockNumber, FilterBuilder, H256};
 
+mod utils;
+
 use crate::{
     mq::{
         nats_client::{NatsMQClient, NatsMQClientFactory},

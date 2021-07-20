@@ -1,7 +1,10 @@
 use super::{EventSink, EventSource, Result};
+use frame_support::sp_tracing::warn;
 use futures::{future::join_all, stream, StreamExt};
 use std::time::Duration;
 use web3::types::{BlockNumber, SyncState};
+
+use super::utils::parse_websocket_url;
 
 /// Steams events from a particular ETH Source, such as a smart contract
 /// into a particular event sink
@@ -20,10 +23,17 @@ pub struct EthEventStreamBuilder<S: EventSource> {
 
 impl<S: EventSource> EthEventStreamBuilder<S> {
     pub fn new(url: &str, event_source: S) -> Self {
-        Self {
-            url: url.into(),
-            event_source,
-            event_sinks: Vec::new(),
+        match parse_websocket_url(url) {
+            Ok(_) => {
+                return Self {
+                    url: url.into(),
+                    event_source,
+                    event_sinks: Vec::new(),
+                }
+            }
+            Err(e) => {
+                panic!("EthEventStream URL Invalid: {}", e);
+            }
         }
     }
 
@@ -36,7 +46,22 @@ impl<S: EventSource> EthEventStreamBuilder<S> {
         if self.event_sinks.is_empty() {
             anyhow::bail!("Can't build a stream with no sink.")
         } else {
-            let transport = ::web3::transports::WebSocket::new(self.url.as_str()).await?;
+            let transport = ::web3::transports::WebSocket::new(self.url.as_str());
+
+            let transport = match tokio::time::timeout(Duration::from_millis(4000), transport).await
+            {
+                Ok(Ok(transport)) => transport,
+                Err(_) => {
+                    return Err(anyhow::Error::msg(
+                        "Timeout creating websocket for EthEventStreamer.",
+                    ));
+                }
+                _ => {
+                    return Err(anyhow::Error::msg(
+                        "Failed to create websocket for EthEventStreamer.",
+                    ));
+                }
+            };
 
             Ok(EthEventStreamer {
                 web3_client: ::web3::Web3::new(transport),
