@@ -391,6 +391,11 @@ impl pallet_transaction_payment::Config for Runtime {
 	type FeeMultiplierUpdate = ();
 }
 
+impl pallet_cf_witness_api::Config for Runtime {
+	type Call = Call;
+	type Witnesser = Witnesser;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -408,6 +413,7 @@ construct_runtime!(
 		Session: pallet_session::{Module, Storage, Event, Config<T>},
 		Historical: session_historical::{Module},
 		Witnesser: pallet_cf_witness::{Module, Call, Event<T>, Origin},
+		WitnesserApi: pallet_cf_witness_api::{Module, Call},
 		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
 		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
 		Aura: pallet_aura::{Module, Config<T>},

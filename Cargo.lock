@@ -8678,6 +8678,7 @@ dependencies = [
  "pallet-cf-staking",
  "pallet-cf-validator",
  "pallet-cf-witness",
+ "pallet-cf-witness-api",
  "pallet-grandpa",
  "pallet-offences",
  "pallet-randomness-collective-flip",
