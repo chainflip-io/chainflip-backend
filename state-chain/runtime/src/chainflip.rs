@@ -1,5 +1,5 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
-use super::{AccountId, Emissions, FlipBalance, Runtime, Rewards, Witnesser};
+use super::{AccountId, Emissions, FlipBalance, Rewards, Witnesser};
 use cf_traits::EmissionsTrigger;
 use frame_support::debug;
 use pallet_cf_validator::EpochTransitionHandler;

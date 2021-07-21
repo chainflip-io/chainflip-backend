@@ -69,10 +69,10 @@ impl pallet_cf_flip::Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 }
 
-pub const MINT_FREQUENCY: u64 = 5;
+pub const MINT_INTERVAL: u64 = 5;
 
 parameter_types! {
-	pub const MintFrequency: u64 = MINT_FREQUENCY;
+	pub const MintInterval: u64 = MINT_INTERVAL;
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
@@ -97,15 +97,11 @@ impl RewardsDistribution for MockRewardsDistribution<Test> {
 
 impl pallet_cf_emissions::Config for Test {
 	type Event = Event;
-	type Call = Call;
 	type FlipBalance = u128;
 	type Surplus = pallet_cf_flip::Surplus<Test>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
-	type EnsureWitnessed = MockEnsureWitnessed;
-	type Witnesser = MockWitnesser;
 	type RewardsDistribution = MockRewardsDistribution<Self>;
-	type Validators = epoch_info::Mock;
-	type MintFrequency = MintFrequency;
+	type MintInterval = MintInterval;
 }
 
 // Build genesis storage according to the mock runtime.
@@ -120,9 +116,6 @@ pub fn new_test_ext(
 		pallet_cf_flip: Some(FlipConfig { total_issuance }),
 		pallet_cf_emissions: Some(EmissionsConfig {
 			emission_per_block: emissions.unwrap_or(total_issuance / 100),
-			// 12 makes for nicer maths than the default which is 13
-			eth_block_time: 12,
-			native_block_time: 6,
 		}),
 	};
 	for v in validators {
