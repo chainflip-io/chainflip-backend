@@ -319,7 +319,7 @@ steps:
     depends_on:
       - build-state-chain-node
       - build-chainflip-engine
-      - destroy
+      - destroy-current-testnet
     environment:
       INFURA_URL:
         from_secret: rinkeby_infura_url
@@ -333,7 +333,7 @@ steps:
   - name: notify-testnet-up
     image: appleboy/drone-discord
     depends_on:
-      - create
+      - create-new-testnet
     settings:
       username: Testnet Bot
       webhook_id:
@@ -349,7 +349,7 @@ steps:
   - name: notify-testnet-failure
     image: appleboy/drone-discord
     depends_on:
-      - create
+      - create-new-testnet
     when:
       status:
         - failure
@@ -370,12 +370,12 @@ steps:
   - name: destroy-testnet-on-failure
     pull: always
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+    depends_on:
+      - create-new-testnet
     failure: ignore
     when:
       status:
         - failure
-    depends_on:
-      - create
     commands:
       - kubectl get pods -n $DRONE_COMMIT_BRANCH
       - kubectl logs -l app.kubernetes.io/name=chainflip-engine -n $DRONE_COMMIT_BRANCH --tail=-1
