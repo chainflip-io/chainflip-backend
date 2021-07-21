@@ -282,8 +282,7 @@ steps:
     depends_on:
       - test-chainflip-backend
     commands:
-      - git clone https://github.com/chainflip-io/chainflip-cluster.git cluster
-      - cd cluster/applications/staging/chainflip-validator
+      - git clone update/build-with-chart https://github.com/chainflip-io/chainflip-cluster.git . # TEMP REMOVE
       - chmod +x ./build.sh
 
 # Notify devs that Testnet is going down
@@ -299,11 +298,11 @@ steps:
         from_secret: discord_webhook_token
       message: |
         ⚠️ Testnet Reboot In Progress: `{{commit.branch}}` ⚠️
-        Testnet will be recreated in 2m0s
+        Testnet will be recreated in 1m0s
         To cancel this build head here: {{build.link}}
 
 # Destroy the testnet
-  - name: destroy
+  - name: destroy-current-testnet
     pull: always
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     failure: ignore
@@ -311,13 +310,11 @@ steps:
       - clone-cluster
       - test-chainflip-backend
     commands:
-      - echo Waiting for 2 minutes
-      - sleep 120
-      - cd cluster/applications/staging/chainflip-validator
+      - sleep 60
       - ./build.sh --branch=$DRONE_COMMIT_BRANCH --destroy --rpc
 
 # Create new testnet
-  - name: create
+  - name: create-new-testnet
     pull: always
     depends_on:
       - build-state-chain-node
@@ -330,9 +327,6 @@ steps:
         from_secret: dockerconfigjson
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     commands:
-      - cd cluster/applications/staging/chainflip-validator
-      - helm repo add chartmuseum http://chartmuseum.chartmuseum:8080
-      - helm dependency update
       - ./build.sh --branch=$DRONE_COMMIT_BRANCH --tag=$DRONE_COMMIT_SHA --rpc
 
 # Notify devs Testnet is up
@@ -373,7 +367,7 @@ steps:
         <@508234815254953985> sort it out!!
 
   # Destroy the testnet on failure
-  - name: destroy-on-failure
+  - name: destroy-testnet-on-failure
     pull: always
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     failure: ignore
@@ -384,8 +378,8 @@ steps:
       - create
     commands:
       - kubectl get pods -n $DRONE_COMMIT_BRANCH
-      - kubectl logs -l app.kubernetes.io/name=chainflip-engine -n $DRONE_COMMIT_BRANCH
-      - kubectl logs -l app.kubernetes.io/name=state-chain-node -n $DRONE_COMMIT_BRANCH
+      - kubectl logs -l app.kubernetes.io/name=chainflip-engine -n $DRONE_COMMIT_BRANCH --tail=-1
+      - kubectl logs -l app.kubernetes.io/name=state-chain-node -n $DRONE_COMMIT_BRANCH --tail=-1
       - cd cluster/applications/staging/chainflip-validator
       - ./build.sh --branch=$DRONE_COMMIT_BRANCH --destroy --rpc
 
@@ -397,6 +391,7 @@ trigger:
     - release/*
     - devnet/*
     - develop
+    - ci/* # TEMP REMOVE!!!
   event:
     - push
 
