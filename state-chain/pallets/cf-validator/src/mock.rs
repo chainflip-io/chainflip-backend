@@ -1,6 +1,6 @@
 use super::*;
 use crate as pallet_cf_validator;
-use cf_traits::{AuctionConfirmation, BidderProvider};
+use cf_traits::{AuctionConfirmation, BidderProvider, impl_mock_ensure_witnessed_for_origin};
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -114,32 +114,10 @@ parameter_types! {
 	pub const MinAuctionSize: u32 = 2;
 }
 
-pub struct MockEnsureWitness;
-
-impl EnsureOrigin<Origin> for MockEnsureWitness {
-	type Success = ();
-
-	fn try_origin(o: Origin) -> Result<Self::Success, Origin> {
-		// We don't intend to test this, it's just to keep the compiler happy.
-		unimplemented!()
-	}
-}
-
-pub struct WitnesserMock;
-
-impl cf_traits::Witnesser for WitnesserMock {
-	type AccountId = u64;
-	type Call = Call;
-
-	fn witness(_who: Self::AccountId, _call: Self::Call) -> DispatchResultWithPostInfo {
-		// We don't intend to test this, it's just to keep the compiler happy.
-		unimplemented!()
-	}
-}
+impl_mock_ensure_witnessed_for_origin!(Origin);
 
 impl pallet_cf_auction::Config for Test {
 	type Event = Event;
-	type Call = Call;
 	type Amount = Amount;
 	type ValidatorId = ValidatorId;
 	type BidderProvider = TestBidderProvider;
@@ -147,8 +125,7 @@ impl pallet_cf_auction::Config for Test {
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
 	type Confirmation = TestConfirmation;
-	type EnsureWitnessed = MockEnsureWitness;
-	type Witnesser = WitnesserMock;
+	type EnsureWitnessed = MockEnsureWitnessed;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
