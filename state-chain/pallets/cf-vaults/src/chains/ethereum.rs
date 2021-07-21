@@ -58,6 +58,10 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
+	/// The Vault for this instance
+	#[pallet::storage]
+	pub(super) type Vault<T: Config> = StorageValue<_, VaultRotationResponse, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -151,7 +155,7 @@ impl From<Vec<u8>> for ChainParams{
 	}
 }
 
-impl<T: Config> Chain<RequestIndex, T::ValidatorId, RotationError<T::ValidatorId>> for Pallet<T> {
+impl<T: Config> ChainVault<RequestIndex, T::ValidatorId, RotationError<T::ValidatorId>> for Pallet<T> {
 	fn chain_params() -> ChainParams {
 		ChainParams::Ethereum(vec![])
 	}
@@ -170,6 +174,10 @@ impl<T: Config> Chain<RequestIndex, T::ValidatorId, RotationError<T::ValidatorId
 				T::Vaults::try_complete_vault_rotation(index, Err(RotationError::FailedToConstructPayload))
 			}
 		}
+	}
+
+	fn vault_rotated(response: VaultRotationResponse) {
+		Vault::<T>::set(response);
 	}
 }
 

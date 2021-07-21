@@ -52,14 +52,16 @@ pub trait RequestResponse<I, Req, Res, Err> {
 	fn try_response(index: I, response: Res) -> Result<(), Err>;
 }
 
-/// A Chain AKA Blockchain
-pub trait Chain<I, ValidatorId, Err> {
-	/// A set of params for this chain
+/// A vault for a chain
+pub trait ChainVault<I, ValidatorId, Err> {
+	/// A set of params for the chain for this vault
 	fn chain_params() -> ChainParams;
 	/// Start the vault rotation phase.  The chain would construct a `VaultRotationRequest`.
 	/// When complete `ChainEvents::try_complete_vault_rotation()` would be used to notify to continue
 	/// with the process.
 	fn try_start_vault_rotation(index: I, new_public_key: NewPublicKey, validators: Vec<ValidatorId>) -> Result<(), Err>;
+	/// We have confirmation of the rotation
+	fn vault_rotated(response: VaultRotationResponse);
 }
 
 /// Events coming in from our chains.  This is used to callback from the request to complete the vault

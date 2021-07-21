@@ -19,6 +19,7 @@ type Amount = u64;
 type ValidatorId = u64;
 
 use chains::ethereum;
+use crate::nonce::NonceUnixTime;
 
 thread_local! {
 }
@@ -30,9 +31,8 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		EthereumChain: ethereum::{Module, Call, Config, Storage, Event<T>},
-		EthereumVault: pallet_cf_vaults::<Instance1>::{Module, Call, Storage, Event<T>, Config},
-		OtherChainVault: pallet_cf_vaults::<Instance2>::{Module, Call, Storage, Event<T>, Config},
+		EthereumVault: ethereum::{Module, Call, Config, Storage, Event<T>},
+		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config},
 	}
 );
 
@@ -69,7 +69,7 @@ parameter_types! {
 }
 
 pub struct OtherChain;
-impl Chain<RequestIndex, ValidatorId, RotationError<ValidatorId>> for OtherChain {
+impl ChainVault<RequestIndex, ValidatorId, RotationError<ValidatorId>> for OtherChain {
 	fn chain_params() -> ChainParams {
 		todo!()
 	}
@@ -77,14 +77,11 @@ impl Chain<RequestIndex, ValidatorId, RotationError<ValidatorId>> for OtherChain
 	fn try_start_vault_rotation(index: RequestIndex, new_public_key: NewPublicKey, validators: Vec<ValidatorId>) -> Result<(), RotationError<ValidatorId>> {
 		todo!("mock other chain construction phase")
 	}
-}
 
-// Our pallet is awaiting on completion
-// impl ChainEvents<RequestIndex, ValidatorId, MockError> for MockRuntime {
-// 	fn try_on_completion(index: RequestIndex, result: Result<ValidatorRotationRequest, ValidatorRotationError<ValidatorId>>) -> Result<(), MockError> {
-// 		todo!("mock construction manager")
-// 	}
-// }
+	fn vault_rotated(response: VaultRotationResponse) {
+		todo!()
+	}
+}
 
 pub struct MockEnsureWitness;
 
@@ -154,42 +151,26 @@ impl AuctionManager<ValidatorId, Amount> for MockRuntime {
 impl ethereum::Config for MockRuntime {
 	type Event = Event;
 	type Call = Call;
-	type Vaults = EthereumVault;
+	type Vaults = Vaults;
 	type EnsureWitnessed = MockEnsureWitness;
 	type Witnesser = MockWitnesser;
 	type Nonce = u64;
-	type NonceProvider = EthereumVault;
+	type NonceProvider = NonceUnixTime<Self::Nonce, time_source::Mock>;
 }
 
-// Our vault for Ethereum
-impl pallet_cf_vaults::Config<Instance1> for MockRuntime {
+impl pallet_cf_vaults::Config for MockRuntime {
 	type Event = Event;
 	type Call = Call;
-	type Chain = EthereumChain;
+	type EthereumVault = EthereumVault;
 	type EnsureWitnessed = MockEnsureWitness;
 	type Witnesser = MockWitnesser;
-	type Nonce = u64;
-	type TimeSource = time_source::Mock;
-}
-
-// Another vault for OtherChain
-impl pallet_cf_vaults::Config<Instance2> for MockRuntime {
-	type Event = Event;
-	type Call = Call;
-	type Chain = OtherChain;
-	type EnsureWitnessed = MockEnsureWitness;
-	type Witnesser = MockWitnesser;
-	type Nonce = u64;
-	type TimeSource = time_source::Mock;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		frame_system: Default::default(),
 		ethereum: Default::default(),
-		pallet_cf_vaults_Instance1: Some(EthereumVaultConfig {
-		}),
-		pallet_cf_vaults_Instance2: Some(OtherChainVaultConfig {
+		pallet_cf_vaults: Some(VaultsConfig {
 		}),
 	};
 
