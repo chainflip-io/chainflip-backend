@@ -2,7 +2,7 @@ use chainflip_engine::{
     eth,
     health::spawn_health_check,
     mq::{nats_client::NatsMQClientFactory, IMQClientFactory},
-    p2p::{P2PConductor, RpcP2PClient, ValidatorId},
+    p2p::{P2PConductor, RpcP2PClient, RpcP2PClientMapper, ValidatorId},
     settings::Settings,
     signing,
     signing::db::PersistentKeyDB,
@@ -37,12 +37,9 @@ async fn main() {
     let ws_port = settings.state_chain.ws_port;
 
     let url = url::Url::parse(&format!("ws://127.0.0.1:{}", ws_port)).expect("valid ws port");
-    let rpc_p2p_client_mapper = RpcP2PClientMapper::init(mq_factory.clone());
+    let mq_client = *mq_factory.create().await.unwrap();
+    let rpc_p2p_client_mapper = RpcP2PClientMapper::init(mq_client.clone()).await;
     let p2p_client = RpcP2PClient::new(url, rpc_p2p_client_mapper);
-    let mq_client = *mq_factory
-        .create()
-        .await
-        .expect("Could not connect MQ client");
     let p2p_conductor_fut = P2PConductor::new(mq_client, p2p_client)
         .await
         .start(shutdown_rx);
