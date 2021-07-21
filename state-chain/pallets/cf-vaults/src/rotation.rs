@@ -136,28 +136,3 @@ pub struct VaultRotationResponse {
 	new_key: Vec<u8>,
 	tx: Vec<u8>
 }
-
-/// The state of a vault rotation
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct VaultRotation<Index, ValidatorId> {
-	/// Index for this rotation
-	id: Index,
-	/// The initial key generation request
-	pub(crate) keygen_request: KeygenRequest<ValidatorId>,
-	/// The proposed key
-	pub(crate) new_public_key: NewPublicKey,
-}
-
-impl<Index, ValidatorId> VaultRotation<Index, ValidatorId> {
-	pub fn new(id: Index, keygen_request: KeygenRequest<ValidatorId>) -> Self {
-		VaultRotation {
-			id,
-			keygen_request,
-			new_public_key: vec![],
-		}
-	}
-
-	pub fn candidate_validators(&self) -> &Vec<ValidatorId> {
-		&self.keygen_request.validator_candidates
-	}
-}
