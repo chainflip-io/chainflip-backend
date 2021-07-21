@@ -127,21 +127,25 @@ where
         }
     }
 
-    // TODO: Should this be CFG test? don't think we'll need it in the end, but might
-    // make testing a bit easier, without initialisation
-    // pub fn new(mq_client: IMQ, validator_ids: Vec<ValidatorId>) -> Self {
-    //     let mut peer_to_validator = HashMap::new();
+    #[cfg(test)]
+    /// Convenience method for tests so we don't have to push an auction confirmed event to fill the validator map
+    pub fn new(mq_client: IMQ, validator_ids: Vec<ValidatorId>) -> Self {
+        let mut peer_to_validator_map = HashMap::new();
 
-    //     for id in validator_ids {
-    //         println!("here's the id: {:?}", id);
-    //         let peer_id =
-    //             peer_id_from_validator_id(&id.to_ss58()).expect("Should be a valid validator id");
-    //         // this is a different to_base58?
-    //         println!("Peer id key: {}", peer_id.to_base58());
-    //         peer_to_validator.insert(peer_id.to_base58(), id);
-    //     }
-    //     Self { peer_to_validator, mq_client: () }
-    // }
+        for id in validator_ids {
+            println!("here's the id: {:?}", id);
+            let peer_id =
+                peer_id_from_validator_id(&id.to_ss58()).expect("Should be a valid validator id");
+            peer_to_validator_map.insert(peer_id.to_base58(), id);
+        }
+        let peer_to_validator_map = PeerIdValidatorMap {
+            inner: peer_to_validator_map,
+        };
+        Self {
+            peer_to_validator_map,
+            mq_client,
+        }
+    }
 }
 
 impl<IMQ> RpcP2PClient<IMQ>
@@ -236,6 +240,7 @@ where
 
         Ok(RpcP2PClientStream::new(
             sub,
+            // TODO: Can we encapsulate this better?
             self.peer_to_validator_mapper.peer_to_validator_map.clone(),
         ))
     }
@@ -287,6 +292,8 @@ impl P2PClient {
 
 #[cfg(test)]
 mod tests {
+    use crate::mq::mq_mock::{MQMock, MQMockClient};
+
     use super::*;
     use jsonrpc_core::{IoHandler, Params};
     use jsonrpc_ws_server::{Server, ServerBuilder};
@@ -332,7 +339,10 @@ mod tests {
     #[test]
     fn client_api() {
         let server = TestServer::serve();
-        let mut glue_client = RpcP2PClient::new(server.url, RpcP2PClientMapper::default());
+        let mq_mock = MQMock::new();
+        let mq_client = mq_mock.get_client();
+        let mapper = create_new_mapper::<MQMockClient>(mq_client).unwrap();
+        let mut glue_client = RpcP2PClient::new(server.url, mapper);
         let run = async {
             let result = glue_client
                 .send(&ValidatorId::new("100"), "disco".as_bytes())
@@ -361,22 +371,28 @@ mod tests {
         assert_eq!(peer_id.to_base58(), ALICE_PEER_ID);
     }
 
-    fn create_new_mapping() -> Result<RpcP2PClientMapper> {
+    fn create_new_mapper<IMQ: IMQClient + Send + Sync + Clone>(
+        mq_mock_client: IMQ,
+    ) -> Result<RpcP2PClientMapper<IMQ>> {
         let alice_validator = ValidatorId::from_ss58(ALICE_SS58)?;
         let validators = vec![alice_validator];
-        let mapping = RpcP2PClientMapper::new(validators);
-        Ok(mapping)
+        let mapper = RpcP2PClientMapper::new(mq_mock_client, validators);
+        Ok(mapper)
     }
 
     #[test]
     fn can_create_new_mapping() {
-        assert!(create_new_mapping().is_ok());
+        let mq_mock = MQMock::new();
+        let mq_client = mq_mock.get_client();
+        assert!(create_new_mapper::<MQMockClient>(mq_client).is_ok());
     }
 
     #[test]
     fn p2p_event_is_mapped_to_p2p_message() {
-        let mapping = create_new_mapping().unwrap();
-        // we use Alice in the mapping constructor, so she'll be there
+        let mq_mock = MQMock::new();
+        let mq_client = mq_mock.get_client();
+        let mapper = create_new_mapper::<MQMockClient>(mq_client).unwrap();
+        // we use Alice in the mapper constructor, so she'll be there
         let p2p_event_received = P2PEvent::PeerConnected(ALICE_PEER_ID.to_string());
 
         let expected_p2p_message = P2PMessage {
@@ -384,7 +400,9 @@ mod tests {
             data: vec![],
         };
 
-        let p2p_message = mapping.from_p2p_event_to_p2p_message(p2p_event_received);
+        let p2p_message = mapper
+            .peer_to_validator_map
+            .from_p2p_event_to_p2p_message(p2p_event_received);
         assert_eq!(p2p_message, expected_p2p_message);
     }
 }
