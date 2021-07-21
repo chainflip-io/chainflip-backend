@@ -329,7 +329,7 @@ steps:
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     commands:
       - cd cluster
-      - build.sh --branch=$DRONE_COMMIT_BRANCH --tag=latest
+      - ./build.sh --branch=$DRONE_COMMIT_BRANCH --tag=latest
 
 # Notify devs Testnet is up
   - name: notify-testnet-up
