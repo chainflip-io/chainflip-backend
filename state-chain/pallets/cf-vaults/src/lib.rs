@@ -256,14 +256,7 @@ impl<T: Config>
 				// Go forth and construct
 				VaultRotations::<T>::mutate(index, |maybe_vault_rotation| {
 					if let Some(validators) = maybe_vault_rotation {
-						if validators.is_empty() {
-							// If we have no validators then clear this out, this shouldn't happen
-							Self::abort_rotation();
-							Err(RotationError::EmptyValidatorSet)
-						} else {
-							// Here we want to iterate over a series of chains
-							T::EthereumVault::try_start_vault_rotation(index, new_public_key, validators.to_vec())
-						}
+						T::EthereumVault::try_start_vault_rotation(index, new_public_key, validators.to_vec())
 					} else {
 						unreachable!("This shouldn't happen but we need to maybe signal this")
 					}
