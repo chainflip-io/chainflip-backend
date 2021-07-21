@@ -12,7 +12,6 @@ use sc_network::config::identity::ed25519;
 use sc_network::config::PublicKey;
 use sc_network::PeerId;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use sp_core::ed25519::Public;
 use std::marker::Send;
 use std::str::FromStr;
@@ -339,6 +338,7 @@ mod tests {
 		(meta, rx)
 	}
 
+	// TODO: Should this test the validator_id to peer directly?? Rather than walk through the steps
 	#[test]
 	fn validator_id_to_peer_id() {
 		let validator_id = "5G9NWJ5P9uk7am24yCKeLZJqXWW6hjuMyRJDmw4ofqxG8Js2";

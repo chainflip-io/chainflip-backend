@@ -24,6 +24,10 @@ impl Base58 for () {
     }
 }
 
+pub trait SS58 {
+    fn to_ss58(&self) -> String;
+}
+
 // TODO: this is duplicated in state-chain/client/cf-p2p/rpc/src/lib.rs
 // TODO: Tests for this
 fn peer_id_from_validator_id(validator_id: &String) -> std::result::Result<PeerId, &str> {
@@ -57,7 +61,9 @@ impl RpcP2PClientMapping {
         let mut peer_to_validator = HashMap::new();
 
         for id in validator_ids {
-            let peer_id = peer_id_from_validator_id(&id.to_base58()).unwrap();
+            println!("here's the id: {:?}", id);
+            let peer_id =
+                peer_id_from_validator_id(&id.to_base58()).expect("Should be a valid validator id");
             peer_to_validator.insert(peer_id.to_base58(), id);
         }
         Self { peer_to_validator }
@@ -226,6 +232,10 @@ mod tests {
         server: Option<Server>,
     }
 
+    const ALICE_SS58: &str = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY";
+    const ALICE_ACCT_ID: &str = "d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
+    const ALICE_PEER_ID: &str = "12D3KooWQ6jz4ttZfoBNKopouQWWkUVg93oWApg7ShLETzbnV3ec";
+
     impl TestServer {
         fn serve() -> Self {
             let server = ServerBuilder::new(io())
@@ -279,5 +289,42 @@ mod tests {
             assert!(result.is_ok(), "Should subscribe OK");
         };
         tokio::runtime::Runtime::new().unwrap().block_on(run);
+    }
+
+    #[test]
+    fn validator_id_to_peer_id() {
+        let peer_id = peer_id_from_validator_id(&ALICE_SS58.to_string()).unwrap();
+        assert_eq!(peer_id.to_base58(), ALICE_PEER_ID);
+    }
+
+    fn create_new_mapping() -> Result<RpcP2PClientMapping> {
+        let alice_validator = ValidatorId::from_ss58(ALICE_SS58)?;
+        let validators = vec![alice_validator];
+        let mapping = RpcP2PClientMapping::new(validators);
+        Ok(mapping)
+    }
+
+    #[test]
+    fn can_create_new_mapping() {
+        create_new_mapping().unwrap();
+        // assert!(create_new_mapping.is_ok());
+    }
+
+    #[test]
+    fn p2p_event_is_mapped_to_p2p_message() {
+        let alice_validator = ValidatorId::from_ss58(ALICE_SS58).expect("Is valid validator id");
+        let validators = vec![alice_validator];
+        let mapping = RpcP2PClientMapping::new(validators);
+        // let p2p_event_received = P2PEvent::PeerConnected(
+        //     "12D3KooWHSTL4JxK3pzG6xMYXMWS3zqUAqgcWTRNc4HvqFcAkzNP".to_string(),
+        // );
+
+        // let expected_p2p_message = P2PMessage {
+        //     sender_id: ValidatorId::from_base58(ALICE_SS58).unwrap(),
+        //     data: vec![],
+        // };
+
+        // let p2p_message = mapping.from_p2p_event_to_p2p_message(p2p_event_received);
+        // assert_eq!(p2p_message, expected_p2p_message);
     }
 }

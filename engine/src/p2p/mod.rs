@@ -5,16 +5,26 @@ pub mod mock;
 mod conductor;
 mod rpc;
 
-use std::convert::TryInto;
+use std::{convert::TryInto, str::FromStr};
 
 pub use conductor::P2PConductor;
 pub use rpc::{RpcP2PClient, RpcP2PClientMapping};
 
 use serde::{Deserialize, Serialize};
+use sp_core::ed25519::Public;
 
 use async_trait::async_trait;
 use futures::Stream;
-use rpc::Base58;
+use rpc::{Base58, SS58};
+
+use sp_core::crypto::Ss58Codec;
+
+use anyhow::Result;
+
+use sp_runtime::AccountId32;
+use state_chain_runtime::SS58Prefix;
+
+use crate::state_chain::validator::Validator;
 
 #[derive(Debug)]
 pub enum P2PNetworkClientError {
@@ -35,6 +45,7 @@ pub trait P2PNetworkClient<B: Base58, S: Stream<Item = P2PMessage>> {
     async fn take_stream(&mut self) -> Result<S, P2PNetworkClientError>;
 }
 
+/// What is this???? We need a comment here
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize, Eq, PartialOrd, Ord, Hash)]
 pub struct ValidatorId(pub [u8; 32]);
 
@@ -55,15 +66,25 @@ impl ValidatorId {
         ValidatorId(id)
     }
 
-    pub fn from_base58(id: &str) -> anyhow::Result<Self> {
+    pub fn from_base58(id: &str) -> Result<Self> {
+        todo!("Remove this?");
         let id = bs58::decode(&id)
             .into_vec()
-            .map_err(|_| anyhow::format_err!("Invalid base58"))?;
+            .map_err(|_| anyhow::format_err!("Id is not valid base58: {}", id))?;
+
+        println!("The id len is: {}", id.len());
+        println!("The id is: {:?}", id);
         let id = id
             .try_into()
-            .map_err(|_| anyhow::format_err!("Invalid id size"))?;
+            .map_err(|_| anyhow::format_err!("Id is not 32 bytes"))?;
 
         Ok(ValidatorId(id))
+    }
+
+    pub fn from_ss58(id: &str) -> Result<Self> {
+        let public =
+            Public::from_str(id).map_err(|_| anyhow::format_err!("Not valid ss58 id: {}", id))?;
+        Ok(ValidatorId(public.0))
     }
 }
 
@@ -73,9 +94,18 @@ impl std::fmt::Display for ValidatorId {
     }
 }
 
+// TODO: Can this be removed?
 impl Base58 for ValidatorId {
     fn to_base58(&self) -> String {
         bs58::encode(&self.0).into_string()
+    }
+}
+
+impl SS58 for ValidatorId {
+    fn to_ss58(&self) -> String {
+        let account_id = AccountId32::new(self.0);
+        let ss58 = account_id.to_ss58check();
+        return ss58;
     }
 }
 
@@ -107,6 +137,9 @@ mod tests {
 
     use super::mock::*;
     use super::*;
+
+    const ALICE_SS58: &str = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY";
+    const ALICE_PUBKEY: &str = "d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
 
     async fn receive_with_timeout<T>(mut receiver: UnboundedReceiver<T>) -> Option<T> {
         let fut = receiver.recv();
@@ -180,5 +213,21 @@ mod tests {
                 data: data.clone()
             })
         );
+    }
+
+    #[test]
+    fn validator_id_to_ss58() {
+        let pubkey_bytes: [u8; 32] = hex::decode(ALICE_PUBKEY).unwrap().try_into().unwrap();
+        let validator_id = ValidatorId(pubkey_bytes);
+        assert_eq!(validator_id.to_ss58(), ALICE_SS58);
+    }
+
+    #[test]
+    fn validator_id_from_ss58() {
+        let pubkey_bytes: [u8; 32] = hex::decode(ALICE_PUBKEY).unwrap().try_into().unwrap();
+
+        let validator_id = ValidatorId::from_ss58(ALICE_SS58).unwrap();
+
+        assert_eq!(validator_id.0, pubkey_bytes);
     }
 }
