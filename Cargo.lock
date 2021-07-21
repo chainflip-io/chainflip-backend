@@ -935,6 +935,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "rand 0.7.3",
+ "regex",
  "reqwest",
  "secp256k1",
  "serde 1.0.126",
