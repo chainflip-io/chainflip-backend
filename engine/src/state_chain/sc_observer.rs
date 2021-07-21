@@ -98,6 +98,8 @@ mod tests {
     #[ignore = "depends on running state chain at the specifed url"]
     async fn create_subxt_client_test() {
         let test_settings = settings::test_utils::new_test_settings().unwrap();
-        assert!(create_subxt_client(test_settings.state_chain).await.is_ok())
+        assert!(create_subxt_client(&test_settings.state_chain)
+            .await
+            .is_ok())
     }
 }

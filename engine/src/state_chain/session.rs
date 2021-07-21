@@ -30,7 +30,7 @@ mod tests {
     #[ignore = "depends on running state chain"]
     async fn test_get_session_validators() {
         let settings = settings::test_utils::new_test_settings().unwrap();
-        let subxt_client = create_subxt_client(settings.state_chain).await.unwrap();
+        let subxt_client = create_subxt_client(&settings.state_chain).await.unwrap();
 
         let validators = subxt_client.validators(None).await;
         println!("the validators are here: {:?}", validators);

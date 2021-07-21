@@ -181,7 +181,7 @@ mod tests {
     #[ignore = "depends on running state chain"]
     async fn submit_xt_test() {
         let settings = settings::test_utils::new_test_settings().unwrap();
-        let subxt_client = create_subxt_client(settings.state_chain).await.unwrap();
+        let subxt_client = create_subxt_client(&settings.state_chain).await.unwrap();
 
         let alice = AccountKeyring::Alice.pair();
         let signer = PairSigner::new(alice);

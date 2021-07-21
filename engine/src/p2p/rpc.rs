@@ -120,7 +120,7 @@ where
 
         let mut peer_to_validator_map: HashMap<String, ValidatorId> = HashMap::new();
 
-        let subxt_client = create_subxt_client(state_chain_settings).await.unwrap();
+        let subxt_client = create_subxt_client(&state_chain_settings).await.unwrap();
         let validators = subxt_client.validators(None).await.unwrap();
         println!(
             "Here they are bois, here're the validators: {:?}",
@@ -151,10 +151,11 @@ where
     #[cfg(test)]
     /// Convenience method for tests so we don't have to push an auction confirmed event to fill the validator map
     pub async fn new(
-        state_chain_settings: settings::StateChain,
+        state_chain_settings: &settings::StateChain,
         mq_client: IMQ,
         validator_ids: Vec<ValidatorId>,
     ) -> Self {
+        // WE NEED TO MOCK THE STATE CHAIN GRre
         let subxt_client = create_subxt_client(state_chain_settings).await.unwrap();
 
         let mut peer_to_validator_map = HashMap::new();
@@ -363,12 +364,13 @@ mod tests {
         io
     }
 
-    #[test]
-    fn client_api() {
+    // TODO: Work out a way we can mock the state chain so we don't have to ignore these tests
+    #[tokio::test]
+    async fn client_api() {
         let server = TestServer::serve();
         let mq_mock = MQMock::new();
         let mq_client = mq_mock.get_client();
-        let mapper = create_new_mapper::<MQMockClient>(mq_client).unwrap();
+        let mapper = create_new_mapper::<MQMockClient>(mq_client).await.unwrap();
         let mut glue_client = RpcP2PClient::new(server.url, mapper);
         let run = async {
             let result = glue_client
@@ -389,7 +391,7 @@ mod tests {
                     .await;
             assert!(result.is_ok(), "Should subscribe OK");
         };
-        tokio::runtime::Runtime::new().unwrap().block_on(run);
+        run.await;
     }
 
     #[test]
@@ -398,27 +400,29 @@ mod tests {
         assert_eq!(peer_id.to_base58(), ALICE_PEER_ID);
     }
 
-    fn create_new_mapper<IMQ: IMQClient + Send + Sync + Clone>(
+    async fn create_new_mapper<IMQ: IMQClient + Send + Sync + Clone>(
         mq_mock_client: IMQ,
     ) -> Result<RpcP2PClientMapper<IMQ>> {
+        let settings = settings::test_utils::new_test_settings().unwrap();
         let alice_validator = ValidatorId::from_ss58(ALICE_SS58)?;
         let validators = vec![alice_validator];
-        let mapper = RpcP2PClientMapper::new(mq_mock_client, validators);
+        let mapper =
+            RpcP2PClientMapper::new(&settings.state_chain, mq_mock_client, validators).await;
         Ok(mapper)
     }
 
-    #[test]
-    fn can_create_new_mapping() {
+    #[tokio::test]
+    async fn can_create_new_mapping() {
         let mq_mock = MQMock::new();
         let mq_client = mq_mock.get_client();
-        assert!(create_new_mapper::<MQMockClient>(mq_client).is_ok());
+        assert!(create_new_mapper::<MQMockClient>(mq_client).await.is_ok());
     }
 
-    #[test]
-    fn p2p_event_is_mapped_to_p2p_message() {
+    #[tokio::test]
+    async fn p2p_event_is_mapped_to_p2p_message() {
         let mq_mock = MQMock::new();
         let mq_client = mq_mock.get_client();
-        let mapper = create_new_mapper::<MQMockClient>(mq_client).unwrap();
+        let mapper = create_new_mapper::<MQMockClient>(mq_client).await.unwrap();
         // we use Alice in the mapper constructor, so she'll be there
         let p2p_event_received = P2PEvent::PeerConnected(ALICE_PEER_ID.to_string());
 
