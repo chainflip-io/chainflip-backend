@@ -317,9 +317,10 @@ steps:
   - name: create-new-testnet
     pull: always
     depends_on:
-      - build-state-chain-node
-      - build-chainflip-engine
-      - destroy-current-testnet
+      - clone
+#      - build-state-chain-node
+#      - build-chainflip-engine
+#      - destroy-current-testnet
     environment:
       INFURA_URL:
         from_secret: rinkeby_infura_url
