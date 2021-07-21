@@ -68,7 +68,6 @@ use sp_runtime::{
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::Witnesser;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
@@ -101,9 +100,6 @@ pub mod pallet {
 		/// Standard Event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
-		type Call: From<Call<Self>> + IsType<<Self as frame_system::Config>::Call>;
-
 		type Balance: Parameter
 			+ Member
 			+ AtLeast32BitUnsigned
@@ -130,12 +126,6 @@ pub mod pallet {
 
 		/// Provides an origin check for witness transactions.
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
-
-		/// An implementation of the witnesser, allows us to define witness_* helper extrinsics.
-		type Witnesser: Witnesser<
-			Call = <Self as Config>::Call,
-			AccountId = <Self as frame_system::Config>::AccountId,
-		>;
 
 		/// Information about the current epoch.
 		type EpochInfo: EpochInfo<
@@ -250,22 +240,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Witness that a `Staked` event was emitted by the `StakeManager` smart contract.
-		///
-		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
-		#[pallet::weight(10_000)]
-		pub fn witness_staked(
-			origin: OriginFor<T>,
-			staker_account_id: AccountId<T>,
-			amount: FlipBalance<T>,
-			tx_hash: EthTransactionHash,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let call = Call::staked(staker_account_id, amount, tx_hash);
-			T::Witnesser::witness(who, call.into())?;
-			Ok(().into())
-		}
-
 		/// Funds have been staked to an account via the StakeManager smart contract.
 		///
 		/// If the account doesn't exist, we create it.
@@ -322,22 +296,6 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			let claimable = T::Flip::claimable_balance(&who);
 			Self::do_claim(&who, claimable, address)?;
-			Ok(().into())
-		}
-
-		/// Witness that a `Claimed` event was emitted by the `StakeManager` smart contract.
-		///
-		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
-		#[pallet::weight(10_000)]
-		pub fn witness_claimed(
-			origin: OriginFor<T>,
-			account_id: AccountId<T>,
-			claimed_amount: FlipBalance<T>,
-			tx_hash: EthTransactionHash,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let call = Call::claimed(account_id, claimed_amount, tx_hash);
-			T::Witnesser::witness(who, call.into())?;
 			Ok(().into())
 		}
 

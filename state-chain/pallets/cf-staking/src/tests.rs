@@ -317,37 +317,6 @@ fn signature_is_inserted() {
 }
 
 #[test]
-fn witnessing_witnesses() {
-	new_test_ext().execute_with(|| {
-		MockWitnesser::set_threshold(2);
-
-		// Bob votes
-		assert_ok!(Staking::witness_staked(
-			Origin::signed(BOB),
-			ALICE,
-			123,
-			TX_HASH
-		));
-
-		// Should be one vote but not staked yet.
-		let count = MockWitnesser::get_vote_count();
-		assert_eq!(count, 1);
-		assert_eq!(Flip::total_balance_of(&ALICE), 0);
-
-		// Bob votes again (the mock allows this)
-		assert_ok!(Staking::witness_staked(
-			Origin::signed(BOB),
-			ALICE,
-			123,
-			TX_HASH
-		));
-
-		// Alice should be staked since we set the threshold to 2.
-		assert_eq!(Flip::total_balance_of(&ALICE), 123);
-	});
-}
-
-#[test]
 fn cannot_claim_bond() {
 	new_test_ext().execute_with(|| {
 		const STAKE: u128 = 200;

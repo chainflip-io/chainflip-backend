@@ -355,12 +355,10 @@ parameter_types! {
 
 impl pallet_cf_staking::Config for Runtime {
 	type Event = Event;
-	type Call = Call;
 	type Balance = FlipBalance;
 	type Flip = Flip;
 	type Nonce = u64;
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
-	type Witnesser = Witnesser;
 	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
 	type TimeSource = Timestamp;
 	type MinClaimTTL = MinClaimTTL;
