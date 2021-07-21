@@ -277,13 +277,13 @@ steps:
 #        Responsible parties: <@401244824440799233>, <@472886957920485386>, <@464710706567053313>, <@261113437642424320>
 #
 ## Get the latest cluster repo
-#  - name: clone-cluster
-#    image: alpine/git
-#    depends_on:
-#      - test-chainflip-backend
-#    commands:
-#      - git clone -b update/build-with-chart https://github.com/chainflip-io/chainflip-cluster.git cluster # TEMP REMOVE
-#      - chmod +x cluster/build.sh
+  - name: clone-cluster
+    image: alpine/git
+    depends_on:
+      - clone
+    commands:
+      - git clone -b update/build-with-chart https://github.com/chainflip-io/chainflip-cluster.git cluster # TEMP REMOVE
+      - chmod +x cluster/build.sh
 #
 ## Notify devs that Testnet is going down
 #  - name: notify-testnet-down
@@ -317,7 +317,7 @@ steps:
   - name: create-new-testnet
     pull: always
     depends_on:
-      - clone
+      - clone-cluster
 #      - build-state-chain-node
 #      - build-chainflip-engine
 #      - destroy-current-testnet
