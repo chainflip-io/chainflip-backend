@@ -60,6 +60,7 @@ pub mod pallet {
 
 	/// The Vault for this instance
 	#[pallet::storage]
+	#[pallet::getter(fn vault)]
 	pub(super) type Vault<T: Config> = StorageValue<_, VaultRotationResponse, ValueQuery>;
 
 	#[pallet::event]
