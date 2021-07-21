@@ -6,57 +6,71 @@ use sp_runtime::traits::AtLeast32BitUnsigned;
 use cf_traits::{AuctionConfirmation, AuctionEvents, AuctionPenalty};
 use sp_runtime::DispatchResult;
 
+/// The new public key
 pub type NewPublicKey = Vec<u8>;
+/// Request index type
 pub type RequestIndex = u32;
+/// List of request indexes
 pub type RequestIndexes = Vec<RequestIndex>;
-
-// The state of a rotation, where we have one rotation for all vaults
-pub enum State {
-	Invalid,
-	InProcess,
-	Completed,
-}
 
 // The things that can go wrong
 pub enum RotationError<ValidatorId> {
+	/// Empty validator set provided
 	EmptyValidatorSet,
+	/// An invalid set of validators
 	InvalidValidators,
+	/// A set of badly acting validators
 	BadValidators(Vec<ValidatorId>),
-	FailedConstruct,
-	FailedToComplete,
-	KeygenResponseFailed,
+	/// Failed to construct a valid chain specific payload for rotation
+	FailedToConstructPayload,
+	/// Vault rotation completion failed
 	VaultRotationCompletionFailed,
 }
 
-pub trait TryIndex<T> {
-	fn try_is_valid(idx: T) -> DispatchResult;
-}
-
+/// An index scheme which manages a number of index references
 pub trait Index<T: Add> {
+	/// Provide the next index
 	fn next() -> T;
-	fn clear(idx: T);
+	/// Invalidate this index if it exists
+	fn invalidate(idx: T);
+	/// Do we have an indexes
 	fn is_empty() -> bool;
+	/// Is this a valid index
 	fn is_valid(idx: T) -> bool;
 }
 
-pub trait RequestResponse<Index, Request, Response, Error> {
-	fn try_request(index: Index, request: Request) -> Result<(), Error>;
-	fn try_response(index: Index, response: Response) -> Result<(), Error>;
+/// Try to determine if an index is valid
+pub trait TryIndex<T: Add> : Index<T> {
+	fn try_is_valid(idx: T) -> DispatchResult;
 }
 
-pub trait Chain<Index, ValidatorId, Error> {
+/// A request/response trait
+pub trait RequestResponse<I, Req, Res, Err> {
+	/// Try to make a request identified with an index
+	fn try_request(index: I, request: Req) -> Result<(), Err>;
+	// Try to handle a response of a request identified with a index
+	fn try_response(index: I, response: Res) -> Result<(), Err>;
+}
+
+/// A Chain AKA Blockchain
+pub trait Chain<I, ValidatorId, Err> {
+	/// A set of params for this chain
 	fn chain_params() -> ChainParams;
-	// Start the construction phase.  When complete `ConstructionHandler::on_completion()`
-	// would be used to notify that this is complete
-	fn try_start_construction_phase(index: Index, new_public_key: NewPublicKey, validators: Vec<ValidatorId>) -> Result<(), Error>;
+	/// Start the vault rotation phase.  The chain would construct a `VaultRotationRequest`.
+	/// When complete `ChainEvents::try_complete_vault_rotation()` would be used to notify to continue
+	/// with the process.
+	fn try_start_vault_rotation(index: I, new_public_key: NewPublicKey, validators: Vec<ValidatorId>) -> Result<(), Err>;
 }
 
-pub trait ChainEvents<Index, ValidatorId, Error> {
-	// Construction phase complete
-	fn try_on_completion(index: Index, result: Result<ValidatorRotationRequest, ValidatorRotationError<ValidatorId>>) -> Result<(), Error>;
+/// Events coming in from our chains.  This is used to callback from the request to complete the vault
+/// rotation phase
+pub trait ChainEvents<I, ValidatorId, Err> {
+	/// Initial vault rotation phase complete with a result describing the outcome of this phase
+	/// Feedback is provided back on this step
+	fn try_complete_vault_rotation(index: I, result: Result<VaultRotationRequest, RotationError<ValidatorId>>) -> Result<(), Err>;
 }
 
-// A trait covering those things we find dearly in ChainFlip
+/// Description of some base types
 pub trait ChainFlip {
 	/// An amount for a bid
 	type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
@@ -64,12 +78,14 @@ pub trait ChainFlip {
 	type ValidatorId: Member + Parameter;
 }
 
+/// Grouping the management(traits) of a ChainFlip auction.
 pub trait AuctionManager<ValidatorId, Amount> {
 	type Penalty: AuctionPenalty<ValidatorId>;
 	type Confirmation: AuctionConfirmation;
 	type Events: AuctionEvents<ValidatorId, Amount>;
 }
 
+/// Our different Chain's specific parameters
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum ChainParams {
 	// Ethereum blockchain
@@ -81,55 +97,53 @@ pub enum ChainParams {
 	Other(Vec<u8>),
 }
 
+/// A representation of a key generation request
+/// This would be constructing for each supporting chain
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct KeygenRequest<ValidatorId> {
-	// Chain
+	/// Chain's parameters
 	pub(crate) chain: ChainParams,
-	// validator_candidates - the set from which we would like to generate the key
+	/// The set of validators from which we would like to generate the key
 	pub(crate) validator_candidates: Vec<ValidatorId>,
 }
 
+/// A response for our KeygenRequest
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum KeygenResponse<ValidatorId> {
-	// The KGC has completed successfully with a new public key
+	/// The key generation ceremony has completed successfully with a new proposed public key
 	Success(NewPublicKey),
-	// Something went wrong and it has failed.
-	// Re-run the auction minus the bad validators
+	/// Something went wrong and it failed.
 	Failure(Vec<ValidatorId>),
 }
 
-pub enum ValidatorRotationError<ValidatorId> {
-	BadValidators(Vec<ValidatorId>),
-	FailedConstruct,
-}
-
+/// The vault rotation request
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct ValidatorRotationRequest {
+pub struct VaultRotationRequest {
 	pub(crate) chain: ChainParams,
 }
-
-impl ValidatorRotationRequest {
-	pub fn new(chain: ChainParams) -> ValidatorRotationRequest {
-		Self {
-			chain
-		}
+/// From chain to request
+impl From<ChainParams> for VaultRotationRequest {
+	fn from(chain: ChainParams) -> Self {
+		VaultRotationRequest { chain }
 	}
 }
-
+/// A response of our request to rotate the vault
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct ValidatorRotationResponse {
+pub struct VaultRotationResponse {
 	old_key: Vec<u8>,
 	new_key: Vec<u8>,
 	tx: Vec<u8>
 }
 
+/// The state of a vault rotation
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct VaultRotation<Index, ValidatorId> {
+	/// Index for this rotation
 	id: Index,
+	/// The initial key generation request
 	pub(crate) keygen_request: KeygenRequest<ValidatorId>,
+	/// The proposed key
 	pub(crate) new_public_key: NewPublicKey,
-	// completed_construct: CompletedConstruct,
-	// validator_rotation_response: ValidatorRotationResponse,
 }
 
 impl<Index, ValidatorId> VaultRotation<Index, ValidatorId> {

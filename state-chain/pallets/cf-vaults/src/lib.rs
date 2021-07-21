@@ -54,9 +54,9 @@ pub mod pallet {
 			Call = <Self as pallet::Config<I>>::Call,
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
-		/// Our chain
+		/// The Chain for our Vault
 		type Chain: Chain<RequestIndex, Self::ValidatorId, RotationError<Self::ValidatorId>>;
-		/// Our Nonce
+		/// The Nonce for this Chain
 		type Nonce: Member
 			+ FullCodec
 			+ Copy
@@ -64,7 +64,7 @@ pub mod pallet {
 			+ AtLeast32BitUnsigned
 			+ MaybeSerializeDeserialize
 			+ CheckedSub;
-
+		/// Time source in generating the Nonce
 		type TimeSource: UnixTime;
 	}
 
@@ -73,29 +73,31 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 	}
 
+	/// Current request index used in request/response (NB. this should be global and probably doesn't fit this architecture)
 	#[pallet::storage]
 	#[pallet::getter(fn request_idx)]
 	pub(super) type RequestIdx<T: Config<I>, I: 'static = ()> = StorageValue<_, RequestIndex, ValueQuery>;
 
+	/// A map acting as a list of our current vault rotations
 	#[pallet::storage]
 	pub(super) type VaultRotations<T: Config<I>, I: 'static = ()> = StorageMap<_, Blake2_128Concat, RequestIndex, VaultRotation<RequestIndex, T::ValidatorId>>;
 
+	/// The Vault for this instance
 	#[pallet::storage]
-	pub(super) type Vault<T: Config<I>, I: 'static = ()> = StorageValue<_, ValidatorRotationResponse, ValueQuery>;
+	pub(super) type Vault<T: Config<I>, I: 'static = ()> = StorageValue<_, VaultRotationResponse, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		// Request a KGC from the CFE
-		// request_id - a unique indicator of this request and should be used throughout the lifetime of this request
-		// request - our keygen request
+		/// Request a key generation \[request_index, request\]
 		KeygenRequestEvent(RequestIndex, KeygenRequest<T::ValidatorId>),
-		// Request a rotation
-		ValidatorRotationRequest(RequestIndex, ValidatorRotationRequest),
-		// The vault has been rotated
+		/// Request a rotation of the vault for this chain \[request_index, request\]
+		VaultRotationRequest(RequestIndex, VaultRotationRequest),
+		/// The vault for the request has rotated \[request_index\]
 		VaultRotationCompleted(RequestIndex),
+		/// A rotation of vaults has been aborted \[request_indexes\]
 		RotationAborted(RequestIndexes),
-		// All vaults have been rotated
+		/// A complete set of vaults have been rotated
 		VaultsRotated,
 	}
 
@@ -103,9 +105,13 @@ pub mod pallet {
 	pub enum Error<T, I = ()> {
 		/// An invalid request idx
 		InvalidRequestIdx,
+		/// We have an empty validator set
 		EmptyValidatorSet,
+		/// A vault rotation has failed
 		VaultRotationCompletionFailed,
+		/// A key generation response has failed
 		KeygenResponseFailed,
+		/// A vault rotation has failed
 		VaultRotationFailed,
 	}
 
@@ -143,7 +149,7 @@ pub mod pallet {
 		pub fn witness_vault_rotation_response(
 			origin: OriginFor<T>,
 			request_id: RequestIndex,
-			response: ValidatorRotationResponse,
+			response: VaultRotationResponse,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = Call::<T, I>::vault_rotation_response(request_id, response);
@@ -154,7 +160,7 @@ pub mod pallet {
 		pub fn vault_rotation_response(
 			origin: OriginFor<T>,
 			request_id: RequestIndex,
-			response: ValidatorRotationResponse,
+			response: VaultRotationResponse,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			Self::try_is_valid(request_id)?;
@@ -225,7 +231,7 @@ impl<T: Config<I>, I: 'static> Index<RequestIndex> for Pallet<T, I> {
 		RequestIdx::<T, I>::mutate(|idx| *idx + 1)
 	}
 
-	fn clear(idx: RequestIndex) {
+	fn invalidate(idx: RequestIndex) {
 		VaultRotations::<T, I>::remove(idx);
 	}
 
@@ -277,7 +283,7 @@ impl<T: Config<I>, I: 'static>
 							Self::abort_rotation();
 							Err(RotationError::EmptyValidatorSet)
 						} else {
-							T::Chain::try_start_construction_phase(index, new_public_key, validators.to_vec())
+							T::Chain::try_start_vault_rotation(index, new_public_key, validators.to_vec())
 						}
 					} else {
 						unreachable!("This shouldn't happen but we need to maybe signal this")
@@ -322,18 +328,18 @@ impl<T: Config<I>, I: 'static> AuctionConfirmation for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static>
-	RequestResponse<RequestIndex, ValidatorRotationRequest, ValidatorRotationResponse, RotationError<T::ValidatorId>>
+	RequestResponse<RequestIndex, VaultRotationRequest, VaultRotationResponse, RotationError<T::ValidatorId>>
 	for Pallet<T, I>
 {
-	fn try_request(index: RequestIndex, request: ValidatorRotationRequest) -> Result<(), RotationError<T::ValidatorId>>  {
+	fn try_request(index: RequestIndex, request: VaultRotationRequest) -> Result<(), RotationError<T::ValidatorId>>  {
 		// Signal to CFE that we are wanting to start the rotation
-		Self::deposit_event(Event::ValidatorRotationRequest(index, request));
+		Self::deposit_event(Event::VaultRotationRequest(index, request));
 		Ok(().into())
 	}
 
-	fn try_response(index: RequestIndex, response: ValidatorRotationResponse) -> Result<(), RotationError<T::ValidatorId>>  {
+	fn try_response(index: RequestIndex, response: VaultRotationResponse) -> Result<(), RotationError<T::ValidatorId>>  {
 		// This request is complete
-		Self::clear(index);
+		Self::invalidate(index);
 		// Store for this instance the keys
 		Vault::<T, I>::set(response);
 		Self::deposit_event(Event::VaultRotationCompleted(index));
@@ -342,16 +348,15 @@ impl<T: Config<I>, I: 'static>
 }
 
 impl<T: Config<I>, I: 'static> ChainEvents<RequestIndex, T::ValidatorId, RotationError<T::ValidatorId>> for Pallet<T, I> {
-	fn try_on_completion(
+	fn try_complete_vault_rotation(
 		index: RequestIndex,
-		result: Result<ValidatorRotationRequest, ValidatorRotationError<T::ValidatorId>>,
+		result: Result<VaultRotationRequest, RotationError<T::ValidatorId>>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		match result {
 			Ok(request) => Self::try_request(index, request),
 			Err(_) => {
-				todo!("can we use this even?");
 				// Abort this key generation request
-				Self::clear(index);
+				Self::abort_rotation();
 				Err(RotationError::VaultRotationCompletionFailed)
 			}
 		}

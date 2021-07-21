@@ -6,7 +6,6 @@ use codec::{Decode, Encode};
 use frame_support::dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable};
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
-use frame_support::traits::UnixTime;
 
 /// A trait abstracting the functionality of the witnesser
 pub trait Witnesser {

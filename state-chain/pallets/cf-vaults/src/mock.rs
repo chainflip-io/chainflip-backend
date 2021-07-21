@@ -9,7 +9,6 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 };
 use crate::rotation::*;
-use crate::rotation::ChainParams::Other;
 use cf_traits::{AuctionConfirmation, AuctionEvents, AuctionError, AuctionPenalty};
 pub(super) mod time_source;
 
@@ -69,15 +68,13 @@ impl frame_system::Config for MockRuntime {
 parameter_types! {
 }
 
-pub enum MockError {}
-
 pub struct OtherChain;
 impl Chain<RequestIndex, ValidatorId, RotationError<ValidatorId>> for OtherChain {
 	fn chain_params() -> ChainParams {
 		todo!()
 	}
 
-	fn try_start_construction_phase(index: RequestIndex, new_public_key: NewPublicKey, validators: Vec<ValidatorId>) -> Result<(), RotationError<ValidatorId>> {
+	fn try_start_vault_rotation(index: RequestIndex, new_public_key: NewPublicKey, validators: Vec<ValidatorId>) -> Result<(), RotationError<ValidatorId>> {
 		todo!("mock other chain construction phase")
 	}
 }

@@ -130,15 +130,15 @@ impl<T: Config> RequestResponse<RequestIndex, EthSigningTxRequest<T::ValidatorId
 	fn try_response(index: RequestIndex, response: EthSigningTxResponse<T::ValidatorId>) -> Result<(), RotationError<T::ValidatorId>> {
 		match response {
 			EthSigningTxResponse::Success(signature) => {
-				T::Vaults::try_on_completion(
+				T::Vaults::try_complete_vault_rotation(
 					index,
-					Ok(ValidatorRotationRequest::new(Ethereum(signature)))
+					Ok(Ethereum(signature).into())
 				)
 			}
 			EthSigningTxResponse::Error(bad_validators) => {
-				T::Vaults::try_on_completion(
+				T::Vaults::try_complete_vault_rotation(
 					index,
-					Err(ValidatorRotationError::BadValidators(bad_validators))
+					Err(RotationError::BadValidators(bad_validators))
 				)
 			}
 		}
@@ -156,7 +156,7 @@ impl<T: Config> Chain<RequestIndex, T::ValidatorId, RotationError<T::ValidatorId
 		ChainParams::Ethereum(vec![])
 	}
 
-	fn try_start_construction_phase(index: RequestIndex, new_public_key: NewPublicKey, validators: Vec<T::ValidatorId>) -> Result<(), RotationError<T::ValidatorId>> {
+	fn try_start_vault_rotation(index: RequestIndex, new_public_key: NewPublicKey, validators: Vec<T::ValidatorId>) -> Result<(), RotationError<T::ValidatorId>> {
 		// Create payload for signature here
 		// function setAggKeyWithAggKey(SigData calldata sigData, Key calldata newKey)
 		match Self::encode_set_agg_key_with_agg_key(new_public_key) {
@@ -167,7 +167,7 @@ impl<T: Config> Chain<RequestIndex, T::ValidatorId, RotationError<T::ValidatorId
 				})
 			}
 			Err(_) => {
-				T::Vaults::try_on_completion(index, Err(ValidatorRotationError::FailedConstruct))
+				T::Vaults::try_complete_vault_rotation(index, Err(RotationError::FailedToConstructPayload))
 			}
 		}
 	}
@@ -177,7 +177,6 @@ impl<T: Config> Pallet<T> {
 	// Encode setAggKeyWithAggKey
 	// This is a long approach as we are working around `no_std` limitations here for the runtime
 	fn encode_set_agg_key_with_agg_key(new_public_key: NewPublicKey) -> ethabi::Result<Bytes> {
-		todo!("Nonce is 0");
 		Function::new(
 			"setAggKeyWithAggKey",
 			vec![
