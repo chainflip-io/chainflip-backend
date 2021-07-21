@@ -282,8 +282,8 @@ steps:
     depends_on:
       - test-chainflip-backend
     commands:
-      - git clone -b update/build-with-chart https://github.com/chainflip-io/chainflip-cluster.git . # TEMP REMOVE
-      - chmod +x ./build.sh
+      - git clone -b update/build-with-chart https://github.com/chainflip-io/chainflip-cluster.git cluster # TEMP REMOVE
+      - chmod +x cluster/build.sh
 
 # Notify devs that Testnet is going down
   - name: notify-testnet-down
@@ -311,7 +311,7 @@ steps:
       - test-chainflip-backend
     commands:
       - sleep 60
-      - ./build.sh --branch=$DRONE_COMMIT_BRANCH --destroy --rpc
+      - cluster/build.sh --branch=$DRONE_COMMIT_BRANCH --destroy --rpc
 
 # Create new testnet
   - name: create-new-testnet
@@ -327,7 +327,7 @@ steps:
         from_secret: dockerconfigjson
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     commands:
-      - ./build.sh --branch=$DRONE_COMMIT_BRANCH --tag=$DRONE_COMMIT_SHA --rpc
+      - cluster/build.sh --branch=$DRONE_COMMIT_BRANCH --tag=$DRONE_COMMIT_SHA --rpc
 
 # Notify devs Testnet is up
   - name: notify-testnet-up
@@ -381,7 +381,7 @@ steps:
       - kubectl logs -l app.kubernetes.io/name=chainflip-engine -n $DRONE_COMMIT_BRANCH --tail=-1
       - kubectl logs -l app.kubernetes.io/name=state-chain-node -n $DRONE_COMMIT_BRANCH --tail=-1
       - cd cluster/applications/staging/chainflip-validator
-      - ./build.sh --branch=$DRONE_COMMIT_BRANCH --destroy --rpc
+      - cluster/build.sh --branch=$DRONE_COMMIT_BRANCH --destroy --rpc
 
 service_account_name: drone-runner-kube
 
