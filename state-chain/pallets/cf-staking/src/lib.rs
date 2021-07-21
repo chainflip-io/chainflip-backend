@@ -77,6 +77,8 @@ pub mod pallet {
 	pub type EthereumAddress = [u8; 20];
 	pub type AggKeySignature = U256;
 
+	pub type StakeAttempt<Amount> = (EthereumAddress, Amount);
+
 	/// Details of a claim request required to build the call to StakeManager's 'requestClaim' function.
 	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 	pub struct ClaimDetails<Amount, Nonce> {
@@ -169,6 +171,14 @@ pub mod pallet {
 		StorageMap<_, Identity, AccountId<T>, ClaimDetailsFor<T>, OptionQuery>;
 
 	#[pallet::storage]
+	pub(super) type ReturnAddress<T: Config> =
+		StorageMap<_, Identity, AccountId<T>, EthereumAddress, OptionQuery>;
+
+	#[pallet::storage]
+	pub(super) type FailedStakeAttempts<T: Config> =
+		StorageMap<_, Identity, AccountId<T>, StakeAttempt<T::Balance>, OptionQuery>;
+
+	#[pallet::storage]
 	pub(super) type ClaimExpiries<T: Config> =
 		StorageValue<_, Vec<(Duration, AccountId<T>)>, ValueQuery>;
 
@@ -244,8 +254,14 @@ pub mod pallet {
 		/// Cannot make a claim request while an auction is being resolved.
 		NoClaimsDuringAuctionPhase,
 
-		/// Failed to encode the claim transaction
+		/// Failed to encode the claim transaction.
 		EthEncodingFailed,
+
+		/// A withdrawal address is provided when staking to an existing account.
+		AlreadyStaked,
+
+		/// A withdrawal address is provided for a claim, but the account has a different withdrawal address already associated.
+		DifferReturnAddress,
 	}
 
 	#[pallet::call]
@@ -261,7 +277,7 @@ pub mod pallet {
 			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = Call::staked(staker_account_id, amount, tx_hash);
+			let call = Call::staked(staker_account_id, amount, tx_hash, None);
 			T::Witnesser::witness(who, call.into())?;
 			Ok(().into())
 		}
@@ -278,9 +294,11 @@ pub mod pallet {
 			amount: FlipBalance<T>,
 			// Required to ensure this call is unique per staking event.
 			_tx_hash: EthTransactionHash,
+			// Optional ETH address used
+			eth_return_address: Option<EthereumAddress>,
 		) -> DispatchResultWithPostInfo {
 			Self::ensure_witnessed(origin)?;
-			Self::stake_account(&account_id, amount);
+			Self::stake_account(&account_id, amount, eth_return_address)?;
 			Ok(().into())
 		}
 
@@ -497,7 +515,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			for (staker, amount) in self.genesis_stakers.iter() {
-				Pallet::<T>::stake_account(staker, *amount);
+				Pallet::<T>::stake_account(staker, *amount, None);
 			}
 		}
 	}
@@ -513,8 +531,18 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Add stake to an account, creating the account if it doesn't exist, and activating the account if it is in retired state.
-	fn stake_account(account_id: &T::AccountId, amount: T::Balance) {
-		if !frame_system::Pallet::<T>::account_exists(account_id) {
+	fn stake_account(
+		account_id: &T::AccountId,
+		amount: T::Balance,
+		eth_return_address: Option<EthereumAddress>,
+	) -> Result<(), DispatchError> {
+		if frame_system::Pallet::<T>::account_exists(account_id) && eth_return_address.is_some() {
+			// TODO: refactor FailedStakeAttempts to store an array of StakeAttempt
+			let failed_stake_attempt: StakeAttempt<T::Balance> =
+				(eth_return_address.unwrap(), amount);
+			FailedStakeAttempts::<T>::insert(account_id, failed_stake_attempt);
+			Err(Error::<T>::AlreadyStaked)?
+		} else {
 			frame_system::Provider::<T>::created(account_id).unwrap_or_else(|e| {
 				// The standard impl of this in the system pallet never fails.
 				debug::error!(
@@ -524,12 +552,19 @@ impl<T: Config> Pallet<T> {
 			});
 		}
 
+		// If there is an address provided save it
+		if let Some(address) = eth_return_address {
+			ReturnAddress::<T>::insert(account_id, address);
+		}
+
 		let new_total = T::Flip::credit_stake(&account_id, amount);
 
 		// Staking implicitly activates the account. Ignore the error.
 		let _ = AccountRetired::<T>::mutate(&account_id, |retired| *retired = false);
 
 		Self::deposit_event(Event::Staked(account_id.clone(), amount, new_total));
+
+		Ok(())
 	}
 
 	fn do_claim(
@@ -550,6 +585,14 @@ impl<T: Config> Pallet<T> {
 			Error::<T>::PendingClaim
 		);
 
+		// Check if a return address exists - if not just go with the provided claim address
+		if let Some(return_address) = ReturnAddress::<T>::get(account_id) {
+			// Check if the address is different from the stored address - if yes error out
+			if return_address != address {
+				Err(Error::<T>::DifferReturnAddress)?
+			}
+		}
+
 		// Throw an error if the validator tries to claim too much. Otherwise decrement the stake by the
 		// amount claimed.
 		T::Flip::try_claim(account_id, amount)?;
@@ -560,6 +603,7 @@ impl<T: Config> Pallet<T> {
 		// Set expiry and build the claim parameters.
 		let expiry = T::TimeSource::now() + T::ClaimTTL::get();
 		Self::register_claim_expiry(account_id.clone(), expiry);
+
 		let mut details = ClaimDetails {
 			msg_hash: None,
 			nonce,
