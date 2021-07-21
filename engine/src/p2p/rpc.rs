@@ -63,7 +63,9 @@ impl RpcP2PClientMapping {
         for id in validator_ids {
             println!("here's the id: {:?}", id);
             let peer_id =
-                peer_id_from_validator_id(&id.to_base58()).expect("Should be a valid validator id");
+                peer_id_from_validator_id(&id.to_ss58()).expect("Should be a valid validator id");
+            // this is a different to_base58?
+            println!("Peer id key: {}", peer_id.to_base58());
             peer_to_validator.insert(peer_id.to_base58(), id);
         }
         Self { peer_to_validator }
@@ -306,25 +308,21 @@ mod tests {
 
     #[test]
     fn can_create_new_mapping() {
-        create_new_mapping().unwrap();
-        // assert!(create_new_mapping.is_ok());
+        assert!(create_new_mapping().is_ok());
     }
 
     #[test]
     fn p2p_event_is_mapped_to_p2p_message() {
-        let alice_validator = ValidatorId::from_ss58(ALICE_SS58).expect("Is valid validator id");
-        let validators = vec![alice_validator];
-        let mapping = RpcP2PClientMapping::new(validators);
-        // let p2p_event_received = P2PEvent::PeerConnected(
-        //     "12D3KooWHSTL4JxK3pzG6xMYXMWS3zqUAqgcWTRNc4HvqFcAkzNP".to_string(),
-        // );
+        let mapping = create_new_mapping().unwrap();
+        // we use Alice in the mapping constructor, so she'll be there
+        let p2p_event_received = P2PEvent::PeerConnected(ALICE_PEER_ID.to_string());
 
-        // let expected_p2p_message = P2PMessage {
-        //     sender_id: ValidatorId::from_base58(ALICE_SS58).unwrap(),
-        //     data: vec![],
-        // };
+        let expected_p2p_message = P2PMessage {
+            sender_id: ValidatorId::from_ss58(ALICE_SS58).unwrap(),
+            data: vec![],
+        };
 
-        // let p2p_message = mapping.from_p2p_event_to_p2p_message(p2p_event_received);
-        // assert_eq!(p2p_message, expected_p2p_message);
+        let p2p_message = mapping.from_p2p_event_to_p2p_message(p2p_event_received);
+        assert_eq!(p2p_message, expected_p2p_message);
     }
 }

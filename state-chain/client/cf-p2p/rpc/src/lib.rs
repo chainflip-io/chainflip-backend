@@ -220,6 +220,8 @@ mod tests {
 	use sp_core::ed25519::Public;
 	use std::collections::HashMap;
 
+	use serde_json::json;
+
 	/// Our network of nodes
 	struct P2P {
 		nodes: HashMap<PeerId, Node>,

@@ -15,16 +15,15 @@ use sp_core::ed25519::Public;
 
 use async_trait::async_trait;
 use futures::Stream;
-use rpc::{Base58, SS58};
+use rpc::SS58;
 
 use sp_core::crypto::Ss58Codec;
 
 use anyhow::Result;
 
 use sp_runtime::AccountId32;
-use state_chain_runtime::SS58Prefix;
 
-use crate::state_chain::validator::Validator;
+use self::rpc::Base58;
 
 #[derive(Debug)]
 pub enum P2PNetworkClientError {
@@ -35,6 +34,7 @@ pub enum P2PNetworkClientError {
 type StatusCode = u64;
 
 #[async_trait]
+// is there a way to remove this Base58 trait??
 pub trait P2PNetworkClient<B: Base58, S: Stream<Item = P2PMessage>> {
     /// Broadcast to all validators on the network
     async fn broadcast(&self, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError>;
@@ -66,8 +66,8 @@ impl ValidatorId {
         ValidatorId(id)
     }
 
+    // TODO: Can this be removed?? maybe not for PeerId?
     pub fn from_base58(id: &str) -> Result<Self> {
-        todo!("Remove this?");
         let id = bs58::decode(&id)
             .into_vec()
             .map_err(|_| anyhow::format_err!("Id is not valid base58: {}", id))?;
@@ -90,11 +90,10 @@ impl ValidatorId {
 
 impl std::fmt::Display for ValidatorId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ValidatorId({})", self.to_base58())
+        write!(f, "ValidatorId({})", self.to_ss58())
     }
 }
 
-// TODO: Can this be removed?
 impl Base58 for ValidatorId {
     fn to_base58(&self) -> String {
         bs58::encode(&self.0).into_string()
