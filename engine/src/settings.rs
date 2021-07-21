@@ -65,13 +65,13 @@ impl Settings {
         let s: Self = s.try_into()?;
 
         // make sure the settings are clean
-        s.clean_settings()?;
+        s.validate_settings()?;
 
         Ok(s)
     }
 
-    /// validates some of the settings
-    pub fn clean_settings(&self) -> Result<(), ConfigError> {
+    /// validates the formatting of some settings
+    pub fn validate_settings(&self) -> Result<(), ConfigError> {
         // check the eth addresses
         is_eth_address(&self.eth.key_manager_eth_address)
             .map_err(|e| ConfigError::Message(e.to_string()))?;
@@ -133,7 +133,7 @@ pub mod test_utils {
         let s: Settings = s.try_into()?;
 
         // make sure the settings are clean
-        s.clean_settings()?;
+        s.validate_settings()?;
 
         Ok(s)
     }
