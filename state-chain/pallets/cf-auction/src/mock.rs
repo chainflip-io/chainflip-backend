@@ -72,7 +72,6 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ();
 }
 
-
 parameter_types! {
 	pub const MinAuctionSize: u32 = 2;
 }

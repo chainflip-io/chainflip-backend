@@ -255,14 +255,26 @@ mod test_issuance {
 
 			// Mint to a reserve.
 			mint_to_reserve(TEST_RESERVE, DEPOSIT);
-			assert_eq!(Flip::reserved_balance(TEST_RESERVE), INIT_RESERVE_BALANCE + DEPOSIT);
-			assert_eq!(FlipIssuance::<Test>::total_issuance(), INIT_TOTAL_ISSUANCE + DEPOSIT);
+			assert_eq!(
+				Flip::reserved_balance(TEST_RESERVE),
+				INIT_RESERVE_BALANCE + DEPOSIT
+			);
+			assert_eq!(
+				FlipIssuance::<Test>::total_issuance(),
+				INIT_TOTAL_ISSUANCE + DEPOSIT
+			);
 			check_balance_integrity();
 
 			// Burn some.
 			burn_from_reserve(TEST_RESERVE, WITHDRAWAL);
-			assert_eq!(Flip::reserved_balance(TEST_RESERVE), INIT_RESERVE_BALANCE + DEPOSIT - WITHDRAWAL);
-			assert_eq!(FlipIssuance::<Test>::total_issuance(), INIT_TOTAL_ISSUANCE + DEPOSIT - WITHDRAWAL);
+			assert_eq!(
+				Flip::reserved_balance(TEST_RESERVE),
+				INIT_RESERVE_BALANCE + DEPOSIT - WITHDRAWAL
+			);
+			assert_eq!(
+				FlipIssuance::<Test>::total_issuance(),
+				INIT_TOTAL_ISSUANCE + DEPOSIT - WITHDRAWAL
+			);
 
 			// Obliterate the rest.
 			burn_from_reserve(TEST_RESERVE, 1_000_000);

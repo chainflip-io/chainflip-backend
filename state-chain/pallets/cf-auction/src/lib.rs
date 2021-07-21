@@ -146,7 +146,10 @@ pub mod pallet {
 			index: T::AuctionIndex,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			ensure!(T::Confirmation::awaiting_confirmation(), Error::<T>::InvalidAuction);
+			ensure!(
+				T::Confirmation::awaiting_confirmation(),
+				Error::<T>::InvalidAuction
+			);
 			ensure!(
 				index == CurrentAuctionIndex::<T>::get(),
 				Error::<T>::InvalidAuction

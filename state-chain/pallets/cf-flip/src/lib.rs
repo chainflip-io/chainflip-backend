@@ -25,7 +25,7 @@
 //! ## Reserves
 //!
 //! Reserves can be thought of as on-chain accounts, however unlike accounts they have no public key associated. Instead,
-//! a reserve is identified by a four-byte [`ReserveId`]. Reserves can be used to allocate funds internally, for example 
+//! a reserve is identified by a four-byte [`ReserveId`]. Reserves can be used to allocate funds internally, for example
 //! for setting aside funds to be distributed as rewards, or for use as a treasury.
 //!
 //! ### Example
