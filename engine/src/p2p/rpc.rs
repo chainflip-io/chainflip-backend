@@ -1,7 +1,9 @@
 use crate::mq::{pin_message_stream, IMQClient, Subject};
 use crate::p2p::{P2PMessage, P2PNetworkClient, P2PNetworkClientError, StatusCode, ValidatorId};
+use crate::settings;
 use crate::state_chain::{
     auction::AuctionCompletedEvent, helpers::create_subxt_client, runtime::StateChainRuntime,
+    session::ValidatorsStoreExt,
 };
 use async_trait::async_trait;
 use cf_p2p_rpc::P2PEvent;
@@ -10,6 +12,7 @@ use jsonrpc_core_client::transports::ws::connect;
 use jsonrpc_core_client::{RpcChannel, RpcResult, TypedClient, TypedSubscriptionStream};
 use libp2p_core::identity::ed25519;
 use libp2p_core::{PeerId, PublicKey};
+use sp_core::crypto::Ss58Codec;
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::str::FromStr;
@@ -72,7 +75,7 @@ where
     peer_to_validator_mapper: RpcP2PClientMapper<IMQ>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct RpcP2PClientMapper<IMQ>
 where
     IMQ: IMQClient + Sync + Send + Clone,
@@ -86,7 +89,7 @@ impl<IMQ> RpcP2PClientMapper<IMQ>
 where
     IMQ: IMQClient + Sync + Send + Clone,
 {
-    pub async fn init(state_chain_settings: settings::StateChain, mq_client: IMQ) -> Self {
+    pub async fn init(state_chain_settings: &settings::StateChain, mq_client: IMQ) -> Self {
         // let auction_completed_event_stream = mq_client
         //     .subscribe::<AuctionCompletedEvent<StateChainRuntime>>(Subject::AuctionCompleted)
         //     .await
@@ -115,8 +118,10 @@ where
         //     peer_to_validator.insert(peer_id.to_base58(), id);
         // }
 
+        let mut peer_to_validator_map: HashMap<String, ValidatorId> = HashMap::new();
+
         let subxt_client = create_subxt_client(state_chain_settings).await.unwrap();
-        let validators = subxt_client.validators(None).await;
+        let validators = subxt_client.validators(None).await.unwrap();
         println!(
             "Here they are bois, here're the validators: {:?}",
             validators
@@ -124,32 +129,34 @@ where
 
         for id in validators {
             println!("here's the id: {:?}", id);
-            let peer_id =
-                peer_id_from_validator_id(&id.to_ss58()).expect("Should be a valid validator id");
+            let peer_id = peer_id_from_validator_id(&id.to_ss58check())
+                .expect("Should be a valid validator id");
             // this is a different to_base58?
             println!("Peer id key: {}", peer_id.to_base58());
-            peer_to_validator.insert(peer_id.to_base58(), id);
+            peer_to_validator_map.insert(peer_id.to_base58(), id.into());
         }
 
-        // log::info!(
-        //     "RpcP2PClientMapper received AuctionCompleted event: {:?}",
-        //     event
-        // );
-
         let peer_to_validator_map = PeerIdValidatorMap {
-            inner: peer_to_validator,
+            inner: peer_to_validator_map,
         };
 
         Self {
             peer_to_validator_map,
             // we still need this after initialisation to update after the next auction
             mq_client,
+            subxt_client,
         }
     }
 
     #[cfg(test)]
     /// Convenience method for tests so we don't have to push an auction confirmed event to fill the validator map
-    pub fn new(mq_client: IMQ, validator_ids: Vec<ValidatorId>) -> Self {
+    pub async fn new(
+        state_chain_settings: settings::StateChain,
+        mq_client: IMQ,
+        validator_ids: Vec<ValidatorId>,
+    ) -> Self {
+        let subxt_client = create_subxt_client(state_chain_settings).await.unwrap();
+
         let mut peer_to_validator_map = HashMap::new();
 
         for id in validator_ids {
@@ -163,6 +170,7 @@ where
         Self {
             peer_to_validator_map,
             mq_client,
+            subxt_client,
         }
     }
 }

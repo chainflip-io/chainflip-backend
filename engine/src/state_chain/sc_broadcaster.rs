@@ -51,7 +51,7 @@ where
         mut signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
         mq_client: MQ,
     ) -> Self {
-        let sc_client = create_subxt_client(settings.state_chain.clone())
+        let sc_client = create_subxt_client(&settings.state_chain)
             .await
             .expect("Could not create subxt client");
 

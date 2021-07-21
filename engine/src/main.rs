@@ -39,7 +39,8 @@ async fn main() {
     let url = url::Url::parse(&format!("ws://127.0.0.1:{}", ws_port)).expect("valid ws port");
     let mq_client = *mq_factory.create().await.unwrap();
     // this will intentionally block on new, as we must let the AuctionConfirmed event be registered on start.
-    let rpc_p2p_client_mapper = RpcP2PClientMapper::init(mq_client.clone()).await;
+    let rpc_p2p_client_mapper =
+        RpcP2PClientMapper::init(&settings.state_chain, mq_client.clone()).await;
     let p2p_client = RpcP2PClient::new(url, rpc_p2p_client_mapper);
     let p2p_conductor_fut = P2PConductor::new(mq_client, p2p_client)
         .await
