@@ -1,6 +1,8 @@
 use crate::mq::{pin_message_stream, IMQClient, Subject};
 use crate::p2p::{P2PMessage, P2PNetworkClient, P2PNetworkClientError, StatusCode, ValidatorId};
-use crate::state_chain::{auction::AuctionCompletedEvent, runtime::StateChainRuntime};
+use crate::state_chain::{
+    auction::AuctionCompletedEvent, helpers::create_subxt_client, runtime::StateChainRuntime,
+};
 use async_trait::async_trait;
 use cf_p2p_rpc::P2PEvent;
 use futures::{Future, Stream, StreamExt};
@@ -12,6 +14,7 @@ use std::collections::HashMap;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::task::{Context, Poll};
+use substrate_subxt::Client;
 use tokio_compat_02::FutureExt;
 
 use anyhow::Result;
@@ -76,33 +79,50 @@ where
 {
     pub peer_to_validator_map: PeerIdValidatorMap,
     mq_client: IMQ,
+    subxt_client: Client<StateChainRuntime>,
 }
 
 impl<IMQ> RpcP2PClientMapper<IMQ>
 where
     IMQ: IMQClient + Sync + Send + Clone,
 {
-    pub async fn init(mq_client: IMQ) -> Self {
-        // HOW TO DO THIS??
-        let auction_completed_event_stream = mq_client
-            .subscribe::<AuctionCompletedEvent<StateChainRuntime>>(Subject::AuctionCompleted)
-            .await
-            .expect("Should be able to subscribe to Subject::AuctionCompleted");
+    pub async fn init(state_chain_settings: settings::StateChain, mq_client: IMQ) -> Self {
+        // let auction_completed_event_stream = mq_client
+        //     .subscribe::<AuctionCompletedEvent<StateChainRuntime>>(Subject::AuctionCompleted)
+        //     .await
+        //     .expect("Should be able to subscribe to Subject::AuctionCompleted");
 
-        let mut auction_completed_event_stream = pin_message_stream(auction_completed_event_stream);
+        // let mut auction_completed_event_stream = pin_message_stream(auction_completed_event_stream);
 
-        let event = auction_completed_event_stream
-            .next()
-            .await
-            .unwrap()
-            .unwrap();
+        // // only await on the very next Auction confirmed when initialising. We should block on this, but not the sc_observer
+        // let event = auction_completed_event_stream
+        //     .next()
+        //     .await
+        //     .unwrap()
+        //     .unwrap();
 
-        let validator_ids: Vec<ValidatorId> =
-            event.validators.iter().map(|a| a.clone().into()).collect();
+        // let validator_ids: Vec<ValidatorId> =
+        //     event.validators.iter().map(|a| a.clone().into()).collect();
 
-        let mut peer_to_validator = HashMap::new();
+        // let mut peer_to_validator = HashMap::new();
 
-        for id in validator_ids {
+        // for id in validator_ids {
+        //     println!("here's the id: {:?}", id);
+        //     let peer_id =
+        //         peer_id_from_validator_id(&id.to_ss58()).expect("Should be a valid validator id");
+        //     // this is a different to_base58?
+        //     println!("Peer id key: {}", peer_id.to_base58());
+        //     peer_to_validator.insert(peer_id.to_base58(), id);
+        // }
+
+        let subxt_client = create_subxt_client(state_chain_settings).await.unwrap();
+        let validators = subxt_client.validators(None).await;
+        println!(
+            "Here they are bois, here're the validators: {:?}",
+            validators
+        );
+
+        for id in validators {
             println!("here's the id: {:?}", id);
             let peer_id =
                 peer_id_from_validator_id(&id.to_ss58()).expect("Should be a valid validator id");
@@ -111,10 +131,10 @@ where
             peer_to_validator.insert(peer_id.to_base58(), id);
         }
 
-        log::info!(
-            "RpcP2PClientMapper received AuctionCompleted event: {:?}",
-            event
-        );
+        // log::info!(
+        //     "RpcP2PClientMapper received AuctionCompleted event: {:?}",
+        //     event
+        // );
 
         let peer_to_validator_map = PeerIdValidatorMap {
             inner: peer_to_validator,
@@ -133,7 +153,6 @@ where
         let mut peer_to_validator_map = HashMap::new();
 
         for id in validator_ids {
-            println!("here's the id: {:?}", id);
             let peer_id =
                 peer_id_from_validator_id(&id.to_ss58()).expect("Should be a valid validator id");
             peer_to_validator_map.insert(peer_id.to_base58(), id);

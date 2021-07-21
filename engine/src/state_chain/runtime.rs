@@ -19,7 +19,7 @@ use core::fmt::Debug;
 
 use codec::{Decode, Encode};
 
-use super::{auction, staking, validator};
+use super::{auction, session, staking, validator};
 
 use serde::{Deserialize, Serialize};
 
@@ -87,6 +87,10 @@ impl Runtime for StateChainRuntime {
         // event_type_registry.with_sudo();
         register_default_type_sizes(event_type_registry);
     }
+}
+
+impl session::Session for StateChainRuntime {
+    type ValidatorId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
 }
 
 impl auction::Auction for StateChainRuntime {
