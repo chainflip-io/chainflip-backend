@@ -5,7 +5,10 @@ pub mod mock;
 mod conductor;
 mod rpc;
 
-use std::{convert::TryInto, str::FromStr};
+use std::{
+    convert::{TryFrom, TryInto},
+    str::FromStr,
+};
 
 pub use conductor::P2PConductor;
 pub use rpc::{RpcP2PClient, RpcP2PClientMapping};
@@ -105,6 +108,12 @@ impl SS58 for ValidatorId {
         let account_id = AccountId32::new(self.0);
         let ss58 = account_id.to_ss58check();
         return ss58;
+    }
+}
+
+impl From<AccountId32> for ValidatorId {
+    fn from(account_id: AccountId32) -> Self {
+        ValidatorId(*account_id.as_ref())
     }
 }
 

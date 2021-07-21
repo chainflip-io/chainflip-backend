@@ -18,16 +18,16 @@ impl TempEventMapper {
         let nats_client_factory = NatsMQClientFactory::new(&settings.message_queue);
         let mq_client = *nats_client_factory.create().await.unwrap();
 
-        let auction_confirmed_event_stream = mq_client
+        let auction_completed_event_stream = mq_client
             .subscribe::<auction::AuctionCompletedEvent<StateChainRuntime>>(
                 Subject::AuctionCompleted,
             )
             .await
             .unwrap();
 
-        let auction_confirmed_event_stream = pin_message_stream(auction_confirmed_event_stream);
+        let auction_completed_event_stream = pin_message_stream(auction_completed_event_stream);
 
-        auction_confirmed_event_stream
+        auction_completed_event_stream
             .for_each_concurrent(None, |evt| async {
                 let event = evt.expect("Should be an event here");
 

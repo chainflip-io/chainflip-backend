@@ -1,4 +1,6 @@
+use crate::mq::{pin_message_stream, IMQClient, Subject};
 use crate::p2p::{P2PMessage, P2PNetworkClient, P2PNetworkClientError, StatusCode, ValidatorId};
+use crate::state_chain::{auction::AuctionCompletedEvent, runtime::StateChainRuntime};
 use async_trait::async_trait;
 use cf_p2p_rpc::P2PEvent;
 use futures::{Future, Stream, StreamExt};
@@ -7,6 +9,7 @@ use jsonrpc_core_client::{RpcChannel, RpcResult, TypedClient, TypedSubscriptionS
 use libp2p_core::identity::ed25519;
 use libp2p_core::{PeerId, PublicKey};
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::task::{Context, Poll};
@@ -37,27 +40,46 @@ fn peer_id_from_validator_id(validator_id: &String) -> std::result::Result<PeerI
         .and_then(|p| Ok(PeerId::from_public_key(PublicKey::Ed25519(p))))
 }
 
-pub struct RpcP2PClient {
+pub struct RpcP2PClient<IMQ>
+where
+    IMQ: IMQClient + Sync + Send,
+{
     url: url::Url,
-    peer_to_validator_mapping: RpcP2PClientMapping,
+    peer_to_validator_mapping: RpcP2PClientMapping<IMQ>,
 }
 
 #[derive(Clone, Debug)]
-pub struct RpcP2PClientMapping {
+pub struct RpcP2PClientMapping<IMQ>
+where
+    IMQ: IMQClient + Sync + Send,
+{
     // base58 PeerId to a ValidatorId
     peer_to_validator: HashMap<String, ValidatorId>,
+    mq_client: IMQ,
 }
 
-impl Default for RpcP2PClientMapping {
-    fn default() -> Self {
-        Self {
-            peer_to_validator: HashMap::default(),
-        }
-    }
-}
+impl<IMQ> RpcP2PClientMapping<IMQ>
+where
+    IMQ: IMQClient + Sync + Send,
+{
+    pub async fn init(mq_client: IMQ) -> Self {
+        // HOW TO DO THIS??
+        let auction_completed_event_stream = mq_client
+            .subscribe::<AuctionCompletedEvent<StateChainRuntime>>(Subject::AuctionCompleted)
+            .await
+            .expect("Should be able to subscribe to Subject::AuctionCompleted");
 
-impl RpcP2PClientMapping {
-    pub fn new(validator_ids: Vec<ValidatorId>) -> Self {
+        let auction_completed_event_stream = pin_message_stream(auction_completed_event_stream);
+
+        let event = auction_completed_event_stream
+            .next()
+            .await
+            .unwrap()
+            .unwrap();
+
+        let validator_ids: Vec<ValidatorId> =
+            event.validators.iter().map(|a| a.clone().into()).collect();
+
         let mut peer_to_validator = HashMap::new();
 
         for id in validator_ids {
@@ -68,8 +90,34 @@ impl RpcP2PClientMapping {
             println!("Peer id key: {}", peer_id.to_base58());
             peer_to_validator.insert(peer_id.to_base58(), id);
         }
-        Self { peer_to_validator }
+
+        log::info!(
+            "RpcP2PClientMapping received AuctionCompleted event: {:?}",
+            event
+        );
+
+        Self {
+            peer_to_validator,
+            // we still need this after initialisation to update after the next auction
+            mq_client,
+        }
     }
+
+    // TODO: Should this be CFG test? don't think we'll need it in the end, but might
+    // make testing a bit easier, without initialisation
+    // pub fn new(mq_client: IMQ, validator_ids: Vec<ValidatorId>) -> Self {
+    //     let mut peer_to_validator = HashMap::new();
+
+    //     for id in validator_ids {
+    //         println!("here's the id: {:?}", id);
+    //         let peer_id =
+    //             peer_id_from_validator_id(&id.to_ss58()).expect("Should be a valid validator id");
+    //         // this is a different to_base58?
+    //         println!("Peer id key: {}", peer_id.to_base58());
+    //         peer_to_validator.insert(peer_id.to_base58(), id);
+    //     }
+    //     Self { peer_to_validator, mq_client: () }
+    // }
 
     pub fn from_p2p_event_to_p2p_message(&self, p2p_event: P2PEvent) -> P2PMessage {
         match p2p_event {
@@ -85,8 +133,11 @@ impl RpcP2PClientMapping {
     }
 }
 
-impl RpcP2PClient {
-    pub fn new(url: url::Url, peer_to_validator_mapping: RpcP2PClientMapping) -> Self {
+impl<IMQ> RpcP2PClient<IMQ>
+where
+    IMQ: IMQClient + Sync + Send + Clone,
+{
+    pub fn new(url: url::Url, peer_to_validator_mapping: RpcP2PClientMapping<IMQ>) -> Self {
         RpcP2PClient {
             url,
             peer_to_validator_mapping,
@@ -94,15 +145,21 @@ impl RpcP2PClient {
     }
 }
 
-pub struct RpcP2PClientStream {
+pub struct RpcP2PClientStream<IMQ>
+where
+    IMQ: IMQClient + Sync + Send + Clone,
+{
     inner: Pin<Box<dyn Stream<Item = RpcResult<P2PEvent>> + Send>>,
-    peer_to_validator_mapping: RpcP2PClientMapping,
+    peer_to_validator_mapping: RpcP2PClientMapping<IMQ>,
 }
 
-impl RpcP2PClientStream {
+impl<IMQ> RpcP2PClientStream<IMQ>
+where
+    IMQ: IMQClient + Sync + Send + Clone,
+{
     pub fn new(
         stream: TypedSubscriptionStream<P2PEvent>,
-        peer_to_validator_mapping: RpcP2PClientMapping,
+        peer_to_validator_mapping: RpcP2PClientMapping<IMQ>,
     ) -> Self {
         RpcP2PClientStream {
             inner: Box::pin(stream),
@@ -111,7 +168,10 @@ impl RpcP2PClientStream {
     }
 }
 
-impl Stream for RpcP2PClientStream {
+impl<IMQ> Stream for RpcP2PClientStream<IMQ>
+where
+    IMQ: IMQClient + Sync + Send + Clone,
+{
     type Item = P2PMessage;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -136,9 +196,10 @@ impl Stream for RpcP2PClientStream {
 }
 
 #[async_trait]
-impl<NodeId> P2PNetworkClient<NodeId, RpcP2PClientStream> for RpcP2PClient
+impl<NodeId, IMQ> P2PNetworkClient<NodeId, RpcP2PClientStream<IMQ>> for RpcP2PClient<IMQ>
 where
     NodeId: Base58 + Send + Sync,
+    IMQ: IMQClient + Send + Sync + Clone,
 {
     async fn broadcast(&self, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError> {
         let client: P2PClient = FutureExt::compat(connect(&self.url))
@@ -162,7 +223,7 @@ where
             .map_err(|_| P2PNetworkClientError::Rpc)
     }
 
-    async fn take_stream(&mut self) -> Result<RpcP2PClientStream, P2PNetworkClientError> {
+    async fn take_stream(&mut self) -> Result<RpcP2PClientStream<IMQ>, P2PNetworkClientError> {
         let client: P2PClient = FutureExt::compat(connect(&self.url))
             .await
             .map_err(|_| P2PNetworkClientError::Rpc)?;
@@ -235,7 +296,6 @@ mod tests {
     }
 
     const ALICE_SS58: &str = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY";
-    const ALICE_ACCT_ID: &str = "d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d";
     const ALICE_PEER_ID: &str = "12D3KooWQ6jz4ttZfoBNKopouQWWkUVg93oWApg7ShLETzbnV3ec";
 
     impl TestServer {
