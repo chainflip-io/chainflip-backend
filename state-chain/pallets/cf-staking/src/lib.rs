@@ -7,7 +7,7 @@
 //! ## Staking
 //!
 //! - Stake is added via the Ethereum StakeManager contract. `Staked` events emitted from this contract should trigger
-//!   votes via signed calls to `witness_stake`.
+//!   a witnessed call to [Pallet::staked].
 //! - Any stake added in this way is considered as an implicit bid for a validator slot.
 //! - If stake is added to a non-existent account, it will not be counted and will be refunded instead.
 //!

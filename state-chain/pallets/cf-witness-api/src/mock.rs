@@ -2,9 +2,10 @@ use std::time::Duration;
 
 use crate as pallet_cf_witness_api;
 use cf_traits::{
-	impl_mock_ensure_witnessed_for_origin, impl_mock_witnesser_for_account_and_call_types, impl_mock_stake_transfer
+	impl_mock_ensure_witnessed_for_origin, impl_mock_stake_transfer,
+	impl_mock_witnesser_for_account_and_call_types, AuctionConfirmation,
 };
-use frame_support::parameter_types;
+use frame_support::{parameter_types, traits::ValidatorRegistration};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -23,6 +24,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Auction: pallet_cf_auction::{Module, Call, Event<T>, Config},
 		Staking: pallet_cf_staking::{Module, Call, Event<T>, Config<T>},
 		WitnessApi: pallet_cf_witness_api::{Module, Call},
 	}
@@ -36,6 +38,7 @@ parameter_types! {
 	pub const SS58Prefix: u8 = 42;
 	pub const MinClaimTTL: Duration = Duration::from_millis(100);
 	pub const ClaimTTL: Duration = Duration::from_millis(1000);
+	pub const MinAuctionSize: u32 = 2;
 }
 
 impl system::Config for Test {
@@ -63,58 +66,6 @@ impl system::Config for Test {
 	type SS58Prefix = SS58Prefix;
 }
 
-// pub struct MockStakeTransfer;
-// 
-// impl MockStakeTransfer {
-// 	pub fn get_balance(account_id: u64) -> u128 {
-// 		BALANCES.with(|cell| {
-// 			cell.borrow()
-// 				.get(&account_id)
-// 				.map(ToOwned::to_owned)
-// 				.unwrap_or_default()
-// 		})
-// 	}
-// }
-
-// thread_local! {
-// 	pub static BALANCES: RefCell<HashMap<u64, u128>> = RefCell::new(HashMap::default());
-// }
-
-// impl cf_traits::StakeTransfer for MockStakeTransfer {
-// 	type AccountId = u64;
-// 	type Balance = u128;
-
-// 	fn stakeable_balance(account_id: &Self::AccountId) -> Self::Balance {
-// 		Self::get_balance(*account_id)
-// 	}
-// 	fn claimable_balance(account_id: &Self::AccountId) -> Self::Balance {
-// 		Self::get_balance(*account_id)
-// 	}
-// 	fn credit_stake(account_id: &Self::AccountId, amount: Self::Balance) -> Self::Balance {
-// 		BALANCES.with(|cell| *cell.borrow_mut().entry(*account_id).or_default() += amount);
-// 		Self::get_balance(*account_id)
-// 	}
-// 	fn try_claim(
-// 		account_id: &Self::AccountId,
-// 		amount: Self::Balance,
-// 	) -> Result<(), sp_runtime::DispatchError> {
-// 		BALANCES.with(|cell| {
-// 			cell.borrow_mut()
-// 				.entry(*account_id)
-// 				.or_default()
-// 				.checked_sub(amount)
-// 				.map(|_| ())
-// 				.ok_or("Overflow".into())
-// 		})
-// 	}
-// 	fn settle_claim(_amount: Self::Balance) {
-// 		unimplemented!()
-// 	}
-// 	fn revert_claim(account_id: &Self::AccountId, amount: Self::Balance) {
-// 		Self::credit_stake(account_id, amount);
-// 	}
-// }
-
 impl_mock_stake_transfer!(u64, u128);
 
 impl pallet_cf_staking::Config for Test {
@@ -127,6 +78,44 @@ impl pallet_cf_staking::Config for Test {
 	type TimeSource = cf_traits::mocks::time_source::Mock;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
+}
+
+pub struct MockAuctionTraits;
+
+impl cf_traits::BidderProvider for MockAuctionTraits {
+	type ValidatorId = u64;
+	type Amount = u128;
+
+	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
+		vec![]
+	}
+}
+
+impl ValidatorRegistration<u64> for MockAuctionTraits {
+	fn is_registered(_id: &u64) -> bool {
+		true
+	}
+}
+
+impl AuctionConfirmation for MockAuctionTraits {
+	fn awaiting_confirmation() -> bool {
+		true
+	}
+	fn set_awaiting_confirmation(_waiting: bool) {
+		unimplemented!()
+	}
+}
+
+impl pallet_cf_auction::Config for Test {
+	type Event = Event;
+	type Amount = u128;
+	type ValidatorId = u64;
+	type BidderProvider = MockAuctionTraits;
+	type Registrar = MockAuctionTraits;
+	type AuctionIndex = u32;
+	type MinAuctionSize = MinAuctionSize;
+	type Confirmation = MockAuctionTraits;
+	type EnsureWitnessed = MockEnsureWitnessed;
 }
 
 impl pallet_cf_witness_api::Config for Test {
