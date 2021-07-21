@@ -5,13 +5,10 @@ pub mod mock;
 mod conductor;
 mod rpc;
 
-use std::{
-    convert::{TryFrom, TryInto},
-    str::FromStr,
-};
+use std::{convert::TryInto, str::FromStr};
 
 pub use conductor::P2PConductor;
-pub use rpc::{RpcP2PClient, RpcP2PClientMapping};
+pub use rpc::{RpcP2PClient, RpcP2PClientMapper};
 
 use serde::{Deserialize, Serialize};
 use sp_core::ed25519::Public;
