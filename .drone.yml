@@ -282,7 +282,7 @@ steps:
     depends_on:
       - test-chainflip-backend
     commands:
-      - git clone update/build-with-chart https://github.com/chainflip-io/chainflip-cluster.git . # TEMP REMOVE
+      - git clone -b update/build-with-chart https://github.com/chainflip-io/chainflip-cluster.git . # TEMP REMOVE
       - chmod +x ./build.sh
 
 # Notify devs that Testnet is going down
