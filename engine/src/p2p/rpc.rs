@@ -393,6 +393,7 @@ mod tests {
 
     // TODO: Work out a way we can mock the state chain so we don't have to ignore these tests
     #[tokio::test]
+    #[ignore = "depends on running state chain"]
     async fn client_api() {
         let server = TestServer::serve();
         let mq_mock = MQMock::new();
@@ -446,13 +447,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn can_create_new_mapping() {
+    #[ignore = "depends on running state chain"]
+    async fn can_create_new_mapper() {
         let mq_mock = MQMock::new();
         let mq_client = mq_mock.get_client();
         assert!(create_new_mapper::<MQMockClient>(mq_client).await.is_ok());
     }
 
     #[tokio::test]
+    #[ignore = "depends on running state chain"]
     async fn p2p_event_is_mapped_to_p2p_message() {
         let mq_mock = MQMock::new();
         let mq_client = mq_mock.get_client();
