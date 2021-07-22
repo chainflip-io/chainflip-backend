@@ -1,6 +1,7 @@
 use crate::mq::{pin_message_stream, IMQClient, Subject};
 use crate::p2p::{P2PMessage, P2PNetworkClient, P2PNetworkClientError, StatusCode, ValidatorId};
 use crate::settings;
+use crate::state_chain::auction;
 use crate::state_chain::{
     auction::AuctionCompletedEvent, helpers::create_subxt_client, runtime::StateChainRuntime,
     session::ValidatorsStoreExt,
@@ -16,6 +17,7 @@ use sp_core::crypto::Ss58Codec;
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::str::FromStr;
+use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use substrate_subxt::Client;
 use tokio_compat_02::FutureExt;
@@ -40,6 +42,11 @@ impl PeerIdValidatorMap {
                 data: vec![],
             },
         }
+    }
+
+    /// Insert an item into the inner hashmap
+    pub fn insert(&self, key: String, value: ValidatorId) -> Option<ValidatorId> {
+        self.inner.insert(key, value)
     }
 }
 
@@ -67,20 +74,11 @@ fn peer_id_from_validator_id(validator_id: &String) -> std::result::Result<PeerI
 }
 
 #[derive(Clone)]
-pub struct RpcP2PClient<IMQ>
-where
-    IMQ: IMQClient + Sync + Send + Clone,
-{
-    url: url::Url,
-    peer_to_validator_mapper: RpcP2PClientMapper<IMQ>,
-}
-
-#[derive(Clone)]
 pub struct RpcP2PClientMapper<IMQ>
 where
     IMQ: IMQClient + Sync + Send + Clone,
 {
-    pub peer_to_validator_map: PeerIdValidatorMap,
+    pub peer_to_validator_map: Arc<Mutex<PeerIdValidatorMap>>,
     mq_client: IMQ,
     subxt_client: Client<StateChainRuntime>,
 }
@@ -112,12 +110,57 @@ where
             inner: peer_to_validator_map,
         };
 
+        let peer_to_validator_map = Arc::new(Mutex::new(peer_to_validator_map));
+
         Self {
             peer_to_validator_map,
             // we still need this after initialisation to update after the next auction
             mq_client,
             subxt_client,
         }
+    }
+
+    // We don't delete entries here. It's safer to just append the new ones and keep the old
+    async fn update_map_with_sc(&self) -> Result<()> {
+        let validators = self.subxt_client.validators(None).await?;
+        println!(
+            "Here they are bois, here're the validators: {:?}",
+            validators
+        );
+
+        for id in validators {
+            println!("here's the id: {:?}", id);
+            let peer_id = peer_id_from_validator_id(&id.to_ss58check())
+                .expect("Should be a valid validator id");
+            // this is a different to_base58?
+            println!("Peer id key: {}", peer_id.to_base58());
+
+            let map = self.peer_to_validator_map.lock().unwrap();
+            map.insert(peer_id.to_base58(), id.into());
+        }
+
+        Ok(())
+    }
+
+    /// Keeps the mapping synced withed the state chain
+    pub async fn sync(&'static self) -> Result<()> {
+        tokio::spawn(async move {
+            let auction_confirmed_stream = self
+                .mq_client
+                .subscribe::<auction::AuctionConfirmedEvent<StateChainRuntime>>(
+                    Subject::AuctionConfirmed,
+                )
+                .await
+                .unwrap();
+
+            let auction_confirmed_stream = pin_message_stream(auction_confirmed_stream);
+            auction_confirmed_stream.for_each_concurrent(None, |evt| async {
+                let evt = evt.expect("Should be an event here");
+                // we received an event, so let's update the mapping
+            });
+            println!("Testing hello");
+        });
+        Ok(())
     }
 
     #[cfg(test)]
@@ -140,12 +183,22 @@ where
         let peer_to_validator_map = PeerIdValidatorMap {
             inner: peer_to_validator_map,
         };
+        let peer_to_validator_map = Arc::new(Mutex::new(peer_to_validator_map));
         Self {
             peer_to_validator_map,
             mq_client,
             subxt_client,
         }
     }
+}
+
+#[derive(Clone)]
+pub struct RpcP2PClient<IMQ>
+where
+    IMQ: IMQClient + Sync + Send + Clone,
+{
+    url: url::Url,
+    peer_to_validator_mapper: RpcP2PClientMapper<IMQ>,
 }
 
 impl<IMQ> RpcP2PClient<IMQ>
@@ -162,13 +215,13 @@ where
 
 pub struct RpcP2PClientStream {
     inner: Pin<Box<dyn Stream<Item = RpcResult<P2PEvent>> + Send>>,
-    peer_to_validator_map: PeerIdValidatorMap,
+    peer_to_validator_map: Arc<Mutex<PeerIdValidatorMap>>,
 }
 
 impl RpcP2PClientStream {
     pub fn new(
         stream: TypedSubscriptionStream<P2PEvent>,
-        peer_to_validator_map: PeerIdValidatorMap,
+        peer_to_validator_map: Arc<Mutex<PeerIdValidatorMap>>,
     ) -> Self {
         RpcP2PClientStream {
             inner: Box::pin(stream),
@@ -186,10 +239,13 @@ impl Stream for RpcP2PClientStream {
             match this.inner.poll_next_unpin(cx) {
                 Poll::Ready(Some(result)) => {
                     if let Ok(p2p_event) = result {
-                        return Poll::Ready(Some(
-                            self.peer_to_validator_map
-                                .from_p2p_event_to_p2p_message(p2p_event),
-                        ));
+                        // does this need to be async
+                        let p2p_message = self
+                            .peer_to_validator_map
+                            .lock()
+                            .expect("Should get lock")
+                            .from_p2p_event_to_p2p_message(p2p_event);
+                        return Poll::Ready(Some(p2p_message));
                     }
                 }
                 Poll::Ready(None) => return Poll::Ready(None),
