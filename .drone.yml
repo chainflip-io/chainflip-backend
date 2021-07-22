@@ -283,8 +283,7 @@ steps:
       - test-chainflip-backend
     commands:
       - git clone https://github.com/chainflip-io/chainflip-cluster.git cluster
-      - cd cluster/applications/staging/chainflip-validator
-      - chmod +x ./build.sh
+      - chmod +x cluster/build.sh
 
 # Notify devs that Testnet is going down
   - name: notify-testnet-down
@@ -299,11 +298,11 @@ steps:
         from_secret: discord_webhook_token
       message: |
         ⚠️ Testnet Reboot In Progress: `{{commit.branch}}` ⚠️
-        Testnet will be recreated in 2m0s
+        Testnet will be recreated in 1m0s
         To cancel this build head here: {{build.link}}
 
 # Destroy the testnet
-  - name: destroy
+  - name: destroy-current-testnet
     pull: always
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     failure: ignore
@@ -311,18 +310,16 @@ steps:
       - clone-cluster
       - test-chainflip-backend
     commands:
-      - echo Waiting for 2 minutes
-      - sleep 120
-      - cd cluster/applications/staging/chainflip-validator
-      - ./build.sh --branch=$DRONE_COMMIT_BRANCH --destroy --rpc
+      - sleep 60
+      - cluster/build.sh --branch=$DRONE_COMMIT_BRANCH --destroy --rpc
 
 # Create new testnet
-  - name: create
+  - name: create-new-testnet
     pull: always
     depends_on:
       - build-state-chain-node
       - build-chainflip-engine
-      - destroy
+      - destroy-current-testnet
     environment:
       INFURA_URL:
         from_secret: rinkeby_infura_url
@@ -330,16 +327,14 @@ steps:
         from_secret: dockerconfigjson
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     commands:
-      - cd cluster/applications/staging/chainflip-validator
-      - helm repo add chartmuseum http://chartmuseum.chartmuseum:8080
-      - helm dependency update
-      - ./build.sh --branch=$DRONE_COMMIT_BRANCH --tag=$DRONE_COMMIT_SHA --rpc
+      - cd cluster
+      - ./build.sh --branch=$DRONE_COMMIT_BRANCH --tag=$DRONE_COMMIT_SHA
 
 # Notify devs Testnet is up
   - name: notify-testnet-up
     image: appleboy/drone-discord
     depends_on:
-      - create
+      - create-new-testnet
     settings:
       username: Testnet Bot
       webhook_id:
@@ -355,7 +350,7 @@ steps:
   - name: notify-testnet-failure
     image: appleboy/drone-discord
     depends_on:
-      - create
+      - create-new-testnet
     when:
       status:
         - failure
@@ -373,21 +368,20 @@ steps:
         <@508234815254953985> sort it out!!
 
   # Destroy the testnet on failure
-  - name: destroy-on-failure
+  - name: destroy-testnet-on-failure
     pull: always
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+    depends_on:
+      - create-new-testnet
     failure: ignore
     when:
       status:
         - failure
-    depends_on:
-      - create
     commands:
       - kubectl get pods -n $DRONE_COMMIT_BRANCH
-      - kubectl logs -l app.kubernetes.io/name=chainflip-engine -n $DRONE_COMMIT_BRANCH
-      - kubectl logs -l app.kubernetes.io/name=state-chain-node -n $DRONE_COMMIT_BRANCH
-      - cd cluster/applications/staging/chainflip-validator
-      - ./build.sh --branch=$DRONE_COMMIT_BRANCH --destroy --rpc
+      - kubectl logs -l app.kubernetes.io/name=chainflip-engine -n $DRONE_COMMIT_BRANCH --tail=-1
+      - kubectl logs -l app.kubernetes.io/name=state-chain-node -n $DRONE_COMMIT_BRANCH --tail=-1
+      - cluster/build.sh --branch=$DRONE_COMMIT_BRANCH --destroy --rpc
 
 service_account_name: drone-runner-kube
 
