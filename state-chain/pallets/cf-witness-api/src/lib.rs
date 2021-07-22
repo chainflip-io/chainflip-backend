@@ -60,8 +60,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = StakingCall::staked(staker_account_id, amount, tx_hash);
-			T::Witnesser::witness(who, call.into())?;
-			Ok(().into())
+			T::Witnesser::witness(who, call.into())
 		}
 
 		/// Witness that a `Claimed` event was emitted by the `StakeManager` smart contract.
@@ -76,8 +75,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = StakingCall::claimed(account_id, claimed_amount, tx_hash);
-			T::Witnesser::witness(who, call.into())?;
-			Ok(().into())
+			T::Witnesser::witness(who, call.into())
 		}
 
 		//*** Auction pallet witness calls ***//
