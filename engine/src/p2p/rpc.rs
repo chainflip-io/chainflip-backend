@@ -114,7 +114,6 @@ where
 
         Ok(Self {
             peer_to_validator_map,
-            // we still need this after initialisation to update after the next auction
             mq_client,
             subxt_client,
         })
