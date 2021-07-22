@@ -652,15 +652,15 @@ fn test_claim_payload() {
 }
 
 #[test]
-fn test_ensure_withdrawal_address() {
+fn test_save_withdrawal_address() {
 	new_test_ext().execute_with(|| {
 		const STAKE: u128 = 45;
 		// Case: No account and no address provided
-		assert!(Pallet::<Test>::ensure_withdrawal_address(&ALICE, None, STAKE).is_ok());
+		assert!(Pallet::<Test>::save_withdrawal_address(&ALICE, None, STAKE).is_ok());
 		assert!(!WithdrawalAddresses::<Test>::contains_key(ALICE));
 		assert!(!FailedStakeAttempts::<Test>::contains_key(ALICE));
 		// Case: No account and provided withdrawal address
-		assert_ok!(Pallet::<Test>::ensure_withdrawal_address(
+		assert_ok!(Pallet::<Test>::save_withdrawal_address(
 			&ALICE,
 			Some(ETH_DUMMY_ADDR),
 			STAKE
@@ -671,7 +671,7 @@ fn test_ensure_withdrawal_address() {
 		// Case: User has already staked
 		Pallet::<Test>::stake_account(&ALICE, STAKE);
 		assert!(
-			Pallet::<Test>::ensure_withdrawal_address(&ALICE, Some(ETH_DUMMY_ADDR), STAKE).is_err()
+			Pallet::<Test>::save_withdrawal_address(&ALICE, Some(ETH_DUMMY_ADDR), STAKE).is_err()
 		);
 		let stake_attempts = FailedStakeAttempts::<Test>::get(ALICE);
 		assert_eq!(stake_attempts.len(), 1);

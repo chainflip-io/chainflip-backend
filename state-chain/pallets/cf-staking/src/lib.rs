@@ -299,7 +299,7 @@ pub mod pallet {
 			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			Self::ensure_witnessed(origin)?;
-			Self::ensure_withdrawal_address(&account_id, withdrawal_address, amount)?;
+			Self::save_withdrawal_address(&account_id, withdrawal_address, amount)?;
 			Self::stake_account(&account_id, amount);
 			Ok(().into())
 		}
@@ -533,7 +533,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Checks the withdrawal address requirements and saves the address if provided
-	fn ensure_withdrawal_address(
+	fn save_withdrawal_address(
 		account_id: &T::AccountId,
 		withdrawal_address: Option<EthereumAddress>,
 		amount: T::Balance,
