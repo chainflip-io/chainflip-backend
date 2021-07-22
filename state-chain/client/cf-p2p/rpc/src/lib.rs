@@ -8,16 +8,11 @@ use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use log::{debug, warn};
-use sc_network::config::identity::ed25519;
-use sc_network::config::PublicKey;
 use sc_network::PeerId;
 use serde::{Deserialize, Serialize};
-use sp_core::ed25519::Public;
 use std::marker::Send;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
-
-type ValidatorId = String;
 
 #[rpc]
 pub trait RpcApi {
@@ -26,7 +21,7 @@ pub trait RpcApi {
 
 	/// Send a message to validator id returning a HTTP status code
 	#[rpc(name = "p2p_send")]
-	fn send(&self, validator_id: ValidatorId, message: String) -> Result<u64>;
+	fn send(&self, peer_id: String, message: String) -> Result<u64>;
 
 	/// Broadcast a message to the p2p network returning a HTTP status code
 	#[rpc(name = "p2p_broadcast")]
@@ -143,19 +138,12 @@ impl<C: Messaging> Rpc<C> {
 	}
 }
 
-fn peer_id_from_validator_id(validator_id: &ValidatorId) -> std::result::Result<PeerId, &str> {
-	Public::from_str(validator_id)
-		.map_err(|_| "failed parsing")
-		.and_then(|p| ed25519::PublicKey::decode(&p.0).map_err(|_| "failed decoding"))
-		.and_then(|p| Ok(PeerId::from_public_key(PublicKey::Ed25519(p))))
-}
-
 /// Impl of the `RpcApi` - send, broadcast and subscribe to notifications
 impl<C: Messaging + Sync + Send + 'static> RpcApi for Rpc<C> {
 	type Metadata = sc_rpc::Metadata;
 
-	fn send(&self, validator_id: ValidatorId, message: String) -> Result<u64> {
-		if let Ok(peer_id) = peer_id_from_validator_id(&validator_id) {
+	fn send(&self, peer_id: String, message: String) -> Result<u64> {
+		if let Ok(peer_id) = PeerId::from_str(&peer_id) {
 			return if self
 				.messaging
 				.lock()
@@ -338,15 +326,6 @@ mod tests {
 		let (tx, rx) = jsonrpc_core::futures::sync::mpsc::channel(2);
 		let meta = sc_rpc::Metadata::new(tx);
 		(meta, rx)
-	}
-
-	#[test]
-	fn validator_id_to_peer_id() {
-		let validator_id = "5G9NWJ5P9uk7am24yCKeLZJqXWW6hjuMyRJDmw4ofqxG8Js2";
-		let expected_peer_id = "12D3KooWMxxmtYRoBr5yMGfXdunkZ3goE4fZsMuJJMRAm3UdySxg";
-
-		let peer_id = peer_id_from_validator_id(&validator_id.to_string()).unwrap();
-		assert_eq!(peer_id.to_base58(), expected_peer_id);
 	}
 
 	#[test]

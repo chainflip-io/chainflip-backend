@@ -42,10 +42,11 @@ async fn main() {
     let mq_client = *mq_factory.create().await.unwrap();
 
     // ==== P2P RPC components ====
-    let rpc_p2p_client_mapper =
-        RpcP2PClientMapper::init(&settings.state_chain, mq_client.clone()).await;
+    let rpc_p2p_client_mapper = RpcP2PClientMapper::init(&settings.state_chain, mq_client.clone())
+        .await
+        .expect("Should initialise the P2P mapper");
     let peer_id_validator_map = rpc_p2p_client_mapper.clone_map();
-    let rpc_p2p_client_mapper_sync_fut = rpc_p2p_client_mapper.sync();
+    let rpc_p2p_client_mapper_sync_fut = rpc_p2p_client_mapper.sync_validator_mapping();
     let p2p_client = RpcP2PClient::new(url, peer_id_validator_map);
     let p2p_conductor_fut = P2PConductor::new(mq_client, p2p_client)
         .await

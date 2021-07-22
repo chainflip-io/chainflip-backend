@@ -5,7 +5,7 @@ pub mod mock;
 mod conductor;
 mod rpc;
 
-use std::{convert::TryInto, str::FromStr};
+use std::str::FromStr;
 
 pub use conductor::P2PConductor;
 pub use rpc::{RpcP2PClient, RpcP2PClientMapper};
@@ -45,8 +45,8 @@ pub trait P2PNetworkClient<B: Base58, S: Stream<Item = P2PMessage>> {
     async fn take_stream(&mut self) -> Result<S, P2PNetworkClientError>;
 }
 
-/// What is this???? We need a comment here
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize, Eq, PartialOrd, Ord, Hash)]
+/// ValidatorId is a node's unique identifier. It is a wrapper of the ed25519 key
 pub struct ValidatorId(pub [u8; 32]);
 
 impl ValidatorId {
@@ -96,6 +96,12 @@ impl SS58 for ValidatorId {
 impl From<AccountId32> for ValidatorId {
     fn from(account_id: AccountId32) -> Self {
         ValidatorId(*account_id.as_ref())
+    }
+}
+
+impl From<ValidatorId> for AccountId32 {
+    fn from(validator_id: ValidatorId) -> Self {
+        AccountId32::new(validator_id.0)
     }
 }
 
