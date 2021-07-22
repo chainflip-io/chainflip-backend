@@ -68,7 +68,7 @@ steps:
   - name: notify-testnet-up
     image: appleboy/drone-discord
     environment:
-      DRONE_COMMIT_BRANCH: $DRONE_SOURCE_BRANCH
+      DRONE_COMMIT_BRANCH: $$DRONE_SOURCE_BRANCH
     settings:
       username: Testnet Bot
       webhook_id:
