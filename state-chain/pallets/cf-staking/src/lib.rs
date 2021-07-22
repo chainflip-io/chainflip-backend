@@ -165,19 +165,19 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub(super) type AccountRetired<T: Config> =
-		StorageMap<_, Identity, AccountId<T>, Retired, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, AccountId<T>, Retired, ValueQuery>;
 
 	#[pallet::storage]
 	pub(super) type PendingClaims<T: Config> =
-		StorageMap<_, Identity, AccountId<T>, ClaimDetailsFor<T>, OptionQuery>;
+		StorageMap<_, Blake2_128Concat, AccountId<T>, ClaimDetailsFor<T>, OptionQuery>;
 
 	#[pallet::storage]
 	pub(super) type WithdrawalAddresses<T: Config> =
-		StorageMap<_, Identity, AccountId<T>, EthereumAddress, OptionQuery>;
+		StorageMap<_, Blake2_128Concat, AccountId<T>, EthereumAddress, OptionQuery>;
 
 	#[pallet::storage]
 	pub(super) type FailedStakeAttempts<T: Config> =
-		StorageMap<_, Identity, AccountId<T>, Vec<StakeAttempt<T::Balance>>, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, AccountId<T>, Vec<StakeAttempt<T::Balance>>, ValueQuery>;
 
 	#[pallet::storage]
 	pub(super) type ClaimExpiries<T: Config> =
