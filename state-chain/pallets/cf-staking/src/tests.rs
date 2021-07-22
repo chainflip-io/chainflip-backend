@@ -665,9 +665,9 @@ fn test_ensure_withdrawal_address() {
 			Some(ETH_DUMMY_ADDR),
 			STAKE
 		));
-		let return_address = WithdrawalAddresses::<Test>::get(ALICE);
-		assert!(return_address.is_some());
-		assert_eq!(return_address.unwrap(), ETH_DUMMY_ADDR);
+		let withdrawal_address = WithdrawalAddresses::<Test>::get(ALICE);
+		assert!(withdrawal_address.is_some());
+		assert_eq!(withdrawal_address.unwrap(), ETH_DUMMY_ADDR);
 		// Case: User has already staked
 		Pallet::<Test>::stake_account(&ALICE, STAKE);
 		assert!(
@@ -678,5 +678,28 @@ fn test_ensure_withdrawal_address() {
 		let stake_attempt = stake_attempts.get(0);
 		assert_eq!(stake_attempt.unwrap().0, ETH_DUMMY_ADDR);
 		assert_eq!(stake_attempt.unwrap().1, STAKE);
+	});
+}
+
+#[test]
+fn claim_with_withdrawal_address() {
+	new_test_ext().execute_with(|| {
+		const STAKE: u128 = 45;
+		const WRONG_ETH_ADDR: EthereumAddress = [45u8; 20];
+		// Stake some FLIP.
+		assert_ok!(Staking::staked(
+			Origin::root(),
+			ALICE,
+			STAKE,
+			Some(ETH_DUMMY_ADDR),
+			TX_HASH
+		));
+		// Claim it - expect to fail cause the the address is different
+		assert_noop!(
+			Staking::claim(Origin::signed(ALICE), STAKE, WRONG_ETH_ADDR),
+			<Error<Test>>::ReturnAddressRestricted
+		);
+		// Try it again with the right address - expect to succeed
+		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR));
 	});
 }

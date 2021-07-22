@@ -532,19 +532,18 @@ impl<T: Config> Pallet<T> {
 		T::EnsureWitnessed::ensure_origin(origin)
 	}
 
-	/// Checks the withdrawal address requirements
+	/// Checks the withdrawal address requirements and saves the address if provided
 	fn ensure_withdrawal_address(
 		account_id: &T::AccountId,
 		withdrawal_address: Option<EthereumAddress>,
 		amount: T::Balance,
 	) -> Result<(), Error<T>> {
-		if frame_system::Pallet::<T>::account_exists(account_id) {
-			if let Some(address) = withdrawal_address {
-				FailedStakeAttempts::<T>::mutate(&account_id, |staking_attempts| {
-					staking_attempts.push((address, amount));
-				});
-				Err(Error::<T>::AlreadyStaked)?
-			}
+		// If a user account already exists and a withdrawal address is provided we error out
+		if frame_system::Pallet::<T>::account_exists(account_id) && withdrawal_address.is_some() {
+			FailedStakeAttempts::<T>::mutate(&account_id, |staking_attempts| {
+				staking_attempts.push((withdrawal_address.unwrap(), amount));
+			});
+			Err(Error::<T>::AlreadyStaked)?
 		}
 		// If there is an address provided save it
 		if let Some(address) = withdrawal_address {
@@ -592,9 +591,9 @@ impl<T: Config> Pallet<T> {
 		);
 
 		// Check if a return address exists - if not just go with the provided claim address
-		if let Some(return_address) = WithdrawalAddresses::<T>::get(account_id) {
+		if let Some(withdrawal_address) = WithdrawalAddresses::<T>::get(account_id) {
 			// Check if the address is different from the stored address - if yes error out
-			if return_address != address {
+			if withdrawal_address != address {
 				Err(Error::<T>::ReturnAddressRestricted)?
 			}
 		}
