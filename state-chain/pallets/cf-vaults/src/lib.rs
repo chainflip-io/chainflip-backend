@@ -105,6 +105,10 @@ pub mod pallet {
 		KeygenResponseFailed,
 		/// A vault rotation has failed
 		VaultRotationFailed,
+		/// A set of badly acting validators
+		BadValidators,
+		/// Failed to construct a valid chain specific payload for rotation
+		FailedToConstructPayload,
 	}
 
 	#[pallet::call]
@@ -132,7 +136,7 @@ pub mod pallet {
 			Self::try_is_valid(request_id)?;
 			match Self::try_response(request_id, response) {
 				Ok(_) => Ok(().into()),
-				Err(e) => Err(e.into())
+				Err(e) => Err(Error::<T>::from(e).into())
 			}
 		}
 
@@ -158,7 +162,7 @@ pub mod pallet {
 			Self::try_is_valid(request_id)?;
 			match Self::try_response(request_id, response) {
 				Ok(_) => Ok(().into()),
-				Err(e) => Err(e.into())
+				Err(e) => Err(Error::<T>::from(e).into())
 			}
 		}
 	}
@@ -180,23 +184,13 @@ pub mod pallet {
 	}
 }
 
-impl<ValidatorId> From<RotationError<ValidatorId>> for DispatchError {
-	fn from(err: RotationError<ValidatorId>) -> Self {
-		DispatchError::BadOrigin
-	}
-}
-
 impl<T: Config> From<RotationError<T::ValidatorId>> for Error<T> {
 	fn from(err: RotationError<T::ValidatorId>) -> Self {
 		match err {
 			RotationError::EmptyValidatorSet => Error::<T>::EmptyValidatorSet,
-			_ => Error::<T>::KeygenResponseFailed
-			// RotationError::InvalidValidators => {}
-			// RotationError::BadValidators(_) => {}
-			// RotationError::FailedConstruct => {}
-			// RotationError::FailedToComplete => {}
-			// RotationError::KeygenResponseFailed => {}
-			// RotationError::VaultRotationCompletionFailed => {}
+			RotationError::BadValidators(_) => Error::<T>::BadValidators,
+			RotationError::FailedToConstructPayload => Error::<T>::FailedToConstructPayload,
+			RotationError::VaultRotationCompletionFailed => Error::<T>::VaultRotationCompletionFailed,
 		}
 	}
 }
@@ -332,7 +326,10 @@ impl<T: Config> ChainEvents<T::RequestIndex, T::ValidatorId, RotationError<T::Va
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		match result {
 			Ok(request) => Self::try_request(index, request),
-			Err(_) => {
+			Err(err) => {
+				if let RotationError::BadValidators(bad) = err {
+					T::Penalty::penalise(bad);
+				}
 				// Abort this key generation request
 				Self::abort_rotation();
 				Err(RotationError::VaultRotationCompletionFailed)
