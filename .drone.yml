@@ -75,7 +75,7 @@ steps:
         from_secret: discord_webhook_token
       message: |
         THIS IS A TEST
-        [Bashful Polkadot]("https://polkadot.js.org/apps/?rpc=wss%3A%2F%2Fbashful-{{commit.branch | replace "/" "-" }}.chainflip.xyz#/explorer")
+        [Bashful Polkadot]("https://polkadot.js.org/apps/?rpc=wss%3A%2F%2Fbashful-{{ regexReplace "/" commit.branch "-" }}.chainflip.xyz#/explorer")
   - name: lint-drone-yml
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     resources:
