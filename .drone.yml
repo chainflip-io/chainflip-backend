@@ -36,6 +36,18 @@ get:
   name: discord_webhook_token
 ---
 kind: secret
+name: discord_webhook_id_info
+get:
+  path: repo-secret
+  name: discord_webhook_id_info
+---
+kind: secret
+name: discord_webhook_token_info
+get:
+  path: repo-secret
+  name: discord_webhook_token_info
+---
+kind: secret
 name: dockerconfigjson
 get:
   path: dockerconfigjson
@@ -146,17 +158,19 @@ steps:
   - name: notify-file-change
     image: appleboy/drone-discord
     when:
+      branch:
+        - develop
       paths:
         - engine/config/Default.toml
         - state-chain/types.json
     settings:
       username: Testnet Bot
       webhook_id:
-        from_secret: discord_webhook_id
+        from_secret: discord_webhook_id_info
       webhook_token:
-        from_secret: discord_webhook_token
+        from_secret: discord_webhook_token_info
       message: |
-        ℹ Config updated ℹ
+        ℹ Config updated: `{{commit.branch}}` ℹ
         Please update your [types.json](https://github.com/chainflip-io/chainflip-backend/blob/develop/state-chain/types.json)
         and/or [Default.toml](https://github.com/chainflip-io/chainflip-backend/blob/develop/engine/config/Default.toml)
 
@@ -255,7 +269,7 @@ steps:
         - SERVICE
 
   #  Create docker image for chainflip-engine
-  - name: notify
+  - name: notify-build-failure
     image: appleboy/drone-discord
     depends_on:
       - test-chainflip-backend
@@ -293,9 +307,9 @@ steps:
     settings:
       username: Testnet Bot
       webhook_id:
-        from_secret: discord_webhook_id
+        from_secret: discord_webhook_id_info
       webhook_token:
-        from_secret: discord_webhook_token
+        from_secret: discord_webhook_token_info
       message: |
         ⚠️ Testnet Reboot In Progress: `{{commit.branch}}` ⚠️
         Testnet will be recreated in 1m0s
@@ -338,9 +352,9 @@ steps:
     settings:
       username: Testnet Bot
       webhook_id:
-        from_secret: discord_webhook_id
+        from_secret: discord_webhook_id_info
       webhook_token:
-        from_secret: discord_webhook_token
+        from_secret: discord_webhook_token_info
       message: |
         ✅ Testnet Reboot Successful: `{{commit.branch}}` ✅
         Testnet released with commit hash: `{{commit.sha}}`
@@ -357,9 +371,9 @@ steps:
     settings:
       username: Testnet Bot
       webhook_id:
-        from_secret: discord_webhook_id
+        from_secret: discord_webhook_id_info
       webhook_token:
-        from_secret: discord_webhook_token
+        from_secret: discord_webhook_token_info
       message: |
         ❌ Testnet Reboot Failure ❌
         Commit hash: `{{commit.sha}}`
