@@ -6,8 +6,6 @@ use crate::{
     settings::Settings,
 };
 
-use log::{debug, error, info, trace};
-
 use super::{
     helpers::create_subxt_client,
     runtime::StateChainRuntime,
@@ -16,7 +14,7 @@ use super::{
 
 /// Kick off the state chain observer process
 pub async fn start(settings: Settings) {
-    info!("Begin subscribing to state chain events");
+    log::info!("Begin subscribing to state chain events");
 
     let mq_client_builder = NatsMQClientFactory::new(&settings.message_queue);
 
@@ -46,11 +44,12 @@ async fn subscribe_to_events<M: 'static + IMQClient>(
         let raw_event = match res_event {
             Ok(raw_event) => raw_event,
             Err(e) => {
-                error!("Next event could not be read: {}", e);
+                log::error!("Next event could not be read: {}", e);
                 continue;
             }
         };
 
+        log::info!("SC Observer receieved raw event of: {:?}", raw_event);
         let subject: Option<Subject> = raw_event_to_subject(&raw_event);
 
         if let Some(subject) = subject {
@@ -60,25 +59,25 @@ async fn subscribe_to_events<M: 'static + IMQClient>(
                     // Publish the message to the message queue
                     match mq_client.publish(subject, &event).await {
                         Err(err) => {
-                            error!(
+                            log::error!(
                                 "Could not publish message `{:?}` to subject `{}`. Error: {}",
                                 event,
                                 subject.to_subject_name(),
                                 err
                             );
                         }
-                        Ok(_) => trace!("Event: {:#?} pushed to message queue", event),
+                        Ok(_) => log::trace!("Event: {:?} pushed to message queue", event),
                     };
                 }
                 None => {
-                    debug!(
+                    log::debug!(
                         "Event decoding for an event under subject: {} doesn't exist",
                         subject.to_subject_name()
                     )
                 }
             }
         } else {
-            trace!("Not routing event {:?} to message queue", raw_event);
+            log::trace!("Not routing event {:?} to message queue", raw_event);
         };
     }
 
@@ -94,9 +93,14 @@ mod tests {
 
     use super::*;
 
+    fn init() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
+
     #[tokio::test]
     #[ignore = "depends on running state chain at the specifed url"]
     async fn create_subxt_client_test() {
+        init();
         let test_settings = settings::test_utils::new_test_settings().unwrap();
         assert!(create_subxt_client(&test_settings.state_chain)
             .await

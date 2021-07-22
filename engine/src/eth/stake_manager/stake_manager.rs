@@ -139,6 +139,7 @@ impl Display for StakeManagerEvent {
 impl StakeManager {
     /// Loads the contract abi to get event definitions
     pub fn load(deployed_address: &str) -> Result<Self> {
+        log::info!("Loading stake manager contract");
         let abi_bytes = std::include_bytes!("../abis/StakeManager.json");
         let contract = ethabi::Contract::load(abi_bytes.as_ref())?;
 

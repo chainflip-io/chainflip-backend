@@ -41,7 +41,7 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-mod imbalances;
+pub mod imbalances;
 mod on_charge_transaction;
 
 pub use on_charge_transaction::FlipTransactionPayment;

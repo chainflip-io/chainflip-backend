@@ -27,6 +27,7 @@ pub struct Eth {
     pub stake_manager_eth_address: String,
     pub key_manager_eth_address: String,
     pub private_key_file: String,
+    pub from_block: u64,
 }
 
 #[derive(Debug, Deserialize, Clone)]

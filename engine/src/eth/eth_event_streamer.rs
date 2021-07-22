@@ -36,8 +36,9 @@ impl<S: EventSource> EthEventStreamBuilder<S> {
         if self.event_sinks.is_empty() {
             anyhow::bail!("Can't build a stream with no sink.")
         } else {
+            log::info!("Creating WS transport");
             let transport = ::web3::transports::WebSocket::new(self.url.as_str()).await?;
-
+            log::info!("Created WS transport");
             Ok(EthEventStreamer {
                 web3_client: ::web3::Web3::new(transport),
                 event_source: self.event_source,
@@ -49,8 +50,10 @@ impl<S: EventSource> EthEventStreamBuilder<S> {
 
 impl<S: EventSource> EthEventStreamer<S> {
     /// Create a stream of Ethereum log events. If `from_block` is `None`, starts at the pending block.
+    // TODO: Why is this an Option?
     pub async fn run(&self, from_block: Option<u64>) -> Result<()> {
         // Make sure the eth node is fully synced
+        log::info!("Start syncing ETH node from block: {:?}", from_block);
         loop {
             match self.web3_client.eth().syncing().await? {
                 SyncState::Syncing(info) => {
@@ -61,6 +64,8 @@ impl<S: EventSource> EthEventStreamer<S> {
                     break;
                 }
             }
+
+            // TODO: Does this sleep do anything or are we just blocked until synced??
             tokio::time::sleep(Duration::from_secs(4)).await;
         }
 
@@ -81,6 +86,7 @@ impl<S: EventSource> EthEventStreamer<S> {
             .filter_builder(BlockNumber::Pending)
             .build();
 
+        log::info!("Eth_subscribe to future logs");
         let future_logs = self
             .web3_client
             .eth_subscribe()
@@ -93,9 +99,11 @@ impl<S: EventSource> EthEventStreamer<S> {
 
         let event_stream = log_stream.map(|log_result| self.event_source.parse_event(log_result?));
 
+        log::info!("Create the processing loop future");
         let processing_loop_fut = event_stream.for_each_concurrent(None, |parse_result| async {
             match parse_result {
                 Ok(event) => {
+                    log::debug!("ETH event being processed: {:?}", event);
                     join_all(self.event_sinks.iter().map(|sink| {
                         let event = event.clone();
                         async move {
@@ -136,25 +144,73 @@ mod tests {
 
     const CONTRACT_ADDRESS: &'static str = "0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f";
 
+    fn init() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
+
     #[tokio::test]
     #[ignore = "Depends on a running ganache instance, runs forever, useful for manually testing / observing incoming events"]
     async fn subscribe_to_stake_manager_events() {
+        init();
         let stake_manager = StakeManager::load(CONTRACT_ADDRESS).unwrap();
 
-        let mq_settings = settings::test_utils::new_test_settings()
-            .unwrap()
-            .message_queue;
+        let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let factory = NatsMQClientFactory::new(&mq_settings);
+        let factory = NatsMQClientFactory::new(&settings.message_queue);
 
-        let mq_client = *factory.create().await.unwrap();
+        let mq_client = *factory.create().await.expect("Could not connect to MQ");
         // create the sink, which pushes events to the MQ
         let sm_sink = StakeManagerSink::<NatsMQClient>::new(mq_client)
             .await
             .unwrap();
-        let sm_event_stream = EthEventStreamBuilder::new("ws://localhost:8545", stake_manager);
+        let sm_event_stream =
+            EthEventStreamBuilder::new(&settings.eth.node_endpoint, stake_manager);
         let sm_event_stream = sm_event_stream.with_sink(sm_sink).build().await.unwrap();
 
-        sm_event_stream.run(Some(0)).await.unwrap();
+        sm_event_stream
+            .run(settings.eth.from_block.into())
+            .await
+            .unwrap();
     }
+
+    #[tokio::test]
+    #[ignore = "testing"]
+    async fn setup_transport() {
+        let h2 = tokio::spawn(async move {
+            println!("Creating transport");
+            let transport = ::web3::transports::WebSocket::new(
+                "wss://rinkeby.infura.io/ws/v3/8225b8de4cc94062959f38e0781586d1",
+            )
+            .await
+            .unwrap();
+            println!("created transport");
+        });
+
+        let h1 = tokio::spawn(async move {
+            loop {
+                // std::thread::sleep(std::time::Duration::from_secs(5));
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                println!("Another 5 seconds gone");
+                // let _ = futures_util::future::ok::<(), ()>(()).await;
+            }
+        });
+
+        futures::join!(h1, h2);
+
+        // tokio::spawn(async move {
+        //     loop {
+        //         std::thread::sleep(std::time::Duration::from_secs(5));
+        //         println!("Nummer zwei: Another 5 seconds gone");
+        //     }
+        // });
+    }
+
+    // #[tokio::test]
+    // async fn setup_builder() {
+    //     let sm_event_stream = EthEventStreamBuilder::new(
+    //         "wss://rinkeby.infura.io/ws/v3/8225b8de4cc94062959f38e0781586d1",
+    //         stake_manager,
+    //     );
+    //     sm_event_
+    // }
 }

@@ -1,19 +1,30 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, time::Duration};
 
 use frame_support::unsigned::TransactionValidityError;
 use sp_runtime::{
     generic::{self, Era},
     traits::{BlakeTwo256, IdentifyAccount, Verify},
-    MultiSignature, OpaqueExtrinsic,
+    AccountId32, MultiSignature, OpaqueExtrinsic,
 };
 use substrate_subxt::{
     extrinsic::{
         CheckEra, CheckGenesis, CheckNonce, CheckSpecVersion, CheckTxVersion, CheckWeight,
     },
     register_default_type_sizes,
+    sudo::Sudo,
+    sudo::SudoEventTypeRegistry,
     system::System,
+    system::SystemEventTypeRegistry,
     EventTypeRegistry, Runtime, SignedExtension, SignedExtra,
 };
+
+use pallet_cf_flip::imbalances::ImbalanceSource;
+
+// use state_chain::flip::imbalances::ImbalanceSource;
+
+use auction::AuctionEventTypeRegistry;
+use staking::StakingEventTypeRegistry;
+use validator::ValidatorEventTypeRegistry;
 
 use core::fmt::Debug;
 
@@ -83,15 +94,42 @@ impl Runtime for StateChainRuntime {
     type Extra = SCDefaultExtra<Self>;
 
     fn register_type_sizes(event_type_registry: &mut EventTypeRegistry<Self>) {
-        // event_type_registry.with_session();
-        // event_type_registry.with_sudo();
+        event_type_registry.with_system();
+        event_type_registry.with_sudo();
         register_default_type_sizes(event_type_registry);
+
+        // Custom pallet event types registered here
+        event_type_registry.with_validator();
+        event_type_registry.with_staking();
+        event_type_registry.with_auction();
+
+        event_type_registry.register_type_size::<AccountId32>("AccountId<T>");
+        event_type_registry.register_type_size::<u64>("T::AuctionIndex");
+        event_type_registry.register_type_size::<(u32, u32)>("AuctionRange");
+        event_type_registry.register_type_size::<u64>("T::Nonce");
+        event_type_registry.register_type_size::<u64>("T::EpochIndex");
+        event_type_registry.register_type_size::<u32>("T::BlockNumber");
+        event_type_registry.register_type_size::<AccountId32>("T::ValidatorId");
+        event_type_registry.register_type_size::<AccountId32>("<T as Config>::ValidatorId");
+
+        event_type_registry.register_type_size::<u128>("T::Balance");
+        event_type_registry.register_type_size::<Vec<u8>>("OpaqueTimeSlot");
+        event_type_registry.register_type_size::<[u8; 32]>("U256");
+        event_type_registry.register_type_size::<Duration>("Duration");
+        event_type_registry.register_type_size::<u128>("FlipBalance<T>");
+        event_type_registry.register_type_size::<u32>("VoteCount");
+        event_type_registry.register_type_size::<u32>("SessionIndex");
+        event_type_registry.register_type_size::<[u8; 32]>("AggKeySignature");
+        event_type_registry
+            .register_type_size::<ImbalanceSource<AccountId32>>("ImbalanceSource<T::AccountId>")
     }
 }
 
 impl session::Session for StateChainRuntime {
     type ValidatorId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
 }
+
+impl Sudo for StateChainRuntime {}
 
 impl auction::Auction for StateChainRuntime {
     type AuctionIndex = u64;
@@ -130,4 +168,9 @@ impl System for StateChainRuntime {
     type Extrinsic = OpaqueExtrinsic;
 
     type AccountData = ();
+}
+
+#[test]
+fn can_register_default_runtime_type_sizes() {
+    EventTypeRegistry::<StateChainRuntime>::new();
 }

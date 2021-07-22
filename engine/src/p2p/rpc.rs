@@ -286,13 +286,22 @@ where
     }
 
     async fn take_stream(&mut self) -> Result<RpcP2PClientStream, P2PNetworkClientError> {
-        let client: P2PClient = FutureExt::compat(connect(&self.url))
-            .await
-            .map_err(|_| P2PNetworkClientError::Rpc)?;
+        let client: P2PClient = FutureExt::compat(connect(&self.url)).await.map_err(|e| {
+            log::error!(
+                "Could not connect to RPC Channel on RpcP2PClient at url: {:?}, error: {:?}",
+                &self.url,
+                e
+            );
+            P2PNetworkClientError::Rpc
+        })?;
 
-        let sub = client
-            .subscribe_notifications()
-            .map_err(|_| P2PNetworkClientError::Rpc)?;
+        let sub = client.subscribe_notifications().map_err(|e| {
+            log::error!(
+                "Could not subscribe to notifications on RpcP2PClient: {:?}",
+                e
+            );
+            P2PNetworkClientError::Rpc
+        })?;
 
         Ok(RpcP2PClientStream::new(
             sub,

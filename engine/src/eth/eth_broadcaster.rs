@@ -21,6 +21,7 @@ pub async fn start_eth_broadcaster<M: IMQClient + Send + Sync>(
     settings: &settings::Settings,
     mq_client: M,
 ) -> anyhow::Result<()> {
+    log::info!("ETH broadcaster: start");
     let secret_key = secret_key_from_file(Path::new(settings.eth.private_key_file.as_str()))?;
     let eth_broadcaster =
         EthBroadcaster::<M, _>::new(settings.into(), mq_client, secret_key).await?;
