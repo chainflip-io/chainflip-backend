@@ -12,8 +12,7 @@ impl<N, T> NonceProvider for NonceUnixTime<N, T> where
 
 	fn generate_nonce() -> Self::Nonce {
 		// For now, we expect the nonce to be an u64 to stay compatible with the CFE
-		let u64_nonce = T::now().as_nanos();
-		let u : u64 = u64_nonce as u64;
-		u.unique_saturated_into()
+		let u64_nonce = T::now().as_nanos() as u64;
+		u64_nonce.unique_saturated_into()
 	}
 }
