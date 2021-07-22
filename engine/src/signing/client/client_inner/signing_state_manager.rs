@@ -36,7 +36,7 @@ pub struct SigningStateManager {
 }
 
 impl SigningStateManager {
-    pub(super) fn new(
+    pub fn new(
         id: ValidatorId,
         p2p_sender: mpsc::UnboundedSender<InnerEvent>,
         phase_timeout: Duration,
@@ -51,7 +51,7 @@ impl SigningStateManager {
     }
 
     #[cfg(test)]
-    pub(super) fn get_state_for(&self, message_info: &MessageInfo) -> Option<&SigningState> {
+    pub fn get_state_for(&self, message_info: &MessageInfo) -> Option<&SigningState> {
         self.signing_states.get(message_info)
     }
 
@@ -88,11 +88,7 @@ impl SigningStateManager {
     }
 
     /// Process signing data, generating new state if necessary
-    pub(super) fn process_signing_data(
-        &mut self,
-        sender_id: ValidatorId,
-        wdata: SigningDataWrapped,
-    ) {
+    pub fn process_signing_data(&mut self, sender_id: ValidatorId, wdata: SigningDataWrapped) {
         let SigningDataWrapped { data, message } = wdata;
 
         debug!(
@@ -127,7 +123,7 @@ impl SigningStateManager {
         }
     }
 
-    pub(super) fn on_request_to_sign(
+    pub fn on_request_to_sign(
         &mut self,
         data: MessageHash,
         key_info: KeygenResultInfo,
@@ -194,7 +190,7 @@ impl SigningStateManager {
     }
 
     /// check all states for timeouts and abandonment then remove them
-    pub(super) fn cleanup(&mut self) {
+    pub fn cleanup(&mut self) {
         let mut events_to_send = vec![];
 
         // remove all active states that have become abandoned or finished (SigningOutcome have already been sent)
@@ -223,7 +219,6 @@ impl SigningStateManager {
         // for every active state, check if it expired
         self.signing_states.retain(|message_info, state| {
             if state.last_progress_timestamp.elapsed() > timeout {
-                // TODO: successful ceremonies should clean up themselves!
                 warn!("Signing state expired and should be abandoned");
 
                 let late_nodes = state.awaited_parties();

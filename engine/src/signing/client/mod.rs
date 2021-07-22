@@ -5,6 +5,7 @@ use std::{marker::PhantomData, time::Duration};
 use crate::{
     mq::{pin_message_stream, IMQClient, IMQClientFactory, Subject},
     p2p::ValidatorId,
+    signing::db::KeyDB,
 };
 use anyhow::Result;
 use futures::StreamExt;
@@ -15,7 +16,9 @@ use crate::p2p::P2PMessage;
 
 use self::client_inner::{InnerEvent, MultisigClientInner};
 
-pub use client_inner::{KeygenOutcome, KeygenSuccess, SigningOutcome, SigningSuccess};
+pub use client_inner::{
+    KeygenOutcome, KeygenResultInfo, KeygenSuccess, SigningOutcome, SigningSuccess,
+};
 
 use super::MessageHash;
 
@@ -66,14 +69,15 @@ pub enum MultisigEvent {
     KeygenResult(KeygenOutcome),
 }
 
-pub struct MultisigClient<MQ, F>
+pub struct MultisigClient<MQ, F, S>
 where
     MQ: IMQClient,
     F: IMQClientFactory<MQ>,
+    S: KeyDB,
 {
     factory: F,
     inner_event_receiver: Option<mpsc::UnboundedReceiver<InnerEvent>>,
-    inner: MultisigClientInner,
+    inner: MultisigClientInner<S>,
     id: ValidatorId,
     _mq: PhantomData<MQ>,
 }
@@ -82,17 +86,18 @@ where
 // before expiring them
 const PHASE_TIMEOUT: Duration = Duration::from_secs(20);
 
-impl<MQ, F> MultisigClient<MQ, F>
+impl<MQ, F, S> MultisigClient<MQ, F, S>
 where
     MQ: IMQClient,
     F: IMQClientFactory<MQ>,
+    S: KeyDB,
 {
-    pub fn new(factory: F, id: ValidatorId) -> Self {
+    pub fn new(db: S, factory: F, id: ValidatorId) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
 
         MultisigClient {
             factory,
-            inner: MultisigClientInner::new(id.clone(), tx, PHASE_TIMEOUT),
+            inner: MultisigClientInner::new(id.clone(), db, tx, PHASE_TIMEOUT),
             inner_event_receiver: Some(rx),
             id,
             _mq: PhantomData,
@@ -149,7 +154,7 @@ where
             tokio::sync::oneshot::channel::<()>();
 
         let events_fut =
-            MultisigClient::<_, F>::process_inner_events(receiver, mq, shutdown_events_fut_rx);
+            MultisigClient::<_, F, S>::process_inner_events(receiver, mq, shutdown_events_fut_rx);
 
         let cleanup_fut = async move {
             loop {

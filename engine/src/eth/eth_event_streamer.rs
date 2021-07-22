@@ -36,7 +36,23 @@ impl<S: EventSource> EthEventStreamBuilder<S> {
         if self.event_sinks.is_empty() {
             anyhow::bail!("Can't build a stream with no sink.")
         } else {
-            let transport = ::web3::transports::WebSocket::new(self.url.as_str()).await?;
+            let transport = ::web3::transports::WebSocket::new(self.url.as_str());
+
+            let transport = match tokio::time::timeout(Duration::from_secs(4), transport).await {
+                Ok(Ok(transport)) => transport,
+                Err(_) => {
+                    return Err(anyhow::Error::msg(format!(
+                        "Timeout creating websocket to {} for EthEventStreamer",
+                        self.url,
+                    )));
+                }
+                _ => {
+                    return Err(anyhow::Error::msg(format!(
+                        "Failed to create websocket to {} for EthEventStreamer",
+                        self.url,
+                    )));
+                }
+            };
 
             Ok(EthEventStreamer {
                 web3_client: ::web3::Web3::new(transport),

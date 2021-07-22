@@ -4,7 +4,9 @@ use chainflip_engine::{
     mq::{nats_client::NatsMQClientFactory, IMQClientFactory},
     p2p::{P2PConductor, RpcP2PClient, ValidatorId},
     settings::Settings,
-    signing, state_chain,
+    signing,
+    signing::db::PersistentKeyDB,
+    state_chain,
     temp_event_mapper::TempEventMapper,
 };
 use sp_core::Pair;
@@ -44,7 +46,10 @@ async fn main() {
         .await
         .start(shutdown_rx);
 
-    let signing_client = signing::MultisigClient::new(mq_factory, signer_id);
+    // TODO: Investigate whether we want to encrypt it on disk
+    let db = PersistentKeyDB::new("data.db");
+
+    let signing_client = signing::MultisigClient::new(db, mq_factory, signer_id);
 
     let temp_event_map_fut = TempEventMapper::run(&settings);
 
