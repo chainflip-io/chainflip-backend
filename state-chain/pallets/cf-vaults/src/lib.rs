@@ -104,6 +104,7 @@ pub mod pallet {
 
 	/// A map acting as a list of our current vault rotations
 	#[pallet::storage]
+	#[pallet::getter(fn vault_rotations)]
 	pub(super) type VaultRotations<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::RequestIndex, KeygenRequest<T::ValidatorId>>;
 
@@ -405,7 +406,7 @@ impl<T: Config>
 		request: VaultRotationRequest,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		Self::deposit_event(Event::VaultRotationRequest(index, request));
-		Ok(().into())
+		Ok(())
 	}
 
 	/// Handle the response posted back on our request for a vault rotation request
@@ -422,12 +423,13 @@ impl<T: Config>
 			// At the moment we just have Ethereum to notify
 			match keygen_request.chain {
 				ChainParams::Ethereum(_) => T::EthereumVault::vault_rotated(response),
+				// Leaving this to be explicit about more to come
 				ChainParams::Other(_) => {}
 			}
 		}
 		// This request is complete
 		Self::invalidate(index);
 		Self::deposit_event(Event::VaultRotationCompleted(index));
-		Ok(().into())
+		Ok(())
 	}
 }

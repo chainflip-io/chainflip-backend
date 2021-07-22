@@ -10,15 +10,17 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-pub(super) mod time_source;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
 type Block = frame_system::mocking::MockBlock<MockRuntime>;
 
 type Amount = u64;
 type ValidatorId = u64;
-
+type RequestIndex = u64;
 use crate::nonce::NonceUnixTime;
+use frame_support::sp_runtime::DispatchResult;
+use crate::mock::time_source;
+use frame_support::pallet_prelude::{EnsureOrigin, DispatchResultWithPostInfo};
 
 thread_local! {}
 
@@ -29,7 +31,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		VaultsPallet: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config},
+		EthereumPallet: ethereum::{Module, Call, Config, Storage, Event<T>},
 	}
 );
 
@@ -64,24 +66,6 @@ impl frame_system::Config for MockRuntime {
 
 parameter_types! {}
 
-pub struct OtherChain;
-type RequestIndex = u64;
-impl ChainVault<RequestIndex, Vec<u8>, ValidatorId, RotationError<ValidatorId>> for OtherChain {
-	fn chain_params() -> ChainParams {
-		ChainParams::Other(vec![])
-	}
-
-	fn try_start_vault_rotation(
-		_index: RequestIndex,
-		_new_public_key: Vec<u8>,
-		_validators: Vec<ValidatorId>,
-	) -> Result<(), RotationError<ValidatorId>> {
-		Ok(())
-	}
-
-	fn vault_rotated(_response: VaultRotationResponse) {}
-}
-
 pub struct MockEnsureWitness;
 
 impl EnsureOrigin<Origin> for MockEnsureWitness {
@@ -109,32 +93,34 @@ impl ChainFlip for MockRuntime {
 	type ValidatorId = ValidatorId;
 }
 
-impl AuctionPenalty<ValidatorId> for MockRuntime {
-	fn abort() { }
-
-	fn penalise(bad_validators: Vec<ValidatorId>) {	}
+impl ChainEvents<RequestIndex, ValidatorId, RotationError<ValidatorId>> for MockRuntime {
+	fn try_complete_vault_rotation(index: RequestIndex, result: Result<VaultRotationRequest, RotationError<ValidatorId>>) -> Result<(), RotationError<ValidatorId>> {
+		todo!()
+	}
 }
 
-impl AuctionManager<ValidatorId, Amount> for MockRuntime {
-	type Penalty = Self;
-	type Confirmation = VaultsPallet;
-	type Events = VaultsPallet;
+impl TryIndex<RequestIndex> for MockRuntime {
+	fn try_is_valid(idx: RequestIndex) -> DispatchResult {
+		Ok(())
+	}
 }
 
-impl pallet_cf_vaults::Config for MockRuntime {
+impl ethereum::Config for MockRuntime {
 	type Event = Event;
 	type Call = Call;
-	type EthereumVault = OtherChain;
+	type Vaults = Self;
 	type EnsureWitnessed = MockEnsureWitness;
 	type Witnesser = MockWitnesser;
-	type RequestIndex = u64;
+	type Nonce = u64;
+	type NonceProvider = NonceUnixTime<Self::Nonce, time_source::Mock>;
+	type RequestIndex = RequestIndex;
 	type PublicKey = Vec<u8>;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		frame_system: Default::default(),
-		pallet_cf_vaults: Some(VaultsPalletConfig {}),
+		ethereum: Default::default(),
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

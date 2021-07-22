@@ -5,6 +5,7 @@ use frame_support::RuntimeDebug;
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_runtime::DispatchResult;
 
+#[derive(RuntimeDebug)]
 /// Errors occurring during a rotation
 pub enum RotationError<ValidatorId> {
 	/// Empty validator set provided
@@ -30,7 +31,7 @@ pub trait Index<T: AtLeast32BitUnsigned> {
 }
 
 /// Try to determine if an index is valid
-pub trait TryIndex<T: AtLeast32BitUnsigned>: Index<T> {
+pub trait TryIndex<T: AtLeast32BitUnsigned> {
 	fn try_is_valid(idx: T) -> DispatchResult;
 }
 
