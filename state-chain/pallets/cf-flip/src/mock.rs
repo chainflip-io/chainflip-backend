@@ -1,4 +1,4 @@
-use crate as pallet_cf_flip;
+use crate::{self as pallet_cf_flip, BurnFlipAccount};
 use cf_traits::StakeTransfer;
 use frame_support::{parameter_types, traits::HandleLifetime, weights::IdentityFee};
 use sp_core::H256;
@@ -50,7 +50,7 @@ impl frame_system::Config for Test {
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
 	type OnNewAccount = ();
-	type OnKilledAccount = Flip;
+	type OnKilledAccount = BurnFlipAccount<Self>;
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
 }

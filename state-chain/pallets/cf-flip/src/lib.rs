@@ -427,11 +427,13 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 	}
 }
 
+pub struct BurnFlipAccount<T: Config>(PhantomData<T>);
+
 /// Implementation of `OnKilledAccount` ensures that we reconcile any flip dust remaining in the account by burning it.
-impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
+impl<T: Config> OnKilledAccount<T::AccountId> for BurnFlipAccount<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
-		let dust = Self::total_balance_of(account_id);
-		Self::settle(account_id, Self::burn(dust).into());
+		let dust = Pallet::<T>::total_balance_of(account_id);
+		Pallet::<T>::settle(account_id, Pallet::<T>::burn(dust).into());
 		Account::<T>::remove(account_id);
 	}
 }
