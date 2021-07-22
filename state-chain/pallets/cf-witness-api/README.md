@@ -65,7 +65,7 @@ Provide dedicated extrinsics to abstract away the use of the Witnesser pallet.
 This pallet has explicit dependencies on the following Chainflip pallets:
 
 - Staking
-- 
+- Auction
 
 ### Genesis Configuration
 
