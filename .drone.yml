@@ -64,20 +64,6 @@ environment:
 
 steps:
   #  Checks the the .drone.yml file is formatted correctly
-  # Notify devs Testnet is up
-  - name: notify-testnet-up
-    image: ghcr.io/chainflip-io/drone-discord
-    environment:
-      DRONE_COMMIT_BRANCH: $$DRONE_SOURCE_BRANCH
-    settings:
-      username: Testnet Bot
-      webhook_id:
-        from_secret: discord_webhook_id
-      webhook_token:
-        from_secret: discord_webhook_token
-      message: |
-        THIS IS A TEST
-        https://polkadot.js.org/apps/?rpc=wss%3A%2F%2Fbashful-{{ regexReplace "/" source.branch "-" }}.chainflip.xyz#/explorer
   - name: lint-drone-yml
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     resources:
@@ -346,7 +332,7 @@ steps:
 
 # Notify devs Testnet is up
   - name: notify-testnet-up
-    image: appleboy/drone-discord
+    image: ghcr.io/chainflip-io/drone-discord
     depends_on:
       - create-new-testnet
     settings:
@@ -359,7 +345,7 @@ steps:
         ✅ Testnet Reboot Successful: `{{commit.branch}}` ✅
         Testnet released with commit hash: `{{commit.sha}}`
         [Check the logs here](https://monitor.chainflip.xyz/explore?orgId=1&left=%5B%22now-1h%22%2C%22now%22%2C%22Loki%22%2C%7B%22expr%22:%22%7Bchainflip_xyz_tag%3D%5C%22{{commit.sha}}%5C%22%7D%22%7D%5D)
-        [Bashful Polkadot]("https://polkadot.js.org/apps/?rpc=wss%3A%2F%2Fbashful-{{commit.branch}}#/explorer")
+        [Bashful Polkadot](https://polkadot.js.org/apps/?rpc=wss%3A%2F%2Fbashful-{{ regexReplace "/" source.branch "-" }}.chainflip.xyz#/explorer)
 # Notify devs Testnet has failed to launch
   - name: notify-testnet-failure
     image: appleboy/drone-discord
