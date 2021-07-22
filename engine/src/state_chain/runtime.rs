@@ -19,7 +19,7 @@ use core::fmt::Debug;
 
 use codec::{Decode, Encode};
 
-use super::{auction, staking, validator};
+use super::{auction, staking, validator, witness_api};
 
 use serde::{Deserialize, Serialize};
 
@@ -106,6 +106,8 @@ impl staking::Staking for StateChainRuntime {
 
     type Nonce = u64;
 }
+
+impl witness_api::WitnessApi for StateChainRuntime {}
 
 impl System for StateChainRuntime {
     type Index = u32;

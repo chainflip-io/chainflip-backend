@@ -8,7 +8,7 @@ use crate::{
     settings::Settings,
 };
 
-use crate::state_chain::staking::{WitnessClaimedCallExt, WitnessStakedCallExt};
+use crate::state_chain::witness_api::*;
 
 use anyhow::Result;
 
