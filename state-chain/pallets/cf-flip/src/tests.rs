@@ -346,15 +346,17 @@ mod test_tx_payments {
 		// A really naughty dude, don't trust him.
 		const BEELZEBUB: AccountId = 666;
 		new_test_ext().execute_with(|| {
-			assert_eq!(FlipTransactionPayment::<Test>::withdraw_fee(
-				&BEELZEBUB,
-				CALL,
-				&CALL.get_dispatch_info(),
-				fee,
-				0,
-			)
-			.expect_err("Account doesn't exist. Expected error, got"),
-			InvalidTransaction::Payment.into());
+			assert_eq!(
+				FlipTransactionPayment::<Test>::withdraw_fee(
+					&BEELZEBUB,
+					CALL,
+					&CALL.get_dispatch_info(),
+					fee,
+					0,
+				)
+				.expect_err("Account doesn't exist. Expected error, got"),
+				InvalidTransaction::Payment.into()
+			);
 		});
 	}
 
@@ -367,7 +369,6 @@ mod test_tx_payments {
 	fn test_invalid_with_fee() {
 		test_invalid_account(1)
 	}
-
 
 	#[test]
 	fn test_fee_payment() {
