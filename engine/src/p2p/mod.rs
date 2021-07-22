@@ -34,7 +34,6 @@ pub enum P2PNetworkClientError {
 type StatusCode = u64;
 
 #[async_trait]
-// is there a way to remove this Base58 trait??
 pub trait P2PNetworkClient<B: Base58, S: Stream<Item = P2PMessage>> {
     /// Broadcast to all validators on the network
     async fn broadcast(&self, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError>;
@@ -46,7 +45,7 @@ pub trait P2PNetworkClient<B: Base58, S: Stream<Item = P2PMessage>> {
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize, Eq, PartialOrd, Ord, Hash)]
-/// ValidatorId is a node's unique identifier. It is a wrapper of the ed25519 key
+/// ValidatorId is a node's unique identifier. It is a wrapper of the sr25519 key
 pub struct ValidatorId(pub [u8; 32]);
 
 impl ValidatorId {
