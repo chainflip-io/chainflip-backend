@@ -160,12 +160,16 @@ impl<T: Config> Pallet<T> {
 			.checked_mul(&blocks_elapsed)
 			.ok_or(T::DbWeight::get().reads(2))?;
 
-		// Mint the rewards
-		let reward = T::Issuance::mint(reward_amount);
+		let exec_weight = if reward_amount.is_zero() {
+			0
+		} else {
+			// Mint the rewards
+			let reward = T::Issuance::mint(reward_amount);
 
-		// Delegate the distribution.
-		T::RewardsDistribution::distribute(reward);
-		let exec_weight = T::RewardsDistribution::execution_weight();
+			// Delegate the distribution.
+			T::RewardsDistribution::distribute(reward);
+			T::RewardsDistribution::execution_weight()
+		};
 
 		// Update this pallet's state.
 		LastMintBlock::<T>::set(block_number);
