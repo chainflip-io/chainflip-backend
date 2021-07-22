@@ -66,7 +66,7 @@ steps:
   #  Checks the the .drone.yml file is formatted correctly
   # Notify devs Testnet is up
   - name: notify-testnet-up
-    image: appleboy/drone-discord
+    image: ghcr.io/chainflip-io/drone-discord
     environment:
       DRONE_COMMIT_BRANCH: $$DRONE_SOURCE_BRANCH
     settings:
@@ -77,7 +77,7 @@ steps:
         from_secret: discord_webhook_token
       message: |
         THIS IS A TEST
-        https://polkadot.js.org/apps/?rpc=wss%3A%2F%2Fbashful-{{ regexReplace "/" commit.branch "-" }}.chainflip.xyz#/explorer
+        https://polkadot.js.org/apps/?rpc=wss%3A%2F%2Fbashful-{{ regexReplace "/" source.branch "-" }}.chainflip.xyz#/explorer
   - name: lint-drone-yml
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     resources:
