@@ -10,6 +10,7 @@ impl<N, T> NonceProvider for NonceUnixTime<N, T> where
 	N: From<u64> + Bounded,{
 	type Nonce = N;
 
+	/// Generate a nonce using a unix timestamp
 	fn generate_nonce() -> Self::Nonce {
 		// For now, we expect the nonce to be an u64 to stay compatible with the CFE
 		let u64_nonce = T::now().as_nanos() as u64;

@@ -5,7 +5,7 @@ use sp_runtime::traits::AtLeast32BitUnsigned;
 use cf_traits::{AuctionConfirmation, AuctionEvents, AuctionPenalty};
 use sp_runtime::DispatchResult;
 
-// The things that can go wrong
+/// Errors occurring during a rotation
 pub enum RotationError<ValidatorId> {
 	/// Empty validator set provided
 	EmptyValidatorSet,
