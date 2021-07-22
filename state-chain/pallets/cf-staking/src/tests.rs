@@ -697,7 +697,7 @@ fn claim_with_withdrawal_address() {
 		// Claim it - expect to fail cause the the address is different
 		assert_noop!(
 			Staking::claim(Origin::signed(ALICE), STAKE, WRONG_ETH_ADDR),
-			<Error<Test>>::ReturnAddressRestricted
+			<Error<Test>>::WithdrawalAddressRestricted
 		);
 		// Try it again with the right address - expect to succeed
 		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR));
