@@ -26,5 +26,4 @@ pub mod staking;
 pub mod validator;
 
 /// Session pallet support for substrate-subxt
-/// NB: Can't use subxt's default because it uses Balances
 pub mod session;

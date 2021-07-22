@@ -340,16 +340,13 @@ mod tests {
 		(meta, rx)
 	}
 
-	// TODO: Should this test the validator_id to peer directly?? Rather than walk through the steps
 	#[test]
 	fn validator_id_to_peer_id() {
 		let validator_id = "5G9NWJ5P9uk7am24yCKeLZJqXWW6hjuMyRJDmw4ofqxG8Js2";
 		let expected_peer_id = "12D3KooWMxxmtYRoBr5yMGfXdunkZ3goE4fZsMuJJMRAm3UdySxg";
-		let public = Public::from_str(validator_id).unwrap();
-		let ed25519 = ed25519::PublicKey::decode(&public.0).unwrap();
-		let peer_id = PeerId::from_public_key(PublicKey::Ed25519(ed25519));
-		let bs58 = peer_id.to_base58();
-		assert_eq!(bs58, expected_peer_id);
+
+		let peer_id = peer_id_from_validator_id(&validator_id.to_string()).unwrap();
+		assert_eq!(peer_id.to_base58(), expected_peer_id);
 	}
 
 	#[test]

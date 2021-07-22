@@ -1,3 +1,6 @@
+//! Session pallet support for subxt
+//! We can't use subxt's own session pallet support implementation because it depends on balances
+
 use std::marker::PhantomData;
 
 use frame_support::Parameter;

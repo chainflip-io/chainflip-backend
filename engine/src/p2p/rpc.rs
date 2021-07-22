@@ -90,34 +90,6 @@ where
     IMQ: IMQClient + Sync + Send + Clone,
 {
     pub async fn init(state_chain_settings: &settings::StateChain, mq_client: IMQ) -> Self {
-        // let auction_completed_event_stream = mq_client
-        //     .subscribe::<AuctionCompletedEvent<StateChainRuntime>>(Subject::AuctionCompleted)
-        //     .await
-        //     .expect("Should be able to subscribe to Subject::AuctionCompleted");
-
-        // let mut auction_completed_event_stream = pin_message_stream(auction_completed_event_stream);
-
-        // // only await on the very next Auction confirmed when initialising. We should block on this, but not the sc_observer
-        // let event = auction_completed_event_stream
-        //     .next()
-        //     .await
-        //     .unwrap()
-        //     .unwrap();
-
-        // let validator_ids: Vec<ValidatorId> =
-        //     event.validators.iter().map(|a| a.clone().into()).collect();
-
-        // let mut peer_to_validator = HashMap::new();
-
-        // for id in validator_ids {
-        //     println!("here's the id: {:?}", id);
-        //     let peer_id =
-        //         peer_id_from_validator_id(&id.to_ss58()).expect("Should be a valid validator id");
-        //     // this is a different to_base58?
-        //     println!("Peer id key: {}", peer_id.to_base58());
-        //     peer_to_validator.insert(peer_id.to_base58(), id);
-        // }
-
         let mut peer_to_validator_map: HashMap<String, ValidatorId> = HashMap::new();
 
         let subxt_client = create_subxt_client(&state_chain_settings).await.unwrap();
@@ -155,7 +127,7 @@ where
         mq_client: IMQ,
         validator_ids: Vec<ValidatorId>,
     ) -> Self {
-        // WE NEED TO MOCK THE STATE CHAIN GRre
+        // WE NEED TO MOCK THE STATE CHAIN GRrrr
         let subxt_client = create_subxt_client(state_chain_settings).await.unwrap();
 
         let mut peer_to_validator_map = HashMap::new();
