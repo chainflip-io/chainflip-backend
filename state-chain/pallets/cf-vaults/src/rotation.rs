@@ -1,16 +1,19 @@
-use cf_traits::{AuctionConfirmation, AuctionEvents, AuctionPenalty};
+use cf_traits::{AuctionConfirmation, AuctionHandler, AuctionPenalty, AuctionEvents};
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::*;
 use frame_support::RuntimeDebug;
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_runtime::DispatchResult;
 
+#[derive(RuntimeDebug, PartialEq)]
 /// Errors occurring during a rotation
 pub enum RotationError<ValidatorId> {
 	/// Empty validator set provided
 	EmptyValidatorSet,
 	/// A set of badly acting validators
 	BadValidators(Vec<ValidatorId>),
+	/// The key generation response failed
+	KeyResponseFailed,
 	/// Failed to construct a valid chain specific payload for rotation
 	FailedToConstructPayload,
 	/// Vault rotation completion failed
@@ -30,7 +33,7 @@ pub trait Index<T: AtLeast32BitUnsigned> {
 }
 
 /// Try to determine if an index is valid
-pub trait TryIndex<T: AtLeast32BitUnsigned>: Index<T> {
+pub trait TryIndex<T: AtLeast32BitUnsigned> {
 	fn try_is_valid(idx: T) -> DispatchResult;
 }
 
@@ -129,7 +132,7 @@ impl From<ChainParams> for VaultRotationRequest {
 /// A response of our request to rotate the vault
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
 pub struct VaultRotationResponse {
-	old_key: Vec<u8>,
-	new_key: Vec<u8>,
-	tx: Vec<u8>,
+	pub old_key: Vec<u8>,
+	pub new_key: Vec<u8>,
+	pub tx: Vec<u8>,
 }

@@ -251,7 +251,7 @@ impl From<Vec<u8>> for ChainParams {
 impl<T: Config> Pallet<T> {
 	/// Encode `setAggKeyWithAggKey` call using `ethabi`.  This is a long approach as we are working
 	/// around `no_std` limitations here for the runtime.
-	fn encode_set_agg_key_with_agg_key(new_public_key: T::PublicKey) -> ethabi::Result<Bytes> {
+	pub(crate) fn encode_set_agg_key_with_agg_key(new_public_key: T::PublicKey) -> ethabi::Result<Bytes> {
 		Function::new(
 			"setAggKeyWithAggKey",
 			vec![

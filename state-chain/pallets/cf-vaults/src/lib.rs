@@ -104,6 +104,7 @@ pub mod pallet {
 
 	/// A map acting as a list of our current vault rotations
 	#[pallet::storage]
+	#[pallet::getter(fn vault_rotations)]
 	pub(super) type VaultRotations<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::RequestIndex, KeygenRequest<T::ValidatorId>>;
 
@@ -128,6 +129,8 @@ pub mod pallet {
 		InvalidRequestIdx,
 		/// We have an empty validator set
 		EmptyValidatorSet,
+		/// The key generation response failed
+		KeyResponseFailed,
 		/// A vault rotation has failed
 		VaultRotationCompletionFailed,
 		/// A key generation response has failed
@@ -221,6 +224,7 @@ impl<T: Config> From<RotationError<T::ValidatorId>> for Error<T> {
 			RotationError::VaultRotationCompletionFailed => {
 				Error::<T>::VaultRotationCompletionFailed
 			}
+			RotationError::KeyResponseFailed => Error::<T>::KeyResponseFailed,
 		}
 	}
 }
@@ -238,7 +242,10 @@ impl<T: Config> TryIndex<T::RequestIndex> for Pallet<T> {
 
 impl<T: Config> Index<T::RequestIndex> for Pallet<T> {
 	fn next() -> T::RequestIndex {
-		RequestIdx::<T>::mutate(|idx| *idx + One::one())
+		RequestIdx::<T>::mutate(|idx| {
+			*idx = *idx + One::one();
+			*idx
+		})
 	}
 
 	fn invalidate(idx: T::RequestIndex) {
@@ -256,10 +263,8 @@ impl<T: Config> Index<T::RequestIndex> for Pallet<T> {
 
 impl<T: Config> Pallet<T> {
 	/// Register this vault rotation
-	fn new_vault_rotation(keygen_request: KeygenRequest<T::ValidatorId>) -> T::RequestIndex {
-		let idx = Self::next();
-		VaultRotations::<T>::insert(idx, keygen_request);
-		idx
+	fn new_vault_rotation(index: T::RequestIndex, keygen_request: KeygenRequest<T::ValidatorId>) {
+		VaultRotations::<T>::insert(index, keygen_request);
 	}
 
 	/// Abort all rotations registered and notify the `AuctionPenalty` trait of our decision to abort.
@@ -317,15 +322,15 @@ impl<T: Config>
 	/// Emit as an event the key generation request, this is the first step after receiving a proposed
 	/// validator set from the `AuctionEvents` trait
 	fn try_request(
-		_index: T::RequestIndex,
+		index: T::RequestIndex,
 		request: KeygenRequest<T::ValidatorId>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		ensure!(
 			!request.validator_candidates.is_empty(),
 			RotationError::EmptyValidatorSet
 		);
-		let idx = Self::new_vault_rotation(request.clone());
-		Self::deposit_event(Event::KeygenRequestEvent(idx, request));
+		Self::new_vault_rotation(index,request.clone());
+		Self::deposit_event(Event::KeygenRequestEvent(index, request));
 		Ok(())
 	}
 
@@ -339,17 +344,14 @@ impl<T: Config>
 		match response {
 			KeygenResponse::Success(new_public_key) => {
 				// Go forth and construct
-				VaultRotations::<T>::mutate(index, |maybe_vault_rotation| {
-					if let Some(keygen_request) = maybe_vault_rotation {
-						T::EthereumVault::try_start_vault_rotation(
-							index,
-							new_public_key,
-							keygen_request.validator_candidates.to_vec(),
-						)
-					} else {
-						unreachable!("This shouldn't happen but we need to maybe signal this")
-					}
-				})
+				match VaultRotations::<T>::try_get(index) {
+					Ok(keygen_request) => T::EthereumVault::try_start_vault_rotation(
+						index,
+						new_public_key,
+						keygen_request.validator_candidates.to_vec(),
+					),
+					Err(_) => Err(RotationError::KeyResponseFailed),
+				}
 			}
 			KeygenResponse::Failure(bad_validators) => {
 				// Abort this key generation request
@@ -357,7 +359,7 @@ impl<T: Config>
 				// Do as you wish with these, I wash my hands..
 				T::Penalty::penalise(bad_validators);
 
-				Ok(())
+				Err(RotationError::KeyResponseFailed)
 			}
 		}
 	}
@@ -405,7 +407,7 @@ impl<T: Config>
 		request: VaultRotationRequest,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		Self::deposit_event(Event::VaultRotationRequest(index, request));
-		Ok(().into())
+		Ok(())
 	}
 
 	/// Handle the response posted back on our request for a vault rotation request
@@ -422,12 +424,13 @@ impl<T: Config>
 			// At the moment we just have Ethereum to notify
 			match keygen_request.chain {
 				ChainParams::Ethereum(_) => T::EthereumVault::vault_rotated(response),
+				// Leaving this to be explicit about more to come
 				ChainParams::Other(_) => {}
 			}
 		}
 		// This request is complete
 		Self::invalidate(index);
 		Self::deposit_event(Event::VaultRotationCompleted(index));
-		Ok(().into())
+		Ok(())
 	}
 }

@@ -1,8 +1,8 @@
 use super::*;
 use crate as pallet_cf_vaults;
 use crate::rotation::*;
-use cf_traits::{AuctionConfirmation, AuctionError, AuctionHandler, AuctionPenalty};
-use frame_support::{construct_runtime, parameter_types, traits::UnfilteredDispatchable};
+use cf_traits::{AuctionConfirmation, AuctionError, AuctionEvents, AuctionPenalty};
+use frame_support::{construct_runtime, parameter_types};
 use frame_system::{ensure_root, RawOrigin};
 use sp_core::H256;
 use sp_runtime::BuildStorage;
@@ -10,22 +10,19 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-use std::cell::RefCell;
-
-pub(super) mod time_source;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
 type Block = frame_system::mocking::MockBlock<MockRuntime>;
 
 type Amount = u64;
 type ValidatorId = u64;
-
+type RequestIndex = u64;
 use crate::nonce::NonceUnixTime;
+use frame_support::sp_runtime::DispatchResult;
+use crate::mock::time_source;
+use frame_support::pallet_prelude::{EnsureOrigin, DispatchResultWithPostInfo};
 
-thread_local! {
-	pub static OTHER_CHAIN_RESULT: RefCell<RequestIndex> = RefCell::new(0);
-	pub static BAD_VALIDATORS: RefCell<Vec<ValidatorId>> = RefCell::new(vec![]);
-}
+thread_local! {}
 
 construct_runtime!(
 	pub enum MockRuntime where
@@ -34,7 +31,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		VaultsPallet: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config},
+		EthereumPallet: ethereum::{Module, Call, Config, Storage, Event<T>},
 	}
 );
 
@@ -69,25 +66,6 @@ impl frame_system::Config for MockRuntime {
 
 parameter_types! {}
 
-pub struct OtherChain;
-type RequestIndex = u64;
-impl ChainVault<RequestIndex, Vec<u8>, ValidatorId, RotationError<ValidatorId>> for OtherChain {
-	fn chain_params() -> ChainParams {
-		ChainParams::Other(vec![])
-	}
-
-	fn try_start_vault_rotation(
-		index: RequestIndex,
-		_new_public_key: Vec<u8>,
-		_validators: Vec<ValidatorId>,
-	) -> Result<(), RotationError<ValidatorId>> {
-		OTHER_CHAIN_RESULT.with(|l| *l.borrow_mut() = index);
-		Ok(())
-	}
-
-	fn vault_rotated(_response: VaultRotationResponse) {}
-}
-
 pub struct MockEnsureWitness;
 
 impl EnsureOrigin<Origin> for MockEnsureWitness {
@@ -104,9 +82,9 @@ impl cf_traits::Witnesser for MockWitnesser {
 	type AccountId = u64;
 	type Call = Call;
 
-	fn witness(_who: Self::AccountId, call: Self::Call) -> DispatchResultWithPostInfo {
-		let result = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
-		Ok(result.unwrap_or_else(|err| err.post_info))
+	fn witness(_who: Self::AccountId, _call: Self::Call) -> DispatchResultWithPostInfo {
+		// We don't intend to test this, it's just to keep the compiler happy.
+		Ok(().into())
 	}
 }
 
@@ -115,42 +93,36 @@ impl ChainFlip for MockRuntime {
 	type ValidatorId = ValidatorId;
 }
 
-impl AuctionPenalty<ValidatorId> for MockRuntime {
-	fn abort() {}
-
-	fn penalise(bad_validators: Vec<ValidatorId>) {
-		BAD_VALIDATORS.with(|l| *l.borrow_mut() = bad_validators);
+impl ChainEvents<RequestIndex, ValidatorId, RotationError<ValidatorId>> for MockRuntime {
+	fn try_complete_vault_rotation(index: RequestIndex, result: Result<VaultRotationRequest, RotationError<ValidatorId>>) -> Result<(), RotationError<ValidatorId>> {
+		todo!()
 	}
 }
 
-impl AuctionManager<ValidatorId, Amount> for MockRuntime {
-	type Penalty = Self;
-	type Confirmation = VaultsPallet;
-	type Events = VaultsPallet;
+impl TryIndex<RequestIndex> for MockRuntime {
+	fn try_is_valid(idx: RequestIndex) -> DispatchResult {
+		Ok(())
+	}
 }
 
-impl pallet_cf_vaults::Config for MockRuntime {
+impl ethereum::Config for MockRuntime {
 	type Event = Event;
 	type Call = Call;
-	type EthereumVault = OtherChain;
+	type Vaults = Self;
 	type EnsureWitnessed = MockEnsureWitness;
 	type Witnesser = MockWitnesser;
-	type RequestIndex = u64;
+	type Nonce = u64;
+	type NonceProvider = NonceUnixTime<Self::Nonce, time_source::Mock>;
+	type RequestIndex = RequestIndex;
 	type PublicKey = Vec<u8>;
 }
 
-pub fn bad_validators() -> Vec<ValidatorId> {
-	BAD_VALIDATORS.with(|l| l.borrow().to_vec())
-}
-
 pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;
-pub const BOB: <MockRuntime as frame_system::Config>::AccountId = 456u64;
-pub const CHARLIE: <MockRuntime as frame_system::Config>::AccountId = 789u64;
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		frame_system: Default::default(),
-		pallet_cf_vaults: Some(VaultsPalletConfig {}),
+		ethereum: Default::default(),
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
