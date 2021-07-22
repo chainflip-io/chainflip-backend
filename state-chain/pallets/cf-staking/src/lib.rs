@@ -275,10 +275,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			staker_account_id: AccountId<T>,
 			amount: FlipBalance<T>,
+			withdrawal_address: Option<EthereumAddress>,
 			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = Call::staked(staker_account_id, amount, None, tx_hash);
+			let call = Call::staked(staker_account_id, amount, withdrawal_address, tx_hash);
 			T::Witnesser::witness(who, call.into())?;
 			Ok(().into())
 		}
@@ -531,6 +532,7 @@ impl<T: Config> Pallet<T> {
 		T::EnsureWitnessed::ensure_origin(origin)
 	}
 
+	/// Checks the withdrawal address requirements
 	fn ensure_withdrawal_address(
 		account_id: &T::AccountId,
 		withdrawal_address: Option<EthereumAddress>,

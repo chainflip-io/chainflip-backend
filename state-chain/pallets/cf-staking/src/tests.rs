@@ -346,6 +346,7 @@ fn witnessing_witnesses() {
 			Origin::signed(BOB),
 			ALICE,
 			123,
+			None,
 			TX_HASH
 		));
 
@@ -359,6 +360,7 @@ fn witnessing_witnesses() {
 			Origin::signed(BOB),
 			ALICE,
 			123,
+			None,
 			TX_HASH
 		));
 
