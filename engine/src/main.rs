@@ -28,6 +28,8 @@ async fn main() {
     let signer = state_chain::get_signer_from_privkey_file(&settings.state_chain.p2p_priv_key_file);
     let my_pubkey = signer.signer().public();
     let signer_id = ValidatorId(my_pubkey.0);
+
+    // ==== State chain components ====
     let sc_o_fut = state_chain::sc_observer::start(settings.clone());
     let sc_b_fut = state_chain::sc_broadcaster::start(&settings, signer, mq_factory.clone());
 
@@ -38,10 +40,13 @@ async fn main() {
 
     let url = url::Url::parse(&format!("ws://127.0.0.1:{}", ws_port)).expect("valid ws port");
     let mq_client = *mq_factory.create().await.unwrap();
-    // this will intentionally block on new, as we must let the AuctionConfirmed event be registered on start.
+
+    // ==== P2P RPC components ====
     let rpc_p2p_client_mapper =
         RpcP2PClientMapper::init(&settings.state_chain, mq_client.clone()).await;
-    let p2p_client = RpcP2PClient::new(url, rpc_p2p_client_mapper);
+    let peer_id_validator_map = rpc_p2p_client_mapper.clone_map();
+    let rpc_p2p_client_mapper_sync_fut = rpc_p2p_client_mapper.sync();
+    let p2p_client = RpcP2PClient::new(url, peer_id_validator_map);
     let p2p_conductor_fut = P2PConductor::new(mq_client, p2p_client)
         .await
         .start(shutdown_rx);
@@ -62,6 +67,7 @@ async fn main() {
         sc_b_fut,
         eth_fut,
         temp_event_map_fut,
+        rpc_p2p_client_mapper_sync_fut,
         p2p_conductor_fut,
         signing_client_fut,
     );

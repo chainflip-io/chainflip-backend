@@ -3,8 +3,7 @@ use crate::p2p::{P2PMessage, P2PNetworkClient, P2PNetworkClientError, StatusCode
 use crate::settings;
 use crate::state_chain::auction;
 use crate::state_chain::{
-    auction::AuctionCompletedEvent, helpers::create_subxt_client, runtime::StateChainRuntime,
-    session::ValidatorsStoreExt,
+    helpers::create_subxt_client, runtime::StateChainRuntime, session::ValidatorsStoreExt,
 };
 use async_trait::async_trait;
 use cf_p2p_rpc::P2PEvent;
@@ -45,7 +44,7 @@ impl PeerIdValidatorMap {
     }
 
     /// Insert an item into the inner hashmap
-    pub fn insert(&self, key: String, value: ValidatorId) -> Option<ValidatorId> {
+    pub fn insert(&mut self, key: String, value: ValidatorId) -> Option<ValidatorId> {
         self.inner.insert(key, value)
     }
 }
@@ -92,17 +91,12 @@ where
 
         let subxt_client = create_subxt_client(&state_chain_settings).await.unwrap();
         let validators = subxt_client.validators(None).await.unwrap();
-        println!(
-            "Here they are bois, here're the validators: {:?}",
-            validators
-        );
 
         for id in validators {
-            println!("here's the id: {:?}", id);
-            let peer_id = peer_id_from_validator_id(&id.to_ss58check())
-                .expect("Should be a valid validator id");
-            // this is a different to_base58?
-            println!("Peer id key: {}", peer_id.to_base58());
+            let peer_id = peer_id_from_validator_id(&id.to_ss58check()).expect(&format!(
+                "Should be a valid validator id: {}",
+                id.to_ss58check()
+            ));
             peer_to_validator_map.insert(peer_id.to_base58(), id.into());
         }
 
@@ -120,22 +114,19 @@ where
         }
     }
 
+    pub fn clone_map(&self) -> Arc<Mutex<PeerIdValidatorMap>> {
+        self.peer_to_validator_map.clone()
+    }
+
     // We don't delete entries here. It's safer to just append the new ones and keep the old
     async fn update_map_with_sc(&self) -> Result<()> {
         let validators = self.subxt_client.validators(None).await?;
-        println!(
-            "Here they are bois, here're the validators: {:?}",
-            validators
-        );
 
         for id in validators {
-            println!("here's the id: {:?}", id);
             let peer_id = peer_id_from_validator_id(&id.to_ss58check())
                 .expect("Should be a valid validator id");
-            // this is a different to_base58?
-            println!("Peer id key: {}", peer_id.to_base58());
 
-            let map = self.peer_to_validator_map.lock().unwrap();
+            let mut map = self.peer_to_validator_map.lock().unwrap();
             map.insert(peer_id.to_base58(), id.into());
         }
 
@@ -143,24 +134,28 @@ where
     }
 
     /// Keeps the mapping synced withed the state chain
-    pub async fn sync(&'static self) -> Result<()> {
-        tokio::spawn(async move {
-            let auction_confirmed_stream = self
-                .mq_client
-                .subscribe::<auction::AuctionConfirmedEvent<StateChainRuntime>>(
-                    Subject::AuctionConfirmed,
-                )
-                .await
-                .unwrap();
+    pub async fn sync(&self) {
+        let auction_confirmed_stream = self
+            .mq_client
+            .subscribe::<auction::AuctionConfirmedEvent<StateChainRuntime>>(
+                Subject::AuctionConfirmed,
+            )
+            .await
+            .expect("Should subscribe to Subject::AuctionConfirmed");
 
-            let auction_confirmed_stream = pin_message_stream(auction_confirmed_stream);
-            auction_confirmed_stream.for_each_concurrent(None, |evt| async {
-                let evt = evt.expect("Should be an event here");
+        let auction_confirmed_stream = pin_message_stream(auction_confirmed_stream);
+        auction_confirmed_stream
+            .for_each_concurrent(None, |evt| async {
+                evt.expect("Should be an event here");
+                log::info!(
+                    "Received AuctionConfirmed event, updating the Peer to Validator mapping"
+                );
                 // we received an event, so let's update the mapping
-            });
-            println!("Testing hello");
-        });
-        Ok(())
+                self.update_map_with_sc()
+                    .await
+                    .expect("Should update successfully");
+            })
+            .await;
     }
 
     #[cfg(test)]
@@ -193,22 +188,16 @@ where
 }
 
 #[derive(Clone)]
-pub struct RpcP2PClient<IMQ>
-where
-    IMQ: IMQClient + Sync + Send + Clone,
-{
+pub struct RpcP2PClient {
     url: url::Url,
-    peer_to_validator_mapper: RpcP2PClientMapper<IMQ>,
+    peer_to_validator_map: Arc<Mutex<PeerIdValidatorMap>>,
 }
 
-impl<IMQ> RpcP2PClient<IMQ>
-where
-    IMQ: IMQClient + Sync + Send + Clone,
-{
-    pub fn new(url: url::Url, peer_to_validator_mapper: RpcP2PClientMapper<IMQ>) -> Self {
+impl RpcP2PClient {
+    pub fn new(url: url::Url, peer_to_validator_map: Arc<Mutex<PeerIdValidatorMap>>) -> Self {
         RpcP2PClient {
             url,
-            peer_to_validator_mapper,
+            peer_to_validator_map,
         }
     }
 }
@@ -258,10 +247,9 @@ impl Stream for RpcP2PClientStream {
 }
 
 #[async_trait]
-impl<NodeId, IMQ> P2PNetworkClient<NodeId, RpcP2PClientStream> for RpcP2PClient<IMQ>
+impl<NodeId> P2PNetworkClient<NodeId, RpcP2PClientStream> for RpcP2PClient
 where
     NodeId: Base58 + Send + Sync,
-    IMQ: IMQClient + Send + Sync + Clone,
 {
     async fn broadcast(&self, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError> {
         let client: P2PClient = FutureExt::compat(connect(&self.url))
@@ -296,8 +284,7 @@ where
 
         Ok(RpcP2PClientStream::new(
             sub,
-            // TODO: Can we encapsulate this better?
-            self.peer_to_validator_mapper.peer_to_validator_map.clone(),
+            self.peer_to_validator_map.clone(),
         ))
     }
 }
@@ -399,7 +386,8 @@ mod tests {
         let mq_mock = MQMock::new();
         let mq_client = mq_mock.get_client();
         let mapper = create_new_mapper::<MQMockClient>(mq_client).await.unwrap();
-        let mut glue_client = RpcP2PClient::new(server.url, mapper);
+        let map = mapper.clone_map();
+        let mut glue_client = RpcP2PClient::new(server.url, map);
         let run = async {
             let result = glue_client
                 .send(&ValidatorId::new("100"), "disco".as_bytes())
@@ -461,6 +449,8 @@ mod tests {
 
         let p2p_message = mapper
             .peer_to_validator_map
+            .lock()
+            .unwrap()
             .from_p2p_event_to_p2p_message(p2p_event_received);
         assert_eq!(p2p_message, expected_p2p_message);
     }

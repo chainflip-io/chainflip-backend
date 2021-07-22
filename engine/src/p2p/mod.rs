@@ -66,21 +66,6 @@ impl ValidatorId {
         ValidatorId(id)
     }
 
-    // TODO: Can this be removed?? maybe not for PeerId?
-    pub fn from_base58(id: &str) -> Result<Self> {
-        let id = bs58::decode(&id)
-            .into_vec()
-            .map_err(|_| anyhow::format_err!("Id is not valid base58: {}", id))?;
-
-        println!("The id len is: {}", id.len());
-        println!("The id is: {:?}", id);
-        let id = id
-            .try_into()
-            .map_err(|_| anyhow::format_err!("Id is not 32 bytes"))?;
-
-        Ok(ValidatorId(id))
-    }
-
     pub fn from_ss58(id: &str) -> Result<Self> {
         let public =
             Public::from_str(id).map_err(|_| anyhow::format_err!("Not valid ss58 id: {}", id))?;
