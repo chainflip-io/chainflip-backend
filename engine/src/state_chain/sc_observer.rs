@@ -102,8 +102,7 @@ mod tests {
     async fn create_subxt_client_test() {
         init();
         let test_settings = settings::test_utils::new_test_settings().unwrap();
-        assert!(create_subxt_client(&test_settings.state_chain)
-            .await
-            .is_ok())
+
+        start(test_settings).await;
     }
 }
