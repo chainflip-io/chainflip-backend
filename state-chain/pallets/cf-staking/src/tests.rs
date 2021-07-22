@@ -1,5 +1,6 @@
 use crate::{
-	mock::*, pallet, ClaimDetails, ClaimDetailsFor, Error, EthereumAddress, Pallet, PendingClaims,
+	mock::*, pallet, ClaimDetails, ClaimDetailsFor, Error, EthereumAddress, FailedStakeAttempts,
+	Pallet, PendingClaims, WithdrawalAddresses,
 };
 use cf_traits::mocks::epoch_info;
 use codec::Encode;
@@ -55,8 +56,8 @@ fn staked_amount_is_added_and_subtracted() {
 			Origin::root(),
 			ALICE,
 			STAKE_A1,
+			None,
 			TX_HASH,
-			None
 		));
 		// Read pallet storage and assert the balance was added.
 		assert_eq!(Flip::total_balance_of(&ALICE), STAKE_A1);
@@ -66,10 +67,10 @@ fn staked_amount_is_added_and_subtracted() {
 			Origin::root(),
 			ALICE,
 			STAKE_A2,
+			None,
 			TX_HASH,
-			None
 		));
-		assert_ok!(Staking::staked(Origin::root(), BOB, STAKE_B, TX_HASH, None));
+		assert_ok!(Staking::staked(Origin::root(), BOB, STAKE_B, None, TX_HASH));
 
 		// Both accounts should now be created.
 		assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
@@ -139,7 +140,7 @@ fn claiming_unclaimable_is_err() {
 		assert_eq!(Flip::total_balance_of(&ALICE), 0u128);
 
 		// Stake some FLIP.
-		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, TX_HASH, None));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, None, TX_HASH));
 
 		// Claim FLIP from another account.
 		assert_noop!(
@@ -166,8 +167,8 @@ fn cannot_double_claim() {
 			Origin::root(),
 			ALICE,
 			stake_a1 + stake_a2,
-			TX_HASH,
-			None
+			None,
+			TX_HASH
 		));
 
 		// Claim a portion.
@@ -210,7 +211,7 @@ fn staked_and_claimed_events_must_match() {
 		assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
 
 		// Stake some FLIP.
-		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, TX_HASH, None));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, None, TX_HASH));
 
 		// The act of staking creates the account.
 		assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
@@ -265,7 +266,7 @@ fn multisig_endpoints_cant_be_called_from_invalid_origins() {
 		const STAKE: u128 = 45;
 
 		assert_noop!(
-			Staking::staked(Origin::none(), ALICE, STAKE, TX_HASH, None),
+			Staking::staked(Origin::none(), ALICE, STAKE, None, TX_HASH),
 			BadOrigin
 		);
 		assert_noop!(
@@ -273,8 +274,8 @@ fn multisig_endpoints_cant_be_called_from_invalid_origins() {
 				Origin::signed(Default::default()),
 				ALICE,
 				STAKE,
+				None,
 				TX_HASH,
-				None
 			),
 			BadOrigin
 		);
@@ -300,7 +301,7 @@ fn signature_is_inserted() {
 		time_source::Mock::reset_to(START_TIME);
 
 		// Stake some FLIP.
-		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, TX_HASH, None));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, None, TX_HASH));
 
 		// Claim it.
 		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR));
@@ -375,8 +376,8 @@ fn cannot_claim_bond() {
 		epoch_info::Mock::add_validator(ALICE);
 
 		// Alice and Bob stake the same amount.
-		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, TX_HASH, None));
-		assert_ok!(Staking::staked(Origin::root(), BOB, STAKE, TX_HASH, None));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, None, TX_HASH));
+		assert_ok!(Staking::staked(Origin::root(), BOB, STAKE, None, TX_HASH));
 
 		// Alice becomes a validator
 		Flip::set_validator_bond(&ALICE, BOND);
@@ -429,7 +430,7 @@ fn test_retirement() {
 		);
 
 		// Try again with some stake, should succeed this time.
-		assert_ok!(Staking::staked(Origin::root(), ALICE, 100, TX_HASH, None));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, 100, None, TX_HASH));
 		assert_ok!(Staking::retire_account(Origin::signed(ALICE)));
 
 		assert!(Staking::is_retired(&ALICE).unwrap());
@@ -466,8 +467,8 @@ fn claim_expiry() {
 		time_source::Mock::reset_to(START_TIME);
 
 		// Stake some FLIP.
-		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, TX_HASH, None));
-		assert_ok!(Staking::staked(Origin::root(), BOB, STAKE, TX_HASH, None));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, None, TX_HASH));
+		assert_ok!(Staking::staked(Origin::root(), BOB, STAKE, None, TX_HASH));
 
 		// Alice claims immediately.
 		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR));
@@ -563,7 +564,7 @@ fn no_claims_during_auction() {
 		epoch_info::Mock::set_is_auction_phase(true);
 
 		// Staking during an auction is OK.
-		assert_ok!(Staking::staked(Origin::root(), ALICE, stake, TX_HASH, None));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, stake, None, TX_HASH));
 
 		// Claiming during an auction isn't OK.
 		assert_noop!(
@@ -580,7 +581,7 @@ fn test_claim_all() {
 		const BOND: u128 = 55;
 
 		// Stake some FLIP.
-		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, TX_HASH, None));
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, None, TX_HASH));
 
 		// Alice becomes a validator.
 		Flip::set_validator_bond(&ALICE, BOND);
@@ -646,4 +647,34 @@ fn test_claim_payload() {
 			])
 			.unwrap()
 	);
+}
+
+#[test]
+fn test_ensure_withdrawal_address() {
+	new_test_ext().execute_with(|| {
+		const STAKE: u128 = 45;
+		// Case: No account and no address provided
+		assert!(Pallet::<Test>::ensure_withdrawal_address(&ALICE, None, STAKE).is_ok());
+		assert!(!WithdrawalAddresses::<Test>::contains_key(ALICE));
+		assert!(!FailedStakeAttempts::<Test>::contains_key(ALICE));
+		// Case: No account and provided withdrawal address
+		assert_ok!(Pallet::<Test>::ensure_withdrawal_address(
+			&ALICE,
+			Some(ETH_DUMMY_ADDR),
+			STAKE
+		));
+		let return_address = WithdrawalAddresses::<Test>::get(ALICE);
+		assert!(return_address.is_some());
+		assert_eq!(return_address.unwrap(), ETH_DUMMY_ADDR);
+		// Case: User has already staked
+		Pallet::<Test>::stake_account(&ALICE, STAKE);
+		assert!(
+			Pallet::<Test>::ensure_withdrawal_address(&ALICE, Some(ETH_DUMMY_ADDR), STAKE).is_err()
+		);
+		let stake_attempts = FailedStakeAttempts::<Test>::get(ALICE);
+		assert_eq!(stake_attempts.len(), 1);
+		let stake_attempt = stake_attempts.get(0);
+		assert_eq!(stake_attempt.unwrap().0, ETH_DUMMY_ADDR);
+		assert_eq!(stake_attempt.unwrap().1, STAKE);
+	});
 }
