@@ -13,9 +13,8 @@
 //! ## Terminology
 //! - **Vault:** An entity
 use frame_support::pallet_prelude::*;
-use frame_support::traits::UnixTime;
 use sp_runtime::DispatchResult;
-use sp_runtime::traits::UniqueSaturatedInto;
+use sp_runtime::traits::{One};
 use sp_std::prelude::*;
 
 use cf_traits::{AuctionConfirmation, AuctionError, AuctionEvents, AuctionPenalty, NonceProvider, Witnesser};
@@ -34,12 +33,11 @@ pub mod nonce;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use codec::FullCodec;
-	use frame_support::traits::UnixTime;
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub};
+	use sp_runtime::traits::{AtLeast32BitUnsigned};
 
 	use super::*;
+	use sp_std::ops::Add;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -59,7 +57,11 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
 		/// The Ethereum Vault
-		type EthereumVault: ChainVault<RequestIndex, Self::ValidatorId, RotationError<Self::ValidatorId>>;
+		type EthereumVault: ChainVault<Self::RequestIndex, Self::PublicKey, Self::ValidatorId, RotationError<Self::ValidatorId>>;
+		/// The request index
+		type RequestIndex: Member + Parameter + Default + Add + Copy + AtLeast32BitUnsigned;
+		/// The new public key type
+		type PublicKey: Member + Parameter;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -70,23 +72,23 @@ pub mod pallet {
 	/// Current request index used in request/response (NB. this should be global and probably doesn't fit this architecture)
 	#[pallet::storage]
 	#[pallet::getter(fn request_idx)]
-	pub(super) type RequestIdx<T: Config> = StorageValue<_, RequestIndex, ValueQuery>;
+	pub(super) type RequestIdx<T: Config> = StorageValue<_, T::RequestIndex, ValueQuery>;
 
 	/// A map acting as a list of our current vault rotations
 	#[pallet::storage]
-	pub(super) type VaultRotations<T: Config> = StorageMap<_, Blake2_128Concat, RequestIndex, Vec<T::ValidatorId>>;
+	pub(super) type VaultRotations<T: Config> = StorageMap<_, Blake2_128Concat, T::RequestIndex, Vec<T::ValidatorId>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Request a key generation \[request_index, request\]
-		KeygenRequestEvent(RequestIndex, KeygenRequest<T::ValidatorId>),
+		KeygenRequestEvent(T::RequestIndex, KeygenRequest<T::ValidatorId>),
 		/// Request a rotation of the vault for this chain \[request_index, request\]
-		VaultRotationRequest(RequestIndex, VaultRotationRequest),
+		VaultRotationRequest(T::RequestIndex, VaultRotationRequest),
 		/// The vault for the request has rotated \[request_index\]
-		VaultRotationCompleted(RequestIndex),
+		VaultRotationCompleted(T::RequestIndex),
 		/// A rotation of vaults has been aborted \[request_indexes\]
-		RotationAborted(RequestIndexes),
+		RotationAborted(Vec<T::RequestIndex>),
 		/// A complete set of vaults have been rotated
 		VaultsRotated,
 	}
@@ -112,8 +114,8 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn witness_keygen_response(
 			origin: OriginFor<T>,
-			request_id: RequestIndex,
-			response: KeygenResponse<T::ValidatorId>,
+			request_id: T::RequestIndex,
+			response: KeygenResponse<T::ValidatorId, T::PublicKey>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = Call::<T>::keygen_response(request_id, response);
@@ -123,8 +125,8 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn keygen_response(
 			origin: OriginFor<T>,
-			request_id: RequestIndex,
-			response: KeygenResponse<T::ValidatorId>,
+			request_id: T::RequestIndex,
+			response: KeygenResponse<T::ValidatorId, T::PublicKey>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			Self::try_is_valid(request_id)?;
@@ -138,7 +140,7 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn witness_vault_rotation_response(
 			origin: OriginFor<T>,
-			request_id: RequestIndex,
+			request_id: T::RequestIndex,
 			response: VaultRotationResponse,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -149,7 +151,7 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn vault_rotation_response(
 			origin: OriginFor<T>,
-			request_id: RequestIndex,
+			request_id: T::RequestIndex,
 			response: VaultRotationResponse,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
@@ -199,19 +201,21 @@ impl<T: Config> From<RotationError<T::ValidatorId>> for Error<T> {
 	}
 }
 
-impl<T: Config> TryIndex<RequestIndex> for Pallet<T> {
-	fn try_is_valid(idx: RequestIndex) -> DispatchResult {
+impl<T: Config> TryIndex<T::RequestIndex> for Pallet<T> {
+	fn try_is_valid(idx: T::RequestIndex) -> DispatchResult {
 		ensure!(VaultRotations::<T>::contains_key(idx), Error::<T>::InvalidRequestIdx);
 		Ok(())
 	}
 }
 
-impl<T: Config> Index<RequestIndex> for Pallet<T> {
-	fn next() -> RequestIndex {
-		RequestIdx::<T>::mutate(|idx| *idx + 1)
+impl<T: Config> Index<T::RequestIndex> for Pallet<T> {
+	fn next() -> T::RequestIndex {
+		RequestIdx::<T>::mutate(|idx| {
+			*idx + One::one()
+		})
 	}
 
-	fn invalidate(idx: RequestIndex) {
+	fn invalidate(idx: T::RequestIndex) {
 		VaultRotations::<T>::remove(idx);
 	}
 
@@ -219,13 +223,13 @@ impl<T: Config> Index<RequestIndex> for Pallet<T> {
 		VaultRotations::<T>::iter().count() == 0
 	}
 
-	fn is_valid(idx: RequestIndex) -> bool {
+	fn is_valid(idx: T::RequestIndex) -> bool {
 		VaultRotations::<T>::contains_key(idx)
 	}
 }
 
 impl<T: Config> Pallet<T> {
-	fn new_vault_rotation(keygen_request: KeygenRequest<T::ValidatorId>) -> RequestIndex {
+	fn new_vault_rotation(keygen_request: KeygenRequest<T::ValidatorId>) -> T::RequestIndex {
 		let idx = Self::next();
 		VaultRotations::<T>::insert(idx, keygen_request.validator_candidates);
 		idx
@@ -239,10 +243,10 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config>
-	RequestResponse<RequestIndex, KeygenRequest<T::ValidatorId>, KeygenResponse<T::ValidatorId>, RotationError<T::ValidatorId>>
+	RequestResponse<T::RequestIndex, KeygenRequest<T::ValidatorId>, KeygenResponse<T::ValidatorId, T::PublicKey>, RotationError<T::ValidatorId>>
 	for Pallet<T>
 {
-	fn try_request(_index: RequestIndex, request: KeygenRequest<T::ValidatorId>) -> Result<(), RotationError<T::ValidatorId>> {
+	fn try_request(_index: T::RequestIndex, request: KeygenRequest<T::ValidatorId>) -> Result<(), RotationError<T::ValidatorId>> {
 		// Signal to CFE that we are wanting to start a new key generation
 		ensure!(!request.validator_candidates.is_empty(), RotationError::EmptyValidatorSet);
 		let idx = Self::new_vault_rotation(request.clone());
@@ -250,7 +254,7 @@ impl<T: Config>
 		Ok(())
 	}
 
-	fn try_response(index: RequestIndex, response: KeygenResponse<T::ValidatorId>) -> Result<(), RotationError<T::ValidatorId>> {
+	fn try_response(index: T::RequestIndex, response: KeygenResponse<T::ValidatorId, T::PublicKey>) -> Result<(), RotationError<T::ValidatorId>> {
 		match response {
 			KeygenResponse::Success(new_public_key) => {
 				// Go forth and construct
@@ -300,16 +304,16 @@ impl<T: Config> AuctionConfirmation for Pallet<T> {
 }
 
 impl<T: Config>
-	RequestResponse<RequestIndex, VaultRotationRequest, VaultRotationResponse, RotationError<T::ValidatorId>>
+	RequestResponse<T::RequestIndex, VaultRotationRequest, VaultRotationResponse, RotationError<T::ValidatorId>>
 	for Pallet<T>
 {
-	fn try_request(index: RequestIndex, request: VaultRotationRequest) -> Result<(), RotationError<T::ValidatorId>>  {
+	fn try_request(index: T::RequestIndex, request: VaultRotationRequest) -> Result<(), RotationError<T::ValidatorId>>  {
 		// Signal to CFE that we are wanting to start the rotation
 		Self::deposit_event(Event::VaultRotationRequest(index, request));
 		Ok(().into())
 	}
 
-	fn try_response(index: RequestIndex, response: VaultRotationResponse) -> Result<(), RotationError<T::ValidatorId>>  {
+	fn try_response(index: T::RequestIndex, response: VaultRotationResponse) -> Result<(), RotationError<T::ValidatorId>>  {
 		// This request is complete
 		Self::invalidate(index);
 		// Feedback to vaults
@@ -321,9 +325,9 @@ impl<T: Config>
 	}
 }
 
-impl<T: Config> ChainEvents<RequestIndex, T::ValidatorId, RotationError<T::ValidatorId>> for Pallet<T> {
+impl<T: Config> ChainEvents<T::RequestIndex, T::ValidatorId, RotationError<T::ValidatorId>> for Pallet<T> {
 	fn try_complete_vault_rotation(
-		index: RequestIndex,
+		index: T::RequestIndex,
 		result: Result<VaultRotationRequest, RotationError<T::ValidatorId>>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		match result {

@@ -69,12 +69,13 @@ parameter_types! {
 }
 
 pub struct OtherChain;
-impl ChainVault<RequestIndex, ValidatorId, RotationError<ValidatorId>> for OtherChain {
+type RequestIndex = u64;
+impl ChainVault<RequestIndex, Vec<u8>, ValidatorId, RotationError<ValidatorId>> for OtherChain {
 	fn chain_params() -> ChainParams {
 		todo!()
 	}
 
-	fn try_start_vault_rotation(index: RequestIndex, new_public_key: NewPublicKey, validators: Vec<ValidatorId>) -> Result<(), RotationError<ValidatorId>> {
+	fn try_start_vault_rotation(index: RequestIndex, new_public_key: Vec<u8>, validators: Vec<ValidatorId>) -> Result<(), RotationError<ValidatorId>> {
 		todo!("mock other chain construction phase")
 	}
 
@@ -156,6 +157,8 @@ impl ethereum::Config for MockRuntime {
 	type Witnesser = MockWitnesser;
 	type Nonce = u64;
 	type NonceProvider = NonceUnixTime<Self::Nonce, time_source::Mock>;
+	type RequestIndex = u64;
+	type PublicKey = Vec<u8>;
 }
 
 impl pallet_cf_vaults::Config for MockRuntime {
@@ -164,6 +167,8 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type EthereumVault = EthereumVault;
 	type EnsureWitnessed = MockEnsureWitness;
 	type Witnesser = MockWitnesser;
+	type RequestIndex = u64;
+	type PublicKey = Vec<u8>;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

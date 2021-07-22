@@ -1,24 +1,14 @@
 use codec::{Encode, Decode};
 use frame_support::RuntimeDebug;
-use std::ops::Add;
 use frame_support::pallet_prelude::*;
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use cf_traits::{AuctionConfirmation, AuctionEvents, AuctionPenalty};
 use sp_runtime::DispatchResult;
 
-/// The new public key
-pub type NewPublicKey = Vec<u8>;
-/// Request index type
-pub type RequestIndex = u32;
-/// List of request indexes
-pub type RequestIndexes = Vec<RequestIndex>;
-
 // The things that can go wrong
 pub enum RotationError<ValidatorId> {
 	/// Empty validator set provided
 	EmptyValidatorSet,
-	/// An invalid set of validators
-	InvalidValidators,
 	/// A set of badly acting validators
 	BadValidators(Vec<ValidatorId>),
 	/// Failed to construct a valid chain specific payload for rotation
@@ -28,7 +18,7 @@ pub enum RotationError<ValidatorId> {
 }
 
 /// An index scheme which manages a number of index references
-pub trait Index<T: Add> {
+pub trait Index<T: AtLeast32BitUnsigned> {
 	/// Provide the next index
 	fn next() -> T;
 	/// Invalidate this index if it exists
@@ -40,7 +30,7 @@ pub trait Index<T: Add> {
 }
 
 /// Try to determine if an index is valid
-pub trait TryIndex<T: Add> : Index<T> {
+pub trait TryIndex<T: AtLeast32BitUnsigned> : Index<T> {
 	fn try_is_valid(idx: T) -> DispatchResult;
 }
 
@@ -53,13 +43,13 @@ pub trait RequestResponse<I, Req, Res, Err> {
 }
 
 /// A vault for a chain
-pub trait ChainVault<I, ValidatorId, Err> {
+pub trait ChainVault<I, PublicKey, ValidatorId, Err> {
 	/// A set of params for the chain for this vault
 	fn chain_params() -> ChainParams;
 	/// Start the vault rotation phase.  The chain would construct a `VaultRotationRequest`.
 	/// When complete `ChainEvents::try_complete_vault_rotation()` would be used to notify to continue
 	/// with the process.
-	fn try_start_vault_rotation(index: I, new_public_key: NewPublicKey, validators: Vec<ValidatorId>) -> Result<(), Err>;
+	fn try_start_vault_rotation(index: I, new_public_key: PublicKey, validators: Vec<ValidatorId>) -> Result<(), Err>;
 	/// We have confirmation of the rotation
 	fn vault_rotated(response: VaultRotationResponse);
 }
@@ -111,9 +101,9 @@ pub struct KeygenRequest<ValidatorId> {
 
 /// A response for our KeygenRequest
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum KeygenResponse<ValidatorId> {
+pub enum KeygenResponse<ValidatorId, PublicKey> {
 	/// The key generation ceremony has completed successfully with a new proposed public key
-	Success(NewPublicKey),
+	Success(PublicKey),
 	/// Something went wrong and it failed.
 	Failure(Vec<ValidatorId>),
 }
