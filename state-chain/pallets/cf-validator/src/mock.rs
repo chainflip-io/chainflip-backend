@@ -1,6 +1,6 @@
 use super::*;
 use crate as pallet_cf_validator;
-use cf_traits::{AuctionConfirmation, BidderProvider, impl_mock_ensure_witnessed_for_origin};
+use cf_traits::{impl_mock_ensure_witnessed_for_origin, AuctionConfirmation, BidderProvider};
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{
 	construct_runtime, parameter_types,
