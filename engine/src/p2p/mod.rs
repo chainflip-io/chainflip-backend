@@ -128,6 +128,8 @@ struct CommandSendMessage {
 #[cfg(test)]
 mod tests {
 
+    use std::convert::TryInto;
+
     use itertools::Itertools;
     use tokio::sync::mpsc::UnboundedReceiver;
 

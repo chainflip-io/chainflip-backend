@@ -374,12 +374,12 @@ mod tests {
 	fn send_message() {
 		let node = Node::new();
 
-		let validator_id = "5G9NWJ5P9uk7am24yCKeLZJqXWW6hjuMyRJDmw4ofqxG8Js2";
+		let peer_id = "12D3KooWMxxmtYRoBr5yMGfXdunkZ3goE4fZsMuJJMRAm3UdySxg";
 
 		let request = json!({
 			"jsonrpc": "2.0",
 			"method": "p2p_send",
-			"params": [validator_id, "hello"],
+			"params": [peer_id, "hello"],
 			"id": 1,
 		});
 
