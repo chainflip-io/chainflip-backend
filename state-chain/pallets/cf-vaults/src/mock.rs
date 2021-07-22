@@ -1,5 +1,7 @@
 use super::*;
 use crate as pallet_cf_vaults;
+use crate::rotation::*;
+use cf_traits::{AuctionConfirmation, AuctionError, AuctionEvents, AuctionPenalty};
 use frame_support::{construct_runtime, parameter_types};
 use frame_system::{ensure_root, RawOrigin};
 use sp_core::H256;
@@ -8,8 +10,6 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-use crate::rotation::*;
-use cf_traits::{AuctionConfirmation, AuctionEvents, AuctionError, AuctionPenalty};
 pub(super) mod time_source;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
@@ -18,11 +18,10 @@ type Block = frame_system::mocking::MockBlock<MockRuntime>;
 type Amount = u64;
 type ValidatorId = u64;
 
-use chains::ethereum;
 use crate::nonce::NonceUnixTime;
+use chains::ethereum;
 
-thread_local! {
-}
+thread_local! {}
 
 construct_runtime!(
 	pub enum MockRuntime where
@@ -65,8 +64,7 @@ impl frame_system::Config for MockRuntime {
 	type SS58Prefix = ();
 }
 
-parameter_types! {
-}
+parameter_types! {}
 
 pub struct OtherChain;
 type RequestIndex = u64;
@@ -75,7 +73,11 @@ impl ChainVault<RequestIndex, Vec<u8>, ValidatorId, RotationError<ValidatorId>> 
 		todo!()
 	}
 
-	fn try_start_vault_rotation(index: RequestIndex, new_public_key: Vec<u8>, validators: Vec<ValidatorId>) -> Result<(), RotationError<ValidatorId>> {
+	fn try_start_vault_rotation(
+		index: RequestIndex,
+		new_public_key: Vec<u8>,
+		validators: Vec<ValidatorId>,
+	) -> Result<(), RotationError<ValidatorId>> {
 		todo!("mock other chain construction phase")
 	}
 
@@ -111,8 +113,10 @@ pub struct MockAuctionEvents<ValidatorId, Amount> {
 	_a: PhantomData<Amount>,
 }
 
-impl<ValidatorId, Amount> AuctionEvents<ValidatorId, Amount> for MockAuctionEvents<ValidatorId, Amount> {
-	fn on_completed(winners: Vec<ValidatorId>, min_bid:Amount) -> Result<(), AuctionError> {
+impl<ValidatorId, Amount> AuctionEvents<ValidatorId, Amount>
+	for MockAuctionEvents<ValidatorId, Amount>
+{
+	fn on_completed(winners: Vec<ValidatorId>, min_bid: Amount) -> Result<(), AuctionError> {
 		Ok(())
 	}
 }
@@ -125,7 +129,7 @@ impl AuctionConfirmation for MockAuctionConfirmation {
 }
 
 pub struct MockAuctionPenalty<ValidatorId> {
-	_a : PhantomData<ValidatorId>,
+	_a: PhantomData<ValidatorId>,
 }
 
 impl<ValidatorId> AuctionPenalty<ValidatorId> for MockAuctionPenalty<ValidatorId> {
@@ -175,8 +179,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		frame_system: Default::default(),
 		ethereum: Default::default(),
-		pallet_cf_vaults: Some(VaultsConfig {
-		}),
+		pallet_cf_vaults: Some(VaultsConfig {}),
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

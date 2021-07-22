@@ -12,8 +12,6 @@ mod test {
 
 	#[test]
 	fn genesis() {
-		new_test_ext().execute_with(|| {
-
-		});
+		new_test_ext().execute_with(|| {});
 	}
 }

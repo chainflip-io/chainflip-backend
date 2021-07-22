@@ -31,28 +31,30 @@
 //! - **Validator Rotation:** The rotation of validators from old to new.
 
 use frame_support::pallet_prelude::*;
+use sp_runtime::traits::One;
 use sp_runtime::DispatchResult;
-use sp_runtime::traits::{One};
 use sp_std::prelude::*;
 
-use cf_traits::{AuctionConfirmation, AuctionError, AuctionEvents, AuctionPenalty, NonceProvider, Witnesser};
+use cf_traits::{
+	AuctionConfirmation, AuctionError, AuctionEvents, AuctionPenalty, NonceProvider, Witnesser,
+};
 pub use pallet::*;
 
 use crate::rotation::*;
 
 mod rotation;
 
+mod chains;
 #[cfg(test)]
 mod mock;
+pub mod nonce;
 #[cfg(test)]
 mod tests;
-mod chains;
-pub mod nonce;
 
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::traits::{AtLeast32BitUnsigned};
+	use sp_runtime::traits::AtLeast32BitUnsigned;
 
 	use super::*;
 	use sp_std::ops::Add;
@@ -62,7 +64,11 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + ChainFlip + AuctionManager<<Self as ChainFlip>::ValidatorId, <Self as ChainFlip>::Amount> {
+	pub trait Config:
+		frame_system::Config
+		+ ChainFlip
+		+ AuctionManager<<Self as ChainFlip>::ValidatorId, <Self as ChainFlip>::Amount>
+	{
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
@@ -75,7 +81,12 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
 		/// The Ethereum Vault
-		type EthereumVault: ChainVault<Self::RequestIndex, Self::PublicKey, Self::ValidatorId, RotationError<Self::ValidatorId>>;
+		type EthereumVault: ChainVault<
+			Self::RequestIndex,
+			Self::PublicKey,
+			Self::ValidatorId,
+			RotationError<Self::ValidatorId>,
+		>;
 		/// The request index
 		type RequestIndex: Member + Parameter + Default + Add + Copy + AtLeast32BitUnsigned;
 		/// The new public key type
@@ -84,8 +95,7 @@ pub mod pallet {
 
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-	}
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
 	/// Current request index used in request/response (NB. this should be global and probably doesn't fit this architecture)
 	#[pallet::storage]
@@ -94,7 +104,8 @@ pub mod pallet {
 
 	/// A map acting as a list of our current vault rotations
 	#[pallet::storage]
-	pub(super) type VaultRotations<T: Config> = StorageMap<_, Blake2_128Concat, T::RequestIndex, KeygenRequest<T::ValidatorId>>;
+	pub(super) type VaultRotations<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::RequestIndex, KeygenRequest<T::ValidatorId>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -131,7 +142,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-
 		// 2/3 threshold from our old validators
 		#[pallet::weight(10_000)]
 		pub fn witness_keygen_response(
@@ -154,7 +164,7 @@ pub mod pallet {
 			Self::try_is_valid(request_id)?;
 			match Self::try_response(request_id, response) {
 				Ok(_) => Ok(().into()),
-				Err(e) => Err(Error::<T>::from(e).into())
+				Err(e) => Err(Error::<T>::from(e).into()),
 			}
 		}
 
@@ -180,7 +190,7 @@ pub mod pallet {
 			Self::try_is_valid(request_id)?;
 			match Self::try_response(request_id, response) {
 				Ok(_) => Ok(().into()),
-				Err(e) => Err(Error::<T>::from(e).into())
+				Err(e) => Err(Error::<T>::from(e).into()),
 			}
 		}
 	}
@@ -208,7 +218,9 @@ impl<T: Config> From<RotationError<T::ValidatorId>> for Error<T> {
 			RotationError::EmptyValidatorSet => Error::<T>::EmptyValidatorSet,
 			RotationError::BadValidators(_) => Error::<T>::BadValidators,
 			RotationError::FailedToConstructPayload => Error::<T>::FailedToConstructPayload,
-			RotationError::VaultRotationCompletionFailed => Error::<T>::VaultRotationCompletionFailed,
+			RotationError::VaultRotationCompletionFailed => {
+				Error::<T>::VaultRotationCompletionFailed
+			}
 		}
 	}
 }
@@ -216,16 +228,17 @@ impl<T: Config> From<RotationError<T::ValidatorId>> for Error<T> {
 impl<T: Config> TryIndex<T::RequestIndex> for Pallet<T> {
 	/// Ensure we have this index else return error
 	fn try_is_valid(idx: T::RequestIndex) -> DispatchResult {
-		ensure!(VaultRotations::<T>::contains_key(idx), Error::<T>::InvalidRequestIdx);
+		ensure!(
+			VaultRotations::<T>::contains_key(idx),
+			Error::<T>::InvalidRequestIdx
+		);
 		Ok(())
 	}
 }
 
 impl<T: Config> Index<T::RequestIndex> for Pallet<T> {
 	fn next() -> T::RequestIndex {
-		RequestIdx::<T>::mutate(|idx| {
-			*idx + One::one()
-		})
+		RequestIdx::<T>::mutate(|idx| *idx + One::one())
 	}
 
 	fn invalidate(idx: T::RequestIndex) {
@@ -251,7 +264,9 @@ impl<T: Config> Pallet<T> {
 
 	/// Abort all rotations registered and notify the `AuctionPenalty` trait of our decision to abort.
 	fn abort_rotation() {
-		Self::deposit_event(Event::RotationAborted(VaultRotations::<T>::iter().map(|(k, _)| k).collect()));
+		Self::deposit_event(Event::RotationAborted(
+			VaultRotations::<T>::iter().map(|(k, _)| k).collect(),
+		));
 		VaultRotations::<T>::remove_all();
 		T::Penalty::abort();
 	}
@@ -261,7 +276,7 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> AuctionEvents<T::ValidatorId, T::Amount> for Pallet<T> {
 	/// On completion of the Auction we would receive the proposed validators
 	/// A key generation request is created for each supported chain and the process starts
-	fn on_completed(winners: Vec<T::ValidatorId>, _: T::Amount) -> Result<(), AuctionError>{
+	fn on_completed(winners: Vec<T::ValidatorId>, _: T::Amount) -> Result<(), AuctionError> {
 		// Create a KeyGenRequest for Ethereum
 		let keygen_request = KeygenRequest {
 			chain: T::EthereumVault::chain_params(),
@@ -292,13 +307,23 @@ impl<T: Config> AuctionConfirmation for Pallet<T> {
 
 // The first phase generating the key generation requests
 impl<T: Config>
-	RequestResponse<T::RequestIndex, KeygenRequest<T::ValidatorId>, KeygenResponse<T::ValidatorId, T::PublicKey>, RotationError<T::ValidatorId>>
-	for Pallet<T>
+	RequestResponse<
+		T::RequestIndex,
+		KeygenRequest<T::ValidatorId>,
+		KeygenResponse<T::ValidatorId, T::PublicKey>,
+		RotationError<T::ValidatorId>,
+	> for Pallet<T>
 {
 	/// Emit as an event the key generation request, this is the first step after receiving a proposed
 	/// validator set from the `AuctionEvents` trait
-	fn try_request(_index: T::RequestIndex, request: KeygenRequest<T::ValidatorId>) -> Result<(), RotationError<T::ValidatorId>> {
-		ensure!(!request.validator_candidates.is_empty(), RotationError::EmptyValidatorSet);
+	fn try_request(
+		_index: T::RequestIndex,
+		request: KeygenRequest<T::ValidatorId>,
+	) -> Result<(), RotationError<T::ValidatorId>> {
+		ensure!(
+			!request.validator_candidates.is_empty(),
+			RotationError::EmptyValidatorSet
+		);
 		let idx = Self::new_vault_rotation(request.clone());
 		Self::deposit_event(Event::KeygenRequestEvent(idx, request));
 		Ok(())
@@ -307,13 +332,20 @@ impl<T: Config>
 	/// Try to process the response back for the key generation request and hand it off to the relevant
 	/// chain to continue processing.  Failure would result in penalisation for the bad validators returned
 	/// and the vault rotation aborted.
-	fn try_response(index: T::RequestIndex, response: KeygenResponse<T::ValidatorId, T::PublicKey>) -> Result<(), RotationError<T::ValidatorId>> {
+	fn try_response(
+		index: T::RequestIndex,
+		response: KeygenResponse<T::ValidatorId, T::PublicKey>,
+	) -> Result<(), RotationError<T::ValidatorId>> {
 		match response {
 			KeygenResponse::Success(new_public_key) => {
 				// Go forth and construct
 				VaultRotations::<T>::mutate(index, |maybe_vault_rotation| {
 					if let Some(keygen_request) = maybe_vault_rotation {
-						T::EthereumVault::try_start_vault_rotation(index, new_public_key, keygen_request.validator_candidates.to_vec())
+						T::EthereumVault::try_start_vault_rotation(
+							index,
+							new_public_key,
+							keygen_request.validator_candidates.to_vec(),
+						)
 					} else {
 						unreachable!("This shouldn't happen but we need to maybe signal this")
 					}
@@ -333,7 +365,9 @@ impl<T: Config>
 
 // We have now had feedback from the vault/chain that we can proceed with the final request for the
 // vault rotation
-impl<T: Config> ChainEvents<T::RequestIndex, T::ValidatorId, RotationError<T::ValidatorId>> for Pallet<T> {
+impl<T: Config> ChainEvents<T::RequestIndex, T::ValidatorId, RotationError<T::ValidatorId>>
+	for Pallet<T>
+{
 	/// Try to complete the final vault rotation with feedback from the chain implementation over
 	/// the `ChainEvents` trait.  This is forwarded as a request and hence an event is emitted.
 	/// Failure is handled and potential bad validators are penalised and the rotation is now aborted.
@@ -358,11 +392,18 @@ impl<T: Config> ChainEvents<T::RequestIndex, T::ValidatorId, RotationError<T::Va
 
 // Request response for the vault rotation requests
 impl<T: Config>
-	RequestResponse<T::RequestIndex, VaultRotationRequest, VaultRotationResponse, RotationError<T::ValidatorId>>
-	for Pallet<T>
+	RequestResponse<
+		T::RequestIndex,
+		VaultRotationRequest,
+		VaultRotationResponse,
+		RotationError<T::ValidatorId>,
+	> for Pallet<T>
 {
 	/// Emit our event for the start of a vault rotation generation request.
-	fn try_request(index: T::RequestIndex, request: VaultRotationRequest) -> Result<(), RotationError<T::ValidatorId>>  {
+	fn try_request(
+		index: T::RequestIndex,
+		request: VaultRotationRequest,
+	) -> Result<(), RotationError<T::ValidatorId>> {
 		Self::deposit_event(Event::VaultRotationRequest(index, request));
 		Ok(().into())
 	}
@@ -370,7 +411,10 @@ impl<T: Config>
 	/// Handle the response posted back on our request for a vault rotation request
 	/// The request is cleared from the cache of pending requests and the relevant vault is
 	/// notified
-	fn try_response(index: T::RequestIndex, response: VaultRotationResponse) -> Result<(), RotationError<T::ValidatorId>>  {
+	fn try_response(
+		index: T::RequestIndex,
+		response: VaultRotationResponse,
+	) -> Result<(), RotationError<T::ValidatorId>> {
 		// Feedback to vaults
 		// We have assumed here that once we have one confirmation of a vault rotation we wouldn't
 		// need to rollback any if one of the group of vault rotations fails

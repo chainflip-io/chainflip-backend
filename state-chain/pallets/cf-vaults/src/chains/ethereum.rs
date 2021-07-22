@@ -29,14 +29,14 @@
 //!   become the next validating set for the network.
 //! - **Vault Rotation:** The rotation of vaults where funds are 'moved' from one to another.
 
+use crate::rotation::ChainParams::Ethereum;
+use crate::rotation::*;
+use cf_traits::{NonceProvider, Witnesser};
+use ethabi::{Bytes, Function, Param, ParamType, Token};
 use frame_support::pallet_prelude::*;
 pub use pallet::*;
-use crate::rotation::*;
-use crate::rotation::ChainParams::Ethereum;
-use ethabi::{Bytes, Function, Param, ParamType, Token};
 use sp_core::H160;
 use sp_core::U256;
-use cf_traits::{Witnesser, NonceProvider};
 
 /// A signing request
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
@@ -58,9 +58,9 @@ pub enum EthSigningTxResponse<ValidatorId> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_system::pallet_prelude::*;
 	use cf_traits::NonceProvider;
-	use sp_runtime::traits::{AtLeast32BitUnsigned};
+	use frame_system::pallet_prelude::*;
+	use sp_runtime::traits::AtLeast32BitUnsigned;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -70,7 +70,11 @@ pub mod pallet {
 	pub trait Config: frame_system::Config + ChainFlip {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-		type Vaults: ChainEvents<Self::RequestIndex, <Self as ChainFlip>::ValidatorId, RotationError<Self::ValidatorId>> + TryIndex<Self::RequestIndex>;
+		type Vaults: ChainEvents<
+				Self::RequestIndex,
+				<Self as ChainFlip>::ValidatorId,
+				RotationError<Self::ValidatorId>,
+			> + TryIndex<Self::RequestIndex>;
 		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
 		type Call: From<Call<Self>> + IsType<<Self as frame_system::Config>::Call>;
 		/// Provides an origin check for witness transactions.
@@ -113,7 +117,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-
 		#[pallet::weight(10_000)]
 		pub fn witness_eth_signing_tx_response(
 			origin: OriginFor<T>,
@@ -129,38 +132,38 @@ pub mod pallet {
 		pub fn eth_signing_tx_response(
 			origin: OriginFor<T>,
 			request_id: T::RequestIndex,
-			response: EthSigningTxResponse<T::ValidatorId>
+			response: EthSigningTxResponse<T::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			T::Vaults::try_is_valid(request_id)?;
 			match Self::try_response(request_id, response) {
 				Ok(_) => Ok(().into()),
-				Err(_) => Err(Error::<T>::EthSigningTxResponseFailed.into())
+				Err(_) => Err(Error::<T>::EthSigningTxResponseFailed.into()),
 			}
 		}
 	}
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig {
-	}
+	pub struct GenesisConfig {}
 
 	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
-			Self {
-			}
+			Self {}
 		}
 	}
 
 	// The build of genesis for the pallet.
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
-		fn build(&self) {
-		}
+		fn build(&self) {}
 	}
 }
 
-impl<T: Config> ChainVault<T::RequestIndex, T::PublicKey, T::ValidatorId, RotationError<T::ValidatorId>> for Pallet<T> {
+impl<T: Config>
+	ChainVault<T::RequestIndex, T::PublicKey, T::ValidatorId, RotationError<T::ValidatorId>>
+	for Pallet<T>
+{
 	/// Parameters required when creating key generation requests
 	fn chain_params() -> ChainParams {
 		ChainParams::Ethereum(vec![])
@@ -171,20 +174,30 @@ impl<T: Config> ChainVault<T::RequestIndex, T::PublicKey, T::ValidatorId, Rotati
 	/// to have the function `setAggKeyWithAggKey` signed by the old set of validators.
 	/// A payload is built and emitted as a `EthSigningTxRequest`, failing this an error is reported
 	/// back to `Vaults`
-	fn try_start_vault_rotation(index: T::RequestIndex, new_public_key: T::PublicKey, validators: Vec<T::ValidatorId>) -> Result<(), RotationError<T::ValidatorId>> {
+	fn try_start_vault_rotation(
+		index: T::RequestIndex,
+		new_public_key: T::PublicKey,
+		validators: Vec<T::ValidatorId>,
+	) -> Result<(), RotationError<T::ValidatorId>> {
 		// Create payload for signature here
 		// function setAggKeyWithAggKey(SigData calldata sigData, Key calldata newKey)
 		match Self::encode_set_agg_key_with_agg_key(new_public_key) {
 			Ok(payload) => {
 				// Emit the event
-				Self::try_request(index, EthSigningTxRequest {
-					validators,
-					payload,
-				})
+				Self::try_request(
+					index,
+					EthSigningTxRequest {
+						validators,
+						payload,
+					},
+				)
 			}
 			Err(_) => {
 				// Failure in completing the vault rotation and we report back to `Vaults`
-				T::Vaults::try_complete_vault_rotation(index, Err(RotationError::FailedToConstructPayload))
+				T::Vaults::try_complete_vault_rotation(
+					index,
+					Err(RotationError::FailedToConstructPayload),
+				)
 			}
 		}
 	}
@@ -195,33 +208,41 @@ impl<T: Config> ChainVault<T::RequestIndex, T::PublicKey, T::ValidatorId, Rotati
 	}
 }
 
-impl<T: Config> RequestResponse<T::RequestIndex, EthSigningTxRequest<T::ValidatorId>, EthSigningTxResponse<T::ValidatorId>, RotationError<T::ValidatorId>> for Pallet<T> {
+impl<T: Config>
+	RequestResponse<
+		T::RequestIndex,
+		EthSigningTxRequest<T::ValidatorId>,
+		EthSigningTxResponse<T::ValidatorId>,
+		RotationError<T::ValidatorId>,
+	> for Pallet<T>
+{
 	/// Make the request to sign by emitting an event
-	fn try_request(index: T::RequestIndex, request: EthSigningTxRequest<T::ValidatorId>) -> Result<(), RotationError<T::ValidatorId>> {
+	fn try_request(
+		index: T::RequestIndex,
+		request: EthSigningTxRequest<T::ValidatorId>,
+	) -> Result<(), RotationError<T::ValidatorId>> {
 		Self::deposit_event(Event::EthSignTxRequestEvent(index, request));
 		Ok(().into())
 	}
 
 	/// Try to handle the response and pass this onto `Vaults` to complete the vault rotation
-	fn try_response(index: T::RequestIndex, response: EthSigningTxResponse<T::ValidatorId>) -> Result<(), RotationError<T::ValidatorId>> {
+	fn try_response(
+		index: T::RequestIndex,
+		response: EthSigningTxResponse<T::ValidatorId>,
+	) -> Result<(), RotationError<T::ValidatorId>> {
 		match response {
 			EthSigningTxResponse::Success(signature) => {
-				T::Vaults::try_complete_vault_rotation(
-					index,
-					Ok(Ethereum(signature).into())
-				)
+				T::Vaults::try_complete_vault_rotation(index, Ok(Ethereum(signature).into()))
 			}
-			EthSigningTxResponse::Error(bad_validators) => {
-				T::Vaults::try_complete_vault_rotation(
-					index,
-					Err(RotationError::BadValidators(bad_validators))
-				)
-			}
+			EthSigningTxResponse::Error(bad_validators) => T::Vaults::try_complete_vault_rotation(
+				index,
+				Err(RotationError::BadValidators(bad_validators)),
+			),
 		}
 	}
 }
 
-impl From<Vec<u8>> for ChainParams{
+impl From<Vec<u8>> for ChainParams {
 	fn from(payload: Vec<u8>) -> Self {
 		Ethereum(payload)
 	}
@@ -247,7 +268,8 @@ impl<T: Config> Pallet<T> {
 			],
 			vec![],
 			false,
-		).encode_input(&vec![
+		)
+		.encode_input(&vec![
 			// sigData: SigData(uint, uint, uint, address)
 			Token::Tuple(vec![
 				Token::Uint(ethabi::Uint::zero()),

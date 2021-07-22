@@ -1,8 +1,8 @@
-use codec::{Encode, Decode};
-use frame_support::RuntimeDebug;
-use frame_support::pallet_prelude::*;
-use sp_runtime::traits::AtLeast32BitUnsigned;
 use cf_traits::{AuctionConfirmation, AuctionEvents, AuctionPenalty};
+use codec::{Decode, Encode};
+use frame_support::pallet_prelude::*;
+use frame_support::RuntimeDebug;
+use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_runtime::DispatchResult;
 
 /// Errors occurring during a rotation
@@ -30,7 +30,7 @@ pub trait Index<T: AtLeast32BitUnsigned> {
 }
 
 /// Try to determine if an index is valid
-pub trait TryIndex<T: AtLeast32BitUnsigned> : Index<T> {
+pub trait TryIndex<T: AtLeast32BitUnsigned>: Index<T> {
 	fn try_is_valid(idx: T) -> DispatchResult;
 }
 
@@ -49,7 +49,11 @@ pub trait ChainVault<I, PublicKey, ValidatorId, Err> {
 	/// Start the vault rotation phase.  The chain would construct a `VaultRotationRequest`.
 	/// When complete `ChainEvents::try_complete_vault_rotation()` would be used to notify to continue
 	/// with the process.
-	fn try_start_vault_rotation(index: I, new_public_key: PublicKey, validators: Vec<ValidatorId>) -> Result<(), Err>;
+	fn try_start_vault_rotation(
+		index: I,
+		new_public_key: PublicKey,
+		validators: Vec<ValidatorId>,
+	) -> Result<(), Err>;
 	/// We have confirmation of the rotation
 	fn vault_rotated(response: VaultRotationResponse);
 }
@@ -59,7 +63,10 @@ pub trait ChainVault<I, PublicKey, ValidatorId, Err> {
 pub trait ChainEvents<I, ValidatorId, Err> {
 	/// Initial vault rotation phase complete with a result describing the outcome of this phase
 	/// Feedback is provided back on this step
-	fn try_complete_vault_rotation(index: I, result: Result<VaultRotationRequest, RotationError<ValidatorId>>) -> Result<(), Err>;
+	fn try_complete_vault_rotation(
+		index: I,
+		result: Result<VaultRotationRequest, RotationError<ValidatorId>>,
+	) -> Result<(), Err>;
 }
 
 /// Description of some base types
@@ -124,5 +131,5 @@ impl From<ChainParams> for VaultRotationRequest {
 pub struct VaultRotationResponse {
 	old_key: Vec<u8>,
 	new_key: Vec<u8>,
-	tx: Vec<u8>
+	tx: Vec<u8>,
 }
