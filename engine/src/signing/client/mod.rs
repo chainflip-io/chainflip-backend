@@ -141,6 +141,7 @@ where
 
     /// Start listening on the p2p connection and MQ
     pub async fn run(mut self, mut shutdown_rx: tokio::sync::oneshot::Receiver<()>) {
+        log::info!("Starting signing module");
         let receiver = self.inner_event_receiver.take().unwrap();
 
         let mq = *self.factory.create().await.unwrap();
@@ -249,5 +250,6 @@ where
         };
 
         futures::join!(events_fut, other_fut, cleanup_fut);
+        log::error!("Signing module has stopped");
     }
 }
