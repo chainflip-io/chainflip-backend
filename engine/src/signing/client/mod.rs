@@ -5,6 +5,7 @@ use std::{marker::PhantomData, time::Duration};
 use crate::{
     mq::{pin_message_stream, IMQClient, IMQClientFactory, Subject},
     p2p::ValidatorId,
+    signing::db::KeyDB,
 };
 use anyhow::Result;
 use futures::StreamExt;
@@ -15,7 +16,9 @@ use crate::p2p::P2PMessage;
 
 use self::client_inner::{InnerEvent, MultisigClientInner};
 
-pub use client_inner::{KeygenOutcome, KeygenSuccess, SigningOutcome, SigningSuccess};
+pub use client_inner::{
+    KeygenOutcome, KeygenResultInfo, KeygenSuccess, SigningOutcome, SigningSuccess,
+};
 
 use super::MessageHash;
 
@@ -66,15 +69,16 @@ pub enum MultisigEvent {
     KeygenResult(KeygenOutcome),
 }
 
-pub struct MultisigClient<MQ, F>
+pub struct MultisigClient<MQ, F, S>
 where
     MQ: IMQClient,
     F: IMQClientFactory<MQ>,
+    S: KeyDB,
 {
     factory: F,
     inner_event_receiver: Option<mpsc::UnboundedReceiver<InnerEvent>>,
-    inner: MultisigClientInner,
-    id: ValidatorId,
+    inner: MultisigClientInner<S>,
+    my_validator_id: ValidatorId,
     _mq: PhantomData<MQ>,
 }
 
@@ -82,19 +86,20 @@ where
 // before expiring them
 const PHASE_TIMEOUT: Duration = Duration::from_secs(20);
 
-impl<MQ, F> MultisigClient<MQ, F>
+impl<MQ, F, S> MultisigClient<MQ, F, S>
 where
     MQ: IMQClient,
     F: IMQClientFactory<MQ>,
+    S: KeyDB,
 {
-    pub fn new(factory: F, id: ValidatorId) -> Self {
+    pub fn new(db: S, factory: F, my_validator_id: ValidatorId) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
 
         MultisigClient {
             factory,
-            inner: MultisigClientInner::new(id.clone(), tx, PHASE_TIMEOUT),
+            inner: MultisigClientInner::new(my_validator_id.clone(), db, tx, PHASE_TIMEOUT),
             inner_event_receiver: Some(rx),
-            id,
+            my_validator_id,
             _mq: PhantomData,
         }
     }
@@ -136,6 +141,7 @@ where
 
     /// Start listening on the p2p connection and MQ
     pub async fn run(mut self, mut shutdown_rx: tokio::sync::oneshot::Receiver<()>) {
+        log::info!("Starting signing module");
         let receiver = self.inner_event_receiver.take().unwrap();
 
         let mq = *self.factory.create().await.unwrap();
@@ -149,7 +155,7 @@ where
             tokio::sync::oneshot::channel::<()>();
 
         let events_fut =
-            MultisigClient::<_, F>::process_inner_events(receiver, mq, shutdown_events_fut_rx);
+            MultisigClient::<_, F, S>::process_inner_events(receiver, mq, shutdown_events_fut_rx);
 
         let cleanup_fut = async move {
             loop {
@@ -211,7 +217,7 @@ where
             let stream_inner = futures::stream::select(s2, s3);
             let mut stream_outer = futures::stream::select(s1, stream_inner);
 
-            trace!("[{:?}] subscribed to MQ", self.id);
+            trace!("[{:?}] subscribed to MQ", self.my_validator_id);
 
             loop {
                 tokio::select! {
@@ -244,5 +250,6 @@ where
         };
 
         futures::join!(events_fut, other_fut, cleanup_fut);
+        log::error!("Signing module has stopped");
     }
 }

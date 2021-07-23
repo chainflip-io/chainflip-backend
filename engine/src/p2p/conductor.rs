@@ -33,7 +33,7 @@ where
         let stream = mq
             .subscribe::<P2PMessageCommand>(Subject::P2POutgoing)
             .await
-            .unwrap();
+            .expect("Should be able to subscribe to Subject::P2POutgoing");
 
         P2PConductor {
             mq,
@@ -44,13 +44,19 @@ where
     }
 
     pub async fn start(mut self, mut shutdown_rx: tokio::sync::oneshot::Receiver<()>) {
+        log::info!("Starting P2P conductor");
         type Msg = Either<Result<P2PMessageCommand, anyhow::Error>, P2PMessage>;
 
         let mq_stream = pin_message_stream(self.stream);
 
         let mq_stream = mq_stream.map(Msg::Left);
 
-        let p2p_stream = self.p2p.take_stream().await.unwrap().map(Msg::Right);
+        let p2p_stream = self
+            .p2p
+            .take_stream()
+            .await
+            .expect("Should have p2p stream")
+            .map(Msg::Right);
 
         let mut stream = futures::stream::select(mq_stream, p2p_stream);
 

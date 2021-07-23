@@ -37,7 +37,7 @@ pub async fn start<M: IMQClient + Clone>(
 
 /// Details of a transaction to be broadcast to ethereum.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub(super) struct TxDetails {
+struct TxDetails {
     pub contract_address: Address,
     pub data: Vec<u8>,
 }

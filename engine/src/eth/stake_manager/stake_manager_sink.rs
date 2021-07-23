@@ -24,7 +24,7 @@ impl<M: IMQClient + Send + Sync> StakeManagerSink<M> {
 #[async_trait]
 impl<M: IMQClient + Send + Sync> EventSink<StakeManagerEvent> for StakeManagerSink<M> {
     async fn process_event(&self, event: StakeManagerEvent) -> anyhow::Result<()> {
-        log::trace!("Processing event in StakeManagerSink: {:?}", event);
+        log::debug!("Processing event in StakeManagerSink: {:?}", event);
         self.mq_client
             .publish(Subject::StakeManager, &event)
             .await?;

@@ -243,7 +243,7 @@ impl frame_system::Config for Runtime {
 	/// What to do if a new account is created.
 	type OnNewAccount = ();
 	/// What to do if an account is fully reaped from the system.
-	type OnKilledAccount = Flip;
+	type OnKilledAccount = pallet_cf_flip::BurnFlipAccount<Self>;
 	/// The data to be stored in an account.
 	type AccountData = ();
 	/// Weight information for the extrinsics of this pallet.
@@ -414,10 +414,7 @@ construct_runtime!(
 		Historical: session_historical::{Module},
 		Witnesser: pallet_cf_witness::{Module, Call, Event<T>, Origin},
 		WitnesserApi: pallet_cf_witness_api::{Module, Call},
-		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
 		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
-		Aura: pallet_aura::{Module, Config<T>},
-		Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
 		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		Offences: pallet_offences::{Module, Call, Storage, Event},

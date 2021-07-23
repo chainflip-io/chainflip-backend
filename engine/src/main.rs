@@ -4,7 +4,9 @@ use chainflip_engine::{
     mq::{nats_client::NatsMQClientFactory, IMQClientFactory},
     p2p::{P2PConductor, RpcP2PClient, ValidatorId},
     settings::Settings,
-    signing, state_chain,
+    signing,
+    signing::db::PersistentKeyDB,
+    state_chain,
     temp_event_mapper::TempEventMapper,
 };
 use sp_core::Pair;
@@ -25,16 +27,20 @@ async fn main() {
     // which won't necessarily always be the case, i.e. if we no longer have PeerId == ValidatorId
     let signer = state_chain::get_signer_from_privkey_file(&settings.state_chain.p2p_priv_key_file);
     let my_pubkey = signer.signer().public();
-    let signer_id = ValidatorId(my_pubkey.0);
+    let my_validator_id = ValidatorId(my_pubkey.0);
     let sc_o_fut = state_chain::sc_observer::start(settings.clone());
     let sc_b_fut = state_chain::sc_broadcaster::start(&settings, signer, mq_factory.clone());
 
     let eth_fut = eth::start(settings.clone());
 
     let (_, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
-    let ws_port = settings.state_chain.ws_port;
 
-    let url = url::Url::parse(&format!("ws://127.0.0.1:{}", ws_port)).expect("valid ws port");
+    let sc_hostname = &settings.state_chain.hostname;
+    let sc_ws_port = &settings.state_chain.ws_port;
+    let url = url::Url::parse(&format!("ws://{}:{}", sc_hostname, sc_ws_port)).expect(&format!(
+        "Should be valid hostname {} and port {}",
+        sc_hostname, sc_ws_port
+    ));
     let p2p_client = RpcP2PClient::new(url);
     let mq_client = *mq_factory
         .create()
@@ -44,7 +50,10 @@ async fn main() {
         .await
         .start(shutdown_rx);
 
-    let signing_client = signing::MultisigClient::new(mq_factory, signer_id);
+    // TODO: Investigate whether we want to encrypt it on disk
+    let db = PersistentKeyDB::new("data.db");
+
+    let signing_client = signing::MultisigClient::new(db, mq_factory, my_validator_id);
 
     let temp_event_map_fut = TempEventMapper::run(&settings);
 

@@ -4,7 +4,6 @@ use cf_p2p_rpc::P2PEvent;
 use futures::{Future, Stream, StreamExt};
 use jsonrpc_core_client::transports::ws::connect;
 use jsonrpc_core_client::{RpcChannel, RpcResult, TypedClient, TypedSubscriptionStream};
-use std::convert::TryInto;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio_compat_02::FutureExt;
@@ -107,13 +106,22 @@ where
     }
 
     async fn take_stream(&mut self) -> Result<RpcP2PClientStream, P2PNetworkClientError> {
-        let client: P2PClient = FutureExt::compat(connect(&self.url))
-            .await
-            .map_err(|_| P2PNetworkClientError::Rpc)?;
+        let client: P2PClient = FutureExt::compat(connect(&self.url)).await.map_err(|e| {
+            log::error!(
+                "Could not connect to RPC Channel on RpcP2PClient at url: {:?}, error: {:?}",
+                &self.url,
+                e
+            );
+            P2PNetworkClientError::Rpc
+        })?;
 
-        let sub = client
-            .subscribe_notifications()
-            .map_err(|_| P2PNetworkClientError::Rpc)?;
+        let sub = client.subscribe_notifications().map_err(|e| {
+            log::error!(
+                "Could not subscribe to notifications on RpcP2PClient: {:?}",
+                e
+            );
+            P2PNetworkClientError::Rpc
+        })?;
 
         Ok(RpcP2PClientStream::new(sub))
     }
@@ -130,6 +138,8 @@ impl From<RpcChannel> for P2PClient {
     }
 }
 
+const U64_RPC_TYPE: &str = "u64";
+
 impl P2PClient {
     /// Creates a new `P2PClient`.
     pub fn new(sender: RpcChannel) -> Self {
@@ -140,14 +150,14 @@ impl P2PClient {
     /// Send a message to peer id returning a HTTP status code
     pub fn send(&self, peer_id: String, message: Vec<u8>) -> impl Future<Output = RpcResult<u64>> {
         let args = (peer_id, message);
-        self.inner.call_method("p2p_send", "u64", args)
+        self.inner.call_method("p2p_send", U64_RPC_TYPE, args)
     }
 
     /// Broadcast a message to the p2p network returning a HTTP status code
     /// impl Future<Output = RpcResult<R>>
     pub fn broadcast(&self, message: Vec<u8>) -> impl Future<Output = RpcResult<u64>> {
         let args = (message,);
-        self.inner.call_method("p2p_broadcast", "u64", args)
+        self.inner.call_method("p2p_broadcast", U64_RPC_TYPE, args)
     }
 
     // Subscribe to receive notifications

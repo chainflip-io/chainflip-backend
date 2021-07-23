@@ -8,6 +8,7 @@ use crate::{
             BigInt, ECPoint, ECScalar, KeyGenBroadcastMessage1, LocalSig, Signature, VerifiableSS,
             FE, GE,
         },
+        db::KeyDB,
         MessageHash, MessageInfo,
     },
 };
@@ -38,7 +39,7 @@ impl From<Signature> for SchnorrSignature {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub(super) enum SigningData {
+pub enum SigningData {
     Broadcast1(Broadcast1),
     Secret2(Secret2),
     LocalSig(LocalSig),
@@ -64,12 +65,12 @@ impl Display for SigningData {
 /// Protocol data plus the message to sign
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SigningDataWrapped {
-    pub(super) data: SigningData,
-    pub(super) message: MessageInfo,
+    pub data: SigningData,
+    pub message: MessageInfo,
 }
 
 impl SigningDataWrapped {
-    pub(super) fn new<S>(data: S, message: MessageInfo) -> Self
+    pub fn new<S>(data: S, message: MessageInfo) -> Self
     where
         S: Into<SigningData>,
     {
@@ -108,8 +109,8 @@ pub struct Broadcast1 {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Secret2 {
-    pub(super) vss: VerifiableSS<GE>,
-    pub(super) secret_share: FE,
+    pub vss: VerifiableSS<GE>,
+    pub secret_share: FE,
 }
 
 impl From<Secret2> for KeygenData {
@@ -126,8 +127,8 @@ impl From<Secret2> for SigningData {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct KeyGenMessageWrapped {
-    pub(super) key_id: KeyId,
-    pub(super) message: KeygenData,
+    pub key_id: KeyId,
+    pub message: KeygenData,
 }
 
 impl KeyGenMessageWrapped {
@@ -296,24 +297,36 @@ pub enum InnerEvent {
 }
 
 #[derive(Clone)]
-pub struct MultisigClientInner {
-    id: ValidatorId,
-    key_store: KeyStore,
+pub struct MultisigClientInner<S>
+where
+    S: KeyDB,
+{
+    my_validator_id: ValidatorId,
+    key_store: KeyStore<S>,
     keygen: KeygenManager,
     pub signing_manager: SigningStateManager,
+    tx: UnboundedSender<InnerEvent>,
     /// Requests awaiting a key
-    // TODO: make sure this is cleaned up on timeout
     pending_requests_to_sign: HashMap<KeyId, Vec<(MessageHash, SigningInfo)>>,
 }
 
-impl MultisigClientInner {
-    pub fn new(id: ValidatorId, tx: UnboundedSender<InnerEvent>, phase_timeout: Duration) -> Self {
+impl<S> MultisigClientInner<S>
+where
+    S: KeyDB,
+{
+    pub fn new(
+        my_validator_id: ValidatorId,
+        db: S,
+        tx: UnboundedSender<InnerEvent>,
+        phase_timeout: Duration,
+    ) -> Self {
         MultisigClientInner {
-            id: id.clone(),
-            key_store: KeyStore::new(),
-            keygen: KeygenManager::new(id.clone(), tx.clone(), phase_timeout.clone()),
-            signing_manager: SigningStateManager::new(id, tx, phase_timeout),
+            my_validator_id: my_validator_id.clone(),
+            key_store: KeyStore::new(db),
+            keygen: KeygenManager::new(my_validator_id.clone(), tx.clone(), phase_timeout.clone()),
+            signing_manager: SigningStateManager::new(my_validator_id, tx.clone(), phase_timeout),
             pending_requests_to_sign: Default::default(),
+            tx,
         }
     }
 
@@ -325,6 +338,16 @@ impl MultisigClientInner {
     #[cfg(test)]
     pub fn get_key(&self, key_id: KeyId) -> Option<&KeygenResultInfo> {
         self.key_store.get_key(key_id)
+    }
+
+    #[cfg(test)]
+    pub fn get_db(&self) -> &S {
+        self.key_store.get_db()
+    }
+
+    #[cfg(test)]
+    pub fn get_my_validator_id(&self) -> ValidatorId {
+        self.my_validator_id.clone()
     }
 
     /// Change the time we wait until deleting all unresolved states
@@ -341,7 +364,7 @@ impl MultisigClientInner {
     }
 
     fn add_pending(&mut self, data: MessageHash, sign_info: SigningInfo) {
-        debug!("[{}] delaying a request to sign", self.id);
+        debug!("[{}] delaying a request to sign", self.my_validator_id);
 
         // TODO: check for duplicates?
 
@@ -359,12 +382,12 @@ impl MultisigClientInner {
             MultisigInstruction::KeyGen(keygen_info) => {
                 // For now disable generating a new key when we already have one
 
-                debug!("[{}] Received keygen instruction", self.id);
+                debug!("[{}] Received keygen instruction", self.my_validator_id);
 
                 self.keygen.on_keygen_request(keygen_info);
             }
             MultisigInstruction::Sign(hash, sign_info) => {
-                debug!("[{}] Received sign instruction", self.id);
+                debug!("[{}] Received sign instruction", self.my_validator_id);
                 let key_id = sign_info.id;
 
                 let key = self.key_store.get_key(key_id);
@@ -394,9 +417,25 @@ impl MultisigClientInner {
         }
     }
 
-    fn on_key_generated(&mut self, key_id: KeyId, key: KeygenResultInfo) {
-        self.key_store.set_key(key_id, key.clone());
-        self.process_pending(key_id, key);
+    fn on_key_generated(&mut self, key_id: KeyId, key_info: KeygenResultInfo) {
+        self.key_store.set_key(key_id, key_info.clone());
+        self.process_pending(key_id, key_info.clone());
+
+        // NOTE: we only notify the SC after we have successfully saved the key
+
+        let keygen_success = KeygenSuccess {
+            key_id,
+            key: key_info.key.get_public_key().get_element(),
+        };
+
+        if let Err(err) = self
+            .tx
+            .send(InnerEvent::KeygenResult(KeygenOutcome::Success(
+                keygen_success,
+            )))
+        {
+            error!("Could not sent KeygenOutcome::Success: {}", err);
+        }
     }
 
     /// Process message from another validator

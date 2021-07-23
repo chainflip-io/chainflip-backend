@@ -1,3 +1,5 @@
+use crate::signing::db::KeyDBMock;
+
 use super::*;
 
 use std::time::Duration;
@@ -6,7 +8,12 @@ use std::time::Duration;
 fn bc1_gets_delayed_until_keygen_request() {
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
 
-    let mut client = MultisigClientInner::new(VALIDATOR_IDS[0].clone(), tx, PHASE_TIMEOUT);
+    let mut client = MultisigClientInner::new(
+        VALIDATOR_IDS[0].clone(),
+        KeyDBMock::new(),
+        tx,
+        PHASE_TIMEOUT,
+    );
 
     assert_eq!(keygen_stage_for(&client, KEY_ID), None);
 
@@ -41,7 +48,8 @@ fn bc1_gets_delayed_until_keygen_request() {
 // Simply test the we don't crash when we receive unexpected validator id
 #[tokio::test]
 async fn keygen_message_from_invalid_validator() {
-    let states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let states = ctx.generate().await;
 
     let mut c1 = states.keygen_phase1.clients[0].clone();
 
@@ -59,9 +67,10 @@ async fn keygen_message_from_invalid_validator() {
 
 #[tokio::test]
 async fn keygen_secret2_gets_delayed() {
-    let states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let states = ctx.generate().await;
 
-    // auciton id is always 0 for generate_valid_keygen_data
+    // auction id is always 0 for helpers::KeygenContext::generate()
     let key_id = KeyId(0);
 
     let phase1 = &states.keygen_phase1;
@@ -109,7 +118,8 @@ async fn keygen_secret2_gets_delayed() {
 /// Test that we can have more than one key simultaneously
 #[tokio::test]
 async fn can_have_multiple_keys() {
-    let states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let states = ctx.generate().await;
 
     // Start with clients that already have an aggregate key
     let mut c1 = states.key_ready.clients[0].clone();
@@ -132,7 +142,8 @@ async fn can_have_multiple_keys() {
 
 #[tokio::test]
 async fn cannot_create_key_for_known_id() {
-    let mut states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let states = ctx.generate().await;
 
     let mut c1 = states.key_ready.clients[0].clone();
 
@@ -151,13 +162,14 @@ async fn cannot_create_key_for_known_id() {
     assert_eq!(keygen_stage_for(&c1, KEY_ID), Some(KeygenStage::KeyReady));
 
     // No message should be sent as a result
-    helpers::assert_channel_empty(&mut states.rxs[0]).await;
+    helpers::assert_channel_empty(&mut ctx.rxs[0]).await;
 }
 
 /// Test that if keygen state times out (without keygen request), we slash senders
 #[tokio::test]
 async fn no_keygen_request() {
-    let mut states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let states = ctx.generate().await;
 
     let mut c1 = states.keygen_phase1.clients[0].clone();
 
@@ -173,7 +185,7 @@ async fn no_keygen_request() {
     c1.set_timeout(Duration::from_secs(0));
     c1.cleanup();
 
-    let mut rx = &mut states.rxs[0];
+    let mut rx = &mut ctx.rxs[0];
 
     assert_eq!(
         helpers::recv_next_inner_event(&mut rx).await,
@@ -187,7 +199,8 @@ async fn no_keygen_request() {
 /// Test that if keygen state times out during phase 1 (with keygen request present), we slash non-senders
 #[tokio::test]
 async fn phase1_timeout() {
-    let mut states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let states = ctx.generate().await;
 
     let mut c1 = states.keygen_phase1.clients[0].clone();
 
@@ -205,7 +218,7 @@ async fn phase1_timeout() {
     c1.set_timeout(Duration::from_secs(0));
     c1.cleanup();
 
-    let mut rx = &mut states.rxs[0];
+    let mut rx = &mut ctx.rxs[0];
 
     let late_node = VALIDATOR_IDS[2].clone();
 
@@ -220,7 +233,8 @@ async fn phase1_timeout() {
 /// Test that if keygen state times out during phase 2 (with keygen request present), we slash non-senders
 #[tokio::test]
 async fn phase2_timeout() {
-    let mut states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let states = ctx.generate().await;
 
     let mut c1 = states.keygen_phase2.clients[0].clone();
 
@@ -241,7 +255,7 @@ async fn phase2_timeout() {
     c1.set_timeout(Duration::from_secs(0));
     c1.cleanup();
 
-    let mut rx = &mut states.rxs[0];
+    let mut rx = &mut ctx.rxs[0];
 
     let late_node = VALIDATOR_IDS[2].clone();
 
@@ -256,7 +270,8 @@ async fn phase2_timeout() {
 /// That that parties that send invalid bc1s get reported
 #[tokio::test]
 async fn invalid_bc1() {
-    let mut states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let states = ctx.generate().await;
 
     let mut c1 = states.keygen_phase1.clients[0].clone();
 
@@ -271,7 +286,7 @@ async fn invalid_bc1() {
     let message_b = helpers::bc1_to_p2p_keygen(bc1_b, KEY_ID, &bad_node);
     c1.process_p2p_mq_message(message_b);
 
-    let mut rx = &mut states.rxs[0];
+    let mut rx = &mut ctx.rxs[0];
 
     assert_eq!(
         helpers::recv_next_inner_event(&mut rx).await,
@@ -290,7 +305,8 @@ async fn invalid_bc1() {
 /// That that parties that send invalid sec2s get reported
 #[tokio::test]
 async fn invalid_sec2() {
-    let mut states = generate_valid_keygen_data().await;
+    let mut ctx = helpers::KeygenContext::new();
+    let states = ctx.generate().await;
 
     let mut c1 = states.keygen_phase2.clients[0].clone();
 
@@ -311,7 +327,7 @@ async fn invalid_sec2() {
     let message_b = helpers::sec2_to_p2p_keygen(sec2_b, &bad_node);
     c1.process_p2p_mq_message(message_b);
 
-    let mut rx = &mut states.rxs[0];
+    let mut rx = &mut ctx.rxs[0];
 
     assert_eq!(
         helpers::recv_next_inner_event(&mut rx).await,

@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use crate::p2p::ValidatorId;
 
+use serde::{Deserialize, Serialize};
+
 #[allow(dead_code)]
 pub fn reorg_vector<T: Clone>(v: &mut Vec<T>, order: &[usize]) {
     assert_eq!(v.len(), order.len());
@@ -34,7 +36,7 @@ fn reorg_vector_works() {
 }
 
 /// Mappings from signer_idx to Validator Id and back
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ValidatorMaps {
     id_to_idx: HashMap<ValidatorId, usize>,
     // TODO: create SortedVec and use it here:
@@ -53,7 +55,7 @@ impl ValidatorMaps {
     }
 }
 
-pub(super) fn get_index_mapping(signers: &[ValidatorId]) -> ValidatorMaps {
+pub fn get_index_mapping(signers: &[ValidatorId]) -> ValidatorMaps {
     let signers = signers.clone();
 
     let idxs: Vec<_> = (1..=signers.len()).collect();
@@ -81,7 +83,7 @@ pub(super) fn get_index_mapping(signers: &[ValidatorId]) -> ValidatorMaps {
 }
 
 /// Sort validators and find our index
-pub(super) fn get_our_idx(signers: &[ValidatorId], id: &ValidatorId) -> Option<usize> {
+pub fn get_our_idx(signers: &[ValidatorId], id: &ValidatorId) -> Option<usize> {
     let mut signers = signers.to_owned();
 
     signers.sort();

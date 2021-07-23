@@ -256,8 +256,8 @@ impl<T: Config> Pallet<T> {
 		Surplus::from_acct(account_id, amount)
 	}
 
-	/// Debits an account's staked balance, if sufficient funds are available, otherwise returns `None`. Unlike [debit],
-	/// does not create the account if it doesn't exist.
+	/// Debits an account's staked balance, if the account exists and sufficient funds are available, otherwise returns `None`.
+	/// Unlike [debit], does not create the account if it doesn't exist.
 	pub fn try_debit(account_id: &T::AccountId, amount: T::Balance) -> Option<Surplus<T>> {
 		Surplus::try_from_acct(account_id, amount)
 	}
@@ -427,11 +427,13 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 	}
 }
 
+pub struct BurnFlipAccount<T: Config>(PhantomData<T>);
+
 /// Implementation of `OnKilledAccount` ensures that we reconcile any flip dust remaining in the account by burning it.
-impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
+impl<T: Config> OnKilledAccount<T::AccountId> for BurnFlipAccount<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
-		let dust = Self::total_balance_of(account_id);
-		Self::settle(account_id, Self::burn(dust).into());
+		let dust = Pallet::<T>::total_balance_of(account_id);
+		Pallet::<T>::settle(account_id, Pallet::<T>::burn(dust).into());
 		Account::<T>::remove(account_id);
 	}
 }
