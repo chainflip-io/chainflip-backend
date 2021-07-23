@@ -78,7 +78,7 @@ where
     factory: F,
     inner_event_receiver: Option<mpsc::UnboundedReceiver<InnerEvent>>,
     inner: MultisigClientInner<S>,
-    id: ValidatorId,
+    my_validator_id: ValidatorId,
     _mq: PhantomData<MQ>,
 }
 
@@ -92,14 +92,14 @@ where
     F: IMQClientFactory<MQ>,
     S: KeyDB,
 {
-    pub fn new(db: S, factory: F, id: ValidatorId) -> Self {
+    pub fn new(db: S, factory: F, my_validator_id: ValidatorId) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
 
         MultisigClient {
             factory,
-            inner: MultisigClientInner::new(id.clone(), db, tx, PHASE_TIMEOUT),
+            inner: MultisigClientInner::new(my_validator_id.clone(), db, tx, PHASE_TIMEOUT),
             inner_event_receiver: Some(rx),
-            id,
+            my_validator_id,
             _mq: PhantomData,
         }
     }
@@ -216,7 +216,7 @@ where
             let stream_inner = futures::stream::select(s2, s3);
             let mut stream_outer = futures::stream::select(s1, stream_inner);
 
-            trace!("[{:?}] subscribed to MQ", self.id);
+            trace!("[{:?}] subscribed to MQ", self.my_validator_id);
 
             loop {
                 tokio::select! {

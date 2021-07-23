@@ -27,7 +27,7 @@ async fn main() {
     // which won't necessarily always be the case, i.e. if we no longer have PeerId == ValidatorId
     let signer = state_chain::get_signer_from_privkey_file(&settings.state_chain.p2p_priv_key_file);
     let my_pubkey = signer.signer().public();
-    let signer_id = ValidatorId(my_pubkey.0);
+    let my_validator_id = ValidatorId(my_pubkey.0);
     let sc_o_fut = state_chain::sc_observer::start(settings.clone());
     let sc_b_fut = state_chain::sc_broadcaster::start(&settings, signer, mq_factory.clone());
 
@@ -49,7 +49,7 @@ async fn main() {
     // TODO: Investigate whether we want to encrypt it on disk
     let db = PersistentKeyDB::new("data.db");
 
-    let signing_client = signing::MultisigClient::new(db, mq_factory, signer_id);
+    let signing_client = signing::MultisigClient::new(db, mq_factory, my_validator_id);
 
     let temp_event_map_fut = TempEventMapper::run(&settings);
 
