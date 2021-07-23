@@ -77,10 +77,6 @@ pub fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEvent>> {
             _ => Ok(None),
         },
         "Auction" => match raw_event.variant.as_str() {
-            "AuctionEnded" => Ok(Some(
-                AuctionConfirmedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
-                    .into(),
-            )),
             "AuctionStarted" => Ok(Some(
                 AuctionStartedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
             )),
