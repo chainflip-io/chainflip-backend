@@ -538,18 +538,28 @@ impl<T: Config> Pallet<T> {
 		withdrawal_address: Option<EthereumAddress>,
 		amount: T::Balance,
 	) -> Result<(), Error<T>> {
-		// If a user account already exists and a withdrawal address is provided we error out
-		if frame_system::Pallet::<T>::account_exists(account_id) && withdrawal_address.is_some() {
-			FailedStakeAttempts::<T>::mutate(&account_id, |staking_attempts| {
-				staking_attempts.push((withdrawal_address.unwrap(), amount));
-			});
-			Err(Error::<T>::AlreadyStaked)?
+		let existing_withdrawal_address = WithdrawalAddresses::<T>::get(&account_id);
+		let account_exists = frame_system::Pallet::<T>::account_exists(account_id);
+		match (
+			withdrawal_address,
+			existing_withdrawal_address,
+			account_exists,
+		) {
+			//User account exists and both addresses hold a value - the value of both addresses is different
+			(Some(provided), Some(existing), true) if provided != existing => {
+				FailedStakeAttempts::<T>::mutate(&account_id, |staking_attempts| {
+					staking_attempts.push((withdrawal_address.unwrap(), amount));
+				});
+				Err(Error::<T>::AlreadyStaked)?
+			}
+			//User account can exist, a withdrawal address is provided and no withdrawal address already exists
+			(Some(provided), None, _) => {
+				WithdrawalAddresses::<T>::insert(account_id, provided);
+				Ok(())
+			}
+			//In every other case we continue with the process without doing anything
+			_ => Ok(()),
 		}
-		// If there is an address provided save it
-		if let Some(address) = withdrawal_address {
-			WithdrawalAddresses::<T>::insert(account_id, address);
-		}
-		Ok(())
 	}
 
 	/// Add stake to an account, creating the account if it doesn't exist, and activating the account if it is in retired state.
