@@ -53,7 +53,7 @@ use frame_support::{
 	traits::{EnsureOrigin, Get, HandleLifetime, UnixTime},
 	weights,
 };
-use frame_system::pallet_prelude::OriginFor;
+use frame_system::{extrinsics_data_root, pallet_prelude::OriginFor};
 pub use pallet::*;
 use sp_std::prelude::*;
 use sp_std::vec;
@@ -535,39 +535,48 @@ impl<T: Config> Pallet<T> {
 		T::EnsureWitnessed::ensure_origin(origin)
 	}
 
+	/// Logs an failed stake attempt
+	fn log_failed_stake_attempt(
+		account_id: &T::AccountId,
+		withdrawal_address: EthereumAddress,
+		amount: T::Balance,
+	) -> Result<(), Error<T>> {
+		FailedStakeAttempts::<T>::mutate(&account_id, |staking_attempts| {
+			staking_attempts.push((withdrawal_address, amount));
+		});
+		Self::deposit_event(Event::FailedStakeAttempt(
+			account_id.clone(),
+			withdrawal_address,
+			amount,
+		));
+		Err(Error::<T>::WithdrawalAddressRestricted)?
+	}
+
 	/// Checks the withdrawal address requirements and saves the address if provided
 	fn check_withdrawal_address(
 		account_id: &T::AccountId,
 		withdrawal_address: Option<EthereumAddress>,
 		amount: T::Balance,
 	) -> Result<(), Error<T>> {
-		let existing_withdrawal_address = WithdrawalAddresses::<T>::get(&account_id);
-		let account_exists = frame_system::Pallet::<T>::account_exists(account_id);
-		match (
-			withdrawal_address,
-			existing_withdrawal_address,
-			account_exists,
-		) {
-			//User account exists and both addresses hold a value - the value of both addresses is different
-			(Some(provided), Some(existing), true) if provided != existing => {
-				FailedStakeAttempts::<T>::mutate(&account_id, |staking_attempts| {
-					staking_attempts.push((withdrawal_address.unwrap(), amount));
-				});
-				Self::deposit_event(Event::FailedStakeAttempt(
-					account_id.clone(),
-					withdrawal_address.unwrap(),
-					amount,
-				));
-				Err(Error::<T>::WithdrawalAddressRestricted)?
+		if frame_system::Pallet::<T>::account_exists(account_id) {
+			let existing_withdrawal_address = WithdrawalAddresses::<T>::get(&account_id);
+			match (withdrawal_address, existing_withdrawal_address) {
+				// User account exists and both addresses hold a value - the value of both addresses is different
+				(Some(provided), Some(existing)) if provided != existing => {
+					Self::log_failed_stake_attempt(account_id, provided, amount)?;
+				}
+				// Only the provided address exists
+				(Some(provided), None) => {
+					Self::log_failed_stake_attempt(account_id, provided, amount)?;
+				}
+				_ => (),
 			}
-			//User account can exist, a withdrawal address is provided and no withdrawal address already exists
-			(Some(provided), None, _) => {
-				WithdrawalAddresses::<T>::insert(account_id, provided);
-				Ok(())
-			}
-			//In every other case we continue with the process without doing anything
-			_ => Ok(()),
 		}
+		//Save the withdrawal address if provided
+		if let Some(provided) = withdrawal_address {
+			WithdrawalAddresses::<T>::insert(account_id, provided);
+		}
+		Ok(())
 	}
 
 	/// Add stake to an account, creating the account if it doesn't exist, and activating the account if it is in retired state.
