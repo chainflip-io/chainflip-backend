@@ -129,6 +129,8 @@ impl From<RpcChannel> for P2PClient {
     }
 }
 
+const U64_RPC_TYPE: &str = "u64";
+
 impl P2PClient {
     /// Creates a new `P2PClient`.
     pub fn new(sender: RpcChannel) -> Self {
@@ -139,14 +141,14 @@ impl P2PClient {
     /// Send a message to peer id returning a HTTP status code
     pub fn send(&self, peer_id: String, message: Vec<u8>) -> impl Future<Output = RpcResult<u64>> {
         let args = (peer_id, message);
-        self.inner.call_method("p2p_send", "u64", args)
+        self.inner.call_method("p2p_send", U64_RPC_TYPE, args)
     }
 
     /// Broadcast a message to the p2p network returning a HTTP status code
     /// impl Future<Output = RpcResult<R>>
     pub fn broadcast(&self, message: Vec<u8>) -> impl Future<Output = RpcResult<u64>> {
         let args = (message,);
-        self.inner.call_method("p2p_broadcast", "u64", args)
+        self.inner.call_method("p2p_broadcast", U64_RPC_TYPE, args)
     }
 
     // Subscribe to receive notifications
