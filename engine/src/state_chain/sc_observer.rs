@@ -86,18 +86,3 @@ async fn subscribe_to_events<M: 'static + IMQClient>(
     log::error!("{}", err_msg);
     Err(anyhow::Error::msg(err_msg))
 }
-
-#[cfg(test)]
-mod tests {
-
-    use crate::settings;
-
-    use super::*;
-
-    #[tokio::test]
-    #[ignore = "depends on running state chain at the specifed url"]
-    async fn create_subxt_client_test() {
-        let test_settings = settings::test_utils::new_test_settings().unwrap();
-        assert!(create_subxt_client(test_settings.state_chain).await.is_ok())
-    }
-}
