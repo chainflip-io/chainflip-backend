@@ -224,6 +224,9 @@ pub mod pallet {
 
 		/// A claim has expired without being redeemed. [who, nonce, amount]
 		ClaimExpired(AccountId<T>, T::Nonce, FlipBalance<T>),
+
+		/// A stake attempt has failed. [who, address, amount]
+		FailedStakeAttempt(AccountId<T>, EthereumAddress, FlipBalance<T>),
 	}
 
 	#[pallet::error]
@@ -258,10 +261,7 @@ pub mod pallet {
 		/// Failed to encode the claim transaction.
 		EthEncodingFailed,
 
-		/// A withdrawal address is provided when staking to an existing account.
-		AlreadyStaked,
-
-		/// A withdrawal address is provided for a claim, but the account has a different withdrawal address already associated.
+		/// A withdrawal address is provided, but the account has a different withdrawal address already associated.
 		WithdrawalAddressRestricted,
 	}
 
@@ -299,9 +299,12 @@ pub mod pallet {
 			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			Self::ensure_witnessed(origin)?;
-			Self::save_withdrawal_address(&account_id, withdrawal_address, amount)?;
-			Self::stake_account(&account_id, amount);
-			Ok(().into())
+			if Self::check_withdrawal_address(&account_id, withdrawal_address, amount).is_err() {
+				Ok(().into())
+			} else {
+				Self::stake_account(&account_id, amount);
+				Ok(().into())
+			}
 		}
 
 		/// Get FLIP that is held for me by the system, signed by my validator key.
@@ -533,7 +536,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Checks the withdrawal address requirements and saves the address if provided
-	fn save_withdrawal_address(
+	fn check_withdrawal_address(
 		account_id: &T::AccountId,
 		withdrawal_address: Option<EthereumAddress>,
 		amount: T::Balance,
@@ -550,7 +553,12 @@ impl<T: Config> Pallet<T> {
 				FailedStakeAttempts::<T>::mutate(&account_id, |staking_attempts| {
 					staking_attempts.push((withdrawal_address.unwrap(), amount));
 				});
-				Err(Error::<T>::AlreadyStaked)?
+				Self::deposit_event(Event::FailedStakeAttempt(
+					account_id.clone(),
+					withdrawal_address.unwrap(),
+					amount,
+				));
+				Err(Error::<T>::WithdrawalAddressRestricted)?
 			}
 			//User account can exist, a withdrawal address is provided and no withdrawal address already exists
 			(Some(provided), None, _) => {

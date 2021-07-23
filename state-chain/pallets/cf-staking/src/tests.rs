@@ -657,11 +657,11 @@ fn test_save_withdrawal_address() {
 		const STAKE: u128 = 45;
 		const DIFFERENT_ETH_ADDR: EthereumAddress = [45u8; 20];
 		// Case: No account and no address provided
-		assert!(Pallet::<Test>::save_withdrawal_address(&ALICE, None, STAKE).is_ok());
+		assert!(Pallet::<Test>::check_withdrawal_address(&ALICE, None, STAKE).is_ok());
 		assert!(!WithdrawalAddresses::<Test>::contains_key(ALICE));
 		assert!(!FailedStakeAttempts::<Test>::contains_key(ALICE));
 		// Case: No account and provided withdrawal address
-		assert_ok!(Pallet::<Test>::save_withdrawal_address(
+		assert_ok!(Pallet::<Test>::check_withdrawal_address(
 			&ALICE,
 			Some(ETH_DUMMY_ADDR),
 			STAKE
@@ -672,7 +672,7 @@ fn test_save_withdrawal_address() {
 		// Case: User has already staked with a different address
 		Pallet::<Test>::stake_account(&ALICE, STAKE);
 		assert!(
-			Pallet::<Test>::save_withdrawal_address(&ALICE, Some(DIFFERENT_ETH_ADDR), STAKE)
+			Pallet::<Test>::check_withdrawal_address(&ALICE, Some(DIFFERENT_ETH_ADDR), STAKE)
 				.is_err()
 		);
 		let stake_attempts = FailedStakeAttempts::<Test>::get(ALICE);
@@ -680,9 +680,12 @@ fn test_save_withdrawal_address() {
 		let stake_attempt = stake_attempts.get(0);
 		assert_eq!(stake_attempt.unwrap().0, DIFFERENT_ETH_ADDR);
 		assert_eq!(stake_attempt.unwrap().1, STAKE);
+		assert_event_stack!(Event::pallet_cf_staking(crate::Event::FailedStakeAttempt(
+			..
+		)));
 		// Case: User stakes again with the same address
 		assert!(
-			Pallet::<Test>::save_withdrawal_address(&ALICE, Some(ETH_DUMMY_ADDR), STAKE).is_ok()
+			Pallet::<Test>::check_withdrawal_address(&ALICE, Some(ETH_DUMMY_ADDR), STAKE).is_ok()
 		);
 	});
 }
