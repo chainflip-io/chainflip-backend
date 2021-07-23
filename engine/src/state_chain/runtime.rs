@@ -1,7 +1,6 @@
 use std::{marker::PhantomData, time::Duration};
 
 use frame_support::unsigned::TransactionValidityError;
-use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::{
     generic::{self, Era},
     traits::{BlakeTwo256, IdentifyAccount, Verify},
