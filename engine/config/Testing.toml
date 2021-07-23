@@ -2,8 +2,7 @@
 
 [message_queue]
 # can also be IP
-hostname = "localhost"
-port = "4222"
+endpoint = "http://localhost:4222"
 
 [state_chain]
 p2p_priv_key_file = "./tests/test_keystore/p2p_key"
