@@ -13,6 +13,7 @@ signing_key_file = ""
 ws_port = "9944"
 
 [eth]
+from_block = 8929230
 node_endpoint = "wss://network.my_eth_node:80/<secret_key>"
 # Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
 private_key_file = "/run/secrets/eth_private_key"
