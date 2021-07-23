@@ -29,7 +29,7 @@ pub async fn start_stake_manager_witness(settings: settings::Settings) -> Result
         EthEventStreamBuilder::new(settings.eth.node_endpoint.as_str(), stake_manager);
     let sm_event_stream = sm_event_stream.with_sink(sm_sink).build().await?;
     sm_event_stream
-        .run(Some(0))
+        .run(settings.eth.from_block.into())
         .await
         .context("Error occurred running the StakeManager events stream")?;
     Ok(())

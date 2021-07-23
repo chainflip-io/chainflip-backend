@@ -25,6 +25,7 @@ pub struct StateChain {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Eth {
+    pub from_block: u64,
     pub node_endpoint: String,
 
     // TODO: Into an Ethereum Address type?
@@ -35,8 +36,7 @@ pub struct Eth {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct HealthCheck {
-    pub hostname: String,
-    pub port: u16,
+    pub endpoint: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -171,6 +171,7 @@ mod tests {
         // test the websocket parsing
         assert!(parse_websocket_url("wss://network.my_eth_node:80/<secret_key>").is_ok());
         assert!(parse_websocket_url("wss://network.my_eth_node/<secret_key>").is_ok());
+        assert!(parse_websocket_url("ws://network.my_eth_node/<secret_key>").is_ok());
         assert!(parse_websocket_url("wss://network.my_eth_node").is_ok());
         assert!(parse_websocket_url(
             "https://mainnet.infura.io/v3/3afd67225fe34be7b185442fab14a4ba"
