@@ -36,7 +36,8 @@ pub struct Eth {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct HealthCheck {
-    pub endpoint: String,
+    pub hostname: String,
+    pub port: u16,
 }
 
 #[derive(Debug, Deserialize, Clone)]
