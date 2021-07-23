@@ -16,9 +16,7 @@ pub struct MessageQueue {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct StateChain {
-    pub hostname: String,
-    pub ws_port: u16,
-    pub rpc_port: u16,
+    pub ws_endpoint: String,
     pub signing_key_file: String,
     pub p2p_priv_key_file: String,
 }

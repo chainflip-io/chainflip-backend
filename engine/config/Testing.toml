@@ -6,11 +6,9 @@ hostname = "localhost"
 port = "4222"
 
 [state_chain]
-hostname = "localhost"
 p2p_priv_key_file = "./tests/test_keystore/p2p_key"
-rpc_port = "4399"
 signing_key_file = "./tests/test_keystore/alice_key"
-ws_port = "9944"
+ws_endpoint = "ws://localhost:9944"
 
 [eth]
 from_block = 0
