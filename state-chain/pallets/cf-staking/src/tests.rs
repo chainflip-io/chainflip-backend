@@ -1,11 +1,11 @@
 use crate::{
 	mock::*, pallet, ClaimDetails, ClaimDetailsFor, Error, EthereumAddress, Pallet, PendingClaims,
 };
-use cf_traits::mocks::epoch_info;
+use cf_traits::mocks::{epoch_info, time_source};
 use codec::Encode;
 use ethereum_types::U256;
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
-use pallet_cf_flip::ImbalanceSource;
+use pallet_cf_flip::{ImbalanceSource, InternalSource};
 use std::time::Duration;
 
 type FlipError = pallet_cf_flip::Error<Test>;
@@ -319,7 +319,7 @@ fn signature_is_inserted() {
 #[test]
 fn witnessing_witnesses() {
 	new_test_ext().execute_with(|| {
-		witnesser::Mock::set_threshold(2);
+		MockWitnesser::set_threshold(2);
 
 		// Bob votes
 		assert_ok!(Staking::witness_staked(
@@ -330,7 +330,7 @@ fn witnessing_witnesses() {
 		));
 
 		// Should be one vote but not staked yet.
-		let count = witnesser::Mock::get_vote_count();
+		let count = MockWitnesser::get_vote_count();
 		assert_eq!(count, 1);
 		assert_eq!(Flip::total_balance_of(&ALICE), 0);
 
@@ -512,7 +512,7 @@ fn claim_expiry() {
 		assert_event_stack!(
 			Event::pallet_cf_flip(FlipEvent::BalanceSettled(
 				ImbalanceSource::External,
-				ImbalanceSource::Account(ALICE),
+				ImbalanceSource::Internal(InternalSource::Account(ALICE)),
 				STAKE,
 				0
 			)),
@@ -528,7 +528,7 @@ fn claim_expiry() {
 		assert_event_stack!(
 			Event::pallet_cf_flip(FlipEvent::BalanceSettled(
 				ImbalanceSource::External,
-				ImbalanceSource::Account(BOB),
+				ImbalanceSource::Internal(InternalSource::Account(BOB)),
 				STAKE,
 				0
 			)),

@@ -3,7 +3,10 @@
 pub mod mocks;
 
 use codec::{Decode, Encode};
-use frame_support::dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable};
+use frame_support::{
+	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight},
+	traits::{Imbalance, SignedImbalance},
+};
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
 
@@ -159,22 +162,34 @@ pub trait StakeTransfer {
 pub trait Issuance {
 	type AccountId;
 	type Balance;
+	/// An imbalance representing freshly minted, unallocated funds.
+	type Surplus: Imbalance<Self::Balance>;
 
-	/// Burn up to `amount` of funds, or as much funds are available.
-	fn burn_from(account_id: &Self::AccountId, amount: Self::Balance);
+	/// Mint new funds.
+	fn mint(amount: Self::Balance) -> Self::Surplus;
 
-	/// Burn some funds from an account, if enough are available.
-	fn try_burn_from(
-		account_id: &Self::AccountId,
-		amount: Self::Balance,
-	) -> Result<(), DispatchError>;
-
-	/// Mint funds to an account.
-	fn mint_to(account_id: &Self::AccountId, amount: Self::Balance);
-
-	/// Burn funds from some external (non-account) source. Use with care.
-	fn vaporise(amount: Self::Balance);
+	/// Burn funds from somewhere.
+	fn burn(amount: Self::Balance) -> <Self::Surplus as Imbalance<Self::Balance>>::Opposite;
 
 	/// Returns the total issuance.
 	fn total_issuance() -> Self::Balance;
+}
+
+/// Distribute rewards somehow.
+pub trait RewardsDistribution {
+	type Balance;
+	/// An imbalance representing an unallocated surplus of funds.
+	type Surplus: Imbalance<Self::Balance> + Into<SignedImbalance<Self::Balance, Self::Surplus>>;
+
+	/// Distribute some rewards.
+	fn distribute(rewards: Self::Surplus);
+
+	/// The execution weight of calling the distribution function.
+	fn execution_weight() -> Weight;
+}
+
+/// Allow triggering of emissions.
+pub trait EmissionsTrigger {
+	/// Trigger emissions.
+	fn trigger_emissions();
 }
