@@ -6,8 +6,6 @@ use crate::{
     settings::Settings,
 };
 
-use log::{debug, error, info, trace};
-
 use super::{
     helpers::create_subxt_client,
     runtime::StateChainRuntime,
@@ -16,11 +14,14 @@ use super::{
 
 /// Kick off the state chain observer process
 pub async fn start(settings: Settings) {
-    info!("Begin subscribing to state chain events");
+    log::info!("Start subscribing to state chain events");
 
     let mq_client_builder = NatsMQClientFactory::new(&settings.message_queue);
 
-    let mq_client = mq_client_builder.create().await.unwrap();
+    let mq_client = mq_client_builder
+        .create()
+        .await
+        .expect("Could not create message queue");
 
     let subxt_client = create_subxt_client(settings.state_chain)
         .await
@@ -46,7 +47,7 @@ async fn subscribe_to_events<M: 'static + IMQClient>(
         let raw_event = match res_event {
             Ok(raw_event) => raw_event,
             Err(e) => {
-                error!("Next event could not be read: {}", e);
+                log::error!("Next event could not be read: {}", e);
                 continue;
             }
         };
@@ -60,26 +61,25 @@ async fn subscribe_to_events<M: 'static + IMQClient>(
                     // Publish the message to the message queue
                     match mq_client.publish(subject, &event).await {
                         Err(err) => {
-                            error!(
+                            log::error!(
                                 "Could not publish message `{:?}` to subject `{}`. Error: {}",
                                 event,
                                 subject.to_subject_name(),
                                 err
                             );
                         }
-                        Ok(_) => trace!("Event: {:#?} pushed to message queue", event),
+                        Ok(_) => log::trace!("Event: {:?} pushed to message queue", event),
                     };
                 }
                 None => {
-                    debug!(
+                    log::debug!(
                         "Event decoding for an event under subject: {} doesn't exist",
                         subject.to_subject_name()
                     )
                 }
             }
-        } else {
-            trace!("Not routing event {:?} to message queue", raw_event);
-        };
+        }
+        // we can ignore events we don't care about like ExtrinsicSuccess
     }
 
     let err_msg = "State Chain Observer stopped subscribing to events!";
