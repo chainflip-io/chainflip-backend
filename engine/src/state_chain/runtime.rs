@@ -109,10 +109,8 @@ impl Runtime for StateChainRuntime {
         event_type_registry.register_type_size::<u64>("T::EpochIndex");
         event_type_registry.register_type_size::<u32>("T::BlockNumber");
         event_type_registry.register_type_size::<u32>("BlockNumberFor<T>");
-        // event_type_registry.register_type_size::<BlockNumberFor<Self>>("BlockNumberFor");
         event_type_registry.register_type_size::<AccountId32>("T::ValidatorId");
         event_type_registry.register_type_size::<AccountId32>("<T as Config>::ValidatorId");
-
         event_type_registry.register_type_size::<u128>("T::Balance");
         event_type_registry.register_type_size::<Vec<u8>>("OpaqueTimeSlot");
         event_type_registry.register_type_size::<[u8; 32]>("U256");
