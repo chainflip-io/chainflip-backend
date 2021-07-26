@@ -47,11 +47,7 @@ impl NatsMQClientFactory {
 #[async_trait]
 impl IMQClientFactory<NatsMQClient> for NatsMQClientFactory {
     async fn create(&self) -> anyhow::Result<Box<NatsMQClient>> {
-        let url = format!(
-            "http://{}:{}",
-            self.mq_settings.hostname, self.mq_settings.port
-        );
-        let conn = async_nats::connect(url.as_str()).await?;
+        let conn = async_nats::connect(self.mq_settings.endpoint.as_str()).await?;
         Ok(Box::new(NatsMQClient { conn }))
     }
 }
@@ -101,12 +97,9 @@ mod test {
     struct TestMessage(String);
 
     async fn setup_client() -> Box<NatsMQClient> {
-        let mq_settings = settings::MessageQueue {
-            hostname: "localhost".to_string(),
-            port: 4222,
-        };
+        let settings = settings::test_utils::new_test_settings().unwrap();
 
-        NatsMQClientFactory::new(&mq_settings)
+        NatsMQClientFactory::new(&settings.message_queue)
             .create()
             .await
             .unwrap()

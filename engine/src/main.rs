@@ -35,13 +35,12 @@ async fn main() {
 
     let (_, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
 
-    let sc_hostname = &settings.state_chain.hostname;
-    let sc_ws_port = &settings.state_chain.ws_port;
-    let url = url::Url::parse(&format!("ws://{}:{}", sc_hostname, sc_ws_port)).expect(&format!(
-        "Should be valid hostname {} and port {}",
-        sc_hostname, sc_ws_port
-    ));
-    let p2p_client = RpcP2PClient::new(url);
+    let substrate_node_endpoint = url::Url::parse(settings.state_chain.ws_endpoint.as_str())
+        .expect(&format!(
+            "Should be valid ws endpoint: {}",
+            settings.state_chain.ws_endpoint
+        ));
+    let p2p_client = RpcP2PClient::new(substrate_node_endpoint);
     let mq_client = *mq_factory
         .create()
         .await

@@ -10,15 +10,12 @@ use url::Url;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct MessageQueue {
-    pub hostname: String,
-    pub port: u16,
+    pub endpoint: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct StateChain {
-    pub hostname: String,
-    pub ws_port: u16,
-    pub rpc_port: u16,
+    pub ws_endpoint: String,
     pub signing_key_file: String,
     pub p2p_priv_key_file: String,
 }
@@ -150,7 +147,7 @@ mod tests {
         let settings = Settings::new();
         let settings = settings.unwrap();
 
-        assert_eq!(settings.message_queue.hostname, "localhost");
+        assert_eq!(settings.message_queue.endpoint, "http://localhost:4222");
     }
 
     #[test]
@@ -158,7 +155,10 @@ mod tests {
         let test_settings = test_utils::new_test_settings();
 
         let test_settings = test_settings.unwrap();
-        assert_eq!(test_settings.message_queue.hostname, "localhost");
+        assert_eq!(
+            test_settings.message_queue.endpoint,
+            "http://localhost:4222"
+        );
     }
 
     #[test]
