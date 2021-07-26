@@ -37,8 +37,10 @@ jsonrpc-http-server = "17.1.0"
 jsonrpc-ws-server = "17.1.0"
 kvdb-rocksdb = "0.11.1"
 lazy_static = "1.4"
-log = {version = "0.4.14"}
 num = "0.4.0"
+# TODO: Remove log
+env_logger = "*"
+log = "0.4.14"
 parking_lot = "0.11"
 rand = "0.7.3"
 regex = "1"

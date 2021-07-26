@@ -8,7 +8,10 @@ use crate::settings;
 /// allowing external services to query, ensuring it's online
 /// Returns a HTTP 200 response to any request on {hostname}:{port}/health
 /// Method returns a Sender, allowing graceful termination of the infinite loop
-pub async fn spawn_health_check(health_check_settings: settings::HealthCheck) -> Sender<()> {
+pub async fn spawn_health_check(
+    health_check_settings: settings::HealthCheck,
+    logger: &'static slog::Logger,
+) -> Sender<()> {
     let bind_address = format!(
         "{}:{}",
         health_check_settings.hostname, health_check_settings.port
@@ -24,7 +27,7 @@ pub async fn spawn_health_check(health_check_settings: settings::HealthCheck) ->
         loop {
             let stream = select! {
                 Ok(()) = &mut rx => {
-                    log::info!("Shutting down health check gracefully");
+                    slog::info!(logger, "Shutting down health check gracefully");
                     break;
                 },
                 Some(stream) = incoming.next() => stream,
@@ -43,7 +46,11 @@ pub async fn spawn_health_check(health_check_settings: settings::HealthCheck) ->
             let mut req = httparse::Request::new(&mut headers);
             let result = req.parse(&buffer);
             if let Err(e) = result {
-                log::warn!("Invalid health check request, could not parse: {}", e);
+                slog::warn!(
+                    logger,
+                    "Invalid health check request, could not parse: {}",
+                    e,
+                );
                 continue;
             }
 
@@ -53,13 +60,13 @@ pub async fn spawn_health_check(health_check_settings: settings::HealthCheck) ->
                     .write(http_200_response.as_bytes())
                     .await
                     .expect("Could not write to health check stream");
-                log::trace!("Responded to health check: CFE is healthy :heart: ");
+                slog::trace!(logger, "Responded to health check: CFE is healthy :heart: ");
                 stream
                     .flush()
                     .await
                     .expect("Could not flush health check TCP stream");
             } else {
-                log::warn!("Requested health at invalid path: {:?}", req.path);
+                slog::warn!(logger, "Requested health at invalid path: {:?}", req.path);
             }
         }
     });
@@ -72,6 +79,7 @@ mod test {
 
     use std::time::Duration;
 
+    use slog::{o, Drain};
     use tokio::time;
 
     use super::*;
@@ -80,8 +88,11 @@ mod test {
     #[tokio::test]
     #[ignore = "runs for 10 seconds"]
     async fn health_check_test() {
+        let drain = slog_json::Json::new(std::io::stdout()).build().fuse();
+        let drain = slog_async::Async::new(drain).build().fuse();
+        let root = slog::Logger::root(drain, o!());
         let test_settings = settings::test_utils::new_test_settings().unwrap();
-        let sender = spawn_health_check(test_settings.health_check).await;
+        let sender = spawn_health_check(test_settings.health_check, &root).await;
         time::sleep(Duration::from_millis(10000)).await;
         sender.send(()).unwrap();
     }

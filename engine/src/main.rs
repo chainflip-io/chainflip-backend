@@ -1,6 +1,7 @@
 use chainflip_engine::{
     eth,
     health::spawn_health_check,
+    logging,
     mq::{nats_client::NatsMQClientFactory, IMQClientFactory},
     p2p::{P2PConductor, RpcP2PClient, ValidatorId},
     settings::Settings,
@@ -19,25 +20,19 @@ extern crate slog_json;
 
 #[tokio::main]
 async fn main() {
-    // log4rs::init_file("./config/log4rs.yml", Default::default())
-    //     .expect("Should have logging configuration at config/log4rs.yml");
-
     let drain = slog_json::Json::new(std::io::stdout())
         .add_default_keys()
         .build()
         .fuse();
-
     let drain = slog_async::Async::new(drain).build().fuse();
     let root = slog::Logger::root(drain, o!());
+    slog::info!(root, "Start the engines! :broom: :broom: "; o!());
 
-    slog::error!(root, "Hello bro"; o!("my key" => "my value"));
     std::thread::sleep(std::time::Duration::from_secs(5));
-
-    log::info!("Start the engines! :broom: :broom: ");
 
     let settings = Settings::new().expect("Failed to initialise settings");
 
-    spawn_health_check(settings.clone().health_check).await;
+    spawn_health_check(settings.clone().health_check, &root).await;
 
     let mq_factory = NatsMQClientFactory::new(&settings.message_queue);
 
@@ -46,7 +41,17 @@ async fn main() {
     let signer = state_chain::get_signer_from_privkey_file(&settings.state_chain.p2p_priv_key_file);
     let my_pubkey = signer.signer().public();
     let my_validator_id = ValidatorId(my_pubkey.0);
-    let sc_o_fut = state_chain::sc_observer::start(settings.clone());
+    let mq_client = *mq_factory
+        .create()
+        .await
+        .expect("Could not connect MQ client");
+    let sc_o = state_chain::sc_observer::SCObserver::new(
+        mq_client.clone(),
+        &settings.state_chain,
+        &logger,
+    )
+    .await;
+    let sc_o_fut = sc_o.run();
     let sc_b_fut = state_chain::sc_broadcaster::start(&settings, signer, mq_factory.clone());
 
     let eth_fut = eth::start(settings.clone());

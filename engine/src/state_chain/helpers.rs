@@ -12,10 +12,10 @@ use substrate_subxt::{Client, ClientBuilder, PairSigner};
 
 /// Create a substrate subxt client over the StateChainRuntime
 pub async fn create_subxt_client(
-    state_chain_settings: settings::StateChain,
+    state_chain_settings: &settings::StateChain,
 ) -> Result<Client<StateChainRuntime>> {
     let client = ClientBuilder::<StateChainRuntime>::new()
-        .set_url(state_chain_settings.ws_endpoint)
+        .set_url(&state_chain_settings.ws_endpoint)
         .build()
         .await?;
 

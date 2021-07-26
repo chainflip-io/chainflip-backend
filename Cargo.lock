@@ -911,6 +911,7 @@ dependencies = [
  "config",
  "crossbeam-channel",
  "curv",
+ "env_logger 0.7.1",
  "frame-support",
  "frame-system",
  "futures 0.3.15",
