@@ -69,7 +69,7 @@ async fn main() {
         .create()
         .await
         .expect("Could not connect MQ client");
-    let p2p_conductor_fut = P2PConductor::new(mq_client, p2p_client)
+    let p2p_conductor_fut = P2PConductor::new(mq_client, p2p_client, &root_logger)
         .await
         .start(shutdown_rx);
 
