@@ -21,5 +21,9 @@ pub mod auction;
 
 /// Staking pallet support for substrate-subxt
 pub mod staking;
+
 /// Validator pallet support for substrate-subxt
 pub mod validator;
+
+/// Emissions pallet support for substrate-subxt
+pub mod emissions;

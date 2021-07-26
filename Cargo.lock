@@ -930,6 +930,7 @@ dependencies = [
  "nats_test_server",
  "num",
  "pallet-cf-auction",
+ "pallet-cf-flip",
  "pallet-cf-staking",
  "pallet-cf-validator",
  "parity-scale-codec",
