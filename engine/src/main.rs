@@ -1,7 +1,6 @@
 use chainflip_engine::{
     eth,
-    health::spawn_health_check,
-    logging,
+    health::HealthMonitor,
     mq::{nats_client::NatsMQClientFactory, IMQClientFactory},
     p2p::{P2PConductor, RpcP2PClient, ValidatorId},
     settings::Settings,
@@ -25,14 +24,15 @@ async fn main() {
         .build()
         .fuse();
     let drain = slog_async::Async::new(drain).build().fuse();
-    let root = slog::Logger::root(drain, o!());
-    slog::info!(root, "Start the engines! :broom: :broom: "; o!());
+    let root_logger = slog::Logger::root(drain, o!());
+    slog::info!(root_logger, "Start the engines! :broom: :broom: "; o!());
 
     std::thread::sleep(std::time::Duration::from_secs(5));
 
     let settings = Settings::new().expect("Failed to initialise settings");
 
-    spawn_health_check(settings.clone().health_check, &root).await;
+    let health_monitor = HealthMonitor::new(&settings.health_check, &root_logger);
+    health_monitor.run().await;
 
     let mq_factory = NatsMQClientFactory::new(&settings.message_queue);
 
@@ -48,13 +48,13 @@ async fn main() {
     let sc_o = state_chain::sc_observer::SCObserver::new(
         mq_client.clone(),
         &settings.state_chain,
-        &logger,
+        &root_logger,
     )
     .await;
     let sc_o_fut = sc_o.run();
     let sc_b_fut = state_chain::sc_broadcaster::start(&settings, signer, mq_factory.clone());
 
-    let eth_fut = eth::start(settings.clone());
+    let eth_fut = eth::start(&settings, &root_logger);
 
     let (_, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
 

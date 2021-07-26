@@ -9,6 +9,7 @@ use crate::{
 
 use anyhow::Result;
 use secp256k1::SecretKey;
+use slog::o;
 use web3::{
     ethabi::ethereum_types::H256, signing::SecretKeyRef, transports::WebSocket,
     types::TransactionParameters, Transport, Web3,
@@ -20,11 +21,12 @@ use futures::StreamExt;
 pub async fn start_eth_broadcaster<M: IMQClient + Send + Sync>(
     settings: &settings::Settings,
     mq_client: M,
+    logger: &slog::Logger,
 ) -> anyhow::Result<()> {
     log::info!("Starting ETH broadcaster");
     let secret_key = secret_key_from_file(Path::new(settings.eth.private_key_file.as_str()))?;
     let eth_broadcaster =
-        EthBroadcaster::<M, _>::new(settings.into(), mq_client, secret_key).await?;
+        EthBroadcaster::<M, _>::new(settings.into(), mq_client, secret_key, logger).await?;
 
     eth_broadcaster.run().await
 }
@@ -64,16 +66,23 @@ struct EthBroadcaster<M: IMQClient + Send + Sync, T: Transport> {
     mq_client: M,
     web3_client: Web3<T>,
     secret_key: SecretKey,
+    logger: slog::Logger,
 }
 
 impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
-    async fn new(builder: EthClientBuilder, mq_client: M, secret_key: SecretKey) -> Result<Self> {
+    async fn new(
+        builder: EthClientBuilder,
+        mq_client: M,
+        secret_key: SecretKey,
+        logger: &slog::Logger,
+    ) -> Result<Self> {
         let web3_client = builder.ws_client().await?;
 
         Ok(EthBroadcaster {
             mq_client,
             web3_client,
             secret_key,
+            logger: logger.new(o!()),
         })
     }
 
@@ -91,14 +100,16 @@ impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
                 match msg {
                     Ok(ref tx_details) => match self.sign_and_broadcast(tx_details).await {
                         Ok(hash) => {
-                            log::debug!(
+                            slog::debug!(
+                                self.logger,
                                 "Transaction for {:?} broadcasted successfully: {:?}",
                                 tx_details,
                                 hash
                             );
                         }
                         Err(err) => {
-                            log::error!(
+                            slog::error!(
+                                self.logger,
                                 "Failed to broadcast transaction {:?}: {:?}",
                                 tx_details,
                                 err
@@ -106,13 +117,13 @@ impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
                         }
                     },
                     Err(e) => {
-                        log::error!("Unable to broadcast message: {:?}.", e);
+                        slog::error!(self.logger, "Unable to broadcast message: {:?}.", e);
                     }
                 }
             })
             .await;
 
-        log::error!("{} has stopped.", stringify!(EthBroadcaster));
+        slog::error!(self.logger, "{} has stopped.", stringify!(EthBroadcaster));
         Ok(())
     }
 
@@ -149,9 +160,12 @@ impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
 #[cfg(test)]
 mod tests {
 
-    use crate::mq::{
-        nats_client::{NatsMQClient, NatsMQClientFactory},
-        IMQClientFactory,
+    use crate::{
+        logging,
+        mq::{
+            nats_client::{NatsMQClient, NatsMQClientFactory},
+            IMQClientFactory,
+        },
     };
 
     use super::*;
@@ -162,9 +176,11 @@ mod tests {
         let factory = NatsMQClientFactory::new(&settings.message_queue);
         let mq_client = *factory.create().await.unwrap();
         let secret = SecretKey::from_slice(&[3u8; 32]).unwrap();
+        let logger = logging::test_utils::create_test_logger();
 
         let eth_broadcaster =
-            EthBroadcaster::<NatsMQClient, _>::new((&settings).into(), mq_client, secret).await;
+            EthBroadcaster::<NatsMQClient, _>::new((&settings).into(), mq_client, secret, &logger)
+                .await;
         eth_broadcaster
     }
 

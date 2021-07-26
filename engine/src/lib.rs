@@ -11,4 +11,4 @@ pub mod eth;
 // TODO: Remove this temp mapper after state chain supports keygen requests directly
 pub mod temp_event_mapper;
 
-mod logging;
+pub mod logging;

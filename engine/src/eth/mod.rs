@@ -61,18 +61,18 @@ pub enum EventProducerError {
 }
 
 /// Start all the ETH components
-pub async fn start(settings: Settings) {
+pub async fn start(settings: &Settings, logger: &slog::Logger) {
     log::info!("Starting the ETH components");
-    let sm_witness_future = stake_manager::start_stake_manager_witness(settings.clone());
+    let sm_witness_future = stake_manager::start_stake_manager_witness(settings, logger);
 
     let factory = NatsMQClientFactory::new(&settings.message_queue);
     let mq_client = *factory.create().await.unwrap();
 
     let eth_broadcaster_future =
-        eth_broadcaster::start_eth_broadcaster::<NatsMQClient>(&settings, mq_client.clone());
+        eth_broadcaster::start_eth_broadcaster::<NatsMQClient>(settings, mq_client.clone(), logger);
 
     let eth_tx_encoder_future =
-        eth_tx_encoding::set_agg_key_with_agg_key::start(&settings, mq_client.clone());
+        eth_tx_encoding::set_agg_key_with_agg_key::start(settings, mq_client.clone());
 
     let result = futures::join!(
         sm_witness_future,
