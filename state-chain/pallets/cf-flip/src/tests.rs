@@ -1,6 +1,8 @@
 use std::mem;
 
-use crate::{mock::*, Config, Error, OffchainFunds, TotalIssuance};
+use crate::{
+	mock::*, Account as FlipAccount, Config, Error, FlipIssuance, OffchainFunds, TotalIssuance,
+};
 use cf_traits::{Issuance, StakeTransfer};
 use frame_support::traits::{HandleLifetime, Imbalance};
 use frame_support::{assert_noop, assert_ok};
@@ -18,6 +20,27 @@ fn account_to_account() {
 		assert_eq!(Flip::total_balance_of(&ALICE), 100);
 		assert_eq!(Flip::total_balance_of(&BOB), 50);
 		check_balance_integrity();
+	});
+}
+
+#[test]
+fn test_try_debit() {
+	new_test_ext().execute_with(|| {
+		// Alice's balance is 100, shouldn't be able to debit 101.
+		assert!(Flip::try_debit(&ALICE, 101).is_none());
+		assert_eq!(Flip::total_balance_of(&ALICE), 100);
+
+		// Charlie's balance is zero, trying to debit or checking the balance should not created the account.
+		assert!(Flip::try_debit(&CHARLIE, 1).is_none());
+		assert_eq!(Flip::total_balance_of(&CHARLIE), 0);
+		assert!(!FlipAccount::<Test>::contains_key(&CHARLIE));
+
+		// Using standard `debit` *does* create an account as a side-effect.
+		{
+			let zero_surplus = Flip::debit(&CHARLIE, 1);
+			assert_eq!(zero_surplus.peek(), 0);
+		}
+		assert!(FlipAccount::<Test>::contains_key(&CHARLIE));
 	});
 }
 
@@ -174,85 +197,130 @@ fn stake_transfers() {
 	});
 }
 
-#[test]
-fn simple_burn() {
-	new_test_ext().execute_with(|| {
-		// Burn some of Alice's funds
-		<Flip as Issuance>::burn_from(&ALICE, 50);
-		assert_eq!(Flip::total_balance_of(&ALICE), 50);
-		assert_eq!(<Flip as Issuance>::total_issuance(), 950);
-		check_balance_integrity();
-	});
-}
+#[cfg(test)]
+mod test_issuance {
+	use super::*;
+	use crate::ReserveId;
 
-#[test]
-fn simple_mint() {
-	new_test_ext().execute_with(|| {
-		// Mint to Charlie's account.
-		<Flip as Issuance>::mint_to(&CHARLIE, 50);
-		assert_eq!(Flip::total_balance_of(&CHARLIE), 50);
-		assert_eq!(<Flip as Issuance>::total_issuance(), 1050);
-		check_balance_integrity();
-	});
-}
+	fn burn_from_account(account_id: &AccountId, amount: FlipBalance) {
+		Flip::settle_imbalance(account_id, FlipIssuance::<Test>::burn(amount))
+	}
 
-#[test]
-fn cant_burn_too_much() {
-	new_test_ext().execute_with(|| {
-		// Burn some of Alice's funds
-		assert_ok!(<Flip as Issuance>::try_burn_from(&ALICE, 50));
+	fn mint_to_account(account_id: &AccountId, amount: FlipBalance) {
+		Flip::settle_imbalance(account_id, FlipIssuance::<Test>::mint(amount))
+	}
 
-		// Try to burn too much - shouldn't succeed
-		assert_noop!(
-			<Flip as Issuance>::try_burn_from(&ALICE, 51),
-			Error::<Test>::InsufficientFunds
-		);
-		assert_eq!(Flip::total_balance_of(&ALICE), 50);
+	fn burn_from_reserve(reserve_id: ReserveId, amount: FlipBalance) {
+		let burn = FlipIssuance::<Test>::burn(amount);
+		let withdrawal = Flip::withdraw_reserves(reserve_id, amount);
+		let _ = burn.offset(withdrawal);
+	}
 
-		// The slashable balance doesn't include the existential deposit.
-		assert_eq!(
-			Flip::slashable_funds(&ALICE),
-			50 - <Test as Config>::ExistentialDeposit::get()
-		);
+	fn mint_to_reserve(reserve_id: ReserveId, amount: FlipBalance) {
+		let mint = FlipIssuance::<Test>::mint(amount);
+		let deposit = Flip::deposit_reserves(reserve_id, amount);
+		let _ = mint.offset(deposit);
+	}
 
-		// Force through a burn of all remaining burnable tokens, including the existential deposit.
-		<Flip as Issuance>::burn_from(&ALICE, 51);
+	#[test]
+	fn simple_burn() {
+		new_test_ext().execute_with(|| {
+			// Burn some of Alice's funds
+			burn_from_account(&ALICE, 50);
+			assert_eq!(Flip::total_balance_of(&ALICE), 50);
+			assert_eq!(FlipIssuance::<Test>::total_issuance(), 950);
+			check_balance_integrity();
+		});
+	}
 
-		assert_eq!(Flip::total_balance_of(&ALICE), 0);
-		assert_eq!(<Flip as Issuance>::total_issuance(), 900);
-		check_balance_integrity();
-	});
-}
+	#[test]
+	fn simple_mint() {
+		new_test_ext().execute_with(|| {
+			// Mint to Charlie's account.
+			mint_to_account(&CHARLIE, 50);
+			assert_eq!(Flip::total_balance_of(&CHARLIE), 50);
+			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1050);
+			check_balance_integrity();
+		});
+	}
 
-#[test]
-fn test_vaporise() {
-	new_test_ext().execute_with(|| {
-		<Flip as Issuance>::vaporise(10);
-		assert_eq!(<Flip as Issuance>::total_issuance(), 990);
-		check_balance_integrity();
+	#[test]
+	fn test_reserves() {
+		new_test_ext().execute_with(|| {
+			const TEST_RESERVE: ReserveId = *b"TEST";
+			const INIT_RESERVE_BALANCE: u128 = 0;
+			const INIT_TOTAL_ISSUANCE: u128 = 1_000;
+			const DEPOSIT: u128 = 50;
+			const WITHDRAWAL: u128 = 20;
 
-		// Can't vaporise on-chain funds - maximum possible will be taken from offchain.
-		<Flip as Issuance>::vaporise(10_000);
-		assert_eq!(<Flip as Issuance>::total_issuance(), Flip::onchain_funds());
+			// Mint to a reserve.
+			mint_to_reserve(TEST_RESERVE, DEPOSIT);
+			assert_eq!(
+				Flip::reserved_balance(TEST_RESERVE),
+				INIT_RESERVE_BALANCE + DEPOSIT
+			);
+			assert_eq!(
+				FlipIssuance::<Test>::total_issuance(),
+				INIT_TOTAL_ISSUANCE + DEPOSIT
+			);
+			check_balance_integrity();
 
-		check_balance_integrity();
-	});
-}
+			// Burn some.
+			burn_from_reserve(TEST_RESERVE, WITHDRAWAL);
+			assert_eq!(
+				Flip::reserved_balance(TEST_RESERVE),
+				INIT_RESERVE_BALANCE + DEPOSIT - WITHDRAWAL
+			);
+			assert_eq!(
+				FlipIssuance::<Test>::total_issuance(),
+				INIT_TOTAL_ISSUANCE + DEPOSIT - WITHDRAWAL
+			);
 
-#[test]
-fn account_deletion_burns_balance() {
-	new_test_ext().execute_with(|| {
-		frame_system::Provider::<Test>::killed(&BOB).unwrap();
-		assert_eq!(<Flip as Issuance>::total_issuance(), 950);
-		assert_eq!(Flip::total_balance_of(&BOB), 0);
-		check_balance_integrity();
-	});
+			// Obliterate the rest.
+			burn_from_reserve(TEST_RESERVE, 1_000_000);
+			assert_eq!(Flip::reserved_balance(TEST_RESERVE), INIT_RESERVE_BALANCE);
+			assert_eq!(FlipIssuance::<Test>::total_issuance(), INIT_TOTAL_ISSUANCE);
+		});
+	}
+
+	#[test]
+	fn cant_burn_too_much() {
+		new_test_ext().execute_with(|| {
+			// Burn some of Alice's funds
+			burn_from_account(&ALICE, 50);
+
+			assert_eq!(Flip::total_balance_of(&ALICE), 50);
+
+			// The slashable balance doesn't include the existential deposit.
+			assert_eq!(
+				Flip::slashable_funds(&ALICE),
+				50 - <Test as Config>::ExistentialDeposit::get()
+			);
+
+			// Force through a burn of all remaining burnable tokens, including the existential deposit.
+			burn_from_account(&ALICE, 1_000_000);
+
+			assert_eq!(Flip::total_balance_of(&ALICE), 0);
+			assert_eq!(FlipIssuance::<Test>::total_issuance(), 900);
+			check_balance_integrity();
+		});
+	}
+
+	#[test]
+	fn account_deletion_burns_balance() {
+		new_test_ext().execute_with(|| {
+			frame_system::Provider::<Test>::killed(&BOB).unwrap();
+			assert_eq!(FlipIssuance::<Test>::total_issuance(), 950);
+			assert_eq!(Flip::total_balance_of(&BOB), 0);
+			check_balance_integrity();
+		});
+	}
 }
 
 #[cfg(test)]
 mod test_tx_payments {
 	use crate::FlipTransactionPayment;
-	use frame_support::dispatch::GetDispatchInfo;
+	use frame_support::{dispatch::GetDispatchInfo, pallet_prelude::InvalidTransaction};
 	use pallet_transaction_payment::OnChargeTransaction;
 
 	use super::*;
@@ -274,6 +342,34 @@ mod test_tx_payments {
 		});
 	}
 
+	fn test_invalid_account(fee: FlipBalance) {
+		// A really naughty dude, don't trust him.
+		const BEELZEBUB: AccountId = 666;
+		new_test_ext().execute_with(|| {
+			assert_eq!(
+				FlipTransactionPayment::<Test>::withdraw_fee(
+					&BEELZEBUB,
+					CALL,
+					&CALL.get_dispatch_info(),
+					fee,
+					0,
+				)
+				.expect_err("Account doesn't exist. Expected error, got"),
+				InvalidTransaction::Payment.into()
+			);
+		});
+	}
+
+	#[test]
+	fn test_invalid_no_fee() {
+		test_invalid_account(0)
+	}
+
+	#[test]
+	fn test_invalid_with_fee() {
+		test_invalid_account(1)
+	}
+
 	#[test]
 	fn test_fee_payment() {
 		new_test_ext().execute_with(|| {
@@ -292,7 +388,7 @@ mod test_tx_payments {
 			// Fee is in escrow.
 			assert_eq!(escrow.as_ref().map(|fee| fee.peek()), Some(FEE));
 			// Issuance unchanged.
-			assert_eq!(<Flip as Issuance>::total_issuance(), 1000);
+			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000);
 
 			FlipTransactionPayment::<Test>::correct_and_deposit_fee(
 				&ALICE,
@@ -308,7 +404,7 @@ mod test_tx_payments {
 			// Alice paid the fee.
 			assert_eq!(Flip::total_balance_of(&ALICE), 99);
 			// Fee was burned.
-			assert_eq!(<Flip as Issuance>::total_issuance(), 999);
+			assert_eq!(FlipIssuance::<Test>::total_issuance(), 999);
 		});
 	}
 
@@ -331,7 +427,7 @@ mod test_tx_payments {
 			// Alice paid no fee.
 			assert_eq!(Flip::total_balance_of(&ALICE), 100);
 			// Nothing was burned.
-			assert_eq!(<Flip as Issuance>::total_issuance(), 1000);
+			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000);
 		});
 	}
 
@@ -354,7 +450,7 @@ mod test_tx_payments {
 			// Fee is in escrow.
 			assert_eq!(escrow.as_ref().map(|fee| fee.peek()), Some(PRE_FEE));
 			// Issuance unchanged.
-			assert_eq!(<Flip as Issuance>::total_issuance(), 1000);
+			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000);
 
 			FlipTransactionPayment::<Test>::correct_and_deposit_fee(
 				&ALICE,
@@ -370,7 +466,7 @@ mod test_tx_payments {
 			// Alice paid the adjusted fee.
 			assert_eq!(Flip::total_balance_of(&ALICE), 100 - POST_FEE);
 			// The fee was bured.
-			assert_eq!(<Flip as Issuance>::total_issuance(), 1000 - POST_FEE);
+			assert_eq!(FlipIssuance::<Test>::total_issuance(), 1000 - POST_FEE);
 		});
 	}
 }

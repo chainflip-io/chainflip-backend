@@ -28,16 +28,14 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 		fee: Self::Balance,
 		_tip: Self::Balance,
 	) -> Result<Self::LiquidityInfo, frame_support::unsigned::TransactionValidityError> {
-		if fee.is_zero() {
-			return Ok(None);
-		}
-
-		// `debit` will debit the requested amount or less, if less was available.
-		let surplus = Flip::<T>::debit(who, fee);
-		if surplus.peek() != fee {
-			Err(InvalidTransaction::Payment.into())
+		if let Some(surplus) = Flip::<T>::try_debit(who, fee) {
+			if surplus.peek().is_zero() {
+				Ok(None)
+			} else {
+				Ok(Some(surplus))
+			}
 		} else {
-			Ok(Some(surplus))
+			Err(InvalidTransaction::Payment.into())
 		}
 	}
 

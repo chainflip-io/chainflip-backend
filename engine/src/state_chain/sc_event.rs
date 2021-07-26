@@ -31,7 +31,7 @@ pub enum SCEvent {
 }
 
 /// Decode a raw event (substrate codec) into a SCEvent wrapper enum
-pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEvent>> {
+pub fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEvent>> {
     let event = match raw_event.module.as_str() {
         "Staking" => match raw_event.variant.as_str() {
             "Staked" => Ok(Some(
@@ -77,10 +77,6 @@ pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEv
             _ => Ok(None),
         },
         "Auction" => match raw_event.variant.as_str() {
-            "AuctionEnded" => Ok(Some(
-                AuctionConfirmedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
-                    .into(),
-            )),
             "AuctionStarted" => Ok(Some(
                 AuctionStartedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
             )),
@@ -110,7 +106,7 @@ pub(super) fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEv
 }
 
 /// Returns the subject to publish the data of a raw event to
-pub(super) fn raw_event_to_subject(event: &RawEvent) -> Option<Subject> {
+pub fn raw_event_to_subject(event: &RawEvent) -> Option<Subject> {
     match event.module.as_str() {
         "Auction" => match event.variant.as_str() {
             "AuctionStarted" => Some(Subject::AuctionStarted),

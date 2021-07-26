@@ -2,17 +2,15 @@
 
 [message_queue]
 # can also be IP
-hostname = "localhost"
-port = "4222"
+endpoint = "http://localhost:4222"
 
 [state_chain]
-hostname = "localhost"
 p2p_priv_key_file = "./tests/test_keystore/p2p_key"
-rpc_port = "4399"
 signing_key_file = "./tests/test_keystore/alice_key"
-ws_port = "9944"
+ws_endpoint = "ws://localhost:9944"
 
 [eth]
+from_block = 0
 node_endpoint = "wss://network.my_eth_node:80/<secret_key>"
 # Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
 private_key_file = "/run/secrets/eth_private_key"

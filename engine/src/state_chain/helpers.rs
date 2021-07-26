@@ -15,11 +15,7 @@ pub async fn create_subxt_client(
     state_chain_settings: settings::StateChain,
 ) -> Result<Client<StateChainRuntime>> {
     let client = ClientBuilder::<StateChainRuntime>::new()
-        .set_url(format!(
-            "ws://{}:{}",
-            state_chain_settings.hostname, state_chain_settings.ws_port
-        ))
-        .skip_type_sizes_check()
+        .set_url(state_chain_settings.ws_endpoint)
         .build()
         .await?;
 
@@ -73,6 +69,6 @@ mod tests {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
         let client = create_subxt_client(settings.state_chain).await;
-        assert!(client.is_ok());
+        client.unwrap();
     }
 }

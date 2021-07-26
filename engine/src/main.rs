@@ -1,6 +1,13 @@
 use chainflip_engine::{
-    eth, health::spawn_health_check, mq::nats_client::NatsMQClientFactory, p2p::ValidatorId,
-    settings::Settings, signing, state_chain, temp_event_mapper::TempEventMapper,
+    eth,
+    health::spawn_health_check,
+    mq::{nats_client::NatsMQClientFactory, IMQClientFactory},
+    p2p::{P2PConductor, RpcP2PClient, ValidatorId},
+    settings::Settings,
+    signing,
+    signing::db::PersistentKeyDB,
+    state_chain,
+    temp_event_mapper::TempEventMapper,
 };
 use slog::Drain;
 use sp_core::Pair;
@@ -38,23 +45,45 @@ async fn main() {
     // which won't necessarily always be the case, i.e. if we no longer have PeerId == ValidatorId
     let signer = state_chain::get_signer_from_privkey_file(&settings.state_chain.p2p_priv_key_file);
     let my_pubkey = signer.signer().public();
-    let signer_id = ValidatorId(my_pubkey.0);
+    let my_validator_id = ValidatorId(my_pubkey.0);
     let sc_o_fut = state_chain::sc_observer::start(settings.clone());
     let sc_b_fut = state_chain::sc_broadcaster::start(&settings, signer, mq_factory.clone());
 
     let eth_fut = eth::start(settings.clone());
 
-    let signing_client = signing::MultisigClient::new(mq_factory, signer_id);
+    let (_, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+
+    let substrate_node_endpoint = url::Url::parse(settings.state_chain.ws_endpoint.as_str())
+        .expect(&format!(
+            "Should be valid ws endpoint: {}",
+            settings.state_chain.ws_endpoint
+        ));
+    let p2p_client = RpcP2PClient::new(substrate_node_endpoint);
+    let mq_client = *mq_factory
+        .create()
+        .await
+        .expect("Could not connect MQ client");
+    let p2p_conductor_fut = P2PConductor::new(mq_client, p2p_client)
+        .await
+        .start(shutdown_rx);
+
+    // TODO: Investigate whether we want to encrypt it on disk
+    let db = PersistentKeyDB::new("data.db");
+
+    let signing_client = signing::MultisigClient::new(db, mq_factory, my_validator_id);
 
     let temp_event_map_fut = TempEventMapper::run(&settings);
 
-    let signing_client_fut = signing_client.run();
+    let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
+
+    let signing_client_fut = signing_client.run(shutdown_client_rx);
 
     futures::join!(
         sc_o_fut,
         sc_b_fut,
         eth_fut,
         temp_event_map_fut,
-        signing_client_fut
+        p2p_conductor_fut,
+        signing_client_fut,
     );
 }

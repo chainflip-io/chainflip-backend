@@ -1,5 +1,6 @@
 mod client;
 pub mod crypto;
+pub mod db;
 
 #[cfg(test)]
 mod tests;
