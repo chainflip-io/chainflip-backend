@@ -563,11 +563,12 @@ impl<T: Config> Pallet<T> {
 			match (withdrawal_address, existing_withdrawal_address) {
 				// User account exists and both addresses hold a value - the value of both addresses is different
 				(Some(provided), Some(existing)) if provided != existing => {
-					Self::log_failed_stake_attempt(account_id, provided, amount)?;
+					Self::log_failed_stake_attempt(account_id, provided, amount)?
 				}
-				// Only the provided address exists
+				// Only the provided address exists:
+				// We only want to add a new withdrawal address if this is the first staking attempt, ie. the account doesn't exist.
 				(Some(provided), None) => {
-					Self::log_failed_stake_attempt(account_id, provided, amount)?;
+					Self::log_failed_stake_attempt(account_id, provided, amount)?
 				}
 				_ => (),
 			}

@@ -652,7 +652,7 @@ fn test_claim_payload() {
 }
 
 #[test]
-fn test_save_withdrawal_address() {
+fn test_check_withdrawal_address() {
 	new_test_ext().execute_with(|| {
 		const STAKE: u128 = 45;
 		const DIFFERENT_ETH_ADDR: EthereumAddress = [45u8; 20];
@@ -710,5 +710,29 @@ fn claim_with_withdrawal_address() {
 		);
 		// Try it again with the right address - expect to succeed
 		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR));
+	});
+}
+
+#[test]
+fn stake_with_provided_withdrawal_only_on_first_attempt() {
+	// Check if the branching of the stake process is working probably
+	new_test_ext().execute_with(|| {
+		const STAKE: u128 = 45;
+		// Stake some FLIP with no withdrawal address
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, None, TX_HASH));
+		// Expect an Staked event to be fired
+		assert_event_stack!(Event::pallet_cf_staking(crate::Event::Staked(..)));
+		// Stake some FLIP again with an provided withdrawal address
+		assert_ok!(Staking::staked(
+			Origin::root(),
+			ALICE,
+			STAKE,
+			Some(ETH_DUMMY_ADDR),
+			TX_HASH
+		));
+		// Expect an failed stake event to be fired but no stake event
+		assert_event_stack!(Event::pallet_cf_staking(crate::Event::FailedStakeAttempt(
+			..
+		)));
 	});
 }
