@@ -1,4 +1,5 @@
-use cf_p2p::{Message, Messaging, NetworkObserver};
+pub mod p2p_serde;
+use cf_p2p::{P2pMessaging, NetworkObserver, ValidatorId, RawMessage};
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures::{StreamExt, TryStreamExt};
 use jsonrpc_core::futures::Sink;
@@ -11,27 +12,66 @@ use log::{debug, warn};
 use sc_network::config::identity::ed25519;
 use sc_network::config::PublicKey;
 use sc_network::PeerId;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde::{self, Deserialize, Serialize};
 use sp_core::ed25519::Public;
 use std::marker::Send;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
-type ValidatorId = String;
+#[derive(Serialize, Deserialize)]
+pub struct ValidatorIdBs58(
+	#[serde(with = "p2p_serde::bs58_fixed_size")]
+	[u8; 32]
+);
+
+impl From<ValidatorIdBs58> for ValidatorId {
+    fn from(id: ValidatorIdBs58) -> Self {
+        Self(id.0)
+    }
+}
+
+impl From<ValidatorId> for ValidatorIdBs58 {
+    fn from(id: ValidatorId) -> Self {
+        Self(id.0)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct MessageBs58(
+	#[serde(with = "p2p_serde::bs58_vec")]
+	Vec<u8>
+);
+
+impl From<MessageBs58> for RawMessage {
+    fn from(msg: MessageBs58) -> Self {
+        Self(msg.0)
+    }
+}
+
+impl From<RawMessage> for MessageBs58 {
+    fn from(msg: RawMessage) -> Self {
+        Self(msg.0)
+    }
+}
+
+
 
 #[rpc]
 pub trait RpcApi {
 	/// RPC Metadata
 	type Metadata;
 
+	/// Identify yourself to the network.
+	#[rpc(name = "p2p_identify")]
+	fn identify(&self, validator_id: ValidatorIdBs58) -> Result<()>;
+
 	/// Send a message to validator id returning a HTTP status code
 	#[rpc(name = "p2p_send")]
-	fn send(&self, validator_id: ValidatorId, message: String) -> Result<u64>;
+	fn send(&self, validator_id: ValidatorIdBs58, message: MessageBs58) -> Result<()>;
 
 	/// Broadcast a message to the p2p network returning a HTTP status code
 	#[rpc(name = "p2p_broadcast")]
-	fn broadcast(&self, message: String) -> Result<u64>;
+	fn broadcast(&self, message: MessageBs58) -> Result<()>;
 
 	/// Subscribe to receive notifications
 	#[pubsub(
@@ -55,6 +95,7 @@ pub trait RpcApi {
 }
 
 /// A list of subscribers to the p2p message events coming in from cf-p2p
+#[derive(Clone)]
 pub struct P2PStream<T> {
 	subscribers: Arc<Mutex<Vec<UnboundedSender<T>>>>,
 }
@@ -74,7 +115,7 @@ impl<T> P2PStream<T> {
 }
 
 /// An event stream over type `RpcEvent`
-type EventStream = Arc<P2PStream<P2PEvent>>;
+type EventStream = P2PStream<P2PEvent>;
 
 /// Our core bridge between p2p events and our RPC subscribers
 pub struct RpcCore {
@@ -82,13 +123,11 @@ pub struct RpcCore {
 	manager: SubscriptionManager,
 }
 
-type RpcPeerId = String;
-
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum P2PEvent {
-	Received(RpcPeerId, Message),
-	PeerConnected(RpcPeerId),
-	PeerDisconnected(RpcPeerId),
+	Received( ValidatorId,RawMessage),
+	PeerConnected(ValidatorId),
+	PeerDisconnected(ValidatorId),
 }
 
 impl RpcCore {
@@ -96,7 +135,7 @@ impl RpcCore {
 	where
 		E: Executor<Box<(dyn Future<Item = (), Error = ()> + Send)>> + Send + Sync + 'static,
 	{
-		let stream = Arc::new(P2PStream::new());
+		let stream = P2PStream::new();
 		(
 			RpcCore {
 				stream: stream.clone(),
@@ -119,70 +158,53 @@ impl RpcCore {
 
 /// Observe p2p events and notify subscribers
 impl NetworkObserver for RpcCore {
-	fn new_peer(&self, peer_id: &PeerId) {
-		self.notify(P2PEvent::PeerConnected(peer_id.to_base58()));
+	fn new_peer(&self, validator_id: &ValidatorId) {
+		self.notify(P2PEvent::PeerConnected((*validator_id).into()));
 	}
 
-	fn disconnected(&self, peer_id: &PeerId) {
-		self.notify(P2PEvent::PeerDisconnected(peer_id.to_base58()));
+	fn disconnected(&self, validator_id: &ValidatorId) {
+		self.notify(P2PEvent::PeerDisconnected((*validator_id).into()));
 	}
 
-	fn received(&self, peer_id: &PeerId, messages: Message) {
-		self.notify(P2PEvent::Received(peer_id.to_base58(), messages.clone()));
+	fn received(&self, validator_id: &ValidatorId, messages: RawMessage) {
+		self.notify(P2PEvent::Received((*validator_id).into(), messages.clone()));
 	}
 }
 
 /// The RPC bridge and API
-pub struct Rpc<C: Messaging> {
+pub struct Rpc<C: P2pMessaging> {
 	core: Arc<RpcCore>,
 	messaging: Arc<Mutex<C>>,
 }
 
-impl<C: Messaging> Rpc<C> {
+impl<C: P2pMessaging> Rpc<C> {
 	pub fn new(messaging: Arc<Mutex<C>>, core: Arc<RpcCore>) -> Self {
 		Rpc { messaging, core }
 	}
 }
 
-fn peer_id_from_validator_id(validator_id: &ValidatorId) -> std::result::Result<PeerId, &str> {
-	Public::from_str(validator_id)
-		.map_err(|_| "failed parsing")
-		.and_then(|p| ed25519::PublicKey::decode(&p.0).map_err(|_| "failed decoding"))
-		.and_then(|p| Ok(PeerId::from_public_key(PublicKey::Ed25519(p))))
-}
-
 /// Impl of the `RpcApi` - send, broadcast and subscribe to notifications
-impl<C: Messaging + Sync + Send + 'static> RpcApi for Rpc<C> {
+impl<C: P2pMessaging + Sync + Send + 'static> RpcApi for Rpc<C> {
 	type Metadata = sc_rpc::Metadata;
-
-	fn send(&self, validator_id: ValidatorId, message: String) -> Result<u64> {
-		if let Ok(peer_id) = peer_id_from_validator_id(&validator_id) {
-			return if self
-				.messaging
-				.lock()
-				.unwrap()
-				.send_message(&peer_id, message.into_bytes())
-			{
-				Ok(200)
-			} else {
-				Err(Error::invalid_params("invalid message and/or peer"))
-			};
-		}
-
-		Err(Error::invalid_request())
+	
+	fn identify(&self, validator_id: ValidatorIdBs58) -> Result<()> {
+		self.messaging.lock().unwrap().identify(validator_id.into()).map_err(|_| Error::internal_error())
 	}
 
-	fn broadcast(&self, message: String) -> Result<u64> {
-		if self
-			.messaging
+	fn send(&self, validator_id: ValidatorIdBs58, message: MessageBs58) -> Result<()> {
+		self.messaging
 			.lock()
 			.unwrap()
-			.broadcast(message.into_bytes())
-		{
-			return Ok(200);
-		}
+			.send_message(validator_id.into(), message.into())
+			.map_err(|_| Error::internal_error())
+	}
 
-		Err(Error::invalid_request())
+	fn broadcast(&self, message: MessageBs58) -> Result<()> {
+		self.messaging
+			.lock()
+			.unwrap()
+			.broadcast_all(message.into())
+			.map_err(|_| Error::internal_error())
 	}
 
 	fn subscribe_notifications(&self, _metadata: Self::Metadata, subscriber: Subscriber<P2PEvent>) {

@@ -1,8 +1,10 @@
+use anyhow::Result;
 use core::iter;
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures::{Future, Stream, StreamExt};
 use log::debug;
 use sc_network::{multiaddr, Event, ExHashT, NetworkService, PeerId};
+use serde::{Serialize, Deserialize};
 use sp_runtime::sp_std::sync::Arc;
 use sp_runtime::traits::Block as BlockT;
 use std::borrow::Cow;
@@ -11,7 +13,22 @@ use std::pin::Pin;
 use std::sync::Mutex;
 use std::task::{Context, Poll};
 
-pub type Message = Vec<u8>;
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ValidatorId(
+	pub [u8; 32]
+);
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RawMessage(
+	pub Vec<u8>
+);
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+enum ProtocolMessage {
+	Identify(ValidatorId),
+	Message(RawMessage),
+}
+
 pub const CHAINFLIP_P2P_PROTOCOL_NAME: &str = "/chainflip-protocol";
 
 pub fn p2p_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
@@ -28,13 +45,13 @@ pub fn p2p_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
 	}
 }
 
-pub trait PeerNetwork: Clone {
+trait PeerNetwork: Clone {
 	/// Adds the peer to the set of peers to be connected to with this protocol.
 	fn add_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>);
 	/// Removes the peer from the set of peers to be connected to with this protocol.
 	fn remove_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>);
 	/// Write notification to network to peer id, over protocol
-	fn write_notification(&self, who: PeerId, protocol: Cow<'static, str>, message: Message);
+	fn write_notification(&self, who: PeerId, protocol: Cow<'static, str>, message: ProtocolMessage);
 	/// Network event stream
 	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>>;
 }
@@ -63,8 +80,12 @@ impl<B: BlockT, H: ExHashT> PeerNetwork for Arc<NetworkService<B, H>> {
 		}
 	}
 
-	fn write_notification(&self, target: PeerId, protocol: Cow<'static, str>, message: Message) {
-		NetworkService::write_notification(self, target, protocol, message)
+	fn write_notification(&self, target: PeerId, protocol: Cow<'static, str>, message: ProtocolMessage) {
+		let _ = bincode::serialize(&message).map(|bytes| {
+			NetworkService::write_notification(self, target, protocol, bytes);
+		}).unwrap_or_else(|err| {
+			log::error!("Error while serializing p2p protocol message {}", err);
+		});
 	}
 
 	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
@@ -72,14 +93,14 @@ impl<B: BlockT, H: ExHashT> PeerNetwork for Arc<NetworkService<B, H>> {
 	}
 }
 
-/// Observing events when they arrive at this peer
+/// An external observer for events. 
 pub trait NetworkObserver {
 	/// On a new peer connected to the network
-	fn new_peer(&self, peer_id: &PeerId);
+	fn new_peer(&self, validator_id: &ValidatorId);
 	/// On a peer being disconnected
-	fn disconnected(&self, peer_id: &PeerId);
-	/// A message being received from peer_id for this peer
-	fn received(&self, peer_id: &PeerId, messages: Message);
+	fn disconnected(&self, validator_id: &ValidatorId);
+	/// A message being received from validator_id for this peer
+	fn received(&self, validator_id: &ValidatorId, message: RawMessage);
 }
 
 /// A state machine routing messages and events to our network and observer
@@ -88,11 +109,15 @@ struct StateMachine<Observer: NetworkObserver, Network: PeerNetwork> {
 	observer: Arc<Observer>,
 	/// The peer to peer network
 	network: Network,
-	/// List of peers on the network
-	peers: HashMap<PeerId, ()>,
+	/// PeerIds with the corresponding ValidatorId, if available.
+	peer_to_validator: HashMap<PeerId, Option<ValidatorId>>,
+	/// ValidatorIds mapped to corresponding PeerIds.
+	validator_to_peer: HashMap<ValidatorId, PeerId>,
 	/// The protocol's name
 	protocol: Cow<'static, str>,
 }
+
+const EXPECTED_PEER_COUNT: usize = 300;
 
 impl<Observer, Network> StateMachine<Observer, Network>
 where
@@ -103,56 +128,107 @@ where
 		StateMachine {
 			observer,
 			network,
-			peers: HashMap::new(),
+			peer_to_validator: HashMap::with_capacity(EXPECTED_PEER_COUNT),
+			validator_to_peer: HashMap::with_capacity(EXPECTED_PEER_COUNT),
 			protocol,
 		}
 	}
 
-	/// A new peer has arrived, insert into our internal list and notify observer
-	pub fn new_peer(&mut self, peer_id: &PeerId) {
-		self.peers.insert(peer_id.clone(), ());
-		self.observer.new_peer(peer_id);
+	/// A new peer has arrived, insert into our internal list and await identification.
+	pub fn register_peer(&mut self, peer_id: &PeerId) {
+		self.peer_to_validator.insert(peer_id.clone(), None);
 	}
 
-	/// A new peer has disconnected, insert into our internal list and notify observer
+	/// A peer has identified itself. Register the validator Id and notify the observer.
+	pub fn register_validator_id(&mut self, peer_id: &PeerId, validator_id: ValidatorId) {
+		self.peer_to_validator.entry(peer_id.clone()).or_insert(Some(validator_id));
+		self.validator_to_peer.insert(validator_id, peer_id.clone());
+		self.observer.new_peer(&validator_id);
+	}
+
+	/// A peer has disconnected, remove from our internal lookups and notify the observer.
 	pub fn disconnected(&mut self, peer_id: &PeerId) {
-		self.peers.remove(peer_id);
-		self.observer.disconnected(peer_id);
+		if let Some(Some(validator_id)) = self.peer_to_validator.remove(peer_id) {
+			if let Some(_) = self.validator_to_peer.remove(&validator_id) {
+				self.observer.disconnected(&validator_id);
+			}
+		}
 	}
 
-	/// Messages received from peer_id, notify observer
-	pub fn received(&self, peer_id: &PeerId, messages: Vec<Message>) {
+	/// Notify the observer, if the validator id of the peer is known.
+	fn maybe_notify_observer(&self, peer_id: &PeerId, message: RawMessage) {
+		if let Some(Some(validator_id)) = self.peer_to_validator.get(peer_id) {
+			self.observer.received(validator_id, message);
+		}
+	}
+
+	/// Messages received from peer_id, notify observer.
+	pub fn received(&mut self, peer_id: &PeerId, messages: Vec<ProtocolMessage>) {
+		if !self.peer_to_validator.contains_key(peer_id) {
+			log::error!("Received message from unrecognised peer {:?}", peer_id);
+			return;
+		}
+
 		for message in messages {
-			self.observer.received(peer_id, message);
+			match message {
+				ProtocolMessage::Identify(validator_id) => {
+					self.register_validator_id(peer_id, validator_id);
+				},
+				ProtocolMessage::Message(raw_message) => {
+					self.maybe_notify_observer(peer_id, raw_message);
+				},
+			}
 		}
 	}
 
-	/// Send message to peer, this will fail silently if peer isn't in our peer list or the message
-	/// is empty
-	pub fn send_message(&mut self, peer_id: PeerId, message: Message) {
-		if self.peers.contains_key(&peer_id) && !message.is_empty() {
+	/// Identify ourselves to the network.
+	pub fn identify(&self, validator_id: ValidatorId) {
+		for peer_id in self.peer_to_validator.keys() {
 			self.network
-				.write_notification(peer_id, self.protocol.clone(), message);
+				.write_notification(*peer_id, self.protocol.clone(), ProtocolMessage::Identify(validator_id));
 		}
 	}
 
-	/// Broadcast message to network, this will fail silently if the message is empty
-	pub fn broadcast(&mut self, message: Message) {
-		if !message.is_empty() {
-			for peer_id in self.peers.keys() {
+	/// Send message to peer, this will fail silently if peer isn't in our peer list or if the message
+	/// is empty.
+	pub fn send_message(&self, validator_id: ValidatorId, message: RawMessage) {
+		if message.0.is_empty() {
+			return;
+		}
+
+		if let Some(peer_id) = self.validator_to_peer.get(&validator_id) {
+			self.network
+				.write_notification(*peer_id, self.protocol.clone(), ProtocolMessage::Message(message));
+		}
+	}
+
+	/// Broadcast message to a specific list of peers on the network, this will fail silently if the message is empty.
+	pub fn broadcast(&self, validators: Vec<ValidatorId>, message: RawMessage) {
+		if message.0.is_empty() {
+			return;
+		}
+		for validator_id in validators {
+			self.send_message(validator_id, message.clone());
+		}
+	}
+
+	/// Broadcast message to all known validators on the network, this will fail silently if the message is empty.
+	pub fn broadcast_all(&self, message: RawMessage) {
+		if !message.0.is_empty() {
+			for peer_id in self.validator_to_peer.values() {
 				self.network
-					.write_notification(*peer_id, self.protocol.clone(), message.clone());
+					.write_notification(*peer_id, self.protocol.clone(), ProtocolMessage::Message(message.clone()));
 			}
 		}
 	}
 }
 
 /// The entry point.  The network bridge provides the trait `Messaging`.
-pub struct NetworkBridge<Observer: NetworkObserver, Network: PeerNetwork> {
+struct NetworkBridge<Observer: NetworkObserver, Network: PeerNetwork> {
 	state_machine: StateMachine<Observer, Network>,
 	network_event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
 	protocol: Cow<'static, str>,
-	worker: UnboundedReceiver<(Vec<PeerId>, Message)>,
+	worker: UnboundedReceiver<MessagingCommand>,
 }
 
 impl<Observer, Network> NetworkBridge<Observer, Network>
@@ -167,7 +243,7 @@ where
 	) -> (Self, Arc<Mutex<Sender>>) {
 		let state_machine = StateMachine::new(observer, network.clone(), protocol.clone());
 		let network_event_stream = Box::pin(network.event_stream());
-		let (sender, worker) = unbounded::<(Vec<PeerId>, Message)>();
+		let (sender, worker) = unbounded::<MessagingCommand>();
 		let messenger = Arc::new(Mutex::new(Sender(sender.clone())));
 		(
 			NetworkBridge {
@@ -181,29 +257,39 @@ where
 	}
 }
 
-/// Messaging by sending directly or broadcasting
-pub trait Messaging {
-	fn send_message(&mut self, peer_id: &PeerId, data: Message) -> bool;
-	fn broadcast(&self, data: Message) -> bool;
+pub enum MessagingCommand {
+	Identify(ValidatorId),
+	Send(ValidatorId, RawMessage),
+	Broadcast(Vec<ValidatorId>, RawMessage),
+	BroadcastAll(RawMessage),
 }
 
-/// Push messages down our channel to be past on to the network
-pub struct Sender(UnboundedSender<(Vec<PeerId>, Message)>);
-impl Messaging for Sender {
-	fn send_message(&mut self, peer_id: &PeerId, data: Message) -> bool {
-		if let Err(e) = self.0.unbounded_send((vec![*peer_id], data)) {
-			debug!("Failed to push message to channel {:?}", e);
-			return false;
-		}
-		true
+/// Messaging by sending directly or broadcasting
+pub trait P2pMessaging {
+	fn identify(&mut self, validator_id: ValidatorId) -> Result<()>;
+	fn send_message(&mut self, validator_id: ValidatorId, data: RawMessage) -> Result<()>;
+	fn broadcast(&self, validators: Vec<ValidatorId>, data: RawMessage) -> Result<()>;
+	fn broadcast_all(&self, data: RawMessage) -> Result<()> {
+		self.broadcast(vec![], data)
+	}
+}
+
+/// Push messages down our channel to be passed on to the network
+pub struct Sender(UnboundedSender<MessagingCommand>);
+impl P2pMessaging for Sender {
+	fn identify(&mut self, validator_id: ValidatorId) -> Result<()> {
+		self.0.unbounded_send(MessagingCommand::Identify(validator_id))?;
+		Ok(())
 	}
 
-	fn broadcast(&self, data: Message) -> bool {
-		if let Err(e) = self.0.unbounded_send((vec![], data)) {
-			debug!("Failed to broadcast message to channel {:?}", e);
-			return false;
-		}
-		true
+	fn send_message(&mut self, validator_id: ValidatorId, data: RawMessage) -> Result<()> {
+		self.0.unbounded_send(MessagingCommand::Send(validator_id, data))?;
+		Ok(())
+	}
+
+	fn broadcast(&self, validators: Vec<ValidatorId>, data: RawMessage) -> Result<()> {
+		self.0.unbounded_send(MessagingCommand::Broadcast(validators, data))?;
+		Ok(())
 	}
 }
 
@@ -227,13 +313,20 @@ where
 		let this = &mut *self;
 		loop {
 			match this.worker.poll_next_unpin(cx) {
-				Poll::Ready(Some((peer_ids, message))) => {
-					if peer_ids.is_empty() {
-						this.state_machine.broadcast(message.clone());
-					} else {
-						for peer_id in peer_ids {
-							this.state_machine.send_message(peer_id, message.clone());
-						}
+				Poll::Ready(Some(cmd)) => {
+					match cmd {
+						MessagingCommand::Send(validator_id, msg) => {
+							this.state_machine.send_message(validator_id, msg);
+						},
+						MessagingCommand::Broadcast(validators, msg) => {
+							this.state_machine.broadcast(validators, msg);
+						},
+        				MessagingCommand::BroadcastAll(msg) => {
+							this.state_machine.broadcast_all(msg);
+						},
+        				MessagingCommand::Identify(validator_id) => {
+							this.state_machine.identify(validator_id);
+						},
 					}
 				}
 				Poll::Ready(None) => return Poll::Ready(()),
@@ -262,7 +355,7 @@ where
 						if protocol != this.protocol {
 							continue;
 						}
-						this.state_machine.new_peer(&remote);
+						this.state_machine.register_peer(&remote);
 					}
 					Event::NotificationStreamClosed { remote, protocol } => {
 						if protocol != this.protocol {
@@ -272,11 +365,14 @@ where
 					}
 					Event::NotificationsReceived { remote, messages } => {
 						if !messages.is_empty() {
-							let messages: Vec<Message> = messages
+							let messages: Vec<ProtocolMessage> = messages
 								.into_iter()
 								.filter_map(|(engine, data)| {
 									if engine == this.protocol {
-										Some(data.to_vec())
+										bincode::deserialize(data.as_ref()).map_err(|err| {
+											log::error!("Error deserializing protocol message: {}", err);
+										})
+										.ok()
 									} else {
 										None
 									}
