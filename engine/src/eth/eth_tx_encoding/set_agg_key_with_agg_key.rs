@@ -2,6 +2,7 @@ use std::{collections::HashMap, convert::TryInto};
 
 use crate::{
     eth::key_manager::KeyManager,
+    logging::COMPONENT_KEY,
     mq::{pin_message_stream, IMQClient, Subject},
     p2p::ValidatorId,
     settings,
@@ -15,6 +16,7 @@ use crate::{
 use anyhow::Result;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
+use slog::o;
 use sp_core::Hasher;
 use sp_runtime::traits::Keccak256;
 use web3::{ethabi::Token, types::Address};
@@ -23,11 +25,13 @@ use web3::{ethabi::Token, types::Address};
 pub async fn start<M: IMQClient + Clone>(
     settings: &settings::Settings,
     mq_client: M,
+    logger: &slog::Logger,
 ) -> Result<()> {
     let mut encoder = SetAggKeyWithAggKeyEncoder::new(
         settings.eth.key_manager_eth_address.as_ref(),
         settings.signing.genesis_validator_ids.clone(),
         mq_client,
+        logger,
     )?;
 
     encoder.process_multi_sig_event_stream().await;
@@ -53,6 +57,7 @@ struct SetAggKeyWithAggKeyEncoder<M: IMQClient> {
     validators: HashMap<KeyId, Vec<ValidatorId>>,
     curr_signing_key_id: Option<KeyId>,
     next_key_id: Option<KeyId>,
+    logger: slog::Logger,
 }
 
 #[derive(Clone)]
@@ -68,6 +73,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
         key_manager_address: &str,
         genesis_validator_ids: Vec<ValidatorId>,
         mq_client: M,
+        logger: &slog::Logger,
     ) -> Result<Self> {
         let key_manager = KeyManager::load(key_manager_address)?;
 
@@ -80,6 +86,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
             validators: genesis_validator_ids_hash_map,
             curr_signing_key_id: Some(KeyId(0)),
             next_key_id: None,
+            logger: logger.new(o!(COMPONENT_KEY => "SetAggKeyWithAggKeyEncoder")),
         })
     }
 
@@ -106,7 +113,10 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
                             self.handle_keygen_success(keygen_success).await;
                         }
                         _ => {
-                            log::error!("Signing module returned error generating key")
+                            slog::error!(
+                                self.logger,
+                                "Signing module returned error generating key"
+                            )
                         }
                     },
                     MultisigEvent::MessageSigningResult(signing_outcome) => match signing_outcome {
@@ -117,15 +127,25 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
                         _ => {
                             // TODO: Use the reported bad nodes in the SigningOutcome / SigningFailure
                             // TODO: retry signing with a different subset of signers
-                            log::error!("Signing module returned error signing message")
+                            slog::error!(
+                                self.logger,
+                                "Signing module returned error signing message"
+                            )
                         }
                     },
                     _ => {
-                        log::trace!("Discarding non keygen result or message signed event")
+                        slog::trace!(
+                            self.logger,
+                            "Discarding non keygen result or message signed event"
+                        )
                     }
                 },
                 Err(e) => {
-                    log::error!("Error reading event from multisig event stream: {:?}", e);
+                    slog::error!(
+                        self.logger,
+                        "Error reading event from multisig event stream: {:?}",
+                        e
+                    );
                 }
             }
         }
@@ -194,7 +214,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
                     .publish(Subject::Broadcast(Chain::ETH), tx_details)
                     .await
                     .unwrap_or_else(|err| {
-                        log::error!("Could not process: {:#?}", err);
+                        slog::error!(self.logger, "Could not process: {:#?}", err);
                     });
                 // here (for now) we assume the key was update successfully
                 // update curr key id
@@ -203,7 +223,7 @@ impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
                 self.next_key_id = None;
             }
             Err(err) => {
-                log::error!("Failed to build: {:#?}", err);
+                slog::error!(self.logger, "Failed to build: {:#?}", err);
             }
         }
     }

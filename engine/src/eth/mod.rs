@@ -72,7 +72,7 @@ pub async fn start(settings: &Settings, logger: &slog::Logger) {
         eth_broadcaster::start_eth_broadcaster::<NatsMQClient>(settings, mq_client.clone(), logger);
 
     let eth_tx_encoder_future =
-        eth_tx_encoding::set_agg_key_with_agg_key::start(settings, mq_client.clone());
+        eth_tx_encoding::set_agg_key_with_agg_key::start(settings, mq_client.clone(), logger);
 
     let result = futures::join!(
         sm_witness_future,
