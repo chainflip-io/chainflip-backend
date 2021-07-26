@@ -360,7 +360,7 @@ mod test_eth_tx_encoder {
     use secp256k1::PublicKey;
     use std::str::FromStr;
 
-    use crate::mq::mq_mock::MQMock;
+    use crate::{logging, mq::mq_mock::MQMock};
 
     const AGG_PRIV_HEX_1: &str = "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba";
     const AGG_PRIV_HEX_2: &str = "bbade2da39cfc81b1b64b6a2d66531ed74dd01803dc5b376ce7ad548bbe23608";
@@ -415,12 +415,15 @@ mod test_eth_tx_encoder {
 
         let mq_client = mq.get_client();
 
+        let logger = logging::test_utils::create_test_logger();
+
         let settings = settings::test_utils::new_test_settings().unwrap();
 
         let encoder = SetAggKeyWithAggKeyEncoder::new(
             settings.eth.key_manager_eth_address.as_str(),
             settings.signing.genesis_validator_ids,
             mq_client,
+            &logger,
         )
         .unwrap();
 
