@@ -18,7 +18,7 @@ use std::marker::Send;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ValidatorIdBs58(
 	#[serde(with = "p2p_serde::bs58_fixed_size")]
 	[u8; 32]
@@ -36,7 +36,7 @@ impl From<ValidatorId> for ValidatorIdBs58 {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageBs58(
 	#[serde(with = "p2p_serde::bs58_vec")]
 	Vec<u8>
@@ -125,9 +125,9 @@ pub struct RpcCore {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum P2PEvent {
-	Received( ValidatorId,RawMessage),
-	PeerConnected(ValidatorId),
-	PeerDisconnected(ValidatorId),
+	Received(ValidatorIdBs58, MessageBs58),
+	PeerConnected(ValidatorIdBs58),
+	PeerDisconnected(ValidatorIdBs58),
 }
 
 impl RpcCore {
@@ -166,8 +166,8 @@ impl NetworkObserver for RpcCore {
 		self.notify(P2PEvent::PeerDisconnected((*validator_id).into()));
 	}
 
-	fn received(&self, validator_id: &ValidatorId, messages: RawMessage) {
-		self.notify(P2PEvent::Received((*validator_id).into(), messages.clone()));
+	fn received(&self, validator_id: &ValidatorId, message: RawMessage) {
+		self.notify(P2PEvent::Received((*validator_id).into(), message.into()));
 	}
 }
 
@@ -267,13 +267,13 @@ mod tests {
 			peer_id
 		}
 
-		fn broadcast(&mut self, data: Message) {
+		fn broadcast(&mut self, data: RawMessage) {
 			for (_, node) in &self.nodes {
 				node.messenger.lock().unwrap().broadcast(data.clone());
 			}
 		}
 
-		fn send_message(&mut self, peer_id: &PeerId, data: Message) {
+		fn send_message(&mut self, peer_id: &PeerId, data: RawMessage) {
 			if let Some(node) = self.nodes.get(&peer_id) {
 				node.messenger
 					.lock()
@@ -295,7 +295,8 @@ mod tests {
 		stream: Arc<EventStream>,
 	}
 
-	impl Messaging for Messenger {
+	impl P2pMessaging for Messenger {
+		
 		fn send_message(&mut self, peer_id: &PeerId, data: Message) -> bool {
 			let subscribers = self.stream.subscribers.lock().unwrap();
 			for subscriber in subscribers.iter() {
@@ -308,7 +309,7 @@ mod tests {
 			true
 		}
 
-		fn broadcast(&self, data: Message) -> bool {
+		fn broadcast(&self, data: RawMessage) -> bool {
 			let subscribers = self.stream.subscribers.lock().unwrap();
 			for subscriber in subscribers.iter() {
 				if let Err(e) =
@@ -318,6 +319,10 @@ mod tests {
 				}
 			}
 			true
+		}
+
+		fn identify(&mut self, validator_id: ValidatorId) -> Result<()> {
+			todo!()
 		}
 	}
 

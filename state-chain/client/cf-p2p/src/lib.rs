@@ -29,11 +29,11 @@ enum ProtocolMessage {
 	Message(RawMessage),
 }
 
-pub const CHAINFLIP_P2P_PROTOCOL_NAME: &str = "/chainflip-protocol";
+pub const CHAINFLIP_P2P_PROTOCOL_NAME: Cow<str> = Cow::Borrowed("/chainflip-protocol");
 
 pub fn p2p_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
 	sc_network::config::NonDefaultSetConfig {
-		notifications_protocol: CHAINFLIP_P2P_PROTOCOL_NAME.into(),
+		notifications_protocol: CHAINFLIP_P2P_PROTOCOL_NAME,
 		// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
 		max_notification_size: 1024 * 1024,
 		set_config: sc_network::config::SetConfig {
@@ -47,32 +47,42 @@ pub fn p2p_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
 
 trait PeerNetwork: Clone {
 	/// Adds the peer to the set of peers to be connected to with this protocol.
-	fn add_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>);
+	fn reserve_peer(&self, who: PeerId);
 	/// Removes the peer from the set of peers to be connected to with this protocol.
-	fn remove_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>);
+	fn remove_reserved_peer(&self, who: PeerId);
 	/// Write notification to network to peer id, over protocol
-	fn write_notification(&self, who: PeerId, protocol: Cow<'static, str>, message: ProtocolMessage);
+	fn write_notification(&self, who: PeerId, message: ProtocolMessage);
 	/// Network event stream
 	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>>;
 }
 
-impl<B: BlockT, H: ExHashT> PeerNetwork for Arc<NetworkService<B, H>> {
-	fn add_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>) {
+#[derive(Clone)]
+struct ChainFlipP2pNetwork<B: BlockT, H: ExHashT> {
+	service: Arc<NetworkService<B, H>>,
+}
+
+impl<B: BlockT, H: ExHashT> ChainFlipP2pNetwork<B, H> {
+	pub fn new(service: Arc<NetworkService<B, H>>) -> Self {
+		Self { service }
+	}
+}
+
+impl<B: BlockT, H: ExHashT> PeerNetwork for ChainFlipP2pNetwork<B, H> {
+	fn reserve_peer(&self, who: PeerId) {
 		let addr =
 			iter::once(multiaddr::Protocol::P2p(who.into())).collect::<multiaddr::Multiaddr>();
 		let result =
-			NetworkService::add_peers_to_reserved_set(self, protocol, iter::once(addr).collect());
+			self.service.add_peers_to_reserved_set(CHAINFLIP_P2P_PROTOCOL_NAME, iter::once(addr).collect());
 		if let Err(err) = result {
 			log::error!(target: "p2p", "add_set_reserved failed: {}", err);
 		}
 	}
 
-	fn remove_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>) {
+	fn remove_reserved_peer(&self, who: PeerId) {
 		let addr =
 			iter::once(multiaddr::Protocol::P2p(who.into())).collect::<multiaddr::Multiaddr>();
-		let result = NetworkService::remove_peers_from_reserved_set(
-			self,
-			protocol,
+		let result = self.service.remove_peers_from_reserved_set(
+			CHAINFLIP_P2P_PROTOCOL_NAME,
 			iter::once(addr).collect(),
 		);
 		if let Err(err) = result {
@@ -80,16 +90,16 @@ impl<B: BlockT, H: ExHashT> PeerNetwork for Arc<NetworkService<B, H>> {
 		}
 	}
 
-	fn write_notification(&self, target: PeerId, protocol: Cow<'static, str>, message: ProtocolMessage) {
+	fn write_notification(&self, target: PeerId, message: ProtocolMessage) {
 		let _ = bincode::serialize(&message).map(|bytes| {
-			NetworkService::write_notification(self, target, protocol, bytes);
+			self.service.write_notification(target, CHAINFLIP_P2P_PROTOCOL_NAME, bytes);
 		}).unwrap_or_else(|err| {
 			log::error!("Error while serializing p2p protocol message {}", err);
 		});
 	}
 
 	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
-		Box::pin(NetworkService::event_stream(self, "network-chainflip"))
+		Box::pin(self.service.event_stream("network-chainflip"))
 	}
 }
 
@@ -113,8 +123,6 @@ struct StateMachine<Observer: NetworkObserver, Network: PeerNetwork> {
 	peer_to_validator: HashMap<PeerId, Option<ValidatorId>>,
 	/// ValidatorIds mapped to corresponding PeerIds.
 	validator_to_peer: HashMap<ValidatorId, PeerId>,
-	/// The protocol's name
-	protocol: Cow<'static, str>,
 }
 
 const EXPECTED_PEER_COUNT: usize = 300;
@@ -124,13 +132,12 @@ where
 	Observer: NetworkObserver,
 	Network: PeerNetwork,
 {
-	pub fn new(observer: Arc<Observer>, network: Network, protocol: Cow<'static, str>) -> Self {
+	pub fn new(observer: Arc<Observer>, network: Network) -> Self {
 		StateMachine {
 			observer,
 			network,
 			peer_to_validator: HashMap::with_capacity(EXPECTED_PEER_COUNT),
 			validator_to_peer: HashMap::with_capacity(EXPECTED_PEER_COUNT),
-			protocol,
 		}
 	}
 
@@ -184,8 +191,7 @@ where
 	/// Identify ourselves to the network.
 	pub fn identify(&self, validator_id: ValidatorId) {
 		for peer_id in self.peer_to_validator.keys() {
-			self.network
-				.write_notification(*peer_id, self.protocol.clone(), ProtocolMessage::Identify(validator_id));
+			self.network.write_notification(*peer_id, ProtocolMessage::Identify(validator_id));
 		}
 	}
 
@@ -197,8 +203,7 @@ where
 		}
 
 		if let Some(peer_id) = self.validator_to_peer.get(&validator_id) {
-			self.network
-				.write_notification(*peer_id, self.protocol.clone(), ProtocolMessage::Message(message));
+			self.network.write_notification(*peer_id, ProtocolMessage::Message(message));
 		}
 	}
 
@@ -216,43 +221,40 @@ where
 	pub fn broadcast_all(&self, message: RawMessage) {
 		if !message.0.is_empty() {
 			for peer_id in self.validator_to_peer.values() {
-				self.network
-					.write_notification(*peer_id, self.protocol.clone(), ProtocolMessage::Message(message.clone()));
+				self.network.write_notification(*peer_id, ProtocolMessage::Message(message.clone()));
 			}
 		}
 	}
 }
 
 /// The entry point.  The network bridge provides the trait `Messaging`.
-struct NetworkBridge<Observer: NetworkObserver, Network: PeerNetwork> {
-	state_machine: StateMachine<Observer, Network>,
+pub struct NetworkBridge<Observer: NetworkObserver, B: BlockT, H: ExHashT> {
+	state_machine: StateMachine<Observer, ChainFlipP2pNetwork<B, H>>,
 	network_event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
-	protocol: Cow<'static, str>,
 	worker: UnboundedReceiver<MessagingCommand>,
 }
 
-impl<Observer, Network> NetworkBridge<Observer, Network>
+impl<Observer, B: BlockT, H: ExHashT> NetworkBridge<Observer, B, H>
 where
 	Observer: NetworkObserver,
-	Network: PeerNetwork,
 {
 	pub fn new(
 		observer: Arc<Observer>,
-		network: Network,
+		network: Arc<NetworkService<B, H>>,
 		protocol: Cow<'static, str>,
 	) -> (Self, Arc<Mutex<Sender>>) {
-		let state_machine = StateMachine::new(observer, network.clone(), protocol.clone());
-		let network_event_stream = Box::pin(network.event_stream());
+		let p2p_network = ChainFlipP2pNetwork::new(network);
+		let state_machine = StateMachine::new(observer, p2p_network);
+		let network_event_stream = Box::pin(p2p_network.event_stream());
 		let (sender, worker) = unbounded::<MessagingCommand>();
-		let messenger = Arc::new(Mutex::new(Sender(sender.clone())));
+		let messenger = Arc::new(Mutex::new(Sender(sender)));
 		(
 			NetworkBridge {
 				state_machine,
 				network_event_stream,
-				protocol: protocol.clone(),
 				worker,
 			},
-			messenger.clone(),
+			messenger,
 		)
 	}
 }
@@ -293,19 +295,17 @@ impl P2pMessaging for Sender {
 	}
 }
 
-impl<Observer, Network> Unpin for NetworkBridge<Observer, Network>
+impl<Observer, B: BlockT, H: ExHashT> Unpin for NetworkBridge<Observer, B, H>
 where
 	Observer: NetworkObserver,
-	Network: PeerNetwork,
 {
 }
 
 /// `Future` for `NetworkBridge` - poll our outgoing messages and pass them to the `StateMachine` for sending
 /// After which we poll the network for events and again back to the `StateMachine`
-impl<Observer, Network> Future for NetworkBridge<Observer, Network>
+impl<Observer, B: BlockT, H: ExHashT> Future for NetworkBridge<Observer, B, H>
 where
 	Observer: NetworkObserver,
-	Network: PeerNetwork,
 {
 	type Output = ();
 
@@ -340,12 +340,12 @@ where
 					Event::SyncConnected { remote } => {
 						this.state_machine
 							.network
-							.add_set_reserved(remote, this.protocol.clone());
+							.reserve_peer(remote);
 					}
 					Event::SyncDisconnected { remote } => {
 						this.state_machine
 							.network
-							.remove_set_reserved(remote, this.protocol.clone());
+							.remove_reserved_peer(remote);
 					}
 					Event::NotificationStreamOpened {
 						remote,
@@ -404,6 +404,7 @@ mod tests {
 		FutureExt,
 	};
 	use sc_network::{Event, ObservedRole, PeerId};
+	use std::cell::Cell;
 	use std::sync::{Arc, Mutex};
 
 	#[derive(Clone, Default)]
@@ -422,12 +423,12 @@ mod tests {
 
 		fn remove_set_reserved(&self, _who: PeerId, _protocol: Cow<'static, str>) {}
 
-		fn write_notification(&self, who: PeerId, _protocol: Cow<'static, str>, message: Vec<u8>) {
+		fn write_notification(&self, who: PeerId, _protocol: Cow<'static, str>, message: ProtocolMessage) {
 			self.inner
 				.lock()
 				.unwrap()
 				.notifications
-				.push((who.to_bytes(), message));
+				.push((who.to_bytes(), bincode::serialize(&message).unwrap()));
 		}
 
 		fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
@@ -438,25 +439,24 @@ mod tests {
 		}
 	}
 
-	#[derive(Clone, Default)]
-	struct TestObserver {
-		inner: Arc<Mutex<TestObserverInner>>,
+	#[derive(Default)]
+	struct MockObserver {
+		pub new_peers: Cell<Vec<ValidatorId>>,
+		pub disconnected_peers: Cell<Vec<ValidatorId>>,
+		pub messages_received: Cell<Vec<(ValidatorId, RawMessage)>>,
 	}
 
-	#[derive(Clone, Default)]
-	struct TestObserverInner(Option<Vec<u8>>, Option<Vec<u8>>, Option<(Vec<u8>, Vec<u8>)>);
-
-	impl NetworkObserver for TestObserver {
-		fn new_peer(&self, peer_id: &PeerId) {
-			self.inner.lock().unwrap().0 = Some(peer_id.to_bytes());
+	impl NetworkObserver for MockObserver {
+		fn new_peer(&self, validator_id: &ValidatorId) {
+			self.new_peers.get_mut().push(*validator_id);
 		}
 
-		fn disconnected(&self, peer_id: &PeerId) {
-			self.inner.lock().unwrap().1 = Some(peer_id.to_bytes());
+		fn disconnected(&self, validator_id: &ValidatorId) {
+			self.disconnected_peers.get_mut().push(*validator_id);
 		}
 
-		fn received(&self, peer_id: &PeerId, messages: Message) {
-			self.inner.lock().unwrap().2 = Some((peer_id.to_bytes(), messages));
+		fn received(&self, validator_id: &ValidatorId, message: RawMessage) {
+			self.messages_received.get_mut().push((*validator_id, message));
 		}
 	}
 
@@ -464,7 +464,7 @@ mod tests {
 	fn send_message_to_peer() {
 		let network = TestNetwork::default();
 		let protocol = Cow::Borrowed("/chainflip-protocol");
-		let observer = Arc::new(TestObserver::default());
+		let observer = Arc::new(MockObserver::default());
 		let (mut bridge, communications) =
 			NetworkBridge::new(observer.clone(), network.clone(), protocol.clone());
 
