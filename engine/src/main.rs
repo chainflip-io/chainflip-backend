@@ -64,7 +64,7 @@ async fn main() {
             "Should be valid ws endpoint: {}",
             settings.state_chain.ws_endpoint
         ));
-    let p2p_client = RpcP2PClient::new(substrate_node_endpoint);
+    let p2p_client = RpcP2PClient::new(substrate_node_endpoint, &root_logger);
     let mq_client = *mq_factory
         .create()
         .await
