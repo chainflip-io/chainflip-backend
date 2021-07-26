@@ -3,6 +3,7 @@ use slog::o;
 use substrate_subxt::{Client, EventSubscription};
 
 use crate::{
+    logging::COMPONENT_KEY,
     mq::{IMQClient, Subject, SubjectName},
     settings,
 };
@@ -32,7 +33,7 @@ impl<M: IMQClient> SCObserver<M> {
         Self {
             mq_client,
             subxt_client,
-            logger: logger.new(o!()),
+            logger: logger.new(o!(COMPONENT_KEY => "SCObserver")),
         }
     }
 

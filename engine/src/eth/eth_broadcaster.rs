@@ -2,6 +2,7 @@ use std::{path::Path, str::FromStr};
 
 use crate::{
     eth::eth_tx_encoding::ContractCallDetails,
+    logging::COMPONENT_KEY,
     mq::{pin_message_stream, IMQClient, Subject},
     settings,
     types::chain::Chain,
@@ -82,7 +83,7 @@ impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
             mq_client,
             web3_client,
             secret_key,
-            logger: logger.new(o!()),
+            logger: logger.new(o!(COMPONENT_KEY => "ETHBroadcaster")),
         })
     }
 
