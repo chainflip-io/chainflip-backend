@@ -1,9 +1,11 @@
+use slog::o;
 use substrate_subxt::{system::AccountStoreExt, Client, PairSigner, Signer};
 use tokio_stream::StreamExt;
 
 use super::{helpers::create_subxt_client, runtime::StateChainRuntime};
 use crate::{
     eth::stake_manager::stake_manager::StakeManagerEvent,
+    logging::COMPONENT_KEY,
     mq::{pin_message_stream, IMQClient, IMQClientFactory, Subject},
     settings::Settings,
 };
@@ -16,6 +18,7 @@ pub async fn start<IMQ, IMQF>(
     settings: &Settings,
     signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
     mq_factory: IMQF,
+    logger: &slog::Logger,
 ) where
     IMQ: IMQClient + Sync + Send,
     IMQF: IMQClientFactory<IMQ>,
@@ -25,7 +28,7 @@ pub async fn start<IMQ, IMQF>(
         .await
         .expect("Should create message queue client");
 
-    let mut sc_broadcaster = SCBroadcaster::new(&settings, signer, mq_client).await;
+    let mut sc_broadcaster = SCBroadcaster::new(&settings, signer, mq_client, logger).await;
 
     sc_broadcaster
         .run()
@@ -40,6 +43,7 @@ where
     mq_client: MQ,
     sc_client: Client<StateChainRuntime>,
     signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
+    logger: slog::Logger,
 }
 
 impl<MQ> SCBroadcaster<MQ>
@@ -50,6 +54,7 @@ where
         settings: &Settings,
         mut signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
         mq_client: MQ,
+        logger: &slog::Logger,
     ) -> Self {
         let sc_client = create_subxt_client(&settings.state_chain)
             .await
@@ -61,13 +66,15 @@ where
             .await
             .expect("Should be able to fetch account info")
             .nonce;
-        log::info!("Initial state chain nonce is: {}", nonce);
+        let logger = logger.new(o!(COMPONENT_KEY => "SCBroadcaster"));
+        slog::info!(logger, "Initial state chain nonce is: {}", nonce);
         signer.set_nonce(nonce);
 
         SCBroadcaster {
             mq_client,
             sc_client,
             signer,
+            logger,
         }
     }
 
@@ -83,14 +90,18 @@ where
             match event {
                 Ok(event) => self.submit_event(event).await?,
                 Err(e) => {
-                    log::error!("Could not read event from StakeManager event stream: {}", e);
+                    slog::error!(
+                        self.logger,
+                        "Could not read event from StakeManager event stream: {}",
+                        e
+                    );
                     return Err(e);
                 }
             }
         }
 
         let err_msg = "State Chain Broadcaster has stopped running!";
-        log::error!("{}", err_msg);
+        slog::error!(self.logger, "{}", err_msg);
         Err(anyhow::Error::msg(err_msg))
     }
 
@@ -102,7 +113,8 @@ where
                 amount,
                 tx_hash,
             } => {
-                log::trace!(
+                slog::trace!(
+                    self.logger,
                     "Sending witness_staked({:?}, {}, {:?}) to state chain",
                     account_id,
                     amount,
@@ -118,7 +130,8 @@ where
                 amount,
                 tx_hash,
             } => {
-                log::trace!(
+                slog::trace!(
+                    self.logger,
                     "Sending claim_executed({:?}, {}, {:?}) to the state chain",
                     account_id,
                     amount,
@@ -132,7 +145,11 @@ where
             StakeManagerEvent::MinStakeChanged { .. }
             | StakeManagerEvent::EmissionChanged { .. }
             | StakeManagerEvent::ClaimRegistered { .. } => {
-                log::warn!("{} is not to be submitted to the State Chain", event);
+                slog::warn!(
+                    self.logger,
+                    "{} is not to be submitted to the State Chain",
+                    event
+                );
             }
         };
         Ok(())
@@ -147,6 +164,7 @@ mod tests {
     use super::*;
 
     use crate::{
+        logging,
         mq::{nats_client::NatsMQClientFactory, IMQClientFactory},
         settings::{self},
     };
@@ -171,9 +189,11 @@ mod tests {
             .await
             .expect("Could not create MQ client");
 
+        let logger = logging::test_utils::create_test_logger();
+
         let alice = AccountKeyring::Alice.pair();
         let pair_signer = PairSigner::new(alice);
-        SCBroadcaster::new(&settings, pair_signer, *mq_client).await;
+        SCBroadcaster::new(&settings, pair_signer, *mq_client, &logger).await;
     }
 
     // TODO: Use the SC broadcaster struct instead
@@ -219,7 +239,9 @@ mod tests {
 
         let alice = AccountKeyring::Alice.pair();
         let pair_signer = PairSigner::new(alice);
-        let mut sc_broadcaster = SCBroadcaster::new(&settings, pair_signer, *mq_client).await;
+        let logger = logging::test_utils::create_test_logger();
+        let mut sc_broadcaster =
+            SCBroadcaster::new(&settings, pair_signer, *mq_client, &logger).await;
 
         let staked_node_id =
             AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU").unwrap();

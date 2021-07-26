@@ -145,6 +145,7 @@ mod tests {
 
     use crate::{
         eth::stake_manager::{stake_manager::StakeManager, stake_manager_sink::StakeManagerSink},
+        logging,
         mq::{
             nats_client::{NatsMQClient, NatsMQClientFactory},
             IMQClientFactory,
@@ -166,10 +167,11 @@ mod tests {
             .message_queue;
 
         let factory = NatsMQClientFactory::new(&mq_settings);
+        let logger = logging::test_utils::create_test_logger();
 
         let mq_client = *factory.create().await.unwrap();
         // create the sink, which pushes events to the MQ
-        let sm_sink = StakeManagerSink::<NatsMQClient>::new(mq_client)
+        let sm_sink = StakeManagerSink::<NatsMQClient>::new(mq_client, &logger)
             .await
             .unwrap();
         let sm_event_stream = EthEventStreamBuilder::new("ws://localhost:8545", stake_manager);

@@ -52,7 +52,8 @@ async fn main() {
     )
     .await;
     let sc_o_fut = sc_o.run();
-    let sc_b_fut = state_chain::sc_broadcaster::start(&settings, signer, mq_factory.clone());
+    let sc_b_fut =
+        state_chain::sc_broadcaster::start(&settings, signer, mq_factory.clone(), &root_logger);
 
     let eth_fut = eth::start(&settings, &root_logger);
 
