@@ -56,10 +56,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			staker_account_id: AccountId<T>,
 			amount: FlipBalance<T>,
+			withdrawal_address: Option<EthereumAddress>,
 			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = StakingCall::staked(staker_account_id, amount, tx_hash);
+			let call = StakingCall::staked(staker_account_id, amount, withdrawal_address, tx_hash);
 			T::Witnesser::witness(who, call.into())
 		}
 
