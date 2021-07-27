@@ -97,7 +97,7 @@ impl SigningState {
             stage: SigningStage::AwaitingBroadcast1,
             signer_idxs,
             signer_ids: si.signers,
-            sss: SharedSecretState::new(idx, params),
+            sss: SharedSecretState::new(idx, params, logger),
             shared_secret: None,
             local_sigs_order: vec![],
             local_sigs: vec![],
