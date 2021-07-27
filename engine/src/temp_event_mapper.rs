@@ -1,6 +1,8 @@
 use futures::StreamExt;
+use slog::o;
 
 use crate::{
+    logging::COMPONENT_KEY,
     mq::{
         nats_client::NatsMQClientFactory, pin_message_stream, IMQClient, IMQClientFactory, Subject,
     },
@@ -11,11 +13,19 @@ use crate::{
 };
 
 /// Temporary event mapper for the internal testnet
-pub struct TempEventMapper {}
+pub struct TempEventMapper {
+    logger: slog::Logger,
+}
 
 impl TempEventMapper {
-    pub async fn run(settings: &Settings) {
-        log::info!("Starting temp event mapper");
+    pub fn new(logger: &slog::Logger) -> Self {
+        Self {
+            logger: logger.new(o!(COMPONENT_KEY => "TempEventMapper")),
+        }
+    }
+
+    pub async fn run(&self, settings: &Settings) {
+        slog::info!(self.logger, "Starting");
         let nats_client_factory = NatsMQClientFactory::new(&settings.message_queue);
         let mq_client = *nats_client_factory.create().await.unwrap();
 
@@ -31,7 +41,8 @@ impl TempEventMapper {
         auction_completed_event
             .for_each_concurrent(None, |evt| async {
                 let event = evt.expect("Should be an event here");
-                log::debug!(
+                slog::debug!(
+                    self.logger,
                     "Temp event mapper received AuctionCompleted event: {:?}",
                     event
                 );
@@ -41,7 +52,8 @@ impl TempEventMapper {
                     .map(|v| p2p::ValidatorId(v.clone().into()))
                     .collect();
 
-                log::debug!(
+                slog::debug!(
+                    self.logger,
                     "Validators in that were in the auction are: {:?}",
                     validators
                 );
@@ -54,6 +66,9 @@ impl TempEventMapper {
                     .expect("Should push new key gen event to multisig instruction queue");
             })
             .await;
-        log::error!("Temp mapper has stopped. Whatever shall we do!");
+        slog::error!(
+            self.logger,
+            "Temp mapper has stopped. Whatever shall we do!"
+        );
     }
 }

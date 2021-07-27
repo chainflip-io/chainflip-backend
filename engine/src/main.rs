@@ -79,7 +79,8 @@ async fn main() {
     let signing_client =
         signing::MultisigClient::new(db, mq_factory, my_validator_id, &root_logger);
 
-    let temp_event_map_fut = TempEventMapper::run(&settings);
+    let temp_event_mapper = TempEventMapper::new(&root_logger);
+    let temp_event_map_fut = temp_event_mapper.run(&settings);
 
     let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
 
