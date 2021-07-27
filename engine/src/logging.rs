@@ -3,6 +3,7 @@ pub const COMPONENT_KEY: &str = "component";
 
 #[cfg(test)]
 pub mod test_utils {
+
     use slog::{o, Drain};
 
     pub fn create_test_logger() -> slog::Logger {

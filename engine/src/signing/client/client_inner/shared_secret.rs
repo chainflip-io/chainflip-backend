@@ -1,13 +1,10 @@
 use slog::o;
 
-use crate::{
-    logging::COMPONENT_KEY,
-    signing::{
-        client::client_inner::utils,
-        crypto::{
-            BigInt, InvalidKey, InvalidSS, KeyGenBroadcastMessage1, Keys, Parameters, VerifiableSS,
-            FE, GE,
-        },
+use crate::signing::{
+    client::client_inner::utils,
+    crypto::{
+        BigInt, InvalidKey, InvalidSS, KeyGenBroadcastMessage1, Keys, Parameters, VerifiableSS, FE,
+        GE,
     },
 };
 
@@ -66,7 +63,7 @@ impl SharedSecretState {
             phase2_order: vec![],
             params,
             signer_idx: idx,
-            logger: logger.new(o!(COMPONENT_KEY => "SharedSecretState")),
+            logger: logger.new(o!()),
         }
     }
 

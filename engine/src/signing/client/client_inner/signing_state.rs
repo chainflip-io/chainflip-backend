@@ -10,7 +10,6 @@ use super::{
 };
 
 use crate::{
-    logging::COMPONENT_KEY,
     p2p::{P2PMessageCommand, ValidatorId},
     signing::{
         client::{
@@ -105,7 +104,7 @@ impl SigningState {
             delayed_data: vec![],
             cur_phase_timestamp: now,
             last_progress_timestamp: now,
-            logger: logger.new(o!(COMPONENT_KEY => "SigningState")),
+            logger: logger.new(o!()),
         };
 
         state.on_request_to_sign_inner();
@@ -268,6 +267,7 @@ impl SigningState {
                 let blamed_ids = self.signer_idxs_to_validator_ids(blamed_idxs);
                 self.update_stage(SigningStage::Abandoned);
 
+                // TODO: This should log the base58 ids and the message hash in hex
                 slog::error!(self.logger, 
                     "Local Sigs verify error for message: {:?}, blamed validators: {:?}",
                     self.message_info, &blamed_ids
@@ -304,7 +304,7 @@ impl SigningState {
             (SigningStage::AwaitingLocalSig3, SigningStage::Abandoned) => {}
             (SigningStage::AwaitingLocalSig3, SigningStage::Finished) => {}
             _ => {
-                slog::error!(self.logger, "Invalid transition from {:?} to {:?}", self.stage, stage);
+                slog::error!(self.logger, "Invalid transition from '{:?}' to '{:?}'", self.stage, stage);
                 panic!();
             }
         }
@@ -313,7 +313,7 @@ impl SigningState {
         let elapsed = self.cur_phase_timestamp.elapsed();
         self.cur_phase_timestamp = Instant::now();
         slog::debug!(self.logger, 
-            "Entering phase {:?}. Previous phase took: {:?}",
+            "Entering phase '{:?}'. Previous phase took: {:?}",
             stage, elapsed
         );
     }
@@ -357,7 +357,7 @@ impl SigningState {
             return;
         }
 
-        slog::trace!(self.logger, "[{}] received {} from [{}]", self.us(), &msg, sender_id);
+        slog::trace!(self.logger, "[{}] received '{}' from [{}]", self.us(), &msg, sender_id);
 
         match (self.stage, msg) {
             (SigningStage::AwaitingBroadcast1, SigningData::Broadcast1(bc1)) => {

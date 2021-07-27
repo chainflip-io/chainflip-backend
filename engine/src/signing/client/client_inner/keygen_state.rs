@@ -83,7 +83,7 @@ impl KeygenState {
             params,
             maps_for_validator_id_and_idx: Arc::new(idx_map),
             last_message_timestamp: Instant::now(),
-            logger: logger.new(o!(COMPONENT_KEY => "KeygenState")),
+            logger: logger.new(o!()),
         };
 
         state.initiate_keygen_inner();
@@ -253,6 +253,7 @@ impl KeygenState {
                     self.logger,
                     "phase2 keygen error for key: {:?}, blamed validators: {:?}",
                     self.key_id,
+                    // TODO: this should log the base58 ids
                     &blamed_ids
                 );
 
