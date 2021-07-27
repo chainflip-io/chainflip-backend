@@ -1,4 +1,4 @@
-// Implements support for the witnesser api module
+//! Implements support for the witnesser api module
 use super::{auction::Auction, staking::Staking};
 use codec::Encode;
 use substrate_subxt::{module, system::System, Call};
