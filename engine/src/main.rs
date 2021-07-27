@@ -76,7 +76,8 @@ async fn main() {
     // TODO: Investigate whether we want to encrypt it on disk
     let db = PersistentKeyDB::new("data.db");
 
-    let signing_client = signing::MultisigClient::new(db, mq_factory, my_validator_id);
+    let signing_client =
+        signing::MultisigClient::new(db, mq_factory, my_validator_id, &root_logger);
 
     let temp_event_map_fut = TempEventMapper::run(&settings);
 

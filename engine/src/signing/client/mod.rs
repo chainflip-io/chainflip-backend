@@ -3,13 +3,14 @@ mod client_inner;
 use std::{marker::PhantomData, time::Duration};
 
 use crate::{
+    logging::COMPONENT_KEY,
     mq::{pin_message_stream, IMQClient, IMQClientFactory, Subject},
     p2p::ValidatorId,
     signing::db::KeyDB,
 };
 use anyhow::Result;
 use futures::StreamExt;
-use log::*;
+use slog::o;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::p2p::P2PMessage;
@@ -80,6 +81,7 @@ where
     inner: MultisigClientInner<S>,
     my_validator_id: ValidatorId,
     _mq: PhantomData<MQ>,
+    logger: slog::Logger,
 }
 
 // How long we keep individual signing phases around
@@ -92,7 +94,7 @@ where
     F: IMQClientFactory<MQ>,
     S: KeyDB,
 {
-    pub fn new(db: S, factory: F, my_validator_id: ValidatorId) -> Self {
+    pub fn new(db: S, factory: F, my_validator_id: ValidatorId, logger: &slog::Logger) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
 
         MultisigClient {
@@ -101,6 +103,7 @@ where
             inner_event_receiver: Some(rx),
             my_validator_id,
             _mq: PhantomData,
+            logger: logger.new(o!(COMPONENT_KEY => "MultisigClient")),
         }
     }
 
@@ -108,6 +111,7 @@ where
         mut receiver: mpsc::UnboundedReceiver<InnerEvent>,
         mq: MQ,
         mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
+        logger: slog::Logger,
     ) {
         loop {
             tokio::select! {
@@ -116,7 +120,7 @@ where
                         InnerEvent::P2PMessageCommand(msg) => {
                             // TODO: do not send one by one
                             if let Err(err) = mq.publish(Subject::P2POutgoing, &msg).await {
-                                error!("Could not publish message to MQ: {}", err);
+                                slog::error!(logger, "Could not publish message to MQ: {}", err);
                             }
                         }
                         InnerEvent::SigningResult(res) => {
@@ -134,14 +138,17 @@ where
                         }
                     }
                 }
-                Ok(()) = &mut shutdown_rx =>{log::info!("Shuting down Multisig Client InnerEvent loop");break;}
+                Ok(()) = &mut shutdown_rx =>{
+                    slog::info!(logger, "Shuting down Multisig Client InnerEvent loop");
+                    break;
+                }
             }
         }
     }
 
     /// Start listening on the p2p connection and MQ
     pub async fn run(mut self, mut shutdown_rx: tokio::sync::oneshot::Receiver<()>) {
-        log::info!("Starting signing module");
+        slog::info!(self.logger, "Starting");
         let receiver = self.inner_event_receiver.take().unwrap();
 
         let mq = *self.factory.create().await.unwrap();
@@ -154,9 +161,14 @@ where
         let (shutdown_events_fut_tx, shutdown_events_fut_rx) =
             tokio::sync::oneshot::channel::<()>();
 
-        let events_fut =
-            MultisigClient::<_, F, S>::process_inner_events(receiver, mq, shutdown_events_fut_rx);
+        let events_fut = MultisigClient::<_, F, S>::process_inner_events(
+            receiver,
+            mq,
+            shutdown_events_fut_rx,
+            self.logger.clone(),
+        );
 
+        let logger_c = self.logger.clone();
         let cleanup_fut = async move {
             loop {
                 tokio::select! {
@@ -164,7 +176,7 @@ where
                         cleanup_tx.send(()).expect("Could not send periotic cleanup command");
                     }
                     Ok(()) = &mut shutdown_rx =>{
-                        log::info!("Shuting down Multisig Client");
+                        slog::info!(logger_c, "Shutting down");
                         // send a signal to the other futures to shutdown
                         shutdown_other_fut_tx.send(()).expect("Could not send shutdown command");
                         shutdown_events_fut_tx.send(()).expect("Could not send shutdown command");
@@ -176,8 +188,13 @@ where
 
         let cleanup_stream = UnboundedReceiverStream::new(cleanup_rx);
 
-        let mq = *self.factory.create().await.unwrap();
+        let mq = *self
+            .factory
+            .create()
+            .await
+            .expect("Should create message queue client");
 
+        let logger_c = self.logger.clone();
         let other_fut = async move {
             let stream1 = mq
                 .subscribe::<P2PMessage>(Subject::P2PIncoming)
@@ -217,7 +234,7 @@ where
             let stream_inner = futures::stream::select(s2, s3);
             let mut stream_outer = futures::stream::select(s1, stream_inner);
 
-            trace!("[{:?}] subscribed to MQ", self.my_validator_id);
+            slog::trace!(self.logger, "[{:?}] subscribed to MQ", self.my_validator_id);
 
             loop {
                 tokio::select! {
@@ -227,22 +244,22 @@ where
                                 self.inner.process_p2p_mq_message(p2p_message);
                             }
                             Events::P2P(Err(err)) => {
-                                warn!("Ignoring channel error: {}", err);
+                                slog::warn!(self.logger, "Ignoring channel error: {}", err);
                             }
                             Events::Other(OtherEvents::Instruction(Ok(instruction))) => {
                                 self.inner.process_multisig_instruction(instruction);
                             }
                             Events::Other(OtherEvents::Instruction(Err(err))) => {
-                                warn!("Ignoring channel error: {}", err);
+                                slog::warn!(self.logger, "Ignoring channel error: {}", err);
                             }
                             Events::Other(OtherEvents::Cleanup(())) => {
-                                info!("Cleaning up multisig states");
+                                slog::info!(self.logger, "Cleaning up multisig states");
                                 self.inner.cleanup();
                             }
                         }
                     }
                     Ok(()) = &mut shutdown_other_fut_rx =>{
-                        log::info!("Shuting down Multisig Client OtherEvents loop");
+                        slog::info!(self.logger, "Shutting down Multisig Client OtherEvents loop");
                         break;
                     }
                 }
@@ -250,6 +267,6 @@ where
         };
 
         futures::join!(events_fut, other_fut, cleanup_fut);
-        log::error!("Signing module has stopped");
+        slog::error!(logger_c, "MultisigClient stopped!");
     }
 }
