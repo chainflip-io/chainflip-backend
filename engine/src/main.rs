@@ -76,14 +76,13 @@ async fn main() {
     // TODO: Investigate whether we want to encrypt it on disk
     let db = PersistentKeyDB::new("data.db", &root_logger);
 
-    let signing_client =
-        signing::MultisigClient::new(db, mq_factory, my_validator_id, &root_logger);
-
     let temp_event_mapper = TempEventMapper::new(&root_logger);
     let temp_event_map_fut = temp_event_mapper.run(&settings);
 
     let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
 
+    let signing_client =
+        signing::MultisigClient::new(db, mq_factory, my_validator_id, &root_logger);
     let signing_client_fut = signing_client.run(shutdown_client_rx);
 
     futures::join!(

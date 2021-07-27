@@ -1,6 +1,7 @@
 use std::{collections::HashMap, fmt::Display, time::Duration};
 
 use crate::{
+    logging::COMPONENT_KEY,
     p2p::{P2PMessage, P2PMessageCommand, ValidatorId},
     signing::{
         client::{KeyId, MultisigInstruction, SigningInfo},
@@ -14,6 +15,7 @@ use crate::{
 };
 
 use log::*;
+use slog::o;
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::{
@@ -308,6 +310,7 @@ where
     tx: UnboundedSender<InnerEvent>,
     /// Requests awaiting a key
     pending_requests_to_sign: HashMap<KeyId, Vec<(MessageHash, SigningInfo)>>,
+    logger: slog::Logger,
 }
 
 impl<S> MultisigClientInner<S>
@@ -319,14 +322,21 @@ where
         db: S,
         tx: UnboundedSender<InnerEvent>,
         phase_timeout: Duration,
+        logger: &slog::Logger,
     ) -> Self {
         MultisigClientInner {
             my_validator_id: my_validator_id.clone(),
             key_store: KeyStore::new(db),
             keygen: KeygenManager::new(my_validator_id.clone(), tx.clone(), phase_timeout.clone()),
-            signing_manager: SigningStateManager::new(my_validator_id, tx.clone(), phase_timeout),
+            signing_manager: SigningStateManager::new(
+                my_validator_id,
+                tx.clone(),
+                phase_timeout,
+                logger,
+            ),
             pending_requests_to_sign: Default::default(),
             tx,
+            logger: logger.new(o!(COMPONENT_KEY => "MultisigClientInner")),
         }
     }
 
@@ -364,7 +374,11 @@ where
     }
 
     fn add_pending(&mut self, data: MessageHash, sign_info: SigningInfo) {
-        debug!("[{}] delaying a request to sign", self.my_validator_id);
+        slog::debug!(
+            self.logger,
+            "[{}] delaying a request to sign",
+            self.my_validator_id
+        );
 
         // TODO: check for duplicates?
 
@@ -382,12 +396,20 @@ where
             MultisigInstruction::KeyGen(keygen_info) => {
                 // For now disable generating a new key when we already have one
 
-                debug!("[{}] Received keygen instruction", self.my_validator_id);
+                slog::debug!(
+                    self.logger,
+                    "[{}] Received keygen instruction",
+                    self.my_validator_id
+                );
 
                 self.keygen.on_keygen_request(keygen_info);
             }
             MultisigInstruction::Sign(hash, sign_info) => {
-                debug!("[{}] Received sign instruction", self.my_validator_id);
+                slog::debug!(
+                    self.logger,
+                    "[{}] Received sign instruction",
+                    self.my_validator_id
+                );
                 let key_id = sign_info.id;
 
                 let key = self.key_store.get_key(key_id);
@@ -409,7 +431,11 @@ where
     /// Process requests to sign that required `key_id`
     fn process_pending(&mut self, key_id: KeyId, key_info: KeygenResultInfo) {
         if let Some(reqs) = self.pending_requests_to_sign.remove(&key_id) {
-            debug!("Processing pending requests to sign, count: {}", reqs.len());
+            slog::debug!(
+                self.logger,
+                "Processing pending requests to sign, count: {}",
+                reqs.len()
+            );
             for (data, info) in reqs {
                 self.signing_manager
                     .on_request_to_sign(data, key_info.clone(), info)
@@ -434,7 +460,11 @@ where
                 keygen_success,
             )))
         {
-            error!("Could not sent KeygenOutcome::Success: {}", err);
+            slog::error!(
+                self.logger,
+                "Could not sent KeygenOutcome::Success: {}",
+                err
+            );
         }
     }
 
@@ -465,7 +495,7 @@ where
                 self.signing_manager.process_signing_data(sender_id, msg);
             }
             Err(_) => {
-                warn!("Cannot parse multisig message, discarding");
+                slog::warn!(self.logger, "Cannot parse multisig message, discarding");
             }
         }
     }
