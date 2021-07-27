@@ -46,3 +46,4 @@ macro_rules! impl_mock_witnesser_for_account_and_call_types {
 			}
 		}
 	};
+}
