@@ -1,7 +1,7 @@
 use anyhow::Result;
 use core::iter;
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
-use futures::{Future, Stream, StreamExt};
+use futures::{Future, Stream, StreamExt, select, stream};
 use log::debug;
 use sc_network::{multiaddr, Event, ExHashT, NetworkService, PeerId};
 use serde::{Serialize, Deserialize};
@@ -45,34 +45,23 @@ pub fn p2p_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
 	}
 }
 
-trait PeerNetwork: Clone {
+pub trait PeerNetwork {
 	/// Adds the peer to the set of peers to be connected to with this protocol.
 	fn reserve_peer(&self, who: PeerId);
 	/// Removes the peer from the set of peers to be connected to with this protocol.
 	fn remove_reserved_peer(&self, who: PeerId);
 	/// Write notification to network to peer id, over protocol
-	fn write_notification(&self, who: PeerId, message: ProtocolMessage);
+	fn write_notification(&self, who: PeerId, message: Vec<u8>);
 	/// Network event stream
 	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>>;
 }
 
-#[derive(Clone)]
-struct ChainFlipP2pNetwork<B: BlockT, H: ExHashT> {
-	service: Arc<NetworkService<B, H>>,
-}
-
-impl<B: BlockT, H: ExHashT> ChainFlipP2pNetwork<B, H> {
-	pub fn new(service: Arc<NetworkService<B, H>>) -> Self {
-		Self { service }
-	}
-}
-
-impl<B: BlockT, H: ExHashT> PeerNetwork for ChainFlipP2pNetwork<B, H> {
+impl<B: BlockT, H: ExHashT> PeerNetwork for NetworkService<B, H> {
 	fn reserve_peer(&self, who: PeerId) {
 		let addr =
 			iter::once(multiaddr::Protocol::P2p(who.into())).collect::<multiaddr::Multiaddr>();
 		let result =
-			self.service.add_peers_to_reserved_set(CHAINFLIP_P2P_PROTOCOL_NAME, iter::once(addr).collect());
+			self.add_peers_to_reserved_set(CHAINFLIP_P2P_PROTOCOL_NAME, iter::once(addr).collect());
 		if let Err(err) = result {
 			log::error!(target: "p2p", "add_set_reserved failed: {}", err);
 		}
@@ -81,7 +70,7 @@ impl<B: BlockT, H: ExHashT> PeerNetwork for ChainFlipP2pNetwork<B, H> {
 	fn remove_reserved_peer(&self, who: PeerId) {
 		let addr =
 			iter::once(multiaddr::Protocol::P2p(who.into())).collect::<multiaddr::Multiaddr>();
-		let result = self.service.remove_peers_from_reserved_set(
+		let result = self.remove_peers_from_reserved_set(
 			CHAINFLIP_P2P_PROTOCOL_NAME,
 			iter::once(addr).collect(),
 		);
@@ -90,16 +79,12 @@ impl<B: BlockT, H: ExHashT> PeerNetwork for ChainFlipP2pNetwork<B, H> {
 		}
 	}
 
-	fn write_notification(&self, target: PeerId, message: ProtocolMessage) {
-		let _ = bincode::serialize(&message).map(|bytes| {
-			self.service.write_notification(target, CHAINFLIP_P2P_PROTOCOL_NAME, bytes);
-		}).unwrap_or_else(|err| {
-			log::error!("Error while serializing p2p protocol message {}", err);
-		});
+	fn write_notification(&self, target: PeerId, message: Vec<u8>) {
+		self.write_notification(target, CHAINFLIP_P2P_PROTOCOL_NAME, message);
 	}
 
 	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
-		Box::pin(self.service.event_stream("network-chainflip"))
+		Box::pin(self.event_stream("network-chainflip"))
 	}
 }
 
@@ -118,11 +103,13 @@ struct StateMachine<Observer: NetworkObserver, Network: PeerNetwork> {
 	/// A reference to an NetworkObserver
 	observer: Arc<Observer>,
 	/// The peer to peer network
-	network: Network,
+	network: Arc<Network>,
 	/// PeerIds with the corresponding ValidatorId, if available.
 	peer_to_validator: HashMap<PeerId, Option<ValidatorId>>,
 	/// ValidatorIds mapped to corresponding PeerIds.
 	validator_to_peer: HashMap<ValidatorId, PeerId>,
+	/// Our own ValidatorId
+	local_validator_id: Option<ValidatorId>,
 }
 
 const EXPECTED_PEER_COUNT: usize = 300;
@@ -132,18 +119,22 @@ where
 	Observer: NetworkObserver,
 	Network: PeerNetwork,
 {
-	pub fn new(observer: Arc<Observer>, network: Network) -> Self {
+	pub fn new(observer: Arc<Observer>, network: Arc<Network>) -> Self {
 		StateMachine {
 			observer,
 			network,
 			peer_to_validator: HashMap::with_capacity(EXPECTED_PEER_COUNT),
 			validator_to_peer: HashMap::with_capacity(EXPECTED_PEER_COUNT),
+			local_validator_id: None,
 		}
 	}
 
-	/// A new peer has arrived, insert into our internal list and await identification.
+	/// A new peer has arrived, insert into our internal list and identify ourselves if we can.
 	pub fn register_peer(&mut self, peer_id: &PeerId) {
 		self.peer_to_validator.insert(peer_id.clone(), None);
+		if let Some(validator_id) = self.local_validator_id {
+			self.identify(*peer_id, validator_id);
+		}
 	}
 
 	/// A peer has identified itself. Register the validator Id and notify the observer.
@@ -169,7 +160,7 @@ where
 		}
 	}
 
-	/// Messages received from peer_id, notify observer.
+	/// Messages received from peer_id, notify observer as long as the corresponding validator_id is known.
 	pub fn received(&mut self, peer_id: &PeerId, messages: Vec<ProtocolMessage>) {
 		if !self.peer_to_validator.contains_key(peer_id) {
 			log::error!("Received message from unrecognised peer {:?}", peer_id);
@@ -189,10 +180,15 @@ where
 	}
 
 	/// Identify ourselves to the network.
-	pub fn identify(&self, validator_id: ValidatorId) {
+	pub fn broadcast_identification(&self, validator_id: ValidatorId) {
 		for peer_id in self.peer_to_validator.keys() {
-			self.network.write_notification(*peer_id, ProtocolMessage::Identify(validator_id));
+			self.identify(*peer_id, validator_id);
 		}
+	}
+
+	/// Identify ourselves to a peer on the network.
+	pub fn identify(&self, peer_id: PeerId, validator_id: ValidatorId) {
+		self.encode_and_send(peer_id, ProtocolMessage::Identify(validator_id));
 	}
 
 	/// Send message to peer, this will fail silently if peer isn't in our peer list or if the message
@@ -203,7 +199,7 @@ where
 		}
 
 		if let Some(peer_id) = self.validator_to_peer.get(&validator_id) {
-			self.network.write_notification(*peer_id, ProtocolMessage::Message(message));
+			self.encode_and_send(*peer_id, ProtocolMessage::Message(message));
 		}
 	}
 
@@ -221,30 +217,48 @@ where
 	pub fn broadcast_all(&self, message: RawMessage) {
 		if !message.0.is_empty() {
 			for peer_id in self.validator_to_peer.values() {
-				self.network.write_notification(*peer_id, ProtocolMessage::Message(message.clone()));
+				self.encode_and_send(*peer_id, ProtocolMessage::Message(message.clone()));
 			}
 		}
+	}
+
+	/// Encodes the message using bincode and sends it over the network.
+	fn encode_and_send(&self, peer_id: PeerId, message: ProtocolMessage) {
+		bincode::serialize(&message)
+			.map(|bytes| {
+				self.network.write_notification(peer_id, bytes);
+			})
+			.unwrap_or_else(|err| {
+				log::error!("Error while serializing p2p protocol message {}", err);
+			})
+	}
+
+	pub fn try_decode(&self, bytes: &[u8]) -> Result<ProtocolMessage> {
+		Ok(bincode::deserialize(bytes)?)
 	}
 }
 
 /// The entry point.  The network bridge provides the trait `Messaging`.
-pub struct NetworkBridge<Observer: NetworkObserver, B: BlockT, H: ExHashT> {
-	state_machine: StateMachine<Observer, ChainFlipP2pNetwork<B, H>>,
+pub struct NetworkBridge<Observer: NetworkObserver, Network: PeerNetwork> {
+	state_machine: StateMachine<Observer, Network>,
 	network_event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
 	worker: UnboundedReceiver<MessagingCommand>,
 }
 
-impl<Observer, B: BlockT, H: ExHashT> NetworkBridge<Observer, B, H>
-where
-	Observer: NetworkObserver,
+pub fn substrate_network_bridge<Observer: NetworkObserver, B: BlockT, H: ExHashT>(
+	observer: Arc<Observer>,
+	network: Arc<NetworkService<B, H>>,
+) -> (NetworkBridge<Observer, NetworkService<B, H>>, Arc<Mutex<Sender>>){
+	NetworkBridge::new(observer, network)
+}
+
+impl<Observer: NetworkObserver, Network: PeerNetwork> NetworkBridge<Observer, Network>
 {
-	pub fn new(
+	pub(crate) fn new(
 		observer: Arc<Observer>,
-		network: Arc<NetworkService<B, H>>,
-		protocol: Cow<'static, str>,
+		p2p_network: Arc<Network>,
 	) -> (Self, Arc<Mutex<Sender>>) {
-		let p2p_network = ChainFlipP2pNetwork::new(network);
-		let state_machine = StateMachine::new(observer, p2p_network);
+		let state_machine = StateMachine::new(observer, p2p_network.clone());
 		let network_event_stream = Box::pin(p2p_network.event_stream());
 		let (sender, worker) = unbounded::<MessagingCommand>();
 		let messenger = Arc::new(Mutex::new(Sender(sender)));
@@ -278,6 +292,7 @@ pub trait P2pMessaging {
 
 /// Push messages down our channel to be passed on to the network
 pub struct Sender(UnboundedSender<MessagingCommand>);
+
 impl P2pMessaging for Sender {
 	fn identify(&mut self, validator_id: ValidatorId) -> Result<()> {
 		self.0.unbounded_send(MessagingCommand::Identify(validator_id))?;
@@ -295,17 +310,19 @@ impl P2pMessaging for Sender {
 	}
 }
 
-impl<Observer, B: BlockT, H: ExHashT> Unpin for NetworkBridge<Observer, B, H>
+impl<O, N> Unpin for NetworkBridge<O, N>
 where
-	Observer: NetworkObserver,
+	O: NetworkObserver,
+	N: PeerNetwork,
 {
 }
 
 /// `Future` for `NetworkBridge` - poll our outgoing messages and pass them to the `StateMachine` for sending
 /// After which we poll the network for events and again back to the `StateMachine`
-impl<Observer, B: BlockT, H: ExHashT> Future for NetworkBridge<Observer, B, H>
+impl<Observer, Network> Future for NetworkBridge<Observer, Network>
 where
 	Observer: NetworkObserver,
+	Network: PeerNetwork,
 {
 	type Output = ();
 
@@ -325,7 +342,7 @@ where
 							this.state_machine.broadcast_all(msg);
 						},
         				MessagingCommand::Identify(validator_id) => {
-							this.state_machine.identify(validator_id);
+							this.state_machine.broadcast_identification(validator_id);
 						},
 					}
 				}
@@ -352,13 +369,13 @@ where
 						protocol,
 						role: _,
 					} => {
-						if protocol != this.protocol {
+						if protocol != CHAINFLIP_P2P_PROTOCOL_NAME {
 							continue;
 						}
 						this.state_machine.register_peer(&remote);
 					}
 					Event::NotificationStreamClosed { remote, protocol } => {
-						if protocol != this.protocol {
+						if protocol != CHAINFLIP_P2P_PROTOCOL_NAME {
 							continue;
 						}
 						this.state_machine.disconnected(&remote);
@@ -368,11 +385,13 @@ where
 							let messages: Vec<ProtocolMessage> = messages
 								.into_iter()
 								.filter_map(|(engine, data)| {
-									if engine == this.protocol {
-										bincode::deserialize(data.as_ref()).map_err(|err| {
-											log::error!("Error deserializing protocol message: {}", err);
-										})
-										.ok()
+									if engine == CHAINFLIP_P2P_PROTOCOL_NAME {
+										this.state_machine
+											.try_decode(data.as_ref())
+											.map_err(|err| {
+												log::error!("Error deserializing protocol message: {}", err);
+											})
+											.ok()
 									} else {
 										None
 									}
@@ -396,7 +415,8 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use futures::Stream;
+	use async_std::channel::Receiver;
+use futures::Stream;
 	use futures::{
 		channel::mpsc::{unbounded, UnboundedSender},
 		executor::block_on,
@@ -404,36 +424,35 @@ mod tests {
 		FutureExt,
 	};
 	use sc_network::{Event, ObservedRole, PeerId};
-	use std::cell::Cell;
+	use std::cell::RefCell;
 	use std::sync::{Arc, Mutex};
 
-	#[derive(Clone, Default)]
+	#[derive(Default)]
 	struct TestNetwork {
-		inner: Arc<Mutex<TestNetworkInner>>,
+		inner: RefCell<TestNetworkInner>,
 	}
 
 	#[derive(Clone, Default)]
 	struct TestNetworkInner {
 		event_senders: Vec<UnboundedSender<Event>>,
-		notifications: Vec<(Vec<u8>, Vec<u8>)>,
+		notifications: Vec<(PeerId, Vec<u8>)>,
 	}
 
 	impl PeerNetwork for TestNetwork {
-		fn add_set_reserved(&self, _who: PeerId, _protocol: Cow<'static, str>) {}
+		fn reserve_peer(&self, _who: PeerId) {}
 
-		fn remove_set_reserved(&self, _who: PeerId, _protocol: Cow<'static, str>) {}
+		fn remove_reserved_peer(&self, _who: PeerId) {}
 
-		fn write_notification(&self, who: PeerId, _protocol: Cow<'static, str>, message: ProtocolMessage) {
+		fn write_notification(&self, who: PeerId, message: Vec<u8>) {
 			self.inner
-				.lock()
-				.unwrap()
+				.borrow_mut()
 				.notifications
-				.push((who.to_bytes(), bincode::serialize(&message).unwrap()));
+				.push((who, message));
 		}
 
 		fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
 			let (tx, rx) = unbounded();
-			self.inner.lock().unwrap().event_senders.push(tx);
+			self.inner.borrow_mut().event_senders.push(tx);
 
 			Box::pin(rx)
 		}
@@ -441,41 +460,49 @@ mod tests {
 
 	#[derive(Default)]
 	struct MockObserver {
-		pub new_peers: Cell<Vec<ValidatorId>>,
-		pub disconnected_peers: Cell<Vec<ValidatorId>>,
-		pub messages_received: Cell<Vec<(ValidatorId, RawMessage)>>,
+		pub inner: RefCell<MockObserverInner>,
+	}
+
+	#[derive(Default)]
+	struct MockObserverInner {
+		pub new_peers: Vec<ValidatorId>,
+		pub disconnected_peers: Vec<ValidatorId>,
+		pub messages_received: Vec<(ValidatorId, RawMessage)>,
 	}
 
 	impl NetworkObserver for MockObserver {
 		fn new_peer(&self, validator_id: &ValidatorId) {
-			self.new_peers.get_mut().push(*validator_id);
+			self.inner.borrow_mut().new_peers.push(*validator_id);
 		}
 
 		fn disconnected(&self, validator_id: &ValidatorId) {
-			self.disconnected_peers.get_mut().push(*validator_id);
+			self.inner.borrow_mut().disconnected_peers.push(*validator_id);
 		}
 
 		fn received(&self, validator_id: &ValidatorId, message: RawMessage) {
-			self.messages_received.get_mut().push((*validator_id, message));
+			self.inner.borrow_mut().messages_received.push((*validator_id, message));
 		}
 	}
 
 	#[test]
 	fn send_message_to_peer() {
-		let network = TestNetwork::default();
-		let protocol = Cow::Borrowed("/chainflip-protocol");
+		const VALIDATOR: ValidatorId = ValidatorId([0xCF; 32]);
+		let network = Arc::new(TestNetwork::default());
 		let observer = Arc::new(MockObserver::default());
 		let (mut bridge, communications) =
-			NetworkBridge::new(observer.clone(), network.clone(), protocol.clone());
-
+			NetworkBridge::new(observer.clone(), network.clone());
+		
 		let peer = PeerId::random();
+		// Identify the validator.
+		communications.lock().unwrap().identify(VALIDATOR);
+		assert!(bridge.state_machine.local_validator_id == Some(VALIDATOR));
 
 		// Register peer
-		let mut event_sender = network.inner.lock().unwrap().event_senders.pop().unwrap();
+		let mut event_sender = network.inner.borrow_mut().event_senders.pop().unwrap();
 
 		let msg = Event::NotificationStreamOpened {
 			remote: peer.clone(),
-			protocol: protocol.clone(),
+			protocol: CHAINFLIP_P2P_PROTOCOL_NAME,
 			role: ObservedRole::Authority,
 		};
 
@@ -490,23 +517,21 @@ mod tests {
 					unreachable!("we should have a new network event");
 				}
 
-				let o = observer.inner.lock().unwrap();
-
-				if let Some(_) = &o.0 {
+				if !observer.inner.borrow().new_peers.is_empty() {
 					if !sent {
 						communications
 							.lock()
 							.unwrap()
-							.send_message(&peer, b"this rocks".to_vec());
+							.send_message(VALIDATOR, RawMessage(b"this rocks".to_vec()));
 						sent = true;
 					}
 
 					if let Some(notification) =
-						network.inner.lock().unwrap().notifications.pop().as_ref()
+						network.inner.borrow_mut().notifications.pop().as_ref()
 					{
 						assert_eq!(
 							notification.clone(),
-							(peer.to_bytes(), b"this rocks".to_vec())
+							(peer, b"this rocks".to_vec())
 						);
 						break;
 					}
@@ -518,21 +543,20 @@ mod tests {
 
 	#[test]
 	fn broadcast_message_to_peers() {
-		let network = TestNetwork::default();
-		let protocol = Cow::Borrowed("/chainflip-protocol");
-		let observer = Arc::new(TestObserver::default());
+		let network = Arc::new(TestNetwork::default());
+		let observer = Arc::new(MockObserver::default());
 		let (mut bridge, comms) =
-			NetworkBridge::new(observer.clone(), network.clone(), protocol.clone());
+			NetworkBridge::new(observer.clone(), network.clone());
 
 		let peer = PeerId::random();
 		let peer_1 = PeerId::random();
 
 		// Register peers
-		let mut event_sender = network.inner.lock().unwrap().event_senders.pop().unwrap();
+		let mut event_sender = network.inner.borrow_mut().event_senders.pop().unwrap();
 
 		let msg = Event::NotificationStreamOpened {
 			remote: peer.clone(),
-			protocol: protocol.clone(),
+			protocol: CHAINFLIP_P2P_PROTOCOL_NAME,
 			role: ObservedRole::Authority,
 		};
 		event_sender
@@ -541,7 +565,7 @@ mod tests {
 
 		let msg = Event::NotificationStreamOpened {
 			remote: peer_1.clone(),
-			protocol: protocol.clone(),
+			protocol: CHAINFLIP_P2P_PROTOCOL_NAME,
 			role: ObservedRole::Authority,
 		};
 
@@ -556,14 +580,11 @@ mod tests {
 					unreachable!("we should have a new network event");
 				}
 
-				let o = observer.inner.lock().unwrap();
-
 				if sent {
-					let notifications: &Vec<(Vec<u8>, Vec<u8>)> =
-						&network.inner.lock().unwrap().notifications;
+					let notifications = &network.inner.borrow().notifications;
 					let peer_ids: Vec<PeerId> = notifications
 						.into_iter()
-						.map(|(id, _)| PeerId::from_bytes(id).unwrap())
+						.map(|(id, _)| id.clone())
 						.collect();
 					assert_eq!(peer_ids.len(), 2);
 					assert!(peer_ids.contains(&peer));
@@ -573,9 +594,9 @@ mod tests {
 					break;
 				}
 
-				if let Some(_) = &o.0 {
+				if !observer.inner.borrow_mut().new_peers.is_empty() {
 					if !sent {
-						comms.lock().unwrap().broadcast(b"this rocks".to_vec());
+						comms.lock().unwrap().broadcast_all(RawMessage(b"this rocks".to_vec())).unwrap();
 						sent = true;
 					}
 				}

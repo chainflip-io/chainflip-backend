@@ -240,6 +240,7 @@ mod tests {
 	use sc_network::config::identity::ed25519;
 	use sc_network::config::PublicKey;
 	use sc_rpc::testing::TaskExecutor;
+	use serde_json::json;
 	use sp_core::ed25519::Public;
 	use std::collections::HashMap;
 
@@ -269,7 +270,7 @@ mod tests {
 
 		fn broadcast(&mut self, data: RawMessage) {
 			for (_, node) in &self.nodes {
-				node.messenger.lock().unwrap().broadcast(data.clone());
+				node.messenger.lock().unwrap().broadcast_all(data.clone());
 			}
 		}
 
