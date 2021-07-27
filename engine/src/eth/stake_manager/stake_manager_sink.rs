@@ -55,8 +55,7 @@ mod tests {
         let port = addr.port();
 
         let mq_settings = settings::MessageQueue {
-            hostname: ip.to_string(),
-            port,
+            endpoint: format!("http://{}:{}", ip, port),
         };
 
         let factory = NatsMQClientFactory::new(&mq_settings);
