@@ -224,9 +224,10 @@ impl SigningStateManager {
 
         let timeout = self.phase_timeout;
         // for every pending state, check if it expired
+        let logger = self.logger.clone();
         self.delayed_messages.retain(|message_info, (t, bc1_vec)| {
             if t.elapsed() > timeout {
-                slog::warn!(self.logger, "BC1 for signing expired");
+                slog::warn!(logger, "BC1 for signing expired");
 
                 // We never received a Signing request for this message, so any parties
                 // that tried to initiate a new ceremony are deemed malicious
@@ -244,7 +245,7 @@ impl SigningStateManager {
         // for every active state, check if it expired
         self.signing_states.retain(|message_info, state| {
             if state.last_progress_timestamp.elapsed() > timeout {
-                slog::warn!(self.logger, "Signing state expired and should be abandoned");
+                slog::warn!(logger, "Signing state expired and should be abandoned");
 
                 let late_nodes = state.awaited_parties();
                 let event =
@@ -257,7 +258,7 @@ impl SigningStateManager {
 
         for event in events_to_send {
             if let Err(err) = self.p2p_sender.send(event) {
-                slog::error!(self.logger, "Unable to send event, error: {}", err);
+                slog::error!(logger, "Unable to send event, error: {}", err);
             }
         }
     }

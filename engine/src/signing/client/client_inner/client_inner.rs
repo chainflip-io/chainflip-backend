@@ -14,7 +14,6 @@ use crate::{
     },
 };
 
-use log::*;
 use slog::o;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -327,7 +326,12 @@ where
         MultisigClientInner {
             my_validator_id: my_validator_id.clone(),
             key_store: KeyStore::new(db),
-            keygen: KeygenManager::new(my_validator_id.clone(), tx.clone(), phase_timeout.clone()),
+            keygen: KeygenManager::new(
+                my_validator_id.clone(),
+                tx.clone(),
+                phase_timeout.clone(),
+                logger,
+            ),
             signing_manager: SigningStateManager::new(
                 my_validator_id,
                 tx.clone(),

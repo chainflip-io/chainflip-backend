@@ -24,7 +24,6 @@ pub async fn start_eth_broadcaster<M: IMQClient + Send + Sync>(
     mq_client: M,
     logger: &slog::Logger,
 ) -> anyhow::Result<()> {
-    log::info!("Starting ETH broadcaster");
     let secret_key = secret_key_from_file(Path::new(settings.eth.private_key_file.as_str()))?;
     let eth_broadcaster =
         EthBroadcaster::<M, _>::new(settings.into(), mq_client, secret_key, logger).await?;
@@ -89,6 +88,7 @@ impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
 
     /// Consumes [TxDetails] messages from the `Broadcast` queue and signs and broadcasts the transaction to ethereum.
     async fn run(&self) -> Result<()> {
+        slog::info!(self.logger, "Starting");
         let subscription = self
             .mq_client
             .subscribe::<ContractCallDetails>(Subject::Broadcast(Chain::ETH))

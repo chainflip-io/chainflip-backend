@@ -4,9 +4,13 @@
 use core::str::FromStr;
 use std::{convert::TryInto, fmt::Display};
 
-use crate::eth::{EventProducerError, EventSource};
+use crate::{
+    eth::{EventProducerError, EventSource},
+    logging::COMPONENT_KEY,
+};
 
 use serde::{Deserialize, Serialize};
+use slog::o;
 use sp_runtime::AccountId32;
 use web3::{
     contract::tokens::Tokenizable,
@@ -21,6 +25,7 @@ use anyhow::Result;
 pub struct StakeManager {
     pub deployed_address: H160,
     contract: ethabi::Contract,
+    logger: slog::Logger,
 }
 
 // TODO: ClaimRegistered, EmissionChanged, MinStakeChanged, not used
@@ -138,8 +143,9 @@ impl Display for StakeManagerEvent {
 
 impl StakeManager {
     /// Loads the contract abi to get event definitions
-    pub fn load(deployed_address: &str) -> Result<Self> {
-        log::info!(
+    pub fn load(deployed_address: &str, logger: &slog::Logger) -> Result<Self> {
+        slog::info!(
+            logger,
             "Loading in stake manager contract abi. Connecting to contract at: {}",
             deployed_address
         );
@@ -149,6 +155,7 @@ impl StakeManager {
         Ok(Self {
             deployed_address: H160::from_str(deployed_address)?,
             contract,
+            logger: logger.new(o!(COMPONENT_KEY => "StakeManager")),
         })
     }
 
@@ -231,7 +238,8 @@ impl EventSource for StakeManager {
             data: log.data.0,
         };
 
-        log::debug!(
+        slog::debug!(
+            self.logger,
             "Parsing event from block {:?} with signature: {:?}",
             log.block_number.unwrap_or_default(),
             sig

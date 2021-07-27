@@ -62,7 +62,7 @@ pub enum EventProducerError {
 
 /// Start all the ETH components
 pub async fn start(settings: &Settings, logger: &slog::Logger) {
-    log::info!("Starting the ETH components");
+    slog::info!(logger, "Starting the ETH components");
     let sm_witness_future = stake_manager::start_stake_manager_witness(settings, logger);
 
     let factory = NatsMQClientFactory::new(&settings.message_queue);

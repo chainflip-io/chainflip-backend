@@ -1,5 +1,8 @@
+use crate::logging::COMPONENT_KEY;
+
 use super::{EventSink, EventSource, Result};
 use futures::{future::join_all, stream, StreamExt};
+use slog::o;
 use std::time::Duration;
 use web3::types::{BlockNumber, SyncState};
 
@@ -10,20 +13,23 @@ pub struct EthEventStreamer<S: EventSource> {
     web3_client: ::web3::Web3<::web3::transports::WebSocket>,
     event_source: S,
     event_sinks: Vec<Box<dyn EventSink<S::Event>>>,
+    logger: slog::Logger,
 }
 
-pub struct EthEventStreamBuilder<S: EventSource> {
+pub struct EthEventStreamBuilder<'a, S: EventSource> {
     url: String,
     event_source: S,
     event_sinks: Vec<Box<dyn EventSink<S::Event>>>,
+    logger: &'a slog::Logger,
 }
 
-impl<S: EventSource> EthEventStreamBuilder<S> {
-    pub fn new(url: &str, event_source: S) -> Self {
+impl<'a, S: EventSource> EthEventStreamBuilder<'a, S> {
+    pub fn new(url: &str, event_source: S, logger: &'a slog::Logger) -> Self {
         Self {
             url: url.into(),
             event_source,
             event_sinks: Vec::new(),
+            logger,
         }
     }
 
@@ -58,6 +64,7 @@ impl<S: EventSource> EthEventStreamBuilder<S> {
                 web3_client: ::web3::Web3::new(transport),
                 event_source: self.event_source,
                 event_sinks: self.event_sinks,
+                logger: self.logger.new(o!(COMPONENT_KEY => "EthEventStreamer")),
             })
         }
     }
@@ -66,7 +73,8 @@ impl<S: EventSource> EthEventStreamBuilder<S> {
 impl<S: EventSource> EthEventStreamer<S> {
     /// Create a stream of Ethereum log events. If `from_block` is `None`, starts at the pending block.
     pub async fn run(&self, from_block: Option<u64>) -> Result<()> {
-        log::info!(
+        slog::info!(
+            self.logger,
             "Start running eth event stream from block: {:?}",
             from_block
         );
@@ -74,10 +82,13 @@ impl<S: EventSource> EthEventStreamer<S> {
         loop {
             match self.web3_client.eth().syncing().await? {
                 SyncState::Syncing(info) => {
-                    log::info!("Waiting for eth node to sync: {:?}", info);
+                    slog::info!(self.logger, "Waiting for eth node to sync: {:?}", info);
                 }
                 SyncState::NotSyncing => {
-                    log::info!("Eth node is synced, subscribing to log events.");
+                    slog::info!(
+                        self.logger,
+                        "Eth node is synced, subscribing to log events."
+                    );
                     break;
                 }
             }
@@ -119,23 +130,23 @@ impl<S: EventSource> EthEventStreamer<S> {
                     join_all(self.event_sinks.iter().map(|sink| {
                         let event = event.clone();
                         async move {
-                            sink.process_event(event)
-                                .await
-                                .map_err(|e| log::error!("Error while processing event:\n{}", e))
+                            sink.process_event(event).await.map_err(|e| {
+                                slog::error!(self.logger, "Error while processing event:\n{}", e)
+                            })
                         }
                     }))
                     .await;
                 }
-                Err(e) => log::error!("Unable to parse event: {}.", e),
+                Err(e) => slog::error!(self.logger, "Unable to parse event: {}.", e),
             }
         });
 
-        log::info!("ETH event streamer listening for events...");
+        slog::info!(self.logger, "Listening for events...");
 
         processing_loop_fut.await;
 
-        let err_msg = "ETH event streamer has stopped!";
-        log::error!("{}", err_msg);
+        let err_msg = "Stopped!";
+        slog::error!(self.logger, "{}", err_msg);
         Err(anyhow::Error::msg(err_msg))
     }
 }
@@ -160,21 +171,23 @@ mod tests {
     #[tokio::test]
     #[ignore = "Depends on a running ganache instance, runs forever, useful for manually testing / observing incoming events"]
     async fn subscribe_to_stake_manager_events() {
-        let stake_manager = StakeManager::load(CONTRACT_ADDRESS).unwrap();
+        let logger = logging::test_utils::create_test_logger();
+        let stake_manager = StakeManager::load(CONTRACT_ADDRESS, &logger).unwrap();
 
         let mq_settings = settings::test_utils::new_test_settings()
             .unwrap()
             .message_queue;
 
         let factory = NatsMQClientFactory::new(&mq_settings);
-        let logger = logging::test_utils::create_test_logger();
 
         let mq_client = *factory.create().await.unwrap();
+
         // create the sink, which pushes events to the MQ
         let sm_sink = StakeManagerSink::<NatsMQClient>::new(mq_client, &logger)
             .await
             .unwrap();
-        let sm_event_stream = EthEventStreamBuilder::new("ws://localhost:8545", stake_manager);
+        let sm_event_stream =
+            EthEventStreamBuilder::new("ws://localhost:8545", stake_manager, &logger);
         let sm_event_stream = sm_event_stream.with_sink(sm_sink).build().await.unwrap();
 
         sm_event_stream.run(Some(0)).await.unwrap();

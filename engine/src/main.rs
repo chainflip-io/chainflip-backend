@@ -9,7 +9,7 @@ use chainflip_engine::{
     state_chain,
     temp_event_mapper::TempEventMapper,
 };
-use slog::Drain;
+use slog::{o, Drain};
 use sp_core::Pair;
 
 #[tokio::main]
