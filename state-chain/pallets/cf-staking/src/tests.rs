@@ -296,7 +296,6 @@ fn signature_is_inserted() {
 	new_test_ext().execute_with(|| {
 		const STAKE: u128 = 45;
 		const START_TIME: Duration = Duration::from_secs(10);
-		MockWitnesser::set_threshold(2);
 
 		// Start the time at the 10-second mark.
 		time_source::Mock::reset_to(START_TIME);
@@ -316,20 +315,9 @@ fn signature_is_inserted() {
 
 		assert_event_stack!(
 			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, msg_hash)) => {
-				// Witness a signature.
-				assert_ok!(Staking::witness_post_claim_signature(
-					Origin::signed(BOB),
-					ALICE,
-					msg_hash.into(),
-					ETH_DUMMY_SIG));
-			}
-		);
-
-		assert_event_stack!(
-			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, msg_hash)) => {
-				// Witness a signature.
-				assert_ok!(Staking::witness_post_claim_signature(
-					Origin::signed(BOB),
+				// Insert a signature.
+				assert_ok!(Staking::post_claim_signature(
+					Origin::root(),
 					ALICE,
 					msg_hash.into(),
 					ETH_DUMMY_SIG));
@@ -477,8 +465,6 @@ fn claim_expiry() {
 		const STAKE: u128 = 45;
 		const START_TIME: Duration = Duration::from_secs(10);
 
-		MockWitnesser::set_threshold(2);
-
 		// Start the time at the 10-second mark.
 		time_source::Mock::reset_to(START_TIME);
 
@@ -495,23 +481,11 @@ fn claim_expiry() {
 
 		let msg_hash_alice = PendingClaims::<Test>::get(ALICE).unwrap().msg_hash.unwrap();
 
-		assert_ok!(Staking::witness_post_claim_signature(
-			Origin::signed(BOB),
-			ALICE,
-			msg_hash_alice,
-			ETH_DUMMY_SIG
-		));
-
 		// We can't insert a sig if the claim has expired.
 		time_source::Mock::reset_to(START_TIME);
 		time_source::Mock::tick(Duration::from_secs(1));
 		assert_noop!(
-			Staking::witness_post_claim_signature(
-				Origin::signed(BOB),
-				ALICE,
-				msg_hash_alice,
-				ETH_DUMMY_SIG
-			),
+			Staking::post_claim_signature(Origin::root(), ALICE, msg_hash_alice, ETH_DUMMY_SIG),
 			<Error<Test>>::SignatureTooLate
 		);
 
@@ -519,12 +493,7 @@ fn claim_expiry() {
 		time_source::Mock::reset_to(START_TIME);
 		time_source::Mock::tick(Duration::from_millis(950));
 		assert_noop!(
-			Staking::post_claim_signature(
-				Origin::signed(BOB),
-				ALICE,
-				msg_hash_alice,
-				ETH_DUMMY_SIG
-			),
+			Staking::post_claim_signature(Origin::root(), ALICE, msg_hash_alice, ETH_DUMMY_SIG),
 			<Error<Test>>::SignatureTooLate
 		);
 
@@ -532,7 +501,7 @@ fn claim_expiry() {
 		time_source::Mock::reset_to(START_TIME);
 		time_source::Mock::tick(Duration::from_millis(200));
 		assert_ok!(Staking::post_claim_signature(
-			Origin::signed(BOB),
+			Origin::root(),
 			ALICE,
 			msg_hash_alice,
 			ETH_DUMMY_SIG
