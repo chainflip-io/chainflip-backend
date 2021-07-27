@@ -249,7 +249,8 @@ impl SigningState {
                 } else {
                     self.update_stage(SigningStage::Abandoned);
 
-                    slog::error!(self.logger, 
+                    slog::error!(
+                        self.logger,
                         "Unexpected signature verification failure. This should never happen. {:?}",
                         self.message_info
                     );
@@ -268,9 +269,11 @@ impl SigningState {
                 self.update_stage(SigningStage::Abandoned);
 
                 // TODO: This should log the base58 ids and the message hash in hex
-                slog::error!(self.logger, 
+                slog::error!(
+                    self.logger,
                     "Local Sigs verify error for message: {:?}, blamed validators: {:?}",
-                    self.message_info, &blamed_ids
+                    self.message_info,
+                    &blamed_ids
                 );
 
                 let event = InnerEvent::SigningResult(SigningOutcome::invalid(
@@ -289,7 +292,11 @@ impl SigningState {
 
     fn process_delayed(&mut self) {
         while let Some((sender_id, msg)) = self.delayed_data.pop() {
-            slog::trace!(self.logger, "Processing a delayed message from [{}]", sender_id);
+            slog::trace!(
+                self.logger,
+                "Processing a delayed message from [{}]",
+                sender_id
+            );
             self.process_signing_message_inner(sender_id, msg);
         }
     }
@@ -304,7 +311,12 @@ impl SigningState {
             (SigningStage::AwaitingLocalSig3, SigningStage::Abandoned) => {}
             (SigningStage::AwaitingLocalSig3, SigningStage::Finished) => {}
             _ => {
-                slog::error!(self.logger, "Invalid transition from '{:?}' to '{:?}'", self.stage, stage);
+                slog::error!(
+                    self.logger,
+                    "Invalid transition from '{:?}' to '{:?}'",
+                    self.stage,
+                    stage
+                );
                 panic!();
             }
         }
@@ -312,9 +324,11 @@ impl SigningState {
         self.stage = stage;
         let elapsed = self.cur_phase_timestamp.elapsed();
         self.cur_phase_timestamp = Instant::now();
-        slog::debug!(self.logger, 
+        slog::debug!(
+            self.logger,
             "Entering phase '{:?}'. Previous phase took: {:?}",
-            stage, elapsed
+            stage,
+            elapsed
         );
     }
 
@@ -350,14 +364,21 @@ impl SigningState {
         let active_parties = &self.signer_idxs;
         // Ignore if the the sender is not in active_parties
         if !active_parties.contains(&sender_id) {
-            slog::warn!(self.logger, 
+            slog::warn!(
+                self.logger,
                 "Ignoring a message from sender not in active_parties: {}",
                 sender_id
             );
             return;
         }
 
-        slog::trace!(self.logger, "[{}] received '{}' from [{}]", self.us(), &msg, sender_id);
+        slog::trace!(
+            self.logger,
+            "[{}] received '{}' from [{}]",
+            self.us(),
+            &msg,
+            sender_id
+        );
 
         match (self.stage, msg) {
             (SigningStage::AwaitingBroadcast1, SigningData::Broadcast1(bc1)) => {
@@ -377,7 +398,11 @@ impl SigningState {
             (SigningStage::AwaitingSecret2, SigningData::Secret2(sec2)) => {
                 match self.sss.process_phase2(sender_id, sec2) {
                     StageStatus::Full => {
-                        slog::info!(self.logger, "[{}] Phase 2 (signing) successful ✅✅", self.us());
+                        slog::info!(
+                            self.logger,
+                            "[{}] Phase 2 (signing) successful ✅✅",
+                            self.us()
+                        );
                         self.update_progress_timestamp();
                         self.finalize_phase2();
                     }
@@ -392,15 +417,19 @@ impl SigningState {
                 self.on_local_sig_received(sender_id, sig);
             }
             (SigningStage::Abandoned, data) => {
-                slog::warn!(self.logger, 
+                slog::warn!(
+                    self.logger,
                     "Dropping {} for abandoned Signing state, Message: {:?}",
-                    data, self.message_info
+                    data,
+                    self.message_info
                 );
             }
             (_, data) => {
-                slog::warn!(self.logger, 
+                slog::warn!(
+                    self.logger,
                     "Dropping unexpected message for stage {:?}, Dropped: {:?}",
-                    self.stage, data
+                    self.stage,
+                    data
                 );
             }
         }
@@ -437,9 +466,11 @@ impl SigningState {
             Err(InvalidKey(blamed_idxs)) => {
                 let blamed_ids = self.signer_idxs_to_validator_ids(blamed_idxs);
 
-                slog::error!(self.logger, 
+                slog::error!(
+                    self.logger,
                     "phase2 signing error for message: {:?}, blamed validators: {:?}",
-                    self.message_info, &blamed_ids
+                    self.message_info,
+                    &blamed_ids
                 );
 
                 let event = InnerEvent::SigningResult(SigningOutcome::invalid(
@@ -504,7 +535,7 @@ impl SigningState {
                 self.process_delayed(); // Process delayed LocalSig
             }
             Err(InvalidSS(blamed_idxs)) => {
-                slog::error!(self.logger, 
+                slog::error!(self.logger,
                     "Invalid Phase2 keygen data, abandoning state for message_info: {:?}, Blaming: {:?}",
                     self.message_info,blamed_idxs
                 );
