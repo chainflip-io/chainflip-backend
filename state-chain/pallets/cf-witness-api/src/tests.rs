@@ -51,14 +51,13 @@ mod staking_witness_tests {
 			MockWitnesser::set_threshold(2);
 
 			// The call we are witnessing.
-			let call: Call = pallet_cf_staking::Call::claimed(STAKER, STAKE, RETURN_ADDRESS, ETH_TX_HASH).into();
+			let call: Call = pallet_cf_staking::Call::claimed(STAKER, STAKE, ETH_TX_HASH).into();
 
 			// One vote.
 			assert_ok!(WitnessApi::witness_claimed(
 				Origin::signed(WITNESS),
 				STAKER,
 				STAKE,
-				RETURN_ADDRESS,
 				ETH_TX_HASH
 			));
 
@@ -66,7 +65,7 @@ mod staking_witness_tests {
 
 			// Another. Should fail since we haven't registered any claims.
 			assert_noop!(
-				WitnessApi::witness_claimed(Origin::signed(WITNESS), STAKER, STAKE, RETURN_ADDRESS, ETH_TX_HASH),
+				WitnessApi::witness_claimed(Origin::signed(WITNESS), STAKER, STAKE, ETH_TX_HASH),
 				pallet_cf_staking::Error::<Test>::NoPendingClaim
 			);
 
