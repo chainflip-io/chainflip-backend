@@ -1,10 +1,10 @@
 use anyhow::Result;
 use core::iter;
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
-use futures::{Future, Stream, StreamExt, select, stream};
+use futures::{select, stream, Future, Stream, StreamExt};
 use log::debug;
 use sc_network::{multiaddr, Event, ExHashT, NetworkService, PeerId};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use sp_runtime::sp_std::sync::Arc;
 use sp_runtime::traits::Block as BlockT;
 use std::borrow::Cow;
@@ -14,14 +14,10 @@ use std::sync::Mutex;
 use std::task::{Context, Poll};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ValidatorId(
-	pub [u8; 32]
-);
+pub struct ValidatorId(pub [u8; 32]);
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RawMessage(
-	pub Vec<u8>
-);
+pub struct RawMessage(pub Vec<u8>);
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 enum ProtocolMessage {
@@ -88,7 +84,7 @@ impl<B: BlockT, H: ExHashT> PeerNetwork for NetworkService<B, H> {
 	}
 }
 
-/// An external observer for events. 
+/// An external observer for events.
 pub trait NetworkObserver {
 	/// On a new peer connected to the network
 	fn new_peer(&self, validator_id: &ValidatorId);
@@ -139,7 +135,9 @@ where
 
 	/// A peer has identified itself. Register the validator Id and notify the observer.
 	pub fn register_validator_id(&mut self, peer_id: &PeerId, validator_id: ValidatorId) {
-		self.peer_to_validator.entry(peer_id.clone()).or_insert(Some(validator_id));
+		self.peer_to_validator
+			.entry(peer_id.clone())
+			.or_insert(Some(validator_id));
 		self.validator_to_peer.insert(validator_id, peer_id.clone());
 		self.observer.new_peer(&validator_id);
 	}
@@ -171,10 +169,10 @@ where
 			match message {
 				ProtocolMessage::Identify(validator_id) => {
 					self.register_validator_id(peer_id, validator_id);
-				},
+				}
 				ProtocolMessage::Message(raw_message) => {
 					self.maybe_notify_observer(peer_id, raw_message);
-				},
+				}
 			}
 		}
 	}
@@ -248,12 +246,14 @@ pub struct NetworkBridge<Observer: NetworkObserver, Network: PeerNetwork> {
 pub fn substrate_network_bridge<Observer: NetworkObserver, B: BlockT, H: ExHashT>(
 	observer: Arc<Observer>,
 	network: Arc<NetworkService<B, H>>,
-) -> (NetworkBridge<Observer, NetworkService<B, H>>, Arc<Mutex<Sender>>){
+) -> (
+	NetworkBridge<Observer, NetworkService<B, H>>,
+	Arc<Mutex<Sender>>,
+) {
 	NetworkBridge::new(observer, network)
 }
 
-impl<Observer: NetworkObserver, Network: PeerNetwork> NetworkBridge<Observer, Network>
-{
+impl<Observer: NetworkObserver, Network: PeerNetwork> NetworkBridge<Observer, Network> {
 	pub(crate) fn new(
 		observer: Arc<Observer>,
 		p2p_network: Arc<Network>,
@@ -295,17 +295,20 @@ pub struct Sender(UnboundedSender<MessagingCommand>);
 
 impl P2pMessaging for Sender {
 	fn identify(&mut self, validator_id: ValidatorId) -> Result<()> {
-		self.0.unbounded_send(MessagingCommand::Identify(validator_id))?;
+		self.0
+			.unbounded_send(MessagingCommand::Identify(validator_id))?;
 		Ok(())
 	}
 
 	fn send_message(&mut self, validator_id: ValidatorId, data: RawMessage) -> Result<()> {
-		self.0.unbounded_send(MessagingCommand::Send(validator_id, data))?;
+		self.0
+			.unbounded_send(MessagingCommand::Send(validator_id, data))?;
 		Ok(())
 	}
 
 	fn broadcast(&self, validators: Vec<ValidatorId>, data: RawMessage) -> Result<()> {
-		self.0.unbounded_send(MessagingCommand::Broadcast(validators, data))?;
+		self.0
+			.unbounded_send(MessagingCommand::Broadcast(validators, data))?;
 		Ok(())
 	}
 }
@@ -330,22 +333,20 @@ where
 		let this = &mut *self;
 		loop {
 			match this.worker.poll_next_unpin(cx) {
-				Poll::Ready(Some(cmd)) => {
-					match cmd {
-						MessagingCommand::Send(validator_id, msg) => {
-							this.state_machine.send_message(validator_id, msg);
-						},
-						MessagingCommand::Broadcast(validators, msg) => {
-							this.state_machine.broadcast(validators, msg);
-						},
-        				MessagingCommand::BroadcastAll(msg) => {
-							this.state_machine.broadcast_all(msg);
-						},
-        				MessagingCommand::Identify(validator_id) => {
-							this.state_machine.broadcast_identification(validator_id);
-						},
+				Poll::Ready(Some(cmd)) => match cmd {
+					MessagingCommand::Send(validator_id, msg) => {
+						this.state_machine.send_message(validator_id, msg);
 					}
-				}
+					MessagingCommand::Broadcast(validators, msg) => {
+						this.state_machine.broadcast(validators, msg);
+					}
+					MessagingCommand::BroadcastAll(msg) => {
+						this.state_machine.broadcast_all(msg);
+					}
+					MessagingCommand::Identify(validator_id) => {
+						this.state_machine.broadcast_identification(validator_id);
+					}
+				},
 				Poll::Ready(None) => return Poll::Ready(()),
 				Poll::Pending => break,
 			}
@@ -353,56 +354,55 @@ where
 
 		loop {
 			match this.network_event_stream.poll_next_unpin(cx) {
-				Poll::Ready(Some(event)) => match event {
-					Event::SyncConnected { remote } => {
-						this.state_machine
-							.network
-							.reserve_peer(remote);
-					}
-					Event::SyncDisconnected { remote } => {
-						this.state_machine
-							.network
-							.remove_reserved_peer(remote);
-					}
-					Event::NotificationStreamOpened {
-						remote,
-						protocol,
-						role: _,
-					} => {
-						if protocol != CHAINFLIP_P2P_PROTOCOL_NAME {
-							continue;
+				Poll::Ready(Some(event)) => {
+					match event {
+						Event::SyncConnected { remote } => {
+							this.state_machine.network.reserve_peer(remote);
 						}
-						this.state_machine.register_peer(&remote);
-					}
-					Event::NotificationStreamClosed { remote, protocol } => {
-						if protocol != CHAINFLIP_P2P_PROTOCOL_NAME {
-							continue;
+						Event::SyncDisconnected { remote } => {
+							this.state_machine.network.remove_reserved_peer(remote);
 						}
-						this.state_machine.disconnected(&remote);
-					}
-					Event::NotificationsReceived { remote, messages } => {
-						if !messages.is_empty() {
-							let messages: Vec<ProtocolMessage> = messages
-								.into_iter()
-								.filter_map(|(engine, data)| {
-									if engine == CHAINFLIP_P2P_PROTOCOL_NAME {
-										this.state_machine
-											.try_decode(data.as_ref())
-											.map_err(|err| {
-												log::error!("Error deserializing protocol message: {}", err);
-											})
-											.ok()
-									} else {
-										None
-									}
-								})
-								.collect();
+						Event::NotificationStreamOpened {
+							remote,
+							protocol,
+							role: _,
+						} => {
+							if protocol != CHAINFLIP_P2P_PROTOCOL_NAME {
+								continue;
+							}
+							this.state_machine.register_peer(&remote);
+						}
+						Event::NotificationStreamClosed { remote, protocol } => {
+							if protocol != CHAINFLIP_P2P_PROTOCOL_NAME {
+								continue;
+							}
+							this.state_machine.disconnected(&remote);
+						}
+						Event::NotificationsReceived { remote, messages } => {
+							if !messages.is_empty() {
+								let messages: Vec<ProtocolMessage> =
+									messages
+										.into_iter()
+										.filter_map(|(engine, data)| {
+											if engine == CHAINFLIP_P2P_PROTOCOL_NAME {
+												this.state_machine
+													.try_decode(data.as_ref())
+													.map_err(|err| {
+														log::error!("Error deserializing protocol message: {}", err);
+													})
+													.ok()
+											} else {
+												None
+											}
+										})
+										.collect();
 
-							this.state_machine.received(&remote, messages);
+								this.state_machine.received(&remote, messages);
+							}
 						}
+						Event::Dht(_) => {}
 					}
-					Event::Dht(_) => {}
-				},
+				}
 				Poll::Ready(None) => return Poll::Ready(()),
 				Poll::Pending => break,
 			}
@@ -416,7 +416,7 @@ where
 mod tests {
 	use super::*;
 	use async_std::channel::Receiver;
-use futures::Stream;
+	use futures::Stream;
 	use futures::{
 		channel::mpsc::{unbounded, UnboundedSender},
 		executor::block_on,
@@ -444,10 +444,7 @@ use futures::Stream;
 		fn remove_reserved_peer(&self, _who: PeerId) {}
 
 		fn write_notification(&self, who: PeerId, message: Vec<u8>) {
-			self.inner
-				.borrow_mut()
-				.notifications
-				.push((who, message));
+			self.inner.borrow_mut().notifications.push((who, message));
 		}
 
 		fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
@@ -476,11 +473,17 @@ use futures::Stream;
 		}
 
 		fn disconnected(&self, validator_id: &ValidatorId) {
-			self.inner.borrow_mut().disconnected_peers.push(*validator_id);
+			self.inner
+				.borrow_mut()
+				.disconnected_peers
+				.push(*validator_id);
 		}
 
 		fn received(&self, validator_id: &ValidatorId, message: RawMessage) {
-			self.inner.borrow_mut().messages_received.push((*validator_id, message));
+			self.inner
+				.borrow_mut()
+				.messages_received
+				.push((*validator_id, message));
 		}
 	}
 
@@ -489,9 +492,8 @@ use futures::Stream;
 		const VALIDATOR: ValidatorId = ValidatorId([0xCF; 32]);
 		let network = Arc::new(TestNetwork::default());
 		let observer = Arc::new(MockObserver::default());
-		let (mut bridge, communications) =
-			NetworkBridge::new(observer.clone(), network.clone());
-		
+		let (mut bridge, communications) = NetworkBridge::new(observer.clone(), network.clone());
+
 		let peer = PeerId::random();
 		// Identify the validator.
 		communications.lock().unwrap().identify(VALIDATOR);
@@ -529,10 +531,7 @@ use futures::Stream;
 					if let Some(notification) =
 						network.inner.borrow_mut().notifications.pop().as_ref()
 					{
-						assert_eq!(
-							notification.clone(),
-							(peer, b"this rocks".to_vec())
-						);
+						assert_eq!(notification.clone(), (peer, b"this rocks".to_vec()));
 						break;
 					}
 				}
@@ -545,8 +544,7 @@ use futures::Stream;
 	fn broadcast_message_to_peers() {
 		let network = Arc::new(TestNetwork::default());
 		let observer = Arc::new(MockObserver::default());
-		let (mut bridge, comms) =
-			NetworkBridge::new(observer.clone(), network.clone());
+		let (mut bridge, comms) = NetworkBridge::new(observer.clone(), network.clone());
 
 		let peer = PeerId::random();
 		let peer_1 = PeerId::random();
@@ -596,7 +594,11 @@ use futures::Stream;
 
 				if !observer.inner.borrow_mut().new_peers.is_empty() {
 					if !sent {
-						comms.lock().unwrap().broadcast_all(RawMessage(b"this rocks".to_vec())).unwrap();
+						comms
+							.lock()
+							.unwrap()
+							.broadcast_all(RawMessage(b"this rocks".to_vec()))
+							.unwrap();
 						sent = true;
 					}
 				}

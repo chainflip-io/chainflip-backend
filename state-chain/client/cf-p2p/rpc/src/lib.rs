@@ -1,5 +1,5 @@
 pub mod p2p_serde;
-use cf_p2p::{P2pMessaging, NetworkObserver, ValidatorId, RawMessage};
+use cf_p2p::{NetworkObserver, P2pMessaging, RawMessage, ValidatorId};
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures::{StreamExt, TryStreamExt};
 use jsonrpc_core::futures::Sink;
@@ -19,42 +19,34 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ValidatorIdBs58(
-	#[serde(with = "p2p_serde::bs58_fixed_size")]
-	[u8; 32]
-);
+pub struct ValidatorIdBs58(#[serde(with = "p2p_serde::bs58_fixed_size")] [u8; 32]);
 
 impl From<ValidatorIdBs58> for ValidatorId {
-    fn from(id: ValidatorIdBs58) -> Self {
-        Self(id.0)
-    }
+	fn from(id: ValidatorIdBs58) -> Self {
+		Self(id.0)
+	}
 }
 
 impl From<ValidatorId> for ValidatorIdBs58 {
-    fn from(id: ValidatorId) -> Self {
-        Self(id.0)
-    }
+	fn from(id: ValidatorId) -> Self {
+		Self(id.0)
+	}
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MessageBs58(
-	#[serde(with = "p2p_serde::bs58_vec")]
-	Vec<u8>
-);
+pub struct MessageBs58(#[serde(with = "p2p_serde::bs58_vec")] Vec<u8>);
 
 impl From<MessageBs58> for RawMessage {
-    fn from(msg: MessageBs58) -> Self {
-        Self(msg.0)
-    }
+	fn from(msg: MessageBs58) -> Self {
+		Self(msg.0)
+	}
 }
 
 impl From<RawMessage> for MessageBs58 {
-    fn from(msg: RawMessage) -> Self {
-        Self(msg.0)
-    }
+	fn from(msg: RawMessage) -> Self {
+		Self(msg.0)
+	}
 }
-
-
 
 #[rpc]
 pub trait RpcApi {
@@ -186,9 +178,13 @@ impl<C: P2pMessaging> Rpc<C> {
 /// Impl of the `RpcApi` - send, broadcast and subscribe to notifications
 impl<C: P2pMessaging + Sync + Send + 'static> RpcApi for Rpc<C> {
 	type Metadata = sc_rpc::Metadata;
-	
+
 	fn identify(&self, validator_id: ValidatorIdBs58) -> Result<()> {
-		self.messaging.lock().unwrap().identify(validator_id.into()).map_err(|_| Error::internal_error())
+		self.messaging
+			.lock()
+			.unwrap()
+			.identify(validator_id.into())
+			.map_err(|_| Error::internal_error())
 	}
 
 	fn send(&self, validator_id: ValidatorIdBs58, message: MessageBs58) -> Result<()> {
@@ -297,7 +293,6 @@ mod tests {
 	}
 
 	impl P2pMessaging for Messenger {
-		
 		fn send_message(&mut self, peer_id: &PeerId, data: Message) -> bool {
 			let subscribers = self.stream.subscribers.lock().unwrap();
 			for subscriber in subscribers.iter() {
