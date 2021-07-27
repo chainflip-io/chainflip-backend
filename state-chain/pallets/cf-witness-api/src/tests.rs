@@ -5,6 +5,7 @@ use frame_support::{assert_noop, assert_ok};
 mod staking_witness_tests {
 	use super::*;
 	const ETH_TX_HASH: [u8; 32] = [0; 32];
+	const RETURN_ADDRESS: Option<[u8; 20]> = None;
 	const STAKE: u128 = 100;
 	const STAKER: u64 = 12345;
 	const WITNESS: u64 = 67890;
@@ -15,13 +16,14 @@ mod staking_witness_tests {
 			MockWitnesser::set_threshold(2);
 
 			// The call we are witnessing.
-			let call: Call = pallet_cf_staking::Call::staked(STAKER, STAKE, ETH_TX_HASH).into();
+			let call: Call = pallet_cf_staking::Call::staked(STAKER, STAKE, RETURN_ADDRESS, ETH_TX_HASH).into();
 
 			// One vote.
 			assert_ok!(WitnessApi::witness_staked(
 				Origin::signed(WITNESS),
 				STAKER,
 				STAKE,
+				RETURN_ADDRESS,
 				ETH_TX_HASH
 			));
 
@@ -32,6 +34,7 @@ mod staking_witness_tests {
 				Origin::signed(WITNESS),
 				STAKER,
 				STAKE,
+				RETURN_ADDRESS,
 				ETH_TX_HASH
 			));
 
@@ -48,13 +51,14 @@ mod staking_witness_tests {
 			MockWitnesser::set_threshold(2);
 
 			// The call we are witnessing.
-			let call: Call = pallet_cf_staking::Call::claimed(STAKER, STAKE, ETH_TX_HASH).into();
+			let call: Call = pallet_cf_staking::Call::claimed(STAKER, STAKE, RETURN_ADDRESS, ETH_TX_HASH).into();
 
 			// One vote.
 			assert_ok!(WitnessApi::witness_claimed(
 				Origin::signed(WITNESS),
 				STAKER,
 				STAKE,
+				RETURN_ADDRESS,
 				ETH_TX_HASH
 			));
 
@@ -62,7 +66,7 @@ mod staking_witness_tests {
 
 			// Another. Should fail since we haven't registered any claims.
 			assert_noop!(
-				WitnessApi::witness_claimed(Origin::signed(WITNESS), STAKER, STAKE, ETH_TX_HASH),
+				WitnessApi::witness_claimed(Origin::signed(WITNESS), STAKER, STAKE, RETURN_ADDRESS, ETH_TX_HASH),
 				pallet_cf_staking::Error::<Test>::NoPendingClaim
 			);
 
