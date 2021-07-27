@@ -12,11 +12,6 @@ use chainflip_engine::{
 use slog::Drain;
 use sp_core::Pair;
 
-#[macro_use]
-extern crate slog;
-extern crate slog_async;
-extern crate slog_json;
-
 #[tokio::main]
 async fn main() {
     let drain = slog_json::Json::new(std::io::stdout())

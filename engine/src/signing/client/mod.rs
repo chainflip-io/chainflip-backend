@@ -99,7 +99,7 @@ where
 
         MultisigClient {
             factory,
-            inner: MultisigClientInner::new(my_validator_id.clone(), db, tx, PHASE_TIMEOUT),
+            inner: MultisigClientInner::new(my_validator_id.clone(), db, tx, PHASE_TIMEOUT, logger),
             inner_event_receiver: Some(rx),
             my_validator_id,
             _mq: PhantomData,

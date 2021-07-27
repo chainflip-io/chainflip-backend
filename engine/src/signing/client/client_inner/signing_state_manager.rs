@@ -204,6 +204,7 @@ impl SigningStateManager {
                     p2p_sender,
                     mi.clone(),
                     sign_info,
+                    &self.logger,
                 );
 
                 entry.insert(state);
@@ -256,7 +257,7 @@ impl SigningStateManager {
 
         for event in events_to_send {
             if let Err(err) = self.p2p_sender.send(event) {
-                error!("Unable to send event, error: {}", err);
+                slog::error!(self.logger, "Unable to send event, error: {}", err);
             }
         }
     }
