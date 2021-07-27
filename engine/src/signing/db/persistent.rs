@@ -2,22 +2,29 @@ use std::{collections::HashMap, convert::TryInto};
 
 use super::KeyDB;
 use kvdb_rocksdb::{Database, DatabaseConfig};
-use log::error;
+use slog::o;
 
-use crate::signing::{client::KeygenResultInfo, KeyId};
+use crate::{
+    logging::COMPONENT_KEY,
+    signing::{client::KeygenResultInfo, KeyId},
+};
 
 /// Database for keys that uses rocksdb
 pub struct PersistentKeyDB {
     /// Rocksdb database instance
     db: Database,
+    logger: slog::Logger,
 }
 
 impl PersistentKeyDB {
-    pub fn new(path: &str) -> Self {
+    pub fn new(path: &str, logger: &slog::Logger) -> Self {
         let config = DatabaseConfig::default();
         let db = Database::open(&config, path).expect("could not open database");
 
-        PersistentKeyDB { db }
+        PersistentKeyDB {
+            db,
+            logger: logger.new(o!(COMPONENT_KEY => "PersistentKeyDB")),
+        }
     }
 }
 
@@ -39,7 +46,7 @@ impl KeyDB for PersistentKeyDB {
                 let key_id: &[u8; 8] = match key_id.as_ref().try_into() {
                     Ok(key_id) => Some(key_id),
                     Err(err) => {
-                        error!("Could not deserialize key_id from DB: {}", err);
+                        slog::error!(self.logger, "Could not deserialize key_id from DB: {}", err);
                         None
                     }
                 }?;
@@ -47,9 +54,11 @@ impl KeyDB for PersistentKeyDB {
                 let key_id: KeyId = KeyId(u64::from_be_bytes(key_id.clone()));
 
                 let key_info = bincode::deserialize(key.as_ref()).unwrap_or_else(|err| {
-                    error!(
+                    slog::error!(
+                        self.logger,
                         "Could not deserialize key (key_id: {}) from DB: {}",
-                        key_id.0, err
+                        key_id.0,
+                        err
                     );
                     None
                 })?;

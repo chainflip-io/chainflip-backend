@@ -74,7 +74,7 @@ async fn main() {
         .start(shutdown_rx);
 
     // TODO: Investigate whether we want to encrypt it on disk
-    let db = PersistentKeyDB::new("data.db");
+    let db = PersistentKeyDB::new("data.db", &root_logger);
 
     let signing_client =
         signing::MultisigClient::new(db, mq_factory, my_validator_id, &root_logger);
