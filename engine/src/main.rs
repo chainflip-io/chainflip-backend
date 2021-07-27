@@ -22,8 +22,6 @@ async fn main() {
     let root_logger = slog::Logger::root(drain, o!());
     slog::info!(root_logger, "Start the engines! :broom: :broom: "; o!());
 
-    std::thread::sleep(std::time::Duration::from_secs(5));
-
     let settings = Settings::new().expect("Failed to initialise settings");
 
     let health_monitor = HealthMonitor::new(&settings.health_check, &root_logger);
@@ -40,13 +38,7 @@ async fn main() {
         .create()
         .await
         .expect("Could not connect MQ client");
-    let sc_o = state_chain::sc_observer::SCObserver::new(
-        mq_client.clone(),
-        &settings.state_chain,
-        &root_logger,
-    )
-    .await;
-    let sc_o_fut = sc_o.run();
+    let sc_o_fut = state_chain::sc_observer::start(mq_client, state_chain_settings, logger);
     let sc_b_fut =
         state_chain::sc_broadcaster::start(&settings, signer, mq_factory.clone(), &root_logger);
 

@@ -103,9 +103,6 @@ mod test {
     #[tokio::test]
     #[ignore = "runs for 10 seconds"]
     async fn health_check_test() {
-        let drain = slog_json::Json::new(std::io::stdout()).build().fuse();
-        let drain = slog_async::Async::new(drain).build().fuse();
-        let root = slog::Logger::root(drain, o!());
         let test_settings = settings::test_utils::new_test_settings().unwrap();
         let logger = logging::test_utils::create_test_logger();
         let health_monitor = HealthMonitor::new(&test_settings.health_check, &logger);

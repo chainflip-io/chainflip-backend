@@ -20,6 +20,15 @@ pub struct SCObserver<M: IMQClient> {
     logger: slog::Logger,
 }
 
+pub async fn start<M: IMQClient>(
+    mq_client: M,
+    state_chain_settings: &settings::StateChain,
+    logger: &slog::Logger,
+) {
+    let sc_observer = SCObserver::new(mq_client, state_chain_settings, logger).await;
+    sc_observer.run().await.expect("SC Observer has died!");
+}
+
 impl<M: IMQClient> SCObserver<M> {
     pub async fn new(
         mq_client: M,
