@@ -8,6 +8,7 @@ use rand::{
 use tokio::time::Duration;
 
 use crate::{
+    logging,
     mq::{
         mq_mock::{MQMock, MQMockClientFactory},
         pin_message_stream, IMQClient, Subject,
@@ -195,17 +196,19 @@ async fn distributed_signing() {
     // Create a fake network
     let network = NetworkMock::new();
 
+    let logger = logging::test_utils::create_test_logger();
+
     // Start message queues for each party
     let mc_futs = (1..=N_PARTIES)
         .map(|i| {
             let p2p_client = network.new_client(VALIDATOR_IDS[i - 1].clone());
-
+            let logger = logger.clone();
             async move {
                 let mq = MQMock::new();
 
                 let mc = mq.get_client();
 
-                let conductor = P2PConductor::new(mc, p2p_client).await;
+                let conductor = P2PConductor::new(mc, p2p_client, &logger).await;
 
                 let (shutdown_conductor_tx, shutdown_conductor_rx) =
                     tokio::sync::oneshot::channel::<()>();
@@ -216,7 +219,8 @@ async fn distributed_signing() {
 
                 let db = KeyDBMock::new();
 
-                let client = MultisigClient::new(db, mq_factory, VALIDATOR_IDS[i - 1].clone());
+                let client =
+                    MultisigClient::new(db, mq_factory, VALIDATOR_IDS[i - 1].clone(), &logger);
 
                 let (shutdown_client_tx, shutdown_client_rx) =
                     tokio::sync::oneshot::channel::<()>();

@@ -326,6 +326,8 @@ mod tests {
 
     use web3::types::{H256, U256};
 
+    use crate::logging;
+
     use super::*;
 
     const CONTRACT_ADDRESS: &'static str = "0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f";
@@ -420,15 +422,17 @@ mod tests {
 
     #[test]
     fn test_load_contract() {
-        assert!(StakeManager::load(CONTRACT_ADDRESS).is_ok());
-        assert!(StakeManager::load("not_an_address").is_err());
+        let logger = logging::test_utils::create_test_logger();
+        assert!(StakeManager::load(CONTRACT_ADDRESS, &logger).is_ok());
+        assert!(StakeManager::load("not_an_address", &logger).is_err());
     }
 
     #[test]
     fn test_staked_log_parsing() -> anyhow::Result<()> {
         let log: web3::types::Log = serde_json::from_str(STAKED_LOG)?;
 
-        let sm = StakeManager::load(CONTRACT_ADDRESS)?;
+        let logger = logging::test_utils::create_test_logger();
+        let sm = StakeManager::load(CONTRACT_ADDRESS, &logger)?;
 
         match sm.parse_event(log)? {
             StakeManagerEvent::Staked {
@@ -458,7 +462,8 @@ mod tests {
     fn test_claim_registered_log_parsing() -> anyhow::Result<()> {
         let log: web3::types::Log = serde_json::from_str(CLAIM_REGISTERED_LOG)?;
 
-        let sm = StakeManager::load(CONTRACT_ADDRESS)?;
+        let logger = logging::test_utils::create_test_logger();
+        let sm = StakeManager::load(CONTRACT_ADDRESS, &logger)?;
 
         match sm.parse_event(log)? {
             StakeManagerEvent::ClaimRegistered {
@@ -508,7 +513,8 @@ mod tests {
     fn test_claim_executed_log_parsing() -> anyhow::Result<()> {
         let log: web3::types::Log = serde_json::from_str(CLAIM_EXECUTED_LOG)?;
 
-        let sm = StakeManager::load(CONTRACT_ADDRESS)?;
+        let logger = logging::test_utils::create_test_logger();
+        let sm = StakeManager::load(CONTRACT_ADDRESS, &logger)?;
 
         match sm.parse_event(log)? {
             StakeManagerEvent::ClaimExecuted {
@@ -538,7 +544,8 @@ mod tests {
     fn emission_changed_log_parsing() -> anyhow::Result<()> {
         let log: web3::types::Log = serde_json::from_str(EMISSION_CHANGED_LOG)?;
 
-        let sm = StakeManager::load(CONTRACT_ADDRESS)?;
+        let logger = logging::test_utils::create_test_logger();
+        let sm = StakeManager::load(CONTRACT_ADDRESS, &logger)?;
 
         match sm.parse_event(log)? {
             StakeManagerEvent::EmissionChanged {
@@ -570,8 +577,8 @@ mod tests {
     #[test]
     fn min_stake_changed_log_parsing() -> anyhow::Result<()> {
         let log: web3::types::Log = serde_json::from_str(MIN_STAKE_CHANGED_LOG)?;
-
-        let sm = StakeManager::load(CONTRACT_ADDRESS)?;
+        let logger = logging::test_utils::create_test_logger();
+        let sm = StakeManager::load(CONTRACT_ADDRESS, &logger)?;
 
         match sm.parse_event(log)? {
             StakeManagerEvent::MinStakeChanged {
@@ -603,7 +610,8 @@ mod tests {
 
     #[test]
     fn abi_topic_sigs() -> anyhow::Result<()> {
-        let sm = StakeManager::load(CONTRACT_ADDRESS)?;
+        let logger = logging::test_utils::create_test_logger();
+        let sm = StakeManager::load(CONTRACT_ADDRESS, &logger)?;
 
         // Staked event
         let staked_sig = sm.staked_event_definition().signature();

@@ -38,7 +38,7 @@ async fn main() {
         .create()
         .await
         .expect("Could not connect MQ client");
-    let sc_o_fut = state_chain::sc_observer::start(mq_client, state_chain_settings, logger);
+    let sc_o_fut = state_chain::sc_observer::start(mq_client, &settings.state_chain, &root_logger);
     let sc_b_fut =
         state_chain::sc_broadcaster::start(&settings, signer, mq_factory.clone(), &root_logger);
 
