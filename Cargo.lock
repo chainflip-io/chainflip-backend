@@ -5032,6 +5032,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-witness-api"
+version = "0.1.0"
+dependencies = [
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-cf-auction",
+ "pallet-cf-staking",
+ "parity-scale-codec",
+ "serde 1.0.126",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-grandpa"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8664,6 +8682,7 @@ dependencies = [
  "pallet-cf-staking",
  "pallet-cf-validator",
  "pallet-cf-witness",
+ "pallet-cf-witness-api",
  "pallet-grandpa",
  "pallet-offences",
  "pallet-randomness-collective-flip",
