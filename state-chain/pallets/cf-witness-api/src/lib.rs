@@ -22,7 +22,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use pallet_cf_auction::{Call as AuctionCall, Config as AuctionConfig};
 	use pallet_cf_staking::{
-		Call as StakingCall, Config as StakingConfig, EthTransactionHash, FlipBalance,
+		Call as StakingCall, Config as StakingConfig, EthereumAddress, EthTransactionHash, FlipBalance,
 	};
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
