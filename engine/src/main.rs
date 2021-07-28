@@ -30,8 +30,7 @@ async fn main() {
         state_chain::get_signer_from_privkey_file(&settings.state_chain.p2p_priv_key_file);
 
     // TODO: Investigate whether we want to encrypt it on disk
-    // TODO: This path should be a configuration option
-    let db = PersistentKeyDB::new("data.db");
+    let db = PersistentKeyDB::new(&settings.signing.db_file);
 
     let (_, p2p_shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();

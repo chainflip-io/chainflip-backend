@@ -1,3 +1,5 @@
+use std::{ffi::OsStr, path::Path};
+
 use config::{Config, ConfigError, File};
 
 use serde::Deserialize;
@@ -41,6 +43,7 @@ pub struct HealthCheck {
 pub struct Signing {
     /// This includes my_id if I'm part of genesis validator set
     pub genesis_validator_ids: Vec<ValidatorId>,
+    pub db_file: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -68,7 +71,7 @@ impl Settings {
         Ok(s)
     }
 
-    /// validates the formatting of some settings
+    /// Validates the formatting of some settings
     pub fn validate_settings(&self) -> Result<(), ConfigError> {
         // check the eth addresses
         is_eth_address(&self.eth.key_manager_eth_address)
@@ -80,6 +83,8 @@ impl Settings {
         // check the Websocket URLs
         parse_websocket_url(&self.eth.node_endpoint)
             .map_err(|e| ConfigError::Message(e.to_string()))?;
+
+        is_valid_db_path(&self.signing.db_file).map_err(|e| ConfigError::Message(e.to_string()))?;
 
         Ok(())
     }
@@ -102,6 +107,15 @@ fn parse_websocket_url(url: &str) -> Result<Url> {
     }
 
     Ok(issue_list_url)
+}
+
+fn is_valid_db_path(db_file: &str) -> Result<()> {
+    let path = Path::new(db_file);
+    println!("The extension is: {:?}", path.extension());
+    if path.extension() != Some(OsStr::new("db")) {
+        return Err(anyhow::Error::msg("Db path does not have '.db' extension"));
+    }
+    Ok(())
 }
 
 /// checks that the string is formatted as an eth address
@@ -143,7 +157,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn init_config() {
+    fn init_default_config() {
         let settings = Settings::new();
         let settings = settings.unwrap();
 
@@ -162,14 +176,16 @@ mod tests {
     }
 
     #[test]
-    fn test_setting_parsing() {
-        // test the eth address regex parsing
+    fn test_eth_address_parsing() {
         assert!(is_eth_address("0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f").is_ok());
         assert!(is_eth_address("0xdBa9b6065Deb6___57BC779fF6736709ecBa3409").is_err());
         assert!(is_eth_address("EAd5De9C41543E4bAbB09f9fE4f79153c036044f").is_err());
         assert!(is_eth_address("").is_err());
+    }
 
-        // test the websocket parsing
+    #[test]
+    fn test_websocket_url_parsing() {
+        assert!(parse_websocket_url("wss://network.my_eth_node:80/d2er2easdfasdfasdf2e").is_ok());
         assert!(parse_websocket_url("wss://network.my_eth_node:80/<secret_key>").is_ok());
         assert!(parse_websocket_url("wss://network.my_eth_node/<secret_key>").is_ok());
         assert!(parse_websocket_url("ws://network.my_eth_node/<secret_key>").is_ok());
@@ -179,5 +195,13 @@ mod tests {
         )
         .is_err());
         assert!(parse_websocket_url("").is_err());
+    }
+
+    #[test]
+    fn test_db_file_path_parsing() {
+        assert!(is_valid_db_path("data.db").is_ok());
+        assert!(is_valid_db_path("/my/user/data/data.db").is_ok());
+        assert!(is_valid_db_path("data.errdb").is_err());
+        assert!(is_valid_db_path("thishasnoextension").is_err());
     }
 }
