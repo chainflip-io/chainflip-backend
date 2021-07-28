@@ -83,10 +83,9 @@ mod test {
     #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
     struct TestMessage(String);
 
-    async fn setup_client() -> Box<NatsMQClient> {
+    async fn setup_client() -> NatsMQClient {
         let settings = settings::test_utils::new_test_settings().unwrap();
-        let mq_client = NatsMQClient::new(&settings.message_queue).await.unwrap();
-        Box::new(mq_client)
+        NatsMQClient::new(&settings.message_queue).await.unwrap()
     }
 
     #[ignore = "Depends on Nats being online"]
@@ -110,7 +109,7 @@ mod test {
         assert!(res.is_ok());
     }
 
-    async fn subscribe_test_inner(nats_client: Box<NatsMQClient>) {
+    async fn subscribe_test_inner(nats_client: NatsMQClient) {
         let test_message = TestMessage(String::from("I SAW A TRANSACTION"));
 
         let subject = Subject::Witness(Chain::ETH);
