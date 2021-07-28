@@ -4,7 +4,7 @@ use tokio_stream::StreamExt;
 use super::{helpers::create_subxt_client, runtime::StateChainRuntime};
 use crate::{
     eth::stake_manager::stake_manager::StakeManagerEvent,
-    mq::{pin_message_stream, IMQClient, IMQClientFactory, Subject},
+    mq::{pin_message_stream, IMQClient, Subject},
     settings::Settings,
 };
 
@@ -12,19 +12,13 @@ use crate::state_chain::witness_api::*;
 
 use anyhow::Result;
 
-pub async fn start<IMQ, IMQF>(
+pub async fn start<M>(
     settings: &Settings,
     signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
-    mq_factory: IMQF,
+    mq_client: M,
 ) where
-    IMQ: IMQClient + Sync + Send,
-    IMQF: IMQClientFactory<IMQ>,
+    M: IMQClient + Sync + Send,
 {
-    let mq_client = *mq_factory
-        .create()
-        .await
-        .expect("Should create message queue client");
-
     let mut sc_broadcaster = SCBroadcaster::new(&settings, signer, mq_client).await;
 
     sc_broadcaster

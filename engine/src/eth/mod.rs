@@ -61,7 +61,7 @@ pub enum EventProducerError {
 }
 
 /// Start all the ETH components
-pub async fn start(settings: Settings) {
+pub async fn start(settings: &Settings) {
     log::info!("Starting the ETH components");
     let sm_witness_future = stake_manager::start_stake_manager_witness(settings.clone());
 

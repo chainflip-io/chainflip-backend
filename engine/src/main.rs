@@ -30,19 +30,26 @@ async fn main() {
 
     // This can be the same filepath as the p2p key --node-key-file <file> on the state chain
     // which won't necessarily always be the case, i.e. if we no longer have PeerId == ValidatorId
-    let signer = state_chain::get_signer_from_privkey_file(&settings.state_chain.p2p_priv_key_file);
-    let my_validator_id = ValidatorId(signer.signer().public().0);
+    let my_pair_signer =
+        state_chain::get_signer_from_privkey_file(&settings.state_chain.p2p_priv_key_file);
 
     // TODO: Investigate whether we want to encrypt it on disk
+    // TODO: This path should be a configuration option
     let db = PersistentKeyDB::new("data.db");
 
     let (_, p2p_shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
 
     futures::join!(
-        state_chain::sc_observer::start(settings.clone()),
-        state_chain::sc_broadcaster::start(&settings, signer, mq_factory.clone()),
-        eth::start(settings.clone()),
+        signing::MultisigClient::new(
+            db,
+            mq_factory,
+            ValidatorId(my_pair_signer.signer().public().0)
+        )
+        .run(shutdown_client_rx),
+        state_chain::sc_observer::start(&settings, mq_client.clone()),
+        state_chain::sc_broadcaster::start(&settings, signer, mq_client.clone()),
+        eth::start(&settings),
         TempEventMapper::run(&settings),
         P2PConductor::new(
             mq_client,
@@ -55,6 +62,5 @@ async fn main() {
         )
         .await
         .start(p2p_shutdown_rx),
-        signing::MultisigClient::new(db, mq_factory, my_validator_id).run(shutdown_client_rx),
     );
 }
