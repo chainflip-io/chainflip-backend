@@ -43,12 +43,12 @@ async fn main() {
     futures::join!(
         signing::MultisigClient::new(
             db,
-            mq_factory,
+            mq_client.clone(),
             ValidatorId(my_pair_signer.signer().public().0)
         )
         .run(shutdown_client_rx),
         state_chain::sc_observer::start(&settings, mq_client.clone()),
-        state_chain::sc_broadcaster::start(&settings, signer, mq_client.clone()),
+        state_chain::sc_broadcaster::start(&settings, my_pair_signer, mq_client.clone()),
         eth::start(&settings),
         TempEventMapper::run(&settings),
         P2PConductor::new(

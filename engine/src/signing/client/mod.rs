@@ -1,9 +1,9 @@
 mod client_inner;
 
-use std::{marker::PhantomData, time::Duration};
+use std::time::Duration;
 
 use crate::{
-    mq::{pin_message_stream, IMQClient, IMQClientFactory, Subject},
+    mq::{pin_message_stream, IMQClient, Subject},
     p2p::ValidatorId,
     signing::db::KeyDB,
 };
@@ -69,44 +69,40 @@ pub enum MultisigEvent {
     KeygenResult(KeygenOutcome),
 }
 
-pub struct MultisigClient<MQ, F, S>
+pub struct MultisigClient<M, S>
 where
-    MQ: IMQClient,
-    F: IMQClientFactory<MQ>,
+    M: IMQClient + Clone,
     S: KeyDB,
 {
-    factory: F,
+    mq_client: M,
     inner_event_receiver: Option<mpsc::UnboundedReceiver<InnerEvent>>,
     inner: MultisigClientInner<S>,
     my_validator_id: ValidatorId,
-    _mq: PhantomData<MQ>,
 }
 
 // How long we keep individual signing phases around
 // before expiring them
 const PHASE_TIMEOUT: Duration = Duration::from_secs(20);
 
-impl<MQ, F, S> MultisigClient<MQ, F, S>
+impl<M, S> MultisigClient<M, S>
 where
-    MQ: IMQClient,
-    F: IMQClientFactory<MQ>,
+    M: IMQClient + Clone,
     S: KeyDB,
 {
-    pub fn new(db: S, factory: F, my_validator_id: ValidatorId) -> Self {
+    pub fn new(db: S, mq_client: M, my_validator_id: ValidatorId) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
 
         MultisigClient {
-            factory,
+            mq_client,
             inner: MultisigClientInner::new(my_validator_id.clone(), db, tx, PHASE_TIMEOUT),
             inner_event_receiver: Some(rx),
             my_validator_id,
-            _mq: PhantomData,
         }
     }
 
     async fn process_inner_events(
         mut receiver: mpsc::UnboundedReceiver<InnerEvent>,
-        mq: MQ,
+        mq: M,
         mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     ) {
         loop {
@@ -144,7 +140,7 @@ where
         log::info!("Starting signing module");
         let receiver = self.inner_event_receiver.take().unwrap();
 
-        let mq = *self.factory.create().await.unwrap();
+        let mq = self.mq_client.clone();
 
         let (cleanup_tx, cleanup_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
 
@@ -155,7 +151,7 @@ where
             tokio::sync::oneshot::channel::<()>();
 
         let events_fut =
-            MultisigClient::<_, F, S>::process_inner_events(receiver, mq, shutdown_events_fut_rx);
+            MultisigClient::<_, S>::process_inner_events(receiver, mq, shutdown_events_fut_rx);
 
         let cleanup_fut = async move {
             loop {
@@ -176,7 +172,7 @@ where
 
         let cleanup_stream = UnboundedReceiverStream::new(cleanup_rx);
 
-        let mq = *self.factory.create().await.unwrap();
+        let mq = self.mq_client.clone();
 
         let other_fut = async move {
             let stream1 = mq
