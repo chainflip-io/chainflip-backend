@@ -49,7 +49,7 @@ async fn main() {
         .run(shutdown_client_rx),
         state_chain::sc_observer::start(&settings, mq_client.clone()),
         state_chain::sc_broadcaster::start(&settings, my_pair_signer, mq_client.clone()),
-        eth::start(&settings),
+        eth::start(&settings, mq_client.clone()),
         TempEventMapper::run(&settings),
         P2PConductor::new(
             mq_client,
