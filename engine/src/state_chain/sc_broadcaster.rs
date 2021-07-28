@@ -221,7 +221,7 @@ mod tests {
         let pair_signer = PairSigner::new(alice);
         let logger = logging::test_utils::create_test_logger();
         let mut sc_broadcaster =
-            SCBroadcaster::new(&settings, pair_signer, *mq_client, &logger).await;
+            SCBroadcaster::new(&settings, pair_signer, mq_client, &logger).await;
 
         let staked_node_id =
             AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU").unwrap();

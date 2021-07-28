@@ -161,7 +161,7 @@ impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
 #[cfg(test)]
 mod tests {
 
-    use crate::mq::nats_client::NatsMQClient;
+    use crate::{logging, mq::nats_client::NatsMQClient};
 
     use super::*;
 

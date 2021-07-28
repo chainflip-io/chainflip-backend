@@ -156,6 +156,7 @@ mod tests {
 
     use crate::{
         eth::stake_manager::{stake_manager::StakeManager, stake_manager_sink::StakeManagerSink},
+        logging,
         mq::nats_client::NatsMQClient,
         settings,
     };
