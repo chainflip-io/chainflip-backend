@@ -5,7 +5,7 @@ use std::{
 
 use crate::mq::pin_message_stream;
 
-use super::{IMQClient, IMQClientFactory, SubjectName};
+use super::{IMQClient, SubjectName};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use log::*;
@@ -37,24 +37,6 @@ impl MQMock {
         MQMockClient {
             topics: Arc::clone(&self.topics),
         }
-    }
-}
-
-/// Factory that knows how to create instances of MQMockClient
-pub struct MQMockClientFactory {
-    mq: MQMock,
-}
-
-impl MQMockClientFactory {
-    pub fn new(mq: MQMock) -> Self {
-        MQMockClientFactory { mq }
-    }
-}
-
-#[async_trait]
-impl IMQClientFactory<MQMockClient> for MQMockClientFactory {
-    async fn create(&self) -> anyhow::Result<Box<MQMockClient>> {
-        Ok(Box::new(self.mq.get_client()))
     }
 }
 

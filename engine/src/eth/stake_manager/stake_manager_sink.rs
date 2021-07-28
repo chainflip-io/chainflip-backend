@@ -35,13 +35,7 @@ impl<M: IMQClient + Send + Sync> EventSink<StakeManagerEvent> for StakeManagerSi
 #[cfg(test)]
 mod tests {
 
-    use crate::{
-        mq::{
-            nats_client::{NatsMQClient, NatsMQClientFactory},
-            IMQClientFactory,
-        },
-        settings,
-    };
+    use crate::{mq::nats_client::NatsMQClient, settings};
 
     use super::*;
 
@@ -58,9 +52,7 @@ mod tests {
             endpoint: format!("http://{}:{}", ip, port),
         };
 
-        let factory = NatsMQClientFactory::new(&mq_settings);
-
-        let mq_client = *factory.create().await.unwrap();
+        let mq_client = NatsMQClient::new(&mq_settings).await.unwrap();
 
         StakeManagerSink::<NatsMQClient>::new(mq_client)
             .await

@@ -140,10 +140,7 @@ mod tests {
 
     use super::*;
 
-    use crate::{
-        mq::{nats_client::NatsMQClientFactory, IMQClientFactory},
-        settings::{self},
-    };
+    use crate::{mq::nats_client::NatsMQClient, settings};
 
     use sp_keyring::AccountKeyring;
     use sp_runtime::AccountId32;
@@ -158,16 +155,11 @@ mod tests {
     async fn can_create_sc_broadcaster() {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let mq_factory = NatsMQClientFactory::new(&settings.message_queue);
-
-        let mq_client = mq_factory
-            .create()
-            .await
-            .expect("Could not create MQ client");
+        let mq_client = NatsMQClient::new(&settings.message_queue).await.unwrap();
 
         let alice = AccountKeyring::Alice.pair();
         let pair_signer = PairSigner::new(alice);
-        SCBroadcaster::new(&settings, pair_signer, *mq_client).await;
+        SCBroadcaster::new(&settings, pair_signer, mq_client).await;
     }
 
     // TODO: Use the SC broadcaster struct instead
@@ -204,16 +196,11 @@ mod tests {
     async fn sc_broadcaster_submit_event() {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let mq_factory = NatsMQClientFactory::new(&settings.message_queue);
-
-        let mq_client = mq_factory
-            .create()
-            .await
-            .expect("Could not create MQ client");
+        let mq_client = NatsMQClient::new(&settings.message_queue).await.unwrap();
 
         let alice = AccountKeyring::Alice.pair();
         let pair_signer = PairSigner::new(alice);
-        let mut sc_broadcaster = SCBroadcaster::new(&settings, pair_signer, *mq_client).await;
+        let mut sc_broadcaster = SCBroadcaster::new(&settings, pair_signer, mq_client).await;
 
         let staked_node_id =
             AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU").unwrap();
