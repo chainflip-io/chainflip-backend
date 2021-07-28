@@ -161,21 +161,14 @@ impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
 #[cfg(test)]
 mod tests {
 
-    use crate::{
-        logging,
-        mq::{
-            nats_client::{NatsMQClient, NatsMQClientFactory},
-            IMQClientFactory,
-        },
-    };
+    use crate::mq::nats_client::NatsMQClient;
 
     use super::*;
 
     async fn new_eth_broadcaster() -> Result<EthBroadcaster<NatsMQClient, WebSocket>> {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let factory = NatsMQClientFactory::new(&settings.message_queue);
-        let mq_client = *factory.create().await.unwrap();
+        let mq_client = NatsMQClient::new(&settings.message_queue).await.unwrap();
         let secret = SecretKey::from_slice(&[3u8; 32]).unwrap();
         let logger = logging::test_utils::create_test_logger();
 

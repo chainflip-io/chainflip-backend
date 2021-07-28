@@ -14,12 +14,6 @@ use super::{
     sc_event::{raw_event_to_subject, sc_event_from_raw_event},
 };
 
-pub struct SCObserver<M: IMQClient> {
-    mq_client: M,
-    subxt_client: Client<StateChainRuntime>,
-    logger: slog::Logger,
-}
-
 pub async fn start<M: IMQClient>(
     mq_client: M,
     state_chain_settings: &settings::StateChain,
@@ -27,6 +21,12 @@ pub async fn start<M: IMQClient>(
 ) {
     let sc_observer = SCObserver::new(mq_client, state_chain_settings, logger).await;
     sc_observer.run().await.expect("SC Observer has died!");
+}
+
+pub struct SCObserver<M: IMQClient> {
+    mq_client: M,
+    subxt_client: Client<StateChainRuntime>,
+    logger: slog::Logger,
 }
 
 impl<M: IMQClient> SCObserver<M> {

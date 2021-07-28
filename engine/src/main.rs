@@ -1,13 +1,12 @@
 use chainflip_engine::{
     eth,
     health::HealthMonitor,
-    mq::{nats_client::NatsMQClientFactory, IMQClientFactory},
+    mq::nats_client::NatsMQClient,
     p2p::{P2PConductor, RpcP2PClient, ValidatorId},
     settings::Settings,
     signing,
     signing::db::PersistentKeyDB,
-    state_chain,
-    temp_event_mapper::TempEventMapper,
+    state_chain, temp_event_mapper,
 };
 use slog::{o, Drain};
 use sp_core::Pair;
@@ -27,57 +26,56 @@ async fn main() {
     let health_monitor = HealthMonitor::new(&settings.health_check, &root_logger);
     health_monitor.run().await;
 
-    let mq_factory = NatsMQClientFactory::new(&settings.message_queue);
+    slog::info!(
+        &root_logger,
+        "Connecting to NatsMQ at: {}",
+        &settings.message_queue.endpoint
+    );
+    let mq_client = NatsMQClient::new(&settings.message_queue)
+        .await
+        .expect("Should connect to message queue");
 
     // This can be the same filepath as the p2p key --node-key-file <file> on the state chain
     // which won't necessarily always be the case, i.e. if we no longer have PeerId == ValidatorId
-    let signer = state_chain::get_signer_from_privkey_file(&settings.state_chain.p2p_priv_key_file);
-    let my_pubkey = signer.signer().public();
-    let my_validator_id = ValidatorId(my_pubkey.0);
-    let mq_client = *mq_factory
-        .create()
-        .await
-        .expect("Could not connect MQ client");
-    let sc_o_fut = state_chain::sc_observer::start(mq_client, &settings.state_chain, &root_logger);
-    let sc_b_fut =
-        state_chain::sc_broadcaster::start(&settings, signer, mq_factory.clone(), &root_logger);
-
-    let eth_fut = eth::start(&settings, &root_logger);
-
-    let (_, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
-
-    let substrate_node_endpoint = url::Url::parse(settings.state_chain.ws_endpoint.as_str())
-        .expect(&format!(
-            "Should be valid ws endpoint: {}",
-            settings.state_chain.ws_endpoint
-        ));
-    let p2p_client = RpcP2PClient::new(substrate_node_endpoint, &root_logger);
-    let mq_client = *mq_factory
-        .create()
-        .await
-        .expect("Could not connect MQ client");
-    let p2p_conductor_fut = P2PConductor::new(mq_client, p2p_client, &root_logger)
-        .await
-        .start(shutdown_rx);
+    let my_pair_signer =
+        state_chain::get_signer_from_privkey_file(&settings.state_chain.p2p_priv_key_file);
 
     // TODO: Investigate whether we want to encrypt it on disk
+    // TODO: This path should be a configuration option
     let db = PersistentKeyDB::new("data.db", &root_logger);
 
-    let temp_event_mapper = TempEventMapper::new(&root_logger);
-    let temp_event_map_fut = temp_event_mapper.run(&settings);
-
+    let (_, p2p_shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
 
-    let signing_client =
-        signing::MultisigClient::new(db, mq_factory, my_validator_id, &root_logger);
-    let signing_client_fut = signing_client.run(shutdown_client_rx);
-
     futures::join!(
-        sc_o_fut,
-        sc_b_fut,
-        eth_fut,
-        temp_event_map_fut,
-        p2p_conductor_fut,
-        signing_client_fut,
+        signing::MultisigClient::new(
+            db,
+            mq_client.clone(),
+            ValidatorId(my_pair_signer.signer().public().0),
+            &root_logger,
+        )
+        .run(shutdown_client_rx),
+        state_chain::sc_observer::start(mq_client.clone(), &settings.state_chain, &root_logger),
+        state_chain::sc_broadcaster::start(
+            &settings,
+            my_pair_signer,
+            mq_client.clone(),
+            &root_logger
+        ),
+        eth::start(&settings, mq_client.clone(), &root_logger),
+        temp_event_mapper::start(mq_client.clone(), &root_logger),
+        P2PConductor::new(
+            mq_client,
+            RpcP2PClient::new(
+                url::Url::parse(settings.state_chain.ws_endpoint.as_str()).expect(&format!(
+                    "Should be valid ws endpoint: {}",
+                    settings.state_chain.ws_endpoint
+                )),
+                &root_logger
+            ),
+            &root_logger
+        )
+        .await
+        .start(p2p_shutdown_rx),
     );
 }

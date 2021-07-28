@@ -76,10 +76,8 @@ cf_traits::impl_mock_witnesser_for_account_and_call_types!(AccountId, Call);
 
 impl pallet_cf_staking::Config for Test {
 	type Event = Event;
-	type Call = Call;
 	type Nonce = u64;
 	type EnsureWitnessed = MockEnsureWitnessed;
-	type Witnesser = MockWitnesser;
 	type EpochInfo = epoch_info::Mock;
 	type TimeSource = time_source::Mock;
 	type MinClaimTTL = MinClaimTTL;

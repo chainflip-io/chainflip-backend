@@ -28,7 +28,7 @@ impl<M: IMQClient + Send + Sync> StakeManagerSink<M> {
 }
 
 #[async_trait]
-impl<M: IMQClient + Send + Sync> EventSink<StakeManagerEvent> for StakeManagerSink<M> {
+impl<MQC: IMQClient + Send + Sync> EventSink<StakeManagerEvent> for StakeManagerSink<MQC> {
     async fn process_event(&self, event: StakeManagerEvent) -> anyhow::Result<()> {
         slog::debug!(self.logger, "Processing event: {:?}", event);
         self.mq_client
@@ -41,14 +41,7 @@ impl<M: IMQClient + Send + Sync> EventSink<StakeManagerEvent> for StakeManagerSi
 #[cfg(test)]
 mod tests {
 
-    use crate::{
-        logging,
-        mq::{
-            nats_client::{NatsMQClient, NatsMQClientFactory},
-            IMQClientFactory,
-        },
-        settings,
-    };
+    use crate::{logging, mq::nats_client::NatsMQClient, settings};
 
     use super::*;
 
@@ -59,16 +52,11 @@ mod tests {
         let addr = server.address();
         let logger = logging::test_utils::create_test_logger();
 
-        let ip = addr.ip();
-        let port = addr.port();
-
         let mq_settings = settings::MessageQueue {
-            endpoint: format!("http://{}:{}", ip, port),
+            endpoint: format!("http://{}:{}", addr.ip(), addr.port()),
         };
 
-        let factory = NatsMQClientFactory::new(&mq_settings);
-
-        let mq_client = *factory.create().await.unwrap();
+        let mq_client = NatsMQClient::new(&mq_settings).await.unwrap();
 
         StakeManagerSink::<NatsMQClient>::new(mq_client, &logger)
             .await

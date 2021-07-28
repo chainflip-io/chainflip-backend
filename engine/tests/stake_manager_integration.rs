@@ -6,10 +6,7 @@ use std::str::FromStr;
 
 use chainflip_engine::{
     eth::{self, stake_manager::stake_manager::StakeManagerEvent},
-    mq::{
-        nats_client::{NatsMQClient, NatsMQClientFactory},
-        pin_message_stream, IMQClient, IMQClientFactory, Subject,
-    },
+    mq::{nats_client::NatsMQClient, pin_message_stream, IMQClient, Subject},
     settings::{self, Settings},
 };
 
@@ -18,27 +15,10 @@ use tokio_stream::StreamExt;
 
 use web3::types::U256;
 
-pub async fn setup_mq(mq_settings: settings::MessageQueue) -> Box<NatsMQClient> {
-    let factory = NatsMQClientFactory::new(&mq_settings);
-
-    factory.create().await.unwrap()
-}
-
-// Creating the settings to be used for tests
-pub fn test_settings() -> Result<Settings, ConfigError> {
-    let mut s = Config::new();
-
-    // Start off by merging in the "default" configuration file
-    s.merge(File::with_name("config/Testing.toml"))?;
-
-    // You can deserialize (and thus freeze) the entire configuration as
-    s.try_into()
-}
-
 #[tokio::test]
 pub async fn test_all_stake_manager_events() {
-    let settings = test_settings().unwrap();
-    let mq_c = setup_mq(settings.clone().message_queue).await;
+    let settings = settings::test_utils::create_test_settings().unwrap();
+    let mq_c = NatsMQClient::new(&settings.message_queue).await.unwrap();
 
     // subscribe before pushing events to the queue
     let stream = mq_c
@@ -48,7 +28,7 @@ pub async fn test_all_stake_manager_events() {
 
     println!("Subscribing to eth events");
     // this future contains an infinite loop, so we must end it's life
-    let sm_future = eth::stake_manager::start_stake_manager_witness(settings);
+    let sm_future = eth::stake_manager::start_stake_manager_witness(&settings, mq_c);
     println!("Subscribed");
 
     // We just want the future to end, it should already have done it's job in 1 second

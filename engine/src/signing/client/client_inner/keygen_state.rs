@@ -5,7 +5,6 @@ use slog::o;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
-    logging::COMPONENT_KEY,
     p2p::{P2PMessageCommand, ValidatorId},
     signing::{
         client::{

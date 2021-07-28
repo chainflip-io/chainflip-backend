@@ -22,9 +22,9 @@ use sp_runtime::traits::Keccak256;
 use web3::{ethabi::Token, types::Address};
 
 /// Helper function, constructs and runs the [SetAggKeyWithAggKeyEncoder] asynchronously.
-pub async fn start<M: IMQClient + Clone>(
+pub async fn start<MQC: IMQClient + Clone>(
     settings: &settings::Settings,
-    mq_client: M,
+    mq_client: MQC,
     logger: &slog::Logger,
 ) -> Result<()> {
     let mut encoder = SetAggKeyWithAggKeyEncoder::new(
@@ -48,8 +48,8 @@ struct TxDetails {
 
 /// Reads [AuctionConfirmedEvent]s off the message queue and encodes the function call to the stake manager.
 #[derive(Clone)]
-struct SetAggKeyWithAggKeyEncoder<M: IMQClient> {
-    mq_client: M,
+struct SetAggKeyWithAggKeyEncoder<MQC: IMQClient> {
+    mq_client: MQC,
     key_manager: KeyManager,
     // maps the MessageHash which gets sent to the signer with the data that the MessageHash is a hash of
     messages: HashMap<MessageHash, ParamContainer>,
@@ -68,11 +68,11 @@ struct ParamContainer {
     pub pubkey_y_parity: u8,
 }
 
-impl<M: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<M> {
+impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
     fn new(
         key_manager_address: &str,
         genesis_validator_ids: Vec<ValidatorId>,
-        mq_client: M,
+        mq_client: MQC,
         logger: &slog::Logger,
     ) -> Result<Self> {
         let key_manager = KeyManager::load(key_manager_address)?;

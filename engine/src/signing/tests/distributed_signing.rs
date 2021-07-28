@@ -9,10 +9,7 @@ use tokio::time::Duration;
 
 use crate::{
     logging,
-    mq::{
-        mq_mock::{MQMock, MQMockClientFactory},
-        pin_message_stream, IMQClient, Subject,
-    },
+    mq::{mq_mock::MQMock, pin_message_stream, IMQClient, Subject},
     p2p::{mock::NetworkMock, P2PConductor, ValidatorId},
     signing::db::KeyDBMock,
 };
@@ -206,21 +203,19 @@ async fn distributed_signing() {
             async move {
                 let mq = MQMock::new();
 
-                let mc = mq.get_client();
+                let mq_client = mq.get_client();
 
-                let conductor = P2PConductor::new(mc, p2p_client, &logger).await;
+                let conductor = P2PConductor::new(mq_client.clone(), p2p_client, &logger).await;
 
                 let (shutdown_conductor_tx, shutdown_conductor_rx) =
                     tokio::sync::oneshot::channel::<()>();
 
                 let conductor_fut = conductor.start(shutdown_conductor_rx);
 
-                let mq_factory = MQMockClientFactory::new(mq.clone());
-
                 let db = KeyDBMock::new();
 
                 let client =
-                    MultisigClient::new(db, mq_factory, VALIDATOR_IDS[i - 1].clone(), &logger);
+                    MultisigClient::new(db, mq_client, VALIDATOR_IDS[i - 1].clone(), &logger);
 
                 let (shutdown_client_tx, shutdown_client_rx) =
                     tokio::sync::oneshot::channel::<()>();

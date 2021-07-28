@@ -1,9 +1,6 @@
 #[macro_export]
 macro_rules! impl_mock_witnesser_for_account_and_call_types {
 	($account_id:ty, $call:ty) => {
-		use frame_support::dispatch::Dispatchable;
-		use std::cell::RefCell;
-
 		pub struct MockWitnesser;
 
 		impl MockWitnesser {
@@ -11,14 +8,18 @@ macro_rules! impl_mock_witnesser_for_account_and_call_types {
 				WITNESS_THRESHOLD.with(|cell| *(cell.borrow_mut()) = threshold);
 			}
 
-			pub fn get_vote_count() -> usize {
+			pub fn total_votes_cast() -> usize {
 				WITNESS_VOTES.with(|cell| cell.borrow().len())
+			}
+
+			pub fn get_vote_count_for(call: &$call) -> usize {
+				WITNESS_VOTES.with(|cell| cell.borrow().iter().filter(|c| *c == call).count())
 			}
 		}
 
 		thread_local! {
-			pub static WITNESS_THRESHOLD: RefCell<u32> = RefCell::new(0);
-			pub static WITNESS_VOTES: RefCell<Vec<$call>> = RefCell::new(vec![]);
+			pub static WITNESS_THRESHOLD: std::cell::RefCell<u32> = std::cell::RefCell::new(0);
+			pub static WITNESS_VOTES: std::cell::RefCell<Vec<$call>> = std::cell::RefCell::new(vec![]);
 		}
 
 		impl $crate::Witnesser for MockWitnesser {
@@ -38,7 +39,7 @@ macro_rules! impl_mock_witnesser_for_account_and_call_types {
 				let threshold = WITNESS_THRESHOLD.with(|t| t.borrow().clone());
 
 				if count as u32 == threshold {
-					Dispatchable::dispatch(call, Origin::root())
+					frame_support::dispatch::Dispatchable::dispatch(call, Origin::root())
 				} else {
 					Ok(().into())
 				}
