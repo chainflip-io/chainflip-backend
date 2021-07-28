@@ -92,7 +92,7 @@ where
     pub fn new(db: S, mq_client: M, my_validator_id: ValidatorId) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
 
-        MultisigClient {
+        Self {
             mq_client,
             inner: MultisigClientInner::new(my_validator_id.clone(), db, tx, PHASE_TIMEOUT),
             inner_event_receiver: Some(rx),

@@ -6,8 +6,7 @@ use chainflip_engine::{
     settings::Settings,
     signing,
     signing::db::PersistentKeyDB,
-    state_chain,
-    temp_event_mapper::TempEventMapper,
+    state_chain, temp_event_mapper,
 };
 use sp_core::Pair;
 
@@ -50,7 +49,7 @@ async fn main() {
         state_chain::sc_observer::start(&settings, mq_client.clone()),
         state_chain::sc_broadcaster::start(&settings, my_pair_signer, mq_client.clone()),
         eth::start(&settings, mq_client.clone()),
-        TempEventMapper::run(&settings),
+        temp_event_mapper::start(mq_client.clone()),
         P2PConductor::new(
             mq_client,
             RpcP2PClient::new(
