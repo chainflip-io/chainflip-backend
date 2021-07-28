@@ -110,11 +110,36 @@ pub struct RpcCore {
 	manager: SubscriptionManager,
 }
 
+/// Protocol errors notified via the subscription stream.
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub enum P2pError {
+	/// The recipient of a message could not be found on the network.
+	UnknownRecipient(ValidatorIdBs58),
+	/// This node can't send messages until it identifies itself to the network.
+	Unidentified,
+	/// Empty messages are not allowed.
+	EmptyMessage,
+	/// The node attempted to identify itself more than once.
+	AlreadyIdentified(ValidatorIdBs58)
+}
+
+impl From<P2pError> for P2PEvent {
+    fn from(err: P2pError) -> Self {
+        P2PEvent::Error(err)
+    }
+}
+
+/// Events available via the subscription stream.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum P2PEvent {
+	/// A message has been received from another validator.
 	MessageReceived(ValidatorIdBs58, MessageBs58),
+	/// A new validator has cconnected and identified itself to the network.
 	ValidatorConnected(ValidatorIdBs58),
+	/// A validator has disconnected from the network.
 	ValidatorDisconnected(ValidatorIdBs58),
+	/// Errors.
+	Error(P2pError)
 }
 
 impl RpcCore {
@@ -156,6 +181,22 @@ impl NetworkObserver for RpcCore {
 	fn received(&self, validator_id: &ValidatorId, message: RawMessage) {
 		self.notify(P2PEvent::MessageReceived((*validator_id).into(), message.into()));
 	}
+
+	fn unknown_recipient(&self, recipient_id: &ValidatorId) {
+		self.notify(P2pError::UnknownRecipient((*recipient_id).into()).into());
+    }
+
+	fn unidentified_node(&self) {
+        self.notify(P2pError::Unidentified.into());
+    }
+
+	fn empty_message(&self) {
+        self.notify(P2pError::EmptyMessage.into());
+    }
+
+	fn already_identified(&self, existing_id: &ValidatorId) {
+        self.notify(P2pError::AlreadyIdentified((*existing_id).into()).into());
+    }
 }
 
 /// The RPC bridge and API
