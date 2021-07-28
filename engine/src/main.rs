@@ -1,7 +1,7 @@
 use chainflip_engine::{
     eth,
     health::spawn_health_check,
-    mq::{nats_client::NatsMQClientFactory, IMQClientFactory},
+    mq::nats_client::NatsMQClient,
     p2p::{P2PConductor, RpcP2PClient, ValidatorId},
     settings::Settings,
     signing,
@@ -20,12 +20,9 @@ async fn main() {
 
     spawn_health_check(settings.clone().health_check).await;
 
-    let mq_factory = NatsMQClientFactory::new(&settings.message_queue);
-
-    let mq_client = *mq_factory
-        .create()
+    let mq_client = NatsMQClient::new(&settings.message_queue)
         .await
-        .expect("Could not connect MQ client");
+        .expect("Should connect to message queue");
 
     // This can be the same filepath as the p2p key --node-key-file <file> on the state chain
     // which won't necessarily always be the case, i.e. if we no longer have PeerId == ValidatorId

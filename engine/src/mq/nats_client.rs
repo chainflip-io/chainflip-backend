@@ -1,5 +1,5 @@
+use super::SubjectName;
 use super::{IMQClient, Subject};
-use super::{IMQClientFactory, SubjectName};
 use anyhow::Context;
 use anyhow::Result;
 use async_nats;
@@ -9,13 +9,6 @@ use serde::{de::DeserializeOwned, Serialize};
 use tokio_stream::{Stream, StreamExt};
 
 use crate::settings;
-
-// This will likely have a private field containing the underlying mq client
-#[derive(Clone, Debug)]
-pub struct NatsMQClient {
-    /// The nats.rs Connection to the Nats server
-    conn: async_nats::Connection,
-}
 
 struct Subscription {
     inner: async_nats::Subscription,
@@ -31,24 +24,18 @@ impl Subscription {
     }
 }
 
-#[derive(Clone)]
-pub struct NatsMQClientFactory {
-    mq_settings: settings::MessageQueue,
+// This will likely have a private field containing the underlying mq client
+#[derive(Clone, Debug)]
+pub struct NatsMQClient {
+    /// The nats.rs Connection to the Nats server
+    conn: async_nats::Connection,
 }
 
-impl NatsMQClientFactory {
-    pub fn new(mq_settings: &settings::MessageQueue) -> Self {
-        NatsMQClientFactory {
-            mq_settings: mq_settings.clone(),
-        }
-    }
-}
-
-#[async_trait]
-impl IMQClientFactory<NatsMQClient> for NatsMQClientFactory {
-    async fn create(&self) -> anyhow::Result<Box<NatsMQClient>> {
-        let conn = async_nats::connect(self.mq_settings.endpoint.as_str()).await?;
-        Ok(Box::new(NatsMQClient { conn }))
+impl NatsMQClient {
+    pub async fn new(mq_settings: &settings::MessageQueue) -> Result<Self> {
+        log::info!("Connecting to message queue at: {}", mq_settings.endpoint);
+        let conn = async_nats::connect(mq_settings.endpoint.as_str()).await?;
+        Ok(Self { conn })
     }
 }
 
@@ -98,11 +85,8 @@ mod test {
 
     async fn setup_client() -> Box<NatsMQClient> {
         let settings = settings::test_utils::new_test_settings().unwrap();
-
-        NatsMQClientFactory::new(&settings.message_queue)
-            .create()
-            .await
-            .unwrap()
+        let mq_client = NatsMQClient::new(&settings.message_queue).await.unwrap();
+        Box::new(mq_client)
     }
 
     #[ignore = "Depends on Nats being online"]
