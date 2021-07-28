@@ -55,16 +55,16 @@ pub enum EventProducerError {
 }
 
 /// Start all the ETH components
-pub async fn start<M: 'static + IMQClient + Send + Sync + Clone>(
+pub async fn start<MQC: 'static + IMQClient + Send + Sync + Clone>(
     settings: &Settings,
-    mq_client: M,
+    mq_client: MQC,
 ) {
     log::info!("Starting the ETH components");
     let sm_witness_future =
-        stake_manager::start_stake_manager_witness::<M>(&settings, mq_client.clone());
+        stake_manager::start_stake_manager_witness::<MQC>(&settings, mq_client.clone());
 
     let eth_broadcaster_future =
-        eth_broadcaster::start_eth_broadcaster::<M>(&settings, mq_client.clone());
+        eth_broadcaster::start_eth_broadcaster::<MQC>(&settings, mq_client.clone());
 
     let eth_tx_encoder_future =
         eth_tx_encoding::set_agg_key_with_agg_key::start(&settings, mq_client.clone());

@@ -7,18 +7,18 @@ use crate::{
     state_chain::{auction, runtime::StateChainRuntime},
 };
 
-pub async fn start<M: IMQClient + Send + Sync>(mq_client: M) {
+pub async fn start<MQC: IMQClient + Send + Sync>(mq_client: MQC) {
     let temp_event_mapper = TempEventMapper::new(mq_client);
     temp_event_mapper.run().await
 }
 
 /// Temporary event mapper for the internal testnet
-pub struct TempEventMapper<M: IMQClient + Send + Sync> {
-    mq_client: M,
+pub struct TempEventMapper<MQC: IMQClient + Send + Sync> {
+    mq_client: MQC,
 }
 
-impl<M: IMQClient + Send + Sync> TempEventMapper<M> {
-    pub fn new(mq_client: M) -> Self {
+impl<MQC: IMQClient + Send + Sync> TempEventMapper<MQC> {
+    pub fn new(mq_client: MQC) -> Self {
         Self { mq_client }
     }
 

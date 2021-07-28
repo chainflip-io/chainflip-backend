@@ -69,12 +69,12 @@ pub enum MultisigEvent {
     KeygenResult(KeygenOutcome),
 }
 
-pub struct MultisigClient<M, S>
+pub struct MultisigClient<MQC, S>
 where
-    M: IMQClient + Clone,
+    MQC: IMQClient + Clone,
     S: KeyDB,
 {
-    mq_client: M,
+    mq_client: MQC,
     inner_event_receiver: Option<mpsc::UnboundedReceiver<InnerEvent>>,
     inner: MultisigClientInner<S>,
     my_validator_id: ValidatorId,
@@ -84,12 +84,12 @@ where
 // before expiring them
 const PHASE_TIMEOUT: Duration = Duration::from_secs(20);
 
-impl<M, S> MultisigClient<M, S>
+impl<MQC, S> MultisigClient<MQC, S>
 where
-    M: IMQClient + Clone,
+    MQC: IMQClient + Clone,
     S: KeyDB,
 {
-    pub fn new(db: S, mq_client: M, my_validator_id: ValidatorId) -> Self {
+    pub fn new(db: S, mq_client: MQC, my_validator_id: ValidatorId) -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
 
         Self {
@@ -102,7 +102,7 @@ where
 
     async fn process_inner_events(
         mut receiver: mpsc::UnboundedReceiver<InnerEvent>,
-        mq: M,
+        mq: MQC,
         mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     ) {
         loop {
@@ -140,8 +140,6 @@ where
         log::info!("Starting signing module");
         let receiver = self.inner_event_receiver.take().unwrap();
 
-        let mq = self.mq_client.clone();
-
         let (cleanup_tx, cleanup_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
 
         let (shutdown_other_fut_tx, mut shutdown_other_fut_rx) =
@@ -150,8 +148,11 @@ where
         let (shutdown_events_fut_tx, shutdown_events_fut_rx) =
             tokio::sync::oneshot::channel::<()>();
 
-        let events_fut =
-            MultisigClient::<_, S>::process_inner_events(receiver, mq, shutdown_events_fut_rx);
+        let events_fut = MultisigClient::<_, S>::process_inner_events(
+            receiver,
+            self.mq_client.clone(),
+            shutdown_events_fut_rx,
+        );
 
         let cleanup_fut = async move {
             loop {

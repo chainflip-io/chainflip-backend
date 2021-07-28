@@ -12,12 +12,12 @@ use crate::state_chain::witness_api::*;
 
 use anyhow::Result;
 
-pub async fn start<M>(
+pub async fn start<MQC>(
     settings: &Settings,
     signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
-    mq_client: M,
+    mq_client: MQC,
 ) where
-    M: IMQClient + Sync + Send,
+    MQC: IMQClient + Sync + Send,
 {
     let mut sc_broadcaster = SCBroadcaster::new(&settings, signer, mq_client).await;
 
@@ -27,23 +27,23 @@ pub async fn start<M>(
         .expect("SC Broadcaster has died!");
 }
 
-pub struct SCBroadcaster<MQ>
+pub struct SCBroadcaster<MQC>
 where
-    MQ: IMQClient + Send + Sync,
+    MQC: IMQClient + Send + Sync,
 {
-    mq_client: MQ,
+    mq_client: MQC,
     sc_client: Client<StateChainRuntime>,
     signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
 }
 
-impl<MQ> SCBroadcaster<MQ>
+impl<MQC> SCBroadcaster<MQC>
 where
-    MQ: IMQClient + Send + Sync,
+    MQC: IMQClient + Send + Sync,
 {
     pub async fn new(
         settings: &Settings,
         mut signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
-        mq_client: MQ,
+        mq_client: MQC,
     ) -> Self {
         let sc_client = create_subxt_client(&settings.state_chain)
             .await
