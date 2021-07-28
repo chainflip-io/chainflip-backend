@@ -9,7 +9,7 @@ pub mod bs58_vec {
 	use serde::{Deserialize, Deserializer};
 
 	pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<u8>, D::Error> {
-		let s = <&str>::deserialize(d)?;
+		let s = String::deserialize(d)?;
 		bs58::decode(s)
 			.into_vec()
 			.map_err(|e| serde::de::Error::custom(e))
@@ -20,11 +20,11 @@ pub mod bs58_fixed_size {
 	pub use super::serialize_base58 as serialize;
 	use serde::{de::Error, Deserialize, Deserializer};
 
-	pub fn deserialize<'de, D: Deserializer<'de>, const Size: usize>(
+	pub fn deserialize<'de, D: Deserializer<'de>, const SIZE: usize>(
 		d: D,
-	) -> Result<[u8; Size], D::Error> {
-		let mut buffer = [0xFF; Size];
-		let s = <&str>::deserialize(d)?;
+	) -> Result<[u8; SIZE], D::Error> {
+		let mut buffer = [0xFF; SIZE];
+		let s = String::deserialize(d)?;
 		let decoded = bs58::decode(s)
 			.into(&mut buffer)
 			.map_err(|e| Error::custom(e))?;
@@ -33,4 +33,22 @@ pub mod bs58_fixed_size {
 		}
 		Ok(buffer)
 	}
+}
+
+#[test]
+fn test_serde() {
+	use serde_json;
+	use super::{MessageBs58, ValidatorIdBs58};
+
+	let validator_id_raw = [0xCF; 32];
+	let original_message = b"super interesting".to_vec();
+
+	serde_json::to_string(&ValidatorIdBs58(validator_id_raw)).expect("Encoding validator Id should work.");
+	let encoded_message = serde_json::to_string(&MessageBs58(original_message.clone())).unwrap();
+
+	let decoded_message: MessageBs58 = serde_json::from_str(encoded_message.as_str()).expect("Encoded should decode.");
+	assert_eq!(decoded_message.0, original_message);
+
+	serde_json::from_str::<ValidatorIdBs58>(r#""5G""#).expect_err("Length is invalid.");
+	serde_json::from_str::<ValidatorIdBs58>(r#""5G9NWJ5P9uk7am24yCKeLZJqXWW6hjuMyRJDmw4ofqx""#).expect("Valid Id.");
 }

@@ -84,14 +84,14 @@ impl<B: BlockT, H: ExHashT> PeerNetwork for NetworkService<B, H> {
 	}
 }
 
-/// An external observer for events.
+/// A collection of callbacks for network events.
 pub trait NetworkObserver {
-	/// On a new peer connected to the network
-	fn new_peer(&self, validator_id: &ValidatorId);
-	/// On a peer being disconnected
+	/// Called when a peer identifies itself to the network.
+	fn new_validator(&self, validator_id: &ValidatorId);
+	/// Called when a peer is disconnected.
 	fn disconnected(&self, validator_id: &ValidatorId);
-	/// A message being received from validator_id for this peer
-	fn received(&self, validator_id: &ValidatorId, message: RawMessage);
+	/// Called when a message is received from some validator_id for this peer.
+	fn received(&self, from: &ValidatorId, message: RawMessage);
 }
 
 /// A state machine routing messages and events to our network and observer
@@ -139,7 +139,7 @@ where
 			.entry(peer_id.clone())
 			.or_insert(Some(validator_id));
 		self.validator_to_peer.insert(validator_id, peer_id.clone());
-		self.observer.new_peer(&validator_id);
+		self.observer.new_validator(&validator_id);
 	}
 
 	/// A peer has disconnected, remove from our internal lookups and notify the observer.
@@ -260,8 +260,8 @@ impl<Observer: NetworkObserver, Network: PeerNetwork> NetworkBridge<Observer, Ne
 	) -> (Self, Arc<Mutex<Sender>>) {
 		let state_machine = StateMachine::new(observer, p2p_network.clone());
 		let network_event_stream = Box::pin(p2p_network.event_stream());
-		let (sender, worker) = unbounded::<MessagingCommand>();
-		let messenger = Arc::new(Mutex::new(Sender(sender)));
+		let (sender, worker) = Sender::new();
+		let messenger = Arc::new(Mutex::new(sender));
 		(
 			NetworkBridge {
 				state_machine,
@@ -285,13 +285,18 @@ pub trait P2pMessaging {
 	fn identify(&mut self, validator_id: ValidatorId) -> Result<()>;
 	fn send_message(&mut self, validator_id: ValidatorId, data: RawMessage) -> Result<()>;
 	fn broadcast(&self, validators: Vec<ValidatorId>, data: RawMessage) -> Result<()>;
-	fn broadcast_all(&self, data: RawMessage) -> Result<()> {
-		self.broadcast(vec![], data)
-	}
+	fn broadcast_all(&self, data: RawMessage) -> Result<()>;
 }
 
 /// Push messages down our channel to be passed on to the network
 pub struct Sender(UnboundedSender<MessagingCommand>);
+
+impl Sender {
+	pub fn new() -> (Self, UnboundedReceiver<MessagingCommand>) {
+		let (tx, rx) = unbounded();
+		(Self(tx), rx)
+	}
+}
 
 impl P2pMessaging for Sender {
 	fn identify(&mut self, validator_id: ValidatorId) -> Result<()> {
@@ -309,6 +314,12 @@ impl P2pMessaging for Sender {
 	fn broadcast(&self, validators: Vec<ValidatorId>, data: RawMessage) -> Result<()> {
 		self.0
 			.unbounded_send(MessagingCommand::Broadcast(validators, data))?;
+		Ok(())
+	}
+
+	fn broadcast_all(&self, data: RawMessage) -> Result<()> {
+		self.0
+			.unbounded_send(MessagingCommand::BroadcastAll(data))?;
 		Ok(())
 	}
 }
@@ -415,7 +426,6 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use async_std::channel::Receiver;
 	use futures::Stream;
 	use futures::{
 		channel::mpsc::{unbounded, UnboundedSender},
@@ -425,7 +435,7 @@ mod tests {
 	};
 	use sc_network::{Event, ObservedRole, PeerId};
 	use std::cell::RefCell;
-	use std::sync::{Arc, Mutex};
+	use std::sync::Arc;
 
 	#[derive(Default)]
 	struct TestNetwork {
@@ -468,7 +478,7 @@ mod tests {
 	}
 
 	impl NetworkObserver for MockObserver {
-		fn new_peer(&self, validator_id: &ValidatorId) {
+		fn new_validator(&self, validator_id: &ValidatorId) {
 			self.inner.borrow_mut().new_peers.push(*validator_id);
 		}
 
@@ -496,8 +506,7 @@ mod tests {
 
 		let peer = PeerId::random();
 		// Identify the validator.
-		communications.lock().unwrap().identify(VALIDATOR);
-		assert!(bridge.state_machine.local_validator_id == Some(VALIDATOR));
+		communications.lock().unwrap().identify(VALIDATOR).unwrap();
 
 		// Register peer
 		let mut event_sender = network.inner.borrow_mut().event_senders.pop().unwrap();
@@ -519,12 +528,15 @@ mod tests {
 					unreachable!("we should have a new network event");
 				}
 
+				assert_eq!(bridge.state_machine.local_validator_id, Some(VALIDATOR));
+
 				if !observer.inner.borrow().new_peers.is_empty() {
 					if !sent {
 						communications
 							.lock()
 							.unwrap()
-							.send_message(VALIDATOR, RawMessage(b"this rocks".to_vec()));
+							.send_message(VALIDATOR, RawMessage(b"this rocks".to_vec()))
+							.unwrap();
 						sent = true;
 					}
 
