@@ -6,9 +6,11 @@ use chainflip_engine::{
     settings::Settings,
     signing,
     signing::db::PersistentKeyDB,
-    state_chain, temp_event_mapper,
+    state_chain::{self, runtime::StateChainRuntime},
+    temp_event_mapper,
 };
 use sp_core::Pair;
+use substrate_subxt::ClientBuilder;
 
 #[tokio::main]
 async fn main() {
@@ -23,6 +25,12 @@ async fn main() {
     let mq_client = NatsMQClient::new(&settings.message_queue)
         .await
         .expect("Should connect to message queue");
+
+    let subxt_client = ClientBuilder::<StateChainRuntime>::new()
+        .set_url(&settings.state_chain.ws_endpoint)
+        .build()
+        .await
+        .expect("Should create subxt client");
 
     // This can be the same filepath as the p2p key --node-key-file <file> on the state chain
     // which won't necessarily always be the case, i.e. if we no longer have PeerId == ValidatorId
@@ -43,8 +51,8 @@ async fn main() {
             ValidatorId(my_pair_signer.signer().public().0)
         )
         .run(shutdown_client_rx),
-        state_chain::sc_observer::start(&settings, mq_client.clone()),
-        state_chain::sc_broadcaster::start(&settings, my_pair_signer, mq_client.clone()),
+        state_chain::sc_observer::start(mq_client.clone(), subxt_client.clone()),
+        state_chain::sc_broadcaster::start(my_pair_signer, mq_client.clone(), subxt_client),
         eth::start(&settings, mq_client.clone()),
         temp_event_mapper::start(mq_client.clone()),
         P2PConductor::new(
