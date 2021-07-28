@@ -6,11 +6,6 @@ use async_trait::async_trait;
 use futures::Stream;
 use serde::{de::DeserializeOwned, Serialize};
 
-#[async_trait]
-pub trait IMQClientFactory<IMQ: IMQClient> {
-    async fn create(&self) -> anyhow::Result<Box<IMQ>>;
-}
-
 /// Interface for a message queue
 #[async_trait]
 pub trait IMQClient {

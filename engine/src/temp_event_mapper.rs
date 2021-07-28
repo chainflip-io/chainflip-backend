@@ -1,25 +1,32 @@
 use futures::StreamExt;
 
 use crate::{
-    mq::{
-        nats_client::NatsMQClientFactory, pin_message_stream, IMQClient, IMQClientFactory, Subject,
-    },
+    mq::{pin_message_stream, IMQClient, Subject},
     p2p::{self},
-    settings::Settings,
     signing::{KeyId, KeygenInfo, MultisigInstruction},
     state_chain::{auction, runtime::StateChainRuntime},
 };
 
+pub async fn start<MQC: IMQClient + Send + Sync>(mq_client: MQC) {
+    let temp_event_mapper = TempEventMapper::new(mq_client);
+    temp_event_mapper.run().await
+}
+
 /// Temporary event mapper for the internal testnet
-pub struct TempEventMapper {}
+pub struct TempEventMapper<MQC: IMQClient + Send + Sync> {
+    mq_client: MQC,
+}
 
-impl TempEventMapper {
-    pub async fn run(settings: &Settings) {
+impl<MQC: IMQClient + Send + Sync> TempEventMapper<MQC> {
+    pub fn new(mq_client: MQC) -> Self {
+        Self { mq_client }
+    }
+
+    pub async fn run(&self) {
         log::info!("Starting temp event mapper");
-        let nats_client_factory = NatsMQClientFactory::new(&settings.message_queue);
-        let mq_client = *nats_client_factory.create().await.unwrap();
 
-        let auction_completed_event = mq_client
+        let auction_completed_event = self
+            .mq_client
             .subscribe::<auction::AuctionCompletedEvent<StateChainRuntime>>(
                 Subject::AuctionCompleted,
             )
@@ -48,7 +55,7 @@ impl TempEventMapper {
 
                 let key_gen_info = KeygenInfo::new(KeyId(event.auction_index), validators);
                 let gen_new_key_event = MultisigInstruction::KeyGen(key_gen_info);
-                mq_client
+                self.mq_client
                     .publish(Subject::MultisigInstruction, &gen_new_key_event)
                     .await
                     .expect("Should push new key gen event to multisig instruction queue");

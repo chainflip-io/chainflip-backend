@@ -14,13 +14,7 @@ use thiserror::Error;
 
 use web3::types::{BlockNumber, FilterBuilder, H256};
 
-use crate::{
-    mq::{
-        nats_client::{NatsMQClient, NatsMQClientFactory},
-        IMQClientFactory,
-    },
-    settings::Settings,
-};
+use crate::{mq::IMQClient, settings::Settings};
 
 /// Something that accepts and processes events asychronously.
 #[async_trait]
@@ -61,15 +55,16 @@ pub enum EventProducerError {
 }
 
 /// Start all the ETH components
-pub async fn start(settings: Settings) {
+pub async fn start<MQC: 'static + IMQClient + Send + Sync + Clone>(
+    settings: &Settings,
+    mq_client: MQC,
+) {
     log::info!("Starting the ETH components");
-    let sm_witness_future = stake_manager::start_stake_manager_witness(settings.clone());
-
-    let factory = NatsMQClientFactory::new(&settings.message_queue);
-    let mq_client = *factory.create().await.unwrap();
+    let sm_witness_future =
+        stake_manager::start_stake_manager_witness::<MQC>(&settings, mq_client.clone());
 
     let eth_broadcaster_future =
-        eth_broadcaster::start_eth_broadcaster::<NatsMQClient>(&settings, mq_client.clone());
+        eth_broadcaster::start_eth_broadcaster::<MQC>(&settings, mq_client.clone());
 
     let eth_tx_encoder_future =
         eth_tx_encoding::set_agg_key_with_agg_key::start(&settings, mq_client.clone());

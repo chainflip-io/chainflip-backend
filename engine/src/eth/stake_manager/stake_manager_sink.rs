@@ -11,18 +11,18 @@ use anyhow::Result;
 
 /// A sink that can be used with an EthEventStreamer instance
 /// Pushes events to the message queue
-pub struct StakeManagerSink<M: IMQClient + Send + Sync> {
-    mq_client: M,
+pub struct StakeManagerSink<MQC: IMQClient + Send + Sync> {
+    mq_client: MQC,
 }
 
-impl<M: IMQClient + Send + Sync> StakeManagerSink<M> {
-    pub async fn new(mq_client: M) -> Result<StakeManagerSink<M>> {
+impl<MQC: IMQClient + Send + Sync> StakeManagerSink<MQC> {
+    pub async fn new(mq_client: MQC) -> Result<StakeManagerSink<MQC>> {
         Ok(StakeManagerSink { mq_client })
     }
 }
 
 #[async_trait]
-impl<M: IMQClient + Send + Sync> EventSink<StakeManagerEvent> for StakeManagerSink<M> {
+impl<MQC: IMQClient + Send + Sync> EventSink<StakeManagerEvent> for StakeManagerSink<MQC> {
     async fn process_event(&self, event: StakeManagerEvent) -> anyhow::Result<()> {
         log::debug!("Processing event in StakeManagerSink: {:?}", event);
         self.mq_client
@@ -35,13 +35,7 @@ impl<M: IMQClient + Send + Sync> EventSink<StakeManagerEvent> for StakeManagerSi
 #[cfg(test)]
 mod tests {
 
-    use crate::{
-        mq::{
-            nats_client::{NatsMQClient, NatsMQClientFactory},
-            IMQClientFactory,
-        },
-        settings,
-    };
+    use crate::{mq::nats_client::NatsMQClient, settings};
 
     use super::*;
 
@@ -58,9 +52,7 @@ mod tests {
             endpoint: format!("http://{}:{}", ip, port),
         };
 
-        let factory = NatsMQClientFactory::new(&mq_settings);
-
-        let mq_client = *factory.create().await.unwrap();
+        let mq_client = NatsMQClient::new(&mq_settings).await.unwrap();
 
         StakeManagerSink::<NatsMQClient>::new(mq_client)
             .await
