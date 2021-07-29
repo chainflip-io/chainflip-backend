@@ -4,12 +4,11 @@
 use core::str::FromStr;
 use std::{convert::TryInto, fmt::Display};
 
-use crate::eth::{EventProducerError, EventSource};
+use crate::eth::{utils, EventProducerError, EventSource};
 
 use serde::{Deserialize, Serialize};
 use sp_runtime::AccountId32;
 use web3::{
-    contract::tokens::Tokenizable,
     ethabi::{self, Function, Log},
     types::{BlockNumber, FilterBuilder, H160},
 };
@@ -197,7 +196,7 @@ impl StakeManager {
 
 // get the node_id from the log and return as AccountId32
 fn node_id_from_log(log: &Log) -> Result<AccountId32> {
-    let account_bytes: [u8; 32] = decode_log_param::<ethabi::FixedBytes>(&log, "nodeID")?
+    let account_bytes: [u8; 32] = utils::decode_log_param::<ethabi::FixedBytes>(&log, "nodeID")?
         .try_into()
         .map_err(|_| anyhow::Error::msg("Could not cast FixedBytes nodeID into [u8;32]"))?;
     Ok(AccountId32::new(account_bytes))
@@ -243,7 +242,7 @@ impl EventSource for StakeManager {
                 let account_id = node_id_from_log(&log)?;
                 let event = StakeManagerEvent::Staked {
                     account_id,
-                    amount: decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
+                    amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
                     tx_hash,
                 };
                 Ok(event)
@@ -253,7 +252,7 @@ impl EventSource for StakeManager {
                 let account_id = node_id_from_log(&log)?;
                 let event = StakeManagerEvent::ClaimExecuted {
                     account_id,
-                    amount: decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
+                    amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
                     tx_hash,
                 };
                 Ok(event)
@@ -264,8 +263,8 @@ impl EventSource for StakeManager {
                     .emission_changed_event_definition()
                     .parse_log(raw_log)?;
                 let event = StakeManagerEvent::EmissionChanged {
-                    old_emission_per_block: decode_log_param(&log, "oldEmissionPerBlock")?,
-                    new_emission_per_block: decode_log_param(&log, "newEmissionPerBlock")?,
+                    old_emission_per_block: utils::decode_log_param(&log, "oldEmissionPerBlock")?,
+                    new_emission_per_block: utils::decode_log_param(&log, "newEmissionPerBlock")?,
                     tx_hash,
                 };
                 Ok(event)
@@ -275,8 +274,8 @@ impl EventSource for StakeManager {
                     .min_stake_changed_event_definition()
                     .parse_log(raw_log)?;
                 let event = StakeManagerEvent::MinStakeChanged {
-                    old_min_stake: decode_log_param(&log, "oldMinStake")?,
-                    new_min_stake: decode_log_param(&log, "newMinStake")?,
+                    old_min_stake: utils::decode_log_param(&log, "oldMinStake")?,
+                    new_min_stake: utils::decode_log_param(&log, "newMinStake")?,
                     tx_hash,
                 };
                 Ok(event)
@@ -288,10 +287,10 @@ impl EventSource for StakeManager {
                 let account_id = node_id_from_log(&log)?;
                 let event = StakeManagerEvent::ClaimRegistered {
                     account_id,
-                    amount: decode_log_param(&log, "amount")?,
-                    staker: decode_log_param(&log, "staker")?,
-                    start_time: decode_log_param(&log, "startTime")?,
-                    expiry_time: decode_log_param(&log, "expiryTime")?,
+                    amount: utils::decode_log_param(&log, "amount")?,
+                    staker: utils::decode_log_param(&log, "staker")?,
+                    start_time: utils::decode_log_param(&log, "startTime")?,
+                    expiry_time: utils::decode_log_param(&log, "expiryTime")?,
                     tx_hash,
                 };
                 Ok(event)
@@ -299,18 +298,6 @@ impl EventSource for StakeManager {
             s => Err(EventProducerError::UnexpectedEvent(s))?,
         }
     }
-}
-
-// Helper method to decode the parameters from an ETH log
-fn decode_log_param<T: Tokenizable>(log: &Log, param_name: &str) -> Result<T> {
-    let token = &log
-        .params
-        .iter()
-        .find(|&p| p.name == param_name)
-        .ok_or_else(|| EventProducerError::MissingParam(String::from(param_name)))?
-        .value;
-
-    Ok(Tokenizable::from_token(token.clone())?)
 }
 
 #[cfg(test)]
