@@ -10,6 +10,7 @@ use super::{
 };
 
 use crate::{
+    logging::SIGNING_SUB_COMPONENT,
     p2p::{P2PMessageCommand, ValidatorId},
     signing::{
         client::{
@@ -104,7 +105,7 @@ impl SigningState {
             delayed_data: vec![],
             cur_phase_timestamp: now,
             last_progress_timestamp: now,
-            logger: logger.new(o!()),
+            logger: logger.new(o!(SIGNING_SUB_COMPONENT => "SigningState")),
         };
 
         state.on_request_to_sign_inner();

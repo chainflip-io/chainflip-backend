@@ -1,6 +1,8 @@
 // ==== Logging key constants ====
 pub const COMPONENT_KEY: &str = "component";
 
+pub const SIGNING_SUB_COMPONENT: &str = "signing-sub-component";
+
 #[cfg(test)]
 pub mod test_utils {
 

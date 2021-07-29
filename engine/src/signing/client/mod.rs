@@ -3,6 +3,7 @@ mod client_inner;
 use std::time::Duration;
 
 use crate::{
+    logging::SIGNING_SUB_COMPONENT,
     mq::{pin_message_stream, IMQClient, Subject},
     p2p::ValidatorId,
     signing::db::KeyDB,
@@ -98,7 +99,7 @@ where
             inner: MultisigClientInner::new(my_validator_id.clone(), db, tx, PHASE_TIMEOUT, logger),
             inner_event_receiver: Some(rx),
             my_validator_id,
-            logger: logger.new(o!()),
+            logger: logger.new(o!(SIGNING_SUB_COMPONENT => "MultisigClient")),
         }
     }
 

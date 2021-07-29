@@ -5,6 +5,7 @@ use slog::o;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
+    logging::{COMPONENT_KEY, SIGNING_SUB_COMPONENT},
     p2p::{P2PMessageCommand, ValidatorId},
     signing::{
         client::{
@@ -82,7 +83,7 @@ impl KeygenState {
             params,
             maps_for_validator_id_and_idx: Arc::new(idx_map),
             last_message_timestamp: Instant::now(),
-            logger: logger.new(o!()),
+            logger: logger.new(o!(SIGNING_SUB_COMPONENT => "KeygenState")),
         };
 
         state.initiate_keygen_inner();
