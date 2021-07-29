@@ -137,7 +137,6 @@ parameter_types! {
 
 impl pallet_cf_auction::Config for Runtime {
 	type Event = Event;
-	type Call = Call;
 	type Amount = FlipBalance;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
 	type AuctionIndex = u64;
@@ -146,7 +145,6 @@ impl pallet_cf_auction::Config for Runtime {
 	type MinAuctionSize = MinAuctionSize;
 	type Confirmation = Auction;
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
-	type Witnesser = Witnesser;
 }
 
 // FIXME: These would be changed
@@ -355,12 +353,10 @@ parameter_types! {
 
 impl pallet_cf_staking::Config for Runtime {
 	type Event = Event;
-	type Call = Call;
 	type Balance = FlipBalance;
 	type Flip = Flip;
 	type Nonce = u64;
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
-	type Witnesser = Witnesser;
 	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
 	type TimeSource = Timestamp;
 	type MinClaimTTL = MinClaimTTL;
@@ -395,6 +391,11 @@ impl pallet_transaction_payment::Config for Runtime {
 	type FeeMultiplierUpdate = ();
 }
 
+impl pallet_cf_witness_api::Config for Runtime {
+	type Call = Call;
+	type Witnesser = Witnesser;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -412,6 +413,7 @@ construct_runtime!(
 		Session: pallet_session::{Module, Storage, Event, Config<T>},
 		Historical: session_historical::{Module},
 		Witnesser: pallet_cf_witness::{Module, Call, Event<T>, Origin},
+		WitnesserApi: pallet_cf_witness_api::{Module, Call},
 		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
 		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
 		Aura: pallet_aura::{Module, Config<T>},

@@ -145,10 +145,7 @@ mod tests {
 
     use crate::{
         eth::stake_manager::{stake_manager::StakeManager, stake_manager_sink::StakeManagerSink},
-        mq::{
-            nats_client::{NatsMQClient, NatsMQClientFactory},
-            IMQClientFactory,
-        },
+        mq::nats_client::NatsMQClient,
         settings,
     };
 
@@ -165,9 +162,7 @@ mod tests {
             .unwrap()
             .message_queue;
 
-        let factory = NatsMQClientFactory::new(&mq_settings);
-
-        let mq_client = *factory.create().await.unwrap();
+        let mq_client = NatsMQClient::new(&mq_settings).await.unwrap();
         // create the sink, which pushes events to the MQ
         let sm_sink = StakeManagerSink::<NatsMQClient>::new(mq_client)
             .await

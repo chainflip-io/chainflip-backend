@@ -12,13 +12,10 @@ use substrate_subxt::{Client, ClientBuilder, PairSigner};
 
 /// Create a substrate subxt client over the StateChainRuntime
 pub async fn create_subxt_client(
-    state_chain_settings: settings::StateChain,
+    state_chain_settings: &settings::StateChain,
 ) -> Result<Client<StateChainRuntime>> {
     let client = ClientBuilder::<StateChainRuntime>::new()
-        .set_url(format!(
-            "ws://{}:{}",
-            state_chain_settings.hostname, state_chain_settings.ws_port
-        ))
+        .set_url(&state_chain_settings.ws_endpoint)
         .build()
         .await?;
 
@@ -71,7 +68,7 @@ mod tests {
     async fn can_create_subxt_client() {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let client = create_subxt_client(settings.state_chain).await;
+        let client = create_subxt_client(&settings.state_chain).await;
         client.unwrap();
     }
 }

@@ -4,27 +4,21 @@ use tokio_stream::StreamExt;
 use super::{helpers::create_subxt_client, runtime::StateChainRuntime};
 use crate::{
     eth::stake_manager::stake_manager::StakeManagerEvent,
-    mq::{pin_message_stream, IMQClient, IMQClientFactory, Subject},
+    mq::{pin_message_stream, IMQClient, Subject},
     settings::Settings,
 };
 
-use crate::state_chain::staking::{WitnessClaimedCallExt, WitnessStakedCallExt};
+use crate::state_chain::witness_api::*;
 
 use anyhow::Result;
 
-pub async fn start<IMQ, IMQF>(
+pub async fn start<MQC>(
     settings: &Settings,
     signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
-    mq_factory: IMQF,
+    mq_client: MQC,
 ) where
-    IMQ: IMQClient + Sync + Send,
-    IMQF: IMQClientFactory<IMQ>,
+    MQC: IMQClient + Sync + Send,
 {
-    let mq_client = *mq_factory
-        .create()
-        .await
-        .expect("Should create message queue client");
-
     let mut sc_broadcaster = SCBroadcaster::new(&settings, signer, mq_client).await;
 
     sc_broadcaster
@@ -33,25 +27,25 @@ pub async fn start<IMQ, IMQF>(
         .expect("SC Broadcaster has died!");
 }
 
-pub struct SCBroadcaster<MQ>
+pub struct SCBroadcaster<MQC>
 where
-    MQ: IMQClient + Send + Sync,
+    MQC: IMQClient + Send + Sync,
 {
-    mq_client: MQ,
+    mq_client: MQC,
     sc_client: Client<StateChainRuntime>,
     signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
 }
 
-impl<MQ> SCBroadcaster<MQ>
+impl<MQC> SCBroadcaster<MQC>
 where
-    MQ: IMQClient + Send + Sync,
+    MQC: IMQClient + Send + Sync,
 {
     pub async fn new(
         settings: &Settings,
         mut signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
-        mq_client: MQ,
+        mq_client: MQC,
     ) -> Self {
-        let sc_client = create_subxt_client(settings.state_chain.clone())
+        let sc_client = create_subxt_client(&settings.state_chain)
             .await
             .expect("Could not create subxt client");
 
@@ -146,10 +140,7 @@ mod tests {
 
     use super::*;
 
-    use crate::{
-        mq::{nats_client::NatsMQClientFactory, IMQClientFactory},
-        settings::{self},
-    };
+    use crate::{mq::nats_client::NatsMQClient, settings};
 
     use sp_keyring::AccountKeyring;
     use sp_runtime::AccountId32;
@@ -164,16 +155,11 @@ mod tests {
     async fn can_create_sc_broadcaster() {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let mq_factory = NatsMQClientFactory::new(&settings.message_queue);
-
-        let mq_client = mq_factory
-            .create()
-            .await
-            .expect("Could not create MQ client");
+        let mq_client = NatsMQClient::new(&settings.message_queue).await.unwrap();
 
         let alice = AccountKeyring::Alice.pair();
         let pair_signer = PairSigner::new(alice);
-        SCBroadcaster::new(&settings, pair_signer, *mq_client).await;
+        SCBroadcaster::new(&settings, pair_signer, mq_client).await;
     }
 
     // TODO: Use the SC broadcaster struct instead
@@ -181,7 +167,7 @@ mod tests {
     #[ignore = "depends on running state chain"]
     async fn submit_xt_test() {
         let settings = settings::test_utils::new_test_settings().unwrap();
-        let subxt_client = create_subxt_client(settings.state_chain).await.unwrap();
+        let subxt_client = create_subxt_client(&settings.state_chain).await.unwrap();
 
         let alice = AccountKeyring::Alice.pair();
         let signer = PairSigner::new(alice);
@@ -210,16 +196,11 @@ mod tests {
     async fn sc_broadcaster_submit_event() {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let mq_factory = NatsMQClientFactory::new(&settings.message_queue);
-
-        let mq_client = mq_factory
-            .create()
-            .await
-            .expect("Could not create MQ client");
+        let mq_client = NatsMQClient::new(&settings.message_queue).await.unwrap();
 
         let alice = AccountKeyring::Alice.pair();
         let pair_signer = PairSigner::new(alice);
-        let mut sc_broadcaster = SCBroadcaster::new(&settings, pair_signer, *mq_client).await;
+        let mut sc_broadcaster = SCBroadcaster::new(&settings, pair_signer, mq_client).await;
 
         let staked_node_id =
             AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU").unwrap();
