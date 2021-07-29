@@ -153,7 +153,10 @@ mod tests {
             .set_url(&state_chain_settings.ws_endpoint)
             .build()
             .await
-            .unwrap()
+            .expect(&format!(
+                "Could not connect to state chain at: {}",
+                &state_chain_settings.ws_endpoint
+            ))
     }
 
     #[tokio::test]
