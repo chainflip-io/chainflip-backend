@@ -1,24 +1,16 @@
 use anyhow::Result;
 use substrate_subxt::{Client, EventSubscription};
 
-use crate::{
-    mq::{IMQClient, Subject, SubjectName},
-    settings::Settings,
-};
+use crate::mq::{IMQClient, Subject, SubjectName};
 
 use super::{
-    helpers::create_subxt_client,
     runtime::StateChainRuntime,
     sc_event::{raw_event_to_subject, sc_event_from_raw_event},
 };
 
 /// Kick off the state chain observer process
-pub async fn start<M: IMQClient>(settings: &Settings, mq_client: M) {
+pub async fn start<M: IMQClient>(mq_client: M, subxt_client: Client<StateChainRuntime>) {
     log::info!("Start subscribing to state chain events");
-
-    let subxt_client = create_subxt_client(&settings.state_chain)
-        .await
-        .expect("Could not create subxt client");
 
     subscribe_to_events(mq_client, subxt_client)
         .await
