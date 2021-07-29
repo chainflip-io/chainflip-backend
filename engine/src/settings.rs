@@ -111,7 +111,6 @@ fn parse_websocket_url(url: &str) -> Result<Url> {
 
 fn is_valid_db_path(db_file: &str) -> Result<()> {
     let path = Path::new(db_file);
-    println!("The extension is: {:?}", path.extension());
     if path.extension() != Some(OsStr::new("db")) {
         return Err(anyhow::Error::msg("Db path does not have '.db' extension"));
     }
