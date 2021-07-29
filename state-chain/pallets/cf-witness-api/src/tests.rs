@@ -96,7 +96,7 @@ mod staking_witness_tests {
 
 			assert_eq!(MockWitnesser::get_vote_count_for(&call), 1);
 
-			// Second vote.
+			// Second vote - fails because there is no claim when it gets executed - but thats okay
 			assert_noop!(
 				WitnessApi::witness_post_claim_signature(
 					Origin::signed(WITNESS),
