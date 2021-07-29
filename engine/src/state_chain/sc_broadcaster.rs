@@ -2,12 +2,11 @@ use slog::o;
 use substrate_subxt::{system::AccountStoreExt, Client, PairSigner, Signer};
 use tokio_stream::StreamExt;
 
-use super::{helpers::create_subxt_client, runtime::StateChainRuntime};
+use super::runtime::StateChainRuntime;
 use crate::{
     eth::stake_manager::stake_manager::StakeManagerEvent,
     logging::COMPONENT_KEY,
     mq::{pin_message_stream, IMQClient, Subject},
-    settings::Settings,
 };
 
 use crate::state_chain::witness_api::*;
@@ -15,14 +14,14 @@ use crate::state_chain::witness_api::*;
 use anyhow::Result;
 
 pub async fn start<MQC>(
-    settings: &Settings,
     signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
     mq_client: MQC,
+    subxt_client: Client<StateChainRuntime>,
     logger: &slog::Logger,
 ) where
     MQC: IMQClient + Sync + Send,
 {
-    let mut sc_broadcaster = SCBroadcaster::new(&settings, signer, mq_client, logger).await;
+    let mut sc_broadcaster = SCBroadcaster::new(signer, mq_client, subxt_client, logger).await;
 
     sc_broadcaster
         .run()
@@ -35,7 +34,7 @@ where
     MQC: IMQClient + Send + Sync,
 {
     mq_client: MQC,
-    sc_client: Client<StateChainRuntime>,
+    subxt_client: Client<StateChainRuntime>,
     signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
     logger: slog::Logger,
 }
@@ -45,17 +44,13 @@ where
     MQC: IMQClient + Send + Sync,
 {
     pub async fn new(
-        settings: &Settings,
         mut signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
         mq_client: MQC,
+        subxt_client: Client<StateChainRuntime>,
         logger: &slog::Logger,
     ) -> Self {
-        let sc_client = create_subxt_client(&settings.state_chain)
-            .await
-            .expect("Could not create subxt client");
-
         let account_id = signer.account_id();
-        let nonce = sc_client
+        let nonce = subxt_client
             .account(&account_id, None)
             .await
             .expect("Should be able to fetch account info")
@@ -65,9 +60,9 @@ where
         signer.set_nonce(nonce);
 
         SCBroadcaster {
-            mq_client,
-            sc_client,
             signer,
+            mq_client,
+            subxt_client,
             logger,
         }
     }
@@ -114,7 +109,7 @@ where
                     amount,
                     tx_hash
                 );
-                self.sc_client
+                self.subxt_client
                     .witness_staked(&self.signer, account_id, amount, tx_hash)
                     .await?;
                 self.signer.increment_nonce();
@@ -131,7 +126,7 @@ where
                     amount,
                     tx_hash
                 );
-                self.sc_client
+                self.subxt_client
                     .witness_claimed(&self.signer, account_id, amount, tx_hash)
                     .await?;
                 self.signer.increment_nonce();
@@ -161,11 +156,25 @@ mod tests {
 
     use sp_keyring::AccountKeyring;
     use sp_runtime::AccountId32;
+    use substrate_subxt::ClientBuilder;
 
     const TX_HASH: [u8; 32] = [
         00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01, 02, 01, 02,
         01, 02, 01, 02, 01, 02, 01, 02, 01,
     ];
+
+    async fn create_subxt_client(
+        state_chain_settings: &settings::StateChain,
+    ) -> Client<StateChainRuntime> {
+        ClientBuilder::<StateChainRuntime>::new()
+            .set_url(&state_chain_settings.ws_endpoint)
+            .build()
+            .await
+            .expect(&format!(
+                "Could not connect to state chain at: {}",
+                &state_chain_settings.ws_endpoint
+            ))
+    }
 
     #[tokio::test]
     #[ignore = "depends on running mq and state chain"]
@@ -173,12 +182,13 @@ mod tests {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
         let mq_client = NatsMQClient::new(&settings.message_queue).await.unwrap();
+        let subxt_client = create_subxt_client(&settings.state_chain).await;
 
         let logger = logging::test_utils::create_test_logger();
 
         let alice = AccountKeyring::Alice.pair();
         let pair_signer = PairSigner::new(alice);
-        SCBroadcaster::new(&settings, pair_signer, mq_client, &logger).await;
+        SCBroadcaster::new(pair_signer, mq_client, subxt_client, &logger).await;
     }
 
     // TODO: Use the SC broadcaster struct instead
@@ -186,7 +196,7 @@ mod tests {
     #[ignore = "depends on running state chain"]
     async fn submit_xt_test() {
         let settings = settings::test_utils::new_test_settings().unwrap();
-        let subxt_client = create_subxt_client(&settings.state_chain).await.unwrap();
+        let subxt_client = create_subxt_client(&settings.state_chain).await;
 
         let alice = AccountKeyring::Alice.pair();
         let signer = PairSigner::new(alice);
@@ -216,12 +226,17 @@ mod tests {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
         let mq_client = NatsMQClient::new(&settings.message_queue).await.unwrap();
+        let subxt_client = create_subxt_client(&settings.state_chain).await;
 
         let alice = AccountKeyring::Alice.pair();
         let pair_signer = PairSigner::new(alice);
-        let logger = logging::test_utils::create_test_logger();
-        let mut sc_broadcaster =
-            SCBroadcaster::new(&settings, pair_signer, mq_client, &logger).await;
+        let mut sc_broadcaster = SCBroadcaster::new(
+            pair_signer,
+            mq_client,
+            subxt_client,
+            &logging::test_utils::create_test_logger(),
+        )
+        .await;
 
         let staked_node_id =
             AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU").unwrap();

@@ -5,22 +5,23 @@ use substrate_subxt::{Client, EventSubscription};
 use crate::{
     logging::COMPONENT_KEY,
     mq::{IMQClient, Subject, SubjectName},
-    settings,
 };
 
 use super::{
-    helpers::create_subxt_client,
     runtime::StateChainRuntime,
     sc_event::{raw_event_to_subject, sc_event_from_raw_event},
 };
 
 pub async fn start<M: IMQClient>(
     mq_client: M,
-    state_chain_settings: &settings::StateChain,
+    subxt_client: Client<StateChainRuntime>,
     logger: &slog::Logger,
 ) {
-    let sc_observer = SCObserver::new(mq_client, state_chain_settings, logger).await;
-    sc_observer.run().await.expect("SC Observer has died!");
+    SCObserver::new(mq_client, subxt_client, logger)
+        .await
+        .run()
+        .await
+        .expect("SC Observer has died!");
 }
 
 pub struct SCObserver<M: IMQClient> {
@@ -32,13 +33,9 @@ pub struct SCObserver<M: IMQClient> {
 impl<M: IMQClient> SCObserver<M> {
     pub async fn new(
         mq_client: M,
-        state_chain_settings: &settings::StateChain,
+        subxt_client: Client<StateChainRuntime>,
         logger: &slog::Logger,
     ) -> Self {
-        let subxt_client = create_subxt_client(state_chain_settings)
-            .await
-            .expect("Could not create subxt client");
-
         Self {
             mq_client,
             subxt_client,

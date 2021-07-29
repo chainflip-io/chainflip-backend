@@ -6,10 +6,12 @@ use chainflip_engine::{
     settings::Settings,
     signing,
     signing::db::PersistentKeyDB,
-    state_chain, temp_event_mapper,
+    state_chain::{self, runtime::StateChainRuntime},
+    temp_event_mapper,
 };
 use slog::{o, Drain};
 use sp_core::Pair;
+use substrate_subxt::ClientBuilder;
 
 #[tokio::main]
 async fn main() {
@@ -23,8 +25,9 @@ async fn main() {
 
     let settings = Settings::new().expect("Failed to initialise settings");
 
-    let health_monitor = HealthMonitor::new(&settings.health_check, &root_logger);
-    health_monitor.run().await;
+    HealthMonitor::new(&settings.health_check, &root_logger)
+        .run()
+        .await;
 
     slog::info!(
         &root_logger,
@@ -35,14 +38,19 @@ async fn main() {
         .await
         .expect("Should connect to message queue");
 
+    let subxt_client = ClientBuilder::<StateChainRuntime>::new()
+        .set_url(&settings.state_chain.ws_endpoint)
+        .build()
+        .await
+        .expect("Should create subxt client");
+
     // This can be the same filepath as the p2p key --node-key-file <file> on the state chain
     // which won't necessarily always be the case, i.e. if we no longer have PeerId == ValidatorId
     let my_pair_signer =
         state_chain::get_signer_from_privkey_file(&settings.state_chain.p2p_priv_key_file);
 
     // TODO: Investigate whether we want to encrypt it on disk
-    // TODO: This path should be a configuration option
-    let db = PersistentKeyDB::new("data.db", &root_logger);
+    let db = PersistentKeyDB::new(&settings.signing.db_file, &root_logger);
 
     let (_, p2p_shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
@@ -55,11 +63,11 @@ async fn main() {
             &root_logger,
         )
         .run(shutdown_client_rx),
-        state_chain::sc_observer::start(mq_client.clone(), &settings.state_chain, &root_logger),
+        state_chain::sc_observer::start(mq_client.clone(), subxt_client.clone(), &root_logger),
         state_chain::sc_broadcaster::start(
-            &settings,
             my_pair_signer,
             mq_client.clone(),
+            subxt_client.clone(),
             &root_logger
         ),
         eth::start(&settings, mq_client.clone(), &root_logger),
