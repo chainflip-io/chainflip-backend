@@ -1,4 +1,3 @@
-use cf_traits::{AuctionPenalty, AuctionHandler};
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::*;
 use frame_support::RuntimeDebug;
@@ -18,18 +17,6 @@ pub enum RotationError<ValidatorId> {
 	FailedToConstructPayload,
 	/// Vault rotation completion failed
 	VaultRotationCompletionFailed,
-}
-
-/// An index scheme which manages a number of index references
-pub trait Index<T: AtLeast32BitUnsigned> {
-	/// Provide the next index
-	fn next() -> T;
-	/// Invalidate this index if it exists
-	fn invalidate(idx: T);
-	/// Do we have an indexes
-	fn is_empty() -> bool;
-	/// Is this a valid index
-	fn is_valid(idx: T) -> bool;
 }
 
 /// Try to determine if an index is valid
@@ -63,7 +50,7 @@ pub trait ChainVault<I, PublicKey, ValidatorId, Err> {
 
 /// Events coming in from our chains.  This is used to callback from the request to complete the vault
 /// rotation phase
-pub trait ChainEvents<I, ValidatorId, Err> {
+pub trait ChainHandler<I, ValidatorId, Err> {
 	/// Initial vault rotation phase complete with a result describing the outcome of this phase
 	/// Feedback is provided back on this step
 	fn try_complete_vault_rotation(
@@ -78,12 +65,6 @@ pub trait ChainFlip {
 	type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 	/// An identity for a validator
 	type ValidatorId: Member + Parameter;
-}
-
-/// Grouping the management(traits) of a ChainFlip auction.
-pub trait AuctionManager<ValidatorId, Amount> {
-	type Penalty: AuctionPenalty<ValidatorId>;
-	type Handler: AuctionHandler<ValidatorId, Amount>;
 }
 
 /// Our different Chain's specific parameters

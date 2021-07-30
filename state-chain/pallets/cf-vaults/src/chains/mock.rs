@@ -93,7 +93,7 @@ impl ChainFlip for MockRuntime {
 	type ValidatorId = ValidatorId;
 }
 
-impl ChainEvents<RequestIndex, ValidatorId, RotationError<ValidatorId>> for MockRuntime {
+impl ChainHandler<RequestIndex, ValidatorId, RotationError<ValidatorId>> for MockRuntime {
 	fn try_complete_vault_rotation(index: RequestIndex, result: Result<VaultRotationRequest, RotationError<ValidatorId>>) -> Result<(), RotationError<ValidatorId>> {
 		todo!()
 	}

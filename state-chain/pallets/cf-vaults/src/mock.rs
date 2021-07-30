@@ -123,11 +123,6 @@ impl AuctionPenalty<ValidatorId> for MockRuntime {
 	}
 }
 
-impl AuctionManager<ValidatorId, Amount> for MockRuntime {
-	type Penalty = Self;
-	type Handler = VaultsPallet;
-}
-
 impl pallet_cf_vaults::Config for MockRuntime {
 	type Event = Event;
 	type Call = Call;
@@ -136,6 +131,8 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type Witnesser = MockWitnesser;
 	type RequestIndex = u64;
 	type PublicKey = Vec<u8>;
+	type Penalty = Self;
+	type Handler = VaultsPallet;
 }
 
 pub fn bad_validators() -> Vec<ValidatorId> {

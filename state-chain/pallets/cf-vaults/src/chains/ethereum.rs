@@ -70,7 +70,7 @@ pub mod pallet {
 	pub trait Config: frame_system::Config + ChainFlip {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-		type Vaults: ChainEvents<
+		type Vaults: ChainHandler<
 				Self::RequestIndex,
 				<Self as ChainFlip>::ValidatorId,
 				RotationError<Self::ValidatorId>,

@@ -67,7 +67,6 @@ pub mod pallet {
 	pub trait Config:
 		frame_system::Config
 		+ ChainFlip
-		+ AuctionManager<<Self as ChainFlip>::ValidatorId, <Self as ChainFlip>::Amount>
 	{
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
@@ -91,6 +90,10 @@ pub mod pallet {
 		type RequestIndex: Member + Parameter + Default + Add + Copy + AtLeast32BitUnsigned;
 		/// The new public key type
 		type PublicKey: Member + Parameter;
+		/// Feedback on penalties for Auction
+		type Penalty: AuctionPenalty<Self::ValidatorId>;
+		/// Handler for events in from Auction
+		type Handler: AuctionHandler<Self::ValidatorId, Self::Amount>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -240,27 +243,6 @@ impl<T: Config> TryIndex<T::RequestIndex> for Pallet<T> {
 	}
 }
 
-impl<T: Config> Index<T::RequestIndex> for Pallet<T> {
-	fn next() -> T::RequestIndex {
-		RequestIdx::<T>::mutate(|idx| {
-			*idx = *idx + One::one();
-			*idx
-		})
-	}
-
-	fn invalidate(idx: T::RequestIndex) {
-		VaultRotations::<T>::remove(idx);
-	}
-
-	fn is_empty() -> bool {
-		VaultRotations::<T>::iter().count() == 0
-	}
-
-	fn is_valid(idx: T::RequestIndex) -> bool {
-		VaultRotations::<T>::contains_key(idx)
-	}
-}
-
 impl<T: Config> Pallet<T> {
 	/// Register this vault rotation
 	fn new_vault_rotation(index: T::RequestIndex, keygen_request: KeygenRequest<T::ValidatorId>) {
@@ -274,6 +256,29 @@ impl<T: Config> Pallet<T> {
 		));
 		VaultRotations::<T>::remove_all();
 		T::Penalty::abort();
+	}
+
+	/// Provide the next index
+	fn next() -> T::RequestIndex {
+		RequestIdx::<T>::mutate(|idx| {
+			*idx = *idx + One::one();
+			*idx
+		})
+	}
+
+	/// Invalidate this index if it exists
+	fn remove_vault(idx: T::RequestIndex) {
+		VaultRotations::<T>::remove(idx);
+	}
+
+	/// Do we have an indexes
+	fn vaults_rotated() -> bool {
+		VaultRotations::<T>::iter().count() == 0
+	}
+
+	/// Is this a valid index
+	fn is_valid_vault(idx: T::RequestIndex) -> bool {
+		VaultRotations::<T>::contains_key(idx)
 	}
 }
 
@@ -296,7 +301,7 @@ impl<T: Config> AuctionHandler<T::ValidatorId, T::Amount> for Pallet<T> {
 	/// that the validators can now be rotated for the new epoch.
 	fn try_confirmation() -> Result<(), AuctionError> {
 		// The 'exit' point for the pallet
-		if Self::is_empty() {
+		if Self::vaults_rotated() {
 			// We can now confirm the auction and rotate
 			// The process has completed successfully
 			Self::deposit_event(Event::VaultsRotated);
@@ -365,7 +370,7 @@ impl<T: Config>
 
 // We have now had feedback from the vault/chain that we can proceed with the final request for the
 // vault rotation
-impl<T: Config> ChainEvents<T::RequestIndex, T::ValidatorId, RotationError<T::ValidatorId>>
+impl<T: Config> ChainHandler<T::RequestIndex, T::ValidatorId, RotationError<T::ValidatorId>>
 	for Pallet<T>
 {
 	/// Try to complete the final vault rotation with feedback from the chain implementation over
@@ -427,7 +432,7 @@ impl<T: Config>
 			}
 		}
 		// This request is complete
-		Self::invalidate(index);
+		Self::remove_vault(index);
 		Self::deposit_event(Event::VaultRotationCompleted(index));
 		Ok(())
 	}
