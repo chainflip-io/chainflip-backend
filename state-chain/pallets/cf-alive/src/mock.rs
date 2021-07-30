@@ -1,16 +1,11 @@
 use super::*;
 use crate as pallet_cf_alive;
-use sp_core::{H256};
+use frame_support::{construct_runtime, parameter_types};
+use sp_core::H256;
 use sp_runtime::{
-    traits::{
-        BlakeTwo256,
-        IdentityLookup,
-    },
-    testing::{
-        Header,
-    },
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
 };
-use frame_support::{parameter_types, construct_runtime,};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -33,51 +28,54 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-    type BaseCallFilter = ();
-    type BlockWeights = ();
-    type BlockLength = ();
-    type Origin = Origin;
-    type Call = Call;
-    type Index = u64;
-    type BlockNumber = u64;
-    type Hash = H256;
-    type Hashing = BlakeTwo256;
-    type AccountId = u64;
-    type Lookup = IdentityLookup<Self::AccountId>;
-    type Header = Header;
-    type Event = Event;
-    type BlockHashCount = BlockHashCount;
-    type DbWeight = ();
-    type Version = ();
-    type PalletInfo = PalletInfo;
-    type AccountData = ();
-    type OnNewAccount = ();
-    type OnKilledAccount = ();
-    type SystemWeightInfo = ();
-    type SS58Prefix = ();
+	type BaseCallFilter = ();
+	type BlockWeights = ();
+	type BlockLength = ();
+	type Origin = Origin;
+	type Call = Call;
+	type Index = u64;
+	type BlockNumber = u64;
+	type Hash = H256;
+	type Hashing = BlakeTwo256;
+	type AccountId = u64;
+	type Lookup = IdentityLookup<Self::AccountId>;
+	type Header = Header;
+	type Event = Event;
+	type BlockHashCount = BlockHashCount;
+	type DbWeight = ();
+	type Version = ();
+	type PalletInfo = PalletInfo;
+	type AccountData = ();
+	type OnNewAccount = ();
+	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 
-parameter_types! {
-}
+parameter_types! {}
 
 #[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct Behaviour(pub Vec<u8>);
 
 impl Config for Test {
-    type Event = Event;
-    type Action = Behaviour;
+	type Event = Event;
+	type Action = Behaviour;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-    let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-    frame_system::GenesisConfig::default().assimilate_storage::<Test>(&mut t).unwrap();
-    let mut ext = sp_io::TestExternalities::new(t);
-    ext.execute_with(|| System::set_block_number(1));
-    ext
+	let mut t = frame_system::GenesisConfig::default()
+		.build_storage::<Test>()
+		.unwrap();
+	frame_system::GenesisConfig::default()
+		.assimilate_storage::<Test>(&mut t)
+		.unwrap();
+	let mut ext = sp_io::TestExternalities::new(t);
+	ext.execute_with(|| System::set_block_number(1));
+	ext
 }
 
 pub fn run_to_block(n: u64) {
-    while System::block_number() < n {
-        System::set_block_number(System::block_number() + 1);
-    }
+	while System::block_number() < n {
+		System::set_block_number(System::block_number() + 1);
+	}
 }

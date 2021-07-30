@@ -30,16 +30,16 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+use cf_traits::{Judgement, JudgementError, Reporter};
+use frame_support::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::prelude::*;
-use frame_support::pallet_prelude::*;
-use cf_traits::{Reporter, Judgement, JudgementError};
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_system::pallet_prelude::*;
 	use codec::FullCodec;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -65,7 +65,8 @@ pub mod pallet {
 	/// Storage of account last known liveliness
 	#[pallet::storage]
 	#[pallet::getter(fn last_know_liveliness)]
-	pub(super) type LastKnownLiveliness<T: Config> = StorageMap<_, Identity, T::AccountId, T::BlockNumber>;
+	pub(super) type LastKnownLiveliness<T: Config> =
+		StorageMap<_, Identity, T::AccountId, T::BlockNumber>;
 
 	#[pallet::event]
 	pub enum Event<T: Config> {}
@@ -111,27 +112,19 @@ impl<T: Config> Reporter for Pallet<T> {
 	///
 	/// We store the action and record the current block number as liveliness for this account
 	fn report(account_id: &Self::AccountId, action: Self::Action) -> Result<(), JudgementError> {
-		<Actions<T>>::try_mutate(account_id, |actions| {
-			match actions.as_mut() {
-				Some(actions) => {
-					actions.push(action);
+		<Actions<T>>::try_mutate(account_id, |actions| match actions.as_mut() {
+			Some(actions) => {
+				actions.push(action);
 
-					<LastKnownLiveliness<T>>::try_mutate(account_id, |last| {
-						match last.as_mut() {
-							Some(last) => {
-								*last = <frame_system::Pallet<T>>::block_number();
-								Ok(())
-							},
-							None => {
-								Err(JudgementError::AccountNotFound)
-							}
-						}
-					})
-				},
-				None => {
-					Err(JudgementError::AccountNotFound)
-				}
+				<LastKnownLiveliness<T>>::try_mutate(account_id, |last| match last.as_mut() {
+					Some(last) => {
+						*last = <frame_system::Pallet<T>>::block_number();
+						Ok(())
+					}
+					None => Err(JudgementError::AccountNotFound),
+				})
 			}
+			None => Err(JudgementError::AccountNotFound),
 		})
 	}
 }
@@ -149,7 +142,9 @@ impl<T: Config> Judgement<Pallet<T>, T::BlockNumber> for Pallet<T> {
 	///
 	/// The report consists of a vector of behaviours recorded
 	/// An error returns if the account is not whitelisted
-	fn report_for(account_id: &T::AccountId) -> Result<Vec<<Pallet<T> as Reporter>::Action>, JudgementError> {
+	fn report_for(
+		account_id: &T::AccountId,
+	) -> Result<Vec<<Pallet<T> as Reporter>::Action>, JudgementError> {
 		Self::actions(account_id).ok_or(JudgementError::AccountNotFound)
 	}
 
