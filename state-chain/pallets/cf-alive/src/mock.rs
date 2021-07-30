@@ -24,7 +24,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		AlivePallet: pallet_cf_alive::{Module, Call, Storage, Event<T>},
+		AlivePallet: pallet_cf_alive::{Module, Storage, Event<T>},
 	}
 );
 
