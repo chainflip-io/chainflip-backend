@@ -112,9 +112,9 @@ pub trait AuctionPenalty<ValidatorId> {
 /// Feedback on auction and confirmation
 pub trait AuctionHandler<ValidatorId, Amount> {
 	// An auction has completed and the winners and the minimum bid are shared
-	fn on_completed(winners: Vec<ValidatorId>, min_bid:Amount) -> Result<(), AuctionError>;
+	fn on_auction_completed(winners: Vec<ValidatorId>, min_bid:Amount) -> Result<(), AuctionError>;
 	// The caller trys to confirm whether the auction can be confirmed
-	fn try_confirmation() -> Result<(), AuctionError>;
+	fn try_to_confirm_auction() -> Result<(), AuctionError>;
 }
 
 /// An error has occurred during an auction

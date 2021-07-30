@@ -284,7 +284,7 @@ impl<T: Config> Auction for Pallet<T> {
 								winners.clone(),
 							));
 
-							T::Events::on_completed(winners, *min_bid)?;
+							T::Events::on_auction_completed(winners, *min_bid)?;
 							return Ok(phase);
 						}
 					}
