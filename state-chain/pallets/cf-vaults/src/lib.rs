@@ -275,11 +275,6 @@ impl<T: Config> Pallet<T> {
 	fn vaults_rotated() -> bool {
 		VaultRotations::<T>::iter().count() == 0
 	}
-
-	/// Is this a valid index
-	fn is_valid_vault(idx: T::RequestIndex) -> bool {
-		VaultRotations::<T>::contains_key(idx)
-	}
 }
 
 impl<T: Config> AuctionHandler<T::ValidatorId, T::Amount> for Pallet<T> {
