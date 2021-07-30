@@ -16,14 +16,14 @@ mod test {
 		new_test_ext().execute_with(|| {
 			// An empty set and an error is thrown back, request index 1
 			assert_eq!(
-				VaultsPallet::on_completed(vec![], 0),
+				VaultsPallet::on_auction_completed(vec![], 0),
 				Err(AuctionError::Abort)
 			);
 			// Everything ok with a set of numbers
 			// Nothing running at the moment
 			assert!(VaultsPallet::vaults_rotated());
 			// Request index 2
-			assert_ok!(VaultsPallet::on_completed(vec![ALICE, BOB, CHARLIE], 0));
+			assert_ok!(VaultsPallet::on_auction_completed(vec![ALICE, BOB, CHARLIE], 0));
 			// Confirm we have a new vault rotation process running
 			assert!(!VaultsPallet::vaults_rotated());
 			// Check the event emitted
@@ -43,7 +43,7 @@ mod test {
 	#[test]
 	fn keygen_response() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(VaultsPallet::on_completed(vec![ALICE, BOB, CHARLIE], 0));
+			assert_ok!(VaultsPallet::on_auction_completed(vec![ALICE, BOB, CHARLIE], 0));
 			assert_ok!(VaultsPallet::witness_keygen_response(
 				Origin::signed(ALICE),
 				VaultsPallet::request_idx(),
@@ -54,7 +54,7 @@ mod test {
 			assert!(OTHER_CHAIN_RESULT.with(|l| *l.borrow() == VaultsPallet::request_idx()));
 
 			// A subsequent key generation request
-			assert_ok!(VaultsPallet::on_completed(vec![ALICE, BOB, CHARLIE], 0));
+			assert_ok!(VaultsPallet::on_auction_completed(vec![ALICE, BOB, CHARLIE], 0));
 
 			// This time we respond with bad news
 			assert_ok!(VaultsPallet::witness_keygen_response(
@@ -77,7 +77,7 @@ mod test {
 	#[test]
 	fn vault_rotation_request() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(VaultsPallet::on_completed(vec![ALICE, BOB, CHARLIE], 0));
+			assert_ok!(VaultsPallet::on_auction_completed(vec![ALICE, BOB, CHARLIE], 0));
 			assert_ok!(VaultsPallet::witness_keygen_response(
 				Origin::signed(ALICE),
 				VaultsPallet::request_idx(),
@@ -121,7 +121,7 @@ mod test {
 	#[test]
 	fn vault_rotation_response() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(VaultsPallet::on_completed(vec![ALICE, BOB, CHARLIE], 0));
+			assert_ok!(VaultsPallet::on_auction_completed(vec![ALICE, BOB, CHARLIE], 0));
 			assert_ok!(VaultsPallet::witness_keygen_response(
 				Origin::signed(ALICE),
 				VaultsPallet::request_idx(),

@@ -1,6 +1,6 @@
 use super::*;
 use crate::rotation::*;
-use frame_support::{construct_runtime, parameter_types};
+use frame_support::{construct_runtime, parameter_types, traits::UnfilteredDispatchable};
 use frame_system::{ensure_root, RawOrigin};
 use sp_core::H256;
 use sp_runtime::BuildStorage;
@@ -80,9 +80,9 @@ impl cf_traits::Witnesser for MockWitnesser {
 	type AccountId = u64;
 	type Call = Call;
 
-	fn witness(_who: Self::AccountId, _call: Self::Call) -> DispatchResultWithPostInfo {
-		// We don't intend to test this, it's just to keep the compiler happy.
-		Ok(().into())
+	fn witness(_who: Self::AccountId, call: Self::Call) -> DispatchResultWithPostInfo {
+		let result = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
+		Ok(result.unwrap_or_else(|err| err.post_info))
 	}
 }
 
@@ -92,8 +92,8 @@ impl ChainFlip for MockRuntime {
 }
 
 impl ChainHandler<RequestIndex, ValidatorId, RotationError<ValidatorId>> for MockRuntime {
-	fn try_complete_vault_rotation(_index: RequestIndex, _result: Result<VaultRotationRequest, RotationError<ValidatorId>>) -> Result<(), RotationError<ValidatorId>> {
-		todo!()
+	fn try_complete_vault_rotation(_index: RequestIndex, result: Result<VaultRotationRequest, RotationError<ValidatorId>>) -> Result<(), RotationError<ValidatorId>> {
+		result.map(|_| ())
 	}
 }
 
@@ -116,6 +116,8 @@ impl ethereum::Config for MockRuntime {
 }
 
 pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;
+pub const BOB: <MockRuntime as frame_system::Config>::AccountId = 456u64;
+pub const CHARLIE: <MockRuntime as frame_system::Config>::AccountId = 789u64;
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {

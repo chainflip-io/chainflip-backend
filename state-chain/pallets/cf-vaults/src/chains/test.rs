@@ -18,11 +18,11 @@ mod test {
 			assert_ok!(EthereumPallet::try_start_vault_rotation(
 				0,
 				vec![],
-				vec![1, 2, 3]
+				vec![ALICE, BOB, CHARLIE]
 			));
 			let signing_request = EthSigningTxRequest {
 				payload: EthereumPallet::encode_set_agg_key_with_agg_key(vec![]).unwrap(),
-				validators: vec![1, 2, 3],
+				validators: vec![ALICE, BOB, CHARLIE],
 			};
 			assert_eq!(
 				last_event(),
