@@ -10,7 +10,7 @@ Thus, this component is responsible for witnessing these events on the contract.
 
 ## Key Manager Witness
 
-This component specifically witnesses events related to the KeyManager smart contract. At the moment there is only 1 event, the `KeyChange` event. This event is emitted when a governance or aggregate key sets a governance or aggregate key. Just like the stake manager witness, this component witnesses and pushes the event to the message queue for broadcast.
+This component specifically witnesses events related to the KeyManager smart contract. At the moment there is only 1 event, the `KeyChange` event. This event is emitted when a governance or aggregate key sets a new governance or aggregate key. Just like the Stake Manager witnesser, this component witnesses and pushes the event to the message queue for broadcast.
 
 ## ETH broadcaster
 

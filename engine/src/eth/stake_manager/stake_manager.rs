@@ -404,12 +404,12 @@ mod tests {
     }
 
     #[test]
-    fn test_staked_log_parsing() -> anyhow::Result<()> {
-        let log: web3::types::Log = serde_json::from_str(STAKED_LOG)?;
+    fn test_staked_log_parsing() {
+        let log: web3::types::Log = serde_json::from_str(STAKED_LOG).unwrap();
 
-        let sm = StakeManager::load(CONTRACT_ADDRESS)?;
+        let sm = StakeManager::load(CONTRACT_ADDRESS).unwrap();
 
-        match sm.parse_event(log)? {
+        match sm.parse_event(log).unwrap() {
             StakeManagerEvent::Staked {
                 account_id,
                 amount,
@@ -429,17 +429,15 @@ mod tests {
             }
             _ => panic!("Expected StakeManagerEvent::Staked, got a different variant"),
         }
-
-        Ok(())
     }
 
     #[test]
-    fn test_claim_registered_log_parsing() -> anyhow::Result<()> {
-        let log: web3::types::Log = serde_json::from_str(CLAIM_REGISTERED_LOG)?;
+    fn test_claim_registered_log_parsing() {
+        let log: web3::types::Log = serde_json::from_str(CLAIM_REGISTERED_LOG).unwrap();
 
-        let sm = StakeManager::load(CONTRACT_ADDRESS)?;
+        let sm = StakeManager::load(CONTRACT_ADDRESS).unwrap();
 
-        match sm.parse_event(log)? {
+        match sm.parse_event(log).unwrap() {
             StakeManagerEvent::ClaimRegistered {
                 account_id,
                 amount,
@@ -479,17 +477,15 @@ mod tests {
             }
             _ => panic!("Expected Staking::ClaimRegistered, got a different variant"),
         }
-
-        Ok(())
     }
 
     #[test]
-    fn test_claim_executed_log_parsing() -> anyhow::Result<()> {
-        let log: web3::types::Log = serde_json::from_str(CLAIM_EXECUTED_LOG)?;
+    fn test_claim_executed_log_parsing() {
+        let log: web3::types::Log = serde_json::from_str(CLAIM_EXECUTED_LOG).unwrap();
 
-        let sm = StakeManager::load(CONTRACT_ADDRESS)?;
+        let sm = StakeManager::load(CONTRACT_ADDRESS).unwrap();
 
-        match sm.parse_event(log)? {
+        match sm.parse_event(log).unwrap() {
             StakeManagerEvent::ClaimExecuted {
                 account_id,
                 amount,
@@ -509,17 +505,15 @@ mod tests {
             }
             _ => panic!("Expected Staking::ClaimExecuted, got a different variant"),
         }
-
-        Ok(())
     }
 
     #[test]
-    fn emission_changed_log_parsing() -> anyhow::Result<()> {
-        let log: web3::types::Log = serde_json::from_str(EMISSION_CHANGED_LOG)?;
+    fn emission_changed_log_parsing() {
+        let log: web3::types::Log = serde_json::from_str(EMISSION_CHANGED_LOG).unwrap();
 
-        let sm = StakeManager::load(CONTRACT_ADDRESS)?;
+        let sm = StakeManager::load(CONTRACT_ADDRESS).unwrap();
 
-        match sm.parse_event(log)? {
+        match sm.parse_event(log).unwrap() {
             StakeManagerEvent::EmissionChanged {
                 old_emission_per_block,
                 new_emission_per_block,
@@ -542,17 +536,15 @@ mod tests {
             }
             _ => panic!("Expected Staking::EmissionChanged, got a different variant"),
         }
-
-        Ok(())
     }
 
     #[test]
-    fn min_stake_changed_log_parsing() -> anyhow::Result<()> {
-        let log: web3::types::Log = serde_json::from_str(MIN_STAKE_CHANGED_LOG)?;
+    fn min_stake_changed_log_parsing() {
+        let log: web3::types::Log = serde_json::from_str(MIN_STAKE_CHANGED_LOG).unwrap();
 
-        let sm = StakeManager::load(CONTRACT_ADDRESS)?;
+        let sm = StakeManager::load(CONTRACT_ADDRESS).unwrap();
 
-        match sm.parse_event(log)? {
+        match sm.parse_event(log).unwrap() {
             StakeManagerEvent::MinStakeChanged {
                 old_min_stake,
                 new_min_stake,
@@ -576,13 +568,11 @@ mod tests {
             }
             _ => panic!("Expected Staking::MinStakeChanged, got a different variant"),
         }
-
-        Ok(())
     }
 
     #[test]
-    fn abi_topic_sigs() -> anyhow::Result<()> {
-        let sm = StakeManager::load(CONTRACT_ADDRESS)?;
+    fn abi_topic_sigs() {
+        let sm = StakeManager::load(CONTRACT_ADDRESS).unwrap();
 
         // Staked event
         let staked_sig = sm.staked_event_definition().signature();
@@ -613,7 +603,5 @@ mod tests {
         let expected = H256::from_str(MIN_STAKE_CHANGED_EVENT_SIG)
             .expect("Couldn't case min stake changed event sig to H256");
         assert_eq!(min_stake_changed_sig, expected);
-
-        Ok(())
     }
 }

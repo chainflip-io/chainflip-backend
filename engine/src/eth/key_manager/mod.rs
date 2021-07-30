@@ -17,20 +17,18 @@ pub async fn start_key_manager_witness<MQC: 'static + IMQClient + Send + Sync + 
     settings: &settings::Settings,
     mq_client: MQC,
 ) -> Result<()> {
-    log::info!("Starting the key manager witness");
+    log::info!("Starting the Key Manager witness");
 
-    let km_event_stream = EthEventStreamBuilder::new(
+    EthEventStreamBuilder::new(
         settings.eth.node_endpoint.as_str(),
         KeyManager::load(settings.eth.key_manager_eth_address.as_str())?,
     )
     .with_sink(KeyManagerSink::<MQC>::new(mq_client).await?)
     .build()
-    .await?;
-
-    km_event_stream
-        .run(settings.eth.from_block.into())
-        .await
-        .context("Error occurred running the KeyManager events stream")?;
+    .await?
+    .run(settings.eth.from_block.into())
+    .await
+    .context("Error occurred running the KeyManager events stream")?;
 
     Ok(())
 }

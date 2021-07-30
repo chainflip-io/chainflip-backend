@@ -143,18 +143,17 @@ impl EventSource for KeyManager {
             sig
         );
 
-        match sig {
-            _ if sig == self.key_change_event_definition().signature() => {
-                let log = self.key_change_event_definition().parse_log(raw_log)?;
+        if sig == self.key_change_event_definition().signature() {
+            let log = self.key_change_event_definition().parse_log(raw_log)?;
 
-                let event = KeyManagerEvent::KeyChange {
-                    signed: utils::decode_log_param::<bool>(&log, "signedByAggKey")?,
-                    old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
-                    new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
-                };
-                Ok(event)
-            }
-            s => Err(EventProducerError::UnexpectedEvent(s))?,
+            let event = KeyManagerEvent::KeyChange {
+                signed: utils::decode_log_param::<bool>(&log, "signedByAggKey")?,
+                old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
+                new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
+            };
+            Ok(event)
+        } else {
+            Err(EventProducerError::UnexpectedEvent(sig).into())
         }
     }
 }
@@ -208,18 +207,32 @@ mod tests {
         "removed": false
     }"#;
 
+    const INVALID_SIG_LOG: &'static str = r#"{
+        "logIndex": "0x0",
+        "transactionIndex": "0x0",
+        "transactionHash": "0x04629152b064c0d1343161c43f3b78cf67e9be35fc97f66bbb0e1ca1a0206bae", 
+        "blockHash": "0x68c5dfba660af922463f3d47c76b551760161711e9341cf8563bae7e146f6b8d", 
+        "blockNumber": "0xC5064B", 
+        "address": "0xD537bF4b795b7D07Bd5F4bAf7017e3ce8360B1DE", 
+        "data": "0x000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae00000000000000000000000000000000000000000000000000000000000000011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001", 
+        "topics": ["0x0b0b5ed18390ab49777844d5fcafb9865c74095ceb3e73cc57d1fbcc926103b5"],
+        "type": "mined",
+        "removed": false
+    }"#;
+
     const KEY_CHANGE_EVENT_SIG: &'static str =
         "0x19389c59b816d8b0ec43f2d5ed9b41bddc63d66dac1ecd808efe35b86b9ee0bf";
 
     const CONTRACT_ADDRESS: &'static str = "0xD537bF4b795b7D07Bd5F4bAf7017e3ce8360B1DE";
 
     #[test]
-    fn test_key_change_parsing() -> anyhow::Result<()> {
-        println!("Loading KeyManager");
-        let km = KeyManager::load(CONTRACT_ADDRESS)?;
+    fn test_key_change_parsing() {
+        let km = KeyManager::load(CONTRACT_ADDRESS).unwrap();
 
-        println!("Parsing event 1");
-        match km.parse_event(serde_json::from_str(AGG_SET_AGG_LOG)?)? {
+        match km
+            .parse_event(serde_json::from_str(AGG_SET_AGG_LOG).unwrap())
+            .expect("Failed parsing AGG_SET_AGG_LOG event")
+        {
             KeyManagerEvent::KeyChange {
                 signed,
                 old_key,
@@ -241,8 +254,10 @@ mod tests {
             }
         }
 
-        println!("Parsing event 2");
-        match km.parse_event(serde_json::from_str(GOV_SET_AGG_LOG)?)? {
+        match km
+            .parse_event(serde_json::from_str(GOV_SET_AGG_LOG).unwrap())
+            .expect("Failed parsing GOV_SET_AGG_LOG event")
+        {
             KeyManagerEvent::KeyChange {
                 signed,
                 old_key,
@@ -264,8 +279,10 @@ mod tests {
             }
         }
 
-        println!("Parsing event 3");
-        match km.parse_event(serde_json::from_str(GOV_SET_GOV_LOG)?)? {
+        match km
+            .parse_event(serde_json::from_str(GOV_SET_GOV_LOG).unwrap())
+            .expect("Failed parsing GOV_SET_GOV_LOG event")
+        {
             KeyManagerEvent::KeyChange {
                 signed,
                 old_key,
@@ -287,12 +304,21 @@ mod tests {
             }
         }
 
-        Ok(())
+        // Invalid sig test
+        let res = km
+            .parse_event(serde_json::from_str(INVALID_SIG_LOG).unwrap())
+            .map_err(|e| match e.downcast_ref::<EventProducerError>() {
+                Some(EventProducerError::UnexpectedEvent(_)) => {}
+                _ => {
+                    panic!("Incorrect error parsing INVALID_SIG_LOG");
+                }
+            });
+        assert!(res.is_err());
     }
 
     #[test]
-    fn abi_topic_sigs() -> anyhow::Result<()> {
-        let km = KeyManager::load(CONTRACT_ADDRESS)?;
+    fn abi_topic_sigs() {
+        let km = KeyManager::load(CONTRACT_ADDRESS).unwrap();
 
         // key change event
         assert_eq!(
@@ -301,7 +327,5 @@ mod tests {
                 .expect("Couldn't cast key change event sig to H256"),
             "key change event doesn't match signature"
         );
-
-        Ok(())
     }
 }
