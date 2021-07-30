@@ -120,13 +120,13 @@ pub enum P2pError {
 	/// Empty messages are not allowed.
 	EmptyMessage,
 	/// The node attempted to identify itself more than once.
-	AlreadyIdentified(ValidatorIdBs58)
+	AlreadyIdentified(ValidatorIdBs58),
 }
 
 impl From<P2pError> for P2PEvent {
-    fn from(err: P2pError) -> Self {
-        P2PEvent::Error(err)
-    }
+	fn from(err: P2pError) -> Self {
+		P2PEvent::Error(err)
+	}
 }
 
 /// Events available via the subscription stream.
@@ -139,7 +139,7 @@ pub enum P2PEvent {
 	/// A validator has disconnected from the network.
 	ValidatorDisconnected(ValidatorIdBs58),
 	/// Errors.
-	Error(P2pError)
+	Error(P2pError),
 }
 
 impl RpcCore {
@@ -179,24 +179,27 @@ impl NetworkObserver for RpcCore {
 	}
 
 	fn received(&self, validator_id: &ValidatorId, message: RawMessage) {
-		self.notify(P2PEvent::MessageReceived((*validator_id).into(), message.into()));
+		self.notify(P2PEvent::MessageReceived(
+			(*validator_id).into(),
+			message.into(),
+		));
 	}
 
 	fn unknown_recipient(&self, recipient_id: &ValidatorId) {
 		self.notify(P2pError::UnknownRecipient((*recipient_id).into()).into());
-    }
+	}
 
 	fn unidentified_node(&self) {
-        self.notify(P2pError::Unidentified.into());
-    }
+		self.notify(P2pError::Unidentified.into());
+	}
 
 	fn empty_message(&self) {
-        self.notify(P2pError::EmptyMessage.into());
-    }
+		self.notify(P2pError::EmptyMessage.into());
+	}
 
 	fn already_identified(&self, existing_id: &ValidatorId) {
-        self.notify(P2pError::AlreadyIdentified((*existing_id).into()).into());
-    }
+		self.notify(P2pError::AlreadyIdentified((*existing_id).into()).into());
+	}
 }
 
 /// The RPC bridge and API
@@ -225,11 +228,15 @@ impl<C: P2pMessaging + Sync + Send + 'static> RpcApi for Rpc<C> {
 	}
 
 	fn send(&self, validator_id: ValidatorIdBs58, message: MessageBs58) -> Result<u64> {
+		println!("Sending on the RPC");
 		self.messaging
 			.lock()
 			.unwrap()
 			.send_message(validator_id.into(), message.into())
-			.map_err(|_| Error::internal_error())
+			.map_err(|e| {
+				println!("Here's the error: {:?}", e);
+				Error::internal_error()
+			})
 			.map(|_| 200)
 	}
 
@@ -305,7 +312,7 @@ mod tests {
 			}
 			Ok(())
 		}
-		
+
 		fn notify_message(&self, from: ValidatorId, data: RawMessage) -> anyhow::Result<()> {
 			self.notify(P2PEvent::MessageReceived(from.into(), data.into()))
 		}
@@ -355,7 +362,8 @@ mod tests {
 		});
 
 		assert_eq!(
-			node.io.handle_request_sync(&unsub_req.to_string(), meta.clone()),
+			node.io
+				.handle_request_sync(&unsub_req.to_string(), meta.clone()),
 			Some(r#"{"jsonrpc":"2.0","result":true,"id":1}"#.into()),
 		);
 
@@ -369,8 +377,12 @@ mod tests {
 	fn send_message() {
 		let node = Node::new();
 
-		let validator_id = "5G9NWJ5P9uk7am24yCKeLZJqXWW6hjuMyRJDmw4ofqx";
-		let message = bs58::encode(b"hello").into_string();
+		let validator_id = serde_json::from_str::<ValidatorIdBs58>(
+			r#""5G9NWJ5P9uk7am24yCKeLZJqXWW6hjuMyRJDmw4ofqx""#,
+		)
+		.expect("Valid Id.");
+		// let message = bs58::encode(b"hello").into_string();
+		let message = MessageBs58("hello".as_bytes().to_vec());
 
 		let request = json!({
 			"jsonrpc": "2.0",
@@ -460,7 +472,8 @@ mod tests {
 					Params::Map(json_map) => json_map,
 					_ => panic!(),
 				};
-				let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
+				let recv_sub_id: String =
+					serde_json::from_value(json_map["subscription"].take()).unwrap();
 				assert_eq!(recv_sub_id, sub_id);
 
 				serde_json::from_value(json_map["result"].take()).unwrap()

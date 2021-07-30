@@ -20,6 +20,7 @@ impl Base58 for () {
 }
 
 pub struct RpcP2PClient {
+    url: url::Url,
     client: P2PClient,
 }
 
@@ -33,7 +34,7 @@ impl RpcP2PClient {
             );
             P2PNetworkClientError::Rpc
         })?;
-        Ok(RpcP2PClient { client })
+        Ok(RpcP2PClient { url, client })
     }
 }
 
@@ -106,11 +107,14 @@ impl P2PNetworkClient<RpcP2PClientStream> for RpcP2PClient {
         to: &ValidatorId,
         data: &RawMessage,
     ) -> Result<StatusCode, P2PNetworkClientError> {
-        Ok(self
+        println!("Send on RPCP2PClient");
+        let result = self
             .client
             .send(to.clone().into(), data.clone().into())
             .await
-            .map_err(|_| P2PNetworkClientError::Rpc)?)
+            .map_err(|_| P2PNetworkClientError::Rpc);
+        println!("Here's the result: {:?}", result);
+        result
     }
 
     async fn take_stream(&mut self) -> Result<RpcP2PClientStream, P2PNetworkClientError> {

@@ -244,13 +244,16 @@ where
 	/// Send message to peer, this will fail silently if peer isn't in our peer list or if the message
 	/// is empty.
 	pub fn send_message(&self, validator_id: ValidatorId, message: RawMessage) {
+		println!("Sending message a 1");
 		if self.notify_invalid(&message) {
 			return;
 		}
 
 		if let Some(peer_id) = self.validator_to_peer.get(&validator_id) {
+			println!("Encode and send a message to peer id");
 			self.encode_and_send(*peer_id, ProtocolMessage::Message(message));
 		} else {
+			println!("Unknown recipient");
 			self.observer.unknown_recipient(&validator_id);
 		}
 	}
@@ -385,8 +388,10 @@ impl P2pMessaging for Sender {
 	}
 
 	fn send_message(&mut self, validator_id: ValidatorId, data: RawMessage) -> Result<()> {
+		println!("P2P messaging unbounded send, sending");
 		self.0
 			.unbounded_send(MessagingCommand::Send(validator_id, data))?;
+		println!("Unbounded thing sent successfully");
 		Ok(())
 	}
 
@@ -421,10 +426,15 @@ where
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let this = &mut *self;
+		println!("Poll called on Network bridge");
 		loop {
 			match this.command_receiver.poll_next_unpin(cx) {
 				Poll::Ready(Some(cmd)) => match cmd {
 					MessagingCommand::Send(validator_id, msg) => {
+						println!(
+							"MessageCommand::Send received with validator id: {:?}; msg: {:?}",
+							validator_id, msg
+						);
 						this.state_machine.send_message(validator_id, msg);
 					}
 					MessagingCommand::Broadcast(validators, msg) => {
