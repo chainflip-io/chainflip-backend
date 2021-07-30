@@ -1,8 +1,10 @@
 mod db_tests;
 mod helpers;
+
 mod keygen_unit_tests;
 mod signing_unit_tests;
 
+use cf_p2p::ValidatorId;
 pub use helpers::KeygenPhase1Data;
 
 use lazy_static::lazy_static;
@@ -15,12 +17,9 @@ use helpers::*;
 use super::keygen_state::KeygenStage;
 use super::signing_state::SigningStage;
 
-use crate::{
-    p2p::ValidatorId,
-    signing::{
-        client::{KeyId, KeygenInfo, MultisigInstruction, SigningInfo, PHASE_TIMEOUT},
-        MessageHash, MessageInfo,
-    },
+use crate::signing::{
+    client::{KeyId, KeygenInfo, MultisigInstruction, SigningInfo, PHASE_TIMEOUT},
+    MessageHash, MessageInfo,
 };
 
 use std::convert::TryInto;

@@ -98,6 +98,7 @@ mod tests {
 
     use super::*;
 
+    use cf_p2p::ValidatorId;
     use tokio::time::timeout;
 
     #[tokio::test]

@@ -1,11 +1,12 @@
 use std::{collections::HashMap, time::Duration};
 
+use cf_p2p::ValidatorId;
 use itertools::Itertools;
 use log::*;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::{
-    p2p::{P2PMessage, P2PMessageCommand, ValidatorId},
+    p2p::{P2PMessage, P2PMessageCommand},
     signing::db::KeyDBMock,
     signing::{
         client::{
@@ -462,7 +463,7 @@ pub async fn print_next_message(rx: &mut InnerEventReceiver) {
 
         match m {
             InnerEvent::P2PMessageCommand(P2PMessageCommand { destination, .. }) => {
-                eprintln!("P2PMessageCommand [ destination: {} ]", destination);
+                eprintln!("P2PMessageCommand [ destination: {:?} ]", destination);
             }
             InnerEvent::SigningResult(s) => {
                 eprintln!("{:?}", s);

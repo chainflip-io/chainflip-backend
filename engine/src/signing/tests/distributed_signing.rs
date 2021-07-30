@@ -1,3 +1,4 @@
+use cf_p2p::ValidatorId;
 use futures::StreamExt;
 use itertools::Itertools;
 use log::*;
@@ -12,7 +13,7 @@ use crate::{
         mq_mock::{MQMock, MQMockClientFactory},
         pin_message_stream, IMQClient, Subject,
     },
-    p2p::{mock::NetworkMock, P2PConductor, ValidatorId},
+    p2p::{mock::NetworkMock, P2PConductor},
     signing::db::KeyDBMock,
 };
 

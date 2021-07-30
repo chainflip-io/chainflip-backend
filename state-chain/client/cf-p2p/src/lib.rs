@@ -16,6 +16,23 @@ use std::task::{Context, Poll};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct ValidatorId(pub [u8; 32]);
 
+impl ValidatorId {
+	// A convenience method to quickly generate different validator ids
+	// from a string of any size that is no larger that 32 bytes
+	pub fn new<T: ToString>(id: T) -> Self {
+		let id_str = id.to_string();
+		let id_bytes = id_str.as_bytes();
+
+		let mut id: [u8; 32] = [0; 32];
+
+		for (idx, byte) in id_bytes.iter().enumerate() {
+			id[idx] = *byte;
+		}
+
+		ValidatorId(id)
+	}
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RawMessage(pub Vec<u8>);
 

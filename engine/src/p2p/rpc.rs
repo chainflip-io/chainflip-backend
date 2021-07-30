@@ -167,7 +167,7 @@ impl P2PClient {
     pub fn subscribe_notifications(&self) -> RpcResult<TypedSubscriptionStream<P2PEvent>> {
         self.inner.subscribe(
             "cf_p2p_subscribeNotifications",
-            (()),
+            (),
             "cf_p2p_notifications",
             "cf_p2p_unsubscribeNotifications",
             "RpcEvent",
@@ -217,27 +217,29 @@ mod tests {
         io
     }
 
-    #[test]
-    fn client_api() {
+    #[tokio::test]
+    async fn client_api() {
         let server = TestServer::serve();
-        let mut glue_client = RpcP2PClient::new(server.url);
+        let mut glue_client = RpcP2PClient::new(server.url).await.unwrap();
         let run = async {
             let result = glue_client
-                .send(&ValidatorId::new("100"), "disco".as_bytes())
+                .send(
+                    &ValidatorId::new("100"),
+                    &RawMessage("disco".as_bytes().to_vec()),
+                )
                 .await;
             assert!(
                 result.is_ok(),
                 "Should receive OK for sending message to peer"
             );
-            let result = P2PNetworkClient::<ValidatorId, RpcP2PClientStream>::broadcast(
+            let result = P2PNetworkClient::<RpcP2PClientStream>::broadcast(
                 &glue_client,
-                "disco".as_bytes(),
+                &RawMessage("disco".as_bytes().to_vec()),
             )
             .await;
             assert!(result.is_ok(), "Should receive OK for broadcasting message");
             let result =
-                P2PNetworkClient::<ValidatorId, RpcP2PClientStream>::take_stream(&mut glue_client)
-                    .await;
+                P2PNetworkClient::<RpcP2PClientStream>::take_stream(&mut glue_client).await;
             assert!(result.is_ok(), "Should subscribe OK");
         };
         tokio::runtime::Runtime::new().unwrap().block_on(run);

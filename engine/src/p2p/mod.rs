@@ -87,6 +87,7 @@ pub trait P2PNetworkClient<S: Stream<Item = P2PMessage>> {
 //     }
 // }
 
+// Should these actually take RawMessage??
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct P2PMessage {
     pub sender_id: ValidatorId,
@@ -136,7 +137,10 @@ mod tests {
             .collect_vec();
 
         // (0) sends to (1); (1) should receive one, (2) receives none
-        clients[0].send(&validator_ids[1], &data).await.unwrap();
+        clients[0]
+            .send(&validator_ids[1], &RawMessage(data.clone()))
+            .await
+            .unwrap();
 
         drop(network);
 
@@ -160,14 +164,17 @@ mod tests {
         let network = NetworkMock::new();
 
         let data = vec![3, 2, 1];
-        let validator_ids = (0..3).map(|i| ValidatorIdBs58::new(i)).collect_vec();
+        let validator_ids = (0..3).map(|i| ValidatorId::new(i)).collect_vec();
         let mut clients = validator_ids
             .iter()
             .map(|id| network.new_client(id.clone()))
             .collect_vec();
 
         // (1) broadcasts; (0) and (2) should receive one message
-        clients[1].broadcast(&data).await.unwrap();
+        clients[1]
+            .broadcast(&RawMessage(data.clone()))
+            .await
+            .unwrap();
 
         let stream_0 = clients[0].take_stream().await.unwrap();
 

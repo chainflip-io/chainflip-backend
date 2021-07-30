@@ -1,10 +1,11 @@
 use std::{collections::HashMap, sync::Arc};
 
+use cf_p2p::{RawMessage, ValidatorId};
 use parking_lot::Mutex;
 
 use tokio::sync::mpsc::UnboundedSender;
 
-use super::{P2PMessage, P2PNetworkClient, ValidatorId};
+use super::{P2PMessage, P2PNetworkClient};
 
 use crate::p2p::{P2PNetworkClientError, StatusCode};
 use async_trait::async_trait;
@@ -31,8 +32,8 @@ impl P2PClientMock {
 }
 
 #[async_trait]
-impl P2PNetworkClient<ValidatorId, UnboundedReceiverStream<P2PMessage>> for P2PClientMock {
-    async fn broadcast(&self, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError> {
+impl P2PNetworkClient<UnboundedReceiverStream<P2PMessage>> for P2PClientMock {
+    async fn broadcast(&self, data: &RawMessage) -> Result<StatusCode, P2PNetworkClientError> {
         self.network_inner.lock().broadcast(&self.id, data);
         Ok(200)
     }
@@ -40,7 +41,7 @@ impl P2PNetworkClient<ValidatorId, UnboundedReceiverStream<P2PMessage>> for P2PC
     async fn send(
         &self,
         to: &ValidatorId,
-        data: &[u8],
+        data: &RawMessage,
     ) -> Result<StatusCode, P2PNetworkClientError> {
         self.network_inner.lock().send(&self.id, to, data);
         Ok(200)
@@ -85,10 +86,10 @@ impl NetworkMockInner {
         assert!(added, "Cannot insert the same validator more than once");
     }
 
-    fn broadcast(&self, from: &ValidatorId, data: &[u8]) {
+    fn broadcast(&self, from: &ValidatorId, data: &RawMessage) {
         let m = P2PMessage {
             sender_id: from.to_owned(),
-            data: data.to_owned(),
+            data: data.0.clone(),
         };
 
         for (id, sender) in &self.clients {
@@ -105,10 +106,10 @@ impl NetworkMockInner {
     }
 
     /// Send to a specific `validator` only
-    fn send(&self, from: &ValidatorId, to: &ValidatorId, data: &[u8]) {
+    fn send(&self, from: &ValidatorId, to: &ValidatorId, data: &RawMessage) {
         let m = P2PMessage {
             sender_id: from.to_owned(),
-            data: data.to_owned(),
+            data: data.0.clone(),
         };
 
         match self.clients.get(to) {
@@ -119,7 +120,7 @@ impl NetworkMockInner {
                 }
             },
             None => {
-                eprintln!("Client not connected: {}", to);
+                eprintln!("Client not connected: {:?}", to);
             }
         }
     }

@@ -422,7 +422,7 @@ async fn sign_request_from_invalid_validator() {
     // make sure that the id is indeed invalid
     assert!(
         !SIGNER_IDS.contains(&invalid_validator),
-        "invalid_validator id {}, must not be in the SIGNER_IDS",
+        "invalid_validator id {:?}, must not be in the SIGNER_IDS",
         invalid_validator
     );
 
