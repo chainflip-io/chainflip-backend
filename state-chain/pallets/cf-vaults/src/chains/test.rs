@@ -1,5 +1,5 @@
 mod test {
-	use crate::chains::ethereum::{EthSigningTxRequest, EthSigningTxResponse, Error};
+	use crate::chains::ethereum::{Error, EthSigningTxRequest, EthSigningTxResponse};
 	use crate::chains::mock::*;
 	use crate::chains::*;
 	use crate::rotation::ChainVault;
@@ -40,11 +40,14 @@ mod test {
 				EthSigningTxResponse::Success(vec![])
 			));
 
-			assert_noop!(EthereumPallet::witness_eth_signing_tx_response(
-				Origin::signed(ALICE),
-				0,
-				EthSigningTxResponse::Error(vec![1, 2, 3])
-			), Error::<MockRuntime>::EthSigningTxResponseFailed);
+			assert_noop!(
+				EthereumPallet::witness_eth_signing_tx_response(
+					Origin::signed(ALICE),
+					0,
+					EthSigningTxResponse::Error(vec![1, 2, 3])
+				),
+				Error::<MockRuntime>::EthSigningTxResponseFailed
+			);
 		});
 	}
 }

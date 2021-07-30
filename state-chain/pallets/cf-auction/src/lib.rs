@@ -40,23 +40,26 @@ mod tests;
 #[macro_use]
 extern crate assert_matches;
 
-use cf_traits::{Auction, AuctionError, AuctionPhase, AuctionRange, BidderProvider, AuctionPenalty, AuctionHandler, AuctionConfirmation};
+use cf_traits::{
+	Auction, AuctionError, AuctionHandler, AuctionPenalty, AuctionPhase, AuctionRange,
+	BidderProvider,
+};
 use frame_support::pallet_prelude::*;
+use frame_support::sp_runtime::offchain::storage_lock::BlockNumberProvider;
 use frame_support::sp_std::mem;
 use frame_support::traits::ValidatorRegistration;
+use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_runtime::traits::{AtLeast32BitUnsigned, One, Zero};
 use sp_std::cmp::min;
 use sp_std::prelude::*;
-use frame_system::pallet_prelude::*;
-use frame_support::sp_runtime::offchain::storage_lock::BlockNumberProvider;
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::AuctionHandler;
 	use frame_support::traits::ValidatorRegistration;
 	use sp_std::ops::Add;
-	use cf_traits::{AuctionHandler, AuctionConfirmation};
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -80,9 +83,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MinAuctionSize: Get<u32>;
 		/// The lifecycle of our auction
-		type Events: AuctionHandler<Self::ValidatorId, Self::Amount>;
-		/// Confirmation of an auction
-		type Confirmation: AuctionConfirmation;
+		type Handler: AuctionHandler<Self::ValidatorId, Self::Amount>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -282,7 +283,7 @@ impl<T: Config> Auction for Pallet<T> {
 								winners.clone(),
 							));
 
-							T::Events::on_auction_completed(winners, *min_bid)?;
+							T::Handler::on_auction_completed(winners, *min_bid)?;
 							return Ok(phase);
 						}
 					}
@@ -298,14 +299,16 @@ impl<T: Config> Auction for Pallet<T> {
 				let result = if frame_system::Pallet::<T>::current_block_number() == Zero::zero() {
 					Ok(())
 				} else {
-					T::Confirmation::try_confirmation()
+					T::Handler::try_to_confirm_auction()
 				};
 
 				match result {
 					Ok(_) => {
 						let phase = AuctionPhase::WaitingForBids(winners, min_bid);
 						<CurrentPhase<T>>::put(phase.clone());
-						Self::deposit_event(Event::AuctionConfirmed(CurrentAuctionIndex::<T>::get()));
+						Self::deposit_event(Event::AuctionConfirmed(
+							CurrentAuctionIndex::<T>::get(),
+						));
 						Self::deposit_event(Event::AwaitingBidders);
 						Ok(phase)
 					}

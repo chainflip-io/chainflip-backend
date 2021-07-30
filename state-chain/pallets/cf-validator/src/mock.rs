@@ -1,6 +1,7 @@
 use super::*;
 use crate as pallet_cf_validator;
-use cf_traits::{impl_mock_ensure_witnessed_for_origin, BidderProvider};
+use cf_traits::mocks::auction_handler::Mock as MockHandler;
+use cf_traits::BidderProvider;
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -15,7 +16,6 @@ use sp_runtime::{
 	Perbill,
 };
 use std::cell::RefCell;
-use cf_traits::mocks::auction_handler::Mock as MockHandler;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -115,8 +115,6 @@ parameter_types! {
 	pub const MinAuctionSize: u32 = 2;
 }
 
-impl_mock_ensure_witnessed_for_origin!(Origin);
-
 impl pallet_cf_auction::Config for Test {
 	type Event = Event;
 	type Amount = Amount;
@@ -126,7 +124,6 @@ impl pallet_cf_auction::Config for Test {
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
 	type Handler = MockHandler<ValidatorId, Amount>;
-	type EnsureWitnessed = MockEnsureWitnessed;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {

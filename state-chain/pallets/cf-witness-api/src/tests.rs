@@ -16,7 +16,8 @@ mod staking_witness_tests {
 			MockWitnesser::set_threshold(2);
 
 			// The call we are witnessing.
-			let call: Call = pallet_cf_staking::Call::staked(STAKER, STAKE, RETURN_ADDRESS, ETH_TX_HASH).into();
+			let call: Call =
+				pallet_cf_staking::Call::staked(STAKER, STAKE, RETURN_ADDRESS, ETH_TX_HASH).into();
 
 			// One vote.
 			assert_ok!(WitnessApi::witness_staked(

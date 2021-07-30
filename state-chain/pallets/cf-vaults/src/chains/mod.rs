@@ -1,3 +1,3 @@
 pub mod ethereum;
-mod test;
 mod mock;
+mod test;

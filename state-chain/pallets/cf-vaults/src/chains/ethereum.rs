@@ -135,7 +135,8 @@ pub mod pallet {
 			response: EthSigningTxResponse<T::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			match T::Vaults::try_is_valid(request_id).and(Self::try_response(request_id, response)) {
+			match T::Vaults::try_is_valid(request_id).and(Self::try_response(request_id, response))
+			{
 				Ok(_) => Ok(().into()),
 				Err(_) => Err(Error::<T>::EthSigningTxResponseFailed.into()),
 			}
@@ -250,7 +251,9 @@ impl From<Vec<u8>> for ChainParams {
 impl<T: Config> Pallet<T> {
 	/// Encode `setAggKeyWithAggKey` call using `ethabi`.  This is a long approach as we are working
 	/// around `no_std` limitations here for the runtime.
-	pub(crate) fn encode_set_agg_key_with_agg_key(new_public_key: T::PublicKey) -> ethabi::Result<Bytes> {
+	pub(crate) fn encode_set_agg_key_with_agg_key(
+		new_public_key: T::PublicKey,
+	) -> ethabi::Result<Bytes> {
 		Function::new(
 			"setAggKeyWithAggKey",
 			vec![

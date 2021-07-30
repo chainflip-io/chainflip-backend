@@ -32,14 +32,12 @@
 
 use frame_support::pallet_prelude::*;
 use sp_runtime::traits::One;
-use sp_runtime::DispatchResult;
 use sp_std::prelude::*;
 
 use cf_traits::{AuctionError, AuctionHandler, AuctionPenalty, NonceProvider, Witnesser};
 pub use pallet::*;
 
 use crate::rotation::*;
-use frame_support::dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo};
 
 mod rotation;
 
@@ -275,7 +273,10 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> AuctionHandler<T::ValidatorId, T::Amount> for Pallet<T> {
 	/// On completion of the Auction we would receive the proposed validators
 	/// A key generation request is created for each supported chain and the process starts
-	fn on_auction_completed(winners: Vec<T::ValidatorId>, _: T::Amount) -> Result<(), AuctionError> {
+	fn on_auction_completed(
+		winners: Vec<T::ValidatorId>,
+		_: T::Amount,
+	) -> Result<(), AuctionError> {
 		// Main entry point for the pallet
 		// Create a KeyGenRequest for Ethereum
 		let keygen_request = KeygenRequest {

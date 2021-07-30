@@ -23,7 +23,10 @@ mod test {
 			// Nothing running at the moment
 			assert!(VaultsPallet::vaults_rotated());
 			// Request index 2
-			assert_ok!(VaultsPallet::on_auction_completed(vec![ALICE, BOB, CHARLIE], 0));
+			assert_ok!(VaultsPallet::on_auction_completed(
+				vec![ALICE, BOB, CHARLIE],
+				0
+			));
 			// Confirm we have a new vault rotation process running
 			assert!(!VaultsPallet::vaults_rotated());
 			// Check the event emitted
@@ -43,7 +46,10 @@ mod test {
 	#[test]
 	fn keygen_response() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(VaultsPallet::on_auction_completed(vec![ALICE, BOB, CHARLIE], 0));
+			assert_ok!(VaultsPallet::on_auction_completed(
+				vec![ALICE, BOB, CHARLIE],
+				0
+			));
 			assert_ok!(VaultsPallet::witness_keygen_response(
 				Origin::signed(ALICE),
 				VaultsPallet::request_idx(),
@@ -54,7 +60,10 @@ mod test {
 			assert!(OTHER_CHAIN_RESULT.with(|l| *l.borrow() == VaultsPallet::request_idx()));
 
 			// A subsequent key generation request
-			assert_ok!(VaultsPallet::on_auction_completed(vec![ALICE, BOB, CHARLIE], 0));
+			assert_ok!(VaultsPallet::on_auction_completed(
+				vec![ALICE, BOB, CHARLIE],
+				0
+			));
 
 			// This time we respond with bad news
 			assert_ok!(VaultsPallet::witness_keygen_response(
@@ -77,7 +86,10 @@ mod test {
 	#[test]
 	fn vault_rotation_request() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(VaultsPallet::on_auction_completed(vec![ALICE, BOB, CHARLIE], 0));
+			assert_ok!(VaultsPallet::on_auction_completed(
+				vec![ALICE, BOB, CHARLIE],
+				0
+			));
 			assert_ok!(VaultsPallet::witness_keygen_response(
 				Origin::signed(ALICE),
 				VaultsPallet::request_idx(),
@@ -121,7 +133,10 @@ mod test {
 	#[test]
 	fn vault_rotation_response() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(VaultsPallet::on_auction_completed(vec![ALICE, BOB, CHARLIE], 0));
+			assert_ok!(VaultsPallet::on_auction_completed(
+				vec![ALICE, BOB, CHARLIE],
+				0
+			));
 			assert_ok!(VaultsPallet::witness_keygen_response(
 				Origin::signed(ALICE),
 				VaultsPallet::request_idx(),
@@ -158,7 +173,9 @@ mod test {
 			// Check the event emitted
 			assert_eq!(
 				last_event(),
-				mock::Event::pallet_cf_vaults(crate::Event::VaultRotationCompleted(VaultsPallet::request_idx()))
+				mock::Event::pallet_cf_vaults(crate::Event::VaultRotationCompleted(
+					VaultsPallet::request_idx()
+				))
 			);
 		});
 	}

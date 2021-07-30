@@ -15,10 +15,9 @@ type Block = frame_system::mocking::MockBlock<MockRuntime>;
 type Amount = u64;
 type ValidatorId = u64;
 type RequestIndex = u64;
-use crate::nonce::NonceUnixTime;
-use frame_support::sp_runtime::DispatchResult;
 use crate::mock::time_source;
-use frame_support::pallet_prelude::{EnsureOrigin, DispatchResultWithPostInfo};
+use crate::nonce::NonceUnixTime;
+use frame_support::pallet_prelude::{DispatchResultWithPostInfo, EnsureOrigin};
 
 thread_local! {}
 
@@ -92,7 +91,10 @@ impl ChainFlip for MockRuntime {
 }
 
 impl ChainHandler<RequestIndex, ValidatorId, RotationError<ValidatorId>> for MockRuntime {
-	fn try_complete_vault_rotation(_index: RequestIndex, result: Result<VaultRotationRequest, RotationError<ValidatorId>>) -> Result<(), RotationError<ValidatorId>> {
+	fn try_complete_vault_rotation(
+		_index: RequestIndex,
+		result: Result<VaultRotationRequest, RotationError<ValidatorId>>,
+	) -> Result<(), RotationError<ValidatorId>> {
 		result.map(|_| ())
 	}
 }

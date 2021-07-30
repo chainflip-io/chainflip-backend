@@ -1,5 +1,6 @@
 use super::*;
 use crate as pallet_cf_auction;
+use cf_traits::mocks::auction_handler::Mock as MockAuctionHandler;
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
@@ -9,7 +10,6 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 };
 use std::cell::RefCell;
-use cf_traits::mocks::auction_handler::Mock as MockEventsAndConfirmation;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -76,8 +76,6 @@ parameter_types! {
 	pub const MinAuctionSize: u32 = 2;
 }
 
-cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
-
 impl Config for Test {
 	type Event = Event;
 	type Amount = Amount;
@@ -86,9 +84,7 @@ impl Config for Test {
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
-	type Events = MockEventsAndConfirmation<ValidatorId, Amount>;
-	type Confirmation = MockEventsAndConfirmation<ValidatorId, Amount>;
-	type EnsureWitnessed = MockEnsureWitnessed;
+	type Handler = MockAuctionHandler<ValidatorId, Amount>;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
