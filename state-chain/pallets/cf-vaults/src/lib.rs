@@ -259,7 +259,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Provide the next index
-	fn next() -> T::RequestIndex {
+	fn next_index() -> T::RequestIndex {
 		RequestIdx::<T>::mutate(|idx| {
 			*idx = *idx + One::one();
 			*idx
@@ -288,7 +288,7 @@ impl<T: Config> AuctionHandler<T::ValidatorId, T::Amount> for Pallet<T> {
 			validator_candidates: winners.clone(),
 		};
 
-		Self::try_request(Self::next(), keygen_request).map_err(|_| AuctionError::Abort)
+		Self::try_request(Self::next_index(), keygen_request).map_err(|_| AuctionError::Abort)
 	}
 
 	/// In order for the validators to be rotated we are waiting on a confirmation that the vaults
