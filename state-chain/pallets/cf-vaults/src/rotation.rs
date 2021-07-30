@@ -4,9 +4,12 @@ use frame_support::RuntimeDebug;
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_runtime::DispatchResult;
 
-#[derive(RuntimeDebug, PartialEq)]
+
+#[derive(RuntimeDebug, Encode, Decode, PartialEq)]
 /// Errors occurring during a rotation
 pub enum RotationError<ValidatorId> {
+	/// An invalid request index
+	InvalidRequestIndex,
 	/// Empty validator set provided
 	EmptyValidatorSet,
 	/// A set of badly acting validators
@@ -19,9 +22,16 @@ pub enum RotationError<ValidatorId> {
 	VaultRotationCompletionFailed,
 }
 
+#[derive(RuntimeDebug, Encode, Decode, PartialEq)]
+/// Errors occurring during a rotation
+pub enum Rotter<ValidatorId> {
+	/// An invalid request index
+	InvalidRequestIndex(ValidatorId),
+}
+
 /// Try to determine if an index is valid
-pub trait TryIndex<T: AtLeast32BitUnsigned> {
-	fn try_is_valid(idx: T) -> DispatchResult;
+pub trait TryIndex<T: AtLeast32BitUnsigned, ValidatorId> {
+	fn try_is_valid(idx: T) -> Result<(), RotationError<ValidatorId>>;
 }
 
 /// A request/response trait

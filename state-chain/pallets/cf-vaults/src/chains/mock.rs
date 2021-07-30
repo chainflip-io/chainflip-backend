@@ -97,8 +97,8 @@ impl ChainHandler<RequestIndex, ValidatorId, RotationError<ValidatorId>> for Moc
 	}
 }
 
-impl TryIndex<RequestIndex> for MockRuntime {
-	fn try_is_valid(_idx: RequestIndex) -> DispatchResult {
+impl TryIndex<RequestIndex, ValidatorId> for MockRuntime {
+	fn try_is_valid(_idx: RequestIndex) -> Result<(), RotationError<ValidatorId>> {
 		Ok(())
 	}
 }

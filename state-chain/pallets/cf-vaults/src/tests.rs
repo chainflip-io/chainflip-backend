@@ -30,7 +30,7 @@ mod test {
 			assert_eq!(
 				last_event(),
 				mock::Event::pallet_cf_vaults(crate::Event::KeygenRequestEvent(
-					2,
+					VaultsPallet::request_idx(),
 					KeygenRequest {
 						chain: Other(vec![]),
 						validator_candidates: vec![ALICE, BOB, CHARLIE],
@@ -46,12 +46,12 @@ mod test {
 			assert_ok!(VaultsPallet::on_completed(vec![ALICE, BOB, CHARLIE], 0));
 			assert_ok!(VaultsPallet::witness_keygen_response(
 				Origin::signed(ALICE),
-				1,
+				VaultsPallet::request_idx(),
 				KeygenResponse::Success(vec![])
 			));
 
 			// Check our mock chain that this was processed
-			assert!(OTHER_CHAIN_RESULT.with(|l| *l.borrow() == 1));
+			assert!(OTHER_CHAIN_RESULT.with(|l| *l.borrow() == VaultsPallet::request_idx()));
 
 			// A subsequent key generation request
 			assert_ok!(VaultsPallet::on_completed(vec![ALICE, BOB, CHARLIE], 0));
@@ -59,12 +59,12 @@ mod test {
 			// This time we respond with bad news
 			assert_ok!(VaultsPallet::witness_keygen_response(
 				Origin::signed(ALICE),
-				2,
+				VaultsPallet::request_idx(),
 				KeygenResponse::Failure(vec![BOB, CHARLIE])
 			));
 
-			// This would have not got to the specialisation
-			assert!(OTHER_CHAIN_RESULT.with(|l| *l.borrow() != 2));
+			// This would have not got to the specialisation but the request index would have incremented
+			assert!(OTHER_CHAIN_RESULT.with(|l| *l.borrow() == VaultsPallet::request_idx() - 1));
 
 			// We would have aborted this rotation and hence no rotations underway
 			assert!(VaultsPallet::vaults_rotated());
@@ -77,8 +77,14 @@ mod test {
 	#[test]
 	fn vault_rotation_request() {
 		new_test_ext().execute_with(|| {
+			assert_ok!(VaultsPallet::on_completed(vec![ALICE, BOB, CHARLIE], 0));
+			assert_ok!(VaultsPallet::witness_keygen_response(
+				Origin::signed(ALICE),
+				VaultsPallet::request_idx(),
+				KeygenResponse::Success(vec![])
+			));
 			assert_ok!(VaultsPallet::try_complete_vault_rotation(
-				0,
+				VaultsPallet::request_idx(),
 				Ok(VaultRotationRequest {
 					chain: ChainParams::Other(vec![])
 				})
@@ -88,7 +94,7 @@ mod test {
 			assert_eq!(
 				last_event(),
 				mock::Event::pallet_cf_vaults(crate::Event::VaultRotationRequest(
-					0,
+					1,
 					VaultRotationRequest {
 						chain: Other(vec![])
 					}
@@ -97,7 +103,7 @@ mod test {
 
 			assert_eq!(
 				VaultsPallet::try_complete_vault_rotation(
-					0,
+					VaultsPallet::request_idx(),
 					Err(RotationError::BadValidators(vec![ALICE, BOB]))
 				)
 				.err(),
@@ -115,8 +121,14 @@ mod test {
 	#[test]
 	fn vault_rotation_response() {
 		new_test_ext().execute_with(|| {
+			assert_ok!(VaultsPallet::on_completed(vec![ALICE, BOB, CHARLIE], 0));
+			assert_ok!(VaultsPallet::witness_keygen_response(
+				Origin::signed(ALICE),
+				VaultsPallet::request_idx(),
+				KeygenResponse::Success(vec![])
+			));
 			assert_ok!(VaultsPallet::try_complete_vault_rotation(
-				0,
+				VaultsPallet::request_idx(),
 				Ok(VaultRotationRequest {
 					chain: ChainParams::Other(vec![])
 				})
@@ -126,7 +138,7 @@ mod test {
 			assert_eq!(
 				last_event(),
 				mock::Event::pallet_cf_vaults(crate::Event::VaultRotationRequest(
-					0,
+					VaultsPallet::request_idx(),
 					VaultRotationRequest {
 						chain: Other(vec![])
 					}
@@ -135,7 +147,7 @@ mod test {
 
 			assert_ok!(VaultsPallet::witness_vault_rotation_response(
 				Origin::signed(ALICE),
-				0,
+				VaultsPallet::request_idx(),
 				VaultRotationResponse {
 					old_key: "old_key".as_bytes().to_vec(),
 					new_key: "new_key".as_bytes().to_vec(),
@@ -146,7 +158,7 @@ mod test {
 			// Check the event emitted
 			assert_eq!(
 				last_event(),
-				mock::Event::pallet_cf_vaults(crate::Event::VaultRotationCompleted(0))
+				mock::Event::pallet_cf_vaults(crate::Event::VaultRotationCompleted(VaultsPallet::request_idx()))
 			);
 		});
 	}

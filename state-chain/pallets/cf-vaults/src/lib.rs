@@ -35,12 +35,11 @@ use sp_runtime::traits::One;
 use sp_runtime::DispatchResult;
 use sp_std::prelude::*;
 
-use cf_traits::{
-	AuctionError, AuctionHandler, AuctionPenalty, NonceProvider, Witnesser,
-};
+use cf_traits::{AuctionError, AuctionHandler, AuctionPenalty, NonceProvider, Witnesser};
 pub use pallet::*;
 
 use crate::rotation::*;
+use frame_support::dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo};
 
 mod rotation;
 
@@ -64,10 +63,7 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	pub trait Config:
-		frame_system::Config
-		+ ChainFlip
-	{
+	pub trait Config: frame_system::Config + ChainFlip {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
@@ -128,8 +124,8 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// An invalid request idx
-		InvalidRequestIdx,
+		/// An invalid request index
+		InvalidRequestIndex,
 		/// We have an empty validator set
 		EmptyValidatorSet,
 		/// The key generation response failed
@@ -167,8 +163,7 @@ pub mod pallet {
 			response: KeygenResponse<T::ValidatorId, T::PublicKey>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			Self::try_is_valid(request_id)?;
-			match Self::try_response(request_id, response) {
+			match Self::try_is_valid(request_id).and(Self::try_response(request_id, response)) {
 				Ok(_) => Ok(().into()),
 				Err(e) => Err(Error::<T>::from(e).into()),
 			}
@@ -193,8 +188,7 @@ pub mod pallet {
 			response: VaultRotationResponse,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			Self::try_is_valid(request_id)?;
-			match Self::try_response(request_id, response) {
+			match Self::try_is_valid(request_id).and(Self::try_response(request_id, response)) {
 				Ok(_) => Ok(().into()),
 				Err(e) => Err(Error::<T>::from(e).into()),
 			}
@@ -228,16 +222,17 @@ impl<T: Config> From<RotationError<T::ValidatorId>> for Error<T> {
 				Error::<T>::VaultRotationCompletionFailed
 			}
 			RotationError::KeyResponseFailed => Error::<T>::KeyResponseFailed,
+			RotationError::InvalidRequestIndex => Error::<T>::InvalidRequestIndex,
 		}
 	}
 }
 
-impl<T: Config> TryIndex<T::RequestIndex> for Pallet<T> {
+impl<T: Config> TryIndex<T::RequestIndex, T::ValidatorId> for Pallet<T> {
 	/// Ensure we have this index else return error
-	fn try_is_valid(idx: T::RequestIndex) -> DispatchResult {
+	fn try_is_valid(idx: T::RequestIndex) -> Result<(), RotationError<T::ValidatorId>> {
 		ensure!(
 			VaultRotations::<T>::contains_key(idx),
-			Error::<T>::InvalidRequestIdx
+			RotationError::InvalidRequestIndex
 		);
 		Ok(())
 	}
@@ -280,7 +275,7 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> AuctionHandler<T::ValidatorId, T::Amount> for Pallet<T> {
 	/// On completion of the Auction we would receive the proposed validators
 	/// A key generation request is created for each supported chain and the process starts
-	fn on_completed(winners: Vec<T::ValidatorId>, _: T::Amount) -> Result<(), AuctionError> {
+	fn on_auction_completed(winners: Vec<T::ValidatorId>, _: T::Amount) -> Result<(), AuctionError> {
 		// Main entry point for the pallet
 		// Create a KeyGenRequest for Ethereum
 		let keygen_request = KeygenRequest {
@@ -294,7 +289,7 @@ impl<T: Config> AuctionHandler<T::ValidatorId, T::Amount> for Pallet<T> {
 	/// In order for the validators to be rotated we are waiting on a confirmation that the vaults
 	/// have been rotated.  This is called on each block with a success acting as a confirmation
 	/// that the validators can now be rotated for the new epoch.
-	fn try_confirmation() -> Result<(), AuctionError> {
+	fn try_to_confirm_auction() -> Result<(), AuctionError> {
 		// The 'exit' point for the pallet
 		if Self::vaults_rotated() {
 			// We can now confirm the auction and rotate
@@ -327,7 +322,7 @@ impl<T: Config>
 			!request.validator_candidates.is_empty(),
 			RotationError::EmptyValidatorSet
 		);
-		Self::new_vault_rotation(index,request.clone());
+		Self::new_vault_rotation(index, request.clone());
 		Self::deposit_event(Event::KeygenRequestEvent(index, request));
 		Ok(())
 	}
@@ -375,6 +370,7 @@ impl<T: Config> ChainHandler<T::RequestIndex, T::ValidatorId, RotationError<T::V
 		index: T::RequestIndex,
 		result: Result<VaultRotationRequest, RotationError<T::ValidatorId>>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
+		Self::try_is_valid(index)?;
 		match result {
 			// All good, forward on the request
 			Ok(request) => Self::try_request(index, request),

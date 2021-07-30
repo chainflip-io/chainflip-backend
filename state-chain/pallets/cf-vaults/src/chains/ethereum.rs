@@ -74,7 +74,7 @@ pub mod pallet {
 				Self::RequestIndex,
 				<Self as ChainFlip>::ValidatorId,
 				RotationError<Self::ValidatorId>,
-			> + TryIndex<Self::RequestIndex>;
+			> + TryIndex<Self::RequestIndex, Self::ValidatorId>;
 		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
 		type Call: From<Call<Self>> + IsType<<Self as frame_system::Config>::Call>;
 		/// Provides an origin check for witness transactions.
@@ -135,8 +135,7 @@ pub mod pallet {
 			response: EthSigningTxResponse<T::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			T::Vaults::try_is_valid(request_id)?;
-			match Self::try_response(request_id, response) {
+			match T::Vaults::try_is_valid(request_id).and(Self::try_response(request_id, response)) {
 				Ok(_) => Ok(().into()),
 				Err(_) => Err(Error::<T>::EthSigningTxResponseFailed.into()),
 			}
