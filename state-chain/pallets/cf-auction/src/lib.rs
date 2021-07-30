@@ -40,7 +40,7 @@ mod tests;
 #[macro_use]
 extern crate assert_matches;
 
-use cf_traits::{Auction, AuctionError, AuctionPhase, AuctionRange, BidderProvider, AuctionPenalty, AuctionEvents, AuctionConfirmation};
+use cf_traits::{Auction, AuctionError, AuctionPhase, AuctionRange, BidderProvider, AuctionPenalty, AuctionHandler, AuctionConfirmation};
 use frame_support::pallet_prelude::*;
 use frame_support::sp_std::mem;
 use frame_support::traits::ValidatorRegistration;
@@ -56,7 +56,7 @@ pub mod pallet {
 	use super::*;
 	use frame_support::traits::ValidatorRegistration;
 	use sp_std::ops::Add;
-	use cf_traits::{AuctionEvents, AuctionConfirmation};
+	use cf_traits::{AuctionHandler, AuctionConfirmation};
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -82,7 +82,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MinAuctionSize: Get<u32>;
 		/// The lifecycle of our auction
-		type Events: AuctionEvents<Self::ValidatorId, Self::Amount>;
+		type Events: AuctionHandler<Self::ValidatorId, Self::Amount>;
 		/// Confirmation of an auction
 		type Confirmation: AuctionConfirmation;
 	}

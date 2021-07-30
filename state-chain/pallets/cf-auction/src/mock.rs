@@ -9,7 +9,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 };
 use std::cell::RefCell;
-use cf_traits::mocks::auction_events::Mock as MockEventsAndConfirmation;
+use cf_traits::mocks::auction_handler::Mock as MockEventsAndConfirmation;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;

@@ -3,7 +3,7 @@ mod test {
 	use crate::{mock::*, Error};
 	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::traits::{BadOrigin, Zero};
-	use cf_traits::mocks::auction_events::clear_confirmation as clear_confirmation;
+	use cf_traits::mocks::auction_handler::clear_confirmation as clear_confirmation;
 
 	const ALICE: u64 = 100;
 

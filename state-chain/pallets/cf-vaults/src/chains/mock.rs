@@ -1,7 +1,7 @@
 use super::*;
 use crate as pallet_cf_vaults;
 use crate::rotation::*;
-use cf_traits::{AuctionConfirmation, AuctionError, AuctionEvents, AuctionPenalty};
+use cf_traits::{AuctionError, AuctionHandler, AuctionPenalty};
 use frame_support::{construct_runtime, parameter_types};
 use frame_system::{ensure_root, RawOrigin};
 use sp_core::H256;

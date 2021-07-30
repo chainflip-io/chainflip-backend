@@ -110,12 +110,9 @@ pub trait AuctionPenalty<ValidatorId> {
 }
 
 /// Feedback on auction and confirmation
-pub trait AuctionEvents<ValidatorId, Amount> {
+pub trait AuctionHandler<ValidatorId, Amount> {
 	// An auction has completed and the winners and the minimum bid are shared
 	fn on_completed(winners: Vec<ValidatorId>, min_bid:Amount) -> Result<(), AuctionError>;
-}
-
-pub trait AuctionConfirmation {
 	// The caller trys to confirm whether the auction can be confirmed
 	fn try_confirmation() -> Result<(), AuctionError>;
 }

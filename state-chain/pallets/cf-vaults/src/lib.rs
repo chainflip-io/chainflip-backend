@@ -36,7 +36,7 @@ use sp_runtime::DispatchResult;
 use sp_std::prelude::*;
 
 use cf_traits::{
-	AuctionConfirmation, AuctionError, AuctionEvents, AuctionPenalty, NonceProvider, Witnesser,
+	AuctionError, AuctionHandler, AuctionPenalty, NonceProvider, Witnesser,
 };
 pub use pallet::*;
 
@@ -277,11 +277,11 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-// Main entry point for the pallet
-impl<T: Config> AuctionEvents<T::ValidatorId, T::Amount> for Pallet<T> {
+impl<T: Config> AuctionHandler<T::ValidatorId, T::Amount> for Pallet<T> {
 	/// On completion of the Auction we would receive the proposed validators
 	/// A key generation request is created for each supported chain and the process starts
 	fn on_completed(winners: Vec<T::ValidatorId>, _: T::Amount) -> Result<(), AuctionError> {
+		// Main entry point for the pallet
 		// Create a KeyGenRequest for Ethereum
 		let keygen_request = KeygenRequest {
 			chain: T::EthereumVault::chain_params(),
@@ -290,14 +290,12 @@ impl<T: Config> AuctionEvents<T::ValidatorId, T::Amount> for Pallet<T> {
 
 		Self::try_request(Self::next(), keygen_request).map_err(|_| AuctionError::Abort)
 	}
-}
 
-// The 'exit' point for the pallet
-impl<T: Config> AuctionConfirmation for Pallet<T> {
 	/// In order for the validators to be rotated we are waiting on a confirmation that the vaults
 	/// have been rotated.  This is called on each block with a success acting as a confirmation
 	/// that the validators can now be rotated for the new epoch.
 	fn try_confirmation() -> Result<(), AuctionError> {
+		// The 'exit' point for the pallet
 		if Self::is_empty() {
 			// We can now confirm the auction and rotate
 			// The process has completed successfully

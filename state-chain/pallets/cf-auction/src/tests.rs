@@ -2,7 +2,7 @@ mod test {
 	use crate::mock::*;
 	use crate::*;
 	use frame_support::{assert_noop, assert_ok};
-	use cf_traits::mocks::auction_events::clear_confirmation;
+	use cf_traits::mocks::auction_handler::clear_confirmation;
 
 	fn last_event() -> mock::Event {
 		frame_system::Pallet::<Test>::events()

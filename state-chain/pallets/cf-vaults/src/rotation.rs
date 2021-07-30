@@ -1,4 +1,4 @@
-use cf_traits::{AuctionConfirmation, AuctionHandler, AuctionPenalty, AuctionEvents};
+use cf_traits::{AuctionPenalty, AuctionHandler};
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::*;
 use frame_support::RuntimeDebug;
@@ -83,8 +83,7 @@ pub trait ChainFlip {
 /// Grouping the management(traits) of a ChainFlip auction.
 pub trait AuctionManager<ValidatorId, Amount> {
 	type Penalty: AuctionPenalty<ValidatorId>;
-	type Confirmation: AuctionConfirmation;
-	type Events: AuctionEvents<ValidatorId, Amount>;
+	type Handler: AuctionHandler<ValidatorId, Amount>;
 }
 
 /// Our different Chain's specific parameters
