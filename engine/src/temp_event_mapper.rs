@@ -1,3 +1,4 @@
+use cf_p2p::ValidatorId;
 use futures::StreamExt;
 
 use crate::{
@@ -38,7 +39,7 @@ impl TempEventMapper {
                 let validators: Vec<_> = event
                     .validators
                     .iter()
-                    .map(|v| p2p::ValidatorId(v.clone().into()))
+                    .map(|v| ValidatorId(v.clone().into()))
                     .collect();
 
                 log::debug!(

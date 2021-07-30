@@ -4,10 +4,10 @@ use std::{marker::PhantomData, time::Duration};
 
 use crate::{
     mq::{pin_message_stream, IMQClient, IMQClientFactory, Subject},
-    p2p::ValidatorId,
     signing::db::KeyDB,
 };
 use anyhow::Result;
+use cf_p2p::ValidatorId;
 use futures::StreamExt;
 use log::*;
 use tokio_stream::wrappers::UnboundedReceiverStream;

@@ -1,11 +1,9 @@
 use std::sync::Arc;
 
+use cf_p2p::ValidatorId;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    p2p::ValidatorId,
-    signing::crypto::{Keys, Parameters, SharedKeys, VerifiableSS, GE},
-};
+use crate::signing::crypto::{Keys, Parameters, SharedKeys, VerifiableSS, GE};
 
 use super::utils::ValidatorMaps;
 

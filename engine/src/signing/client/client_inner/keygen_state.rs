@@ -1,11 +1,12 @@
 use std::{sync::Arc, time::Instant};
 
+use cf_p2p::ValidatorId;
 use itertools::Itertools;
 use log::*;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
-    p2p::{P2PMessageCommand, ValidatorId},
+    p2p::P2PMessageCommand,
     signing::{
         client::{
             client_inner::{
@@ -75,7 +76,7 @@ impl KeygenState {
             event_sender,
             signer_idx: idx,
             all_signer_idxs,
-            delayed_next_stage_data: Vec::new(),
+            delayed_next_stage_data: Vec::<(ValidatorId, KeygenData)>::new(),
             key_id,
             params,
             maps_for_validator_id_and_idx: Arc::new(idx_map),
@@ -127,13 +128,13 @@ impl KeygenState {
         sender_id: ValidatorId,
         msg: KeygenData,
     ) -> Option<KeygenResultInfo> {
-        trace!("[{}] received {} from [{}]", self.us(), &msg, sender_id);
+        trace!("[{}] received {} from [{:?}]", self.us(), &msg, sender_id);
 
         let signer_idx = match self.validator_id_to_signer_idx(&sender_id) {
             Some(idx) => idx,
             None => {
                 warn!(
-                    "[{}] Keygen message is ignored for invalid validator id: {}",
+                    "[{}] Keygen message is ignored for invalid validator id: {:?}",
                     self.us(),
                     sender_id
                 );
@@ -153,7 +154,7 @@ impl KeygenState {
                 }
             }
             (KeygenStage::AwaitingBroadcast1, KeygenData::Secret2(sec2)) => {
-                trace!("[{}] delaying Secret2 from [{}]", self.us(), sender_id);
+                trace!("[{}] delaying Secret2 from [{:?}]", self.us(), sender_id);
                 self.delayed_next_stage_data.push((sender_id, sec2.into()));
             }
             (KeygenStage::AwaitingSecret2, KeygenData::Secret2(sec2)) => {
@@ -292,7 +293,7 @@ impl KeygenState {
             let destination = self.signer_idx_to_validator_id(to_idx).clone();
 
             debug!(
-                "[{}] sending direct message to [{}]",
+                "[{}] sending direct message to [{:?}]",
                 self.us(),
                 destination
             );
@@ -314,7 +315,7 @@ impl KeygenState {
 
             let destination = self.signer_idx_to_validator_id(*idx).clone();
 
-            debug!("[{}] Sending to {}", self.us(), destination);
+            debug!("[{}] Sending to {:?}", self.us(), destination);
 
             let message = P2PMessageCommand {
                 destination,
@@ -330,7 +331,7 @@ impl KeygenState {
     fn process_delayed(&mut self) {
         while let Some((sender_id, msg)) = self.delayed_next_stage_data.pop() {
             trace!(
-                "[{}] Processing a delayed message from [{}]",
+                "[{}] Processing a delayed message from [{:?}]",
                 self.us(),
                 sender_id
             );

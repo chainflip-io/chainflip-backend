@@ -3,7 +3,6 @@ use std::{collections::HashMap, convert::TryInto};
 use crate::{
     eth::key_manager::KeyManager,
     mq::{pin_message_stream, IMQClient, Subject},
-    p2p::ValidatorId,
     settings,
     signing::{
         KeyId, KeygenOutcome, KeygenSuccess, MessageHash, MultisigEvent, MultisigInstruction,
@@ -13,6 +12,7 @@ use crate::{
 };
 
 use anyhow::Result;
+use cf_p2p::ValidatorId;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use sp_core::Hasher;

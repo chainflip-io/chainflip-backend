@@ -1,8 +1,7 @@
+use cf_p2p::ValidatorId;
 use config::{Config, ConfigError, File};
 
 use serde::Deserialize;
-
-use crate::p2p::ValidatorId;
 
 pub use anyhow::Result;
 use regex::Regex;

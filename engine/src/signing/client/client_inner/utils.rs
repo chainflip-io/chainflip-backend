@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
-use crate::p2p::ValidatorId;
-
+use cf_p2p::ValidatorId;
 use serde::{Deserialize, Serialize};
 
 #[allow(dead_code)]

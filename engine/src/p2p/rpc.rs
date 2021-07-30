@@ -1,6 +1,7 @@
-use crate::p2p::{P2PMessage, P2PNetworkClient, P2PNetworkClientError, StatusCode, ValidatorId};
+use crate::p2p::{P2PMessage, P2PNetworkClient, P2PNetworkClientError, StatusCode};
 use async_trait::async_trait;
-use cf_p2p_rpc::P2PEvent;
+use cf_p2p::{RawMessage, ValidatorId};
+use cf_p2p_rpc::{MessageBs58, P2PEvent, ValidatorIdBs58};
 use futures::{Future, Stream, StreamExt};
 use jsonrpc_core_client::transports::ws::connect;
 use jsonrpc_core_client::{RpcChannel, RpcResult, TypedClient, TypedSubscriptionStream};
@@ -19,28 +20,40 @@ impl Base58 for () {
 }
 
 pub struct RpcP2PClient {
-    url: url::Url,
+    client: P2PClient,
 }
 
 impl RpcP2PClient {
-    pub fn new(url: url::Url) -> Self {
-        RpcP2PClient { url }
+    pub async fn new(url: url::Url) -> Result<Self, P2PNetworkClientError> {
+        let client: P2PClient = FutureExt::compat(connect(&url)).await.map_err(|e| {
+            log::error!(
+                "Could not connect to RPC Channel on RpcP2PClient at url: {:?}, error: {:?}",
+                url,
+                e
+            );
+            P2PNetworkClientError::Rpc
+        })?;
+        Ok(RpcP2PClient { client })
     }
 }
 
 impl From<P2PEvent> for P2PMessage {
     fn from(p2p_event: P2PEvent) -> Self {
         match p2p_event {
-            P2PEvent::Received(peer_id, msg) => P2PMessage {
-                sender_id: ValidatorId::from_base58(&peer_id)
-                    .expect("valid 58 encoding of peer id"),
-                data: msg,
+            P2PEvent::MessageReceived(validator_id, msg) => P2PMessage {
+                sender_id: validator_id.into(),
+                // TODO: this seems silly
+                data: RawMessage::from(msg).0,
             },
-            P2PEvent::PeerConnected(peer_id) | P2PEvent::PeerDisconnected(peer_id) => P2PMessage {
-                sender_id: ValidatorId::from_base58(&peer_id)
-                    .expect("valid 58 encoding of peer id"),
+            P2PEvent::ValidatorConnected(validator_id)
+            | P2PEvent::ValidatorDisconnected(validator_id) => P2PMessage {
+                sender_id: validator_id.into(),
                 data: vec![],
             },
+            P2PEvent::Error(p2p_error) => {
+                // TODO: Actually do something with this error?
+                panic!("P2P event was an error: {:?}", p2p_error)
+            }
         }
     }
 }
@@ -79,43 +92,29 @@ impl Stream for RpcP2PClientStream {
 }
 
 #[async_trait]
-impl<NodeId> P2PNetworkClient<NodeId, RpcP2PClientStream> for RpcP2PClient
-where
-    NodeId: Base58 + Send + Sync,
-{
-    async fn broadcast(&self, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError> {
-        let client: P2PClient = FutureExt::compat(connect(&self.url))
+impl P2PNetworkClient<RpcP2PClientStream> for RpcP2PClient {
+    async fn broadcast(&self, data: &RawMessage) -> Result<StatusCode, P2PNetworkClientError> {
+        Ok(self
+            .client
+            .broadcast(data.clone().into())
             .await
-            .map_err(|_| P2PNetworkClientError::Rpc)?;
-
-        client
-            .broadcast(data.into())
-            .await
-            .map_err(|_| P2PNetworkClientError::Rpc)
+            .map_err(|_| P2PNetworkClientError::Rpc)?)
     }
 
-    async fn send(&self, to: &NodeId, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError> {
-        let client: P2PClient = FutureExt::compat(connect(&self.url))
+    async fn send(
+        &self,
+        to: &ValidatorId,
+        data: &RawMessage,
+    ) -> Result<StatusCode, P2PNetworkClientError> {
+        Ok(self
+            .client
+            .send(to.clone().into(), data.clone().into())
             .await
-            .map_err(|_| P2PNetworkClientError::Rpc)?;
-
-        client
-            .send(to.to_base58(), data.into())
-            .await
-            .map_err(|_| P2PNetworkClientError::Rpc)
+            .map_err(|_| P2PNetworkClientError::Rpc)?)
     }
 
     async fn take_stream(&mut self) -> Result<RpcP2PClientStream, P2PNetworkClientError> {
-        let client: P2PClient = FutureExt::compat(connect(&self.url)).await.map_err(|e| {
-            log::error!(
-                "Could not connect to RPC Channel on RpcP2PClient at url: {:?}, error: {:?}",
-                &self.url,
-                e
-            );
-            P2PNetworkClientError::Rpc
-        })?;
-
-        let sub = client.subscribe_notifications().map_err(|e| {
+        let sub = self.client.subscribe_notifications().map_err(|e| {
             log::error!(
                 "Could not subscribe to notifications on RpcP2PClient: {:?}",
                 e
@@ -148,24 +147,27 @@ impl P2PClient {
         }
     }
     /// Send a message to peer id returning a HTTP status code
-    pub fn send(&self, peer_id: String, message: Vec<u8>) -> impl Future<Output = RpcResult<u64>> {
-        let args = (peer_id, message);
-        self.inner.call_method("p2p_send", U64_RPC_TYPE, args)
+    pub fn send(
+        &self,
+        validator_id: ValidatorIdBs58,
+        message: MessageBs58,
+    ) -> impl Future<Output = RpcResult<u64>> {
+        self.inner
+            .call_method("p2p_send", U64_RPC_TYPE, (validator_id, message))
     }
 
     /// Broadcast a message to the p2p network returning a HTTP status code
     /// impl Future<Output = RpcResult<R>>
-    pub fn broadcast(&self, message: Vec<u8>) -> impl Future<Output = RpcResult<u64>> {
-        let args = (message,);
-        self.inner.call_method("p2p_broadcast", U64_RPC_TYPE, args)
+    pub fn broadcast(&self, message: MessageBs58) -> impl Future<Output = RpcResult<u64>> {
+        self.inner
+            .call_method("p2p_broadcast", U64_RPC_TYPE, (message,))
     }
 
     // Subscribe to receive notifications
     pub fn subscribe_notifications(&self) -> RpcResult<TypedSubscriptionStream<P2PEvent>> {
-        let args_tuple = ();
         self.inner.subscribe(
             "cf_p2p_subscribeNotifications",
-            args_tuple,
+            (()),
             "cf_p2p_notifications",
             "cf_p2p_unsubscribeNotifications",
             "RpcEvent",
@@ -176,6 +178,7 @@ impl P2PClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cf_p2p::ValidatorId;
     use jsonrpc_core::{IoHandler, Params};
     use jsonrpc_ws_server::{Server, ServerBuilder};
     use serde_json::json;

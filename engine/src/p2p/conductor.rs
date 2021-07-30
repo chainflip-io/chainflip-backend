@@ -1,3 +1,4 @@
+use cf_p2p::RawMessage;
 use futures::{future::Either, Stream};
 use tokio_stream::StreamExt;
 
@@ -7,7 +8,6 @@ use crate::{
 };
 
 use super::{P2PMessageCommand, P2PNetworkClient};
-use crate::p2p::ValidatorId;
 use std::marker::PhantomData;
 
 /// Intermediates P2P events between MQ and P2P interface
@@ -15,7 +15,7 @@ pub struct P2PConductor<MQ, P2P, S>
 where
     MQ: IMQClient + Send,
     S: Stream<Item = P2PMessage>,
-    P2P: P2PNetworkClient<ValidatorId, S>,
+    P2P: P2PNetworkClient<S>,
 {
     mq: MQ,
     p2p: P2P,
@@ -27,7 +27,7 @@ impl<MQ, P2P, S> P2PConductor<MQ, P2P, S>
 where
     MQ: IMQClient + Send,
     S: Stream<Item = P2PMessage> + Unpin,
-    P2P: P2PNetworkClient<ValidatorId, S> + Send,
+    P2P: P2PNetworkClient<S> + Send,
 {
     pub async fn new(mq: MQ, p2p: P2P) -> Self {
         let stream = mq
@@ -66,7 +66,7 @@ where
                     match x {
                         Either::Left(outgoing) => {
                             if let Ok(P2PMessageCommand { destination, data }) = outgoing {
-                                self.p2p.send(&destination, &data).await.expect("Could not send outgoing P2PMessageCommand");
+                                self.p2p.send(&destination, &RawMessage(data)).await.expect("Could not send outgoing P2PMessageCommand");
                             }
                         }
                         Either::Right(incoming) => {
@@ -93,7 +93,7 @@ mod tests {
 
     use crate::{
         mq::mq_mock::MQMock,
-        p2p::{mock::NetworkMock, P2PMessageCommand, ValidatorId},
+        p2p::{mock::NetworkMock, P2PMessageCommand},
     };
 
     use super::*;

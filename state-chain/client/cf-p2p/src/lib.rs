@@ -13,7 +13,7 @@ use std::pin::Pin;
 use std::sync::Mutex;
 use std::task::{Context, Poll};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct ValidatorId(pub [u8; 32]);
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -107,7 +107,7 @@ pub trait NetworkObserver {
 /// ## ID management
 ///
 /// Peers must identify themselves by their `ValidatorId` otherwise they will be unable to send
-/// messages. 
+/// messages.
 /// Likewise, any messages received from peers that have not identified themselves will be dropped.
 struct StateMachine<Observer: NetworkObserver, Network: PeerNetwork> {
 	/// A reference to a NetworkObserver
@@ -155,10 +155,18 @@ where
 				self.validator_to_peer.insert(validator_id, peer_id.clone());
 				self.observer.new_validator(&validator_id);
 			} else {
-				log::warn!("Received a duplicate identification {:?} for peer {:?}", validator_id, peer_id);
+				log::warn!(
+					"Received a duplicate identification {:?} for peer {:?}",
+					validator_id,
+					peer_id
+				);
 			}
 		} else {
-			log::error!("An unknown peer {:?} identified itself as {:?}", peer_id, validator_id);
+			log::error!(
+				"An unknown peer {:?} identified itself as {:?}",
+				peer_id,
+				validator_id
+			);
 		}
 	}
 
@@ -246,7 +254,7 @@ where
 		if self.notify_invalid(&message) {
 			return;
 		}
-		
+
 		for peer_id in self.validator_to_peer.values() {
 			self.encode_and_send(*peer_id, ProtocolMessage::Message(message.clone()));
 		}
@@ -354,22 +362,26 @@ impl Sender {
 
 impl P2pMessaging for Sender {
 	fn identify(&mut self, validator_id: ValidatorId) -> Result<()> {
-		self.0.unbounded_send(MessagingCommand::Identify(validator_id))?;
+		self.0
+			.unbounded_send(MessagingCommand::Identify(validator_id))?;
 		Ok(())
 	}
 
 	fn send_message(&mut self, validator_id: ValidatorId, data: RawMessage) -> Result<()> {
-		self.0.unbounded_send(MessagingCommand::Send(validator_id, data))?;
+		self.0
+			.unbounded_send(MessagingCommand::Send(validator_id, data))?;
 		Ok(())
 	}
 
 	fn broadcast(&self, validators: Vec<ValidatorId>, data: RawMessage) -> Result<()> {
-		self.0.unbounded_send(MessagingCommand::Broadcast(validators, data))?;
+		self.0
+			.unbounded_send(MessagingCommand::Broadcast(validators, data))?;
 		Ok(())
 	}
 
 	fn broadcast_all(&self, data: RawMessage) -> Result<()> {
-		self.0.unbounded_send(MessagingCommand::BroadcastAll(data))?;
+		self.0
+			.unbounded_send(MessagingCommand::BroadcastAll(data))?;
 		Ok(())
 	}
 }
@@ -476,10 +488,8 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use futures::channel::mpsc::{unbounded, UnboundedSender};
 	use futures::Stream;
-	use futures::{
-		channel::mpsc::{unbounded, UnboundedSender},
-	};
 	use sc_network::{Event, ObservedRole, PeerId};
 	use std::cell::RefCell;
 	use std::sync::Arc;
@@ -491,9 +501,9 @@ mod tests {
 
 	impl TestNetwork {
 		fn new(local_peer: PeerId) -> Self {
-			Self { 
-				local_peer, 
-				inner: Default::default()
+			Self {
+				local_peer,
+				inner: Default::default(),
 			}
 		}
 
@@ -505,7 +515,10 @@ mod tests {
 		/// Returns a sender that can be used to simulate network events. Requires `event_stream` to
 		/// be called first to create the sender and receiver.
 		fn get_local_event_sender(&self) -> UnboundedSender<Event> {
-			self.inner.borrow().local_sender.clone()
+			self.inner
+				.borrow()
+				.local_sender
+				.clone()
 				.expect("no local sender, need to call `event_stream()` first")
 		}
 
@@ -533,7 +546,7 @@ mod tests {
 	}
 
 	impl PeerNetwork for TestNetwork {
-		fn reserve_peer(&self, _who: PeerId) {}	
+		fn reserve_peer(&self, _who: PeerId) {}
 
 		fn remove_reserved_peer(&self, _who: PeerId) {}
 
@@ -597,17 +610,11 @@ mod tests {
 		}
 
 		fn unidentified_node(&self) {
-			self.inner
-				.borrow_mut()
-				.unidentified_node
-				.push(());
+			self.inner.borrow_mut().unidentified_node.push(());
 		}
 
 		fn empty_message(&self) {
-			self.inner
-				.borrow_mut()
-				.empty_message
-				.push(());
+			self.inner.borrow_mut().empty_message.push(());
 		}
 
 		fn already_identified(&self, existing_id: &ValidatorId) {
@@ -635,37 +642,62 @@ mod tests {
 		sm.send_message(remote_validator_id, hello.clone());
 
 		// The observer should be notified of this.
-		assert_eq!(observer.inner.borrow_mut().unidentified_node.pop(), Some(()));
+		assert_eq!(
+			observer.inner.borrow_mut().unidentified_node.pop(),
+			Some(())
+		);
 
 		// Identify the local node.
 		sm.identify(local_validator_id);
 		assert_eq!(sm.local_validator_id, Some(local_validator_id));
-		
+
 		let (remote_sender, mut remote_receiver) = unbounded();
 		network.add_remote_peer(remote_peer, remote_sender);
 
 		// Simulate the remote peer identifying herself.
 		sm.new_peer(&remote_peer);
-		assert!(sm.peer_to_validator.contains_key(&remote_peer), "Entry should have been inserted.");
-		sm.received(&remote_peer, vec![ProtocolMessage::Identify(remote_validator_id)]);
-		assert_eq!(sm.peer_to_validator.get(&remote_peer)
-					.expect("an entry for the remote peer")
-					.expect("a validator id for the remote peer")
-					, remote_validator_id);
+		assert!(
+			sm.peer_to_validator.contains_key(&remote_peer),
+			"Entry should have been inserted."
+		);
+		sm.received(
+			&remote_peer,
+			vec![ProtocolMessage::Identify(remote_validator_id)],
+		);
+		assert_eq!(
+			sm.peer_to_validator
+				.get(&remote_peer)
+				.expect("an entry for the remote peer")
+				.expect("a validator id for the remote peer"),
+			remote_validator_id
+		);
 
 		// The observer should be notified of this.
-		assert_eq!(observer.inner.borrow_mut().new_peers.pop(), Some(remote_validator_id));
+		assert_eq!(
+			observer.inner.borrow_mut().new_peers.pop(),
+			Some(remote_validator_id)
+		);
 
 		// The remote should have received an Identification reply.
-		match remote_receiver.try_next().expect("Should have received a message") {
-			Some(Event::NotificationsReceived { remote, mut messages, ..}) => {
+		match remote_receiver
+			.try_next()
+			.expect("Should have received a message")
+		{
+			Some(Event::NotificationsReceived {
+				remote,
+				mut messages,
+				..
+			}) => {
 				assert_eq!(remote, local_peer);
 				if let Some((_, message)) = messages.pop() {
-					assert_eq!(sm.try_decode(message.as_ref()).unwrap(), ProtocolMessage::Identify(local_validator_id));
+					assert_eq!(
+						sm.try_decode(message.as_ref()).unwrap(),
+						ProtocolMessage::Identify(local_validator_id)
+					);
 				} else {
 					panic!("Expected a message.");
 				}
-			},
+			}
 			_ => panic!("Expected an indentification message."),
 		}
 
@@ -673,7 +705,10 @@ mod tests {
 		sm.received(&remote_peer, vec![ProtocolMessage::Message(hello.clone())]);
 
 		// The observer should be notified of this with the peer's validator id.
-		assert_eq!(observer.inner.borrow_mut().messages_received.pop(), Some((remote_validator_id, hello.clone())));
+		assert_eq!(
+			observer.inner.borrow_mut().messages_received.pop(),
+			Some((remote_validator_id, hello.clone()))
+		);
 
 		// Try to send an empty message.
 		sm.send_message(remote_validator_id, RawMessage(vec![]));
@@ -686,19 +721,28 @@ mod tests {
 		assert_eq!(sm.local_validator_id, Some(local_validator_id));
 
 		// The observer should be notified of this.
-		assert_eq!(observer.inner.borrow_mut().already_identified.pop(), Some(local_validator_id));
+		assert_eq!(
+			observer.inner.borrow_mut().already_identified.pop(),
+			Some(local_validator_id)
+		);
 
 		// Try to send to an unregistered validator.
 		let unregistered = ValidatorId([0xA1; 32]);
 		sm.send_message(unregistered, hello);
 
 		// The observer should be notified of this.
-		assert_eq!(observer.inner.borrow_mut().unknown_recipients.pop(), Some(unregistered));
+		assert_eq!(
+			observer.inner.borrow_mut().unknown_recipients.pop(),
+			Some(unregistered)
+		);
 
 		// Simulate a remote peer disconnect.
 		sm.disconnected(&remote_peer);
 
 		// The observer should be notified of this.
-		assert_eq!(observer.inner.borrow_mut().disconnected_peers.pop(), Some(remote_validator_id));
+		assert_eq!(
+			observer.inner.borrow_mut().disconnected_peers.pop(),
+			Some(remote_validator_id)
+		);
 	}
 }

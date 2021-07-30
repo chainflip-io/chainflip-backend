@@ -1,8 +1,9 @@
+use cf_p2p::ValidatorId;
 use chainflip_engine::{
     eth,
     health::spawn_health_check,
     mq::{nats_client::NatsMQClientFactory, IMQClientFactory},
-    p2p::{P2PConductor, RpcP2PClient, ValidatorId},
+    p2p::{P2PConductor, RpcP2PClient},
     settings::Settings,
     signing,
     signing::db::PersistentKeyDB,
@@ -41,7 +42,9 @@ async fn main() {
         "Should be valid hostname {} and port {}",
         sc_hostname, sc_ws_port
     ));
-    let p2p_client = RpcP2PClient::new(url);
+    let p2p_client = RpcP2PClient::new(url)
+        .await
+        .expect("Should create RpcP2PClient successfully");
     let mq_client = *mq_factory
         .create()
         .await

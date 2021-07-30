@@ -7,6 +7,8 @@ mod rpc;
 
 use std::convert::TryInto;
 
+use cf_p2p::{RawMessage, ValidatorId};
+use cf_p2p_rpc::{self, MessageBs58, ValidatorIdBs58};
 pub use conductor::P2PConductor;
 pub use rpc::RpcP2PClient;
 
@@ -15,6 +17,8 @@ use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
 use futures::Stream;
 use rpc::Base58;
+
+use crate::state_chain::validator::Validator;
 
 #[derive(Debug)]
 pub enum P2PNetworkClientError {
@@ -25,59 +29,63 @@ pub enum P2PNetworkClientError {
 type StatusCode = u64;
 
 #[async_trait]
-pub trait P2PNetworkClient<B: Base58, S: Stream<Item = P2PMessage>> {
+pub trait P2PNetworkClient<S: Stream<Item = P2PMessage>> {
     /// Broadcast to all validators on the network
-    async fn broadcast(&self, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError>;
+    async fn broadcast(&self, data: &RawMessage) -> Result<StatusCode, P2PNetworkClientError>;
 
     /// Send to a specific `validator` only
-    async fn send(&self, to: &B, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError>;
+    async fn send(
+        &self,
+        to: &ValidatorId,
+        data: &RawMessage,
+    ) -> Result<StatusCode, P2PNetworkClientError>;
 
     async fn take_stream(&mut self) -> Result<S, P2PNetworkClientError>;
 }
 
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize, Eq, PartialOrd, Ord, Hash)]
-pub struct ValidatorId(pub [u8; 32]);
+// #[derive(Clone, PartialEq, Debug, Serialize, Deserialize, Eq, PartialOrd, Ord, Hash)]
+// pub struct ValidatorId(pub [u8; 32]);
 
-impl ValidatorId {
-    // A convenience method to quickly generate different validator ids
-    // from a string of any size that is no larger that 32 bytes
-    #[cfg(test)]
-    pub fn new<T: ToString>(id: T) -> Self {
-        let id_str = id.to_string();
-        let id_bytes = id_str.as_bytes();
+// impl ValidatorId {
+//     // A convenience method to quickly generate different validator ids
+//     // from a string of any size that is no larger that 32 bytes
+//     #[cfg(test)]
+//     pub fn new<T: ToString>(id: T) -> Self {
+//         let id_str = id.to_string();
+//         let id_bytes = id_str.as_bytes();
 
-        let mut id: [u8; 32] = [0; 32];
+//         let mut id: [u8; 32] = [0; 32];
 
-        for (idx, byte) in id_bytes.iter().enumerate() {
-            id[idx] = *byte;
-        }
+//         for (idx, byte) in id_bytes.iter().enumerate() {
+//             id[idx] = *byte;
+//         }
 
-        ValidatorId(id)
-    }
+//         ValidatorId(id)
+//     }
 
-    pub fn from_base58(id: &str) -> anyhow::Result<Self> {
-        let id = bs58::decode(&id)
-            .into_vec()
-            .map_err(|_| anyhow::format_err!("Invalid base58"))?;
-        let id = id
-            .try_into()
-            .map_err(|_| anyhow::format_err!("Invalid id size"))?;
+//     pub fn from_base58(id: &str) -> anyhow::Result<Self> {
+//         let id = bs58::decode(&id)
+//             .into_vec()
+//             .map_err(|_| anyhow::format_err!("Invalid base58"))?;
+//         let id = id
+//             .try_into()
+//             .map_err(|_| anyhow::format_err!("Invalid id size"))?;
 
-        Ok(ValidatorId(id))
-    }
-}
+//         Ok(ValidatorId(id))
+//     }
+// }
 
-impl std::fmt::Display for ValidatorId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ValidatorId({})", self.to_base58())
-    }
-}
+// impl std::fmt::Display for ValidatorId {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "ValidatorId({})", self.to_base58())
+//     }
+// }
 
-impl Base58 for ValidatorId {
-    fn to_base58(&self) -> String {
-        bs58::encode(&self.0).into_string()
-    }
-}
+// impl Base58 for ValidatorId {
+//     fn to_base58(&self) -> String {
+//         bs58::encode(&self.0).into_string()
+//     }
+// }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct P2PMessage {
@@ -152,7 +160,7 @@ mod tests {
         let network = NetworkMock::new();
 
         let data = vec![3, 2, 1];
-        let validator_ids = (0..3).map(|i| ValidatorId::new(i)).collect_vec();
+        let validator_ids = (0..3).map(|i| ValidatorIdBs58::new(i)).collect_vec();
         let mut clients = validator_ids
             .iter()
             .map(|id| network.new_client(id.clone()))

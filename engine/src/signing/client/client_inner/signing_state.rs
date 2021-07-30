@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use cf_p2p::ValidatorId;
 use itertools::Itertools;
 use log::*;
 use tokio::sync::mpsc;
@@ -10,7 +11,7 @@ use super::{
 };
 
 use crate::{
-    p2p::{P2PMessageCommand, ValidatorId},
+    p2p::P2PMessageCommand,
     signing::{
         client::{
             client_inner::{
@@ -474,7 +475,7 @@ impl SigningState {
                 continue;
             }
 
-            trace!("[{}] sending bc1 to [{}]", self.us(), id);
+            trace!("[{}] sending bc1 to [{:?}]", self.us(), id);
 
             let msg = P2PMessageCommand {
                 destination: id.clone(),

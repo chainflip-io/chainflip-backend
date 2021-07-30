@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Display, time::Duration};
 
 use crate::{
-    p2p::{P2PMessage, P2PMessageCommand, ValidatorId},
+    p2p::{P2PMessage, P2PMessageCommand},
     signing::{
         client::{KeyId, MultisigInstruction, SigningInfo},
         crypto::{
@@ -13,6 +13,7 @@ use crate::{
     },
 };
 
+use cf_p2p::ValidatorId;
 use log::*;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -364,7 +365,7 @@ where
     }
 
     fn add_pending(&mut self, data: MessageHash, sign_info: SigningInfo) {
-        debug!("[{}] delaying a request to sign", self.my_validator_id);
+        debug!("[{:?}] delaying a request to sign", self.my_validator_id);
 
         // TODO: check for duplicates?
 
@@ -382,12 +383,12 @@ where
             MultisigInstruction::KeyGen(keygen_info) => {
                 // For now disable generating a new key when we already have one
 
-                debug!("[{}] Received keygen instruction", self.my_validator_id);
+                debug!("[{:?}] Received keygen instruction", self.my_validator_id);
 
                 self.keygen.on_keygen_request(keygen_info);
             }
             MultisigInstruction::Sign(hash, sign_info) => {
-                debug!("[{}] Received sign instruction", self.my_validator_id);
+                debug!("[{:?}] Received sign instruction", self.my_validator_id);
                 let key_id = sign_info.id;
 
                 let key = self.key_store.get_key(key_id);

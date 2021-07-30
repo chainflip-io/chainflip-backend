@@ -3,12 +3,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{
-    p2p::ValidatorId,
-    signing::{
-        client::{client_inner::utils::get_index_mapping, KeyId, KeygenInfo},
-        crypto,
-    },
+use crate::signing::{
+    client::{client_inner::utils::get_index_mapping, KeyId, KeygenInfo},
+    crypto,
 };
 
 use super::{
@@ -22,6 +19,7 @@ use super::{
 #[cfg(test)]
 use super::keygen_state::KeygenStage;
 
+use cf_p2p::ValidatorId;
 use itertools::Itertools;
 use log::*;
 use tokio::sync::mpsc::UnboundedSender;

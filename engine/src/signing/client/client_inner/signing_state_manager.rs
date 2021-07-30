@@ -3,16 +3,14 @@ use std::{
     time::Duration,
 };
 
+use cf_p2p::ValidatorId;
 use itertools::Itertools;
 use log::*;
 use tokio::sync::mpsc;
 
-use crate::{
-    p2p::ValidatorId,
-    signing::{
-        client::{client_inner::client_inner::SigningData, SigningInfo, SigningOutcome},
-        MessageHash, MessageInfo,
-    },
+use crate::signing::{
+    client::{client_inner::client_inner::SigningData, SigningInfo, SigningOutcome},
+    MessageHash, MessageInfo,
 };
 
 use super::{
