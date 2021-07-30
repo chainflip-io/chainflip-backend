@@ -217,7 +217,7 @@ pub mod pallet {
 
 	/// Validator lookup
 	#[pallet::storage]
-	pub(super) type ValidatorLookup<T: Config> = StorageMap<_, Identity, T::ValidatorId, ()>;
+	pub(super) type ValidatorLookup<T: Config> = StorageMap<_, Blake2_128Concat, T::ValidatorId, ()>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
