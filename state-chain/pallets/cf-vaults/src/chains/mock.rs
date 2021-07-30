@@ -1,7 +1,5 @@
 use super::*;
-use crate as pallet_cf_vaults;
 use crate::rotation::*;
-use cf_traits::{AuctionError, AuctionHandler, AuctionPenalty};
 use frame_support::{construct_runtime, parameter_types};
 use frame_system::{ensure_root, RawOrigin};
 use sp_core::H256;
@@ -94,13 +92,13 @@ impl ChainFlip for MockRuntime {
 }
 
 impl ChainHandler<RequestIndex, ValidatorId, RotationError<ValidatorId>> for MockRuntime {
-	fn try_complete_vault_rotation(index: RequestIndex, result: Result<VaultRotationRequest, RotationError<ValidatorId>>) -> Result<(), RotationError<ValidatorId>> {
+	fn try_complete_vault_rotation(_index: RequestIndex, _result: Result<VaultRotationRequest, RotationError<ValidatorId>>) -> Result<(), RotationError<ValidatorId>> {
 		todo!()
 	}
 }
 
 impl TryIndex<RequestIndex> for MockRuntime {
-	fn try_is_valid(idx: RequestIndex) -> DispatchResult {
+	fn try_is_valid(_idx: RequestIndex) -> DispatchResult {
 		Ok(())
 	}
 }

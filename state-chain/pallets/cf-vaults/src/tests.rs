@@ -2,7 +2,7 @@ mod test {
 	use crate::mock::*;
 	use crate::rotation::ChainParams::Other;
 	use crate::*;
-	use frame_support::{assert_noop, assert_ok};
+	use frame_support::assert_ok;
 
 	fn last_event() -> mock::Event {
 		frame_system::Pallet::<MockRuntime>::events()

@@ -1,7 +1,5 @@
 use super::*;
 use crate as pallet_cf_vaults;
-use crate::rotation::*;
-use cf_traits::{AuctionError, AuctionHandler, AuctionPenalty};
 use frame_support::{construct_runtime, parameter_types, traits::UnfilteredDispatchable};
 use frame_system::{ensure_root, RawOrigin};
 use sp_core::H256;
@@ -19,8 +17,6 @@ type Block = frame_system::mocking::MockBlock<MockRuntime>;
 
 type Amount = u64;
 type ValidatorId = u64;
-
-use crate::nonce::NonceUnixTime;
 
 thread_local! {
 	pub static OTHER_CHAIN_RESULT: RefCell<RequestIndex> = RefCell::new(0);
