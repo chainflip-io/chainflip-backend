@@ -7,7 +7,7 @@
 //! ## Staking
 //!
 //! - Stake is added via the Ethereum StakeManager contract. `Staked` events emitted from this contract should trigger
-//!   votes via signed calls to `witness_stake`.
+//!   a witnessed call to [Pallet::staked].
 //! - Any stake added in this way is considered as an implicit bid for a validator slot.
 //! - If stake is added to a non-existent account, it will not be counted and will be refunded instead.
 //!
@@ -56,6 +56,7 @@ use frame_support::{
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
+use sp_std::vec;
 
 use codec::{Encode, FullCodec};
 use ethabi::{Bytes, Function, Param, ParamType};
@@ -68,7 +69,6 @@ use sp_runtime::{
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::Witnesser;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
@@ -76,6 +76,8 @@ pub mod pallet {
 
 	pub type EthereumAddress = [u8; 20];
 	pub type AggKeySignature = U256;
+
+	pub type StakeAttempt<Amount> = (EthereumAddress, Amount);
 
 	/// Details of a claim request required to build the call to StakeManager's 'requestClaim' function.
 	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
@@ -100,9 +102,6 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// Standard Event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-
-		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
-		type Call: From<Call<Self>> + IsType<<Self as frame_system::Config>::Call>;
 
 		type Balance: Parameter
 			+ Member
@@ -131,12 +130,6 @@ pub mod pallet {
 		/// Provides an origin check for witness transactions.
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 
-		/// An implementation of the witnesser, allows us to define witness_* helper extrinsics.
-		type Witnesser: Witnesser<
-			Call = <Self as Config>::Call,
-			AccountId = <Self as frame_system::Config>::AccountId,
-		>;
-
 		/// Information about the current epoch.
 		type EpochInfo: EpochInfo<
 			ValidatorId = <Self as frame_system::Config>::AccountId,
@@ -162,11 +155,19 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub(super) type AccountRetired<T: Config> =
-		StorageMap<_, Identity, AccountId<T>, Retired, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, AccountId<T>, Retired, ValueQuery>;
 
 	#[pallet::storage]
 	pub(super) type PendingClaims<T: Config> =
-		StorageMap<_, Identity, AccountId<T>, ClaimDetailsFor<T>, OptionQuery>;
+		StorageMap<_, Blake2_128Concat, AccountId<T>, ClaimDetailsFor<T>, OptionQuery>;
+
+	#[pallet::storage]
+	pub(super) type WithdrawalAddresses<T: Config> =
+		StorageMap<_, Blake2_128Concat, AccountId<T>, EthereumAddress, OptionQuery>;
+
+	#[pallet::storage]
+	pub(super) type FailedStakeAttempts<T: Config> =
+		StorageMap<_, Blake2_128Concat, AccountId<T>, Vec<StakeAttempt<T::Balance>>, ValueQuery>;
 
 	#[pallet::storage]
 	pub(super) type ClaimExpiries<T: Config> =
@@ -213,6 +214,9 @@ pub mod pallet {
 
 		/// A claim has expired without being redeemed. [who, nonce, amount]
 		ClaimExpired(AccountId<T>, T::Nonce, FlipBalance<T>),
+
+		/// A stake attempt has failed. [who, address, amount]
+		FailedStakeAttempt(AccountId<T>, EthereumAddress, FlipBalance<T>),
 	}
 
 	#[pallet::error]
@@ -244,28 +248,15 @@ pub mod pallet {
 		/// Cannot make a claim request while an auction is being resolved.
 		NoClaimsDuringAuctionPhase,
 
-		/// Failed to encode the claim transaction
+		/// Failed to encode the claim transaction.
 		EthEncodingFailed,
+
+		/// A withdrawal address is provided, but the account has a different withdrawal address already associated.
+		WithdrawalAddressRestricted,
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Witness that a `Staked` event was emitted by the `StakeManager` smart contract.
-		///
-		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
-		#[pallet::weight(10_000)]
-		pub fn witness_staked(
-			origin: OriginFor<T>,
-			staker_account_id: AccountId<T>,
-			amount: FlipBalance<T>,
-			tx_hash: EthTransactionHash,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let call = Call::staked(staker_account_id, amount, tx_hash);
-			T::Witnesser::witness(who, call.into())?;
-			Ok(().into())
-		}
-
 		/// Funds have been staked to an account via the StakeManager smart contract.
 		///
 		/// If the account doesn't exist, we create it.
@@ -276,12 +267,17 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			account_id: T::AccountId,
 			amount: FlipBalance<T>,
+			withdrawal_address: Option<EthereumAddress>,
 			// Required to ensure this call is unique per staking event.
 			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			Self::ensure_witnessed(origin)?;
-			Self::stake_account(&account_id, amount);
-			Ok(().into())
+			if Self::check_withdrawal_address(&account_id, withdrawal_address, amount).is_err() {
+				Ok(().into())
+			} else {
+				Self::stake_account(&account_id, amount);
+				Ok(().into())
+			}
 		}
 
 		/// Get FLIP that is held for me by the system, signed by my validator key.
@@ -322,22 +318,6 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			let claimable = T::Flip::claimable_balance(&who);
 			Self::do_claim(&who, claimable, address)?;
-			Ok(().into())
-		}
-
-		/// Witness that a `Claimed` event was emitted by the `StakeManager` smart contract.
-		///
-		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
-		#[pallet::weight(10_000)]
-		pub fn witness_claimed(
-			origin: OriginFor<T>,
-			account_id: AccountId<T>,
-			claimed_amount: FlipBalance<T>,
-			tx_hash: EthTransactionHash,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let call = Call::claimed(account_id, claimed_amount, tx_hash);
-			T::Witnesser::witness(who, call.into())?;
 			Ok(().into())
 		}
 
@@ -512,6 +492,51 @@ impl<T: Config> Pallet<T> {
 		T::EnsureWitnessed::ensure_origin(origin)
 	}
 
+	/// Logs an failed stake attempt
+	fn log_failed_stake_attempt(
+		account_id: &T::AccountId,
+		withdrawal_address: EthereumAddress,
+		amount: T::Balance,
+	) -> Result<(), Error<T>> {
+		FailedStakeAttempts::<T>::mutate(&account_id, |staking_attempts| {
+			staking_attempts.push((withdrawal_address, amount));
+		});
+		Self::deposit_event(Event::FailedStakeAttempt(
+			account_id.clone(),
+			withdrawal_address,
+			amount,
+		));
+		Err(Error::<T>::WithdrawalAddressRestricted)?
+	}
+
+	/// Checks the withdrawal address requirements and saves the address if provided
+	fn check_withdrawal_address(
+		account_id: &T::AccountId,
+		withdrawal_address: Option<EthereumAddress>,
+		amount: T::Balance,
+	) -> Result<(), Error<T>> {
+		if frame_system::Pallet::<T>::account_exists(account_id) {
+			let existing_withdrawal_address = WithdrawalAddresses::<T>::get(&account_id);
+			match (withdrawal_address, existing_withdrawal_address) {
+				// User account exists and both addresses hold a value - the value of both addresses is different
+				(Some(provided), Some(existing)) if provided != existing => {
+					Self::log_failed_stake_attempt(account_id, provided, amount)?
+				}
+				// Only the provided address exists:
+				// We only want to add a new withdrawal address if this is the first staking attempt, ie. the account doesn't exist.
+				(Some(provided), None) => {
+					Self::log_failed_stake_attempt(account_id, provided, amount)?
+				}
+				_ => (),
+			}
+		}
+		//Save the withdrawal address if provided
+		if let Some(provided) = withdrawal_address {
+			WithdrawalAddresses::<T>::insert(account_id, provided);
+		}
+		Ok(())
+	}
+
 	/// Add stake to an account, creating the account if it doesn't exist, and activating the account if it is in retired state.
 	fn stake_account(account_id: &T::AccountId, amount: T::Balance) {
 		if !frame_system::Pallet::<T>::account_exists(account_id) {
@@ -550,6 +575,14 @@ impl<T: Config> Pallet<T> {
 			Error::<T>::PendingClaim
 		);
 
+		// Check if a return address exists - if not just go with the provided claim address
+		if let Some(withdrawal_address) = WithdrawalAddresses::<T>::get(account_id) {
+			// Check if the address is different from the stored address - if yes error out
+			if withdrawal_address != address {
+				Err(Error::<T>::WithdrawalAddressRestricted)?
+			}
+		}
+
 		// Throw an error if the validator tries to claim too much. Otherwise decrement the stake by the
 		// amount claimed.
 		T::Flip::try_claim(account_id, amount)?;
@@ -560,6 +593,7 @@ impl<T: Config> Pallet<T> {
 		// Set expiry and build the claim parameters.
 		let expiry = T::TimeSource::now() + T::ClaimTTL::get();
 		Self::register_claim_expiry(account_id.clone(), expiry);
+
 		let mut details = ClaimDetails {
 			msg_hash: None,
 			nonce,

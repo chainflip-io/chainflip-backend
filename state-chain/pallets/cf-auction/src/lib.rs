@@ -66,8 +66,6 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
-		type Call: From<Call<Self>> + IsType<<Self as frame_system::Config>::Call>;
 		/// An amount for a bid
 		type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 		/// An identity for a validator
@@ -107,7 +105,7 @@ pub mod pallet {
 	#[pallet::getter(fn current_auction_index)]
 	pub(super) type CurrentAuctionIndex<T: Config> = StorageValue<_, T::AuctionIndex, ValueQuery>;
 
-	/// The current auction we are in
+	/// The set of bad validators
 	#[pallet::storage]
 	#[pallet::getter(fn bad_validators)]
 	pub(super) type BadValidators<T: Config> = StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;

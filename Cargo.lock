@@ -930,11 +930,13 @@ dependencies = [
  "nats_test_server",
  "num",
  "pallet-cf-auction",
+ "pallet-cf-flip",
  "pallet-cf-staking",
  "pallet-cf-validator",
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "rand 0.7.3",
+ "regex",
  "reqwest",
  "secp256k1",
  "serde 1.0.126",
@@ -4919,6 +4921,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-emissions"
+version = "0.1.0"
+dependencies = [
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-cf-flip",
+ "parity-scale-codec",
+ "serde 1.0.126",
+ "sp-arithmetic",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-flip"
 version = "0.1.0"
 dependencies = [
@@ -4927,6 +4947,24 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-transaction-payment",
+ "parity-scale-codec",
+ "serde 1.0.126",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-cf-rewards"
+version = "0.1.0"
+dependencies = [
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-cf-flip",
+ "pallet-cf-validator",
  "parity-scale-codec",
  "serde 1.0.126",
  "sp-core",
@@ -5003,6 +5041,24 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-cf-validator",
+ "parity-scale-codec",
+ "serde 1.0.126",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-cf-witness-api"
+version = "0.1.0"
+dependencies = [
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-cf-auction",
+ "pallet-cf-staking",
  "parity-scale-codec",
  "serde 1.0.126",
  "sp-core",
@@ -8638,10 +8694,13 @@ dependencies = [
  "pallet-aura",
  "pallet-authorship",
  "pallet-cf-auction",
+ "pallet-cf-emissions",
  "pallet-cf-flip",
+ "pallet-cf-rewards",
  "pallet-cf-staking",
  "pallet-cf-validator",
  "pallet-cf-witness",
+ "pallet-cf-witness-api",
  "pallet-grandpa",
  "pallet-offences",
  "pallet-randomness-collective-flip",

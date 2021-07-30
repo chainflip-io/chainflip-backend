@@ -14,10 +14,7 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
 
-use cf_traits::mocks::epoch_info;
-pub(super) mod ensure_witnessed;
-pub(super) mod time_source;
-pub(super) mod witnesser;
+use cf_traits::mocks::{epoch_info, time_source};
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -74,12 +71,13 @@ impl pallet_cf_flip::Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 }
 
+cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
+cf_traits::impl_mock_witnesser_for_account_and_call_types!(AccountId, Call);
+
 impl pallet_cf_staking::Config for Test {
 	type Event = Event;
-	type Call = Call;
 	type Nonce = u64;
-	type EnsureWitnessed = ensure_witnessed::Mock;
-	type Witnesser = witnesser::Mock;
+	type EnsureWitnessed = MockEnsureWitnessed;
 	type EpochInfo = epoch_info::Mock;
 	type TimeSource = time_source::Mock;
 	type MinClaimTTL = MinClaimTTL;

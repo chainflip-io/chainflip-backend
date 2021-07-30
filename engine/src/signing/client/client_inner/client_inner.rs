@@ -301,7 +301,7 @@ pub struct MultisigClientInner<S>
 where
     S: KeyDB,
 {
-    id: ValidatorId,
+    my_validator_id: ValidatorId,
     key_store: KeyStore<S>,
     keygen: KeygenManager,
     pub signing_manager: SigningStateManager,
@@ -315,16 +315,16 @@ where
     S: KeyDB,
 {
     pub fn new(
-        id: ValidatorId,
+        my_validator_id: ValidatorId,
         db: S,
         tx: UnboundedSender<InnerEvent>,
         phase_timeout: Duration,
     ) -> Self {
         MultisigClientInner {
-            id: id.clone(),
+            my_validator_id: my_validator_id.clone(),
             key_store: KeyStore::new(db),
-            keygen: KeygenManager::new(id.clone(), tx.clone(), phase_timeout.clone()),
-            signing_manager: SigningStateManager::new(id, tx.clone(), phase_timeout),
+            keygen: KeygenManager::new(my_validator_id.clone(), tx.clone(), phase_timeout.clone()),
+            signing_manager: SigningStateManager::new(my_validator_id, tx.clone(), phase_timeout),
             pending_requests_to_sign: Default::default(),
             tx,
         }
@@ -346,8 +346,8 @@ where
     }
 
     #[cfg(test)]
-    pub fn get_validator_id(&self) -> ValidatorId {
-        self.id.clone()
+    pub fn get_my_validator_id(&self) -> ValidatorId {
+        self.my_validator_id.clone()
     }
 
     /// Change the time we wait until deleting all unresolved states
@@ -364,7 +364,7 @@ where
     }
 
     fn add_pending(&mut self, data: MessageHash, sign_info: SigningInfo) {
-        debug!("[{}] delaying a request to sign", self.id);
+        debug!("[{}] delaying a request to sign", self.my_validator_id);
 
         // TODO: check for duplicates?
 
@@ -382,12 +382,12 @@ where
             MultisigInstruction::KeyGen(keygen_info) => {
                 // For now disable generating a new key when we already have one
 
-                debug!("[{}] Received keygen instruction", self.id);
+                debug!("[{}] Received keygen instruction", self.my_validator_id);
 
                 self.keygen.on_keygen_request(keygen_info);
             }
             MultisigInstruction::Sign(hash, sign_info) => {
-                debug!("[{}] Received sign instruction", self.id);
+                debug!("[{}] Received sign instruction", self.my_validator_id);
                 let key_id = sign_info.id;
 
                 let key = self.key_store.get_key(key_id);

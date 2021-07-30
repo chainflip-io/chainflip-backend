@@ -2,6 +2,7 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
 mod weights;
+mod chainflip;
 // A few exports that help ease life for downstream crates.
 use core::time::Duration;
 pub use frame_support::{
@@ -136,7 +137,6 @@ parameter_types! {
 
 impl pallet_cf_auction::Config for Runtime {
 	type Event = Event;
-	type Call = Call;
 	type Amount = FlipBalance;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
 	type AuctionIndex = u64;
@@ -145,7 +145,6 @@ impl pallet_cf_auction::Config for Runtime {
 	type MinAuctionSize = MinAuctionSize;
 	type Confirmation = Auction;
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
-	type Witnesser = pallet_cf_witness::Pallet<Runtime>;
 }
 
 // FIXME: These would be changed
@@ -156,7 +155,7 @@ parameter_types! {
 impl pallet_cf_validator::Config for Runtime {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
-	type EpochTransitionHandler = pallet_cf_witness::Pallet<Runtime>;
+	type EpochTransitionHandler = chainflip::ChainflipEpochTransitions;
 	type ValidatorWeightInfo = weights::pallet_cf_validator::WeightInfo<Runtime>;
 	type EpochIndex = EpochIndex;
 	type Amount = FlipBalance;
@@ -244,7 +243,7 @@ impl frame_system::Config for Runtime {
 	/// What to do if a new account is created.
 	type OnNewAccount = ();
 	/// What to do if an account is fully reaped from the system.
-	type OnKilledAccount = Flip;
+	type OnKilledAccount = pallet_cf_flip::BurnFlipAccount<Self>;
 	/// The data to be stored in an account.
 	type AccountData = ();
 	/// Weight information for the extrinsics of this pallet.
@@ -354,16 +353,31 @@ parameter_types! {
 
 impl pallet_cf_staking::Config for Runtime {
 	type Event = Event;
-	type Call = Call;
 	type Balance = FlipBalance;
 	type Flip = Flip;
 	type Nonce = u64;
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
-	type Witnesser = pallet_cf_witness::Pallet<Runtime>;
 	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
 	type TimeSource = Timestamp;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
+}
+
+parameter_types! {
+	pub const MintInterval: u32 = 10 * MINUTES;
+}
+
+impl pallet_cf_emissions::Config for Runtime {
+	type Event = Event;
+	type FlipBalance = FlipBalance;
+	type Surplus = pallet_cf_flip::Surplus<Runtime>;
+	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
+	type RewardsDistribution = pallet_cf_rewards::OnDemandRewardsDistribution<Runtime>;
+	type MintInterval = MintInterval;
+}
+
+impl pallet_cf_rewards::Config for Runtime {
+	type Event = Event;
 }
 
 parameter_types! {
@@ -377,6 +391,11 @@ impl pallet_transaction_payment::Config for Runtime {
 	type FeeMultiplierUpdate = ();
 }
 
+impl pallet_cf_witness_api::Config for Runtime {
+	type Call = Call;
+	type Witnesser = Witnesser;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -387,11 +406,14 @@ construct_runtime!(
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
 		Flip: pallet_cf_flip::{Module, Event<T>, Storage, Config<T>},
+		Emissions: pallet_cf_emissions::{Module, Event<T>, Config<T>},
+		Rewards: pallet_cf_rewards::{Module, Call, Event<T>},
 		Staking: pallet_cf_staking::{Module, Call, Storage, Event<T>, Config<T>},
 		TransactionPayment: pallet_transaction_payment::{Module, Storage},
 		Session: pallet_session::{Module, Storage, Event, Config<T>},
 		Historical: session_historical::{Module},
-		Witness: pallet_cf_witness::{Module, Call, Event<T>, Origin},
+		Witnesser: pallet_cf_witness::{Module, Call, Event<T>, Origin},
+		WitnesserApi: pallet_cf_witness_api::{Module, Call},
 		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
 		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
 		Aura: pallet_aura::{Module, Config<T>},

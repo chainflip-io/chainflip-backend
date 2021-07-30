@@ -76,9 +76,10 @@ parameter_types! {
 	pub const MinAuctionSize: u32 = 2;
 }
 
+cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
+
 impl Config for Test {
 	type Event = Event;
-	type Call = Call;
 	type Amount = Amount;
 	type ValidatorId = ValidatorId;
 	type BidderProvider = TestBidderProvider;
@@ -87,6 +88,7 @@ impl Config for Test {
 	type MinAuctionSize = MinAuctionSize;
 	type Events = MockEventsAndConfirmation<ValidatorId, Amount>;
 	type Confirmation = MockEventsAndConfirmation<ValidatorId, Amount>;
+	type EnsureWitnessed = MockEnsureWitnessed;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {

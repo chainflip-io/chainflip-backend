@@ -21,6 +21,7 @@ pub async fn start_eth_broadcaster<M: IMQClient + Send + Sync>(
     settings: &settings::Settings,
     mq_client: M,
 ) -> anyhow::Result<()> {
+    log::info!("Starting ETH broadcaster");
     let secret_key = secret_key_from_file(Path::new(settings.eth.private_key_file.as_str()))?;
     let eth_broadcaster =
         EthBroadcaster::<M, _>::new(settings.into(), mq_client, secret_key).await?;
@@ -148,18 +149,14 @@ impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
 #[cfg(test)]
 mod tests {
 
-    use crate::mq::{
-        nats_client::{NatsMQClient, NatsMQClientFactory},
-        IMQClientFactory,
-    };
+    use crate::mq::nats_client::NatsMQClient;
 
     use super::*;
 
     async fn new_eth_broadcaster() -> Result<EthBroadcaster<NatsMQClient, WebSocket>> {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let factory = NatsMQClientFactory::new(&settings.message_queue);
-        let mq_client = *factory.create().await.unwrap();
+        let mq_client = NatsMQClient::new(&settings.message_queue).await.unwrap();
         let secret = SecretKey::from_slice(&[3u8; 32]).unwrap();
 
         let eth_broadcaster =

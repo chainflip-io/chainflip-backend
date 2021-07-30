@@ -44,6 +44,7 @@ where
     }
 
     pub async fn start(mut self, mut shutdown_rx: tokio::sync::oneshot::Receiver<()>) {
+        log::info!("Starting P2P conductor");
         type Msg = Either<Result<P2PMessageCommand, anyhow::Error>, P2PMessage>;
 
         let mq_stream = pin_message_stream(self.stream);

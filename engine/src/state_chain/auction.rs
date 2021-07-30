@@ -6,7 +6,7 @@ use codec::{Decode, Encode};
 use frame_support::{pallet_prelude::MaybeSerializeDeserialize, Parameter};
 use serde::{Deserialize, Serialize};
 use sp_runtime::traits::One;
-use substrate_subxt::{module, sp_runtime::traits::Member, system::System, Call, Event};
+use substrate_subxt::{module, sp_runtime::traits::Member, system::System, Event};
 
 use super::{runtime::StateChainRuntime, sc_event::SCEvent};
 
@@ -15,11 +15,6 @@ pub trait Auction: System {
     type AuctionIndex: Member + Parameter + Default + Add + One + Copy + MaybeSerializeDeserialize;
 
     type ValidatorId: Member + Parameter + MaybeSerializeDeserialize;
-}
-
-#[derive(Call, Encode)]
-pub struct WitnessAuctionConfirmationCall<T: Auction> {
-    auction_index: T::AuctionIndex,
 }
 
 // The order of these fields matter for decoding
