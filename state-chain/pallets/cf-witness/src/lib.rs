@@ -51,6 +51,7 @@ use frame_support::{
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -167,7 +168,6 @@ pub mod pallet {
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-
 			Self::do_witness(who, *call)
 		}
 	}
@@ -258,7 +258,7 @@ impl<T: Config> Pallet<T> {
 
 		// Check if threshold is reached and, if so, apply the voted-on Call.
 		let threshold = ConsensusThreshold::<T>::get() as usize;
-		let post_dispatch_info = if num_votes == threshold {
+		if num_votes == threshold {
 			Self::deposit_event(Event::<T>::ThresholdReached(
 				call_hash,
 				num_votes as VoteCount,
@@ -268,12 +268,10 @@ impl<T: Config> Pallet<T> {
 				call_hash,
 				result.map(|_| ()).map_err(|e| e.error),
 			));
-			result.unwrap_or_else(|err| err.post_info)
+			result
 		} else {
-			().into()
-		};
-
-		Ok(post_dispatch_info)
+			Ok(().into())
+		}
 	}
 }
 
