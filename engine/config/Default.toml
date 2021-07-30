@@ -2,15 +2,32 @@
 
 [message_queue]
 # can also be IP
-hostname = "localhost"
-port = "4222"
+endpoint = "http://localhost:4222"
 
 [state_chain]
-hostname = "localhost"
-port = "9944"
+p2p_priv_key_file = ""
+signing_key_file = ""
+ws_endpoint = "ws://localhost:9944"
 
 [eth]
-hostname = "localhost"
-port = "8545"
+from_block = 8929230
+node_endpoint = "wss://network.my_eth_node:80/<secret_key>"
+# Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
+private_key_file = "/run/secrets/eth_private_key"
 # Address used on the Ganache/Brownie tests
+key_manager_eth_address = "0xdBa9b6065Deb6Cc057BC779fF6736709ecBa3409"
 stake_manager_eth_address = "0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f"
+
+[health_check]
+hostname = "0.0.0.0"
+port = 5555
+
+[signing]
+db_file = "data.db"
+genesis_validator_ids = [
+  [54, 192, 7, 138, 243, 137, 75, 130, 2, 181, 65, 236, 230, 197, 216, 251, 74, 9, 31, 126, 88, 18, 182, 136, 231, 3, 84, 144, 64, 71, 57, 17], #bashful
+  [136, 152, 117, 139, 248, 136, 85, 97, 93, 69, 159, 85, 46, 54, 191, 209, 78, 133, 102, 200, 179, 104, 246, 166, 68, 137, 66, 117, 157, 92, 127, 4], # doc
+  [202, 88, 242, 244, 174, 113, 61, 187, 59, 77, 177, 6, 100, 10, 61, 177, 80, 227, 128, 7, 148, 13, 254, 41, 230, 235, 184, 112, 196, 204, 212, 126], # grumpy
+  [40, 181, 245, 241, 101, 67, 147, 151, 95, 88, 231, 140, 240, 107, 111, 58, 181, 9, 179, 98, 155, 10, 75, 8, 170, 163, 220, 230, 191, 106, 248, 5], # happy
+  [126, 110, 176, 177, 92, 23, 103, 54, 15, 218, 214, 61, 111, 247, 138, 151, 55, 67, 85, 176, 11, 77, 53, 17, 165, 34, 177, 168, 104, 138, 102, 29], # dopey
+]

@@ -11,12 +11,8 @@ version = '0.1.0'
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
 
-# alias "parity-scale-code" to "codec"
-[dependencies.codec]
-default-features = false
-features = ['derive']
-package = 'parity-scale-codec'
-version = '2.0'
+[build-dependencies]
+substrate-wasm-builder = '3.0.0'
 
 [dependencies]
 # Internal deps
@@ -24,6 +20,9 @@ cf-traits = { path = '../../traits', default-features = false }
 pallet-cf-validator = { path = '../cf-validator', default-features = false }
 
 # Non-substrate external deps
+codec = {default-features = false, features = ['derive'], package = 'parity-scale-codec', version = '2.0.0'}
+ethereum-types = { default-features = false, version = "0.11"}
+ethabi = { default-features = false, git = 'https://github.com/chainflip-io/ethabi', rev = 'a53cb47'}
 
 # Substrate deps
 frame-support = { default-features = false, version = '3.0.0' }
@@ -31,10 +30,11 @@ frame-system = { default-features = false, version = '3.0.0' }
 sp-runtime = { default-features = false, version = '3.0.0' }
 sp-core = { default-features = false, version = '3.0.0' }
 sp-std = { default-features = false, version = '3.0.0' }
+serde = { default-features = false, version = '1.0.119' }
 
 [dev-dependencies]
-serde = { version = "1.0.119" }
-sp-io = { default-features = false, version = '3.0.0' }
+sp-io = { version = '3.0.0' }
+pallet-cf-flip = { path = '../cf-flip' }
 
 [features]
 default = ['std']
@@ -47,4 +47,6 @@ std = [
     'sp-runtime/std',
     'sp-core/std',
     'sp-std/std',
+    'serde/std',
+    'ethabi/std',
 ]

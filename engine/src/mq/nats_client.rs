@@ -1,4 +1,5 @@
-use super::{IMQClient, Options, Subject};
+use super::SubjectName;
+use super::{IMQClient, Subject};
 use anyhow::Context;
 use anyhow::Result;
 use async_nats;
@@ -7,12 +8,7 @@ use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use tokio_stream::{Stream, StreamExt};
 
-// This will likely have a private field containing the underlying mq client
-#[derive(Clone)]
-pub struct NatsMQClient {
-    /// The nats.rs Connection to the Nats server
-    conn: async_nats::Connection,
-}
+use crate::settings;
 
 struct Subscription {
     inner: async_nats::Subscription,
@@ -28,17 +24,27 @@ impl Subscription {
     }
 }
 
+// This will likely have a private field containing the underlying mq client
+#[derive(Clone, Debug)]
+pub struct NatsMQClient {
+    /// The nats.rs Connection to the Nats server
+    conn: async_nats::Connection,
+}
+
+impl NatsMQClient {
+    pub async fn new(mq_settings: &settings::MessageQueue) -> Result<Self> {
+        log::info!("Connecting to message queue at: {}", mq_settings.endpoint);
+        let conn = async_nats::connect(mq_settings.endpoint.as_str()).await?;
+        Ok(Self { conn })
+    }
+}
+
 #[async_trait]
 impl IMQClient for NatsMQClient {
-    async fn connect(opts: Options) -> Result<Box<Self>> {
-        let conn = async_nats::connect(opts.url.as_str()).await?;
-        Ok(Box::new(NatsMQClient { conn }))
-    }
-
     async fn publish<M: Serialize + Sync>(&self, subject: Subject, message: &'_ M) -> Result<()> {
         let bytes = serde_json::to_string(message)?;
         let bytes = bytes.as_bytes();
-        self.conn.publish(&subject.to_string(), bytes).await?;
+        self.conn.publish(&subject.to_subject_name(), bytes).await?;
         Ok(())
     }
 
@@ -46,7 +52,7 @@ impl IMQClient for NatsMQClient {
         &self,
         subject: Subject,
     ) -> Result<Box<dyn Stream<Item = Result<M>>>> {
-        let sub = self.conn.subscribe(&subject.to_string()).await?;
+        let sub = self.conn.subscribe(&subject.to_subject_name()).await?;
 
         let subscription = Subscription { inner: sub };
         let stream = subscription.into_stream().map(|bytes| {
@@ -69,7 +75,7 @@ mod test {
     use core::panic;
     use std::time::Duration;
 
-    use chainflip_common::types::coin::Coin;
+    use crate::types::chain::Chain;
     use serde::Deserialize;
 
     use crate::mq::pin_message_stream;
@@ -77,12 +83,9 @@ mod test {
     #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
     struct TestMessage(String);
 
-    async fn setup_client() -> Box<NatsMQClient> {
-        let options = Options {
-            url: "http://localhost:4222".to_string(),
-        };
-
-        NatsMQClient::connect(options).await.unwrap()
+    async fn setup_client() -> NatsMQClient {
+        let settings = settings::test_utils::new_test_settings().unwrap();
+        NatsMQClient::new(&settings.message_queue).await.unwrap()
     }
 
     #[ignore = "Depends on Nats being online"]
@@ -99,17 +102,17 @@ mod test {
         let nats_client = setup_client().await;
         let res = nats_client
             .publish(
-                Subject::Witness(Coin::ETH),
+                Subject::Witness(Chain::ETH),
                 &TestMessage(String::from("hello")),
             )
             .await;
         assert!(res.is_ok());
     }
 
-    async fn subscribe_test_inner(nats_client: Box<NatsMQClient>) {
+    async fn subscribe_test_inner(nats_client: NatsMQClient) {
         let test_message = TestMessage(String::from("I SAW A TRANSACTION"));
 
-        let subject = Subject::Witness(Coin::ETH);
+        let subject = Subject::Witness(Chain::ETH);
 
         let stream = nats_client.subscribe::<TestMessage>(subject).await.unwrap();
 

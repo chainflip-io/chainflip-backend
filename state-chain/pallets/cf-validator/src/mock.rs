@@ -1,45 +1,49 @@
 use super::*;
 use crate as pallet_cf_validator;
-use sp_core::{H256};
-use sp_runtime::{
-	Perbill,
-	impl_opaque_keys,
-	traits::{
-		BlakeTwo256,
-		IdentityLookup,
-		ConvertInto,
-	},
-	testing::{
-		Header,
-		UintAuthorityId,
-	},
+use cf_traits::{impl_mock_ensure_witnessed_for_origin, AuctionConfirmation, BidderProvider};
+use frame_support::traits::ValidatorRegistration;
+use frame_support::{
+	construct_runtime, parameter_types,
+	traits::{OnFinalize, OnInitialize},
 };
-use frame_support::{parameter_types, construct_runtime, traits::{OnInitialize, OnFinalize}};
+use sp_core::H256;
+use sp_runtime::BuildStorage;
+use sp_runtime::{
+	impl_opaque_keys,
+	testing::{Header, UintAuthorityId},
+	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
+	Perbill,
+};
 use std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-type Amount = u64;
-type ValidatorId = u64;
-pub const BAD_VALIDATOR_ID: ValidatorId = 100;
+pub type Amount = u64;
+pub type ValidatorId = u64;
 
 impl WeightInfo for () {
-	fn set_blocks_for_epoch() -> u64 { 0 as Weight }
+	fn set_blocks_for_epoch() -> u64 {
+		0 as Weight
+	}
 
-	fn set_validator_target_size() -> u64 { 0 as Weight }
-
-	fn force_auction() -> u64 { 0 as Weight }
-
-	fn confirm_auction() -> u64 { 0 as Weight }
+	fn force_rotation() -> u64 {
+		0 as Weight
+	}
 }
+
+pub const MIN_AUCTION_SIZE: u32 = 2;
+pub const MAX_AUCTION_SIZE: u32 = 150;
+pub const EPOCH_BLOCKS: u64 = 100;
 
 thread_local! {
 	pub static CANDIDATE_IDX: RefCell<u64> = RefCell::new(0);
-	pub static CURRENT_EPOCH: RefCell<u64> = RefCell::new(0);
 	pub static CURRENT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
-	pub static OUTGOING_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
-	pub static CHANGED: RefCell<bool> = RefCell::new(false);
+	pub static MIN_BID: RefCell<u64> = RefCell::new(0);
+	pub static PHASE: RefCell<AuctionPhase<ValidatorId, Amount>> =  RefCell::new(AuctionPhase::default());
+	pub static BIDDERS: RefCell<Vec<(u64, u64)>> = RefCell::new(vec![]);
+	pub static WINNERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
+	pub static CONFIRM: RefCell<bool> = RefCell::new(false);
 }
 
 construct_runtime!(
@@ -49,8 +53,9 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		ValidatorManager: pallet_cf_validator::{Module, Call, Storage, Event<T>},
 		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
+		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
+		ValidatorPallet: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
 	}
 );
 
@@ -93,9 +98,9 @@ parameter_types! {
 }
 
 impl pallet_session::Config for Test {
-	type ShouldEndSession = ValidatorManager;
-	type SessionManager = ValidatorManager;
-	type SessionHandler = ValidatorManager;
+	type ShouldEndSession = ValidatorPallet;
+	type SessionManager = ValidatorPallet;
+	type SessionHandler = ValidatorPallet;
 	type ValidatorId = ValidatorId;
 	type ValidatorIdOf = ConvertInto;
 	type Keys = MockSessionKeys;
@@ -105,42 +110,71 @@ impl pallet_session::Config for Test {
 	type WeightInfo = ();
 }
 
+parameter_types! {
+	pub const MinAuctionSize: u32 = 2;
+}
+
+impl_mock_ensure_witnessed_for_origin!(Origin);
+
+impl pallet_cf_auction::Config for Test {
+	type Event = Event;
+	type Amount = Amount;
+	type ValidatorId = ValidatorId;
+	type BidderProvider = TestBidderProvider;
+	type Registrar = Test;
+	type AuctionIndex = u32;
+	type MinAuctionSize = MinAuctionSize;
+	type Confirmation = TestConfirmation;
+	type EnsureWitnessed = MockEnsureWitnessed;
+}
+
+impl ValidatorRegistration<ValidatorId> for Test {
+	fn is_registered(_id: &ValidatorId) -> bool {
+		true
+	}
+}
+
+pub struct TestBidderProvider;
+
+impl BidderProvider for TestBidderProvider {
+	type ValidatorId = ValidatorId;
+	type Amount = Amount;
+
+	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
+		let idx = CANDIDATE_IDX.with(|idx| {
+			let new_idx = *idx.borrow_mut() + 1;
+			*idx.borrow_mut() = new_idx;
+			new_idx
+		});
+
+		vec![(1 + idx, 1), (2 + idx, 2)]
+	}
+}
+
+pub struct TestConfirmation;
+impl AuctionConfirmation for TestConfirmation {
+	fn awaiting_confirmation() -> bool {
+		CONFIRM.with(|l| *l.borrow())
+	}
+
+	fn set_awaiting_confirmation(waiting: bool) {
+		CONFIRM.with(|l| *l.borrow_mut() = waiting);
+	}
+}
 pub struct TestEpochTransitionHandler;
 
 impl EpochTransitionHandler for TestEpochTransitionHandler {
 	type ValidatorId = ValidatorId;
-	fn on_new_epoch(new_validators: Vec<Self::ValidatorId>) {
-		CURRENT_VALIDATORS.with(|l|
-			*l.borrow_mut() = new_validators
-		);
-	}
-	fn on_new_auction(outgoing_validators: Vec<Self::ValidatorId>) {
-		OUTGOING_VALIDATORS.with(|l|
-			*l.borrow_mut() = outgoing_validators
-		);
-	}
-	fn on_before_auction() {}
-	fn on_before_epoch_ending() {}
-}
-
-pub struct TestCandidateProvider;
-
-impl CandidateProvider for TestCandidateProvider {
-	type ValidatorId = ValidatorId;
 	type Amount = Amount;
-
-	fn get_candidates() -> Vec<(Self::ValidatorId, Self::Amount)> {
-		CANDIDATE_IDX.with(|l| {
-			let idx = *l.borrow();
-			let candidates = vec![(idx, idx), (idx + 1, idx + 1), (idx + 2, idx + 2), (idx + 3, idx + 3)];
-			*l.borrow_mut() = idx + 1;
-			candidates
-		})
+	fn on_new_epoch(new_validators: &Vec<Self::ValidatorId>, min_bid: Self::Amount) {
+		CURRENT_VALIDATORS.with(|l| *l.borrow_mut() = new_validators.clone());
+		MIN_BID.with(|l| *l.borrow_mut() = min_bid);
 	}
 }
+
 parameter_types! {
 	pub const MinEpoch: u64 = 1;
-	pub const MinValidatorSetSize: u64 = 2;
+	pub const MinValidatorSetSize: u32 = 2;
 }
 
 pub(super) type EpochIndex = u32;
@@ -148,38 +182,40 @@ pub(super) type EpochIndex = u32;
 impl Config for Test {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
-	type MinValidatorSetSize = MinValidatorSetSize;
-	type CandidateProvider = TestCandidateProvider;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
 	type ValidatorWeightInfo = ();
 	type EpochIndex = EpochIndex;
 	type Amount = Amount;
 	// Use the pallet's implementation
-	type Auction = ValidatorManager;
-	// Mock out the registrar
-	type Registrar = Test;
-}
-
-impl ValidatorRegistration<ValidatorId> for Test {
-	fn is_registered(id: &ValidatorId) -> bool {
-		*id != BAD_VALIDATOR_ID
-	}
+	type Auction = AuctionPallet;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	frame_system::GenesisConfig::default().assimilate_storage::<Test>(&mut t).unwrap();
-	let mut ext = sp_io::TestExternalities::new(t);
-	ext.execute_with(|| System::set_block_number(1));
+	let config = GenesisConfig {
+		frame_system: Default::default(),
+		pallet_session: None,
+		pallet_cf_validator: Some(ValidatorPalletConfig {
+			epoch_number_of_blocks: EPOCH_BLOCKS,
+		}),
+		pallet_cf_auction: Some(AuctionPalletConfig {
+			auction_size_range: (MIN_AUCTION_SIZE, MAX_AUCTION_SIZE),
+		}),
+	};
+
+	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
+
+	ext.execute_with(|| {
+		System::set_block_number(1);
+	});
+
 	ext
 }
 
 pub fn current_validators() -> Vec<u64> {
 	CURRENT_VALIDATORS.with(|l| l.borrow().to_vec())
 }
-
-pub fn outgoing_validators() -> Vec<u64> {
-	OUTGOING_VALIDATORS.with(|l| l.borrow().to_vec())
+pub fn min_bid() -> u64 {
+	MIN_BID.with(|l| *l.borrow())
 }
 
 pub fn run_to_block(n: u64) {

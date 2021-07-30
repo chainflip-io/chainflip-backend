@@ -12,6 +12,7 @@ targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
 # Internal deps
+pallet-cf-auction = { path = '../cf-auction', default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
 serde = { version = "1.0.101", default-features = false, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
@@ -29,6 +30,7 @@ log = { version = "0.4.14", default-features = false }
 sp-std = { version = "3.0.0", default-features = false }
 sp-io = { version = "3.0.0", default-features = false }
 sp-core = { default-features = false, version = '3.0.0' }
+assert_matches = { version = "1.5.0" }
 
 [features]
 default = ['std']
@@ -44,6 +46,7 @@ std = [
     'log/std',
     'pallet-session/std',
     'frame-benchmarking/std',
+    'pallet-cf-auction/std',
 ]
 runtime-benchmarks = [
     'frame-benchmarking',

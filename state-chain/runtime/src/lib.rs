@@ -2,42 +2,41 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
 mod weights;
+mod chainflip;
 // A few exports that help ease life for downstream crates.
+use core::time::Duration;
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
-	StorageValue,
 	traits::{KeyOwnerProofSystem, Randomness},
 	weights::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
 		IdentityFee, Weight,
 	},
+	StorageValue,
 };
 use frame_system::offchain::SendTransactionTypes;
-use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
 use pallet_grandpa::fg_primitives;
+use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
 use pallet_session::historical as session_historical;
 pub use pallet_timestamp::Call as TimestampCall;
-pub use pallet_balances::Call as BalancesCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{OpaqueMetadata, crypto::KeyTypeId, ecdsa};
-use sp_runtime::{
-	ApplyExtrinsicResult, create_runtime_str, generic,
-	impl_opaque_keys,
-	MultiSignature, transaction_validity::{TransactionSource, TransactionValidity},
-};
-pub use sp_runtime::{Perbill, Permill};
-#[cfg(any(feature = "std", test))]
-pub use sp_runtime::BuildStorage;
+use sp_core::{crypto::KeyTypeId, ecdsa, OpaqueMetadata};
 use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify,
 };
+#[cfg(any(feature = "std", test))]
+pub use sp_runtime::BuildStorage;
+use sp_runtime::{
+	create_runtime_str, generic, impl_opaque_keys,
+	transaction_validity::{TransactionSource, TransactionValidity},
+	ApplyExtrinsicResult, MultiSignature,
+};
+pub use sp_runtime::{Perbill, Permill};
 use sp_std::prelude::*;
-use sp_std::marker::PhantomData;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
-use sp_transaction_pool::TransactionPriority;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -132,26 +131,39 @@ pub fn native_version() -> NativeVersion {
 	}
 }
 
+parameter_types! {
+	pub const MinAuctionSize: u32 = 2;
+}
+
+impl pallet_cf_auction::Config for Runtime {
+	type Event = Event;
+	type Amount = FlipBalance;
+	type BidderProvider = pallet_cf_staking::Pallet<Self>;
+	type AuctionIndex = u64;
+	type Registrar = Session;
+	type ValidatorId = AccountId;
+	type MinAuctionSize = MinAuctionSize;
+	type Confirmation = Auction;
+	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
+}
+
 // FIXME: These would be changed
 parameter_types! {
 	pub const MinEpoch: BlockNumber = 1;
-	pub const MinValidatorSetSize: u64 = 2;
 }
 
 impl pallet_cf_validator::Config for Runtime {
 	type Event = Event;
 	type MinEpoch = MinEpoch;
-	type MinValidatorSetSize = MinValidatorSetSize;
-	type CandidateProvider = pallet_cf_staking::Pallet<Self>;
-	type EpochTransitionHandler = PhantomData<Runtime>;
+	type EpochTransitionHandler = chainflip::ChainflipEpochTransitions;
 	type ValidatorWeightInfo = weights::pallet_cf_validator::WeightInfo<Runtime>;
 	type EpochIndex = EpochIndex;
 	type Amount = FlipBalance;
-	type Auction = Validator;
-	type Registrar = Session;
+	type Auction = Auction;
 }
 
-impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime where
+impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
+where
 	Call: From<LocalCall>,
 {
 	type Extrinsic = UncheckedExtrinsic;
@@ -231,9 +243,9 @@ impl frame_system::Config for Runtime {
 	/// What to do if a new account is created.
 	type OnNewAccount = ();
 	/// What to do if an account is fully reaped from the system.
-	type OnKilledAccount = ();
+	type OnKilledAccount = pallet_cf_flip::BurnFlipAccount<Self>;
 	/// The data to be stored in an account.
-	type AccountData = pallet_balances::AccountData<Balance>;
+	type AccountData = ();
 	/// Weight information for the extrinsics of this pallet.
 	type SystemWeightInfo = ();
 	/// This is used as an identifier of the chain. 42 is the generic substrate prefix.
@@ -256,7 +268,7 @@ impl pallet_grandpa::Config for Runtime {
 	type KeyOwnerProofSystem = Historical;
 
 	type KeyOwnerProof =
-	<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
+		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
 
 	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
 		KeyTypeId,
@@ -266,23 +278,6 @@ impl pallet_grandpa::Config for Runtime {
 	type HandleEquivocation = ();
 
 	type WeightInfo = ();
-}
-
-parameter_types! {
-	pub const ExistentialDeposit: u128 = 500;
-	pub const MaxLocks: u32 = 50;
-}
-
-impl pallet_balances::Config for Runtime {
-	type MaxLocks = MaxLocks;
-	/// The type for recording an account's balance.
-	type Balance = Balance;
-	/// The ubiquitous event type.
-	type Event = Event;
-	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
-	type AccountStore = System;
-	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -320,6 +315,16 @@ impl pallet_authorship::Config for Runtime {
 	type EventHandler = ();
 }
 
+parameter_types! {
+	pub const ExistentialDeposit: u128 = 500;
+}
+
+impl pallet_cf_flip::Config for Runtime {
+	type Event = Event;
+	type Balance = FlipBalance;
+	type ExistentialDeposit = ExistentialDeposit;
+}
+
 impl pallet_sudo::Config for Runtime {
 	type Event = Event;
 	type Call = Call;
@@ -332,21 +337,63 @@ impl pallet_cf_witness::Config for Runtime {
 	type Epoch = EpochIndex;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
+	type Amount = FlipBalance;
+}
+
+/// Claims go live 48 hours after registration, so we need to allow enough time beyond that.
+const SECS_IN_AN_HOUR: u64 = 3600;
+const REGISTRATION_DELAY: u64 = 48 * SECS_IN_AN_HOUR;
+
+parameter_types! {
+	/// 4 days. When a claim is signed, there needs to be enough time left to be able to cash it in.
+	pub const MinClaimTTL: Duration = Duration::from_secs(2 * REGISTRATION_DELAY);
+	/// 6 days.
+	pub const ClaimTTL: Duration = Duration::from_secs(3 * REGISTRATION_DELAY);
 }
 
 impl pallet_cf_staking::Config for Runtime {
 	type Event = Event;
-	type Call = Call;
-
-	type TokenAmount = FlipBalance;
-	// TODO: check this against the address type used in the StakeManager
-	type EthereumAddress = [u8; 20];
-	// TODO: check this against the nonce type used in the StakeManager
+	type Balance = FlipBalance;
+	type Flip = Flip;
 	type Nonce = u64;
-	type EthereumCrypto = ecdsa::Public;
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
-	type Witnesser = pallet_cf_witness::Pallet<Runtime>;
 	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
+	type TimeSource = Timestamp;
+	type MinClaimTTL = MinClaimTTL;
+	type ClaimTTL = ClaimTTL;
+}
+
+parameter_types! {
+	pub const MintInterval: u32 = 10 * MINUTES;
+}
+
+impl pallet_cf_emissions::Config for Runtime {
+	type Event = Event;
+	type FlipBalance = FlipBalance;
+	type Surplus = pallet_cf_flip::Surplus<Runtime>;
+	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
+	type RewardsDistribution = pallet_cf_rewards::OnDemandRewardsDistribution<Runtime>;
+	type MintInterval = MintInterval;
+}
+
+impl pallet_cf_rewards::Config for Runtime {
+	type Event = Event;
+}
+
+parameter_types! {
+	pub const TransactionByteFee: FlipBalance = 1_000_000;
+}
+
+impl pallet_transaction_payment::Config for Runtime {
+	type OnChargeTransaction = pallet_cf_flip::FlipTransactionPayment<Self>;
+	type TransactionByteFee = TransactionByteFee;
+	type WeightToFee = IdentityFee<FlipBalance>;
+	type FeeMultiplierUpdate = ();
+}
+
+impl pallet_cf_witness_api::Config for Runtime {
+	type Call = Call;
+	type Witnesser = Witnesser;
 }
 
 construct_runtime!(
@@ -358,17 +405,22 @@ construct_runtime!(
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Module, Call, Storage},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+		Flip: pallet_cf_flip::{Module, Event<T>, Storage, Config<T>},
+		Emissions: pallet_cf_emissions::{Module, Event<T>, Config<T>},
+		Rewards: pallet_cf_rewards::{Module, Call, Event<T>},
+		Staking: pallet_cf_staking::{Module, Call, Storage, Event<T>, Config<T>},
+		TransactionPayment: pallet_transaction_payment::{Module, Storage},
 		Session: pallet_session::{Module, Storage, Event, Config<T>},
 		Historical: session_historical::{Module},
+		Witnesser: pallet_cf_witness::{Module, Call, Event<T>, Origin},
+		WitnesserApi: pallet_cf_witness_api::{Module, Call},
+		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
 		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
 		Aura: pallet_aura::{Module, Config<T>},
 		Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
 		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
-		Witness: pallet_cf_witness::{Module, Call, Event<T>, Origin},
-		StakeManager: pallet_cf_staking::{Module, Call, Event<T>},
 	}
 );
 

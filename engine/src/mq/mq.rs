@@ -1,23 +1,14 @@
-use std::{fmt, pin::Pin};
+use std::pin::Pin;
 
+use crate::types::chain::Chain;
 use anyhow::Result;
 use async_trait::async_trait;
-use chainflip_common::types::coin::Coin;
 use futures::Stream;
 use serde::{de::DeserializeOwned, Serialize};
-
-/// Contains various general message queue options
-#[derive(Debug, Clone)]
-pub struct Options {
-    pub url: String,
-}
 
 /// Interface for a message queue
 #[async_trait]
 pub trait IMQClient {
-    /// Open a connection to the message queue
-    async fn connect(opts: Options) -> Result<Box<Self>>;
-
     /// Publish something to a particular subject
     async fn publish<M: 'static + Serialize + Sync>(
         &self,
@@ -39,63 +30,145 @@ pub trait IMQClient {
 pub fn pin_message_stream<M>(stream: Box<dyn Stream<Item = M>>) -> Pin<Box<dyn Stream<Item = M>>> {
     stream.into()
 }
+
 /// Subjects that can be published / subscribed to
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Subject {
-    Witness(Coin),
-    Quote(Coin),
-    Batch(Coin),
-    Broadcast(Coin),
+    Witness(Chain),
+    Quote(Chain),
+    Batch(Chain),
+    Broadcast(Chain),
+
+    // broadcaster pushes tx hashes here after being broadcast
+    BroadcastSuccess(Chain),
     /// Stake events coming from the Stake manager contract
     StakeManager,
-    /// Stake events coming from the State chain
-    StateChainStake,
-    /// Claim events coming from the State chain
-    StateChainClaim,
-    /// Claim issued event from the state chain
-    StateChainClaimIssued,
-    Rotate,
+
+    // Auction pallet events
+    AuctionStarted,
+    AuctionConfirmed,
+    AuctionCompleted,
+    AuctionAborted,
+    AuctionRangeChanged,
+    AwaitingBidders,
+
+    // Validator pallet events
+    ForceRotationRequested,
+    EpochDurationChanged,
+    NewEpoch,
+
+    // Staking pallet events
+    ClaimSigRequested,
+    Staked,
+    ClaimSettled,
+    StakeRefund,
+    ClaimSignatureIssued,
+    AccountRetired,
+    AccountActivated,
+
     P2PIncoming,
     P2POutgoing,
+    MultisigInstruction,
+    // both signing and keygen events come from here
+    MultisigEvent,
+    /// Published by the signing module to notify SC about
+    /// the outcome of a keygen ceremony
+    KeygenResult,
 }
 
-// TODO: Make this a separate trait, not `fmt::Display` - https://github.com/chainflip-io/chainflip-backend/issues/63
-// Used to create the subject that the MQ publishes to
-impl fmt::Display for Subject {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+/// Convert an object to a to a subject string (currently Nats compatible)
+pub trait SubjectName {
+    fn to_subject_name(&self) -> String;
+}
+
+impl SubjectName for Subject {
+    fn to_subject_name(&self) -> String {
         match &self {
-            Subject::Witness(coin) => {
-                write!(f, "witness.{}", coin.to_string())
+            Subject::Witness(chain) => {
+                format!("witness.{}", chain)
             }
-            Subject::Quote(coin) => {
-                write!(f, "quote.{}", coin.to_string())
+            Subject::Quote(chain) => {
+                format!("quote.{}", chain)
             }
-            Subject::Batch(coin) => {
-                write!(f, "batch.{}", coin.to_string())
+            Subject::Batch(chain) => {
+                format!("batch.{}", chain)
             }
-            Subject::Broadcast(coin) => {
-                write!(f, "broadcast.{}", coin.to_string())
+            Subject::Broadcast(chain) => {
+                format!("broadcast.{}", chain)
+            }
+            Subject::BroadcastSuccess(chain) => {
+                format!("broadcast_success.{}", chain)
             }
             Subject::StakeManager => {
-                write!(f, "stake_manager")
+                format!("stake_manager")
             }
-            Subject::StateChainClaim => {
-                write!(f, "state_chain_claim")
-            }
-            Subject::Rotate => {
-                write!(f, "rotate")
-            }
-            Subject::StateChainStake => {
-                write!(f, "state_chain_stake")
-            }
-            Subject::StateChainClaimIssued => {
-                write!(f, "state_chain_claim_issued")
-            }
+            // === Signing ===
             Subject::P2PIncoming => {
-                write!(f, "p2p_incoming")
+                format!("p2p_incoming")
             }
             Subject::P2POutgoing => {
-                write!(f, "p2p_outgoing")
+                format!("p2p_outgoing")
+            }
+            Subject::MultisigInstruction => {
+                format!("multisig_instruction")
+            }
+            Subject::MultisigEvent => {
+                format!("multisig_event")
+            }
+            Subject::KeygenResult => {
+                format!("keygen_result")
+            }
+            // === Auction events ===
+            Subject::AuctionStarted => {
+                format!("auction.auction_started")
+            }
+            Subject::AuctionConfirmed => {
+                format!("auction.auction_confirmed")
+            }
+            Subject::AuctionCompleted => {
+                format!("auction.auction_completed")
+            }
+            Subject::AuctionAborted => {
+                format!("auction.auction_aborted")
+            }
+            Subject::AuctionRangeChanged => {
+                format!("auction.auction_range_changed")
+            }
+            Subject::AwaitingBidders => {
+                format!("auction.awaiting_bidders")
+            }
+            // === Validator events ===
+            Subject::ForceRotationRequested => {
+                format!("validator.force_rotation_requested")
+            }
+            Subject::EpochDurationChanged => {
+                format!("validator.epoch_duration_changed")
+            }
+            Subject::NewEpoch => {
+                format!("validator.new_epoch")
+            }
+            // === Staking events ===
+            Subject::ClaimSigRequested => {
+                format!("staking.claim_sig_requested")
+            }
+            Subject::Staked => {
+                format!("staking.staked")
+            }
+            Subject::ClaimSettled => {
+                format!("staking.claim_settled")
+            }
+            Subject::StakeRefund => {
+                format!("staking.stake_refund")
+            }
+            Subject::ClaimSignatureIssued => {
+                format!("staking.claim_signature_issued")
+            }
+            Subject::AccountRetired => {
+                format!("staking.account_retired")
+            }
+            Subject::AccountActivated => {
+                format!("staking.account_activated")
             }
         }
     }
@@ -106,26 +179,20 @@ mod test {
     use super::*;
 
     #[test]
-    fn channel_to_string() {
-        let witness_subject = Subject::Witness(Coin::BTC);
-        assert_eq!(witness_subject.to_string(), "witness.BTC");
+    fn channel_to_subject_name() {
+        let witness_subject = Subject::Witness(Chain::BTC);
+        assert_eq!(witness_subject.to_subject_name(), "witness.BTC");
 
-        let quote_subject = Subject::Quote(Coin::ETH);
-        assert_eq!(quote_subject.to_string(), "quote.ETH");
+        let quote_subject = Subject::Quote(Chain::ETH);
+        assert_eq!(quote_subject.to_subject_name(), "quote.ETH");
 
-        let batch_subject = Subject::Batch(Coin::OXEN);
-        assert_eq!(batch_subject.to_string(), "batch.OXEN");
+        let batch_subject = Subject::Batch(Chain::OXEN);
+        assert_eq!(batch_subject.to_subject_name(), "batch.OXEN");
 
-        let broadcast_subject = Subject::Broadcast(Coin::BTC);
-        assert_eq!(broadcast_subject.to_string(), "broadcast.BTC");
+        let broadcast_subject = Subject::Broadcast(Chain::BTC);
+        assert_eq!(broadcast_subject.to_subject_name(), "broadcast.BTC");
 
         let stake_manager_subject = Subject::StakeManager;
-        assert_eq!(stake_manager_subject.to_string(), "stake_manager");
-
-        let sc_stake_subject = Subject::StateChainStake;
-        assert_eq!(sc_stake_subject.to_string(), "state_chain_stake");
-
-        let sc_claim_subject = Subject::StateChainClaim;
-        assert_eq!(sc_claim_subject.to_string(), "state_chain_claim");
+        assert_eq!(stake_manager_subject.to_subject_name(), "stake_manager");
     }
 }

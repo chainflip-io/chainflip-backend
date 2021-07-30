@@ -1,6 +1,10 @@
-mod stake_manager;
+pub mod key_manager;
+pub mod stake_manager;
 
 mod eth_event_streamer;
+
+mod eth_broadcaster;
+mod eth_tx_encoding;
 
 pub use anyhow::Result;
 use async_trait::async_trait;
@@ -10,7 +14,7 @@ use thiserror::Error;
 
 use web3::types::{BlockNumber, FilterBuilder, H256};
 
-use crate::settings::Settings;
+use crate::{mq::IMQClient, settings::Settings};
 
 /// Something that accepts and processes events asychronously.
 #[async_trait]
@@ -25,7 +29,7 @@ where
 /// Implement this for each contract for which you want to subscribe to events.
 pub trait EventSource {
     /// The Event type expected from this contract. Likely to be an enum of all possible events.
-    type Event: Send + Copy + Sync;
+    type Event: Clone + Send + Sync + std::fmt::Debug;
 
     /// Returns an eth filter for the events from the contract, starting at the given
     /// block number.
@@ -51,9 +55,25 @@ pub enum EventProducerError {
 }
 
 /// Start all the ETH components
-pub async fn start(settings: Settings) {
+pub async fn start<MQC: 'static + IMQClient + Send + Sync + Clone>(
+    settings: &Settings,
+    mq_client: MQC,
+) {
     log::info!("Starting the ETH components");
-    stake_manager::start_stake_manager_witness(settings)
-        .await
-        .expect("Could not start the StakeManager witness");
+    let sm_witness_future =
+        stake_manager::start_stake_manager_witness::<MQC>(&settings, mq_client.clone());
+
+    let eth_broadcaster_future =
+        eth_broadcaster::start_eth_broadcaster::<MQC>(&settings, mq_client.clone());
+
+    let eth_tx_encoder_future =
+        eth_tx_encoding::set_agg_key_with_agg_key::start(&settings, mq_client.clone());
+
+    let result = futures::join!(
+        sm_witness_future,
+        eth_broadcaster_future,
+        eth_tx_encoder_future
+    );
+    result.0.expect("Broadcaster should exit without error");
+    result.1.expect("Eth tx encoder should exit without error");
 }

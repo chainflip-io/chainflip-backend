@@ -41,18 +41,8 @@ impl<T: frame_system::Config> pallet_cf_validator::WeightInfo for WeightInfo<T> 
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	fn set_validator_target_size() -> Weight {
-		(478_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-	}
-	fn force_auction() -> Weight {
+	fn force_rotation() -> Weight {
 		(401_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-	}
-	fn confirm_auction() -> Weight {
-		(509_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 }
