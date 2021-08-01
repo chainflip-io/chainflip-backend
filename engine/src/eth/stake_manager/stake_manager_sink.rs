@@ -23,39 +23,11 @@ impl<MQC: IMQClient + Send + Sync> StakeManagerSink<MQC> {
 
 #[async_trait]
 impl<MQC: IMQClient + Send + Sync> EventSink<StakeManagerEvent> for StakeManagerSink<MQC> {
-    async fn process_event(&self, event: StakeManagerEvent) -> anyhow::Result<()> {
+    async fn process_event(&self, event: StakeManagerEvent) -> Result<()> {
         log::debug!("Processing event in StakeManagerSink: {:?}", event);
         self.mq_client
             .publish(Subject::StakeManager, &event)
             .await?;
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use crate::{mq::nats_client::NatsMQClient, settings};
-
-    use super::*;
-
-    #[tokio::test]
-    // Ensure it doesn't panic
-    async fn create_stake_manager_sink() {
-        let server = nats_test_server::NatsTestServer::build().spawn();
-        let addr = server.address();
-
-        let ip = addr.ip();
-        let port = addr.port();
-
-        let mq_settings = settings::MessageQueue {
-            endpoint: format!("http://{}:{}", ip, port),
-        };
-
-        let mq_client = NatsMQClient::new(&mq_settings).await.unwrap();
-
-        StakeManagerSink::<NatsMQClient>::new(mq_client)
-            .await
-            .unwrap();
     }
 }

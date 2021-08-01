@@ -5,6 +5,7 @@ mod eth_event_streamer;
 
 mod eth_broadcaster;
 mod eth_tx_encoding;
+mod utils;
 
 pub use anyhow::Result;
 use async_trait::async_trait;
@@ -60,20 +61,15 @@ pub async fn start<MQC: 'static + IMQClient + Send + Sync + Clone>(
     mq_client: MQC,
 ) {
     log::info!("Starting the ETH components");
-    let sm_witness_future =
-        stake_manager::start_stake_manager_witness::<MQC>(&settings, mq_client.clone());
-
-    let eth_broadcaster_future =
-        eth_broadcaster::start_eth_broadcaster::<MQC>(&settings, mq_client.clone());
-
-    let eth_tx_encoder_future =
-        eth_tx_encoding::set_agg_key_with_agg_key::start(&settings, mq_client.clone());
 
     let result = futures::join!(
-        sm_witness_future,
-        eth_broadcaster_future,
-        eth_tx_encoder_future
+        eth_broadcaster::start_eth_broadcaster::<MQC>(&settings, mq_client.clone()),
+        eth_tx_encoding::set_agg_key_with_agg_key::start(&settings, mq_client.clone()),
+        stake_manager::start_stake_manager_witness::<MQC>(&settings, mq_client.clone()),
+        key_manager::start_key_manager_witness(&settings, mq_client.clone()),
     );
     result.0.expect("Broadcaster should exit without error");
     result.1.expect("Eth tx encoder should exit without error");
+    result.2.expect("Stake manager should exit without error");
+    result.3.expect("Key manager should exit without error");
 }

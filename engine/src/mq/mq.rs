@@ -44,6 +44,8 @@ pub enum Subject {
     BroadcastSuccess(Chain),
     /// Stake events coming from the Stake manager contract
     StakeManager,
+    /// events coming from the key manager contract
+    KeyManager,
 
     // Auction pallet events
     AuctionStarted,
@@ -102,6 +104,9 @@ impl SubjectName for Subject {
             }
             Subject::StakeManager => {
                 format!("stake_manager")
+            }
+            Subject::KeyManager => {
+                format!("key_manager")
             }
             // === Signing ===
             Subject::P2PIncoming => {
