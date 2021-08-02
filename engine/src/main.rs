@@ -52,7 +52,7 @@ async fn main() {
             // TODO: Add this into a function, once it is used multiple times (i.e. tests)
             use std::{convert::TryInto, fs};
             let seed: [u8; 32] = hex::decode(
-                &fs::read_to_string(&settings.state_chain.p2p_priv_key_file)
+                &fs::read_to_string(&settings.state_chain.p2p_private_key_file)
                     .expect("Cannot read private key file")
                     .replace("\"", ""),
             )

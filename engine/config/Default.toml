@@ -5,7 +5,7 @@
 endpoint = "http://localhost:4222"
 
 [state_chain]
-p2p_priv_key_file = ""
+p2p_private_key_file = ""
 signing_key_file = ""
 ws_endpoint = "ws://localhost:9944"
 
