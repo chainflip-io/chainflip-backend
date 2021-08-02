@@ -12,7 +12,6 @@ use sc_network::config::identity::ed25519;
 use sc_network::config::PublicKey;
 use sc_network::PeerId;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use sp_core::ed25519::Public;
 use std::marker::Send;
 use std::str::FromStr;
