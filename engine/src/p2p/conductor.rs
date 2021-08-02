@@ -1,4 +1,4 @@
-use futures::{future::Either, Stream};
+use futures::Stream;
 use slog::o;
 use tokio_stream::StreamExt;
 
@@ -49,37 +49,27 @@ where
 
     pub async fn start(mut self, mut shutdown_rx: tokio::sync::oneshot::Receiver<()>) {
         slog::info!(self.logger, "Starting");
-        type Msg = Either<Result<P2PMessageCommand, anyhow::Error>, P2PMessage>;
 
-        let mq_stream = pin_message_stream(self.stream);
+        let mut p2p_command_stream = pin_message_stream(self.stream);
 
-        let mq_stream = mq_stream.map(Msg::Left);
-
-        let p2p_stream = self
+        let mut p2p_stream = self
             .p2p
             .take_stream()
             .await
-            .expect("Should have p2p stream")
-            .map(Msg::Right);
-
-        let mut stream = futures::stream::select(mq_stream, p2p_stream);
+            .expect("Should have p2p stream");
 
         loop {
             tokio::select! {
-                Some(x) = stream.next() => {
-                    match x {
-                        Either::Left(outgoing) => {
-                            if let Ok(P2PMessageCommand { destination, data }) = outgoing {
-                                self.p2p.send(&destination, &data).await.expect("Could not send outgoing P2PMessageCommand");
-                            }
-                        }
-                        Either::Right(incoming) => {
-                            self.mq
-                                .publish::<P2PMessage>(Subject::P2PIncoming, &incoming)
-                                .await
-                                .expect("Could not publish incoming message to Subject::P2PIncoming");
-                        }
+                Some(outgoing) = p2p_command_stream.next() => {
+                    if let Ok(P2PMessageCommand { destination, data }) = outgoing {
+                        self.p2p.send(&destination, &data).await.expect("Could not send outgoing P2PMessageCommand");
                     }
+                }
+                Some(incoming) = p2p_stream.next() => {
+                    self.mq
+                    .publish::<P2PMessage>(Subject::P2PIncoming, &incoming)
+                    .await
+                    .expect("Could not publish incoming message to Subject::P2PIncoming");
                 }
                 Ok(()) = &mut shutdown_rx =>{
                     slog::info!(self.logger, "Shutting down");
