@@ -1,76 +1,55 @@
 use crate::logging::COMPONENT_KEY;
 
-use super::{EventSink, EventSource, Result};
+use super::{EventSink, EventSource};
 use futures::{future::join_all, stream, StreamExt};
 use slog::o;
 use std::time::Duration;
-use web3::types::{BlockNumber, SyncState};
+use web3::{
+    types::{BlockNumber, SyncState},
+    Web3,
+};
+
+use anyhow::Result;
 
 /// Steams events from a particular ETH Source, such as a smart contract
 /// into a particular event sink
 /// For example, see stake_manager/mod.rs
-pub struct EthEventStreamer<S: EventSource> {
+pub struct EthEventStreamer<E, S>
+where
+    E: EventSink<S::Event> + 'static,
+    S: EventSource,
+{
     web3_client: ::web3::Web3<::web3::transports::WebSocket>,
     event_source: S,
-    event_sinks: Vec<Box<dyn EventSink<S::Event>>>,
+    event_sinks: Vec<E>,
     logger: slog::Logger,
 }
 
-pub struct EthEventStreamBuilder<'a, S: EventSource> {
-    url: String,
-    event_source: S,
-    event_sinks: Vec<Box<dyn EventSink<S::Event>>>,
-    logger: &'a slog::Logger,
-}
-
-impl<'a, S: EventSource> EthEventStreamBuilder<'a, S> {
-    pub fn new(url: &str, event_source: S, logger: &'a slog::Logger) -> Self {
-        Self {
-            url: url.into(),
+impl<E, S> EthEventStreamer<E, S>
+where
+    S: EventSource,
+    E: EventSink<S::Event> + 'static,
+{
+    pub async fn new(
+        node_endpoint: &str,
+        event_source: S,
+        event_sinks: Vec<E>,
+        logger: &slog::Logger,
+    ) -> Result<Self> {
+        Ok(Self {
+            web3_client: Web3::new(web3::transports::WebSocket::new(node_endpoint).await?),
             event_source,
-            event_sinks: Vec::new(),
-            logger,
-        }
-    }
-
-    pub fn with_sink<E: 'static + EventSink<S::Event>>(mut self, sink: E) -> Self {
-        self.event_sinks.push(Box::new(sink));
-        self
-    }
-
-    pub async fn build(self) -> Result<EthEventStreamer<S>> {
-        if self.event_sinks.is_empty() {
-            anyhow::bail!("Can't build a stream with no sink.")
-        } else {
-            let transport = ::web3::transports::WebSocket::new(self.url.as_str());
-
-            let transport = match tokio::time::timeout(Duration::from_secs(4), transport).await {
-                Ok(Ok(transport)) => transport,
-                Err(_) => {
-                    return Err(anyhow::Error::msg(format!(
-                        "Timeout creating websocket to {} for EthEventStreamer",
-                        self.url,
-                    )));
-                }
-                _ => {
-                    return Err(anyhow::Error::msg(format!(
-                        "Failed to create websocket to {} for EthEventStreamer",
-                        self.url,
-                    )));
-                }
-            };
-
-            Ok(EthEventStreamer {
-                web3_client: ::web3::Web3::new(transport),
-                event_source: self.event_source,
-                event_sinks: self.event_sinks,
-                logger: self.logger.new(o!(COMPONENT_KEY => "EthEventStreamer")),
-            })
-        }
+            event_sinks,
+            logger: logger.new(o!(COMPONENT_KEY => "EthEventStreamer")),
+        })
     }
 }
 
-impl<S: EventSource> EthEventStreamer<S> {
+impl<S, E> EthEventStreamer<E, S>
+where
+    S: EventSource,
+    E: EventSink<S::Event> + 'static,
+{
     /// Create a stream of Ethereum log events. If `from_block` is `None`, starts at the pending block.
     pub async fn run(&self, from_block: Option<u64>) -> Result<()> {
         slog::info!(
@@ -169,21 +148,23 @@ mod tests {
     #[ignore = "Depends on a running ganache instance, runs forever, useful for manually testing / observing incoming events"]
     async fn subscribe_to_stake_manager_events() {
         let logger = logging::test_utils::create_test_logger();
-        let stake_manager = StakeManager::load(CONTRACT_ADDRESS, &logger).unwrap();
 
-        let mq_settings = settings::test_utils::new_test_settings()
-            .unwrap()
-            .message_queue;
+        let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let mq_client = NatsMQClient::new(&mq_settings).await.unwrap();
-        // create the sink, which pushes events to the MQ
-        let sm_sink = StakeManagerSink::<NatsMQClient>::new(mq_client, &logger)
-            .await
-            .unwrap();
-        let sm_event_stream =
-            EthEventStreamBuilder::new("ws://localhost:8545", stake_manager, &logger);
-        let sm_event_stream = sm_event_stream.with_sink(sm_sink).build().await.unwrap();
+        let mq_client = NatsMQClient::new(&settings.message_queue).await.unwrap();
 
-        sm_event_stream.run(Some(0)).await.unwrap();
+        EthEventStreamer::new(
+            &settings.eth.node_endpoint,
+            StakeManager::load(CONTRACT_ADDRESS, &logger).unwrap(),
+            vec![StakeManagerSink::<NatsMQClient>::new(mq_client, &logger)
+                .await
+                .unwrap()],
+            &logger,
+        )
+        .await
+        .unwrap()
+        .run(Some(0))
+        .await
+        .unwrap()
     }
 }

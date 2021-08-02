@@ -1,7 +1,7 @@
 use crate::{
     eth::{
         key_manager::{key_manager::KeyManager, key_manager_sink::KeyManagerSink},
-        EthEventStreamBuilder,
+        EthEventStreamer,
     },
     mq::IMQClient,
     settings,
@@ -20,20 +20,17 @@ pub async fn start_key_manager_witness<MQC: 'static + IMQClient + Send + Sync + 
 ) {
     slog::info!(logger, "Starting KeyManager witness");
 
-    EthEventStreamBuilder::new(
-        settings.eth.node_endpoint.as_str(),
+    EthEventStreamer::new(
+        &settings.eth.node_endpoint,
         KeyManager::load(settings.eth.key_manager_eth_address.as_str(), logger)
             .expect("Should load KeyManager contract"),
+        vec![KeyManagerSink::<MQC>::new(mq_client, logger)
+            .await
+            .expect("Should create KeyManagerSink")],
         logger,
     )
-    .with_sink(
-        KeyManagerSink::<MQC>::new(mq_client, logger)
-            .await
-            .expect("Should create new KeyManagerSink"),
-    )
-    .build()
     .await
-    .expect("Should build KeyManager event stream")
+    .expect("Streamer should be created")
     .run(settings.eth.from_block.into())
     .await
     .context("Error occurred running the KeyManager events stream")
