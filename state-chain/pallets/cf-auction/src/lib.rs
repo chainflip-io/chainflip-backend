@@ -188,6 +188,19 @@ pub mod pallet {
 	}
 }
 
+impl<T: Config> AuctionHandler<T::ValidatorId, T::Amount> for Pallet<T> {
+	fn on_auction_completed(
+		_winners: Vec<T::ValidatorId>,
+		_min_bid: T::Amount,
+	) -> Result<(), AuctionError> {
+		Ok(())
+	}
+
+	fn try_to_confirm_auction() -> Result<(), AuctionError> {
+		Ok(())
+	}
+}
+
 impl<T: Config> Auction for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
