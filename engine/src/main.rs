@@ -1,5 +1,5 @@
 use chainflip_engine::{
-    eth,
+    eth::{eth_broadcaster, eth_tx_encoding, key_manager, stake_manager},
     health::HealthMonitor,
     mq::nats_client::NatsMQClient,
     p2p::{P2PConductor, RpcP2PClient, ValidatorId},
@@ -56,6 +56,7 @@ async fn main() {
     let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
 
     futures::join!(
+        // Start signing components
         signing::MultisigClient::new(
             db,
             mq_client.clone(),
@@ -63,17 +64,8 @@ async fn main() {
             &root_logger,
         )
         .run(shutdown_client_rx),
-        state_chain::sc_observer::start(mq_client.clone(), subxt_client.clone(), &root_logger),
-        state_chain::sc_broadcaster::start(
-            my_pair_signer,
-            mq_client.clone(),
-            subxt_client.clone(),
-            &root_logger
-        ),
-        eth::start(&settings, mq_client.clone(), &root_logger),
-        temp_event_mapper::start(mq_client.clone(), &root_logger),
         P2PConductor::new(
-            mq_client,
+            mq_client.clone(),
             RpcP2PClient::new(
                 url::Url::parse(settings.state_chain.ws_endpoint.as_str()).expect(&format!(
                     "Should be valid ws endpoint: {}",
@@ -85,5 +77,23 @@ async fn main() {
         )
         .await
         .start(p2p_shutdown_rx),
+        // Start state chain components
+        state_chain::sc_observer::start(mq_client.clone(), subxt_client.clone(), &root_logger),
+        state_chain::sc_broadcaster::start(
+            my_pair_signer,
+            mq_client.clone(),
+            subxt_client.clone(),
+            &root_logger
+        ),
+        temp_event_mapper::start(mq_client.clone(), &root_logger),
+        // Start eth components
+        eth_broadcaster::start_eth_broadcaster(&settings, mq_client.clone(), &root_logger),
+        eth_tx_encoding::set_agg_key_with_agg_key::start(
+            &settings,
+            mq_client.clone(),
+            &root_logger
+        ),
+        stake_manager::start_stake_manager_witness(&settings, mq_client.clone(), &root_logger),
+        key_manager::start_key_manager_witness(&settings, mq_client.clone(), &root_logger),
     );
 }
