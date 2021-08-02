@@ -26,17 +26,16 @@ pub async fn start<MQC: IMQClient + Clone>(
     settings: &settings::Settings,
     mq_client: MQC,
     logger: &slog::Logger,
-) -> Result<()> {
-    let mut encoder = SetAggKeyWithAggKeyEncoder::new(
+) {
+    SetAggKeyWithAggKeyEncoder::new(
         settings.eth.key_manager_eth_address.as_ref(),
         settings.signing.genesis_validator_ids.clone(),
         mq_client,
         logger,
-    )?;
-
-    encoder.process_multi_sig_event_stream().await;
-
-    Ok(())
+    )
+    .expect("Should create eth tx encoder")
+    .process_multi_sig_event_stream()
+    .await;
 }
 
 /// Details of a transaction to be broadcast to ethereum.
