@@ -23,12 +23,21 @@ pub async fn start_eth_broadcaster<M: IMQClient + Send + Sync>(
     settings: &settings::Settings,
     mq_client: M,
     logger: &slog::Logger,
-) -> anyhow::Result<()> {
-    let secret_key = secret_key_from_file(Path::new(settings.eth.private_key_file.as_str()))?;
-    let eth_broadcaster =
-        EthBroadcaster::<M, _>::new(settings.into(), mq_client, secret_key, logger).await?;
-
-    eth_broadcaster.run().await
+) {
+    EthBroadcaster::<M, _>::new(
+        settings.into(),
+        mq_client,
+        secret_key_from_file(Path::new(settings.eth.private_key_file.as_str())).expect(&format!(
+            "Should read in secret key from: {}",
+            settings.eth.private_key_file,
+        )),
+        logger,
+    )
+    .await
+    .expect("Should create eth broadcaster")
+    .run()
+    .await
+    .expect("Should run eth broadcaster");
 }
 
 /// Retrieves a private key from a file. The file should contain just the hex-encoded key, nothing else.
