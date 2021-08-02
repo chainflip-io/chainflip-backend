@@ -96,133 +96,132 @@ where
         let (shutdown_events_fut_tx, mut shutdown_events_fut_rx) =
             tokio::sync::oneshot::channel::<()>();
 
-        let events_fut = {
-            let mq = mq_client.clone();
-            let logger = logger.clone();
-            async move {
-                loop {
-                    tokio::select! {
-                        Some(event) = events_rx.recv() =>{
-                            match event {
-                                InnerEvent::P2PMessageCommand(msg) => {
-                                    // TODO: do not send one by one
-                                    if let Err(err) = mq.publish(Subject::P2POutgoing, &msg).await {
-                                        slog::error!(logger, "Could not publish message to MQ: {}", err);
+        futures::join!(
+            { // events
+                let mq = mq_client.clone();
+                let logger = logger.clone();
+                async move {
+                    loop {
+                        tokio::select! {
+                            Some(event) = events_rx.recv() =>{
+                                match event {
+                                    InnerEvent::P2PMessageCommand(msg) => {
+                                        // TODO: do not send one by one
+                                        if let Err(err) = mq.publish(Subject::P2POutgoing, &msg).await {
+                                            slog::error!(logger, "Could not publish message to MQ: {}", err);
+                                        }
+                                    }
+                                    InnerEvent::SigningResult(res) => {
+                                        mq.publish(
+                                            Subject::MultisigEvent,
+                                            &MultisigEvent::MessageSigningResult(res),
+                                        )
+                                        .await
+                                        .expect("Failed to publish MessageSigningResult");
+                                    }
+                                    InnerEvent::KeygenResult(res) => {
+                                        mq.publish(Subject::MultisigEvent, &MultisigEvent::KeygenResult(res))
+                                            .await
+                                            .expect("Failed to publish KeygenResult");
                                     }
                                 }
-                                InnerEvent::SigningResult(res) => {
-                                    mq.publish(
-                                        Subject::MultisigEvent,
-                                        &MultisigEvent::MessageSigningResult(res),
-                                    )
-                                    .await
-                                    .expect("Failed to publish MessageSigningResult");
-                                }
-                                InnerEvent::KeygenResult(res) => {
-                                    mq.publish(Subject::MultisigEvent, &MultisigEvent::KeygenResult(res))
-                                        .await
-                                        .expect("Failed to publish KeygenResult");
-                                }
+                            }
+                            Ok(()) = &mut shutdown_events_fut_rx =>{
+                                slog::info!(logger, "Shuting down Multisig Client InnerEvent loop");
+                                break;
                             }
                         }
-                        Ok(()) = &mut shutdown_events_fut_rx =>{
-                            slog::info!(logger, "Shuting down Multisig Client InnerEvent loop");
-                            break;
-                        }
                     }
                 }
-            }
-        };
-
-        let cleanup_fut = {
-            let logger = logger.clone();
-            async move {
-                loop {
-                    tokio::select! {
-                        _ = tokio::time::sleep(Duration::from_secs(10)) =>{
-                            cleanup_tx.send(()).expect("Could not send periotic cleanup command");
-                        }
-                        Ok(()) = &mut shutdown_rx => {
-                            slog::info!(logger, "Shutting down");
-                            // send a signal to the other futures to shutdown
-                            shutdown_other_fut_tx.send(()).expect("Could not send shutdown command");
-                            shutdown_events_fut_tx.send(()).expect("Could not send shutdown command");
-                            break;
-                        }
-                    }
-                }
-            }
-        };
-
-        let other_fut = {
-            let mq = mq_client.clone();
-            let logger = logger.clone();
-            let mut cleanup_stream = UnboundedReceiverStream::new(cleanup_rx);
-            let mut inner = MultisigClientInner::new(
-                my_validator_id.clone(),
-                db,
-                events_tx,
-                PHASE_TIMEOUT,
-                &logger,
-            );
-            async move {
-                let mut p2p_messages = pin_message_stream(
-                    mq.subscribe::<P2PMessage>(Subject::P2PIncoming)
-                        .await
-                        .expect("Could not subscribe to Subject::P2PIncoming"),
+            },
+            { // signing and keygen
+                let mq = mq_client.clone();
+                let logger = logger.clone();
+                let mut cleanup_stream = UnboundedReceiverStream::new(cleanup_rx);
+                let mut inner = MultisigClientInner::new(
+                    my_validator_id.clone(),
+                    db,
+                    events_tx,
+                    PHASE_TIMEOUT,
+                    &logger,
                 );
-
-                let mut multisig_instructions = pin_message_stream(
-                    mq.subscribe::<MultisigInstruction>(Subject::MultisigInstruction)
+                async move {
+                    let mut p2p_messages = pin_message_stream(
+                        mq.subscribe::<P2PMessage>(Subject::P2PIncoming)
+                            .await
+                            .expect("Could not subscribe to Subject::P2PIncoming"),
+                    );
+    
+                    let mut multisig_instructions = pin_message_stream(
+                        mq.subscribe::<MultisigInstruction>(Subject::MultisigInstruction)
+                            .await
+                            .expect("Could not subscribe to Subject::MultisigInstruction"),
+                    );
+    
+                    // have to wait for the coordinator to subscribe...
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    
+                    // issue a message that we've subscribed
+                    mq.publish(Subject::MultisigEvent, &MultisigEvent::ReadyToKeygen)
                         .await
-                        .expect("Could not subscribe to Subject::MultisigInstruction"),
-                );
-
-                // have to wait for the coordinator to subscribe...
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-
-                // issue a message that we've subscribed
-                mq.publish(Subject::MultisigEvent, &MultisigEvent::ReadyToKeygen)
-                    .await
-                    .expect("Signing module failed to publish readiness");
-
-                slog::trace!(logger, "[{:?}] subscribed to MQ", my_validator_id);
-
-                loop {
-                    tokio::select! {
-                        Some(msg) = p2p_messages.next() => {
-                            match msg {
-                                Ok(p2p_message) => {
-                                    inner.process_p2p_mq_message(p2p_message);
-                                },
-                                Err(err) => {
-                                    slog::warn!(logger, "Ignoring channel error: {}", err);
+                        .expect("Signing module failed to publish readiness");
+    
+                    slog::trace!(logger, "[{:?}] subscribed to MQ", my_validator_id);
+    
+                    loop {
+                        tokio::select! {
+                            Some(msg) = p2p_messages.next() => {
+                                match msg {
+                                    Ok(p2p_message) => {
+                                        inner.process_p2p_mq_message(p2p_message);
+                                    },
+                                    Err(err) => {
+                                        slog::warn!(logger, "Ignoring channel error: {}", err);
+                                    }
                                 }
                             }
-                        }
-                        Some(msg) = multisig_instructions.next() => {
-                            match msg {
-                                Ok(instruction) => {
-                                    inner.process_multisig_instruction(instruction);
-                                },
-                                Err(err) => {
-                                    slog::warn!(logger, "Ignoring channel error: {}", err);
+                            Some(msg) = multisig_instructions.next() => {
+                                match msg {
+                                    Ok(instruction) => {
+                                        inner.process_multisig_instruction(instruction);
+                                    },
+                                    Err(err) => {
+                                        slog::warn!(logger, "Ignoring channel error: {}", err);
+                                    }
                                 }
                             }
+                            Some(()) = cleanup_stream.next() => {
+                                slog::info!(logger, "Cleaning up multisig states");
+                                inner.cleanup();
+                            }
+                            Ok(()) = &mut shutdown_other_fut_rx =>{
+                                slog::info!(logger, "Shutting down Multisig Client OtherEvents loop");
+                                break;
+                            }
                         }
-                        Some(()) = cleanup_stream.next() => {
-                            slog::info!(logger, "Cleaning up multisig states");
-                            inner.cleanup();
-                        }
-                        Ok(()) = &mut shutdown_other_fut_rx =>{
-                            slog::info!(logger, "Shutting down Multisig Client OtherEvents loop");
-                            break;
+                    }
+                }
+            },
+            { // cleanup
+                let logger = logger.clone();
+                async move {
+                    loop {
+                        tokio::select! {
+                            _ = tokio::time::sleep(Duration::from_secs(10)) =>{
+                                cleanup_tx.send(()).expect("Could not send periotic cleanup command");
+                            }
+                            Ok(()) = &mut shutdown_rx => {
+                                slog::info!(logger, "Shutting down");
+                                // send a signal to the other futures to shutdown
+                                shutdown_other_fut_tx.send(()).expect("Could not send shutdown command");
+                                shutdown_events_fut_tx.send(()).expect("Could not send shutdown command");
+                                break;
+                            }
                         }
                     }
                 }
             }
-        };
-        futures::join!(events_fut, other_fut, cleanup_fut);
+        );
         slog::error!(logger, "MultisigClient stopped!");
     }
 }
