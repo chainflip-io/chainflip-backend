@@ -21,7 +21,7 @@ use pallet_session::historical as session_historical;
 pub use pallet_timestamp::Call as TimestampCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{crypto::KeyTypeId, ecdsa, OpaqueMetadata};
+use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify,
 };
@@ -37,6 +37,9 @@ use sp_std::prelude::*;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
+use pallet_cf_vaults::nonce::NonceUnixTime;
+use pallet_cf_vaults::rotation::ChainFlip;
+use pallet_cf_vaults::chains::ethereum as pallet_cf_ethereum;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -143,8 +146,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type Registrar = Session;
 	type ValidatorId = AccountId;
 	type MinAuctionSize = MinAuctionSize;
-	type Confirmation = Auction;
-	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
+	type Handler = Vaults;
 }
 
 // FIXME: These would be changed
@@ -160,6 +162,25 @@ impl pallet_cf_validator::Config for Runtime {
 	type EpochIndex = EpochIndex;
 	type Amount = FlipBalance;
 	type Auction = Auction;
+}
+
+impl pallet_cf_ethereum::Config for Runtime {
+	type Event = Event;
+	type Vaults = Vaults;
+	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
+	type RequestIndex = u64;
+	type PublicKey = Vec<u8>;
+	type Nonce = u64;
+	type NonceProvider = NonceUnixTime<Self::Nonce, Timestamp>;
+}
+
+impl pallet_cf_vaults::Config for Runtime {
+	type Event = Event;
+	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
+	type EthereumVault = Ethereum;
+	type RequestIndex = u64;
+	type PublicKey = Vec<u8>;
+	type Penalty = Auction;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
@@ -396,6 +417,11 @@ impl pallet_cf_witness_api::Config for Runtime {
 	type Witnesser = Witnesser;
 }
 
+impl ChainFlip for Runtime {
+	type Amount = FlipBalance;
+	type ValidatorId = <Self as frame_system::Config>::AccountId;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -421,6 +447,8 @@ construct_runtime!(
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
 		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
+		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>},
+		Ethereum: pallet_cf_ethereum::{Module, Call, Storage, Event<T>},
 	}
 );
 

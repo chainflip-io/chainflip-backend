@@ -8699,6 +8699,7 @@ dependencies = [
  "pallet-cf-rewards",
  "pallet-cf-staking",
  "pallet-cf-validator",
+ "pallet-cf-vaults",
  "pallet-cf-witness",
  "pallet-cf-witness-api",
  "pallet-grandpa",
