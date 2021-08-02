@@ -217,6 +217,7 @@ mod tests {
 	use sc_network::config::identity::ed25519;
 	use sc_network::config::PublicKey;
 	use sc_rpc::testing::TaskExecutor;
+	use serde_json::json;
 	use sp_core::ed25519::Public;
 	use std::collections::HashMap;
 
