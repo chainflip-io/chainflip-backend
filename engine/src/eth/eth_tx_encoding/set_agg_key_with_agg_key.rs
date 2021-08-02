@@ -1,7 +1,7 @@
 use std::{collections::HashMap, convert::TryInto};
 
 use crate::{
-    eth::key_manager::KeyManager,
+    eth::key_manager::key_manager::KeyManager,
     logging::COMPONENT_KEY,
     mq::{pin_message_stream, IMQClient, Subject},
     p2p::ValidatorId,
@@ -75,7 +75,7 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
         mq_client: MQC,
         logger: &slog::Logger,
     ) -> Result<Self> {
-        let key_manager = KeyManager::load(key_manager_address)?;
+        let key_manager = KeyManager::load(key_manager_address, logger)?;
 
         let mut genesis_validator_ids_hash_map = HashMap::new();
         genesis_validator_ids_hash_map.insert(KeyId(0), genesis_validator_ids);
