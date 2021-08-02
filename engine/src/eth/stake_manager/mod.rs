@@ -1,7 +1,7 @@
 use crate::{
     eth::{
         stake_manager::{stake_manager::StakeManager, stake_manager_sink::StakeManagerSink},
-        EthEventStreamBuilder,
+        EthEventStreamer,
     },
     mq::IMQClient,
     settings,
@@ -20,20 +20,17 @@ pub async fn start_stake_manager_witness<MQC: 'static + IMQClient + Send + Sync 
 ) {
     slog::info!(logger, "Starting StakeManager witness");
 
-    EthEventStreamBuilder::new(
-        settings.eth.node_endpoint.as_str(),
+    EthEventStreamer::new(
+        &settings.eth.node_endpoint,
         StakeManager::load(settings.eth.stake_manager_eth_address.as_str(), logger)
             .expect("Should load StakeManager contract"),
+        vec![StakeManagerSink::<MQC>::new(mq_client, logger)
+            .await
+            .expect("Should create StakeManagerSink")],
         logger,
     )
-    .with_sink(
-        StakeManagerSink::<MQC>::new(mq_client, logger)
-            .await
-            .expect("Should create StakeManagerSink"),
-    )
-    .build()
     .await
-    .expect("Should build StakeManager stream")
+    .expect("Should build EthEventStreamer")
     .run(settings.eth.from_block.into())
     .await
     .context("Error occurred running the StakeManager events stream")

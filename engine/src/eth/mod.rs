@@ -7,9 +7,9 @@ pub mod eth_broadcaster;
 pub mod eth_tx_encoding;
 mod utils;
 
-pub use anyhow::Result;
+use anyhow::Result;
 use async_trait::async_trait;
-pub use eth_event_streamer::{EthEventStreamBuilder, EthEventStreamer};
+pub use eth_event_streamer::EthEventStreamer;
 
 use thiserror::Error;
 
