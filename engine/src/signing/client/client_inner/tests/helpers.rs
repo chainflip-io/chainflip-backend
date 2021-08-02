@@ -5,6 +5,7 @@ use log::*;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::{
+    logging,
     p2p::{P2PMessage, P2PMessageCommand, ValidatorId},
     signing::db::KeyDBMock,
     signing::{
@@ -115,13 +116,18 @@ impl KeygenContext {
     /// keygen ceremony
     pub fn new() -> Self {
         let validator_ids = (1..=3).map(|idx| ValidatorId::new(idx)).collect_vec();
-
+        let logger = logging::test_utils::create_test_logger();
         let (clients, rxs): (Vec<_>, Vec<_>) = validator_ids
             .iter()
             .map(|id| {
                 let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-                let c =
-                    MultisigClientInner::new(id.clone(), KeyDBMock::new(), tx, TEST_PHASE_TIMEOUT);
+                let c = MultisigClientInner::new(
+                    id.clone(),
+                    KeyDBMock::new(),
+                    tx,
+                    TEST_PHASE_TIMEOUT,
+                    &logger,
+                );
                 (c, rx)
             })
             .unzip();

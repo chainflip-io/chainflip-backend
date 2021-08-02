@@ -1,6 +1,6 @@
 use chainflip_engine::{
     eth,
-    health::spawn_health_check,
+    health::HealthMonitor,
     mq::nats_client::NatsMQClient,
     p2p::{P2PConductor, RpcP2PClient, ValidatorId},
     settings::Settings,
@@ -9,19 +9,31 @@ use chainflip_engine::{
     state_chain::{self, runtime::StateChainRuntime},
     temp_event_mapper,
 };
+use slog::{o, Drain};
 use sp_core::Pair;
 use substrate_subxt::ClientBuilder;
 
 #[tokio::main]
 async fn main() {
-    env_logger::init();
-
-    log::info!("Start the engines! :broom: :broom: ");
+    let drain = slog_json::Json::new(std::io::stdout())
+        .add_default_keys()
+        .build()
+        .fuse();
+    let drain = slog_async::Async::new(drain).build().fuse();
+    let root_logger = slog::Logger::root(drain, o!());
+    slog::info!(root_logger, "Start the engines! :broom: :broom: "; o!());
 
     let settings = Settings::new().expect("Failed to initialise settings");
 
-    spawn_health_check(settings.clone().health_check).await;
+    HealthMonitor::new(&settings.health_check, &root_logger)
+        .run()
+        .await;
 
+    slog::info!(
+        &root_logger,
+        "Connecting to NatsMQ at: {}",
+        &settings.message_queue.endpoint
+    );
     let mq_client = NatsMQClient::new(&settings.message_queue)
         .await
         .expect("Should connect to message queue");
@@ -38,7 +50,7 @@ async fn main() {
         state_chain::get_signer_from_privkey_file(&settings.state_chain.p2p_priv_key_file);
 
     // TODO: Investigate whether we want to encrypt it on disk
-    let db = PersistentKeyDB::new(&settings.signing.db_file);
+    let db = PersistentKeyDB::new(&settings.signing.db_file, &root_logger);
 
     let (_, p2p_shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
@@ -47,21 +59,29 @@ async fn main() {
         signing::MultisigClient::new(
             db,
             mq_client.clone(),
-            ValidatorId(my_pair_signer.signer().public().0)
+            ValidatorId(my_pair_signer.signer().public().0),
+            &root_logger,
         )
         .run(shutdown_client_rx),
-        state_chain::sc_observer::start(mq_client.clone(), subxt_client.clone()),
-        state_chain::sc_broadcaster::start(my_pair_signer, mq_client.clone(), subxt_client),
-        eth::start(&settings, mq_client.clone()),
-        temp_event_mapper::start(mq_client.clone()),
+        state_chain::sc_observer::start(mq_client.clone(), subxt_client.clone(), &root_logger),
+        state_chain::sc_broadcaster::start(
+            my_pair_signer,
+            mq_client.clone(),
+            subxt_client.clone(),
+            &root_logger
+        ),
+        eth::start(&settings, mq_client.clone(), &root_logger),
+        temp_event_mapper::start(mq_client.clone(), &root_logger),
         P2PConductor::new(
             mq_client,
             RpcP2PClient::new(
                 url::Url::parse(settings.state_chain.ws_endpoint.as_str()).expect(&format!(
                     "Should be valid ws endpoint: {}",
                     settings.state_chain.ws_endpoint
-                ))
-            )
+                )),
+                &root_logger
+            ),
+            &root_logger
         )
         .await
         .start(p2p_shutdown_rx),

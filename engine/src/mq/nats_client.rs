@@ -33,7 +33,6 @@ pub struct NatsMQClient {
 
 impl NatsMQClient {
     pub async fn new(mq_settings: &settings::MessageQueue) -> Result<Self> {
-        log::info!("Connecting to message queue at: {}", mq_settings.endpoint);
         let conn = async_nats::connect(mq_settings.endpoint.as_str()).await?;
         Ok(Self { conn })
     }

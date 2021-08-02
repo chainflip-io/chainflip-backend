@@ -16,13 +16,15 @@ use anyhow::{Context, Result};
 pub async fn start_stake_manager_witness<MQC: 'static + IMQClient + Send + Sync + Clone>(
     settings: &settings::Settings,
     mq_client: MQC,
+    logger: &slog::Logger,
 ) -> Result<()> {
-    log::info!("Starting the stake manager witness");
-    let stake_manager = StakeManager::load(settings.eth.stake_manager_eth_address.as_str())?;
+    slog::info!(logger, "Starting!");
+    let stake_manager =
+        StakeManager::load(settings.eth.stake_manager_eth_address.as_str(), logger)?;
 
-    let sm_sink = StakeManagerSink::<MQC>::new(mq_client).await?;
+    let sm_sink = StakeManagerSink::<MQC>::new(mq_client, logger).await?;
     let sm_event_stream =
-        EthEventStreamBuilder::new(settings.eth.node_endpoint.as_str(), stake_manager);
+        EthEventStreamBuilder::new(settings.eth.node_endpoint.as_str(), stake_manager, logger);
     let sm_event_stream = sm_event_stream.with_sink(sm_sink).build().await?;
     sm_event_stream
         .run(settings.eth.from_block.into())

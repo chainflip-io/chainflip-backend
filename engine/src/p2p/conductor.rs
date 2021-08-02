@@ -1,7 +1,9 @@
 use futures::{future::Either, Stream};
+use slog::o;
 use tokio_stream::StreamExt;
 
 use crate::{
+    logging::COMPONENT_KEY,
     mq::{pin_message_stream, IMQClient, Subject},
     p2p::P2PMessage,
 };
@@ -21,6 +23,7 @@ where
     p2p: P2P,
     stream: Box<dyn Stream<Item = Result<P2PMessageCommand, anyhow::Error>>>,
     marker: PhantomData<S>,
+    logger: slog::Logger,
 }
 
 impl<MQ, P2P, S> P2PConductor<MQ, P2P, S>
@@ -29,7 +32,7 @@ where
     S: Stream<Item = P2PMessage> + Unpin,
     P2P: P2PNetworkClient<ValidatorId, S> + Send,
 {
-    pub async fn new(mq: MQ, p2p: P2P) -> Self {
+    pub async fn new(mq: MQ, p2p: P2P, logger: &slog::Logger) -> Self {
         let stream = mq
             .subscribe::<P2PMessageCommand>(Subject::P2POutgoing)
             .await
@@ -40,11 +43,12 @@ where
             p2p,
             stream,
             marker: PhantomData,
+            logger: logger.new(o!(COMPONENT_KEY => "P2PConductor")),
         }
     }
 
     pub async fn start(mut self, mut shutdown_rx: tokio::sync::oneshot::Receiver<()>) {
-        log::info!("Starting P2P conductor");
+        slog::info!(self.logger, "Starting");
         type Msg = Either<Result<P2PMessageCommand, anyhow::Error>, P2PMessage>;
 
         let mq_stream = pin_message_stream(self.stream);
@@ -78,7 +82,7 @@ where
                     }
                 }
                 Ok(()) = &mut shutdown_rx =>{
-                    log::info!("Shutting down P2P Conductor");
+                    slog::info!(self.logger, "Shutting down");
                     break;
                 }
             }
@@ -92,6 +96,7 @@ mod tests {
     use std::time::Duration;
 
     use crate::{
+        logging,
         mq::mq_mock::MQMock,
         p2p::{mock::NetworkMock, P2PMessageCommand, ValidatorId},
     };
@@ -106,6 +111,8 @@ mod tests {
 
         let network = NetworkMock::new();
 
+        let logger = logging::test_utils::create_test_logger();
+
         // NOTE: for some reason connecting to the mock nat's server
         // is slow (0.5-1 seconds), which will add up when we have a
         // lot of tests. Will need to fix this.
@@ -118,7 +125,7 @@ mod tests {
         let mc1 = mq.get_client();
         let mc1_copy = mq.get_client();
         let p2p_client_1 = network.new_client(id_1);
-        let conductor_1 = P2PConductor::new(mc1, p2p_client_1).await;
+        let conductor_1 = P2PConductor::new(mc1, p2p_client_1, &logger).await;
 
         // Validator 2 setup
         let id_2: ValidatorId = ValidatorId::new(2);
@@ -127,7 +134,7 @@ mod tests {
         let mc2 = mq.get_client();
         let mc2_copy = mq.get_client();
         let p2p_client_2 = network.new_client(id_2.clone());
-        let conductor_2 = P2PConductor::new(mc2, p2p_client_2).await;
+        let conductor_2 = P2PConductor::new(mc2, p2p_client_2, &logger).await;
 
         let (_, shutdown_conductor1_rx) = tokio::sync::oneshot::channel::<()>();
         let (_, shutdown_conductor2_rx) = tokio::sync::oneshot::channel::<()>();
