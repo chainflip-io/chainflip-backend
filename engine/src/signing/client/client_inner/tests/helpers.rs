@@ -459,34 +459,6 @@ pub async fn assert_channel_empty(rx: &mut InnerEventReceiver) {
     assert!(tokio::time::timeout(dur, fut).await.is_err());
 }
 
-#[allow(dead_code)]
-pub async fn print_next_message(rx: &mut InnerEventReceiver) {
-    let dur = std::time::Duration::from_millis(10);
-
-    let future = async {
-        let m = rx.recv().await.unwrap();
-
-        match m {
-            InnerEvent::P2PMessageCommand(P2PMessageCommand { destination, .. }) => {
-                eprintln!("P2PMessageCommand [ destination: {} ]", destination);
-            }
-            InnerEvent::SigningResult(s) => {
-                eprintln!("{:?}", s);
-            }
-            InnerEvent::KeygenResult(res) => {
-                eprintln!("{:?}", res);
-            }
-        }
-    };
-
-    match tokio::time::timeout(dur, future).await {
-        Err(err) => {
-            eprintln!("Timeout: {}", err);
-        }
-        _ => {}
-    }
-}
-
 /// Skip all non-signal messages
 pub async fn recv_next_signal_message_skipping(
     rx: &mut InnerEventReceiver,
