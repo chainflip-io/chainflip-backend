@@ -102,64 +102,54 @@ where
         }
     }
 
-    async fn process_inner_events(
-        mut receiver: mpsc::UnboundedReceiver<InnerEvent>,
-        mq: MQC,
-        mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
-        logger: slog::Logger,
-    ) {
-        loop {
-            tokio::select! {
-                Some(event) = receiver.recv() =>{
-                    match event {
-                        InnerEvent::P2PMessageCommand(msg) => {
-                            // TODO: do not send one by one
-                            if let Err(err) = mq.publish(Subject::P2POutgoing, &msg).await {
-                                slog::error!(logger, "Could not publish message to MQ: {}", err);
-                            }
-                        }
-                        InnerEvent::SigningResult(res) => {
-                            mq.publish(
-                                Subject::MultisigEvent,
-                                &MultisigEvent::MessageSigningResult(res),
-                            )
-                            .await
-                            .expect("Failed to publish MessageSigningResult");
-                        }
-                        InnerEvent::KeygenResult(res) => {
-                            mq.publish(Subject::MultisigEvent, &MultisigEvent::KeygenResult(res))
-                                .await
-                                .expect("Failed to publish KeygenResult");
-                        }
-                    }
-                }
-                Ok(()) = &mut shutdown_rx =>{
-                    slog::info!(logger, "Shuting down Multisig Client InnerEvent loop");
-                    break;
-                }
-            }
-        }
-    }
-
     /// Start listening on the p2p connection and MQ
     pub async fn run(mut self, mut shutdown_rx: tokio::sync::oneshot::Receiver<()>) {
         slog::info!(self.logger, "Starting");
-        let receiver = self.inner_event_receiver.take().unwrap();
+        let mut receiver = self.inner_event_receiver.take().unwrap();
 
         let (cleanup_tx, cleanup_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
 
         let (shutdown_other_fut_tx, mut shutdown_other_fut_rx) =
             tokio::sync::oneshot::channel::<()>();
 
-        let (shutdown_events_fut_tx, shutdown_events_fut_rx) =
+        let (shutdown_events_fut_tx, mut shutdown_events_fut_rx) =
             tokio::sync::oneshot::channel::<()>();
 
-        let events_fut = MultisigClient::<_, S>::process_inner_events(
-            receiver,
-            self.mq_client.clone(),
-            shutdown_events_fut_rx,
-            self.logger.clone(),
-        );
+        let mq = self.mq_client.clone();
+        let logger_c = self.logger.clone();
+        let events_fut = async move {
+            loop {
+                tokio::select! {
+                    Some(event) = receiver.recv() =>{
+                        match event {
+                            InnerEvent::P2PMessageCommand(msg) => {
+                                // TODO: do not send one by one
+                                if let Err(err) = mq.publish(Subject::P2POutgoing, &msg).await {
+                                    slog::error!(logger_c, "Could not publish message to MQ: {}", err);
+                                }
+                            }
+                            InnerEvent::SigningResult(res) => {
+                                mq.publish(
+                                    Subject::MultisigEvent,
+                                    &MultisigEvent::MessageSigningResult(res),
+                                )
+                                .await
+                                .expect("Failed to publish MessageSigningResult");
+                            }
+                            InnerEvent::KeygenResult(res) => {
+                                mq.publish(Subject::MultisigEvent, &MultisigEvent::KeygenResult(res))
+                                    .await
+                                    .expect("Failed to publish KeygenResult");
+                            }
+                        }
+                    }
+                    Ok(()) = &mut shutdown_events_fut_rx =>{
+                        slog::info!(logger_c, "Shuting down Multisig Client InnerEvent loop");
+                        break;
+                    }
+                }
+            }
+        };
 
         let logger_c = self.logger.clone();
         let cleanup_fut = async move {
