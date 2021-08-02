@@ -192,6 +192,7 @@ mod tests {
 
     struct TestServer {
         url: url::Url,
+        #[allow(dead_code)]
         server: Option<Server>,
     }
 
