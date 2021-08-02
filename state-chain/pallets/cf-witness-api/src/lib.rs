@@ -20,7 +20,6 @@ pub mod pallet {
 	use cf_traits::Witnesser;
 	use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
-	use pallet_cf_auction::{Call as AuctionCall, Config as AuctionConfig};
 	use pallet_cf_staking::{
 		Call as StakingCall, Config as StakingConfig, EthTransactionHash, EthereumAddress,
 		FlipBalance,
@@ -29,11 +28,10 @@ pub mod pallet {
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + StakingConfig + AuctionConfig {
+	pub trait Config: frame_system::Config + StakingConfig {
 		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
 		type Call: IsType<<Self as frame_system::Config>::Call>
-			+ From<StakingCall<Self>>
-			+ From<AuctionCall<Self>>;
+			+ From<StakingCall<Self>>;
 
 		/// An implementation of the witnesser, allows us to define our witness_* helper extrinsics.
 		type Witnesser: Witnesser<Call = <Self as Config>::Call, AccountId = AccountId<Self>>;
@@ -77,19 +75,6 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = StakingCall::claimed(account_id, claimed_amount, tx_hash);
-			T::Witnesser::witness(who, call.into())
-		}
-
-		//*** Auction pallet witness calls ***//
-
-		/// Witness that a running auction is valid.
-		#[pallet::weight(10_000)]
-		pub fn witness_auction_confirmation(
-			origin: OriginFor<T>,
-			index: T::AuctionIndex,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let call = AuctionCall::confirm_auction(index);
 			T::Witnesser::witness(who, call.into())
 		}
 	}

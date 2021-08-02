@@ -3,9 +3,9 @@ use std::time::Duration;
 use crate as pallet_cf_witness_api;
 use cf_traits::{
 	impl_mock_ensure_witnessed_for_origin, impl_mock_stake_transfer,
-	impl_mock_witnesser_for_account_and_call_types, AuctionConfirmation,
+	impl_mock_witnesser_for_account_and_call_types,
 };
-use frame_support::{parameter_types, traits::ValidatorRegistration};
+use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -24,7 +24,6 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Auction: pallet_cf_auction::{Module, Call, Event<T>, Config},
 		Staking: pallet_cf_staking::{Module, Call, Event<T>, Config<T>},
 		WitnessApi: pallet_cf_witness_api::{Module, Call},
 	}
@@ -38,7 +37,6 @@ parameter_types! {
 	pub const SS58Prefix: u8 = 42;
 	pub const MinClaimTTL: Duration = Duration::from_millis(100);
 	pub const ClaimTTL: Duration = Duration::from_millis(1000);
-	pub const MinAuctionSize: u32 = 2;
 }
 
 impl system::Config for Test {
@@ -78,44 +76,6 @@ impl pallet_cf_staking::Config for Test {
 	type TimeSource = cf_traits::mocks::time_source::Mock;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
-}
-
-pub struct MockAuctionTraits;
-
-impl cf_traits::BidderProvider for MockAuctionTraits {
-	type ValidatorId = u64;
-	type Amount = u128;
-
-	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
-		vec![]
-	}
-}
-
-impl ValidatorRegistration<u64> for MockAuctionTraits {
-	fn is_registered(_id: &u64) -> bool {
-		true
-	}
-}
-
-impl AuctionConfirmation for MockAuctionTraits {
-	fn awaiting_confirmation() -> bool {
-		true
-	}
-	fn set_awaiting_confirmation(_waiting: bool) {
-		unimplemented!()
-	}
-}
-
-impl pallet_cf_auction::Config for Test {
-	type Event = Event;
-	type Amount = u128;
-	type ValidatorId = u64;
-	type BidderProvider = MockAuctionTraits;
-	type Registrar = MockAuctionTraits;
-	type AuctionIndex = u32;
-	type MinAuctionSize = MinAuctionSize;
-	type Confirmation = MockAuctionTraits;
-	type EnsureWitnessed = MockEnsureWitnessed;
 }
 
 impl pallet_cf_witness_api::Config for Test {
