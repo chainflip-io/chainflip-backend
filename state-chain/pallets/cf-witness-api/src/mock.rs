@@ -1,10 +1,9 @@
 use std::time::Duration;
 
 use crate as pallet_cf_witness_api;
-use cf_traits::{
-	impl_mock_ensure_witnessed_for_origin, impl_mock_stake_transfer,
-	impl_mock_witnesser_for_account_and_call_types,
-};
+use pallet_cf_vaults::chains::ethereum as pallet_cf_ethereum;
+
+use cf_traits::{impl_mock_ensure_witnessed_for_origin, impl_mock_stake_transfer, impl_mock_witnesser_for_account_and_call_types, AuctionPenalty};
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
@@ -12,6 +11,7 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
+use pallet_cf_vaults::rotation::ChainFlip;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -25,6 +25,8 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		Staking: pallet_cf_staking::{Module, Call, Event<T>, Config<T>},
+		Vaults: pallet_cf_vaults::{Module, Call, Event<T>, Config},
+		EthereumChain: pallet_cf_ethereum::{Module, Call, Event<T>, Config},
 		WitnessApi: pallet_cf_witness_api::{Module, Call},
 	}
 );
@@ -76,6 +78,38 @@ impl pallet_cf_staking::Config for Test {
 	type TimeSource = cf_traits::mocks::time_source::Mock;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
+}
+
+type Amount = u64;
+type ValidatorId = u64;
+
+impl ChainFlip for Test {
+	type Amount = Amount;
+	type ValidatorId = ValidatorId;
+}
+
+impl AuctionPenalty<ValidatorId> for Test {
+	fn abort() {}
+	fn penalise(_bad_validators: Vec<ValidatorId>) {}
+}
+
+impl pallet_cf_vaults::chains::ethereum::Config for Test {
+	type Event = Event;
+	type Vaults = Vaults;
+	type EnsureWitnessed = MockEnsureWitnessed;
+	type Nonce = u64;
+	type NonceProvider = pallet_cf_vaults::nonce::NonceUnixTime<u64, cf_traits::mocks::time_source::Mock>;
+	type RequestIndex = u64;
+	type PublicKey = Vec<u8>;
+}
+
+impl pallet_cf_vaults::Config for Test {
+	type Event = Event;
+	type EthereumVault = EthereumChain;
+	type EnsureWitnessed = MockEnsureWitnessed;
+	type RequestIndex = u64;
+	type PublicKey = Vec<u8>;
+	type Penalty = Self;
 }
 
 impl pallet_cf_witness_api::Config for Test {

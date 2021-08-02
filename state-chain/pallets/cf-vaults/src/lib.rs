@@ -34,17 +34,16 @@ use frame_support::pallet_prelude::*;
 use sp_runtime::traits::One;
 use sp_std::prelude::*;
 
-use cf_traits::{AuctionError, AuctionHandler, AuctionPenalty, NonceProvider, Witnesser};
+use cf_traits::{AuctionError, AuctionHandler, AuctionPenalty, NonceProvider};
 pub use pallet::*;
 
 use crate::rotation::*;
 
-mod rotation;
-
-mod chains;
+pub mod chains;
 #[cfg(test)]
 mod mock;
 pub mod nonce;
+pub mod rotation;
 #[cfg(test)]
 mod tests;
 
@@ -64,15 +63,8 @@ pub mod pallet {
 	pub trait Config: frame_system::Config + ChainFlip {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
-		type Call: From<Call<Self>> + IsType<<Self as frame_system::Config>::Call>;
 		/// Provides an origin check for witness transactions.
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
-		/// An implementation of the witnesser, allows us to define witness_* helper extrinsics.
-		type Witnesser: Witnesser<
-			Call = <Self as pallet::Config>::Call,
-			AccountId = <Self as frame_system::Config>::AccountId,
-		>;
 		/// The Ethereum Vault
 		type EthereumVault: ChainVault<
 			Self::RequestIndex,
@@ -86,8 +78,6 @@ pub mod pallet {
 		type PublicKey: Member + Parameter;
 		/// Feedback on penalties for Auction
 		type Penalty: AuctionPenalty<Self::ValidatorId>;
-		/// Handler for events in from Auction
-		type Handler: AuctionHandler<Self::ValidatorId, Self::Amount>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -142,18 +132,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		// 2/3 threshold from our old validators
-		#[pallet::weight(10_000)]
-		pub fn witness_keygen_response(
-			origin: OriginFor<T>,
-			request_id: T::RequestIndex,
-			response: KeygenResponse<T::ValidatorId, T::PublicKey>,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let call = Call::<T>::keygen_response(request_id, response);
-			T::Witnesser::witness(who, call.into())
-		}
-
 		#[pallet::weight(10_000)]
 		pub fn keygen_response(
 			origin: OriginFor<T>,
@@ -165,18 +143,6 @@ pub mod pallet {
 				Ok(_) => Ok(().into()),
 				Err(e) => Err(Error::<T>::from(e).into()),
 			}
-		}
-
-		// 2/3 threshold from our old validators
-		#[pallet::weight(10_000)]
-		pub fn witness_vault_rotation_response(
-			origin: OriginFor<T>,
-			request_id: T::RequestIndex,
-			response: VaultRotationResponse,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let call = Call::<T>::vault_rotation_response(request_id, response);
-			T::Witnesser::witness(who, call.into())
 		}
 
 		#[pallet::weight(10_000)]
@@ -264,8 +230,8 @@ impl<T: Config> Pallet<T> {
 		VaultRotations::<T>::remove(idx);
 	}
 
-	/// Do we have an indexes
-	fn vaults_rotated() -> bool {
+	/// Do we have an rotations processing
+	fn rotations_processing() -> bool {
 		VaultRotations::<T>::iter().count() == 0
 	}
 }
@@ -292,7 +258,7 @@ impl<T: Config> AuctionHandler<T::ValidatorId, T::Amount> for Pallet<T> {
 	/// that the validators can now be rotated for the new epoch.
 	fn try_to_confirm_auction() -> Result<(), AuctionError> {
 		// The 'exit' point for the pallet
-		if Self::vaults_rotated() {
+		if Self::rotations_processing() {
 			// We can now confirm the auction and rotate
 			// The process has completed successfully
 			Self::deposit_event(Event::VaultsRotated);
@@ -353,7 +319,7 @@ impl<T: Config>
 				// Do as you wish with these, I wash my hands..
 				T::Penalty::penalise(bad_validators);
 
-				Err(RotationError::KeyResponseFailed)
+				Ok(().into())
 			}
 		}
 	}

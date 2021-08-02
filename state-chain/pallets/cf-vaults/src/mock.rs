@@ -1,5 +1,5 @@
-use super::*;
-use crate as pallet_cf_vaults;
+use std::cell::RefCell;
+
 use frame_support::{construct_runtime, parameter_types, traits::UnfilteredDispatchable};
 use frame_system::{ensure_root, RawOrigin};
 use sp_core::H256;
@@ -8,9 +8,10 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-use std::cell::RefCell;
 
-pub(super) mod time_source;
+use crate as pallet_cf_vaults;
+
+use super::*;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
 type Block = frame_system::mocking::MockBlock<MockRuntime>;
@@ -121,14 +122,11 @@ impl AuctionPenalty<ValidatorId> for MockRuntime {
 
 impl pallet_cf_vaults::Config for MockRuntime {
 	type Event = Event;
-	type Call = Call;
 	type EthereumVault = OtherChain;
 	type EnsureWitnessed = MockEnsureWitness;
-	type Witnesser = MockWitnesser;
 	type RequestIndex = u64;
 	type PublicKey = Vec<u8>;
 	type Penalty = Self;
-	type Handler = VaultsPallet;
 }
 
 pub fn bad_validators() -> Vec<ValidatorId> {

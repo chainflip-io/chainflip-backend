@@ -15,7 +15,6 @@ type Block = frame_system::mocking::MockBlock<MockRuntime>;
 type Amount = u64;
 type ValidatorId = u64;
 type RequestIndex = u64;
-use crate::mock::time_source;
 use crate::nonce::NonceUnixTime;
 use frame_support::pallet_prelude::{DispatchResultWithPostInfo, EnsureOrigin};
 
@@ -107,12 +106,10 @@ impl TryIndex<RequestIndex, ValidatorId> for MockRuntime {
 
 impl ethereum::Config for MockRuntime {
 	type Event = Event;
-	type Call = Call;
 	type Vaults = Self;
 	type EnsureWitnessed = MockEnsureWitness;
-	type Witnesser = MockWitnesser;
 	type Nonce = u64;
-	type NonceProvider = NonceUnixTime<Self::Nonce, time_source::Mock>;
+	type NonceProvider = NonceUnixTime<Self::Nonce, cf_traits::mocks::time_source::Mock>;
 	type RequestIndex = RequestIndex;
 	type PublicKey = Vec<u8>;
 }

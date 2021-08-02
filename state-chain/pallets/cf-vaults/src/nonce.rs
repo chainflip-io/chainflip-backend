@@ -1,7 +1,7 @@
 use crate::NonceProvider;
 use frame_support::traits::UnixTime;
 use sp_runtime::traits::{Bounded, UniqueSaturatedInto};
-use std::marker::PhantomData;
+use sp_std::marker::PhantomData;
 
 pub struct NonceUnixTime<N, T> {
 	_marker1: PhantomData<N>,

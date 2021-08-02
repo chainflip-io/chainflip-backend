@@ -21,14 +21,14 @@ mod test {
 			);
 			// Everything ok with a set of numbers
 			// Nothing running at the moment
-			assert!(VaultsPallet::vaults_rotated());
+			assert!(VaultsPallet::rotations_processing());
 			// Request index 2
 			assert_ok!(VaultsPallet::on_auction_completed(
 				vec![ALICE, BOB, CHARLIE],
 				0
 			));
 			// Confirm we have a new vault rotation process running
-			assert!(!VaultsPallet::vaults_rotated());
+			assert!(!VaultsPallet::rotations_processing());
 			// Check the event emitted
 			assert_eq!(
 				last_event(),
@@ -50,9 +50,10 @@ mod test {
 				vec![ALICE, BOB, CHARLIE],
 				0
 			));
-			assert_ok!(VaultsPallet::witness_keygen_response(
-				Origin::signed(ALICE),
-				VaultsPallet::request_idx(),
+			let first_request_idx = VaultsPallet::request_idx();
+			assert_ok!(VaultsPallet::keygen_response(
+				Origin::root(),
+				first_request_idx,
 				KeygenResponse::Success(vec![])
 			));
 
@@ -65,18 +66,28 @@ mod test {
 				0
 			));
 
+			let second_request_idx = VaultsPallet::request_idx();
 			// This time we respond with bad news
-			assert_ok!(VaultsPallet::witness_keygen_response(
-				Origin::signed(ALICE),
-				VaultsPallet::request_idx(),
+			assert_ok!(VaultsPallet::keygen_response(
+				Origin::root(),
+				second_request_idx,
 				KeygenResponse::Failure(vec![BOB, CHARLIE])
 			));
+
+			// Check the event emitted of an aborted rotation with are two requests
+			assert_eq!(
+				last_event(),
+				mock::Event::pallet_cf_vaults(crate::Event::RotationAborted(vec![
+					first_request_idx,
+					second_request_idx
+				]))
+			);
 
 			// This would have not got to the specialisation but the request index would have incremented
 			assert!(OTHER_CHAIN_RESULT.with(|l| *l.borrow() == VaultsPallet::request_idx() - 1));
 
 			// We would have aborted this rotation and hence no rotations underway
-			assert!(VaultsPallet::vaults_rotated());
+			assert!(VaultsPallet::rotations_processing());
 
 			// Penalised bad validators would be now punished
 			assert_eq!(bad_validators(), vec![BOB, CHARLIE]);
@@ -90,8 +101,8 @@ mod test {
 				vec![ALICE, BOB, CHARLIE],
 				0
 			));
-			assert_ok!(VaultsPallet::witness_keygen_response(
-				Origin::signed(ALICE),
+			assert_ok!(VaultsPallet::keygen_response(
+				Origin::root(),
 				VaultsPallet::request_idx(),
 				KeygenResponse::Success(vec![])
 			));
@@ -123,7 +134,7 @@ mod test {
 			);
 
 			// We would have aborted this rotation and hence no rotations underway
-			assert!(VaultsPallet::vaults_rotated());
+			assert!(VaultsPallet::rotations_processing());
 
 			// Penalised bad validators would be now punished
 			assert_eq!(bad_validators(), vec![ALICE, BOB]);
@@ -137,8 +148,8 @@ mod test {
 				vec![ALICE, BOB, CHARLIE],
 				0
 			));
-			assert_ok!(VaultsPallet::witness_keygen_response(
-				Origin::signed(ALICE),
+			assert_ok!(VaultsPallet::keygen_response(
+				Origin::root(),
 				VaultsPallet::request_idx(),
 				KeygenResponse::Success(vec![])
 			));
@@ -160,8 +171,8 @@ mod test {
 				))
 			);
 
-			assert_ok!(VaultsPallet::witness_vault_rotation_response(
-				Origin::signed(ALICE),
+			assert_ok!(VaultsPallet::vault_rotation_response(
+				Origin::root(),
 				VaultsPallet::request_idx(),
 				VaultRotationResponse {
 					old_key: "old_key".as_bytes().to_vec(),

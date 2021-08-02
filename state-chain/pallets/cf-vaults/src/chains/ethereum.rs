@@ -1,5 +1,3 @@
-#![cfg_attr(not(feature = "std"), no_std)]
-
 //! # Ethereum Vault Module
 //!
 //! A module for the Ethereum vault
@@ -31,12 +29,12 @@
 
 use crate::rotation::ChainParams::Ethereum;
 use crate::rotation::*;
-use cf_traits::{NonceProvider, Witnesser};
+use cf_traits::NonceProvider;
 use ethabi::{Bytes, Function, Param, ParamType, Token};
 use frame_support::pallet_prelude::*;
 pub use pallet::*;
-use sp_core::H160;
-use sp_core::U256;
+use sp_core::{H160, U256};
+use sp_std::prelude::*;
 
 /// A signing request
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
@@ -75,15 +73,8 @@ pub mod pallet {
 				<Self as ChainFlip>::ValidatorId,
 				RotationError<Self::ValidatorId>,
 			> + TryIndex<Self::RequestIndex, Self::ValidatorId>;
-		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
-		type Call: From<Call<Self>> + IsType<<Self as frame_system::Config>::Call>;
 		/// Provides an origin check for witness transactions.
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
-		/// An implementation of the witnesser, allows us to define witness_* helper extrinsics.
-		type Witnesser: Witnesser<
-			Call = <Self as pallet::Config>::Call,
-			AccountId = <Self as frame_system::Config>::AccountId,
-		>;
 		/// The request index
 		type RequestIndex: Member + Parameter + Default + AtLeast32BitUnsigned + Copy;
 		/// The new public key type
@@ -117,16 +108,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::weight(10_000)]
-		pub fn witness_eth_signing_tx_response(
-			origin: OriginFor<T>,
-			request_id: T::RequestIndex,
-			response: EthSigningTxResponse<T::ValidatorId>,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let call = Call::<T>::eth_signing_tx_response(request_id, response);
-			T::Witnesser::witness(who, call.into())
-		}
 
 		#[pallet::weight(10_000)]
 		pub fn eth_signing_tx_response(

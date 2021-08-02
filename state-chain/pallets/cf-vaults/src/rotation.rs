@@ -2,6 +2,7 @@ use codec::{Decode, Encode};
 use frame_support::pallet_prelude::*;
 use frame_support::RuntimeDebug;
 use sp_runtime::traits::AtLeast32BitUnsigned;
+use sp_std::prelude::*;
 
 #[derive(RuntimeDebug, Encode, Decode, PartialEq)]
 /// Errors occurring during a rotation
