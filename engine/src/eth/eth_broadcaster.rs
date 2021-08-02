@@ -25,7 +25,7 @@ pub async fn start_eth_broadcaster<M: IMQClient + Send + Sync>(
     logger: &slog::Logger,
 ) {
     EthBroadcaster::<M, _>::new(
-        settings.into(),
+        &settings,
         mq_client,
         secret_key_from_file(Path::new(settings.eth.private_key_file.as_str())).expect(&format!(
             "Should read in secret key from: {}",
@@ -46,29 +46,6 @@ fn secret_key_from_file(filename: &Path) -> Result<SecretKey> {
     Ok(SecretKey::from_str(&key[..])?)
 }
 
-/// Adapter struct to build the ethereum web3 client from settings.
-struct EthClientBuilder {
-    node_endpoint: String,
-}
-
-impl EthClientBuilder {
-    pub fn new(node_endpoint: String) -> Self {
-        Self { node_endpoint }
-    }
-
-    /// Builds a web3 ethereum client with websocket transport.
-    pub async fn ws_client(&self) -> Result<Web3<WebSocket>> {
-        let transport = web3::transports::WebSocket::new(self.node_endpoint.as_str()).await?;
-        Ok(Web3::new(transport))
-    }
-}
-
-impl From<&settings::Settings> for EthClientBuilder {
-    fn from(settings: &settings::Settings) -> Self {
-        EthClientBuilder::new(settings.eth.node_endpoint.clone())
-    }
-}
-
 /// Reads [ContractCallDetails] off the message queue and constructs, signs, and sends the tx to the ethereum network.
 #[derive(Debug)]
 struct EthBroadcaster<M: IMQClient + Send + Sync, T: Transport> {
@@ -80,16 +57,16 @@ struct EthBroadcaster<M: IMQClient + Send + Sync, T: Transport> {
 
 impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
     async fn new(
-        builder: EthClientBuilder,
+        settings: &settings::Settings,
         mq_client: M,
         secret_key: SecretKey,
         logger: &slog::Logger,
     ) -> Result<Self> {
-        let web3_client = builder.ws_client().await?;
-
         Ok(EthBroadcaster {
             mq_client,
-            web3_client,
+            web3_client: Web3::new(
+                web3::transports::WebSocket::new(settings.eth.node_endpoint.as_str()).await?,
+            ),
             secret_key,
             logger: logger.new(o!(COMPONENT_KEY => "ETHBroadcaster")),
         })
@@ -182,8 +159,7 @@ mod tests {
         let logger = logging::test_utils::create_test_logger();
 
         let eth_broadcaster =
-            EthBroadcaster::<NatsMQClient, _>::new((&settings).into(), mq_client, secret, &logger)
-                .await;
+            EthBroadcaster::<NatsMQClient, _>::new(&settings, mq_client, secret, &logger).await;
         eth_broadcaster
     }
 
