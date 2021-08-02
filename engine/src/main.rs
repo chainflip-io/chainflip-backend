@@ -46,8 +46,22 @@ async fn main() {
 
     // This can be the same filepath as the p2p key --node-key-file <file> on the state chain
     // which won't necessarily always be the case, i.e. if we no longer have PeerId == ValidatorId
-    let my_pair_signer =
-        state_chain::get_signer_from_privkey_file(&settings.state_chain.p2p_priv_key_file);
+    let my_pair_signer = {
+        use sp_core::Pair;
+        substrate_subxt::PairSigner::new(sp_core::sr25519::Pair::from_seed(&{
+            // TODO: Add this into a function, once it is used multiple times (i.e. tests)
+            use std::{convert::TryInto, fs};
+            let seed: [u8; 32] = hex::decode(
+                &fs::read_to_string(&settings.state_chain.p2p_private_key_file)
+                    .expect("Cannot read private key file")
+                    .replace("\"", ""),
+            )
+            .expect("Failed to decode seed")
+            .try_into()
+            .expect("Seed has wrong length");
+            seed
+        }))
+    };
 
     // TODO: Investigate whether we want to encrypt it on disk
     let db = PersistentKeyDB::new(&settings.signing.db_file, &root_logger);
