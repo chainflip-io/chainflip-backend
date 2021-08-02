@@ -51,7 +51,6 @@ use frame_support::{
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
