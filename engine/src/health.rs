@@ -92,7 +92,6 @@ mod test {
 
     use std::time::Duration;
 
-    use slog::{o, Drain};
     use tokio::time;
 
     use crate::logging;
