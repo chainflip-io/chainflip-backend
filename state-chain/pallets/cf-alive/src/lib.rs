@@ -58,7 +58,7 @@ pub mod pallet {
 	/// Storage of account against actions
 	#[pallet::storage]
 	#[pallet::getter(fn actions)]
-	pub(super) type Actions<T: Config> = StorageMap<_, Identity, T::AccountId, Vec<T::Action>>;
+	pub(super) type Actions<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, Vec<T::Action>>;
 
 	/// Storage of account last known liveliness
 	#[pallet::storage]
