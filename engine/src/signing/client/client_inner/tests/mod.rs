@@ -24,7 +24,7 @@ use crate::{
 };
 
 use std::convert::TryInto;
-use std::{sync::Once, time::Duration};
+use std::time::Duration;
 
 // The id to be used by default
 const KEY_ID: KeyId = KeyId(0);
@@ -71,20 +71,6 @@ lazy_static! {
         id: KEY_ID,
         signers: VALIDATOR_IDS.clone()
     };
-}
-
-static INIT: Once = Once::new();
-
-/// Initializes the logger and does only once
-/// (doing otherwise would result in error)
-#[allow(dead_code)]
-fn init_logs_once() {
-    INIT.call_once(|| {
-        env_logger::builder()
-            .format_timestamp(None)
-            .format_module_path(false)
-            .init();
-    })
 }
 
 // INFO: We should be able to continue signing with the old key. When key rotation happens,

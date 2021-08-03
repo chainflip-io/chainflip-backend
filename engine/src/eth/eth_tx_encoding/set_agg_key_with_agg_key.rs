@@ -1,7 +1,8 @@
 use std::{collections::HashMap, convert::TryInto};
 
 use crate::{
-    eth::key_manager::KeyManager,
+    eth::key_manager::key_manager::KeyManager,
+    logging::COMPONENT_KEY,
     mq::{pin_message_stream, IMQClient, Subject},
     p2p::ValidatorId,
     settings,
@@ -15,6 +16,7 @@ use crate::{
 use anyhow::Result;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
+use slog::o;
 use sp_core::Hasher;
 use sp_runtime::traits::Keccak256;
 use web3::{ethabi::Token, types::Address};
@@ -23,16 +25,17 @@ use web3::{ethabi::Token, types::Address};
 pub async fn start<MQC: IMQClient + Clone>(
     settings: &settings::Settings,
     mq_client: MQC,
-) -> Result<()> {
-    let mut encoder = SetAggKeyWithAggKeyEncoder::new(
+    logger: &slog::Logger,
+) {
+    SetAggKeyWithAggKeyEncoder::new(
         settings.eth.key_manager_eth_address.as_ref(),
         settings.signing.genesis_validator_ids.clone(),
         mq_client,
-    )?;
-
-    encoder.process_multi_sig_event_stream().await;
-
-    Ok(())
+        logger,
+    )
+    .expect("Should create eth tx encoder")
+    .process_multi_sig_event_stream()
+    .await;
 }
 
 /// Details of a transaction to be broadcast to ethereum.
@@ -53,6 +56,7 @@ struct SetAggKeyWithAggKeyEncoder<MQC: IMQClient> {
     validators: HashMap<KeyId, Vec<ValidatorId>>,
     curr_signing_key_id: Option<KeyId>,
     next_key_id: Option<KeyId>,
+    logger: slog::Logger,
 }
 
 #[derive(Clone)]
@@ -68,8 +72,9 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
         key_manager_address: &str,
         genesis_validator_ids: Vec<ValidatorId>,
         mq_client: MQC,
+        logger: &slog::Logger,
     ) -> Result<Self> {
-        let key_manager = KeyManager::load(key_manager_address)?;
+        let key_manager = KeyManager::load(key_manager_address, logger)?;
 
         let mut genesis_validator_ids_hash_map = HashMap::new();
         genesis_validator_ids_hash_map.insert(KeyId(0), genesis_validator_ids);
@@ -80,6 +85,7 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
             validators: genesis_validator_ids_hash_map,
             curr_signing_key_id: Some(KeyId(0)),
             next_key_id: None,
+            logger: logger.new(o!(COMPONENT_KEY => "SetAggKeyWithAggKeyEncoder")),
         })
     }
 
@@ -106,7 +112,10 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
                             self.handle_keygen_success(keygen_success).await;
                         }
                         _ => {
-                            log::error!("Signing module returned error generating key")
+                            slog::error!(
+                                self.logger,
+                                "Signing module returned error generating key"
+                            )
                         }
                     },
                     MultisigEvent::MessageSigningResult(signing_outcome) => match signing_outcome {
@@ -117,15 +126,25 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
                         _ => {
                             // TODO: Use the reported bad nodes in the SigningOutcome / SigningFailure
                             // TODO: retry signing with a different subset of signers
-                            log::error!("Signing module returned error signing message")
+                            slog::error!(
+                                self.logger,
+                                "Signing module returned error signing message"
+                            )
                         }
                     },
                     _ => {
-                        log::trace!("Discarding non keygen result or message signed event")
+                        slog::trace!(
+                            self.logger,
+                            "Discarding non keygen result or message signed event"
+                        )
                     }
                 },
                 Err(e) => {
-                    log::error!("Error reading event from multisig event stream: {:?}", e);
+                    slog::error!(
+                        self.logger,
+                        "Error reading event from multisig event stream: {:?}",
+                        e
+                    );
                 }
             }
         }
@@ -194,7 +213,7 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
                     .publish(Subject::Broadcast(Chain::ETH), tx_details)
                     .await
                     .unwrap_or_else(|err| {
-                        log::error!("Could not process: {:#?}", err);
+                        slog::error!(self.logger, "Could not process: {:#?}", err);
                     });
                 // here (for now) we assume the key was update successfully
                 // update curr key id
@@ -203,7 +222,7 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
                 self.next_key_id = None;
             }
             Err(err) => {
-                log::error!("Failed to build: {:#?}", err);
+                slog::error!(self.logger, "Failed to build: {:#?}", err);
             }
         }
     }
@@ -340,7 +359,7 @@ mod test_eth_tx_encoder {
     use secp256k1::PublicKey;
     use std::str::FromStr;
 
-    use crate::mq::mq_mock::MQMock;
+    use crate::{logging, mq::mq_mock::MQMock};
 
     const AGG_PRIV_HEX_1: &str = "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba";
     const AGG_PRIV_HEX_2: &str = "bbade2da39cfc81b1b64b6a2d66531ed74dd01803dc5b376ce7ad548bbe23608";
@@ -395,12 +414,15 @@ mod test_eth_tx_encoder {
 
         let mq_client = mq.get_client();
 
+        let logger = logging::test_utils::create_test_logger();
+
         let settings = settings::test_utils::new_test_settings().unwrap();
 
         let encoder = SetAggKeyWithAggKeyEncoder::new(
             settings.eth.key_manager_eth_address.as_str(),
             settings.signing.genesis_validator_ids,
             mq_client,
+            &logger,
         )
         .unwrap();
 

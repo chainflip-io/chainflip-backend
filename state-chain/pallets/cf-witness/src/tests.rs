@@ -1,5 +1,5 @@
-use crate::{mock::dummy::pallet as pallet_dummy, mock::*, Config, Error, Pallet, VoteMask, Votes};
-use frame_support::{assert_noop, assert_ok, dispatch::DispatchResultWithPostInfo};
+use crate::{mock::dummy::pallet as pallet_dummy, mock::*, Error, VoteMask, Votes};
+use frame_support::{assert_noop, assert_ok};
 
 fn assert_event_sequence<T: frame_system::Config>(expected: Vec<T::Event>) {
 	let events = frame_system::Pallet::<T>::events()
@@ -110,6 +110,22 @@ fn only_validators_can_witness() {
 		assert_noop!(
 			Witnesser::witness(Origin::signed(DEIRDRE), call.clone()),
 			Error::<Test>::UnauthorizedWitness
+		);
+	});
+}
+
+#[test]
+fn delegated_call_should_throw_error() {
+	new_test_ext().execute_with(|| {
+		// Our callable extrinsic which will fail when called
+		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::try_get_value()));
+		// The first witness.  Here there is no error as we don't dispatch the call until
+		// we reach the threshold which is 2 for our tests
+		assert_ok!(Witnesser::witness(Origin::signed(ALISSA), call.clone()));
+		// This should return the error `NoneValue`
+		assert_eq!(
+			Witnesser::witness(Origin::signed(BOBSON), call.clone()),
+			Err(pallet_dummy::Error::<Test>::NoneValue.into())
 		);
 	});
 }

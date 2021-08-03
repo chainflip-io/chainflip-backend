@@ -1,4 +1,4 @@
-use crate::signing::db::KeyDBMock;
+use crate::{logging, signing::db::KeyDBMock};
 
 use super::*;
 
@@ -7,12 +7,13 @@ use std::time::Duration;
 #[test]
 fn bc1_gets_delayed_until_keygen_request() {
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-
+    let logger = logging::test_utils::create_test_logger();
     let mut client = MultisigClientInner::new(
         VALIDATOR_IDS[0].clone(),
         KeyDBMock::new(),
         tx,
         PHASE_TIMEOUT,
+        &logger,
     );
 
     assert_eq!(keygen_stage_for(&client, KEY_ID), None);

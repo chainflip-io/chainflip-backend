@@ -4,12 +4,15 @@
 use core::str::FromStr;
 use std::{convert::TryInto, fmt::Display};
 
-use crate::eth::{EventProducerError, EventSource};
+use crate::{
+    eth::{utils, EventProducerError, EventSource},
+    logging::COMPONENT_KEY,
+};
 
 use serde::{Deserialize, Serialize};
+use slog::o;
 use sp_runtime::AccountId32;
 use web3::{
-    contract::tokens::Tokenizable,
     ethabi::{self, Function, Log},
     types::{BlockNumber, FilterBuilder, H160},
 };
@@ -21,6 +24,7 @@ use anyhow::Result;
 pub struct StakeManager {
     pub deployed_address: H160,
     contract: ethabi::Contract,
+    logger: slog::Logger,
 }
 
 // TODO: ClaimRegistered, EmissionChanged, MinStakeChanged, not used
@@ -138,8 +142,9 @@ impl Display for StakeManagerEvent {
 
 impl StakeManager {
     /// Loads the contract abi to get event definitions
-    pub fn load(deployed_address: &str) -> Result<Self> {
-        log::info!(
+    pub fn load(deployed_address: &str, logger: &slog::Logger) -> Result<Self> {
+        slog::info!(
+            logger,
             "Loading in stake manager contract abi. Connecting to contract at: {}",
             deployed_address
         );
@@ -149,6 +154,7 @@ impl StakeManager {
         Ok(Self {
             deployed_address: H160::from_str(deployed_address)?,
             contract,
+            logger: logger.new(o!(COMPONENT_KEY => "StakeManager")),
         })
     }
 
@@ -197,7 +203,7 @@ impl StakeManager {
 
 // get the node_id from the log and return as AccountId32
 fn node_id_from_log(log: &Log) -> Result<AccountId32> {
-    let account_bytes: [u8; 32] = decode_log_param::<ethabi::FixedBytes>(&log, "nodeID")?
+    let account_bytes: [u8; 32] = utils::decode_log_param::<ethabi::FixedBytes>(&log, "nodeID")?
         .try_into()
         .map_err(|_| anyhow::Error::msg("Could not cast FixedBytes nodeID into [u8;32]"))?;
     Ok(AccountId32::new(account_bytes))
@@ -231,7 +237,8 @@ impl EventSource for StakeManager {
             data: log.data.0,
         };
 
-        log::debug!(
+        slog::debug!(
+            self.logger,
             "Parsing event from block {:?} with signature: {:?}",
             log.block_number.unwrap_or_default(),
             sig
@@ -243,7 +250,7 @@ impl EventSource for StakeManager {
                 let account_id = node_id_from_log(&log)?;
                 let event = StakeManagerEvent::Staked {
                     account_id,
-                    amount: decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
+                    amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
                     tx_hash,
                 };
                 Ok(event)
@@ -253,7 +260,7 @@ impl EventSource for StakeManager {
                 let account_id = node_id_from_log(&log)?;
                 let event = StakeManagerEvent::ClaimExecuted {
                     account_id,
-                    amount: decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
+                    amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
                     tx_hash,
                 };
                 Ok(event)
@@ -264,8 +271,8 @@ impl EventSource for StakeManager {
                     .emission_changed_event_definition()
                     .parse_log(raw_log)?;
                 let event = StakeManagerEvent::EmissionChanged {
-                    old_emission_per_block: decode_log_param(&log, "oldEmissionPerBlock")?,
-                    new_emission_per_block: decode_log_param(&log, "newEmissionPerBlock")?,
+                    old_emission_per_block: utils::decode_log_param(&log, "oldEmissionPerBlock")?,
+                    new_emission_per_block: utils::decode_log_param(&log, "newEmissionPerBlock")?,
                     tx_hash,
                 };
                 Ok(event)
@@ -275,8 +282,8 @@ impl EventSource for StakeManager {
                     .min_stake_changed_event_definition()
                     .parse_log(raw_log)?;
                 let event = StakeManagerEvent::MinStakeChanged {
-                    old_min_stake: decode_log_param(&log, "oldMinStake")?,
-                    new_min_stake: decode_log_param(&log, "newMinStake")?,
+                    old_min_stake: utils::decode_log_param(&log, "oldMinStake")?,
+                    new_min_stake: utils::decode_log_param(&log, "newMinStake")?,
                     tx_hash,
                 };
                 Ok(event)
@@ -288,10 +295,10 @@ impl EventSource for StakeManager {
                 let account_id = node_id_from_log(&log)?;
                 let event = StakeManagerEvent::ClaimRegistered {
                     account_id,
-                    amount: decode_log_param(&log, "amount")?,
-                    staker: decode_log_param(&log, "staker")?,
-                    start_time: decode_log_param(&log, "startTime")?,
-                    expiry_time: decode_log_param(&log, "expiryTime")?,
+                    amount: utils::decode_log_param(&log, "amount")?,
+                    staker: utils::decode_log_param(&log, "staker")?,
+                    start_time: utils::decode_log_param(&log, "startTime")?,
+                    expiry_time: utils::decode_log_param(&log, "expiryTime")?,
                     tx_hash,
                 };
                 Ok(event)
@@ -301,22 +308,12 @@ impl EventSource for StakeManager {
     }
 }
 
-// Helper method to decode the parameters from an ETH log
-fn decode_log_param<T: Tokenizable>(log: &Log, param_name: &str) -> Result<T> {
-    let token = &log
-        .params
-        .iter()
-        .find(|&p| p.name == param_name)
-        .ok_or_else(|| EventProducerError::MissingParam(String::from(param_name)))?
-        .value;
-
-    Ok(Tokenizable::from_token(token.clone())?)
-}
-
 #[cfg(test)]
 mod tests {
 
     use web3::types::{H256, U256};
+
+    use crate::logging;
 
     use super::*;
 
@@ -412,17 +409,19 @@ mod tests {
 
     #[test]
     fn test_load_contract() {
-        assert!(StakeManager::load(CONTRACT_ADDRESS).is_ok());
-        assert!(StakeManager::load("not_an_address").is_err());
+        let logger = logging::test_utils::create_test_logger();
+        assert!(StakeManager::load(CONTRACT_ADDRESS, &logger).is_ok());
+        assert!(StakeManager::load("not_an_address", &logger).is_err());
     }
 
     #[test]
-    fn test_staked_log_parsing() -> anyhow::Result<()> {
-        let log: web3::types::Log = serde_json::from_str(STAKED_LOG)?;
+    fn test_staked_log_parsing() {
+        let log: web3::types::Log = serde_json::from_str(STAKED_LOG).unwrap();
 
-        let sm = StakeManager::load(CONTRACT_ADDRESS)?;
+        let logger = logging::test_utils::create_test_logger();
+        let sm = StakeManager::load(CONTRACT_ADDRESS, &logger).unwrap();
 
-        match sm.parse_event(log)? {
+        match sm.parse_event(log).unwrap() {
             StakeManagerEvent::Staked {
                 account_id,
                 amount,
@@ -442,17 +441,16 @@ mod tests {
             }
             _ => panic!("Expected StakeManagerEvent::Staked, got a different variant"),
         }
-
-        Ok(())
     }
 
     #[test]
-    fn test_claim_registered_log_parsing() -> anyhow::Result<()> {
-        let log: web3::types::Log = serde_json::from_str(CLAIM_REGISTERED_LOG)?;
+    fn test_claim_registered_log_parsing() {
+        let log: web3::types::Log = serde_json::from_str(CLAIM_REGISTERED_LOG).unwrap();
 
-        let sm = StakeManager::load(CONTRACT_ADDRESS)?;
+        let logger = logging::test_utils::create_test_logger();
+        let sm = StakeManager::load(CONTRACT_ADDRESS, &logger).unwrap();
 
-        match sm.parse_event(log)? {
+        match sm.parse_event(log).unwrap() {
             StakeManagerEvent::ClaimRegistered {
                 account_id,
                 amount,
@@ -492,17 +490,16 @@ mod tests {
             }
             _ => panic!("Expected Staking::ClaimRegistered, got a different variant"),
         }
-
-        Ok(())
     }
 
     #[test]
-    fn test_claim_executed_log_parsing() -> anyhow::Result<()> {
-        let log: web3::types::Log = serde_json::from_str(CLAIM_EXECUTED_LOG)?;
+    fn test_claim_executed_log_parsing() {
+        let log: web3::types::Log = serde_json::from_str(CLAIM_EXECUTED_LOG).unwrap();
 
-        let sm = StakeManager::load(CONTRACT_ADDRESS)?;
+        let logger = logging::test_utils::create_test_logger();
+        let sm = StakeManager::load(CONTRACT_ADDRESS, &logger).unwrap();
 
-        match sm.parse_event(log)? {
+        match sm.parse_event(log).unwrap() {
             StakeManagerEvent::ClaimExecuted {
                 account_id,
                 amount,
@@ -522,17 +519,16 @@ mod tests {
             }
             _ => panic!("Expected Staking::ClaimExecuted, got a different variant"),
         }
-
-        Ok(())
     }
 
     #[test]
-    fn emission_changed_log_parsing() -> anyhow::Result<()> {
-        let log: web3::types::Log = serde_json::from_str(EMISSION_CHANGED_LOG)?;
+    fn emission_changed_log_parsing() {
+        let log: web3::types::Log = serde_json::from_str(EMISSION_CHANGED_LOG).unwrap();
 
-        let sm = StakeManager::load(CONTRACT_ADDRESS)?;
+        let logger = logging::test_utils::create_test_logger();
+        let sm = StakeManager::load(CONTRACT_ADDRESS, &logger).unwrap();
 
-        match sm.parse_event(log)? {
+        match sm.parse_event(log).unwrap() {
             StakeManagerEvent::EmissionChanged {
                 old_emission_per_block,
                 new_emission_per_block,
@@ -555,17 +551,15 @@ mod tests {
             }
             _ => panic!("Expected Staking::EmissionChanged, got a different variant"),
         }
-
-        Ok(())
     }
 
     #[test]
-    fn min_stake_changed_log_parsing() -> anyhow::Result<()> {
-        let log: web3::types::Log = serde_json::from_str(MIN_STAKE_CHANGED_LOG)?;
+    fn min_stake_changed_log_parsing() {
+        let log: web3::types::Log = serde_json::from_str(MIN_STAKE_CHANGED_LOG).unwrap();
+        let logger = logging::test_utils::create_test_logger();
+        let sm = StakeManager::load(CONTRACT_ADDRESS, &logger).unwrap();
 
-        let sm = StakeManager::load(CONTRACT_ADDRESS)?;
-
-        match sm.parse_event(log)? {
+        match sm.parse_event(log).unwrap() {
             StakeManagerEvent::MinStakeChanged {
                 old_min_stake,
                 new_min_stake,
@@ -589,13 +583,12 @@ mod tests {
             }
             _ => panic!("Expected Staking::MinStakeChanged, got a different variant"),
         }
-
-        Ok(())
     }
 
     #[test]
-    fn abi_topic_sigs() -> anyhow::Result<()> {
-        let sm = StakeManager::load(CONTRACT_ADDRESS)?;
+    fn abi_topic_sigs() {
+        let logger = logging::test_utils::create_test_logger();
+        let sm = StakeManager::load(CONTRACT_ADDRESS, &logger).unwrap();
 
         // Staked event
         let staked_sig = sm.staked_event_definition().signature();
@@ -626,7 +619,5 @@ mod tests {
         let expected = H256::from_str(MIN_STAKE_CHANGED_EVENT_SIG)
             .expect("Couldn't case min stake changed event sig to H256");
         assert_eq!(min_stake_changed_sig, expected);
-
-        Ok(())
     }
 }

@@ -4,7 +4,6 @@ use crate::p2p::ValidatorId;
 
 use serde::{Deserialize, Serialize};
 
-#[allow(dead_code)]
 pub fn reorg_vector<T: Clone>(v: &mut Vec<T>, order: &[usize]) {
     assert_eq!(v.len(), order.len());
 

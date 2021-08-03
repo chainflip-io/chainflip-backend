@@ -317,7 +317,7 @@ fn signature_is_inserted() {
 			Event::pallet_cf_staking(crate::Event::ClaimSigRequested(ALICE, msg_hash)) => {
 				// Insert a signature.
 				assert_ok!(Staking::post_claim_signature(
-					Origin::signed(BOB),
+					Origin::root(),
 					ALICE,
 					msg_hash.into(),
 					ETH_DUMMY_SIG));
@@ -452,12 +452,7 @@ fn claim_expiry() {
 		time_source::Mock::reset_to(START_TIME);
 		time_source::Mock::tick(Duration::from_secs(1));
 		assert_noop!(
-			Staking::post_claim_signature(
-				Origin::signed(BOB),
-				ALICE,
-				msg_hash_alice,
-				ETH_DUMMY_SIG
-			),
+			Staking::post_claim_signature(Origin::root(), ALICE, msg_hash_alice, ETH_DUMMY_SIG),
 			<Error<Test>>::SignatureTooLate
 		);
 
@@ -465,12 +460,7 @@ fn claim_expiry() {
 		time_source::Mock::reset_to(START_TIME);
 		time_source::Mock::tick(Duration::from_millis(950));
 		assert_noop!(
-			Staking::post_claim_signature(
-				Origin::signed(BOB),
-				ALICE,
-				msg_hash_alice,
-				ETH_DUMMY_SIG
-			),
+			Staking::post_claim_signature(Origin::root(), ALICE, msg_hash_alice, ETH_DUMMY_SIG),
 			<Error<Test>>::SignatureTooLate
 		);
 
@@ -478,7 +468,7 @@ fn claim_expiry() {
 		time_source::Mock::reset_to(START_TIME);
 		time_source::Mock::tick(Duration::from_millis(200));
 		assert_ok!(Staking::post_claim_signature(
-			Origin::signed(BOB),
+			Origin::root(),
 			ALICE,
 			msg_hash_alice,
 			ETH_DUMMY_SIG

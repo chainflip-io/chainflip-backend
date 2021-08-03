@@ -1,9 +1,11 @@
+use slog::o;
 use substrate_subxt::{system::AccountStoreExt, Client, PairSigner, Signer};
 use tokio_stream::StreamExt;
 
 use super::runtime::StateChainRuntime;
 use crate::{
     eth::stake_manager::stake_manager::StakeManagerEvent,
+    logging::COMPONENT_KEY,
     mq::{pin_message_stream, IMQClient, Subject},
 };
 
@@ -15,10 +17,11 @@ pub async fn start<MQC>(
     signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
     mq_client: MQC,
     subxt_client: Client<StateChainRuntime>,
+    logger: &slog::Logger,
 ) where
     MQC: IMQClient + Sync + Send,
 {
-    let mut sc_broadcaster = SCBroadcaster::new(signer, mq_client, subxt_client).await;
+    let mut sc_broadcaster = SCBroadcaster::new(signer, mq_client, subxt_client, logger).await;
 
     sc_broadcaster
         .run()
@@ -33,6 +36,7 @@ where
     mq_client: MQC,
     subxt_client: Client<StateChainRuntime>,
     signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
+    logger: slog::Logger,
 }
 
 impl<MQC> SCBroadcaster<MQC>
@@ -43,6 +47,7 @@ where
         mut signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
         mq_client: MQC,
         subxt_client: Client<StateChainRuntime>,
+        logger: &slog::Logger,
     ) -> Self {
         let account_id = signer.account_id();
         let nonce = subxt_client
@@ -50,13 +55,15 @@ where
             .await
             .expect("Should be able to fetch account info")
             .nonce;
-        log::info!("Initial state chain nonce is: {}", nonce);
+        let logger = logger.new(o!(COMPONENT_KEY => "SCBroadcaster"));
+        slog::info!(logger, "Initial state chain nonce is: {}", nonce);
         signer.set_nonce(nonce);
 
         SCBroadcaster {
+            signer,
             mq_client,
             subxt_client,
-            signer,
+            logger,
         }
     }
 
@@ -72,14 +79,18 @@ where
             match event {
                 Ok(event) => self.submit_event(event).await?,
                 Err(e) => {
-                    log::error!("Could not read event from StakeManager event stream: {}", e);
+                    slog::error!(
+                        self.logger,
+                        "Could not read event from StakeManager event stream: {}",
+                        e
+                    );
                     return Err(e);
                 }
             }
         }
 
         let err_msg = "State Chain Broadcaster has stopped running!";
-        log::error!("{}", err_msg);
+        slog::error!(self.logger, "{}", err_msg);
         Err(anyhow::Error::msg(err_msg))
     }
 
@@ -91,7 +102,8 @@ where
                 amount,
                 tx_hash,
             } => {
-                log::trace!(
+                slog::trace!(
+                    self.logger,
                     "Sending witness_staked({:?}, {}, {:?}) to state chain",
                     account_id,
                     amount,
@@ -107,7 +119,8 @@ where
                 amount,
                 tx_hash,
             } => {
-                log::trace!(
+                slog::trace!(
+                    self.logger,
                     "Sending claim_executed({:?}, {}, {:?}) to the state chain",
                     account_id,
                     amount,
@@ -121,7 +134,11 @@ where
             StakeManagerEvent::MinStakeChanged { .. }
             | StakeManagerEvent::EmissionChanged { .. }
             | StakeManagerEvent::ClaimRegistered { .. } => {
-                log::warn!("{} is not to be submitted to the State Chain", event);
+                slog::warn!(
+                    self.logger,
+                    "{} is not to be submitted to the State Chain",
+                    event
+                );
             }
         };
         Ok(())
@@ -135,7 +152,7 @@ mod tests {
 
     use super::*;
 
-    use crate::{mq::nats_client::NatsMQClient, settings};
+    use crate::{logging, mq::nats_client::NatsMQClient, settings};
 
     use sp_keyring::AccountKeyring;
     use sp_runtime::AccountId32;
@@ -167,9 +184,11 @@ mod tests {
         let mq_client = NatsMQClient::new(&settings.message_queue).await.unwrap();
         let subxt_client = create_subxt_client(&settings.state_chain).await;
 
+        let logger = logging::test_utils::create_test_logger();
+
         let alice = AccountKeyring::Alice.pair();
         let pair_signer = PairSigner::new(alice);
-        SCBroadcaster::new(pair_signer, mq_client, subxt_client).await;
+        SCBroadcaster::new(pair_signer, mq_client, subxt_client, &logger).await;
     }
 
     // TODO: Use the SC broadcaster struct instead
@@ -211,7 +230,13 @@ mod tests {
 
         let alice = AccountKeyring::Alice.pair();
         let pair_signer = PairSigner::new(alice);
-        let mut sc_broadcaster = SCBroadcaster::new(pair_signer, mq_client, subxt_client).await;
+        let mut sc_broadcaster = SCBroadcaster::new(
+            pair_signer,
+            mq_client,
+            subxt_client,
+            &logging::test_utils::create_test_logger(),
+        )
+        .await;
 
         let staked_node_id =
             AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU").unwrap();
