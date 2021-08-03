@@ -144,7 +144,7 @@ impl staking::Staking for StateChainRuntime {
     type Nonce = u64;
 }
 
-impl witness_api::WitnessApi for StateChainRuntime {}
+impl witness_api::WitnesserApi for StateChainRuntime {}
 
 impl emissions::Emissions for StateChainRuntime {
     type FlipBalance = u128;
