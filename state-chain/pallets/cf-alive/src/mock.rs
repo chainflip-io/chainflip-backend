@@ -19,7 +19,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		AlivePallet: pallet_cf_alive::{Module, Storage, Event<T>},
+		AlivePallet: pallet_cf_alive::{Module, Storage},
 	}
 );
 
@@ -58,7 +58,6 @@ parameter_types! {}
 pub struct Behaviour(pub Vec<u8>);
 
 impl Config for Test {
-	type Event = Event;
 	type Action = Behaviour;
 }
 

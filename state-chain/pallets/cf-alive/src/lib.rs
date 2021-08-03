@@ -47,8 +47,6 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		/// The event type
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// The action type
 		type Action: Member + FullCodec + Default;
 	}
@@ -66,13 +64,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn last_know_liveliness)]
 	pub(super) type LastKnownLiveliness<T: Config> =
-		StorageMap<_, Identity, T::AccountId, T::BlockNumber>;
-
-	#[pallet::event]
-	pub enum Event<T: Config> {}
-
-	#[pallet::error]
-	pub enum Error<T> {}
+		StorageMap<_, Blake2_128Concat, T::AccountId, T::BlockNumber>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {}
