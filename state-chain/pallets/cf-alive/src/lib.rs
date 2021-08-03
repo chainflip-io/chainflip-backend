@@ -55,19 +55,20 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
-	/// Storage of account against actions
+	/// Storage of account against liveliness and actions
 	#[pallet::storage]
 	#[pallet::getter(fn actions)]
-	pub(super) type Actions<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, Vec<T::Action>>;
-
-	/// Storage of account last known liveliness
-	#[pallet::storage]
-	#[pallet::getter(fn last_know_liveliness)]
-	pub(super) type LastKnownLiveliness<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, T::BlockNumber>;
+	pub(super) type Actions<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, (T::BlockNumber, Vec<T::Action>)>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {}
+}
+
+impl<T: Config> Pallet<T> {
+	fn account_exists(account_id: &T::AccountId) -> bool {
+		Actions::<T>::contains_key(account_id)
+	}
 }
 
 impl<T: Config> Reporter for Pallet<T> {
@@ -79,11 +80,13 @@ impl<T: Config> Reporter for Pallet<T> {
 	/// An account is added with an empty report and its liveliness is recorded at this block number
 	/// A `JudgementError::AccountExits` if this account is already whitelisted
 	fn add_account(account_id: &Self::AccountId) -> Result<(), JudgementError> {
-		if <Actions<T>>::contains_key(account_id) {
+		if Self::account_exists(account_id) {
 			return Err(JudgementError::AccountExists);
 		}
-		<LastKnownLiveliness<T>>::insert(account_id, T::BlockNumber::default());
-		<Actions<T>>::insert(account_id, Vec::<T::Action>::new());
+		<Actions<T>>::insert(
+			account_id,
+			(T::BlockNumber::default(), Vec::<T::Action>::new()),
+		);
 		Ok(())
 	}
 
@@ -92,12 +95,12 @@ impl<T: Config> Reporter for Pallet<T> {
 	/// An account is removed and its liveliness is reset
 	/// A `JudgementError::AccountExits` if this account is not already whitelisted
 	fn remove_account(account_id: &Self::AccountId) -> Result<(), JudgementError> {
-		if !<Actions<T>>::contains_key(account_id) {
-			return Err(JudgementError::AccountNotFound);
+		if Self::account_exists(account_id) {
+			<Actions<T>>::remove(account_id);
+			return Ok(());
 		}
 
-		<Actions<T>>::remove(account_id);
-		Ok(())
+		Err(JudgementError::AccountNotFound)
 	}
 
 	/// Report an action from an account.
@@ -105,16 +108,10 @@ impl<T: Config> Reporter for Pallet<T> {
 	/// We store the action and record the current block number as liveliness for this account
 	fn report(account_id: &Self::AccountId, action: Self::Action) -> Result<(), JudgementError> {
 		<Actions<T>>::try_mutate(account_id, |actions| match actions.as_mut() {
-			Some(actions) => {
+			Some((block_number, actions)) => {
 				actions.push(action);
-
-				<LastKnownLiveliness<T>>::try_mutate(account_id, |last| match last.as_mut() {
-					Some(last) => {
-						*last = <frame_system::Pallet<T>>::block_number();
-						Ok(())
-					}
-					None => Err(JudgementError::AccountNotFound),
-				})
+				*block_number = <frame_system::Pallet<T>>::block_number();
+				Ok(())
 			}
 			None => Err(JudgementError::AccountNotFound),
 		})
@@ -127,7 +124,9 @@ impl<T: Config> Judgement<Pallet<T>, T::BlockNumber> for Pallet<T> {
 	/// Liveliness is defined as the last block number
 	/// An error returns if the account is not whitelisted
 	fn liveliness(account_id: &T::AccountId) -> Result<T::BlockNumber, JudgementError> {
-		Self::last_know_liveliness(account_id).ok_or(JudgementError::AccountNotFound)
+		Actions::<T>::get(account_id)
+			.map(|(block_number, _)| block_number)
+			.ok_or(JudgementError::AccountNotFound)
 	}
 
 	/// Return a report on this account
@@ -137,7 +136,9 @@ impl<T: Config> Judgement<Pallet<T>, T::BlockNumber> for Pallet<T> {
 	fn report_for(
 		account_id: &T::AccountId,
 	) -> Result<Vec<<Pallet<T> as Reporter>::Action>, JudgementError> {
-		Self::actions(account_id).ok_or(JudgementError::AccountNotFound)
+		Actions::<T>::get(account_id)
+			.map(|(_, judgements)| judgements)
+			.ok_or(JudgementError::AccountNotFound)
 	}
 
 	/// Clean out the report for this account
@@ -146,7 +147,10 @@ impl<T: Config> Judgement<Pallet<T>, T::BlockNumber> for Pallet<T> {
 	/// An error returns is this account is not whitelisted
 	fn clean_all(account_id: &T::AccountId) -> Result<(), JudgementError> {
 		if <Actions<T>>::contains_key(account_id) {
-			<Actions<T>>::insert(account_id, Vec::<T::Action>::new());
+			<Actions<T>>::insert(
+				account_id,
+				(T::BlockNumber::default(), Vec::<T::Action>::new()),
+			);
 			return Ok(());
 		}
 
