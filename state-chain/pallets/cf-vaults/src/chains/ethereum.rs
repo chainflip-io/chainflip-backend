@@ -11,8 +11,9 @@
 //! on the `Vaults` pallet and is treated as submodule of this pallet allowing specialisation.
 //! A request to sign a payload is created on calling `ChainVault::try_start_vault_rotation()` and
 //! emitted as an event to the network for signing.  A response is required with either a signature
-//! or a failure reported with which the result is reported back to the `Vaults` pallet.
-//! The final execution of the vault rotation is reported back `vault_rotated()` and the response
+//! or a failure reported with which the result is reported back via `ChainHandler::try_complete_vault_rotation()`
+//! and the process is passed back to the `Vaults` pallet.
+//! Final execution of the vault rotation is reported back via `vault_rotated()` and the response
 //! `VaultRotationResponse` is put to storage.
 //!
 //! ## Terminology
@@ -78,7 +79,7 @@ pub mod pallet {
 		type RequestIndex: Member + Parameter + Default + AtLeast32BitUnsigned + Copy;
 		/// The new public key type
 		type PublicKey: Into<Vec<u8>> + Member + Parameter + Default;
-		/// The type here for the nonce used
+		/// A nonce
 		type Nonce: Into<U256>;
 		/// A nonce provider
 		type NonceProvider: NonceProvider<Nonce = Self::Nonce>;

@@ -4,8 +4,8 @@ use frame_support::RuntimeDebug;
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 
-#[derive(RuntimeDebug, Encode, Decode, PartialEq)]
 /// Errors occurring during a rotation
+#[derive(RuntimeDebug, Encode, Decode, PartialEq)]
 pub enum RotationError<ValidatorId> {
 	/// An invalid request index
 	InvalidRequestIndex,
@@ -38,13 +38,18 @@ pub trait RequestResponse<Index: AtLeast32BitUnsigned, Req, Res, Err> {
 
 /// A vault for a chain
 pub trait ChainVault {
+	/// An index type we would associate requests with
 	type Index: AtLeast32BitUnsigned;
+	/// The type used for public keys
 	type Bytes: Into<Vec<u8>>;
+	/// An identifier for a validator involved in the rotation of the vault
 	type ValidatorId;
+	/// An error on rotating the vault
 	type Err;
 	/// A set of params for the chain for this vault
 	fn chain_params() -> ChainParams;
-	/// Start the vault rotation phase.  The chain would construct a `VaultRotationRequest`.
+	/// Start the vault rotation phase.  The chain would complete steps necessary for its chain
+	/// for the rotation of the vault.
 	/// When complete `ChainHandler::try_complete_vault_rotation()` would be used to notify to continue
 	/// with the process.
 	fn try_start_vault_rotation(
@@ -52,12 +57,12 @@ pub trait ChainVault {
 		new_public_key: Self::Bytes,
 		validators: Vec<Self::ValidatorId>,
 	) -> Result<(), Self::Err>;
-	/// We have confirmation of the rotation
+	/// We have confirmation of the rotation back from `Vaults`
 	fn vault_rotated(response: VaultRotationResponse<Self::Bytes>);
 }
 
-/// Events coming in from our chains.  This is used to callback from the request to complete the vault
-/// rotation phase
+/// Events coming in from our chain.  This is used to callback from the request to complete the vault
+/// rotation phase.  See `ChainVault::try_start_vault_rotation()` for more details.
 pub trait ChainHandler {
 	type Index: AtLeast32BitUnsigned;
 	type ValidatorId;
@@ -81,20 +86,20 @@ pub trait ChainFlip {
 /// Our different Chain's specific parameters
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum ChainParams {
-	// Ethereum blockchain
-	//
-	// The value is the call data encoded for the final transaction
-	// to request the key rotation via `setAggKeyWithAggKey`
+	/// Ethereum blockchain
+	///
+	/// The value is the call data encoded for the final transaction
+	/// to request the key rotation via `setAggKeyWithAggKey`
 	Ethereum(Vec<u8>),
-	// This is a placeholder, not to be used in production
+	/// This is a placeholder, not to be used in production
 	Other(Vec<u8>),
 }
 
 /// A representation of a key generation request
-/// This would be constructing for each supporting chain
+/// This would be used for each supporting chain
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct KeygenRequest<ValidatorId> {
-	/// Chain's parameters
+	/// A Chain's parameters
 	pub(crate) chain: ChainParams,
 	/// The set of validators from which we would like to generate the key
 	pub(crate) validator_candidates: Vec<ValidatorId>,

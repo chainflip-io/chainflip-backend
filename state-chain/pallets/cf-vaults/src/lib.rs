@@ -10,14 +10,23 @@
 //!
 //! ## Overview
 //! The module contains functionality to manage the vault rotation that has to occur for the ChainFlip
-//! validator set to rotate.  The process of vault rotation us triggered by a successful auction via
-//! the trait `AuctionEvents`, implemented by the `Auction` pallet, which provides a list of suitable
-//! validators with which we would like to proceed in rotating the vaults concerned.
-//! A key generation request is created for each chain supported and emitted as an event from which
-//! a ceremony is performed and on success reports back with a response which is delegated to the chain
-//! specialisation which continues performing steps necessary to rotate its vault.  On completing this
-//! and calling back to the `Vaults` pallet, via the trait `ChainEvents`, the final step is executed
-//! with a vault rotation request being emitted and on success the vault being rotated.
+//! validator set to rotate.  The process of vault rotation is triggered by a successful auction via
+//! the trait `AuctionHandler::on_auction_completed()`, which provides a list of suitable validators with which we would
+//! like to proceed in rotating the vaults concerned.  The process of rotation is multi-faceted and involves a number of
+//! pallets.  With the end of an epoch, by reaching a block number of forced, the `Validator` pallet requests an auction to
+//! start from the `Auction` pallet.  A set of stakers are provided by the `Staking` pallet and an auction is run with the
+//! outcome being shared via `AuctionHandler::on_auction_completed()`.
+
+//! A key generation request is created for each chain supported and emitted as an event from which a ceremony is performed
+//! and on success reports back with a response which is delegated to the chain specialisation which continues performing
+//! steps necessary to rotate its vault implementing the `ChainVault` trait.  On completing this phase and via the trait
+//! `ChainHandler`, the final step is executed with a vault rotation request being emitted.  A `VaultRotationResponse` is
+//! submitted to inform whether this request to rotate has succeeded or not.
+
+//! During the process the network is in an auction phase, where the current validators secure the network and on successful
+//! rotation of the vaults a set of nodes become validators.  Feedback on whether a rotation had occurred is provided by
+//! `AuctionHandler::try_to_confirm_auction()` with which on success the validators are rotated and on failure a new auction
+//! is started.
 //!
 //! ## Terminology
 //! - **Vault:** A cryptocurrency wallet.
@@ -84,7 +93,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
-	/// Current request index used in request/response (NB. this should be global and probably doesn't fit this architecture)
+	/// Current request index used in request/response
 	#[pallet::storage]
 	#[pallet::getter(fn request_idx)]
 	pub(super) type RequestIdx<T: Config> = StorageValue<_, T::RequestIndex, ValueQuery>;
@@ -234,7 +243,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Do we have an rotations processing
-	fn rotations_in_process() -> bool {
+	fn rotations_complete() -> bool {
 		VaultRotations::<T>::iter().count() == 0
 	}
 }
@@ -242,6 +251,9 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> AuctionHandler<T::ValidatorId, T::Amount> for Pallet<T> {
 	/// On completion of the Auction we would receive the proposed validators
 	/// A key generation request is created for each supported chain and the process starts
+	/// The requests created here are regarded as a group where until this is called again
+	/// all would be processed and any one failing would result in aborted the whole group
+	/// of requests.
 	fn on_auction_completed(
 		winners: Vec<T::ValidatorId>,
 		_: T::Amount,
@@ -261,7 +273,7 @@ impl<T: Config> AuctionHandler<T::ValidatorId, T::Amount> for Pallet<T> {
 	/// that the validators can now be rotated for the new epoch.
 	fn try_to_confirm_auction() -> Result<(), AuctionError> {
 		// The 'exit' point for the pallet
-		if Self::rotations_in_process() {
+		if Self::rotations_complete() {
 			// We can now confirm the auction and rotate
 			// The process has completed successfully
 			Self::deposit_event(Event::VaultsRotated);
@@ -283,7 +295,7 @@ impl<T: Config>
 	> for Pallet<T>
 {
 	/// Emit as an event the key generation request, this is the first step after receiving a proposed
-	/// validator set from the `AuctionEvents` trait
+	/// validator set from the `AuctionHandler::on_auction_completed()`
 	fn try_request(
 		index: T::RequestIndex,
 		request: KeygenRequest<T::ValidatorId>,
@@ -321,7 +333,7 @@ impl<T: Config>
 				Self::abort_rotation();
 				// Do as you wish with these, I wash my hands..
 				T::Penalty::penalise(bad_validators);
-
+				// Report back we have processed the failure
 				Ok(().into())
 			}
 		}
@@ -336,7 +348,7 @@ impl<T: Config> ChainHandler for Pallet<T> {
 	type Err = RotationError<T::ValidatorId>;
 
 	/// Try to complete the final vault rotation with feedback from the chain implementation over
-	/// the `ChainEvents` trait.  This is forwarded as a request and hence an event is emitted.
+	/// the `ChainHandler` trait.  This is forwarded as a request and hence an event is emitted.
 	/// Failure is handled and potential bad validators are penalised and the rotation is now aborted.
 	fn try_complete_vault_rotation(
 		index: Self::Index,

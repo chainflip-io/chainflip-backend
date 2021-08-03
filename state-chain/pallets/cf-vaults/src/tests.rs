@@ -21,14 +21,14 @@ mod test {
 			);
 			// Everything ok with a set of numbers
 			// Nothing running at the moment
-			assert!(VaultsPallet::rotations_in_process());
+			assert!(VaultsPallet::rotations_complete());
 			// Request index 2
 			assert_ok!(VaultsPallet::on_auction_completed(
 				vec![ALICE, BOB, CHARLIE],
 				0
 			));
 			// Confirm we have a new vault rotation process running
-			assert!(!VaultsPallet::rotations_in_process());
+			assert!(!VaultsPallet::rotations_complete());
 			// Check the event emitted
 			assert_eq!(
 				last_event(),
@@ -87,7 +87,7 @@ mod test {
 			assert!(OTHER_CHAIN_RESULT.with(|l| *l.borrow() == VaultsPallet::request_idx() - 1));
 
 			// We would have aborted this rotation and hence no rotations underway
-			assert!(VaultsPallet::rotations_in_process());
+			assert!(VaultsPallet::rotations_complete());
 
 			// Penalised bad validators would be now punished
 			assert_eq!(bad_validators(), vec![BOB, CHARLIE]);
@@ -134,7 +134,7 @@ mod test {
 			);
 
 			// We would have aborted this rotation and hence no rotations underway
-			assert!(VaultsPallet::rotations_in_process());
+			assert!(VaultsPallet::rotations_complete());
 
 			// Penalised bad validators would be now punished
 			assert_eq!(bad_validators(), vec![ALICE, BOB]);
