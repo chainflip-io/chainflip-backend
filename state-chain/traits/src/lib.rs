@@ -214,7 +214,7 @@ pub trait Reporter {
 pub enum JudgementError {
 	/// Account is not found in the whitelist
 	AccountNotFound,
-	/// This account occurs in the whitelist
+	/// This account occurs in the whitelist, resulting in adding an already existing account
 	AccountExists,
 }
 

@@ -110,6 +110,7 @@ steps:
         cargo fmt -p chainflip-engine
         -p cf-p2p
         -p cf-p2p-rpc
+        -p pallet-cf-alive
         -p pallet-cf-auction
         -p pallet-cf-flip
         -p pallet-cf-staking
