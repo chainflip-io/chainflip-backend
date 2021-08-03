@@ -26,11 +26,6 @@ pub trait IMQClient {
     async fn close(&self) -> Result<()>;
 }
 
-/// Used to pin a stream within a single scope.
-pub fn pin_message_stream<M>(stream: Box<dyn Stream<Item = M>>) -> Pin<Box<dyn Stream<Item = M>>> {
-    stream.into()
-}
-
 /// Subjects that can be published / subscribed to
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq)]

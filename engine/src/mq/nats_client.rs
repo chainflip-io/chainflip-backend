@@ -79,8 +79,6 @@ mod test {
     use crate::types::chain::Chain;
     use serde::Deserialize;
 
-    use crate::mq::pin_message_stream;
-
     #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
     struct TestMessage(String);
 
