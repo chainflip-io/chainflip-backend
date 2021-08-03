@@ -31,7 +31,7 @@ pub mod pallet {
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
 	type RequestIndexFor<T> = <T as pallet_cf_vaults::Config>::RequestIndex;
-	type PublicKeyFor<T> = <T as pallet_cf_vaults::Config>::PublicKey;
+	type BytesFor<T> = <T as pallet_cf_vaults::Config>::Bytes;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + StakingConfig + VaultsConfig + EthereumConfig {
@@ -109,7 +109,7 @@ pub mod pallet {
 		pub fn witness_keygen_response(
 			origin: OriginFor<T>,
 			request_id: RequestIndexFor<T>,
-			response: KeygenResponse<T::ValidatorId, PublicKeyFor<T>>,
+			response: KeygenResponse<T::ValidatorId, BytesFor<T>>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = VaultsCall::keygen_response(request_id, response);
@@ -123,7 +123,7 @@ pub mod pallet {
 		pub fn witness_vault_rotation_response(
 			origin: OriginFor<T>,
 			request_id: RequestIndexFor<T>,
-			response: VaultRotationResponse,
+			response: VaultRotationResponse<BytesFor<T>>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = VaultsCall::vault_rotation_response(request_id, response);
