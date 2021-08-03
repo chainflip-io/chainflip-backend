@@ -3,18 +3,17 @@ pub mod stake_manager;
 
 mod eth_event_streamer;
 
-mod eth_broadcaster;
-mod eth_tx_encoding;
+pub mod eth_broadcaster;
+pub mod eth_tx_encoding;
+mod utils;
 
-pub use anyhow::Result;
+use anyhow::Result;
 use async_trait::async_trait;
-pub use eth_event_streamer::{EthEventStreamBuilder, EthEventStreamer};
+pub use eth_event_streamer::EthEventStreamer;
 
 use thiserror::Error;
 
 use web3::types::{BlockNumber, FilterBuilder, H256};
-
-use crate::{mq::IMQClient, settings::Settings};
 
 /// Something that accepts and processes events asychronously.
 #[async_trait]
@@ -52,28 +51,4 @@ pub enum EventProducerError {
     /// Tried to decode a parameter that doesn't exist in the log.
     #[error("Cannot decode missing parameter: '{0}'.")]
     MissingParam(String),
-}
-
-/// Start all the ETH components
-pub async fn start<MQC: 'static + IMQClient + Send + Sync + Clone>(
-    settings: &Settings,
-    mq_client: MQC,
-) {
-    log::info!("Starting the ETH components");
-    let sm_witness_future =
-        stake_manager::start_stake_manager_witness::<MQC>(&settings, mq_client.clone());
-
-    let eth_broadcaster_future =
-        eth_broadcaster::start_eth_broadcaster::<MQC>(&settings, mq_client.clone());
-
-    let eth_tx_encoder_future =
-        eth_tx_encoding::set_agg_key_with_agg_key::start(&settings, mq_client.clone());
-
-    let result = futures::join!(
-        sm_witness_future,
-        eth_broadcaster_future,
-        eth_tx_encoder_future
-    );
-    result.0.expect("Broadcaster should exit without error");
-    result.1.expect("Eth tx encoder should exit without error");
 }

@@ -1,4 +1,4 @@
-use crate::signing::db::KeyDBMock;
+use crate::{logging, signing::db::KeyDBMock};
 
 use super::*;
 
@@ -66,8 +66,15 @@ async fn delayed_signing_bc1_gets_removed() {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
     let timeout = Duration::from_secs(0);
+    let logger = logging::test_utils::create_test_logger();
 
-    let mut client = MultisigClientInner::new(SIGNER_IDS[0].clone(), KeyDBMock::new(), tx, timeout);
+    let mut client = MultisigClientInner::new(
+        SIGNER_IDS[0].clone(),
+        KeyDBMock::new(),
+        tx,
+        timeout,
+        &logger,
+    );
 
     // Create delayed BC1
     let bad_node = SIGNER_IDS[1].clone();

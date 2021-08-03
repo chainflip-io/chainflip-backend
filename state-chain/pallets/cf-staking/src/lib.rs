@@ -383,8 +383,7 @@ pub mod pallet {
 			msg_hash: U256,
 			signature: AggKeySignature,
 		) -> DispatchResultWithPostInfo {
-			// TODO: we should check more than just "is this a valid account" - see clubhouse stories 471 and 473
-			let _ = ensure_signed(origin)?;
+			Self::ensure_witnessed(origin)?;
 
 			let time_now = T::TimeSource::now();
 
