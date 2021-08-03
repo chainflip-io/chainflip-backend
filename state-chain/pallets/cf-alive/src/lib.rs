@@ -17,9 +17,7 @@
 //! time and hence serve as a strong indicator of its liveliness in terms of an operational node.
 //! In order to prevent spamming a whitelist of accounts is controlled in which before reporting
 //! behaviour for an account the account has to be explicitly added using `add_account()` and
-//! removed with `remove_account()`.  Liveliness is stored separately, in the `LastKnownLiveliness`
-//! storage map, from the tracked behaviour to maintain this indicator after cleaning the
-//! behavioural data on an account.
+//! removed with `remove_account()`.
 //!
 //! ## Terminology
 //! - **Liveness:** - the last block number we have had a report on an account for
@@ -146,14 +144,12 @@ impl<T: Config> Judgement<Pallet<T>, T::BlockNumber> for Pallet<T> {
 	/// The report is cleared for this account
 	/// An error returns is this account is not whitelisted
 	fn clean_all(account_id: &T::AccountId) -> Result<(), JudgementError> {
-		if <Actions<T>>::contains_key(account_id) {
-			<Actions<T>>::insert(
-				account_id,
-				(T::BlockNumber::default(), Vec::<T::Action>::new()),
-			);
-			return Ok(());
-		}
-
-		Err(JudgementError::AccountNotFound)
+		<Actions<T>>::mutate(account_id, |actions| match actions.as_mut() {
+			Some((_, actions)) => {
+				actions.clear();
+				Ok(())
+			},
+			None => Err(JudgementError::AccountNotFound)
+		})
 	}
 }

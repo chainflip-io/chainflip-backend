@@ -16,9 +16,7 @@ validator. The last behaviour recorded for a validator would be used as its last
 time and hence serve as a strong indicator of its liveliness in terms of an operational node.
 In order to prevent spamming a whitelist of accounts is controlled in which before reporting
 behaviour for an account the account has to be explicitly added using `add_account()` and
-removed with `remove_account()`.  Liveliness is stored separately, in the `LastKnownLiveliness`
-storage map, from the tracked behaviour to maintain this indicator after cleaning the
-behavioural data on an account.
+removed with `remove_account()`. 
 
 ## Terminology
 
