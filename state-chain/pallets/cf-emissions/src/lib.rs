@@ -19,7 +19,10 @@ use cf_traits::{EmissionsTrigger, Issuance, RewardsDistribution};
 use codec::FullCodec;
 use frame_support::traits::{Get, Imbalance};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
-use sp_runtime::{offchain::storage_lock::BlockNumberProvider, traits::{AtLeast32BitUnsigned, CheckedMul, Zero}};
+use sp_runtime::{
+	offchain::storage_lock::BlockNumberProvider,
+	traits::{AtLeast32BitUnsigned, CheckedMul, Zero},
+};
 
 #[frame_support::pallet]
 pub mod pallet {

@@ -209,4 +209,3 @@ impl<T: Config> RewardsDistribution for OnDemandRewardsDistribution<T> {
 		T::DbWeight::get().reads_writes(1, 2)
 	}
 }
-
