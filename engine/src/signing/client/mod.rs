@@ -179,9 +179,8 @@ where
                         }
                     }
                 }
-                Ok(()) = &mut shutdown_rx =>{
-                    slog::info!(logger, "Shutting down");
-                    slog::error!(logger, "MultisigClient stopped!");
+                Ok(()) = &mut shutdown_rx => {
+                    slog::info!(logger, "MultisigClient stopped!");
                     break;
                 }
             }
