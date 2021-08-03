@@ -1,23 +1,46 @@
 //! This tests integration with the StakeManager contract
 //! In order for these tests to work, nats and ganache with the preloaded db
 //! in `./eth-db` must be loaded in
-
-use std::str::FromStr;
+use std::{str::FromStr, time::Duration};
 
 use chainflip_engine::{
     eth::{self, stake_manager::stake_manager::StakeManagerEvent},
     mq::{nats_client::NatsMQClient, pin_message_stream, IMQClient, Subject},
-    settings::{self, Settings},
+    settings::Settings,
 };
 
-use config::{Config, ConfigError, File};
+use sp_runtime::AccountId32;
 use tokio_stream::StreamExt;
 
 use web3::types::U256;
 
+use slog::{o, Drain};
+
 #[tokio::test]
 pub async fn test_all_stake_manager_events() {
-    let settings = settings::test_utils::create_test_settings().unwrap();
+    struct TestEvents {
+        staked: bool,
+        claim_registered: bool,
+        claim_executed: bool,
+        min_stake_changed: bool,
+        flip_supply_updated: bool,
+    }
+    let mut events_check_list = TestEvents {
+        staked: false,
+        claim_registered: false,
+        claim_executed: false,
+        min_stake_changed: false,
+        flip_supply_updated: false,
+    };
+
+    let drain = slog_json::Json::new(std::io::stdout())
+        .add_default_keys()
+        .build()
+        .fuse();
+    let drain = slog_async::Async::new(drain).build().fuse();
+    let root_logger = slog::Logger::root(drain, o!());
+
+    let settings = Settings::from_file("config/Testing.toml").unwrap();
     let mq_c = NatsMQClient::new(&settings.message_queue).await.unwrap();
 
     // subscribe before pushing events to the queue
@@ -26,75 +49,140 @@ pub async fn test_all_stake_manager_events() {
         .await
         .unwrap();
 
-    println!("Subscribing to eth events");
     // this future contains an infinite loop, so we must end it's life
-    let sm_future = eth::stake_manager::start_stake_manager_witness(&settings, mq_c);
-    println!("Subscribed");
+    let sm_future = eth::stake_manager::start_stake_manager_witness(&settings, mq_c, &root_logger);
 
-    // We just want the future to end, it should already have done it's job in 1 second
+    // We just want the future to end, it should already have done it's job
     let _ = tokio::time::timeout(std::time::Duration::from_secs(1), sm_future).await;
+    slog::info!(&root_logger, "Subscribed");
 
-    println!("What's the next event?");
+    // The following events correspond to the events in chainflip-eth-contracts/scripts/deploy_and.py
     let mut stream = pin_message_stream(stream);
-    match stream.next().await.unwrap().unwrap() {
-        StakeManagerEvent::Staked(node_id, amount) => {
-            assert_eq!(node_id, U256::from_dec_str("12345").unwrap());
-            assert_eq!(
+    loop {
+        // All events should already be built up in the event stream, so no need to wait.
+        match tokio::time::timeout(Duration::from_millis(1), stream.next()).await {
+            Ok(Some(Ok(StakeManagerEvent::Staked {
+                account_id,
                 amount,
-                U256::from_dec_str("40000000000000000000000").unwrap()
-            );
-        }
-        _ => panic!("Was expected Staked event"),
-    };
+                return_addr,
+                ..
+            }))) => {
+                assert_eq!(
+                    account_id,
+                    AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
+                        .unwrap()
+                );
+                assert_eq!(amount, 40000000000000000000000);
+                assert_eq!(
+                    return_addr,
+                    web3::types::H160::from_str("0x0000000000000000000000000000000000000001")
+                        .unwrap()
+                );
+                events_check_list.staked = true;
+            }
 
-    match stream.next().await.unwrap().unwrap() {
-        StakeManagerEvent::ClaimRegistered(node_id, amount, address, _start_time, _end_time) => {
-            assert_eq!(node_id, U256::from_dec_str("12345").unwrap());
-            assert_eq!(
+            Ok(Some(Ok(StakeManagerEvent::ClaimRegistered {
+                account_id,
                 amount,
-                U256::from_dec_str("13333333333333334032384").unwrap()
-            );
-            assert_eq!(
-                address,
-                web3::types::H160::from_str("0x4726b1555bf7ab73553be4eb3cfe15376d0db188").unwrap()
-            );
-            // these aren't determinstic, so exclude from the test
-            // assert_eq!(start_time, U256::from_dec_str("1621727544").unwrap());
-            // assert_eq!(end_time, U256::from_dec_str("1621900344").unwrap());
+                staker,
+                ..
+            }))) => {
+                assert_eq!(
+                    account_id,
+                    AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
+                        .unwrap()
+                );
+                assert_eq!(
+                    amount,
+                    U256::from_dec_str("13333333333333334032384").unwrap()
+                );
+                assert_eq!(
+                    staker,
+                    web3::types::H160::from_str("0x33a4622b82d4c04a53e170c638b944ce27cffce3")
+                        .unwrap()
+                );
+                events_check_list.claim_registered = true;
+            }
+
+            Ok(Some(Ok(StakeManagerEvent::ClaimExecuted {
+                account_id, amount, ..
+            }))) => {
+                assert_eq!(
+                    account_id,
+                    AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU")
+                        .unwrap()
+                );
+                assert_eq!(amount, 13333333333333334032384);
+                events_check_list.claim_executed = true;
+            }
+
+            Ok(Some(Ok(StakeManagerEvent::MinStakeChanged {
+                old_min_stake,
+                new_min_stake,
+                ..
+            }))) => {
+                assert_eq!(
+                    old_min_stake,
+                    U256::from_dec_str("40000000000000000000000").unwrap()
+                );
+                assert_eq!(
+                    new_min_stake,
+                    U256::from_dec_str("13333333333333334032384").unwrap()
+                );
+                events_check_list.min_stake_changed = true;
+            }
+
+            Ok(Some(Ok(StakeManagerEvent::FlipSupplyUpdated {
+                old_supply,
+                new_supply,
+                ..
+            }))) => {
+                assert_eq!(
+                    old_supply,
+                    U256::from_dec_str("90000000000000000000000000").unwrap()
+                );
+                assert_eq!(
+                    new_supply,
+                    U256::from_dec_str("100000000000000000000000000").unwrap()
+                );
+                events_check_list.flip_supply_updated = true;
+            }
+
+            Ok(_) => {
+                panic!("Error in event stream")
+            }
+
+            Err(_) => {
+                // Timeout, all events in the stream have been check.
+                break;
+            }
         }
-        _ => panic!("Was expecting ClaimRegistered event"),
     }
 
-    match stream.next().await.unwrap().unwrap() {
-        StakeManagerEvent::ClaimExecuted(node_id, amount) => {
-            assert_eq!(node_id, U256::from_dec_str("12345").unwrap());
-            assert_eq!(
-                amount,
-                U256::from_dec_str("13333333333333334032384").unwrap()
-            );
-        }
-        _ => panic!("Was expecting ClaimExecuted event"),
+    if !events_check_list.staked
+        && !events_check_list.claim_registered
+        && !events_check_list.claim_executed
+        && !events_check_list.min_stake_changed
+        && !events_check_list.flip_supply_updated
+    {
+        panic!("Event stream was empty. Have you ran the setup script to deploy/run the contracts?")
     }
 
-    match stream.next().await.unwrap().unwrap() {
-        StakeManagerEvent::MinStakeChanged(before, after) => {
-            assert_eq!(
-                before,
-                U256::from_dec_str("40000000000000000000000").unwrap()
-            );
-            assert_eq!(
-                after,
-                U256::from_dec_str("13333333333333334032384").unwrap()
-            );
-        }
-        _ => panic!("Was expecting MinStakeChanged event"),
-    }
-
-    match stream.next().await.unwrap().unwrap() {
-        StakeManagerEvent::EmissionChanged(before, after) => {
-            assert_eq!(before, U256::from_dec_str("5607877281367557723").unwrap());
-            assert_eq!(after, U256::from_dec_str("1869292427122519296").unwrap());
-        }
-        _ => panic!("Was expecting MinStakeChanged event"),
-    }
+    assert_eq!(events_check_list.staked, true, "Staked event was not seen");
+    assert_eq!(
+        events_check_list.claim_registered, true,
+        "ClaimRegistered event was not seen"
+    );
+    assert_eq!(
+        events_check_list.claim_executed, true,
+        "ClaimExecuted event was not seen"
+    );
+    assert_eq!(
+        events_check_list.min_stake_changed, true,
+        "MinStakeChanged event was not seen"
+    );
+    assert_eq!(
+        events_check_list.flip_supply_updated, true,
+        "FlipSupplyUpdated event was not seen"
+    );
 }
