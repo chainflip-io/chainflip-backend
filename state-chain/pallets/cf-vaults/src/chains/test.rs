@@ -1,8 +1,8 @@
 mod test {
 	use crate::chains::ethereum::{Error, EthSigningTxRequest, EthSigningTxResponse};
-	use crate::rotation::ChainVault;
 	use crate::chains::mock::*;
 	use crate::chains::*;
+	use crate::rotation::ChainVault;
 	use frame_support::{assert_noop, assert_ok};
 
 	fn last_event() -> mock::Event {

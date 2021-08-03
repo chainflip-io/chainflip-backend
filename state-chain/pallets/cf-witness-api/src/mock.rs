@@ -108,7 +108,7 @@ impl pallet_cf_vaults::Config for Test {
 	type EthereumVault = EthereumChain;
 	type EnsureWitnessed = MockEnsureWitnessed;
 	type RequestIndex = u64;
-	type PublicKey = Vec<u8>;
+	type Bytes = Vec<u8>;
 	type Penalty = Self;
 }
 

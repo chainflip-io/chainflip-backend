@@ -68,21 +68,26 @@ parameter_types! {}
 
 pub struct OtherChain;
 type RequestIndex = u64;
-impl ChainVault<RequestIndex, Vec<u8>, ValidatorId, RotationError<ValidatorId>> for OtherChain {
+impl ChainVault for OtherChain {
+	type Index = RequestIndex;
+	type Bytes = Vec<u8>;
+	type ValidatorId = ValidatorId;
+	type Err = RotationError<Self::ValidatorId>;
+
 	fn chain_params() -> ChainParams {
 		ChainParams::Other(vec![])
 	}
 
 	fn try_start_vault_rotation(
-		index: RequestIndex,
-		_new_public_key: Vec<u8>,
-		_validators: Vec<ValidatorId>,
-	) -> Result<(), RotationError<ValidatorId>> {
+		index: Self::Index,
+		_new_public_key: Self::Bytes,
+		_validators: Vec<Self::ValidatorId>,
+	) -> Result<(), Self::Err> {
 		OTHER_CHAIN_RESULT.with(|l| *l.borrow_mut() = index);
 		Ok(())
 	}
 
-	fn vault_rotated(_response: VaultRotationResponse) {}
+	fn vault_rotated(_response: VaultRotationResponse<Self::Bytes>) {}
 }
 
 pub struct MockEnsureWitness;
@@ -125,7 +130,7 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type EthereumVault = OtherChain;
 	type EnsureWitnessed = MockEnsureWitness;
 	type RequestIndex = u64;
-	type PublicKey = Vec<u8>;
+	type Bytes = Vec<u8>;
 	type Penalty = Self;
 }
 

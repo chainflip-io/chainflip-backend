@@ -59,7 +59,6 @@ pub mod pallet {
 	use cf_traits::NonceProvider;
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::traits::AtLeast32BitUnsigned;
-
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(_);
@@ -69,16 +68,16 @@ pub mod pallet {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		type Vaults: ChainHandler<
-				Self::RequestIndex,
-				<Self as ChainFlip>::ValidatorId,
-				RotationError<Self::ValidatorId>,
-			> + TryIndex<Self::RequestIndex, Self::ValidatorId>;
+				Index = Self::RequestIndex,
+				ValidatorId = <Self as ChainFlip>::ValidatorId,
+				Err = RotationError<Self::ValidatorId>,
+			> + TryIndex<Index = Self::RequestIndex, Err = RotationError<Self::ValidatorId>>;
 		/// Provides an origin check for witness transactions.
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 		/// The request index
 		type RequestIndex: Member + Parameter + Default + AtLeast32BitUnsigned + Copy;
 		/// The new public key type
-		type PublicKey: Into<Vec<u8>>;
+		type PublicKey: Into<Vec<u8>> + Member + Parameter + Default;
 		/// The type here for the nonce used
 		type Nonce: Into<U256>;
 		/// A nonce provider
@@ -92,7 +91,8 @@ pub mod pallet {
 	/// The Vault for this instance
 	#[pallet::storage]
 	#[pallet::getter(fn vault)]
-	pub(super) type Vault<T: Config> = StorageValue<_, VaultRotationResponse, ValueQuery>;
+	pub(super) type Vault<T: Config> =
+		StorageValue<_, VaultRotationResponse<T::PublicKey>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -108,7 +108,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-
 		#[pallet::weight(10_000)]
 		pub fn eth_signing_tx_response(
 			origin: OriginFor<T>,
@@ -141,10 +140,12 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config>
-	ChainVault<T::RequestIndex, T::PublicKey, T::ValidatorId, RotationError<T::ValidatorId>>
-	for Pallet<T>
-{
+impl<T: Config> ChainVault for Pallet<T> {
+	type Index = T::RequestIndex;
+	type Bytes = T::PublicKey;
+	type ValidatorId = T::ValidatorId;
+	type Err = RotationError<T::ValidatorId>;
+
 	/// Parameters required when creating key generation requests
 	fn chain_params() -> ChainParams {
 		ChainParams::Ethereum(vec![])
@@ -156,10 +157,10 @@ impl<T: Config>
 	/// A payload is built and emitted as a `EthSigningTxRequest`, failing this an error is reported
 	/// back to `Vaults`
 	fn try_start_vault_rotation(
-		index: T::RequestIndex,
-		new_public_key: T::PublicKey,
-		validators: Vec<T::ValidatorId>,
-	) -> Result<(), RotationError<T::ValidatorId>> {
+		index: Self::Index,
+		new_public_key: Self::Bytes,
+		validators: Vec<Self::ValidatorId>,
+	) -> Result<(), Self::Err> {
 		// Create payload for signature here
 		// function setAggKeyWithAggKey(SigData calldata sigData, Key calldata newKey)
 		match Self::encode_set_agg_key_with_agg_key(new_public_key) {
@@ -184,7 +185,7 @@ impl<T: Config>
 	}
 
 	/// The vault for this chain has been rotated and we store this response to storage
-	fn vault_rotated(response: VaultRotationResponse) {
+	fn vault_rotated(response: VaultRotationResponse<Self::Bytes>) {
 		Vault::<T>::set(response);
 	}
 }

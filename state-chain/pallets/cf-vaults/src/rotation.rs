@@ -21,51 +21,53 @@ pub enum RotationError<ValidatorId> {
 	VaultRotationCompletionFailed,
 }
 
-#[derive(RuntimeDebug, Encode, Decode, PartialEq)]
-/// Errors occurring during a rotation
-pub enum Rotter<ValidatorId> {
-	/// An invalid request index
-	InvalidRequestIndex(ValidatorId),
-}
-
-/// Try to determine if an index is valid
-pub trait TryIndex<T: AtLeast32BitUnsigned, ValidatorId> {
-	fn try_is_valid(idx: T) -> Result<(), RotationError<ValidatorId>>;
+/// Determine if an index is valid
+pub trait TryIndex {
+	type Index: AtLeast32BitUnsigned;
+	type Err;
+	fn try_is_valid(idx: Self::Index) -> Result<(), Self::Err>;
 }
 
 /// A request/response trait
-pub trait RequestResponse<I, Req, Res, Err> {
+pub trait RequestResponse<Index: AtLeast32BitUnsigned, Req, Res, Err> {
 	/// Try to make a request identified with an index
-	fn try_request(index: I, request: Req) -> Result<(), Err>;
+	fn try_request(index: Index, request: Req) -> Result<(), Err>;
 	// Try to handle a response of a request identified with a index
-	fn try_response(index: I, response: Res) -> Result<(), Err>;
+	fn try_response(index: Index, response: Res) -> Result<(), Err>;
 }
 
 /// A vault for a chain
-pub trait ChainVault<I, PublicKey, ValidatorId, Err> {
+pub trait ChainVault {
+	type Index: AtLeast32BitUnsigned;
+	type Bytes: Into<Vec<u8>>;
+	type ValidatorId;
+	type Err;
 	/// A set of params for the chain for this vault
 	fn chain_params() -> ChainParams;
 	/// Start the vault rotation phase.  The chain would construct a `VaultRotationRequest`.
-	/// When complete `ChainEvents::try_complete_vault_rotation()` would be used to notify to continue
+	/// When complete `ChainHandler::try_complete_vault_rotation()` would be used to notify to continue
 	/// with the process.
 	fn try_start_vault_rotation(
-		index: I,
-		new_public_key: PublicKey,
-		validators: Vec<ValidatorId>,
-	) -> Result<(), Err>;
+		index: Self::Index,
+		new_public_key: Self::Bytes,
+		validators: Vec<Self::ValidatorId>,
+	) -> Result<(), Self::Err>;
 	/// We have confirmation of the rotation
-	fn vault_rotated(response: VaultRotationResponse);
+	fn vault_rotated(response: VaultRotationResponse<Self::Bytes>);
 }
 
 /// Events coming in from our chains.  This is used to callback from the request to complete the vault
 /// rotation phase
-pub trait ChainHandler<I, ValidatorId, Err> {
+pub trait ChainHandler {
+	type Index: AtLeast32BitUnsigned;
+	type ValidatorId;
+	type Err;
 	/// Initial vault rotation phase complete with a result describing the outcome of this phase
 	/// Feedback is provided back on this step
 	fn try_complete_vault_rotation(
-		index: I,
-		result: Result<VaultRotationRequest, RotationError<ValidatorId>>,
-	) -> Result<(), Err>;
+		index: Self::Index,
+		result: Result<VaultRotationRequest, RotationError<Self::ValidatorId>>,
+	) -> Result<(), Self::Err>;
 }
 
 /// Description of some base types
@@ -100,7 +102,7 @@ pub struct KeygenRequest<ValidatorId> {
 
 /// A response for our KeygenRequest
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum KeygenResponse<ValidatorId, PublicKey> {
+pub enum KeygenResponse<ValidatorId, PublicKey: Into<Vec<u8>>> {
 	/// The key generation ceremony has completed successfully with a new proposed public key
 	Success(PublicKey),
 	/// Something went wrong and it failed.
@@ -120,8 +122,8 @@ impl From<ChainParams> for VaultRotationRequest {
 }
 /// A response of our request to rotate the vault
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct VaultRotationResponse {
-	pub old_key: Vec<u8>,
-	pub new_key: Vec<u8>,
-	pub tx: Vec<u8>,
+pub struct VaultRotationResponse<Bytes: Into<Vec<u8>>> {
+	pub old_key: Bytes,
+	pub new_key: Bytes,
+	pub tx: Bytes,
 }
