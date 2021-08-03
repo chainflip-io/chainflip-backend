@@ -561,7 +561,7 @@ fn test_claim_all() {
 #[test]
 fn test_claim_payload() {
 	use ethabi::{Address, Token};
-	const ABI_JSON: &[u8; 11435] =
+	const ABI_JSON: &[u8; 9822] =
 		std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json");
 	const EXPIRY_SECS: u64 = 10;
 	const AMOUNT: u128 = 1234567890;
