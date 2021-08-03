@@ -104,3 +104,32 @@ impl<M: IMQClient> SCObserver<M> {
         Err(anyhow::Error::msg(err_msg))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use substrate_subxt::ClientBuilder;
+
+    use crate::{logging, mq::nats_client::NatsMQClient, settings};
+
+    use super::*;
+
+    #[tokio::test]
+    #[ignore = "runs forever, useful for testing without having to start the whole CFE"]
+    async fn run_the_sc_observer() {
+        let settings = settings::test_utils::new_test_settings().unwrap();
+        let subxt_client = ClientBuilder::<StateChainRuntime>::new()
+            .set_url(&settings.state_chain.ws_endpoint)
+            .build()
+            .await
+            .expect("Should create subxt client");
+
+        let logger = logging::test_utils::create_test_logger();
+
+        start(
+            NatsMQClient::new(&settings.message_queue).await.unwrap(),
+            subxt_client,
+            &logger,
+        )
+        .await;
+    }
+}
