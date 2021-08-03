@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use crate::{
     logging::SIGNING_SUB_COMPONENT,
-    mq::{pin_message_stream, IMQClient, Subject},
+    mq::{IMQClient, Subject},
     p2p::ValidatorId,
     signing::db::KeyDB,
 };
@@ -185,17 +185,15 @@ where
 
         let logger_c = self.logger.clone();
         let other_fut = async move {
-            let mut p2p_messages = pin_message_stream(
-                mq.subscribe::<P2PMessage>(Subject::P2PIncoming)
-                    .await
-                    .expect("Could not subscribe to Subject::P2PIncoming"),
-            );
+            let mut p2p_messages = mq
+                .subscribe::<P2PMessage>(Subject::P2PIncoming)
+                .await
+                .expect("Could not subscribe to Subject::P2PIncoming");
 
-            let mut multisig_instructions = pin_message_stream(
-                mq.subscribe::<MultisigInstruction>(Subject::MultisigInstruction)
-                    .await
-                    .expect("Could not subscribe to Subject::MultisigInstruction"),
-            );
+            let mut multisig_instructions = mq
+                .subscribe::<MultisigInstruction>(Subject::MultisigInstruction)
+                .await
+                .expect("Could not subscribe to Subject::MultisigInstruction");
 
             // have to wait for the coordinator to subscribe...
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;

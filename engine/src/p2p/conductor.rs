@@ -4,13 +4,13 @@ use tokio_stream::StreamExt;
 
 use crate::{
     logging::COMPONENT_KEY,
-    mq::{pin_message_stream, IMQClient, Subject},
+    mq::{IMQClient, Subject},
     p2p::P2PMessage,
 };
 
 use super::{P2PMessageCommand, P2PNetworkClient};
 use crate::p2p::ValidatorId;
-use std::marker::PhantomData;
+use std::{marker::PhantomData, pin::Pin};
 
 /// Intermediates P2P events between MQ and P2P interface
 pub struct P2PConductor<MQ, P2P, S>
@@ -21,7 +21,7 @@ where
 {
     mq: MQ,
     p2p: P2P,
-    stream: Box<dyn Stream<Item = Result<P2PMessageCommand, anyhow::Error>>>,
+    stream: Pin<Box<dyn Stream<Item = Result<P2PMessageCommand, anyhow::Error>>>>,
     marker: PhantomData<S>,
     logger: slog::Logger,
 }
@@ -50,7 +50,7 @@ where
     pub async fn start(mut self, mut shutdown_rx: tokio::sync::oneshot::Receiver<()>) {
         slog::info!(self.logger, "Starting");
 
-        let mut p2p_command_stream = pin_message_stream(self.stream);
+        let mut p2p_command_stream = self.stream;
 
         let mut p2p_stream = self
             .p2p
@@ -153,15 +153,13 @@ mod tests {
         };
 
         let read_fut = async move {
-            let stream2 = mc2_copy
+            let mut p2p_messages = mc2_copy
                 .subscribe::<P2PMessage>(Subject::P2PIncoming)
                 .await
                 .expect("Could not subscribe to Subject::P2PIncoming");
 
-            let mut stream2 = pin_message_stream(stream2);
-
             // Second client should be able to receive the message
-            let maybe_msg = timeout(Duration::from_millis(100), stream2.next()).await;
+            let maybe_msg = timeout(Duration::from_millis(100), p2p_messages.next()).await;
 
             assert!(maybe_msg.is_ok(), "recv timeout");
 

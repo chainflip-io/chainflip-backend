@@ -20,7 +20,7 @@ pub trait IMQClient {
     async fn subscribe<M: DeserializeOwned>(
         &self,
         subject: Subject,
-    ) -> Result<Box<dyn Stream<Item = Result<M>>>>;
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<M>>>>>;
 
     // / Close the connection to the MQ
     async fn close(&self) -> Result<()>;

@@ -9,7 +9,7 @@ use tokio::time::Duration;
 
 use crate::{
     logging,
-    mq::{mq_mock::MQMock, pin_message_stream, IMQClient, Subject},
+    mq::{mq_mock::MQMock, IMQClient, Subject},
     p2p::{mock::NetworkMock, P2PConductor, ValidatorId},
     signing::db::KeyDBMock,
 };
@@ -46,8 +46,7 @@ async fn coordinate_signing(
                     .subscribe::<MultisigEvent>(Subject::MultisigEvent)
                     .await
                     .expect("Could not subscribe to Subject::MultisigEvent");
-
-                pin_message_stream(stream)
+                stream
             }
         })
         .collect_vec();
