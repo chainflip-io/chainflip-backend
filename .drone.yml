@@ -114,6 +114,7 @@ steps:
         -p pallet-cf-flip
         -p pallet-cf-staking
         -p pallet-cf-validator
+        -p pallet-cf-vaults
         -p pallet-cf-witness
         -p cf-traits
         -- --check

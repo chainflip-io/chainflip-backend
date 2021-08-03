@@ -24,9 +24,11 @@ pub mod pallet {
 		AggKeySignature, Call as StakingCall, Config as StakingConfig, EthTransactionHash,
 		EthereumAddress, FlipBalance,
 	};
-	use pallet_cf_vaults::chains::ethereum::{Call as EthereumCall, Config as EthereumConfig, EthSigningTxResponse};
-	use pallet_cf_vaults::{Call as VaultsCall, Config as VaultsConfig};
+	use pallet_cf_vaults::chains::ethereum::{
+		Call as EthereumCall, Config as EthereumConfig, EthSigningTxResponse,
+	};
 	use pallet_cf_vaults::rotation::{KeygenResponse, VaultRotationResponse};
+	use pallet_cf_vaults::{Call as VaultsCall, Config as VaultsConfig};
 	use sp_core::U256;
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
