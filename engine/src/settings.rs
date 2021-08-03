@@ -56,19 +56,9 @@ pub struct Settings {
 }
 
 impl Settings {
+    /// new settings loaded from "config/Default.toml"
     pub fn new() -> Result<Self, ConfigError> {
-        let mut s = Config::new();
-
-        // Start off by merging in the "default" configuration file
-        s.merge(File::with_name("config/Default.toml"))?;
-
-        // You can deserialize (and thus freeze) the entire configuration as
-        let s: Self = s.try_into()?;
-
-        // make sure the settings are clean
-        s.validate_settings()?;
-
-        Ok(s)
+        Settings::from_file("config/Default.toml")
     }
 
     /// Validates the formatting of some settings
@@ -87,6 +77,22 @@ impl Settings {
         is_valid_db_path(&self.signing.db_file).map_err(|e| ConfigError::Message(e.to_string()))?;
 
         Ok(())
+    }
+
+    /// load settings from a toml file
+    pub fn from_file(file: &str) -> Result<Self, ConfigError> {
+        let mut s = Config::new();
+
+        // merging in the configuration file
+        s.merge(File::with_name(file))?;
+
+        // You can deserialize (and thus freeze) the entire configuration as
+        let s: Settings = s.try_into()?;
+
+        // make sure the settings are clean
+        s.validate_settings()?;
+
+        Ok(s)
     }
 }
 
@@ -134,19 +140,9 @@ fn is_eth_address(address: &str) -> Result<()> {
 pub mod test_utils {
     use super::*;
 
+    /// loads the settings from the "config/Testing.toml" file
     pub fn new_test_settings() -> Result<Settings, ConfigError> {
-        let mut s = Config::new();
-
-        // Start off by merging in the "testing" configuration file
-        s.merge(File::with_name("config/Testing.toml"))?;
-
-        // You can deserialize (and thus freeze) the entire configuration as
-        let s: Settings = s.try_into()?;
-
-        // make sure the settings are clean
-        s.validate_settings()?;
-
-        Ok(s)
+        Settings::from_file("config/Testing.toml")
     }
 }
 
