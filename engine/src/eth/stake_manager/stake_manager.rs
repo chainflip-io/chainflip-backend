@@ -27,7 +27,7 @@ pub struct StakeManager {
     logger: slog::Logger,
 }
 
-// TODO: ClaimRegistered, EmissionChanged, MinStakeChanged, not used
+// TODO: ClaimRegistered, FlipSupplyUpdated, MinStakeChanged, not used
 // so they are just using the ethabi encoding atm
 /// Represents the events that are expected from the StakeManager contract.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,6 +38,8 @@ pub enum StakeManagerEvent {
         account_id: AccountId32,
         /// The amount of FLIP that was staked.
         amount: u128,
+        /// The address which the staker requires to be used when claiming back FLIP for `nodeID`
+        return_addr: ethabi::Address,
         /// Transaction hash that created the event
         tx_hash: [u8; 32],
     },
@@ -68,12 +70,14 @@ pub enum StakeManagerEvent {
         tx_hash: [u8; 32],
     },
 
-    /// `EmissionChanged(oldEmissionPerBlock, newEmissionPerBlock)`
-    EmissionChanged {
+    /// `FlipSupplyUpdated(oldEmissionPerBlock, newEmissionPerBlock)`
+    FlipSupplyUpdated {
         /// Old emission per block
-        old_emission_per_block: ethabi::Uint,
+        old_supply: ethabi::Uint,
         /// New emission per block
-        new_emission_per_block: ethabi::Uint,
+        new_supply: ethabi::Uint,
+        /// State Chain block number for the new total supply
+        block_number: ethabi::Uint,
         /// Transaction hash that created the event
         tx_hash: [u8; 32],
     },
@@ -95,8 +99,13 @@ impl Display for StakeManagerEvent {
             StakeManagerEvent::Staked {
                 account_id,
                 amount,
+                return_addr,
                 tx_hash,
-            } => write!(f, "Staked({:?}, {}, {:?}", account_id, amount, tx_hash),
+            } => write!(
+                f,
+                "Staked({:?}, {}, {:?}, {:?}",
+                account_id, amount, return_addr, tx_hash
+            ),
             StakeManagerEvent::ClaimRegistered {
                 account_id,
                 amount,
@@ -113,19 +122,22 @@ impl Display for StakeManagerEvent {
                 account_id,
                 amount,
                 tx_hash,
-            } => write!(
-                f,
-                "ClaimExecuted({:?}, {}, {:?}",
-                account_id, amount, tx_hash
-            ),
-            StakeManagerEvent::EmissionChanged {
-                old_emission_per_block,
-                new_emission_per_block,
+            } => {
+                write!(
+                    f,
+                    "ClaimExecuted({:?}, {}, {:?}",
+                    account_id, amount, tx_hash
+                )
+            }
+            StakeManagerEvent::FlipSupplyUpdated {
+                old_supply,
+                new_supply,
+                block_number,
                 tx_hash,
             } => write!(
                 f,
-                "EmissionChanged({}, {}, {:?}",
-                old_emission_per_block, new_emission_per_block, tx_hash
+                "FlipSupplyUpdated({}, {}, {}, {:?}",
+                old_supply, new_supply, block_number, tx_hash
             ),
             StakeManagerEvent::MinStakeChanged {
                 old_min_stake,
@@ -176,10 +188,10 @@ impl StakeManager {
             .expect("StakeManager contract should provide 'ClaimExecuted' event.")
     }
 
-    /// Event definition for the 'EmissionChanged' event
+    /// Event definition for the 'FlipSupplyUpdated' event
     pub fn emission_changed_event_definition(&self) -> &ethabi::Event {
-        self.get_event("EmissionChanged")
-            .expect("StakeManager contract should provide 'EmissionChanged' event")
+        self.get_event("FlipSupplyUpdated")
+            .expect("StakeManager contract should provide 'FlipSupplyUpdated' event")
     }
 
     /// Event definition for the 'MinStakeChanged' event
@@ -251,6 +263,7 @@ impl EventSource for StakeManager {
                 let event = StakeManagerEvent::Staked {
                     account_id,
                     amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
+                    return_addr: utils::decode_log_param(&log, "returnAddr")?,
                     tx_hash,
                 };
                 Ok(event)
@@ -270,9 +283,10 @@ impl EventSource for StakeManager {
                 let log = self
                     .emission_changed_event_definition()
                     .parse_log(raw_log)?;
-                let event = StakeManagerEvent::EmissionChanged {
-                    old_emission_per_block: utils::decode_log_param(&log, "oldEmissionPerBlock")?,
-                    new_emission_per_block: utils::decode_log_param(&log, "newEmissionPerBlock")?,
+                let event = StakeManagerEvent::FlipSupplyUpdated {
+                    old_supply: utils::decode_log_param(&log, "oldSupply")?,
+                    new_supply: utils::decode_log_param(&log, "newSupply")?,
+                    block_number: utils::decode_log_param(&log, "stateChainBlockNumber")?,
                     tx_hash,
                 };
                 Ok(event)
@@ -328,25 +342,27 @@ mod tests {
     const CLAIM_EXECUTED_EVENT_SIG: &'static str =
         "0xac96f597a44ad425c6eedf6e4c8327fd959c9d912fa8d027fb54313e59f247c8";
 
-    const EMISSION_CHANGED_EVENT_SIG: &'static str =
-        "0x0b0b5ed18390ab49777844d5fcafb9865c74095ceb3e73cc57d1fbcc926103b5";
+    const FLIP_SUPPLY_UPDATED_EVENT_SIG: &'static str =
+        "0xff4b7a826623672c6944dc44d809008e2e1105180d110fd63986e841f15eb2ad";
 
     const MIN_STAKE_CHANGED_EVENT_SIG: &'static str =
         "0xca11c8a4c461b60c9f485404c272650c2aaae260b2067d72e9924abb68556593";
 
     const STAKED_LOG: &'static str = r#"{
-        "address": "0x85c0d660ea89da58c05996eb8fb7a444b3543f11",
-        "blockHash": "0x90c9130d55361350e0cb72fe436987fedd22111e9e554259124526ca60ddebd5",
-        "blockNumber": "0x8669f5",
-        "data": "0x000000000000000000000000000000000000000000000878678326eac90000000000000000000000000000000000000000000000000000000000000000000001",
-        "logIndex": "0x8",
-        "removed": false,
+        "logIndex": "0x2", 
+        "transactionIndex": "0x0",
+        "transactionHash": "0x9158e6d1470330d9d38636930831d5ee17fb71af70f3f17794539d50e00b08aa", 
+        "blockHash": "0x17c2c0ca7b4ff256e6bcec927535a081bc0d6274523abee01f02daed24e9a3ab", 
+        "blockNumber": "0xa", 
+        "address": "0x6951b5Bd815043E3F842c1b026b0Fa888Cc2DD85", 
+        "data": "0x000000000000000000000000000000000000000000000878678326eac90000000000000000000000000000000000000000000000000000000000000000000001", 
         "topics": [
             "0x23581b9afdc2170a53868d0b64508f096844aa55c3ad98caf14032a91c41cc52",
             "0x0000000000000000000000000000000000000000000000000000000000003039"
         ],
-        "transactionHash": "0x3a4b2643b00b579c493f9ed171bebbac1173dd195fde1a2c4ef8f69b55a7da43",
-        "transactionIndex": "0x12"
+        "type": "mined",
+        "removed": false
+        
     }"#;
 
     const CLAIM_REGISTERED_LOG: &'static str = r#"{
@@ -379,18 +395,17 @@ mod tests {
         "transactionIndex": "0xe"
     }"#;
 
-    const EMISSION_CHANGED_LOG: &'static str = r#"{
-        "address": "0x85c0d660ea89da58c05996eb8fb7a444b3543f11",
-        "blockHash": "0xa2197a97f0e129082c688fd76244fe119481d670460968283a5c7cb694efc6e5",
-        "blockNumber": "0x8669f8",
-        "data": "0x0000000000000000000000000000000000000000000000004dd32eacf3e5865b00000000000000000000000000000000000000000000000019f10f8efbf72d00",
-        "logIndex": "0x10",
-        "removed": false,
-        "topics": [
-            "0x0b0b5ed18390ab49777844d5fcafb9865c74095ceb3e73cc57d1fbcc926103b5"
-        ],
-        "transactionHash": "0xc33000ba8e13e574b813521aa88f879af50470ddd3fceb0712bc31d4c83bd6ef",
-        "transactionIndex": "0xf"
+    const FLIP_SUPPLY_UPDATED_LOG: &'static str = r#"{
+        "logIndex": "0x2", 
+        "transactionIndex": "0x0", 
+        "transactionHash": "0x06a6ef6fb6ab3a9493435d37a36607efc197dc71518b68b25d1061116034b16f", 
+        "blockHash": "0x6518112e02b160ef699990355d752dbf402a19f472ea18e6bdd575e0a3351c1a", 
+        "blockNumber": "0xe", 
+        "address": "0x6951b5Bd815043E3F842c1b026b0Fa888Cc2DD85", 
+        "data": "0x0000000000000000000000000000000000000000004a723dc6b40b8a9a00000000000000000000000000000000000000000000000052b7d2dcc80cd2e40000000000000000000000000000000000000000000000000000000000000000000064", 
+        "topics": ["0xff4b7a826623672c6944dc44d809008e2e1105180d110fd63986e841f15eb2ad"], 
+        "type": "mined",
+        "removed": false
     }"#;
 
     const MIN_STAKE_CHANGED_LOG: &'static str = r#"{
@@ -425,6 +440,7 @@ mod tests {
             StakeManagerEvent::Staked {
                 account_id,
                 amount,
+                return_addr,
                 tx_hash,
             } => {
                 let expected_account_id =
@@ -433,10 +449,15 @@ mod tests {
                 assert_eq!(account_id, expected_account_id);
                 assert_eq!(amount, 40000000000000000000000u128);
                 let expected_hash = H256::from_str(
-                    "0x3a4b2643b00b579c493f9ed171bebbac1173dd195fde1a2c4ef8f69b55a7da43",
+                    "0x9158e6d1470330d9d38636930831d5ee17fb71af70f3f17794539d50e00b08aa",
                 )
                 .unwrap()
                 .to_fixed_bytes();
+                assert_eq!(
+                    return_addr,
+                    web3::types::H160::from_str("0x0000000000000000000000000000000000000001")
+                        .unwrap()
+                );
                 assert_eq!(tx_hash, expected_hash);
             }
             _ => panic!("Expected StakeManagerEvent::Staked, got a different variant"),
@@ -522,34 +543,36 @@ mod tests {
     }
 
     #[test]
-    fn emission_changed_log_parsing() {
-        let log: web3::types::Log = serde_json::from_str(EMISSION_CHANGED_LOG).unwrap();
+    fn flip_supply_updated_log_parsing() {
+        let log: web3::types::Log = serde_json::from_str(FLIP_SUPPLY_UPDATED_LOG).unwrap();
 
         let logger = logging::test_utils::create_test_logger();
         let sm = StakeManager::load(CONTRACT_ADDRESS, &logger).unwrap();
 
         match sm.parse_event(log).unwrap() {
-            StakeManagerEvent::EmissionChanged {
-                old_emission_per_block,
-                new_emission_per_block,
+            StakeManagerEvent::FlipSupplyUpdated {
+                old_supply,
+                new_supply,
+                block_number,
                 tx_hash,
             } => {
                 assert_eq!(
-                    old_emission_per_block,
-                    U256::from_dec_str("5607877281367557723").unwrap()
+                    old_supply,
+                    U256::from_dec_str("90000000000000000000000000").unwrap()
                 );
                 assert_eq!(
-                    new_emission_per_block,
-                    U256::from_dec_str("1869292427122519296").unwrap()
+                    new_supply,
+                    U256::from_dec_str("100000000000000000000000000").unwrap()
                 );
+                assert_eq!(block_number, U256::from_dec_str("100").unwrap());
                 let expected_hash = H256::from_str(
-                    "0xc33000ba8e13e574b813521aa88f879af50470ddd3fceb0712bc31d4c83bd6ef",
+                    "0x06a6ef6fb6ab3a9493435d37a36607efc197dc71518b68b25d1061116034b16f",
                 )
                 .unwrap()
                 .to_fixed_bytes();
                 assert_eq!(tx_hash, expected_hash);
             }
-            _ => panic!("Expected Staking::EmissionChanged, got a different variant"),
+            _ => panic!("Expected Staking::FlipSupplyUpdated, got a different variant"),
         }
     }
 
@@ -610,7 +633,7 @@ mod tests {
 
         // Emission changed event
         let emission_changed_sig = sm.emission_changed_event_definition().signature();
-        let expected = H256::from_str(EMISSION_CHANGED_EVENT_SIG)
+        let expected = H256::from_str(FLIP_SUPPLY_UPDATED_EVENT_SIG)
             .expect("Couldn't cast emission changed event sig to H256");
         assert_eq!(emission_changed_sig, expected);
 
