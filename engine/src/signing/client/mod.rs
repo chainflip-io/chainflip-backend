@@ -8,7 +8,6 @@ use crate::{
     p2p::ValidatorId,
     signing::db::KeyDB,
 };
-use anyhow::Result;
 use futures::StreamExt;
 use slog::o;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -180,21 +179,23 @@ where
             }
         };
 
-        let cleanup_stream = UnboundedReceiverStream::new(cleanup_rx);
+        let mut cleanup_stream = UnboundedReceiverStream::new(cleanup_rx);
 
         let mq = self.mq_client.clone();
 
         let logger_c = self.logger.clone();
         let other_fut = async move {
-            let stream1 = mq
-                .subscribe::<P2PMessage>(Subject::P2PIncoming)
-                .await
-                .expect("Could not subscribe to Subject::P2PIncoming");
+            let mut p2p_messages = pin_message_stream(
+                mq.subscribe::<P2PMessage>(Subject::P2PIncoming)
+                    .await
+                    .expect("Could not subscribe to Subject::P2PIncoming"),
+            );
 
-            let stream2 = mq
-                .subscribe::<MultisigInstruction>(Subject::MultisigInstruction)
-                .await
-                .expect("Could not subscribe to Subject::MultisigInstruction");
+            let mut multisig_instructions = pin_message_stream(
+                mq.subscribe::<MultisigInstruction>(Subject::MultisigInstruction)
+                    .await
+                    .expect("Could not subscribe to Subject::MultisigInstruction"),
+            );
 
             // have to wait for the coordinator to subscribe...
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -204,49 +205,33 @@ where
                 .await
                 .expect("Signing module failed to publish readiness");
 
-            enum OtherEvents {
-                Instruction(Result<MultisigInstruction>),
-                Cleanup(()),
-            }
-
-            enum Events {
-                P2P(Result<P2PMessage>),
-                Other(OtherEvents),
-            }
-
-            let stream1 = pin_message_stream(stream1);
-            let stream2 = pin_message_stream(stream2);
-
-            let s1 = stream1.map(Events::P2P);
-            let s2 = stream2.map(|x| Events::Other(OtherEvents::Instruction(x)));
-            let s3 = cleanup_stream.map(|_| Events::Other(OtherEvents::Cleanup(())));
-
-            let stream_inner = futures::stream::select(s2, s3);
-            let mut stream_outer = futures::stream::select(s1, stream_inner);
-
             slog::trace!(self.logger, "[{:?}] subscribed to MQ", self.my_validator_id);
 
             loop {
                 tokio::select! {
-                    Some(msg) = stream_outer.next() =>{
+                    Some(msg) = p2p_messages.next() => {
                         match msg {
-                            Events::P2P(Ok(p2p_message)) => {
+                            Ok(p2p_message) => {
                                 self.inner.process_p2p_mq_message(p2p_message);
-                            }
-                            Events::P2P(Err(err)) => {
+                            },
+                            Err(err) => {
                                 slog::warn!(self.logger, "Ignoring channel error: {}", err);
-                            }
-                            Events::Other(OtherEvents::Instruction(Ok(instruction))) => {
-                                self.inner.process_multisig_instruction(instruction);
-                            }
-                            Events::Other(OtherEvents::Instruction(Err(err))) => {
-                                slog::warn!(self.logger, "Ignoring channel error: {}", err);
-                            }
-                            Events::Other(OtherEvents::Cleanup(())) => {
-                                slog::info!(self.logger, "Cleaning up multisig states");
-                                self.inner.cleanup();
                             }
                         }
+                    }
+                    Some(msg) = multisig_instructions.next() => {
+                        match msg {
+                            Ok(instruction) => {
+                                self.inner.process_multisig_instruction(instruction);
+                            },
+                            Err(err) => {
+                                slog::warn!(self.logger, "Ignoring channel error: {}", err);
+                            }
+                        }
+                    }
+                    Some(()) = cleanup_stream.next() => {
+                        slog::info!(self.logger, "Cleaning up multisig states");
+                        self.inner.cleanup();
                     }
                     Ok(()) = &mut shutdown_other_fut_rx =>{
                         slog::info!(self.logger, "Shutting down Multisig Client OtherEvents loop");
