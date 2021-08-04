@@ -96,32 +96,50 @@ pub mod pallet {
 			Ok(().into())
 		}
 	}
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub members: Vec<AccountId<T>>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self { members: vec![] }
+		}
+	}
+
+	// The build of genesis for the pallet.
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {}
+	}
 }
 
-// impl<T: Config> Pallet<T> {
-// 	fn majority_reached(votes: u32) -> bool {
-// 		if votes > 2 {
-// 			true
-// 		} else {
-// 			false
-// 		}
-// 	}
-// 	// fn ensure_member(account: T::AccountId) -> Result<(), DispatchError> {
-// 	// 	match <Members<T>>::get() {
-// 	// 		Some(members) if members.contains(&account) => Ok(()),
-// 	// 		_ => Err(Error::<T>::NoMember.into()),
-// 	// 	}
-// 	// }
-// 	// fn ensure_not_voted(account: T::AccountId) -> Result<(), DispatchError> {
-// 	// 	match <Voted<T>>::get() {
-// 	// 		Some(voted) if voted.contains(&account) => Err(Error::<T>::AlreadyVoted.into()),
-// 	// 		_ => Ok(()),
-// 	// 	}
-// 	// }
-// 	// fn calc_block_weight() -> u32 {
-// 	// 	100
-// 	// }
-// 	// fn count_vote(account: T::AccountId) -> Result<(), DispatchError> {
-// 	// 	Ok(())
-// 	// }
-// }
+impl<T: Config> Pallet<T> {
+	fn majority_reached(votes: u32) -> bool {
+		if votes > 2 {
+			true
+		} else {
+			false
+		}
+	}
+	fn ensure_member(account: T::AccountId) -> Result<(), DispatchError> {
+		match <Members<T>>::get() {
+			Some(members) if members.contains(&account) => Ok(()),
+			_ => Err(Error::<T>::NoMember.into()),
+		}
+	}
+	fn ensure_not_voted(account: T::AccountId) -> Result<(), DispatchError> {
+		match <Voted<T>>::get() {
+			Some(voted) if voted.contains(&account) => Err(Error::<T>::AlreadyVoted.into()),
+			_ => Ok(()),
+		}
+	}
+	fn calc_block_weight() -> u32 {
+		100
+	}
+	fn count_vote(account: T::AccountId) -> Result<(), DispatchError> {
+		Ok(())
+	}
+}
