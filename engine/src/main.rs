@@ -71,13 +71,13 @@ async fn main() {
 
     futures::join!(
         // Start signing components
-        signing::MultisigClient::new(
+        signing::start(
+            ValidatorId(my_pair_signer.signer().public().0),
             db,
             mq_client.clone(),
-            ValidatorId(my_pair_signer.signer().public().0),
+            shutdown_client_rx,
             &root_logger,
-        )
-        .run(shutdown_client_rx),
+        ),
         P2PConductor::new(
             mq_client.clone(),
             RpcP2PClient::new(
