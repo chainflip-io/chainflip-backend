@@ -18,8 +18,7 @@ use lazy_static::lazy_static;
 
 use crate::signing::{
     client::{
-        KeyId, KeygenInfo, MultisigClient, MultisigEvent, MultisigInstruction, SigningInfo,
-        SigningOutcome,
+        self, KeyId, KeygenInfo, MultisigEvent, MultisigInstruction, SigningInfo, SigningOutcome,
     },
     MessageHash,
 };
@@ -214,14 +213,15 @@ async fn distributed_signing() {
 
                 let db = KeyDBMock::new();
 
-                let client =
-                    MultisigClient::new(db, mq_client, VALIDATOR_IDS[i - 1].clone(), &logger);
-
                 let (shutdown_client_tx, shutdown_client_rx) =
                     tokio::sync::oneshot::channel::<()>();
-
-                // "ready to sign" emitted here
-                let client_fut = client.run(shutdown_client_rx);
+                let client_fut = client::start(
+                    VALIDATOR_IDS[i - 1].clone(),
+                    db,
+                    mq_client,
+                    shutdown_client_rx,
+                    &logger,
+                );
 
                 let mc = mq.get_client();
 
