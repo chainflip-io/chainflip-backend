@@ -1,8 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
-mod weights;
 mod chainflip;
+mod weights;
 // A few exports that help ease life for downstream crates.
 use core::time::Duration;
 pub use frame_support::{
@@ -425,7 +425,7 @@ construct_runtime!(
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
 		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
-		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>},
+		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>},
 	}
 );
 
