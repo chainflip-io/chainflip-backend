@@ -9,7 +9,7 @@ pub mod test_utils {
     use slog::{o, Drain, Fuse, Level, OwnedKVList, Record};
     use std::result;
 
-    pub struct PrintlnDrain;
+    struct PrintlnDrain;
 
     impl Drain for PrintlnDrain {
         type Ok = ();
