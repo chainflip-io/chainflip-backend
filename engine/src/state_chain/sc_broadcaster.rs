@@ -6,7 +6,7 @@ use super::runtime::StateChainRuntime;
 use crate::{
     eth::stake_manager::stake_manager::StakeManagerEvent,
     logging::COMPONENT_KEY,
-    mq::{pin_message_stream, IMQClient, Subject},
+    mq::{IMQClient, Subject},
 };
 
 use crate::state_chain::witness_api::*;
@@ -68,14 +68,12 @@ where
     }
 
     pub async fn run(&mut self) -> Result<()> {
-        let stream = self
+        let mut stake_manager_events = self
             .mq_client
             .subscribe::<StakeManagerEvent>(Subject::StakeManager)
             .await?;
 
-        let mut stream = pin_message_stream(stream);
-
-        while let Some(event) = stream.next().await {
+        while let Some(event) = stake_manager_events.next().await {
             match event {
                 Ok(event) => self.submit_event(event).await?,
                 Err(e) => {

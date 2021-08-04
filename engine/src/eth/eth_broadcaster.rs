@@ -3,7 +3,7 @@ use std::{path::Path, str::FromStr};
 use crate::{
     eth::eth_tx_encoding::ContractCallDetails,
     logging::COMPONENT_KEY,
-    mq::{pin_message_stream, IMQClient, Subject},
+    mq::{IMQClient, Subject},
     settings,
     types::chain::Chain,
 };
@@ -79,8 +79,6 @@ impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
             .mq_client
             .subscribe::<ContractCallDetails>(Subject::Broadcast(Chain::ETH))
             .await?;
-
-        let subscription = pin_message_stream(subscription);
 
         subscription
             .for_each_concurrent(None, |msg| async {

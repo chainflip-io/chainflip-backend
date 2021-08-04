@@ -3,7 +3,7 @@ use slog::o;
 
 use crate::{
     logging::COMPONENT_KEY,
-    mq::{pin_message_stream, IMQClient, Subject},
+    mq::{IMQClient, Subject},
     p2p::{self},
     signing::{KeyId, KeygenInfo, MultisigInstruction},
     state_chain::{auction, runtime::StateChainRuntime},
@@ -38,8 +38,6 @@ impl<MQC: IMQClient + Send + Sync> TempEventMapper<MQC> {
             )
             .await
             .unwrap();
-
-        let auction_completed_event = pin_message_stream(auction_completed_event);
 
         auction_completed_event
             .for_each_concurrent(None, |evt| async {

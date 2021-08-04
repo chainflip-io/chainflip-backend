@@ -3,7 +3,7 @@ use std::{collections::HashMap, convert::TryInto};
 use crate::{
     eth::key_manager::key_manager::KeyManager,
     logging::COMPONENT_KEY,
-    mq::{pin_message_stream, IMQClient, Subject},
+    mq::{IMQClient, Subject},
     p2p::ValidatorId,
     settings,
     signing::{
@@ -96,13 +96,11 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
     /// 2. `MultisigEvent::MessagedSigned` which is emitted after the Signing module
     /// has successfully signed a message with a particular (denoted by KeyId) key
     async fn process_multi_sig_event_stream(&mut self) {
-        let multisig_event_stream = self
+        let mut multisig_event_stream = self
             .mq_client
             .subscribe::<MultisigEvent>(Subject::MultisigEvent)
             .await
             .unwrap();
-
-        let mut multisig_event_stream = pin_message_stream(multisig_event_stream);
 
         while let Some(event) = multisig_event_stream.next().await {
             match event {
