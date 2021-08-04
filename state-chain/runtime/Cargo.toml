@@ -34,6 +34,7 @@ pallet-cf-auction = { path = "../pallets/cf-auction", default-features = false }
 pallet-cf-emissions = { path = "../pallets/cf-emissions", default-features = false }
 pallet-cf-rewards = { path = "../pallets/cf-rewards", default-features = false }
 pallet-cf-witness-api = { path = "../pallets/cf-witness-api", default-features = false }
+pallet-cf-governance = { path = "../pallets/cf-governance", default-features = false }
 
 # Substrate dependencies
 frame-benchmarking = {default-features = false, optional = true, version = '3.0.0'}
@@ -112,4 +113,5 @@ std = [
   'pallet-cf-emissions/std',
   'pallet-cf-rewards/std',
   'pallet-cf-witness-api/std',
+  'pallet-cf-governance/std',
 ]

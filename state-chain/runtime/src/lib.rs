@@ -363,6 +363,10 @@ impl pallet_cf_staking::Config for Runtime {
 	type ClaimTTL = ClaimTTL;
 }
 
+impl pallet_cf_governance::Config for Runtime {
+	type Event = Event;
+}
+
 parameter_types! {
 	pub const MintInterval: u32 = 10 * MINUTES;
 }
@@ -421,6 +425,7 @@ construct_runtime!(
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
 		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
+		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>},
 	}
 );
 
