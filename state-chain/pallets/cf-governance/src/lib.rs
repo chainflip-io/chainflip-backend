@@ -112,7 +112,9 @@ pub mod pallet {
 	// The build of genesis for the pallet.
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
-		fn build(&self) {}
+		fn build(&self) {
+			Members::<T>::put(self.members.clone());
+		}
 	}
 }
 
