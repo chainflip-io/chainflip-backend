@@ -56,7 +56,7 @@ pub struct Settings {
 }
 
 impl Settings {
-    /// new settings loaded from "config/Default.toml"
+    /// New settings loaded from "config/Default.toml"
     pub fn new() -> Result<Self, ConfigError> {
         Settings::from_file("config/Default.toml")
     }
@@ -79,7 +79,7 @@ impl Settings {
         Ok(())
     }
 
-    /// load settings from a toml file
+    /// Load settings from a TOML file
     pub fn from_file(file: &str) -> Result<Self, ConfigError> {
         let mut s = Config::new();
 
@@ -140,7 +140,7 @@ fn is_eth_address(address: &str) -> Result<()> {
 pub mod test_utils {
     use super::*;
 
-    /// loads the settings from the "config/Testing.toml" file
+    /// Loads the settings from the "config/Testing.toml" file
     pub fn new_test_settings() -> Result<Settings, ConfigError> {
         Settings::from_file("config/Testing.toml")
     }

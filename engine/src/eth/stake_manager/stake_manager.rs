@@ -70,7 +70,7 @@ pub enum StakeManagerEvent {
         tx_hash: [u8; 32],
     },
 
-    /// `FlipSupplyUpdated(oldEmissionPerBlock, newEmissionPerBlock)`
+    /// `FlipSupplyUpdated(oldSupply, newTotalSupply, stateChainBlockNumber)` event
     FlipSupplyUpdated {
         /// Old emission per block
         old_supply: ethabi::Uint,
@@ -433,8 +433,8 @@ mod tests {
     fn test_staked_log_parsing() {
         let log: web3::types::Log = serde_json::from_str(STAKED_LOG).unwrap();
 
-        let logger = logging::test_utils::create_test_logger();
-        let sm = StakeManager::load(CONTRACT_ADDRESS, &logger).unwrap();
+        let sm = StakeManager::load(CONTRACT_ADDRESS, &logging::test_utils::create_test_logger())
+            .unwrap();
 
         match sm.parse_event(log).unwrap() {
             StakeManagerEvent::Staked {
@@ -468,8 +468,8 @@ mod tests {
     fn test_claim_registered_log_parsing() {
         let log: web3::types::Log = serde_json::from_str(CLAIM_REGISTERED_LOG).unwrap();
 
-        let logger = logging::test_utils::create_test_logger();
-        let sm = StakeManager::load(CONTRACT_ADDRESS, &logger).unwrap();
+        let sm = StakeManager::load(CONTRACT_ADDRESS, &logging::test_utils::create_test_logger())
+            .unwrap();
 
         match sm.parse_event(log).unwrap() {
             StakeManagerEvent::ClaimRegistered {
@@ -517,8 +517,8 @@ mod tests {
     fn test_claim_executed_log_parsing() {
         let log: web3::types::Log = serde_json::from_str(CLAIM_EXECUTED_LOG).unwrap();
 
-        let logger = logging::test_utils::create_test_logger();
-        let sm = StakeManager::load(CONTRACT_ADDRESS, &logger).unwrap();
+        let sm = StakeManager::load(CONTRACT_ADDRESS, &logging::test_utils::create_test_logger())
+            .unwrap();
 
         match sm.parse_event(log).unwrap() {
             StakeManagerEvent::ClaimExecuted {
@@ -546,8 +546,8 @@ mod tests {
     fn flip_supply_updated_log_parsing() {
         let log: web3::types::Log = serde_json::from_str(FLIP_SUPPLY_UPDATED_LOG).unwrap();
 
-        let logger = logging::test_utils::create_test_logger();
-        let sm = StakeManager::load(CONTRACT_ADDRESS, &logger).unwrap();
+        let sm = StakeManager::load(CONTRACT_ADDRESS, &logging::test_utils::create_test_logger())
+            .unwrap();
 
         match sm.parse_event(log).unwrap() {
             StakeManagerEvent::FlipSupplyUpdated {
@@ -579,8 +579,9 @@ mod tests {
     #[test]
     fn min_stake_changed_log_parsing() {
         let log: web3::types::Log = serde_json::from_str(MIN_STAKE_CHANGED_LOG).unwrap();
-        let logger = logging::test_utils::create_test_logger();
-        let sm = StakeManager::load(CONTRACT_ADDRESS, &logger).unwrap();
+
+        let sm = StakeManager::load(CONTRACT_ADDRESS, &logging::test_utils::create_test_logger())
+            .unwrap();
 
         match sm.parse_event(log).unwrap() {
             StakeManagerEvent::MinStakeChanged {
@@ -610,8 +611,8 @@ mod tests {
 
     #[test]
     fn abi_topic_sigs() {
-        let logger = logging::test_utils::create_test_logger();
-        let sm = StakeManager::load(CONTRACT_ADDRESS, &logger).unwrap();
+        let sm = StakeManager::load(CONTRACT_ADDRESS, &logging::test_utils::create_test_logger())
+            .unwrap();
 
         // Staked event
         let staked_sig = sm.staked_event_definition().signature();

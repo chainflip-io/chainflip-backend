@@ -38,7 +38,7 @@ where
     ) -> Result<Self> {
         slog::debug!(
             logger,
-            "connecting new Eth event streamer to {}",
+            "Connecting new Eth event streamer to {}",
             node_endpoint
         );
         // TODO: should this have a timeout?

@@ -4,7 +4,11 @@ This folder contains the "integration tests" (as Cargo calls them) for the CFE. 
 
 ## First time setup
 
-In order to run the integration there is setup required. The following instructions are for Linux distros that use apt like Ubuntu.
+In order to run the integration there is setup required.
+
+### Linux
+
+The following instructions are for Linux distros that use apt like Ubuntu.
 
 ### Install Brownie
 

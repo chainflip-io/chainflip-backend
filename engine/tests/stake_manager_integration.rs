@@ -44,23 +44,25 @@ pub async fn test_all_stake_manager_events() {
     let mq_c = NatsMQClient::new(&settings.message_queue).await.unwrap();
 
     // subscribe before pushing events to the queue
-    let stream = mq_c
+    let sm_event_stream = mq_c
         .subscribe::<StakeManagerEvent>(Subject::StakeManager)
         .await
         .unwrap();
 
-    // this future contains an infinite loop, so we must end it's life
-    let sm_future = eth::stake_manager::start_stake_manager_witness(&settings, mq_c, &root_logger);
-
-    // We just want the future to end, it should already have done it's job
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(1), sm_future).await;
+    // The Stake Manager Witness will run forever unless we stop it after a short time
+    // in which it should have already done it's job.
+    let _ = tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        eth::stake_manager::start_stake_manager_witness(&settings, mq_c, &root_logger),
+    )
+    .await;
     slog::info!(&root_logger, "Subscribed");
 
     // The following events correspond to the events in chainflip-eth-contracts/scripts/deploy_and.py
-    let mut stream = pin_message_stream(stream);
+    let mut sm_event_stream = pin_message_stream(sm_event_stream);
     loop {
         // All events should already be built up in the event stream, so no need to wait.
-        match tokio::time::timeout(Duration::from_millis(1), stream.next()).await {
+        match tokio::time::timeout(Duration::from_millis(1), sm_event_stream.next()).await {
             Ok(Some(Ok(StakeManagerEvent::Staked {
                 account_id,
                 amount,
