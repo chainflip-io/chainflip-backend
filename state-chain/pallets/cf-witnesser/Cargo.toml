@@ -4,7 +4,7 @@ description = 'FRAME pallet for chainflip witnessing.'
 edition = '2018'
 homepage = 'https://chainflip.io'
 license = 'TBC'
-name = 'pallet-cf-witness'
+name = 'pallet-cf-witnesser'
 repository = 'https://github.com/chainflip-io/chainflip-backend/pallets/'
 version = '0.1.0'
 
