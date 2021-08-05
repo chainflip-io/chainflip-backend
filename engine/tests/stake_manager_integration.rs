@@ -5,7 +5,7 @@ use std::{str::FromStr, time::Duration};
 
 use chainflip_engine::{
     eth::{self, stake_manager::stake_manager::StakeManagerEvent},
-    mq::{nats_client::NatsMQClient, pin_message_stream, IMQClient, Subject},
+    mq::{nats_client::NatsMQClient, IMQClient, Subject},
     settings::Settings,
 };
 
@@ -44,7 +44,7 @@ pub async fn test_all_stake_manager_events() {
     let mq_c = NatsMQClient::new(&settings.message_queue).await.unwrap();
 
     // subscribe before pushing events to the queue
-    let sm_event_stream = mq_c
+    let mut sm_event_stream = mq_c
         .subscribe::<StakeManagerEvent>(Subject::StakeManager)
         .await
         .unwrap();
@@ -59,7 +59,6 @@ pub async fn test_all_stake_manager_events() {
     slog::info!(&root_logger, "Subscribed");
 
     // The following events correspond to the events in chainflip-eth-contracts/scripts/deploy_and.py
-    let mut sm_event_stream = pin_message_stream(sm_event_stream);
     loop {
         // All events should already be built up in the event stream, so no need to wait.
         match tokio::time::timeout(Duration::from_millis(1), sm_event_stream.next()).await {
