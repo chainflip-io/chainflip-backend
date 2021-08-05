@@ -351,7 +351,15 @@ fn testnet_genesis(
 			emission_per_block: BLOCK_EMISSIONS,
 			..Default::default()
 		}),
-		pallet_cf_governance: Some(GovernanceConfig { members: vec![] }),
+		pallet_cf_governance: Some(GovernanceConfig {
+			members: vec![
+				get_account_id_from_seed::<sr25519::Public>("Bob"),
+				get_account_id_from_seed::<sr25519::Public>("Charlie"),
+				get_account_id_from_seed::<sr25519::Public>("Dave"),
+				get_account_id_from_seed::<sr25519::Public>("Eve"),
+			],
+			required_approvals: 3,
+		}),
 	}
 }
 
