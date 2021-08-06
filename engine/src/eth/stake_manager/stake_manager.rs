@@ -212,10 +212,20 @@ fn node_id_from_log(log: &Log) -> Result<AccountId32> {
 impl EventSource for StakeManager {
     type Event = StakeManagerEvent;
 
-    fn filter_builder(&self, block: BlockNumber) -> FilterBuilder {
-        FilterBuilder::default()
-            .from_block(block)
-            .address(vec![self.deployed_address])
+    fn filter_builder(
+        &self,
+        from_block: BlockNumber,
+        to_block: Option<BlockNumber>,
+    ) -> FilterBuilder {
+        match to_block {
+            Some(to_block) => FilterBuilder::default()
+                .from_block(from_block)
+                .to_block(to_block)
+                .address(vec![self.deployed_address]),
+            None => FilterBuilder::default()
+                .from_block(from_block)
+                .address(vec![self.deployed_address]),
+        }
     }
 
     fn parse_event(&self, log: web3::types::Log) -> Result<Self::Event> {

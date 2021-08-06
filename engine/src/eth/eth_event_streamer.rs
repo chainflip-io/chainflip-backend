@@ -74,21 +74,27 @@ where
             tokio::time::sleep(Duration::from_secs(4)).await;
         }
 
+        // remember the current block, we will sub from it later.
+        let current_block = self.web3_client.eth().block_number().await?;
+
         // The `fromBlock` parameter doesn't seem to work reliably with subscription streams, so
         // request past block via http and prepend them to the stream manually.
-        let past_logs = if let Some(b) = from_block {
-            let http_filter = self.event_source.filter_builder(b.into()).build();
+        let past_logs = if let Some(from_block) = from_block {
+            let http_filter = self
+                .event_source
+                .filter_builder(from_block.into(), Some(BlockNumber::from(current_block)))
+                .build();
 
             self.web3_client.eth().logs(http_filter).await?
         } else {
             Vec::new()
         };
 
-        // This is the filter for the subscription. Explicitly set it to start at the pending block
-        // since this is what happens in most cases anyway.
+        // This is the filter for the subscription. Explicitly set it to start at the 'current_block' + 1
+        // since we have the logs up to the point.
         let ws_filter = self
             .event_source
-            .filter_builder(BlockNumber::Pending)
+            .filter_builder(BlockNumber::from(current_block + 1), None)
             .build();
 
         let future_logs = self
@@ -142,7 +148,7 @@ mod tests {
 
     use super::*;
 
-    const CONTRACT_ADDRESS: &'static str = "0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f";
+    const CONTRACT_ADDRESS: &'static str = "0x6951b5Bd815043E3F842c1b026b0Fa888Cc2DD85";
 
     #[tokio::test]
     #[ignore = "Depends on a running ganache instance, runs forever, useful for manually testing / observing incoming events"]

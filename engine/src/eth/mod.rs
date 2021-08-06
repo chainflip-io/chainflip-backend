@@ -30,9 +30,13 @@ pub trait EventSource {
     /// The Event type expected from this contract. Likely to be an enum of all possible events.
     type Event: Clone + Send + Sync + std::fmt::Debug;
 
-    /// Returns an eth filter for the events from the contract, starting at the given
-    /// block number.
-    fn filter_builder(&self, block: BlockNumber) -> FilterBuilder;
+    /// Returns an eth filter for the events from the contract
+    /// spanning from 'from_block' to 'to_block' or no end if 'to_block' is None.
+    fn filter_builder(
+        &self,
+        from_block: BlockNumber,
+        to_block: Option<BlockNumber>,
+    ) -> FilterBuilder;
 
     /// Attempt to parse an event from an ethereum Log item.
     fn parse_event(&self, log: web3::types::Log) -> Result<Self::Event>;
