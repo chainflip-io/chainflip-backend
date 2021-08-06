@@ -113,8 +113,8 @@ steps:
         -p pallet-cf-auction
         -p pallet-cf-emissions
         -p pallet-cf-flip
-        -p pallet-cf-online
         -p pallet-cf-rewards
+        -p pallet-cf-reputation
         -p pallet-cf-staking
         -p pallet-cf-validator
         -p pallet-cf-witness

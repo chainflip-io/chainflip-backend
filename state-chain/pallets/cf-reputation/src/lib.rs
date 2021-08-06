@@ -1,8 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-//! # Chainflip Online Module
+//! # Chainflip Reputation Module
 //!
-//! A module to manage liveliness of our validators for the Chainflip State Chain
+//! A module to manage the reputation of our validators for the Chainflip State Chain
 //!
 //! - [`Config`]
 //! - [`Call`]
@@ -26,6 +26,7 @@ pub trait Slashing {}
 trait OfflineConditions {
 	type ValidatorId;
 	fn broadcast_output_failed(validator: Self::ValidatorId);
+	fn participate_signing_failed(validator: Self::ValidatorId);
 }
 
 #[frame_support::pallet]
@@ -54,7 +55,7 @@ pub mod pallet {
 		type HeartbeatBlockInterval: Get<<Self as frame_system::Config>::BlockNumber>;
 
 		/// Online credit
-		type OnlineCredit: Default + Member + Parameter + AtLeast32BitUnsigned;
+		type ReputationPoints: Default + Member + Parameter + AtLeast32BitUnsigned;
 
 		/// When we have to, we slash
 		type Slasher: Slashing;
@@ -75,8 +76,8 @@ pub mod pallet {
 	pub type Liveliness<T: Config> = StorageMap<_, Blake2_128Concat, T::ValidatorId, T::BlockNumber, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn online_credits)]
-	pub type OnlineCredits<T: Config> = StorageMap<_, Blake2_128Concat, T::ValidatorId, T::OnlineCredit, ValueQuery>;
+	#[pallet::getter(fn reputation_points)]
+	pub type ReputationPoints<T: Config> = StorageMap<_, Blake2_128Concat, T::ValidatorId, T::ReputationPoints, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -104,13 +105,6 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		#[pallet::weight(10_000)]
-		pub(super) fn participate_signing_failed(
-			origin: OriginFor<T>,
-			validator: T::ValidatorId
-		) -> DispatchResultWithPostInfo {
-			Ok(().into())
-		}
 	}
 
 	#[pallet::genesis_config]
@@ -136,6 +130,7 @@ pub mod pallet {
 		fn broadcast_output_failed(validator: Self::ValidatorId) {
 			todo!("implement")
 		}
+		fn participate_signing_failed(validator: Self::ValidatorId) {todo!("implement")}
 	}
 
 	impl<T: Config> Pallet<T> {
@@ -147,7 +142,7 @@ pub mod pallet {
 			todo!("implement")
 		}
 
-		fn calculate_online_credit(validator: T::ValidatorId) {
+		fn calculate_reputation(validator: T::ValidatorId) {
 			todo!("implement")
 		}
 	}

@@ -14,7 +14,7 @@ members = [
   'state-chain/pallets/cf-rewards',
   'state-chain/pallets/cf-witness',
   'state-chain/pallets/cf-witness-api',
-  'state-chain/pallets/cf-online',
+  'state-chain/pallets/cf-reputation',
   'state-chain/runtime',
   'state-chain/traits',
   'engine',

@@ -396,7 +396,7 @@ impl pallet_cf_witness_api::Config for Runtime {
 	type Witnesser = Witnesser;
 }
 
-impl pallet_cf_online::Config for Runtime {
+impl pallet_cf_reputation::Config for Runtime {
 	type Event = Event;
 }
 
@@ -425,7 +425,7 @@ construct_runtime!(
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
 		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
-		Online: pallet_cf_online::{Module, Call, Storage, Event<T>},
+		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>},
 	}
 );
 

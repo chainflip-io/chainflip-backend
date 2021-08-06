@@ -1,5 +1,5 @@
 use super::*;
-use crate as pallet_cf_online;
+use crate as pallet_cf_reputation;
 use frame_support::{construct_runtime, parameter_types};
 use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -24,7 +24,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		OnlinePallet: pallet_cf_online::{Module, Call, Storage, Event<T>, Config},
+		ReputationPallet: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config},
 	}
 );
 
@@ -69,7 +69,7 @@ impl Config for Test {
 	type ValidatorId = u64;
 	type Amount = u128;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
-	type OnlineCredit = u64;
+	type ReputationPoints = u64;
 	type Slasher = MySlasher;
 	type EpochInfo = epoch_info::Mock;
 }
@@ -77,7 +77,7 @@ impl Config for Test {
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		frame_system: Default::default(),
-		pallet_cf_online: Default::default(),
+		pallet_cf_reputation: Default::default(),
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
