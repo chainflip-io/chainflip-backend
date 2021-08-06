@@ -6,7 +6,7 @@ use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
 	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, EmissionsConfig, FlipBalance,
 	FlipConfig, GenesisConfig, Governance, GovernanceConfig, GrandpaConfig, SessionConfig,
-	Signature, StakingConfig, SudoConfig, SystemConfig, ValidatorConfig, DAYS, WASM_BINARY,
+	Signature, StakingConfig, SystemConfig, ValidatorConfig, DAYS, WASM_BINARY,
 };
 
 // The URL for the telemetry server.
@@ -343,10 +343,10 @@ fn testnet_genesis(
 		pallet_grandpa: Some(GrandpaConfig {
 			authorities: vec![],
 		}),
-		pallet_sudo: Some(SudoConfig {
-			// Assign network admin rights.
-			key: root_key,
-		}),
+		// pallet_sudo: Some(SudoConfig {
+		// 	// Assign network admin rights.
+		// 	key: root_key,
+		// }),
 		pallet_cf_emissions: Some(EmissionsConfig {
 			emission_per_block: BLOCK_EMISSIONS,
 			..Default::default()
