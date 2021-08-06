@@ -359,6 +359,7 @@ fn testnet_genesis(
 				get_account_id_from_seed::<sr25519::Public>("Eve"),
 			],
 			required_approvals: 3,
+			expiry_time_span: 1800,
 		}),
 	}
 }

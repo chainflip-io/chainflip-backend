@@ -53,13 +53,17 @@ pub mod pallet {
 	pub(super) type RequiredApprovals<T> = StorageValue<_, u32>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn expiry_block)]
-	pub type ExpiryTime<T> = StorageValue<_, u64>;
+	#[pallet::getter(fn expiry_date)]
+	pub type ExpiryDate<T> = StorageValue<_, u64>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn expiry_time_span)]
+	pub(super) type ExpiryTimeSpan<T> = StorageValue<_, u64>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
-			if let Some(expiry_time) = <ExpiryTime<T>>::get() {
+			if let Some(expiry_time) = <ExpiryDate<T>>::get() {
 				if T::TimeSource::now().as_secs() >= expiry_time {
 					Self::deposit_event(Event::SudoCallExpired);
 					Self::cleanup();
@@ -110,8 +114,9 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			ensure!(<SudoCall<T>>::get().is_none(), Error::<T>::OnGoingVote);
 			Self::ensure_member(&who)?;
-			// 3 minutes
-			<ExpiryTime<T>>::put(T::TimeSource::now().as_secs() + 180);
+			<ExpiryDate<T>>::put(
+				T::TimeSource::now().as_secs() + <ExpiryTimeSpan<T>>::get().unwrap(),
+			);
 			<SudoCall<T>>::put(call.encode());
 			Self::deposit_event(Event::ProposedSudoCall(call.encode(), who.clone()));
 			Ok(().into())
@@ -131,6 +136,7 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config> {
 		pub members: Vec<AccountId<T>>,
 		pub required_approvals: u32,
+		pub expiry_time_span: u64,
 	}
 
 	#[cfg(feature = "std")]
@@ -139,6 +145,7 @@ pub mod pallet {
 			Self {
 				members: Default::default(),
 				required_approvals: Default::default(),
+				expiry_time_span: 432000, // 5 days in seconds
 			}
 		}
 	}
@@ -149,6 +156,7 @@ pub mod pallet {
 		fn build(&self) {
 			Members::<T>::set(self.members.clone());
 			RequiredApprovals::<T>::set(Some(self.required_approvals));
+			ExpiryTimeSpan::<T>::set(Some(self.expiry_time_span));
 		}
 	}
 }
@@ -195,6 +203,6 @@ impl<T: Config> Pallet<T> {
 		<Votes<T>>::take();
 		<Voted<T>>::take();
 		<SudoCall<T>>::take();
-		<ExpiryTime<T>>::take();
+		<ExpiryDate<T>>::take();
 	}
 }
