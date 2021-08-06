@@ -364,6 +364,7 @@ impl pallet_cf_staking::Config for Runtime {
 }
 
 impl pallet_cf_governance::Config for Runtime {
+	type Call = Call;
 	type Event = Event;
 }
 
