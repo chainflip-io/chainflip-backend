@@ -176,10 +176,13 @@ impl<T: Config> Pallet<T> {
 		0
 	}
 	fn vote(account: T::AccountId) -> Result<(), DispatchError> {
-		if let Some(votes) = <Votes<T>>::get() {
-			<Votes<T>>::put(votes + 1);
-		} else {
-			<Votes<T>>::put(1);
+		match <Votes<T>>::get() {
+			Some(votes) => {
+				<Votes<T>>::put(votes + 1);
+			}
+			None => {
+				<Votes<T>>::put(1);
+			}
 		}
 		Self::deposit_event(Event::Voted);
 		<Voted<T>>::mutate(|votes| votes.push(account));
