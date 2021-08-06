@@ -30,18 +30,40 @@ where
     S: EventSource,
     E: EventSink<S::Event> + 'static,
 {
+    /// Connects to the node_endpoint WebSocket with a 5sec timeout
     pub async fn new(
         node_endpoint: &str,
         event_source: S,
         event_sinks: Vec<E>,
         logger: &slog::Logger,
     ) -> Result<Self> {
-        Ok(Self {
-            web3_client: Web3::new(web3::transports::WebSocket::new(node_endpoint).await?),
-            event_source,
-            event_sinks,
-            logger: logger.new(o!(COMPONENT_KEY => "EthEventStreamer")),
-        })
+        match tokio::time::timeout(
+            Duration::from_secs(5),
+            web3::transports::WebSocket::new(node_endpoint),
+        )
+        .await
+        {
+            Ok(Ok(socket)) => {
+                // Successful connection
+                return Ok(Self {
+                    web3_client: Web3::new(socket),
+                    event_source,
+                    event_sinks,
+                    logger: logger.new(o!(COMPONENT_KEY => "EthEventStreamer")),
+                });
+            }
+            Ok(Err(e)) => {
+                // Connection error
+                return Err(e.into());
+            }
+            Err(_) => {
+                // Connection timeout
+                return Err(anyhow::Error::msg(format!(
+                    "Timeout connecting to {:?}",
+                    node_endpoint
+                )));
+            }
+        }
     }
 }
 
