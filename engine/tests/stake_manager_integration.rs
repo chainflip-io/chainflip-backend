@@ -18,7 +18,6 @@ use slog::{o, Drain};
 
 #[tokio::test]
 pub async fn test_all_stake_manager_events() {
-
     let drain = slog_json::Json::new(std::io::stdout())
         .add_default_keys()
         .build()
@@ -49,7 +48,7 @@ pub async fn test_all_stake_manager_events() {
     loop {
         // All events should already be built up in the event stream, so no need to wait.
         match tokio::time::timeout(Duration::from_millis(1), sm_event_stream.next()).await {
-            Ok(Some(Ok(e))) =>{
+            Ok(Some(Ok(e))) => {
                 sm_events.push(e);
             }
             Ok(_) => {
@@ -62,13 +61,14 @@ pub async fn test_all_stake_manager_events() {
         }
     }
 
-    if sm_events.len()==0{
+    if sm_events.len() == 0 {
         panic!("Event stream was empty. Have you ran the setup script to deploy/run the contracts?")
     }
 
     // The following event details correspond to the events in chainflip-eth-contracts/scripts/deploy_and.py
-    sm_events.iter().find(|event| 
-        match event {
+    sm_events
+        .iter()
+        .find(|event| match event {
             StakeManagerEvent::Staked {
                 account_id,
                 amount,
@@ -88,12 +88,13 @@ pub async fn test_all_stake_manager_events() {
                 );
                 true
             }
-            _ => {false}
-        }
-    ).expect("Didn't find the Staked event");
+            _ => false,
+        })
+        .expect("Didn't find the Staked event");
 
-    sm_events.iter().find(|event| 
-        match event {
+    sm_events
+        .iter()
+        .find(|event| match event {
             StakeManagerEvent::ClaimRegistered {
                 account_id,
                 amount,
@@ -116,12 +117,13 @@ pub async fn test_all_stake_manager_events() {
                 );
                 true
             }
-            _ => {false}
-        }
-    ).expect("Didn't find the ClaimRegistered event");
+            _ => false,
+        })
+        .expect("Didn't find the ClaimRegistered event");
 
-    sm_events.iter().find(|event| 
-        match event {
+    sm_events
+        .iter()
+        .find(|event| match event {
             StakeManagerEvent::ClaimExecuted {
                 account_id, amount, ..
             } => {
@@ -133,12 +135,13 @@ pub async fn test_all_stake_manager_events() {
                 assert_eq!(amount, &13333333333333334032384);
                 true
             }
-            _ => {false}
-        }
-    ).expect("Didn't find the ClaimExecuted event");
+            _ => false,
+        })
+        .expect("Didn't find the ClaimExecuted event");
 
-    sm_events.iter().find(|event| 
-        match event {
+    sm_events
+        .iter()
+        .find(|event| match event {
             StakeManagerEvent::MinStakeChanged {
                 old_min_stake,
                 new_min_stake,
@@ -154,12 +157,13 @@ pub async fn test_all_stake_manager_events() {
                 );
                 true
             }
-            _ => {false}
-        }
-    ).expect("Didn't find the MinStakeChanged event");
+            _ => false,
+        })
+        .expect("Didn't find the MinStakeChanged event");
 
-    sm_events.iter().find(|event| 
-        match event {
+    sm_events
+        .iter()
+        .find(|event| match event {
             StakeManagerEvent::FlipSupplyUpdated {
                 old_supply,
                 new_supply,
@@ -175,7 +179,7 @@ pub async fn test_all_stake_manager_events() {
                 );
                 true
             }
-            _ => {false}
-        }
-    ).expect("Didn't find the FlipSupplyUpdated event");
+            _ => false,
+        })
+        .expect("Didn't find the FlipSupplyUpdated event");
 }
