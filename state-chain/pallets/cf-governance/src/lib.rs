@@ -8,6 +8,7 @@ pub mod pallet {
 	use frame_support::{
 		dispatch::{GetDispatchInfo, PostDispatchInfo},
 		pallet_prelude::*,
+		traits::UnixTime,
 	};
 
 	use codec::Encode;
@@ -25,14 +26,11 @@ pub mod pallet {
 			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
 			+ GetDispatchInfo
 			+ From<frame_system::Call<Self>>;
+		type TimeSource: UnixTime;
 	}
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
-
-	// #[pallet::storage]
-	// #[pallet::getter(fn code)]
-	// pub type Code<T> = StorageValue<_, Vec<u8>>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn call)]
@@ -56,23 +54,27 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn expiry_block)]
-	pub type ExpiryBlock<T> = StorageValue<_, u32>;
+	pub type ExpiryTime<T> = StorageValue<_, u64>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
+			if let Some(expiry_time) = <ExpiryTime<T>>::get() {
+				if T::TimeSource::now().as_secs() >= expiry_time {
+					Self::deposit_event(Event::SudoCallExpired);
+					Self::cleanup();
+				}
+			}
 			match (<Votes<T>>::get(), <SudoCall<T>>::get()) {
 				(Some(votes), Some(encoded_call)) if Self::majority_reached(votes) => {
 					if let Some(call) = Self::decode_call(encoded_call) {
 						let result = call.dispatch(frame_system::RawOrigin::Root.into());
 						if result.is_ok() {
-							Self::deposit_event(Event::RuntimeUpdated);
-							<Votes<T>>::take();
-							<Voted<T>>::take();
-							<SudoCall<T>>::take();
+							Self::deposit_event(Event::CallExecuted);
+							Self::cleanup();
 						}
 					}
-					0
+					Self::calc_block_weight()
 				}
 				_ => 0,
 			}
@@ -83,16 +85,19 @@ pub mod pallet {
 	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		ProposedRuntimeUpgrade(Vec<u8>, T::AccountId),
-		RuntimeUpdated,
+		ProposedSudoCall(Vec<u8>, T::AccountId),
+		CallExecuted,
 		Voted,
+		SudoCallExpired,
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
 		AlreadyVoted,
-		OnGoingUpgrade,
+		OnGoingVote,
 		NoMember,
+		CanNotDecodeCall,
+		CanNotExecuteCall,
 	}
 
 	#[pallet::call]
@@ -103,42 +108,23 @@ pub mod pallet {
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			ensure!(<SudoCall<T>>::get().is_none(), Error::<T>::OnGoingUpgrade);
-			//TODO: check membership
+			ensure!(<SudoCall<T>>::get().is_none(), Error::<T>::OnGoingVote);
+			Self::ensure_member(&who)?;
+			// 3 minutes
+			<ExpiryTime<T>>::put(T::TimeSource::now().as_secs() + 180);
 			<SudoCall<T>>::put(call.encode());
+			Self::deposit_event(Event::ProposedSudoCall(call.encode(), who.clone()));
 			Ok(().into())
 		}
 
 		#[pallet::weight(10_000)]
 		pub fn approve_sudo_call(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			//TODO: check membership
+			Self::ensure_member(&who)?;
 			Self::ensure_not_voted(&who)?;
 			Self::vote(who.clone())?;
 			Ok(().into())
 		}
-
-		// #[pallet::weight(10_000)]
-		// pub fn propose_runtime_upgrade(
-		// 	origin: OriginFor<T>,
-		// 	code: Vec<u8>,
-		// ) -> DispatchResultWithPostInfo {
-		// 	let who = ensure_signed(origin)?;
-		// 	Self::ensure_member(&who)?;
-		// 	ensure!(<Code<T>>::get().is_none(), Error::<T>::OnGoingUpgrade);
-		// 	<Code<T>>::put(code.clone());
-		// 	Self::deposit_event(Event::ProposedRuntimeUpgrade(code.clone(), who));
-		// 	Ok(().into())
-		// }
-
-		// #[pallet::weight(10_000)]
-		// pub fn approve_runtime_upgrade(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-		// 	let who = ensure_signed(origin)?;
-		// 	Self::ensure_member(&who)?;
-		// 	Self::ensure_not_voted(&who)?;
-		// 	Self::vote(who.clone())?;
-		// 	Ok(().into())
-		// }
 	}
 
 	#[pallet::genesis_config]
@@ -169,7 +155,7 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	fn majority_reached(votes: u32) -> bool {
-		votes > 2
+		votes >= <RequiredApprovals<T>>::get().unwrap()
 	}
 	fn ensure_member(account: &T::AccountId) -> Result<(), DispatchError> {
 		if !<Members<T>>::get().contains(account) {
@@ -186,7 +172,8 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 	fn calc_block_weight() -> u64 {
-		1000000000
+		// TODO: figure out what makes sense here
+		0
 	}
 	fn vote(account: T::AccountId) -> Result<(), DispatchError> {
 		if let Some(votes) = <Votes<T>>::get() {
@@ -201,13 +188,10 @@ impl<T: Config> Pallet<T> {
 	fn decode_call(call: Vec<u8>) -> Option<<T as Config>::Call> {
 		Decode::decode(&mut &call[..]).ok()
 	}
-	// fn upgrade_runtime() {
-	// 	storage::unhashed::put_raw(well_known_keys::CODE, &code);
-	// 	Self::cleanup();
-	// 	Self::deposit_event(Event::RuntimeUpdated);
-	// }
-	// fn cleanup() {
-	// 	<Code<T>>::take();
-	// 	<Votes<T>>::take();
-	// }
+	fn cleanup() {
+		<Votes<T>>::take();
+		<Voted<T>>::take();
+		<SudoCall<T>>::take();
+		<ExpiryTime<T>>::take();
+	}
 }

@@ -101,7 +101,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("state-chain-node"),
 	impl_name: create_runtime_str!("state-chain-node"),
 	authoring_version: 1,
-	spec_version: 100,
+	spec_version: 102,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
@@ -366,6 +366,7 @@ impl pallet_cf_staking::Config for Runtime {
 impl pallet_cf_governance::Config for Runtime {
 	type Call = Call;
 	type Event = Event;
+	type TimeSource = Timestamp;
 }
 
 parameter_types! {
