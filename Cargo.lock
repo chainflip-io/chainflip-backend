@@ -823,10 +823,13 @@ dependencies = [
 name = "cf-p2p"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-std",
+ "bincode",
  "futures 0.3.15",
  "log 0.4.14",
  "sc-network",
+ "serde 1.0.126",
  "sp-runtime",
 ]
 
@@ -834,6 +837,7 @@ dependencies = [
 name = "cf-p2p-rpc"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "bs58",
  "cf-p2p",
  "futures 0.3.15",
