@@ -32,6 +32,20 @@ pub struct ChainflipKey {
     pub_key_y_parity: ethabi::Uint,
 }
 
+impl ChainflipKey {
+    /// Create a ChainflipKey from a decimal string
+    pub fn from_dec_str(dec_str: &str, parity: bool) -> Result<Self> {
+        let pub_key_x = web3::types::U256::from_dec_str(dec_str)?;
+        Ok(ChainflipKey {
+            pub_key_x,
+            pub_key_y_parity: match parity {
+                true => web3::types::U256::from_dec_str("1").unwrap(),
+                false => web3::types::U256::from_dec_str("0").unwrap(),
+            },
+        })
+    }
+}
+
 impl Tokenizable for ChainflipKey {
     fn from_token(token: ethabi::Token) -> Result<Self, web3::contract::Error>
     where
@@ -75,6 +89,8 @@ pub enum KeyManagerEvent {
         old_key: ChainflipKey,
         /// The new key.
         new_key: ChainflipKey,
+        /// Transaction hash that created the event
+        tx_hash: [u8; 32],
     },
 }
 
@@ -117,7 +133,12 @@ impl Display for KeyManagerEvent {
                 signed,
                 old_key,
                 new_key,
-            } => write!(f, "KeyChange({}, {:?}, {:?}", signed, old_key, new_key),
+                tx_hash,
+            } => write!(
+                f,
+                "KeyChange({}, {:?}, {:?}, {:?}",
+                signed, old_key, new_key, tx_hash
+            ),
         }
     }
 }
@@ -138,6 +159,13 @@ impl EventSource for KeyManager {
             .ok_or_else(|| EventProducerError::EmptyTopics)?
             .clone();
 
+        let tx_hash = log
+            .transaction_hash
+            .ok_or(anyhow::Error::msg(
+                "Could not get transaction hash from ETH log",
+            ))?
+            .to_fixed_bytes();
+
         let raw_log = ethabi::RawLog {
             topics: log.topics,
             data: log.data.0,
@@ -157,6 +185,7 @@ impl EventSource for KeyManager {
                 signed: utils::decode_log_param::<bool>(&log, "signedByAggKey")?,
                 old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
                 new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
+                tx_hash,
             };
             Ok(event)
         } else {
@@ -168,7 +197,7 @@ impl EventSource for KeyManager {
 #[cfg(test)]
 mod tests {
 
-    use web3::types::{H256, U256};
+    use web3::types::H256;
 
     use crate::logging;
 
@@ -247,20 +276,20 @@ mod tests {
                 signed,
                 old_key,
                 new_key,
+                tx_hash,
             } => {
                 assert_eq!(signed, true);
+                assert_eq!(old_key, ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
+                assert_eq!(new_key, ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
 
-                let expected_key  = ChainflipKey{
-                    pub_key_x: U256::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398").unwrap(),
-                    pub_key_y_parity: U256::from_dec_str("1").unwrap(),
-                };
-                assert_eq!(old_key, expected_key);
-
-                let expected_key  = ChainflipKey{
-                    pub_key_x: U256::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925").unwrap(),
-                    pub_key_y_parity: U256::from_dec_str("1").unwrap(),
-                };
-                assert_eq!(new_key, expected_key);
+                assert_eq!(
+                    tx_hash,
+                    H256::from_str(
+                        "0x04629152b064c0d1343161c43f3b78cf67e9be35fc97f66bbb0e1ca1a0206bae",
+                    )
+                    .unwrap()
+                    .to_fixed_bytes()
+                );
             }
         }
 
@@ -272,20 +301,20 @@ mod tests {
                 signed,
                 old_key,
                 new_key,
+                tx_hash,
             } => {
                 assert_eq!(signed, false);
+                assert_eq!(old_key, ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
+                assert_eq!(new_key, ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
 
-                let expected_key  = ChainflipKey{
-                    pub_key_x: U256::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925").unwrap(),
-                    pub_key_y_parity: U256::from_dec_str("1").unwrap(),
-                };
-                assert_eq!(old_key, expected_key);
-
-                let expected_key  = ChainflipKey{
-                    pub_key_x: U256::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398").unwrap(),
-                    pub_key_y_parity: U256::from_dec_str("1").unwrap(),
-                };
-                assert_eq!(new_key, expected_key);
+                assert_eq!(
+                    tx_hash,
+                    H256::from_str(
+                        "0x6320cfd702415644192bf57702ceccc0d6de0ddc54fe9aa53f9b1a5d9035fe52",
+                    )
+                    .unwrap()
+                    .to_fixed_bytes()
+                );
             }
         }
 
@@ -297,20 +326,20 @@ mod tests {
                 signed,
                 old_key,
                 new_key,
+                tx_hash,
             } => {
                 assert_eq!(signed, false);
+                assert_eq!(old_key, ChainflipKey::from_dec_str("29963508097954364125322164523090632495724997135004046323041274775773196467672",true).unwrap());
+                assert_eq!(new_key, ChainflipKey::from_dec_str("35388971693871284788334991319340319470612669764652701045908837459480931993848",false).unwrap());
 
-                let expected_key  = ChainflipKey{
-                    pub_key_x: U256::from_dec_str("29963508097954364125322164523090632495724997135004046323041274775773196467672").unwrap(),
-                    pub_key_y_parity: U256::from_dec_str("1").unwrap(),
-                };
-                assert_eq!(old_key, expected_key);
-
-                let expected_key  = ChainflipKey{
-                    pub_key_x: U256::from_dec_str("35388971693871284788334991319340319470612669764652701045908837459480931993848").unwrap(),
-                    pub_key_y_parity: U256::from_dec_str("0").unwrap(),
-                };
-                assert_eq!(new_key, expected_key);
+                assert_eq!(
+                    tx_hash,
+                    H256::from_str(
+                        "0x9215ce54309fddf0ce9b1e8fd10319c62cf9603635ffa0c06ac9db8338348f95",
+                    )
+                    .unwrap()
+                    .to_fixed_bytes()
+                );
             }
         }
 
