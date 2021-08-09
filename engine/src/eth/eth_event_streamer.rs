@@ -45,23 +45,23 @@ where
         {
             Ok(Ok(socket)) => {
                 // Successful connection
-                return Ok(Self {
+                Ok(Self {
                     web3_client: Web3::new(socket),
                     event_source,
                     event_sinks,
                     logger: logger.new(o!(COMPONENT_KEY => "EthEventStreamer")),
-                });
+                })
             }
             Ok(Err(e)) => {
                 // Connection error
-                return Err(e.into());
+                Err(e.into())
             }
             Err(_) => {
                 // Connection timeout
-                return Err(anyhow::Error::msg(format!(
+                Err(anyhow::Error::msg(format!(
                     "Timeout connecting to {:?}",
                     node_endpoint
-                )));
+                )))
             }
         }
     }
