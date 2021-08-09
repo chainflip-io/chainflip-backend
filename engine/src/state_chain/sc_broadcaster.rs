@@ -98,13 +98,15 @@ where
             StakeManagerEvent::Staked {
                 account_id,
                 amount,
+                return_addr,
                 tx_hash,
             } => {
                 slog::trace!(
                     self.logger,
-                    "Sending witness_staked({:?}, {}, {:?}) to state chain",
+                    "Sending witness_staked({:?}, {}, {:?}, {:?}) to state chain",
                     account_id,
                     amount,
+                    return_addr,
                     tx_hash
                 );
                 self.subxt_client
@@ -130,7 +132,7 @@ where
                 self.signer.increment_nonce();
             }
             StakeManagerEvent::MinStakeChanged { .. }
-            | StakeManagerEvent::EmissionChanged { .. }
+            | StakeManagerEvent::FlipSupplyUpdated { .. }
             | StakeManagerEvent::ClaimRegistered { .. } => {
                 slog::warn!(
                     self.logger,
@@ -213,8 +215,6 @@ mod tests {
             )
             .await;
 
-        println!("Result is: {:#?}", result);
-
         assert!(result.is_ok());
     }
 
@@ -238,9 +238,12 @@ mod tests {
 
         let staked_node_id =
             AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU").unwrap();
+        let return_addr =
+            web3::types::H160::from_str("0x73d669c173d88ccb01f6daab3a3304af7a1b22c1").unwrap();
         let staked_event = StakeManagerEvent::Staked {
             account_id: staked_node_id,
             amount: 100,
+            return_addr: return_addr,
             tx_hash: TX_HASH,
         };
 
