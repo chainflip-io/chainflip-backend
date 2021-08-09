@@ -23,6 +23,6 @@ cd eth-contracts
 poetry run poetry install
 
 # run the brownie script to generate events for the cfe to read
-poetry run brownie run deploy_and all_stakeManager_events
+poetry run brownie run deploy_and all_events
 
-echo "Ready to run StakeManager witness integration tests"
+echo "Ready to run StakeManager and KeyManager witness integration tests"
