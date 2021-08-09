@@ -2,15 +2,12 @@
 
 [message_queue]
 # can also be IP
-hostname = "localhost"
-port = "4222"
+endpoint = "http://localhost:4222"
 
 [state_chain]
-hostname = "localhost"
-p2p_priv_key_file = ""
-rpc_port = "4399"
+p2p_private_key_file = ""
 signing_key_file = ""
-ws_port = "9944"
+ws_endpoint = "ws://localhost:9944"
 
 [eth]
 from_block = 8929230
@@ -26,6 +23,7 @@ hostname = "0.0.0.0"
 port = 5555
 
 [signing]
+db_file = "data.db"
 genesis_validator_ids = [
   [54, 192, 7, 138, 243, 137, 75, 130, 2, 181, 65, 236, 230, 197, 216, 251, 74, 9, 31, 126, 88, 18, 182, 136, 231, 3, 84, 144, 64, 71, 57, 17], #bashful
   [136, 152, 117, 139, 248, 136, 85, 97, 93, 69, 159, 85, 46, 54, 191, 209, 78, 133, 102, 200, 179, 104, 246, 166, 68, 137, 66, 117, 157, 92, 127, 4], # doc

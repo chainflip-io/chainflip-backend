@@ -38,7 +38,7 @@ Once the CFE has generated a valid signature for a claim, it should be posted ba
 
 This pallet depends on foreign implementations of the following [traits](../../traits):
 
-- `Witnesser`. See the [Witness](../cf-witness) pallet for an implementation.
+- `Witnesser`. See the [Witness](../cf-witnesser) pallet for an implementation.
 - `StakeTransfer`. See the [Flip](../cf-flip) pallet for an implementation.
 - `EpochInfo`. See the [Validator](../cf-validator) pallet for an implementation.
 

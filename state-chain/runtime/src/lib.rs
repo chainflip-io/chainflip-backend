@@ -21,7 +21,7 @@ use pallet_session::historical as session_historical;
 pub use pallet_timestamp::Call as TimestampCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{crypto::KeyTypeId, ecdsa, OpaqueMetadata};
+use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify,
 };
@@ -137,7 +137,6 @@ parameter_types! {
 
 impl pallet_cf_auction::Config for Runtime {
 	type Event = Event;
-	type Call = Call;
 	type Amount = FlipBalance;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
 	type AuctionIndex = u64;
@@ -145,8 +144,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type ValidatorId = AccountId;
 	type MinAuctionSize = MinAuctionSize;
 	type Confirmation = Auction;
-	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
-	type Witnesser = Witnesser;
+	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 }
 
 // FIXME: These would be changed
@@ -332,7 +330,7 @@ impl pallet_sudo::Config for Runtime {
 	type Call = Call;
 }
 
-impl pallet_cf_witness::Config for Runtime {
+impl pallet_cf_witnesser::Config for Runtime {
 	type Event = Event;
 	type Origin = Origin;
 	type Call = Call;
@@ -355,12 +353,10 @@ parameter_types! {
 
 impl pallet_cf_staking::Config for Runtime {
 	type Event = Event;
-	type Call = Call;
 	type Balance = FlipBalance;
 	type Flip = Flip;
 	type Nonce = u64;
-	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
-	type Witnesser = Witnesser;
+	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
 	type TimeSource = Timestamp;
 	type MinClaimTTL = MinClaimTTL;
@@ -395,6 +391,11 @@ impl pallet_transaction_payment::Config for Runtime {
 	type FeeMultiplierUpdate = ();
 }
 
+impl pallet_cf_witnesser_api::Config for Runtime {
+	type Call = Call;
+	type Witnesser = Witnesser;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -411,7 +412,8 @@ construct_runtime!(
 		TransactionPayment: pallet_transaction_payment::{Module, Storage},
 		Session: pallet_session::{Module, Storage, Event, Config<T>},
 		Historical: session_historical::{Module},
-		Witnesser: pallet_cf_witness::{Module, Call, Event<T>, Origin},
+		Witnesser: pallet_cf_witnesser::{Module, Call, Event<T>, Origin},
+		WitnesserApi: pallet_cf_witnesser_api::{Module, Call},
 		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
 		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
 		Aura: pallet_aura::{Module, Config<T>},

@@ -6,11 +6,6 @@ use async_trait::async_trait;
 use futures::Stream;
 use serde::{de::DeserializeOwned, Serialize};
 
-#[async_trait]
-pub trait IMQClientFactory<IMQ: IMQClient> {
-    async fn create(&self) -> anyhow::Result<Box<IMQ>>;
-}
-
 /// Interface for a message queue
 #[async_trait]
 pub trait IMQClient {
@@ -25,15 +20,10 @@ pub trait IMQClient {
     async fn subscribe<M: DeserializeOwned>(
         &self,
         subject: Subject,
-    ) -> Result<Box<dyn Stream<Item = Result<M>>>>;
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<M>>>>>;
 
     // / Close the connection to the MQ
     async fn close(&self) -> Result<()>;
-}
-
-/// Used to pin a stream within a single scope.
-pub fn pin_message_stream<M>(stream: Box<dyn Stream<Item = M>>) -> Pin<Box<dyn Stream<Item = M>>> {
-    stream.into()
 }
 
 /// Subjects that can be published / subscribed to
@@ -49,6 +39,8 @@ pub enum Subject {
     BroadcastSuccess(Chain),
     /// Stake events coming from the Stake manager contract
     StakeManager,
+    /// events coming from the key manager contract
+    KeyManager,
 
     // Auction pallet events
     AuctionStarted,
@@ -107,6 +99,9 @@ impl SubjectName for Subject {
             }
             Subject::StakeManager => {
                 format!("stake_manager")
+            }
+            Subject::KeyManager => {
+                format!("key_manager")
             }
             // === Signing ===
             Subject::P2PIncoming => {

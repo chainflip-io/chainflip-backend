@@ -1,9 +1,11 @@
+use crate::logging::COMPONENT_KEY;
 use crate::p2p::{P2PMessage, P2PNetworkClient, P2PNetworkClientError, StatusCode, ValidatorId};
 use async_trait::async_trait;
 use cf_p2p_rpc::P2PEvent;
 use futures::{Future, Stream, StreamExt};
 use jsonrpc_core_client::transports::ws::connect;
 use jsonrpc_core_client::{RpcChannel, RpcResult, TypedClient, TypedSubscriptionStream};
+use slog::o;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio_compat_02::FutureExt;
@@ -20,11 +22,15 @@ impl Base58 for () {
 
 pub struct RpcP2PClient {
     url: url::Url,
+    logger: slog::Logger,
 }
 
 impl RpcP2PClient {
-    pub fn new(url: url::Url) -> Self {
-        RpcP2PClient { url }
+    pub fn new(url: url::Url, logger: &slog::Logger) -> Self {
+        RpcP2PClient {
+            url,
+            logger: logger.new(o!(COMPONENT_KEY => "RpcP2PClient")),
+        }
     }
 }
 
@@ -107,7 +113,8 @@ where
 
     async fn take_stream(&mut self) -> Result<RpcP2PClientStream, P2PNetworkClientError> {
         let client: P2PClient = FutureExt::compat(connect(&self.url)).await.map_err(|e| {
-            log::error!(
+            slog::error!(
+                self.logger,
                 "Could not connect to RPC Channel on RpcP2PClient at url: {:?}, error: {:?}",
                 &self.url,
                 e
@@ -116,7 +123,8 @@ where
         })?;
 
         let sub = client.subscribe_notifications().map_err(|e| {
-            log::error!(
+            slog::error!(
+                self.logger,
                 "Could not subscribe to notifications on RpcP2PClient: {:?}",
                 e
             );
@@ -175,6 +183,8 @@ impl P2PClient {
 
 #[cfg(test)]
 mod tests {
+    use crate::logging;
+
     use super::*;
     use jsonrpc_core::{IoHandler, Params};
     use jsonrpc_ws_server::{Server, ServerBuilder};
@@ -182,6 +192,7 @@ mod tests {
 
     struct TestServer {
         url: url::Url,
+        #[allow(dead_code)]
         server: Option<Server>,
     }
 
@@ -217,7 +228,8 @@ mod tests {
     #[test]
     fn client_api() {
         let server = TestServer::serve();
-        let mut glue_client = RpcP2PClient::new(server.url);
+        let logger = logging::test_utils::create_test_logger();
+        let mut glue_client = RpcP2PClient::new(server.url, &logger);
         let run = async {
             let result = glue_client
                 .send(&ValidatorId::new("100"), "disco".as_bytes())

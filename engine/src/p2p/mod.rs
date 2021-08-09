@@ -2,12 +2,11 @@
 #[cfg(test)]
 pub mod mock;
 
-mod conductor;
+pub mod conductor;
 mod rpc;
 
 use std::convert::TryInto;
 
-pub use conductor::P2PConductor;
 pub use rpc::RpcP2PClient;
 
 use serde::{Deserialize, Serialize};

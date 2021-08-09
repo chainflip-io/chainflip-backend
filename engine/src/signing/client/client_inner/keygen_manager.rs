@@ -4,6 +4,7 @@ use std::{
 };
 
 use crate::{
+    logging::COMPONENT_KEY,
     p2p::ValidatorId,
     signing::{
         client::{client_inner::utils::get_index_mapping, KeyId, KeygenInfo},
@@ -23,7 +24,7 @@ use super::{
 use super::keygen_state::KeygenStage;
 
 use itertools::Itertools;
-use log::*;
+use slog::o;
 use tokio::sync::mpsc::UnboundedSender;
 
 /// Contains states (`KeygenState`) for different key ids. Responsible for directing
@@ -44,6 +45,7 @@ pub struct KeygenManager {
     delayed_messages: HashMap<KeyId, (Instant, Vec<(ValidatorId, Broadcast1)>)>,
     /// Abandon state for a given keygen if we can't make progress for longer than this
     phase_timeout: Duration,
+    logger: slog::Logger,
 }
 
 impl KeygenManager {
@@ -51,6 +53,7 @@ impl KeygenManager {
         our_id: ValidatorId,
         event_sender: UnboundedSender<InnerEvent>,
         phase_timeout: Duration,
+        logger: &slog::Logger,
     ) -> Self {
         KeygenManager {
             keygen_states: Default::default(),
@@ -58,6 +61,7 @@ impl KeygenManager {
             event_sender,
             our_id,
             phase_timeout,
+            logger: logger.new(o!(COMPONENT_KEY => "KeygenManager")),
         }
     }
 
@@ -75,11 +79,15 @@ impl KeygenManager {
             }
             Entry::Vacant(_) => match message {
                 KeygenData::Broadcast1(bc1) => {
-                    trace!("Delaying keygen bc1 for key id: {:?}", key_id);
+                    slog::trace!(self.logger, "Delaying keygen bc1 for key id: {:?}", key_id);
                     self.add_delayed(key_id, sender_id, bc1);
                 }
                 KeygenData::Secret2(_) => {
-                    warn!("Unexpected keygen secret2 for key id: {:?}", key_id);
+                    slog::warn!(
+                        self.logger,
+                        "Unexpected keygen secret2 for key id: {:?}",
+                        key_id
+                    );
                 }
             },
         };
@@ -106,9 +114,11 @@ impl KeygenManager {
         let timeout = self.phase_timeout;
         // Remove all pending state that hasn't been updated for
         // longer than `self.phase_timeout`
+        let logger_c = self.logger.clone();
         self.delayed_messages.retain(|key_id, (t, bc1_vec)| {
             if t.elapsed() > timeout {
-                warn!(
+                slog::warn!(
+                    logger_c,
                     "Keygen state expired w/o keygen request for id: {:?}",
                     key_id
                 );
@@ -128,7 +138,7 @@ impl KeygenManager {
         // remove any active states that are taking too long
         self.keygen_states.retain(|key_id, state| {
             if state.last_message_timestamp.elapsed() > timeout {
-                warn!("Keygen state expired for key id: {:?}", key_id);
+                slog::warn!(logger_c, "Keygen state expired for key id: {:?}", key_id);
 
                 let late_nodes = state.awaited_parties();
                 let event = InnerEvent::from(KeygenOutcome::timeout(*key_id, late_nodes));
@@ -141,7 +151,7 @@ impl KeygenManager {
 
         for event in events_to_send {
             if let Err(err) = self.event_sender.send(event) {
-                error!("Unable to send event, error: {}", err);
+                slog::error!(logger_c, "Unable to send event, error: {}", err);
             }
         }
     }
@@ -156,7 +166,11 @@ impl KeygenManager {
         match self.keygen_states.entry(key_id) {
             Entry::Occupied(_) => {
                 // State should not have been created prior to receiving a keygen request
-                warn!("Ignoring a keygen request for a known key_id: {:?}", key_id);
+                slog::warn!(
+                    self.logger,
+                    "Ignoring a keygen request for a known key_id: {:?}",
+                    key_id
+                );
             }
             Entry::Vacant(entry) => match get_our_idx(&signers, &self.our_id) {
                 Some(idx) => {
@@ -176,6 +190,7 @@ impl KeygenManager {
                         idx_map,
                         key_id,
                         self.event_sender.clone(),
+                        &self.logger,
                     );
 
                     let state = entry.insert(state);
@@ -190,7 +205,10 @@ impl KeygenManager {
                     debug_assert!(self.delayed_messages.get(&key_id).is_none());
                 }
                 None => {
-                    error!("Unexpected keygen request w/o us as participants")
+                    slog::error!(
+                        self.logger,
+                        "Unexpected keygen request w/o us as participants"
+                    )
                 }
             },
         }

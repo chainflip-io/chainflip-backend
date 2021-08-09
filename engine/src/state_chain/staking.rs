@@ -7,7 +7,7 @@ use codec::{Decode, Encode, FullCodec};
 use frame_support::pallet_prelude::*;
 use sp_core::U256;
 use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub};
-use substrate_subxt::{module, sp_core::crypto::AccountId32, system::System, Call, Event};
+use substrate_subxt::{module, sp_core::crypto::AccountId32, system::System, Event};
 
 use serde::{Deserialize, Serialize};
 
@@ -37,31 +37,6 @@ pub trait Staking: System {
         + AtLeast32BitUnsigned
         + MaybeSerializeDeserialize
         + CheckedSub;
-}
-
-#[derive(Call, Encode)]
-pub struct WitnessStakedCall<T: Staking> {
-    /// Runtime marker
-    _runtime: PhantomData<T>,
-
-    staker_account_id: AccountId32,
-
-    amount: T::TokenAmount,
-
-    tx_hash: [u8; 32],
-}
-
-#[derive(Call, Encode)]
-pub struct WitnessClaimedCall<T: Staking> {
-    /// Runtime marker
-    _runtime: PhantomData<T>,
-
-    // Account id of the claiming account
-    account_id: AccountId32,
-
-    amount: T::TokenAmount,
-
-    tx_hash: [u8; 32],
 }
 
 type MsgHash = U256;

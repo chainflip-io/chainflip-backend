@@ -1,0 +1,54 @@
+[package]
+authors = ['Chainflip Team <https://github.com/chainflip-io>']
+description = 'FRAME pallet providing helper extrinsics for witnessing transactions.'
+edition = '2018'
+homepage = 'https://substrate.dev'
+license = '<TODO>'
+name = 'pallet-cf-witnesser-api'
+readme = 'README.md'
+repository = 'https://github.com/chainflip-io/chainflip-backend'
+version = '0.1.0'
+
+[package.metadata.docs.rs]
+targets = ['x86_64-unknown-linux-gnu']
+
+[dependencies]
+# Chainflip pallets
+cf-traits = { path = '../../traits', default-features = false }
+pallet-cf-staking = { path = '../cf-staking', default-features = false }
+pallet-cf-auction = { path = '../cf-auction', default-features = false }
+
+# Substrate stuff
+codec = { default-features = false, features = ['derive'], package = 'parity-scale-codec', version = '2.0.0' }
+frame-system = { default-features = false, version = '3.0.0' }
+frame-support = { default-features = false, version = '3.0.0' }
+frame-benchmarking = { default-features = false, optional = true, version = '3.1.0' }
+sp-std = { default-features = false, version = '3.0.0' }
+sp-core = { default-features = false, version = '3.0.0' }
+
+[dev-dependencies]
+serde = { version = "1.0.119" }
+sp-core = { default-features = false, version = '3.0.0' }
+sp-io = { default-features = false, version = '3.0.0' }
+sp-runtime = { default-features = false, version = '3.0.0' }
+
+[features]
+default = ['std']
+std = [
+	'cf-traits/std',
+	'codec/std',
+	'frame-support/std',
+	'frame-system/std',
+	'frame-benchmarking/std',
+	'pallet-cf-staking/std',
+	'sp-std/std',
+    'sp-core/std',
+]
+runtime-benchmarks = [
+	'frame-benchmarking',
+	'frame-support/runtime-benchmarks',
+	'frame-system/runtime-benchmarks',
+]
+# Note: frame-support `try-runtime` feature is released after v3.
+#   Uncomment the following line when `frame-support` version > `3.0.0`.
+# try-runtime = ['frame-support/try-runtime']

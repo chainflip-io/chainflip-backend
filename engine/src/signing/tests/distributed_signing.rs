@@ -8,11 +8,9 @@ use rand::{
 use tokio::time::Duration;
 
 use crate::{
-    mq::{
-        mq_mock::{MQMock, MQMockClientFactory},
-        pin_message_stream, IMQClient, Subject,
-    },
-    p2p::{mock::NetworkMock, P2PConductor, ValidatorId},
+    logging,
+    mq::{mq_mock::MQMock, IMQClient, Subject},
+    p2p::{self, mock::NetworkMock, ValidatorId},
     signing::db::KeyDBMock,
 };
 
@@ -20,8 +18,7 @@ use lazy_static::lazy_static;
 
 use crate::signing::{
     client::{
-        KeyId, KeygenInfo, MultisigClient, MultisigEvent, MultisigInstruction, SigningInfo,
-        SigningOutcome,
+        self, KeyId, KeygenInfo, MultisigEvent, MultisigInstruction, SigningInfo, SigningOutcome,
     },
     MessageHash,
 };
@@ -48,8 +45,7 @@ async fn coordinate_signing(
                     .subscribe::<MultisigEvent>(Subject::MultisigEvent)
                     .await
                     .expect("Could not subscribe to Subject::MultisigEvent");
-
-                pin_message_stream(stream)
+                stream
             }
         })
         .collect_vec();
@@ -195,34 +191,39 @@ async fn distributed_signing() {
     // Create a fake network
     let network = NetworkMock::new();
 
+    let logger = logging::test_utils::create_test_logger();
+
     // Start message queues for each party
     let mc_futs = (1..=N_PARTIES)
         .map(|i| {
             let p2p_client = network.new_client(VALIDATOR_IDS[i - 1].clone());
-
+            let logger = logger.clone();
             async move {
                 let mq = MQMock::new();
 
-                let mc = mq.get_client();
-
-                let conductor = P2PConductor::new(mc, p2p_client).await;
+                let mq_client = mq.get_client();
 
                 let (shutdown_conductor_tx, shutdown_conductor_rx) =
                     tokio::sync::oneshot::channel::<()>();
 
-                let conductor_fut = conductor.start(shutdown_conductor_rx);
-
-                let mq_factory = MQMockClientFactory::new(mq.clone());
+                let conductor_fut = p2p::conductor::start(
+                    p2p_client,
+                    mq_client.clone(),
+                    shutdown_conductor_rx,
+                    &logger,
+                );
 
                 let db = KeyDBMock::new();
 
-                let client = MultisigClient::new(db, mq_factory, VALIDATOR_IDS[i - 1].clone());
-
                 let (shutdown_client_tx, shutdown_client_rx) =
                     tokio::sync::oneshot::channel::<()>();
-
-                // "ready to sign" emitted here
-                let client_fut = client.run(shutdown_client_rx);
+                let client_fut = client::start(
+                    VALIDATOR_IDS[i - 1].clone(),
+                    db,
+                    mq_client,
+                    shutdown_client_rx,
+                    &logger,
+                );
 
                 let mc = mq.get_client();
 

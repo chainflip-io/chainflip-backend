@@ -1,11 +1,10 @@
 use std::{
     collections::{hash_map::Entry, HashMap},
+    pin::Pin,
     sync::Arc,
 };
 
-use crate::mq::pin_message_stream;
-
-use super::{IMQClient, IMQClientFactory, SubjectName};
+use super::{IMQClient, SubjectName};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use log::*;
@@ -40,24 +39,6 @@ impl MQMock {
     }
 }
 
-/// Factory that knows how to create instances of MQMockClient
-pub struct MQMockClientFactory {
-    mq: MQMock,
-}
-
-impl MQMockClientFactory {
-    pub fn new(mq: MQMock) -> Self {
-        MQMockClientFactory { mq }
-    }
-}
-
-#[async_trait]
-impl IMQClientFactory<MQMockClient> for MQMockClientFactory {
-    async fn create(&self) -> anyhow::Result<Box<MQMockClient>> {
-        Ok(Box::new(self.mq.get_client()))
-    }
-}
-
 #[async_trait]
 impl IMQClient for MQMockClient {
     async fn publish<M: 'static + serde::Serialize + Sync>(
@@ -86,7 +67,7 @@ impl IMQClient for MQMockClient {
     async fn subscribe<M: serde::de::DeserializeOwned>(
         &self,
         subject: super::Subject,
-    ) -> Result<Box<dyn futures::Stream<Item = Result<M>>>> {
+    ) -> Result<Pin<Box<dyn futures::Stream<Item = Result<M>>>>> {
         let subject = subject.to_subject_name();
 
         let mut topics = self.topics.lock();
@@ -98,7 +79,7 @@ impl IMQClient for MQMockClient {
         let rx =
             UnboundedReceiverStream::new(rx).map(|x| serde_json::from_str(&x).context("subscribe"));
 
-        return Ok(Box::new(rx));
+        return Ok(Box::pin(rx));
     }
 
     async fn close(&self) -> Result<()> {
@@ -114,17 +95,15 @@ async fn test_own_mq() {
     let c2 = mq.get_client();
     let c3 = mq.get_client();
 
-    let stream2 = c2
+    let mut stream2 = c2
         .subscribe::<String>(super::Subject::P2PIncoming)
         .await
         .unwrap();
-    let mut stream2 = pin_message_stream(stream2);
 
-    let stream3 = c3
+    let mut stream3 = c3
         .subscribe::<String>(super::Subject::P2PIncoming)
         .await
         .unwrap();
-    let mut stream3 = pin_message_stream(stream3);
 
     let msg = "Test".to_string();
 
