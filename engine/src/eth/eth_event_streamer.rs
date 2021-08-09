@@ -37,6 +37,11 @@ where
         event_sinks: Vec<E>,
         logger: &slog::Logger,
     ) -> Result<Self> {
+        slog::debug!(
+            logger,
+            "Connecting new Eth event streamer to {}",
+            node_endpoint
+        );
         match tokio::time::timeout(
             Duration::from_secs(5),
             web3::transports::WebSocket::new(node_endpoint),
@@ -99,9 +104,10 @@ where
         // The `fromBlock` parameter doesn't seem to work reliably with subscription streams, so
         // request past block via http and prepend them to the stream manually.
         let past_logs = if let Some(b) = from_block {
-            let http_filter = self.event_source.filter_builder(b.into()).build();
-
-            self.web3_client.eth().logs(http_filter).await?
+            self.web3_client
+                .eth()
+                .logs(self.event_source.filter_builder(b.into()).build())
+                .await?
         } else {
             Vec::new()
         };
