@@ -3,9 +3,7 @@ pub const COMPONENT_KEY: &str = "component";
 
 pub const SIGNING_SUB_COMPONENT: &str = "signing-sub-component";
 
-#[cfg(test)]
-pub mod test_utils {
-
+pub mod utils {
     use slog::{o, Drain, Fuse, Level, OwnedKVList, Record};
     use std::result;
 
@@ -34,7 +32,16 @@ pub mod test_utils {
         }
     }
 
-    pub fn create_test_logger() -> slog::Logger {
+    pub fn create_cli_logger() -> slog::Logger {
         slog::Logger::root(Fuse(PrintlnDrain), o!())
+    }
+}
+
+#[cfg(test)]
+pub mod test_utils {
+    use super::utils::create_cli_logger;
+
+    pub fn create_test_logger() -> slog::Logger {
+        create_cli_logger()
     }
 }
