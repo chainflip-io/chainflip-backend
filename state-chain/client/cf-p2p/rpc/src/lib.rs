@@ -223,7 +223,11 @@ impl<C: P2pMessaging + Sync + Send + 'static> RpcApi for Rpc<C> {
 			.lock()
 			.unwrap()
 			.identify(validator_id.into())
-			.map_err(|_| Error::internal_error())
+			.map_err(|inner| {
+				let mut e = Error::internal_error();
+				e.message = format!("{}", inner);
+				e
+			})
 			.map(|_| 200)
 	}
 
@@ -232,7 +236,11 @@ impl<C: P2pMessaging + Sync + Send + 'static> RpcApi for Rpc<C> {
 			.lock()
 			.unwrap()
 			.send_message(validator_id.into(), message.into())
-			.map_err(|_| Error::internal_error())
+			.map_err(|inner| {
+				let mut e = Error::internal_error();
+				e.message = format!("{}", inner);
+				e
+			})
 			.map(|_| 200)
 	}
 
@@ -241,7 +249,11 @@ impl<C: P2pMessaging + Sync + Send + 'static> RpcApi for Rpc<C> {
 			.lock()
 			.unwrap()
 			.broadcast_all(message.into())
-			.map_err(|_| Error::internal_error())
+			.map_err(|inner| {
+				let mut e = Error::internal_error();
+				e.message = format!("{}", inner);
+				e
+			})
 			.map(|_| 200)
 	}
 
@@ -282,6 +294,8 @@ mod tests {
 	struct Node {
 		io: jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>,
 		event_stream: Arc<EventStream>,
+		// Unused, but needs to remain in scope so that the sender doesn't fail.
+		_receiver: UnboundedReceiver<cf_p2p::MessagingCommand>,
 	}
 
 	impl Node {
@@ -298,6 +312,7 @@ mod tests {
 			Node {
 				io,
 				event_stream: event_stream.clone(),
+				_receiver,
 			}
 		}
 
