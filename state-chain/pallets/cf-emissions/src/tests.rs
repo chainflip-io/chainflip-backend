@@ -78,4 +78,3 @@ fn test_duplicate_emission_should_be_noop() {
 		assert_eq!(before, after);
 	});
 }
-
