@@ -11,12 +11,12 @@ ws_endpoint = "ws://localhost:9944"
 
 [eth]
 from_block = 0
-node_endpoint = "wss://network.my_eth_node:80/<secret_key>"
+node_endpoint = "ws://localhost:8545"
 # Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
 private_key_file = "/run/secrets/eth_private_key"
 # Address used on the Ganache/Brownie tests
 key_manager_eth_address = "0xdBa9b6065Deb6Cc057BC779fF6736709ecBa3409"
-stake_manager_eth_address = "0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f"
+stake_manager_eth_address = "0x6951b5Bd815043E3F842c1b026b0Fa888Cc2DD85"
 
 [health_check]
 hostname = "127.0.0.1"
