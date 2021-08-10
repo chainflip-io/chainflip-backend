@@ -74,8 +74,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		frame_system: Default::default(),
 		pallet_cf_governance: Some(GovernanceConfig {
 			members: vec![ALICE, BOB, CHARLES, EVE, PETER, MAX],
-			required_approvals: 3,
-			expiry_time_span: 1800,
 		}),
 	};
 
