@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Decode;
+use frame_support::traits::EnsureOrigin;
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_runtime::DispatchError;
@@ -21,7 +22,7 @@ pub mod pallet {
 	};
 
 	use codec::Encode;
-	use frame_system::{pallet_prelude::*, RawOrigin};
+	use frame_system::pallet_prelude::*;
 	use sp_runtime::traits::Dispatchable;
 	use sp_std::boxed::Box;
 	use sp_std::vec;
@@ -94,19 +95,17 @@ pub mod pallet {
 	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		ProposedSudoCall(Vec<u8>, T::AccountId),
-		CallExecuted,
+		ProposedGovernanceExtrinsic(u32, Vec<u8>),
+		GovernanceExtrinsicExecuted(u32, Vec<u8>),
 		Voted,
-		SudoCallExpired,
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
 		AlreadyVoted,
-		OnGoingVote,
+		AlreadyExecuted,
+		AlreadyExpired,
 		NoMember,
-		CanNotDecodeCall,
-		CanNotExecuteCall,
 	}
 
 	#[pallet::call]
@@ -197,6 +196,38 @@ pub mod pallet {
 			Members::<T>::set(self.members.clone());
 		}
 	}
+
+	#[pallet::origin]
+	pub type Origin = RawOrigin;
+
+	/// The raw origin enum for this pallet.
+	#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
+	pub enum RawOrigin {
+		EnsureGovernance,
+	}
+}
+
+pub struct EnsureGovernance;
+
+impl<OuterOrigin> EnsureOrigin<OuterOrigin> for EnsureGovernance
+where
+	OuterOrigin: Into<Result<RawOrigin, OuterOrigin>> + From<RawOrigin>,
+{
+	type Success = ();
+
+	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
+		match o.into() {
+			Ok(o) => match o {
+				RawOrigin::EnsureGovernance => Ok(()),
+			},
+			Err(o) => Err(o),
+		}
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> OuterOrigin {
+		RawOrigin::EnsureGovernance.into()
+	}
 }
 
 impl<T: Config> Pallet<T> {
@@ -232,8 +263,8 @@ impl<T: Config> Pallet<T> {
 			Some(proposal) if proposal.voted.contains(&account) => {
 				Err(Error::<T>::AlreadyVoted.into())
 			}
-			Some(proposal) if proposal.executed => Err(Error::<T>::AlreadyVoted.into()),
-			Some(proposal) if proposal.expiry >= 30000 => Err(Error::<T>::AlreadyVoted.into()),
+			Some(proposal) if proposal.executed => Err(Error::<T>::AlreadyExecuted.into()),
+			Some(proposal) if proposal.expiry >= 30000 => Err(Error::<T>::AlreadyExpired.into()),
 			Some(mut proposal) => {
 				proposal.voted.push(account);
 				proposal.votes = proposal.votes + 1;
