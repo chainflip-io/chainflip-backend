@@ -3,6 +3,12 @@ use codec::Decode;
 pub use pallet::*;
 use sp_runtime::DispatchError;
 use sp_std::vec::Vec;
+
+#[cfg(test)]
+mod mock;
+
+#[cfg(test)]
+mod tests;
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_support::{
