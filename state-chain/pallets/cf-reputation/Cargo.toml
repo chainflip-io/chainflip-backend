@@ -20,6 +20,7 @@ sp-std = { version = "3.0.0", default-features = false }
 sp-io = { version = "3.0.0", default-features = false }
 sp-core = { default-features = false, version = '3.0.0' }
 serde = { version = "1.0.101", default-features = false, features = ["derive"] }
+sp-arithmetic = { version = "3.0.0", default-features = false}
 
 [dev-dependencies]
 sp-std = { version = "3.0.0", default-features = false }

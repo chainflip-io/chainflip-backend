@@ -20,25 +20,46 @@ mod mock;
 mod tests;
 
 use frame_support::pallet_prelude::*;
+use frame_support::sp_std::convert::TryInto;
 pub use pallet::*;
+use sp_runtime::traits::Zero;
 
-pub trait Slashing {}
-trait OfflineConditions {
+pub trait Slashing {
 	type ValidatorId;
-	fn broadcast_output_failed(validator: Self::ValidatorId);
-	fn participate_signing_failed(validator: Self::ValidatorId);
+	fn slash(validator_id: &Self::ValidatorId) -> Weight;
+}
+
+enum OfflineConditions {
+	BroadcastOutputFailed(ReputationPoints),
+	ParticipateSigningFailed(ReputationPoints),
+}
+
+enum ReportError {
+	// Validator doesn't exist
+	UnknownValidator,
+}
+
+trait ReportOfflineCondition {
+	type ValidatorId;
+	fn report(
+		condition: OfflineConditions,
+		validator_id: &Self::ValidatorId,
+	) -> Result<Weight, ReportError>;
 }
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_system::pallet_prelude::*;
-	use sp_runtime::traits::AtLeast32BitUnsigned;
 	use cf_traits::EpochInfo;
+	use frame_support::sp_runtime::offchain::storage_lock::BlockNumberProvider;
+	use frame_system::pallet_prelude::*;
+	use std::ops::Neg;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(_);
+
+	pub type ReputationPoints = i32;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -46,7 +67,10 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// A stable ID for a validator.
-		type ValidatorId: Member + Parameter;
+		type ValidatorId: Member
+			+ Parameter
+			+ From<<Self as frame_system::Config>::AccountId>
+			+ Copy;
 
 		type Amount;
 
@@ -54,96 +78,240 @@ pub mod pallet {
 		#[pallet::constant]
 		type HeartbeatBlockInterval: Get<<Self as frame_system::Config>::BlockNumber>;
 
-		/// Online credit
-		type ReputationPoints: Default + Member + Parameter + AtLeast32BitUnsigned;
+		/// The number of reputation points we lose for every x blocks offline
+		#[pallet::constant]
+		type ReputationPointPenalty: Get<(u32, u32)>;
+
+		/// The floor and ceiling values for a reputation score
+		#[pallet::constant]
+		type ReputationPointFloorAndCeiling: Get<(ReputationPoints, ReputationPoints)>;
 
 		/// When we have to, we slash
-		type Slasher: Slashing;
+		type Slasher: Slashing<ValidatorId = Self::ValidatorId>;
 
 		// Information about the current epoch.
-		type EpochInfo: EpochInfo<
-			ValidatorId = Self::ValidatorId,
-			Amount = Self::Amount,
-		>;
+		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
+			// Read heartbeat interval to see if we need to check liveness
+			if current_block % T::HeartbeatBlockInterval::get() == Zero::zero() {
+				return T::DbWeight::get().reads(1) + Self::check_liveness(current_block);
+			}
+
+			Zero::zero()
+		}
+	}
 
 	#[pallet::storage]
-	#[pallet::getter(fn liveliness)]
-	pub type Liveliness<T: Config> = StorageMap<_, Blake2_128Concat, T::ValidatorId, T::BlockNumber, ValueQuery>;
+	#[pallet::getter(fn accrual_ratio)]
+	pub(super) type AccrualRatio<T: Config> =
+		StorageValue<_, (ReputationPoints, T::BlockNumber), ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn reputation_points)]
-	pub type ReputationPoints<T: Config> = StorageMap<_, Blake2_128Concat, T::ValidatorId, T::ReputationPoints, ValueQuery>;
+	#[pallet::getter(fn awaiting_heartbeats)]
+	pub(super) type AwaitingHeartbeats<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::ValidatorId, (), ValueQuery>;
+
+	/// A map tracking our validators.  We record the number of blocks they have been alive
+	/// according to the heartbeats submitted.  We are assuming that during a `HeartbeatInterval`
+	/// if a `heartbeat()` transaction is submitted that they are alive during the entire
+	/// `HeartbeatInterval` of blocks.
+	#[pallet::storage]
+	#[pallet::getter(fn reputation)]
+	pub type Reputation<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::ValidatorId,
+		(T::BlockNumber, ReputationPoints),
+		ValueQuery,
+	>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Broadcast of an output has failed for validator
-		BroadcastOutputFailed(T::ValidatorId),
+		BroadcastOutputFailed(T::ValidatorId, ReputationPoints),
 		/// Validator has failed to participate in a signing ceremony
-		ParticipateSigningFailed(T::ValidatorId),
-		/// Validators that are \[offline, online\]
-		ValidatorsOnlineCheck(Vec<T::ValidatorId>, Vec<T::ValidatorId>),
+		ParticipateSigningFailed(T::ValidatorId, ReputationPoints),
+		/// The accrual rate for our reputation poins has been updated \[points, blocks\]
+		AccrualRateUpdated(ReputationPoints, T::BlockNumber),
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
 		Invalid,
+		AlreadySubmittedHeartbeat,
+		InvalidReputationPoints,
+		InvalidReputationBlocks,
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-
 		#[pallet::weight(10_000)]
-		pub(super) fn heartbeat(
-			origin: OriginFor<T>
-		) -> DispatchResultWithPostInfo {
+		pub(super) fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
+			// Ensure we haven't had a heartbeat for this interval yet for this validator
+			ensure!(
+				AwaitingHeartbeats::<T>::contains_key(validator_id),
+				Error::<T>::AlreadySubmittedHeartbeat
+			);
+			// Remove this validator from the hot list
+			AwaitingHeartbeats::<T>::take(validator_id);
+			// Check if this validator has reputation
+			if !Reputation::<T>::contains_key(validator_id) {
+				// Track current block number and set 0 reputation points for the validator
+				Reputation::<T>::insert(
+					validator_id,
+					(frame_system::Pallet::<T>::current_block_number(), 0),
+				);
+			} else {
+				// Update reputation points for this validator
+				Reputation::<T>::mutate(validator_id, |(block_number, points)| {
+					// Accrue some blocks of `HeartbeatInterval` size
+					*block_number = *block_number + T::HeartbeatBlockInterval::get();
+					let (reputation_points, reputation_blocks) = AccrualRatio::<T>::get();
+					// If we have hit a number of blocks to earn reputation points
+					if *block_number >= reputation_blocks {
+						// Swap these blocks for reputation, probably better after the try_mutate here
+						*block_number = *block_number - reputation_blocks;
+						// Update reputation
+						*points = *points + reputation_points;
+					}
+				});
+			}
+
 			Ok(().into())
 		}
 
+		#[pallet::weight(10_000)]
+		pub(super) fn update_accrual_ratio(
+			origin: OriginFor<T>,
+			points: ReputationPoints,
+			blocks: BlockNumberFor<T>,
+		) -> DispatchResultWithPostInfo {
+			let _ = ensure_root(origin)?;
+			// Some very basic validation here.  Should be improved in subsequent PR
+			ensure!(points > Zero::zero(), Error::<T>::InvalidReputationPoints);
+			ensure!(blocks > Zero::zero(), Error::<T>::InvalidReputationBlocks);
+			AccrualRatio::<T>::set((points, blocks));
+			Ok(().into())
+		}
 	}
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig {
-	}
+	pub struct GenesisConfig {}
 
 	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
-			Self {
-			}
+			Self {}
 		}
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
+			// A list of those we expect to be online, which are our set of validators
+			for validator_id in T::EpochInfo::current_validators().iter() {
+				AwaitingHeartbeats::<T>::insert(validator_id, ());
+			}
 		}
 	}
 
-	impl<T: Config> OfflineConditions for Pallet<T> {
+	impl<T: Config> ReportOfflineCondition for Pallet<T> {
 		type ValidatorId = T::ValidatorId;
-		fn broadcast_output_failed(validator: Self::ValidatorId) {
-			todo!("implement")
+
+		fn report(
+			condition: OfflineConditions,
+			validator_id: &Self::ValidatorId,
+		) -> Result<Weight, ReportError> {
+			// Confirm validator is present
+			ensure!(
+				Reputation::<T>::contains_key(validator_id),
+				ReportError::UnknownValidator
+			);
+
+			// Handle offline conditions
+			match condition {
+				OfflineConditions::BroadcastOutputFailed(penalty) => {
+					Self::deposit_event(Event::BroadcastOutputFailed(*validator_id, penalty));
+					Ok(Self::update_reputation(validator_id, penalty.neg()))
+				}
+				OfflineConditions::ParticipateSigningFailed(penalty) => {
+					Self::deposit_event(Event::ParticipateSigningFailed(*validator_id, penalty));
+					Ok(Self::update_reputation(validator_id, penalty.neg()))
+				}
+			}
 		}
-		fn participate_signing_failed(validator: Self::ValidatorId) {todo!("implement")}
 	}
 
 	impl<T: Config> Pallet<T> {
-		fn check_liveliness() {
-			todo!("implement")
+		fn update_reputation(validator_id: &T::ValidatorId, points: ReputationPoints) -> Weight {
+			Reputation::<T>::mutate(validator_id, |(_, current_points)| {
+				*current_points = *current_points + points;
+				let (mut floor, mut ceiling) = T::ReputationPointFloorAndCeiling::get();
+				*current_points = *current_points.clamp(&mut floor, &mut ceiling);
+
+				T::DbWeight::get().reads_writes(1, 1)
+			})
 		}
 
-		fn slash(validator: T::ValidatorId) {
-			todo!("implement")
+		fn is_floor(points: ReputationPoints) -> bool {
+			let (floor, _) = T::ReputationPointFloorAndCeiling::get();
+			floor == points
 		}
 
-		fn calculate_reputation(validator: T::ValidatorId) {
-			todo!("implement")
+		fn calculate_offline_penalty(
+			current_block: T::BlockNumber,
+			last_block: T::BlockNumber,
+		) -> ReputationPoints {
+			// What points for what blocks we penalise by
+			let (penalty_points, penalty_blocks) = T::ReputationPointPenalty::get();
+			// The blocks we have missed
+			let dead_blocks = TryInto::<u32>::try_into(current_block - last_block).unwrap_or(0);
+			// The points to be penalised
+			((penalty_points * dead_blocks / penalty_blocks) as ReputationPoints).neg()
+		}
+
+		fn check_liveness(current_block: BlockNumberFor<T>) -> Weight {
+			// Let's run through those that haven't come back to us
+			let mut weight = 0;
+			// Drain those that have not returned with a heartbeat
+			for (validator_id, _) in AwaitingHeartbeats::<T>::drain() {
+				if Reputation::<T>::mutate(
+					validator_id,
+					|(last_block_number_alive, reputation_points)| {
+						if !Self::is_floor(*reputation_points) {
+							// Set their block time to current as they have paid their debt in reputation
+							*last_block_number_alive = current_block;
+							// Update reputation points
+							*reputation_points = *reputation_points
+								+ Self::calculate_offline_penalty(
+									current_block,
+									*last_block_number_alive,
+								)
+						}
+						*reputation_points
+					},
+				) < Zero::zero()
+				{
+					weight += T::Slasher::slash(&validator_id);
+				}
+
+				weight += T::DbWeight::get().reads_writes(1, 1);
+			}
+
+			// A list of those we expect to be online
+			for validator_id in T::EpochInfo::current_validators().iter() {
+				AwaitingHeartbeats::<T>::insert(validator_id, ());
+				weight += T::DbWeight::get().reads_writes(1, 1);
+			}
+
+			weight
 		}
 	}
 }

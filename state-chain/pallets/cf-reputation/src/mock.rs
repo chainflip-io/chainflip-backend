@@ -59,17 +59,26 @@ impl frame_system::Config for Test {
 
 parameter_types! {
 	pub const HeartbeatBlockInterval: u64 = 10;
+	pub const ReputationPointPenalty: (u32, u32) = (1, 10);
+	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
 }
 
 pub struct MySlasher;
-impl Slashing for MySlasher {}
+impl Slashing for MySlasher {
+	type ValidatorId = u64;
+
+	fn slash(validator_id: &Self::ValidatorId) -> Weight {
+		0
+	}
+}
 
 impl Config for Test {
 	type Event = Event;
 	type ValidatorId = u64;
 	type Amount = u128;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
-	type ReputationPoints = u64;
+	type ReputationPointPenalty = ReputationPointPenalty;
+	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = MySlasher;
 	type EpochInfo = epoch_info::Mock;
 }
