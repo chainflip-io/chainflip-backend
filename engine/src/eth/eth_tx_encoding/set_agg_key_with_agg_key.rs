@@ -155,9 +155,29 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
     // 3. Create a Signing Instruction
     // 4. Push this instruction to the MQ for the signing module to pick up
     async fn handle_keygen_success(&mut self, keygen_success: KeygenSuccess) {
-        let (encoded_fn_params, param_container) = self
-            .build_encoded_fn_params(&keygen_success)
-            .expect("should be a valid encoded params");
+        
+        // This has nothing to do with building an ETH transaction.
+        // We encode the tx like this, in eth format, because this is how the contract will
+        // serialise the data to verify the signature over the message hash
+        let (pubkey_x, pubkey_y_parity) = destructure_pubkey(keygen_success.key);
+
+        let param_container = ParamContainer {
+            key_id: keygen_success.key_id,
+            pubkey_x,
+            pubkey_y_parity,
+            key_nonce: [0u8; 32],
+        };
+
+        let params = set_agg_key_with_agg_key_param_constructor(
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 32],
+            [0u8; 20],
+            pubkey_x,
+            pubkey_y_parity,
+        );
+
+        let encoded_fn_params = self.encode_params_key_manager_fn(params).expect("should be a valid encoded params");
 
         let hash = Keccak256::hash(&encoded_fn_params[..]);
         let message_hash = MessageHash(hash.0);
@@ -248,38 +268,6 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
             contract_address: self.key_manager.deployed_address,
             data: tx_data.into(),
         })
-    }
-
-    // This has nothing to do with building an ETH transaction.
-    // We encode the tx like this, in eth format, because this is how the contract will
-    // serialise the data to verify the signature over the message hash
-    fn build_encoded_fn_params(
-        &self,
-        keygen_success: &KeygenSuccess,
-    ) -> Result<(Vec<u8>, ParamContainer)> {
-        let pubkey = keygen_success.key;
-
-        let (pubkey_x, pubkey_y_parity) = destructure_pubkey(pubkey);
-
-        let param_container = ParamContainer {
-            key_id: keygen_success.key_id,
-            pubkey_x,
-            pubkey_y_parity,
-            key_nonce: [0u8; 32],
-        };
-
-        let params = set_agg_key_with_agg_key_param_constructor(
-            [0u8; 32],
-            [0u8; 32],
-            [0u8; 32],
-            [0u8; 20],
-            pubkey_x,
-            pubkey_y_parity,
-        );
-
-        let encoded_data = self.encode_params_key_manager_fn(params)?;
-
-        return Ok((encoded_data, param_container));
     }
 
     fn encode_params_key_manager_fn(&self, params: [Token; 2]) -> Result<Vec<u8>> {
