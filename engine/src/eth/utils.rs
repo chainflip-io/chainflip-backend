@@ -18,17 +18,17 @@ pub fn decode_log_param<T: Tokenizable>(log: &Log, param_name: &str) -> Result<T
 }
 
 /// Get a eth address from a public key
-pub fn pubkey_to_eth_addr(r: secp256k1::PublicKey) -> [u8; 20] {
-    let v_pub: [u8; 64] = r.serialize_uncompressed()[1..]
+pub fn pubkey_to_eth_addr(pubkey: secp256k1::PublicKey) -> [u8; 20] {
+    let pubkey_bytes: [u8; 64] = pubkey.serialize_uncompressed()[1..]
         .try_into()
         .expect("Should be a valid pubkey");
 
-    let pubkey_hash = Keccak256::hash(&v_pub).as_bytes().to_owned();
+    let pubkey_hash = Keccak256::hash(&pubkey_bytes).as_bytes().to_owned();
 
     // take the last 160bits (20 bytes)
     let addr: [u8; 20] = pubkey_hash[12..]
         .try_into()
-        .expect("Should only be 20 bytes long");
+        .expect("Should be exactly 20 bytes long");
 
     return addr;
 }
@@ -41,19 +41,19 @@ mod utils_tests {
 
     #[test]
     fn test_pubkey_to_eth_addr() {
-        // The secret key and corresponding eth addr were taken from an example in the Ethereum Book.
-        let sk_1 = secp256k1::SecretKey::from_str(
+        // The secret key and corresponding eth addr were taken from an example in the "Mastering Ethereum" Book.
+        let sk = secp256k1::SecretKey::from_str(
             "f8f8a2f43c8376ccb0871305060d7b27b0554d2cc72bccf41b2705608452f315",
         )
         .unwrap();
 
-        let pk_2 = PublicKey::from_secret_key(&secp256k1::Secp256k1::signing_only(), &sk_1);
+        let pk = PublicKey::from_secret_key(&secp256k1::Secp256k1::signing_only(), &sk);
 
         let expected: [u8; 20] = hex::decode("001d3f1ef827552ae1114027bd3ecf1f086ba0f9")
             .unwrap()
             .try_into()
             .unwrap();
 
-        assert_eq!(pubkey_to_eth_addr(pk_2), expected);
+        assert_eq!(pubkey_to_eth_addr(pk), expected);
     }
 }

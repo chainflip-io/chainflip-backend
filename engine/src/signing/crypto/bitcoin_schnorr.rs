@@ -200,17 +200,14 @@ impl LocalSig {
         let beta_i = local_ephemeral_key.x_i.clone();
         let alpha_i = local_private_key.x_i.clone();
 
-        let message_len_bits = message.len() * 8;
         let r = local_ephemeral_key.y.get_element();
         let eth_addr = utils::pubkey_to_eth_addr(r);
-        let eth_addr_len_bits = eth_addr.len() * 8;
-        let X = local_private_key.y.bytes_compressed_to_big_int();
-        let e_bn = HSha256::create_hash_from_slice(
-            &BigInt::to_bytes(
-                &((((X << message_len_bits) + BigInt::from_bytes(message)) << eth_addr_len_bits)
-                    + BigInt::from_bytes(&eth_addr)),
-            )[..],
-        );
+
+        let e_bn = HSha256::create_hash(&[
+            &local_private_key.y.bytes_compressed_to_big_int(),
+            &BigInt::from_bytes(message),
+            &BigInt::from_bytes(&eth_addr),
+        ]);
 
         let e: FE = ECScalar::from(&e_bn);
         let gamma_i = beta_i + e.clone() * alpha_i;
