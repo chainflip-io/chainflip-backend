@@ -99,7 +99,7 @@ pub mod pallet {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			// Read heartbeat interval to see if we need to check liveness
 			if current_block % T::HeartbeatBlockInterval::get() == Zero::zero() {
-				return T::DbWeight::get().reads(1) + Self::check_liveness(current_block);
+				return Self::check_liveness(current_block);
 			}
 
 			Zero::zero()
