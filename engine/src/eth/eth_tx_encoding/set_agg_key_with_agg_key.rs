@@ -108,7 +108,7 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
                 Ok(event) => match event {
                     MultisigEvent::KeygenResult(key_outcome) => match key_outcome {
                         KeygenOutcome::Success(keygen_success) => {
-                            self.handle_keygen_success(keygen_success).await;
+                            self.handle_keygen_success(keygen_success.key_id, keygen_success.key).await;
                         }
                         _ => {
                             slog::error!(
@@ -154,14 +154,14 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
     // 2. Store the tx parameters in state for use later
     // 3. Create a Signing Instruction
     // 4. Push this instruction to the MQ for the signing module to pick up
-    async fn handle_keygen_success(&mut self, keygen_success: KeygenSuccess) {
+    async fn handle_keygen_success(&mut self, key_id : KeyId, key : secp256k1::PublicKey) {
         // This has nothing to do with building an ETH transaction.
         // We encode the tx like this, in eth format, because this is how the contract will
         // serialise the data to verify the signature over the message hash
-        let (pubkey_x, pubkey_y_parity) = destructure_pubkey(keygen_success.key);
+        let (pubkey_x, pubkey_y_parity) = destructure_pubkey(key);
 
         let param_container = ParamContainer {
-            key_id: keygen_success.key_id,
+            key_id,
             pubkey_x,
             pubkey_y_parity,
             key_nonce: [0u8; 32],
