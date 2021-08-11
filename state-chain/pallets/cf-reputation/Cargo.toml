@@ -12,6 +12,8 @@ targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
 cf-traits = { path = '../../traits', default-features = false }
+pallet-cf-validator = { path = '../cf-validator', default-features = false }
+
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
 frame-support = { version = "3.0.0", default-features = false }
 frame-system = { version = "3.0.0", default-features = false }
@@ -38,4 +40,5 @@ std = [
     'sp-core/std',
     'sp-io/std',
     'cf-traits/std',
+    'pallet-cf-validator/std',
 ]

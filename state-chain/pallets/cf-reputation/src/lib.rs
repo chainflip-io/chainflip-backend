@@ -22,6 +22,7 @@ mod tests;
 use frame_support::pallet_prelude::*;
 use frame_support::sp_std::convert::TryInto;
 pub use pallet::*;
+use pallet_cf_validator::EpochTransitionHandler;
 use sp_runtime::traits::Zero;
 
 pub trait Slashing {
@@ -73,7 +74,7 @@ pub mod pallet {
 			+ From<<Self as frame_system::Config>::AccountId>
 			+ Copy;
 
-		type Amount;
+		type Amount: Copy;
 
 		/// The number of blocks for the time frame we would test liveliness within
 		#[pallet::constant]
@@ -225,6 +226,17 @@ pub mod pallet {
 			// A list of those we expect to be online, which are our set of validators
 			for validator_id in T::EpochInfo::current_validators().iter() {
 				AwaitingHeartbeats::<T>::insert(validator_id, ());
+			}
+		}
+	}
+
+	impl<T: Config> EpochTransitionHandler for Pallet<T> {
+		type ValidatorId = T::ValidatorId;
+		type Amount = T::Amount;
+
+		fn on_new_epoch(new_validators: &Vec<Self::ValidatorId>, _new_bond: Self::Amount) {
+			for validator_id in new_validators.iter() {
+				AwaitingHeartbeats::<T>::insert(validator_id, true);
 			}
 		}
 	}
