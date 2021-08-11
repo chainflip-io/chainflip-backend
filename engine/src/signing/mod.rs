@@ -7,7 +7,7 @@ mod tests;
 
 pub use client::{
     start, KeyId, KeygenInfo, KeygenOutcome, KeygenSuccess, MultisigEvent, MultisigInstruction,
-    SigningInfo, SigningOutcome, SigningSuccess,
+    SigningInfo, SigningOutcome, SigningSuccess, SchnorrSignature
 };
 
 use serde::{Deserialize, Serialize};

@@ -13,5 +13,5 @@ mod tests;
 
 pub use client_inner::{InnerEvent, MultisigClientInner};
 
-pub use client_inner::{KeygenOutcome, KeygenSuccess, SigningOutcome, SigningSuccess};
+pub use client_inner::{KeygenOutcome, KeygenSuccess, SigningOutcome, SigningSuccess, SchnorrSignature};
 pub use common::KeygenResultInfo;

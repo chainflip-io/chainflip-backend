@@ -8,8 +8,8 @@ use crate::{
     p2p::ValidatorId,
     settings,
     signing::{
-        KeyId, KeygenOutcome, KeygenSuccess, MessageHash, MultisigEvent, MultisigInstruction,
-        SigningInfo, SigningOutcome, SigningSuccess,
+        KeyId, KeygenOutcome, MessageHash, MultisigEvent, MultisigInstruction,
+        SigningInfo, SigningOutcome, MessageInfo, SchnorrSignature
     },
     types::chain::Chain,
 };
@@ -119,7 +119,7 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
                     },
                     MultisigEvent::MessageSigningResult(signing_outcome) => match signing_outcome {
                         SigningOutcome::MessageSigned(signing_success) => {
-                            self.handle_set_agg_key_message_signed(signing_success)
+                            self.handle_set_agg_key_message_signed(signing_success.message_info, signing_success.sig)
                                 .await;
                         }
                         _ => {
@@ -209,13 +209,9 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
     // 3. Push this transaction to the Broadcast(Chain::ETH) subject, to be broadcast by the ETH Broadcaster
     // 4. Update the current key id, with the new key id returned by the signing module, so we know which key to sign with
     // from now onwards, until the next successful key rotation
-    async fn handle_set_agg_key_message_signed(&mut self, signing_success: SigningSuccess) {
+    async fn handle_set_agg_key_message_signed(&mut self, message_info: MessageInfo, sig: SchnorrSignature) {
         // 1. Get the data from the message hash that was signed (using the `messages` field)
-        let sig = signing_success.sig;
-
-        let message_info = signing_success.message_info;
         let nonce_times_g_addr = utils::pubkey_to_eth_addr(sig.r);
-
         let key_id = message_info.key_id;
         let msg_hash = message_info.hash;
         let params = self
