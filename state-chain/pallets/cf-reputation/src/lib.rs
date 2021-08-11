@@ -34,6 +34,7 @@ enum OfflineConditions {
 	ParticipateSigningFailed(ReputationPoints),
 }
 
+#[derive(Debug, PartialEq)]
 enum ReportError {
 	// Validator doesn't exist
 	UnknownValidator,
@@ -198,6 +199,7 @@ pub mod pallet {
 			ensure!(points > Zero::zero(), Error::<T>::InvalidReputationPoints);
 			ensure!(blocks > Zero::zero(), Error::<T>::InvalidReputationBlocks);
 			AccrualRatio::<T>::set((points, blocks));
+			Self::deposit_event(Event::AccrualRateUpdated(points, blocks));
 			Ok(().into())
 		}
 	}

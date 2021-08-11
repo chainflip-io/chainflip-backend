@@ -1,21 +1,21 @@
 use super::*;
 use crate as pallet_cf_reputation;
 use frame_support::{construct_runtime, parameter_types};
+use sp_core::H256;
 use sp_runtime::BuildStorage;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-use sp_core::H256;
 use std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
+use cf_traits::mocks::epoch_info::Mock;
 use cf_traits::mocks::{epoch_info, time_source};
 
-thread_local! {
-}
+thread_local! {}
 
 construct_runtime!(
 	pub enum Test where
@@ -24,7 +24,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		ReputationPallet: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config},
+		ReputationPallet: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
 	}
 );
 
@@ -57,9 +57,12 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ();
 }
 
+pub const HEARTBEAT_BLOCK_INTERVAL: u64 = 10;
+pub const POINTS_PER_BLOCK_PENALTY: (u32, u32) = (1, 5);
+
 parameter_types! {
-	pub const HeartbeatBlockInterval: u64 = 10;
-	pub const ReputationPointPenalty: (u32, u32) = (1, 10);
+	pub const HeartbeatBlockInterval: u64 = HEARTBEAT_BLOCK_INTERVAL;
+	pub const ReputationPointPenalty: (u32, u32) = POINTS_PER_BLOCK_PENALTY;
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
 }
 
@@ -71,6 +74,9 @@ impl Slashing for MySlasher {
 		0
 	}
 }
+
+pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
+pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
 
 impl Config for Test {
 	type Event = Event;
@@ -86,9 +92,10 @@ impl Config for Test {
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		frame_system: Default::default(),
-		pallet_cf_reputation: Default::default(),
+		pallet_cf_reputation: Some(Default::default()),
 	};
 
+	Mock::add_validator(ALICE);
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
 	ext.execute_with(|| {
@@ -96,4 +103,12 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	});
 
 	ext
+}
+
+pub fn run_to_block(n: u64) {
+	while System::block_number() < n {
+		ReputationPallet::on_finalize(System::block_number());
+		System::set_block_number(System::block_number() + 1);
+		ReputationPallet::on_initialize(System::block_number());
+	}
 }
