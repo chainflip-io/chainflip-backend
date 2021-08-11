@@ -58,6 +58,7 @@ impl frame_system::Config for Test {
 
 pub const HEARTBEAT_BLOCK_INTERVAL: u64 = 10;
 pub const POINTS_PER_BLOCK_PENALTY: (u32, u32) = (1, 5);
+pub const ACCRUAL_BLOCKS_PER_REPUTATION_POINT: u64 = HEARTBEAT_BLOCK_INTERVAL / 2;
 
 parameter_types! {
 	pub const HeartbeatBlockInterval: u64 = HEARTBEAT_BLOCK_INTERVAL;
@@ -93,7 +94,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		frame_system: Default::default(),
 		pallet_cf_reputation: Some(
 			ReputationPalletConfig {
-				accrual_ratio: (1, 10)
+				accrual_ratio: (1, ACCRUAL_BLOCKS_PER_REPUTATION_POINT)
 			}
 		),
 	};

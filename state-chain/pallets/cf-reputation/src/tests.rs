@@ -4,6 +4,7 @@ mod tests {
 	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::DispatchError::BadOrigin;
 	use std::ops::Neg;
+	use sp_runtime::BuildStorage;
 
 	fn last_event() -> mock::Event {
 		frame_system::Pallet::<Test>::events()
@@ -21,6 +22,19 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
 		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn should_panic_if_accrual_rate_is_more_than_heartbeat_interval_at_genesis() {
+		mock::GenesisConfig {
+			frame_system: Default::default(),
+			pallet_cf_reputation: Some(
+				ReputationPalletConfig {
+					accrual_ratio: (1, HEARTBEAT_BLOCK_INTERVAL + 1)
+				}
+			),
+		}.build_storage().unwrap();
 	}
 
 	#[test]
@@ -61,17 +75,41 @@ mod tests {
 				),
 				BadOrigin
 			);
+			assert_noop!(
+				ReputationPallet::update_accrual_ratio(
+					Origin::root(),
+					2,
+					0
+				),
+				Error::<Test>::InvalidReputationBlocks
+			);
+			assert_noop!(
+				ReputationPallet::update_accrual_ratio(
+					Origin::root(),
+					2,
+					HEARTBEAT_BLOCK_INTERVAL + 1
+				),
+				Error::<Test>::InvalidReputationBlocks
+			);
+			assert_noop!(
+				ReputationPallet::update_accrual_ratio(
+					Origin::root(),
+					0,
+					2
+				),
+				Error::<Test>::InvalidReputationPoints
+			);
 			assert_ok!(ReputationPallet::update_accrual_ratio(
 				Origin::root(),
 				2,
-				HEARTBEAT_BLOCK_INTERVAL
+				ACCRUAL_BLOCKS_PER_REPUTATION_POINT
 			));
 
 			assert_eq!(
 				last_event(),
 				mock::Event::pallet_cf_reputation(crate::Event::AccrualRateUpdated(
 					2,
-					HEARTBEAT_BLOCK_INTERVAL
+					ACCRUAL_BLOCKS_PER_REPUTATION_POINT
 				))
 			);
 

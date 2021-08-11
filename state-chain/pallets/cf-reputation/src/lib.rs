@@ -194,11 +194,18 @@ pub mod pallet {
 			blocks: BlockNumberFor<T>,
 		) -> DispatchResultWithPostInfo {
 			let _ = ensure_root(origin)?;
-			// Some very basic validation here.  Should be improved in subsequent PR
+			// Some very basic validation here.  Should be improved in subsequent PR based on
+			// further definition of limits
 			ensure!(points > Zero::zero(), Error::<T>::InvalidReputationPoints);
 			ensure!(blocks > Zero::zero(), Error::<T>::InvalidReputationBlocks);
+			ensure!(
+				blocks < T::HeartbeatBlockInterval::get(),
+				Error::<T>::InvalidReputationBlocks
+			);
+
 			AccrualRatio::<T>::set((points, blocks));
 			Self::deposit_event(Event::AccrualRateUpdated(points, blocks));
+
 			Ok(().into())
 		}
 	}
@@ -220,6 +227,10 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
+			assert!(
+				self.accrual_ratio.1 < T::HeartbeatBlockInterval::get(),
+				"Heartbeat interval needs to greater than block duration reward"
+			);
 			AccrualRatio::<T>::set(self.accrual_ratio);
 			// A list of those we expect to be online, which are our set of validators
 			for validator_id in T::EpochInfo::current_validators().iter() {
