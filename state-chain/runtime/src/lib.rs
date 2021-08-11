@@ -1,8 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
-mod weights;
 mod chainflip;
+mod weights;
 // A few exports that help ease life for downstream crates.
 use core::time::Duration;
 pub use frame_support::{
@@ -396,8 +396,21 @@ impl pallet_cf_witness_api::Config for Runtime {
 	type Witnesser = Witnesser;
 }
 
+parameter_types! {
+	pub const HeartbeatBlockInterval: u32 = 10;
+	pub const ReputationPointPenalty: (u32, u32) = (1, 5);
+	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
+}
+
 impl pallet_cf_reputation::Config for Runtime {
 	type Event = Event;
+	type ValidatorId = <Self as frame_system::Config>::AccountId;
+	type Amount = FlipBalance;
+	type HeartbeatBlockInterval = HeartbeatBlockInterval;
+	type ReputationPointPenalty = ReputationPointPenalty;
+	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
+	type Slasher = Reputation;
+	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 }
 
 construct_runtime!(
@@ -425,7 +438,7 @@ construct_runtime!(
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
 		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
-		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>},
+		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
 	}
 );
 

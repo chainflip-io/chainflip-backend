@@ -24,6 +24,7 @@ use frame_support::sp_std::convert::TryInto;
 pub use pallet::*;
 use pallet_cf_validator::EpochTransitionHandler;
 use sp_runtime::traits::Zero;
+use sp_std::vec::Vec;
 
 pub trait Slashing {
 	type ValidatorId;
@@ -55,7 +56,7 @@ pub mod pallet {
 	use cf_traits::EpochInfo;
 	use frame_support::sp_runtime::offchain::storage_lock::BlockNumberProvider;
 	use frame_system::pallet_prelude::*;
-	use std::ops::Neg;
+	use sp_std::ops::Neg;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -330,5 +331,12 @@ pub mod pallet {
 
 			weight
 		}
+	}
+}
+
+impl<T: Config> Slashing for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
+	fn slash(_validator_id: &Self::ValidatorId) -> Weight {
+		0
 	}
 }
