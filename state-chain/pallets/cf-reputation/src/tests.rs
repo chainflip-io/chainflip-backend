@@ -162,8 +162,7 @@ mod tests {
 			assert_eq!(
 				last_event(),
 				mock::Event::pallet_cf_reputation(crate::Event::BroadcastOutputFailed(
-					ALICE,
-					penalty
+					ALICE, penalty
 				))
 			);
 		});
@@ -183,8 +182,7 @@ mod tests {
 			assert_eq!(
 				last_event(),
 				mock::Event::pallet_cf_reputation(crate::Event::ParticipateSigningFailed(
-					ALICE,
-					penalty
+					ALICE, penalty
 				))
 			);
 		});
