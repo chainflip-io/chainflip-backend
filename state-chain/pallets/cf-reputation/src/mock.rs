@@ -91,7 +91,11 @@ impl Config for Test {
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		frame_system: Default::default(),
-		pallet_cf_reputation: Some(Default::default()),
+		pallet_cf_reputation: Some(
+			ReputationPalletConfig {
+				accrual_ratio: (1, 10)
+			}
+		),
 	};
 
 	Mock::add_validator(ALICE);

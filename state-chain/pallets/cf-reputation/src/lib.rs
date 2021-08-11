@@ -72,6 +72,7 @@ pub mod pallet {
 		/// A stable ID for a validator.
 		type ValidatorId: Member + Parameter + From<<Self as frame_system::Config>::AccountId>;
 
+		// An amount of a bid
 		type Amount: Copy;
 
 		/// The number of blocks for the time frame we would test liveliness within
@@ -211,7 +212,7 @@ pub mod pallet {
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self {
-				accrual_ratio: (1, 10u32.into()),
+				accrual_ratio: (Zero::zero(), Zero::zero()),
 			}
 		}
 	}
