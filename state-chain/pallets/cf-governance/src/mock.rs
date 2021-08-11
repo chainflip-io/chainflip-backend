@@ -13,6 +13,8 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
 
+cf_traits::impl_mock_ensure_governance_for_origin!(Origin);
+
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
 	pub enum Test where
@@ -21,7 +23,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>},
+		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>, Origin},
 	}
 );
 
@@ -56,9 +58,11 @@ impl system::Config for Test {
 }
 
 impl pallet_cf_governance::Config for Test {
+	type Origin = Origin;
 	type Call = Call;
 	type Event = Event;
 	type TimeSource = time_source::Mock;
+	type EnsureGovernance = MockEnsureGovernance;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

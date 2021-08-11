@@ -364,9 +364,11 @@ impl pallet_cf_staking::Config for Runtime {
 }
 
 impl pallet_cf_governance::Config for Runtime {
+	type Origin = Origin;
 	type Call = Call;
 	type Event = Event;
 	type TimeSource = Timestamp;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
 parameter_types! {
@@ -427,7 +429,7 @@ construct_runtime!(
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
 		// Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
-		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>},
+		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>, Origin},
 	}
 );
 

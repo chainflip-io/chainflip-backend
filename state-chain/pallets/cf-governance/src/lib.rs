@@ -18,11 +18,11 @@ pub mod pallet {
 	use frame_support::{
 		dispatch::{GetDispatchInfo, PostDispatchInfo},
 		pallet_prelude::*,
-		traits::UnixTime,
+		traits::{UnfilteredDispatchable, UnixTime},
 	};
 
-	use codec::Encode;
-	use frame_system::pallet_prelude::*;
+	use codec::{Encode, FullCodec};
+	use frame_system::{pallet, pallet_prelude::*};
 	use sp_runtime::traits::Dispatchable;
 	use sp_std::boxed::Box;
 	use sp_std::vec;
@@ -42,10 +42,19 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-		type Call: Parameter
-			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
-			+ GetDispatchInfo
-			+ From<frame_system::Call<Self>>;
+		// type Origin: From<RawOrigin>;
+		// type Call: Member
+		// 	+ FullCodec
+		// 	+ UnfilteredDispatchable<Origin = <Self as Config>::Origin>
+		// 	+ GetDispatchInfo;
+		/// Provides an origin check for witness transactions.
+		type Origin: From<RawOrigin>;
+		type EnsureGovernance: EnsureOrigin<<Self as pallet::Config>::Origin>;
+		type Call: Member
+			+ FullCodec
+			+ UnfilteredDispatchable<Origin = <Self as Config>::Origin>
+			+ GetDispatchInfo;
+
 		type TimeSource: UnixTime;
 	}
 	#[pallet::pallet]
@@ -136,7 +145,8 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			accounts: Vec<T::AccountId>,
 		) -> DispatchResultWithPostInfo {
-			Self::ensure_governance(origin)?;
+			// Self::ensure_governance(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
 			<Members<T>>::put(accounts);
 			Ok(().into())
 		}
@@ -203,7 +213,7 @@ pub mod pallet {
 	/// The raw origin enum for this pallet.
 	#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
 	pub enum RawOrigin {
-		EnsureGovernance,
+		GovernanceThreshold,
 	}
 }
 
@@ -218,7 +228,7 @@ where
 	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
 		match o.into() {
 			Ok(o) => match o {
-				RawOrigin::EnsureGovernance => Ok(()),
+				RawOrigin::GovernanceThreshold => Ok(()),
 			},
 			Err(o) => Err(o),
 		}
@@ -226,14 +236,11 @@ where
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> OuterOrigin {
-		RawOrigin::EnsureGovernance.into()
+		RawOrigin::GovernanceThreshold.into()
 	}
 }
 
 impl<T: Config> Pallet<T> {
-	fn ensure_governance(origin: OriginFor<T>) -> Result<(), Error<T>> {
-		Ok(())
-	}
 	fn majority_reached(votes: u32) -> bool {
 		true
 	}
