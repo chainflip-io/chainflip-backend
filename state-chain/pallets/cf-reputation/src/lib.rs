@@ -166,18 +166,22 @@ pub mod pallet {
 				// Track current block number and set 0 reputation points for the validator
 				Reputation::<T>::insert(
 					validator_id,
-					(frame_system::Pallet::<T>::current_block_number(), 0),
+					(
+						frame_system::Pallet::<T>::current_block_number()
+							+ T::HeartbeatBlockInterval::get(),
+						0,
+					),
 				);
 			} else {
 				// Update reputation points for this validator
-				Reputation::<T>::mutate(validator_id, |(block_number, points)| {
+				Reputation::<T>::mutate(validator_id, |(block_credits, points)| {
 					// Accrue some blocks of `HeartbeatInterval` size
-					*block_number = *block_number + T::HeartbeatBlockInterval::get();
+					*block_credits = *block_credits + T::HeartbeatBlockInterval::get();
 					let (reputation_points, reputation_blocks) = AccrualRatio::<T>::get();
 					// If we have hit a number of blocks to earn reputation points
-					if *block_number >= reputation_blocks {
-						// Swap these blocks for reputation, probably better after the try_mutate here
-						*block_number = *block_number - reputation_blocks;
+					if *block_credits >= reputation_blocks {
+						// Swap these blocks for reputation
+						*block_credits = *block_credits - reputation_blocks;
 						// Update reputation
 						*points = *points + reputation_points;
 					}
@@ -199,7 +203,7 @@ pub mod pallet {
 			ensure!(points > Zero::zero(), Error::<T>::InvalidReputationPoints);
 			ensure!(blocks > Zero::zero(), Error::<T>::InvalidReputationBlocks);
 			ensure!(
-				blocks < T::HeartbeatBlockInterval::get(),
+				blocks > T::HeartbeatBlockInterval::get(),
 				Error::<T>::InvalidReputationBlocks
 			);
 
@@ -228,8 +232,8 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			assert!(
-				self.accrual_ratio.1 < T::HeartbeatBlockInterval::get(),
-				"Heartbeat interval needs to greater than block duration reward"
+				self.accrual_ratio.1 > T::HeartbeatBlockInterval::get(),
+				"Heartbeat interval needs to be less than block duration reward"
 			);
 			AccrualRatio::<T>::set(self.accrual_ratio);
 			// A list of those we expect to be online, which are our set of validators
@@ -315,16 +319,16 @@ pub mod pallet {
 				if awaiting
 					&& Reputation::<T>::mutate(
 						&validator_id,
-						|(last_block_number_alive, reputation_points)| {
+						|(block_credits, reputation_points)| {
 							if T::ReputationPointFloorAndCeiling::get().0 < *reputation_points {
 								// Update reputation points
 								*reputation_points = *reputation_points
 									+ Self::calculate_offline_penalty(
 										current_block,
-										*last_block_number_alive,
+										current_block - T::HeartbeatBlockInterval::get(),
 									);
-								// Set their block time to current as they have paid their debt in reputation
-								*last_block_number_alive = current_block;
+								// Reset the credits earned as being online consecutively
+								*block_credits = Zero::zero();
 							}
 							weight += T::DbWeight::get().reads_writes(1, 1);
 

@@ -2,9 +2,9 @@ mod tests {
 	use crate::mock::*;
 	use crate::*;
 	use frame_support::{assert_noop, assert_ok};
+	use sp_runtime::BuildStorage;
 	use sp_runtime::DispatchError::BadOrigin;
 	use std::ops::Neg;
-	use sp_runtime::BuildStorage;
 
 	fn last_event() -> mock::Event {
 		frame_system::Pallet::<Test>::events()
@@ -17,6 +17,15 @@ mod tests {
 		ReputationPallet::reputation(who).1
 	}
 
+	fn run_heartbeats_to_block(end_block: u64) {
+		for block in (HEARTBEAT_BLOCK_INTERVAL..end_block + HEARTBEAT_BLOCK_INTERVAL)
+			.step_by(HEARTBEAT_BLOCK_INTERVAL as usize)
+		{
+			assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
+			run_to_block(block);
+		}
+	}
+
 	#[test]
 	fn should_have_a_list_of_validators_at_genesis() {
 		new_test_ext().execute_with(|| {
@@ -26,15 +35,15 @@ mod tests {
 
 	#[test]
 	#[should_panic]
-	fn should_panic_if_accrual_rate_is_more_than_heartbeat_interval_at_genesis() {
+	fn should_panic_if_accrual_rate_is_less_than_heartbeat_interval_at_genesis() {
 		mock::GenesisConfig {
 			frame_system: Default::default(),
-			pallet_cf_reputation: Some(
-				ReputationPalletConfig {
-					accrual_ratio: (1, HEARTBEAT_BLOCK_INTERVAL + 1)
-				}
-			),
-		}.build_storage().unwrap();
+			pallet_cf_reputation: Some(ReputationPalletConfig {
+				accrual_ratio: (1, HEARTBEAT_BLOCK_INTERVAL - 1),
+			}),
+		}
+		.build_storage()
+		.unwrap();
 	}
 
 	#[test]
@@ -50,17 +59,45 @@ mod tests {
 	#[test]
 	fn submitting_heartbeat_should_reward_reputation_points() {
 		new_test_ext().execute_with(|| {
-			// Interval 0 - expecting 0 points
-			assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
+			let points_to_earn = 10;
+			// We will need to send heartbeats for the next ACCRUAL_BLOCKS_PER_REPUTATION_POINT blocks
+			run_heartbeats_to_block(ACCRUAL_BLOCKS_PER_REPUTATION_POINT * points_to_earn);
+			// Alice should now have 1 point
+			assert_eq!(reputation_points(ALICE), points_to_earn as i32);
+		});
+	}
+
+	#[test]
+	fn missing_heartbeats_should_see_loss_of_reputation_points() {
+		new_test_ext().execute_with(|| {
 			assert_eq!(reputation_points(ALICE), 0);
-			// Interval 1 - expecting 1 point
-			run_to_block(HEARTBEAT_BLOCK_INTERVAL);
-			assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
-			assert_eq!(reputation_points(ALICE), 1);
-			// Interval 2 - expecting 2 points
-			run_to_block(HEARTBEAT_BLOCK_INTERVAL * 2);
-			assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
-			assert_eq!(reputation_points(ALICE), 2);
+			// We will need to send heartbeats for the next ACCRUAL_BLOCKS_PER_REPUTATION_POINT blocks
+			run_heartbeats_to_block(ACCRUAL_BLOCKS_PER_REPUTATION_POINT);
+			// Alice should now have 1 point
+			let current_reputation = reputation_points(ALICE);
+			assert_eq!(current_reputation, 1);
+			let points_to_lose = 100;
+			for _ in 0..points_to_lose {
+				// Lose a point, move a heartbeat interval forward with no heartbeat sent
+				run_to_block(System::block_number() + HEARTBEAT_BLOCK_INTERVAL);
+			}
+			assert_eq!(
+				reputation_points(ALICE),
+				current_reputation - points_to_lose
+			);
+		});
+	}
+
+	#[test]
+	fn missing_heartbeats_should_see_slashing_when_we_hit_negative() {
+		new_test_ext().execute_with(|| {
+			assert_eq!(reputation_points(ALICE), 0);
+			let expected_slashes = 10;
+			for _ in 0..expected_slashes {
+				// Lose a point, move a heartbeat interval forward with no heartbeat sent
+				run_to_block(System::block_number() + HEARTBEAT_BLOCK_INTERVAL);
+			}
+			assert_eq!(SLASH_COUNT.with(|count| *count.borrow()), expected_slashes);
 		});
 	}
 
@@ -76,27 +113,19 @@ mod tests {
 				BadOrigin
 			);
 			assert_noop!(
-				ReputationPallet::update_accrual_ratio(
-					Origin::root(),
-					2,
-					0
-				),
+				ReputationPallet::update_accrual_ratio(Origin::root(), 2, 0),
 				Error::<Test>::InvalidReputationBlocks
 			);
 			assert_noop!(
 				ReputationPallet::update_accrual_ratio(
 					Origin::root(),
 					2,
-					HEARTBEAT_BLOCK_INTERVAL + 1
+					HEARTBEAT_BLOCK_INTERVAL - 1
 				),
 				Error::<Test>::InvalidReputationBlocks
 			);
 			assert_noop!(
-				ReputationPallet::update_accrual_ratio(
-					Origin::root(),
-					0,
-					2
-				),
+				ReputationPallet::update_accrual_ratio(Origin::root(), 0, 2),
 				Error::<Test>::InvalidReputationPoints
 			);
 			assert_ok!(ReputationPallet::update_accrual_ratio(
@@ -105,21 +134,18 @@ mod tests {
 				ACCRUAL_BLOCKS_PER_REPUTATION_POINT
 			));
 
+			let target_points = 2;
+
 			assert_eq!(
 				last_event(),
 				mock::Event::pallet_cf_reputation(crate::Event::AccrualRateUpdated(
-					2,
+					target_points,
 					ACCRUAL_BLOCKS_PER_REPUTATION_POINT
 				))
 			);
 
-			// Interval 0 - expecting 0 points
-			assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
-			assert_eq!(reputation_points(ALICE), 0);
-			// Interval 1 - expecting 2 points
-			run_to_block(HEARTBEAT_BLOCK_INTERVAL);
-			assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
-			assert_eq!(reputation_points(ALICE), 2);
+			run_heartbeats_to_block(ACCRUAL_BLOCKS_PER_REPUTATION_POINT);
+			assert_eq!(reputation_points(ALICE), target_points);
 		});
 	}
 

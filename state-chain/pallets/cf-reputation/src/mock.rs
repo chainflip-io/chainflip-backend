@@ -7,6 +7,7 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
+use sp_std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -14,7 +15,9 @@ type Block = frame_system::mocking::MockBlock<Test>;
 use cf_traits::mocks::epoch_info;
 use cf_traits::mocks::epoch_info::Mock;
 
-thread_local! {}
+thread_local! {
+	pub static SLASH_COUNT: RefCell<u64> = RefCell::new(0);
+}
 
 construct_runtime!(
 	pub enum Test where
@@ -56,9 +59,12 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ();
 }
 
-pub const HEARTBEAT_BLOCK_INTERVAL: u64 = 10;
-pub const POINTS_PER_BLOCK_PENALTY: (u32, u32) = (1, 5);
-pub const ACCRUAL_BLOCKS_PER_REPUTATION_POINT: u64 = HEARTBEAT_BLOCK_INTERVAL / 2;
+// A heartbeat every 150 blocks
+pub const HEARTBEAT_BLOCK_INTERVAL: u64 = 150;
+// Number of blocks beng offline before you lose one point
+pub const POINTS_PER_BLOCK_PENALTY: (u32, u32) = (1, HEARTBEAT_BLOCK_INTERVAL as u32);
+// Number of blocks to be online to accrue a point
+pub const ACCRUAL_BLOCKS_PER_REPUTATION_POINT: u64 = 2500;
 
 parameter_types! {
 	pub const HeartbeatBlockInterval: u64 = HEARTBEAT_BLOCK_INTERVAL;
@@ -71,6 +77,10 @@ impl Slashing for MockSlasher {
 	type ValidatorId = u64;
 
 	fn slash(_validator_id: &Self::ValidatorId) -> Weight {
+		SLASH_COUNT.with(|count| {
+			let mut c = count.borrow_mut();
+			*c = *c + 1
+		});
 		0
 	}
 }
@@ -92,11 +102,9 @@ impl Config for Test {
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		frame_system: Default::default(),
-		pallet_cf_reputation: Some(
-			ReputationPalletConfig {
-				accrual_ratio: (1, ACCRUAL_BLOCKS_PER_REPUTATION_POINT)
-			}
-		),
+		pallet_cf_reputation: Some(ReputationPalletConfig {
+			accrual_ratio: (1, ACCRUAL_BLOCKS_PER_REPUTATION_POINT),
+		}),
 	};
 
 	Mock::add_validator(ALICE);
@@ -110,7 +118,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 pub fn run_to_block(n: u64) {
-	while System::block_number() < n {
+	while System::block_number() <= n {
 		ReputationPallet::on_finalize(System::block_number());
 		System::set_block_number(System::block_number() + 1);
 		ReputationPallet::on_initialize(System::block_number());
