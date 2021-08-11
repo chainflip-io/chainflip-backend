@@ -8,8 +8,8 @@ use crate::{
     p2p::ValidatorId,
     settings,
     signing::{
-        KeyId, KeygenOutcome, MessageHash, MultisigEvent, MultisigInstruction,
-        SigningInfo, SigningOutcome, MessageInfo, SchnorrSignature
+        KeyId, MessageHash, MultisigEvent, MultisigInstruction,
+        SigningInfo, MessageInfo, SchnorrSignature
     },
     types::chain::Chain,
 };
@@ -106,29 +106,32 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
         while let Some(event) = multisig_event_stream.next().await {
             match event {
                 Ok(event) => match event {
-                    MultisigEvent::KeygenResult(key_outcome) => match key_outcome {
-                        KeygenOutcome::Success(keygen_success) => {
-                            self.handle_keygen_success(keygen_success.key_id, keygen_success.key).await;
-                        }
-                        _ => {
-                            slog::error!(
-                                self.logger,
-                                "Signing module returned error generating key"
-                            )
+                    MultisigEvent::KeygenResult(key_outcome) => {
+                        match key_outcome.result {
+                            Ok(key) => {
+                                self.handle_keygen_success(key_outcome.computation_id, key).await;
+                            },
+                            Err(_) => {
+                                slog::error!(
+                                    self.logger,
+                                    "Signing module returned error generating key"
+                                )
+                            }
                         }
                     },
-                    MultisigEvent::MessageSigningResult(signing_outcome) => match signing_outcome {
-                        SigningOutcome::MessageSigned(signing_success) => {
-                            self.handle_set_agg_key_message_signed(signing_success.message_info, signing_success.sig)
-                                .await;
-                        }
-                        _ => {
-                            // TODO: Use the reported bad nodes in the SigningOutcome / SigningFailure
-                            // TODO: retry signing with a different subset of signers
-                            slog::error!(
-                                self.logger,
-                                "Signing module returned error signing message"
-                            )
+                    MultisigEvent::MessageSigningResult(signing_outcome) => {
+                        match signing_outcome.result {
+                            Ok(sig) => {
+                                self.handle_set_agg_key_message_signed(signing_outcome.computation_id, sig).await;
+                            },
+                            Err(_) => {
+                                // TODO: Use the reported bad nodes in the SigningOutcome / SigningFailure
+                                // TODO: retry signing with a different subset of signers
+                                slog::error!(
+                                    self.logger,
+                                    "Signing module returned error signing message"
+                                )
+                            }
                         }
                     },
                     _ => {

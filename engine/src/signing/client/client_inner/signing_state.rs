@@ -18,6 +18,7 @@ use crate::{
                 shared_secret::StageStatus,
                 utils::{self},
                 SigningOutcome,
+                SchnorrSignature
             },
             SigningInfo,
         },
@@ -165,8 +166,8 @@ impl SigningState {
         id
     }
 
-    fn send_event(&self, event: InnerEvent) {
-        if let Err(err) = self.event_sender.send(event) {
+    fn send_outcome(&self, event: SigningOutcome) {
+        if let Err(err) = self.event_sender.send(InnerEvent::SigningResult(event)) {
             slog::error!(self.logger, "Could not send inner event: {}", err);
         }
     }
@@ -243,10 +244,10 @@ impl SigningState {
 
                 if verify_sig.is_ok() {
                     slog::info!(self.logger, "Generated signature is correct! 🎉");
-                    self.send_event(InnerEvent::SigningResult(SigningOutcome::success(
+                    self.send_outcome(SigningOutcome::success(
                         self.message_info.clone(),
-                        signature,
-                    )));
+                        SchnorrSignature::from(signature),
+                    ));
                 } else {
                     self.update_stage(SigningStage::Abandoned);
 
@@ -256,12 +257,10 @@ impl SigningState {
                         self.message_info
                     );
 
-                    let event = InnerEvent::SigningResult(SigningOutcome::invalid(
+                    self.send_outcome(SigningOutcome::invalid(
                         self.message_info.clone(),
                         vec![],
                     ));
-
-                    self.send_event(event);
                 }
                 self.update_stage(SigningStage::Finished);
             }
@@ -277,12 +276,10 @@ impl SigningState {
                     &blamed_ids
                 );
 
-                let event = InnerEvent::SigningResult(SigningOutcome::invalid(
+                self.send_outcome(SigningOutcome::invalid(
                     self.message_info.clone(),
                     blamed_ids,
                 ));
-
-                self.send_event(event);
             }
         }
     }
@@ -474,12 +471,10 @@ impl SigningState {
                     &blamed_ids
                 );
 
-                let event = InnerEvent::SigningResult(SigningOutcome::invalid(
+                self.send_outcome(SigningOutcome::invalid(
                     self.message_info.clone(),
                     blamed_ids,
                 ));
-
-                self.send_event(event);
 
                 self.update_stage(SigningStage::Abandoned);
             }
@@ -544,10 +539,10 @@ impl SigningState {
 
                 let blamed_ids = self.signer_idxs_to_validator_ids(blamed_idxs);
 
-                self.send_event(InnerEvent::SigningResult(SigningOutcome::invalid(
+                self.send_outcome(SigningOutcome::invalid(
                     self.message_info.clone(),
                     blamed_ids,
-                )));
+                ));
             }
         }
     }
