@@ -114,9 +114,8 @@ pub mod pallet {
 		StorageValue<_, (ReputationPoints, T::BlockNumber), ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn awaiting_heartbeats)]
 	pub(super) type AwaitingHeartbeats<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::ValidatorId, (), ValueQuery>;
+		StorageMap<_, Blake2_128Concat, T::ValidatorId, bool, OptionQuery>;
 
 	/// A map tracking our validators.  We record the number of blocks they have been alive
 	/// according to the heartbeats submitted.  We are assuming that during a `HeartbeatInterval`
@@ -158,11 +157,11 @@ pub mod pallet {
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
 			// Ensure we haven't had a heartbeat for this interval yet for this validator
 			ensure!(
-				AwaitingHeartbeats::<T>::contains_key(validator_id),
+				AwaitingHeartbeats::<T>::get(validator_id).unwrap_or(false),
 				Error::<T>::AlreadySubmittedHeartbeat
 			);
-			// Remove this validator from the hot list
-			AwaitingHeartbeats::<T>::take(validator_id);
+			// Update this validator from the hot list
+			AwaitingHeartbeats::<T>::mutate(validator_id, |awaiting| *awaiting = Some(false));
 			// Check if this validator has reputation
 			if !Reputation::<T>::contains_key(validator_id) {
 				// Track current block number and set 0 reputation points for the validator
@@ -225,7 +224,7 @@ pub mod pallet {
 			AccrualRatio::<T>::set(self.accrual_ratio);
 			// A list of those we expect to be online, which are our set of validators
 			for validator_id in T::EpochInfo::current_validators().iter() {
-				AwaitingHeartbeats::<T>::insert(validator_id, ());
+				AwaitingHeartbeats::<T>::insert(validator_id, true);
 			}
 		}
 	}
@@ -297,38 +296,37 @@ pub mod pallet {
 		}
 
 		fn check_liveness(current_block: BlockNumberFor<T>) -> Weight {
-			// Let's run through those that haven't come back to us
+			// Let's run through those that haven't come back to us and those that have
 			let mut weight = 0;
-			// Drain those that have not returned with a heartbeat
-			for (validator_id, _) in AwaitingHeartbeats::<T>::drain() {
-				if Reputation::<T>::mutate(
+			AwaitingHeartbeats::<T>::translate(|validator_id, awaiting | {
+				// Still waiting on these, penalise and those that are in reputation debt will be
+				// slashed
+				if awaiting
+					&& Reputation::<T>::mutate(
 					validator_id,
 					|(last_block_number_alive, reputation_points)| {
 						if !Self::is_floor(*reputation_points) {
 							// Update reputation points
 							*reputation_points = *reputation_points
 								+ Self::calculate_offline_penalty(
-									current_block,
-									*last_block_number_alive,
-								);
+								current_block,
+								*last_block_number_alive,
+							);
 							// Set their block time to current as they have paid their debt in reputation
 							*last_block_number_alive = current_block;
 						}
+						weight += T::DbWeight::get().reads_writes(1, 1);
+
 						*reputation_points
 					},
-				) < Zero::zero()
+				) < Zero::zero() || Reputation::<T>::get(validator_id).1 < Zero::zero()
 				{
 					weight += T::Slasher::slash(&validator_id);
 				}
 
-				weight += T::DbWeight::get().reads_writes(1, 1);
-			}
-
-			// A list of those we expect to be online
-			for validator_id in T::EpochInfo::current_validators().iter() {
-				AwaitingHeartbeats::<T>::insert(validator_id, ());
-				weight += T::DbWeight::get().reads_writes(1, 1);
-			}
+				weight += T::DbWeight::get().reads(1);
+				Some(true)
+			});
 
 			weight
 		}
