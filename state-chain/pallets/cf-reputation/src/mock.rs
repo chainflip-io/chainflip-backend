@@ -7,13 +7,12 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-use std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
+use cf_traits::mocks::epoch_info;
 use cf_traits::mocks::epoch_info::Mock;
-use cf_traits::mocks::{epoch_info, time_source};
 
 thread_local! {}
 
@@ -66,11 +65,11 @@ parameter_types! {
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
 }
 
-pub struct MySlasher;
-impl Slashing for MySlasher {
+pub struct MockSlasher;
+impl Slashing for MockSlasher {
 	type ValidatorId = u64;
 
-	fn slash(validator_id: &Self::ValidatorId) -> Weight {
+	fn slash(_validator_id: &Self::ValidatorId) -> Weight {
 		0
 	}
 }
@@ -85,7 +84,7 @@ impl Config for Test {
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type ReputationPointPenalty = ReputationPointPenalty;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
-	type Slasher = MySlasher;
+	type Slasher = MockSlasher;
 	type EpochInfo = epoch_info::Mock;
 }
 

@@ -31,21 +31,21 @@ pub trait Slashing {
 	fn slash(validator_id: &Self::ValidatorId) -> Weight;
 }
 
-enum OfflineConditions {
+pub enum OfflineCondition {
 	BroadcastOutputFailed(ReputationPoints),
 	ParticipateSigningFailed(ReputationPoints),
 }
 
 #[derive(Debug, PartialEq)]
-enum ReportError {
+pub enum ReportError {
 	// Validator doesn't exist
 	UnknownValidator,
 }
 
-trait ReportOfflineCondition {
+pub trait OfflineConditions {
 	type ValidatorId;
 	fn report(
-		condition: OfflineConditions,
+		condition: OfflineCondition,
 		validator_id: &Self::ValidatorId,
 	) -> Result<Weight, ReportError>;
 }
@@ -70,10 +70,7 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// A stable ID for a validator.
-		type ValidatorId: Member
-			+ Parameter
-			+ From<<Self as frame_system::Config>::AccountId>
-			+ Copy;
+		type ValidatorId: Member + Parameter + From<<Self as frame_system::Config>::AccountId>;
 
 		type Amount: Copy;
 
@@ -158,13 +155,13 @@ pub mod pallet {
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
 			// Ensure we haven't had a heartbeat for this interval yet for this validator
 			ensure!(
-				AwaitingHeartbeats::<T>::get(validator_id).unwrap_or(false),
+				AwaitingHeartbeats::<T>::get(&validator_id).unwrap_or(false),
 				Error::<T>::AlreadySubmittedHeartbeat
 			);
 			// Update this validator from the hot list
-			AwaitingHeartbeats::<T>::mutate(validator_id, |awaiting| *awaiting = Some(false));
+			AwaitingHeartbeats::<T>::mutate(&validator_id, |awaiting| *awaiting = Some(false));
 			// Check if this validator has reputation
-			if !Reputation::<T>::contains_key(validator_id) {
+			if !Reputation::<T>::contains_key(&validator_id) {
 				// Track current block number and set 0 reputation points for the validator
 				Reputation::<T>::insert(
 					validator_id,
@@ -241,11 +238,11 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config> ReportOfflineCondition for Pallet<T> {
+	impl<T: Config> OfflineConditions for Pallet<T> {
 		type ValidatorId = T::ValidatorId;
 
 		fn report(
-			condition: OfflineConditions,
+			condition: OfflineCondition,
 			validator_id: &Self::ValidatorId,
 		) -> Result<Weight, ReportError> {
 			// Confirm validator is present
@@ -256,12 +253,18 @@ pub mod pallet {
 
 			// Handle offline conditions
 			match condition {
-				OfflineConditions::BroadcastOutputFailed(penalty) => {
-					Self::deposit_event(Event::BroadcastOutputFailed(*validator_id, penalty));
+				OfflineCondition::BroadcastOutputFailed(penalty) => {
+					Self::deposit_event(Event::BroadcastOutputFailed(
+						(*validator_id).clone(),
+						penalty,
+					));
 					Ok(Self::update_reputation(validator_id, penalty.neg()))
 				}
-				OfflineConditions::ParticipateSigningFailed(penalty) => {
-					Self::deposit_event(Event::ParticipateSigningFailed(*validator_id, penalty));
+				OfflineCondition::ParticipateSigningFailed(penalty) => {
+					Self::deposit_event(Event::ParticipateSigningFailed(
+						(*validator_id).clone(),
+						penalty,
+					));
 					Ok(Self::update_reputation(validator_id, penalty.neg()))
 				}
 			}
@@ -279,11 +282,6 @@ pub mod pallet {
 			})
 		}
 
-		fn is_floor(points: ReputationPoints) -> bool {
-			let (floor, _) = T::ReputationPointFloorAndCeiling::get();
-			floor == points
-		}
-
 		fn calculate_offline_penalty(
 			current_block: T::BlockNumber,
 			last_block: T::BlockNumber,
@@ -296,31 +294,31 @@ pub mod pallet {
 			((penalty_points * dead_blocks / penalty_blocks) as ReputationPoints).neg()
 		}
 
-		fn check_liveness(current_block: BlockNumberFor<T>) -> Weight {
+		fn check_liveness(current_block: T::BlockNumber) -> Weight {
 			// Let's run through those that haven't come back to us and those that have
 			let mut weight = 0;
-			AwaitingHeartbeats::<T>::translate(|validator_id, awaiting | {
+			AwaitingHeartbeats::<T>::translate(|validator_id, awaiting| {
 				// Still waiting on these, penalise and those that are in reputation debt will be
 				// slashed
 				if awaiting
 					&& Reputation::<T>::mutate(
-					validator_id,
-					|(last_block_number_alive, reputation_points)| {
-						if !Self::is_floor(*reputation_points) {
-							// Update reputation points
-							*reputation_points = *reputation_points
-								+ Self::calculate_offline_penalty(
-								current_block,
-								*last_block_number_alive,
-							);
-							// Set their block time to current as they have paid their debt in reputation
-							*last_block_number_alive = current_block;
-						}
-						weight += T::DbWeight::get().reads_writes(1, 1);
+						&validator_id,
+						|(last_block_number_alive, reputation_points)| {
+							if T::ReputationPointFloorAndCeiling::get().0 < *reputation_points {
+								// Update reputation points
+								*reputation_points = *reputation_points
+									+ Self::calculate_offline_penalty(
+										current_block,
+										*last_block_number_alive,
+									);
+								// Set their block time to current as they have paid their debt in reputation
+								*last_block_number_alive = current_block;
+							}
+							weight += T::DbWeight::get().reads_writes(1, 1);
 
-						*reputation_points
-					},
-				) < Zero::zero() || Reputation::<T>::get(validator_id).1 < Zero::zero()
+							*reputation_points
+						},
+					) < Zero::zero() || Reputation::<T>::get(&validator_id).1 < Zero::zero()
 				{
 					weight += T::Slasher::slash(&validator_id);
 				}
