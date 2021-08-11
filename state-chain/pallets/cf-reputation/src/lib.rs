@@ -203,18 +203,23 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig {}
+	pub struct GenesisConfig<T: Config> {
+		pub accrual_ratio: (ReputationPoints, T::BlockNumber),
+	}
 
 	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
+	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self {}
+			Self {
+				accrual_ratio: (1, 10u32.into()),
+			}
 		}
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
+			AccrualRatio::<T>::set(self.accrual_ratio);
 			// A list of those we expect to be online, which are our set of validators
 			for validator_id in T::EpochInfo::current_validators().iter() {
 				AwaitingHeartbeats::<T>::insert(validator_id, ());
@@ -286,14 +291,14 @@ pub mod pallet {
 					validator_id,
 					|(last_block_number_alive, reputation_points)| {
 						if !Self::is_floor(*reputation_points) {
-							// Set their block time to current as they have paid their debt in reputation
-							*last_block_number_alive = current_block;
 							// Update reputation points
 							*reputation_points = *reputation_points
 								+ Self::calculate_offline_penalty(
 									current_block,
 									*last_block_number_alive,
-								)
+								);
+							// Set their block time to current as they have paid their debt in reputation
+							*last_block_number_alive = current_block;
 						}
 						*reputation_points
 					},
