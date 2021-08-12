@@ -4,6 +4,9 @@ use frame_support::RuntimeDebug;
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 
+/// Request index type
+pub type RequestIndex = u64;
+
 /// Errors occurring during a rotation
 #[derive(RuntimeDebug, Encode, Decode, PartialEq)]
 pub enum RotationError<ValidatorId> {
@@ -21,13 +24,6 @@ pub enum RotationError<ValidatorId> {
 	VaultRotationCompletionFailed,
 }
 
-/// Determine if an index is valid
-pub trait TryIndex {
-	type Index: AtLeast32BitUnsigned;
-	type Err;
-	fn try_is_valid(idx: Self::Index) -> Result<(), Self::Err>;
-}
-
 /// A request/response trait
 pub trait RequestResponse<Index: AtLeast32BitUnsigned, Req, Res, Err> {
 	/// Try to make a request identified with an index
@@ -38,8 +34,6 @@ pub trait RequestResponse<Index: AtLeast32BitUnsigned, Req, Res, Err> {
 
 /// A vault for a chain
 pub trait ChainVault {
-	/// An index type we would associate requests with
-	type Index: AtLeast32BitUnsigned;
 	/// The type used for public keys
 	type Bytes: Into<Vec<u8>>;
 	/// An identifier for a validator involved in the rotation of the vault
@@ -53,7 +47,7 @@ pub trait ChainVault {
 	/// When complete `ChainHandler::try_complete_vault_rotation()` would be used to notify to continue
 	/// with the process.
 	fn try_start_vault_rotation(
-		index: Self::Index,
+		index: RequestIndex,
 		new_public_key: Self::Bytes,
 		validators: Vec<Self::ValidatorId>,
 	) -> Result<(), Self::Err>;
@@ -64,13 +58,12 @@ pub trait ChainVault {
 /// Events coming in from our chain.  This is used to callback from the request to complete the vault
 /// rotation phase.  See `ChainVault::try_start_vault_rotation()` for more details.
 pub trait ChainHandler {
-	type Index: AtLeast32BitUnsigned;
 	type ValidatorId;
 	type Err;
 	/// Initial vault rotation phase complete with a result describing the outcome of this phase
 	/// Feedback is provided back on this step
 	fn try_complete_vault_rotation(
-		index: Self::Index,
+		index: RequestIndex,
 		result: Result<VaultRotationRequest, RotationError<Self::ValidatorId>>,
 	) -> Result<(), Self::Err>;
 }

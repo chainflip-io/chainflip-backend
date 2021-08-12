@@ -69,10 +69,9 @@ pub mod pallet {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		type Vaults: ChainHandler<
-				Index = Self::RequestIndex,
-				ValidatorId = <Self as ChainFlip>::ValidatorId,
-				Err = RotationError<Self::ValidatorId>,
-			> + TryIndex<Index = Self::RequestIndex, Err = RotationError<Self::ValidatorId>>;
+			ValidatorId = <Self as ChainFlip>::ValidatorId,
+			Err = RotationError<Self::ValidatorId>,
+		>;
 		/// Provides an origin check for witness transactions.
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 		/// The request index
@@ -99,7 +98,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Request this payload to be signed by the existing aggregate key
-		EthSignTxRequestEvent(T::RequestIndex, EthSigningTxRequest<T::ValidatorId>),
+		EthSignTxRequestEvent(RequestIndex, EthSigningTxRequest<T::ValidatorId>),
 	}
 
 	#[pallet::error]
@@ -112,12 +111,11 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn eth_signing_tx_response(
 			origin: OriginFor<T>,
-			request_id: T::RequestIndex,
+			request_id: RequestIndex,
 			response: EthSigningTxResponse<T::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			match T::Vaults::try_is_valid(request_id).and(Self::try_response(request_id, response))
-			{
+			match Self::try_response(request_id, response) {
 				Ok(_) => Ok(().into()),
 				Err(_) => Err(Error::<T>::EthSigningTxResponseFailed.into()),
 			}
@@ -142,7 +140,6 @@ pub mod pallet {
 }
 
 impl<T: Config> ChainVault for Pallet<T> {
-	type Index = T::RequestIndex;
 	type Bytes = T::PublicKey;
 	type ValidatorId = T::ValidatorId;
 	type Err = RotationError<T::ValidatorId>;
@@ -158,7 +155,7 @@ impl<T: Config> ChainVault for Pallet<T> {
 	/// A payload is built and emitted as a `EthSigningTxRequest`, failing this an error is reported
 	/// back to `Vaults`
 	fn try_start_vault_rotation(
-		index: Self::Index,
+		index: RequestIndex,
 		new_public_key: Self::Bytes,
 		validators: Vec<Self::ValidatorId>,
 	) -> Result<(), Self::Err> {
@@ -193,7 +190,7 @@ impl<T: Config> ChainVault for Pallet<T> {
 
 impl<T: Config>
 	RequestResponse<
-		T::RequestIndex,
+		RequestIndex,
 		EthSigningTxRequest<T::ValidatorId>,
 		EthSigningTxResponse<T::ValidatorId>,
 		RotationError<T::ValidatorId>,
@@ -201,7 +198,7 @@ impl<T: Config>
 {
 	/// Make the request to sign by emitting an event
 	fn try_request(
-		index: T::RequestIndex,
+		index: RequestIndex,
 		request: EthSigningTxRequest<T::ValidatorId>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		Self::deposit_event(Event::EthSignTxRequestEvent(index, request));
@@ -210,7 +207,7 @@ impl<T: Config>
 
 	/// Try to handle the response and pass this onto `Vaults` to complete the vault rotation
 	fn try_response(
-		index: T::RequestIndex,
+		index: RequestIndex,
 		response: EthSigningTxResponse<T::ValidatorId>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		match response {

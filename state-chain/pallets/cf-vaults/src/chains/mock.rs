@@ -90,24 +90,14 @@ impl ChainFlip for MockRuntime {
 }
 
 impl ChainHandler for MockRuntime {
-	type Index = RequestIndex;
 	type ValidatorId = ValidatorId;
 	type Err = RotationError<ValidatorId>;
 
 	fn try_complete_vault_rotation(
-		_index: Self::Index,
+		_index: RequestIndex,
 		result: Result<VaultRotationRequest, RotationError<Self::ValidatorId>>,
 	) -> Result<(), Self::Err> {
 		result.map(|_| ())
-	}
-}
-
-impl TryIndex for MockRuntime {
-	type Index = RequestIndex;
-	type Err = RotationError<ValidatorId>;
-
-	fn try_is_valid(_idx: RequestIndex) -> Result<(), Self::Err> {
-		Ok(())
 	}
 }
 

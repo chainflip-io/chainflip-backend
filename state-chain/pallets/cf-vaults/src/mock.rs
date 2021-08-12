@@ -69,7 +69,6 @@ parameter_types! {}
 pub struct OtherChain;
 type RequestIndex = u64;
 impl ChainVault for OtherChain {
-	type Index = RequestIndex;
 	type Bytes = Vec<u8>;
 	type ValidatorId = ValidatorId;
 	type Err = RotationError<Self::ValidatorId>;
@@ -79,7 +78,7 @@ impl ChainVault for OtherChain {
 	}
 
 	fn try_start_vault_rotation(
-		index: Self::Index,
+		index: RequestIndex,
 		_new_public_key: Self::Bytes,
 		_validators: Vec<Self::ValidatorId>,
 	) -> Result<(), Self::Err> {
