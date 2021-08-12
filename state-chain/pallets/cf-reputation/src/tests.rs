@@ -17,12 +17,34 @@ mod tests {
 		ReputationPallet::reputation(who).1
 	}
 
-	fn run_heartbeats_to_block(end_block: u64) {
-		for block in (HEARTBEAT_BLOCK_INTERVAL..end_block + HEARTBEAT_BLOCK_INTERVAL)
+	// Cycle heartbeat interval sending the heartbeat extrinsic in each
+	fn run_heartbeat_intervals(
+		validator: <Test as frame_system::Config>::AccountId,
+		intervals: u64,
+	) {
+		let start_block_number = System::block_number();
+		// Inclusive
+		for block in (HEARTBEAT_BLOCK_INTERVAL..(intervals + 1) * HEARTBEAT_BLOCK_INTERVAL)
 			.step_by(HEARTBEAT_BLOCK_INTERVAL as usize)
 		{
-			assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
-			run_to_block(block);
+			assert_ok!(ReputationPallet::heartbeat(Origin::signed(validator)));
+			run_to_block(start_block_number + block);
+		}
+	}
+
+	// We will need to send heartbeats for the next ACCRUAL_BLOCKS_PER_REPUTATION_POINT blocks
+	fn submit_heartbeats_for_accrual_blocks(
+		validator: <Test as frame_system::Config>::AccountId,
+		number_of_accruals: u64,
+	) {
+		let intervals = ACCRUAL_BLOCKS * number_of_accruals / HEARTBEAT_BLOCK_INTERVAL;
+		run_heartbeat_intervals(validator, intervals + 1 /* roundup */);
+	}
+
+	// Move a heartbeat interval forward with no heartbeat sent
+	fn move_forward_by_heartbeat_intervals(heartbeats: u64) {
+		for _ in 0..heartbeats {
+			run_to_block(System::block_number() + HEARTBEAT_BLOCK_INTERVAL);
 		}
 	}
 
@@ -59,11 +81,13 @@ mod tests {
 	#[test]
 	fn submitting_heartbeat_should_reward_reputation_points() {
 		new_test_ext().execute_with(|| {
-			let points_to_earn = 10;
-			// We will need to send heartbeats for the next ACCRUAL_BLOCKS_PER_REPUTATION_POINT blocks
-			run_heartbeats_to_block(ACCRUAL_BLOCKS_PER_REPUTATION_POINT * points_to_earn);
-			// Alice should now have 1 point
-			assert_eq!(reputation_points(ALICE), points_to_earn as i32);
+			let number_of_accruals = 10;
+			submit_heartbeats_for_accrual_blocks(ALICE, number_of_accruals);
+			// Alice should now have 10 points
+			assert_eq!(
+				reputation_points(ALICE),
+				number_of_accruals as i32 * ACCRUAL_POINTS
+			);
 		});
 	}
 
@@ -72,18 +96,16 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_eq!(reputation_points(ALICE), 0);
 			// We will need to send heartbeats for the next ACCRUAL_BLOCKS_PER_REPUTATION_POINT blocks
-			run_heartbeats_to_block(ACCRUAL_BLOCKS_PER_REPUTATION_POINT);
+			submit_heartbeats_for_accrual_blocks(ALICE, 1);
 			// Alice should now have 1 point
 			let current_reputation = reputation_points(ALICE);
-			assert_eq!(current_reputation, 1);
-			let points_to_lose = 100;
-			for _ in 0..points_to_lose {
-				// Lose a point, move a heartbeat interval forward with no heartbeat sent
-				run_to_block(System::block_number() + HEARTBEAT_BLOCK_INTERVAL);
-			}
+			assert_eq!(current_reputation, 1 * ACCRUAL_POINTS);
+			let heartbeats = 100;
+			move_forward_by_heartbeat_intervals(heartbeats);
 			assert_eq!(
 				reputation_points(ALICE),
-				current_reputation - points_to_lose
+				current_reputation
+					- (heartbeats as u32 * POINTS_PER_BLOCK_PENALTY.0) as ReputationPoints
 			);
 		});
 	}
@@ -128,24 +150,26 @@ mod tests {
 				ReputationPallet::update_accrual_ratio(Origin::root(), 0, 2),
 				Error::<Test>::InvalidAccrualReputationPoints
 			);
+			let accrual_points = 2;
 			assert_ok!(ReputationPallet::update_accrual_ratio(
 				Origin::root(),
-				2,
-				ACCRUAL_BLOCKS_PER_REPUTATION_POINT
+				accrual_points,
+				ACCRUAL_BLOCKS
 			));
-
-			let target_points = 2;
 
 			assert_eq!(
 				last_event(),
 				mock::Event::pallet_cf_reputation(crate::Event::AccrualRateUpdated(
-					target_points,
-					ACCRUAL_BLOCKS_PER_REPUTATION_POINT
+					accrual_points,
+					ACCRUAL_BLOCKS
 				))
 			);
-
-			run_heartbeats_to_block(ACCRUAL_BLOCKS_PER_REPUTATION_POINT);
-			assert_eq!(reputation_points(ALICE), target_points);
+			let number_of_accruals = 2;
+			submit_heartbeats_for_accrual_blocks(ALICE, number_of_accruals);
+			assert_eq!(
+				reputation_points(ALICE),
+				accrual_points * number_of_accruals as i32
+			);
 		});
 	}
 
@@ -172,7 +196,7 @@ mod tests {
 				reputation_points(ALICE),
 				(HEARTBEAT_BLOCK_INTERVAL as i32 / blocks as i32 * points as i32).neg()
 			);
-			// Interval 1 - with no heartbeat this will continue
+			// Interval 2 - with no heartbeat this will continue
 			run_to_block(HEARTBEAT_BLOCK_INTERVAL * 2);
 			assert_eq!(
 				reputation_points(ALICE),
@@ -246,6 +270,29 @@ mod tests {
 				mock::Event::pallet_cf_reputation(crate::Event::ParticipateSigningFailed(
 					ALICE, penalty
 				))
+			);
+		});
+	}
+
+	#[test]
+	fn on_new_epoch_should_see_new_set_of_validators_and_those_before_maintain_reputation() {
+		new_test_ext().execute_with(|| {
+			let number_of_accruals = 10;
+			submit_heartbeats_for_accrual_blocks(ALICE, number_of_accruals);
+			assert_eq!(
+				reputation_points(ALICE),
+				number_of_accruals as i32 * ACCRUAL_POINTS
+			);
+			// Rotation to Bob
+			ReputationPallet::on_new_epoch(&vec![BOB], 0);
+			submit_heartbeats_for_accrual_blocks(BOB, number_of_accruals);
+			assert_eq!(
+				reputation_points(ALICE),
+				number_of_accruals as i32 * ACCRUAL_POINTS
+			);
+			assert_eq!(
+				reputation_points(BOB),
+				number_of_accruals as i32 * ACCRUAL_POINTS
 			);
 		});
 	}

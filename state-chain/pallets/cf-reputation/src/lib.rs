@@ -82,7 +82,6 @@ pub trait OfflineConditions {
 pub mod pallet {
 	use super::*;
 	use cf_traits::EpochInfo;
-	use frame_support::sp_runtime::offchain::storage_lock::BlockNumberProvider;
 	use frame_system::pallet_prelude::*;
 	use sp_std::ops::Neg;
 
@@ -199,6 +198,7 @@ pub mod pallet {
 		///
 		#[pallet::weight(10_000)]
 		pub(super) fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			// for the validator
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
 			// Ensure we haven't had a heartbeat for this interval yet for this validator
 			ensure!(
@@ -210,15 +210,7 @@ pub mod pallet {
 			// Check if this validator has reputation
 			if !Reputation::<T>::contains_key(&validator_id) {
 				// Credit this validator with the blocks for this interval and set 0 reputation points
-				// for the validator
-				Reputation::<T>::insert(
-					validator_id,
-					(
-						frame_system::Pallet::<T>::current_block_number()
-							+ T::HeartbeatBlockInterval::get(),
-						0,
-					),
-				);
+				Reputation::<T>::insert(validator_id, (T::HeartbeatBlockInterval::get(), 0));
 			} else {
 				// Update reputation points for this validator
 				Reputation::<T>::mutate(validator_id, |(block_credits, points)| {
@@ -251,8 +243,14 @@ pub mod pallet {
 			let _ = ensure_root(origin)?;
 			// Some very basic validation here.  Should be improved in subsequent PR based on
 			// further definition of limits
-			ensure!(points > Zero::zero(), Error::<T>::InvalidAccrualReputationPoints);
-			ensure!(blocks > Zero::zero(), Error::<T>::InvalidAccrualReputationBlocks);
+			ensure!(
+				points > Zero::zero(),
+				Error::<T>::InvalidAccrualReputationPoints
+			);
+			ensure!(
+				blocks > Zero::zero(),
+				Error::<T>::InvalidAccrualReputationBlocks
+			);
 			ensure!(
 				blocks > T::HeartbeatBlockInterval::get(),
 				Error::<T>::InvalidAccrualReputationBlocks
@@ -264,7 +262,6 @@ pub mod pallet {
 			Ok(().into())
 		}
 	}
-
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -306,6 +303,9 @@ pub mod pallet {
 		type Amount = T::Amount;
 
 		fn on_new_epoch(new_validators: &Vec<Self::ValidatorId>, _new_bond: Self::Amount) {
+			// Clear our expectations
+			AwaitingHeartbeats::<T>::remove_all();
+			// Set the new list of validators we expect a heartbeat from
 			for validator_id in new_validators.iter() {
 				AwaitingHeartbeats::<T>::insert(validator_id, true);
 			}

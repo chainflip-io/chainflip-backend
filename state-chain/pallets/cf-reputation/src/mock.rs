@@ -64,7 +64,9 @@ pub const HEARTBEAT_BLOCK_INTERVAL: u64 = 150;
 // Number of blocks beng offline before you lose one point
 pub const POINTS_PER_BLOCK_PENALTY: (u32, u32) = (1, HEARTBEAT_BLOCK_INTERVAL as u32);
 // Number of blocks to be online to accrue a point
-pub const ACCRUAL_BLOCKS_PER_REPUTATION_POINT: u64 = 2500;
+pub const ACCRUAL_BLOCKS: u64 = 2500;
+// Number of accrual points
+pub const ACCRUAL_POINTS: i32 = 1;
 
 parameter_types! {
 	pub const HeartbeatBlockInterval: u64 = HEARTBEAT_BLOCK_INTERVAL;
@@ -106,7 +108,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		frame_system: Default::default(),
 		pallet_cf_reputation: Some(ReputationPalletConfig {
-			accrual_ratio: (1, ACCRUAL_BLOCKS_PER_REPUTATION_POINT),
+			accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
 		}),
 	};
 
@@ -122,7 +124,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 pub fn run_to_block(n: u64) {
-	while System::block_number() <= n {
+	while System::block_number() < n {
 		ReputationPallet::on_finalize(System::block_number());
 		System::set_block_number(System::block_number() + 1);
 		ReputationPallet::on_initialize(System::block_number());
