@@ -53,7 +53,6 @@ pub mod pallet {
 			+ FullCodec
 			+ UnfilteredDispatchable<Origin = <Self as Config>::Origin>
 			+ GetDispatchInfo;
-
 		type TimeSource: UnixTime;
 	}
 	#[pallet::pallet]

@@ -1,8 +1,8 @@
-use crate::mock::*;
-use crate::*;
-// use crate::{Call as GovernanceCall, Error as BalancesError};
-use crate::mock::Governance;
 use frame_support::{assert_noop, assert_ok};
+
+use crate::{mock::*, pallet, Members, Pallet};
+
+use crate as pallet_cf_governance;
 
 #[test]
 fn genesis_config() {
@@ -20,13 +20,23 @@ fn genesis_config() {
 #[test]
 fn check_governance_restriction() {
 	new_test_ext().execute_with(|| {
-		// let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value(
-		// 	answer,
-		// )));
 		assert_noop!(
-			Governance::new_membership_set(mock::Origin::signed(ALICE), vec![ALICE, BOB, EVE]),
+			Governance::new_membership_set(Origin::signed(ALICE), vec![ALICE, BOB, EVE]),
 			frame_support::error::BadOrigin
 		);
+	});
+}
+
+#[test]
+fn it_can_propose_a_governance_extrinsic() {
+	new_test_ext().execute_with(|| {
+		let call = Box::new(Call::Governance(
+			pallet_cf_governance::Call::<Test>::new_membership_set(vec![ALICE, BOB, EVE]),
+		));
+		assert_ok!(Governance::propose_governance_extrinsic(
+			Origin::signed(ALICE),
+			call
+		));
 	});
 }
 
