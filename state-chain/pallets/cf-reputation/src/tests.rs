@@ -136,7 +136,7 @@ mod tests {
 			);
 			assert_noop!(
 				ReputationPallet::update_accrual_ratio(Origin::root(), 2, 0),
-				Error::<Test>::InvalidAccrualReputationBlocks
+				Error::<Test>::InvalidAccrualOnlineCredits
 			);
 			assert_noop!(
 				ReputationPallet::update_accrual_ratio(
@@ -144,7 +144,7 @@ mod tests {
 					2,
 					HEARTBEAT_BLOCK_INTERVAL - 1
 				),
-				Error::<Test>::InvalidAccrualReputationBlocks
+				Error::<Test>::InvalidAccrualOnlineCredits
 			);
 			assert_noop!(
 				ReputationPallet::update_accrual_ratio(Origin::root(), 0, 2),
