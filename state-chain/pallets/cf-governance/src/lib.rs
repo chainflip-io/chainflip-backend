@@ -2,7 +2,6 @@
 
 use codec::Decode;
 use frame_support::traits::EnsureOrigin;
-use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_runtime::DispatchError;
 use sp_std::vec::Vec;
@@ -16,20 +15,20 @@ mod tests;
 pub mod pallet {
 
 	use frame_support::{
-		dispatch::{GetDispatchInfo, PostDispatchInfo},
+		dispatch::GetDispatchInfo,
 		pallet_prelude::*,
 		traits::{UnfilteredDispatchable, UnixTime},
 	};
 
 	use codec::{Encode, FullCodec};
 	use frame_system::{pallet, pallet_prelude::*};
-	use sp_runtime::traits::Dispatchable;
 	use sp_std::boxed::Box;
 	use sp_std::vec;
 	use sp_std::vec::Vec;
 
 	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 	pub struct Proposal<AccountId> {
+		pub id: u32,
 		pub call: OpaqueCall,
 		pub expiry: u64,
 		pub votes: u32,
@@ -67,6 +66,10 @@ pub mod pallet {
 		StorageMap<_, Blake2_128Concat, u32, Proposal<T::AccountId>, OptionQuery>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn ongoing_proposals)]
+	pub type OnGoingProposals<T> = StorageValue<_, Vec<u32>, ValueQuery>;
+
+	#[pallet::storage]
 	#[pallet::getter(fn number_of_proposals)]
 	pub type NumberOfProposals<T> = StorageValue<_, u32>;
 
@@ -77,26 +80,31 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
+			let ongoing_proposals = <OnGoingProposals<T>>::get();
+			for proposal_id in ongoing_proposals.iter() {
+				match <Proposals<T>>::get(proposal_id) {
+					Some(mut proposal)
+						if !proposal.executed
+							&& proposal.expiry <= T::TimeSource::now().as_secs() =>
+					{
+						if let Some(call) = Self::decode_call(proposal.call) {
+							let result = call
+								.dispatch_bypass_filter((RawOrigin::GovernanceThreshold).into());
+							if result.is_ok() {
+								proposal.executed = true;
+								Self::deposit_event(Event::GovernanceExtrinsicExecuted(
+									proposal_id.clone(),
+								));
+							}
+						}
+					}
+					Some(proposal)
+						if !proposal.executed
+							&& proposal.expiry > T::TimeSource::now().as_secs() => {}
+					_ => (),
+				}
+			}
 			0
-			// if let Some(expiry_time) = <ExpiryDate<T>>::get() {
-			// 	if T::TimeSource::now().as_secs() >= expiry_time {
-			// 		Self::deposit_event(Event::SudoCallExpired);
-			// 		Self::cleanup();
-			// 	}
-			// }
-			// match (<Votes<T>>::get(), <SudoCall<T>>::get()) {
-			// 	(Some(votes), Some(encoded_call)) if Self::majority_reached(votes) => {
-			// 		if let Some(call) = Self::decode_call(encoded_call) {
-			// 			let result = call.dispatch(frame_system::RawOrigin::Root.into());
-			// 			if result.is_ok() {
-			// 				Self::deposit_event(Event::CallExecuted);
-			// 				Self::cleanup();
-			// 			}
-			// 		}
-			// 		Self::calc_block_weight()
-			// 	}
-			// 	_ => 0,
-			// }
 		}
 	}
 
@@ -105,7 +113,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		ProposedGovernanceExtrinsic(u32, Vec<u8>),
-		GovernanceExtrinsicExecuted(u32, Vec<u8>),
+		GovernanceExtrinsicExecuted(u32),
 		Voted,
 	}
 
@@ -130,6 +138,7 @@ pub mod pallet {
 			<Proposals<T>>::insert(
 				proposal_id,
 				Proposal {
+					id: proposal_id,
 					call: call.encode(),
 					expiry: T::TimeSource::now().as_secs() + 180,
 					executed: false,
@@ -137,6 +146,9 @@ pub mod pallet {
 					voted: vec![who],
 				},
 			);
+			<OnGoingProposals<T>>::mutate(|proposals| {
+				proposals.push(proposal_id);
+			});
 			Ok(().into())
 		}
 
@@ -145,7 +157,6 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			accounts: Vec<T::AccountId>,
 		) -> DispatchResultWithPostInfo {
-			// Self::ensure_governance(origin)?;
 			T::EnsureGovernance::ensure_origin(origin)?;
 			<Members<T>>::put(accounts);
 			Ok(().into())
@@ -158,31 +169,6 @@ pub mod pallet {
 			Self::try_vote(who, id)?;
 			Ok(().into())
 		}
-
-		// #[pallet::weight(10_000)]
-		// pub fn propose_sudo_call(
-		// 	origin: OriginFor<T>,
-		// 	call: Box<<T as Config>::Call>,
-		// ) -> DispatchResultWithPostInfo {
-		// 	let who = ensure_signed(origin)?;
-		// 	ensure!(<SudoCall<T>>::get().is_none(), Error::<T>::OnGoingVote);
-		// 	Self::ensure_member(&who)?;
-		// 	<ExpiryDate<T>>::put(
-		// 		T::TimeSource::now().as_secs() + <ExpiryTimeSpan<T>>::get().unwrap(),
-		// 	);
-		// 	<SudoCall<T>>::put(call.encode());
-		// 	Self::deposit_event(Event::ProposedSudoCall(call.encode(), who.clone()));
-		// 	Ok(().into())
-		// }
-
-		// #[pallet::weight(10_000)]
-		// pub fn approve_sudo_call(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-		// 	let who = ensure_signed(origin)?;
-		// 	Self::ensure_member(&who)?;
-		// 	Self::ensure_not_voted(&who)?;
-		// 	Self::vote(who.clone())?;
-		// 	Ok(().into())
-		// }
 	}
 
 	#[pallet::genesis_config]
