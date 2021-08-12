@@ -72,6 +72,7 @@ parameter_types! {
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
 }
 
+// Mocking the `Slasher` trait
 pub struct MockSlasher;
 impl Slashing for MockSlasher {
 	type ValidatorId = u64;
@@ -109,6 +110,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		}),
 	};
 
+	// We only expect Alice to be a validator at the moment
 	Mock::add_validator(ALICE);
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 

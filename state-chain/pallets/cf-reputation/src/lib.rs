@@ -1,18 +1,40 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-//! # Chainflip Reputation Module
+//! # ChainFlip Reputation Module
 //!
-//! A module to manage the reputation of our validators for the Chainflip State Chain
+//! A module to manage the reputation of our validators for the ChainFlip State Chain
 //!
 //! - [`Config`]
 //! - [`Call`]
 //! - [`Module`]
 //!
 //! ## Overview
-//! The module contains functionality
+//! The module contains functionality to measure the liveness of our validators.  This is measured
+//! with a *heartbeat* which should be submitted via the extrinsic `heartbeat()` within the time
+//! period set by the *heartbeat interval*.  By continuing to submit heartbeats the validator will
+//! over time earn *reputation points* which in time can buffer the validator from being slashed
+//! when the fall under an *offline condition*.
+//!
+//! Penalties in terms of reputation points are incurred when any one of the *offline conditions* are
+//! met.  Falling into negative reputation leads to the eventual slashing of FLIP.
 //!
 //! ## Terminology
-//! - **Offline:**
+//! - **Validator:** A node in our network that is producing blocks.
+//! - **Heartbeat:** A term used to measure the liveness of a validator.
+//! - **Heartbeat interval:** Number of blocks we would expect to receive a heartbeat from a validator.
+//! - **Online:** A node that is online has successfully submitted a heartbeat during the current
+//!   heartbeat interval.
+//! - **Offline:** A node that is considered offline when they have *not* submitted a heartbeat during
+//!   the last heartbeat interval or has met one of the other *offline conditions*.
+//! - **Reputation points:** A point system which allows validators to earn reputation by being *online*.
+//!   They lose points by being *offline*.
+//! - **Offline conditions:** One of the following conditions: missed heartbeat, failed to broadcast
+//!   an output or failed to participate in a signing ceremony.  Each condition has its associated
+//!   penalty in reputation points
+//! - **Slashing:** The process of debiting FLIP tokens from a validator.  Slashing only occurs in this
+//!   pallet when a validator's reputation points fall below zero *and* they have met one of the
+//!   *offline conditions*
+//!
 
 #[cfg(test)]
 mod mock;
@@ -26,6 +48,7 @@ use pallet_cf_validator::EpochTransitionHandler;
 use sp_runtime::traits::Zero;
 use sp_std::vec::Vec;
 
+/// Slashing a validator
 pub trait Slashing {
 	type ValidatorId;
 	type BlockNumber;
@@ -33,17 +56,20 @@ pub trait Slashing {
 	fn slash(validator_id: &Self::ValidatorId, blocks: &Self::BlockNumber) -> Weight;
 }
 
+/// Conditions as judged as offline
 pub enum OfflineCondition {
 	BroadcastOutputFailed(ReputationPoints),
 	ParticipateSigningFailed(ReputationPoints),
 }
 
+/// Error on reporting an offline condition
 #[derive(Debug, PartialEq)]
 pub enum ReportError {
 	// Validator doesn't exist
 	UnknownValidator,
 }
 
+/// Offline conditions are reported on
 pub trait OfflineConditions {
 	type ValidatorId;
 	fn report(
@@ -64,6 +90,7 @@ pub mod pallet {
 	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(_);
 
+	/// Reputation points type as signed integer
 	pub type ReputationPoints = i32;
 
 	#[pallet::config]
@@ -102,8 +129,9 @@ pub mod pallet {
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		/// On initializing each block we check liveness every heartbeat interval
+		///
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
-			// Read heartbeat interval to see if we need to check liveness
 			if current_block % T::HeartbeatBlockInterval::get() == Zero::zero() {
 				return Self::check_liveness(current_block);
 			}
@@ -112,11 +140,15 @@ pub mod pallet {
 		}
 	}
 
+	/// The ratio at which one accrues Reputation points
+	///
 	#[pallet::storage]
 	#[pallet::getter(fn accrual_ratio)]
 	pub(super) type AccrualRatio<T: Config> =
 		StorageValue<_, (ReputationPoints, T::BlockNumber), ValueQuery>;
 
+	/// Those that we are awaiting heartbeats
+	///
 	#[pallet::storage]
 	pub(super) type AwaitingHeartbeats<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::ValidatorId, bool, OptionQuery>;
@@ -125,6 +157,7 @@ pub mod pallet {
 	/// according to the heartbeats submitted.  We are assuming that during a `HeartbeatInterval`
 	/// if a `heartbeat()` transaction is submitted that they are alive during the entire
 	/// `HeartbeatInterval` of blocks.
+	///
 	#[pallet::storage]
 	#[pallet::getter(fn reputation)]
 	pub type Reputation<T: Config> = StorageMap<
@@ -148,14 +181,22 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		Invalid,
+		/// A heartbeat has already been submitted for this validator
 		AlreadySubmittedHeartbeat,
-		InvalidReputationPoints,
-		InvalidReputationBlocks,
+		/// An invalid amount of reputation points set for the accrual ratio
+		InvalidAccrualReputationPoints,
+		/// An invalid amount of blocks for the accrual ratio
+		InvalidAccrualReputationBlocks,
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// A heartbeat that is used to measure the liveness of a validator
+		/// Every interval we have a set of validators we expect a heartbeat from with which we
+		/// mark off when we have received a heartbeat.  In doing so the validator is credited
+		/// the blocks for this heartbeat interval.  Once the block credits have surpassed the accrual
+		/// block number they will earn reputation points based on the accrual ratio.
+		///
 		#[pallet::weight(10_000)]
 		pub(super) fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
@@ -168,7 +209,8 @@ pub mod pallet {
 			AwaitingHeartbeats::<T>::mutate(&validator_id, |awaiting| *awaiting = Some(false));
 			// Check if this validator has reputation
 			if !Reputation::<T>::contains_key(&validator_id) {
-				// Track current block number and set 0 reputation points for the validator
+				// Credit this validator with the blocks for this interval and set 0 reputation points
+				// for the validator
 				Reputation::<T>::insert(
 					validator_id,
 					(
@@ -180,7 +222,7 @@ pub mod pallet {
 			} else {
 				// Update reputation points for this validator
 				Reputation::<T>::mutate(validator_id, |(block_credits, points)| {
-					// Accrue some blocks of `HeartbeatInterval` size
+					// Accrue some block credits of `HeartbeatInterval` size
 					*block_credits = *block_credits + T::HeartbeatBlockInterval::get();
 					let (reputation_points, reputation_blocks) = AccrualRatio::<T>::get();
 					// If we have hit a number of blocks to earn reputation points
@@ -196,20 +238,24 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// The accrual ratio can be updated and would come into play in the current heartbeat interval
+		/// This is only available to sudo
+		///
 		#[pallet::weight(10_000)]
 		pub(super) fn update_accrual_ratio(
 			origin: OriginFor<T>,
 			points: ReputationPoints,
 			blocks: BlockNumberFor<T>,
 		) -> DispatchResultWithPostInfo {
+			// Ensure we are root when setting this
 			let _ = ensure_root(origin)?;
 			// Some very basic validation here.  Should be improved in subsequent PR based on
 			// further definition of limits
-			ensure!(points > Zero::zero(), Error::<T>::InvalidReputationPoints);
-			ensure!(blocks > Zero::zero(), Error::<T>::InvalidReputationBlocks);
+			ensure!(points > Zero::zero(), Error::<T>::InvalidAccrualReputationPoints);
+			ensure!(blocks > Zero::zero(), Error::<T>::InvalidAccrualReputationBlocks);
 			ensure!(
 				blocks > T::HeartbeatBlockInterval::get(),
-				Error::<T>::InvalidReputationBlocks
+				Error::<T>::InvalidAccrualReputationBlocks
 			);
 
 			AccrualRatio::<T>::set((points, blocks));
@@ -218,6 +264,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 	}
+
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -233,6 +280,9 @@ pub mod pallet {
 		}
 	}
 
+	/// On genesis we are initializing the accrual ratio confirming that it is greater than the
+	/// heartbeat interval.  We also expect a set of validators to expect heartbeats from.
+	///
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
@@ -248,6 +298,9 @@ pub mod pallet {
 		}
 	}
 
+	/// Implementation of the `EpochTransitionHandler` trait with which we populate are
+	/// expected list of validators.
+	///
 	impl<T: Config> EpochTransitionHandler for Pallet<T> {
 		type ValidatorId = T::ValidatorId;
 		type Amount = T::Amount;
@@ -259,6 +312,8 @@ pub mod pallet {
 		}
 	}
 
+	/// Implementation of `OfflineConditions` reporting on `OfflineCondition` with specified number
+	/// of reputation points
 	impl<T: Config> OfflineConditions for Pallet<T> {
 		type ValidatorId = T::ValidatorId;
 
@@ -275,17 +330,21 @@ pub mod pallet {
 			// Handle offline conditions
 			match condition {
 				OfflineCondition::BroadcastOutputFailed(penalty) => {
+					// Broadcast this penalty
 					Self::deposit_event(Event::BroadcastOutputFailed(
 						(*validator_id).clone(),
 						penalty,
 					));
+					// Update reputation points
 					Ok(Self::update_reputation(validator_id, penalty.neg()))
 				}
 				OfflineCondition::ParticipateSigningFailed(penalty) => {
+					// Broadcast this penalty
 					Self::deposit_event(Event::ParticipateSigningFailed(
 						(*validator_id).clone(),
 						penalty,
 					));
+					// Update reputation points
 					Ok(Self::update_reputation(validator_id, penalty.neg()))
 				}
 			}
@@ -293,6 +352,8 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
+		/// Update reputation for validator.  Points are clamped to `ReputationPointFloorAndCeiling`
+		///
 		fn update_reputation(validator_id: &T::ValidatorId, points: ReputationPoints) -> Weight {
 			Reputation::<T>::mutate(validator_id, |(_, current_points)| {
 				*current_points = *current_points + points;
@@ -303,6 +364,8 @@ pub mod pallet {
 			})
 		}
 
+		/// Calculate the penalty for being offline for an amount of blocks based on`ReputationPointPenalty`
+		///
 		fn calculate_offline_penalty(
 			current_block: T::BlockNumber,
 			last_block: T::BlockNumber,
@@ -315,9 +378,15 @@ pub mod pallet {
 			((penalty_points * dead_blocks / penalty_blocks) as ReputationPoints).neg()
 		}
 
+		/// Check liveness of our expected list of validators at the current block.
+		/// For those that we are still *awaiting* on will be penalised reputation points and any block
+		/// credits earned will be set to zero.  In other words we expect continued liveness, measured in
+		/// heartbeats, for the number of accrual blocks before we earn points.
+		/// Once the reputation points fall below zero slashing comes into play and is delegated to the
+		/// `Slashing` trait.
 		fn check_liveness(current_block: T::BlockNumber) -> Weight {
-			// Let's run through those that haven't come back to us and those that have
 			let mut weight = 0;
+			// Let's run through those that haven't come back to us and those that have
 			AwaitingHeartbeats::<T>::translate(|validator_id, awaiting| {
 				// Still waiting on these, penalise and those that are in reputation debt will be
 				// slashed
@@ -341,7 +410,8 @@ pub mod pallet {
 						},
 					) < Zero::zero() || Reputation::<T>::get(&validator_id).1 < Zero::zero()
 				{
-					weight += T::Slasher::slash(&validator_id);
+					// At this point we slash the validator by the amount of blocks offline
+					weight += T::Slasher::slash(&validator_id, &T::HeartbeatBlockInterval::get());
 				}
 
 				weight += T::DbWeight::get().reads(1);
@@ -353,6 +423,7 @@ pub mod pallet {
 	}
 }
 
+/// An implementation of `Slashing` which kindly doesn't slash
 impl<T: Config> Slashing for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type BlockNumber = u64;
