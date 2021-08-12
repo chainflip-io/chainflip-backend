@@ -5047,7 +5047,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-cf-witness"
+name = "pallet-cf-witnesser"
 version = "0.1.0"
 dependencies = [
  "bitvec 0.20.4",
@@ -5065,7 +5065,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-cf-witness-api"
+name = "pallet-cf-witnesser-api"
 version = "0.1.0"
 dependencies = [
  "cf-traits",
@@ -8745,8 +8745,8 @@ dependencies = [
  "pallet-cf-rewards",
  "pallet-cf-staking",
  "pallet-cf-validator",
- "pallet-cf-witness",
- "pallet-cf-witness-api",
+ "pallet-cf-witnesser",
+ "pallet-cf-witnesser-api",
  "pallet-grandpa",
  "pallet-offences",
  "pallet-randomness-collective-flip",

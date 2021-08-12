@@ -28,12 +28,12 @@ serde = {features = ['derive'], optional = true, version = '1.0.119'}
 cf-traits = { path = "../traits", default-features = false }
 pallet-cf-validator = { path = "../pallets/cf-validator", default-features = false }
 pallet-cf-staking = { path = "../pallets/cf-staking", default-features = false }
-pallet-cf-witness = { path = "../pallets/cf-witness", default-features = false}
+pallet-cf-witnesser = { path = "../pallets/cf-witnesser", default-features = false}
 pallet-cf-flip = { path = "../pallets/cf-flip", default-features = false }
 pallet-cf-auction = { path = "../pallets/cf-auction", default-features = false }
 pallet-cf-emissions = { path = "../pallets/cf-emissions", default-features = false }
 pallet-cf-rewards = { path = "../pallets/cf-rewards", default-features = false }
-pallet-cf-witness-api = { path = "../pallets/cf-witness-api", default-features = false }
+pallet-cf-witnesser-api = { path = "../pallets/cf-witnesser-api", default-features = false }
 pallet-cf-reputation = { path = "../pallets/cf-reputation", default-features = false }
 
 # Substrate dependencies
@@ -74,7 +74,7 @@ runtime-benchmarks = [
   'frame-system/runtime-benchmarks',
   'pallet-timestamp/runtime-benchmarks',
   'sp-runtime/runtime-benchmarks',
-  'pallet-cf-witness/runtime-benchmarks',
+  'pallet-cf-witnesser/runtime-benchmarks',
   'pallet-cf-validator/runtime-benchmarks',
 ]
 std = [
@@ -107,10 +107,10 @@ std = [
   'sp-version/std',
   'pallet-cf-validator/std',
   'pallet-cf-staking/std',
-  'pallet-cf-witness/std',
+  'pallet-cf-witnesser/std',
   'pallet-cf-flip/std',
   'pallet-cf-auction/std',
   'pallet-cf-emissions/std',
   'pallet-cf-rewards/std',
-  'pallet-cf-witness-api/std',
+  'pallet-cf-witnesser-api/std',
 ]
