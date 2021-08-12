@@ -28,7 +28,9 @@ use sp_std::vec::Vec;
 
 pub trait Slashing {
 	type ValidatorId;
-	fn slash(validator_id: &Self::ValidatorId) -> Weight;
+	type BlockNumber;
+	/// Slash this validator by said amount of blocks
+	fn slash(validator_id: &Self::ValidatorId, blocks: &Self::BlockNumber) -> Weight;
 }
 
 pub enum OfflineCondition {
@@ -88,7 +90,10 @@ pub mod pallet {
 		type ReputationPointFloorAndCeiling: Get<(ReputationPoints, ReputationPoints)>;
 
 		/// When we have to, we slash
-		type Slasher: Slashing<ValidatorId = Self::ValidatorId>;
+		type Slasher: Slashing<
+			ValidatorId = Self::ValidatorId,
+			BlockNumber = <Self as frame_system::Config>::BlockNumber,
+		>;
 
 		// Information about the current epoch.
 		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
@@ -350,7 +355,9 @@ pub mod pallet {
 
 impl<T: Config> Slashing for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
-	fn slash(_validator_id: &Self::ValidatorId) -> Weight {
+	type BlockNumber = u64;
+
+	fn slash(_validator_id: &Self::ValidatorId, _blocks: &Self::BlockNumber) -> Weight {
 		0
 	}
 }

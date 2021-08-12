@@ -75,8 +75,10 @@ parameter_types! {
 pub struct MockSlasher;
 impl Slashing for MockSlasher {
 	type ValidatorId = u64;
+	type BlockNumber = u64;
 
-	fn slash(_validator_id: &Self::ValidatorId) -> Weight {
+	fn slash(_validator_id: &Self::ValidatorId, _blocks: &Self::BlockNumber) -> Weight {
+		// Count those slashes
 		SLASH_COUNT.with(|count| {
 			let mut c = count.borrow_mut();
 			*c = *c + 1
