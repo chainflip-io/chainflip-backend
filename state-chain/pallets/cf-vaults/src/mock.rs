@@ -129,7 +129,6 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type Event = Event;
 	type EthereumVault = OtherChain;
 	type EnsureWitnessed = MockEnsureWitness;
-	type RequestIndex = u64;
 	type Bytes = Vec<u8>;
 	type Penalty = Self;
 }

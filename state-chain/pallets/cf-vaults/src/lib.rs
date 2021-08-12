@@ -40,7 +40,6 @@
 //! - **Validator Rotation:** The rotation of validators from old to new.
 
 use frame_support::pallet_prelude::*;
-use sp_runtime::traits::One;
 use sp_std::prelude::*;
 
 use cf_traits::{AuctionError, AuctionHandler, AuctionPenalty, NonceProvider};
@@ -59,14 +58,13 @@ mod tests;
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::traits::AtLeast32BitUnsigned;
-
 	use super::*;
-	use sp_std::ops::Add;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(_);
+	/// Request index type
+	pub type RequestIndex = u64;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + ChainFlip {
@@ -76,13 +74,11 @@ pub mod pallet {
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 		/// The Ethereum Vault
 		type EthereumVault: ChainVault<
-			Index = Self::RequestIndex,
+			Index = RequestIndex,
 			Bytes = Self::Bytes,
 			ValidatorId = Self::ValidatorId,
 			Err = RotationError<Self::ValidatorId>,
 		>;
-		/// The request index
-		type RequestIndex: Member + Parameter + Default + Add + Copy + AtLeast32BitUnsigned;
 		/// Bytes as a form to share things such as payloads and public keys
 		type Bytes: Member + Parameter + Into<Vec<u8>>;
 		/// Feedback on penalties for Auction
@@ -96,25 +92,25 @@ pub mod pallet {
 	/// Current request index used in request/response
 	#[pallet::storage]
 	#[pallet::getter(fn request_idx)]
-	pub(super) type RequestIdx<T: Config> = StorageValue<_, T::RequestIndex, ValueQuery>;
+	pub(super) type RequestIdx<T: Config> = StorageValue<_, RequestIndex, ValueQuery>;
 
 	/// A map acting as a list of our current vault rotations
 	#[pallet::storage]
 	#[pallet::getter(fn vault_rotations)]
 	pub(super) type VaultRotations<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::RequestIndex, KeygenRequest<T::ValidatorId>>;
+		StorageMap<_, Blake2_128Concat, RequestIndex, KeygenRequest<T::ValidatorId>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Request a key generation \[request_index, request\]
-		KeygenRequestEvent(T::RequestIndex, KeygenRequest<T::ValidatorId>),
+		KeygenRequestEvent(RequestIndex, KeygenRequest<T::ValidatorId>),
 		/// Request a rotation of the vault for this chain \[request_index, request\]
-		VaultRotationRequest(T::RequestIndex, VaultRotationRequest),
+		VaultRotationRequest(RequestIndex, VaultRotationRequest),
 		/// The vault for the request has rotated \[request_index\]
-		VaultRotationCompleted(T::RequestIndex),
+		VaultRotationCompleted(RequestIndex),
 		/// A rotation of vaults has been aborted \[request_indexes\]
-		RotationAborted(Vec<T::RequestIndex>),
+		RotationAborted(Vec<RequestIndex>),
 		/// A complete set of vaults have been rotated
 		VaultsRotated,
 	}
@@ -144,7 +140,7 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn keygen_response(
 			origin: OriginFor<T>,
-			request_id: T::RequestIndex,
+			request_id: RequestIndex,
 			response: KeygenResponse<T::ValidatorId, T::Bytes>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
@@ -157,7 +153,7 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn vault_rotation_response(
 			origin: OriginFor<T>,
-			request_id: T::RequestIndex,
+			request_id: RequestIndex,
 			response: VaultRotationResponse<T::Bytes>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
@@ -201,7 +197,7 @@ impl<T: Config> From<RotationError<T::ValidatorId>> for Error<T> {
 }
 
 impl<T: Config> TryIndex for Pallet<T> {
-	type Index = T::RequestIndex;
+	type Index = RequestIndex;
 	type Err = RotationError<T::ValidatorId>;
 
 	/// Ensure we have this index else return error
@@ -216,7 +212,7 @@ impl<T: Config> TryIndex for Pallet<T> {
 
 impl<T: Config> Pallet<T> {
 	/// Register this vault rotation
-	fn new_vault_rotation(index: T::RequestIndex, keygen_request: KeygenRequest<T::ValidatorId>) {
+	fn new_vault_rotation(index: RequestIndex, keygen_request: KeygenRequest<T::ValidatorId>) {
 		VaultRotations::<T>::insert(index, keygen_request);
 	}
 
@@ -230,15 +226,15 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Provide the next index
-	fn next_index() -> T::RequestIndex {
+	fn next_index() -> RequestIndex {
 		RequestIdx::<T>::mutate(|idx| {
-			*idx = *idx + One::one();
+			*idx = *idx + 1;
 			*idx
 		})
 	}
 
 	/// Invalidate this index if it exists
-	fn remove_vault(idx: T::RequestIndex) {
+	fn remove_vault(idx: RequestIndex) {
 		VaultRotations::<T>::remove(idx);
 	}
 
@@ -288,7 +284,7 @@ impl<T: Config> AuctionHandler<T::ValidatorId, T::Amount> for Pallet<T> {
 // The first phase generating the key generation requests
 impl<T: Config>
 	RequestResponse<
-		T::RequestIndex,
+		RequestIndex,
 		KeygenRequest<T::ValidatorId>,
 		KeygenResponse<T::ValidatorId, T::Bytes>,
 		RotationError<T::ValidatorId>,
@@ -297,7 +293,7 @@ impl<T: Config>
 	/// Emit as an event the key generation request, this is the first step after receiving a proposed
 	/// validator set from the `AuctionHandler::on_auction_completed()`
 	fn try_request(
-		index: T::RequestIndex,
+		index: RequestIndex,
 		request: KeygenRequest<T::ValidatorId>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		ensure!(
@@ -313,7 +309,7 @@ impl<T: Config>
 	/// chain to continue processing.  Failure would result in penalisation for the bad validators returned
 	/// and the vault rotation aborted.
 	fn try_response(
-		index: T::RequestIndex,
+		index: RequestIndex,
 		response: KeygenResponse<T::ValidatorId, T::Bytes>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		match response {
@@ -343,7 +339,7 @@ impl<T: Config>
 // We have now had feedback from the vault/chain that we can proceed with the final request for the
 // vault rotation
 impl<T: Config> ChainHandler for Pallet<T> {
-	type Index = T::RequestIndex;
+	type Index = RequestIndex;
 	type ValidatorId = T::ValidatorId;
 	type Err = RotationError<T::ValidatorId>;
 
@@ -373,7 +369,7 @@ impl<T: Config> ChainHandler for Pallet<T> {
 // Request response for the vault rotation requests
 impl<T: Config>
 	RequestResponse<
-		T::RequestIndex,
+		RequestIndex,
 		VaultRotationRequest,
 		VaultRotationResponse<T::Bytes>,
 		RotationError<T::ValidatorId>,
@@ -381,7 +377,7 @@ impl<T: Config>
 {
 	/// Emit our event for the start of a vault rotation generation request.
 	fn try_request(
-		index: T::RequestIndex,
+		index: RequestIndex,
 		request: VaultRotationRequest,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		Self::deposit_event(Event::VaultRotationRequest(index, request));
@@ -392,7 +388,7 @@ impl<T: Config>
 	/// The request is cleared from the cache of pending requests and the relevant vault is
 	/// notified
 	fn try_response(
-		index: T::RequestIndex,
+		index: RequestIndex,
 		response: VaultRotationResponse<T::Bytes>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		// Feedback to vaults
