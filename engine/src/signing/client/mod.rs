@@ -15,9 +15,7 @@ use crate::p2p::P2PMessage;
 
 use self::client_inner::{InnerEvent, MultisigClientInner};
 
-pub use client_inner::{
-    KeygenOutcome, KeygenResultInfo, SigningOutcome, SchnorrSignature
-};
+pub use client_inner::{KeygenOutcome, KeygenResultInfo, SchnorrSignature, SigningOutcome};
 
 use super::MessageHash;
 

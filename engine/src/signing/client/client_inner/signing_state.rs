@@ -17,8 +17,7 @@ use crate::{
             client_inner::{
                 shared_secret::StageStatus,
                 utils::{self},
-                SigningOutcome,
-                SchnorrSignature
+                SchnorrSignature, SigningOutcome,
             },
             SigningInfo,
         },
@@ -257,10 +256,7 @@ impl SigningState {
                         self.message_info
                     );
 
-                    self.send_outcome(SigningOutcome::invalid(
-                        self.message_info.clone(),
-                        vec![],
-                    ));
+                    self.send_outcome(SigningOutcome::invalid(self.message_info.clone(), vec![]));
                 }
                 self.update_stage(SigningStage::Finished);
             }

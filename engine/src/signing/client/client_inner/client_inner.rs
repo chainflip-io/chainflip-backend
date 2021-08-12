@@ -175,37 +175,37 @@ impl Display for KeygenData {
 pub enum Error {
     Unauthorised,
     Timeout,
-    Invalid
+    Invalid,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ComputationOutcome<Id, Output> {
     pub computation_id: Id,
-    pub result : Result<Output, (Error, Vec<ValidatorId>)>
+    pub result: Result<Output, (Error, Vec<ValidatorId>)>,
 }
 impl<Id, Output> ComputationOutcome<Id, Output> {
-    pub fn success(computation_id : Id, output : Output) -> Self {
+    pub fn success(computation_id: Id, output: Output) -> Self {
         Self {
             computation_id,
-            result : Ok(output)
-        }
-    } 
-    pub fn unauthorised(computation_id : Id, bad_validators : Vec<ValidatorId>) -> Self {
-        Self {
-            computation_id,
-            result : Err((Error::Unauthorised, bad_validators))
+            result: Ok(output),
         }
     }
-    pub fn timeout(computation_id : Id, bad_validators : Vec<ValidatorId>) -> Self {
+    pub fn unauthorised(computation_id: Id, bad_validators: Vec<ValidatorId>) -> Self {
         Self {
             computation_id,
-            result : Err((Error::Timeout, bad_validators))
+            result: Err((Error::Unauthorised, bad_validators)),
         }
     }
-    pub fn invalid(computation_id : Id, bad_validators : Vec<ValidatorId>) -> Self {
+    pub fn timeout(computation_id: Id, bad_validators: Vec<ValidatorId>) -> Self {
         Self {
             computation_id,
-            result : Err((Error::Invalid, bad_validators))
+            result: Err((Error::Timeout, bad_validators)),
+        }
+    }
+    pub fn invalid(computation_id: Id, bad_validators: Vec<ValidatorId>) -> Self {
+        Self {
+            computation_id,
+            result: Err((Error::Invalid, bad_validators)),
         }
     }
 }
@@ -214,7 +214,6 @@ impl<Id, Output> ComputationOutcome<Id, Output> {
 pub type KeygenOutcome = ComputationOutcome<KeyId, secp256k1::PublicKey>;
 /// The final result of a Signing ceremony
 pub type SigningOutcome = ComputationOutcome<MessageInfo, SchnorrSignature>;
-
 
 #[derive(Debug, PartialEq)]
 pub enum InnerEvent {

@@ -8,8 +8,8 @@ use crate::{
     p2p::ValidatorId,
     settings,
     signing::{
-        KeyId, MessageHash, MultisigEvent, MultisigInstruction,
-        SigningInfo, MessageInfo, SchnorrSignature
+        KeyId, MessageHash, MessageInfo, MultisigEvent, MultisigInstruction, SchnorrSignature,
+        SigningInfo,
     },
     types::chain::Chain,
 };
@@ -106,24 +106,27 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
         while let Some(event) = multisig_event_stream.next().await {
             match event {
                 Ok(event) => match event {
-                    MultisigEvent::KeygenResult(key_outcome) => {
-                        match key_outcome.result {
-                            Ok(key) => {
-                                self.handle_keygen_success(key_outcome.computation_id, key).await;
-                            },
-                            Err(_) => {
-                                slog::error!(
-                                    self.logger,
-                                    "Signing module returned error generating key"
-                                )
-                            }
+                    MultisigEvent::KeygenResult(key_outcome) => match key_outcome.result {
+                        Ok(key) => {
+                            self.handle_keygen_success(key_outcome.computation_id, key)
+                                .await;
+                        }
+                        Err(_) => {
+                            slog::error!(
+                                self.logger,
+                                "Signing module returned error generating key"
+                            )
                         }
                     },
                     MultisigEvent::MessageSigningResult(signing_outcome) => {
                         match signing_outcome.result {
                             Ok(sig) => {
-                                self.handle_set_agg_key_message_signed(signing_outcome.computation_id, sig).await;
-                            },
+                                self.handle_set_agg_key_message_signed(
+                                    signing_outcome.computation_id,
+                                    sig,
+                                )
+                                .await;
+                            }
                             Err(_) => {
                                 // TODO: Use the reported bad nodes in the SigningOutcome / SigningFailure
                                 // TODO: retry signing with a different subset of signers
@@ -133,7 +136,7 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
                                 )
                             }
                         }
-                    },
+                    }
                     _ => {
                         slog::trace!(
                             self.logger,
@@ -157,7 +160,7 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
     // 2. Store the tx parameters in state for use later
     // 3. Create a Signing Instruction
     // 4. Push this instruction to the MQ for the signing module to pick up
-    async fn handle_keygen_success(&mut self, key_id : KeyId, key : secp256k1::PublicKey) {
+    async fn handle_keygen_success(&mut self, key_id: KeyId, key: secp256k1::PublicKey) {
         // This has nothing to do with building an ETH transaction.
         // We encode the tx like this, in eth format, because this is how the contract will
         // serialise the data to verify the signature over the message hash
@@ -212,7 +215,11 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
     // 3. Push this transaction to the Broadcast(Chain::ETH) subject, to be broadcast by the ETH Broadcaster
     // 4. Update the current key id, with the new key id returned by the signing module, so we know which key to sign with
     // from now onwards, until the next successful key rotation
-    async fn handle_set_agg_key_message_signed(&mut self, message_info: MessageInfo, sig: SchnorrSignature) {
+    async fn handle_set_agg_key_message_signed(
+        &mut self,
+        message_info: MessageInfo,
+        sig: SchnorrSignature,
+    ) {
         // 1. Get the data from the message hash that was signed (using the `messages` field)
         let nonce_times_g_addr = utils::pubkey_to_eth_addr(sig.r);
         let key_id = message_info.key_id;
