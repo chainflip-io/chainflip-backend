@@ -23,21 +23,21 @@
 //! ## Terminology
 //! - **Validator:** A node in our network that is producing blocks.
 //! - **Heartbeat:** A term used to measure the liveness of a validator.
-//! - **Heartbeat interval:** Number of blocks we would expect to receive a heartbeat from a validator.
+//! - **Heartbeat interval:** The duration in time, measured in blocks we would expect to receive a
+//!   *heartbeat* from a validator.
 //! - **Online:** A node that is online has successfully submitted a heartbeat during the current
 //!   heartbeat interval.
 //! - **Offline:** A node that is considered offline when they have *not* submitted a heartbeat during
-//!   the last heartbeat interval or has met one of the other *offline conditions*.
-//!  -**Online credits:** A credit accrued by being continously online which inturn is used to earn
+//!   the last heartbeat interval.
+//! - **Online credits:** A credit accrued by being continuously online which inturn is used to earn.
 //!   *reputation points*.  Failing to stay *online* results in losing all of their *online credits*.
 //! - **Reputation points:** A point system which allows validators to earn reputation by being *online*.
-//!   They lose reputation points by being *offline*.
-//! - **Offline conditions:** One of the following conditions: missed heartbeat, failed to broadcast
-//!   an output or failed to participate in a signing ceremony.  Each condition has its associated
-//!   penalty in reputation points
+//!   They lose reputation points by being meeting one of the *offline conditions*.
+//! - **Offline conditions:** One of the following conditions: *missed heartbeat*, *failed to broadcast
+//!   an output* or *failed to participate in a signing ceremony*.  Each condition has its associated
+//!   penalty in reputation points.
 //! - **Slashing:** The process of debiting FLIP tokens from a validator.  Slashing only occurs in this
-//!   pallet when a validator's reputation points fall below zero *and* they have met one of the
-//!   *offline conditions*
+//!   pallet when a validator's reputation points fall below zero *and* they are *offline*.
 //!
 
 #[cfg(test)]
@@ -59,8 +59,8 @@ pub trait Slashing {
 	type ValidatorId;
 	/// Block number
 	type BlockNumber;
-	/// Slash this validator by said amount of blocks
-	fn slash(validator_id: &Self::ValidatorId, blocks: &Self::BlockNumber) -> Weight;
+	/// Slash this validator based on the number of blocks offline
+	fn slash(validator_id: &Self::ValidatorId, blocks_offline: &Self::BlockNumber) -> Weight;
 }
 
 /// Conditions as judged as offline
@@ -458,9 +458,9 @@ pub mod pallet {
 /// An implementation of `Slashing` which kindly doesn't slash
 impl<T: Config> Slashing for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
-	type BlockNumber = u64;
+	type BlockNumber = T::BlockNumber;
 
-	fn slash(_validator_id: &Self::ValidatorId, _blocks: &Self::BlockNumber) -> Weight {
+	fn slash(_validator_id: &Self::ValidatorId, _blocks_offline: &Self::BlockNumber) -> Weight {
 		0
 	}
 }
