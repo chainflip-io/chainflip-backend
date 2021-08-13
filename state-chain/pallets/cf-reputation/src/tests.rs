@@ -299,9 +299,4 @@ mod tests {
 			);
 		});
 	}
-
-	#[test]
-	fn should_be_penalised_one_reputation_point_per_ten_blocks() {
-		new_test_ext().execute_with(|| {});
-	}
 }
