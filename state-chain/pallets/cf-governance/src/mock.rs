@@ -62,7 +62,7 @@ impl pallet_cf_governance::Config for Test {
 	type Call = Call;
 	type Event = Event;
 	type TimeSource = time_source::Mock;
-	type EnsureGovernance = MockEnsureGovernance;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
