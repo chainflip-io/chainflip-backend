@@ -105,7 +105,10 @@ mod tests {
 			assert_eq!(
 				reputation_points(ALICE),
 				current_reputation
-					- (heartbeats as u32 * POINTS_PER_BLOCK_PENALTY.0) as ReputationPoints
+					- (heartbeats as u32
+						* POINTS_PER_BLOCK_PENALTY.0
+						* HEARTBEAT_BLOCK_INTERVAL as u32
+						/ POINTS_PER_BLOCK_PENALTY.1) as ReputationPoints
 			);
 		});
 	}
@@ -295,5 +298,10 @@ mod tests {
 				number_of_accruals as i32 * ACCRUAL_POINTS
 			);
 		});
+	}
+
+	#[test]
+	fn should_be_penalised_one_reputation_point_per_ten_blocks() {
+		new_test_ext().execute_with(|| {});
 	}
 }
