@@ -53,7 +53,7 @@ tokio = {version = "1.5.0", features = ["full"]}
 tokio-compat-02 = "0.2.0"
 tokio-stream = "0.1.5"
 url = "1.7.2"
-web3 = "0.16.0"
+web3 = "0.17.0"
 
 # substrate deps
 codec = {package = "parity-scale-codec", version = "2.1", default-features = false, features = ["derive", "full"]}
