@@ -8,15 +8,8 @@ fn next_block() {
 	<Governance as OnInitialize<u64>>::on_initialize(System::block_number());
 }
 
-fn last_event() -> Event {
-	frame_system::Pallet::<Test>::events()
-		.pop()
-		.expect("Event expected")
-		.event
-}
-
 #[test]
-fn genesis_config() {
+fn it_can_use_genesis_config() {
 	new_test_ext().execute_with(|| {
 		let genesis_members = Members::<Test>::get();
 		assert!(genesis_members.contains(&ALICE));
@@ -26,7 +19,7 @@ fn genesis_config() {
 }
 
 #[test]
-fn check_governance_restriction() {
+fn it_can_detect_governance_restriction() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			Governance::new_membership_set(Origin::signed(ALICE), vec![EVE, PETER, MAX]),
@@ -36,7 +29,7 @@ fn check_governance_restriction() {
 }
 
 #[test]
-fn it_can_propose_a_governance_extrinsic() {
+fn it_can_propose_a_governance_extrinsic_and_execute_it() {
 	new_test_ext().execute_with(|| {
 		let call = Box::new(Call::Governance(
 			pallet_cf_governance::Call::<Test>::new_membership_set(vec![EVE, PETER, MAX]),
@@ -60,6 +53,6 @@ fn it_can_propose_a_governance_extrinsic() {
 }
 
 #[test]
-fn it_can_approve_a_proposal() {
+fn it_can_detect_expiry_date() {
 	new_test_ext().execute_with(|| {});
 }

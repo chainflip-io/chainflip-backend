@@ -1,7 +1,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Decode;
+use frame_support::dispatch::UnfilteredDispatchable;
 use frame_support::traits::EnsureOrigin;
+use frame_support::traits::UnixTime;
 pub use pallet::*;
 use sp_runtime::DispatchError;
 use sp_std::vec::Vec;
@@ -72,34 +74,8 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
-			let ongoing_proposals = <OnGoingProposals<T>>::get();
-			let mut executed: Vec<usize> = vec![];
-			for (index, proposal_id) in ongoing_proposals.iter().enumerate() {
-				let proposal = <Proposals<T>>::get(proposal_id);
-				if Self::majority_reached(proposal.votes)
-					&& !proposal.executed
-					&& proposal.expiry >= T::TimeSource::now().as_secs()
-				{
-					if let Some(call) = Self::decode_call(proposal.call) {
-						let result =
-							call.dispatch_bypass_filter((RawOrigin::GovernanceThreshold).into());
-						<Proposals<T>>::mutate(proposal_id, |proposal| {
-							proposal.executed = true;
-						});
-						if result.is_ok() {
-							executed.push(index);
-							Self::deposit_event(Event::GovernanceExtrinsicExecuted(
-								proposal_id.clone(),
-							));
-						}
-					}
-				}
-			}
-			<OnGoingProposals<T>>::mutate(|ongoing_proposals| {
-				for i in executed {
-					ongoing_proposals.remove(i);
-				}
-			});
+			let proposals = Self::process_proposals();
+			Self::cleanup(proposals);
 			0
 		}
 	}
@@ -108,9 +84,12 @@ pub mod pallet {
 	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		ProposedGovernanceExtrinsic(u32, Vec<u8>),
-		GovernanceExtrinsicExecuted(u32),
-		Voted,
+		Proposed(u32),
+		Executed(u32),
+		Expired(u32),
+		ExecutionFailed(u32),
+		DecodeFailed(u32),
+		Voted(u32),
 	}
 
 	#[pallet::error]
@@ -145,6 +124,7 @@ pub mod pallet {
 			<OnGoingProposals<T>>::mutate(|proposals| {
 				proposals.push(proposal_id);
 			});
+			Self::deposit_event(Event::Proposed(proposal_id.clone()));
 			Ok(().into())
 		}
 
@@ -223,6 +203,47 @@ where
 }
 
 impl<T: Config> Pallet<T> {
+	fn is_proposal_executable(proposal: &Proposal<T::AccountId>) -> bool {
+		Self::majority_reached(proposal.votes)
+			&& !proposal.executed
+			&& proposal.expiry >= T::TimeSource::now().as_secs()
+	}
+	fn process_proposals() -> Vec<usize> {
+		let ongoing_proposals = <OnGoingProposals<T>>::get();
+		let mut executed_or_expired: Vec<usize> = vec![];
+		for (index, proposal_id) in ongoing_proposals.iter().enumerate() {
+			let proposal = <Proposals<T>>::get(proposal_id);
+			// Execute proposal if valid
+			if Self::is_proposal_executable(&proposal) {
+				if let Some(call) = Self::decode_call(proposal.call) {
+					let result =
+						call.dispatch_bypass_filter((RawOrigin::GovernanceThreshold).into());
+					<Proposals<T>>::mutate(proposal_id, |proposal| {
+						proposal.executed = true;
+					});
+					if result.is_ok() {
+						executed_or_expired.push(index);
+						Self::deposit_event(Event::Executed(proposal_id.clone()));
+					} else {
+						Self::deposit_event(Event::ExecutionFailed(proposal_id.clone()));
+					}
+				}
+			}
+			// Check if proposal is expired
+			if proposal.expiry < T::TimeSource::now().as_secs() {
+				executed_or_expired.push(index);
+				Self::deposit_event(Event::Expired(proposal_id.clone()));
+			}
+		}
+		executed_or_expired
+	}
+	fn cleanup(proposals: Vec<usize>) {
+		<OnGoingProposals<T>>::mutate(|ongoing_proposals| {
+			for i in proposals {
+				ongoing_proposals.remove(i);
+			}
+		});
+	}
 	fn calc_threshold(total: u32) -> u32 {
 		let doubled = total * 2;
 		if doubled % 3 == 0 {
@@ -234,11 +255,7 @@ impl<T: Config> Pallet<T> {
 	fn majority_reached(votes: u32) -> bool {
 		let total_number_of_voters = <Members<T>>::get().len() as u32;
 		let threshold = Self::calc_threshold(total_number_of_voters);
-		if votes >= threshold {
-			true
-		} else {
-			false
-		}
+		votes >= threshold
 	}
 	fn ensure_member(account: &T::AccountId) -> Result<(), DispatchError> {
 		if !<Members<T>>::get().contains(account) {
@@ -263,16 +280,24 @@ impl<T: Config> Pallet<T> {
 	}
 	fn try_vote(account: T::AccountId, proposal_id: u32) -> Result<(), DispatchError> {
 		let proposal = <Proposals<T>>::get(proposal_id);
+		// Check if already executed
 		if proposal.executed {
 			return Err(Error::<T>::AlreadyExecuted.into());
 		}
-		//TODO: Check expiry
+		// Check expiry
+		if proposal.expiry < T::TimeSource::now().as_secs() {
+			return Err(Error::<T>::AlreadyExpired.into());
+		}
 		//TODO: Check existing
-		//TODO: Check already voted
+		// Check already voted
+		if proposal.voted.contains(&account) {
+			return Err(Error::<T>::AlreadyVoted.into());
+		}
 		<Proposals<T>>::mutate(proposal_id, |proposal| {
 			proposal.voted.push(account);
 			proposal.votes = proposal.votes.checked_add(1).unwrap();
 		});
+		Self::deposit_event(Event::Voted(proposal_id.clone()));
 		Ok(())
 	}
 	fn decode_call(call: Vec<u8>) -> Option<<T as Config>::Call> {
