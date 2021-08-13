@@ -141,7 +141,7 @@ pub mod pallet {
 			response: KeygenResponse<T::ValidatorId, T::Bytes>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			match Self::try_response(request_id, response) {
+			match KeygenRequestResponse::<T>::try_response(request_id, response) {
 				Ok(_) => Ok(().into()),
 				Err(e) => Err(Error::<T>::from(e).into()),
 			}
@@ -154,7 +154,7 @@ pub mod pallet {
 			response: VaultRotationResponse<T::Bytes>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			match Self::try_response(request_id, response) {
+			match VaultRotationRequestResponse::<T>::try_response(request_id, response) {
 				Ok(_) => Ok(().into()),
 				Err(e) => Err(Error::<T>::from(e).into()),
 			}
@@ -230,7 +230,7 @@ impl<T: Config> AuctionHandler<T::ValidatorId, T::Amount> for Pallet<T> {
 			validator_candidates: winners.clone(),
 		};
 
-		Self::try_request(Self::next_index(), keygen_request).map_err(|_| AuctionError::Abort)
+		KeygenRequestResponse::<T>::try_request(Self::next_index(), keygen_request).map_err(|_| AuctionError::Abort)
 	}
 
 	/// In order for the validators to be rotated we are waiting on a confirmation that the vaults
@@ -251,13 +251,15 @@ impl<T: Config> AuctionHandler<T::ValidatorId, T::Amount> for Pallet<T> {
 }
 
 // The first phase generating the key generation requests
+struct KeygenRequestResponse<T: Config>(PhantomData<T>);
+
 impl<T: Config>
 	RequestResponse<
 		RequestIndex,
 		KeygenRequest<T::ValidatorId>,
 		KeygenResponse<T::ValidatorId, T::Bytes>,
 		RotationError<T::ValidatorId>,
-	> for Pallet<T>
+	> for KeygenRequestResponse<T>
 {
 	/// Emit as an event the key generation request, this is the first step after receiving a proposed
 	/// validator set from the `AuctionHandler::on_auction_completed()`
@@ -270,6 +272,7 @@ impl<T: Config>
 			RotationError::EmptyValidatorSet
 		);
 		VaultRotations::<T>::insert(index, request.clone());
+		
 		Self::deposit_event(Event::KeygenRequestEvent(index, request));
 		Ok(())
 	}
@@ -328,7 +331,7 @@ impl<T: Config> ChainHandler for Pallet<T> {
 		);
 		match result {
 			// All good, forward on the request
-			Ok(request) => Self::try_request(index, request),
+			Ok(request) => VaultRotationRequestResponse::<T>::try_request(index, request),
 			// Penalise if we have a set of bad validators and abort the rotation
 			Err(err) => {
 				if let RotationError::BadValidators(bad) = err {
@@ -342,13 +345,14 @@ impl<T: Config> ChainHandler for Pallet<T> {
 }
 
 // Request response for the vault rotation requests
+struct VaultRotationRequestResponse<T: Config>(PhantomData<T>);
 impl<T: Config>
 	RequestResponse<
 		RequestIndex,
 		VaultRotationRequest,
 		VaultRotationResponse<T::Bytes>,
 		RotationError<T::ValidatorId>,
-	> for Pallet<T>
+	> for VaultRotationRequestResponse<T>
 {
 	/// Emit our event for the start of a vault rotation generation request.
 	fn try_request(
