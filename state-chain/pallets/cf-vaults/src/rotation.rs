@@ -125,3 +125,13 @@ pub struct VaultRotationResponse<Bytes: Into<Vec<u8>>> {
 	pub new_key: Bytes,
 	pub tx: Bytes,
 }
+
+#[macro_export]
+macro_rules! ensure_index {
+	($index: expr) => {
+		ensure!(
+			VaultRotations::<T>::contains_key($index),
+			RotationError::InvalidRequestIndex
+		);
+	}
+}

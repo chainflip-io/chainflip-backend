@@ -57,8 +57,8 @@ mod tests;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_system::pallet_prelude::*;
 	use super::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -194,7 +194,6 @@ impl<T: Config> From<RotationError<T::ValidatorId>> for Error<T> {
 }
 
 impl<T: Config> Pallet<T> {
-
 	/// Abort all rotations registered and notify the `AuctionPenalty` trait of our decision to abort.
 	fn abort_rotation() {
 		Self::deposit_event(Event::RotationAborted(
@@ -211,6 +210,11 @@ impl<T: Config> Pallet<T> {
 			*index
 		})
 	}
+
+	#[cfg(test)]
+	fn rotations_complete() -> bool {
+		VaultRotations::<T>::iter().count() == 0
+	}
 }
 
 impl<T: Config> AuctionHandler<T::ValidatorId, T::Amount> for Pallet<T> {
@@ -224,13 +228,15 @@ impl<T: Config> AuctionHandler<T::ValidatorId, T::Amount> for Pallet<T> {
 		_: T::Amount,
 	) -> Result<(), AuctionError> {
 		// Main entry point for the pallet
+		ensure!(!winners.is_empty(), AuctionError::Abort);
 		// Create a KeyGenRequest for Ethereum
 		let keygen_request = KeygenRequest {
 			chain: T::EthereumVault::chain_params(),
 			validator_candidates: winners.clone(),
 		};
 
-		KeygenRequestResponse::<T>::try_request(Self::next_index(), keygen_request).map_err(|_| AuctionError::Abort)
+		KeygenRequestResponse::<T>::try_request(Self::next_index(), keygen_request)
+			.map_err(|_| AuctionError::Abort)
 	}
 
 	/// In order for the validators to be rotated we are waiting on a confirmation that the vaults
@@ -267,13 +273,8 @@ impl<T: Config>
 		index: RequestIndex,
 		request: KeygenRequest<T::ValidatorId>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
-		ensure!(
-			!request.validator_candidates.is_empty(),
-			RotationError::EmptyValidatorSet
-		);
 		VaultRotations::<T>::insert(index, request.clone());
-		
-		Self::deposit_event(Event::KeygenRequestEvent(index, request));
+		Pallet::<T>::deposit_event(Event::KeygenRequestEvent(index, request));
 		Ok(())
 	}
 
@@ -284,10 +285,7 @@ impl<T: Config>
 		index: RequestIndex,
 		response: KeygenResponse<T::ValidatorId, T::Bytes>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
-		ensure!(
-			VaultRotations::<T>::contains_key(index),
-			RotationError::InvalidRequestIndex
-		);
+		ensure_index!(index);
 		match response {
 			KeygenResponse::Success(new_public_key) => {
 				// Go forth and construct
@@ -302,7 +300,7 @@ impl<T: Config>
 			}
 			KeygenResponse::Failure(bad_validators) => {
 				// Abort this key generation request
-				Self::abort_rotation();
+				Pallet::<T>::abort_rotation();
 				// Do as you wish with these, I wash my hands..
 				T::Penalty::penalise(bad_validators);
 				// Report back we have processed the failure
@@ -325,10 +323,7 @@ impl<T: Config> ChainHandler for Pallet<T> {
 		index: RequestIndex,
 		result: Result<VaultRotationRequest, RotationError<Self::ValidatorId>>,
 	) -> Result<(), Self::Error> {
-		ensure!(
-			VaultRotations::<T>::contains_key(index),
-			RotationError::InvalidRequestIndex
-		);
+		ensure_index!(index);
 		match result {
 			// All good, forward on the request
 			Ok(request) => VaultRotationRequestResponse::<T>::try_request(index, request),
@@ -359,11 +354,8 @@ impl<T: Config>
 		index: RequestIndex,
 		request: VaultRotationRequest,
 	) -> Result<(), RotationError<T::ValidatorId>> {
-		ensure!(
-			VaultRotations::<T>::contains_key(index),
-			RotationError::InvalidRequestIndex
-		);
-		Self::deposit_event(Event::VaultRotationRequest(index, request));
+		ensure_index!(index);
+		Pallet::<T>::deposit_event(Event::VaultRotationRequest(index, request));
 		Ok(())
 	}
 
@@ -374,10 +366,7 @@ impl<T: Config>
 		index: RequestIndex,
 		response: VaultRotationResponse<T::Bytes>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
-		ensure!(
-			VaultRotations::<T>::contains_key(index),
-			RotationError::InvalidRequestIndex
-		);
+		ensure_index!(index);
 		// Feedback to vaults
 		// We have assumed here that once we have one confirmation of a vault rotation we wouldn't
 		// need to rollback any if one of the group of vault rotations fails
@@ -391,7 +380,7 @@ impl<T: Config>
 		}
 		// This request is complete
 		VaultRotations::<T>::remove(index);
-		Self::deposit_event(Event::VaultRotationCompleted(index));
+		Pallet::<T>::deposit_event(Event::VaultRotationCompleted(index));
 		Ok(())
 	}
 }
