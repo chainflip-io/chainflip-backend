@@ -1,8 +1,8 @@
 pub mod p2p_serde;
-use cf_p2p::{NetworkObserver, P2pMessaging, RawMessage, ValidatorId};
+use cf_p2p::{NetworkObserver, P2PMessaging, RawMessage, ValidatorId};
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures::{StreamExt, TryStreamExt};
-pub use gen_client::Client as P2pRpcClient;
+pub use gen_client::Client as P2PRpcClient;
 use jsonrpc_core::futures::Sink;
 use jsonrpc_core::futures::{future::Executor, Future, Stream};
 use jsonrpc_core::Error;
@@ -216,19 +216,19 @@ impl NetworkObserver for RpcCore {
 }
 
 /// The RPC bridge and API
-pub struct Rpc<C: P2pMessaging> {
+pub struct Rpc<C: P2PMessaging> {
 	core: Arc<RpcCore>,
 	messaging: Arc<Mutex<C>>,
 }
 
-impl<C: P2pMessaging> Rpc<C> {
+impl<C: P2PMessaging> Rpc<C> {
 	pub fn new(messaging: Arc<Mutex<C>>, core: Arc<RpcCore>) -> Self {
 		Rpc { messaging, core }
 	}
 }
 
 /// Impl of the `RpcApi` - send, broadcast and subscribe to notifications
-impl<C: P2pMessaging + Sync + Send + 'static> RpcApi for Rpc<C> {
+impl<C: P2PMessaging + Sync + Send + 'static> RpcApi for Rpc<C> {
 	type Metadata = sc_rpc::Metadata;
 
 	fn self_identify(&self, validator_id: ValidatorIdBs58) -> Result<u64> {

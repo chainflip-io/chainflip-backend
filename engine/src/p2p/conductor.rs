@@ -4,14 +4,14 @@ use tokio_stream::StreamExt;
 use crate::{
     logging::COMPONENT_KEY,
     mq::{IMQClient, Subject},
-    p2p::{P2pRpcClient, P2pRpcEventHandler},
+    p2p::{P2PRpcClient, P2PRpcEventHandler},
 };
 
 use super::{NetworkEventHandler, P2PMessageCommand, P2PNetworkClient};
 
 /// Drives P2P events between MQ and P2P interface
 pub fn start<MQ>(
-    p2p: P2pRpcClient,
+    p2p: P2PRpcClient,
     mq: MQ,
     shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     logger: &slog::Logger,
@@ -20,7 +20,7 @@ where
     MQ: IMQClient + Clone + Send + Sync,
 {
     start_with_handler(
-        P2pRpcEventHandler {
+        P2PRpcEventHandler {
             mq: mq.clone(),
             logger: logger.clone(),
         },

@@ -1,7 +1,7 @@
 use crate::p2p::{P2PNetworkClient, StatusCode, ValidatorId};
 use anyhow::Result;
 use async_trait::async_trait;
-use cf_p2p_rpc::{MessageBs58, P2PEvent, P2pRpcClient, ValidatorIdBs58};
+use cf_p2p_rpc::{MessageBs58, P2PEvent, P2PRpcClient, ValidatorIdBs58};
 use futures::{
     compat::{Future01CompatExt, Stream01CompatExt},
     stream::BoxStream,
@@ -20,8 +20,8 @@ pub enum RpcClientError {
     SubscriptionError(RpcError),
 }
 
-pub async fn connect(url: &url::Url, validator_id: ValidatorId) -> Result<P2pRpcClient> {
-    let client = ws::connect::<P2pRpcClient>(url)
+pub async fn connect(url: &url::Url, validator_id: ValidatorId) -> Result<P2PRpcClient> {
+    let client = ws::connect::<P2PRpcClient>(url)
         .compat()
         .await
         .map_err(|e| RpcClientError::ConnectionError(url.clone(), e))?;
@@ -36,18 +36,18 @@ pub async fn connect(url: &url::Url, validator_id: ValidatorId) -> Result<P2pRpc
 }
 
 #[async_trait]
-impl P2PNetworkClient for P2pRpcClient {
+impl P2PNetworkClient for P2PRpcClient {
     type NetworkEvent = Result<P2PEvent>;
 
     async fn broadcast(&self, data: &[u8]) -> Result<StatusCode> {
-        P2pRpcClient::broadcast(self, MessageBs58(data.into()))
+        P2PRpcClient::broadcast(self, MessageBs58(data.into()))
             .compat()
             .await
             .map_err(|e| RpcClientError::CallError(String::from("broadcast"), e).into())
     }
 
     async fn send(&self, to: &ValidatorId, data: &[u8]) -> Result<StatusCode> {
-        P2pRpcClient::send(self, ValidatorIdBs58(to.0), MessageBs58(data.into()))
+        P2PRpcClient::send(self, ValidatorIdBs58(to.0), MessageBs58(data.into()))
             .compat()
             .await
             .map_err(|e| RpcClientError::CallError(String::from("send"), e).into())
@@ -134,7 +134,7 @@ mod tests {
     fn client_api() {
         tokio::runtime::Runtime::new().unwrap().block_on(async {
             let io = io();
-            let (client, server) = local::connect_with_pubsub::<P2pRpcClient, _>(&io);
+            let (client, server) = local::connect_with_pubsub::<P2PRpcClient, _>(&io);
 
             tokio::select! {
                 _ = async move {

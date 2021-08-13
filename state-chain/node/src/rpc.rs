@@ -36,7 +36,7 @@ pub fn create_full<C, P, T>(
 	C: Send + Sync + 'static,
 	C::Api: BlockBuilder<Block>,
 	P: TransactionPool + 'static,
-	T: cf_p2p::P2pMessaging + Send + Sync + 'static,
+	T: cf_p2p::P2PMessaging + Send + Sync + 'static,
 {
 
 	let mut io = jsonrpc_core::IoHandler::default();

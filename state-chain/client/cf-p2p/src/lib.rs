@@ -341,7 +341,7 @@ pub enum MessagingCommand {
 }
 
 /// Messaging by sending directly or broadcasting
-pub trait P2pMessaging {
+pub trait P2PMessaging {
 	fn identify(&mut self, validator_id: ValidatorId) -> Result<()>;
 	fn send_message(&mut self, validator_id: ValidatorId, data: RawMessage) -> Result<()>;
 	fn broadcast(&self, validators: Vec<ValidatorId>, data: RawMessage) -> Result<()>;
@@ -359,7 +359,7 @@ impl Sender {
 	}
 }
 
-impl P2pMessaging for Sender {
+impl P2PMessaging for Sender {
 	fn identify(&mut self, validator_id: ValidatorId) -> Result<()> {
 		self.0
 			.unbounded_send(MessagingCommand::Identify(validator_id))?;

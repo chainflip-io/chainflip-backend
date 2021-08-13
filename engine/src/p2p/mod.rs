@@ -4,7 +4,7 @@ pub mod conductor;
 pub mod mock;
 pub mod rpc;
 
-pub use cf_p2p_rpc::{P2PEvent, P2pRpcClient};
+pub use cf_p2p_rpc::{P2PEvent, P2PRpcClient};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -35,13 +35,13 @@ pub trait NetworkEventHandler<C: P2PNetworkClient + Send> {
     async fn handle_event(&self, event: C::NetworkEvent);
 }
 
-struct P2pRpcEventHandler<MQ> {
+struct P2PRpcEventHandler<MQ> {
     mq: MQ,
     logger: slog::Logger,
 }
 
 #[async_trait]
-impl<MQ> NetworkEventHandler<P2pRpcClient> for P2pRpcEventHandler<MQ>
+impl<MQ> NetworkEventHandler<P2PRpcClient> for P2PRpcEventHandler<MQ>
 where
     MQ: IMQClient + Send + Sync,
 {
