@@ -1,8 +1,7 @@
 use anyhow::Result;
 use core::iter;
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
-use futures::{select, stream, Future, Stream, StreamExt};
-use log::debug;
+use futures::{Future, Stream, StreamExt};
 use sc_network::{multiaddr, Event, ExHashT, NetworkService, PeerId};
 use serde::{Deserialize, Serialize};
 use sp_runtime::sp_std::sync::Arc;

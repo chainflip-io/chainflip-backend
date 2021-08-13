@@ -115,7 +115,7 @@ impl KeygenContext {
     /// Generate context without starting the
     /// keygen ceremony
     pub fn new() -> Self {
-        let validator_ids = (1..=3).map(|idx| ValidatorId::new(idx)).collect_vec();
+        let validator_ids = (1..=3).map(|idx| ValidatorId([idx; 32])).collect_vec();
         let logger = logging::test_utils::create_test_logger();
         let (clients, rxs): (Vec<_>, Vec<_>) = validator_ids
             .iter()

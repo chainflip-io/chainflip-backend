@@ -2,6 +2,7 @@ pub mod p2p_serde;
 use cf_p2p::{NetworkObserver, P2pMessaging, RawMessage, ValidatorId};
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures::{StreamExt, TryStreamExt};
+pub use gen_client::Client as P2pRpcClient;
 use jsonrpc_core::futures::Sink;
 use jsonrpc_core::futures::{future::Executor, Future, Stream};
 use jsonrpc_core::Error;
@@ -14,7 +15,7 @@ use std::marker::Send;
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ValidatorIdBs58(#[serde(with = "p2p_serde::bs58_fixed_size")] [u8; 32]);
+pub struct ValidatorIdBs58(#[serde(with = "p2p_serde::bs58_fixed_size")] pub [u8; 32]);
 
 impl From<ValidatorIdBs58> for ValidatorId {
 	fn from(id: ValidatorIdBs58) -> Self {
@@ -28,8 +29,14 @@ impl From<ValidatorId> for ValidatorIdBs58 {
 	}
 }
 
+impl std::fmt::Display for ValidatorIdBs58 {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", bs58::encode(&self.0).into_string())
+	}
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MessageBs58(#[serde(with = "p2p_serde::bs58_vec")] Vec<u8>);
+pub struct MessageBs58(#[serde(with = "p2p_serde::bs58_vec")] pub Vec<u8>);
 
 impl From<MessageBs58> for RawMessage {
 	fn from(msg: MessageBs58) -> Self {
@@ -40,6 +47,12 @@ impl From<MessageBs58> for RawMessage {
 impl From<RawMessage> for MessageBs58 {
 	fn from(msg: RawMessage) -> Self {
 		Self(msg.0)
+	}
+}
+
+impl std::fmt::Display for MessageBs58 {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", bs58::encode(&self.0).into_string())
 	}
 }
 

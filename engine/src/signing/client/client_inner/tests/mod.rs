@@ -31,9 +31,9 @@ const KEY_ID: KeyId = KeyId(0);
 
 lazy_static! {
     static ref VALIDATOR_IDS: Vec<ValidatorId> = vec![
-        ValidatorId::new(1),
-        ValidatorId::new(2),
-        ValidatorId::new(3),
+        ValidatorId([1; 32]),
+        ValidatorId([2; 32]),
+        ValidatorId([3; 32]),
     ];
     static ref SIGNER_IDXS: Vec<usize> = vec![0, 1];
     static ref SIGNER_IDS: Vec<ValidatorId> = SIGNER_IDXS

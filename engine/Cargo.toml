@@ -31,10 +31,10 @@ futures-util = "0.3.14"
 hex = "0.4.3"
 httparse = "1.4.1"
 itertools = "0.10"
-jsonrpc-core = {version = "17.1.0"}
-jsonrpc-core-client = {version = "17.1.0", default-features = false, features = ["http", "ws"]}
-jsonrpc-http-server = "17.1.0"
-jsonrpc-ws-server = "17.1.0"
+jsonrpc-core = {version = "15.1"}
+jsonrpc-core-client = {version = "15.1", default-features = false, features = ["http", "ws"]}
+jsonrpc-http-server = "15.1"
+jsonrpc-ws-server = "15.1"
 kvdb-rocksdb = "0.11.1"
 lazy_static = "1.4"
 num = "0.4.0"
@@ -81,5 +81,6 @@ tag = "v0.7.0"
 [dev-dependencies]
 env_logger = "0.9.0"
 frame-support = "3.0.0"
+jsonrpc-pubsub = "15.1"
 log = "0.4.14"
 nats_test_server = "0.3.0"

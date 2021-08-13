@@ -10,7 +10,11 @@ use tokio::time::Duration;
 use crate::{
     logging,
     mq::{mq_mock::MQMock, IMQClient, Subject},
-    p2p::{self, mock::NetworkMock, ValidatorId},
+    p2p::{
+        self,
+        mock::{MockMqEventHandler, NetworkMock},
+        ValidatorId,
+    },
     signing::db::KeyDBMock,
 };
 
@@ -27,8 +31,10 @@ use crate::signing::{
 const N_PARTIES: usize = 2;
 lazy_static! {
     static ref SIGNERS: Vec<usize> = (1..=N_PARTIES).collect();
-    static ref VALIDATOR_IDS: Vec<ValidatorId> =
-        SIGNERS.iter().map(|idx| ValidatorId::new(idx)).collect();
+    static ref VALIDATOR_IDS: Vec<ValidatorId> = SIGNERS
+        .iter()
+        .map(|idx| ValidatorId([*idx as u8; 32]))
+        .collect();
 }
 
 async fn coordinate_signing(
@@ -206,7 +212,8 @@ async fn distributed_signing() {
                 let (shutdown_conductor_tx, shutdown_conductor_rx) =
                     tokio::sync::oneshot::channel::<()>();
 
-                let conductor_fut = p2p::conductor::start(
+                let conductor_fut = p2p::conductor::start_with_handler(
+                    MockMqEventHandler(mq_client.clone()),
                     p2p_client,
                     mq_client.clone(),
                     shutdown_conductor_rx,

@@ -2,7 +2,7 @@ use chainflip_engine::{
     eth::{eth_broadcaster, eth_tx_encoding, key_manager, stake_manager},
     health::HealthMonitor,
     mq::nats_client::NatsMQClient,
-    p2p::{self, RpcP2PClient, ValidatorId},
+    p2p::{self, rpc as p2p_rpc, ValidatorId},
     settings::Settings,
     signing,
     signing::db::PersistentKeyDB,
@@ -79,16 +79,17 @@ async fn main() {
             &root_logger,
         ),
         p2p::conductor::start(
-            RpcP2PClient::new(
-                url::Url::parse(settings.state_chain.ws_endpoint.as_str()).expect(&format!(
+            p2p_rpc::connect(
+                &url::Url::parse(settings.state_chain.ws_endpoint.as_str()).expect(&format!(
                     "Should be valid ws endpoint: {}",
                     settings.state_chain.ws_endpoint
-                )),
-                &root_logger
-            ),
+                ))
+            )
+            .await
+            .expect("unable to connect p2p rpc client"),
             mq_client.clone(),
             p2p_shutdown_rx,
-            &root_logger
+            &root_logger.clone()
         ),
         // Start state chain components
         state_chain::sc_observer::start(mq_client.clone(), subxt_client.clone(), &root_logger),
