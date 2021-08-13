@@ -73,9 +73,13 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
 			let ongoing_proposals = <OnGoingProposals<T>>::get();
-			for proposal_id in ongoing_proposals.iter() {
+			let mut executed: Vec<usize> = vec![];
+			for (index, proposal_id) in ongoing_proposals.iter().enumerate() {
 				let proposal = <Proposals<T>>::get(proposal_id);
-				if Self::majority_reached(proposal.votes) && !proposal.executed {
+				if Self::majority_reached(proposal.votes)
+					&& !proposal.executed
+					&& proposal.expiry >= T::TimeSource::now().as_secs()
+				{
 					if let Some(call) = Self::decode_call(proposal.call) {
 						let result =
 							call.dispatch_bypass_filter((RawOrigin::GovernanceThreshold).into());
@@ -83,6 +87,7 @@ pub mod pallet {
 							proposal.executed = true;
 						});
 						if result.is_ok() {
+							executed.push(index);
 							Self::deposit_event(Event::GovernanceExtrinsicExecuted(
 								proposal_id.clone(),
 							));
@@ -90,6 +95,11 @@ pub mod pallet {
 					}
 				}
 			}
+			<OnGoingProposals<T>>::mutate(|ongoing_proposals| {
+				for i in executed {
+					ongoing_proposals.remove(i);
+				}
+			});
 			0
 		}
 	}
@@ -213,17 +223,17 @@ where
 }
 
 impl<T: Config> Pallet<T> {
+	fn calc_threshold(total: u32) -> u32 {
+		let doubled = total * 2;
+		if doubled % 3 == 0 {
+			doubled / 3
+		} else {
+			doubled / 3 + 1
+		}
+	}
 	fn majority_reached(votes: u32) -> bool {
 		let total_number_of_voters = <Members<T>>::get().len() as u32;
-		let calc_threshold = |total: u32| -> u32 {
-			let doubled = total * 2;
-			if doubled % 3 == 0 {
-				doubled / 3
-			} else {
-				doubled / 3 + 1
-			}
-		};
-		let threshold = calc_threshold(total_number_of_voters);
+		let threshold = Self::calc_threshold(total_number_of_voters);
 		if votes >= threshold {
 			true
 		} else {
@@ -256,6 +266,9 @@ impl<T: Config> Pallet<T> {
 		if proposal.executed {
 			return Err(Error::<T>::AlreadyExecuted.into());
 		}
+		//TODO: Check expiry
+		//TODO: Check existing
+		//TODO: Check already voted
 		<Proposals<T>>::mutate(proposal_id, |proposal| {
 			proposal.voted.push(account);
 			proposal.votes = proposal.votes.checked_add(1).unwrap();
