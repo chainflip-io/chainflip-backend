@@ -71,7 +71,7 @@ type RequestIndex = u64;
 impl ChainVault for OtherChain {
 	type Bytes = Vec<u8>;
 	type ValidatorId = ValidatorId;
-	type Err = RotationError<Self::ValidatorId>;
+	type Error = RotationError<Self::ValidatorId>;
 
 	fn chain_params() -> ChainParams {
 		ChainParams::Other(vec![])
@@ -81,7 +81,7 @@ impl ChainVault for OtherChain {
 		index: RequestIndex,
 		_new_public_key: Self::Bytes,
 		_validators: Vec<Self::ValidatorId>,
-	) -> Result<(), Self::Err> {
+	) -> Result<(), Self::Error> {
 		OTHER_CHAIN_RESULT.with(|l| *l.borrow_mut() = index);
 		Ok(())
 	}

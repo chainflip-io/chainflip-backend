@@ -25,11 +25,11 @@ pub enum RotationError<ValidatorId> {
 }
 
 /// A request/response trait
-pub trait RequestResponse<Index: AtLeast32BitUnsigned, Req, Res, Err> {
+pub trait RequestResponse<Index: AtLeast32BitUnsigned, Req, Res, Error> {
 	/// Try to make a request identified with an index
-	fn try_request(index: Index, request: Req) -> Result<(), Err>;
+	fn try_request(index: Index, request: Req) -> Result<(), Error>;
 	// Try to handle a response of a request identified with a index
-	fn try_response(index: Index, response: Res) -> Result<(), Err>;
+	fn try_response(index: Index, response: Res) -> Result<(), Error>;
 }
 
 /// A vault for a chain
@@ -39,7 +39,7 @@ pub trait ChainVault {
 	/// An identifier for a validator involved in the rotation of the vault
 	type ValidatorId;
 	/// An error on rotating the vault
-	type Err;
+	type Error;
 	/// A set of params for the chain for this vault
 	fn chain_params() -> ChainParams;
 	/// Start the vault rotation phase.  The chain would complete steps necessary for its chain
@@ -50,7 +50,7 @@ pub trait ChainVault {
 		index: RequestIndex,
 		new_public_key: Self::Bytes,
 		validators: Vec<Self::ValidatorId>,
-	) -> Result<(), Self::Err>;
+	) -> Result<(), Self::Error>;
 	/// We have confirmation of the rotation back from `Vaults`
 	fn vault_rotated(response: VaultRotationResponse<Self::Bytes>);
 }
@@ -59,13 +59,13 @@ pub trait ChainVault {
 /// rotation phase.  See `ChainVault::try_start_vault_rotation()` for more details.
 pub trait ChainHandler {
 	type ValidatorId;
-	type Err;
+	type Error;
 	/// Initial vault rotation phase complete with a result describing the outcome of this phase
 	/// Feedback is provided back on this step
 	fn try_complete_vault_rotation(
 		index: RequestIndex,
 		result: Result<VaultRotationRequest, RotationError<Self::ValidatorId>>,
-	) -> Result<(), Self::Err>;
+	) -> Result<(), Self::Error>;
 }
 
 /// Description of some base types

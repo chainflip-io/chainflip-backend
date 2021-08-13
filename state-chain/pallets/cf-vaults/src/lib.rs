@@ -74,7 +74,7 @@ pub mod pallet {
 		type EthereumVault: ChainVault<
 			Bytes = Self::Bytes,
 			ValidatorId = Self::ValidatorId,
-			Err = RotationError<Self::ValidatorId>,
+			Error = RotationError<Self::ValidatorId>,
 		>;
 		/// Bytes as a form to share things such as payloads and public keys
 		type Bytes: Member + Parameter + Into<Vec<u8>>;
@@ -316,7 +316,7 @@ impl<T: Config>
 // vault rotation
 impl<T: Config> ChainHandler for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
-	type Err = RotationError<T::ValidatorId>;
+	type Error = RotationError<T::ValidatorId>;
 
 	/// Try to complete the final vault rotation with feedback from the chain implementation over
 	/// the `ChainHandler` trait.  This is forwarded as a request and hence an event is emitted.
@@ -324,7 +324,7 @@ impl<T: Config> ChainHandler for Pallet<T> {
 	fn try_complete_vault_rotation(
 		index: RequestIndex,
 		result: Result<VaultRotationRequest, RotationError<Self::ValidatorId>>,
-	) -> Result<(), Self::Err> {
+	) -> Result<(), Self::Error> {
 		ensure!(
 			VaultRotations::<T>::contains_key(index),
 			RotationError::InvalidRequestIndex

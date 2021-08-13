@@ -70,7 +70,7 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		type Vaults: ChainHandler<
 			ValidatorId = <Self as ChainFlip>::ValidatorId,
-			Err = RotationError<Self::ValidatorId>,
+			Error = RotationError<Self::ValidatorId>,
 		>;
 		/// Provides an origin check for witness transactions.
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
@@ -142,7 +142,7 @@ pub mod pallet {
 impl<T: Config> ChainVault for Pallet<T> {
 	type Bytes = T::PublicKey;
 	type ValidatorId = T::ValidatorId;
-	type Err = RotationError<T::ValidatorId>;
+	type Error = RotationError<T::ValidatorId>;
 
 	/// Parameters required when creating key generation requests
 	fn chain_params() -> ChainParams {
@@ -158,7 +158,7 @@ impl<T: Config> ChainVault for Pallet<T> {
 		index: RequestIndex,
 		new_public_key: Self::Bytes,
 		validators: Vec<Self::ValidatorId>,
-	) -> Result<(), Self::Err> {
+	) -> Result<(), Self::Error> {
 		// Create payload for signature here
 		// function setAggKeyWithAggKey(SigData calldata sigData, Key calldata newKey)
 		match Self::encode_set_agg_key_with_agg_key(new_public_key) {
