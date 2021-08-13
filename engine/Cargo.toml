@@ -35,6 +35,7 @@ jsonrpc-core = {version = "17.1.0"}
 jsonrpc-core-client = {version = "17.1.0", default-features = false, features = ["http", "ws"]}
 jsonrpc-http-server = "17.1.0"
 jsonrpc-ws-server = "17.1.0"
+# kvdb-rocksdb is tied to substrate deps
 kvdb-rocksdb = "0.11.1"
 lazy_static = "1.4"
 num = "0.4.0"
