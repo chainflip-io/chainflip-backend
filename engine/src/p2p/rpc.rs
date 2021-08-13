@@ -26,11 +26,12 @@ pub async fn connect(url: &url::Url, validator_id: ValidatorId) -> Result<P2pRpc
         .await
         .map_err(|e| RpcClientError::ConnectionError(url.clone(), e))?;
 
-    client.identify(ValidatorIdBs58(validator_id.0))
+    client
+        .identify(ValidatorIdBs58(validator_id.0))
         .compat()
         .await
         .map_err(|e| RpcClientError::CallError(String::from("identify"), e))?;
-    
+
     Ok(client)
 }
 
@@ -67,7 +68,10 @@ impl P2PNetworkClient for P2pRpcClient {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, sync::{Arc, Mutex}};
+    use std::{
+        collections::HashMap,
+        sync::{Arc, Mutex},
+    };
 
     use super::*;
     use cf_p2p_rpc::RpcApi;
@@ -136,16 +140,12 @@ mod tests {
                 _ = async move {
                     let result =
                         P2PNetworkClient::send(&client, &ValidatorId([100; 32]), "disco".as_bytes()).await;
-            
                     assert!(
                         result.is_ok(),
                         "Should receive OK for sending message to peer"
                     );
-            
                     let result = P2PNetworkClient::broadcast(&client, "disco".as_bytes()).await;
-            
                     assert!(result.is_ok(), "Should receive OK for broadcasting message");
-            
                     let result = P2PNetworkClient::take_stream(&client).await;
                     assert!(result.is_ok(), "Should subscribe OK");
                 } => {}

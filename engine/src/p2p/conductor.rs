@@ -38,7 +38,7 @@ pub(crate) fn start_with_handler<MQ, P2P, H>(
     mq: MQ,
     mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     logger: &slog::Logger,
-)  -> impl futures::Future
+) -> impl futures::Future
 where
     MQ: IMQClient + Send,
     P2P: P2PNetworkClient + Send,
