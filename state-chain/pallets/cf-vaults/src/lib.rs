@@ -13,7 +13,7 @@
 //! validator set to rotate.  The process of vault rotation is triggered by a successful auction via
 //! the trait `AuctionHandler::on_auction_completed()`, which provides a list of suitable validators with which we would
 //! like to proceed in rotating the vaults concerned.  The process of rotation is multi-faceted and involves a number of
-//! pallets.  With the end of an epoch, by reaching a block number of forced, the `Validator` pallet requests an auction to
+//! pallets.  With the end of an epoch (by reaching a block number or forced), the `Validator` pallet requests an auction to
 //! start from the `Auction` pallet.  A set of stakers are provided by the `Staking` pallet and an auction is run with the
 //! outcome being shared via `AuctionHandler::on_auction_completed()`.
 
