@@ -88,8 +88,8 @@ pub mod pallet {
 
 	/// Current request index used in request/response
 	#[pallet::storage]
-	#[pallet::getter(fn request_idx)]
-	pub(super) type RequestIdx<T: Config> = StorageValue<_, RequestIndex, ValueQuery>;
+	#[pallet::getter(fn current_request)]
+	pub(super) type CurrentRequest<T: Config> = StorageValue<_, RequestIndex, ValueQuery>;
 
 	/// A map acting as a list of our current vault rotations
 	#[pallet::storage]
@@ -206,9 +206,9 @@ impl<T: Config> Pallet<T> {
 
 	/// Provide the next index
 	fn next_index() -> RequestIndex {
-		RequestIdx::<T>::mutate(|idx| {
-			*idx = *idx + 1;
-			*idx
+		CurrentRequest::<T>::mutate(|index| {
+			*index = *index + 1;
+			*index
 		})
 	}
 }
