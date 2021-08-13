@@ -8,7 +8,6 @@ use sp_std::vec::Vec;
 
 #[cfg(test)]
 mod mock;
-
 #[cfg(test)]
 mod tests;
 #[frame_support::pallet]
@@ -41,12 +40,6 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-		// type Origin: From<RawOrigin>;
-		// type Call: Member
-		// 	+ FullCodec
-		// 	+ UnfilteredDispatchable<Origin = <Self as Config>::Origin>
-		// 	+ GetDispatchInfo;
-		/// Provides an origin check for witness transactions.
 		type Origin: From<RawOrigin>;
 		type EnsureGovernance: EnsureOrigin<<Self as pallet::Config>::Origin>;
 		type Call: Member
@@ -62,7 +55,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn proposals)]
 	pub(super) type Proposals<T: Config> =
-		StorageMap<_, Blake2_128Concat, u32, Proposal<T::AccountId>, OptionQuery>;
+		StorageMap<_, Blake2_128Concat, u32, Proposal<T::AccountId>, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn ongoing_proposals)]
@@ -81,26 +74,20 @@ pub mod pallet {
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
 			let ongoing_proposals = <OnGoingProposals<T>>::get();
 			for proposal_id in ongoing_proposals.iter() {
-				match <Proposals<T>>::get(proposal_id) {
-					Some(mut proposal)
-						if !proposal.executed
-							&& proposal.expiry <= T::TimeSource::now().as_secs() =>
-					{
-						if let Some(call) = Self::decode_call(proposal.call) {
-							let result = call
-								.dispatch_bypass_filter((RawOrigin::GovernanceThreshold).into());
-							if result.is_ok() {
-								proposal.executed = true;
-								Self::deposit_event(Event::GovernanceExtrinsicExecuted(
-									proposal_id.clone(),
-								));
-							}
+				let proposal = <Proposals<T>>::get(proposal_id);
+				if Self::majority_reached(proposal.votes) && !proposal.executed {
+					if let Some(call) = Self::decode_call(proposal.call) {
+						let result =
+							call.dispatch_bypass_filter((RawOrigin::GovernanceThreshold).into());
+						<Proposals<T>>::mutate(proposal_id, |proposal| {
+							proposal.executed = true;
+						});
+						if result.is_ok() {
+							Self::deposit_event(Event::GovernanceExtrinsicExecuted(
+								proposal_id.clone(),
+							));
 						}
 					}
-					Some(proposal)
-						if !proposal.executed
-							&& proposal.expiry > T::TimeSource::now().as_secs() => {}
-					_ => (),
 				}
 			}
 			0
@@ -142,7 +129,7 @@ pub mod pallet {
 					expiry: T::TimeSource::now().as_secs() + 180,
 					executed: false,
 					votes: 0,
-					voted: vec![who],
+					voted: vec![],
 				},
 			);
 			<OnGoingProposals<T>>::mutate(|proposals| {
@@ -227,7 +214,21 @@ where
 
 impl<T: Config> Pallet<T> {
 	fn majority_reached(votes: u32) -> bool {
-		true
+		let total_number_of_voters = <Members<T>>::get().len() as u32;
+		let calc_threshold = |total: u32| -> u32 {
+			let doubled = total * 2;
+			if doubled % 3 == 0 {
+				doubled / 3
+			} else {
+				doubled / 3 + 1
+			}
+		};
+		let threshold = calc_threshold(total_number_of_voters);
+		if votes >= threshold {
+			true
+		} else {
+			false
+		}
 	}
 	fn ensure_member(account: &T::AccountId) -> Result<(), DispatchError> {
 		if !<Members<T>>::get().contains(account) {
@@ -251,20 +252,15 @@ impl<T: Config> Pallet<T> {
 		0
 	}
 	fn try_vote(account: T::AccountId, proposal_id: u32) -> Result<(), DispatchError> {
-		match <Proposals<T>>::get(proposal_id) {
-			Some(proposal) if proposal.voted.contains(&account) => {
-				Err(Error::<T>::AlreadyVoted.into())
-			}
-			Some(proposal) if proposal.executed => Err(Error::<T>::AlreadyExecuted.into()),
-			Some(proposal) if proposal.expiry >= 30000 => Err(Error::<T>::AlreadyExpired.into()),
-			Some(mut proposal) => {
-				proposal.voted.push(account);
-				proposal.votes = proposal.votes + 1;
-				Self::deposit_event(Event::Voted);
-				Ok(())
-			}
-			_ => Err(Error::<T>::AlreadyVoted.into()),
+		let proposal = <Proposals<T>>::get(proposal_id);
+		if proposal.executed {
+			return Err(Error::<T>::AlreadyExecuted.into());
 		}
+		<Proposals<T>>::mutate(proposal_id, |proposal| {
+			proposal.voted.push(account);
+			proposal.votes = proposal.votes.checked_add(1).unwrap();
+		});
+		Ok(())
 	}
 	fn decode_call(call: Vec<u8>) -> Option<<T as Config>::Call> {
 		Decode::decode(&mut &call[..]).ok()

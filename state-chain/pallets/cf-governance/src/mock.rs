@@ -77,7 +77,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		frame_system: Default::default(),
 		pallet_cf_governance: Some(GovernanceConfig {
-			members: vec![ALICE, BOB, CHARLES, EVE, PETER, MAX],
+			members: vec![ALICE, BOB, CHARLES],
 		}),
 	};
 
