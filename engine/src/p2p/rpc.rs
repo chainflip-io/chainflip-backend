@@ -20,11 +20,18 @@ pub enum RpcClientError {
     SubscriptionError(RpcError),
 }
 
-pub async fn connect(url: &url::Url) -> Result<P2pRpcClient> {
-    ws::connect::<P2pRpcClient>(url)
+pub async fn connect(url: &url::Url, validator_id: ValidatorId) -> Result<P2pRpcClient> {
+    let client = ws::connect::<P2pRpcClient>(url)
         .compat()
         .await
-        .map_err(|e| RpcClientError::ConnectionError(url.clone(), e).into())
+        .map_err(|e| RpcClientError::ConnectionError(url.clone(), e))?;
+
+    client.identify(ValidatorIdBs58(validator_id.0))
+        .compat()
+        .await
+        .map_err(|e| RpcClientError::CallError(String::from("identify"), e))?;
+    
+    Ok(client)
 }
 
 #[async_trait]
@@ -60,53 +67,62 @@ impl P2PNetworkClient for P2pRpcClient {
 
 #[cfg(test)]
 mod tests {
+    use std::{collections::HashMap, sync::{Arc, Mutex}};
+
     use super::*;
     use cf_p2p_rpc::RpcApi;
     use jsonrpc_core::MetaIoHandler;
     use jsonrpc_core_client::transports::local;
     use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 
-    struct TestApi;
+    #[derive(Default)]
+    struct TestApi {
+        subs: Arc<Mutex<HashMap<SubscriptionId, jsonrpc_pubsub::typed::Sink<P2PEvent>>>>,
+    }
 
     impl RpcApi for TestApi {
         type Metadata = local::LocalMeta;
 
-        fn identify(&self, validator_id: ValidatorIdBs58) -> jsonrpc_core::Result<u64> {
+        fn identify(&self, _validator_id: ValidatorIdBs58) -> jsonrpc_core::Result<u64> {
             Ok(200)
         }
 
         fn send(
             &self,
-            validator_id: ValidatorIdBs58,
-            message: MessageBs58,
+            _validator_id: ValidatorIdBs58,
+            _message: MessageBs58,
         ) -> jsonrpc_core::Result<u64> {
             Ok(200)
         }
 
-        fn broadcast(&self, message: MessageBs58) -> jsonrpc_core::Result<u64> {
+        fn broadcast(&self, _message: MessageBs58) -> jsonrpc_core::Result<u64> {
             Ok(200)
         }
 
         fn subscribe_notifications(
             &self,
-            metadata: Self::Metadata,
+            _metadata: Self::Metadata,
             subscriber: Subscriber<P2PEvent>,
         ) {
-            todo!()
+            let mut subs = self.subs.lock().unwrap();
+            let next = SubscriptionId::Number(subs.len() as u64 + 1);
+            let sink = subscriber.assign_id(next.clone()).unwrap();
+            subs.insert(next, sink);
         }
 
         fn unsubscribe_notifications(
             &self,
-            metadata: Option<Self::Metadata>,
+            _metadata: Option<Self::Metadata>,
             id: SubscriptionId,
         ) -> jsonrpc_core::Result<bool> {
+            self.subs.lock().unwrap().remove(&id).unwrap();
             Ok(true)
         }
     }
 
     fn io() -> MetaIoHandler<local::LocalMeta> {
         let mut io = MetaIoHandler::default();
-        io.extend_with(TestApi.to_delegate());
+        io.extend_with(TestApi::default().to_delegate());
         io
     }
 
@@ -114,22 +130,27 @@ mod tests {
     fn client_api() {
         tokio::runtime::Runtime::new().unwrap().block_on(async {
             let io = io();
-            let (client, s) = local::connect_with_pubsub::<P2pRpcClient, _>(&io);
+            let (client, server) = local::connect_with_pubsub::<P2pRpcClient, _>(&io);
 
-            let result =
-                P2PNetworkClient::send(&client, &ValidatorId([100; 32]), "disco".as_bytes()).await;
-
-            assert!(
-                result.is_ok(),
-                "Should receive OK for sending message to peer"
-            );
-
-            let result = P2PNetworkClient::broadcast(&client, "disco".as_bytes()).await;
-
-            assert!(result.is_ok(), "Should receive OK for broadcasting message");
-
-            let result = P2PNetworkClient::take_stream(&client).await;
-            assert!(result.is_ok(), "Should subscribe OK");
+            tokio::select! {
+                _ = async move {
+                    let result =
+                        P2PNetworkClient::send(&client, &ValidatorId([100; 32]), "disco".as_bytes()).await;
+            
+                    assert!(
+                        result.is_ok(),
+                        "Should receive OK for sending message to peer"
+                    );
+            
+                    let result = P2PNetworkClient::broadcast(&client, "disco".as_bytes()).await;
+            
+                    assert!(result.is_ok(), "Should receive OK for broadcasting message");
+            
+                    let result = P2PNetworkClient::take_stream(&client).await;
+                    assert!(result.is_ok(), "Should subscribe OK");
+                } => {}
+                _ = server.compat() => {}
+            };
         });
     }
 }

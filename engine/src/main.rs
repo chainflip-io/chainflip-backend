@@ -83,7 +83,8 @@ async fn main() {
                 &url::Url::parse(settings.state_chain.ws_endpoint.as_str()).expect(&format!(
                     "Should be valid ws endpoint: {}",
                     settings.state_chain.ws_endpoint
-                ))
+                )),
+                ValidatorId(my_pair_signer.signer().public().0)
             )
             .await
             .expect("unable to connect p2p rpc client"),
