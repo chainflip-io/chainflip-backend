@@ -62,8 +62,8 @@ pub trait RpcApi {
 	type Metadata;
 
 	/// Identify yourself to the network.
-	#[rpc(name = "p2p_identify")]
-	fn identify(&self, validator_id: ValidatorIdBs58) -> Result<u64>;
+	#[rpc(name = "p2p_self_identify")]
+	fn self_identify(&self, validator_id: ValidatorIdBs58) -> Result<u64>;
 
 	/// Send a message to validator id returning a HTTP status code
 	#[rpc(name = "p2p_send")]
@@ -231,7 +231,7 @@ impl<C: P2pMessaging> Rpc<C> {
 impl<C: P2pMessaging + Sync + Send + 'static> RpcApi for Rpc<C> {
 	type Metadata = sc_rpc::Metadata;
 
-	fn identify(&self, validator_id: ValidatorIdBs58) -> Result<u64> {
+	fn self_identify(&self, validator_id: ValidatorIdBs58) -> Result<u64> {
 		self.messaging
 			.lock()
 			.unwrap()
@@ -444,7 +444,7 @@ mod tests {
 
 		let request = json!({
 			"jsonrpc": "2.0",
-			"method": "p2p_identify",
+			"method": "p2p_self_identify",
 			"params": [validator_id],
 			"id": 1,
 		});

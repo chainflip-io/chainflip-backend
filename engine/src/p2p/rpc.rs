@@ -27,7 +27,7 @@ pub async fn connect(url: &url::Url, validator_id: ValidatorId) -> Result<P2pRpc
         .map_err(|e| RpcClientError::ConnectionError(url.clone(), e))?;
 
     client
-        .identify(ValidatorIdBs58(validator_id.0))
+        .self_identify(ValidatorIdBs58(validator_id.0))
         .compat()
         .await
         .map_err(|e| RpcClientError::CallError(String::from("identify"), e))?;
@@ -87,7 +87,7 @@ mod tests {
     impl RpcApi for TestApi {
         type Metadata = local::LocalMeta;
 
-        fn identify(&self, _validator_id: ValidatorIdBs58) -> jsonrpc_core::Result<u64> {
+        fn self_identify(&self, _validator_id: ValidatorIdBs58) -> jsonrpc_core::Result<u64> {
             Ok(200)
         }
 

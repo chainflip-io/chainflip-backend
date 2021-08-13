@@ -126,7 +126,7 @@ mod tests {
         let data = vec![1, 2, 3];
         let validator_ids = (0..3).map(|i| ValidatorId([i; 32])).collect_vec();
 
-        let mut clients = validator_ids
+        let clients = validator_ids
             .iter()
             .map(|id| network.new_client(id.clone()))
             .collect_vec();
@@ -157,7 +157,7 @@ mod tests {
 
         let data = vec![3, 2, 1];
         let validator_ids = (0..3).map(|i| ValidatorId([i; 32])).collect_vec();
-        let mut clients = validator_ids
+        let clients = validator_ids
             .iter()
             .map(|id| network.new_client(id.clone()))
             .collect_vec();
