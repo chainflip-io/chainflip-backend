@@ -1,5 +1,5 @@
 #![cfg(feature = "std")]
-pub mod auction_handler;
+pub mod vault_rotation;
 pub mod ensure_witnessed;
 pub mod epoch_info;
 pub mod stake_transfer;

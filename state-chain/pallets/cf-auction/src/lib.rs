@@ -41,7 +41,7 @@ mod tests;
 extern crate assert_matches;
 
 use cf_traits::{
-	Auction, AuctionError, AuctionHandler, AuctionPenalty, AuctionPhase, AuctionRange,
+	Auction, AuctionError, VaultRotation, AuctionPenalty, AuctionPhase, AuctionRange,
 	BidderProvider,
 };
 use frame_support::pallet_prelude::*;
@@ -57,7 +57,7 @@ use sp_std::prelude::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::AuctionHandler;
+	use cf_traits::VaultRotation;
 	use frame_support::traits::ValidatorRegistration;
 	use sp_std::ops::Add;
 
@@ -83,7 +83,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MinAuctionSize: Get<u32>;
 		/// The lifecycle of our auction
-		type Handler: AuctionHandler<Self::ValidatorId, Self::Amount>;
+		type Handler: VaultRotation<Self::ValidatorId, Self::Amount>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -188,8 +188,8 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> AuctionHandler<T::ValidatorId, T::Amount> for Pallet<T> {
-	fn on_auction_completed(
+impl<T: Config> VaultRotation<T::ValidatorId, T::Amount> for Pallet<T> {
+	fn start_vault_rotation(
 		_winners: Vec<T::ValidatorId>,
 		_min_bid: T::Amount,
 	) -> Result<(), AuctionError> {
@@ -296,7 +296,7 @@ impl<T: Config> Auction for Pallet<T> {
 								winners.clone(),
 							));
 
-							T::Handler::on_auction_completed(winners, *min_bid)?;
+							T::Handler::start_vault_rotation(winners, *min_bid)?;
 							return Ok(phase);
 						}
 					}

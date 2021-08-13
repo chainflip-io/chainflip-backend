@@ -17,7 +17,7 @@ mod test {
 			// An empty set and an error is thrown back, request index 1
 			assert_eq!(
 				VaultsPallet::on_auction_completed(vec![], 0),
-				Err(AuctionError::Abort)
+				Err(RotationError::EmptyValidatorSet)
 			);
 			// Everything ok with a set of numbers
 			// Nothing running at the moment

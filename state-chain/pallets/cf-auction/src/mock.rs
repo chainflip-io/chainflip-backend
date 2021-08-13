@@ -1,6 +1,6 @@
 use super::*;
 use crate as pallet_cf_auction;
-use cf_traits::mocks::auction_handler::Mock as MockAuctionHandler;
+use cf_traits::mocks::vault_rotation::Mock as MockAuctionHandler;
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;

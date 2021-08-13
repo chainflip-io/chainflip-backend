@@ -179,7 +179,7 @@ impl pallet_cf_vaults::Config for Runtime {
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
 	type EthereumVault = Ethereum;
 	type RequestIndex = u64;
-	type Bytes = Vec<u8>;
+	type PublicKey = Vec<u8>;
 	type Penalty = Auction;
 }
 

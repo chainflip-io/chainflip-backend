@@ -17,6 +17,7 @@ type ValidatorId = u64;
 type RequestIndex = u64;
 use crate::nonce::NonceUnixTime;
 use frame_support::pallet_prelude::{DispatchResultWithPostInfo, EnsureOrigin};
+use cf_traits::RotationError;
 
 thread_local! {}
 
@@ -93,7 +94,7 @@ impl ChainHandler for MockRuntime {
 	type ValidatorId = ValidatorId;
 	type Error = RotationError<ValidatorId>;
 
-	fn try_complete_vault_rotation(
+	fn complete_vault_rotation(
 		_index: RequestIndex,
 		result: Result<VaultRotationRequest, RotationError<Self::ValidatorId>>,
 	) -> Result<(), Self::Error> {
@@ -109,6 +110,7 @@ impl ethereum::Config for MockRuntime {
 	type NonceProvider = NonceUnixTime<Self::Nonce, cf_traits::mocks::time_source::Mock>;
 	type RequestIndex = RequestIndex;
 	type PublicKey = Vec<u8>;
+	type Transaction = Vec<u8>;
 }
 
 pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;

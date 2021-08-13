@@ -112,13 +112,38 @@ pub trait AuctionPenalty<ValidatorId> {
 	fn penalise(bad_validators: Vec<ValidatorId>);
 }
 
-/// Feedback on auction and confirmation
-pub trait AuctionHandler<ValidatorId, Amount> {
-	// An auction has completed and the winners and the minimum bid are shared
-	fn on_auction_completed(winners: Vec<ValidatorId>, min_bid: Amount)
-		-> Result<(), AuctionError>;
-	// The caller trys to confirm whether the auction can be confirmed
-	fn try_to_confirm_auction() -> Result<(), AuctionError>;
+/// Errors occurring during a rotation
+#[derive(RuntimeDebug, Encode, Decode, PartialEq, Clone)]
+pub enum RotationError<ValidatorId> {
+	/// An invalid request index
+	InvalidRequestIndex,
+	/// Empty validator set provided
+	EmptyValidatorSet,
+	/// A set of badly acting validators
+	BadValidators(Vec<ValidatorId>),
+	/// The key generation response failed
+	KeyResponseFailed,
+	/// Failed to construct a valid chain specific payload for rotation
+	FailedToConstructPayload,
+	/// Vault rotation completion failed
+	VaultRotationCompletionFailed,
+	// /The vault rotation is not confirmed
+	NotConfirmed,
+	/// Failed to make keygen request
+	FailedToMakeKeygenRequest,
+}
+
+/// Rotating vaults
+pub trait VaultRotation {
+	type ValidatorId;
+	type Amount;
+	// Start a vault rotation with the winners
+	fn start_vault_rotation(
+		winners: Vec<Self::ValidatorId>,
+		min_bid: Self::Amount,
+	) -> Result<(), RotationError<Self::ValidatorId>>;
+	// The caller trys to finalize the rotation
+	fn finalize_rotation() -> Result<(), RotationError<Self::ValidatorId>>;
 }
 
 /// An error has occurred during an auction
@@ -127,7 +152,6 @@ pub enum AuctionError {
 	Empty,
 	MinValidatorSize,
 	InvalidRange,
-	NotConfirmed,
 	Abort,
 }
 

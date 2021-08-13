@@ -1,7 +1,7 @@
 mod test {
 	use crate::mock::*;
 	use crate::*;
-	use cf_traits::mocks::auction_handler::clear_confirmation;
+	use cf_traits::mocks::vault_rotation::clear_confirmation;
 	use frame_support::{assert_noop, assert_ok};
 
 	fn last_event() -> mock::Event {

@@ -3,39 +3,25 @@ use frame_support::pallet_prelude::*;
 use frame_support::RuntimeDebug;
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
+use cf_traits::RotationError;
 
 /// Request index type
 pub type RequestIndex = u64;
 
-/// Errors occurring during a rotation
-#[derive(RuntimeDebug, Encode, Decode, PartialEq)]
-pub enum RotationError<ValidatorId> {
-	/// An invalid request index
-	InvalidRequestIndex,
-	/// Empty validator set provided
-	EmptyValidatorSet,
-	/// A set of badly acting validators
-	BadValidators(Vec<ValidatorId>),
-	/// The key generation response failed
-	KeyResponseFailed,
-	/// Failed to construct a valid chain specific payload for rotation
-	FailedToConstructPayload,
-	/// Vault rotation completion failed
-	VaultRotationCompletionFailed,
-}
-
 /// A request/response trait
 pub trait RequestResponse<Index: AtLeast32BitUnsigned, Req, Res, Error> {
-	/// Try to make a request identified with an index
-	fn try_request(index: Index, request: Req) -> Result<(), Error>;
-	// Try to handle a response of a request identified with a index
-	fn try_response(index: Index, response: Res) -> Result<(), Error>;
+	/// Make a request identified with an index
+	fn make_request(index: Index, request: Req) -> Result<(), Error>;
+	// Handle a response of a request identified with a index
+	fn handle_response(index: Index, response: Res) -> Result<(), Error>;
 }
 
 /// A vault for a chain
 pub trait ChainVault {
 	/// The type used for public keys
-	type Bytes: Into<Vec<u8>>;
+	type PublicKey: Into<Vec<u8>>;
+	/// A transaction
+	type Transaction: Into<Vec<u8>>;
 	/// An identifier for a validator involved in the rotation of the vault
 	type ValidatorId;
 	/// An error on rotating the vault
@@ -46,13 +32,13 @@ pub trait ChainVault {
 	/// for the rotation of the vault.
 	/// When complete `ChainHandler::try_complete_vault_rotation()` would be used to notify to continue
 	/// with the process.
-	fn try_start_vault_rotation(
+	fn start_vault_rotation(
 		index: RequestIndex,
-		new_public_key: Self::Bytes,
+		new_public_key: Self::PublicKey,
 		validators: Vec<Self::ValidatorId>,
 	) -> Result<(), Self::Error>;
 	/// We have confirmation of the rotation back from `Vaults`
-	fn vault_rotated(response: VaultRotationResponse<Self::Bytes>);
+	fn vault_rotated(response: VaultRotationResponse<Self::PublicKey, Self::Transaction>);
 }
 
 /// Events coming in from our chain.  This is used to callback from the request to complete the vault
@@ -62,7 +48,7 @@ pub trait ChainHandler {
 	type Error;
 	/// Initial vault rotation phase complete with a result describing the outcome of this phase
 	/// Feedback is provided back on this step
-	fn try_complete_vault_rotation(
+	fn complete_vault_rotation(
 		index: RequestIndex,
 		result: Result<VaultRotationRequest, RotationError<Self::ValidatorId>>,
 	) -> Result<(), Self::Error>;
@@ -120,10 +106,10 @@ impl From<ChainParams> for VaultRotationRequest {
 }
 /// A response of our request to rotate the vault
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct VaultRotationResponse<Bytes: Into<Vec<u8>>> {
-	pub old_key: Bytes,
-	pub new_key: Bytes,
-	pub tx: Bytes,
+pub struct VaultRotationResponse<PublicKey: Into<Vec<u8>>, Transaction: Into<Vec<u8>>> {
+	pub old_key: PublicKey,
+	pub new_key: PublicKey,
+	pub tx: Transaction,
 }
 
 #[macro_export]
@@ -133,5 +119,5 @@ macro_rules! ensure_index {
 			VaultRotations::<T>::contains_key($index),
 			RotationError::InvalidRequestIndex
 		);
-	}
+	};
 }

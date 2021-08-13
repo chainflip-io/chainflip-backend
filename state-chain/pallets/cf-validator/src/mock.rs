@@ -1,6 +1,6 @@
 use super::*;
 use crate as pallet_cf_validator;
-use cf_traits::mocks::auction_handler::Mock as MockHandler;
+use cf_traits::mocks::vault_rotation::Mock as MockHandler;
 use cf_traits::BidderProvider;
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{

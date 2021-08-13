@@ -42,7 +42,7 @@
 use frame_support::pallet_prelude::*;
 use sp_std::prelude::*;
 
-use cf_traits::{AuctionError, AuctionHandler, AuctionPenalty, NonceProvider};
+use cf_traits::{RotationError, VaultRotation, AuctionPenalty, NonceProvider};
 pub use pallet::*;
 
 use crate::rotation::*;
@@ -72,12 +72,14 @@ pub mod pallet {
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 		/// The Ethereum Vault
 		type EthereumVault: ChainVault<
-			Bytes = Self::Bytes,
+			PublicKey= Self::PublicKey,
 			ValidatorId = Self::ValidatorId,
 			Error = RotationError<Self::ValidatorId>,
 		>;
-		/// Bytes as a form to share things such as payloads and public keys
-		type Bytes: Member + Parameter + Into<Vec<u8>>;
+		/// A public key
+		type PublicKey: Member + Parameter + Into<Vec<u8>>;
+		/// A transaction
+		type Transaction: Member + Parameter + Into<Vec<u8>>;
 		/// Feedback on penalties for Auction
 		type Penalty: AuctionPenalty<Self::ValidatorId>;
 	}
@@ -138,10 +140,10 @@ pub mod pallet {
 		pub fn keygen_response(
 			origin: OriginFor<T>,
 			request_id: RequestIndex,
-			response: KeygenResponse<T::ValidatorId, T::Bytes>,
+			response: KeygenResponse<T::ValidatorId, T::PublicKey>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			match KeygenRequestResponse::<T>::try_response(request_id, response) {
+			match KeygenRequestResponse::<T>::handle_response(request_id, response) {
 				Ok(_) => Ok(().into()),
 				Err(e) => Err(Error::<T>::from(e).into()),
 			}
@@ -151,10 +153,10 @@ pub mod pallet {
 		pub fn vault_rotation_response(
 			origin: OriginFor<T>,
 			request_id: RequestIndex,
-			response: VaultRotationResponse<T::Bytes>,
+			response: VaultRotationResponse<T::PublicKey, T::Transaction>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			match VaultRotationRequestResponse::<T>::try_response(request_id, response) {
+			match VaultRotationRequestResponse::<T>::handle_response(request_id, response) {
 				Ok(_) => Ok(().into()),
 				Err(e) => Err(Error::<T>::from(e).into()),
 			}
@@ -217,32 +219,34 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> AuctionHandler<T::ValidatorId, T::Amount> for Pallet<T> {
+impl<T: Config> VaultRotation for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
+	type Amount = T::Amount;
 	/// On completion of the Auction we would receive the proposed validators
 	/// A key generation request is created for each supported chain and the process starts
 	/// The requests created here are regarded as a group where until this is called again
 	/// all would be processed and any one failing would result in aborted the whole group
 	/// of requests.
-	fn on_auction_completed(
-		winners: Vec<T::ValidatorId>,
-		_: T::Amount,
-	) -> Result<(), AuctionError> {
+	fn start_vault_rotation(
+		winners: Vec<Self::ValidatorId>,
+		_: Self::Amount,
+	) -> Result<(), RotationError<Self::ValidatorId>> {
 		// Main entry point for the pallet
-		ensure!(!winners.is_empty(), AuctionError::Abort);
+		ensure!(!winners.is_empty(), RotationError::EmptyValidatorSet);
 		// Create a KeyGenRequest for Ethereum
 		let keygen_request = KeygenRequest {
 			chain: T::EthereumVault::chain_params(),
 			validator_candidates: winners.clone(),
 		};
 
-		KeygenRequestResponse::<T>::try_request(Self::next_index(), keygen_request)
-			.map_err(|_| AuctionError::Abort)
+		KeygenRequestResponse::<T>::make_request(Self::next_index(), keygen_request)
+			.map_err(|_| RotationError::FailedToMakeKeygenRequest)
 	}
 
 	/// In order for the validators to be rotated we are waiting on a confirmation that the vaults
 	/// have been rotated.  This is called on each block with a success acting as a confirmation
 	/// that the validators can now be rotated for the new epoch.
-	fn try_to_confirm_auction() -> Result<(), AuctionError> {
+	fn finalize_rotation() -> Result<(), RotationError<Self::ValidatorId>> {
 		// The 'exit' point for the pallet, no rotations left to process
 		if VaultRotations::<T>::iter().count() == 0 {
 			// We can now confirm the auction and rotate
@@ -251,7 +255,7 @@ impl<T: Config> AuctionHandler<T::ValidatorId, T::Amount> for Pallet<T> {
 			Ok(())
 		} else {
 			// Wait on confirmation
-			Err(AuctionError::NotConfirmed)
+			Err(RotationError::NotConfirmed)
 		}
 	}
 }
@@ -263,13 +267,13 @@ impl<T: Config>
 	RequestResponse<
 		RequestIndex,
 		KeygenRequest<T::ValidatorId>,
-		KeygenResponse<T::ValidatorId, T::Bytes>,
+		KeygenResponse<T::ValidatorId, T::PublicKey>,
 		RotationError<T::ValidatorId>,
 	> for KeygenRequestResponse<T>
 {
 	/// Emit as an event the key generation request, this is the first step after receiving a proposed
 	/// validator set from the `AuctionHandler::on_auction_completed()`
-	fn try_request(
+	fn make_request(
 		index: RequestIndex,
 		request: KeygenRequest<T::ValidatorId>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
@@ -281,16 +285,16 @@ impl<T: Config>
 	/// Try to process the response back for the key generation request and hand it off to the relevant
 	/// chain to continue processing.  Failure would result in penalisation for the bad validators returned
 	/// and the vault rotation aborted.
-	fn try_response(
+	fn handle_response(
 		index: RequestIndex,
-		response: KeygenResponse<T::ValidatorId, T::Bytes>,
+		response: KeygenResponse<T::ValidatorId, T::PublicKey>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		ensure_index!(index);
 		match response {
 			KeygenResponse::Success(new_public_key) => {
 				// Go forth and construct
 				match VaultRotations::<T>::try_get(index) {
-					Ok(keygen_request) => T::EthereumVault::try_start_vault_rotation(
+					Ok(keygen_request) => T::EthereumVault::start_vault_rotation(
 						index,
 						new_public_key,
 						keygen_request.validator_candidates.to_vec(),
@@ -319,14 +323,14 @@ impl<T: Config> ChainHandler for Pallet<T> {
 	/// Try to complete the final vault rotation with feedback from the chain implementation over
 	/// the `ChainHandler` trait.  This is forwarded as a request and hence an event is emitted.
 	/// Failure is handled and potential bad validators are penalised and the rotation is now aborted.
-	fn try_complete_vault_rotation(
+	fn complete_vault_rotation(
 		index: RequestIndex,
 		result: Result<VaultRotationRequest, RotationError<Self::ValidatorId>>,
 	) -> Result<(), Self::Error> {
 		ensure_index!(index);
 		match result {
 			// All good, forward on the request
-			Ok(request) => VaultRotationRequestResponse::<T>::try_request(index, request),
+			Ok(request) => VaultRotationRequestResponse::<T>::make_request(index, request),
 			// Penalise if we have a set of bad validators and abort the rotation
 			Err(err) => {
 				if let RotationError::BadValidators(bad) = err {
@@ -345,12 +349,12 @@ impl<T: Config>
 	RequestResponse<
 		RequestIndex,
 		VaultRotationRequest,
-		VaultRotationResponse<T::Bytes>,
+		VaultRotationResponse<T::PublicKey, T::Transaction>,
 		RotationError<T::ValidatorId>,
 	> for VaultRotationRequestResponse<T>
 {
 	/// Emit our event for the start of a vault rotation generation request.
-	fn try_request(
+	fn make_request(
 		index: RequestIndex,
 		request: VaultRotationRequest,
 	) -> Result<(), RotationError<T::ValidatorId>> {
@@ -362,9 +366,9 @@ impl<T: Config>
 	/// Handle the response posted back on our request for a vault rotation request
 	/// The request is cleared from the cache of pending requests and the relevant vault is
 	/// notified
-	fn try_response(
+	fn handle_response(
 		index: RequestIndex,
-		response: VaultRotationResponse<T::Bytes>,
+		response: VaultRotationResponse<T::PublicKey, T::Transaction>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		ensure_index!(index);
 		// Feedback to vaults

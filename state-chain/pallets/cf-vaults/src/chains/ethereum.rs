@@ -30,7 +30,7 @@
 
 use crate::rotation::ChainParams::Ethereum;
 use crate::rotation::*;
-use cf_traits::NonceProvider;
+use cf_traits::{NonceProvider, RotationError};
 use ethabi::{Bytes, Function, Param, ParamType, Token};
 use frame_support::pallet_prelude::*;
 pub use pallet::*;
@@ -78,6 +78,8 @@ pub mod pallet {
 		type RequestIndex: Member + Parameter + Default + AtLeast32BitUnsigned + Copy;
 		/// The new public key type
 		type PublicKey: Into<Vec<u8>> + Member + Parameter + Default;
+		/// A transaction
+		type Transaction: Member + Parameter + Into<Vec<u8>>;
 		/// A nonce
 		type Nonce: Into<U256>;
 		/// A nonce provider
@@ -92,7 +94,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn vault)]
 	pub(super) type Vault<T: Config> =
-		StorageValue<_, VaultRotationResponse<T::PublicKey>, ValueQuery>;
+		StorageValue<_, VaultRotationResponse<T::PublicKey, T::Transaction>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -115,7 +117,7 @@ pub mod pallet {
 			response: EthSigningTxResponse<T::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			match Self::try_response(request_id, response) {
+			match Self::handle_response(request_id, response) {
 				Ok(_) => Ok(().into()),
 				Err(_) => Err(Error::<T>::EthSigningTxResponseFailed.into()),
 			}
@@ -140,7 +142,8 @@ pub mod pallet {
 }
 
 impl<T: Config> ChainVault for Pallet<T> {
-	type Bytes = T::PublicKey;
+	type PublicKey = T::PublicKey;
+	type Transaction = T::Transaction;
 	type ValidatorId = T::ValidatorId;
 	type Error = RotationError<T::ValidatorId>;
 
@@ -154,9 +157,9 @@ impl<T: Config> ChainVault for Pallet<T> {
 	/// to have the function `setAggKeyWithAggKey` signed by the old set of validators.
 	/// A payload is built and emitted as a `EthSigningTxRequest`, failing this an error is reported
 	/// back to `Vaults`
-	fn try_start_vault_rotation(
+	fn start_vault_rotation(
 		index: RequestIndex,
-		new_public_key: Self::Bytes,
+		new_public_key: Self::PublicKey,
 		validators: Vec<Self::ValidatorId>,
 	) -> Result<(), Self::Error> {
 		// Create payload for signature here
@@ -164,7 +167,7 @@ impl<T: Config> ChainVault for Pallet<T> {
 		match Self::encode_set_agg_key_with_agg_key(new_public_key) {
 			Ok(payload) => {
 				// Emit the event
-				Self::try_request(
+				Self::make_request(
 					index,
 					EthSigningTxRequest {
 						validators,
@@ -174,7 +177,7 @@ impl<T: Config> ChainVault for Pallet<T> {
 			}
 			Err(_) => {
 				// Failure in completing the vault rotation and we report back to `Vaults`
-				T::Vaults::try_complete_vault_rotation(
+				T::Vaults::complete_vault_rotation(
 					index,
 					Err(RotationError::FailedToConstructPayload),
 				)
@@ -183,7 +186,7 @@ impl<T: Config> ChainVault for Pallet<T> {
 	}
 
 	/// The vault for this chain has been rotated and we store this response to storage
-	fn vault_rotated(response: VaultRotationResponse<Self::Bytes>) {
+	fn vault_rotated(response: VaultRotationResponse<Self::PublicKey, Self::Transaction>) {
 		Vault::<T>::set(response);
 	}
 }
@@ -197,7 +200,7 @@ impl<T: Config>
 	> for Pallet<T>
 {
 	/// Make the request to sign by emitting an event
-	fn try_request(
+	fn make_request(
 		index: RequestIndex,
 		request: EthSigningTxRequest<T::ValidatorId>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
@@ -206,15 +209,15 @@ impl<T: Config>
 	}
 
 	/// Try to handle the response and pass this onto `Vaults` to complete the vault rotation
-	fn try_response(
+	fn handle_response(
 		index: RequestIndex,
 		response: EthSigningTxResponse<T::ValidatorId>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		match response {
 			EthSigningTxResponse::Success(signature) => {
-				T::Vaults::try_complete_vault_rotation(index, Ok(Ethereum(signature).into()))
+				T::Vaults::complete_vault_rotation(index, Ok(Ethereum(signature).into()))
 			}
-			EthSigningTxResponse::Error(bad_validators) => T::Vaults::try_complete_vault_rotation(
+			EthSigningTxResponse::Error(bad_validators) => T::Vaults::complete_vault_rotation(
 				index,
 				Err(RotationError::BadValidators(bad_validators)),
 			),
