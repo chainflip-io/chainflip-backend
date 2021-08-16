@@ -456,7 +456,8 @@ pub mod pallet {
 									+ Self::calculate_offline_penalty(
 										current_block,
 										current_block - T::HeartbeatBlockInterval::get(),
-									).neg();
+									)
+									.neg();
 
 								Pallet::<T>::clamp_reputation_points(reputation_points);
 								// Reset the credits earned as being online consecutively
