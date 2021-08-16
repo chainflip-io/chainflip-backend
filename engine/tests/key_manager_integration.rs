@@ -61,7 +61,7 @@ pub async fn test_all_key_manager_events() {
                 // All the key strings in this test are decimal versions of the hex strings in the consts.py script
                 // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
                 // TODO: Use hex strings instead of dec strings. So we can use the exact const hex strings from consts.py.
-                
+
                 if new_key == &ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap(){
 
                     assert_eq!(signed,&true);
