@@ -98,6 +98,7 @@ pub mod pallet {
 		AlreadyExecuted,
 		AlreadyExpired,
 		NoMember,
+		NotFound,
 	}
 
 	#[pallet::call]
@@ -265,6 +266,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 	fn next_proposal_id() -> u32 {
+		//TODO: refactor needed here
 		if let Some(number_of_proposals) = <NumberOfProposals<T>>::get() {
 			let next_id = number_of_proposals + 1;
 			<NumberOfProposals<T>>::put(next_id);
@@ -279,6 +281,10 @@ impl<T: Config> Pallet<T> {
 		0
 	}
 	fn try_vote(account: T::AccountId, proposal_id: u32) -> Result<(), DispatchError> {
+		// Check if proposal exist
+		if !<Proposals<T>>::contains_key(proposal_id) {
+			return Err(Error::<T>::NotFound.into());
+		}
 		let proposal = <Proposals<T>>::get(proposal_id);
 		// Check if already executed
 		if proposal.executed {
@@ -288,7 +294,6 @@ impl<T: Config> Pallet<T> {
 		if proposal.expiry < T::TimeSource::now().as_secs() {
 			return Err(Error::<T>::AlreadyExpired.into());
 		}
-		//TODO: Check existing
 		// Check already voted
 		if proposal.voted.contains(&account) {
 			return Err(Error::<T>::AlreadyVoted.into());
