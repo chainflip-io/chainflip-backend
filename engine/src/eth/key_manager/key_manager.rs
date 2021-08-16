@@ -203,6 +203,9 @@ mod tests {
 
     use super::*;
 
+    // All log data for these tests was obtained from the events in the `deploy_and` script:
+    // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/scripts/deploy_and.py
+
     // 🔑 Aggregate Key sets the new Aggregate Key 🔑
     const AGG_SET_AGG_LOG: &'static str = r#"{
         "logIndex": "0x0",
@@ -265,6 +268,10 @@ mod tests {
 
     #[test]
     fn test_key_change_parsing() {
+        // All the key strings in this test are decimal versions of the hex strings in the consts.py script
+        // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
+        // TODO: Use hex strings instead of dec strings. So we can use the exact const hex strings from consts.py.
+
         let logger = logging::test_utils::create_test_logger();
         let km = KeyManager::load(CONTRACT_ADDRESS, &logger).unwrap();
 
