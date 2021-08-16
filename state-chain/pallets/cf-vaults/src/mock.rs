@@ -12,6 +12,7 @@ use sp_runtime::{
 use crate as pallet_cf_vaults;
 
 use super::*;
+use crate::nonce::NonceUnixTime;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
 type Block = frame_system::mocking::MockBlock<MockRuntime>;
@@ -66,29 +67,6 @@ impl frame_system::Config for MockRuntime {
 
 parameter_types! {}
 
-pub struct OtherChain;
-type RequestIndex = u64;
-impl ChainVault for OtherChain {
-	type PublicKey = Vec<u8>;
-	type ValidatorId = ValidatorId;
-	type Error = RotationError<Self::ValidatorId>;
-
-	fn chain_params() -> ChainParams {
-		ChainParams::Other(vec![])
-	}
-
-	fn start_vault_rotation(
-		index: RequestIndex,
-		_new_public_key: Self::PublicKey,
-		_validators: Vec<Self::ValidatorId>,
-	) -> Result<(), Self::Error> {
-		OTHER_CHAIN_RESULT.with(|l| *l.borrow_mut() = index);
-		Ok(())
-	}
-
-	fn vault_rotated(_response: VaultRotationResponse<Self::PublicKey, Self::Transaction>) {}
-}
-
 pub struct MockEnsureWitness;
 
 impl EnsureOrigin<Origin> for MockEnsureWitness {
@@ -126,10 +104,12 @@ impl AuctionPenalty<ValidatorId> for MockRuntime {
 
 impl pallet_cf_vaults::Config for MockRuntime {
 	type Event = Event;
-	type EthereumVault = OtherChain;
 	type EnsureWitnessed = MockEnsureWitness;
 	type PublicKey = Vec<u8>;
+	type Transaction = Vec<u8>;
 	type Penalty = Self;
+	type Nonce = u64;
+	type NonceProvider = NonceUnixTime<Self::Nonce, cf_traits::mocks::time_source::Mock>;
 }
 
 pub fn bad_validators() -> Vec<ValidatorId> {

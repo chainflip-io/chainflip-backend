@@ -2,7 +2,7 @@ mod test {
 	use crate::mock::*;
 	use crate::rotation::ChainParams::Other;
 	use crate::*;
-	use frame_support::assert_ok;
+	use frame_support::{assert_noop, assert_ok};
 
 	fn last_event() -> mock::Event {
 		frame_system::Pallet::<MockRuntime>::events()
@@ -16,14 +16,14 @@ mod test {
 		new_test_ext().execute_with(|| {
 			// An empty set and an error is thrown back, request index 1
 			assert_eq!(
-				VaultsPallet::on_auction_completed(vec![], 0),
+				VaultsPallet::start_vault_rotation(vec![], 0),
 				Err(RotationError::EmptyValidatorSet)
 			);
 			// Everything ok with a set of numbers
 			// Nothing running at the moment
 			assert!(VaultsPallet::rotations_complete());
 			// Request index 2
-			assert_ok!(VaultsPallet::on_auction_completed(
+			assert_ok!(VaultsPallet::start_vault_rotation(
 				vec![ALICE, BOB, CHARLIE],
 				0
 			));
@@ -46,7 +46,7 @@ mod test {
 	#[test]
 	fn keygen_response() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(VaultsPallet::on_auction_completed(
+			assert_ok!(VaultsPallet::start_vault_rotation(
 				vec![ALICE, BOB, CHARLIE],
 				0
 			));
@@ -61,7 +61,7 @@ mod test {
 			assert!(OTHER_CHAIN_RESULT.with(|l| *l.borrow() == VaultsPallet::current_request()));
 
 			// A subsequent key generation request
-			assert_ok!(VaultsPallet::on_auction_completed(
+			assert_ok!(VaultsPallet::start_vault_rotation(
 				vec![ALICE, BOB, CHARLIE],
 				0
 			));
@@ -97,7 +97,7 @@ mod test {
 	#[test]
 	fn vault_rotation_request() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(VaultsPallet::on_auction_completed(
+			assert_ok!(VaultsPallet::start_vault_rotation(
 				vec![ALICE, BOB, CHARLIE],
 				0
 			));
@@ -106,7 +106,7 @@ mod test {
 				VaultsPallet::current_request(),
 				KeygenResponse::Success(vec![])
 			));
-			assert_ok!(VaultsPallet::try_complete_vault_rotation(
+			assert_ok!(VaultsPallet::complete_vault_rotation(
 				VaultsPallet::current_request(),
 				Ok(VaultRotationRequest {
 					chain: ChainParams::Other(vec![])
@@ -125,7 +125,7 @@ mod test {
 			);
 
 			assert_eq!(
-				VaultsPallet::try_complete_vault_rotation(
+				VaultsPallet::complete_vault_rotation(
 					VaultsPallet::current_request(),
 					Err(RotationError::BadValidators(vec![ALICE, BOB]))
 				)
@@ -144,7 +144,7 @@ mod test {
 	#[test]
 	fn vault_rotation_response() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(VaultsPallet::on_auction_completed(
+			assert_ok!(VaultsPallet::start_vault_rotation(
 				vec![ALICE, BOB, CHARLIE],
 				0
 			));
@@ -153,7 +153,7 @@ mod test {
 				VaultsPallet::current_request(),
 				KeygenResponse::Success(vec![])
 			));
-			assert_ok!(VaultsPallet::try_complete_vault_rotation(
+			assert_ok!(VaultsPallet::complete_vault_rotation(
 				VaultsPallet::current_request(),
 				Ok(VaultRotationRequest {
 					chain: ChainParams::Other(vec![])
@@ -187,6 +187,50 @@ mod test {
 				mock::Event::pallet_cf_vaults(crate::Event::VaultRotationCompleted(
 					VaultsPallet::current_request()
 				))
+			);
+		});
+	}
+
+	// Ethereum tests
+	#[test]
+	fn try_starting_a_vault_rotation() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(EthereumChain::<MockRuntime>::start_vault_rotation(
+				0,
+				vec![],
+				vec![ALICE, BOB, CHARLIE]
+			));
+			let signing_request = EthSigningTxRequest {
+				payload: EthereumChain::<MockRuntime>::encode_set_agg_key_with_agg_key(vec![])
+					.unwrap(),
+				validators: vec![ALICE, BOB, CHARLIE],
+			};
+			assert_eq!(
+				last_event(),
+				mock::Event::pallet_cf_vaults(crate::Event::EthSignTxRequestEvent(
+					0,
+					signing_request
+				))
+			);
+		});
+	}
+
+	#[test]
+	fn witness_eth_signing_tx_response() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(VaultsPallet::eth_signing_tx_response(
+				Origin::root(),
+				0,
+				EthSigningTxResponse::Success(vec![])
+			));
+
+			assert_noop!(
+				VaultsPallet::eth_signing_tx_response(
+					Origin::root(),
+					0,
+					EthSigningTxResponse::Error(vec![1, 2, 3])
+				),
+				Error::<MockRuntime>::EthSigningTxResponseFailed
 			);
 		});
 	}
