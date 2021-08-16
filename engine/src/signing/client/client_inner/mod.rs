@@ -1,3 +1,4 @@
+mod ceremony;
 mod client_inner;
 mod common;
 mod key_store;
