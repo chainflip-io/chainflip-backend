@@ -111,10 +111,11 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
                             self.handle_keygen_success(key_outcome.ceremony_id, key)
                                 .await;
                         }
-                        Err(_) => {
+                        Err((err, _)) => {
                             slog::error!(
                                 self.logger,
-                                "Signing module returned error generating key"
+                                "Signing module returned error generating key: {:?}",
+                                err
                             )
                         }
                     },
@@ -127,12 +128,13 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
                                 )
                                 .await;
                             }
-                            Err(_) => {
+                            Err((err, _)) => {
                                 // TODO: Use the reported bad nodes in the SigningOutcome / SigningFailure
                                 // TODO: retry signing with a different subset of signers
                                 slog::error!(
                                     self.logger,
-                                    "Signing module returned error signing message"
+                                    "Signing module returned error signing message: {:?}",
+                                    err
                                 )
                             }
                         }
