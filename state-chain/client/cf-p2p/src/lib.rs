@@ -31,20 +31,26 @@ use std::pin::Pin;
 use std::sync::Mutex;
 use std::task::{Context, Poll};
 
+/// The type of validator id expected by the p2p layer, uses standard serialization.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ValidatorId(pub [u8; 32]);
 
+/// A wrapper around a byte buffer containing some opaque message.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RawMessage(pub Vec<u8>);
 
+/// The protocol has two message types, `Identify` and `Message`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 enum ProtocolMessage {
 	Identify(ValidatorId),
 	Message(RawMessage),
 }
 
+/// The identifier for our protocol, required to distinguish it from other protocols running on the substrate p2p
+/// network.
 pub const CHAINFLIP_P2P_PROTOCOL_NAME: Cow<str> = Cow::Borrowed("/chainflip-protocol");
 
+/// Required by substrate to register and configure the protocol.
 pub fn p2p_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
 	sc_network::config::NonDefaultSetConfig {
 		notifications_protocol: CHAINFLIP_P2P_PROTOCOL_NAME,
@@ -59,6 +65,7 @@ pub fn p2p_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
 	}
 }
 
+/// An abstration of the underlying network of peers.
 pub trait PeerNetwork {
 	/// Adds the peer to the set of peers to be connected to with this protocol.
 	fn reserve_peer(&self, who: PeerId);
@@ -70,6 +77,7 @@ pub trait PeerNetwork {
 	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>>;
 }
 
+/// An implementation of [PeerNetwork] using substrate's libp2p-based `NetworkService`.
 impl<B: BlockT, H: ExHashT> PeerNetwork for NetworkService<B, H> {
 	fn reserve_peer(&self, who: PeerId) {
 		let addr =
@@ -320,6 +328,7 @@ pub struct NetworkBridge<Observer: NetworkObserver, Network: PeerNetwork> {
 	command_receiver: UnboundedReceiver<MessagingCommand>,
 }
 
+/// Helper method for creating a network bridge to the substrate network.
 pub fn substrate_network_bridge<Observer: NetworkObserver, B: BlockT, H: ExHashT>(
 	observer: Arc<Observer>,
 	network: Arc<NetworkService<B, H>>,
@@ -474,8 +483,8 @@ where
 								let messages: Vec<ProtocolMessage> =
 									messages
 										.into_iter()
-										.filter_map(|(engine, data)| {
-											if engine == CHAINFLIP_P2P_PROTOCOL_NAME {
+										.filter_map(|(protocol, data)| {
+											if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
 												this.state_machine
 													.try_decode(data.as_ref())
 													.map_err(|err| {
