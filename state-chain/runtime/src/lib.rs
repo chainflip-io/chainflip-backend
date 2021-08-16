@@ -15,6 +15,7 @@ pub use frame_support::{
 	StorageValue,
 };
 use frame_system::offchain::SendTransactionTypes;
+use pallet_cf_reputation::ZeroSlasher;
 use pallet_grandpa::fg_primitives;
 use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
 use pallet_session::historical as session_historical;
@@ -409,7 +410,7 @@ impl pallet_cf_reputation::Config for Runtime {
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type ReputationPointPenalty = ReputationPointPenalty;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
-	type Slasher = Reputation;
+	type Slasher = ZeroSlasher<Self>;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 }
 

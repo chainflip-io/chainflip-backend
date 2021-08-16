@@ -482,3 +482,14 @@ pub mod pallet {
 		}
 	}
 }
+
+pub struct ZeroSlasher<T: Config>(PhantomData<T>);
+/// An implementation of `Slashing` which kindly doesn't slash
+impl<T: Config> Slashing for ZeroSlasher<T> {
+	type ValidatorId = T::ValidatorId;
+	type BlockNumber = T::BlockNumber;
+
+	fn slash(_validator_id: &Self::ValidatorId, _blocks_offline: &Self::BlockNumber) -> Weight {
+		0
+	}
+}
