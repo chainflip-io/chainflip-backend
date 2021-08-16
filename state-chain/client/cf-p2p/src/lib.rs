@@ -1,3 +1,22 @@
+//! Chainflip P2P layer.
+//!
+//! Provides an interface to substrate's peer-to-peer networking layer/
+//!
+//! How it works at a high level:
+//!
+//! The [NetworkBridge] is a `Future` that is passed to substrate's top-level task executor. The executor drives the
+//! future, which reacts to:
+//! 1. [MessagingCommand]s from the local node (passed in via the rpc layer that sits on top of this).
+//! 2. [Event] notifications from the network.
+//!
+//! The [NetworkBridge] implementation relays relevant [Event]s (any event that is handled by our
+//!   [protocol](CHAINFLIP_P2P_PROTOCOL_NAME)) and all [MessagingCommand]s to methods in the [StateMachine].
+//!
+//! The [StateMachine] contains the core protocol methods. The local node is notified of events via the
+//! [NetworkObserver] trait. Outgoing messages can be sent to the network via the [PeerNetwork] trait. The default
+//! implementation of [NetworkObserver] is the rpc server so that clients can be notified. The default implementation of
+//! [PeerNetwork] is [NetworkService], which is substrate's `libp2p`-based network implementation.
+
 use anyhow::Result;
 use core::iter;
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
