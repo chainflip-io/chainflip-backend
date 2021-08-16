@@ -1,35 +1,29 @@
 //! This tests integration with the StakeManager contract
 //! In order for these tests to work, nats and ganache with the preloaded db
 //! in `./eth-db` must be loaded in
-use std::{str::FromStr, time::Duration};
+use std::str::FromStr;
 
 use chainflip_engine::{
     eth::{self, stake_manager::stake_manager::StakeManagerEvent},
+    logging::utils,
     mq::{nats_client::NatsMQClient, IMQClient, Subject},
     settings::Settings,
 };
 
+use futures::stream::StreamExt;
 use sp_runtime::AccountId32;
-use tokio_stream::StreamExt;
 
 use web3::types::U256;
 
-use slog::{o, Drain};
-
 #[tokio::test]
 pub async fn test_all_stake_manager_events() {
-    let drain = slog_json::Json::new(std::io::stdout())
-        .add_default_keys()
-        .build()
-        .fuse();
-    let drain = slog_async::Async::new(drain).build().fuse();
-    let root_logger = slog::Logger::root(drain, o!());
+    let root_logger = utils::create_cli_logger();
 
     let settings = Settings::from_file("config/Testing.toml").unwrap();
     let mq_c = NatsMQClient::new(&settings.message_queue).await.unwrap();
 
     // subscribe before pushing events to the queue
-    let mut sm_event_stream = mq_c
+    let sm_event_stream = mq_c
         .subscribe::<StakeManagerEvent>(Subject::StakeManager)
         .await
         .unwrap();
@@ -37,33 +31,25 @@ pub async fn test_all_stake_manager_events() {
     // The Stake Manager Witness will run forever unless we stop it after a short time
     // in which it should have already done it's job.
     let _ = tokio::time::timeout(
-        std::time::Duration::from_secs(1),
+        std::time::Duration::from_millis(100),
         eth::stake_manager::start_stake_manager_witness(&settings, mq_c, &root_logger),
     )
     .await;
     slog::info!(&root_logger, "Subscribed");
 
     // Grab the events from the stream and put them into a vec
-    let mut sm_events: Vec<StakeManagerEvent> = Vec::new();
-    loop {
-        // All events should already be built up in the event stream, so no need to wait.
-        match tokio::time::timeout(Duration::from_millis(1), sm_event_stream.next()).await {
-            Ok(Some(Ok(e))) => {
-                sm_events.push(e);
-            }
-            Ok(_) => {
-                panic!("Error in event stream")
-            }
-            Err(_) => {
-                // Timeout, all events in the stream have been pulled.
-                break;
-            }
-        }
-    }
+    let sm_events = sm_event_stream
+        .take_until(tokio::time::sleep(std::time::Duration::from_millis(1)))
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .expect("Error in event stream");
 
-    if sm_events.len() == 0 {
-        panic!("Event stream was empty. Have you ran the setup script to deploy/run the contracts?")
-    }
+    assert!(
+        !sm_events.is_empty(),
+        "Event stream was empty. Have you ran the setup script to deploy/run the contracts?"
+    );
 
     // The following event details correspond to the events in chainflip-eth-contracts/scripts/deploy_and.py
     sm_events

@@ -58,10 +58,11 @@ Then run the [setup script](scripts/setup.sh) that creates the events expected b
 bash chainflip-backend/engine/tests/scripts/setup.sh
 ```
 
-Now we can run the stake_manager_integration test with cargo.
+Now we can run the stake_manager_integration or key_manager_integration tests with cargo.
 
 ```sh
 cargo test --package chainflip-engine --test stake_manager_integration -- test_all_stake_manager_events --exact --nocapture
+cargo test --package chainflip-engine --test key_manager_integration -- test_all_key_manager_events --exact --nocapture
 ```
 
 ## How It Works

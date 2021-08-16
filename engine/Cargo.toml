@@ -17,7 +17,7 @@ section = "rust"
 
 [dependencies]
 anyhow = "1.0"
-async-nats = "0.9.12"
+async-nats = "0.10.1"
 async-std = {version = "1.9", features = ["attributes", "tokio1"]}
 async-stream = "0.3.0"
 async-trait = "0.1.49"
@@ -31,10 +31,12 @@ futures-util = "0.3.14"
 hex = "0.4.3"
 httparse = "1.4.1"
 itertools = "0.10"
+# Same version of jsonrpc as substrate
 jsonrpc-core = {version = "15.1"}
 jsonrpc-core-client = {version = "15.1", default-features = false, features = ["http", "ws"]}
 jsonrpc-http-server = "15.1"
 jsonrpc-ws-server = "15.1"
+# kvdb-rocksdb is tied to substrate deps
 kvdb-rocksdb = "0.11.1"
 lazy_static = "1.4"
 num = "0.4.0"
@@ -53,7 +55,7 @@ tokio = {version = "1.5.0", features = ["full"]}
 tokio-compat-02 = "0.2.0"
 tokio-stream = "0.1.5"
 url = "1.7.2"
-web3 = "0.16.0"
+web3 = "0.17.0"
 
 # substrate deps
 codec = {package = "parity-scale-codec", version = "2.1", default-features = false, features = ["derive", "full"]}

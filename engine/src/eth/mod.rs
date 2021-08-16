@@ -5,7 +5,7 @@ mod eth_event_streamer;
 
 pub mod eth_broadcaster;
 pub mod eth_tx_encoding;
-mod utils;
+pub mod utils;
 
 use anyhow::Result;
 use async_trait::async_trait;
