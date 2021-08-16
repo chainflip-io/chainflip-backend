@@ -104,6 +104,14 @@ pub mod pallet {
 	pub type ReputationPoints = i32;
 	/// The credits one earns being online, equivalent to a blocktime online
 	pub type OnlineCreditsFor<T> = <T as frame_system::Config>::BlockNumber;
+	/// Reputation of a validator
+	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+	pub struct Reputation<OnlineCredits> {
+		online_credits: OnlineCredits,
+		pub reputation_points: ReputationPoints,
+	}
+
+	type ReputationOf<T> = Reputation<<T as frame_system::Config>::BlockNumber>;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -172,13 +180,8 @@ pub mod pallet {
 	///
 	#[pallet::storage]
 	#[pallet::getter(fn reputation)]
-	pub type Reputation<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		T::ValidatorId,
-		(OnlineCreditsFor<T>, ReputationPoints),
-		ValueQuery,
-	>;
+	pub type Reputations<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::ValidatorId, ReputationOf<T>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -221,23 +224,35 @@ pub mod pallet {
 			// Update this validator from the hot list
 			AwaitingHeartbeats::<T>::mutate(&validator_id, |awaiting| *awaiting = Some(false));
 			// Check if this validator has reputation
-			if !Reputation::<T>::contains_key(&validator_id) {
+			if !Reputations::<T>::contains_key(&validator_id) {
 				// Credit this validator with the blocks for this interval and set 0 reputation points
-				Reputation::<T>::insert(validator_id, (Self::online_credit_reward(), 0));
+				Reputations::<T>::insert(
+					validator_id,
+					Reputation {
+						online_credits: Self::online_credit_reward(),
+						reputation_points: 0,
+					},
+				);
 			} else {
 				// Update reputation points for this validator
-				Reputation::<T>::mutate(validator_id, |(online_credits, points)| {
-					// Accrue some online credits of `HeartbeatInterval` size
-					*online_credits = *online_credits + Self::online_credit_reward();
-					let (rewarded_points, credits) = AccrualRatio::<T>::get();
-					// If we have hit a number of credits to earn reputation points
-					if *online_credits >= credits {
-						// Swap these credits for reputation
-						*online_credits = *online_credits - credits;
-						// Update reputation
-						*points = *points + rewarded_points;
-					}
-				});
+				Reputations::<T>::mutate(
+					validator_id,
+					|Reputation {
+					     online_credits,
+					     reputation_points,
+					 }| {
+						// Accrue some online credits of `HeartbeatInterval` size
+						*online_credits = *online_credits + Self::online_credit_reward();
+						let (rewarded_points, credits) = AccrualRatio::<T>::get();
+						// If we have hit a number of credits to earn reputation points
+						if *online_credits >= credits {
+							// Swap these credits for reputation
+							*online_credits = *online_credits - credits;
+							// Update reputation
+							*reputation_points = *reputation_points + rewarded_points;
+						}
+					},
+				);
 			}
 
 			Ok(().into())
@@ -338,7 +353,7 @@ pub mod pallet {
 		) -> Result<Weight, ReportError> {
 			// Confirm validator is present
 			ensure!(
-				Reputation::<T>::contains_key(validator_id),
+				Reputations::<T>::contains_key(validator_id),
 				ReportError::UnknownValidator
 			);
 
@@ -377,13 +392,21 @@ pub mod pallet {
 		/// Update reputation for validator.  Points are clamped to `ReputationPointFloorAndCeiling`
 		///
 		fn update_reputation(validator_id: &T::ValidatorId, points: ReputationPoints) -> Weight {
-			Reputation::<T>::mutate(validator_id, |(_, current_points)| {
-				*current_points = *current_points + points;
-				let (mut floor, mut ceiling) = T::ReputationPointFloorAndCeiling::get();
-				*current_points = *current_points.clamp(&mut floor, &mut ceiling);
+			Reputations::<T>::mutate(
+				validator_id,
+				|Reputation {
+				     reputation_points, ..
+				 }| {
+					*reputation_points = *reputation_points + points;
+					Pallet::<T>::clamp_reputation_points(reputation_points);
+					T::DbWeight::get().reads_writes(1, 1)
+				},
+			)
+		}
 
-				T::DbWeight::get().reads_writes(1, 1)
-			})
+		fn clamp_reputation_points(reputation_points: &mut i32) {
+			let (mut floor, mut ceiling) = T::ReputationPointFloorAndCeiling::get();
+			*reputation_points = *reputation_points.clamp(&mut floor, &mut ceiling);
 		}
 
 		/// Calculate the penalty for being offline for an amount of blocks based on`ReputationPointPenalty`
@@ -391,22 +414,21 @@ pub mod pallet {
 		fn calculate_offline_penalty(
 			current_block: T::BlockNumber,
 			last_block: T::BlockNumber,
-		) -> Result<ReputationPoints, &'static str> {
-			ensure!(current_block > last_block, "invalid block");
+		) -> ReputationPoints {
 			// What points for what blocks we penalise by
 			let (penalty_points, penalty_blocks) = T::ReputationPointPenalty::get();
 			// The blocks we have missed
 			let dead_blocks: u32 = current_block
 				.saturating_sub(last_block)
 				.try_into()
-				.map_err(|_| "dead blocks")?;
+				.unwrap_or(0);
 			// The points calculated
-			let penalty: ReputationPoints = (penalty_points.saturating_mul(dead_blocks)
-				/ penalty_blocks)
-				.try_into()
-				.map_err(|_| "penalty")?;
-			// The points to be penalised
-			Ok(penalty.neg())
+			(penalty_points
+				.saturating_mul(dead_blocks)
+				.checked_div(penalty_blocks))
+			.unwrap_or(0)
+			.try_into()
+			.expect("calculating offline penalty shouldn't fail")
 		}
 
 		/// Check liveness of our expected list of validators at the current block.
@@ -422,17 +444,21 @@ pub mod pallet {
 				// Still waiting on these, penalise and those that are in reputation debt will be
 				// slashed
 				if awaiting
-					&& Reputation::<T>::mutate(
+					&& Reputations::<T>::mutate(
 						&validator_id,
-						|(online_credits, reputation_points)| {
+						|Reputation {
+						     online_credits,
+						     reputation_points,
+						 }| {
 							if T::ReputationPointFloorAndCeiling::get().0 < *reputation_points {
 								// Update reputation points
 								*reputation_points = *reputation_points
 									+ Self::calculate_offline_penalty(
 										current_block,
 										current_block - T::HeartbeatBlockInterval::get(),
-									)
-									.expect("calculating offline penalty shouldn't fail");
+									).neg();
+
+								Pallet::<T>::clamp_reputation_points(reputation_points);
 								// Reset the credits earned as being online consecutively
 								*online_credits = Zero::zero();
 							}
@@ -440,7 +466,8 @@ pub mod pallet {
 
 							*reputation_points
 						},
-					) < Zero::zero() || Reputation::<T>::get(&validator_id).1 < Zero::zero()
+					) < Zero::zero() || Reputations::<T>::get(&validator_id).reputation_points
+					< Zero::zero()
 				{
 					// At this point we slash the validator by the amount of blocks offline
 					weight += T::Slasher::slash(&validator_id, &T::HeartbeatBlockInterval::get());
@@ -452,15 +479,5 @@ pub mod pallet {
 
 			weight
 		}
-	}
-}
-
-/// An implementation of `Slashing` which kindly doesn't slash
-impl<T: Config> Slashing for Pallet<T> {
-	type ValidatorId = T::ValidatorId;
-	type BlockNumber = T::BlockNumber;
-
-	fn slash(_validator_id: &Self::ValidatorId, _blocks_offline: &Self::BlockNumber) -> Weight {
-		0
 	}
 }

@@ -14,7 +14,7 @@ mod tests {
 	}
 
 	fn reputation_points(who: <Test as frame_system::Config>::AccountId) -> ReputationPoints {
-		ReputationPallet::reputation(who).1
+		ReputationPallet::reputation(who).reputation_points
 	}
 
 	// Cycle heartbeat interval sending the heartbeat extrinsic in each
@@ -24,9 +24,8 @@ mod tests {
 	) {
 		let start_block_number = System::block_number();
 		// Inclusive
-		for block in (HEARTBEAT_BLOCK_INTERVAL..(intervals + 1) * HEARTBEAT_BLOCK_INTERVAL)
-			.step_by(HEARTBEAT_BLOCK_INTERVAL as usize)
-		{
+		for interval in 1..=intervals {
+			let block = interval * HEARTBEAT_BLOCK_INTERVAL;
 			assert_ok!(ReputationPallet::heartbeat(Origin::signed(validator)));
 			run_to_block(start_block_number + block);
 		}
