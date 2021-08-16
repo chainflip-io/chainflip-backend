@@ -29,7 +29,7 @@ pub mod bs58_fixed_size {
 			.into(&mut buffer)
 			.map_err(|e| Error::custom(e))?;
 		if decoded != buffer.len() {
-                      return Err(Error::custom(format!(
+			return Err(Error::custom(format!(
 				"Decoded is {} bytes, but buffer len is {} bytes",
 				decoded,
 				buffer.len(),
@@ -41,7 +41,7 @@ pub mod bs58_fixed_size {
 
 #[test]
 fn test_validator_id_bs58() {
-	use super::{ValidatorIdBs58};
+	use super::ValidatorIdBs58;
 	use serde_json;
 
 	let validator_id_raw = [0xCF; 32];
@@ -56,7 +56,7 @@ fn test_validator_id_bs58() {
 
 #[test]
 fn test_message_bs58() {
-	use super::{MessageBs58};
+	use super::MessageBs58;
 	use serde_json;
 
 	let original_message = b"super interesting".to_vec();
