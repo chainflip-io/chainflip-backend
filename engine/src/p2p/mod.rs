@@ -1,4 +1,3 @@
-// Note: we temporary allow mock in non-test code
 pub mod conductor;
 #[cfg(test)]
 pub mod mock;
