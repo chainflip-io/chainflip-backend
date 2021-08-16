@@ -108,7 +108,7 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
                 Ok(event) => match event {
                     MultisigEvent::KeygenResult(key_outcome) => match key_outcome.result {
                         Ok(key) => {
-                            self.handle_keygen_success(key_outcome.computation_id, key)
+                            self.handle_keygen_success(key_outcome.ceremony_id, key)
                                 .await;
                         }
                         Err(_) => {
@@ -122,7 +122,7 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
                         match signing_outcome.result {
                             Ok(sig) => {
                                 self.handle_set_agg_key_message_signed(
-                                    signing_outcome.computation_id,
+                                    signing_outcome.ceremony_id,
                                     sig,
                                 )
                                 .await;

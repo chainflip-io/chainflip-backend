@@ -179,41 +179,41 @@ pub enum Error {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ComputationOutcome<Id, Output> {
-    pub computation_id: Id,
+pub struct CeremonyOutcome<Id, Output> {
+    pub ceremony_id: Id,
     pub result: Result<Output, (Error, Vec<ValidatorId>)>,
 }
-impl<Id, Output> ComputationOutcome<Id, Output> {
-    pub fn success(computation_id: Id, output: Output) -> Self {
+impl<Id, Output> CeremonyOutcome<Id, Output> {
+    pub fn success(ceremony_id: Id, output: Output) -> Self {
         Self {
-            computation_id,
+            ceremony_id,
             result: Ok(output),
         }
     }
-    pub fn unauthorised(computation_id: Id, bad_validators: Vec<ValidatorId>) -> Self {
+    pub fn unauthorised(ceremony_id: Id, bad_validators: Vec<ValidatorId>) -> Self {
         Self {
-            computation_id,
+            ceremony_id,
             result: Err((Error::Unauthorised, bad_validators)),
         }
     }
-    pub fn timeout(computation_id: Id, bad_validators: Vec<ValidatorId>) -> Self {
+    pub fn timeout(ceremony_id: Id, bad_validators: Vec<ValidatorId>) -> Self {
         Self {
-            computation_id,
+            ceremony_id,
             result: Err((Error::Timeout, bad_validators)),
         }
     }
-    pub fn invalid(computation_id: Id, bad_validators: Vec<ValidatorId>) -> Self {
+    pub fn invalid(ceremony_id: Id, bad_validators: Vec<ValidatorId>) -> Self {
         Self {
-            computation_id,
+            ceremony_id,
             result: Err((Error::Invalid, bad_validators)),
         }
     }
 }
 
 /// The final result of a keygen ceremony
-pub type KeygenOutcome = ComputationOutcome<KeyId, secp256k1::PublicKey>;
+pub type KeygenOutcome = CeremonyOutcome<KeyId, secp256k1::PublicKey>;
 /// The final result of a Signing ceremony
-pub type SigningOutcome = ComputationOutcome<MessageInfo, SchnorrSignature>;
+pub type SigningOutcome = CeremonyOutcome<MessageInfo, SchnorrSignature>;
 
 #[derive(Debug, PartialEq)]
 pub enum InnerEvent {
