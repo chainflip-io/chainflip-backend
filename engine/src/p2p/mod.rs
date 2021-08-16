@@ -28,7 +28,7 @@ pub trait P2PNetworkClient {
     async fn take_stream(&self) -> Result<BoxStream<Self::NetworkEvent>>;
 }
 
-/// Handles network events.
+/// Handles P2P network events.
 #[async_trait]
 pub trait NetworkEventHandler<C: P2PNetworkClient + Send> {
     async fn handle_event(&self, event: C::NetworkEvent);
