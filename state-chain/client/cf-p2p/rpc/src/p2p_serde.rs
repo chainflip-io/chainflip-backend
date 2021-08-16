@@ -29,7 +29,11 @@ pub mod bs58_fixed_size {
 			.into(&mut buffer)
 			.map_err(|e| Error::custom(e))?;
 		if decoded != buffer.len() {
-			return Err(Error::custom("not enough bytes"));
+                      return Err(Error::custom(format!(
+				"Decoded is {} bytes, but buffer len is {} bytes",
+				decoded,
+				buffer.len(),
+			)));
 		}
 		Ok(buffer)
 	}
