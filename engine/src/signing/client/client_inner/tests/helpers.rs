@@ -246,7 +246,7 @@ impl KeygenContext {
         let mut pubkeys = vec![];
         for mut r in rxs.iter_mut() {
             let pubkey = match recv_next_inner_event(&mut r).await {
-                InnerEvent::KeygenResult(KeygenOutcome::Success(key_data)) => key_data.key,
+                InnerEvent::KeygenResult(KeygenOutcome{result : Ok(key), ..}) => key,
                 _ => panic!("Unexpected inner event"),
             };
             pubkeys.push(pubkey);
@@ -435,8 +435,8 @@ impl KeygenContext {
         let event = recv_next_inner_event(&mut rxs[0]).await;
 
         let signature = match event {
-            InnerEvent::SigningResult(SigningOutcome::MessageSigned(signing_success)) => {
-                signing_success.sig
+            InnerEvent::SigningResult(SigningOutcome{result : Ok(sig), ..}) => {
+                sig
             }
             _ => panic!("Unexpected event"),
         };

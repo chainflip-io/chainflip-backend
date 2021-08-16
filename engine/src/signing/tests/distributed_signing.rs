@@ -130,7 +130,7 @@ async fn coordinate_signing(
                 .await
             {
                 Ok(Some(Ok(MultisigEvent::MessageSigningResult(
-                    SigningOutcome::MessageSigned(_),
+                    SigningOutcome {result : Ok(_), ..},
                 )))) => {
                     info!("Message is signed from {}", i);
                     signed_count = signed_count + 1;
