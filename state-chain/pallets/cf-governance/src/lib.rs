@@ -1,11 +1,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Decode;
+use frame_support::dispatch::GetDispatchInfo;
 use frame_support::dispatch::UnfilteredDispatchable;
 use frame_support::traits::EnsureOrigin;
 use frame_support::traits::UnixTime;
 pub use pallet::*;
 use sp_runtime::DispatchError;
+use sp_std::vec;
 use sp_std::vec::Vec;
 
 #[cfg(test)]
@@ -74,9 +76,9 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
-			let proposals = Self::process_proposals();
-			Self::cleanup(proposals);
-			0
+			let result = Self::process_proposals();
+			Self::cleanup(result.0);
+			result.1
 		}
 	}
 
@@ -209,14 +211,16 @@ impl<T: Config> Pallet<T> {
 			&& !proposal.executed
 			&& proposal.expiry >= T::TimeSource::now().as_secs()
 	}
-	fn process_proposals() -> Vec<usize> {
+	fn process_proposals() -> (Vec<usize>, u64) {
 		let ongoing_proposals = <OnGoingProposals<T>>::get();
 		let mut executed_or_expired: Vec<usize> = vec![];
+		let mut weight: u64 = 0;
 		for (index, proposal_id) in ongoing_proposals.iter().enumerate() {
 			let proposal = <Proposals<T>>::get(proposal_id);
 			// Execute proposal if valid
 			if Self::is_proposal_executable(&proposal) {
 				if let Some(call) = Self::decode_call(proposal.call) {
+					weight = weight.checked_add(call.get_dispatch_info().weight).unwrap();
 					let result =
 						call.dispatch_bypass_filter((RawOrigin::GovernanceThreshold).into());
 					<Proposals<T>>::mutate(proposal_id, |proposal| {
@@ -236,7 +240,7 @@ impl<T: Config> Pallet<T> {
 				Self::deposit_event(Event::Expired(proposal_id.clone()));
 			}
 		}
-		executed_or_expired
+		(executed_or_expired, weight)
 	}
 	fn cleanup(proposals: Vec<usize>) {
 		<OnGoingProposals<T>>::mutate(|ongoing_proposals| {

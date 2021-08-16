@@ -47,6 +47,10 @@ fn propose_a_governance_extrinsic_and_execute_it() {
 			Origin::signed(ALICE),
 			call
 		));
+		assert_eq!(
+			last_event(),
+			crate::mock::Event::pallet_cf_governance(crate::Event::Proposed(0)),
+		);
 		assert_eq!(OnGoingProposals::<Test>::get().len(), 1);
 		next_block();
 		assert_ok!(Governance::approve(Origin::signed(BOB), 0));
