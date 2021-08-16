@@ -1,5 +1,5 @@
 use crate::{mock::*, Error, Members, OnGoingProposals};
-use cf_traits::mocks::{epoch_info, time_source};
+use cf_traits::mocks::time_source;
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
 use std::time::Duration;
 
@@ -77,7 +77,7 @@ fn propose_a_governance_extrinsic_and_execute_it() {
 fn expired_on_approve() {
 	new_test_ext().execute_with(|| {
 		const START_TIME: Duration = Duration::from_secs(10);
-		const END_TIME: Duration = Duration::from_secs(200);
+		const END_TIME: Duration = Duration::from_secs(7300);
 		time_source::Mock::reset_to(START_TIME);
 		let call = Box::new(Call::Governance(
 			pallet_cf_governance::Call::<Test>::new_membership_set(vec![EVE, PETER, MAX]),
@@ -108,7 +108,7 @@ fn proposal_not_found() {
 fn proposal_expires() {
 	new_test_ext().execute_with(|| {
 		const START_TIME: Duration = Duration::from_secs(10);
-		const END_TIME: Duration = Duration::from_secs(200);
+		const END_TIME: Duration = Duration::from_secs(7300);
 		time_source::Mock::reset_to(START_TIME);
 		let call = Box::new(Call::Governance(
 			pallet_cf_governance::Call::<Test>::new_membership_set(vec![EVE, PETER, MAX]),
