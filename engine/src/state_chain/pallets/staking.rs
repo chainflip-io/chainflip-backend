@@ -1,4 +1,4 @@
-// Implements support for the staking module
+//! Implements support for the staking module
 
 use std::marker::PhantomData;
 use std::time::Duration;

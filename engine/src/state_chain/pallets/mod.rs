@@ -14,3 +14,6 @@ pub mod witness_api;
 
 /// Emissions pallet support for substrate-subxt
 pub mod emissions;
+
+/// Reputation pallet support for substrate-subxt
+pub mod reputation;
