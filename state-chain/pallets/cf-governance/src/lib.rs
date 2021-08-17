@@ -1,6 +1,21 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-//! # A pallet that implements the Chainflip governance process. For more information's check out the readme.
+//! # Chainflip governance
+//!
+//! ## Purpose
+//!
+//! This pallet implements the current Chainflip governance functionality. The purpose of this pallet is primarily to provide the following capabilities:
+//!
+//! - Handle the set of governance members
+//! - Handle submitting proposals
+//! - Handle approving proposals
+//! - Provide tools to implement governance secured extrinsic in other pallets
+//!
+//! ## Governance model
+//!
+//! The governance model is a simple approved system. Every member can propose an extrinsic, which is secured by the EnsureGovernance implementation of the EnsureOrigin trait. Apart from that, every member is allowed to approve a proposed governance extrinsic. If a proposal can raise 2/3 + 1 approvals, it's getting executed by the system automatically. Moreover, every proposal has an expiry date. If a proposal is not able to raise enough approvals in time, it gets dropped and won't be executed.
+//!
+//! note: For implementation details pls see the readme.
 
 use codec::Decode;
 use frame_support::dispatch::GetDispatchInfo;
@@ -16,6 +31,7 @@ use sp_std::vec::Vec;
 mod mock;
 #[cfg(test)]
 mod tests;
+/// Implements the functionality of the Chainflip governance.
 #[frame_support::pallet]
 pub mod pallet {
 
@@ -271,7 +287,7 @@ impl<T: Config> Pallet<T> {
 			if Self::is_proposal_executable(&proposal) {
 				// Decode the saved extrinsic
 				if let Some(call) = Self::decode_call(proposal.call) {
-					// Sum up the extrinsic weight to the block weight
+					// Sum up the extrinsic weight to the next block weight
 					weight = weight.checked_add(call.get_dispatch_info().weight).unwrap();
 					let result =
 						call.dispatch_bypass_filter((RawOrigin::GovernanceThreshold).into());

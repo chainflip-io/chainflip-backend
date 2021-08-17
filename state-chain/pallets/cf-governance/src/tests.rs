@@ -1,9 +1,16 @@
-use crate::{mock::*, Error, Members, OnGoingProposals};
+use crate::{mock::*, Error, Members, NumberOfProposals, OnGoingProposals};
 use cf_traits::mocks::time_source;
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
 use std::time::Duration;
 
 use crate as pallet_cf_governance;
+
+fn mock_extrinsic() -> Box<Call> {
+	let call = Box::new(Call::Governance(
+		pallet_cf_governance::Call::<Test>::new_membership_set(vec![EVE, PETER, MAX]),
+	));
+	call
+}
 
 fn next_block() {
 	System::set_block_number(System::block_number() + 1);
@@ -40,12 +47,9 @@ fn governance_restriction() {
 #[test]
 fn propose_a_governance_extrinsic_and_expect_execution() {
 	new_test_ext().execute_with(|| {
-		let call = Box::new(Call::Governance(
-			pallet_cf_governance::Call::<Test>::new_membership_set(vec![EVE, PETER, MAX]),
-		));
 		assert_ok!(Governance::propose_governance_extrinsic(
 			Origin::signed(ALICE),
-			call
+			mock_extrinsic()
 		));
 		assert_eq!(
 			last_event(),
@@ -79,12 +83,9 @@ fn expired_on_approve() {
 		const START_TIME: Duration = Duration::from_secs(10);
 		const END_TIME: Duration = Duration::from_secs(7300);
 		time_source::Mock::reset_to(START_TIME);
-		let call = Box::new(Call::Governance(
-			pallet_cf_governance::Call::<Test>::new_membership_set(vec![EVE, PETER, MAX]),
-		));
 		assert_ok!(Governance::propose_governance_extrinsic(
 			Origin::signed(ALICE),
-			call
+			mock_extrinsic()
 		));
 		time_source::Mock::reset_to(END_TIME);
 		assert_noop!(
@@ -110,13 +111,10 @@ fn propose_a_governance_extrinsic_and_expect_it_to_expire() {
 		const START_TIME: Duration = Duration::from_secs(10);
 		const END_TIME: Duration = Duration::from_secs(7300);
 		time_source::Mock::reset_to(START_TIME);
-		let call = Box::new(Call::Governance(
-			pallet_cf_governance::Call::<Test>::new_membership_set(vec![EVE, PETER, MAX]),
-		));
 		next_block();
 		assert_ok!(Governance::propose_governance_extrinsic(
 			Origin::signed(ALICE),
-			call
+			mock_extrinsic()
 		));
 		next_block();
 		time_source::Mock::reset_to(END_TIME);
@@ -130,5 +128,20 @@ fn propose_a_governance_extrinsic_and_expect_it_to_expire() {
 			<Error<Test>>::AlreadyExpired
 		);
 		assert_eq!(OnGoingProposals::<Test>::get().len(), 0);
+	});
+}
+
+#[test]
+fn several_open_proposals() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Governance::propose_governance_extrinsic(
+			Origin::signed(ALICE),
+			mock_extrinsic()
+		));
+		assert_ok!(Governance::propose_governance_extrinsic(
+			Origin::signed(BOB),
+			mock_extrinsic()
+		));
+		assert_eq!(NumberOfProposals::<Test>::get().unwrap(), 2);
 	});
 }
