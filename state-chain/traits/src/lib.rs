@@ -127,7 +127,7 @@ pub enum RotationError<ValidatorId> {
 	FailedToConstructPayload,
 	/// Vault rotation completion failed
 	VaultRotationCompletionFailed,
-	// /The vault rotation is not confirmed
+	/// The vault rotation is not confirmed
 	NotConfirmed,
 	/// Failed to make keygen request
 	FailedToMakeKeygenRequest,
@@ -153,6 +153,7 @@ pub enum AuctionError {
 	MinValidatorSize,
 	InvalidRange,
 	Abort,
+	NotConfirmed,
 }
 
 /// Providing bidders for our auction

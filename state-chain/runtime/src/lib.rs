@@ -15,6 +15,8 @@ pub use frame_support::{
 	StorageValue,
 };
 use frame_system::offchain::SendTransactionTypes;
+use pallet_cf_vaults::nonce::NonceUnixTime;
+use pallet_cf_vaults::rotation::ChainFlip;
 use pallet_grandpa::fg_primitives;
 use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
 use pallet_session::historical as session_historical;
@@ -37,9 +39,6 @@ use sp_std::prelude::*;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
-use pallet_cf_vaults::nonce::NonceUnixTime;
-use pallet_cf_vaults::rotation::ChainFlip;
-use pallet_cf_vaults::chains::ethereum as pallet_cf_ethereum;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -164,23 +163,14 @@ impl pallet_cf_validator::Config for Runtime {
 	type Auction = Auction;
 }
 
-impl pallet_cf_ethereum::Config for Runtime {
-	type Event = Event;
-	type Vaults = Vaults;
-	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
-	type RequestIndex = u64;
-	type PublicKey = Vec<u8>;
-	type Nonce = u64;
-	type NonceProvider = NonceUnixTime<Self::Nonce, Timestamp>;
-}
-
 impl pallet_cf_vaults::Config for Runtime {
 	type Event = Event;
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
-	type EthereumVault = Ethereum;
-	type RequestIndex = u64;
 	type PublicKey = Vec<u8>;
+	type Transaction = Vec<u8>;
 	type Penalty = Auction;
+	type Nonce = u64;
+	type NonceProvider = NonceUnixTime<Self::Nonce, Timestamp>;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
@@ -448,7 +438,6 @@ construct_runtime!(
 		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
 		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>},
-		Ethereum: pallet_cf_ethereum::{Module, Call, Storage, Event<T>},
 	}
 );
 

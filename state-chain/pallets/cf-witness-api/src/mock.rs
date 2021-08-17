@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use crate as pallet_cf_witness_api;
-use pallet_cf_vaults::chains::ethereum as pallet_cf_ethereum;
 
 use cf_traits::{
 	impl_mock_ensure_witnessed_for_origin, impl_mock_stake_transfer,
@@ -29,7 +28,6 @@ frame_support::construct_runtime!(
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		Staking: pallet_cf_staking::{Module, Call, Event<T>, Config<T>},
 		Vaults: pallet_cf_vaults::{Module, Call, Event<T>, Config},
-		EthereumChain: pallet_cf_ethereum::{Module, Call, Event<T>, Config},
 		WitnessApi: pallet_cf_witness_api::{Module, Call},
 	}
 );
@@ -96,24 +94,15 @@ impl AuctionPenalty<ValidatorId> for Test {
 	fn penalise(_bad_validators: Vec<ValidatorId>) {}
 }
 
-impl pallet_cf_vaults::chains::ethereum::Config for Test {
+impl pallet_cf_vaults::Config for Test {
 	type Event = Event;
-	type Vaults = Vaults;
 	type EnsureWitnessed = MockEnsureWitnessed;
+	type PublicKey = Vec<u8>;
+	type Transaction = Vec<u8>;
+	type Penalty = Self;
 	type Nonce = u64;
 	type NonceProvider =
 		pallet_cf_vaults::nonce::NonceUnixTime<u64, cf_traits::mocks::time_source::Mock>;
-	type RequestIndex = u64;
-	type PublicKey = Vec<u8>;
-}
-
-impl pallet_cf_vaults::Config for Test {
-	type Event = Event;
-	type EthereumVault = EthereumChain;
-	type EnsureWitnessed = MockEnsureWitnessed;
-	type RequestIndex = u64;
-	type PublicKey = Vec<u8>;
-	type Penalty = Self;
 }
 
 impl pallet_cf_witness_api::Config for Test {

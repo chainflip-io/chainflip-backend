@@ -1,9 +1,9 @@
+use cf_traits::RotationError;
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::*;
 use frame_support::RuntimeDebug;
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
-use cf_traits::RotationError;
 
 /// Request index type
 pub type RequestIndex = u64;
@@ -46,9 +46,9 @@ pub trait ChainVault {
 pub trait ChainHandler {
 	type ValidatorId;
 	type Error;
-	/// Initial vault rotation phase complete with a result describing the outcome of this phase
+	/// Request initial vault rotation phase complete with a result describing the outcome of this phase
 	/// Feedback is provided back on this step
-	fn complete_vault_rotation(
+	fn request_vault_rotation(
 		index: RequestIndex,
 		result: Result<VaultRotationRequest, RotationError<Self::ValidatorId>>,
 	) -> Result<(), Self::Error>;

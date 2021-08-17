@@ -24,24 +24,18 @@ pub mod pallet {
 		AggKeySignature, Call as StakingCall, Config as StakingConfig, EthTransactionHash,
 		EthereumAddress, FlipBalance,
 	};
-	use pallet_cf_vaults::chains::ethereum::{
-		Call as EthereumCall, Config as EthereumConfig, EthSigningTxResponse,
-	};
-	use pallet_cf_vaults::rotation::{KeygenResponse, VaultRotationResponse};
-	use pallet_cf_vaults::{Call as VaultsCall, Config as VaultsConfig};
+	use pallet_cf_vaults::rotation::{KeygenResponse, RequestIndex, VaultRotationResponse};
+	use pallet_cf_vaults::{Call as VaultsCall, Config as VaultsConfig, EthSigningTxResponse};
 	use sp_core::U256;
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
-	type RequestIndexFor<T> = <T as pallet_cf_vaults::Config>::RequestIndex;
-	type BytesFor<T> = <T as pallet_cf_vaults::Config>::Bytes;
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + StakingConfig + VaultsConfig + EthereumConfig {
+	pub trait Config: frame_system::Config + StakingConfig + VaultsConfig {
 		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
 		type Call: IsType<<Self as frame_system::Config>::Call>
 			+ From<StakingCall<Self>>
-			+ From<VaultsCall<Self>>
-			+ From<EthereumCall<Self>>;
+			+ From<VaultsCall<Self>>;
 
 		/// An implementation of the witnesser, allows us to define our witness_* helper extrinsics.
 		type Witnesser: Witnesser<Call = <Self as Config>::Call, AccountId = AccountId<Self>>;
@@ -110,8 +104,8 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn witness_keygen_response(
 			origin: OriginFor<T>,
-			request_id: RequestIndexFor<T>,
-			response: KeygenResponse<T::ValidatorId, BytesFor<T>>,
+			request_id: RequestIndex,
+			response: KeygenResponse<T::ValidatorId, T::PublicKey>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = VaultsCall::keygen_response(request_id, response);
@@ -124,8 +118,8 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn witness_vault_rotation_response(
 			origin: OriginFor<T>,
-			request_id: RequestIndexFor<T>,
-			response: VaultRotationResponse<BytesFor<T>>,
+			request_id: RequestIndex,
+			response: VaultRotationResponse<T::PublicKey, T::Transaction>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = VaultsCall::vault_rotation_response(request_id, response);
@@ -135,11 +129,11 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn witness_eth_signing_tx_response(
 			origin: OriginFor<T>,
-			request_id: <T as pallet_cf_vaults::chains::ethereum::Config>::RequestIndex,
+			request_id: RequestIndex,
 			response: EthSigningTxResponse<T::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = EthereumCall::eth_signing_tx_response(request_id, response);
+			let call = VaultsCall::eth_signing_tx_response(request_id, response);
 			T::Witnesser::witness(who, call.into())
 		}
 	}

@@ -366,7 +366,7 @@ impl<T: Config> ChainHandler for Pallet<T> {
 	/// Try to complete the final vault rotation with feedback from the chain implementation over
 	/// the `ChainHandler` trait.  This is forwarded as a request and hence an event is emitted.
 	/// Failure is handled and potential bad validators are penalised and the rotation is now aborted.
-	fn complete_vault_rotation(
+	fn request_vault_rotation(
 		index: RequestIndex,
 		result: Result<VaultRotationRequest, RotationError<Self::ValidatorId>>,
 	) -> Result<(), Self::Error> {
@@ -470,7 +470,7 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 			}
 			Err(_) => {
 				// Failure in completing the vault rotation and we report back to `Vaults`
-				Pallet::<T>::complete_vault_rotation(
+				Pallet::<T>::request_vault_rotation(
 					index,
 					Err(RotationError::FailedToConstructPayload),
 				)
@@ -508,9 +508,9 @@ impl<T: Config>
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		match response {
 			EthSigningTxResponse::Success(signature) => {
-				Pallet::<T>::complete_vault_rotation(index, Ok(Ethereum(signature).into()))
+				Pallet::<T>::request_vault_rotation(index, Ok(Ethereum(signature).into()))
 			}
-			EthSigningTxResponse::Error(bad_validators) => Pallet::<T>::complete_vault_rotation(
+			EthSigningTxResponse::Error(bad_validators) => Pallet::<T>::request_vault_rotation(
 				index,
 				Err(RotationError::BadValidators(bad_validators)),
 			),

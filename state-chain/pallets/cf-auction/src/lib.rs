@@ -42,7 +42,7 @@ extern crate assert_matches;
 
 use cf_traits::{
 	Auction, AuctionError, AuctionPenalty, AuctionPhase, AuctionRange, BidderProvider,
-	RotationError, VaultRotation,
+	VaultRotation,
 };
 use frame_support::pallet_prelude::*;
 use frame_support::sp_runtime::offchain::storage_lock::BlockNumberProvider;
@@ -188,22 +188,6 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> VaultRotation for Pallet<T> {
-	type ValidatorId = T::ValidatorId;
-	type Amount = T::Amount;
-
-	fn start_vault_rotation(
-		_winners: Vec<T::ValidatorId>,
-		_min_bid: T::Amount,
-	) -> Result<(), RotationError<Self::ValidatorId>> {
-		Ok(())
-	}
-
-	fn finalize_rotation() -> Result<(), RotationError<Self::ValidatorId>> {
-		Ok(())
-	}
-}
-
 impl<T: Config> Auction for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
@@ -329,14 +313,7 @@ impl<T: Config> Auction for Pallet<T> {
 						Self::deposit_event(Event::AwaitingBidders);
 						Ok(phase)
 					}
-					Err(err) => {
-						// If this is an abort reset the phase
-						if err == RotationError::<T::ValidatorId>::Abort {
-							Self::abort();
-						}
-
-						Err(err)
-					}
+					Err(_) => Err(AuctionError::NotConfirmed),
 				}
 			}
 		};

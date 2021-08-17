@@ -106,7 +106,7 @@ mod test {
 				VaultsPallet::current_request(),
 				KeygenResponse::Success(vec![])
 			));
-			assert_ok!(VaultsPallet::complete_vault_rotation(
+			assert_ok!(VaultsPallet::request_vault_rotation(
 				VaultsPallet::current_request(),
 				Ok(VaultRotationRequest {
 					chain: ChainParams::Other(vec![])
@@ -125,7 +125,7 @@ mod test {
 			);
 
 			assert_eq!(
-				VaultsPallet::complete_vault_rotation(
+				VaultsPallet::request_vault_rotation(
 					VaultsPallet::current_request(),
 					Err(RotationError::BadValidators(vec![ALICE, BOB]))
 				)
@@ -153,7 +153,7 @@ mod test {
 				VaultsPallet::current_request(),
 				KeygenResponse::Success(vec![])
 			));
-			assert_ok!(VaultsPallet::complete_vault_rotation(
+			assert_ok!(VaultsPallet::request_vault_rotation(
 				VaultsPallet::current_request(),
 				Ok(VaultRotationRequest {
 					chain: ChainParams::Other(vec![])
