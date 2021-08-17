@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use sp_runtime::traits::One;
 use substrate_subxt::{module, sp_runtime::traits::Member, system::System, Event};
 
-use super::{runtime::StateChainRuntime, sc_event::SCEvent};
+use super::super::{runtime::StateChainRuntime, sc_event::SCEvent};
 
 #[module]
 pub trait Auction: System {

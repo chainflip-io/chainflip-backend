@@ -2,11 +2,10 @@
 
 use std::marker::PhantomData;
 
+use crate::state_chain::{runtime::StateChainRuntime, sc_event::SCEvent};
 use codec::{Decode, Encode};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use substrate_subxt::{module, sp_runtime::traits::Member, Call, Event};
-
-use super::{runtime::StateChainRuntime, sc_event::SCEvent};
 
 #[module]
 pub trait Validator: substrate_subxt::system::System {

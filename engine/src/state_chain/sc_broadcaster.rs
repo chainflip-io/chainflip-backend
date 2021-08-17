@@ -9,7 +9,7 @@ use crate::{
     mq::{IMQClient, Subject},
 };
 
-use crate::state_chain::witness_api::*;
+use crate::state_chain::pallets::witness_api::*;
 
 use anyhow::Result;
 

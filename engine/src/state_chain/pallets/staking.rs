@@ -11,7 +11,7 @@ use substrate_subxt::{module, sp_core::crypto::AccountId32, system::System, Even
 
 use serde::{Deserialize, Serialize};
 
-use super::{runtime::StateChainRuntime, sc_event::SCEvent};
+use super::super::{runtime::StateChainRuntime, sc_event::SCEvent};
 
 type Nonce = u64;
 type FlipBalance = u128;
