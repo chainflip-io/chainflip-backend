@@ -41,8 +41,8 @@ mod tests;
 extern crate assert_matches;
 
 use cf_traits::{
-	Auction, AuctionError, VaultRotation, AuctionPenalty, AuctionPhase, AuctionRange,
-	BidderProvider,
+	Auction, AuctionError, AuctionPenalty, AuctionPhase, AuctionRange, BidderProvider,
+	RotationError, VaultRotation,
 };
 use frame_support::pallet_prelude::*;
 use frame_support::sp_runtime::offchain::storage_lock::BlockNumberProvider;
@@ -83,7 +83,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MinAuctionSize: Get<u32>;
 		/// The lifecycle of our auction
-		type Handler: VaultRotation<Self::ValidatorId, Self::Amount>;
+		type Handler: VaultRotation<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -188,15 +188,18 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> VaultRotation<T::ValidatorId, T::Amount> for Pallet<T> {
+impl<T: Config> VaultRotation for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
+	type Amount = T::Amount;
+
 	fn start_vault_rotation(
 		_winners: Vec<T::ValidatorId>,
 		_min_bid: T::Amount,
-	) -> Result<(), AuctionError> {
+	) -> Result<(), RotationError<Self::ValidatorId>> {
 		Ok(())
 	}
 
-	fn try_to_confirm_auction() -> Result<(), AuctionError> {
+	fn finalize_rotation() -> Result<(), RotationError<Self::ValidatorId>> {
 		Ok(())
 	}
 }
@@ -296,7 +299,8 @@ impl<T: Config> Auction for Pallet<T> {
 								winners.clone(),
 							));
 
-							T::Handler::start_vault_rotation(winners, *min_bid)?;
+							T::Handler::start_vault_rotation(winners, *min_bid)
+								.map_err(|_| AuctionError::Abort)?;
 							return Ok(phase);
 						}
 					}
@@ -312,7 +316,7 @@ impl<T: Config> Auction for Pallet<T> {
 				let result = if frame_system::Pallet::<T>::current_block_number() == Zero::zero() {
 					Ok(())
 				} else {
-					T::Handler::try_to_confirm_auction()
+					T::Handler::finalize_rotation()
 				};
 
 				match result {
@@ -327,7 +331,7 @@ impl<T: Config> Auction for Pallet<T> {
 					}
 					Err(err) => {
 						// If this is an abort reset the phase
-						if err == AuctionError::Abort {
+						if err == RotationError::<T::ValidatorId>::Abort {
 							Self::abort();
 						}
 

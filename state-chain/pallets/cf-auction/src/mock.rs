@@ -84,7 +84,7 @@ impl Config for Test {
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
-	type Handler = MockAuctionHandler<ValidatorId, Amount>;
+	type Handler = MockAuctionHandler;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {

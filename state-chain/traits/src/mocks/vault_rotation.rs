@@ -1,10 +1,8 @@
 use crate::{RotationError, VaultRotation};
 use std::cell::RefCell;
-use std::marker::PhantomData;
 
-type ValidatorId = u64;
 thread_local! {
-	pub static TO_CONFIRM: RefCell<Result<(), RotationError<()>>> = RefCell::new(Err(RotationError::NotConfirmed));
+	pub static TO_CONFIRM: RefCell<Result<(), RotationError<u64>>> = RefCell::new(Err(RotationError::NotConfirmed));
 }
 
 pub struct Mock {}
@@ -15,8 +13,8 @@ pub fn clear_confirmation() {
 }
 
 impl VaultRotation for Mock {
-	type ValidatorId = ();
-	type Amount = ();
+	type ValidatorId = u64;
+	type Amount = u64;
 
 	fn start_vault_rotation(
 		_winners: Vec<Self::ValidatorId>,

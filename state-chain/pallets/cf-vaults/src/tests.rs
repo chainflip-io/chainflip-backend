@@ -35,7 +35,7 @@ mod test {
 				mock::Event::pallet_cf_vaults(crate::Event::KeygenRequestEvent(
 					VaultsPallet::current_request(),
 					KeygenRequest {
-						chain: Other(vec![]),
+						chain: Ethereum(vec![]),
 						validator_candidates: vec![ALICE, BOB, CHARLIE],
 					}
 				))

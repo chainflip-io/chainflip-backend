@@ -77,7 +77,6 @@ pub enum EthSigningTxResponse<ValidatorId> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use crate::rotation::ChainParams::Ethereum;
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
