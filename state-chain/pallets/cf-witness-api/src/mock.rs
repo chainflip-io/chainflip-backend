@@ -4,7 +4,7 @@ use crate as pallet_cf_witness_api;
 
 use cf_traits::{
 	impl_mock_ensure_witnessed_for_origin, impl_mock_stake_transfer,
-	impl_mock_witnesser_for_account_and_call_types, AuctionPenalty,
+	impl_mock_witnesser_for_account_and_call_types, VaultRotationHandler,
 };
 use frame_support::parameter_types;
 use frame_system as system;
@@ -89,7 +89,7 @@ impl ChainFlip for Test {
 	type ValidatorId = ValidatorId;
 }
 
-impl AuctionPenalty<ValidatorId> for Test {
+impl VaultRotationHandler<ValidatorId> for Test {
 	fn abort() {}
 	fn penalise(_bad_validators: Vec<ValidatorId>) {}
 }
@@ -99,7 +99,7 @@ impl pallet_cf_vaults::Config for Test {
 	type EnsureWitnessed = MockEnsureWitnessed;
 	type PublicKey = Vec<u8>;
 	type Transaction = Vec<u8>;
-	type Penalty = Self;
+	type RotationHandler = Self;
 	type Nonce = u64;
 	type NonceProvider =
 		pallet_cf_vaults::nonce::NonceUnixTime<u64, cf_traits::mocks::time_source::Mock>;

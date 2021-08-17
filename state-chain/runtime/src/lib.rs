@@ -168,7 +168,7 @@ impl pallet_cf_vaults::Config for Runtime {
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
 	type PublicKey = Vec<u8>;
 	type Transaction = Vec<u8>;
-	type Penalty = Auction;
+	type RotationHandler = Auction;
 	type Nonce = u64;
 	type NonceProvider = NonceUnixTime<Self::Nonce, Timestamp>;
 }

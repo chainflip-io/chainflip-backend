@@ -94,10 +94,11 @@ impl ChainFlip for MockRuntime {
 	type ValidatorId = ValidatorId;
 }
 
-impl AuctionPenalty<ValidatorId> for MockRuntime {
+impl VaultRotationHandler for MockRuntime {
+	type ValidatorId = u64;
 	fn abort() {}
 
-	fn penalise(bad_validators: Vec<ValidatorId>) {
+	fn penalise(bad_validators: Vec<Self::ValidatorId>) {
 		BAD_VALIDATORS.with(|l| *l.borrow_mut() = bad_validators);
 	}
 }
@@ -107,7 +108,7 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type EnsureWitnessed = MockEnsureWitness;
 	type PublicKey = Vec<u8>;
 	type Transaction = Vec<u8>;
-	type Penalty = Self;
+	type RotationHandler = Self;
 	type Nonce = u64;
 	type NonceProvider = NonceUnixTime<Self::Nonce, cf_traits::mocks::time_source::Mock>;
 }

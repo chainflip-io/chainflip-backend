@@ -105,11 +105,12 @@ pub trait Auction {
 	fn process() -> Result<AuctionPhase<Self::ValidatorId, Self::Amount>, AuctionError>;
 }
 
-pub trait AuctionPenalty<ValidatorId> {
-	/// Abort this auction
+pub trait VaultRotationHandler {
+	type ValidatorId;
+	/// Abort requested after failed vault rotation
 	fn abort();
-	// Report on bad actors
-	fn penalise(bad_validators: Vec<ValidatorId>);
+	// Penalise validators during a vault rotation
+	fn penalise(bad_validators: Vec<Self::ValidatorId>);
 }
 
 /// Errors occurring during a rotation

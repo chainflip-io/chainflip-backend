@@ -41,8 +41,8 @@ mod tests;
 extern crate assert_matches;
 
 use cf_traits::{
-	Auction, AuctionError, AuctionPenalty, AuctionPhase, AuctionRange, BidderProvider,
-	VaultRotation,
+	Auction, AuctionError, AuctionPhase, AuctionRange, BidderProvider, VaultRotation,
+	VaultRotationHandler,
 };
 use frame_support::pallet_prelude::*;
 use frame_support::sp_runtime::offchain::storage_lock::BlockNumberProvider;
@@ -320,7 +320,7 @@ impl<T: Config> Auction for Pallet<T> {
 	}
 }
 
-impl<T: Config> AuctionPenalty<T::ValidatorId> for Pallet<T> {
+impl<T: Config> VaultRotationHandler<T::ValidatorId> for Pallet<T> {
 	fn abort() {
 		<CurrentPhase<T>>::put(AuctionPhase::default());
 		Self::deposit_event(Event::AuctionAborted(<CurrentAuctionIndex<T>>::get()));

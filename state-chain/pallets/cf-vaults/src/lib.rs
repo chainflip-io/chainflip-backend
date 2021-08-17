@@ -42,7 +42,7 @@
 use frame_support::pallet_prelude::*;
 use sp_std::prelude::*;
 
-use cf_traits::{AuctionPenalty, NonceProvider, RotationError, VaultRotation};
+use cf_traits::{NonceProvider, RotationError, VaultRotation, VaultRotationHandler};
 pub use pallet::*;
 use sp_core::{H160, U256};
 
@@ -93,8 +93,8 @@ pub mod pallet {
 		type PublicKey: Member + Parameter + Into<Vec<u8>> + Default;
 		/// A transaction
 		type Transaction: Member + Parameter + Into<Vec<u8>> + Default;
-		/// Feedback on penalties for Auction
-		type Penalty: AuctionPenalty<Self::ValidatorId>;
+		/// Rotation handler
+		type RotationHandler: VaultRotationHandler<ValidatorId = Self::ValidatorId>;
 		/// A nonce
 		type Nonce: Into<U256>;
 		/// A nonce provider
@@ -245,7 +245,7 @@ impl<T: Config> Pallet<T> {
 			VaultRotations::<T>::iter().map(|(k, _)| k).collect(),
 		));
 		VaultRotations::<T>::remove_all();
-		T::Penalty::abort();
+		T::RotationHandler::abort();
 	}
 
 	/// Provide the next index
@@ -349,7 +349,7 @@ impl<T: Config>
 				// Abort this key generation request
 				Pallet::<T>::abort_rotation();
 				// Do as you wish with these, I wash my hands..
-				T::Penalty::penalise(bad_validators);
+				T::RotationHandler::penalise(bad_validators);
 				// Report back we have processed the failure
 				Ok(().into())
 			}
@@ -377,7 +377,7 @@ impl<T: Config> ChainHandler for Pallet<T> {
 			// Penalise if we have a set of bad validators and abort the rotation
 			Err(err) => {
 				if let RotationError::BadValidators(bad) = err {
-					T::Penalty::penalise(bad);
+					T::RotationHandler::penalise(bad);
 				}
 				Self::abort_rotation();
 				Err(RotationError::VaultRotationCompletionFailed)
