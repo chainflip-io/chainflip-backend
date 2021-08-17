@@ -49,16 +49,16 @@ fn propose_a_governance_extrinsic_and_expect_execution() {
 		));
 		assert_eq!(
 			last_event(),
-			crate::mock::Event::pallet_cf_governance(crate::Event::Proposed(0)),
+			crate::mock::Event::pallet_cf_governance(crate::Event::Proposed(1)),
 		);
 		assert_eq!(OnGoingProposals::<Test>::get().len(), 1);
 		next_block();
-		assert_ok!(Governance::approve(Origin::signed(BOB), 0));
+		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
 		next_block();
-		assert_ok!(Governance::approve(Origin::signed(CHARLES), 0));
+		assert_ok!(Governance::approve(Origin::signed(CHARLES), 1));
 		assert_eq!(
 			last_event(),
-			crate::mock::Event::pallet_cf_governance(crate::Event::Approved(0)),
+			crate::mock::Event::pallet_cf_governance(crate::Event::Approved(1)),
 		);
 		next_block();
 		let genesis_members = Members::<Test>::get();
@@ -68,7 +68,7 @@ fn propose_a_governance_extrinsic_and_expect_execution() {
 		assert_eq!(OnGoingProposals::<Test>::get().len(), 0);
 		assert_eq!(
 			last_event(),
-			crate::mock::Event::pallet_cf_governance(crate::Event::Executed(0)),
+			crate::mock::Event::pallet_cf_governance(crate::Event::Executed(1)),
 		);
 	});
 }
@@ -88,7 +88,7 @@ fn expired_on_approve() {
 		));
 		time_source::Mock::reset_to(END_TIME);
 		assert_noop!(
-			Governance::approve(Origin::signed(ALICE), 0),
+			Governance::approve(Origin::signed(ALICE), 1),
 			<Error<Test>>::AlreadyExpired
 		);
 	});
@@ -123,10 +123,10 @@ fn propose_a_governance_extrinsic_and_expect_it_to_expire() {
 		next_block();
 		assert_eq!(
 			last_event(),
-			crate::mock::Event::pallet_cf_governance(crate::Event::Expired(0)),
+			crate::mock::Event::pallet_cf_governance(crate::Event::Expired(1)),
 		);
 		assert_noop!(
-			Governance::approve(Origin::signed(ALICE), 0),
+			Governance::approve(Origin::signed(ALICE), 1),
 			<Error<Test>>::AlreadyExpired
 		);
 		assert_eq!(OnGoingProposals::<Test>::get().len(), 0);

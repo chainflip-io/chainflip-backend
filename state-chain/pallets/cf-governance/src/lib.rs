@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-//! # A pallet which implements the Chainflip governance process
+//! # A pallet that implements the Chainflip governance process. For more information's check out the readme.
 
 use codec::Decode;
 use frame_support::dispatch::GetDispatchInfo;
@@ -167,6 +167,7 @@ pub mod pallet {
 				proposals.push(proposal_id);
 			});
 			Self::deposit_event(Event::Proposed(proposal_id.clone()));
+			<NumberOfProposals<T>>::put(proposal_id);
 			Ok(().into())
 		}
 		/// Sets a new set of governance members
@@ -328,15 +329,10 @@ impl<T: Config> Pallet<T> {
 	}
 	/// Generates the next proposal id
 	fn next_proposal_id() -> u32 {
-		//TODO: refactor needed here
-		if let Some(number_of_proposals) = <NumberOfProposals<T>>::get() {
-			let next_id = number_of_proposals + 1;
-			<NumberOfProposals<T>>::put(next_id);
-			next_id
-		} else {
-			<NumberOfProposals<T>>::put(0);
-			0
-		}
+		<NumberOfProposals<T>>::get()
+			.unwrap_or_default()
+			.checked_add(1)
+			.unwrap()
 	}
 	/// Tries to approve a proposal
 	fn try_approve(account: T::AccountId, proposal_id: u32) -> Result<(), DispatchError> {
