@@ -38,7 +38,7 @@ fn governance_restriction() {
 }
 
 #[test]
-fn propose_a_governance_extrinsic_and_execute_it() {
+fn propose_a_governance_extrinsic_and_expect_execution() {
 	new_test_ext().execute_with(|| {
 		let call = Box::new(Call::Governance(
 			pallet_cf_governance::Call::<Test>::new_membership_set(vec![EVE, PETER, MAX]),
@@ -58,7 +58,7 @@ fn propose_a_governance_extrinsic_and_execute_it() {
 		assert_ok!(Governance::approve(Origin::signed(CHARLES), 0));
 		assert_eq!(
 			last_event(),
-			crate::mock::Event::pallet_cf_governance(crate::Event::Voted(0)),
+			crate::mock::Event::pallet_cf_governance(crate::Event::Approved(0)),
 		);
 		next_block();
 		let genesis_members = Members::<Test>::get();
@@ -105,7 +105,7 @@ fn proposal_not_found() {
 }
 
 #[test]
-fn proposal_expires() {
+fn propose_a_governance_extrinsic_and_expect_it_to_expire() {
 	new_test_ext().execute_with(|| {
 		const START_TIME: Duration = Duration::from_secs(10);
 		const END_TIME: Duration = Duration::from_secs(7300);

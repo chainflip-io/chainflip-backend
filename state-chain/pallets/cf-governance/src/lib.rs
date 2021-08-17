@@ -1,9 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-//! # Chainflip governance
-//!
-//! TODO: write some nice explanation here
-//!
+//! # A pallet which implements the Chainflip governance process
 
 use codec::Decode;
 use frame_support::dispatch::GetDispatchInfo;
@@ -55,6 +52,7 @@ pub mod pallet {
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
 	type OpaqueCall = Vec<u8>;
+	type ProposalId = u32;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -111,24 +109,24 @@ pub mod pallet {
 	#[pallet::metadata(T::AccountId = "AccountId")]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A new proposal was submitted
-		Proposed(u32),
-		/// A proposal was executed
-		Executed(u32),
-		/// A proposal is expired
-		Expired(u32),
-		/// The execution of a proposal failed
-		ExecutionFailed(u32),
-		/// The decode of the a proposal failed
-		DecodeFailed(u32),
-		/// A proposal was approved
-		Voted(u32),
+		/// A new proposal was submitted [proposal_id]
+		Proposed(ProposalId),
+		/// A proposal was executed [proposal_id]
+		Executed(ProposalId),
+		/// A proposal is expired [proposal_id]
+		Expired(ProposalId),
+		/// The execution of a proposal failed [proposal_id]
+		ExecutionFailed(ProposalId),
+		/// The decode of the a proposal failed [proposal_id]
+		DecodeFailed(ProposalId),
+		/// A proposal was approved [proposal_id]
+		Approved(ProposalId),
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// An account already voted on a proposal
-		AlreadyVoted,
+		/// An account already approved a proposal
+		AlreadyApproved,
 		/// A proposal was already executed
 		AlreadyExecuted,
 		/// A proposal is already expired
@@ -188,7 +186,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			Self::ensure_member(&who)?;
 			// Try to approve the proposal
-			Self::try_vote(who, id)?;
+			Self::try_approve(who, id)?;
 			Ok(().into())
 		}
 	}
@@ -289,7 +287,7 @@ impl<T: Config> Pallet<T> {
 				}
 				continue;
 			}
-			// Check if proposal is expired
+			// Check if proposal is expired if not already executed
 			if proposal.expiry < T::TimeSource::now().as_secs() {
 				executed_or_expired.push(index);
 				Self::deposit_event(Event::Expired(proposal_id.clone()));
@@ -340,8 +338,8 @@ impl<T: Config> Pallet<T> {
 			0
 		}
 	}
-	/// Tries to vote a proposal
-	fn try_vote(account: T::AccountId, proposal_id: u32) -> Result<(), DispatchError> {
+	/// Tries to approve a proposal
+	fn try_approve(account: T::AccountId, proposal_id: u32) -> Result<(), DispatchError> {
 		// Check if proposal exist
 		if !<Proposals<T>>::contains_key(proposal_id) {
 			return Err(Error::<T>::NotFound.into());
@@ -357,13 +355,13 @@ impl<T: Config> Pallet<T> {
 		}
 		// Check already voted
 		if proposal.voted.contains(&account) {
-			return Err(Error::<T>::AlreadyVoted.into());
+			return Err(Error::<T>::AlreadyApproved.into());
 		}
 		<Proposals<T>>::mutate(proposal_id, |proposal| {
 			proposal.voted.push(account);
 			proposal.votes = proposal.votes.checked_add(1).unwrap();
 		});
-		Self::deposit_event(Event::Voted(proposal_id.clone()));
+		Self::deposit_event(Event::Approved(proposal_id.clone()));
 		Ok(())
 	}
 	/// Decodes a encoded representation of a Call
