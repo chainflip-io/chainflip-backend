@@ -59,10 +59,13 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ();
 }
 
-// A heartbeat every 150 blocks
+// A heartbeat interval in blocks
 pub const HEARTBEAT_BLOCK_INTERVAL: u64 = 150;
 // Number of blocks being offline before you lose one point
-pub const POINTS_PER_BLOCK_PENALTY: (u32, u32) = (1, 10);
+pub const POINTS_PER_BLOCK_PENALTY: ReputationPenalty<u64> = ReputationPenalty {
+	points: 1,
+	blocks: 10,
+};
 // Number of blocks to be online to accrue a point
 pub const ACCRUAL_BLOCKS: u64 = 2500;
 // Number of accrual points
@@ -70,7 +73,7 @@ pub const ACCRUAL_POINTS: i32 = 1;
 
 parameter_types! {
 	pub const HeartbeatBlockInterval: u64 = HEARTBEAT_BLOCK_INTERVAL;
-	pub const ReputationPointPenalty: (u32, u32) = POINTS_PER_BLOCK_PENALTY;
+	pub const ReputationPointPenalty: ReputationPenalty<u64> = POINTS_PER_BLOCK_PENALTY;
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
 }
 

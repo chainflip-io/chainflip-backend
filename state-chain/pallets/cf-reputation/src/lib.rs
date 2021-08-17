@@ -38,6 +38,7 @@
 //!   penalty in reputation points.
 //! - **Slashing:** The process of debiting FLIP tokens from a validator.  Slashing only occurs in this
 //!   pallet when a validator's reputation points fall below zero *and* they are *offline*.
+//! - **Accrual Ratio:** A ratio of reputation points earned per number of offline credits
 //!
 
 #[cfg(test)]
@@ -111,6 +112,12 @@ pub mod pallet {
 		pub reputation_points: ReputationPoints,
 	}
 
+	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+	pub struct ReputationPenalty<BlockNumber> {
+		pub points: ReputationPoints,
+		pub blocks: BlockNumber,
+	}
+
 	type ReputationOf<T> = Reputation<<T as frame_system::Config>::BlockNumber>;
 
 	#[pallet::config]
@@ -130,7 +137,7 @@ pub mod pallet {
 
 		/// The number of reputation points we lose for every x blocks offline
 		#[pallet::constant]
-		type ReputationPointPenalty: Get<(u32, u32)>;
+		type ReputationPointPenalty: Get<ReputationPenalty<Self::BlockNumber>>;
 
 		/// The floor and ceiling values for a reputation score
 		#[pallet::constant]
@@ -416,16 +423,17 @@ pub mod pallet {
 			last_block: T::BlockNumber,
 		) -> ReputationPoints {
 			// What points for what blocks we penalise by
-			let (penalty_points, penalty_blocks) = T::ReputationPointPenalty::get();
+			let ReputationPenalty { points, blocks } = T::ReputationPointPenalty::get();
+			let blocks: u32 = blocks.try_into().unwrap_or(0);
 			// The blocks we have missed
 			let dead_blocks: u32 = current_block
 				.saturating_sub(last_block)
 				.try_into()
 				.unwrap_or(0);
 			// The points calculated
-			(penalty_points
-				.saturating_mul(dead_blocks)
-				.checked_div(penalty_blocks))
+			(points
+				.saturating_mul(dead_blocks as i32)
+				.checked_div(blocks as i32))
 			.unwrap_or(0)
 			.try_into()
 			.expect("calculating offline penalty shouldn't fail")

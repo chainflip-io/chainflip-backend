@@ -105,9 +105,9 @@ mod tests {
 				reputation_points(ALICE),
 				current_reputation
 					- (heartbeats as u32
-						* POINTS_PER_BLOCK_PENALTY.0
+						* POINTS_PER_BLOCK_PENALTY.points as u32
 						* HEARTBEAT_BLOCK_INTERVAL as u32
-						/ POINTS_PER_BLOCK_PENALTY.1) as ReputationPoints
+						/ POINTS_PER_BLOCK_PENALTY.blocks as u32) as ReputationPoints
 			);
 		});
 	}
@@ -189,7 +189,7 @@ mod tests {
 	#[test]
 	fn missing_a_heartbeat_submission_should_penalise_reputation_points() {
 		new_test_ext().execute_with(|| {
-			let (points, blocks) = POINTS_PER_BLOCK_PENALTY;
+			let ReputationPenalty { points, blocks } = POINTS_PER_BLOCK_PENALTY;
 			// We are starting out with zero points
 			assert_eq!(reputation_points(ALICE), 0);
 			// Interval 1 - with no heartbeat we will lose `points` per `block`
