@@ -77,6 +77,7 @@ pub enum EthSigningTxResponse<ValidatorId> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::ChainFlip;
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]

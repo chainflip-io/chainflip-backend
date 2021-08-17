@@ -13,6 +13,7 @@ use crate as pallet_cf_vaults;
 
 use super::*;
 use crate::nonce::NonceUnixTime;
+use cf_traits::ChainFlip;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
 type Block = frame_system::mocking::MockBlock<MockRuntime>;

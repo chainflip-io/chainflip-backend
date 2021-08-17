@@ -1,6 +1,5 @@
 use cf_traits::RotationError;
 use codec::{Decode, Encode};
-use frame_support::pallet_prelude::*;
 use frame_support::RuntimeDebug;
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
@@ -52,14 +51,6 @@ pub trait ChainHandler {
 		index: RequestIndex,
 		result: Result<VaultRotationRequest, RotationError<Self::ValidatorId>>,
 	) -> Result<(), Self::Error>;
-}
-
-/// Description of some base types
-pub trait ChainFlip {
-	/// An amount for a bid
-	type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
-	/// An identity for a validator
-	type ValidatorId: Member + Parameter;
 }
 
 /// Our different Chain's specific parameters

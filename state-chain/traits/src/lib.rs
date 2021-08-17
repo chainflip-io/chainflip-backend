@@ -3,12 +3,23 @@
 pub mod mocks;
 
 use codec::{Decode, Encode};
+use frame_support::pallet_prelude::Member;
+use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight},
 	traits::{Imbalance, SignedImbalance},
+	Parameter,
 };
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
+
+/// and ChainFlip was born...some base types
+pub trait ChainFlip {
+	/// An amount for a bid
+	type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
+	/// An identity for a validator
+	type ValidatorId: Member + Parameter;
+}
 
 /// A trait abstracting the functionality of the witnesser
 pub trait Witnesser {
