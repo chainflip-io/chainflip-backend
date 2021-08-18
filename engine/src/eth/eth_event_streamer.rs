@@ -129,7 +129,9 @@ where
             .map(|log| Ok(log))
             .chain(future_logs);
 
-        let event_stream = log_stream.map(|log_result| self.event_source.parse_event(log_result?));
+        let event_stream = log_stream.map(|log_result| {
+            self.event_source.parse_event(log_result?)}
+        );
 
         let processing_loop_fut = event_stream.for_each_concurrent(None, |parse_result| async {
             match parse_result {
@@ -183,7 +185,7 @@ mod tests {
 
         EthEventStreamer::new(
             &settings.eth.node_endpoint,
-            StakeManager::load(CONTRACT_ADDRESS, &logger).unwrap(),
+            StakeManager::load(CONTRACT_ADDRESS).unwrap(),
             vec![StakeManagerSink::<NatsMQClient>::new(mq_client, &logger)
                 .await
                 .unwrap()],
