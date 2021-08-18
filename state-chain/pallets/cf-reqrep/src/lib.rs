@@ -15,9 +15,11 @@ pub use pallet::*;
 pub trait ReqRep<T> : Parameter {
 	type Reply: Parameter;
 
-	fn on_reply(&self, _reply: Self::Reply) -> DispatchResult { todo!() }
+	fn on_reply(&self, _reply: Self::Reply) -> DispatchResult;
 }
 
+// These would be defined in their own modules but adding it here for now.
+// Macros might help reduce the boilerplat but I don't think it's too bad.
 pub mod reqreps {
 	pub use super::*;
 	use codec::{Decode, Encode};
@@ -30,6 +32,7 @@ pub mod reqreps {
 		type ChainId: Parameter;
 	}
 
+	// A signature request.
 	pub mod signature {
 		use super::*;
 
@@ -48,9 +51,14 @@ pub mod reqreps {
 
 		impl<T: BaseConfig> ReqRep<T> for Request<T::KeyId, T::ValidatorId> {
 			type Reply = Reply<T::ValidatorId>;
+
+			fn on_reply(&self, _reply: Self::Reply) -> DispatchResult {
+				todo!("The implementing pallet could store the result, or process a claim, or whatever.")
+			}
 		}
 	}
 
+	// A broadcast request.
 	pub mod broadcast {
 		use super::*;
 
@@ -68,6 +76,10 @@ pub mod reqreps {
 
 		impl<T: BaseConfig> ReqRep<T> for Request<T::ChainId> {
 			type Reply = Reply;
+
+			fn on_reply(&self, _reply: Self::Reply) -> DispatchResult {
+				todo!("Handle failure and timeouts.")
+			}
 		}
 	}
 }
