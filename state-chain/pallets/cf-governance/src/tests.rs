@@ -1,4 +1,4 @@
-use crate::{mock::*, Error, Members, NumberOfProposals, OnGoingProposals};
+use crate::{mock::*, Error, Members};
 use cf_traits::mocks::time_source;
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
 use std::time::Duration;
@@ -53,26 +53,24 @@ fn propose_a_governance_extrinsic_and_expect_execution() {
 		));
 		assert_eq!(
 			last_event(),
-			crate::mock::Event::pallet_cf_governance(crate::Event::Proposed(1)),
+			crate::mock::Event::pallet_cf_governance(crate::Event::Proposed(0)),
 		);
-		assert_eq!(OnGoingProposals::<Test>::get().len(), 1);
 		next_block();
-		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
+		assert_ok!(Governance::approve(Origin::signed(BOB), 0));
 		next_block();
-		assert_ok!(Governance::approve(Origin::signed(CHARLES), 1));
+		assert_ok!(Governance::approve(Origin::signed(CHARLES), 0));
 		assert_eq!(
 			last_event(),
-			crate::mock::Event::pallet_cf_governance(crate::Event::Approved(1)),
+			crate::mock::Event::pallet_cf_governance(crate::Event::Approved(0)),
 		);
 		next_block();
 		let genesis_members = Members::<Test>::get();
 		assert!(genesis_members.contains(&EVE));
 		assert!(genesis_members.contains(&PETER));
 		assert!(genesis_members.contains(&MAX));
-		assert_eq!(OnGoingProposals::<Test>::get().len(), 0);
 		assert_eq!(
 			last_event(),
-			crate::mock::Event::pallet_cf_governance(crate::Event::Executed(1)),
+			crate::mock::Event::pallet_cf_governance(crate::Event::Executed(0)),
 		);
 	});
 }
@@ -89,7 +87,7 @@ fn expired_on_approve() {
 		));
 		time_source::Mock::reset_to(END_TIME);
 		assert_noop!(
-			Governance::approve(Origin::signed(ALICE), 1),
+			Governance::approve(Origin::signed(ALICE), 0),
 			<Error<Test>>::AlreadyExpired
 		);
 	});
@@ -127,7 +125,6 @@ fn propose_a_governance_extrinsic_and_expect_it_to_expire() {
 			Governance::approve(Origin::signed(ALICE), 1),
 			<Error<Test>>::AlreadyExpired
 		);
-		assert_eq!(OnGoingProposals::<Test>::get().len(), 0);
 	});
 }
 
@@ -142,6 +139,5 @@ fn several_open_proposals() {
 			Origin::signed(BOB),
 			mock_extrinsic()
 		));
-		assert_eq!(NumberOfProposals::<Test>::get().unwrap(), 2);
 	});
 }
