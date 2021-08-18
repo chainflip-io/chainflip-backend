@@ -22,7 +22,7 @@ pub async fn start_stake_manager_witness<MQC: 'static + IMQClient + Send + Sync 
 
     EthEventStreamer::new(
         &settings.eth.node_endpoint,
-        StakeManager::load(settings.eth.stake_manager_eth_address.as_str(), logger)
+        StakeManager::load(settings.eth.stake_manager_eth_address.as_str())
             .expect("Should load StakeManager contract"),
         vec![StakeManagerSink::<MQC>::new(mq_client, logger)
             .await
