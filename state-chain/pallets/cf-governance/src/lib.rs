@@ -4,7 +4,8 @@
 //!
 //! ## Purpose
 //!
-//! This pallet implements the current Chainflip governance functionality. The purpose of this pallet is primarily to provide the following capabilities:
+//! This pallet implements the current Chainflip governance functionality. The purpose of this pallet is primarily
+//! to provide the following capabilities:
 //!
 //! - Handle the set of governance members
 //! - Handle submitting proposals
@@ -13,7 +14,11 @@
 //!
 //! ## Governance model
 //!
-//! The governance model is a simple approved system. Every member can propose an extrinsic, which is secured by the EnsureGovernance implementation of the EnsureOrigin trait. Apart from that, every member is allowed to approve a proposed governance extrinsic. If a proposal can raise 2/3 + 1 approvals, it's getting executed by the system automatically. Moreover, every proposal has an expiry date. If a proposal is not able to raise enough approvals in time, it gets dropped and won't be executed.
+//! The governance model is a simple approved system. Every member can propose an extrinsic, which is secured by
+//! the EnsureGovernance implementation of the EnsureOrigin trait. Apart from that, every member is allowed to
+//! approve a proposed governance extrinsic. If a proposal can raise 2/3 + 1 approvals, it's getting executed by
+//! the system automatically. Moreover, every proposal has an expiry date. If a proposal is not able to raise
+//! enough approvals in time, it gets dropped and won't be executed.
 //!
 //! note: For implementation details pls see the readme.
 
