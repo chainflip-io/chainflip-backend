@@ -171,124 +171,49 @@ impl Display for KeygenData {
     }
 }
 
-/// Holds extra info about signing failure (but not the reason)
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SigningFailure {
-    pub message_info: MessageInfo,
-    pub bad_nodes: Vec<ValidatorId>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SigningSuccess {
-    pub message_info: MessageInfo,
-    pub sig: SchnorrSignature,
-}
-
-/// The final result of a Signing ceremony
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum SigningOutcome {
-    MessageSigned(SigningSuccess),
-    Unauthorised(SigningFailure),
-    /// Abandoned as we couldn't make progress for a long time
-    Timeout(SigningFailure),
-    /// Invalid data has been submitted, can't proceed
-    Invalid(SigningFailure),
-}
-
-impl SigningOutcome {
-    /// Helper method to create SigningOutcome::MessageSigned
-    pub fn success(message_info: MessageInfo, sig: Signature) -> Self {
-        let sig = SchnorrSignature::from(sig);
-
-        SigningOutcome::MessageSigned(SigningSuccess { message_info, sig })
-    }
-
-    /// Helper method to create SigningOutcome::Unauthorised
-    pub fn unauthorised(message_info: MessageInfo, bad_nodes: impl Into<Vec<ValidatorId>>) -> Self {
-        SigningOutcome::Unauthorised(SigningFailure {
-            message_info,
-            bad_nodes: bad_nodes.into(),
-        })
-    }
-
-    /// Helper method to create SigningOutcome::Timeout
-    pub fn timeout(message_info: MessageInfo, bad_nodes: impl Into<Vec<ValidatorId>>) -> Self {
-        SigningOutcome::Timeout(SigningFailure {
-            message_info,
-            bad_nodes: bad_nodes.into(),
-        })
-    }
-
-    /// Helper method to create SigningOutcome::Invalid
-    pub fn invalid(message_info: MessageInfo, bad_nodes: impl Into<Vec<ValidatorId>>) -> Self {
-        SigningOutcome::Invalid(SigningFailure {
-            message_info,
-            bad_nodes: bad_nodes.into(),
-        })
-    }
-}
-
-impl From<SigningOutcome> for InnerEvent {
-    fn from(so: SigningOutcome) -> Self {
-        InnerEvent::SigningResult(so)
-    }
-}
-
-/// Holds extra info about keygen failure (but not the reason)
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct KeygenFailure {
-    pub key_id: KeyId,
-    pub bad_nodes: Vec<ValidatorId>,
+pub enum Error {
+    Unauthorised,
+    Timeout,
+    Invalid,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct KeygenSuccess {
-    pub key_id: KeyId,
-    pub key: secp256k1::PublicKey,
+pub struct CeremonyOutcome<Id, Output> {
+    pub ceremony_id: Id,
+    pub result: Result<Output, (Error, Vec<ValidatorId>)>,
+}
+impl<Id, Output> CeremonyOutcome<Id, Output> {
+    pub fn success(ceremony_id: Id, output: Output) -> Self {
+        Self {
+            ceremony_id,
+            result: Ok(output),
+        }
+    }
+    pub fn unauthorised(ceremony_id: Id, bad_validators: Vec<ValidatorId>) -> Self {
+        Self {
+            ceremony_id,
+            result: Err((Error::Unauthorised, bad_validators)),
+        }
+    }
+    pub fn timeout(ceremony_id: Id, bad_validators: Vec<ValidatorId>) -> Self {
+        Self {
+            ceremony_id,
+            result: Err((Error::Timeout, bad_validators)),
+        }
+    }
+    pub fn invalid(ceremony_id: Id, bad_validators: Vec<ValidatorId>) -> Self {
+        Self {
+            ceremony_id,
+            result: Err((Error::Invalid, bad_validators)),
+        }
+    }
 }
 
 /// The final result of a keygen ceremony
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum KeygenOutcome {
-    Success(KeygenSuccess),
-    Unauthorised(KeygenFailure),
-    /// Abandoned as we couldn't make progress for a long time
-    Timeout(KeygenFailure),
-    /// Invalid data has been submitted, can't proceed
-    Invalid(KeygenFailure),
-}
-
-impl KeygenOutcome {
-    /// Helper method to create KeygenOutcome::Unauthorised
-    pub fn unauthorised(key_id: KeyId, bad_nodes: impl Into<Vec<ValidatorId>>) -> Self {
-        KeygenOutcome::Unauthorised(KeygenFailure {
-            key_id,
-            bad_nodes: bad_nodes.into(),
-        })
-    }
-
-    /// Helper method to create KeygenOutcome::Timeout
-    pub fn timeout(key_id: KeyId, bad_nodes: impl Into<Vec<ValidatorId>>) -> Self {
-        KeygenOutcome::Timeout(KeygenFailure {
-            key_id,
-            bad_nodes: bad_nodes.into(),
-        })
-    }
-
-    /// Helper method to create KeygenOutcome::Invalid
-    pub fn invalid(key_id: KeyId, bad_nodes: impl Into<Vec<ValidatorId>>) -> Self {
-        KeygenOutcome::Invalid(KeygenFailure {
-            key_id,
-            bad_nodes: bad_nodes.into(),
-        })
-    }
-}
-
-impl From<KeygenOutcome> for InnerEvent {
-    fn from(ko: KeygenOutcome) -> Self {
-        InnerEvent::KeygenResult(ko)
-    }
-}
+pub type KeygenOutcome = CeremonyOutcome<KeyId, secp256k1::PublicKey>;
+/// The final result of a Signing ceremony
+pub type SigningOutcome = CeremonyOutcome<MessageInfo, SchnorrSignature>;
 
 #[derive(Debug, PartialEq)]
 pub enum InnerEvent {
@@ -453,15 +378,11 @@ where
 
         // NOTE: we only notify the SC after we have successfully saved the key
 
-        let keygen_success = KeygenSuccess {
-            key_id,
-            key: key_info.key.get_public_key().get_element(),
-        };
-
         if let Err(err) = self
             .tx
-            .send(InnerEvent::KeygenResult(KeygenOutcome::Success(
-                keygen_success,
+            .send(InnerEvent::KeygenResult(KeygenOutcome::success(
+                key_id,
+                key_info.key.get_public_key().get_element(),
             )))
         {
             slog::error!(

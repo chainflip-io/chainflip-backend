@@ -50,7 +50,6 @@ use frame_support::pallet_prelude::*;
 use frame_support::sp_std::convert::TryInto;
 pub use pallet::*;
 use pallet_cf_validator::EpochTransitionHandler;
-use sp_runtime::traits::Saturating;
 use sp_runtime::traits::Zero;
 use sp_std::vec::Vec;
 
@@ -112,6 +111,7 @@ pub mod pallet {
 		pub reputation_points: ReputationPoints,
 	}
 
+	/// A reputation penalty as a ratio of points penalised over number of blocks
 	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 	pub struct ReputationPenalty<BlockNumber> {
 		pub points: ReputationPoints,
@@ -160,7 +160,7 @@ pub mod pallet {
 		///
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			if current_block % T::HeartbeatBlockInterval::get() == Zero::zero() {
-				return Self::check_liveness(current_block);
+				return Self::check_liveness();
 			}
 
 			Zero::zero()
@@ -404,39 +404,16 @@ pub mod pallet {
 				|Reputation {
 				     reputation_points, ..
 				 }| {
-					*reputation_points = *reputation_points + points;
-					Pallet::<T>::clamp_reputation_points(reputation_points);
+					*reputation_points =
+						Pallet::<T>::clamp_reputation_points(*reputation_points + points);
 					T::DbWeight::get().reads_writes(1, 1)
 				},
 			)
 		}
 
-		fn clamp_reputation_points(reputation_points: &mut i32) {
-			let (mut floor, mut ceiling) = T::ReputationPointFloorAndCeiling::get();
-			*reputation_points = *reputation_points.clamp(&mut floor, &mut ceiling);
-		}
-
-		/// Calculate the penalty for being offline for an amount of blocks based on`ReputationPointPenalty`
-		///
-		fn calculate_offline_penalty(
-			current_block: T::BlockNumber,
-			last_block: T::BlockNumber,
-		) -> ReputationPoints {
-			// What points for what blocks we penalise by
-			let ReputationPenalty { points, blocks } = T::ReputationPointPenalty::get();
-			let blocks: u32 = blocks.try_into().unwrap_or(0);
-			// The blocks we have missed
-			let dead_blocks: u32 = current_block
-				.saturating_sub(last_block)
-				.try_into()
-				.unwrap_or(0);
-			// The points calculated
-			(points
-				.saturating_mul(dead_blocks as i32)
-				.checked_div(blocks as i32))
-			.unwrap_or(0)
-			.try_into()
-			.expect("calculating offline penalty shouldn't fail")
+		fn clamp_reputation_points(reputation_points: i32) -> i32 {
+			let (floor, ceiling) = T::ReputationPointFloorAndCeiling::get();
+			reputation_points.clamp(floor, ceiling)
 		}
 
 		/// Check liveness of our expected list of validators at the current block.
@@ -445,13 +422,13 @@ pub mod pallet {
 		/// earn points.
 		/// Once the reputation points fall below zero slashing comes into play and is delegated to the
 		/// `Slashing` trait.
-		fn check_liveness(current_block: T::BlockNumber) -> Weight {
+		fn check_liveness() -> Weight {
 			let mut weight = 0;
 			// Let's run through those that haven't come back to us and those that have
 			AwaitingHeartbeats::<T>::translate(|validator_id, awaiting| {
 				// Still waiting on these, penalise and those that are in reputation debt will be
 				// slashed
-				if awaiting
+				let penalised = awaiting
 					&& Reputations::<T>::mutate(
 						&validator_id,
 						|Reputation {
@@ -460,14 +437,20 @@ pub mod pallet {
 						 }| {
 							if T::ReputationPointFloorAndCeiling::get().0 < *reputation_points {
 								// Update reputation points
-								*reputation_points = *reputation_points
-									+ Self::calculate_offline_penalty(
-										current_block,
-										current_block - T::HeartbeatBlockInterval::get(),
-									)
-									.neg();
+								let ReputationPenalty { points, blocks } =
+									T::ReputationPointPenalty::get();
+								let interval: u32 =
+									T::HeartbeatBlockInterval::get().try_into().unwrap_or(0);
+								let blocks: u32 = blocks.try_into().unwrap_or(0);
 
-								Pallet::<T>::clamp_reputation_points(reputation_points);
+								let penalty = (points
+									.saturating_mul(interval as i32)
+									.checked_div(blocks as i32))
+								.expect("calculating offline penalty shouldn't fail");
+
+								*reputation_points = Pallet::<T>::clamp_reputation_points(
+									(*reputation_points).saturating_sub(penalty),
+								);
 								// Reset the credits earned as being online consecutively
 								*online_credits = Zero::zero();
 							}
@@ -475,8 +458,10 @@ pub mod pallet {
 
 							*reputation_points
 						},
-					) < Zero::zero() || Reputations::<T>::get(&validator_id).reputation_points
-					< Zero::zero()
+					) < Zero::zero();
+
+				if penalised
+					|| Reputations::<T>::get(&validator_id).reputation_points < Zero::zero()
 				{
 					// At this point we slash the validator by the amount of blocks offline
 					weight += T::Slasher::slash(&validator_id, &T::HeartbeatBlockInterval::get());

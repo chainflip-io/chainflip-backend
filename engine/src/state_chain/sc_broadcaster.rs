@@ -73,8 +73,6 @@ where
             .subscribe::<StakeManagerEvent>(Subject::StakeManager)
             .await?;
 
-        let mut 
-
         while let Some(event) = stake_manager_events.next().await {
             match event {
                 Ok(event) => self.submit_stake_manager_event(event).await?,

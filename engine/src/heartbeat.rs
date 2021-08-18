@@ -6,6 +6,10 @@ use crate::state_chain::runtime::StateChainRuntime;
 pub async fn start_heartbeat(subxt_client: Client<StateChainRuntime>) {
     println!("Starting heartbeat");
     // First get the HeartbeatIntervalPeriod
+
+    let props = subxt_client.properties();
+
+    println!("Here are the props: {:?}", props);
 }
 
 #[cfg(test)]
