@@ -308,8 +308,6 @@ mod tests {
 
     use web3::types::{H256, U256};
 
-    use crate::logging;
-
     use super::*;
 
     const CONTRACT_ADDRESS: &'static str = "0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f";

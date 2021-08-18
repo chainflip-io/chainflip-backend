@@ -186,8 +186,6 @@ mod tests {
 
     use web3::types::H256;
 
-    use crate::logging;
-
     use super::*;
 
     // All log data for these tests was obtained from the events in the `deploy_and` script:
