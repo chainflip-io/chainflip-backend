@@ -12,6 +12,7 @@ members = [
   'state-chain/pallets/cf-auction',
   'state-chain/pallets/cf-emissions',
   'state-chain/pallets/cf-rewards',
+  'state-chain/pallets/cf-reputation',
   'state-chain/pallets/cf-witnesser',
   'state-chain/pallets/cf-witnesser-api',
   'state-chain/runtime',
