@@ -1,6 +1,6 @@
 mod tests {
 	use crate::mock::*;
-	use crate::OfflineCondition::{BroadcastOutputFailed, ParticipateSigningFailed};
+	use crate::OfflineCondition::*;
 	use crate::*;
 	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::BuildStorage;
@@ -238,25 +238,32 @@ mod tests {
 	}
 
 	#[test]
-	fn reporting_broadcast_output_failed_offline_condition_should_penalise_reputation_points() {
+	fn reporting_any_offline_condition_should_penalise_reputation_points() {
 		new_test_ext().execute_with(|| {
+			let offline_test = |offline_condition: OfflineCondition,
+			                    who: <Test as frame_system::Config>::AccountId,
+			                    penalty: ReputationPoints| {
+				let points_before = reputation_points(who);
+				assert_ok!(ReputationPallet::report(
+					offline_condition.clone(),
+					penalty,
+					&who
+				));
+				assert_eq!(reputation_points(who), points_before - penalty);
+				assert_eq!(
+					last_event(),
+					mock::Event::pallet_cf_reputation(crate::Event::OfflineConditionPenalty(
+						who,
+						offline_condition,
+						penalty
+					))
+				);
+			};
 			assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
-			let points_before = reputation_points(ALICE);
-			let penalty = 100;
-			assert_ok!(ReputationPallet::report(
-				BroadcastOutputFailed,
-				penalty,
-				&ALICE
-			));
-			assert_eq!(reputation_points(ALICE), points_before - penalty);
-			assert_eq!(
-				last_event(),
-				mock::Event::pallet_cf_reputation(crate::Event::OfflineConditionPenalty(
-					ALICE,
-					BroadcastOutputFailed,
-					penalty
-				))
-			);
+			offline_test(ParticipateSigningFailed, ALICE, 100);
+			offline_test(BroadcastOutputFailed, ALICE, 100);
+			offline_test(ContradictingSelfDuringSigningCeremony, ALICE, 100);
+			offline_test(NotEnoughPerformanceCredits, ALICE, 100);
 		});
 	}
 
