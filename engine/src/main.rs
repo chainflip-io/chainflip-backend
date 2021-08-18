@@ -1,5 +1,5 @@
 use chainflip_engine::{
-    eth::{eth_broadcaster, eth_tx_encoding, key_manager, stake_manager},
+    eth::{self, eth_broadcaster, eth_tx_encoding, key_manager, stake_manager},
     health::HealthMonitor,
     heartbeat,
     mq::nats_client::NatsMQClient,
@@ -70,6 +70,8 @@ async fn main() {
     let (_, p2p_shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
 
+    let web3 = eth::new_web3_client(&settings, &root_logger).await.unwrap();
+
     futures::join!(
         // Start signing components
         signing::start(
@@ -108,7 +110,7 @@ async fn main() {
             mq_client.clone(),
             &root_logger
         ),
-        stake_manager::start_stake_manager_witness(&settings, mq_client.clone(), &root_logger),
-        key_manager::start_key_manager_witness(&settings, mq_client.clone(), &root_logger),
+        stake_manager::start_stake_manager_witness(&web3, &settings, mq_client.clone(), &root_logger),
+        key_manager::start_key_manager_witness(&web3, &settings, mq_client.clone(), &root_logger),
     );
 }

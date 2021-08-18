@@ -13,7 +13,10 @@ pub use eth_event_streamer::EthEventStreamer;
 
 use thiserror::Error;
 
+use std::time::Duration;
+use crate::settings;
 use web3::types::{BlockNumber, FilterBuilder, H256};
+use web3;
 
 /// Something that accepts and processes events asychronously.
 #[async_trait]
@@ -51,4 +54,29 @@ pub enum EventProducerError {
     /// Tried to decode a parameter that doesn't exist in the log.
     #[error("Cannot decode missing parameter: '{0}'.")]
     MissingParam(String),
+}
+
+pub async fn new_web3_client(settings : &settings::Settings, logger : &slog::Logger) -> Result<web3::Web3<web3::transports::WebSocket>> {
+    let node_endpoint = &settings.eth.node_endpoint;
+    slog::debug!(
+        logger,
+        "Connecting new web3 client to {}",
+        node_endpoint
+    );
+    match tokio::time::timeout(
+        Duration::from_secs(5),
+        async {
+            Ok(web3::Web3::new(web3::transports::WebSocket::new(node_endpoint).await?))
+        },
+    ).await {
+        Ok(result) => result,
+        Err(_) => {
+            // Connection timeout
+            Err(anyhow::Error::msg(format!(
+                "Timeout connecting to {:?}",
+                node_endpoint
+            )))
+        }
+    }
+
 }
