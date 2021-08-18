@@ -92,8 +92,6 @@ where
         Err(anyhow::Error::msg(err_msg))
     }
 
-    async fn submit_heartbeat() {}
-
     /// Submit an event to the state chain, return the tx_hash
     async fn submit_stake_manager_event(&mut self, event: StakeManagerEvent) -> Result<()> {
         match event {
