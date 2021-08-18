@@ -2,13 +2,14 @@ use std::{collections::HashMap, convert::TryInto};
 
 use crate::{
     eth::key_manager::key_manager::KeyManager,
+    eth::utils,
     logging::COMPONENT_KEY,
     mq::{IMQClient, Subject},
     p2p::ValidatorId,
     settings,
     signing::{
-        KeyId, KeygenOutcome, KeygenSuccess, MessageHash, MultisigEvent, MultisigInstruction,
-        SigningInfo, SigningOutcome, SigningSuccess,
+        KeyId, MessageHash, MessageInfo, MultisigEvent, MultisigInstruction, SchnorrSignature,
+        SigningInfo,
     },
     types::chain::Chain,
 };
@@ -105,31 +106,39 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
         while let Some(event) = multisig_event_stream.next().await {
             match event {
                 Ok(event) => match event {
-                    MultisigEvent::KeygenResult(key_outcome) => match key_outcome {
-                        KeygenOutcome::Success(keygen_success) => {
-                            self.handle_keygen_success(keygen_success).await;
-                        }
-                        _ => {
-                            slog::error!(
-                                self.logger,
-                                "Signing module returned error generating key"
-                            )
-                        }
-                    },
-                    MultisigEvent::MessageSigningResult(signing_outcome) => match signing_outcome {
-                        SigningOutcome::MessageSigned(signing_success) => {
-                            self.handle_set_agg_key_message_signed(signing_success)
+                    MultisigEvent::KeygenResult(key_outcome) => match key_outcome.result {
+                        Ok(key) => {
+                            self.handle_keygen_success(key_outcome.ceremony_id, key)
                                 .await;
                         }
-                        _ => {
-                            // TODO: Use the reported bad nodes in the SigningOutcome / SigningFailure
-                            // TODO: retry signing with a different subset of signers
+                        Err((err, _)) => {
                             slog::error!(
                                 self.logger,
-                                "Signing module returned error signing message"
+                                "Signing module returned error generating key: {:?}",
+                                err
                             )
                         }
                     },
+                    MultisigEvent::MessageSigningResult(signing_outcome) => {
+                        match signing_outcome.result {
+                            Ok(sig) => {
+                                self.handle_set_agg_key_message_signed(
+                                    signing_outcome.ceremony_id,
+                                    sig,
+                                )
+                                .await;
+                            }
+                            Err((err, _)) => {
+                                // TODO: Use the reported bad nodes in the SigningOutcome / SigningFailure
+                                // TODO: retry signing with a different subset of signers
+                                slog::error!(
+                                    self.logger,
+                                    "Signing module returned error signing message: {:?}",
+                                    err
+                                )
+                            }
+                        }
+                    }
                     _ => {
                         slog::trace!(
                             self.logger,
@@ -153,9 +162,28 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
     // 2. Store the tx parameters in state for use later
     // 3. Create a Signing Instruction
     // 4. Push this instruction to the MQ for the signing module to pick up
-    async fn handle_keygen_success(&mut self, keygen_success: KeygenSuccess) {
-        let (encoded_fn_params, param_container) = self
-            .build_encoded_fn_params(&keygen_success)
+    async fn handle_keygen_success(&mut self, key_id: KeyId, key: secp256k1::PublicKey) {
+        // This has nothing to do with building an ETH transaction.
+        // We encode the tx like this, in eth format, because this is how the contract will
+        // serialise the data to verify the signature over the message hash
+        let (pubkey_x, pubkey_y_parity) = destructure_pubkey(key);
+
+        let param_container = ParamContainer {
+            key_id,
+            pubkey_x,
+            pubkey_y_parity,
+            key_nonce: [0u8; 32],
+        };
+
+        let encoded_fn_params = self
+            .encode_set_agg_key_with_agg_key(
+                [0u8; 32],
+                [0u8; 32],
+                [0u8; 32],
+                [0u8; 20],
+                pubkey_x,
+                pubkey_y_parity,
+            )
             .expect("should be a valid encoded params");
 
         let hash = Keccak256::hash(&encoded_fn_params[..]);
@@ -189,13 +217,13 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
     // 3. Push this transaction to the Broadcast(Chain::ETH) subject, to be broadcast by the ETH Broadcaster
     // 4. Update the current key id, with the new key id returned by the signing module, so we know which key to sign with
     // from now onwards, until the next successful key rotation
-    async fn handle_set_agg_key_message_signed(&mut self, signing_success: SigningSuccess) {
+    async fn handle_set_agg_key_message_signed(
+        &mut self,
+        message_info: MessageInfo,
+        sig: SchnorrSignature,
+    ) {
         // 1. Get the data from the message hash that was signed (using the `messages` field)
-        let sig = signing_success.sig;
-
-        let message_info = signing_success.message_info;
-        let nonce_times_g_addr = nonce_times_g_addr_from_r(sig.r);
-
+        let nonce_times_g_addr = utils::pubkey_to_eth_addr(sig.r);
         let key_id = message_info.key_id;
         let msg_hash = message_info.hash;
         let params = self
@@ -232,111 +260,51 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
         nonce_times_g_addr: [u8; 20],
         params: &ParamContainer,
     ) -> Result<TxDetails> {
-        let params = set_agg_key_with_agg_key_param_constructor(
-            msg.0,
-            s,
-            params.key_nonce,
-            nonce_times_g_addr,
-            params.pubkey_x,
-            params.pubkey_y_parity,
-        );
-
-        let tx_data = self.encode_params_key_manager_fn(params)?;
-
         Ok(TxDetails {
             contract_address: self.key_manager.deployed_address,
-            data: tx_data.into(),
+            data: self.encode_set_agg_key_with_agg_key(
+                msg.0,
+                s,
+                params.key_nonce,
+                nonce_times_g_addr,
+                params.pubkey_x,
+                params.pubkey_y_parity,
+            )?,
         })
     }
 
-    // This has nothing to do with building an ETH transaction.
-    // We encode the tx like this, in eth format, because this is how the contract will
-    // serialise the data to verify the signature over the message hash
-    fn build_encoded_fn_params(
+    // not sure if key nonce should be u64...
+    // sig = s in the literature. The scalar of the signature
+    fn encode_set_agg_key_with_agg_key(
         &self,
-        keygen_success: &KeygenSuccess,
-    ) -> Result<(Vec<u8>, ParamContainer)> {
-        let pubkey = keygen_success.key;
-
-        let (pubkey_x, pubkey_y_parity) = destructure_pubkey(pubkey);
-
-        let param_container = ParamContainer {
-            key_id: keygen_success.key_id,
-            pubkey_x,
-            pubkey_y_parity,
-            key_nonce: [0u8; 32],
-        };
-
-        let params = set_agg_key_with_agg_key_param_constructor(
-            [0u8; 32],
-            [0u8; 32],
-            [0u8; 32],
-            [0u8; 20],
-            pubkey_x,
-            pubkey_y_parity,
-        );
-
-        let encoded_data = self.encode_params_key_manager_fn(params)?;
-
-        return Ok((encoded_data, param_container));
-    }
-
-    fn encode_params_key_manager_fn(&self, params: [Token; 2]) -> Result<Vec<u8>> {
+        msg_hash: [u8; 32],
+        sig: [u8; 32],
+        key_nonce: [u8; 32],
+        nonce_times_g_addr: [u8; 20],
+        pubkey_x: [u8; 32],
+        pubkey_y_parity: u8,
+    ) -> Result<Vec<u8>> {
         // Serialize the data using eth encoding so the KeyManager contract can serialize the data in the same way
         // in order to verify the signature
-        let encoded_data = self
-            .key_manager
-            .set_agg_key_with_agg_key()
-            .encode_input(&params[..])?;
-
-        return Ok(encoded_data);
+        Ok(self.key_manager.set_agg_key_with_agg_key().encode_input(
+            // These are two arguments, SigData and Key from:
+            // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol
+            &[
+                // SigData
+                Token::Tuple(vec![
+                    Token::Uint(msg_hash.into()),              // msgHash
+                    Token::Uint(sig.into()), // sig - this 's' in the literature, the signature scalar
+                    Token::Uint(key_nonce.into()), // key nonce
+                    Token::Address(nonce_times_g_addr.into()), // nonceTimesGAddr - this is r in the literature
+                ]),
+                // Key - the signing module will sign over the params, containing this
+                Token::Tuple(vec![
+                    Token::Uint(pubkey_x.into()),        // pubkeyX
+                    Token::Uint(pubkey_y_parity.into()), // pubkeyYparity
+                ]),
+            ],
+        )?)
     }
-}
-
-// not sure if key nonce should be u64...
-// sig = s in the literature. The scalar of the signature
-fn set_agg_key_with_agg_key_param_constructor(
-    msg_hash: [u8; 32],
-    sig: [u8; 32],
-    key_nonce: [u8; 32],
-    nonce_times_g_addr: [u8; 20],
-    pubkey_x: [u8; 32],
-    pubkey_y_parity: u8,
-) -> [Token; 2] {
-    // These are two arguments, SigData and Key from:
-    // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol
-    [
-        // SigData
-        Token::Tuple(vec![
-            Token::Uint(msg_hash.into()),              // msgHash
-            Token::Uint(sig.into()), // sig - this 's' in the literature, the signature scalar
-            Token::Uint(key_nonce.into()), // key nonce
-            Token::Address(nonce_times_g_addr.into()), // nonceTimesGAddr - this is r in the literature
-        ]),
-        // Key - the signing module will sign over the params, containing this
-        Token::Tuple(vec![
-            Token::Uint(pubkey_x.into()),        // pubkeyX
-            Token::Uint(pubkey_y_parity.into()), // pubkeyYparity
-        ]),
-    ]
-}
-
-/// r = k * G where k is the nonce and G is the generator point
-/// i.e. `k * G` is the "pubkey" generated from "secret key" `k`
-fn nonce_times_g_addr_from_r(r: secp256k1::PublicKey) -> [u8; 20] {
-    let v_pub: [u8; 64] = r.serialize_uncompressed()[1..]
-        .try_into()
-        .expect("Should be a valid pubkey");
-
-    // calculate nonce times g addr - the hash over
-    let nonce_times_g_addr_hash = Keccak256::hash(&v_pub).as_bytes().to_owned();
-
-    // take the last 160bits (20 bytes)
-    let nonce_times_g_addr: [u8; 20] = nonce_times_g_addr_hash[12..]
-        .try_into()
-        .expect("Should only be 20 bytes long");
-
-    return nonce_times_g_addr;
 }
 
 // Take a secp256k1 pubkey and return the pubkey_x and pubkey_y_parity
@@ -366,25 +334,6 @@ mod test_eth_tx_encoder {
         "86256580123538456061655860770396085945007591306530617821168588559087896188216";
     const MESSAGE_HASH: &str =
         "19838331578708755702960229198816480402256567085479269042839672688267843389518";
-
-    #[test]
-    fn test_nonce_times_g_addr_from_r() {
-        let s = secp256k1::Secp256k1::signing_only();
-        let sk_1 = secp256k1::SecretKey::from_str(AGG_PRIV_HEX_1).unwrap();
-
-        let pk_2 = PublicKey::from_secret_key(&s, &sk_1);
-
-        let res = nonce_times_g_addr_from_r(pk_2);
-
-        // This value was generated by the test itself. Basically
-        // just making sure that this doesn't change over time
-        // (and that `nonce_times_g_addr_from_r` above does not crash)
-        let expected = [
-            245, 23, 187, 128, 78, 210, 214, 7, 225, 83, 13, 1, 40, 174, 40, 161, 228, 112, 42, 190,
-        ];
-
-        assert_eq!(res, expected);
-    }
 
     #[test]
     fn test_message_hashing() {
@@ -434,16 +383,16 @@ mod test_eth_tx_encoder {
 
         let (pubkey_x, pubkey_y_parity) = destructure_pubkey(pk_2);
 
-        let params = set_agg_key_with_agg_key_param_constructor(
-            [0u8; 32],
-            [0u8; 32],
-            [0u8; 32],
-            [0u8; 20],
-            pubkey_x,
-            pubkey_y_parity,
-        );
-
-        let encoded = encoder.encode_params_key_manager_fn(params).unwrap();
+        let encoded = encoder
+            .encode_set_agg_key_with_agg_key(
+                [0u8; 32],
+                [0u8; 32],
+                [0u8; 32],
+                [0u8; 20],
+                pubkey_x,
+                pubkey_y_parity,
+            )
+            .unwrap();
         let hex_params = hex::encode(&encoded);
         println!("hex params: {:#?}", hex_params);
         // hex - from smart contract tests

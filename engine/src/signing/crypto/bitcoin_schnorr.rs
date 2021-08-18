@@ -18,6 +18,7 @@
 /// following the variant used in bip-schnorr: https://github.com/sipa/bips/blob/bip-schnorr/bip-schnorr.mediawiki
 use super::error::{InvalidKey, InvalidSS, InvalidSig};
 
+use super::super::super::eth::utils;
 // TODO: add tests for this module?
 
 use curv::arithmetic::traits::*;
@@ -199,16 +200,14 @@ impl LocalSig {
         let beta_i = local_ephemeral_key.x_i.clone();
         let alpha_i = local_private_key.x_i.clone();
 
-        let message_len_bits = message.len() * 8;
-        let R = local_ephemeral_key.y.bytes_compressed_to_big_int();
-        let X = local_private_key.y.bytes_compressed_to_big_int();
-        let X_vec = BigInt::to_bytes(&X);
-        let X_vec_len_bits = X_vec.len() * 8;
-        let e_bn = HSha256::create_hash_from_slice(
-            &BigInt::to_bytes(
-                &((((R << X_vec_len_bits) + X) << message_len_bits) + BigInt::from_bytes(message)),
-            )[..],
-        );
+        let r = local_ephemeral_key.y.get_element();
+        let eth_addr = utils::pubkey_to_eth_addr(r);
+
+        let e_bn = HSha256::create_hash(&[
+            &local_private_key.y.bytes_compressed_to_big_int(),
+            &BigInt::from_bytes(message),
+            &BigInt::from_bytes(&eth_addr),
+        ]);
 
         let e: FE = ECScalar::from(&e_bn);
         let gamma_i = beta_i + e.clone() * alpha_i;
@@ -308,10 +307,11 @@ impl Signature {
     }
 
     pub fn verify(&self, message: &[u8], pubkey_y: &GE) -> Result<(), InvalidSig> {
+        let eth_addr = utils::pubkey_to_eth_addr(self.v.get_element());
         let e_bn = HSha256::create_hash(&[
-            &self.v.bytes_compressed_to_big_int(),
             &pubkey_y.bytes_compressed_to_big_int(),
             &BigInt::from_bytes(message),
+            &BigInt::from_bytes(&eth_addr),
         ]);
         let e: FE = ECScalar::from(&e_bn);
 

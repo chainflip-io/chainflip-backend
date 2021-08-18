@@ -15,6 +15,7 @@ pub use frame_support::{
 	StorageValue,
 };
 use frame_system::offchain::SendTransactionTypes;
+use pallet_cf_reputation::{ReputationPenalty, ZeroSlasher};
 use pallet_grandpa::fg_primitives;
 use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
 use pallet_session::historical as session_historical;
@@ -399,6 +400,23 @@ impl pallet_cf_witnesser_api::Config for Runtime {
 	type Witnesser = Witnesser;
 }
 
+parameter_types! {
+	pub const HeartbeatBlockInterval: u32 = 150;
+	pub const ReputationPointPenalty: ReputationPenalty<BlockNumber> = ReputationPenalty { points: 1, blocks: 10 };
+	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
+}
+
+impl pallet_cf_reputation::Config for Runtime {
+	type Event = Event;
+	type ValidatorId = <Self as frame_system::Config>::AccountId;
+	type Amount = FlipBalance;
+	type HeartbeatBlockInterval = HeartbeatBlockInterval;
+	type ReputationPointPenalty = ReputationPointPenalty;
+	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
+	type Slasher = ZeroSlasher<Self>;
+	type EpochInfo = pallet_cf_validator::Pallet<Self>;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -424,6 +442,7 @@ construct_runtime!(
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
 		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>, Origin},
+		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
 	}
 );
 
