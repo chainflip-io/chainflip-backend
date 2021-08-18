@@ -53,15 +53,15 @@ pub mod pallet {
 	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 	pub struct Proposal<AccountId> {
 		/// Id - key in the proposal map
-		pub id: u32,
+		pub id: ProposalId,
 		/// Encoded representation of a extrinsic
 		pub call: OpaqueCall,
 		/// Expiry date (in secondes)
 		pub expiry: u64,
-		/// Numbers of votes for a proposal
-		pub votes: u32,
+		/// Numbers of approvals for a proposal
+		pub approvals: u32,
 		/// Array of accounts which already approved the proposal
-		pub voted: Vec<AccountId>,
+		pub approved: Vec<AccountId>,
 		/// Boolean value if the extrinsic was executed
 		pub executed: bool,
 	}
@@ -174,8 +174,8 @@ pub mod pallet {
 					call: call.encode(),
 					expiry: T::TimeSource::now().as_secs() + EXPIRY_SPAN,
 					executed: false,
-					votes: 0,
-					voted: vec![],
+					approvals: 0,
+					approved: vec![],
 				},
 			);
 			// Add the proposal to the ongoing proposals
@@ -271,7 +271,7 @@ impl<T: Config> Pallet<T> {
 	/// Check if a proposal fits all requirements to get executed
 	fn is_proposal_executable(proposal: &Proposal<T::AccountId>) -> bool {
 		// majority + not executed + not expired
-		Self::majority_reached(proposal.votes)
+		Self::majority_reached(proposal.approvals)
 			&& !proposal.executed
 			&& proposal.expiry >= T::TimeSource::now().as_secs()
 	}
@@ -330,10 +330,10 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 	/// Checks if the majority for a proposal is reached
-	fn majority_reached(votes: u32) -> bool {
+	fn majority_reached(approvals: u32) -> bool {
 		let total_number_of_voters = <Members<T>>::get().len() as u32;
 		let threshold = Self::calc_threshold(total_number_of_voters);
-		votes >= threshold
+		approvals >= threshold
 	}
 	/// Ensures that the account is a member of the governance
 	fn ensure_member(account: &T::AccountId) -> Result<(), DispatchError> {
@@ -365,13 +365,13 @@ impl<T: Config> Pallet<T> {
 		if proposal.expiry < T::TimeSource::now().as_secs() {
 			return Err(Error::<T>::AlreadyExpired.into());
 		}
-		// Check already voted
-		if proposal.voted.contains(&account) {
+		// Check already approved
+		if proposal.approved.contains(&account) {
 			return Err(Error::<T>::AlreadyApproved.into());
 		}
 		<Proposals<T>>::mutate(proposal_id, |proposal| {
-			proposal.voted.push(account);
-			proposal.votes = proposal.votes.checked_add(1).unwrap();
+			proposal.approved.push(account);
+			proposal.approvals = proposal.approvals.checked_add(1).unwrap();
 		});
 		Self::deposit_event(Event::Approved(proposal_id.clone()));
 		Ok(())

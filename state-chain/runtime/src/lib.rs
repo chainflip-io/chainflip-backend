@@ -101,7 +101,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("state-chain-node"),
 	impl_name: create_runtime_str!("state-chain-node"),
 	authoring_version: 1,
-	spec_version: 102,
+	spec_version: 100,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
@@ -325,11 +325,6 @@ impl pallet_cf_flip::Config for Runtime {
 	type ExistentialDeposit = ExistentialDeposit;
 }
 
-// impl pallet_sudo::Config for Runtime {
-// 	type Event = Event;
-// 	type Call = Call;
-// }
-
 impl pallet_cf_witnesser::Config for Runtime {
 	type Event = Event;
 	type Origin = Origin;
@@ -427,7 +422,6 @@ construct_runtime!(
 		Aura: pallet_aura::{Module, Config<T>},
 		Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
-		// Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
 		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>, Origin},
 	}
