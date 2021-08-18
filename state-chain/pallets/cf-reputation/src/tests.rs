@@ -1,5 +1,6 @@
 mod tests {
 	use crate::mock::*;
+	use crate::OfflineCondition::{BroadcastOutputFailed, ParticipateSigningFailed};
 	use crate::*;
 	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::BuildStorage;
@@ -211,11 +212,11 @@ mod tests {
 	fn reporting_any_offline_condition_for_unknown_validator_should_produce_error() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(
-				ReputationPallet::report(OfflineCondition::ParticipateSigningFailed(100), &BOB),
+				ReputationPallet::report(OfflineCondition::ParticipateSigningFailed, 100, &BOB),
 				ReportError::UnknownValidator
 			);
 			assert_noop!(
-				ReputationPallet::report(OfflineCondition::BroadcastOutputFailed(100), &BOB),
+				ReputationPallet::report(OfflineCondition::BroadcastOutputFailed, 100, &BOB),
 				ReportError::UnknownValidator
 			);
 		});
@@ -226,11 +227,11 @@ mod tests {
 	) {
 		new_test_ext().execute_with(|| {
 			assert_noop!(
-				ReputationPallet::report(OfflineCondition::ParticipateSigningFailed(100), &ALICE),
+				ReputationPallet::report(OfflineCondition::ParticipateSigningFailed, 100, &ALICE),
 				ReportError::UnknownValidator
 			);
 			assert_noop!(
-				ReputationPallet::report(OfflineCondition::BroadcastOutputFailed(100), &ALICE),
+				ReputationPallet::report(OfflineCondition::BroadcastOutputFailed, 100, &ALICE),
 				ReportError::UnknownValidator
 			);
 		});
@@ -243,14 +244,17 @@ mod tests {
 			let points_before = reputation_points(ALICE);
 			let penalty = 100;
 			assert_ok!(ReputationPallet::report(
-				OfflineCondition::BroadcastOutputFailed(penalty),
+				BroadcastOutputFailed,
+				penalty,
 				&ALICE
 			));
 			assert_eq!(reputation_points(ALICE), points_before - penalty);
 			assert_eq!(
 				last_event(),
-				mock::Event::pallet_cf_reputation(crate::Event::BroadcastOutputFailed(
-					ALICE, penalty
+				mock::Event::pallet_cf_reputation(crate::Event::OfflineConditionPenalty(
+					ALICE,
+					BroadcastOutputFailed,
+					penalty
 				))
 			);
 		});
@@ -263,14 +267,17 @@ mod tests {
 			let points_before = reputation_points(ALICE);
 			let penalty = 100;
 			assert_ok!(ReputationPallet::report(
-				OfflineCondition::ParticipateSigningFailed(penalty),
+				ParticipateSigningFailed,
+				penalty,
 				&ALICE
 			));
 			assert_eq!(reputation_points(ALICE), points_before - penalty);
 			assert_eq!(
 				last_event(),
-				mock::Event::pallet_cf_reputation(crate::Event::ParticipateSigningFailed(
-					ALICE, penalty
+				mock::Event::pallet_cf_reputation(crate::Event::OfflineConditionPenalty(
+					ALICE,
+					ParticipateSigningFailed,
+					penalty
 				))
 			);
 		});
