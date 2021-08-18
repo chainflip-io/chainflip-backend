@@ -428,6 +428,25 @@ impl pallet_cf_reputation::Config for Runtime {
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 }
 
+// ReqRep stuff
+
+impl pallet_cf_reqrep::reqreps::BaseConfig for Runtime {
+	type KeyId = u32;
+	type ValidatorId = AccountId;
+	// More likely to be an enum or something.
+	type ChainId = u32;
+}
+
+impl pallet_cf_reqrep::Config<Instance1> for Runtime {
+	type Event = Event;
+	type Request = pallet_cf_reqrep::reqreps::signature::Request<Self>;
+}
+
+impl pallet_cf_reqrep::Config<Instance2> for Runtime {
+	type Event = Event;
+	type Request = pallet_cf_reqrep::reqreps::broadcast::Request<Self>;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -455,6 +474,8 @@ construct_runtime!(
 		Offences: pallet_offences::{Module, Call, Storage, Event},
 		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>},
 		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
+		SignatureRequestReply: pallet_cf_reqrep::<Instance1>::{Module, Call, Storage, Event},
+		BroadcastRequestReply: pallet_cf_reqrep::<Instance2>::{Module, Call, Storage, Event},
 	}
 );
 

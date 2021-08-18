@@ -8850,6 +8850,7 @@ dependencies = [
  "pallet-cf-emissions",
  "pallet-cf-flip",
  "pallet-cf-reputation",
+ "pallet-cf-reqrep",
  "pallet-cf-rewards",
  "pallet-cf-staking",
  "pallet-cf-validator",
