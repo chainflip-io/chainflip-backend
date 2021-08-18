@@ -259,7 +259,6 @@ mod tests {
         // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
         // TODO: Use hex strings instead of dec strings. So we can use the exact const hex strings from consts.py.
 
-        let logger = logging::test_utils::create_test_logger();
         let km = KeyManager::load(CONTRACT_ADDRESS).unwrap();
 
         match km
@@ -351,7 +350,6 @@ mod tests {
 
     #[test]
     fn abi_topic_sigs() {
-        let logger = logging::test_utils::create_test_logger();
         let km = KeyManager::load(CONTRACT_ADDRESS).unwrap();
 
         // key change event

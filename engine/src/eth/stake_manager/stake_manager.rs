@@ -405,7 +405,6 @@ mod tests {
 
     #[test]
     fn test_load_contract() {
-        let logger = logging::test_utils::create_test_logger();
         assert!(StakeManager::load(CONTRACT_ADDRESS).is_ok());
         assert!(StakeManager::load("not_an_address").is_err());
     }
