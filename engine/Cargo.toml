@@ -70,6 +70,7 @@ cf-p2p-rpc = {path = "../state-chain/client/cf-p2p/rpc"}
 cf-traits = {path = "../state-chain/traits"}
 pallet-cf-auction = {path = "../state-chain/pallets/cf-auction"}
 pallet-cf-flip = {path = "../state-chain/pallets/cf-flip"}
+pallet-cf-reputation = {path = "../state-chain/pallets/cf-reputation"}
 pallet-cf-staking = {path = "../state-chain/pallets/cf-staking"}
 pallet-cf-validator = {path = "../state-chain/pallets/cf-validator"}
 state-chain-runtime = {path = "../state-chain/runtime"}
@@ -84,3 +85,17 @@ env_logger = "0.9.0"
 frame-support = "3.0.0"
 log = "0.4.14"
 nats_test_server = "0.3.0"
+
+# [features]
+# default = ['std']
+# std = [
+#     'cf-traits/std',
+#     'codec/std',
+#     'frame-support/std',
+#     'frame-system/std',
+#     'frame-benchmarking/std',
+#     'pallet-transaction-payment/std',
+#     'sp-runtime/std',
+#     'sp-std/std',
+#     'serde/std'
+# ]
