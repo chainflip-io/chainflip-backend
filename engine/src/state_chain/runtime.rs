@@ -120,7 +120,9 @@ impl Runtime for StateChainRuntime {
         event_type_registry.register_type_size::<u32>("SessionIndex");
         event_type_registry.register_type_size::<[u8; 32]>("AggKeySignature");
         event_type_registry
-            .register_type_size::<ImbalanceSource<AccountId32>>("ImbalanceSource<T::AccountId>")
+            .register_type_size::<ImbalanceSource<AccountId32>>("ImbalanceSource<T::AccountId>");
+        event_type_registry.register_type_size::<i32>("ReputationPoints");
+        event_type_registry.register_type_size::<u32>("OnlineCreditsFor<T>");
     }
 }
 
