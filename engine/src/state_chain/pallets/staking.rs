@@ -1,4 +1,4 @@
-//! Implements support for the staking module
+//! Implements subxt support for the staking pallet
 
 use std::marker::PhantomData;
 use std::time::Duration;

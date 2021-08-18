@@ -73,6 +73,8 @@ where
             .subscribe::<StakeManagerEvent>(Subject::StakeManager)
             .await?;
 
+        let mut 
+
         while let Some(event) = stake_manager_events.next().await {
             match event {
                 Ok(event) => self.submit_stake_manager_event(event).await?,
@@ -91,6 +93,8 @@ where
         slog::error!(self.logger, "{}", err_msg);
         Err(anyhow::Error::msg(err_msg))
     }
+
+    async fn submit_heartbeat() {}
 
     /// Submit an event to the state chain, return the tx_hash
     async fn submit_stake_manager_event(&mut self, event: StakeManagerEvent) -> Result<()> {
