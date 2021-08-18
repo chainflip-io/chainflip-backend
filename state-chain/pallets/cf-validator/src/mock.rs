@@ -123,7 +123,7 @@ impl pallet_cf_auction::Config for Test {
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
-	type Handler = MockHandler<ValidatorId, Amount>;
+	type Handler = MockHandler<ValidatorId = ValidatorId, Amount = Amount>;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {

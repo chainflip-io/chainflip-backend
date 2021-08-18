@@ -320,13 +320,15 @@ impl<T: Config> Auction for Pallet<T> {
 	}
 }
 
-impl<T: Config> VaultRotationHandler<T::ValidatorId> for Pallet<T> {
+impl<T: Config> VaultRotationHandler for Pallet<T> {
+	type ValidatorId = T::ValidatorId;
+
 	fn abort() {
 		<CurrentPhase<T>>::put(AuctionPhase::default());
 		Self::deposit_event(Event::AuctionAborted(<CurrentAuctionIndex<T>>::get()));
 	}
 
-	fn penalise(bad_validators: Vec<T::ValidatorId>) {
+	fn penalise(bad_validators: Vec<Self::ValidatorId>) {
 		BadValidators::<T>::set(bad_validators);
 	}
 }

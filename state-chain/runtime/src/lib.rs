@@ -4,6 +4,7 @@
 mod chainflip;
 mod weights;
 // A few exports that help ease life for downstream crates.
+use cf_traits::ChainFlip;
 use core::time::Duration;
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
@@ -17,7 +18,6 @@ pub use frame_support::{
 use frame_system::offchain::SendTransactionTypes;
 use pallet_cf_reputation::{ReputationPenalty, ZeroSlasher};
 use pallet_cf_vaults::nonce::NonceUnixTime;
-use pallet_cf_vaults::rotation::ChainFlip;
 use pallet_grandpa::fg_primitives;
 use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
 use pallet_session::historical as session_historical;
@@ -166,7 +166,7 @@ impl pallet_cf_validator::Config for Runtime {
 
 impl pallet_cf_vaults::Config for Runtime {
 	type Event = Event;
-	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
+	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type PublicKey = Vec<u8>;
 	type Transaction = Vec<u8>;
 	type RotationHandler = Auction;

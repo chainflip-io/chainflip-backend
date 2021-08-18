@@ -2,7 +2,7 @@ mod test {
 	use crate::mock::*;
 	use crate::rotation::ChainParams::Other;
 	use crate::*;
-	use frame_support::{assert_noop, assert_ok};
+	use frame_support::assert_ok;
 
 	fn last_event() -> mock::Event {
 		frame_system::Pallet::<MockRuntime>::events()
@@ -219,15 +219,6 @@ mod test {
 				1,
 				EthSigningTxResponse::Success(vec![])
 			));
-
-			assert_noop!(
-				VaultsPallet::eth_signing_tx_response(
-					Origin::root(),
-					1,
-					EthSigningTxResponse::Error(vec![1, 2, 3])
-				),
-				Error::<MockRuntime>::VaultRotationCompletionFailed
-			);
 		});
 	}
 }

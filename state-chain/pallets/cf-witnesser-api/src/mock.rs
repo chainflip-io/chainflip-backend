@@ -4,11 +4,10 @@ use crate as pallet_cf_witness_api;
 
 use cf_traits::{
 	impl_mock_ensure_witnessed_for_origin, impl_mock_stake_transfer,
-	impl_mock_witnesser_for_account_and_call_types, VaultRotationHandler,
+	impl_mock_witnesser_for_account_and_call_types, ChainFlip, VaultRotationHandler,
 };
 use frame_support::parameter_types;
 use frame_system as system;
-use pallet_cf_vaults::rotation::ChainFlip;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -89,9 +88,11 @@ impl ChainFlip for Test {
 	type ValidatorId = ValidatorId;
 }
 
-impl VaultRotationHandler<ValidatorId> for Test {
+impl VaultRotationHandler for Test {
+	type ValidatorId = ValidatorId;
+
 	fn abort() {}
-	fn penalise(_bad_validators: Vec<ValidatorId>) {}
+	fn penalise(_bad_validators: Vec<Self::ValidatorId>) {}
 }
 
 impl pallet_cf_vaults::Config for Test {
