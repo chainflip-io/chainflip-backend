@@ -11,6 +11,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 pub use eth_event_streamer::EthEventStreamer;
 
+use web3::types::SyncState;
 use thiserror::Error;
 
 use std::time::Duration;
@@ -69,7 +70,28 @@ pub async fn new_web3_client(settings : &settings::Settings, logger : &slog::Log
             Ok(web3::Web3::new(web3::transports::WebSocket::new(node_endpoint).await?))
         },
     ).await {
-        Ok(result) => result,
+        Ok(result) => match result {
+            Ok(web3) => {
+                // Make sure the eth node is fully synced
+                loop {
+                    match web3.eth().syncing().await? {
+                        SyncState::Syncing(info) => {
+                            slog::info!(logger, "Waiting for eth node to sync: {:?}", info);
+                        }
+                        SyncState::NotSyncing => {
+                            slog::info!(
+                                logger,
+                                "Eth node is synced."
+                            );
+                            break;
+                        }
+                    }
+                    tokio::time::sleep(Duration::from_secs(4)).await;
+                };
+                Ok(web3)
+            },
+            Err(error) => Err(error)
+        },
         Err(_) => {
             // Connection timeout
             Err(anyhow::Error::msg(format!(
