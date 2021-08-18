@@ -3,9 +3,8 @@ use crate::logging::COMPONENT_KEY;
 use super::{EventSink, EventSource};
 use futures::{future::join_all, stream, StreamExt};
 use slog::o;
-use std::time::Duration;
 use web3::{
-    types::{BlockNumber, SyncState},
+    types::BlockNumber,
     Web3,
     Transport,
     DuplexTransport
@@ -56,22 +55,6 @@ where
             "Start running eth event stream from block: {:?}",
             from_block
         );
-        // Make sure the eth node is fully synced
-        loop {
-            match self.web3.eth().syncing().await? {
-                SyncState::Syncing(info) => {
-                    slog::info!(self.logger, "Waiting for eth node to sync: {:?}", info);
-                }
-                SyncState::NotSyncing => {
-                    slog::info!(
-                        self.logger,
-                        "Eth node is synced, subscribing to log events."
-                    );
-                    break;
-                }
-            }
-            tokio::time::sleep(Duration::from_secs(4)).await;
-        }
 
         // The `fromBlock` parameter doesn't seem to work reliably with subscription streams, so
         // request past block via http and prepend them to the stream manually.
