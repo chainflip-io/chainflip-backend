@@ -18,12 +18,13 @@ pub trait ReqRep<T> : Parameter {
 	fn on_reply(&self, _reply: Self::Reply) -> DispatchResult { todo!() }
 }
 
-mod reqreps {
+pub mod reqreps {
 	pub use super::*;
 	use codec::{Decode, Encode};
 	use frame_support::Parameter;
 
 	pub trait BaseConfig: frame_system::Config {
+		/// The id type used to identify signing keys.
 		type KeyId: Parameter;
 		type ValidatorId: Parameter;
 		type ChainId: Parameter;
@@ -130,7 +131,7 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn reply(origin: OriginFor<T>, id: RequestId, reply: ReplyFor<T, I>) -> DispatchResultWithPostInfo {
 			// Probably needs to be witnessed.
-			let who = ensure_signed(origin)?;
+			let _who = ensure_signed(origin)?;
 			
 			// 1. Pull the request type out of storage.
 			let request = PendingRequests::<T, I>::get(id).ok_or(Error::<T, I>::InvalidRequestId)?;
