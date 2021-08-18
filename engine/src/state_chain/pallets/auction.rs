@@ -88,10 +88,14 @@ mod tests {
 
     use pallet_cf_auction::Config;
 
+    use state_chain_runtime::Runtime as SCRuntime;
+
+    use crate::state_chain::runtime::StateChainRuntime;
+
     #[test]
     fn auction_started_decoding() {
-        let event: <StateChainRuntime as Config>::Event =
-            pallet_cf_auction::Event::<StateChainRuntime>::AuctionStarted(1).into();
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_auction::Event::<SCRuntime>::AuctionStarted(1).into();
 
         let encoded_auction_started = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped
@@ -108,8 +112,8 @@ mod tests {
 
     #[test]
     fn auction_confirmed_decoding() {
-        let event: <StateChainRuntime as Config>::Event =
-            pallet_cf_auction::Event::<StateChainRuntime>::AuctionConfirmed(1).into();
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_auction::Event::<SCRuntime>::AuctionConfirmed(1).into();
 
         let encoded_auction_confirmed = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped
@@ -127,9 +131,8 @@ mod tests {
     #[test]
     fn auction_range_changed_decoding() {
         // AuctionRangeChanged(AuctionRange, AuctionRange)
-        let event: <StateChainRuntime as Config>::Event =
-            pallet_cf_auction::Event::<StateChainRuntime>::AuctionRangeChanged((0, 1), (0, 2))
-                .into();
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_auction::Event::<SCRuntime>::AuctionRangeChanged((0, 1), (0, 2)).into();
 
         let encoded_auction_range_changed = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped
@@ -155,9 +158,8 @@ mod tests {
         let bob = sp_keyring::AccountKeyring::Bob.to_account_id();
 
         let validator_ids = vec![alice.clone(), bob.clone()];
-        let event: <StateChainRuntime as Config>::Event =
-            pallet_cf_auction::Event::<StateChainRuntime>::AuctionCompleted(1, validator_ids)
-                .into();
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_auction::Event::<SCRuntime>::AuctionCompleted(1, validator_ids).into();
 
         let encoded_auction_completed = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped
@@ -177,8 +179,8 @@ mod tests {
 
     #[test]
     fn auction_aborted_decoding() {
-        let event: <StateChainRuntime as Config>::Event =
-            pallet_cf_auction::Event::<StateChainRuntime>::AuctionAborted(1).into();
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_auction::Event::<SCRuntime>::AuctionAborted(1).into();
 
         let encoded_auction_aborted = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped
@@ -195,8 +197,8 @@ mod tests {
 
     #[test]
     fn awaiting_bidders() {
-        let event: <StateChainRuntime as Config>::Event =
-            pallet_cf_auction::Event::<StateChainRuntime>::AwaitingBidders.into();
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_auction::Event::<SCRuntime>::AwaitingBidders.into();
 
         let awaiting_bidders_encoded = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped

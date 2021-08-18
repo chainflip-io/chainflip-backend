@@ -69,10 +69,14 @@ mod tests {
 
     use super::*;
 
+    use state_chain_runtime::Runtime as SCRuntime;
+
+    use crate::state_chain::runtime::StateChainRuntime;
+
     #[test]
     fn epoch_changed_decoding() {
-        let event: <StateChainRuntime as Config>::Event =
-            pallet_cf_validator::Event::<StateChainRuntime>::EpochDurationChanged(4, 10).into();
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_validator::Event::<SCRuntime>::EpochDurationChanged(4, 10).into();
 
         let encoded_epoch = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped
@@ -90,8 +94,8 @@ mod tests {
     #[test]
     fn new_epoch_decoding() {
         // AuctionConfirmed(EpochIndex)
-        let event: <StateChainRuntime as Config>::Event =
-            pallet_cf_validator::Event::<StateChainRuntime>::NewEpoch(1).into();
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_validator::Event::<SCRuntime>::NewEpoch(1).into();
 
         let encoded_new_epoch = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped
@@ -107,8 +111,8 @@ mod tests {
 
     #[test]
     fn force_rotation_requested_decoding() {
-        let event: <StateChainRuntime as Config>::Event =
-            pallet_cf_validator::Event::<StateChainRuntime>::ForceRotationRequested().into();
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_validator::Event::<SCRuntime>::ForceRotationRequested().into();
 
         let encodeded_force_rotation = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped

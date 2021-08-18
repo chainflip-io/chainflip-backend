@@ -249,7 +249,9 @@ mod tests {
             tx_hash: TX_HASH,
         };
 
-        let result = sc_broadcaster.submit_event(staked_event).await;
+        let result = sc_broadcaster
+            .submit_stake_manager_event(staked_event)
+            .await;
 
         println!("Result: {:#?}", result);
     }

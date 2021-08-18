@@ -21,6 +21,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    #[ignore = "depends on sc"]
     async fn test_start_heartbeat() {
         let settings = settings::test_utils::new_test_settings().unwrap();
 

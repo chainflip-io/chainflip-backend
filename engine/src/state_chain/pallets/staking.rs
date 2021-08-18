@@ -166,7 +166,6 @@ impl_staking_event_enum!(
 
 #[cfg(test)]
 mod tests {
-    use crate::state_chain::runtime::StateChainRuntime;
 
     use super::*;
 
@@ -175,6 +174,8 @@ mod tests {
 
     use sp_core::U256;
     use sp_keyring::AccountKeyring;
+
+    use state_chain_runtime::Runtime as SCRuntime;
 
     const ETH_ADDRESS: [u8; 20] = [
         00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01,
@@ -185,9 +186,8 @@ mod tests {
         let who = AccountKeyring::Alice.to_account_id();
         let msg_hash = MsgHash::from([21u8; 32]);
 
-        let event: <StateChainRuntime as Config>::Event =
-            pallet_cf_staking::Event::<StateChainRuntime>::ClaimSigRequested(who.clone(), msg_hash)
-                .into();
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_staking::Event::<SCRuntime>::ClaimSigRequested(who.clone(), msg_hash).into();
 
         let encoded_claim_sig_requested = event.encode();
 
@@ -212,9 +212,8 @@ mod tests {
     fn staked_decode_test() {
         let who = AccountKeyring::Alice.to_account_id();
 
-        let event: <StateChainRuntime as Config>::Event =
-            pallet_cf_staking::Event::<StateChainRuntime>::Staked(who.clone(), 100u128, 150u128)
-                .into();
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_staking::Event::<SCRuntime>::Staked(who.clone(), 100u128, 150u128).into();
 
         let encoded_staked = event.encode();
 
@@ -238,9 +237,8 @@ mod tests {
     fn claimed_decode_test() {
         let who = AccountKeyring::Alice.to_account_id();
 
-        let event: <StateChainRuntime as Config>::Event =
-            pallet_cf_staking::Event::<StateChainRuntime>::ClaimSettled(who.clone(), 150u128)
-                .into();
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_staking::Event::<SCRuntime>::ClaimSettled(who.clone(), 150u128).into();
 
         let encoded_claimed = event.encode();
 
@@ -263,12 +261,9 @@ mod tests {
     fn stake_refund_decode_test() {
         let who = AccountKeyring::Alice.to_account_id();
 
-        let event: <StateChainRuntime as Config>::Event = pallet_cf_staking::Event::<
-            StateChainRuntime,
-        >::StakeRefund(
-            who.clone(), 150u128, ETH_ADDRESS
-        )
-        .into();
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_staking::Event::<SCRuntime>::StakeRefund(who.clone(), 150u128, ETH_ADDRESS)
+                .into();
 
         let encoded_stake_refund = event.encode();
 
@@ -296,8 +291,8 @@ mod tests {
         let sig = U256::zero();
         let expiry = Duration::from_secs(1);
 
-        let event: <StateChainRuntime as Config>::Event =
-            pallet_cf_staking::Event::<StateChainRuntime>::ClaimSignatureIssued(
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_staking::Event::<SCRuntime>::ClaimSignatureIssued(
                 msg_hash,
                 1u64,
                 sig.clone(),
@@ -336,8 +331,8 @@ mod tests {
     fn account_retired_decode_test() {
         let who = AccountKeyring::Alice.to_account_id();
 
-        let event: <StateChainRuntime as Config>::Event =
-            pallet_cf_staking::Event::<StateChainRuntime>::AccountRetired(who.clone()).into();
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_staking::Event::<SCRuntime>::AccountRetired(who.clone()).into();
 
         let encoded_account_retired = event.encode();
 
@@ -359,8 +354,8 @@ mod tests {
     fn account_activated_decode_test() {
         let who = AccountKeyring::Alice.to_account_id();
 
-        let event: <StateChainRuntime as Config>::Event =
-            pallet_cf_staking::Event::<StateChainRuntime>::AccountActivated(who.clone()).into();
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_staking::Event::<SCRuntime>::AccountActivated(who.clone()).into();
 
         let encoded_account_activated = event.encode();
 
@@ -387,12 +382,9 @@ mod tests {
 
         let flip_balance = 1000u128;
 
-        let event: <StateChainRuntime as Config>::Event = pallet_cf_staking::Event::<
-            StateChainRuntime,
-        >::ClaimExpired(
-            who.clone(), nonce, flip_balance
-        )
-        .into();
+        let event: <SCRuntime as Config>::Event =
+            pallet_cf_staking::Event::<SCRuntime>::ClaimExpired(who.clone(), nonce, flip_balance)
+                .into();
 
         let encoded_account_retired = event.encode();
 
