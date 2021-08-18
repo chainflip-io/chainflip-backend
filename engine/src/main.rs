@@ -104,7 +104,7 @@ async fn main() {
         ),
         temp_event_mapper::start(mq_client.clone(), &root_logger),
         // Start eth components
-        eth_broadcaster::start_eth_broadcaster(&settings, mq_client.clone(), &root_logger),
+        eth_broadcaster::start_eth_broadcaster(&web3, &settings, mq_client.clone(), &root_logger),
         eth_tx_encoding::set_agg_key_with_agg_key::start(
             &settings,
             mq_client.clone(),
