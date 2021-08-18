@@ -22,7 +22,7 @@ pub async fn start_key_manager_witness<MQC: 'static + IMQClient + Send + Sync + 
 
     EthEventStreamer::new(
         &settings.eth.node_endpoint,
-        KeyManager::load(settings.eth.key_manager_eth_address.as_str(), logger)
+        KeyManager::load(settings.eth.key_manager_eth_address.as_str())
             .expect("Should load KeyManager contract"),
         vec![KeyManagerSink::<MQC>::new(mq_client, logger)
             .await

@@ -3,12 +3,8 @@
 
 use core::str::FromStr;
 
-use crate::{
-    eth::{utils, EventProducerError, EventSource},
-    logging::COMPONENT_KEY,
-};
+use crate::eth::{utils, EventProducerError, EventSource};
 use serde::{Deserialize, Serialize};
-use slog::o;
 use std::fmt::Display;
 use web3::{
     contract::tokens::Tokenizable,
@@ -23,7 +19,6 @@ use anyhow::Result;
 pub struct KeyManager {
     pub deployed_address: H160,
     contract: ethabi::Contract,
-    logger: slog::Logger,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -96,13 +91,12 @@ pub enum KeyManagerEvent {
 
 impl KeyManager {
     /// Loads the contract abi to get event definitions
-    pub fn load(deployed_address: &str, logger: &slog::Logger) -> Result<Self> {
+    pub fn load(deployed_address: &str) -> Result<Self> {
         Ok(Self {
             deployed_address: H160::from_str(deployed_address)?,
             contract: ethabi::Contract::load(
                 std::include_bytes!("../abis/KeyManager.json").as_ref(),
-            )?,
-            logger: logger.new(o!(COMPONENT_KEY => "KeyManager")),
+            )?
         })
     }
 
@@ -170,13 +164,6 @@ impl EventSource for KeyManager {
             topics: log.topics,
             data: log.data.0,
         };
-
-        slog::debug!(
-            self.logger,
-            "Parsing event from block {:?} with signature: {:?}",
-            log.block_number.unwrap_or_default(),
-            sig
-        );
 
         if sig == self.key_change_event_definition().signature() {
             let log = self.key_change_event_definition().parse_log(raw_log)?;
@@ -273,7 +260,7 @@ mod tests {
         // TODO: Use hex strings instead of dec strings. So we can use the exact const hex strings from consts.py.
 
         let logger = logging::test_utils::create_test_logger();
-        let km = KeyManager::load(CONTRACT_ADDRESS, &logger).unwrap();
+        let km = KeyManager::load(CONTRACT_ADDRESS).unwrap();
 
         match km
             .parse_event(serde_json::from_str(AGG_SET_AGG_LOG).unwrap())
@@ -365,7 +352,7 @@ mod tests {
     #[test]
     fn abi_topic_sigs() {
         let logger = logging::test_utils::create_test_logger();
-        let km = KeyManager::load(CONTRACT_ADDRESS, &logger).unwrap();
+        let km = KeyManager::load(CONTRACT_ADDRESS).unwrap();
 
         // key change event
         assert_eq!(
