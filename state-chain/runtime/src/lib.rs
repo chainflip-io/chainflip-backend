@@ -15,6 +15,7 @@ pub use frame_support::{
 	StorageValue,
 };
 use frame_system::offchain::SendTransactionTypes;
+use pallet_cf_reputation::{ReputationPenalty, ZeroSlasher};
 use pallet_cf_vaults::nonce::NonceUnixTime;
 use pallet_cf_vaults::rotation::ChainFlip;
 use pallet_grandpa::fg_primitives;
@@ -341,7 +342,7 @@ impl pallet_sudo::Config for Runtime {
 	type Call = Call;
 }
 
-impl pallet_cf_witness::Config for Runtime {
+impl pallet_cf_witnesser::Config for Runtime {
 	type Event = Event;
 	type Origin = Origin;
 	type Call = Call;
@@ -367,7 +368,7 @@ impl pallet_cf_staking::Config for Runtime {
 	type Balance = FlipBalance;
 	type Flip = Flip;
 	type Nonce = u64;
-	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
+	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
 	type TimeSource = Timestamp;
 	type MinClaimTTL = MinClaimTTL;
@@ -402,7 +403,7 @@ impl pallet_transaction_payment::Config for Runtime {
 	type FeeMultiplierUpdate = ();
 }
 
-impl pallet_cf_witness_api::Config for Runtime {
+impl pallet_cf_witnesser_api::Config for Runtime {
 	type Call = Call;
 	type Witnesser = Witnesser;
 }
@@ -410,6 +411,23 @@ impl pallet_cf_witness_api::Config for Runtime {
 impl ChainFlip for Runtime {
 	type Amount = FlipBalance;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
+}
+
+parameter_types! {
+	pub const HeartbeatBlockInterval: u32 = 150;
+	pub const ReputationPointPenalty: ReputationPenalty<BlockNumber> = ReputationPenalty { points: 1, blocks: 10 };
+	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
+}
+
+impl pallet_cf_reputation::Config for Runtime {
+	type Event = Event;
+	type ValidatorId = <Self as frame_system::Config>::AccountId;
+	type Amount = FlipBalance;
+	type HeartbeatBlockInterval = HeartbeatBlockInterval;
+	type ReputationPointPenalty = ReputationPointPenalty;
+	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
+	type Slasher = ZeroSlasher<Self>;
+	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 }
 
 construct_runtime!(
@@ -428,8 +446,8 @@ construct_runtime!(
 		TransactionPayment: pallet_transaction_payment::{Module, Storage},
 		Session: pallet_session::{Module, Storage, Event, Config<T>},
 		Historical: session_historical::{Module},
-		Witnesser: pallet_cf_witness::{Module, Call, Event<T>, Origin},
-		WitnesserApi: pallet_cf_witness_api::{Module, Call},
+		Witnesser: pallet_cf_witnesser::{Module, Call, Event<T>, Origin},
+		WitnesserApi: pallet_cf_witnesser_api::{Module, Call},
 		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
 		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
 		Aura: pallet_aura::{Module, Config<T>},
@@ -438,6 +456,7 @@ construct_runtime!(
 		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
 		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>},
+		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
 	}
 );
 

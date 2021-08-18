@@ -6,8 +6,8 @@ pub mod db;
 mod tests;
 
 pub use client::{
-    KeyId, KeygenInfo, KeygenOutcome, KeygenSuccess, MultisigClient, MultisigEvent,
-    MultisigInstruction, SigningInfo, SigningOutcome, SigningSuccess,
+    start, KeyId, KeygenInfo, KeygenOutcome, MultisigEvent, MultisigInstruction, SchnorrSignature,
+    SigningInfo, SigningOutcome,
 };
 
 use serde::{Deserialize, Serialize};

@@ -3,7 +3,7 @@ use std::{path::Path, str::FromStr};
 use crate::{
     eth::eth_tx_encoding::ContractCallDetails,
     logging::COMPONENT_KEY,
-    mq::{pin_message_stream, IMQClient, Subject},
+    mq::{IMQClient, Subject},
     settings,
     types::chain::Chain,
 };
@@ -11,6 +11,7 @@ use crate::{
 use anyhow::Result;
 use secp256k1::SecretKey;
 use slog::o;
+use std::time::Duration;
 use web3::{
     ethabi::ethereum_types::H256, signing::SecretKeyRef, transports::WebSocket,
     types::TransactionParameters, Transport, Web3,
@@ -62,14 +63,38 @@ impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
         secret_key: SecretKey,
         logger: &slog::Logger,
     ) -> Result<Self> {
-        Ok(EthBroadcaster {
-            mq_client,
-            web3_client: Web3::new(
-                web3::transports::WebSocket::new(settings.eth.node_endpoint.as_str()).await?,
-            ),
-            secret_key,
-            logger: logger.new(o!(COMPONENT_KEY => "ETHBroadcaster")),
-        })
+        slog::debug!(
+            logger,
+            "Connecting new Eth Broadcaster to {}",
+            settings.eth.node_endpoint.as_str()
+        );
+        match tokio::time::timeout(
+            Duration::from_secs(5),
+            web3::transports::WebSocket::new(settings.eth.node_endpoint.as_str()),
+        )
+        .await
+        {
+            Ok(Ok(socket)) => {
+                // Successful connection
+                Ok(Self {
+                    mq_client,
+                    web3_client: Web3::new(socket),
+                    secret_key,
+                    logger: logger.new(o!(COMPONENT_KEY => "ETHBroadcaster")),
+                })
+            }
+            Ok(Err(e)) => {
+                // Connection error
+                Err(e.into())
+            }
+            Err(_) => {
+                // Connection timeout
+                Err(anyhow::Error::msg(format!(
+                    "Timeout connecting to {:?}",
+                    settings.eth.node_endpoint.as_str()
+                )))
+            }
+        }
     }
 
     /// Consumes [TxDetails] messages from the `Broadcast` queue and signs and broadcasts the transaction to ethereum.
@@ -79,8 +104,6 @@ impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
             .mq_client
             .subscribe::<ContractCallDetails>(Subject::Broadcast(Chain::ETH))
             .await?;
-
-        let subscription = pin_message_stream(subscription);
 
         subscription
             .for_each_concurrent(None, |msg| async {

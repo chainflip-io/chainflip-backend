@@ -1,3 +1,5 @@
+use std::pin::Pin;
+
 use super::SubjectName;
 use super::{IMQClient, Subject};
 use anyhow::Context;
@@ -50,7 +52,7 @@ impl IMQClient for NatsMQClient {
     async fn subscribe<M: DeserializeOwned>(
         &self,
         subject: Subject,
-    ) -> Result<Box<dyn Stream<Item = Result<M>>>> {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<M>>>>> {
         let sub = self.conn.subscribe(&subject.to_subject_name()).await?;
 
         let subscription = Subscription { inner: sub };
@@ -58,7 +60,7 @@ impl IMQClient for NatsMQClient {
             serde_json::from_slice(&bytes[..]).context("Message deserialization failed.")
         });
 
-        Ok(Box::new(stream))
+        Ok(Box::pin(stream))
     }
 
     async fn close(&self) -> Result<()> {
@@ -76,8 +78,6 @@ mod test {
 
     use crate::types::chain::Chain;
     use serde::Deserialize;
-
-    use crate::mq::pin_message_stream;
 
     #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
     struct TestMessage(String);
@@ -113,13 +113,11 @@ mod test {
 
         let subject = Subject::Witness(Chain::ETH);
 
-        let stream = nats_client.subscribe::<TestMessage>(subject).await.unwrap();
+        let mut test_messages = nats_client.subscribe::<TestMessage>(subject).await.unwrap();
 
         nats_client.publish(subject, &test_message).await.unwrap();
 
-        let mut stream = pin_message_stream(stream);
-
-        match tokio::time::timeout(Duration::from_millis(100), stream.next()).await {
+        match tokio::time::timeout(Duration::from_millis(100), test_messages.next()).await {
             Ok(Some(m)) => assert_eq!(m.unwrap(), test_message),
             Ok(None) => panic!("Unexpected error: stream returned early."),
             Err(_) => panic!("Nats stream timed out."),

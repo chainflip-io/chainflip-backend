@@ -2,7 +2,7 @@ use chainflip_engine::{
     eth::{eth_broadcaster, eth_tx_encoding, key_manager, stake_manager},
     health::HealthMonitor,
     mq::nats_client::NatsMQClient,
-    p2p::{P2PConductor, RpcP2PClient, ValidatorId},
+    p2p::{self, RpcP2PClient, ValidatorId},
     settings::Settings,
     signing,
     signing::db::PersistentKeyDB,
@@ -71,15 +71,14 @@ async fn main() {
 
     futures::join!(
         // Start signing components
-        signing::MultisigClient::new(
+        signing::start(
+            ValidatorId(my_pair_signer.signer().public().0),
             db,
             mq_client.clone(),
-            ValidatorId(my_pair_signer.signer().public().0),
+            shutdown_client_rx,
             &root_logger,
-        )
-        .run(shutdown_client_rx),
-        P2PConductor::new(
-            mq_client.clone(),
+        ),
+        p2p::conductor::start(
             RpcP2PClient::new(
                 url::Url::parse(settings.state_chain.ws_endpoint.as_str()).expect(&format!(
                     "Should be valid ws endpoint: {}",
@@ -87,10 +86,10 @@ async fn main() {
                 )),
                 &root_logger
             ),
+            mq_client.clone(),
+            p2p_shutdown_rx,
             &root_logger
-        )
-        .await
-        .start(p2p_shutdown_rx),
+        ),
         // Start state chain components
         state_chain::sc_observer::start(mq_client.clone(), subxt_client.clone(), &root_logger),
         state_chain::sc_broadcaster::start(

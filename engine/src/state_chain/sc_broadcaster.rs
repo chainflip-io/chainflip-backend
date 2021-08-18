@@ -6,7 +6,7 @@ use super::runtime::StateChainRuntime;
 use crate::{
     eth::stake_manager::stake_manager::StakeManagerEvent,
     logging::COMPONENT_KEY,
-    mq::{pin_message_stream, IMQClient, Subject},
+    mq::{IMQClient, Subject},
 };
 
 use crate::state_chain::witness_api::*;
@@ -68,14 +68,12 @@ where
     }
 
     pub async fn run(&mut self) -> Result<()> {
-        let stream = self
+        let mut stake_manager_events = self
             .mq_client
             .subscribe::<StakeManagerEvent>(Subject::StakeManager)
             .await?;
 
-        let mut stream = pin_message_stream(stream);
-
-        while let Some(event) = stream.next().await {
+        while let Some(event) = stake_manager_events.next().await {
             match event {
                 Ok(event) => self.submit_event(event).await?,
                 Err(e) => {
@@ -100,13 +98,15 @@ where
             StakeManagerEvent::Staked {
                 account_id,
                 amount,
+                return_addr,
                 tx_hash,
             } => {
                 slog::trace!(
                     self.logger,
-                    "Sending witness_staked({:?}, {}, {:?}) to state chain",
+                    "Sending witness_staked({:?}, {}, {:?}, {:?}) to state chain",
                     account_id,
                     amount,
+                    return_addr,
                     tx_hash
                 );
                 self.subxt_client
@@ -132,7 +132,7 @@ where
                 self.signer.increment_nonce();
             }
             StakeManagerEvent::MinStakeChanged { .. }
-            | StakeManagerEvent::EmissionChanged { .. }
+            | StakeManagerEvent::FlipSupplyUpdated { .. }
             | StakeManagerEvent::ClaimRegistered { .. } => {
                 slog::warn!(
                     self.logger,
@@ -215,8 +215,6 @@ mod tests {
             )
             .await;
 
-        println!("Result is: {:#?}", result);
-
         assert!(result.is_ok());
     }
 
@@ -240,9 +238,12 @@ mod tests {
 
         let staked_node_id =
             AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU").unwrap();
+        let return_addr =
+            web3::types::H160::from_str("0x73d669c173d88ccb01f6daab3a3304af7a1b22c1").unwrap();
         let staked_event = StakeManagerEvent::Staked {
             account_id: staked_node_id,
             amount: 100,
+            return_addr: return_addr,
             tx_hash: TX_HASH,
         };
 
