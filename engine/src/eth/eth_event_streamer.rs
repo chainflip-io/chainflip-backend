@@ -28,10 +28,11 @@ where
     logger: slog::Logger,
 }
 
-impl<E, S, T: Transport> EthEventStreamer<E, S, T>
+impl<S, E, T> EthEventStreamer<E, S, T>
 where
     S: EventSource,
     E: EventSink<S::Event> + 'static,
+    T : DuplexTransport
 {
     /// Connects to the node_endpoint WebSocket with a 5sec timeout
     pub async fn new(
@@ -47,14 +48,7 @@ where
             logger : logger.new(o!(COMPONENT_KEY => "EthEventStreamer"))
         }
     }
-}
 
-impl<S, E, T> EthEventStreamer<E, S, T>
-where
-    S: EventSource,
-    E: EventSink<S::Event> + 'static,
-    T : DuplexTransport
-{
     /// Create a stream of Ethereum log events. If `from_block` is `None`, starts at the pending block.
     pub async fn run(&self, from_block: Option<u64>) -> Result<()> {
         slog::info!(
