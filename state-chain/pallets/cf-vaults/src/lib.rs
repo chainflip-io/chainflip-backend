@@ -11,22 +11,25 @@
 //! ## Overview
 //! The module contains functionality to manage the vault rotation that has to occur for the ChainFlip
 //! validator set to rotate.  The process of vault rotation is triggered by a successful auction via
-//! the trait `AuctionHandler::on_auction_completed()`, which provides a list of suitable validators with which we would
+//! the trait `VaultRotation::start_vault_rotation()`, which provides a list of suitable validators with which we would
 //! like to proceed in rotating the vaults concerned.  The process of rotation is multi-faceted and involves a number of
 //! pallets.  With the end of an epoch (by reaching a block number or forced), the `Validator` pallet requests an auction to
 //! start from the `Auction` pallet.  A set of stakers are provided by the `Staking` pallet and an auction is run with the
-//! outcome being shared via `AuctionHandler::on_auction_completed()`.
+//! outcome being shared via `VaultRotation::start_vault_rotation()`.
 
 //! A key generation request is created for each chain supported and emitted as an event from which a ceremony is performed
 //! and on success reports back with a response which is delegated to the chain specialisation which continues performing
 //! steps necessary to rotate its vault implementing the `ChainVault` trait.  On completing this phase and via the trait
 //! `ChainHandler`, the final step is executed with a vault rotation request being emitted.  A `VaultRotationResponse` is
 //! submitted to inform whether this request to rotate has succeeded or not.
-
+//!
+//! Currently Ethereum is the only supported chain.
+//!
 //! During the process the network is in an auction phase, where the current validators secure the network and on successful
 //! rotation of the vaults a set of nodes become validators.  Feedback on whether a rotation had occurred is provided by
-//! `AuctionHandler::try_to_confirm_auction()` with which on success the validators are rotated and on failure a new auction
+//! `VaultRotation::finalize_rotation()` with which on success the validators are rotated and on failure a new auction
 //! is started.
+//!
 //!
 //! ## Terminology
 //! - **Vault:** A cryptocurrency wallet.
@@ -127,7 +130,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Request a key generation \[request_index, request\]
-		KeygenRequestEvent(RequestIndex, KeygenRequest<T::ValidatorId>),
+		KeygenRequest(RequestIndex, KeygenRequest<T::ValidatorId>),
 		/// Request a rotation of the vault for this chain \[request_index, request\]
 		VaultRotationRequest(RequestIndex, VaultRotationRequest),
 		/// The vault for the request has rotated \[request_index\]
@@ -137,7 +140,7 @@ pub mod pallet {
 		/// A complete set of vaults have been rotated
 		VaultsRotated,
 		/// Request this payload to be signed by the existing aggregate key
-		EthSignTxRequestEvent(RequestIndex, EthSigningTxRequest<T::ValidatorId>),
+		EthSignTxRequest(RequestIndex, EthSigningTxRequest<T::ValidatorId>),
 	}
 
 	#[pallet::error]
@@ -158,8 +161,11 @@ pub mod pallet {
 		BadValidators,
 		/// Failed to construct a valid chain specific payload for rotation
 		FailedToConstructPayload,
+		/// Failed to sign the tx for the ethereum chain
 		EthSigningTxResponseFailed,
+		/// The rotation has not been confirmed
 		NotConfirmed,
+		/// Failed to make a key generation request
 		FailedToMakeKeygenRequest,
 	}
 
@@ -322,7 +328,7 @@ impl<T: Config>
 		request: KeygenRequest<T::ValidatorId>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		VaultRotations::<T>::insert(index, request.clone());
-		Pallet::<T>::deposit_event(Event::KeygenRequestEvent(index, request));
+		Pallet::<T>::deposit_event(Event::KeygenRequest(index, request));
 		Ok(())
 	}
 
@@ -498,7 +504,7 @@ impl<T: Config>
 		index: RequestIndex,
 		request: EthSigningTxRequest<T::ValidatorId>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
-		Pallet::<T>::deposit_event(Event::EthSignTxRequestEvent(index, request));
+		Pallet::<T>::deposit_event(Event::EthSignTxRequest(index, request));
 		Ok(().into())
 	}
 

@@ -32,7 +32,7 @@ mod test {
 			// Check the event emitted
 			assert_eq!(
 				last_event(),
-				mock::Event::pallet_cf_vaults(crate::Event::KeygenRequestEvent(
+				mock::Event::pallet_cf_vaults(crate::Event::KeygenRequest(
 					VaultsPallet::current_request(),
 					KeygenRequest {
 						chain: Ethereum(vec![]),
@@ -57,9 +57,6 @@ mod test {
 				KeygenResponse::Success(vec![])
 			));
 
-			// Check our mock chain that this was processed
-			assert!(OTHER_CHAIN_RESULT.with(|l| *l.borrow() == VaultsPallet::current_request()));
-
 			// A subsequent key generation request
 			assert_ok!(VaultsPallet::start_vault_rotation(
 				vec![ALICE, BOB, CHARLIE],
@@ -82,9 +79,6 @@ mod test {
 					second_request_idx
 				]))
 			);
-
-			// This would have not got to the specialisation but the request index would have incremented
-			assert!(OTHER_CHAIN_RESULT.with(|l| *l.borrow() == VaultsPallet::current_request() - 1));
 
 			// We would have aborted this rotation and hence no rotations underway
 			assert!(VaultsPallet::rotations_complete());
@@ -207,10 +201,7 @@ mod test {
 			};
 			assert_eq!(
 				last_event(),
-				mock::Event::pallet_cf_vaults(crate::Event::EthSignTxRequestEvent(
-					0,
-					signing_request
-				))
+				mock::Event::pallet_cf_vaults(crate::Event::EthSignTxRequest(0, signing_request))
 			);
 		});
 	}
@@ -218,19 +209,24 @@ mod test {
 	#[test]
 	fn witness_eth_signing_tx_response() {
 		new_test_ext().execute_with(|| {
+			assert_ok!(VaultsPallet::start_vault_rotation(
+				vec![ALICE, BOB, CHARLIE],
+				0
+			));
+
 			assert_ok!(VaultsPallet::eth_signing_tx_response(
 				Origin::root(),
-				0,
+				1,
 				EthSigningTxResponse::Success(vec![])
 			));
 
 			assert_noop!(
 				VaultsPallet::eth_signing_tx_response(
 					Origin::root(),
-					0,
+					1,
 					EthSigningTxResponse::Error(vec![1, 2, 3])
 				),
-				Error::<MockRuntime>::EthSigningTxResponseFailed
+				Error::<MockRuntime>::VaultRotationCompletionFailed
 			);
 		});
 	}
