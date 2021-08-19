@@ -30,12 +30,10 @@ pub async fn start(
         .value::<u32>()
         .expect("Could not decode HeartbeatBlockInterval to u32");
 
-    let send_heartbeat_interval: u32 = heartbeat_block_interval / 2;
     slog::info!(
         logger,
-        "HeartbeatBlockInterval is {}. Sending heartbeat every {} blocks",
+        "Sending heartbeat every {} blocks",
         heartbeat_block_interval,
-        send_heartbeat_interval
     );
 
     let mut blocks = subxt_client
@@ -44,7 +42,8 @@ pub async fn start(
         .expect("Should subscribe to finalised blocks");
 
     while let Some(block_header) = blocks.next().await {
-        if block_header.number % send_heartbeat_interval == 0 {
+        // Target the middle of the heartbeat block interval so block drift is *very* unlikely to cause failure
+        if (block_header.number + (heartbeat_block_interval / 2)) % heartbeat_block_interval == 0 {
             slog::info!(logger, "Sending heartbeat");
             if let Err(e) = subxt_client.heartbeat(&signer).await {
                 slog::error!(logger, "Error submitting heartbeat: {:?}", e)
