@@ -22,7 +22,7 @@
 //!
 //! note: For implementation details pls see the readme.
 
-use std::convert::TryInto;
+use sp_std::convert::TryInto;
 
 use codec::Decode;
 use frame_support::dispatch::GetDispatchInfo;
