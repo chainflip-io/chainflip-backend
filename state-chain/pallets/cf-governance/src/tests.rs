@@ -119,10 +119,10 @@ fn propose_a_governance_extrinsic_and_expect_it_to_expire() {
 		next_block();
 		assert_eq!(
 			last_event(),
-			crate::mock::Event::pallet_cf_governance(crate::Event::Expired(1)),
+			crate::mock::Event::pallet_cf_governance(crate::Event::Expired(0)),
 		);
 		assert_noop!(
-			Governance::approve(Origin::signed(ALICE), 1),
+			Governance::approve(Origin::signed(ALICE), 0),
 			<Error<Test>>::AlreadyExpired
 		);
 	});

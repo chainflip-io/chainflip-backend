@@ -31,8 +31,10 @@ use frame_support::traits::UnfilteredDispatchable;
 use frame_support::traits::UnixTime;
 pub use pallet::*;
 use sp_runtime::DispatchError;
-use sp_std::vec;
 use sp_std::vec::Vec;
+
+/// Time span a proposal expires in seconds (currently  5 days)
+const EXPIRY_SPAN: u64 = 7200;
 
 #[cfg(test)]
 mod mock;
@@ -41,9 +43,6 @@ mod tests;
 /// Implements the functionality of the Chainflip governance.
 #[frame_support::pallet]
 pub mod pallet {
-
-	/// Time span a proposal expires in seconds (currently  5 days)
-	const EXPIRY_SPAN: u64 = 7200;
 
 	use frame_support::{
 		dispatch::GetDispatchInfo,
@@ -61,12 +60,14 @@ pub mod pallet {
 	pub struct Proposal<AccountId> {
 		/// Encoded representation of a extrinsic
 		pub call: OpaqueCall,
-		/// Expiry date (in secondes)
-		pub expiry: u64,
+		/// Date of creation
+		pub created: u64,
 		/// Array of accounts which already approved the proposal
 		pub approved: Vec<AccountId>,
 		/// Boolean value if the extrinsic was executed
 		pub executed: bool,
+		/// Boolean if the proposal is expired
+		pub expired: bool,
 	}
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
@@ -159,8 +160,9 @@ pub mod pallet {
 			// Insert the proposal
 			<Proposals<T>>::append(Proposal {
 				call: call.encode(),
-				expiry: T::TimeSource::now().as_secs() + EXPIRY_SPAN,
+				created: T::TimeSource::now().as_secs(),
 				executed: false,
+				expired: false,
 				approved: vec![],
 			});
 			Self::deposit_event(Event::Proposed(proposal_id));
@@ -249,24 +251,29 @@ where
 }
 
 impl<T: Config> Pallet<T> {
-	/// Check if a proposal fits all requirements to get executed
-	fn is_proposal_executable(proposal: &Proposal<T::AccountId>) -> bool {
-		// majority + not executed + not expired
-		Self::majority_reached(proposal.approved.len())
-			&& !proposal.executed
-			&& proposal.expiry >= T::TimeSource::now().as_secs()
-	}
 	/// Processes all ongoing proposals
 	fn process_proposals() -> u64 {
 		let mut weight: u64 = 0;
-		// Iterate over all ongoing proposals
 		let proposals = <Proposals<T>>::get();
-		let filtered_proposals = proposals
-			.iter()
-			.filter(|proposal| Self::is_proposal_executable(proposal))
-			.collect::<Vec<_>>();
-
-		for (index, proposal) in filtered_proposals.iter().enumerate() {
+		// Iterate over all proposals
+		for (index, proposal) in proposals.iter().enumerate() {
+			// Check if the proposal was executed or is already expired
+			if proposal.executed || proposal.expired {
+				continue;
+			}
+			// Check if the proposal is expired
+			if proposal.created + EXPIRY_SPAN < T::TimeSource::now().as_secs() {
+				<Proposals<T>>::mutate(|p| {
+					p.get_mut(index).unwrap().expired = true;
+				});
+				Self::deposit_event(Event::Expired(index.try_into().unwrap()));
+				continue;
+			}
+			// Check if the majority is reached
+			if !Self::majority_reached(proposal.approved.len()) {
+				continue;
+			}
+			// Execute the proposal
 			if let Some(call) = Self::decode_call(&proposal.call) {
 				// Sum up the extrinsic weight to the next block weight
 				weight = weight.checked_add(call.get_dispatch_info().weight).unwrap();
@@ -284,13 +291,12 @@ impl<T: Config> Pallet<T> {
 		}
 		weight
 	}
-	/// Calcs the threshold based on the total amount of governance members (current threshold is 2/3 + 1)
+	/// Calcs the threshold based on the total amount of governance members (current threshold is 1/2 + 1)
 	fn calc_threshold(total: u32) -> u32 {
-		let doubled = total * 2;
-		if doubled % 3 == 0 {
-			doubled / 3
+		if total % 2 == 0 {
+			total / 2
 		} else {
-			doubled / 3 + 1
+			total / 2 + 1
 		}
 	}
 	/// Checks if the majority for a proposal is reached
@@ -304,7 +310,7 @@ impl<T: Config> Pallet<T> {
 		// Check if proposal exist
 		if let Some(proposal) = <Proposals<T>>::get().get(proposal_id) {
 			// Check expiry
-			if proposal.expiry < T::TimeSource::now().as_secs() {
+			if proposal.created + EXPIRY_SPAN < T::TimeSource::now().as_secs() {
 				return Err(Error::<T>::AlreadyExpired.into());
 			}
 			// Check already approved
