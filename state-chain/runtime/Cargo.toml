@@ -76,6 +76,7 @@ runtime-benchmarks = [
   'sp-runtime/runtime-benchmarks',
   'pallet-cf-witnesser/runtime-benchmarks',
   'pallet-cf-validator/runtime-benchmarks',
+  'pallet-cf-reputation/runtime-benchmarks',
 ]
 std = [
   'cf-traits/std',
