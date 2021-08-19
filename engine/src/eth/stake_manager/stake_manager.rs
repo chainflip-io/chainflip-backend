@@ -212,12 +212,6 @@ fn node_id_from_log(log: &Log) -> Result<AccountId32> {
 impl EventSource for StakeManager {
     type Event = StakeManagerEvent;
 
-    fn filter_builder(&self, block: BlockNumber) -> FilterBuilder {
-        FilterBuilder::default()
-            .from_block(block)
-            .address(vec![self.deployed_address])
-    }
-
     fn parse_event(&self, log: web3::types::Log) -> Result<Self::Event> {
         let sig = log
             .topics

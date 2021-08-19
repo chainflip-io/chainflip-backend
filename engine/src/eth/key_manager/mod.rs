@@ -1,8 +1,5 @@
 use crate::{
-    eth::{
-        key_manager::{key_manager::KeyManager, key_manager_sink::KeyManagerSink},
-        EthEventStreamer,
-    },
+    eth::key_manager::key_manager::KeyManager,
     mq::IMQClient,
     settings,
 };
@@ -10,7 +7,6 @@ use web3::{Web3, DuplexTransport};
 use anyhow::Context;
 
 pub mod key_manager;
-pub mod key_manager_sink;
 
 /// Set up the eth event streamer for the KeyManager contract, and start it
 pub async fn start_key_manager_witness<T : DuplexTransport, MQC: 'static + IMQClient + Send + Sync + Clone>(
