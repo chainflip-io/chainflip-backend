@@ -6,7 +6,8 @@ use crate::state_chain::runtime::StateChainRuntime;
 
 use crate::state_chain::pallets::reputation::HeartbeatCallExt;
 
-/// Starts the CFE heartbeat. Submits an extrinsic to the SC every HeartbeatIntervalPeriod / 2 blocks
+/// Starts the CFE heartbeat.
+/// Submits a heartbeat to the SC on start up and then every HeartbeatBlockInterval / 2 blocks
 pub async fn start(
     subxt_client: Client<StateChainRuntime>,
     signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
@@ -15,18 +16,19 @@ pub async fn start(
     let logger = logger.new(o!(COMPONENT_KEY => "Heartbeat"));
     slog::info!(logger, "Starting");
 
-    // submit a heartbeat on startup
-    subxt_client.heartbeat(&signer).await.unwrap();
+    subxt_client
+        .heartbeat(&signer)
+        .await
+        .expect("Should send heartbeat on startup successfully");
 
-    // TODO: handle errors
     let heartbeat_block_interval = subxt_client
         .metadata()
         .module("Reputation")
-        .unwrap()
+        .expect("No module 'Reputation' in chain metadata")
         .constant("HeartbeatBlockInterval")
-        .unwrap()
+        .expect("No constant 'HeartbeatBlockInterval' in chain metadata for module 'Reputation'")
         .value::<i32>()
-        .unwrap();
+        .expect("Could not cast HeartbeatBlockInterval to i32");
 
     let send_heartbeat_interval: i32 = heartbeat_block_interval / 2;
     slog::info!(
@@ -46,7 +48,9 @@ pub async fn start(
         count += 1;
         if count % send_heartbeat_interval == 0 {
             slog::info!(logger, "Sending heartbeat");
-            subxt_client.heartbeat(&signer).await.unwrap();
+            if let Err(e) = subxt_client.heartbeat(&signer).await {
+                slog::error!(logger, "Error submitting heartbeat: {:?}", e)
+            }
         }
     }
 }
