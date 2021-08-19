@@ -251,7 +251,8 @@ where
 }
 
 impl<T: Config> Pallet<T> {
-	/// Processes all ongoing proposals
+	/// Processes all ongoing proposals.
+	/// Iterates over all proposals and checks if the proposal is ready to execute or expired.
 	fn process_proposals() -> u64 {
 		let mut weight: u64 = 0;
 		let proposals = <Proposals<T>>::get();
@@ -318,6 +319,7 @@ impl<T: Config> Pallet<T> {
 				return Err(Error::<T>::AlreadyApproved.into());
 			}
 			Self::deposit_event(Event::Approved(proposal_id.try_into().unwrap()));
+			// Add the approval
 			<Proposals<T>>::mutate(|p| {
 				p.get_mut(proposal_id).unwrap().approved.push(account);
 			});

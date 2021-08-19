@@ -1,4 +1,4 @@
-use crate::{mock::*, Error, Members};
+use crate::{mock::*, Error, Members, Proposals};
 use cf_traits::mocks::time_source;
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
 use std::time::Duration;
@@ -140,4 +140,5 @@ fn several_open_proposals() {
 			mock_extrinsic()
 		));
 	});
+	assert_eq!(Proposals::<Test>::get().len(), 2);
 }
