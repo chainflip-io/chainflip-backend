@@ -256,6 +256,7 @@ impl<T: Config> Pallet<T> {
 	fn process_proposals() -> u64 {
 		let mut weight: u64 = 0;
 		let proposals = <Proposals<T>>::get();
+
 		// Iterate over all proposals
 		for (index, proposal) in proposals.iter().enumerate() {
 			// Check if the proposal was executed or is already expired

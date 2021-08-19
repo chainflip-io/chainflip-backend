@@ -135,10 +135,18 @@ fn several_open_proposals() {
 			Origin::signed(ALICE),
 			mock_extrinsic()
 		));
+		assert_eq!(
+			last_event(),
+			crate::mock::Event::pallet_cf_governance(crate::Event::Proposed(0)),
+		);
 		assert_ok!(Governance::propose_governance_extrinsic(
 			Origin::signed(BOB),
 			mock_extrinsic()
 		));
+		assert_eq!(
+			last_event(),
+			crate::mock::Event::pallet_cf_governance(crate::Event::Proposed(1)),
+		);
+		assert_eq!(Proposals::<Test>::get().len(), 2);
 	});
-	assert_eq!(Proposals::<Test>::get().len(), 2);
 }
