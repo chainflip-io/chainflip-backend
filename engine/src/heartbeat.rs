@@ -27,10 +27,10 @@ pub async fn start(
         .expect("No module 'Reputation' in chain metadata")
         .constant("HeartbeatBlockInterval")
         .expect("No constant 'HeartbeatBlockInterval' in chain metadata for module 'Reputation'")
-        .value::<i32>()
+        .value::<u32>()
         .expect("Could not cast HeartbeatBlockInterval to i32");
 
-    let send_heartbeat_interval: i32 = heartbeat_block_interval / 2;
+    let send_heartbeat_interval: u32 = heartbeat_block_interval / 2;
     slog::info!(
         logger,
         "HeartbeatBlockInterval is {}. Sending heartbeat every {} blocks",
@@ -43,10 +43,8 @@ pub async fn start(
         .await
         .expect("Should subscribe to finalised blocks");
 
-    let mut count: i32 = 0;
-    while let Some(_) = blocks.next().await {
-        count += 1;
-        if count % send_heartbeat_interval == 0 {
+    while let Some(block_header) = blocks.next().await {
+        if block_header.number % send_heartbeat_interval == 0 {
             slog::info!(logger, "Sending heartbeat");
             if let Err(e) = subxt_client.heartbeat(&signer).await {
                 slog::error!(logger, "Error submitting heartbeat: {:?}", e)
