@@ -289,6 +289,9 @@ impl<T: Config> Pallet<T> {
 				} else {
 					Self::deposit_event(Event::ExecutionFailed(index.try_into().unwrap()));
 				}
+			} else {
+				// Emit an event if the decode of a call failed
+				Self::deposit_event(Event::DecodeFailed(index.try_into().unwrap()));
 			}
 		}
 		weight
@@ -330,6 +333,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 	/// Decodes a encoded representation of a Call
+	/// Returns None if the encode failed
 	fn decode_call(call: &Vec<u8>) -> Option<<T as Config>::Call> {
 		Decode::decode(&mut &call[..]).ok()
 	}
