@@ -1,4 +1,4 @@
-// Implements support for the staking module
+//! Implements subxt support for the staking pallet
 
 use std::marker::PhantomData;
 use std::time::Duration;
@@ -11,7 +11,7 @@ use substrate_subxt::{module, sp_core::crypto::AccountId32, system::System, Even
 
 use serde::{Deserialize, Serialize};
 
-use super::{runtime::StateChainRuntime, sc_event::SCEvent};
+use crate::state_chain::{runtime::StateChainRuntime, sc_event::SCEvent};
 
 type Nonce = u64;
 type FlipBalance = u128;
@@ -166,16 +166,16 @@ impl_staking_event_enum!(
 
 #[cfg(test)]
 mod tests {
-    use crate::state_chain::runtime::StateChainRuntime;
 
     use super::*;
 
     use codec::Encode;
     use pallet_cf_staking::Config;
-    use state_chain_runtime::Runtime as SCRuntime;
 
     use sp_core::U256;
     use sp_keyring::AccountKeyring;
+
+    use state_chain_runtime::Runtime as SCRuntime;
 
     const ETH_ADDRESS: [u8; 20] = [
         00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01,

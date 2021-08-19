@@ -6,7 +6,7 @@ use crate::{
     mq::{IMQClient, Subject},
     p2p::{self},
     signing::{KeyId, KeygenInfo, MultisigInstruction},
-    state_chain::{auction, runtime::StateChainRuntime},
+    state_chain::{pallets::auction, runtime::StateChainRuntime},
 };
 
 pub async fn start<MQC: IMQClient + Send + Sync>(mq_client: MQC, logger: &slog::Logger) {
