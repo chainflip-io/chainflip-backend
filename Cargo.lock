@@ -4957,7 +4957,6 @@ name = "pallet-cf-emissions"
 version = "0.1.0"
 dependencies = [
  "cf-traits",
- "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-cf-flip",
@@ -4975,7 +4974,6 @@ name = "pallet-cf-flip"
 version = "0.1.0"
 dependencies = [
  "cf-traits",
- "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-transaction-payment",
@@ -5010,7 +5008,6 @@ name = "pallet-cf-rewards"
 version = "0.1.0"
 dependencies = [
  "cf-traits",
- "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-cf-flip",
@@ -5086,7 +5083,6 @@ name = "pallet-cf-witnesser-api"
 version = "0.1.0"
 dependencies = [
  "cf-traits",
- "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-cf-auction",
