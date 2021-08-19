@@ -3,14 +3,10 @@
 
 use core::str::FromStr;
 
-use crate::eth::{utils, EventProducerError, EventSource};
+use crate::{eth::{EventProducerError, SignatureAndEvent, utils}, settings};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
-use web3::{
-    contract::tokens::Tokenizable,
-    ethabi::{self, Function, Token},
-    types::{BlockNumber, FilterBuilder, H160},
-};
+use web3::{contract::tokens::Tokenizable, ethabi::{self, Function, RawLog, Token}, types::{H160, H256}};
 
 use anyhow::Result;
 
@@ -91,9 +87,9 @@ pub enum KeyManagerEvent {
 
 impl KeyManager {
     /// Loads the contract abi to get event definitions
-    pub fn load(deployed_address: &str) -> Result<Self> {
+    pub fn new(settings: &settings::Settings) -> Result<Self> {
         Ok(Self {
-            deployed_address: H160::from_str(deployed_address)?,
+            deployed_address: H160::from_str(&settings.eth.key_manager_eth_address)?,
             contract: ethabi::Contract::load(
                 std::include_bytes!("../abis/KeyManager.json").as_ref(),
             )?
@@ -105,18 +101,6 @@ impl KeyManager {
         self.contract
             .function("setAggKeyWithAggKey")
             .expect("Function 'setAggKeyWithAggKey' should be defined in the KeyManager abi.")
-    }
-
-    /// Event definition for the 'Staked' event
-    pub fn key_change_event_definition(&self) -> &ethabi::Event {
-        self.get_event("KeyChange")
-            .expect("KeyManager contract should provide 'KeyChange' event.")
-    }
-
-    // TODO: move this to a common place with stake manager?
-    // Get the event type definition from the contract abi
-    fn get_event(&self, name: &str) -> Result<&ethabi::Event> {
-        Ok(self.contract.event(name)?)
     }
 }
 
@@ -137,225 +121,151 @@ impl Display for KeyManagerEvent {
     }
 }
 
-impl EventSource for KeyManager {
-    type Event = KeyManagerEvent;
+impl KeyManager {
+    pub fn parser_closure(&self) -> Result<impl Fn(H256, H256, ethabi::RawLog) -> Result<KeyManagerEvent>> {
+        let key_change = SignatureAndEvent::new(&self.contract, "KeyChange")?;
 
-    fn filter_builder(&self, block: BlockNumber) -> FilterBuilder {
-        FilterBuilder::default()
-            .from_block(block)
-            .address(vec![self.deployed_address])
-    }
-
-    fn parse_event(&self, log: web3::types::Log) -> Result<Self::Event> {
-        let sig = log
-            .topics
-            .first()
-            .ok_or_else(|| EventProducerError::EmptyTopics)?
-            .clone();
-
-        let tx_hash = log
-            .transaction_hash
-            .ok_or(anyhow::Error::msg(
-                "Could not get transaction hash from ETH log",
-            ))?
-            .to_fixed_bytes();
-
-        let raw_log = ethabi::RawLog {
-            topics: log.topics,
-            data: log.data.0,
-        };
-
-        if sig == self.key_change_event_definition().signature() {
-            let log = self.key_change_event_definition().parse_log(raw_log)?;
-
-            let event = KeyManagerEvent::KeyChange {
-                signed: utils::decode_log_param::<bool>(&log, "signedByAggKey")?,
-                old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
-                new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
-                tx_hash,
-            };
-            Ok(event)
-        } else {
-            Err(EventProducerError::UnexpectedEvent(sig).into())
-        }
-    }
+        Ok(move |signature : H256, tx_hash : H256, raw_log : RawLog| -> Result<KeyManagerEvent> {
+            let tx_hash = tx_hash.to_fixed_bytes();
+            if signature == key_change.signature {
+                let log = key_change.event.parse_log(raw_log)?;
+                let event = KeyManagerEvent::KeyChange {
+                    signed: utils::decode_log_param::<bool>(&log, "signedByAggKey")?,
+                    old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
+                    new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
+                    tx_hash,
+                };
+                Ok(event)
+            } else {
+                Err(anyhow::Error::from(EventProducerError::UnexpectedEvent(signature)))
+            }
+        })
+    } 
 }
 
 #[cfg(test)]
 mod tests {
 
     use web3::types::H256;
-
+    use hex;
     use super::*;
-
-    // All log data for these tests was obtained from the events in the `deploy_and` script:
-    // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/scripts/deploy_and.py
-
-    // 🔑 Aggregate Key sets the new Aggregate Key 🔑
-    const AGG_SET_AGG_LOG: &'static str = r#"{
-        "logIndex": "0x0",
-        "transactionIndex": "0x0",
-        "transactionHash": "0x04629152b064c0d1343161c43f3b78cf67e9be35fc97f66bbb0e1ca1a0206bae", 
-        "blockHash": "0x68c5dfba660af922463f3d47c76b551760161711e9341cf8563bae7e146f6b8d", 
-        "blockNumber": "0xC5064B", 
-        "address": "0xD537bF4b795b7D07Bd5F4bAf7017e3ce8360B1DE", 
-        "data": "0x000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae00000000000000000000000000000000000000000000000000000000000000011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001", 
-        "topics": ["0x19389c59b816d8b0ec43f2d5ed9b41bddc63d66dac1ecd808efe35b86b9ee0bf"],
-        "type": "mined",
-        "removed": false
-    }"#;
-
-    // 🔑 Governance Key sets the new Aggregate Key 🔑
-    const GOV_SET_AGG_LOG: &'static str = r#"{
-        "logIndex": "0x0", 
-        "transactionIndex": "0x0", 
-        "transactionHash": "0x6320cfd702415644192bf57702ceccc0d6de0ddc54fe9aa53f9b1a5d9035fe52", 
-        "blockHash": "0x042a88e77cb7455f72f15b806dc88304ce113a0a39a03274712e31274bb8fbfa", 
-        "blockNumber": "0xC5064C", 
-        "address": "0xD537bF4b795b7D07Bd5F4bAf7017e3ce8360B1DE", 
-        "data": "0x00000000000000000000000000000000000000000000000000000000000000001742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae0000000000000000000000000000000000000000000000000000000000000001", 
-        "topics": ["0x19389c59b816d8b0ec43f2d5ed9b41bddc63d66dac1ecd808efe35b86b9ee0bf"], 
-        "type": "mined", 
-        "removed": false
-    }"#;
-
-    // 🔑 Governance Key sets the new Governance Key 🔑
-    const GOV_SET_GOV_LOG: &'static str = r#"{
-        "logIndex": "0x0", 
-        "transactionIndex": "0x0", 
-        "transactionHash": "0x9215ce54309fddf0ce9b1e8fd10319c62cf9603635ffa0c06ac9db8338348f95", 
-        "blockHash": "0x55d818c9efc4b9d6ac54609f779c06df7bc92919c7ac3fa123d178205ffea351", 
-        "blockNumber": "0xC5064D", 
-        "address": "0xD537bF4b795b7D07Bd5F4bAf7017e3ce8360B1DE", 
-        "data": "0x0000000000000000000000000000000000000000000000000000000000000000423ebe9d54bf7cb10dfebe2b323bb9a01bfede660619a7f49531c96a23263dd800000000000000000000000000000000000000000000000000000000000000014e3d72babbee4133675d42db3bba62a7dfbc47a91ddc5db56d95313d908c08f80000000000000000000000000000000000000000000000000000000000000000", 
-        "topics": ["0x19389c59b816d8b0ec43f2d5ed9b41bddc63d66dac1ecd808efe35b86b9ee0bf"], 
-        "type": "mined", 
-        "removed": false
-    }"#;
-
-    const INVALID_SIG_LOG: &'static str = r#"{
-        "logIndex": "0x0",
-        "transactionIndex": "0x0",
-        "transactionHash": "0x04629152b064c0d1343161c43f3b78cf67e9be35fc97f66bbb0e1ca1a0206bae", 
-        "blockHash": "0x68c5dfba660af922463f3d47c76b551760161711e9341cf8563bae7e146f6b8d", 
-        "blockNumber": "0xC5064B", 
-        "address": "0xD537bF4b795b7D07Bd5F4bAf7017e3ce8360B1DE", 
-        "data": "0x000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae00000000000000000000000000000000000000000000000000000000000000011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001", 
-        "topics": ["0x0b0b5ed18390ab49777844d5fcafb9865c74095ceb3e73cc57d1fbcc926103b5"],
-        "type": "mined",
-        "removed": false
-    }"#;
-
-    const KEY_CHANGE_EVENT_SIG: &'static str =
-        "0x19389c59b816d8b0ec43f2d5ed9b41bddc63d66dac1ecd808efe35b86b9ee0bf";
-
-    const CONTRACT_ADDRESS: &'static str = "0xD537bF4b795b7D07Bd5F4bAf7017e3ce8360B1DE";
 
     #[test]
     fn test_key_change_parsing() {
+        // All log data for these tests was obtained from the events in the `deploy_and` script:
+        // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/scripts/deploy_and.py
+
         // All the key strings in this test are decimal versions of the hex strings in the consts.py script
         // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
         // TODO: Use hex strings instead of dec strings. So we can use the exact const hex strings from consts.py.
 
-        let km = KeyManager::load(CONTRACT_ADDRESS).unwrap();
+        let settings = settings::test_utils::new_test_settings().unwrap();
 
-        match km
-            .parse_event(serde_json::from_str(AGG_SET_AGG_LOG).unwrap())
-            .expect("Failed parsing AGG_SET_AGG_LOG event")
+        let key_manager = KeyManager::new(&settings).unwrap();
+
+        let parser = key_manager.parser_closure().unwrap();
+
+        let key_change_event_signature = H256::from_str("0x19389c59b816d8b0ec43f2d5ed9b41bddc63d66dac1ecd808efe35b86b9ee0bf").unwrap();
+
+
+        // 🔑 Aggregate Key sets the new Aggregate Key 🔑
         {
-            KeyManagerEvent::KeyChange {
-                signed,
-                old_key,
-                new_key,
-                tx_hash,
-            } => {
-                assert_eq!(signed, true);
-                assert_eq!(old_key, ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
-                assert_eq!(new_key, ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
-
-                assert_eq!(
+            let transaction_hash = H256::from_str("0x04629152b064c0d1343161c43f3b78cf67e9be35fc97f66bbb0e1ca1a0206bae").unwrap();
+            match parser(
+                key_change_event_signature,
+                transaction_hash,
+                RawLog {
+                    topics : vec![key_change_event_signature],
+                    data : hex::decode("000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae00000000000000000000000000000000000000000000000000000000000000011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001").unwrap()
+                }
+            ).expect("Failed parsing AGG_SET_AGG_LOG event") {
+                KeyManagerEvent::KeyChange {
+                    signed,
+                    old_key,
+                    new_key,
                     tx_hash,
-                    H256::from_str(
-                        "0x04629152b064c0d1343161c43f3b78cf67e9be35fc97f66bbb0e1ca1a0206bae",
-                    )
-                    .unwrap()
-                    .to_fixed_bytes()
-                );
+                } => {
+                    assert_eq!(signed, true);
+                    assert_eq!(old_key, ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
+                    assert_eq!(new_key, ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
+
+                    assert_eq!(tx_hash, transaction_hash.to_fixed_bytes());
+                }
             }
         }
 
-        match km
-            .parse_event(serde_json::from_str(GOV_SET_AGG_LOG).unwrap())
-            .expect("Failed parsing GOV_SET_AGG_LOG event")
+        // 🔑 Governance Key sets the new Aggregate Key 🔑
         {
-            KeyManagerEvent::KeyChange {
-                signed,
-                old_key,
-                new_key,
-                tx_hash,
-            } => {
-                assert_eq!(signed, false);
-                assert_eq!(old_key, ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
-                assert_eq!(new_key, ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
-
-                assert_eq!(
+            let transaction_hash = H256::from_str("0x6320cfd702415644192bf57702ceccc0d6de0ddc54fe9aa53f9b1a5d9035fe52").unwrap();
+            match parser(
+                key_change_event_signature,
+                transaction_hash,
+                RawLog {
+                    topics : vec![key_change_event_signature],
+                    data : hex::decode("00000000000000000000000000000000000000000000000000000000000000001742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae0000000000000000000000000000000000000000000000000000000000000001").unwrap()
+                }
+            ).expect("Failed parsing GOV_SET_AGG_LOG event")
+            {
+                KeyManagerEvent::KeyChange {
+                    signed,
+                    old_key,
+                    new_key,
                     tx_hash,
-                    H256::from_str(
-                        "0x6320cfd702415644192bf57702ceccc0d6de0ddc54fe9aa53f9b1a5d9035fe52",
-                    )
-                    .unwrap()
-                    .to_fixed_bytes()
-                );
+                } => {
+                    assert_eq!(signed, false);
+                    assert_eq!(old_key, ChainflipKey::from_dec_str("10521316663921629387264629518161886172223783929820773409615991397525613232925",true).unwrap());
+                    assert_eq!(new_key, ChainflipKey::from_dec_str("22479114112312168431982914496826057754130808976066989807481484372215659188398",true).unwrap());
+
+                    assert_eq!(tx_hash, transaction_hash.to_fixed_bytes());
+                }
             }
         }
 
-        match km
-            .parse_event(serde_json::from_str(GOV_SET_GOV_LOG).unwrap())
-            .expect("Failed parsing GOV_SET_GOV_LOG event")
+        // 🔑 Governance Key sets the new Governance Key 🔑
         {
-            KeyManagerEvent::KeyChange {
-                signed,
-                old_key,
-                new_key,
-                tx_hash,
-            } => {
-                assert_eq!(signed, false);
-                assert_eq!(old_key, ChainflipKey::from_dec_str("29963508097954364125322164523090632495724997135004046323041274775773196467672",true).unwrap());
-                assert_eq!(new_key, ChainflipKey::from_dec_str("35388971693871284788334991319340319470612669764652701045908837459480931993848",false).unwrap());
-
-                assert_eq!(
+            let transaction_hash = H256::from_str("0x9215ce54309fddf0ce9b1e8fd10319c62cf9603635ffa0c06ac9db8338348f95").unwrap();
+            match parser(
+                key_change_event_signature,
+                transaction_hash,
+                RawLog {
+                    topics : vec![key_change_event_signature],
+                    data : hex::decode("0000000000000000000000000000000000000000000000000000000000000000423ebe9d54bf7cb10dfebe2b323bb9a01bfede660619a7f49531c96a23263dd800000000000000000000000000000000000000000000000000000000000000014e3d72babbee4133675d42db3bba62a7dfbc47a91ddc5db56d95313d908c08f80000000000000000000000000000000000000000000000000000000000000000").unwrap()
+                }
+            ).expect("Failed parsing GOV_SET_GOV_LOG event")
+            {
+                KeyManagerEvent::KeyChange {
+                    signed,
+                    old_key,
+                    new_key,
                     tx_hash,
-                    H256::from_str(
-                        "0x9215ce54309fddf0ce9b1e8fd10319c62cf9603635ffa0c06ac9db8338348f95",
-                    )
-                    .unwrap()
-                    .to_fixed_bytes()
-                );
+                } => {
+                    assert_eq!(signed, false);
+                    assert_eq!(old_key, ChainflipKey::from_dec_str("29963508097954364125322164523090632495724997135004046323041274775773196467672",true).unwrap());
+                    assert_eq!(new_key, ChainflipKey::from_dec_str("35388971693871284788334991319340319470612669764652701045908837459480931993848",false).unwrap());
+
+                    assert_eq!(tx_hash, transaction_hash.to_fixed_bytes());
+                }
             }
         }
 
         // Invalid sig test
-        let res = km
-            .parse_event(serde_json::from_str(INVALID_SIG_LOG).unwrap())
+        {
+            let invalid_signature = H256::from_str("0x0b0b5ed18390ab49777844d5fcafb9865c74095ceb3e73cc57d1fbcc926103b5").unwrap();
+            let res = parser(
+                invalid_signature,
+                H256::from_str("0x04629152b064c0d1343161c43f3b78cf67e9be35fc97f66bbb0e1ca1a0206bae").unwrap(),
+                RawLog {
+                    topics : vec![invalid_signature],
+                    data : hex::decode("000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae00000000000000000000000000000000000000000000000000000000000000011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001").unwrap()
+                }
+            )
             .map_err(|e| match e.downcast_ref::<EventProducerError>() {
                 Some(EventProducerError::UnexpectedEvent(_)) => {}
                 _ => {
                     panic!("Incorrect error parsing INVALID_SIG_LOG");
                 }
             });
-        assert!(res.is_err());
-    }
-
-    #[test]
-    fn abi_topic_sigs() {
-        let km = KeyManager::load(CONTRACT_ADDRESS).unwrap();
-
-        // key change event
-        assert_eq!(
-            km.key_change_event_definition().signature(),
-            H256::from_str(KEY_CHANGE_EVENT_SIG)
-                .expect("Couldn't cast key change event sig to H256"),
-            "key change event doesn't match signature"
-        );
+            assert!(res.is_err());
+        }
     }
 }

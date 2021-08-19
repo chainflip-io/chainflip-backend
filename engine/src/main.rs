@@ -72,6 +72,9 @@ async fn main() {
 
     let web3 = eth::new_web3_client(&settings, &root_logger).await.unwrap();
 
+    let key_manager_events = tokio::sync::mpsc::unbounded_channel().0;
+    let stake_manager_events = tokio::sync::mpsc::unbounded_channel().0;
+
     futures::join!(
         // Start signing components
         signing::start(
@@ -110,7 +113,7 @@ async fn main() {
             mq_client.clone(),
             &root_logger
         ),
-        stake_manager::start_stake_manager_witness(&web3, &settings, mq_client.clone(), &root_logger),
-        key_manager::start_key_manager_witness(&web3, &settings, mq_client.clone(), &root_logger),
+        stake_manager::start_stake_manager_witness(&web3, &settings, key_manager_events, &root_logger).unwrap(),
+        key_manager::start_key_manager_witness(&web3, &settings, stake_manager_events, &root_logger).unwrap(),
     );
 }
