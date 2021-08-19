@@ -29,8 +29,7 @@ pub async fn start<MQC: IMQClient + Clone>(
     logger: &slog::Logger,
 ) {
     SetAggKeyWithAggKeyEncoder::new(
-        settings.eth.key_manager_eth_address.as_ref(),
-        settings.signing.genesis_validator_ids.clone(),
+        &settings,
         mq_client,
         logger,
     )
@@ -70,15 +69,14 @@ struct ParamContainer {
 
 impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
     fn new(
-        key_manager_address: &str,
-        genesis_validator_ids: Vec<ValidatorId>,
+        settings: &settings::Settings,
         mq_client: MQC,
         logger: &slog::Logger,
     ) -> Result<Self> {
-        let key_manager = KeyManager::load(key_manager_address)?;
+        let key_manager = KeyManager::new(settings)?;
 
         let mut genesis_validator_ids_hash_map = HashMap::new();
-        genesis_validator_ids_hash_map.insert(KeyId(0), genesis_validator_ids);
+        genesis_validator_ids_hash_map.insert(KeyId(0), settings.signing.genesis_validator_ids.clone());
         Ok(Self {
             mq_client,
             key_manager,
@@ -366,8 +364,7 @@ mod test_eth_tx_encoder {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
         let encoder = SetAggKeyWithAggKeyEncoder::new(
-            settings.eth.key_manager_eth_address.as_str(),
-            settings.signing.genesis_validator_ids,
+            &settings,
             mq_client,
             &logger,
         )

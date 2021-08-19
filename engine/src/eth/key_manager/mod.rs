@@ -1,38 +1,32 @@
-use crate::{
-    eth::{
-        key_manager::{key_manager::KeyManager, key_manager_sink::KeyManagerSink},
-        EthEventStreamer,
-    },
-    mq::IMQClient,
-    settings,
-};
-use web3::{Web3, DuplexTransport};
-use anyhow::Context;
+use crate::{eth::{key_manager::key_manager::KeyManager, eth_event_streamer}, logging::COMPONENT_KEY, settings};
+use futures::Future;
+use tokio::sync::mpsc::UnboundedSender;
+use web3::{Web3, transports::WebSocket};
+use anyhow::Result;
+use slog::o;
+use key_manager::KeyManagerEvent;
 
 pub mod key_manager;
-pub mod key_manager_sink;
 
 /// Set up the eth event streamer for the KeyManager contract, and start it
-pub async fn start_key_manager_witness<T : DuplexTransport, MQC: 'static + IMQClient + Send + Sync + Clone>(
-    web3 : &Web3<T>,
+pub fn start_key_manager_witness(
+    web3 : &Web3<WebSocket>,
     settings: &settings::Settings,
-    mq_client: MQC,
+    sink : UnboundedSender<KeyManagerEvent>,
     logger: &slog::Logger,
-) {
+) -> Result<impl Future> {
+    let logger = logger.new(o!(COMPONENT_KEY => "KeyManagerWitness"));
+
     slog::info!(logger, "Starting KeyManager witness");
 
-    EthEventStreamer::new(
-        web3,
-        KeyManager::load(settings.eth.key_manager_eth_address.as_str())
-            .expect("Should load KeyManager contract"),
-        vec![KeyManagerSink::<MQC>::new(mq_client, logger)
-            .await
-            .expect("Should create KeyManagerSink")],
-        logger,
-    )
-    .await
-    .run(settings.eth.from_block.into())
-    .await
-    .context("Error occurred running the KeyManager events stream")
-    .expect("Should run key manager event stream");
+    let key_manager = KeyManager::new(&settings)?;
+
+    Ok(eth_event_streamer::start(
+        web3.clone(),
+        key_manager.deployed_address,
+        settings.eth.from_block,
+        key_manager.parser_closure()?,
+        sink,
+        logger
+    ))
 }
