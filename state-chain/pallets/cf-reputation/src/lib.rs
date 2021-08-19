@@ -46,6 +46,9 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
 use frame_support::pallet_prelude::*;
 use frame_support::sp_std::convert::TryInto;
 pub use pallet::*;
