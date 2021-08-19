@@ -28,7 +28,7 @@ pub async fn start(
         .constant("HeartbeatBlockInterval")
         .expect("No constant 'HeartbeatBlockInterval' in chain metadata for module 'Reputation'")
         .value::<u32>()
-        .expect("Could not cast HeartbeatBlockInterval to i32");
+        .expect("Could not decode HeartbeatBlockInterval to u32");
 
     let send_heartbeat_interval: u32 = heartbeat_block_interval / 2;
     slog::info!(
