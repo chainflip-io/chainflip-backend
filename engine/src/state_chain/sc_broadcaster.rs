@@ -75,7 +75,7 @@ where
 
         while let Some(event) = stake_manager_events.next().await {
             match event {
-                Ok(event) => self.submit_stake_manager_event(event).await?,
+                Ok(event) => self.submit_event(event).await?,
                 Err(e) => {
                     slog::error!(
                         self.logger,
@@ -93,7 +93,7 @@ where
     }
 
     /// Submit an event to the state chain, return the tx_hash
-    async fn submit_stake_manager_event(&mut self, event: StakeManagerEvent) -> Result<()> {
+    async fn submit_event(&mut self, event: StakeManagerEvent) -> Result<()> {
         match event {
             StakeManagerEvent::Staked {
                 account_id,
@@ -248,7 +248,7 @@ mod tests {
         };
 
         let result = sc_broadcaster
-            .submit_stake_manager_event(staked_event)
+            .submit_event(staked_event)
             .await;
 
         println!("Result: {:#?}", result);
