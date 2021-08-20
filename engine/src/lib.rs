@@ -3,6 +3,7 @@ pub mod heartbeat;
 pub mod mq;
 pub mod p2p;
 pub mod settings;
+mod testing;
 pub mod signing;
 pub mod state_chain;
 pub mod types;
