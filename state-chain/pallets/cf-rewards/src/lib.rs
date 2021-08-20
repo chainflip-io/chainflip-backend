@@ -10,9 +10,6 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
-
 use cf_traits::RewardsDistribution;
 use frame_support::{
 	ensure,
