@@ -4,7 +4,7 @@ use tokio::sync::mpsc::UnboundedReceiver;
 
 use super::runtime::StateChainRuntime;
 use crate::{
-    eth::stake_manager::stake_manager::StakeManagerEvent,
+    eth::stake_manager::StakeManagerEvent,
     logging::COMPONENT_KEY,
 };
 

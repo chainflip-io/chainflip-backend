@@ -1,7 +1,7 @@
 use std::{collections::HashMap, convert::TryInto};
 
 use crate::{
-    eth::key_manager::key_manager::KeyManager,
+    eth::key_manager::KeyManager,
     eth::utils,
     logging::COMPONENT_KEY,
     mq::{IMQClient, Subject},
