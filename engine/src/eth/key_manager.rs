@@ -37,13 +37,15 @@ pub async fn start_key_manager_witness(
     logger: &slog::Logger,
 ) -> Result<impl Future> {
     let logger = logger.new(o!(COMPONENT_KEY => "KeyManagerWitness"));
-
     slog::info!(logger, "Starting KeyManager witness");
 
+    slog::info!(logger, "Load Contract ABI");
     let key_manager = KeyManager::new(&settings)?;
 
+    slog::info!(logger, "Creating Parser");
     let parser = key_manager.parser_closure()?;
 
+    slog::info!(logger, "Creating Event Stream");
     let mut event_stream = eth_event_streamer::new_eth_event_stream(
         web3.clone(),
         key_manager.deployed_address,
