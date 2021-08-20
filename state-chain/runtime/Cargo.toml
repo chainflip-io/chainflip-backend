@@ -113,4 +113,5 @@ std = [
   'pallet-cf-emissions/std',
   'pallet-cf-rewards/std',
   'pallet-cf-witnesser-api/std',
+  'pallet-cf-reputation/std',
 ]
