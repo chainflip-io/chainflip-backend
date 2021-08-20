@@ -9,7 +9,7 @@ use crate::{eth::{eth_event_streamer, EventProducerError, SignatureAndEvent, uti
 use serde::{Deserialize, Serialize};
 use sp_runtime::AccountId32;
 use web3::{
-    ethabi::{self, Function, Log, RawLog},
+    ethabi::{self, Log, RawLog},
     types::{H160, H256},
     Web3, transports::WebSocket
 };
@@ -183,13 +183,6 @@ impl StakeManager {
             deployed_address: H160::from_str(&settings.eth.stake_manager_eth_address)?,
             contract,
         })
-    }
-
-    /// Extracts a reference to the "registerClaim" function definition. Panics if it can't be found.
-    pub fn register_claim(&self) -> &Function {
-        self.contract
-            .function("registerClaim")
-            .expect("Function 'register_claim' should be defined in the StakeManager abi.")
     }
 
     // get the node_id from the log and return as AccountId32
