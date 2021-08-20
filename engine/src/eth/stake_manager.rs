@@ -53,7 +53,7 @@ pub async fn start_stake_manager_witness(
         logger.clone(),
     )
     .await?;
-    
+
     slog::info!(logger, "Creating Event Stream");
     let parser = stake_manager.parser_closure()?;
 
