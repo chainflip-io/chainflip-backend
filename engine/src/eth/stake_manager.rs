@@ -4,7 +4,7 @@
 use core::str::FromStr;
 use std::{convert::TryInto, fmt::Display};
 
-use crate::{eth::{eth_event_streamer, EventProducerError, SignatureAndEvent, utils}, settings, logging::COMPONENT_KEY};
+use crate::{eth::{eth_event_streamer, EventParseError, SignatureAndEvent, utils}, settings, logging::COMPONENT_KEY};
 
 use serde::{Deserialize, Serialize};
 use sp_runtime::AccountId32;
@@ -251,7 +251,7 @@ impl StakeManager {
                 };
                 Ok(event)
             } else {
-                Err(anyhow::Error::from(EventProducerError::UnexpectedEvent(signature)))
+                Err(anyhow::Error::from(EventParseError::UnexpectedEvent(signature)))
             }
         })
     }

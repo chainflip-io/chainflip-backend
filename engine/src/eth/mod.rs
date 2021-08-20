@@ -18,17 +18,12 @@ use crate::settings;
 use web3::types::H256;
 use web3;
 
-/// The `Error` type for errors specific to this module.
 #[derive(Error, Debug)]
-pub enum EventProducerError {
+pub enum EventParseError {
     #[error("Unexpected event signature in log subscription: {0:#}")]
     UnexpectedEvent(H256),
-
-    /// A log was received with an empty "topics" vector, shouldn't happen.
     #[error("Expected log to contain topics, got empty vector.")]
     EmptyTopics,
-
-    /// Tried to decode a parameter that doesn't exist in the log.
     #[error("Cannot decode missing parameter: '{0}'.")]
     MissingParam(String),
 }
