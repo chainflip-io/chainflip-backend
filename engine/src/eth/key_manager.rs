@@ -9,7 +9,6 @@ use crate::{
     settings,
     state_chain::runtime::StateChainRuntime,
 };
-use serde::{Deserialize, Serialize};
 use std::{
     fmt::Display,
     sync::{Arc, Mutex},
@@ -71,7 +70,7 @@ pub struct KeyManager {
     pub contract: ethabi::Contract,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 struct ChainflipKey {
     pub_key_x: ethabi::Uint,
     pub_key_y_parity: ethabi::Uint,
