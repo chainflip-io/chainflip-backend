@@ -11,7 +11,6 @@ use web3::types::H160;
 use crate::p2p::ValidatorId;
 
 pub use anyhow::Result;
-use regex::Regex;
 use url::Url;
 
 #[derive(Debug, Deserialize, Clone)]
@@ -30,8 +29,6 @@ pub struct StateChain {
 pub struct Eth {
     pub from_block: u64,
     pub node_endpoint: String,
-
-    // TODO: Into an Ethereum Address type?
     pub stake_manager_eth_address: H160,
     pub key_manager_eth_address: H160,
     #[serde(deserialize_with = "deser_path")]
@@ -95,13 +92,6 @@ impl Settings {
 
     /// Validates the formatting of some settings
     pub fn validate_settings(&self) -> Result<(), ConfigError> {
-        // check the eth addresses
-        is_eth_address(&hex::encode(&self.eth.key_manager_eth_address.0))
-            .map_err(|e| ConfigError::Message(e.to_string()))?;
-
-        is_eth_address(&hex::encode(&self.eth.stake_manager_eth_address.0))
-            .map_err(|e| ConfigError::Message(e.to_string()))?;
-
         // check the Websocket URLs
         parse_websocket_url(&self.eth.node_endpoint)
             .map_err(|e| ConfigError::Message(e.to_string()))?;
@@ -155,20 +145,6 @@ fn is_valid_db_path(db_file: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Checks that the string is formatted as a valid ETH address
-/// NB: Doesn't include the '0x' prefix
-fn is_eth_address(address: &str) -> Result<()> {
-    let re = Regex::new(r"^[a-fA-F0-9]{40}$").unwrap();
-
-    match re.is_match(address) {
-        true => Ok(()),
-        false => Err(anyhow::Error::msg(format!(
-            "Invalid Eth Address: {}",
-            address
-        ))),
-    }
-}
-
 #[cfg(test)]
 pub mod test_utils {
     use super::*;
@@ -201,13 +177,6 @@ mod tests {
             test_settings.message_queue.endpoint,
             "http://localhost:4222"
         );
-    }
-
-    #[test]
-    fn test_eth_address_parsing() {
-        assert!(is_eth_address("EAd5De9C41543E4bAbB09f9fE4f79153c036044f").is_ok());
-        assert!(is_eth_address("dBa9b6065Deb6___57BC779fF6736709ecBa3409").is_err());
-        assert!(is_eth_address("").is_err());
     }
 
     #[test]
