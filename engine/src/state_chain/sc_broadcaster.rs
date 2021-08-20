@@ -1,27 +1,24 @@
 use slog::o;
 use substrate_subxt::{system::AccountStoreExt, Client, PairSigner, Signer};
-use tokio_stream::StreamExt;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 use super::runtime::StateChainRuntime;
 use crate::{
     eth::stake_manager::stake_manager::StakeManagerEvent,
     logging::COMPONENT_KEY,
-    mq::{IMQClient, Subject},
 };
 
 use crate::state_chain::pallets::witness_api::*;
 
 use anyhow::Result;
 
-pub async fn start<MQC>(
+pub async fn start(
     signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
-    mq_client: MQC,
+    broadcast_stream : UnboundedReceiver<StakeManagerEvent>,
     subxt_client: Client<StateChainRuntime>,
     logger: &slog::Logger,
-) where
-    MQC: IMQClient + Sync + Send,
-{
-    let mut sc_broadcaster = SCBroadcaster::new(signer, mq_client, subxt_client, logger).await;
+) {
+    let mut sc_broadcaster = SCBroadcaster::new(signer, broadcast_stream, subxt_client, logger).await;
 
     sc_broadcaster
         .run()
@@ -29,23 +26,17 @@ pub async fn start<MQC>(
         .expect("SC Broadcaster has died!");
 }
 
-pub struct SCBroadcaster<MQC>
-where
-    MQC: IMQClient + Send + Sync,
-{
-    mq_client: MQC,
-    subxt_client: Client<StateChainRuntime>,
+pub struct SCBroadcaster {
     signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
+    broadcast_stream: UnboundedReceiver<StakeManagerEvent>,
+    subxt_client: Client<StateChainRuntime>,
     logger: slog::Logger,
 }
 
-impl<MQC> SCBroadcaster<MQC>
-where
-    MQC: IMQClient + Send + Sync,
-{
+impl SCBroadcaster {
     pub async fn new(
         mut signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
-        mq_client: MQC,
+        broadcast_stream : UnboundedReceiver<StakeManagerEvent>,
         subxt_client: Client<StateChainRuntime>,
         logger: &slog::Logger,
     ) -> Self {
@@ -61,30 +52,15 @@ where
 
         SCBroadcaster {
             signer,
-            mq_client,
+            broadcast_stream,
             subxt_client,
             logger,
         }
     }
 
     pub async fn run(&mut self) -> Result<()> {
-        let mut stake_manager_events = self
-            .mq_client
-            .subscribe::<StakeManagerEvent>(Subject::StakeManager)
-            .await?;
-
-        while let Some(event) = stake_manager_events.next().await {
-            match event {
-                Ok(event) => self.submit_event(event).await?,
-                Err(e) => {
-                    slog::error!(
-                        self.logger,
-                        "Could not read event from StakeManager event stream: {}",
-                        e
-                    );
-                    return Err(e);
-                }
-            }
+        while let Some(event) = self.broadcast_stream.recv().await {
+            self.submit_event(event).await?;
         }
 
         let err_msg = "State Chain Broadcaster has stopped running!";
@@ -152,7 +128,7 @@ mod tests {
 
     use super::*;
 
-    use crate::{logging, mq::nats_client::NatsMQClient, settings};
+    use crate::{logging, settings};
 
     use sp_keyring::AccountKeyring;
     use sp_runtime::AccountId32;
@@ -181,14 +157,13 @@ mod tests {
     async fn can_create_sc_broadcaster() {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let mq_client = NatsMQClient::new(&settings.message_queue).await.unwrap();
         let subxt_client = create_subxt_client(&settings.state_chain).await;
 
         let logger = logging::test_utils::create_test_logger();
 
         let alice = AccountKeyring::Alice.pair();
         let pair_signer = PairSigner::new(alice);
-        SCBroadcaster::new(pair_signer, mq_client, subxt_client, &logger).await;
+        SCBroadcaster::new(pair_signer, tokio::sync::mpsc::unbounded_channel().1, subxt_client, &logger).await;
     }
 
     // TODO: Use the SC broadcaster struct instead
@@ -223,14 +198,13 @@ mod tests {
     async fn sc_broadcaster_submit_event() {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let mq_client = NatsMQClient::new(&settings.message_queue).await.unwrap();
         let subxt_client = create_subxt_client(&settings.state_chain).await;
 
         let alice = AccountKeyring::Alice.pair();
         let pair_signer = PairSigner::new(alice);
         let mut sc_broadcaster = SCBroadcaster::new(
             pair_signer,
-            mq_client,
+            tokio::sync::mpsc::unbounded_channel().1, // TODO: Fix SCBroadcaster, so we don't need to initialise all this state to call submit_event (alastair holmes - 20.08.2021)
             subxt_client,
             &logging::test_utils::create_test_logger(),
         )
