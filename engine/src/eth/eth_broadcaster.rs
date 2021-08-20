@@ -12,15 +12,15 @@ use anyhow::Result;
 use secp256k1::SecretKey;
 use slog::o;
 use web3::{
-    ethabi::ethereum_types::H256, signing::SecretKeyRef,
-    types::TransactionParameters, Transport, Web3,
+    ethabi::ethereum_types::H256, signing::SecretKeyRef, types::TransactionParameters, Transport,
+    Web3,
 };
 
 use futures::StreamExt;
 
 /// Helper function, constructs and runs the [EthBroadcaster] asynchronously.
-pub async fn start_eth_broadcaster<T : Transport, M: IMQClient + Send + Sync>(
-    web3 : &Web3<T>,
+pub async fn start_eth_broadcaster<T: Transport, M: IMQClient + Send + Sync>(
+    web3: &Web3<T>,
     settings: &settings::Settings,
     mq_client: M,
     logger: &slog::Logger,
@@ -55,7 +55,7 @@ struct EthBroadcaster<M: IMQClient + Send + Sync, T: Transport> {
     logger: slog::Logger,
 }
 
-impl<T : Transport, M: IMQClient + Send + Sync> EthBroadcaster<M, T> {
+impl<T: Transport, M: IMQClient + Send + Sync> EthBroadcaster<M, T> {
     async fn new(
         web3: &Web3<T>,
         mq_client: M,
@@ -143,8 +143,8 @@ impl<T : Transport, M: IMQClient + Send + Sync> EthBroadcaster<M, T> {
 #[cfg(test)]
 mod tests {
 
-    use crate::{logging, mq::nats_client::NatsMQClient};
     use crate::eth;
+    use crate::{logging, mq::nats_client::NatsMQClient};
     use web3::transports::WebSocket;
 
     use super::*;
@@ -156,7 +156,13 @@ mod tests {
         let secret = SecretKey::from_slice(&[3u8; 32]).unwrap();
         let logger = logging::test_utils::create_test_logger();
 
-        Ok(EthBroadcaster::<NatsMQClient, _>::new(&eth::new_web3_client(&settings, &logger).await?, mq_client, secret, &logger).await)
+        Ok(EthBroadcaster::<NatsMQClient, _>::new(
+            &eth::new_web3_client(&settings, &logger).await?,
+            mq_client,
+            secret,
+            &logger,
+        )
+        .await)
     }
 
     #[tokio::test]

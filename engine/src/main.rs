@@ -117,7 +117,23 @@ async fn main() {
             mq_client.clone(),
             &root_logger
         ),
-        stake_manager::start_stake_manager_witness(&web3, &settings, pair_signer.clone(), subxt_client.clone(), &root_logger).await.unwrap(),
-        key_manager::start_key_manager_witness(&web3, &settings, pair_signer, subxt_client, &root_logger).await.unwrap(),
+        stake_manager::start_stake_manager_witness(
+            &web3,
+            &settings,
+            pair_signer.clone(),
+            subxt_client.clone(),
+            &root_logger
+        )
+        .await
+        .unwrap(),
+        key_manager::start_key_manager_witness(
+            &web3,
+            &settings,
+            pair_signer,
+            subxt_client,
+            &root_logger
+        )
+        .await
+        .unwrap(),
     );
 }
