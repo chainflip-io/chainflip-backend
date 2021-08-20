@@ -3,7 +3,7 @@
 
 use core::str::FromStr;
 
-use crate::{eth::{eth_event_streamer, EventProducerError, SignatureAndEvent, utils}, logging::COMPONENT_KEY, settings};
+use crate::{eth::{eth_event_streamer, EventParseError, SignatureAndEvent, utils}, logging::COMPONENT_KEY, settings};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use web3::{contract::tokens::Tokenizable, ethabi::{self, RawLog, Token}, types::{H160, H256}, Web3, transports::WebSocket};
@@ -159,7 +159,7 @@ impl KeyManager {
                 };
                 Ok(event)
             } else {
-                Err(anyhow::Error::from(EventProducerError::UnexpectedEvent(signature)))
+                Err(anyhow::Error::from(EventParseError::UnexpectedEvent(signature)))
             }
         })
     } 
@@ -281,8 +281,8 @@ mod tests {
                     data : hex::decode("000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae00000000000000000000000000000000000000000000000000000000000000011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001").unwrap()
                 }
             )
-            .map_err(|e| match e.downcast_ref::<EventProducerError>() {
-                Some(EventProducerError::UnexpectedEvent(_)) => {}
+            .map_err(|e| match e.downcast_ref::<EventParseError>() {
+                Some(EventParseError::UnexpectedEvent(_)) => {}
                 _ => {
                     panic!("Incorrect error parsing INVALID_SIG_LOG");
                 }

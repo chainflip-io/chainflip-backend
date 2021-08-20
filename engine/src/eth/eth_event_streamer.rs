@@ -1,4 +1,4 @@
-use crate::eth::EventProducerError;
+use crate::eth::EventParseError;
 
 use futures::{StreamExt, stream};
 use tokio::sync::mpsc::UnboundedSender;
@@ -48,7 +48,7 @@ pub async fn start<Event, Parser>(
             let sig = log
                 .topics
                 .first()
-                .ok_or_else(|| EventProducerError::EmptyTopics)?
+                .ok_or_else(|| EventParseError::EmptyTopics)?
                 .clone();
 
             let tx_hash = log
