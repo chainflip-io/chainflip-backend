@@ -14,11 +14,9 @@ pub fn clear_confirmation() {
 
 impl VaultRotation for Mock {
 	type ValidatorId = u64;
-	type Amount = u64;
 
 	fn start_vault_rotation(
-		_winners: Vec<Self::ValidatorId>,
-		_min_bid: Self::Amount,
+		_candidates: Vec<Self::ValidatorId>,
 	) -> Result<(), RotationError<Self::ValidatorId>> {
 		TO_CONFIRM.with(|l| *l.borrow_mut() = Err(RotationError::NotConfirmed));
 		Ok(())

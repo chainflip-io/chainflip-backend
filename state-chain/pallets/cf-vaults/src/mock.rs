@@ -13,7 +13,7 @@ use crate as pallet_cf_vaults;
 
 use super::*;
 use crate::nonce::NonceUnixTime;
-use cf_traits::ChainFlip;
+use cf_traits::Chainflip;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
 type Block = frame_system::mocking::MockBlock<MockRuntime>;
@@ -90,7 +90,7 @@ impl cf_traits::Witnesser for MockWitnesser {
 	}
 }
 
-impl ChainFlip for MockRuntime {
+impl Chainflip for MockRuntime {
 	type Amount = Amount;
 	type ValidatorId = ValidatorId;
 }

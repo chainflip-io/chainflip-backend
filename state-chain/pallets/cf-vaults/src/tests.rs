@@ -16,17 +16,16 @@ mod test {
 		new_test_ext().execute_with(|| {
 			// An empty set and an error is thrown back, request index 1
 			assert_eq!(
-				VaultsPallet::start_vault_rotation(vec![], 0),
+				VaultsPallet::start_vault_rotation(vec![]),
 				Err(RotationError::EmptyValidatorSet)
 			);
 			// Everything ok with a set of numbers
 			// Nothing running at the moment
 			assert!(VaultsPallet::rotations_complete());
 			// Request index 2
-			assert_ok!(VaultsPallet::start_vault_rotation(
-				vec![ALICE, BOB, CHARLIE],
-				0
-			));
+			assert_ok!(VaultsPallet::start_vault_rotation(vec![
+				ALICE, BOB, CHARLIE
+			]));
 			// Confirm we have a new vault rotation process running
 			assert!(!VaultsPallet::rotations_complete());
 			// Check the event emitted
@@ -46,10 +45,9 @@ mod test {
 	#[test]
 	fn keygen_response() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(VaultsPallet::start_vault_rotation(
-				vec![ALICE, BOB, CHARLIE],
-				0
-			));
+			assert_ok!(VaultsPallet::start_vault_rotation(vec![
+				ALICE, BOB, CHARLIE
+			]));
 			let first_request_idx = VaultsPallet::current_request();
 			assert_ok!(VaultsPallet::keygen_response(
 				Origin::root(),
@@ -58,10 +56,9 @@ mod test {
 			));
 
 			// A subsequent key generation request
-			assert_ok!(VaultsPallet::start_vault_rotation(
-				vec![ALICE, BOB, CHARLIE],
-				0
-			));
+			assert_ok!(VaultsPallet::start_vault_rotation(vec![
+				ALICE, BOB, CHARLIE
+			]));
 
 			let second_request_idx = VaultsPallet::current_request();
 			// This time we respond with bad news
@@ -91,10 +88,9 @@ mod test {
 	#[test]
 	fn vault_rotation_request() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(VaultsPallet::start_vault_rotation(
-				vec![ALICE, BOB, CHARLIE],
-				0
-			));
+			assert_ok!(VaultsPallet::start_vault_rotation(vec![
+				ALICE, BOB, CHARLIE
+			]));
 			assert_ok!(VaultsPallet::keygen_response(
 				Origin::root(),
 				VaultsPallet::current_request(),
@@ -138,10 +134,9 @@ mod test {
 	#[test]
 	fn vault_rotation_response() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(VaultsPallet::start_vault_rotation(
-				vec![ALICE, BOB, CHARLIE],
-				0
-			));
+			assert_ok!(VaultsPallet::start_vault_rotation(vec![
+				ALICE, BOB, CHARLIE
+			]));
 			assert_ok!(VaultsPallet::keygen_response(
 				Origin::root(),
 				VaultsPallet::current_request(),
@@ -209,10 +204,9 @@ mod test {
 	#[test]
 	fn witness_eth_signing_tx_response() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(VaultsPallet::start_vault_rotation(
-				vec![ALICE, BOB, CHARLIE],
-				0
-			));
+			assert_ok!(VaultsPallet::start_vault_rotation(vec![
+				ALICE, BOB, CHARLIE
+			]));
 
 			assert_ok!(VaultsPallet::eth_signing_tx_response(
 				Origin::root(),

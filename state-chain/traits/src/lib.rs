@@ -13,8 +13,8 @@ use frame_support::{
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
 
-/// and ChainFlip was born...some base types
-pub trait ChainFlip {
+/// and Chainflip was born...some base types
+pub trait Chainflip {
 	/// An amount for a bid
 	type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 	/// An identity for a validator
@@ -148,13 +148,13 @@ pub enum RotationError<ValidatorId> {
 /// Rotating vaults
 pub trait VaultRotation {
 	type ValidatorId;
-	type Amount;
-	// Start a vault rotation with the winners
+	/// Start a vault rotation with the following `candidates`
 	fn start_vault_rotation(
-		winners: Vec<Self::ValidatorId>,
-		min_bid: Self::Amount,
+		candidates: Vec<Self::ValidatorId>,
 	) -> Result<(), RotationError<Self::ValidatorId>>;
-	// The caller trys to finalize the rotation
+
+	/// In order for the validators to be rotated we are waiting on a confirmation that the vaults
+	/// have been rotated.
 	fn finalize_rotation() -> Result<(), RotationError<Self::ValidatorId>>;
 }
 

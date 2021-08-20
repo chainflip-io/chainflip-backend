@@ -80,7 +80,7 @@ pub enum EthSigningTxResponse<ValidatorId> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::ChainFlip;
+	use cf_traits::Chainflip;
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -88,7 +88,7 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + ChainFlip {
+	pub trait Config: frame_system::Config + Chainflip {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Provides an origin check for witness transactions.
@@ -171,6 +171,8 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// A key generation response received from a key generation request and handled
+		/// by [KeygenRequestResponse::handle_response]
 		#[pallet::weight(10_000)]
 		pub fn keygen_response(
 			origin: OriginFor<T>,
@@ -184,6 +186,8 @@ pub mod pallet {
 			}
 		}
 
+		/// A vault rotation response received from a vault rotation request and handled
+		/// by [VaultRotationRequestResponse::handle_response]
 		#[pallet::weight(10_000)]
 		pub fn vault_rotation_response(
 			origin: OriginFor<T>,
@@ -197,6 +201,8 @@ pub mod pallet {
 			}
 		}
 
+		/// A ethereum signing transaction response received and handled
+		/// by [EthereumChain::handle_response]
 		#[pallet::weight(10_000)]
 		pub fn eth_signing_tx_response(
 			origin: OriginFor<T>,
@@ -246,7 +252,7 @@ impl<T: Config> From<RotationError<T::ValidatorId>> for Error<T> {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Abort all rotations registered and notify the `AuctionPenalty` trait of our decision to abort.
+	/// Abort all rotations registered and notify the `VaultRotationHandler` trait of our decision to abort.
 	fn abort_rotation() {
 		Self::deposit_event(Event::RotationAborted(
 			VaultRotations::<T>::iter().map(|(k, _)| k).collect(),
@@ -263,7 +269,6 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	#[cfg(test)]
 	fn rotations_complete() -> bool {
 		VaultRotations::<T>::iter().count() == 0
 	}
@@ -271,34 +276,24 @@ impl<T: Config> Pallet<T> {
 
 impl<T: Config> VaultRotation for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
-	type Amount = T::Amount;
-	/// On completion of the Auction we would receive the proposed validators
-	/// A key generation request is created for each supported chain and the process starts
-	/// The requests created here are regarded as a group where until this is called again
-	/// all would be processed and any one failing would result in aborted the whole group
-	/// of requests.
 	fn start_vault_rotation(
-		winners: Vec<Self::ValidatorId>,
-		_: Self::Amount,
+		candidates: Vec<Self::ValidatorId>,
 	) -> Result<(), RotationError<Self::ValidatorId>> {
 		// Main entry point for the pallet
-		ensure!(!winners.is_empty(), RotationError::EmptyValidatorSet);
+		ensure!(!candidates.is_empty(), RotationError::EmptyValidatorSet);
 		// Create a KeyGenRequest for Ethereum
 		let keygen_request = KeygenRequest {
 			chain: EthereumChain::<T>::chain_params(),
-			validator_candidates: winners.clone(),
+			validator_candidates: candidates.clone(),
 		};
 
 		KeygenRequestResponse::<T>::make_request(Self::next_index(), keygen_request)
 			.map_err(|_| RotationError::FailedToMakeKeygenRequest)
 	}
 
-	/// In order for the validators to be rotated we are waiting on a confirmation that the vaults
-	/// have been rotated.  This is called on each block with a success acting as a confirmation
-	/// that the validators can now be rotated for the new epoch.
 	fn finalize_rotation() -> Result<(), RotationError<Self::ValidatorId>> {
 		// The 'exit' point for the pallet, no rotations left to process
-		if VaultRotations::<T>::iter().count() == 0 {
+		if Pallet::<T>::rotations_complete() {
 			// We can now confirm the auction and rotate
 			// The process has completed successfully
 			Self::deposit_event(Event::VaultsRotated);
@@ -476,11 +471,8 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 				)
 			}
 			Err(_) => {
-				// Failure in completing the vault rotation and we report back to `Vaults`
-				Pallet::<T>::request_vault_rotation(
-					index,
-					Err(RotationError::FailedToConstructPayload),
-				)
+				Pallet::<T>::abort_rotation();
+				Err(RotationError::FailedToConstructPayload)
 			}
 		}
 	}
@@ -515,19 +507,14 @@ impl<T: Config>
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		match response {
 			EthSigningTxResponse::Success(signature) => {
-				Pallet::<T>::request_vault_rotation(index, Ok(Ethereum(signature).into()))
+				VaultRotationRequestResponse::<T>::make_request(index, Ethereum(signature).into())
 			}
-			EthSigningTxResponse::Error(bad_validators) => Pallet::<T>::request_vault_rotation(
-				index,
-				Err(RotationError::BadValidators(bad_validators)),
-			),
+			EthSigningTxResponse::Error(bad_validators) => {
+				T::RotationHandler::penalise(bad_validators.clone());
+				Pallet::<T>::abort_rotation();
+				Err(RotationError::BadValidators(bad_validators))
+			}
 		}
-	}
-}
-
-impl From<Vec<u8>> for ChainParams {
-	fn from(payload: Vec<u8>) -> Self {
-		Ethereum(payload)
 	}
 }
 

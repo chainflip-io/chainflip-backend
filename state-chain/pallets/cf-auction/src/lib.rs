@@ -83,7 +83,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MinAuctionSize: Get<u32>;
 		/// The lifecycle of our auction
-		type Handler: VaultRotation<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
+		type Handler: VaultRotation<ValidatorId = Self::ValidatorId>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -283,7 +283,7 @@ impl<T: Config> Auction for Pallet<T> {
 								winners.clone(),
 							));
 
-							T::Handler::start_vault_rotation(winners, *min_bid)
+							T::Handler::start_vault_rotation(winners)
 								.map_err(|_| AuctionError::Abort)?;
 							return Ok(phase);
 						}

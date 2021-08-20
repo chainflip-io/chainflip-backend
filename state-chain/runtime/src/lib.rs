@@ -4,7 +4,7 @@
 mod chainflip;
 mod weights;
 // A few exports that help ease life for downstream crates.
-use cf_traits::ChainFlip;
+use cf_traits::Chainflip;
 use core::time::Duration;
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
@@ -408,7 +408,7 @@ impl pallet_cf_witnesser_api::Config for Runtime {
 	type Witnesser = Witnesser;
 }
 
-impl ChainFlip for Runtime {
+impl Chainflip for Runtime {
 	type Amount = FlipBalance;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 }

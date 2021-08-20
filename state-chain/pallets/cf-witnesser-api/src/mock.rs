@@ -4,7 +4,7 @@ use crate as pallet_cf_witness_api;
 
 use cf_traits::{
 	impl_mock_ensure_witnessed_for_origin, impl_mock_stake_transfer,
-	impl_mock_witnesser_for_account_and_call_types, ChainFlip, VaultRotationHandler,
+	impl_mock_witnesser_for_account_and_call_types, Chainflip, VaultRotationHandler,
 };
 use frame_support::parameter_types;
 use frame_system as system;
@@ -83,7 +83,7 @@ impl pallet_cf_staking::Config for Test {
 type Amount = u64;
 type ValidatorId = u64;
 
-impl ChainFlip for Test {
+impl Chainflip for Test {
 	type Amount = Amount;
 	type ValidatorId = ValidatorId;
 }
