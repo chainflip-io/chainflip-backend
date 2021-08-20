@@ -40,11 +40,12 @@ pub async fn start_stake_manager_witness(
     logger: &slog::Logger,
 ) -> Result<impl Future> {
     let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerWitness"));
-
     slog::info!(logger, "Starting StakeManager witness");
 
+    slog::info!(logger, "Load Contract ABI");
     let stake_manager = StakeManager::new(&settings)?;
 
+    slog::info!(logger, "Creating Parser");
     let mut event_stream = eth_event_streamer::new_eth_event_stream(
         web3.clone(),
         stake_manager.deployed_address,
@@ -52,7 +53,8 @@ pub async fn start_stake_manager_witness(
         logger.clone(),
     )
     .await?;
-
+    
+    slog::info!(logger, "Creating Event Stream");
     let parser = stake_manager.parser_closure()?;
 
     Ok(async move {
