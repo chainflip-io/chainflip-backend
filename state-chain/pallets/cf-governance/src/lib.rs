@@ -79,7 +79,8 @@ pub mod pallet {
 		/// Standard Event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// The outer Origin needs to be compatible with this pallet's Origin
-		type Origin: From<RawOrigin>;
+		type Origin: From<RawOrigin>
+			+ From<frame_system::RawOrigin<<Self as frame_system::Config>::AccountId>>;
 		/// Implementation of EnsureOrigin trait for governance
 		type EnsureGovernance: EnsureOrigin<<Self as pallet::Config>::Origin>;
 		/// The overarching call type.
@@ -197,7 +198,7 @@ pub mod pallet {
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			let result = call.dispatch_bypass_filter(Origin::Root.into());
+			let result = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
 			ensure!(result.is_ok(), Error::<T>::SudoCallFailed);
 			Ok(().into())
 		}
@@ -232,7 +233,6 @@ pub mod pallet {
 	/// The raw origin enum for this pallet.
 	#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
 	pub enum RawOrigin {
-		Root,
 		GovernanceThreshold,
 	}
 }
@@ -252,7 +252,6 @@ where
 		match o.into() {
 			Ok(o) => match o {
 				RawOrigin::GovernanceThreshold => Ok(()),
-				RawOrigin::Root => Ok(()),
 			},
 			Err(o) => Err(o),
 		}
