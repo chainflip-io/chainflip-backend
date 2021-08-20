@@ -284,7 +284,7 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
     ) -> Result<Vec<u8>> {
         // Serialize the data using eth encoding so the KeyManager contract can serialize the data in the same way
         // in order to verify the signature
-        Ok(self.key_manager.set_agg_key_with_agg_key().encode_input(
+        Ok(self.key_manager.contract.function("setAggKeyWithAggKey").expect("Function 'setAggKeyWithAggKey' should be defined in the KeyManager abi.").encode_input(
             // These are two arguments, SigData and Key from:
             // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol
             &[

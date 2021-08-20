@@ -6,7 +6,7 @@ use core::str::FromStr;
 use crate::{eth::{eth_event_streamer, EventProducerError, SignatureAndEvent, utils}, logging::COMPONENT_KEY, settings};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
-use web3::{contract::tokens::Tokenizable, ethabi::{self, Function, RawLog, Token}, types::{H160, H256}, Web3, transports::WebSocket};
+use web3::{contract::tokens::Tokenizable, ethabi::{self, RawLog, Token}, types::{H160, H256}, Web3, transports::WebSocket};
 
 use anyhow::Result;
 
@@ -43,7 +43,7 @@ pub fn start_key_manager_witness(
 /// A wrapper for the KeyManager Ethereum contract.
 pub struct KeyManager {
     pub deployed_address: H160,
-    contract: ethabi::Contract,
+    pub contract: ethabi::Contract,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -123,13 +123,6 @@ impl KeyManager {
                 std::include_bytes!("abis/KeyManager.json").as_ref(),
             )?
         })
-    }
-
-    /// Extracts a reference to the "setAggKeyWithAggKey" function definition. Panics if it can't be found.
-    pub fn set_agg_key_with_agg_key(&self) -> &Function {
-        self.contract
-            .function("setAggKeyWithAggKey")
-            .expect("Function 'setAggKeyWithAggKey' should be defined in the KeyManager abi.")
     }
 }
 
