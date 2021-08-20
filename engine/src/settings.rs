@@ -1,8 +1,8 @@
 use std::{ffi::OsStr, path::Path};
 
 use config::{Config, ConfigError, File};
-
 use serde::Deserialize;
+use web3::types::H160;
 
 use crate::p2p::ValidatorId;
 
@@ -28,8 +28,8 @@ pub struct Eth {
     pub node_endpoint: String,
 
     // TODO: Into an Ethereum Address type?
-    pub stake_manager_eth_address: String,
-    pub key_manager_eth_address: String,
+    pub stake_manager_eth_address: H160,
+    pub key_manager_eth_address: H160,
     pub private_key_file: String,
 }
 
@@ -64,10 +64,10 @@ impl Settings {
     /// Validates the formatting of some settings
     pub fn validate_settings(&self) -> Result<(), ConfigError> {
         // check the eth addresses
-        is_eth_address(&self.eth.key_manager_eth_address)
+        is_eth_address(&hex::encode(&self.eth.key_manager_eth_address.0))
             .map_err(|e| ConfigError::Message(e.to_string()))?;
 
-        is_eth_address(&self.eth.stake_manager_eth_address)
+        is_eth_address(&hex::encode(&self.eth.stake_manager_eth_address.0))
             .map_err(|e| ConfigError::Message(e.to_string()))?;
 
         // check the Websocket URLs
@@ -96,7 +96,7 @@ impl Settings {
     }
 }
 
-/// parse the URL and check that it is a valid websocket url
+/// Parse the URL and check that it is a valid websocket url
 fn parse_websocket_url(url: &str) -> Result<Url> {
     let issue_list_url = Url::parse(&url)?;
     if issue_list_url.scheme() != "ws" && issue_list_url.scheme() != "wss" {
@@ -123,9 +123,10 @@ fn is_valid_db_path(db_file: &str) -> Result<()> {
     Ok(())
 }
 
-/// checks that the string is formatted as an eth address
+/// Checks that the string is formatted as an eth address
+/// NB: Doesn't include the '0x' prefix
 fn is_eth_address(address: &str) -> Result<()> {
-    let re = Regex::new(r"^0x[a-fA-F0-9]{40}$").unwrap();
+    let re = Regex::new(r"^[a-fA-F0-9]{40}$").unwrap();
 
     match re.is_match(address) {
         true => Ok(()),
