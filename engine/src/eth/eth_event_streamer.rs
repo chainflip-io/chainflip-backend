@@ -1,26 +1,15 @@
 use crate::eth::EventParseError;
 
-use futures::{StreamExt, stream};
-use tokio::sync::mpsc::UnboundedSender;
+use futures::{Stream, StreamExt, stream};
 use web3::{transports::WebSocket, Web3, ethabi::RawLog, types::{BlockNumber, FilterBuilder, H160, H256}};
 use anyhow::Result;
 
-pub async fn start<Event, Parser>(
+pub async fn new_eth_event_stream(
     web3 : Web3<WebSocket>,
     deployed_address : H160,
     from_block: u64,
-    parser : Parser,
-    sink : UnboundedSender<Event>,
     logger: slog::Logger,
-) -> Result<()> where
-    Parser : Fn(H256, H256, RawLog) -> Result<Event>
-{
-    slog::info!(
-        logger,
-        "Start running eth event stream from block: {:?}",
-        from_block
-    );
-
+) -> Result<impl Stream<Item = Result<(H256, H256, RawLog)>>> {
     // The `fromBlock` parameter doesn't seem to work reliably with subscription streams, so
     // request past block via http and prepend them to the stream manually.
     let past_logs = web3.eth()
@@ -40,9 +29,9 @@ pub async fn start<Event, Parser>(
         )
         .await?;
 
-    let mut event_stream = stream::iter(past_logs)
+    Ok(stream::iter(past_logs)
         .map(|log| Ok(log))
-        .chain(future_logs).map(|log_result| {
+        .chain(future_logs).map(move |log_result| -> Result<(H256, H256, RawLog), anyhow::Error> {
             let log = log_result?;
 
             let sig = log
@@ -69,21 +58,18 @@ pub async fn start<Event, Parser>(
                 sig
             );
 
-            parser(sig, tx_hash, raw_log)
-        });
-
-        while let Some(event) = event_stream.next().await {
-            assert!(sink.send(event.unwrap()).is_ok());
-        }
-
-    Ok(())
+            Ok((sig, tx_hash, raw_log))
+        })
+    )
 }
 
 #[cfg(test)]
 mod tests {
 
+    use std::str::FromStr;
+
     use crate::{
-        eth::{new_web3_client, stake_manager::StakeManager},
+        eth::new_web3_client,
         logging,
         settings,
     };
@@ -97,15 +83,11 @@ mod tests {
 
         let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let stake_manager = StakeManager::new(&settings).unwrap();
-
-        start(
+        new_eth_event_stream(
             new_web3_client(&settings, &logger).await.unwrap(),
-            stake_manager.deployed_address,
+            H160::from_str(&settings.eth.key_manager_eth_address).unwrap(),
             0,
-            stake_manager.parser_closure().unwrap(),
-            tokio::sync::mpsc::unbounded_channel().0,
             logger
-        ).await.unwrap();
+        ).await.unwrap().collect::<Vec<_>>().await;
     }
 }

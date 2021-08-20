@@ -2,12 +2,14 @@
 //! the EthEventStreamer
 
 use core::str::FromStr;
-use std::{convert::TryInto, fmt::Display};
+use std::{convert::TryInto, fmt::Display, sync::{Arc, Mutex}};
 
-use crate::{eth::{eth_event_streamer, EventParseError, SignatureAndEvent, utils}, settings, logging::COMPONENT_KEY};
+use crate::{state_chain::pallets::witness_api::*, eth::{eth_event_streamer, EventParseError, SignatureAndEvent, utils}, logging::COMPONENT_KEY, settings, state_chain::runtime::StateChainRuntime};
 
 use serde::{Deserialize, Serialize};
 use sp_runtime::AccountId32;
+use substrate_subxt::{Client, PairSigner};
+
 use web3::{
     ethabi::{self, Log, RawLog},
     types::{H160, H256},
@@ -16,31 +18,86 @@ use web3::{
 
 use anyhow::Result;
 
-use futures::Future;
+use futures::{Future, StreamExt};
 use slog::o;
-use tokio::sync::mpsc::UnboundedSender;
 
 /// Set up the eth event streamer for the StakeManager contract, and start it
-pub fn start_stake_manager_witness(
+pub async fn start_stake_manager_witness(
     web3 : &Web3<WebSocket>,
     settings: &settings::Settings,
-    sink : UnboundedSender<StakeManagerEvent>,
+    signer: Arc<Mutex<PairSigner<StateChainRuntime, sp_core::sr25519::Pair>>>,
+    subxt_client: Client<StateChainRuntime>,
     logger: &slog::Logger,
 ) -> Result<impl Future> {
     let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerWitness"));
 
-    slog::info!(logger, "Starting StakeManager obverser");
+    slog::info!(logger, "Starting StakeManager witness");
 
     let stake_manager = StakeManager::new(&settings)?;
 
-    Ok(eth_event_streamer::start(
+    let mut event_stream = eth_event_streamer::new_eth_event_stream(
         web3.clone(),
         stake_manager.deployed_address,
         settings.eth.from_block,
-        stake_manager.parser_closure()?,
-        sink,
-        logger
-    ))
+        logger.clone()
+    ).await?;
+    
+    let parser = stake_manager.parser_closure()?;
+
+    Ok(async move {
+        while let Some(result_event) = event_stream.next().await {
+            async {
+                match parser(result_event.unwrap()).unwrap() { // TODO: Handle unwraps
+                    StakeManagerEvent::Staked {
+                        account_id,
+                        amount,
+                        return_addr,
+                        tx_hash,
+                    } => {
+                        slog::trace!(
+                            logger,
+                            "Sending witness_staked({:?}, {}, {:?}, {:?}) to state chain",
+                            account_id,
+                            amount,
+                            return_addr,
+                            tx_hash
+                        );
+                        let mut signer = signer.lock().unwrap();
+                        subxt_client
+                            .witness_staked(&*signer, account_id, amount, tx_hash)
+                            .await?;
+                        signer.increment_nonce();
+                    }
+                    StakeManagerEvent::ClaimExecuted {
+                        account_id,
+                        amount,
+                        tx_hash,
+                    } => {
+                        slog::trace!(
+                            logger,
+                            "Sending claim_executed({:?}, {}, {:?}) to the state chain",
+                            account_id,
+                            amount,
+                            tx_hash
+                        );
+                        let mut signer = signer.lock().unwrap();
+                        subxt_client
+                            .witness_claimed(&*signer, account_id, amount, tx_hash)
+                            .await?;
+                        signer.increment_nonce();
+                    }
+                    event => {
+                        slog::warn!(
+                            logger,
+                            "{} is not to be submitted to the State Chain",
+                            event
+                        );
+                    }
+                }
+                Result::<(), anyhow::Error>::Ok(())
+            }.await.unwrap(); // TODO: How to handle call errors
+        }
+    })
 }
 
 #[derive(Clone)]
@@ -193,14 +250,14 @@ impl StakeManager {
         Ok(AccountId32::new(account_bytes))
     }
 
-    pub fn parser_closure(&self) -> Result<impl Fn(H256, H256, ethabi::RawLog) -> Result<StakeManagerEvent>> {
+    pub fn parser_closure(&self) -> Result<impl Fn((H256, H256, ethabi::RawLog)) -> Result<StakeManagerEvent>> {
         let staked = SignatureAndEvent::new(&self.contract, "Staked")?;
         let claim_registered = SignatureAndEvent::new(&self.contract, "ClaimRegistered")?;
         let claim_executed = SignatureAndEvent::new(&self.contract, "ClaimExecuted")?;
         let flip_supply_updated = SignatureAndEvent::new(&self.contract, "FlipSupplyUpdated")?;
         let min_stake_changed = SignatureAndEvent::new(&self.contract, "MinStakeChanged")?;
     
-        Ok(move |signature : H256, tx_hash : H256, raw_log : RawLog| -> Result<StakeManagerEvent> {
+        Ok(move |(signature, tx_hash, raw_log) : (H256, H256, RawLog)| -> Result<StakeManagerEvent> {
             let tx_hash = tx_hash.to_fixed_bytes();
             if signature == staked.signature {
                 let log = staked.event.parse_log(raw_log)?;
@@ -282,7 +339,7 @@ mod tests {
 
         let staked_event_signature = H256::from_str("0x23581b9afdc2170a53868d0b64508f096844aa55c3ad98caf14032a91c41cc52").unwrap();
         let transaction_hash = H256::from_str("0x9158e6d1470330d9d38636930831d5ee17fb71af70f3f17794539d50e00b08aa").unwrap();
-        match parser(
+        match parser((
             staked_event_signature,
             transaction_hash,
             RawLog {
@@ -292,7 +349,7 @@ mod tests {
                 ],
                 data : hex::decode("000000000000000000000000000000000000000000000878678326eac90000000000000000000000000000000000000000000000000000000000000000000001").unwrap()
             }
-        ).unwrap() {
+        )).unwrap() {
             StakeManagerEvent::Staked {
                 account_id,
                 amount,
@@ -325,7 +382,7 @@ mod tests {
 
         let claimed_register_event_signature = H256::from_str("0x2f73775f2573d45f5b0ed0064eb65f631ac9e568a52807221c44ca9d358a9cee").unwrap();
         let transaction_hash = H256::from_str("0x4e3f3296f3baff3763bd2beb9cdfa6ddeb996c409f746f0450093712f2417185").unwrap();
-        match parser(
+        match parser((
             claimed_register_event_signature,
             transaction_hash,
             RawLog {
@@ -335,7 +392,7 @@ mod tests {
                 ],
                 data : hex::decode("0000000000000000000000000000000000000000000002d2cd2bb7a39860000000000000000000000000000073d669c173d88ccb01f6daab3a3304af7a1b22c10000000000000000000000000000000000000000000000000000000060d4910f0000000000000000000000000000000000000000000000000000000060d73402").unwrap()
             }
-        ).unwrap() {
+        )).unwrap() {
             StakeManagerEvent::ClaimRegistered {
                 account_id,
                 amount,
@@ -382,7 +439,7 @@ mod tests {
 
         let claimed_executed_event_signature = H256::from_str("0xac96f597a44ad425c6eedf6e4c8327fd959c9d912fa8d027fb54313e59f247c8").unwrap();
         let transaction_hash = H256::from_str("0x99264107b21be2fb9beb1e4e8d47dc431df6696651f1937ece635a7960849605").unwrap();
-        match parser(
+        match parser((
             claimed_executed_event_signature,
             transaction_hash,
             RawLog {
@@ -392,7 +449,7 @@ mod tests {
                 ],
                 data : hex::decode("0000000000000000000000000000000000000000000002d2cd2bb7a398600000").unwrap()
             }
-        ).unwrap() {
+        )).unwrap() {
             StakeManagerEvent::ClaimExecuted {
                 account_id,
                 amount,
@@ -419,14 +476,14 @@ mod tests {
 
         let flip_supply_updated_event_signature = H256::from_str("0xff4b7a826623672c6944dc44d809008e2e1105180d110fd63986e841f15eb2ad").unwrap();
         let transaction_hash = H256::from_str("0x06a6ef6fb6ab3a9493435d37a36607efc197dc71518b68b25d1061116034b16f").unwrap();
-        match parser(
+        match parser((
             flip_supply_updated_event_signature,
             transaction_hash,
             RawLog {
                 topics : vec![flip_supply_updated_event_signature],
                 data : hex::decode("0000000000000000000000000000000000000000004a723dc6b40b8a9a00000000000000000000000000000000000000000000000052b7d2dcc80cd2e40000000000000000000000000000000000000000000000000000000000000000000064").unwrap()
             }
-        ).unwrap() {
+        )).unwrap() {
             StakeManagerEvent::FlipSupplyUpdated {
                 old_supply,
                 new_supply,
@@ -458,14 +515,14 @@ mod tests {
 
         let min_stake_changed_event_signature = H256::from_str("0xca11c8a4c461b60c9f485404c272650c2aaae260b2067d72e9924abb68556593").unwrap();
         let transaction_hash = H256::from_str("0x7224ca5aae97dc9f9b25fd0ba337fd936709d277cf8600786c4168e1d86d7c1f").unwrap();
-        match parser(
+        match parser((
             min_stake_changed_event_signature,
             transaction_hash,
             RawLog {
                 topics : vec![min_stake_changed_event_signature],
                 data : hex::decode("000000000000000000000000000000000000000000000878678326eac90000000000000000000000000000000000000000000000000002d2cd2bb7a398600000").unwrap()
             }
-        ).unwrap() {
+        )).unwrap() {
             StakeManagerEvent::MinStakeChanged {
                 old_min_stake,
                 new_min_stake,
