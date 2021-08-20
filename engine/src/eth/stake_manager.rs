@@ -16,7 +16,6 @@ use crate::{
     state_chain::runtime::StateChainRuntime,
 };
 
-use serde::{Deserialize, Serialize};
 use sp_runtime::AccountId32;
 use substrate_subxt::{Client, PairSigner};
 
@@ -115,9 +114,8 @@ pub async fn start_stake_manager_witness(
     })
 }
 
-#[derive(Clone)]
 /// A wrapper for the StakeManager Ethereum contract.
-pub struct StakeManager {
+struct StakeManager {
     pub deployed_address: H160,
     contract: ethabi::Contract,
 }
@@ -125,8 +123,8 @@ pub struct StakeManager {
 // TODO: ClaimRegistered, FlipSupplyUpdated, MinStakeChanged, not used
 // so they are just using the ethabi encoding atm
 /// Represents the events that are expected from the StakeManager contract.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum StakeManagerEvent {
+#[derive(Debug)]
+enum StakeManagerEvent {
     /// The `Staked(nodeId, amount)` event.
     Staked {
         /// The node id of the validator that submitted the stake.
