@@ -65,22 +65,21 @@ pub async fn start_key_manager_witness(
     })
 }
 
-#[derive(Clone)]
 /// A wrapper for the KeyManager Ethereum contract.
 pub struct KeyManager {
     pub deployed_address: H160,
     pub contract: ethabi::Contract,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ChainflipKey {
+#[derive(Debug)]
+struct ChainflipKey {
     pub_key_x: ethabi::Uint,
     pub_key_y_parity: ethabi::Uint,
 }
 
 impl ChainflipKey {
     /// Create a ChainflipKey from a decimal string
-    pub fn from_dec_str(dec_str: &str, parity: bool) -> Result<Self> {
+    fn from_dec_str(dec_str: &str, parity: bool) -> Result<Self> {
         let pub_key_x = web3::types::U256::from_dec_str(dec_str)?;
         Ok(ChainflipKey {
             pub_key_x,
@@ -125,8 +124,8 @@ impl Tokenizable for ChainflipKey {
 }
 
 /// Represents the events that are expected from the KeyManager contract.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum KeyManagerEvent {
+#[derive(Debug)]
+enum KeyManagerEvent {
     /// The `Staked(nodeId, amount)` event.
     KeyChange {
         /// Whether the change was signed by the AggKey.
@@ -168,7 +167,7 @@ impl Display for KeyManagerEvent {
 }
 
 impl KeyManager {
-    pub fn parser_closure(
+    fn parser_closure(
         &self,
     ) -> Result<impl Fn((H256, H256, ethabi::RawLog)) -> Result<KeyManagerEvent>> {
         let key_change = SignatureAndEvent::new(&self.contract, "KeyChange")?;

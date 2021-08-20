@@ -42,7 +42,6 @@ struct TxDetails {
 }
 
 /// Reads [AuctionConfirmedEvent]s off the message queue and encodes the function call to the stake manager.
-#[derive(Clone)]
 struct SetAggKeyWithAggKeyEncoder<MQC: IMQClient> {
     mq_client: MQC,
     key_manager: KeyManager,
