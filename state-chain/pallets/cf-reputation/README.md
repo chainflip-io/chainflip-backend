@@ -32,7 +32,8 @@ is positive slashing stops.
 - **Reputation points:** A point system which allows validators to earn reputation by being *online*.
   They lose reputation points by being meeting one of the *offline conditions*.
 - **Offline conditions:** One of the following conditions: *missed heartbeat*, *failed to broadcast
-  an output* or *failed to participate in a signing ceremony*.  Each condition has its associated
-  penalty in reputation points.
+  an output*, *failed to participate in a signing ceremony*, *not enough performance credits* and
+  *contradicting self during signing ceremony*.  Each condition has its associated penalty in
+  reputation points.
 - **Slashing:** The process of debiting FLIP tokens from a validator.  Slashing only occurs in this
   pallet when a validator's reputation points fall below zero *and* they are *offline*.
