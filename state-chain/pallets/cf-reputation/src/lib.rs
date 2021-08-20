@@ -96,6 +96,7 @@ pub trait OfflineConditions {
 pub mod pallet {
 	use super::*;
 	use cf_traits::EpochInfo;
+	use frame_benchmarking::frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
 	use frame_system::pallet_prelude::*;
 	use sp_std::ops::Neg;
 
@@ -110,7 +111,7 @@ pub mod pallet {
 	/// Reputation of a validator
 	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 	pub struct Reputation<OnlineCredits> {
-		online_credits: OnlineCredits,
+		pub(crate) online_credits: OnlineCredits,
 		pub reputation_points: ReputationPoints,
 	}
 
@@ -132,7 +133,7 @@ pub mod pallet {
 		type ValidatorId: Member + Parameter + From<<Self as frame_system::Config>::AccountId>;
 
 		// An amount of a bid
-		type Amount: Copy;
+		type Amount: Copy + AtLeast32BitUnsigned;
 
 		/// The number of blocks for the time frame we would test liveliness within
 		#[pallet::constant]
@@ -235,11 +236,12 @@ pub mod pallet {
 			AwaitingHeartbeats::<T>::mutate(&validator_id, |awaiting| *awaiting = Some(false));
 			// Check if this validator has reputation
 			if !Reputations::<T>::contains_key(&validator_id) {
+				let reward = Self::online_credit_reward();
 				// Credit this validator with the blocks for this interval and set 0 reputation points
 				Reputations::<T>::insert(
 					validator_id,
 					Reputation {
-						online_credits: Self::online_credit_reward(),
+						online_credits: reward,
 						reputation_points: 0,
 					},
 				);

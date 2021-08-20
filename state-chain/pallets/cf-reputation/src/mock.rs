@@ -59,6 +59,7 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ();
 }
 
+pub type ValidatorId = <Test as frame_system::Config>::AccountId;
 // A heartbeat interval in blocks
 pub const HEARTBEAT_BLOCK_INTERVAL: u64 = 150;
 // Number of blocks being offline before you lose one point
@@ -80,7 +81,7 @@ parameter_types! {
 // Mocking the `Slasher` trait
 pub struct MockSlasher;
 impl Slashing for MockSlasher {
-	type ValidatorId = u64;
+	type ValidatorId = ValidatorId;
 	type BlockNumber = u64;
 
 	fn slash(_validator_id: &Self::ValidatorId, _blocks_offline: &Self::BlockNumber) -> Weight {
@@ -98,7 +99,7 @@ pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
 
 impl Config for Test {
 	type Event = Event;
-	type ValidatorId = u64;
+	type ValidatorId = ValidatorId;
 	type Amount = u128;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type ReputationPointPenalty = ReputationPointPenalty;
