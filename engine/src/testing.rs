@@ -1,5 +1,5 @@
-#[cfg(test)]
-#[macro_use]
+#![cfg(test)]
+
 /// Simply unwraps the value. Advantage of this is to make it clear in tests
 /// what we are testing
 macro_rules! assert_ok_unwrap {

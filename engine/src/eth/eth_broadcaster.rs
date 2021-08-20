@@ -191,5 +191,6 @@ mod tests {
     async fn test_eth_broadcaster_new() {
         let eth_broadcaster = new_eth_broadcaster().await;
         assert!(eth_broadcaster.is_ok());
+        assert_ok_unwrap!(eth_broadcaster);
     }
 }
