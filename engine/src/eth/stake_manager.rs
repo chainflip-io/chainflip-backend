@@ -75,7 +75,7 @@ pub async fn start_stake_manager_witness(
                             return_addr,
                             tx_hash
                         );
-                        let mut signer = signer.lock().unwrap();
+                        let mut signer = signer.lock().unwrap(); // TODO: Handle unwrap
                         subxt_client
                             .witness_staked(&*signer, account_id, amount, tx_hash)
                             .await?;
@@ -93,7 +93,7 @@ pub async fn start_stake_manager_witness(
                             amount,
                             tx_hash
                         );
-                        let mut signer = signer.lock().unwrap();
+                        let mut signer = signer.lock().unwrap(); // TODO: Handle unwrap
                         subxt_client
                             .witness_claimed(&*signer, account_id, amount, tx_hash)
                             .await?;
