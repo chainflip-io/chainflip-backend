@@ -142,6 +142,8 @@ pub mod pallet {
 		NoMember,
 		/// The proposal was not found in the the proposal map
 		NotFound,
+		/// Sudo call failed
+		SudoCallFailed,
 	}
 
 	#[pallet::call]
@@ -189,6 +191,16 @@ pub mod pallet {
 			Self::try_approve(who, id as usize)?;
 			Ok(().into())
 		}
+		#[pallet::weight(10_000)]
+		pub fn call_as_sudo(
+			origin: OriginFor<T>,
+			call: Box<<T as Config>::Call>,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			let result = call.dispatch_bypass_filter(Origin::Root.into());
+			ensure!(result.is_ok(), Error::<T>::SudoCallFailed);
+			Ok(().into())
+		}
 	}
 
 	/// Genesis definition
@@ -220,6 +232,7 @@ pub mod pallet {
 	/// The raw origin enum for this pallet.
 	#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
 	pub enum RawOrigin {
+		Root,
 		GovernanceThreshold,
 	}
 }
@@ -239,6 +252,7 @@ where
 		match o.into() {
 			Ok(o) => match o {
 				RawOrigin::GovernanceThreshold => Ok(()),
+				RawOrigin::Root => Ok(()),
 			},
 			Err(o) => Err(o),
 		}
