@@ -1,4 +1,13 @@
-use chainflip_engine::{eth::{self, key_manager::key_manager::{ChainflipKey, KeyManagerEvent}, new_web3_client}, logging::utils, mq::{nats_client::NatsMQClient, IMQClient, Subject}, settings::Settings};
+use chainflip_engine::{
+    eth::{
+        self,
+        key_manager::key_manager::{ChainflipKey, KeyManagerEvent},
+        new_web3_client,
+    },
+    logging::utils,
+    mq::{nats_client::NatsMQClient, IMQClient, Subject},
+    settings::Settings,
+};
 
 use futures::stream::StreamExt;
 
@@ -10,13 +19,19 @@ pub async fn test_all_key_manager_events() {
 
     let web3 = new_web3_client(&settings, &root_logger).unwrap();
 
-    let (key_manager_event_sender, key_manager_event_receiver) = tokio::sync::mpsc::unbounded_channel(); 
+    let (key_manager_event_sender, key_manager_event_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
 
     // The Key Manager Witness will run forever unless we stop it after a short time
     // in which it should have already done it's job.
     let _ = tokio::time::timeout(
         std::time::Duration::from_millis(100),
-        eth::key_manager::start_key_manager_witness(&web3, &settings, key_manager_event_sender, &root_logger),
+        eth::key_manager::start_key_manager_witness(
+            &web3,
+            &settings,
+            key_manager_event_sender,
+            &root_logger,
+        ),
     )
     .await;
     slog::info!(&root_logger, "Subscribed");

@@ -3,11 +3,25 @@
 
 use core::str::FromStr;
 
-use crate::{eth::{eth_event_streamer, EventParseError, SignatureAndEvent, utils}, logging::COMPONENT_KEY, settings, state_chain::runtime::StateChainRuntime};
+use crate::{
+    eth::{eth_event_streamer, utils, EventParseError, SignatureAndEvent},
+    logging::COMPONENT_KEY,
+    settings,
+    state_chain::runtime::StateChainRuntime,
+};
 use serde::{Deserialize, Serialize};
+use std::{
+    fmt::Display,
+    sync::{Arc, Mutex},
+};
 use substrate_subxt::{Client, PairSigner};
-use std::{fmt::Display, sync::{Arc, Mutex}};
-use web3::{contract::tokens::Tokenizable, ethabi::{self, RawLog, Token}, types::{H160, H256}, Web3, transports::WebSocket};
+use web3::{
+    contract::tokens::Tokenizable,
+    ethabi::{self, RawLog, Token},
+    transports::WebSocket,
+    types::{H160, H256},
+    Web3,
+};
 
 use anyhow::Result;
 
@@ -15,10 +29,9 @@ use futures::{Future, StreamExt};
 
 use slog::o;
 
-
 /// Set up the eth event streamer for the KeyManager contract, and start it
 pub async fn start_key_manager_witness(
-    web3 : &Web3<WebSocket>,
+    web3: &Web3<WebSocket>,
     settings: &settings::Settings,
     _signer: Arc<Mutex<PairSigner<StateChainRuntime, sp_core::sr25519::Pair>>>,
     _subxt_client: Client<StateChainRuntime>,
@@ -29,20 +42,22 @@ pub async fn start_key_manager_witness(
     slog::info!(logger, "Starting KeyManager witness");
 
     let key_manager = KeyManager::new(&settings)?;
-    
+
     let parser = key_manager.parser_closure()?;
 
     let mut event_stream = eth_event_streamer::new_eth_event_stream(
         web3.clone(),
         key_manager.deployed_address,
         settings.eth.from_block,
-        logger.clone()
-    ).await?;
+        logger.clone(),
+    )
+    .await?;
 
     Ok(async move {
         while let Some(result_event) = event_stream.next().await {
-            match parser(result_event.unwrap()).unwrap() { // TODO: Handle unwraps
-                KeyManagerEvent::KeyChange{..} => {
+            match parser(result_event.unwrap()).unwrap() {
+                // TODO: Handle unwraps
+                KeyManagerEvent::KeyChange { .. } => {
                     todo!();
                 }
             }
@@ -130,9 +145,7 @@ impl KeyManager {
     pub fn new(settings: &settings::Settings) -> Result<Self> {
         Ok(Self {
             deployed_address: H160::from_str(&settings.eth.key_manager_eth_address)?,
-            contract: ethabi::Contract::load(
-                std::include_bytes!("abis/KeyManager.json").as_ref(),
-            )?
+            contract: ethabi::Contract::load(std::include_bytes!("abis/KeyManager.json").as_ref())?,
         })
     }
 }
@@ -155,33 +168,39 @@ impl Display for KeyManagerEvent {
 }
 
 impl KeyManager {
-    pub fn parser_closure(&self) -> Result<impl Fn((H256, H256, ethabi::RawLog)) -> Result<KeyManagerEvent>> {
+    pub fn parser_closure(
+        &self,
+    ) -> Result<impl Fn((H256, H256, ethabi::RawLog)) -> Result<KeyManagerEvent>> {
         let key_change = SignatureAndEvent::new(&self.contract, "KeyChange")?;
 
-        Ok(move |(signature, tx_hash, raw_log) : (H256, H256, RawLog)| -> Result<KeyManagerEvent> {
-            let tx_hash = tx_hash.to_fixed_bytes();
-            if signature == key_change.signature {
-                let log = key_change.event.parse_log(raw_log)?;
-                let event = KeyManagerEvent::KeyChange {
-                    signed: utils::decode_log_param::<bool>(&log, "signedByAggKey")?,
-                    old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
-                    new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
-                    tx_hash,
-                };
-                Ok(event)
-            } else {
-                Err(anyhow::Error::from(EventParseError::UnexpectedEvent(signature)))
-            }
-        })
-    } 
+        Ok(
+            move |(signature, tx_hash, raw_log): (H256, H256, RawLog)| -> Result<KeyManagerEvent> {
+                let tx_hash = tx_hash.to_fixed_bytes();
+                if signature == key_change.signature {
+                    let log = key_change.event.parse_log(raw_log)?;
+                    let event = KeyManagerEvent::KeyChange {
+                        signed: utils::decode_log_param::<bool>(&log, "signedByAggKey")?,
+                        old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
+                        new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
+                        tx_hash,
+                    };
+                    Ok(event)
+                } else {
+                    Err(anyhow::Error::from(EventParseError::UnexpectedEvent(
+                        signature,
+                    )))
+                }
+            },
+        )
+    }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use web3::types::H256;
-    use hex;
     use super::*;
+    use hex;
+    use web3::types::H256;
 
     #[test]
     fn test_key_change_parsing() {
@@ -198,12 +217,16 @@ mod tests {
 
         let parser = key_manager.parser_closure().unwrap();
 
-        let key_change_event_signature = H256::from_str("0x19389c59b816d8b0ec43f2d5ed9b41bddc63d66dac1ecd808efe35b86b9ee0bf").unwrap();
-
+        let key_change_event_signature =
+            H256::from_str("0x19389c59b816d8b0ec43f2d5ed9b41bddc63d66dac1ecd808efe35b86b9ee0bf")
+                .unwrap();
 
         // 🔑 Aggregate Key sets the new Aggregate Key 🔑
         {
-            let transaction_hash = H256::from_str("0x04629152b064c0d1343161c43f3b78cf67e9be35fc97f66bbb0e1ca1a0206bae").unwrap();
+            let transaction_hash = H256::from_str(
+                "0x04629152b064c0d1343161c43f3b78cf67e9be35fc97f66bbb0e1ca1a0206bae",
+            )
+            .unwrap();
             match parser((
                 key_change_event_signature,
                 transaction_hash,
@@ -229,7 +252,10 @@ mod tests {
 
         // 🔑 Governance Key sets the new Aggregate Key 🔑
         {
-            let transaction_hash = H256::from_str("0x6320cfd702415644192bf57702ceccc0d6de0ddc54fe9aa53f9b1a5d9035fe52").unwrap();
+            let transaction_hash = H256::from_str(
+                "0x6320cfd702415644192bf57702ceccc0d6de0ddc54fe9aa53f9b1a5d9035fe52",
+            )
+            .unwrap();
             match parser((
                 key_change_event_signature,
                 transaction_hash,
@@ -256,7 +282,10 @@ mod tests {
 
         // 🔑 Governance Key sets the new Governance Key 🔑
         {
-            let transaction_hash = H256::from_str("0x9215ce54309fddf0ce9b1e8fd10319c62cf9603635ffa0c06ac9db8338348f95").unwrap();
+            let transaction_hash = H256::from_str(
+                "0x9215ce54309fddf0ce9b1e8fd10319c62cf9603635ffa0c06ac9db8338348f95",
+            )
+            .unwrap();
             match parser((
                 key_change_event_signature,
                 transaction_hash,
@@ -283,7 +312,10 @@ mod tests {
 
         // Invalid sig test
         {
-            let invalid_signature = H256::from_str("0x0b0b5ed18390ab49777844d5fcafb9865c74095ceb3e73cc57d1fbcc926103b5").unwrap();
+            let invalid_signature = H256::from_str(
+                "0x0b0b5ed18390ab49777844d5fcafb9865c74095ceb3e73cc57d1fbcc926103b5",
+            )
+            .unwrap();
             let res = parser((
                 invalid_signature,
                 H256::from_str("0x04629152b064c0d1343161c43f3b78cf67e9be35fc97f66bbb0e1ca1a0206bae").unwrap(),

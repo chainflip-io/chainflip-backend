@@ -53,7 +53,7 @@ pub async fn start(
             if let Err(e) = {
                 let signer = signer.lock().unwrap();
                 subxt_client.heartbeat(&*signer).await
-             } {
+            } {
                 slog::error!(logger, "Error submitting heartbeat: {:?}", e)
             }
         }

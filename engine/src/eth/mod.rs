@@ -9,14 +9,14 @@ pub mod utils;
 
 use anyhow::Result;
 
+use thiserror::Error;
 use web3::ethabi::{Contract, Event};
 use web3::types::SyncState;
-use thiserror::Error;
 
-use std::time::Duration;
 use crate::settings;
-use web3::types::H256;
+use std::time::Duration;
 use web3;
+use web3::types::H256;
 
 #[derive(Error, Debug)]
 pub enum EventParseError {
@@ -30,29 +30,32 @@ pub enum EventParseError {
 
 // The signature is recalculated on each Event::signature() call, so we use this structure to cache the signture-
 pub struct SignatureAndEvent {
-    pub signature : H256,
-    pub event : Event
+    pub signature: H256,
+    pub event: Event,
 }
 impl SignatureAndEvent {
-    pub fn new(contract : &Contract, name : &str) -> Result<Self> {
+    pub fn new(contract: &Contract, name: &str) -> Result<Self> {
         let event = contract.event(name)?;
-        Ok(Self {signature : event.signature(), event : event.clone()})
+        Ok(Self {
+            signature: event.signature(),
+            event: event.clone(),
+        })
     }
 }
 
-pub async fn new_web3_client(settings : &settings::Settings, logger : &slog::Logger) -> Result<web3::Web3<web3::transports::WebSocket>> {
+pub async fn new_web3_client(
+    settings: &settings::Settings,
+    logger: &slog::Logger,
+) -> Result<web3::Web3<web3::transports::WebSocket>> {
     let node_endpoint = &settings.eth.node_endpoint;
-    slog::debug!(
-        logger,
-        "Connecting new web3 client to {}",
-        node_endpoint
-    );
-    match tokio::time::timeout(
-        Duration::from_secs(5),
-        async {
-            Ok(web3::Web3::new(web3::transports::WebSocket::new(node_endpoint).await?))
-        },
-    ).await {
+    slog::debug!(logger, "Connecting new web3 client to {}", node_endpoint);
+    match tokio::time::timeout(Duration::from_secs(5), async {
+        Ok(web3::Web3::new(
+            web3::transports::WebSocket::new(node_endpoint).await?,
+        ))
+    })
+    .await
+    {
         Ok(result) => match result {
             Ok(web3) => {
                 // Make sure the eth node is fully synced
@@ -62,18 +65,15 @@ pub async fn new_web3_client(settings : &settings::Settings, logger : &slog::Log
                             slog::info!(logger, "Waiting for eth node to sync: {:?}", info);
                         }
                         SyncState::NotSyncing => {
-                            slog::info!(
-                                logger,
-                                "Eth node is synced."
-                            );
+                            slog::info!(logger, "Eth node is synced.");
                             break;
                         }
                     }
                     tokio::time::sleep(Duration::from_secs(4)).await;
-                };
+                }
                 Ok(web3)
-            },
-            Err(error) => Err(error)
+            }
+            Err(error) => Err(error),
         },
         Err(_) => {
             // Connection timeout
@@ -83,5 +83,4 @@ pub async fn new_web3_client(settings : &settings::Settings, logger : &slog::Log
             )))
         }
     }
-
 }
