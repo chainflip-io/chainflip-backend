@@ -3,12 +3,41 @@
 
 use core::str::FromStr;
 
-use crate::{eth::{EventProducerError, SignatureAndEvent, utils}, settings};
+use crate::{eth::{eth_event_streamer, EventProducerError, SignatureAndEvent, utils}, logging::COMPONENT_KEY, settings};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
-use web3::{contract::tokens::Tokenizable, ethabi::{self, Function, RawLog, Token}, types::{H160, H256}};
+use web3::{contract::tokens::Tokenizable, ethabi::{self, Function, RawLog, Token}, types::{H160, H256}, Web3, transports::WebSocket};
 
 use anyhow::Result;
+
+use futures::Future;
+use tokio::sync::mpsc::UnboundedSender;
+
+use slog::o;
+
+
+/// Set up the eth event streamer for the KeyManager contract, and start it
+pub fn start_key_manager_witness(
+    web3 : &Web3<WebSocket>,
+    settings: &settings::Settings,
+    sink : UnboundedSender<KeyManagerEvent>,
+    logger: &slog::Logger,
+) -> Result<impl Future> {
+    let logger = logger.new(o!(COMPONENT_KEY => "KeyManagerWitness"));
+
+    slog::info!(logger, "Starting KeyManager witness");
+
+    let key_manager = KeyManager::new(&settings)?;
+
+    Ok(eth_event_streamer::start(
+        web3.clone(),
+        key_manager.deployed_address,
+        settings.eth.from_block,
+        key_manager.parser_closure()?,
+        sink,
+        logger
+    ))
+}
 
 #[derive(Clone)]
 /// A wrapper for the KeyManager Ethereum contract.
@@ -91,7 +120,7 @@ impl KeyManager {
         Ok(Self {
             deployed_address: H160::from_str(&settings.eth.key_manager_eth_address)?,
             contract: ethabi::Contract::load(
-                std::include_bytes!("../abis/KeyManager.json").as_ref(),
+                std::include_bytes!("abis/KeyManager.json").as_ref(),
             )?
         })
     }

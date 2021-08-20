@@ -83,7 +83,7 @@ pub async fn start<Event, Parser>(
 mod tests {
 
     use crate::{
-        eth::{new_web3_client, stake_manager::stake_manager::StakeManager},
+        eth::{new_web3_client, stake_manager::StakeManager},
         logging,
         settings,
     };

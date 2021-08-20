@@ -4,16 +4,44 @@
 use core::str::FromStr;
 use std::{convert::TryInto, fmt::Display};
 
-use crate::{eth::{EventProducerError, SignatureAndEvent, utils}, settings};
+use crate::{eth::{eth_event_streamer, EventProducerError, SignatureAndEvent, utils}, settings, logging::COMPONENT_KEY};
 
 use serde::{Deserialize, Serialize};
 use sp_runtime::AccountId32;
 use web3::{
     ethabi::{self, Function, Log, RawLog},
     types::{H160, H256},
+    Web3, transports::WebSocket
 };
 
 use anyhow::Result;
+
+use futures::Future;
+use slog::o;
+use tokio::sync::mpsc::UnboundedSender;
+
+/// Set up the eth event streamer for the StakeManager contract, and start it
+pub fn start_stake_manager_witness(
+    web3 : &Web3<WebSocket>,
+    settings: &settings::Settings,
+    sink : UnboundedSender<StakeManagerEvent>,
+    logger: &slog::Logger,
+) -> Result<impl Future> {
+    let logger = logger.new(o!(COMPONENT_KEY => "StakeManagerWitness"));
+
+    slog::info!(logger, "Starting StakeManager obverser");
+
+    let stake_manager = StakeManager::new(&settings)?;
+
+    Ok(eth_event_streamer::start(
+        web3.clone(),
+        stake_manager.deployed_address,
+        settings.eth.from_block,
+        stake_manager.parser_closure()?,
+        sink,
+        logger
+    ))
+}
 
 #[derive(Clone)]
 /// A wrapper for the StakeManager Ethereum contract.
@@ -150,7 +178,7 @@ impl Display for StakeManagerEvent {
 impl StakeManager {
     /// Loads the contract abi to get event definitions
     pub fn new(settings: &settings::Settings) -> Result<Self> {
-        let contract = ethabi::Contract::load(std::include_bytes!("../abis/StakeManager.json").as_ref())?;
+        let contract = ethabi::Contract::load(std::include_bytes!("abis/StakeManager.json").as_ref())?;
         Ok(Self {
             deployed_address: H160::from_str(&settings.eth.stake_manager_eth_address)?,
             contract,
