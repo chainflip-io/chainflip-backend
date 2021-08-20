@@ -3,21 +3,19 @@
 
 use super::*;
 
-use crate::mock::HEARTBEAT_BLOCK_INTERVAL;
 #[allow(unused)]
 use crate::Pallet as pallet_cf_reputation;
 use frame_benchmarking::account;
 use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
 use frame_system::RawOrigin;
 use sp_std::{boxed::Box, vec, vec::Vec};
-type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 
+type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 const VALIDATOR_COUNT: u32 = 150;
 
 benchmarks! {
 	heartbeat {
 		let b in 0 .. VALIDATOR_COUNT;
-
 		let accounts: Vec<AccountIdOf<T>> = (0..=VALIDATOR_COUNT)
 			.map(|i| account("doogle", i, 0))
 			.collect();
@@ -29,7 +27,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(accounts[b as usize].clone()))
 	verify {
 		let validator_id: T::ValidatorId = accounts[b as usize].clone().into();
-		let expected_credits: T::BlockNumber = (HEARTBEAT_BLOCK_INTERVAL as u32).into();
+		let expected_credits = pallet_cf_reputation::<T>::online_credit_reward();
 		let reputation_for_validator = pallet_cf_reputation::<T>::reputation(validator_id);
 		assert_eq!(reputation_for_validator.online_credits, expected_credits);
 	}

@@ -396,7 +396,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Return number of online credits for reward
 		///
-		fn online_credit_reward() -> OnlineCreditsFor<T> {
+		pub(crate) fn online_credit_reward() -> OnlineCreditsFor<T> {
 			// Equivalent to the number of blocks used for the heartbeat
 			T::HeartbeatBlockInterval::get()
 		}
