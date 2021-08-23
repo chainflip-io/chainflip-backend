@@ -1,9 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
-mod weights;
 mod chainflip;
+mod weights;
 // A few exports that help ease life for downstream crates.
+use cf_traits::Chainflip;
 use core::time::Duration;
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
@@ -15,6 +16,8 @@ pub use frame_support::{
 	StorageValue,
 };
 use frame_system::offchain::SendTransactionTypes;
+use pallet_cf_reputation::{ReputationPenalty, ZeroSlasher};
+use pallet_cf_vaults::nonce::NonceUnixTime;
 use pallet_grandpa::fg_primitives;
 use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
 use pallet_session::historical as session_historical;
@@ -143,8 +146,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type Registrar = Session;
 	type ValidatorId = AccountId;
 	type MinAuctionSize = MinAuctionSize;
-	type Confirmation = Auction;
-	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
+	type Handler = Vaults;
 }
 
 // FIXME: These would be changed
@@ -160,6 +162,16 @@ impl pallet_cf_validator::Config for Runtime {
 	type EpochIndex = EpochIndex;
 	type Amount = FlipBalance;
 	type Auction = Auction;
+}
+
+impl pallet_cf_vaults::Config for Runtime {
+	type Event = Event;
+	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
+	type PublicKey = Vec<u8>;
+	type Transaction = Vec<u8>;
+	type RotationHandler = Auction;
+	type Nonce = u64;
+	type NonceProvider = NonceUnixTime<Self::Nonce, Timestamp>;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
@@ -396,6 +408,28 @@ impl pallet_cf_witnesser_api::Config for Runtime {
 	type Witnesser = Witnesser;
 }
 
+impl Chainflip for Runtime {
+	type Amount = FlipBalance;
+	type ValidatorId = <Self as frame_system::Config>::AccountId;
+}
+
+parameter_types! {
+	pub const HeartbeatBlockInterval: u32 = 150;
+	pub const ReputationPointPenalty: ReputationPenalty<BlockNumber> = ReputationPenalty { points: 1, blocks: 10 };
+	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
+}
+
+impl pallet_cf_reputation::Config for Runtime {
+	type Event = Event;
+	type ValidatorId = <Self as frame_system::Config>::AccountId;
+	type Amount = FlipBalance;
+	type HeartbeatBlockInterval = HeartbeatBlockInterval;
+	type ReputationPointPenalty = ReputationPointPenalty;
+	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
+	type Slasher = ZeroSlasher<Self>;
+	type EpochInfo = pallet_cf_validator::Pallet<Self>;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -421,6 +455,8 @@ construct_runtime!(
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
 		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
+		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>},
+		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
 	}
 );
 

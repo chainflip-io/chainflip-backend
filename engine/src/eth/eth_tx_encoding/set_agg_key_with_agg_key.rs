@@ -1,15 +1,15 @@
 use std::{collections::HashMap, convert::TryInto};
 
 use crate::{
-    eth::key_manager::key_manager::KeyManager,
+    eth::key_manager::KeyManager,
     eth::utils,
     logging::COMPONENT_KEY,
     mq::{IMQClient, Subject},
     p2p::ValidatorId,
     settings,
     signing::{
-        KeyId, KeygenOutcome, KeygenSuccess, MessageHash, MultisigEvent, MultisigInstruction,
-        SigningInfo, SigningOutcome, SigningSuccess,
+        KeyId, MessageHash, MessageInfo, MultisigEvent, MultisigInstruction, SchnorrSignature,
+        SigningInfo,
     },
     types::chain::Chain,
 };
@@ -28,15 +28,10 @@ pub async fn start<MQC: IMQClient + Clone>(
     mq_client: MQC,
     logger: &slog::Logger,
 ) {
-    SetAggKeyWithAggKeyEncoder::new(
-        settings.eth.key_manager_eth_address.as_ref(),
-        settings.signing.genesis_validator_ids.clone(),
-        mq_client,
-        logger,
-    )
-    .expect("Should create eth tx encoder")
-    .process_multi_sig_event_stream()
-    .await;
+    SetAggKeyWithAggKeyEncoder::new(&settings, mq_client, logger)
+        .expect("Should create eth tx encoder")
+        .process_multi_sig_event_stream()
+        .await;
 }
 
 /// Details of a transaction to be broadcast to ethereum.
@@ -47,7 +42,6 @@ struct TxDetails {
 }
 
 /// Reads [AuctionConfirmedEvent]s off the message queue and encodes the function call to the stake manager.
-#[derive(Clone)]
 struct SetAggKeyWithAggKeyEncoder<MQC: IMQClient> {
     mq_client: MQC,
     key_manager: KeyManager,
@@ -69,16 +63,12 @@ struct ParamContainer {
 }
 
 impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
-    fn new(
-        key_manager_address: &str,
-        genesis_validator_ids: Vec<ValidatorId>,
-        mq_client: MQC,
-        logger: &slog::Logger,
-    ) -> Result<Self> {
-        let key_manager = KeyManager::load(key_manager_address, logger)?;
+    fn new(settings: &settings::Settings, mq_client: MQC, logger: &slog::Logger) -> Result<Self> {
+        let key_manager = KeyManager::new(settings)?;
 
         let mut genesis_validator_ids_hash_map = HashMap::new();
-        genesis_validator_ids_hash_map.insert(KeyId(0), genesis_validator_ids);
+        genesis_validator_ids_hash_map
+            .insert(KeyId(0), settings.signing.genesis_validator_ids.clone());
         Ok(Self {
             mq_client,
             key_manager,
@@ -106,31 +96,39 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
         while let Some(event) = multisig_event_stream.next().await {
             match event {
                 Ok(event) => match event {
-                    MultisigEvent::KeygenResult(key_outcome) => match key_outcome {
-                        KeygenOutcome::Success(keygen_success) => {
-                            self.handle_keygen_success(keygen_success).await;
-                        }
-                        _ => {
-                            slog::error!(
-                                self.logger,
-                                "Signing module returned error generating key"
-                            )
-                        }
-                    },
-                    MultisigEvent::MessageSigningResult(signing_outcome) => match signing_outcome {
-                        SigningOutcome::MessageSigned(signing_success) => {
-                            self.handle_set_agg_key_message_signed(signing_success)
+                    MultisigEvent::KeygenResult(key_outcome) => match key_outcome.result {
+                        Ok(key) => {
+                            self.handle_keygen_success(key_outcome.ceremony_id, key)
                                 .await;
                         }
-                        _ => {
-                            // TODO: Use the reported bad nodes in the SigningOutcome / SigningFailure
-                            // TODO: retry signing with a different subset of signers
+                        Err((err, _)) => {
                             slog::error!(
                                 self.logger,
-                                "Signing module returned error signing message"
+                                "Signing module returned error generating key: {:?}",
+                                err
                             )
                         }
                     },
+                    MultisigEvent::MessageSigningResult(signing_outcome) => {
+                        match signing_outcome.result {
+                            Ok(sig) => {
+                                self.handle_set_agg_key_message_signed(
+                                    signing_outcome.ceremony_id,
+                                    sig,
+                                )
+                                .await;
+                            }
+                            Err((err, _)) => {
+                                // TODO: Use the reported bad nodes in the SigningOutcome / SigningFailure
+                                // TODO: retry signing with a different subset of signers
+                                slog::error!(
+                                    self.logger,
+                                    "Signing module returned error signing message: {:?}",
+                                    err
+                                )
+                            }
+                        }
+                    }
                     _ => {
                         slog::trace!(
                             self.logger,
@@ -154,14 +152,14 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
     // 2. Store the tx parameters in state for use later
     // 3. Create a Signing Instruction
     // 4. Push this instruction to the MQ for the signing module to pick up
-    async fn handle_keygen_success(&mut self, keygen_success: KeygenSuccess) {
+    async fn handle_keygen_success(&mut self, key_id: KeyId, key: secp256k1::PublicKey) {
         // This has nothing to do with building an ETH transaction.
         // We encode the tx like this, in eth format, because this is how the contract will
         // serialise the data to verify the signature over the message hash
-        let (pubkey_x, pubkey_y_parity) = destructure_pubkey(keygen_success.key);
+        let (pubkey_x, pubkey_y_parity) = destructure_pubkey(key);
 
         let param_container = ParamContainer {
-            key_id: keygen_success.key_id,
+            key_id,
             pubkey_x,
             pubkey_y_parity,
             key_nonce: [0u8; 32],
@@ -209,13 +207,13 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
     // 3. Push this transaction to the Broadcast(Chain::ETH) subject, to be broadcast by the ETH Broadcaster
     // 4. Update the current key id, with the new key id returned by the signing module, so we know which key to sign with
     // from now onwards, until the next successful key rotation
-    async fn handle_set_agg_key_message_signed(&mut self, signing_success: SigningSuccess) {
+    async fn handle_set_agg_key_message_signed(
+        &mut self,
+        message_info: MessageInfo,
+        sig: SchnorrSignature,
+    ) {
         // 1. Get the data from the message hash that was signed (using the `messages` field)
-        let sig = signing_success.sig;
-
-        let message_info = signing_success.message_info;
         let nonce_times_g_addr = utils::pubkey_to_eth_addr(sig.r);
-
         let key_id = message_info.key_id;
         let msg_hash = message_info.hash;
         let params = self
@@ -278,24 +276,29 @@ impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
     ) -> Result<Vec<u8>> {
         // Serialize the data using eth encoding so the KeyManager contract can serialize the data in the same way
         // in order to verify the signature
-        Ok(self.key_manager.set_agg_key_with_agg_key().encode_input(
-            // These are two arguments, SigData and Key from:
-            // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol
-            &[
-                // SigData
-                Token::Tuple(vec![
-                    Token::Uint(msg_hash.into()),              // msgHash
-                    Token::Uint(sig.into()), // sig - this 's' in the literature, the signature scalar
-                    Token::Uint(key_nonce.into()), // key nonce
-                    Token::Address(nonce_times_g_addr.into()), // nonceTimesGAddr - this is r in the literature
-                ]),
-                // Key - the signing module will sign over the params, containing this
-                Token::Tuple(vec![
-                    Token::Uint(pubkey_x.into()),        // pubkeyX
-                    Token::Uint(pubkey_y_parity.into()), // pubkeyYparity
-                ]),
-            ],
-        )?)
+        Ok(self
+            .key_manager
+            .contract
+            .function("setAggKeyWithAggKey")
+            .expect("Function 'setAggKeyWithAggKey' should be defined in the KeyManager abi.")
+            .encode_input(
+                // These are two arguments, SigData and Key from:
+                // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol
+                &[
+                    // SigData
+                    Token::Tuple(vec![
+                        Token::Uint(msg_hash.into()),              // msgHash
+                        Token::Uint(sig.into()), // sig - this 's' in the literature, the signature scalar
+                        Token::Uint(key_nonce.into()), // key nonce
+                        Token::Address(nonce_times_g_addr.into()), // nonceTimesGAddr - this is r in the literature
+                    ]),
+                    // Key - the signing module will sign over the params, containing this
+                    Token::Tuple(vec![
+                        Token::Uint(pubkey_x.into()),        // pubkeyX
+                        Token::Uint(pubkey_y_parity.into()), // pubkeyYparity
+                    ]),
+                ],
+            )?)
     }
 }
 
@@ -357,13 +360,7 @@ mod test_eth_tx_encoder {
 
         let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let encoder = SetAggKeyWithAggKeyEncoder::new(
-            settings.eth.key_manager_eth_address.as_str(),
-            settings.signing.genesis_validator_ids,
-            mq_client,
-            &logger,
-        )
-        .unwrap();
+        let encoder = SetAggKeyWithAggKeyEncoder::new(&settings, mq_client, &logger).unwrap();
 
         let s = secp256k1::Secp256k1::signing_only();
         let _sk_1 = secp256k1::SecretKey::from_str(AGG_PRIV_HEX_1).unwrap();

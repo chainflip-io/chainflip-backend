@@ -49,10 +49,16 @@
   },
   "LookupSource": "MultiAddress",
   "Nonce": "u64",
+  "OnlineCreditsFor": "u64",
   "Retired": "bool",
   "Signature": "H256",
   "TokenAmount": "u128",
   "ValidatorId": "AccountId",
+  "ReputationPenalty": {
+    "points": "ReputationPoints",
+    "blocks": "BlockNumber"
+  },
+  "ReputationPoints": "i32",
   "ReserveId": "[u8;4]",
   "ValidatorSize": "u32",
   "VoteCount": "u32"

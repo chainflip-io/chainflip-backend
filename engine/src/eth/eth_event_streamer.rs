@@ -1,176 +1,82 @@
-use crate::logging::COMPONENT_KEY;
-
-use super::{EventSink, EventSource};
-use futures::{future::join_all, stream, StreamExt};
-use slog::o;
-use std::time::Duration;
+use anyhow::Result;
+use futures::{stream, Stream, StreamExt};
 use web3::{
-    types::{BlockNumber, SyncState},
+    ethabi::RawLog,
+    transports::WebSocket,
+    types::{BlockNumber, FilterBuilder, H160, H256},
     Web3,
 };
 
-use anyhow::Result;
-
-/// Steams events from a particular ETH Source, such as a smart contract
-/// into a particular event sink
-/// For example, see stake_manager/mod.rs
-pub struct EthEventStreamer<E, S>
-where
-    E: EventSink<S::Event> + 'static,
-    S: EventSource,
-{
-    web3_client: ::web3::Web3<::web3::transports::WebSocket>,
-    event_source: S,
-    event_sinks: Vec<E>,
+/// Creates a stream that outputs the (signature, transaction hash, raw log) of events from a contract.
+pub async fn new_eth_event_stream(
+    web3: Web3<WebSocket>,
+    deployed_address: H160,
+    from_block: u64,
     logger: slog::Logger,
-}
-
-impl<E, S> EthEventStreamer<E, S>
-where
-    S: EventSource,
-    E: EventSink<S::Event> + 'static,
-{
-    /// Connects to the node_endpoint WebSocket with a 5sec timeout
-    pub async fn new(
-        node_endpoint: &str,
-        event_source: S,
-        event_sinks: Vec<E>,
-        logger: &slog::Logger,
-    ) -> Result<Self> {
-        slog::debug!(
-            logger,
-            "Connecting new Eth event streamer to {}",
-            node_endpoint
-        );
-        match tokio::time::timeout(
-            Duration::from_secs(5),
-            web3::transports::WebSocket::new(node_endpoint),
+) -> Result<impl Stream<Item = Result<(H256, H256, RawLog)>>> {
+    // The `fromBlock` parameter doesn't seem to work reliably with subscription streams, so
+    // request past block via http and prepend them to the stream manually.
+    let past_logs = web3
+        .eth()
+        .logs(
+            FilterBuilder::default()
+                .from_block(BlockNumber::Number(from_block.into()))
+                .address(vec![deployed_address])
+                .build(),
         )
-        .await
-        {
-            Ok(Ok(socket)) => {
-                // Successful connection
-                Ok(Self {
-                    web3_client: Web3::new(socket),
-                    event_source,
-                    event_sinks,
-                    logger: logger.new(o!(COMPONENT_KEY => "EthEventStreamer")),
-                })
-            }
-            Ok(Err(e)) => {
-                // Connection error
-                Err(e.into())
-            }
-            Err(_) => {
-                // Connection timeout
-                Err(anyhow::Error::msg(format!(
-                    "Timeout connecting to {:?}",
-                    node_endpoint
-                )))
-            }
-        }
-    }
-}
+        .await?;
 
-impl<S, E> EthEventStreamer<E, S>
-where
-    S: EventSource,
-    E: EventSink<S::Event> + 'static,
-{
-    /// Create a stream of Ethereum log events. If `from_block` is `None`, starts at the pending block.
-    pub async fn run(&self, from_block: Option<u64>) -> Result<()> {
-        slog::info!(
-            self.logger,
-            "Start running eth event stream from block: {:?}",
-            from_block
-        );
-        // Make sure the eth node is fully synced
-        loop {
-            match self.web3_client.eth().syncing().await? {
-                SyncState::Syncing(info) => {
-                    slog::info!(self.logger, "Waiting for eth node to sync: {:?}", info);
-                }
-                SyncState::NotSyncing => {
-                    slog::info!(
-                        self.logger,
-                        "Eth node is synced, subscribing to log events."
-                    );
-                    break;
-                }
-            }
-            tokio::time::sleep(Duration::from_secs(4)).await;
-        }
+    let future_logs = web3
+        .eth_subscribe()
+        .subscribe_logs(
+            FilterBuilder::default()
+                .from_block(BlockNumber::Pending)
+                .address(vec![deployed_address])
+                .build(),
+        )
+        .await?;
 
-        // The `fromBlock` parameter doesn't seem to work reliably with subscription streams, so
-        // request past block via http and prepend them to the stream manually.
-        let past_logs = if let Some(b) = from_block {
-            self.web3_client
-                .eth()
-                .logs(self.event_source.filter_builder(b.into()).build())
-                .await?
-        } else {
-            Vec::new()
-        };
+    Ok(stream::iter(past_logs)
+        .map(|log| Ok(log))
+        .chain(future_logs)
+        .map(
+            move |result_unparsed_log| -> Result<(H256, H256, RawLog), anyhow::Error> {
+                let result_extracted_log_details = result_unparsed_log
+                    .map_err(|error| anyhow::Error::new(error))
+                    .and_then(|log| {
+                        Ok((
+                            /*signature*/
+                            *log.topics.first().ok_or_else(|| {
+                                anyhow::Error::msg("Could not get signature from ETH log")
+                            })?,
+                            /*tx hash*/
+                            log.transaction_hash.ok_or_else(|| {
+                                anyhow::Error::msg("Could not get transaction hash from ETH log")
+                            })?,
+                            RawLog {
+                                topics: log.topics,
+                                data: log.data.0,
+                            },
+                        ))
+                    });
 
-        // This is the filter for the subscription. Explicitly set it to start at the pending block
-        // since this is what happens in most cases anyway.
-        let ws_filter = self
-            .event_source
-            .filter_builder(BlockNumber::Pending)
-            .build();
+                slog::debug!(
+                    logger,
+                    "Received ETH log: {:?}",
+                    result_extracted_log_details
+                );
 
-        let future_logs = self
-            .web3_client
-            .eth_subscribe()
-            .subscribe_logs(ws_filter)
-            .await?;
-
-        let log_stream = stream::iter(past_logs)
-            .map(|log| Ok(log))
-            .chain(future_logs);
-
-        let event_stream = log_stream.map(|log_result| self.event_source.parse_event(log_result?));
-
-        let processing_loop_fut = event_stream.for_each_concurrent(None, |parse_result| async {
-            match parse_result {
-                Ok(event) => {
-                    join_all(self.event_sinks.iter().map(|sink| {
-                        let event = event.clone();
-                        async move {
-                            sink.process_event(event).await.map_err(|e| {
-                                slog::error!(self.logger, "Error while processing event:\n{}", e)
-                            })
-                        }
-                    }))
-                    .await;
-                }
-                Err(e) => slog::error!(self.logger, "Unable to parse event: {}.", e),
-            }
-        });
-
-        slog::info!(self.logger, "Listening for events...");
-
-        processing_loop_fut.await;
-
-        let err_msg = "Stopped!";
-        slog::error!(self.logger, "{}", err_msg);
-        Err(anyhow::Error::msg(err_msg))
-    }
+                result_extracted_log_details
+            },
+        ))
 }
 
 #[cfg(test)]
 mod tests {
 
-    use crate::{
-        eth::stake_manager::{stake_manager::StakeManager, stake_manager_sink::StakeManagerSink},
-        logging,
-        mq::nats_client::NatsMQClient,
-        settings,
-    };
+    use crate::{eth::new_synced_web3_client, logging, settings};
 
     use super::*;
-
-    const CONTRACT_ADDRESS: &'static str = "0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f";
 
     #[tokio::test]
     #[ignore = "Depends on a running ganache instance, runs forever, useful for manually testing / observing incoming events"]
@@ -179,20 +85,15 @@ mod tests {
 
         let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let mq_client = NatsMQClient::new(&settings.message_queue).await.unwrap();
-
-        EthEventStreamer::new(
-            &settings.eth.node_endpoint,
-            StakeManager::load(CONTRACT_ADDRESS, &logger).unwrap(),
-            vec![StakeManagerSink::<NatsMQClient>::new(mq_client, &logger)
-                .await
-                .unwrap()],
-            &logger,
+        new_eth_event_stream(
+            new_synced_web3_client(&settings, &logger).await.unwrap(),
+            settings.eth.key_manager_eth_address,
+            0,
+            logger,
         )
         .await
         .unwrap()
-        .run(Some(0))
-        .await
-        .unwrap()
+        .collect::<Vec<_>>()
+        .await;
     }
 }

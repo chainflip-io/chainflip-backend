@@ -232,11 +232,10 @@ impl SigningStateManager {
                 // We never received a Signing request for this message, so any parties
                 // that tried to initiate a new ceremony are deemed malicious
                 let bad_validators = bc1_vec.iter().map(|(vid, _)| vid).cloned().collect_vec();
-                let event = InnerEvent::from(SigningOutcome::unauthorised(
+                events_to_send.push(SigningOutcome::unauthorised(
                     message_info.clone(),
                     bad_validators,
                 ));
-                events_to_send.push(event);
                 return false;
             }
             true
@@ -248,16 +247,14 @@ impl SigningStateManager {
                 slog::warn!(logger, "Signing state expired and should be abandoned");
 
                 let late_nodes = state.awaited_parties();
-                let event =
-                    InnerEvent::from(SigningOutcome::timeout(message_info.clone(), late_nodes));
-                events_to_send.push(event);
+                events_to_send.push(SigningOutcome::timeout(message_info.clone(), late_nodes));
                 return false;
             }
             true
         });
 
         for event in events_to_send {
-            if let Err(err) = self.p2p_sender.send(event) {
+            if let Err(err) = self.p2p_sender.send(InnerEvent::SigningResult(event)) {
                 slog::error!(logger, "Unable to send event, error: {}", err);
             }
         }

@@ -135,9 +135,10 @@ async fn coordinate_signing(
             match tokio::time::timeout(Duration::from_millis(200 * N_PARTIES as u64), stream.next())
                 .await
             {
-                Ok(Some(Ok(MultisigEvent::MessageSigningResult(
-                    SigningOutcome::MessageSigned(_),
-                )))) => {
+                Ok(Some(Ok(MultisigEvent::MessageSigningResult(SigningOutcome {
+                    result: Ok(_),
+                    ..
+                })))) => {
                     info!("Message is signed from {}", i);
                     signed_count = signed_count + 1;
                 }

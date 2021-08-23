@@ -1,5 +1,6 @@
 use super::*;
 use crate as pallet_cf_auction;
+use cf_traits::mocks::vault_rotation::Mock as MockAuctionHandler;
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
@@ -29,7 +30,6 @@ thread_local! {
 	pub static BIDDER_SET: RefCell<Vec<(ValidatorId, Amount)>> = RefCell::new(vec![
 		INVALID_BID, LOW_BID, JOE_BID, MAX_BID
 	]);
-	pub static CONFIRM: RefCell<bool> = RefCell::new(false);
 }
 
 construct_runtime!(
@@ -76,8 +76,6 @@ parameter_types! {
 	pub const MinAuctionSize: u32 = 2;
 }
 
-cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
-
 impl Config for Test {
 	type Event = Event;
 	type Amount = Amount;
@@ -86,8 +84,7 @@ impl Config for Test {
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
-	type Confirmation = Test;
-	type EnsureWitnessed = MockEnsureWitnessed;
+	type Handler = MockAuctionHandler;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
@@ -104,16 +101,6 @@ impl BidderProvider for TestBidderProvider {
 
 	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
 		BIDDER_SET.with(|l| l.borrow().to_vec())
-	}
-}
-
-impl AuctionConfirmation for Test {
-	fn awaiting_confirmation() -> bool {
-		CONFIRM.with(|l| *l.borrow())
-	}
-
-	fn set_awaiting_confirmation(waiting: bool) {
-		CONFIRM.with(|l| *l.borrow_mut() = waiting);
 	}
 }
 
