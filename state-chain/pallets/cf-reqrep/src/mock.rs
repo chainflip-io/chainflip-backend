@@ -89,5 +89,11 @@ impl pallet_cf_request_response::Config<Instance0> for Test {
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+	let mut ext: sp_io::TestExternalities = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
+	
+	ext.execute_with(|| {
+		System::set_block_number(1);
+	});
+
+	ext
 }
