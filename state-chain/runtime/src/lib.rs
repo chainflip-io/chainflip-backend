@@ -432,6 +432,7 @@ impl pallet_cf_reputation::Config for Runtime {
 }
 
 // ReqRep stuff
+use frame_support::instances::{Instance0, Instance1};
 
 impl pallet_cf_reqrep::reqreps::BaseConfig for Runtime {
 	type KeyId = u32;
@@ -440,12 +441,12 @@ impl pallet_cf_reqrep::reqreps::BaseConfig for Runtime {
 	type ChainId = u32;
 }
 
-impl pallet_cf_reqrep::Config<Instance1> for Runtime {
+impl pallet_cf_reqrep::Config<Instance0> for Runtime {
 	type Event = Event;
 	type Request = pallet_cf_reqrep::reqreps::signature::Request<Self>;
 }
 
-impl pallet_cf_reqrep::Config<Instance2> for Runtime {
+impl pallet_cf_reqrep::Config<Instance1> for Runtime {
 	type Event = Event;
 	type Request = pallet_cf_reqrep::reqreps::broadcast::Request<Self>;
 }
@@ -477,8 +478,8 @@ construct_runtime!(
 		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>, Origin},
 		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>},
 		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
-		SignatureRequestReply: pallet_cf_reqrep::<Instance1>::{Module, Call, Storage, Event},
-		BroadcastRequestReply: pallet_cf_reqrep::<Instance2>::{Module, Call, Storage, Event},
+		SignatureRequestReply: pallet_cf_reqrep::<Instance0>::{Module, Call, Storage, Event<T>},
+		BroadcastRequestReply: pallet_cf_reqrep::<Instance1>::{Module, Call, Storage, Event<T>},
 	}
 );
 

@@ -11,8 +11,14 @@ mod benchmarking;
 
 use frame_support::{Parameter, dispatch::DispatchResult};
 pub use pallet::*;
+use sp_std::prelude::*;
+use sp_runtime::RuntimeDebug;
 
-pub trait ReqRep<T: frame_system::Config> : Parameter {
+pub mod instances {
+	
+}
+
+pub trait ReqRep<T: frame_system::Config> {
 	type Reply: Parameter;
 
 	fn on_reply(&self, _reply: Self::Reply) -> DispatchResult;
@@ -26,7 +32,7 @@ pub mod reqreps {
 	use frame_support::Parameter;
 
 	pub trait BaseConfig: frame_system::Config {
-		/// The id type used to identify signing keys.
+		/// The id type used to identify individual signing keys.
 		type KeyId: Parameter;
 		type ValidatorId: Parameter;
 		type ChainId: Parameter;
@@ -36,21 +42,27 @@ pub mod reqreps {
 	pub mod signature {
 		use super::*;
 
-		#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-		pub struct Request<KeyId, ValidatorId> {
-			signing_key: KeyId,
+		#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
+		pub struct Request<T: BaseConfig> {
+			signing_key: T::KeyId,
 			payload: Vec<u8>,
-			signatories: Vec<ValidatorId>,
+			signatories: Vec<T::ValidatorId>,
 		}
-
-		#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-		pub enum Reply<ValidatorId> {
+		
+		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+		pub enum Reply<T: BaseConfig> {
 			Success { sig: Vec<u8> },
-			Failure { bad_nodes: Vec<ValidatorId> },
+			Failure { bad_nodes: Vec<T::ValidatorId> },
 		}
 
-		impl<T: BaseConfig> ReqRep<T> for Request<T::KeyId, T::ValidatorId> {
-			type Reply = Reply<T::ValidatorId>;
+		impl<T: BaseConfig> sp_std::fmt::Debug for Reply<T> {
+			fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+				f.write_str(stringify!(Reply))
+			}
+		}
+
+		impl<T: BaseConfig> ReqRep<T> for Request<T> {
+			type Reply = Reply<T>;
 
 			fn on_reply(&self, _reply: Self::Reply) -> DispatchResult {
 				todo!("The implementing pallet could store the result, or process a claim, or whatever.")
@@ -63,8 +75,8 @@ pub mod reqreps {
 		use super::*;
 
 		#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-		pub struct Request<ChainId> {
-			chain: ChainId,
+		pub struct Request<T: BaseConfig> {
+			chain: T::ChainId,
 		}
 
 		#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
@@ -74,7 +86,7 @@ pub mod reqreps {
 			Timeout,
 		}
 
-		impl<T: BaseConfig> ReqRep<T> for Request<T::ChainId> {
+		impl<T: BaseConfig> ReqRep<T> for Request<T> {
 			type Reply = Reply;
 
 			fn on_reply(&self, _reply: Self::Reply) -> DispatchResult {
@@ -89,10 +101,10 @@ pub type RequestId = u64;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use std::marker::PhantomData;
 	use frame_support::{Twox64Concat, dispatch::DispatchResultWithPostInfo};
 	use frame_system::pallet_prelude::*;
 	use frame_support::pallet_prelude::*;
+	use codec::FullCodec;
 
 	type ReplyFor<T, I> = <<T as Config<I>>::Request as ReqRep<T>>::Reply;
 
@@ -103,7 +115,7 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The request-reply definition for this instance.
-		type Request: ReqRep<Self>;
+		type Request: ReqRep<Self> + Member + FullCodec;
 	}
 
 	#[pallet::pallet]
