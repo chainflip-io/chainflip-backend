@@ -178,8 +178,8 @@ mod tests {
 
     use super::*;
     use hex;
-    use web3::types::H256;
     use std::str::FromStr;
+    use web3::types::H256;
 
     #[test]
     fn test_key_change_parsing() {

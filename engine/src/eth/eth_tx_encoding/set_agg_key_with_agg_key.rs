@@ -20,10 +20,7 @@ use serde::{Deserialize, Serialize};
 use slog::o;
 use sp_core::Hasher;
 use sp_runtime::traits::Keccak256;
-use web3::{
-    ethabi::Token,
-    types::Address,
-};
+use web3::{ethabi::Token, types::Address};
 
 /// Helper function, constructs and runs the [SetAggKeyWithAggKeyEncoder] asynchronously.
 pub async fn start<MQC: IMQClient + Clone>(

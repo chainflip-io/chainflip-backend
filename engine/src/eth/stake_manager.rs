@@ -51,7 +51,7 @@ pub async fn start_stake_manager_witness(
         logger.clone(),
     )
     .await?;
-    
+
     slog::info!(logger, "Creating Parser");
     let parser = stake_manager.parser_closure()?;
 
@@ -277,8 +277,8 @@ mod tests {
 
     use super::*;
     use hex;
-    use web3::types::{H256, U256};
     use std::str::FromStr;
+    use web3::types::{H256, U256};
 
     #[test]
     fn test_load_contract() {
