@@ -4,7 +4,6 @@
 use core::str::FromStr;
 use std::{
     convert::TryInto,
-    fmt::Display,
     sync::{Arc, Mutex},
 };
 
@@ -103,7 +102,7 @@ pub async fn start_stake_manager_witness(
                     event => {
                         slog::warn!(
                             logger,
-                            "{} is not to be submitted to the State Chain",
+                            "{:?} is not to be submitted to the State Chain",
                             event
                         );
                     }
@@ -186,65 +185,6 @@ enum StakeManagerEvent {
         /// Transaction hash that created the event
         tx_hash: [u8; 32],
     },
-}
-
-impl Display for StakeManagerEvent {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self {
-            StakeManagerEvent::Staked {
-                account_id,
-                amount,
-                return_addr,
-                tx_hash,
-            } => write!(
-                f,
-                "Staked({:?}, {}, {:?}, {:?}",
-                account_id, amount, return_addr, tx_hash
-            ),
-            StakeManagerEvent::ClaimRegistered {
-                account_id,
-                amount,
-                staker,
-                start_time,
-                expiry_time,
-                tx_hash,
-            } => write!(
-                f,
-                "ClaimRegistered({:?}, {}, {}, {}, {}, {:?}",
-                account_id, amount, staker, start_time, expiry_time, tx_hash
-            ),
-            StakeManagerEvent::ClaimExecuted {
-                account_id,
-                amount,
-                tx_hash,
-            } => {
-                write!(
-                    f,
-                    "ClaimExecuted({:?}, {}, {:?}",
-                    account_id, amount, tx_hash
-                )
-            }
-            StakeManagerEvent::FlipSupplyUpdated {
-                old_supply,
-                new_supply,
-                block_number,
-                tx_hash,
-            } => write!(
-                f,
-                "FlipSupplyUpdated({}, {}, {}, {:?}",
-                old_supply, new_supply, block_number, tx_hash
-            ),
-            StakeManagerEvent::MinStakeChanged {
-                old_min_stake,
-                new_min_stake,
-                tx_hash,
-            } => write!(
-                f,
-                "MinStakeChanged({}, {}, {:?}",
-                old_min_stake, new_min_stake, tx_hash
-            ),
-        }
-    }
 }
 
 impl StakeManager {

@@ -9,10 +9,7 @@ use crate::{
     settings,
     state_chain::runtime::StateChainRuntime,
 };
-use std::{
-    fmt::Display,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 use substrate_subxt::{Client, PairSigner};
 use web3::{
     contract::tokens::Tokenizable,
@@ -147,23 +144,6 @@ impl KeyManager {
             deployed_address: H160::from_str(&settings.eth.key_manager_eth_address)?,
             contract: ethabi::Contract::load(std::include_bytes!("abis/KeyManager.json").as_ref())?,
         })
-    }
-}
-
-impl Display for KeyManagerEvent {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self {
-            KeyManagerEvent::KeyChange {
-                signed,
-                old_key,
-                new_key,
-                tx_hash,
-            } => write!(
-                f,
-                "KeyChange({}, {:?}, {:?}, {:?}",
-                signed, old_key, new_key, tx_hash
-            ),
-        }
     }
 }
 
