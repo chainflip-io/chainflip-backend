@@ -1,7 +1,6 @@
 //! Contains the information required to use the StakeManger contract as a source for
 //! the EthEventStreamer
 
-use core::str::FromStr;
 use std::{
     convert::TryInto,
     sync::{Arc, Mutex},
@@ -193,7 +192,7 @@ impl StakeManager {
         let contract =
             ethabi::Contract::load(std::include_bytes!("abis/StakeManager.json").as_ref())?;
         Ok(Self {
-            deployed_address: H160::from_str(&settings.eth.stake_manager_eth_address)?,
+            deployed_address: settings.eth.stake_manager_eth_address,
             contract,
         })
     }
@@ -279,13 +278,12 @@ mod tests {
     use super::*;
     use hex;
     use web3::types::{H256, U256};
+    use std::str::FromStr;
 
     #[test]
     fn test_load_contract() {
         let mut settings = settings::test_utils::new_test_settings().unwrap();
         assert!(StakeManager::new(&settings).is_ok());
-        settings.eth.stake_manager_eth_address = "not_an_address".to_string();
-        assert!(StakeManager::new(&settings).is_err());
     }
 
     #[test]

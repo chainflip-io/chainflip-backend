@@ -1,6 +1,7 @@
 mod test {
 	use crate::mock::*;
 	use crate::*;
+	use cf_traits::mocks::vault_rotation::clear_confirmation;
 	use frame_support::{assert_noop, assert_ok};
 
 	fn last_event() -> mock::Event {
@@ -46,7 +47,7 @@ mod test {
 			// until is confirmed
 			assert_matches!(AuctionPallet::process(), Err(AuctionError::NotConfirmed));
 			// Confirm the auction
-			Test::set_awaiting_confirmation(false);
+			clear_confirmation();
 			// and finally we complete the process, clearing the bidders
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WaitingForBids(..)));
 			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::WaitingForBids(..));
@@ -102,7 +103,8 @@ mod test {
 				AuctionPallet::process(),
 				Ok(AuctionPhase::WinnersSelected(..))
 			);
-			assert!(Test::awaiting_confirmation());
+
+			// assert!(::try_confirmation());
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(winners, min_bid)
 				if !winners.is_empty() && min_bid > 0
 			);

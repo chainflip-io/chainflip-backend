@@ -74,8 +74,6 @@ pub async fn new_eth_event_stream(
 #[cfg(test)]
 mod tests {
 
-    use std::str::FromStr;
-
     use crate::{eth::new_synced_web3_client, logging, settings};
 
     use super::*;
@@ -89,7 +87,7 @@ mod tests {
 
         new_eth_event_stream(
             new_synced_web3_client(&settings, &logger).await.unwrap(),
-            H160::from_str(&settings.eth.key_manager_eth_address).unwrap(),
+            settings.eth.key_manager_eth_address,
             0,
             logger,
         )

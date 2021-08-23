@@ -1,8 +1,6 @@
 //! Contains the information required to use the KeyManager contract as a source for
 //! the EthEventStreamer
 
-use core::str::FromStr;
-
 use crate::{
     eth::{eth_event_streamer, utils, EventParseError, SignatureAndEvent},
     logging::COMPONENT_KEY,
@@ -141,7 +139,7 @@ impl KeyManager {
     /// Loads the contract abi to get event definitions
     pub fn new(settings: &settings::Settings) -> Result<Self> {
         Ok(Self {
-            deployed_address: H160::from_str(&settings.eth.key_manager_eth_address)?,
+            deployed_address: settings.eth.key_manager_eth_address,
             contract: ethabi::Contract::load(std::include_bytes!("abis/KeyManager.json").as_ref())?,
         })
     }
@@ -181,6 +179,7 @@ mod tests {
     use super::*;
     use hex;
     use web3::types::H256;
+    use std::str::FromStr;
 
     #[test]
     fn test_key_change_parsing() {

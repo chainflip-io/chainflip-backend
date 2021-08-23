@@ -1,7 +1,7 @@
 mod test {
 	use crate::*;
 	use crate::{mock::*, Error};
-	use cf_traits::AuctionConfirmation;
+	use cf_traits::mocks::vault_rotation::clear_confirmation;
 	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::traits::{BadOrigin, Zero};
 
@@ -78,7 +78,7 @@ mod test {
 			run_to_block(2);
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(..));
 			// Confirm the auction
-			TestConfirmation::set_awaiting_confirmation(false);
+			clear_confirmation();
 			// Move forward by 1 block
 			run_to_block(3);
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
@@ -103,7 +103,7 @@ mod test {
 			);
 			// Finally back to the start again
 			// Confirm the auction
-			TestConfirmation::set_awaiting_confirmation(false);
+			clear_confirmation();
 			run_to_block(11);
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
 		});
@@ -152,7 +152,7 @@ mod test {
 			// and still...
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(..));
 			// Confirm the auction
-			TestConfirmation::set_awaiting_confirmation(false);
+			clear_confirmation();
 			run_to_block(14);
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
 			assert_eq!(<ValidatorPallet as EpochInfo>::epoch_index(), 1);
@@ -177,7 +177,7 @@ mod test {
 			let winners = assert_winners();
 			assert_eq!(<ValidatorPallet as EpochInfo>::next_validators(), winners);
 			// Confirm the auction
-			TestConfirmation::set_awaiting_confirmation(false);
+			clear_confirmation();
 			run_to_block(16);
 			// Finalised auction, waiting for bids again
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));

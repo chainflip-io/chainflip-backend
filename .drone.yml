@@ -117,10 +117,20 @@ steps:
         -p pallet-cf-reputation
         -p pallet-cf-staking
         -p pallet-cf-validator
+        -p pallet-cf-vaults
         -p pallet-cf-witnesser
         -p pallet-cf-witnesser-api
         -p cf-traits
         -- --check
+      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
+
+  #  Compiles the entire backend
+  - name: compile-chainflip-backend
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    depends_on:
+      - rust-base
+    commands:
+      - cargo build
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
   #  Performs all unit tests
