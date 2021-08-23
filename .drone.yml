@@ -102,18 +102,6 @@ steps:
         - Dockerfile.rust-base
         - .drone.yml
 
-<<<<<<< HEAD
-=======
-  #  Compiles the entire backend
-  - name: compile-chainflip-backend
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    depends_on:
-      - rust-base
-    commands:
-      - cargo build
-      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
-
->>>>>>> 00542432b89a7bb194acc7293455003bbe6c3ee5
   #  Format checks
   - name: fmt-validator-package
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
@@ -136,7 +124,6 @@ steps:
         -- --check
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
-<<<<<<< HEAD
   #  Compiles the entire backend
   - name: compile-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
@@ -146,8 +133,6 @@ steps:
       - cargo build
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
-=======
->>>>>>> 00542432b89a7bb194acc7293455003bbe6c3ee5
   #  Performs all unit tests
   - name: test-validator-package
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
