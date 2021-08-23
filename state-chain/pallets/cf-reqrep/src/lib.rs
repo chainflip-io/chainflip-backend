@@ -14,36 +14,31 @@ pub use pallet::*;
 use sp_std::prelude::*;
 use sp_runtime::RuntimeDebug;
 
-pub mod instances {
-	
+pub trait RequestResponse<T: frame_system::Config> {
+	type Response: Parameter;
+
+	fn on_response(&self, _response: Self::Response) -> DispatchResult;
 }
 
-pub trait ReqRep<T: frame_system::Config> {
-	type Reply: Parameter;
-
-	fn on_reply(&self, _reply: Self::Reply) -> DispatchResult;
+pub trait BaseConfig: frame_system::Config {
+	/// The id type used to identify individual signing keys.
+	type KeyId: Parameter;
+	type ValidatorId: Parameter;
+	type ChainId: Parameter;
 }
 
 // These would be defined in their own modules but adding it here for now.
 // Macros might help reduce the boilerplat but I don't think it's too bad.
-pub mod reqreps {
+pub mod instances {
 	pub use super::*;
 	use codec::{Decode, Encode};
-	use frame_support::Parameter;
-
-	pub trait BaseConfig: frame_system::Config {
-		/// The id type used to identify individual signing keys.
-		type KeyId: Parameter;
-		type ValidatorId: Parameter;
-		type ChainId: Parameter;
-	}
 
 	// A signature request.
-	pub mod signature {
+	pub mod signing {
 		use super::*;
 
 		#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
-		pub struct Request<T: BaseConfig> {
+		pub struct Response<T: BaseConfig> {
 			signing_key: T::KeyId,
 			payload: Vec<u8>,
 			signatories: Vec<T::ValidatorId>,
@@ -61,10 +56,10 @@ pub mod reqreps {
 			}
 		}
 
-		impl<T: BaseConfig> ReqRep<T> for Request<T> {
-			type Reply = Reply<T>;
+		impl<T: BaseConfig> RequestResponse<T> for Response<T> {
+			type Response = Reply<T>;
 
-			fn on_reply(&self, _reply: Self::Reply) -> DispatchResult {
+			fn on_response(&self, _response: Self::Response) -> DispatchResult {
 				todo!("The implementing pallet could store the result, or process a claim, or whatever.")
 			}
 		}
@@ -80,16 +75,16 @@ pub mod reqreps {
 		}
 
 		#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-		pub enum Reply {
+		pub enum Response {
 			Success,
 			Failure,
 			Timeout,
 		}
 
-		impl<T: BaseConfig> ReqRep<T> for Request<T> {
-			type Reply = Reply;
+		impl<T: BaseConfig> RequestResponse<T> for Request<T> {
+			type Response = Response;
 
-			fn on_reply(&self, _reply: Self::Reply) -> DispatchResult {
+			fn on_response(&self, _response: Self::Response) -> DispatchResult {
 				todo!("Handle failure and timeouts.")
 			}
 		}
@@ -106,16 +101,16 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use codec::FullCodec;
 
-	type ReplyFor<T, I> = <<T as Config<I>>::Request as ReqRep<T>>::Reply;
+	type ResponseFor<T, I> = <<T as Config<I>>::Request as RequestResponse<T>>::Response;
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config<I: 'static = ()>: reqreps::BaseConfig {
+	pub trait Config<I: 'static = ()>: BaseConfig {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
-		/// The request-reply definition for this instance.
-		type Request: ReqRep<Self> + Member + FullCodec;
+		/// The request-response definition for this instance.
+		type Request: RequestResponse<Self> + Member + FullCodec;
 	}
 
 	#[pallet::pallet]
@@ -153,7 +148,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Reply.
 		#[pallet::weight(10_000)]
-		pub fn reply(origin: OriginFor<T>, id: RequestId, reply: ReplyFor<T, I>) -> DispatchResultWithPostInfo {
+		pub fn response(origin: OriginFor<T>, id: RequestId, response: ResponseFor<T, I>) -> DispatchResultWithPostInfo {
 			// Probably needs to be witnessed.
 			let _who = ensure_signed(origin)?;
 			
@@ -161,7 +156,7 @@ pub mod pallet {
 			let request = PendingRequests::<T, I>::get(id).ok_or(Error::<T, I>::InvalidRequestId)?;
 
 			// 2. Dispatch the callback.
-			let _ = request.on_reply(reply)?;
+			let _ = request.on_response(response)?;
 
 			Ok(().into())
 		}
