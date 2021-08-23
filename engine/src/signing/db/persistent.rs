@@ -1,4 +1,4 @@
-use std::{collections::HashMap, convert::TryInto};
+use std::{collections::HashMap, convert::TryInto, path::Path};
 
 use super::KeyDB;
 use kvdb_rocksdb::{Database, DatabaseConfig};
@@ -17,10 +17,11 @@ pub struct PersistentKeyDB {
 }
 
 impl PersistentKeyDB {
-    // TODO: Update to kvdb 14 and then can pass in &Path
-    pub fn new(path: &str, logger: &slog::Logger) -> Self {
+    pub fn new(path: &Path, logger: &slog::Logger) -> Self {
         let config = DatabaseConfig::default();
-        let db = Database::open(&config, path).expect("could not open database");
+        // TODO: Update to kvdb 14 and then can pass in &Path
+        let db = Database::open(&config, path.to_str().expect("Invalid path"))
+            .expect("could not open database");
 
         PersistentKeyDB {
             db,
