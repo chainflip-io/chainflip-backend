@@ -6,7 +6,7 @@
 //!
 //! Provides some low-level helpers for creating balance updates that maintain the accounting of funds.
 //!
-//! Exposes higher-level operations via the [cf_traits::StakeTransfer] and [cf_traits::Emissions] traits.
+//! Exposes higher-level operations via the [cf_traits::StakeTransfer] and [cf_traits::Issuance] traits.
 //!
 //! ## Imbalances
 //!
@@ -20,14 +20,20 @@
 //! by minting some tokens, or by bridging them from outside (aka. staking).
 //!
 //! A [Surplus] is (unsurprisingly) the opposite: it means there is an excess of funds *outside of the accounts*. Maybe
-//! an account has been debited some amount, or we have minted some tokens. These to be allocated somewhere.
+//! an account has been debited some amount, or we have minted some tokens. These need to be allocated somewhere.
+//!
+//! ## Reserves
+//!
+//! Reserves can be thought of as on-chain accounts, however unlike accounts they have no public key associated. Instead,
+//! a reserve is identified by a four-byte [`ReserveId`]. Reserves can be used to allocate funds internally, for example
+//! for setting aside funds to be distributed as rewards, or for use as a treasury.
 //!
 //! ### Example
 //!
 //! A [burn](Pallet::burn) creates a [Deficit]: the total issuance has been reduced so we need a [Surplus] from
 //! somewhere that we can offset against this. Usually, we want to debit an account to burn (slash) funds. We may also
-//! want to burn funds that are held in trading pools, for example. In this case we might withdraw from a pool to create
-//! a surplus to offset the burn (not implemented yet).
+//! want to burn funds that are held in a trading pool, for example. In this case we might withdraw from a pool to create
+//! a surplus to offset the burn. The pool's balance might be held in some reserve.
 //!
 //! If the [Deficit] created by the burn goes out of scope without being offset, the change is reverted, effectively
 //! minting the tokens and adding them back to the total issuance.
@@ -38,33 +44,34 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
-
 mod imbalances;
+mod on_charge_transaction;
+
+pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
+pub use on_charge_transaction::FlipTransactionPayment;
 
 use frame_support::{
-	ensure, 
-	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance}
+	ensure,
+	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
 };
-use imbalances::{Surplus, Deficit};
 
 use codec::{Decode, Encode};
-use sp_runtime::{DispatchError, RuntimeDebug, traits::{
-		AtLeast32BitUnsigned, MaybeSerializeDeserialize,
-		Saturating, Zero,
-	}};
-use sp_std::{fmt::Debug, prelude::*};
+use sp_runtime::{
+	traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, Zero},
+	DispatchError, RuntimeDebug,
+};
+use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use pallet::*;
-
-pub use crate::imbalances::ImbalanceSource;
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+
+	/// A 4-byte identifier for different reserves.
+	pub type ReserveId = [u8; 4];
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -93,6 +100,12 @@ pub mod pallet {
 	#[pallet::getter(fn account)]
 	pub type Account<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, FlipAccount<T::Balance>, ValueQuery>;
+
+	/// Funds belonging to on-chain reserves.
+	#[pallet::storage]
+	#[pallet::getter(fn reserve)]
+	pub type Reserve<T: Config> =
+		StorageMap<_, Blake2_128Concat, ReserveId, T::Balance, ValueQuery>;
 
 	/// The total number of tokens issued.
 	#[pallet::storage]
@@ -124,12 +137,8 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Not enough liquid funds.
 		InsufficientLiquidity,
-
-		/// Not enough funds.
-		InsufficientFunds,
-
-		/// Some operations can only be performed on existing accounts.
-		UnknownAccount,
+		/// Not enough reserves.
+		InsufficientReserves,
 	}
 
 	#[pallet::hooks]
@@ -148,7 +157,9 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { total_issuance: Zero::zero() }
+			Self {
+				total_issuance: Zero::zero(),
+			}
 		}
 	}
 
@@ -174,17 +185,18 @@ pub struct FlipAccount<Amount> {
 
 impl<Balance: Saturating + Copy + Ord> FlipAccount<Balance> {
 	/// The total balance excludes any funds that are in a pending claim request.
-	fn total(&self) -> Balance {
+	pub fn total(&self) -> Balance {
 		self.stake
 	}
 
 	/// Excludes the bond.
-	fn liquid(&self) -> Balance {
+	pub fn liquid(&self) -> Balance {
 		self.stake.saturating_sub(self.validator_bond)
 	}
 }
 
-type FlipImbalance<T> = SignedImbalance<<T as Config>::Balance, Surplus<T>>;
+/// Convenient alias for [SignedImbalance].
+pub type FlipImbalance<T> = SignedImbalance<<T as Config>::Balance, Surplus<T>>;
 
 impl<T: Config> From<Surplus<T>> for FlipImbalance<T> {
 	fn from(surplus: Surplus<T>) -> Self {
@@ -203,39 +215,55 @@ impl<T: Config> Pallet<T> {
 	pub fn onchain_funds() -> T::Balance {
 		TotalIssuance::<T>::get() - OffchainFunds::<T>::get()
 	}
-	
+
 	/// Total funds stored in an account.
 	pub fn total_balance_of(account_id: &T::AccountId) -> T::Balance {
 		Account::<T>::get(account_id).total()
 	}
 
+	/// Amount of funds allocated to a [Reserve].
+	pub fn reserved_balance(reserve_id: ReserveId) -> T::Balance {
+		Reserve::<T>::get(reserve_id)
+	}
+
 	/// Sets the validator bond for an account.
 	pub fn set_validator_bond(account_id: &T::AccountId, amount: T::Balance) {
-		Account::<T>::mutate_exists(account_id, |maybe_account| {
-			match maybe_account.as_mut() {
-				Some(account) => account.validator_bond = amount,
-				None => {},
-			}
+		Account::<T>::mutate_exists(account_id, |maybe_account| match maybe_account.as_mut() {
+			Some(account) => account.validator_bond = amount,
+			None => {}
 		})
 	}
 
 	/// Slashable funds for an account.
 	pub fn slashable_funds(account_id: &T::AccountId) -> T::Balance {
-		Account::<T>::get(account_id).total().saturating_sub(T::ExistentialDeposit::get())
+		Account::<T>::get(account_id)
+			.total()
+			.saturating_sub(T::ExistentialDeposit::get())
 	}
 
-	/// Debits an account's staked balance. Ignores restricted funds, so can be used for slashing.
+	/// Debits an account's staked balance.
+	///
+	/// *Warning:* Creates the flip account if it doesn't exist already, but *doesn't* ensure that the `System`-level
+	/// account exists so should only be used with accounts that are known to exist.
+	///
+	/// Use `try_debit` instead when the existence of the account is unsure.
 	///
 	/// Debiting creates a surplus since we now have some funds that need to be allocated somewhere.
-	fn debit(account_id: &T::AccountId, amount: T::Balance) -> Surplus<T> {
+	pub fn debit(account_id: &T::AccountId, amount: T::Balance) -> Surplus<T> {
 		Surplus::from_acct(account_id, amount)
 	}
 
+	/// Debits an account's staked balance, if the account exists and sufficient funds are available, otherwise returns `None`.
+	/// Unlike [debit], does not create the account if it doesn't exist.
+	pub fn try_debit(account_id: &T::AccountId, amount: T::Balance) -> Option<Surplus<T>> {
+		Surplus::try_from_acct(account_id, amount)
+	}
+
 	/// Credits an account with some staked funds. If the amount provided would result in overflow, does nothing.
-	/// 
+	///
 	/// Crediting an account creates a deficit since we need to take the credited funds from somewhere. In a sense we
 	/// have spent money we don't have.
-	fn credit(account_id: &T::AccountId, amount: T::Balance) -> Deficit<T> {
+	pub fn credit(account_id: &T::AccountId, amount: T::Balance) -> Deficit<T> {
 		Deficit::from_acct(account_id, amount)
 	}
 
@@ -248,13 +276,15 @@ impl<T: Config> Pallet<T> {
 		match imbalance {
 			SignedImbalance::Positive(surplus) => {
 				let amount = surplus.peek();
-				surplus.offset(Self::credit(account_id, amount))
+				surplus
+					.offset(Self::credit(account_id, amount))
 					.map(SignedImbalance::Positive)
 					.unwrap_or_else(SignedImbalance::Negative)
 			}
 			SignedImbalance::Negative(deficit) => {
 				let amount = deficit.peek();
-				deficit.offset(Self::debit(account_id, amount))
+				deficit
+					.offset(Self::debit(account_id, amount))
 					.map(SignedImbalance::Negative)
 					.unwrap_or_else(SignedImbalance::Positive)
 			}
@@ -265,10 +295,14 @@ impl<T: Config> Pallet<T> {
 	/// Settles an imbalance against an account. Any excess is reverted to source according to the rules defined in
 	/// [imbalances::RevertImbalance].
 	pub fn settle(account_id: &T::AccountId, imbalance: FlipImbalance<T>) {
-		let settlement_source = ImbalanceSource::Account(account_id.clone());
+		let settlement_source = ImbalanceSource::from_acct(account_id.clone());
 		let (from, to, amount) = match &imbalance {
-			SignedImbalance::Positive(surplus) => (surplus.source.clone(), settlement_source, surplus.peek()),
-			SignedImbalance::Negative(deficit) => (settlement_source, deficit.source.clone(), deficit.peek()),
+			SignedImbalance::Positive(surplus) => {
+				(surplus.source.clone(), settlement_source, surplus.peek())
+			}
+			SignedImbalance::Negative(deficit) => {
+				(settlement_source, deficit.source.clone(), deficit.peek())
+			}
 		};
 
 		let (settled, reverted) = Self::try_settle(account_id, imbalance)
@@ -286,6 +320,10 @@ impl<T: Config> Pallet<T> {
 			});
 
 		Self::deposit_event(Event::<T>::BalanceSettled(from, to, settled, reverted))
+	}
+
+	pub fn settle_imbalance<I: Into<FlipImbalance<T>>>(account_id: &T::AccountId, imbalance: I) {
+		Self::settle(account_id, imbalance.into())
 	}
 
 	/// Decreases total issuance and returns a corresponding imbalance that must be reconciled.
@@ -307,38 +345,44 @@ impl<T: Config> Pallet<T> {
 	fn bridge_out(amount: T::Balance) -> Deficit<T> {
 		Deficit::from_offchain(amount)
 	}
-}
 
-impl<T: Config> cf_traits::Emissions for Pallet<T> {
+	/// Withdraws *up to* `amount` from a reserve.
+	///
+	/// *Warning:* if the reserve does not exist, it will be created as a side effect.
+	pub fn withdraw_reserves(reserve_id: ReserveId, amount: T::Balance) -> Surplus<T> {
+		Surplus::from_reserve(reserve_id, amount)
+	}
+
+	/// Tries to withdraw funds from a reserve. Fails if the reserve doesn't exist or has insufficient funds.
+	pub fn try_withdraw_reserves(
+		reserve_id: ReserveId,
+		amount: T::Balance,
+	) -> Result<Surplus<T>, DispatchError> {
+		Surplus::try_from_reserve(reserve_id, amount).ok_or(Error::<T>::InsufficientReserves.into())
+	}
+
+	/// Deposit `amount` into the reserve identified by a `reserve_id`. Creates the reserve it it doesn't exist already.
+	pub fn deposit_reserves(reserve_id: ReserveId, amount: T::Balance) -> Deficit<T> {
+		Deficit::from_reserve(reserve_id, amount)
+	}
+}
+pub struct FlipIssuance<T>(PhantomData<T>);
+
+impl<T: Config> cf_traits::Issuance for FlipIssuance<T> {
 	type AccountId = T::AccountId;
 	type Balance = T::Balance;
+	type Surplus = Surplus<T>;
 
-	fn burn_from(account_id: &Self::AccountId, amount: Self::Balance) {
-		Self::settle(account_id, Self::burn(amount).into());
+	fn mint(amount: Self::Balance) -> Surplus<T> {
+		Pallet::<T>::mint(amount)
 	}
 
-	fn try_burn_from(
-		account_id: &Self::AccountId,
-		amount: Self::Balance,
-	) -> Result<(), DispatchError> {
-		ensure!(
-			amount <= Self::slashable_funds(account_id),
-			DispatchError::from(Error::<T>::InsufficientFunds)
-		);
-		Self::burn_from(account_id, amount);
-		Ok(())
-	}
-
-	fn mint_to(account_id: &Self::AccountId, amount: Self::Balance) {
-		Self::settle(account_id, Self::mint(amount).into());
-	}
-
-	fn vaporise(amount: Self::Balance) {
-		let _ = Self::burn(amount).offset(Self::bridge_in(amount));
+	fn burn(amount: Self::Balance) -> Deficit<T> {
+		Pallet::<T>::burn(amount)
 	}
 
 	fn total_issuance() -> Self::Balance {
-		Self::total_issuance()
+		Pallet::<T>::total_issuance()
 	}
 }
 
@@ -380,11 +424,13 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 	}
 }
 
+pub struct BurnFlipAccount<T: Config>(PhantomData<T>);
+
 /// Implementation of `OnKilledAccount` ensures that we reconcile any flip dust remaining in the account by burning it.
-impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
-    fn on_killed_account(account_id: &T::AccountId) {
-		let dust = Self::total_balance_of(account_id);
-        <Self as cf_traits::Emissions>::burn_from(account_id, dust);
+impl<T: Config> OnKilledAccount<T::AccountId> for BurnFlipAccount<T> {
+	fn on_killed_account(account_id: &T::AccountId) {
+		let dust = Pallet::<T>::total_balance_of(account_id);
+		Pallet::<T>::settle(account_id, Pallet::<T>::burn(dust).into());
 		Account::<T>::remove(account_id);
-    }
+	}
 }

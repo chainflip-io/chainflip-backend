@@ -2,20 +2,28 @@
 
 [message_queue]
 # can also be IP
-hostname = "localhost"
-port = "4222"
+endpoint = "http://localhost:4222"
 
 [state_chain]
-hostname = "localhost"
-port = "9944"
-signing_key_path = "./tests/test_keystore/alice_key"
+p2p_private_key_file = "./tests/test_keystore/p2p_key"
+signing_key_file = "./tests/test_keystore/alice_key"
+ws_endpoint = "ws://localhost:9944"
 
 [eth]
-hostname = "localhost"
-port = "8545"
+from_block = 0
+node_endpoint = "ws://localhost:8545"
+# Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
+private_key_file = "/run/secrets/eth_private_key"
 # Address used on the Ganache/Brownie tests
-stake_manager_eth_address = "0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f"
+key_manager_eth_address = "0x602C71e4DAC47a042Ee7f46E0aee17F94A3bA0B6"
+stake_manager_eth_address = "0x6951b5Bd815043E3F842c1b026b0Fa888Cc2DD85"
 
 [health_check]
 hostname = "127.0.0.1"
 port = 5555
+
+[signing]
+db_file = "data.db"
+genesis_validator_ids = [
+  [212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125], # alice
+]

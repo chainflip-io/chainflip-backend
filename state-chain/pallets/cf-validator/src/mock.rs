@@ -1,24 +1,21 @@
 use super::*;
 use crate as pallet_cf_validator;
-use sp_core::{H256};
-use sp_runtime::{
-	Perbill,
-	impl_opaque_keys,
-	traits::{
-		BlakeTwo256,
-		IdentityLookup,
-		ConvertInto,
-	},
-	testing::{
-		Header,
-		UintAuthorityId,
-	},
-};
-use frame_support::{parameter_types, construct_runtime, traits::{OnInitialize, OnFinalize}};
-use std::cell::RefCell;
-use cf_traits::{BidderProvider, AuctionConfirmation};
+use cf_traits::mocks::vault_rotation::Mock as MockHandler;
+use cf_traits::BidderProvider;
 use frame_support::traits::ValidatorRegistration;
+use frame_support::{
+	construct_runtime, parameter_types,
+	traits::{OnFinalize, OnInitialize},
+};
+use sp_core::H256;
 use sp_runtime::BuildStorage;
+use sp_runtime::{
+	impl_opaque_keys,
+	testing::{Header, UintAuthorityId},
+	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
+	Perbill,
+};
+use std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -27,13 +24,17 @@ pub type Amount = u64;
 pub type ValidatorId = u64;
 
 impl WeightInfo for () {
-	fn set_blocks_for_epoch() -> u64 { 0 as Weight }
+	fn set_blocks_for_epoch() -> u64 {
+		0 as Weight
+	}
 
-	fn force_rotation() -> u64 { 0 as Weight }
+	fn force_rotation() -> u64 {
+		0 as Weight
+	}
 }
 
-pub const MIN_AUCTION_SIZE : u32 = 2;
-pub const MAX_AUCTION_SIZE : u32 = 150;
+pub const MIN_AUCTION_SIZE: u32 = 2;
+pub const MAX_AUCTION_SIZE: u32 = 150;
 pub const EPOCH_BLOCKS: u64 = 100;
 
 thread_local! {
@@ -114,41 +115,15 @@ parameter_types! {
 	pub const MinAuctionSize: u32 = 2;
 }
 
-pub struct MockEnsureWitness;
-
-impl EnsureOrigin<Origin> for MockEnsureWitness {
-	type Success = ();
-
-	fn try_origin(o: Origin) -> Result<Self::Success, Origin> {
-		// We don't intend to test this, it's just to keep the compiler happy.
-		unimplemented!()
-	}
-}
-
-pub struct WitnesserMock;
-
-impl cf_traits::Witnesser for WitnesserMock {
-	type AccountId = u64;
-	type Call = Call;
-
-	fn witness(_who: Self::AccountId, _call: Self::Call) -> DispatchResultWithPostInfo {
-		// We don't intend to test this, it's just to keep the compiler happy.
-		unimplemented!()
-	}
-}
-
 impl pallet_cf_auction::Config for Test {
 	type Event = Event;
-	type Call = Call;
 	type Amount = Amount;
 	type ValidatorId = ValidatorId;
 	type BidderProvider = TestBidderProvider;
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
-	type Confirmation = TestConfirmation;
-	type EnsureWitnessed = MockEnsureWitness;
-	type Witnesser = WitnesserMock;
+	type Handler = MockHandler<ValidatorId = ValidatorId, Amount = Amount>;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
@@ -174,29 +149,14 @@ impl BidderProvider for TestBidderProvider {
 	}
 }
 
-pub struct TestConfirmation;
-impl AuctionConfirmation for TestConfirmation {
-
-	fn awaiting_confirmation() -> bool {
-		CONFIRM.with(|l| *l.borrow())
-	}
-
-	fn set_awaiting_confirmation(waiting: bool) {
-		CONFIRM.with(|l| *l.borrow_mut() = waiting);
-	}
-}
 pub struct TestEpochTransitionHandler;
 
 impl EpochTransitionHandler for TestEpochTransitionHandler {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
-	fn on_new_epoch(new_validators: Vec<Self::ValidatorId>, min_bid: Self::Amount) {
-		CURRENT_VALIDATORS.with(|l|
-			*l.borrow_mut() = new_validators
-		);
-		MIN_BID.with(|l|
-			*l.borrow_mut() = min_bid
-		);
+	fn on_new_epoch(new_validators: &Vec<Self::ValidatorId>, min_bid: Self::Amount) {
+		CURRENT_VALIDATORS.with(|l| *l.borrow_mut() = new_validators.clone());
+		MIN_BID.with(|l| *l.borrow_mut() = min_bid);
 	}
 }
 
@@ -242,7 +202,9 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 pub fn current_validators() -> Vec<u64> {
 	CURRENT_VALIDATORS.with(|l| l.borrow().to_vec())
 }
-pub fn min_bid() -> u64 { MIN_BID.with(|l| *l.borrow())}
+pub fn min_bid() -> u64 {
+	MIN_BID.with(|l| *l.borrow())
+}
 
 pub fn run_to_block(n: u64) {
 	while System::block_number() < n {

@@ -1,17 +1,31 @@
-use crate::signing::{
-    client::client_inner::utils,
-    crypto::{BigInt, KeyGenBroadcastMessage1, Keys, Parameters, VerifiableSS, FE, GE},
+use slog::o;
+
+use crate::{
+    logging::SIGNING_SUB_COMPONENT,
+    signing::{
+        client::client_inner::utils,
+        crypto::{
+            BigInt, InvalidKey, InvalidSS, KeyGenBroadcastMessage1, Keys, Parameters, VerifiableSS,
+            FE, GE,
+        },
+    },
 };
 
 use super::{
     client_inner::{Broadcast1, Secret2},
-    signing_state::KeygenResult,
+    common::KeygenResult,
 };
 
-use log::*;
+#[derive(Clone)]
+enum SharedSecretStage {
+    AwaitingBroadcast1,
+    AwaitingSecret2,
+    Done,
+}
 
 #[derive(Clone)]
 pub struct SharedSecretState {
+    stage: SharedSecretStage,
     key: Keys,
     // Phase 1
     bc1_vec: Vec<KeyGenBroadcastMessage1>,
@@ -25,10 +39,38 @@ pub struct SharedSecretState {
     phase2_order: Vec<usize>,
     pub params: Parameters,
     signer_idx: usize,
+    logger: slog::Logger,
+}
+
+/// Indicates whether we've collected all data
+/// necessary to proceed to the next stage
+pub enum StageStatus {
+    Full,
+    MadeProgress,
+    Ignored,
 }
 
 impl SharedSecretState {
-    pub(super) fn init_phase1(&mut self) -> Broadcast1 {
+    pub fn new(idx: usize, params: Parameters, logger: &slog::Logger) -> Self {
+        let key = Keys::phase1_create(idx);
+
+        SharedSecretState {
+            stage: SharedSecretStage::AwaitingBroadcast1,
+            key,
+            bc1_vec: vec![],
+            blind_vec: vec![],
+            y_vec: vec![],
+            vss_vec: vec![],
+            ss_vec: vec![],
+            phase1_order: vec![],
+            phase2_order: vec![],
+            params,
+            signer_idx: idx,
+            logger: logger.new(o!(SIGNING_SUB_COMPONENT => "SharedSecretState")),
+        }
+    }
+
+    pub fn init_phase1(&mut self) -> Broadcast1 {
         let (bc1, blind) = self.key.phase1_broadcast();
 
         // remember our own value
@@ -44,13 +86,15 @@ impl SharedSecretState {
         Broadcast1 { bc1, blind, y_i }
     }
 
-    pub(super) fn process_broadcast1(&mut self, sender_id: usize, bc1: Broadcast1) -> bool {
+    pub fn process_broadcast1(&mut self, sender_id: usize, bc1: Broadcast1) -> StageStatus {
         if self.phase1_order.contains(&sender_id) {
-            error!(
+            slog::error!(
+                self.logger,
                 "[{}] Received bc1 from the same sender idx: {}",
-                self.signer_idx, sender_id
+                self.signer_idx,
+                sender_id
             );
-            return false;
+            return StageStatus::Ignored;
         }
 
         self.phase1_order.push(sender_id);
@@ -66,13 +110,16 @@ impl SharedSecretState {
             utils::reorg_vector(&mut self.bc1_vec, &self.phase1_order);
             utils::reorg_vector(&mut self.blind_vec, &self.phase1_order);
             utils::reorg_vector(&mut self.y_vec, &self.phase1_order);
+            return StageStatus::Full;
         }
 
-        full
+        StageStatus::MadeProgress
     }
 
-    pub(super) fn init_phase2(&mut self, parties: &[usize]) -> Result<Vec<(usize, Secret2)>, ()> {
-        trace!("[{}] entering phase 2", self.signer_idx);
+    pub fn init_phase2(&mut self, parties: &[usize]) -> Result<Vec<(usize, Secret2)>, InvalidKey> {
+        slog::trace!(self.logger, "[{}] entering phase 2", self.signer_idx);
+
+        self.stage = SharedSecretStage::AwaitingSecret2;
 
         let bc1_vec = &self.bc1_vec;
         let blind_vec = &self.blind_vec;
@@ -84,44 +131,48 @@ impl SharedSecretState {
             .key
             .phase1_verify_com_phase2_distribute(params, blind_vec, y_vec, bc1_vec, &parties);
 
-        let mut messages = vec![];
+        res.map(|(vss_scheme, secret_shares, _idx)| {
+            slog::debug!(self.logger, "[{}] phase 1 successful ✅", self.signer_idx);
 
-        match res {
-            Ok((vss_scheme, secret_shares, _idx)) => {
-                debug!("[{}] phase 1 successful ✅", self.signer_idx);
+            assert_eq!(secret_shares.len(), parties.len());
 
-                assert_eq!(secret_shares.len(), parties.len());
+            let mut messages = vec![];
 
-                // Share secret shares with the right parties
-                for (idx, ss) in parties.iter().zip(secret_shares) {
-                    if *idx == self.signer_idx {
-                        // Save our own value
-                        self.vss_vec.push(vss_scheme.clone());
-                        self.ss_vec.push(ss.clone());
-                        self.phase2_order.push(self.signer_idx);
-                    } else {
-                        let secret2 = Secret2 {
-                            vss: vss_scheme.clone(),
-                            secret_share: ss.clone(),
-                        };
+            // Share secret shares with the right parties
+            for (idx, ss) in parties.iter().zip(secret_shares) {
+                if *idx == self.signer_idx {
+                    // Save our own value
+                    self.vss_vec.push(vss_scheme.clone());
+                    self.ss_vec.push(ss.clone());
+                    self.phase2_order.push(self.signer_idx);
+                } else {
+                    let secret2 = Secret2 {
+                        vss: vss_scheme.clone(),
+                        secret_share: ss.clone(),
+                    };
 
-                        messages.push((*idx, secret2));
-                    }
+                    messages.push((*idx, secret2));
                 }
             }
-            Err(err) => {
-                error!("Could not verify phase1 keygen: {}", err);
-                // TODO: abort current signing process, or, more likely, ignore the player?
-            }
-        }
 
-        return Ok(messages);
+            messages
+        })
     }
 
-    pub(super) fn process_phase2(&mut self, sender_id: usize, sec2: Secret2) -> bool {
+    pub fn process_phase2(&mut self, sender_idx: usize, sec2: Secret2) -> StageStatus {
+        if self.phase2_order.contains(&sender_idx) {
+            slog::error!(
+                self.logger,
+                "[{}] Received sec2 from the same sender idx: {}",
+                self.signer_idx,
+                sender_idx
+            );
+            return StageStatus::Ignored;
+        }
+
         let Secret2 { vss, secret_share } = sec2;
 
-        self.phase2_order.push(sender_id);
+        self.phase2_order.push(sender_idx);
 
         self.vss_vec.push(vss);
         self.ss_vec.push(secret_share);
@@ -131,13 +182,16 @@ impl SharedSecretState {
         if full {
             utils::reorg_vector(&mut self.vss_vec, &self.phase2_order);
             utils::reorg_vector(&mut self.ss_vec, &self.phase2_order);
+            return StageStatus::Full;
         }
 
-        full
+        StageStatus::MadeProgress
     }
 
-    pub(super) fn init_phase3(&mut self) -> Result<KeygenResult, ()> {
-        info!("[{}] entering phase 3", self.signer_idx);
+    pub fn finalize_phase2(&mut self) -> Result<KeygenResult, InvalidSS> {
+        slog::info!(self.logger, "[{}] entering phase 3", self.signer_idx);
+
+        self.stage = SharedSecretStage::Done;
 
         let params = &self.params;
         let index = &self.signer_idx;
@@ -146,52 +200,33 @@ impl SharedSecretState {
         let ss_vec = &self.ss_vec;
         let vss_vec = &self.vss_vec;
 
-        // Do the indices matter at this point? (Only if we want to penalize, I think)
-
         let res = self
             .key
             .phase2_verify_vss_construct_keypair(params, y_vec, ss_vec, vss_vec, index);
 
-        match res {
-            Ok(shared_keys) => {
-                info!("[{}] phase 3 is OK", self.signer_idx);
+        res.map(|shared_keys| {
+            slog::info!(self.logger, "[{}] phase 3 is OK", self.signer_idx);
 
-                let mut y_vec_iter = self.y_vec.iter();
-
-                let head = y_vec_iter.next().unwrap();
-                let tail = y_vec_iter;
-                let y_sum = tail.fold(head.clone(), |acc, x| acc + x);
-
-                let key = KeygenResult {
-                    keys: self.key.clone(),
-                    shared_keys,
-                    aggregate_pubkey: y_sum,
-                    vss: self.vss_vec.clone(),
-                };
-
-                return Ok(key);
+            KeygenResult {
+                keys: self.key.clone(),
+                shared_keys,
+                vss: self.vss_vec.clone(),
             }
-            Err(err) => {
-                error!("Vss verification failure: {}", err);
-                return Err(());
-            }
-        }
+        })
     }
 
-    pub fn new(idx: usize, params: Parameters) -> Self {
-        let key = Keys::phase1_create(idx);
+    /// Get indexes of validators who haven't sent the data for the current stage
+    pub fn awaited_parties(&self) -> Vec<usize> {
+        let received_idxs = match self.stage {
+            SharedSecretStage::AwaitingBroadcast1 => &self.phase1_order,
+            SharedSecretStage::AwaitingSecret2 => &self.phase2_order,
+            SharedSecretStage::Done => return vec![],
+        };
 
-        SharedSecretState {
-            key,
-            bc1_vec: vec![],
-            blind_vec: vec![],
-            y_vec: vec![],
-            vss_vec: vec![],
-            ss_vec: vec![],
-            phase1_order: vec![],
-            phase2_order: vec![],
-            params,
-            signer_idx: idx,
-        }
+        let mut idxs: Vec<usize> = (1..=self.params.share_count).collect();
+
+        idxs.retain(|idx| !received_idxs.contains(idx));
+
+        idxs
     }
 }

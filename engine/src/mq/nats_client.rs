@@ -1,5 +1,7 @@
+use std::pin::Pin;
+
+use super::SubjectName;
 use super::{IMQClient, Subject};
-use super::{IMQClientFactory, SubjectName};
 use anyhow::Context;
 use anyhow::Result;
 use async_nats;
@@ -9,13 +11,6 @@ use serde::{de::DeserializeOwned, Serialize};
 use tokio_stream::{Stream, StreamExt};
 
 use crate::settings;
-
-// This will likely have a private field containing the underlying mq client
-#[derive(Clone, Debug)]
-pub struct NatsMQClient {
-    /// The nats.rs Connection to the Nats server
-    conn: async_nats::Connection,
-}
 
 struct Subscription {
     inner: async_nats::Subscription,
@@ -31,28 +26,17 @@ impl Subscription {
     }
 }
 
-#[derive(Clone)]
-pub struct NatsMQClientFactory {
-    mq_settings: settings::MessageQueue,
+// This will likely have a private field containing the underlying mq client
+#[derive(Clone, Debug)]
+pub struct NatsMQClient {
+    /// The nats.rs Connection to the Nats server
+    conn: async_nats::Connection,
 }
 
-impl NatsMQClientFactory {
-    pub fn new(mq_settings: &settings::MessageQueue) -> Self {
-        NatsMQClientFactory {
-            mq_settings: mq_settings.clone(),
-        }
-    }
-}
-
-#[async_trait]
-impl IMQClientFactory<NatsMQClient> for NatsMQClientFactory {
-    async fn create(&self) -> anyhow::Result<Box<NatsMQClient>> {
-        let url = format!(
-            "http://{}:{}",
-            self.mq_settings.hostname, self.mq_settings.port
-        );
-        let conn = async_nats::connect(url.as_str()).await?;
-        Ok(Box::new(NatsMQClient { conn }))
+impl NatsMQClient {
+    pub async fn new(mq_settings: &settings::MessageQueue) -> Result<Self> {
+        let conn = async_nats::connect(mq_settings.endpoint.as_str()).await?;
+        Ok(Self { conn })
     }
 }
 
@@ -68,7 +52,7 @@ impl IMQClient for NatsMQClient {
     async fn subscribe<M: DeserializeOwned>(
         &self,
         subject: Subject,
-    ) -> Result<Box<dyn Stream<Item = Result<M>>>> {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<M>>>>> {
         let sub = self.conn.subscribe(&subject.to_subject_name()).await?;
 
         let subscription = Subscription { inner: sub };
@@ -76,7 +60,7 @@ impl IMQClient for NatsMQClient {
             serde_json::from_slice(&bytes[..]).context("Message deserialization failed.")
         });
 
-        Ok(Box::new(stream))
+        Ok(Box::pin(stream))
     }
 
     async fn close(&self) -> Result<()> {
@@ -95,21 +79,12 @@ mod test {
     use crate::types::chain::Chain;
     use serde::Deserialize;
 
-    use crate::mq::pin_message_stream;
-
     #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
     struct TestMessage(String);
 
-    async fn setup_client() -> Box<NatsMQClient> {
-        let mq_settings = settings::MessageQueue {
-            hostname: "localhost".to_string(),
-            port: 4222,
-        };
-
-        NatsMQClientFactory::new(&mq_settings)
-            .create()
-            .await
-            .unwrap()
+    async fn setup_client() -> NatsMQClient {
+        let settings = settings::test_utils::new_test_settings().unwrap();
+        NatsMQClient::new(&settings.message_queue).await.unwrap()
     }
 
     #[ignore = "Depends on Nats being online"]
@@ -133,18 +108,16 @@ mod test {
         assert!(res.is_ok());
     }
 
-    async fn subscribe_test_inner(nats_client: Box<NatsMQClient>) {
+    async fn subscribe_test_inner(nats_client: NatsMQClient) {
         let test_message = TestMessage(String::from("I SAW A TRANSACTION"));
 
         let subject = Subject::Witness(Chain::ETH);
 
-        let stream = nats_client.subscribe::<TestMessage>(subject).await.unwrap();
+        let mut test_messages = nats_client.subscribe::<TestMessage>(subject).await.unwrap();
 
         nats_client.publish(subject, &test_message).await.unwrap();
 
-        let mut stream = pin_message_stream(stream);
-
-        match tokio::time::timeout(Duration::from_millis(100), stream.next()).await {
+        match tokio::time::timeout(Duration::from_millis(100), test_messages.next()).await {
             Ok(Some(m)) => assert_eq!(m.unwrap(), test_message),
             Ok(None) => panic!("Unexpected error: stream returned early."),
             Err(_) => panic!("Nats stream timed out."),

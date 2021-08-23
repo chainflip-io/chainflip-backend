@@ -1,24 +1,46 @@
 use std::{collections::HashMap, fmt::Display, time::Duration};
 
 use crate::{
+    logging::COMPONENT_KEY,
     p2p::{P2PMessage, P2PMessageCommand, ValidatorId},
     signing::{
         client::{KeyId, MultisigInstruction, SigningInfo},
-        crypto::{BigInt, KeyGenBroadcastMessage1, LocalSig, Parameters, VerifiableSS, FE, GE},
+        crypto::{
+            BigInt, ECPoint, ECScalar, KeyGenBroadcastMessage1, LocalSig, Signature, VerifiableSS,
+            FE, GE,
+        },
+        db::KeyDB,
         MessageHash, MessageInfo,
     },
 };
 
-use log::*;
+use slog::o;
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::{
-    keygen_manager::KeygenManager, signing_state::KeygenResultInfo,
+    common::KeygenResultInfo, key_store::KeyStore, keygen_manager::KeygenManager,
     signing_state_manager::SigningStateManager,
 };
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SchnorrSignature {
+    /// Scalar component
+    // s: secp256k1::SecretKey,
+    pub s: [u8; 32],
+    /// Point component
+    pub r: secp256k1::PublicKey,
+}
+
+impl From<Signature> for SchnorrSignature {
+    fn from(sig: Signature) -> Self {
+        let s: [u8; 32] = sig.sigma.get_element().as_ref().clone();
+        let r = sig.v.get_element();
+        SchnorrSignature { s, r }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub(super) enum SigningData {
+pub enum SigningData {
     Broadcast1(Broadcast1),
     Secret2(Secret2),
     LocalSig(LocalSig),
@@ -44,12 +66,12 @@ impl Display for SigningData {
 /// Protocol data plus the message to sign
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SigningDataWrapped {
-    pub(super) data: SigningData,
-    pub(super) message: MessageInfo,
+    pub data: SigningData,
+    pub message: MessageInfo,
 }
 
 impl SigningDataWrapped {
-    pub(super) fn new<S>(data: S, message: MessageInfo) -> Self
+    pub fn new<S>(data: S, message: MessageInfo) -> Self
     where
         S: Into<SigningData>,
     {
@@ -88,8 +110,8 @@ pub struct Broadcast1 {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Secret2 {
-    pub(super) vss: VerifiableSS<GE>,
-    pub(super) secret_share: FE,
+    pub vss: VerifiableSS<GE>,
+    pub secret_share: FE,
 }
 
 impl From<Secret2> for KeygenData {
@@ -106,8 +128,8 @@ impl From<Secret2> for SigningData {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct KeyGenMessageWrapped {
-    pub(super) key_id: KeyId,
-    pub(super) message: KeygenData,
+    pub key_id: KeyId,
+    pub message: KeygenData,
 }
 
 impl KeyGenMessageWrapped {
@@ -149,44 +171,101 @@ impl Display for KeygenData {
     }
 }
 
-/// public interfaces will return this to indicate
-/// that something potentially interesting has happened
-#[derive(Debug, PartialEq)]
-pub enum InnerSignal {
-    KeyReady,
-    MessageSigned(MessageInfo),
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum Error {
+    Unauthorised,
+    Timeout,
+    Invalid,
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CeremonyOutcome<Id, Output> {
+    pub ceremony_id: Id,
+    pub result: Result<Output, (Error, Vec<ValidatorId>)>,
+}
+impl<Id, Output> CeremonyOutcome<Id, Output> {
+    pub fn success(ceremony_id: Id, output: Output) -> Self {
+        Self {
+            ceremony_id,
+            result: Ok(output),
+        }
+    }
+    pub fn unauthorised(ceremony_id: Id, bad_validators: Vec<ValidatorId>) -> Self {
+        Self {
+            ceremony_id,
+            result: Err((Error::Unauthorised, bad_validators)),
+        }
+    }
+    pub fn timeout(ceremony_id: Id, bad_validators: Vec<ValidatorId>) -> Self {
+        Self {
+            ceremony_id,
+            result: Err((Error::Timeout, bad_validators)),
+        }
+    }
+    pub fn invalid(ceremony_id: Id, bad_validators: Vec<ValidatorId>) -> Self {
+        Self {
+            ceremony_id,
+            result: Err((Error::Invalid, bad_validators)),
+        }
+    }
+}
+
+/// The final result of a keygen ceremony
+pub type KeygenOutcome = CeremonyOutcome<KeyId, secp256k1::PublicKey>;
+/// The final result of a Signing ceremony
+pub type SigningOutcome = CeremonyOutcome<MessageInfo, SchnorrSignature>;
 
 #[derive(Debug, PartialEq)]
 pub enum InnerEvent {
     P2PMessageCommand(P2PMessageCommand),
-    InnerSignal(InnerSignal),
+    SigningResult(SigningOutcome),
+    KeygenResult(KeygenOutcome),
 }
 
 #[derive(Clone)]
-pub struct MultisigClientInner {
+pub struct MultisigClientInner<S>
+where
+    S: KeyDB,
+{
+    my_validator_id: ValidatorId,
+    key_store: KeyStore<S>,
     keygen: KeygenManager,
-    params: Parameters,
-    id: ValidatorId,
     pub signing_manager: SigningStateManager,
+    tx: UnboundedSender<InnerEvent>,
     /// Requests awaiting a key
-    // TODO: make sure this is cleaned up on timeout
     pending_requests_to_sign: HashMap<KeyId, Vec<(MessageHash, SigningInfo)>>,
+    logger: slog::Logger,
 }
 
-impl MultisigClientInner {
+impl<S> MultisigClientInner<S>
+where
+    S: KeyDB,
+{
     pub fn new(
-        id: ValidatorId,
-        params: Parameters,
+        my_validator_id: ValidatorId,
+        db: S,
         tx: UnboundedSender<InnerEvent>,
         phase_timeout: Duration,
+        logger: &slog::Logger,
     ) -> Self {
         MultisigClientInner {
-            keygen: KeygenManager::new(params, id.clone(), tx.clone()),
-            params,
-            id: id.clone(),
-            signing_manager: SigningStateManager::new(params, id, tx, phase_timeout),
+            my_validator_id: my_validator_id.clone(),
+            key_store: KeyStore::new(db),
+            keygen: KeygenManager::new(
+                my_validator_id.clone(),
+                tx.clone(),
+                phase_timeout.clone(),
+                logger,
+            ),
+            signing_manager: SigningStateManager::new(
+                my_validator_id,
+                tx.clone(),
+                phase_timeout,
+                logger,
+            ),
             pending_requests_to_sign: Default::default(),
+            tx,
+            logger: logger.new(o!(COMPONENT_KEY => "MultisigClientInner")),
         }
     }
 
@@ -195,14 +274,40 @@ impl MultisigClientInner {
         &self.keygen
     }
 
+    #[cfg(test)]
+    pub fn get_key(&self, key_id: KeyId) -> Option<&KeygenResultInfo> {
+        self.key_store.get_key(key_id)
+    }
+
+    #[cfg(test)]
+    pub fn get_db(&self) -> &S {
+        self.key_store.get_db()
+    }
+
+    #[cfg(test)]
+    pub fn get_my_validator_id(&self) -> ValidatorId {
+        self.my_validator_id.clone()
+    }
+
+    /// Change the time we wait until deleting all unresolved states
+    #[cfg(test)]
+    pub fn set_timeout(&mut self, phase_timeout: Duration) {
+        self.keygen.set_timeout(phase_timeout);
+        self.signing_manager.set_timeout(phase_timeout);
+    }
+
     /// Clean up expired states
     pub fn cleanup(&mut self) {
-        // TODO: cleanup keygen states as well
+        self.keygen.cleanup();
         self.signing_manager.cleanup();
     }
 
     fn add_pending(&mut self, data: MessageHash, sign_info: SigningInfo) {
-        debug!("[{}] delaying a request to sign", self.id);
+        slog::debug!(
+            self.logger,
+            "[{}] delaying a request to sign",
+            self.my_validator_id
+        );
 
         // TODO: check for duplicates?
 
@@ -220,15 +325,23 @@ impl MultisigClientInner {
             MultisigInstruction::KeyGen(keygen_info) => {
                 // For now disable generating a new key when we already have one
 
-                debug!("[{}] Received keygen instruction", self.id);
+                slog::debug!(
+                    self.logger,
+                    "[{}] Received keygen instruction",
+                    self.my_validator_id
+                );
 
                 self.keygen.on_keygen_request(keygen_info);
             }
             MultisigInstruction::Sign(hash, sign_info) => {
-                debug!("[{}] Received sign instruction", self.id);
+                slog::debug!(
+                    self.logger,
+                    "[{}] Received sign instruction",
+                    self.my_validator_id
+                );
                 let key_id = sign_info.id;
 
-                let key = self.keygen.get_key_info_by_id(key_id);
+                let key = self.key_store.get_key(key_id);
 
                 match key {
                     Some(key) => {
@@ -244,13 +357,39 @@ impl MultisigClientInner {
         }
     }
 
+    /// Process requests to sign that required `key_id`
     fn process_pending(&mut self, key_id: KeyId, key_info: KeygenResultInfo) {
         if let Some(reqs) = self.pending_requests_to_sign.remove(&key_id) {
-            debug!("Processing pending requests to sign, count: {}", reqs.len());
+            slog::debug!(
+                self.logger,
+                "Processing pending requests to sign, count: {}",
+                reqs.len()
+            );
             for (data, info) in reqs {
                 self.signing_manager
                     .on_request_to_sign(data, key_info.clone(), info)
             }
+        }
+    }
+
+    fn on_key_generated(&mut self, key_id: KeyId, key_info: KeygenResultInfo) {
+        self.key_store.set_key(key_id, key_info.clone());
+        self.process_pending(key_id, key_info.clone());
+
+        // NOTE: we only notify the SC after we have successfully saved the key
+
+        if let Err(err) = self
+            .tx
+            .send(InnerEvent::KeygenResult(KeygenOutcome::success(
+                key_id,
+                key_info.key.get_public_key().get_element(),
+            )))
+        {
+            slog::error!(
+                self.logger,
+                "Could not sent KeygenOutcome::Success: {}",
+                err
+            );
         }
     }
 
@@ -268,7 +407,9 @@ impl MultisigClientInner {
                 let key_id = msg.key_id;
 
                 if let Some(key) = self.keygen.process_keygen_message(sender_id, msg) {
-                    self.process_pending(key_id, key);
+                    self.on_key_generated(key_id, key);
+                    // NOTE: we could already delete the state here, but it is
+                    // not necessary as it will be deleted by "cleanup"
                 }
             }
             Ok(MultisigMessage::SigningMessage(msg)) => {
@@ -279,7 +420,7 @@ impl MultisigClientInner {
                 self.signing_manager.process_signing_data(sender_id, msg);
             }
             Err(_) => {
-                warn!("Cannot parse multisig message, discarding");
+                slog::warn!(self.logger, "Cannot parse multisig message, discarding");
             }
         }
     }

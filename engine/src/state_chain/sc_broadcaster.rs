@@ -1,32 +1,27 @@
-use sp_core::Pair;
-
-use substrate_subxt::{Client, PairSigner};
+use slog::o;
+use substrate_subxt::{system::AccountStoreExt, Client, PairSigner, Signer};
 use tokio_stream::StreamExt;
 
-use std::fs;
-
-use super::{helpers::create_subxt_client, runtime::StateChainRuntime};
+use super::runtime::StateChainRuntime;
 use crate::{
     eth::stake_manager::stake_manager::StakeManagerEvent,
-    mq::{pin_message_stream, IMQClient, IMQClientFactory, Subject},
-    settings::Settings,
+    logging::COMPONENT_KEY,
+    mq::{IMQClient, Subject},
 };
 
-use crate::state_chain::staking::{WitnessClaimedCallExt, WitnessStakedCallExt};
+use crate::state_chain::pallets::witness_api::*;
 
 use anyhow::Result;
 
-pub async fn start<IMQ, IMQF>(settings: &Settings, mq_factory: IMQF)
-where
-    IMQ: IMQClient + Sync + Send,
-    IMQF: IMQClientFactory<IMQ>,
+pub async fn start<MQC>(
+    signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
+    mq_client: MQC,
+    subxt_client: Client<StateChainRuntime>,
+    logger: &slog::Logger,
+) where
+    MQC: IMQClient + Sync + Send,
 {
-    let mq_client = *mq_factory
-        .create()
-        .await
-        .expect("Should create message queue client");
-
-    let sc_broadcaster = SCBroadcaster::new(&settings, mq_client).await;
+    let mut sc_broadcaster = SCBroadcaster::new(signer, mq_client, subxt_client, logger).await;
 
     sc_broadcaster
         .run()
@@ -34,100 +29,116 @@ where
         .expect("SC Broadcaster has died!");
 }
 
-pub struct SCBroadcaster<MQ>
+pub struct SCBroadcaster<MQC>
 where
-    MQ: IMQClient + Send + Sync,
+    MQC: IMQClient + Send + Sync,
 {
-    mq_client: MQ,
-    sc_client: Client<StateChainRuntime>,
+    mq_client: MQC,
+    subxt_client: Client<StateChainRuntime>,
     signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
+    logger: slog::Logger,
 }
 
-impl<MQ> SCBroadcaster<MQ>
+impl<MQC> SCBroadcaster<MQC>
 where
-    MQ: IMQClient + Send + Sync,
+    MQC: IMQClient + Send + Sync,
 {
-    pub async fn new(settings: &Settings, mq_client: MQ) -> Self {
-        let sc_client = create_subxt_client(settings.state_chain.clone())
+    pub async fn new(
+        mut signer: PairSigner<StateChainRuntime, sp_core::sr25519::Pair>,
+        mq_client: MQC,
+        subxt_client: Client<StateChainRuntime>,
+        logger: &slog::Logger,
+    ) -> Self {
+        let account_id = signer.account_id();
+        let nonce = subxt_client
+            .account(&account_id, None)
             .await
-            .unwrap();
-
-        let seed = fs::read_to_string(settings.state_chain.signing_key_path.clone())
-            .expect("Can't read in signing key");
-
-        // remove the quotes that are in the file, as if entered from polkadot js
-        let seed = seed.replace("\"", "");
-
-        let pair = sp_core::sr25519::Pair::from_phrase(&seed, None).unwrap().0;
-        let signer: PairSigner<_, sp_core::sr25519::Pair> = PairSigner::new(pair);
+            .expect("Should be able to fetch account info")
+            .nonce;
+        let logger = logger.new(o!(COMPONENT_KEY => "SCBroadcaster"));
+        slog::info!(logger, "Initial state chain nonce is: {}", nonce);
+        signer.set_nonce(nonce);
 
         SCBroadcaster {
-            mq_client,
-            sc_client,
             signer,
+            mq_client,
+            subxt_client,
+            logger,
         }
     }
 
-    pub async fn run(&self) -> Result<()> {
-        let stream = self
+    pub async fn run(&mut self) -> Result<()> {
+        let mut stake_manager_events = self
             .mq_client
             .subscribe::<StakeManagerEvent>(Subject::StakeManager)
             .await?;
 
-        let mut stream = pin_message_stream(stream);
-
-        while let Some(event) = stream.next().await {
+        while let Some(event) = stake_manager_events.next().await {
             match event {
-                Ok(event) => self.submit_event(event).await?,
+                Ok(event) => self.submit_stake_manager_event(event).await?,
                 Err(e) => {
-                    log::error!("Could not read event from StakeManager event stream: {}", e);
+                    slog::error!(
+                        self.logger,
+                        "Could not read event from StakeManager event stream: {}",
+                        e
+                    );
                     return Err(e);
                 }
             }
         }
 
         let err_msg = "State Chain Broadcaster has stopped running!";
-        log::error!("{}", err_msg);
+        slog::error!(self.logger, "{}", err_msg);
         Err(anyhow::Error::msg(err_msg))
     }
 
     /// Submit an event to the state chain, return the tx_hash
-    async fn submit_event(&self, event: StakeManagerEvent) -> Result<()> {
+    async fn submit_stake_manager_event(&mut self, event: StakeManagerEvent) -> Result<()> {
         match event {
             StakeManagerEvent::Staked {
                 account_id,
                 amount,
+                return_addr,
                 tx_hash,
             } => {
-                log::trace!(
-                    "Sending witness_staked({:?}, {}, {:?}) to state chain",
+                slog::trace!(
+                    self.logger,
+                    "Sending witness_staked({:?}, {}, {:?}, {:?}) to state chain",
                     account_id,
                     amount,
+                    return_addr,
                     tx_hash
                 );
-                self.sc_client
+                self.subxt_client
                     .witness_staked(&self.signer, account_id, amount, tx_hash)
                     .await?;
+                self.signer.increment_nonce();
             }
             StakeManagerEvent::ClaimExecuted {
                 account_id,
                 amount,
                 tx_hash,
             } => {
-                log::trace!(
+                slog::trace!(
+                    self.logger,
                     "Sending claim_executed({:?}, {}, {:?}) to the state chain",
                     account_id,
                     amount,
                     tx_hash
                 );
-                self.sc_client
+                self.subxt_client
                     .witness_claimed(&self.signer, account_id, amount, tx_hash)
                     .await?;
+                self.signer.increment_nonce();
             }
             StakeManagerEvent::MinStakeChanged { .. }
-            | StakeManagerEvent::EmissionChanged { .. }
+            | StakeManagerEvent::FlipSupplyUpdated { .. }
             | StakeManagerEvent::ClaimRegistered { .. } => {
-                log::warn!("{} is not to be submitted to the State Chain", event);
+                slog::warn!(
+                    self.logger,
+                    "{} is not to be submitted to the State Chain",
+                    event
+                );
             }
         };
         Ok(())
@@ -141,32 +152,43 @@ mod tests {
 
     use super::*;
 
-    use crate::{
-        mq::{nats_client::NatsMQClientFactory, IMQClientFactory},
-        settings::{self},
-    };
+    use crate::{logging, mq::nats_client::NatsMQClient, settings};
 
     use sp_keyring::AccountKeyring;
     use sp_runtime::AccountId32;
+    use substrate_subxt::ClientBuilder;
 
     const TX_HASH: [u8; 32] = [
         00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 02, 01, 02, 01, 02,
         01, 02, 01, 02, 01, 02, 01, 02, 01,
     ];
 
+    async fn create_subxt_client(
+        state_chain_settings: &settings::StateChain,
+    ) -> Client<StateChainRuntime> {
+        ClientBuilder::<StateChainRuntime>::new()
+            .set_url(&state_chain_settings.ws_endpoint)
+            .build()
+            .await
+            .expect(&format!(
+                "Could not connect to state chain at: {}",
+                &state_chain_settings.ws_endpoint
+            ))
+    }
+
     #[tokio::test]
     #[ignore = "depends on running mq and state chain"]
     async fn can_create_sc_broadcaster() {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let mq_factory = NatsMQClientFactory::new(&settings.message_queue);
+        let mq_client = NatsMQClient::new(&settings.message_queue).await.unwrap();
+        let subxt_client = create_subxt_client(&settings.state_chain).await;
 
-        let mq_client = mq_factory
-            .create()
-            .await
-            .expect("Could not create MQ client");
+        let logger = logging::test_utils::create_test_logger();
 
-        SCBroadcaster::new(&settings, *mq_client).await;
+        let alice = AccountKeyring::Alice.pair();
+        let pair_signer = PairSigner::new(alice);
+        SCBroadcaster::new(pair_signer, mq_client, subxt_client, &logger).await;
     }
 
     // TODO: Use the SC broadcaster struct instead
@@ -174,7 +196,7 @@ mod tests {
     #[ignore = "depends on running state chain"]
     async fn submit_xt_test() {
         let settings = settings::test_utils::new_test_settings().unwrap();
-        let subxt_client = create_subxt_client(settings.state_chain).await.unwrap();
+        let subxt_client = create_subxt_client(&settings.state_chain).await;
 
         let alice = AccountKeyring::Alice.pair();
         let signer = PairSigner::new(alice);
@@ -193,8 +215,6 @@ mod tests {
             )
             .await;
 
-        println!("Result is: {:#?}", result);
-
         assert!(result.is_ok());
     }
 
@@ -203,24 +223,33 @@ mod tests {
     async fn sc_broadcaster_submit_event() {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let mq_factory = NatsMQClientFactory::new(&settings.message_queue);
+        let mq_client = NatsMQClient::new(&settings.message_queue).await.unwrap();
+        let subxt_client = create_subxt_client(&settings.state_chain).await;
 
-        let mq_client = mq_factory
-            .create()
-            .await
-            .expect("Could not create MQ client");
-
-        let sc_broadcaster = SCBroadcaster::new(&settings, *mq_client).await;
+        let alice = AccountKeyring::Alice.pair();
+        let pair_signer = PairSigner::new(alice);
+        let mut sc_broadcaster = SCBroadcaster::new(
+            pair_signer,
+            mq_client,
+            subxt_client,
+            &logging::test_utils::create_test_logger(),
+        )
+        .await;
 
         let staked_node_id =
             AccountId32::from_str("5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuziKFgU").unwrap();
+        let return_addr =
+            web3::types::H160::from_str("0x73d669c173d88ccb01f6daab3a3304af7a1b22c1").unwrap();
         let staked_event = StakeManagerEvent::Staked {
             account_id: staked_node_id,
             amount: 100,
+            return_addr: return_addr,
             tx_hash: TX_HASH,
         };
 
-        let result = sc_broadcaster.submit_event(staked_event).await;
+        let result = sc_broadcaster
+            .submit_stake_manager_event(staked_event)
+            .await;
 
         println!("Result: {:#?}", result);
     }

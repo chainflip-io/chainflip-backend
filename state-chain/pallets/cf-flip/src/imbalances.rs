@@ -3,7 +3,7 @@
 // wrapping these imbalances in a private module is necessary to ensure absolute privacy
 // of the inner member.
 
-use crate::{self as Flip, Config};
+use crate::{self as Flip, Config, ReserveId};
 use codec::{Decode, Encode};
 use frame_support::traits::{Imbalance, TryDrop};
 use sp_runtime::{
@@ -12,11 +12,34 @@ use sp_runtime::{
 };
 use sp_std::{mem, result};
 
+/// Internal sources of funds.
+#[derive(RuntimeDebug, PartialEq, Eq, Clone, Encode, Decode)]
+pub enum InternalSource<AccountId> {
+	/// A user account.
+	Account(AccountId),
+	/// Reserved funds. Could be a pot of rewards, a treasury balance, etc.
+	Reserve(ReserveId),
+}
+
+/// The origin of an imbalance.
 #[derive(RuntimeDebug, PartialEq, Eq, Clone, Encode, Decode)]
 pub enum ImbalanceSource<AccountId> {
+	/// External, aka. off-chain.
 	External,
-	Account(AccountId),
-	Emissions
+	/// Internal, aka. on-chain.
+	Internal(InternalSource<AccountId>),
+	/// Emissions, aka. a mint or burn.
+	Emissions,
+}
+
+impl<AccountId> ImbalanceSource<AccountId> {
+	pub fn from_acct(id: AccountId) -> Self {
+		Self::Internal(InternalSource::Account(id))
+	}
+
+	pub fn from_reserve(id: ReserveId) -> Self {
+		Self::Internal(InternalSource::Reserve(id))
+	}
 }
 
 /// Opaque, move-only struct with private fields that serves as a token denoting that funds have been added from
@@ -31,7 +54,7 @@ pub struct Surplus<T: Config> {
 impl<T: Config> Surplus<T> {
 	/// Create a new surplus.
 	fn new(amount: T::Balance, source: ImbalanceSource<T::AccountId>) -> Self {
-		Surplus { amount, source, }
+		Surplus { amount, source }
 	}
 
 	/// Funds surplus from minting new funds. This surplus needs to be allocated somewhere or the mint will be
@@ -49,14 +72,60 @@ impl<T: Config> Surplus<T> {
 		Self::new(amount, ImbalanceSource::Emissions)
 	}
 
-	/// Funds surplus from an account.
+	/// Tries to withdraw funds from an account. Fails if the account doesn't exist or has insufficient funds.
+	pub(super) fn try_from_acct(account_id: &T::AccountId, amount: T::Balance) -> Option<Self> {
+		Flip::Account::<T>::try_mutate_exists(account_id, |maybe_account| {
+			if let Some(account) = maybe_account.as_mut() {
+				if account.stake < amount {
+					Err(())
+				} else {
+					account.stake = account.stake.saturating_sub(amount);
+					Ok(Self::new(
+						amount,
+						ImbalanceSource::from_acct(account_id.clone()),
+					))
+				}
+			} else {
+				Err(())
+			}
+		})
+		.ok()
+	}
+
+	/// Withdraw funds from an account. Deducts *up to* the requested amount, depending on available funds.
 	///
-	/// Usually means that funds have been debited from an account.
+	/// *Warning:* if the account entry does not exist, it will be created as a side effect. Do not expose this via
+	///  an extrinsic.
 	pub(super) fn from_acct(account_id: &T::AccountId, amount: T::Balance) -> Self {
 		Flip::Account::<T>::mutate(account_id, |account| {
 			let deducted = account.stake.min(amount);
 			account.stake = account.stake.saturating_sub(deducted);
-			Self::new(deducted, ImbalanceSource::Account(account_id.clone()))
+			Self::new(deducted, ImbalanceSource::from_acct(account_id.clone()))
+		})
+	}
+
+	/// Tries to withdraw funds from a reserve. Fails if the reserve doesn't exist or has insufficient funds.
+	pub(super) fn try_from_reserve(reserve_id: ReserveId, amount: T::Balance) -> Option<Self> {
+		Flip::Reserve::<T>::try_mutate(reserve_id, |balance| {
+			if (*balance) < amount {
+				Err(())
+			} else {
+				(*balance) = (*balance).saturating_sub(amount);
+				Ok(Self::new(amount, ImbalanceSource::from_reserve(reserve_id)))
+			}
+		})
+		.ok()
+	}
+
+	/// Withdraw funds from a reserve. Deducts *up to* the requested amount, depending on available funds.
+	///
+	/// *Warning:* if the reserve does not exist, it will be created as a side effect. Do not expose this via
+	///  an extrinsic.
+	pub(super) fn from_reserve(reserve_id: ReserveId, amount: T::Balance) -> Self {
+		Flip::Reserve::<T>::mutate(reserve_id, |balance| {
+			let deducted = (*balance).min(amount);
+			*balance = (*balance).saturating_sub(deducted);
+			Self::new(deducted, ImbalanceSource::from_reserve(reserve_id))
 		})
 	}
 
@@ -102,18 +171,41 @@ impl<T: Config> Deficit<T> {
 		Self::new(amount, ImbalanceSource::Emissions)
 	}
 
-	/// Funds deficit from an account. 
+	/// Credit funds to an account.
 	///
-	/// Usually means that funds have been credited to an account.
+	/// In case of overflow, the returned imbalance is zero (meaning nothing will be credited).
+	///
+	/// *Warning:* if the accout does not exist, it will be created as a side effect. Do not expose this via
+	///  an extrinsic.
 	pub(super) fn from_acct(account_id: &T::AccountId, amount: T::Balance) -> Self {
 		Flip::Account::<T>::mutate(account_id, |account| {
-			match account.stake.checked_add(&amount) {
+			let added = match account.stake.checked_add(&amount) {
 				Some(result) => {
 					account.stake = result;
-					Self::new(amount, ImbalanceSource::Account(account_id.clone()))
+					amount
 				}
-				None => Self::new(Zero::zero(), ImbalanceSource::Account(account_id.clone()))
-			}
+				None => Zero::zero(),
+			};
+			Self::new(added, ImbalanceSource::from_acct(account_id.clone()))
+		})
+	}
+
+	/// Credit funds to a reserve.
+	///
+	/// In case of overflow, the returned imbalance is zero (meaning nothing will be credited).
+	///
+	/// *Warning:* if the reserve does not exist, it will be created as a side effect. Do not expose this via
+	///  an extrinsic.
+	pub(super) fn from_reserve(reserve_id: ReserveId, amount: T::Balance) -> Self {
+		Flip::Reserve::<T>::mutate(reserve_id, |balance| {
+			let added = match balance.checked_add(&amount) {
+				Some(result) => {
+					(*balance) = result;
+					amount
+				}
+				None => Zero::zero(),
+			};
+			Self::new(added, ImbalanceSource::from_reserve(reserve_id))
 		})
 	}
 
@@ -121,14 +213,12 @@ impl<T: Config> Deficit<T> {
 	///
 	/// Means that funds have been sent offchain; we need to apply the resulting deficit somewhere.
 	pub(super) fn from_offchain(amount: T::Balance) -> Self {
-		let added = Flip::OffchainFunds::<T>::mutate(|total| {
-			match total.checked_add(&amount) {
-				Some(result) => {
-					*total = result;
-					amount
-				},
-				None => Zero::zero()
+		let added = Flip::OffchainFunds::<T>::mutate(|total| match total.checked_add(&amount) {
+			Some(result) => {
+				*total = result;
+				amount
 			}
+			None => Zero::zero(),
 		});
 		Self::new(added, ImbalanceSource::External)
 	}
@@ -250,6 +340,18 @@ impl<T: Config> Imbalance<T::Balance> for Deficit<T> {
 	}
 }
 
+impl<T: Config> Default for Surplus<T> {
+	fn default() -> Self {
+		Self::zero()
+	}
+}
+
+impl<T: Config> Default for Deficit<T> {
+	fn default() -> Self {
+		Self::zero()
+	}
+}
+
 /// Reverts any remaining imbalance that hasn't been canceled out with an opposite imbalance.
 pub trait RevertImbalance {
 	fn revert(&mut self);
@@ -262,19 +364,32 @@ impl<T: Config> RevertImbalance for Surplus<T> {
 				// Some funds were bridged onto the chain but weren't be allocated to an account. For all intents and
 				// purposes they are still offchain.
 				// TODO: Allocate these to some 'error' account? Eg. for refunds.
-				Flip::OffchainFunds::<T>::mutate(|total| *total = total.saturating_add(self.amount));
+				Flip::OffchainFunds::<T>::mutate(|total| {
+					*total = total.saturating_add(self.amount)
+				});
 			}
 			ImbalanceSource::Emissions => {
 				// This means some Flip were minted without allocating them somewhere. We revert by burning
 				// them again.
 				Flip::TotalIssuance::<T>::mutate(|v| *v = v.saturating_sub(self.amount))
 			}
-			ImbalanceSource::Account(account_id) => {
-				// This means we took funds from an account but didn't put them anywhere. Add the funds back to
-				// the account again.
-				Flip::Account::<T>::mutate(account_id, |acct| {
-					acct.stake = acct.stake.saturating_add(self.amount)
-				})
+			ImbalanceSource::Internal(internal) => {
+				match internal {
+					InternalSource::Account(account_id) => {
+						// This means we took funds from an account but didn't put them anywhere. Add the funds back to
+						// the account again.
+						Flip::Account::<T>::mutate(account_id, |acct| {
+							acct.stake = acct.stake.saturating_add(self.amount)
+						})
+					}
+					InternalSource::Reserve(reserve_id) => {
+						// This means we took funds from a reserve but didn't put them anywhere. Add the funds back to
+						// the reserve again.
+						Flip::Reserve::<T>::mutate(reserve_id, |rsrv| {
+							*rsrv = rsrv.saturating_add(self.amount)
+						})
+					}
+				}
 			}
 		};
 	}
@@ -285,19 +400,31 @@ impl<T: Config> RevertImbalance for Deficit<T> {
 		match &self.source {
 			ImbalanceSource::External => {
 				// This means we tried to move funds off-chain but didn't move them *from* anywhere
-				Flip::OffchainFunds::<T>::mutate(|total| *total = total.saturating_sub(self.amount));
-			},
+				Flip::OffchainFunds::<T>::mutate(|total| {
+					*total = total.saturating_sub(self.amount)
+				});
+			}
 			ImbalanceSource::Emissions => {
 				// This means some funds were burned without specifying the source. If this happens, we
 				// add this back on to the total issuance again.
 				Flip::TotalIssuance::<T>::mutate(|v| *v = v.saturating_add(self.amount))
 			}
-			ImbalanceSource::Account(account_id) => {
-				// This means we added funds to an account without specifying a source. Deduct them again.
-				Flip::Account::<T>::mutate(account_id, |acct| {
-					acct.stake = acct.stake.saturating_sub(self.amount)
-				})
-			},
+			ImbalanceSource::Internal(internal) => {
+				match internal {
+					InternalSource::Account(account_id) => {
+						// This means we added funds to an account without specifying a source. Deduct them again.
+						Flip::Account::<T>::mutate(account_id, |acct| {
+							acct.stake = acct.stake.saturating_sub(self.amount)
+						})
+					}
+					InternalSource::Reserve(reserve_id) => {
+						// This means we added funds to a reserve without specifying a source. Deduct them again.
+						Flip::Reserve::<T>::mutate(reserve_id, |rsrv| {
+							*rsrv = rsrv.saturating_sub(self.amount)
+						})
+					}
+				}
+			}
 		};
 	}
 }

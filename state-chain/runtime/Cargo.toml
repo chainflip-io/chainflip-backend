@@ -28,9 +28,14 @@ serde = {features = ['derive'], optional = true, version = '1.0.119'}
 cf-traits = { path = "../traits", default-features = false }
 pallet-cf-validator = { path = "../pallets/cf-validator", default-features = false }
 pallet-cf-staking = { path = "../pallets/cf-staking", default-features = false }
-pallet-cf-witness = { path = "../pallets/cf-witness", default-features = false}
+pallet-cf-witnesser = { path = "../pallets/cf-witnesser", default-features = false}
 pallet-cf-flip = { path = "../pallets/cf-flip", default-features = false }
 pallet-cf-auction = { path = "../pallets/cf-auction", default-features = false }
+pallet-cf-emissions = { path = "../pallets/cf-emissions", default-features = false }
+pallet-cf-rewards = { path = "../pallets/cf-rewards", default-features = false }
+pallet-cf-witnesser-api = { path = "../pallets/cf-witnesser-api", default-features = false }
+pallet-cf-reputation = { path = "../pallets/cf-reputation", default-features = false }
+pallet-cf-vaults = { path = "../pallets/cf-vaults", default-features = false }
 
 # Substrate dependencies
 frame-benchmarking = {default-features = false, optional = true, version = '3.0.0'}
@@ -47,6 +52,7 @@ pallet-randomness-collective-flip = {default-features = false, version = '3.0.0'
 pallet-session = {default-features = false, version = '3.0.0', features = ['historical']}
 pallet-sudo = {default-features = false, version = '3.0.0'}
 pallet-timestamp = {default-features = false, version = '3.0.0'}
+pallet-transaction-payment = {default-features = false, version = '3.0.0'}
 sp-api = {default-features = false, version = '3.0.0'}
 sp-block-builder = {default-features = false, version = '3.0.0'}
 sp-consensus-aura = {default-features = false, version = '0.9.0'}
@@ -69,7 +75,7 @@ runtime-benchmarks = [
   'frame-system/runtime-benchmarks',
   'pallet-timestamp/runtime-benchmarks',
   'sp-runtime/runtime-benchmarks',
-  'pallet-cf-witness/runtime-benchmarks',
+  'pallet-cf-witnesser/runtime-benchmarks',
   'pallet-cf-validator/runtime-benchmarks',
 ]
 std = [
@@ -88,6 +94,7 @@ std = [
   'pallet-session/std',
   'pallet-sudo/std',
   'pallet-timestamp/std',
+  'pallet-transaction-payment/std',
   'sp-api/std',
   'sp-block-builder/std',
   'sp-consensus-aura/std',
@@ -101,6 +108,13 @@ std = [
   'sp-version/std',
   'pallet-cf-validator/std',
   'pallet-cf-staking/std',
-  'pallet-cf-witness/std',
+  'pallet-cf-witnesser/std',
   'pallet-cf-flip/std',
+  'pallet-cf-auction/std',
+  'pallet-cf-emissions/std',
+  'pallet-cf-reputation/std',
+  'pallet-cf-rewards/std',
+  'pallet-cf-witnesser-api/std',
+  'pallet-cf-vaults/std',
+  'pallet-cf-reputation/std',
 ]

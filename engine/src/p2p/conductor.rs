@@ -1,63 +1,55 @@
-use futures::{future::Either, Stream};
-use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
+use futures::Stream;
+use slog::o;
+use tokio_stream::StreamExt;
 
 use crate::{
-    mq::{pin_message_stream, IMQClient, Subject},
+    logging::COMPONENT_KEY,
+    mq::{IMQClient, Subject},
     p2p::P2PMessage,
 };
 
 use super::{P2PMessageCommand, P2PNetworkClient};
+use crate::p2p::ValidatorId;
 
 /// Intermediates P2P events between MQ and P2P interface
-pub struct P2PConductor<MQ, P2P>
-where
-    MQ: IMQClient + Send,
-    P2P: P2PNetworkClient,
-{
+pub fn start<S, P2P, MQ>(
+    mut p2p: P2P,
     mq: MQ,
-    p2p: P2P,
-    stream: Box<dyn Stream<Item = Result<P2PMessageCommand, anyhow::Error>>>,
-}
-
-impl<MQ, P2P> P2PConductor<MQ, P2P>
+    mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
+    logger: &slog::Logger,
+) -> impl futures::Future
 where
     MQ: IMQClient + Send,
-    P2P: P2PNetworkClient + Send,
+    S: Stream<Item = P2PMessage> + Unpin,
+    P2P: P2PNetworkClient<ValidatorId, S> + Send,
 {
-    pub async fn new(mq: MQ, p2p: P2P) -> Self {
-        let stream = mq
+    let logger = logger.new(o!(COMPONENT_KEY => "P2PConductor"));
+
+    async move {
+        slog::info!(logger, "Starting");
+
+        let mut p2p_command_stream = mq
             .subscribe::<P2PMessageCommand>(Subject::P2POutgoing)
             .await
-            .unwrap();
+            .expect("Should be able to subscribe to Subject::P2POutgoing");
 
-        P2PConductor { mq, p2p, stream }
-    }
+        let mut p2p_stream = p2p.take_stream().await.expect("Should have p2p stream");
 
-    pub async fn start(mut self) {
-        type Msg = Either<Result<P2PMessageCommand, anyhow::Error>, P2PMessage>;
-
-        let mq_stream = pin_message_stream(self.stream);
-
-        let mq_stream = mq_stream.map(Msg::Left);
-
-        let receiver = self.p2p.take_receiver().unwrap();
-
-        let p2p_stream = UnboundedReceiverStream::new(receiver).map(Msg::Right);
-
-        let mut stream = futures::stream::select(mq_stream, p2p_stream);
-
-        while let Some(x) = stream.next().await {
-            match x {
-                Either::Left(outgoing) => {
+        loop {
+            tokio::select! {
+                Some(outgoing) = p2p_command_stream.next() => {
                     if let Ok(P2PMessageCommand { destination, data }) = outgoing {
-                        self.p2p.send(&destination, &data);
+                        p2p.send(&destination, &data).await.expect("Could not send outgoing P2PMessageCommand");
                     }
                 }
-                Either::Right(incoming) => {
-                    self.mq
-                        .publish(Subject::P2PIncoming, &incoming)
+                Some(incoming) = p2p_stream.next() => {
+                    mq.publish::<P2PMessage>(Subject::P2PIncoming, &incoming)
                         .await
-                        .unwrap();
+                        .expect("Could not publish incoming message to Subject::P2PIncoming");
+                }
+                Ok(()) = &mut shutdown_rx =>{
+                    slog::info!(logger, "Shutting down");
+                    break;
                 }
             }
         }
@@ -70,6 +62,7 @@ mod tests {
     use std::time::Duration;
 
     use crate::{
+        logging,
         mq::mq_mock::MQMock,
         p2p::{mock::NetworkMock, P2PMessageCommand, ValidatorId},
     };
@@ -84,6 +77,8 @@ mod tests {
 
         let network = NetworkMock::new();
 
+        let logger = logging::test_utils::create_test_logger();
+
         // NOTE: for some reason connecting to the mock nat's server
         // is slow (0.5-1 seconds), which will add up when we have a
         // lot of tests. Will need to fix this.
@@ -96,7 +91,6 @@ mod tests {
         let mc1 = mq.get_client();
         let mc1_copy = mq.get_client();
         let p2p_client_1 = network.new_client(id_1);
-        let conductor_1 = P2PConductor::new(mc1, p2p_client_1).await;
 
         // Validator 2 setup
         let id_2: ValidatorId = ValidatorId::new(2);
@@ -105,10 +99,18 @@ mod tests {
         let mc2 = mq.get_client();
         let mc2_copy = mq.get_client();
         let p2p_client_2 = network.new_client(id_2.clone());
-        let conductor_2 = P2PConductor::new(mc2, p2p_client_2).await;
 
-        let conductor_fut_1 = timeout(Duration::from_millis(100), conductor_1.start());
-        let conductor_fut_2 = timeout(Duration::from_millis(100), conductor_2.start());
+        let (_, shutdown_conductor1_rx) = tokio::sync::oneshot::channel::<()>();
+        let (_, shutdown_conductor2_rx) = tokio::sync::oneshot::channel::<()>();
+
+        let conductor_fut_1 = timeout(
+            Duration::from_millis(100),
+            start(p2p_client_1, mc1, shutdown_conductor1_rx, &logger),
+        );
+        let conductor_fut_2 = timeout(
+            Duration::from_millis(100),
+            start(p2p_client_2, mc2, shutdown_conductor2_rx, &logger),
+        );
 
         let msg = String::from("hello");
 
@@ -121,19 +123,17 @@ mod tests {
             mc1_copy
                 .publish(Subject::P2POutgoing, &message)
                 .await
-                .unwrap();
+                .expect("Could not publish incoming P2PMessageCommand to Subject::P2POutgoing");
         };
 
         let read_fut = async move {
-            let stream2 = mc2_copy
+            let mut p2p_messages = mc2_copy
                 .subscribe::<P2PMessage>(Subject::P2PIncoming)
                 .await
-                .unwrap();
-
-            let mut stream2 = pin_message_stream(stream2);
+                .expect("Could not subscribe to Subject::P2PIncoming");
 
             // Second client should be able to receive the message
-            let maybe_msg = timeout(Duration::from_millis(100), stream2.next()).await;
+            let maybe_msg = timeout(Duration::from_millis(100), p2p_messages.next()).await;
 
             assert!(maybe_msg.is_ok(), "recv timeout");
 

@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use crate::p2p::ValidatorId;
 
-#[allow(dead_code)]
+use serde::{Deserialize, Serialize};
+
 pub fn reorg_vector<T: Clone>(v: &mut Vec<T>, order: &[usize]) {
     assert_eq!(v.len(), order.len());
 
@@ -34,8 +35,8 @@ fn reorg_vector_works() {
 }
 
 /// Mappings from signer_idx to Validator Id and back
-#[derive(Clone, Debug)]
-pub(super) struct ValidatorMaps {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ValidatorMaps {
     id_to_idx: HashMap<ValidatorId, usize>,
     // TODO: create SortedVec and use it here:
     // Sorted Validator Ids
@@ -43,17 +44,17 @@ pub(super) struct ValidatorMaps {
 }
 
 impl ValidatorMaps {
-    pub(super) fn get_idx(&self, id: &ValidatorId) -> Option<usize> {
+    pub fn get_idx(&self, id: &ValidatorId) -> Option<usize> {
         self.id_to_idx.get(id).copied()
     }
 
-    pub(super) fn get_id(&self, idx: usize) -> Option<&ValidatorId> {
+    pub fn get_id(&self, idx: usize) -> Option<&ValidatorId> {
         let idx = idx.checked_sub(1)?;
         self.validator_ids.get(idx)
     }
 }
 
-pub(super) fn get_index_mapping(signers: &[ValidatorId]) -> ValidatorMaps {
+pub fn get_index_mapping(signers: &[ValidatorId]) -> ValidatorMaps {
     let signers = signers.clone();
 
     let idxs: Vec<_> = (1..=signers.len()).collect();
@@ -81,7 +82,7 @@ pub(super) fn get_index_mapping(signers: &[ValidatorId]) -> ValidatorMaps {
 }
 
 /// Sort validators and find our index
-pub(super) fn get_our_idx(signers: &[ValidatorId], id: &ValidatorId) -> Option<usize> {
+pub fn get_our_idx(signers: &[ValidatorId], id: &ValidatorId) -> Option<usize> {
     let mut signers = signers.to_owned();
 
     signers.sort();
@@ -98,9 +99,9 @@ mod utils_tests {
 
     #[test]
     fn get_our_idx_works() {
-        let a = ValidatorId("A".to_string());
-        let b = ValidatorId("B".to_string());
-        let c = ValidatorId("C".to_string());
+        let a = ValidatorId::new("A");
+        let b = ValidatorId::new("B");
+        let c = ValidatorId::new("C");
 
         let signers = [c, a, b.clone()];
 
@@ -111,9 +112,9 @@ mod utils_tests {
 
     #[test]
     fn get_index_mapping_works() {
-        let a = ValidatorId("A".to_string());
-        let b = ValidatorId("B".to_string());
-        let c = ValidatorId("C".to_string());
+        let a = ValidatorId::new("A");
+        let b = ValidatorId::new("B");
+        let c = ValidatorId::new("C");
 
         let signers = [a, c.clone(), b];
 
