@@ -431,7 +431,7 @@ impl pallet_cf_reputation::Config for Runtime {
 // ReqRep stuff
 use frame_support::instances::{Instance0, Instance1};
 
-impl pallet_cf_reqrep::reqreps::BaseConfig for Runtime {
+impl pallet_cf_reqrep::BaseConfig for Runtime {
 	type KeyId = u32;
 	type ValidatorId = AccountId;
 	// More likely to be an enum or something.
@@ -440,12 +440,12 @@ impl pallet_cf_reqrep::reqreps::BaseConfig for Runtime {
 
 impl pallet_cf_reqrep::Config<Instance0> for Runtime {
 	type Event = Event;
-	type Request = pallet_cf_reqrep::reqreps::signature::Request<Self>;
+	type Request = pallet_cf_reqrep::instances::signature::Request<Self>;
 }
 
 impl pallet_cf_reqrep::Config<Instance1> for Runtime {
 	type Event = Event;
-	type Request = pallet_cf_reqrep::reqreps::broadcast::Request<Self>;
+	type Request = pallet_cf_reqrep::instances::broadcast::Request<Self>;
 }
 
 construct_runtime!(

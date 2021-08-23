@@ -1,4 +1,4 @@
-use crate::{self as pallet_reqrep, reqreps::BaseConfig};
+use crate::{self as pallet_cf_request_response, instances::BaseConfig};
 use sp_core::H256;
 use frame_support::parameter_types;
 use frame_support::instances::Instance0;
@@ -18,7 +18,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		PingPongRequestResponse: pallet_reqrep::<Instance0>::{Module, Call, Storage, Event<T>},
+		PingPongRequestResponse: pallet_cf_request_response::<Instance0>::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -72,17 +72,17 @@ pub(crate) mod ping_pong {
 	#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
 	pub struct Pong;
 
-	impl pallet_reqrep::ReqRep<Test> for Ping {
-		type Reply = Pong;
+	impl pallet_cf_request_response::RequestResponse<Test> for Ping {
+		type Response = Pong;
 
-		fn on_reply(&self, reply: Self::Reply) -> frame_support::dispatch::DispatchResult {
-			assert_eq!(reply, Pong);
+		fn on_response(&self, response: Self::Response) -> frame_support::dispatch::DispatchResult {
+			assert_eq!(response, Pong);
 			Ok(().into())
 		}
 	}
 }
 
-impl pallet_reqrep::Config<Instance0> for Test {
+impl pallet_cf_request_response::Config<Instance0> for Test {
 	type Event = Event;
 	type Request = ping_pong::Ping;
 }
