@@ -157,7 +157,7 @@ mod tests {
         let logger = logging::test_utils::create_test_logger();
 
         Ok(EthBroadcaster::<NatsMQClient, _>::new(
-            &eth::new_web3_client(&settings, &logger).await?,
+            &eth::new_synced_web3_client(&settings, &logger).await?,
             mq_client,
             secret,
             &logger,

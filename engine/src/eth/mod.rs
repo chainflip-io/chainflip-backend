@@ -42,7 +42,7 @@ impl SignatureAndEvent {
     }
 }
 
-pub async fn new_web3_client(
+pub async fn new_synced_web3_client(
     settings: &settings::Settings,
     logger: &slog::Logger,
 ) -> Result<web3::Web3<web3::transports::WebSocket>> {

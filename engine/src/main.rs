@@ -83,7 +83,7 @@ async fn main() {
     let (_, p2p_shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
 
-    let web3 = eth::new_web3_client(&settings, &root_logger).await.unwrap();
+    let web3 = eth::new_synced_web3_client(&settings, &root_logger).await.unwrap();
 
     futures::join!(
         // Start signing components

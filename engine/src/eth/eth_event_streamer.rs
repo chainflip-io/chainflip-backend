@@ -76,7 +76,7 @@ mod tests {
 
     use std::str::FromStr;
 
-    use crate::{eth::new_web3_client, logging, settings};
+    use crate::{eth::new_synced_web3_client, logging, settings};
 
     use super::*;
 
@@ -88,7 +88,7 @@ mod tests {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
         new_eth_event_stream(
-            new_web3_client(&settings, &logger).await.unwrap(),
+            new_synced_web3_client(&settings, &logger).await.unwrap(),
             H160::from_str(&settings.eth.key_manager_eth_address).unwrap(),
             0,
             logger,

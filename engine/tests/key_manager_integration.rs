@@ -2,7 +2,7 @@ use chainflip_engine::{
     eth::{
         self,
         key_manager::key_manager::{ChainflipKey, KeyManagerEvent},
-        new_web3_client,
+        new_synced_web3_client,
     },
     logging::utils,
     mq::{nats_client::NatsMQClient, IMQClient, Subject},
@@ -17,7 +17,7 @@ pub async fn test_all_key_manager_events() {
 
     let settings = Settings::from_file("config/Testing.toml").unwrap();
 
-    let web3 = new_web3_client(&settings, &root_logger).unwrap();
+    let web3 = new_synced_web3_client(&settings, &root_logger).unwrap();
 
     let (key_manager_event_sender, key_manager_event_receiver) =
         tokio::sync::mpsc::unbounded_channel();
