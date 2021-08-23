@@ -12,7 +12,7 @@ mod benchmarking;
 use frame_support::{Parameter, dispatch::DispatchResult};
 pub use pallet::*;
 
-pub trait ReqRep<T> : Parameter {
+pub trait ReqRep<T: frame_system::Config> : Parameter {
 	type Reply: Parameter;
 
 	fn on_reply(&self, _reply: Self::Reply) -> DispatchResult;
