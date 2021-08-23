@@ -1,5 +1,7 @@
+use std::sync::{Arc, Mutex};
+
 use chainflip_engine::{
-    eth::{eth_broadcaster, eth_tx_encoding, key_manager, stake_manager},
+    eth::{self, eth_broadcaster, eth_tx_encoding, key_manager, stake_manager},
     health::HealthMonitor,
     heartbeat,
     mq::nats_client::NatsMQClient,
@@ -45,23 +47,34 @@ async fn main() {
         .await
         .expect("Should create subxt client");
 
-    // This can be the same filepath as the p2p key --node-key-file <file> on the state chain
-    // which won't necessarily always be the case, i.e. if we no longer have PeerId == ValidatorId
-    let my_pair_signer = {
-        use sp_core::Pair;
-        substrate_subxt::PairSigner::new(sp_core::sr25519::Pair::from_seed(&{
-            // TODO: Add this into a function, once it is used multiple times (i.e. tests)
-            use std::{convert::TryInto, fs};
-            let seed: [u8; 32] = hex::decode(
-                &fs::read_to_string(&settings.state_chain.p2p_private_key_file)
-                    .expect("Cannot read private key file")
-                    .replace("\"", ""),
-            )
-            .expect("Failed to decode seed")
-            .try_into()
-            .expect("Seed has wrong length");
-            seed
-        }))
+    let key_pair = sp_core::sr25519::Pair::from_seed(&{
+        // This can be the same filepath as the p2p key --node-key-file <file> on the state chain
+        // which won't necessarily always be the case, i.e. if we no longer have PeerId == ValidatorId
+        use std::{convert::TryInto, fs};
+        let seed: [u8; 32] = hex::decode(
+            &fs::read_to_string(&settings.state_chain.p2p_private_key_file)
+                .expect("Cannot read private key file")
+                .replace("\"", ""),
+        )
+        .expect("Failed to decode seed")
+        .try_into()
+        .expect("Seed has wrong length");
+        seed
+    });
+
+    let pair_signer = {
+        use substrate_subxt::{system::AccountStoreExt, Signer};
+        let mut pair_signer = substrate_subxt::PairSigner::new(key_pair.clone());
+        let account_id = pair_signer.account_id();
+        let nonce = subxt_client
+            .account(&account_id, None)
+            .await
+            .expect("Should be able to fetch account info")
+            .nonce;
+        slog::info!(root_logger, "Initial state chain nonce is: {}", nonce);
+        pair_signer.set_nonce(nonce);
+        // Allow in the future many witnessers to increment the nonce of this signer
+        Arc::new(Mutex::new(pair_signer))
     };
 
     // TODO: Investigate whether we want to encrypt it on disk
@@ -70,10 +83,14 @@ async fn main() {
     let (_, p2p_shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
 
+    let web3 = eth::new_synced_web3_client(&settings, &root_logger)
+        .await
+        .unwrap();
+
     futures::join!(
         // Start signing components
         signing::start(
-            ValidatorId(my_pair_signer.signer().public().0),
+            ValidatorId(key_pair.public().0),
             db,
             mq_client.clone(),
             shutdown_client_rx,
@@ -91,24 +108,34 @@ async fn main() {
             p2p_shutdown_rx,
             &root_logger
         ),
-        heartbeat::start(subxt_client.clone(), my_pair_signer.clone(), &root_logger),
+        heartbeat::start(subxt_client.clone(), pair_signer.clone(), &root_logger),
         // Start state chain components
         state_chain::sc_observer::start(mq_client.clone(), subxt_client.clone(), &root_logger),
-        state_chain::sc_broadcaster::start(
-            my_pair_signer,
-            mq_client.clone(),
-            subxt_client.clone(),
-            &root_logger
-        ),
         temp_event_mapper::start(mq_client.clone(), &root_logger),
         // Start eth components
-        eth_broadcaster::start_eth_broadcaster(&settings, mq_client.clone(), &root_logger),
+        eth_broadcaster::start_eth_broadcaster(&web3, &settings, mq_client.clone(), &root_logger),
         eth_tx_encoding::set_agg_key_with_agg_key::start(
             &settings,
             mq_client.clone(),
             &root_logger
         ),
-        stake_manager::start_stake_manager_witness(&settings, mq_client.clone(), &root_logger),
-        key_manager::start_key_manager_witness(&settings, mq_client.clone(), &root_logger),
+        stake_manager::start_stake_manager_witness(
+            &web3,
+            &settings,
+            pair_signer.clone(),
+            subxt_client.clone(),
+            &root_logger
+        )
+        .await
+        .unwrap(),
+        key_manager::start_key_manager_witness(
+            &web3,
+            &settings,
+            pair_signer,
+            subxt_client,
+            &root_logger
+        )
+        .await
+        .unwrap(),
     );
 }

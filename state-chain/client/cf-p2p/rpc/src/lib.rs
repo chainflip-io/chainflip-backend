@@ -107,7 +107,7 @@ impl RpcCore {
 
 	/// Notify to our subscribers
 	fn notify(&self, event: P2PEvent) {
-		let subscribers = self.stream.subscribers.lock().unwrap();
+		let subscribers = self.stream.subscribers.lock().unwrap(); // TODO: Handle unwrap
 		for subscriber in subscribers.iter() {
 			if let Err(e) = subscriber.unbounded_send(event.clone()) {
 				debug!("Failed to send message: {:?}", e);
@@ -275,7 +275,7 @@ mod tests {
 
 	impl Messaging for Messenger {
 		fn send_message(&mut self, peer_id: &PeerId, data: Message) -> bool {
-			let subscribers = self.stream.subscribers.lock().unwrap();
+			let subscribers = self.stream.subscribers.lock().unwrap(); // TODO: Handle unwrap
 			for subscriber in subscribers.iter() {
 				if let Err(e) =
 					subscriber.unbounded_send(P2PEvent::Received(peer_id.to_base58(), data.clone()))
@@ -287,7 +287,7 @@ mod tests {
 		}
 
 		fn broadcast(&self, data: Message) -> bool {
-			let subscribers = self.stream.subscribers.lock().unwrap();
+			let subscribers = self.stream.subscribers.lock().unwrap(); // TODO: Handle unwrap
 			for subscriber in subscribers.iter() {
 				if let Err(e) =
 					subscriber.unbounded_send(P2PEvent::Received("".to_string(), data.clone()))
@@ -321,7 +321,7 @@ mod tests {
 		}
 
 		fn notify(&self, event: P2PEvent) {
-			let subscribers = self.stream.subscribers.lock().unwrap();
+			let subscribers = self.stream.subscribers.lock().unwrap(); // TODO: Handle unwrap
 			for subscriber in subscribers.iter() {
 				if let Err(e) = subscriber.unbounded_send(event.clone()) {
 					debug!("Failed to send message {:?}", e);

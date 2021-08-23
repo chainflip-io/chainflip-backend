@@ -11,22 +11,22 @@ use crate::{
 use anyhow::Result;
 use secp256k1::SecretKey;
 use slog::o;
-use std::time::Duration;
 use web3::{
-    ethabi::ethereum_types::H256, signing::SecretKeyRef, transports::WebSocket,
-    types::TransactionParameters, Transport, Web3,
+    ethabi::ethereum_types::H256, signing::SecretKeyRef, types::TransactionParameters, Transport,
+    Web3,
 };
 
 use futures::StreamExt;
 
 /// Helper function, constructs and runs the [EthBroadcaster] asynchronously.
-pub async fn start_eth_broadcaster<M: IMQClient + Send + Sync>(
+pub async fn start_eth_broadcaster<T: Transport, M: IMQClient + Send + Sync>(
+    web3: &Web3<T>,
     settings: &settings::Settings,
     mq_client: M,
     logger: &slog::Logger,
 ) {
     EthBroadcaster::<M, _>::new(
-        &settings,
+        web3,
         mq_client,
         secret_key_from_file(settings.eth.private_key_file.as_path()).expect(&format!(
             "Should read in secret key from: {}",
@@ -35,7 +35,6 @@ pub async fn start_eth_broadcaster<M: IMQClient + Send + Sync>(
         logger,
     )
     .await
-    .expect("Should create eth broadcaster")
     .run()
     .await
     .expect("Should run eth broadcaster");
@@ -51,49 +50,23 @@ fn secret_key_from_file(filename: &Path) -> Result<SecretKey> {
 #[derive(Debug)]
 struct EthBroadcaster<M: IMQClient + Send + Sync, T: Transport> {
     mq_client: M,
-    web3_client: Web3<T>,
+    web3: Web3<T>,
     secret_key: SecretKey,
     logger: slog::Logger,
 }
 
-impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
+impl<T: Transport, M: IMQClient + Send + Sync> EthBroadcaster<M, T> {
     async fn new(
-        settings: &settings::Settings,
+        web3: &Web3<T>,
         mq_client: M,
         secret_key: SecretKey,
         logger: &slog::Logger,
-    ) -> Result<Self> {
-        slog::debug!(
-            logger,
-            "Connecting new Eth Broadcaster to {}",
-            settings.eth.node_endpoint.as_str()
-        );
-        match tokio::time::timeout(
-            Duration::from_secs(5),
-            web3::transports::WebSocket::new(settings.eth.node_endpoint.as_str()),
-        )
-        .await
-        {
-            Ok(Ok(socket)) => {
-                // Successful connection
-                Ok(Self {
-                    mq_client,
-                    web3_client: Web3::new(socket),
-                    secret_key,
-                    logger: logger.new(o!(COMPONENT_KEY => "ETHBroadcaster")),
-                })
-            }
-            Ok(Err(e)) => {
-                // Connection error
-                Err(e.into())
-            }
-            Err(_) => {
-                // Connection timeout
-                Err(anyhow::Error::msg(format!(
-                    "Timeout connecting to {:?}",
-                    settings.eth.node_endpoint.as_str()
-                )))
-            }
+    ) -> Self {
+        Self {
+            mq_client,
+            web3: web3.clone(),
+            secret_key,
+            logger: logger.new(o!(COMPONENT_KEY => "ETHBroadcaster")),
         }
     }
 
@@ -147,13 +120,13 @@ impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
 
         let key = SecretKeyRef::from(&self.secret_key);
         let signed = self
-            .web3_client
+            .web3
             .accounts()
             .sign_transaction(tx_params, key)
             .await?;
 
         let tx_hash = self
-            .web3_client
+            .web3
             .eth()
             .send_raw_transaction(signed.raw_transaction)
             .await?;
@@ -170,7 +143,9 @@ impl<M: IMQClient + Send + Sync> EthBroadcaster<M, WebSocket> {
 #[cfg(test)]
 mod tests {
 
+    use crate::eth;
     use crate::{logging, mq::nats_client::NatsMQClient};
+    use web3::transports::WebSocket;
 
     use super::*;
 
@@ -181,9 +156,13 @@ mod tests {
         let secret = SecretKey::from_slice(&[3u8; 32]).unwrap();
         let logger = logging::test_utils::create_test_logger();
 
-        let eth_broadcaster =
-            EthBroadcaster::<NatsMQClient, _>::new(&settings, mq_client, secret, &logger).await;
-        eth_broadcaster
+        Ok(EthBroadcaster::<NatsMQClient, _>::new(
+            &eth::new_synced_web3_client(&settings, &logger).await?,
+            mq_client,
+            secret,
+            &logger,
+        )
+        .await)
     }
 
     #[tokio::test]
