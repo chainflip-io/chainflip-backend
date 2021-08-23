@@ -3,9 +3,23 @@
 pub mod mocks;
 
 use codec::{Decode, Encode};
-use frame_support::dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable};
+use frame_support::pallet_prelude::Member;
+use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
+use frame_support::{
+	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight},
+	traits::{Imbalance, SignedImbalance},
+	Parameter,
+};
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
+
+/// and Chainflip was born...some base types
+pub trait Chainflip {
+	/// An amount for a bid
+	type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
+	/// An identity for a validator
+	type ValidatorId: Member + Parameter;
+}
 
 /// A trait abstracting the functionality of the witnesser
 pub trait Witnesser {
@@ -17,7 +31,7 @@ pub trait Witnesser {
 	/// Witness an event. The event is represented by a call, which is dispatched when a threshold number of witnesses
 	/// have been made.
 	///
-	/// **IMPORTANT** 
+	/// **IMPORTANT**
 	/// The encoded `call` and its arguments are expected to be *unique*. If necessary this should be enforced by adding
 	/// a salt or nonce to the function arguments.
 	/// **IMPORTANT**
@@ -89,7 +103,6 @@ pub trait Auction {
 	type ValidatorId;
 	type Amount;
 	type BidderProvider;
-	type Confirmation: AuctionConfirmation;
 
 	/// Range describing auction set size
 	fn auction_range() -> AuctionRange;
@@ -101,24 +114,57 @@ pub trait Auction {
 	fn waiting_on_bids() -> bool;
 	/// Move the process forward by one step, returns the phase completed or error
 	fn process() -> Result<AuctionPhase<Self::ValidatorId, Self::Amount>, AuctionError>;
-	/// Abort this auction
-	fn abort();
 }
 
-/// Confirmation of an auction
-pub trait AuctionConfirmation {
-	/// To confirm that the auction is valid and can continue
-	fn awaiting_confirmation() -> bool;
-	/// Awaiting confirmation
-	fn set_awaiting_confirmation(waiting: bool);
+pub trait VaultRotationHandler {
+	type ValidatorId;
+	/// Abort requested after failed vault rotation
+	fn abort();
+	// Penalise validators during a vault rotation
+	fn penalise(bad_validators: Vec<Self::ValidatorId>);
+}
+
+/// Errors occurring during a rotation
+#[derive(RuntimeDebug, Encode, Decode, PartialEq, Clone)]
+pub enum RotationError<ValidatorId> {
+	/// An invalid request index
+	InvalidRequestIndex,
+	/// Empty validator set provided
+	EmptyValidatorSet,
+	/// A set of badly acting validators
+	BadValidators(Vec<ValidatorId>),
+	/// The key generation response failed
+	KeyResponseFailed,
+	/// Failed to construct a valid chain specific payload for rotation
+	FailedToConstructPayload,
+	/// Vault rotation completion failed
+	VaultRotationCompletionFailed,
+	/// The vault rotation is not confirmed
+	NotConfirmed,
+	/// Failed to make keygen request
+	FailedToMakeKeygenRequest,
+}
+
+/// Rotating vaults
+pub trait VaultRotation {
+	type ValidatorId;
+	/// Start a vault rotation with the following `candidates`
+	fn start_vault_rotation(
+		candidates: Vec<Self::ValidatorId>,
+	) -> Result<(), RotationError<Self::ValidatorId>>;
+
+	/// In order for the validators to be rotated we are waiting on a confirmation that the vaults
+	/// have been rotated.
+	fn finalize_rotation() -> Result<(), RotationError<Self::ValidatorId>>;
 }
 
 /// An error has occurred during an auction
-#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, Clone, Copy, RuntimeDebug, PartialEq, Eq)]
 pub enum AuctionError {
 	Empty,
 	MinValidatorSize,
 	InvalidRange,
+	Abort,
 	NotConfirmed,
 }
 
@@ -146,10 +192,7 @@ pub trait StakeTransfer {
 	///
 	/// Note this function makes no assumptions about how many claims may be pending simultaneously: if enough funds
 	/// are available, it succeeds. Otherwise, it fails.
-	fn try_claim(
-		account_id: &Self::AccountId,
-		amount: Self::Balance,
-	) -> Result<(), DispatchError>;
+	fn try_claim(account_id: &Self::AccountId, amount: Self::Balance) -> Result<(), DispatchError>;
 
 	/// Performs any necessary settlement once a claim has been confirmed off-chain.
 	fn settle_claim(amount: Self::Balance);
@@ -158,26 +201,45 @@ pub trait StakeTransfer {
 	fn revert_claim(account_id: &Self::AccountId, amount: Self::Balance);
 }
 
-/// Trait for managing token emissions.
-pub trait Emissions {
+/// Trait for managing token issuance.
+pub trait Issuance {
 	type AccountId;
 	type Balance;
+	/// An imbalance representing freshly minted, unallocated funds.
+	type Surplus: Imbalance<Self::Balance>;
 
-	/// Burn up to `amount` of funds, or as much funds are available.
-	fn burn_from(account_id: &Self::AccountId, amount: Self::Balance);
+	/// Mint new funds.
+	fn mint(amount: Self::Balance) -> Self::Surplus;
 
-	/// Burn some funds from an account, if enough are available.
-	fn try_burn_from(
-		account_id: &Self::AccountId,
-		amount: Self::Balance,
-	) -> Result<(), DispatchError>;
-
-	/// Mint funds to an account.
-	fn mint_to(account_id: &Self::AccountId, amount: Self::Balance);
-
-	/// Burn funds from some external (non-account) source. Use with care.
-	fn vaporise(amount: Self::Balance);
+	/// Burn funds from somewhere.
+	fn burn(amount: Self::Balance) -> <Self::Surplus as Imbalance<Self::Balance>>::Opposite;
 
 	/// Returns the total issuance.
 	fn total_issuance() -> Self::Balance;
+}
+
+/// Distribute rewards somehow.
+pub trait RewardsDistribution {
+	type Balance;
+	/// An imbalance representing an unallocated surplus of funds.
+	type Surplus: Imbalance<Self::Balance> + Into<SignedImbalance<Self::Balance, Self::Surplus>>;
+
+	/// Distribute some rewards.
+	fn distribute(rewards: Self::Surplus);
+
+	/// The execution weight of calling the distribution function.
+	fn execution_weight() -> Weight;
+}
+
+/// Allow triggering of emissions.
+pub trait EmissionsTrigger {
+	/// Trigger emissions.
+	fn trigger_emissions();
+}
+
+pub trait NonceProvider {
+	/// A Nonce type to be used for nonces.
+	type Nonce;
+	/// Generates a unique nonce.
+	fn generate_nonce() -> Self::Nonce;
 }

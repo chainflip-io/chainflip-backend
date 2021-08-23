@@ -9,12 +9,5 @@ pub mod runtime;
 
 mod sc_event;
 
-/// Contains helper methods for state chain code
-mod helpers;
-
-// ==== Pallet support for the state chain =====
-
-/// Staking pallet support for substrate-subxt
-pub mod staking;
-/// Validator pallet support for substrate-subxt
-pub mod validator;
+/// Contains the pallets supported by the CFE
+pub mod pallets;

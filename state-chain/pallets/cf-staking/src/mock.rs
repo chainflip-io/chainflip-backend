@@ -1,20 +1,20 @@
 use std::time::Duration;
 
 use crate as pallet_cf_staking;
+use frame_support::parameter_types;
 use pallet_cf_flip;
-use app_crypto::ecdsa::Public;
 use sp_core::H256;
-use frame_support::{parameter_types};
-use sp_runtime::{BuildStorage, app_crypto, testing::Header, traits::{BlakeTwo256, IdentityLookup}};
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
+};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
 
-use cf_traits::mocks::epoch_info;
-pub(super) mod witnesser;
-pub(super) mod ensure_witnessed;
-pub(super) mod time_source;
+use cf_traits::mocks::{epoch_info, time_source};
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -71,13 +71,13 @@ impl pallet_cf_flip::Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 }
 
+cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
+cf_traits::impl_mock_witnesser_for_account_and_call_types!(AccountId, Call);
+
 impl pallet_cf_staking::Config for Test {
 	type Event = Event;
-	type Call = Call;
-	type Nonce = u32;
-	type EthereumCrypto = Public;
-	type EnsureWitnessed = ensure_witnessed::Mock;
-	type Witnesser = witnesser::Mock;
+	type Nonce = u64;
+	type EnsureWitnessed = MockEnsureWitnessed;
 	type EpochInfo = epoch_info::Mock;
 	type TimeSource = time_source::Mock;
 	type MinClaimTTL = MinClaimTTL;
@@ -88,7 +88,6 @@ impl pallet_cf_staking::Config for Test {
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123123u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
-pub const CHARLIE: <Test as frame_system::Config>::AccountId = 789u64;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -97,7 +96,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		pallet_cf_flip: Some(FlipConfig {
 			total_issuance: 1_000,
 		}),
-		pallet_cf_staking: Some(StakingConfig{
+		pallet_cf_staking: Some(StakingConfig {
 			genesis_stakers: vec![],
 		}),
 	};

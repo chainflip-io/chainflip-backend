@@ -1,21 +1,27 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 
 use itertools::Itertools;
-use log::*;
+use slog::o;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
+    logging::SIGNING_SUB_COMPONENT,
     p2p::{P2PMessageCommand, ValidatorId},
     signing::{
-        client::{client_inner::client_inner::KeyGenMessageWrapped, KeyId},
-        crypto::Parameters,
+        client::{
+            client_inner::{
+                client_inner::KeyGenMessageWrapped, shared_secret::StageStatus, KeygenOutcome,
+            },
+            KeyId,
+        },
+        crypto::{InvalidKey, InvalidSS, Parameters},
     },
 };
 
 use super::{
-    client_inner::{InnerSignal, KeygenData, MultisigMessage},
+    client_inner::{KeygenData, MultisigMessage},
+    common::KeygenResultInfo,
     shared_secret::SharedSecretState,
-    signing_state::KeygenResultInfo,
     utils::ValidatorMaps,
     InnerEvent,
 };
@@ -25,6 +31,8 @@ pub enum KeygenStage {
     AwaitingBroadcast1,
     AwaitingSecret2,
     KeyReady,
+    /// The ceremony couldn't proceed, so the associated state should be cleaned up
+    Abandoned,
 }
 
 #[derive(Clone)]
@@ -39,40 +47,66 @@ pub struct KeygenState {
     all_signer_idxs: Vec<usize>,
     delayed_next_stage_data: Vec<(ValidatorId, KeygenData)>,
     key_id: KeyId,
-    pub(super) key_info: Option<KeygenResultInfo>,
+    /// Multisig parameters are only stored here so we can put
+    /// them inside `KeygenResultInfo` when we create the key
+    params: Parameters,
+    /// Last time we were able to make progress
+    pub last_message_timestamp: Instant,
+    logger: slog::Logger,
 }
 
 /// A command to the other module to send data to a particular node
 struct MessageToSend {
-    pub(super) to_idx: usize,
-    pub(super) data: Vec<u8>,
+    pub to_idx: usize,
+    pub data: Vec<u8>,
 }
 
 impl KeygenState {
-    pub(super) fn initiate(
+    pub fn initiate(
         idx: usize,
         params: Parameters,
         idx_map: ValidatorMaps,
         key_id: KeyId,
         event_sender: UnboundedSender<InnerEvent>,
+        logger: &slog::Logger,
     ) -> Self {
         let all_signer_idxs = (1..=params.share_count).collect_vec();
 
         let mut state = KeygenState {
             stage: KeygenStage::AwaitingBroadcast1,
-            sss: SharedSecretState::new(idx, params),
+            sss: SharedSecretState::new(idx, params.clone(), logger),
             event_sender,
             signer_idx: idx,
             all_signer_idxs,
             delayed_next_stage_data: Vec::new(),
             key_id,
-            key_info: None,
+            params,
             maps_for_validator_id_and_idx: Arc::new(idx_map),
+            last_message_timestamp: Instant::now(),
+            logger: logger.new(o!(SIGNING_SUB_COMPONENT => "KeygenState")),
         };
 
         state.initiate_keygen_inner();
 
         state
+    }
+
+    /// Get ids of validators who haven't sent the data for the current stage
+    pub fn awaited_parties(&self) -> Vec<ValidatorId> {
+        let awaited_idxs = match self.stage {
+            KeygenStage::AwaitingBroadcast1 | KeygenStage::AwaitingSecret2 => {
+                self.sss.awaited_parties()
+            }
+            KeygenStage::KeyReady | KeygenStage::Abandoned => vec![],
+        };
+
+        let awaited_ids = awaited_idxs
+            .into_iter()
+            .map(|idx| self.signer_idx_to_validator_id(idx))
+            .cloned()
+            .collect_vec();
+
+        awaited_ids
     }
 
     /// Get index in the (sorted) array of all signers
@@ -87,18 +121,29 @@ impl KeygenState {
         id
     }
 
+    fn update_progress_timestamp(&mut self) {
+        self.last_message_timestamp = Instant::now();
+    }
+
     /// Returned value will signal that the key is ready
-    pub(super) fn process_keygen_message(
+    pub fn process_keygen_message(
         &mut self,
         sender_id: ValidatorId,
         msg: KeygenData,
     ) -> Option<KeygenResultInfo> {
-        trace!("[{}] received {} from [{}]", self.us(), &msg, sender_id);
+        slog::trace!(
+            self.logger,
+            "[{}] received {} from [{}]",
+            self.us(),
+            &msg,
+            sender_id
+        );
 
         let signer_idx = match self.validator_id_to_signer_idx(&sender_id) {
             Some(idx) => idx,
             None => {
-                warn!(
+                slog::warn!(
+                    self.logger,
                     "[{}] Keygen message is ignored for invalid validator id: {}",
                     self.us(),
                     sender_id
@@ -109,40 +154,48 @@ impl KeygenState {
 
         match (&self.stage, msg) {
             (KeygenStage::AwaitingBroadcast1, KeygenData::Broadcast1(bc1)) => {
-                if self.sss.process_broadcast1(signer_idx, bc1) {
-                    self.keygen_phase2();
-                    self.process_delayed();
+                match self.sss.process_broadcast1(signer_idx, bc1) {
+                    StageStatus::Full => {
+                        self.update_progress_timestamp();
+                        self.finalise_phase1();
+                    }
+                    StageStatus::MadeProgress => self.update_progress_timestamp(),
+                    StageStatus::Ignored => { /* do nothing */ }
                 }
             }
             (KeygenStage::AwaitingBroadcast1, KeygenData::Secret2(sec2)) => {
-                trace!("[{}] delaying Secret2 from [{}]", self.us(), sender_id);
+                slog::trace!(
+                    self.logger,
+                    "[{}] delaying Secret2 from [{}]",
+                    self.us(),
+                    sender_id
+                );
                 self.delayed_next_stage_data.push((sender_id, sec2.into()));
             }
             (KeygenStage::AwaitingSecret2, KeygenData::Secret2(sec2)) => {
-                if self.sss.process_phase2(signer_idx, sec2) {
-                    trace!("[{}] Phase 2 (keygen) successful ✅✅", self.us());
-                    if let Ok(key) = self.sss.init_phase3() {
-                        info!("[{}] SHARED KEY IS READY 👍", self.us());
+                match self.sss.process_phase2(signer_idx, sec2) {
+                    StageStatus::Full => {
+                        slog::trace!(
+                            self.logger,
+                            "[{}] Phase 2 (keygen) successful ✅✅",
+                            self.us()
+                        );
+                        self.update_progress_timestamp();
 
-                        self.stage = KeygenStage::KeyReady;
-
-                        let key_info = KeygenResultInfo {
-                            key: Arc::new(key),
-                            validator_map: Arc::clone(&self.maps_for_validator_id_and_idx),
-                        };
-
-                        self.key_info = Some(key_info.clone());
-
-                        let _ = self
-                            .event_sender
-                            .send(InnerEvent::InnerSignal(InnerSignal::KeyReady));
-
-                        return Some(key_info);
+                        return self.finalize_phase2();
                     }
+                    StageStatus::MadeProgress => {
+                        self.update_progress_timestamp();
+                    }
+                    StageStatus::Ignored => { /* do nothing */ }
                 }
             }
+            (KeygenStage::Abandoned, data) => {
+                slog::warn!(self.logger, "Dropping {} for abandoned keygen state", data);
+            }
             _ => {
-                warn!(
+                slog::warn!(
+                    self.logger,
                     "[{}] Unexpected message for stage: {:?}",
                     self.us(),
                     self.stage
@@ -154,7 +207,8 @@ impl KeygenState {
     }
 
     fn initiate_keygen_inner(&mut self) {
-        trace!(
+        slog::trace!(
+            self.logger,
             "[{}] Initiating keygen for key {:?}",
             self.us(),
             self.key_id
@@ -171,12 +225,11 @@ impl KeygenState {
         self.process_delayed();
     }
 
-    fn keygen_phase2(&mut self) {
-        self.stage = KeygenStage::AwaitingSecret2;
-
+    fn finalise_phase1(&mut self) {
         // We require all parties to be active during keygen
         match self.sss.init_phase2(&self.all_signer_idxs) {
             Ok(msgs) => {
+                self.stage = KeygenStage::AwaitingSecret2;
                 let msgs = msgs
                     .into_iter()
                     .map(|(idx, secret2)| {
@@ -188,10 +241,75 @@ impl KeygenState {
                     .collect_vec();
 
                 self.send(msgs);
+
+                self.process_delayed();
             }
-            Err(_) => {
-                error!("phase2 keygen error")
+            Err(InvalidKey(blamed_idxs)) => {
+                self.stage = KeygenStage::Abandoned;
+
+                let blamed_ids = self.signer_idxs_to_validator_ids(blamed_idxs);
+
+                slog::error!(
+                    self.logger,
+                    "phase2 keygen error for key: {:?}, blamed validators: {:?}",
+                    self.key_id,
+                    // TODO: this should log the base58 ids
+                    &blamed_ids
+                );
+
+                let event =
+                    InnerEvent::KeygenResult(KeygenOutcome::invalid(self.key_id, blamed_ids));
+
+                self.send_event(event);
             }
+        }
+    }
+
+    fn finalize_phase2(&mut self) -> Option<KeygenResultInfo> {
+        match self.sss.finalize_phase2() {
+            Ok(key) => {
+                slog::info!(self.logger, "[{}] SHARED KEY IS READY 👍", self.us());
+
+                self.stage = KeygenStage::KeyReady;
+
+                let key_info = KeygenResultInfo {
+                    key: Arc::new(key),
+                    validator_map: Arc::clone(&self.maps_for_validator_id_and_idx),
+                    params: self.params,
+                };
+
+                return Some(key_info);
+            }
+            Err(InvalidSS(blamed_idxs)) => {
+                slog::error!(
+                    self.logger,
+                    "Invalid Phase2 keygen data, abandoning state for key: {:?}",
+                    self.key_id
+                );
+                self.stage = KeygenStage::Abandoned;
+
+                let blamed_ids = self.signer_idxs_to_validator_ids(blamed_idxs);
+
+                self.send_event(InnerEvent::KeygenResult(KeygenOutcome::invalid(
+                    self.key_id,
+                    blamed_ids,
+                )));
+            }
+        }
+
+        None
+    }
+
+    fn signer_idxs_to_validator_ids(&self, idxs: Vec<usize>) -> Vec<ValidatorId> {
+        idxs.into_iter()
+            .map(|idx| self.signer_idx_to_validator_id(idx))
+            .cloned()
+            .collect()
+    }
+
+    fn send_event(&self, event: InnerEvent) {
+        if let Err(err) = self.event_sender.send(event) {
+            slog::error!(self.logger, "Could not send inner event: {}", err);
         }
     }
 
@@ -199,7 +317,8 @@ impl KeygenState {
         for MessageToSend { to_idx, data } in messages {
             let destination = self.signer_idx_to_validator_id(to_idx).clone();
 
-            debug!(
+            slog::debug!(
+                self.logger,
                 "[{}] sending direct message to [{}]",
                 self.us(),
                 destination
@@ -209,9 +328,7 @@ impl KeygenState {
 
             let event = InnerEvent::P2PMessageCommand(message);
 
-            if let Err(err) = self.event_sender.send(event) {
-                error!("Could not send p2p message command: {}", err);
-            }
+            self.send_event(event);
         }
     }
 
@@ -224,7 +341,7 @@ impl KeygenState {
 
             let destination = self.signer_idx_to_validator_id(*idx).clone();
 
-            debug!("[{}] Sending to {}", self.us(), destination);
+            slog::debug!(self.logger, "[{}] Sending to {}", self.us(), destination);
 
             let message = P2PMessageCommand {
                 destination,
@@ -233,20 +350,35 @@ impl KeygenState {
 
             let event = InnerEvent::P2PMessageCommand(message);
 
-            if let Err(err) = self.event_sender.send(event) {
-                error!("Could not send p2p message command: {}", err);
-            }
+            self.send_event(event);
         }
     }
 
     fn process_delayed(&mut self) {
         while let Some((sender_id, msg)) = self.delayed_next_stage_data.pop() {
-            trace!(
+            slog::trace!(
+                self.logger,
                 "[{}] Processing a delayed message from [{}]",
                 self.us(),
                 sender_id
             );
             self.process_keygen_message(sender_id, msg);
+        }
+    }
+
+    /// check is the KeygenStage is Abandoned
+    pub fn is_abandoned(&self) -> bool {
+        match self.stage {
+            KeygenStage::Abandoned => true,
+            _ => false,
+        }
+    }
+
+    /// check is the KeygenStage is in the KeyReady stage
+    pub fn is_finished(&self) -> bool {
+        match self.stage {
+            KeygenStage::KeyReady => true,
+            _ => false,
         }
     }
 

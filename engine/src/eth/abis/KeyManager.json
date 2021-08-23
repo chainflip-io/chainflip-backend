@@ -1,0 +1,385 @@
+[
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "pubKeyX",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint8",
+            "name": "pubKeyYParity",
+            "type": "uint8"
+          }
+        ],
+        "internalType": "struct IShared.Key",
+        "name": "aggKey",
+        "type": "tuple"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "pubKeyX",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint8",
+            "name": "pubKeyYParity",
+            "type": "uint8"
+          }
+        ],
+        "internalType": "struct IShared.Key",
+        "name": "govKey",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "signedByAggKey",
+        "type": "bool"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "pubKeyX",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint8",
+            "name": "pubKeyYParity",
+            "type": "uint8"
+          }
+        ],
+        "indexed": false,
+        "internalType": "struct IShared.Key",
+        "name": "oldKey",
+        "type": "tuple"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "pubKeyX",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint8",
+            "name": "pubKeyYParity",
+            "type": "uint8"
+          }
+        ],
+        "indexed": false,
+        "internalType": "struct IShared.Key",
+        "name": "newKey",
+        "type": "tuple"
+      }
+    ],
+    "name": "KeyChange",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "getAggregateKey",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "pubKeyX",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint8",
+            "name": "pubKeyYParity",
+            "type": "uint8"
+          }
+        ],
+        "internalType": "struct IShared.Key",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getGovernanceKey",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "pubKeyX",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint8",
+            "name": "pubKeyYParity",
+            "type": "uint8"
+          }
+        ],
+        "internalType": "struct IShared.Key",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getLastValidateTime",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "enum IShared.KeyID",
+        "name": "keyID",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint256",
+        "name": "nonce",
+        "type": "uint256"
+      }
+    ],
+    "name": "isNonceUsedByKey",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "msgHash",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "sig",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "nonce",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddr",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.SigData",
+        "name": "sigData",
+        "type": "tuple"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "contractMsgHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "enum IShared.KeyID",
+        "name": "keyID",
+        "type": "uint8"
+      }
+    ],
+    "name": "isValidSig",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "msgHash",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "sig",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "nonce",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddr",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.SigData",
+        "name": "sigData",
+        "type": "tuple"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "pubKeyX",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint8",
+            "name": "pubKeyYParity",
+            "type": "uint8"
+          }
+        ],
+        "internalType": "struct IShared.Key",
+        "name": "newKey",
+        "type": "tuple"
+      }
+    ],
+    "name": "setAggKeyWithAggKey",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "msgHash",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "sig",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "nonce",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddr",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.SigData",
+        "name": "sigData",
+        "type": "tuple"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "pubKeyX",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint8",
+            "name": "pubKeyYParity",
+            "type": "uint8"
+          }
+        ],
+        "internalType": "struct IShared.Key",
+        "name": "newKey",
+        "type": "tuple"
+      }
+    ],
+    "name": "setAggKeyWithGovKey",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "msgHash",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "sig",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "nonce",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddr",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.SigData",
+        "name": "sigData",
+        "type": "tuple"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "pubKeyX",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint8",
+            "name": "pubKeyYParity",
+            "type": "uint8"
+          }
+        ],
+        "internalType": "struct IShared.Key",
+        "name": "newKey",
+        "type": "tuple"
+      }
+    ],
+    "name": "setGovKeyWithGovKey",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]

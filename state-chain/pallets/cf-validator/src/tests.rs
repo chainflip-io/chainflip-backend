@@ -1,14 +1,17 @@
 mod test {
 	use crate::*;
-	use crate::{Error, mock::*};
+	use crate::{mock::*, Error};
+	use cf_traits::mocks::vault_rotation::clear_confirmation;
+	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::traits::{BadOrigin, Zero};
-	use frame_support::{assert_ok, assert_noop};
-	use cf_traits::AuctionConfirmation;
 
 	const ALICE: u64 = 100;
 
 	fn last_event() -> mock::Event {
-		frame_system::Pallet::<Test>::events().pop().expect("Event expected").event
+		frame_system::Pallet::<Test>::events()
+			.pop()
+			.expect("Event expected")
+			.event
 	}
 
 	fn assert_winners() -> Vec<ValidatorId> {
@@ -21,8 +24,14 @@ mod test {
 	fn you_have_to_be_priviledged() {
 		new_test_ext().execute_with(|| {
 			// Run through the sudo extrinsics to be sure they are what they are
-			assert_noop!(ValidatorPallet::set_blocks_for_epoch(Origin::signed(ALICE), Zero::zero()), BadOrigin);
-			assert_noop!(ValidatorPallet::force_rotation(Origin::signed(ALICE)), BadOrigin);
+			assert_noop!(
+				ValidatorPallet::set_blocks_for_epoch(Origin::signed(ALICE), Zero::zero()),
+				BadOrigin
+			);
+			assert_noop!(
+				ValidatorPallet::force_rotation(Origin::signed(ALICE)),
+				BadOrigin
+			);
 		});
 	}
 
@@ -32,7 +41,10 @@ mod test {
 			// Confirm we have a minimum epoch of 1 block
 			assert_eq!(<Test as Config>::MinEpoch::get(), 1);
 			// Throw up an error if we supply anything less than this
-			assert_noop!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), 0), Error::<Test>::InvalidEpoch);
+			assert_noop!(
+				ValidatorPallet::set_blocks_for_epoch(Origin::root(), 0),
+				Error::<Test>::InvalidEpoch
+			);
 			// This should work as 2 > 1
 			assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), 2));
 			// Confirm we have an event for the change from 0 to 2
@@ -41,7 +53,10 @@ mod test {
 				mock::Event::pallet_cf_validator(crate::Event::EpochDurationChanged(0, 2)),
 			);
 			// We throw up an error if we try to set it to the current
-			assert_noop!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), 2), Error::<Test>::InvalidEpoch);
+			assert_noop!(
+				ValidatorPallet::set_blocks_for_epoch(Origin::root(), 2),
+				Error::<Test>::InvalidEpoch
+			);
 		});
 	}
 
@@ -63,7 +78,7 @@ mod test {
 			run_to_block(2);
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(..));
 			// Confirm the auction
-			TestConfirmation::set_awaiting_confirmation(false);
+			clear_confirmation();
 			// Move forward by 1 block
 			run_to_block(3);
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
@@ -78,11 +93,17 @@ mod test {
 			// We should have started another auction
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(..));
 			// Let's check we can't alter the state of the pallet during this period
-			assert_noop!(ValidatorPallet::force_rotation(Origin::root()), Error::<Test>::AuctionInProgress);
-			assert_noop!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), 10), Error::<Test>::AuctionInProgress);
+			assert_noop!(
+				ValidatorPallet::force_rotation(Origin::root()),
+				Error::<Test>::AuctionInProgress
+			);
+			assert_noop!(
+				ValidatorPallet::set_blocks_for_epoch(Origin::root(), 10),
+				Error::<Test>::AuctionInProgress
+			);
 			// Finally back to the start again
 			// Confirm the auction
-			TestConfirmation::set_awaiting_confirmation(false);
+			clear_confirmation();
 			run_to_block(11);
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
 		});
@@ -131,12 +152,15 @@ mod test {
 			// and still...
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(..));
 			// Confirm the auction
-			TestConfirmation::set_awaiting_confirmation(false);
+			clear_confirmation();
 			run_to_block(14);
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
 			assert_eq!(<ValidatorPallet as EpochInfo>::epoch_index(), 1);
 			// We do now see our winners as the set of validators
-			assert_eq!(<ValidatorPallet as EpochInfo>::current_validators(), winners);
+			assert_eq!(
+				<ValidatorPallet as EpochInfo>::current_validators(),
+				winners
+			);
 			// Our old winners remain
 			assert_eq!(<ValidatorPallet as EpochInfo>::next_validators(), winners);
 			// Force an auction at the next block
@@ -144,19 +168,25 @@ mod test {
 			run_to_block(15);
 			// A new auction starts
 			// We should still see the old winners validating
-			assert_eq!(<ValidatorPallet as EpochInfo>::current_validators(), winners);
+			assert_eq!(
+				<ValidatorPallet as EpochInfo>::current_validators(),
+				winners
+			);
 			// Our new winners are
 			// We should still see the old winners validating
 			let winners = assert_winners();
 			assert_eq!(<ValidatorPallet as EpochInfo>::next_validators(), winners);
 			// Confirm the auction
-			TestConfirmation::set_awaiting_confirmation(false);
+			clear_confirmation();
 			run_to_block(16);
 			// Finalised auction, waiting for bids again
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
 			assert_eq!(<ValidatorPallet as EpochInfo>::epoch_index(), 2);
 			// We have the new set of validators
-			assert_eq!(<ValidatorPallet as EpochInfo>::current_validators(), winners);
+			assert_eq!(
+				<ValidatorPallet as EpochInfo>::current_validators(),
+				winners
+			);
 		});
 	}
 
@@ -164,7 +194,11 @@ mod test {
 	fn genesis() {
 		new_test_ext().execute_with(|| {
 			// We should have a set of 2 validators on genesis with a minimum bid of 1 set
-			assert_eq!(current_validators().len(), 2, "We should have a set of validators at genesis");
+			assert_eq!(
+				current_validators().len(),
+				2,
+				"We should have a set of validators at genesis"
+			);
 			assert_eq!(min_bid(), 1, "We should have a minimum bid");
 		});
 	}

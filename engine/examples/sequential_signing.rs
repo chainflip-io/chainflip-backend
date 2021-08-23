@@ -2,7 +2,6 @@ use chainflip_engine::signing::crypto::{
     Keys, LocalSig, Parameters, SharedKeys, Signature, VerifiableSS, FE, GE,
 };
 
-#[allow(dead_code)]
 pub fn keygen_t_n_parties(
     t: usize,
     n: usize,

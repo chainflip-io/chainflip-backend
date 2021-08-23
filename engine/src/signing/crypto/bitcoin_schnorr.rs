@@ -16,7 +16,10 @@
     @license GPL-3.0+ <https://github.com/KZen-networks/multisig-schnorr/blob/master/LICENSE>
 */
 /// following the variant used in bip-schnorr: https://github.com/sipa/bips/blob/bip-schnorr/bip-schnorr.mediawiki
-use super::error::Error::{self, InvalidKey, InvalidSS, InvalidSig};
+use super::error::{InvalidKey, InvalidSS, InvalidSig};
+
+use super::super::super::eth::utils;
+// TODO: add tests for this module?
 
 use curv::arithmetic::traits::*;
 
@@ -29,6 +32,7 @@ use curv::cryptographic_primitives::hashing::traits::Hash;
 use curv::cryptographic_primitives::secret_sharing::feldman_vss::VerifiableSS;
 use curv::BigInt;
 
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 type GE = curv::elliptic::curves::secp256_k1::GE;
@@ -36,7 +40,7 @@ type FE = curv::elliptic::curves::secp256_k1::FE;
 
 const SECURITY: usize = 256;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Keys {
     pub u_i: FE,
     pub y_i: GE,
@@ -48,7 +52,7 @@ pub struct KeyGenBroadcastMessage1 {
     com: BigInt,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Parameters {
     pub threshold: usize,   //t
     pub share_count: usize, //n
@@ -88,20 +92,28 @@ impl Keys {
         y_vec: &Vec<GE>,
         bc1_vec: &Vec<KeyGenBroadcastMessage1>,
         parties: &[usize],
-    ) -> Result<(VerifiableSS<GE>, Vec<FE>, usize), Error> {
+    ) -> Result<(VerifiableSS<GE>, Vec<FE>, usize), InvalidKey> {
         // test length:
         assert_eq!(blind_vec.len(), params.share_count);
         assert_eq!(bc1_vec.len(), params.share_count);
         assert_eq!(y_vec.len(), params.share_count);
         // test decommitments
-        let correct_key_correct_decom_all = (0..bc1_vec.len())
-            .map(|i| {
-                HashCommitment::create_commitment_with_user_defined_randomness(
+        let invalid_decom_indexes = (0..bc1_vec.len())
+            .into_iter()
+            .filter_map(|i| {
+                let valid = HashCommitment::create_commitment_with_user_defined_randomness(
                     &y_vec[i].bytes_compressed_to_big_int(),
                     &blind_vec[i],
-                ) == bc1_vec[i].com
+                ) == bc1_vec[i].com;
+                if valid {
+                    None
+                } else {
+                    // signer indexes are their array indexes + 1
+                    Some(i + 1)
+                }
             })
-            .all(|x| x == true);
+            .collect_vec();
+
         let (vss_scheme, secret_shares) = VerifiableSS::share_at_indices(
             params.threshold,
             params.share_count,
@@ -109,9 +121,9 @@ impl Keys {
             &parties,
         );
 
-        match correct_key_correct_decom_all {
-            true => Ok((vss_scheme, secret_shares, self.party_index.clone())),
-            false => Err(InvalidKey),
+        match invalid_decom_indexes.len() {
+            0 => Ok((vss_scheme, secret_shares, self.party_index.clone())),
+            _ => Err(InvalidKey(invalid_decom_indexes)),
         }
     }
 
@@ -122,29 +134,35 @@ impl Keys {
         secret_shares_vec: &Vec<FE>,
         vss_scheme_vec: &Vec<VerifiableSS<GE>>,
         index: &usize,
-    ) -> Result<SharedKeys, Error> {
+    ) -> Result<SharedKeys, InvalidSS> {
         assert_eq!(y_vec.len(), params.share_count);
         assert_eq!(secret_shares_vec.len(), params.share_count);
         assert_eq!(vss_scheme_vec.len(), params.share_count);
 
-        let correct_ss_verify = (0..y_vec.len())
-            .map(|i| {
-                vss_scheme_vec[i]
+        let invalid_idxs = (0..y_vec.len())
+            .into_iter()
+            .filter_map(|i| {
+                let valid = vss_scheme_vec[i]
                     .validate_share(&secret_shares_vec[i], *index)
                     .is_ok()
-                    && vss_scheme_vec[i].commitments[0] == y_vec[i]
+                    && vss_scheme_vec[i].commitments[0] == y_vec[i];
+                if valid {
+                    None
+                } else {
+                    Some(i + 1)
+                }
             })
-            .all(|x| x == true);
+            .collect_vec();
 
-        match correct_ss_verify {
-            true => {
+        match invalid_idxs.len() {
+            0 => {
                 let mut y_vec_iter = y_vec.iter();
                 let y0 = y_vec_iter.next().unwrap();
                 let y = y_vec_iter.fold(y0.clone(), |acc, x| acc + x);
                 let x_i = secret_shares_vec.iter().fold(FE::zero(), |acc, x| acc + x);
                 Ok(SharedKeys { y, x_i })
             }
-            false => Err(InvalidSS),
+            _ => Err(InvalidSS(invalid_idxs)),
         }
     }
 
@@ -182,16 +200,14 @@ impl LocalSig {
         let beta_i = local_ephemeral_key.x_i.clone();
         let alpha_i = local_private_key.x_i.clone();
 
-        let message_len_bits = message.len() * 8;
-        let R = local_ephemeral_key.y.bytes_compressed_to_big_int();
-        let X = local_private_key.y.bytes_compressed_to_big_int();
-        let X_vec = BigInt::to_bytes(&X);
-        let X_vec_len_bits = X_vec.len() * 8;
-        let e_bn = HSha256::create_hash_from_slice(
-            &BigInt::to_bytes(
-                &((((R << X_vec_len_bits) + X) << message_len_bits) + BigInt::from_bytes(message)),
-            )[..],
-        );
+        let r = local_ephemeral_key.y.get_element();
+        let eth_addr = utils::pubkey_to_eth_addr(r);
+
+        let e_bn = HSha256::create_hash(&[
+            &local_private_key.y.bytes_compressed_to_big_int(),
+            &BigInt::from_bytes(message),
+            &BigInt::from_bytes(&eth_addr),
+        ]);
 
         let e: FE = ECScalar::from(&e_bn);
         let gamma_i = beta_i + e.clone() * alpha_i;
@@ -206,7 +222,7 @@ impl LocalSig {
         parties_index_vec: &[usize],
         vss_private_keys: &Vec<VerifiableSS<GE>>,
         vss_ephemeral_keys: &Vec<VerifiableSS<GE>>,
-    ) -> Result<VerifiableSS<GE>, Error> {
+    ) -> Result<VerifiableSS<GE>, InvalidSS> {
         //parties_index_vec is a vector with indices of the parties that are participating and provided gamma_i for this step
         // test that enough parties are in this round
         assert!(parties_index_vec.len() > vss_private_keys[0].parameters.threshold);
@@ -246,16 +262,29 @@ impl LocalSig {
             })
             .collect::<Vec<bool>>();
 
+        let invalid_idxs = (0..parties_index_vec.len())
+            .into_iter()
+            .filter_map(|i| {
+                if correct_ss_verify[i] {
+                    None
+                } else {
+                    Some(i + 1)
+                }
+            })
+            .collect_vec();
+
         match correct_ss_verify.iter().all(|x| x.clone() == true) {
             true => Ok(vss_sum),
-            false => Err(InvalidSS),
+            false => Err(InvalidSS(invalid_idxs)),
         }
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Signature {
+    /// This is `s` in other literature
     pub sigma: FE,
+    /// This is `r` in other literature
     pub v: GE,
 }
 
@@ -277,11 +306,12 @@ impl Signature {
         Signature { sigma, v }
     }
 
-    pub fn verify(&self, message: &[u8], pubkey_y: &GE) -> Result<(), Error> {
+    pub fn verify(&self, message: &[u8], pubkey_y: &GE) -> Result<(), InvalidSig> {
+        let eth_addr = utils::pubkey_to_eth_addr(self.v.get_element());
         let e_bn = HSha256::create_hash(&[
-            &self.v.bytes_compressed_to_big_int(),
             &pubkey_y.bytes_compressed_to_big_int(),
             &BigInt::from_bytes(message),
+            &BigInt::from_bytes(&eth_addr),
         ]);
         let e: FE = ECScalar::from(&e_bn);
 

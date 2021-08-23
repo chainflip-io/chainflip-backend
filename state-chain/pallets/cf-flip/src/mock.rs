@@ -1,12 +1,16 @@
-use crate as pallet_cf_flip;
+use crate::{self as pallet_cf_flip, BurnFlipAccount};
 use cf_traits::StakeTransfer;
-use frame_support::{parameter_types, traits::HandleLifetime};
+use frame_support::{parameter_types, traits::HandleLifetime, weights::IdentityFee};
 use sp_core::H256;
-use sp_runtime::{BuildStorage, testing::Header, traits::{BlakeTwo256, IdentityLookup}};
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
+};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
-type AccountId = u64;
+pub type AccountId = u64;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -17,6 +21,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		Flip: pallet_cf_flip::{Module, Call, Config<T>, Storage, Event<T>},
+		TransactionPayment: pallet_transaction_payment::{Module, Storage},
 	}
 );
 
@@ -45,19 +50,32 @@ impl frame_system::Config for Test {
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
 	type OnNewAccount = ();
-	type OnKilledAccount = Flip;
+	type OnKilledAccount = BurnFlipAccount<Self>;
 	type SystemWeightInfo = ();
 	type SS58Prefix = SS58Prefix;
 }
 
+pub type FlipBalance = u128;
+
 parameter_types! {
-	pub const ExistentialDeposit: u128 = 10;
+	pub const ExistentialDeposit: FlipBalance = 10;
 }
 
 impl pallet_cf_flip::Config for Test {
 	type Event = Event;
-	type Balance = u128;
+	type Balance = FlipBalance;
 	type ExistentialDeposit = ExistentialDeposit;
+}
+
+parameter_types! {
+	pub const TransactionByteFee: FlipBalance = 1;
+}
+
+impl pallet_transaction_payment::Config for Test {
+	type OnChargeTransaction = pallet_cf_flip::FlipTransactionPayment<Self>;
+	type TransactionByteFee = TransactionByteFee;
+	type WeightToFee = IdentityFee<FlipBalance>;
+	type FeeMultiplierUpdate = ();
 }
 
 // Build genesis storage according to the mock runtime.
@@ -66,10 +84,12 @@ pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
 pub const CHARLIE: <Test as frame_system::Config>::AccountId = 789u64;
 
 pub fn check_balance_integrity() {
-	assert_eq!(
-		pallet_cf_flip::Account::<Test>::iter_values().map(|account| account.total()).sum::<u128>(),
-		Flip::onchain_funds()
-	);
+	let accounts_total = pallet_cf_flip::Account::<Test>::iter_values()
+		.map(|account| account.total())
+		.sum::<FlipBalance>();
+	let reserves_total = pallet_cf_flip::Reserve::<Test>::iter_values().sum::<FlipBalance>();
+
+	assert_eq!(accounts_total + reserves_total, Flip::onchain_funds());
 }
 
 // Build genesis storage according to the mock runtime.
@@ -87,8 +107,11 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		System::set_block_number(1);
 
 		// Seed with two staked accounts.
-		frame_system::Provider::<Test>::created(&ALICE);
-		frame_system::Provider::<Test>::created(&BOB);
+		frame_system::Provider::<Test>::created(&ALICE).unwrap();
+		frame_system::Provider::<Test>::created(&BOB).unwrap();
+		assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
+		assert!(frame_system::Pallet::<Test>::account_exists(&BOB));
+		assert!(!frame_system::Pallet::<Test>::account_exists(&CHARLIE));
 		<Flip as StakeTransfer>::credit_stake(&ALICE, 100);
 		<Flip as StakeTransfer>::credit_stake(&BOB, 50);
 

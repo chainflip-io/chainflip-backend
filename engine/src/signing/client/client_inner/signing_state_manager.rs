@@ -3,28 +3,29 @@ use std::{
     time::Duration,
 };
 
-use log::*;
+use itertools::Itertools;
+use slog::o;
 use tokio::sync::mpsc;
 
 use crate::{
+    logging::COMPONENT_KEY,
     p2p::ValidatorId,
     signing::{
-        client::{client_inner::client_inner::SigningData, SigningInfo},
-        crypto::Parameters,
+        client::{client_inner::client_inner::SigningData, SigningInfo, SigningOutcome},
         MessageHash, MessageInfo,
     },
 };
 
 use super::{
     client_inner::{Broadcast1, InnerEvent, SigningDataWrapped},
-    signing_state::{KeygenResultInfo, SigningState},
+    common::KeygenResultInfo,
+    signing_state::SigningState,
 };
 
 /// Manages multiple signing states for multiple signing processes
 #[derive(Clone)]
 pub struct SigningStateManager {
     signing_states: HashMap<MessageInfo, SigningState>,
-    params: Parameters,
     id: ValidatorId,
     p2p_sender: mpsc::UnboundedSender<InnerEvent>,
     /// Max lifetime of any phase before it expires
@@ -33,27 +34,28 @@ pub struct SigningStateManager {
     /// Storage for messages for which we are not able to create a SigningState yet.
     /// Processing these is triggered by a request to sign
     delayed_messages: HashMap<MessageInfo, (std::time::Instant, Vec<(ValidatorId, Broadcast1)>)>,
+    logger: slog::Logger,
 }
 
 impl SigningStateManager {
-    pub(super) fn new(
-        params: Parameters,
+    pub fn new(
         id: ValidatorId,
         p2p_sender: mpsc::UnboundedSender<InnerEvent>,
         phase_timeout: Duration,
+        logger: &slog::Logger,
     ) -> Self {
         SigningStateManager {
             signing_states: HashMap::new(),
-            params,
             id,
             p2p_sender,
             phase_timeout,
             delayed_messages: HashMap::new(),
+            logger: logger.new(o!(COMPONENT_KEY => "SigningStateManager")),
         }
     }
 
     #[cfg(test)]
-    pub(super) fn get_state_for(&self, message_info: &MessageInfo) -> Option<&SigningState> {
+    pub fn get_state_for(&self, message_info: &MessageInfo) -> Option<&SigningState> {
         self.signing_states.get(message_info)
     }
 
@@ -75,8 +77,13 @@ impl SigningStateManager {
         bc_count + other_count
     }
 
+    #[cfg(test)]
+    pub fn set_timeout(&mut self, phase_timeout: Duration) {
+        self.phase_timeout = phase_timeout;
+    }
+
     fn add_delayed(&mut self, mi: MessageInfo, bc1_entry: (ValidatorId, Broadcast1)) {
-        trace!("Signing manager adds delayed bc1");
+        slog::trace!(self.logger, "Signing manager adds delayed bc1");
         let entry = self
             .delayed_messages
             .entry(mi)
@@ -85,14 +92,11 @@ impl SigningStateManager {
     }
 
     /// Process signing data, generating new state if necessary
-    pub(super) fn process_signing_data(
-        &mut self,
-        sender_id: ValidatorId,
-        wdata: SigningDataWrapped,
-    ) {
+    pub fn process_signing_data(&mut self, sender_id: ValidatorId, wdata: SigningDataWrapped) {
         let SigningDataWrapped { data, message } = wdata;
 
-        debug!(
+        slog::debug!(
+            self.logger,
             "receiving signing data for message: {}",
             String::from_utf8_lossy(&message.hash.0)
         );
@@ -104,7 +108,12 @@ impl SigningStateManager {
             None => {
                 match data {
                     SigningData::Broadcast1(bc1) => self.add_delayed(message, (sender_id, bc1)),
-                    other => warn!("Unexpected {} for message: {:?}", other, message.hash),
+                    other => slog::warn!(
+                        self.logger,
+                        "Unexpected {} for message: {:?}",
+                        other,
+                        message.hash
+                    ),
                 };
             }
         }
@@ -113,7 +122,7 @@ impl SigningStateManager {
     fn process_delayed(&mut self, mi: &MessageInfo) {
         if let Some((_t, messages)) = self.delayed_messages.remove(mi) {
             for (sender, bc1) in messages {
-                debug!("Processing delayed signging bc1");
+                slog::debug!(self.logger, "Processing delayed signing bc1");
 
                 let wdata = SigningDataWrapped {
                     data: bc1.into(),
@@ -124,19 +133,23 @@ impl SigningStateManager {
         }
     }
 
-    pub(super) fn on_request_to_sign(
+    pub fn on_request_to_sign(
         &mut self,
         data: MessageHash,
         key_info: KeygenResultInfo,
         sign_info: SigningInfo,
     ) {
-        debug!(
+        slog::debug!(
+            self.logger,
             "initiating signing for message: {}",
             String::from_utf8_lossy(&data.0)
         );
 
         if !sign_info.signers.contains(&self.id) {
-            warn!("Request to sign ignored: we are not among signers.");
+            slog::warn!(
+                self.logger,
+                "Request to sign ignored: we are not among signers."
+            );
             return;
         }
 
@@ -146,7 +159,10 @@ impl SigningStateManager {
                 // This should be impossible because of the check above,
                 // but I don't like unwrapping (would be better if we
                 // could combine this with the check above)
-                warn!("Request to sign ignored: could not derive our idx");
+                slog::warn!(
+                    self.logger,
+                    "Request to sign ignored: could not derive our idx"
+                );
                 return;
             }
         };
@@ -155,7 +171,7 @@ impl SigningStateManager {
         let signer_idxs = match project_signers(&sign_info.signers, &key_info) {
             Ok(signer_idxs) => signer_idxs,
             Err(_) => {
-                warn!("Request to sign ignored: invalid signers.");
+                slog::warn!(self.logger, "Request to sign ignored: invalid signers.");
                 return;
             }
         };
@@ -166,11 +182,18 @@ impl SigningStateManager {
 
         match self.signing_states.entry(mi.clone()) {
             Entry::Occupied(_) => {
-                warn!("Ingoring a request to sign the same message again");
+                slog::warn!(
+                    self.logger,
+                    "Ignoring a request to sign the same message again"
+                );
             }
             Entry::Vacant(entry) => {
                 // We have the key and have received a request to sign
-                trace!("Creating new signing state for message: {:?}", mi.hash);
+                slog::trace!(
+                    self.logger,
+                    "Creating new signing state for message: {:?}",
+                    mi.hash
+                );
                 let p2p_sender = self.p2p_sender.clone();
 
                 let state = SigningState::on_request_to_sign(
@@ -178,10 +201,10 @@ impl SigningStateManager {
                     our_idx,
                     signer_idxs,
                     key_info,
-                    self.params,
                     p2p_sender,
                     mi.clone(),
                     sign_info,
+                    &self.logger,
                 );
 
                 entry.insert(state);
@@ -191,31 +214,50 @@ impl SigningStateManager {
         }
     }
 
-    pub(super) fn cleanup(&mut self) {
-        // for every state, check if it expired
+    /// check all states for timeouts and abandonment then remove them
+    pub fn cleanup(&mut self) {
+        let mut events_to_send = vec![];
 
-        info!("cleanup");
+        // remove all active states that have become abandoned or finished (SigningOutcome have already been sent)
+        self.signing_states
+            .retain(|_, state| !state.is_abandoned() && !state.is_finished());
 
         let timeout = self.phase_timeout;
-
-        self.delayed_messages.retain(|_key, (t, _)| {
+        // for every pending state, check if it expired
+        let logger = self.logger.clone();
+        self.delayed_messages.retain(|message_info, (t, bc1_vec)| {
             if t.elapsed() > timeout {
-                warn!("BC1 for signing expired");
-                // TODO: send a signal
+                slog::warn!(logger, "BC1 for signing expired");
+
+                // We never received a Signing request for this message, so any parties
+                // that tried to initiate a new ceremony are deemed malicious
+                let bad_validators = bc1_vec.iter().map(|(vid, _)| vid).cloned().collect_vec();
+                events_to_send.push(SigningOutcome::unauthorised(
+                    message_info.clone(),
+                    bad_validators,
+                ));
                 return false;
             }
             true
         });
 
-        self.signing_states.retain(|_msg, state| {
-            if state.cur_phase_timestamp.elapsed() > timeout {
-                // TODO: successful ceremonies should clean up themselves!
-                warn!("Signing state expired and should be abandoned");
-                // TODO: send a signal
+        // for every active state, check if it expired
+        self.signing_states.retain(|message_info, state| {
+            if state.last_progress_timestamp.elapsed() > timeout {
+                slog::warn!(logger, "Signing state expired and should be abandoned");
+
+                let late_nodes = state.awaited_parties();
+                events_to_send.push(SigningOutcome::timeout(message_info.clone(), late_nodes));
                 return false;
             }
             true
         });
+
+        for event in events_to_send {
+            if let Err(err) = self.p2p_sender.send(InnerEvent::SigningResult(event)) {
+                slog::error!(logger, "Unable to send event, error: {}", err);
+            }
+        }
     }
 }
 

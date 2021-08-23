@@ -2,15 +2,17 @@ use std::{collections::HashMap, sync::Arc};
 
 use parking_lot::Mutex;
 
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::UnboundedSender;
 
 use super::{P2PMessage, P2PNetworkClient, ValidatorId};
 
+use crate::p2p::{P2PNetworkClientError, StatusCode};
 use async_trait::async_trait;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 pub struct P2PClientMock {
     id: ValidatorId,
-    pub receiver: Option<UnboundedReceiver<P2PMessage>>,
+    pub receiver: Option<UnboundedReceiverStream<P2PMessage>>,
     network_inner: Arc<Mutex<NetworkMockInner>>,
 }
 
@@ -22,24 +24,32 @@ impl P2PClientMock {
 
         P2PClientMock {
             id,
-            receiver: Some(receiver),
+            receiver: Some(UnboundedReceiverStream::new(receiver)),
             network_inner,
         }
     }
 }
 
 #[async_trait]
-impl P2PNetworkClient for P2PClientMock {
-    fn broadcast(&self, data: &[u8]) {
+impl P2PNetworkClient<ValidatorId, UnboundedReceiverStream<P2PMessage>> for P2PClientMock {
+    async fn broadcast(&self, data: &[u8]) -> Result<StatusCode, P2PNetworkClientError> {
         self.network_inner.lock().broadcast(&self.id, data);
+        Ok(200)
     }
 
-    fn send(&self, to: &ValidatorId, data: &[u8]) {
+    async fn send(
+        &self,
+        to: &ValidatorId,
+        data: &[u8],
+    ) -> Result<StatusCode, P2PNetworkClientError> {
         self.network_inner.lock().send(&self.id, to, data);
+        Ok(200)
     }
 
-    fn take_receiver(&mut self) -> Option<UnboundedReceiver<P2PMessage>> {
-        self.receiver.take()
+    async fn take_stream(
+        &mut self,
+    ) -> Result<UnboundedReceiverStream<P2PMessage>, P2PNetworkClientError> {
+        self.receiver.take().ok_or(P2PNetworkClientError::Rpc)
     }
 }
 
