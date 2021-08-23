@@ -141,9 +141,6 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {}
 
-	// Dispatchable functions allows users to interact with the pallet and invoke state changes.
-	// These functions materialize as "extrinsics", which are often compared to transactions.
-	// Dispatchable functions must be annotated with a weight and must return a DispatchResult.
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Reply.
@@ -153,7 +150,7 @@ pub mod pallet {
 			let _who = ensure_signed(origin)?;
 			
 			// 1. Pull the request type out of storage.
-			let request = PendingRequests::<T, I>::get(id).ok_or(Error::<T, I>::InvalidRequestId)?;
+			let request = PendingRequests::<T, I>::take(id).ok_or(Error::<T, I>::InvalidRequestId)?;
 
 			// 2. Dispatch the callback.
 			let _ = request.on_response(response)?;
@@ -164,11 +161,17 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub fn request(request: T::Request) {
+	/// Emits a request event, stores it, and returns its id.
+	pub fn request(request: T::Request) -> u64 {
 		// Get a new id.
 		let id = RequestIdCounter::<T, I>::mutate(|id| { *id += 1; *id });
 
+		// Store the request.
+		PendingRequests::<T, I>::insert(id, &request);
+
 		// Emit the request to the CFE.
 		Self::deposit_event(Event::<T, I>::Request(id, request));
+
+		id
 	}
 }
