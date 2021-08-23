@@ -51,7 +51,7 @@ use sp_core::{H160, U256};
 
 use crate::rotation::ChainParams::Ethereum;
 use crate::rotation::*;
-// we need this type exposed so subxt can use the type size
+// we need these types exposed so subxt can use the type size
 pub use crate::rotation::{KeygenRequest, VaultRotationRequest};
 use ethabi::{Bytes, Function, Param, ParamType, Token};
 
