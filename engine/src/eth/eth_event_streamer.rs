@@ -1,5 +1,3 @@
-use crate::eth::EventParseError;
-
 use anyhow::Result;
 use futures::{stream, Stream, StreamExt};
 use web3::{
@@ -41,32 +39,33 @@ pub async fn new_eth_event_stream(
         .map(|log| Ok(log))
         .chain(future_logs)
         .map(
-            move |log_result| -> Result<(H256, H256, RawLog), anyhow::Error> {
-                let log = log_result?;
-
-                let sig = log
-                    .topics
-                    .first()
-                    .ok_or_else(|| EventParseError::EmptyTopics)?
-                    .clone();
-
-                let tx_hash = log.transaction_hash.ok_or(anyhow::Error::msg(
-                    "Could not get transaction hash from ETH log",
-                ))?;
-
-                let raw_log = RawLog {
-                    topics: log.topics,
-                    data: log.data.0,
-                };
+            move |result_unparsed_log| -> Result<(H256, H256, RawLog), anyhow::Error> {
+                let result_extracted_log_details = result_unparsed_log
+                    .map_err(|error| anyhow::Error::new(error))
+                    .and_then(|log| {
+                        Ok((
+                            /*signature*/
+                            *log.topics.first().ok_or_else(|| {
+                                anyhow::Error::msg("Could not get signature from ETH log")
+                            })?,
+                            /*tx hash*/
+                            log.transaction_hash.ok_or_else(|| {
+                                anyhow::Error::msg("Could not get transaction hash from ETH log")
+                            })?,
+                            RawLog {
+                                topics: log.topics,
+                                data: log.data.0,
+                            },
+                        ))
+                    });
 
                 slog::debug!(
                     logger,
-                    "Parsing event from block {:?} with signature: {:?}",
-                    log.block_number.unwrap_or_default(),
-                    sig
+                    "Received ETH log: {:?}",
+                    result_extracted_log_details
                 );
 
-                Ok((sig, tx_hash, raw_log))
+                result_extracted_log_details
             },
         ))
 }

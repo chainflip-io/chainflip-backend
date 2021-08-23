@@ -22,8 +22,6 @@ use web3::types::H256;
 pub enum EventParseError {
     #[error("Unexpected event signature in log subscription: {0:#}")]
     UnexpectedEvent(H256),
-    #[error("Expected log to contain topics, got empty vector.")]
-    EmptyTopics,
     #[error("Cannot decode missing parameter: '{0}'.")]
     MissingParam(String),
 }
