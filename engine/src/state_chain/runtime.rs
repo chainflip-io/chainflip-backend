@@ -16,16 +16,16 @@ use substrate_subxt::{
     EventTypeRegistry, Runtime, SignedExtension, SignedExtra,
 };
 
-use crate::state_chain::auction::AuctionEventTypeRegistry;
-use crate::state_chain::emissions::EmissionsEventTypeRegistry;
-use crate::state_chain::staking::StakingEventTypeRegistry;
-use crate::state_chain::validator::ValidatorEventTypeRegistry;
+use crate::state_chain::pallets::auction::AuctionEventTypeRegistry;
+use crate::state_chain::pallets::emissions::EmissionsEventTypeRegistry;
+use crate::state_chain::pallets::staking::StakingEventTypeRegistry;
+use crate::state_chain::pallets::validator::ValidatorEventTypeRegistry;
 
 use core::fmt::Debug;
 
 use codec::{Decode, Encode};
 
-use super::{auction, emissions, staking, validator, witness_api};
+use super::pallets::{auction, emissions, reputation, staking, validator, witness_api};
 
 use pallet_cf_flip::ImbalanceSource;
 
@@ -151,6 +151,8 @@ impl witness_api::WitnesserApi for StateChainRuntime {}
 impl emissions::Emissions for StateChainRuntime {
     type FlipBalance = u128;
 }
+
+impl reputation::Reputation for StateChainRuntime {}
 
 impl System for StateChainRuntime {
     type Index = u32;

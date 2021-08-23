@@ -5061,6 +5061,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-vaults"
+version = "0.0.1"
+dependencies = [
+ "assert_matches",
+ "cf-traits",
+ "ethabi 13.0.0",
+ "frame-support",
+ "frame-system",
+ "log 0.4.14",
+ "parity-scale-codec",
+ "serde 1.0.126",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-witnesser"
 version = "0.1.0"
 dependencies = [
@@ -5085,8 +5103,8 @@ dependencies = [
  "cf-traits",
  "frame-support",
  "frame-system",
- "pallet-cf-auction",
  "pallet-cf-staking",
+ "pallet-cf-vaults",
  "parity-scale-codec",
  "serde 1.0.126",
  "sp-core",
@@ -8773,6 +8791,7 @@ dependencies = [
  "pallet-cf-rewards",
  "pallet-cf-staking",
  "pallet-cf-validator",
+ "pallet-cf-vaults",
  "pallet-cf-witnesser",
  "pallet-cf-witnesser-api",
  "pallet-grandpa",

@@ -6,19 +6,18 @@ use crate::mq::Subject;
 use anyhow::Result;
 
 use super::{
-    auction::AuctionEvent,
-    auction::{
-        AuctionAbortedEvent, AuctionCompletedEvent, AuctionConfirmedEvent,
+    pallets::auction::{
+        AuctionAbortedEvent, AuctionCompletedEvent, AuctionConfirmedEvent, AuctionEvent,
         AuctionRangeChangedEvent, AuctionStartedEvent, AwaitingBiddersEvent,
     },
-    runtime::StateChainRuntime,
-    staking::{
+    pallets::staking::{
         AccountActivated, AccountRetired, ClaimExpired, ClaimSettledEvent, ClaimSigRequestedEvent,
         ClaimSignatureIssuedEvent, StakeRefundEvent, StakedEvent, StakingEvent,
     },
-    validator::{
+    pallets::validator::{
         EpochDurationChangedEvent, ForceRotationRequestedEvent, NewEpochEvent, ValidatorEvent,
     },
+    runtime::StateChainRuntime,
 };
 
 use serde::{Deserialize, Serialize};

@@ -34,8 +34,9 @@
 //! - **Reputation points:** A point system which allows validators to earn reputation by being *online*.
 //!   They lose reputation points by being meeting one of the *offline conditions*.
 //! - **Offline conditions:** One of the following conditions: *missed heartbeat*, *failed to broadcast
-//!   an output* or *failed to participate in a signing ceremony*.  Each condition has its associated
-//!   penalty in reputation points.
+//!   an output*, *failed to participate in a signing ceremony*, *not enough performance credits* and
+//!   *contradicting self during signing ceremony*.  Each condition has its associated penalty in
+//!   reputation points.
 //! - **Slashing:** The process of debiting FLIP tokens from a validator.  Slashing only occurs in this
 //!   pallet when a validator's reputation points fall below zero *and* they are *offline*.
 //! - **Accrual Ratio:** A ratio of reputation points earned per number of offline credits
@@ -67,11 +68,16 @@ pub trait Slashing {
 }
 
 /// Conditions as judged as offline
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum OfflineCondition {
 	/// A broadcast of an output has failed
-	BroadcastOutputFailed(ReputationPoints),
+	BroadcastOutputFailed,
 	/// There was a failure in participation during a signing
-	ParticipateSigningFailed(ReputationPoints),
+	ParticipateSigningFailed,
+	/// Not Enough Performance Credits
+	NotEnoughPerformanceCredits,
+	/// Contradicting Self During a Signing Ceremony
+	ContradictingSelfDuringSigningCeremony,
 }
 
 /// Error on reporting an offline condition
@@ -88,6 +94,7 @@ pub trait OfflineConditions {
 	/// Returns `Ok(Weight)` else an error if the validator isn't valid
 	fn report(
 		condition: OfflineCondition,
+		penalty: ReputationPoints,
 		validator_id: &Self::ValidatorId,
 	) -> Result<Weight, ReportError>;
 }
@@ -200,10 +207,8 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Broadcast of an output has failed for validator
-		BroadcastOutputFailed(T::ValidatorId, ReputationPoints),
-		/// Validator has failed to participate in a signing ceremony
-		ParticipateSigningFailed(T::ValidatorId, ReputationPoints),
+		/// An offline condition has been met
+		OfflineConditionPenalty(T::ValidatorId, OfflineCondition, ReputationPoints),
 		/// The accrual rate for our reputation poins has been updated \[points, online credits\]
 		AccrualRateUpdated(ReputationPoints, OnlineCreditsFor<T>),
 	}
@@ -364,6 +369,7 @@ pub mod pallet {
 
 		fn report(
 			condition: OfflineCondition,
+			penalty: ReputationPoints,
 			validator_id: &Self::ValidatorId,
 		) -> Result<Weight, ReportError> {
 			// Confirm validator is present
@@ -372,27 +378,13 @@ pub mod pallet {
 				ReportError::UnknownValidator
 			);
 
-			// Handle offline conditions
-			match condition {
-				OfflineCondition::BroadcastOutputFailed(penalty) => {
-					// Broadcast this penalty
-					Self::deposit_event(Event::BroadcastOutputFailed(
-						(*validator_id).clone(),
-						penalty,
-					));
-					// Update reputation points
-					Ok(Self::update_reputation(validator_id, penalty.neg()))
-				}
-				OfflineCondition::ParticipateSigningFailed(penalty) => {
-					// Broadcast this penalty
-					Self::deposit_event(Event::ParticipateSigningFailed(
-						(*validator_id).clone(),
-						penalty,
-					));
-					// Update reputation points
-					Ok(Self::update_reputation(validator_id, penalty.neg()))
-				}
-			}
+			Self::deposit_event(Event::OfflineConditionPenalty(
+				(*validator_id).clone(),
+				condition,
+				penalty,
+			));
+
+			Ok(Self::update_reputation(validator_id, penalty.neg()))
 		}
 	}
 

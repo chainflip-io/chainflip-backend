@@ -1,6 +1,7 @@
 use super::*;
 use crate as pallet_cf_validator;
-use cf_traits::{impl_mock_ensure_witnessed_for_origin, AuctionConfirmation, BidderProvider};
+use cf_traits::mocks::vault_rotation::Mock as MockHandler;
+use cf_traits::BidderProvider;
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -114,8 +115,6 @@ parameter_types! {
 	pub const MinAuctionSize: u32 = 2;
 }
 
-impl_mock_ensure_witnessed_for_origin!(Origin);
-
 impl pallet_cf_auction::Config for Test {
 	type Event = Event;
 	type Amount = Amount;
@@ -124,8 +123,7 @@ impl pallet_cf_auction::Config for Test {
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
-	type Confirmation = TestConfirmation;
-	type EnsureWitnessed = MockEnsureWitnessed;
+	type Handler = MockHandler<ValidatorId = ValidatorId, Amount = Amount>;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
@@ -151,16 +149,6 @@ impl BidderProvider for TestBidderProvider {
 	}
 }
 
-pub struct TestConfirmation;
-impl AuctionConfirmation for TestConfirmation {
-	fn awaiting_confirmation() -> bool {
-		CONFIRM.with(|l| *l.borrow())
-	}
-
-	fn set_awaiting_confirmation(waiting: bool) {
-		CONFIRM.with(|l| *l.borrow_mut() = waiting);
-	}
-}
 pub struct TestEpochTransitionHandler;
 
 impl EpochTransitionHandler for TestEpochTransitionHandler {

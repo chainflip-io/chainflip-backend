@@ -1,6 +1,7 @@
 use chainflip_engine::{
     eth::{eth_broadcaster, eth_tx_encoding, key_manager, stake_manager},
     health::HealthMonitor,
+    heartbeat,
     mq::nats_client::NatsMQClient,
     p2p::{self, RpcP2PClient, ValidatorId},
     settings::Settings,
@@ -64,7 +65,7 @@ async fn main() {
     };
 
     // TODO: Investigate whether we want to encrypt it on disk
-    let db = PersistentKeyDB::new(&settings.signing.db_file, &root_logger);
+    let db = PersistentKeyDB::new(&settings.signing.db_file.as_path(), &root_logger);
 
     let (_, p2p_shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
@@ -90,6 +91,7 @@ async fn main() {
             p2p_shutdown_rx,
             &root_logger
         ),
+        heartbeat::start(subxt_client.clone(), my_pair_signer.clone(), &root_logger),
         // Start state chain components
         state_chain::sc_observer::start(mq_client.clone(), subxt_client.clone(), &root_logger),
         state_chain::sc_broadcaster::start(

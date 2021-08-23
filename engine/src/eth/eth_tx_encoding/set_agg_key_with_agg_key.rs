@@ -20,7 +20,10 @@ use serde::{Deserialize, Serialize};
 use slog::o;
 use sp_core::Hasher;
 use sp_runtime::traits::Keccak256;
-use web3::{ethabi::Token, types::Address};
+use web3::{
+    ethabi::Token,
+    types::{Address, H160},
+};
 
 /// Helper function, constructs and runs the [SetAggKeyWithAggKeyEncoder] asynchronously.
 pub async fn start<MQC: IMQClient + Clone>(
@@ -29,7 +32,7 @@ pub async fn start<MQC: IMQClient + Clone>(
     logger: &slog::Logger,
 ) {
     SetAggKeyWithAggKeyEncoder::new(
-        settings.eth.key_manager_eth_address.as_ref(),
+        settings.eth.key_manager_eth_address,
         settings.signing.genesis_validator_ids.clone(),
         mq_client,
         logger,
@@ -70,7 +73,7 @@ struct ParamContainer {
 
 impl<MQC: IMQClient + Clone> SetAggKeyWithAggKeyEncoder<MQC> {
     fn new(
-        key_manager_address: &str,
+        key_manager_address: H160,
         genesis_validator_ids: Vec<ValidatorId>,
         mq_client: MQC,
         logger: &slog::Logger,
@@ -366,7 +369,7 @@ mod test_eth_tx_encoder {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
         let encoder = SetAggKeyWithAggKeyEncoder::new(
-            settings.eth.key_manager_eth_address.as_str(),
+            settings.eth.key_manager_eth_address,
             settings.signing.genesis_validator_ids,
             mq_client,
             &logger,

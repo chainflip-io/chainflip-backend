@@ -170,8 +170,6 @@ mod tests {
 
     use super::*;
 
-    const CONTRACT_ADDRESS: &'static str = "0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f";
-
     #[tokio::test]
     #[ignore = "Depends on a running ganache instance, runs forever, useful for manually testing / observing incoming events"]
     async fn subscribe_to_stake_manager_events() {
@@ -183,7 +181,7 @@ mod tests {
 
         EthEventStreamer::new(
             &settings.eth.node_endpoint,
-            StakeManager::load(CONTRACT_ADDRESS, &logger).unwrap(),
+            StakeManager::load(settings.eth.stake_manager_eth_address, &logger).unwrap(),
             vec![StakeManagerSink::<NatsMQClient>::new(mq_client, &logger)
                 .await
                 .unwrap()],
