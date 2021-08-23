@@ -80,7 +80,7 @@ where
         }
     }
 
-    // use our visitor to deserialize an `ActualValue`
+    // use our visitor to deserialize a `PathBuf`
     deserializer.deserialize_any(PathVisitor)
 }
 
