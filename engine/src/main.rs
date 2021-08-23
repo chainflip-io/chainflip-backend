@@ -65,7 +65,10 @@ async fn main() {
     };
 
     // TODO: Investigate whether we want to encrypt it on disk
-    let db = PersistentKeyDB::new(&settings.signing.db_file, &root_logger);
+    let db = PersistentKeyDB::new(
+        &settings.signing.db_file.to_str().expect("Invalid path"),
+        &root_logger,
+    );
 
     let (_, p2p_shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
