@@ -1,10 +1,11 @@
-use crate as pallet_template;
+use crate::{self as pallet_reqrep, reqreps::BaseConfig};
 use sp_core::H256;
 use frame_support::parameter_types;
+use frame_support::instances::Instance0;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup}, testing::Header,
 };
-use frame_system as system;
+use frame_system;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -17,7 +18,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		TemplateModule: pallet_template::{Module, Call, Storage, Event<T>},
+		PingPongRequestResponse: pallet_reqrep::<Instance0>::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -26,7 +27,7 @@ parameter_types! {
 	pub const SS58Prefix: u8 = 42;
 }
 
-impl system::Config for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = ();
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -51,11 +52,42 @@ impl system::Config for Test {
 	type SS58Prefix = SS58Prefix;
 }
 
-impl pallet_template::Config for Test {
+impl BaseConfig for Test {
+	type KeyId = u64;
+	type ValidatorId = u64;
+	type ChainId = u64;
+}
+
+pub(crate) mod ping_pong {
+	use super::*;
+	use codec::{Decode, Encode};
+
+	/// Instance marker.
+	#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+	pub struct Instance;
+	
+	#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+	pub struct Ping;
+
+	#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+	pub struct Pong;
+
+	impl pallet_reqrep::ReqRep<Test> for Ping {
+		type Reply = Pong;
+
+		fn on_reply(&self, reply: Self::Reply) -> frame_support::dispatch::DispatchResult {
+			assert_eq!(reply, Pong);
+			Ok(().into())
+		}
+	}
+}
+
+impl pallet_reqrep::Config<Instance0> for Test {
 	type Event = Event;
+	type Request = ping_pong::Ping;
 }
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 }

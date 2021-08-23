@@ -1,23 +1,31 @@
-use crate::{Error, mock::*};
-use frame_support::{assert_ok, assert_noop};
+use crate::{self as pallet_reqrep, mock::*};
+use frame_support::assert_ok;
+use frame_system::RawOrigin;
 
-#[test]
-fn it_works_for_default_value() {
-	new_test_ext().execute_with(|| {
-		// Dispatch a signed extrinsic.
-		assert_ok!(TemplateModule::do_something(Origin::signed(1), 42));
-		// Read pallet storage and assert an expected result.
-		assert_eq!(TemplateModule::something(), Some(42));
-	});
+struct MockCfe;
+
+impl MockCfe {
+	fn respond() {
+		for event_record in System::events() {
+			Self::process_event(event_record.event);
+		}
+	}
+
+	fn process_event(event: Event) {
+		match event {
+			Event::pallet_reqrep_Instance0(pallet_reqrep::Event::Request(id, req)) => {
+				assert_eq!(req, ping_pong::Ping);
+				assert_ok!(PingPongRequestResponse::reply(RawOrigin::Signed(0).into(), id, ping_pong::Pong));
+			},
+			_ => panic!("Unexpected event"),
+		};
+	}
 }
 
 #[test]
-fn correct_error_for_none_value() {
+fn ping_pong() {
 	new_test_ext().execute_with(|| {
-		// Ensure the expected error is thrown when no value is present.
-		assert_noop!(
-			TemplateModule::cause_error(Origin::signed(1)),
-			Error::<Test>::NoneValue
-		);
+		PingPongRequestResponse::request(ping_pong::Ping);
+		MockCfe::respond();
 	});
 }
