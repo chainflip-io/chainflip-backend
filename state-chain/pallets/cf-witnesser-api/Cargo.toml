@@ -16,7 +16,7 @@ targets = ['x86_64-unknown-linux-gnu']
 # Chainflip pallets
 cf-traits = { path = '../../traits', default-features = false }
 pallet-cf-staking = { path = '../cf-staking', default-features = false }
-pallet-cf-auction = { path = '../cf-auction', default-features = false }
+pallet-cf-vaults = { path = '../cf-vaults', default-features = false }
 
 # Substrate stuff
 codec = { default-features = false, features = ['derive'], package = 'parity-scale-codec', version = '2.0.0' }
@@ -39,6 +39,7 @@ std = [
 	'frame-support/std',
 	'frame-system/std',
 	'pallet-cf-staking/std',
+	'pallet-cf-vaults/std',
 	'sp-std/std',
     'sp-core/std',
 ]

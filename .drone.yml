@@ -117,6 +117,7 @@ steps:
         -p pallet-cf-reputation
         -p pallet-cf-staking
         -p pallet-cf-validator
+        -p pallet-cf-vaults
         -p pallet-cf-witnesser
         -p pallet-cf-witnesser-api
         -p cf-traits

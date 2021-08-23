@@ -111,36 +111,3 @@ mod staking_witness_tests {
 		});
 	}
 }
-
-#[cfg(test)]
-mod auction_witness_tests {
-	use super::*;
-	const AUCTION_INDEX: u32 = 0;
-	const WITNESS: u64 = 67890;
-
-	#[test]
-	fn test_confirm_auction() {
-		new_test_ext().execute_with(|| {
-			MockWitnesser::set_threshold(2);
-
-			// The call we are witnessing.
-			let call: Call = pallet_cf_auction::Call::confirm_auction(AUCTION_INDEX).into();
-
-			// One vote.
-			assert_ok!(WitnessApi::witness_auction_confirmation(
-				Origin::signed(WITNESS),
-				AUCTION_INDEX
-			));
-
-			assert_eq!(MockWitnesser::get_vote_count_for(&call), 1);
-
-			// Another.
-			assert_ok!(WitnessApi::witness_auction_confirmation(
-				Origin::signed(WITNESS),
-				AUCTION_INDEX
-			));
-
-			assert_eq!(MockWitnesser::get_vote_count_for(&call), 2);
-		});
-	}
-}

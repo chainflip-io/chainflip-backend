@@ -17,21 +17,22 @@ pub mod pallet {
 	use cf_traits::Witnesser;
 	use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
-	use pallet_cf_auction::{Call as AuctionCall, Config as AuctionConfig};
 	use pallet_cf_staking::{
 		AggKeySignature, Call as StakingCall, Config as StakingConfig, EthTransactionHash,
 		EthereumAddress, FlipBalance,
 	};
+	use pallet_cf_vaults::rotation::{KeygenResponse, RequestIndex, VaultRotationResponse};
+	use pallet_cf_vaults::{Call as VaultsCall, Config as VaultsConfig, EthSigningTxResponse};
 	use sp_core::U256;
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + StakingConfig + AuctionConfig {
+	pub trait Config: frame_system::Config + StakingConfig + VaultsConfig {
 		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
 		type Call: IsType<<Self as frame_system::Config>::Call>
 			+ From<StakingCall<Self>>
-			+ From<AuctionCall<Self>>;
+			+ From<VaultsCall<Self>>;
 
 		/// An implementation of the witnesser, allows us to define our witness_* helper extrinsics.
 		type Witnesser: Witnesser<Call = <Self as Config>::Call, AccountId = AccountId<Self>>;
@@ -94,16 +95,42 @@ pub mod pallet {
 			T::Witnesser::witness(who, call.into())
 		}
 
-		//*** Auction pallet witness calls ***//
-
-		/// Witness that a running auction is valid.
+		/// Witness that a key generation response from 2/3 of our old validators
+		///
+		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
 		#[pallet::weight(10_000)]
-		pub fn witness_auction_confirmation(
+		pub fn witness_keygen_response(
 			origin: OriginFor<T>,
-			index: T::AuctionIndex,
+			request_id: RequestIndex,
+			response: KeygenResponse<T::ValidatorId, T::PublicKey>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = AuctionCall::confirm_auction(index);
+			let call = VaultsCall::keygen_response(request_id, response);
+			T::Witnesser::witness(who, call.into())
+		}
+
+		/// Witness that a vault rotation response from 2/3 of our old validators
+		///
+		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
+		#[pallet::weight(10_000)]
+		pub fn witness_vault_rotation_response(
+			origin: OriginFor<T>,
+			request_id: RequestIndex,
+			response: VaultRotationResponse<T::PublicKey, T::Transaction>,
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			let call = VaultsCall::vault_rotation_response(request_id, response);
+			T::Witnesser::witness(who, call.into())
+		}
+
+		#[pallet::weight(10_000)]
+		pub fn witness_eth_signing_tx_response(
+			origin: OriginFor<T>,
+			request_id: RequestIndex,
+			response: EthSigningTxResponse<T::ValidatorId>,
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			let call = VaultsCall::eth_signing_tx_response(request_id, response);
 			T::Witnesser::witness(who, call.into())
 		}
 	}
