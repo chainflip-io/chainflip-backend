@@ -1,13 +1,16 @@
-use std::{ffi::OsStr, path::Path};
+use std::{
+    ffi::OsStr,
+    fmt,
+    path::{Path, PathBuf},
+};
 
 use config::{Config, ConfigError, File};
-
-use serde::Deserialize;
+use serde::{de, Deserialize, Deserializer};
+use web3::types::H160;
 
 use crate::p2p::ValidatorId;
 
 pub use anyhow::Result;
-use regex::Regex;
 use url::Url;
 
 #[derive(Debug, Deserialize, Clone)]
@@ -26,11 +29,10 @@ pub struct StateChain {
 pub struct Eth {
     pub from_block: u64,
     pub node_endpoint: String,
-
-    // TODO: Into an Ethereum Address type?
-    pub stake_manager_eth_address: String,
-    pub key_manager_eth_address: String,
-    pub private_key_file: String,
+    pub stake_manager_eth_address: H160,
+    pub key_manager_eth_address: H160,
+    #[serde(deserialize_with = "deser_path")]
+    pub private_key_file: PathBuf,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -43,7 +45,8 @@ pub struct HealthCheck {
 pub struct Signing {
     /// This includes my_id if I'm part of genesis validator set
     pub genesis_validator_ids: Vec<ValidatorId>,
-    pub db_file: String,
+    #[serde(deserialize_with = "deser_path")]
+    pub db_file: PathBuf,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -55,6 +58,32 @@ pub struct Settings {
     pub signing: Signing,
 }
 
+// We use PathBuf because the value must be Sized, Path is not Sized
+fn deser_path<'de, D>(deserializer: D) -> std::result::Result<PathBuf, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct PathVisitor;
+
+    impl<'de> de::Visitor<'de> for PathVisitor {
+        type Value = PathBuf;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("A string containing a path")
+        }
+
+        fn visit_str<E>(self, v: &str) -> std::result::Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(PathBuf::from(v))
+        }
+    }
+
+    // use our visitor to deserialize a `PathBuf`
+    deserializer.deserialize_any(PathVisitor)
+}
+
 impl Settings {
     /// New settings loaded from "config/Default.toml"
     pub fn new() -> Result<Self, ConfigError> {
@@ -63,18 +92,12 @@ impl Settings {
 
     /// Validates the formatting of some settings
     pub fn validate_settings(&self) -> Result<(), ConfigError> {
-        // check the eth addresses
-        is_eth_address(&self.eth.key_manager_eth_address)
-            .map_err(|e| ConfigError::Message(e.to_string()))?;
-
-        is_eth_address(&self.eth.stake_manager_eth_address)
-            .map_err(|e| ConfigError::Message(e.to_string()))?;
-
         // check the Websocket URLs
         parse_websocket_url(&self.eth.node_endpoint)
             .map_err(|e| ConfigError::Message(e.to_string()))?;
 
-        is_valid_db_path(&self.signing.db_file).map_err(|e| ConfigError::Message(e.to_string()))?;
+        is_valid_db_path(self.signing.db_file.as_path())
+            .map_err(|e| ConfigError::Message(e.to_string()))?;
 
         Ok(())
     }
@@ -96,7 +119,7 @@ impl Settings {
     }
 }
 
-/// parse the URL and check that it is a valid websocket url
+/// Parse the URL and check that it is a valid websocket url
 fn parse_websocket_url(url: &str) -> Result<Url> {
     let issue_list_url = Url::parse(&url)?;
     if issue_list_url.scheme() != "ws" && issue_list_url.scheme() != "wss" {
@@ -115,25 +138,11 @@ fn parse_websocket_url(url: &str) -> Result<Url> {
     Ok(issue_list_url)
 }
 
-fn is_valid_db_path(db_file: &str) -> Result<()> {
-    let path = Path::new(db_file);
-    if path.extension() != Some(OsStr::new("db")) {
+fn is_valid_db_path(db_file: &Path) -> Result<()> {
+    if db_file.extension() != Some(OsStr::new("db")) {
         return Err(anyhow::Error::msg("Db path does not have '.db' extension"));
     }
     Ok(())
-}
-
-/// checks that the string is formatted as an eth address
-fn is_eth_address(address: &str) -> Result<()> {
-    let re = Regex::new(r"^0x[a-fA-F0-9]{40}$").unwrap();
-
-    match re.is_match(address) {
-        true => Ok(()),
-        false => Err(anyhow::Error::msg(format!(
-            "Invalid Eth Address: {}",
-            address
-        ))),
-    }
 }
 
 #[cfg(test)]
@@ -171,14 +180,6 @@ mod tests {
     }
 
     #[test]
-    fn test_eth_address_parsing() {
-        assert!(is_eth_address("0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f").is_ok());
-        assert!(is_eth_address("0xdBa9b6065Deb6___57BC779fF6736709ecBa3409").is_err());
-        assert!(is_eth_address("EAd5De9C41543E4bAbB09f9fE4f79153c036044f").is_err());
-        assert!(is_eth_address("").is_err());
-    }
-
-    #[test]
     fn test_websocket_url_parsing() {
         assert!(parse_websocket_url("wss://network.my_eth_node:80/d2er2easdfasdfasdf2e").is_ok());
         assert!(parse_websocket_url("wss://network.my_eth_node:80/<secret_key>").is_ok());
@@ -194,9 +195,9 @@ mod tests {
 
     #[test]
     fn test_db_file_path_parsing() {
-        assert!(is_valid_db_path("data.db").is_ok());
-        assert!(is_valid_db_path("/my/user/data/data.db").is_ok());
-        assert!(is_valid_db_path("data.errdb").is_err());
-        assert!(is_valid_db_path("thishasnoextension").is_err());
+        assert!(is_valid_db_path(Path::new("data.db")).is_ok());
+        assert!(is_valid_db_path(Path::new("/my/user/data/data.db")).is_ok());
+        assert!(is_valid_db_path(Path::new("data.errdb")).is_err());
+        assert!(is_valid_db_path(Path::new("thishasnoextension")).is_err());
     }
 }

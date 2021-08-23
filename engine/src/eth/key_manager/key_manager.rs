@@ -1,8 +1,6 @@
 //! Contains the information required to use the KeyManager contract as a source for
 //! the EthEventStreamer
 
-use core::str::FromStr;
-
 use crate::{
     eth::{utils, EventProducerError, EventSource},
     logging::COMPONENT_KEY,
@@ -96,9 +94,9 @@ pub enum KeyManagerEvent {
 
 impl KeyManager {
     /// Loads the contract abi to get event definitions
-    pub fn load(deployed_address: &str, logger: &slog::Logger) -> Result<Self> {
+    pub fn load(deployed_address: H160, logger: &slog::Logger) -> Result<Self> {
         Ok(Self {
-            deployed_address: H160::from_str(deployed_address)?,
+            deployed_address,
             contract: ethabi::Contract::load(
                 std::include_bytes!("../abis/KeyManager.json").as_ref(),
             )?,
@@ -197,9 +195,11 @@ impl EventSource for KeyManager {
 #[cfg(test)]
 mod tests {
 
+    use std::str::FromStr;
+
     use web3::types::H256;
 
-    use crate::logging;
+    use crate::{logging, settings};
 
     use super::*;
 
@@ -264,8 +264,6 @@ mod tests {
     const KEY_CHANGE_EVENT_SIG: &'static str =
         "0x19389c59b816d8b0ec43f2d5ed9b41bddc63d66dac1ecd808efe35b86b9ee0bf";
 
-    const CONTRACT_ADDRESS: &'static str = "0xD537bF4b795b7D07Bd5F4bAf7017e3ce8360B1DE";
-
     #[test]
     fn test_key_change_parsing() {
         // All the key strings in this test are decimal versions of the hex strings in the consts.py script
@@ -273,7 +271,8 @@ mod tests {
         // TODO: Use hex strings instead of dec strings. So we can use the exact const hex strings from consts.py.
 
         let logger = logging::test_utils::create_test_logger();
-        let km = KeyManager::load(CONTRACT_ADDRESS, &logger).unwrap();
+        let settings = settings::test_utils::new_test_settings().unwrap();
+        let km = KeyManager::load(settings.eth.key_manager_eth_address, &logger).unwrap();
 
         match km
             .parse_event(serde_json::from_str(AGG_SET_AGG_LOG).unwrap())
@@ -365,7 +364,8 @@ mod tests {
     #[test]
     fn abi_topic_sigs() {
         let logger = logging::test_utils::create_test_logger();
-        let km = KeyManager::load(CONTRACT_ADDRESS, &logger).unwrap();
+        let settings = settings::test_utils::new_test_settings().unwrap();
+        let km = KeyManager::load(settings.eth.key_manager_eth_address, &logger).unwrap();
 
         // key change event
         assert_eq!(

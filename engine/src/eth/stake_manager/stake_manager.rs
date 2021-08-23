@@ -1,7 +1,6 @@
 //! Contains the information required to use the StakeManger contract as a source for
 //! the EthEventStreamer
 
-use core::str::FromStr;
 use std::{convert::TryInto, fmt::Display};
 
 use crate::{
@@ -154,7 +153,7 @@ impl Display for StakeManagerEvent {
 
 impl StakeManager {
     /// Loads the contract abi to get event definitions
-    pub fn load(deployed_address: &str, logger: &slog::Logger) -> Result<Self> {
+    pub fn load(deployed_address: H160, logger: &slog::Logger) -> Result<Self> {
         slog::info!(
             logger,
             "Loading in stake manager contract abi. Connecting to contract at: {}",
@@ -164,7 +163,7 @@ impl StakeManager {
         let contract = ethabi::Contract::load(abi_bytes.as_ref())?;
 
         Ok(Self {
-            deployed_address: H160::from_str(deployed_address)?,
+            deployed_address,
             contract,
             logger: logger.new(o!(COMPONENT_KEY => "StakeManager")),
         })
@@ -325,13 +324,13 @@ impl EventSource for StakeManager {
 #[cfg(test)]
 mod tests {
 
+    use std::str::FromStr;
+
     use web3::types::{H256, U256};
 
-    use crate::logging;
+    use crate::{logging, settings};
 
     use super::*;
-
-    const CONTRACT_ADDRESS: &'static str = "0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f";
 
     const STAKED_EVENT_SIG: &'static str =
         "0x23581b9afdc2170a53868d0b64508f096844aa55c3ad98caf14032a91c41cc52";
@@ -425,16 +424,20 @@ mod tests {
     #[test]
     fn test_load_contract() {
         let logger = logging::test_utils::create_test_logger();
-        assert!(StakeManager::load(CONTRACT_ADDRESS, &logger).is_ok());
-        assert!(StakeManager::load("not_an_address", &logger).is_err());
+        let settings = settings::test_utils::new_test_settings().unwrap();
+        assert!(StakeManager::load(settings.eth.stake_manager_eth_address, &logger).is_ok());
     }
 
     #[test]
     fn test_staked_log_parsing() {
         let log: web3::types::Log = serde_json::from_str(STAKED_LOG).unwrap();
+        let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let sm = StakeManager::load(CONTRACT_ADDRESS, &logging::test_utils::create_test_logger())
-            .unwrap();
+        let sm = StakeManager::load(
+            settings.eth.stake_manager_eth_address,
+            &logging::test_utils::create_test_logger(),
+        )
+        .unwrap();
 
         match sm.parse_event(log).unwrap() {
             StakeManagerEvent::Staked {
@@ -467,9 +470,13 @@ mod tests {
     #[test]
     fn test_claim_registered_log_parsing() {
         let log: web3::types::Log = serde_json::from_str(CLAIM_REGISTERED_LOG).unwrap();
+        let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let sm = StakeManager::load(CONTRACT_ADDRESS, &logging::test_utils::create_test_logger())
-            .unwrap();
+        let sm = StakeManager::load(
+            settings.eth.stake_manager_eth_address,
+            &logging::test_utils::create_test_logger(),
+        )
+        .unwrap();
 
         match sm.parse_event(log).unwrap() {
             StakeManagerEvent::ClaimRegistered {
@@ -516,9 +523,13 @@ mod tests {
     #[test]
     fn test_claim_executed_log_parsing() {
         let log: web3::types::Log = serde_json::from_str(CLAIM_EXECUTED_LOG).unwrap();
+        let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let sm = StakeManager::load(CONTRACT_ADDRESS, &logging::test_utils::create_test_logger())
-            .unwrap();
+        let sm = StakeManager::load(
+            settings.eth.stake_manager_eth_address,
+            &logging::test_utils::create_test_logger(),
+        )
+        .unwrap();
 
         match sm.parse_event(log).unwrap() {
             StakeManagerEvent::ClaimExecuted {
@@ -545,9 +556,13 @@ mod tests {
     #[test]
     fn flip_supply_updated_log_parsing() {
         let log: web3::types::Log = serde_json::from_str(FLIP_SUPPLY_UPDATED_LOG).unwrap();
+        let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let sm = StakeManager::load(CONTRACT_ADDRESS, &logging::test_utils::create_test_logger())
-            .unwrap();
+        let sm = StakeManager::load(
+            settings.eth.stake_manager_eth_address,
+            &logging::test_utils::create_test_logger(),
+        )
+        .unwrap();
 
         match sm.parse_event(log).unwrap() {
             StakeManagerEvent::FlipSupplyUpdated {
@@ -579,9 +594,13 @@ mod tests {
     #[test]
     fn min_stake_changed_log_parsing() {
         let log: web3::types::Log = serde_json::from_str(MIN_STAKE_CHANGED_LOG).unwrap();
+        let settings = settings::test_utils::new_test_settings().unwrap();
 
-        let sm = StakeManager::load(CONTRACT_ADDRESS, &logging::test_utils::create_test_logger())
-            .unwrap();
+        let sm = StakeManager::load(
+            settings.eth.stake_manager_eth_address,
+            &logging::test_utils::create_test_logger(),
+        )
+        .unwrap();
 
         match sm.parse_event(log).unwrap() {
             StakeManagerEvent::MinStakeChanged {
@@ -611,8 +630,12 @@ mod tests {
 
     #[test]
     fn abi_topic_sigs() {
-        let sm = StakeManager::load(CONTRACT_ADDRESS, &logging::test_utils::create_test_logger())
-            .unwrap();
+        let settings = settings::test_utils::new_test_settings().unwrap();
+        let sm = StakeManager::load(
+            settings.eth.stake_manager_eth_address,
+            &logging::test_utils::create_test_logger(),
+        )
+        .unwrap();
 
         // Staked event
         let staked_sig = sm.staked_event_definition().signature();

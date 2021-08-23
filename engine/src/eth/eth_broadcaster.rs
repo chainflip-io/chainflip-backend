@@ -28,9 +28,9 @@ pub async fn start_eth_broadcaster<M: IMQClient + Send + Sync>(
     EthBroadcaster::<M, _>::new(
         &settings,
         mq_client,
-        secret_key_from_file(Path::new(settings.eth.private_key_file.as_str())).expect(&format!(
+        secret_key_from_file(settings.eth.private_key_file.as_path()).expect(&format!(
             "Should read in secret key from: {}",
-            settings.eth.private_key_file,
+            settings.eth.private_key_file.display(),
         )),
         logger,
     )
