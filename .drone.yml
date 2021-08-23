@@ -111,13 +111,25 @@ steps:
         -p cf-p2p
         -p cf-p2p-rpc
         -p pallet-cf-auction
+        -p pallet-cf-emissions
+        -p pallet-cf-rewards
+        -p pallet-cf-reputation
+        -p pallet-cf-vaults
+        -p pallet-cf-witnesser
+        -p pallet-cf-witnesser-api
         -p pallet-cf-flip
         -p pallet-cf-staking
         -p pallet-cf-validator
-        -p pallet-cf-witness
         -p cf-traits
         -- --check
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
+
+  - name: check-chainflip-backend
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    depends_on:
+      - rust-base
+    commands:
+      - cargo check --all-targets
 
   #  Performs all unit tests
   - name: test-validator-package
