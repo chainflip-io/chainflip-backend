@@ -130,7 +130,10 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// A stable ID for a validator.
-		type ValidatorId: Member + Parameter + From<<Self as frame_system::Config>::AccountId>;
+		type ValidatorId: Member
+			+ Parameter
+			+ From<<Self as frame_system::Config>::AccountId>
+			+ Into<<Self as frame_system::Config>::AccountId>;
 
 		// An amount of a bid
 		type Amount: Copy + AtLeast32BitUnsigned;
@@ -427,7 +430,7 @@ pub mod pallet {
 		/// earn points.
 		/// Once the reputation points fall below zero slashing comes into play and is delegated to the
 		/// `Slashing` trait.
-		fn check_liveness() -> Weight {
+		pub(super) fn check_liveness() -> Weight {
 			let mut weight = 0;
 			// Let's run through those that haven't come back to us and those that have
 			AwaitingHeartbeats::<T>::translate(|validator_id, awaiting| {
