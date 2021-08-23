@@ -18,7 +18,7 @@ use sp_runtime::AccountId32;
 use substrate_subxt::{Client, PairSigner};
 
 use web3::{
-    ethabi::{self, Log, RawLog},
+    ethabi::{self, RawLog},
     transports::WebSocket,
     types::{H160, H256},
     Web3,
@@ -198,14 +198,6 @@ impl StakeManager {
     }
 
     // get the node_id from the log and return as AccountId32
-    fn node_id_from_log(log: &Log) -> Result<AccountId32> {
-        let account_bytes: [u8; 32] =
-            utils::decode_log_param::<ethabi::FixedBytes>(&log, "nodeID")?
-                .try_into()
-                .map_err(|_| anyhow::Error::msg("Could not cast FixedBytes nodeID into [u8;32]"))?;
-        Ok(AccountId32::new(account_bytes))
-    }
-
     pub fn parser_closure(
         &self,
     ) -> Result<impl Fn((H256, H256, ethabi::RawLog)) -> Result<StakeManagerEvent>> {
@@ -216,10 +208,20 @@ impl StakeManager {
         let min_stake_changed = SignatureAndEvent::new(&self.contract, "MinStakeChanged")?;
 
         Ok(move |(signature, tx_hash, raw_log) : (H256, H256, RawLog)| -> Result<StakeManagerEvent> {
+
+            // get the node_id from the log and return as AccountId32
+            let node_id_from_log = |log| {
+                let account_bytes: [u8; 32] =
+                utils::decode_log_param::<ethabi::FixedBytes>(log, "nodeID")?
+                    .try_into()
+                    .map_err(|_| anyhow::Error::msg("Could not cast FixedBytes nodeID into [u8;32]"))?;
+                Result::<_, anyhow::Error>::Ok(AccountId32::new(account_bytes))
+            };
+
             let tx_hash = tx_hash.to_fixed_bytes();
             if signature == staked.signature {
                 let log = staked.event.parse_log(raw_log)?;
-                let account_id = Self::node_id_from_log(&log)?;
+                let account_id = node_id_from_log(&log)?;
                 let event = StakeManagerEvent::Staked {
                     account_id,
                     amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
@@ -229,7 +231,7 @@ impl StakeManager {
                 Ok(event)
             } else if signature == claim_registered.signature {
                 let log = claim_registered.event.parse_log(raw_log)?;
-                let account_id = Self::node_id_from_log(&log)?;
+                let account_id = node_id_from_log(&log)?;
                 let event = StakeManagerEvent::ClaimRegistered {
                     account_id,
                     amount: utils::decode_log_param(&log, "amount")?,
@@ -241,7 +243,7 @@ impl StakeManager {
                 Ok(event)
             } else if signature == claim_executed.signature {
                 let log = claim_executed.event.parse_log(raw_log)?;
-                let account_id = Self::node_id_from_log(&log)?;
+                let account_id = node_id_from_log(&log)?;
                 let event = StakeManagerEvent::ClaimExecuted {
                     account_id,
                     amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
