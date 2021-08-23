@@ -52,13 +52,13 @@ pub async fn start_stake_manager_witness(
     )
     .await?;
 
-    slog::info!(logger, "Creating Parser");
-    let parser = stake_manager.parser_closure()?;
+    slog::info!(logger, "Creating Event Decoder");
+    let decode_log = stake_manager.decode_log_closure()?;
 
     Ok(async move {
         while let Some(result_event) = event_stream.next().await {
             async {
-                match parser(result_event.unwrap()).unwrap() {
+                match decode_log(result_event.unwrap()).unwrap() {
                     // TODO: Handle unwraps
                     StakeManagerEvent::Staked {
                         account_id,
@@ -197,8 +197,7 @@ impl StakeManager {
         })
     }
 
-    // get the node_id from the log and return as AccountId32
-    pub fn parser_closure(
+    pub fn decode_log_closure(
         &self,
     ) -> Result<impl Fn((H256, H256, ethabi::RawLog)) -> Result<StakeManagerEvent>> {
         let staked = SignatureAndEvent::new(&self.contract, "Staked")?;
@@ -293,7 +292,7 @@ mod tests {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
         let stake_manager = StakeManager::new(&settings).unwrap();
-        let parser = stake_manager.parser_closure().unwrap();
+        let parser = stake_manager.decode_log_closure().unwrap();
 
         let staked_event_signature =
             H256::from_str("0x23581b9afdc2170a53868d0b64508f096844aa55c3ad98caf14032a91c41cc52")
@@ -339,7 +338,7 @@ mod tests {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
         let stake_manager = StakeManager::new(&settings).unwrap();
-        let parser = stake_manager.parser_closure().unwrap();
+        let decode_log = stake_manager.decode_log_closure().unwrap();
 
         let claimed_register_event_signature =
             H256::from_str("0x2f73775f2573d45f5b0ed0064eb65f631ac9e568a52807221c44ca9d358a9cee")
@@ -347,7 +346,7 @@ mod tests {
         let transaction_hash =
             H256::from_str("0x4e3f3296f3baff3763bd2beb9cdfa6ddeb996c409f746f0450093712f2417185")
                 .unwrap();
-        match parser((
+        match decode_log((
             claimed_register_event_signature,
             transaction_hash,
             RawLog {
@@ -399,7 +398,7 @@ mod tests {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
         let stake_manager = StakeManager::new(&settings).unwrap();
-        let parser = stake_manager.parser_closure().unwrap();
+        let decode_log = stake_manager.decode_log_closure().unwrap();
 
         let claimed_executed_event_signature =
             H256::from_str("0xac96f597a44ad425c6eedf6e4c8327fd959c9d912fa8d027fb54313e59f247c8")
@@ -407,7 +406,7 @@ mod tests {
         let transaction_hash =
             H256::from_str("0x99264107b21be2fb9beb1e4e8d47dc431df6696651f1937ece635a7960849605")
                 .unwrap();
-        match parser((
+        match decode_log((
             claimed_executed_event_signature,
             transaction_hash,
             RawLog {
@@ -447,7 +446,7 @@ mod tests {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
         let stake_manager = StakeManager::new(&settings).unwrap();
-        let parser = stake_manager.parser_closure().unwrap();
+        let decode_log = stake_manager.decode_log_closure().unwrap();
 
         let flip_supply_updated_event_signature =
             H256::from_str("0xff4b7a826623672c6944dc44d809008e2e1105180d110fd63986e841f15eb2ad")
@@ -455,7 +454,7 @@ mod tests {
         let transaction_hash =
             H256::from_str("0x06a6ef6fb6ab3a9493435d37a36607efc197dc71518b68b25d1061116034b16f")
                 .unwrap();
-        match parser((
+        match decode_log((
             flip_supply_updated_event_signature,
             transaction_hash,
             RawLog {
@@ -489,7 +488,7 @@ mod tests {
         let settings = settings::test_utils::new_test_settings().unwrap();
 
         let stake_manager = StakeManager::new(&settings).unwrap();
-        let parser = stake_manager.parser_closure().unwrap();
+        let decode_log = stake_manager.decode_log_closure().unwrap();
 
         let min_stake_changed_event_signature =
             H256::from_str("0xca11c8a4c461b60c9f485404c272650c2aaae260b2067d72e9924abb68556593")
@@ -497,7 +496,7 @@ mod tests {
         let transaction_hash =
             H256::from_str("0x7224ca5aae97dc9f9b25fd0ba337fd936709d277cf8600786c4168e1d86d7c1f")
                 .unwrap();
-        match parser((
+        match decode_log((
             min_stake_changed_event_signature,
             transaction_hash,
             RawLog {

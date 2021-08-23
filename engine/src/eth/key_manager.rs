@@ -37,8 +37,8 @@ pub async fn start_key_manager_witness(
     slog::info!(logger, "Load Contract ABI");
     let key_manager = KeyManager::new(&settings)?;
 
-    slog::info!(logger, "Creating Parser");
-    let parser = key_manager.parser_closure()?;
+    slog::info!(logger, "Creating Event Decoder");
+    let decode_log = key_manager.decode_log_closure()?;
 
     slog::info!(logger, "Creating Event Stream");
     let mut event_stream = eth_event_streamer::new_eth_event_stream(
@@ -51,7 +51,7 @@ pub async fn start_key_manager_witness(
 
     Ok(async move {
         while let Some(result_event) = event_stream.next().await {
-            match parser(result_event.unwrap()).unwrap() {
+            match decode_log(result_event.unwrap()).unwrap() {
                 // TODO: Handle unwraps
                 KeyManagerEvent::KeyChange { .. } => {
                     todo!();
@@ -146,7 +146,7 @@ impl KeyManager {
 }
 
 impl KeyManager {
-    fn parser_closure(
+    fn decode_log_closure(
         &self,
     ) -> Result<impl Fn((H256, H256, ethabi::RawLog)) -> Result<KeyManagerEvent>> {
         let key_change = SignatureAndEvent::new(&self.contract, "KeyChange")?;
@@ -194,7 +194,7 @@ mod tests {
 
         let key_manager = KeyManager::new(&settings).unwrap();
 
-        let parser = key_manager.parser_closure().unwrap();
+        let decode_log = key_manager.decode_log_closure().unwrap();
 
         let key_change_event_signature =
             H256::from_str("0x19389c59b816d8b0ec43f2d5ed9b41bddc63d66dac1ecd808efe35b86b9ee0bf")
@@ -206,7 +206,7 @@ mod tests {
                 "0x04629152b064c0d1343161c43f3b78cf67e9be35fc97f66bbb0e1ca1a0206bae",
             )
             .unwrap();
-            match parser((
+            match decode_log((
                 key_change_event_signature,
                 transaction_hash,
                 RawLog {
@@ -235,7 +235,7 @@ mod tests {
                 "0x6320cfd702415644192bf57702ceccc0d6de0ddc54fe9aa53f9b1a5d9035fe52",
             )
             .unwrap();
-            match parser((
+            match decode_log((
                 key_change_event_signature,
                 transaction_hash,
                 RawLog {
@@ -265,7 +265,7 @@ mod tests {
                 "0x9215ce54309fddf0ce9b1e8fd10319c62cf9603635ffa0c06ac9db8338348f95",
             )
             .unwrap();
-            match parser((
+            match decode_log((
                 key_change_event_signature,
                 transaction_hash,
                 RawLog {
@@ -295,7 +295,7 @@ mod tests {
                 "0x0b0b5ed18390ab49777844d5fcafb9865c74095ceb3e73cc57d1fbcc926103b5",
             )
             .unwrap();
-            let res = parser((
+            let res = decode_log((
                 invalid_signature,
                 H256::from_str("0x04629152b064c0d1343161c43f3b78cf67e9be35fc97f66bbb0e1ca1a0206bae").unwrap(),
                 RawLog {
