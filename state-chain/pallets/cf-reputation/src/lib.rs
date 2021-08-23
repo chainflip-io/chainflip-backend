@@ -103,8 +103,8 @@ pub trait OfflineConditions {
 pub mod pallet {
 	use super::*;
 	use cf_traits::EpochInfo;
-	use frame_benchmarking::frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
 	use frame_system::pallet_prelude::*;
+	use sp_arithmetic::traits::AtLeast32BitUnsigned;
 	use sp_std::ops::Neg;
 
 	#[pallet::pallet]

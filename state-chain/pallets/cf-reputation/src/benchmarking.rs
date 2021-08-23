@@ -32,8 +32,7 @@ fn initialise_pallet<T: Config>(count: u32) -> Vec<AccountIdOf<T>> {
 fn expected_reputation_penalty<T: Config>() -> ReputationPoints {
 	let ReputationPenalty { points, blocks } = T::ReputationPointPenalty::get();
 
-	(T::HeartbeatBlockInterval::get().try_into().unwrap_or(0)
-		* points as u32
+	(T::HeartbeatBlockInterval::get().try_into().unwrap_or(0) * points as u32
 		/ blocks.try_into().unwrap_or(0)) as ReputationPoints
 }
 
