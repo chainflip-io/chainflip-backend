@@ -9,18 +9,52 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-use frame_support::{Parameter, dispatch::DispatchResult};
+use codec::{Decode, Encode};
+
+use frame_support::{
+	dispatch::{DispatchResultWithPostInfo, Dispatchable, PostDispatchInfo},
+	Parameter,
+};
+use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
-use sp_std::prelude::*;
 use sp_runtime::RuntimeDebug;
+use sp_std::marker::PhantomData;
+use sp_std::prelude::*;
 
-pub trait RequestResponse<T: frame_system::Config> {
+pub trait RequestContext<T: frame_system::Config> {
 	type Response: Parameter;
+	type Callback: Dispatchable<PostInfo = PostDispatchInfo, Origin = T::Origin>
+		+ codec::Codec
+		+ Clone
+		+ PartialEq
+		+ Eq;
 
-	fn on_response(&self, _response: Self::Response) -> DispatchResult;
+	fn get_callback(&self, response: Self::Response) -> Self::Callback;
+
+	fn dispatch_callback(
+		&self,
+		origin: <Self::Callback as Dispatchable>::Origin,
+		response: Self::Response,
+	) -> DispatchResultWithPostInfo {
+		self.get_callback(response).dispatch(origin).into()
+	}
 }
 
-pub trait BaseConfig: frame_system::Config {
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
+struct NullCallback<T>(PhantomData<T>);
+
+impl<T: frame_system::Config> Dispatchable for NullCallback<T> {
+	type Origin = T::Origin;
+	type Config = T;
+	type Info = ();
+	type PostInfo = PostDispatchInfo;
+
+	fn dispatch(self, origin: Self::Origin) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+		Ok(().into())
+	}
+}
+
+pub trait BaseConfig: frame_system::Config + std::fmt::Debug {
 	/// The id type used to identify individual signing keys.
 	type KeyId: Parameter;
 	type ValidatorId: Parameter;
@@ -36,31 +70,35 @@ pub mod instances {
 	// A signature request.
 	pub mod signing {
 		use super::*;
+		use sp_std::marker::PhantomData;
 
 		#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
-		pub struct Response<T: BaseConfig> {
+		pub struct Request<T: BaseConfig> {
 			signing_key: T::KeyId,
 			payload: Vec<u8>,
 			signatories: Vec<T::ValidatorId>,
 		}
-		
+
 		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-		pub enum Reply<T: BaseConfig> {
+		pub enum Response<T: BaseConfig> {
 			Success { sig: Vec<u8> },
 			Failure { bad_nodes: Vec<T::ValidatorId> },
 		}
 
-		impl<T: BaseConfig> sp_std::fmt::Debug for Reply<T> {
+		impl<T: BaseConfig> sp_std::fmt::Debug for Response<T> {
 			fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
-				f.write_str(stringify!(Reply))
+				f.write_str(stringify!(Response))
 			}
 		}
 
-		impl<T: BaseConfig> RequestResponse<T> for Response<T> {
-			type Response = Reply<T>;
+		struct SigningRequestResponse<T>(PhantomData<T>);
 
-			fn on_response(&self, _response: Self::Response) -> DispatchResult {
-				todo!("The implementing pallet could store the result, or process a claim, or whatever.")
+		impl<T: BaseConfig> RequestContext<T> for SigningRequestResponse<T> {
+			type Response = Response<T>;
+			type Callback = NullCallback<T>;
+
+			fn get_callback(&self, response: Self::Response) -> Self::Callback {
+				todo!("Delegate to some call.")
 			}
 		}
 	}
@@ -68,6 +106,7 @@ pub mod instances {
 	// A broadcast request.
 	pub mod broadcast {
 		use super::*;
+		use sp_std::marker::PhantomData;
 
 		#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 		pub struct Request<T: BaseConfig> {
@@ -81,11 +120,14 @@ pub mod instances {
 			Timeout,
 		}
 
-		impl<T: BaseConfig> RequestResponse<T> for Request<T> {
-			type Response = Response;
+		struct BroadcastRequestResponse<T>(PhantomData<T>);
 
-			fn on_response(&self, _response: Self::Response) -> DispatchResult {
-				todo!("Handle failure and timeouts.")
+		impl<T: BaseConfig> RequestContext<T> for BroadcastRequestResponse<T> {
+			type Response = Response;
+			type Callback = NullCallback<T>;
+
+			fn get_callback(&self, response: Self::Response) -> Self::Callback {
+				todo!("Delegate to some call.")
 			}
 		}
 	}
@@ -96,12 +138,12 @@ pub type RequestId = u64;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{Twox64Concat, dispatch::DispatchResultWithPostInfo};
-	use frame_system::pallet_prelude::*;
-	use frame_support::pallet_prelude::*;
 	use codec::FullCodec;
+	use frame_support::pallet_prelude::*;
+	use frame_support::{dispatch::DispatchResultWithPostInfo, Twox64Concat};
+	use frame_system::{ensure_signed, pallet_prelude::*};
 
-	type ResponseFor<T, I> = <<T as Config<I>>::Request as RequestResponse<T>>::Response;
+	type ResponseFor<T, I> = <<T as Config<I>>::RequestContext as RequestContext<T>>::Response;
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -110,7 +152,7 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The request-response definition for this instance.
-		type Request: RequestResponse<Self> + Member + FullCodec;
+		type RequestContext: RequestContext<Self> + Member + FullCodec;
 	}
 
 	#[pallet::pallet]
@@ -123,13 +165,14 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn pending_request)]
-	pub type PendingRequests<T: Config<I>, I: 'static = ()> = StorageMap<_, Twox64Concat, RequestId, T::Request, OptionQuery>;
+	pub type PendingRequests<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, RequestId, T::RequestContext, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// An outgoing request. [id, request]
-		Request(RequestId, T::Request),
+		Request(RequestId, T::RequestContext),
 	}
 
 	#[pallet::error]
@@ -145,26 +188,31 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Reply.
 		#[pallet::weight(10_000)]
-		pub fn response(origin: OriginFor<T>, id: RequestId, response: ResponseFor<T, I>) -> DispatchResultWithPostInfo {
-			// Probably needs to be witnessed.
-			let _who = ensure_signed(origin)?;
-			
-			// 1. Pull the request type out of storage.
-			let request = PendingRequests::<T, I>::take(id).ok_or(Error::<T, I>::InvalidRequestId)?;
+		pub fn response(
+			origin: OriginFor<T>,
+			id: RequestId,
+			response: ResponseFor<T, I>,
+		) -> DispatchResultWithPostInfo {
+			let _ = ensure_signed(origin.clone())?;
+
+			// 1. Pull the context out of storage.
+			let context =
+				PendingRequests::<T, I>::take(id).ok_or(Error::<T, I>::InvalidRequestId)?;
 
 			// 2. Dispatch the callback.
-			let _ = request.on_response(response)?;
-
-			Ok(().into())
+			context.dispatch_callback(origin, response)
 		}
 	}
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Emits a request event, stores it, and returns its id.
-	pub fn request(request: T::Request) -> u64 {
+	pub fn request(request: T::RequestContext) -> u64 {
 		// Get a new id.
-		let id = RequestIdCounter::<T, I>::mutate(|id| { *id += 1; *id });
+		let id = RequestIdCounter::<T, I>::mutate(|id| {
+			*id += 1;
+			*id
+		});
 
 		// Store the request.
 		PendingRequests::<T, I>::insert(id, &request);
