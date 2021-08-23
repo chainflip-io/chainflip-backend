@@ -429,10 +429,11 @@ steps:
       - create-new-testnet
     failure: ignore
     commands:
-      - kubectl get pods -n $DRONE_COMMIT_BRANCH
-      - kubectl logs -l app.kubernetes.io/name=chainflip-engine -n $DRONE_COMMIT_BRANCH --tail=-1
-      - kubectl logs -l app.kubernetes.io/name=state-chain-node -n $DRONE_COMMIT_BRANCH --tail=-1
-      - cluster/build.sh --branch=$DRONE_COMMIT_BRANCH --destroy --rpc
+      - export branch=$(echo $DRONE_COMMIT_BRANCH | tr \/ -)
+      - kubectl get pods -n $branch
+      - kubectl logs -l app.kubernetes.io/name=chainflip-engine -n $branch --tail=-1
+      - kubectl logs -l app.kubernetes.io/name=state-chain-node -n $branch --tail=-1
+      - cluster/build.sh --branch=$branch --destroy --rpc
 
 service_account_name: drone-runner-kube
 
