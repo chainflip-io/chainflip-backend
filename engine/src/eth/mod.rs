@@ -14,6 +14,7 @@ use web3::ethabi::{Contract, Event};
 use web3::types::SyncState;
 
 use crate::settings;
+use futures::TryFutureExt;
 use std::time::Duration;
 use web3;
 use web3::types::H256;
@@ -47,38 +48,29 @@ pub async fn new_web3_client(
 ) -> Result<web3::Web3<web3::transports::WebSocket>> {
     let node_endpoint = &settings.eth.node_endpoint;
     slog::debug!(logger, "Connecting new web3 client to {}", node_endpoint);
-    match tokio::time::timeout(Duration::from_secs(5), async {
+    tokio::time::timeout(Duration::from_secs(5), async {
         Ok(web3::Web3::new(
             web3::transports::WebSocket::new(node_endpoint).await?,
         ))
     })
-    .await
-    {
-        Ok(result) => match result {
-            Ok(web3) => {
-                // Make sure the eth node is fully synced
-                loop {
-                    match web3.eth().syncing().await? {
-                        SyncState::Syncing(info) => {
-                            slog::info!(logger, "Waiting for eth node to sync: {:?}", info);
-                        }
-                        SyncState::NotSyncing => {
-                            slog::info!(logger, "Eth node is synced.");
-                            break;
-                        }
-                    }
-                    tokio::time::sleep(Duration::from_secs(4)).await;
+    // Flatten the Result<Result<>> returned by timeout()
+    .map_err(|error| anyhow::Error::new(error))
+    .and_then(|x| async { x })
+    // Make sure the eth node is fully synced
+    .and_then(|web3| async {
+        loop {
+            match web3.eth().syncing().await? {
+                SyncState::Syncing(info) => {
+                    slog::info!(logger, "Waiting for eth node to sync: {:?}", info);
                 }
-                Ok(web3)
+                SyncState::NotSyncing => {
+                    slog::info!(logger, "Eth node is synced.");
+                    break;
+                }
             }
-            Err(error) => Err(error),
-        },
-        Err(_) => {
-            // Connection timeout
-            Err(anyhow::Error::msg(format!(
-                "Timeout connecting to {:?}",
-                node_endpoint
-            )))
+            tokio::time::sleep(Duration::from_secs(4)).await;
         }
-    }
+        Ok(web3)
+    })
+    .await
 }
