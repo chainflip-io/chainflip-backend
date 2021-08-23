@@ -127,8 +127,6 @@ steps:
   #  Run cargo check on the entire backend
   - name: check-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    depends_on:
-      - rust-base
     commands:
       - cargo check --all-targets
 
