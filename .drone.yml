@@ -124,14 +124,13 @@ steps:
         -- --check
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
-  #  Compiles the entire backend
-  - name: compile-chainflip-backend
+  #  Run cargo check on the entire backend
+  - name: check-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     depends_on:
       - rust-base
     commands:
-      - cargo build
-      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
+      - cargo check --all-targets
 
   #  Performs all unit tests
   - name: test-validator-package
