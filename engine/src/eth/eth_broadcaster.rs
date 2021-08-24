@@ -1,7 +1,6 @@
 use std::{path::Path, str::FromStr};
 
 use crate::{
-    eth::eth_tx_encoding::ContractCallDetails,
     logging::COMPONENT_KEY,
     mq::{IMQClient, Subject},
     settings,
@@ -16,7 +15,17 @@ use web3::{
     Web3,
 };
 
+use serde::{Deserialize, Serialize};
+use web3::types::Address;
+
 use futures::StreamExt;
+
+/// Details of a contract call to be broadcast to ethereum.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct ContractCallDetails {
+    pub contract_address: Address,
+    pub data: Vec<u8>,
+}
 
 /// Helper function, constructs and runs the [EthBroadcaster] asynchronously.
 pub async fn start_eth_broadcaster<T: Transport, M: IMQClient + Send + Sync>(

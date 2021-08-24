@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use chainflip_engine::{
-    eth::{self, eth_broadcaster, eth_tx_encoding, key_manager, stake_manager},
+    eth::{self, eth_broadcaster, key_manager, stake_manager},
     health::HealthMonitor,
     heartbeat,
     mq::nats_client::NatsMQClient,
@@ -114,11 +114,6 @@ async fn main() {
         temp_event_mapper::start(mq_client.clone(), &root_logger),
         // Start eth components
         eth_broadcaster::start_eth_broadcaster(&web3, &settings, mq_client.clone(), &root_logger),
-        eth_tx_encoding::set_agg_key_with_agg_key::start(
-            &settings,
-            mq_client.clone(),
-            &root_logger
-        ),
         stake_manager::start_stake_manager_witness(
             &web3,
             &settings,

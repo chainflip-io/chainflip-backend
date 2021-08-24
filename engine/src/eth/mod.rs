@@ -4,7 +4,6 @@ pub mod stake_manager;
 mod eth_event_streamer;
 
 pub mod eth_broadcaster;
-pub mod eth_tx_encoding;
 pub mod utils;
 
 use anyhow::Result;
