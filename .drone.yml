@@ -543,14 +543,14 @@ steps:
   - name: hardhat-setup
     depends_on:
       - clone
-    image: ghcr.io/chainflip-io/chainflip-backend/hardhat:latest
+    image: node:14-alpine
     commands:
       - cd eth-contracts
       - npm install
   - name: hardhat-start
     depends_on:
       - hardhat-setup
-    image: ghcr.io/chainflip-io/chainflip-backend/hardhat:latest
+    image: node:14-alpine
     detach: true
     commands:
       - cd eth-contracts
