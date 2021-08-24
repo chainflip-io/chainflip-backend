@@ -187,7 +187,8 @@ pub mod pallet {
 				p.push((id, T::TimeSource::now().as_secs() + <ExpirySpan<T>>::get()));
 			});
 			Self::deposit_event(Event::Proposed(id));
-			Ok(().into())
+			// Governance member don't pay fees
+			Ok(Pays::No.into())
 		}
 		/// Sets a new set of governance members
 		#[pallet::weight(10_000)]
@@ -211,9 +212,10 @@ pub mod pallet {
 			Self::try_approve(who, id)?;
 			// Try to execute the proposal
 			Self::execute_proposal(id);
-			Ok(().into())
+			// Governance member don't pay fees
+			Ok(Pays::No.into())
 		}
-		/// Execute an extrinsic as sudo
+		/// Execute an extrinsic as root
 		#[pallet::weight(10_000)]
 		pub fn call_as_sudo(
 			origin: OriginFor<T>,
