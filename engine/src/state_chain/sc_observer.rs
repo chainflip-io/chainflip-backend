@@ -1,14 +1,16 @@
 use anyhow::Result;
 use slog::o;
+use sp_core::Hasher;
+use sp_runtime::traits::Keccak256;
 use substrate_subxt::{Client, EventSubscription};
 
 use crate::{
     logging::COMPONENT_KEY,
     mq::{IMQClient, Subject},
     p2p,
-    signing::{KeyId, KeygenInfo, MultisigInstruction},
+    signing::{KeyId, KeygenInfo, MessageHash, MultisigInstruction},
     state_chain::{
-        pallets::vaults::VaultsEvent::KeygenRequestEvent,
+        pallets::vaults::VaultsEvent::{EthSigningTxRequestEvent, KeygenRequestEvent},
         sc_event::SCEvent::{AuctionEvent, StakingEvent, ValidatorEvent, VaultsEvent},
     },
 };
@@ -95,6 +97,32 @@ impl<M: IMQClient> SCObserver<M> {
                             .publish(Subject::MultisigInstruction, &gen_new_key_event)
                             .await
                             .expect("Should publish to MQ");
+                    }
+                    EthSigningTxRequestEvent(eth_signing_tx_request) => {
+                        let validators: Vec<_> = eth_signing_tx_request
+                            .validators
+                            .iter()
+                            .map(|v| p2p::ValidatorId(v.clone().into()))
+                            .collect();
+
+                        // TODO: Should this hash be on the state chain or the signing module?
+                        let hash = Keccak256::hash(&eth_signing_tx_request.payload[..]);
+                        let message_hash = MessageHash(hash.0);
+
+                        let signing_info = SigningInfo::new(
+                            key_id,
+                            self.validators
+                                .get(&key_id)
+                                .expect("validators should exist for current KeyId")
+                                .clone(),
+                        );
+
+                        let sign_tx = MultisigInstruction::Sign(message_hash, validators);
+
+                        self.mq_client
+                            .publish(Subject::MultisigInstruction, &sign_tx)
+                            .await
+                            .expect("should publish to MQ");
                     }
                 },
             }

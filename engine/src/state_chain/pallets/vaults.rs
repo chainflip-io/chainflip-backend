@@ -20,6 +20,16 @@ pub struct KeygenRequestEvent<V: Vaults> {
     pub _runtime: PhantomData<V>,
 }
 
+// The order of these fields matter for decoding
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode)]
+pub struct EthSigningTxRequestEvent<V: Vaults> {
+    pub payload: Vec<u8>,
+
+    pub validators: Vec<AccountId32>,
+
+    pub _runtime: PhantomData<V>,
+}
+
 /// Derives an enum for the listed events and corresponding implementations of `From`.
 macro_rules! impl_vaults_event_enum {
     ( $( $name:tt ),+ ) => {
@@ -40,4 +50,4 @@ macro_rules! impl_vaults_event_enum {
     };
 }
 
-impl_vaults_event_enum!(KeygenRequestEvent);
+impl_vaults_event_enum!(KeygenRequestEvent, EthSigningTxRequestEvent);
