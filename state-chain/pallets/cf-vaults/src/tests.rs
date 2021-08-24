@@ -163,7 +163,7 @@ mod test {
 			assert_ok!(VaultsPallet::vault_rotation_response(
 				Origin::root(),
 				VaultsPallet::current_request(),
-				VaultRotationResponse {
+				VaultRotationResponse::Success {
 					old_key: "old_key".as_bytes().to_vec(),
 					new_key: "new_key".as_bytes().to_vec(),
 					tx: "tx".as_bytes().to_vec(),
