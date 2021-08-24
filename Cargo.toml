@@ -15,6 +15,7 @@ members = [
   'state-chain/pallets/cf-reqrep',
   'state-chain/pallets/cf-rewards',
   'state-chain/pallets/cf-reputation',
+  'state-chain/pallets/cf-transaction-broadcast',
   'state-chain/pallets/cf-witnesser',
   'state-chain/pallets/cf-witnesser-api',
   'state-chain/runtime',
