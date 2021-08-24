@@ -52,10 +52,10 @@ use sp_core::{H160, U256};
 use crate::rotation::ChainParams::Ethereum;
 use crate::rotation::*;
 use ethabi::{Bytes, Function, Param, ParamType, Token};
+use sp_runtime::traits::{AtLeast32BitUnsigned, One, Saturating};
 
 #[cfg(test)]
 mod mock;
-pub mod nonce;
 pub mod rotation;
 #[cfg(test)]
 mod tests;
@@ -99,10 +99,15 @@ pub mod pallet {
 		type Transaction: Member + Parameter + Into<Vec<u8>> + Default;
 		/// Rotation handler
 		type RotationHandler: VaultRotationHandler<ValidatorId = Self::ValidatorId>;
-		/// A nonce
-		type Nonce: Into<U256>;
+		/// A Nonce for all chains
+		type Nonce: Into<U256> + Copy + AtLeast32BitUnsigned + One + Member + Parameter + Default;
+		/// An identifier for a chain
+		type ChainIdentifier: Member + Parameter + Default + AtLeast32BitUnsigned;
 		/// A nonce provider
-		type NonceProvider: NonceProvider<Nonce = Self::Nonce>;
+		type NonceProvider: NonceProvider<
+			Nonce = Self::Nonce,
+			ChainIdentifier = Self::ChainIdentifier,
+		>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -125,6 +130,12 @@ pub mod pallet {
 	#[pallet::getter(fn vault_rotations)]
 	pub(super) type VaultRotations<T: Config> =
 		StorageMap<_, Blake2_128Concat, RequestIndex, KeygenRequest<T::ValidatorId>>;
+
+	/// A map of Nonces for chains supported
+	#[pallet::storage]
+	#[pallet::getter(fn chain_nonces)]
+	pub(super) type ChainNonces<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::ChainIdentifier, T::Nonce>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -248,6 +259,19 @@ impl<T: Config> From<RotationError<T::ValidatorId>> for Error<T> {
 			RotationError::NotConfirmed => Error::<T>::NotConfirmed,
 			RotationError::FailedToMakeKeygenRequest => Error::<T>::FailedToMakeKeygenRequest,
 		}
+	}
+}
+
+impl<T: Config> NonceProvider for Pallet<T> {
+	type Nonce = T::Nonce;
+	type ChainIdentifier = T::ChainIdentifier;
+
+	fn next_nonce(identifier: Self::ChainIdentifier) -> Self::Nonce {
+		ChainNonces::<T>::mutate(identifier, |nonce| {
+			let new_nonce = nonce.unwrap_or_default().saturating_add(One::one());
+			*nonce = Some(new_nonce);
+			new_nonce
+		})
 	}
 }
 
@@ -546,7 +570,7 @@ impl<T: Config> EthereumChain<T> {
 			Token::Tuple(vec![
 				Token::Uint(ethabi::Uint::zero()),
 				Token::Uint(ethabi::Uint::zero()),
-				Token::Uint(T::NonceProvider::generate_nonce().into()),
+				Token::Uint(T::NonceProvider::next_nonce(ETHEREUM_CHAIN.into()).into()),
 				Token::Address(H160::zero()),
 			]),
 			// newKey: bytes32

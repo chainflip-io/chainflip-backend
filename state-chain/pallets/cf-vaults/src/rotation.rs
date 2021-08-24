@@ -53,6 +53,10 @@ pub trait ChainHandler {
 	) -> Result<(), Self::Error>;
 }
 
+/// Identifiers for chains supported
+pub const NO_CHAIN: u32 = 0;
+pub const ETHEREUM_CHAIN: u32 = 1;
+
 /// Our different Chain's specific parameters
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum ChainParams {
