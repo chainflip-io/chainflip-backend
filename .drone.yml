@@ -547,15 +547,19 @@ steps:
   - name: clone
     image: alpine/git
     commands:
-      - git clone https://github.com/chainflip-io/chainflip-backend.git .
-      - git clone https://github.com/chainflip-io/chainflip-eth-contracts.git eth-contracts
+      - git clone https://github.com/chainflip-io/chainflip-backend.git backend
+      - git clone https://github.com/chainflip-io/chainflip-eth-contracts.git backend/eth-contracts
   - name: stakemanager-events-setup
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
+      - cd backend
+      - git checkout $DRONE_COMMIT
       - sh ./engine/tests/scripts/setup.sh
   - name: run-tests
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
+      - cd backend
+      - git checkout $DRONE_COMMIT
       - cargo test --locked --release
 
 # Config
