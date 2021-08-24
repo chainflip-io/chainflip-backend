@@ -22,19 +22,13 @@
 //!
 //! note: For implementation details pls see the readme.
 
-use sp_std::convert::TryInto;
-
 use codec::Decode;
-use frame_support::dispatch::GetDispatchInfo;
 use frame_support::traits::EnsureOrigin;
 use frame_support::traits::UnfilteredDispatchable;
-use frame_support::traits::UnixTime;
 pub use pallet::*;
 use sp_runtime::DispatchError;
+use sp_std::ops::Add;
 use sp_std::vec::Vec;
-
-/// Time span a proposal expires in seconds (currently  5 days)
-const EXPIRY_SPAN: u64 = 7200;
 
 #[cfg(test)]
 mod mock;
@@ -55,6 +49,8 @@ pub mod pallet {
 	use sp_std::boxed::Box;
 	use sp_std::vec;
 	use sp_std::vec::Vec;
+
+	pub type ActiveProposal = (ProposalId, u64);
 	/// Proposal struct
 	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 	pub struct Proposal<AccountId> {
@@ -64,10 +60,6 @@ pub mod pallet {
 		pub created: u64,
 		/// Array of accounts which already approved the proposal
 		pub approved: Vec<AccountId>,
-		/// Boolean value if the extrinsic was executed
-		pub executed: bool,
-		/// Boolean if the proposal is expired
-		pub expired: bool,
 	}
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
@@ -95,10 +87,26 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
-	/// Map of proposals
+	/// Proposals
 	#[pallet::storage]
 	#[pallet::getter(fn proposals)]
-	pub(super) type Proposals<T: Config> = StorageValue<_, Vec<Proposal<T::AccountId>>, ValueQuery>;
+	pub(super) type Proposals<T: Config> =
+		StorageMap<_, Blake2_128Concat, u32, Proposal<T::AccountId>, ValueQuery>;
+
+	/// Active proposals
+	#[pallet::storage]
+	#[pallet::getter(fn active_proposals)]
+	pub(super) type ActiveProposals<T> = StorageValue<_, Vec<ActiveProposal>, ValueQuery>;
+
+	/// Number of proposals
+	#[pallet::storage]
+	#[pallet::getter(fn number_of_proposals)]
+	pub(super) type NumberOfProposals<T> = StorageValue<_, u32, ValueQuery>;
+
+	/// Time span in which an proposal expires
+	#[pallet::storage]
+	#[pallet::getter(fn expiry_span)]
+	pub(super) type ExpirySpan<T> = StorageValue<_, u64, ValueQuery>;
 
 	/// Array of accounts which are included in the current governance
 	#[pallet::storage]
@@ -109,8 +117,27 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
-			let weight = Self::process_proposals();
-			weight
+			// Check if their are any ongoing proposals
+			match <ActiveProposals<T>>::decode_len() {
+				Some(proposal_len) if proposal_len > 0 => {
+					// Get all expired proposals
+					let expired_proposals =
+						Self::filter_proposals_by(&|x| x.1 <= T::TimeSource::now().as_secs());
+					// Remove expired proposals
+					for expired_proposal in expired_proposals {
+						<Proposals<T>>::remove(expired_proposal.0);
+						Self::deposit_event(Event::Expired(expired_proposal.0));
+					}
+					// Get all not expired proposals
+					let new_active_proposals =
+						Self::filter_proposals_by(&|x| x.1 > T::TimeSource::now().as_secs());
+					// Set the new proposals
+					<ActiveProposals<T>>::set(new_active_proposals);
+					// Todo: figure out some value here
+					0
+				}
+				_ => 0,
+			}
 		}
 	}
 
@@ -159,16 +186,20 @@ pub mod pallet {
 			// Ensure origin is part of the governance
 			ensure!(<Members<T>>::get().contains(&who), Error::<T>::NoMember);
 			// Generate the next proposal id
-			let proposal_id = <Proposals<T>>::get().len() as u32;
-			// Insert the proposal
-			<Proposals<T>>::append(Proposal {
-				call: call.encode(),
-				created: T::TimeSource::now().as_secs(),
-				executed: false,
-				expired: false,
-				approved: vec![],
+			let id = Self::get_next_id();
+			<Proposals<T>>::insert(
+				id,
+				Proposal {
+					call: call.encode(),
+					created: T::TimeSource::now().as_secs(),
+					approved: vec![],
+				},
+			);
+			Self::deposit_event(Event::Proposed(id));
+			<NumberOfProposals<T>>::put(id);
+			<ActiveProposals<T>>::mutate(|p| {
+				p.push((id, T::TimeSource::now().as_secs() + <ExpirySpan<T>>::get()));
 			});
-			Self::deposit_event(Event::Proposed(proposal_id));
 			Ok(().into())
 		}
 		/// Sets a new set of governance members
@@ -189,9 +220,12 @@ pub mod pallet {
 			// Ensure origin is part of the governance
 			ensure!(<Members<T>>::get().contains(&who), Error::<T>::NoMember);
 			// Try to approve the proposal
-			Self::try_approve(who, id as usize)?;
+			Self::try_approve(who, id)?;
+			// Try to execute the proposal
+			Self::execute_proposal(id);
 			Ok(().into())
 		}
+		/// Execute an extrinsic as sudo
 		#[pallet::weight(10_000)]
 		pub fn call_as_sudo(
 			origin: OriginFor<T>,
@@ -208,6 +242,7 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub members: Vec<AccountId<T>>,
+		pub expiry_span: u64,
 	}
 
 	#[cfg(feature = "std")]
@@ -215,6 +250,7 @@ pub mod pallet {
 		fn default() -> Self {
 			Self {
 				members: Default::default(),
+				expiry_span: 7200,
 			}
 		}
 	}
@@ -224,6 +260,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			Members::<T>::set(self.members.clone());
+			ExpirySpan::<T>::set(self.expiry_span);
 		}
 	}
 
@@ -264,89 +301,74 @@ where
 }
 
 impl<T: Config> Pallet<T> {
-	/// Processes all ongoing proposals.
-	/// Iterates over all proposals and checks if the proposal is ready to execute or expired.
-	fn process_proposals() -> u64 {
-		let mut weight: u64 = 0;
-		let proposals = <Proposals<T>>::get();
-
-		// Iterate over all proposals
-		for (index, proposal) in proposals.iter().enumerate() {
-			// Check if the proposal was executed or is already expired
-			if proposal.executed || proposal.expired {
-				continue;
-			}
-			// Check if the proposal is expired
-			if proposal.created + EXPIRY_SPAN < T::TimeSource::now().as_secs() {
-				<Proposals<T>>::mutate(|p| {
-					p.get_mut(index).unwrap().expired = true;
-				});
-				Self::deposit_event(Event::Expired(index.try_into().unwrap()));
-				continue;
-			}
-			// Check if the majority is reached
-			if !Self::majority_reached(proposal.approved.len()) {
-				continue;
-			}
-			// Execute the proposal
+	/// Returns the next proposal id
+	fn get_next_id() -> u32 {
+		<NumberOfProposals<T>>::get().add(1)
+	}
+	/// Executes an proposal if the majority is reached
+	fn execute_proposal(id: u32) {
+		let proposal = <Proposals<T>>::get(id);
+		if Self::majority_reached(proposal.approved.len()) {
+			//Try to decode the stored extrinsic
 			if let Some(call) = Self::decode_call(&proposal.call) {
-				// Sum up the extrinsic weight to the next block weight
-				weight = weight.checked_add(call.get_dispatch_info().weight).unwrap();
+				// Execute the extrinsic
 				let result = call.dispatch_bypass_filter((RawOrigin::GovernanceThreshold).into());
-				// Mark the proposal as executed - doesn't matter if successful or not
-				<Proposals<T>>::mutate(|p| {
-					p.get_mut(index).unwrap().executed = true;
-				});
+				// Check the result and emit events
 				if result.is_ok() {
-					Self::deposit_event(Event::Executed(index.try_into().unwrap()));
+					Self::deposit_event(Event::Executed(id));
 				} else {
-					Self::deposit_event(Event::ExecutionFailed(index.try_into().unwrap()));
+					Self::deposit_event(Event::ExecutionFailed(id));
 				}
+				// Remove the proposal from storage
+				<Proposals<T>>::remove(id);
+				// Remove the proposal from active proposals
+				let new_active_proposals = Self::filter_proposals_by(&|x| x.0 != id);
+				// Set the new active proposals
+				<ActiveProposals<T>>::set(new_active_proposals);
 			} else {
 				// Emit an event if the decode of a call failed
-				Self::deposit_event(Event::DecodeFailed(index.try_into().unwrap()));
+				Self::deposit_event(Event::DecodeFailed(id));
 			}
 		}
-		weight
 	}
-	/// Calcs the threshold based on the total amount of governance members (current threshold is 1/2 + 1)
-	fn calc_threshold(total: u32) -> u32 {
-		if total % 2 == 0 {
-			total / 2
-		} else {
-			total / 2 + 1
-		}
+	/// Filters the active proposals array by a givin clojure
+	fn filter_proposals_by(filter: &dyn Fn(&&(u32, u64)) -> bool) -> Vec<(u32, u64)> {
+		let active_proposals = <ActiveProposals<T>>::get();
+		let filtered_proposals = active_proposals
+			.iter()
+			.filter(filter)
+			.cloned()
+			.collect::<Vec<_>>();
+		filtered_proposals
 	}
 	/// Checks if the majority for a proposal is reached
 	fn majority_reached(approvals: usize) -> bool {
 		let total_number_of_voters = <Members<T>>::get().len() as u32;
-		let threshold = Self::calc_threshold(total_number_of_voters);
+		let threshold = if total_number_of_voters % 2 == 0 {
+			total_number_of_voters / 2
+		} else {
+			total_number_of_voters / 2 + 1
+		};
 		approvals as u32 >= threshold
 	}
 	/// Tries to approve a proposal
-	fn try_approve(account: T::AccountId, proposal_id: usize) -> Result<(), DispatchError> {
-		// Check if proposal exist
-		if let Some(proposal) = <Proposals<T>>::get().get(proposal_id) {
-			// Check expiry
-			if proposal.created + EXPIRY_SPAN < T::TimeSource::now().as_secs() {
-				return Err(Error::<T>::AlreadyExpired.into());
-			}
-			// Check already approved
-			if proposal.approved.contains(&account) {
-				return Err(Error::<T>::AlreadyApproved.into());
-			}
-			Self::deposit_event(Event::Approved(proposal_id.try_into().unwrap()));
-			// Add the approval
-			<Proposals<T>>::mutate(|p| {
-				p.get_mut(proposal_id).unwrap().approved.push(account);
-			});
-			Ok(())
+	fn try_approve(account: T::AccountId, id: u32) -> Result<(), DispatchError> {
+		if <Proposals<T>>::contains_key(id) {
+			<Proposals<T>>::mutate(id, |proposal| {
+				// Check already approved
+				if proposal.approved.contains(&account) {
+					return Err(Error::<T>::AlreadyApproved.into());
+				}
+				proposal.approved.push(account);
+				Self::deposit_event(Event::Approved(id));
+				Ok(())
+			})
 		} else {
 			Err(Error::<T>::NotFound.into())
 		}
 	}
 	/// Decodes a encoded representation of a Call
-	/// Returns None if the encode failed
+	/// Returns None if the encode of the extrinsic has failed
 	fn decode_call(call: &Vec<u8>) -> Option<<T as Config>::Call> {
 		Decode::decode(&mut &call[..]).ok()
 	}

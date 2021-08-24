@@ -358,6 +358,7 @@ fn testnet_genesis(
 				get_account_id_from_seed::<sr25519::Public>("Charlie"),
 				get_account_id_from_seed::<sr25519::Public>("Dave"),
 			],
+			expiry_span: 80000,
 		}),
 		pallet_cf_reputation: Some(ReputationConfig {
 			accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
