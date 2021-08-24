@@ -132,9 +132,13 @@ steps:
         --namespace default
         --set state-chain-node.nodeType=validator
         --set state-chain-node.image.tag="latest"
+        --set state-chain-node.stateChainNode.extraArgs.0="--rpc-external"
+        --set state-chain-node.stateChainNode.extraArgs.1="--rpc-cors"
+        --set state-chain-node.stateChainNode.extraArgs.2="all"
         --set chainflip-engine.image.tag="latest"
         --wait
         --wait-for-jobs
+      - helm test bashful
       - helm uninstall bashful -n default
 
   # clean up
