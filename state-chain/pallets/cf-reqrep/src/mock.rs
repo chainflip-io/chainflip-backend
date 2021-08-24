@@ -59,6 +59,9 @@ impl BaseConfig for Test {
 }
 
 pub(crate) mod ping_pong {
+	use std::marker::PhantomData;
+	use crate::NullCallback;
+
 	use super::*;
 	use codec::{Decode, Encode};
 
@@ -72,19 +75,21 @@ pub(crate) mod ping_pong {
 	#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
 	pub struct Pong;
 
-	impl pallet_cf_request_response::RequestResponse<Test> for Ping {
+	impl pallet_cf_request_response::RequestContext<Test> for Ping {
 		type Response = Pong;
+		type Callback = NullCallback<Test>;
 
-		fn on_response(&self, response: Self::Response) -> frame_support::dispatch::DispatchResult {
-			assert_eq!(response, Pong);
-			Ok(().into())
+		fn get_callback(&self, response: Self::Response) -> Self::Callback {
+			assert!(*self == Ping);
+			assert!(response == Pong);
+			NullCallback::<Test>(PhantomData::default())
 		}
 	}
 }
 
 impl pallet_cf_request_response::Config<Instance0> for Test {
 	type Event = Event;
-	type Request = ping_pong::Ping;
+	type RequestContext = ping_pong::Ping;
 }
 
 // Build genesis storage according to the mock runtime.
