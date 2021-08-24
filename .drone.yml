@@ -547,7 +547,7 @@ steps:
   - name: clone
     image: alpine/git
     commands:
-      - git clone https://github.com/chainflip-io/chainflip-backend.git
+      - git clone https://github.com/chainflip-io/chainflip-backend.git .
       - git clone https://github.com/chainflip-io/chainflip-eth-contracts.git eth-contracts
   - name: stakemanager-events-setup
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
