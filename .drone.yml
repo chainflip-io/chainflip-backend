@@ -534,11 +534,12 @@ services:
     name: hardhat
     ports: [8545]
     working_dir: /drone/src/eth-contracts
-    entrypoint:
-      - "npx"
     command:
-      - "hardhat"
-      - "node"
+      - sleep 30
+      - &&
+      - npx
+      - hardhat
+      - node
   - image: nats:latest
     ports: [4222, 8222]
     name: nats
