@@ -541,6 +541,8 @@ steps:
       - git clone https://github.com/chainflip-io/chainflip-backend.git .
       - git clone https://github.com/chainflip-io/chainflip-eth-contracts.git eth-contracts
   - name: hardhat-start
+    depends_on:
+      - clone
     image: ghcr.io/chainflip-io/chainflip-backend/hardhat:latest
     detach: true
     commands:
@@ -550,9 +552,13 @@ steps:
       - npx hardhat node
   - name: stakemanager-events-setup
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    depends_on:
+      - clone
     commands:
       - sh ./engine/tests/scripts/setup.sh
   - name: run-tests
+    depends_on:
+      - stakemanager-events-setup
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
       - cd backend

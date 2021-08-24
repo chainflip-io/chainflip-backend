@@ -24,6 +24,8 @@ fi
 
 # ensure we have the poetry deps
 cd eth-contracts
+# TODO: Delete before merge
+git checkout feature/ch1589-gas-refund
 poetry run poetry install
 
 # run the brownie script to generate events for the cfe to read
