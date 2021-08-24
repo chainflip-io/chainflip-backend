@@ -4,13 +4,10 @@ use substrate_subxt::{Client, EventSubscription};
 
 use crate::{
     logging::COMPONENT_KEY,
-    mq::{IMQClient, Subject, SubjectName},
+    mq::{IMQClient, SubjectName},
 };
 
-use super::{
-    runtime::StateChainRuntime,
-    sc_event::{raw_event_to_subject, sc_event_from_raw_event},
-};
+use super::{runtime::StateChainRuntime, sc_event::raw_event_to_subject_and_sc_event};
 
 pub async fn start<M: IMQClient>(
     mq_client: M,
@@ -61,42 +58,30 @@ impl<M: IMQClient> SCObserver<M> {
                 }
             };
 
-            let subject: Option<Subject> = raw_event_to_subject(&raw_event);
+            let subject_and_sc_event = raw_event_to_subject_and_sc_event(&raw_event)?;
 
-            if let Some(subject) = subject {
-                let message = sc_event_from_raw_event(raw_event)?;
-                match message {
-                    Some(event) => {
-                        // Publish the message to the message queue
-                        match self.mq_client.publish(subject, &event).await {
-                            Err(err) => {
-                                slog::error!(
-                                    self.logger,
-                                    "Could not publish message `{:?}` to subject `{}`. Error: {}",
-                                    event,
-                                    subject.to_subject_name(),
-                                    err
-                                );
-                            }
-                            Ok(_) => {
-                                slog::trace!(
-                                    self.logger,
-                                    "Event: {:?} pushed to message queue",
-                                    event
-                                )
-                            }
-                        };
-                    }
-                    None => {
-                        slog::debug!(
-                            self.logger,
-                            "Event decoding for an event under subject: {} doesn't exist",
-                            subject.to_subject_name()
-                        )
-                    }
+            if let None = subject_and_sc_event {
+                slog::trace!(self.logger, "Discarding {:?}", raw_event);
+                continue;
+            }
+
+            let (subject, sc_event) =
+                subject_and_sc_event.expect("Must be Some due to condition above");
+
+            match self.mq_client.publish(subject, &sc_event).await {
+                Err(err) => {
+                    slog::error!(
+                        self.logger,
+                        "Could not publish message `{:?}` to subject `{}`. Error: {}",
+                        sc_event,
+                        subject.to_subject_name(),
+                        err
+                    );
+                }
+                Ok(_) => {
+                    slog::trace!(self.logger, "Event: {:?} pushed to message queue", sc_event)
                 }
             }
-            // we can ignore events we don't care about like ExtrinsicSuccess
         }
 
         let err_msg = "State Chain Observer stopped subscribing to events!";
