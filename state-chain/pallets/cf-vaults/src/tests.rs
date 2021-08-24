@@ -132,7 +132,7 @@ mod test {
 	}
 
 	#[test]
-	fn vault_rotation_response() {
+	fn should_vault_rotation_response_receiving_success() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(VaultsPallet::start_vault_rotation(vec![
 				ALICE, BOB, CHARLIE
@@ -176,6 +176,51 @@ mod test {
 				mock::Event::pallet_cf_vaults(crate::Event::VaultRotationCompleted(
 					VaultsPallet::current_request()
 				))
+			);
+		});
+	}
+
+	#[test]
+	fn should_abort_vault_rotation_response_receiving_error() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(VaultsPallet::start_vault_rotation(vec![
+				ALICE, BOB, CHARLIE
+			]));
+			assert_ok!(VaultsPallet::keygen_response(
+				Origin::root(),
+				VaultsPallet::current_request(),
+				KeygenResponse::Success(vec![])
+			));
+			assert_ok!(VaultsPallet::request_vault_rotation(
+				VaultsPallet::current_request(),
+				Ok(VaultRotationRequest {
+					chain: ChainParams::Other(vec![])
+				})
+			));
+
+			// Check the event emitted
+			assert_eq!(
+				last_event(),
+				mock::Event::pallet_cf_vaults(crate::Event::VaultRotationRequest(
+					VaultsPallet::current_request(),
+					VaultRotationRequest {
+						chain: Other(vec![])
+					}
+				))
+			);
+
+			assert_ok!(VaultsPallet::vault_rotation_response(
+				Origin::root(),
+				VaultsPallet::current_request(),
+				VaultRotationResponse::Failure
+			));
+
+			// Check the event emitted
+			assert_eq!(
+				last_event(),
+				mock::Event::pallet_cf_vaults(crate::Event::RotationAborted(vec![
+					VaultsPallet::current_request()
+				]))
 			);
 		});
 	}
