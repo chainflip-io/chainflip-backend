@@ -535,8 +535,7 @@ services:
     ports: [8545]
     working_dir: /drone/src/eth-contracts
     command:
-      - sleep 30
-      - &&
+      - sleep 30;
       - npx
       - hardhat
       - node
