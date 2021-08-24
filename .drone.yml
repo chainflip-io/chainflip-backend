@@ -546,6 +546,7 @@ steps:
     commands:
       - cd eth-contracts
       - git checkout feature/ch1589-gas-refund
+      - npm install
       - npx hardhat node
   - name: stakemanager-events-setup
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
