@@ -533,7 +533,7 @@ services:
   - image: ghcr.io/chainflip-io/chainflip-backend/hardhat:latest
     name: hardhat
     ports: [8545]
-    working_dir: ./eth-contracts
+    working_dir: /drone/src/eth-contracts
     entrypoint:
       - "npx"
     command:
