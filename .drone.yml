@@ -534,7 +534,7 @@ services:
     name: hardhat
     ports: [8545]
     volumes:
-      - "eth-contracts:/usr/app"
+      - "/drone/src/eth-contracts:/usr/app"
     entrypoint:
       - "npx"
     command:
