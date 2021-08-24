@@ -25,7 +25,7 @@ use core::fmt::Debug;
 
 use codec::{Decode, Encode};
 
-use super::pallets::{auction, emissions, reputation, staking, validator, witness_api};
+use super::pallets::{auction, emissions, reputation, staking, validator, vaults, witness_api};
 
 use pallet_cf_flip::ImbalanceSource;
 
@@ -151,6 +151,8 @@ impl witness_api::WitnesserApi for StateChainRuntime {}
 impl emissions::Emissions for StateChainRuntime {
     type FlipBalance = u128;
 }
+
+impl vaults::Vaults for StateChainRuntime {}
 
 impl reputation::Reputation for StateChainRuntime {}
 

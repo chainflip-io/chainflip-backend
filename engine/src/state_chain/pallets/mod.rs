@@ -17,3 +17,6 @@ pub mod emissions;
 
 /// Reputation pallet support for substrate-subxt
 pub mod reputation;
+
+/// Vaults pallet support for substrate-subxt
+pub mod vaults;

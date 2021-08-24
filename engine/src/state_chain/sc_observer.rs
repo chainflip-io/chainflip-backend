@@ -4,7 +4,13 @@ use substrate_subxt::{Client, EventSubscription};
 
 use crate::{
     logging::COMPONENT_KEY,
-    mq::{IMQClient, SubjectName},
+    mq::{IMQClient, Subject},
+    p2p,
+    signing::{KeyId, KeygenInfo, MultisigInstruction},
+    state_chain::{
+        pallets::vaults::VaultsEvent::KeygenRequestEvent,
+        sc_event::SCEvent::{AuctionEvent, StakingEvent, ValidatorEvent, VaultsEvent},
+    },
 };
 
 use super::{runtime::StateChainRuntime, sc_event::raw_event_to_subject_and_sc_event};
@@ -49,6 +55,7 @@ impl<M: IMQClient> SCObserver<M> {
             .expect("Could not subscribe to state chain events");
         let decoder = self.subxt_client.events_decoder();
         let mut sub = EventSubscription::new(sub, decoder);
+
         while let Some(res_event) = sub.next().await {
             let raw_event = match res_event {
                 Ok(raw_event) => raw_event,
@@ -65,22 +72,31 @@ impl<M: IMQClient> SCObserver<M> {
                 continue;
             }
 
-            let (subject, sc_event) =
+            let (_subject, sc_event) =
                 subject_and_sc_event.expect("Must be Some due to condition above");
 
-            match self.mq_client.publish(subject, &sc_event).await {
-                Err(err) => {
-                    slog::error!(
-                        self.logger,
-                        "Could not publish message `{:?}` to subject `{}`. Error: {}",
-                        sc_event,
-                        subject.to_subject_name(),
-                        err
-                    );
-                }
-                Ok(_) => {
-                    slog::trace!(self.logger, "Event: {:?} pushed to message queue", sc_event)
-                }
+            match sc_event {
+                AuctionEvent(_) => todo!(),
+                ValidatorEvent(_) => todo!(),
+                StakingEvent(_) => todo!(),
+                VaultsEvent(event) => match event {
+                    KeygenRequestEvent(keygen_request_event) => {
+                        let validators: Vec<_> = keygen_request_event
+                            .keygen_request
+                            .validator_candidates
+                            .iter()
+                            .map(|v| p2p::ValidatorId(v.clone().into()))
+                            .collect();
+                        // TODO: Should this be request index? @andy
+                        let key_gen_info =
+                            KeygenInfo::new(KeyId(keygen_request_event.request_index), validators);
+                        let gen_new_key_event = MultisigInstruction::KeyGen(key_gen_info);
+                        self.mq_client
+                            .publish(Subject::MultisigInstruction, &gen_new_key_event)
+                            .await
+                            .expect("Should publish to MQ");
+                    }
+                },
             }
         }
 

@@ -10,7 +10,6 @@ use chainflip_engine::{
     signing,
     signing::db::PersistentKeyDB,
     state_chain::{self, runtime::StateChainRuntime},
-    temp_event_mapper,
 };
 use slog::{o, Drain};
 use sp_core::Pair;
@@ -111,7 +110,6 @@ async fn main() {
         heartbeat::start(subxt_client.clone(), pair_signer.clone(), &root_logger),
         // Start state chain components
         state_chain::sc_observer::start(mq_client.clone(), subxt_client.clone(), &root_logger),
-        temp_event_mapper::start(mq_client.clone(), &root_logger),
         // Start eth components
         eth_broadcaster::start_eth_broadcaster(&web3, &settings, mq_client.clone(), &root_logger),
         stake_manager::start_stake_manager_witness(

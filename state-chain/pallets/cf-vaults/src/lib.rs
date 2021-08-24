@@ -51,6 +51,8 @@ use sp_core::{H160, U256};
 
 use crate::rotation::ChainParams::Ethereum;
 use crate::rotation::*;
+// we need these types exposed so subxt can use the type size
+pub use crate::rotation::{KeygenRequest, VaultRotationRequest};
 use ethabi::{Bytes, Function, Param, ParamType, Token};
 
 #[cfg(test)]
@@ -130,6 +132,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Request a key generation \[request_index, request\]
+		// TODO: KeygenRequest can be inlined
 		KeygenRequest(RequestIndex, KeygenRequest<T::ValidatorId>),
 		/// Request a rotation of the vault for this chain \[request_index, request\]
 		VaultRotationRequest(RequestIndex, VaultRotationRequest),

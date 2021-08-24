@@ -70,9 +70,9 @@ pub enum ChainParams {
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct KeygenRequest<ValidatorId> {
 	/// A Chain's parameters
-	pub(crate) chain: ChainParams,
+	pub chain: ChainParams,
 	/// The set of validators from which we would like to generate the key
-	pub(crate) validator_candidates: Vec<ValidatorId>,
+	pub validator_candidates: Vec<ValidatorId>,
 }
 
 /// A response for our KeygenRequest
