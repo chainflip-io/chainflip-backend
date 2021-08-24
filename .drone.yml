@@ -530,15 +530,6 @@ clone:
   disable: true
 
 services:
-  - image: ghcr.io/chainflip-io/chainflip-backend/hardhat:latest
-    name: hardhat
-    ports: [8545]
-    working_dir: /drone/src/eth-contracts
-    command:
-      - sleep 30;
-      - npx
-      - hardhat
-      - node
   - image: nats:latest
     ports: [4222, 8222]
     name: nats
@@ -547,13 +538,18 @@ steps:
   - name: clone
     image: alpine/git
     commands:
-      - git clone https://github.com/chainflip-io/chainflip-backend.git backend
-      - git clone https://github.com/chainflip-io/chainflip-eth-contracts.git backend/eth-contracts
+      - git clone https://github.com/chainflip-io/chainflip-backend.git .
+      - git clone https://github.com/chainflip-io/chainflip-eth-contracts.git eth-contracts
+  - name: hardhat-start
+    image: ghcr.io/chainflip-io/chainflip-backend/hardhat:latest
+    detach: true
+    commands:
+      - cd eth-contracts
+      - git checkout feature/ch1589-gas-refund
+      - npx hardhat node
   - name: stakemanager-events-setup
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - cd backend
-      - git checkout $DRONE_COMMIT
       - sh ./engine/tests/scripts/setup.sh
   - name: run-tests
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
