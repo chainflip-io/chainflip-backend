@@ -23,6 +23,7 @@
 //! note: For implementation details pls see the readme.
 
 use codec::Decode;
+use frame_support::ensure;
 use frame_support::traits::EnsureOrigin;
 use frame_support::traits::UnfilteredDispatchable;
 pub use pallet::*;
@@ -113,7 +114,8 @@ pub mod pallet {
 	#[pallet::getter(fn members)]
 	pub(super) type Members<T> = StorageValue<_, Vec<AccountId<T>>, ValueQuery>;
 
-	/// on_initialize hook - check and execute before every block all ongoing proposals
+	/// on_initialize hook - check the ActiveProposals
+	// and remove the expired ones for house keeping
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
@@ -123,6 +125,7 @@ pub mod pallet {
 					// Get all expired proposals
 					let expired_proposals =
 						Self::filter_proposals_by(&|x| x.1 <= T::TimeSource::now().as_secs());
+					let number_of_expired_proposals = expired_proposals.len();
 					// Remove expired proposals
 					for expired_proposal in expired_proposals {
 						<Proposals<T>>::remove(expired_proposal.0);
@@ -133,10 +136,11 @@ pub mod pallet {
 						Self::filter_proposals_by(&|x| x.1 > T::TimeSource::now().as_secs());
 					// Set the new proposals
 					<ActiveProposals<T>>::set(new_active_proposals);
-					// Todo: figure out some value here
-					0
+					// Weight is 2 reads + (n + 1) * writes
+					T::DbWeight::get().reads(2)
+						+ T::DbWeight::get().writes(number_of_expired_proposals as u64 + 1)
 				}
-				_ => 0,
+				_ => T::DbWeight::get().reads(1),
 			}
 		}
 	}
@@ -167,7 +171,7 @@ pub mod pallet {
 		/// A proposal is already expired
 		AlreadyExpired,
 		/// The signer of an extrinsic is no member of the current governance
-		NoMember,
+		NotMember,
 		/// The proposal was not found in the the proposal map
 		NotFound,
 		/// Sudo call failed
@@ -184,9 +188,10 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			// Ensure origin is part of the governance
-			ensure!(<Members<T>>::get().contains(&who), Error::<T>::NoMember);
+			ensure!(<Members<T>>::get().contains(&who), Error::<T>::NotMember);
 			// Generate the next proposal id
 			let id = Self::get_next_id();
+			// Insert a new proposal
 			<Proposals<T>>::insert(
 				id,
 				Proposal {
@@ -195,11 +200,13 @@ pub mod pallet {
 					approved: vec![],
 				},
 			);
-			Self::deposit_event(Event::Proposed(id));
+			// Update the proposal counter
 			<NumberOfProposals<T>>::put(id);
+			// Add the proposal to the active proposals array
 			<ActiveProposals<T>>::mutate(|p| {
 				p.push((id, T::TimeSource::now().as_secs() + <ExpirySpan<T>>::get()));
 			});
+			Self::deposit_event(Event::Proposed(id));
 			Ok(().into())
 		}
 		/// Sets a new set of governance members
@@ -210,6 +217,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			// Ensure the extrinsic was executed by the governance
 			T::EnsureGovernance::ensure_origin(origin)?;
+			// Set the new members of the governance
 			<Members<T>>::put(accounts);
 			Ok(().into())
 		}
@@ -218,7 +226,7 @@ pub mod pallet {
 		pub fn approve(origin: OriginFor<T>, id: u32) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			// Ensure origin is part of the governance
-			ensure!(<Members<T>>::get().contains(&who), Error::<T>::NoMember);
+			ensure!(<Members<T>>::get().contains(&who), Error::<T>::NotMember);
 			// Try to approve the proposal
 			Self::try_approve(who, id)?;
 			// Try to execute the proposal
@@ -232,7 +240,9 @@ pub mod pallet {
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
+			// Execute the root call
 			let result = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
+			// Ensure the the sudo call was executed successfully
 			ensure!(result.is_ok(), Error::<T>::SudoCallFailed);
 			Ok(().into())
 		}
@@ -250,7 +260,8 @@ pub mod pallet {
 		fn default() -> Self {
 			Self {
 				members: Default::default(),
-				expiry_span: 7200,
+				// 5 days in seconds (60 sec * 60 min * 24 hours * 5 days)
+				expiry_span: 432000,
 			}
 		}
 	}
@@ -353,19 +364,17 @@ impl<T: Config> Pallet<T> {
 	}
 	/// Tries to approve a proposal
 	fn try_approve(account: T::AccountId, id: u32) -> Result<(), DispatchError> {
-		if <Proposals<T>>::contains_key(id) {
-			<Proposals<T>>::mutate(id, |proposal| {
-				// Check already approved
-				if proposal.approved.contains(&account) {
-					return Err(Error::<T>::AlreadyApproved.into());
-				}
-				proposal.approved.push(account);
-				Self::deposit_event(Event::Approved(id));
-				Ok(())
-			})
-		} else {
-			Err(Error::<T>::NotFound.into())
-		}
+		ensure!(<Proposals<T>>::contains_key(id), Error::<T>::NotFound);
+		<Proposals<T>>::mutate(id, |proposal| {
+			// Check already approved
+			if proposal.approved.contains(&account) {
+				return Err(Error::<T>::AlreadyApproved.into());
+			}
+			// Add account to approved array
+			proposal.approved.push(account);
+			Self::deposit_event(Event::Approved(id));
+			Ok(())
+		})
 	}
 	/// Decodes a encoded representation of a Call
 	/// Returns None if the encode of the extrinsic has failed
