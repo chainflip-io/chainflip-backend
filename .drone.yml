@@ -538,8 +538,8 @@ steps:
   - name: clone
     image: alpine/git
     commands:
-      - git clone --branch $DRONE_SOURCE_BRANCH https://github.com/chainflip-io/chainflip-backend.git .
-      - git clone --branch feature/ch1589-gas-refund https://github.com/chainflip-io/chainflip-eth-contracts.git eth-contracts
+      - git clone https://github.com/chainflip-io/chainflip-backend.git .
+      - git clone https://github.com/chainflip-io/chainflip-eth-contracts.git eth-contracts
   - name: hardhat-setup
     depends_on:
       - clone
@@ -569,15 +569,11 @@ steps:
       - cargo test --locked --release
 
 # Config
-#trigger:
-#  event:
-#    - cron
-#  cron:
-#    - nightly
-# TODO: Remove before merge
 trigger:
   event:
-    - push
+    - cron
+  cron:
+    - nightly
 
 image_pull_secrets:
   - dockerconfigjson
