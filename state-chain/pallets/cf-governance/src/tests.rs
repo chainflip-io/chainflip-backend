@@ -1,4 +1,4 @@
-use crate::{mock::*, ActiveProposals, Error, ExpirySpan, Members, NumberOfProposals};
+use crate::{mock::*, ActiveProposals, Error, ExpirySpan, Members, NumberOfProposals, Proposals};
 use cf_traits::mocks::time_source;
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
 use std::time::Duration;
@@ -59,28 +59,32 @@ fn not_a_member() {
 #[test]
 fn propose_a_governance_extrinsic_and_expect_execution() {
 	new_test_ext().execute_with(|| {
+		// Propose a governance extrinsic
 		assert_ok!(Governance::propose_governance_extrinsic(
 			Origin::signed(ALICE),
 			mock_extrinsic()
 		));
+		// Assert the proposed event was fired
 		assert_eq!(
 			last_event(),
 			crate::mock::Event::pallet_cf_governance(crate::Event::Proposed(1)),
 		);
+		// Do the two needed approvals to reach majority
 		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
 		assert_ok!(Governance::approve(Origin::signed(CHARLES), 1));
+		// Expect the Executed event was fired
 		assert_eq!(
 			last_event(),
 			crate::mock::Event::pallet_cf_governance(crate::Event::Executed(1)),
 		);
+		// Check the new governance set
 		let genesis_members = Members::<Test>::get();
 		assert!(genesis_members.contains(&EVE));
 		assert!(genesis_members.contains(&PETER));
 		assert!(genesis_members.contains(&MAX));
-		assert_eq!(
-			last_event(),
-			crate::mock::Event::pallet_cf_governance(crate::Event::Executed(1)),
-		);
+		// Check if the storage was cleaned up
+		assert_eq!(ActiveProposals::<Test>::get().len(), 0);
+		assert!(!Proposals::<Test>::contains_key(1));
 	});
 }
 
@@ -101,13 +105,16 @@ fn propose_a_governance_extrinsic_and_expect_it_to_expire() {
 		const END_TIME: Duration = Duration::from_secs(7300);
 		time_source::Mock::reset_to(START_TIME);
 		next_block();
+		// Propose governance extrinsic
 		assert_ok!(Governance::propose_governance_extrinsic(
 			Origin::signed(ALICE),
 			mock_extrinsic()
 		));
 		next_block();
+		// Set the time to be higher than the expiry time
 		time_source::Mock::reset_to(END_TIME);
 		next_block();
+		// Expect the Expired event to be fired
 		assert_eq!(
 			last_event(),
 			crate::mock::Event::pallet_cf_governance(crate::Event::Expired(1)),

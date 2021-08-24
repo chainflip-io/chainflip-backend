@@ -1,26 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 //! # Chainflip governance
-//!
-//! ## Purpose
-//!
-//! This pallet implements the current Chainflip governance functionality. The purpose of this pallet is primarily
-//! to provide the following capabilities:
-//!
-//! - Handle the set of governance members
-//! - Handle submitting proposals
-//! - Handle approving proposals
-//! - Provide tools to implement governance secured extrinsic in other pallets
-//!
-//! ## Governance model
-//!
-//! The governance model is a simple approved system. Every member can propose an extrinsic, which is secured by
-//! the EnsureGovernance implementation of the EnsureOrigin trait. Apart from that, every member is allowed to
-//! approve a proposed governance extrinsic. If a proposal can raise 2/3 + 1 approvals, it's getting executed by
-//! the system automatically. Moreover, every proposal has an expiry date. If a proposal is not able to raise
-//! enough approvals in time, it gets dropped and won't be executed.
-//!
-//! note: For implementation details pls see the readme.
 
 use codec::Decode;
 use frame_support::ensure;
@@ -65,7 +45,7 @@ pub mod pallet {
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
 	type OpaqueCall = Vec<u8>;
-	type ProposalId = u32;
+	pub type ProposalId = u32;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -92,7 +72,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn proposals)]
 	pub(super) type Proposals<T: Config> =
-		StorageMap<_, Blake2_128Concat, u32, Proposal<T::AccountId>, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, ProposalId, Proposal<T::AccountId>, ValueQuery>;
 
 	/// Active proposals
 	#[pallet::storage]
@@ -223,7 +203,7 @@ pub mod pallet {
 		}
 		/// Approve a proposal by a given proposal id
 		#[pallet::weight(10_000)]
-		pub fn approve(origin: OriginFor<T>, id: u32) -> DispatchResultWithPostInfo {
+		pub fn approve(origin: OriginFor<T>, id: ProposalId) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			// Ensure origin is part of the governance
 			ensure!(<Members<T>>::get().contains(&who), Error::<T>::NotMember);
@@ -313,14 +293,14 @@ where
 
 impl<T: Config> Pallet<T> {
 	/// Returns the next proposal id
-	fn get_next_id() -> u32 {
+	fn get_next_id() -> ProposalId {
 		<NumberOfProposals<T>>::get().add(1)
 	}
 	/// Executes an proposal if the majority is reached
-	fn execute_proposal(id: u32) {
+	fn execute_proposal(id: ProposalId) {
 		let proposal = <Proposals<T>>::get(id);
 		if Self::majority_reached(proposal.approved.len()) {
-			//Try to decode the stored extrinsic
+			// Try to decode the stored extrinsic
 			if let Some(call) = Self::decode_call(&proposal.call) {
 				// Execute the extrinsic
 				let result = call.dispatch_bypass_filter((RawOrigin::GovernanceThreshold).into());
@@ -343,7 +323,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 	/// Filters the active proposals array by a givin clojure
-	fn filter_proposals_by(filter: &dyn Fn(&&(u32, u64)) -> bool) -> Vec<(u32, u64)> {
+	fn filter_proposals_by(filter: &dyn Fn(&&ActiveProposal) -> bool) -> Vec<ActiveProposal> {
 		let active_proposals = <ActiveProposals<T>>::get();
 		let filtered_proposals = active_proposals
 			.iter()

@@ -7,11 +7,12 @@ This pallet implements the current Chainflip governance functionality. The purpo
 - Handle the set of governance members
 - Handle submitting proposals
 - Handle approving proposals
+- Execute extrinsic secured by the governance as sudo
 - Provide tools to implement governance secured extrinsic in other pallets
 
 ## Governance model
 
-The governance model is a simple approved system. Every member can propose an extrinsic, which is secured by the EnsureGovernance implementation of the EnsureOrigin trait. Apart from that, every member is allowed to approve a proposed governance extrinsic. If a proposal can raise 2/3 + 1 approvals, it's getting executed by the system automatically. Moreover, every proposal has an expiry date. If a proposal is not able to raise enough approvals in time, it gets dropped and won't be executed.
+Every member can propose an extrinsic, which is secured by the EnsureGovernance implementation of the EnsureOrigin trait. Apart from that, every member is allowed to approve a proposed governance extrinsic. If a proposal can raise 1/2 + 1 approvals, it's getting executed. Moreover, every proposal has an expiry date. If a proposal is not able to raise enough approvals in time, it gets dropped and won't be executed.
 
 ## Implementation
 
