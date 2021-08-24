@@ -1,0 +1,8 @@
+FROM node
+
+WORKDIR /usr/app
+
+RUN npm install --save-dev hardhat
+
+ENTRYPOINT ["npx", "hardhat"]
+

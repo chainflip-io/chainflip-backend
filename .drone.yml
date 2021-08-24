@@ -526,22 +526,30 @@ environment:
   SCCACHE_REDIS: redis://drone-redis-headless:6379/
   SCCACHE_CACHE_SIZE: 14G
 
+clone:
+  disable: true
+
 services:
-  - image: trufflesuite/ganache-cli:latest
-    name: ganache
+  - image: ghcr.io/chainflip-io/chainflip-backend/hardhat:latest
+    name: hardhat
     ports: [8545]
+    volumes:
+      - eth-contracts:/usr/app
     entrypoint:
+      - "npx"
+    command:
+      - "hardhat"
       - "node"
-      - "/app/ganache-core.docker.cli.js"
-      - "--mnemonic brownie"
-      - "--gasLimit 12000000"
-      - "--accounts 10"
-      - "--hardfork istanbul"
   - image: nats:latest
     ports: [4222, 8222]
     name: nats
 
 steps:
+  - name: clone
+    image: alpine/git
+    commands:
+      - git clone https://github.com/chainflip-io/chainflip-backend.git
+      - git clone https://github.com/chainflip-io/chainflip-eth-contracts.git eth-contracts
   - name: stakemanager-events-setup
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
