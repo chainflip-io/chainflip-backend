@@ -137,6 +137,18 @@ steps:
         --wait-for-jobs
       - helm uninstall bashful
 
+  # clean up
+  - name: clean-up-on-failure
+    image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+    pull: always
+    when:
+      status:
+        - failure
+    depends_on:
+      - install-single-node
+    commands:
+      - helm uninstall bashful
+
 service_account_name: drone-runner-kube
 
 # Config
