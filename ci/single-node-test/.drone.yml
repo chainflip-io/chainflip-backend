@@ -136,7 +136,7 @@ steps:
         --set chainflip-engine.image.tag="latest"
         --wait
         --wait-for-jobs
-      - helm test bashful
+      - helm test bashful -n default
       - helm uninstall bashful -n default
 
   # clean up
