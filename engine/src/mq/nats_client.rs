@@ -101,7 +101,7 @@ mod test {
         let nats_client = setup_client().await;
         let res = nats_client
             .publish(
-                Subject::Witness(Chain::ETH),
+                Subject::Broadcast(Chain::ETH),
                 &TestMessage(String::from("hello")),
             )
             .await;
@@ -111,7 +111,7 @@ mod test {
     async fn subscribe_test_inner(nats_client: NatsMQClient) {
         let test_message = TestMessage(String::from("I SAW A TRANSACTION"));
 
-        let subject = Subject::Witness(Chain::ETH);
+        let subject = Subject::Broadcast(Chain::ETH);
 
         let mut test_messages = nats_client.subscribe::<TestMessage>(subject).await.unwrap();
 

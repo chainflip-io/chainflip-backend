@@ -30,35 +30,13 @@ pub trait IMQClient {
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Subject {
-    Witness(Chain),
-    Quote(Chain),
-    Batch(Chain),
     Broadcast(Chain),
 
     // broadcaster pushes tx hashes here after being broadcast
     BroadcastSuccess(Chain),
 
     // Auction pallet events
-    AuctionStarted,
-    AuctionConfirmed,
     AuctionCompleted,
-    AuctionAborted,
-    AuctionRangeChanged,
-    AwaitingBidders,
-
-    // Validator pallet events
-    ForceRotationRequested,
-    EpochDurationChanged,
-    NewEpoch,
-
-    // Staking pallet events
-    ClaimSigRequested,
-    Staked,
-    ClaimSettled,
-    StakeRefund,
-    ClaimSignatureIssued,
-    AccountRetired,
-    AccountActivated,
 
     P2PIncoming,
     P2POutgoing,
@@ -78,15 +56,6 @@ pub trait SubjectName {
 impl SubjectName for Subject {
     fn to_subject_name(&self) -> String {
         match &self {
-            Subject::Witness(chain) => {
-                format!("witness.{}", chain)
-            }
-            Subject::Quote(chain) => {
-                format!("quote.{}", chain)
-            }
-            Subject::Batch(chain) => {
-                format!("batch.{}", chain)
-            }
             Subject::Broadcast(chain) => {
                 format!("broadcast.{}", chain)
             }
@@ -110,76 +79,9 @@ impl SubjectName for Subject {
                 format!("keygen_result")
             }
             // === Auction events ===
-            Subject::AuctionStarted => {
-                format!("auction.auction_started")
-            }
-            Subject::AuctionConfirmed => {
-                format!("auction.auction_confirmed")
-            }
             Subject::AuctionCompleted => {
                 format!("auction.auction_completed")
             }
-            Subject::AuctionAborted => {
-                format!("auction.auction_aborted")
-            }
-            Subject::AuctionRangeChanged => {
-                format!("auction.auction_range_changed")
-            }
-            Subject::AwaitingBidders => {
-                format!("auction.awaiting_bidders")
-            }
-            // === Validator events ===
-            Subject::ForceRotationRequested => {
-                format!("validator.force_rotation_requested")
-            }
-            Subject::EpochDurationChanged => {
-                format!("validator.epoch_duration_changed")
-            }
-            Subject::NewEpoch => {
-                format!("validator.new_epoch")
-            }
-            // === Staking events ===
-            Subject::ClaimSigRequested => {
-                format!("staking.claim_sig_requested")
-            }
-            Subject::Staked => {
-                format!("staking.staked")
-            }
-            Subject::ClaimSettled => {
-                format!("staking.claim_settled")
-            }
-            Subject::StakeRefund => {
-                format!("staking.stake_refund")
-            }
-            Subject::ClaimSignatureIssued => {
-                format!("staking.claim_signature_issued")
-            }
-            Subject::AccountRetired => {
-                format!("staking.account_retired")
-            }
-            Subject::AccountActivated => {
-                format!("staking.account_activated")
-            }
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn channel_to_subject_name() {
-        let witness_subject = Subject::Witness(Chain::BTC);
-        assert_eq!(witness_subject.to_subject_name(), "witness.BTC");
-
-        let quote_subject = Subject::Quote(Chain::ETH);
-        assert_eq!(quote_subject.to_subject_name(), "quote.ETH");
-
-        let batch_subject = Subject::Batch(Chain::OXEN);
-        assert_eq!(batch_subject.to_subject_name(), "batch.OXEN");
-
-        let broadcast_subject = Subject::Broadcast(Chain::BTC);
-        assert_eq!(broadcast_subject.to_subject_name(), "broadcast.BTC");
     }
 }
