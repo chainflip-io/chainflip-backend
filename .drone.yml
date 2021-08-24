@@ -538,8 +538,8 @@ steps:
   - name: clone
     image: alpine/git
     commands:
-      - git clone https://github.com/chainflip-io/chainflip-backend.git .
-      - git clone https://github.com/chainflip-io/chainflip-eth-contracts.git eth-contracts
+      - git clone --branch $DRONE_COMMIT https://github.com/chainflip-io/chainflip-backend.git .
+      - git clone --branch feature/ch1589-gas-refund https://github.com/chainflip-io/chainflip-eth-contracts.git eth-contracts
   - name: hardhat-start
     depends_on:
       - clone
@@ -547,7 +547,6 @@ steps:
     detach: true
     commands:
       - cd eth-contracts
-      - git checkout feature/ch1589-gas-refund
       - npm install
       - npx hardhat node
   - name: stakemanager-events-setup
@@ -561,8 +560,6 @@ steps:
       - stakemanager-events-setup
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - cd backend
-      - git checkout $DRONE_COMMIT
       - cargo test --locked --release
 
 # Config
