@@ -121,6 +121,9 @@ steps:
   - name: install-single-node
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     pull: always
+    depends_on:
+      - build-chainflip-engine
+      - build-state-chain-node
     commands:
       - helm repo add chainflip http://chartmuseum.chartmuseum:8080
       - >
