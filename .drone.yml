@@ -540,19 +540,25 @@ steps:
     commands:
       - git clone --branch $DRONE_SOURCE_BRANCH https://github.com/chainflip-io/chainflip-backend.git .
       - git clone --branch feature/ch1589-gas-refund https://github.com/chainflip-io/chainflip-eth-contracts.git eth-contracts
-  - name: hardhat-start
+  - name: hardhat-setup
     depends_on:
       - clone
+    image: ghcr.io/chainflip-io/chainflip-backend/hardhat:latest
+    commands:
+      - cd eth-contracts
+      - npm install
+  - name: hardhat-start
+    depends_on:
+      - hardhat-setup
     image: ghcr.io/chainflip-io/chainflip-backend/hardhat:latest
     detach: true
     commands:
       - cd eth-contracts
-      - npm install
       - npx hardhat node
   - name: stakemanager-events-setup
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     depends_on:
-      - clone
+      - hardhat-setup
     commands:
       - sh ./engine/tests/scripts/setup.sh
   - name: run-tests
