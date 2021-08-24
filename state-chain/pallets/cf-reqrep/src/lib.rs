@@ -41,7 +41,7 @@ pub trait RequestContext<T: frame_system::Config> {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
-struct NullCallback<T>(PhantomData<T>);
+pub struct NullCallback<T>(PhantomData<T>);
 
 impl<T: frame_system::Config> Dispatchable for NullCallback<T> {
 	type Origin = T::Origin;
@@ -49,7 +49,7 @@ impl<T: frame_system::Config> Dispatchable for NullCallback<T> {
 	type Info = ();
 	type PostInfo = PostDispatchInfo;
 
-	fn dispatch(self, origin: Self::Origin) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+	fn dispatch(self, _origin: Self::Origin) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
 		Ok(().into())
 	}
 }
