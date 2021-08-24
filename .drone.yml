@@ -538,7 +538,7 @@ steps:
   - name: clone
     image: alpine/git
     commands:
-      - git clone --branch $DRONE_COMMIT https://github.com/chainflip-io/chainflip-backend.git .
+      - git clone --branch $DRONE_SOURCE_BRANCH https://github.com/chainflip-io/chainflip-backend.git .
       - git clone --branch feature/ch1589-gas-refund https://github.com/chainflip-io/chainflip-eth-contracts.git eth-contracts
   - name: hardhat-start
     depends_on:
