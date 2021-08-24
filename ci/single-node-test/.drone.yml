@@ -147,7 +147,7 @@ steps:
       status:
         - failure
     depends_on:
-      - install-single-node
+      - test-single-node
     commands:
       - helm uninstall bashful -n default
 
