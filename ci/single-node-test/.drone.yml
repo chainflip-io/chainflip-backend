@@ -135,7 +135,7 @@ steps:
         --set chainflip-engine.image.tag="latest"
         --wait
         --wait-for-jobs
-      - helm uninstall bashful
+      - helm uninstall bashful -n default
 
   # clean up
   - name: clean-up-on-failure
@@ -147,7 +147,7 @@ steps:
     depends_on:
       - install-single-node
     commands:
-      - helm uninstall bashful
+      - helm uninstall bashful -n default
 
 service_account_name: drone-runner-kube
 
