@@ -1,4 +1,4 @@
-use crate::eth::EventProducerError;
+use crate::eth::EventParseError;
 use anyhow::Result;
 use sp_core::Hasher;
 use sp_runtime::traits::Keccak256;
@@ -11,7 +11,7 @@ pub fn decode_log_param<T: Tokenizable>(log: &Log, param_name: &str) -> Result<T
         .params
         .iter()
         .find(|&p| p.name == param_name)
-        .ok_or_else(|| EventProducerError::MissingParam(String::from(param_name)))?
+        .ok_or_else(|| EventParseError::MissingParam(String::from(param_name)))?
         .value;
 
     Ok(Tokenizable::from_token(token.clone())?)
