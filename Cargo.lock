@@ -934,6 +934,7 @@ dependencies = [
  "pallet-cf-reputation",
  "pallet-cf-staking",
  "pallet-cf-validator",
+ "pallet-cf-vaults",
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "rand 0.7.3",

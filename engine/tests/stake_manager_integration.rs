@@ -4,9 +4,11 @@
 use std::str::FromStr;
 
 use chainflip_engine::{
-    eth::{self, stake_manager::stake_manager::StakeManagerEvent},
+    eth::{
+        new_synced_web3_client,
+        stake_manager::{StakeManager, StakeManagerEvent},
+    },
     logging::utils,
-    mq::{nats_client::NatsMQClient, IMQClient, Subject},
     settings::Settings,
 };
 
@@ -20,25 +22,19 @@ pub async fn test_all_stake_manager_events() {
     let root_logger = utils::create_cli_logger();
 
     let settings = Settings::from_file("config/Testing.toml").unwrap();
-    let mq_c = NatsMQClient::new(&settings.message_queue).await.unwrap();
 
-    // subscribe before pushing events to the queue
-    let sm_event_stream = mq_c
-        .subscribe::<StakeManagerEvent>(Subject::StakeManager)
+    let web3 = new_synced_web3_client(&settings, &root_logger)
         .await
         .unwrap();
 
-    // The Stake Manager Witness will run forever unless we stop it after a short time
-    // in which it should have already done it's job.
-    let _ = tokio::time::timeout(
-        std::time::Duration::from_millis(100),
-        eth::stake_manager::start_stake_manager_witness(&settings, mq_c, &root_logger),
-    )
-    .await;
-    slog::info!(&root_logger, "Subscribed");
+    let stake_manager = StakeManager::new(&settings).unwrap();
 
-    // Grab the events from the stream and put them into a vec
-    let sm_events = sm_event_stream
+    // The stream is infinite unless we stop it after a short time
+    // in which it should have already done it's job.
+    let sm_events = stake_manager
+        .event_stream(&web3, settings.eth.from_block, &root_logger)
+        .await
+        .unwrap()
         .take_until(tokio::time::sleep(std::time::Duration::from_millis(1)))
         .collect::<Vec<_>>()
         .await
