@@ -53,9 +53,10 @@ pub trait ChainHandler {
 	) -> Result<(), Self::Error>;
 }
 
+pub type ChainIdentifier = u8;
 /// Identifiers for chains supported
 /// The Ethereum chain
-pub const ETHEREUM_CHAIN: u32 = 1;
+pub const ETHEREUM_CHAIN: ChainIdentifier = 1;
 
 /// Our different Chain's specific parameters
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]

@@ -221,8 +221,8 @@ mod test {
 		new_test_ext().execute_with(|| {
 			assert_eq!(VaultsPallet::next_nonce(ETHEREUM_CHAIN), 1u64);
 			assert_eq!(VaultsPallet::next_nonce(ETHEREUM_CHAIN), 2u64);
-			assert_eq!(VaultsPallet::next_nonce(NO_CHAIN), 1u64);
-			assert_eq!(VaultsPallet::next_nonce(NO_CHAIN), 2u64);
+			assert_eq!(VaultsPallet::next_nonce(TEST_CHAIN), 1u64);
+			assert_eq!(VaultsPallet::next_nonce(TEST_CHAIN), 2u64);
 		});
 	}
 }

@@ -101,12 +101,10 @@ pub mod pallet {
 		type RotationHandler: VaultRotationHandler<ValidatorId = Self::ValidatorId>;
 		/// A Nonce for all chains
 		type Nonce: Into<U256> + Copy + AtLeast32BitUnsigned + One + Member + Parameter + Default;
-		/// An identifier for a chain
-		type ChainIdentifier: Member + Parameter + Default + AtLeast32BitUnsigned;
 		/// A nonce provider
 		type NonceProvider: NonceProvider<
 			Nonce = Self::Nonce,
-			ChainIdentifier = Self::ChainIdentifier,
+			Identifier = ChainIdentifier,
 		>;
 	}
 
@@ -135,7 +133,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn chain_nonces)]
 	pub(super) type ChainNonces<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::ChainIdentifier, T::Nonce>;
+		StorageMap<_, Blake2_128Concat, ChainIdentifier, T::Nonce>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -264,9 +262,9 @@ impl<T: Config> From<RotationError<T::ValidatorId>> for Error<T> {
 
 impl<T: Config> NonceProvider for Pallet<T> {
 	type Nonce = T::Nonce;
-	type ChainIdentifier = T::ChainIdentifier;
+	type Identifier = ChainIdentifier;
 
-	fn next_nonce(identifier: Self::ChainIdentifier) -> Self::Nonce {
+	fn next_nonce(identifier: Self::Identifier) -> Self::Nonce {
 		ChainNonces::<T>::mutate(identifier, |nonce| {
 			let new_nonce = nonce.unwrap_or_default().saturating_add(One::one());
 			*nonce = Some(new_nonce);
