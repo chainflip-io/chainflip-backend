@@ -19,7 +19,7 @@ use web3::{
 
 use anyhow::Result;
 
-use futures::{Future, StreamExt};
+use futures::{Future, Stream, StreamExt};
 
 use slog::o;
 
@@ -37,21 +37,14 @@ pub async fn start_key_manager_witness(
     slog::info!(logger, "Load Contract ABI");
     let key_manager = KeyManager::new(&settings)?;
 
-    slog::info!(logger, "Creating Parser");
-    let parser = key_manager.parser_closure()?;
-
     slog::info!(logger, "Creating Event Stream");
-    let mut event_stream = eth_event_streamer::new_eth_event_stream(
-        web3.clone(),
-        key_manager.deployed_address,
-        settings.eth.from_block,
-        logger.clone(),
-    )
-    .await?;
+    let mut event_stream = key_manager
+        .event_stream(web3, settings.eth.from_block, &logger)
+        .await?;
 
     Ok(async move {
         while let Some(result_event) = event_stream.next().await {
-            match parser(result_event.unwrap()).unwrap() {
+            match result_event.unwrap() {
                 // TODO: Handle unwraps
                 KeyManagerEvent::KeyChange { .. } => {
                     todo!();
@@ -68,14 +61,14 @@ pub struct KeyManager {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-struct ChainflipKey {
+pub struct ChainflipKey {
     pub_key_x: ethabi::Uint,
     pub_key_y_parity: ethabi::Uint,
 }
 
 impl ChainflipKey {
     /// Create a ChainflipKey from a decimal string
-    fn from_dec_str(dec_str: &str, parity: bool) -> Result<Self> {
+    pub fn from_dec_str(dec_str: &str, parity: bool) -> Result<Self> {
         let pub_key_x = web3::types::U256::from_dec_str(dec_str)?;
         Ok(ChainflipKey {
             pub_key_x,
@@ -121,7 +114,7 @@ impl Tokenizable for ChainflipKey {
 
 /// Represents the events that are expected from the KeyManager contract.
 #[derive(Debug)]
-enum KeyManagerEvent {
+pub enum KeyManagerEvent {
     /// The `Staked(nodeId, amount)` event.
     KeyChange {
         /// Whether the change was signed by the AggKey.
@@ -143,16 +136,31 @@ impl KeyManager {
             contract: ethabi::Contract::load(std::include_bytes!("abis/KeyManager.json").as_ref())?,
         })
     }
-}
 
-impl KeyManager {
-    fn parser_closure(
+    // TODO: Maybe try to factor this out (See StakeManager)
+    pub async fn event_stream(
         &self,
-    ) -> Result<impl Fn((H256, H256, ethabi::RawLog)) -> Result<KeyManagerEvent>> {
+        web3: &Web3<WebSocket>,
+        from_block: u64,
+        logger: &slog::Logger,
+    ) -> Result<impl Stream<Item = Result<KeyManagerEvent>>> {
+        eth_event_streamer::new_eth_event_stream(
+            web3,
+            self.deployed_address,
+            self.decode_log_closure()?,
+            from_block,
+            logger,
+        )
+        .await
+    }
+
+    pub fn decode_log_closure(
+        &self,
+    ) -> Result<impl Fn(H256, H256, RawLog) -> Result<KeyManagerEvent>> {
         let key_change = SignatureAndEvent::new(&self.contract, "KeyChange")?;
 
         Ok(
-            move |(signature, tx_hash, raw_log): (H256, H256, RawLog)| -> Result<KeyManagerEvent> {
+            move |signature: H256, tx_hash: H256, raw_log: RawLog| -> Result<KeyManagerEvent> {
                 let tx_hash = tx_hash.to_fixed_bytes();
                 if signature == key_change.signature {
                     let log = key_change.event.parse_log(raw_log)?;
@@ -194,7 +202,7 @@ mod tests {
 
         let key_manager = KeyManager::new(&settings).unwrap();
 
-        let parser = key_manager.parser_closure().unwrap();
+        let decode_log = key_manager.decode_log_closure().unwrap();
 
         let key_change_event_signature =
             H256::from_str("0x19389c59b816d8b0ec43f2d5ed9b41bddc63d66dac1ecd808efe35b86b9ee0bf")
@@ -206,14 +214,14 @@ mod tests {
                 "0x04629152b064c0d1343161c43f3b78cf67e9be35fc97f66bbb0e1ca1a0206bae",
             )
             .unwrap();
-            match parser((
+            match decode_log(
                 key_change_event_signature,
                 transaction_hash,
                 RawLog {
                     topics : vec![key_change_event_signature],
                     data : hex::decode("000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae00000000000000000000000000000000000000000000000000000000000000011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001").unwrap()
                 }
-            )).expect("Failed parsing AGG_SET_AGG_LOG event") {
+            ).expect("Failed parsing AGG_SET_AGG_LOG event") {
                 KeyManagerEvent::KeyChange {
                     signed,
                     old_key,
@@ -235,14 +243,14 @@ mod tests {
                 "0x6320cfd702415644192bf57702ceccc0d6de0ddc54fe9aa53f9b1a5d9035fe52",
             )
             .unwrap();
-            match parser((
+            match decode_log(
                 key_change_event_signature,
                 transaction_hash,
                 RawLog {
                     topics : vec![key_change_event_signature],
                     data : hex::decode("00000000000000000000000000000000000000000000000000000000000000001742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae0000000000000000000000000000000000000000000000000000000000000001").unwrap()
                 }
-            )).expect("Failed parsing GOV_SET_AGG_LOG event")
+            ).expect("Failed parsing GOV_SET_AGG_LOG event")
             {
                 KeyManagerEvent::KeyChange {
                     signed,
@@ -265,14 +273,14 @@ mod tests {
                 "0x9215ce54309fddf0ce9b1e8fd10319c62cf9603635ffa0c06ac9db8338348f95",
             )
             .unwrap();
-            match parser((
+            match decode_log(
                 key_change_event_signature,
                 transaction_hash,
                 RawLog {
                     topics : vec![key_change_event_signature],
                     data : hex::decode("0000000000000000000000000000000000000000000000000000000000000000423ebe9d54bf7cb10dfebe2b323bb9a01bfede660619a7f49531c96a23263dd800000000000000000000000000000000000000000000000000000000000000014e3d72babbee4133675d42db3bba62a7dfbc47a91ddc5db56d95313d908c08f80000000000000000000000000000000000000000000000000000000000000000").unwrap()
                 }
-            )).expect("Failed parsing GOV_SET_GOV_LOG event")
+            ).expect("Failed parsing GOV_SET_GOV_LOG event")
             {
                 KeyManagerEvent::KeyChange {
                     signed,
@@ -295,14 +303,14 @@ mod tests {
                 "0x0b0b5ed18390ab49777844d5fcafb9865c74095ceb3e73cc57d1fbcc926103b5",
             )
             .unwrap();
-            let res = parser((
+            let res = decode_log(
                 invalid_signature,
                 H256::from_str("0x04629152b064c0d1343161c43f3b78cf67e9be35fc97f66bbb0e1ca1a0206bae").unwrap(),
                 RawLog {
                     topics : vec![invalid_signature],
                     data : hex::decode("000000000000000000000000000000000000000000000000000000000000000131b2ba4b46201610901c5164f42edd1f64ce88076fde2e2c544f9dc3d7b350ae00000000000000000000000000000000000000000000000000000000000000011742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001").unwrap()
                 }
-            ))
+            )
             .map_err(|e| match e.downcast_ref::<EventParseError>() {
                 Some(EventParseError::UnexpectedEvent(_)) => {}
                 _ => {
