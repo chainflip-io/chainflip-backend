@@ -13,11 +13,11 @@ pub async fn new_eth_event_stream<
     Event: Debug,
     LogDecoder: Fn(H256, H256, RawLog) -> Result<Event>,
 >(
-    web3: Web3<WebSocket>,
+    web3: &Web3<WebSocket>,
     deployed_address: H160,
     decode_log: LogDecoder,
     from_block: u64,
-    logger: slog::Logger,
+    logger: &slog::Logger,
 ) -> Result<impl Stream<Item = Result<Event>>> {
     // The `fromBlock` parameter doesn't seem to work reliably with subscription streams, so
     // request past block via http and prepend them to the stream manually.
@@ -41,6 +41,7 @@ pub async fn new_eth_event_stream<
         )
         .await?;
 
+    let logger = logger.clone();
     Ok(stream::iter(past_logs)
         .map(|log| Ok(log))
         .chain(future_logs)
