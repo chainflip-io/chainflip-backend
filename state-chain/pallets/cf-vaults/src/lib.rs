@@ -102,10 +102,7 @@ pub mod pallet {
 		/// A Nonce for all chains
 		type Nonce: Into<U256> + Copy + AtLeast32BitUnsigned + One + Member + Parameter + Default;
 		/// A nonce provider
-		type NonceProvider: NonceProvider<
-			Nonce = Self::Nonce,
-			Identifier = ChainIdentifier,
-		>;
+		type NonceProvider: NonceProvider<Nonce = Self::Nonce, Identifier = ChainIdentifier>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
