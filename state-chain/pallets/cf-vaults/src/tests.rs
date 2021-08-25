@@ -219,10 +219,10 @@ mod test {
 	#[test]
 	fn should_increment_nonce_for_ethereum_and_other_chain_independently() {
 		new_test_ext().execute_with(|| {
-			assert_eq!(VaultsPallet::next_nonce(ETHEREUM_CHAIN), 1u64);
-			assert_eq!(VaultsPallet::next_nonce(ETHEREUM_CHAIN), 2u64);
-			assert_eq!(VaultsPallet::next_nonce(TEST_CHAIN), 1u64);
-			assert_eq!(VaultsPallet::next_nonce(TEST_CHAIN), 2u64);
+			assert_eq!(VaultsPallet::next_nonce(NonceIdentifier::Ethereum), 1u64);
+			assert_eq!(VaultsPallet::next_nonce(NonceIdentifier::Ethereum), 2u64);
+			assert_eq!(VaultsPallet::next_nonce(NonceIdentifier::Bitcoin), 1u64);
+			assert_eq!(VaultsPallet::next_nonce(NonceIdentifier::Dot), 1u64);
 		});
 	}
 }
