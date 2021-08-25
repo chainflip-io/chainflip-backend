@@ -81,7 +81,7 @@ token:
 
 server:
   image: docker-18-04
-  size: s-16vcpu-32gb
+  size: c-32
   region: fra1
 
 environment:
