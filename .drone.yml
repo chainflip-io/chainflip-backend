@@ -88,12 +88,13 @@ environment:
   SCCACHE_REDIS: redis://161.35.77.244:6379/
   SCCACHE_CACHE_SIZE: 14G
 
+workspace:
+  path: /root
 steps:
   - name: compile-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - . /root/.cargo/env
-      - . /root/.cargo/env && cargo build --locked --release
+      - /root/.cargo/bin/cargo build --locked --release
       - sccache -s
 
 trigger:
