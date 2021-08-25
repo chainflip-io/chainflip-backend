@@ -62,6 +62,6 @@
   "ReserveId": "[u8;4]",
   "ValidatorSize": "u32",
   "VoteCount": "u32",
-  "ChainIdentifier": "u32",
+  "ChainIdentifier": "u8",
   "Nonce": "u64"
 }
