@@ -93,20 +93,8 @@ steps:
   - name: compile-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - cargo build --locked --release
-      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
-
-  - name: check-chainflip-backend
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    commands:
-      - cargo check --all-targets
-
-  #  Performs all unit tests
-  - name: test-validator-package
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    commands:
-      - cargo test --locked --lib --release
-      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
+      - docker run ghcr.io/chainflip-io/chainflip-backend/rust-base:latest cargo build --locked --release
+      - docker run ghcr.io/chainflip-io/chainflip-backend/rust-base:latest sccache -s
 
 trigger:
   branch:
