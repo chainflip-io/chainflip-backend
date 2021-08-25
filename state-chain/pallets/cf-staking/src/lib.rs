@@ -59,8 +59,8 @@ use sp_std::prelude::*;
 use sp_std::vec;
 
 use codec::{Encode, FullCodec};
-use ethabi::{Bytes, Function, Param, ParamType};
-use sp_core::U256;
+use ethabi::ethereum_types::U256;
+use ethabi::{Bytes, Function, Param, ParamType, StateMutability};
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, CheckedSub, Hash, Keccak256, UniqueSaturatedInto, Zero},
 	DispatchError,
@@ -671,6 +671,7 @@ impl<T: Config> Pallet<T> {
 			],
 			vec![],
 			false,
+			StateMutability::NonPayable,
 		);
 
 		register_claim.encode_input(&vec![

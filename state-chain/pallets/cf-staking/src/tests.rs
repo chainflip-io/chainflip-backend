@@ -559,18 +559,30 @@ fn test_claim_all() {
 }
 
 #[test]
+fn literally_just_load_the_contract() {
+	let stake_manager = ethabi::Contract::load(
+		std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json").as_ref(),
+	)
+	.unwrap();
+}
+
+#[test]
 fn test_claim_payload() {
 	use ethabi::{Address, Token};
-	const ABI_JSON: &[u8] =
-		std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json");
 	const EXPIRY_SECS: u64 = 10;
 	const AMOUNT: u128 = 1234567890;
 
 	const NONCE: u64 = 6;
 
-	let stake_manager = ethabi::Contract::load(ABI_JSON as &[u8]).unwrap();
+	println!("About to load stake manager");
+	let stake_manager = ethabi::Contract::load(
+		std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json").as_ref(),
+	)
+	.unwrap();
+	println!("Stake manager loaded");
 	let register_claim = stake_manager.function("registerClaim").unwrap();
 
+	println!("Registered claim function collected");
 	let claim_details: ClaimDetailsFor<Test> = ClaimDetails {
 		msg_hash: None,
 		amount: AMOUNT,
