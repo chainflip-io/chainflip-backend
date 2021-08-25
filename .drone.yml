@@ -92,7 +92,7 @@ steps:
   - name: compile-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
-      - . $HOME/.cargo/env
+      - . /root/.cargo/env
       - cargo build --locked --release
       - sccache -s
 
