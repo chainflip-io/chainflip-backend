@@ -54,7 +54,7 @@ pub trait ChainHandler {
 }
 
 /// Identifiers for chains supported
-pub const NO_CHAIN: u32 = 0;
+/// The Ethereum chain
 pub const ETHEREUM_CHAIN: u32 = 1;
 
 /// Our different Chain's specific parameters

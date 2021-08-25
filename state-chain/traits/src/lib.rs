@@ -237,8 +237,10 @@ pub trait EmissionsTrigger {
 	fn trigger_emissions();
 }
 
+/// Provide a nonce
 pub trait NonceProvider {
 	type Nonce;
+	/// An identifier for the chain to provide a nonce for
 	type ChainIdentifier;
 	/// Provide the next nonce for the chain identified
 	fn next_nonce(identifier: Self::ChainIdentifier) -> Self::Nonce;

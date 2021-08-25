@@ -130,6 +130,8 @@ pub fn bad_validators() -> Vec<ValidatorId> {
 pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <MockRuntime as frame_system::Config>::AccountId = 456u64;
 pub const CHARLIE: <MockRuntime as frame_system::Config>::AccountId = 789u64;
+// A chain for test purposes only
+pub const NO_CHAIN: u32 = 0;
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {

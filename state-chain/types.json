@@ -61,5 +61,7 @@
   "ReputationPoints": "i32",
   "ReserveId": "[u8;4]",
   "ValidatorSize": "u32",
-  "VoteCount": "u32"
+  "VoteCount": "u32",
+  "ChainIdentifier": "u32",
+  "Nonce": "u64"
 }

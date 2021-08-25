@@ -100,6 +100,7 @@ impl NonceProvider for Test {
 	type ChainIdentifier = u32;
 
 	fn next_nonce(_identifier: Self::ChainIdentifier) -> Self::Nonce {
+		// Keep the same nonce for validating txs
 		0
 	}
 }
