@@ -538,7 +538,7 @@ steps:
   - name: clone
     image: alpine/git
     commands:
-      - git clone https://github.com/chainflip-io/chainflip-backend.git .
+      - git clone --branch feature/ch1793 https://github.com/chainflip-io/chainflip-backend.git .
       - git clone https://github.com/chainflip-io/chainflip-eth-contracts.git eth-contracts
   - name: hardhat-setup
     depends_on:
@@ -571,9 +571,9 @@ steps:
 # Config
 trigger:
   event:
-    - cron
-  cron:
-    - nightly
+    - push
+#  cron:
+#    - nightly
 
 image_pull_secrets:
   - dockerconfigjson
