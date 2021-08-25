@@ -117,11 +117,8 @@ pub mod pallet {
 	/// The Vault for this instance
 	#[pallet::storage]
 	#[pallet::getter(fn eth_vault)]
-	pub(super) type EthereumVault<T: Config> = StorageValue<
-		_,
-		Vault<T::PublicKey, T::Transaction>,
-		ValueQuery,
-	>;
+	pub(super) type EthereumVault<T: Config> =
+		StorageValue<_, Vault<T::PublicKey, T::Transaction>, ValueQuery>;
 
 	/// A map acting as a list of our current vault rotations
 	#[pallet::storage]
@@ -423,12 +420,18 @@ impl<T: Config>
 		// We have assumed here that once we have one confirmation of a vault rotation we wouldn't
 		// need to rollback any if one of the group of vault rotations fails
 		match response {
-			VaultRotationResponse::Success { old_key, new_key, tx } => {
+			VaultRotationResponse::Success {
+				old_key,
+				new_key,
+				tx,
+			} => {
 				if let Some(keygen_request) = VaultRotations::<T>::get(index) {
 					// At the moment we just have Ethereum to notify
 					match keygen_request.chain {
 						ChainParams::Ethereum(_) => EthereumChain::<T>::vault_rotated(Vault {
-							old_key, new_key, tx
+							old_key,
+							new_key,
+							tx,
 						}),
 						// Leaving this to be explicit about more to come
 						ChainParams::Other(_) => {}
@@ -491,9 +494,7 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 	}
 
 	/// The vault for this chain has been rotated and we store this vault to storage
-	fn vault_rotated(
-		vault: Vault<Self::PublicKey, Self::Transaction>,
-	) {
+	fn vault_rotated(vault: Vault<Self::PublicKey, Self::Transaction>) {
 		EthereumVault::<T>::set(vault);
 	}
 }

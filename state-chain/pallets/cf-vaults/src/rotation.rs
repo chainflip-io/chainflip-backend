@@ -98,7 +98,7 @@ impl From<ChainParams> for VaultRotationRequest {
 
 /// The Vault's keys, public that is
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct Vault <PublicKey: Into<Vec<u8>>, Transaction: Into<Vec<u8>>> {
+pub struct Vault<PublicKey: Into<Vec<u8>>, Transaction: Into<Vec<u8>>> {
 	pub old_key: PublicKey,
 	pub new_key: PublicKey,
 	pub tx: Transaction,
