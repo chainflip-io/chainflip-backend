@@ -93,7 +93,7 @@ steps:
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
       - . /root/.cargo/env
-      - cargo build --locked --release
+      - . /root/.cargo/env && cargo build --locked --release
       - sccache -s
 
 trigger:
