@@ -1,7 +1,7 @@
 pub mod key_manager;
 pub mod stake_manager;
 
-mod eth_event_streamer;
+pub mod eth_event_streamer;
 
 pub mod eth_broadcaster;
 pub mod utils;
