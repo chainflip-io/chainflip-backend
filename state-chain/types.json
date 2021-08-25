@@ -60,6 +60,45 @@
   },
   "ReputationPoints": "i32",
   "RequestIndex": "u64",
+  "PublicKey": "Vec<u8>",
+  "Transaction": "Vec<u8>",
+  "EthSigningTxResponse": {
+    "_enum": {
+      "Success": "(Vec<u8>)",
+      "Error": "(Vec<ValidatorId>)"
+    }
+  },
+  "KeygenResponse": {
+    "_enum": {
+      "Success": "(PublicKey)",
+      "Failure": "(Vec<ValidatorId>)"
+    }
+  },
+  "ChainParams": {
+    "_enum": {
+      "Ethereum": "(Vec<u8>)",
+      "Other": "(Vec<u8>)"
+    }
+  },
+  "KeygenRequest": {
+    "chain": "ChainParams",
+    "validator_candidates": "Vec<ValidatorId>"
+  },
+  "Vault": {
+    "old_key": "PublicKey",
+    "new_key": "PublicKey",
+    "tx": "Transaction"
+  },
+  "VaultRotationResponse": {
+    "_enum": {
+      "Success": {
+        "old_key": "PublicKey",
+        "new_key": "PublicKey",
+        "tx": "Transaction"
+      },
+      "Failure": ""
+    }
+  },
   "ReserveId": "[u8;4]",
   "ValidatorSize": "u32",
   "VoteCount": "u32"
