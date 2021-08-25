@@ -169,8 +169,6 @@ impl pallet_cf_vaults::Config for Runtime {
 	type PublicKey = Vec<u8>;
 	type Transaction = Vec<u8>;
 	type RotationHandler = Auction;
-	type Nonce = u64;
-	type ChainIdentifier = u32;
 	type NonceProvider = Vaults;
 }
 

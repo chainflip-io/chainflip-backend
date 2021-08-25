@@ -4,7 +4,8 @@ use crate as pallet_cf_witness_api;
 
 use cf_traits::{
 	impl_mock_ensure_witnessed_for_origin, impl_mock_stake_transfer,
-	impl_mock_witnesser_for_account_and_call_types, Chainflip, NonceProvider, VaultRotationHandler,
+	impl_mock_witnesser_for_account_and_call_types, Chainflip, Nonce, NonceIdentifier,
+	NonceProvider, VaultRotationHandler,
 };
 use frame_support::parameter_types;
 use frame_system as system;
@@ -96,10 +97,7 @@ impl VaultRotationHandler for Test {
 }
 
 impl NonceProvider for Test {
-	type Nonce = u64;
-	type ChainIdentifier = u32;
-
-	fn next_nonce(_identifier: Self::ChainIdentifier) -> Self::Nonce {
+	fn next_nonce(_identifier: NonceIdentifier) -> Nonce {
 		// Keep the same nonce for validating txs
 		0
 	}
@@ -111,8 +109,6 @@ impl pallet_cf_vaults::Config for Test {
 	type PublicKey = Vec<u8>;
 	type Transaction = Vec<u8>;
 	type RotationHandler = Self;
-	type Nonce = u64;
-	type ChainIdentifier = u32;
 	type NonceProvider = Self;
 }
 
