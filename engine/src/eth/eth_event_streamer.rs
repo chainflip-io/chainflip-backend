@@ -8,7 +8,7 @@ use web3::{
     Web3,
 };
 
-/// Creates a stream that outputs the (signature, transaction hash, raw log) of events from a contract.
+/// Creates a stream that outputs the events from a contract.
 pub async fn new_eth_event_stream<
     Event: Debug,
     LogDecoder: Fn(H256, H256, RawLog) -> Result<Event>,
