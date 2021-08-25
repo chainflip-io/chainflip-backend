@@ -65,6 +65,12 @@ get:
   path: repo-secret
   name: rinkeby_infura_url
 ---
+kind: secret
+name: digitalocean_token
+get:
+  path: repo-secret
+  name: digitalocean_token
+---
 # Runs on every PR
 kind: pipeline
 name: chainflip-backend-checks
