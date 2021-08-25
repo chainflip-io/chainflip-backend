@@ -80,7 +80,7 @@ token:
   from_secret: digitalocean_token
 
 server:
-  image: packer-1629908584
+  image: 90509425
   size: c-32
   region: fra1
 
