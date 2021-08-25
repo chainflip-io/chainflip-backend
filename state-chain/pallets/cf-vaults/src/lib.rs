@@ -65,9 +65,10 @@ mod tests;
 /// A signing request
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct EthSigningTxRequest<ValidatorId> {
-	// Payload to be signed by the existing aggregate key
-	pub(crate) payload: Vec<u8>,
-	pub(crate) validators: Vec<ValidatorId>,
+	/// Payload to be signed by the existing aggregate key
+	pub payload: Vec<u8>,
+	/// Subset of active validators selected to sign the payload
+	pub validators: Vec<ValidatorId>,
 }
 
 /// A response back with our signature else a list of bad validators

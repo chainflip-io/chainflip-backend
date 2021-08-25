@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use codec::{Decode, Encode};
-use pallet_cf_vaults::KeygenRequest;
+use pallet_cf_vaults::{EthSigningTxRequest, KeygenRequest, VaultRotationRequest};
 use sp_runtime::AccountId32;
 use substrate_subxt::{module, system::System, Event};
 
@@ -22,10 +22,20 @@ pub struct KeygenRequestEvent<V: Vaults> {
 
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode)]
-pub struct EthSigningTxRequestEvent<V: Vaults> {
-    pub payload: Vec<u8>,
+pub struct EthSignTxRequestEvent<V: Vaults> {
+    pub request_index: u64,
 
-    pub validators: Vec<AccountId32>,
+    pub eth_signing_tx_request: EthSigningTxRequest<AccountId32>,
+
+    pub _runtime: PhantomData<V>,
+}
+
+// The order of these fields matter for decoding
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode)]
+pub struct VaultRotationRequestEvent<V: Vaults> {
+    pub request_index: u64,
+
+    pub vault_rotation_request: VaultRotationRequest,
 
     pub _runtime: PhantomData<V>,
 }
@@ -50,4 +60,8 @@ macro_rules! impl_vaults_event_enum {
     };
 }
 
-impl_vaults_event_enum!(KeygenRequestEvent, EthSigningTxRequestEvent);
+impl_vaults_event_enum!(
+    KeygenRequestEvent,
+    EthSignTxRequestEvent,
+    VaultRotationRequestEvent
+);

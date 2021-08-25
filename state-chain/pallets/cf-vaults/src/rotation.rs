@@ -87,8 +87,9 @@ pub enum KeygenResponse<ValidatorId, PublicKey: Into<Vec<u8>>> {
 /// The vault rotation request
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct VaultRotationRequest {
-	pub(crate) chain: ChainParams,
+	pub chain: ChainParams,
 }
+
 /// From chain to request
 impl From<ChainParams> for VaultRotationRequest {
 	fn from(chain: ChainParams) -> Self {

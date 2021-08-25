@@ -1,4 +1,5 @@
 use anyhow::Result;
+use pallet_cf_vaults::rotation::ChainParams;
 use slog::o;
 use sp_core::Hasher;
 use sp_runtime::traits::Keccak256;
@@ -8,11 +9,14 @@ use crate::{
     logging::COMPONENT_KEY,
     mq::{IMQClient, Subject},
     p2p,
-    signing::{KeyId, KeygenInfo, MessageHash, MultisigInstruction},
+    signing::{KeyId, KeygenInfo, MessageHash, MultisigInstruction, SigningInfo},
     state_chain::{
-        pallets::vaults::VaultsEvent::{EthSigningTxRequestEvent, KeygenRequestEvent},
+        pallets::vaults::VaultsEvent::{
+            EthSignTxRequestEvent, KeygenRequestEvent, VaultRotationRequestEvent,
+        },
         sc_event::SCEvent::{AuctionEvent, StakingEvent, ValidatorEvent, VaultsEvent},
     },
+    types::chain::Chain,
 };
 
 use super::{runtime::StateChainRuntime, sc_event::raw_event_to_subject_and_sc_event};
@@ -98,31 +102,48 @@ impl<M: IMQClient> SCObserver<M> {
                             .await
                             .expect("Should publish to MQ");
                     }
-                    EthSigningTxRequestEvent(eth_signing_tx_request) => {
-                        let validators: Vec<_> = eth_signing_tx_request
+                    EthSignTxRequestEvent(eth_sign_tx_request) => {
+                        let validators: Vec<_> = eth_sign_tx_request
+                            .eth_signing_tx_request
                             .validators
                             .iter()
                             .map(|v| p2p::ValidatorId(v.clone().into()))
                             .collect();
 
                         // TODO: Should this hash be on the state chain or the signing module?
-                        let hash = Keccak256::hash(&eth_signing_tx_request.payload[..]);
+                        // https://github.com/chainflip-io/chainflip-backend/issues/446
+                        let hash = Keccak256::hash(
+                            &eth_sign_tx_request.eth_signing_tx_request.payload[..],
+                        );
                         let message_hash = MessageHash(hash.0);
 
-                        let signing_info = SigningInfo::new(
-                            key_id,
-                            self.validators
-                                .get(&key_id)
-                                .expect("validators should exist for current KeyId")
-                                .clone(),
-                        );
+                        // TODO: we want to use some notion of "KeyId"
+                        // https://github.com/chainflip-io/chainflip-backend/issues/442
+                        let signing_info =
+                            SigningInfo::new(KeyId(eth_sign_tx_request.request_index), validators);
 
-                        let sign_tx = MultisigInstruction::Sign(message_hash, validators);
+                        let sign_tx = MultisigInstruction::Sign(message_hash, signing_info);
 
                         self.mq_client
                             .publish(Subject::MultisigInstruction, &sign_tx)
                             .await
                             .expect("should publish to MQ");
+                    }
+                    VaultRotationRequestEvent(vault_rotation_request_event) => {
+                        // broadcast the transaction to the eth chain
+                        match vault_rotation_request_event.vault_rotation_request.chain {
+                            // TODO: The broadcasting should contain some reference to the request_id, so we can report
+                            // failure back to the SC that a particular request id failed
+                            ChainParams::Ethereum(tx) => {
+                                slog::debug!(self.logger, "Broadcasting to ETH: {:?}", tx);
+                                self.mq_client
+                                    .publish(Subject::Broadcast(Chain::ETH), &tx)
+                                    .await
+                                    .expect("should publish to MQ");
+                            }
+                            // Leave this to be explicit about future chains being added
+                            ChainParams::Other(_) => todo!("Chain::Other does not exist"),
+                        }
                     }
                 },
             }
