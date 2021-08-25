@@ -50,11 +50,9 @@ pub async fn new_eth_event_stream<
                 .map_err(|error| anyhow::Error::new(error))
                 .and_then(|log| {
                     decode_log(
-                        /*signature*/
                         *log.topics.first().ok_or_else(|| {
-                            anyhow::Error::msg("Could not get signature from ETH log")
+                            anyhow::Error::msg("Could not get event signature from ETH log")
                         })?,
-                        /*tx hash*/
                         log.transaction_hash.ok_or_else(|| {
                             anyhow::Error::msg("Could not get transaction hash from ETH log")
                         })?,

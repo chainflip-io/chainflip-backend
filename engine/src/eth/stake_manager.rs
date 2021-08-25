@@ -177,6 +177,12 @@ pub enum StakeManagerEvent {
         /// Transaction hash that created the event
         tx_hash: [u8; 32],
     },
+
+    /// `Refunded(amount)`
+    Refunded {
+        /// The amount of FLIP refunded
+        amount: u128,
+    },
 }
 
 impl StakeManager {
@@ -215,6 +221,7 @@ impl StakeManager {
         let claim_executed = SignatureAndEvent::new(&self.contract, "ClaimExecuted")?;
         let flip_supply_updated = SignatureAndEvent::new(&self.contract, "FlipSupplyUpdated")?;
         let min_stake_changed = SignatureAndEvent::new(&self.contract, "MinStakeChanged")?;
+        let refunded = SignatureAndEvent::new(&self.contract, "Refunded")?;
 
         Ok(
             move |signature: H256, tx_hash: H256, raw_log: RawLog| -> Result<StakeManagerEvent> {
@@ -277,6 +284,15 @@ impl StakeManager {
                         new_min_stake: utils::decode_log_param(&log, "newMinStake")?,
                         tx_hash,
                     };
+                    Ok(event)
+                } else if signature == refunded.signature {
+                    println!("Sig matches Refunded, let's goooo");
+                    let log = refunded.event.parse_log(raw_log)?;
+                    println!("Parsed the raw log");
+                    let event = StakeManagerEvent::Refunded {
+                        amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
+                    };
+                    println!("Could not decode log params");
                     Ok(event)
                 } else {
                     Err(anyhow::Error::from(EventParseError::UnexpectedEvent(
@@ -535,6 +551,40 @@ mod tests {
                 assert_eq!(tx_hash, transaction_hash.to_fixed_bytes());
             }
             _ => panic!("Expected Staking::MinStakeChanged, got a different variant"),
+        }
+    }
+
+    #[test]
+    fn refunded_log_parsing() {
+        let settings = settings::test_utils::new_test_settings().unwrap();
+
+        let stake_manager = StakeManager::new(&settings).unwrap();
+        let decode_log = stake_manager.decode_log_closure().unwrap();
+
+        let refunded_event_signature =
+            H256::from_str("0x3d2a04f53164bedf9a8a46353305d6b2d2261410406df3b41f99ce6489dc003c")
+                .unwrap();
+        let transaction_hash =
+            H256::from_str("0xae857f31e9543b0dd1e2092f049897045107e009c281ddf24d32dd5d80ec7492")
+                .unwrap();
+
+        match decode_log(
+            refunded_event_signature,
+            transaction_hash,
+            RawLog {
+                topics: vec![refunded_event_signature],
+                data: hex::decode(
+                    "00000000000000000000000000000000000000000000000000000a1eaa1e2544",
+                )
+                .unwrap(),
+            },
+        )
+        .unwrap()
+        {
+            StakeManagerEvent::Refunded { amount } => {
+                assert_eq!(11126819398980, amount);
+            }
+            _ => panic!("Expected StakeManagerEvent::Refunded, got a different variant"),
         }
     }
 }

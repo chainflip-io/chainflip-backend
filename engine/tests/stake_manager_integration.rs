@@ -94,7 +94,7 @@ pub async fn test_all_stake_manager_events() {
                 );
                 assert_eq!(
                     staker,
-                    &web3::types::H160::from_str("0x33a4622b82d4c04a53e170c638b944ce27cffce3")
+                    &web3::types::H160::from_str("0x70997970c51812dc3a010c7d01b50e0d17dc79c8")
                         .unwrap()
                 );
                 true
