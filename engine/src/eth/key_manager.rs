@@ -145,11 +145,11 @@ impl KeyManager {
         logger: &slog::Logger,
     ) -> Result<impl Stream<Item = Result<KeyManagerEvent>>> {
         eth_event_streamer::new_eth_event_stream(
-            web3.clone(),
+            web3,
             self.deployed_address,
             self.decode_log_closure()?,
             from_block,
-            logger.clone(),
+            logger,
         )
         .await
     }
