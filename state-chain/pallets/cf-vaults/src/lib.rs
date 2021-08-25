@@ -427,7 +427,7 @@ impl<T: Config>
 				new_key,
 				tx,
 			} => {
-				if let Some(keygen_request) = VaultRotations::<T>::get(index) {
+				if let Some(keygen_request) = VaultRotations::<T>::take(index) {
 					// At the moment we just have Ethereum to notify
 					match keygen_request.chain {
 						ChainParams::Ethereum(_) => EthereumChain::<T>::vault_rotated(Vault {
@@ -440,7 +440,6 @@ impl<T: Config>
 					}
 				}
 				// This request is complete
-				VaultRotations::<T>::remove(index);
 				Pallet::<T>::deposit_event(Event::VaultRotationCompleted(index));
 			}
 			VaultRotationResponse::Failure => {
