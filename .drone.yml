@@ -563,7 +563,7 @@ steps:
       - apt-get install curl
       - curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python -
       - cd eth-contracts
-      - $HOME/.poetry/bin/poetry run poetry install
+      - $HOME/.poetry/bin/poetry install
       - $HOME/.poetry/bin/poetry run brownie run deploy_and all_events --network hardhat
   - name: run-tests
     depends_on:
