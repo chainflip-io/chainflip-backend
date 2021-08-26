@@ -59,8 +59,8 @@ use sp_std::prelude::*;
 use sp_std::vec;
 
 use codec::{Encode, FullCodec};
-use ethabi::ethereum_types::U256;
 use ethabi::{Bytes, Function, Param, ParamType, StateMutability};
+use sp_core::U256;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, CheckedSub, Hash, Keccak256, UniqueSaturatedInto, Zero},
 	DispatchError,
@@ -679,13 +679,13 @@ impl<T: Config> Pallet<T> {
 			Token::Tuple(vec![
 				Token::Uint(ethabi::Uint::zero()),
 				Token::Uint(ethabi::Uint::zero()),
-				Token::Uint(claim_details.nonce.into()),
+				Token::Uint(ethabi::ethereum_types::U256(claim_details.nonce.into().0)),
 				Token::Address(Address::from(claim_details.address)),
 			]),
 			// nodeId: bytes32
 			Token::FixedBytes(account_id.using_encoded(|bytes| bytes.to_vec())),
 			// amount: uint
-			Token::Uint(claim_details.amount.into()),
+			Token::Uint(ethabi::ethereum_types::U256(claim_details.amount.into().0)),
 			// staker: address
 			Token::Address(Address::from(claim_details.address)),
 			// expiryTime: uint48

@@ -4,9 +4,9 @@ use crate::{
 };
 use cf_traits::mocks::{epoch_info, time_source};
 use codec::Encode;
-use ethereum_types::U256;
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 use pallet_cf_flip::{ImbalanceSource, InternalSource};
+use sp_core::U256;
 use std::time::Duration;
 
 type FlipError = pallet_cf_flip::Error<Test>;
@@ -559,11 +559,12 @@ fn test_claim_all() {
 }
 
 #[test]
-fn literally_just_load_the_contract() {
-	let stake_manager = ethabi::Contract::load(
+// There have been obtuse test failures due to the loading of the contract failing
+// It uses a different ethabi to the CFE, so we test separately
+fn just_load_the_contract() {
+	assert_ok!(ethabi::Contract::load(
 		std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json").as_ref(),
-	)
-	.unwrap();
+	));
 }
 
 #[test]

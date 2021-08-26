@@ -15,7 +15,6 @@ mod tests;
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_traits::Witnesser;
-	use ethabi::ethereum_types::U256;
 	use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 	use pallet_cf_staking::{
@@ -24,6 +23,7 @@ pub mod pallet {
 	};
 	use pallet_cf_vaults::rotation::{KeygenResponse, RequestIndex, VaultRotationResponse};
 	use pallet_cf_vaults::{Call as VaultsCall, Config as VaultsConfig, EthSigningTxResponse};
+	use sp_core::U256;
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
 
