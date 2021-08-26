@@ -101,5 +101,13 @@
   },
   "ReserveId": "[u8;4]",
   "ValidatorSize": "u32",
-  "VoteCount": "u32"
+  "VoteCount": "u32",
+  "NonceIdentifier": {
+    "_enum": [
+      "Ethereum",
+      "Bitcoin",
+      "Dot"
+    ]
+  },
+  "Nonce": "u64"
 }
