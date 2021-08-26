@@ -6,7 +6,7 @@ use sp_runtime::traits::Keccak256;
 use substrate_subxt::{Client, EventSubscription};
 
 use crate::{
-    eth::Web3Signer,
+    eth::{CFContract, ContractCallDetails, Web3Signer},
     logging::COMPONENT_KEY,
     mq::{IMQClient, Subject},
     p2p,
@@ -144,14 +144,16 @@ impl<M: IMQClient> SCObserver<M> {
                             // failure back to the SC that a particular request id failed
                             ChainParams::Ethereum(tx) => {
                                 slog::debug!(self.logger, "Broadcasting to ETH: {:?}", tx);
-                                
-                                // How to select the contract here? 
-                                // with an enum from `new()` and we can specify the contract. Then the calling
-                                // code will be able to route to the correct call.
-                                let tx_data = ContractCallDetails {
-
+                                match self
+                                    .web3_signer
+                                    .sign_and_broadcast_to(tx, CFContract::KeyManager)
+                                    .await
+                                {
+                                    Ok(tx_hash) => {
+                                        println!("Successfully broadcast, hash is: {:?}", tx_hash)
+                                    }
+                                    Err(e) => println!("Oh no, we errored sir: {:?}", e),
                                 }
-                                web3_signer.sign_and_broadcast(tx);
                             }
                             // Leave this to be explicit about future chains being added
                             ChainParams::Other(_) => todo!("Chain::Other does not exist"),
