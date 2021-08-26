@@ -557,7 +557,7 @@ steps:
       - npx hardhat node
   - name: eth-events-setup
     depends_on:
-      - hardhat-setup
+      - hardhat-start
     image: cd eth-contracts
     commands: 
       - poetry run poetry install
