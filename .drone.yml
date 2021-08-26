@@ -557,7 +557,7 @@ steps:
       - npx hardhat node
   - name: eth-events-setup
     depends_on:
-      - hardhat-start
+      - hardhat-setup
     image: node:14-alpine
     commands: 
       - cd eth-contracts
