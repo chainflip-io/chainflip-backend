@@ -558,14 +558,8 @@ steps:
   - name: eth-events-setup
     depends_on:
       - hardhat-setup
-    image: python:3.9.6-alpine3.14
+    image: jonatkinson/python-poetry:3.7
     commands:
-      - apk add curl
-      - apk add gcc musl-dev python3-dev
-      - apk add --no-cache --virtual .build-deps && pip install cython && apk del .build-deps
-      - curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python3 -
-      - . $HOME/.poetry/env
-      - python -m pip install --upgrade pip
       - cd eth-contracts
       - poetry run poetry install
       - poetry run brownie run deploy_and all_events --network hardhat
