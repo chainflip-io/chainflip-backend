@@ -561,7 +561,8 @@ steps:
     image: python:3.9.6-alpine3.14
     commands:
       - apk add curl
-      - curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python3 $HOME/.poetry/env
+      - curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python3 -
+      - . $HOME/.poetry/env
       - cd eth-contracts
       - poetry run poetry install
       - poetry run brownie run deploy_and all_events --network hardhat
