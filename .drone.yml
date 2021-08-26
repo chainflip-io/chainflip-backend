@@ -558,7 +558,7 @@ steps:
   - name: eth-events-setup
     depends_on:
       - hardhat-setup
-    image: jonatkinson/python-poetry:3.7
+    image: airdock/python-poetry
     commands:
       - cd eth-contracts
       - poetry run poetry install
