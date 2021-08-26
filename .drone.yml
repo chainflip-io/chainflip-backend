@@ -559,7 +559,9 @@ steps:
     depends_on:
       - hardhat-setup
     image: node:14-alpine
-    commands: 
+    commands:
+      - curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python3 -
+         . $HOME/.poetry/env
       - cd eth-contracts
       - poetry run poetry install
       - poetry run brownie run deploy_and all_events --network hardhat
