@@ -573,9 +573,9 @@ steps:
 # Config
 trigger:
   event:
-    - push
-#  cron:
-#    - nightly
+    - cron
+  cron:
+    - nightly
 
 image_pull_secrets:
   - dockerconfigjson
