@@ -561,7 +561,7 @@ steps:
     image: python:3.9.6-alpine3.14
     commands:
       - apk add curl
-      - apk add --no-cache --virtual .build-deps gcc musl-dev && pip install cython && apk del .build-deps
+      - apk add gcc musl-dev python3-dev
       - curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python3 -
       - . $HOME/.poetry/env
       - cd eth-contracts
