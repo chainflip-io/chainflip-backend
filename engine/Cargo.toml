@@ -73,6 +73,7 @@ pallet-cf-flip = {path = "../state-chain/pallets/cf-flip"}
 pallet-cf-reputation = {path = "../state-chain/pallets/cf-reputation"}
 pallet-cf-staking = {path = "../state-chain/pallets/cf-staking"}
 pallet-cf-validator = {path = "../state-chain/pallets/cf-validator"}
+pallet-cf-vaults = {path = "../state-chain/pallets/cf-vaults"}
 state-chain-runtime = {path = "../state-chain/runtime"}
 
 [dependencies.curv]

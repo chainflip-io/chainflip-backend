@@ -28,6 +28,8 @@ use codec::{Decode, Encode};
 use super::pallets::{auction, emissions, reputation, staking, validator, witness_api};
 
 use pallet_cf_flip::ImbalanceSource;
+use pallet_cf_reputation::OfflineCondition;
+use pallet_cf_vaults::{EthSigningTxRequest, KeygenRequest, VaultRotationRequest};
 
 use serde::{Deserialize, Serialize};
 
@@ -123,6 +125,15 @@ impl Runtime for StateChainRuntime {
             .register_type_size::<ImbalanceSource<AccountId32>>("ImbalanceSource<T::AccountId>");
         event_type_registry.register_type_size::<i32>("ReputationPoints");
         event_type_registry.register_type_size::<u32>("OnlineCreditsFor<T>");
+
+        event_type_registry.register_type_size::<u64>("RequestIndex");
+        event_type_registry.register_type_size::<OfflineCondition>("OfflineCondition");
+        event_type_registry
+            .register_type_size::<KeygenRequest<AccountId32>>("KeygenRequest<T::ValidatorId>");
+        event_type_registry.register_type_size::<EthSigningTxRequest<AccountId32>>(
+            "EthSigningTxRequest<T::ValidatorId>",
+        );
+        event_type_registry.register_type_size::<VaultRotationRequest>("VaultRotationRequest");
     }
 }
 
