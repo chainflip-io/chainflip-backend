@@ -1,4 +1,4 @@
-use crate::{self as pallet_cf_transaction_broadcast, instances::BaseConfig};
+use crate::{self as pallet_cf_transaction_broadcast, BroadcastContext, SignerNomination, instances::BaseConfig};
 use sp_core::H256;
 use frame_support::parameter_types;
 use frame_support::instances::Instance0;
@@ -6,6 +6,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup}, testing::Header,
 };
 use frame_system;
+use codec::{Encode, Decode};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -60,12 +61,68 @@ impl BaseConfig for Test {
 	type ChainId = u64;
 }
 
+pub struct MockNominator;
+pub const RANDOM_NOMINEE: u64 = 0xc001d00d as u64;
+
+impl SignerNomination for MockNominator {
+	type SignerId = u64;
+
+	fn nomination_with_seed(_seed: u64) -> Self::SignerId {
+		RANDOM_NOMINEE
+	}
+
+	fn threshold_nomination_with_seed(seed: u64) -> Vec<Self::SignerId> {
+		vec![RANDOM_NOMINEE]
+	}
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub enum MockBroadcast {
+	New,
+	PayloadConstructed,
+	ThresholdSigReceived(Vec<u8>),
+	Complete,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub struct MockUnsignedTx;
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub struct MockSignedTx;
+
+impl BroadcastContext<<Test as BaseConfig>::ChainId> for MockBroadcast {
+	const CHAIN_ID: u64 = 0;
+
+	type Payload = Vec<u8>;
+	type Signature = Vec<u8>;
+	type UnsignedTransaction = MockUnsignedTx;
+	type SignedTransaction = MockSignedTx;
+
+	fn construct_signing_payload(&mut self) -> Self::Payload {
+		assert_eq!(*self, MockBroadcast::New);
+		*self = MockBroadcast::PayloadConstructed;
+		b"payload".to_vec()
+	}
+
+	fn construct_unsigned_transaction(
+		&mut self,
+		sig: &Self::Signature,
+	) -> Self::UnsignedTransaction {
+		assert_eq!(sig, b"signed-by-cfe");
+		*self = MockBroadcast::ThresholdSigReceived(sig.clone());
+		MockUnsignedTx
+	}
+
+	fn on_transaction_ready(&mut self, _signed_tx: &Self::SignedTransaction) {
+		*self = MockBroadcast::Complete;
+	}
+}
+
 impl pallet_cf_transaction_broadcast::Config<Instance0> for Test {
 	type Event = Event;
 	type EnsureWitnessed = MockEnsureWitnessed;
-	// type RequestContext = ; TODO
+	type BroadcastContext = MockBroadcast;
+	type SignerNomination = MockNominator;
 }
-
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
