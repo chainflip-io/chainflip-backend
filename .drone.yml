@@ -560,7 +560,7 @@ steps:
     depends_on:
       - hardhat-setup
     commands:
-      - sh ./engine/tests/scripts/setup.sh
+      - brownie run deploy_and all_events --network hardhat
   - name: run-tests
     depends_on:
       - stakemanager-events-setup
