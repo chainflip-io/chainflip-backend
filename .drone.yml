@@ -65,98 +65,6 @@ get:
   path: repo-secret
   name: rinkeby_infura_url
 ---
-# Runs on every PR
-kind: pipeline
-name: chainflip-backend-checks
-type: kubernetes
-
-environment:
-  SCCACHE_REDIS: redis://drone-redis-headless:6379/
-  SCCACHE_CACHE_SIZE: 14G
-
-steps:
-  #  Checks the the .drone.yml file is formatted correctly
-  - name: lint-drone-yml
-    image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
-    resources:
-      limits:
-        cpu: 3000
-    commands:
-      - drone lint --trusted
-
-  #  Builds the base image for running build jobs
-  - name: rust-base
-    image: plugins/docker
-    settings:
-      username:
-        from_secret: docker_username
-      password:
-        from_secret: docker_password
-      repo: ghcr.io/chainflip-io/chainflip-backend/rust-base
-      dockerfile: Dockerfile.rust-base
-      registry: ghcr.io
-      tags: latest
-      cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    when:
-      paths:
-        - Dockerfile.rust-base
-        - .drone.yml
-
-  #  Format checks
-  - name: fmt-validator-package
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    commands:
-      - >
-        cargo fmt -p chainflip-engine
-        -p cf-p2p
-        -p cf-p2p-rpc
-        -p pallet-cf-auction
-        -p pallet-cf-emissions
-        -p pallet-cf-flip
-        -p pallet-cf-rewards
-        -p pallet-cf-reputation
-        -p pallet-cf-staking
-        -p pallet-cf-validator
-        -p pallet-cf-vaults
-        -p pallet-cf-witnesser
-        -p pallet-cf-witnesser-api
-        -p cf-traits
-        -- --check
-      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
-
-  #  Run cargo check on the entire backend
-  - name: check-chainflip-backend
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    depends_on:
-      - rust-base
-    commands:
-      - cargo check --all-targets
-
-  #  Performs all unit tests
-  - name: test-validator-package
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    commands:
-      - cargo test --locked --lib --release
-      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
-
-trigger:
-  branch:
-    exclude:
-      - devnet/*
-  event:
-    - pull_request
-
-image_pull_secrets:
-  - dockerconfigjson
-
-node_selector:
-  type: ci
-
-tolerations:
-  - key: "workloadKind"
-    operator: "Equal"
-    value: "ci"
----
 # Runs when PR is merged to release branch and develop
 kind: pipeline
 type: kubernetes
@@ -167,7 +75,7 @@ environment:
   SCCACHE_CACHE_SIZE: 14G
 
 steps:
-# Notify when files change
+  # Notify when files change
   - name: notify-file-change
     image: appleboy/drone-discord
     when:
@@ -187,7 +95,7 @@ steps:
         Please update your [types.json](https://github.com/chainflip-io/chainflip-backend/blob/develop/state-chain/types.json)
         and/or [Default.toml](https://github.com/chainflip-io/chainflip-backend/blob/develop/engine/config/Default.toml)
 
-#  Builds the base image for running build jobs
+  #  Builds the base image for running build jobs
   - name: rust-base
     resources:
       limits:
@@ -303,7 +211,7 @@ steps:
         Duration: `{{since build.started}}`
         Responsible parties: <@401244824440799233>, <@472886957920485386>, <@464710706567053313>, <@261113437642424320>
 
-# Get the latest cluster repo
+  # Get the latest cluster repo
   - name: clone-cluster
     image: alpine/git
     depends_on:
@@ -312,7 +220,7 @@ steps:
       - git clone https://github.com/chainflip-io/chainflip-cluster.git cluster
       - chmod +x cluster/build.sh
 
-# Notify devs that Testnet is going down
+  # Notify devs that Testnet is going down
   - name: notify-testnet-down
     image: appleboy/drone-discord
     depends_on:
@@ -328,7 +236,7 @@ steps:
         Testnet will be recreated in 1m0s
         To cancel this build head here: {{build.link}}
 
-# Destroy the testnet
+  # Destroy the testnet
   - name: destroy-current-testnet
     pull: always
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
@@ -340,7 +248,7 @@ steps:
       - sleep 60
       - cluster/build.sh --branch=$DRONE_COMMIT_BRANCH --destroy --rpc
 
-# Create new testnet
+  # Create new testnet
   - name: create-new-testnet
     pull: always
     depends_on:
@@ -357,7 +265,7 @@ steps:
       - cd cluster
       - ./build.sh --branch=$DRONE_COMMIT_BRANCH --tag=$DRONE_COMMIT_SHA
 
-# Notify devs Testnet is up
+  # Notify devs Testnet is up
   - name: notify-testnet-up
     image: ghcr.io/chainflip-io/drone-discord
     depends_on:
@@ -373,7 +281,7 @@ steps:
         Testnet released with commit hash: `{{commit.sha}}`
         [Check the logs here](https://monitor.chainflip.xyz/explore?orgId=1&left=%5B%22now-1h%22%2C%22now%22%2C%22Loki%22%2C%7B%22expr%22:%22%7Bchainflip_xyz_tag%3D%5C%22{{commit.sha}}%5C%22%7D%22%7D%5D)
         [Bashful Polkadot](https://polkadot.js.org/apps/?rpc=wss%3A%2F%2Fbashful-{{ regexReplace "/" source.branch "-" }}.chainflip.xyz#/explorer)
-# Notify devs Testnet has failed to launch
+  # Notify devs Testnet has failed to launch
   - name: notify-testnet-failure
     image: appleboy/drone-discord
     depends_on:
@@ -535,9 +443,8 @@ services:
       - "/app/ganache-core.docker.cli.js"
       - "--mnemonic chainflip"
   - image: nats:latest
-    ports: [4222,8222]
+    ports: [4222, 8222]
     name: nats
-
 
 steps:
   - name: run-tests
