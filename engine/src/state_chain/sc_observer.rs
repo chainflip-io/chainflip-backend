@@ -6,6 +6,7 @@ use sp_runtime::traits::Keccak256;
 use substrate_subxt::{Client, EventSubscription};
 
 use crate::{
+    eth::Web3Signer,
     logging::COMPONENT_KEY,
     mq::{IMQClient, Subject},
     p2p,
@@ -24,9 +25,10 @@ use super::{runtime::StateChainRuntime, sc_event::raw_event_to_subject_and_sc_ev
 pub async fn start<M: IMQClient>(
     mq_client: M,
     subxt_client: Client<StateChainRuntime>,
+    web3_signer: Web3Signer,
     logger: &slog::Logger,
 ) {
-    SCObserver::new(mq_client, subxt_client, logger)
+    SCObserver::new(mq_client, subxt_client, web3_signer, logger)
         .await
         .run()
         .await
@@ -36,6 +38,7 @@ pub async fn start<M: IMQClient>(
 pub struct SCObserver<M: IMQClient> {
     mq_client: M,
     subxt_client: Client<StateChainRuntime>,
+    web3_signer: Web3Signer,
     logger: slog::Logger,
 }
 
@@ -43,11 +46,13 @@ impl<M: IMQClient> SCObserver<M> {
     pub async fn new(
         mq_client: M,
         subxt_client: Client<StateChainRuntime>,
+        web3_signer: Web3Signer,
         logger: &slog::Logger,
     ) -> Self {
         Self {
             mq_client,
             subxt_client,
+            web3_signer,
             logger: logger.new(o!(COMPONENT_KEY => "SCObserver")),
         }
     }
@@ -128,6 +133,9 @@ impl<M: IMQClient> SCObserver<M> {
                             .publish(Subject::MultisigInstruction, &sign_tx)
                             .await
                             .expect("should publish to MQ");
+
+                        // receive the signed message via message queue here?
+                        // eventually this will be a one shot channel
                     }
                     VaultRotationRequestEvent(vault_rotation_request_event) => {
                         // broadcast the transaction to the eth chain
@@ -136,10 +144,14 @@ impl<M: IMQClient> SCObserver<M> {
                             // failure back to the SC that a particular request id failed
                             ChainParams::Ethereum(tx) => {
                                 slog::debug!(self.logger, "Broadcasting to ETH: {:?}", tx);
-                                self.mq_client
-                                    .publish(Subject::Broadcast(Chain::ETH), &tx)
-                                    .await
-                                    .expect("should publish to MQ");
+                                
+                                // How to select the contract here? 
+                                // with an enum from `new()` and we can specify the contract. Then the calling
+                                // code will be able to route to the correct call.
+                                let tx_data = ContractCallDetails {
+
+                                }
+                                web3_signer.sign_and_broadcast(tx);
                             }
                             // Leave this to be explicit about future chains being added
                             ChainParams::Other(_) => todo!("Chain::Other does not exist"),

@@ -23,9 +23,11 @@ use futures::{Future, Stream, StreamExt};
 
 use slog::o;
 
+use super::Web3Signer;
+
 /// Set up the eth event streamer for the KeyManager contract, and start it
 pub async fn start_key_manager_witness(
-    web3: &Web3<WebSocket>,
+    web3_signer: &Web3Signer,
     settings: &settings::Settings,
     _signer: Arc<Mutex<PairSigner<StateChainRuntime, sp_core::sr25519::Pair>>>,
     _subxt_client: Client<StateChainRuntime>,
@@ -39,7 +41,7 @@ pub async fn start_key_manager_witness(
 
     slog::info!(logger, "Creating Event Stream");
     let mut event_stream = key_manager
-        .event_stream(web3, settings.eth.from_block, &logger)
+        .event_stream(&web3_signer.web3, settings.eth.from_block, &logger)
         .await?;
 
     Ok(async move {

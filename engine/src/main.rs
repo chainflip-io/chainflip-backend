@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use chainflip_engine::{
-    eth::{self, eth_broadcaster, key_manager, stake_manager},
+    eth::{self, eth_broadcaster, key_manager, stake_manager, Web3Signer},
     health::HealthMonitor,
     heartbeat,
     mq::nats_client::NatsMQClient,
@@ -82,7 +82,7 @@ async fn main() {
     let (_, p2p_shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
 
-    let web3 = eth::new_synced_web3_client(&settings, &root_logger)
+    let web3_signer = Web3Signer::new_synced(&settings, &root_logger)
         .await
         .unwrap();
 
@@ -109,11 +109,15 @@ async fn main() {
         ),
         heartbeat::start(subxt_client.clone(), pair_signer.clone(), &root_logger),
         // Start state chain components
-        state_chain::sc_observer::start(mq_client.clone(), subxt_client.clone(), &root_logger),
+        state_chain::sc_observer::start(
+            mq_client.clone(),
+            subxt_client.clone(),
+            web3_signer.clone(),
+            &root_logger
+        ),
         // Start eth components
-        eth_broadcaster::start_eth_broadcaster(&web3, &settings, mq_client.clone(), &root_logger),
         stake_manager::start_stake_manager_witness(
-            &web3,
+            &web3_signer,
             &settings,
             pair_signer.clone(),
             subxt_client.clone(),
@@ -122,7 +126,7 @@ async fn main() {
         .await
         .unwrap(),
         key_manager::start_key_manager_witness(
-            &web3,
+            &web3_signer,
             &settings,
             pair_signer,
             subxt_client,
