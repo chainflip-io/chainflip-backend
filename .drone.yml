@@ -560,6 +560,7 @@ steps:
       - hardhat-setup
     image: ghcr.io/chainflip-io/chainflip-eth-contracts/eth-brownie:latest
     commands:
+      - cd eth-contracts
       - $HOME/.poetry/bin/poetry install
       - $HOME/.poetry/bin/poetry run brownie run deploy_and all_events --network hardhat
   - name: run-tests
