@@ -75,7 +75,7 @@ environment:
   SCCACHE_CACHE_SIZE: 14G
 
 steps:
-  # Notify when files change
+# Notify when files change
   - name: notify-file-change
     image: appleboy/drone-discord
     when:
@@ -214,6 +214,10 @@ steps:
   # Get the latest cluster repo
   - name: clone-cluster
     image: alpine/git
+    when:
+      branch:
+        - release/*
+        - devnet/*
     depends_on:
       - test-chainflip-backend
     commands:
@@ -223,6 +227,10 @@ steps:
   # Notify devs that Testnet is going down
   - name: notify-testnet-down
     image: appleboy/drone-discord
+    when:
+      branch:
+        - release/*
+        - devnet/*
     depends_on:
       - test-chainflip-backend
     settings:
@@ -238,8 +246,12 @@ steps:
 
   # Destroy the testnet
   - name: destroy-current-testnet
-    pull: always
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+    when:
+      branch:
+        - release/*
+        - devnet/*
+    pull: always
     failure: ignore
     depends_on:
       - clone-cluster
@@ -250,6 +262,11 @@ steps:
 
   # Create new testnet
   - name: create-new-testnet
+    image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+    when:
+      branch:
+        - release/*
+        - devnet/*
     pull: always
     depends_on:
       - build-state-chain-node
@@ -260,7 +277,6 @@ steps:
         from_secret: rinkeby_infura_url
       DOCKER_CONFIG_JSON:
         from_secret: dockerconfigjson
-    image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     commands:
       - cd cluster
       - ./build.sh --branch=$DRONE_COMMIT_BRANCH --tag=$DRONE_COMMIT_SHA
@@ -268,6 +284,10 @@ steps:
   # Notify devs Testnet is up
   - name: notify-testnet-up
     image: ghcr.io/chainflip-io/drone-discord
+    when:
+      branch:
+        - release/*
+        - devnet/*
     depends_on:
       - create-new-testnet
     settings:
@@ -284,11 +304,14 @@ steps:
   # Notify devs Testnet has failed to launch
   - name: notify-testnet-failure
     image: appleboy/drone-discord
-    depends_on:
-      - create-new-testnet
     when:
+      branch:
+        - release/*
+        - devnet/*
       status:
         - failure
+    depends_on:
+      - create-new-testnet
     settings:
       username: Testnet Bot
       webhook_id:
@@ -304,19 +327,23 @@ steps:
 
   # Destroy the testnet on failure
   - name: destroy-testnet-on-failure
-    pull: always
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+    pull: always
+    when:
+      branch:
+        - release/*
+        - devnet/*
+      status:
+        - failure
     depends_on:
       - create-new-testnet
     failure: ignore
-    when:
-      status:
-        - failure
     commands:
-      - kubectl get pods -n $DRONE_COMMIT_BRANCH
-      - kubectl logs -l app.kubernetes.io/name=chainflip-engine -n $DRONE_COMMIT_BRANCH --tail=-1
-      - kubectl logs -l app.kubernetes.io/name=state-chain-node -n $DRONE_COMMIT_BRANCH --tail=-1
-      - cluster/build.sh --branch=$DRONE_COMMIT_BRANCH --destroy --rpc
+      - export branch=$(echo $DRONE_COMMIT_BRANCH | tr \/ -)
+      - kubectl get pods -n $branch
+      - kubectl logs -l app.kubernetes.io/name=chainflip-engine -n $branch --tail=-1
+      - kubectl logs -l app.kubernetes.io/name=state-chain-node -n $branch --tail=-1
+      - cluster/build.sh --branch=$branch --destroy --rpc
 
 service_account_name: drone-runner-kube
 
