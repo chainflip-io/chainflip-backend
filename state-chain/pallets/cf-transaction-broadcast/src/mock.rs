@@ -1,12 +1,15 @@
-use crate::{self as pallet_cf_transaction_broadcast, BroadcastContext, SignerNomination, instances::BaseConfig};
-use sp_core::H256;
-use frame_support::parameter_types;
-use frame_support::instances::Instance0;
-use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup}, testing::Header,
+use crate::{
+	self as pallet_cf_transaction_broadcast, BaseConfig, BroadcastContext, BroadcastFailure, SignerNomination,
 };
+use codec::{Decode, Encode};
+use frame_support::instances::Instance0;
+use frame_support::parameter_types;
 use frame_system;
-use codec::{Encode, Decode};
+use sp_core::H256;
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -89,13 +92,12 @@ pub struct MockUnsignedTx;
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct MockSignedTx;
 
-impl BroadcastContext<<Test as BaseConfig>::ChainId> for MockBroadcast {
-	const CHAIN_ID: u64 = 0;
-
+impl BroadcastContext<Test> for MockBroadcast {
 	type Payload = Vec<u8>;
 	type Signature = Vec<u8>;
 	type UnsignedTransaction = MockUnsignedTx;
 	type SignedTransaction = MockSignedTx;
+	type TransactionHash = Vec<u8>;
 
 	fn construct_signing_payload(&mut self) -> Self::Payload {
 		assert_eq!(*self, MockBroadcast::New);
@@ -115,6 +117,14 @@ impl BroadcastContext<<Test as BaseConfig>::ChainId> for MockBroadcast {
 	fn on_transaction_ready(&mut self, _signed_tx: &Self::SignedTransaction) {
 		*self = MockBroadcast::Complete;
 	}
+
+	fn on_broadcast_success(&mut self, transaction_hash: &Self::TransactionHash) {
+		todo!()
+	}
+
+	fn on_broadcast_failure( &mut self, failure: &BroadcastFailure<u64>) {
+		todo!()
+	}
 }
 
 impl pallet_cf_transaction_broadcast::Config<Instance0> for Test {
@@ -126,8 +136,11 @@ impl pallet_cf_transaction_broadcast::Config<Instance0> for Test {
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
-	
+	let mut ext: sp_io::TestExternalities = frame_system::GenesisConfig::default()
+		.build_storage::<Test>()
+		.unwrap()
+		.into();
+
 	ext.execute_with(|| {
 		System::set_block_number(1);
 	});

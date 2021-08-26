@@ -2,6 +2,8 @@ use crate::{mock::*, BroadcastId, Error, Event as BroadcastEvent, PayloadFor, Pe
 use frame_support::{assert_noop, instances::Instance0};
 use frame_system::RawOrigin;
 
+const KEY_ID: u64 = 42;
+
 struct MockCfe;
 
 impl MockCfe {
@@ -15,8 +17,8 @@ impl MockCfe {
 		match event {
 			Event::pallet_cf_transaction_broadcast_Instance0(broadcast_event) => {
 				match broadcast_event {
-					BroadcastEvent::ThresholdSignatureRequest(id, nominees, payload) => {
-						Self::handle_threshold_sig_request(id, nominees, payload)
+					BroadcastEvent::ThresholdSignatureRequest(id, key_id, nominees, payload) => {
+						Self::handle_threshold_sig_request(id, key_id, nominees, payload)
 					}
 					BroadcastEvent::TransactionSigningRequest(id, nominee, unsigned_tx) => {
 						Self::handle_transaction_signature_request(id, nominee, unsigned_tx)
@@ -34,9 +36,11 @@ impl MockCfe {
 	// Asserts the payload is as expected and returns a super-secure signature.
 	fn handle_threshold_sig_request(
 		id: BroadcastId,
+		key_id: u64,
 		signers: Vec<u64>,
 		payload: PayloadFor<Test, Instance0>,
 	) {
+		assert_eq!(key_id, KEY_ID);
 		assert_eq!(payload, b"payload");
 		assert_eq!(signers, vec![RANDOM_NOMINEE]);
 		TransactionBroadcast::signature_ready(
@@ -66,9 +70,8 @@ fn broadcast_state(id: BroadcastId) -> Option<MockBroadcast> {
 #[test]
 fn test_broadcast_flow() {
 	new_test_ext().execute_with(|| {
-		let bc = MockBroadcast::New;
 		// Construct the payload and request threshold sig.
-		assert_eq!(1, TransactionBroadcast::initiate_broadcast(bc));
+		assert_eq!(1, TransactionBroadcast::initiate_broadcast(MockBroadcast::New, KEY_ID));
 		assert_eq!(broadcast_state(1), Some(MockBroadcast::PayloadConstructed));
 		// CFE posts the signature back on-chain once the threshold sig has been constructed.
 		// This triggers a new request to sign the actual tx.
