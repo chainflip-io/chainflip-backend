@@ -1,9 +1,13 @@
 use std::marker::PhantomData;
 
 use codec::{Decode, Encode};
-use pallet_cf_vaults::{EthSigningTxRequest, KeygenRequest, VaultRotationRequest};
+use pallet_cf_vaults::{
+    rotation::VaultRotationResponse, EthSigningTxRequest, EthSigningTxResponse, KeygenRequest,
+    VaultRotationRequest,
+};
+use secp256k1::PublicKey;
 use sp_runtime::AccountId32;
-use substrate_subxt::{module, system::System, Event};
+use substrate_subxt::{module, system::System, Call, Event};
 
 use crate::state_chain::{runtime::StateChainRuntime, sc_event::SCEvent};
 
@@ -38,6 +42,17 @@ pub struct VaultRotationRequestEvent<V: Vaults> {
     pub vault_rotation_request: VaultRotationRequest,
 
     pub _runtime: PhantomData<V>,
+}
+
+#[derive(Clone, Debug, PartialEq, Call, Encode)]
+pub struct VaultRotationResponseCall<T: Vaults> {
+    pub request_id: u64,
+
+    // Can we provide better types than this? It may require some changes
+    // to the type accepted by the SC
+    pub response: VaultRotationResponse<Vec<u8>, Vec<u8>>,
+
+    pub _runtime: PhantomData<T>,
 }
 
 /// Derives an enum for the listed events and corresponding implementations of `From`.

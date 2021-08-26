@@ -190,21 +190,6 @@ pub mod pallet {
 			}
 		}
 
-		/// A vault rotation response received from a vault rotation request and handled
-		/// by [VaultRotationRequestResponse::handle_response]
-		#[pallet::weight(10_000)]
-		pub fn vault_rotation_response(
-			origin: OriginFor<T>,
-			request_id: RequestIndex,
-			response: VaultRotationResponse<T::PublicKey, T::Transaction>,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-			match VaultRotationRequestResponse::<T>::handle_response(request_id, response) {
-				Ok(_) => Ok(().into()),
-				Err(e) => Err(Error::<T>::from(e).into()),
-			}
-		}
-
 		/// A ethereum signing transaction response received and handled
 		/// by [EthereumChain::handle_response]
 		#[pallet::weight(10_000)]
@@ -217,6 +202,21 @@ pub mod pallet {
 			match EthereumChain::<T>::handle_response(request_id, response) {
 				Ok(_) => Ok(().into()),
 				Err(_) => Err(Error::<T>::EthSigningTxResponseFailed.into()),
+			}
+		}
+
+		/// A vault rotation response received from a vault rotation request and handled
+		/// by [VaultRotationRequestResponse::handle_response]
+		#[pallet::weight(10_000)]
+		pub fn vault_rotation_response(
+			origin: OriginFor<T>,
+			request_id: RequestIndex,
+			response: VaultRotationResponse<T::PublicKey, T::Transaction>,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+			match VaultRotationRequestResponse::<T>::handle_response(request_id, response) {
+				Ok(_) => Ok(().into()),
+				Err(e) => Err(Error::<T>::from(e).into()),
 			}
 		}
 	}

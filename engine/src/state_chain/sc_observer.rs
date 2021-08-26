@@ -1,24 +1,29 @@
+use std::marker::PhantomData;
+
 use anyhow::Result;
-use pallet_cf_vaults::rotation::ChainParams;
+use pallet_cf_vaults::rotation::{ChainParams, VaultRotationResponse};
 use slog::o;
 use sp_core::Hasher;
 use sp_runtime::traits::Keccak256;
-use substrate_subxt::{Client, EventSubscription};
+use substrate_subxt::{Client, EventSubscription, PairSigner};
 
 use crate::{
-    eth::{CFContract, ContractCallDetails, Web3Signer},
+    eth::{CFContract, Web3Signer},
     logging::COMPONENT_KEY,
     mq::{IMQClient, Subject},
     p2p,
     signing::{KeyId, KeygenInfo, MessageHash, MultisigInstruction, SigningInfo},
     state_chain::{
-        pallets::vaults::VaultsEvent::{
-            EthSignTxRequestEvent, KeygenRequestEvent, VaultRotationRequestEvent,
+        pallets::vaults::{
+            VaultRotationResponseCallExt,
+            VaultsEvent::{EthSignTxRequestEvent, KeygenRequestEvent, VaultRotationRequestEvent},
         },
         sc_event::SCEvent::{AuctionEvent, StakingEvent, ValidatorEvent, VaultsEvent},
     },
     types::chain::Chain,
 };
+
+use sp_keyring::AccountKeyring;
 
 use super::{runtime::StateChainRuntime, sc_event::raw_event_to_subject_and_sc_event};
 
@@ -146,13 +151,29 @@ impl<M: IMQClient> SCObserver<M> {
                                 slog::debug!(self.logger, "Broadcasting to ETH: {:?}", tx);
                                 match self
                                     .web3_signer
-                                    .sign_and_broadcast_to(tx, CFContract::KeyManager)
+                                    .sign_and_broadcast_to(tx.clone(), CFContract::KeyManager)
                                     .await
                                 {
                                     Ok(tx_hash) => {
-                                        println!("Successfully broadcast, hash is: {:?}", tx_hash)
+                                        // broadcast was successful. Yay!
+                                        let alice = AccountKeyring::Alice.pair();
+                                        let pair_signer = PairSigner::new(alice);
+
+                                        let vault_rotation_response = VaultRotationResponse {
+                                            old_key: Vec::default(),
+                                            new_key: Vec::default(),
+                                            tx,
+                                        };
+
+                                        self.subxt_client
+                                            .vault_rotation_response(
+                                                &pair_signer,
+                                                vault_rotation_request_event.request_index,
+                                                vault_rotation_response,
+                                            )
+                                            .await?;
                                     }
-                                    Err(e) => println!("Oh no, we errored sir: {:?}", e),
+                                    Err(e) => {}
                                 }
                             }
                             // Leave this to be explicit about future chains being added
