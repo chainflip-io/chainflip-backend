@@ -143,10 +143,9 @@ impl<M: IMQClient> SCObserver<M> {
                         // eventually this will be a one shot channel
                     }
                     VaultRotationRequestEvent(vault_rotation_request_event) => {
-                        // broadcast the transaction to the eth chain
+                        let alice = AccountKeyring::Alice.pair();
+                        let pair_signer = PairSigner::new(alice);
                         match vault_rotation_request_event.vault_rotation_request.chain {
-                            // TODO: The broadcasting should contain some reference to the request_id, so we can report
-                            // failure back to the SC that a particular request id failed
                             ChainParams::Ethereum(tx) => {
                                 slog::debug!(self.logger, "Broadcasting to ETH: {:?}", tx);
                                 match self
@@ -155,15 +154,12 @@ impl<M: IMQClient> SCObserver<M> {
                                     .await
                                 {
                                     Ok(tx_hash) => {
-                                        // broadcast was successful. Yay!
-                                        let alice = AccountKeyring::Alice.pair();
-                                        let pair_signer = PairSigner::new(alice);
-
-                                        let vault_rotation_response = VaultRotationResponse {
-                                            old_key: Vec::default(),
-                                            new_key: Vec::default(),
-                                            tx,
-                                        };
+                                        let vault_rotation_response =
+                                            VaultRotationResponse::Success {
+                                                old_key: Vec::default(),
+                                                new_key: Vec::default(),
+                                                tx,
+                                            };
 
                                         self.subxt_client
                                             .vault_rotation_response(
@@ -173,7 +169,15 @@ impl<M: IMQClient> SCObserver<M> {
                                             )
                                             .await?;
                                     }
-                                    Err(e) => {}
+                                    Err(e) => {
+                                        self.subxt_client
+                                            .vault_rotation_response(
+                                                &pair_signer,
+                                                vault_rotation_request_event.request_index,
+                                                VaultRotationResponse::Failure,
+                                            )
+                                            .await?;
+                                    }
                                 }
                             }
                             // Leave this to be explicit about future chains being added

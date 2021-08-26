@@ -37,7 +37,7 @@ pub trait ChainVault {
 		validators: Vec<Self::ValidatorId>,
 	) -> Result<(), Self::Error>;
 	/// We have confirmation of the rotation back from `Vaults`
-	fn vault_rotated(response: VaultRotationResponse<Self::PublicKey, Self::Transaction>);
+	fn vault_rotated(response: Vault<Self::PublicKey, Self::Transaction>);
 }
 
 /// Events coming in from our chain.  This is used to callback from the request to complete the vault
@@ -96,12 +96,24 @@ impl From<ChainParams> for VaultRotationRequest {
 		VaultRotationRequest { chain }
 	}
 }
-/// A response of our request to rotate the vault
+
+/// The Vault's keys, public that is
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct VaultRotationResponse<PublicKey: Into<Vec<u8>>, Transaction: Into<Vec<u8>>> {
+pub struct Vault<PublicKey: Into<Vec<u8>>, Transaction: Into<Vec<u8>>> {
 	pub old_key: PublicKey,
 	pub new_key: PublicKey,
 	pub tx: Transaction,
+}
+
+/// A response of our request to rotate the vault
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub enum VaultRotationResponse<PublicKey: Into<Vec<u8>>, Transaction: Into<Vec<u8>>> {
+	Success {
+		old_key: PublicKey,
+		new_key: PublicKey,
+		tx: Transaction,
+	},
+	Failure,
 }
 
 #[macro_export]

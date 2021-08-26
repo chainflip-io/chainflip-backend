@@ -84,18 +84,11 @@ impl Web3Signer {
         .and_then(|x| async { x })
         // Make sure the eth node is fully synced
         .and_then(|web3| async {
-            loop {
-                match web3.eth().syncing().await? {
-                    SyncState::Syncing(info) => {
-                        slog::info!(logger, "Waiting for eth node to sync: {:?}", info);
-                    }
-                    SyncState::NotSyncing => {
-                        slog::info!(logger, "Eth node is synced.");
-                        break;
-                    }
-                }
+            while let SyncState::Syncing(info) = web3.eth().syncing().await? {
+                slog::info!(logger, "Waiting for eth node to sync: {:?}", info);
                 tokio::time::sleep(Duration::from_secs(4)).await;
             }
+            slog::info!(logger, "Eth node is synced.");
             Ok(web3)
         })
         .await?;
