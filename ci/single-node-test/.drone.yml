@@ -213,6 +213,11 @@ service_account_name: drone-runner-kube
 trigger:
   event:
     - push
+  branch:
+    exclude:
+      - develop
+      - main
+      - release/*
 
 image_pull_secrets:
   - dockerconfigjson
