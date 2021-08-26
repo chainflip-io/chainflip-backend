@@ -49,6 +49,7 @@ pub async fn start_key_manager_witness(
                 KeyManagerEvent::KeyChange { .. } => {
                     todo!();
                 }
+                KeyManagerEvent::Refunded { amount } => todo!("Refunded({})", amount),
             }
         }
     })
@@ -115,7 +116,7 @@ impl Tokenizable for ChainflipKey {
 /// Represents the events that are expected from the KeyManager contract.
 #[derive(Debug)]
 pub enum KeyManagerEvent {
-    /// The `Staked(nodeId, amount)` event.
+    /// `Staked(nodeId, amount)`
     KeyChange {
         /// Whether the change was signed by the AggKey.
         signed: bool,
@@ -125,6 +126,12 @@ pub enum KeyManagerEvent {
         new_key: ChainflipKey,
         /// Transaction hash that created the event
         tx_hash: [u8; 32],
+    },
+
+    /// `Refunded(amount)`
+    Refunded {
+        /// The amount of ETH refunded
+        amount: u128,
     },
 }
 
@@ -158,6 +165,7 @@ impl KeyManager {
         &self,
     ) -> Result<impl Fn(H256, H256, RawLog) -> Result<KeyManagerEvent>> {
         let key_change = SignatureAndEvent::new(&self.contract, "KeyChange")?;
+        let refunded = SignatureAndEvent::new(&self.contract, "Refunded")?;
 
         Ok(
             move |signature: H256, tx_hash: H256, raw_log: RawLog| -> Result<KeyManagerEvent> {
@@ -169,6 +177,12 @@ impl KeyManager {
                         old_key: utils::decode_log_param::<ChainflipKey>(&log, "oldKey")?,
                         new_key: utils::decode_log_param::<ChainflipKey>(&log, "newKey")?,
                         tx_hash,
+                    };
+                    Ok(event)
+                } else if signature == refunded.signature {
+                    let log = refunded.event.parse_log(raw_log)?;
+                    let event = KeyManagerEvent::Refunded {
+                        amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
                     };
                     Ok(event)
                 } else {
@@ -234,6 +248,7 @@ mod tests {
 
                     assert_eq!(tx_hash, transaction_hash.to_fixed_bytes());
                 }
+                _ => panic!("Expected KeyManagerEvent::KeyChange, got different variant"),
             }
         }
 
@@ -264,6 +279,7 @@ mod tests {
 
                     assert_eq!(tx_hash, transaction_hash.to_fixed_bytes());
                 }
+                _ => panic!("Expected KeyManagerEvent::KeyChange, got different variant"),
             }
         }
 
@@ -294,6 +310,7 @@ mod tests {
 
                     assert_eq!(tx_hash, transaction_hash.to_fixed_bytes());
                 }
+                _ => panic!("Expected KeyManagerEvent::KeyChange, got different variant"),
             }
         }
 
@@ -318,6 +335,40 @@ mod tests {
                 }
             });
             assert!(res.is_err());
+        }
+    }
+
+    #[test]
+    fn refunded_log_parsing() {
+        let settings = settings::test_utils::new_test_settings().unwrap();
+
+        let key_manager = KeyManager::new(&settings).unwrap();
+        let decode_log = key_manager.decode_log_closure().unwrap();
+
+        let refunded_event_signature =
+            H256::from_str("0x3d2a04f53164bedf9a8a46353305d6b2d2261410406df3b41f99ce6489dc003c")
+                .unwrap();
+        let transaction_hash =
+            H256::from_str("0xae857f31e9543b0dd1e2092f049897045107e009c281ddf24d32dd5d80ec7492")
+                .unwrap();
+
+        match decode_log(
+            refunded_event_signature,
+            transaction_hash,
+            RawLog {
+                topics: vec![refunded_event_signature],
+                data: hex::decode(
+                    "00000000000000000000000000000000000000000000000000000a1eaa1e2544",
+                )
+                .unwrap(),
+            },
+        )
+        .unwrap()
+        {
+            KeyManagerEvent::Refunded { amount } => {
+                assert_eq!(11126819398980, amount);
+            }
+            _ => panic!("Expected KeyManager::Refunded, got a different variant"),
         }
     }
 }
