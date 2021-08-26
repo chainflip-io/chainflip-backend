@@ -575,15 +575,12 @@ fn test_claim_payload() {
 
 	const NONCE: u64 = 6;
 
-	println!("About to load stake manager");
 	let stake_manager = ethabi::Contract::load(
 		std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json").as_ref(),
 	)
 	.unwrap();
-	println!("Stake manager loaded");
 	let register_claim = stake_manager.function("registerClaim").unwrap();
 
-	println!("Registered claim function collected");
 	let claim_details: ClaimDetailsFor<Test> = ClaimDetails {
 		msg_hash: None,
 		amount: AMOUNT,

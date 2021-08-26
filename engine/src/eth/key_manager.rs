@@ -130,7 +130,7 @@ pub enum KeyManagerEvent {
 
     /// `Refunded(amount)`
     Refunded {
-        /// The amount of FLIP refunded
+        /// The amount of ETH refunded
         amount: u128,
     },
 }

@@ -180,7 +180,7 @@ pub enum StakeManagerEvent {
 
     /// `Refunded(amount)`
     Refunded {
-        /// The amount of FLIP refunded
+        /// The amount of ETH refunded
         amount: u128,
     },
 }
@@ -286,13 +286,10 @@ impl StakeManager {
                     };
                     Ok(event)
                 } else if signature == refunded.signature {
-                    println!("Sig matches Refunded, let's goooo");
                     let log = refunded.event.parse_log(raw_log)?;
-                    println!("Parsed the raw log");
                     let event = StakeManagerEvent::Refunded {
                         amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
                     };
-                    println!("Could not decode log params");
                     Ok(event)
                 } else {
                     Err(anyhow::Error::from(EventParseError::UnexpectedEvent(
