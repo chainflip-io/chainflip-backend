@@ -12,8 +12,7 @@ use sp_runtime::{
 use crate as pallet_cf_vaults;
 
 use super::*;
-use crate::nonce::NonceUnixTime;
-use cf_traits::Chainflip;
+use cf_traits::{Chainflip, Nonce, NonceIdentifier};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
 type Block = frame_system::mocking::MockBlock<MockRuntime>;
@@ -104,14 +103,19 @@ impl VaultRotationHandler for MockRuntime {
 	}
 }
 
+impl NonceProvider for MockRuntime {
+	fn next_nonce(_identifier: NonceIdentifier) -> Nonce {
+		0
+	}
+}
+
 impl pallet_cf_vaults::Config for MockRuntime {
 	type Event = Event;
 	type EnsureWitnessed = MockEnsureWitness;
 	type PublicKey = Vec<u8>;
 	type Transaction = Vec<u8>;
 	type RotationHandler = Self;
-	type Nonce = u64;
-	type NonceProvider = NonceUnixTime<Self::Nonce, cf_traits::mocks::time_source::Mock>;
+	type NonceProvider = Self;
 }
 
 pub fn bad_validators() -> Vec<ValidatorId> {
