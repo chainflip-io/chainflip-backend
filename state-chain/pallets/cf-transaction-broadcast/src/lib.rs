@@ -39,7 +39,7 @@ pub enum BroadcastFailure<SignerId: Parameter> {
 	TransactionTimeout,
 }
 
-pub trait BroadcastContext<SignerId: Parameter> {
+pub trait BroadcastContext<T: BaseConfig> {
 	type Payload: Parameter;
 	type Signature: Parameter;
 	type UnsignedTransaction: Parameter;
@@ -62,7 +62,7 @@ pub trait BroadcastContext<SignerId: Parameter> {
 	fn on_broadcast_success(&mut self, transaction_hash: &Self::TransactionHash);
 
 	/// Callback for when a 
-	fn on_broadcast_failure(&mut self, failure: &BroadcastFailure<SignerId>);
+	fn on_broadcast_failure(&mut self, failure: &BroadcastFailure<T::ValidatorId>);
 }
 
 /// Something that can nominate signers from the set of active validators.
@@ -88,15 +88,12 @@ pub mod pallet {
 	use frame_support::{dispatch::DispatchResultWithPostInfo, Twox64Concat};
 	use frame_system::pallet_prelude::*;
 
-	pub type SignerIdFor<T> = <T as BaseConfig>::ValidatorId;
-	pub type PayloadFor<T, I> = <<T as Config<I>>::BroadcastContext as BroadcastContext<
-		SignerIdFor<T>,
-	>>::Payload;
-	pub type SignatureFor<T, I> = <<T as Config<I>>::BroadcastContext as BroadcastContext<SignerIdFor<T>>>::Signature;
-	pub type SignedTransactionFor<T, I> = <<T as Config<I>>::BroadcastContext as BroadcastContext<SignerIdFor<T>>>::SignedTransaction;
-	pub type UnsignedTransactionFor<T, I> = <<T as Config<I>>::BroadcastContext as BroadcastContext<SignerIdFor<T>>>::UnsignedTransaction;
-	pub type TransactionHashFor<T, I> = <<T as Config<I>>::BroadcastContext as BroadcastContext<SignerIdFor<T>>>::TransactionHash;
-	pub type BroadcastFailureFor<T> = BroadcastFailure<SignerIdFor<T>>;
+	pub type PayloadFor<T, I> = <<T as Config<I>>::BroadcastContext as BroadcastContext<T>>::Payload;
+	pub type SignatureFor<T, I> = <<T as Config<I>>::BroadcastContext as BroadcastContext<T>>::Signature;
+	pub type SignedTransactionFor<T, I> = <<T as Config<I>>::BroadcastContext as BroadcastContext<T>>::SignedTransaction;
+	pub type UnsignedTransactionFor<T, I> = <<T as Config<I>>::BroadcastContext as BroadcastContext<T>>::UnsignedTransaction;
+	pub type TransactionHashFor<T, I> = <<T as Config<I>>::BroadcastContext as BroadcastContext<T>>::TransactionHash;
+	pub type BroadcastFailureFor<T> = BroadcastFailure<T>;
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -108,7 +105,7 @@ pub mod pallet {
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 
 		/// The context definition for this instance.
-		type BroadcastContext: BroadcastContext<Self::ValidatorId> + Member + FullCodec;
+		type BroadcastContext: BroadcastContext<Self> + Member + FullCodec;
 
 		/// Signer nomination
 		type SignerNomination: SignerNomination<SignerId = Self::ValidatorId>;
@@ -130,16 +127,17 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// [broadcast_id, signatories, payload]
+		/// [broadcast_id, key_id, signatories, payload]
 		ThresholdSignatureRequest(
 			BroadcastId,
-			Vec<<T as BaseConfig>::ValidatorId>,
+			T::KeyId,
+			Vec<T::ValidatorId>,
 			PayloadFor<T, I>,
 		),
 		/// [broadcast_id, validator_id, unsigned_tx]
 		TransactionSigningRequest(
 			BroadcastId,
-			<T as BaseConfig>::ValidatorId,
+			T::ValidatorId,
 			UnsignedTransactionFor<T, I>,
 		),
 		/// [broadcast_id, signed_tx]
@@ -268,7 +266,7 @@ pub mod pallet {
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Initiates a broadcast and returns its id.
-	pub fn initiate_broadcast(mut context: T::BroadcastContext) -> u64 {
+	pub fn initiate_broadcast(mut context: T::BroadcastContext, key_id: T::KeyId) -> u64 {
 		// Get a new id.
 		let id = BroadcastIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
@@ -286,7 +284,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		// Emit the initial request to the CFE.
 		Self::deposit_event(Event::<T, I>::ThresholdSignatureRequest(
-			id, nominees, payload,
+			id, key_id, nominees, payload,
 		));
 
 		id
