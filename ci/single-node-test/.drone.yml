@@ -125,7 +125,7 @@ steps:
       branch:
         - epic/*
     depends_on:
-      - test-chainflip-backend
+      - compile-chainflip-backend
     commands:
       - echo -n "$DRONE_COMMIT_SHA" > .tags
 
