@@ -559,7 +559,6 @@ steps:
     image: cd eth-contracts
     commands: 
       - poetry run poetry install
-      # - poetry run brownie networks add development hardhat cmd='npx hardhat node' host=http://127.0.0.1 port=8545
       - poetry run brownie run deploy_and all_events --network hardhat
   - name: run-tests
     depends_on:
