@@ -558,11 +558,13 @@ steps:
   - name: eth-events-setup
     depends_on:
       - hardhat-setup
-    image: kylezs/poetry
+    image: python:buster
     commands:
+      - apt-get install curl
+      - curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python -
       - cd eth-contracts
-      - poetry run poetry install
-      - poetry run brownie run deploy_and all_events --network hardhat
+      - $HOME/.poetry/bin/poetry run poetry install
+      - $HOME/.poetry/bin/poetry run brownie run deploy_and all_events --network hardhat
   - name: run-tests
     depends_on:
       - eth-events-setup
