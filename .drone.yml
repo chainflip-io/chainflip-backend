@@ -555,12 +555,12 @@ steps:
     commands:
       - cd eth-contracts
       - npx hardhat node
-  - name: stakemanager-events-setup
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    depends_on:
-      - hardhat-setup
-    commands:
-      - brownie run deploy_and all_events --network hardhat
+  - name: contract-events-setup
+    image: cd eth-contracts
+    commands: 
+      - poetry run poetry install
+      # - poetry run brownie networks add development hardhat cmd='npx hardhat node' host=http://127.0.0.1 port=8545
+      - poetry run brownie run deploy_and all_events --network hardhat
   - name: run-tests
     depends_on:
       - stakemanager-events-setup
