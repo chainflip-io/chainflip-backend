@@ -100,7 +100,8 @@ steps:
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     when:
       branch:
-        - epic/*
+        include:
+          - epic/*
     depends_on:
       - fmt-validator-package
     commands:
@@ -112,7 +113,8 @@ steps:
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     when:
       branch:
-        - epic/*
+        include:
+          - epic/*
     depends_on:
       - compile-chainflip-backend
     commands:
@@ -123,7 +125,8 @@ steps:
     image: busybox
     when:
       branch:
-        - epic/*
+        include:
+          - epic/*
     depends_on:
       - compile-chainflip-backend
     commands:
@@ -134,7 +137,8 @@ steps:
     image: plugins/docker
     when:
       branch:
-        - epic/*
+        include:
+          - epic/*
     depends_on:
       - prepare-files
     environment:
@@ -152,7 +156,8 @@ steps:
     image: plugins/docker
     when:
       branch:
-        - epic/*
+        include:
+          - epic/*
     depends_on:
       - prepare-files
     environment:
@@ -171,7 +176,8 @@ steps:
     pull: always
     when:
       branch:
-        - epic/*
+        include:
+          - epic/*
     depends_on:
       - build-chainflip-engine
       - build-state-chain-node
@@ -194,7 +200,8 @@ steps:
     pull: always
     when:
       branch:
-        - epic/*
+        include:
+          - epic/*
     depends_on:
       - test-single-node
     commands:
