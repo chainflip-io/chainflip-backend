@@ -94,30 +94,28 @@ pub mod pallet {
 	#[pallet::getter(fn members)]
 	pub(super) type Members<T> = StorageValue<_, Vec<AccountId<T>>, ValueQuery>;
 
-	/// on_initialize hook - check the ActiveProposals
-	// and remove the expired ones for house keeping
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		/// on_initialize hook - check the ActiveProposals
+		/// and remove the expired ones for house keeping
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
 			// Check if their are any ongoing proposals
 			match <ActiveProposals<T>>::decode_len() {
 				Some(proposal_len) if proposal_len > 0 => {
-					// Get all expired proposals
-					let expired_proposals =
-						Self::filter_proposals_by(&|x| x.1 <= T::TimeSource::now().as_secs());
-					let number_of_expired_proposals = expired_proposals.len();
+					// Separate the proposals into expired an active by partitioning
+					let (expired, active): (Vec<ActiveProposal>, Vec<ActiveProposal>) =
+						<ActiveProposals<T>>::get()
+							.iter()
+							.partition(|p| p.1 <= T::TimeSource::now().as_secs());
+					let number_of_expired_proposals = expired.len();
 					// Remove expired proposals
-					for expired_proposal in expired_proposals {
+					for expired_proposal in expired {
 						<Proposals<T>>::remove(expired_proposal.0);
 						Self::deposit_event(Event::Expired(expired_proposal.0));
 					}
-					// Get all not expired proposals
-					let new_active_proposals =
-						Self::filter_proposals_by(&|x| x.1 > T::TimeSource::now().as_secs());
-					// Set the new proposals
-					<ActiveProposals<T>>::set(new_active_proposals);
-					// Weight is 2 reads + (n + 1) * writes
-					T::DbWeight::get().reads(2)
+					<ActiveProposals<T>>::set(active);
+					// Weight is 1 reads + (n + 1) * writes
+					T::DbWeight::get().reads(1)
 						+ T::DbWeight::get().writes(number_of_expired_proposals as u64 + 1)
 				}
 				_ => T::DbWeight::get().reads(1),
@@ -183,9 +181,10 @@ pub mod pallet {
 			// Update the proposal counter
 			<NumberOfProposals<T>>::put(id);
 			// Add the proposal to the active proposals array
-			<ActiveProposals<T>>::mutate(|p| {
-				p.push((id, T::TimeSource::now().as_secs() + <ExpirySpan<T>>::get()));
-			});
+			<ActiveProposals<T>>::append((
+				id,
+				T::TimeSource::now().as_secs() + <ExpirySpan<T>>::get(),
+			));
 			Self::deposit_event(Event::Proposed(id));
 			// Governance member don't pay fees
 			Ok(Pays::No.into())
@@ -315,7 +314,12 @@ impl<T: Config> Pallet<T> {
 				// Remove the proposal from storage
 				<Proposals<T>>::remove(id);
 				// Remove the proposal from active proposals
-				let new_active_proposals = Self::filter_proposals_by(&|x| x.0 != id);
+				let active_proposals = <ActiveProposals<T>>::get();
+				let new_active_proposals = active_proposals
+					.iter()
+					.filter(|x| x.0 != id)
+					.cloned()
+					.collect::<Vec<_>>();
 				// Set the new active proposals
 				<ActiveProposals<T>>::set(new_active_proposals);
 			} else {
@@ -324,24 +328,10 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 	}
-	/// Filters the active proposals array by a givin clojure
-	fn filter_proposals_by(filter: &dyn Fn(&&ActiveProposal) -> bool) -> Vec<ActiveProposal> {
-		let active_proposals = <ActiveProposals<T>>::get();
-		let filtered_proposals = active_proposals
-			.iter()
-			.filter(filter)
-			.cloned()
-			.collect::<Vec<_>>();
-		filtered_proposals
-	}
 	/// Checks if the majority for a proposal is reached
 	fn majority_reached(approvals: usize) -> bool {
 		let total_number_of_voters = <Members<T>>::get().len() as u32;
-		let threshold = if total_number_of_voters % 2 == 0 {
-			total_number_of_voters / 2
-		} else {
-			total_number_of_voters / 2 + 1
-		};
+		let threshold = total_number_of_voters / 2 + 1;
 		approvals as u32 >= threshold
 	}
 	/// Tries to approve a proposal
