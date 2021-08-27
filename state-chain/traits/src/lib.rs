@@ -243,3 +243,10 @@ pub trait NonceProvider {
 	/// Generates a unique nonce.
 	fn generate_nonce() -> Self::Nonce;
 }
+
+pub trait Online {
+	/// The validator id used
+	type ValidatorId;
+	/// Is the validator online?
+	fn is_online(validator_id: &Self::ValidatorId) -> bool;
+}

@@ -1,6 +1,6 @@
 use super::*;
 use crate as pallet_cf_auction;
-use cf_traits::mocks::vault_rotation::Mock as MockAuctionHandler;
+use cf_traits::mocks::vault_rotation::Mock as MockVaultRotation;
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
@@ -84,7 +84,17 @@ impl Config for Test {
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
-	type Handler = MockAuctionHandler;
+	type Handler = MockVaultRotation;
+	type Online = MockOnline;
+}
+
+pub struct MockOnline;
+impl Online for MockOnline {
+	type ValidatorId = ValidatorId;
+
+	fn is_online(_validator_id: &Self::ValidatorId) -> bool {
+		true
+	}
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {

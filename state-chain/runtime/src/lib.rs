@@ -147,6 +147,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type ValidatorId = AccountId;
 	type MinAuctionSize = MinAuctionSize;
 	type Handler = Vaults;
+	type Online = Reputation;
 }
 
 // FIXME: These would be changed
