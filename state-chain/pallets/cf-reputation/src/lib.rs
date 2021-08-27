@@ -174,12 +174,16 @@ pub mod pallet {
 		}
 	}
 
-	/// Liveness bitmap tracking intervals
 	type Liveness = u8;
 	const SUBMITTED: u8 = 1;
+
+	/// Liveness bitmap tracking intervals
 	trait LivenessTracker {
+		/// Online status
 		fn is_online(&self) -> bool;
+		/// Update state of current interval
 		fn update_current_interval(&mut self, online: bool) -> Self;
+		/// State of submission for the current interval
 		fn has_submitted(&self) -> bool;
 	}
 
@@ -216,7 +220,7 @@ pub mod pallet {
 	pub(super) type AccrualRatio<T: Config> =
 		StorageValue<_, (ReputationPoints, OnlineCreditsFor<T>), ValueQuery>;
 
-	/// Those that we are awaiting heartbeats
+	/// The liveness of our validators
 	///
 	#[pallet::storage]
 	pub(super) type ValidatorsLiveness<T: Config> =

@@ -247,6 +247,6 @@ pub trait NonceProvider {
 pub trait Online {
 	/// The validator id used
 	type ValidatorId;
-	/// Is the validator online?
+	/// The online status of the validator
 	fn is_online(validator_id: &Self::ValidatorId) -> bool;
 }
