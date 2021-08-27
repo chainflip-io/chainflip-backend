@@ -504,6 +504,20 @@ steps:
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     commands:
       - cargo test --locked --release
+  - name: notify
+    image: appleboy/drone-discord
+    when:
+      status:
+        - failure
+    settings:
+      username: Integration Tests Bot
+      webhook_id:
+        from_secret: discord_webhook_id
+      webhook_token:
+        from_secret: discord_webhook_token
+      message: |
+        ⚠️ Nightly Integration Tests Failure ⚠️
+        Logs: {{build.link}}
 
 # Config
 trigger:
