@@ -29,11 +29,9 @@ use anyhow::Result;
 use futures::{Future, Stream, StreamExt};
 use slog::o;
 
-use super::Web3Signer;
-
 /// Set up the eth event streamer for the StakeManager contract, and start it
 pub async fn start_stake_manager_witness(
-    web3_signer: &Web3Signer,
+    web3: &Web3<WebSocket>,
     settings: &settings::Settings,
     signer: Arc<Mutex<PairSigner<StateChainRuntime, sp_core::sr25519::Pair>>>,
     subxt_client: Client<StateChainRuntime>,
@@ -47,7 +45,7 @@ pub async fn start_stake_manager_witness(
 
     slog::info!(logger, "Creating Event Stream");
     let mut event_stream = stake_manager
-        .event_stream(&web3_signer.web3, settings.eth.from_block, &logger)
+        .event_stream(&web3, settings.eth.from_block, &logger)
         .await?;
 
     Ok(async move {

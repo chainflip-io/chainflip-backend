@@ -9,11 +9,13 @@ pub mod utils;
 use anyhow::Result;
 
 use secp256k1::SecretKey;
+use slog::o;
 use thiserror::Error;
 use web3::ethabi::{Contract, Event};
 use web3::signing::SecretKeyRef;
 use web3::types::{SyncState, TransactionParameters};
 
+use crate::logging::COMPONENT_KEY;
 use crate::settings;
 use futures::TryFutureExt;
 use std::collections::HashMap;
@@ -52,47 +54,52 @@ pub enum CFContract {
     KeyManager,
 }
 
-/// Enables ETH event streaming via the `Web3` client and signing & broadcasting of txs
-#[derive(Clone, Debug)]
-pub struct Web3Signer {
-    web3: Web3<web3::transports::WebSocket>,
-    secret_key: SecretKey,
-    // TODO: I feel like we can do better than HashMap as a data structure, given we know the keys
-    contract_addresses: HashMap<CFContract, H160>,
-}
-
 /// Retrieves a private key from a file. The file should contain just the hex-encoded key, nothing else.
 fn secret_key_from_file(filename: &Path) -> Result<SecretKey> {
     let key = String::from_utf8(std::fs::read(filename)?)?;
     Ok(SecretKey::from_str(&key[..])?)
 }
 
-impl Web3Signer {
-    pub async fn new_synced(
-        settings: &settings::Settings,
-        logger: &slog::Logger,
-    ) -> Result<Web3Signer> {
-        let node_endpoint = &settings.eth.node_endpoint;
-        slog::debug!(logger, "Connecting new web3 client to {}", node_endpoint);
-        let web3_client = tokio::time::timeout(Duration::from_secs(5), async {
-            Ok(web3::Web3::new(
-                web3::transports::WebSocket::new(node_endpoint).await?,
-            ))
-        })
-        // Flatten the Result<Result<>> returned by timeout()
-        .map_err(|error| anyhow::Error::new(error))
-        .and_then(|x| async { x })
-        // Make sure the eth node is fully synced
-        .and_then(|web3| async {
-            while let SyncState::Syncing(info) = web3.eth().syncing().await? {
-                slog::info!(logger, "Waiting for eth node to sync: {:?}", info);
-                tokio::time::sleep(Duration::from_secs(4)).await;
-            }
-            slog::info!(logger, "Eth node is synced.");
-            Ok(web3)
-        })
-        .await?;
+pub async fn new_synced_web3_client(
+    settings: &settings::Settings,
+    logger: &slog::Logger,
+) -> Result<Web3<web3::transports::WebSocket>> {
+    let node_endpoint = &settings.eth.node_endpoint;
+    slog::debug!(logger, "Connecting new web3 client to {}", node_endpoint);
+    Ok(tokio::time::timeout(Duration::from_secs(5), async {
+        Ok(web3::Web3::new(
+            web3::transports::WebSocket::new(node_endpoint).await?,
+        ))
+    })
+    // Flatten the Result<Result<>> returned by timeout()
+    .map_err(|error| anyhow::Error::new(error))
+    .and_then(|x| async { x })
+    // Make sure the eth node is fully synced
+    .and_then(|web3| async {
+        while let SyncState::Syncing(info) = web3.eth().syncing().await? {
+            slog::info!(logger, "Waiting for eth node to sync: {:?}", info);
+            tokio::time::sleep(Duration::from_secs(4)).await;
+        }
+        slog::info!(logger, "Eth node is synced.");
+        Ok(web3)
+    })
+    .await?)
+}
 
+/// Enables ETH event streaming via the `Web3` client and signing & broadcasting of txs
+#[derive(Clone, Debug)]
+pub struct EthBroadcaster {
+    web3: Web3<web3::transports::WebSocket>,
+    secret_key: SecretKey,
+    // TODO: I feel like we can do better than HashMap as a data structure, given we know the keys
+    contract_addresses: HashMap<CFContract, H160>,
+}
+
+impl EthBroadcaster {
+    pub fn new(
+        settings: &settings::Settings,
+        web3: Web3<web3::transports::WebSocket>,
+    ) -> Result<Self> {
         let mut contract_addresses = HashMap::new();
         contract_addresses.insert(
             CFContract::StakeManager,
@@ -101,7 +108,7 @@ impl Web3Signer {
         contract_addresses.insert(CFContract::KeyManager, settings.eth.key_manager_eth_address);
 
         Ok(Self {
-            web3: web3_client,
+            web3,
             secret_key: secret_key_from_file(settings.eth.private_key_file.as_path()).expect(
                 &format!(
                     "Should read in secret key from: {}",

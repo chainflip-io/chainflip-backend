@@ -8,7 +8,7 @@ use sp_runtime::traits::Keccak256;
 use substrate_subxt::{Client, EventSubscription, PairSigner};
 
 use crate::{
-    eth::{CFContract, Web3Signer},
+    eth::{CFContract, EthBroadcaster},
     logging::COMPONENT_KEY,
     mq::{IMQClient, Subject},
     p2p,
@@ -20,7 +20,6 @@ use crate::{
         },
         sc_event::SCEvent::{AuctionEvent, StakingEvent, ValidatorEvent, VaultsEvent},
     },
-    types::chain::Chain,
 };
 
 use sp_keyring::AccountKeyring;
@@ -30,10 +29,10 @@ use super::{runtime::StateChainRuntime, sc_event::raw_event_to_subject_and_sc_ev
 pub async fn start<M: IMQClient>(
     mq_client: M,
     subxt_client: Client<StateChainRuntime>,
-    web3_signer: Web3Signer,
+    eth_broadcaster: EthBroadcaster,
     logger: &slog::Logger,
 ) {
-    SCObserver::new(mq_client, subxt_client, web3_signer, logger)
+    SCObserver::new(mq_client, subxt_client, eth_broadcaster, logger)
         .await
         .run()
         .await
@@ -43,7 +42,7 @@ pub async fn start<M: IMQClient>(
 pub struct SCObserver<M: IMQClient> {
     mq_client: M,
     subxt_client: Client<StateChainRuntime>,
-    web3_signer: Web3Signer,
+    eth_broadcaster: EthBroadcaster,
     logger: slog::Logger,
 }
 
@@ -51,13 +50,13 @@ impl<M: IMQClient> SCObserver<M> {
     pub async fn new(
         mq_client: M,
         subxt_client: Client<StateChainRuntime>,
-        web3_signer: Web3Signer,
+        eth_broadcaster: EthBroadcaster,
         logger: &slog::Logger,
     ) -> Self {
         Self {
             mq_client,
             subxt_client,
-            web3_signer,
+            eth_broadcaster,
             logger: logger.new(o!(COMPONENT_KEY => "SCObserver")),
         }
     }
@@ -149,7 +148,7 @@ impl<M: IMQClient> SCObserver<M> {
                             ChainParams::Ethereum(tx) => {
                                 slog::debug!(self.logger, "Broadcasting to ETH: {:?}", tx);
                                 match self
-                                    .web3_signer
+                                    .eth_broadcaster
                                     .sign_and_broadcast_to(tx.clone(), CFContract::KeyManager)
                                     .await
                                 {
