@@ -93,6 +93,11 @@ impl Slashing for MockSlasher {
 	}
 }
 
+pub struct MockEmergencyRotation;
+impl EmergencyRotation for MockEmergencyRotation {
+	fn request_emergency_rotation(_network_state: NetworkState) {}
+}
+
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
 
@@ -105,6 +110,7 @@ impl Config for Test {
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = MockSlasher;
 	type EpochInfo = epoch_info::Mock;
+	type EmergencyRotation = MockEmergencyRotation;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
