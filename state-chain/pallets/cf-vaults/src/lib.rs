@@ -115,7 +115,7 @@ pub mod pallet {
 	/// Current request index used in request/response
 	#[pallet::storage]
 	#[pallet::getter(fn current_request)]
-	pub(super) type CurrentRequest<T: Config> = StorageValue<_, RequestIndex, ValueQuery>;
+	pub(super) type CurrentRequest<T: Config> = StorageValue<_, CeremonyId, ValueQuery>;
 
 	/// The Vault for this instance
 	#[pallet::storage]
@@ -127,7 +127,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn vault_rotations)]
 	pub(super) type VaultRotations<T: Config> =
-		StorageMap<_, Blake2_128Concat, RequestIndex, KeygenRequest<T::ValidatorId>>;
+		StorageMap<_, Blake2_128Concat, CeremonyId, KeygenRequest<T::ValidatorId>>;
 
 	/// A map of Nonces for chains supported
 	#[pallet::storage]
@@ -140,23 +140,23 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// Request a key generation \[request_index, request\]
 		// TODO: KeygenRequest can be inlined
-		KeygenRequest(RequestIndex, KeygenRequest<T::ValidatorId>),
+		KeygenRequest(CeremonyId, KeygenRequest<T::ValidatorId>),
 		/// Request a rotation of the vault for this chain \[request_index, request\]
-		VaultRotationRequest(RequestIndex, VaultRotationRequest),
+		VaultRotationRequest(CeremonyId, VaultRotationRequest),
 		/// The vault for the request has rotated \[request_index\]
-		VaultRotationCompleted(RequestIndex),
+		VaultRotationCompleted(CeremonyId),
 		/// A rotation of vaults has been aborted \[request_indexes\]
-		RotationAborted(Vec<RequestIndex>),
+		RotationAborted(Vec<CeremonyId>),
 		/// A complete set of vaults have been rotated
 		VaultsRotated,
 		/// Request this payload to be signed by the existing aggregate key
-		EthSignTxRequest(RequestIndex, EthSigningTxRequest<T::ValidatorId>),
+		EthSignTxRequest(CeremonyId, EthSigningTxRequest<T::ValidatorId>),
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
 		/// An invalid request index
-		InvalidRequestIndex,
+		InvalidCeremonyId,
 		/// We have an empty validator set
 		EmptyValidatorSet,
 		/// The key generation response failed
@@ -186,11 +186,11 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn keygen_response(
 			origin: OriginFor<T>,
-			request_id: RequestIndex,
+			ceremony_id: CeremonyId,
 			response: KeygenResponse<T::ValidatorId, T::PublicKey>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			match KeygenRequestResponse::<T>::handle_response(request_id, response) {
+			match KeygenRequestResponse::<T>::handle_response(ceremony_id, response) {
 				Ok(_) => Ok(().into()),
 				Err(e) => Err(Error::<T>::from(e).into()),
 			}
@@ -201,11 +201,11 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn eth_signing_tx_response(
 			origin: OriginFor<T>,
-			request_id: RequestIndex,
+			ceremony_id: CeremonyId,
 			response: EthSigningTxResponse<T::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			match EthereumChain::<T>::handle_response(request_id, response) {
+			match EthereumChain::<T>::handle_response(ceremony_id, response) {
 				Ok(_) => Ok(().into()),
 				Err(_) => Err(Error::<T>::EthSigningTxResponseFailed.into()),
 			}
@@ -216,11 +216,11 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn vault_rotation_response(
 			origin: OriginFor<T>,
-			request_id: RequestIndex,
+			ceremony_id: CeremonyId,
 			response: VaultRotationResponse<T::PublicKey, T::Transaction>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			match VaultRotationRequestResponse::<T>::handle_response(request_id, response) {
+			match VaultRotationRequestResponse::<T>::handle_response(ceremony_id, response) {
 				Ok(_) => Ok(().into()),
 				Err(e) => Err(Error::<T>::from(e).into()),
 			}
@@ -254,7 +254,7 @@ impl<T: Config> From<RotationError<T::ValidatorId>> for Error<T> {
 				Error::<T>::VaultRotationCompletionFailed
 			}
 			RotationError::KeyResponseFailed => Error::<T>::KeyResponseFailed,
-			RotationError::InvalidRequestIndex => Error::<T>::InvalidRequestIndex,
+			RotationError::InvalidCeremonyId => Error::<T>::InvalidCeremonyId,
 			RotationError::NotConfirmed => Error::<T>::NotConfirmed,
 			RotationError::FailedToMakeKeygenRequest => Error::<T>::FailedToMakeKeygenRequest,
 		}
@@ -282,7 +282,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Provide the next index
-	fn next_index() -> RequestIndex {
+	fn next_index() -> CeremonyId {
 		CurrentRequest::<T>::mutate(|index| {
 			*index = *index + 1;
 			*index
@@ -330,7 +330,7 @@ struct KeygenRequestResponse<T: Config>(PhantomData<T>);
 
 impl<T: Config>
 	RequestResponse<
-		RequestIndex,
+		CeremonyId,
 		KeygenRequest<T::ValidatorId>,
 		KeygenResponse<T::ValidatorId, T::PublicKey>,
 		RotationError<T::ValidatorId>,
@@ -339,7 +339,7 @@ impl<T: Config>
 	/// Emit as an event the key generation request, this is the first step after receiving a proposed
 	/// validator set from the `AuctionHandler::on_auction_completed()`
 	fn make_request(
-		index: RequestIndex,
+		index: CeremonyId,
 		request: KeygenRequest<T::ValidatorId>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		VaultRotations::<T>::insert(index, request.clone());
@@ -351,7 +351,7 @@ impl<T: Config>
 	/// chain to continue processing.  Failure would result in penalisation for the bad validators returned
 	/// and the vault rotation aborted.
 	fn handle_response(
-		index: RequestIndex,
+		index: CeremonyId,
 		response: KeygenResponse<T::ValidatorId, T::PublicKey>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		ensure_index!(index);
@@ -389,7 +389,7 @@ impl<T: Config> ChainHandler for Pallet<T> {
 	/// the `ChainHandler` trait.  This is forwarded as a request and hence an event is emitted.
 	/// Failure is handled and potential bad validators are penalised and the rotation is now aborted.
 	fn request_vault_rotation(
-		index: RequestIndex,
+		index: CeremonyId,
 		result: Result<VaultRotationRequest, RotationError<Self::ValidatorId>>,
 	) -> Result<(), Self::Error> {
 		ensure_index!(index);
@@ -412,7 +412,7 @@ impl<T: Config> ChainHandler for Pallet<T> {
 struct VaultRotationRequestResponse<T: Config>(PhantomData<T>);
 impl<T: Config>
 	RequestResponse<
-		RequestIndex,
+		CeremonyId,
 		VaultRotationRequest,
 		VaultRotationResponse<T::PublicKey, T::Transaction>,
 		RotationError<T::ValidatorId>,
@@ -420,7 +420,7 @@ impl<T: Config>
 {
 	/// Emit our event for the start of a vault rotation generation request.
 	fn make_request(
-		index: RequestIndex,
+		index: CeremonyId,
 		request: VaultRotationRequest,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		ensure_index!(index);
@@ -432,7 +432,7 @@ impl<T: Config>
 	/// The request is cleared from the cache of pending requests and the relevant vault is
 	/// notified
 	fn handle_response(
-		index: RequestIndex,
+		index: CeremonyId,
 		response: VaultRotationResponse<T::PublicKey, T::Transaction>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		ensure_index!(index);
@@ -488,7 +488,7 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 	/// A payload is built and emitted as a `EthSigningTxRequest`, failing this an error is reported
 	/// back to `Vaults`
 	fn start_vault_rotation(
-		index: RequestIndex,
+		index: CeremonyId,
 		new_public_key: Self::PublicKey,
 		validators: Vec<Self::ValidatorId>,
 	) -> Result<(), Self::Error> {
@@ -520,7 +520,7 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 
 impl<T: Config>
 	RequestResponse<
-		RequestIndex,
+		CeremonyId,
 		EthSigningTxRequest<T::ValidatorId>,
 		EthSigningTxResponse<T::ValidatorId>,
 		RotationError<T::ValidatorId>,
@@ -528,7 +528,7 @@ impl<T: Config>
 {
 	/// Make the request to sign by emitting an event
 	fn make_request(
-		index: RequestIndex,
+		index: CeremonyId,
 		request: EthSigningTxRequest<T::ValidatorId>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		Pallet::<T>::deposit_event(Event::EthSignTxRequest(index, request));
@@ -537,7 +537,7 @@ impl<T: Config>
 
 	/// Try to handle the response and pass this onto `Vaults` to complete the vault rotation
 	fn handle_response(
-		index: RequestIndex,
+		index: CeremonyId,
 		response: EthSigningTxResponse<T::ValidatorId>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		match response {

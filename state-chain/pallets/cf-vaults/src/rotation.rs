@@ -4,8 +4,8 @@ use frame_support::RuntimeDebug;
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 
-/// Request index type
-pub type RequestIndex = u64;
+/// CeremonyId type
+pub type CeremonyId = u64;
 
 /// A request/response trait
 pub trait RequestResponse<Index: AtLeast32BitUnsigned, Req, Res, Error> {
@@ -32,7 +32,7 @@ pub trait ChainVault {
 	/// When complete `ChainHandler::try_complete_vault_rotation()` would be used to notify to continue
 	/// with the process.
 	fn start_vault_rotation(
-		index: RequestIndex,
+		index: CeremonyId,
 		new_public_key: Self::PublicKey,
 		validators: Vec<Self::ValidatorId>,
 	) -> Result<(), Self::Error>;
@@ -48,7 +48,7 @@ pub trait ChainHandler {
 	/// Request initial vault rotation phase complete with a result describing the outcome of this phase
 	/// Feedback is provided back on this step
 	fn request_vault_rotation(
-		index: RequestIndex,
+		index: CeremonyId,
 		result: Result<VaultRotationRequest, RotationError<Self::ValidatorId>>,
 	) -> Result<(), Self::Error>;
 }
@@ -121,7 +121,7 @@ macro_rules! ensure_index {
 	($index: expr) => {
 		ensure!(
 			VaultRotations::<T>::contains_key($index),
-			RotationError::InvalidRequestIndex
+			RotationError::InvalidCeremonyId
 		);
 	};
 }

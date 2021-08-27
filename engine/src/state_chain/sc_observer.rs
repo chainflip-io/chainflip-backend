@@ -179,7 +179,7 @@ pub async fn start(
 mod tests {
     use substrate_subxt::ClientBuilder;
 
-    use crate::{logging, settings};
+    use crate::{eth, logging, settings};
     use sp_keyring::AccountKeyring;
 
     use super::*;
@@ -188,20 +188,32 @@ mod tests {
     #[ignore = "runs forever, useful for testing without having to start the whole CFE"]
     async fn run_the_sc_observer() {
         let settings = settings::test_utils::new_test_settings().unwrap();
+        let logger = logging::test_utils::create_test_logger();
         let alice = AccountKeyring::Alice.pair();
         let pair_signer = PairSigner::new(alice);
         let signer = Arc::new(Mutex::new(pair_signer));
+        let (multisig_instruction_sender, multisig_instruction_receiver) =
+            tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+        let (multisig_event_sender, multisig_event_receiver) =
+            tokio::sync::mpsc::unbounded_channel::<MultisigEvent>();
 
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let web3 = eth::new_synced_web3_client(&settings, &logger)
+            .await
+            .unwrap();
+        let eth_broadcaster = EthBroadcaster::new(&settings, web3.clone()).unwrap();
+
         start(
+            &settings,
             ClientBuilder::<StateChainRuntime>::new()
                 .set_url(&settings.state_chain.ws_endpoint)
                 .build()
                 .await
                 .expect("Should create subxt client"),
-            &signer,
-            tx,
-            &logging::test_utils::create_test_logger(),
+            signer,
+            eth_broadcaster,
+            multisig_instruction_sender,
+            multisig_event_receiver,
+            &logger,
         )
         .await;
     }
