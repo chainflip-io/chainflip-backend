@@ -19,7 +19,7 @@ pub use client_inner::{KeygenOutcome, KeygenResultInfo, SchnorrSignature, Signin
 
 use super::MessageHash;
 
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::{self, UnboundedReceiver};
 
 use serde::{Deserialize, Serialize};
 
@@ -76,6 +76,7 @@ pub fn start<MQC, S>(
     db: S,
     mq_client: MQC,
     mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
+    mut multisig_instruction_receiver: UnboundedReceiver<MultisigInstruction>,
     logger: &slog::Logger,
 ) -> impl futures::Future
 where
@@ -100,11 +101,6 @@ where
             .subscribe::<P2PMessage>(Subject::P2PIncoming)
             .await
             .expect("Could not subscribe to Subject::P2PIncoming");
-
-        let mut multisig_instructions = mq_client
-            .subscribe::<MultisigInstruction>(Subject::MultisigInstruction)
-            .await
-            .expect("Could not subscribe to Subject::MultisigInstruction");
 
         {
             // have to wait for the coordinator to subscribe...
@@ -136,15 +132,8 @@ where
                         }
                     }
                 }
-                Some(msg) = multisig_instructions.next() => {
-                    match msg {
-                        Ok(instruction) => {
-                            inner.process_multisig_instruction(instruction);
-                        },
-                        Err(err) => {
-                            slog::warn!(logger, "Ignoring channel error: {}", err);
-                        }
-                    }
+                Some(msg) = multisig_instruction_receiver.recv() => {
+                    inner.process_multisig_instruction(msg);
                 }
                 Some(()) = cleanup_stream.next() => {
                     slog::info!(logger, "Cleaning up multisig states");

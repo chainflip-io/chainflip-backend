@@ -1,16 +1,14 @@
-use std::marker::PhantomData;
-
 use anyhow::Result;
 use pallet_cf_vaults::rotation::{ChainParams, VaultRotationResponse};
 use slog::o;
 use sp_core::Hasher;
 use sp_runtime::traits::Keccak256;
 use substrate_subxt::{Client, EventSubscription, PairSigner};
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     eth::{CFContract, EthBroadcaster},
     logging::COMPONENT_KEY,
-    mq::{IMQClient, Subject},
     p2p,
     signing::{KeyId, KeygenInfo, MessageHash, MultisigInstruction, SigningInfo},
     state_chain::{
@@ -26,37 +24,42 @@ use sp_keyring::AccountKeyring;
 
 use super::{runtime::StateChainRuntime, sc_event::raw_event_to_subject_and_sc_event};
 
-pub async fn start<M: IMQClient>(
-    mq_client: M,
+pub async fn start(
     subxt_client: Client<StateChainRuntime>,
     eth_broadcaster: EthBroadcaster,
+    multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
     logger: &slog::Logger,
 ) {
-    SCObserver::new(mq_client, subxt_client, eth_broadcaster, logger)
-        .await
-        .run()
-        .await
-        .expect("SC Observer has died!");
+    SCObserver::new(
+        subxt_client,
+        eth_broadcaster,
+        multisig_instruction_sender,
+        logger,
+    )
+    .await
+    .run()
+    .await
+    .expect("SC Observer has died!");
 }
 
-pub struct SCObserver<M: IMQClient> {
-    mq_client: M,
+pub struct SCObserver {
     subxt_client: Client<StateChainRuntime>,
     eth_broadcaster: EthBroadcaster,
+    multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
     logger: slog::Logger,
 }
 
-impl<M: IMQClient> SCObserver<M> {
+impl SCObserver {
     pub async fn new(
-        mq_client: M,
         subxt_client: Client<StateChainRuntime>,
         eth_broadcaster: EthBroadcaster,
+        multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
         logger: &slog::Logger,
     ) -> Self {
         Self {
-            mq_client,
             subxt_client,
             eth_broadcaster,
+            multisig_instruction_sender,
             logger: logger.new(o!(COMPONENT_KEY => "SCObserver")),
         }
     }
@@ -106,10 +109,11 @@ impl<M: IMQClient> SCObserver<M> {
                         let key_gen_info =
                             KeygenInfo::new(KeyId(keygen_request_event.request_index), validators);
                         let gen_new_key_event = MultisigInstruction::KeyGen(key_gen_info);
-                        self.mq_client
-                            .publish(Subject::MultisigInstruction, &gen_new_key_event)
-                            .await
-                            .expect("Should publish to MQ");
+                        // We need the Sender for Multisig instructions channel here
+                        self.multisig_instruction_sender
+                            .send(gen_new_key_event)
+                            .map_err(|_| "Receiver should exist")
+                            .unwrap();
                     }
                     EthSignTxRequestEvent(eth_sign_tx_request) => {
                         let validators: Vec<_> = eth_sign_tx_request
@@ -133,13 +137,10 @@ impl<M: IMQClient> SCObserver<M> {
 
                         let sign_tx = MultisigInstruction::Sign(message_hash, signing_info);
 
-                        self.mq_client
-                            .publish(Subject::MultisigInstruction, &sign_tx)
-                            .await
-                            .expect("should publish to MQ");
-
-                        // receive the signed message via message queue here?
-                        // eventually this will be a one shot channel
+                        self.multisig_instruction_sender
+                            .send(sign_tx)
+                            .map_err(|_| "Receiver should exist")
+                            .unwrap();
                     }
                     VaultRotationRequestEvent(vault_rotation_request_event) => {
                         let alice = AccountKeyring::Alice.pair();

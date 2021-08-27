@@ -8,7 +8,7 @@ use chainflip_engine::{
     p2p::{self, RpcP2PClient, ValidatorId},
     settings::Settings,
     signing,
-    signing::db::PersistentKeyDB,
+    signing::{db::PersistentKeyDB, MultisigInstruction},
     state_chain::{self, runtime::StateChainRuntime},
 };
 use slog::{o, Drain};
@@ -81,6 +81,8 @@ async fn main() {
 
     let (_, p2p_shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
+    let (multisig_instruction_sender, multisig_instruction_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
 
     let web3 = eth::new_synced_web3_client(&settings, &root_logger)
         .await
@@ -95,6 +97,7 @@ async fn main() {
             db,
             mq_client.clone(),
             shutdown_client_rx,
+            multisig_instruction_receiver,
             &root_logger,
         ),
         p2p::conductor::start(
@@ -112,9 +115,9 @@ async fn main() {
         heartbeat::start(subxt_client.clone(), pair_signer.clone(), &root_logger),
         // Start state chain components
         state_chain::sc_observer::start(
-            mq_client.clone(),
             subxt_client.clone(),
             eth_broadcaster,
+            multisig_instruction_sender,
             &root_logger
         ),
         // Start eth components
