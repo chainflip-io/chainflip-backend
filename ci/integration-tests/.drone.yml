@@ -1,7 +1,7 @@
 #  Runs all tests at night
 kind: pipeline
 type: kubernetes
-name: chainflip-backend-nightly
+name: integration-tests
 
 environment:
   SCCACHE_REDIS: redis://drone-redis-headless:6379/
