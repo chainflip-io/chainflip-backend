@@ -448,6 +448,8 @@ pub mod pallet {
 			)
 		}
 
+		/// Clamp reputation points to bounds defined in the pallet
+		///
 		fn clamp_reputation_points(reputation_points: i32) -> i32 {
 			let (floor, ceiling) = T::ReputationPointFloorAndCeiling::get();
 			reputation_points.clamp(floor, ceiling)
