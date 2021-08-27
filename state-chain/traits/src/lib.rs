@@ -262,6 +262,7 @@ impl NetworkState {
 	/// Return the percentage of validators online rounded down
 	pub fn percentage_online(&self) -> u32 {
 		self.online
+			.saturating_mul(100)
 			.checked_div(self.online + self.offline)
 			.unwrap_or(0)
 	}
