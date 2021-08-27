@@ -9,21 +9,19 @@ pub mod utils;
 use anyhow::Result;
 
 use secp256k1::SecretKey;
-use slog::o;
 use thiserror::Error;
-use web3::ethabi::{Contract, Event};
-use web3::signing::SecretKeyRef;
-use web3::types::{SyncState, TransactionParameters};
 
-use crate::logging::COMPONENT_KEY;
 use crate::settings;
 use futures::TryFutureExt;
-use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
-use web3::types::{H160, H256};
-use web3::{Transport, Web3};
+use web3::{
+    ethabi::{Contract, Event},
+    signing::SecretKeyRef,
+    types::{SyncState, TransactionParameters, H160, H256},
+    Web3,
+};
 
 #[derive(Error, Debug)]
 pub enum EventParseError {
@@ -46,12 +44,6 @@ impl SignatureAndEvent {
             event: event.clone(),
         })
     }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum CFContract {
-    StakeManager,
-    KeyManager,
 }
 
 /// Retrieves a private key from a file. The file should contain just the hex-encoded key, nothing else.
@@ -91,8 +83,6 @@ pub async fn new_synced_web3_client(
 pub struct EthBroadcaster {
     web3: Web3<web3::transports::WebSocket>,
     secret_key: SecretKey,
-    // TODO: I feel like we can do better than HashMap as a data structure, given we know the keys
-    contract_addresses: HashMap<CFContract, H160>,
 }
 
 impl EthBroadcaster {
@@ -100,13 +90,6 @@ impl EthBroadcaster {
         settings: &settings::Settings,
         web3: Web3<web3::transports::WebSocket>,
     ) -> Result<Self> {
-        let mut contract_addresses = HashMap::new();
-        contract_addresses.insert(
-            CFContract::StakeManager,
-            settings.eth.stake_manager_eth_address,
-        );
-        contract_addresses.insert(CFContract::KeyManager, settings.eth.key_manager_eth_address);
-
         Ok(Self {
             web3,
             secret_key: secret_key_from_file(settings.eth.private_key_file.as_path()).expect(
@@ -115,23 +98,13 @@ impl EthBroadcaster {
                     settings.eth.private_key_file.display(),
                 ),
             ),
-            contract_addresses,
         })
     }
 
     /// Sign and broadcast a transaction to a particular contract
-    pub async fn sign_and_broadcast_to(
-        &self,
-        tx_data: Vec<u8>,
-        contract: CFContract,
-    ) -> Result<H256> {
-        let to = self
-            .contract_addresses
-            .get(&contract)
-            .expect("Should be contained above")
-            .to_owned();
+    pub async fn sign_and_broadcast_to(&self, tx_data: Vec<u8>, contract: H160) -> Result<H256> {
         let tx_params = TransactionParameters {
-            to: Some(to),
+            to: Some(contract),
             data: tx_data.into(),
             ..Default::default()
         };

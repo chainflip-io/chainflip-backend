@@ -115,7 +115,9 @@ async fn main() {
         heartbeat::start(subxt_client.clone(), pair_signer.clone(), &root_logger),
         // Start state chain components
         state_chain::sc_observer::start(
+            &settings,
             subxt_client.clone(),
+            pair_signer.clone(),
             eth_broadcaster,
             multisig_instruction_sender,
             &root_logger

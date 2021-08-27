@@ -2,10 +2,8 @@ use std::marker::PhantomData;
 
 use codec::{Decode, Encode};
 use pallet_cf_vaults::{
-    rotation::VaultRotationResponse, EthSigningTxRequest, EthSigningTxResponse, KeygenRequest,
-    VaultRotationRequest,
+    rotation::VaultRotationResponse, EthSigningTxRequest, KeygenRequest, VaultRotationRequest,
 };
-use secp256k1::PublicKey;
 use sp_runtime::AccountId32;
 use substrate_subxt::{module, system::System, Call, Event};
 
