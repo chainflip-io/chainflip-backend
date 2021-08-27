@@ -64,26 +64,6 @@ pub trait Slashing {
 	fn slash(validator_id: &Self::ValidatorId, blocks_offline: &Self::BlockNumber) -> Weight;
 }
 
-/// A representation of the current network state
-pub struct NetworkState {
-	online: u32,
-	offline: u32,
-}
-
-impl NetworkState {
-	/// Return the percentage of validators online rounded down
-	fn percentage_online(&self) -> u32 {
-		self.online
-			.checked_div(self.online + self.offline)
-			.unwrap_or(0)
-	}
-}
-
-pub trait EmergencyRotation {
-	/// Request an emergency rotation based on the reported network state with a weight returned
-	fn request_emergency_rotation(network_state: NetworkState);
-}
-
 /// Conditions as judged as offline
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum OfflineCondition {
@@ -119,7 +99,7 @@ pub trait OfflineConditions {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{EpochInfo, Online};
+	use cf_traits::{EpochInfo, Online, EmergencyRotation, NetworkState};
 	use frame_system::pallet_prelude::*;
 	use sp_std::ops::Neg;
 

@@ -250,3 +250,24 @@ pub trait Online {
 	/// The online status of the validator
 	fn is_online(validator_id: &Self::ValidatorId) -> bool;
 }
+
+/// A representation of the current network state
+pub struct NetworkState {
+	pub online: u32,
+	pub offline: u32,
+}
+
+impl NetworkState {
+	/// Return the percentage of validators online rounded down
+	pub fn percentage_online(&self) -> u32 {
+		self.online
+			.checked_div(self.online + self.offline)
+			.unwrap_or(0)
+	}
+}
+
+/// To handle those emergency rotations
+pub trait EmergencyRotation {
+	/// Request an emergency rotation based on the reported network state with a weight returned
+	fn request_emergency_rotation(network_state: NetworkState);
+}
