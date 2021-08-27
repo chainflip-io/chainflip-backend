@@ -154,22 +154,31 @@ impl<M: IMQClient> SCObserver<M> {
                                     .await
                                 {
                                     Ok(tx_hash) => {
-                                        let vault_rotation_response =
-                                            VaultRotationResponse::Success {
-                                                old_key: Vec::default(),
-                                                new_key: Vec::default(),
-                                                tx,
-                                            };
-
+                                        slog::debug!(
+                                            self.logger,
+                                            "Broadcast set_agg_key_with_agg_key tx, tx_hash: {}",
+                                            tx_hash
+                                        );
                                         self.subxt_client
                                             .vault_rotation_response(
                                                 &pair_signer,
                                                 vault_rotation_request_event.request_index,
-                                                vault_rotation_response,
+                                                VaultRotationResponse::Success {
+                                                    // TODO: Add the actual keys here
+                                                    // why are these being added here? The SC should know these already? right?
+                                                    old_key: Vec::default(),
+                                                    new_key: Vec::default(),
+                                                    tx,
+                                                },
                                             )
                                             .await?;
                                     }
                                     Err(e) => {
+                                        slog::error!(
+                                            self.logger,
+                                            "Failed to broadcast set_agg_key_with_agg_key tx: {}",
+                                            e
+                                        );
                                         self.subxt_client
                                             .vault_rotation_response(
                                                 &pair_signer,
