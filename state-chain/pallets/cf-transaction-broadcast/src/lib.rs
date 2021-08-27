@@ -142,6 +142,8 @@ pub mod pallet {
 		),
 		/// [broadcast_id, signed_tx]
 		ReadyForBroadcast(BroadcastId, SignedTransactionFor<T, I>),
+		/// [broadcast_id]
+		BroadcastComplete(BroadcastId),
 	}
 
 	#[pallet::error]
@@ -233,13 +235,16 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 
-			// Construct the unsigned transaction and update the context.
+			// Remove the broadcast, it's done.
 			let _ = PendingBroadcasts::<T, I>::try_mutate_exists(id, |maybe_ctx| {
-				maybe_ctx
-					.as_mut()
-					.ok_or(Error::<T, I>::InvalidBroadcastId)
-					.map(|ctx| ctx.on_broadcast_success(&tx_hash))
+				let ctx = maybe_ctx
+					.take()
+					.ok_or(Error::<T, I>::InvalidBroadcastId)?;
+				ctx.on_broadcast_success(&tx_hash);
+				Ok(())
 			})?;
+
+			Self::deposit_event(Event::<T, I>::BroadcastComplete(id));
 
 			Ok(().into())
 		}
