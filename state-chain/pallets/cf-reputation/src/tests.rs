@@ -21,14 +21,16 @@ mod tests {
 
 	// Cycle heartbeat interval sending the heartbeat extrinsic in each
 	fn run_heartbeat_intervals(
-		validator: <Test as frame_system::Config>::AccountId,
+		validators: Vec<<Test as frame_system::Config>::AccountId>,
 		intervals: u64,
 	) {
 		let start_block_number = System::block_number();
 		// Inclusive
 		for interval in 1..=intervals {
 			let block = interval * HEARTBEAT_BLOCK_INTERVAL;
-			assert_ok!(ReputationPallet::heartbeat(Origin::signed(validator)));
+			for validator in &validators {
+				assert_ok!(ReputationPallet::heartbeat(Origin::signed(*validator)));
+			}
 			run_to_block(start_block_number + block);
 		}
 	}
@@ -39,7 +41,7 @@ mod tests {
 		number_of_accruals: u64,
 	) {
 		let intervals = ACCRUAL_BLOCKS * number_of_accruals / HEARTBEAT_BLOCK_INTERVAL;
-		run_heartbeat_intervals(validator, intervals + 1 /* roundup */);
+		run_heartbeat_intervals(vec![validator], intervals + 1 /* roundup */);
 	}
 
 	// Move a heartbeat interval forward with no heartbeat sent
@@ -317,13 +319,56 @@ mod tests {
 	#[test]
 	fn we_should_be_online_when_submitting_heartbeats_and_offline_when_not() {
 		new_test_ext().execute_with(|| {
-			run_heartbeat_intervals(ALICE, 1);
+			run_heartbeat_intervals(vec![ALICE], 1);
 			assert!(<ReputationPallet as Online>::is_online(&ALICE));
-			run_heartbeat_intervals(ALICE, 1);
+			run_heartbeat_intervals(vec![ALICE], 1);
 			assert!(<ReputationPallet as Online>::is_online(&ALICE));
 			// Fail to submit for two heartbeats
 			move_forward_by_heartbeat_intervals(2);
 			assert_eq!(<ReputationPallet as Online>::is_online(&ALICE), false);
+		});
+	}
+
+	#[test]
+	fn should_trigger_an_emergency_rotation_when_we_drop_to_less_than_eighty_percent() {
+		new_test_ext().execute_with(|| {
+			<ReputationPallet as EpochTransitionHandler>::on_new_epoch(
+				&vec![ALICE, BOB, CHARLIE, DAVE, ERIN],
+				Zero::zero(),
+			);
+
+			run_heartbeat_intervals(vec![ALICE, CHARLIE, BOB, DAVE, ERIN], 1);
+			assert!(<ReputationPallet as Online>::is_online(&ALICE));
+			assert!(<ReputationPallet as Online>::is_online(&BOB));
+			assert!(<ReputationPallet as Online>::is_online(&CHARLIE));
+			assert!(<ReputationPallet as Online>::is_online(&DAVE));
+			assert!(<ReputationPallet as Online>::is_online(&ERIN));
+
+			run_heartbeat_intervals(vec![ALICE, BOB, CHARLIE, DAVE], 1);
+			assert!(<ReputationPallet as Online>::is_online(&ALICE));
+			assert!(<ReputationPallet as Online>::is_online(&BOB));
+			assert!(<ReputationPallet as Online>::is_online(&CHARLIE));
+			assert!(<ReputationPallet as Online>::is_online(&DAVE));
+
+			// Offline, we now have 4/5
+			assert_eq!(<ReputationPallet as Online>::is_online(&ERIN), false);
+			// Close but not an emergency rotation
+			assert_eq!(
+				EMERGENCY_ROTATION_REQUESTED.with(|requested| { *requested.borrow() }),
+				false
+			);
+
+			run_heartbeat_intervals(vec![ALICE, BOB, CHARLIE], 1);
+			assert!(<ReputationPallet as Online>::is_online(&ALICE));
+			assert!(<ReputationPallet as Online>::is_online(&BOB));
+			assert!(<ReputationPallet as Online>::is_online(&CHARLIE));
+
+			// Offline, we now have 3/5
+			assert_eq!(<ReputationPallet as Online>::is_online(&DAVE), false);
+			assert_eq!(<ReputationPallet as Online>::is_online(&ERIN), false);
+
+			// An emergency rotation
+			assert!(EMERGENCY_ROTATION_REQUESTED.with(|requested| { *requested.borrow() }));
 		});
 	}
 }

@@ -18,6 +18,7 @@ use cf_traits::EmergencyRotation;
 
 thread_local! {
 	pub static SLASH_COUNT: RefCell<u64> = RefCell::new(0);
+	pub static EMERGENCY_ROTATION_REQUESTED: RefCell<bool> = RefCell::new(false);
 }
 
 construct_runtime!(
@@ -96,11 +97,18 @@ impl Slashing for MockSlasher {
 
 pub struct MockEmergencyRotation;
 impl EmergencyRotation for MockEmergencyRotation {
-	fn request_emergency_rotation() {}
+	fn request_emergency_rotation() {
+		EMERGENCY_ROTATION_REQUESTED.with(|requested| {
+			*requested.borrow_mut() = true;
+		});
+	}
 }
 
-pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
-pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
+pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
+pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
+pub const CHARLIE: <Test as frame_system::Config>::AccountId = 300u64;
+pub const DAVE: <Test as frame_system::Config>::AccountId = 400u64;
+pub const ERIN: <Test as frame_system::Config>::AccountId = 500u64;
 
 impl Config for Test {
 	type Event = Event;
