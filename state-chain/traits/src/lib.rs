@@ -252,6 +252,7 @@ pub trait Online {
 }
 
 /// A representation of the current network state
+#[derive(Encode, Decode, Clone, Copy, RuntimeDebug, PartialEq, Eq)]
 pub struct NetworkState {
 	pub online: u32,
 	pub offline: u32,
@@ -268,6 +269,6 @@ impl NetworkState {
 
 /// To handle those emergency rotations
 pub trait EmergencyRotation {
-	/// Request an emergency rotation based on the reported network state with a weight returned
-	fn request_emergency_rotation(network_state: NetworkState);
+	/// Request an emergency rotation
+	fn request_emergency_rotation();
 }

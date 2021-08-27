@@ -101,5 +101,9 @@
   },
   "ReserveId": "[u8;4]",
   "ValidatorSize": "u32",
-  "VoteCount": "u32"
+  "VoteCount": "u32",
+  "NetworkState": {
+    "online": "u32",
+    "offline": "u32"
+  }
 }

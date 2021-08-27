@@ -429,6 +429,7 @@ impl pallet_cf_reputation::Config for Runtime {
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = ZeroSlasher<Self>;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
+	type EmergencyRotation = Validator;
 }
 
 construct_runtime!(

@@ -52,7 +52,7 @@ extern crate assert_matches;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-use cf_traits::{Auction, AuctionPhase, EpochInfo};
+use cf_traits::{Auction, AuctionPhase, EmergencyRotation, EpochInfo};
 use frame_support::pallet_prelude::*;
 use frame_support::sp_runtime::traits::{Saturating, Zero};
 pub use pallet::*;
@@ -176,8 +176,7 @@ pub mod pallet {
 		pub(super) fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			ensure!(T::Auction::waiting_on_bids(), Error::<T>::AuctionInProgress);
 			ensure_root(origin)?;
-			Force::<T>::set(true);
-			Self::deposit_event(Event::ForceRotationRequested());
+			Self::force_validator_rotation();
 			Ok(().into())
 		}
 
@@ -349,6 +348,11 @@ impl<T: Config> Pallet<T> {
 			ValidatorLookup::<T>::insert(validator, ());
 		}
 	}
+
+	fn force_validator_rotation() {
+		Force::<T>::set(true);
+		Pallet::<T>::deposit_event(Event::ForceRotationRequested());
+	}
 }
 
 /// Provides the new set of validators to the session module when session is being rotated.
@@ -406,5 +410,11 @@ pub struct ValidatorOf<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 	fn convert(account: T::AccountId) -> Option<T::AccountId> {
 		Some(account)
+	}
+}
+
+impl<T: Config> EmergencyRotation for Pallet<T> {
+	fn request_emergency_rotation() {
+		Self::force_validator_rotation();
 	}
 }

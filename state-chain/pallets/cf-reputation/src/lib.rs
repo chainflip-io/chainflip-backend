@@ -99,7 +99,7 @@ pub trait OfflineConditions {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{EpochInfo, Online, EmergencyRotation, NetworkState};
+	use cf_traits::{EmergencyRotation, EpochInfo, NetworkState, Online};
 	use frame_system::pallet_prelude::*;
 	use sp_std::ops::Neg;
 
@@ -174,7 +174,8 @@ pub mod pallet {
 				let (network_weight, network_state) = Self::check_network_liveness();
 
 				if network_state.percentage_online() < 80 {
-					T::EmergencyRotation::request_emergency_rotation(network_state);
+					Self::deposit_event(Event::EmergencyRotationRequested(network_state));
+					T::EmergencyRotation::request_emergency_rotation();
 				}
 
 				return liveness_weight + network_weight;
@@ -253,6 +254,8 @@ pub mod pallet {
 		OfflineConditionPenalty(T::ValidatorId, OfflineCondition, ReputationPoints),
 		/// The accrual rate for our reputation poins has been updated \[points, online credits\]
 		AccrualRateUpdated(ReputationPoints, OnlineCreditsFor<T>),
+		/// An emergency rotation has been requested \[network state\]
+		EmergencyRotationRequested(NetworkState),
 	}
 
 	#[pallet::error]

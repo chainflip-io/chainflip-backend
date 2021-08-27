@@ -14,6 +14,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 
 use cf_traits::mocks::epoch_info;
 use cf_traits::mocks::epoch_info::Mock;
+use cf_traits::EmergencyRotation;
 
 thread_local! {
 	pub static SLASH_COUNT: RefCell<u64> = RefCell::new(0);
@@ -95,7 +96,7 @@ impl Slashing for MockSlasher {
 
 pub struct MockEmergencyRotation;
 impl EmergencyRotation for MockEmergencyRotation {
-	fn request_emergency_rotation(_network_state: NetworkState) {}
+	fn request_emergency_rotation() {}
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
