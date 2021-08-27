@@ -19,7 +19,7 @@ pub use client_inner::{KeygenOutcome, KeygenResultInfo, SchnorrSignature, Signin
 
 use super::MessageHash;
 
-use tokio::sync::mpsc::{self, UnboundedReceiver};
+use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
 use serde::{Deserialize, Serialize};
 
@@ -77,6 +77,7 @@ pub fn start<MQC, S>(
     mq_client: MQC,
     mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     mut multisig_instruction_receiver: UnboundedReceiver<MultisigInstruction>,
+    multisig_event_sender: UnboundedSender<MultisigEvent>,
     logger: &slog::Logger,
 ) -> impl futures::Future
 where
@@ -148,17 +149,10 @@ where
                             }
                         }
                         InnerEvent::SigningResult(res) => {
-                            mq_client.publish(
-                                Subject::MultisigEvent,
-                                &MultisigEvent::MessageSigningResult(res),
-                            )
-                            .await
-                            .expect("Failed to publish MessageSigningResult");
+                            multisig_event_sender.send(MultisigEvent::MessageSigningResult(res)).map_err(|_| "Receiver should exist").unwrap();
                         }
                         InnerEvent::KeygenResult(res) => {
-                            mq_client.publish(Subject::MultisigEvent, &MultisigEvent::KeygenResult(res))
-                                .await
-                                .expect("Failed to publish KeygenResult");
+                            multisig_event_sender.send(MultisigEvent::KeygenResult(res)).map_err(|_| "Receiver should exist").unwrap();
                         }
                     }
                 }

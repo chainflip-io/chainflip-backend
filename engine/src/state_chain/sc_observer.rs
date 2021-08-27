@@ -5,13 +5,13 @@ use slog::o;
 use sp_core::Hasher;
 use sp_runtime::traits::Keccak256;
 use substrate_subxt::{Client, EventSubscription, PairSigner};
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
     eth::EthBroadcaster,
     logging::COMPONENT_KEY,
     p2p, settings,
-    signing::{KeyId, KeygenInfo, MessageHash, MultisigInstruction, SigningInfo},
+    signing::{KeyId, KeygenInfo, MessageHash, MultisigEvent, MultisigInstruction, SigningInfo},
     state_chain::{
         pallets::vaults::{
             VaultRotationResponseCallExt,
@@ -29,6 +29,7 @@ pub async fn start(
     signer: Arc<Mutex<PairSigner<StateChainRuntime, sp_core::sr25519::Pair>>>,
     eth_broadcaster: EthBroadcaster,
     multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
+    mut multisig_event_receiver: UnboundedReceiver<MultisigEvent>,
     logger: &slog::Logger,
 ) {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
@@ -64,10 +65,13 @@ pub async fn start(
                             .iter()
                             .map(|v| p2p::ValidatorId(v.clone().into()))
                             .collect();
-                        // TODO: Should this be request index? @andy
-                        let key_gen_info =
-                            KeygenInfo::new(KeyId(keygen_request_event.request_index), validators);
-                        let gen_new_key_event = MultisigInstruction::KeyGen(key_gen_info);
+
+                        // TODO: Should this be the key id?
+                        // https://github.com/chainflip-io/chainflip-backend/issues/442
+                        let gen_new_key_event = MultisigInstruction::KeyGen(KeygenInfo::new(
+                            KeyId(keygen_request_event.request_index),
+                            validators,
+                        ));
                         // We need the Sender for Multisig instructions channel here
                         multisig_instruction_sender
                             .send(gen_new_key_event)
@@ -100,6 +104,8 @@ pub async fn start(
                             .send(sign_tx)
                             .map_err(|_| "Receiver should exist")
                             .unwrap();
+
+                        todo!("Receive signing result and send result back to State chain");
                     }
                     VaultRotationRequestEvent(vault_rotation_request_event) => {
                         match vault_rotation_request_event.vault_rotation_request.chain {
