@@ -4,11 +4,19 @@ orbs:
 workflows:
   chainflip-backend-checks:
     jobs:
-      - lint: &context
+      - lint:
           context:
             - ghcr-credentials
-      - build-rust-base: *context
-      - fmt-validator-package: *context
+      - build-rust-base:
+          requires:
+            - lint
+          context:
+            - ghcr-credentials
+      - fmt-validator-package:
+          requires:
+            - build-rust-base
+          context:
+            - ghcr-credentials
 
 jobs:
   lint:
@@ -45,6 +53,7 @@ jobs:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
         auth: *dockerconfig
     steps:
+      - checkout
       - run: >
           cargo fmt -p chainflip-engine
           -p cf-p2p
