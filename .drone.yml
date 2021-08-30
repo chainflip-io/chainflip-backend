@@ -1,3 +1,4 @@
+---
 # Secrets
 kind: secret
 name: aws_access_key_id

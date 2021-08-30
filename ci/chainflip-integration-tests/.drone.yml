@@ -1,3 +1,4 @@
+---
 #  Runs all tests at night
 kind: pipeline
 type: kubernetes

@@ -1,3 +1,4 @@
+---
 # Runs on every PR
 kind: pipeline
 name: chainflip-backend-checks
