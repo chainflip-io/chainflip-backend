@@ -13,6 +13,7 @@ steps:
     depends_on:
       - clone
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+    pull: always
     resources:
       limits:
         cpu: 3000
