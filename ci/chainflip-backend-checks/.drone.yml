@@ -100,6 +100,8 @@ steps:
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     when:
       branch:
+        event:
+          - push
         include:
           - epic/*
     depends_on:
@@ -113,6 +115,8 @@ steps:
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
     when:
       branch:
+        event:
+          - push
         include:
           - epic/*
     depends_on:
@@ -125,6 +129,8 @@ steps:
     image: busybox
     when:
       branch:
+        event:
+          - push
         include:
           - epic/*
     depends_on:
@@ -137,6 +143,8 @@ steps:
     image: plugins/docker
     when:
       branch:
+        event:
+          - push
         include:
           - epic/*
     depends_on:
@@ -156,6 +164,8 @@ steps:
     image: plugins/docker
     when:
       branch:
+        event:
+          - push
         include:
           - epic/*
     depends_on:
@@ -176,6 +186,8 @@ steps:
     pull: always
     when:
       branch:
+        event:
+          - push
         include:
           - epic/*
     depends_on:
@@ -200,6 +212,8 @@ steps:
     pull: always
     when:
       branch:
+        event:
+          - push
         include:
           - epic/*
     depends_on:
@@ -212,9 +226,9 @@ service_account_name: drone-runner-kube
 # Config
 trigger:
   event:
-    - push
+    - pull_request
   branch:
-    exclude:
+    include:
       - develop
       - main
       - release/*
