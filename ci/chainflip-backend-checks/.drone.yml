@@ -232,6 +232,7 @@ trigger:
       - develop
       - main
       - release/*
+      - epic/*
 
 image_pull_secrets:
   - dockerconfigjson
