@@ -46,7 +46,7 @@ jobs:
           registry: ghcr.io
       - docker/push:
           registry: ghcr.io
-          image: ghcr.io/chainflip-io/chainflip-backend/rust-base
+          image: chainflip-io/chainflip-backend/rust-base
           tag: latest
 
   fmt-validator-package:
