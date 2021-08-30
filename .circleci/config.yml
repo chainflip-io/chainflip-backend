@@ -46,19 +46,19 @@ jobs:
         auth: *dockerconfig
     steps:
       - run: >
-        cargo fmt -p chainflip-engine
-        -p cf-p2p
-        -p cf-p2p-rpc
-        -p pallet-cf-auction
-        -p pallet-cf-emissions
-        -p pallet-cf-flip
-        -p pallet-cf-rewards
-        -p pallet-cf-reputation
-        -p pallet-cf-staking
-        -p pallet-cf-validator
-        -p pallet-cf-vaults
-        -p pallet-cf-witnesser
-        -p pallet-cf-witnesser-api
-        -p cf-traits
-        -- --check
+          cargo fmt -p chainflip-engine
+          -p cf-p2p
+          -p cf-p2p-rpc
+          -p pallet-cf-auction
+          -p pallet-cf-emissions
+          -p pallet-cf-flip
+          -p pallet-cf-rewards
+          -p pallet-cf-reputation
+          -p pallet-cf-staking
+          -p pallet-cf-validator
+          -p pallet-cf-vaults
+          -p pallet-cf-witnesser
+          -p pallet-cf-witnesser-api
+          -p cf-traits
+          -- --check
       - run: if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
