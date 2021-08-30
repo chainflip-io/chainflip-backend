@@ -98,12 +98,12 @@ service_account_name: drone-runner-kube
 trigger:
   event:
     - pull_request
-  branch:
-    include:
-      - develop
-      - main
-      - release/*
-      - epic/*
+#  branch:
+#    include:
+#      - develop
+#      - main
+#      - release/*
+#      - epic/*
 
 image_pull_secrets:
   - dockerconfigjson
