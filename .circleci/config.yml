@@ -1,8 +1,10 @@
+version: 2.1
+orbs:
+  docker: circleci/docker@1.7.0
 workflows:
-  version: 2
   chainflip-backend-checks:
     jobs:
-      - build: &context
+      - lint: &context
           context:
             - ghcr-credentials
       - build-rust-base:
@@ -21,19 +23,20 @@ jobs:
       - run: drone lint --trusted
 
   build-rust-base:
-    docker:
-      - image: circleci/golang:1.15
-        auth:
-          username: tomjohnburton
-          password: $DOCKERHUB_PASSWORD
+    executor: docker/docker
     steps:
-      - checkout
       - setup_remote_docker:
           version: 19.03.13
           docker_layer_caching: true
-      - run: |
-          TAG=latest
-          IMAGE=ghcr.io/chainflip-io/chainflip-backend/rust-base
-          docker build --cache-from $IMAGE:$TAG -t $IMAGE:$TAG -f Dockerfile.rust-base .
-          echo $DOCKERHUB_PASSWORD | docker login -u $DOCKERHUB_USERNAME --password-stdin
-          docker push $IMAGE:$TAG
+      - checkout
+      - docker/check:
+          docker-username: tomjohnburton
+          registry: ghcr.io
+      - docker/build:
+          image: ghcr.io/chainflip-io/chainflip-backend/rust-base
+          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+          dockerfile: Dockerfile.rust-base
+          registry: ghcr.io
+      - docker/push:
+          digest-path: /tmp/digest.txt
+          image: my_repo/orb-test
