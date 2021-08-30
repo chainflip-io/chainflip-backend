@@ -1,11 +1,16 @@
-version: 2.1
+workflows:
+  my-workflow:
+    jobs:
+      - build:
+          context:
+            - ghcr-credentials
 jobs:
   build:
     docker:
-      - image: alpine:3.7
+      - image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+        auth:
+          username: $DOCKER_USERNAME
+          password: $DOCKER_PASSWORD
     steps:
-      - run:
-          name: The First Step
-          command: |
-            echo 'Hello World!'
-            echo 'This is the delivery pipeline'
+      - checkout
+      - run: drone lint --trust
