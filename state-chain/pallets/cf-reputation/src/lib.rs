@@ -180,17 +180,17 @@ pub mod pallet {
 	/// Liveness bitmap tracking intervals
 	trait LivenessTracker {
 		/// Online status
-		fn is_online(&self) -> bool;
+		fn is_online(self) -> bool;
 		/// Update state of current interval
 		fn update_current_interval(&mut self, online: bool) -> Self;
 		/// State of submission for the current interval
-		fn has_submitted(&self) -> bool;
+		fn has_submitted(self) -> bool;
 	}
 
 	impl LivenessTracker for Liveness {
-		fn is_online(&self) -> bool {
+		fn is_online(self) -> bool {
 			// Online for 2 * `HeartbeatBlockInterval` or 2 lsb
-			*self & 0x3 != 0
+			self & 0x3 != 0
 		}
 
 		fn update_current_interval(&mut self, online: bool) -> Self {
@@ -199,8 +199,8 @@ pub mod pallet {
 			*self
 		}
 
-		fn has_submitted(&self) -> bool {
-			*self & 0x1 == 0x1
+		fn has_submitted(self) -> bool {
+			self & 0x1 == 0x1
 		}
 	}
 
