@@ -30,7 +30,7 @@ jobs:
           docker_layer_caching: true
       - checkout
       - docker/check:
-          docker-username: tomjohnburton
+          docker-username: DOCKER_USERNAME
           registry: ghcr.io
       - docker/build:
           image: ghcr.io/chainflip-io/chainflip-backend/rust-base
