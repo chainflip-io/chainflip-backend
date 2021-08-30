@@ -55,14 +55,14 @@ pub trait BroadcastContext<T: BaseConfig> {
 		sig: &Self::Signature,
 	) -> Self::UnsignedTransaction;
 
-	/// Callback for when the signed transaction is submitted to the state chain.
-	fn on_transaction_ready(&mut self, signed_tx: &Self::SignedTransaction);
+	/// Optional callback for when the signed transaction is submitted to the state chain.
+	fn on_transaction_ready(&mut self, signed_tx: &Self::SignedTransaction) {};
 
-	///
-	fn on_broadcast_success(&mut self, transaction_hash: &Self::TransactionHash);
+	/// Optional callback for when a transaction has been witnessed on the host chain.
+	fn on_broadcast_success(&mut self, transaction_hash: &Self::TransactionHash) {};
 
-	/// Callback for when a 
-	fn on_broadcast_failure(&mut self, failure: &BroadcastFailure<T::ValidatorId>);
+	/// Optional callback for when a transaction has failed.
+	fn on_broadcast_failure(&mut self, failure: &BroadcastFailure<T::ValidatorId>) {};
 }
 
 /// Something that can nominate signers from the set of active validators.
