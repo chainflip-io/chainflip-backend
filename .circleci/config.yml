@@ -1,5 +1,5 @@
 workflows:
-  my-workflow:
+  build:
     jobs:
       - build:
           context:
