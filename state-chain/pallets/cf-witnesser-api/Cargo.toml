@@ -14,34 +14,35 @@ targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
 # Chainflip pallets
-cf-traits = { path = '../../traits', default-features = false }
-pallet-cf-staking = { path = '../cf-staking', default-features = false }
-pallet-cf-vaults = { path = '../cf-vaults', default-features = false }
+cf-traits = {path = '../../traits', default-features = false}
+pallet-cf-staking = {path = '../cf-staking', default-features = false}
+pallet-cf-vaults = {path = '../cf-vaults', default-features = false}
 
 # Substrate stuff
-codec = { default-features = false, features = ['derive'], package = 'parity-scale-codec', version = '2.0.0' }
-frame-system = { default-features = false, version = '3.0.0' }
-frame-support = { default-features = false, version = '3.0.0' }
-sp-std = { default-features = false, version = '3.0.0' }
-sp-core = { default-features = false, version = '3.0.0' }
+codec = {default-features = false, features = ['derive'], package = 'parity-scale-codec', version = '2.0.0'}
+ethabi = {default-features = false, git = 'https://github.com/chainflip-io/ethabi', rev = '114a29d'}
+frame-support = {default-features = false, version = '3.0.0'}
+frame-system = {default-features = false, version = '3.0.0'}
+sp-core = {default-features = false, version = '3.0.0'}
+sp-std = {default-features = false, version = '3.0.0'}
 
 [dev-dependencies]
-serde = { version = "1.0.119" }
-sp-core = { default-features = false, version = '3.0.0' }
-sp-io = { default-features = false, version = '3.0.0' }
-sp-runtime = { default-features = false, version = '3.0.0' }
+serde = {version = "1.0.119"}
+sp-core = {default-features = false, version = '3.0.0'}
+sp-io = {default-features = false, version = '3.0.0'}
+sp-runtime = {default-features = false, version = '3.0.0'}
 
 [features]
 default = ['std']
 std = [
-	'cf-traits/std',
-	'codec/std',
-	'frame-support/std',
-	'frame-system/std',
-	'pallet-cf-staking/std',
-	'pallet-cf-vaults/std',
-	'sp-std/std',
-    'sp-core/std',
+  'cf-traits/std',
+  'codec/std',
+  'frame-support/std',
+  'frame-system/std',
+  'pallet-cf-staking/std',
+  'pallet-cf-vaults/std',
+  'sp-std/std',
+  'sp-core/std',
 ]
 # Note: frame-support `try-runtime` feature is released after v3.
 #   Uncomment the following line when `frame-support` version > `3.0.0`.

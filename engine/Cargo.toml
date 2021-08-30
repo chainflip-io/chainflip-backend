@@ -50,7 +50,7 @@ serde_json = "1.0"
 slog = {version = "2.7.0"}
 slog-async = {version = "2.6.0"}
 slog-json = {version = "2.3.0"}
-thiserror = "1.0.24"
+thiserror = "1.0.26"
 tokio = {version = "1.5.0", features = ["full"]}
 tokio-compat-02 = "0.2.0"
 tokio-stream = "0.1.5"
@@ -74,6 +74,7 @@ pallet-cf-flip = {path = "../state-chain/pallets/cf-flip"}
 pallet-cf-reputation = {path = "../state-chain/pallets/cf-reputation"}
 pallet-cf-staking = {path = "../state-chain/pallets/cf-staking"}
 pallet-cf-validator = {path = "../state-chain/pallets/cf-validator"}
+pallet-cf-vaults = {path = "../state-chain/pallets/cf-vaults"}
 state-chain-runtime = {path = "../state-chain/runtime"}
 
 [dependencies.curv]
