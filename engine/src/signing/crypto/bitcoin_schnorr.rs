@@ -27,13 +27,15 @@ use curv::elliptic::curves::traits::*;
 
 use curv::cryptographic_primitives::commitments::hash_commitment::HashCommitment;
 use curv::cryptographic_primitives::commitments::traits::Commitment;
-use curv::cryptographic_primitives::hashing::hash_sha256::HSha256;
-use curv::cryptographic_primitives::hashing::traits::Hash;
 use curv::cryptographic_primitives::secret_sharing::feldman_vss::VerifiableSS;
 use curv::BigInt;
 
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use std::convert::TryInto;
+
+use sp_core::Hasher;
+use sp_runtime::traits::Keccak256;
 
 type GE = curv::elliptic::curves::secp256_k1::GE;
 type FE = curv::elliptic::curves::secp256_k1::FE;
@@ -200,19 +202,53 @@ impl LocalSig {
         let beta_i = local_ephemeral_key.x_i.clone();
         let alpha_i = local_private_key.x_i.clone();
 
-        let r = local_ephemeral_key.y.get_element();
-        let eth_addr = utils::pubkey_to_eth_addr(r);
+        let e = LocalSig::build_challenge(
+            local_private_key.y.get_element(),
+            local_ephemeral_key.y.get_element(),
+            message,
+        );
 
-        let e_bn = HSha256::create_hash(&[
-            &local_private_key.y.bytes_compressed_to_big_int(),
-            &BigInt::from_bytes(message),
-            &BigInt::from_bytes(&eth_addr),
-        ]);
-
-        let e: FE = ECScalar::from(&e_bn);
-        let gamma_i = beta_i + e.clone() * alpha_i;
+        let rhs = e.clone() * alpha_i;
+        let gamma_i = beta_i.sub(&rhs.get_element());
 
         LocalSig { gamma_i, e }
+    }
+
+    /// Assembles and hashes the challenge in the correct order for eth
+    pub fn build_challenge(
+        nonce_key: secp256k1::PublicKey,
+        pub_key: secp256k1::PublicKey,
+        message: &[u8],
+    ) -> FE {
+        let eth_addr = utils::pubkey_to_eth_addr(pub_key);
+
+        let (pubkey_x, pubkey_y_parity) = LocalSig::destructure_pubkey(nonce_key);
+
+        // assemble challenge in correct order
+        let e_bytes = [
+            pubkey_x.to_vec(),
+            [pubkey_y_parity].to_vec(),
+            message.to_vec(),
+            eth_addr.to_vec(),
+        ]
+        .concat();
+
+        let e_bn = BigInt::from_bytes(Keccak256::hash(&e_bytes).as_bytes());
+        let e: FE = ECScalar::from(&e_bn);
+        e
+    }
+
+    fn destructure_pubkey(pubkey: secp256k1::PublicKey) -> ([u8; 32], u8) {
+        let pubkey_bytes: [u8; 33] = pubkey.serialize();
+        let pubkey_y_parity_byte = pubkey_bytes[0];
+        let pubkey_y_parity = if pubkey_y_parity_byte == 2 { 0u8 } else { 1u8 };
+        let pubkey_x: [u8; 32] = pubkey_bytes[1..].try_into().expect("Is valid pubkey");
+        return (pubkey_x, pubkey_y_parity);
+    }
+
+    #[cfg(test)]
+    pub fn get_gamma(&self) -> FE {
+        self.gamma_i
     }
 
     // section 4.2 step 3
@@ -234,16 +270,23 @@ impl LocalSig {
         // comt_eph_0,... ,comt_eph_n', e*comt_kg_0, ..., e*comt_kg_n ]
         let comm_vec = (0..vss_private_keys[0].parameters.threshold + 1)
             .map(|i| {
-                let mut key_gen_comm_i_vec = (0..vss_private_keys.len())
-                    .map(|j| vss_private_keys[j].commitments[i].clone() * &gamma_vec[i].e)
-                    .collect::<Vec<GE>>();
-                let mut eph_comm_i_vec = (0..vss_ephemeral_keys.len())
+                let eph_comm_i_vec = (0..vss_ephemeral_keys.len())
                     .map(|j| vss_ephemeral_keys[j].commitments[i].clone())
                     .collect::<Vec<GE>>();
-                key_gen_comm_i_vec.append(&mut eph_comm_i_vec);
-                let mut comm_i_vec_iter = key_gen_comm_i_vec.iter();
-                let comm_i_0 = comm_i_vec_iter.next().unwrap();
-                comm_i_vec_iter.fold(comm_i_0.clone(), |acc, x| acc + x)
+
+                let mut eph_comm_i_iter = eph_comm_i_vec.iter();
+                let head = eph_comm_i_iter.next().unwrap();
+                let eph_comm_i_sum = eph_comm_i_iter.fold(head.clone(), |acc, x| acc + x);
+
+                let key_gen_comm_i_vec = (0..vss_private_keys.len())
+                    .map(|j| vss_private_keys[j].commitments[i].clone() * &gamma_vec[i].e)
+                    .collect::<Vec<GE>>();
+
+                let mut key_gen_comm_i_iter = key_gen_comm_i_vec.iter();
+                let head = key_gen_comm_i_iter.next().unwrap();
+                let key_gen_comm_i_sum = key_gen_comm_i_iter.fold(head.clone(), |acc, x| acc + x);
+
+                eph_comm_i_sum.sub_point(&key_gen_comm_i_sum.get_element())
             })
             .collect::<Vec<GE>>();
 
@@ -307,23 +350,82 @@ impl Signature {
     }
 
     pub fn verify(&self, message: &[u8], pubkey_y: &GE) -> Result<(), InvalidSig> {
-        let eth_addr = utils::pubkey_to_eth_addr(self.v.get_element());
-        let e_bn = HSha256::create_hash(&[
-            &pubkey_y.bytes_compressed_to_big_int(),
-            &BigInt::from_bytes(message),
-            &BigInt::from_bytes(&eth_addr),
-        ]);
-        let e: FE = ECScalar::from(&e_bn);
+        let e = LocalSig::build_challenge(pubkey_y.get_element(), self.v.get_element(), message);
 
         let g: GE = GE::generator();
         let sigma_g = g * &self.sigma;
         let e_y = pubkey_y * &e;
-        let e_y_plus_v = e_y + &self.v;
+        let v_minus_e_y = self.v.sub_point(&e_y.get_element());
 
-        if e_y_plus_v == sigma_g {
+        if v_minus_e_y == sigma_g {
             Ok(())
         } else {
             Err(InvalidSig)
         }
+    }
+}
+
+#[cfg(test)]
+mod test_schnorr {
+    use super::LocalSig;
+    use super::SharedKeys;
+    use super::Signature;
+    use curv::elliptic::curves::secp256_k1::{Secp256k1Point, Secp256k1Scalar};
+    use curv::elliptic::curves::traits::{ECPoint, ECScalar};
+    use std::str::FromStr;
+
+    // This test data has been signed and validated on the KeyManager.sol contract
+    const SECRET_KEY_HEX: &str = "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba";
+    const NONCE_KEY_HEX: &str = "d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285";
+    const MESSAGE_HASH_HEX: &str =
+        "2bdc19071c7994f088103dbf8d5476d6deb6d55ee005a2f510dc7640055cc84e";
+    const SIGMA_HEX: &str = "beb37e87509e15cd88b19fa224441c56acc0e143cb25b9fd1e57fdafed215538";
+
+    #[test]
+    fn test_signature() {
+        // using the known SECRET_KEY_HEX, build the local_private_key
+        let sk_1 = secp256k1::SecretKey::from_str(SECRET_KEY_HEX).unwrap();
+
+        let mut sk_1_scalar: Secp256k1Scalar = Secp256k1Scalar::new_random();
+        sk_1_scalar.set_element(sk_1);
+
+        let pk_1_point = Secp256k1Point::generator();
+        let pk_1_point = pk_1_point.scalar_mul(&sk_1_scalar.get_element());
+
+        let local_private_key = SharedKeys {
+            y: pk_1_point,
+            x_i: sk_1_scalar,
+        };
+
+        // create the local_ephemeral_key from the known NONCE_KEY_HEX
+        let k = secp256k1::SecretKey::from_str(NONCE_KEY_HEX).unwrap();
+        let mut k_scalar: Secp256k1Scalar = Secp256k1Scalar::new_random();
+        k_scalar.set_element(k);
+        let kTimesG_point = Secp256k1Point::generator();
+        let kTimesG_point = kTimesG_point.scalar_mul(&k_scalar.get_element());
+        let local_ephemeral_key = SharedKeys {
+            y: kTimesG_point,
+            x_i: k_scalar,
+        };
+
+        // sign the message
+        let message_hash = hex::decode(MESSAGE_HASH_HEX).unwrap();
+        let local_sig = LocalSig::compute(&message_hash, &local_ephemeral_key, &local_private_key);
+        let sigma: [u8; 32] = local_sig.get_gamma().get_element().as_ref().clone();
+
+        // by using the same key, nonce and message, we should get the same signature (sigma)
+        assert_eq!(hex::encode(&sigma), SIGMA_HEX);
+
+        // turn the sigma into a proper signature and run it though the verify function.
+        let sigma_key = secp256k1::SecretKey::from_slice(&sigma).unwrap();
+        let mut sigma_scalar: Secp256k1Scalar = Secp256k1Scalar::new_random();
+        sigma_scalar.set_element(sigma_key);
+        let sig = Signature {
+            sigma: sigma_scalar,
+            v: local_ephemeral_key.y,
+        };
+
+        let res = sig.verify(&message_hash, &local_private_key.y);
+        assert!(res.is_ok());
     }
 }
