@@ -17,6 +17,16 @@ workflows:
             - build-rust-base
           context:
             - ghcr-credentials
+      - check-validator-package:
+          requires:
+            - fmt-validator-package
+          context:
+            - ghcr-credentials
+      - test-validator-package:
+          requires:
+            - check-validator-package
+          context:
+            - ghcr-credentials
 
 jobs:
   lint:
