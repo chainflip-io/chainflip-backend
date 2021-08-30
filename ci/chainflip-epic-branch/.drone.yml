@@ -151,7 +151,7 @@ steps:
 
 service_account_name: drone-runner-kube
 
-# Config
+# Config extra
 trigger:
   event:
     - push
