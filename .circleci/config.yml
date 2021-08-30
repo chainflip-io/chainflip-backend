@@ -90,10 +90,11 @@ jobs:
     environment:
       SCCACHE_REDIS: redis://167.172.97.176:6379
       SCCACHE_CACHE_SIZE: 14G
+    working_directory: /mnt/ramdisk
     steps:
       - checkout
       - run: sccache -s
-      - run: cargo build --locked --release
+      - run: cargo build --locked --release --verbose
 
   test-validator-package-with-check:
     docker:
@@ -102,7 +103,8 @@ jobs:
     environment:
       SCCACHE_REDIS: redis://167.172.97.176:6379
       SCCACHE_CACHE_SIZE: 14G
+    working_directory: /mnt/ramdisk
     steps:
       - checkout
       - run: sccache -s
-      - run: cargo test --locked --lib --release
+      - run: cargo test --locked --lib --release --verbose
