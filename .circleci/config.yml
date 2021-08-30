@@ -45,6 +45,7 @@ jobs:
           dockerfile: Dockerfile.rust-base
           registry: ghcr.io
       - docker/push:
+          registry: ghcr.io
           image: ghcr.io/chainflip-io/chainflip-backend/rust-base
           tag: latest
 
