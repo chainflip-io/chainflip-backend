@@ -51,8 +51,10 @@ pub async fn start(
         if (block_header.number + (heartbeat_block_interval / 2)) % heartbeat_block_interval == 0 {
             slog::info!(logger, "Sending heartbeat");
             if let Err(e) = {
-                let signer = signer.lock().unwrap(); // TODO: Handle unwrap
-                subxt_client.heartbeat(&*signer).await
+                let mut signer = signer.lock().unwrap(); // TODO: Handle unwrap
+                let result = subxt_client.heartbeat(&*signer).await;
+                signer.increment_nonce();
+                result
             } {
                 slog::error!(logger, "Error submitting heartbeat: {:?}", e)
             }
