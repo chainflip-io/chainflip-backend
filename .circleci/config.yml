@@ -40,7 +40,7 @@ jobs:
           docker-username: DOCKER_USERNAME
           registry: ghcr.io
       - docker/build:
-          image: ghcr.io/chainflip-io/chainflip-backend/rust-base
+          image: chainflip-io/chainflip-backend/rust-base
           cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
           dockerfile: Dockerfile.rust-base
           registry: ghcr.io
