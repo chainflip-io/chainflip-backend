@@ -2,7 +2,8 @@ use std::marker::PhantomData;
 
 use codec::{Decode, Encode};
 use pallet_cf_vaults::{
-    rotation::VaultRotationResponse, EthSigningTxRequest, KeygenRequest, VaultRotationRequest,
+    rotation::VaultRotationResponse, CeremonyId, EthSigningTxRequest, KeygenRequest,
+    VaultRotationRequest,
 };
 use sp_runtime::AccountId32;
 use substrate_subxt::{module, system::System, Call, Event};
@@ -15,7 +16,7 @@ pub trait Vaults: System {}
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode)]
 pub struct KeygenRequestEvent<V: Vaults> {
-    pub request_index: u64,
+    pub ceremony_id: CeremonyId,
 
     pub keygen_request: KeygenRequest<AccountId32>,
 
@@ -25,7 +26,7 @@ pub struct KeygenRequestEvent<V: Vaults> {
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode)]
 pub struct EthSignTxRequestEvent<V: Vaults> {
-    pub request_index: u64,
+    pub ceremony_id: CeremonyId,
 
     pub eth_signing_tx_request: EthSigningTxRequest<AccountId32>,
 
@@ -35,7 +36,7 @@ pub struct EthSignTxRequestEvent<V: Vaults> {
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode)]
 pub struct VaultRotationRequestEvent<V: Vaults> {
-    pub request_index: u64,
+    pub ceremony_id: CeremonyId,
 
     pub vault_rotation_request: VaultRotationRequest,
 
@@ -44,7 +45,7 @@ pub struct VaultRotationRequestEvent<V: Vaults> {
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct VaultRotationResponseCall<T: Vaults> {
-    pub request_id: u64,
+    pub ceremony_id: CeremonyId,
 
     // Can we provide better types than this? It may require some changes
     // to the type accepted by the SC

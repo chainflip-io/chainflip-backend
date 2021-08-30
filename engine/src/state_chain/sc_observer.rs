@@ -69,7 +69,7 @@ pub async fn start(
                         // TODO: Should this be the key id?
                         // https://github.com/chainflip-io/chainflip-backend/issues/442
                         let gen_new_key_event = MultisigInstruction::KeyGen(KeygenInfo::new(
-                            KeyId(keygen_request_event.request_index),
+                            KeyId(keygen_request_event.ceremony_id),
                             validators,
                         ));
                         // We need the Sender for Multisig instructions channel here
@@ -97,7 +97,7 @@ pub async fn start(
                             ),
                             // TODO: we want to use some notion of "KeyId"
                             // https://github.com/chainflip-io/chainflip-backend/issues/442
-                            SigningInfo::new(KeyId(eth_sign_tx_request.request_index), validators),
+                            SigningInfo::new(KeyId(eth_sign_tx_request.ceremony_id), validators),
                         );
 
                         multisig_instruction_sender
@@ -130,7 +130,7 @@ pub async fn start(
                                         subxt_client
                                             .vault_rotation_response(
                                                 &*signer,
-                                                vault_rotation_request_event.request_index,
+                                                vault_rotation_request_event.ceremony_id,
                                                 VaultRotationResponse::Success {
                                                     // TODO: Add the actual keys here
                                                     // why are these being added here? The SC should know these already? right?
@@ -151,7 +151,7 @@ pub async fn start(
                                         subxt_client
                                             .vault_rotation_response(
                                                 &*signer,
-                                                vault_rotation_request_event.request_index,
+                                                vault_rotation_request_event.ceremony_id,
                                                 VaultRotationResponse::Failure,
                                             )
                                             .await

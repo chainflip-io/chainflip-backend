@@ -48,10 +48,10 @@ mod test {
 			assert_ok!(VaultsPallet::start_vault_rotation(vec![
 				ALICE, BOB, CHARLIE
 			]));
-			let first_request_idx = VaultsPallet::current_request();
+			let first_ceremony_id = VaultsPallet::current_request();
 			assert_ok!(VaultsPallet::keygen_response(
 				Origin::root(),
-				first_request_idx,
+				first_ceremony_id,
 				KeygenResponse::Success(vec![])
 			));
 
@@ -60,11 +60,11 @@ mod test {
 				ALICE, BOB, CHARLIE
 			]));
 
-			let second_request_idx = VaultsPallet::current_request();
+			let second_ceremony_id = VaultsPallet::current_request();
 			// This time we respond with bad news
 			assert_ok!(VaultsPallet::keygen_response(
 				Origin::root(),
-				second_request_idx,
+				second_ceremony_id,
 				KeygenResponse::Failure(vec![BOB, CHARLIE])
 			));
 
@@ -72,8 +72,8 @@ mod test {
 			assert_eq!(
 				last_event(),
 				mock::Event::pallet_cf_vaults(crate::Event::RotationAborted(vec![
-					first_request_idx,
-					second_request_idx
+					first_ceremony_id,
+					second_ceremony_id
 				]))
 			);
 

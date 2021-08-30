@@ -53,8 +53,8 @@ use sp_core::H160;
 
 use crate::rotation::ChainParams::Ethereum;
 use crate::rotation::*;
-// we need these types exposed so subxt can use the type size
-pub use crate::rotation::{KeygenRequest, VaultRotationRequest};
+// we need these types exposed so the CFE can use them
+pub use crate::rotation::{CeremonyId, KeygenRequest, VaultRotationRequest};
 use ethabi::{Bytes, Function, Param, ParamType, Token};
 use sp_runtime::traits::One;
 
@@ -138,14 +138,14 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Request a key generation \[request_index, request\]
+		/// Request a key generation \[ceremony_id, request\]
 		// TODO: KeygenRequest can be inlined
 		KeygenRequest(CeremonyId, KeygenRequest<T::ValidatorId>),
-		/// Request a rotation of the vault for this chain \[request_index, request\]
+		/// Request a rotation of the vault for this chain \[ceremony_id, request\]
 		VaultRotationRequest(CeremonyId, VaultRotationRequest),
-		/// The vault for the request has rotated \[request_index\]
+		/// The vault for the request has rotated \[ceremony_id\]
 		VaultRotationCompleted(CeremonyId),
-		/// A rotation of vaults has been aborted \[request_indexes\]
+		/// A rotation of vaults has been aborted \[ceremony_ids\]
 		RotationAborted(Vec<CeremonyId>),
 		/// A complete set of vaults have been rotated
 		VaultsRotated,
