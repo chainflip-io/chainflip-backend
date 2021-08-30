@@ -115,6 +115,24 @@ pub enum VaultRotationResponse<PublicKey: Into<Vec<u8>>, Transaction: Into<Vec<u
 	Failure,
 }
 
+/// A signing request
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub struct ThresholdSignatureRequest<PublicKey, ValidatorId> {
+	// Payload to be signed by the existing aggregate key
+	pub(crate) payload: Vec<u8>,
+	pub(crate) public_key: PublicKey,
+	pub(crate) validators: Vec<ValidatorId>,
+}
+
+/// A response back with our signature else a list of bad validators
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub enum ThresholdSignatureResponse<ValidatorId> {
+	// Signature
+	Success(Vec<u8>),
+	// Bad validators
+	Error(Vec<ValidatorId>),
+}
+
 #[macro_export]
 macro_rules! ensure_index {
 	($index: expr) => {

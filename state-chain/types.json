@@ -62,7 +62,12 @@
   "RequestIndex": "u64",
   "PublicKey": "Vec<u8>",
   "Transaction": "Vec<u8>",
-  "EthSigningTxResponse": {
+  "ThresholdSignatureRequest": {
+    "payload": "Vec<u8>",
+    "public_key": "PublicKey",
+    "validators": "Vec<ValidatorId>"
+  },
+  "ThresholdSignatureResponse": {
     "_enum": {
       "Success": "(Vec<u8>)",
       "Error": "(Vec<ValidatorId>)"

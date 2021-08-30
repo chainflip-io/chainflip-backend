@@ -234,14 +234,18 @@ mod test {
 				vec![],
 				vec![ALICE, BOB, CHARLIE]
 			));
-			let signing_request = EthSigningTxRequest {
+			let signing_request = ThresholdSignatureRequest {
 				payload: EthereumChain::<MockRuntime>::encode_set_agg_key_with_agg_key(vec![])
 					.unwrap(),
+				public_key: vec![],
 				validators: vec![ALICE, BOB, CHARLIE],
 			};
 			assert_eq!(
 				last_event(),
-				mock::Event::pallet_cf_vaults(crate::Event::EthSignTxRequest(0, signing_request))
+				mock::Event::pallet_cf_vaults(crate::Event::ThresholdSignatureRequest(
+					0,
+					signing_request
+				))
 			);
 		});
 	}
@@ -253,10 +257,10 @@ mod test {
 				ALICE, BOB, CHARLIE
 			]));
 
-			assert_ok!(VaultsPallet::eth_signing_tx_response(
+			assert_ok!(VaultsPallet::threshold_signature_response(
 				Origin::root(),
 				1,
-				EthSigningTxResponse::Success(vec![])
+				ThresholdSignatureResponse::Success(vec![])
 			));
 		});
 	}
