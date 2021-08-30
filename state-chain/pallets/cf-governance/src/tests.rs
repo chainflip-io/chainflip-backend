@@ -93,7 +93,7 @@ fn proposal_not_found() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			Governance::approve(Origin::signed(ALICE), 200),
-			<Error<Test>>::NotFound
+			<Error<Test>>::ProposalNotFound
 		);
 	});
 }

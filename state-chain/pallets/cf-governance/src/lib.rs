@@ -37,8 +37,6 @@ pub mod pallet {
 	pub struct Proposal<AccountId> {
 		/// Encoded representation of a extrinsic
 		pub call: OpaqueCall,
-		/// Date of creation
-		pub created: u64,
 		/// Array of accounts which already approved the proposal
 		pub approved: Vec<AccountId>,
 	}
@@ -144,14 +142,10 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// An account already approved a proposal
 		AlreadyApproved,
-		/// A proposal was already executed
-		AlreadyExecuted,
-		/// A proposal is already expired
-		AlreadyExpired,
 		/// The signer of an extrinsic is no member of the current governance
 		NotMember,
-		/// The proposal was not found in the the proposal map
-		NotFound,
+		/// The proposal was not found - it may have expired or it may already be executed.
+		ProposalNotFound,
 		/// Sudo call failed
 		SudoCallFailed,
 	}
@@ -174,7 +168,6 @@ pub mod pallet {
 				id,
 				Proposal {
 					call: call.encode(),
-					created: T::TimeSource::now().as_secs(),
 					approved: vec![],
 				},
 			);
@@ -330,13 +323,13 @@ impl<T: Config> Pallet<T> {
 	}
 	/// Checks if the majority for a proposal is reached
 	fn majority_reached(approvals: usize) -> bool {
-		let total_number_of_voters = <Members<T>>::get().len() as u32;
+		let total_number_of_voters = <Members<T>>::decode_len().unwrap_or_default() as u32;
 		let threshold = total_number_of_voters / 2 + 1;
 		approvals as u32 >= threshold
 	}
 	/// Tries to approve a proposal
 	fn try_approve(account: T::AccountId, id: u32) -> Result<(), DispatchError> {
-		ensure!(<Proposals<T>>::contains_key(id), Error::<T>::NotFound);
+		ensure!(<Proposals<T>>::contains_key(id), Error::<T>::ProposalNotFound);
 		<Proposals<T>>::mutate(id, |proposal| {
 			// Check already approved
 			if proposal.approved.contains(&account) {
