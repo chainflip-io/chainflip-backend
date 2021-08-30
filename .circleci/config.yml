@@ -22,7 +22,7 @@ workflows:
             - fmt-validator-package
           context:
             - ghcr-credentials
-      - test-validator-package:
+      - test-validator-package-with-check:
           requires:
             - check-validator-package
           context:
