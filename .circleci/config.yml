@@ -7,9 +7,8 @@ workflows:
       - lint: &context
           context:
             - ghcr-credentials
-      - build-rust-base:
-          context:
-            - ghcr-credentials
+      - build-rust-base: *context
+      - fmt-validator-package: *context
 
 jobs:
   lint:
@@ -38,5 +37,28 @@ jobs:
           dockerfile: Dockerfile.rust-base
           registry: ghcr.io
       - docker/push:
-          digest-path: /tmp/digest.txt
-          image: my_repo/orb-test
+          image: ghcr.io/chainflip-io/chainflip-backend/rust-base
+          tag: latest
+
+  fmt-validator-package:
+    docker:
+      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+        auth: *dockerconfig
+    steps:
+      - >
+        cargo fmt -p chainflip-engine
+        -p cf-p2p
+        -p cf-p2p-rpc
+        -p pallet-cf-auction
+        -p pallet-cf-emissions
+        -p pallet-cf-flip
+        -p pallet-cf-rewards
+        -p pallet-cf-reputation
+        -p pallet-cf-staking
+        -p pallet-cf-validator
+        -p pallet-cf-vaults
+        -p pallet-cf-witnesser
+        -p pallet-cf-witnesser-api
+        -p cf-traits
+        -- --check
+      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
