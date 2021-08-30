@@ -91,10 +91,11 @@ jobs:
       SCCACHE_REDIS: redis://167.172.97.176:6379
       SCCACHE_CACHE_SIZE: 14G
     working_directory: /mnt/ramdisk
+    resource_class: xlarge
     steps:
       - checkout
       - run: sccache -s
-      - run: cargo build --locked --release --verbose
+      - run: cargo build --locked --release
 
   test-validator-package-with-check:
     docker:
@@ -104,7 +105,8 @@ jobs:
       SCCACHE_REDIS: redis://167.172.97.176:6379
       SCCACHE_CACHE_SIZE: 14G
     working_directory: /mnt/ramdisk
+    resource_class: xlarge
     steps:
       - checkout
       - run: sccache -s
-      - run: cargo test --locked --lib --release --verbose
+      - run: cargo test --locked --lib --release
