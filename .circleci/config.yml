@@ -33,6 +33,7 @@ jobs:
           docker_layer_caching: true
       - run: |
           TAG=latest
-          docker build --cache-from ghcr.io/chainflip-io/chainflip-backend/rust-base:$TAG -t ghcr.io/chainflip-io/chainflip-backend/rust-base:$TAG -f Dockerfile.rust-base .
+          IMAGE=ghcr.io/chainflip-io/chainflip-backend/rust-base
+          docker build --cache-from $IMAGE:$TAG -t $IMAGE:$TAG -f Dockerfile.rust-base .
           echo $DOCKERHUB_PASSWORD | docker login -u $DOCKERHUB_USERNAME --password-stdin
-          docker push ghcr.io/chainflip-io/chainflip-backend/rust-base:$TAG
+          docker push $IMAGE:$TAG
