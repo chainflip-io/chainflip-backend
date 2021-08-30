@@ -329,7 +329,10 @@ impl<T: Config> Pallet<T> {
 	}
 	/// Tries to approve a proposal
 	fn try_approve(account: T::AccountId, id: u32) -> Result<(), DispatchError> {
-		ensure!(<Proposals<T>>::contains_key(id), Error::<T>::ProposalNotFound);
+		ensure!(
+			<Proposals<T>>::contains_key(id),
+			Error::<T>::ProposalNotFound
+		);
 		<Proposals<T>>::mutate(id, |proposal| {
 			// Check already approved
 			if proposal.approved.contains(&account) {
