@@ -9,7 +9,7 @@ workflows:
             - ghcr-credentials
       - build-rust-base:
           context:
-            - dockerhub-credentials
+            - ghcr-credentials
 
 jobs:
   lint:
