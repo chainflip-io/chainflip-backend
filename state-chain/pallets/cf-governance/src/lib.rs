@@ -323,9 +323,7 @@ impl<T: Config> Pallet<T> {
 	}
 	/// Checks if the majority for a proposal is reached
 	fn majority_reached(approvals: usize) -> bool {
-		let total_number_of_voters = <Members<T>>::decode_len().unwrap_or_default() as u32;
-		let threshold = total_number_of_voters / 2 + 1;
-		approvals as u32 >= threshold
+		approvals > <Members<T>>::decode_len().unwrap_or_default() / 2
 	}
 	/// Tries to approve a proposal
 	fn try_approve(account: T::AccountId, id: u32) -> Result<(), DispatchError> {
