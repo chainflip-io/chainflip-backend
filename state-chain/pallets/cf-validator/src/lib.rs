@@ -413,8 +413,10 @@ impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for ValidatorOf<T> {
 	}
 }
 
-impl<T: Config> EmergencyRotation for Pallet<T> {
+pub struct EmergencyRotationOf<T>(PhantomData<T>);
+
+impl<T: Config> EmergencyRotation for EmergencyRotationOf<T> {
 	fn request_emergency_rotation() {
-		Self::force_validator_rotation();
+		Pallet::<T>::force_validator_rotation();
 	}
 }
