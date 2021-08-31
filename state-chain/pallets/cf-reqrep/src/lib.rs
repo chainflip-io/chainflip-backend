@@ -54,7 +54,7 @@ impl<T: frame_system::Config> Dispatchable for NullCallback<T> {
 	}
 }
 
-pub trait BaseConfig: frame_system::Config + std::fmt::Debug {
+pub trait BaseConfig: frame_system::Config + sp_std::fmt::Debug {
 	/// The id type used to identify individual signing keys.
 	type KeyId: Parameter;
 	type ValidatorId: Parameter;

@@ -13,6 +13,8 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
+pub mod instances;
+
 use frame_support::Parameter;
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
@@ -56,13 +58,13 @@ pub trait BroadcastContext<T: BaseConfig> {
 	) -> Self::UnsignedTransaction;
 
 	/// Optional callback for when the signed transaction is submitted to the state chain.
-	fn on_transaction_ready(&mut self, signed_tx: &Self::SignedTransaction) {};
+	fn on_transaction_ready(&mut self, signed_tx: &Self::SignedTransaction) {}
 
 	/// Optional callback for when a transaction has been witnessed on the host chain.
-	fn on_broadcast_success(&mut self, transaction_hash: &Self::TransactionHash) {};
+	fn on_broadcast_success(&mut self, transaction_hash: &Self::TransactionHash) {}
 
 	/// Optional callback for when a transaction has failed.
-	fn on_broadcast_failure(&mut self, failure: &BroadcastFailure<T::ValidatorId>) {};
+	fn on_broadcast_failure(&mut self, failure: &BroadcastFailure<T::ValidatorId>) {}
 }
 
 /// Something that can nominate signers from the set of active validators.
@@ -236,8 +238,8 @@ pub mod pallet {
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			// Remove the broadcast, it's done.
-			let _ = PendingBroadcasts::<T, I>::try_mutate_exists(id, |maybe_ctx| {
-				let ctx = maybe_ctx
+			let _ = PendingBroadcasts::<T, I>::try_mutate_exists::<_, _, Error<T, I>, _>(id, |maybe_ctx| {
+				let mut ctx = maybe_ctx
 					.take()
 					.ok_or(Error::<T, I>::InvalidBroadcastId)?;
 				ctx.on_broadcast_success(&tx_hash);
