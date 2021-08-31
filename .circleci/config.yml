@@ -6,20 +6,16 @@ ignore_main_branches: &ignore_main_branches
         - develop
         - epic/*
         - release/*
-
+auth: &dockerconfig
+  username: $DOCKER_USERNAME
+  password: $DOCKER_PASSWORD
 version: 2.1
 orbs:
   docker: circleci/docker@1.7.0
 workflows:
   chainflip-backend-checks:
     jobs:
-      - lint:
-          context:
-            - ghcr-credentials
-          <<: *ignore_main_branches
       - build-rust-base:
-          requires:
-            - lint
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
@@ -43,16 +39,6 @@ workflows:
           <<: *ignore_main_branches
 
 jobs:
-  lint:
-    docker:
-      - image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
-        auth: &dockerconfig
-          username: $DOCKER_USERNAME
-          password: $DOCKER_PASSWORD
-    steps:
-      - checkout
-      - run: drone lint --trusted
-
   build-rust-base:
     executor: docker/docker
     steps:
