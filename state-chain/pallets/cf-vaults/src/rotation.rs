@@ -121,9 +121,11 @@ pub enum VaultRotationResponse<PublicKey: Into<Vec<u8>>, Transaction: Into<Vec<u
 /// A signing request
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct ThresholdSignatureRequest<PublicKey, ValidatorId> {
-	// Payload to be signed by the existing aggregate key
+	/// Payload to be signed by the existing aggregate key
 	pub(crate) payload: Vec<u8>,
+	/// The public key of the key to be used to sign with
 	pub(crate) public_key: PublicKey,
+	/// Those validators to sign
 	pub(crate) validators: Vec<ValidatorId>,
 }
 
