@@ -187,11 +187,7 @@ jobs:
     steps:
       - checkout
       - run: sccache -s
-      #      - run: cargo test --locked --lib --release
-      - run: |
-          mkdir -p target/release
-          touch target/release/state-chain-node
-          touch target/release/chainflip-engine
+      - run: cargo test --locked --lib --release
       - persist_to_workspace:
           root: ./
           paths:
