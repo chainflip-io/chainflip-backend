@@ -50,7 +50,7 @@ jobs:
       - image: circleci/circleci-cli
     steps:
       - checkout
-      - run: drone lint --trusted
+      - run: circleci config validate
 
   build-rust-base:
     executor: docker/docker
