@@ -180,7 +180,7 @@ jobs:
     steps:
       - checkout
       - run: sccache -s
-      - run: cargo test --locked --lib --release
+      - run: cargo test --locked --release
 
   compile-validator-package:
     <<: *cargo-base-job
