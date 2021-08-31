@@ -1,6 +1,6 @@
 # Runs on every PR
 kind: pipeline
-name: chainflip-backend-checks
+name: chainflip-epic-branch
 type: kubernetes
 
 environment:
@@ -63,45 +63,11 @@ steps:
       - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
   #######################################################################
-  # Run Check and Test on normal PRs
-
-  #  Compiles the entire backend
-  - name: check-chainflip-backend
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    when:
-      branch:
-        exclude:
-          - epic/*
-    depends_on:
-      - fmt-validator-package
-    commands:
-      - cargo build --locked --release
-      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
-
-  #  Compiles runs all unit tests
-  - name: test-chainflip-backend-with-check
-    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    when:
-      branch:
-        exclude:
-          - epic/*
-    depends_on:
-      - check-chainflip-backend
-    commands:
-      - cargo test --locked --lib --release
-      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
-  #######################################################################
-
-  #######################################################################
   # Run Compile and Test on EPIC branches
 
   #  Compiles the entire backend
   - name: compile-chainflip-backend
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    when:
-      branch:
-        include:
-          - epic/*
     depends_on:
       - fmt-validator-package
     commands:
@@ -111,10 +77,6 @@ steps:
   #  Compiles runs all unit tests
   - name: test-chainflip-backend-with-compile
     image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-    when:
-      branch:
-        include:
-          - epic/*
     depends_on:
       - compile-chainflip-backend
     commands:
@@ -123,10 +85,6 @@ steps:
   #######################################################################
   - name: prepare-files
     image: busybox
-    when:
-      branch:
-        include:
-          - epic/*
     depends_on:
       - compile-chainflip-backend
     commands:
@@ -135,10 +93,6 @@ steps:
   #  Create docker image for state-chain-node
   - name: build-state-chain-node
     image: plugins/docker
-    when:
-      branch:
-        include:
-          - epic/*
     depends_on:
       - prepare-files
     environment:
@@ -154,10 +108,6 @@ steps:
   #  Create docker image for chainflip-engine
   - name: build-chainflip-engine
     image: plugins/docker
-    when:
-      branch:
-        include:
-          - epic/*
     depends_on:
       - prepare-files
     environment:
@@ -174,10 +124,6 @@ steps:
   - name: test-single-node
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     pull: always
-    when:
-      branch:
-        include:
-          - epic/*
     depends_on:
       - build-chainflip-engine
       - build-state-chain-node
@@ -198,10 +144,6 @@ steps:
   - name: clean-up-on-failure
     image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
     pull: always
-    when:
-      branch:
-        include:
-          - epic/*
     depends_on:
       - test-single-node
     commands:
@@ -213,6 +155,9 @@ service_account_name: drone-runner-kube
 trigger:
   event:
     - push
+  branch:
+    include:
+      - epic/*
 
 image_pull_secrets:
   - dockerconfigjson

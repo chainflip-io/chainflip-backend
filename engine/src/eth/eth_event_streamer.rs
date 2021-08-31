@@ -74,22 +74,21 @@ pub async fn new_eth_event_stream<
         .map(|log| Ok(log))
         .chain(future_logs)
         .map(move |result_unparsed_log| -> Result<Event, anyhow::Error> {
-            let result_event = result_unparsed_log.and_then(|log| {
-                decode_log(
-                    /*signature*/
-                    *log.topics.first().ok_or_else(|| {
-                        anyhow::Error::msg("Could not get signature from ETH log")
-                    })?,
-                    /*tx hash*/
-                    log.transaction_hash.ok_or_else(|| {
-                        anyhow::Error::msg("Could not get transaction hash from ETH log")
-                    })?,
-                    RawLog {
-                        topics: log.topics,
-                        data: log.data.0,
-                    },
-                )
-            });
+            let result_event = result_unparsed_log
+                .and_then(|log| {
+                    decode_log(
+                        *log.topics.first().ok_or_else(|| {
+                            anyhow::Error::msg("Could not get event signature from ETH log")
+                        })?,
+                        log.transaction_hash.ok_or_else(|| {
+                            anyhow::Error::msg("Could not get transaction hash from ETH log")
+                        })?,
+                        RawLog {
+                            topics: log.topics,
+                            data: log.data.0,
+                        },
+                    )
+                });
 
             slog::debug!(
                 logger,
