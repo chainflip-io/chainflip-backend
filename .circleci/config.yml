@@ -3,10 +3,12 @@ orbs:
   docker: circleci/docker@1.7.0
 workflows:
   chainflip-backend-checks:
-    branches:
-      ignore:
-        - main
-        - develop
+    triggers:
+      - filters:
+          branches:
+            ignore:
+              - main
+              - develop
     jobs:
       - lint:
           context:
