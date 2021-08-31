@@ -22,7 +22,9 @@ pub mod pallet {
 		EthereumAddress, FlipBalance,
 	};
 	use pallet_cf_vaults::rotation::{KeygenResponse, RequestIndex, VaultRotationResponse};
-	use pallet_cf_vaults::{Call as VaultsCall, Config as VaultsConfig, ThresholdSignatureResponse};
+	use pallet_cf_vaults::{
+		Call as VaultsCall, Config as VaultsConfig, ThresholdSignatureResponse,
+	};
 	use sp_core::U256;
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
