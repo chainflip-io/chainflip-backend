@@ -45,13 +45,10 @@ workflows:
 jobs:
   lint:
     docker:
-      - image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
-        auth: &dockerconfig
-          username: $DOCKER_USERNAME
-          password: $DOCKER_PASSWORD
+      - image: circleci/circleci-cli
     steps:
       - checkout
-      - run: drone lint --trusted
+      - run: circleci config validate
 
   build-rust-base:
     executor: docker/docker
