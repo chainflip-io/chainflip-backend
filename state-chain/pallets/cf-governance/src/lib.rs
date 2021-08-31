@@ -11,8 +11,7 @@ use sp_runtime::DispatchError;
 use sp_std::ops::Add;
 use sp_std::vec::Vec;
 
-// 5 days in seconds (60 sec * 60 min * 24 hours * 5 days)
-const FIVE_DAYS: u64 = 432000;
+const FIVE_DAYS_IN_SECONDS: u64 = 432000;
 
 #[cfg(test)]
 mod mock;
@@ -34,7 +33,7 @@ pub mod pallet {
 	use sp_std::vec;
 	use sp_std::vec::Vec;
 
-	use crate::FIVE_DAYS;
+	use crate::FIVE_DAYS_IN_SECONDS;
 
 	pub type ActiveProposal = (ProposalId, Timestamp);
 	/// Proposal struct
@@ -240,7 +239,7 @@ pub mod pallet {
 		fn default() -> Self {
 			Self {
 				members: Default::default(),
-				expiry_span: FIVE_DAYS,
+				expiry_span: FIVE_DAYS_IN_SECONDS,
 			}
 		}
 	}
