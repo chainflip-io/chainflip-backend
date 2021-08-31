@@ -15,13 +15,7 @@ orbs:
 workflows:
   chainflip-backend-checks:
     jobs:
-      - lint:
-          context:
-            - ghcr-credentials
-          <<: *ignore_main_branches
       - build-rust-base:
-          requires:
-            - lint
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
@@ -45,13 +39,6 @@ workflows:
           <<: *ignore_main_branches
 
 jobs:
-  lint:
-    docker:
-      - image: circleci/circleci-cli
-    steps:
-      - checkout
-      - run: circleci config validate
-
   build-rust-base:
     executor: docker/docker
     steps:
