@@ -1,4 +1,3 @@
-#![allow(non_snake_case)]
 #[allow(unused_doc_comments)]
 /*
     Multisig Schnorr
@@ -214,7 +213,7 @@ impl LocalSig {
         LocalSig { gamma_i, e }
     }
 
-    /// Assembles and hashes the challenge in the correct order for eth
+    /// Assembles and hashes the challenge in the correct order for the KeyManager Contract
     pub fn build_challenge(
         nonce_key: secp256k1::PublicKey,
         pub_key: secp256k1::PublicKey,
@@ -224,7 +223,8 @@ impl LocalSig {
 
         let (pubkey_x, pubkey_y_parity) = LocalSig::destructure_pubkey(nonce_key);
 
-        // assemble challenge in correct order
+        // Assemble the challenge in correct order according to this contract:
+        // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/abstract/SchnorrSECP256K1.sol
         let e_bytes = [
             pubkey_x.to_vec(),
             [pubkey_y_parity].to_vec(),
@@ -274,17 +274,21 @@ impl LocalSig {
                     .map(|j| vss_ephemeral_keys[j].commitments[i].clone())
                     .collect::<Vec<GE>>();
 
-                let mut eph_comm_i_iter = eph_comm_i_vec.iter();
-                let head = eph_comm_i_iter.next().unwrap();
-                let eph_comm_i_sum = eph_comm_i_iter.fold(head.clone(), |acc, x| acc + x);
+                let eph_comm_i_sum = eph_comm_i_vec
+                    .iter()
+                    .copied()
+                    .reduce(|acc, x| acc + x)
+                    .expect("Iter should not be empty");
 
                 let key_gen_comm_i_vec = (0..vss_private_keys.len())
                     .map(|j| vss_private_keys[j].commitments[i].clone() * &gamma_vec[i].e)
                     .collect::<Vec<GE>>();
 
-                let mut key_gen_comm_i_iter = key_gen_comm_i_vec.iter();
-                let head = key_gen_comm_i_iter.next().unwrap();
-                let key_gen_comm_i_sum = key_gen_comm_i_iter.fold(head.clone(), |acc, x| acc + x);
+                let key_gen_comm_i_sum = key_gen_comm_i_vec
+                    .iter()
+                    .copied()
+                    .reduce(|acc, x| acc + x)
+                    .expect("Iter should not be empty");
 
                 eph_comm_i_sum.sub_point(&key_gen_comm_i_sum.get_element())
             })
@@ -370,6 +374,7 @@ mod test_schnorr {
     use super::LocalSig;
     use super::SharedKeys;
     use super::Signature;
+    use anyhow::Result;
     use curv::elliptic::curves::secp256_k1::{Secp256k1Point, Secp256k1Scalar};
     use curv::elliptic::curves::traits::{ECPoint, ECScalar};
     use std::str::FromStr;
@@ -384,27 +389,16 @@ mod test_schnorr {
     #[test]
     fn test_signature() {
         // using the known SECRET_KEY_HEX, build the local_private_key
-        let sk_1 = secp256k1::SecretKey::from_str(SECRET_KEY_HEX).unwrap();
-
-        let mut sk_1_scalar: Secp256k1Scalar = Secp256k1Scalar::new_random();
-        sk_1_scalar.set_element(sk_1);
-
-        let pk_1_point = Secp256k1Point::generator();
-        let pk_1_point = pk_1_point.scalar_mul(&sk_1_scalar.get_element());
-
+        let sk_1_scalar = scalar_from_secretkey_hex(SECRET_KEY_HEX).unwrap();
         let local_private_key = SharedKeys {
-            y: pk_1_point,
+            y: Secp256k1Point::generator() * &sk_1_scalar,
             x_i: sk_1_scalar,
         };
 
         // create the local_ephemeral_key from the known NONCE_KEY_HEX
-        let k = secp256k1::SecretKey::from_str(NONCE_KEY_HEX).unwrap();
-        let mut k_scalar: Secp256k1Scalar = Secp256k1Scalar::new_random();
-        k_scalar.set_element(k);
-        let kTimesG_point = Secp256k1Point::generator();
-        let kTimesG_point = kTimesG_point.scalar_mul(&k_scalar.get_element());
+        let k_scalar = scalar_from_secretkey_hex(NONCE_KEY_HEX).unwrap();
         let local_ephemeral_key = SharedKeys {
-            y: kTimesG_point,
+            y: Secp256k1Point::generator() * &k_scalar,
             x_i: k_scalar,
         };
 
@@ -418,14 +412,24 @@ mod test_schnorr {
 
         // turn the sigma into a proper signature and run it though the verify function.
         let sigma_key = secp256k1::SecretKey::from_slice(&sigma).unwrap();
-        let mut sigma_scalar: Secp256k1Scalar = Secp256k1Scalar::new_random();
-        sigma_scalar.set_element(sigma_key);
         let sig = Signature {
-            sigma: sigma_scalar,
+            sigma: scalar_from_secretkey(sigma_key),
             v: local_ephemeral_key.y,
         };
 
         let res = sig.verify(&message_hash, &local_private_key.y);
         assert!(res.is_ok());
+    }
+
+    fn scalar_from_secretkey(secret_key: secp256k1::SecretKey) -> Secp256k1Scalar {
+        let mut scalar: Secp256k1Scalar = Secp256k1Scalar::new_random();
+        scalar.set_element(secret_key);
+        scalar
+    }
+
+    fn scalar_from_secretkey_hex(secret_key_hex: &str) -> Result<Secp256k1Scalar> {
+        let sk = secp256k1::SecretKey::from_str(secret_key_hex)?;
+        let scalar = scalar_from_secretkey(sk);
+        Ok(scalar)
     }
 }
