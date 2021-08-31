@@ -2,6 +2,7 @@ mod tests {
 	use crate::mock::*;
 	use crate::OfflineCondition::*;
 	use crate::*;
+	use cf_traits::Online;
 	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::BuildStorage;
 	use sp_runtime::DispatchError::BadOrigin;
@@ -310,6 +311,19 @@ mod tests {
 				reputation_points(BOB),
 				number_of_accruals as i32 * ACCRUAL_POINTS
 			);
+		});
+	}
+
+	#[test]
+	fn we_should_be_online_when_submitting_heartbeats_and_offline_when_not() {
+		new_test_ext().execute_with(|| {
+			run_heartbeat_intervals(ALICE, 1);
+			assert!(<ReputationPallet as Online>::is_online(&ALICE));
+			run_heartbeat_intervals(ALICE, 1);
+			assert!(<ReputationPallet as Online>::is_online(&ALICE));
+			// Fail to submit for two heartbeats
+			move_forward_by_heartbeat_intervals(2);
+			assert_eq!(<ReputationPallet as Online>::is_online(&ALICE), false);
 		});
 	}
 }
