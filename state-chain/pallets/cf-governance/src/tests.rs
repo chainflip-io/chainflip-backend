@@ -1,4 +1,4 @@
-use crate::{mock::*, ActiveProposals, Error, ExpirySpan, Members, NumberOfProposals, Proposals};
+use crate::{mock::*, ActiveProposals, Error, ExpiryTime, Members, ProposalCount, Proposals};
 use cf_traits::mocks::time_source;
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
 use std::time::Duration;
@@ -31,7 +31,7 @@ fn genesis_config() {
 		assert!(genesis_members.contains(&ALICE));
 		assert!(genesis_members.contains(&BOB));
 		assert!(genesis_members.contains(&CHARLES));
-		let expiry_span = ExpirySpan::<Test>::get();
+		let expiry_span = ExpiryTime::<Test>::get();
 		assert_eq!(expiry_span, 50);
 	});
 }
@@ -152,7 +152,7 @@ fn several_open_proposals() {
 			last_event(),
 			crate::mock::Event::pallet_cf_governance(crate::Event::Proposed(2)),
 		);
-		assert_eq!(NumberOfProposals::<Test>::get(), 2);
+		assert_eq!(ProposalCount::<Test>::get(), 2);
 	});
 }
 

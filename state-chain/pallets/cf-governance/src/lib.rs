@@ -11,6 +11,9 @@ use sp_runtime::DispatchError;
 use sp_std::ops::Add;
 use sp_std::vec::Vec;
 
+// 5 days in seconds (60 sec * 60 min * 24 hours * 5 days)
+const FIVE_DAYS: u64 = 432000;
+
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -31,7 +34,9 @@ pub mod pallet {
 	use sp_std::vec;
 	use sp_std::vec::Vec;
 
-	pub type ActiveProposal = (ProposalId, u64);
+	use crate::FIVE_DAYS;
+
+	pub type ActiveProposal = (ProposalId, Timestamp);
 	/// Proposal struct
 	#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 	pub struct Proposal<AccountId> {
@@ -43,6 +48,7 @@ pub mod pallet {
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
 	type OpaqueCall = Vec<u8>;
+	type Timestamp = u64;
 	pub type ProposalId = u32;
 
 	#[pallet::config]
@@ -77,15 +83,15 @@ pub mod pallet {
 	#[pallet::getter(fn active_proposals)]
 	pub(super) type ActiveProposals<T> = StorageValue<_, Vec<ActiveProposal>, ValueQuery>;
 
-	/// Number of proposals
+	/// Count how many proposals ever has been submitted
 	#[pallet::storage]
 	#[pallet::getter(fn number_of_proposals)]
-	pub(super) type NumberOfProposals<T> = StorageValue<_, u32, ValueQuery>;
+	pub(super) type ProposalCount<T> = StorageValue<_, u32, ValueQuery>;
 
-	/// Time span in which an proposal expires
+	/// Time in seconds after a proposal expires
 	#[pallet::storage]
 	#[pallet::getter(fn expiry_span)]
-	pub(super) type ExpirySpan<T> = StorageValue<_, u64, ValueQuery>;
+	pub(super) type ExpiryTime<T> = StorageValue<_, Timestamp, ValueQuery>;
 
 	/// Array of accounts which are included in the current governance
 	#[pallet::storage]
@@ -172,11 +178,11 @@ pub mod pallet {
 				},
 			);
 			// Update the proposal counter
-			<NumberOfProposals<T>>::put(id);
+			<ProposalCount<T>>::put(id);
 			// Add the proposal to the active proposals array
 			<ActiveProposals<T>>::append((
 				id,
-				T::TimeSource::now().as_secs() + <ExpirySpan<T>>::get(),
+				T::TimeSource::now().as_secs() + <ExpiryTime<T>>::get(),
 			));
 			Self::deposit_event(Event::Proposed(id));
 			// Governance member don't pay fees
@@ -234,8 +240,7 @@ pub mod pallet {
 		fn default() -> Self {
 			Self {
 				members: Default::default(),
-				// 5 days in seconds (60 sec * 60 min * 24 hours * 5 days)
-				expiry_span: 432000,
+				expiry_span: FIVE_DAYS,
 			}
 		}
 	}
@@ -245,7 +250,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			Members::<T>::set(self.members.clone());
-			ExpirySpan::<T>::set(self.expiry_span);
+			ExpiryTime::<T>::set(self.expiry_span);
 		}
 	}
 
@@ -288,7 +293,7 @@ where
 impl<T: Config> Pallet<T> {
 	/// Returns the next proposal id
 	fn get_next_id() -> ProposalId {
-		<NumberOfProposals<T>>::get().add(1)
+		<ProposalCount<T>>::get().add(1)
 	}
 	/// Executes an proposal if the majority is reached
 	fn execute_proposal(id: ProposalId) {

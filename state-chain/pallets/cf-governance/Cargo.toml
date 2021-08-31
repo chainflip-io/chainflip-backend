@@ -2,7 +2,7 @@
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
 description = 'FRAME pallet providing governance for the Chainflip statechain'
 edition = '2018'
-homepage = 'https://substrate.dev'
+homepage = 'https://chainflip.io'
 license = '<TODO>'
 name = 'pallet-cf-governance'
 repository = 'https://github.com/chainflip-io/chainflip-backend'
