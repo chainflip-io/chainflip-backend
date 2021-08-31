@@ -6,7 +6,7 @@ ignore_main_branches: &ignore_main_branches
         - main
         - develop
         - /epic\/.*/
-        - /release\/.*/# ------------------- anchors ------------------- #
+        - /release\/.*/
 only_main_branches: &only_main_branches
   filters:
     branches:
@@ -57,73 +57,67 @@ orbs:
   docker: circleci/docker@1.7.0
   discord: antonioned/discord@0.1.0
 workflows:
-  #  chainflip-backend-checks:
-  #    jobs:
-  #      - build-rust-base:
-  #          context:
-  #            - ghcr-credentials
-  #          <<: *ignore_main_branches
-  #      - fmt-validator-package:
-  #          requires:
-  #            - build-rust-base
-  #          context:
-  #            - ghcr-credentials
-  #          <<: *ignore_main_branches
-  #      - check-validator-package:
-  #          requires:
-  #            - fmt-validator-package
-  #          context:
-  #            - ghcr-credentials
-  #          <<: *ignore_main_branches
-  #      - test-validator-package:
-  #          requires:
-  #            - check-validator-package
-  #          context:
-  #            - ghcr-credentials
-  #          <<: *ignore_main_branches
-  chainflip-backend-release:
+  chainflip-backend-checks:
     jobs:
       - build-rust-base:
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
-      #          <<: *only_main_branches
       - fmt-validator-package:
           requires:
             - build-rust-base
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
-      #          <<: *only_main_branches
+      - check-validator-package:
+          requires:
+            - fmt-validator-package
+          context:
+            - ghcr-credentials
+          <<: *ignore_main_branches
+      - test-validator-package:
+          requires:
+            - check-validator-package
+          context:
+            - ghcr-credentials
+          <<: *ignore_main_branches
+  chainflip-backend-release:
+    jobs:
+      - build-rust-base:
+          context:
+            - ghcr-credentials
+          <<: *only_main_branches
+      - fmt-validator-package:
+          requires:
+            - build-rust-base
+          context:
+            - ghcr-credentials
+          <<: *only_main_branches
       - compile-validator-package:
           requires:
             - fmt-validator-package
           context:
             - ghcr-credentials
             - discord-webhooks
-          <<: *ignore_main_branches
-      #          <<: *only_main_branches
+          <<: *only_main_branches
       - test-validator-package:
           requires:
             - compile-validator-package
           context:
             - ghcr-credentials
-          <<: *ignore_main_branches
-      #          <<: *only_main_branches
+          <<: *only_main_branches
       - build-chainflip-engine:
           requires:
             - test-validator-package
           context:
             - ghcr-credentials
-          <<: *ignore_main_branches
-      #          <<: *only_main_branches
+          <<: *only_main_branches
       - build-state-chain-node:
           requires:
             - test-validator-package
           context:
             - ghcr-credentials
-          <<: *ignore_main_branches
-#          <<: *only_main_branches
+          <<: *only_main_branches
 jobs:
   build-rust-base:
     executor: docker/docker
