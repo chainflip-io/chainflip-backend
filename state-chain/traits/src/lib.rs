@@ -253,3 +253,10 @@ pub trait NonceProvider {
 	/// Provide the next nonce for the chain identified
 	fn next_nonce(identifier: NonceIdentifier) -> Nonce;
 }
+
+pub trait Online {
+	/// The validator id used
+	type ValidatorId;
+	/// The online status of the validator
+	fn is_online(validator_id: &Self::ValidatorId) -> bool;
+}

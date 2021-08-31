@@ -24,6 +24,12 @@
   },
   "AuctionRange": "(u32,u32)",
   "CallHash": "[u8;32]",
+  "ChainParams": {
+    "_enum": {
+      "Ethereum": "(Vec<u8>)",
+      "Other": "(Vec<u8>)"
+    }
+  },
   "ClaimDetailsFor": {
     "amount": "FlipBalance",
     "nonce": "Nonce",
@@ -33,6 +39,12 @@
   },
   "Duration": "(u64,u32)",
   "EpochIndex": "u32",
+  "EthSigningTxResponse": {
+    "_enum": {
+      "Success": "(Vec<u8>)",
+      "Error": "(Vec<ValidatorId>)"
+    }
+  },
   "EthereumAddress": "[u8;20]",
   "EthTransactionHash": "[u8;32]",
   "FlipAccount": {
@@ -47,31 +59,9 @@
       "Emissions"
     ]
   },
-  "LookupSource": "MultiAddress",
-  "Nonce": "u64",
-  "OnlineCreditsFor": "u64",
-  "Retired": "bool",
-  "Signature": "H256",
-  "TokenAmount": "u128",
-  "ValidatorId": "AccountId",
-  "ReputationPenalty": {
-    "points": "ReputationPoints",
-    "blocks": "BlockNumber"
-  },
-  "ReputationPoints": "i32",
-  "RequestIndex": "u64",
-  "PublicKey": "Vec<u8>",
-  "Transaction": "Vec<u8>",
-  "ThresholdSignatureRequest": {
-    "payload": "Vec<u8>",
-    "public_key": "PublicKey",
-    "validators": "Vec<ValidatorId>"
-  },
-  "ThresholdSignatureResponse": {
-    "_enum": {
-      "Success": "(Vec<u8>)",
-      "Error": "(Vec<ValidatorId>)"
-    }
+  "KeygenRequest": {
+    "chain": "ChainParams",
+    "validator_candidates": "Vec<ValidatorId>"
   },
   "KeygenResponse": {
     "_enum": {
@@ -79,16 +69,29 @@
       "Failure": "(Vec<ValidatorId>)"
     }
   },
-  "ChainParams": {
-    "_enum": {
-      "Ethereum": "(Vec<u8>)",
-      "Other": "(Vec<u8>)"
-    }
+  "LookupSource": "MultiAddress",
+  "Nonce": "u64",
+  "NonceIdentifier": {
+    "_enum": [
+      "Ethereum",
+      "Bitcoin",
+      "Dot"
+    ]
   },
-  "KeygenRequest": {
-    "chain": "ChainParams",
-    "validator_candidates": "Vec<ValidatorId>"
+  "OnlineCreditsFor": "u64",
+  "PublicKey": "Vec<u8>",
+  "ReputationPenalty": {
+    "points": "ReputationPoints",
+    "blocks": "BlockNumber"
   },
+  "ReputationPoints": "i32",
+  "RequestIndex": "u64",
+  "ReserveId": "[u8;4]",
+  "Retired": "bool",
+  "Signature": "H256",
+  "TokenAmount": "u128",
+  "ValidatorId": "AccountId",
+  "Transaction": "Vec<u8>",
   "Vault": {
     "old_key": "PublicKey",
     "new_key": "PublicKey",
@@ -104,15 +107,6 @@
       "Failure": ""
     }
   },
-  "ReserveId": "[u8;4]",
   "ValidatorSize": "u32",
-  "VoteCount": "u32",
-  "NonceIdentifier": {
-    "_enum": [
-      "Ethereum",
-      "Bitcoin",
-      "Dot"
-    ]
-  },
-  "Nonce": "u64"
+  "VoteCount": "u32"
 }
