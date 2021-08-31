@@ -253,3 +253,13 @@ pub trait NonceProvider {
 	/// Provide the next nonce for the chain identified
 	fn next_nonce(identifier: NonceIdentifier) -> Nonce;
 }
+
+/// Slashing a validator
+pub trait Slashing {
+	/// An identifier for our validator
+	type ValidatorId;
+	/// Block number
+	type BlockNumber;
+	/// Slash this validator based on the number of blocks offline
+	fn slash(validator_id: &Self::ValidatorId, blocks_offline: &Self::BlockNumber) -> Weight;
+}

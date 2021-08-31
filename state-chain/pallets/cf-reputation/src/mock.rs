@@ -1,5 +1,6 @@
 use super::*;
 use crate as pallet_cf_reputation;
+use cf_traits::Slashing;
 use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
 use sp_runtime::BuildStorage;

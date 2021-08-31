@@ -47,10 +47,12 @@ mod tests;
 mod imbalances;
 mod on_charge_transaction;
 
+use cf_traits::Slashing;
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
 
 use frame_support::{
+	dispatch::Weight,
 	ensure,
 	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
 };
@@ -432,5 +434,19 @@ impl<T: Config> OnKilledAccount<T::AccountId> for BurnFlipAccount<T> {
 		let dust = Pallet::<T>::total_balance_of(account_id);
 		Pallet::<T>::settle(account_id, Pallet::<T>::burn(dust).into());
 		Account::<T>::remove(account_id);
+	}
+}
+
+pub struct FlipSlasher<T: Config>(PhantomData<T>);
+/// An implementation of `Slashing` which kindly doesn't slash
+impl<T: Config> Slashing for FlipSlasher<T> {
+	// ValidatorId = AccountId ? :/
+	type ValidatorId = T::AccountId;
+	type BlockNumber = T::BlockNumber;
+
+	fn slash(_validator_id: &Self::ValidatorId, _blocks_offline: &Self::BlockNumber) -> Weight {
+		// TODO: implement the slashing logic here
+		// TODO: Calc a proper weight here
+		0
 	}
 }
