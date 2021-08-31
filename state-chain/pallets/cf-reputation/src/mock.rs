@@ -77,6 +77,7 @@ parameter_types! {
 	pub const HeartbeatBlockInterval: u64 = HEARTBEAT_BLOCK_INTERVAL;
 	pub const ReputationPointPenalty: ReputationPenalty<u64> = POINTS_PER_BLOCK_PENALTY;
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
+	pub const EmergencyRotationPercentageTrigger: u8 = 80;
 }
 
 // Mocking the `Slasher` trait
@@ -120,6 +121,7 @@ impl Config for Test {
 	type Slasher = MockSlasher;
 	type EpochInfo = epoch_info::Mock;
 	type EmergencyRotation = MockEmergencyRotation;
+	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

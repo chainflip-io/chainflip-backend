@@ -150,6 +150,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type ReputationPointFloorAndCeiling: Get<(ReputationPoints, ReputationPoints)>;
 
+		/// Trigger an emergency rotation on falling below the percentage of online validators
+		#[pallet::constant]
+		type EmergencyRotationPercentageTrigger: Get<u8>;
+
 		/// When we have to, we slash
 		type Slasher: Slashing<
 			ValidatorId = Self::ValidatorId,
@@ -173,7 +177,9 @@ pub mod pallet {
 				let liveness_weight = Self::check_liveness();
 				let (network_weight, network_state) = Self::check_network_liveness();
 
-				if network_state.percentage_online() < 80 {
+				if network_state.percentage_online()
+					< T::EmergencyRotationPercentageTrigger::get() as u32
+				{
 					Self::deposit_event(Event::EmergencyRotationRequested(network_state));
 					T::EmergencyRotation::request_emergency_rotation();
 				}
