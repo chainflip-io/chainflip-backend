@@ -1,38 +1,46 @@
+ignore_main_branches: &ignore_main_branches
+  filters:
+    branches:
+      ignore:
+        - main
+        - develop
+        - epic/*
+        - release/*
+
 version: 2.1
 orbs:
   docker: circleci/docker@1.7.0
 workflows:
   chainflip-backend-checks:
-    triggers:
-      - filters:
-          branches:
-            ignore:
-              - main
-              - develop
     jobs:
       - lint:
           context:
             - ghcr-credentials
+          <<: *ignore_main_branches
       - build-rust-base:
           requires:
             - lint
           context:
             - ghcr-credentials
+          <<: *ignore_main_branches
       - fmt-validator-package:
           requires:
             - build-rust-base
           context:
             - ghcr-credentials
+          <<: *ignore_main_branches
       - check-validator-package:
           requires:
             - fmt-validator-package
           context:
             - ghcr-credentials
+          <<: *ignore_main_branches
       - test-validator-package-with-check:
           requires:
             - check-validator-package
           context:
             - ghcr-credentials
+          <<: *ignore_main_branches
 
 jobs:
   lint:
