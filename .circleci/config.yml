@@ -133,14 +133,14 @@ jobs:
     environment:
       IMAGE: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine
       TAG: <<pipeline.git.revision>>
-      BUILDS_ARGS: "--build-arg SERVICE=chainflip-engine"
+      BUILD_ARGS: "--build-arg SERVICE=chainflip-engine"
 
   build-state-chain-node:
     <<: *chainflip-docker-base
     environment:
       IMAGE: ghcr.io/chainflip-io/chainflip-backend/state-chain-node
       TAG: <<pipeline.git.revision>>
-      BUILDS_ARGS: "--build-arg SERVICE=state-chain-node"
+      BUILD_ARGS: "--build-arg SERVICE=state-chain-node"
 
   fmt-validator-package:
     docker:
