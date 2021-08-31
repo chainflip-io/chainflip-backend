@@ -81,7 +81,7 @@ pub mod pallet {
 		/// Provides an origin check for witness transactions.
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 		/// A public key
-		type PublicKey: Member + Parameter + Into<Vec<u8>> + Default;
+		type PublicKey: Member + Parameter + Into<Vec<u8>> + Default + MaybeSerializeDeserialize;
 		/// A transaction
 		type Transaction: Member + Parameter + Into<Vec<u8>> + Default;
 		/// Rotation handler
@@ -212,19 +212,29 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig {}
+	pub struct GenesisConfig<T: Config> {
+		pub ethereum_vault_key: T::PublicKey,
+	}
 
 	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
+	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self {}
+			Self {
+				ethereum_vault_key: Default::default(),
+			}
 		}
 	}
 
 	// The build of genesis for the pallet.
 	#[pallet::genesis_build]
-	impl<T> GenesisBuild<T> for GenesisConfig {
-		fn build(&self) {}
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			EthereumVault::<T>::set(Vault {
+				old_key: self.ethereum_vault_key.clone(),
+				new_key: Default::default(),
+				tx: Default::default(),
+			});
+		}
 	}
 }
 
@@ -486,7 +496,7 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 					ThresholdSignatureRequest {
 						validators,
 						payload,
-						public_key: new_public_key,
+						public_key: EthereumVault::<T>::get().old_key,
 					},
 				)
 			}

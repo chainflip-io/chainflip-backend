@@ -237,7 +237,7 @@ mod test {
 			let signing_request = ThresholdSignatureRequest {
 				payload: EthereumChain::<MockRuntime>::encode_set_agg_key_with_agg_key(vec![])
 					.unwrap(),
-				public_key: vec![],
+				public_key: ethereum_public_key(),
 				validators: vec![ALICE, BOB, CHARLIE],
 			};
 			assert_eq!(
