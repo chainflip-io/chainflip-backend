@@ -30,6 +30,8 @@ chainflip-docker-base: &chainflip-docker-base
         version: 19.03.13
         docker_layer_caching: true
     - checkout
+    - attach_workspace:
+        at: ./
     - docker/check:
         docker-username: DOCKER_USERNAME
         registry: ghcr.io
@@ -185,4 +187,13 @@ jobs:
     steps:
       - checkout
       - run: sccache -s
-      - run: cargo test --locked --lib --release
+      #      - run: cargo test --locked --lib --release
+      - run: |
+          mkdir -p target/release
+          touch target/release/state-chain-node
+          touch target/release/chainflip-engine
+      - persist_to_workspace:
+          root: ./
+          paths:
+            - target/release/state-chain-node
+            - target/release/chainflip-engine
