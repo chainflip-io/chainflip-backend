@@ -105,5 +105,12 @@
   "NetworkState": {
     "online": "u32",
     "offline": "u32"
+  },
+  "NonceIdentifier": {
+    "_enum": [
+      "Ethereum",
+      "Bitcoin",
+      "Dot"
+    ]
   }
 }

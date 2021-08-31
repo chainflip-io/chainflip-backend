@@ -17,7 +17,6 @@ pub use frame_support::{
 };
 use frame_system::offchain::SendTransactionTypes;
 use pallet_cf_reputation::{ReputationPenalty, ZeroSlasher};
-use pallet_cf_vaults::nonce::NonceUnixTime;
 use pallet_grandpa::fg_primitives;
 use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
 use pallet_session::historical as session_historical;
@@ -171,8 +170,7 @@ impl pallet_cf_vaults::Config for Runtime {
 	type PublicKey = Vec<u8>;
 	type Transaction = Vec<u8>;
 	type RotationHandler = Auction;
-	type Nonce = u64;
-	type NonceProvider = NonceUnixTime<Self::Nonce, Timestamp>;
+	type NonceProvider = Vaults;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime

@@ -45,19 +45,21 @@
 use frame_support::pallet_prelude::*;
 use sp_std::prelude::*;
 
-use cf_traits::{NonceProvider, RotationError, VaultRotation, VaultRotationHandler};
+use cf_traits::{
+	Nonce, NonceIdentifier, NonceProvider, RotationError, VaultRotation, VaultRotationHandler,
+};
 pub use pallet::*;
-use sp_core::{H160, U256};
+use sp_core::H160;
 
 use crate::rotation::ChainParams::Ethereum;
 use crate::rotation::*;
 // we need these types exposed so subxt can use the type size
 pub use crate::rotation::{KeygenRequest, VaultRotationRequest};
 use ethabi::{Bytes, Function, Param, ParamType, Token};
+use sp_runtime::traits::One;
 
 #[cfg(test)]
 mod mock;
-pub mod nonce;
 pub mod rotation;
 #[cfg(test)]
 mod tests;
@@ -82,7 +84,7 @@ pub enum EthSigningTxResponse<ValidatorId> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::Chainflip;
+	use cf_traits::{Chainflip, Nonce, NonceIdentifier};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -101,10 +103,8 @@ pub mod pallet {
 		type Transaction: Member + Parameter + Into<Vec<u8>> + Default;
 		/// Rotation handler
 		type RotationHandler: VaultRotationHandler<ValidatorId = Self::ValidatorId>;
-		/// A nonce
-		type Nonce: Into<U256>;
 		/// A nonce provider
-		type NonceProvider: NonceProvider<Nonce = Self::Nonce>;
+		type NonceProvider: NonceProvider;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -127,6 +127,12 @@ pub mod pallet {
 	#[pallet::getter(fn vault_rotations)]
 	pub(super) type VaultRotations<T: Config> =
 		StorageMap<_, Blake2_128Concat, RequestIndex, KeygenRequest<T::ValidatorId>>;
+
+	/// A map of Nonces for chains supported
+	#[pallet::storage]
+	#[pallet::getter(fn chain_nonces)]
+	pub(super) type ChainNonces<T: Config> =
+		StorageMap<_, Blake2_128Concat, NonceIdentifier, Nonce>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -250,6 +256,16 @@ impl<T: Config> From<RotationError<T::ValidatorId>> for Error<T> {
 			RotationError::NotConfirmed => Error::<T>::NotConfirmed,
 			RotationError::FailedToMakeKeygenRequest => Error::<T>::FailedToMakeKeygenRequest,
 		}
+	}
+}
+
+impl<T: Config> NonceProvider for Pallet<T> {
+	fn next_nonce(identifier: NonceIdentifier) -> Nonce {
+		ChainNonces::<T>::mutate(identifier, |nonce| {
+			let new_nonce = nonce.unwrap_or_default().saturating_add(One::one());
+			*nonce = Some(new_nonce);
+			new_nonce
+		})
 	}
 }
 
@@ -563,7 +579,7 @@ impl<T: Config> EthereumChain<T> {
 			Token::Tuple(vec![
 				Token::Uint(ethabi::Uint::zero()),
 				Token::Uint(ethabi::Uint::zero()),
-				Token::Uint(T::NonceProvider::generate_nonce().into()),
+				Token::Uint(T::NonceProvider::next_nonce(NonceIdentifier::Ethereum).into()),
 				Token::Address(H160::zero()),
 			]),
 			// newKey: bytes32
