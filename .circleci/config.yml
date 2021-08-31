@@ -1,43 +1,109 @@
+# ------------------- anchors ------------------- #
 ignore_main_branches: &ignore_main_branches
   filters:
     branches:
       ignore:
         - main
         - develop
-        - epic/*
-        - release/*
+        - /epic\/.*/
+        - /release\/.*/
+
 auth: &dockerconfig
   username: $DOCKER_USERNAME
   password: $DOCKER_PASSWORD
+
+cargo-base-job: &cargo-base-job
+  docker:
+    - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+      auth: *dockerconfig
+  environment:
+    SCCACHE_REDIS: redis://167.172.97.176:6379
+    SCCACHE_CACHE_SIZE: 14G
+  working_directory: /mnt/ramdisk
+  resource_class: xlarge
+
+chainflip-docker-steps: &chainflip-docker-steps
+  - setup_remote_docker:
+      version: 19.03.13
+      docker_layer_caching: true
+  - checkout
+  - docker/check:
+      docker-username: DOCKER_USERNAME
+      registry: ghcr.io
+  - docker/build:
+      image: $IMAGE
+      cache_from: ghcr.io/$IMAGE:$TAG
+      registry: ghcr.io
+  - docker/push:
+      registry: ghcr.io
+      image: $IMAGE
+      tag: $TAG
+# ------------------- anchors ------------------- #
+
 version: 2.1
 orbs:
   docker: circleci/docker@1.7.0
 workflows:
-  chainflip-backend-checks:
+  #  chainflip-backend-checks:
+  #    jobs:
+  #      - build-rust-base:
+  #          context:
+  #            - ghcr-credentials
+  #          <<: *ignore_main_branches
+  #      - fmt-validator-package:
+  #          requires:
+  #            - build-rust-base
+  #          context:
+  #            - ghcr-credentials
+  #          <<: *ignore_main_branches
+  #      - check-validator-package:
+  #          requires:
+  #            - fmt-validator-package
+  #          context:
+  #            - ghcr-credentials
+  #          <<: *ignore_main_branches
+  #      - test-validator-package:
+  #          requires:
+  #            - check-validator-package
+  #          context:
+  #            - ghcr-credentials
+  #          <<: *ignore_main_branches
+  chainflip-backend-release:
     jobs:
-      - build-rust-base:
+      #      - build-rust-base:
+      #          context:
+      #            - ghcr-credentials
+      #          <<: *ignore_main_branches
+      #      - fmt-validator-package:
+      #          requires:
+      #            - build-rust-base
+      #          context:
+      #            - ghcr-credentials
+      #          <<: *ignore_main_branches
+      - compile-validator-package:
+          #          requires:
+          #            - fmt-validator-package
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
-      - fmt-validator-package:
+      #      - test-validator-package:
+      #          requires:
+      #            - compile-validator-package
+      #          context:
+      #            - ghcr-credentials
+      #          <<: *ignore_main_branches
+      - build-chainflip-engine:
           requires:
-            - build-rust-base
+            - compile-validator-package
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
-      - check-validator-package:
+      - build-state-chain-node:
           requires:
-            - fmt-validator-package
+            - compile-validator-package
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
-      - test-validator-package-with-check:
-          requires:
-            - check-validator-package
-          context:
-            - ghcr-credentials
-          <<: *ignore_main_branches
-
 jobs:
   build-rust-base:
     executor: docker/docker
@@ -58,6 +124,22 @@ jobs:
           registry: ghcr.io
           image: chainflip-io/chainflip-backend/rust-base
           tag: latest
+
+  build-chainflip-engine:
+    executor: docker/docker
+    environment:
+      IMAGE: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine
+      TAG: <<pipeline.git.revision>>
+      SERVICE: chainflip-engine
+    steps: *chainflip-docker-steps
+
+  build-state-chain-node:
+    executor: docker/docker
+    environment:
+      IMAGE: ghcr.io/chainflip-io/chainflip-backend/state-chain-node
+      TAG: <<pipeline.git.revision>>
+      SERVICE: state-chain-node
+    steps: *chainflip-docker-steps
 
   fmt-validator-package:
     docker:
@@ -84,28 +166,21 @@ jobs:
       - run: if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
   check-validator-package:
-    docker:
-      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-        auth: *dockerconfig
-    environment:
-      SCCACHE_REDIS: redis://167.172.97.176:6379
-      SCCACHE_CACHE_SIZE: 14G
-    working_directory: /mnt/ramdisk
-    resource_class: xlarge
+    <<: *cargo-base-job
     steps:
       - checkout
       - run: sccache -s
       - run: cargo build --locked --release
 
-  test-validator-package-with-check:
-    docker:
-      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-        auth: *dockerconfig
-    environment:
-      SCCACHE_REDIS: redis://167.172.97.176:6379
-      SCCACHE_CACHE_SIZE: 14G
-    working_directory: /mnt/ramdisk
-    resource_class: xlarge
+  test-validator-package:
+    <<: *cargo-base-job
+    steps:
+      - checkout
+      - run: sccache -s
+      - run: cargo test --locked --lib --release
+
+  compile-validator-package:
+    <<: *cargo-base-job
     steps:
       - checkout
       - run: sccache -s
