@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use chainflip_engine::{
-    eth::{self, eth_broadcaster, eth_tx_encoding, key_manager, stake_manager},
+    eth::{eth_broadcaster, eth_tx_encoding, key_manager, stake_manager, vault_witness},
     health::HealthMonitor,
     heartbeat,
     mq::nats_client::NatsMQClient,
@@ -129,6 +129,15 @@ async fn main() {
         .await
         .unwrap(),
         key_manager::start_key_manager_witness(
+            &web3,
+            &settings,
+            pair_signer,
+            subxt_client,
+            &root_logger
+        )
+        .await
+        .unwrap(),
+        vault_witness::start_vault_witness(
             &web3,
             &settings,
             pair_signer,

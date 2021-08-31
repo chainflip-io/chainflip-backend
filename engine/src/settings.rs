@@ -31,6 +31,7 @@ pub struct Eth {
     pub node_endpoint: String,
     pub stake_manager_eth_address: H160,
     pub key_manager_eth_address: H160,
+    pub vault_contract_eth_address: H160,
     #[serde(deserialize_with = "deser_path")]
     pub private_key_file: PathBuf,
 }

@@ -1,0 +1,398 @@
+[
+    {
+        "inputs": [
+            {
+                "internalType": "contract IKeyManager",
+                "name": "keyManager",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": false,
+                "internalType": "address payable",
+                "name": "recipient",
+                "type": "address"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "amount",
+                "type": "uint256"
+            },
+            {
+                "indexed": false,
+                "internalType": "bytes",
+                "name": "lowLevelData",
+                "type": "bytes"
+            }
+        ],
+        "name": "TransferFailed",
+        "type": "event"
+    },
+    {
+        "inputs": [
+            {
+                "components": [
+                    {
+                        "internalType": "uint256",
+                        "name": "msgHash",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "sig",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "nonce",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "kTimesGAddr",
+                        "type": "address"
+                    }
+                ],
+                "internalType": "struct IShared.SigData",
+                "name": "sigData",
+                "type": "tuple"
+            },
+            {
+                "internalType": "bytes32[]",
+                "name": "fetchSwapIDs",
+                "type": "bytes32[]"
+            },
+            {
+                "internalType": "address[]",
+                "name": "fetchTokenAddrs",
+                "type": "address[]"
+            },
+            {
+                "internalType": "address[]",
+                "name": "tranTokenAddrs",
+                "type": "address[]"
+            },
+            {
+                "internalType": "address payable[]",
+                "name": "tranRecipients",
+                "type": "address[]"
+            },
+            {
+                "internalType": "uint256[]",
+                "name": "tranAmounts",
+                "type": "uint256[]"
+            }
+        ],
+        "name": "allBatch",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "components": [
+                    {
+                        "internalType": "uint256",
+                        "name": "msgHash",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "sig",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "nonce",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "kTimesGAddr",
+                        "type": "address"
+                    }
+                ],
+                "internalType": "struct IShared.SigData",
+                "name": "sigData",
+                "type": "tuple"
+            },
+            {
+                "internalType": "bytes32",
+                "name": "swapID",
+                "type": "bytes32"
+            }
+        ],
+        "name": "fetchDepositEth",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "components": [
+                    {
+                        "internalType": "uint256",
+                        "name": "msgHash",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "sig",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "nonce",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "kTimesGAddr",
+                        "type": "address"
+                    }
+                ],
+                "internalType": "struct IShared.SigData",
+                "name": "sigData",
+                "type": "tuple"
+            },
+            {
+                "internalType": "bytes32[]",
+                "name": "swapIDs",
+                "type": "bytes32[]"
+            }
+        ],
+        "name": "fetchDepositEthBatch",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "components": [
+                    {
+                        "internalType": "uint256",
+                        "name": "msgHash",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "sig",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "nonce",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "kTimesGAddr",
+                        "type": "address"
+                    }
+                ],
+                "internalType": "struct IShared.SigData",
+                "name": "sigData",
+                "type": "tuple"
+            },
+            {
+                "internalType": "bytes32",
+                "name": "swapID",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "address",
+                "name": "tokenAddr",
+                "type": "address"
+            }
+        ],
+        "name": "fetchDepositToken",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "components": [
+                    {
+                        "internalType": "uint256",
+                        "name": "msgHash",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "sig",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "nonce",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "kTimesGAddr",
+                        "type": "address"
+                    }
+                ],
+                "internalType": "struct IShared.SigData",
+                "name": "sigData",
+                "type": "tuple"
+            },
+            {
+                "internalType": "bytes32[]",
+                "name": "swapIDs",
+                "type": "bytes32[]"
+            },
+            {
+                "internalType": "address[]",
+                "name": "tokenAddrs",
+                "type": "address[]"
+            }
+        ],
+        "name": "fetchDepositTokenBatch",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "getKeyManager",
+        "outputs": [
+            {
+                "internalType": "contract IKeyManager",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address payable",
+                "name": "recipient",
+                "type": "address"
+            }
+        ],
+        "name": "sendEth",
+        "outputs": [],
+        "stateMutability": "payable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "components": [
+                    {
+                        "internalType": "uint256",
+                        "name": "msgHash",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "sig",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "nonce",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "kTimesGAddr",
+                        "type": "address"
+                    }
+                ],
+                "internalType": "struct IShared.SigData",
+                "name": "sigData",
+                "type": "tuple"
+            },
+            {
+                "internalType": "address",
+                "name": "tokenAddr",
+                "type": "address"
+            },
+            {
+                "internalType": "address payable",
+                "name": "recipient",
+                "type": "address"
+            },
+            {
+                "internalType": "uint256",
+                "name": "amount",
+                "type": "uint256"
+            }
+        ],
+        "name": "transfer",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "components": [
+                    {
+                        "internalType": "uint256",
+                        "name": "msgHash",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "sig",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "nonce",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "kTimesGAddr",
+                        "type": "address"
+                    }
+                ],
+                "internalType": "struct IShared.SigData",
+                "name": "sigData",
+                "type": "tuple"
+            },
+            {
+                "internalType": "address[]",
+                "name": "tokenAddrs",
+                "type": "address[]"
+            },
+            {
+                "internalType": "address payable[]",
+                "name": "recipients",
+                "type": "address[]"
+            },
+            {
+                "internalType": "uint256[]",
+                "name": "amounts",
+                "type": "uint256[]"
+            }
+        ],
+        "name": "transferBatch",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "stateMutability": "payable",
+        "type": "receive"
+    }
+]

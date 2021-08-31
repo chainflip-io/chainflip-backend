@@ -1,5 +1,6 @@
 pub mod key_manager;
 pub mod stake_manager;
+pub mod vault_witness;
 
 pub mod eth_event_streamer;
 
