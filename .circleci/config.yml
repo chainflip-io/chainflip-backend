@@ -6,7 +6,9 @@ ignore_main_branches: &ignore_main_branches
         - develop
         - epic/*
         - release/*
-
+auth: &dockerconfig
+  username: $DOCKER_USERNAME
+  password: $DOCKER_PASSWORD
 version: 2.1
 orbs:
   docker: circleci/docker@1.7.0
@@ -48,7 +50,7 @@ jobs:
       - image: circleci/circleci-cli
     steps:
       - checkout
-      - run: circleci config validate
+      - run: drone lint --trusted
 
   build-rust-base:
     executor: docker/docker
