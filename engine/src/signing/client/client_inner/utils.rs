@@ -99,9 +99,9 @@ mod utils_tests {
 
     #[test]
     fn get_our_idx_works() {
-        let a = ValidatorId::new("A");
-        let b = ValidatorId::new("B");
-        let c = ValidatorId::new("C");
+        let a = ValidatorId(['A' as u8; 32]);
+        let b = ValidatorId(['B' as u8; 32]);
+        let c = ValidatorId(['C' as u8; 32]);
 
         let signers = [c, a, b.clone()];
 
@@ -112,9 +112,9 @@ mod utils_tests {
 
     #[test]
     fn get_index_mapping_works() {
-        let a = ValidatorId::new("A");
-        let b = ValidatorId::new("B");
-        let c = ValidatorId::new("C");
+        let a = ValidatorId(['A' as u8; 32]);
+        let b = ValidatorId(['B' as u8; 32]);
+        let c = ValidatorId(['C' as u8; 32]);
 
         let signers = [a, c.clone(), b];
 
