@@ -1,0 +1,112 @@
+version: 2.1
+orbs:
+  docker: circleci/docker@1.7.0
+workflows:
+  chainflip-backend-checks:
+    jobs:
+      - lint:
+          context:
+            - ghcr-credentials
+      - build-rust-base:
+          requires:
+            - lint
+          context:
+            - ghcr-credentials
+      - fmt-validator-package:
+          requires:
+            - build-rust-base
+          context:
+            - ghcr-credentials
+      - check-validator-package:
+          requires:
+            - fmt-validator-package
+          context:
+            - ghcr-credentials
+      - test-validator-package-with-check:
+          requires:
+            - check-validator-package
+          context:
+            - ghcr-credentials
+
+jobs:
+  lint:
+    docker:
+      - image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+        auth: &dockerconfig
+          username: $DOCKER_USERNAME
+          password: $DOCKER_PASSWORD
+    steps:
+      - checkout
+      - run: drone lint --trusted
+
+  build-rust-base:
+    executor: docker/docker
+    steps:
+      - setup_remote_docker:
+          version: 19.03.13
+          docker_layer_caching: true
+      - checkout
+      - docker/check:
+          docker-username: DOCKER_USERNAME
+          registry: ghcr.io
+      - docker/build:
+          image: chainflip-io/chainflip-backend/rust-base
+          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+          dockerfile: Dockerfile.rust-base
+          registry: ghcr.io
+      - docker/push:
+          registry: ghcr.io
+          image: chainflip-io/chainflip-backend/rust-base
+          tag: latest
+
+  fmt-validator-package:
+    docker:
+      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+        auth: *dockerconfig
+    steps:
+      - checkout
+      - run: >
+          cargo fmt -p chainflip-engine
+          -p cf-p2p
+          -p cf-p2p-rpc
+          -p pallet-cf-auction
+          -p pallet-cf-emissions
+          -p pallet-cf-flip
+          -p pallet-cf-rewards
+          -p pallet-cf-reputation
+          -p pallet-cf-staking
+          -p pallet-cf-validator
+          -p pallet-cf-vaults
+          -p pallet-cf-witnesser
+          -p pallet-cf-witnesser-api
+          -p cf-traits
+          -- --check
+      - run: if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
+
+  check-validator-package:
+    docker:
+      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+        auth: *dockerconfig
+    environment:
+      SCCACHE_REDIS: redis://167.172.97.176:6379
+      SCCACHE_CACHE_SIZE: 14G
+    working_directory: /mnt/ramdisk
+    resource_class: xlarge
+    steps:
+      - checkout
+      - run: sccache -s
+      - run: cargo build --locked --release
+
+  test-validator-package-with-check:
+    docker:
+      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+        auth: *dockerconfig
+    environment:
+      SCCACHE_REDIS: redis://167.172.97.176:6379
+      SCCACHE_CACHE_SIZE: 14G
+    working_directory: /mnt/ramdisk
+    resource_class: xlarge
+    steps:
+      - checkout
+      - run: sccache -s
+      - run: cargo test --locked --lib --release
