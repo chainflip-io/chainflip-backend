@@ -180,14 +180,14 @@ jobs:
     steps:
       - checkout
       - run: sccache -s
-      - run: cargo test --locked --release
+      - run: cargo test --locked --lib --release
 
   compile-validator-package:
     <<: *cargo-base-job
     steps:
       - checkout
       - run: sccache -s
-      - run: cargo build --locked --lib --release
+      - run: cargo build --locked --release
       - persist_to_workspace:
           root: ./
           paths:
