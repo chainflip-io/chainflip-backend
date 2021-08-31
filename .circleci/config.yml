@@ -22,22 +22,26 @@ cargo-base-job: &cargo-base-job
   working_directory: /mnt/ramdisk
   resource_class: xlarge
 
-chainflip-docker-steps: &chainflip-docker-steps
-  - setup_remote_docker:
-      version: 19.03.13
-      docker_layer_caching: true
-  - checkout
-  - docker/check:
-      docker-username: DOCKER_USERNAME
-      registry: ghcr.io
-  - docker/build:
-      image: $IMAGE
-      cache_from: ghcr.io/$IMAGE:$TAG
-      registry: ghcr.io
-  - docker/push:
-      registry: ghcr.io
-      image: $IMAGE
-      tag: $TAG
+chainflip-docker-base: &chainflip-docker-base
+  executor: docker/docker
+  working_directory: /mnt/ramdisk
+  steps:
+    - setup_remote_docker:
+        version: 19.03.13
+        docker_layer_caching: true
+    - checkout
+    - docker/check:
+        docker-username: DOCKER_USERNAME
+        registry: ghcr.io
+    - docker/build:
+        image: $IMAGE
+        cache_from: ghcr.io/$IMAGE:latest
+        registry: ghcr.io
+        extra_build_args: $BUILD_ARGS
+    - docker/push:
+        registry: ghcr.io
+        image: $IMAGE
+        tag: $TAG
 # ------------------- anchors ------------------- #
 
 version: 2.1
@@ -126,20 +130,18 @@ jobs:
           tag: latest
 
   build-chainflip-engine:
-    executor: docker/docker
+    <<: *chainflip-docker-base
     environment:
       IMAGE: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine
       TAG: <<pipeline.git.revision>>
-      SERVICE: chainflip-engine
-    steps: *chainflip-docker-steps
+      BUILDS_ARGS: "--build-arg SERVICE=chainflip-engine"
 
   build-state-chain-node:
-    executor: docker/docker
+    <<: *chainflip-docker-base
     environment:
       IMAGE: ghcr.io/chainflip-io/chainflip-backend/state-chain-node
       TAG: <<pipeline.git.revision>>
-      SERVICE: state-chain-node
-    steps: *chainflip-docker-steps
+      BUILDS_ARGS: "--build-arg SERVICE=state-chain-node"
 
   fmt-validator-package:
     docker:
