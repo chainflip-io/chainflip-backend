@@ -48,6 +48,8 @@ chainflip-docker-base: &chainflip-docker-base
         image: $IMAGE
         registry: ghcr.io
         extra_build_args: $BUILD_ARGS
+        dockerfile: $DOCKERFILE
+        cache_from: $CACHE_FROM
     - docker/push:
         registry: ghcr.io
         image: $IMAGE
@@ -148,24 +150,13 @@ workflows:
 #            - eth-events-setup
 jobs:
   build-rust-base:
-    executor: docker/docker
-    steps:
-      - setup_remote_docker:
-          version: 19.03.13
-          docker_layer_caching: true
-      - checkout
-      - docker/check:
-          docker-username: DOCKER_USERNAME
-          registry: ghcr.io
-      - docker/build:
-          image: chainflip-io/chainflip-backend/rust-base
-          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-          dockerfile: Dockerfile.rust-base
-          registry: ghcr.io
-      - docker/push:
-          registry: ghcr.io
-          image: chainflip-io/chainflip-backend/rust-base
-          tag: latest
+    <<: *chainflip-docker-base
+    environment:
+      IMAGE: chainflip-io/chainflip-backend/rust-base
+      #      TODO: change back to latest
+      TAG: unstable
+      CACHE_FROM: $IMAGE:latest
+      DOCKERFILE: Dockerfile.rust-base
 
   build-chainflip-engine:
     <<: *chainflip-docker-base
@@ -250,7 +241,7 @@ jobs:
             - eth-contracts
   hardhat-setup-and-start:
     docker:
-      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:unstable
         auth: *dockerconfig
       - image: nats
     steps:
@@ -272,24 +263,7 @@ jobs:
           name: Install poetry dependencies and deploy contracts
           command: |
             cd eth-contracts
-            $HOME/.poetry/bin/poetry install
-            $HOME/.poetry/bin/poetry run brownie run deploy_and all_events --network hardhat
+            poetry install
+            poetry run brownie run deploy_and all_events --network hardhat
       - checkout
       - run: cargo test --locked --release
-#  run-integration-tests:
-#    <<: *cargo-base-job
-#    docker:
-#      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-#        auth: *dockerconfig
-#      - image: nats
-#
-#    steps:
-#      - checkout
-#      - attach_workspace:
-#          at: ./
-#      - run: cargo test --locked --release
-#      - discord/status:
-#          fail_only: true
-#          failure_message: ":red_circle: Nightly integration tests failure on $CIRCLE_BRANCH"
-#          only_for_branches: "develop,main"
-#          webhook: $DW_ALERTS_STAGING

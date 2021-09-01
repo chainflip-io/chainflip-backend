@@ -12,6 +12,7 @@ RUN apt-get update -y \
        python3-dev
 
 RUN curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python -
+ENV PATH="${HOME}/.poetry/bin:${PATH}"
 
 RUN curl -fsSL https://deb.nodesource.com/setup_14.x | sh - \
     && apt-get install -y nodejs
