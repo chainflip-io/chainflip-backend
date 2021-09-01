@@ -50,6 +50,7 @@ chainflip-docker-base: &chainflip-docker-base
         extra_build_args: $BUILD_ARGS
         dockerfile: $DOCKERFILE
         cache_from: $CACHE_FROM
+        tag: $TAG
     - docker/push:
         registry: ghcr.io
         image: $IMAGE
@@ -161,14 +162,14 @@ jobs:
   build-chainflip-engine:
     <<: *chainflip-docker-base
     environment:
-      IMAGE: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine
+      IMAGE: chainflip-io/chainflip-backend/chainflip-engine
       TAG: <<pipeline.git.revision>>
       BUILD_ARGS: "--build-arg SERVICE=chainflip-engine"
 
   build-state-chain-node:
     <<: *chainflip-docker-base
     environment:
-      IMAGE: ghcr.io/chainflip-io/chainflip-backend/state-chain-node
+      IMAGE: chainflip-io/chainflip-backend/state-chain-node
       TAG: <<pipeline.git.revision>>
       BUILD_ARGS: "--build-arg SERVICE=state-chain-node"
 
