@@ -99,8 +99,11 @@ impl From<ChainParams> for VaultRotationRequest {
 /// The Vault's keys, public that is
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
 pub struct Vault<PublicKey: Into<Vec<u8>>, Transaction: Into<Vec<u8>>> {
+	/// Until rotation is completed successfully the current key
 	pub old_key: PublicKey,
+	/// The newly proposed and soon to be current key
 	pub new_key: PublicKey,
+	/// The transaction hash for the vault rotation
 	pub tx: Transaction,
 }
 
@@ -113,6 +116,26 @@ pub enum VaultRotationResponse<PublicKey: Into<Vec<u8>>, Transaction: Into<Vec<u
 		tx: Transaction,
 	},
 	Failure,
+}
+
+/// A signing request
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub struct ThresholdSignatureRequest<PublicKey, ValidatorId> {
+	/// Payload to be signed over
+	pub(crate) payload: Vec<u8>,
+	/// The public key of the key to be used to sign with
+	pub(crate) public_key: PublicKey,
+	/// Those validators to sign
+	pub(crate) validators: Vec<ValidatorId>,
+}
+
+/// A response back with our signature else a list of bad validators
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub enum ThresholdSignatureResponse<ValidatorId> {
+	// Signature
+	Success(Vec<u8>),
+	// Bad validators
+	Error(Vec<ValidatorId>),
 }
 
 #[macro_export]

@@ -52,7 +52,7 @@ pub use pallet::*;
 use sp_core::H160;
 
 use crate::rotation::ChainParams::Ethereum;
-use crate::rotation::*;
+pub use crate::rotation::*;
 // we need these types exposed so subxt can use the type size
 pub use crate::rotation::{KeygenRequest, VaultRotationRequest};
 use ethabi::{Bytes, Function, Param, ParamType, Token};
@@ -63,23 +63,6 @@ mod mock;
 pub mod rotation;
 #[cfg(test)]
 mod tests;
-
-/// A signing request
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct EthSigningTxRequest<ValidatorId> {
-	// Payload to be signed by the existing aggregate key
-	pub(crate) payload: Vec<u8>,
-	pub(crate) validators: Vec<ValidatorId>,
-}
-
-/// A response back with our signature else a list of bad validators
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum EthSigningTxResponse<ValidatorId> {
-	// Signature
-	Success(Vec<u8>),
-	// Bad validators
-	Error(Vec<ValidatorId>),
-}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -98,7 +81,7 @@ pub mod pallet {
 		/// Provides an origin check for witness transactions.
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 		/// A public key
-		type PublicKey: Member + Parameter + Into<Vec<u8>> + Default;
+		type PublicKey: Member + Parameter + Into<Vec<u8>> + Default + MaybeSerializeDeserialize;
 		/// A transaction
 		type Transaction: Member + Parameter + Into<Vec<u8>> + Default;
 		/// Rotation handler
@@ -148,7 +131,10 @@ pub mod pallet {
 		/// A complete set of vaults have been rotated
 		VaultsRotated,
 		/// Request this payload to be signed by the existing aggregate key
-		EthSignTxRequest(RequestIndex, EthSigningTxRequest<T::ValidatorId>),
+		ThresholdSignatureRequest(
+			RequestIndex,
+			ThresholdSignatureRequest<T::PublicKey, T::ValidatorId>,
+		),
 	}
 
 	#[pallet::error]
@@ -170,7 +156,7 @@ pub mod pallet {
 		/// Failed to construct a valid chain specific payload for rotation
 		FailedToConstructPayload,
 		/// Failed to sign the tx for the ethereum chain
-		EthSigningTxResponseFailed,
+		SignatureResponseFailed,
 		/// The rotation has not been confirmed
 		NotConfirmed,
 		/// Failed to make a key generation request
@@ -212,33 +198,43 @@ pub mod pallet {
 		/// A ethereum signing transaction response received and handled
 		/// by [EthereumChain::handle_response]
 		#[pallet::weight(10_000)]
-		pub fn eth_signing_tx_response(
+		pub fn threshold_signature_response(
 			origin: OriginFor<T>,
 			request_id: RequestIndex,
-			response: EthSigningTxResponse<T::ValidatorId>,
+			response: ThresholdSignatureResponse<T::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			match EthereumChain::<T>::handle_response(request_id, response) {
 				Ok(_) => Ok(().into()),
-				Err(_) => Err(Error::<T>::EthSigningTxResponseFailed.into()),
+				Err(_) => Err(Error::<T>::SignatureResponseFailed.into()),
 			}
 		}
 	}
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig {}
+	pub struct GenesisConfig<T: Config> {
+		pub ethereum_vault_key: T::PublicKey,
+	}
 
 	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
+	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self {}
+			Self {
+				ethereum_vault_key: Default::default(),
+			}
 		}
 	}
 
 	// The build of genesis for the pallet.
 	#[pallet::genesis_build]
-	impl<T> GenesisBuild<T> for GenesisConfig {
-		fn build(&self) {}
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			EthereumVault::<T>::set(Vault {
+				old_key: self.ethereum_vault_key.clone(),
+				new_key: Default::default(),
+				tx: Default::default(),
+			});
+		}
 	}
 }
 
@@ -492,14 +488,15 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 	) -> Result<(), Self::Error> {
 		// Create payload for signature here
 		// function setAggKeyWithAggKey(SigData calldata sigData, Key calldata newKey)
-		match Self::encode_set_agg_key_with_agg_key(new_public_key) {
+		match Self::encode_set_agg_key_with_agg_key(new_public_key.clone()) {
 			Ok(payload) => {
 				// Emit the event
 				Self::make_request(
 					index,
-					EthSigningTxRequest {
+					ThresholdSignatureRequest {
 						validators,
 						payload,
+						public_key: EthereumVault::<T>::get().old_key,
 					},
 				)
 			}
@@ -519,30 +516,30 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 impl<T: Config>
 	RequestResponse<
 		RequestIndex,
-		EthSigningTxRequest<T::ValidatorId>,
-		EthSigningTxResponse<T::ValidatorId>,
+		ThresholdSignatureRequest<T::PublicKey, T::ValidatorId>,
+		ThresholdSignatureResponse<T::ValidatorId>,
 		RotationError<T::ValidatorId>,
 	> for EthereumChain<T>
 {
 	/// Make the request to sign by emitting an event
 	fn make_request(
 		index: RequestIndex,
-		request: EthSigningTxRequest<T::ValidatorId>,
+		request: ThresholdSignatureRequest<T::PublicKey, T::ValidatorId>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
-		Pallet::<T>::deposit_event(Event::EthSignTxRequest(index, request));
+		Pallet::<T>::deposit_event(Event::ThresholdSignatureRequest(index, request));
 		Ok(().into())
 	}
 
 	/// Try to handle the response and pass this onto `Vaults` to complete the vault rotation
 	fn handle_response(
 		index: RequestIndex,
-		response: EthSigningTxResponse<T::ValidatorId>,
+		response: ThresholdSignatureResponse<T::ValidatorId>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		match response {
-			EthSigningTxResponse::Success(signature) => {
+			ThresholdSignatureResponse::Success(signature) => {
 				VaultRotationRequestResponse::<T>::make_request(index, Ethereum(signature).into())
 			}
-			EthSigningTxResponse::Error(bad_validators) => {
+			ThresholdSignatureResponse::Error(bad_validators) => {
 				T::RotationHandler::penalise(bad_validators.clone());
 				Pallet::<T>::abort_rotation();
 				Err(RotationError::BadValidators(bad_validators))

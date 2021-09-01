@@ -22,7 +22,9 @@ pub mod pallet {
 		EthereumAddress, FlipBalance,
 	};
 	use pallet_cf_vaults::rotation::{KeygenResponse, RequestIndex, VaultRotationResponse};
-	use pallet_cf_vaults::{Call as VaultsCall, Config as VaultsConfig, EthSigningTxResponse};
+	use pallet_cf_vaults::{
+		Call as VaultsCall, Config as VaultsConfig, ThresholdSignatureResponse,
+	};
 	use sp_core::U256;
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
@@ -124,13 +126,13 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(10_000)]
-		pub fn witness_eth_signing_tx_response(
+		pub fn witness_threshold_signature_response(
 			origin: OriginFor<T>,
 			request_id: RequestIndex,
-			response: EthSigningTxResponse<T::ValidatorId>,
+			response: ThresholdSignatureResponse<T::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = VaultsCall::eth_signing_tx_response(request_id, response);
+			let call = VaultsCall::threshold_signature_response(request_id, response);
 			T::Witnesser::witness(who, call.into())
 		}
 	}
