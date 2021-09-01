@@ -152,10 +152,10 @@ jobs:
   build-rust-base:
     <<: *chainflip-docker-base
     environment:
-      IMAGE: ghcr.io/chainflip-io/chainflip-backend/rust-base
+      IMAGE: chainflip-io/chainflip-backend/rust-base
       #      TODO: change back to latest
       TAG: unstable
-      CACHE_FROM: $IMAGE:latest
+      CACHE_FROM: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
       DOCKERFILE: Dockerfile.rust-base
 
   build-chainflip-engine:
