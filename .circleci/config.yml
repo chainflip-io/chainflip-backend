@@ -172,6 +172,7 @@ jobs:
       IMAGE: chainflip-io/chainflip-backend/chainflip-engine
       TAG: <<pipeline.git.revision>>
       BUILD_ARGS: "--build-arg SERVICE=chainflip-engine"
+      DOCKERFILE: Dockerfile
 
   build-state-chain-node:
     <<: *chainflip-docker-base
@@ -179,6 +180,7 @@ jobs:
       IMAGE: chainflip-io/chainflip-backend/state-chain-node
       TAG: <<pipeline.git.revision>>
       BUILD_ARGS: "--build-arg SERVICE=state-chain-node"
+      DOCKERFILE: Dockerfile
 
   fmt-validator-package:
     docker:
