@@ -274,4 +274,23 @@ mod test {
 			assert_eq!(VaultsPallet::next_nonce(NonceIdentifier::Dot), 1u64);
 		});
 	}
+
+	#[test]
+	fn encode_and_decode_a_schnorr_signature() {
+		let public_key = secp256k1::PublicKey::from_slice(&[
+			3, 23, 183, 225, 206, 31, 159, 148, 195, 42, 67, 115, 146, 41, 248, 140, 11, 3, 51, 41,
+			111, 180, 110, 143, 114, 134, 88, 73, 198, 174, 52, 184, 78,
+		])
+			.expect("Valid public key");
+
+		let signature = SchnorrSignature {
+			s: [1; 32],
+			r: public_key,
+		};
+
+		let signature_after_decoding =
+			SchnorrSignature::decode(&mut signature.encode().as_slice()).expect("Decode signature");
+
+		assert_eq!(signature, signature_after_decoding);
+	}
 }

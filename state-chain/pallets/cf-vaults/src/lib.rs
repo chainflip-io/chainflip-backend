@@ -55,6 +55,7 @@ use crate::rotation::ChainParams::Ethereum;
 pub use crate::rotation::*;
 // we need these types exposed so subxt can use the type size
 pub use crate::rotation::{KeygenRequest, VaultRotationRequest};
+use codec::{EncodeLike, Input, Output};
 use ethabi::{Bytes, Function, Param, ParamType, Token};
 use sp_runtime::traits::One;
 
@@ -466,9 +467,49 @@ impl<T: Config>
 // Ethereum Chain specialisation
 //
 
+impl Default for SchnorrSignature {
+	fn default() -> Self {
+		SchnorrSignature {
+			s: [0; 32],
+			// this should be changed, for the time it will do
+			r: secp256k1::PublicKey::from_slice(&[0; 33]).expect("an empty public key"),
+		}
+	}
+}
+
+impl Encode for SchnorrSignature {
+	fn encode_to<T: Output + ?Sized>(&self, output: &mut T) {
+		output.write(&self.s);
+		output.write(&self.r.serialize());
+	}
+}
+
+impl EncodeLike for SchnorrSignature {}
+
+impl Decode for SchnorrSignature {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
+		// Our fixed size buffer for the scalar property
+		let mut scalar: [u8; 32] = [0; 32];
+		input.read(&mut scalar)?;
+		// We expect a compressed buffer here of 33 bytes long
+		let mut pk: [u8; 33] = [0; 33];
+		input.read(&mut pk)?;
+		let pk = secp256k1::PublicKey::from_slice(&pk)
+			.map_err::<codec::Error, _>(|_| "decoding failed at public key".into())?;
+
+		Ok(SchnorrSignature { s: scalar, r: pk })
+	}
+}
+
 /// Schnorr Signature type
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct SchnorrSignature(Vec<u8>);
+#[derive(PartialEq, Eq, Clone, RuntimeDebug)]
+pub struct SchnorrSignature {
+	/// Scalar component
+	// s: secp256k1::SecretKey,
+	pub s: [u8; 32],
+	/// Point component
+	pub r: secp256k1::PublicKey,
+}
 
 pub struct EthereumChain<T: Config>(PhantomData<T>);
 

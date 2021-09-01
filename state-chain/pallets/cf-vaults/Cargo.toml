@@ -25,6 +25,7 @@ serde = { version = "1.0.101", default-features = false, features = ["derive"] }
 
 #Non-substrate external deps
 ethabi = { default-features = false, git = 'https://github.com/chainflip-io/ethabi', rev = 'a53cb47'}
+secp256k1 = "0.20"
 
 [dev-dependencies]
 sp-std = { version = "3.0.0", default-features = false }

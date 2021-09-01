@@ -5098,6 +5098,7 @@ dependencies = [
  "frame-system",
  "log 0.4.14",
  "parity-scale-codec",
+ "secp256k1",
  "serde 1.0.126",
  "sp-core",
  "sp-io",
