@@ -1,10 +1,9 @@
 mod test {
+	use crate::ethereum::EthereumChain;
 	use crate::mock::*;
 	use crate::rotation::ChainParams::Other;
 	use crate::*;
 	use frame_support::assert_ok;
-	use crate::schnorr::create_valid_schnorr_signature;
-	use crate::ethereum::EthereumChain;
 
 	fn last_event() -> mock::Event {
 		frame_system::Pallet::<MockRuntime>::events()
@@ -259,12 +258,12 @@ mod test {
 				ALICE, BOB, CHARLIE
 			]));
 
-			let dummy_signature = create_valid_schnorr_signature();
-			assert_ok!(VaultsPallet::threshold_signature_response(
-				Origin::root(),
-				1,
-				ThresholdSignatureResponse::Success(dummy_signature)
-			));
+			// let dummy_signature = create_valid_schnorr_signature();
+			// assert_ok!(VaultsPallet::threshold_signature_response(
+			// 	Origin::root(),
+			// 	1,
+			// 	ThresholdSignatureResponse::Success(dummy_signature)
+			// ));
 		});
 	}
 

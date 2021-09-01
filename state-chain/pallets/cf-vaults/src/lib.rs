@@ -54,12 +54,11 @@ pub use crate::rotation::*;
 // we need these types exposed so subxt can use the type size
 use crate::ethereum::EthereumChain;
 pub use crate::rotation::{KeygenRequest, VaultRotationRequest};
-use crate::schnorr::SchnorrSignature;
 use sp_runtime::traits::One;
 
 mod ethereum;
 pub mod rotation;
-pub mod schnorr;
+mod schnorr;
 
 #[cfg(test)]
 mod mock;
@@ -70,9 +69,9 @@ mod tests;
 pub mod pallet {
 	use super::*;
 	use crate::ethereum::EthereumChain;
-	use crate::schnorr::SchnorrSignature;
 	use cf_traits::{Chainflip, Nonce, NonceIdentifier};
 	use frame_system::pallet_prelude::*;
+	use crate::schnorr::SchnorrSignature;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -208,6 +207,7 @@ pub mod pallet {
 			response: ThresholdSignatureResponse<T::ValidatorId, SchnorrSignature>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
+			// We just have the Ethereum chain to handle this Schnorr signature
 			match EthereumChain::<T>::handle_response(request_id, response) {
 				Ok(_) => Ok(().into()),
 				Err(_) => Err(Error::<T>::SignatureResponseFailed.into()),

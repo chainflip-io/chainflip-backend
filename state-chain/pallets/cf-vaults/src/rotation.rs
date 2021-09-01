@@ -1,9 +1,9 @@
-use crate::SchnorrSignature;
 use cf_traits::RotationError;
 use codec::{Decode, Encode};
 use frame_support::RuntimeDebug;
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
+use crate::schnorr::SchnorrSignature;
 
 /// Request index type
 pub type RequestIndex = u64;
