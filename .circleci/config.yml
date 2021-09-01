@@ -18,6 +18,15 @@ only_main_branches: &only_main_branches
         - /epic\/.*/
         - /release\/.*/
 
+nightly: &nightly
+  triggers:
+    - schedule:
+        cron: "0 0 * * *"
+        filters:
+          branches:
+            only:
+              - develop
+
 auth: &dockerconfig
   username: $DOCKER_USERNAME
   password: $DOCKER_PASSWORD
@@ -126,20 +135,21 @@ workflows:
           <<: *only_main_branches
 
   chainflip-integration-tests:
+    #    <<: *nightly
     jobs:
       - build-rust-poetry:
           context:
             - ghcr-credentials
       - clone-contracts-repo:
-          requires:
-            - build-rust-poetry
           context:
             - github-credentials
-      - hardhat-setup-and-start:
           requires:
-            - clone-contracts-repo
+            - build-rust-poetry
+      - run-integration-tests:
           context:
             - ghcr-credentials
+          requires:
+            - clone-contracts-repo
 
 jobs:
   build-rust-base:
@@ -236,13 +246,12 @@ jobs:
           root: ./
           paths:
             - eth-contracts
-  hardhat-setup-and-start:
+  run-integration-tests:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
         auth: *dockerconfig
       - image: nats
-    environment:
-      <<: *sccache_environment
+    environment: *sccache_environment
     steps:
       - checkout
       - attach_workspace:
