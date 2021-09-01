@@ -27,7 +27,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		Staking: pallet_cf_staking::{Module, Call, Event<T>, Config<T>},
-		Vaults: pallet_cf_vaults::{Module, Call, Event<T>, Config},
+		Vaults: pallet_cf_vaults::{Module, Call, Event<T>, Config<T>},
 		WitnessApi: pallet_cf_witness_api::{Module, Call},
 	}
 );

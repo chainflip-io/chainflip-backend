@@ -41,7 +41,7 @@ mod tests;
 extern crate assert_matches;
 
 use cf_traits::{
-	Auction, AuctionError, AuctionPhase, AuctionRange, BidderProvider, VaultRotation,
+	Auction, AuctionError, AuctionPhase, AuctionRange, BidderProvider, Online, VaultRotation,
 	VaultRotationHandler,
 };
 use frame_support::pallet_prelude::*;
@@ -57,7 +57,7 @@ use sp_std::prelude::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::VaultRotation;
+	use cf_traits::{Online, VaultRotation};
 	use frame_support::traits::ValidatorRegistration;
 	use sp_std::ops::Add;
 
@@ -84,6 +84,8 @@ pub mod pallet {
 		type MinAuctionSize: Get<u32>;
 		/// The lifecycle of our auction
 		type Handler: VaultRotation<ValidatorId = Self::ValidatorId>;
+		/// An online validator
+		type Online: Online<ValidatorId = Self::ValidatorId>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -248,7 +250,9 @@ impl<T: Config> Auction for Pallet<T> {
 				bidders.retain(|(_, amount)| !amount.is_zero());
 				// Rule #3 - They are registered
 				bidders.retain(|(id, _)| T::Registrar::is_registered(id));
-				// Rule #4 - Confirm we have our set size
+				// Rule #4 - Confirm that the validators are 'online'
+				bidders.retain(|(id, _)| T::Online::is_online(id));
+				// Rule #5 - Confirm we have our set size
 				if (bidders.len() as u32) < <AuctionSizeRange<T>>::get().0 {
 					return Err(AuctionError::MinValidatorSize);
 				};

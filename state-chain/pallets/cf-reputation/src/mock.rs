@@ -14,9 +14,11 @@ type Block = frame_system::mocking::MockBlock<Test>;
 
 use cf_traits::mocks::epoch_info;
 use cf_traits::mocks::epoch_info::Mock;
+use cf_traits::EmergencyRotation;
 
 thread_local! {
 	pub static SLASH_COUNT: RefCell<u64> = RefCell::new(0);
+	pub static EMERGENCY_ROTATION_REQUESTED: RefCell<bool> = RefCell::new(false);
 }
 
 construct_runtime!(
@@ -75,6 +77,7 @@ parameter_types! {
 	pub const HeartbeatBlockInterval: u64 = HEARTBEAT_BLOCK_INTERVAL;
 	pub const ReputationPointPenalty: ReputationPenalty<u64> = POINTS_PER_BLOCK_PENALTY;
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
+	pub const EmergencyRotationPercentageTrigger: u8 = 80;
 }
 
 // Mocking the `Slasher` trait
@@ -93,8 +96,20 @@ impl Slashing for MockSlasher {
 	}
 }
 
-pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
-pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
+pub struct MockEmergencyRotation;
+impl EmergencyRotation for MockEmergencyRotation {
+	fn request_emergency_rotation() {
+		EMERGENCY_ROTATION_REQUESTED.with(|requested| {
+			*requested.borrow_mut() = true;
+		});
+	}
+}
+
+pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
+pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
+pub const CHARLIE: <Test as frame_system::Config>::AccountId = 300u64;
+pub const DAVE: <Test as frame_system::Config>::AccountId = 400u64;
+pub const ERIN: <Test as frame_system::Config>::AccountId = 500u64;
 
 impl Config for Test {
 	type Event = Event;
@@ -105,6 +120,8 @@ impl Config for Test {
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = MockSlasher;
 	type EpochInfo = epoch_info::Mock;
+	type EmergencyRotation = MockEmergencyRotation;
+	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

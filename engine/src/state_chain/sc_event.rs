@@ -7,7 +7,7 @@ use super::{
     pallets::auction::AuctionEvent,
     pallets::staking::StakingEvent,
     pallets::vaults::{KeygenRequestEvent, VaultRotationRequestEvent, VaultsEvent},
-    pallets::{validator::ValidatorEvent, vaults::EthSignTxRequestEvent},
+    pallets::{validator::ValidatorEvent, vaults::ThresholdSignatureRequestEvent},
     runtime::StateChainRuntime,
 };
 
@@ -23,7 +23,7 @@ pub enum SCEvent {
 /// Supported events are:
 /// - Vaults
 ///   - KeygenRequest
-///   - EthSignTxRequest
+///   - ThresholdSignatureRequest
 ///   - VaultRotationRequestEvent
 pub fn raw_event_to_sc_event(raw_event: &RawEvent) -> Result<Option<SCEvent>> {
     match raw_event.module.as_str() {
@@ -31,9 +31,11 @@ pub fn raw_event_to_sc_event(raw_event: &RawEvent) -> Result<Option<SCEvent>> {
             "KeygenRequest" => Ok(Some(
                 KeygenRequestEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
             )),
-            "EthSignTxRequest" => Ok(Some(
-                EthSignTxRequestEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
-                    .into(),
+            "ThresholdSignatureRequest" => Ok(Some(
+                ThresholdSignatureRequestEvent::<StateChainRuntime>::decode(
+                    &mut &raw_event.data[..],
+                )?
+                .into(),
             )),
             "VaultRotationRequestEvent" => Ok(Some(
                 VaultRotationRequestEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?

@@ -23,6 +23,7 @@ type ValidatorId = u64;
 thread_local! {
 	pub static OTHER_CHAIN_RESULT: RefCell<CeremonyId> = RefCell::new(0);
 	pub static BAD_VALIDATORS: RefCell<Vec<ValidatorId>> = RefCell::new(vec![]);
+	pub static GENESIS_ETHEREUM_PUBLIC_KEY: RefCell<Vec<u8>> = RefCell::new(vec![1,2,3]);
 }
 
 construct_runtime!(
@@ -32,7 +33,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		VaultsPallet: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config},
+		VaultsPallet: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config<T>},
 	}
 );
 
@@ -126,10 +127,16 @@ pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <MockRuntime as frame_system::Config>::AccountId = 456u64;
 pub const CHARLIE: <MockRuntime as frame_system::Config>::AccountId = 789u64;
 
+pub fn ethereum_public_key() -> Vec<u8> {
+	GENESIS_ETHEREUM_PUBLIC_KEY.with(|l| l.borrow().to_vec())
+}
+
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		frame_system: Default::default(),
-		pallet_cf_vaults: Some(VaultsPalletConfig {}),
+		pallet_cf_vaults: Some(VaultsPalletConfig {
+			ethereum_vault_key: ethereum_public_key(),
+		}),
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

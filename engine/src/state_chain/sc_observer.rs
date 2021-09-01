@@ -15,7 +15,9 @@ use crate::{
     state_chain::{
         pallets::vaults::{
             VaultRotationResponseCallExt,
-            VaultsEvent::{EthSignTxRequestEvent, KeygenRequestEvent, VaultRotationRequestEvent},
+            VaultsEvent::{
+                KeygenRequestEvent, ThresholdSignatureRequestEvent, VaultRotationRequestEvent,
+            },
         },
         sc_event::SCEvent::VaultsEvent,
     },
@@ -78,9 +80,9 @@ pub async fn start(
                             .map_err(|_| "Receiver should exist")
                             .unwrap();
                     }
-                    EthSignTxRequestEvent(eth_sign_tx_request) => {
-                        let validators: Vec<_> = eth_sign_tx_request
-                            .eth_signing_tx_request
+                    ThresholdSignatureRequestEvent(threshold_sig_requst) => {
+                        let validators: Vec<_> = threshold_sig_requst
+                            .threshold_signature_request
                             .validators
                             .iter()
                             .map(|v| p2p::ValidatorId(v.clone().into()))
@@ -91,13 +93,13 @@ pub async fn start(
                             // https://github.com/chainflip-io/chainflip-backend/issues/446
                             MessageHash(
                                 Keccak256::hash(
-                                    &eth_sign_tx_request.eth_signing_tx_request.payload[..],
+                                    &threshold_sig_requst.threshold_signature_request.payload[..],
                                 )
                                 .0,
                             ),
                             // TODO: we want to use some notion of "KeyId"
                             // https://github.com/chainflip-io/chainflip-backend/issues/442
-                            SigningInfo::new(KeyId(eth_sign_tx_request.ceremony_id), validators),
+                            SigningInfo::new(KeyId(threshold_sig_requst.ceremony_id), validators),
                         );
 
                         multisig_instruction_sender
@@ -114,7 +116,7 @@ pub async fn start(
                                 let signer = signer.lock().unwrap();
                                 // TODO: Contract address should come from the state chain
 
-                                match eth_broadcaster
+                                let response = match eth_broadcaster
                                     .sign_and_broadcast_to(
                                         tx.clone(),
                                         settings.eth.key_manager_eth_address,
@@ -127,20 +129,13 @@ pub async fn start(
                                             "Broadcast set_agg_key_with_agg_key tx, tx_hash: {}",
                                             tx_hash
                                         );
-                                        subxt_client
-                                            .vault_rotation_response(
-                                                &*signer,
-                                                vault_rotation_request_event.ceremony_id,
-                                                VaultRotationResponse::Success {
-                                                    // TODO: Add the actual keys here
-                                                    // why are these being added here? The SC should know these already? right?
-                                                    old_key: Vec::default(),
-                                                    new_key: Vec::default(),
-                                                    tx,
-                                                },
-                                            )
-                                            .await
-                                            .unwrap(); // TODO: Handle error
+                                        VaultRotationResponse::Success {
+                                            // TODO: These to be removed on the SC side
+                                            // Issue: <link>
+                                            old_key: Vec::default(),
+                                            new_key: Vec::default(),
+                                            tx,
+                                        }
                                     }
                                     Err(e) => {
                                         slog::error!(
@@ -148,16 +143,17 @@ pub async fn start(
                                             "Failed to broadcast set_agg_key_with_agg_key tx: {}",
                                             e
                                         );
-                                        subxt_client
-                                            .vault_rotation_response(
-                                                &*signer,
-                                                vault_rotation_request_event.ceremony_id,
-                                                VaultRotationResponse::Failure,
-                                            )
-                                            .await
-                                            .unwrap(); // TODO: Handle error
+                                        VaultRotationResponse::Failure
                                     }
-                                }
+                                };
+                                subxt_client
+                                    .vault_rotation_response(
+                                        &*signer,
+                                        vault_rotation_request_event.ceremony_id,
+                                        response,
+                                    )
+                                    .await
+                                    .unwrap(); // TODO: Handle error
                             }
                             // Leave this to be explicit about future chains being added
                             ChainParams::Other(_) => panic!("Chain::Other does not exist"),

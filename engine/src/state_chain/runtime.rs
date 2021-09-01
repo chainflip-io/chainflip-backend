@@ -29,7 +29,7 @@ use super::pallets::{auction, emissions, reputation, staking, validator, vaults,
 
 use pallet_cf_flip::ImbalanceSource;
 use pallet_cf_reputation::OfflineCondition;
-use pallet_cf_vaults::{EthSigningTxRequest, KeygenRequest, VaultRotationRequest};
+use pallet_cf_vaults::{KeygenRequest, ThresholdSignatureRequest, VaultRotationRequest};
 
 use serde::{Deserialize, Serialize};
 
@@ -130,8 +130,9 @@ impl Runtime for StateChainRuntime {
         event_type_registry.register_type_size::<OfflineCondition>("OfflineCondition");
         event_type_registry
             .register_type_size::<KeygenRequest<AccountId32>>("KeygenRequest<T::ValidatorId>");
-        event_type_registry.register_type_size::<EthSigningTxRequest<AccountId32>>(
-            "EthSigningTxRequest<T::ValidatorId>",
+        event_type_registry.register_type_size::<Vec<u8>>("T::PublicKey");
+        event_type_registry.register_type_size::<ThresholdSignatureRequest<Vec<u8>, AccountId32>>(
+            "ThresholdSignatureRequest<T::PublicKey, T::ValidatorId>",
         );
         event_type_registry.register_type_size::<VaultRotationRequest>("VaultRotationRequest");
     }

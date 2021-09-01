@@ -146,6 +146,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type ValidatorId = AccountId;
 	type MinAuctionSize = MinAuctionSize;
 	type Handler = Vaults;
+	type Online = Reputation;
 }
 
 // FIXME: These would be changed
@@ -415,6 +416,7 @@ parameter_types! {
 	pub const HeartbeatBlockInterval: u32 = 150;
 	pub const ReputationPointPenalty: ReputationPenalty<BlockNumber> = ReputationPenalty { points: 1, blocks: 10 };
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
+	pub const EmergencyRotationPercentageTrigger: u8 = 80;
 }
 
 impl pallet_cf_reputation::Config for Runtime {
@@ -426,6 +428,8 @@ impl pallet_cf_reputation::Config for Runtime {
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = ZeroSlasher<Self>;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
+	type EmergencyRotation = pallet_cf_validator::EmergencyRotationOf<Self>;
+	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
 }
 
 construct_runtime!(
