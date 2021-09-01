@@ -257,20 +257,16 @@ jobs:
       - attach_workspace:
           at: ./
       - run:
-          name: Install dependencies
-          command: |
-            cd eth-contracts
-            npm install
-      - run:
-          name: Run Hardhat
+          name: Install dependencies & run Hardhat network
           background: true
           command: |
             cd eth-contracts
+            npm install
             npx hardhat node
       - run:
           name: Install poetry dependencies and deploy contracts
           command: |
             cd eth-contracts
-            poetry install
+            poetry install --quiet
             poetry run brownie run deploy_and all_events --network hardhat
       - run: cargo test --locked --release
