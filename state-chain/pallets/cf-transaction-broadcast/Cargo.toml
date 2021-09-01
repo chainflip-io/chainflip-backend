@@ -21,6 +21,14 @@ sp-core = { default-features = false, version = '3.0.0' }
 sp-runtime = { default-features = false, version = '3.0.0' }
 sp-std = { default-features = false, version = '3.0.0' }
 
+# Ethereum transaction encoding
+ethabi = {default-features = false, git = 'https://github.com/chainflip-io/ethabi', rev = '114a29d'}
+ethereum = {default-features = false, version = "0.9"}
+ethereum-types = {default-features = false, version = "0.12"}
+hex = {default-features = false, version = "0.4"}
+rlp = {default-features = false, version = "0.5"}
+secp256k1 = {default-features = false, version = "0.20"}
+
 [dev-dependencies]
 serde = { version = "1.0.119" }
 sp-io = { default-features = false, version = '3.0.0' }
@@ -28,14 +36,20 @@ sp-io = { default-features = false, version = '3.0.0' }
 [features]
 default = ['std']
 std = [
-	'cf-traits/std',
-	'codec/std',
-	'frame-support/std',
-	'frame-system/std',
-	'frame-benchmarking/std',
-	'sp-core/std',
-	'sp-runtime/std',
-	'sp-std/std',
+  'cf-traits/std',
+  'codec/std',
+  'hex/std',
+  'frame-support/std',
+  'frame-system/std',
+  'frame-benchmarking/std',
+  'sp-core/std',
+  'sp-runtime/std',
+  'sp-std/std',
+  'ethabi/std',
+  'ethereum/std',
+  'ethereum-types/std',
+  'rlp/std',
+  'secp256k1/std',
 ]
 runtime-benchmarks = [
 	'frame-benchmarking',
