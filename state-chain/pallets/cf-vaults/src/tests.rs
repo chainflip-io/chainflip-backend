@@ -281,7 +281,7 @@ mod test {
 			3, 23, 183, 225, 206, 31, 159, 148, 195, 42, 67, 115, 146, 41, 248, 140, 11, 3, 51, 41,
 			111, 180, 110, 143, 114, 134, 88, 73, 198, 174, 52, 184, 78,
 		])
-			.expect("Valid public key");
+		.expect("Valid public key");
 
 		let signature = SchnorrSignature {
 			s: [1; 32],
