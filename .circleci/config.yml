@@ -49,7 +49,7 @@ chainflip-docker-base: &chainflip-docker-base
         registry: ghcr.io
         extra_build_args: $BUILD_ARGS
         dockerfile: $DOCKERFILE
-        cache_from: $CACHE_FROM
+        cache_from: ghcr.io/$IMAGE:latest
         tag: $TAG
     - docker/push:
         registry: ghcr.io
@@ -156,7 +156,6 @@ jobs:
       IMAGE: chainflip-io/chainflip-backend/rust-base
       #      TODO: change back to latest
       TAG: unstable
-      CACHE_FROM: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
       DOCKERFILE: Dockerfile.rust-base
 
   build-chainflip-engine:
