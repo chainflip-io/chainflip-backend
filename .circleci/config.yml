@@ -256,7 +256,7 @@ jobs:
             npm install
       - run:
           name: Run Hardhat
-          background: true
+          #          background: true
           command: |
             cd eth-contracts
             npx hardhat node
