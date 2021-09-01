@@ -8,7 +8,7 @@ ignore_main_branches: &ignore_main_branches
         - /epic\/.*/
         - /release\/.*/
         # Uncomment and add your current branch when testing
-        - update/integration-test-ci
+        # - update/integration-test-ci
 only_main_branches: &only_main_branches
   filters:
     branches:
@@ -135,7 +135,7 @@ workflows:
           <<: *only_main_branches
 
   chainflip-integration-tests:
-    #    <<: *nightly
+    <<: *nightly
     jobs:
       - build-rust-poetry:
           context:
@@ -251,7 +251,9 @@ jobs:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
         auth: *dockerconfig
       - image: nats
-    environment: *sccache_environment
+    environment:
+      SCCACHE_REDIS: redis://167.172.97.176:6379
+      SCCACHE_CACHE_SIZE: 14G
     steps:
       - checkout
       - attach_workspace:
@@ -269,4 +271,5 @@ jobs:
             cd eth-contracts
             poetry install --quiet
             poetry run brownie run deploy_and all_events --network hardhat
+      - run: sccache -s
       - run: cargo test --locked --release
