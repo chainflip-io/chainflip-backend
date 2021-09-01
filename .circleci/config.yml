@@ -135,7 +135,7 @@ workflows:
           <<: *only_main_branches
 
   chainflip-integration-tests:
-    #<<: *nightly
+    <<: *nightly
     jobs:
       - build-rust-poetry:
           context:
@@ -273,3 +273,8 @@ jobs:
             poetry run brownie run deploy_and all_events --network hardhat
       - run: sccache -s
       - run: cargo test --locked --release
+      - discord/status:
+          fail_only: true
+          failure_message: ":red_circle: Integration tests have failed"
+          only_for_branches: "develop"
+          webhook: $DW_ALERTS_STAGING
