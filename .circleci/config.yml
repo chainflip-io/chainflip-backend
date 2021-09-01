@@ -236,7 +236,7 @@ jobs:
             - eth-contracts
   hardhat-setup-and-start:
     docker:
-      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:new
+      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:unstable
         auth: *dockerconfig
       - image: nats
     steps:
