@@ -256,7 +256,7 @@ jobs:
             npm install
       - run:
           name: Run Hardhat
-          #          background: true
+          background: true
           command: |
             cd eth-contracts
             npx hardhat node
@@ -267,7 +267,8 @@ jobs:
     steps:
       - attach_workspace:
           at: ./
-      - run: curl http://localhost:8545 -vvv
+      - run: sleep 5
+      - run: curl http://0.0.0.0:8545 -vvv
 #      - run:
 #          name: Install poetry dependencies and deploy contracts
 #          command: |
