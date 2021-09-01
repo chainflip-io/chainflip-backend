@@ -135,12 +135,12 @@ workflows:
             - ghcr-credentials
           requires:
             - hardhat-setup-and-start
-      - run-integration-tests:
-          context:
-            - discord-webhooks
-            - ghcr-credentials
-          requires:
-            - eth-events-setup
+#      - run-integration-tests:
+#          context:
+#            - discord-webhooks
+#            - ghcr-credentials
+#          requires:
+#            - eth-events-setup
 jobs:
   build-rust-base:
     executor: docker/docker
