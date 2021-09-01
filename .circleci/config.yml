@@ -267,26 +267,27 @@ jobs:
     steps:
       - attach_workspace:
           at: ./
-      - run:
-          name: Install poetry dependencies and deploy contracts
-          command: |
-            cd eth-contracts
-            $HOME/.poetry/bin/poetry install
-            $HOME/.poetry/bin/poetry run brownie run deploy_and all_events --network hardhat
-  run-integration-tests:
-    <<: *cargo-base-job
-    docker:
-      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-        auth: *dockerconfig
-      - image: nats
-
-    steps:
-      - checkout
-      - attach_workspace:
-          at: ./
-      - run: cargo test --locked --release
-      - discord/status:
-          fail_only: true
-          failure_message: ":red_circle: Nightly integration tests failure on $CIRCLE_BRANCH"
-          only_for_branches: "develop,main"
-          webhook: $DW_ALERTS_STAGING
+      - run: curl http://localhost:8545 -vvv
+#      - run:
+#          name: Install poetry dependencies and deploy contracts
+#          command: |
+#            cd eth-contracts
+#            $HOME/.poetry/bin/poetry --quiet install
+#            $HOME/.poetry/bin/poetry run brownie run deploy_and all_events --network hardhat
+#  run-integration-tests:
+#    <<: *cargo-base-job
+#    docker:
+#      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+#        auth: *dockerconfig
+#      - image: nats
+#
+#    steps:
+#      - checkout
+#      - attach_workspace:
+#          at: ./
+#      - run: cargo test --locked --release
+#      - discord/status:
+#          fail_only: true
+#          failure_message: ":red_circle: Nightly integration tests failure on $CIRCLE_BRANCH"
+#          only_for_branches: "develop,main"
+#          webhook: $DW_ALERTS_STAGING
