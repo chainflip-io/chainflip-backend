@@ -124,7 +124,9 @@ workflows:
 
   chainflip-integration-tests:
     jobs:
-      - clone-contracts-repo
+      - clone-contracts-repo:
+          context:
+            - github-credentials
       - hardhat-setup-and-start:
           requires:
             - clone-contracts-repo
