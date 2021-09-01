@@ -130,9 +130,9 @@ workflows:
       - hardhat-setup-and-start:
           requires:
             - clone-contracts-repo
+          context:
+            - ghcr-credentials
 #      - eth-events-setup:
-#          context:
-#            - ghcr-credentials
 #          requires:
 #            - hardhat-setup-and-start
 #      - run-integration-tests:
