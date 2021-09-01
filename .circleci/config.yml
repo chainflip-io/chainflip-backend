@@ -257,7 +257,9 @@ jobs:
       - run:
           name: Run Hardhat
           background: true
-          command: npx hardhat node
+          command: |
+            cd eth-contracts
+            npx hardhat node
   eth-events-setup:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-eth-contracts/eth-brownie:latest
