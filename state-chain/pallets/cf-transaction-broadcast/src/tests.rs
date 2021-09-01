@@ -26,6 +26,9 @@ impl MockCfe {
 					BroadcastEvent::ReadyForBroadcast(id, _signed_tx) => {
 						// TODO
 					},
+					BroadcastEvent::BroadcastComplete(_) => {
+						// TODO
+					},
 					BroadcastEvent::__Ignore(_, _) => unimplemented!(),
 				}
 			}
@@ -71,7 +74,7 @@ fn broadcast_state(id: BroadcastId) -> Option<MockBroadcast> {
 fn test_broadcast_flow() {
 	new_test_ext().execute_with(|| {
 		// Construct the payload and request threshold sig.
-		assert_eq!(1, TransactionBroadcast::initiate_broadcast(MockBroadcast::New, KEY_ID));
+		assert_eq!(1, TransactionBroadcast::initiate_broadcast(MockBroadcast::New, KEY_ID).unwrap());
 		assert_eq!(broadcast_state(1), Some(MockBroadcast::PayloadConstructed));
 		// CFE posts the signature back on-chain once the threshold sig has been constructed.
 		// This triggers a new request to sign the actual tx.

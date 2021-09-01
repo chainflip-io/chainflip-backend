@@ -58,10 +58,19 @@ impl frame_system::Config for Test {
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
 
+pub struct MockNonceProvider;
+
+impl cf_traits::NonceProvider for MockNonceProvider {
+	fn next_nonce(identifier: cf_traits::NonceIdentifier) -> cf_traits::Nonce {
+		1
+	}
+}
+
 impl BaseConfig for Test {
 	type KeyId = u64;
 	type ValidatorId = u64;
 	type ChainId = u64;
+	type NonceProvider = MockNonceProvider;
 }
 
 pub struct MockNominator;
@@ -98,20 +107,20 @@ impl BroadcastContext<Test> for MockBroadcast {
 	type UnsignedTransaction = MockUnsignedTx;
 	type SignedTransaction = MockSignedTx;
 	type TransactionHash = Vec<u8>;
+	type Error = ();
 
-	fn construct_signing_payload(&mut self) -> Self::Payload {
+	fn construct_signing_payload(&self) -> Result<Self::Payload, Self::Error> {
 		assert_eq!(*self, MockBroadcast::New);
-		*self = MockBroadcast::PayloadConstructed;
-		b"payload".to_vec()
+		Ok(b"payload".to_vec())
 	}
 
 	fn construct_unsigned_transaction(
 		&mut self,
 		sig: &Self::Signature,
-	) -> Self::UnsignedTransaction {
+	) -> Result<Self::UnsignedTransaction, Self::Error> {
 		assert_eq!(sig, b"signed-by-cfe");
 		*self = MockBroadcast::ThresholdSigReceived(sig.clone());
-		MockUnsignedTx
+		Ok(MockUnsignedTx)
 	}
 
 	fn on_transaction_ready(&mut self, _signed_tx: &Self::SignedTransaction) {

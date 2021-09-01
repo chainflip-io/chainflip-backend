@@ -60,7 +60,7 @@ impl RegisterClaim {
 	pub fn populate_sigdata(&mut self, sig: &SchnorrSignature) -> Result<(), EthBroadcastError> {
 		let k_times_g = PublicKey::from_slice(&sig.r)
 			.map(|pk| Keccak256::hash(&pk.serialize_uncompressed()))
-			.map_err(|e| EthBroadcastError::InvalidSignature)?;
+			.map_err(|_e| EthBroadcastError::InvalidSignature)?;
 
 		self.sig_data = SigData {
 			sig: sig.s.into(),
@@ -138,5 +138,67 @@ impl<T: BaseConfig> BroadcastContext<T> for RegisterClaim {
 			value: 0.into(),
 			data: signed_payload,
 		})
+	}
+}
+
+#[cfg(test)]
+mod test_register_claim {
+	use super::*;
+	
+	struct MockNonceProvider;
+	
+	const NONCE: u64 = 6;
+	impl NonceProvider for MockNonceProvider {
+
+		fn next_nonce(identifier: NonceIdentifier) -> cf_traits::Nonce {
+			NONCE
+		}
+	}
+
+	#[test]
+	fn test_claim_payload() {
+		use ethabi::Token;
+		const EXPIRY_SECS: u64 = 10;
+		const AMOUNT: u128 = 1234567890;
+		const TEST_ACCT: [u8; 32] = [0x42; 32];
+		const TEST_ADDR: [u8; 20] = [0xcf; 20];
+
+		let stake_manager = ethabi::Contract::load(
+			std::include_bytes!("../../../../../../engine/src/eth/abis/StakeManager.json").as_ref(),
+		)
+		.unwrap();
+
+		let register_claim_reference = stake_manager.function("registerClaim").unwrap();
+
+		let mut register_claim_runtime = RegisterClaim::new_unsigned::<MockNonceProvider>(
+			TEST_ACCT.into(), AMOUNT.into(), TEST_ADDR.into(), EXPIRY_SECS.into()).unwrap();
+
+		register_claim_runtime.sig_data.msg_hash = H256::zero();
+		let runtime_payload = register_claim_runtime.abi_encode().unwrap();
+
+		assert_eq!(
+			// Our encoding:
+			runtime_payload,
+			// "Canoncial" encoding based on the abi definition above and using the ethabi crate:
+			register_claim_reference
+				.encode_input(&vec![
+					// sigData: SigData(uint, uint, uint)
+					Token::Tuple(vec![
+						Token::Uint(ethabi::Uint::zero()),
+						Token::Uint(ethabi::Uint::zero()),
+						Token::Uint(NONCE.into()),
+						Token::Address(TEST_ADDR.into()),
+					]),
+					// nodeId: bytes32
+					Token::FixedBytes(TEST_ACCT.into()),
+					// amount: uint
+					Token::Uint(AMOUNT.into()),
+					// staker: address
+					Token::Address(TEST_ADDR.into()),
+					// epiryTime: uint48
+					Token::Uint(EXPIRY_SECS.into()),
+				])
+				.unwrap()
+		);
 	}
 }
