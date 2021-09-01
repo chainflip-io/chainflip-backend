@@ -1834,6 +1834,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "ethereum"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a67be3eaf296ef668733f54c637e84d0ca34eaf194f0077455135981ad464c3"
+dependencies = [
+ "bytes 1.0.1",
+ "ethereum-types 0.12.0",
+ "hash-db",
+ "hash256-std-hasher",
+ "parity-scale-codec",
+ "rlp",
+ "rlp-derive",
+ "serde 1.0.126",
+ "sha3 0.9.1",
+ "triehash",
+]
+
+[[package]]
 name = "ethereum-types"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1855,6 +1873,7 @@ checksum = "0dd6bde671199089e601e8d47e153368b893ef885f11f365a3261ec58153c211"
 dependencies = [
  "ethbloom",
  "fixed-hash",
+ "impl-rlp",
  "primitive-types 0.10.1",
  "uint",
 ]
@@ -5011,10 +5030,16 @@ name = "pallet-cf-transaction-broadcast"
 version = "0.1.0"
 dependencies = [
  "cf-traits",
+ "ethabi 14.1.0",
+ "ethereum",
+ "ethereum-types 0.12.0",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "hex",
  "parity-scale-codec",
+ "rlp",
+ "secp256k1",
  "serde 1.0.126",
  "sp-core",
  "sp-io",
@@ -5748,6 +5773,7 @@ checksum = "05e4722c697a58a99d5d06a08c30821d7c082a4632198de1eaa5a6c22ef42373"
 dependencies = [
  "fixed-hash",
  "impl-codec",
+ "impl-rlp",
  "uint",
 ]
 
@@ -6412,6 +6438,17 @@ checksum = "e54369147e3e7796c9b885c7304db87ca3d09a0a98f72843d532868675bbfba8"
 dependencies = [
  "bytes 1.0.1",
  "rustc-hex",
+]
+
+[[package]]
+name = "rlp-derive"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e33d7b2abe0c340d8797fe2907d3f20d3b5ea5908683618bfe80df7f621f672a"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -9706,6 +9743,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "652931506d2c1244d7217a70b99f56718a7b4161b37f04e7cd868072a99f68cd"
 dependencies = [
  "hash-db",
+]
+
+[[package]]
+name = "triehash"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1631b201eb031b563d2e85ca18ec8092508e262a3196ce9bd10a67ec87b9f5c"
+dependencies = [
+ "hash-db",
+ "rlp",
 ]
 
 [[package]]

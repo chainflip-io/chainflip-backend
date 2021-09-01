@@ -15,26 +15,26 @@ mod benchmarking;
 
 pub mod instances;
 
+use cf_traits::NonceProvider;
+use codec::{Decode, Encode};
 use frame_support::Parameter;
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
 use sp_std::{cmp::min, marker::PhantomData, mem::size_of};
-use codec::{Decode, Encode};
 
 pub trait BaseConfig: frame_system::Config + std::fmt::Debug {
 	/// The id type used to identify individual signing keys.
 	type KeyId: Parameter;
 	type ValidatorId: Parameter;
 	type ChainId: Parameter;
+	type NonceProvider: NonceProvider;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum BroadcastFailure<SignerId: Parameter> {
 	/// The threshold signature step failed, we need to blacklist some nodes.
-	MpcFailure {
-		bad_nodes: Vec<SignerId>,
-	},
+	MpcFailure { bad_nodes: Vec<SignerId> },
 	/// The transaction was rejected.
 	TransactionFailure,
 	/// The transaction stalled.
@@ -42,20 +42,24 @@ pub enum BroadcastFailure<SignerId: Parameter> {
 }
 
 pub trait BroadcastContext<T: BaseConfig> {
+	/// The payload type that will be signed over.
 	type Payload: Parameter;
+	/// The signature type that is returned by the threshold signature.
 	type Signature: Parameter;
+	/// An unsigned version of the transaction that needs to be broadcast.
 	type UnsignedTransaction: Parameter;
 	type SignedTransaction: Parameter;
 	type TransactionHash: Parameter;
+	type Error;
 
 	/// Constructs the payload for the threshold signature.
-	fn construct_signing_payload(&mut self) -> Self::Payload;
+	fn construct_signing_payload(&self) -> Result<Self::Payload, Self::Error>;
 
 	/// Constructs the outgoing transaction using the payload signature.
 	fn construct_unsigned_transaction(
 		&mut self,
 		sig: &Self::Signature,
-	) -> Self::UnsignedTransaction;
+	) -> Result<Self::UnsignedTransaction, Self::Error>;
 
 	/// Optional callback for when the signed transaction is submitted to the state chain.
 	fn on_transaction_ready(&mut self, signed_tx: &Self::SignedTransaction) {}
@@ -90,11 +94,18 @@ pub mod pallet {
 	use frame_support::{dispatch::DispatchResultWithPostInfo, Twox64Concat};
 	use frame_system::pallet_prelude::*;
 
-	pub type PayloadFor<T, I> = <<T as Config<I>>::BroadcastContext as BroadcastContext<T>>::Payload;
-	pub type SignatureFor<T, I> = <<T as Config<I>>::BroadcastContext as BroadcastContext<T>>::Signature;
-	pub type SignedTransactionFor<T, I> = <<T as Config<I>>::BroadcastContext as BroadcastContext<T>>::SignedTransaction;
-	pub type UnsignedTransactionFor<T, I> = <<T as Config<I>>::BroadcastContext as BroadcastContext<T>>::UnsignedTransaction;
-	pub type TransactionHashFor<T, I> = <<T as Config<I>>::BroadcastContext as BroadcastContext<T>>::TransactionHash;
+	pub type PayloadFor<T, I> =
+		<<T as Config<I>>::BroadcastContext as BroadcastContext<T>>::Payload;
+	pub type SignatureFor<T, I> =
+		<<T as Config<I>>::BroadcastContext as BroadcastContext<T>>::Signature;
+	pub type SignedTransactionFor<T, I> =
+		<<T as Config<I>>::BroadcastContext as BroadcastContext<T>>::SignedTransaction;
+	pub type UnsignedTransactionFor<T, I> =
+		<<T as Config<I>>::BroadcastContext as BroadcastContext<T>>::UnsignedTransaction;
+	pub type TransactionHashFor<T, I> =
+		<<T as Config<I>>::BroadcastContext as BroadcastContext<T>>::TransactionHash;
+	pub type BroadcastErrorFor<T, I> =
+		<<T as Config<I>>::BroadcastContext as BroadcastContext<T>>::Error;
 	pub type BroadcastFailureFor<T> = BroadcastFailure<T>;
 
 	#[pallet::config]
@@ -130,18 +141,9 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// [broadcast_id, key_id, signatories, payload]
-		ThresholdSignatureRequest(
-			BroadcastId,
-			T::KeyId,
-			Vec<T::ValidatorId>,
-			PayloadFor<T, I>,
-		),
+		ThresholdSignatureRequest(BroadcastId, T::KeyId, Vec<T::ValidatorId>, PayloadFor<T, I>),
 		/// [broadcast_id, validator_id, unsigned_tx]
-		TransactionSigningRequest(
-			BroadcastId,
-			T::ValidatorId,
-			UnsignedTransactionFor<T, I>,
-		),
+		TransactionSigningRequest(BroadcastId, T::ValidatorId, UnsignedTransactionFor<T, I>),
 		/// [broadcast_id, signed_tx]
 		ReadyForBroadcast(BroadcastId, SignedTransactionFor<T, I>),
 		/// [broadcast_id]
@@ -152,6 +154,8 @@ pub mod pallet {
 	pub enum Error<T, I = ()> {
 		/// The provided request id is invalid.
 		InvalidBroadcastId,
+		/// The provided request id is invalid.
+		InvalidSignature,
 	}
 
 	#[pallet::hooks]
@@ -175,7 +179,11 @@ pub mod pallet {
 				maybe_ctx
 					.as_mut()
 					.ok_or(Error::<T, I>::InvalidBroadcastId)
-					.map(|ctx| ctx.construct_unsigned_transaction(&signature))
+					.and_then(|ctx| ctx.construct_unsigned_transaction(&signature)
+					.map_err(|_e| {
+						// TODO: log the error
+						Error::<T, I>::InvalidSignature
+					}))
 			})?;
 
 			// Select a signer: we assume that the signature is a good source of randomness, so we use it to generate a
@@ -198,7 +206,8 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		///
+		/// Called when the transaction is ready to be broadcast. The signed transaction is stored on-chain so that
+		/// any node can potentially broadcast it to the target chain.
 		#[pallet::weight(10_000)]
 		pub fn transaction_ready(
 			origin: OriginFor<T>,
@@ -206,7 +215,7 @@ pub mod pallet {
 			signed_tx: SignedTransactionFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			// TODO: - verify the signer is the same we requested the signature from.
-			//       - can we also verify the actual signature?
+			//       - can we also verify the actual signature? --> Need to be able to binary-encode the tx.
 			let signer = ensure_signed(origin)?;
 
 			ensure!(
@@ -228,7 +237,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		///
+		/// Nodes have witnessed that the transaction has reached finality on the target chain.
 		#[pallet::weight(10_000)]
 		pub fn broadcast_success(
 			origin: OriginFor<T>,
@@ -238,20 +247,22 @@ pub mod pallet {
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			// Remove the broadcast, it's done.
-			let _ = PendingBroadcasts::<T, I>::try_mutate_exists::<_, _, Error<T, I>, _>(id, |maybe_ctx| {
-				let mut ctx = maybe_ctx
-					.take()
-					.ok_or(Error::<T, I>::InvalidBroadcastId)?;
-				ctx.on_broadcast_success(&tx_hash);
-				Ok(())
-			})?;
+			let _ = PendingBroadcasts::<T, I>::try_mutate_exists::<_, _, Error<T, I>, _>(
+				id,
+				|maybe_ctx| {
+					let mut ctx = maybe_ctx.take().ok_or(Error::<T, I>::InvalidBroadcastId)?;
+					ctx.on_broadcast_success(&tx_hash);
+					Ok(())
+				},
+			)?;
 
 			Self::deposit_event(Event::<T, I>::BroadcastComplete(id));
 
 			Ok(().into())
 		}
 
-		///
+		/// Nodes have witnessed that something went wrong. Either the threshold signature failed, or the transaction
+		/// was rejected or stalled on the target chain.
 		#[pallet::weight(10_000)]
 		pub fn broadcast_failure(
 			origin: OriginFor<T>,
@@ -261,7 +272,9 @@ pub mod pallet {
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			match failure {
-				BroadcastFailure::MpcFailure { bad_nodes: _ } => { todo!() },
+				BroadcastFailure::MpcFailure { bad_nodes: _ } => {
+					todo!()
+				}
 				BroadcastFailure::TransactionFailure => todo!(),
 				BroadcastFailure::TransactionTimeout => todo!(),
 			}
@@ -273,14 +286,17 @@ pub mod pallet {
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Initiates a broadcast and returns its id.
-	pub fn initiate_broadcast(mut context: T::BroadcastContext, key_id: T::KeyId) -> u64 {
+	pub fn initiate_broadcast(
+		mut context: T::BroadcastContext,
+		key_id: T::KeyId,
+	) -> Result<BroadcastId, BroadcastErrorFor<T, I>> {
 		// Get a new id.
 		let id = BroadcastIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
 			*id
 		});
 
-		let payload = context.construct_signing_payload();
+		let payload = context.construct_signing_payload()?;
 
 		// Store the context.
 		PendingBroadcasts::<T, I>::insert(id, &context);
@@ -294,6 +310,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			id, key_id, nominees, payload,
 		));
 
-		id
+		Ok(id)
 	}
 }
