@@ -262,15 +262,13 @@ jobs:
             cd eth-contracts
             npx hardhat node
       - run: sleep 5
-      - run: |
-          curl --request POST -sL -H "Content-Type:application/json;charset=utf-8" --data '{"jsonrpc":"2.0","method":"eth_getLogs", "params":[{}], "id": "0"}' --url http://localhost:8545
+      - run:
+          name: Install poetry dependencies and deploy contracts
+          command: |
+            cd eth-contracts
+            $HOME/.poetry/bin/poetry --quiet install
+            $HOME/.poetry/bin/poetry run brownie run deploy_and all_events --network hardhat
 
-#      - run:
-#          name: Install poetry dependencies and deploy contracts
-#          command: |
-#            cd eth-contracts
-#            $HOME/.poetry/bin/poetry --quiet install
-#            $HOME/.poetry/bin/poetry run brownie run deploy_and all_events --network hardhat
 #  run-integration-tests:
 #    <<: *cargo-base-job
 #    docker:
