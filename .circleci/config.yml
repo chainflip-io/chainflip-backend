@@ -26,7 +26,7 @@ cargo-base-job: &cargo-base-job
   docker:
     - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
       auth: *dockerconfig
-  environment:
+  environment: &sccache_environment
     SCCACHE_REDIS: redis://167.172.97.176:6379
     SCCACHE_CACHE_SIZE: 14G
   resource_class: xlarge
@@ -127,7 +127,12 @@ workflows:
 
   chainflip-integration-tests:
     jobs:
+      - build-rust-poetry:
+          context:
+            - ghcr-credentials
       - clone-contracts-repo:
+          requires:
+            - build-rust-poetry
           context:
             - github-credentials
       - hardhat-setup-and-start:
@@ -135,23 +140,20 @@ workflows:
             - clone-contracts-repo
           context:
             - ghcr-credentials
-#      - eth-events-setup:
-#          requires:
-#            - hardhat-setup-and-start
-#      - run-integration-tests:
-#          context:
-#            - discord-webhooks
-#            - ghcr-credentials
-#          requires:
-#            - eth-events-setup
+
 jobs:
   build-rust-base:
     <<: *chainflip-docker-base
     environment:
       IMAGE: chainflip-io/chainflip-backend/rust-base
-      #      TODO: change back to latest
-      TAG: unstable
+      TAG: latest
       DOCKERFILE: Dockerfile.rust-base
+  build-rust-poetry:
+    <<: *chainflip-docker-base
+    environment:
+      IMAGE: chainflip-io/chainflip-backend/rust-poetry
+      TAG: latest
+      DOCKERFILE: Dockerfile.rust-poetry
 
   build-chainflip-engine:
     <<: *chainflip-docker-base
@@ -239,6 +241,8 @@ jobs:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:unstable
         auth: *dockerconfig
       - image: nats
+    environment:
+      <<: *sccache_environment
     steps:
       - checkout
       - attach_workspace:
