@@ -251,10 +251,13 @@ jobs:
           at: ./
       - run:
           name: Install dependencies and run Hardhat
-          background: true
           command: |
             cd eth-contracts
             npm install
+      - run:
+          name: Install dependencies and run Hardhat
+          background: true
+          command: |
             npx hardhat node
   eth-events-setup:
     docker:
