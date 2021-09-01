@@ -36,7 +36,7 @@ cargo-base-job: &cargo-base-job
     - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
       auth: *dockerconfig
   environment: &sccache_environment
-    SCCACHE_REDIS: redis://167.172.97.176:6379
+    SCCACHE_REDIS: redis://sccache.chainflip.xyz:6379
     SCCACHE_CACHE_SIZE: 14G
   resource_class: xlarge
 
@@ -158,6 +158,7 @@ jobs:
       IMAGE: chainflip-io/chainflip-backend/rust-base
       TAG: latest
       DOCKERFILE: Dockerfile.rust-base
+
   build-rust-poetry:
     <<: *chainflip-docker-base
     environment:
@@ -246,13 +247,14 @@ jobs:
           root: ./
           paths:
             - eth-contracts
+
   run-integration-tests:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
         auth: *dockerconfig
       - image: nats
     environment:
-      SCCACHE_REDIS: redis://167.172.97.176:6379
+      SCCACHE_REDIS: redis://sccache.chainflip.xyz:6379
       SCCACHE_CACHE_SIZE: 14G
     steps:
       - checkout
