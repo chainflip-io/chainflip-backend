@@ -3,7 +3,13 @@ FROM python:buster
 USER root
 
 RUN apt-get update -y \
-    && apt-get install curl
+    && apt-get install -y curl \
+       cmake \
+       build-essential \
+       clang \
+       libclang-dev \
+       lld \
+       python3-dev
 
 RUN curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python -
 
@@ -13,19 +19,17 @@ RUN curl -fsSL https://deb.nodesource.com/setup_14.x | sh - \
 RUN npm install --global ganache-cli \
     && ganache-cli --version
 
-# Substrate and rust compiler dependencies.
-RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-    && apt-get -y install --no-install-recommends \
-        cmake \
-        build-essential \
-        clang \
-        libclang-dev \
-        lld \
-        python3-dev
-
-ENV PATH="/root/.cargo/bin:${PATH}"
-
+# Download rustup
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
+
+# Set environment
+ENV PATH="/root/.cargo/bin:${PATH}"
+ENV RUSTC_WRAPPER=sccache
+
+# Download and set nightly as the default Rust compiler
+RUN rustup default nightly-2021-03-24 \
+    && rustup target add wasm32-unknown-unknown --toolchain nightly-2021-03-24 \
+    && rustup component add rustfmt
 
 # Download and install sccache https://github.com/mozilla/sccache
 ARG SCCACHE_VER="0.2.15"
@@ -35,11 +39,4 @@ RUN curl -fsSLo /tmp/sccache.tgz \
  && mv /tmp/sccache /usr/bin && chmod +x /usr/bin/sccache \
  && rm -rf /tmp/*
 
-# Set sccache as the default compiler cache
-ENV RUSTC_WRAPPER=sccache
-
-# Download and set nightly as the default Rust compiler
-RUN rustup default nightly-2021-03-24 \
-    && rustup target add wasm32-unknown-unknown --toolchain nightly-2021-03-24 \
-    && rustup component add rustfmt
 
