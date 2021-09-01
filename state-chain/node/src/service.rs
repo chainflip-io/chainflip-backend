@@ -11,8 +11,6 @@ pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use sc_finality_grandpa::SharedVoterState;
 use sc_keystore::LocalKeystore;
-use std::borrow::Cow;
-use cf_p2p::{NetworkBridge, CHAINFLIP_P2P_PROTOCOL_NAME};
 use cf_p2p_rpc::RpcCore;
 
 // Our native executor instance.
@@ -143,10 +141,9 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle());
 	let (rpc_params, _) = RpcCore::new(Arc::new(subscription_task_executor));
 	let rpc_params = Arc::new(rpc_params);
-	let (p2p, comms) = NetworkBridge::new(
+	let (p2p, comms) = cf_p2p::substrate_network_bridge(
 		rpc_params.clone(),
-		network.clone(),
-		Cow::Borrowed(CHAINFLIP_P2P_PROTOCOL_NAME));
+		network.clone());
 
 	let rpc_extensions_builder = {
 		let client = client.clone();

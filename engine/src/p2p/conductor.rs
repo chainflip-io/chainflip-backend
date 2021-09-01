@@ -1,27 +1,48 @@
-use futures::Stream;
 use slog::o;
 use tokio_stream::StreamExt;
 
 use crate::{
     logging::COMPONENT_KEY,
     mq::{IMQClient, Subject},
-    p2p::P2PMessage,
+    p2p::{P2PRpcClient, P2PRpcEventHandler},
 };
 
-use super::{P2PMessageCommand, P2PNetworkClient};
-use crate::p2p::ValidatorId;
+use super::{NetworkEventHandler, P2PMessageCommand, P2PNetworkClient};
 
-/// Intermediates P2P events between MQ and P2P interface
-pub fn start<S, P2P, MQ>(
-    mut p2p: P2P,
+/// Drives P2P events between MQ and P2P interface
+pub fn start<MQ>(
+    p2p: P2PRpcClient,
+    mq: MQ,
+    shutdown_rx: tokio::sync::oneshot::Receiver<()>,
+    logger: &slog::Logger,
+) -> impl futures::Future
+where
+    MQ: IMQClient + Clone + Send + Sync,
+{
+    start_with_handler(
+        P2PRpcEventHandler {
+            mq: mq.clone(),
+            logger: logger.clone(),
+        },
+        p2p,
+        mq,
+        shutdown_rx,
+        &logger,
+    )
+}
+
+/// Start with a custom network event handler. Useful for mocks / testing.
+pub(crate) fn start_with_handler<MQ, P2P, H>(
+    network_event_handler: H,
+    p2p: P2P,
     mq: MQ,
     mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     logger: &slog::Logger,
 ) -> impl futures::Future
 where
     MQ: IMQClient + Send,
-    S: Stream<Item = P2PMessage> + Unpin,
-    P2P: P2PNetworkClient<ValidatorId, S> + Send,
+    P2P: P2PNetworkClient + Send,
+    H: NetworkEventHandler<P2P>,
 {
     let logger = logger.new(o!(COMPONENT_KEY => "P2PConductor"));
 
@@ -33,7 +54,7 @@ where
             .await
             .expect("Should be able to subscribe to Subject::P2POutgoing");
 
-        let mut p2p_stream = p2p.take_stream().await.expect("Should have p2p stream");
+        let mut p2p_event_stream = p2p.take_stream().await.expect("Should have p2p stream");
 
         loop {
             tokio::select! {
@@ -42,10 +63,8 @@ where
                         p2p.send(&destination, &data).await.expect("Could not send outgoing P2PMessageCommand");
                     }
                 }
-                Some(incoming) = p2p_stream.next() => {
-                    mq.publish::<P2PMessage>(Subject::P2PIncoming, &incoming)
-                        .await
-                        .expect("Could not publish incoming message to Subject::P2PIncoming");
+                Some(incoming) = p2p_event_stream.next() => {
+                    network_event_handler.handle_event(incoming).await;
                 }
                 Ok(()) = &mut shutdown_rx =>{
                     slog::info!(logger, "Shutting down");
@@ -64,7 +83,10 @@ mod tests {
     use crate::{
         logging,
         mq::mq_mock::MQMock,
-        p2p::{mock::NetworkMock, P2PMessageCommand, ValidatorId},
+        p2p::{
+            mock::{MockChannelEventHandler, NetworkMock},
+            P2PMessageCommand, ValidatorId,
+        },
     };
 
     use super::*;
@@ -84,60 +106,68 @@ mod tests {
         // lot of tests. Will need to fix this.
 
         // Validator 1 setup
-        let id_1: ValidatorId = ValidatorId::new(1);
+        let id_1: ValidatorId = ValidatorId([1; 32]);
 
         let mq = MQMock::new();
 
         let mc1 = mq.get_client();
         let mc1_copy = mq.get_client();
         let p2p_client_1 = network.new_client(id_1);
+        let (handler_1, _) = MockChannelEventHandler::new();
 
         // Validator 2 setup
-        let id_2: ValidatorId = ValidatorId::new(2);
+        let id_2: ValidatorId = ValidatorId([2; 32]);
 
         let mq = MQMock::new();
         let mc2 = mq.get_client();
-        let mc2_copy = mq.get_client();
         let p2p_client_2 = network.new_client(id_2.clone());
+        let (handler_2, mut receiver) = MockChannelEventHandler::new();
 
         let (_, shutdown_conductor1_rx) = tokio::sync::oneshot::channel::<()>();
         let (_, shutdown_conductor2_rx) = tokio::sync::oneshot::channel::<()>();
 
         let conductor_fut_1 = timeout(
             Duration::from_millis(100),
-            start(p2p_client_1, mc1, shutdown_conductor1_rx, &logger),
+            start_with_handler(
+                handler_1,
+                p2p_client_1,
+                mc1,
+                shutdown_conductor1_rx,
+                &logger,
+            ),
         );
         let conductor_fut_2 = timeout(
             Duration::from_millis(100),
-            start(p2p_client_2, mc2, shutdown_conductor2_rx, &logger),
+            start_with_handler(
+                handler_2,
+                p2p_client_2,
+                mc2,
+                shutdown_conductor2_rx,
+                &logger,
+            ),
         );
 
-        let msg = String::from("hello");
-
-        let message = P2PMessageCommand {
+        let msg_sent = b"hello";
+        let cmd = P2PMessageCommand {
             destination: id_2,
-            data: Vec::from(msg.as_bytes()),
+            data: msg_sent.to_vec(),
         };
 
         let write_fut = async move {
             mc1_copy
-                .publish(Subject::P2POutgoing, &message)
+                .publish(Subject::P2POutgoing, &cmd)
                 .await
                 .expect("Could not publish incoming P2PMessageCommand to Subject::P2POutgoing");
         };
 
         let read_fut = async move {
-            let mut p2p_messages = mc2_copy
-                .subscribe::<P2PMessage>(Subject::P2PIncoming)
-                .await
-                .expect("Could not subscribe to Subject::P2PIncoming");
-
             // Second client should be able to receive the message
-            let maybe_msg = timeout(Duration::from_millis(100), p2p_messages.next()).await;
+            let received = timeout(Duration::from_millis(100), receiver.recv())
+                .await
+                .expect("recv timeout")
+                .expect("channel closed");
 
-            assert!(maybe_msg.is_ok(), "recv timeout");
-
-            assert_eq!(maybe_msg.unwrap().unwrap().unwrap().data, msg.as_bytes());
+            assert_eq!(received.data, msg_sent);
         };
 
         let _ = futures::join!(conductor_fut_1, conductor_fut_2, write_fut, read_fut);
