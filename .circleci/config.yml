@@ -7,6 +7,8 @@ ignore_main_branches: &ignore_main_branches
         - develop
         - /epic\/.*/
         - /release\/.*/
+        # Uncomment and add your current branch when testing
+        - update/integration-test-ci
 only_main_branches: &only_main_branches
   filters:
     branches:
@@ -56,6 +58,7 @@ version: 2.1
 orbs:
   docker: circleci/docker@1.7.0
   discord: antonioned/discord@0.1.0
+  gh: circleci/github-cli@1.0.4
 workflows:
   chainflip-backend-checks:
     jobs:
@@ -118,6 +121,24 @@ workflows:
           context:
             - ghcr-credentials
           <<: *only_main_branches
+
+  chainflip-integration-tests:
+    jobs:
+      - clone-contracts-repo
+      - hardhat-setup-and-start:
+          requires:
+            - clone-contracts-repo
+      - eth-events-setup:
+          context:
+            - ghcr-credentials
+          requires:
+            - hardhat-setup-and-start
+      - run-integration-tests:
+          context:
+            - discord-webhooks
+            - ghcr-credentials
+          requires:
+            - eth-events-setup
 jobs:
   build-rust-base:
     executor: docker/docker
@@ -205,5 +226,53 @@ jobs:
       - discord/status:
           fail_only: true
           failure_message: ":red_circle: Build failure on $CIRCLE_BRANCH | $CIRCLE_BUILD_URL"
+          only_for_branches: "develop,main"
+          webhook: $DW_ALERTS_STAGING
+
+  clone-contracts-repo:
+    docker:
+      - image: "cimg/base:stable"
+    steps:
+      - gh/clone:
+          repo: https://github.com/chainflip-io/chainflip-eth-contracts.git
+          dir: eth-contracts
+      - persist_to_workspace:
+          root: ./
+          paths:
+            - eth-contracts
+  hardhat-setup-and-start:
+    docker:
+      - image: node:14-alpine
+    steps:
+      - attach_workspace:
+          at: ./
+      - run:
+          name: Install dependencies and run Hardhat
+          background: true
+          command: |
+            cd eth-contracts
+            npm install
+            npx hardhat node
+  eth-events-setup:
+    docker:
+      - image: ghcr.io/chainflip-io/chainflip-eth-contracts/eth-brownie:latest
+        auth: *dockerconfig
+    steps:
+      - attach_workspace:
+          at: ./
+      - run: |
+          cd eth-contracts
+          $HOME/.poetry/bin/poetry install
+          $HOME/.poetry/bin/poetry run brownie run deploy_and all_events --network hardhat
+  run-integration-tests:
+    <<: *cargo-base-job
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ./
+      - run: cargo test --locked --release
+      - discord/status:
+          fail_only: true
+          failure_message: ":red_circle: Nightly integration tests failure on $CIRCLE_BRANCH"
           only_for_branches: "develop,main"
           webhook: $DW_ALERTS_STAGING
