@@ -243,9 +243,10 @@ jobs:
           root: ./
           paths:
             - eth-contracts
-  hardhat-setup-and-start:
+  setup-integration-tests:
     docker:
-      - image: node:14-alpine
+      - image: ghcr.io/chainflip-io/chainflip-eth-contracts/eth-brownie:latest
+        auth: *dockerconfig
     steps:
       - attach_workspace:
           at: ./
@@ -260,15 +261,10 @@ jobs:
           command: |
             cd eth-contracts
             npx hardhat node
-  eth-events-setup:
-    docker:
-      - image: ghcr.io/chainflip-io/chainflip-eth-contracts/eth-brownie:latest
-        auth: *dockerconfig
-    steps:
-      - attach_workspace:
-          at: ./
       - run: sleep 5
-      - run: curl http://0.0.0.0:8545 -vvv
+      - run: |
+          curl --request POST -sL -H "Content-Type:application/json;charset=utf-8" --data '{"jsonrpc":"2.0","method":"eth_getLogs", "params":[{}], "id": "0"}' --url http://localhost:8545
+
 #      - run:
 #          name: Install poetry dependencies and deploy contracts
 #          command: |
