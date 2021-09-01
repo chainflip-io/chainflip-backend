@@ -68,18 +68,19 @@ pub async fn start(
                             .map(|v| p2p::ValidatorId(v.clone().into()))
                             .collect();
 
-                        // TODO: Should this be the key id?
-                        // https://github.com/chainflip-io/chainflip-backend/issues/442
                         let gen_new_key_event = MultisigInstruction::KeyGen(KeygenInfo::new(
+                            // TODO: KeyId will be removed from here
                             KeyId(keygen_request_event.ceremony_id),
                             validators,
                         ));
-                        // We need the Sender for Multisig instructions channel here
+
                         multisig_instruction_sender
                             .send(gen_new_key_event)
                             .map_err(|_| "Receiver should exist")
                             .unwrap();
                     }
+                    // TODO: Provide the pubkey of the key we want to sign with to the signing module
+                    // from this event
                     ThresholdSignatureRequestEvent(threshold_sig_requst) => {
                         let validators: Vec<_> = threshold_sig_requst
                             .threshold_signature_request
@@ -97,9 +98,7 @@ pub async fn start(
                                 )
                                 .0,
                             ),
-                            // TODO: we want to use some notion of "KeyId"
-                            // https://github.com/chainflip-io/chainflip-backend/issues/442
-                            SigningInfo::new(KeyId(threshold_sig_requst.ceremony_id), validators),
+                            SigningInfo::new(KeyId(todo!("Use pubkey as key id")), validators),
                         );
 
                         multisig_instruction_sender

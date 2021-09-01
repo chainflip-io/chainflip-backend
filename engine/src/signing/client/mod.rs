@@ -26,6 +26,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Copy)]
 pub struct KeyId(pub u64);
 
+// TODO: Remove KeyId from here - we don't know what the keyid will be, since it'll be the public key
+// we might want to rename KeyId here too.
+// Issue: <link>
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct KeygenInfo {
     id: KeyId,
