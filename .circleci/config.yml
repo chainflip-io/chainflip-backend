@@ -127,12 +127,7 @@ workflows:
 
   chainflip-integration-tests:
     jobs:
-      - build-rust-base:
-          context:
-            - ghcr-credentials
       - clone-contracts-repo:
-          requires:
-            - build-rust-base
           context:
             - github-credentials
       - hardhat-setup-and-start:
@@ -241,7 +236,7 @@ jobs:
             - eth-contracts
   hardhat-setup-and-start:
     docker:
-      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:unstable
+      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:new
         auth: *dockerconfig
       - image: nats
     steps:
