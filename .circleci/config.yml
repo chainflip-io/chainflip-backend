@@ -251,6 +251,9 @@ jobs:
     steps:
       - attach_workspace:
           at: ./
+      - setup_remote_docker:
+        version: 19.03.13
+      - run: docker run -it -v $(pwd):/root/home ghcr.io/chainflip-io/chainflip-backend/rust-base:latest cargo test --locked --release
       - run:
           name: Install dependencies
           command: |
