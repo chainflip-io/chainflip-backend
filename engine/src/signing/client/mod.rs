@@ -78,9 +78,9 @@ pub fn start<MQC, S>(
     my_validator_id: ValidatorId,
     db: S,
     mq_client: MQC,
-    mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     mut multisig_instruction_receiver: UnboundedReceiver<MultisigInstruction>,
     multisig_event_sender: UnboundedSender<MultisigEvent>,
+    mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     logger: &slog::Logger,
 ) -> impl futures::Future
 where

@@ -163,6 +163,7 @@ async fn coordinate_signing(
 }
 
 #[tokio::test]
+#[ignore = "Reinstate in: https://github.com/chainflip-io/chainflip-backend/issues/481"]
 async fn distributed_signing() {
     // calculate how many parties will be in the signing (must be exact)
     // TODO: use the threshold_from_share_count function in keygen manager here.
@@ -216,12 +217,18 @@ async fn distributed_signing() {
 
                 let db = KeyDBMock::new();
 
+                let (_multisig_instruction_sender, multisig_instruction_receiver) =
+                    tokio::sync::mpsc::unbounded_channel();
+                let (multisig_event_sender, _multisig_event_receiver) =
+                    tokio::sync::mpsc::unbounded_channel();
                 let (shutdown_client_tx, shutdown_client_rx) =
                     tokio::sync::oneshot::channel::<()>();
                 let client_fut = client::start(
                     VALIDATOR_IDS[i - 1].clone(),
                     db,
                     mq_client,
+                    multisig_instruction_receiver,
+                    multisig_event_sender,
                     shutdown_client_rx,
                     &logger,
                 );

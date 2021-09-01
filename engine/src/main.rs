@@ -98,9 +98,9 @@ async fn main() {
             ValidatorId(key_pair.public().0),
             db,
             mq_client.clone(),
-            shutdown_client_rx,
             multisig_instruction_receiver,
             multisig_event_sender,
+            shutdown_client_rx,
             &root_logger,
         ),
         p2p::conductor::start(
