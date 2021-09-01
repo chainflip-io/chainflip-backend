@@ -4915,6 +4915,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-governance"
+version = "0.1.0"
+dependencies = [
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "serde 1.0.126",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-reputation"
 version = "0.0.1"
 dependencies = [
@@ -8728,6 +8744,7 @@ dependencies = [
  "pallet-cf-auction",
  "pallet-cf-emissions",
  "pallet-cf-flip",
+ "pallet-cf-governance",
  "pallet-cf-reputation",
  "pallet-cf-rewards",
  "pallet-cf-staking",
