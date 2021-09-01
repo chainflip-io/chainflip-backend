@@ -78,8 +78,8 @@ pub fn start<S>(
     db: S,
     mut multisig_instruction_receiver: UnboundedReceiver<MultisigInstruction>,
     multisig_event_sender: UnboundedSender<MultisigEvent>,
-    p2p_message_receiver: UnboundedReceiver<P2PMessage>,
-    p2p_message_command_sender: UnboundedReceiver<P2PMessageCommand>,
+    mut p2p_message_receiver: UnboundedReceiver<P2PMessage>,
+    p2p_message_command_sender: UnboundedSender<P2PMessageCommand>,
     mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     logger: &slog::Logger,
 ) -> impl futures::Future

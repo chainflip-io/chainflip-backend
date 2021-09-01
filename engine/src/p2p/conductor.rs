@@ -1,5 +1,5 @@
 use slog::o;
-use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_stream::StreamExt;
 
 use crate::{
@@ -7,22 +7,24 @@ use crate::{
     p2p::{P2PRpcClient, P2PRpcEventHandler},
 };
 
-use super::{NetworkEventHandler, P2PMessageCommand, P2PNetworkClient};
+use super::{NetworkEventHandler, P2PMessage, P2PMessageCommand, P2PNetworkClient};
 
 /// Drives P2P events between channels and P2P interface
 // TODO: Can this be refactored now that we use channels
 pub fn start(
     p2p: P2PRpcClient,
+    p2p_message_sender: UnboundedSender<P2PMessage>,
+    p2p_message_command_receiver: UnboundedReceiver<P2PMessageCommand>,
     shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     logger: &slog::Logger,
 ) -> impl futures::Future {
     start_with_handler(
         P2PRpcEventHandler {
-            mq: mq.clone(),
+            p2p_message_sender,
             logger: logger.clone(),
         },
         p2p,
-        mq,
+        p2p_message_command_receiver,
         shutdown_rx,
         &logger,
     )
@@ -32,7 +34,7 @@ pub fn start(
 pub(crate) fn start_with_handler<P2P, H>(
     network_event_handler: H,
     p2p: P2P,
-    p2p_message_command_receiver: UnboundedReceiver<P2PMessageCommand>,
+    mut p2p_message_command_receiver: UnboundedReceiver<P2PMessageCommand>,
     mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     logger: &slog::Logger,
 ) -> impl futures::Future
@@ -49,10 +51,8 @@ where
 
         loop {
             tokio::select! {
-                Some(outgoing) = p2p_message_command_receiver.recv() => {
-                    if let Ok(P2PMessageCommand { destination, data }) = outgoing {
-                        p2p.send(&destination, &data).await.expect("Could not send outgoing P2PMessageCommand");
-                    }
+                Some(P2PMessageCommand { destination, data }) = p2p_message_command_receiver.recv() => {
+                    p2p.send(&destination, &data).await.expect("Could not send outgoing P2PMessageCommand");
                 }
                 Some(incoming) = p2p_event_stream.next() => {
                     network_event_handler.handle_event(incoming).await;
@@ -73,7 +73,6 @@ mod tests {
 
     use crate::{
         logging,
-        mq::mq_mock::MQMock,
         p2p::{
             mock::{MockChannelEventHandler, NetworkMock},
             P2PMessageCommand, ValidatorId,
@@ -86,8 +85,6 @@ mod tests {
 
     #[tokio::test]
     async fn conductor_reads_from_mq() {
-        use crate::mq::Subject;
-
         let network = NetworkMock::new();
 
         let logger = logging::test_utils::create_test_logger();

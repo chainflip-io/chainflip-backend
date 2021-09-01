@@ -4,8 +4,7 @@ use chainflip_engine::{
     eth::{self, key_manager, stake_manager, EthBroadcaster},
     health::HealthMonitor,
     heartbeat,
-    mq::nats_client::NatsMQClient,
-    p2p::{self, rpc as p2p_rpc, ValidatorId},
+    p2p::{self, rpc as p2p_rpc, P2PMessage, P2PMessageCommand, ValidatorId},
     settings::Settings,
     signing,
     signing::{db::PersistentKeyDB, MultisigEvent, MultisigInstruction},
@@ -36,9 +35,6 @@ async fn main() {
         "Connecting to NatsMQ at: {}",
         &settings.message_queue.endpoint
     );
-    let mq_client = NatsMQClient::new(&settings.message_queue)
-        .await
-        .expect("Should connect to message queue");
 
     let subxt_client = ClientBuilder::<StateChainRuntime>::new()
         .set_url(&settings.state_chain.ws_endpoint)
@@ -83,8 +79,14 @@ async fn main() {
     let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
     let (multisig_instruction_sender, multisig_instruction_receiver) =
         tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
-    let (multisig_event_sender, multisig_event_receiver) =
+
+    let (multisig_event_sender, _multisig_event_receiver) =
         tokio::sync::mpsc::unbounded_channel::<MultisigEvent>();
+
+    let (p2p_message_sender, p2p_message_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<P2PMessage>();
+    let (p2p_message_command_sender, p2p_message_command_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<P2PMessageCommand>();
 
     let web3 = eth::new_synced_web3_client(&settings, &root_logger)
         .await
@@ -99,6 +101,8 @@ async fn main() {
             db,
             multisig_instruction_receiver,
             multisig_event_sender,
+            p2p_message_receiver,
+            p2p_message_command_sender,
             shutdown_client_rx,
             &root_logger,
         ),
@@ -112,7 +116,8 @@ async fn main() {
             )
             .await
             .expect("unable to connect p2p rpc client"),
-            mq_client.clone(),
+            p2p_message_sender,
+            p2p_message_command_receiver,
             p2p_shutdown_rx,
             &root_logger.clone()
         ),
@@ -124,7 +129,6 @@ async fn main() {
             pair_signer.clone(),
             eth_broadcaster,
             multisig_instruction_sender,
-            multisig_event_receiver,
             &root_logger
         ),
         // Start eth components
