@@ -131,9 +131,9 @@ pub struct ThresholdSignatureRequest<PublicKey, ValidatorId> {
 
 /// A response back with our signature else a list of bad validators
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum ThresholdSignatureResponse<ValidatorId> {
+pub enum ThresholdSignatureResponse<ValidatorId, Signature> {
 	// Signature
-	Success(Vec<u8>),
+	Success(Signature),
 	// Bad validators
 	Error(Vec<ValidatorId>),
 }

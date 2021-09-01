@@ -201,7 +201,7 @@ pub mod pallet {
 		pub fn threshold_signature_response(
 			origin: OriginFor<T>,
 			request_id: RequestIndex,
-			response: ThresholdSignatureResponse<T::ValidatorId>,
+			response: ThresholdSignatureResponse<T::ValidatorId, Vec<u8>>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			match EthereumChain::<T>::handle_response(request_id, response) {
@@ -517,7 +517,7 @@ impl<T: Config>
 	RequestResponse<
 		RequestIndex,
 		ThresholdSignatureRequest<T::PublicKey, T::ValidatorId>,
-		ThresholdSignatureResponse<T::ValidatorId>,
+		ThresholdSignatureResponse<T::ValidatorId, Vec<u8>>,
 		RotationError<T::ValidatorId>,
 	> for EthereumChain<T>
 {
@@ -533,7 +533,7 @@ impl<T: Config>
 	/// Try to handle the response and pass this onto `Vaults` to complete the vault rotation
 	fn handle_response(
 		index: RequestIndex,
-		response: ThresholdSignatureResponse<T::ValidatorId>,
+		response: ThresholdSignatureResponse<T::ValidatorId, Vec<u8>>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		match response {
 			ThresholdSignatureResponse::Success(signature) => {
