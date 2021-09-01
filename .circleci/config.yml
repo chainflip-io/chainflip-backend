@@ -124,7 +124,12 @@ workflows:
 
   chainflip-integration-tests:
     jobs:
+      - build-rust-base:
+          context:
+            - ghcr-credentials
       - clone-contracts-repo:
+          requires:
+            - build-rust-base
           context:
             - github-credentials
       - hardhat-setup-and-start:
@@ -245,15 +250,12 @@ jobs:
             - eth-contracts
   hardhat-setup-and-start:
     docker:
-      - image: ghcr.io/chainflip-io/chainflip-eth-contracts/eth-brownie:latest
+      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
         auth: *dockerconfig
       - image: nats
     steps:
       - attach_workspace:
           at: ./
-      - setup_remote_docker:
-        version: 19.03.13
-      - run: docker run -it -v $(pwd):/root/home ghcr.io/chainflip-io/chainflip-backend/rust-base:latest cargo test --locked --release
       - run:
           name: Install dependencies
           command: |
@@ -272,7 +274,8 @@ jobs:
             cd eth-contracts
             $HOME/.poetry/bin/poetry install
             $HOME/.poetry/bin/poetry run brownie run deploy_and all_events --network hardhat
-
+      - checkout
+      - run: cargo test --locked --release
 #  run-integration-tests:
 #    <<: *cargo-base-job
 #    docker:
