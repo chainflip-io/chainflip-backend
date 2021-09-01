@@ -6,6 +6,7 @@ use ethereum::{AccessList, TransactionAction};
 use sp_core::{H256, U256};
 use sp_runtime::RuntimeDebug;
 
+#[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum EthBroadcastError {
 	InvalidPayloadData,
 	InvalidSignature,
