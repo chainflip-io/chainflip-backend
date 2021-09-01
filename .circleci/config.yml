@@ -58,7 +58,7 @@ version: 2.1
 orbs:
   docker: circleci/docker@1.7.0
   discord: antonioned/discord@0.1.0
-  gh: circleci/github-cli@1.0.4
+  github-cli: circleci/github-cli@1.0.4
 workflows:
   chainflip-backend-checks:
     jobs:
@@ -233,7 +233,7 @@ jobs:
     docker:
       - image: "cimg/base:stable"
     steps:
-      - gh/clone:
+      - github-cli/clone:
           repo: https://github.com/chainflip-io/chainflip-eth-contracts.git
           dir: eth-contracts
       - persist_to_workspace:
