@@ -67,6 +67,7 @@ pub struct ChainflipKey {
     pub_key_y_parity: ethabi::Uint,
 }
 
+#[cfg(test)]
 impl ChainflipKey {
     /// Create a ChainflipKey from a decimal string
     pub fn from_dec_str(dec_str: &str, parity: bool) -> Result<Self> {
