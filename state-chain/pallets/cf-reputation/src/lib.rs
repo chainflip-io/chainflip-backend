@@ -99,7 +99,7 @@ pub trait OfflineConditions {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{EpochInfo, Online};
+	use cf_traits::{EmergencyRotation, EpochInfo, NetworkState, Online};
 	use frame_system::pallet_prelude::*;
 	use sp_std::ops::Neg;
 
@@ -150,24 +150,41 @@ pub mod pallet {
 		#[pallet::constant]
 		type ReputationPointFloorAndCeiling: Get<(ReputationPoints, ReputationPoints)>;
 
+		/// Trigger an emergency rotation on falling below the percentage of online validators
+		#[pallet::constant]
+		type EmergencyRotationPercentageTrigger: Get<u8>;
+
 		/// When we have to, we slash
 		type Slasher: Slashing<
 			ValidatorId = Self::ValidatorId,
 			BlockNumber = <Self as frame_system::Config>::BlockNumber,
 		>;
 
-		// Information about the current epoch.
+		/// Information about the current epoch.
 		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
+
+		/// Request an emergency rotation
+		type EmergencyRotation: EmergencyRotation;
 	}
 
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// On initializing each block we check liveness every heartbeat interval
-		///
+		/// On initializing each block we check liveness and network liveness on every heartbeat interval
+		/// A request for an emergency rotation is made if needed
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			if current_block % T::HeartbeatBlockInterval::get() == Zero::zero() {
-				return Self::check_liveness();
+				let liveness_weight = Self::check_liveness();
+				let (network_weight, network_state) = Self::check_network_liveness();
+
+				if network_state.percentage_online()
+					< T::EmergencyRotationPercentageTrigger::get() as u32
+				{
+					Self::deposit_event(Event::EmergencyRotationRequested(network_state));
+					T::EmergencyRotation::request_emergency_rotation();
+				}
+
+				return liveness_weight + network_weight;
 			}
 
 			Zero::zero()
@@ -243,6 +260,8 @@ pub mod pallet {
 		OfflineConditionPenalty(T::ValidatorId, OfflineCondition, ReputationPoints),
 		/// The accrual rate for our reputation poins has been updated \[points, online credits\]
 		AccrualRateUpdated(ReputationPoints, OnlineCreditsFor<T>),
+		/// An emergency rotation has been requested \[network state\]
+		EmergencyRotationRequested(NetworkState),
 	}
 
 	#[pallet::error]
@@ -455,6 +474,20 @@ pub mod pallet {
 			reputation_points.clamp(floor, ceiling)
 		}
 
+		fn check_network_liveness() -> (Weight, NetworkState) {
+			let (mut online, mut offline) = (0u32, 0u32);
+			let mut weight = 0;
+			for (_, liveness) in ValidatorsLiveness::<T>::iter() {
+				weight += T::DbWeight::get().reads(1);
+				if liveness.is_online() {
+					online += 1
+				} else {
+					offline += 1
+				};
+			}
+
+			(weight, NetworkState { online, offline })
+		}
 		/// Check liveness of our expected list of validators at the current block.
 		/// For those that we are still *awaiting* on will be penalised reputation points and any online
 		/// credits earned will be set to zero.  In other words we expect continued liveness before we
