@@ -247,6 +247,7 @@ jobs:
     docker:
       - image: ghcr.io/chainflip-io/chainflip-eth-contracts/eth-brownie:latest
         auth: *dockerconfig
+      - image: nats
     steps:
       - attach_workspace:
           at: ./
@@ -266,7 +267,7 @@ jobs:
           name: Install poetry dependencies and deploy contracts
           command: |
             cd eth-contracts
-            $HOME/.poetry/bin/poetry --quiet install
+            $HOME/.poetry/bin/poetry install
             $HOME/.poetry/bin/poetry run brownie run deploy_and all_events --network hardhat
 
 #  run-integration-tests:
