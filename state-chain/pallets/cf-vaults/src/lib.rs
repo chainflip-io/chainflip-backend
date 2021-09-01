@@ -58,7 +58,7 @@ use sp_runtime::traits::One;
 
 mod ethereum;
 pub mod rotation;
-mod schnorr;
+pub mod schnorr;
 
 #[cfg(test)]
 mod mock;
@@ -69,9 +69,9 @@ mod tests;
 pub mod pallet {
 	use super::*;
 	use crate::ethereum::EthereumChain;
+	use crate::schnorr::SchnorrSignature;
 	use cf_traits::{Chainflip, Nonce, NonceIdentifier};
 	use frame_system::pallet_prelude::*;
-	use crate::schnorr::SchnorrSignature;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]

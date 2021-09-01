@@ -1,3 +1,4 @@
+use crate::schnorr::SchnorrSignature;
 use crate::ChainParams::Ethereum;
 use crate::{
 	ChainVault, Config, EthereumVault, Event, Pallet, RequestIndex, RequestResponse,
@@ -5,10 +6,9 @@ use crate::{
 };
 use cf_traits::{NonceIdentifier, NonceProvider, RotationError, VaultRotationHandler};
 use ethabi::{Bytes, Function, Param, ParamType, Token};
-use frame_support::sp_runtime::app_crypto::sp_core::H160;
 use frame_support::pallet_prelude::*;
+use frame_support::sp_runtime::app_crypto::sp_core::H160;
 use sp_std::prelude::*;
-use crate::schnorr::SchnorrSignature;
 
 pub struct EthereumChain<T: Config>(PhantomData<T>);
 

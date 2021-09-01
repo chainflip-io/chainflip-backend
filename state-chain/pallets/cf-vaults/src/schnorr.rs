@@ -1,8 +1,10 @@
-use codec::{Decode, Encode, EncodeLike, Input, Output};
+use codec::{Decode, Encode, Input, Output};
 use frame_support::RuntimeDebug;
 use libsecp256k1::Signature;
 
 /// Schnorr Signature type
+///
+/// Wrapper around an ECDSA signature.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug)]
 pub struct SchnorrSignature(Signature);
 
@@ -11,8 +13,6 @@ impl Encode for SchnorrSignature {
 		output.write(&self.0.serialize());
 	}
 }
-
-impl EncodeLike for SchnorrSignature {}
 
 impl Decode for SchnorrSignature {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {

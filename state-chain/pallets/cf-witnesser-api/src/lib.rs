@@ -23,7 +23,8 @@ pub mod pallet {
 	};
 	use pallet_cf_vaults::rotation::{KeygenResponse, RequestIndex, VaultRotationResponse};
 	use pallet_cf_vaults::{
-		Call as VaultsCall, Config as VaultsConfig, SchnorrSignature, ThresholdSignatureResponse,
+		schnorr::SchnorrSignature, Call as VaultsCall, Config as VaultsConfig,
+		ThresholdSignatureResponse,
 	};
 	use sp_core::U256;
 
