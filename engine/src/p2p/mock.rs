@@ -7,9 +7,7 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use super::{NetworkEventHandler, P2PMessage, P2PNetworkClient, ValidatorId};
 
-use crate::mq::mq_mock::MQMockClient;
-use crate::mq::Subject;
-use crate::{mq::IMQClient, p2p::StatusCode};
+use crate::p2p::StatusCode;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -59,6 +57,7 @@ impl P2PNetworkClient for P2PClientMock {
     }
 }
 
+// THIS NEEDS A DESCRIPTION
 pub struct MockChannelEventHandler(UnboundedSender<P2PMessage>);
 
 impl MockChannelEventHandler {
@@ -71,16 +70,8 @@ impl MockChannelEventHandler {
 #[async_trait]
 impl NetworkEventHandler<P2PClientMock> for MockChannelEventHandler {
     async fn handle_event(&self, event: P2PMessage) {
+        println!("MockChannelEventHandler sending event: {:?}", event);
         self.0.send(event).unwrap()
-    }
-}
-
-pub struct MockMqEventHandler(pub MQMockClient);
-
-#[async_trait]
-impl NetworkEventHandler<P2PClientMock> for MockMqEventHandler {
-    async fn handle_event(&self, event: P2PMessage) {
-        self.0.publish(Subject::P2PIncoming, &event).await.unwrap()
     }
 }
 

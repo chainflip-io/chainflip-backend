@@ -173,7 +173,7 @@ pub async fn start(
 mod tests {
     use substrate_subxt::ClientBuilder;
 
-    use crate::{eth, logging, settings};
+    use crate::{eth, logging, settings, signing::MultisigEvent};
     use sp_keyring::AccountKeyring;
 
     use super::*;
@@ -206,7 +206,6 @@ mod tests {
             signer,
             eth_broadcaster,
             multisig_instruction_sender,
-            multisig_event_receiver,
             &logger,
         )
         .await;

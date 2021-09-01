@@ -63,7 +63,6 @@ pub enum MultisigInstruction {
 
 #[derive(Serialize, Deserialize)]
 pub enum MultisigEvent {
-    ReadyToKeygen,
     MessageSigningResult(SigningOutcome),
     KeygenResult(KeygenOutcome),
 }
@@ -100,11 +99,6 @@ where
     );
 
     async move {
-        multisig_event_sender
-            .send(MultisigEvent::ReadyToKeygen)
-            .map_err(|_| "Receiver dropped")
-            .unwrap();
-
         // Stream outputs () approximately every ten seconds
         let mut cleanup_stream = Box::pin(futures::stream::unfold((), |()| async move {
             Some((tokio::time::sleep(Duration::from_secs(10)).await, ()))

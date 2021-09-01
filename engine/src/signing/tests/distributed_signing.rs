@@ -1,18 +1,19 @@
-use futures::StreamExt;
+use futures::{future::Join, Future, StreamExt};
 use itertools::Itertools;
 use log::*;
 use rand::{
     prelude::{IteratorRandom, StdRng},
     SeedableRng,
 };
-use tokio::time::Duration;
+use slog::o;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
-    logging,
+    logging::{self, COMPONENT_KEY},
     p2p::{
         self,
-        mock::{MockMqEventHandler, NetworkMock},
-        ValidatorId,
+        mock::{MockChannelEventHandler, NetworkMock},
+        P2PMessage, ValidatorId,
     },
     signing::db::KeyDBMock,
 };
@@ -37,66 +38,24 @@ lazy_static! {
 }
 
 async fn coordinate_signing(
-    mq_clients: Vec<impl IMQClient>,
+    mut nodes: Vec<FakeNode>,
     active_indices: &[usize],
+    logger: &slog::Logger,
 ) -> Result<(), ()> {
-    // get all the streams from the clients and subscribe them to MultisigEvent
-    let streams = mq_clients
-        .iter()
-        .map(|mc| {
-            let mc = mc.clone();
-            async move {
-                let stream = mc
-                    .subscribe::<MultisigEvent>(Subject::MultisigEvent)
-                    .await
-                    .expect("Could not subscribe to Subject::MultisigEvent");
-                stream
-            }
-        })
-        .collect_vec();
-
-    // join all the MultisigEvent streams together
-    let mut streams = futures::future::join_all(streams).await;
-
-    // wait until all of the clients have sent the MultisigEvent::ReadyToKeygen signal
-    let mut key_ready_count = 0;
-    loop {
-        for s in &mut streams {
-            // timeout must be more then 100ms because the client has a sleep(100ms) in its run function.
-            match tokio::time::timeout(Duration::from_millis(110), s.next()).await {
-                Ok(Some(Ok(MultisigEvent::ReadyToKeygen))) => {
-                    key_ready_count = key_ready_count + 1;
-                }
-                Err(_) => {
-                    info!("client timed out on getting to ReadyToKeygen.");
-                    return Err(());
-                }
-                _ => { /* ignore all other MultisigEvents while we wait */ }
-            }
-        }
-        if key_ready_count >= streams.len() {
-            info!("All clients ReadyToKeygen.");
-            break;
-        }
-    }
-
+    let logger = logger.new(o!(COMPONENT_KEY => "CoordinateSigning"));
     // get a keygen request ready with all of the VALIDATOR_IDS
     let key_id = KeyId(0);
-    let auction_info = KeygenInfo::new(key_id, VALIDATOR_IDS.clone());
+    let keygen_request_info = KeygenInfo::new(key_id, VALIDATOR_IDS.clone());
 
     // publish the MultisigInstruction::KeyGen to all the clients
-    for mc in &mq_clients {
-        trace!("published keygen instruction");
-        mc.publish(
-            Subject::MultisigInstruction,
-            &MultisigInstruction::KeyGen(auction_info.clone()),
-        )
-        .await
-        .expect("Could not publish");
+    for node in &nodes {
+        node.multisig_instruction_tx
+            .send(MultisigInstruction::KeyGen(keygen_request_info.clone()))
+            .map_err(|_| "Receiver dropped")
+            .unwrap();
     }
 
-    let data = MessageHash(super::fixtures::MESSAGE.clone());
-    let data2 = MessageHash(super::fixtures::MESSAGE2.clone());
+    slog::info!(logger, "Published key gen instruction to all the clients");
 
     // get a list of the signer_ids as a subset of VALIDATOR_IDS with an offset of 1
     let signer_ids = active_indices
@@ -109,51 +68,50 @@ async fn coordinate_signing(
 
     // Only some clients should receive the instruction to sign
     for i in active_indices {
-        let mc = &mq_clients[*i - 1];
+        let n = &nodes[*i - 1];
 
-        mc.publish(
-            Subject::MultisigInstruction,
-            &MultisigInstruction::Sign(data.clone(), sign_info.clone()),
-        )
-        .await
-        .expect("Could not publish MultisigInstruction::Sign message 1");
+        n.multisig_instruction_tx
+            .send(MultisigInstruction::Sign(
+                MessageHash(super::fixtures::MESSAGE.clone()),
+                sign_info.clone(),
+            ))
+            .map_err(|_| "Receiver dropped")
+            .unwrap();
 
-        mc.publish(
-            Subject::MultisigInstruction,
-            &MultisigInstruction::Sign(data2.clone(), sign_info.clone()),
-        )
-        .await
-        .expect("Could not publish MultisigInstruction::Sign message2");
+        n.multisig_instruction_tx
+            .send(MultisigInstruction::Sign(
+                MessageHash(super::fixtures::MESSAGE2.clone()),
+                sign_info.clone(),
+            ))
+            .map_err(|_| "Receiver dropped")
+            .unwrap();
     }
+
+    slog::info!(logger, "Published two signing messages to all clients");
 
     // collect all of the signed messages
     let mut signed_count = 0;
     loop {
+        // go through each node and get the multisig events from the receiver
         for i in active_indices {
-            let stream = &mut streams[*i - 1];
-            match tokio::time::timeout(Duration::from_millis(200 * N_PARTIES as u64), stream.next())
-                .await
-            {
-                Ok(Some(Ok(MultisigEvent::MessageSigningResult(SigningOutcome {
-                    result: Ok(_),
-                    ..
-                })))) => {
-                    info!("Message is signed from {}", i);
+            let stream = &mut nodes[*i - 1].multisig_event_rx;
+
+            match stream.recv().await {
+                Some(MultisigEvent::MessageSigningResult(SigningOutcome {
+                    result: Ok(_), ..
+                })) => {
+                    slog::info!(logger, "Message is signed from {}", i);
                     signed_count = signed_count + 1;
                 }
-                Ok(Some(Ok(MultisigEvent::MessageSigningResult(_)))) => {
+                Some(MultisigEvent::MessageSigningResult(_)) => {
+                    slog::error!(logger, "Messaging signing result failed :(");
                     return Err(());
                 }
-                Ok(None) => info!("Unexpected error: client stream returned early: {}", i),
-                Err(_) => {
-                    info!(
-                        "client {} timed out. {}/{} messages signed",
-                        i,
-                        signed_count,
-                        active_indices.len() * 2
-                    );
-                    return Err(());
-                }
+                None => slog::error!(
+                    logger,
+                    "Unexpected error: client stream returned early: {}",
+                    i
+                ),
                 _ => { /* Ignore all other messages, just wait for the MessageSigningResult or timeout*/
                 }
             };
@@ -162,14 +120,25 @@ async fn coordinate_signing(
         if signed_count >= active_indices.len() * 2 {
             break;
         }
+        slog::info!(logger, "Not all messages signed, go around again");
     }
-    info!("All messages have been signed");
+    slog::info!(logger, "All messages have been signed");
     return Ok(());
 }
 
+// Represent the internals of a nodes channels here. The message queue sorta kinda did this
+// because it sat between the components in a much more "real" / separate way
+#[derive(Debug)]
+pub struct FakeNode {
+    // we place all the send / receive pairs in here. Then we can use this to pass messages
+    // around the nodes and network. By creating a Vec of these node channel structs
+    multisig_instruction_tx: UnboundedSender<MultisigInstruction>,
+    multisig_event_rx: UnboundedReceiver<MultisigEvent>,
+}
+
 #[tokio::test]
-#[ignore = "Reinstate in: https://github.com/chainflip-io/chainflip-backend/issues/481"]
 async fn distributed_signing() {
+    let logger = logging::test_utils::create_test_logger();
     // calculate how many parties will be in the signing (must be exact)
     // TODO: use the threshold_from_share_count function in keygen manager here.
     let doubled = N_PARTIES * 2;
@@ -187,8 +156,9 @@ async fn distributed_signing() {
     let mut active_indices = (1..=N_PARTIES).into_iter().choose_multiple(&mut rng, t + 1);
     active_indices.sort_unstable();
 
-    info!(
-        "{} Active parties: {:?}",
+    slog::info!(
+        logger,
+        "There are {} active parties: {:?}",
         active_indices.len(),
         active_indices
     );
@@ -198,84 +168,75 @@ async fn distributed_signing() {
     // Create a fake network
     let network = NetworkMock::new();
 
-    let logger = logging::test_utils::create_test_logger();
-
-    // Start message queues for each party
-    let mc_futs = (1..=N_PARTIES)
-        .map(|i| {
-            let p2p_client = network.new_client(VALIDATOR_IDS[i - 1].clone());
-            let logger = logger.clone();
-            async move {
-                let mq = MQMock::new();
-
-                let mq_client = mq.get_client();
-
-                let (shutdown_conductor_tx, shutdown_conductor_rx) =
-                    tokio::sync::oneshot::channel::<()>();
-
-                let conductor_fut = p2p::conductor::start_with_handler(
-                    MockMqEventHandler(mq_client.clone()),
-                    p2p_client,
-                    mq_client.clone(),
-                    shutdown_conductor_rx,
-                    &logger,
-                );
-
-                let db = KeyDBMock::new();
-
-                let (_multisig_instruction_sender, multisig_instruction_receiver) =
-                    tokio::sync::mpsc::unbounded_channel();
-                let (multisig_event_sender, _multisig_event_receiver) =
-                    tokio::sync::mpsc::unbounded_channel();
-                let (shutdown_client_tx, shutdown_client_rx) =
-                    tokio::sync::oneshot::channel::<()>();
-                let client_fut = client::start(
-                    VALIDATOR_IDS[i - 1].clone(),
-                    db,
-                    mq_client,
-                    multisig_instruction_receiver,
-                    multisig_event_sender,
-                    shutdown_client_rx,
-                    &logger,
-                );
-
-                let mc = mq.get_client();
-
-                (
-                    mc,
-                    futures::future::join(conductor_fut, client_fut),
-                    shutdown_client_tx,
-                    shutdown_conductor_tx,
-                )
-            }
-        })
-        .collect_vec();
-
-    let results = futures::future::join_all(mc_futs).await;
-
-    let mut futs = vec![];
-    let mut mc_clients = vec![];
+    // Start the futures for each node
+    let mut node_client_and_conductor_futs = vec![];
     let mut shutdown_txs = vec![];
+    let mut fake_nodes = vec![];
+    for i in 1..=N_PARTIES {
+        let p2p_client = network.new_client(VALIDATOR_IDS[i - 1].clone());
+        let logger = logger.clone();
 
-    for (mc, fut, shut_client_tx, shut_conduct_tx) in results {
-        futs.push(fut);
-        mc_clients.push(mc);
-        shutdown_txs.push(shut_client_tx);
-        shutdown_txs.push(shut_conduct_tx);
+        let db = KeyDBMock::new();
+
+        let (multisig_instruction_tx, multisig_instruction_rx) =
+            tokio::sync::mpsc::unbounded_channel();
+        let (multisig_event_tx, multisig_event_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (p2p_message_command_tx, p2p_message_command_rx) =
+            tokio::sync::mpsc::unbounded_channel();
+
+        let (mock_channel_event_handler, mock_channel_event_handler_receiver) =
+            MockChannelEventHandler::new();
+        let (shutdown_client_tx, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
+        let client_fut = client::start(
+            VALIDATOR_IDS[i - 1].clone(),
+            db,
+            multisig_instruction_rx,
+            multisig_event_tx,
+            mock_channel_event_handler_receiver,
+            p2p_message_command_tx,
+            shutdown_client_rx,
+            &logger,
+        );
+
+        let (shutdown_conductor_tx, shutdown_conductor_rx) = tokio::sync::oneshot::channel::<()>();
+
+        let conductor_fut = p2p::conductor::start_with_handler(
+            mock_channel_event_handler,
+            p2p_client,
+            p2p_message_command_rx,
+            shutdown_conductor_rx,
+            &logger,
+        );
+
+        node_client_and_conductor_futs.push(futures::future::join(conductor_fut, client_fut));
+        shutdown_txs.push(shutdown_conductor_tx);
+        shutdown_txs.push(shutdown_client_tx);
+
+        // contain the channels
+        fake_nodes.push(FakeNode {
+            multisig_instruction_tx,
+            multisig_event_rx,
+        })
     }
+
+    // put the fake nodes into coordinate signing
 
     let test_fut = async move {
         // run the signing test and get the result
-        let res = coordinate_signing(mc_clients, &active_indices).await;
+        let res = coordinate_signing(fake_nodes, &active_indices, &logger).await;
 
         assert_eq!(res, Ok(()), "One of the clients failed to sign the message");
 
         info!("Graceful shutdown of distributed_signing test");
         // send a message to all the clients and the conductors to shut down
+
         for tx in shutdown_txs {
             tx.send(()).unwrap();
         }
     };
 
-    futures::join!(futures::future::join_all(futs), test_fut);
+    futures::join!(
+        futures::future::join_all(node_client_and_conductor_futs),
+        test_fut
+    );
 }
