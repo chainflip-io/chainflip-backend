@@ -49,7 +49,7 @@ chainflip-docker-base: &chainflip-docker-base
         registry: ghcr.io
         extra_build_args: $BUILD_ARGS
         dockerfile: $DOCKERFILE
-        cache_from: ghcr.io/$IMAGE:latest
+        cache_from: ghcr.io/$IMAGE:unstable
         tag: $TAG
     - docker/push:
         registry: ghcr.io
