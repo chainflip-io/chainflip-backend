@@ -135,7 +135,7 @@ workflows:
           <<: *only_main_branches
 
   chainflip-integration-tests:
-    <<: *nightly
+    #<<: *nightly
     jobs:
       - build-rust-poetry:
           context:
