@@ -3,6 +3,7 @@ use codec::{Decode, Encode};
 use frame_support::RuntimeDebug;
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
+use crate::SchnorrSignature;
 
 /// Request index type
 pub type RequestIndex = u64;
@@ -60,7 +61,7 @@ pub enum ChainParams {
 	///
 	/// The value is the call data encoded for the final transaction
 	/// to request the key rotation via `setAggKeyWithAggKey`
-	Ethereum(Vec<u8>),
+	Ethereum(SchnorrSignature),
 	/// This is a placeholder, not to be used in production
 	Other(Vec<u8>),
 }

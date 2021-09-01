@@ -34,7 +34,7 @@ mod test {
 				mock::Event::pallet_cf_vaults(crate::Event::KeygenRequest(
 					VaultsPallet::current_request(),
 					KeygenRequest {
-						chain: Ethereum(vec![]),
+						chain: Ethereum(SchnorrSignature::default()),
 						validator_candidates: vec![ALICE, BOB, CHARLIE],
 					}
 				))
@@ -260,7 +260,7 @@ mod test {
 			assert_ok!(VaultsPallet::threshold_signature_response(
 				Origin::root(),
 				1,
-				ThresholdSignatureResponse::Success(vec![])
+				ThresholdSignatureResponse::Success(SchnorrSignature::default())
 			));
 		});
 	}

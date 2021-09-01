@@ -201,7 +201,7 @@ pub mod pallet {
 		pub fn threshold_signature_response(
 			origin: OriginFor<T>,
 			request_id: RequestIndex,
-			response: ThresholdSignatureResponse<T::ValidatorId, Vec<u8>>,
+			response: ThresholdSignatureResponse<T::ValidatorId, SchnorrSignature>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			match EthereumChain::<T>::handle_response(request_id, response) {
@@ -463,6 +463,13 @@ impl<T: Config>
 	}
 }
 
+// Ethereum Chain specialisation
+//
+
+/// Schnorr Signature type
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+pub struct SchnorrSignature(Vec<u8>);
+
 pub struct EthereumChain<T: Config>(PhantomData<T>);
 
 impl<T: Config> ChainVault for EthereumChain<T> {
@@ -473,7 +480,7 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 
 	/// Parameters required when creating key generation requests
 	fn chain_params() -> ChainParams {
-		ChainParams::Ethereum(vec![])
+		ChainParams::Ethereum(SchnorrSignature::default())
 	}
 
 	/// The initial phase has completed with success and we are notified of this from `Vaults`.
@@ -517,7 +524,7 @@ impl<T: Config>
 	RequestResponse<
 		RequestIndex,
 		ThresholdSignatureRequest<T::PublicKey, T::ValidatorId>,
-		ThresholdSignatureResponse<T::ValidatorId, Vec<u8>>,
+		ThresholdSignatureResponse<T::ValidatorId, SchnorrSignature>,
 		RotationError<T::ValidatorId>,
 	> for EthereumChain<T>
 {
@@ -533,7 +540,7 @@ impl<T: Config>
 	/// Try to handle the response and pass this onto `Vaults` to complete the vault rotation
 	fn handle_response(
 		index: RequestIndex,
-		response: ThresholdSignatureResponse<T::ValidatorId, Vec<u8>>,
+		response: ThresholdSignatureResponse<T::ValidatorId, SchnorrSignature>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		match response {
 			ThresholdSignatureResponse::Success(signature) => {
