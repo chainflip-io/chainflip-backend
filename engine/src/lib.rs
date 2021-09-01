@@ -1,6 +1,5 @@
 pub mod health;
 pub mod heartbeat;
-pub mod mq;
 pub mod p2p;
 pub mod settings;
 pub mod signing;

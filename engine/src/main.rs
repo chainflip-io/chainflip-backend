@@ -97,7 +97,6 @@ async fn main() {
         signing::start(
             ValidatorId(key_pair.public().0),
             db,
-            mq_client.clone(),
             multisig_instruction_receiver,
             multisig_event_sender,
             shutdown_client_rx,

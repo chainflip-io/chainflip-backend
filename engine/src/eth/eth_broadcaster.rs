@@ -1,11 +1,6 @@
 use std::{path::Path, str::FromStr};
 
-use crate::{
-    logging::COMPONENT_KEY,
-    mq::{IMQClient, Subject},
-    settings,
-    types::chain::Chain,
-};
+use crate::{logging::COMPONENT_KEY, settings, types::chain::Chain};
 
 use anyhow::Result;
 use secp256k1::SecretKey;

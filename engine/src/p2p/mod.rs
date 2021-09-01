@@ -9,8 +9,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::stream::BoxStream;
 use serde::{Deserialize, Serialize};
-
-use crate::mq::{IMQClient, Subject};
+use tokio::sync::mpsc::UnboundedSender;
 
 type StatusCode = u64;
 
@@ -34,30 +33,24 @@ pub trait NetworkEventHandler<C: P2PNetworkClient + Send> {
     async fn handle_event(&self, event: C::NetworkEvent);
 }
 
-struct P2PRpcEventHandler<MQ> {
-    mq: MQ,
+struct P2PRpcEventHandler {
+    p2p_message_sender: UnboundedSender<P2PMessage>,
     logger: slog::Logger,
 }
 
 #[async_trait]
-impl<MQ> NetworkEventHandler<P2PRpcClient> for P2PRpcEventHandler<MQ>
-where
-    MQ: IMQClient + Send + Sync,
-{
+impl NetworkEventHandler<P2PRpcClient> for P2PRpcEventHandler {
     async fn handle_event(&self, network_event: Result<P2PEvent>) {
         match network_event {
             Ok(event) => match event {
                 P2PEvent::MessageReceived(sender, message) => {
-                    self.mq
-                        .publish::<P2PMessage>(
-                            Subject::P2PIncoming,
-                            &P2PMessage {
-                                sender_id: ValidatorId(sender.0),
-                                data: message.0,
-                            },
-                        )
-                        .await
-                        .expect("Unable to publish to message queue.");
+                    self.p2p_message_sender
+                        .send(P2PMessage {
+                            sender_id: ValidatorId(sender.0),
+                            data: message.0,
+                        })
+                        .map_err(|_| "Receiver dropped")
+                        .unwrap();
                 }
                 P2PEvent::ValidatorConnected(id) => {
                     slog::debug!(self.logger, "Validator '{}' has joined the network.", id);

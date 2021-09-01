@@ -1,24 +1,21 @@
 use slog::o;
+use tokio::sync::mpsc::UnboundedReceiver;
 use tokio_stream::StreamExt;
 
 use crate::{
     logging::COMPONENT_KEY,
-    mq::{IMQClient, Subject},
     p2p::{P2PRpcClient, P2PRpcEventHandler},
 };
 
 use super::{NetworkEventHandler, P2PMessageCommand, P2PNetworkClient};
 
-/// Drives P2P events between MQ and P2P interface
-pub fn start<MQ>(
+/// Drives P2P events between channels and P2P interface
+// TODO: Can this be refactored now that we use channels
+pub fn start(
     p2p: P2PRpcClient,
-    mq: MQ,
     shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     logger: &slog::Logger,
-) -> impl futures::Future
-where
-    MQ: IMQClient + Clone + Send + Sync,
-{
+) -> impl futures::Future {
     start_with_handler(
         P2PRpcEventHandler {
             mq: mq.clone(),
@@ -32,15 +29,14 @@ where
 }
 
 /// Start with a custom network event handler. Useful for mocks / testing.
-pub(crate) fn start_with_handler<MQ, P2P, H>(
+pub(crate) fn start_with_handler<P2P, H>(
     network_event_handler: H,
     p2p: P2P,
-    mq: MQ,
+    p2p_message_command_receiver: UnboundedReceiver<P2PMessageCommand>,
     mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     logger: &slog::Logger,
 ) -> impl futures::Future
 where
-    MQ: IMQClient + Send,
     P2P: P2PNetworkClient + Send,
     H: NetworkEventHandler<P2P>,
 {
@@ -49,16 +45,11 @@ where
     async move {
         slog::info!(logger, "Starting");
 
-        let mut p2p_command_stream = mq
-            .subscribe::<P2PMessageCommand>(Subject::P2POutgoing)
-            .await
-            .expect("Should be able to subscribe to Subject::P2POutgoing");
-
         let mut p2p_event_stream = p2p.take_stream().await.expect("Should have p2p stream");
 
         loop {
             tokio::select! {
-                Some(outgoing) = p2p_command_stream.next() => {
+                Some(outgoing) = p2p_message_command_receiver.recv() => {
                     if let Ok(P2PMessageCommand { destination, data }) = outgoing {
                         p2p.send(&destination, &data).await.expect("Could not send outgoing P2PMessageCommand");
                     }

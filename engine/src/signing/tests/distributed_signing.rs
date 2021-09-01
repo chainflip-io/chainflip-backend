@@ -9,7 +9,6 @@ use tokio::time::Duration;
 
 use crate::{
     logging,
-    mq::{mq_mock::MQMock, IMQClient, Subject},
     p2p::{
         self,
         mock::{MockMqEventHandler, NetworkMock},
