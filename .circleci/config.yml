@@ -332,9 +332,9 @@ jobs:
             helm install bashful chainflip/chainflip-validator
             --namespace default
             --set state-chain-node.nodeType=validator
-            --set state-chain-node.image.tag="latest"
+            --set state-chain-node.image.tag="<<pipeline.git.revision>>"
             --set "state-chain-node.stateChainNode.extraArgs={--rpc-external,--rpc-cors,all}"
-            --set chainflip-engine.image.tag="latest"
+            --set chainflip-engine.image.tag="<<pipeline.git.revision>>"
             --wait
             --wait-for-jobs
       - run:
