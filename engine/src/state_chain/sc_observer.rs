@@ -173,7 +173,7 @@ pub async fn start(
 mod tests {
     use substrate_subxt::ClientBuilder;
 
-    use crate::{eth, logging, settings, signing::MultisigEvent};
+    use crate::{eth, logging, settings};
     use sp_keyring::AccountKeyring;
 
     use super::*;
@@ -186,10 +186,8 @@ mod tests {
         let alice = AccountKeyring::Alice.pair();
         let pair_signer = PairSigner::new(alice);
         let signer = Arc::new(Mutex::new(pair_signer));
-        let (multisig_instruction_sender, multisig_instruction_receiver) =
+        let (multisig_instruction_sender, _multisig_instruction_receiver) =
             tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
-        let (multisig_event_sender, multisig_event_receiver) =
-            tokio::sync::mpsc::unbounded_channel::<MultisigEvent>();
 
         let web3 = eth::new_synced_web3_client(&settings, &logger)
             .await

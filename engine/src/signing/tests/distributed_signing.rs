@@ -1,4 +1,3 @@
-use futures::{future::Join, Future, StreamExt};
 use itertools::Itertools;
 use log::*;
 use rand::{
@@ -13,7 +12,7 @@ use crate::{
     p2p::{
         self,
         mock::{MockChannelEventHandler, NetworkMock},
-        P2PMessage, ValidatorId,
+        ValidatorId,
     },
     signing::db::KeyDBMock,
 };
@@ -26,6 +25,13 @@ use crate::signing::{
     },
     MessageHash,
 };
+
+// Store channels used by a node to communicate internally (*not* to peers)
+#[derive(Debug)]
+pub struct FakeNode {
+    multisig_instruction_tx: UnboundedSender<MultisigInstruction>,
+    multisig_event_rx: UnboundedReceiver<MultisigEvent>,
+}
 
 /// Number of parties participating in keygen
 const N_PARTIES: usize = 2;
@@ -94,9 +100,9 @@ async fn coordinate_signing(
     loop {
         // go through each node and get the multisig events from the receiver
         for i in active_indices {
-            let stream = &mut nodes[*i - 1].multisig_event_rx;
+            let multisig_events = &mut nodes[*i - 1].multisig_event_rx;
 
-            match stream.recv().await {
+            match multisig_events.recv().await {
                 Some(MultisigEvent::MessageSigningResult(SigningOutcome {
                     result: Ok(_), ..
                 })) => {
@@ -124,16 +130,6 @@ async fn coordinate_signing(
     }
     slog::info!(logger, "All messages have been signed");
     return Ok(());
-}
-
-// Represent the internals of a nodes channels here. The message queue sorta kinda did this
-// because it sat between the components in a much more "real" / separate way
-#[derive(Debug)]
-pub struct FakeNode {
-    // we place all the send / receive pairs in here. Then we can use this to pass messages
-    // around the nodes and network. By creating a Vec of these node channel structs
-    multisig_instruction_tx: UnboundedSender<MultisigInstruction>,
-    multisig_event_rx: UnboundedReceiver<MultisigEvent>,
 }
 
 #[tokio::test]
@@ -165,7 +161,6 @@ async fn distributed_signing() {
 
     assert!(active_indices.len() <= N_PARTIES);
 
-    // Create a fake network
     let network = NetworkMock::new();
 
     // Start the futures for each node
@@ -212,23 +207,20 @@ async fn distributed_signing() {
         shutdown_txs.push(shutdown_conductor_tx);
         shutdown_txs.push(shutdown_client_tx);
 
-        // contain the channels
         fake_nodes.push(FakeNode {
             multisig_instruction_tx,
             multisig_event_rx,
         })
     }
 
-    // put the fake nodes into coordinate signing
-
     let test_fut = async move {
-        // run the signing test and get the result
-        let res = coordinate_signing(fake_nodes, &active_indices, &logger).await;
-
-        assert_eq!(res, Ok(()), "One of the clients failed to sign the message");
+        assert_eq!(
+            coordinate_signing(fake_nodes, &active_indices, &logger).await,
+            Ok(()),
+            "One of the clients failed to sign the message"
+        );
 
         info!("Graceful shutdown of distributed_signing test");
-        // send a message to all the clients and the conductors to shut down
 
         for tx in shutdown_txs {
             tx.send(()).unwrap();

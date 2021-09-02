@@ -13,6 +13,8 @@ use tokio::sync::mpsc::UnboundedSender;
 
 type StatusCode = u64;
 
+/// Trait for handling messages to/from the P2P layer
+/// i.e. messages that come from / go to *other* nodes in the network
 #[async_trait]
 pub trait P2PNetworkClient {
     type NetworkEvent;

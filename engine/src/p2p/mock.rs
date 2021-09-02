@@ -57,7 +57,6 @@ impl P2PNetworkClient for P2PClientMock {
     }
 }
 
-// THIS NEEDS A DESCRIPTION
 pub struct MockChannelEventHandler(UnboundedSender<P2PMessage>);
 
 impl MockChannelEventHandler {
@@ -70,7 +69,6 @@ impl MockChannelEventHandler {
 #[async_trait]
 impl NetworkEventHandler<P2PClientMock> for MockChannelEventHandler {
     async fn handle_event(&self, event: P2PMessage) {
-        println!("MockChannelEventHandler sending event: {:?}", event);
         self.0.send(event).unwrap()
     }
 }

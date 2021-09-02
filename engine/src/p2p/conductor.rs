@@ -10,7 +10,7 @@ use crate::{
 use super::{NetworkEventHandler, P2PMessage, P2PMessageCommand, P2PNetworkClient};
 
 /// Drives P2P events between channels and P2P interface
-// TODO: Can this be refactored now that we use channels
+// TODO: Can we just remove the conductor now that we have channels?
 pub fn start(
     p2p: P2PRpcClient,
     p2p_message_sender: UnboundedSender<P2PMessage>,
