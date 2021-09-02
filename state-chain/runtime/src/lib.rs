@@ -334,6 +334,7 @@ impl pallet_cf_flip::Config for Runtime {
 	type Event = Event;
 	type Balance = FlipBalance;
 	type ExistentialDeposit = ExistentialDeposit;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
 impl pallet_cf_witnesser::Config for Runtime {

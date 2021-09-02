@@ -69,6 +69,7 @@ impl pallet_cf_flip::Config for Test {
 	type Event = Event;
 	type Balance = u128;
 	type ExistentialDeposit = ExistentialDeposit;
+	type EnsureGovernance = MockEnsureGovernance;
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);

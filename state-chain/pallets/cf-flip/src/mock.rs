@@ -1,6 +1,11 @@
 use crate::{self as pallet_cf_flip, BurnFlipAccount};
 use cf_traits::StakeTransfer;
-use frame_support::{parameter_types, traits::HandleLifetime, weights::IdentityFee};
+use frame_support::{
+	parameter_types,
+	traits::{EnsureOrigin, HandleLifetime},
+	weights::IdentityFee,
+};
+use frame_system::{ensure_root, RawOrigin};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -61,10 +66,22 @@ parameter_types! {
 	pub const ExistentialDeposit: FlipBalance = 10;
 }
 
+pub struct MockEnsureGovernance;
+
+impl EnsureOrigin<Origin> for MockEnsureGovernance {
+	type Success = ();
+
+	fn try_origin(o: Origin) -> Result<Self::Success, Origin> {
+		// ensure_root(o).or(Err(RawOrigin::None.into()))
+		Ok(().into())
+	}
+}
+
 impl pallet_cf_flip::Config for Test {
 	type Event = Event;
 	type Balance = FlipBalance;
 	type ExistentialDeposit = ExistentialDeposit;
+	type EnsureGovernance = MockEnsureGovernance;
 }
 
 parameter_types! {

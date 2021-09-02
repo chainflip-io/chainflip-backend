@@ -59,7 +59,10 @@ use frame_support::{
 
 use codec::{Decode, Encode};
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, Zero},
+	traits::{
+		AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, UniqueSaturatedFrom,
+		UniqueSaturatedInto, Zero,
+	},
 	DispatchError, RuntimeDebug,
 };
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
@@ -80,6 +83,9 @@ pub mod pallet {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
+		/// Implementation of EnsureOrigin trait for governance
+		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+
 		/// The balance of an account.
 		type Balance: Parameter
 			+ Member
@@ -88,6 +94,7 @@ pub mod pallet {
 			+ Copy
 			+ MaybeSerializeDeserialize
 			+ Debug;
+		// + UniqueSaturatedFrom<Self::BlockNumber>;
 
 		/// The minimum amount required to keep an account open.
 		#[pallet::constant]
@@ -113,6 +120,11 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn total_issuance)]
 	pub type TotalIssuance<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
+
+	/// The slashing rate
+	#[pallet::storage]
+	#[pallet::getter(fn slashing_rate)]
+	pub type SlashingRate<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	/// The number of tokens currently off-chain.
 	#[pallet::storage]
@@ -148,7 +160,17 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		// No external calls for this pallet.
+		#[pallet::weight(10_000)]
+		pub fn set_slashing_rate(
+			origin: OriginFor<T>,
+			slashing_rate: u32,
+		) -> DispatchResultWithPostInfo {
+			// Ensure the extrinsic was executed by the governance
+			T::EnsureGovernance::ensure_origin(origin)?;
+			// Set the slashing rate
+			<SlashingRate<T>>::set(slashing_rate);
+			Ok(().into())
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -443,10 +465,33 @@ impl<T: Config> Slashing for FlipSlasher<T> {
 	// ValidatorId = AccountId ? :/
 	type ValidatorId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
+	type Balance = T::Balance;
 
-	fn slash(_validator_id: &Self::ValidatorId, _blocks_offline: &Self::BlockNumber) -> Weight {
-		// TODO: implement the slashing logic here
-		// TODO: Calc a proper weight here
+	fn slash(validator_id: &Self::ValidatorId, blocks_offline: &Self::BlockNumber) -> Weight {
+		// Get the MBA aka the bond
+		let bond = Account::<T>::get(validator_id).validator_bond;
+		// Get the slashing rate
+		let slashing_rate: Self::Balance = Self::Balance::from(SlashingRate::<T>::get());
+		// Get blocks_offline as Balance
+		let blocks_off_as_int: u32 =
+			UniqueSaturatedInto::unique_saturated_into(blocks_offline.clone());
+		let blocks_as_balance: Self::Balance =
+			UniqueSaturatedInto::unique_saturated_into(blocks_off_as_int);
+
+		// Clojure to cast a u32 to a Balance type
+		let to_balance =
+			|n: u32| -> Self::Balance { UniqueSaturatedInto::unique_saturated_into(n) };
+
+		// Number of blocks
+		let number_of_blocks = to_balance(14400);
+
+		// n % of MBA
+		let slash_base = (bond / to_balance(100)) * slashing_rate;
+
+		// Burn per block
+		let burn_per_block = slash_base / number_of_blocks;
+		let total_burn = burn_per_block * blocks_as_balance;
+		Pallet::<T>::settle(validator_id, Pallet::<T>::burn(total_burn).into());
 		0
 	}
 }

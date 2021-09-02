@@ -10,6 +10,7 @@ use frame_support::{
 	traits::{Imbalance, SignedImbalance},
 	Parameter,
 };
+use sp_runtime::traits::UniqueSaturatedFrom;
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
 
@@ -260,6 +261,8 @@ pub trait Slashing {
 	type ValidatorId;
 	/// Block number
 	type BlockNumber;
+	// type Balance: UniqueSaturatedFrom<Self::BlockNumber>;
+	type Balance;
 	/// Slash this validator based on the number of blocks offline
 	fn slash(validator_id: &Self::ValidatorId, blocks_offline: &Self::BlockNumber) -> Weight;
 }
