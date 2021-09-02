@@ -237,7 +237,7 @@ jobs:
       - checkout
       - run: sccache -s
       - run: |
-          cargo build --locked --release
+          cargo check --locked --release
           sccache -s
 
   test-validator-package:
