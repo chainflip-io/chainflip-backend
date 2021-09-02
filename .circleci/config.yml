@@ -22,8 +22,8 @@ only_epic_branches: &only_epic_branches
   filters:
     branches:
       only:
-        - update/epic-ci
-
+        # Uncomment and add your current branch when testing
+        # - update/epic-ci
         - /epic\/.*/
         - /release\/.*/
 
@@ -114,45 +114,45 @@ workflows:
           <<: *ignore_main_branches
   chainflip-backend-release:
     jobs:
-      #      - build-rust-base:
-      #          context:
-      #            - ghcr-credentials
-      #          <<: *only_main_branches
-      #      - fmt-validator-package:
-      #          requires:
-      #            - build-rust-base
-      #          context:
-      #            - ghcr-credentials
-      #          <<: *only_main_branches
-      #      - compile-validator-package:
-      #          requires:
-      #            - fmt-validator-package
-      #          context:
-      #            - ghcr-credentials
-      #            - discord-webhooks
-      #          <<: *only_main_branches
-      #      - test-validator-package:
-      #          requires:
-      #            - compile-validator-package
-      #          context:
-      #            - ghcr-credentials
-      #          <<: *only_main_branches
-      #      - build-chainflip-engine:
-      #          requires:
-      #            - test-validator-package
-      #          context:
-      #            - ghcr-credentials
-      #          <<: *only_main_branches
-      #      - build-state-chain-node:
-      #          requires:
-      #            - test-validator-package
-      #          context:
-      #            - ghcr-credentials
-      #          <<: *only_main_branches
+      - build-rust-base:
+          context:
+            - ghcr-credentials
+          <<: *only_main_branches
+      - fmt-validator-package:
+          requires:
+            - build-rust-base
+          context:
+            - ghcr-credentials
+          <<: *only_main_branches
+      - compile-validator-package:
+          requires:
+            - fmt-validator-package
+          context:
+            - ghcr-credentials
+            - discord-webhooks
+          <<: *only_main_branches
+      - test-validator-package:
+          requires:
+            - compile-validator-package
+          context:
+            - ghcr-credentials
+          <<: *only_main_branches
+      - build-chainflip-engine:
+          requires:
+            - test-validator-package
+          context:
+            - ghcr-credentials
+          <<: *only_main_branches
+      - build-state-chain-node:
+          requires:
+            - test-validator-package
+          context:
+            - ghcr-credentials
+          <<: *only_main_branches
       - test-single-node:
-          #          requires:
-          #            - build-chainflip-engine
-          #            - build-state-chain-node
+          requires:
+            - build-chainflip-engine
+            - build-state-chain-node
           context:
             - ghcr-credentials
             - do-credentials
@@ -336,4 +336,5 @@ jobs:
           command: helm test bashful -n default
       - run:
           name: Destroy single node
+          when: always
           command: helm uninstall bashful -n default
