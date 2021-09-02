@@ -8,11 +8,12 @@ use sp_std::prelude::*;
 pub type RequestIndex = u64;
 
 /// Schnorr Signature type
-///
-/// Wrapper around an ECDSA signature.
 #[derive(PartialEq, Decode, Encode, Eq, Clone, RuntimeDebug)]
 pub struct SchnorrSignature {
+	/// Scalar component
+	// s: secp256k1::SecretKey,
 	pub s: [u8; 32],
+	/// Public key hashed and truncated to an ethereum address
 	pub r: [u8; 20],
 }
 
@@ -64,7 +65,6 @@ pub trait ChainHandler {
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum ChainType {
 	/// Ethereum type blockchain
-	///
 	Ethereum,
 }
 

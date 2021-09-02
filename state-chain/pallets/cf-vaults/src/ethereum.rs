@@ -29,7 +29,6 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 		validators: Vec<Self::ValidatorId>,
 	) -> Result<(), Self::Error> {
 		// Create payload for signature here
-		// function setAggKeyWithAggKey(SigData calldata sigData, Key calldata newKey)
 		match Self::encode_set_agg_key_with_agg_key(new_public_key.clone()) {
 			Ok(payload) => {
 				// Emit the event

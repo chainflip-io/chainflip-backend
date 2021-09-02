@@ -463,6 +463,3 @@ impl<T: Config>
 		Ok(())
 	}
 }
-
-// Ethereum Chain specialisation
-//
