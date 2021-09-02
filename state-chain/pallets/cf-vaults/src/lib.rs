@@ -49,24 +49,26 @@ use cf_traits::{
 	Nonce, NonceIdentifier, NonceProvider, RotationError, VaultRotation, VaultRotationHandler,
 };
 pub use pallet::*;
-use sp_core::H160;
 
-use crate::rotation::ChainParams::Ethereum;
 pub use crate::rotation::*;
 // we need these types exposed so subxt can use the type size
+use crate::ethereum::EthereumChain;
 pub use crate::rotation::{KeygenRequest, VaultRotationRequest};
-use ethabi::{Bytes, Function, Param, ParamType, Token};
 use sp_runtime::traits::One;
+
+mod ethereum;
+pub mod rotation;
 
 #[cfg(test)]
 mod mock;
-pub mod rotation;
 #[cfg(test)]
 mod tests;
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use crate::ethereum::EthereumChain;
+	use crate::rotation::SchnorrSignature;
 	use cf_traits::{Chainflip, Nonce, NonceIdentifier};
 	use frame_system::pallet_prelude::*;
 
@@ -201,9 +203,10 @@ pub mod pallet {
 		pub fn threshold_signature_response(
 			origin: OriginFor<T>,
 			request_id: RequestIndex,
-			response: ThresholdSignatureResponse<T::ValidatorId>,
+			response: ThresholdSignatureResponse<T::ValidatorId, SchnorrSignature>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
+			// We just have the Ethereum chain to handle this Schnorr signature
 			match EthereumChain::<T>::handle_response(request_id, response) {
 				Ok(_) => Ok(().into()),
 				Err(_) => Err(Error::<T>::SignatureResponseFailed.into()),
@@ -297,7 +300,7 @@ impl<T: Config> VaultRotation for Pallet<T> {
 		ensure!(!candidates.is_empty(), RotationError::EmptyValidatorSet);
 		// Create a KeyGenRequest for Ethereum
 		let keygen_request = KeygenRequest {
-			chain: EthereumChain::<T>::chain_params(),
+			chain_type: ChainType::Ethereum,
 			validator_candidates: candidates.clone(),
 		};
 
@@ -441,14 +444,12 @@ impl<T: Config>
 			} => {
 				if let Some(keygen_request) = VaultRotations::<T>::take(index) {
 					// At the moment we just have Ethereum to notify
-					match keygen_request.chain {
-						ChainParams::Ethereum(_) => EthereumChain::<T>::vault_rotated(Vault {
+					match keygen_request.chain_type {
+						ChainType::Ethereum => EthereumChain::<T>::vault_rotated(Vault {
 							old_key,
 							new_key,
 							tx,
 						}),
-						// Leaving this to be explicit about more to come
-						ChainParams::Other(_) => {}
 					}
 				}
 				// This request is complete
@@ -460,127 +461,5 @@ impl<T: Config>
 		}
 
 		Ok(())
-	}
-}
-
-pub struct EthereumChain<T: Config>(PhantomData<T>);
-
-impl<T: Config> ChainVault for EthereumChain<T> {
-	type PublicKey = T::PublicKey;
-	type Transaction = T::Transaction;
-	type ValidatorId = T::ValidatorId;
-	type Error = RotationError<T::ValidatorId>;
-
-	/// Parameters required when creating key generation requests
-	fn chain_params() -> ChainParams {
-		ChainParams::Ethereum(vec![])
-	}
-
-	/// The initial phase has completed with success and we are notified of this from `Vaults`.
-	/// Now the specifics for this chain/vault are processed.  In the case for Ethereum we request
-	/// to have the function `setAggKeyWithAggKey` signed by the old set of validators.
-	/// A payload is built and emitted as a `EthSigningTxRequest`, failing this an error is reported
-	/// back to `Vaults`
-	fn start_vault_rotation(
-		index: RequestIndex,
-		new_public_key: Self::PublicKey,
-		validators: Vec<Self::ValidatorId>,
-	) -> Result<(), Self::Error> {
-		// Create payload for signature here
-		// function setAggKeyWithAggKey(SigData calldata sigData, Key calldata newKey)
-		match Self::encode_set_agg_key_with_agg_key(new_public_key.clone()) {
-			Ok(payload) => {
-				// Emit the event
-				Self::make_request(
-					index,
-					ThresholdSignatureRequest {
-						validators,
-						payload,
-						public_key: EthereumVault::<T>::get().old_key,
-					},
-				)
-			}
-			Err(_) => {
-				Pallet::<T>::abort_rotation();
-				Err(RotationError::FailedToConstructPayload)
-			}
-		}
-	}
-
-	/// The vault for this chain has been rotated and we store this vault to storage
-	fn vault_rotated(vault: Vault<Self::PublicKey, Self::Transaction>) {
-		EthereumVault::<T>::set(vault);
-	}
-}
-
-impl<T: Config>
-	RequestResponse<
-		RequestIndex,
-		ThresholdSignatureRequest<T::PublicKey, T::ValidatorId>,
-		ThresholdSignatureResponse<T::ValidatorId>,
-		RotationError<T::ValidatorId>,
-	> for EthereumChain<T>
-{
-	/// Make the request to sign by emitting an event
-	fn make_request(
-		index: RequestIndex,
-		request: ThresholdSignatureRequest<T::PublicKey, T::ValidatorId>,
-	) -> Result<(), RotationError<T::ValidatorId>> {
-		Pallet::<T>::deposit_event(Event::ThresholdSignatureRequest(index, request));
-		Ok(().into())
-	}
-
-	/// Try to handle the response and pass this onto `Vaults` to complete the vault rotation
-	fn handle_response(
-		index: RequestIndex,
-		response: ThresholdSignatureResponse<T::ValidatorId>,
-	) -> Result<(), RotationError<T::ValidatorId>> {
-		match response {
-			ThresholdSignatureResponse::Success(signature) => {
-				VaultRotationRequestResponse::<T>::make_request(index, Ethereum(signature).into())
-			}
-			ThresholdSignatureResponse::Error(bad_validators) => {
-				T::RotationHandler::penalise(bad_validators.clone());
-				Pallet::<T>::abort_rotation();
-				Err(RotationError::BadValidators(bad_validators))
-			}
-		}
-	}
-}
-
-impl<T: Config> EthereumChain<T> {
-	/// Encode `setAggKeyWithAggKey` call using `ethabi`.  This is a long approach as we are working
-	/// around `no_std` limitations here for the runtime.
-	pub(crate) fn encode_set_agg_key_with_agg_key(
-		new_public_key: T::PublicKey,
-	) -> ethabi::Result<Bytes> {
-		Function::new(
-			"setAggKeyWithAggKey",
-			vec![
-				Param::new(
-					"sigData",
-					ParamType::Tuple(vec![
-						ParamType::Uint(256),
-						ParamType::Uint(256),
-						ParamType::Uint(256),
-						ParamType::Address,
-					]),
-				),
-				Param::new("newKey", ParamType::FixedBytes(32)),
-			],
-			vec![],
-			false,
-		)
-		.encode_input(&vec![
-			// sigData: SigData(uint, uint, uint, address)
-			Token::Tuple(vec![
-				Token::Uint(ethabi::Uint::zero()),
-				Token::Uint(ethabi::Uint::zero()),
-				Token::Uint(T::NonceProvider::next_nonce(NonceIdentifier::Ethereum).into()),
-				Token::Address(H160::zero()),
-			]),
-			// newKey: bytes32
-			Token::FixedBytes(new_public_key.into()),
-		])
 	}
 }

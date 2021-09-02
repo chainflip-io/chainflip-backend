@@ -30,7 +30,6 @@ ethabi = { default-features = false, git = 'https://github.com/chainflip-io/etha
 sp-std = { version = "3.0.0", default-features = false }
 sp-io = { version = "3.0.0", default-features = false }
 sp-core = { default-features = false, version = '3.0.0' }
-assert_matches = { version = "1.5.0" }
 
 [features]
 default = ['std']
