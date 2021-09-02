@@ -27,7 +27,6 @@ ethereum = {default-features = false, version = "0.9"}
 ethereum-types = {default-features = false, version = "0.12"}
 hex = {default-features = false, version = "0.4"}
 rlp = {default-features = false, version = "0.5"}
-secp256k1 = {default-features = false, version = "0.20"}
 
 [dev-dependencies]
 serde = { version = "1.0.119" }
@@ -49,7 +48,6 @@ std = [
   'ethereum/std',
   'ethereum-types/std',
   'rlp/std',
-  'secp256k1/std',
 ]
 runtime-benchmarks = [
 	'frame-benchmarking',
