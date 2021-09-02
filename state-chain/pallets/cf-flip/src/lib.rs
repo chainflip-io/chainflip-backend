@@ -461,36 +461,33 @@ impl<T: Config> OnKilledAccount<T::AccountId> for BurnFlipAccount<T> {
 
 pub struct FlipSlasher<T: Config>(PhantomData<T>);
 /// An implementation of `Slashing` which kindly doesn't slash
-impl<T: Config> Slashing for FlipSlasher<T> {
+impl<T, B> Slashing for FlipSlasher<T>
+where
+	T: Config<BlockNumber = B>,
+	B: UniqueSaturatedInto<T::Balance>,
+{
 	// ValidatorId = AccountId ? :/
 	type ValidatorId = T::AccountId;
-	type BlockNumber = T::BlockNumber;
-	type Balance = T::Balance;
+	type BlockNumber = B;
 
-	fn slash(validator_id: &Self::ValidatorId, blocks_offline: &Self::BlockNumber) -> Weight {
+	fn slash(validator_id: &Self::ValidatorId, blocks_offline: Self::BlockNumber) -> Weight {
 		// Get the MBA aka the bond
 		let bond = Account::<T>::get(validator_id).validator_bond;
 		// Get the slashing rate
-		let slashing_rate: Self::Balance = Self::Balance::from(SlashingRate::<T>::get());
+		let slashing_rate: T::Balance = T::Balance::from(SlashingRate::<T>::get());
 		// Get blocks_offline as Balance
-		let blocks_off_as_int: u32 =
-			UniqueSaturatedInto::unique_saturated_into(blocks_offline.clone());
-		let blocks_as_balance: Self::Balance =
-			UniqueSaturatedInto::unique_saturated_into(blocks_off_as_int);
-
+		let blocks_offline_balance: T::Balance = blocks_offline.unique_saturated_into();
 		// Clojure to cast a u32 to a Balance type
-		let to_balance =
-			|n: u32| -> Self::Balance { UniqueSaturatedInto::unique_saturated_into(n) };
-
+		let to_balance = |n: u32| -> T::Balance { UniqueSaturatedInto::unique_saturated_into(n) };
 		// Number of blocks
 		let number_of_blocks = to_balance(14400);
-
 		// n % of MBA
 		let slash_base = (bond / to_balance(100)) * slashing_rate;
-
 		// Burn per block
 		let burn_per_block = slash_base / number_of_blocks;
-		let total_burn = burn_per_block * blocks_as_balance;
+		// Total amount of burn
+		let total_burn = burn_per_block * blocks_offline_balance;
+		// Burn the slashing fee
 		Pallet::<T>::settle(validator_id, Pallet::<T>::burn(total_burn).into());
 		0
 	}

@@ -261,8 +261,5 @@ pub trait Slashing {
 	type ValidatorId;
 	/// Block number
 	type BlockNumber;
-	// type Balance: UniqueSaturatedFrom<Self::BlockNumber>;
-	type Balance;
-	/// Slash this validator based on the number of blocks offline
-	fn slash(validator_id: &Self::ValidatorId, blocks_offline: &Self::BlockNumber) -> Weight;
+	fn slash(validator_id: &Self::ValidatorId, blocks_offline: Self::BlockNumber) -> Weight;
 }

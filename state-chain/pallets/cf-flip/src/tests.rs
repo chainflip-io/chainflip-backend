@@ -470,3 +470,23 @@ mod test_tx_payments {
 		});
 	}
 }
+
+mod test_slashing {
+	use cf_traits::Slashing;
+
+	use crate::{FlipSlasher, SlashingRate};
+
+	use super::*;
+	#[test]
+	fn test_slash_validator() {
+		new_test_ext().execute_with(|| {
+			let blocks_offline: u64 = 20;
+			Flip::set_validator_bond(&ALICE, 8000000);
+			let total_balance_1 = Flip::total_balance_of(&ALICE);
+			SlashingRate::<Test>::set(5);
+			assert_eq!(FlipSlasher::<Test>::slash(&ALICE, blocks_offline), 0);
+			let total_balance_2 = Flip::total_balance_of(&ALICE);
+			assert!(total_balance_1 > total_balance_2);
+		});
+	}
+}
