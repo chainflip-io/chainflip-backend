@@ -9,7 +9,8 @@ use ethereum::{AccessList, TransactionAction};
 use sp_core::{H256, U256};
 use sp_runtime::{RuntimeDebug, traits::{Hash, Keccak256}};
 
-// TODO: these should be on-chain constants.
+//------------------------//
+// TODO: these should be on-chain constants or config items.
 const RINKEBY_CHAIN_ID: u64 = 4;
 fn stake_manager_contract_address() -> Address {
 	const ADDR: &'static str = "Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9";
@@ -19,6 +20,7 @@ fn stake_manager_contract_address() -> Address {
 		.as_slice());
 	Address::from(buffer)
 }
+//--------------------------//
 
 pub enum EthereumBroadcast {
 	RegisterClaim(register_claim::RegisterClaim),
@@ -38,17 +40,19 @@ impl<T: BaseConfig> BroadcastContext<T> for EthereumBroadcast {
 		}
 	}
 
+	fn add_threshold_signature(&mut self, sig: &Self::Signature) {
+		match self {
+			Self::RegisterClaim(ref mut rc) => rc.populate_sigdata(sig),
+		};
+	}
+
 	fn construct_unsigned_transaction(
-		&mut self,
-		sig: &Self::Signature,
+		&self,
 	) -> Result<Self::UnsignedTransaction, Self::Error> {
 		let (contract, data) = match self {
-			Self::RegisterClaim(ref mut rc) => (
+			Self::RegisterClaim(ref rc) => (
 				stake_manager_contract_address(),
-				{
-					rc.populate_sigdata(sig)?;
-					rc.abi_encode()?
-				}
+				rc.abi_encode()?
 			)
 		};
 
@@ -62,6 +66,15 @@ impl<T: BaseConfig> BroadcastContext<T> for EthereumBroadcast {
 			data,
 		})
 	}
+
+	fn verify_tx(
+		&self,
+		signer: &T::ValidatorId,
+		signed_tx: &Self::SignedTransaction,
+	) -> Result<(), Self::Error> {
+		todo!()
+	}
+	
 }
 
 

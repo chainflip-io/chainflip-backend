@@ -52,9 +52,8 @@ impl RegisterClaim {
 			.map_err(|_| EthereumBroadcastError::InvalidPayloadData)
 	}
 
-	pub fn populate_sigdata(&mut self, sig: &SchnorrSignature) -> Result<(), EthereumBroadcastError> {
+	pub fn populate_sigdata(&mut self, sig: &SchnorrSignature) {
 		self.sig_data = self.sig_data.with_signature(sig);
-		Ok(())
 	}
 
 	/// Gets the function defintion for the `registerClaim` smart contract call. Loading this from the json abi

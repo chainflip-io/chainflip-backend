@@ -1,4 +1,7 @@
-use crate::{mock::*, BroadcastId, Error, Event as BroadcastEvent, PayloadFor, PendingBroadcasts};
+use crate::{
+	mock::*, BroadcastId, BroadcastState, Error, Event as BroadcastEvent, PayloadFor,
+	PendingBroadcasts,
+};
 use frame_support::{assert_noop, instances::Instance0};
 use frame_system::RawOrigin;
 
@@ -8,7 +11,9 @@ struct MockCfe;
 
 impl MockCfe {
 	fn respond() {
-		for event_record in System::events() {
+		let events = System::events();
+		System::reset_events();
+		for event_record in events {
 			Self::process_event(event_record.event);
 		}
 	}
@@ -23,12 +28,12 @@ impl MockCfe {
 					BroadcastEvent::TransactionSigningRequest(id, nominee, unsigned_tx) => {
 						Self::handle_transaction_signature_request(id, nominee, unsigned_tx)
 					}
-					BroadcastEvent::ReadyForBroadcast(id, _signed_tx) => {
-						// TODO
-					},
+					BroadcastEvent::BroadcastRequest(id, _signed_tx) => {
+						Self::handle_broadcast_request(id)
+					}
 					BroadcastEvent::BroadcastComplete(_) => {
 						// TODO
-					},
+					}
 					BroadcastEvent::__Ignore(_, _) => unimplemented!(),
 				}
 			}
@@ -61,33 +66,59 @@ impl MockCfe {
 		_unsigned_tx: MockUnsignedTx,
 	) {
 		assert_eq!(nominee, RANDOM_NOMINEE);
-		TransactionBroadcast::transaction_ready(RawOrigin::Signed(0).into(), id, MockSignedTx)
+		TransactionBroadcast::transaction_ready(RawOrigin::Signed(nominee).into(), id, MockSignedTx)
 			.unwrap();
+	}
+
+	fn handle_broadcast_request(id: BroadcastId) {
+		TransactionBroadcast::broadcast_success(
+			RawOrigin::Root.into(),
+			id,
+			b"0x-tx-hash".to_vec()
+		).unwrap();
 	}
 }
 
-fn broadcast_state(id: BroadcastId) -> Option<MockBroadcast> {
-	PendingBroadcasts::<Test, Instance0>::get(id)
+fn broadcast_state(state: BroadcastState, id: BroadcastId) -> Option<MockBroadcast> {
+	PendingBroadcasts::<Test, Instance0>::get(state, id)
 }
 
 #[test]
 fn test_broadcast_flow() {
 	new_test_ext().execute_with(|| {
 		// Construct the payload and request threshold sig.
-		assert_eq!(1, TransactionBroadcast::initiate_broadcast(MockBroadcast::New, KEY_ID).unwrap());
-		assert_eq!(broadcast_state(1), Some(MockBroadcast::PayloadConstructed));
+		assert_eq!(
+			1,
+			TransactionBroadcast::initiate_broadcast(MockBroadcast::New, KEY_ID).unwrap()
+		);
+		assert_eq!(
+			broadcast_state(BroadcastState::AwaitingThreshold, 1),
+			Some(MockBroadcast::New)
+		);
 		// CFE posts the signature back on-chain once the threshold sig has been constructed.
 		// This triggers a new request to sign the actual tx.
 		MockCfe::respond();
 		assert_eq!(
-			broadcast_state(1),
+			broadcast_state(BroadcastState::AwaitingSignature, 1),
 			Some(MockBroadcast::ThresholdSigReceived(
 				b"signed-by-cfe".to_vec()
 			))
 		);
 		// The CFE returns the complete and ready-to-broadcast tx.
 		MockCfe::respond();
-		assert_eq!(broadcast_state(1), Some(MockBroadcast::Complete));
+		// This triggers transaction verification and a broadcast request.
+		assert_eq!(
+			broadcast_state(BroadcastState::AwaitingBroadcast, 1),
+			Some(MockBroadcast::ThresholdSigReceived(
+				b"signed-by-cfe".to_vec()
+			))
+		);
+		// The CFE will respond that the transaction is complete.
+		MockCfe::respond();
+		assert_eq!(
+			broadcast_state(BroadcastState::Complete, 1),
+			Some(MockBroadcast::Complete)
+		);
 	})
 }
 
