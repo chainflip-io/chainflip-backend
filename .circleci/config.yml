@@ -230,28 +230,33 @@ jobs:
           -p pallet-cf-witnesser-api
           -p cf-traits
           -- --check
-      - run: if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
   check-validator-package:
     <<: *cargo-base-job
     steps:
       - checkout
       - run: sccache -s
-      - run: cargo build --locked --release
+      - run: |
+          cargo build --locked --release
+          sccache -s
 
   test-validator-package:
     <<: *cargo-base-job
     steps:
       - checkout
       - run: sccache -s
-      - run: cargo test --locked --lib --release
+      - run: |
+          cargo test --locked --lib --release
+          sccache -s
 
   compile-validator-package:
     <<: *cargo-base-job
     steps:
       - checkout
       - run: sccache -s
-      - run: cargo build --locked --release
+      - run: |
+          cargo build --locked --release
+          sccache -s
       - persist_to_workspace:
           root: ./
           paths:
