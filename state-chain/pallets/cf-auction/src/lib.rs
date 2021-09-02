@@ -113,6 +113,11 @@ pub mod pallet {
 	#[pallet::getter(fn bad_validators)]
 	pub(super) type BadValidators<T: Config> = StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
 
+	/// The set of backup validators
+	#[pallet::storage]
+	#[pallet::getter(fn backup_validators)]
+	pub(super) type BackupValidators<T: Config> = StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {

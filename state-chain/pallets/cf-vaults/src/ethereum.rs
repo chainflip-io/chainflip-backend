@@ -1,5 +1,5 @@
-use crate::schnorr::SchnorrSignature;
 use crate::ChainParams::Ethereum;
+use crate::SchnorrSignature;
 use crate::{
 	ChainVault, Config, EthereumVault, Event, Pallet, RequestIndex, RequestResponse,
 	ThresholdSignatureRequest, ThresholdSignatureResponse, Vault, VaultRotationRequestResponse,

@@ -1,4 +1,3 @@
-use crate::schnorr::SchnorrSignature;
 use cf_traits::RotationError;
 use codec::{Decode, Encode};
 use frame_support::RuntimeDebug;
@@ -7,6 +6,15 @@ use sp_std::prelude::*;
 
 /// Request index type
 pub type RequestIndex = u64;
+
+/// Schnorr Signature type
+///
+/// Wrapper around an ECDSA signature.
+#[derive(PartialEq, Decode, Encode, Eq, Clone, RuntimeDebug)]
+pub struct SchnorrSignature {
+	pub s: [u8; 32],
+	pub r: [u8; 20],
+}
 
 /// A request/response trait
 pub trait RequestResponse<Index: AtLeast32BitUnsigned, Req, Res, Error> {
