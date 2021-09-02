@@ -8,13 +8,23 @@ ignore_main_branches: &ignore_main_branches
         - /epic\/.*/
         - /release\/.*/
         # Uncomment and add your current branch when testing
-        # - update/integration-test-ci
+#        - update/epic-ci
+
 only_main_branches: &only_main_branches
   filters:
     branches:
       only:
         - main
         - develop
+        - /epic\/.*/
+        - /release\/.*/
+
+only_epic_branches: &only_epic_branches
+  filters:
+    branches:
+      only:
+        # Uncomment and add your current branch when testing
+        # - update/epic-ci
         - /epic\/.*/
         - /release\/.*/
 
@@ -67,10 +77,17 @@ chainflip-docker-base: &chainflip-docker-base
 # ------------------- anchors ------------------- #
 
 version: 2.1
+executors:
+  chainflip-master:
+    docker:
+      - image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+        auth: *dockerconfig
 orbs:
   docker: circleci/docker@1.7.0
   discord: antonioned/discord@0.1.0
   gh: circleci/github-cli@1.0.4
+  doctl: digitalocean/cli@0.1.1
+  helm: circleci/helm@1.2.0
 workflows:
   chainflip-backend-checks:
     jobs:
@@ -133,6 +150,14 @@ workflows:
           context:
             - ghcr-credentials
           <<: *only_main_branches
+      - test-single-node:
+          requires:
+            - build-chainflip-engine
+            - build-state-chain-node
+          context:
+            - ghcr-credentials
+            - do-credentials
+          <<: *only_epic_branches
 
   chainflip-integration-tests:
     <<: *nightly
@@ -205,28 +230,33 @@ jobs:
           -p pallet-cf-witnesser-api
           -p cf-traits
           -- --check
-      - run: if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
 
   check-validator-package:
     <<: *cargo-base-job
     steps:
       - checkout
       - run: sccache -s
-      - run: cargo build --locked --release
+      - run: |
+          cargo check --locked --release
+          sccache -s
 
   test-validator-package:
     <<: *cargo-base-job
     steps:
       - checkout
       - run: sccache -s
-      - run: cargo test --locked --lib --release
+      - run: |
+          cargo test --locked --lib --release
+          sccache -s
 
   compile-validator-package:
     <<: *cargo-base-job
     steps:
       - checkout
       - run: sccache -s
-      - run: cargo build --locked --release
+      - run: |
+          cargo build --locked --release
+          sccache -s
       - persist_to_workspace:
           root: ./
           paths:
@@ -283,3 +313,34 @@ jobs:
           failure_message: ":red_circle: Integration tests have failed"
           only_for_branches: "develop"
           webhook: $DW_ALERTS_STAGING
+
+  test-single-node:
+    executor: chainflip-master
+    steps:
+      - doctl/install
+      - doctl/initialize
+      - run: doctl kubernetes cluster kubeconfig save cluster-staging
+      - run:
+          name: Port-forward into cluster
+          background: true
+          command: kubectl port-forward -n chartmuseum service/chartmuseum 8080
+      - run: sleep 5
+      - run: helm repo add chainflip http://localhost:8080
+      - run:
+          name: Install bashful single node
+          command: >
+            helm install bashful chainflip/chainflip-validator
+            --namespace default
+            --set state-chain-node.nodeType=validator
+            --set state-chain-node.image.tag="latest"
+            --set "state-chain-node.stateChainNode.extraArgs={--rpc-external,--rpc-cors,all}"
+            --set chainflip-engine.image.tag="latest"
+            --wait
+            --wait-for-jobs
+      - run:
+          name: Test single node
+          command: helm test bashful -n default
+      - run:
+          name: Destroy single node
+          when: always
+          command: helm uninstall bashful -n default
