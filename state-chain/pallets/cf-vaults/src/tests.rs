@@ -261,7 +261,7 @@ mod test {
 			assert_ok!(VaultsPallet::threshold_signature_response(
 				Origin::root(),
 				1,
-				ThresholdSignatureResponse::Success(SchnorrSignature{
+				ThresholdSignatureResponse::Success(SchnorrSignature {
 					r: [0; 20],
 					s: [0; 32],
 				})
