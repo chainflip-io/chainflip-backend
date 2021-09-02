@@ -148,6 +148,7 @@ workflows:
       - run-integration-tests:
           context:
             - ghcr-credentials
+            - discord-webhooks
           requires:
             - clone-contracts-repo
 
