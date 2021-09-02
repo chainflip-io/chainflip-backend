@@ -91,8 +91,8 @@ impl SignerNomination for MockNominator {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum MockBroadcast {
 	New,
-	PayloadConstructed,
 	ThresholdSigReceived(Vec<u8>),
+	Broadcasting,
 	Complete,
 }
 
@@ -115,24 +115,32 @@ impl BroadcastContext<Test> for MockBroadcast {
 	}
 
 	fn construct_unsigned_transaction(
-		&mut self,
-		sig: &Self::Signature,
+		&self,
 	) -> Result<Self::UnsignedTransaction, Self::Error> {
-		assert_eq!(sig, b"signed-by-cfe");
-		*self = MockBroadcast::ThresholdSigReceived(sig.clone());
 		Ok(MockUnsignedTx)
 	}
 
-	fn on_transaction_ready(&mut self, _signed_tx: &Self::SignedTransaction) {
-		*self = MockBroadcast::Complete;
-	}
-
 	fn on_broadcast_success(&mut self, transaction_hash: &Self::TransactionHash) {
-		todo!()
+		assert_eq!(transaction_hash, b"0x-tx-hash");
+		*self = MockBroadcast::Complete;
 	}
 
 	fn on_broadcast_failure( &mut self, failure: &BroadcastFailure<u64>) {
 		todo!()
+	}
+
+	fn add_threshold_signature(&mut self, sig: &Self::Signature) {
+		assert_eq!(sig, b"signed-by-cfe");
+		*self = MockBroadcast::ThresholdSigReceived(sig.clone());
+	}
+
+	fn verify_tx(
+		&self,
+		signer: &<Test as BaseConfig>::ValidatorId,
+		_signed_tx: &Self::SignedTransaction,
+	) -> Result<(), Self::Error> {
+		assert_eq!(*signer, RANDOM_NOMINEE);
+		Ok(())
 	}
 }
 
