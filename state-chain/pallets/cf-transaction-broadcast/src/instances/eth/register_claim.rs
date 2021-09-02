@@ -182,12 +182,12 @@ mod test_register_claim {
 			// "Canoncial" encoding based on the abi definition above and using the ethabi crate:
 			register_claim_reference
 				.encode_input(&vec![
-					// sigData: SigData(uint, uint, uint)
+					// sigData: SigData(uint, uint, uint, address)
 					Token::Tuple(vec![
 						Token::Uint(ethabi::Uint::zero()),
 						Token::Uint(ethabi::Uint::zero()),
 						Token::Uint(NONCE.into()),
-						Token::Address(TEST_ADDR.into()),
+						Token::Address(Address::zero()),
 					]),
 					// nodeId: bytes32
 					Token::FixedBytes(TEST_ACCT.into()),
