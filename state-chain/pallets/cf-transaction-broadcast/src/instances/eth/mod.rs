@@ -1,13 +1,72 @@
+//! Types and functions that are common to ethereum broadcasting.
 pub mod register_claim;
+
+use crate::{BaseConfig, BroadcastContext};
 
 use codec::{Decode, Encode};
 use ethabi::{Address, Token, Uint};
 use ethereum::{AccessList, TransactionAction};
 use sp_core::{H256, U256};
-use sp_runtime::RuntimeDebug;
+use sp_runtime::{RuntimeDebug, traits::{Hash, Keccak256}};
+
+// TODO: these should be on-chain constants.
+const RINKEBY_CHAIN_ID: u64 = 4;
+fn stake_manager_contract_address() -> Address {
+	const ADDR: &'static str = "Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9";
+	let mut buffer = [0u8; 20];
+	buffer.copy_from_slice(hex::decode(ADDR)
+		.unwrap()
+		.as_slice());
+	Address::from(buffer)
+}
+
+pub enum EthereumBroadcast {
+	RegisterClaim(register_claim::RegisterClaim),
+}
+
+impl<T: BaseConfig> BroadcastContext<T> for EthereumBroadcast {
+	type Payload = H256;
+	type Signature = SchnorrSignature;
+	type UnsignedTransaction = UnsignedTransaction;
+	type SignedTransaction = RawSignedTransaction;
+	type TransactionHash = H256;
+	type Error = EthereumBroadcastError;
+
+	fn construct_signing_payload(&self) -> Result<Self::Payload, Self::Error> {
+		match self {
+			Self::RegisterClaim(rc) => Ok(rc.sig_data.msg_hash)
+		}
+	}
+
+	fn construct_unsigned_transaction(
+		&mut self,
+		sig: &Self::Signature,
+	) -> Result<Self::UnsignedTransaction, Self::Error> {
+		let (contract, data) = match self {
+			Self::RegisterClaim(ref mut rc) => (
+				stake_manager_contract_address(),
+				{
+					rc.populate_sigdata(sig)?;
+					rc.abi_encode()?
+				}
+			)
+		};
+
+		Ok(UnsignedTransaction {
+			chain_id: RINKEBY_CHAIN_ID,
+			max_priority_fee_per_gas: None,
+			max_fee_per_gas: None,
+			gas_limit: None,
+			contract,
+			value: U256::zero(),
+			data,
+		})
+	}
+}
+
 
 #[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
-pub enum EthBroadcastError {
+pub enum EthereumBroadcastError {
 	InvalidPayloadData,
 	InvalidSignature,
 }
@@ -41,6 +100,21 @@ impl SigData {
 			..Default::default()
 		}
 	}
+
+	pub fn with_msg_hash_from(self, calldata: &[u8]) -> Self {
+		Self {
+			msg_hash:  Keccak256::hash(calldata),
+			..self
+		}
+	}
+
+	pub fn with_signature(self, schnorr: &SchnorrSignature) -> Self {
+		Self {
+			sig: schnorr.s.into(),
+			k_times_g_addr: schnorr.k_times_g_addr.into(),
+			..self
+		}
+	}
 }
 
 impl Tokenizable for SigData {
@@ -58,8 +132,8 @@ impl Tokenizable for SigData {
 pub struct SchnorrSignature {
 	/// Scalar component
 	pub s: [u8; 32],
-	/// Point component as compressed public key bytes.
-	pub r: [u8; 33],
+	/// The challenge, expressed as a truncated keccak hash of a pair of coordinates.
+	pub k_times_g_addr: [u8; 20],
 }
 
 /// Required information to construct and sign an ethereum transaction. Equivalet to [ethereum::EIP1559TransactionMessage]
