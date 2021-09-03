@@ -47,8 +47,6 @@ pub struct VaultRotationRequestEvent<V: Vaults> {
 pub struct VaultRotationResponseCall<T: Vaults> {
     pub ceremony_id: CeremonyId,
 
-    // Can we provide better types than this? It may require some changes
-    // to the type accepted by the SC
     pub response: VaultRotationResponse<Vec<u8>>,
 
     pub _runtime: PhantomData<T>,

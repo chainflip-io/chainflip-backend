@@ -71,7 +71,7 @@ pub enum MultisigEvent {
 // before expiring them
 const PHASE_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// Start listening on the p2p connection and MQ
+/// Start listening for p2p messages and instructions from the SC
 pub fn start<S>(
     my_validator_id: ValidatorId,
     db: S,

@@ -1,3 +1,7 @@
+<!-- 
+TODO: This README is no longer accurate. Update it when the time is right
+-->
+
 # Signing Module
 
 The signing module facilitates the creation of a key that is shared by the chosen validators and then using a created key to sign stuff.

@@ -68,8 +68,6 @@ pub async fn start(
                             .collect();
 
                         let gen_new_key_event = MultisigInstruction::KeyGen(KeygenInfo::new(
-                            // this will probably be removed
-                            // https://github.com/chainflip-io/chainflip-backend/issues/492
                             KeyId(keygen_request_event.ceremony_id),
                             validators,
                         ));
@@ -91,7 +89,7 @@ pub async fn start(
                             .collect();
 
                         let sign_tx = MultisigInstruction::Sign(
-                            // TODO: Should this hash be on the state chain or the signing module?
+                            // TODO: The hashing of the payload should be done on the SC
                             // https://github.com/chainflip-io/chainflip-backend/issues/446
                             MessageHash(
                                 Keccak256::hash(
