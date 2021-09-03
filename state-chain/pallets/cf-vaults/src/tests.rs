@@ -54,7 +54,7 @@ mod test {
 			assert_ok!(VaultsPallet::keygen_response(
 				Origin::root(),
 				first_request_idx,
-				KeygenResponse::Success(vec![])
+				KeygenResponse::Success(vec![1, 2, 3])
 			));
 
 			// A subsequent key generation request
@@ -96,7 +96,7 @@ mod test {
 			assert_ok!(VaultsPallet::keygen_response(
 				Origin::root(),
 				VaultsPallet::current_request(),
-				KeygenResponse::Success(vec![])
+				KeygenResponse::Success(vec![1, 2, 3])
 			));
 			assert_ok!(VaultsPallet::request_vault_rotation(
 				VaultsPallet::current_request(),
@@ -142,7 +142,7 @@ mod test {
 			assert_ok!(VaultsPallet::keygen_response(
 				Origin::root(),
 				VaultsPallet::current_request(),
-				KeygenResponse::Success(vec![])
+				KeygenResponse::Success(vec![1, 2, 3])
 			));
 			assert_ok!(VaultsPallet::request_vault_rotation(
 				VaultsPallet::current_request(),
@@ -166,9 +166,7 @@ mod test {
 				Origin::root(),
 				VaultsPallet::current_request(),
 				VaultRotationResponse::Success {
-					old_key: "old_key".as_bytes().to_vec(),
-					new_key: "new_key".as_bytes().to_vec(),
-					tx: "tx".as_bytes().to_vec(),
+					tx_hash: "tx_hash".as_bytes().to_vec(),
 				}
 			));
 
@@ -191,7 +189,7 @@ mod test {
 			assert_ok!(VaultsPallet::keygen_response(
 				Origin::root(),
 				VaultsPallet::current_request(),
-				KeygenResponse::Success(vec![])
+				KeygenResponse::Success(vec![1, 2, 3])
 			));
 			assert_ok!(VaultsPallet::request_vault_rotation(
 				VaultsPallet::current_request(),
@@ -242,7 +240,7 @@ mod test {
 					SchnorrSignature::default(),
 				)
 				.unwrap(),
-				public_key: ethereum_public_key(),
+				public_key: vec![],
 				validators: vec![ALICE, BOB, CHARLIE],
 			};
 			assert_eq!(

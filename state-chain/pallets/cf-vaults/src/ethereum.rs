@@ -1,7 +1,7 @@
 use crate::ChainParams::Ethereum;
 use crate::{
 	ChainVault, Config, EthereumVault, Event, Pallet, RequestIndex, RequestResponse,
-	ThresholdSignatureRequest, ThresholdSignatureResponse, Vault, VaultRotationRequestResponse,
+	ThresholdSignatureRequest, ThresholdSignatureResponse, VaultRotationRequestResponse,
 };
 use crate::{SchnorrSignature, VaultRotations};
 use cf_traits::{NonceIdentifier, NonceProvider, RotationError, VaultRotationHandler};
@@ -13,7 +13,7 @@ pub struct EthereumChain<T: Config>(PhantomData<T>);
 
 impl<T: Config> ChainVault for EthereumChain<T> {
 	type PublicKey = T::PublicKey;
-	type Transaction = T::Transaction;
+	type TransactionHash = T::TransactionHash;
 	type ValidatorId = T::ValidatorId;
 	type Error = RotationError<T::ValidatorId>;
 
@@ -39,7 +39,7 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 					ThresholdSignatureRequest {
 						validators,
 						payload,
-						public_key: EthereumVault::<T>::get().old_key,
+						public_key: EthereumVault::<T>::get().previous_key,
 					},
 				)
 			}
@@ -51,8 +51,12 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 	}
 
 	/// The vault for this chain has been rotated and we store this vault to storage
-	fn vault_rotated(vault: Vault<Self::PublicKey, Self::Transaction>) {
-		EthereumVault::<T>::set(vault);
+	fn vault_rotated(new_public_key: Self::PublicKey, tx_hash: Self::TransactionHash) {
+		EthereumVault::<T>::mutate(|vault| {
+			(*vault).previous_key = (*vault).current_key.clone();
+			(*vault).current_key = new_public_key;
+			(*vault).tx_hash = tx_hash;
+		});
 	}
 }
 

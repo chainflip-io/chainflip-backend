@@ -29,8 +29,8 @@ pub trait RequestResponse<Index: AtLeast32BitUnsigned, Req, Res, Error> {
 pub trait ChainVault {
 	/// The type used for public keys
 	type PublicKey: Into<Vec<u8>>;
-	/// A transaction
-	type Transaction: Into<Vec<u8>>;
+	/// A transaction hash
+	type TransactionHash: Into<Vec<u8>>;
 	/// An identifier for a validator involved in the rotation of the vault
 	type ValidatorId;
 	/// An error on rotating the vault
@@ -45,7 +45,7 @@ pub trait ChainVault {
 		validators: Vec<Self::ValidatorId>,
 	) -> Result<(), Self::Error>;
 	/// We have confirmation of the rotation back from `Vaults`
-	fn vault_rotated(response: Vault<Self::PublicKey, Self::Transaction>);
+	fn vault_rotated(new_public_key: Self::PublicKey, tx_hash: Self::TransactionHash);
 }
 
 /// Events coming in from our chain.  This is used to callback from the request to complete the vault
@@ -115,22 +115,20 @@ impl From<ChainParams> for VaultRotationRequest {
 
 /// The Vault's keys, public that is
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct Vault<PublicKey: Into<Vec<u8>>, Transaction: Into<Vec<u8>>> {
-	/// Until rotation is completed successfully the current key
-	pub old_key: PublicKey,
-	/// The newly proposed and soon to be current key
-	pub new_key: PublicKey,
-	/// The transaction hash for the vault rotation
-	pub tx: Transaction,
+pub struct Vault<PublicKey: Into<Vec<u8>>, TransactionHash: Into<Vec<u8>>> {
+	/// The previous key
+	pub previous_key: PublicKey,
+	/// The current key
+	pub current_key: PublicKey,
+	/// The transaction hash for the vault rotation to the current key
+	pub tx_hash: TransactionHash,
 }
 
 /// A response of our request to rotate the vault
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum VaultRotationResponse<PublicKey: Into<Vec<u8>>, Transaction: Into<Vec<u8>>> {
+pub enum VaultRotationResponse<TransactionHash: Into<Vec<u8>>> {
 	Success {
-		old_key: PublicKey,
-		new_key: PublicKey,
-		tx: Transaction,
+		tx_hash: TransactionHash,
 	},
 	Failure,
 }
