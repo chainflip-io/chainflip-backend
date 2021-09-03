@@ -81,6 +81,7 @@ pub async fn start(
                     }
                     // TODO: Provide the pubkey of the key we want to sign with to the signing module
                     // from this event
+                    // https://github.com/chainflip-io/chainflip-backend/issues/492
                     ThresholdSignatureRequestEvent(threshold_sig_requst) => {
                         let validators: Vec<_> = threshold_sig_requst
                             .threshold_signature_request
@@ -114,7 +115,7 @@ pub async fn start(
                                 slog::debug!(logger, "Broadcasting to ETH: {:?}", tx);
                                 let signer = signer.lock().unwrap();
                                 // TODO: Contract address should come from the state chain
-
+                                // https://github.com/chainflip-io/chainflip-backend/issues/459
                                 let response = match eth_broadcaster
                                     .sign_and_broadcast_to(
                                         tx.clone(),
@@ -130,10 +131,11 @@ pub async fn start(
                                         );
                                         VaultRotationResponse::Success {
                                             // TODO: These to be removed on the SC side
-                                            // Issue: <link>
+                                            // https://github.com/chainflip-io/chainflip-backend/issues/480
                                             old_key: Vec::default(),
                                             new_key: Vec::default(),
-                                            tx,
+                                            // this to be put in as vec<u8> tx
+                                            tx: Vec::default(),
                                         }
                                     }
                                     Err(e) => {

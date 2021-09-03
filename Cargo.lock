@@ -5008,7 +5008,6 @@ dependencies = [
 name = "pallet-cf-vaults"
 version = "0.0.1"
 dependencies = [
- "assert_matches",
  "cf-traits",
  "ethabi 13.0.0",
  "frame-support",

@@ -7,6 +7,16 @@ use sp_std::prelude::*;
 /// CeremonyId type
 pub type CeremonyId = u64;
 
+/// Schnorr Signature type
+#[derive(PartialEq, Decode, Encode, Eq, Clone, RuntimeDebug)]
+pub struct SchnorrSignature {
+	/// Scalar component
+	// s: secp256k1::SecretKey,
+	pub s: [u8; 32],
+	/// Public key hashed and truncated to an ethereum address
+	pub r: [u8; 20],
+}
+
 /// A request/response trait
 pub trait RequestResponse<Index: AtLeast32BitUnsigned, Req, Res, Error> {
 	/// Make a request identified with an index
@@ -25,8 +35,6 @@ pub trait ChainVault {
 	type ValidatorId;
 	/// An error on rotating the vault
 	type Error;
-	/// A set of params for the chain for this vault
-	fn chain_params() -> ChainParams;
 	/// Start the vault rotation phase.  The chain would complete steps necessary for its chain
 	/// for the rotation of the vault.
 	/// When complete `ChainHandler::try_complete_vault_rotation()` would be used to notify to continue
@@ -53,6 +61,13 @@ pub trait ChainHandler {
 	) -> Result<(), Self::Error>;
 }
 
+/// Chain types supported
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub enum ChainType {
+	/// Ethereum type blockchain
+	Ethereum,
+}
+
 /// Our different Chain's specific parameters
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum ChainParams {
@@ -60,7 +75,7 @@ pub enum ChainParams {
 	///
 	/// The value is the call data encoded for the final transaction
 	/// to request the key rotation via `setAggKeyWithAggKey`
-	Ethereum(Vec<u8>),
+	Ethereum(SchnorrSignature),
 	/// This is a placeholder, not to be used in production
 	Other(Vec<u8>),
 }
@@ -69,8 +84,8 @@ pub enum ChainParams {
 /// This would be used for each supporting chain
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct KeygenRequest<ValidatorId> {
-	/// A Chain's parameters
-	pub chain: ChainParams,
+	/// The chain type
+	pub(crate) chain_type: ChainType,
 	/// The set of validators from which we would like to generate the key
 	pub validator_candidates: Vec<ValidatorId>,
 }
@@ -132,9 +147,9 @@ pub struct ThresholdSignatureRequest<PublicKey: Into<Vec<u8>>, ValidatorId> {
 
 /// A response back with our signature else a list of bad validators
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum ThresholdSignatureResponse<ValidatorId> {
+pub enum ThresholdSignatureResponse<ValidatorId, Signature> {
 	// Signature
-	Success(Vec<u8>),
+	Success(Signature),
 	// Bad validators
 	Error(Vec<ValidatorId>),
 }
