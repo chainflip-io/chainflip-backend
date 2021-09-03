@@ -24,6 +24,12 @@
   },
   "AuctionRange": "(u32,u32)",
   "CallHash": "[u8;32]",
+  "ChainParams": {
+    "_enum": {
+      "Ethereum": "(Vec<u8>)",
+      "Other": "(Vec<u8>)"
+    }
+  },
   "ClaimDetailsFor": {
     "amount": "FlipBalance",
     "nonce": "Nonce",
@@ -33,6 +39,12 @@
   },
   "Duration": "(u64,u32)",
   "EpochIndex": "u32",
+  "EthSigningTxResponse": {
+    "_enum": {
+      "Success": "(Vec<u8>)",
+      "Error": "(Vec<ValidatorId>)"
+    }
+  },
   "EthereumAddress": "[u8;20]",
   "EthTransactionHash": "[u8;32]",
   "FlipAccount": {
@@ -47,13 +59,54 @@
       "Emissions"
     ]
   },
+  "KeygenRequest": {
+    "chain": "ChainParams",
+    "validator_candidates": "Vec<ValidatorId>"
+  },
+  "KeygenResponse": {
+    "_enum": {
+      "Success": "(PublicKey)",
+      "Failure": "(Vec<ValidatorId>)"
+    }
+  },
   "LookupSource": "MultiAddress",
   "Nonce": "u64",
+  "NonceIdentifier": {
+    "_enum": [
+      "Ethereum",
+      "Bitcoin",
+      "Dot"
+    ]
+  },
+  "OnlineCreditsFor": "u64",
+  "PublicKey": "Vec<u8>",
+  "ReputationPenalty": {
+    "points": "ReputationPoints",
+    "blocks": "BlockNumber"
+  },
+  "ReputationPoints": "i32",
+  "RequestIndex": "u64",
+  "ReserveId": "[u8;4]",
   "Retired": "bool",
   "Signature": "H256",
   "TokenAmount": "u128",
   "ValidatorId": "AccountId",
-  "ReserveId": "[u8;4]",
+  "Transaction": "Vec<u8>",
+  "Vault": {
+    "old_key": "PublicKey",
+    "new_key": "PublicKey",
+    "tx": "Transaction"
+  },
+  "VaultRotationResponse": {
+    "_enum": {
+      "Success": {
+        "old_key": "PublicKey",
+        "new_key": "PublicKey",
+        "tx": "Transaction"
+      },
+      "Failure": ""
+    }
+  },
   "ValidatorSize": "u32",
   "VoteCount": "u32"
 }

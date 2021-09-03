@@ -37,10 +37,6 @@ pub enum Subject {
 
     // broadcaster pushes tx hashes here after being broadcast
     BroadcastSuccess(Chain),
-    /// Stake events coming from the Stake manager contract
-    StakeManager,
-    /// events coming from the key manager contract
-    KeyManager,
 
     // Auction pallet events
     AuctionStarted,
@@ -96,12 +92,6 @@ impl SubjectName for Subject {
             }
             Subject::BroadcastSuccess(chain) => {
                 format!("broadcast_success.{}", chain)
-            }
-            Subject::StakeManager => {
-                format!("stake_manager")
-            }
-            Subject::KeyManager => {
-                format!("key_manager")
             }
             // === Signing ===
             Subject::P2PIncoming => {
@@ -191,8 +181,5 @@ mod test {
 
         let broadcast_subject = Subject::Broadcast(Chain::BTC);
         assert_eq!(broadcast_subject.to_subject_name(), "broadcast.BTC");
-
-        let stake_manager_subject = Subject::StakeManager;
-        assert_eq!(stake_manager_subject.to_subject_name(), "stake_manager");
     }
 }

@@ -1,6 +1,8 @@
-use cf_p2p::{Message, Messaging, NetworkObserver};
+pub mod p2p_serde;
+use cf_p2p::{NetworkObserver, P2PMessaging, RawMessage, ValidatorId};
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures::{StreamExt, TryStreamExt};
+pub use gen_client::Client as P2PRpcClient;
 use jsonrpc_core::futures::Sink;
 use jsonrpc_core::futures::{future::Executor, Future, Stream};
 use jsonrpc_core::Error;
@@ -8,29 +10,68 @@ use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use log::{debug, warn};
-use sc_network::config::identity::ed25519;
-use sc_network::config::PublicKey;
-use sc_network::PeerId;
-use serde::{Deserialize, Serialize};
-use sp_core::ed25519::Public;
+use serde::{self, Deserialize, Serialize};
 use std::marker::Send;
-use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
-type ValidatorId = String;
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ValidatorIdBs58(#[serde(with = "p2p_serde::bs58_fixed_size")] pub [u8; 32]);
+
+impl From<ValidatorIdBs58> for ValidatorId {
+	fn from(id: ValidatorIdBs58) -> Self {
+		Self(id.0)
+	}
+}
+
+impl From<ValidatorId> for ValidatorIdBs58 {
+	fn from(id: ValidatorId) -> Self {
+		Self(id.0)
+	}
+}
+
+impl std::fmt::Display for ValidatorIdBs58 {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", bs58::encode(&self.0).into_string())
+	}
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MessageBs58(#[serde(with = "p2p_serde::bs58_vec")] pub Vec<u8>);
+
+impl From<MessageBs58> for RawMessage {
+	fn from(msg: MessageBs58) -> Self {
+		Self(msg.0)
+	}
+}
+
+impl From<RawMessage> for MessageBs58 {
+	fn from(msg: RawMessage) -> Self {
+		Self(msg.0)
+	}
+}
+
+impl std::fmt::Display for MessageBs58 {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", bs58::encode(&self.0).into_string())
+	}
+}
 
 #[rpc]
 pub trait RpcApi {
 	/// RPC Metadata
 	type Metadata;
 
+	/// Identify yourself to the network.
+	#[rpc(name = "p2p_self_identify")]
+	fn self_identify(&self, validator_id: ValidatorIdBs58) -> Result<u64>;
+
 	/// Send a message to validator id returning a HTTP status code
 	#[rpc(name = "p2p_send")]
-	fn send(&self, validator_id: ValidatorId, message: String) -> Result<u64>;
+	fn send(&self, validator_id: ValidatorIdBs58, message: MessageBs58) -> Result<u64>;
 
 	/// Broadcast a message to the p2p network returning a HTTP status code
 	#[rpc(name = "p2p_broadcast")]
-	fn broadcast(&self, message: String) -> Result<u64>;
+	fn broadcast(&self, message: MessageBs58) -> Result<u64>;
 
 	/// Subscribe to receive notifications
 	#[pubsub(
@@ -54,6 +95,7 @@ pub trait RpcApi {
 }
 
 /// A list of subscribers to the p2p message events coming in from cf-p2p
+#[derive(Clone)]
 pub struct P2PStream<T> {
 	subscribers: Arc<Mutex<Vec<UnboundedSender<T>>>>,
 }
@@ -73,7 +115,7 @@ impl<T> P2PStream<T> {
 }
 
 /// An event stream over type `RpcEvent`
-type EventStream = Arc<P2PStream<P2PEvent>>;
+type EventStream = P2PStream<P2PEvent>;
 
 /// Our core bridge between p2p events and our RPC subscribers
 pub struct RpcCore {
@@ -81,13 +123,36 @@ pub struct RpcCore {
 	manager: SubscriptionManager,
 }
 
-type RpcPeerId = String;
+/// Protocol errors notified via the subscription stream.
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub enum P2pError {
+	/// The recipient of a message could not be found on the network.
+	UnknownRecipient(ValidatorIdBs58),
+	/// This node can't send messages until it identifies itself to the network.
+	Unidentified,
+	/// Empty messages are not allowed.
+	EmptyMessage,
+	/// The node attempted to identify itself more than once.
+	AlreadyIdentified(ValidatorIdBs58),
+}
 
+impl From<P2pError> for P2PEvent {
+	fn from(err: P2pError) -> Self {
+		P2PEvent::Error(err)
+	}
+}
+
+/// Events available via the subscription stream.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum P2PEvent {
-	Received(RpcPeerId, Message),
-	PeerConnected(RpcPeerId),
-	PeerDisconnected(RpcPeerId),
+	/// A message has been received from another validator.
+	MessageReceived(ValidatorIdBs58, MessageBs58),
+	/// A new validator has cconnected and identified itself to the network.
+	ValidatorConnected(ValidatorIdBs58),
+	/// A validator has disconnected from the network.
+	ValidatorDisconnected(ValidatorIdBs58),
+	/// Errors.
+	Error(P2pError),
 }
 
 impl RpcCore {
@@ -95,7 +160,7 @@ impl RpcCore {
 	where
 		E: Executor<Box<(dyn Future<Item = (), Error = ()> + Send)>> + Send + Sync + 'static,
 	{
-		let stream = Arc::new(P2PStream::new());
+		let stream = P2PStream::new();
 		(
 			RpcCore {
 				stream: stream.clone(),
@@ -118,70 +183,91 @@ impl RpcCore {
 
 /// Observe p2p events and notify subscribers
 impl NetworkObserver for RpcCore {
-	fn new_peer(&self, peer_id: &PeerId) {
-		self.notify(P2PEvent::PeerConnected(peer_id.to_base58()));
+	fn new_validator(&self, validator_id: &ValidatorId) {
+		self.notify(P2PEvent::ValidatorConnected((*validator_id).into()));
 	}
 
-	fn disconnected(&self, peer_id: &PeerId) {
-		self.notify(P2PEvent::PeerDisconnected(peer_id.to_base58()));
+	fn disconnected(&self, validator_id: &ValidatorId) {
+		self.notify(P2PEvent::ValidatorDisconnected((*validator_id).into()));
 	}
 
-	fn received(&self, peer_id: &PeerId, messages: Message) {
-		self.notify(P2PEvent::Received(peer_id.to_base58(), messages.clone()));
+	fn received(&self, validator_id: &ValidatorId, message: RawMessage) {
+		self.notify(P2PEvent::MessageReceived(
+			(*validator_id).into(),
+			message.into(),
+		));
+	}
+
+	fn unknown_recipient(&self, recipient_id: &ValidatorId) {
+		self.notify(P2pError::UnknownRecipient((*recipient_id).into()).into());
+	}
+
+	fn unidentified_node(&self) {
+		self.notify(P2pError::Unidentified.into());
+	}
+
+	fn empty_message(&self) {
+		self.notify(P2pError::EmptyMessage.into());
+	}
+
+	fn already_identified(&self, existing_id: &ValidatorId) {
+		self.notify(P2pError::AlreadyIdentified((*existing_id).into()).into());
 	}
 }
 
 /// The RPC bridge and API
-pub struct Rpc<C: Messaging> {
+pub struct Rpc<C: P2PMessaging> {
 	core: Arc<RpcCore>,
 	messaging: Arc<Mutex<C>>,
 }
 
-impl<C: Messaging> Rpc<C> {
+impl<C: P2PMessaging> Rpc<C> {
 	pub fn new(messaging: Arc<Mutex<C>>, core: Arc<RpcCore>) -> Self {
 		Rpc { messaging, core }
 	}
 }
 
-fn peer_id_from_validator_id(validator_id: &ValidatorId) -> std::result::Result<PeerId, &str> {
-	Public::from_str(validator_id)
-		.map_err(|_| "failed parsing")
-		.and_then(|p| ed25519::PublicKey::decode(&p.0).map_err(|_| "failed decoding"))
-		.and_then(|p| Ok(PeerId::from_public_key(PublicKey::Ed25519(p))))
-}
-
 /// Impl of the `RpcApi` - send, broadcast and subscribe to notifications
-impl<C: Messaging + Sync + Send + 'static> RpcApi for Rpc<C> {
+impl<C: P2PMessaging + Sync + Send + 'static> RpcApi for Rpc<C> {
 	type Metadata = sc_rpc::Metadata;
 
-	fn send(&self, validator_id: ValidatorId, message: String) -> Result<u64> {
-		if let Ok(peer_id) = peer_id_from_validator_id(&validator_id) {
-			return if self
-				.messaging
-				.lock()
-				.unwrap()
-				.send_message(&peer_id, message.into_bytes())
-			{
-				Ok(200)
-			} else {
-				Err(Error::invalid_params("invalid message and/or peer"))
-			};
-		}
-
-		Err(Error::invalid_request())
-	}
-
-	fn broadcast(&self, message: String) -> Result<u64> {
-		if self
-			.messaging
+	fn self_identify(&self, validator_id: ValidatorIdBs58) -> Result<u64> {
+		self.messaging
 			.lock()
 			.unwrap()
-			.broadcast(message.into_bytes())
-		{
-			return Ok(200);
-		}
+			.identify(validator_id.into())
+			.map_err(|inner| {
+				let mut e = Error::internal_error();
+				e.message = format!("{}", inner);
+				e
+			})
+			.map(|_| 200)
+	}
 
-		Err(Error::invalid_request())
+	fn send(&self, validator_id: ValidatorIdBs58, message: MessageBs58) -> Result<u64> {
+		self.messaging
+			.lock()
+			.unwrap()
+			.send_message(validator_id.into(), message.into())
+			.map_err(|inner| {
+				let mut e = Error::internal_error();
+				e.message = format!("{}", inner);
+				e
+			})
+			.map(|_| 200)
+	}
+
+	fn broadcast(&self, message: MessageBs58) -> Result<u64> {
+		self.messaging
+			.lock()
+			.unwrap()
+			.broadcast_all(message.into())
+			.map_err(|inner| {
+				let mut e = Error::internal_error();
+				e.message = format!("{}", inner);
+				e
+			})
+			.map(|_| 200)
 	}
 
 	fn subscribe_notifications(&self, _metadata: Self::Metadata, subscriber: Subscriber<P2PEvent>) {
@@ -214,119 +300,49 @@ impl<C: Messaging + Sync + Send + 'static> RpcApi for Rpc<C> {
 mod tests {
 	use super::*;
 	use jsonrpc_core::{types::Params, Notification, Output};
-	use sc_network::config::identity::ed25519;
-	use sc_network::config::PublicKey;
 	use sc_rpc::testing::TaskExecutor;
 	use serde_json::json;
-	use sp_core::ed25519::Public;
-	use std::collections::HashMap;
-
-	/// Our network of nodes
-	struct P2P {
-		nodes: HashMap<PeerId, Node>,
-	}
-
-	impl P2P {
-		fn new() -> Self {
-			P2P {
-				nodes: HashMap::new(),
-			}
-		}
-
-		fn get_node(&mut self, peer_id: &PeerId) -> Option<&Node> {
-			self.nodes.get(peer_id)
-		}
-
-		fn create_node(&mut self) -> PeerId {
-			let node = Node::new();
-			let peer_id = node.peer_id;
-			self.nodes.insert(peer_id, node);
-
-			peer_id
-		}
-
-		fn broadcast(&mut self, data: Message) {
-			for (_, node) in &self.nodes {
-				node.messenger.lock().unwrap().broadcast(data.clone());
-			}
-		}
-
-		fn send_message(&mut self, peer_id: &PeerId, data: Message) {
-			if let Some(node) = self.nodes.get(&peer_id) {
-				node.messenger
-					.lock()
-					.unwrap()
-					.send_message(peer_id, data.clone());
-			}
-		}
-	}
 
 	/// A node on this test network
 	struct Node {
-		peer_id: PeerId,
 		io: jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>,
-		messenger: Arc<Mutex<Messenger>>,
-		stream: Arc<EventStream>,
-	}
-
-	struct Messenger {
-		stream: Arc<EventStream>,
-	}
-
-	impl Messaging for Messenger {
-		fn send_message(&mut self, peer_id: &PeerId, data: Message) -> bool {
-			let subscribers = self.stream.subscribers.lock().unwrap();
-			for subscriber in subscribers.iter() {
-				if let Err(e) =
-					subscriber.unbounded_send(P2PEvent::Received(peer_id.to_base58(), data.clone()))
-				{
-					debug!("Failed to send message {:?}", e);
-				}
-			}
-			true
-		}
-
-		fn broadcast(&self, data: Message) -> bool {
-			let subscribers = self.stream.subscribers.lock().unwrap();
-			for subscriber in subscribers.iter() {
-				if let Err(e) =
-					subscriber.unbounded_send(P2PEvent::Received("".to_string(), data.clone()))
-				{
-					debug!("Failed to send message {:?}", e);
-				}
-			}
-			true
-		}
+		event_stream: Arc<EventStream>,
+		// Unused, but needs to remain in scope so that the sender doesn't fail.
+		_receiver: UnboundedReceiver<cf_p2p::MessagingCommand>,
 	}
 
 	impl Node {
 		fn new() -> Self {
 			let executor = Arc::new(TaskExecutor);
-			let (core, stream) = RpcCore::new(executor);
+			let (core, event_stream) = RpcCore::new(executor);
 			let mut io = jsonrpc_core::MetaIoHandler::default();
-			let stream = Arc::new(stream);
-			let messenger = Messenger {
-				stream: stream.clone(),
-			};
-			let messenger = Arc::new(Mutex::new(messenger));
-			let rpc = Rpc::new(messenger.clone(), Arc::new(core));
+			let event_stream = Arc::new(event_stream);
+			let (sender, _receiver) = cf_p2p::Sender::new();
+			let messenger = Arc::new(Mutex::new(sender));
+			let rpc = Rpc::new(messenger, Arc::new(core));
 			io.extend_with(RpcApi::to_delegate(rpc));
 
 			Node {
-				peer_id: PeerId::random(),
 				io,
-				messenger,
-				stream: stream.clone(),
+				event_stream: event_stream.clone(),
+				_receiver,
 			}
 		}
 
-		fn notify(&self, event: P2PEvent) {
-			let subscribers = self.stream.subscribers.lock().unwrap();
+		fn notify(&self, event: P2PEvent) -> anyhow::Result<()> {
+			let subscribers = self.event_stream.subscribers.lock().unwrap();
 			for subscriber in subscribers.iter() {
-				if let Err(e) = subscriber.unbounded_send(event.clone()) {
-					debug!("Failed to send message {:?}", e);
-				}
+				subscriber.unbounded_send(event.clone())?;
 			}
+			Ok(())
+		}
+
+		fn notify_message(&self, from: ValidatorId, data: RawMessage) -> anyhow::Result<()> {
+			self.notify(P2PEvent::MessageReceived(from.into(), data.into()))
+		}
+
+		fn notify_identity(&self, who: ValidatorId) -> anyhow::Result<()> {
+			self.notify(P2PEvent::ValidatorConnected(who.into()))
 		}
 	}
 
@@ -337,17 +353,6 @@ mod tests {
 		let (tx, rx) = jsonrpc_core::futures::sync::mpsc::channel(2);
 		let meta = sc_rpc::Metadata::new(tx);
 		(meta, rx)
-	}
-
-	#[test]
-	fn validator_id_to_peer_id() {
-		let validator_id = "5G9NWJ5P9uk7am24yCKeLZJqXWW6hjuMyRJDmw4ofqxG8Js2";
-		let expected_peer_id = "12D3KooWMxxmtYRoBr5yMGfXdunkZ3goE4fZsMuJJMRAm3UdySxg";
-		let public = Public::from_str(validator_id).unwrap();
-		let ed25519 = ed25519::PublicKey::decode(&public.0).unwrap();
-		let peer_id = PeerId::from_public_key(PublicKey::Ed25519(ed25519));
-		let bs58 = peer_id.to_base58();
-		assert_eq!(bs58, expected_peer_id);
 	}
 
 	#[test]
@@ -396,12 +401,13 @@ mod tests {
 	fn send_message() {
 		let node = Node::new();
 
-		let validator_id = "5G9NWJ5P9uk7am24yCKeLZJqXWW6hjuMyRJDmw4ofqxG8Js2";
+		let validator_id = "5G9NWJ5P9uk7am24yCKeLZJqXWW6hjuMyRJDmw4ofqx";
+		let message = bs58::encode(b"hello").into_string();
 
 		let request = json!({
 			"jsonrpc": "2.0",
 			"method": "p2p_send",
-			"params": [validator_id, "hello"],
+			"params": [validator_id, message],
 			"id": 1,
 		});
 
@@ -415,11 +421,31 @@ mod tests {
 	#[test]
 	fn broadcast_message() {
 		let node = Node::new();
+		let message = bs58::encode(b"hello").into_string();
 
 		let request = json!({
 			"jsonrpc": "2.0",
 			"method": "p2p_broadcast",
-			"params": ["hello"],
+			"params": [message],
+			"id": 1,
+		});
+
+		let meta = sc_rpc::Metadata::default();
+		assert_eq!(
+			node.io.handle_request_sync(&request.to_string(), meta),
+			Some("{\"jsonrpc\":\"2.0\",\"result\":200,\"id\":1}".to_string())
+		);
+	}
+
+	#[test]
+	fn identify_message() {
+		let node = Node::new();
+		let validator_id = "5G9NWJ5P9uk7am24yCKeLZJqXWW6hjuMyRJDmw4ofqx";
+
+		let request = json!({
+			"jsonrpc": "2.0",
+			"method": "p2p_self_identify",
+			"params": [validator_id],
 			"id": 1,
 		});
 
@@ -432,10 +458,8 @@ mod tests {
 
 	#[test]
 	fn subscribe_and_listen_for_messages() {
-		let mut p2p = P2P::new();
-		let peer_id = p2p.create_node();
-		let node = p2p.get_node(&peer_id).unwrap();
-		let (meta, receiver) = setup_session();
+		let node = Node::new();
+		let (meta, notifications_receiver) = setup_session();
 
 		let sub_request = json!({
 			"jsonrpc": "2.0",
@@ -450,166 +474,44 @@ mod tests {
 		let mut resp: serde_json::Value = serde_json::from_str(&resp.unwrap()).unwrap();
 		let sub_id: String = serde_json::from_value(resp["result"].take()).unwrap();
 
-		// Simulate a message being received from the peer
-		let message: Message = vec![1, 2, 3];
-		p2p.send_message(&peer_id, message.clone());
+		// Simulate messages being received from a peer
+		let peer = ValidatorId([0xCF; 32]);
+		let message = RawMessage(vec![1, 2, 3]);
+		node.notify_identity(peer).unwrap();
+		node.notify_message(peer, message.clone()).unwrap();
 
-		// We should get a notification of this event
-		let recv = receiver.take(1).wait().flatten().collect::<Vec<_>>();
-		let recv: Notification = serde_json::from_str(&recv[0]).unwrap();
-		let mut json_map = match recv.params {
-			Params::Map(json_map) => json_map,
-			_ => panic!(),
-		};
+		// We should get notifications of these events
+		let events = notifications_receiver
+			.take(2)
+			.wait()
+			.map(|s| serde_json::from_str::<Notification>(s.unwrap().as_ref()).unwrap())
+			.map(|notification| {
+				assert_eq!(notification.method, "cf_p2p_notifications");
 
-		let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
-		let recv_message: P2PEvent = serde_json::from_value(json_map["result"].take()).unwrap();
-		assert_eq!(recv.method, "cf_p2p_notifications");
-		assert_eq!(recv_sub_id, sub_id);
+				let mut json_map = match notification.params {
+					Params::Map(json_map) => json_map,
+					_ => panic!(),
+				};
+				let recv_sub_id: String =
+					serde_json::from_value(json_map["subscription"].take()).unwrap();
+				assert_eq!(recv_sub_id, sub_id);
 
-		match recv_message {
-			P2PEvent::Received(_, recv_message) => {
-				assert_eq!(recv_message, message);
-			}
-			_ => panic!(),
-		}
-	}
-
-	#[test]
-	fn subscribe_and_listen_for_broadcast() {
-		// Create a node and subscribe to it
-		let mut p2p = P2P::new();
-		let peer_id = p2p.create_node();
-		let node = p2p.get_node(&peer_id).unwrap();
-
-		let (meta, receiver) = setup_session();
-		let sub_request = json!({
-			"jsonrpc": "2.0",
-			"method": "cf_p2p_subscribeNotifications",
-			"params": [],
-			"id": 1,
-		});
-		let resp = node
-			.io
-			.handle_request_sync(&sub_request.to_string(), meta.clone());
-		let mut resp: serde_json::Value = serde_json::from_str(&resp.unwrap()).unwrap();
-		let sub_id: String = serde_json::from_value(resp["result"].take()).unwrap();
-
-		// Create another node and subscribe to it
-		let peer_id_1 = p2p.create_node();
-		let node_1 = p2p.get_node(&peer_id_1).unwrap();
-		let (meta_1, receiver_1) = setup_session();
-		let sub_request_1 = json!({
-			"jsonrpc": "2.0",
-			"method": "cf_p2p_subscribeNotifications",
-			"params": [],
-			"id": 1,
-		});
-		let resp_1 = node_1
-			.io
-			.handle_request_sync(&sub_request_1.to_string(), meta_1.clone());
-		let mut resp_1: serde_json::Value = serde_json::from_str(&resp_1.unwrap()).unwrap();
-		let sub_id_1: String = serde_json::from_value(resp_1["result"].take()).unwrap();
-
-		// Simulate a message being received from the peer
-		let message: Message = vec![1, 2, 3];
-		p2p.broadcast(message.clone());
-
-		// We should get a notification of this event
-		let recv = receiver.take(1).wait().flatten().collect::<Vec<_>>();
-		let recv: Notification = serde_json::from_str(&recv[0]).unwrap();
-		let mut json_map = match recv.params {
-			Params::Map(json_map) => json_map,
-			_ => panic!(),
-		};
-
-		let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
-		let recv_message: P2PEvent = serde_json::from_value(json_map["result"].take()).unwrap();
-
-		assert_eq!(recv.method, "cf_p2p_notifications");
-		assert_eq!(recv_sub_id, sub_id);
-		match recv_message {
-			P2PEvent::Received(_, recv_message) => {
-				assert_eq!(recv_message, message);
-			}
-			_ => panic!(),
-		}
-
-		let recv = receiver_1.take(1).wait().flatten().collect::<Vec<_>>();
-		let recv: Notification = serde_json::from_str(&recv[0]).unwrap();
-		let mut json_map = match recv.params {
-			Params::Map(json_map) => json_map,
-			_ => panic!(),
-		};
-
-		let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
-		let recv_message: P2PEvent = serde_json::from_value(json_map["result"].take()).unwrap();
-
-		assert_eq!(recv.method, "cf_p2p_notifications");
-		assert_eq!(recv_sub_id, sub_id_1);
-		match recv_message {
-			P2PEvent::Received(_, recv_message) => {
-				assert_eq!(recv_message, message);
-			}
-			_ => panic!(),
-		}
-	}
-
-	#[test]
-	fn connect_disconnect_peer() {
-		let mut p2p = P2P::new();
-		let peer_id = p2p.create_node();
-		let node = p2p.get_node(&peer_id).unwrap();
-		let (meta, receiver) = setup_session();
-
-		let sub_request = json!({
-			"jsonrpc": "2.0",
-			"method": "cf_p2p_subscribeNotifications",
-			"params": [],
-			"id": 1,
-		});
-
-		let resp = node
-			.io
-			.handle_request_sync(&sub_request.to_string(), meta.clone());
-		let mut resp: serde_json::Value = serde_json::from_str(&resp.unwrap()).unwrap();
-		let sub_id: String = serde_json::from_value(resp["result"].take()).unwrap();
-
-		node.notify(P2PEvent::PeerConnected(peer_id.to_base58()));
-		node.notify(P2PEvent::PeerDisconnected(peer_id.to_base58()));
-
-		// We should get a notification for the two events
-		let recv = receiver.take(2).wait().flatten().collect::<Vec<_>>();
-		let mut events = vec![];
-
-		for v in recv {
-			let recv: Notification = serde_json::from_str(&v).unwrap();
-			let mut json_map = match recv.params {
-				Params::Map(json_map) => json_map,
-				_ => panic!(),
-			};
-
-			let recv_sub_id: String =
-				serde_json::from_value(json_map["subscription"].take()).unwrap();
-			let recv_message: P2PEvent = serde_json::from_value(json_map["result"].take()).unwrap();
-			assert_eq!(recv.method, "cf_p2p_notifications");
-			assert_eq!(recv_sub_id, sub_id);
-			events.push(recv_message);
-		}
-
-		assert_eq!(events.len(), 2);
+				serde_json::from_value(json_map["result"].take()).unwrap()
+			})
+			.collect::<Vec<P2PEvent>>();
 
 		match events[0].clone() {
-			P2PEvent::PeerConnected(recv_peer_id) => {
-				assert_eq!(recv_peer_id, peer_id.to_base58());
+			P2PEvent::ValidatorConnected(id) => {
+				assert_eq!(id, peer.into());
 			}
-			_ => panic!(),
+			_ => panic!("Unexpected message type."),
 		}
 		match events[1].clone() {
-			P2PEvent::PeerDisconnected(recv_peer_id) => {
-				assert_eq!(recv_peer_id, peer_id.to_base58());
+			P2PEvent::MessageReceived(id, recv_message) => {
+				assert_eq!(id, peer.into());
+				assert_eq!(recv_message, message.into());
 			}
-			_ => panic!(),
+			_ => panic!("Unexpected message type."),
 		}
 	}
 }

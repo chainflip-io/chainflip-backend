@@ -4,6 +4,7 @@
 mod chainflip;
 mod weights;
 // A few exports that help ease life for downstream crates.
+use cf_traits::Chainflip;
 use core::time::Duration;
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
@@ -144,8 +145,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type Registrar = Session;
 	type ValidatorId = AccountId;
 	type MinAuctionSize = MinAuctionSize;
-	type Confirmation = Auction;
-	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
+	type Handler = Vaults;
 }
 
 // FIXME: These would be changed
@@ -161,6 +161,15 @@ impl pallet_cf_validator::Config for Runtime {
 	type EpochIndex = EpochIndex;
 	type Amount = FlipBalance;
 	type Auction = Auction;
+}
+
+impl pallet_cf_vaults::Config for Runtime {
+	type Event = Event;
+	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
+	type PublicKey = Vec<u8>;
+	type Transaction = Vec<u8>;
+	type RotationHandler = Auction;
+	type NonceProvider = Vaults;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
@@ -326,11 +335,6 @@ impl pallet_cf_flip::Config for Runtime {
 	type ExistentialDeposit = ExistentialDeposit;
 }
 
-impl pallet_sudo::Config for Runtime {
-	type Event = Event;
-	type Call = Call;
-}
-
 impl pallet_cf_witnesser::Config for Runtime {
 	type Event = Event;
 	type Origin = Origin;
@@ -364,6 +368,14 @@ impl pallet_cf_staking::Config for Runtime {
 	type ClaimTTL = ClaimTTL;
 }
 
+impl pallet_cf_governance::Config for Runtime {
+	type Origin = Origin;
+	type Call = Call;
+	type Event = Event;
+	type TimeSource = Timestamp;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+}
+
 parameter_types! {
 	pub const MintInterval: u32 = 10 * MINUTES;
 }
@@ -395,6 +407,11 @@ impl pallet_transaction_payment::Config for Runtime {
 impl pallet_cf_witnesser_api::Config for Runtime {
 	type Call = Call;
 	type Witnesser = Witnesser;
+}
+
+impl Chainflip for Runtime {
+	type Amount = FlipBalance;
+	type ValidatorId = <Self as frame_system::Config>::AccountId;
 }
 
 parameter_types! {
@@ -437,8 +454,9 @@ construct_runtime!(
 		Aura: pallet_aura::{Module, Config<T>},
 		Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
-		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
+		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>, Origin},
+		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>},
 		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
 	}
 );

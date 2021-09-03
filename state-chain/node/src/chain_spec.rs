@@ -5,8 +5,8 @@ use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
 	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, EmissionsConfig, FlipBalance,
-	FlipConfig, GenesisConfig, GrandpaConfig, ReputationConfig, SessionConfig, Signature,
-	StakingConfig, SudoConfig, SystemConfig, ValidatorConfig, DAYS, WASM_BINARY,
+	FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig,
+	Signature, StakingConfig, SystemConfig, ValidatorConfig, DAYS, WASM_BINARY,
 };
 
 // The URL for the telemetry server.
@@ -348,13 +348,17 @@ fn testnet_genesis(
 		pallet_grandpa: Some(GrandpaConfig {
 			authorities: vec![],
 		}),
-		pallet_sudo: Some(SudoConfig {
-			// Assign network admin rights.
-			key: root_key,
-		}),
 		pallet_cf_emissions: Some(EmissionsConfig {
 			emission_per_block: BLOCK_EMISSIONS,
 			..Default::default()
+		}),
+		pallet_cf_governance: Some(GovernanceConfig {
+			members: vec![
+				get_account_id_from_seed::<sr25519::Public>("Bob"),
+				get_account_id_from_seed::<sr25519::Public>("Charlie"),
+				get_account_id_from_seed::<sr25519::Public>("Dave"),
+			],
+			expiry_span: 80000,
 		}),
 		pallet_cf_reputation: Some(ReputationConfig {
 			accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),

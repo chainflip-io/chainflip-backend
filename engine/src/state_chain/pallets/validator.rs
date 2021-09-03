@@ -2,11 +2,10 @@
 
 use std::marker::PhantomData;
 
+use crate::state_chain::{runtime::StateChainRuntime, sc_event::SCEvent};
 use codec::{Decode, Encode};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use substrate_subxt::{module, sp_runtime::traits::Member, Call, Event};
-
-use super::{runtime::StateChainRuntime, sc_event::SCEvent};
 
 #[module]
 pub trait Validator: substrate_subxt::system::System {
@@ -67,11 +66,12 @@ mod tests {
     use pallet_cf_validator::Config;
 
     use codec::Encode;
+
+    use super::*;
+
     use state_chain_runtime::Runtime as SCRuntime;
 
     use crate::state_chain::runtime::StateChainRuntime;
-
-    use super::*;
 
     #[test]
     fn epoch_changed_decoding() {

@@ -16,18 +16,20 @@ use substrate_subxt::{
     EventTypeRegistry, Runtime, SignedExtension, SignedExtra,
 };
 
-use crate::state_chain::auction::AuctionEventTypeRegistry;
-use crate::state_chain::emissions::EmissionsEventTypeRegistry;
-use crate::state_chain::staking::StakingEventTypeRegistry;
-use crate::state_chain::validator::ValidatorEventTypeRegistry;
+use crate::state_chain::pallets::auction::AuctionEventTypeRegistry;
+use crate::state_chain::pallets::emissions::EmissionsEventTypeRegistry;
+use crate::state_chain::pallets::staking::StakingEventTypeRegistry;
+use crate::state_chain::pallets::validator::ValidatorEventTypeRegistry;
 
 use core::fmt::Debug;
 
 use codec::{Decode, Encode};
 
-use super::{auction, emissions, staking, validator, witness_api};
+use super::pallets::{auction, emissions, reputation, staking, validator, witness_api};
 
 use pallet_cf_flip::ImbalanceSource;
+use pallet_cf_reputation::OfflineCondition;
+use pallet_cf_vaults::{EthSigningTxRequest, KeygenRequest, VaultRotationRequest};
 
 use serde::{Deserialize, Serialize};
 
@@ -120,7 +122,18 @@ impl Runtime for StateChainRuntime {
         event_type_registry.register_type_size::<u32>("SessionIndex");
         event_type_registry.register_type_size::<[u8; 32]>("AggKeySignature");
         event_type_registry
-            .register_type_size::<ImbalanceSource<AccountId32>>("ImbalanceSource<T::AccountId>")
+            .register_type_size::<ImbalanceSource<AccountId32>>("ImbalanceSource<T::AccountId>");
+        event_type_registry.register_type_size::<i32>("ReputationPoints");
+        event_type_registry.register_type_size::<u32>("OnlineCreditsFor<T>");
+
+        event_type_registry.register_type_size::<u64>("RequestIndex");
+        event_type_registry.register_type_size::<OfflineCondition>("OfflineCondition");
+        event_type_registry
+            .register_type_size::<KeygenRequest<AccountId32>>("KeygenRequest<T::ValidatorId>");
+        event_type_registry.register_type_size::<EthSigningTxRequest<AccountId32>>(
+            "EthSigningTxRequest<T::ValidatorId>",
+        );
+        event_type_registry.register_type_size::<VaultRotationRequest>("VaultRotationRequest");
     }
 }
 
@@ -149,6 +162,8 @@ impl witness_api::WitnesserApi for StateChainRuntime {}
 impl emissions::Emissions for StateChainRuntime {
     type FlipBalance = u128;
 }
+
+impl reputation::Reputation for StateChainRuntime {}
 
 impl System for StateChainRuntime {
     type Index = u32;

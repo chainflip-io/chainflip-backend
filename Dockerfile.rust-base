@@ -12,7 +12,7 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
         libclang-dev \
         lld \
         python3-dev
-        
+
 # Download and install sccache https://github.com/mozilla/sccache
 ARG SCCACHE_VER="0.2.15"
 RUN curl -fsSLo /tmp/sccache.tgz \

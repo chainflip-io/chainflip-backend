@@ -1,0 +1,111 @@
+# Runs on every PR
+kind: pipeline
+name: chainflip-backend-checks
+type: kubernetes
+
+environment:
+  SCCACHE_REDIS: redis://drone-redis-headless:6379/
+  SCCACHE_CACHE_SIZE: 14G
+
+steps:
+  #  Checks the the .drone.yml file is formatted correctly
+  - name: lint-drone-yml
+    depends_on:
+      - clone
+    image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+    resources:
+      limits:
+        cpu: 3000
+    commands:
+      - drone lint --trusted
+
+  #  Builds the base image for running build jobs
+  - name: rust-base
+    image: plugins/docker
+    depends_on:
+      - lint-drone-yml
+    settings:
+      username: &docker_username
+        from_secret: docker_username
+      password: &docker_password
+        from_secret: docker_password
+      repo: ghcr.io/chainflip-io/chainflip-backend/rust-base
+      dockerfile: Dockerfile.rust-base
+      registry: ghcr.io
+      tags: latest
+      cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    when:
+      paths:
+        - Dockerfile.rust-base
+
+  #  Format checks
+  - name: fmt-validator-package
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    depends_on:
+      - rust-base
+    commands:
+      - >
+        cargo fmt -p chainflip-engine
+        -p cf-p2p
+        -p cf-p2p-rpc
+        -p pallet-cf-auction
+        -p pallet-cf-emissions
+        -p pallet-cf-flip
+        -p pallet-cf-governance
+        -p pallet-cf-rewards
+        -p pallet-cf-reputation
+        -p pallet-cf-staking
+        -p pallet-cf-validator
+        -p pallet-cf-vaults
+        -p pallet-cf-witnesser
+        -p pallet-cf-witnesser-api
+        -p cf-traits
+        -- --check
+      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
+
+  #######################################################################
+  # Run Check and Test on normal PRs
+
+  #  Compiles the entire backend
+  - name: check-chainflip-backend
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    when:
+      branch:
+        exclude:
+          - epic/*
+    depends_on:
+      - fmt-validator-package
+    commands:
+      - cargo build --locked --release
+      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
+
+  #  Compiles runs all unit tests
+  - name: test-chainflip-backend-with-check
+    image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+    when:
+      branch:
+        exclude:
+          - epic/*
+    depends_on:
+      - check-chainflip-backend
+    commands:
+      - cargo test --locked --lib --release
+      - if ! sccache -s; then echo 'warning - sccache is unhealthy'; fi
+
+service_account_name: drone-runner-kube
+
+# Config
+trigger:
+  event:
+    - pull_request
+
+image_pull_secrets:
+  - dockerconfigjson
+
+node_selector:
+  type: ci
+
+tolerations:
+  - key: "workloadKind"
+    operator: "Equal"
+    value: "ci"

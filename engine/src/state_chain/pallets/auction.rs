@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use sp_runtime::traits::One;
 use substrate_subxt::{module, sp_runtime::traits::Member, system::System, Event};
 
-use super::{runtime::StateChainRuntime, sc_event::SCEvent};
+use crate::state_chain::{runtime::StateChainRuntime, sc_event::SCEvent};
 
 #[module]
 pub trait Auction: System {
@@ -89,6 +89,8 @@ mod tests {
     use pallet_cf_auction::Config;
 
     use state_chain_runtime::Runtime as SCRuntime;
+
+    use crate::state_chain::runtime::StateChainRuntime;
 
     #[test]
     fn auction_started_decoding() {
