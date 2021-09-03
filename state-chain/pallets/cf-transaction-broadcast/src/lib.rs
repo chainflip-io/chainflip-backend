@@ -40,8 +40,10 @@ pub enum BroadcastFailure<SignerId: Parameter> {
 	MpcFailure { bad_nodes: Vec<SignerId> },
 	/// The nominated signer was unable to sign the transaction in time.
 	SigningTimeout(SignerId),
-	/// The transaction was rejected.
+	/// The transaction was rejected because of some user error.
 	TransactionRejected,
+	/// The transaction failed for some unknown reason.
+	TransactionFailed,
 	/// The transaction stalled.
 	TransactionTimeout,
 }
@@ -74,10 +76,10 @@ pub trait BroadcastContext<T: BaseConfig> {
 	) -> Result<(), Self::Error>;
 
 	/// Optional callback for when a transaction has been witnessed on the host chain.
-	fn on_broadcast_success(&mut self, transaction_hash: &Self::TransactionHash) {}
+	fn on_broadcast_success(&mut self, _transaction_hash: &Self::TransactionHash) {}
 
 	/// Optional callback for when a transaction has failed.
-	fn on_broadcast_failure(&mut self, failure: &BroadcastFailure<T::ValidatorId>) {}
+	fn on_broadcast_failure(&mut self, _failure: &BroadcastFailure<T::ValidatorId>) {}
 }
 
 /// Something that can nominate signers from the set of active validators.
@@ -309,11 +311,15 @@ pub mod pallet {
 					todo!()
 				}
 				BroadcastFailure::TransactionRejected => {
-					//
+					// Report and nominate a new signer. Retry.
+					todo!()
+				}
+				BroadcastFailure::TransactionFailed => {
+					// This is bad.
 					todo!()
 				}
 				BroadcastFailure::TransactionTimeout => {
-					//
+					// Nominate a new signer, but don't report the old one. Retry.
 					todo!()
 				}
 			}
