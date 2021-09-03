@@ -146,7 +146,7 @@ pub enum RotationError<ValidatorId> {
 }
 
 /// Rotating vaults
-pub trait VaultRotation {
+pub trait VaultRotator {
 	type ValidatorId;
 	/// Start a vault rotation with the following `candidates`
 	fn start_vault_rotation(
