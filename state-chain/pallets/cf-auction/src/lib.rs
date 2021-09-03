@@ -41,8 +41,8 @@ mod tests;
 extern crate assert_matches;
 
 use cf_traits::{
-	Auction, AuctionError, AuctionPhase, AuctionRange, BidderProvider, Online, VaultRotation,
-	VaultRotationHandler,
+	Auction, AuctionError, AuctionPhase, AuctionRange, BidderProvider, Online,
+	VaultRotationHandler, VaultRotator,
 };
 use frame_support::pallet_prelude::*;
 use frame_support::sp_runtime::offchain::storage_lock::BlockNumberProvider;
@@ -57,7 +57,6 @@ use sp_std::prelude::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{Online, VaultRotation};
 	use frame_support::traits::ValidatorRegistration;
 	use sp_std::ops::Add;
 
@@ -83,7 +82,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MinAuctionSize: Get<u32>;
 		/// The lifecycle of our auction
-		type Handler: VaultRotation<ValidatorId = Self::ValidatorId>;
+		type Handler: VaultRotator<ValidatorId = Self::ValidatorId>;
 		/// An online validator
 		type Online: Online<ValidatorId = Self::ValidatorId>;
 	}

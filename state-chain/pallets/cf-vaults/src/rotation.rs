@@ -8,7 +8,7 @@ use sp_std::prelude::*;
 pub type CeremonyId = u64;
 
 /// Schnorr Signature type
-#[derive(PartialEq, Decode, Encode, Eq, Clone, RuntimeDebug)]
+#[derive(PartialEq, Decode, Encode, Eq, Clone, RuntimeDebug, Copy, Default)]
 pub struct SchnorrSignature {
 	/// Scalar component
 	// s: secp256k1::SecretKey,
@@ -29,23 +29,21 @@ pub trait RequestResponse<Index: AtLeast32BitUnsigned, Req, Res, Error> {
 pub trait ChainVault {
 	/// The type used for public keys
 	type PublicKey: Into<Vec<u8>>;
-	/// A transaction
-	type Transaction: Into<Vec<u8>>;
+	/// A transaction hash
+	type TransactionHash: Into<Vec<u8>>;
 	/// An identifier for a validator involved in the rotation of the vault
 	type ValidatorId;
 	/// An error on rotating the vault
 	type Error;
 	/// Start the vault rotation phase.  The chain would complete steps necessary for its chain
 	/// for the rotation of the vault.
-	/// When complete `ChainHandler::try_complete_vault_rotation()` would be used to notify to continue
-	/// with the process.
-	fn start_vault_rotation(
-		index: CeremonyId,
+	fn rotate_vault(
+		ceremony_id: CeremonyId,
 		new_public_key: Self::PublicKey,
 		validators: Vec<Self::ValidatorId>,
 	) -> Result<(), Self::Error>;
 	/// We have confirmation of the rotation back from `Vaults`
-	fn vault_rotated(response: Vault<Self::PublicKey, Self::Transaction>);
+	fn vault_rotated(new_public_key: Self::PublicKey, tx_hash: Self::TransactionHash);
 }
 
 /// Events coming in from our chain.  This is used to callback from the request to complete the vault
@@ -75,9 +73,17 @@ pub enum ChainParams {
 	///
 	/// The value is the call data encoded for the final transaction
 	/// to request the key rotation via `setAggKeyWithAggKey`
-	Ethereum(SchnorrSignature),
+	Ethereum(Vec<u8>),
 	/// This is a placeholder, not to be used in production
 	Other(Vec<u8>),
+}
+
+/// State of a vault rotation
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub struct VaultRotation<ValidatorId, PublicKey> {
+	/// Proposed new public key
+	pub new_public_key: PublicKey,
+	pub keygen_request: KeygenRequest<ValidatorId>,
 }
 
 /// A representation of a key generation request
@@ -114,23 +120,19 @@ impl From<ChainParams> for VaultRotationRequest {
 
 /// The Vault's keys, public that is
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct Vault<PublicKey: Into<Vec<u8>>, Transaction: Into<Vec<u8>>> {
-	/// Until rotation is completed successfully the current key
-	pub old_key: PublicKey,
-	/// The newly proposed and soon to be current key
-	pub new_key: PublicKey,
-	/// The transaction hash for the vault rotation
-	pub tx: Transaction,
+pub struct Vault<PublicKey: Into<Vec<u8>>, TransactionHash: Into<Vec<u8>>> {
+	/// The previous key
+	pub previous_key: PublicKey,
+	/// The current key
+	pub current_key: PublicKey,
+	/// The transaction hash for the vault rotation to the current key
+	pub tx_hash: TransactionHash,
 }
 
 /// A response of our request to rotate the vault
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum VaultRotationResponse<PublicKey: Into<Vec<u8>>, Transaction: Into<Vec<u8>>> {
-	Success {
-		old_key: PublicKey,
-		new_key: PublicKey,
-		tx: Transaction,
-	},
+pub enum VaultRotationResponse<TransactionHash: Into<Vec<u8>>> {
+	Success { tx_hash: TransactionHash },
 	Failure,
 }
 

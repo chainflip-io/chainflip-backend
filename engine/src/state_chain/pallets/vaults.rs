@@ -49,7 +49,7 @@ pub struct VaultRotationResponseCall<T: Vaults> {
 
     // Can we provide better types than this? It may require some changes
     // to the type accepted by the SC
-    pub response: VaultRotationResponse<Vec<u8>, Vec<u8>>,
+    pub response: VaultRotationResponse<Vec<u8>>,
 
     pub _runtime: PhantomData<T>,
 }

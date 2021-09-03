@@ -119,7 +119,7 @@ pub mod pallet {
 		pub fn witness_vault_rotation_response(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
-			response: VaultRotationResponse<T::PublicKey, T::Transaction>,
+			response: VaultRotationResponse<T::TransactionHash>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = VaultsCall::vault_rotation_response(ceremony_id, response);

@@ -23,7 +23,7 @@ type ValidatorId = u64;
 thread_local! {
 	pub static OTHER_CHAIN_RESULT: RefCell<CeremonyId> = RefCell::new(0);
 	pub static BAD_VALIDATORS: RefCell<Vec<ValidatorId>> = RefCell::new(vec![]);
-	pub static GENESIS_ETHEREUM_PUBLIC_KEY: RefCell<Vec<u8>> = RefCell::new(vec![1,2,3]);
+	pub static GENESIS_ETHEREUM_PUBLIC_KEY: RefCell<Vec<u8>> = RefCell::new(vec![0]);
 }
 
 construct_runtime!(
@@ -114,9 +114,10 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type Event = Event;
 	type EnsureWitnessed = MockEnsureWitness;
 	type PublicKey = Vec<u8>;
-	type Transaction = Vec<u8>;
+	type TransactionHash = Vec<u8>;
 	type RotationHandler = Self;
 	type NonceProvider = Self;
+	type EpochInfo = cf_traits::mocks::epoch_info::Mock;
 }
 
 pub fn bad_validators() -> Vec<ValidatorId> {

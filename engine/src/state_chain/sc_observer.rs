@@ -68,7 +68,8 @@ pub async fn start(
                             .collect();
 
                         let gen_new_key_event = MultisigInstruction::KeyGen(KeygenInfo::new(
-                            // TODO: KeyId will be removed from here
+                            // this will probably be removed
+                            // https://github.com/chainflip-io/chainflip-backend/issues/492
                             KeyId(keygen_request_event.ceremony_id),
                             validators,
                         ));
@@ -116,10 +117,7 @@ pub async fn start(
                                 // TODO: Contract address should come from the state chain
                                 // https://github.com/chainflip-io/chainflip-backend/issues/459
                                 let response = match eth_broadcaster
-                                    .sign_and_broadcast_to(
-                                        tx.clone(),
-                                        settings.eth.key_manager_eth_address,
-                                    )
+                                    .sign_and_broadcast_to(tx, settings.eth.key_manager_eth_address)
                                     .await
                                 {
                                     Ok(tx_hash) => {
@@ -129,12 +127,7 @@ pub async fn start(
                                             tx_hash
                                         );
                                         VaultRotationResponse::Success {
-                                            // TODO: These to be removed on the SC side
-                                            // https://github.com/chainflip-io/chainflip-backend/issues/480
-                                            old_key: Vec::default(),
-                                            new_key: Vec::default(),
-                                            // this to be put in as vec<u8> tx
-                                            tx: Vec::default(),
+                                            tx_hash: tx_hash.as_bytes().to_vec(),
                                         }
                                     }
                                     Err(e) => {

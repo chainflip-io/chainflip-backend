@@ -53,7 +53,7 @@ mod test {
 			assert_ok!(VaultsPallet::keygen_response(
 				Origin::root(),
 				first_ceremony_id,
-				KeygenResponse::Success(vec![])
+				KeygenResponse::Success(vec![1, 2, 3])
 			));
 
 			// A subsequent key generation request
@@ -95,7 +95,7 @@ mod test {
 			assert_ok!(VaultsPallet::keygen_response(
 				Origin::root(),
 				VaultsPallet::current_request(),
-				KeygenResponse::Success(vec![])
+				KeygenResponse::Success(vec![1, 2, 3])
 			));
 			assert_ok!(VaultsPallet::request_vault_rotation(
 				VaultsPallet::current_request(),
@@ -138,10 +138,11 @@ mod test {
 			assert_ok!(VaultsPallet::start_vault_rotation(vec![
 				ALICE, BOB, CHARLIE
 			]));
+			let new_public_key = vec![1, 2, 3];
 			assert_ok!(VaultsPallet::keygen_response(
 				Origin::root(),
 				VaultsPallet::current_request(),
-				KeygenResponse::Success(vec![])
+				KeygenResponse::Success(new_public_key.clone())
 			));
 			assert_ok!(VaultsPallet::request_vault_rotation(
 				VaultsPallet::current_request(),
@@ -161,15 +162,22 @@ mod test {
 				))
 			);
 
+			let tx_hash = "tx_hash".as_bytes().to_vec();
 			assert_ok!(VaultsPallet::vault_rotation_response(
 				Origin::root(),
 				VaultsPallet::current_request(),
 				VaultRotationResponse::Success {
-					old_key: "old_key".as_bytes().to_vec(),
-					new_key: "new_key".as_bytes().to_vec(),
-					tx: "tx".as_bytes().to_vec(),
+					tx_hash: tx_hash.clone(),
 				}
 			));
+
+			// Confirm we have rotated the keys
+			assert_eq!(VaultsPallet::eth_vault().tx_hash, tx_hash);
+			assert_eq!(
+				VaultsPallet::eth_vault().previous_key,
+				ethereum_public_key()
+			);
+			assert_eq!(VaultsPallet::eth_vault().current_key, new_public_key);
 
 			// Check the event emitted
 			assert_eq!(
@@ -190,7 +198,7 @@ mod test {
 			assert_ok!(VaultsPallet::keygen_response(
 				Origin::root(),
 				VaultsPallet::current_request(),
-				KeygenResponse::Success(vec![])
+				KeygenResponse::Success(vec![1, 2, 3])
 			));
 			assert_ok!(VaultsPallet::request_vault_rotation(
 				VaultsPallet::current_request(),
@@ -230,15 +238,18 @@ mod test {
 	#[test]
 	fn try_starting_a_vault_rotation() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(EthereumChain::<MockRuntime>::start_vault_rotation(
+			assert_ok!(EthereumChain::<MockRuntime>::rotate_vault(
 				0,
 				vec![],
 				vec![ALICE, BOB, CHARLIE]
 			));
 			let signing_request = ThresholdSignatureRequest {
-				payload: EthereumChain::<MockRuntime>::encode_set_agg_key_with_agg_key(vec![])
-					.unwrap(),
-				public_key: ethereum_public_key(),
+				payload: EthereumChain::<MockRuntime>::encode_set_agg_key_with_agg_key(
+					vec![],
+					SchnorrSignature::default(),
+				)
+				.unwrap(),
+				public_key: vec![],
 				validators: vec![ALICE, BOB, CHARLIE],
 			};
 			assert_eq!(
