@@ -461,13 +461,12 @@ impl<T: Config> OnKilledAccount<T::AccountId> for BurnFlipAccount<T> {
 }
 
 pub struct FlipSlasher<T: Config>(PhantomData<T>);
-/// An implementation of `Slashing` which kindly doesn't slash
+/// An implementation of `Slashing` for Flip
 impl<T, B> Slashing for FlipSlasher<T>
 where
 	T: Config<BlockNumber = B>,
 	B: UniqueSaturatedInto<T::Balance>,
 {
-	// ValidatorId = AccountId ? :/
 	type ValidatorId = T::AccountId;
 	type BlockNumber = B;
 
@@ -481,12 +480,11 @@ where
 		// Get blocks_offline as Balance
 		let blocks_offline: T::Balance = blocks_offline.unique_saturated_into();
 		// slash per day = n % of MBA
-		let slash_per_day = (bond / as_balance(100)) * slashing_rate;
+		let slash_per_day = (bond / as_balance(100)).saturating_mul(slashing_rate);
 		// Burn per block
 		let burn_per_block = slash_per_day / as_balance(BLOCKS_PER_DAY);
 		// Total amount of burn
-		let total_burn = burn_per_block * blocks_offline;
-		// TODO: handle case when the burn is zero
+		let total_burn = burn_per_block.saturating_mul(blocks_offline);
 		// Burn the slashing fee
 		Pallet::<T>::settle(validator_id, Pallet::<T>::burn(total_burn).into());
 		// TODO: calc weight

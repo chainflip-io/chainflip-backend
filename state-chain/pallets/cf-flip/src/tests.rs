@@ -480,21 +480,16 @@ mod test_slashing {
 	#[test]
 	fn test_slash_validator() {
 		new_test_ext().execute_with(|| {
+			// Amount of blocks the validator was offline
 			let blocks_offline: u64 = 20;
+			// Mint some Flip for testing - 100 is not enough and unrealistic for this usecase
+			Flip::settle(&ALICE, Flip::mint(80000000).into());
 			Flip::set_validator_bond(&ALICE, 8000000);
-			let total_balance_1 = Flip::total_balance_of(&ALICE);
+			let balance_before = Flip::total_balance_of(&ALICE);
 			SlashingRate::<Test>::set(5);
 			assert_eq!(FlipSlasher::<Test>::slash(&ALICE, blocks_offline), 0);
-			let total_balance_2 = Flip::total_balance_of(&ALICE);
-			assert!(total_balance_1 > total_balance_2);
-			// TODO: check if the right amount of Flip was burned
-		});
-	}
-
-	#[test]
-	fn test_update_slashing_rate() {
-		new_test_ext().execute_with(|| {
-			// TODO: check if its possible to update the slashing rate
+			let balance_after = Flip::total_balance_of(&ALICE);
+			assert_eq!(balance_before - balance_after, 540);
 		});
 	}
 }
