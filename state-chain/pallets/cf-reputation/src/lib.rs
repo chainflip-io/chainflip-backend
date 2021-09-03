@@ -446,7 +446,7 @@ pub mod pallet {
 					|| Reputations::<T>::get(&validator_id).reputation_points < Zero::zero()
 				{
 					// At this point we slash the validator by the amount of blocks offline
-					weight += T::Slasher::slash(&validator_id, &T::HeartbeatBlockInterval::get());
+					weight += T::Slasher::slash(&validator_id, T::HeartbeatBlockInterval::get());
 				}
 
 				weight += T::DbWeight::get().reads(1);
