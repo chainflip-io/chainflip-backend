@@ -4,8 +4,7 @@ use std::time::Duration;
 
 use crate::{
     logging::SIGNING_SUB_COMPONENT,
-    mq::{IMQClient, Subject},
-    p2p::ValidatorId,
+    p2p::{P2PMessageCommand, ValidatorId},
     signing::db::KeyDB,
 };
 use futures::StreamExt;
@@ -64,7 +63,6 @@ pub enum MultisigInstruction {
 
 #[derive(Serialize, Deserialize)]
 pub enum MultisigEvent {
-    ReadyToKeygen,
     MessageSigningResult(SigningOutcome),
     KeygenResult(KeygenOutcome),
 }
@@ -74,17 +72,17 @@ pub enum MultisigEvent {
 const PHASE_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Start listening on the p2p connection and MQ
-pub fn start<MQC, S>(
+pub fn start<S>(
     my_validator_id: ValidatorId,
     db: S,
-    mq_client: MQC,
     mut multisig_instruction_receiver: UnboundedReceiver<MultisigInstruction>,
     multisig_event_sender: UnboundedSender<MultisigEvent>,
+    mut p2p_message_receiver: UnboundedReceiver<P2PMessage>,
+    p2p_message_command_sender: UnboundedSender<P2PMessageCommand>,
     mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     logger: &slog::Logger,
 ) -> impl futures::Future
 where
-    MQC: IMQClient + Clone,
     S: KeyDB,
 {
     let logger = logger.new(o!(SIGNING_SUB_COMPONENT => "MultisigClient"));
@@ -101,24 +99,6 @@ where
     );
 
     async move {
-        let mut p2p_messages = mq_client
-            .subscribe::<P2PMessage>(Subject::P2PIncoming)
-            .await
-            .expect("Could not subscribe to Subject::P2PIncoming");
-
-        {
-            // have to wait for the coordinator to subscribe...
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-
-            // issue a message that we've subscribed
-            mq_client
-                .publish(Subject::MultisigEvent, &MultisigEvent::ReadyToKeygen)
-                .await
-                .expect("Signing module failed to publish readiness");
-
-            slog::trace!(logger, "[{:?}] subscribed to MQ", my_validator_id);
-        }
-
         // Stream outputs () approximately every ten seconds
         let mut cleanup_stream = Box::pin(futures::stream::unfold((), |()| async move {
             Some((tokio::time::sleep(Duration::from_secs(10)).await, ()))
@@ -126,15 +106,8 @@ where
 
         loop {
             tokio::select! {
-                Some(msg) = p2p_messages.next() => {
-                    match msg {
-                        Ok(p2p_message) => {
-                            inner.process_p2p_mq_message(p2p_message);
-                        },
-                        Err(err) => {
-                            slog::warn!(logger, "Ignoring channel error: {}", err);
-                        }
-                    }
+                Some(p2p_message) = p2p_message_receiver.recv() => {
+                    inner.process_p2p_mq_message(p2p_message);
                 }
                 Some(msg) = multisig_instruction_receiver.recv() => {
                     inner.process_multisig_instruction(msg);
@@ -145,17 +118,14 @@ where
                 }
                 Some(event) = events_rx.recv() => { // TODO: This will be removed entirely in the future
                     match event {
-                        InnerEvent::P2PMessageCommand(msg) => {
-                            // TODO: do not send one by one
-                            if let Err(err) = mq_client.publish(Subject::P2POutgoing, &msg).await {
-                                slog::error!(logger, "Could not publish message to MQ: {}", err);
-                            }
+                        InnerEvent::P2PMessageCommand(p2p_message_command) => {
+                            p2p_message_command_sender.send(p2p_message_command).map_err(|_| "Receiver dropped").unwrap();
                         }
                         InnerEvent::SigningResult(res) => {
-                            multisig_event_sender.send(MultisigEvent::MessageSigningResult(res)).map_err(|_| "Receiver should exist").unwrap();
+                            multisig_event_sender.send(MultisigEvent::MessageSigningResult(res)).map_err(|_| "Receiver dropped").unwrap();
                         }
                         InnerEvent::KeygenResult(res) => {
-                            multisig_event_sender.send(MultisigEvent::KeygenResult(res)).map_err(|_| "Receiver should exist").unwrap();
+                            multisig_event_sender.send(MultisigEvent::KeygenResult(res)).map_err(|_| "Receiver dropped").unwrap();
                         }
                     }
                 }

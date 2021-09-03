@@ -5,13 +5,13 @@ use slog::o;
 use sp_core::Hasher;
 use sp_runtime::traits::Keccak256;
 use substrate_subxt::{Client, EventSubscription, PairSigner};
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     eth::EthBroadcaster,
     logging::COMPONENT_KEY,
     p2p, settings,
-    signing::{KeyId, KeygenInfo, MessageHash, MultisigEvent, MultisigInstruction, SigningInfo},
+    signing::{KeyId, KeygenInfo, MessageHash, MultisigInstruction, SigningInfo},
     state_chain::{
         pallets::vaults::{
             VaultRotationResponseCallExt,
@@ -31,7 +31,6 @@ pub async fn start(
     signer: Arc<Mutex<PairSigner<StateChainRuntime, sp_core::sr25519::Pair>>>,
     eth_broadcaster: EthBroadcaster,
     multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
-    mut multisig_event_receiver: UnboundedReceiver<MultisigEvent>,
     logger: &slog::Logger,
 ) {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
@@ -99,7 +98,7 @@ pub async fn start(
                                 )
                                 .0,
                             ),
-                            SigningInfo::new(KeyId(todo!("Use pubkey as key id")), validators),
+                            SigningInfo::new(KeyId(0), validators),
                         );
 
                         multisig_instruction_sender
@@ -189,10 +188,8 @@ mod tests {
         let alice = AccountKeyring::Alice.pair();
         let pair_signer = PairSigner::new(alice);
         let signer = Arc::new(Mutex::new(pair_signer));
-        let (multisig_instruction_sender, multisig_instruction_receiver) =
+        let (multisig_instruction_sender, _multisig_instruction_receiver) =
             tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
-        let (multisig_event_sender, multisig_event_receiver) =
-            tokio::sync::mpsc::unbounded_channel::<MultisigEvent>();
 
         let web3 = eth::new_synced_web3_client(&settings, &logger)
             .await
@@ -209,7 +206,6 @@ mod tests {
             signer,
             eth_broadcaster,
             multisig_instruction_sender,
-            multisig_event_receiver,
             &logger,
         )
         .await;

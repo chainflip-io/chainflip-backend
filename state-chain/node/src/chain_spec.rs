@@ -305,7 +305,7 @@ pub fn chainflip_local_testnet_config() -> Result<ChainSpec, String> {
 fn testnet_genesis(
 	wasm_binary: &[u8],
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>,
-	root_key: AccountId,
+	_root_key: AccountId,
 	endowed_accounts: Vec<AccountId>,
 	dev: bool,
 ) -> GenesisConfig {
