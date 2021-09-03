@@ -1,7 +1,10 @@
 use std::marker::PhantomData;
 
 use crate as pallet_cf_emissions;
-use frame_support::{parameter_types, traits::Imbalance};
+use frame_support::{
+	parameter_types,
+	traits::{EnsureOrigin, Imbalance},
+};
 use frame_system as system;
 use pallet_cf_flip;
 use sp_core::H256;
@@ -63,10 +66,21 @@ parameter_types! {
 	pub const ExistentialDeposit: u128 = 10;
 }
 
+pub struct MockEnsureGovernance;
+
+impl EnsureOrigin<Origin> for MockEnsureGovernance {
+	type Success = ();
+
+	fn try_origin(o: Origin) -> Result<Self::Success, Origin> {
+		Ok(().into())
+	}
+}
+
 impl pallet_cf_flip::Config for Test {
 	type Event = Event;
 	type Balance = u128;
 	type ExistentialDeposit = ExistentialDeposit;
+	type EnsureGovernance = MockEnsureGovernance;
 }
 
 pub const MINT_INTERVAL: u64 = 5;

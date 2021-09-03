@@ -72,7 +72,6 @@ impl EnsureOrigin<Origin> for MockEnsureGovernance {
 	type Success = ();
 
 	fn try_origin(o: Origin) -> Result<Self::Success, Origin> {
-		// ensure_root(o).or(Err(RawOrigin::None.into()))
 		Ok(().into())
 	}
 }

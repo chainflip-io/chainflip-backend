@@ -1,3 +1,5 @@
+use frame_support::traits::EnsureOrigin;
+
 #[macro_export]
 macro_rules! impl_mock_ensure_governance_for_origin {
 	($origin:ty) => {

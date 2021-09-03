@@ -471,6 +471,8 @@ where
 	type BlockNumber = B;
 
 	fn slash(validator_id: &Self::ValidatorId, blocks_offline: Self::BlockNumber) -> Weight {
+		// TODO: Get the blocktime as seconds
+		//
 		// Get the MBA aka the bond
 		let bond = Account::<T>::get(validator_id).validator_bond;
 		// Get the slashing rate
