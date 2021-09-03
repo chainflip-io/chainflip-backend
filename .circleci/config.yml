@@ -9,7 +9,6 @@ ignore_main_branches: &ignore_main_branches
         - /release\/.*/
         # Uncomment and add your current branch when testing
 #        - update/epic-ci
-
 only_main_branches: &only_main_branches
   filters:
     branches:
@@ -42,9 +41,7 @@ auth: &dockerconfig
   password: $DOCKER_PASSWORD
 
 cargo-base-job: &cargo-base-job
-  docker:
-    - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-      auth: *dockerconfig
+  executor: rust-base
   environment: &sccache_environment
     SCCACHE_REDIS: redis://sccache.chainflip.xyz
     SCCACHE_CACHE_SIZE: 14G
@@ -81,6 +78,10 @@ executors:
   chainflip-master:
     docker:
       - image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
+        auth: *dockerconfig
+  rust-base:
+    docker:
+      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
         auth: *dockerconfig
 orbs:
   docker: circleci/docker@1.7.0
@@ -209,9 +210,7 @@ jobs:
       DOCKERFILE: Dockerfile
 
   fmt-validator-package:
-    docker:
-      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-        auth: *dockerconfig
+    executor: rust-base
     steps:
       - checkout
       - run: >
@@ -332,9 +331,9 @@ jobs:
             helm install bashful chainflip/chainflip-validator
             --namespace default
             --set state-chain-node.nodeType=validator
-            --set state-chain-node.image.tag="latest"
+            --set state-chain-node.image.tag="<<pipeline.git.revision>>"
             --set "state-chain-node.stateChainNode.extraArgs={--rpc-external,--rpc-cors,all}"
-            --set chainflip-engine.image.tag="latest"
+            --set chainflip-engine.image.tag="<<pipeline.git.revision>>"
             --wait
             --wait-for-jobs
       - run:
