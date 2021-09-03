@@ -487,6 +487,7 @@ mod test_slashing {
 			assert_eq!(FlipSlasher::<Test>::slash(&ALICE, blocks_offline), 0);
 			let total_balance_2 = Flip::total_balance_of(&ALICE);
 			assert!(total_balance_1 > total_balance_2);
+			// TODO: check if the right amount of Flip was burned
 		});
 	}
 

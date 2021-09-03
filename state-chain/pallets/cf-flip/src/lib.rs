@@ -60,14 +60,15 @@ use frame_support::{
 use codec::{Decode, Encode};
 use sp_runtime::{
 	traits::{
-		AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, UniqueSaturatedFrom,
-		UniqueSaturatedInto, Zero,
+		AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, UniqueSaturatedInto, Zero,
 	},
 	DispatchError, RuntimeDebug,
 };
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use pallet::*;
+
+const BLOCKS_PER_DAY: u32 = 14400;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -471,26 +472,24 @@ where
 	type BlockNumber = B;
 
 	fn slash(validator_id: &Self::ValidatorId, blocks_offline: Self::BlockNumber) -> Weight {
-		// TODO: Get the blocktime as seconds
-		//
+		// Clojure to cast a u32 to a Balance type
+		let as_balance = |n: u32| -> T::Balance { UniqueSaturatedInto::unique_saturated_into(n) };
 		// Get the MBA aka the bond
 		let bond = Account::<T>::get(validator_id).validator_bond;
 		// Get the slashing rate
 		let slashing_rate: T::Balance = T::Balance::from(SlashingRate::<T>::get());
 		// Get blocks_offline as Balance
-		let blocks_offline_balance: T::Balance = blocks_offline.unique_saturated_into();
-		// Clojure to cast a u32 to a Balance type
-		let to_balance = |n: u32| -> T::Balance { UniqueSaturatedInto::unique_saturated_into(n) };
-		// Number of blocks
-		let number_of_blocks = to_balance(14400);
-		// n % of MBA
-		let slash_base = (bond / to_balance(100)) * slashing_rate;
+		let blocks_offline: T::Balance = blocks_offline.unique_saturated_into();
+		// slash per day = n % of MBA
+		let slash_per_day = (bond / as_balance(100)) * slashing_rate;
 		// Burn per block
-		let burn_per_block = slash_base / number_of_blocks;
+		let burn_per_block = slash_per_day / as_balance(BLOCKS_PER_DAY);
 		// Total amount of burn
-		let total_burn = burn_per_block * blocks_offline_balance;
+		let total_burn = burn_per_block * blocks_offline;
+		// TODO: handle case when the burn is zero
 		// Burn the slashing fee
 		Pallet::<T>::settle(validator_id, Pallet::<T>::burn(total_burn).into());
+		// TODO: calc weight
 		0
 	}
 }
