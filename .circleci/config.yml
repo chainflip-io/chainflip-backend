@@ -110,7 +110,7 @@ workflows:
           <<: *ignore_main_branches
       - test-validator-package:
           requires:
-            - check-validator-package
+            - fmt-validator-package
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
