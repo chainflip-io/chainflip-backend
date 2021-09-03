@@ -441,16 +441,6 @@ impl pallet_cf_reqrep::BaseConfig for Runtime {
 	type ChainId = u32;
 }
 
-impl pallet_cf_reqrep::Config<Instance0> for Runtime {
-	type Event = Event;
-	type Request = pallet_cf_reqrep::instances::signature::Request<Self>;
-}
-
-impl pallet_cf_reqrep::Config<Instance1> for Runtime {
-	type Event = Event;
-	type Request = pallet_cf_reqrep::instances::broadcast::Request<Self>;
-}
-
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -478,8 +468,6 @@ construct_runtime!(
 		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>, Origin},
 		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>},
 		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
-		SignatureRequestReply: pallet_cf_reqrep::<Instance0>::{Module, Call, Storage, Event<T>},
-		BroadcastRequestReply: pallet_cf_reqrep::<Instance1>::{Module, Call, Storage, Event<T>},
 	}
 );
 
