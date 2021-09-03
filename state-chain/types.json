@@ -105,18 +105,16 @@
   "Signature": "H256",
   "TokenAmount": "u128",
   "ValidatorId": "AccountId",
-  "Transaction": "Vec<u8>",
+  "TransactionHash": "Vec<u8>",
   "Vault": {
-    "old_key": "PublicKey",
-    "new_key": "PublicKey",
-    "tx": "Transaction"
+    "previous_key": "PublicKey",
+    "current_key": "PublicKey",
+    "tx_hash": "TransactionHash"
   },
   "VaultRotationResponse": {
     "_enum": {
       "Success": {
-        "old_key": "PublicKey",
-        "new_key": "PublicKey",
-        "tx": "Transaction"
+        "tx": "TransactionHash"
       },
       "Failure": ""
     }

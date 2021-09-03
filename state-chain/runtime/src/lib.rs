@@ -168,7 +168,7 @@ impl pallet_cf_vaults::Config for Runtime {
 	type Event = Event;
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type PublicKey = Vec<u8>;
-	type Transaction = Vec<u8>;
+	type TransactionHash = Vec<u8>;
 	type RotationHandler = Auction;
 	type NonceProvider = Vaults;
 }

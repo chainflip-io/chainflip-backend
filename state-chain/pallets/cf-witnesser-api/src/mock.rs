@@ -107,7 +107,7 @@ impl pallet_cf_vaults::Config for Test {
 	type Event = Event;
 	type EnsureWitnessed = MockEnsureWitnessed;
 	type PublicKey = Vec<u8>;
-	type Transaction = Vec<u8>;
+	type TransactionHash = Vec<u8>;
 	type RotationHandler = Self;
 	type NonceProvider = Self;
 }

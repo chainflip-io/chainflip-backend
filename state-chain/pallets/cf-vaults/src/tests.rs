@@ -139,10 +139,11 @@ mod test {
 			assert_ok!(VaultsPallet::start_vault_rotation(vec![
 				ALICE, BOB, CHARLIE
 			]));
+			let new_public_key = vec![1, 2, 3];
 			assert_ok!(VaultsPallet::keygen_response(
 				Origin::root(),
 				VaultsPallet::current_request(),
-				KeygenResponse::Success(vec![1, 2, 3])
+				KeygenResponse::Success(new_public_key.clone())
 			));
 			assert_ok!(VaultsPallet::request_vault_rotation(
 				VaultsPallet::current_request(),
@@ -162,13 +163,22 @@ mod test {
 				))
 			);
 
+			let tx_hash = "tx_hash".as_bytes().to_vec();
 			assert_ok!(VaultsPallet::vault_rotation_response(
 				Origin::root(),
 				VaultsPallet::current_request(),
 				VaultRotationResponse::Success {
-					tx_hash: "tx_hash".as_bytes().to_vec(),
+					tx_hash: tx_hash.clone(),
 				}
 			));
+
+			// Confirm we have rotated the keys
+			assert_eq!(VaultsPallet::eth_vault().tx_hash, tx_hash);
+			assert_eq!(
+				VaultsPallet::eth_vault().previous_key,
+				ethereum_public_key()
+			);
+			assert_eq!(VaultsPallet::eth_vault().current_key, new_public_key);
 
 			// Check the event emitted
 			assert_eq!(
