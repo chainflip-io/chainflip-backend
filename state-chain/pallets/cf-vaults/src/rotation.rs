@@ -8,7 +8,7 @@ use sp_std::prelude::*;
 pub type RequestIndex = u64;
 
 /// Schnorr Signature type
-#[derive(PartialEq, Decode, Encode, Eq, Clone, RuntimeDebug)]
+#[derive(PartialEq, Decode, Encode, Eq, Clone, RuntimeDebug, Copy, Default)]
 pub struct SchnorrSignature {
 	/// Scalar component
 	// s: secp256k1::SecretKey,
@@ -75,7 +75,7 @@ pub enum ChainParams {
 	///
 	/// The value is the call data encoded for the final transaction
 	/// to request the key rotation via `setAggKeyWithAggKey`
-	Ethereum(SchnorrSignature),
+	Ethereum(Vec<u8>),
 	/// This is a placeholder, not to be used in production
 	Other(Vec<u8>),
 }
@@ -83,11 +83,13 @@ pub enum ChainParams {
 /// A representation of a key generation request
 /// This would be used for each supporting chain
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct KeygenRequest<ValidatorId> {
+pub struct KeygenRequest<ValidatorId, PublicKey> {
 	/// The chain type
 	pub(crate) chain_type: ChainType,
 	/// The set of validators from which we would like to generate the key
 	pub(crate) validator_candidates: Vec<ValidatorId>,
+	/// Proposed new public key
+	pub new_public_key: PublicKey,
 }
 
 /// A response for our KeygenRequest

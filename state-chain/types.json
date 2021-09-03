@@ -30,6 +30,11 @@
       "Other": "(Vec<u8>)"
     }
   },
+  "ChainType": {
+    "_enum": [
+      "Ethereum"
+    ]
+  },
   "ClaimDetailsFor": {
     "amount": "FlipBalance",
     "nonce": "Nonce",
@@ -61,7 +66,8 @@
   },
   "KeygenRequest": {
     "chain": "ChainParams",
-    "validator_candidates": "Vec<ValidatorId>"
+    "validator_candidates": "Vec<ValidatorId>",
+    "new_public_key": "PublicKey"
   },
   "KeygenResponse": {
     "_enum": {
@@ -92,6 +98,10 @@
   "RequestIndex": "u64",
   "ReserveId": "[u8;4]",
   "Retired": "bool",
+  "SchnorrSignature": {
+    "s": "[u8; 32]",
+    "r": "[u8; 20]"
+  },
   "Signature": "H256",
   "TokenAmount": "u128",
   "ValidatorId": "AccountId",

@@ -128,8 +128,9 @@ impl Runtime for StateChainRuntime {
 
         event_type_registry.register_type_size::<u64>("RequestIndex");
         event_type_registry.register_type_size::<OfflineCondition>("OfflineCondition");
-        event_type_registry
-            .register_type_size::<KeygenRequest<AccountId32>>("KeygenRequest<T::ValidatorId>");
+        event_type_registry.register_type_size::<KeygenRequest<AccountId32, Vec<u8>>>(
+            "KeygenRequest<T::ValidatorId, T::PublicKey>",
+        );
         event_type_registry.register_type_size::<Vec<u8>>("T::PublicKey");
         event_type_registry.register_type_size::<ThresholdSignatureRequest<Vec<u8>, AccountId32>>(
             "ThresholdSignatureRequest<T::PublicKey, T::ValidatorId>",

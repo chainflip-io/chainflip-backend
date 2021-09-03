@@ -111,7 +111,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn vault_rotations)]
 	pub(super) type VaultRotations<T: Config> =
-		StorageMap<_, Blake2_128Concat, RequestIndex, KeygenRequest<T::ValidatorId>>;
+		StorageMap<_, Blake2_128Concat, RequestIndex, KeygenRequest<T::ValidatorId, T::PublicKey>>;
 
 	/// A map of Nonces for chains supported
 	#[pallet::storage]
@@ -123,7 +123,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Request a key generation \[request_index, request\]
-		KeygenRequest(RequestIndex, KeygenRequest<T::ValidatorId>),
+		KeygenRequest(RequestIndex, KeygenRequest<T::ValidatorId, T::PublicKey>),
 		/// Request a rotation of the vault for this chain \[request_index, request\]
 		VaultRotationRequest(RequestIndex, VaultRotationRequest),
 		/// The vault for the request has rotated \[request_index\]
@@ -302,6 +302,7 @@ impl<T: Config> VaultRotation for Pallet<T> {
 		let keygen_request = KeygenRequest {
 			chain_type: ChainType::Ethereum,
 			validator_candidates: candidates.clone(),
+			new_public_key: Default::default(),
 		};
 
 		KeygenRequestResponse::<T>::make_request(Self::next_index(), keygen_request)
@@ -328,7 +329,7 @@ struct KeygenRequestResponse<T: Config>(PhantomData<T>);
 impl<T: Config>
 	RequestResponse<
 		RequestIndex,
-		KeygenRequest<T::ValidatorId>,
+		KeygenRequest<T::ValidatorId, T::PublicKey>,
 		KeygenResponse<T::ValidatorId, T::PublicKey>,
 		RotationError<T::ValidatorId>,
 	> for KeygenRequestResponse<T>
@@ -337,7 +338,7 @@ impl<T: Config>
 	/// validator set from the `AuctionHandler::on_auction_completed()`
 	fn make_request(
 		index: RequestIndex,
-		request: KeygenRequest<T::ValidatorId>,
+		request: KeygenRequest<T::ValidatorId, T::PublicKey>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		VaultRotations::<T>::insert(index, request.clone());
 		Pallet::<T>::deposit_event(Event::KeygenRequest(index, request));
@@ -354,15 +355,18 @@ impl<T: Config>
 		ensure_index!(index);
 		match response {
 			KeygenResponse::Success(new_public_key) => {
-				// Go forth and construct
-				match VaultRotations::<T>::try_get(index) {
-					Ok(keygen_request) => EthereumChain::<T>::start_vault_rotation(
-						index,
-						new_public_key,
-						keygen_request.validator_candidates.to_vec(),
-					),
-					Err(_) => Err(RotationError::KeyResponseFailed),
-				}
+				VaultRotations::<T>::mutate(index, |maybe_key_request| {
+					if let Some(keygen_request) = maybe_key_request {
+						(*keygen_request).new_public_key = new_public_key.clone();
+						EthereumChain::<T>::start_vault_rotation(
+							index,
+							new_public_key,
+							(*keygen_request).validator_candidates.to_vec(),
+						)
+					} else {
+						Err(RotationError::InvalidRequestIndex)
+					}
+				})
 			}
 			KeygenResponse::Failure(bad_validators) => {
 				// Abort this key generation request

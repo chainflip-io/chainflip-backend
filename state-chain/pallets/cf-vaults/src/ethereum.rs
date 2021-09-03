@@ -1,13 +1,12 @@
 use crate::ChainParams::Ethereum;
-use crate::SchnorrSignature;
 use crate::{
 	ChainVault, Config, EthereumVault, Event, Pallet, RequestIndex, RequestResponse,
 	ThresholdSignatureRequest, ThresholdSignatureResponse, Vault, VaultRotationRequestResponse,
 };
+use crate::{SchnorrSignature, VaultRotations};
 use cf_traits::{NonceIdentifier, NonceProvider, RotationError, VaultRotationHandler};
 use ethabi::{Bytes, Function, Param, ParamType, Token};
 use frame_support::pallet_prelude::*;
-use frame_support::sp_runtime::app_crypto::sp_core::H160;
 use sp_std::prelude::*;
 
 pub struct EthereumChain<T: Config>(PhantomData<T>);
@@ -28,8 +27,11 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 		new_public_key: Self::PublicKey,
 		validators: Vec<Self::ValidatorId>,
 	) -> Result<(), Self::Error> {
-		// Create payload for signature here
-		match Self::encode_set_agg_key_with_agg_key(new_public_key.clone()) {
+		// Create payload for signature
+		match Self::encode_set_agg_key_with_agg_key(
+			new_public_key.clone(),
+			SchnorrSignature::default(),
+		) {
 			Ok(payload) => {
 				// Emit the event
 				Self::make_request(
@@ -78,7 +80,27 @@ impl<T: Config>
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		match response {
 			ThresholdSignatureResponse::Success(signature) => {
-				VaultRotationRequestResponse::<T>::make_request(index, Ethereum(signature).into())
+				match VaultRotations::<T>::try_get(index) {
+					Ok(keygen_request) => {
+						match Self::encode_set_agg_key_with_agg_key(
+							keygen_request.new_public_key,
+							signature,
+						) {
+							Ok(payload) => {
+								// Emit the event
+								VaultRotationRequestResponse::<T>::make_request(
+									index,
+									Ethereum(payload).into(),
+								)
+							}
+							Err(_) => {
+								Pallet::<T>::abort_rotation();
+								Err(RotationError::FailedToConstructPayload)
+							}
+						}
+					}
+					Err(_) => Err(RotationError::InvalidRequestIndex),
+				}
 			}
 			ThresholdSignatureResponse::Error(bad_validators) => {
 				T::RotationHandler::penalise(bad_validators.clone());
@@ -94,6 +116,7 @@ impl<T: Config> EthereumChain<T> {
 	/// around `no_std` limitations here for the runtime.
 	pub(crate) fn encode_set_agg_key_with_agg_key(
 		new_public_key: T::PublicKey,
+		signature: SchnorrSignature,
 	) -> ethabi::Result<Bytes> {
 		Function::new(
 			"setAggKeyWithAggKey",
@@ -113,12 +136,11 @@ impl<T: Config> EthereumChain<T> {
 			false,
 		)
 		.encode_input(&vec![
-			// sigData: SigData(uint, uint, uint, address)
 			Token::Tuple(vec![
 				Token::Uint(ethabi::Uint::zero()),
-				Token::Uint(ethabi::Uint::zero()),
+				Token::Uint(signature.s.into()),
 				Token::Uint(T::NonceProvider::next_nonce(NonceIdentifier::Ethereum).into()),
-				Token::Address(H160::zero()),
+				Token::Address(signature.r.into()),
 			]),
 			// newKey: bytes32
 			Token::FixedBytes(new_public_key.into()),

@@ -37,6 +37,7 @@ mod test {
 					KeygenRequest {
 						chain_type: ChainType::Ethereum,
 						validator_candidates: vec![ALICE, BOB, CHARLIE],
+						new_public_key: Default::default()
 					}
 				))
 			);
@@ -236,8 +237,11 @@ mod test {
 				vec![ALICE, BOB, CHARLIE]
 			));
 			let signing_request = ThresholdSignatureRequest {
-				payload: EthereumChain::<MockRuntime>::encode_set_agg_key_with_agg_key(vec![])
-					.unwrap(),
+				payload: EthereumChain::<MockRuntime>::encode_set_agg_key_with_agg_key(
+					vec![],
+					SchnorrSignature::default(),
+				)
+				.unwrap(),
 				public_key: ethereum_public_key(),
 				validators: vec![ALICE, BOB, CHARLIE],
 			};
