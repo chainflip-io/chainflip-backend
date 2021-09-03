@@ -37,9 +37,7 @@ pub trait ChainVault {
 	type Error;
 	/// Start the vault rotation phase.  The chain would complete steps necessary for its chain
 	/// for the rotation of the vault.
-	/// When complete `ChainHandler::try_complete_vault_rotation()` would be used to notify to continue
-	/// with the process.
-	fn start_vault_rotation(
+	fn rotate_vault(
 		index: RequestIndex,
 		new_public_key: Self::PublicKey,
 		validators: Vec<Self::ValidatorId>,
@@ -80,16 +78,22 @@ pub enum ChainParams {
 	Other(Vec<u8>),
 }
 
+/// State of a vault rotation
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub struct VaultRotation<ValidatorId, PublicKey> {
+	/// Proposed new public key
+	pub new_public_key: PublicKey,
+	pub keygen_request: KeygenRequest<ValidatorId>,
+}
+
 /// A representation of a key generation request
 /// This would be used for each supporting chain
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct KeygenRequest<ValidatorId, PublicKey> {
+pub struct KeygenRequest<ValidatorId> {
 	/// The chain type
 	pub(crate) chain_type: ChainType,
 	/// The set of validators from which we would like to generate the key
 	pub(crate) validator_candidates: Vec<ValidatorId>,
-	/// Proposed new public key
-	pub new_public_key: PublicKey,
 }
 
 /// A response for our KeygenRequest

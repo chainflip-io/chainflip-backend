@@ -37,7 +37,6 @@ mod test {
 					KeygenRequest {
 						chain_type: ChainType::Ethereum,
 						validator_candidates: vec![ALICE, BOB, CHARLIE],
-						new_public_key: Default::default()
 					}
 				))
 			);
@@ -239,7 +238,7 @@ mod test {
 	#[test]
 	fn try_starting_a_vault_rotation() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(EthereumChain::<MockRuntime>::start_vault_rotation(
+			assert_ok!(EthereumChain::<MockRuntime>::rotate_vault(
 				0,
 				vec![],
 				vec![ALICE, BOB, CHARLIE]

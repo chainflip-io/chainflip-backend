@@ -67,7 +67,6 @@
   "KeygenRequest": {
     "chain": "ChainParams",
     "validator_candidates": "Vec<ValidatorId>",
-    "new_public_key": "PublicKey"
   },
   "KeygenResponse": {
     "_enum": {
@@ -110,6 +109,10 @@
     "previous_key": "PublicKey",
     "current_key": "PublicKey",
     "tx_hash": "TransactionHash"
+  },
+  "VaultRotation": {
+    "new_public_key": "PublicKey",
+    "keygen_request": "KeygenRequest"
   },
   "VaultRotationResponse": {
     "_enum": {

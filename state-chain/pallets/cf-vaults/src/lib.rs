@@ -46,7 +46,8 @@ use frame_support::pallet_prelude::*;
 use sp_std::prelude::*;
 
 use cf_traits::{
-	Nonce, NonceIdentifier, NonceProvider, RotationError, VaultRotation, VaultRotationHandler,
+	EpochInfo, Nonce, NonceIdentifier, NonceProvider, RotationError, VaultRotationHandler,
+	VaultRotator,
 };
 pub use pallet::*;
 
@@ -69,7 +70,7 @@ pub mod pallet {
 	use super::*;
 	use crate::ethereum::EthereumChain;
 	use crate::rotation::SchnorrSignature;
-	use cf_traits::{Chainflip, Nonce, NonceIdentifier};
+	use cf_traits::{Chainflip, EpochInfo, Nonce, NonceIdentifier};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -90,6 +91,8 @@ pub mod pallet {
 		type RotationHandler: VaultRotationHandler<ValidatorId = Self::ValidatorId>;
 		/// A nonce provider
 		type NonceProvider: NonceProvider;
+		/// Epoch info
+		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -111,7 +114,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn vault_rotations)]
 	pub(super) type VaultRotations<T: Config> =
-		StorageMap<_, Blake2_128Concat, RequestIndex, KeygenRequest<T::ValidatorId, T::PublicKey>>;
+		StorageMap<_, Blake2_128Concat, RequestIndex, VaultRotation<T::ValidatorId, T::PublicKey>>;
 
 	/// A map of Nonces for chains supported
 	#[pallet::storage]
@@ -123,7 +126,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Request a key generation \[request_index, request\]
-		KeygenRequest(RequestIndex, KeygenRequest<T::ValidatorId, T::PublicKey>),
+		KeygenRequest(RequestIndex, KeygenRequest<T::ValidatorId>),
 		/// Request a rotation of the vault for this chain \[request_index, request\]
 		VaultRotationRequest(RequestIndex, VaultRotationRequest),
 		/// The vault for the request has rotated \[request_index\]
@@ -291,7 +294,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> VaultRotation for Pallet<T> {
+impl<T: Config> VaultRotator for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 	fn start_vault_rotation(
 		candidates: Vec<Self::ValidatorId>,
@@ -302,7 +305,6 @@ impl<T: Config> VaultRotation for Pallet<T> {
 		let keygen_request = KeygenRequest {
 			chain_type: ChainType::Ethereum,
 			validator_candidates: candidates.clone(),
-			new_public_key: Default::default(),
 		};
 
 		KeygenRequestResponse::<T>::make_request(Self::next_index(), keygen_request)
@@ -329,7 +331,7 @@ struct KeygenRequestResponse<T: Config>(PhantomData<T>);
 impl<T: Config>
 	RequestResponse<
 		RequestIndex,
-		KeygenRequest<T::ValidatorId, T::PublicKey>,
+		KeygenRequest<T::ValidatorId>,
 		KeygenResponse<T::ValidatorId, T::PublicKey>,
 		RotationError<T::ValidatorId>,
 	> for KeygenRequestResponse<T>
@@ -338,9 +340,15 @@ impl<T: Config>
 	/// validator set from the `AuctionHandler::on_auction_completed()`
 	fn make_request(
 		index: RequestIndex,
-		request: KeygenRequest<T::ValidatorId, T::PublicKey>,
+		request: KeygenRequest<T::ValidatorId>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
-		VaultRotations::<T>::insert(index, request.clone());
+		VaultRotations::<T>::insert(
+			index,
+			VaultRotation {
+				new_public_key: Default::default(),
+				keygen_request: request.clone(),
+			},
+		);
 		Pallet::<T>::deposit_event(Event::KeygenRequest(index, request));
 		Ok(())
 	}
@@ -356,13 +364,13 @@ impl<T: Config>
 		match response {
 			KeygenResponse::Success(new_public_key) => {
 				if EthereumVault::<T>::get().current_key != new_public_key {
-					VaultRotations::<T>::mutate(index, |maybe_key_request| {
-						if let Some(keygen_request) = maybe_key_request {
-							(*keygen_request).new_public_key = new_public_key.clone();
-							EthereumChain::<T>::start_vault_rotation(
+					VaultRotations::<T>::mutate(index, |maybe_vault_rotation| {
+						if let Some(vault_rotation) = maybe_vault_rotation {
+							(*vault_rotation).new_public_key = new_public_key.clone();
+							EthereumChain::<T>::rotate_vault(
 								index,
 								new_public_key,
-								(*keygen_request).validator_candidates.to_vec(),
+								T::EpochInfo::current_validators(),
 							)
 						} else {
 							Err(RotationError::InvalidRequestIndex)
@@ -448,11 +456,11 @@ impl<T: Config>
 		// need to rollback any if one of the group of vault rotations fails
 		match response {
 			VaultRotationResponse::Success { tx_hash } => {
-				if let Some(keygen_request) = VaultRotations::<T>::take(index) {
+				if let Some(vault_rotation) = VaultRotations::<T>::take(index) {
 					// At the moment we just have Ethereum to notify
-					match keygen_request.chain_type {
+					match vault_rotation.keygen_request.chain_type {
 						ChainType::Ethereum => EthereumChain::<T>::vault_rotated(
-							keygen_request.new_public_key,
+							vault_rotation.new_public_key,
 							tx_hash,
 						),
 					}

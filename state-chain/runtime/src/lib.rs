@@ -171,6 +171,7 @@ impl pallet_cf_vaults::Config for Runtime {
 	type TransactionHash = Vec<u8>;
 	type RotationHandler = Auction;
 	type NonceProvider = Vaults;
+	type EpochInfo = Validator;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime

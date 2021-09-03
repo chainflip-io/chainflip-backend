@@ -117,6 +117,7 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type TransactionHash = Vec<u8>;
 	type RotationHandler = Self;
 	type NonceProvider = Self;
+	type EpochInfo = cf_traits::mocks::epoch_info::Mock;
 }
 
 pub fn bad_validators() -> Vec<ValidatorId> {

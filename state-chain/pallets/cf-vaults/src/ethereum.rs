@@ -19,10 +19,10 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 
 	/// The initial phase has completed with success and we are notified of this from `Vaults`.
 	/// Now the specifics for this chain/vault are processed.  In the case for Ethereum we request
-	/// to have the function `setAggKeyWithAggKey` signed by the old set of validators.
+	/// to have the function `setAggKeyWithAggKey` signed by the **old** set of validators.
 	/// A payload is built and emitted as a `EthSigningTxRequest`, failing this an error is reported
 	/// back to `Vaults`
-	fn start_vault_rotation(
+	fn rotate_vault(
 		index: RequestIndex,
 		new_public_key: Self::PublicKey,
 		validators: Vec<Self::ValidatorId>,
@@ -85,9 +85,9 @@ impl<T: Config>
 		match response {
 			ThresholdSignatureResponse::Success(signature) => {
 				match VaultRotations::<T>::try_get(index) {
-					Ok(keygen_request) => {
+					Ok(vault_rotation) => {
 						match Self::encode_set_agg_key_with_agg_key(
-							keygen_request.new_public_key,
+							vault_rotation.new_public_key,
 							signature,
 						) {
 							Ok(payload) => {

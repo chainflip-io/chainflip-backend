@@ -110,6 +110,7 @@ impl pallet_cf_vaults::Config for Test {
 	type TransactionHash = Vec<u8>;
 	type RotationHandler = Self;
 	type NonceProvider = Self;
+	type EpochInfo = cf_traits::mocks::epoch_info::Mock;
 }
 
 impl pallet_cf_witness_api::Config for Test {
