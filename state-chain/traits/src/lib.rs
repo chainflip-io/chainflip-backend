@@ -261,5 +261,6 @@ pub trait Slashing {
 	type ValidatorId;
 	/// Block number
 	type BlockNumber;
+	/// Function which implements the slashing logic
 	fn slash(validator_id: &Self::ValidatorId, blocks_offline: Self::BlockNumber) -> Weight;
 }

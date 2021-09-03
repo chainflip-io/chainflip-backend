@@ -71,7 +71,7 @@ pub struct MockEnsureGovernance;
 impl EnsureOrigin<Origin> for MockEnsureGovernance {
 	type Success = ();
 
-	fn try_origin(o: Origin) -> Result<Self::Success, Origin> {
+	fn try_origin(_o: Origin) -> Result<Self::Success, Origin> {
 		Ok(().into())
 	}
 }
