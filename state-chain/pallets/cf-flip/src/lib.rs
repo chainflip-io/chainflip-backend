@@ -487,7 +487,8 @@ where
 		let total_burn = burn_per_block.saturating_mul(blocks_offline);
 		// Burn the slashing fee
 		Pallet::<T>::settle(validator_id, Pallet::<T>::burn(total_burn).into());
-		// TODO: calc weight
-		0
+		// Calc the weight for the operation - assume 1r for slashing rate
+		// + 1r get bond + 1w update bond + 1w update balance
+		T::DbWeight::get().reads(2) + T::DbWeight::get().writes(2)
 	}
 }
