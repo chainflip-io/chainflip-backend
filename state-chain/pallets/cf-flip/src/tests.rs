@@ -489,4 +489,11 @@ mod test_slashing {
 			assert!(total_balance_1 > total_balance_2);
 		});
 	}
+
+	#[test]
+	fn test_update_slashing_rate() {
+		new_test_ext().execute_with(|| {
+			// TODO: check if its possible to update the slashing rate
+		});
+	}
 }
