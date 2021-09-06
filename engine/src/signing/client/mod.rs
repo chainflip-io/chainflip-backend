@@ -8,6 +8,7 @@ use crate::{
     signing::db::KeyDB,
 };
 use futures::StreamExt;
+use pallet_cf_vaults::CeremonyId;
 use slog::o;
 
 use crate::p2p::P2PMessage;
@@ -22,21 +23,21 @@ use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Copy)]
-pub struct KeyId(pub u64);
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
+pub struct KeyId(pub Vec<u8>);
 
-// TODO: Remove KeyId from here - we don't know what the keyid will be, since it'll be the public key
-// we might want to rename KeyId here too.
-// Issue: <link>
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct KeygenInfo {
-    id: KeyId,
+    ceremony_id: CeremonyId,
     signers: Vec<ValidatorId>,
 }
 
 impl KeygenInfo {
-    pub fn new(id: KeyId, signers: Vec<ValidatorId>) -> Self {
-        KeygenInfo { id, signers }
+    pub fn new(ceremony_id: CeremonyId, signers: Vec<ValidatorId>) -> Self {
+        KeygenInfo {
+            ceremony_id,
+            signers,
+        }
     }
 }
 

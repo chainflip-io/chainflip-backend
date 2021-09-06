@@ -14,6 +14,7 @@ use crate::{
     },
 };
 
+use pallet_cf_vaults::CeremonyId;
 use slog::o;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -128,17 +129,17 @@ impl From<Secret2> for SigningData {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct KeyGenMessageWrapped {
-    pub key_id: KeyId,
+    pub ceremony_id: CeremonyId,
     pub message: KeygenData,
 }
 
 impl KeyGenMessageWrapped {
-    pub fn new<M>(key_id: KeyId, m: M) -> Self
+    pub fn new<M>(ceremony_id: CeremonyId, m: M) -> Self
     where
         M: Into<KeygenData>,
     {
         KeyGenMessageWrapped {
-            key_id,
+            ceremony_id,
             message: m.into(),
         }
     }
@@ -211,7 +212,7 @@ impl<Id, Output> CeremonyOutcome<Id, Output> {
 }
 
 /// The final result of a keygen ceremony
-pub type KeygenOutcome = CeremonyOutcome<KeyId, secp256k1::PublicKey>;
+pub type KeygenOutcome = CeremonyOutcome<CeremonyId, secp256k1::PublicKey>;
 /// The final result of a Signing ceremony
 pub type SigningOutcome = CeremonyOutcome<MessageInfo, SchnorrSignature>;
 
@@ -313,7 +314,7 @@ where
 
         let entry = self
             .pending_requests_to_sign
-            .entry(sign_info.id)
+            .entry(sign_info.clone().id)
             .or_default();
 
         entry.push((data, sign_info));
@@ -339,7 +340,7 @@ where
                     "[{}] Received sign instruction",
                     self.my_validator_id
                 );
-                let key_id = sign_info.id;
+                let key_id = sign_info.clone().id;
 
                 let key = self.key_store.get_key(key_id);
 
@@ -357,9 +358,12 @@ where
         }
     }
 
-    /// Process requests to sign that required `key_id`
-    fn process_pending(&mut self, key_id: KeyId, key_info: KeygenResultInfo) {
-        if let Some(reqs) = self.pending_requests_to_sign.remove(&key_id) {
+    /// Process requests to sign that required `ceremony_id`
+    fn process_pending(&mut self, key_info: KeygenResultInfo) {
+        if let Some(reqs) = self
+            .pending_requests_to_sign
+            .remove(&KeyId(key_info.key.get_public_key_bytes()))
+        {
             slog::debug!(
                 self.logger,
                 "Processing pending requests to sign, count: {}",
@@ -372,16 +376,16 @@ where
         }
     }
 
-    fn on_key_generated(&mut self, key_id: KeyId, key_info: KeygenResultInfo) {
-        self.key_store.set_key(key_id, key_info.clone());
-        self.process_pending(key_id, key_info.clone());
+    fn on_key_generated(&mut self, ceremony_id: CeremonyId, key_info: KeygenResultInfo) {
+        self.key_store
+            .set_key(KeyId(key_info.key.get_public_key_bytes()), key_info.clone());
+        self.process_pending(key_info.clone());
 
         // NOTE: we only notify the SC after we have successfully saved the key
-
         if let Err(err) = self
             .tx
             .send(InnerEvent::KeygenResult(KeygenOutcome::success(
-                key_id,
+                ceremony_id,
                 key_info.key.get_public_key().get_element(),
             )))
         {
@@ -404,10 +408,10 @@ where
                 // even when we are "signing"... (for example, if we want to
                 // generate a new key)
 
-                let key_id = msg.key_id;
+                let ceremony_id = msg.ceremony_id;
 
                 if let Some(key) = self.keygen.process_keygen_message(sender_id, msg) {
-                    self.on_key_generated(key_id, key);
+                    self.on_key_generated(ceremony_id, key);
                     // NOTE: we could already delete the state here, but it is
                     // not necessary as it will be deleted by "cleanup"
                 }

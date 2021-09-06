@@ -176,7 +176,7 @@ impl SigningStateManager {
             }
         };
 
-        let key_id = sign_info.id;
+        let key_id = sign_info.clone().id;
 
         let mi = MessageInfo { hash: data, key_id };
 

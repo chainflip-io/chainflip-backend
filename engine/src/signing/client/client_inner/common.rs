@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use curv::elliptic::curves::traits::ECPoint;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -19,6 +20,10 @@ pub struct KeygenResult {
 impl KeygenResult {
     pub fn get_public_key(&self) -> GE {
         self.shared_keys.y
+    }
+
+    pub fn get_public_key_bytes(&self) -> Vec<u8> {
+        self.shared_keys.y.pk_to_key_slice()
     }
 }
 
