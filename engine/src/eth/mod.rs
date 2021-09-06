@@ -12,7 +12,7 @@ use thiserror::Error;
 
 use crate::settings;
 use futures::TryFutureExt;
-use std::path::Path;
+use std::fs::read_to_string;
 use std::str::FromStr;
 use std::time::Duration;
 use web3::{
@@ -43,12 +43,6 @@ impl SignatureAndEvent {
             event: event.clone(),
         })
     }
-}
-
-/// Retrieves a private key from a file. The file should contain just the hex-encoded key, nothing else.
-fn secret_key_from_file(filename: &Path) -> Result<SecretKey> {
-    let key = String::from_utf8(std::fs::read(filename)?)?;
-    Ok(SecretKey::from_str(&key[..])?)
 }
 
 pub async fn new_synced_web3_client(
@@ -89,14 +83,13 @@ impl EthBroadcaster {
         settings: &settings::Settings,
         web3: Web3<web3::transports::WebSocket>,
     ) -> Result<Self> {
+        let key = read_to_string(settings.eth.private_key_file.as_path())?;
         Ok(Self {
             web3,
-            secret_key: secret_key_from_file(settings.eth.private_key_file.as_path()).expect(
-                &format!(
-                    "Should read in secret key from: {}",
-                    settings.eth.private_key_file.display(),
-                ),
-            ),
+            secret_key: SecretKey::from_str(&key[..]).expect(&format!(
+                "Should read in secret key from: {}",
+                settings.eth.private_key_file.display(),
+            )),
         })
     }
 
