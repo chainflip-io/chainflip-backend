@@ -57,7 +57,7 @@ pub async fn new_synced_web3_client(
 ) -> Result<Web3<web3::transports::WebSocket>> {
     let node_endpoint = &settings.eth.node_endpoint;
     slog::debug!(logger, "Connecting new web3 client to {}", node_endpoint);
-    Ok(tokio::time::timeout(Duration::from_secs(5), async {
+    tokio::time::timeout(Duration::from_secs(5), async {
         Ok(web3::Web3::new(
             web3::transports::WebSocket::new(node_endpoint).await?,
         ))
@@ -74,7 +74,7 @@ pub async fn new_synced_web3_client(
         slog::info!(logger, "Eth node is synced.");
         Ok(web3)
     })
-    .await?)
+    .await
 }
 
 /// Enables ETH event streaming via the `Web3` client and signing & broadcasting of txs
@@ -101,7 +101,7 @@ impl EthBroadcaster {
     }
 
     /// Sign and broadcast a transaction to a particular contract
-    pub async fn sign_and_broadcast_to(&self, tx_data: Vec<u8>, contract: H160) -> Result<H256> {
+    pub async fn send(&self, tx_data: Vec<u8>, contract: H160) -> Result<H256> {
         let tx_params = TransactionParameters {
             to: Some(contract),
             data: tx_data.into(),

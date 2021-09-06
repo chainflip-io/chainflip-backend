@@ -115,7 +115,7 @@ pub async fn start(
                                 // TODO: Contract address should come from the state chain
                                 // https://github.com/chainflip-io/chainflip-backend/issues/459
                                 let response = match eth_broadcaster
-                                    .sign_and_broadcast_to(tx, settings.eth.key_manager_eth_address)
+                                    .send(tx, settings.eth.key_manager_eth_address)
                                     .await
                                 {
                                     Ok(tx_hash) => {
