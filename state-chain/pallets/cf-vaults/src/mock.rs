@@ -21,7 +21,7 @@ type Amount = u64;
 type ValidatorId = u64;
 
 thread_local! {
-	pub static OTHER_CHAIN_RESULT: RefCell<RequestIndex> = RefCell::new(0);
+	pub static OTHER_CHAIN_RESULT: RefCell<CeremonyId> = RefCell::new(0);
 	pub static BAD_VALIDATORS: RefCell<Vec<ValidatorId>> = RefCell::new(vec![]);
 	pub static GENESIS_ETHEREUM_PUBLIC_KEY: RefCell<Vec<u8>> = RefCell::new(vec![0]);
 }

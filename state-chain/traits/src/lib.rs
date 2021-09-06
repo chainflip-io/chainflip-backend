@@ -128,7 +128,7 @@ pub trait VaultRotationHandler {
 #[derive(RuntimeDebug, Encode, Decode, PartialEq, Clone)]
 pub enum RotationError<ValidatorId> {
 	/// An invalid request index
-	InvalidRequestIndex,
+	InvalidCeremonyId,
 	/// Empty validator set provided
 	EmptyValidatorSet,
 	/// A set of badly acting validators

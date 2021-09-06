@@ -4,8 +4,8 @@ use frame_support::RuntimeDebug;
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 
-/// Request index type
-pub type RequestIndex = u64;
+/// CeremonyId type
+pub type CeremonyId = u64;
 
 /// Schnorr Signature type
 #[derive(PartialEq, Decode, Encode, Eq, Clone, RuntimeDebug, Copy, Default)]
@@ -38,7 +38,7 @@ pub trait ChainVault {
 	/// Start the vault rotation phase.  The chain would complete steps necessary for its chain
 	/// for the rotation of the vault.
 	fn rotate_vault(
-		index: RequestIndex,
+		ceremony_id: CeremonyId,
 		new_public_key: Self::PublicKey,
 		validators: Vec<Self::ValidatorId>,
 	) -> Result<(), Self::Error>;
@@ -54,7 +54,7 @@ pub trait ChainHandler {
 	/// Request initial vault rotation phase complete with a result describing the outcome of this phase
 	/// Feedback is provided back on this step
 	fn request_vault_rotation(
-		index: RequestIndex,
+		index: CeremonyId,
 		result: Result<VaultRotationRequest, RotationError<Self::ValidatorId>>,
 	) -> Result<(), Self::Error>;
 }
@@ -93,7 +93,7 @@ pub struct KeygenRequest<ValidatorId> {
 	/// The chain type
 	pub(crate) chain_type: ChainType,
 	/// The set of validators from which we would like to generate the key
-	pub(crate) validator_candidates: Vec<ValidatorId>,
+	pub validator_candidates: Vec<ValidatorId>,
 }
 
 /// A response for our KeygenRequest
@@ -108,8 +108,9 @@ pub enum KeygenResponse<ValidatorId, PublicKey: Into<Vec<u8>>> {
 /// The vault rotation request
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct VaultRotationRequest {
-	pub(crate) chain: ChainParams,
+	pub chain: ChainParams,
 }
+
 /// From chain to request
 impl From<ChainParams> for VaultRotationRequest {
 	fn from(chain: ChainParams) -> Self {
@@ -137,13 +138,13 @@ pub enum VaultRotationResponse<TransactionHash: Into<Vec<u8>>> {
 
 /// A signing request
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct ThresholdSignatureRequest<PublicKey, ValidatorId> {
+pub struct ThresholdSignatureRequest<PublicKey: Into<Vec<u8>>, ValidatorId> {
 	/// Payload to be signed over
-	pub(crate) payload: Vec<u8>,
+	pub payload: Vec<u8>,
 	/// The public key of the key to be used to sign with
-	pub(crate) public_key: PublicKey,
+	pub public_key: PublicKey,
 	/// Those validators to sign
-	pub(crate) validators: Vec<ValidatorId>,
+	pub validators: Vec<ValidatorId>,
 }
 
 /// A response back with our signature else a list of bad validators
@@ -160,7 +161,7 @@ macro_rules! ensure_index {
 	($index: expr) => {
 		ensure!(
 			VaultRotations::<T>::contains_key($index),
-			RotationError::InvalidRequestIndex
+			RotationError::InvalidCeremonyId
 		);
 	};
 }

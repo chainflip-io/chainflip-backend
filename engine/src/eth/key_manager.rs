@@ -39,7 +39,7 @@ pub async fn start_key_manager_witness(
 
     slog::info!(logger, "Creating Event Stream");
     let mut event_stream = key_manager
-        .event_stream(web3, settings.eth.from_block, &logger)
+        .event_stream(&web3, settings.eth.from_block, &logger)
         .await?;
 
     Ok(async move {
@@ -67,7 +67,6 @@ pub struct ChainflipKey {
     pub_key_y_parity: ethabi::Uint,
 }
 
-#[cfg(test)]
 impl ChainflipKey {
     /// Create a ChainflipKey from a decimal string
     pub fn from_dec_str(dec_str: &str, parity: bool) -> Result<Self> {

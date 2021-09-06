@@ -1,6 +1,6 @@
 use crate::ChainParams::Ethereum;
 use crate::{
-	ChainVault, Config, EthereumVault, Event, Pallet, RequestIndex, RequestResponse,
+	CeremonyId, ChainVault, Config, EthereumVault, Event, Pallet, RequestResponse,
 	ThresholdSignatureRequest, ThresholdSignatureResponse, VaultRotationRequestResponse,
 };
 use crate::{SchnorrSignature, VaultRotations};
@@ -23,7 +23,7 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 	/// A payload is built and emitted as a `EthSigningTxRequest`, failing this an error is reported
 	/// back to `Vaults`
 	fn rotate_vault(
-		index: RequestIndex,
+		ceremony_id: CeremonyId,
 		new_public_key: Self::PublicKey,
 		validators: Vec<Self::ValidatorId>,
 	) -> Result<(), Self::Error> {
@@ -35,7 +35,7 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 			Ok(payload) => {
 				// Emit the event
 				Self::make_request(
-					index,
+					ceremony_id,
 					ThresholdSignatureRequest {
 						validators,
 						payload,
@@ -62,7 +62,7 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 
 impl<T: Config>
 	RequestResponse<
-		RequestIndex,
+		CeremonyId,
 		ThresholdSignatureRequest<T::PublicKey, T::ValidatorId>,
 		ThresholdSignatureResponse<T::ValidatorId, SchnorrSignature>,
 		RotationError<T::ValidatorId>,
@@ -70,21 +70,21 @@ impl<T: Config>
 {
 	/// Make the request to sign by emitting an event
 	fn make_request(
-		index: RequestIndex,
+		ceremony_id: CeremonyId,
 		request: ThresholdSignatureRequest<T::PublicKey, T::ValidatorId>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
-		Pallet::<T>::deposit_event(Event::ThresholdSignatureRequest(index, request));
+		Pallet::<T>::deposit_event(Event::ThresholdSignatureRequest(ceremony_id, request));
 		Ok(().into())
 	}
 
 	/// Try to handle the response and pass this onto `Vaults` to complete the vault rotation
 	fn handle_response(
-		index: RequestIndex,
+		ceremony_id: CeremonyId,
 		response: ThresholdSignatureResponse<T::ValidatorId, SchnorrSignature>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		match response {
 			ThresholdSignatureResponse::Success(signature) => {
-				match VaultRotations::<T>::try_get(index) {
+				match VaultRotations::<T>::try_get(ceremony_id) {
 					Ok(vault_rotation) => {
 						match Self::encode_set_agg_key_with_agg_key(
 							vault_rotation.new_public_key,
@@ -93,7 +93,7 @@ impl<T: Config>
 							Ok(payload) => {
 								// Emit the event
 								VaultRotationRequestResponse::<T>::make_request(
-									index,
+									ceremony_id,
 									Ethereum(payload).into(),
 								)
 							}
@@ -103,7 +103,7 @@ impl<T: Config>
 							}
 						}
 					}
-					Err(_) => Err(RotationError::InvalidRequestIndex),
+					Err(_) => Err(RotationError::InvalidCeremonyId),
 				}
 			}
 			ThresholdSignatureResponse::Error(bad_validators) => {

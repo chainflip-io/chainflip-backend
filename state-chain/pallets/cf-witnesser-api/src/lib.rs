@@ -21,7 +21,7 @@ pub mod pallet {
 		AggKeySignature, Call as StakingCall, Config as StakingConfig, EthTransactionHash,
 		EthereumAddress, FlipBalance,
 	};
-	use pallet_cf_vaults::rotation::{KeygenResponse, RequestIndex, VaultRotationResponse};
+	use pallet_cf_vaults::rotation::{CeremonyId, KeygenResponse, VaultRotationResponse};
 	use pallet_cf_vaults::{
 		rotation::SchnorrSignature, Call as VaultsCall, Config as VaultsConfig,
 		ThresholdSignatureResponse,
@@ -104,11 +104,11 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn witness_keygen_response(
 			origin: OriginFor<T>,
-			request_id: RequestIndex,
+			ceremony_id: CeremonyId,
 			response: KeygenResponse<T::ValidatorId, T::PublicKey>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = VaultsCall::keygen_response(request_id, response);
+			let call = VaultsCall::keygen_response(ceremony_id, response);
 			T::Witnesser::witness(who, call.into())
 		}
 
@@ -118,22 +118,22 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn witness_vault_rotation_response(
 			origin: OriginFor<T>,
-			request_id: RequestIndex,
+			ceremony_id: CeremonyId,
 			response: VaultRotationResponse<T::TransactionHash>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = VaultsCall::vault_rotation_response(request_id, response);
+			let call = VaultsCall::vault_rotation_response(ceremony_id, response);
 			T::Witnesser::witness(who, call.into())
 		}
 
 		#[pallet::weight(10_000)]
 		pub fn witness_threshold_signature_response(
 			origin: OriginFor<T>,
-			request_id: RequestIndex,
+			ceremony_id: CeremonyId,
 			response: ThresholdSignatureResponse<T::ValidatorId, SchnorrSignature>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = VaultsCall::threshold_signature_response(request_id, response);
+			let call = VaultsCall::threshold_signature_response(ceremony_id, response);
 			T::Witnesser::witness(who, call.into())
 		}
 	}
