@@ -5,7 +5,7 @@ use parking_lot::Mutex;
 
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-use super::{NetworkEventHandler, P2PMessage, P2PNetworkClient, ValidatorId};
+use super::{AccountId, NetworkEventHandler, P2PMessage, P2PNetworkClient};
 
 use crate::mq::mq_mock::MQMockClient;
 use crate::mq::Subject;
@@ -15,13 +15,13 @@ use async_trait::async_trait;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 pub struct P2PClientMock {
-    id: ValidatorId,
+    id: AccountId,
     pub receiver: Arc<Mutex<Option<UnboundedReceiverStream<P2PMessage>>>>,
     network_inner: Arc<Mutex<NetworkMockInner>>,
 }
 
 impl P2PClientMock {
-    pub fn new(id: ValidatorId, network_inner: Arc<Mutex<NetworkMockInner>>) -> Self {
+    pub fn new(id: AccountId, network_inner: Arc<Mutex<NetworkMockInner>>) -> Self {
         let (sender, receiver) = unbounded_channel();
 
         network_inner.lock().register(&id, sender);
@@ -43,7 +43,7 @@ impl P2PNetworkClient for P2PClientMock {
         Ok(200)
     }
 
-    async fn send(&self, to: &ValidatorId, data: &[u8]) -> Result<StatusCode> {
+    async fn send(&self, to: &AccountId, data: &[u8]) -> Result<StatusCode> {
         self.network_inner.lock().send(&self.id, to, data);
         Ok(200)
     }
@@ -94,13 +94,13 @@ impl NetworkMock {
         NetworkMock(inner)
     }
 
-    pub fn new_client(&self, id: ValidatorId) -> P2PClientMock {
+    pub fn new_client(&self, id: AccountId) -> P2PClientMock {
         P2PClientMock::new(id, Arc::clone(&self.0))
     }
 }
 
 pub struct NetworkMockInner {
-    clients: HashMap<ValidatorId, UnboundedSender<P2PMessage>>,
+    clients: HashMap<AccountId, UnboundedSender<P2PMessage>>,
 }
 
 impl NetworkMockInner {
@@ -111,12 +111,12 @@ impl NetworkMockInner {
     }
 
     /// Register validator, so we know how to contact them
-    fn register(&mut self, id: &ValidatorId, sender: UnboundedSender<P2PMessage>) {
+    fn register(&mut self, id: &AccountId, sender: UnboundedSender<P2PMessage>) {
         let added = self.clients.insert(id.to_owned(), sender).is_none();
         assert!(added, "Cannot insert the same validator more than once");
     }
 
-    fn broadcast(&self, from: &ValidatorId, data: &[u8]) {
+    fn broadcast(&self, from: &AccountId, data: &[u8]) {
         let m = P2PMessage {
             sender_id: from.to_owned(),
             data: data.to_owned(),
@@ -136,7 +136,7 @@ impl NetworkMockInner {
     }
 
     /// Send to a specific `validator` only
-    fn send(&self, from: &ValidatorId, to: &ValidatorId, data: &[u8]) {
+    fn send(&self, from: &AccountId, to: &AccountId, data: &[u8]) {
         let m = P2PMessage {
             sender_id: from.to_owned(),
             data: data.to_owned(),

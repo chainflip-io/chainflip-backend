@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     logging::COMPONENT_KEY,
-    p2p::ValidatorId,
+    p2p::AccountId,
     signing::{
         client::{client_inner::utils::get_index_mapping, KeyId, KeygenInfo},
         crypto,
@@ -37,12 +37,12 @@ pub struct KeygenManager {
     /// Used to propagate events upstream
     event_sender: UnboundedSender<InnerEvent>,
     /// Validator id of our node
-    our_id: ValidatorId,
+    our_id: AccountId,
     /// Storage for delayed data (only Broadcast1 makes sense here).
     /// We choose not to store it inside KeygenState, as having KeygenState currently
     /// implies that we have received the relevant keygen request
     /// (and know all parties involved), which is not always the case.
-    delayed_messages: HashMap<KeyId, (Instant, Vec<(ValidatorId, Broadcast1)>)>,
+    delayed_messages: HashMap<KeyId, (Instant, Vec<(AccountId, Broadcast1)>)>,
     /// Abandon state for a given keygen if we can't make progress for longer than this
     phase_timeout: Duration,
     logger: slog::Logger,
@@ -50,7 +50,7 @@ pub struct KeygenManager {
 
 impl KeygenManager {
     pub fn new(
-        our_id: ValidatorId,
+        our_id: AccountId,
         event_sender: UnboundedSender<InnerEvent>,
         phase_timeout: Duration,
         logger: &slog::Logger,
@@ -67,7 +67,7 @@ impl KeygenManager {
 
     pub fn process_keygen_message(
         &mut self,
-        sender_id: ValidatorId,
+        sender_id: AccountId,
         msg: KeyGenMessageWrapped,
     ) -> Option<KeygenResultInfo> {
         let KeyGenMessageWrapped { key_id, message } = msg;
@@ -95,7 +95,7 @@ impl KeygenManager {
         return None;
     }
 
-    fn add_delayed(&mut self, key_id: KeyId, sender_id: ValidatorId, bc1: Broadcast1) {
+    fn add_delayed(&mut self, key_id: KeyId, sender_id: AccountId, bc1: Broadcast1) {
         let entry = self
             .delayed_messages
             .entry(key_id)

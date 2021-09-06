@@ -46,7 +46,8 @@ use frame_support::pallet_prelude::*;
 use sp_std::prelude::*;
 
 use cf_traits::{
-	Nonce, NonceIdentifier, NonceProvider, RotationError, VaultRotation, VaultRotationHandler,
+	Chainflip, Nonce, NonceIdentifier, NonceProvider, RotationError, VaultRotation,
+	VaultRotationHandler,
 };
 pub use pallet::*;
 use sp_core::H160;
@@ -66,19 +67,19 @@ mod tests;
 
 /// A signing request
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct EthSigningTxRequest<ValidatorId> {
+pub struct EthSigningTxRequest<AccountId> {
 	// Payload to be signed by the existing aggregate key
 	pub(crate) payload: Vec<u8>,
-	pub(crate) validators: Vec<ValidatorId>,
+	pub(crate) validators: Vec<AccountId>,
 }
 
 /// A response back with our signature else a list of bad validators
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum EthSigningTxResponse<ValidatorId> {
+pub enum EthSigningTxResponse<AccountId> {
 	// Signature
 	Success(Vec<u8>),
 	// Bad validators
-	Error(Vec<ValidatorId>),
+	Error(Vec<AccountId>),
 }
 
 #[frame_support::pallet]
@@ -92,7 +93,7 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + Chainflip {
+	pub trait Config: Chainflip + frame_system::Config {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Provides an origin check for witness transactions.
@@ -102,7 +103,7 @@ pub mod pallet {
 		/// A transaction
 		type Transaction: Member + Parameter + Into<Vec<u8>> + Default;
 		/// Rotation handler
-		type RotationHandler: VaultRotationHandler<ValidatorId = Self::ValidatorId>;
+		type RotationHandler: VaultRotationHandler<AccountId = <Self as Chainflip>::AccountId>;
 		/// A nonce provider
 		type NonceProvider: NonceProvider;
 	}
@@ -126,7 +127,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn vault_rotations)]
 	pub(super) type VaultRotations<T: Config> =
-		StorageMap<_, Blake2_128Concat, RequestIndex, KeygenRequest<T::ValidatorId>>;
+		StorageMap<_, Blake2_128Concat, RequestIndex, KeygenRequest<<T as Chainflip>::AccountId>>;
 
 	/// A map of Nonces for chains supported
 	#[pallet::storage]
@@ -138,7 +139,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Request a key generation \[request_index, request\]
-		KeygenRequest(RequestIndex, KeygenRequest<T::ValidatorId>),
+		KeygenRequest(RequestIndex, KeygenRequest<<T as Chainflip>::AccountId>),
 		/// Request a rotation of the vault for this chain \[request_index, request\]
 		VaultRotationRequest(RequestIndex, VaultRotationRequest),
 		/// The vault for the request has rotated \[request_index\]
@@ -148,7 +149,10 @@ pub mod pallet {
 		/// A complete set of vaults have been rotated
 		VaultsRotated,
 		/// Request this payload to be signed by the existing aggregate key
-		EthSignTxRequest(RequestIndex, EthSigningTxRequest<T::ValidatorId>),
+		EthSignTxRequest(
+			RequestIndex,
+			EthSigningTxRequest<<T as Chainflip>::AccountId>,
+		),
 	}
 
 	#[pallet::error]
@@ -185,7 +189,7 @@ pub mod pallet {
 		pub fn keygen_response(
 			origin: OriginFor<T>,
 			request_id: RequestIndex,
-			response: KeygenResponse<T::ValidatorId, T::PublicKey>,
+			response: KeygenResponse<<T as Chainflip>::AccountId, T::PublicKey>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			match KeygenRequestResponse::<T>::handle_response(request_id, response) {
@@ -215,7 +219,7 @@ pub mod pallet {
 		pub fn eth_signing_tx_response(
 			origin: OriginFor<T>,
 			request_id: RequestIndex,
-			response: EthSigningTxResponse<T::ValidatorId>,
+			response: EthSigningTxResponse<<T as Chainflip>::AccountId>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			match EthereumChain::<T>::handle_response(request_id, response) {
@@ -242,8 +246,8 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> From<RotationError<T::ValidatorId>> for Error<T> {
-	fn from(err: RotationError<T::ValidatorId>) -> Self {
+impl<T: Config> From<RotationError<<T as Chainflip>::AccountId>> for Error<T> {
+	fn from(err: RotationError<<T as Chainflip>::AccountId>) -> Self {
 		match err {
 			RotationError::EmptyValidatorSet => Error::<T>::EmptyValidatorSet,
 			RotationError::BadValidators(_) => Error::<T>::BadValidators,
@@ -293,10 +297,10 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> VaultRotation for Pallet<T> {
-	type ValidatorId = T::ValidatorId;
+	type AccountId = <T as Chainflip>::AccountId;
 	fn start_vault_rotation(
-		candidates: Vec<Self::ValidatorId>,
-	) -> Result<(), RotationError<Self::ValidatorId>> {
+		candidates: Vec<Self::AccountId>,
+	) -> Result<(), RotationError<Self::AccountId>> {
 		// Main entry point for the pallet
 		ensure!(!candidates.is_empty(), RotationError::EmptyValidatorSet);
 		// Create a KeyGenRequest for Ethereum
@@ -309,7 +313,7 @@ impl<T: Config> VaultRotation for Pallet<T> {
 			.map_err(|_| RotationError::FailedToMakeKeygenRequest)
 	}
 
-	fn finalize_rotation() -> Result<(), RotationError<Self::ValidatorId>> {
+	fn finalize_rotation() -> Result<(), RotationError<Self::AccountId>> {
 		// The 'exit' point for the pallet, no rotations left to process
 		if Pallet::<T>::rotations_complete() {
 			// We can now confirm the auction and rotate
@@ -329,17 +333,17 @@ struct KeygenRequestResponse<T: Config>(PhantomData<T>);
 impl<T: Config>
 	RequestResponse<
 		RequestIndex,
-		KeygenRequest<T::ValidatorId>,
-		KeygenResponse<T::ValidatorId, T::PublicKey>,
-		RotationError<T::ValidatorId>,
+		KeygenRequest<<T as Chainflip>::AccountId>,
+		KeygenResponse<<T as Chainflip>::AccountId, T::PublicKey>,
+		RotationError<<T as Chainflip>::AccountId>,
 	> for KeygenRequestResponse<T>
 {
 	/// Emit as an event the key generation request, this is the first step after receiving a proposed
 	/// validator set from the `AuctionHandler::on_auction_completed()`
 	fn make_request(
 		index: RequestIndex,
-		request: KeygenRequest<T::ValidatorId>,
-	) -> Result<(), RotationError<T::ValidatorId>> {
+		request: KeygenRequest<<T as Chainflip>::AccountId>,
+	) -> Result<(), RotationError<<T as Chainflip>::AccountId>> {
 		VaultRotations::<T>::insert(index, request.clone());
 		Pallet::<T>::deposit_event(Event::KeygenRequest(index, request));
 		Ok(())
@@ -350,8 +354,8 @@ impl<T: Config>
 	/// and the vault rotation aborted.
 	fn handle_response(
 		index: RequestIndex,
-		response: KeygenResponse<T::ValidatorId, T::PublicKey>,
-	) -> Result<(), RotationError<T::ValidatorId>> {
+		response: KeygenResponse<<T as Chainflip>::AccountId, T::PublicKey>,
+	) -> Result<(), RotationError<<T as Chainflip>::AccountId>> {
 		ensure_index!(index);
 		match response {
 			KeygenResponse::Success(new_public_key) => {
@@ -380,15 +384,15 @@ impl<T: Config>
 // We have now had feedback from the vault/chain that we can proceed with the final request for the
 // vault rotation
 impl<T: Config> ChainHandler for Pallet<T> {
-	type ValidatorId = T::ValidatorId;
-	type Error = RotationError<T::ValidatorId>;
+	type AccountId = <T as Chainflip>::AccountId;
+	type Error = RotationError<<T as Chainflip>::AccountId>;
 
 	/// Try to complete the final vault rotation with feedback from the chain implementation over
 	/// the `ChainHandler` trait.  This is forwarded as a request and hence an event is emitted.
 	/// Failure is handled and potential bad validators are penalised and the rotation is now aborted.
 	fn request_vault_rotation(
 		index: RequestIndex,
-		result: Result<VaultRotationRequest, RotationError<Self::ValidatorId>>,
+		result: Result<VaultRotationRequest, RotationError<Self::AccountId>>,
 	) -> Result<(), Self::Error> {
 		ensure_index!(index);
 		match result {
@@ -413,14 +417,14 @@ impl<T: Config>
 		RequestIndex,
 		VaultRotationRequest,
 		VaultRotationResponse<T::PublicKey, T::Transaction>,
-		RotationError<T::ValidatorId>,
+		RotationError<<T as Chainflip>::AccountId>,
 	> for VaultRotationRequestResponse<T>
 {
 	/// Emit our event for the start of a vault rotation generation request.
 	fn make_request(
 		index: RequestIndex,
 		request: VaultRotationRequest,
-	) -> Result<(), RotationError<T::ValidatorId>> {
+	) -> Result<(), RotationError<<T as Chainflip>::AccountId>> {
 		ensure_index!(index);
 		Pallet::<T>::deposit_event(Event::VaultRotationRequest(index, request));
 		Ok(())
@@ -432,7 +436,7 @@ impl<T: Config>
 	fn handle_response(
 		index: RequestIndex,
 		response: VaultRotationResponse<T::PublicKey, T::Transaction>,
-	) -> Result<(), RotationError<T::ValidatorId>> {
+	) -> Result<(), RotationError<<T as Chainflip>::AccountId>> {
 		ensure_index!(index);
 		// Feedback to vaults
 		// We have assumed here that once we have one confirmation of a vault rotation we wouldn't
@@ -472,8 +476,8 @@ pub struct EthereumChain<T: Config>(PhantomData<T>);
 impl<T: Config> ChainVault for EthereumChain<T> {
 	type PublicKey = T::PublicKey;
 	type Transaction = T::Transaction;
-	type ValidatorId = T::ValidatorId;
-	type Error = RotationError<T::ValidatorId>;
+	type AccountId = <T as Chainflip>::AccountId;
+	type Error = RotationError<<T as Chainflip>::AccountId>;
 
 	/// Parameters required when creating key generation requests
 	fn chain_params() -> ChainParams {
@@ -488,7 +492,7 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 	fn start_vault_rotation(
 		index: RequestIndex,
 		new_public_key: Self::PublicKey,
-		validators: Vec<Self::ValidatorId>,
+		validators: Vec<Self::AccountId>,
 	) -> Result<(), Self::Error> {
 		// Create payload for signature here
 		// function setAggKeyWithAggKey(SigData calldata sigData, Key calldata newKey)
@@ -519,16 +523,16 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 impl<T: Config>
 	RequestResponse<
 		RequestIndex,
-		EthSigningTxRequest<T::ValidatorId>,
-		EthSigningTxResponse<T::ValidatorId>,
-		RotationError<T::ValidatorId>,
+		EthSigningTxRequest<<T as Chainflip>::AccountId>,
+		EthSigningTxResponse<<T as Chainflip>::AccountId>,
+		RotationError<<T as Chainflip>::AccountId>,
 	> for EthereumChain<T>
 {
 	/// Make the request to sign by emitting an event
 	fn make_request(
 		index: RequestIndex,
-		request: EthSigningTxRequest<T::ValidatorId>,
-	) -> Result<(), RotationError<T::ValidatorId>> {
+		request: EthSigningTxRequest<<T as Chainflip>::AccountId>,
+	) -> Result<(), RotationError<<T as Chainflip>::AccountId>> {
 		Pallet::<T>::deposit_event(Event::EthSignTxRequest(index, request));
 		Ok(().into())
 	}
@@ -536,8 +540,8 @@ impl<T: Config>
 	/// Try to handle the response and pass this onto `Vaults` to complete the vault rotation
 	fn handle_response(
 		index: RequestIndex,
-		response: EthSigningTxResponse<T::ValidatorId>,
-	) -> Result<(), RotationError<T::ValidatorId>> {
+		response: EthSigningTxResponse<<T as Chainflip>::AccountId>,
+	) -> Result<(), RotationError<<T as Chainflip>::AccountId>> {
 		match response {
 			EthSigningTxResponse::Success(signature) => {
 				VaultRotationRequestResponse::<T>::make_request(index, Ethereum(signature).into())
