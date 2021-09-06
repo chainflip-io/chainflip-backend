@@ -101,18 +101,17 @@ impl EthBroadcaster {
             ..Default::default()
         };
 
-        let key = SecretKeyRef::from(&self.secret_key);
-
-        let signed = self
+        let raw_transaction = self
             .web3
             .accounts()
-            .sign_transaction(tx_params, key)
-            .await?;
+            .sign_transaction(tx_params, SecretKeyRef::from(&self.secret_key))
+            .await?
+            .raw_transaction;
 
         let tx_hash = self
             .web3
             .eth()
-            .send_raw_transaction(signed.raw_transaction)
+            .send_raw_transaction(raw_transaction)
             .await?;
 
         Ok(tx_hash)

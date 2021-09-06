@@ -66,7 +66,7 @@ async fn coordinate_signing(
     // get a list of the signer_ids as a subset of VALIDATOR_IDS with an offset of 1
     let signer_ids = active_indices
         .iter()
-        .map(|i| VALIDATOR_IDS[*i - 1].clone())
+        .map(|i| VALIDATOR_IDS[*i].clone())
         .collect_vec();
 
     // get a signing request ready with the list of signer_ids
@@ -74,7 +74,7 @@ async fn coordinate_signing(
 
     // Only some clients should receive the instruction to sign
     for i in active_indices {
-        let n = &nodes[*i - 1];
+        let n = &nodes[*i];
 
         n.multisig_instruction_tx
             .send(MultisigInstruction::Sign(
@@ -100,7 +100,7 @@ async fn coordinate_signing(
     loop {
         // go through each node and get the multisig events from the receiver
         for i in active_indices {
-            let multisig_events = &mut nodes[*i - 1].multisig_event_rx;
+            let multisig_events = &mut nodes[*i].multisig_event_rx;
 
             match multisig_events.recv().await {
                 Some(MultisigEvent::MessageSigningResult(SigningOutcome {
@@ -137,19 +137,14 @@ async fn distributed_signing() {
     let logger = logging::test_utils::create_test_logger();
     // calculate how many parties will be in the signing (must be exact)
     // TODO: use the threshold_from_share_count function in keygen manager here.
-    let doubled = N_PARTIES * 2;
-    let t = {
-        if doubled % 3 == 0 {
-            doubled / 3 - 1
-        } else {
-            doubled / 3
-        }
-    };
+    let threshold = (2 * N_PARTIES - 1) / 3;
 
     let mut rng = StdRng::seed_from_u64(0);
 
-    // Parties (from 1..=n that will participate in the signing process)
-    let mut active_indices = (1..=N_PARTIES).into_iter().choose_multiple(&mut rng, t + 1);
+    // Parties (from 0..n that will participate in the signing process)
+    let mut active_indices = (0..N_PARTIES)
+        .into_iter()
+        .choose_multiple(&mut rng, threshold + 1);
     active_indices.sort_unstable();
 
     slog::info!(
@@ -167,8 +162,8 @@ async fn distributed_signing() {
     let mut node_client_and_conductor_futs = vec![];
     let mut shutdown_txs = vec![];
     let mut fake_nodes = vec![];
-    for i in 1..=N_PARTIES {
-        let p2p_client = network.new_client(VALIDATOR_IDS[i - 1].clone());
+    for i in 0..N_PARTIES {
+        let p2p_client = network.new_client(VALIDATOR_IDS[i].clone());
         let logger = logger.clone();
 
         let db = KeyDBMock::new();
@@ -183,7 +178,7 @@ async fn distributed_signing() {
             MockChannelEventHandler::new();
         let (shutdown_client_tx, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
         let client_fut = client::start(
-            VALIDATOR_IDS[i - 1].clone(),
+            VALIDATOR_IDS[i].clone(),
             db,
             multisig_instruction_rx,
             multisig_event_tx,
