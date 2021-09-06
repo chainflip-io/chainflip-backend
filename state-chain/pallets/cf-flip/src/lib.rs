@@ -68,8 +68,6 @@ use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use pallet::*;
 
-const BLOCKS_PER_DAY: u32 = 14400;
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -95,7 +93,10 @@ pub mod pallet {
 			+ Copy
 			+ MaybeSerializeDeserialize
 			+ Debug;
-		// + UniqueSaturatedFrom<Self::BlockNumber>;
+
+		/// The time span in which block are getting produced in milliseconds.
+		#[pallet::constant]
+		type BlockTime: Get<Self::Balance>;
 
 		/// The minimum amount required to keep an account open.
 		#[pallet::constant]
@@ -473,6 +474,8 @@ where
 	fn slash(validator_id: &Self::ValidatorId, blocks_offline: Self::BlockNumber) -> Weight {
 		// Clojure to cast a u32 to a Balance type
 		let as_balance = |n: u32| -> T::Balance { UniqueSaturatedInto::unique_saturated_into(n) };
+		// Calculate the blocks per day 86400000 ms = 1 day in ms / the block time = amount of blocks per day
+		let blocks_per_day = as_balance(86400000) / T::BlockTime::get();
 		// Get the MBA aka the bond
 		let bond = Account::<T>::get(validator_id).validator_bond;
 		// Get the slashing rate
@@ -482,7 +485,7 @@ where
 		// slash per day = n % of MBA
 		let slash_per_day = (bond / as_balance(100)).saturating_mul(slashing_rate);
 		// Burn per block
-		let burn_per_block = slash_per_day / as_balance(BLOCKS_PER_DAY);
+		let burn_per_block = slash_per_day / blocks_per_day;
 		// Total amount of burn
 		let total_burn = burn_per_block.saturating_mul(blocks_offline);
 		// Burn the slashing fee

@@ -76,11 +76,16 @@ impl EnsureOrigin<Origin> for MockEnsureGovernance {
 	}
 }
 
+parameter_types! {
+	pub const BlockTime: u64 = 6000;
+}
+
 impl pallet_cf_flip::Config for Test {
 	type Event = Event;
 	type Balance = FlipBalance;
 	type ExistentialDeposit = ExistentialDeposit;
 	type EnsureGovernance = MockEnsureGovernance;
+	type BlockTime = BlockTime;
 }
 
 parameter_types! {
