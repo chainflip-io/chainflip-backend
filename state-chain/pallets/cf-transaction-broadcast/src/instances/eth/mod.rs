@@ -4,10 +4,10 @@ pub mod register_claim;
 use crate::{BaseConfig, BroadcastContext};
 
 use codec::{Decode, Encode};
-use ethabi::{Address, Token, Uint};
+use ethabi::{Address, Token, Uint, ethereum_types::{U256, H256}};
 use ethereum::{AccessList, TransactionAction};
-use sp_core::{H256, U256};
 use sp_runtime::{RuntimeDebug, traits::{Hash, Keccak256}};
+use sp_std::prelude::*;
 
 //------------------------//
 // TODO: these should be on-chain constants or config items.
@@ -22,6 +22,7 @@ fn stake_manager_contract_address() -> Address {
 }
 //--------------------------//
 
+#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum EthereumBroadcast {
 	RegisterClaim(register_claim::RegisterClaim),
 }
@@ -116,7 +117,7 @@ impl SigData {
 
 	pub fn with_msg_hash_from(self, calldata: &[u8]) -> Self {
 		Self {
-			msg_hash:  Keccak256::hash(calldata),
+			msg_hash: Keccak256::hash(calldata),
 			..self
 		}
 	}

@@ -1,5 +1,5 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
-use super::{AccountId, Emissions, FlipBalance, Reputation, Rewards, Witnesser};
+use super::{AccountId, Emissions, FlipBalance, Reputation, Rewards, Validator, Witnesser};
 use cf_traits::EmissionsTrigger;
 use frame_support::debug;
 use pallet_cf_validator::EpochTransitionHandler;
@@ -23,5 +23,19 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<Reputation as EpochTransitionHandler>::on_new_epoch(new_validators, new_bond);
 		// Update the list of validators in the witnesser.
 		<Witnesser as EpochTransitionHandler>::on_new_epoch(new_validators, new_bond)
+	}
+}
+
+pub struct BasicSignerNomination;
+
+impl pallet_cf_transaction_broadcast::SignerNomination for BasicSignerNomination {
+	type SignerId = AccountId;
+
+	fn nomination_with_seed(seed: u64) -> Self::SignerId {
+		todo!()
+	}
+
+	fn threshold_nomination_with_seed(seed: u64) -> Vec<Self::SignerId> {
+		todo!()
 	}
 }

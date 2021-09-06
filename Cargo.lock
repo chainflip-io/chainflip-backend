@@ -1821,6 +1821,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ethabi"
+version = "14.1.0"
+source = "git+https://github.com/chainflip-io/ethabi?rev=a522b41#a522b41e7566fc51632b1f3aefd3a301c18c7281"
+dependencies = [
+ "anyhow",
+ "ethereum-types 0.11.0",
+ "hex",
+ "serde 1.0.126",
+ "serde_json",
+ "sha3 0.9.1",
+ "thiserror",
+ "uint",
+]
+
+[[package]]
 name = "ethbloom"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1828,6 +1843,7 @@ checksum = "779864b9c7f7ead1f092972c3257496c6a84b46dba2ce131dd8a282cb2cc5972"
 dependencies = [
  "crunchy",
  "fixed-hash",
+ "impl-codec",
  "impl-rlp",
  "impl-serde",
  "tiny-keccak",
@@ -1859,6 +1875,7 @@ checksum = "f64b5df66a228d85e4b17e5d6c6aa43b0310898ffe8a85988c4c032357aaabfd"
 dependencies = [
  "ethbloom",
  "fixed-hash",
+ "impl-codec",
  "impl-rlp",
  "impl-serde",
  "primitive-types 0.9.0",
@@ -5010,11 +5027,12 @@ name = "pallet-cf-staking"
 version = "0.1.0"
 dependencies = [
  "cf-traits",
- "ethabi 14.1.0",
+ "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=114a29d)",
  "ethereum-types 0.12.0",
  "frame-support",
  "frame-system",
  "pallet-cf-flip",
+ "pallet-cf-transaction-broadcast",
  "pallet-cf-validator",
  "parity-scale-codec",
  "serde 1.0.126",
@@ -5030,9 +5048,8 @@ name = "pallet-cf-transaction-broadcast"
 version = "0.1.0"
 dependencies = [
  "cf-traits",
- "ethabi 14.1.0",
+ "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=a522b41)",
  "ethereum",
- "ethereum-types 0.12.0",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -5107,7 +5124,7 @@ name = "pallet-cf-witnesser-api"
 version = "0.1.0"
 dependencies = [
  "cf-traits",
- "ethabi 14.1.0",
+ "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=114a29d)",
  "frame-support",
  "frame-system",
  "pallet-cf-staking",
@@ -8820,9 +8837,9 @@ dependencies = [
  "pallet-cf-flip",
  "pallet-cf-governance",
  "pallet-cf-reputation",
- "pallet-cf-reqrep",
  "pallet-cf-rewards",
  "pallet-cf-staking",
+ "pallet-cf-transaction-broadcast",
  "pallet-cf-validator",
  "pallet-cf-vaults",
  "pallet-cf-witnesser",

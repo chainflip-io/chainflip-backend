@@ -32,12 +32,12 @@ pallet-cf-witnesser = { path = "../pallets/cf-witnesser", default-features = fal
 pallet-cf-flip = { path = "../pallets/cf-flip", default-features = false }
 pallet-cf-auction = { path = "../pallets/cf-auction", default-features = false }
 pallet-cf-emissions = { path = "../pallets/cf-emissions", default-features = false }
-pallet-cf-reqrep = { path = "../pallets/cf-reqrep", default-features = false }
 pallet-cf-rewards = { path = "../pallets/cf-rewards", default-features = false }
 pallet-cf-witnesser-api = { path = "../pallets/cf-witnesser-api", default-features = false }
 pallet-cf-governance = { path = "../pallets/cf-governance", default-features = false }
 pallet-cf-reputation = { path = "../pallets/cf-reputation", default-features = false }
 pallet-cf-vaults = { path = "../pallets/cf-vaults", default-features = false }
+pallet-cf-transaction-broadcast = { path = "../pallets/cf-transaction-broadcast", default-features = false }
 
 # Substrate dependencies
 frame-benchmarking = {default-features = false, optional = true, version = '3.0.0'}
@@ -115,10 +115,10 @@ std = [
   'pallet-cf-auction/std',
   'pallet-cf-emissions/std',
   'pallet-cf-reputation/std',
-  'pallet-cf-reqrep/std',
   'pallet-cf-rewards/std',
   'pallet-cf-witnesser-api/std',
   'pallet-cf-governance/std',
   'pallet-cf-vaults/std',
   'pallet-cf-reputation/std',
+  'pallet-cf-transaction-broadcast/std',
 ]

@@ -84,7 +84,7 @@ fn broadcast_state(state: BroadcastState, id: BroadcastId) -> Option<MockBroadca
 }
 
 #[test]
-fn test_broadcast_flow() {
+fn test_broadcast_happy_path() {
 	new_test_ext().execute_with(|| {
 		// Construct the payload and request threshold sig.
 		assert_eq!(

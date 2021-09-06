@@ -18,6 +18,7 @@ substrate-wasm-builder = '3.0.0'
 # Internal deps
 cf-traits = {path = '../../traits', default-features = false}
 pallet-cf-validator = {path = '../cf-validator', default-features = false}
+pallet-cf-transaction-broadcast = {path = '../cf-transaction-broadcast', default-features = false}
 
 # Non-substrate external deps
 codec = {default-features = false, features = ['derive'], package = 'parity-scale-codec', version = '2.0.0'}
@@ -41,6 +42,7 @@ default = ['std']
 std = [
   'cf-traits/std',
   'pallet-cf-validator/std',
+  'pallet-cf-transaction-broadcast/std',
   'codec/std',
   'frame-support/std',
   'frame-system/std',

@@ -99,7 +99,7 @@ pub mod pallet {
 	pub type EthTransactionHash = [u8; 32];
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	pub trait Config: frame_system::Config + pallet_cf_transaction_broadcast::Config<pallet_cf_transaction_broadcast::instances::EthereumInstance> {
 		/// Standard Event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
@@ -487,8 +487,8 @@ impl<T: Config> Pallet<T> {
 	/// `[EnsureWitnessed](cf_traits::EnsureWitnessed)`.
 	fn ensure_witnessed(
 		origin: OriginFor<T>,
-	) -> Result<<T::EnsureWitnessed as EnsureOrigin<OriginFor<T>>>::Success, BadOrigin> {
-		T::EnsureWitnessed::ensure_origin(origin)
+	) -> Result<<<T as Config>::EnsureWitnessed as EnsureOrigin<OriginFor<T>>>::Success, BadOrigin> {
+		<T as Config>::EnsureWitnessed::ensure_origin(origin)
 	}
 
 	/// Logs an failed stake attempt
@@ -601,6 +601,8 @@ impl<T: Config> Pallet<T> {
 			address,
 			expiry,
 		};
+
+
 
 		// Compute the message hash to be signed.
 		match Self::try_encode_claim_request(account_id, &details) {

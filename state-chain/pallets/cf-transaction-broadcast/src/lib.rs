@@ -24,7 +24,7 @@ pub use pallet::*;
 use sp_std::prelude::*;
 use sp_std::{cmp::min, marker::PhantomData, mem::size_of};
 
-pub trait BaseConfig: frame_system::Config + std::fmt::Debug {
+pub trait BaseConfig: frame_system::Config {
 	/// The id type used to identify individual signing keys.
 	type KeyId: Parameter;
 	type ValidatorId: Parameter
@@ -358,3 +358,56 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(id)
 	}
 }
+
+// pub trait KeyProvider<KeyId> {
+// 	fn current_key() -> KeyId;
+// }
+
+// pub struct DumbKeyProvider;
+
+// impl KeyProvider<u64> for DumbKeyProvider {
+// 	fn current_key() -> u64 { 0 }
+// }
+
+// pub trait BroadcastChain {}
+
+// pub struct Ethereum;
+// impl BroadcastChain for Ethereum {}
+
+// pub trait Broadcaster<T: BaseConfig, C: BroadcastChain> {
+// 	type Context: BroadcastContext<T>;
+// 	type KeyProvider: KeyProvider<T::KeyId>;
+// 	type Error;
+
+// 	fn broadcast(context: Self::Context) -> Result<BroadcastId, Self::Error>;
+// }
+
+// pub type EthereumBroadcaster<T> = Pallet<T, Instance0>;
+
+// impl<T: Config<Instance0, KeyId = u64>> Broadcaster<T, Ethereum> for EthereumBroadcaster<T> {
+// 	type Context = eth::EthereumBroadcast;
+// 	type KeyProvider = DumbKeyProvider;
+// 	type Error = eth::EthereumBroadcastError;
+
+// 	fn broadcast(context: Self::Context) -> Result<BroadcastId, Self::Error> {
+// 		Self::initiate_broadcast(context, Self::KeyProvider::current_key())
+// 	}
+// }
+
+// pub trait Broadcaster<T: Config<I>, I: 'static> {
+// 	type KeyProvider: KeyProvider<T::KeyId>;
+
+// 	fn broadcast(context: T::BroadcastContext) -> Result<BroadcastId, BroadcastErrorFor<T, I>>;
+// }
+
+// impl<T: Config<instances::EthereumInstance, KeyId = u64>> Broadcaster<T, instances::EthereumInstance>
+// 	for Pallet<T, instances::EthereumInstance>
+// {
+// 	type KeyProvider = DumbKeyProvider;
+
+// 	fn broadcast(
+// 		context: T::BroadcastContext,
+// 	) -> Result<BroadcastId, BroadcastErrorFor<T, instances::EthereumInstance>> {
+// 		Self::initiate_broadcast(context, Self::KeyProvider::current_key())
+// 	}
+// }
