@@ -281,6 +281,7 @@ jobs:
             - eth-contracts
 
   run-integration-tests:
+    resource_class: xlarge
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
         auth: *dockerconfig
