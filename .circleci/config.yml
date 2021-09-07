@@ -317,7 +317,6 @@ jobs:
   test-single-node:
     executor: chainflip-master
     steps:
-      - doctl/install
       - doctl/initialize
       - run: doctl kubernetes cluster kubeconfig save cluster-staging
       - run:
