@@ -378,7 +378,11 @@ where
     }
 
     fn on_key_generated(&mut self, ceremony_id: CeremonyId, key_info: KeygenResultInfo) {
-        println!("Here's the keygen_result_info: {:?}", key_info);
+        println!(
+            "Here's the public key bytes we are about to set: {:?}",
+            // these are uncompressed
+            key_info.key.get_public_key_bytes()
+        );
         self.key_store
             .set_key(KeyId(key_info.key.get_public_key_bytes()), key_info.clone());
         self.process_pending(key_info.clone());

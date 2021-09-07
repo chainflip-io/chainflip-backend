@@ -22,8 +22,9 @@ impl KeygenResult {
         self.shared_keys.y
     }
 
+    /// Gets the serialized compressed public key
     pub fn get_public_key_bytes(&self) -> Vec<u8> {
-        self.shared_keys.y.pk_to_key_slice()
+        self.shared_keys.y.get_element().serialize().into()
     }
 }
 

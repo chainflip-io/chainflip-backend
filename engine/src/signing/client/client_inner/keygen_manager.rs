@@ -147,7 +147,7 @@ impl KeygenManager {
                     "Keygen state expired for key id: {:?}",
                     ceremony_id
                 );
-
+                println!("Timed out :(");
                 let late_nodes = state.awaited_parties();
                 events_to_send.push(KeygenOutcome::timeout(*ceremony_id, late_nodes));
                 return false;

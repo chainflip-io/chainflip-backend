@@ -23,6 +23,7 @@ use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
 use serde::{Deserialize, Serialize};
 
+/// Public key compressed
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct KeyId(pub Vec<u8>);
 

@@ -155,9 +155,6 @@ async fn cannot_create_key_for_known_id() {
         Some(KeygenStage::KeyReady)
     );
 
-    // Send a new keygen request for the same key id
-    let next_key_id = KeyId(PUB_KEY.into());
-
     let keygen_info = KeygenInfo {
         ceremony_id: CEREMONY_ID,
         signers: KEYGEN_INFO.signers.clone(),
@@ -197,6 +194,7 @@ async fn no_keygen_request() {
     let mut rx = &mut ctx.rxs[0];
 
     assert_eq!(
+        // kyle debug: we receive a timeout
         helpers::recv_next_inner_event(&mut rx).await,
         InnerEvent::KeygenResult(KeygenOutcome::unauthorised(
             CEREMONY_ID,

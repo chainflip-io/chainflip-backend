@@ -159,8 +159,6 @@ impl KeygenContext {
 
         // Generate phase 1 data
 
-        let key_id = KeyId(PUB_KEY.into());
-
         let keygen_info = KeygenInfo {
             ceremony_id: CEREMONY_ID,
             signers: validator_ids.clone(),
@@ -268,6 +266,8 @@ impl KeygenContext {
 
         // TODO: Is this the same as pk_to_slice() ??? - we should be using the same shit here
         let key_id = KeyId(pubkeys[0].serialize().into());
+
+        println!("pubkeys[0] ser: {:?}", pubkeys[0].serialize());
 
         for c in clients.iter() {
             // we cannot fetch with just the standard key id... it will have to be the generated key
@@ -630,8 +630,13 @@ pub fn sec2_to_p2p_keygen(sec2: Secret2, sender_id: &ValidatorId) -> P2PMessage 
     }
 }
 
-pub fn bc1_to_p2p_keygen(bc1: Broadcast1, key_id: KeyId, sender_id: &ValidatorId) -> P2PMessage {
-    let wrapped = KeyGenMessageWrapped::new(CEREMONY_ID, bc1);
+// this should probably be CeremonyId
+pub fn bc1_to_p2p_keygen(
+    bc1: Broadcast1,
+    ceremony_id: CeremonyId,
+    sender_id: &ValidatorId,
+) -> P2PMessage {
+    let wrapped = KeyGenMessageWrapped::new(ceremony_id, bc1);
 
     let data = MultisigMessage::from(wrapped);
     let data = serde_json::to_vec(&data).unwrap();
