@@ -183,8 +183,8 @@ async fn no_keygen_request() {
 
     let bad_validator = &VALIDATOR_IDS[1];
 
-    // We have not received a keygen request for KeyId 1
-    let message = helpers::bc1_to_p2p_keygen(bc1, KeyId(Vec::default()), bad_validator);
+    // We have not received a keygen request for ceremony_id 0
+    let message = helpers::bc1_to_p2p_keygen(bc1, CEREMONY_ID, bad_validator);
 
     c1.process_p2p_mq_message(message);
 
@@ -218,7 +218,7 @@ async fn phase1_timeout() {
 
     let bc1 = states.keygen_phase1.bc1_vec[1].clone();
 
-    let message = helpers::bc1_to_p2p_keygen(bc1, KeyId(PUB_KEY.into()), &VALIDATOR_IDS[1]);
+    let message = helpers::bc1_to_p2p_keygen(bc1, CEREMONY_ID, &VALIDATOR_IDS[1]);
 
     c1.process_p2p_mq_message(message);
 
@@ -284,14 +284,13 @@ async fn invalid_bc1() {
 
     // This BC1 is valid
     let bc1_a = states.keygen_phase1.bc1_vec[1].clone();
-    let message_a =
-        helpers::bc1_to_p2p_keygen(bc1_a.clone(), KeyId(PUB_KEY.into()), &VALIDATOR_IDS[1]);
+    let message_a = helpers::bc1_to_p2p_keygen(bc1_a.clone(), CEREMONY_ID, &VALIDATOR_IDS[1]);
     c1.process_p2p_mq_message(message_a);
 
     // This BC1 is invalid
     let bad_node = VALIDATOR_IDS[2].clone();
     let bc1_b = helpers::create_invalid_bc1();
-    let message_b = helpers::bc1_to_p2p_keygen(bc1_b, KeyId(PUB_KEY.into()), &bad_node);
+    let message_b = helpers::bc1_to_p2p_keygen(bc1_b, CEREMONY_ID, &bad_node);
     c1.process_p2p_mq_message(message_b);
 
     let mut rx = &mut ctx.rxs[0];

@@ -185,7 +185,7 @@ impl KeygenContext {
         for sender_idx in 0..=2 {
             let bc1 = bc1_vec[sender_idx].clone();
             let id = &validator_ids[sender_idx];
-            let m = bc1_to_p2p_keygen(bc1, KeyId(PUB_KEY.into()), id);
+            let m = bc1_to_p2p_keygen(bc1, CEREMONY_ID, id);
 
             for receiver_idx in 0..=2 {
                 if receiver_idx != sender_idx {

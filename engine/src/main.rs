@@ -129,7 +129,6 @@ async fn main() {
             pair_signer.clone(),
             eth_broadcaster,
             multisig_instruction_sender,
-            multisig_event_receiver,
             &root_logger
         ),
         // Start eth components
