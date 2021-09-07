@@ -86,7 +86,7 @@ async fn delayed_signing_bc1_gets_removed() {
     let bad_node = SIGNER_IDS[1].clone();
     let bc1 = create_bc1(2).into();
     let m = helpers::bc1_to_p2p_signing(bc1, &bad_node, &MESSAGE_INFO);
-    client.process_p2p_mq_message(m);
+    client.process_p2p_message(m);
 
     assert_eq!(get_stage_for_msg(&client, &MESSAGE_INFO), None);
     assert_eq!(signing_delayed_count(&client, &MESSAGE_INFO), 1);
@@ -129,7 +129,7 @@ async fn signing_secret2_gets_delayed() {
 
     let m = sec2_to_p2p_signing(sec2, &VALIDATOR_IDS[1], &MESSAGE_INFO);
 
-    c1.process_p2p_mq_message(m);
+    c1.process_p2p_message(m);
 
     assert_eq!(
         get_stage_for_msg(&c1, &MESSAGE_INFO),
@@ -141,7 +141,7 @@ async fn signing_secret2_gets_delayed() {
 
     let m = helpers::bc1_to_p2p_signing(bc1, &VALIDATOR_IDS[1], &MESSAGE_INFO);
 
-    c1.process_p2p_mq_message(m);
+    c1.process_p2p_message(m);
 
     // We are able to process delayed secret2 and immediately
     // go from phase1 to phase3
@@ -165,7 +165,7 @@ async fn signing_local_sig_gets_delayed() {
 
     let m = sig_to_p2p(local_sig, &VALIDATOR_IDS[1], &MESSAGE_INFO);
 
-    c1_p2.process_p2p_mq_message(m);
+    c1_p2.process_p2p_message(m);
 
     assert_eq!(
         get_stage_for_msg(&c1_p2, &MESSAGE_INFO),
@@ -177,7 +177,7 @@ async fn signing_local_sig_gets_delayed() {
 
     let m = sec2_to_p2p_signing(sec2, &VALIDATOR_IDS[1], &MESSAGE_INFO);
 
-    c1_p2.process_p2p_mq_message(m);
+    c1_p2.process_p2p_message(m);
 
     match recv_next_signal_message_skipping(&mut ctx.rxs[0]).await {
         Some(SigningOutcome { result: Ok(_), .. }) => { /* all good */ }
@@ -206,7 +206,7 @@ async fn request_to_sign_before_key_ready() {
 
     let m = helpers::bc1_to_p2p_signing(bc1_sign, &VALIDATOR_IDS[1], &MESSAGE_INFO);
 
-    c1.process_p2p_mq_message(m);
+    c1.process_p2p_message(m);
 
     assert_eq!(get_stage_for_msg(&c1, &MESSAGE_INFO), None);
 
@@ -217,14 +217,14 @@ async fn request_to_sign_before_key_ready() {
         .unwrap()
         .clone();
     let m = sec2_to_p2p_keygen(sec2_1, &VALIDATOR_IDS[1]);
-    c1.process_p2p_mq_message(m);
+    c1.process_p2p_message(m);
 
     let sec2_2 = keygen_states.keygen_phase2.sec2_vec[2]
         .get(&VALIDATOR_IDS[0])
         .unwrap()
         .clone();
     let m = sec2_to_p2p_keygen(sec2_2, &VALIDATOR_IDS[2]);
-    c1.process_p2p_mq_message(m);
+    c1.process_p2p_message(m);
 
     assert_eq!(
         keygen_stage_for(&c1, CEREMONY_ID),
@@ -446,7 +446,7 @@ async fn sign_request_from_invalid_validator() {
     let bc1 = states.sign_phase1.bc1_vec[1].clone();
     let id = &invalid_validator;
     let message = helpers::bc1_to_p2p_signing(bc1, id, &MESSAGE_INFO);
-    c1.process_p2p_mq_message(message);
+    c1.process_p2p_message(message);
 
     // just check that we didn't advance to the next phase
     assert_eq!(
@@ -488,7 +488,7 @@ async fn bc1_with_different_hash() {
         "MESSAGE and MESSAGE2 need to have different hashes"
     );
     let message = helpers::bc1_to_p2p_signing(bc1, id, &mi);
-    c1.process_p2p_mq_message(message);
+    c1.process_p2p_message(message);
 
     // make sure we did not advance the stage of message 1
     assert_eq!(
@@ -521,7 +521,7 @@ async fn invalid_bc1() {
     let bad_node = SIGNER_IDS[1].clone();
     let bc1 = create_invalid_bc1();
     let message = helpers::bc1_to_p2p_signing(bc1, &bad_node, &MESSAGE_INFO);
-    c1.process_p2p_mq_message(message);
+    c1.process_p2p_message(message);
 
     // make sure we the signing is abandoned
     assert_eq!(
@@ -577,7 +577,7 @@ async fn invalid_secret2() {
         .unwrap()
         .clone();
     let m = sec2_to_p2p_signing(sec2, &bad_node, &MESSAGE_INFO);
-    c1.process_p2p_mq_message(m);
+    c1.process_p2p_message(m);
 
     // make sure we the signing is abandoned
     assert_eq!(
@@ -630,7 +630,7 @@ async fn invalid_local_sig() {
     let bad_node = SIGNER_IDS[1].clone();
     let local_sig = states.sign_phase3.local_sigs[0].clone();
     let m = sig_to_p2p(local_sig, &bad_node, &MESSAGE_INFO);
-    c1.process_p2p_mq_message(m);
+    c1.process_p2p_message(m);
 
     // make sure we the signing is abandoned
     assert_eq!(

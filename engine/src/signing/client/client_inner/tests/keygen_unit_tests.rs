@@ -19,7 +19,7 @@ fn bc1_gets_delayed_until_keygen_request() {
     assert_eq!(keygen_stage_for(&client, CEREMONY_ID), None);
 
     let message = create_keygen_p2p_message(&VALIDATOR_IDS[1], create_bc1(2));
-    client.process_p2p_mq_message(message);
+    client.process_p2p_message(message);
 
     assert_eq!(keygen_stage_for(&client, CEREMONY_ID), None);
     assert_eq!(keygen_delayed_count(&client, CEREMONY_ID), 1);
@@ -38,7 +38,7 @@ fn bc1_gets_delayed_until_keygen_request() {
 
     // One more message should advance the stage (share_count = 3)
     let message = create_keygen_p2p_message(&VALIDATOR_IDS[2], create_bc1(3));
-    client.process_p2p_mq_message(message);
+    client.process_p2p_message(message);
 
     assert_eq!(
         keygen_stage_for(&client, CEREMONY_ID),
@@ -63,7 +63,7 @@ async fn keygen_message_from_invalid_validator() {
 
     let msg = create_keygen_p2p_message(invalid_validator, create_bc1(2));
 
-    c1.process_p2p_mq_message(msg);
+    c1.process_p2p_message(msg);
 }
 
 #[tokio::test]
@@ -93,7 +93,7 @@ async fn keygen_secret2_gets_delayed() {
     // We should not process it immediately
     let message = create_keygen_p2p_message(&VALIDATOR_IDS[1].clone(), sec2);
 
-    c1.process_p2p_mq_message(message);
+    c1.process_p2p_message(message);
 
     assert_eq!(keygen_delayed_count(&c1, CEREMONY_ID), 1);
     assert_eq!(
@@ -103,10 +103,10 @@ async fn keygen_secret2_gets_delayed() {
 
     // Process incoming bc1_vec, so we can advance to the next phase
     let message = create_keygen_p2p_message(&VALIDATOR_IDS[1], bc1_vec[1].clone());
-    c1.process_p2p_mq_message(message);
+    c1.process_p2p_message(message);
 
     let message = create_keygen_p2p_message(&VALIDATOR_IDS[2], bc1_vec[2].clone());
-    c1.process_p2p_mq_message(message);
+    c1.process_p2p_message(message);
 
     assert_eq!(
         keygen_stage_for(&c1, CEREMONY_ID),
@@ -180,13 +180,12 @@ async fn no_keygen_request() {
     let mut c1 = states.keygen_phase1.clients[0].clone();
 
     let bc1 = create_bc1(2);
-
     let bad_validator = &VALIDATOR_IDS[1];
 
     // We have not received a keygen request for ceremony_id 0
     let message = helpers::bc1_to_p2p_keygen(bc1, CEREMONY_ID, bad_validator);
 
-    c1.process_p2p_mq_message(message);
+    c1.process_p2p_message(message);
 
     c1.set_timeout(Duration::from_secs(0));
     c1.cleanup();
@@ -220,7 +219,7 @@ async fn phase1_timeout() {
 
     let message = helpers::bc1_to_p2p_keygen(bc1, CEREMONY_ID, &VALIDATOR_IDS[1]);
 
-    c1.process_p2p_mq_message(message);
+    c1.process_p2p_message(message);
 
     c1.set_timeout(Duration::from_secs(0));
     c1.cleanup();
@@ -257,7 +256,7 @@ async fn phase2_timeout() {
 
     let message = helpers::sec2_to_p2p_keygen(sec2, &VALIDATOR_IDS[1]);
 
-    c1.process_p2p_mq_message(message);
+    c1.process_p2p_message(message);
 
     c1.set_timeout(Duration::from_secs(0));
     c1.cleanup();
@@ -285,13 +284,13 @@ async fn invalid_bc1() {
     // This BC1 is valid
     let bc1_a = states.keygen_phase1.bc1_vec[1].clone();
     let message_a = helpers::bc1_to_p2p_keygen(bc1_a.clone(), CEREMONY_ID, &VALIDATOR_IDS[1]);
-    c1.process_p2p_mq_message(message_a);
+    c1.process_p2p_message(message_a);
 
     // This BC1 is invalid
     let bad_node = VALIDATOR_IDS[2].clone();
     let bc1_b = helpers::create_invalid_bc1();
     let message_b = helpers::bc1_to_p2p_keygen(bc1_b, CEREMONY_ID, &bad_node);
-    c1.process_p2p_mq_message(message_b);
+    c1.process_p2p_message(message_b);
 
     let mut rx = &mut ctx.rxs[0];
 
@@ -323,7 +322,7 @@ async fn invalid_sec2() {
         .unwrap()
         .clone();
     let message_a = helpers::sec2_to_p2p_keygen(sec2_a.clone(), &VALIDATOR_IDS[1]);
-    c1.process_p2p_mq_message(message_a);
+    c1.process_p2p_message(message_a);
 
     let bad_node = VALIDATOR_IDS[2].clone();
     // This Sec2 is not for us, so it is invalid
@@ -332,7 +331,7 @@ async fn invalid_sec2() {
         .unwrap()
         .clone();
     let message_b = helpers::sec2_to_p2p_keygen(sec2_b, &bad_node);
-    c1.process_p2p_mq_message(message_b);
+    c1.process_p2p_message(message_b);
 
     let mut rx = &mut ctx.rxs[0];
 

@@ -122,6 +122,7 @@ impl KeygenManager {
         // Remove all pending state that hasn't been updated for
         // longer than `self.phase_timeout`
         let logger_c = self.logger.clone();
+        println!("Delayed messages: {:?}", self.delayed_messages);
         self.delayed_messages.retain(|ceremony_id, (t, bc1_vec)| {
             if t.elapsed() > timeout {
                 slog::warn!(
@@ -144,10 +145,9 @@ impl KeygenManager {
             if state.last_message_timestamp.elapsed() > timeout {
                 slog::warn!(
                     logger_c,
-                    "Keygen state expired for key id: {:?}",
+                    "Keygen state expired for ceremony id: {:?}",
                     ceremony_id
                 );
-                println!("Timed out :(");
                 let late_nodes = state.awaited_parties();
                 events_to_send.push(KeygenOutcome::timeout(*ceremony_id, late_nodes));
                 return false;

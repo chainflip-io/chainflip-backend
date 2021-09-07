@@ -189,7 +189,7 @@ impl KeygenContext {
 
             for receiver_idx in 0..=2 {
                 if receiver_idx != sender_idx {
-                    clients[receiver_idx].process_p2p_mq_message(m.clone());
+                    clients[receiver_idx].process_p2p_message(m.clone());
                 }
             }
         }
@@ -241,7 +241,7 @@ impl KeygenContext {
                 let s_id = &validator_ids[sender_idx];
                 let m = sec2_to_p2p_keygen(sec2.clone(), s_id);
 
-                clients[receiver_idx].process_p2p_mq_message(m);
+                clients[receiver_idx].process_p2p_message(m);
             }
         }
 
@@ -355,7 +355,7 @@ impl KeygenContext {
 
             for receiver_idx in SIGNER_IDXS.iter() {
                 if receiver_idx != sender_idx {
-                    clients[*receiver_idx].process_p2p_mq_message(m.clone());
+                    clients[*receiver_idx].process_p2p_message(m.clone());
                 }
             }
         }
@@ -399,7 +399,7 @@ impl KeygenContext {
                     let id = &validator_ids[*sender_idx];
                     let m = sec2_to_p2p_signing(sec2, id, &MESSAGE_INFO);
 
-                    clients[*receiver_idx].process_p2p_mq_message(m);
+                    clients[*receiver_idx].process_p2p_message(m);
                 }
             }
         }
@@ -441,7 +441,7 @@ impl KeygenContext {
 
             for receiver_idx in SIGNER_IDXS.iter() {
                 if receiver_idx != sender_idx {
-                    clients[*receiver_idx].process_p2p_mq_message(m.clone());
+                    clients[*receiver_idx].process_p2p_message(m.clone());
                 }
             }
         }
@@ -630,7 +630,6 @@ pub fn sec2_to_p2p_keygen(sec2: Secret2, sender_id: &ValidatorId) -> P2PMessage 
     }
 }
 
-// this should probably be CeremonyId
 pub fn bc1_to_p2p_keygen(
     bc1: Broadcast1,
     ceremony_id: CeremonyId,

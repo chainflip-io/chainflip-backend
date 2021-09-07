@@ -109,7 +109,7 @@ where
         loop {
             tokio::select! {
                 Some(p2p_message) = p2p_message_receiver.recv() => {
-                    inner.process_p2p_mq_message(p2p_message);
+                    inner.process_p2p_message(p2p_message);
                 }
                 Some(msg) = multisig_instruction_receiver.recv() => {
                     inner.process_multisig_instruction(msg);

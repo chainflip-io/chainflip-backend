@@ -404,7 +404,7 @@ where
     }
 
     /// Process message from another validator
-    pub fn process_p2p_mq_message(&mut self, msg: P2PMessage) {
+    pub fn process_p2p_message(&mut self, msg: P2PMessage) {
         let P2PMessage { sender_id, data } = msg;
         let msg: Result<MultisigMessage, _> = serde_json::from_slice(&data);
 
