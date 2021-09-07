@@ -50,8 +50,8 @@ async fn coordinate_signing(
 ) -> Result<(), ()> {
     let logger = logger.new(o!(COMPONENT_KEY => "CoordinateSigning"));
     // get a keygen request ready with all of the VALIDATOR_IDS
-    let key_id = KeyId(0);
-    let keygen_request_info = KeygenInfo::new(key_id, VALIDATOR_IDS.clone());
+    let key_id = KeyId(Vec::default());
+    let keygen_request_info = KeygenInfo::new(0, VALIDATOR_IDS.clone());
 
     // publish the MultisigInstruction::KeyGen to all the clients
     for node in &nodes {

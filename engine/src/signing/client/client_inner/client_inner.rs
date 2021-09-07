@@ -127,6 +127,7 @@ impl From<Secret2> for SigningData {
     }
 }
 
+// When we introduce
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct KeyGenMessageWrapped {
     pub ceremony_id: CeremonyId,
@@ -232,7 +233,7 @@ where
     key_store: KeyStore<S>,
     keygen: KeygenManager,
     pub signing_manager: SigningStateManager,
-    tx: UnboundedSender<InnerEvent>,
+    inner_event_sender: UnboundedSender<InnerEvent>,
     /// Requests awaiting a key
     pending_requests_to_sign: HashMap<KeyId, Vec<(MessageHash, SigningInfo)>>,
     logger: slog::Logger,
@@ -245,7 +246,7 @@ where
     pub fn new(
         my_validator_id: ValidatorId,
         db: S,
-        tx: UnboundedSender<InnerEvent>,
+        inner_event_sender: UnboundedSender<InnerEvent>,
         phase_timeout: Duration,
         logger: &slog::Logger,
     ) -> Self {
@@ -254,18 +255,18 @@ where
             key_store: KeyStore::new(db),
             keygen: KeygenManager::new(
                 my_validator_id.clone(),
-                tx.clone(),
+                inner_event_sender.clone(),
                 phase_timeout.clone(),
                 logger,
             ),
             signing_manager: SigningStateManager::new(
                 my_validator_id,
-                tx.clone(),
+                inner_event_sender.clone(),
                 phase_timeout,
                 logger,
             ),
             pending_requests_to_sign: Default::default(),
-            tx,
+            inner_event_sender,
             logger: logger.new(o!(COMPONENT_KEY => "MultisigClientInner")),
         }
     }
@@ -377,17 +378,18 @@ where
     }
 
     fn on_key_generated(&mut self, ceremony_id: CeremonyId, key_info: KeygenResultInfo) {
+        println!("Here's the keygen_result_info: {:?}", key_info);
         self.key_store
             .set_key(KeyId(key_info.key.get_public_key_bytes()), key_info.clone());
         self.process_pending(key_info.clone());
 
         // NOTE: we only notify the SC after we have successfully saved the key
-        if let Err(err) = self
-            .tx
-            .send(InnerEvent::KeygenResult(KeygenOutcome::success(
-                ceremony_id,
-                key_info.key.get_public_key().get_element(),
-            )))
+        if let Err(err) =
+            self.inner_event_sender
+                .send(InnerEvent::KeygenResult(KeygenOutcome::success(
+                    ceremony_id,
+                    key_info.key.get_public_key().get_element(),
+                )))
         {
             slog::error!(
                 self.logger,

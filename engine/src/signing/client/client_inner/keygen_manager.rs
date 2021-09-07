@@ -35,7 +35,7 @@ pub struct KeygenManager {
     /// States for each key id
     keygen_states: HashMap<CeremonyId, KeygenState>,
     /// Used to propagate events upstream
-    event_sender: UnboundedSender<InnerEvent>,
+    inner_event_sender: UnboundedSender<InnerEvent>,
     /// Validator id of our node
     our_id: ValidatorId,
     /// Storage for delayed data (only Broadcast1 makes sense here).
@@ -51,14 +51,14 @@ pub struct KeygenManager {
 impl KeygenManager {
     pub fn new(
         our_id: ValidatorId,
-        event_sender: UnboundedSender<InnerEvent>,
+        inner_event_sender: UnboundedSender<InnerEvent>,
         phase_timeout: Duration,
         logger: &slog::Logger,
     ) -> Self {
         KeygenManager {
             keygen_states: Default::default(),
             delayed_messages: Default::default(),
-            event_sender,
+            inner_event_sender,
             our_id,
             phase_timeout,
             logger: logger.new(o!(COMPONENT_KEY => "KeygenManager")),
@@ -156,7 +156,10 @@ impl KeygenManager {
         });
 
         for event in events_to_send {
-            if let Err(err) = self.event_sender.send(InnerEvent::KeygenResult(event)) {
+            if let Err(err) = self
+                .inner_event_sender
+                .send(InnerEvent::KeygenResult(event))
+            {
                 slog::error!(logger_c, "Unable to send event, error: {}", err);
             }
         }
@@ -195,7 +198,7 @@ impl KeygenManager {
                         params,
                         idx_map,
                         ceremony_id,
-                        self.event_sender.clone(),
+                        self.inner_event_sender.clone(),
                         &self.logger,
                     );
 
@@ -226,6 +229,8 @@ impl KeygenManager {
 /// i.e. at least `t+1` parties are required.
 /// This follow the notation in the multisig library that
 /// we are using and in the corresponding literature.
+
+// TODO: Another place this code is - should be in one place
 fn threshold_from_share_count(share_count: usize) -> usize {
     let doubled = share_count * 2;
 

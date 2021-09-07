@@ -82,9 +82,9 @@ pub async fn start(
                             .unwrap();
 
                         // TODO: get the signing result here - oneshot channels
-
-                        // public key comes as a secp256k1::PublicKey
-                        // TODO: Simulate this
+                        // if we wanted these events now we would pass in the currently unusued MultisigEventReceiver.
+                        // However there is a timing and association issue where we cannot guarantee that event we fetch from the channel
+                        // will be the one matching the particular request - hence require one shot channels
                         let keygen_response = KeygenResponse::Success(Vec::default());
 
                         let signer = signer.lock().unwrap();

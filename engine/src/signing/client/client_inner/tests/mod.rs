@@ -26,8 +26,8 @@ use crate::{
 use std::convert::TryInto;
 use std::time::Duration;
 
-// The id to be used by default
-const KEY_ID: KeyId = KeyId(0);
+// The pub key to be used as the key identifier by default
+const PUB_KEY: [u8; 32] = [0; 32];
 
 lazy_static! {
     static ref VALIDATOR_IDS: Vec<ValidatorId> = vec![
@@ -56,7 +56,7 @@ lazy_static! {
     static ref MESSAGE_HASH: MessageHash = MessageHash(MESSAGE.clone());
     static ref MESSAGE_INFO: MessageInfo = MessageInfo {
         hash: MESSAGE_HASH.clone(),
-        key_id: KEY_ID
+        key_id: KeyId(PUB_KEY.into())
     };
         /// Just in case we need to test signing two messages
     static ref MESSAGE2: [u8; 32] = "Chainflip:Chainflip:Chainflip:02"
@@ -64,11 +64,11 @@ lazy_static! {
         .try_into()
         .unwrap();
     static ref SIGN_INFO: SigningInfo = SigningInfo {
-        id: KEY_ID,
+        id: KeyId(PUB_KEY.into()),
         signers: SIGNER_IDS.clone()
     };
     static ref KEYGEN_INFO: KeygenInfo = KeygenInfo {
-        id: KEY_ID,
+        ceremony_id: CEREMONY_ID,
         signers: VALIDATOR_IDS.clone()
     };
 }

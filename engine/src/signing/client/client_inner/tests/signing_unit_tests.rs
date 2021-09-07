@@ -11,7 +11,10 @@ async fn should_await_bc1_after_rts() {
 
     let mut c1 = states.key_ready.clients[0].clone();
 
-    let key = c1.get_key(KEY_ID).expect("no key").to_owned();
+    let key = c1
+        .get_key(KeyId(PUB_KEY.into()))
+        .expect("no key")
+        .to_owned();
 
     c1.signing_manager
         .on_request_to_sign(MESSAGE_HASH.clone(), key, SIGN_INFO.clone());
@@ -44,7 +47,10 @@ async fn should_process_delayed_bc1_after_rts() {
 
     assert_eq!(signing_delayed_count(&c1, &MESSAGE_INFO), 1);
 
-    let key = c1.get_key(KEY_ID).expect("no key").to_owned();
+    let key = c1
+        .get_key(KeyId(PUB_KEY.into()))
+        .expect("no key")
+        .to_owned();
 
     c1.signing_manager
         .on_request_to_sign(MESSAGE_HASH.clone(), key, SIGN_INFO.clone());
@@ -182,7 +188,7 @@ async fn signing_local_sig_gets_delayed() {
 /// Request to sign should be delayed until the key is ready
 #[tokio::test]
 async fn request_to_sign_before_key_ready() {
-    let key_id = KeyId(0);
+    let key_id = KeyId(Vec::default());
 
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
@@ -191,7 +197,7 @@ async fn request_to_sign_before_key_ready() {
     let mut c1 = keygen_states.keygen_phase2.clients[0].clone();
 
     assert_eq!(
-        keygen_stage_for(&c1, key_id),
+        keygen_stage_for(&c1, CEREMONY_ID),
         Some(KeygenStage::AwaitingSecret2)
     );
 
@@ -220,7 +226,10 @@ async fn request_to_sign_before_key_ready() {
     let m = sec2_to_p2p_keygen(sec2_2, &VALIDATOR_IDS[2]);
     c1.process_p2p_mq_message(m);
 
-    assert_eq!(keygen_stage_for(&c1, key_id), Some(KeygenStage::KeyReady));
+    assert_eq!(
+        keygen_stage_for(&c1, CEREMONY_ID),
+        Some(KeygenStage::KeyReady)
+    );
 
     assert_eq!(get_stage_for_msg(&c1, &MESSAGE_INFO), None);
 
@@ -249,7 +258,7 @@ async fn unknown_signer_ids_gracefully_handled() {
     let signers = vec![VALIDATOR_IDS[0].clone(), ValidatorId([200; 32])];
 
     let info = SigningInfo {
-        id: KeyId(0),
+        id: KeyId(Vec::default()),
         signers,
     };
 
@@ -393,7 +402,7 @@ async fn cannot_create_duplicate_sign_request() {
     c1.process_multisig_instruction(MultisigInstruction::Sign(
         MessageHash(MESSAGE.clone()),
         SigningInfo {
-            id: KEY_ID,
+            id: KeyId(PUB_KEY.into()),
             signers: SIGNER_IDS.clone(),
         },
     ));
@@ -472,7 +481,7 @@ async fn bc1_with_different_hash() {
     let id = &SIGNER_IDS[1];
     let mi = MessageInfo {
         hash: MessageHash(MESSAGE2.clone()),
-        key_id: KEY_ID,
+        key_id: KeyId(PUB_KEY.into()),
     };
     assert_ne!(
         mi.hash, MESSAGE_INFO.hash,

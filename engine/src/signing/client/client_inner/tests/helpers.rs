@@ -2,6 +2,7 @@ use std::{collections::HashMap, time::Duration};
 
 use itertools::Itertools;
 use log::*;
+use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::{
@@ -29,7 +30,7 @@ use crate::{
 
 type MultisigClientInnerNoDB = MultisigClientInner<KeyDBMock>;
 
-use super::{KEY_ID, MESSAGE_HASH, MESSAGE_INFO, SIGNER_IDXS, SIGN_INFO};
+use super::{MESSAGE_HASH, MESSAGE_INFO, PUB_KEY, SIGNER_IDXS, SIGN_INFO};
 
 type InnerEventReceiver = UnboundedReceiver<InnerEvent>;
 
@@ -87,12 +88,15 @@ pub struct ValidSigningStates {
 
 const TEST_PHASE_TIMEOUT: Duration = Duration::from_secs(5);
 
-pub fn keygen_stage_for(client: &MultisigClientInnerNoDB, key_id: KeyId) -> Option<KeygenStage> {
-    client.get_keygen().get_stage_for(key_id)
+pub fn keygen_stage_for(
+    client: &MultisigClientInnerNoDB,
+    ceremony_id: CeremonyId,
+) -> Option<KeygenStage> {
+    client.get_keygen().get_stage_for(ceremony_id)
 }
 
-pub fn keygen_delayed_count(client: &MultisigClientInnerNoDB, key_id: KeyId) -> usize {
-    client.get_keygen().get_delayed_count(key_id)
+pub fn keygen_delayed_count(client: &MultisigClientInnerNoDB, ceremony_id: CeremonyId) -> usize {
+    client.get_keygen().get_delayed_count(ceremony_id)
 }
 
 pub fn signing_delayed_count(client: &MultisigClientInnerNoDB, mi: &MessageInfo) -> usize {
@@ -155,15 +159,15 @@ impl KeygenContext {
 
         // Generate phase 1 data
 
-        let key_id = KeyId(0);
+        let key_id = KeyId(PUB_KEY.into());
 
-        let auction_info = KeygenInfo {
-            id: key_id,
+        let keygen_info = KeygenInfo {
+            ceremony_id: CEREMONY_ID,
             signers: validator_ids.clone(),
         };
 
         for c in clients.iter_mut() {
-            c.process_multisig_instruction(MultisigInstruction::KeyGen(auction_info.clone()));
+            c.process_multisig_instruction(MultisigInstruction::KeyGen(keygen_info.clone()));
         }
 
         let mut bc1_vec = vec![];
@@ -183,7 +187,7 @@ impl KeygenContext {
         for sender_idx in 0..=2 {
             let bc1 = bc1_vec[sender_idx].clone();
             let id = &validator_ids[sender_idx];
-            let m = bc1_to_p2p_keygen(bc1, KEY_ID, id);
+            let m = bc1_to_p2p_keygen(bc1, KeyId(PUB_KEY.into()), id);
 
             for receiver_idx in 0..=2 {
                 if receiver_idx != sender_idx {
@@ -194,7 +198,7 @@ impl KeygenContext {
 
         for c in clients.iter() {
             assert_eq!(
-                keygen_stage_for(c, key_id),
+                keygen_stage_for(c, CEREMONY_ID),
                 Some(KeygenStage::AwaitingSecret2)
             );
         }
@@ -253,13 +257,21 @@ impl KeygenContext {
             };
             pubkeys.push(pubkey);
         }
+
+        // ensure all participants have the same idea of the public key
         assert_eq!(pubkeys[0].serialize(), pubkeys[1].serialize());
         assert_eq!(pubkeys[1].serialize(), pubkeys[2].serialize());
 
+        println!("pubkeys: {:?}", pubkeys);
+
         let mut sec_keys = vec![];
 
+        // TODO: Is this the same as pk_to_slice() ??? - we should be using the same shit here
+        let key_id = KeyId(pubkeys[0].serialize().into());
+
         for c in clients.iter() {
-            let key = c.get_key(KEY_ID).expect("key must be present");
+            // we cannot fetch with just the standard key id... it will have to be the generated key
+            let key = c.get_key(key_id.clone()).expect("key must be present");
             sec_keys.push(key.clone());
         }
 
@@ -603,10 +615,12 @@ pub fn sec2_to_p2p_signing(sec2: Secret2, sender_id: &ValidatorId, mi: &MessageI
     }
 }
 
+pub const CEREMONY_ID: u64 = 0;
+
 // Do the necessary wrapping so Secret2 can be sent
 // via the clients interface
 pub fn sec2_to_p2p_keygen(sec2: Secret2, sender_id: &ValidatorId) -> P2PMessage {
-    let wrapped = KeyGenMessageWrapped::new(KEY_ID, sec2);
+    let wrapped = KeyGenMessageWrapped::new(CEREMONY_ID, sec2);
 
     let data = MultisigMessage::from(wrapped);
     let data = serde_json::to_vec(&data).unwrap();
@@ -617,7 +631,7 @@ pub fn sec2_to_p2p_keygen(sec2: Secret2, sender_id: &ValidatorId) -> P2PMessage 
 }
 
 pub fn bc1_to_p2p_keygen(bc1: Broadcast1, key_id: KeyId, sender_id: &ValidatorId) -> P2PMessage {
-    let wrapped = KeyGenMessageWrapped::new(key_id, bc1);
+    let wrapped = KeyGenMessageWrapped::new(CEREMONY_ID, bc1);
 
     let data = MultisigMessage::from(wrapped);
     let data = serde_json::to_vec(&data).unwrap();
@@ -659,7 +673,7 @@ pub fn create_keygen_p2p_message<M>(sender_id: &ValidatorId, message: M) -> P2PM
 where
     M: Into<KeygenData>,
 {
-    let wrapped = KeyGenMessageWrapped::new(KEY_ID, message.into());
+    let wrapped = KeyGenMessageWrapped::new(0, message.into());
 
     let ms_message = MultisigMessage::from(wrapped);
 

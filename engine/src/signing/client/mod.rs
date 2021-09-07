@@ -90,11 +90,11 @@ where
 
     slog::info!(logger, "Starting");
 
-    let (events_tx, mut events_rx) = mpsc::unbounded_channel();
+    let (inner_event_sender, mut inner_event_receiver) = mpsc::unbounded_channel();
     let mut inner = MultisigClientInner::new(
         my_validator_id.clone(),
         db,
-        events_tx,
+        inner_event_sender,
         PHASE_TIMEOUT,
         &logger,
     );
@@ -117,7 +117,7 @@ where
                     slog::info!(logger, "Cleaning up multisig states");
                     inner.cleanup();
                 }
-                Some(event) = events_rx.recv() => { // TODO: This will be removed entirely in the future
+                Some(event) = inner_event_receiver.recv() => { // TODO: This will be removed entirely in the future
                     match event {
                         InnerEvent::P2PMessageCommand(p2p_message_command) => {
                             p2p_message_command_sender.send(p2p_message_command).map_err(|_| "Receiver dropped").unwrap();
@@ -126,6 +126,7 @@ where
                             multisig_event_sender.send(MultisigEvent::MessageSigningResult(res)).map_err(|_| "Receiver dropped").unwrap();
                         }
                         InnerEvent::KeygenResult(res) => {
+                            // goes through here
                             multisig_event_sender.send(MultisigEvent::KeygenResult(res)).map_err(|_| "Receiver dropped").unwrap();
                         }
                     }
