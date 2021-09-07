@@ -22,7 +22,7 @@ sp-runtime = { default-features = false, version = '3.0.0' }
 sp-std = { default-features = false, version = '3.0.0' }
 
 # Ethereum transaction encoding
-ethabi = {default-features = false, features = ['codec'], git = 'https://github.com/chainflip-io/ethabi', rev = 'a522b41'}
+ethabi = {default-features = false, features = ['codec'], git = 'https://github.com/chainflip-io/ethabi', rev = 'bfa7866'}
 ethereum = {default-features = false, version = "0.9"}
 hex = {default-features = false, version = "0.4"}
 rlp = {default-features = false, version = "0.5"}

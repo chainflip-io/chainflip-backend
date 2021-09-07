@@ -51,6 +51,7 @@ impl<T: BaseConfig> BroadcastContext<T> for EthereumBroadcast {
 		&self,
 	) -> Result<Self::UnsignedTransaction, Self::Error> {
 		let (contract, data) = match self {
+			// TODO: check claim expiry?
 			Self::RegisterClaim(ref rc) => (
 				stake_manager_contract_address(),
 				rc.abi_encode()?

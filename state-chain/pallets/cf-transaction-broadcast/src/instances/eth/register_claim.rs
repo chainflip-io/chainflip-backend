@@ -13,26 +13,31 @@ use sp_std::prelude::*;
 /// Represents all the arguments required to build the call to StakeManager's 'requestClaim' function.
 #[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct RegisterClaim {
+	/// The signature data for validation and replay protection.
 	pub sig_data: SigData,
+	/// The id (ie. Chainflip account Id) of the claimant.
 	pub node_id: FixedBytes,
+	/// The amount being claimed.
 	pub amount: Uint,
+	/// The Ethereum address to which the claim with will be withdrawn.
 	pub address: Address,
+	/// The expiry duration in seconds.
 	pub expiry: Uint,
 }
 
 impl RegisterClaim {
-	pub fn new_unsigned<N: NonceProvider>(
-		node_id: FixedBytes,
-		amount: Uint,
-		address: Address,
-		expiry: Uint,
+	pub fn new_unsigned<N: NonceProvider, Amount: Into<Uint>>(
+		node_id: &[u8; 32],
+		amount: Amount,
+		address: &[u8; 20],
+		expiry: u64,
 	) -> Result<Self, EthereumBroadcastError> {
 		let mut calldata = Self {
 			sig_data: SigData::new_empty(N::next_nonce(NonceIdentifier::Ethereum).into()),
-			node_id,
-			amount,
-			address,
-			expiry,
+			node_id: node_id.to_vec(),
+			amount: amount.into(),
+			address: address.into(),
+			expiry: expiry.into(),
 		};
 		calldata.sig_data = calldata.sig_data.with_msg_hash_from(calldata.abi_encode()?.as_slice());
 
@@ -118,8 +123,8 @@ mod test_register_claim {
 
 		let register_claim_reference = stake_manager.function("registerClaim").unwrap();
 
-		let mut register_claim_runtime = RegisterClaim::new_unsigned::<MockNonceProvider>(
-			TEST_ACCT.into(), AMOUNT.into(), TEST_ADDR.into(), EXPIRY_SECS.into()).unwrap();
+		let mut register_claim_runtime = RegisterClaim::new_unsigned::<MockNonceProvider, u128>(
+			&TEST_ACCT, AMOUNT, &TEST_ADDR, EXPIRY_SECS).unwrap();
 
 		// Erase the msg_hash.
 		register_claim_runtime.sig_data.msg_hash = FAKE_HASH.into();

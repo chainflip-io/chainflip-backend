@@ -24,6 +24,10 @@ pub use pallet::*;
 use sp_std::prelude::*;
 use sp_std::{cmp::min, marker::PhantomData, mem::size_of};
 
+pub enum ChainId {
+	Ethereum,
+}
+
 pub trait BaseConfig: frame_system::Config {
 	/// The id type used to identify individual signing keys.
 	type KeyId: Parameter;
@@ -74,12 +78,6 @@ pub trait BroadcastContext<T: BaseConfig> {
 		signer: &T::ValidatorId,
 		signed_tx: &Self::SignedTransaction,
 	) -> Result<(), Self::Error>;
-
-	/// Optional callback for when a transaction has been witnessed on the host chain.
-	fn on_broadcast_success(&mut self, _transaction_hash: &Self::TransactionHash) {}
-
-	/// Optional callback for when a transaction has failed.
-	fn on_broadcast_failure(&mut self, _failure: &BroadcastFailure<T::ValidatorId>) {}
 }
 
 /// Something that can nominate signers from the set of active validators.
@@ -93,6 +91,12 @@ pub trait SignerNomination {
 	/// Returns a list of live signers where the number of signers is sufficient to author a threshold signature. The
 	/// seed value is used as a source of randomness.
 	fn threshold_nomination_with_seed(seed: u64) -> Vec<Self::SignerId>;
+}
+
+pub trait KeyProvider<Chain: Into<ChainId>> {
+	type KeyId;
+
+	fn current_key() -> Self::KeyId;
 }
 
 pub type BroadcastId = u64;
@@ -134,14 +138,20 @@ pub mod pallet {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
+		/// A marker trait identifying the chain that is broadcast to.
+		type TargetChain: Into<ChainId>;
+
 		/// A type that allows us to check if a call was a result of witness consensus.
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 
 		/// The context definition for this instance.
 		type BroadcastContext: BroadcastContext<Self> + Member + FullCodec;
 
-		/// Signer nomination
+		/// Signer nomination.
 		type SignerNomination: SignerNomination<SignerId = Self::ValidatorId>;
+
+		/// Something that provides the current key for signing.
+		type KeyProvider: KeyProvider<Self::TargetChain, KeyId = Self::KeyId>;
 	}
 
 	#[pallet::pallet]
@@ -277,12 +287,10 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 
-			// Move it do the Complete storage area.
+			// Move it to the Complete storage area.
 			let mut context =
 				PendingBroadcasts::<T, I>::take(BroadcastState::AwaitingBroadcast, id)
 					.ok_or(Error::<T, I>::InvalidBroadcastId)?;
-
-			context.on_broadcast_success(&tx_hash);
 
 			PendingBroadcasts::<T, I>::insert(BroadcastState::Complete, id, context);
 
@@ -333,7 +341,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Initiates a broadcast and returns its id.
 	pub fn initiate_broadcast(
 		context: T::BroadcastContext,
-		key_id: T::KeyId,
 	) -> Result<BroadcastId, BroadcastErrorFor<T, I>> {
 		// Get a new id.
 		let id = BroadcastIdCounter::<T, I>::mutate(|id| {
@@ -341,6 +348,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			*id
 		});
 
+		// Get the current signing key.
+		let key_id = T::KeyProvider::current_key();
+
+		// Construct the payload.
 		let payload = context.construct_signing_payload()?;
 
 		// Store the context.
@@ -358,56 +369,3 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(id)
 	}
 }
-
-// pub trait KeyProvider<KeyId> {
-// 	fn current_key() -> KeyId;
-// }
-
-// pub struct DumbKeyProvider;
-
-// impl KeyProvider<u64> for DumbKeyProvider {
-// 	fn current_key() -> u64 { 0 }
-// }
-
-// pub trait BroadcastChain {}
-
-// pub struct Ethereum;
-// impl BroadcastChain for Ethereum {}
-
-// pub trait Broadcaster<T: BaseConfig, C: BroadcastChain> {
-// 	type Context: BroadcastContext<T>;
-// 	type KeyProvider: KeyProvider<T::KeyId>;
-// 	type Error;
-
-// 	fn broadcast(context: Self::Context) -> Result<BroadcastId, Self::Error>;
-// }
-
-// pub type EthereumBroadcaster<T> = Pallet<T, Instance0>;
-
-// impl<T: Config<Instance0, KeyId = u64>> Broadcaster<T, Ethereum> for EthereumBroadcaster<T> {
-// 	type Context = eth::EthereumBroadcast;
-// 	type KeyProvider = DumbKeyProvider;
-// 	type Error = eth::EthereumBroadcastError;
-
-// 	fn broadcast(context: Self::Context) -> Result<BroadcastId, Self::Error> {
-// 		Self::initiate_broadcast(context, Self::KeyProvider::current_key())
-// 	}
-// }
-
-// pub trait Broadcaster<T: Config<I>, I: 'static> {
-// 	type KeyProvider: KeyProvider<T::KeyId>;
-
-// 	fn broadcast(context: T::BroadcastContext) -> Result<BroadcastId, BroadcastErrorFor<T, I>>;
-// }
-
-// impl<T: Config<instances::EthereumInstance, KeyId = u64>> Broadcaster<T, instances::EthereumInstance>
-// 	for Pallet<T, instances::EthereumInstance>
-// {
-// 	type KeyProvider = DumbKeyProvider;
-
-// 	fn broadcast(
-// 		context: T::BroadcastContext,
-// 	) -> Result<BroadcastId, BroadcastErrorFor<T, instances::EthereumInstance>> {
-// 		Self::initiate_broadcast(context, Self::KeyProvider::current_key())
-// 	}
-// }
