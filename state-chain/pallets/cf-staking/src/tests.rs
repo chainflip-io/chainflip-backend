@@ -703,3 +703,27 @@ fn stake_with_provided_withdrawal_only_on_first_attempt() {
 		)));
 	});
 }
+
+#[test]
+fn should_see_updates_to_stake_for_both_claims_and_stakes() {
+	new_test_ext().execute_with(|| {
+		let amount = 100;
+		assert_ok!(Staking::staked(
+			Origin::root(),
+			ALICE,
+			amount,
+			None,
+			TX_HASH,
+		));
+
+		assert_eq!(true, MockStakerHandler::has_stake_updated(ALICE));
+
+		assert_ok!(Staking::claim(
+			Origin::signed(ALICE),
+			amount,
+			ETH_DUMMY_ADDR
+		));
+
+		assert_eq!(true, MockStakerHandler::has_stake_updated(ALICE));
+	});
+}

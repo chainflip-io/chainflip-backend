@@ -368,6 +368,7 @@ impl pallet_cf_staking::Config for Runtime {
 	type TimeSource = Timestamp;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
+	type StakerHandler = pallet_cf_auction::HandleStakes<Self>;
 }
 
 impl pallet_cf_governance::Config for Runtime {

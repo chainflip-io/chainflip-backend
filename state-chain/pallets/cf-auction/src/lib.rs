@@ -41,8 +41,8 @@ mod tests;
 extern crate assert_matches;
 
 use cf_traits::{
-	Auction, AuctionError, AuctionPhase, AuctionRange, BidderProvider, VaultRotation,
-	VaultRotationHandler,
+	Auction, AuctionError, AuctionPhase, AuctionRange, BidderProvider, StakerHandler,
+	VaultRotation, VaultRotationHandler,
 };
 use frame_support::pallet_prelude::*;
 use frame_support::sp_runtime::offchain::storage_lock::BlockNumberProvider;
@@ -335,5 +335,15 @@ impl<T: Config> VaultRotationHandler for Pallet<T> {
 
 	fn penalise(bad_validators: Vec<Self::ValidatorId>) {
 		BadValidators::<T>::set(bad_validators);
+	}
+}
+
+pub struct HandleStakes<T>(PhantomData<T>);
+impl<T: Config> StakerHandler for HandleStakes<T> {
+	type ValidatorId = T::ValidatorId;
+	type Amount = T::Amount;
+
+	fn stake_updated(_validator_id: Self::ValidatorId, _amount: Self::Amount) {
+		unimplemented!()
 	}
 }

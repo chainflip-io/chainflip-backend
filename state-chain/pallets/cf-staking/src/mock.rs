@@ -15,6 +15,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
 
 use cf_traits::mocks::{epoch_info, time_source};
+use cf_traits::StakerHandler;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -73,6 +74,7 @@ impl pallet_cf_flip::Config for Test {
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
 cf_traits::impl_mock_witnesser_for_account_and_call_types!(AccountId, Call);
+cf_traits::impl_mock_staker_handler!(u64, u128);
 
 impl pallet_cf_staking::Config for Test {
 	type Event = Event;
@@ -84,6 +86,7 @@ impl pallet_cf_staking::Config for Test {
 	type ClaimTTL = ClaimTTL;
 	type Balance = u128;
 	type Flip = Flip;
+	type StakerHandler = MockStakerHandler;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123123u64;

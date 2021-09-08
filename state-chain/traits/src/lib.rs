@@ -177,6 +177,14 @@ pub trait BidderProvider {
 	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)>;
 }
 
+/// Provide feedback on staking
+pub trait StakerHandler {
+	type ValidatorId;
+	type Amount;
+	/// A validator has updated their stake and now has a new total amount
+	fn stake_updated(validator_id: Self::ValidatorId, new_total: Self::Amount);
+}
+
 pub trait StakeTransfer {
 	type AccountId;
 	type Balance;
