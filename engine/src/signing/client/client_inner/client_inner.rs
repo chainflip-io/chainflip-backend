@@ -167,8 +167,8 @@ impl From<Broadcast1> for KeygenData {
 impl Display for KeygenData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
-            KeygenData::Broadcast1(_) => write!(f, "Keygen::Broadcast"),
-            KeygenData::Secret2(_) => write!(f, "Keygen::Secret"),
+            KeygenData::Broadcast1(_) => write!(f, "KeygenData::Broadcast1"),
+            KeygenData::Secret2(_) => write!(f, "KeygenData::Secret2"),
         }
     }
 }
@@ -343,6 +343,8 @@ where
                 );
                 let key_id = sign_info.clone().id;
 
+                println!("Here's the key id of the sign_info: {:?}", key_id);
+
                 let key = self.key_store.get_key(key_id);
 
                 match key {
@@ -404,30 +406,34 @@ where
     }
 
     /// Process message from another validator
-    pub fn process_p2p_message(&mut self, msg: P2PMessage) {
-        let P2PMessage { sender_id, data } = msg;
-        let msg: Result<MultisigMessage, _> = serde_json::from_slice(&data);
+    pub fn process_p2p_message(&mut self, p2p_message: P2PMessage) {
+        let P2PMessage { sender_id, data } = p2p_message;
+        let multisig_message: Result<MultisigMessage, _> = serde_json::from_slice(&data);
 
-        match msg {
-            Ok(MultisigMessage::KeyGenMessage(msg)) => {
+        match multisig_message {
+            Ok(MultisigMessage::KeyGenMessage(multisig_message)) => {
                 // NOTE: we should be able to process Keygen messages
                 // even when we are "signing"... (for example, if we want to
                 // generate a new key)
 
-                let ceremony_id = msg.ceremony_id;
+                let ceremony_id = multisig_message.ceremony_id;
 
-                if let Some(key) = self.keygen.process_keygen_message(sender_id, msg) {
+                if let Some(key) = self
+                    .keygen
+                    .process_keygen_message(sender_id, multisig_message)
+                {
                     self.on_key_generated(ceremony_id, key);
                     // NOTE: we could already delete the state here, but it is
                     // not necessary as it will be deleted by "cleanup"
                 }
             }
-            Ok(MultisigMessage::SigningMessage(msg)) => {
+            Ok(MultisigMessage::SigningMessage(multisig_message)) => {
                 // NOTE: we should be able to process Signing messages
                 // even when we are generating a new key (for example,
                 // we should be able to receive phase1 messages before we've
                 // finalized the signing key locally)
-                self.signing_manager.process_signing_data(sender_id, msg);
+                self.signing_manager
+                    .process_signing_data(sender_id, multisig_message);
             }
             Err(_) => {
                 slog::warn!(self.logger, "Cannot parse multisig message, discarding");

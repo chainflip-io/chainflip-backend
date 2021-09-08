@@ -32,7 +32,7 @@ use tokio::sync::mpsc::UnboundedSender;
 /// Broadcast1 messages before a corresponding keygen request is received.
 #[derive(Clone)]
 pub struct KeygenManager {
-    /// States for each key id
+    /// States for each ceremony_id
     keygen_states: HashMap<CeremonyId, KeygenState>,
     /// Used to propagate events upstream
     inner_event_sender: UnboundedSender<InnerEvent>,
@@ -42,6 +42,7 @@ pub struct KeygenManager {
     /// We choose not to store it inside KeygenState, as having KeygenState currently
     /// implies that we have received the relevant keygen request
     /// (and know all parties involved), which is not always the case.
+    /// The `Instant` is the time at which the first messages was added to the delayed_messages queue
     delayed_messages: HashMap<CeremonyId, (Instant, Vec<(ValidatorId, Broadcast1)>)>,
     /// Abandon state for a given keygen if we can't make progress for longer than this
     phase_timeout: Duration,
@@ -74,10 +75,14 @@ impl KeygenManager {
             ceremony_id,
             message,
         } = msg;
+        println!(
+            "[{}] Processing a {} keygen message for ceremony_id: {:?}",
+            self.our_id, message, ceremony_id
+        );
 
+        // keygen states. entry
         match self.keygen_states.entry(ceremony_id) {
             Entry::Occupied(mut state) => {
-                // We have entry, process normally
                 return state.get_mut().process_keygen_message(sender_id, message);
             }
             Entry::Vacant(_) => match message {

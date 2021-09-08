@@ -124,10 +124,8 @@ async fn can_have_multiple_keys() {
     // Start with clients that already have an aggregate key
     let mut c1 = states.key_ready.clients[0].clone();
 
-    let next_key_id = KeyId(Vec::default());
-
     let keygen_info = KeygenInfo {
-        ceremony_id: CEREMONY_ID,
+        ceremony_id: CEREMONY_ID + 1,
         signers: KEYGEN_INFO.signers.clone(),
     };
 
@@ -138,7 +136,7 @@ async fn can_have_multiple_keys() {
         Some(KeygenStage::KeyReady)
     );
     assert_eq!(
-        keygen_stage_for(&c1, CEREMONY_ID),
+        keygen_stage_for(&c1, CEREMONY_ID + 1),
         Some(KeygenStage::AwaitingBroadcast1)
     );
 }
@@ -177,26 +175,21 @@ async fn no_keygen_request() {
     let mut ctx = helpers::KeygenContext::new();
     let states = ctx.generate().await;
 
-    let mut c1 = states.keygen_phase1.clients[0].clone();
-
-    let bc1 = create_bc1(2);
     let bad_validator = &VALIDATOR_IDS[1];
+    let next_ceremony_id = CEREMONY_ID + 1;
+    let message = helpers::bc1_to_p2p_keygen(create_bc1(2), next_ceremony_id, bad_validator);
 
-    // We have not received a keygen request for ceremony_id 0
-    let message = helpers::bc1_to_p2p_keygen(bc1, CEREMONY_ID, bad_validator);
-
+    let mut c1 = states.keygen_phase1.clients[0].clone();
     c1.process_p2p_message(message);
 
     c1.set_timeout(Duration::from_secs(0));
     c1.cleanup();
 
-    let mut rx = &mut ctx.rxs[0];
-
     assert_eq!(
         // kyle debug: we receive a timeout
-        helpers::recv_next_inner_event(&mut rx).await,
+        helpers::recv_next_inner_event(&mut ctx.rxs[0]).await,
         InnerEvent::KeygenResult(KeygenOutcome::unauthorised(
-            CEREMONY_ID,
+            next_ceremony_id,
             vec![bad_validator.clone()]
         ))
     );

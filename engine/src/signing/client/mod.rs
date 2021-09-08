@@ -47,6 +47,7 @@ impl KeygenInfo {
 /// any given ceremony
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SigningInfo {
+    // TODO: Rename to key_id
     id: KeyId,
     signers: Vec<ValidatorId>,
 }

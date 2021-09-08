@@ -177,6 +177,7 @@ impl SigningStateManager {
         };
 
         let key_id = sign_info.clone().id;
+        println!("Key id in request to sign is: {:?}", key_id);
 
         let mi = MessageInfo { hash: data, key_id };
 

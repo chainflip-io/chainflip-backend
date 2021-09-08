@@ -54,20 +54,14 @@ lazy_static! {
         .try_into()
         .unwrap();
     static ref MESSAGE_HASH: MessageHash = MessageHash(MESSAGE.clone());
-    static ref MESSAGE_INFO: MessageInfo = MessageInfo {
-        hash: MESSAGE_HASH.clone(),
-        key_id: KeyId(PUB_KEY.into())
-    };
-        /// Just in case we need to test signing two messages
+
+    /// Just in case we need to test signing two messages
     static ref MESSAGE2: [u8; 32] = "Chainflip:Chainflip:Chainflip:02"
         .as_bytes()
         .try_into()
         .unwrap();
-    static ref SIGN_INFO: SigningInfo = SigningInfo {
-        id: KeyId(PUB_KEY.into()),
-        signers: SIGNER_IDS.clone()
-    };
     static ref KEYGEN_INFO: KeygenInfo = KeygenInfo {
+        // THIS MIGHT ALSO BE WRONG - BUT LESS LIKELY THAN THE ABOVE 2
         ceremony_id: CEREMONY_ID,
         signers: VALIDATOR_IDS.clone()
     };
