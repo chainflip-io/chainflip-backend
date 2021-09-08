@@ -52,7 +52,11 @@ pub enum BroadcastFailure<SignerId: Parameter> {
 	TransactionTimeout,
 }
 
-pub trait BroadcastContext<T: BaseConfig> {
+/// The [TransactionContext] should contain all the state required to construct and process transactions for a given
+/// chain.
+pub trait TransactionContext<T: BaseConfig> {
+	/// A chain identifier.
+	type Chain: Into<ChainId>;
 	/// The payload type that will be signed over.
 	type Payload: Parameter;
 	/// The signature type that is returned by the threshold signature.
@@ -66,11 +70,11 @@ pub trait BroadcastContext<T: BaseConfig> {
 	/// Constructs the payload for the threshold signature.
 	fn construct_signing_payload(&self) -> Result<Self::Payload, Self::Error>;
 
-	/// Adds the signature to the broadcast context.
-	fn add_threshold_signature(&mut self, sig: &Self::Signature);
-
 	/// Constructs the outgoing transaction.
-	fn construct_unsigned_transaction(&self) -> Result<Self::UnsignedTransaction, Self::Error>;
+	fn construct_unsigned_transaction(
+		&mut self,
+		sig: &Self::Signature,
+	) -> Result<Self::UnsignedTransaction, Self::Error>;
 
 	/// Verify the signed transaction when it is submitted to the state chain.
 	fn verify_tx(
@@ -110,17 +114,17 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	pub type PayloadFor<T, I> =
-		<<T as Config<I>>::BroadcastContext as BroadcastContext<T>>::Payload;
+		<<T as Config<I>>::BroadcastContext as TransactionContext<T>>::Payload;
 	pub type SignatureFor<T, I> =
-		<<T as Config<I>>::BroadcastContext as BroadcastContext<T>>::Signature;
+		<<T as Config<I>>::BroadcastContext as TransactionContext<T>>::Signature;
 	pub type SignedTransactionFor<T, I> =
-		<<T as Config<I>>::BroadcastContext as BroadcastContext<T>>::SignedTransaction;
+		<<T as Config<I>>::BroadcastContext as TransactionContext<T>>::SignedTransaction;
 	pub type UnsignedTransactionFor<T, I> =
-		<<T as Config<I>>::BroadcastContext as BroadcastContext<T>>::UnsignedTransaction;
+		<<T as Config<I>>::BroadcastContext as TransactionContext<T>>::UnsignedTransaction;
 	pub type TransactionHashFor<T, I> =
-		<<T as Config<I>>::BroadcastContext as BroadcastContext<T>>::TransactionHash;
+		<<T as Config<I>>::BroadcastContext as TransactionContext<T>>::TransactionHash;
 	pub type BroadcastErrorFor<T, I> =
-		<<T as Config<I>>::BroadcastContext as BroadcastContext<T>>::Error;
+		<<T as Config<I>>::BroadcastContext as TransactionContext<T>>::Error;
 	pub type BroadcastFailureFor<T> = BroadcastFailure<T>;
 
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
@@ -145,7 +149,7 @@ pub mod pallet {
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 
 		/// The context definition for this instance.
-		type BroadcastContext: BroadcastContext<Self> + Member + FullCodec;
+		type BroadcastContext: TransactionContext<Self> + Member + FullCodec;
 
 		/// Signer nomination.
 		type SignerNomination: SignerNomination<SignerId = Self::ValidatorId>;
@@ -218,13 +222,14 @@ pub mod pallet {
 					.ok_or(Error::<T, I>::InvalidBroadcastId)?;
 
 			// Construct the unsigned transaction and update the context.
-			context.add_threshold_signature(&signature);
-			let unsigned_tx = context.construct_unsigned_transaction().map_err(|_| {
-				// We should only reach here if he have invalid data. If this is the case, restarting
-				// won't help. The broacast has failed.
-				PendingBroadcasts::<T, I>::insert(BroadcastState::Failed, id, context.clone());
-				Error::<T, I>::TransactionConstructionFailed
-			})?;
+			let unsigned_tx = context
+				.construct_unsigned_transaction(&signature)
+				.map_err(|_| {
+					// We should only reach here if he have invalid data. If this is the case, restarting
+					// won't help. The broacast has failed.
+					PendingBroadcasts::<T, I>::insert(BroadcastState::Failed, id, context.clone());
+					Error::<T, I>::TransactionConstructionFailed
+				})?;
 
 			PendingBroadcasts::<T, I>::insert(BroadcastState::AwaitingSignature, id, context);
 

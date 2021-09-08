@@ -1,7 +1,7 @@
 //! Definitions for the "registerClaim" transaction broadcast.
 
 use super::{
-	EthereumBroadcastError, SchnorrSignature, SigData, Tokenizable,
+	EthereumTransactionError, SchnorrSignature, SigData, Tokenizable,
 };
 
 use cf_traits::{NonceIdentifier, NonceProvider};
@@ -31,7 +31,7 @@ impl RegisterClaim {
 		amount: Amount,
 		address: &[u8; 20],
 		expiry: u64,
-	) -> Result<Self, EthereumBroadcastError> {
+	) -> Result<Self, EthereumTransactionError> {
 		let mut calldata = Self {
 			sig_data: SigData::new_empty(N::next_nonce(NonceIdentifier::Ethereum).into()),
 			node_id: node_id.to_vec(),
@@ -44,7 +44,7 @@ impl RegisterClaim {
 		Ok(calldata)
 	}
 
-	pub fn abi_encode(&self) -> Result<Vec<u8>, EthereumBroadcastError> {
+	pub fn abi_encode(&self) -> Result<Vec<u8>, EthereumTransactionError> {
 		self
 			.get_function()
 			.encode_input(&[
@@ -54,7 +54,7 @@ impl RegisterClaim {
 				Token::Address(self.address),
 				Token::Uint(self.expiry),
 			])
-			.map_err(|_| EthereumBroadcastError::InvalidPayloadData)
+			.map_err(|_| EthereumTransactionError::InvalidPayloadData)
 	}
 
 	pub fn populate_sigdata(&mut self, sig: &SchnorrSignature) {

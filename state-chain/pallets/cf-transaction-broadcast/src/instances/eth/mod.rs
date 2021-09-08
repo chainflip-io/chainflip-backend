@@ -1,7 +1,7 @@
 //! Types and functions that are common to ethereum broadcasting.
 pub mod register_claim;
 
-use crate::{BaseConfig, BroadcastContext};
+use crate::{BaseConfig, TransactionContext};
 
 use codec::{Decode, Encode};
 use ethabi::{Address, Token, Uint, ethereum_types::{U256, H256}};
@@ -23,39 +23,38 @@ fn stake_manager_contract_address() -> Address {
 //--------------------------//
 
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
-pub enum EthereumBroadcast {
+pub enum EthereumTransactions {
 	RegisterClaim(register_claim::RegisterClaim),
 }
 
-impl<T: BaseConfig> BroadcastContext<T> for EthereumBroadcast {
+impl<T: BaseConfig> TransactionContext<T> for EthereumTransactions {
+	type Chain = super::Ethereum;
 	type Payload = H256;
 	type Signature = SchnorrSignature;
 	type UnsignedTransaction = UnsignedTransaction;
 	type SignedTransaction = RawSignedTransaction;
 	type TransactionHash = H256;
-	type Error = EthereumBroadcastError;
+	type Error = EthereumTransactionError;
 
 	fn construct_signing_payload(&self) -> Result<Self::Payload, Self::Error> {
 		match self {
-			Self::RegisterClaim(rc) => Ok(rc.sig_data.msg_hash)
+			Self::RegisterClaim(tx) => Ok(tx.sig_data.msg_hash)
 		}
 	}
 
-	fn add_threshold_signature(&mut self, sig: &Self::Signature) {
-		match self {
-			Self::RegisterClaim(ref mut rc) => rc.populate_sigdata(sig),
-		};
-	}
-
 	fn construct_unsigned_transaction(
-		&self,
+		&mut self,
+		sig: &Self::Signature,
 	) -> Result<Self::UnsignedTransaction, Self::Error> {
 		let (contract, data) = match self {
 			// TODO: check claim expiry?
-			Self::RegisterClaim(ref rc) => (
-				stake_manager_contract_address(),
-				rc.abi_encode()?
-			)
+			Self::RegisterClaim(ref mut tx) => {
+				tx.populate_sigdata(sig);
+				(
+					stake_manager_contract_address(),
+					tx.abi_encode()?
+				)
+			}
 		};
 
 		Ok(UnsignedTransaction {
@@ -74,16 +73,16 @@ impl<T: BaseConfig> BroadcastContext<T> for EthereumBroadcast {
 		signer: &T::ValidatorId,
 		signed_tx: &Self::SignedTransaction,
 	) -> Result<(), Self::Error> {
-		todo!()
+		verify_raw(signed_tx, signer)
 	}
-	
 }
 
 
 #[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
-pub enum EthereumBroadcastError {
+pub enum EthereumTransactionError {
 	InvalidPayloadData,
 	InvalidSignature,
+	InvalidRlp,
 }
 
 pub trait Tokenizable {
@@ -170,13 +169,9 @@ pub struct UnsignedTransaction {
 
 pub type RawSignedTransaction = Vec<u8>;
 
-pub enum VerificationError {
-	InvalidRlp(rlp::DecoderError),
-}
-
-pub fn verify(tx: RawSignedTransaction) -> Result<(), VerificationError> {
+pub fn verify_raw<SignerId>(tx: RawSignedTransaction, _signer: SignerId) -> Result<(), EthereumTransactionError> {
 	let decoded: ethereum::EIP1559Transaction = rlp::decode(&tx[..])
-		.map_err(|e| VerificationError::InvalidRlp(e))?;
+		.map_err(|_| EthereumTransactionError::InvalidRlp)?;
 	// TODO check contents, signature, etc.
 	Ok(())
 }
