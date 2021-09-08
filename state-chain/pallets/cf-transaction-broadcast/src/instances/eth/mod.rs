@@ -94,12 +94,12 @@ pub trait Tokenizable {
 #[derive(Encode, Decode, Copy, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct SigData {
 	/// The message hash aka. payload to be signed over.
-	msg_hash: H256,
+	pub msg_hash: H256,
 	/// The Schnorr signature.
 	sig: Uint,
 	/// The nonce value for the AggKey. Each Signature over an AggKey should have a unique nonce to prevent replay
 	/// attacks.
-	nonce: Uint,
+	pub nonce: Uint,
 	/// The public key derived from the random nonce value `k`. Also known as `nonceTimesGeneratorAddress`.
 	///
 	/// Note this is unrelated to the `nonce` above. The nonce in this context is a generated as part of each signing
@@ -127,6 +127,13 @@ impl SigData {
 			sig: schnorr.s.into(),
 			k_times_g_addr: schnorr.k_times_g_addr.into(),
 			..self
+		}
+	}
+
+	pub fn get_signature(&self) -> SchnorrSignature {
+		SchnorrSignature {
+			s: self.sig.into(),
+			k_times_g_addr: self.k_times_g_addr.into(),
 		}
 	}
 }
@@ -169,7 +176,7 @@ pub struct UnsignedTransaction {
 
 pub type RawSignedTransaction = Vec<u8>;
 
-pub fn verify_raw<SignerId>(tx: RawSignedTransaction, _signer: SignerId) -> Result<(), EthereumTransactionError> {
+pub fn verify_raw<SignerId>(tx: &RawSignedTransaction, _signer: &SignerId) -> Result<(), EthereumTransactionError> {
 	let decoded: ethereum::EIP1559Transaction = rlp::decode(&tx[..])
 		.map_err(|_| EthereumTransactionError::InvalidRlp)?;
 	// TODO check contents, signature, etc.
