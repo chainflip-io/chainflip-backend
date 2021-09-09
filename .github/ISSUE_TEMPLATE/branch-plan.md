@@ -19,7 +19,7 @@ A more thorough technical description of the code to be introduced. Including bu
 - Dependencies assumed of other components
 - Suspected (or actual, if possible) breaking changes
 - Target Branch
-- Linked Issues
+- Linked Issues (Either Github or ~~Clubhouse~~ Shortcut)
 
 ### Storage
 
@@ -46,8 +46,8 @@ A more thorough technical description of the code to be introduced. Including bu
 
 ---
 
-**Does this plan have an associated Clubhouse Story?**
-If so, link it here [CH-XXXX].
+**~~Clubhouse~~ Shortcut Story Link**
+[CH-XXXX].
 
 **Describe alternatives you've considered**
 A clear and concise description of any alternative solutions you've considered.
