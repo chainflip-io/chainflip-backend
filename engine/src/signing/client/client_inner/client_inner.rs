@@ -314,7 +314,7 @@ where
 
         let entry = self
             .pending_requests_to_sign
-            .entry(sign_info.clone().key_id)
+            .entry(sign_info.key_id.clone())
             .or_default();
 
         entry.push((data, sign_info));
@@ -341,7 +341,7 @@ where
                     self.my_validator_id
                 );
 
-                let key = self.key_store.get_key(sign_info.clone().key_id);
+                let key = self.key_store.get_key(sign_info.key_id.clone());
 
                 match key {
                     Some(key) => {
@@ -357,7 +357,7 @@ where
         }
     }
 
-    /// Process requests to sign that required `ceremony_id`
+    /// Process requests to sign that required the key in `key_info`
     fn process_pending(&mut self, key_info: KeygenResultInfo) {
         if let Some(reqs) = self
             .pending_requests_to_sign

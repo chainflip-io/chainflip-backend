@@ -160,7 +160,7 @@ impl KeygenContext {
         // Generate phase 1 data
 
         let keygen_info = KeygenInfo {
-            ceremony_id: CEREMONY_ID.clone(),
+            ceremony_id: *CEREMONY_ID,
             signers: validator_ids.clone(),
         };
 
@@ -185,7 +185,7 @@ impl KeygenContext {
         for sender_idx in 0..=2 {
             let bc1 = bc1_vec[sender_idx].clone();
             let id = &validator_ids[sender_idx];
-            let m = bc1_to_p2p_keygen(bc1, CEREMONY_ID.clone(), id);
+            let m = bc1_to_p2p_keygen(bc1, *CEREMONY_ID, id);
 
             for receiver_idx in 0..=2 {
                 if receiver_idx != sender_idx {
@@ -196,7 +196,7 @@ impl KeygenContext {
 
         for c in clients.iter() {
             assert_eq!(
-                keygen_stage_for(c, CEREMONY_ID.clone()),
+                keygen_stage_for(c, *CEREMONY_ID),
                 Some(KeygenStage::AwaitingSecret2)
             );
         }
@@ -259,8 +259,6 @@ impl KeygenContext {
         // ensure all participants have the same idea of the public key
         assert_eq!(pubkeys[0].serialize(), pubkeys[1].serialize());
         assert_eq!(pubkeys[1].serialize(), pubkeys[2].serialize());
-
-        println!("pubkeys: {:?}", pubkeys);
 
         let mut sec_keys = vec![];
 
@@ -615,7 +613,7 @@ pub fn sec2_to_p2p_signing(sec2: Secret2, sender_id: &ValidatorId, mi: &MessageI
 // Do the necessary wrapping so Secret2 can be sent
 // via the clients interface
 pub fn sec2_to_p2p_keygen(sec2: Secret2, sender_id: &ValidatorId) -> P2PMessage {
-    let wrapped = KeyGenMessageWrapped::new(CEREMONY_ID.clone(), sec2);
+    let wrapped = KeyGenMessageWrapped::new(*CEREMONY_ID, sec2);
 
     let data = MultisigMessage::from(wrapped);
     let data = serde_json::to_vec(&data).unwrap();

@@ -240,7 +240,7 @@ async fn request_to_sign_before_key_ready() {
     let mut c1 = keygen_states.keygen_phase2.clients[0].clone();
 
     assert_eq!(
-        keygen_stage_for(&c1, CEREMONY_ID.clone()),
+        keygen_stage_for(&c1, *CEREMONY_ID),
         Some(KeygenStage::AwaitingSecret2)
     );
 
@@ -270,7 +270,7 @@ async fn request_to_sign_before_key_ready() {
     c1.process_p2p_message(m);
 
     assert_eq!(
-        keygen_stage_for(&c1, CEREMONY_ID.clone()),
+        keygen_stage_for(&c1, *CEREMONY_ID),
         Some(KeygenStage::KeyReady)
     );
 
@@ -559,7 +559,7 @@ async fn bc1_with_different_hash() {
     };
     let sign_info = SigningInfo {
         signers: SIGNER_IDS.clone(),
-        key_id,
+        key_id: key_id.clone(),
     };
     let states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
@@ -578,7 +578,7 @@ async fn bc1_with_different_hash() {
     let id = &SIGNER_IDS[1];
     let mi = MessageInfo {
         hash: MessageHash(MESSAGE2.clone()),
-        key_id: KeyId(PUB_KEY.into()),
+        key_id,
     };
     assert_ne!(
         mi.hash, message_info.hash,

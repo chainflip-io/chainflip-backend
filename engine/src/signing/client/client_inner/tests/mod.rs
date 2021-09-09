@@ -26,9 +26,6 @@ use crate::{
 use std::convert::TryInto;
 use std::time::Duration;
 
-// The pub key to be used as the key identifier by default
-const PUB_KEY: [u8; 32] = [0; 32];
-
 lazy_static! {
     static ref VALIDATOR_IDS: Vec<ValidatorId> = vec![
         ValidatorId([1; 32]),
@@ -55,15 +52,13 @@ lazy_static! {
         .try_into()
         .unwrap();
     static ref MESSAGE_HASH: MessageHash = MessageHash(MESSAGE.clone());
-
     /// Just in case we need to test signing two messages
     static ref MESSAGE2: [u8; 32] = "Chainflip:Chainflip:Chainflip:02"
         .as_bytes()
         .try_into()
         .unwrap();
     static ref KEYGEN_INFO: KeygenInfo = KeygenInfo {
-        // THIS MIGHT ALSO BE WRONG - BUT LESS LIKELY THAN THE ABOVE 2
-        ceremony_id: CEREMONY_ID.clone(),
+        ceremony_id: *CEREMONY_ID,
         signers: VALIDATOR_IDS.clone()
     };
 }
@@ -74,7 +69,7 @@ lazy_static! {
 // generate a new key for epoch X (and attempt number?). Requests to sign should also
 // contain the epoch.
 
-// TO DO (unit tests):
+// TODO (unit tests):
 // [Signing]
 // - Delayed data expires on timeout
 // - Parties cannot send two messages for the same phase

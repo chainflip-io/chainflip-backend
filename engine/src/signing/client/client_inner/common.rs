@@ -1,11 +1,10 @@
 use std::sync::Arc;
 
-use curv::elliptic::curves::traits::ECPoint;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     p2p::ValidatorId,
-    signing::crypto::{Keys, Parameters, SharedKeys, VerifiableSS, GE},
+    signing::crypto::{ECPoint, Keys, Parameters, SharedKeys, VerifiableSS, GE},
 };
 
 use super::utils::ValidatorMaps;

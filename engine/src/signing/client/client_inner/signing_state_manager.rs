@@ -178,7 +178,7 @@ impl SigningStateManager {
 
         let mi = MessageInfo {
             hash: data,
-            key_id: sign_info.clone().key_id,
+            key_id: sign_info.key_id.clone(),
         };
 
         match self.signing_states.entry(mi.clone()) {

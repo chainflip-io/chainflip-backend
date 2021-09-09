@@ -16,13 +16,13 @@ fn bc1_gets_delayed_until_keygen_request() {
         &logger,
     );
 
-    assert_eq!(keygen_stage_for(&client, CEREMONY_ID.clone()), None);
+    assert_eq!(keygen_stage_for(&client, *CEREMONY_ID), None);
 
     let message = create_keygen_p2p_message(&VALIDATOR_IDS[1], create_bc1(2));
     client.process_p2p_message(message);
 
-    assert_eq!(keygen_stage_for(&client, CEREMONY_ID.clone()), None);
-    assert_eq!(keygen_delayed_count(&client, CEREMONY_ID.clone()), 1);
+    assert_eq!(keygen_stage_for(&client, *CEREMONY_ID), None);
+    assert_eq!(keygen_delayed_count(&client, *CEREMONY_ID), 1);
 
     // Keygen instruction should advance the stage and process delayed messages
 
@@ -31,17 +31,17 @@ fn bc1_gets_delayed_until_keygen_request() {
     client.process_multisig_instruction(keygen);
 
     assert_eq!(
-        keygen_stage_for(&client, CEREMONY_ID.clone()),
+        keygen_stage_for(&client, *CEREMONY_ID),
         Some(KeygenStage::AwaitingBroadcast1)
     );
-    assert_eq!(keygen_delayed_count(&client, CEREMONY_ID.clone()), 0);
+    assert_eq!(keygen_delayed_count(&client, *CEREMONY_ID), 0);
 
     // One more message should advance the stage (share_count = 3)
     let message = create_keygen_p2p_message(&VALIDATOR_IDS[2], create_bc1(3));
     client.process_p2p_message(message);
 
     assert_eq!(
-        keygen_stage_for(&client, CEREMONY_ID.clone()),
+        keygen_stage_for(&client, *CEREMONY_ID),
         Some(KeygenStage::AwaitingSecret2)
     );
 }
@@ -55,7 +55,7 @@ async fn keygen_message_from_invalid_validator() {
     let mut c1 = states.keygen_phase1.clients[0].clone();
 
     assert_eq!(
-        keygen_stage_for(&c1, CEREMONY_ID.clone()),
+        keygen_stage_for(&c1, *CEREMONY_ID),
         Some(KeygenStage::AwaitingBroadcast1)
     );
 
@@ -81,7 +81,7 @@ async fn keygen_secret2_gets_delayed() {
 
     let c1 = &mut clients_p1[0];
     assert_eq!(
-        keygen_stage_for(&c1, CEREMONY_ID.clone()),
+        keygen_stage_for(&c1, *CEREMONY_ID),
         Some(KeygenStage::AwaitingBroadcast1)
     );
 
@@ -93,9 +93,9 @@ async fn keygen_secret2_gets_delayed() {
 
     c1.process_p2p_message(message);
 
-    assert_eq!(keygen_delayed_count(&c1, CEREMONY_ID.clone()), 1);
+    assert_eq!(keygen_delayed_count(&c1, *CEREMONY_ID), 1);
     assert_eq!(
-        keygen_stage_for(&c1, CEREMONY_ID.clone()),
+        keygen_stage_for(&c1, *CEREMONY_ID),
         Some(KeygenStage::AwaitingBroadcast1)
     );
 
@@ -107,10 +107,10 @@ async fn keygen_secret2_gets_delayed() {
     c1.process_p2p_message(message);
 
     assert_eq!(
-        keygen_stage_for(&c1, CEREMONY_ID.clone()),
+        keygen_stage_for(&c1, *CEREMONY_ID),
         Some(KeygenStage::AwaitingSecret2)
     );
-    assert_eq!(keygen_delayed_count(&c1, CEREMONY_ID.clone()), 0);
+    assert_eq!(keygen_delayed_count(&c1, *CEREMONY_ID), 0);
 }
 
 /// Test that we can have more than one key simultaneously
@@ -123,18 +123,18 @@ async fn can_have_multiple_keys() {
     let mut c1 = states.key_ready.clients[0].clone();
 
     let keygen_info = KeygenInfo {
-        ceremony_id: CEREMONY_ID.clone() + 1,
+        ceremony_id: *CEREMONY_ID + 1,
         signers: KEYGEN_INFO.signers.clone(),
     };
 
     c1.process_multisig_instruction(MultisigInstruction::KeyGen(keygen_info));
 
     assert_eq!(
-        keygen_stage_for(&c1, CEREMONY_ID.clone()),
+        keygen_stage_for(&c1, *CEREMONY_ID),
         Some(KeygenStage::KeyReady)
     );
     assert_eq!(
-        keygen_stage_for(&c1, CEREMONY_ID.clone() + 1),
+        keygen_stage_for(&c1, *CEREMONY_ID + 1),
         Some(KeygenStage::AwaitingBroadcast1)
     );
 }
@@ -147,19 +147,19 @@ async fn cannot_create_key_for_known_id() {
     let mut c1 = states.key_ready.clients[0].clone();
 
     assert_eq!(
-        keygen_stage_for(&c1, CEREMONY_ID.clone()),
+        keygen_stage_for(&c1, *CEREMONY_ID),
         Some(KeygenStage::KeyReady)
     );
 
     let keygen_info = KeygenInfo {
-        ceremony_id: CEREMONY_ID.clone(),
+        ceremony_id: *CEREMONY_ID,
         signers: KEYGEN_INFO.signers.clone(),
     };
     c1.process_multisig_instruction(MultisigInstruction::KeyGen(keygen_info));
 
     // Previous state should be unaffected
     assert_eq!(
-        keygen_stage_for(&c1, CEREMONY_ID.clone()),
+        keygen_stage_for(&c1, *CEREMONY_ID),
         Some(KeygenStage::KeyReady)
     );
 
@@ -174,7 +174,7 @@ async fn no_keygen_request() {
     let states = ctx.generate().await;
 
     let bad_validator = &VALIDATOR_IDS[1];
-    let next_ceremony_id = CEREMONY_ID.clone() + 1;
+    let next_ceremony_id = *CEREMONY_ID + 1;
     let message = helpers::bc1_to_p2p_keygen(create_bc1(2), next_ceremony_id, bad_validator);
 
     let mut c1 = states.keygen_phase1.clients[0].clone();
@@ -202,13 +202,13 @@ async fn phase1_timeout() {
     let mut c1 = states.keygen_phase1.clients[0].clone();
 
     assert_eq!(
-        helpers::keygen_stage_for(&c1, CEREMONY_ID.clone()),
+        helpers::keygen_stage_for(&c1, *CEREMONY_ID),
         Some(KeygenStage::AwaitingBroadcast1)
     );
 
     let bc1 = states.keygen_phase1.bc1_vec[1].clone();
 
-    let message = helpers::bc1_to_p2p_keygen(bc1, CEREMONY_ID.clone(), &VALIDATOR_IDS[1]);
+    let message = helpers::bc1_to_p2p_keygen(bc1, *CEREMONY_ID, &VALIDATOR_IDS[1]);
 
     c1.process_p2p_message(message);
 
@@ -221,10 +221,10 @@ async fn phase1_timeout() {
 
     assert_eq!(
         helpers::recv_next_inner_event(&mut rx).await,
-        InnerEvent::KeygenResult(KeygenOutcome::timeout(CEREMONY_ID.clone(), vec![late_node]))
+        InnerEvent::KeygenResult(KeygenOutcome::timeout(*CEREMONY_ID, vec![late_node]))
     );
 
-    assert_eq!(helpers::keygen_stage_for(&c1, CEREMONY_ID.clone()), None);
+    assert_eq!(helpers::keygen_stage_for(&c1, *CEREMONY_ID), None);
 }
 
 /// Test that if keygen state times out during phase 2 (with keygen request present), we slash non-senders
@@ -236,7 +236,7 @@ async fn phase2_timeout() {
     let mut c1 = states.keygen_phase2.clients[0].clone();
 
     assert_eq!(
-        helpers::keygen_stage_for(&c1, CEREMONY_ID.clone()),
+        helpers::keygen_stage_for(&c1, *CEREMONY_ID),
         Some(KeygenStage::AwaitingSecret2)
     );
 
@@ -258,10 +258,10 @@ async fn phase2_timeout() {
 
     assert_eq!(
         helpers::recv_next_inner_event(&mut rx).await,
-        InnerEvent::KeygenResult(KeygenOutcome::timeout(CEREMONY_ID.clone(), vec![late_node]))
+        InnerEvent::KeygenResult(KeygenOutcome::timeout(*CEREMONY_ID, vec![late_node]))
     );
 
-    assert_eq!(helpers::keygen_stage_for(&c1, CEREMONY_ID.clone()), None);
+    assert_eq!(helpers::keygen_stage_for(&c1, *CEREMONY_ID), None);
 }
 
 /// That that parties that send invalid bc1s get reported
@@ -275,26 +275,26 @@ async fn invalid_bc1() {
     // This BC1 is valid
     let bc1_a = states.keygen_phase1.bc1_vec[1].clone();
     let message_a =
-        helpers::bc1_to_p2p_keygen(bc1_a.clone(), CEREMONY_ID.clone(), &VALIDATOR_IDS[1]);
+        helpers::bc1_to_p2p_keygen(bc1_a.clone(), *CEREMONY_ID, &VALIDATOR_IDS[1]);
     c1.process_p2p_message(message_a);
 
     // This BC1 is invalid
     let bad_node = VALIDATOR_IDS[2].clone();
     let bc1_b = helpers::create_invalid_bc1();
-    let message_b = helpers::bc1_to_p2p_keygen(bc1_b, CEREMONY_ID.clone(), &bad_node);
+    let message_b = helpers::bc1_to_p2p_keygen(bc1_b, *CEREMONY_ID, &bad_node);
     c1.process_p2p_message(message_b);
 
     let mut rx = &mut ctx.rxs[0];
 
     assert_eq!(
         helpers::recv_next_inner_event(&mut rx).await,
-        InnerEvent::KeygenResult(KeygenOutcome::invalid(CEREMONY_ID.clone(), vec![bad_node]))
+        InnerEvent::KeygenResult(KeygenOutcome::invalid(*CEREMONY_ID, vec![bad_node]))
     );
 
     c1.set_timeout(Duration::from_secs(0));
     c1.cleanup();
 
-    assert_eq!(helpers::keygen_stage_for(&c1, CEREMONY_ID.clone()), None);
+    assert_eq!(helpers::keygen_stage_for(&c1, *CEREMONY_ID), None);
 
     // make sure the timeout is not triggered for the abandoned keygen
     assert_eq!(helpers::check_for_inner_event(&mut rx).await, None);
@@ -329,13 +329,13 @@ async fn invalid_sec2() {
 
     assert_eq!(
         helpers::recv_next_inner_event(&mut rx).await,
-        InnerEvent::KeygenResult(KeygenOutcome::invalid(CEREMONY_ID.clone(), vec![bad_node]))
+        InnerEvent::KeygenResult(KeygenOutcome::invalid(*CEREMONY_ID, vec![bad_node]))
     );
 
     c1.set_timeout(Duration::from_secs(0));
     c1.cleanup();
 
-    assert_eq!(helpers::keygen_stage_for(&c1, CEREMONY_ID.clone()), None);
+    assert_eq!(helpers::keygen_stage_for(&c1, *CEREMONY_ID), None);
 
     // make sure the timeout is not triggered for the abandoned keygen
     assert_eq!(helpers::check_for_inner_event(&mut rx).await, None);
