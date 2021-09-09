@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::p2p::ValidatorId;
+use crate::p2p::AccountId;
 
 use serde::{Deserialize, Serialize};
 
@@ -37,24 +37,24 @@ fn reorg_vector_works() {
 /// Mappings from signer_idx to Validator Id and back
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ValidatorMaps {
-    id_to_idx: HashMap<ValidatorId, usize>,
+    id_to_idx: HashMap<AccountId, usize>,
     // TODO: create SortedVec and use it here:
     // Sorted Validator Ids
-    validator_ids: Vec<ValidatorId>,
+    validator_ids: Vec<AccountId>,
 }
 
 impl ValidatorMaps {
-    pub fn get_idx(&self, id: &ValidatorId) -> Option<usize> {
+    pub fn get_idx(&self, id: &AccountId) -> Option<usize> {
         self.id_to_idx.get(id).copied()
     }
 
-    pub fn get_id(&self, idx: usize) -> Option<&ValidatorId> {
+    pub fn get_id(&self, idx: usize) -> Option<&AccountId> {
         let idx = idx.checked_sub(1)?;
         self.validator_ids.get(idx)
     }
 }
 
-pub fn get_index_mapping(signers: &[ValidatorId]) -> ValidatorMaps {
+pub fn get_index_mapping(signers: &[AccountId]) -> ValidatorMaps {
     let signers = signers.clone();
 
     let idxs: Vec<_> = (1..=signers.len()).collect();
@@ -82,7 +82,7 @@ pub fn get_index_mapping(signers: &[ValidatorId]) -> ValidatorMaps {
 }
 
 /// Sort validators and find our index
-pub fn get_our_idx(signers: &[ValidatorId], id: &ValidatorId) -> Option<usize> {
+pub fn get_our_idx(signers: &[AccountId], id: &AccountId) -> Option<usize> {
     let mut signers = signers.to_owned();
 
     signers.sort();
@@ -99,9 +99,9 @@ mod utils_tests {
 
     #[test]
     fn get_our_idx_works() {
-        let a = ValidatorId(['A' as u8; 32]);
-        let b = ValidatorId(['B' as u8; 32]);
-        let c = ValidatorId(['C' as u8; 32]);
+        let a = AccountId(['A' as u8; 32]);
+        let b = AccountId(['B' as u8; 32]);
+        let c = AccountId(['C' as u8; 32]);
 
         let signers = [c, a, b.clone()];
 
@@ -112,9 +112,9 @@ mod utils_tests {
 
     #[test]
     fn get_index_mapping_works() {
-        let a = ValidatorId(['A' as u8; 32]);
-        let b = ValidatorId(['B' as u8; 32]);
-        let c = ValidatorId(['C' as u8; 32]);
+        let a = AccountId(['A' as u8; 32]);
+        let b = AccountId(['B' as u8; 32]);
+        let c = AccountId(['C' as u8; 32]);
 
         let signers = [a, c.clone(), b];
 

@@ -82,18 +82,18 @@ impl pallet_cf_staking::Config for Test {
 }
 
 type Amount = u64;
-type ValidatorId = u64;
+type AccountId = u64;
 
 impl Chainflip for Test {
 	type Amount = Amount;
-	type ValidatorId = ValidatorId;
+	type AccountId = AccountId;
 }
 
 impl VaultRotationHandler for Test {
-	type ValidatorId = ValidatorId;
+	type AccountId = AccountId;
 
 	fn abort() {}
-	fn penalise(_bad_validators: Vec<Self::ValidatorId>) {}
+	fn penalise(_bad_validators: Vec<Self::AccountId>) {}
 }
 
 impl NonceProvider for Test {
