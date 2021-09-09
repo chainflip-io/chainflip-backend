@@ -20,7 +20,7 @@ use crate::{
                 signing_state::SigningStage,
                 InnerEvent, KeygenOutcome, MultisigClientInner, SigningOutcome,
             },
-            KeyId, KeygenInfo, MultisigInstruction,
+            KeyId, KeygenInfo, MessageHash, MultisigInstruction,
         },
         crypto::{Keys, LocalSig},
         MessageInfo,
@@ -30,7 +30,7 @@ use crate::{
 
 type MultisigClientInnerNoDB = MultisigClientInner<KeyDBMock>;
 
-use super::{CEREMONY_ID, MESSAGE_HASH, SIGNER_IDXS};
+use super::{CEREMONY_ID, MESSAGE_HASH, SIGNER_IDS, SIGNER_IDXS};
 
 type InnerEventReceiver = UnboundedReceiver<InnerEvent>;
 
@@ -713,4 +713,17 @@ pub fn create_invalid_bc1() -> Broadcast1 {
     let y_i = key.y_i;
 
     Broadcast1 { bc1, blind, y_i }
+}
+
+pub fn message_and_sign_info(hash: MessageHash, key_id: KeyId) -> (MessageInfo, SigningInfo) {
+    (
+        MessageInfo {
+            hash,
+            key_id: key_id.clone(),
+        },
+        SigningInfo {
+            signers: *SIGNER_IDS,
+            key_id,
+        },
+    )
 }
