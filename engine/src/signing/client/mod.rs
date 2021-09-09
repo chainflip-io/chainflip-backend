@@ -23,7 +23,7 @@ use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
 use serde::{Deserialize, Serialize};
 
-/// Public key compressed
+/// Public key compressed (33 bytes - 32 bytes + a y parity byte)
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct KeyId(pub Vec<u8>);
 
@@ -42,9 +42,6 @@ impl KeygenInfo {
     }
 }
 
-/// Note that this is different from `AuctionInfo` as
-/// not every multisig party will participate in
-/// any given ceremony
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SigningInfo {
     // TODO: Rename to key_id
@@ -113,7 +110,6 @@ where
                     inner.process_p2p_message(p2p_message);
                 }
                 Some(msg) = multisig_instruction_receiver.recv() => {
-                    println!("[{}] received instruction: {:?}", my_validator_id, msg);
                     inner.process_multisig_instruction(msg);
                 }
                 Some(()) = cleanup_stream.next() => {
@@ -129,7 +125,6 @@ where
                             multisig_event_sender.send(MultisigEvent::MessageSigningResult(res)).map_err(|_| "Receiver dropped").unwrap();
                         }
                         InnerEvent::KeygenResult(res) => {
-                            // goes through here
                             multisig_event_sender.send(MultisigEvent::KeygenResult(res)).map_err(|_| "Receiver dropped").unwrap();
                         }
                     }

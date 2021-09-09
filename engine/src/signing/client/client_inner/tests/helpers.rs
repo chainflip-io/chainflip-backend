@@ -30,7 +30,7 @@ use crate::{
 
 type MultisigClientInnerNoDB = MultisigClientInner<KeyDBMock>;
 
-use super::{MESSAGE_HASH, SIGNER_IDXS};
+use super::{CEREMONY_ID, MESSAGE_HASH, SIGNER_IDXS};
 
 type InnerEventReceiver = UnboundedReceiver<InnerEvent>;
 
@@ -160,7 +160,7 @@ impl KeygenContext {
         // Generate phase 1 data
 
         let keygen_info = KeygenInfo {
-            ceremony_id: CEREMONY_ID,
+            ceremony_id: CEREMONY_ID.clone(),
             signers: validator_ids.clone(),
         };
 
@@ -185,7 +185,7 @@ impl KeygenContext {
         for sender_idx in 0..=2 {
             let bc1 = bc1_vec[sender_idx].clone();
             let id = &validator_ids[sender_idx];
-            let m = bc1_to_p2p_keygen(bc1, CEREMONY_ID, id);
+            let m = bc1_to_p2p_keygen(bc1, CEREMONY_ID.clone(), id);
 
             for receiver_idx in 0..=2 {
                 if receiver_idx != sender_idx {
@@ -196,7 +196,7 @@ impl KeygenContext {
 
         for c in clients.iter() {
             assert_eq!(
-                keygen_stage_for(c, CEREMONY_ID),
+                keygen_stage_for(c, CEREMONY_ID.clone()),
                 Some(KeygenStage::AwaitingSecret2)
             );
         }
@@ -267,7 +267,6 @@ impl KeygenContext {
         let key_id = KeyId(pubkeys[0].serialize().into());
 
         for c in clients.iter() {
-            // we cannot fetch with just the standard key id... it will have to be the generated key
             let key = c.get_key(key_id.clone()).expect("key must be present");
             sec_keys.push(key.clone());
         }
@@ -322,8 +321,6 @@ impl KeygenContext {
                 sign_info.clone(),
             ));
 
-            // get state for this message info?
-            println!("Message info about to lookup: {:?}", message_info);
             assert_eq!(
                 c.signing_manager
                     .get_state_for(&message_info)
@@ -336,10 +333,7 @@ impl KeygenContext {
         let mut bc1_vec = vec![];
 
         for idx in SIGNER_IDXS.iter() {
-            let rx = &mut rxs[*idx];
-
-            let bc1 = recv_bc1_signing(rx).await;
-            println!("Signer: {} bc1: {:?}", idx, bc1);
+            let bc1 = recv_bc1_signing(&mut rxs[*idx]).await;
             bc1_vec.push(bc1);
         }
 
@@ -348,9 +342,6 @@ impl KeygenContext {
             bc1_vec: bc1_vec.clone(),
         };
 
-        println!("Assert empty channel after signer ids");
-        // let bc1_again = recv_bc1_signing(&mut rxs[0]).await;
-        // println!("bc1_again: {:?}", bc1_again);
         assert_channel_empty(&mut rxs[0]).await;
 
         // *** Broadcast BC1 messages to advance to Phase2 ***
@@ -383,7 +374,6 @@ impl KeygenContext {
             sec2_vec.push(sec2_map);
         }
 
-        println!("Assert empty channel after secret 2 messages");
         assert_channel_empty(&mut rxs[0]).await;
 
         assert_eq!(sec2_vec.len(), 2);
@@ -434,7 +424,6 @@ impl KeygenContext {
             local_sigs.push(sig);
         }
 
-        println!("Assert empty channel after collecting local sigs");
         assert_channel_empty(&mut rxs[0]).await;
 
         let sign_phase3 = SigningPhase3Data {
@@ -455,9 +444,7 @@ impl KeygenContext {
             }
         }
 
-        let event = recv_next_inner_event(&mut rxs[0]).await;
-
-        let signature = match event {
+        let signature = match recv_next_inner_event(&mut rxs[0]).await {
             InnerEvent::SigningResult(SigningOutcome {
                 result: Ok(sig), ..
             }) => sig,
@@ -625,12 +612,10 @@ pub fn sec2_to_p2p_signing(sec2: Secret2, sender_id: &ValidatorId, mi: &MessageI
     }
 }
 
-pub const CEREMONY_ID: u64 = 0;
-
 // Do the necessary wrapping so Secret2 can be sent
 // via the clients interface
 pub fn sec2_to_p2p_keygen(sec2: Secret2, sender_id: &ValidatorId) -> P2PMessage {
-    let wrapped = KeyGenMessageWrapped::new(CEREMONY_ID, sec2);
+    let wrapped = KeyGenMessageWrapped::new(CEREMONY_ID.clone(), sec2);
 
     let data = MultisigMessage::from(wrapped);
     let data = serde_json::to_vec(&data).unwrap();

@@ -1,6 +1,5 @@
 use client::KeygenOutcome;
 use itertools::Itertools;
-use log::*;
 use rand::{
     prelude::{IteratorRandom, StdRng},
     SeedableRng,

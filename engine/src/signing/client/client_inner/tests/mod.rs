@@ -49,6 +49,7 @@ lazy_static! {
 }
 
 lazy_static! {
+    static ref CEREMONY_ID: u64 = 0;
     static ref MESSAGE: [u8; 32] = "Chainflip:Chainflip:Chainflip:01"
         .as_bytes()
         .try_into()
@@ -62,7 +63,7 @@ lazy_static! {
         .unwrap();
     static ref KEYGEN_INFO: KeygenInfo = KeygenInfo {
         // THIS MIGHT ALSO BE WRONG - BUT LESS LIKELY THAN THE ABOVE 2
-        ceremony_id: CEREMONY_ID,
+        ceremony_id: CEREMONY_ID.clone(),
         signers: VALIDATOR_IDS.clone()
     };
 }

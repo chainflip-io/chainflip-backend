@@ -14,8 +14,6 @@ where
     db: S,
 }
 
-// TODO: this will need to be fixed to get the keys via the ceremony id or the pubkey
-// Not sure if the above TODO is actually true now
 impl<S> KeyStore<S>
 where
     S: KeyDB,

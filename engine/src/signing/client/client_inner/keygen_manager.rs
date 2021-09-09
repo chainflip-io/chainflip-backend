@@ -75,12 +75,14 @@ impl KeygenManager {
             ceremony_id,
             message,
         } = msg;
-        println!(
+        slog::debug!(
+            self.logger,
             "[{}] Processing a {} keygen message for ceremony_id: {:?}",
-            self.our_id, message, ceremony_id
+            self.our_id,
+            message,
+            ceremony_id
         );
 
-        // keygen states. entry
         match self.keygen_states.entry(ceremony_id) {
             Entry::Occupied(mut state) => {
                 return state.get_mut().process_keygen_message(sender_id, message);
@@ -131,7 +133,7 @@ impl KeygenManager {
             if t.elapsed() > timeout {
                 slog::warn!(
                     logger_c,
-                    "Keygen state expired w/o keygen request for id: {:?}",
+                    "Keygen state expired w/o keygen request for ceremony id: {:?}",
                     ceremony_id
                 );
 

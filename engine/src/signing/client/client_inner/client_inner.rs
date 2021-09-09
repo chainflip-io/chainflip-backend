@@ -127,7 +127,6 @@ impl From<Secret2> for SigningData {
     }
 }
 
-// When we introduce
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct KeyGenMessageWrapped {
     pub ceremony_id: CeremonyId,
@@ -343,8 +342,6 @@ where
                 );
                 let key_id = sign_info.clone().id;
 
-                println!("Here's the key id of the sign_info: {:?}", key_id);
-
                 let key = self.key_store.get_key(key_id);
 
                 match key {
@@ -380,11 +377,6 @@ where
     }
 
     fn on_key_generated(&mut self, ceremony_id: CeremonyId, key_info: KeygenResultInfo) {
-        println!(
-            "Here's the public key bytes we are about to set: {:?}",
-            // these are uncompressed
-            key_info.key.get_public_key_bytes()
-        );
         self.key_store
             .set_key(KeyId(key_info.key.get_public_key_bytes()), key_info.clone());
         self.process_pending(key_info.clone());

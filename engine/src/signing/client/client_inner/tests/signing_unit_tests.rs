@@ -240,7 +240,7 @@ async fn request_to_sign_before_key_ready() {
     let mut c1 = keygen_states.keygen_phase2.clients[0].clone();
 
     assert_eq!(
-        keygen_stage_for(&c1, CEREMONY_ID),
+        keygen_stage_for(&c1, CEREMONY_ID.clone()),
         Some(KeygenStage::AwaitingSecret2)
     );
 
@@ -270,7 +270,7 @@ async fn request_to_sign_before_key_ready() {
     c1.process_p2p_message(m);
 
     assert_eq!(
-        keygen_stage_for(&c1, CEREMONY_ID),
+        keygen_stage_for(&c1, CEREMONY_ID.clone()),
         Some(KeygenStage::KeyReady)
     );
 
