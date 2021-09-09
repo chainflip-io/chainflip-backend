@@ -4870,6 +4870,7 @@ version = "0.0.1"
 dependencies = [
  "assert_matches",
  "cf-traits",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "log 0.4.14",
@@ -4952,6 +4953,7 @@ name = "pallet-cf-rewards"
 version = "0.1.0"
 dependencies = [
  "cf-traits",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-cf-flip",

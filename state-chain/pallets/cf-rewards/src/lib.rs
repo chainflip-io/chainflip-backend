@@ -4,6 +4,9 @@
 
 pub use pallet::*;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
 #[cfg(test)]
 mod mock;
 
@@ -17,7 +20,7 @@ use frame_support::{
 };
 use pallet_cf_flip::{Pallet as Flip, ReserveId, Surplus};
 use sp_runtime::{
-	traits::{Saturating, Zero},
+	traits::{Saturating, UniqueSaturatedInto, Zero},
 	DispatchError,
 };
 use sp_std::{marker::PhantomData, prelude::*};
@@ -26,7 +29,7 @@ use sp_std::{marker::PhantomData, prelude::*};
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
+	use frame_system::{pallet_prelude::*, WeightInfo};
 
 	pub const VALIDATOR_REWARDS: ReserveId = *b"VALR";
 
@@ -35,6 +38,8 @@ pub mod pallet {
 	pub trait Config: frame_system::Config + pallet_cf_flip::Config {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		// /// Benchmark stuff
+		// type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
