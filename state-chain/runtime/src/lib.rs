@@ -328,7 +328,7 @@ impl pallet_authorship::Config for Runtime {
 
 parameter_types! {
 	pub const ExistentialDeposit: u128 = 500;
-	pub const BlockTime: u64 = MILLISECS_PER_BLOCK;
+	pub const BlocksPerDay: u32 = DAYS;
 }
 
 impl pallet_cf_flip::Config for Runtime {
@@ -336,7 +336,7 @@ impl pallet_cf_flip::Config for Runtime {
 	type Balance = FlipBalance;
 	type ExistentialDeposit = ExistentialDeposit;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type BlockTime = BlockTime;
+	type BlocksPerDay = BlocksPerDay;
 }
 
 impl pallet_cf_witnesser::Config for Runtime {

@@ -77,7 +77,7 @@ impl EnsureOrigin<Origin> for MockEnsureGovernance {
 }
 
 parameter_types! {
-	pub const BlockTime: u64 = 6000;
+	pub const BlocksPerDay: u64 = 14400;
 }
 
 impl pallet_cf_flip::Config for Test {
@@ -85,7 +85,7 @@ impl pallet_cf_flip::Config for Test {
 	type Balance = FlipBalance;
 	type ExistentialDeposit = ExistentialDeposit;
 	type EnsureGovernance = MockEnsureGovernance;
-	type BlockTime = BlockTime;
+	type BlocksPerDay = BlocksPerDay;
 }
 
 parameter_types! {

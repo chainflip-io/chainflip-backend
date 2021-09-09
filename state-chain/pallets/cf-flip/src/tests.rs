@@ -481,15 +481,19 @@ mod test_slashing {
 	fn test_slash_validator() {
 		new_test_ext().execute_with(|| {
 			// Amount of blocks the validator was offline
-			let blocks_offline: u64 = 20;
+			const BLOCKS_OFFLINE: u64 = 20;
+			const MAB: u128 = 80_000_000;
+			const BOND: u128 = 8_000_000;
+			const SLASHING_RATE: u128 = 5;
+			const EXPECTED_FINAL_BALANCE: u128 = 540;
 			// Mint some Flip for testing - 100 is not enough and unrealistic for this usecase
-			Flip::settle(&ALICE, Flip::mint(80000000).into());
-			Flip::set_validator_bond(&ALICE, 8000000);
-			let balance_before = Flip::total_balance_of(&ALICE);
-			SlashingRate::<Test>::set(5);
-			assert_eq!(FlipSlasher::<Test>::slash(&ALICE, blocks_offline), 0);
+			Flip::settle(&ALICE, Flip::mint(MAB).into());
+			let initial_balance: u128 = Flip::total_balance_of(&ALICE);
+			Flip::set_validator_bond(&ALICE, BOND);
+			SlashingRate::<Test>::set(SLASHING_RATE);
+			assert_eq!(FlipSlasher::<Test>::slash(&ALICE, BLOCKS_OFFLINE), 0);
 			let balance_after = Flip::total_balance_of(&ALICE);
-			assert_eq!(balance_before - balance_after, 540);
+			assert_eq!(initial_balance - balance_after, EXPECTED_FINAL_BALANCE);
 		});
 	}
 }
