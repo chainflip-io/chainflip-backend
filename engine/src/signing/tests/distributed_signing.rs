@@ -1,3 +1,4 @@
+use client::KeygenOutcome;
 use itertools::Itertools;
 use log::*;
 use rand::{
@@ -68,8 +69,18 @@ async fn coordinate_signing(
         .map(|i| VALIDATOR_IDS[*i].clone())
         .collect_vec();
 
-    // how to get the key id here?
-    let key_id = KeyId(Vec::default());
+    // wait on the keygen ceremony so we can use the correct KeyId to sign with
+    let key_id = if let Some(MultisigEvent::KeygenResult(KeygenOutcome {
+        ceremony_id: _,
+        result: Ok(pubkey),
+    })) = nodes[0].multisig_event_rx.recv().await
+    {
+        // if you remove this the test fails. Seems to prematurely cleanup signing states
+        let _ = nodes[1].multisig_event_rx.recv().await;
+        KeyId(pubkey.serialize().into())
+    } else {
+        panic!("Expecting a successful keygen result");
+    };
 
     // get a signing request ready with the list of signer_ids
     let sign_info = SigningInfo::new(key_id, signer_ids);
@@ -216,8 +227,6 @@ async fn distributed_signing() {
             Ok(()),
             "One of the clients failed to sign the message"
         );
-
-        info!("Graceful shutdown of distributed_signing test");
 
         for tx in shutdown_txs {
             tx.send(()).unwrap();

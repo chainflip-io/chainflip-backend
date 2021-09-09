@@ -127,7 +127,6 @@ impl KeygenManager {
         // Remove all pending state that hasn't been updated for
         // longer than `self.phase_timeout`
         let logger_c = self.logger.clone();
-        println!("Delayed messages: {:?}", self.delayed_messages);
         self.delayed_messages.retain(|ceremony_id, (t, bc1_vec)| {
             if t.elapsed() > timeout {
                 slog::warn!(

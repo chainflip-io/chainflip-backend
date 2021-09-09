@@ -58,13 +58,13 @@ impl SigningInfo {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum MultisigInstruction {
     KeyGen(KeygenInfo),
     Sign(MessageHash, SigningInfo),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum MultisigEvent {
     MessageSigningResult(SigningOutcome),
     KeygenResult(KeygenOutcome),
@@ -113,6 +113,7 @@ where
                     inner.process_p2p_message(p2p_message);
                 }
                 Some(msg) = multisig_instruction_receiver.recv() => {
+                    println!("[{}] received instruction: {:?}", my_validator_id, msg);
                     inner.process_multisig_instruction(msg);
                 }
                 Some(()) = cleanup_stream.next() => {
