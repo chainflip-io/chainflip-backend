@@ -97,9 +97,6 @@ pub async fn start(
                             .await
                             .unwrap();
                     }
-                    // TODO: Provide the pubkey of the key we want to sign with to the signing module
-                    // from this event
-                    // https://github.com/chainflip-io/chainflip-backend/issues/492
                     ThresholdSignatureRequestEvent(threshold_sig_requst) => {
                         let validators: Vec<_> = threshold_sig_requst
                             .threshold_signature_request
