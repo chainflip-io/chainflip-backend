@@ -722,7 +722,7 @@ pub fn message_and_sign_info(hash: MessageHash, key_id: KeyId) -> (MessageInfo, 
             key_id: key_id.clone(),
         },
         SigningInfo {
-            signers: *SIGNER_IDS,
+            signers: SIGNER_IDS.clone(),
             key_id,
         },
     )

@@ -38,7 +38,7 @@ async fn should_process_delayed_bc1_after_rts() {
     let keygen_states = ctx.generate().await;
 
     let key_id: KeyId = KeyId(keygen_states.key_ready.pubkey.serialize().into());
-    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH, key_id);
+    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH.clone(), key_id.clone());
     let sign_states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
     let mut c1 = keygen_states.key_ready.clients[0].clone();
@@ -123,7 +123,7 @@ async fn signing_secret2_gets_delayed() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
     let key_id: KeyId = KeyId(keygen_states.key_ready.pubkey.serialize().into());
-    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH, key_id);
+    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH.clone(), key_id.clone());
     let sign_states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
     let phase1 = &sign_states.sign_phase1;
@@ -169,7 +169,7 @@ async fn signing_local_sig_gets_delayed() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
     let key_id: KeyId = KeyId(keygen_states.key_ready.pubkey.serialize().into());
-    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH, key_id);
+    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH.clone(), key_id.clone());
     let sign_states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
     let phase2 = &sign_states.sign_phase2;
@@ -206,7 +206,7 @@ async fn request_to_sign_before_key_ready() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
     let key_id: KeyId = KeyId(keygen_states.key_ready.pubkey.serialize().into());
-    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH, key_id);
+    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH.clone(), key_id.clone());
     let states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
     let mut c1 = keygen_states.keygen_phase2.clients[0].clone();
@@ -290,7 +290,7 @@ async fn phase1_timeout() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
     let key_id: KeyId = KeyId(keygen_states.key_ready.pubkey.serialize().into());
-    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH, key_id);
+    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH.clone(), key_id.clone());
 
     let states = ctx.sign(message_info.clone(), sign_info.clone()).await;
     let mut c1 = states.sign_phase1.clients[0].clone();
@@ -332,7 +332,7 @@ async fn phase2_timeout() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
     let key_id: KeyId = KeyId(keygen_states.key_ready.pubkey.serialize().into());
-    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH, key_id);
+    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH.clone(), key_id.clone());
     let states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
     let mut c1 = states.sign_phase2.clients[0].clone();
@@ -372,7 +372,7 @@ async fn phase3_timeout() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
     let key_id: KeyId = KeyId(keygen_states.key_ready.pubkey.serialize().into());
-    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH, key_id);
+    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH.clone(), key_id.clone());
     let states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
     let mut c1 = states.sign_phase3.clients[0].clone();
@@ -411,7 +411,7 @@ async fn cannot_create_duplicate_sign_request() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
     let key_id: KeyId = KeyId(keygen_states.key_ready.pubkey.serialize().into());
-    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH, key_id);
+    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH.clone(), key_id.clone());
     let states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
     let mut c1 = states.sign_phase3.clients[0].clone();
@@ -446,7 +446,7 @@ async fn sign_request_from_invalid_validator() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
     let key_id: KeyId = KeyId(keygen_states.key_ready.pubkey.serialize().into());
-    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH, key_id);
+    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH.clone(), key_id.clone());
     let states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
     let mut c1 = states.sign_phase1.clients[0].clone();
@@ -490,7 +490,7 @@ async fn bc1_with_different_hash() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
     let key_id: KeyId = KeyId(keygen_states.key_ready.pubkey.serialize().into());
-    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH, key_id);
+    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH.clone(), key_id.clone());
     let states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
     let mut c1 = states.sign_phase1.clients[0].clone();
@@ -533,7 +533,7 @@ async fn invalid_bc1() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
     let key_id: KeyId = KeyId(keygen_states.key_ready.pubkey.serialize().into());
-    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH, key_id);
+    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH.clone(), key_id.clone());
     let states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
     let mut c1 = states.sign_phase1.clients[0].clone();
@@ -588,7 +588,7 @@ async fn invalid_secret2() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
     let key_id: KeyId = KeyId(keygen_states.key_ready.pubkey.serialize().into());
-    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH, key_id);
+    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH.clone(), key_id.clone());
     let states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
     let mut c1 = states.sign_phase2.clients[0].clone();
@@ -647,7 +647,7 @@ async fn invalid_local_sig() {
     let keygen_states = ctx.generate().await;
     let key_id: KeyId = KeyId(keygen_states.key_ready.pubkey.serialize().into());
 
-    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH, key_id);
+    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH.clone(), key_id.clone());
     let states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
     let mut c1 = states.sign_phase3.clients[0].clone();
