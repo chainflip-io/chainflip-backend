@@ -44,14 +44,13 @@ impl KeygenInfo {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SigningInfo {
-    // TODO: Rename to key_id
-    id: KeyId,
+    key_id: KeyId,
     signers: Vec<ValidatorId>,
 }
 
 impl SigningInfo {
-    pub fn new(id: KeyId, signers: Vec<ValidatorId>) -> Self {
-        SigningInfo { id, signers }
+    pub fn new(key_id: KeyId, signers: Vec<ValidatorId>) -> Self {
+        SigningInfo { key_id, signers }
     }
 }
 

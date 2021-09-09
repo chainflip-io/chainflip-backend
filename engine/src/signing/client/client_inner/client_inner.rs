@@ -314,7 +314,7 @@ where
 
         let entry = self
             .pending_requests_to_sign
-            .entry(sign_info.clone().id)
+            .entry(sign_info.clone().key_id)
             .or_default();
 
         entry.push((data, sign_info));
@@ -340,9 +340,8 @@ where
                     "[{}] Received sign instruction",
                     self.my_validator_id
                 );
-                let key_id = sign_info.clone().id;
 
-                let key = self.key_store.get_key(key_id);
+                let key = self.key_store.get_key(sign_info.clone().key_id);
 
                 match key {
                     Some(key) => {

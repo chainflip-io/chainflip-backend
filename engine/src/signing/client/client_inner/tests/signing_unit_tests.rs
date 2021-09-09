@@ -15,7 +15,7 @@ async fn should_await_bc1_after_rts() {
     };
     let sign_info = SigningInfo {
         signers: SIGNER_IDS.clone(),
-        id: key_id.clone(),
+        key_id: key_id.clone(),
     };
 
     let mut c1 = keygen_states.key_ready.clients[0].clone();
@@ -44,7 +44,7 @@ async fn should_process_delayed_bc1_after_rts() {
     };
     let sign_info = SigningInfo {
         signers: SIGNER_IDS.clone(),
-        id: key_id.clone(),
+        key_id: key_id.clone(),
     };
     let sign_states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
@@ -136,7 +136,7 @@ async fn signing_secret2_gets_delayed() {
     };
     let sign_info = SigningInfo {
         signers: SIGNER_IDS.clone(),
-        id: key_id,
+        key_id,
     };
     let sign_states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
@@ -189,7 +189,7 @@ async fn signing_local_sig_gets_delayed() {
     };
     let sign_info = SigningInfo {
         signers: SIGNER_IDS.clone(),
-        id: key_id,
+        key_id,
     };
     let sign_states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
@@ -233,7 +233,7 @@ async fn request_to_sign_before_key_ready() {
     };
     let sign_info = SigningInfo {
         signers: SIGNER_IDS.clone(),
-        id: key_id,
+        key_id,
     };
     let states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
@@ -294,24 +294,20 @@ async fn request_to_sign_before_key_ready() {
 async fn unknown_signer_ids_gracefully_handled() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
+    let key_id: KeyId = KeyId(keygen_states.key_ready.pubkey.serialize().into());
+    let message_info = MessageInfo {
+        hash: MESSAGE_HASH.clone(),
+        key_id: key_id.clone(),
+    };
 
     let mut c1 = keygen_states.key_ready.clients[0].clone();
 
     // Note the unknown validator id
     let signers = vec![VALIDATOR_IDS[0].clone(), ValidatorId([200; 32])];
 
-    let info = SigningInfo {
-        id: KeyId(Vec::default()),
-        signers,
-    };
+    let info = SigningInfo { key_id, signers };
 
     c1.process_multisig_instruction(MultisigInstruction::Sign(MESSAGE_HASH.clone(), info));
-
-    let key_id: KeyId = KeyId(keygen_states.key_ready.pubkey.serialize().into());
-    let message_info = MessageInfo {
-        hash: MESSAGE_HASH.clone(),
-        key_id,
-    };
 
     assert_eq!(get_stage_for_msg(&c1, &message_info), None);
 }
@@ -328,7 +324,7 @@ async fn phase1_timeout() {
     };
     let sign_info = SigningInfo {
         signers: SIGNER_IDS.clone(),
-        id: key_id,
+        key_id,
     };
 
     let states = ctx.sign(message_info.clone(), sign_info.clone()).await;
@@ -377,7 +373,7 @@ async fn phase2_timeout() {
     };
     let sign_info = SigningInfo {
         signers: SIGNER_IDS.clone(),
-        id: key_id,
+        key_id,
     };
     let states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
@@ -424,7 +420,7 @@ async fn phase3_timeout() {
     };
     let sign_info = SigningInfo {
         signers: SIGNER_IDS.clone(),
-        id: key_id,
+        key_id,
     };
     let states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
@@ -470,7 +466,7 @@ async fn cannot_create_duplicate_sign_request() {
     };
     let sign_info = SigningInfo {
         signers: SIGNER_IDS.clone(),
-        id: key_id,
+        key_id,
     };
     let states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
@@ -487,10 +483,7 @@ async fn cannot_create_duplicate_sign_request() {
     // send a signing request to a client
     c1.process_multisig_instruction(MultisigInstruction::Sign(
         MessageHash(MESSAGE.clone()),
-        SigningInfo {
-            id: KeyId(PUB_KEY.into()),
-            signers: SIGNER_IDS.clone(),
-        },
+        sign_info,
     ));
 
     // Previous state should be unaffected
@@ -515,7 +508,7 @@ async fn sign_request_from_invalid_validator() {
     };
     let sign_info = SigningInfo {
         signers: SIGNER_IDS.clone(),
-        id: key_id,
+        key_id,
     };
     let states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
@@ -566,7 +559,7 @@ async fn bc1_with_different_hash() {
     };
     let sign_info = SigningInfo {
         signers: SIGNER_IDS.clone(),
-        id: key_id,
+        key_id,
     };
     let states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
@@ -616,7 +609,7 @@ async fn invalid_bc1() {
     };
     let sign_info = SigningInfo {
         signers: SIGNER_IDS.clone(),
-        id: key_id,
+        key_id,
     };
     let states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
@@ -678,7 +671,7 @@ async fn invalid_secret2() {
     };
     let sign_info = SigningInfo {
         signers: SIGNER_IDS.clone(),
-        id: key_id,
+        key_id,
     };
     let states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
@@ -731,7 +724,7 @@ async fn invalid_secret2() {
     assert_eq!(helpers::check_for_inner_event(&mut rx).await, None);
 }
 
-// comment is wrong
+/// Test that we report an invalid local signature and abandon ceremony
 #[tokio::test]
 async fn invalid_local_sig() {
     let mut ctx = helpers::KeygenContext::new();
@@ -743,13 +736,12 @@ async fn invalid_local_sig() {
     };
     let sign_info = SigningInfo {
         signers: SIGNER_IDS.clone(),
-        id: key_id,
+        key_id,
     };
     let states = ctx.sign(message_info.clone(), sign_info.clone()).await;
 
     let mut c1 = states.sign_phase3.clients[0].clone();
 
-    println!("About to get state for signing manager at top");
     assert_eq!(
         c1.signing_manager
             .get_state_for(&message_info)
@@ -757,8 +749,6 @@ async fn invalid_local_sig() {
             .get_stage(),
         SigningStage::AwaitingLocalSig3
     );
-
-    println!("At AwaitingLocalSig3");
 
     // send the local_sig from 0->1 back to client 0
     let bad_node = SIGNER_IDS[1].clone();
@@ -775,8 +765,6 @@ async fn invalid_local_sig() {
         SigningStage::Abandoned
     );
 
-    println!("At Abandoned");
-
     let mut rx = &mut ctx.rxs[0];
 
     // check that we got the 'invalid' signal
@@ -787,8 +775,6 @@ async fn invalid_local_sig() {
             vec![bad_node]
         ))
     );
-
-    println!("At SigningResult");
 
     c1.set_timeout(Duration::from_secs(0));
     c1.cleanup();

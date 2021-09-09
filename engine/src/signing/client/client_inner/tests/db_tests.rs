@@ -26,7 +26,7 @@ async fn check_signing_db() {
     };
     let sign_info = SigningInfo {
         signers: SIGNER_IDS.clone(),
-        id: key_id,
+        key_id,
     };
 
     // 2. Extract the clients' database
