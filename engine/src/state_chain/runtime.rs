@@ -110,8 +110,8 @@ impl Runtime for StateChainRuntime {
         event_type_registry.register_type_size::<u64>("T::EpochIndex");
         event_type_registry.register_type_size::<u32>("T::BlockNumber");
         event_type_registry.register_type_size::<u32>("BlockNumberFor<T>");
-        event_type_registry.register_type_size::<AccountId32>("T::ValidatorId");
-        event_type_registry.register_type_size::<AccountId32>("<T as Config>::ValidatorId");
+        event_type_registry.register_type_size::<AccountId32>("T::AccountId");
+        event_type_registry.register_type_size::<AccountId32>("<T as Config>::AccountId");
         event_type_registry.register_type_size::<u128>("T::Balance");
         event_type_registry.register_type_size::<Vec<u8>>("OpaqueTimeSlot");
         event_type_registry.register_type_size::<[u8; 32]>("U256");
@@ -129,11 +129,11 @@ impl Runtime for StateChainRuntime {
         event_type_registry.register_type_size::<u64>("RequestIndex");
         event_type_registry.register_type_size::<OfflineCondition>("OfflineCondition");
         event_type_registry.register_type_size::<KeygenRequest<AccountId32>>(
-            "KeygenRequest<T::ValidatorId, T::PublicKey>",
+            "KeygenRequest<T::AccountId, T::PublicKey>",
         );
         event_type_registry.register_type_size::<Vec<u8>>("T::PublicKey");
         event_type_registry.register_type_size::<ThresholdSignatureRequest<Vec<u8>, AccountId32>>(
-            "ThresholdSignatureRequest<T::PublicKey, T::ValidatorId>",
+            "ThresholdSignatureRequest<T::PublicKey, T::AccountId>",
         );
         event_type_registry.register_type_size::<VaultRotationRequest>("VaultRotationRequest");
     }
@@ -143,8 +143,6 @@ impl Sudo for StateChainRuntime {}
 
 impl auction::Auction for StateChainRuntime {
     type AuctionIndex = u64;
-
-    type ValidatorId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
 }
 
 impl validator::Validator for StateChainRuntime {

@@ -18,11 +18,11 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRunt
 type Block = frame_system::mocking::MockBlock<MockRuntime>;
 
 type Amount = u64;
-type ValidatorId = u64;
+type AccountId = u64;
 
 thread_local! {
 	pub static OTHER_CHAIN_RESULT: RefCell<CeremonyId> = RefCell::new(0);
-	pub static BAD_VALIDATORS: RefCell<Vec<ValidatorId>> = RefCell::new(vec![]);
+	pub static BAD_VALIDATORS: RefCell<Vec<AccountId>> = RefCell::new(vec![]);
 	pub static GENESIS_ETHEREUM_PUBLIC_KEY: RefCell<Vec<u8>> = RefCell::new(vec![0]);
 }
 
@@ -92,14 +92,14 @@ impl cf_traits::Witnesser for MockWitnesser {
 
 impl Chainflip for MockRuntime {
 	type Amount = Amount;
-	type ValidatorId = ValidatorId;
+	type AccountId = AccountId;
 }
 
 impl VaultRotationHandler for MockRuntime {
-	type ValidatorId = u64;
+	type AccountId = u64;
 	fn abort() {}
 
-	fn penalise(bad_validators: Vec<Self::ValidatorId>) {
+	fn penalise(bad_validators: Vec<Self::AccountId>) {
 		BAD_VALIDATORS.with(|l| *l.borrow_mut() = bad_validators);
 	}
 }
@@ -120,7 +120,7 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type EpochInfo = cf_traits::mocks::epoch_info::Mock;
 }
 
-pub fn bad_validators() -> Vec<ValidatorId> {
+pub fn bad_validators() -> Vec<AccountId> {
 	BAD_VALIDATORS.with(|l| l.borrow().to_vec())
 }
 

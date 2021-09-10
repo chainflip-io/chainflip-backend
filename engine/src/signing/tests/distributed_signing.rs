@@ -12,7 +12,7 @@ use crate::{
     p2p::{
         self,
         mock::{MockChannelEventHandler, NetworkMock},
-        ValidatorId,
+        AccountId,
     },
     signing::db::KeyDBMock,
 };
@@ -37,9 +37,9 @@ pub struct FakeNode {
 const N_PARTIES: usize = 2;
 lazy_static! {
     static ref SIGNERS: Vec<usize> = (1..=N_PARTIES).collect();
-    static ref VALIDATOR_IDS: Vec<ValidatorId> = SIGNERS
+    static ref VALIDATOR_IDS: Vec<AccountId> = SIGNERS
         .iter()
-        .map(|idx| ValidatorId([*idx as u8; 32]))
+        .map(|idx| AccountId([*idx as u8; 32]))
         .collect();
 }
 

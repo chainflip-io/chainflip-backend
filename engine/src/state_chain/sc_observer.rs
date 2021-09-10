@@ -68,7 +68,7 @@ pub async fn start(
                             .keygen_request
                             .validator_candidates
                             .iter()
-                            .map(|v| p2p::ValidatorId(v.clone().into()))
+                            .map(|v| p2p::AccountId(v.clone().into()))
                             .collect();
 
                         let gen_new_key_event = MultisigInstruction::KeyGen(KeygenInfo::new(
@@ -102,7 +102,7 @@ pub async fn start(
                             .threshold_signature_request
                             .validators
                             .iter()
-                            .map(|v| p2p::ValidatorId(v.clone().into()))
+                            .map(|v| p2p::AccountId(v.clone().into()))
                             .collect();
 
                         let sign_tx = MultisigInstruction::Sign(

@@ -1,7 +1,7 @@
-use crate::p2p::{P2PNetworkClient, StatusCode, ValidatorId};
+use crate::p2p::{AccountId, P2PNetworkClient, StatusCode};
 use anyhow::Result;
 use async_trait::async_trait;
-use cf_p2p_rpc::{MessageBs58, P2PEvent, P2PRpcClient, ValidatorIdBs58};
+use cf_p2p_rpc::{AccountIdBs58, MessageBs58, P2PEvent, P2PRpcClient};
 use futures::{
     compat::{Future01CompatExt, Stream01CompatExt},
     stream::BoxStream,
@@ -20,14 +20,14 @@ pub enum RpcClientError {
     SubscriptionError(RpcError),
 }
 
-pub async fn connect(url: &url::Url, validator_id: ValidatorId) -> Result<P2PRpcClient> {
+pub async fn connect(url: &url::Url, validator_id: AccountId) -> Result<P2PRpcClient> {
     let client = ws::connect::<P2PRpcClient>(url)
         .compat()
         .await
         .map_err(|e| RpcClientError::ConnectionError(url.clone(), e))?;
 
     client
-        .self_identify(ValidatorIdBs58(validator_id.0))
+        .self_identify(AccountIdBs58(validator_id.0))
         .compat()
         .await
         .map_err(|e| RpcClientError::CallError(String::from("identify"), e))?;
@@ -46,8 +46,8 @@ impl P2PNetworkClient for P2PRpcClient {
             .map_err(|e| RpcClientError::CallError(String::from("broadcast"), e).into())
     }
 
-    async fn send(&self, to: &ValidatorId, data: &[u8]) -> Result<StatusCode> {
-        P2PRpcClient::send(self, ValidatorIdBs58(to.0), MessageBs58(data.into()))
+    async fn send(&self, to: &AccountId, data: &[u8]) -> Result<StatusCode> {
+        P2PRpcClient::send(self, AccountIdBs58(to.0), MessageBs58(data.into()))
             .compat()
             .await
             .map_err(|e| RpcClientError::CallError(String::from("send"), e).into())
@@ -87,13 +87,13 @@ mod tests {
     impl RpcApi for TestApi {
         type Metadata = local::LocalMeta;
 
-        fn self_identify(&self, _validator_id: ValidatorIdBs58) -> jsonrpc_core::Result<u64> {
+        fn self_identify(&self, _validator_id: AccountIdBs58) -> jsonrpc_core::Result<u64> {
             Ok(200)
         }
 
         fn send(
             &self,
-            _validator_id: ValidatorIdBs58,
+            _validator_id: AccountIdBs58,
             _message: MessageBs58,
         ) -> jsonrpc_core::Result<u64> {
             Ok(200)
@@ -139,7 +139,7 @@ mod tests {
             tokio::select! {
                 _ = async move {
                     let result =
-                        P2PNetworkClient::send(&client, &ValidatorId([100; 32]), "disco".as_bytes()).await;
+                        P2PNetworkClient::send(&client, &AccountId([100; 32]), "disco".as_bytes()).await;
                     assert!(
                         result.is_ok(),
                         "Should receive OK for sending message to peer"

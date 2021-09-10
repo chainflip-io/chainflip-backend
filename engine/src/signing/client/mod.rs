@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use crate::{
     logging::SIGNING_SUB_COMPONENT,
-    p2p::{P2PMessageCommand, ValidatorId},
+    p2p::{AccountId, P2PMessageCommand},
     signing::db::KeyDB,
 };
 use futures::StreamExt;
@@ -30,11 +30,11 @@ pub struct KeyId(pub Vec<u8>);
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct KeygenInfo {
     ceremony_id: CeremonyId,
-    signers: Vec<ValidatorId>,
+    signers: Vec<AccountId>,
 }
 
 impl KeygenInfo {
-    pub fn new(ceremony_id: CeremonyId, signers: Vec<ValidatorId>) -> Self {
+    pub fn new(ceremony_id: CeremonyId, signers: Vec<AccountId>) -> Self {
         KeygenInfo {
             ceremony_id,
             signers,
@@ -45,11 +45,11 @@ impl KeygenInfo {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SigningInfo {
     key_id: KeyId,
-    signers: Vec<ValidatorId>,
+    signers: Vec<AccountId>,
 }
 
 impl SigningInfo {
-    pub fn new(key_id: KeyId, signers: Vec<ValidatorId>) -> Self {
+    pub fn new(key_id: KeyId, signers: Vec<AccountId>) -> Self {
         SigningInfo { key_id, signers }
     }
 }
@@ -72,7 +72,7 @@ const PHASE_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Start listening for p2p messages and instructions from the SC
 pub fn start<S>(
-    my_validator_id: ValidatorId,
+    my_account_id: AccountId,
     db: S,
     mut multisig_instruction_receiver: UnboundedReceiver<MultisigInstruction>,
     multisig_event_sender: UnboundedSender<MultisigEvent>,
@@ -90,7 +90,7 @@ where
 
     let (inner_event_sender, mut inner_event_receiver) = mpsc::unbounded_channel();
     let mut inner = MultisigClientInner::new(
-        my_validator_id.clone(),
+        my_account_id.clone(),
         db,
         inner_event_sender,
         PHASE_TIMEOUT,

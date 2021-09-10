@@ -31,7 +31,7 @@ async fn check_signing_db() {
     let db = client1.get_db().clone();
 
     // 3. Create a new multisig client using the extracted database
-    let id = client1.get_my_validator_id();
+    let id = client1.get_my_account_id();
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let logger = logging::test_utils::create_test_logger();
     let restarted_client = MultisigClientInner::new(id, db, tx, PHASE_TIMEOUT, &logger);

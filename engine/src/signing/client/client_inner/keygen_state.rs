@@ -7,7 +7,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     logging::SIGNING_SUB_COMPONENT,
-    p2p::{P2PMessageCommand, ValidatorId},
+    p2p::{AccountId, P2PMessageCommand},
     signing::{
         client::client_inner::{
             client_inner::KeyGenMessageWrapped, shared_secret::StageStatus, KeygenOutcome,
@@ -43,7 +43,7 @@ pub struct KeygenState {
     maps_for_validator_id_and_idx: Arc<ValidatorMaps>,
     /// All valid signer indexes (1..=n)
     all_signer_idxs: Vec<usize>,
-    delayed_next_stage_data: Vec<(ValidatorId, KeygenData)>,
+    delayed_next_stage_data: Vec<(AccountId, KeygenData)>,
     ceremony_id: CeremonyId,
     /// Multisig parameters are only stored here so we can put
     /// them inside `KeygenResultInfo` when we create the key
@@ -90,7 +90,7 @@ impl KeygenState {
     }
 
     /// Get ids of validators who haven't sent the data for the current stage
-    pub fn awaited_parties(&self) -> Vec<ValidatorId> {
+    pub fn awaited_parties(&self) -> Vec<AccountId> {
         let awaited_idxs = match self.stage {
             KeygenStage::AwaitingBroadcast1 | KeygenStage::AwaitingSecret2 => {
                 self.sss.awaited_parties()
@@ -108,11 +108,11 @@ impl KeygenState {
     }
 
     /// Get index in the (sorted) array of all signers
-    fn validator_id_to_signer_idx(&self, id: &ValidatorId) -> Option<usize> {
+    fn validator_id_to_signer_idx(&self, id: &AccountId) -> Option<usize> {
         self.maps_for_validator_id_and_idx.get_idx(&id)
     }
 
-    fn signer_idx_to_validator_id(&self, idx: usize) -> &ValidatorId {
+    fn signer_idx_to_validator_id(&self, idx: usize) -> &AccountId {
         // Should be safe to unwrap because the `idx` is carefully
         // chosen by our on module
         let id = self.maps_for_validator_id_and_idx.get_id(idx).unwrap();
@@ -126,7 +126,7 @@ impl KeygenState {
     /// Returned value will signal that the key is ready
     pub fn process_keygen_message(
         &mut self,
-        sender_id: ValidatorId,
+        sender_id: AccountId,
         msg: KeygenData,
     ) -> Option<KeygenResultInfo> {
         slog::trace!(
@@ -298,7 +298,7 @@ impl KeygenState {
         None
     }
 
-    fn signer_idxs_to_validator_ids(&self, idxs: Vec<usize>) -> Vec<ValidatorId> {
+    fn signer_idxs_to_validator_ids(&self, idxs: Vec<usize>) -> Vec<AccountId> {
         idxs.into_iter()
             .map(|idx| self.signer_idx_to_validator_id(idx))
             .cloned()

@@ -46,8 +46,8 @@ use frame_support::pallet_prelude::*;
 use sp_std::prelude::*;
 
 use cf_traits::{
-	EpochInfo, Nonce, NonceIdentifier, NonceProvider, RotationError, VaultRotationHandler,
-	VaultRotator,
+	Chainflip, EpochInfo, Nonce, NonceIdentifier, NonceProvider, RotationError,
+	VaultRotationHandler, VaultRotator,
 };
 pub use pallet::*;
 
@@ -70,7 +70,7 @@ pub mod pallet {
 	use super::*;
 	use crate::ethereum::EthereumChain;
 	use crate::rotation::SchnorrSignature;
-	use cf_traits::{Chainflip, EpochInfo, Nonce, NonceIdentifier};
+	use cf_traits::{Chainflip, EpochInfo, NonceProvider};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -78,7 +78,7 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + Chainflip {
+	pub trait Config: Chainflip + frame_system::Config {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Provides an origin check for witness transactions.
@@ -88,11 +88,11 @@ pub mod pallet {
 		/// A transaction
 		type TransactionHash: Member + Parameter + Into<Vec<u8>> + Default;
 		/// Rotation handler
-		type RotationHandler: VaultRotationHandler<ValidatorId = Self::ValidatorId>;
+		type RotationHandler: VaultRotationHandler<AccountId = <Self as Chainflip>::AccountId>;
 		/// A nonce provider
 		type NonceProvider: NonceProvider;
 		/// Epoch info
-		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId>;
+		type EpochInfo: EpochInfo<AccountId = <Self as Chainflip>::AccountId>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -113,8 +113,12 @@ pub mod pallet {
 	/// A map acting as a list of our current vault rotations
 	#[pallet::storage]
 	#[pallet::getter(fn vault_rotations)]
-	pub(super) type VaultRotations<T: Config> =
-		StorageMap<_, Blake2_128Concat, CeremonyId, VaultRotation<T::ValidatorId, T::PublicKey>>;
+	pub(super) type VaultRotations<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		CeremonyId,
+		VaultRotation<<T as Chainflip>::AccountId, T::PublicKey>,
+	>;
 
 	/// A map of Nonces for chains supported
 	#[pallet::storage]
@@ -126,7 +130,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Request a key generation \[request_index, request\]
-		KeygenRequest(CeremonyId, KeygenRequest<T::ValidatorId>),
+		KeygenRequest(CeremonyId, KeygenRequest<<T as Chainflip>::AccountId>),
 		/// Request a rotation of the vault for this chain \[request_index, request\]
 		VaultRotationRequest(CeremonyId, VaultRotationRequest),
 		/// The vault for the request has rotated \[request_index\]
@@ -138,7 +142,7 @@ pub mod pallet {
 		/// Request this payload to be signed by the existing aggregate key
 		ThresholdSignatureRequest(
 			CeremonyId,
-			ThresholdSignatureRequest<T::PublicKey, T::ValidatorId>,
+			ThresholdSignatureRequest<T::PublicKey, <T as Chainflip>::AccountId>,
 		),
 	}
 
@@ -176,7 +180,7 @@ pub mod pallet {
 		pub fn keygen_response(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
-			response: KeygenResponse<T::ValidatorId, T::PublicKey>,
+			response: KeygenResponse<<T as Chainflip>::AccountId, T::PublicKey>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			match KeygenRequestResponse::<T>::handle_response(ceremony_id, response) {
@@ -191,7 +195,7 @@ pub mod pallet {
 		pub fn threshold_signature_response(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
-			response: ThresholdSignatureResponse<T::ValidatorId, SchnorrSignature>,
+			response: ThresholdSignatureResponse<<T as Chainflip>::AccountId, SchnorrSignature>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			// We just have the Ethereum chain to handle this Schnorr signature
@@ -244,8 +248,8 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> From<RotationError<T::ValidatorId>> for Error<T> {
-	fn from(err: RotationError<T::ValidatorId>) -> Self {
+impl<T: Config> From<RotationError<<T as Chainflip>::AccountId>> for Error<T> {
+	fn from(err: RotationError<<T as Chainflip>::AccountId>) -> Self {
 		match err {
 			RotationError::EmptyValidatorSet => Error::<T>::EmptyValidatorSet,
 			RotationError::BadValidators(_) => Error::<T>::BadValidators,
@@ -282,10 +286,10 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Provide the next ceremony id
-	fn next_index() -> CeremonyId {
-		CurrentRequest::<T>::mutate(|index| {
-			*index = *index + 1;
-			*index
+	fn next_ceremony_id() -> CeremonyId {
+		CurrentRequest::<T>::mutate(|next_ceremony_id| {
+			*next_ceremony_id = *next_ceremony_id + 1;
+			*next_ceremony_id
 		})
 	}
 
@@ -295,10 +299,10 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> VaultRotator for Pallet<T> {
-	type ValidatorId = T::ValidatorId;
+	type AccountId = <T as Chainflip>::AccountId;
 	fn start_vault_rotation(
-		candidates: Vec<Self::ValidatorId>,
-	) -> Result<(), RotationError<Self::ValidatorId>> {
+		candidates: Vec<Self::AccountId>,
+	) -> Result<(), RotationError<Self::AccountId>> {
 		// Main entry point for the pallet
 		ensure!(!candidates.is_empty(), RotationError::EmptyValidatorSet);
 		// Create a KeyGenRequest for Ethereum
@@ -307,11 +311,11 @@ impl<T: Config> VaultRotator for Pallet<T> {
 			validator_candidates: candidates.clone(),
 		};
 
-		KeygenRequestResponse::<T>::make_request(Self::next_index(), keygen_request)
+		KeygenRequestResponse::<T>::make_request(Self::next_ceremony_id(), keygen_request)
 			.map_err(|_| RotationError::FailedToMakeKeygenRequest)
 	}
 
-	fn finalize_rotation() -> Result<(), RotationError<Self::ValidatorId>> {
+	fn finalize_rotation() -> Result<(), RotationError<Self::AccountId>> {
 		// The 'exit' point for the pallet, no rotations left to process
 		if Pallet::<T>::rotations_complete() {
 			// We can now confirm the auction and rotate
@@ -331,25 +335,25 @@ struct KeygenRequestResponse<T: Config>(PhantomData<T>);
 impl<T: Config>
 	RequestResponse<
 		CeremonyId,
-		KeygenRequest<T::ValidatorId>,
-		KeygenResponse<T::ValidatorId, T::PublicKey>,
-		RotationError<T::ValidatorId>,
+		KeygenRequest<<T as Chainflip>::AccountId>,
+		KeygenResponse<<T as Chainflip>::AccountId, T::PublicKey>,
+		RotationError<<T as Chainflip>::AccountId>,
 	> for KeygenRequestResponse<T>
 {
 	/// Emit as an event the key generation request, this is the first step after receiving a proposed
 	/// validator set from the `AuctionHandler::on_auction_completed()`
 	fn make_request(
-		index: CeremonyId,
-		request: KeygenRequest<T::ValidatorId>,
-	) -> Result<(), RotationError<T::ValidatorId>> {
+		ceremony_id: CeremonyId,
+		request: KeygenRequest<<T as Chainflip>::AccountId>,
+	) -> Result<(), RotationError<<T as Chainflip>::AccountId>> {
 		VaultRotations::<T>::insert(
-			index,
+			ceremony_id,
 			VaultRotation {
 				new_public_key: Default::default(),
 				keygen_request: request.clone(),
 			},
 		);
-		Pallet::<T>::deposit_event(Event::KeygenRequest(index, request));
+		Pallet::<T>::deposit_event(Event::KeygenRequest(ceremony_id, request));
 		Ok(())
 	}
 
@@ -357,18 +361,18 @@ impl<T: Config>
 	/// chain to continue processing.  Failure would result in penalisation for the bad validators returned
 	/// and the vault rotation aborted.
 	fn handle_response(
-		index: CeremonyId,
-		response: KeygenResponse<T::ValidatorId, T::PublicKey>,
-	) -> Result<(), RotationError<T::ValidatorId>> {
-		ensure_index!(index);
+		ceremony_id: CeremonyId,
+		response: KeygenResponse<<T as Chainflip>::AccountId, T::PublicKey>,
+	) -> Result<(), RotationError<<T as Chainflip>::AccountId>> {
+		ensure_index!(ceremony_id);
 		match response {
 			KeygenResponse::Success(new_public_key) => {
 				if EthereumVault::<T>::get().current_key != new_public_key {
-					VaultRotations::<T>::mutate(index, |maybe_vault_rotation| {
+					VaultRotations::<T>::mutate(ceremony_id, |maybe_vault_rotation| {
 						if let Some(vault_rotation) = maybe_vault_rotation {
 							(*vault_rotation).new_public_key = new_public_key.clone();
 							EthereumChain::<T>::rotate_vault(
-								index,
+								ceremony_id,
 								new_public_key,
 								T::EpochInfo::current_validators(),
 							)
@@ -397,15 +401,15 @@ impl<T: Config>
 // We have now had feedback from the vault/chain that we can proceed with the final request for the
 // vault rotation
 impl<T: Config> ChainHandler for Pallet<T> {
-	type ValidatorId = T::ValidatorId;
-	type Error = RotationError<T::ValidatorId>;
+	type AccountId = <T as Chainflip>::AccountId;
+	type Error = RotationError<<T as Chainflip>::AccountId>;
 
 	/// Try to complete the final vault rotation with feedback from the chain implementation over
 	/// the `ChainHandler` trait.  This is forwarded as a request and hence an event is emitted.
 	/// Failure is handled and potential bad validators are penalised and the rotation is now aborted.
 	fn request_vault_rotation(
 		ceremony_id: CeremonyId,
-		result: Result<VaultRotationRequest, RotationError<Self::ValidatorId>>,
+		result: Result<VaultRotationRequest, RotationError<<T as Chainflip>::AccountId>>,
 	) -> Result<(), Self::Error> {
 		ensure_index!(ceremony_id);
 		match result {
@@ -430,14 +434,14 @@ impl<T: Config>
 		CeremonyId,
 		VaultRotationRequest,
 		VaultRotationResponse<T::TransactionHash>,
-		RotationError<T::ValidatorId>,
+		RotationError<<T as Chainflip>::AccountId>,
 	> for VaultRotationRequestResponse<T>
 {
 	/// Emit our event for the start of a vault rotation generation request.
 	fn make_request(
 		ceremony_id: CeremonyId,
 		request: VaultRotationRequest,
-	) -> Result<(), RotationError<T::ValidatorId>> {
+	) -> Result<(), RotationError<<T as Chainflip>::AccountId>> {
 		ensure_index!(ceremony_id);
 		Pallet::<T>::deposit_event(Event::VaultRotationRequest(ceremony_id, request));
 		Ok(())
@@ -449,7 +453,7 @@ impl<T: Config>
 	fn handle_response(
 		ceremony_id: CeremonyId,
 		response: VaultRotationResponse<T::TransactionHash>,
-	) -> Result<(), RotationError<T::ValidatorId>> {
+	) -> Result<(), RotationError<<T as Chainflip>::AccountId>> {
 		ensure_index!(ceremony_id);
 		// Feedback to vaults
 		// We have assumed here that once we have one confirmation of a vault rotation we wouldn't

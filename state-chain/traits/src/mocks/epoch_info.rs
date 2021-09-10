@@ -55,15 +55,15 @@ impl Mock {
 }
 
 impl EpochInfo for Mock {
-	type ValidatorId = AccountId;
+	type AccountId = AccountId;
 	type Amount = u128;
 	type EpochIndex = u32;
 
-	fn current_validators() -> Vec<Self::ValidatorId> {
+	fn current_validators() -> Vec<Self::AccountId> {
 		CURRENT_VALIDATORS.with(|cell| cell.borrow().clone())
 	}
 
-	fn is_validator(account: &Self::ValidatorId) -> bool {
+	fn is_validator(account: &Self::AccountId) -> bool {
 		Self::current_validators().as_slice().contains(account)
 	}
 
@@ -71,7 +71,7 @@ impl EpochInfo for Mock {
 		BOND.with(|cell| *cell.borrow())
 	}
 
-	fn next_validators() -> Vec<Self::ValidatorId> {
+	fn next_validators() -> Vec<Self::AccountId> {
 		NEXT_VALIDATORS.with(|cell| cell.borrow().clone())
 	}
 
