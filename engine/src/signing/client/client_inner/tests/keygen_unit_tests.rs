@@ -184,7 +184,6 @@ async fn no_keygen_request() {
     c1.cleanup();
 
     assert_eq!(
-        // kyle debug: we receive a timeout
         helpers::recv_next_inner_event(&mut ctx.rxs[0]).await,
         InnerEvent::KeygenResult(KeygenOutcome::unauthorised(
             next_ceremony_id,
