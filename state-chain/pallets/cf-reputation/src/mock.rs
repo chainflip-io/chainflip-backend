@@ -81,7 +81,7 @@ parameter_types! {
 // Mocking the `Slasher` trait
 pub struct MockSlasher;
 impl Slashing for MockSlasher {
-	type ValidatorId = u64;
+	type AccountId = u64;
 	type BlockNumber = u64;
 
 	fn slash(_validator_id: &Self::ValidatorId, _blocks_offline: Self::BlockNumber) -> Weight {
@@ -99,7 +99,7 @@ pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
 
 impl Config for Test {
 	type Event = Event;
-	type ValidatorId = u64;
+	type AccountId = u64;
 	type Amount = u128;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type ReputationPointPenalty = ReputationPointPenalty;

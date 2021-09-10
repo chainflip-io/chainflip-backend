@@ -5,7 +5,7 @@ use chainflip_engine::{
     health::HealthMonitor,
     heartbeat,
     mq::nats_client::NatsMQClient,
-    p2p::{self, rpc as p2p_rpc, ValidatorId},
+    p2p::{self, rpc as p2p_rpc, AccountId},
     settings::Settings,
     signing,
     signing::db::PersistentKeyDB,
@@ -49,7 +49,7 @@ async fn main() {
 
     let key_pair = sp_core::sr25519::Pair::from_seed(&{
         // This can be the same filepath as the p2p key --node-key-file <file> on the state chain
-        // which won't necessarily always be the case, i.e. if we no longer have PeerId == ValidatorId
+        // which won't necessarily always be the case, i.e. if we no longer have PeerId == AccountId
         use std::{convert::TryInto, fs};
         let seed: [u8; 32] = hex::decode(
             &fs::read_to_string(&settings.state_chain.p2p_private_key_file)
@@ -90,7 +90,7 @@ async fn main() {
     futures::join!(
         // Start signing components
         signing::start(
-            ValidatorId(key_pair.public().0),
+            AccountId(key_pair.public().0),
             db,
             mq_client.clone(),
             shutdown_client_rx,
@@ -102,7 +102,7 @@ async fn main() {
                     "Should be valid ws endpoint: {}",
                     settings.state_chain.ws_endpoint
                 )),
-                ValidatorId(pair_signer.lock().unwrap().signer().public().0)
+                AccountId(pair_signer.lock().unwrap().signer().public().0)
             )
             .await
             .expect("unable to connect p2p rpc client"),

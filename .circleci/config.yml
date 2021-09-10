@@ -9,7 +9,6 @@ ignore_main_branches: &ignore_main_branches
         - /release\/.*/
         # Uncomment and add your current branch when testing
 #        - update/epic-ci
-
 only_main_branches: &only_main_branches
   filters:
     branches:
@@ -42,9 +41,7 @@ auth: &dockerconfig
   password: $DOCKER_PASSWORD
 
 cargo-base-job: &cargo-base-job
-  docker:
-    - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-      auth: *dockerconfig
+  executor: rust-base
   environment: &sccache_environment
     SCCACHE_REDIS: redis://sccache.chainflip.xyz
     SCCACHE_CACHE_SIZE: 14G
@@ -82,6 +79,10 @@ executors:
     docker:
       - image: ghcr.io/chainflip-io/infrastructure/chainflip-master:latest
         auth: *dockerconfig
+  rust-base:
+    docker:
+      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+        auth: *dockerconfig
 orbs:
   docker: circleci/docker@1.7.0
   discord: antonioned/discord@0.1.0
@@ -109,7 +110,7 @@ workflows:
           <<: *ignore_main_branches
       - test-validator-package:
           requires:
-            - check-validator-package
+            - fmt-validator-package
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
@@ -209,9 +210,7 @@ jobs:
       DOCKERFILE: Dockerfile
 
   fmt-validator-package:
-    docker:
-      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
-        auth: *dockerconfig
+    executor: rust-base
     steps:
       - checkout
       - run: >
@@ -282,6 +281,7 @@ jobs:
             - eth-contracts
 
   run-integration-tests:
+    resource_class: xlarge
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
         auth: *dockerconfig
@@ -317,7 +317,6 @@ jobs:
   test-single-node:
     executor: chainflip-master
     steps:
-      - doctl/install
       - doctl/initialize
       - run: doctl kubernetes cluster kubeconfig save cluster-staging
       - run:
@@ -332,9 +331,9 @@ jobs:
             helm install bashful chainflip/chainflip-validator
             --namespace default
             --set state-chain-node.nodeType=validator
-            --set state-chain-node.image.tag="latest"
+            --set state-chain-node.image.tag="<<pipeline.git.revision>>"
             --set "state-chain-node.stateChainNode.extraArgs={--rpc-external,--rpc-cors,all}"
-            --set chainflip-engine.image.tag="latest"
+            --set chainflip-engine.image.tag="<<pipeline.git.revision>>"
             --wait
             --wait-for-jobs
       - run:

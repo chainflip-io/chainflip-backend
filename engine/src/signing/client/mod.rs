@@ -5,7 +5,7 @@ use std::time::Duration;
 use crate::{
     logging::SIGNING_SUB_COMPONENT,
     mq::{IMQClient, Subject},
-    p2p::ValidatorId,
+    p2p::AccountId,
     signing::db::KeyDB,
 };
 use futures::StreamExt;
@@ -29,11 +29,11 @@ pub struct KeyId(pub u64);
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct KeygenInfo {
     id: KeyId,
-    signers: Vec<ValidatorId>,
+    signers: Vec<AccountId>,
 }
 
 impl KeygenInfo {
-    pub fn new(id: KeyId, signers: Vec<ValidatorId>) -> Self {
+    pub fn new(id: KeyId, signers: Vec<AccountId>) -> Self {
         KeygenInfo { id, signers }
     }
 }
@@ -44,11 +44,11 @@ impl KeygenInfo {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SigningInfo {
     id: KeyId,
-    signers: Vec<ValidatorId>,
+    signers: Vec<AccountId>,
 }
 
 impl SigningInfo {
-    pub fn new(id: KeyId, signers: Vec<ValidatorId>) -> Self {
+    pub fn new(id: KeyId, signers: Vec<AccountId>) -> Self {
         SigningInfo { id, signers }
     }
 }
@@ -72,7 +72,7 @@ const PHASE_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Start listening on the p2p connection and MQ
 pub fn start<MQC, S>(
-    my_validator_id: ValidatorId,
+    my_validator_id: AccountId,
     db: S,
     mq_client: MQC,
     mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,

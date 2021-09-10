@@ -246,7 +246,7 @@ async fn unknown_signer_ids_gracefully_handled() {
     let mut c1 = keygen_states.key_ready.clients[0].clone();
 
     // Note the unknown validator id
-    let signers = vec![VALIDATOR_IDS[0].clone(), ValidatorId([200; 32])];
+    let signers = vec![VALIDATOR_IDS[0].clone(), AccountId([200; 32])];
 
     let info = SigningInfo {
         id: KeyId(0),

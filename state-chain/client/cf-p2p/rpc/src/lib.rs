@@ -1,5 +1,5 @@
 pub mod p2p_serde;
-use cf_p2p::{NetworkObserver, P2PMessaging, RawMessage, ValidatorId};
+use cf_p2p::{AccountId, NetworkObserver, P2PMessaging, RawMessage};
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures::{StreamExt, TryStreamExt};
 pub use gen_client::Client as P2PRpcClient;
@@ -15,21 +15,21 @@ use std::marker::Send;
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ValidatorIdBs58(#[serde(with = "p2p_serde::bs58_fixed_size")] pub [u8; 32]);
+pub struct AccountIdBs58(#[serde(with = "p2p_serde::bs58_fixed_size")] pub [u8; 32]);
 
-impl From<ValidatorIdBs58> for ValidatorId {
-	fn from(id: ValidatorIdBs58) -> Self {
+impl From<AccountIdBs58> for AccountId {
+	fn from(id: AccountIdBs58) -> Self {
 		Self(id.0)
 	}
 }
 
-impl From<ValidatorId> for ValidatorIdBs58 {
-	fn from(id: ValidatorId) -> Self {
+impl From<AccountId> for AccountIdBs58 {
+	fn from(id: AccountId) -> Self {
 		Self(id.0)
 	}
 }
 
-impl std::fmt::Display for ValidatorIdBs58 {
+impl std::fmt::Display for AccountIdBs58 {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{}", bs58::encode(&self.0).into_string())
 	}
@@ -63,11 +63,11 @@ pub trait RpcApi {
 
 	/// Identify yourself to the network.
 	#[rpc(name = "p2p_self_identify")]
-	fn self_identify(&self, validator_id: ValidatorIdBs58) -> Result<u64>;
+	fn self_identify(&self, validator_id: AccountIdBs58) -> Result<u64>;
 
 	/// Send a message to validator id returning a HTTP status code
 	#[rpc(name = "p2p_send")]
-	fn send(&self, validator_id: ValidatorIdBs58, message: MessageBs58) -> Result<u64>;
+	fn send(&self, validator_id: AccountIdBs58, message: MessageBs58) -> Result<u64>;
 
 	/// Broadcast a message to the p2p network returning a HTTP status code
 	#[rpc(name = "p2p_broadcast")]
@@ -127,13 +127,13 @@ pub struct RpcCore {
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum P2pError {
 	/// The recipient of a message could not be found on the network.
-	UnknownRecipient(ValidatorIdBs58),
+	UnknownRecipient(AccountIdBs58),
 	/// This node can't send messages until it identifies itself to the network.
 	Unidentified,
 	/// Empty messages are not allowed.
 	EmptyMessage,
 	/// The node attempted to identify itself more than once.
-	AlreadyIdentified(ValidatorIdBs58),
+	AlreadyIdentified(AccountIdBs58),
 }
 
 impl From<P2pError> for P2PEvent {
@@ -146,11 +146,11 @@ impl From<P2pError> for P2PEvent {
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum P2PEvent {
 	/// A message has been received from another validator.
-	MessageReceived(ValidatorIdBs58, MessageBs58),
+	MessageReceived(AccountIdBs58, MessageBs58),
 	/// A new validator has cconnected and identified itself to the network.
-	ValidatorConnected(ValidatorIdBs58),
+	ValidatorConnected(AccountIdBs58),
 	/// A validator has disconnected from the network.
-	ValidatorDisconnected(ValidatorIdBs58),
+	ValidatorDisconnected(AccountIdBs58),
 	/// Errors.
 	Error(P2pError),
 }
@@ -183,22 +183,22 @@ impl RpcCore {
 
 /// Observe p2p events and notify subscribers
 impl NetworkObserver for RpcCore {
-	fn new_validator(&self, validator_id: &ValidatorId) {
+	fn new_validator(&self, validator_id: &AccountId) {
 		self.notify(P2PEvent::ValidatorConnected((*validator_id).into()));
 	}
 
-	fn disconnected(&self, validator_id: &ValidatorId) {
+	fn disconnected(&self, validator_id: &AccountId) {
 		self.notify(P2PEvent::ValidatorDisconnected((*validator_id).into()));
 	}
 
-	fn received(&self, validator_id: &ValidatorId, message: RawMessage) {
+	fn received(&self, validator_id: &AccountId, message: RawMessage) {
 		self.notify(P2PEvent::MessageReceived(
 			(*validator_id).into(),
 			message.into(),
 		));
 	}
 
-	fn unknown_recipient(&self, recipient_id: &ValidatorId) {
+	fn unknown_recipient(&self, recipient_id: &AccountId) {
 		self.notify(P2pError::UnknownRecipient((*recipient_id).into()).into());
 	}
 
@@ -210,7 +210,7 @@ impl NetworkObserver for RpcCore {
 		self.notify(P2pError::EmptyMessage.into());
 	}
 
-	fn already_identified(&self, existing_id: &ValidatorId) {
+	fn already_identified(&self, existing_id: &AccountId) {
 		self.notify(P2pError::AlreadyIdentified((*existing_id).into()).into());
 	}
 }
@@ -231,7 +231,7 @@ impl<C: P2PMessaging> Rpc<C> {
 impl<C: P2PMessaging + Sync + Send + 'static> RpcApi for Rpc<C> {
 	type Metadata = sc_rpc::Metadata;
 
-	fn self_identify(&self, validator_id: ValidatorIdBs58) -> Result<u64> {
+	fn self_identify(&self, validator_id: AccountIdBs58) -> Result<u64> {
 		self.messaging
 			.lock()
 			.unwrap()
@@ -244,7 +244,7 @@ impl<C: P2PMessaging + Sync + Send + 'static> RpcApi for Rpc<C> {
 			.map(|_| 200)
 	}
 
-	fn send(&self, validator_id: ValidatorIdBs58, message: MessageBs58) -> Result<u64> {
+	fn send(&self, validator_id: AccountIdBs58, message: MessageBs58) -> Result<u64> {
 		self.messaging
 			.lock()
 			.unwrap()
@@ -337,11 +337,11 @@ mod tests {
 			Ok(())
 		}
 
-		fn notify_message(&self, from: ValidatorId, data: RawMessage) -> anyhow::Result<()> {
+		fn notify_message(&self, from: AccountId, data: RawMessage) -> anyhow::Result<()> {
 			self.notify(P2PEvent::MessageReceived(from.into(), data.into()))
 		}
 
-		fn notify_identity(&self, who: ValidatorId) -> anyhow::Result<()> {
+		fn notify_identity(&self, who: AccountId) -> anyhow::Result<()> {
 			self.notify(P2PEvent::ValidatorConnected(who.into()))
 		}
 	}
@@ -475,7 +475,7 @@ mod tests {
 		let sub_id: String = serde_json::from_value(resp["result"].take()).unwrap();
 
 		// Simulate messages being received from a peer
-		let peer = ValidatorId([0xCF; 32]);
+		let peer = AccountId([0xCF; 32]);
 		let message = RawMessage(vec![1, 2, 3]);
 		node.notify_identity(peer).unwrap();
 		node.notify_message(peer, message.clone()).unwrap();

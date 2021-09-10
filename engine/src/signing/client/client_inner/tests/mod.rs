@@ -16,7 +16,7 @@ use super::keygen_state::KeygenStage;
 use super::signing_state::SigningStage;
 
 use crate::{
-    p2p::ValidatorId,
+    p2p::AccountId,
     signing::{
         client::{KeyId, KeygenInfo, MultisigInstruction, SigningInfo, PHASE_TIMEOUT},
         MessageHash, MessageInfo,
@@ -30,17 +30,14 @@ use std::time::Duration;
 const KEY_ID: KeyId = KeyId(0);
 
 lazy_static! {
-    static ref VALIDATOR_IDS: Vec<ValidatorId> = vec![
-        ValidatorId([1; 32]),
-        ValidatorId([2; 32]),
-        ValidatorId([3; 32]),
-    ];
+    static ref VALIDATOR_IDS: Vec<AccountId> =
+        vec![AccountId([1; 32]), AccountId([2; 32]), AccountId([3; 32]),];
     static ref SIGNER_IDXS: Vec<usize> = vec![0, 1];
-    static ref SIGNER_IDS: Vec<ValidatorId> = SIGNER_IDXS
+    static ref SIGNER_IDS: Vec<AccountId> = SIGNER_IDXS
         .iter()
         .map(|idx| VALIDATOR_IDS[*idx].clone())
         .collect();
-    static ref UNEXPECTED_VALIDATOR_ID: ValidatorId = ValidatorId(
+    static ref UNEXPECTED_VALIDATOR_ID: AccountId = AccountId(
         "unexpected|unexpected|unexpected"
             .as_bytes()
             .try_into()
