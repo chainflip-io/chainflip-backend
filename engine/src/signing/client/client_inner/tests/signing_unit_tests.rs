@@ -13,7 +13,7 @@ async fn should_await_bc1_after_rts() {
 
     let key = c1.get_key(KEY_ID).expect("no key").to_owned();
 
-    c1.signing_manager
+    c1.legacy_signing_manager
         .on_request_to_sign(MESSAGE_HASH.clone(), key, SIGN_INFO.clone());
 
     assert_eq!(
@@ -37,7 +37,7 @@ async fn should_process_delayed_bc1_after_rts() {
 
     let wdata = SigningDataWrapped::new(bc1, MESSAGE_INFO.clone());
 
-    c1.signing_manager
+    c1.legacy_signing_manager
         .process_signing_data(VALIDATOR_IDS[1].clone(), wdata);
 
     assert_eq!(get_stage_for_msg(&c1, &MESSAGE_INFO), None);
@@ -46,7 +46,7 @@ async fn should_process_delayed_bc1_after_rts() {
 
     let key = c1.get_key(KEY_ID).expect("no key").to_owned();
 
-    c1.signing_manager
+    c1.legacy_signing_manager
         .on_request_to_sign(MESSAGE_HASH.clone(), key, SIGN_INFO.clone());
 
     assert_eq!(signing_delayed_count(&c1, &MESSAGE_INFO), 0);
@@ -68,7 +68,7 @@ async fn delayed_signing_bc1_gets_removed() {
     let timeout = Duration::from_secs(0);
     let logger = logging::test_utils::create_test_logger();
 
-    let mut client = MultisigClientInner::new(
+    let mut client = MultisigClient::new(
         SIGNER_IDS[0].clone(),
         KeyDBMock::new(),
         tx,
@@ -102,7 +102,7 @@ async fn delayed_signing_bc1_gets_removed() {
 }
 
 #[tokio::test]
-async fn signing_secret2_gets_delayed() {
+async fn secret2_gets_delayed() {
     let mut ctx = helpers::KeygenContext::new();
     let _keygen_states = ctx.generate().await;
     let sign_states = ctx.sign().await;
@@ -146,7 +146,7 @@ async fn signing_secret2_gets_delayed() {
 }
 
 #[tokio::test]
-async fn signing_local_sig_gets_delayed() {
+async fn local_sig_gets_delayed() {
     let mut ctx = helpers::KeygenContext::new();
     let _keygen_states = ctx.generate().await;
     let sign_states = ctx.sign().await;
@@ -157,7 +157,7 @@ async fn signing_local_sig_gets_delayed() {
     let mut c1_p2 = phase2.clients[0].clone();
     let local_sig = phase3.local_sigs[1].clone();
 
-    let m = sig_to_p2p(local_sig, &VALIDATOR_IDS[1], &MESSAGE_INFO);
+    let m = sig_data_to_p2p(local_sig, &VALIDATOR_IDS[1], &MESSAGE_INFO);
 
     c1_p2.process_p2p_mq_message(m);
 
@@ -210,14 +210,14 @@ async fn request_to_sign_before_key_ready() {
         .get(&VALIDATOR_IDS[0])
         .unwrap()
         .clone();
-    let m = sec2_to_p2p_keygen(sec2_1, &VALIDATOR_IDS[1]);
+    let m = keygen_data_to_p2p(sec2_1, &VALIDATOR_IDS[1], KEY_ID);
     c1.process_p2p_mq_message(m);
 
     let sec2_2 = keygen_states.keygen_phase2.sec2_vec[2]
         .get(&VALIDATOR_IDS[0])
         .unwrap()
         .clone();
-    let m = sec2_to_p2p_keygen(sec2_2, &VALIDATOR_IDS[2]);
+    let m = keygen_data_to_p2p(sec2_2, &VALIDATOR_IDS[2], KEY_ID);
     c1.process_p2p_mq_message(m);
 
     assert_eq!(keygen_stage_for(&c1, key_id), Some(KeygenStage::KeyReady));
@@ -268,7 +268,7 @@ async fn phase1_timeout() {
     let mut c1 = states.sign_phase1.clients[0].clone();
 
     assert_eq!(
-        c1.signing_manager
+        c1.legacy_signing_manager
             .get_state_for(&MESSAGE_INFO)
             .unwrap()
             .get_stage(),
@@ -294,7 +294,10 @@ async fn phase1_timeout() {
         ))
     );
 
-    assert!(c1.signing_manager.get_state_for(&MESSAGE_INFO).is_none());
+    assert!(c1
+        .legacy_signing_manager
+        .get_state_for(&MESSAGE_INFO)
+        .is_none());
 }
 
 /// Test that signing state times out during phase 2
@@ -307,7 +310,7 @@ async fn phase2_timeout() {
     let mut c1 = states.sign_phase2.clients[0].clone();
 
     assert_eq!(
-        c1.signing_manager
+        c1.legacy_signing_manager
             .get_state_for(&MESSAGE_INFO)
             .unwrap()
             .get_stage(),
@@ -332,7 +335,10 @@ async fn phase2_timeout() {
         ))
     );
 
-    assert!(c1.signing_manager.get_state_for(&MESSAGE_INFO).is_none());
+    assert!(c1
+        .legacy_signing_manager
+        .get_state_for(&MESSAGE_INFO)
+        .is_none());
 }
 
 /// Test that signing state times out during phase 3
@@ -345,7 +351,7 @@ async fn phase3_timeout() {
     let mut c1 = states.sign_phase3.clients[0].clone();
 
     assert_eq!(
-        c1.signing_manager
+        c1.legacy_signing_manager
             .get_state_for(&MESSAGE_INFO)
             .unwrap()
             .get_stage(),
@@ -369,7 +375,10 @@ async fn phase3_timeout() {
         ))
     );
 
-    assert!(c1.signing_manager.get_state_for(&MESSAGE_INFO).is_none());
+    assert!(c1
+        .legacy_signing_manager
+        .get_state_for(&MESSAGE_INFO)
+        .is_none());
 }
 
 // test that a request to sign for a message that is already in use
@@ -382,7 +391,7 @@ async fn cannot_create_duplicate_sign_request() {
     let mut c1 = states.sign_phase3.clients[0].clone();
 
     assert_eq!(
-        c1.signing_manager
+        c1.legacy_signing_manager
             .get_state_for(&MESSAGE_INFO)
             .unwrap()
             .get_stage(),
@@ -400,7 +409,7 @@ async fn cannot_create_duplicate_sign_request() {
 
     // Previous state should be unaffected
     assert_eq!(
-        c1.signing_manager
+        c1.legacy_signing_manager
             .get_state_for(&MESSAGE_INFO)
             .unwrap()
             .get_stage(),
@@ -408,9 +417,9 @@ async fn cannot_create_duplicate_sign_request() {
     );
 }
 
-// test that a sign request from a client that is not in the current selection is ignored
+// test that data from a non-signer is ignored
 #[tokio::test]
-async fn sign_request_from_invalid_validator() {
+async fn data_from_non_signer_is_ignored() {
     let mut ctx = helpers::KeygenContext::new();
     let mut _keygen_states = ctx.generate().await;
     let states = ctx.sign().await;
@@ -418,7 +427,7 @@ async fn sign_request_from_invalid_validator() {
     let mut c1 = states.sign_phase1.clients[0].clone();
 
     assert_eq!(
-        c1.signing_manager
+        c1.legacy_signing_manager
             .get_state_for(&MESSAGE_INFO)
             .unwrap()
             .get_stage(),
@@ -441,7 +450,7 @@ async fn sign_request_from_invalid_validator() {
 
     // just check that we didn't advance to the next phase
     assert_eq!(
-        c1.signing_manager
+        c1.legacy_signing_manager
             .get_state_for(&MESSAGE_INFO)
             .unwrap()
             .get_stage(),
@@ -460,7 +469,7 @@ async fn bc1_with_different_hash() {
     let mut c1 = states.sign_phase1.clients[0].clone();
 
     assert_eq!(
-        c1.signing_manager
+        c1.legacy_signing_manager
             .get_state_for(&MESSAGE_INFO)
             .unwrap()
             .get_stage(),
@@ -483,7 +492,7 @@ async fn bc1_with_different_hash() {
 
     // make sure we did not advance the stage of message 1
     assert_eq!(
-        c1.signing_manager
+        c1.legacy_signing_manager
             .get_state_for(&MESSAGE_INFO)
             .unwrap()
             .get_stage(),
@@ -501,7 +510,7 @@ async fn invalid_bc1() {
     let mut c1 = states.sign_phase1.clients[0].clone();
 
     assert_eq!(
-        c1.signing_manager
+        c1.legacy_signing_manager
             .get_state_for(&MESSAGE_INFO)
             .unwrap()
             .get_stage(),
@@ -516,7 +525,7 @@ async fn invalid_bc1() {
 
     // make sure we the signing is abandoned
     assert_eq!(
-        c1.signing_manager
+        c1.legacy_signing_manager
             .get_state_for(&MESSAGE_INFO)
             .unwrap()
             .get_stage(),
@@ -538,7 +547,10 @@ async fn invalid_bc1() {
     c1.cleanup();
 
     // check that the signing was cleaned up
-    assert!(c1.signing_manager.get_state_for(&MESSAGE_INFO).is_none());
+    assert!(c1
+        .legacy_signing_manager
+        .get_state_for(&MESSAGE_INFO)
+        .is_none());
 
     // make sure the timeout is not triggered for the abandoned signing
     assert_eq!(helpers::check_for_inner_event(&mut rx).await, None);
@@ -554,7 +566,7 @@ async fn invalid_secret2() {
     let mut c1 = states.sign_phase2.clients[0].clone();
 
     assert_eq!(
-        c1.signing_manager
+        c1.legacy_signing_manager
             .get_state_for(&MESSAGE_INFO)
             .unwrap()
             .get_stage(),
@@ -572,7 +584,7 @@ async fn invalid_secret2() {
 
     // make sure we the signing is abandoned
     assert_eq!(
-        c1.signing_manager
+        c1.legacy_signing_manager
             .get_state_for(&MESSAGE_INFO)
             .unwrap()
             .get_stage(),
@@ -594,7 +606,10 @@ async fn invalid_secret2() {
     c1.cleanup();
 
     // check that the signing was cleaned up
-    assert!(c1.signing_manager.get_state_for(&MESSAGE_INFO).is_none());
+    assert!(c1
+        .legacy_signing_manager
+        .get_state_for(&MESSAGE_INFO)
+        .is_none());
 
     // make sure the timeout is not triggered for the abandoned signing
     assert_eq!(helpers::check_for_inner_event(&mut rx).await, None);
@@ -610,7 +625,7 @@ async fn invalid_local_sig() {
     let mut c1 = states.sign_phase3.clients[0].clone();
 
     assert_eq!(
-        c1.signing_manager
+        c1.legacy_signing_manager
             .get_state_for(&MESSAGE_INFO)
             .unwrap()
             .get_stage(),
@@ -620,12 +635,12 @@ async fn invalid_local_sig() {
     // send the local_sig from 0->1 back to client 0
     let bad_node = SIGNER_IDS[1].clone();
     let local_sig = states.sign_phase3.local_sigs[0].clone();
-    let m = sig_to_p2p(local_sig, &bad_node, &MESSAGE_INFO);
+    let m = sig_data_to_p2p(local_sig, &bad_node, &MESSAGE_INFO);
     c1.process_p2p_mq_message(m);
 
     // make sure we the signing is abandoned
     assert_eq!(
-        c1.signing_manager
+        c1.legacy_signing_manager
             .get_state_for(&MESSAGE_INFO)
             .unwrap()
             .get_stage(),
@@ -647,7 +662,10 @@ async fn invalid_local_sig() {
     c1.cleanup();
 
     // check that the signing was cleaned up
-    assert!(c1.signing_manager.get_state_for(&MESSAGE_INFO).is_none());
+    assert!(c1
+        .legacy_signing_manager
+        .get_state_for(&MESSAGE_INFO)
+        .is_none());
 
     // make sure the timeout is not triggered for the abandoned signing
     assert_eq!(helpers::check_for_inner_event(&mut rx).await, None);

@@ -1,12 +1,12 @@
 use chainflip_engine::signing::crypto::{
-    Keys, LocalSig, Parameters, SharedKeys, Signature, VerifiableSS, FE, GE,
+    KeyShare, Keys, LegacySignature, LocalSig, Parameters, VerifiableSS, FE, GE,
 };
 
 pub fn keygen_t_n_parties(
     t: usize,
     n: usize,
     parties: &[usize],
-) -> (Vec<Keys>, Vec<SharedKeys>, GE, Vec<VerifiableSS<GE>>) {
+) -> (Vec<Keys>, Vec<KeyShare>, GE, Vec<VerifiableSS<GE>>) {
     let params = Parameters {
         threshold: t,
         share_count: n,
@@ -58,7 +58,7 @@ pub fn keygen_t_n_parties(
 
     let mut shared_keys_vec = Vec::new();
     for i in 0..n.clone() {
-        let shared_keys = party_keys_vec[i]
+        let (shared_keys, _) = party_keys_vec[i]
             .phase2_verify_vss_construct_keypair(
                 &params,
                 &y_vec,
@@ -77,8 +77,8 @@ pub fn keygen_t_n_parties(
 fn sign(
     message: &[u8],
     t: usize,
-    eph_shared_keys_vec: &Vec<SharedKeys>,
-    priv_shared_keys_vec: &Vec<SharedKeys>,
+    eph_shared_keys_vec: &Vec<KeyShare>,
+    priv_shared_keys_vec: &Vec<KeyShare>,
     parties_index_vec: &[usize],
     key_gen_vss_vec: &Vec<VerifiableSS<GE>>,
     eph_vss_vec: &Vec<VerifiableSS<GE>>,
@@ -107,7 +107,8 @@ fn sign(
     let vss_sum_local_sigs = verify_local_sig.unwrap();
 
     // each party / dealer can generate the signature
-    let signature = Signature::generate(&vss_sum_local_sigs, &local_sig_vec, &parties_index_vec, v);
+    let signature =
+        LegacySignature::generate(&vss_sum_local_sigs, &local_sig_vec, &parties_index_vec, v);
     let verify_sig = signature.verify(&message, &y);
     if verify_sig.is_ok() {
         println!("Generated signature is OK!");

@@ -6,8 +6,8 @@ use crate::{
     signing::{
         client::{KeyId, MultisigInstruction, SigningInfo},
         crypto::{
-            BigInt, ECPoint, ECScalar, KeyGenBroadcastMessage1, LocalSig, Signature, VerifiableSS,
-            FE, GE,
+            BigInt, ECPoint, ECScalar, KeyGenBroadcastMessage1, LegacySignature, VerifiableSS, FE,
+            GE,
         },
         db::KeyDB,
         MessageHash, MessageInfo,
@@ -18,73 +18,23 @@ use slog::o;
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::{
-    common::KeygenResultInfo, key_store::KeyStore, keygen_manager::KeygenManager,
-    signing_state_manager::SigningStateManager,
+    common::KeygenResultInfo, frost::SigningDataWrapped, key_store::KeyStore,
+    keygen_manager::KeygenManager, signing_manager::SigningManager,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SchnorrSignature {
     /// Scalar component
-    // s: secp256k1::SecretKey,
     pub s: [u8; 32],
-    /// Point component
+    /// Point component (commitment)
     pub r: secp256k1::PublicKey,
 }
 
-impl From<Signature> for SchnorrSignature {
-    fn from(sig: Signature) -> Self {
+impl From<LegacySignature> for SchnorrSignature {
+    fn from(sig: LegacySignature) -> Self {
         let s: [u8; 32] = sig.sigma.get_element().as_ref().clone();
         let r = sig.v.get_element();
         SchnorrSignature { s, r }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum SigningData {
-    Broadcast1(Broadcast1),
-    Secret2(Secret2),
-    LocalSig(LocalSig),
-}
-
-impl From<Broadcast1> for SigningData {
-    fn from(bc1: Broadcast1) -> Self {
-        SigningData::Broadcast1(bc1)
-    }
-}
-
-impl Display for SigningData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // We are not interested in the exact contents most of the time
-        match self {
-            SigningData::Broadcast1(_) => write!(f, "Signing::Broadcast"),
-            SigningData::Secret2(_) => write!(f, "Signing::Secret"),
-            SigningData::LocalSig(_) => write!(f, "Signing::LocalSig"),
-        }
-    }
-}
-
-/// Protocol data plus the message to sign
-#[derive(Serialize, Deserialize, Debug)]
-pub struct SigningDataWrapped {
-    pub data: SigningData,
-    pub message: MessageInfo,
-}
-
-impl SigningDataWrapped {
-    pub fn new<S>(data: S, message: MessageInfo) -> Self
-    where
-        S: Into<SigningData>,
-    {
-        SigningDataWrapped {
-            data: data.into(),
-            message,
-        }
-    }
-}
-
-impl From<SigningDataWrapped> for MultisigMessage {
-    fn from(wrapped: SigningDataWrapped) -> Self {
-        MultisigMessage::SigningMessage(wrapped)
     }
 }
 
@@ -92,12 +42,6 @@ impl From<SigningDataWrapped> for MultisigMessage {
 pub enum MultisigMessage {
     KeyGenMessage(KeyGenMessageWrapped),
     SigningMessage(SigningDataWrapped),
-}
-
-impl From<LocalSig> for SigningData {
-    fn from(sig: LocalSig) -> Self {
-        SigningData::LocalSig(sig)
-    }
 }
 
 use serde::{Deserialize, Serialize};
@@ -119,13 +63,6 @@ impl From<Secret2> for KeygenData {
         KeygenData::Secret2(sec2)
     }
 }
-
-impl From<Secret2> for SigningData {
-    fn from(sec2: Secret2) -> Self {
-        SigningData::Secret2(sec2)
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct KeyGenMessageWrapped {
     pub key_id: KeyId,
@@ -178,10 +115,12 @@ pub enum Error {
     Invalid,
 }
 
+pub type CeremonyOutcomeResult<Output> = Result<Output, (Error, Vec<AccountId>)>;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CeremonyOutcome<Id, Output> {
     pub ceremony_id: Id,
-    pub result: Result<Output, (Error, Vec<AccountId>)>,
+    pub result: CeremonyOutcomeResult<Output>,
 }
 impl<Id, Output> CeremonyOutcome<Id, Output> {
     pub fn success(ceremony_id: Id, output: Output) -> Self {
@@ -223,49 +162,44 @@ pub enum InnerEvent {
 }
 
 #[derive(Clone)]
-pub struct MultisigClientInner<S>
+pub struct MultisigClient<S>
 where
     S: KeyDB,
 {
     my_account_id: AccountId,
     key_store: KeyStore<S>,
     keygen: KeygenManager,
-    pub signing_manager: SigningStateManager,
-    tx: UnboundedSender<InnerEvent>,
+    pub signing_manager: SigningManager,
+    event_sender: UnboundedSender<InnerEvent>,
     /// Requests awaiting a key
     pending_requests_to_sign: HashMap<KeyId, Vec<(MessageHash, SigningInfo)>>,
     logger: slog::Logger,
 }
 
-impl<S> MultisigClientInner<S>
+impl<S> MultisigClient<S>
 where
     S: KeyDB,
 {
     pub fn new(
         my_account_id: AccountId,
         db: S,
-        tx: UnboundedSender<InnerEvent>,
+        event_sender: UnboundedSender<InnerEvent>,
         phase_timeout: Duration,
         logger: &slog::Logger,
     ) -> Self {
-        MultisigClientInner {
+        MultisigClient {
             my_account_id: my_account_id.clone(),
             key_store: KeyStore::new(db),
             keygen: KeygenManager::new(
                 my_account_id.clone(),
-                tx.clone(),
+                event_sender.clone(),
                 phase_timeout.clone(),
                 logger,
             ),
-            signing_manager: SigningStateManager::new(
-                my_account_id,
-                tx.clone(),
-                phase_timeout,
-                logger,
-            ),
+            signing_manager: SigningManager::new(my_account_id, event_sender.clone(), logger),
             pending_requests_to_sign: Default::default(),
-            tx,
-            logger: logger.new(o!(COMPONENT_KEY => "MultisigClientInner")),
+            event_sender,
+            logger: logger.new(o!(COMPONENT_KEY => "MultisigClient")),
         }
     }
 
@@ -379,7 +313,7 @@ where
         // NOTE: we only notify the SC after we have successfully saved the key
 
         if let Err(err) = self
-            .tx
+            .event_sender
             .send(InnerEvent::KeygenResult(KeygenOutcome::success(
                 key_id,
                 key_info.key.get_public_key().get_element(),
@@ -396,7 +330,7 @@ where
     /// Process message from another validator
     pub fn process_p2p_mq_message(&mut self, msg: P2PMessage) {
         let P2PMessage { sender_id, data } = msg;
-        let msg: Result<MultisigMessage, _> = serde_json::from_slice(&data);
+        let msg: Result<MultisigMessage, _> = bincode::deserialize(&data);
 
         match msg {
             Ok(MultisigMessage::KeyGenMessage(msg)) => {

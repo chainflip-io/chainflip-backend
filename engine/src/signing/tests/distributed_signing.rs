@@ -1,6 +1,5 @@
 use futures::StreamExt;
 use itertools::Itertools;
-use log::*;
 use rand::{
     prelude::{IteratorRandom, StdRng},
     SeedableRng,
@@ -40,6 +39,7 @@ lazy_static! {
 async fn coordinate_signing(
     mq_clients: Vec<impl IMQClient>,
     active_indices: &[usize],
+    logger: &slog::Logger,
 ) -> Result<(), ()> {
     // get all the streams from the clients and subscribe them to MultisigEvent
     let streams = mq_clients
@@ -69,14 +69,14 @@ async fn coordinate_signing(
                     key_ready_count = key_ready_count + 1;
                 }
                 Err(_) => {
-                    info!("client timed out on getting to ReadyToKeygen.");
+                    slog::info!(logger, "client timed out on getting to ReadyToKeygen.");
                     return Err(());
                 }
                 _ => { /* ignore all other MultisigEvents while we wait */ }
             }
         }
         if key_ready_count >= streams.len() {
-            info!("All clients ReadyToKeygen.");
+            slog::info!(logger, "All clients ReadyToKeygen.");
             break;
         }
     }
@@ -87,7 +87,7 @@ async fn coordinate_signing(
 
     // publish the MultisigInstruction::KeyGen to all the clients
     for mc in &mq_clients {
-        trace!("published keygen instruction");
+        slog::trace!(logger, "published keygen instruction");
         mc.publish(
             Subject::MultisigInstruction,
             &MultisigInstruction::KeyGen(auction_info.clone()),
@@ -139,15 +139,20 @@ async fn coordinate_signing(
                     result: Ok(_),
                     ..
                 })))) => {
-                    info!("Message is signed from {}", i);
+                    slog::info!(logger, "Message is signed from {}", i);
                     signed_count = signed_count + 1;
                 }
                 Ok(Some(Ok(MultisigEvent::MessageSigningResult(_)))) => {
                     return Err(());
                 }
-                Ok(None) => info!("Unexpected error: client stream returned early: {}", i),
+                Ok(None) => slog::info!(
+                    logger,
+                    "Unexpected error: client stream returned early: {}",
+                    i
+                ),
                 Err(_) => {
-                    info!(
+                    slog::info!(
+                        logger,
                         "client {} timed out. {}/{} messages signed",
                         i,
                         signed_count,
@@ -164,7 +169,7 @@ async fn coordinate_signing(
             break;
         }
     }
-    info!("All messages have been signed");
+    slog::info!(logger, "All messages have been signed");
     return Ok(());
 }
 
@@ -187,7 +192,10 @@ async fn distributed_signing() {
     let mut active_indices = (1..=N_PARTIES).into_iter().choose_multiple(&mut rng, t + 1);
     active_indices.sort_unstable();
 
-    info!(
+    let logger = logging::test_utils::create_test_logger();
+
+    slog::info!(
+        logger,
         "{} Active parties: {:?}",
         active_indices.len(),
         active_indices
@@ -197,8 +205,6 @@ async fn distributed_signing() {
 
     // Create a fake network
     let network = NetworkMock::new();
-
-    let logger = logging::test_utils::create_test_logger();
 
     // Start message queues for each party
     let mc_futs = (1..=N_PARTIES)
@@ -260,11 +266,11 @@ async fn distributed_signing() {
 
     let test_fut = async move {
         // run the signing test and get the result
-        let res = coordinate_signing(mc_clients, &active_indices).await;
+        let res = coordinate_signing(mc_clients, &active_indices, &logger).await;
 
         assert_eq!(res, Ok(()), "One of the clients failed to sign the message");
 
-        info!("Graceful shutdown of distributed_signing test");
+        slog::info!(logger, "Graceful shutdown of distributed_signing test");
         // send a message to all the clients and the conductors to shut down
         for tx in shutdown_txs {
             tx.send(()).unwrap();

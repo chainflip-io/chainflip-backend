@@ -13,7 +13,7 @@ use slog::o;
 
 use crate::p2p::P2PMessage;
 
-use self::client_inner::{InnerEvent, MultisigClientInner};
+use self::client_inner::{InnerEvent, MultisigClient};
 
 pub use client_inner::{KeygenOutcome, KeygenResultInfo, SchnorrSignature, SigningOutcome};
 
@@ -87,7 +87,7 @@ where
     slog::info!(logger, "Starting");
 
     let (events_tx, mut events_rx) = mpsc::unbounded_channel();
-    let mut inner = MultisigClientInner::new(
+    let mut inner = MultisigClient::new(
         my_validator_id.clone(),
         db,
         events_tx,

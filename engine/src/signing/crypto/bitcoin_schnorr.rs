@@ -59,7 +59,7 @@ pub struct Parameters {
     pub share_count: usize, //n
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SharedKeys {
+pub struct KeyShare {
     pub y: GE,
     pub x_i: FE,
 }
@@ -135,7 +135,7 @@ impl Keys {
         secret_shares_vec: &Vec<FE>,
         vss_scheme_vec: &Vec<VerifiableSS<GE>>,
         index: &usize,
-    ) -> Result<SharedKeys, InvalidSS> {
+    ) -> Result<(KeyShare, Vec<GE>), InvalidSS> {
         assert_eq!(y_vec.len(), params.share_count);
         assert_eq!(secret_shares_vec.len(), params.share_count);
         assert_eq!(vss_scheme_vec.len(), params.share_count);
@@ -161,7 +161,37 @@ impl Keys {
                 let y0 = y_vec_iter.next().unwrap();
                 let y = y_vec_iter.fold(y0.clone(), |acc, x| acc + x);
                 let x_i = secret_shares_vec.iter().fold(FE::zero(), |acc, x| acc + x);
-                Ok(SharedKeys { y, x_i })
+
+                let n = params.share_count;
+                let t = params.threshold;
+
+                let mut pubkeys = vec![];
+
+                // Generate public verification shares for each party `i`
+                for i in 1..=n {
+                    let i_scalar: FE = ECScalar::from(&BigInt::from(i as u32));
+                    // println!("i_scalar: {:?}", i_scalar);
+
+                    let mut iter = (1..=n).map(|j| {
+                        let mut a_rev_iter =
+                            (0..=t).map(|k| vss_scheme_vec[j - 1].commitments[k]).rev();
+
+                        let first = a_rev_iter.next().unwrap();
+
+                        a_rev_iter.fold(first, |acc, x| acc * i_scalar + x)
+                    });
+
+                    let first = iter.next().unwrap();
+
+                    let pk_i = iter.fold(first, |acc, x| acc + x);
+
+                    pubkeys.push(pk_i)
+                }
+
+                // Sanity check: our pubkey is among generated pubkeys for all parties
+                assert_eq!(pubkeys[index - 1], GE::generator() * x_i);
+
+                Ok((KeyShare { y, x_i }, pubkeys))
             }
             _ => Err(InvalidSS(invalid_idxs)),
         }
@@ -169,21 +199,46 @@ impl Keys {
 
     // remove secret shares from x_i for parties that are not participating in signing
     pub fn update_shared_key(
-        shared_key: &SharedKeys,
+        shared_key: &KeyShare,
         parties_in: &[usize],
         secret_shares_vec: &Vec<FE>,
-    ) -> SharedKeys {
+    ) -> KeyShare {
         let mut new_xi: FE = FE::zero();
         for i in 0..secret_shares_vec.len() {
             if parties_in.iter().find(|&&x| x == i).is_some() {
                 new_xi = new_xi + &secret_shares_vec[i]
             }
         }
-        SharedKeys {
+        KeyShare {
             y: shared_key.y.clone(),
             x_i: new_xi,
         }
     }
+}
+
+/// Assembles and hashes the challenge in the correct order for the KeyManager Contract
+pub fn build_challenge(
+    nonce_key: secp256k1::PublicKey,
+    pub_key: secp256k1::PublicKey,
+    message: &[u8],
+) -> FE {
+    let eth_addr = utils::pubkey_to_eth_addr(pub_key);
+
+    let (pubkey_x, pubkey_y_parity) = LocalSig::destructure_pubkey(nonce_key);
+
+    // Assemble the challenge in correct order according to this contract:
+    // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/abstract/SchnorrSECP256K1.sol
+    let e_bytes = [
+        pubkey_x.to_vec(),
+        [pubkey_y_parity].to_vec(),
+        message.to_vec(),
+        eth_addr.to_vec(),
+    ]
+    .concat();
+
+    let e_bn = BigInt::from_bytes(Keccak256::hash(&e_bytes).as_bytes());
+    let e: FE = ECScalar::from(&e_bn);
+    e
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -193,49 +248,20 @@ pub struct LocalSig {
 }
 
 impl LocalSig {
-    pub fn compute(
-        message: &[u8],
-        local_ephemeral_key: &SharedKeys,
-        local_private_key: &SharedKeys,
-    ) -> LocalSig {
-        let beta_i = local_ephemeral_key.x_i.clone();
-        let alpha_i = local_private_key.x_i.clone();
+    pub fn compute(message: &[u8], nonce_share: &KeyShare, key_share: &KeyShare) -> LocalSig {
+        let beta_i = nonce_share.x_i;
+        let alpha_i = key_share.x_i;
 
-        let e = LocalSig::build_challenge(
-            local_private_key.y.get_element(),
-            local_ephemeral_key.y.get_element(),
+        let e = build_challenge(
+            key_share.y.get_element(),
+            nonce_share.y.get_element(),
             message,
         );
 
-        let rhs = e.clone() * alpha_i;
+        let rhs = e * alpha_i;
         let gamma_i = beta_i.sub(&rhs.get_element());
 
         LocalSig { gamma_i, e }
-    }
-
-    /// Assembles and hashes the challenge in the correct order for the KeyManager Contract
-    pub fn build_challenge(
-        nonce_key: secp256k1::PublicKey,
-        pub_key: secp256k1::PublicKey,
-        message: &[u8],
-    ) -> FE {
-        let eth_addr = utils::pubkey_to_eth_addr(pub_key);
-
-        let (pubkey_x, pubkey_y_parity) = LocalSig::destructure_pubkey(nonce_key);
-
-        // Assemble the challenge in correct order according to this contract:
-        // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/abstract/SchnorrSECP256K1.sol
-        let e_bytes = [
-            pubkey_x.to_vec(),
-            [pubkey_y_parity].to_vec(),
-            message.to_vec(),
-            eth_addr.to_vec(),
-        ]
-        .concat();
-
-        let e_bn = BigInt::from_bytes(Keccak256::hash(&e_bytes).as_bytes());
-        let e: FE = ECScalar::from(&e_bn);
-        e
     }
 
     fn destructure_pubkey(pubkey: secp256k1::PublicKey) -> ([u8; 32], u8) {
@@ -328,20 +354,20 @@ impl LocalSig {
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-pub struct Signature {
+pub struct LegacySignature {
     /// This is `s` in other literature
     pub sigma: FE,
     /// This is `r` in other literature
     pub v: GE,
 }
 
-impl Signature {
+impl LegacySignature {
     pub fn generate(
         vss_sum_local_sigs: &VerifiableSS<GE>,
         local_sig_vec: &Vec<LocalSig>,
         parties_index_vec: &[usize],
         v: GE,
-    ) -> Signature {
+    ) -> LegacySignature {
         let gamma_vec = (0..parties_index_vec.len())
             .map(|i| local_sig_vec[i].gamma_i.clone())
             .collect::<Vec<FE>>();
@@ -350,11 +376,11 @@ impl Signature {
             &parties_index_vec[0..reconstruct_limit.clone()],
             &gamma_vec[0..reconstruct_limit.clone()],
         );
-        Signature { sigma, v }
+        LegacySignature { sigma, v }
     }
 
     pub fn verify(&self, message: &[u8], pubkey_y: &GE) -> Result<(), InvalidSig> {
-        let e = LocalSig::build_challenge(pubkey_y.get_element(), self.v.get_element(), message);
+        let e = build_challenge(pubkey_y.get_element(), self.v.get_element(), message);
 
         let g: GE = GE::generator();
         let sigma_g = g * &self.sigma;
@@ -371,9 +397,9 @@ impl Signature {
 
 #[cfg(test)]
 mod test_schnorr {
+    use crate::signing::crypto::{KeyShare, LegacySignature};
+
     use super::LocalSig;
-    use super::SharedKeys;
-    use super::Signature;
     use anyhow::Result;
     use curv::elliptic::curves::secp256_k1::{Secp256k1Point, Secp256k1Scalar};
     use curv::elliptic::curves::traits::{ECPoint, ECScalar};
@@ -390,14 +416,14 @@ mod test_schnorr {
     fn test_signature() {
         // using the known SECRET_KEY_HEX, build the local_private_key
         let sk_1_scalar = scalar_from_secretkey_hex(SECRET_KEY_HEX).unwrap();
-        let local_private_key = SharedKeys {
+        let local_private_key = KeyShare {
             y: Secp256k1Point::generator() * &sk_1_scalar,
             x_i: sk_1_scalar,
         };
 
         // create the local_ephemeral_key from the known NONCE_KEY_HEX
         let k_scalar = scalar_from_secretkey_hex(NONCE_KEY_HEX).unwrap();
-        let local_ephemeral_key = SharedKeys {
+        let local_ephemeral_key = KeyShare {
             y: Secp256k1Point::generator() * &k_scalar,
             x_i: k_scalar,
         };
@@ -412,7 +438,7 @@ mod test_schnorr {
 
         // turn the sigma into a proper signature and run it though the verify function.
         let sigma_key = secp256k1::SecretKey::from_slice(&sigma).unwrap();
-        let sig = Signature {
+        let sig = LegacySignature {
             sigma: scalar_from_secretkey(sigma_key),
             v: local_ephemeral_key.y,
         };

@@ -235,7 +235,7 @@ impl KeygenState {
                     .map(|(idx, secret2)| {
                         let wrapped = KeyGenMessageWrapped::new(self.key_id, secret2);
                         let secret2 = MultisigMessage::from(wrapped);
-                        let data = serde_json::to_vec(&secret2).unwrap();
+                        let data = bincode::serialize(&secret2).unwrap();
                         MessageToSend { to_idx: idx, data }
                     })
                     .collect_vec();
@@ -345,7 +345,7 @@ impl KeygenState {
 
             let message = P2PMessageCommand {
                 destination,
-                data: serde_json::to_vec(&msg).unwrap(),
+                data: bincode::serialize(&msg).unwrap(),
             };
 
             let event = InnerEvent::P2PMessageCommand(message);

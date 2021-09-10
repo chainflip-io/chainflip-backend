@@ -8,7 +8,7 @@ use std::time::Duration;
 fn bc1_gets_delayed_until_keygen_request() {
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
     let logger = logging::test_utils::create_test_logger();
-    let mut client = MultisigClientInner::new(
+    let mut client = MultisigClient::new(
         VALIDATOR_IDS[0].clone(),
         KeyDBMock::new(),
         tx,
@@ -18,7 +18,7 @@ fn bc1_gets_delayed_until_keygen_request() {
 
     assert_eq!(keygen_stage_for(&client, KEY_ID), None);
 
-    let message = create_keygen_p2p_message(&VALIDATOR_IDS[1], create_bc1(2));
+    let message = keygen_data_to_p2p(&VALIDATOR_IDS[1], create_bc1(2), KEY_ID);
     client.process_p2p_mq_message(message);
 
     assert_eq!(keygen_stage_for(&client, KEY_ID), None);
@@ -37,7 +37,7 @@ fn bc1_gets_delayed_until_keygen_request() {
     assert_eq!(keygen_delayed_count(&client, KEY_ID), 0);
 
     // One more message should advance the stage (share_count = 3)
-    let message = create_keygen_p2p_message(&VALIDATOR_IDS[2], create_bc1(3));
+    let message = keygen_data_to_p2p(&VALIDATOR_IDS[2], create_bc1(3), KEY_ID);
     client.process_p2p_mq_message(message);
 
     assert_eq!(
@@ -61,7 +61,7 @@ async fn keygen_message_from_invalid_validator() {
 
     let invalid_validator = &UNEXPECTED_VALIDATOR_ID;
 
-    let msg = create_keygen_p2p_message(invalid_validator, create_bc1(2));
+    let msg = keygen_data_to_p2p(invalid_validator, create_bc1(2), KEY_ID);
 
     c1.process_p2p_mq_message(msg);
 }
@@ -92,7 +92,7 @@ async fn keygen_secret2_gets_delayed() {
     let sec2 = sec2_vec[1].get(&VALIDATOR_IDS[0]).unwrap().clone();
 
     // We should not process it immediately
-    let message = create_keygen_p2p_message(&VALIDATOR_IDS[1].clone(), sec2);
+    let message = keygen_data_to_p2p(&VALIDATOR_IDS[1].clone(), sec2, KEY_ID);
 
     c1.process_p2p_mq_message(message);
 
@@ -103,10 +103,10 @@ async fn keygen_secret2_gets_delayed() {
     );
 
     // Process incoming bc1_vec, so we can advance to the next phase
-    let message = create_keygen_p2p_message(&VALIDATOR_IDS[1], bc1_vec[1].clone());
+    let message = keygen_data_to_p2p(&VALIDATOR_IDS[1], bc1_vec[1].clone(), KEY_ID);
     c1.process_p2p_mq_message(message);
 
-    let message = create_keygen_p2p_message(&VALIDATOR_IDS[2], bc1_vec[2].clone());
+    let message = keygen_data_to_p2p(&VALIDATOR_IDS[2], bc1_vec[2].clone(), KEY_ID);
     c1.process_p2p_mq_message(message);
 
     assert_eq!(
@@ -179,7 +179,7 @@ async fn no_keygen_request() {
     let bad_validator = &VALIDATOR_IDS[1];
 
     // We have not received a keygen request for KeyId 1
-    let message = helpers::bc1_to_p2p_keygen(bc1, KeyId(1), bad_validator);
+    let message = helpers::keygen_data_to_p2p(bc1, bad_validator, KeyId(1));
 
     c1.process_p2p_mq_message(message);
 
@@ -212,7 +212,7 @@ async fn phase1_timeout() {
 
     let bc1 = states.keygen_phase1.bc1_vec[1].clone();
 
-    let message = helpers::bc1_to_p2p_keygen(bc1, KEY_ID, &VALIDATOR_IDS[1]);
+    let message = helpers::keygen_data_to_p2p(bc1, &VALIDATOR_IDS[1], KEY_ID);
 
     c1.process_p2p_mq_message(message);
 
@@ -249,7 +249,7 @@ async fn phase2_timeout() {
         .unwrap()
         .clone();
 
-    let message = helpers::sec2_to_p2p_keygen(sec2, &VALIDATOR_IDS[1]);
+    let message = helpers::keygen_data_to_p2p(sec2, &VALIDATOR_IDS[1], KEY_ID);
 
     c1.process_p2p_mq_message(message);
 
@@ -278,13 +278,13 @@ async fn invalid_bc1() {
 
     // This BC1 is valid
     let bc1_a = states.keygen_phase1.bc1_vec[1].clone();
-    let message_a = helpers::bc1_to_p2p_keygen(bc1_a.clone(), KEY_ID, &VALIDATOR_IDS[1]);
+    let message_a = helpers::keygen_data_to_p2p(bc1_a.clone(), &VALIDATOR_IDS[1], KEY_ID);
     c1.process_p2p_mq_message(message_a);
 
     // This BC1 is invalid
     let bad_node = VALIDATOR_IDS[2].clone();
     let bc1_b = helpers::create_invalid_bc1();
-    let message_b = helpers::bc1_to_p2p_keygen(bc1_b, KEY_ID, &bad_node);
+    let message_b = helpers::keygen_data_to_p2p(bc1_b, &bad_node, KEY_ID);
     c1.process_p2p_mq_message(message_b);
 
     let mut rx = &mut ctx.rxs[0];
@@ -316,7 +316,7 @@ async fn invalid_sec2() {
         .get(&VALIDATOR_IDS[0])
         .unwrap()
         .clone();
-    let message_a = helpers::sec2_to_p2p_keygen(sec2_a.clone(), &VALIDATOR_IDS[1]);
+    let message_a = helpers::keygen_data_to_p2p(sec2_a.clone(), &VALIDATOR_IDS[1], KEY_ID);
     c1.process_p2p_mq_message(message_a);
 
     let bad_node = VALIDATOR_IDS[2].clone();
@@ -325,7 +325,7 @@ async fn invalid_sec2() {
         .get(&VALIDATOR_IDS[2])
         .unwrap()
         .clone();
-    let message_b = helpers::sec2_to_p2p_keygen(sec2_b, &bad_node);
+    let message_b = helpers::keygen_data_to_p2p(sec2_b, &bad_node, KEY_ID);
     c1.process_p2p_mq_message(message_b);
 
     let mut rx = &mut ctx.rxs[0];

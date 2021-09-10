@@ -7,8 +7,7 @@ use chainflip_engine::{
     mq::nats_client::NatsMQClient,
     p2p::{self, rpc as p2p_rpc, AccountId},
     settings::Settings,
-    signing,
-    signing::db::PersistentKeyDB,
+    signing::{self, db::PersistentKeyDB},
     state_chain::{self, runtime::StateChainRuntime},
     temp_event_mapper,
 };

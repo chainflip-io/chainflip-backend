@@ -7,7 +7,10 @@ use crate::{
     logging::COMPONENT_KEY,
     p2p::AccountId,
     signing::{
-        client::{client_inner::utils::get_index_mapping, KeyId, KeygenInfo},
+        client::{
+            client_inner::utils::{get_index_mapping, threshold_from_share_count},
+            KeyId, KeygenInfo,
+        },
         crypto,
     },
 };
@@ -208,31 +211,6 @@ impl KeygenManager {
             },
         }
     }
-}
-
-/// Note that the resulting `threshold` is the maximum number
-/// of parties *not* enough to generate a signature,
-/// i.e. at least `t+1` parties are required.
-/// This follow the notation in the multisig library that
-/// we are using and in the corresponding literature.
-fn threshold_from_share_count(share_count: usize) -> usize {
-    let doubled = share_count * 2;
-
-    if doubled % 3 == 0 {
-        doubled / 3 - 1
-    } else {
-        doubled / 3
-    }
-}
-
-#[cfg(test)]
-#[test]
-fn check_threshold_calculation() {
-    assert_eq!(threshold_from_share_count(150), 99);
-    assert_eq!(threshold_from_share_count(100), 66);
-    assert_eq!(threshold_from_share_count(90), 59);
-    assert_eq!(threshold_from_share_count(3), 1);
-    assert_eq!(threshold_from_share_count(4), 2);
 }
 
 #[cfg(test)]
