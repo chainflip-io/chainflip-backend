@@ -1,5 +1,5 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
-use super::{AccountId, Emissions, FlipBalance, Reputation, Rewards, Witnesser};
+use super::{AccountId, Emissions, Flip, FlipBalance, Reputation, Rewards, Witnesser};
 use cf_traits::EmissionsTrigger;
 use frame_support::debug;
 use pallet_cf_validator::EpochTransitionHandler;
@@ -18,6 +18,10 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		// Rollover the rewards.
 		Rewards::rollover(new_validators).unwrap_or_else(|err| {
 			debug::error!("Unable to process rewards rollover: {:?}!", err);
+		});
+		// Update the the bond of all new validators
+		new_validators.iter().for_each(|new_validator| {
+			Flip::set_validator_bond(new_validator, new_bond);
 		});
 		// Update the list of validators in reputation
 		<Reputation as EpochTransitionHandler>::on_new_epoch(new_validators, new_bond);
