@@ -5,7 +5,6 @@ use frame_support::{
 	traits::{EnsureOrigin, HandleLifetime},
 	weights::IdentityFee,
 };
-use frame_system::{ensure_root, RawOrigin};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
