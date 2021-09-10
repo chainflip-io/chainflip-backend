@@ -62,7 +62,6 @@ pub async fn start(
             }
         };
 
-        let signer = signer.lock().unwrap();
         match raw_event_to_sc_event(&raw_event)
             .expect("Could not convert substrate event to SCEvent")
         {
@@ -98,14 +97,13 @@ pub async fn start(
                                                 pubkey.serialize().into(),
                                             )
                                         }
-                                        Err(err) => {
+                                        Err((err, validator_ids)) => {
                                             slog::error!(
                                                 logger,
                                                 "Keygen failed with error: {:?}",
-                                                err.0
+                                                err
                                             );
-                                            let bad_account_ids: Vec<_> = err
-                                                .1
+                                            let bad_account_ids: Vec<_> = validator_ids
                                                 .iter()
                                                 .map(|v| AccountId32::from(v.0))
                                                 .collect();
@@ -121,6 +119,7 @@ pub async fn start(
                                 },
                                 None => todo!(),
                             };
+                            let signer = signer.lock().unwrap();
                             subxt_client
                                 .keygen_response(
                                     &*signer,
@@ -181,14 +180,13 @@ pub async fn start(
                                         >::Success(
                                             sig.into()
                                         ),
-                                        Err(err) => {
+                                        Err((err, validator_ids)) => {
                                             slog::error!(
                                                 logger,
                                                 "Signing failed with error: {:?}",
-                                                err.0
+                                                err
                                             );
-                                            let bad_account_ids: Vec<_> = err
-                                                .1
+                                            let bad_account_ids: Vec<_> = validator_ids
                                                 .iter()
                                                 .map(|v| AccountId32::from(v.0))
                                                 .collect();
@@ -204,7 +202,7 @@ pub async fn start(
                                 },
                                 _ => panic!("Channel closed"),
                             };
-
+                            let signer = signer.lock().unwrap();
                             subxt_client
                                 .threshold_signature_response(
                                     &*signer,
@@ -243,6 +241,7 @@ pub async fn start(
                                             VaultRotationResponse::Error
                                         }
                                     };
+                                    let signer = signer.lock().unwrap();
                                     subxt_client
                                         .vault_rotation_response(
                                             &*signer,
