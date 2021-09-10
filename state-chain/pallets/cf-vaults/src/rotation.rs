@@ -7,12 +7,15 @@ use sp_std::prelude::*;
 /// CeremonyId type
 pub type CeremonyId = u64;
 
+// TODO: Use the same type as the CFE
 /// Schnorr Signature type
 #[derive(PartialEq, Decode, Encode, Eq, Clone, RuntimeDebug, Copy, Default)]
 pub struct SchnorrSignature {
 	/// Scalar component
 	// s: secp256k1::SecretKey,
 	pub s: [u8; 32],
+
+	// TODO: This is not technically "r" so this should be renamed
 	/// Public key hashed and truncated to an ethereum address
 	pub r: [u8; 20],
 }
