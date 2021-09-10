@@ -1,9 +1,15 @@
 use crate::{
     logging,
-    signing::client::{client_inner::MultisigClientInner, PHASE_TIMEOUT},
+    signing::{
+        client::{client_inner::MultisigClientInner, PHASE_TIMEOUT},
+        KeyId,
+    },
 };
 
-use super::helpers;
+use super::{
+    helpers::{self, message_and_sign_info},
+    MESSAGE_HASH,
+};
 
 #[tokio::test]
 async fn check_signing_db() {
@@ -15,7 +21,10 @@ async fn check_signing_db() {
     let mut ctx = helpers::KeygenContext::new();
 
     // 1. Generate a key. It should automatically be written to a database
-    let _keygen_states = ctx.generate().await;
+    let keygen_states = ctx.generate().await;
+    let key_id: KeyId = KeyId(keygen_states.key_ready.pubkey.serialize().into());
+
+    let (message_info, sign_info) = message_and_sign_info(MESSAGE_HASH.clone(), key_id);
 
     // 2. Extract the clients' database
     let client1 = ctx.get_client(0);
@@ -31,5 +40,5 @@ async fn check_signing_db() {
     ctx.substitute_client_at(0, restarted_client, rx);
 
     // 5. Signing should not crash
-    ctx.sign().await;
+    ctx.sign(message_info, sign_info).await;
 }

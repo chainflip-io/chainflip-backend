@@ -8,6 +8,7 @@ use crate::{
     signing::db::KeyDB,
 };
 use futures::StreamExt;
+use pallet_cf_vaults::CeremonyId;
 use slog::o;
 
 use crate::p2p::P2PMessage;
@@ -22,46 +23,44 @@ use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone, Copy)]
-pub struct KeyId(pub u64);
+/// Public key compressed (33 bytes - 32 bytes + a y parity byte)
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
+pub struct KeyId(pub Vec<u8>);
 
-// TODO: Remove KeyId from here - we don't know what the keyid will be, since it'll be the public key
-// we might want to rename KeyId here too.
-// Issue: <link>
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct KeygenInfo {
-    id: KeyId,
+    ceremony_id: CeremonyId,
     signers: Vec<ValidatorId>,
 }
 
 impl KeygenInfo {
-    pub fn new(id: KeyId, signers: Vec<ValidatorId>) -> Self {
-        KeygenInfo { id, signers }
+    pub fn new(ceremony_id: CeremonyId, signers: Vec<ValidatorId>) -> Self {
+        KeygenInfo {
+            ceremony_id,
+            signers,
+        }
     }
 }
 
-/// Note that this is different from `AuctionInfo` as
-/// not every multisig party will participate in
-/// any given ceremony
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SigningInfo {
-    id: KeyId,
+    key_id: KeyId,
     signers: Vec<ValidatorId>,
 }
 
 impl SigningInfo {
-    pub fn new(id: KeyId, signers: Vec<ValidatorId>) -> Self {
-        SigningInfo { id, signers }
+    pub fn new(key_id: KeyId, signers: Vec<ValidatorId>) -> Self {
+        SigningInfo { key_id, signers }
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum MultisigInstruction {
     KeyGen(KeygenInfo),
     Sign(MessageHash, SigningInfo),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum MultisigEvent {
     MessageSigningResult(SigningOutcome),
     KeygenResult(KeygenOutcome),
@@ -89,11 +88,11 @@ where
 
     slog::info!(logger, "Starting");
 
-    let (events_tx, mut events_rx) = mpsc::unbounded_channel();
+    let (inner_event_sender, mut inner_event_receiver) = mpsc::unbounded_channel();
     let mut inner = MultisigClientInner::new(
         my_validator_id.clone(),
         db,
-        events_tx,
+        inner_event_sender,
         PHASE_TIMEOUT,
         &logger,
     );
@@ -107,7 +106,7 @@ where
         loop {
             tokio::select! {
                 Some(p2p_message) = p2p_message_receiver.recv() => {
-                    inner.process_p2p_mq_message(p2p_message);
+                    inner.process_p2p_message(p2p_message);
                 }
                 Some(msg) = multisig_instruction_receiver.recv() => {
                     inner.process_multisig_instruction(msg);
@@ -116,7 +115,7 @@ where
                     slog::info!(logger, "Cleaning up multisig states");
                     inner.cleanup();
                 }
-                Some(event) = events_rx.recv() => { // TODO: This will be removed entirely in the future
+                Some(event) = inner_event_receiver.recv() => { // TODO: This will be removed entirely in the future
                     match event {
                         InnerEvent::P2PMessageCommand(p2p_message_command) => {
                             p2p_message_command_sender.send(p2p_message_command).map_err(|_| "Receiver dropped").unwrap();

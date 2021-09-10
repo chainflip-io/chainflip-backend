@@ -28,7 +28,7 @@ impl KeyDB for KeyDBMock {
     fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo> {
         self.kv_db
             .iter()
-            .map(|(k, v)| (*k, bincode::deserialize(v).unwrap()))
+            .map(|(k, v)| (k.clone(), bincode::deserialize(v).unwrap()))
             .collect()
     }
 }

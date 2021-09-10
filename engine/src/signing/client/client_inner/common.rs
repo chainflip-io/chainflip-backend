@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     p2p::ValidatorId,
-    signing::crypto::{Keys, Parameters, SharedKeys, VerifiableSS, GE},
+    signing::crypto::{ECPoint, Keys, Parameters, SharedKeys, VerifiableSS, GE},
 };
 
 use super::utils::ValidatorMaps;
@@ -19,6 +19,11 @@ pub struct KeygenResult {
 impl KeygenResult {
     pub fn get_public_key(&self) -> GE {
         self.shared_keys.y
+    }
+
+    /// Gets the serialized compressed public key (33 bytes - 32 bytes + a y parity byte)
+    pub fn get_public_key_bytes(&self) -> Vec<u8> {
+        self.shared_keys.y.get_element().serialize().into()
     }
 }
 

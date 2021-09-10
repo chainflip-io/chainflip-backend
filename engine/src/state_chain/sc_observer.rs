@@ -1,6 +1,9 @@
 use std::sync::{Arc, Mutex};
 
-use pallet_cf_vaults::rotation::{ChainParams, VaultRotationResponse};
+use pallet_cf_vaults::{
+    rotation::{ChainParams, VaultRotationResponse},
+    KeygenResponse,
+};
 use slog::o;
 use sp_core::Hasher;
 use sp_runtime::traits::Keccak256;
@@ -14,7 +17,7 @@ use crate::{
     signing::{KeyId, KeygenInfo, MessageHash, MultisigInstruction, SigningInfo},
     state_chain::{
         pallets::vaults::{
-            VaultRotationResponseCallExt,
+            KeygenResponseCallExt, VaultRotationResponseCallExt,
             VaultsEvent::{
                 KeygenRequestEvent, ThresholdSignatureRequestEvent, VaultRotationRequestEvent,
             },
@@ -69,7 +72,7 @@ pub async fn start(
                             .collect();
 
                         let gen_new_key_event = MultisigInstruction::KeyGen(KeygenInfo::new(
-                            KeyId(keygen_request_event.ceremony_id),
+                            keygen_request_event.ceremony_id,
                             validators,
                         ));
 
@@ -77,10 +80,23 @@ pub async fn start(
                             .send(gen_new_key_event)
                             .map_err(|_| "Receiver should exist")
                             .unwrap();
+
+                        // TODO: get the signing result here - oneshot channels
+                        // if we wanted these events now we would pass in the currently unusued MultisigEventReceiver.
+                        // However there is a timing and association issue where we cannot guarantee that event we fetch from the channel
+                        // will be the one matching the particular request - hence require one shot channels
+                        let keygen_response = KeygenResponse::Success(Vec::default());
+
+                        let signer = signer.lock().unwrap();
+                        subxt_client
+                            .keygen_response(
+                                &*signer,
+                                keygen_request_event.ceremony_id,
+                                keygen_response,
+                            )
+                            .await
+                            .unwrap();
                     }
-                    // TODO: Provide the pubkey of the key we want to sign with to the signing module
-                    // from this event
-                    // https://github.com/chainflip-io/chainflip-backend/issues/492
                     ThresholdSignatureRequestEvent(threshold_sig_requst) => {
                         let validators: Vec<_> = threshold_sig_requst
                             .threshold_signature_request
@@ -98,7 +114,10 @@ pub async fn start(
                                 )
                                 .0,
                             ),
-                            SigningInfo::new(KeyId(0), validators),
+                            SigningInfo::new(
+                                KeyId(threshold_sig_requst.threshold_signature_request.public_key),
+                                validators,
+                            ),
                         );
 
                         multisig_instruction_sender
