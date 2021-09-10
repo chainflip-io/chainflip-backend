@@ -15,8 +15,8 @@ use crate::{
     logging::COMPONENT_KEY,
     p2p, settings,
     signing::{
-        KeyId, KeygenInfo, KeygenOutcome, MessageHash, MessageInfo, MultisigEvent,
-        MultisigInstruction, SigningInfo, SigningOutcome,
+        KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigEvent, MultisigInstruction,
+        SigningInfo, SigningOutcome,
     },
     state_chain::{
         pallets::vaults::{
@@ -90,7 +90,7 @@ pub async fn start(
                             let response = match multisig_event_receiver.recv().await {
                                 Some(event) => match event {
                                     MultisigEvent::KeygenResult(KeygenOutcome {
-                                        ceremony_id: _,
+                                        id: _,
                                         result,
                                     }) => match result {
                                         Ok(pubkey) => {
@@ -162,7 +162,7 @@ pub async fn start(
                             let response = match multisig_event_receiver.recv().await {
                                 Some(event) => match event {
                                     MultisigEvent::MessageSigningResult(SigningOutcome {
-                                        ceremony_id: MessageInfo { hash: _, key_id: _ },
+                                        id: _,
                                         result,
                                     }) => match result {
                                         Ok(sig) => ThresholdSignatureResponse::<

@@ -197,32 +197,31 @@ pub enum Error {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CeremonyOutcome<Id, Output> {
-    // TODO: this should be renamed id, as in signing, it's not a ceremony id
-    pub ceremony_id: Id,
+    pub id: Id,
     pub result: Result<Output, (Error, Vec<ValidatorId>)>,
 }
 impl<Id, Output> CeremonyOutcome<Id, Output> {
-    pub fn success(ceremony_id: Id, output: Output) -> Self {
+    pub fn success(id: Id, output: Output) -> Self {
         Self {
-            ceremony_id,
+            id,
             result: Ok(output),
         }
     }
-    pub fn unauthorised(ceremony_id: Id, bad_validators: Vec<ValidatorId>) -> Self {
+    pub fn unauthorised(id: Id, bad_validators: Vec<ValidatorId>) -> Self {
         Self {
-            ceremony_id,
+            id,
             result: Err((Error::Unauthorised, bad_validators)),
         }
     }
-    pub fn timeout(ceremony_id: Id, bad_validators: Vec<ValidatorId>) -> Self {
+    pub fn timeout(id: Id, bad_validators: Vec<ValidatorId>) -> Self {
         Self {
-            ceremony_id,
+            id,
             result: Err((Error::Timeout, bad_validators)),
         }
     }
-    pub fn invalid(ceremony_id: Id, bad_validators: Vec<ValidatorId>) -> Self {
+    pub fn invalid(id: Id, bad_validators: Vec<ValidatorId>) -> Self {
         Self {
-            ceremony_id,
+            id,
             result: Err((Error::Invalid, bad_validators)),
         }
     }
