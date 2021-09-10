@@ -5,12 +5,14 @@ pub mod mocks;
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::Member;
 use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
+use frame_support::traits::StoredMap;
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight},
 	traits::{Imbalance, SignedImbalance},
 	Parameter,
 };
 use sp_runtime::{DispatchError, RuntimeDebug};
+use sp_std::marker::PhantomData;
 use sp_std::prelude::*;
 
 /// and Chainflip was born...some base types
@@ -252,4 +254,51 @@ pub enum NonceIdentifier {
 pub trait NonceProvider {
 	/// Provide the next nonce for the chain identified
 	fn next_nonce(identifier: NonceIdentifier) -> Nonce;
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Copy)]
+pub enum ChainflipAccountState {
+	Passive,
+	Retired,
+	Backup,
+	Validator,
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub struct ChainflipAccountData {
+	pub state: ChainflipAccountState,
+}
+
+impl Default for ChainflipAccountData {
+	fn default() -> Self {
+		ChainflipAccountData {
+			state: ChainflipAccountState::Passive,
+		}
+	}
+}
+
+pub trait ChainflipAccount {
+	type AccountId;
+
+	fn get(account_id: &Self::AccountId) -> ChainflipAccountData;
+	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState);
+}
+
+pub struct ChainflipAccounts<T>(PhantomData<T>);
+
+impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccount
+	for ChainflipAccounts<T>
+{
+	type AccountId = T::AccountId;
+
+	fn get(account_id: &Self::AccountId) -> ChainflipAccountData {
+		frame_system::Pallet::<T>::get(account_id)
+	}
+
+	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState) {
+		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
+			(*account_data).state = state;
+		})
+		.expect("mutating account state")
+	}
 }

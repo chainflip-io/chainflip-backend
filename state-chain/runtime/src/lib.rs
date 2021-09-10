@@ -4,7 +4,7 @@
 mod chainflip;
 mod weights;
 // A few exports that help ease life for downstream crates.
-use cf_traits::Chainflip;
+use cf_traits::{Chainflip, ChainflipAccountData};
 use core::time::Duration;
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
@@ -24,9 +24,7 @@ pub use pallet_timestamp::Call as TimestampCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
-use sp_runtime::traits::{
-	AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify,
-};
+use sp_runtime::traits::{AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, OpaqueKeys, Verify, ConvertInto};
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -146,6 +144,8 @@ impl pallet_cf_auction::Config for Runtime {
 	type ValidatorId = AccountId;
 	type MinAuctionSize = MinAuctionSize;
 	type Handler = Vaults;
+	type ChainflipAccount = cf_traits::ChainflipAccounts<Self>;
+	type AccountIdOf = ConvertInto;
 }
 
 // FIXME: These would be changed
@@ -161,6 +161,8 @@ impl pallet_cf_validator::Config for Runtime {
 	type EpochIndex = EpochIndex;
 	type Amount = FlipBalance;
 	type Auction = Auction;
+	type ChainflipAccount = cf_traits::ChainflipAccounts<Self>;
+	type AccountIdOf = ConvertInto;
 }
 
 impl pallet_cf_vaults::Config for Runtime {
@@ -255,7 +257,7 @@ impl frame_system::Config for Runtime {
 	/// What to do if an account is fully reaped from the system.
 	type OnKilledAccount = pallet_cf_flip::BurnFlipAccount<Self>;
 	/// The data to be stored in an account.
-	type AccountData = ();
+	type AccountData = ChainflipAccountData;
 	/// Weight information for the extrinsics of this pallet.
 	type SystemWeightInfo = ();
 	/// This is used as an identifier of the chain. 42 is the generic substrate prefix.

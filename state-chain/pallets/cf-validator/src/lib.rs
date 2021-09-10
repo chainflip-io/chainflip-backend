@@ -86,6 +86,7 @@ impl<T: Config> EpochTransitionHandler for PhantomData<T> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::ChainflipAccount;
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 
@@ -119,6 +120,12 @@ pub mod pallet {
 
 		/// An auction type
 		type Auction: Auction<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
+
+		/// A Chainflip Account
+		type ChainflipAccount: ChainflipAccount<AccountId = Self::AccountId>;
+
+		/// Convert ValidatorId to AccountId
+		type AccountIdOf: Convert<Self::ValidatorId, Option<Self::AccountId>>;
 	}
 
 	#[pallet::event]

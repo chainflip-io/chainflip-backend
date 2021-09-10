@@ -57,8 +57,9 @@ use sp_std::prelude::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::VaultRotation;
+	use cf_traits::{ChainflipAccount, VaultRotation};
 	use frame_support::traits::ValidatorRegistration;
+	use sp_runtime::traits::Convert;
 	use sp_std::ops::Add;
 
 	#[pallet::pallet]
@@ -84,6 +85,10 @@ pub mod pallet {
 		type MinAuctionSize: Get<u32>;
 		/// The lifecycle of our auction
 		type Handler: VaultRotation<ValidatorId = Self::ValidatorId>;
+		/// A Chainflip Account
+		type ChainflipAccount: ChainflipAccount<AccountId = Self::AccountId>;
+		/// Convert ValidatorId to AccountId
+		type AccountIdOf: Convert<Self::ValidatorId, Option<Self::AccountId>>;
 	}
 
 	/// Pallet implements [`Hooks`] trait

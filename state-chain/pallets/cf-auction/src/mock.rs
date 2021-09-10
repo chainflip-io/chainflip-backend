@@ -1,9 +1,11 @@
 use super::*;
 use crate as pallet_cf_auction;
 use cf_traits::mocks::vault_rotation::Mock as MockAuctionHandler;
+use cf_traits::ChainflipAccountData;
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
+use sp_runtime::traits::ConvertInto;
 use sp_runtime::BuildStorage;
 use sp_runtime::{
 	testing::Header,
@@ -65,7 +67,7 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = ();
+	type AccountData = ChainflipAccountData;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
@@ -85,6 +87,8 @@ impl Config for Test {
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
 	type Handler = MockAuctionHandler;
+	type ChainflipAccount = cf_traits::ChainflipAccounts<Self>;
+	type AccountIdOf = ConvertInto;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {

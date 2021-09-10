@@ -1,7 +1,7 @@
 use super::*;
 use crate as pallet_cf_validator;
 use cf_traits::mocks::vault_rotation::Mock as MockHandler;
-use cf_traits::BidderProvider;
+use cf_traits::{BidderProvider, ChainflipAccountData};
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -81,7 +81,7 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = ();
+	type AccountData = ChainflipAccountData;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
@@ -124,6 +124,8 @@ impl pallet_cf_auction::Config for Test {
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
 	type Handler = MockHandler<ValidatorId = ValidatorId, Amount = Amount>;
+	type ChainflipAccount = cf_traits::ChainflipAccounts<Self>;
+	type AccountIdOf = ConvertInto;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
@@ -176,6 +178,8 @@ impl Config for Test {
 	type Amount = Amount;
 	// Use the pallet's implementation
 	type Auction = AuctionPallet;
+	type ChainflipAccount = cf_traits::ChainflipAccounts<Self>;
+	type AccountIdOf = ConvertInto;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
