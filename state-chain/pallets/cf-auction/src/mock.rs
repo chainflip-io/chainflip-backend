@@ -16,22 +16,24 @@ use std::cell::RefCell;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-type Amount = u64;
-type ValidatorId = u64;
+pub type Amount = u64;
+pub type ValidatorId = u64;
 
-pub const LOW_BID: (ValidatorId, Amount) = (2, 2);
-pub const JOE_BID: (ValidatorId, Amount) = (3, 100);
-pub const MAX_BID: (ValidatorId, Amount) = (4, 101);
-pub const INVALID_BID: (ValidatorId, Amount) = (1, 0);
-
-pub const MIN_AUCTION_SIZE: u32 = 2;
-pub const MAX_AUCTION_SIZE: u32 = 150;
+pub const MIN_VALIDATOR_SIZE: u32 = 2;
+pub const MAX_VALIDATOR_SIZE: u32 = 3;
 
 thread_local! {
 	// A set of bidders, we initialise this with the proposed genesis bidders
-	pub static BIDDER_SET: RefCell<Vec<(ValidatorId, Amount)>> = RefCell::new(vec![
-		INVALID_BID, LOW_BID, JOE_BID, MAX_BID
-	]);
+	pub static BIDDER_SET: RefCell<Vec<(ValidatorId, Amount)>> = RefCell::new(vec![]);
+}
+
+// Create a set of descending bids, including an invalid bid of amount 0
+pub fn generate_bids(number_of_bids: u64) {
+	BIDDER_SET.with(|cell| {
+		for bid_number in (0..number_of_bids).rev() {
+			(*(cell.borrow_mut())).push((bid_number + 1, bid_number * 100));
+		}
+	});
 }
 
 construct_runtime!(
@@ -75,7 +77,7 @@ impl frame_system::Config for Test {
 }
 
 parameter_types! {
-	pub const MinAuctionSize: u32 = 2;
+	pub const MinValidators: u32 = 2;
 }
 
 impl Config for Test {
@@ -85,7 +87,7 @@ impl Config for Test {
 	type BidderProvider = TestBidderProvider;
 	type Registrar = Test;
 	type AuctionIndex = u32;
-	type MinAuctionSize = MinAuctionSize;
+	type MinValidators = MinValidators;
 	type Handler = MockAuctionHandler;
 	type ChainflipAccount = cf_traits::ChainflipAccounts<Self>;
 	type AccountIdOf = ConvertInto;
@@ -112,9 +114,11 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		frame_system: Default::default(),
 		pallet_cf_auction: Some(AuctionPalletConfig {
-			auction_size_range: (MIN_AUCTION_SIZE, MAX_AUCTION_SIZE),
+			validator_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
 		}),
 	};
+
+	generate_bids(9);
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 

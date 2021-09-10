@@ -2,6 +2,7 @@ mod test {
 	use crate::mock::*;
 	use crate::*;
 	use cf_traits::mocks::vault_rotation::clear_confirmation;
+	use cf_traits::Bid;
 	use frame_support::{assert_noop, assert_ok};
 
 	fn last_event() -> mock::Event {
@@ -11,13 +12,33 @@ mod test {
 			.event
 	}
 
+	// The last is invalid as it has a bid of 0
+	fn expected_bidding() -> Vec<Bid<ValidatorId, Amount>> {
+		let mut bidders = TestBidderProvider::get_bidders();
+		bidders.pop();
+		bidders
+	}
+
+	// The set we would expect
+	fn expected_validating_set() -> ValidatingSet<ValidatorId, Amount> {
+		let mut bidders = TestBidderProvider::get_bidders();
+		bidders.truncate(MAX_VALIDATOR_SIZE as usize);
+		ValidatingSet {
+			validators: bidders
+				.iter()
+				.map(|(validator_id, _)| *validator_id)
+				.collect(),
+			minimum_active_bid: bidders.last().unwrap().1,
+		}
+	}
+
 	#[test]
 	fn genesis() {
 		new_test_ext().execute_with(|| {
 			// We should have our genesis validators, which would have been provided by
 			// `BidderProvider`
-			assert_matches!(AuctionPallet::		phase(), AuctionPhase::WaitingForBids(winners, min_bid)
-				if winners == vec![MAX_BID.0, JOE_BID.0, LOW_BID.0] && min_bid == LOW_BID.1
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids { validating_set, .. }
+				if validating_set == expected_validating_set()
 			);
 		});
 	}
@@ -25,23 +46,28 @@ mod test {
 	fn run_through_phases() {
 		new_test_ext().execute_with(|| {
 			// Check we are in the bidders phase
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids { .. });
 			// Now move to the next phase, this should be the BidsTaken phase
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(bidders)) if bidders == vec![LOW_BID, JOE_BID, MAX_BID]);
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken {bids})
+				if bids == expected_bidding());
 			// Read storage to confirm has been changed to BidsTaken
-			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::BidsTaken(bidders) if bidders == vec![LOW_BID, JOE_BID, MAX_BID]);
+			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::BidsTaken {bids}
+				if bids == expected_bidding());
 			// Having moved into the BidsTaken phase we should have our list of bidders filtered
 			// Expecting the phase to change, a set of winners, the bidder list and a bond value set
 			// to our min bid
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::ValidatorsSelected(winners, min_bid))
-				if winners == vec![MAX_BID.0, JOE_BID.0, LOW_BID.0] && min_bid == LOW_BID.1
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::ValidatorsSelected {validating_set, ..})
+				if validating_set == expected_validating_set()
 			);
-			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::ValidatorsSelected(winners, min_bid)
-				if winners == vec![MAX_BID.0, JOE_BID.0, LOW_BID.0] && min_bid == LOW_BID.1
+			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::ValidatorsSelected{validating_set, ..}
+				if validating_set == expected_validating_set()
 			);
 			assert_eq!(
 				last_event(),
-				mock::Event::pallet_cf_auction(crate::Event::AuctionCompleted(0, vec![MAX_BID.0, JOE_BID.0, LOW_BID.0])),
+				mock::Event::pallet_cf_auction(crate::Event::AuctionCompleted(
+					0,
+					expected_validating_set().validators
+				)),
 			);
 			// Just leaves us to confirm this auction, if we try to process this we will get an error
 			// until is confirmed
@@ -49,8 +75,14 @@ mod test {
 			// Confirm the auction
 			clear_confirmation();
 			// and finally we complete the process, clearing the bidders
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WaitingForBids(..)));
-			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::WaitingForBids(..));
+			assert_matches!(
+				AuctionPallet::process(),
+				Ok(AuctionPhase::WaitingForBids { .. })
+			);
+			assert_matches!(
+				AuctionPallet::current_phase(),
+				AuctionPhase::WaitingForBids { .. }
+			);
 		});
 	}
 
@@ -58,7 +90,7 @@ mod test {
 	fn changing_range() {
 		new_test_ext().execute_with(|| {
 			// Assert our minimum is set to 2
-			assert_eq!(<Test as Config>::MinAuctionSize::get(), 2);
+			assert_eq!(<Test as Config>::MinValidators::get(), 2);
 			// Check we are throwing up an error when we send anything less than the minimum of 2
 			assert_noop!(
 				AuctionPallet::set_active_validator_range(Origin::root(), (0, 0)),
@@ -77,7 +109,7 @@ mod test {
 			assert_eq!(
 				last_event(),
 				mock::Event::pallet_cf_auction(crate::Event::ActiveValidatorRangeChanged(
-					(MIN_AUCTION_SIZE, MAX_AUCTION_SIZE),
+					(MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
 					(2, 100)
 				)),
 			);
@@ -94,8 +126,7 @@ mod test {
 	fn kill_them_all() {
 		new_test_ext().execute_with(|| {
 			// Create a test set of bidders
-			BIDDER_SET.with(|l| *l.borrow_mut() = vec![LOW_BID, JOE_BID]);
-
+			generate_bids(2);
 			let auction_range = (2, 100);
 			assert_ok!(AuctionPallet::set_active_range(auction_range));
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(_)));
