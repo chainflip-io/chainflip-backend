@@ -501,6 +501,7 @@ mod test_slashing {
 			let balance_after = Flip::total_balance_of(&ALICE);
 			// Check if the diff between the balances is the expected slash
 			assert_eq!(initial_balance - balance_after, EXPECTED_SLASH);
+			check_balance_integrity();
 		});
 	}
 }
