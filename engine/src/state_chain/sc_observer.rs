@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use pallet_cf_vaults::{
     rotation::{ChainParams, VaultRotationResponse},
-    ThresholdSignatureResponse,
+    KeygenResponse, ThresholdSignatureResponse,
 };
 use slog::o;
 use sp_core::Hasher;
@@ -15,12 +15,12 @@ use crate::{
     logging::COMPONENT_KEY,
     p2p, settings,
     signing::{
-        KeyId, KeygenInfo, MessageHash, MessageInfo, MultisigEvent, MultisigInstruction,
-        SigningInfo, SigningOutcome,
+        KeyId, KeygenInfo, KeygenOutcome, MessageHash, MessageInfo, MultisigEvent,
+        MultisigInstruction, SigningInfo, SigningOutcome,
     },
     state_chain::{
         pallets::vaults::{
-            ThresholdSignatureResponseCallExt, VaultRotationResponseCallExt,
+            KeygenResponseCallExt, ThresholdSignatureResponseCallExt, VaultRotationResponseCallExt,
             VaultsEvent::{
                 KeygenRequestEvent, ThresholdSignatureRequestEvent, VaultRotationRequestEvent,
             },
@@ -86,6 +86,46 @@ pub async fn start(
                                 .send(gen_new_key_event)
                                 .map_err(|_| "Receiver should exist")
                                 .unwrap();
+
+                            let response = match multisig_event_receiver.recv().await {
+                                Some(event) => match event {
+                                    MultisigEvent::KeygenResult(KeygenOutcome {
+                                        ceremony_id: _,
+                                        result,
+                                    }) => match result {
+                                        Ok(pubkey) => {
+                                            KeygenResponse::<AccountId32, Vec<u8>>::Success(
+                                                pubkey.serialize().into(),
+                                            )
+                                        }
+                                        Err(err) => {
+                                            slog::error!(
+                                                logger,
+                                                "Keygen failed with error: {:?}",
+                                                err.0
+                                            );
+                                            let bad_account_ids: Vec<_> = err
+                                                .1
+                                                .iter()
+                                                .map(|v| AccountId32::from(v.0))
+                                                .collect();
+                                            KeygenResponse::Failure(bad_account_ids)
+                                        }
+                                    },
+                                    MultisigEvent::MessageSigningResult(_) => {
+                                        panic!("Should be keygen result")
+                                    }
+                                },
+                                None => todo!(),
+                            };
+                            subxt_client
+                                .keygen_response(
+                                    &*signer,
+                                    keygen_request_event.ceremony_id,
+                                    response,
+                                )
+                                .await
+                                .unwrap(); // TODO: Handle error
                         }
                         // TODO: Provide the pubkey of the key we want to sign with to the signing module
                         // from this event
@@ -113,6 +153,7 @@ pub async fn start(
                                     SigningInfo::new(KeyId(0), validators),
                                 );
 
+                            // The below will be replaced with one shot channels
                             multisig_instruction_sender
                                 .send(sign_tx)
                                 .map_err(|_| "Receiver should exist")
@@ -131,6 +172,11 @@ pub async fn start(
                                             sig.into()
                                         ),
                                         Err(err) => {
+                                            slog::error!(
+                                                logger,
+                                                "Signing failed with error: {:?}",
+                                                err.0
+                                            );
                                             let bad_account_ids: Vec<_> = err
                                                 .1
                                                 .iter()
@@ -155,20 +201,6 @@ pub async fn start(
                                 .await
                                 .unwrap(); // TODO handle error
                         }
-                        //         Some(event) => {
-                        //             let response = match event {
-                        //                 MultisigEvent::MessageSigningResult(SigningOutcome {
-                        //             ceremony_id: MessageInfo { hash: _, key_id: _ },
-                        //             result: Ok(sig),
-                        //         }) => {
-                        //             slog::info!(logger, "Sending signature to SC");
-
-                        //             ThresholdSignatureResponse::Success(sig.into())
-                        //         }
-                        //                 MultisigEvent::KeygenResult(_) => todo!(),
-                        //     };
-                        // }
-                        //     }
                         VaultRotationRequestEvent(vault_rotation_request_event) => {
                             match vault_rotation_request_event.vault_rotation_request.chain {
                                 ChainParams::Ethereum(tx) => {

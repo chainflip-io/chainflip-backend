@@ -197,7 +197,7 @@ pub enum Error {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CeremonyOutcome<Id, Output> {
-    // this should be renamed id, as in signing, it's not a ceremony id
+    // TODO: this should be renamed id, as in signing, it's not a ceremony id
     pub ceremony_id: Id,
     pub result: Result<Output, (Error, Vec<ValidatorId>)>,
 }
