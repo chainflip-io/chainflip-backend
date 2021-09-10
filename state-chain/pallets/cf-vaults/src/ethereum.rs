@@ -1,10 +1,10 @@
 use crate::ChainParams::Ethereum;
 use crate::{
 	CeremonyId, ChainVault, Config, EthereumVault, Event, Pallet, RequestResponse,
-	ThresholdSignatureRequest, ThresholdSignatureResponse, VaultRotationRequestResponse,
+	SchnorrSigTruncPubkey, ThresholdSignatureRequest, ThresholdSignatureResponse,
+	VaultRotationRequestResponse, VaultRotations,
 };
-use crate::{SchnorrSigTruncPubkey, VaultRotations};
-use cf_traits::{NonceIdentifier, NonceProvider, RotationError, VaultRotationHandler};
+use cf_traits::{Chainflip, NonceIdentifier, NonceProvider, RotationError, VaultRotationHandler};
 use ethabi::{Bytes, Function, Param, ParamType, Token};
 use frame_support::pallet_prelude::*;
 use sp_std::prelude::*;
@@ -14,8 +14,8 @@ pub struct EthereumChain<T: Config>(PhantomData<T>);
 impl<T: Config> ChainVault for EthereumChain<T> {
 	type PublicKey = T::PublicKey;
 	type TransactionHash = T::TransactionHash;
-	type ValidatorId = T::ValidatorId;
-	type Error = RotationError<T::ValidatorId>;
+	type AccountId = <T as Chainflip>::AccountId;
+	type Error = RotationError<<T as Chainflip>::AccountId>;
 
 	/// The initial phase has completed with success and we are notified of this from `Vaults`.
 	/// Now the specifics for this chain/vault are processed.  In the case for Ethereum we request
@@ -25,7 +25,7 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 	fn rotate_vault(
 		ceremony_id: CeremonyId,
 		new_public_key: Self::PublicKey,
-		validators: Vec<Self::ValidatorId>,
+		validators: Vec<Self::AccountId>,
 	) -> Result<(), Self::Error> {
 		// Create payload for signature
 		match Self::encode_set_agg_key_with_agg_key(
@@ -63,16 +63,16 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 impl<T: Config>
 	RequestResponse<
 		CeremonyId,
-		ThresholdSignatureRequest<T::PublicKey, T::ValidatorId>,
-		ThresholdSignatureResponse<T::ValidatorId, SchnorrSigTruncPubkey>,
-		RotationError<T::ValidatorId>,
+		ThresholdSignatureRequest<T::PublicKey, <T as Chainflip>::AccountId>,
+		ThresholdSignatureResponse<<T as Chainflip>::AccountId, SchnorrSigTruncPubkey>,
+		RotationError<<T as Chainflip>::AccountId>,
 	> for EthereumChain<T>
 {
 	/// Make the request to sign by emitting an event
 	fn make_request(
 		ceremony_id: CeremonyId,
-		request: ThresholdSignatureRequest<T::PublicKey, T::ValidatorId>,
-	) -> Result<(), RotationError<T::ValidatorId>> {
+		request: ThresholdSignatureRequest<T::PublicKey, <T as Chainflip>::AccountId>,
+	) -> Result<(), RotationError<<T as Chainflip>::AccountId>> {
 		Pallet::<T>::deposit_event(Event::ThresholdSignatureRequest(ceremony_id, request));
 		Ok(().into())
 	}
@@ -80,8 +80,8 @@ impl<T: Config>
 	/// Try to handle the response and pass this onto `Vaults` to complete the vault rotation
 	fn handle_response(
 		ceremony_id: CeremonyId,
-		response: ThresholdSignatureResponse<T::ValidatorId, SchnorrSigTruncPubkey>,
-	) -> Result<(), RotationError<T::ValidatorId>> {
+		response: ThresholdSignatureResponse<<T as Chainflip>::AccountId, SchnorrSigTruncPubkey>,
+	) -> Result<(), RotationError<<T as Chainflip>::AccountId>> {
 		match response {
 			ThresholdSignatureResponse::Success(signature) => {
 				match VaultRotations::<T>::try_get(ceremony_id) {

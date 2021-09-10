@@ -69,16 +69,16 @@ pub async fn start(
                 match sc_event {
                     VaultsEvent(event) => match event {
                         KeygenRequestEvent(keygen_request_event) => {
-                            let validators: Vec<_> = keygen_request_event
+                            let signers: Vec<_> = keygen_request_event
                                 .keygen_request
                                 .validator_candidates
                                 .iter()
-                                .map(|v| p2p::ValidatorId(v.clone().into()))
+                                .map(|v| p2p::AccountId(v.clone().into()))
                                 .collect();
 
                             let gen_new_key_event = MultisigInstruction::KeyGen(KeygenInfo::new(
                                 keygen_request_event.ceremony_id,
-                                validators,
+                                signers,
                             ));
 
                             multisig_instruction_sender
@@ -97,13 +97,13 @@ pub async fn start(
                                                 pubkey.serialize().into(),
                                             )
                                         }
-                                        Err((err, validator_ids)) => {
+                                        Err((err, bad_account_ids)) => {
                                             slog::error!(
                                                 logger,
                                                 "Keygen failed with error: {:?}",
                                                 err
                                             );
-                                            let bad_account_ids: Vec<_> = validator_ids
+                                            let bad_account_ids: Vec<_> = bad_account_ids
                                                 .iter()
                                                 .map(|v| AccountId32::from(v.0))
                                                 .collect();
@@ -133,11 +133,11 @@ pub async fn start(
                         // from this event
                         // https://github.com/chainflip-io/chainflip-backend/issues/492
                         ThresholdSignatureRequestEvent(threshold_sig_requst) => {
-                            let validators: Vec<_> = threshold_sig_requst
+                            let signers: Vec<_> = threshold_sig_requst
                                 .threshold_signature_request
                                 .validators
                                 .iter()
-                                .map(|v| p2p::ValidatorId(v.clone().into()))
+                                .map(|v| p2p::AccountId(v.clone().into()))
                                 .collect();
 
                             let sign_tx =
@@ -158,7 +158,7 @@ pub async fn start(
                                                 .threshold_signature_request
                                                 .public_key,
                                         ),
-                                        validators,
+                                        signers,
                                     ),
                                 );
 
@@ -180,13 +180,13 @@ pub async fn start(
                                         >::Success(
                                             sig.into()
                                         ),
-                                        Err((err, validator_ids)) => {
+                                        Err((err, bad_account_ids)) => {
                                             slog::error!(
                                                 logger,
                                                 "Signing failed with error: {:?}",
                                                 err
                                             );
-                                            let bad_account_ids: Vec<_> = validator_ids
+                                            let bad_account_ids: Vec<_> = bad_account_ids
                                                 .iter()
                                                 .map(|v| AccountId32::from(v.0))
                                                 .collect();

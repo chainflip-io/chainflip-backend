@@ -3,7 +3,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    p2p::ValidatorId,
+    p2p::AccountId,
     signing::crypto::{ECPoint, Keys, Parameters, SharedKeys, VerifiableSS, GE},
 };
 
@@ -36,11 +36,11 @@ pub struct KeygenResultInfo {
 }
 
 impl KeygenResultInfo {
-    pub fn get_idx(&self, id: &ValidatorId) -> Option<usize> {
+    pub fn get_idx(&self, id: &AccountId) -> Option<usize> {
         self.validator_map.get_idx(id)
     }
 
-    pub fn get_id(&self, idx: usize) -> ValidatorId {
+    pub fn get_id(&self, idx: usize) -> AccountId {
         // providing an invalid idx is considered a programmer error here
         self.validator_map
             .get_id(idx)

@@ -7,7 +7,7 @@ use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::{
     logging,
-    p2p::{P2PMessage, P2PMessageCommand, ValidatorId},
+    p2p::{AccountId, P2PMessage, P2PMessageCommand},
     signing::{
         client::{
             client_inner::{
@@ -44,7 +44,7 @@ pub struct KeygenPhase1Data {
 pub struct KeygenPhase2Data {
     pub clients: Vec<MultisigClientInnerNoDB>,
     /// The key in the map is the index of the desitnation node
-    pub sec2_vec: Vec<HashMap<ValidatorId, Secret2>>,
+    pub sec2_vec: Vec<HashMap<AccountId, Secret2>>,
 }
 
 pub struct KeygenPhase3Data {
@@ -63,7 +63,7 @@ pub struct SigningPhase1Data {
 pub struct SigningPhase2Data {
     pub clients: Vec<MultisigClientInnerNoDB>,
     /// The key in the map is the index of the desitnation node
-    pub sec2_vec: Vec<HashMap<ValidatorId, Secret2>>,
+    pub sec2_vec: Vec<HashMap<AccountId, Secret2>>,
 }
 
 /// Clients generated Secret2, not sent yet
@@ -106,7 +106,7 @@ pub fn signing_delayed_count(client: &MultisigClientInnerNoDB, mi: &MessageInfo)
 /// Contains the states at different points of key generation
 /// including the final state, where the key is created
 pub struct KeygenContext {
-    validator_ids: Vec<ValidatorId>,
+    validator_ids: Vec<AccountId>,
 
     pub rxs: Vec<InnerEventReceiver>,
     /// This clients will match the ones in `key_ready`,
@@ -119,7 +119,7 @@ impl KeygenContext {
     /// Generate context without starting the
     /// keygen ceremony
     pub fn new() -> Self {
-        let validator_ids = (1..=3).map(|idx| ValidatorId([idx; 32])).collect_vec();
+        let validator_ids = (1..=3).map(|idx| AccountId([idx; 32])).collect_vec();
         let logger = logging::test_utils::create_test_logger();
         let (clients, rxs): (Vec<_>, Vec<_>) = validator_ids
             .iter()
@@ -519,7 +519,7 @@ pub async fn recv_p2p_message(rx: &mut InnerEventReceiver) -> P2PMessageCommand 
     }
 }
 
-async fn recv_multisig_message(rx: &mut InnerEventReceiver) -> (ValidatorId, MultisigMessage) {
+async fn recv_multisig_message(rx: &mut InnerEventReceiver) -> (AccountId, MultisigMessage) {
     let m = recv_p2p_message(rx).await;
 
     (
@@ -569,7 +569,7 @@ async fn recv_local_sig(rx: &mut InnerEventReceiver) -> LocalSig {
     panic!();
 }
 
-async fn recv_secret2_keygen(rx: &mut InnerEventReceiver) -> (ValidatorId, Secret2) {
+async fn recv_secret2_keygen(rx: &mut InnerEventReceiver) -> (AccountId, Secret2) {
     let (dest, m) = recv_multisig_message(rx).await;
 
     if let MultisigMessage::KeyGenMessage(wrapped) = m {
@@ -584,7 +584,7 @@ async fn recv_secret2_keygen(rx: &mut InnerEventReceiver) -> (ValidatorId, Secre
     panic!();
 }
 
-async fn recv_secret2_signing(rx: &mut InnerEventReceiver) -> (ValidatorId, Secret2) {
+async fn recv_secret2_signing(rx: &mut InnerEventReceiver) -> (AccountId, Secret2) {
     let (dest, m) = recv_multisig_message(rx).await;
 
     if let MultisigMessage::SigningMessage(SigningDataWrapped { data, .. }) = m {
@@ -599,7 +599,7 @@ async fn recv_secret2_signing(rx: &mut InnerEventReceiver) -> (ValidatorId, Secr
 
 // Do the necessary wrapping so Secret2 can be sent
 // via the clients interface
-pub fn sec2_to_p2p_signing(sec2: Secret2, sender_id: &ValidatorId, mi: &MessageInfo) -> P2PMessage {
+pub fn sec2_to_p2p_signing(sec2: Secret2, sender_id: &AccountId, mi: &MessageInfo) -> P2PMessage {
     let wrapped = SigningDataWrapped::new(sec2, mi.clone());
 
     let data = MultisigMessage::from(wrapped);
@@ -612,7 +612,7 @@ pub fn sec2_to_p2p_signing(sec2: Secret2, sender_id: &ValidatorId, mi: &MessageI
 
 // Do the necessary wrapping so Secret2 can be sent
 // via the clients interface
-pub fn sec2_to_p2p_keygen(sec2: Secret2, sender_id: &ValidatorId) -> P2PMessage {
+pub fn sec2_to_p2p_keygen(sec2: Secret2, sender_id: &AccountId) -> P2PMessage {
     let wrapped = KeyGenMessageWrapped::new(*CEREMONY_ID, sec2);
 
     let data = MultisigMessage::from(wrapped);
@@ -626,7 +626,7 @@ pub fn sec2_to_p2p_keygen(sec2: Secret2, sender_id: &ValidatorId) -> P2PMessage 
 pub fn bc1_to_p2p_keygen(
     bc1: Broadcast1,
     ceremony_id: CeremonyId,
-    sender_id: &ValidatorId,
+    sender_id: &AccountId,
 ) -> P2PMessage {
     let wrapped = KeyGenMessageWrapped::new(ceremony_id, bc1);
 
@@ -638,11 +638,7 @@ pub fn bc1_to_p2p_keygen(
     }
 }
 
-pub fn bc1_to_p2p_signing(
-    bc1: Broadcast1,
-    sender_id: &ValidatorId,
-    mi: &MessageInfo,
-) -> P2PMessage {
+pub fn bc1_to_p2p_signing(bc1: Broadcast1, sender_id: &AccountId, mi: &MessageInfo) -> P2PMessage {
     let bc1 = SigningData::Broadcast1(bc1);
 
     let wrapped = SigningDataWrapped::new(bc1, mi.clone());
@@ -655,7 +651,7 @@ pub fn bc1_to_p2p_signing(
     }
 }
 
-pub fn sig_to_p2p(sig: LocalSig, sender_id: &ValidatorId, mi: &MessageInfo) -> P2PMessage {
+pub fn sig_to_p2p(sig: LocalSig, sender_id: &AccountId, mi: &MessageInfo) -> P2PMessage {
     let wrapped = SigningDataWrapped::new(sig, mi.clone());
 
     let data = MultisigMessage::from(wrapped);
@@ -666,7 +662,7 @@ pub fn sig_to_p2p(sig: LocalSig, sender_id: &ValidatorId, mi: &MessageInfo) -> P
     }
 }
 
-pub fn create_keygen_p2p_message<M>(sender_id: &ValidatorId, message: M) -> P2PMessage
+pub fn create_keygen_p2p_message<M>(sender_id: &AccountId, message: M) -> P2PMessage
 where
     M: Into<KeygenData>,
 {

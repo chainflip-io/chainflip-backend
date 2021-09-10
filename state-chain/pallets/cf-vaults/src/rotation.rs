@@ -33,7 +33,7 @@ pub trait ChainVault {
 	/// A transaction hash
 	type TransactionHash: Into<Vec<u8>>;
 	/// An identifier for a validator involved in the rotation of the vault
-	type ValidatorId;
+	type AccountId;
 	/// An error on rotating the vault
 	type Error;
 	/// Start the vault rotation phase.  The chain would complete steps necessary for its chain
@@ -41,7 +41,7 @@ pub trait ChainVault {
 	fn rotate_vault(
 		ceremony_id: CeremonyId,
 		new_public_key: Self::PublicKey,
-		validators: Vec<Self::ValidatorId>,
+		validators: Vec<Self::AccountId>,
 	) -> Result<(), Self::Error>;
 	/// We have confirmation of the rotation back from `Vaults`
 	fn vault_rotated(new_public_key: Self::PublicKey, tx_hash: Self::TransactionHash);
@@ -50,13 +50,13 @@ pub trait ChainVault {
 /// Events coming in from our chain.  This is used to callback from the request to complete the vault
 /// rotation phase.  See `ChainVault::try_start_vault_rotation()` for more details.
 pub trait ChainHandler {
-	type ValidatorId;
+	type AccountId;
 	type Error;
 	/// Request initial vault rotation phase complete with a result describing the outcome of this phase
 	/// Feedback is provided back on this step
 	fn request_vault_rotation(
-		index: CeremonyId,
-		result: Result<VaultRotationRequest, RotationError<Self::ValidatorId>>,
+		ceremony_id: CeremonyId,
+		result: Result<VaultRotationRequest, RotationError<Self::AccountId>>,
 	) -> Result<(), Self::Error>;
 }
 
@@ -81,49 +81,49 @@ pub enum ChainParams {
 
 /// State of a vault rotation
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct VaultRotation<ValidatorId, PublicKey> {
+pub struct VaultRotation<AccountId, PublicKey> {
 	/// Proposed new public key
 	pub new_public_key: PublicKey,
-	pub keygen_request: KeygenRequest<ValidatorId>,
+	pub keygen_request: KeygenRequest<AccountId>,
 }
 
 /// A representation of a key generation request
 /// This would be used for each supporting chain
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct KeygenRequest<ValidatorId> {
+pub struct KeygenRequest<AccountId> {
 	/// The chain type
 	pub(crate) chain_type: ChainType,
 	/// The set of validators from which we would like to generate the key
-	pub validator_candidates: Vec<ValidatorId>,
+	pub validator_candidates: Vec<AccountId>,
 }
 
 /// A response for our KeygenRequest
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum KeygenResponse<ValidatorId, PublicKey: Into<Vec<u8>>> {
+pub enum KeygenResponse<AccountId, PublicKey: Into<Vec<u8>>> {
 	/// The key generation ceremony has completed successfully with a new proposed public key
 	Success(PublicKey),
 	/// Something went wrong and it failed.
-	Error(Vec<ValidatorId>),
+	Error(Vec<AccountId>),
 }
 
 /// A signing request
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct ThresholdSignatureRequest<PublicKey: Into<Vec<u8>>, ValidatorId> {
+pub struct ThresholdSignatureRequest<PublicKey: Into<Vec<u8>>, AccountId> {
 	/// Payload to be signed over
 	pub payload: Vec<u8>,
 	/// The public key of the key to be used to sign with
 	pub public_key: PublicKey,
 	/// Those validators to sign
-	pub validators: Vec<ValidatorId>,
+	pub validators: Vec<AccountId>,
 }
 
 /// A response back with our signature else a list of bad validators
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum ThresholdSignatureResponse<ValidatorId, Signature> {
+pub enum ThresholdSignatureResponse<AccountId, Signature> {
 	// Signature
 	Success(Signature),
 	// Bad validators
-	Error(Vec<ValidatorId>),
+	Error(Vec<AccountId>),
 }
 
 /// The vault rotation request

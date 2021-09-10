@@ -2,7 +2,7 @@ use std::{collections::HashMap, convert::TryInto, fmt::Display, time::Duration};
 
 use crate::{
     logging::COMPONENT_KEY,
-    p2p::{P2PMessage, P2PMessageCommand, ValidatorId},
+    p2p::{AccountId, P2PMessage, P2PMessageCommand},
     signing::{
         client::{KeyId, MultisigInstruction, SigningInfo},
         crypto::{
@@ -199,7 +199,7 @@ pub enum Error {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CeremonyOutcome<Id, Output> {
     pub id: Id,
-    pub result: Result<Output, (Error, Vec<ValidatorId>)>,
+    pub result: Result<Output, (Error, Vec<AccountId>)>,
 }
 impl<Id, Output> CeremonyOutcome<Id, Output> {
     pub fn success(id: Id, output: Output) -> Self {
@@ -208,19 +208,19 @@ impl<Id, Output> CeremonyOutcome<Id, Output> {
             result: Ok(output),
         }
     }
-    pub fn unauthorised(id: Id, bad_validators: Vec<ValidatorId>) -> Self {
+    pub fn unauthorised(id: Id, bad_validators: Vec<AccountId>) -> Self {
         Self {
             id,
             result: Err((Error::Unauthorised, bad_validators)),
         }
     }
-    pub fn timeout(id: Id, bad_validators: Vec<ValidatorId>) -> Self {
+    pub fn timeout(id: Id, bad_validators: Vec<AccountId>) -> Self {
         Self {
             id,
             result: Err((Error::Timeout, bad_validators)),
         }
     }
-    pub fn invalid(id: Id, bad_validators: Vec<ValidatorId>) -> Self {
+    pub fn invalid(id: Id, bad_validators: Vec<AccountId>) -> Self {
         Self {
             id,
             result: Err((Error::Invalid, bad_validators)),
@@ -245,7 +245,7 @@ pub struct MultisigClientInner<S>
 where
     S: KeyDB,
 {
-    my_validator_id: ValidatorId,
+    my_account_id: AccountId,
     key_store: KeyStore<S>,
     keygen: KeygenManager,
     pub signing_manager: SigningStateManager,
@@ -260,23 +260,23 @@ where
     S: KeyDB,
 {
     pub fn new(
-        my_validator_id: ValidatorId,
+        my_account_id: AccountId,
         db: S,
         inner_event_sender: UnboundedSender<InnerEvent>,
         phase_timeout: Duration,
         logger: &slog::Logger,
     ) -> Self {
         MultisigClientInner {
-            my_validator_id: my_validator_id.clone(),
+            my_account_id: my_account_id.clone(),
             key_store: KeyStore::new(db),
             keygen: KeygenManager::new(
-                my_validator_id.clone(),
+                my_account_id.clone(),
                 inner_event_sender.clone(),
                 phase_timeout.clone(),
                 logger,
             ),
             signing_manager: SigningStateManager::new(
-                my_validator_id,
+                my_account_id,
                 inner_event_sender.clone(),
                 phase_timeout,
                 logger,
@@ -303,8 +303,8 @@ where
     }
 
     #[cfg(test)]
-    pub fn get_my_validator_id(&self) -> ValidatorId {
-        self.my_validator_id.clone()
+    pub fn get_my_account_id(&self) -> AccountId {
+        self.my_account_id.clone()
     }
 
     /// Change the time we wait until deleting all unresolved states
@@ -324,7 +324,7 @@ where
         slog::debug!(
             self.logger,
             "[{}] delaying a request to sign",
-            self.my_validator_id
+            self.my_account_id
         );
 
         // TODO: check for duplicates?
@@ -346,7 +346,7 @@ where
                 slog::debug!(
                     self.logger,
                     "[{}] Received keygen instruction",
-                    self.my_validator_id
+                    self.my_account_id
                 );
 
                 self.keygen.on_keygen_request(keygen_info);
@@ -355,7 +355,7 @@ where
                 slog::debug!(
                     self.logger,
                     "[{}] Received sign instruction",
-                    self.my_validator_id
+                    self.my_account_id
                 );
 
                 let key = self.key_store.get_key(sign_info.key_id.clone());

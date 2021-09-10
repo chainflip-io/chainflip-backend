@@ -11,7 +11,7 @@ use super::{
 
 use crate::{
     logging::SIGNING_SUB_COMPONENT,
-    p2p::{P2PMessageCommand, ValidatorId},
+    p2p::{AccountId, P2PMessageCommand},
     signing::{
         client::{
             client_inner::{
@@ -39,7 +39,7 @@ pub enum SigningStage {
 
 #[derive(Clone)]
 pub struct SigningState {
-    id: ValidatorId,
+    id: AccountId,
     signer_idx: usize,
     pub message_info: MessageInfo,
     /// The result of the relevant keygen ceremony
@@ -47,7 +47,7 @@ pub struct SigningState {
     stage: SigningStage,
     /// Indices of participants who should participate
     signer_idxs: Vec<usize>,
-    signer_ids: Vec<ValidatorId>,
+    signer_ids: Vec<AccountId>,
     pub sss: SharedSecretState,
     pub shared_secret: Option<KeygenResult>,
     pub local_sigs: Vec<LocalSig>,
@@ -65,7 +65,7 @@ pub struct SigningState {
 
 impl SigningState {
     pub fn on_request_to_sign(
-        id: ValidatorId,
+        id: AccountId,
         idx: usize,
         signer_idxs: Vec<usize>,
         key_info: KeygenResultInfo,
@@ -137,7 +137,7 @@ impl SigningState {
     }
 
     /// Get ids of validators who haven't sent the data for the current stage
-    pub fn awaited_parties(&self) -> Vec<ValidatorId> {
+    pub fn awaited_parties(&self) -> Vec<AccountId> {
         let awaited_idxs = match self.stage {
             SigningStage::AwaitingBroadcast1 | SigningStage::AwaitingSecret2 => {
                 self.sss.awaited_parties()
@@ -160,7 +160,7 @@ impl SigningState {
         awaited_ids
     }
 
-    fn signer_idx_to_validator_id(&self, idx: usize) -> ValidatorId {
+    fn signer_idx_to_validator_id(&self, idx: usize) -> AccountId {
         let id = self.key_info.get_id(idx);
         id
     }
@@ -346,7 +346,7 @@ impl SigningState {
         self.delayed_data.push((sender_id, data));
     }
 
-    pub fn process_signing_message(&mut self, sender_id: ValidatorId, msg: SigningData) {
+    pub fn process_signing_message(&mut self, sender_id: AccountId, msg: SigningData) {
         let sender_idx = self.key_info.get_idx(&sender_id);
 
         if let Some(idx) = sender_idx {
@@ -478,7 +478,7 @@ impl SigningState {
         }
     }
 
-    fn signer_idxs_to_validator_ids(&self, idxs: Vec<usize>) -> Vec<ValidatorId> {
+    fn signer_idxs_to_validator_ids(&self, idxs: Vec<usize>) -> Vec<AccountId> {
         idxs.into_iter()
             .map(|idx| self.signer_idx_to_validator_id(idx))
             .collect()
