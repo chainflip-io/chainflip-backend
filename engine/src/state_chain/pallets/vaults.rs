@@ -13,6 +13,8 @@ use crate::state_chain::{runtime::StateChainRuntime, sc_event::SCEvent};
 #[module]
 pub trait Vaults: System {}
 
+// ===== Events =====
+
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode)]
 pub struct KeygenRequestEvent<V: Vaults> {
@@ -42,6 +44,8 @@ pub struct VaultRotationRequestEvent<V: Vaults> {
 
     pub _runtime: PhantomData<V>,
 }
+
+// ===== Calls / Extrinsics =====
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct KeygenResponseCall<T: Vaults> {

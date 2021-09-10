@@ -78,7 +78,7 @@ pub async fn start(
                                 .collect();
 
                             let gen_new_key_event = MultisigInstruction::KeyGen(KeygenInfo::new(
-                                KeyId(keygen_request_event.ceremony_id),
+                                keygen_request_event.ceremony_id,
                                 validators,
                             ));
 
@@ -153,7 +153,14 @@ pub async fn start(
                                         )
                                         .0,
                                     ),
-                                    SigningInfo::new(KeyId(0), validators),
+                                    SigningInfo::new(
+                                        KeyId(
+                                            threshold_sig_requst
+                                                .threshold_signature_request
+                                                .public_key,
+                                        ),
+                                        validators,
+                                    ),
                                 );
 
                             // The below will be replaced with one shot channels

@@ -14,6 +14,7 @@ use crate::{
     },
 };
 
+use pallet_cf_vaults::CeremonyId;
 use slog::o;
 use sp_core::Hasher;
 use sp_runtime::traits::Keccak256;
@@ -145,17 +146,17 @@ impl From<Secret2> for SigningData {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct KeyGenMessageWrapped {
-    pub key_id: KeyId,
+    pub ceremony_id: CeremonyId,
     pub message: KeygenData,
 }
 
 impl KeyGenMessageWrapped {
-    pub fn new<M>(key_id: KeyId, m: M) -> Self
+    pub fn new<M>(ceremony_id: CeremonyId, m: M) -> Self
     where
         M: Into<KeygenData>,
     {
         KeyGenMessageWrapped {
-            key_id,
+            ceremony_id,
             message: m.into(),
         }
     }
@@ -182,8 +183,8 @@ impl From<Broadcast1> for KeygenData {
 impl Display for KeygenData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
-            KeygenData::Broadcast1(_) => write!(f, "Keygen::Broadcast"),
-            KeygenData::Secret2(_) => write!(f, "Keygen::Secret"),
+            KeygenData::Broadcast1(_) => write!(f, "KeygenData::Broadcast1"),
+            KeygenData::Secret2(_) => write!(f, "KeygenData::Secret2"),
         }
     }
 }
@@ -228,7 +229,7 @@ impl<Id, Output> CeremonyOutcome<Id, Output> {
 }
 
 /// The final result of a keygen ceremony
-pub type KeygenOutcome = CeremonyOutcome<KeyId, secp256k1::PublicKey>;
+pub type KeygenOutcome = CeremonyOutcome<CeremonyId, secp256k1::PublicKey>;
 /// The final result of a Signing ceremony
 pub type SigningOutcome = CeremonyOutcome<MessageInfo, SchnorrSignature>;
 
@@ -248,7 +249,7 @@ where
     key_store: KeyStore<S>,
     keygen: KeygenManager,
     pub signing_manager: SigningStateManager,
-    tx: UnboundedSender<InnerEvent>,
+    inner_event_sender: UnboundedSender<InnerEvent>,
     /// Requests awaiting a key
     pending_requests_to_sign: HashMap<KeyId, Vec<(MessageHash, SigningInfo)>>,
     logger: slog::Logger,
@@ -261,7 +262,7 @@ where
     pub fn new(
         my_validator_id: ValidatorId,
         db: S,
-        tx: UnboundedSender<InnerEvent>,
+        inner_event_sender: UnboundedSender<InnerEvent>,
         phase_timeout: Duration,
         logger: &slog::Logger,
     ) -> Self {
@@ -270,18 +271,18 @@ where
             key_store: KeyStore::new(db),
             keygen: KeygenManager::new(
                 my_validator_id.clone(),
-                tx.clone(),
+                inner_event_sender.clone(),
                 phase_timeout.clone(),
                 logger,
             ),
             signing_manager: SigningStateManager::new(
                 my_validator_id,
-                tx.clone(),
+                inner_event_sender.clone(),
                 phase_timeout,
                 logger,
             ),
             pending_requests_to_sign: Default::default(),
-            tx,
+            inner_event_sender,
             logger: logger.new(o!(COMPONENT_KEY => "MultisigClientInner")),
         }
     }
@@ -330,7 +331,7 @@ where
 
         let entry = self
             .pending_requests_to_sign
-            .entry(sign_info.id)
+            .entry(sign_info.key_id.clone())
             .or_default();
 
         entry.push((data, sign_info));
@@ -356,9 +357,8 @@ where
                     "[{}] Received sign instruction",
                     self.my_validator_id
                 );
-                let key_id = sign_info.id;
 
-                let key = self.key_store.get_key(key_id);
+                let key = self.key_store.get_key(sign_info.key_id.clone());
 
                 match key {
                     Some(key) => {
@@ -374,9 +374,12 @@ where
         }
     }
 
-    /// Process requests to sign that required `key_id`
-    fn process_pending(&mut self, key_id: KeyId, key_info: KeygenResultInfo) {
-        if let Some(reqs) = self.pending_requests_to_sign.remove(&key_id) {
+    /// Process requests to sign that required the key in `key_info`
+    fn process_pending(&mut self, key_info: KeygenResultInfo) {
+        if let Some(reqs) = self
+            .pending_requests_to_sign
+            .remove(&KeyId(key_info.key.get_public_key_bytes()))
+        {
             slog::debug!(
                 self.logger,
                 "Processing pending requests to sign, count: {}",
@@ -389,18 +392,18 @@ where
         }
     }
 
-    fn on_key_generated(&mut self, key_id: KeyId, key_info: KeygenResultInfo) {
-        self.key_store.set_key(key_id, key_info.clone());
-        self.process_pending(key_id, key_info.clone());
+    fn on_key_generated(&mut self, ceremony_id: CeremonyId, key_info: KeygenResultInfo) {
+        self.key_store
+            .set_key(KeyId(key_info.key.get_public_key_bytes()), key_info.clone());
+        self.process_pending(key_info.clone());
 
         // NOTE: we only notify the SC after we have successfully saved the key
-
-        if let Err(err) = self
-            .tx
-            .send(InnerEvent::KeygenResult(KeygenOutcome::success(
-                key_id,
-                key_info.key.get_public_key().get_element(),
-            )))
+        if let Err(err) =
+            self.inner_event_sender
+                .send(InnerEvent::KeygenResult(KeygenOutcome::success(
+                    ceremony_id,
+                    key_info.key.get_public_key().get_element(),
+                )))
         {
             slog::error!(
                 self.logger,
@@ -411,30 +414,34 @@ where
     }
 
     /// Process message from another validator
-    pub fn process_p2p_mq_message(&mut self, msg: P2PMessage) {
-        let P2PMessage { sender_id, data } = msg;
-        let msg: Result<MultisigMessage, _> = serde_json::from_slice(&data);
+    pub fn process_p2p_message(&mut self, p2p_message: P2PMessage) {
+        let P2PMessage { sender_id, data } = p2p_message;
+        let multisig_message: Result<MultisigMessage, _> = serde_json::from_slice(&data);
 
-        match msg {
-            Ok(MultisigMessage::KeyGenMessage(msg)) => {
+        match multisig_message {
+            Ok(MultisigMessage::KeyGenMessage(multisig_message)) => {
                 // NOTE: we should be able to process Keygen messages
                 // even when we are "signing"... (for example, if we want to
                 // generate a new key)
 
-                let key_id = msg.key_id;
+                let ceremony_id = multisig_message.ceremony_id;
 
-                if let Some(key) = self.keygen.process_keygen_message(sender_id, msg) {
-                    self.on_key_generated(key_id, key);
+                if let Some(key) = self
+                    .keygen
+                    .process_keygen_message(sender_id, multisig_message)
+                {
+                    self.on_key_generated(ceremony_id, key);
                     // NOTE: we could already delete the state here, but it is
                     // not necessary as it will be deleted by "cleanup"
                 }
             }
-            Ok(MultisigMessage::SigningMessage(msg)) => {
+            Ok(MultisigMessage::SigningMessage(multisig_message)) => {
                 // NOTE: we should be able to process Signing messages
                 // even when we are generating a new key (for example,
                 // we should be able to receive phase1 messages before we've
                 // finalized the signing key locally)
-                self.signing_manager.process_signing_data(sender_id, msg);
+                self.signing_manager
+                    .process_signing_data(sender_id, multisig_message);
             }
             Err(_) => {
                 slog::warn!(self.logger, "Cannot parse multisig message, discarding");

@@ -1,5 +1,5 @@
+use client::KeygenOutcome;
 use itertools::Itertools;
-use log::*;
 use rand::{
     prelude::{IteratorRandom, StdRng},
     SeedableRng,
@@ -50,8 +50,7 @@ async fn coordinate_signing(
 ) -> Result<(), ()> {
     let logger = logger.new(o!(COMPONENT_KEY => "CoordinateSigning"));
     // get a keygen request ready with all of the VALIDATOR_IDS
-    let key_id = KeyId(0);
-    let keygen_request_info = KeygenInfo::new(key_id, VALIDATOR_IDS.clone());
+    let keygen_request_info = KeygenInfo::new(0, VALIDATOR_IDS.clone());
 
     // publish the MultisigInstruction::KeyGen to all the clients
     for node in &nodes {
@@ -68,6 +67,19 @@ async fn coordinate_signing(
         .iter()
         .map(|i| VALIDATOR_IDS[*i].clone())
         .collect_vec();
+
+    // wait on the keygen ceremony so we can use the correct KeyId to sign with
+    let key_id = if let Some(MultisigEvent::KeygenResult(KeygenOutcome {
+        id: _,
+        result: Ok(pubkey),
+    })) = nodes[0].multisig_event_rx.recv().await
+    {
+        // if you remove this the test fails. Seems to prematurely cleanup signing states
+        let _ = nodes[1].multisig_event_rx.recv().await;
+        KeyId(pubkey.serialize().into())
+    } else {
+        panic!("Expecting a successful keygen result");
+    };
 
     // get a signing request ready with the list of signer_ids
     let sign_info = SigningInfo::new(key_id, signer_ids);
@@ -214,8 +226,6 @@ async fn distributed_signing() {
             Ok(()),
             "One of the clients failed to sign the message"
         );
-
-        info!("Graceful shutdown of distributed_signing test");
 
         for tx in shutdown_txs {
             tx.send(()).unwrap();
