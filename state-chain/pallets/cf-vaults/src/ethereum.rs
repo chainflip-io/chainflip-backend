@@ -3,7 +3,7 @@ use crate::{
 	CeremonyId, ChainVault, Config, EthereumVault, Event, Pallet, RequestResponse,
 	ThresholdSignatureRequest, ThresholdSignatureResponse, VaultRotationRequestResponse,
 };
-use crate::{SchnorrSignature, VaultRotations};
+use crate::{SchnorrSigTruncPubkey, VaultRotations};
 use cf_traits::{NonceIdentifier, NonceProvider, RotationError, VaultRotationHandler};
 use ethabi::{Bytes, Function, Param, ParamType, Token};
 use frame_support::pallet_prelude::*;
@@ -30,7 +30,7 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 		// Create payload for signature
 		match Self::encode_set_agg_key_with_agg_key(
 			new_public_key.clone(),
-			SchnorrSignature::default(),
+			SchnorrSigTruncPubkey::default(),
 		) {
 			Ok(payload) => {
 				// Emit the event
@@ -64,7 +64,7 @@ impl<T: Config>
 	RequestResponse<
 		CeremonyId,
 		ThresholdSignatureRequest<T::PublicKey, T::ValidatorId>,
-		ThresholdSignatureResponse<T::ValidatorId, SchnorrSignature>,
+		ThresholdSignatureResponse<T::ValidatorId, SchnorrSigTruncPubkey>,
 		RotationError<T::ValidatorId>,
 	> for EthereumChain<T>
 {
@@ -80,7 +80,7 @@ impl<T: Config>
 	/// Try to handle the response and pass this onto `Vaults` to complete the vault rotation
 	fn handle_response(
 		ceremony_id: CeremonyId,
-		response: ThresholdSignatureResponse<T::ValidatorId, SchnorrSignature>,
+		response: ThresholdSignatureResponse<T::ValidatorId, SchnorrSigTruncPubkey>,
 	) -> Result<(), RotationError<T::ValidatorId>> {
 		match response {
 			ThresholdSignatureResponse::Success(signature) => {
@@ -120,7 +120,7 @@ impl<T: Config> EthereumChain<T> {
 	/// around `no_std` limitations here for the runtime.
 	pub(crate) fn encode_set_agg_key_with_agg_key(
 		new_public_key: T::PublicKey,
-		signature: SchnorrSignature,
+		signature: SchnorrSigTruncPubkey,
 	) -> ethabi::Result<Bytes> {
 		Function::new(
 			"setAggKeyWithAggKey",
@@ -144,7 +144,7 @@ impl<T: Config> EthereumChain<T> {
 				Token::Uint(ethabi::Uint::zero()),
 				Token::Uint(signature.s.into()),
 				Token::Uint(T::NonceProvider::next_nonce(NonceIdentifier::Ethereum).into()),
-				Token::Address(signature.r.into()),
+				Token::Address(signature.eth_pub_key.into()),
 			]),
 			// newKey: bytes32
 			Token::FixedBytes(new_public_key.into()),

@@ -7,17 +7,15 @@ use sp_std::prelude::*;
 /// CeremonyId type
 pub type CeremonyId = u64;
 
-// TODO: Use the same type as the CFE
 /// Schnorr Signature type
 #[derive(PartialEq, Decode, Encode, Eq, Clone, RuntimeDebug, Copy, Default)]
-pub struct SchnorrSignature {
+pub struct SchnorrSigTruncPubkey {
 	/// Scalar component
 	// s: secp256k1::SecretKey,
 	pub s: [u8; 32],
 
-	// TODO: This is not technically "r" so this should be renamed
 	/// Public key hashed and truncated to an ethereum address
-	pub r: [u8; 20],
+	pub eth_pub_key: [u8; 20],
 }
 
 /// A request/response trait
@@ -105,7 +103,7 @@ pub enum KeygenResponse<ValidatorId, PublicKey: Into<Vec<u8>>> {
 	/// The key generation ceremony has completed successfully with a new proposed public key
 	Success(PublicKey),
 	/// Something went wrong and it failed.
-	Failure(Vec<ValidatorId>),
+	Error(Vec<ValidatorId>),
 }
 
 /// A signing request
@@ -156,7 +154,7 @@ pub struct Vault<PublicKey: Into<Vec<u8>>, TransactionHash: Into<Vec<u8>>> {
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum VaultRotationResponse<TransactionHash: Into<Vec<u8>>> {
 	Success { tx_hash: TransactionHash },
-	Failure,
+	Error,
 }
 
 #[macro_export]

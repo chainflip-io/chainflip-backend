@@ -69,7 +69,7 @@ mod tests;
 pub mod pallet {
 	use super::*;
 	use crate::ethereum::EthereumChain;
-	use crate::rotation::SchnorrSignature;
+	use crate::rotation::SchnorrSigTruncPubkey;
 	use cf_traits::{Chainflip, EpochInfo, Nonce, NonceIdentifier};
 	use frame_system::pallet_prelude::*;
 
@@ -191,7 +191,7 @@ pub mod pallet {
 		pub fn threshold_signature_response(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
-			response: ThresholdSignatureResponse<T::ValidatorId, SchnorrSignature>,
+			response: ThresholdSignatureResponse<T::ValidatorId, SchnorrSigTruncPubkey>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			// We just have the Ethereum chain to handle this Schnorr signature
@@ -382,7 +382,7 @@ impl<T: Config>
 					Err(RotationError::KeyResponseFailed)
 				}
 			}
-			KeygenResponse::Failure(bad_validators) => {
+			KeygenResponse::Error(bad_validators) => {
 				// Abort this key generation request
 				Pallet::<T>::abort_rotation();
 				// Do as you wish with these, I wash my hands..
@@ -468,7 +468,7 @@ impl<T: Config>
 				// This request is complete
 				Pallet::<T>::deposit_event(Event::VaultRotationCompleted(ceremony_id));
 			}
-			VaultRotationResponse::Failure => {
+			VaultRotationResponse::Error => {
 				Pallet::<T>::abort_rotation();
 			}
 		}

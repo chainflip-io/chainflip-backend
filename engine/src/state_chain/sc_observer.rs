@@ -109,7 +109,7 @@ pub async fn start(
                                                 .iter()
                                                 .map(|v| AccountId32::from(v.0))
                                                 .collect();
-                                            KeygenResponse::Failure(bad_account_ids)
+                                            KeygenResponse::Error(bad_account_ids)
                                         }
                                     },
                                     MultisigEvent::MessageSigningResult(message_signing_result) => {
@@ -177,7 +177,7 @@ pub async fn start(
                                     }) => match result {
                                         Ok(sig) => ThresholdSignatureResponse::<
                                             AccountId32,
-                                            pallet_cf_vaults::SchnorrSignature,
+                                            pallet_cf_vaults::SchnorrSigTruncPubkey,
                                         >::Success(
                                             sig.into()
                                         ),
@@ -240,7 +240,7 @@ pub async fn start(
                                                 "Failed to broadcast set_agg_key_with_agg_key tx: {}",
                                                 e
                                             );
-                                            VaultRotationResponse::Failure
+                                            VaultRotationResponse::Error
                                         }
                                     };
                                     subxt_client

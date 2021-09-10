@@ -2,8 +2,9 @@ use std::marker::PhantomData;
 
 use codec::{Decode, Encode};
 use pallet_cf_vaults::{
-    rotation::VaultRotationResponse, CeremonyId, KeygenRequest, KeygenResponse, SchnorrSignature,
-    ThresholdSignatureRequest, ThresholdSignatureResponse, VaultRotationRequest,
+    rotation::VaultRotationResponse, CeremonyId, KeygenRequest, KeygenResponse,
+    SchnorrSigTruncPubkey, ThresholdSignatureRequest, ThresholdSignatureResponse,
+    VaultRotationRequest,
 };
 use sp_runtime::AccountId32;
 use substrate_subxt::{module, system::System, Call, Event};
@@ -60,7 +61,7 @@ pub struct KeygenResponseCall<T: Vaults> {
 pub struct ThresholdSignatureResponseCall<T: Vaults> {
     pub ceremony_id: CeremonyId,
 
-    pub response: ThresholdSignatureResponse<AccountId32, SchnorrSignature>,
+    pub response: ThresholdSignatureResponse<AccountId32, SchnorrSigTruncPubkey>,
 
     pub _runtime: PhantomData<T>,
 }

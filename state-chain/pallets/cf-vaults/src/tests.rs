@@ -66,7 +66,7 @@ mod test {
 			assert_ok!(VaultsPallet::keygen_response(
 				Origin::root(),
 				second_ceremony_id,
-				KeygenResponse::Failure(vec![BOB, CHARLIE])
+				KeygenResponse::Error(vec![BOB, CHARLIE])
 			));
 
 			// Check the event emitted of an aborted rotation with are two requests
@@ -221,7 +221,7 @@ mod test {
 			assert_ok!(VaultsPallet::vault_rotation_response(
 				Origin::root(),
 				VaultsPallet::current_request(),
-				VaultRotationResponse::Failure
+				VaultRotationResponse::Error
 			));
 
 			// Check the event emitted
@@ -246,7 +246,7 @@ mod test {
 			let signing_request = ThresholdSignatureRequest {
 				payload: EthereumChain::<MockRuntime>::encode_set_agg_key_with_agg_key(
 					vec![],
-					SchnorrSignature::default(),
+					SchnorrSigTruncPubkey::default(),
 				)
 				.unwrap(),
 				public_key: vec![],
@@ -272,8 +272,8 @@ mod test {
 			assert_ok!(VaultsPallet::threshold_signature_response(
 				Origin::root(),
 				1,
-				ThresholdSignatureResponse::Success(SchnorrSignature {
-					r: [0; 20],
+				ThresholdSignatureResponse::Success(SchnorrSigTruncPubkey {
+					eth_pub_key: [0; 20],
 					s: [0; 32],
 				})
 			));
