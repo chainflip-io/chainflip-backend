@@ -112,8 +112,11 @@ pub async fn start(
                                             KeygenResponse::Failure(bad_account_ids)
                                         }
                                     },
-                                    MultisigEvent::MessageSigningResult(_) => {
-                                        panic!("Should be keygen result")
+                                    MultisigEvent::MessageSigningResult(message_signing_result) => {
+                                        panic!(
+                                            "Expecting KeygenResult, got: {:?}",
+                                            message_signing_result
+                                        );
                                     }
                                 },
                                 None => todo!(),
@@ -185,11 +188,14 @@ pub async fn start(
                                             ThresholdSignatureResponse::Error(bad_account_ids)
                                         }
                                     },
-                                    MultisigEvent::KeygenResult(_) => {
-                                        panic!("there shouldn't be a keygen result here")
+                                    MultisigEvent::KeygenResult(keygen_result) => {
+                                        panic!(
+                                            "Expecting MessageSigningResult, got: {:?}",
+                                            keygen_result
+                                        );
                                     }
                                 },
-                                None => todo!(),
+                                _ => panic!("Channel closed"),
                             };
 
                             subxt_client
@@ -244,9 +250,9 @@ pub async fn start(
                             }
                         }
                     },
-                    crate::state_chain::sc_event::SCEvent::AuctionEvent(_) => todo!(),
-                    crate::state_chain::sc_event::SCEvent::ValidatorEvent(_) => todo!(),
-                    crate::state_chain::sc_event::SCEvent::StakingEvent(_) => todo!(),
+                    _ => {
+                        // ignore events we don't care about
+                    }
                 }
             }
             None => {
