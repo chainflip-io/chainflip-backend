@@ -70,7 +70,7 @@ async fn coordinate_signing(
 
     // wait on the keygen ceremony so we can use the correct KeyId to sign with
     let key_id = if let Some(MultisigEvent::KeygenResult(KeygenOutcome {
-        ceremony_id: _,
+        id: _,
         result: Ok(pubkey),
     })) = nodes[0].multisig_event_rx.recv().await
     {

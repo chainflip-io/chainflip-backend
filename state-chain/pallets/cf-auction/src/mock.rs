@@ -90,9 +90,9 @@ impl Config for Test {
 
 pub struct MockOnline;
 impl Online for MockOnline {
-	type ValidatorId = ValidatorId;
+	type AccountId = AccountId;
 
-	fn is_online(_validator_id: &Self::ValidatorId) -> bool {
+	fn is_online(_validator_id: &Self::AccountId) -> bool {
 		true
 	}
 }

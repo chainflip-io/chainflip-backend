@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display, time::Duration};
+use std::{collections::HashMap, convert::TryInto, fmt::Display, time::Duration};
 
 use crate::{
     logging::COMPONENT_KEY,
@@ -16,6 +16,8 @@ use crate::{
 
 use pallet_cf_vaults::CeremonyId;
 use slog::o;
+use sp_core::Hasher;
+use sp_runtime::traits::Keccak256;
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::{
@@ -37,6 +39,21 @@ impl From<Signature> for SchnorrSignature {
         let s: [u8; 32] = sig.sigma.get_element().as_ref().clone();
         let r = sig.v.get_element();
         SchnorrSignature { s, r }
+    }
+}
+
+impl From<SchnorrSignature> for pallet_cf_vaults::SchnorrSigTruncPubkey {
+    fn from(cfe_sig: SchnorrSignature) -> Self {
+        // https://ethereum.stackexchange.com/questions/3542/how-are-ethereum-addresses-generated
+        // Start with the public key (128 characters / 64 bytes)
+        // Take the Keccak-256 hash of the public key. You should now have a string that is 64 characters / 32 bytes. (note: SHA3-256 eventually became the standard, but Ethereum uses Keccak)
+        let hash = Keccak256::hash(&cfe_sig.r.serialize_uncompressed()).0;
+        // Take the last 40 characters / 20 bytes of this public key (Keccak-256). Or, in other words, drop the first 24 characters / 12 bytes. These 40 characters / 20 bytes are the address. When prefixed with 0x it becomes 42 characters long.
+        let eth_pub_key: [u8; 20] = hash[12..=32].try_into().expect("Is valid pubkey");
+        Self {
+            s: cfe_sig.s,
+            eth_pub_key,
+        }
     }
 }
 
@@ -181,31 +198,31 @@ pub enum Error {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CeremonyOutcome<Id, Output> {
-    pub ceremony_id: Id,
+    pub id: Id,
     pub result: Result<Output, (Error, Vec<AccountId>)>,
 }
 impl<Id, Output> CeremonyOutcome<Id, Output> {
-    pub fn success(ceremony_id: Id, output: Output) -> Self {
+    pub fn success(id: Id, output: Output) -> Self {
         Self {
-            ceremony_id,
+            id,
             result: Ok(output),
         }
     }
-    pub fn unauthorised(ceremony_id: Id, bad_validators: Vec<AccountId>) -> Self {
+    pub fn unauthorised(id: Id, bad_validators: Vec<AccountId>) -> Self {
         Self {
-            ceremony_id,
+            id,
             result: Err((Error::Unauthorised, bad_validators)),
         }
     }
-    pub fn timeout(ceremony_id: Id, bad_validators: Vec<AccountId>) -> Self {
+    pub fn timeout(id: Id, bad_validators: Vec<AccountId>) -> Self {
         Self {
-            ceremony_id,
+            id,
             result: Err((Error::Timeout, bad_validators)),
         }
     }
-    pub fn invalid(ceremony_id: Id, bad_validators: Vec<AccountId>) -> Self {
+    pub fn invalid(id: Id, bad_validators: Vec<AccountId>) -> Self {
         Self {
-            ceremony_id,
+            id,
             result: Err((Error::Invalid, bad_validators)),
         }
     }

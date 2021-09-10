@@ -9,12 +9,13 @@ pub type CeremonyId = u64;
 
 /// Schnorr Signature type
 #[derive(PartialEq, Decode, Encode, Eq, Clone, RuntimeDebug, Copy, Default)]
-pub struct SchnorrSignature {
+pub struct SchnorrSigTruncPubkey {
 	/// Scalar component
 	// s: secp256k1::SecretKey,
 	pub s: [u8; 32],
+
 	/// Public key hashed and truncated to an ethereum address
-	pub r: [u8; 20],
+	pub eth_pub_key: [u8; 20],
 }
 
 /// A request/response trait
@@ -80,10 +81,10 @@ pub enum ChainParams {
 
 /// State of a vault rotation
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct VaultRotation<ValidatorId, PublicKey> {
+pub struct VaultRotation<AccountId, PublicKey> {
 	/// Proposed new public key
 	pub new_public_key: PublicKey,
-	pub keygen_request: KeygenRequest<ValidatorId>,
+	pub keygen_request: KeygenRequest<AccountId>,
 }
 
 /// A representation of a key generation request
@@ -102,7 +103,27 @@ pub enum KeygenResponse<AccountId, PublicKey: Into<Vec<u8>>> {
 	/// The key generation ceremony has completed successfully with a new proposed public key
 	Success(PublicKey),
 	/// Something went wrong and it failed.
-	Failure(Vec<AccountId>),
+	Error(Vec<AccountId>),
+}
+
+/// A signing request
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub struct ThresholdSignatureRequest<PublicKey: Into<Vec<u8>>, AccountId> {
+	/// Payload to be signed over
+	pub payload: Vec<u8>,
+	/// The public key of the key to be used to sign with
+	pub public_key: PublicKey,
+	/// Those validators to sign
+	pub validators: Vec<AccountId>,
+}
+
+/// A response back with our signature else a list of bad validators
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub enum ThresholdSignatureResponse<AccountId, Signature> {
+	// Signature
+	Success(Signature),
+	// Bad validators
+	Error(Vec<AccountId>),
 }
 
 /// The vault rotation request
@@ -133,27 +154,7 @@ pub struct Vault<PublicKey: Into<Vec<u8>>, TransactionHash: Into<Vec<u8>>> {
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum VaultRotationResponse<TransactionHash: Into<Vec<u8>>> {
 	Success { tx_hash: TransactionHash },
-	Failure,
-}
-
-/// A signing request
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct ThresholdSignatureRequest<PublicKey: Into<Vec<u8>>, ValidatorId> {
-	/// Payload to be signed over
-	pub payload: Vec<u8>,
-	/// The public key of the key to be used to sign with
-	pub public_key: PublicKey,
-	/// Those validators to sign
-	pub validators: Vec<ValidatorId>,
-}
-
-/// A response back with our signature else a list of bad validators
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum ThresholdSignatureResponse<ValidatorId, Signature> {
-	// Signature
-	Success(Signature),
-	// Bad validators
-	Error(Vec<ValidatorId>),
+	Error,
 }
 
 #[macro_export]

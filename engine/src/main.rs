@@ -80,7 +80,7 @@ async fn main() {
     let (multisig_instruction_sender, multisig_instruction_receiver) =
         tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
 
-    let (multisig_event_sender, _multisig_event_receiver) =
+    let (multisig_event_sender, multisig_event_receiver) =
         tokio::sync::mpsc::unbounded_channel::<MultisigEvent>();
 
     let (p2p_message_sender, p2p_message_receiver) =
@@ -129,6 +129,7 @@ async fn main() {
             pair_signer.clone(),
             eth_broadcaster,
             multisig_instruction_sender,
+            multisig_event_receiver,
             &root_logger
         ),
         // Start eth components

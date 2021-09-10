@@ -2,22 +2,25 @@ use std::sync::{Arc, Mutex};
 
 use pallet_cf_vaults::{
     rotation::{ChainParams, VaultRotationResponse},
-    KeygenResponse,
+    KeygenResponse, ThresholdSignatureResponse,
 };
 use slog::o;
 use sp_core::Hasher;
-use sp_runtime::traits::Keccak256;
+use sp_runtime::{traits::Keccak256, AccountId32};
 use substrate_subxt::{Client, EventSubscription, PairSigner};
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
     eth::EthBroadcaster,
     logging::COMPONENT_KEY,
     p2p, settings,
-    signing::{KeyId, KeygenInfo, MessageHash, MultisigInstruction, SigningInfo},
+    signing::{
+        KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigEvent, MultisigInstruction,
+        SigningInfo, SigningOutcome,
+    },
     state_chain::{
         pallets::vaults::{
-            KeygenResponseCallExt, VaultRotationResponseCallExt,
+            KeygenResponseCallExt, ThresholdSignatureResponseCallExt, VaultRotationResponseCallExt,
             VaultsEvent::{
                 KeygenRequestEvent, ThresholdSignatureRequestEvent, VaultRotationRequestEvent,
             },
@@ -34,6 +37,7 @@ pub async fn start(
     signer: Arc<Mutex<PairSigner<StateChainRuntime, sp_core::sr25519::Pair>>>,
     eth_broadcaster: EthBroadcaster,
     multisig_instruction_sender: UnboundedSender<MultisigInstruction>,
+    mut multisig_event_receiver: UnboundedReceiver<MultisigEvent>,
     logger: &slog::Logger,
 ) {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
@@ -58,126 +62,209 @@ pub async fn start(
             }
         };
 
-        if let Some(sc_event) =
-            raw_event_to_sc_event(&raw_event).expect("Could not convert substrate event to SCEvent")
+        match raw_event_to_sc_event(&raw_event)
+            .expect("Could not convert substrate event to SCEvent")
         {
-            match sc_event {
-                VaultsEvent(event) => match event {
-                    KeygenRequestEvent(keygen_request_event) => {
-                        let validators: Vec<_> = keygen_request_event
-                            .keygen_request
-                            .validator_candidates
-                            .iter()
-                            .map(|v| p2p::AccountId(v.clone().into()))
-                            .collect();
+            Some(sc_event) => {
+                match sc_event {
+                    VaultsEvent(event) => match event {
+                        KeygenRequestEvent(keygen_request_event) => {
+                            let signers: Vec<_> = keygen_request_event
+                                .keygen_request
+                                .validator_candidates
+                                .iter()
+                                .map(|v| p2p::AccountId(v.clone().into()))
+                                .collect();
 
-                        let gen_new_key_event = MultisigInstruction::KeyGen(KeygenInfo::new(
-                            keygen_request_event.ceremony_id,
-                            validators,
-                        ));
-
-                        multisig_instruction_sender
-                            .send(gen_new_key_event)
-                            .map_err(|_| "Receiver should exist")
-                            .unwrap();
-
-                        // TODO: get the signing result here - oneshot channels
-                        // if we wanted these events now we would pass in the currently unusued MultisigEventReceiver.
-                        // However there is a timing and association issue where we cannot guarantee that event we fetch from the channel
-                        // will be the one matching the particular request - hence require one shot channels
-                        let keygen_response = KeygenResponse::Success(Vec::default());
-
-                        let signer = signer.lock().unwrap();
-                        subxt_client
-                            .keygen_response(
-                                &*signer,
+                            let gen_new_key_event = MultisigInstruction::KeyGen(KeygenInfo::new(
                                 keygen_request_event.ceremony_id,
-                                keygen_response,
-                            )
-                            .await
-                            .unwrap();
-                    }
-                    ThresholdSignatureRequestEvent(threshold_sig_requst) => {
-                        let validators: Vec<_> = threshold_sig_requst
-                            .threshold_signature_request
-                            .validators
-                            .iter()
-                            .map(|v| p2p::AccountId(v.clone().into()))
-                            .collect();
+                                signers,
+                            ));
 
-                        let sign_tx = MultisigInstruction::Sign(
-                            // TODO: The hashing of the payload should be done on the SC
-                            // https://github.com/chainflip-io/chainflip-backend/issues/446
-                            MessageHash(
-                                Keccak256::hash(
-                                    &threshold_sig_requst.threshold_signature_request.payload[..],
-                                )
-                                .0,
-                            ),
-                            SigningInfo::new(
-                                KeyId(threshold_sig_requst.threshold_signature_request.public_key),
-                                validators,
-                            ),
-                        );
+                            multisig_instruction_sender
+                                .send(gen_new_key_event)
+                                .map_err(|_| "Receiver should exist")
+                                .unwrap();
 
-                        multisig_instruction_sender
-                            .send(sign_tx)
-                            .map_err(|_| "Receiver should exist")
-                            .unwrap();
-
-                        todo!("Receive signing result and send result back to State chain");
-                    }
-                    VaultRotationRequestEvent(vault_rotation_request_event) => {
-                        match vault_rotation_request_event.vault_rotation_request.chain {
-                            ChainParams::Ethereum(tx) => {
-                                slog::debug!(logger, "Broadcasting to ETH: {:?}", tx);
-                                let signer = signer.lock().unwrap();
-                                // TODO: Contract address should come from the state chain
-                                // https://github.com/chainflip-io/chainflip-backend/issues/459
-                                let response = match eth_broadcaster
-                                    .send(tx, settings.eth.key_manager_eth_address)
-                                    .await
-                                {
-                                    Ok(tx_hash) => {
-                                        slog::debug!(
-                                            logger,
-                                            "Broadcast set_agg_key_with_agg_key tx, tx_hash: {}",
-                                            tx_hash
-                                        );
-                                        VaultRotationResponse::Success {
-                                            tx_hash: tx_hash.as_bytes().to_vec(),
+                            let response = match multisig_event_receiver.recv().await {
+                                Some(event) => match event {
+                                    MultisigEvent::KeygenResult(KeygenOutcome {
+                                        id: _,
+                                        result,
+                                    }) => match result {
+                                        Ok(pubkey) => {
+                                            KeygenResponse::<AccountId32, Vec<u8>>::Success(
+                                                pubkey.serialize().into(),
+                                            )
                                         }
-                                    }
-                                    Err(e) => {
-                                        slog::error!(
-                                            logger,
-                                            "Failed to broadcast set_agg_key_with_agg_key tx: {}",
-                                            e
+                                        Err((err, bad_account_ids)) => {
+                                            slog::error!(
+                                                logger,
+                                                "Keygen failed with error: {:?}",
+                                                err
+                                            );
+                                            let bad_account_ids: Vec<_> = bad_account_ids
+                                                .iter()
+                                                .map(|v| AccountId32::from(v.0))
+                                                .collect();
+                                            KeygenResponse::Error(bad_account_ids)
+                                        }
+                                    },
+                                    MultisigEvent::MessageSigningResult(message_signing_result) => {
+                                        panic!(
+                                            "Expecting KeygenResult, got: {:?}",
+                                            message_signing_result
                                         );
-                                        VaultRotationResponse::Failure
                                     }
-                                };
-                                subxt_client
-                                    .vault_rotation_response(
-                                        &*signer,
-                                        vault_rotation_request_event.ceremony_id,
-                                        response,
-                                    )
-                                    .await
-                                    .unwrap(); // TODO: Handle error
-                            }
-                            // Leave this to be explicit about future chains being added
-                            ChainParams::Other(_) => panic!("Chain::Other does not exist"),
+                                },
+                                None => todo!(),
+                            };
+                            let signer = signer.lock().unwrap();
+                            subxt_client
+                                .keygen_response(
+                                    &*signer,
+                                    keygen_request_event.ceremony_id,
+                                    response,
+                                )
+                                .await
+                                .unwrap(); // TODO: Handle error
                         }
+                        // TODO: Provide the pubkey of the key we want to sign with to the signing module
+                        // from this event
+                        // https://github.com/chainflip-io/chainflip-backend/issues/492
+                        ThresholdSignatureRequestEvent(threshold_sig_requst) => {
+                            let signers: Vec<_> = threshold_sig_requst
+                                .threshold_signature_request
+                                .validators
+                                .iter()
+                                .map(|v| p2p::AccountId(v.clone().into()))
+                                .collect();
+
+                            let sign_tx =
+                                MultisigInstruction::Sign(
+                                    // TODO: The hashing of the payload should be done on the SC
+                                    // https://github.com/chainflip-io/chainflip-backend/issues/446
+                                    MessageHash(
+                                        Keccak256::hash(
+                                            &threshold_sig_requst
+                                                .threshold_signature_request
+                                                .payload[..],
+                                        )
+                                        .0,
+                                    ),
+                                    SigningInfo::new(
+                                        KeyId(
+                                            threshold_sig_requst
+                                                .threshold_signature_request
+                                                .public_key,
+                                        ),
+                                        signers,
+                                    ),
+                                );
+
+                            // The below will be replaced with one shot channels
+                            multisig_instruction_sender
+                                .send(sign_tx)
+                                .map_err(|_| "Receiver should exist")
+                                .unwrap();
+
+                            let response = match multisig_event_receiver.recv().await {
+                                Some(event) => match event {
+                                    MultisigEvent::MessageSigningResult(SigningOutcome {
+                                        id: _,
+                                        result,
+                                    }) => match result {
+                                        Ok(sig) => ThresholdSignatureResponse::<
+                                            AccountId32,
+                                            pallet_cf_vaults::SchnorrSigTruncPubkey,
+                                        >::Success(
+                                            sig.into()
+                                        ),
+                                        Err((err, bad_account_ids)) => {
+                                            slog::error!(
+                                                logger,
+                                                "Signing failed with error: {:?}",
+                                                err
+                                            );
+                                            let bad_account_ids: Vec<_> = bad_account_ids
+                                                .iter()
+                                                .map(|v| AccountId32::from(v.0))
+                                                .collect();
+                                            ThresholdSignatureResponse::Error(bad_account_ids)
+                                        }
+                                    },
+                                    MultisigEvent::KeygenResult(keygen_result) => {
+                                        panic!(
+                                            "Expecting MessageSigningResult, got: {:?}",
+                                            keygen_result
+                                        );
+                                    }
+                                },
+                                _ => panic!("Channel closed"),
+                            };
+                            let signer = signer.lock().unwrap();
+                            subxt_client
+                                .threshold_signature_response(
+                                    &*signer,
+                                    threshold_sig_requst.ceremony_id,
+                                    response,
+                                )
+                                .await
+                                .unwrap(); // TODO handle error
+                        }
+                        VaultRotationRequestEvent(vault_rotation_request_event) => {
+                            match vault_rotation_request_event.vault_rotation_request.chain {
+                                ChainParams::Ethereum(tx) => {
+                                    slog::debug!(logger, "Broadcasting to ETH: {:?}", tx);
+                                    // TODO: Contract address should come from the state chain
+                                    // https://github.com/chainflip-io/chainflip-backend/issues/459
+                                    let response = match eth_broadcaster
+                                        .send(tx, settings.eth.key_manager_eth_address)
+                                        .await
+                                    {
+                                        Ok(tx_hash) => {
+                                            slog::debug!(
+                                                logger,
+                                                "Broadcast set_agg_key_with_agg_key tx, tx_hash: {}",
+                                                tx_hash
+                                            );
+                                            VaultRotationResponse::Success {
+                                                tx_hash: tx_hash.as_bytes().to_vec(),
+                                            }
+                                        }
+                                        Err(e) => {
+                                            slog::error!(
+                                                logger,
+                                                "Failed to broadcast set_agg_key_with_agg_key tx: {}",
+                                                e
+                                            );
+                                            VaultRotationResponse::Error
+                                        }
+                                    };
+                                    let signer = signer.lock().unwrap();
+                                    subxt_client
+                                        .vault_rotation_response(
+                                            &*signer,
+                                            vault_rotation_request_event.ceremony_id,
+                                            response,
+                                        )
+                                        .await
+                                        .unwrap(); // TODO: Handle error
+                                }
+                                // Leave this to be explicit about future chains being added
+                                ChainParams::Other(_) => panic!("Chain::Other does not exist"),
+                            }
+                        }
+                    },
+                    _ => {
+                        // ignore events we don't care about
                     }
-                },
-                _ => {
-                    // ignore events we don't care about
                 }
             }
-        } else {
-            slog::trace!(logger, "No action for raw event: {:?}", raw_event);
-            continue;
+            None => {
+                slog::trace!(logger, "No action for raw event: {:?}", raw_event);
+                continue;
+            }
         }
     }
 }
@@ -201,6 +288,8 @@ mod tests {
         let signer = Arc::new(Mutex::new(pair_signer));
         let (multisig_instruction_sender, _multisig_instruction_receiver) =
             tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+        let (_multisig_event_sender, multisig_event_receiver) =
+            tokio::sync::mpsc::unbounded_channel::<MultisigEvent>();
 
         let web3 = eth::new_synced_web3_client(&settings, &logger)
             .await
@@ -217,6 +306,7 @@ mod tests {
             signer,
             eth_broadcaster,
             multisig_instruction_sender,
+            multisig_event_receiver,
             &logger,
         )
         .await;

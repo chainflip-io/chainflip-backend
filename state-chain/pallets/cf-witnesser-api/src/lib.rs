@@ -23,7 +23,7 @@ pub mod pallet {
 	};
 	use pallet_cf_vaults::rotation::{CeremonyId, KeygenResponse, VaultRotationResponse};
 	use pallet_cf_vaults::{
-		rotation::SchnorrSignature, Call as VaultsCall, Config as VaultsConfig,
+		rotation::SchnorrSigTruncPubkey, Call as VaultsCall, Config as VaultsConfig,
 		ThresholdSignatureResponse,
 	};
 	use sp_core::U256;
@@ -130,7 +130,10 @@ pub mod pallet {
 		pub fn witness_threshold_signature_response(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
-			response: ThresholdSignatureResponse<<T as Chainflip>::AccountId, SchnorrSignature>,
+			response: ThresholdSignatureResponse<
+				<T as Chainflip>::AccountId,
+				SchnorrSigTruncPubkey,
+			>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = VaultsCall::threshold_signature_response(ceremony_id, response);
