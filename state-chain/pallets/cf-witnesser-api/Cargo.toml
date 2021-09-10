@@ -14,6 +14,7 @@ targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
 # Chainflip pallets
+cf-chains = {path = '../../chains', default-features = false}
 cf-traits = {path = '../../traits', default-features = false}
 pallet-cf-staking = {path = '../cf-staking', default-features = false}
 pallet-cf-vaults = {path = '../cf-vaults', default-features = false}
@@ -35,6 +36,7 @@ sp-runtime = {default-features = false, version = '3.0.0'}
 [features]
 default = ['std']
 std = [
+  'cf-chains/std',
   'cf-traits/std',
   'codec/std',
   'frame-support/std',

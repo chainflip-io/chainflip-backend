@@ -14,11 +14,12 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-pub mod instances;
-
 use cf_traits::NonceProvider;
 use codec::{Decode, Encode};
-use frame_support::Parameter;
+use frame_support::{
+	dispatch::{DispatchResultWithPostInfo, Dispatchable, PostDispatchInfo},
+	Parameter,
+};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
@@ -149,7 +150,7 @@ pub mod pallet {
 		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 
 		/// The context definition for this instance.
-		type BroadcastContext: TransactionContext<Self> + Member + FullCodec;
+		type BroadcastContext: TransactionContext<Self, Chain = Self::TargetChain> + Member + FullCodec;
 
 		/// Signer nomination.
 		type SignerNomination: SignerNomination<SignerId = Self::ValidatorId>;

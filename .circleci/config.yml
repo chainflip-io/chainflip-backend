@@ -227,6 +227,8 @@ jobs:
           -p pallet-cf-vaults
           -p pallet-cf-witnesser
           -p pallet-cf-witnesser-api
+          -p pallet-cf-broadcast
+          -p pallet-cf-signing
           -p cf-traits
           -- --check
 

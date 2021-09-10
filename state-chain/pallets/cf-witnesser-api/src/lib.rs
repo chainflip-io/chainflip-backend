@@ -14,11 +14,12 @@ mod tests;
 
 #[frame_support::pallet]
 pub mod pallet {
+	use cf_chains::eth::SchnorrSignature;
 	use cf_traits::{Chainflip, Witnesser};
 	use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 	use pallet_cf_staking::{
-		AggKeySignature, Call as StakingCall, Config as StakingConfig, EthTransactionHash,
+		Call as StakingCall, Config as StakingConfig, EthTransactionHash,
 		EthereumAddress, FlipBalance,
 	};
 	use pallet_cf_vaults::rotation::{KeygenResponse, RequestIndex, VaultRotationResponse};
@@ -56,7 +57,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
 			msg_hash: U256,
-			signature: AggKeySignature,
+			signature: SchnorrSignature,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = StakingCall::post_claim_signature(account_id, msg_hash, signature);

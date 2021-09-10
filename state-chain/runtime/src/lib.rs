@@ -360,9 +360,10 @@ impl pallet_cf_staking::Config for Runtime {
 	type Event = Event;
 	type Balance = FlipBalance;
 	type Flip = Flip;
-	type Nonce = u64;
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
+	type NonceProvider = Vaults;
+	type EthereumSigner = chainflip::EthereumSigner;
 	type TimeSource = Timestamp;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
@@ -433,23 +434,23 @@ impl pallet_cf_reputation::Config for Runtime {
 
 use frame_support::instances::{Instance0};
 
-impl pallet_cf_transaction_broadcast::BaseConfig for Runtime {
-	type KeyId = u32;
-	type ValidatorId = AccountId;
-	// More likely to be an enum or something.
-	type ChainId = u32;
-	type NonceProvider = Vaults;
-}
+// impl pallet_cf_broadcast::BaseConfig for Runtime {
+// 	type KeyId = u32;
+// 	type ValidatorId = AccountId;
+// 	// More likely to be an enum or something.
+// 	type ChainId = u32;
+// 	type NonceProvider = Vaults;
+// }
 
-impl
-	pallet_cf_transaction_broadcast::Config<
-		pallet_cf_transaction_broadcast::instances::EthereumInstance,
-	> for Runtime
+impl pallet_cf_signing::Config<Instance0> for Runtime
 {
 	type Event = Event;
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
-	type BroadcastContext = pallet_cf_transaction_broadcast::instances::eth::EthereumBroadcast;
 	type SignerNomination = chainflip::BasicSignerNomination;
+	type TargetChain = cf_chains::Ethereum;
+	type SigningContext = chainflip::EthereumSigner;
+	type KeyProvider = chainflip::VaultKeyProvider;
+	type OfflineConditions = Reputation;
 }
 
 construct_runtime!(
@@ -479,7 +480,7 @@ construct_runtime!(
 		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>, Origin},
 		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>},
 		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
-		EthereumBroadcaster: pallet_cf_transaction_broadcast::<Instance0>::{Module, Call, Storage, Event<T>},
+		EthereumSigner: pallet_cf_signing::<Instance0>::{Module, Call, Storage, Event<T>},
 	}
 );
 

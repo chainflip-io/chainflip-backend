@@ -1,82 +1,32 @@
-//! Types and functions that are common to ethereum broadcasting.
+//! Types and functions that are common to ethereum.
 pub mod register_claim;
 
-use crate::{BaseConfig, TransactionContext};
-
 use codec::{Decode, Encode};
-use ethabi::{Address, Token, Uint, ethereum_types::{U256, H256}};
+use ethabi::{
+	ethereum_types::{H256, U256},
+	Address, Token, Uint,
+};
 use ethereum::{AccessList, TransactionAction};
-use sp_runtime::{RuntimeDebug, traits::{Hash, Keccak256}};
+use sp_runtime::{
+	traits::{Hash, Keccak256},
+	RuntimeDebug,
+};
 use sp_std::prelude::*;
 
 //------------------------//
 // TODO: these should be on-chain constants or config items.
-const RINKEBY_CHAIN_ID: u64 = 4;
-fn stake_manager_contract_address() -> Address {
+pub const CHAIN_ID_MAINNET: u64 = 1;
+pub const CHAIN_ID_ROPSTEN: u64 = 3;
+pub const CHAIN_ID_RINKEBY: u64 = 4;
+pub const CHAIN_ID_KOVAN: u64 = 42;
+
+pub fn stake_manager_contract_address() -> [u8; 20] {
 	const ADDR: &'static str = "Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9";
 	let mut buffer = [0u8; 20];
-	buffer.copy_from_slice(hex::decode(ADDR)
-		.unwrap()
-		.as_slice());
-	Address::from(buffer)
+	buffer.copy_from_slice(hex::decode(ADDR).unwrap().as_slice());
+	buffer
 }
 //--------------------------//
-
-#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
-pub enum EthereumTransactions {
-	RegisterClaim(register_claim::RegisterClaim),
-}
-
-impl<T: BaseConfig> TransactionContext<T> for EthereumTransactions {
-	type Chain = super::Ethereum;
-	type Payload = H256;
-	type Signature = SchnorrSignature;
-	type UnsignedTransaction = UnsignedTransaction;
-	type SignedTransaction = RawSignedTransaction;
-	type TransactionHash = H256;
-	type Error = EthereumTransactionError;
-
-	fn construct_signing_payload(&self) -> Result<Self::Payload, Self::Error> {
-		match self {
-			Self::RegisterClaim(tx) => Ok(tx.sig_data.msg_hash)
-		}
-	}
-
-	fn construct_unsigned_transaction(
-		&mut self,
-		sig: &Self::Signature,
-	) -> Result<Self::UnsignedTransaction, Self::Error> {
-		let (contract, data) = match self {
-			// TODO: check claim expiry?
-			Self::RegisterClaim(ref mut tx) => {
-				tx.populate_sigdata(sig);
-				(
-					stake_manager_contract_address(),
-					tx.abi_encode()?
-				)
-			}
-		};
-
-		Ok(UnsignedTransaction {
-			chain_id: RINKEBY_CHAIN_ID,
-			max_priority_fee_per_gas: None,
-			max_fee_per_gas: None,
-			gas_limit: None,
-			contract,
-			value: U256::zero(),
-			data,
-		})
-	}
-
-	fn verify_tx(
-		&self,
-		signer: &T::ValidatorId,
-		signed_tx: &Self::SignedTransaction,
-	) -> Result<(), Self::Error> {
-		verify_raw(signed_tx, signer)
-	}
-}
-
 
 #[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum EthereumTransactionError {
@@ -94,12 +44,12 @@ pub trait Tokenizable {
 #[derive(Encode, Decode, Copy, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct SigData {
 	/// The message hash aka. payload to be signed over.
-	pub msg_hash: H256,
+	msg_hash: H256,
 	/// The Schnorr signature.
 	sig: Uint,
 	/// The nonce value for the AggKey. Each Signature over an AggKey should have a unique nonce to prevent replay
 	/// attacks.
-	pub nonce: Uint,
+	nonce: Uint,
 	/// The public key derived from the random nonce value `k`. Also known as `nonceTimesGeneratorAddress`.
 	///
 	/// Note this is unrelated to the `nonce` above. The nonce in this context is a generated as part of each signing
@@ -108,6 +58,7 @@ pub struct SigData {
 }
 
 impl SigData {
+	/// Initiate a new `SigData` with a given nonce value.
 	pub fn new_empty(nonce: Uint) -> Self {
 		Self {
 			nonce,
@@ -115,6 +66,7 @@ impl SigData {
 		}
 	}
 
+	/// Returns a copy of the SigData with the `msg_hash` value derived from the provided calldata.
 	pub fn with_msg_hash_from(self, calldata: &[u8]) -> Self {
 		Self {
 			msg_hash: Keccak256::hash(calldata),
@@ -122,6 +74,7 @@ impl SigData {
 		}
 	}
 
+	/// Add the actual signature. This method does no verification.
 	pub fn with_signature(self, schnorr: &SchnorrSignature) -> Self {
 		Self {
 			sig: schnorr.s.into(),
@@ -130,6 +83,7 @@ impl SigData {
 		}
 	}
 
+	/// Get the inner signature components as a `SchnorrSignature`.
 	pub fn get_signature(&self) -> SchnorrSignature {
 		SchnorrSignature {
 			s: self.sig.into(),
@@ -158,11 +112,11 @@ pub struct SchnorrSignature {
 }
 
 /// Required information to construct and sign an ethereum transaction. Equivalet to [ethereum::EIP1559TransactionMessage]
-/// with the following fields omitted: nonce, 
+/// with the following fields omitted: nonce,
 ///
 /// The signer will need to add its account nonce and then sign and rlp-encode the transaction.
 ///
-/// We assume the access_list (EIP-2930) is not required. 
+/// We assume the access_list (EIP-2930) is not required.
 #[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct UnsignedTransaction {
 	pub chain_id: u64,
@@ -176,9 +130,12 @@ pub struct UnsignedTransaction {
 
 pub type RawSignedTransaction = Vec<u8>;
 
-pub fn verify_raw<SignerId>(tx: &RawSignedTransaction, _signer: &SignerId) -> Result<(), EthereumTransactionError> {
-	let decoded: ethereum::EIP1559Transaction = rlp::decode(&tx[..])
-		.map_err(|_| EthereumTransactionError::InvalidRlp)?;
+pub fn verify_raw<SignerId>(
+	tx: &RawSignedTransaction,
+	_signer: &SignerId,
+) -> Result<(), EthereumTransactionError> {
+	let decoded: ethereum::EIP1559Transaction =
+		rlp::decode(&tx[..]).map_err(|_| EthereumTransactionError::InvalidRlp)?;
 	// TODO check contents, signature, etc.
 	Ok(())
 }

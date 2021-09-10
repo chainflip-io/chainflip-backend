@@ -1,5 +1,5 @@
 use crate::{
-	self as pallet_cf_transaction_broadcast, BaseConfig, TransactionContext, BroadcastFailure, SignerNomination,
+	self as pallet_cf_broadcast, BaseConfig, TransactionContext, BroadcastFailure, SignerNomination,
 };
 use codec::{Decode, Encode};
 use frame_support::instances::Instance0;
@@ -22,7 +22,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		TransactionBroadcast: pallet_cf_transaction_broadcast::<Instance0>::{Module, Call, Storage, Event<T>},
+		TransactionBroadcast: pallet_cf_broadcast::<Instance0>::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -144,7 +144,7 @@ impl TransactionContext<Test> for MockBroadcast {
 	}
 }
 
-impl pallet_cf_transaction_broadcast::Config<Instance0> for Test {
+impl pallet_cf_broadcast::Config<Instance0> for Test {
 	type Event = Event;
 	type EnsureWitnessed = MockEnsureWitnessed;
 	type BroadcastContext = MockBroadcast;

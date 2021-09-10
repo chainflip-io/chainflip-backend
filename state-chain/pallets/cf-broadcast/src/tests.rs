@@ -20,7 +20,7 @@ impl MockCfe {
 
 	fn process_event(event: Event) {
 		match event {
-			Event::pallet_cf_transaction_broadcast_Instance0(broadcast_event) => {
+			Event::pallet_cf_broadcast_Instance0(broadcast_event) => {
 				match broadcast_event {
 					BroadcastEvent::ThresholdSignatureRequest(id, key_id, nominees, payload) => {
 						Self::handle_threshold_sig_request(id, key_id, nominees, payload)

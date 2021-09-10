@@ -43,7 +43,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use cf_traits::{BidderProvider, EpochInfo, StakeTransfer};
+use cf_traits::{BidderProvider, EpochInfo, NonceIdentifier, NonceProvider, StakeTransfer};
 use core::time::Duration;
 use frame_support::{
 	debug,
@@ -55,13 +55,11 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
-use pallet_cf_transaction_broadcast::{
-	instances::{
-		eth::{register_claim::RegisterClaim, EthereumTransactions},
-		Ethereum,
-	},
-	Config as BroadcastConfig, Pallet as BroadcastPallet,
+use cf_chains::{
+	eth::{register_claim::RegisterClaim, SchnorrSignature},
+	Ethereum,
 };
+use pallet_cf_signing::SigningContext;
 use sp_std::prelude::*;
 use sp_std::vec;
 
@@ -78,7 +76,6 @@ pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use pallet_cf_transaction_broadcast::instances::eth::SchnorrSignature;
 
 	pub type AccountId<T> = <T as frame_system::Config>::AccountId;
 
@@ -94,7 +91,8 @@ pub mod pallet {
 	pub type EthTransactionHash = [u8; 32];
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	#[pallet::disable_frame_system_supertrait_check]
+	pub trait Config: cf_traits::Chainflip {
 		/// Standard Event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
@@ -106,6 +104,7 @@ pub mod pallet {
 			+ Default
 			+ Copy
 			+ MaybeSerializeDeserialize
+			+ From<u128>
 			+ Into<U256>;
 
 		/// The Flip token implementation.
@@ -120,8 +119,14 @@ pub mod pallet {
 		/// Information about the current epoch.
 		type EpochInfo: EpochInfo<
 			ValidatorId = <Self as frame_system::Config>::AccountId,
-			Amount = FlipBalance<Self>,
+			Amount = Self::Balance,
 		>;
+
+		/// Something that can provide a nonce for the threshold signature.
+		type NonceProvider: NonceProvider;
+
+		/// Ethereum signing context.
+		type EthereumSigner: ThresholdSigner<Self, Chain = Ethereum>;
 
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;
@@ -559,6 +564,7 @@ impl<T: Config> Pallet<T> {
 		Self::register_claim_expiry(account_id.clone(), expiry);
 
 		let transaction = RegisterClaim::new_unsigned(
+			T::NonceProvider::next_nonce(NonceIdentifier::Ethereum),
 			<T as Config>::AccountId::from_ref(account_id).as_ref(),
 			amount,
 			&address,
@@ -569,6 +575,7 @@ impl<T: Config> Pallet<T> {
 		// Emit a signature request.
 		// todo!("handle this in dedicated pallet.");
 		// T::request_signature(transaction.sig_data.msg_hash, OnSuccess::PostClaimSignature);
+		T::EthereumSigner::request_signature(transaction);
 
 		// Store the claim params for later.
 		PendingClaims::<T>::insert(account_id, transaction);
@@ -669,14 +676,15 @@ impl<T: Config> Pallet<T> {
 
 		for (_, account_id) in to_expire {
 			if let Some(pending_claim) = PendingClaims::<T>::take(account_id) {
+				let claim_amount = pending_claim.amount.low_u128().into();
 				// Notify that the claim has expired.
 				Self::deposit_event(Event::<T>::ClaimExpired(
 					account_id.clone(),
-					pending_claim.amount,
+					claim_amount,
 				));
 
 				// Re-credit the account
-				T::Flip::revert_claim(&account_id, pending_claim.amount);
+				T::Flip::revert_claim(&account_id, claim_amount);
 
 				// Add weight: One read/write each for deleting the claim and updating the stake.
 				weight = weight

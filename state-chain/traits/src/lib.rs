@@ -2,6 +2,7 @@
 
 pub mod mocks;
 
+use cf_chains::Chain;
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::Member;
 use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
@@ -10,15 +11,20 @@ use frame_support::{
 	traits::{Imbalance, SignedImbalance},
 	Parameter,
 };
+use frame_system::pallet_prelude::OriginFor;
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
 
 /// and Chainflip was born...some base types
-pub trait Chainflip {
+pub trait Chainflip: frame_system::Config {
 	/// An amount for a bid
 	type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 	/// An identity for a validator
 	type ValidatorId: Member + Parameter;
+	/// An identifier for keys used in threshold signature ceremonies.
+	type KeyId: Member + Parameter;
+	/// The overarching call type.
+	type Call: Member + Parameter + UnfilteredDispatchable<Origin = Self::Origin>;
 }
 
 /// A trait abstracting the functionality of the witnesser
@@ -252,4 +258,64 @@ pub enum NonceIdentifier {
 pub trait NonceProvider {
 	/// Provide the next nonce for the chain identified
 	fn next_nonce(identifier: NonceIdentifier) -> Nonce;
+}
+
+/// Something that can nominate signers from the set of active validators.
+pub trait SignerNomination {
+	/// The id type of signers. Most likely the same as the runtime's `ValidatorId`.
+	type SignerId;
+
+	/// Returns a random live signer. The seed value is used as a source of randomness.
+	fn nomination_with_seed(seed: u64) -> Self::SignerId;
+
+	/// Returns a list of live signers where the number of signers is sufficient to author a threshold signature. The
+	/// seed value is used as a source of randomness.
+	fn threshold_nomination_with_seed(seed: u64) -> Vec<Self::SignerId>;
+}
+
+/// Provides the currently valid key for multisig ceremonies.
+pub trait KeyProvider<C: Chain> {
+	/// The type of the provided key_id.
+	type KeyId;
+
+	/// Gets the key.
+	fn current_key() -> Self::KeyId;
+}
+
+/// Api trait for pallets that need to sign things.
+pub trait ThresholdSigner<T, C>
+where
+	T: Chainflip,
+	C: Chain,
+{
+	type Context: SigningContext<T, Chain = C>;
+
+	/// Initiate a signing request and return the request id.
+	fn request_signature(context: Self::Context) -> u64;
+}
+
+pub trait SigningContext<T: Chainflip> {
+	/// The chain that this context applies to.
+	type Chain: Chain;
+	/// The payload type that will be signed over.
+	type Payload: Parameter;
+	/// The signature type that is returned by the threshold signature.
+	type Signature: Parameter;
+	/// The callback that will be dispatched when we receive the signature.
+	type Callback: UnfilteredDispatchable<Origin = T::Origin> + Into<<T as Chainflip>::Call>;
+
+	/// Returns the signing payload.
+	fn get_payload(&self) -> Self::Payload;
+
+	/// Returns the callback to be triggered on success.
+	fn get_callback(&self, signature: Self::Signature) -> Self::Callback;
+
+	/// Dispatches the success callback.
+	fn dispatch_callback(
+		&self,
+		origin: OriginFor<T>,
+		signature: Self::Signature,
+	) -> DispatchResultWithPostInfo {
+		self.get_callback(signature).dispatch_bypass_filter(origin)
+	}
 }

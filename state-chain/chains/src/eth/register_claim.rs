@@ -1,12 +1,9 @@
-//! Definitions for the "registerClaim" transaction broadcast.
+//! Definitions for the "registerClaim" transaction.
 
-use super::{
-	EthereumTransactionError, SchnorrSignature, SigData, Tokenizable,
-};
+use super::{EthereumTransactionError, SchnorrSignature, SigData, Tokenizable};
 
-use cf_traits::{NonceIdentifier, NonceProvider};
 use codec::{Decode, Encode};
-use ethabi::{Address, FixedBytes, Param, ParamType, StateMutability, Token, Uint};
+use ethabi::{Address, FixedBytes, Param, ParamType, StateMutability, Token, Uint, ethereum_types::H256};
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 
@@ -26,27 +23,33 @@ pub struct RegisterClaim {
 }
 
 impl RegisterClaim {
-	pub fn new_unsigned<N: NonceProvider, Amount: Into<Uint>>(
+	pub fn new_unsigned<Nonce: Into<Uint>, Amount: Into<Uint>>(
+		nonce: Nonce,
 		node_id: &[u8; 32],
 		amount: Amount,
 		address: &[u8; 20],
 		expiry: u64,
 	) -> Result<Self, EthereumTransactionError> {
 		let mut calldata = Self {
-			sig_data: SigData::new_empty(N::next_nonce(NonceIdentifier::Ethereum).into()),
+			sig_data: SigData::new_empty(nonce.into()),
 			node_id: node_id.to_vec(),
 			amount: amount.into(),
 			address: address.into(),
 			expiry: expiry.into(),
 		};
-		calldata.sig_data = calldata.sig_data.with_msg_hash_from(calldata.abi_encode()?.as_slice());
+		calldata.sig_data = calldata
+			.sig_data
+			.with_msg_hash_from(calldata.abi_encode()?.as_slice());
 
 		Ok(calldata)
 	}
 
+	pub fn get_msg_hash(&self) -> H256 {
+		self.sig_data.msg_hash
+	}
+
 	pub fn abi_encode(&self) -> Result<Vec<u8>, EthereumTransactionError> {
-		self
-			.get_function()
+		self.get_function()
 			.encode_input(&[
 				self.sig_data.tokenize(),
 				Token::FixedBytes(self.node_id.clone()),
@@ -89,25 +92,15 @@ impl RegisterClaim {
 	}
 }
 
-
 #[cfg(test)]
 mod test_register_claim {
 	use super::*;
-	
-	struct MockNonceProvider;
-	
-	const NONCE: u64 = 6;
-	impl NonceProvider for MockNonceProvider {
-
-		fn next_nonce(_: NonceIdentifier) -> cf_traits::Nonce {
-			NONCE
-		}
-	}
 
 	#[test]
 	fn test_claim_payload() {
 		// TODO: this test would be more robust with randomly generated parameters.
 		use ethabi::Token;
+		const NONCE: u64 = 6;
 		const EXPIRY_SECS: u64 = 10;
 		const AMOUNT: u128 = 1234567890;
 		const FAKE_HASH: [u8; 32] = [0x21; 32];
@@ -117,21 +110,25 @@ mod test_register_claim {
 		const TEST_ADDR: [u8; 20] = [0xcf; 20];
 
 		let stake_manager = ethabi::Contract::load(
-			std::include_bytes!("../../../../../../engine/src/eth/abis/StakeManager.json").as_ref(),
+			std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json").as_ref(),
 		)
 		.unwrap();
 
 		let register_claim_reference = stake_manager.function("registerClaim").unwrap();
 
-		let mut register_claim_runtime = RegisterClaim::new_unsigned::<MockNonceProvider, u128>(
-			&TEST_ACCT, AMOUNT, &TEST_ADDR, EXPIRY_SECS).unwrap();
+		let mut register_claim_runtime =
+			RegisterClaim::new_unsigned(NONCE, &TEST_ACCT, AMOUNT, &TEST_ADDR, EXPIRY_SECS)
+				.unwrap();
 
 		// Erase the msg_hash.
 		register_claim_runtime.sig_data.msg_hash = FAKE_HASH.into();
-		register_claim_runtime.sig_data = register_claim_runtime.sig_data.with_signature(&SchnorrSignature {
-			s: FAKE_SIG,
-			k_times_g_addr: FAKE_NONCE_TIMES_G_ADDR,
-		});
+		register_claim_runtime.sig_data =
+			register_claim_runtime
+				.sig_data
+				.with_signature(&SchnorrSignature {
+					s: FAKE_SIG,
+					k_times_g_addr: FAKE_NONCE_TIMES_G_ADDR,
+				});
 		let runtime_payload = register_claim_runtime.abi_encode().unwrap();
 
 		assert_eq!(

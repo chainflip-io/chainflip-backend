@@ -820,6 +820,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "cf-chains"
+version = "0.1.0"
+dependencies = [
+ "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=bfa7866)",
+ "ethereum",
+ "frame-support",
+ "frame-system",
+ "hex",
+ "parity-scale-codec",
+ "rlp",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "cf-p2p"
 version = "0.1.0"
 dependencies = [
@@ -857,6 +872,7 @@ dependencies = [
 name = "cf-traits"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "frame-support",
  "frame-system",
  "parity-scale-codec",
@@ -1823,7 +1839,7 @@ dependencies = [
 [[package]]
 name = "ethabi"
 version = "14.1.0"
-source = "git+https://github.com/chainflip-io/ethabi?rev=a522b41#a522b41e7566fc51632b1f3aefd3a301c18c7281"
+source = "git+https://github.com/chainflip-io/ethabi?rev=bfa7866#bfa7866611f63960d8bffbc0117691f7b479e533"
 dependencies = [
  "anyhow",
  "ethereum-types 0.11.0",
@@ -4924,6 +4940,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-broadcast"
+version = "0.1.0"
+dependencies = [
+ "cf-traits",
+ "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=bfa7866)",
+ "ethereum",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "hex",
+ "parity-scale-codec",
+ "rlp",
+ "serde 1.0.126",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-emissions"
 version = "0.1.0"
 dependencies = [
@@ -4990,22 +5026,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-cf-reqrep"
-version = "0.1.0"
-dependencies = [
- "downcast-rs",
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "parity-scale-codec",
- "serde 1.0.126",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
 name = "pallet-cf-rewards"
 version = "0.1.0"
 dependencies = [
@@ -5023,16 +5043,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-signing"
+version = "0.1.0"
+dependencies = [
+ "cf-chains",
+ "cf-traits",
+ "downcast-rs",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-cf-reputation",
+ "parity-scale-codec",
+ "serde 1.0.126",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-staking"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "cf-traits",
  "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=114a29d)",
  "ethereum-types 0.12.0",
  "frame-support",
  "frame-system",
  "pallet-cf-flip",
- "pallet-cf-transaction-broadcast",
+ "pallet-cf-signing",
  "pallet-cf-validator",
  "parity-scale-codec",
  "serde 1.0.126",
@@ -5041,26 +5081,6 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "substrate-wasm-builder",
-]
-
-[[package]]
-name = "pallet-cf-transaction-broadcast"
-version = "0.1.0"
-dependencies = [
- "cf-traits",
- "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=a522b41)",
- "ethereum",
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "hex",
- "parity-scale-codec",
- "rlp",
- "serde 1.0.126",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
 ]
 
 [[package]]
@@ -5123,6 +5143,7 @@ dependencies = [
 name = "pallet-cf-witnesser-api"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "cf-traits",
  "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=114a29d)",
  "frame-support",
@@ -8822,6 +8843,7 @@ dependencies = [
 name = "state-chain-runtime"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "cf-traits",
  "frame-benchmarking",
  "frame-executive",
@@ -8833,13 +8855,14 @@ dependencies = [
  "pallet-aura",
  "pallet-authorship",
  "pallet-cf-auction",
+ "pallet-cf-broadcast",
  "pallet-cf-emissions",
  "pallet-cf-flip",
  "pallet-cf-governance",
  "pallet-cf-reputation",
  "pallet-cf-rewards",
+ "pallet-cf-signing",
  "pallet-cf-staking",
- "pallet-cf-transaction-broadcast",
  "pallet-cf-validator",
  "pallet-cf-vaults",
  "pallet-cf-witnesser",
