@@ -228,6 +228,7 @@ jobs:
 
   fmt-validator-package:
     executor: rust-base
+    resource_class: small
     steps:
       - checkout
       - run: >
@@ -285,6 +286,7 @@ jobs:
           webhook: $DW_ALERTS_STAGING
 
   clone-contracts-repo:
+    resource_class: small
     docker:
       - image: "cimg/base:stable"
     steps:
@@ -332,6 +334,7 @@ jobs:
           webhook: $DW_ALERTS_STAGING
 
   authenticate-to-cluster:
+    resource_class: small
     executor: chainflip-master
     parameters:
       cluster_name:
@@ -347,6 +350,7 @@ jobs:
             - .kube/*
 
   test-single-node:
+    resource_class: small
     executor: chainflip-master
     steps:
       - attach_workspace:
@@ -371,6 +375,14 @@ jobs:
       - run:
           name: Test single node
           command: helm test bashful -n default
+      - run:
+          name: Dump logs (state-chain-node)
+          when: always
+          command: kubectl logs -l app.kubernetes.io/name=state-chain-node
+      - run:
+          name: Dump logs (chainflip-engine)
+          when: always
+          command: kubectl logs -l app.kubernetes.io/name=chainflip-engine
       - run:
           name: Destroy single node
           when: always
