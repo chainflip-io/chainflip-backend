@@ -41,8 +41,8 @@ mod tests;
 extern crate assert_matches;
 
 use cf_traits::{
-	ActiveValidatorRange, Auction, AuctionError, AuctionPhase, BidderProvider, StakerHandler,
-	VaultRotation, VaultRotationHandler,
+	ActiveValidatorRange, Auction, AuctionError, AuctionPhase, BidderProvider, ChainflipAccount,
+	ChainflipAccountState, StakerHandler, VaultRotation, VaultRotationHandler,
 };
 use frame_support::pallet_prelude::*;
 use frame_support::sp_runtime::offchain::storage_lock::BlockNumberProvider;
@@ -50,7 +50,7 @@ use frame_support::sp_std::mem;
 use frame_support::traits::ValidatorRegistration;
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_runtime::traits::{AtLeast32BitUnsigned, One, Zero};
+use sp_runtime::traits::{AtLeast32BitUnsigned, Convert, One, Zero};
 use sp_std::cmp::min;
 use sp_std::prelude::*;
 
@@ -329,7 +329,12 @@ impl<T: Config> Auction for Pallet<T> {
 			// Things have gone well and we have a set of 'Winners', congratulations.
 			// We are ready to call this an auction a day resetting the bidders in storage and
 			// setting the state ready for a new set of 'Bidders'
-			AuctionPhase::ValidatorsSelected(winners, min_bid, ..) => {
+			AuctionPhase::ValidatorsSelected(
+				winners,
+				min_bid,
+				remaining_bidders,
+				backup_group_size,
+			) => {
 				// If this is genesis we auto confirm
 				let result = if frame_system::Pallet::<T>::current_block_number() == Zero::zero() {
 					Ok(())
@@ -339,6 +344,33 @@ impl<T: Config> Auction for Pallet<T> {
 
 				match result {
 					Ok(_) => {
+						let update_validators = |validators, state| -> Result<(), AuctionError> {
+							for validator_id in validators {
+								let account_id = T::AccountIdOf::convert(validator_id)
+									.ok_or_else(|| AuctionError::Abort)?;
+								T::ChainflipAccount::update_state(&account_id, state);
+							}
+							Ok(())
+						};
+
+						let backup_validators: Vec<T::ValidatorId> = remaining_bidders
+							.get(0usize..backup_group_size as usize)
+							.unwrap_or_default()
+							.iter()
+							.map(|(validator_id, _)| *validator_id)
+							.collect();
+
+						let passive: Vec<T::ValidatorId> = remaining_bidders
+							.get(backup_group_size as usize..remaining_bidders.len())
+							.unwrap_or_default()
+							.iter()
+							.map(|(validator_id, _)| *validator_id)
+							.collect();
+
+						update_validators(winners.clone(), ChainflipAccountState::Validator);
+						update_validators(backup_validators, ChainflipAccountState::Backup);
+						update_validators(passive, ChainflipAccountState::Passive);
+
 						let phase = AuctionPhase::WaitingForBids(winners, min_bid);
 						<CurrentPhase<T>>::put(phase.clone());
 						Self::deposit_event(Event::AuctionConfirmed(
