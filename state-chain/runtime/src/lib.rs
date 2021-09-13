@@ -392,7 +392,6 @@ impl pallet_cf_emissions::Config for Runtime {
 
 impl pallet_cf_rewards::Config for Runtime {
 	type Event = Event;
-	// type WeightInfo = weights::pallet_cf_rewards::WeightInfo<Runtime>;
 }
 
 parameter_types! {
@@ -647,7 +646,6 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, frame_system, SystemBench::<Runtime>);
 			add_benchmark!(params, batches, pallet_timestamp, Timestamp);
 			add_benchmark!(params, batches, pallet_cf_validator, Validator);
-			add_benchmark!(params, batches, pallet_cf_rewards, Rewards);
 			add_benchmark!(params, batches, pallet_cf_auction, Auction);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
