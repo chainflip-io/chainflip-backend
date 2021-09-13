@@ -114,15 +114,23 @@ where
         let m: P::Message = match m.try_into() {
             Ok(m) => m,
             Err(_) => {
-                eprintln!("Unexpected message type for stage {}", self);
+                slog::warn!(
+                    self.common.logger,
+                    "Ignoring an unexpected message for stage {} from party [{}]",
+                    self,
+                    signer_idx
+                );
                 return ProcessMessageResult::Ignored;
             }
         };
 
         if self.messages.contains_key(&signer_idx) {
-            // slog::error!(self.common.logger, "Already received from this party");
-
-            println!("Already received from this party");
+            slog::warn!(
+                self.common.logger,
+                "Ignoring a redundant message for stage {} from party [{}]",
+                self,
+                signer_idx
+            );
             return ProcessMessageResult::Ignored;
         }
 

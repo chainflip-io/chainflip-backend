@@ -71,7 +71,7 @@ impl SigningManager {
         key_info: KeygenResultInfo,
         sign_info: SigningInfo,
     ) {
-        slog::debug!(self.logger, "Received request to sign");
+        slog::debug!(self.logger, "Processing a request to sign");
 
         if !sign_info.signers.contains(&self.id) {
             slog::warn!(
@@ -104,14 +104,10 @@ impl SigningManager {
             }
         };
 
-        let key_id = sign_info.id;
-
-        let mi = MessageInfo { hash: data, key_id };
-
-        let entry = self
-            .signing_states
-            .entry(mi.clone())
-            .or_insert(SigningState::new_unauthorised());
+        let mi = MessageInfo {
+            hash: data,
+            key_id: sign_info.id,
+        };
 
         // We have the key and have received a request to sign
         slog::trace!(
@@ -119,6 +115,11 @@ impl SigningManager {
             "Creating new signing state for message: {:?}",
             mi.hash
         );
+
+        let entry = self
+            .signing_states
+            .entry(mi.clone())
+            .or_insert(SigningState::new_unauthorised(self.logger.clone()));
 
         entry.on_request_to_sign(
             our_idx,
@@ -141,7 +142,7 @@ impl SigningManager {
         let state = self
             .signing_states
             .entry(mi)
-            .or_insert(SigningState::new_unauthorised());
+            .or_insert(SigningState::new_unauthorised(self.logger.clone()));
 
         state.process_message(sender_id, data);
     }

@@ -59,4 +59,5 @@ pub struct CeremonyCommon {
     pub all_idxs: Vec<usize>,
     /// Sending end of the channel used for p2p communication
     pub p2p_sender: P2PSender,
+    pub logger: slog::Logger,
 }

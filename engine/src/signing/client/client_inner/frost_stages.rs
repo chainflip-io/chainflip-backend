@@ -124,14 +124,19 @@ impl StageProcessor<SigningData, SchnorrSignature> for VerifyCommitmentsBroadcas
             }
         };
 
+        slog::debug!(
+            self.common.logger,
+            "Initial commitments have been correctly broadcast for ceremony: [todo]"
+        );
+
+        let wrapper = SigningMessageWrapper::new(self.signing_common.message_info.clone());
+
         let processor = LocalSigStage3 {
             common: self.common.clone(),
-            signing_common: self.signing_common.clone(),
+            signing_common: self.signing_common,
             nonces: self.nonces,
             commitments: verified_commitments,
         };
-
-        let wrapper = SigningMessageWrapper::new(self.signing_common.message_info.clone());
 
         let state = BroadcastStage::new(processor, self.common, wrapper);
 
@@ -153,7 +158,10 @@ impl StageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
     type Message = LocalSig3;
 
     fn init(&self) -> Self::Message {
-        println!("<<< We are in local state stage and have everyone's verified commitments!");
+        slog::trace!(
+            self.common.logger,
+            "Generating local sig for ceremony [todo]"
+        );
 
         frost::generate_local_sig(
             &self.signing_common.message_info.hash.0,
@@ -203,9 +211,7 @@ impl StageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsBroadcastS
             data.push(self.local_sigs.get(&idx).cloned().unwrap());
         }
 
-        let vcb = VerifyLocalSig4 { data };
-
-        vcb.into()
+        VerifyLocalSig4 { data }.into()
     }
 
     fn should_delay(&self, _: &SigningData) -> bool {
@@ -220,27 +226,26 @@ impl StageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsBroadcastS
             }
         };
 
-        println!("GOT LOCAL SIGS!");
+        slog::debug!(
+            self.common.logger,
+            "Local signatures have been correctly broadcast for ceremony: [todo]"
+        );
 
         let all_idxs = &self.common.all_idxs;
 
-        let mut pubkeys = Vec::with_capacity(all_idxs.len());
+        let pubkeys: Vec<_> = all_idxs
+            .iter()
+            .map(|idx| self.signing_common.key.party_public_keys[idx - 1])
+            .collect();
 
-        for idx in all_idxs {
-            let pk = self.signing_common.key.party_public_keys[idx - 1];
-            pubkeys.push(pk);
-        }
-
-        let result = frost::aggregate_signature(
+        match frost::aggregate_signature(
             &self.signing_common.message_info.hash.0,
             &all_idxs,
             self.signing_common.key.get_public_key(),
             &pubkeys,
             &self.commitments,
             &local_sigs,
-        );
-
-        match result {
+        ) {
             Ok(sig) => StageResult::Done(sig.into()),
             Err(failed_idxs) => StageResult::Error(failed_idxs),
         }

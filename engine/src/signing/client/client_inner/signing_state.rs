@@ -50,20 +50,23 @@ impl MessageWrapper<SigningData> for SigningMessageWrapper {
 struct SigningStatePreKey {
     /// We need to store senders as `AccountId` as we might
     /// not know the
-    delayed_messages: Vec<(AccountId, SigningData)>,
+    delayed_messages_by_id: Vec<(AccountId, SigningData)>,
     should_expire_at: std::time::Instant,
+    logger: slog::Logger,
 }
 
 #[derive(Clone)]
 struct SigningStateWithKey {
     state: Option<Box<dyn CeremonyStage<Message = SigningData, Result = SchnorrSignature>>>,
-    delayed_messages: Vec<(usize, SigningData)>,
+    // MAXIM: should this store messages by id instead of signer_idx?
+    delayed_messages_by_idx: Vec<(usize, SigningData)>,
     // TODO: this should be specialized to sending
     // results only (no p2p stuff)
     result_sender: EventSender,
     message_info: MessageInfo,
     validator_map: Arc<ValidatorMaps>,
     should_expire_at: std::time::Instant,
+    logger: slog::Logger,
 }
 
 #[derive(Clone)]
@@ -80,8 +83,8 @@ pub struct SigningState {
 
 impl SigningStatePreKey {
     fn add_delayed(&mut self, id: AccountId, m: SigningData) {
-        println!("Adding a delayed message");
-        self.delayed_messages.push((id, m));
+        slog::debug!(self.logger, "Adding a delayed message");
+        self.delayed_messages_by_id.push((id, m));
     }
 
     fn try_expiring(&self) -> Option<Vec<AccountId>> {
@@ -89,7 +92,7 @@ impl SigningStatePreKey {
 
         if self.should_expire_at < now {
             let nodes = self
-                .delayed_messages
+                .delayed_messages_by_id
                 .iter()
                 .map(|(id, _)| id.clone())
                 .collect();
@@ -108,8 +111,13 @@ impl SigningStateWithKey {
 
         // TODO: check that the party is a signer for this ceremony
         if state.should_delay(&m) {
-            println!("Delaying message {} from party idx [{}]", m, sender_idx);
-            self.delayed_messages.push((sender_idx, m));
+            slog::debug!(
+                self.logger,
+                "Delaying message {} from party idx [{}]",
+                m,
+                sender_idx
+            );
+            self.delayed_messages_by_idx.push((sender_idx, m));
             return;
         }
 
@@ -119,11 +127,14 @@ impl SigningStateWithKey {
             ProcessMessageResult::CollectedAll => {
                 let state = self.state.take().unwrap();
 
-                // Is this the only point at which we can get result?
-                // (no, there is also timeout)
+                // This is the only point at which we can get the result (apart from the timeout)
                 match state.finalize() {
                     StageResult::NextStage(mut stage) => {
-                        println!("State transition to {}", &stage);
+                        slog::debug!(
+                            self.logger,
+                            "Signing Ceremony [todo] transitions to {}",
+                            &stage
+                        );
 
                         stage.init();
 
@@ -150,7 +161,7 @@ impl SigningStateWithKey {
                     StageResult::Done(signature) => {
                         self.send_result(Ok(signature));
 
-                        println!("Reached final stage!");
+                        slog::debug!(self.logger, "Signing ceremony reached the final stage!");
                     }
                 }
             }
@@ -160,7 +171,7 @@ impl SigningStateWithKey {
         }
     }
 
-    fn process_message(&mut self, id: AccountId, m: SigningData) {
+    fn process_message_for_id(&mut self, id: AccountId, m: SigningData) {
         // Check that the validator has access to key
         let sender_idx = match self.validator_map.get_idx(&id) {
             Some(idx) => idx,
@@ -171,10 +182,15 @@ impl SigningStateWithKey {
     }
 
     fn process_delayed(&mut self) {
-        let messages = self.delayed_messages.split_off(0);
+        let messages = self.delayed_messages_by_idx.split_off(0);
 
         for (idx, m) in messages {
-            println!("Processing delayed message {} from party [{}]", m, idx);
+            slog::debug!(
+                self.logger,
+                "Processing delayed message {} from party [{}]",
+                m,
+                idx
+            );
             self.process_message_for_idx(idx, m);
         }
     }
@@ -220,12 +236,13 @@ impl SigningState {
         event_sender: EventSender,
         logger: &slog::Logger,
     ) {
-        println!("on_request to sign");
-
-        let delayed_messages = match &mut self.inner {
-            SigningStateInner::SigningStatePreKey(state) => state.delayed_messages.split_off(0),
+        let (delayed_messages, logger) = match &mut self.inner {
+            SigningStateInner::SigningStatePreKey(state) => (
+                state.delayed_messages_by_id.split_off(0),
+                state.logger.clone(),
+            ),
             SigningStateInner::SigningStateWithKey(_) => {
-                println!("Ignoring duplicate request to sign");
+                slog::warn!(logger, "Ignoring duplicate request to sign");
                 return;
             }
         };
@@ -234,6 +251,7 @@ impl SigningState {
             p2p_sender: P2PSender::new(key_info.validator_map.clone(), event_sender.clone()),
             own_idx: signer_idx,
             all_idxs: signer_idxs.clone(),
+            logger: logger.clone(),
         };
 
         let signing_common = SigningStateCommonInfo {
@@ -255,7 +273,7 @@ impl SigningState {
         let mut state = SigningStateWithKey {
             state: Some(Box::new(state)),
             validator_map: key_info.validator_map.clone(),
-            delayed_messages: Vec::new(),
+            delayed_messages_by_idx: Vec::new(),
             result_sender: event_sender,
             message_info,
             // Unlike other state transitions, we don't take into account
@@ -263,11 +281,17 @@ impl SigningState {
             // to sign (we don't want other parties to be able to
             // control when our stages time out)
             should_expire_at: Instant::now() + STAGE_DURATION,
+            logger: logger.clone(),
         };
 
         // process delayed messages
         for (id, m) in delayed_messages {
-            state.process_message(id, m);
+            // TODO: show which message?
+
+            // Why not map id to idx at this stage?
+            slog::debug!(logger, "Processing a delayed message");
+
+            state.process_message_for_id(id, m);
         }
 
         self.inner = SigningStateInner::SigningStateWithKey(state);
@@ -276,11 +300,12 @@ impl SigningState {
     /// Create State w/o access to key info with
     /// the only purpose of being able to keep delayed
     /// messages in the same place
-    pub fn new_unauthorised() -> Self {
+    pub fn new_unauthorised(logger: slog::Logger) -> Self {
         SigningState {
             inner: SigningStateInner::SigningStatePreKey(SigningStatePreKey {
-                delayed_messages: Vec::new(),
+                delayed_messages_by_id: Vec::new(),
                 should_expire_at: Instant::now() + STAGE_DURATION,
+                logger,
             }),
         }
     }
@@ -291,7 +316,7 @@ impl SigningState {
                 state.add_delayed(id, m);
             }
             SigningStateInner::SigningStateWithKey(state) => {
-                state.process_message(id, m);
+                state.process_message_for_id(id, m);
             }
         }
     }
