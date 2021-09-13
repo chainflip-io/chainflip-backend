@@ -1,0 +1,10 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "author_insertKey",
+  "params": [
+    "$KEY_TYPE",
+    "$KEY_PHRASE",
+    "$KEY_HASH"
+  ]
+}

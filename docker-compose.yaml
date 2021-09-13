@@ -1,0 +1,48 @@
+version: "3"
+
+services:
+  #  chainflip-engine:
+  #    container_name: bashful-engine
+  #    pull_policy: always
+  #    image: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:bc94cacbdf3cbb91840c81758efdbd10533b7960
+  #    restart: always
+  #    depends_on:
+  #      - state-chain-node
+  #      - nats
+  #    environment:
+  #      RUST_BACKTRACE: full
+  #    volumes:
+  #      - ./engine/config/docker:/chainflip-engine/config
+  #      - ./engine/tests:/chainflip-engine/tests
+  #    networks:
+  #      chainflip:
+
+  state-chain-node:
+    container_name: bashful
+    pull_policy: always
+    image: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:bc94cacbdf3cbb91840c81758efdbd10533b7960
+    ports:
+      - "30333:30333"
+      - "9944:9944"
+      - "9933:9933"
+    command:
+      - --chain
+      - chainflip-local
+      - --base-path
+      - /state-chain-node/data/bashful-develop
+      - --validator
+      - --rpc-methods
+      - Unsafe
+      - --rpc-external
+      - --ws-external
+    networks:
+      chainflip:
+  nats:
+    image: nats
+    container_name: nats
+    ports:
+      - "4222:4222"
+    networks:
+      chainflip:
+networks:
+  chainflip:
