@@ -33,10 +33,10 @@ mod test {
 			// Having moved into the BidsTaken phase we should have our list of bidders filtered
 			// Expecting the phase to change, a set of winners, the bidder list and a bond value set
 			// to our min bid
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::WinnersSelected(winners, min_bid))
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::ValidatorsSelected(winners, min_bid))
 				if winners == vec![MAX_BID.0, JOE_BID.0, LOW_BID.0] && min_bid == LOW_BID.1
 			);
-			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::WinnersSelected(winners, min_bid)
+			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::ValidatorsSelected(winners, min_bid)
 				if winners == vec![MAX_BID.0, JOE_BID.0, LOW_BID.0] && min_bid == LOW_BID.1
 			);
 			assert_eq!(
@@ -101,11 +101,11 @@ mod test {
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(_)));
 			assert_matches!(
 				AuctionPallet::process(),
-				Ok(AuctionPhase::WinnersSelected(..))
+				Ok(AuctionPhase::ValidatorsSelected(..))
 			);
 
 			// assert!(::try_confirmation());
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(winners, min_bid)
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(winners, min_bid)
 				if !winners.is_empty() && min_bid > 0
 			);
 			// Kill it

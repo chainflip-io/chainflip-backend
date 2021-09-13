@@ -41,7 +41,7 @@ mod tests;
 extern crate assert_matches;
 
 use cf_traits::{
-	Auction, AuctionError, AuctionPhase, ActiveValidatorRange, BidderProvider, StakerHandler,
+	ActiveValidatorRange, Auction, AuctionError, AuctionPhase, BidderProvider, StakerHandler,
 	VaultRotation, VaultRotationHandler,
 };
 use frame_support::pallet_prelude::*;
@@ -104,7 +104,8 @@ pub mod pallet {
 	/// Size range for number of bidders in auction (min, max)
 	#[pallet::storage]
 	#[pallet::getter(fn active_validator_size_range)]
-	pub(super) type ActiveValidatorSizeRange<T: Config> = StorageValue<_, ActiveValidatorRange, ValueQuery>;
+	pub(super) type ActiveValidatorSizeRange<T: Config> =
+		StorageValue<_, ActiveValidatorRange, ValueQuery>;
 
 	/// The current auction we are in
 	#[pallet::storage]
@@ -270,29 +271,57 @@ impl<T: Config> Auction for Pallet<T> {
 			// If we have a valid set, within the size range, we store this set as the
 			// 'winners' of this auction, change the state to 'Completed' and store the
 			// minimum bid needed to be included in the set.
-			AuctionPhase::BidsTaken(mut bidders) => {
-				if !bidders.is_empty() {
-					bidders.sort_unstable_by_key(|k| k.1);
-					bidders.reverse();
-					let max_size = min(<ActiveValidatorSizeRange<T>>::get().1, bidders.len() as u32);
-					let bidders = bidders.get(0..max_size as usize);
-					if let Some(bidders) = bidders {
-						if let Some((_, min_bid)) = bidders.last() {
-							let winners: Vec<T::ValidatorId> =
-								bidders.iter().map(|i| i.0.clone()).collect();
-							let phase = AuctionPhase::WinnersSelected(winners.clone(), *min_bid);
-							<CurrentPhase<T>>::put(phase.clone());
+			AuctionPhase::BidsTaken(mut bids) => {
+				if !bids.is_empty() {
+					bids.sort_unstable_by_key(|k| k.1);
+					bids.reverse();
+					let number_of_bidders = bids.len() as u32;
+					let validator_set_size = <ActiveValidatorSizeRange<T>>::get().1;
+					let validator_group_size = min(validator_set_size, number_of_bidders);
+					let backup_group_size = if validator_group_size < number_of_bidders {
+						min(
+							validator_set_size / 3,
+							number_of_bidders - validator_group_size,
+						)
+					} else {
+						0
+					};
 
-							Self::deposit_event(Event::AuctionCompleted(
-								<CurrentAuctionIndex<T>>::get(),
-								winners.clone(),
-							));
+					let validating_set = bids
+						.get(Zero::zero()..validator_group_size as usize)
+						.and_then(|validators| {
+							validators.last().and_then(|(_, minimum_active_bid)| {
+								Some((
+									validators.iter().map(|i| i.0.clone()).collect(),
+									*minimum_active_bid,
+								))
+							})
+						})
+						.ok_or_else(|| AuctionError::Empty)?;
 
-							T::Handler::start_vault_rotation(winners)
-								.map_err(|_| AuctionError::Abort)?;
-							return Ok(phase);
-						}
-					}
+					let remaining_bidders = bids
+						.get(validator_group_size as usize..bids.len() as usize)
+						.unwrap_or_default()
+						.to_vec();
+
+					let phase = AuctionPhase::ValidatorsSelected(
+						validating_set.0,
+						validating_set.1,
+						remaining_bidders,
+						backup_group_size,
+					);
+
+					<CurrentPhase<T>>::put(phase.clone());
+
+					Self::deposit_event(Event::AuctionCompleted(
+						<CurrentAuctionIndex<T>>::get(),
+						validating_set.0.clone(),
+					));
+
+					T::Handler::start_vault_rotation(validating_set.0)
+						.map_err(|_| AuctionError::Abort)?;
+
+					return Ok(phase);
 				}
 
 				return Err(AuctionError::Empty);
@@ -300,7 +329,7 @@ impl<T: Config> Auction for Pallet<T> {
 			// Things have gone well and we have a set of 'Winners', congratulations.
 			// We are ready to call this an auction a day resetting the bidders in storage and
 			// setting the state ready for a new set of 'Bidders'
-			AuctionPhase::WinnersSelected(winners, min_bid) => {
+			AuctionPhase::ValidatorsSelected(winners, min_bid, ..) => {
 				// If this is genesis we auto confirm
 				let result = if frame_system::Pallet::<T>::current_block_number() == Zero::zero() {
 					Ok(())

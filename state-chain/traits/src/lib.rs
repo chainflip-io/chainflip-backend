@@ -77,9 +77,9 @@ pub enum AuctionPhase<ValidatorId, Amount> {
 	WaitingForBids(Vec<ValidatorId>, Amount),
 	// Bids are now taken and validated
 	BidsTaken(Vec<Bid<ValidatorId, Amount>>),
-	// We have ran the auction and have a set of winners with min bid.  This waits on confirmation
-	// via the trait `AuctionConfirmation`
-	WinnersSelected(Vec<ValidatorId>, Amount),
+	// We have ran the auction and have a set of validators with minimum active bid.  This waits on confirmation
+	// via the trait `VaultRotation`
+	ValidatorsSelected(Vec<ValidatorId>, Amount, Vec<Bid<ValidatorId, Amount>>, u32),
 }
 
 impl<ValidatorId, Amount: Default> Default for AuctionPhase<ValidatorId, Amount> {

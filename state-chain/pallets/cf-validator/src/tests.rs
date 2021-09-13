@@ -76,7 +76,7 @@ mod test {
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
 			// Move forward by 1 block, we have a block already
 			run_to_block(2);
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(..));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(..));
 			// Confirm the auction
 			clear_confirmation();
 			// Move forward by 1 block
@@ -91,7 +91,7 @@ mod test {
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
 			run_to_block(10);
 			// We should have started another auction
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(..));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(..));
 			// Let's check we can't alter the state of the pallet during this period
 			assert_noop!(
 				ValidatorPallet::force_rotation(Origin::root()),
@@ -147,10 +147,10 @@ mod test {
 			// Complete the cycle
 			run_to_block(12);
 			// As we haven't confirmed the auction we would still be in the same phase
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(..));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(..));
 			run_to_block(13);
 			// and still...
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(..));
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(..));
 			// Confirm the auction
 			clear_confirmation();
 			run_to_block(14);

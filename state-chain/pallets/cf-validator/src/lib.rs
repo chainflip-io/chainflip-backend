@@ -276,7 +276,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 
 	fn bond() -> Self::Amount {
 		match T::Auction::phase() {
-			AuctionPhase::WinnersSelected(_, min_bid) => min_bid,
+			AuctionPhase::ValidatorsSelected(_, min_bid) => min_bid,
 			_ => Zero::zero(),
 		}
 	}
@@ -314,7 +314,7 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 				// two steps- validate and select winners
 				Self::should_rotate(now) && T::Auction::process().and(T::Auction::process()).is_ok()
 			}
-			AuctionPhase::WinnersSelected(..) => {
+			AuctionPhase::ValidatorsSelected(..) => {
 				// Confirmation of winners, we need to finally process them
 				// This checks whether this is confirmable via the `AuctionConfirmation` trait
 				T::Auction::process().is_ok()
@@ -364,7 +364,7 @@ impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
 		return match T::Auction::phase() {
 			// Successfully completed the process, these are the next set of validators to be used
-			AuctionPhase::WinnersSelected(winners, _) => Some(winners),
+			AuctionPhase::ValidatorsSelected(winners, _) => Some(winners),
 			// A rotation has occurred, we emit an event of the new epoch and compile a list of
 			// validators for validator lookup
 			AuctionPhase::WaitingForBids(winners, min_bid) => {
