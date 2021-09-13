@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate as pallet_cf_staking;
-use frame_support::parameter_types;
+use frame_support::{parameter_types, traits::EnsureOrigin};
 use pallet_cf_flip;
 use sp_core::H256;
 use sp_runtime::{
@@ -65,10 +65,26 @@ parameter_types! {
 	pub const ExistentialDeposit: u128 = 10;
 }
 
+pub struct MockEnsureGovernance;
+
+impl EnsureOrigin<Origin> for MockEnsureGovernance {
+	type Success = ();
+
+	fn try_origin(_o: Origin) -> Result<Self::Success, Origin> {
+		Ok(().into())
+	}
+}
+
+parameter_types! {
+	pub const BlocksPerDay: u64 = 14400;
+}
+
 impl pallet_cf_flip::Config for Test {
 	type Event = Event;
 	type Balance = u128;
 	type ExistentialDeposit = ExistentialDeposit;
+	type EnsureGovernance = MockEnsureGovernance;
+	type BlocksPerDay = BlocksPerDay;
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
