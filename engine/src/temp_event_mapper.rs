@@ -50,7 +50,7 @@ impl<MQC: IMQClient + Send + Sync> TempEventMapper<MQC> {
                 let validators: Vec<_> = event
                     .validators
                     .iter()
-                    .map(|v| p2p::ValidatorId(v.clone().into()))
+                    .map(|v| p2p::AccountId(v.clone().into()))
                     .collect();
 
                 slog::debug!(

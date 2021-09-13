@@ -25,6 +25,7 @@ USER gitpod
 
 # Set sccache as the default compiler cache
 ENV RUSTC_WRAPPER=sccache
+ENV SCCACHE_REDIS=redis://sccache.chainflip.xyz
 
 # Download and set nightly as the default Rust compiler
 RUN rustup default nightly-2021-03-24 \

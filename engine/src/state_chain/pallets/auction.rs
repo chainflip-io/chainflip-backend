@@ -5,7 +5,7 @@ use codec::{Decode, Encode};
 
 use frame_support::{pallet_prelude::MaybeSerializeDeserialize, Parameter};
 use serde::{Deserialize, Serialize};
-use sp_runtime::traits::One;
+use sp_runtime::{traits::One, AccountId32};
 use substrate_subxt::{module, sp_runtime::traits::Member, system::System, Event};
 
 use crate::state_chain::{runtime::StateChainRuntime, sc_event::SCEvent};
@@ -13,8 +13,6 @@ use crate::state_chain::{runtime::StateChainRuntime, sc_event::SCEvent};
 #[module]
 pub trait Auction: System {
     type AuctionIndex: Member + Parameter + Default + Add + One + Copy + MaybeSerializeDeserialize;
-
-    type ValidatorId: Member + Parameter + MaybeSerializeDeserialize;
 }
 
 // The order of these fields matter for decoding
@@ -28,7 +26,7 @@ pub struct AuctionStartedEvent<A: Auction> {
 pub struct AuctionCompletedEvent<A: Auction> {
     pub auction_index: A::AuctionIndex,
 
-    pub validators: Vec<A::ValidatorId>,
+    pub validators: Vec<AccountId32>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]

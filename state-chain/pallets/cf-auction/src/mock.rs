@@ -15,7 +15,7 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 type Amount = u64;
-type ValidatorId = u64;
+type AccountId = u64;
 
 impl WeightInfo for () {
 	fn set_auction_size_range() -> u64 {
@@ -23,17 +23,17 @@ impl WeightInfo for () {
 	}
 }
 
-pub const LOW_BID: (ValidatorId, Amount) = (2, 2);
-pub const JOE_BID: (ValidatorId, Amount) = (3, 100);
-pub const MAX_BID: (ValidatorId, Amount) = (4, 101);
-pub const INVALID_BID: (ValidatorId, Amount) = (1, 0);
+pub const LOW_BID: (AccountId, Amount) = (2, 2);
+pub const JOE_BID: (AccountId, Amount) = (3, 100);
+pub const MAX_BID: (AccountId, Amount) = (4, 101);
+pub const INVALID_BID: (AccountId, Amount) = (1, 0);
 
 pub const MIN_AUCTION_SIZE: u32 = 2;
 pub const MAX_AUCTION_SIZE: u32 = 150;
 
 thread_local! {
 	// A set of bidders, we initialise this with the proposed genesis bidders
-	pub static BIDDER_SET: RefCell<Vec<(ValidatorId, Amount)>> = RefCell::new(vec![
+	pub static BIDDER_SET: RefCell<Vec<(AccountId, Amount)>> = RefCell::new(vec![
 		INVALID_BID, LOW_BID, JOE_BID, MAX_BID
 	]);
 }
@@ -85,7 +85,7 @@ parameter_types! {
 impl Config for Test {
 	type Event = Event;
 	type Amount = Amount;
-	type ValidatorId = ValidatorId;
+	type AccountId = AccountId;
 	type BidderProvider = TestBidderProvider;
 	type Registrar = Test;
 	type AuctionIndex = u32;
@@ -94,8 +94,8 @@ impl Config for Test {
 	type WeightInfo = ();
 }
 
-impl ValidatorRegistration<ValidatorId> for Test {
-	fn is_registered(_id: &ValidatorId) -> bool {
+impl ValidatorRegistration<AccountId> for Test {
+	fn is_registered(_id: &AccountId) -> bool {
 		true
 	}
 }
@@ -103,10 +103,10 @@ impl ValidatorRegistration<ValidatorId> for Test {
 pub struct TestBidderProvider;
 
 impl BidderProvider for TestBidderProvider {
-	type ValidatorId = ValidatorId;
+	type AccountId = AccountId;
 	type Amount = Amount;
 
-	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
+	fn get_bidders() -> Vec<(Self::AccountId, Self::Amount)> {
 		BIDDER_SET.with(|l| l.borrow().to_vec())
 	}
 }

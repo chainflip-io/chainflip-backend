@@ -41,16 +41,16 @@ pub mod bs58_fixed_size {
 
 #[test]
 fn test_validator_id_bs58() {
-	use super::ValidatorIdBs58;
+	use super::AccountIdBs58;
 	use serde_json;
 
 	let validator_id_raw = [0xCF; 32];
 
-	serde_json::to_string(&ValidatorIdBs58(validator_id_raw))
+	serde_json::to_string(&AccountIdBs58(validator_id_raw))
 		.expect("Encoding validator Id should work.");
 
-	serde_json::from_str::<ValidatorIdBs58>(r#""5G""#).expect_err("Length is invalid.");
-	serde_json::from_str::<ValidatorIdBs58>(r#""5G9NWJ5P9uk7am24yCKeLZJqXWW6hjuMyRJDmw4ofqx""#)
+	serde_json::from_str::<AccountIdBs58>(r#""5G""#).expect_err("Length is invalid.");
+	serde_json::from_str::<AccountIdBs58>(r#""5G9NWJ5P9uk7am24yCKeLZJqXWW6hjuMyRJDmw4ofqx""#)
 		.expect("Valid Id.");
 }
 
