@@ -17,6 +17,12 @@ type Block = frame_system::mocking::MockBlock<Test>;
 type Amount = u64;
 type ValidatorId = u64;
 
+impl WeightInfo for () {
+	fn set_auction_size_range() -> u64 {
+		0 as Weight
+	}
+}
+
 pub const LOW_BID: (ValidatorId, Amount) = (2, 2);
 pub const JOE_BID: (ValidatorId, Amount) = (3, 100);
 pub const MAX_BID: (ValidatorId, Amount) = (4, 101);
@@ -85,6 +91,7 @@ impl Config for Test {
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
 	type Handler = MockAuctionHandler;
+	type WeightInfo = ();
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
