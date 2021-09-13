@@ -41,6 +41,7 @@ auth: &dockerconfig
   password: $DOCKER_PASSWORD
 
 cargo-base-job: &cargo-base-job
+  circleci_ip_ranges: true
   executor: rust-base
   environment: &sccache_environment
     SCCACHE_REDIS: redis://sccache.chainflip.xyz
