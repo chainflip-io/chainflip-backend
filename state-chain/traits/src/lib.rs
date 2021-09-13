@@ -10,6 +10,7 @@ use frame_support::{
 	traits::{Imbalance, SignedImbalance},
 	Parameter,
 };
+use sp_runtime::traits::UniqueSaturatedFrom;
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
 
@@ -252,4 +253,14 @@ pub enum NonceIdentifier {
 pub trait NonceProvider {
 	/// Provide the next nonce for the chain identified
 	fn next_nonce(identifier: NonceIdentifier) -> Nonce;
+}
+
+/// Slashing a validator
+pub trait Slashing {
+	/// An identifier for our validator
+	type AccountId;
+	/// Block number
+	type BlockNumber;
+	/// Function which implements the slashing logic
+	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber) -> Weight;
 }
