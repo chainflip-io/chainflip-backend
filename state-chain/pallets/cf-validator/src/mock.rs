@@ -33,6 +33,14 @@ impl WeightInfo for () {
 	}
 }
 
+pub struct AuctionWeight;
+
+impl AuctionWeight {
+	fn set_auction_size_range() -> u64 {
+		0 as Weight
+	}
+}
+
 pub const MIN_AUCTION_SIZE: u32 = 2;
 pub const MAX_AUCTION_SIZE: u32 = 150;
 pub const EPOCH_BLOCKS: u64 = 100;
@@ -124,6 +132,7 @@ impl pallet_cf_auction::Config for Test {
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
 	type Handler = MockHandler<ValidatorId = ValidatorId, Amount = Amount>;
+	type WeightInfo = AuctionWeight;
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
