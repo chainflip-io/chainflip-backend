@@ -8,7 +8,7 @@ ignore_main_branches: &ignore_main_branches
         - /epic\/.*/
         - /release\/.*/
         # Uncomment and add your current branch when testing
-#        - update/epic-ci
+        
 only_main_branches: &only_main_branches
   filters:
     branches:
@@ -17,6 +17,7 @@ only_main_branches: &only_main_branches
         - develop
         - /epic\/.*/
         - /release\/.*/
+        - /fix\/.*/
 
 only_epic_branches: &only_epic_branches
   filters:
@@ -26,6 +27,7 @@ only_epic_branches: &only_epic_branches
         # - update/epic-ci
         - /epic\/.*/
         - /release\/.*/
+        - /fix\/.*/
 
 nightly: &nightly
   triggers:
@@ -333,8 +335,9 @@ jobs:
             --namespace default
             --set state-chain-node.nodeType=validator
             --set state-chain-node.image.tag="<<pipeline.git.revision>>"
-            --set "state-chain-node.stateChainNode.extraArgs={--rpc-external,--rpc-cors,all,--dev}"
+            --set "state-chain-node.stateChainNode.extraArgs={--rpc-external,--rpc-cors,all}"
             --set chainflip-engine.image.tag="<<pipeline.git.revision>>"
+            --set global.chain=dev
             --wait
             --wait-for-jobs
       - run:
