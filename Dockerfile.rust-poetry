@@ -1,4 +1,4 @@
-FROM python:buster
+FROM python:bullseye
 
 USER root
 
