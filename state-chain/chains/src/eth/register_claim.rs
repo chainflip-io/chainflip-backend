@@ -3,7 +3,7 @@
 use super::{EthereumTransactionError, SchnorrSignature, SigData, Tokenizable};
 
 use codec::{Decode, Encode};
-use ethabi::{Address, FixedBytes, Param, ParamType, StateMutability, Token, Uint, ethereum_types::H256};
+use ethabi::{Address, Param, ParamType, StateMutability, Token, Uint, ethereum_types::H256};
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 
@@ -13,7 +13,7 @@ pub struct RegisterClaim {
 	/// The signature data for validation and replay protection.
 	pub sig_data: SigData,
 	/// The id (ie. Chainflip account Id) of the claimant.
-	pub node_id: FixedBytes,
+	pub node_id: [u8; 32],
 	/// The amount being claimed.
 	pub amount: Uint,
 	/// The Ethereum address to which the claim with will be withdrawn.
@@ -32,7 +32,7 @@ impl RegisterClaim {
 	) -> Result<Self, EthereumTransactionError> {
 		let mut calldata = Self {
 			sig_data: SigData::new_empty(nonce.into()),
-			node_id: node_id.to_vec(),
+			node_id: (*node_id),
 			amount: amount.into(),
 			address: address.into(),
 			expiry: expiry.into(),
@@ -52,7 +52,7 @@ impl RegisterClaim {
 		self.get_function()
 			.encode_input(&[
 				self.sig_data.tokenize(),
-				Token::FixedBytes(self.node_id.clone()),
+				Token::FixedBytes(self.node_id.to_vec()),
 				Token::Uint(self.amount),
 				Token::Address(self.address),
 				Token::Uint(self.expiry),

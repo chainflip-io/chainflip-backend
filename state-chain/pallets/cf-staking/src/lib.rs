@@ -43,7 +43,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use cf_traits::{BidderProvider, EpochInfo, NonceIdentifier, NonceProvider, StakeTransfer};
+use cf_traits::{BidderProvider, EpochInfo, NonceIdentifier, NonceProvider, StakeTransfer, ThresholdSigner};
 use core::time::Duration;
 use frame_support::{
 	debug,
@@ -59,7 +59,6 @@ use cf_chains::{
 	eth::{register_claim::RegisterClaim, SchnorrSignature},
 	Ethereum,
 };
-use pallet_cf_signing::SigningContext;
 use sp_std::prelude::*;
 use sp_std::vec;
 
@@ -125,8 +124,11 @@ pub mod pallet {
 		/// Something that can provide a nonce for the threshold signature.
 		type NonceProvider: NonceProvider;
 
-		/// Ethereum signing context.
-		type EthereumSigner: ThresholdSigner<Self, Chain = Ethereum>;
+		/// Top-level Ethereum signing context needs to support `RegisterClaim`.
+		type SigningContext: From<RegisterClaim>;
+
+		/// Threshold signer.
+		type Signer: ThresholdSigner<Self, Context = Self::SigningContext>;
 
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;
@@ -573,9 +575,7 @@ impl<T: Config> Pallet<T> {
 		.map_err(|_| Error::<T>::PayloadEncodingFailed)?;
 
 		// Emit a signature request.
-		// todo!("handle this in dedicated pallet.");
-		// T::request_signature(transaction.sig_data.msg_hash, OnSuccess::PostClaimSignature);
-		T::EthereumSigner::request_signature(transaction);
+		T::Signer::request_transaction_signature(transaction.clone());
 
 		// Store the claim params for later.
 		PendingClaims::<T>::insert(account_id, transaction);

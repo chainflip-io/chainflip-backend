@@ -1,10 +1,27 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
-use super::{AccountId, Emissions, FlipBalance, Reputation, Rewards, Runtime, Call, Validator, Witnesser};
-use cf_chains::eth;
-use cf_traits::{EmissionsTrigger, KeyProvider};
+use super::{
+	AccountId, Call, Emissions, FlipBalance, Reputation, Rewards, Runtime, Validator, Vaults,
+	Witnesser,
+};
+use cf_chains::{
+	eth::{self, register_claim::RegisterClaim},
+	Ethereum,
+};
+use cf_traits::{Chainflip, EmissionsTrigger, KeyProvider, SigningContext};
+use codec::{Decode, Encode};
 use frame_support::debug;
 use pallet_cf_validator::EpochTransitionHandler;
-use sp_std::vec::Vec;
+use sp_core::H256;
+use sp_runtime::{DispatchError, RuntimeDebug};
+use sp_std::marker::PhantomData;
+use sp_std::prelude::*;
+
+impl Chainflip for Runtime {
+	type Call = Call;
+	type Amount = FlipBalance;
+	type ValidatorId = <Self as frame_system::Config>::AccountId;
+	type KeyId = Vec<u8>;
+}
 
 pub struct ChainflipEpochTransitions;
 
@@ -41,45 +58,45 @@ impl cf_traits::SignerNomination for BasicSignerNomination {
 	}
 }
 
-// Supported Ethereum transactions.
+// Supported Ethereum signing operations.
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
-pub enum EthereumSigner {
-	RegisterClaim(register_claim::RegisterClaim),
+pub enum EthereumSigningContext {
+	RegisterClaim(RegisterClaim),
 }
 
-impl pallet_cf_signing::SigningContext<Runtime> for EthereumSigner {
+impl From<RegisterClaim> for EthereumSigningContext {
+	fn from(rc: RegisterClaim) -> Self {
+		EthereumSigningContext::RegisterClaim(rc)
+	}
+}
+
+impl SigningContext<Runtime> for EthereumSigningContext {
 	type Chain = cf_chains::Ethereum;
-	type Payload = Vec<u8>;
+	type Payload = H256;
 	type Signature = eth::SchnorrSignature;
 	type Callback = Call;
 
 	fn get_payload(&self) -> Self::Payload {
 		match self {
-			eth::EthereumTransactions::RegisterClaim(ref tx) => {
-				tx.sig_data.msg_hash
-			},
+			Self::RegisterClaim(ref tx) => tx.get_msg_hash(),
 		}
 	}
 
 	fn get_callback(&self, signature: Self::Signature) -> Self::Callback {
 		match self {
-			eth::EthereumTransactions::RegisterClaim(tx) => {
-				pallet_cf_staking::Call::post_claim_signature(
-					tx.node_id,
-					tx.amount,
-					signature
-				)
-			},
+			Self::RegisterClaim(ref tx) => {
+				pallet_cf_staking::Call::post_claim_signature(tx.node_id.into(), tx.amount, signature).into()
+			}
 		}
 	}
 }
 
-pub struct VaultKeyProvider;
+pub struct VaultKeyProvider<T>(PhantomData<T>);
 
-impl KeyProvider for VaultKeyProvider {
-	type KeyId = <Self as VaultsConfig>::PublicKey;
+impl<T: pallet_cf_vaults::Config> KeyProvider<Ethereum> for VaultKeyProvider<T> {
+	type KeyId = T::PublicKey;
 
 	fn current_key() -> Self::KeyId {
-		todo!()
+		pallet_cf_vaults::Pallet::<T>::eth_vault().new_key
 	}
 }

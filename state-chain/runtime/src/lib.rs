@@ -3,8 +3,6 @@
 #![recursion_limit = "256"]
 mod chainflip;
 mod weights;
-// A few exports that help ease life for downstream crates.
-use cf_traits::Chainflip;
 use core::time::Duration;
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
@@ -359,11 +357,13 @@ parameter_types! {
 impl pallet_cf_staking::Config for Runtime {
 	type Event = Event;
 	type Balance = FlipBalance;
+	type AccountId = AccountId;
 	type Flip = Flip;
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
 	type NonceProvider = Vaults;
-	type EthereumSigner = chainflip::EthereumSigner;
+	type SigningContext = chainflip::EthereumSigningContext;
+	type Signer = EthereumSigner;
 	type TimeSource = Timestamp;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
@@ -410,11 +410,6 @@ impl pallet_cf_witnesser_api::Config for Runtime {
 	type Witnesser = Witnesser;
 }
 
-impl Chainflip for Runtime {
-	type Amount = FlipBalance;
-	type ValidatorId = <Self as frame_system::Config>::AccountId;
-}
-
 parameter_types! {
 	pub const HeartbeatBlockInterval: u32 = 150;
 	pub const ReputationPointPenalty: ReputationPenalty<BlockNumber> = ReputationPenalty { points: 1, blocks: 10 };
@@ -448,8 +443,8 @@ impl pallet_cf_signing::Config<Instance0> for Runtime
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type SignerNomination = chainflip::BasicSignerNomination;
 	type TargetChain = cf_chains::Ethereum;
-	type SigningContext = chainflip::EthereumSigner;
-	type KeyProvider = chainflip::VaultKeyProvider;
+	type SigningContext = chainflip::EthereumSigningContext;
+	type KeyProvider = chainflip::VaultKeyProvider<Self>;
 	type OfflineConditions = Reputation;
 }
 

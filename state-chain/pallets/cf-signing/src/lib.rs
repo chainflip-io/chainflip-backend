@@ -189,10 +189,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 }
 
-impl<T, C, S, I: 'static> cf_traits::ThresholdSigner<T, C> for Pallet<T, I>
+impl<T, I: 'static> cf_traits::ThresholdSigner<T> for Pallet<T, I>
 where
-	T: Config<I, Chain = C>,
-	C: Chain,
+	T: Config<I>,
 {
 	type Context = T::SigningContext;
 
