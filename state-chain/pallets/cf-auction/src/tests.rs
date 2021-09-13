@@ -61,22 +61,22 @@ mod test {
 			assert_eq!(<Test as Config>::MinAuctionSize::get(), 2);
 			// Check we are throwing up an error when we send anything less than the minimum of 2
 			assert_noop!(
-				AuctionPallet::set_auction_size_range(Origin::root(), (0, 0)),
+				AuctionPallet::set_active_validator_range(Origin::root(), (0, 0)),
 				Error::<Test>::InvalidRange
 			);
 			assert_noop!(
-				AuctionPallet::set_auction_size_range(Origin::root(), (1, 2)),
+				AuctionPallet::set_active_validator_range(Origin::root(), (1, 2)),
 				Error::<Test>::InvalidRange
 			);
 			// This should now work
-			assert_ok!(AuctionPallet::set_auction_size_range(
+			assert_ok!(AuctionPallet::set_active_validator_range(
 				Origin::root(),
 				(2, 100)
 			));
 			// Confirm we have an event
 			assert_eq!(
 				last_event(),
-				mock::Event::pallet_cf_auction(crate::Event::AuctionRangeChanged(
+				mock::Event::pallet_cf_auction(crate::Event::ActiveValidatorRangeChanged(
 					(MIN_AUCTION_SIZE, MAX_AUCTION_SIZE),
 					(2, 100)
 				)),
@@ -84,7 +84,7 @@ mod test {
 			//
 			// We throw up an error if we try to set it to the current
 			assert_noop!(
-				AuctionPallet::set_auction_size_range(Origin::root(), (2, 100)),
+				AuctionPallet::set_active_validator_range(Origin::root(), (2, 100)),
 				Error::<Test>::InvalidRange
 			);
 		});
@@ -97,7 +97,7 @@ mod test {
 			BIDDER_SET.with(|l| *l.borrow_mut() = vec![LOW_BID, JOE_BID]);
 
 			let auction_range = (2, 100);
-			assert_ok!(AuctionPallet::set_auction_range(auction_range));
+			assert_ok!(AuctionPallet::set_active_range(auction_range));
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(_)));
 			assert_matches!(
 				AuctionPallet::process(),

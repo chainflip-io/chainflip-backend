@@ -90,8 +90,8 @@ impl<ValidatorId, Amount: Default> Default for AuctionPhase<ValidatorId, Amount>
 
 /// A bid represented by a validator and the amount they wish to bid
 pub type Bid<ValidatorId, Amount> = (ValidatorId, Amount);
-/// A range of min, max for our winning set
-pub type AuctionRange = (u32, u32);
+/// A range of min, max for active validator set
+pub type ActiveValidatorRange = (u32, u32);
 
 /// An Auction
 ///
@@ -107,9 +107,9 @@ pub trait Auction {
 	type BidderProvider;
 
 	/// Range describing auction set size
-	fn auction_range() -> AuctionRange;
+	fn auction_range() -> ActiveValidatorRange;
 	/// Set the auction range
-	fn set_auction_range(range: AuctionRange) -> Result<AuctionRange, AuctionError>;
+	fn set_active_range(range: ActiveValidatorRange) -> Result<ActiveValidatorRange, AuctionError>;
 	/// The current phase we find ourselves in
 	fn phase() -> AuctionPhase<Self::ValidatorId, Self::Amount>;
 	/// Are we in an auction?

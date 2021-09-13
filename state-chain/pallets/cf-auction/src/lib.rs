@@ -41,7 +41,7 @@ mod tests;
 extern crate assert_matches;
 
 use cf_traits::{
-	Auction, AuctionError, AuctionPhase, AuctionRange, BidderProvider, StakerHandler,
+	Auction, AuctionError, AuctionPhase, ActiveValidatorRange, BidderProvider, StakerHandler,
 	VaultRotation, VaultRotationHandler,
 };
 use frame_support::pallet_prelude::*;
@@ -103,8 +103,8 @@ pub mod pallet {
 
 	/// Size range for number of bidders in auction (min, max)
 	#[pallet::storage]
-	#[pallet::getter(fn auction_size_range)]
-	pub(super) type AuctionSizeRange<T: Config> = StorageValue<_, AuctionRange, ValueQuery>;
+	#[pallet::getter(fn active_validator_size_range)]
+	pub(super) type ActiveValidatorSizeRange<T: Config> = StorageValue<_, ActiveValidatorRange, ValueQuery>;
 
 	/// The current auction we are in
 	#[pallet::storage]
@@ -127,8 +127,8 @@ pub mod pallet {
 		AuctionConfirmed(T::AuctionIndex),
 		/// Awaiting bidders for the auction
 		AwaitingBidders,
-		/// The auction range upper limit has changed \[before, after\]
-		AuctionRangeChanged(AuctionRange, AuctionRange),
+		/// The active validator range upper limit has changed \[before, after\]
+		ActiveValidatorRangeChanged(ActiveValidatorRange, ActiveValidatorRange),
 		/// The auction was aborted \[auction_index\]
 		AuctionAborted(T::AuctionIndex),
 	}
@@ -146,15 +146,15 @@ pub mod pallet {
 		///
 		/// The dispatch origin of this function must be root.
 		#[pallet::weight(10_000)]
-		pub(super) fn set_auction_size_range(
+		pub(super) fn set_active_validator_range(
 			origin: OriginFor<T>,
-			range: AuctionRange,
+			range: ActiveValidatorRange,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 
-			match Self::set_auction_range(range) {
+			match Self::set_active_range(range) {
 				Ok(old) => {
-					Self::deposit_event(Event::AuctionRangeChanged(old, range));
+					Self::deposit_event(Event::ActiveValidatorRangeChanged(old, range));
 					Ok(().into())
 				}
 				Err(_) => Err(Error::<T>::InvalidRange.into()),
@@ -164,7 +164,7 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
-		pub auction_size_range: AuctionRange,
+		pub auction_size_range: ActiveValidatorRange,
 	}
 
 	#[cfg(feature = "std")]
@@ -180,7 +180,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			AuctionSizeRange::<T>::set(self.auction_size_range);
+			ActiveValidatorSizeRange::<T>::set(self.auction_size_range);
 			// Run through an auction
 			if Pallet::<T>::process().and(Pallet::<T>::process()).is_ok() {
 				if let Err(err) = Pallet::<T>::process() {
@@ -198,12 +198,12 @@ impl<T: Config> Auction for Pallet<T> {
 	type Amount = T::Amount;
 	type BidderProvider = T::BidderProvider;
 
-	fn auction_range() -> AuctionRange {
-		<AuctionSizeRange<T>>::get()
+	fn auction_range() -> ActiveValidatorRange {
+		<ActiveValidatorSizeRange<T>>::get()
 	}
 
 	/// Set new auction range, returning on success the old value
-	fn set_auction_range(range: AuctionRange) -> Result<AuctionRange, AuctionError> {
+	fn set_active_range(range: ActiveValidatorRange) -> Result<ActiveValidatorRange, AuctionError> {
 		let (low, high) = range;
 
 		if low == high
@@ -214,12 +214,12 @@ impl<T: Config> Auction for Pallet<T> {
 			return Err(AuctionError::InvalidRange);
 		}
 
-		let old = <AuctionSizeRange<T>>::get();
+		let old = <ActiveValidatorSizeRange<T>>::get();
 		if old == range {
 			return Err(AuctionError::InvalidRange);
 		}
 
-		<AuctionSizeRange<T>>::put(range);
+		<ActiveValidatorSizeRange<T>>::put(range);
 		Ok(old)
 	}
 
@@ -254,7 +254,7 @@ impl<T: Config> Auction for Pallet<T> {
 				// Rule #3 - They are registered
 				bidders.retain(|(id, _)| T::Registrar::is_registered(id));
 				// Rule #4 - Confirm we have our set size
-				if (bidders.len() as u32) < <AuctionSizeRange<T>>::get().0 {
+				if (bidders.len() as u32) < <ActiveValidatorSizeRange<T>>::get().0 {
 					return Err(AuctionError::MinValidatorSize);
 				};
 
@@ -274,7 +274,7 @@ impl<T: Config> Auction for Pallet<T> {
 				if !bidders.is_empty() {
 					bidders.sort_unstable_by_key(|k| k.1);
 					bidders.reverse();
-					let max_size = min(<AuctionSizeRange<T>>::get().1, bidders.len() as u32);
+					let max_size = min(<ActiveValidatorSizeRange<T>>::get().1, bidders.len() as u32);
 					let bidders = bidders.get(0..max_size as usize);
 					if let Some(bidders) = bidders {
 						if let Some((_, min_bid)) = bidders.last() {
