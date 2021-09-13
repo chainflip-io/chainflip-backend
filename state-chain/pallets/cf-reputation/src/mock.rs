@@ -84,7 +84,7 @@ impl Slashing for MockSlasher {
 	type AccountId = u64;
 	type BlockNumber = u64;
 
-	fn slash(_validator_id: &Self::ValidatorId, _blocks_offline: Self::BlockNumber) -> Weight {
+	fn slash(_account_id: &Self::AccountId, _blocks_offline: Self::BlockNumber) -> Weight {
 		// Count those slashes
 		SLASH_COUNT.with(|count| {
 			let mut c = count.borrow_mut();

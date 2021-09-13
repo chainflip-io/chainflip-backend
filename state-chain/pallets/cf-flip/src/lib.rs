@@ -468,12 +468,12 @@ where
 	T: Config<BlockNumber = B>,
 	B: UniqueSaturatedInto<T::Balance>,
 {
-	type ValidatorId = T::AccountId;
+	type AccountId = T::AccountId;
 	type BlockNumber = B;
 
-	fn slash(validator_id: &Self::ValidatorId, blocks_offline: Self::BlockNumber) -> Weight {
+	fn slash(account_id: &Self::AccountId, blocks_offline: Self::BlockNumber) -> Weight {
 		// Get the MBA aka the bond
-		let bond = Account::<T>::get(validator_id).validator_bond;
+		let bond = Account::<T>::get(account_id).validator_bond;
 		// Get the slashing rate
 		let slashing_rate: T::Balance = T::Balance::from(SlashingRate::<T>::get());
 		// Get blocks_offline as Balance
@@ -485,7 +485,7 @@ where
 		// Total amount of burn
 		let total_burn = burn_per_block.saturating_mul(blocks_offline);
 		// Burn the slashing fee
-		Pallet::<T>::settle(validator_id, Pallet::<T>::burn(total_burn).into());
+		Pallet::<T>::settle(account_id, Pallet::<T>::burn(total_burn).into());
 		// Calc the weight for the operation - assume 1r for slashing rate
 		// + 1r get bond + 1w update bond + 1w update balance
 		T::DbWeight::get().reads(2) + T::DbWeight::get().writes(2)
