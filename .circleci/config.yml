@@ -142,17 +142,10 @@ workflows:
           context:
             - ghcr-credentials
           <<: *only_main_branches
-      - authenticate-to-cluster:
-          cluster_name: cluster-staging
+      - test-single-node:
           requires:
             - build-chainflip-engine
             - build-state-chain-node
-          context:
-            - do-credentials
-          <<: *only_epic_branches
-      - test-single-node:
-          requires:
-            - authenticate-to-cluster
           context:
             - ghcr-credentials
             - do-credentials
@@ -179,19 +172,6 @@ workflows:
           requires:
             - clone-contracts-repo
 
-  test-workflow:
-    jobs:
-      - authenticate-to-cluster:
-          cluster_name: cluster-staging
-          context:
-            - do-credentials
-            - ghcr-credentials
-
-      - test:
-          context:
-            - ghcr-credentials
-          requires:
-            - authenticate-to-cluster
 jobs:
   build-docker-image:
     executor: docker/docker
@@ -347,34 +327,17 @@ jobs:
           only_for_branches: "develop"
           webhook: $DW_ALERTS_STAGING
 
-  authenticate-to-cluster:
-    resource_class: small
-    executor: chainflip-master
+  test-single-node:
     parameters:
       cluster_name:
         description: Name of the cluster to authenticate to
         type: string
         default: cluster-staging
+    resource_class: small
+    executor: chainflip-master
     steps:
       - doctl/initialize
       - run: doctl kubernetes cluster kubeconfig save <<parameters.cluster_name>>
-      - persist_to_workspace:
-          root: ~/
-          paths:
-            - .kube/*
-
-  test:
-    resource_class: small
-    executor: chainflip-master
-    steps:
-      - attach_workspace:
-          at: ~/
-      - run: kubectl get pods -n ingress
-
-  test-single-node:
-    resource_class: small
-    executor: chainflip-master
-    steps:
       - attach_workspace:
           at: ./
       - run:
