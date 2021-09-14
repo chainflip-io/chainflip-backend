@@ -16,7 +16,7 @@ mod test {
 		new_test_ext().execute_with(|| {
 			// We should have our genesis validators, which would have been provided by
 			// `BidderProvider`
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(winners, min_bid)
+			assert_matches!(AuctionPallet::		phase(), AuctionPhase::WaitingForBids(winners, min_bid)
 				if winners == vec![MAX_BID.0, JOE_BID.0, LOW_BID.0] && min_bid == LOW_BID.1
 			);
 		});

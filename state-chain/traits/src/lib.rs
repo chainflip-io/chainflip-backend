@@ -74,7 +74,7 @@ pub trait EpochInfo {
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum AuctionPhase<ValidatorId, Amount> {
 	// Waiting for bids, we store the last set of winners and min bid required
-	WaitingForBids(Vec<ValidatorId>, Amount),
+	WaitingForBids(Vec<ValidatorId>, Amount, Vec<Bid<ValidatorId, Amount>>, u32),
 	// Bids are now taken and validated
 	BidsTaken(Vec<Bid<ValidatorId, Amount>>),
 	// We have ran the auction and have a set of validators with minimum active bid.  This waits on confirmation
@@ -84,7 +84,7 @@ pub enum AuctionPhase<ValidatorId, Amount> {
 
 impl<ValidatorId, Amount: Default> Default for AuctionPhase<ValidatorId, Amount> {
 	fn default() -> Self {
-		AuctionPhase::WaitingForBids(Vec::new(), Amount::default())
+		AuctionPhase::WaitingForBids(Vec::new(), Amount::default(), Vec::new(), 0)
 	}
 }
 
