@@ -357,7 +357,7 @@ jobs:
       - doctl/initialize
       - run: doctl kubernetes cluster kubeconfig save <<parameters.cluster_name>>
       - persist_to_workspace:
-          root: ./
+          root: ~/
           paths:
             - .kube/*
 
