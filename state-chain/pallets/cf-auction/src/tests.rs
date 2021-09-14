@@ -80,9 +80,18 @@ mod test {
 				Ok(AuctionPhase::WaitingForBids(..))
 			);
 
+			// We should have our validators states set correctly based on the backup group size parameter
 			match AuctionPallet::current_phase() {
-				AuctionPhase::WaitingForBids(validators, minimum_active_bid) => {
-					assert_eq!(MockChainflipAccount::get(&validators[0]).state, ChainflipAccountState::Validator)
+				AuctionPhase::WaitingForBids(validators, _) => {
+					let backup_group_size = AuctionPallet::backup_group_size();
+					let remaining = AuctionPallet::remaining_bidders();
+
+					assert_eq!(MockChainflipAccount::get(&validators[0]).state, ChainflipAccountState::Validator);
+					assert_eq!(MockChainflipAccount::get(&validators[(MAX_VALIDATOR_SIZE - 1) as usize]).state, ChainflipAccountState::Validator);
+					assert_eq!(MockChainflipAccount::get(&remaining[0].0).state, ChainflipAccountState::Backup);
+					assert_eq!(MockChainflipAccount::get(&remaining[(backup_group_size - 1) as usize].0).state, ChainflipAccountState::Backup);
+					assert_eq!(MockChainflipAccount::get(&remaining[(backup_group_size) as usize].0).state, ChainflipAccountState::Passive);
+					assert_eq!(MockChainflipAccount::get(&remaining.last().unwrap().0).state, ChainflipAccountState::Passive);
 				},
 				_ => {panic!("Wrong phase")}
 			}

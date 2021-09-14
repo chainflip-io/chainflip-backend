@@ -36,12 +36,6 @@ pub fn generate_bids(number_of_bids: u64) {
 			(*(cell.borrow_mut())).push((bid_number + 1, bid_number * 100));
 		}
 	});
-
-	CHAINFLIP_ACCOUNTS.with(|cell| {
-		for id in 1..=number_of_bids {
-			cell.borrow_mut().insert(id, ChainflipAccountData::default());
-		}
-	});
 }
 
 construct_runtime!(
@@ -112,11 +106,22 @@ impl ChainflipAccount for MockChainflipAccount {
 
 	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState) {
 		CHAINFLIP_ACCOUNTS.with(|cell| {
-			let cell = cell.borrow_mut();
-			let mut data = *cell.get(account_id).unwrap();
-			data.state = state;
+			cell.borrow_mut().insert(*account_id, ChainflipAccountData { state });
 		})
 	}
+}
+
+#[test]
+fn account_updates() {
+	generate_bids(5);
+	let data = MockChainflipAccount::get(&1);
+	assert_eq!(data.state, ChainflipAccountState::Passive);
+	MockChainflipAccount::update_state(&1, ChainflipAccountState::Backup);
+	let data = MockChainflipAccount::get(&1);
+	assert_eq!(data.state, ChainflipAccountState::Backup);
+	MockChainflipAccount::update_state(&1, ChainflipAccountState::Validator);
+	let data = MockChainflipAccount::get(&1);
+	assert_eq!(data.state, ChainflipAccountState::Validator);
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
