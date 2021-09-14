@@ -90,9 +90,7 @@ pub mod pallet {
 		type TargetChain: Chain;
 
 		/// The broadcast configuration for this instance.
-		type BroadcastConfig: BroadcastConfig<Self, Chain = Self::TargetChain>
-			+ Member
-			+ FullCodec;
+		type BroadcastConfig: BroadcastConfig<Self, Chain = Self::TargetChain>;
 		
 		/// Signer nomination.
 		type SignerNomination: SignerNomination<SignerId = Self::ValidatorId>;

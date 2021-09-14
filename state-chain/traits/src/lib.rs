@@ -315,8 +315,8 @@ pub trait SigningContext<T: Chainflip> {
 	/// Returns the signing payload.
 	fn get_payload(&self) -> Self::Payload;
 
-	/// Returns the callback to be triggered on success, or `None` if no call back can be determined.
-	fn resolve_callback(&self, signature: Self::Signature) -> Option<Self::Callback>;
+	/// Returns the callback to be triggered on success.
+	fn resolve_callback(&self, signature: Self::Signature) -> Self::Callback;
 
 	/// Dispatches the success callback.
 	fn dispatch_callback(
@@ -324,8 +324,6 @@ pub trait SigningContext<T: Chainflip> {
 		origin: OriginFor<T>,
 		signature: Self::Signature,
 	) -> DispatchResultWithPostInfo {
-		self.resolve_callback(signature)
-			.map(|callback| callback.dispatch_bypass_filter(origin))
-			.unwrap_or(Ok(().into()))
+		self.resolve_callback(signature).dispatch_bypass_filter(origin)
 	}
 }

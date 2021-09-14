@@ -95,8 +95,6 @@ pub mod pallet {
 	pub trait Config: frame_system::Config + Chainflip {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-		/// Provides an origin check for witness transactions.
-		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 		/// A public key
 		type PublicKey: Member + Parameter + Into<Vec<u8>> + Default;
 		/// A transaction

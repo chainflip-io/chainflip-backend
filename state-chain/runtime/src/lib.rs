@@ -163,7 +163,6 @@ impl pallet_cf_validator::Config for Runtime {
 
 impl pallet_cf_vaults::Config for Runtime {
 	type Event = Event;
-	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type PublicKey = Vec<u8>;
 	type Transaction = Vec<u8>;
 	type RotationHandler = Auction;
@@ -359,11 +358,10 @@ impl pallet_cf_staking::Config for Runtime {
 	type Balance = FlipBalance;
 	type AccountId = AccountId;
 	type Flip = Flip;
-	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
 	type NonceProvider = Vaults;
 	type SigningContext = chainflip::EthereumSigningContext;
-	type Signer = EthereumSigner;
+	type ThresholdSigner = EthereumSigner;
 	type TimeSource = Timestamp;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
@@ -429,23 +427,21 @@ impl pallet_cf_reputation::Config for Runtime {
 
 use frame_support::instances::{Instance0};
 
-// impl pallet_cf_broadcast::BaseConfig for Runtime {
-// 	type KeyId = u32;
-// 	type ValidatorId = AccountId;
-// 	// More likely to be an enum or something.
-// 	type ChainId = u32;
-// 	type NonceProvider = Vaults;
-// }
-
 impl pallet_cf_signing::Config<Instance0> for Runtime
 {
 	type Event = Event;
-	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type SignerNomination = chainflip::BasicSignerNomination;
 	type TargetChain = cf_chains::Ethereum;
 	type SigningContext = chainflip::EthereumSigningContext;
 	type KeyProvider = chainflip::VaultKeyProvider<Self>;
 	type OfflineConditions = Reputation;
+}
+
+impl pallet_cf_broadcast::Config<Instance0> for Runtime {
+	type Event = Event;
+	type TargetChain = cf_chains::Ethereum;
+	type BroadcastConfig = chainflip::EthereumBroadcastConfig;
+	type SignerNomination = chainflip::BasicSignerNomination;
 }
 
 construct_runtime!(
@@ -476,6 +472,7 @@ construct_runtime!(
 		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>},
 		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
 		EthereumSigner: pallet_cf_signing::<Instance0>::{Module, Call, Storage, Event<T>},
+		EthereumBroadcaster: pallet_cf_broadcast::<Instance0>::{Module, Call, Storage, Event<T>},
 	}
 );
 

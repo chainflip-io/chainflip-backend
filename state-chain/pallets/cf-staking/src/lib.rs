@@ -56,7 +56,7 @@ use frame_support::{
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use cf_chains::{
-	eth::{register_claim::RegisterClaim, SchnorrSignature},
+	eth::{register_claim::RegisterClaim, SchnorrSignature, ChainflipContractCall},
 	Ethereum,
 };
 use sp_std::prelude::*;
@@ -228,9 +228,6 @@ pub mod pallet {
 		/// Cannot make a claim request while an auction is being resolved.
 		NoClaimsDuringAuctionPhase,
 
-		/// Failed to encode the threshold signing payload.
-		PayloadEncodingFailed,
-
 		/// Failed to encode the signed claim payload.
 		ClaimEncodingFailed,
 
@@ -363,7 +360,6 @@ pub mod pallet {
 		pub fn post_claim_signature(
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
-			msg_hash: U256,
 			signature: SchnorrSignature,
 		) -> DispatchResultWithPostInfo {
 			Self::ensure_witnessed(origin)?;
@@ -377,20 +373,19 @@ pub mod pallet {
 
 			// Make sure the expiry time is still sane.
 			let min_ttl = T::MinClaimTTL::get();
-			let expiry: u64 = claim_details.expiry
+			let _ = claim_details.expiry
 				.low_u64()
 				.checked_sub(time_now.as_secs())
 				.and_then(|ttl| ttl.checked_sub(min_ttl.as_secs()))
 				.ok_or(Error::<T>::SignatureTooLate)?;
 
 			// Insert the signature and notify the CFE.
-			claim_details.populate_sigdata(&signature);
-
+			claim_details.sign(&signature);
 			PendingClaims::<T>::insert(&account_id, &claim_details);
 
 			Self::deposit_event(Event::ClaimSignatureIssued(
 				account_id,
-				claim_details.abi_encode().map_err(|_| Error::<T>::ClaimEncodingFailed)?
+				claim_details.abi_encoded()
 			));
 
 			Ok(().into())
@@ -458,9 +453,9 @@ impl<T: Config> Pallet<T> {
 	/// `[EnsureWitnessed](cf_traits::EnsureWitnessed)`.
 	fn ensure_witnessed(
 		origin: OriginFor<T>,
-	) -> Result<<<T as Config>::EnsureWitnessed as EnsureOrigin<OriginFor<T>>>::Success, BadOrigin>
+	) -> Result<<T::EnsureWitnessed as EnsureOrigin<OriginFor<T>>>::Success, BadOrigin>
 	{
-		<T as Config>::EnsureWitnessed::ensure_origin(origin)
+		T::EnsureWitnessed::ensure_origin(origin)
 	}
 
 	/// Logs an failed stake attempt
@@ -568,8 +563,7 @@ impl<T: Config> Pallet<T> {
 			amount,
 			&address,
 			expiry.as_secs(),
-		)
-		.map_err(|_| Error::<T>::PayloadEncodingFailed)?;
+		);
 
 		// Emit a signature request.
 		T::ThresholdSigner::request_transaction_signature(transaction.clone());

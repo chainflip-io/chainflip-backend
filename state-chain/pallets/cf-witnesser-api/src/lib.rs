@@ -56,11 +56,10 @@ pub mod pallet {
 		pub fn witness_post_claim_signature(
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
-			msg_hash: U256,
 			signature: SchnorrSignature,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let call = StakingCall::post_claim_signature(account_id, msg_hash, signature);
+			let call = StakingCall::post_claim_signature(account_id, signature);
 			T::Witnesser::witness(who, call.into())?;
 			Ok(().into())
 		}

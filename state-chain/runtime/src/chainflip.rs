@@ -3,13 +3,11 @@ use super::{
 	AccountId, Call, Emissions, FlipBalance, Reputation, Rewards, Runtime, Validator, Vaults,
 	Witnesser,
 };
-use cf_chains::{
-	eth::{self, register_claim::RegisterClaim},
-	Ethereum,
-};
+use cf_chains::{Ethereum, eth::{self, ChainflipContractCall, register_claim::RegisterClaim}};
 use cf_traits::{Chainflip, EmissionsTrigger, KeyProvider, SigningContext};
 use codec::{Decode, Encode};
 use frame_support::debug;
+use pallet_cf_broadcast::BroadcastConfig;
 use pallet_cf_validator::EpochTransitionHandler;
 use sp_core::H256;
 use sp_runtime::{DispatchError, RuntimeDebug};
@@ -21,6 +19,7 @@ impl Chainflip for Runtime {
 	type Amount = FlipBalance;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type KeyId = Vec<u8>;
+	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 }
 
 pub struct ChainflipEpochTransitions;
@@ -61,12 +60,13 @@ impl cf_traits::SignerNomination for BasicSignerNomination {
 // Supported Ethereum signing operations.
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum EthereumSigningContext {
-	RegisterClaim(RegisterClaim),
+	PostClaimSignature(RegisterClaim),
+	Broadcast(RegisterClaim),
 }
 
 impl From<RegisterClaim> for EthereumSigningContext {
 	fn from(rc: RegisterClaim) -> Self {
-		EthereumSigningContext::RegisterClaim(rc)
+		EthereumSigningContext::PostClaimSignature(rc)
 	}
 }
 
@@ -78,16 +78,45 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 
 	fn get_payload(&self) -> Self::Payload {
 		match self {
-			Self::RegisterClaim(ref tx) => tx.get_msg_hash(),
+			Self::PostClaimSignature(ref claim) => claim.signing_payload(),
+			Self::Broadcast(ref call) => call.signing_payload(),
 		}
 	}
 
-	fn get_callback(&self, signature: Self::Signature) -> Self::Callback {
+	fn resolve_callback(&self, signature: Self::Signature) -> Self::Callback {
 		match self {
-			Self::RegisterClaim(ref tx) => {
-				pallet_cf_staking::Call::post_claim_signature(tx.node_id.into(), tx.amount, signature).into()
+			Self::PostClaimSignature(claim) => {
+				pallet_cf_staking::Call::<Runtime>::post_claim_signature(claim.node_id.into(), signature).into()
+			}
+			Self::Broadcast(contract_call) => {
+				let mut contract_call = contract_call.clone();
+				contract_call.sign(&signature);
+				let unsigned_tx = eth::UnsignedTransaction {
+					chain_id: eth::CHAIN_ID_RINKEBY,
+					contract: eth::stake_manager_contract_address().into(),
+					data: contract_call.abi_encoded(),
+					..Default::default()
+				};
+				pallet_cf_broadcast::Call::<Runtime, pallet_cf_broadcast::Instance0>::start_broadcast(unsigned_tx).into()
 			}
 		}
+	}
+}
+
+pub struct EthereumBroadcastConfig;
+
+impl BroadcastConfig<Runtime> for EthereumBroadcastConfig {
+	type Chain = Ethereum;
+	type UnsignedTransaction = eth::UnsignedTransaction;
+	type SignedTransaction = eth::RawSignedTransaction;
+	type TransactionHash = [u8; 32];
+
+	fn verify_transaction(
+		signer: &<Runtime as Chainflip>::ValidatorId,
+		unsigned_tx: &Self::UnsignedTransaction,
+		signed_tx: &Self::SignedTransaction,
+	) -> Option<()> {
+		todo!()
 	}
 }
 

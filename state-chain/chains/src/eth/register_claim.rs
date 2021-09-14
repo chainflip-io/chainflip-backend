@@ -1,9 +1,11 @@
 //! Definitions for the "registerClaim" transaction.
 
-use super::{EthereumTransactionError, SchnorrSignature, SigData, Tokenizable};
+use super::{
+	ChainflipContractCall, SchnorrSignature, SigData, Tokenizable,
+};
 
 use codec::{Decode, Encode};
-use ethabi::{Address, Param, ParamType, StateMutability, Token, Uint, ethereum_types::H256};
+use ethabi::{ethereum_types::H256, Address, Param, ParamType, StateMutability, Token, Uint};
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 
@@ -22,6 +24,34 @@ pub struct RegisterClaim {
 	pub expiry: Uint,
 }
 
+impl ChainflipContractCall for RegisterClaim {
+	fn is_signed(&self) -> bool {
+		self.sig_data.sig.is_zero()
+	}
+
+	fn abi_encoded(&self) -> Vec<u8> {
+		self.abi_encoded()
+	}
+
+	fn signing_payload(&self) -> H256 {
+		self.sig_data.msg_hash
+	}
+
+	fn sign(&mut self, signature: &SchnorrSignature) {
+		self.sig_data.insert_signature(signature)
+	}
+
+	fn into_new(self, new_nonce: u64) -> Self {
+		Self::new_unsigned(
+			new_nonce,
+			&self.node_id,
+			self.amount,
+			self.address.as_fixed_bytes(),
+			self.expiry.low_u64(),
+		)
+	}
+}
+
 impl RegisterClaim {
 	pub fn new_unsigned<Nonce: Into<Uint>, Amount: Into<Uint>>(
 		nonce: Nonce,
@@ -29,7 +59,7 @@ impl RegisterClaim {
 		amount: Amount,
 		address: &[u8; 20],
 		expiry: u64,
-	) -> Result<Self, EthereumTransactionError> {
+	) -> Self {
 		let mut calldata = Self {
 			sig_data: SigData::new_empty(nonce.into()),
 			node_id: (*node_id),
@@ -37,18 +67,14 @@ impl RegisterClaim {
 			address: address.into(),
 			expiry: expiry.into(),
 		};
-		calldata.sig_data = calldata
+		calldata
 			.sig_data
-			.with_msg_hash_from(calldata.abi_encode()?.as_slice());
+			.insert_msg_hash_from(calldata.abi_encoded().as_slice());
 
-		Ok(calldata)
+		calldata
 	}
 
-	pub fn get_msg_hash(&self) -> H256 {
-		self.sig_data.msg_hash
-	}
-
-	pub fn abi_encode(&self) -> Result<Vec<u8>, EthereumTransactionError> {
+	fn abi_encoded(&self) -> Vec<u8> {
 		self.get_function()
 			.encode_input(&[
 				self.sig_data.tokenize(),
@@ -57,11 +83,12 @@ impl RegisterClaim {
 				Token::Address(self.address),
 				Token::Uint(self.expiry),
 			])
-			.map_err(|_| EthereumTransactionError::InvalidPayloadData)
-	}
-
-	pub fn populate_sigdata(&mut self, sig: &SchnorrSignature) {
-		self.sig_data = self.sig_data.with_signature(sig);
+			.expect(
+				r#"
+					This can only fail if the parameter types don't match the function signature encoded below.
+					Therefore, as long as the tests pass, it can't fail at runtime.
+				"#,
+			)
 	}
 
 	/// Gets the function defintion for the `registerClaim` smart contract call. Loading this from the json abi
@@ -117,19 +144,17 @@ mod test_register_claim {
 		let register_claim_reference = stake_manager.function("registerClaim").unwrap();
 
 		let mut register_claim_runtime =
-			RegisterClaim::new_unsigned(NONCE, &TEST_ACCT, AMOUNT, &TEST_ADDR, EXPIRY_SECS)
-				.unwrap();
+			RegisterClaim::new_unsigned(NONCE, &TEST_ACCT, AMOUNT, &TEST_ADDR, EXPIRY_SECS);
 
-		// Erase the msg_hash.
+		// Replace the msg_hash.
 		register_claim_runtime.sig_data.msg_hash = FAKE_HASH.into();
-		register_claim_runtime.sig_data =
-			register_claim_runtime
-				.sig_data
-				.with_signature(&SchnorrSignature {
-					s: FAKE_SIG,
-					k_times_g_addr: FAKE_NONCE_TIMES_G_ADDR,
-				});
-		let runtime_payload = register_claim_runtime.abi_encode().unwrap();
+		ChainflipContractCall::sign(&mut register_claim_runtime, &SchnorrSignature {
+			s: FAKE_SIG,
+			k_times_g_addr: FAKE_NONCE_TIMES_G_ADDR,
+		});
+		assert_eq!(ChainflipContractCall::signing_payload(&register_claim_runtime), FAKE_HASH.into());
+		assert!(ChainflipContractCall::is_signed(&register_claim_runtime));
+		let runtime_payload = ChainflipContractCall::abi_encoded(&register_claim_runtime);
 
 		assert_eq!(
 			// Our encoding:

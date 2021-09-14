@@ -30,8 +30,6 @@ pub fn stake_manager_contract_address() -> [u8; 20] {
 
 #[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum EthereumTransactionError {
-	InvalidPayloadData,
-	InvalidSignature,
 	InvalidRlp,
 }
 
@@ -66,21 +64,15 @@ impl SigData {
 		}
 	}
 
-	/// Returns a copy of the SigData with the `msg_hash` value derived from the provided calldata.
-	pub fn with_msg_hash_from(self, calldata: &[u8]) -> Self {
-		Self {
-			msg_hash: Keccak256::hash(calldata),
-			..self
-		}
+	/// Inserts the `msg_hash` value derived from the provided calldata.
+	pub fn insert_msg_hash_from(&mut self, calldata: &[u8]) {
+		self.msg_hash = Keccak256::hash(calldata);
 	}
 
 	/// Add the actual signature. This method does no verification.
-	pub fn with_signature(self, schnorr: &SchnorrSignature) -> Self {
-		Self {
-			sig: schnorr.s.into(),
-			k_times_g_addr: schnorr.k_times_g_addr.into(),
-			..self
-		}
+	pub fn insert_signature(&mut self, schnorr: &SchnorrSignature) {
+		self.sig = schnorr.s.into();
+		self.k_times_g_addr = schnorr.k_times_g_addr.into();
 	}
 
 	/// Get the inner signature components as a `SchnorrSignature`.
@@ -128,6 +120,7 @@ pub struct UnsignedTransaction {
 	pub data: Vec<u8>,
 }
 
+/// Raw bytes of an rlp-encoded Ethereum transaction.
 pub type RawSignedTransaction = Vec<u8>;
 
 pub fn verify_raw<SignerId>(
@@ -140,6 +133,8 @@ pub fn verify_raw<SignerId>(
 	Ok(())
 }
 
+/// Represents a transaction that has been signed and is ready to be broadcast.
+#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct SignedTransaction {
 	pub chain_id: u64, // Constant
 
@@ -149,12 +144,12 @@ pub struct SignedTransaction {
 	pub max_fee_per_gas: U256,
 	pub gas_limit: U256,
 
-	pub action: TransactionAction, // always `Call(contract_address)`
+	// pub action: TransactionAction, // always `Call(contract_address)`
 	pub value: U256,               // Always 0 (?)
 	pub data: Vec<u8>,             // The abi-encoded contract call.
 
 	// EIP-2930, assume for now that this will remain empty.
-	pub access_list: AccessList,
+	// pub access_list: AccessList,
 
 	// Signature data
 	/// The V field of the signature; the LS bit described which half of the curve our point falls
@@ -164,4 +159,22 @@ pub struct SignedTransaction {
 	pub r: H256,
 	/// The S field of the signature; helps describe the point on the curve.
 	pub s: H256,
+}
+
+/// Represents calls to Chainflip contracts requiring a threshold signature.
+pub trait ChainflipContractCall {
+	/// Whether or not the call has been signed.
+	fn is_signed(&self) -> bool;
+
+	/// Ethereum abi-encoded calldata for the contract call.
+	fn abi_encoded(&self) -> Vec<u8>;
+
+	/// The payload data over which the threshold signature should be made.
+	fn signing_payload(&self) -> H256;
+
+	/// Add the threshold signature to the contract call. 
+	fn sign(&mut self, signature: &SchnorrSignature);
+
+	/// Create a new call from the old one, with a new nonce and discarding the old signature.
+	fn into_new(self, new_nonce: u64) -> Self;
 }
