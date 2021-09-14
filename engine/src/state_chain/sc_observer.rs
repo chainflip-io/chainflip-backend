@@ -279,7 +279,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    #[ignore = "..."]
+    #[ignore = "Start the state chain and then run this to see what types are missing from the register_type_sizes in runtime.rs"]
     async fn test_types() {
         let settings = settings::test_utils::new_test_settings().unwrap();
         let subxt_client = ClientBuilder::<StateChainRuntime>::new()

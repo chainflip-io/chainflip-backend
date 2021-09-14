@@ -1,5 +1,6 @@
 use std::{marker::PhantomData, time::Duration};
 
+use cf_traits::NetworkState;
 use frame_support::unsigned::TransactionValidityError;
 use sp_runtime::{
     generic::{self, Era},
@@ -29,7 +30,9 @@ use super::pallets::{auction, emissions, reputation, staking, validator, vaults,
 
 use pallet_cf_flip::ImbalanceSource;
 use pallet_cf_reputation::OfflineCondition;
-use pallet_cf_vaults::{KeygenRequest, ThresholdSignatureRequest, VaultRotationRequest};
+use pallet_cf_vaults::{
+    CeremonyId, KeygenRequest, ThresholdSignatureRequest, VaultRotationRequest,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -111,7 +114,9 @@ impl Runtime for StateChainRuntime {
         event_type_registry.register_type_size::<u32>("T::BlockNumber");
         event_type_registry.register_type_size::<u32>("BlockNumberFor<T>");
         event_type_registry.register_type_size::<AccountId32>("T::AccountId");
+        event_type_registry.register_type_size::<AccountId32>("<T as Chainflip>::AccountId");
         event_type_registry.register_type_size::<AccountId32>("<T as Config>::AccountId");
+        event_type_registry.register_type_size::<AccountId32>("<T as pallet::Config>::AccountId");
         event_type_registry.register_type_size::<u128>("T::Balance");
         event_type_registry.register_type_size::<Vec<u8>>("OpaqueTimeSlot");
         event_type_registry.register_type_size::<[u8; 32]>("U256");
@@ -126,16 +131,18 @@ impl Runtime for StateChainRuntime {
         event_type_registry.register_type_size::<i32>("ReputationPoints");
         event_type_registry.register_type_size::<u32>("OnlineCreditsFor<T>");
 
-        event_type_registry.register_type_size::<u64>("RequestIndex");
+        event_type_registry.register_type_size::<CeremonyId>("CeremonyId");
         event_type_registry.register_type_size::<OfflineCondition>("OfflineCondition");
         event_type_registry.register_type_size::<KeygenRequest<AccountId32>>(
-            "KeygenRequest<T::AccountId, T::PublicKey>",
+            "KeygenRequest<<T as Chainflip>::AccountId>",
         );
         event_type_registry.register_type_size::<Vec<u8>>("T::PublicKey");
         event_type_registry.register_type_size::<ThresholdSignatureRequest<Vec<u8>, AccountId32>>(
-            "ThresholdSignatureRequest<T::PublicKey, T::AccountId>",
+            "ThresholdSignatureRequest<T::PublicKey,<T as Chainflip>::AccountId>",
         );
         event_type_registry.register_type_size::<VaultRotationRequest>("VaultRotationRequest");
+        event_type_registry.register_type_size::<u32>("ProposalId");
+        event_type_registry.register_type_size::<NetworkState>("NetworkState");
     }
 }
 

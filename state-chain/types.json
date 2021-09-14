@@ -30,6 +30,7 @@
       "Other": "(Vec<u8>)"
     }
   },
+  "CeremonyId": "u64",
   "ChainType": {
     "_enum": [
       "Ethereum"
@@ -88,13 +89,13 @@
     ]
   },
   "OnlineCreditsFor": "u64",
+  "ProposalId": "u32",
   "PublicKey": "Vec<u8>",
   "ReputationPenalty": {
     "points": "ReputationPoints",
     "blocks": "BlockNumber"
   },
   "ReputationPoints": "i32",
-  "RequestIndex": "u64",
   "ReserveId": "[u8;4]",
   "Retired": "bool",
   "SchnorrSignature": {
