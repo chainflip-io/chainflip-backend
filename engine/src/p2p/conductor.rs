@@ -85,7 +85,7 @@ mod tests {
         mq::mq_mock::MQMock,
         p2p::{
             mock::{MockChannelEventHandler, NetworkMock},
-            P2PMessageCommand, ValidatorId,
+            AccountId, P2PMessageCommand,
         },
     };
 
@@ -106,7 +106,7 @@ mod tests {
         // lot of tests. Will need to fix this.
 
         // Validator 1 setup
-        let id_1: ValidatorId = ValidatorId([1; 32]);
+        let id_1: AccountId = AccountId([1; 32]);
 
         let mq = MQMock::new();
 
@@ -116,7 +116,7 @@ mod tests {
         let (handler_1, _) = MockChannelEventHandler::new();
 
         // Validator 2 setup
-        let id_2: ValidatorId = ValidatorId([2; 32]);
+        let id_2: AccountId = AccountId([2; 32]);
 
         let mq = MQMock::new();
         let mc2 = mq.get_client();

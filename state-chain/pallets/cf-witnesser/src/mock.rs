@@ -62,7 +62,7 @@ impl pallet_cf_witness::Config for Test {
 	type Origin = Origin;
 	type Call = Call;
 	type Epoch = <mocks::epoch_info::Mock as EpochInfo>::EpochIndex;
-	type ValidatorId = AccountId;
+	type AccountId = AccountId;
 	type EpochInfo = mocks::epoch_info::Mock;
 	type Amount = u64;
 }

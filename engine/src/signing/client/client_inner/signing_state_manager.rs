@@ -9,7 +9,7 @@ use tokio::sync::mpsc;
 
 use crate::{
     logging::COMPONENT_KEY,
-    p2p::ValidatorId,
+    p2p::AccountId,
     signing::{
         client::{client_inner::client_inner::SigningData, SigningInfo, SigningOutcome},
         MessageHash, MessageInfo,
@@ -26,20 +26,20 @@ use super::{
 #[derive(Clone)]
 pub struct SigningStateManager {
     signing_states: HashMap<MessageInfo, SigningState>,
-    id: ValidatorId,
+    id: AccountId,
     p2p_sender: mpsc::UnboundedSender<InnerEvent>,
     /// Max lifetime of any phase before it expires
     /// and we abandon on the signing ceremony
     phase_timeout: Duration,
     /// Storage for messages for which we are not able to create a SigningState yet.
     /// Processing these is triggered by a request to sign
-    delayed_messages: HashMap<MessageInfo, (std::time::Instant, Vec<(ValidatorId, Broadcast1)>)>,
+    delayed_messages: HashMap<MessageInfo, (std::time::Instant, Vec<(AccountId, Broadcast1)>)>,
     logger: slog::Logger,
 }
 
 impl SigningStateManager {
     pub fn new(
-        id: ValidatorId,
+        id: AccountId,
         p2p_sender: mpsc::UnboundedSender<InnerEvent>,
         phase_timeout: Duration,
         logger: &slog::Logger,
@@ -82,7 +82,7 @@ impl SigningStateManager {
         self.phase_timeout = phase_timeout;
     }
 
-    fn add_delayed(&mut self, mi: MessageInfo, bc1_entry: (ValidatorId, Broadcast1)) {
+    fn add_delayed(&mut self, mi: MessageInfo, bc1_entry: (AccountId, Broadcast1)) {
         slog::trace!(self.logger, "Signing manager adds delayed bc1");
         let entry = self
             .delayed_messages
@@ -92,7 +92,7 @@ impl SigningStateManager {
     }
 
     /// Process signing data, generating new state if necessary
-    pub fn process_signing_data(&mut self, sender_id: ValidatorId, wdata: SigningDataWrapped) {
+    pub fn process_signing_data(&mut self, sender_id: AccountId, wdata: SigningDataWrapped) {
         let SigningDataWrapped { data, message } = wdata;
 
         slog::debug!(
@@ -262,7 +262,7 @@ impl SigningStateManager {
 }
 
 /// Map all signer ids to their corresponding signer idx
-fn project_signers(signer_ids: &[ValidatorId], info: &KeygenResultInfo) -> Result<Vec<usize>, ()> {
+fn project_signers(signer_ids: &[AccountId], info: &KeygenResultInfo) -> Result<Vec<usize>, ()> {
     // There is probably a more efficient way of doing this
     // for for now this shoud be good enough
 
