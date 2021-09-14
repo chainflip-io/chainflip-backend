@@ -57,6 +57,7 @@ use sp_std::prelude::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::Bid;
 	use cf_traits::{ChainflipAccount, VaultRotation};
 	use frame_support::traits::ValidatorRegistration;
 	use sp_runtime::traits::Convert;
@@ -116,6 +117,15 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn bad_validators)]
 	pub(super) type BadValidators<T: Config> = StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn remaining_bidders)]
+	pub(super) type RemainingBidders<T: Config> =
+		StorageValue<_, Vec<Bid<T::ValidatorId, T::Amount>>, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn backup_group_size)]
+	pub(super) type BackupGroupSize<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -305,11 +315,11 @@ impl<T: Config> Auction for Pallet<T> {
 					let phase = AuctionPhase::ValidatorsSelected(
 						validating_set.0.clone(),
 						validating_set.1,
-						remaining_bidders,
-						backup_group_size,
 					);
 
-					<CurrentPhase<T>>::put(phase.clone());
+					RemainingBidders::<T>::put(remaining_bidders);
+					BackupGroupSize::<T>::put(backup_group_size);
+					CurrentPhase::<T>::put(phase.clone());
 
 					Self::deposit_event(Event::AuctionCompleted(
 						<CurrentAuctionIndex<T>>::get(),
@@ -327,12 +337,7 @@ impl<T: Config> Auction for Pallet<T> {
 			// Things have gone well and we have a set of 'Winners', congratulations.
 			// We are ready to call this an auction a day resetting the bidders in storage and
 			// setting the state ready for a new set of 'Bidders'
-			AuctionPhase::ValidatorsSelected(
-				winners,
-				min_bid,
-				remaining_bidders,
-				backup_group_size,
-			) => {
+			AuctionPhase::ValidatorsSelected(winners, minimum_active_bid) => {
 				// If this is genesis we auto confirm
 				let result = if frame_system::Pallet::<T>::current_block_number() == Zero::zero() {
 					Ok(())
@@ -350,6 +355,9 @@ impl<T: Config> Auction for Pallet<T> {
 							}
 							Ok(())
 						};
+
+						let remaining_bidders = RemainingBidders::<T>::get();
+						let backup_group_size = BackupGroupSize::<T>::get();
 
 						let backup_validators: Vec<T::ValidatorId> = remaining_bidders
 							.get(0usize..backup_group_size as usize)
@@ -369,16 +377,14 @@ impl<T: Config> Auction for Pallet<T> {
 						update_validators(backup_validators, ChainflipAccountState::Backup)?;
 						update_validators(passive, ChainflipAccountState::Passive)?;
 
-						let phase = AuctionPhase::WaitingForBids(
-							winners,
-							min_bid,
-							remaining_bidders,
-							backup_group_size,
-						);
-						<CurrentPhase<T>>::put(phase.clone());
+						let phase = AuctionPhase::WaitingForBids(winners, minimum_active_bid);
+
+						CurrentPhase::<T>::put(phase.clone());
+
 						Self::deposit_event(Event::AuctionConfirmed(
 							CurrentAuctionIndex::<T>::get(),
 						));
+
 						Self::deposit_event(Event::AwaitingBidders);
 						Ok(phase)
 					}
@@ -409,83 +415,82 @@ impl<T: Config> StakerHandler for HandleStakes<T> {
 
 	fn stake_updated(validator_id: Self::ValidatorId, amount: Self::Amount) {
 		if let Some(account_id) = T::AccountIdOf::convert(validator_id.clone()) {
-			CurrentPhase::<T>::try_mutate(|phase| {
-				match phase {
-					AuctionPhase::WaitingForBids(_, _, remaining_bids, backup_group_size) => {
-						match T::ChainflipAccount::get(&account_id).state {
-							ChainflipAccountState::Passive => {
-								// Are we above the mark?
-								if let Some((_, lowest_backup_bid)) =
-									remaining_bids.get(*backup_group_size as usize)
-								{
-									if amount > *lowest_backup_bid {
-										if let Some((passive_validator_id, _)) =
-											remaining_bids.get((*backup_group_size - 1) as usize)
-										{
-											if let Some(passive_account_id) =
-												T::AccountIdOf::convert(
-													passive_validator_id.clone(),
-												) {
-												// Set state of new validator to Backup
-												T::ChainflipAccount::update_state(
-													&account_id,
-													ChainflipAccountState::Backup,
-												);
-												// Set state of backup_group_size - 1 to Passive
-												T::ChainflipAccount::update_state(
-													&passive_account_id,
-													ChainflipAccountState::Passive,
-												);
-												// Sort and set state
-												remaining_bids.sort_unstable_by_key(|k| k.1);
-												remaining_bids.reverse();
+			match CurrentPhase::<T>::get() {
+				AuctionPhase::WaitingForBids(..) => {
+					match T::ChainflipAccount::get(&account_id).state {
+						ChainflipAccountState::Passive => {
+							// Are we above the mark?
+							let mut remaining_bids = RemainingBidders::<T>::get();
+							let backup_group_size = BackupGroupSize::<T>::get();
 
-												return Ok(());
-											}
+							if let Some((_, lowest_backup_bid)) =
+								remaining_bids.get(backup_group_size as usize)
+							{
+								if amount > *lowest_backup_bid {
+									if let Some((passive_validator_id, _)) =
+										remaining_bids.get((backup_group_size - 1) as usize)
+									{
+										if let Some(passive_account_id) =
+											T::AccountIdOf::convert(passive_validator_id.clone())
+										{
+											// Set state of new validator to Backup
+											T::ChainflipAccount::update_state(
+												&account_id,
+												ChainflipAccountState::Backup,
+											);
+											// Set state of backup_group_size - 1 to Passive
+											T::ChainflipAccount::update_state(
+												&passive_account_id,
+												ChainflipAccountState::Passive,
+											);
+											// Sort and set state
+											remaining_bids.sort_unstable_by_key(|k| k.1);
+											remaining_bids.reverse();
+
+											RemainingBidders::<T>::put(remaining_bids);
 										}
 									}
 								}
 							}
-							ChainflipAccountState::Backup => {
-								// Are we below the mark?
-								if let Some((_, lowest_backup_bid)) =
-									remaining_bids.get(*backup_group_size as usize)
-								{
-									if amount < *lowest_backup_bid {
-										if let Some((backup_validator_id, _)) =
-											remaining_bids.get((*backup_group_size + 1) as usize)
-										{
-											if let Some(backup_account_id) =
-												T::AccountIdOf::convert(backup_validator_id.clone())
-											{
-												// Set state of new validator to Passive
-												T::ChainflipAccount::update_state(
-													&account_id,
-													ChainflipAccountState::Passive,
-												);
-												// Set state of backup_group_size + 1 to Backup
-												T::ChainflipAccount::update_state(
-													&backup_account_id,
-													ChainflipAccountState::Backup,
-												);
-												// Sort and set state
-												remaining_bids.sort_unstable_by_key(|k| k.1);
-												remaining_bids.reverse();
-
-												return Ok(());
-											}
-										}
-									}
-								}
-							}
-							_ => {}
 						}
+						ChainflipAccountState::Backup => {
+							let mut remaining_bids = RemainingBidders::<T>::get();
+							let backup_group_size = BackupGroupSize::<T>::get();
+							// Are we below the mark?
+							if let Some((_, lowest_backup_bid)) =
+								remaining_bids.get(backup_group_size as usize)
+							{
+								if amount < *lowest_backup_bid {
+									if let Some((backup_validator_id, _)) =
+										remaining_bids.get((backup_group_size + 1) as usize)
+									{
+										if let Some(backup_account_id) =
+											T::AccountIdOf::convert(backup_validator_id.clone())
+										{
+											// Set state of new validator to Passive
+											T::ChainflipAccount::update_state(
+												&account_id,
+												ChainflipAccountState::Passive,
+											);
+											// Set state of backup_group_size + 1 to Backup
+											T::ChainflipAccount::update_state(
+												&backup_account_id,
+												ChainflipAccountState::Backup,
+											);
+											// Sort and set state
+											remaining_bids.sort_unstable_by_key(|k| k.1);
+											remaining_bids.reverse();
+											RemainingBidders::<T>::put(remaining_bids);
+										}
+									}
+								}
+							}
+						}
+						_ => {}
 					}
-					AuctionPhase::BidsTaken(..) => {}
-					AuctionPhase::ValidatorsSelected(..) => {}
 				}
-				Err(())
-			});
+				_ => {}
+			}
 		}
 	}
 }
