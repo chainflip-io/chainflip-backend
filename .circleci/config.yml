@@ -128,6 +128,7 @@ workflows:
           name: build-chainflip-engine
           image: chainflip-io/chainflip-backend/chainflip-engine
           extra_build_args: "--build-arg SERVICE=chainflip-engine"
+          cache_from: ""
           requires:
             - test-validator-package
           context:
@@ -137,6 +138,7 @@ workflows:
           name: build-state-chain-node
           image: chainflip-io/chainflip-backend/state-chain-node
           extra_build_args: "--build-arg SERVICE=state-chain-node"
+          cache_from: ""
           requires:
             - test-validator-package
           context:
@@ -197,6 +199,10 @@ jobs:
         type: string
         description: Primary tag of the build
         default: <<pipeline.git.revision>>
+      cache_from:
+        type: string
+        description: Where to derive the build cache
+        default: ghcr.io/<<parameters.image>>:latest
     steps:
       - setup_remote_docker:
           version: 20.10.7
@@ -212,7 +218,7 @@ jobs:
           registry: ghcr.io
           extra_build_args: <<parameters.extra_build_args>>
           dockerfile: <<parameters.dockerfile>>
-          cache_from: ghcr.io/<<parameters.image>>:latest
+          cache_from: <<parameters.cache_from>>
           tag: <<parameters.tag>>
       - docker/push:
           registry: ghcr.io
