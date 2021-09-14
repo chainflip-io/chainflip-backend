@@ -244,6 +244,7 @@ impl<T: Config> Auction for Pallet<T> {
 			// bidders and change our state ready for an 'Auction' to be ran
 			AuctionPhase::WaitingForBids(_, _) => {
 				let mut bidders = T::BidderProvider::get_bidders();
+				log::info!(target: "auction", "got bidders: {:?}", bidders);
 				// Rule #1 - They are not bad
 				bidders.retain(|(id, _)| !BadValidators::<T>::get().contains(id));
 				// They aren't bad now
