@@ -161,6 +161,7 @@ workflows:
           context:
             - ghcr-credentials
             - do-credentials
+            - infura-endpoints
           <<: *only_epic_branches
 
   chainflip-integration-tests:
