@@ -335,7 +335,7 @@ jobs:
             --namespace default
             --set state-chain-node.nodeType=validator
             --set state-chain-node.image.tag="<<pipeline.git.revision>>"
-            --set "state-chain-node.stateChainNode.extraArgs={--rpc-external,--rpc-cors,all}"
+            --set "state-chain-node.stateChainNode.extraArgs={--rpc-external,--rpc-cors,all,--ws-external}"
             --set chainflip-engine.image.tag="<<pipeline.git.revision>>"
             --set chainflip-engine.config.eth.node_endpoint=$RINKEBY
             --set chainflip-engine.engine.backtrace=full
