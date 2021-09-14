@@ -408,7 +408,7 @@ pub mod pallet {
 			AccrualRatio::<T>::set(self.accrual_ratio);
 			// A list of those we expect to be online, which are our set of validators
 			for validator_id in T::EpochInfo::current_validators().iter() {
-				ValidatorsLiveness::<T>::insert(validator_id, 0);
+				ValidatorsLiveness::<T>::insert(validator_id, 1);
 			}
 		}
 	}
