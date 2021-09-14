@@ -301,6 +301,7 @@ jobs:
 
   run-integration-tests:
     resource_class: xlarge
+    circleci_ip_ranges: true
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
         auth: *dockerconfig
