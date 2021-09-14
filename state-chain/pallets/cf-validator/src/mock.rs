@@ -33,8 +33,8 @@ impl WeightInfo for () {
 	}
 }
 
-pub const MIN_AUCTION_SIZE: u32 = 2;
-pub const MAX_AUCTION_SIZE: u32 = 150;
+pub const MIN_VALIDATOR_SIZE: u32 = 2;
+pub const MAX_VALIDATOR_SIZE: u32 = 150;
 pub const EPOCH_BLOCKS: u64 = 100;
 
 thread_local! {
@@ -112,7 +112,7 @@ impl pallet_session::Config for Test {
 }
 
 parameter_types! {
-	pub const MinAuctionSize: u32 = 2;
+	pub const MinValidators: u32 = 2;
 }
 
 impl pallet_cf_auction::Config for Test {
@@ -122,7 +122,7 @@ impl pallet_cf_auction::Config for Test {
 	type BidderProvider = TestBidderProvider;
 	type Registrar = Test;
 	type AuctionIndex = u32;
-	type MinAuctionSize = MinAuctionSize;
+	type MinValidators = MinValidators;
 	type Handler = MockHandler<ValidatorId = ValidatorId, Amount = Amount>;
 	type ChainflipAccount = cf_traits::ChainflipAccounts<Self>;
 	type AccountIdOf = ConvertInto;
@@ -190,7 +190,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 			epoch_number_of_blocks: EPOCH_BLOCKS,
 		}),
 		pallet_cf_auction: Some(AuctionPalletConfig {
-			auction_size_range: (MIN_AUCTION_SIZE, MAX_AUCTION_SIZE),
+			validator_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
 		}),
 	};
 

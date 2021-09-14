@@ -132,7 +132,7 @@ pub fn native_version() -> NativeVersion {
 }
 
 parameter_types! {
-	pub const MinAuctionSize: u32 = 2;
+	pub const MinValidators: u32 = 2;
 }
 
 impl pallet_cf_auction::Config for Runtime {
@@ -142,7 +142,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type AuctionIndex = u64;
 	type Registrar = Session;
 	type ValidatorId = AccountId;
-	type MinAuctionSize = MinAuctionSize;
+	type MinValidators = MinValidators;
 	type Handler = Vaults;
 	type ChainflipAccount = cf_traits::ChainflipAccounts<Self>;
 	type AccountIdOf = ConvertInto;

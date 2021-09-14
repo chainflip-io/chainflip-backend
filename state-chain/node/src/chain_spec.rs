@@ -340,7 +340,7 @@ fn testnet_genesis(
 				.collect::<Vec<(AccountId, FlipBalance)>>(),
 		}),
 		pallet_cf_auction: Some(AuctionConfig {
-			auction_size_range: (if dev { 1 } else { MIN_VALIDATORS }, MAX_VALIDATORS),
+			validator_size_range: (if dev { 1 } else { MIN_VALIDATORS }, MAX_VALIDATORS),
 		}),
 		pallet_aura: Some(AuraConfig {
 			authorities: vec![],

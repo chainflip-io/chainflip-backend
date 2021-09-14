@@ -15,7 +15,7 @@ mod test {
 	}
 
 	fn assert_winners() -> Vec<ValidatorId> {
-		assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(winners, _) => {
+		assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(winners, _) => {
 			winners
 		})
 	}
@@ -64,7 +64,7 @@ mod test {
 	fn should_end_session() {
 		new_test_ext().execute_with(|| {
 			let set_size = 10;
-			assert_ok!(AuctionPallet::set_auction_range((2, set_size)));
+			assert_ok!(AuctionPallet::set_active_range((2, set_size)));
 			// Set block length of epoch to 10
 			let epoch = 10;
 			assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), epoch));
@@ -115,7 +115,7 @@ mod test {
 		// ran through an auction and that the winners of this auction become the validating set
 		new_test_ext().execute_with(|| {
 			let set_size = 10;
-			assert_ok!(AuctionPallet::set_auction_range((2, set_size)));
+			assert_ok!(AuctionPallet::set_active_range((2, set_size)));
 			// Set block length of epoch to 10
 			let epoch = 10;
 			assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), epoch));
