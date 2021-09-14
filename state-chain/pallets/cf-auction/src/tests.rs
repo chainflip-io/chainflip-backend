@@ -37,7 +37,7 @@ mod test {
 		new_test_ext().execute_with(|| {
 			// We should have our genesis validators, which would have been provided by
 			// `BidderProvider`
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(validators, minimum_active_bid, ..)
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(validators, minimum_active_bid)
 				if (validators.clone(), minimum_active_bid) == expected_validating_set()
 			);
 		});
@@ -56,10 +56,10 @@ mod test {
 			// Having moved into the BidsTaken phase we should have our list of bidders filtered
 			// Expecting the phase to change, a set of winners, the bidder list and a bond value set
 			// to our min bid
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::ValidatorsSelected(validators, minimum_active_bid, ..))
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::ValidatorsSelected(validators, minimum_active_bid))
 				if (validators.clone(), minimum_active_bid) == expected_validating_set()
 			);
-			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::ValidatorsSelected(validators, minimum_active_bid, ..)
+			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::ValidatorsSelected(validators, minimum_active_bid)
 				if (validators.clone(), minimum_active_bid) == expected_validating_set()
 			);
 			assert_eq!(
@@ -77,12 +77,15 @@ mod test {
 			// and finally we complete the process, clearing the bidders
 			assert_matches!(
 				AuctionPallet::process(),
-				Ok(AuctionPhase::WaitingForBids { .. })
+				Ok(AuctionPhase::WaitingForBids(..))
 			);
-			assert_matches!(
-				AuctionPallet::current_phase(),
-				AuctionPhase::WaitingForBids { .. }
-			);
+
+			match AuctionPallet::current_phase() {
+				AuctionPhase::WaitingForBids(validators, minimum_active_bid) => {
+					assert_eq!(MockChainflipAccount::get(&validators[0]).state, ChainflipAccountState::Validator)
+				},
+				_ => {panic!("Wrong phase")}
+			}
 		});
 	}
 
@@ -129,14 +132,13 @@ mod test {
 			generate_bids(2);
 			let auction_range = (2, 100);
 			assert_ok!(AuctionPallet::set_active_range(auction_range));
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(_)));
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(..)));
 			assert_matches!(
 				AuctionPallet::process(),
 				Ok(AuctionPhase::ValidatorsSelected(..))
 			);
 
-			// assert!(::try_confirmation());
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(validators, minimum_active_bid, ..)
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(validators, minimum_active_bid)
 				if !validators.is_empty() && minimum_active_bid > 0
 			);
 			// Kill it

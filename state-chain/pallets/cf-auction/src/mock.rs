@@ -12,6 +12,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 };
 use std::cell::RefCell;
+use std::collections::HashMap;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -25,6 +26,7 @@ pub const MAX_VALIDATOR_SIZE: u32 = 3;
 thread_local! {
 	// A set of bidders, we initialise this with the proposed genesis bidders
 	pub static BIDDER_SET: RefCell<Vec<(ValidatorId, Amount)>> = RefCell::new(vec![]);
+	pub static CHAINFLIP_ACCOUNTS: RefCell<HashMap<u64, ChainflipAccountData>> = RefCell::new(HashMap::new());
 }
 
 // Create a set of descending bids, including an invalid bid of amount 0
@@ -32,6 +34,12 @@ pub fn generate_bids(number_of_bids: u64) {
 	BIDDER_SET.with(|cell| {
 		for bid_number in (0..number_of_bids).rev() {
 			(*(cell.borrow_mut())).push((bid_number + 1, bid_number * 100));
+		}
+	});
+
+	CHAINFLIP_ACCOUNTS.with(|cell| {
+		for id in 1..=number_of_bids {
+			cell.borrow_mut().insert(id, ChainflipAccountData::default());
 		}
 	});
 }
@@ -89,8 +97,26 @@ impl Config for Test {
 	type AuctionIndex = u32;
 	type MinValidators = MinValidators;
 	type Handler = MockAuctionHandler;
-	type ChainflipAccount = cf_traits::ChainflipAccounts<Self>;
+	type ChainflipAccount = MockChainflipAccount;
 	type AccountIdOf = ConvertInto;
+}
+
+pub struct MockChainflipAccount;
+
+impl ChainflipAccount for MockChainflipAccount {
+	type AccountId = u64;
+
+	fn get(account_id: &Self::AccountId) -> ChainflipAccountData {
+		CHAINFLIP_ACCOUNTS.with(|cell| *cell.borrow().get(account_id).unwrap())
+	}
+
+	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState) {
+		CHAINFLIP_ACCOUNTS.with(|cell| {
+			let cell = cell.borrow_mut();
+			let mut data = *cell.get(account_id).unwrap();
+			data.state = state;
+		})
+	}
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
