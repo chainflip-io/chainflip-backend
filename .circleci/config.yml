@@ -368,7 +368,7 @@ jobs:
     executor: chainflip-master
     steps:
       - attach_workspace:
-          at: ./
+          at: ~/
       - run: kubectl get pods -n ingress
 
   test-single-node:
