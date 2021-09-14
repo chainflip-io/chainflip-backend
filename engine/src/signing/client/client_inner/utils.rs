@@ -10,13 +10,7 @@ use serde::{Deserialize, Serialize};
 /// This follows the notation in the multisig library that
 /// we are using and in the corresponding literature.
 pub fn threshold_from_share_count(share_count: usize) -> usize {
-    let doubled = share_count * 2;
-
-    if doubled % 3 == 0 {
-        doubled / 3 - 1
-    } else {
-        doubled / 3
-    }
+    ((share_count * 2) - 1) / 3
 }
 
 #[cfg(test)]

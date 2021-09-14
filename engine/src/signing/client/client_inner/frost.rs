@@ -170,22 +170,17 @@ fn gen_group_commitment(
     signing_commitments: &[SigningCommitment],
     bindings: &HashMap<usize, Scalar>,
 ) -> Point {
-    let mut iter = signing_commitments.iter();
-
-    let mut acc = {
-        let first = iter.next().expect("non empty list");
-        let rho_i = bindings[&first.index];
-        first.d + first.e * rho_i
-    };
-
-    for com in iter {
-        let rho_i = bindings[&com.index];
-        acc = acc + com.d + com.e * rho_i;
-    }
-
-    acc
+    signing_commitments
+        .iter()
+        .map(|comm| {
+            let rho_i = bindings[&comm.index];
+            comm.d + comm.e * rho_i
+        })
+        .reduce(|a, b| a + b)
+        .expect("non empty list")
 }
 
+// TODO: link to the reference
 fn get_lagrange_coeff(
     signer_index: usize,
     all_signer_indices: &[usize],
@@ -212,6 +207,7 @@ fn get_lagrange_coeff(
     Ok(lagrange_coeff)
 }
 
+// TODO: link to the reference
 fn gen_rho_i(index: usize, msg: &[u8], signing_commitments: &[SigningCommitment]) -> Scalar {
     let mut hasher = Sha256::new();
     hasher.update(b"I");
@@ -246,13 +242,14 @@ fn generate_bindings(msg: &[u8], commitments: &[SigningCommitment]) -> HashMap<u
     bindings
 }
 
+// TODO: link to the reference
 pub fn generate_local_sig(
     msg: &[u8],
     key: &KeyShare,
     nonces: &SecretNoncePair,
     commitments: &[SigningCommitment],
-    signer_idx: usize,
-    signer_idxs: &[usize],
+    own_idx: usize,
+    all_idxs: &[usize],
 ) -> SigningResponse {
     let bindings = generate_bindings(&msg, commitments);
 
@@ -263,11 +260,11 @@ pub fn generate_local_sig(
 
     let SecretNoncePair { d, e, .. } = nonces;
 
-    let lambda_i = get_lagrange_coeff(signer_idx, signer_idxs).expect("lagrange coeff");
+    let lambda_i = get_lagrange_coeff(own_idx, all_idxs).expect("lagrange coeff");
 
     let key = key.x_i;
 
-    let rho_i = bindings[&signer_idx];
+    let rho_i = bindings[&own_idx];
 
     let lhs = *d + (*e * rho_i);
 
@@ -302,6 +299,9 @@ impl From<Signature> for SchnorrSignature {
     }
 }
 
+/// Combine local signatures received from all parties into the final
+/// (aggregate) signature given that no party misbehavied. Otherwise
+/// return the misbehaving parties.
 pub fn aggregate_signature(
     msg: &[u8],
     signer_idxs: &[usize],

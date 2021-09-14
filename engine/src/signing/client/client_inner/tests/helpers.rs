@@ -3,7 +3,7 @@ use std::{collections::HashMap, time::Duration};
 use itertools::Itertools;
 use tokio::sync::mpsc::UnboundedReceiver;
 
-use crate::signing::client::client_inner::frost;
+use crate::signing::client::client_inner::frost::{self, SigningCommitment};
 
 use frost::{SigningData, SigningDataWrapped};
 
@@ -23,7 +23,7 @@ use crate::{
             },
             KeyId, KeygenInfo, MultisigInstruction,
         },
-        crypto::Keys,
+        crypto::{Keys, GE as Point},
         db::KeyDBMock,
         MessageInfo,
     },
@@ -54,23 +54,25 @@ pub struct KeygenPhase3Data {
     pub sec_keys: Vec<KeygenResultInfo>,
 }
 
-/// Clients received a request to sign and generated Comm1, not broadcast yet
+/// Clients received a request to sign and generated (but haven't broadcast) Comm1
 pub struct SigningPhase1Data {
     pub clients: Vec<MultisigClientNoDB>,
     pub comm1_vec: Vec<frost::Comm1>,
 }
 
-/// Clients generated Secret2, not sent yet
+/// Clients generated (but haven't broadcast) VerifyComm2
 pub struct SigningPhase2Data {
     pub clients: Vec<MultisigClientNoDB>,
     pub ver2_vec: Vec<frost::VerifyComm2>,
 }
 
+/// Clients generated (but haven't broadcast) LocalSig3
 pub struct SigningPhase3Data {
     pub clients: Vec<MultisigClientNoDB>,
     pub local_sigs: Vec<frost::LocalSig3>,
 }
 
+/// Clients generated (but haven't broadcast) VerifyLocalSig4
 pub struct SigningPhase4Data {
     pub clients: Vec<MultisigClientNoDB>,
     pub ver4_vec: Vec<frost::VerifyLocalSig4>,
@@ -87,7 +89,7 @@ pub struct ValidSigningStates {
     pub sign_phase2: SigningPhase2Data,
     pub sign_phase3: SigningPhase3Data,
     pub sign_phase4: SigningPhase4Data,
-    pub signature: SchnorrSignature,
+    pub outcome: SigningOutcome,
 }
 
 const TEST_PHASE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -118,13 +120,17 @@ pub struct KeygenContext {
     /// the one that would be normally generated, it
     /// will be stored here
     custom_local_sigs: HashMap<usize, frost::LocalSig3>,
+    /// Maps a (sender, receiver) pair to the data that will be
+    /// sent (in case it needs to be invalid/different from what
+    /// is expected normally)
+    comm1_to_send: HashMap<(usize, usize), SigningCommitment>,
 }
 
 impl KeygenContext {
     /// Generate context without starting the
     /// keygen ceremony
     pub fn new() -> Self {
-        let validator_ids = (1..=3).map(|idx| AccountId([idx; 32])).collect_vec();
+        let validator_ids = super::VALIDATOR_IDS.clone();
         let logger = logging::test_utils::create_test_logger();
         let (clients, rxs): (Vec<_>, Vec<_>) = validator_ids
             .iter()
@@ -146,6 +152,7 @@ impl KeygenContext {
             rxs,
             clients,
             custom_local_sigs: HashMap::new(),
+            comm1_to_send: HashMap::new(),
         }
     }
 
@@ -161,6 +168,22 @@ impl KeygenContext {
         };
 
         self.custom_local_sigs.insert(signer_idx, sig);
+    }
+
+    pub fn use_inconsistent_broadcast(&mut self, sender_idx: usize, receiver_idx: usize) {
+        assert_ne!(sender_idx, receiver_idx);
+
+        // It doesn't matter what kind of commitment we create here,
+        // the main idea is that the commitment doesn't match what we
+        // send to all other parties
+        let fake_comm1 = SigningCommitment {
+            index: sender_idx,
+            d: Point::random_point(),
+            e: Point::random_point(),
+        };
+
+        self.comm1_to_send
+            .insert((sender_idx, receiver_idx), fake_comm1);
     }
 
     // Generate keygen states for each of the phases,
@@ -194,18 +217,19 @@ impl KeygenContext {
 
             // ignore the next message
             let _ = recv_bc1_keygen(rx).await;
+            let _ = recv_bc1_keygen(rx).await;
         }
 
         let phase1_clients = clients.clone();
 
         // *** Distribute BC1, so we can advance and generate Secret2 ***
 
-        for sender_idx in 0..=2 {
+        for sender_idx in 0..=3 {
             let bc1 = bc1_vec[sender_idx].clone();
             let id = &validator_ids[sender_idx];
             let m = keygen_data_to_p2p(bc1, id, KEY_ID);
 
-            for receiver_idx in 0..=2 {
+            for receiver_idx in 0..=3 {
                 if receiver_idx != sender_idx {
                     clients[receiver_idx].process_p2p_mq_message(m.clone());
                 }
@@ -224,8 +248,9 @@ impl KeygenContext {
         for rx in rxs.iter_mut() {
             let mut sec2_map = HashMap::new();
 
-            // Should generate two messages (one for each of the other two parties)
-            for _ in 0u32..2 {
+            // Should generate three messages (one for each of the other three parties)
+            for i in 0u32..3 {
+                println!("recv_secret2_keygen, i: {}", i);
                 let (dest, sec2) = recv_secret2_keygen(rx).await;
                 sec2_map.insert(dest, sec2);
             }
@@ -247,8 +272,8 @@ impl KeygenContext {
 
         // *** Distribute Secret2s, so we can advance and generate Signing Key ***
 
-        for sender_idx in 0..3 {
-            for receiver_idx in 0..3 {
+        for sender_idx in 0..=3 {
+            for receiver_idx in 0..=3 {
                 if sender_idx == receiver_idx {
                     continue;
                 }
@@ -318,6 +343,8 @@ impl KeygenContext {
         let mut clients = self.clients.clone();
         let rxs = &mut self.rxs;
 
+        assert_channel_empty(&mut rxs[0]).await;
+
         // *** Send a request to sign and generate BC1 to be distributed ***
 
         // NOTE: only parties 1 and 2 will participate in signing (SIGNER_IDXS)
@@ -341,6 +368,12 @@ impl KeygenContext {
             let rx = &mut rxs[*idx];
 
             let comm1 = recv_comm1_signing(rx).await;
+
+            // Ignore all other (same) messages
+            for _ in 0..SIGNER_IDXS.len() - 2 {
+                let _ = recv_comm1_signing(rx).await;
+            }
+
             comm1_vec.push(comm1);
         }
 
@@ -353,13 +386,24 @@ impl KeygenContext {
 
         // *** Broadcast Comm1 messages to advance to Stage2 ***
         for sender_idx in SIGNER_IDXS.iter() {
-            let comm1 = comm1_vec[*sender_idx].clone();
-            let id = &validator_ids[*sender_idx];
-
-            let m = sig_data_to_p2p(comm1, id, &MESSAGE_INFO);
-
             for receiver_idx in SIGNER_IDXS.iter() {
                 if receiver_idx != sender_idx {
+                    let valid_comm1 = comm1_vec[*sender_idx].clone();
+
+                    let comm1 = self
+                        .comm1_to_send
+                        .remove(&(*sender_idx, *receiver_idx))
+                        .unwrap_or(valid_comm1);
+
+                    println!(
+                        "[{}] will send to [{}] as comm1: {:?}",
+                        sender_idx, receiver_idx, comm1
+                    );
+
+                    let id = &validator_ids[*sender_idx];
+
+                    let m = sig_data_to_p2p(comm1, id, &MESSAGE_INFO);
+
                     clients[*receiver_idx].process_p2p_mq_message(m.clone());
                 }
             }
@@ -375,6 +419,11 @@ impl KeygenContext {
             let rx = &mut rxs[*sender_idx];
 
             let ver2 = recv_ver2_signing(rx).await;
+
+            // Ignore all other (same) messages
+            for _ in 0..SIGNER_IDXS.len() - 2 {
+                let _ = recv_ver2_signing(rx).await;
+            }
 
             ver2_vec.push(ver2);
         }
@@ -404,6 +453,8 @@ impl KeygenContext {
         for idx in SIGNER_IDXS.iter() {
             let c = &mut clients[*idx];
 
+            // TODO: account for the case where we abort early
+
             assert_eq!(
                 get_stage_for_msg(&c, &MESSAGE_INFO),
                 Some("BroadcastStage<LocalSigStage3>".to_string())
@@ -421,7 +472,13 @@ impl KeygenContext {
 
             // Check if the test requested a custom local sig
             // to be emitted by party idx
-            // let sig = self.custom_local_sigs.remove(idx).unwrap_or(sig);
+            let sig = self.custom_local_sigs.remove(idx).unwrap_or(sig);
+
+            // Ignore all other (same) messages
+            for _ in 0..SIGNER_IDXS.len() - 2 {
+                let _ = recv_local_sig(rx).await;
+            }
+
             local_sigs.push(sig);
         }
 
@@ -456,6 +513,11 @@ impl KeygenContext {
 
             let ver4 = recv_ver4_signing(rx).await;
 
+            // Ignore all other (same) messages
+            for _ in 0..SIGNER_IDXS.len() - 2 {
+                let _ = recv_ver4_signing(rx).await;
+            }
+
             ver4_vec.push(ver4);
         }
 
@@ -483,10 +545,8 @@ impl KeygenContext {
 
         let event = recv_next_inner_event(&mut rxs[0]).await;
 
-        let signature = match event {
-            InnerEvent::SigningResult(SigningOutcome {
-                result: Ok(sig), ..
-            }) => sig,
+        let outcome = match event {
+            InnerEvent::SigningResult(outcome) => outcome,
             _ => panic!("Unexpected event"),
         };
 
@@ -497,7 +557,7 @@ impl KeygenContext {
             sign_phase2,
             sign_phase3,
             sign_phase4,
-            signature,
+            outcome,
         }
     }
 }

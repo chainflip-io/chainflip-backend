@@ -132,7 +132,7 @@ impl SigningStateWithKey {
                     StageResult::NextStage(mut stage) => {
                         slog::debug!(
                             self.logger,
-                            "Signing Ceremony [todo] transitions to {}",
+                            "Signing ceremony [todo] transitions to {}",
                             &stage
                         );
 
@@ -155,6 +155,12 @@ impl SigningStateWithKey {
                             .iter()
                             .map(|idx| self.validator_map.get_id(*idx).unwrap().clone())
                             .collect();
+
+                        slog::warn!(
+                            self.logger,
+                            "Signing ceremony failed, blaming parties: {:?}",
+                            &bad_validators
+                        );
 
                         self.send_result(Err((Error::Invalid, blamed_parties)));
                     }

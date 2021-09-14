@@ -104,10 +104,11 @@ impl StageProcessor<SigningData, SchnorrSignature> for VerifyCommitmentsBroadcas
     type Message = VerifyComm2;
 
     fn init(&self) -> Self::Message {
+        // TODO: use map instead
         let mut data = Vec::with_capacity(self.common.all_idxs.len());
 
         for idx in &self.common.all_idxs {
-            // is there a way to avoid unwrapping here?
+            // TODO: is there a way to avoid unwrapping here?
             data.push(self.commitments1.get(&idx).cloned().unwrap());
         }
 
@@ -287,6 +288,10 @@ fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwned>(
         }
 
         for (data, count) in value_counts {
+            println!(
+                ">>>>>>>>>>>>>>>>>> count: {}, threshold: {}",
+                count, threshold
+            );
             if count > threshold {
                 let data = bincode::deserialize(&data).unwrap();
                 agreed_on_values.push(data);

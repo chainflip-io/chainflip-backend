@@ -12,7 +12,7 @@ pub enum StageResult<M, Result> {
     Done(Result),
 }
 
-/// The result of processing a message for a stage from a signle party
+/// The result of processing a message for a stage from a single party
 /// (currently used to indicate whether we are ready to proceed to the
 /// next stage)
 pub enum ProcessMessageResult {

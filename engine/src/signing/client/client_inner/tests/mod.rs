@@ -27,8 +27,8 @@ const KEY_ID: KeyId = KeyId(0);
 
 lazy_static! {
     static ref VALIDATOR_IDS: Vec<AccountId> =
-        vec![AccountId([1; 32]), AccountId([2; 32]), AccountId([3; 32]),];
-    static ref SIGNER_IDXS: Vec<usize> = vec![0, 1];
+        [1, 2, 3, 4].iter().map(|i| AccountId([*i; 32])).collect();
+    static ref SIGNER_IDXS: Vec<usize> = vec![0, 1, 2];
     static ref SIGNER_IDS: Vec<AccountId> = SIGNER_IDXS
         .iter()
         .map(|idx| VALIDATOR_IDS[*idx].clone())
