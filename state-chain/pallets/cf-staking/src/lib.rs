@@ -114,8 +114,8 @@ pub mod pallet {
 
 		/// Information about the current epoch.
 		type EpochInfo: EpochInfo<
-			ValidatorId = <Self as frame_system::Config>::AccountId,
-			Amount = Self::Balance,
+			AccountId = <Self as frame_system::Config>::AccountId,
+			Amount = FlipBalance<Self>,
 		>;
 
 		/// Something that can provide a nonce for the threshold signature.
@@ -691,10 +691,10 @@ impl<T: Config> Pallet<T> {
 /// This implementation of [pallet_cf_validator::CandidateProvider] simply returns a list of `(account_id, stake)` for
 /// all non-retired accounts.
 impl<T: Config> BidderProvider for Pallet<T> {
-	type ValidatorId = AccountId<T>;
+	type AccountId = T::AccountId;
 	type Amount = T::Balance;
 
-	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
+	fn get_bidders() -> Vec<(Self::AccountId, Self::Amount)> {
 		AccountRetired::<T>::iter()
 			.filter_map(|(acct, retired)| {
 				if retired {

@@ -70,16 +70,16 @@ type SessionIndex = u32;
 /// Handler for Epoch life cycle events.
 pub trait EpochTransitionHandler {
 	/// The id type used for the validators.
-	type ValidatorId;
+	type AccountId;
 	type Amount: Copy;
 	/// A new epoch has started
 	///
 	/// The new set of validator `new_validators` are now validating
-	fn on_new_epoch(_new_validators: &Vec<Self::ValidatorId>, _new_bond: Self::Amount) {}
+	fn on_new_epoch(_new_validators: &Vec<Self::AccountId>, _new_bond: Self::Amount) {}
 }
 
 impl<T: Config> EpochTransitionHandler for PhantomData<T> {
-	type ValidatorId = T::ValidatorId;
+	type AccountId = T::AccountId;
 	type Amount = T::Amount;
 }
 
@@ -100,7 +100,7 @@ pub mod pallet {
 
 		/// A handler for epoch lifecycle events
 		type EpochTransitionHandler: EpochTransitionHandler<
-			ValidatorId = Self::ValidatorId,
+			AccountId = Self::AccountId,
 			Amount = Self::Amount,
 		>;
 
@@ -118,7 +118,7 @@ pub mod pallet {
 		type Amount: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 
 		/// An auction type
-		type Auction: Auction<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
+		type Auction: Auction<AccountId = Self::AccountId, Amount = Self::Amount>;
 	}
 
 	#[pallet::event]
@@ -218,7 +218,7 @@ pub mod pallet {
 	/// Validator lookup
 	#[pallet::storage]
 	pub(super) type ValidatorLookup<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::ValidatorId, ()>;
+		StorageMap<_, Blake2_128Concat, <T as pallet_session::Config>::ValidatorId, ()>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -248,19 +248,19 @@ pub mod pallet {
 }
 
 impl<T: Config> EpochInfo for Pallet<T> {
-	type ValidatorId = T::ValidatorId;
+	type AccountId = <T as pallet_session::Config>::ValidatorId;
 	type Amount = T::Amount;
 	type EpochIndex = T::EpochIndex;
 
-	fn current_validators() -> Vec<Self::ValidatorId> {
+	fn current_validators() -> Vec<Self::AccountId> {
 		<pallet_session::Module<T>>::validators()
 	}
 
-	fn is_validator(account: &Self::ValidatorId) -> bool {
+	fn is_validator(account: &Self::AccountId) -> bool {
 		ValidatorLookup::<T>::contains_key(account)
 	}
 
-	fn next_validators() -> Vec<Self::ValidatorId> {
+	fn next_validators() -> Vec<Self::AccountId> {
 		<pallet_session::Module<T>>::queued_keys()
 			.into_iter()
 			.map(|(k, _)| k)
@@ -283,14 +283,14 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	}
 }
 
-impl<T: Config> pallet_session::SessionHandler<T::ValidatorId> for Pallet<T> {
+impl<T: Config> pallet_session::SessionHandler<T::AccountId> for Pallet<T> {
 	/// TODO look at the key management
 	const KEY_TYPE_IDS: &'static [sp_runtime::KeyTypeId] = &[];
-	fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(T::ValidatorId, Ks)]) {}
+	fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(T::AccountId, Ks)]) {}
 	fn on_new_session<Ks: OpaqueKeys>(
 		_changed: bool,
-		_validators: &[(T::ValidatorId, Ks)],
-		_queued_validators: &[(T::ValidatorId, Ks)],
+		_validators: &[(T::AccountId, Ks)],
+		_queued_validators: &[(T::AccountId, Ks)],
 	) {
 	}
 	fn on_before_session_ending() {}
@@ -352,9 +352,9 @@ impl<T: Config> Pallet<T> {
 }
 
 /// Provides the new set of validators to the session module when session is being rotated.
-impl<T: Config> pallet_session::SessionManager<T::ValidatorId> for Pallet<T> {
+impl<T: Config> pallet_session::SessionManager<T::AccountId> for Pallet<T> {
 	/// Prepare candidates for a new session
-	fn new_session(_new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
+	fn new_session(_new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		return match T::Auction::phase() {
 			// Successfully completed the process, these are the next set of validators to be used
 			AuctionPhase::WinnersSelected(winners, _) => Some(winners),

@@ -14,7 +14,10 @@ mod tests;
 
 #[frame_support::pallet]
 pub mod pallet {
+<<<<<<< HEAD
 	use cf_chains::eth::SchnorrSignature;
+=======
+>>>>>>> epic/1432-abstract-transaction-broadcast
 	use cf_traits::{Chainflip, Witnesser};
 	use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
@@ -102,7 +105,11 @@ pub mod pallet {
 		pub fn witness_keygen_response(
 			origin: OriginFor<T>,
 			request_id: RequestIndex,
+<<<<<<< HEAD
 			response: KeygenResponse<<T as Chainflip>::ValidatorId, T::PublicKey>,
+=======
+			response: KeygenResponse<<T as Chainflip>::AccountId, T::PublicKey>,
+>>>>>>> epic/1432-abstract-transaction-broadcast
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = VaultsCall::keygen_response(request_id, response);
@@ -127,7 +134,11 @@ pub mod pallet {
 		pub fn witness_eth_signing_tx_response(
 			origin: OriginFor<T>,
 			request_id: RequestIndex,
+<<<<<<< HEAD
 			response: EthSigningTxResponse<<T as Chainflip>::ValidatorId>,
+=======
+			response: EthSigningTxResponse<<T as Chainflip>::AccountId>,
+>>>>>>> epic/1432-abstract-transaction-broadcast
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = VaultsCall::eth_signing_tx_response(request_id, response);

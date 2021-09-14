@@ -13,16 +13,16 @@ pub fn clear_confirmation() {
 }
 
 impl VaultRotation for Mock {
-	type ValidatorId = u64;
+	type AccountId = u64;
 
 	fn start_vault_rotation(
-		_candidates: Vec<Self::ValidatorId>,
-	) -> Result<(), RotationError<Self::ValidatorId>> {
+		_candidates: Vec<Self::AccountId>,
+	) -> Result<(), RotationError<Self::AccountId>> {
 		TO_CONFIRM.with(|l| *l.borrow_mut() = Err(RotationError::NotConfirmed));
 		Ok(())
 	}
 
-	fn finalize_rotation() -> Result<(), RotationError<Self::ValidatorId>> {
+	fn finalize_rotation() -> Result<(), RotationError<Self::AccountId>> {
 		TO_CONFIRM.with(|l| (*l.borrow()).clone())
 	}
 }
