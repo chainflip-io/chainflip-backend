@@ -106,7 +106,6 @@ mod test {
 					assert_eq!(MockChainflipAccount::get(&first_passive.0).state, ChainflipAccountState::Backup);
 					assert_eq!(MockChainflipAccount::get(&last_backup_validator.0).state, ChainflipAccountState::Passive);
 					// Update who is who
-					let last_backup_validator = remaining[backup_group_size - 1];
 					let first_passive = remaining[backup_group_size];
 					// A backup validator has claimed stake and is now a passive validator
 					// and the first passive has been promoted to backup

@@ -106,7 +106,8 @@ impl ChainflipAccount for MockChainflipAccount {
 
 	fn update_state(account_id: &Self::AccountId, state: ChainflipAccountState) {
 		CHAINFLIP_ACCOUNTS.with(|cell| {
-			cell.borrow_mut().insert(*account_id, ChainflipAccountData { state });
+			cell.borrow_mut()
+				.insert(*account_id, ChainflipAccountData { state });
 		})
 	}
 }

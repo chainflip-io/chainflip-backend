@@ -13,23 +13,40 @@
 //! provided via the `BidderProvider` trait.  Calling `Auction::process()` we push forward the state
 //! of our auction.
 //!
-//! First we are looking for bidders in the `AuctionPhase::WaitingForBids` phase in which we
-//! validate their suitability for the next phase `AuctionPhase::BidsTaken`.
-//! During the `AuctionPhase::BidsTaken` phase we run an auction which selects a list of winners and
-//! sets the state to `WinnersSelected` and giving us our winners and the minimum bid.
-//! The caller would then finally call `Auction::process()` to finalise the auction, this can only
-//! happen on confirmation via the `AuctionConfirmation` trait. From which it would move to
-//! `WaitingForBids` for the next auction to be started.
+//! The process starts with `AuctionPhase::WaitingForBids` requesting a set of bidders and filtering
+//! them at a high level for the next phase `AuctionPhase::BidsTaken`.
+//! During `AuctionPhase::BidsTaken` bidder classification starts where a set of viable candidates
+//! for the next epoch are selected.  Those that don't qualify at this stage are grouped and stored in
+//! `RemainingBidders` with a backup group size being calculated and stored in `BackupGroupSize`.
+//! The pallet maintains a sorted list of these remaining bidders which can be viewed as two groups,
+//! `ChainflipAccountState::Backup` and `ChainflipAccountState::Passive`, using the calculated `BackupGroupSize`.
+//! This list and group size are recalculated everytime the process passes through `AuctionPhase::BidsTaken`.
+//! Their final states are not updated until the process has completed.
+//!
+//! After completing the step `AuctionPhase::BidsTaken` the pallet moves forward to the
+//! `AuctionPhase::ValidatorsSelected` phase.  At this point a request has been sent to start a vault
+//! rotation with the proposed winning set via `VaultRotation::start_vault_rotation()`.
+//! Once confirmation has been made via `VaultRotation::finalize_rotation()` the states for the
+//! validators and the remaining set, backup and passive, are set using `ChainflipAccount::update_state`
+//!
+//! During the lifetime of a node its stake may vary.  This is shared via the `StakeHandler` trait in
+//! which updates are received.  Updates to stakes are respected only during `AuctionPhase::WaitingForBids`
+//! and depending on the nodes state being either `ChainflipAccountState::Passive` or
+//! `ChainflipAccountState::Backup` we may see a change in their state if they rise above or fall
+//! below the bid marked by `BackupGroupSize`
 //!
 //! At any point in time the auction can be aborted using `Auction::abort()` returning state to
 //! `WaitingForBids`.
 //!
 //! ## Terminology
-//! - **Bidder:** An entity that has placed a bid and would hope to be included in the winning set
+//! - **Bidder:** A staker that has put their bid forward to be considered in the auction
 //! - **Winners:** Those bidders that have been evaluated and have been included in the the winning set
-//! - **Minimum Bid:** The minimum bid required to be included in the Winners set
-//! - **Auction Range:** A range specifying the minimum number of bidders we require and an upper range
-//!	  specifying the maximum size for the winning set
+//!   to become the next set of validators in the next epoch.
+//! - **Minimum Active Bid:** The minimum active bid required to be included in the Winners set
+//! - **Backup Validator** A group of bidders who make up a group size of 1/3 of the desired validator
+//!   group size.  They are expected to the reserve in that they are ready to become a validator during
+//!   an emergency rotation.
+//!
 
 #[cfg(test)]
 mod mock;
@@ -102,27 +119,29 @@ pub mod pallet {
 	pub(super) type CurrentPhase<T: Config> =
 		StorageValue<_, AuctionPhase<T::ValidatorId, T::Amount>, ValueQuery>;
 
-	/// Size range for number of bidders in auction (min, max)
+	/// Size range for number of validators we want in our validating set
 	#[pallet::storage]
 	#[pallet::getter(fn active_validator_size_range)]
 	pub(super) type ActiveValidatorSizeRange<T: Config> =
 		StorageValue<_, ActiveValidatorRange, ValueQuery>;
 
-	/// The current auction we are in
+	/// The index of the auction we are in
 	#[pallet::storage]
 	#[pallet::getter(fn current_auction_index)]
 	pub(super) type CurrentAuctionIndex<T: Config> = StorageValue<_, T::AuctionIndex, ValueQuery>;
 
-	/// The set of bad validators
+	/// Validators that have been reported as being bad
 	#[pallet::storage]
 	#[pallet::getter(fn bad_validators)]
 	pub(super) type BadValidators<T: Config> = StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
 
+	/// The remaining set of bidders after an auction
 	#[pallet::storage]
 	#[pallet::getter(fn remaining_bidders)]
 	pub(super) type RemainingBidders<T: Config> =
 		StorageValue<_, Vec<Bid<T::ValidatorId, T::Amount>>, ValueQuery>;
 
+	/// A size calculated for our backup validator group
 	#[pallet::storage]
 	#[pallet::getter(fn backup_group_size)]
 	pub(super) type BackupGroupSize<T: Config> = StorageValue<_, u32, ValueQuery>;
@@ -148,6 +167,7 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Invalid auction index used in confirmation
 		InvalidAuction,
+		/// Invalid range used for the active validator range
 		InvalidRange,
 	}
 
@@ -210,7 +230,7 @@ impl<T: Config> Auction for Pallet<T> {
 	type BidderProvider = T::BidderProvider;
 
 	fn auction_range() -> ActiveValidatorRange {
-		<ActiveValidatorSizeRange<T>>::get()
+		ActiveValidatorSizeRange::<T>::get()
 	}
 
 	/// Set new auction range, returning on success the old value
@@ -225,17 +245,17 @@ impl<T: Config> Auction for Pallet<T> {
 			return Err(AuctionError::InvalidRange);
 		}
 
-		let old = <ActiveValidatorSizeRange<T>>::get();
+		let old = ActiveValidatorSizeRange::<T>::get();
 		if old == range {
 			return Err(AuctionError::InvalidRange);
 		}
 
-		<ActiveValidatorSizeRange<T>>::put(range);
+		ActiveValidatorSizeRange::<T>::put(range);
 		Ok(old)
 	}
 
 	fn phase() -> AuctionPhase<Self::ValidatorId, Self::Amount> {
-		<CurrentPhase<T>>::get()
+		CurrentPhase::<T>::get()
 	}
 
 	fn waiting_on_bids() -> bool {
@@ -265,14 +285,14 @@ impl<T: Config> Auction for Pallet<T> {
 				// Rule #3 - They are registered
 				bidders.retain(|(id, _)| T::Registrar::is_registered(id));
 				// Rule #4 - Confirm we have our set size
-				if (bidders.len() as u32) < <ActiveValidatorSizeRange<T>>::get().0 {
+				if (bidders.len() as u32) < ActiveValidatorSizeRange::<T>::get().0 {
 					return Err(AuctionError::MinValidatorSize);
 				};
 
 				let phase = AuctionPhase::BidsTaken(bidders);
-				<CurrentPhase<T>>::put(phase.clone());
+				CurrentPhase::<T>::put(phase.clone());
 
-				<CurrentAuctionIndex<T>>::mutate(|idx| *idx + One::one());
+				CurrentAuctionIndex::<T>::mutate(|idx| *idx + One::one());
 
 				Self::deposit_event(Event::AuctionStarted(<CurrentAuctionIndex<T>>::get()));
 				Ok(phase)
@@ -286,7 +306,7 @@ impl<T: Config> Auction for Pallet<T> {
 					bids.sort_unstable_by_key(|k| k.1);
 					bids.reverse();
 					let number_of_bidders = bids.len() as u32;
-					let validator_set_size = <ActiveValidatorSizeRange<T>>::get().1;
+					let validator_set_size = ActiveValidatorSizeRange::<T>::get().1;
 					let validator_group_size = min(validator_set_size, number_of_bidders);
 					let backup_group_size = if validator_group_size < number_of_bidders {
 						min(
@@ -399,8 +419,8 @@ impl<T: Config> VaultRotationHandler for Pallet<T> {
 	type ValidatorId = T::ValidatorId;
 
 	fn abort() {
-		<CurrentPhase<T>>::put(AuctionPhase::default());
-		Self::deposit_event(Event::AuctionAborted(<CurrentAuctionIndex<T>>::get()));
+		CurrentPhase::<T>::put(AuctionPhase::default());
+		Self::deposit_event(Event::AuctionAborted(CurrentAuctionIndex::<T>::get()));
 	}
 
 	fn penalise(bad_validators: Vec<Self::ValidatorId>) {
