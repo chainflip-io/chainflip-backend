@@ -40,11 +40,9 @@ mod tests;
 #[macro_use]
 extern crate assert_matches;
 
-use cf_traits::AuctionPhase::WaitingForBids;
 use cf_traits::{
 	ActiveValidatorRange, Auction, AuctionError, AuctionPhase, BidderProvider, ChainflipAccount,
-	ChainflipAccountData, ChainflipAccountState, StakerHandler, VaultRotation,
-	VaultRotationHandler,
+	ChainflipAccountState, StakerHandler, VaultRotation, VaultRotationHandler,
 };
 use frame_support::pallet_prelude::*;
 use frame_support::sp_runtime::offchain::storage_lock::BlockNumberProvider;
@@ -289,17 +287,15 @@ impl<T: Config> Auction for Pallet<T> {
 						0
 					};
 
-					let validating_set = bids
+					let validating_set: (Vec<T::ValidatorId>, _) = bids
 						.get(Zero::zero()..validator_group_size as usize)
-						.and_then(|validators| {
-							validators.last().and_then(|(_, minimum_active_bid)| {
-								Some((
-									validators.iter().map(|i| i.0.clone()).collect(),
-									*minimum_active_bid,
-								))
-							})
+						.map(|validators| {
+							(
+								validators.iter().map(|i| i.0.clone()).collect(),
+								validators.last().map(|last| last.1).unwrap_or_default(),
+							)
 						})
-						.ok_or_else(|| AuctionError::Empty)?;
+						.ok_or(AuctionError::Empty)?;
 
 					let remaining_bidders = bids
 						.get(validator_group_size as usize..bids.len() as usize)
@@ -307,7 +303,7 @@ impl<T: Config> Auction for Pallet<T> {
 						.to_vec();
 
 					let phase = AuctionPhase::ValidatorsSelected(
-						validating_set.0,
+						validating_set.0.clone(),
 						validating_set.1,
 						remaining_bidders,
 						backup_group_size,
@@ -359,19 +355,19 @@ impl<T: Config> Auction for Pallet<T> {
 							.get(0usize..backup_group_size as usize)
 							.unwrap_or_default()
 							.iter()
-							.map(|(validator_id, _)| *validator_id)
+							.map(|(validator_id, _)| validator_id.clone())
 							.collect();
 
 						let passive: Vec<T::ValidatorId> = remaining_bidders
 							.get(backup_group_size as usize..remaining_bidders.len())
 							.unwrap_or_default()
 							.iter()
-							.map(|(validator_id, _)| *validator_id)
+							.map(|(validator_id, _)| validator_id.clone())
 							.collect();
 
-						update_validators(winners.clone(), ChainflipAccountState::Validator);
-						update_validators(backup_validators, ChainflipAccountState::Backup);
-						update_validators(passive, ChainflipAccountState::Passive);
+						update_validators(winners.clone(), ChainflipAccountState::Validator)?;
+						update_validators(backup_validators, ChainflipAccountState::Backup)?;
+						update_validators(passive, ChainflipAccountState::Passive)?;
 
 						let phase = AuctionPhase::WaitingForBids(
 							winners,
@@ -460,9 +456,8 @@ impl<T: Config> StakerHandler for HandleStakes<T> {
 											remaining_bids.get((*backup_group_size + 1) as usize)
 										{
 											if let Some(backup_account_id) =
-												T::AccountIdOf::convert(
-													backup_validator_id.clone(),
-												) {
+												T::AccountIdOf::convert(backup_validator_id.clone())
+											{
 												// Set state of new validator to Passive
 												T::ChainflipAccount::update_state(
 													&account_id,

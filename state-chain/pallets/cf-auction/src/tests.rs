@@ -20,16 +20,16 @@ mod test {
 	}
 
 	// The set we would expect
-	fn expected_validating_set() -> ValidatingSet<ValidatorId, Amount> {
+	fn expected_validating_set() -> (Vec<ValidatorId>, Amount) {
 		let mut bidders = TestBidderProvider::get_bidders();
 		bidders.truncate(MAX_VALIDATOR_SIZE as usize);
-		ValidatingSet {
-			validators: bidders
+		(
+			bidders
 				.iter()
 				.map(|(validator_id, _)| *validator_id)
 				.collect(),
-			minimum_active_bid: bidders.last().unwrap().1,
-		}
+			bidders.last().unwrap().1,
+		)
 	}
 
 	#[test]
@@ -37,8 +37,8 @@ mod test {
 		new_test_ext().execute_with(|| {
 			// We should have our genesis validators, which would have been provided by
 			// `BidderProvider`
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids { validating_set, .. }
-				if validating_set == expected_validating_set()
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(validators, minimum_active_bid, ..)
+				if (validators.clone(), minimum_active_bid) == expected_validating_set()
 			);
 		});
 	}
@@ -46,27 +46,27 @@ mod test {
 	fn run_through_phases() {
 		new_test_ext().execute_with(|| {
 			// Check we are in the bidders phase
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids { .. });
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
 			// Now move to the next phase, this should be the BidsTaken phase
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken {bids})
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(bids))
 				if bids == expected_bidding());
 			// Read storage to confirm has been changed to BidsTaken
-			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::BidsTaken {bids}
+			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::BidsTaken(bids)
 				if bids == expected_bidding());
 			// Having moved into the BidsTaken phase we should have our list of bidders filtered
 			// Expecting the phase to change, a set of winners, the bidder list and a bond value set
 			// to our min bid
-			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::ValidatorsSelected {validating_set, ..})
-				if validating_set == expected_validating_set()
+			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::ValidatorsSelected(validators, minimum_active_bid, ..))
+				if (validators.clone(), minimum_active_bid) == expected_validating_set()
 			);
-			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::ValidatorsSelected{validating_set, ..}
-				if validating_set == expected_validating_set()
+			assert_matches!(AuctionPallet::current_phase(), AuctionPhase::ValidatorsSelected(validators, minimum_active_bid, ..)
+				if (validators.clone(), minimum_active_bid) == expected_validating_set()
 			);
 			assert_eq!(
 				last_event(),
 				mock::Event::pallet_cf_auction(crate::Event::AuctionCompleted(
 					0,
-					expected_validating_set().validators
+					expected_validating_set().0
 				)),
 			);
 			// Just leaves us to confirm this auction, if we try to process this we will get an error
@@ -136,8 +136,8 @@ mod test {
 			);
 
 			// assert!(::try_confirmation());
-			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(winners, min_bid)
-				if !winners.is_empty() && min_bid > 0
+			assert_matches!(AuctionPallet::phase(), AuctionPhase::ValidatorsSelected(validators, minimum_active_bid, ..)
+				if !validators.is_empty() && minimum_active_bid > 0
 			);
 			// Kill it
 			AuctionPallet::abort();
