@@ -74,6 +74,7 @@ workflows:
           image: chainflip-io/chainflip-backend/rust-base
           tag: latest
           dockerfile: Dockerfile.rust-base
+          cache_from: ghcr.io/<<parameters.image>>:latest
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
@@ -102,6 +103,7 @@ workflows:
           image: chainflip-io/chainflip-backend/rust-base
           tag: latest
           dockerfile: Dockerfile.rust-base
+          cache_from: ghcr.io/<<parameters.image>>:latest
           context:
             - ghcr-credentials
           <<: *only_main_branches
@@ -128,7 +130,6 @@ workflows:
           name: build-chainflip-engine
           image: chainflip-io/chainflip-backend/chainflip-engine
           extra_build_args: "--build-arg SERVICE=chainflip-engine"
-          cache_from: ""
           requires:
             - test-validator-package
           context:
@@ -138,7 +139,6 @@ workflows:
           name: build-state-chain-node
           image: chainflip-io/chainflip-backend/state-chain-node
           extra_build_args: "--build-arg SERVICE=state-chain-node"
-          cache_from: ""
           requires:
             - test-validator-package
           context:
@@ -158,6 +158,7 @@ workflows:
     jobs:
       - build-docker-image:
           image: chainflip-io/chainflip-backend/rust-poetry
+          cache_from: ghcr.io/<<parameters.image>>:latest
           tag: latest
           dockerfile: Dockerfile.rust-poetry
           context:
@@ -202,7 +203,7 @@ jobs:
       cache_from:
         type: string
         description: Where to derive the build cache
-        default: ghcr.io/<<parameters.image>>:latest
+        default: ""
     steps:
       - setup_remote_docker:
           version: 20.10.7
