@@ -30,6 +30,7 @@ async fn main() {
         .run()
         .await;
 
+    slog::info!(root_logger, "health monitor");
     let subxt_client = ClientBuilder::<StateChainRuntime>::new()
         .set_url(&settings.state_chain.ws_endpoint)
         .build()
@@ -88,7 +89,7 @@ async fn main() {
 
     let eth_broadcaster = EthBroadcaster::new(&settings, web3.clone()).unwrap();
 
-    futures::join!(
+    tokio::join!(
         // Start signing components
         signing::start(
             AccountId(key_pair.public().0),
@@ -139,7 +140,7 @@ async fn main() {
         key_manager::start_key_manager_witness(
             &web3,
             &settings,
-            pair_signer,
+            pair_signer.clone(),
             subxt_client,
             &root_logger
         )
