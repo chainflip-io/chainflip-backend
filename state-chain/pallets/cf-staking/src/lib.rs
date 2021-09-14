@@ -691,7 +691,7 @@ impl<T: Config> Pallet<T> {
 /// This implementation of [pallet_cf_validator::CandidateProvider] simply returns a list of `(account_id, stake)` for
 /// all non-retired accounts.
 impl<T: Config> BidderProvider for Pallet<T> {
-	type AccountId = T::AccountId;
+	type AccountId = <T as frame_system::Config>::AccountId;
 	type Amount = T::Balance;
 
 	fn get_bidders() -> Vec<(Self::AccountId, Self::Amount)> {

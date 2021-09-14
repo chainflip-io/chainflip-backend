@@ -59,7 +59,7 @@ pub mod pallet {
 		type KeyProvider: KeyProvider<Self::TargetChain, KeyId = Self::KeyId>;
 
 		/// For reporting bad actors.
-		type OfflineConditions: OfflineConditions<ValidatorId = <Self as Chainflip>::ValidatorId>;
+		type OfflineConditions: OfflineConditions<AccountId = <Self as Chainflip>::ValidatorId>;
 	}
 
 	#[pallet::pallet]

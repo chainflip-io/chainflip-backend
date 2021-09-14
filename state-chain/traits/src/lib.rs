@@ -21,7 +21,12 @@ pub trait Chainflip: frame_system::Config {
 	/// An amount for a bid
 	type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 	/// An identity for a validator
-	type ValidatorId: Member + Parameter + From<Self::AccountId> + Into<Self::AccountId>;
+	type ValidatorId: Member
+		+ Parameter
+		+ From<<Self as frame_system::Config>::AccountId>
+		+ Into<<Self as frame_system::Config>::AccountId>;
+	/// A duplicate - to be removed.
+	type AccountId: Member + Parameter;
 	/// An identifier for keys used in threshold signature ceremonies.
 	type KeyId: Member + Parameter;
 	/// The overarching call type.
@@ -334,6 +339,7 @@ pub trait SigningContext<T: Chainflip> {
 		origin: OriginFor<T>,
 		signature: Self::Signature,
 	) -> DispatchResultWithPostInfo {
-		self.resolve_callback(signature).dispatch_bypass_filter(origin)
+		self.resolve_callback(signature)
+			.dispatch_bypass_filter(origin)
 	}
 }
