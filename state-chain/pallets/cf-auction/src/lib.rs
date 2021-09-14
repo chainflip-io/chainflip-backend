@@ -82,9 +82,9 @@ pub mod pallet {
 		type Registrar: ValidatorRegistration<Self::ValidatorId>;
 		/// An index for the current auction
 		type AuctionIndex: Member + Parameter + Default + Add + One + Copy;
-		/// Minimum amount of bidders
+		/// Minimum amount of validators
 		#[pallet::constant]
-		type MinAuctionSize: Get<u32>;
+		type MinValidators: Get<u32>;
 		/// The lifecycle of our auction
 		type Handler: VaultRotation<ValidatorId = Self::ValidatorId>;
 		/// A Chainflip Account
@@ -167,14 +167,14 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
-		pub auction_size_range: ActiveValidatorRange,
+		pub validator_size_range: ActiveValidatorRange,
 	}
 
 	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
 			Self {
-				auction_size_range: (Zero::zero(), Zero::zero()),
+				validator_size_range: (Zero::zero(), Zero::zero()),
 			}
 		}
 	}
@@ -183,7 +183,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			ActiveValidatorSizeRange::<T>::set(self.auction_size_range);
+			ActiveValidatorSizeRange::<T>::set(self.validator_size_range);
 			// Run through an auction
 			if Pallet::<T>::process().and(Pallet::<T>::process()).is_ok() {
 				if let Err(err) = Pallet::<T>::process() {
@@ -210,8 +210,8 @@ impl<T: Config> Auction for Pallet<T> {
 		let (low, high) = range;
 
 		if low == high
-			|| low < T::MinAuctionSize::get()
-			|| high < T::MinAuctionSize::get()
+			|| low < T::MinValidators::get()
+			|| high < T::MinValidators::get()
 			|| high < low
 		{
 			return Err(AuctionError::InvalidRange);
