@@ -186,7 +186,8 @@ workflows:
           context:
             - do-credentials
       - test:
-          requires: authenticate-to-cluster
+          requires:
+            - authenticate-to-cluster
 jobs:
   build-docker-image:
     executor: docker/docker
