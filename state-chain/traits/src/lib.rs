@@ -6,6 +6,7 @@ use cf_chains::Chain;
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::Member;
 use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
+use frame_support::traits::EnsureOrigin;
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable, Weight},
 	traits::{Imbalance, SignedImbalance},
@@ -20,11 +21,13 @@ pub trait Chainflip: frame_system::Config {
 	/// An amount for a bid
 	type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 	/// An identity for a validator
-	type ValidatorId: Member + Parameter;
+	type ValidatorId: Member + Parameter + From<Self::AccountId> + Into<Self::AccountId>;
 	/// An identifier for keys used in threshold signature ceremonies.
 	type KeyId: Member + Parameter;
 	/// The overarching call type.
 	type Call: Member + Parameter + UnfilteredDispatchable<Origin = Self::Origin>;
+	/// A type that allows us to check if a call was a result of witness consensus.
+	type EnsureWitnessed: EnsureOrigin<Self::Origin>;
 }
 
 /// A trait abstracting the functionality of the witnesser
@@ -298,7 +301,7 @@ where
 	}
 }
 
-/// Types and methods for requesting and processing a threshold signature.
+/// Types, methods and state for requesting and processing a threshold signature.
 pub trait SigningContext<T: Chainflip> {
 	/// The chain that this context applies to.
 	type Chain: Chain;
@@ -312,8 +315,8 @@ pub trait SigningContext<T: Chainflip> {
 	/// Returns the signing payload.
 	fn get_payload(&self) -> Self::Payload;
 
-	/// Returns the callback to be triggered on success.
-	fn get_callback(&self, signature: Self::Signature) -> Self::Callback;
+	/// Returns the callback to be triggered on success, or `None` if no call back can be determined.
+	fn resolve_callback(&self, signature: Self::Signature) -> Option<Self::Callback>;
 
 	/// Dispatches the success callback.
 	fn dispatch_callback(
@@ -321,6 +324,8 @@ pub trait SigningContext<T: Chainflip> {
 		origin: OriginFor<T>,
 		signature: Self::Signature,
 	) -> DispatchResultWithPostInfo {
-		self.get_callback(signature).dispatch_bypass_filter(origin)
+		self.resolve_callback(signature)
+			.map(|callback| callback.dispatch_bypass_filter(origin))
+			.unwrap_or(Ok(().into()))
 	}
 }

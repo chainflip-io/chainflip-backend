@@ -112,9 +112,6 @@ pub mod pallet {
 			Balance = Self::Balance,
 		>;
 
-		/// Provides an origin check for witness transactions.
-		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
-
 		/// Information about the current epoch.
 		type EpochInfo: EpochInfo<
 			ValidatorId = <Self as frame_system::Config>::AccountId,
@@ -128,7 +125,7 @@ pub mod pallet {
 		type SigningContext: From<RegisterClaim>;
 
 		/// Threshold signer.
-		type Signer: ThresholdSigner<Self, Context = Self::SigningContext>;
+		type ThresholdSigner: ThresholdSigner<Self, Context = Self::SigningContext>;
 
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;
@@ -575,7 +572,7 @@ impl<T: Config> Pallet<T> {
 		.map_err(|_| Error::<T>::PayloadEncodingFailed)?;
 
 		// Emit a signature request.
-		T::Signer::request_transaction_signature(transaction.clone());
+		T::ThresholdSigner::request_transaction_signature(transaction.clone());
 
 		// Store the claim params for later.
 		PendingClaims::<T>::insert(account_id, transaction);

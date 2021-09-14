@@ -1,5 +1,5 @@
 use crate::{
-	self as pallet_cf_broadcast, BaseConfig, TransactionContext, BroadcastFailure, SignerNomination,
+	self as pallet_cf_broadcast, BaseConfig, BroadcastConfig, BroadcastFailure, SignerNomination,
 };
 use codec::{Decode, Encode};
 use frame_support::instances::Instance0;
@@ -101,7 +101,7 @@ pub struct MockUnsignedTx;
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct MockSignedTx;
 
-impl TransactionContext<Test> for MockBroadcast {
+impl BroadcastConfig<Test> for MockBroadcast {
 	type Payload = Vec<u8>;
 	type Signature = Vec<u8>;
 	type UnsignedTransaction = MockUnsignedTx;

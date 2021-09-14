@@ -14,37 +14,19 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-use cf_traits::NonceProvider;
-use codec::{Decode, Encode};
-use frame_support::{
-	dispatch::{DispatchResultWithPostInfo, Dispatchable, PostDispatchInfo},
-	Parameter,
+use cf_chains::Chain;
+use cf_traits::{
+	Chainflip, KeyProvider, NonceProvider, SignerNomination, SigningContext, ThresholdSigner,
 };
+use codec::{Decode, Encode};
+use frame_support::{Parameter, dispatch::{DispatchResultWithPostInfo, Dispatchable, PostDispatchInfo}, pallet_prelude::Member};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
 use sp_std::{cmp::min, marker::PhantomData, mem::size_of};
 
-pub enum ChainId {
-	Ethereum,
-}
-
-pub trait BaseConfig: frame_system::Config {
-	/// The id type used to identify individual signing keys.
-	type KeyId: Parameter;
-	type ValidatorId: Parameter
-		+ Into<<Self as frame_system::Config>::AccountId>
-		+ From<<Self as frame_system::Config>::AccountId>;
-	type ChainId: Parameter;
-	type NonceProvider: NonceProvider;
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub enum BroadcastFailure<SignerId: Parameter> {
-	/// The threshold signature step failed, we need to blacklist some nodes.
-	MpcFailure { bad_nodes: Vec<SignerId> },
-	/// The nominated signer was unable to sign the transaction in time.
-	SigningTimeout(SignerId),
+pub enum BroadcastFailure {
 	/// The transaction was rejected because of some user error.
 	TransactionRejected,
 	/// The transaction failed for some unknown reason.
@@ -55,53 +37,22 @@ pub enum BroadcastFailure<SignerId: Parameter> {
 
 /// The [TransactionContext] should contain all the state required to construct and process transactions for a given
 /// chain.
-pub trait TransactionContext<T: BaseConfig> {
+pub trait BroadcastConfig<T: Chainflip> {
 	/// A chain identifier.
-	type Chain: Into<ChainId>;
-	/// The payload type that will be signed over.
-	type Payload: Parameter;
-	/// The signature type that is returned by the threshold signature.
-	type Signature: Parameter;
-	/// An unsigned version of the transaction that needs to be broadcast.
+	type Chain: Chain;
+	/// An unsigned version of the transaction that needs to signed before it can be broadcast.
 	type UnsignedTransaction: Parameter;
+	/// A transaction that has been signed by some account and is ready to be broadcast.
 	type SignedTransaction: Parameter;
+	/// The transaction hash type used to uniquely identify signed transactions.
 	type TransactionHash: Parameter;
-	type Error;
 
-	/// Constructs the payload for the threshold signature.
-	fn construct_signing_payload(&self) -> Result<Self::Payload, Self::Error>;
-
-	/// Constructs the outgoing transaction.
-	fn construct_unsigned_transaction(
-		&mut self,
-		sig: &Self::Signature,
-	) -> Result<Self::UnsignedTransaction, Self::Error>;
-
-	/// Verify the signed transaction when it is submitted to the state chain.
-	fn verify_tx(
-		&self,
+	/// Verify the signed transaction when it is submitted to the state chain by the nominated signer.
+	fn verify_transaction(
 		signer: &T::ValidatorId,
+		unsigned_tx: &Self::UnsignedTransaction,
 		signed_tx: &Self::SignedTransaction,
-	) -> Result<(), Self::Error>;
-}
-
-/// Something that can nominate signers from the set of active validators.
-pub trait SignerNomination {
-	/// The id type of signers. Most likely the same as the runtime's `ValidatorId`.
-	type SignerId;
-
-	/// Returns a random live signer. The seed value is used as a source of randomness.
-	fn nomination_with_seed(seed: u64) -> Self::SignerId;
-
-	/// Returns a list of live signers where the number of signers is sufficient to author a threshold signature. The
-	/// seed value is used as a source of randomness.
-	fn threshold_nomination_with_seed(seed: u64) -> Vec<Self::SignerId>;
-}
-
-pub trait KeyProvider<Chain: Into<ChainId>> {
-	type KeyId;
-
-	fn current_key() -> Self::KeyId;
+	) -> Option<()>;
 }
 
 pub type BroadcastId = u64;
@@ -114,49 +65,37 @@ pub mod pallet {
 	use frame_support::{dispatch::DispatchResultWithPostInfo, Twox64Concat};
 	use frame_system::pallet_prelude::*;
 
-	pub type PayloadFor<T, I> =
-		<<T as Config<I>>::BroadcastContext as TransactionContext<T>>::Payload;
-	pub type SignatureFor<T, I> =
-		<<T as Config<I>>::BroadcastContext as TransactionContext<T>>::Signature;
 	pub type SignedTransactionFor<T, I> =
-		<<T as Config<I>>::BroadcastContext as TransactionContext<T>>::SignedTransaction;
+		<<T as Config<I>>::BroadcastConfig as BroadcastConfig<T>>::SignedTransaction;
 	pub type UnsignedTransactionFor<T, I> =
-		<<T as Config<I>>::BroadcastContext as TransactionContext<T>>::UnsignedTransaction;
+		<<T as Config<I>>::BroadcastConfig as BroadcastConfig<T>>::UnsignedTransaction;
 	pub type TransactionHashFor<T, I> =
-		<<T as Config<I>>::BroadcastContext as TransactionContext<T>>::TransactionHash;
-	pub type BroadcastErrorFor<T, I> =
-		<<T as Config<I>>::BroadcastContext as TransactionContext<T>>::Error;
-	pub type BroadcastFailureFor<T> = BroadcastFailure<T>;
+		<<T as Config<I>>::BroadcastConfig as BroadcastConfig<T>>::TransactionHash;
 
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 	pub enum BroadcastState {
-		AwaitingThreshold,
 		AwaitingSignature,
 		AwaitingBroadcast,
-		Complete,
+		AwaitingRetry,
 		Failed,
 	}
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config<I: 'static = ()>: BaseConfig {
+	pub trait Config<I: 'static = ()>: Chainflip {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
-		/// A marker trait identifying the chain that is broadcast to.
-		type TargetChain: Into<ChainId>;
+		/// A marker trait identifying the chain that we are broadcasting to.
+		type TargetChain: Chain;
 
-		/// A type that allows us to check if a call was a result of witness consensus.
-		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
-
-		/// The context definition for this instance.
-		type BroadcastContext: TransactionContext<Self, Chain = Self::TargetChain> + Member + FullCodec;
-
+		/// The broadcast configuration for this instance.
+		type BroadcastConfig: BroadcastConfig<Self, Chain = Self::TargetChain>
+			+ Member
+			+ FullCodec;
+		
 		/// Signer nomination.
 		type SignerNomination: SignerNomination<SignerId = Self::ValidatorId>;
-
-		/// Something that provides the current key for signing.
-		type KeyProvider: KeyProvider<Self::TargetChain, KeyId = Self::KeyId>;
 	}
 
 	#[pallet::pallet]
@@ -168,22 +107,30 @@ pub mod pallet {
 	pub type BroadcastIdCounter<T, I = ()> = StorageValue<_, BroadcastId, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn pending_request)]
-	pub type PendingBroadcasts<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub type AwaitingSignature<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
-		Identity,
-		BroadcastState,
 		Twox64Concat,
 		BroadcastId,
-		T::BroadcastContext,
+		(T::ValidatorId, UnsignedTransactionFor<T, I>),
 		OptionQuery,
 	>;
+
+	#[pallet::storage]
+	pub type AwaitingBroadcast<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Twox64Concat,
+		BroadcastId,
+		SignedTransactionFor<T, I>,
+		OptionQuery,
+	>;
+
+	#[pallet::storage]
+	pub type RetryQueue<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, Vec<BroadcastId>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// [broadcast_id, key_id, signatories, payload]
-		ThresholdSignatureRequest(BroadcastId, T::KeyId, Vec<T::ValidatorId>, PayloadFor<T, I>),
 		/// [broadcast_id, validator_id, unsigned_tx]
 		TransactionSigningRequest(BroadcastId, T::ValidatorId, UnsignedTransactionFor<T, I>),
 		/// [broadcast_id, signed_tx]
@@ -196,8 +143,8 @@ pub mod pallet {
 	pub enum Error<T, I = ()> {
 		/// The provided request id is invalid.
 		InvalidBroadcastId,
-		/// The provided request id is invalid.
-		InvalidSignature,
+		/// The transaction signer is not signer who was nominated.
+		InvalidSigner,
 		/// The outgoing transaction could not be constructed.
 		TransactionConstructionFailed,
 	}
@@ -207,42 +154,26 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		/// Submit a payload signature.
+		/// Begin the process of broadcasting a transaction.
 		///
-		/// Triggers the next step in the signing process - requsting a transaction signature from a nominated validator.
+		/// This is the first step - requsting a transaction signature from a nominated validator.
 		#[pallet::weight(10_000)]
-		pub fn signature_ready(
+		pub fn start_broadcast(
 			origin: OriginFor<T>,
-			id: BroadcastId,
-			signature: SignatureFor<T, I>,
+			unsigned_tx: UnsignedTransactionFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 
-			let mut context =
-				PendingBroadcasts::<T, I>::take(BroadcastState::AwaitingThreshold, id)
-					.ok_or(Error::<T, I>::InvalidBroadcastId)?;
-
-			// Construct the unsigned transaction and update the context.
-			let unsigned_tx = context
-				.construct_unsigned_transaction(&signature)
-				.map_err(|_| {
-					// We should only reach here if he have invalid data. If this is the case, restarting
-					// won't help. The broacast has failed.
-					PendingBroadcasts::<T, I>::insert(BroadcastState::Failed, id, context.clone());
-					Error::<T, I>::TransactionConstructionFailed
-				})?;
-
-			PendingBroadcasts::<T, I>::insert(BroadcastState::AwaitingSignature, id, context);
-
-			// Select a signer: we assume that the signature is a good source of randomness, so we use it to generate a
-			// seed for the signer nomination.
-			let seed: u64 = signature.using_encoded(|bytes| {
-				let mut u64_bytes: [u8; 8] = [0xff; 8];
-				let range_to_copy = 0..min(size_of::<u64>(), bytes.len());
-				(&mut u64_bytes[range_to_copy.clone()]).copy_from_slice(&bytes[range_to_copy]);
-				u64::from_be_bytes(u64_bytes)
+			// Get a new id.
+			let id = BroadcastIdCounter::<T, I>::mutate(|id| {
+				*id += 1;
+				*id
 			});
-			let nominated_signer = T::SignerNomination::nomination_with_seed(seed);
+
+			// Select a signer for this broadcast.
+			let nominated_signer = T::SignerNomination::nomination_with_seed(id);
+
+			AwaitingSignature::<T, I>::insert(id, (nominated_signer.clone(), unsigned_tx.clone()));
 
 			// Emit the transaction signing request.
 			Self::deposit_event(Event::<T, I>::TransactionSigningRequest(
@@ -264,22 +195,24 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let signer = ensure_signed(origin)?;
 
-			// Process the signed transaction callback and update the context.
-			let context = PendingBroadcasts::<T, I>::take(BroadcastState::AwaitingSignature, id)
+			let (nominated_signer, unsigned_tx) = AwaitingSignature::<T, I>::get(id)
 				.ok_or(Error::<T, I>::InvalidBroadcastId)?;
 
-			context
-				.verify_tx(&signer.into(), &signed_tx)
-				.unwrap_or_else(|_| {
-					todo!()
-					// the authored transaction is invalid.
-					// punish the signer and nominate a new one.
-				});
+			ensure!(
+				nominated_signer.into() == signer,
+				Error::<T, I>::InvalidSigner
+			);
 
-			// Q: Is this really necessary? We could also listen to the `AwaitingBroadcast` storage location.
-			Self::deposit_event(Event::<T, I>::BroadcastRequest(id, signed_tx));
+			AwaitingSignature::<T, I>::remove(id);
 
-			PendingBroadcasts::<T, I>::insert(BroadcastState::AwaitingBroadcast, id, context);
+			if T::BroadcastConfig::verify_transaction(&signer.into(), &unsigned_tx, &signed_tx).is_some() {
+				Self::deposit_event(Event::<T, I>::BroadcastRequest(id, signed_tx.clone()));
+				AwaitingBroadcast::<T, I>::insert(id, signed_tx);
+			} else {
+				// the authored transaction is invalid.
+				// punish the signer and retry.
+				todo!()
+			}
 
 			Ok(().into())
 		}
@@ -293,37 +226,24 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 
-			// Move it to the Complete storage area.
-			let mut context =
-				PendingBroadcasts::<T, I>::take(BroadcastState::AwaitingBroadcast, id)
-					.ok_or(Error::<T, I>::InvalidBroadcastId)?;
-
-			PendingBroadcasts::<T, I>::insert(BroadcastState::Complete, id, context);
-
+			// Remove the broadcast now it's completed.
+			AwaitingBroadcast::<T, I>::remove(id);
 			Self::deposit_event(Event::<T, I>::BroadcastComplete(id));
 
 			Ok(().into())
 		}
 
-		/// Nodes have witnessed that something went wrong. Either the threshold signature failed, or the transaction
-		/// was rejected or stalled on the target chain.
+		/// Nodes have witnessed that something went wrong. The transaction may have been rejected outright or may
+		/// have stalled on the target chain.
 		#[pallet::weight(10_000)]
 		pub fn broadcast_failure(
 			origin: OriginFor<T>,
 			id: BroadcastId,
-			failure: BroadcastFailure<<T as BaseConfig>::ValidatorId>,
+			failure: BroadcastFailure,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			match failure {
-				BroadcastFailure::MpcFailure { bad_nodes: _ } => {
-					// Report bad nodes and schedule for retry
-					todo!()
-				}
-				BroadcastFailure::SigningTimeout(signer) => {
-					// Report and nominate a new signer. Retry.
-					todo!()
-				}
 				BroadcastFailure::TransactionRejected => {
 					// Report and nominate a new signer. Retry.
 					todo!()
@@ -340,38 +260,5 @@ pub mod pallet {
 
 			Ok(().into())
 		}
-	}
-}
-
-impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	/// Initiates a broadcast and returns its id.
-	pub fn initiate_broadcast(
-		context: T::BroadcastContext,
-	) -> Result<BroadcastId, BroadcastErrorFor<T, I>> {
-		// Get a new id.
-		let id = BroadcastIdCounter::<T, I>::mutate(|id| {
-			*id += 1;
-			*id
-		});
-
-		// Get the current signing key.
-		let key_id = T::KeyProvider::current_key();
-
-		// Construct the payload.
-		let payload = context.construct_signing_payload()?;
-
-		// Store the context.
-		PendingBroadcasts::<T, I>::insert(BroadcastState::AwaitingThreshold, id, &context);
-
-		// Select nominees for threshold signature.
-		// Q: does it matter if this is predictable? ie. does it matter if we use the `id`, which contains no randomness?
-		let nominees = T::SignerNomination::threshold_nomination_with_seed(id);
-
-		// Emit the initial request to the CFE.
-		Self::deposit_event(Event::<T, I>::ThresholdSignatureRequest(
-			id, key_id, nominees, payload,
-		));
-
-		Ok(id)
 	}
 }

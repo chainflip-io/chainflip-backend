@@ -4943,15 +4943,13 @@ dependencies = [
 name = "pallet-cf-broadcast"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "cf-traits",
- "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=bfa7866)",
- "ethereum",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "hex",
+ "pallet-cf-signing",
  "parity-scale-codec",
- "rlp",
  "serde 1.0.126",
  "sp-core",
  "sp-io",

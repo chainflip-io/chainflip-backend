@@ -52,9 +52,6 @@ pub mod pallet {
 		/// The context definition for this instance.
 		type SigningContext: SigningContext<Self, Chain = Self::TargetChain> + Member + FullCodec;
 
-		/// A type that allows us to check if a call was a result of witness consensus.
-		type EnsureWitnessed: EnsureOrigin<Self::Origin>;
-
 		/// Signer nomination.
 		type SignerNomination: SignerNomination<SignerId = Self::ValidatorId>;
 

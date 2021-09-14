@@ -12,7 +12,11 @@ version = '0.1.0'
 targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
+# Chainflip
+cf-chains = { path = "../../chains", default-features = false }
 cf-traits = { path = "../../traits", default-features = false }
+pallet-cf-signing = { path = "../cf-signing", default-features = false }
+
 codec = { default-features = false, features = ['derive'], package = 'parity-scale-codec', version = '2.0.0' }
 frame-system = { default-features = false, version = '3.0.0' }
 frame-support = { default-features = false, version = '3.0.0' }
@@ -21,12 +25,6 @@ sp-core = { default-features = false, version = '3.0.0' }
 sp-runtime = { default-features = false, version = '3.0.0' }
 sp-std = { default-features = false, version = '3.0.0' }
 
-# Ethereum transaction encoding
-ethabi = {default-features = false, features = ['codec'], git = 'https://github.com/chainflip-io/ethabi', rev = 'bfa7866'}
-ethereum = {default-features = false, version = "0.9"}
-hex = {default-features = false, version = "0.4"}
-rlp = {default-features = false, version = "0.5"}
-
 [dev-dependencies]
 serde = { version = "1.0.119" }
 sp-io = { default-features = false, version = '3.0.0' }
@@ -34,18 +32,16 @@ sp-io = { default-features = false, version = '3.0.0' }
 [features]
 default = ['std']
 std = [
+  'cf-chains/std',
   'cf-traits/std',
   'codec/std',
-  'hex/std',
   'frame-support/std',
   'frame-system/std',
   'frame-benchmarking/std',
+  'pallet-cf-signing/std',
   'sp-core/std',
   'sp-runtime/std',
   'sp-std/std',
-  'ethabi/std',
-  'ethereum/std',
-  'rlp/std',
 ]
 runtime-benchmarks = [
 	'frame-benchmarking',
