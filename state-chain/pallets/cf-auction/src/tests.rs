@@ -83,15 +83,37 @@ mod test {
 			// We should have our validators states set correctly based on the backup group size parameter
 			match AuctionPallet::current_phase() {
 				AuctionPhase::WaitingForBids(validators, _) => {
-					let backup_group_size = AuctionPallet::backup_group_size();
+					let backup_group_size = AuctionPallet::backup_group_size() as usize;
 					let remaining = AuctionPallet::remaining_bidders();
 
+					let first_backup_validator = remaining[0];
+					let last_backup_validator = remaining[backup_group_size - 1];
+					let first_passive = remaining[backup_group_size];
+					let last_passive = remaining.last().unwrap();
 					assert_eq!(MockChainflipAccount::get(&validators[0]).state, ChainflipAccountState::Validator);
 					assert_eq!(MockChainflipAccount::get(&validators[(MAX_VALIDATOR_SIZE - 1) as usize]).state, ChainflipAccountState::Validator);
-					assert_eq!(MockChainflipAccount::get(&remaining[0].0).state, ChainflipAccountState::Backup);
-					assert_eq!(MockChainflipAccount::get(&remaining[(backup_group_size - 1) as usize].0).state, ChainflipAccountState::Backup);
-					assert_eq!(MockChainflipAccount::get(&remaining[(backup_group_size) as usize].0).state, ChainflipAccountState::Passive);
-					assert_eq!(MockChainflipAccount::get(&remaining.last().unwrap().0).state, ChainflipAccountState::Passive);
+					assert_eq!(MockChainflipAccount::get(&first_backup_validator.0).state, ChainflipAccountState::Backup);
+					assert_eq!(MockChainflipAccount::get(&last_backup_validator.0).state, ChainflipAccountState::Backup);
+					assert_eq!(MockChainflipAccount::get(&first_passive.0).state, ChainflipAccountState::Passive);
+					assert_eq!(MockChainflipAccount::get(&last_passive.0).state, ChainflipAccountState::Passive);
+
+					let minimum_backup_bid = remaining[backup_group_size - 1].1;
+					// Update stakes via `HandleStakes`
+					// Take the top passive and increase their stake to minimum backup bid plus 1
+					// The last backup validator should now be a passive validator
+					// and our passive validator is now a backup validator
+					HandleStakes::<Test>::stake_updated(first_passive.0, minimum_backup_bid + 1);
+					assert_eq!(MockChainflipAccount::get(&first_passive.0).state, ChainflipAccountState::Backup);
+					assert_eq!(MockChainflipAccount::get(&last_backup_validator.0).state, ChainflipAccountState::Passive);
+					// Update who is who
+					let last_backup_validator = remaining[backup_group_size - 1];
+					let first_passive = remaining[backup_group_size];
+					// A backup validator has claimed stake and is now a passive validator
+					// and the first passive has been promoted to backup
+					HandleStakes::<Test>::stake_updated(first_backup_validator.0, 1);
+					assert_eq!(MockChainflipAccount::get(&first_backup_validator.0).state, ChainflipAccountState::Passive);
+					assert_eq!(MockChainflipAccount::get(&first_passive.0).state, ChainflipAccountState::Backup);
+
 				},
 				_ => {panic!("Wrong phase")}
 			}
