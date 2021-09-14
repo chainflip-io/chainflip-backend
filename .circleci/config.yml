@@ -338,8 +338,6 @@ jobs:
     steps:
       - doctl/initialize
       - run: doctl kubernetes cluster kubeconfig save <<parameters.cluster_name>>
-      - attach_workspace:
-          at: ./
       - run:
           name: Port-forward into cluster
           background: true
