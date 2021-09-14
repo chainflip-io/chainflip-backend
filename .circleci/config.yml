@@ -74,7 +74,7 @@ workflows:
           image: chainflip-io/chainflip-backend/rust-base
           tag: latest
           dockerfile: Dockerfile.rust-base
-          cache_from: ghcr.io/<<parameters.image>>:latest
+          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
@@ -103,7 +103,7 @@ workflows:
           image: chainflip-io/chainflip-backend/rust-base
           tag: latest
           dockerfile: Dockerfile.rust-base
-          cache_from: ghcr.io/<<parameters.image>>:latest
+          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
           context:
             - ghcr-credentials
           <<: *only_main_branches
@@ -158,7 +158,7 @@ workflows:
     jobs:
       - build-docker-image:
           image: chainflip-io/chainflip-backend/rust-poetry
-          cache_from: ghcr.io/<<parameters.image>>:latest
+          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
           tag: latest
           dockerfile: Dockerfile.rust-poetry
           context:
