@@ -179,6 +179,14 @@ workflows:
           requires:
             - clone-contracts-repo
 
+  test-workflow:
+    jobs:
+      - authenticate-to-cluster:
+          cluster_name: cluster-staging
+          context:
+            - do-credentials
+      - test:
+          requires: authenticate-to-cluster
 jobs:
   build-docker-image:
     executor: docker/docker
@@ -349,6 +357,14 @@ jobs:
           root: ./
           paths:
             - .kube/*
+
+  test:
+    resource_class: small
+    executor: chainflip-master
+    steps:
+      - attach_workspace:
+          at: ./
+      - run: kubectl get pods -n ingress
 
   test-single-node:
     resource_class: small
