@@ -185,6 +185,8 @@ workflows:
           cluster_name: cluster-staging
           context:
             - do-credentials
+            - ghcr-credentials
+
       - test:
           requires:
             - authenticate-to-cluster
