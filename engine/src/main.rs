@@ -30,12 +30,6 @@ async fn main() {
         .run()
         .await;
 
-    slog::info!(
-        &root_logger,
-        "Connecting to NatsMQ at: {}",
-        &settings.message_queue.endpoint
-    );
-
     let subxt_client = ClientBuilder::<StateChainRuntime>::new()
         .set_url(&settings.state_chain.ws_endpoint)
         .build()

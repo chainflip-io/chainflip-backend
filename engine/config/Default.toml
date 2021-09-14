@@ -1,9 +1,5 @@
 # Default configurations for the CFE
 
-[message_queue]
-# can also be IP
-endpoint = "http://localhost:4222"
-
 [state_chain]
 p2p_private_key_file = ""
 signing_key_file = ""

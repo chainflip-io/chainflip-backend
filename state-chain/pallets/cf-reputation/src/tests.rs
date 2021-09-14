@@ -1,3 +1,7 @@
+/// For many of these tests we use
+/// move_forward_by_heartbeat_intervals(1);
+/// in order to progress past the first, genesis heartbeat interval
+/// since nodes in the genesis interval have, by default, submitted a heartbeat
 mod tests {
 	use crate::mock::*;
 	use crate::OfflineCondition::*;
@@ -75,6 +79,7 @@ mod tests {
 	#[test]
 	fn submitting_heartbeat_from_unknown_validator_should_fail() {
 		new_test_ext().execute_with(|| {
+			move_forward_by_heartbeat_intervals(1);
 			assert_noop!(
 				ReputationPallet::heartbeat(Origin::signed(BOB)),
 				<Error<Test>>::AlreadySubmittedHeartbeat
