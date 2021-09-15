@@ -15,16 +15,15 @@ mod tests;
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_chains::eth::SchnorrSignature;
-	use cf_traits::{Chainflip, Witnesser};
+	use cf_traits::Witnesser;
 	use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 	use pallet_cf_staking::{
-		Call as StakingCall, Config as StakingConfig, EthTransactionHash,
-		EthereumAddress, FlipBalance,
+		Call as StakingCall, Config as StakingConfig, EthTransactionHash, EthereumAddress,
+		FlipBalance,
 	};
 	use pallet_cf_vaults::rotation::{KeygenResponse, RequestIndex, VaultRotationResponse};
 	use pallet_cf_vaults::{Call as VaultsCall, Config as VaultsConfig, EthSigningTxResponse};
-	use sp_core::U256;
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
 

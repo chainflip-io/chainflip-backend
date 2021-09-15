@@ -6,19 +6,15 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
-
 use codec::{Decode, Encode};
 
-use frame_support::{Parameter, dispatch::{DispatchResultWithPostInfo, Dispatchable, PostDispatchInfo}, traits::UnfilteredDispatchable};
+use cf_chains::Chain;
+use cf_traits::{Chainflip, KeyProvider, SignerNomination, SigningContext};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_runtime::RuntimeDebug;
 use sp_std::marker::PhantomData;
 use sp_std::prelude::*;
-use cf_chains::Chain;
-use cf_traits::{Chainflip, KeyProvider, SignerNomination, SigningContext};
 
 pub type RequestId = u64;
 
@@ -28,7 +24,7 @@ pub mod pallet {
 	use codec::FullCodec;
 	use frame_support::pallet_prelude::*;
 	use frame_support::{dispatch::DispatchResultWithPostInfo, Twox64Concat};
-	use frame_system::{ensure_signed, pallet_prelude::*};
+	use frame_system::pallet_prelude::*;
 	use pallet_cf_reputation::{OfflineCondition, OfflineConditions};
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
@@ -111,7 +107,7 @@ pub mod pallet {
 			// 1. Ensure the id is valid and remove the context.
 			let context =
 				PendingRequests::<T, I>::take(id).ok_or(Error::<T, I>::InvalidRequestId)?;
-			
+
 			// TODO: verify the threshold signature.
 
 			Self::deposit_event(Event::<T, I>::ThresholdSignatureSuccess(id));
@@ -132,11 +128,19 @@ pub mod pallet {
 
 			// Report the offenders.
 			for offender in offenders.iter() {
-				T::OfflineConditions::report(OfflineCondition::ParticipateSigningFailed, PENALTY, offender)
-					.unwrap_or_else(|e| {
-						frame_support::debug::error!("Unable to report offense for signer {:?}: {:?}", offender, e);
-						0
-					});
+				T::OfflineConditions::report(
+					OfflineCondition::ParticipateSigningFailed,
+					PENALTY,
+					offender,
+				)
+				.unwrap_or_else(|e| {
+					frame_support::debug::error!(
+						"Unable to report offense for signer {:?}: {:?}",
+						offender,
+						e
+					);
+					0
+				});
 			}
 
 			// Remove the context and retry.
@@ -170,12 +174,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// Select nominees for threshold signature.
 		// Q: does it matter if this is predictable? ie. does it matter if we use the `id` as a seed value?
 		let nominees = T::SignerNomination::threshold_nomination_with_seed(id);
-		
+
 		// Store the context.
-		PendingRequests::<T, I>::insert(id, RequestContext {
-			signatories: nominees.clone(),
-			chain_specific: context,
-		});
+		PendingRequests::<T, I>::insert(
+			id,
+			RequestContext {
+				signatories: nominees.clone(),
+				chain_specific: context,
+			},
+		);
 
 		// Emit the request to the CFE.
 		Self::deposit_event(Event::<T, I>::ThresholdSignatureRequest(

@@ -1,7 +1,6 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 use super::{
-	AccountId, Call, Emissions, FlipBalance, Reputation, Rewards, Runtime, Validator, Vaults,
-	Witnesser,
+	AccountId, Call, Emissions, FlipBalance, Reputation, Rewards, Runtime, Witnesser,
 };
 use cf_chains::{Ethereum, eth::{self, ChainflipContractCall, register_claim::RegisterClaim}};
 use cf_traits::{Chainflip, EmissionsTrigger, KeyProvider, SigningContext};
@@ -10,7 +9,7 @@ use frame_support::debug;
 use pallet_cf_broadcast::BroadcastConfig;
 use pallet_cf_validator::EpochTransitionHandler;
 use sp_core::H256;
-use sp_runtime::{DispatchError, RuntimeDebug};
+use sp_runtime::RuntimeDebug;
 use sp_std::marker::PhantomData;
 use sp_std::prelude::*;
 
@@ -48,11 +47,11 @@ pub struct BasicSignerNomination;
 impl cf_traits::SignerNomination for BasicSignerNomination {
 	type SignerId = AccountId;
 
-	fn nomination_with_seed(seed: u64) -> Self::SignerId {
+	fn nomination_with_seed(_seed: u64) -> Self::SignerId {
 		todo!()
 	}
 
-	fn threshold_nomination_with_seed(seed: u64) -> Vec<Self::SignerId> {
+	fn threshold_nomination_with_seed(_seed: u64) -> Vec<Self::SignerId> {
 		todo!()
 	}
 }
@@ -112,9 +111,9 @@ impl BroadcastConfig<Runtime> for EthereumBroadcastConfig {
 	type TransactionHash = [u8; 32];
 
 	fn verify_transaction(
-		signer: &<Runtime as Chainflip>::ValidatorId,
-		unsigned_tx: &Self::UnsignedTransaction,
-		signed_tx: &Self::SignedTransaction,
+		_signer: &<Runtime as Chainflip>::ValidatorId,
+		_unsigned_tx: &Self::UnsignedTransaction,
+		_signed_tx: &Self::SignedTransaction,
 	) -> Option<()> {
 		todo!()
 	}

@@ -114,9 +114,7 @@ impl BroadcastConfig<Test> for MockBroadcast {
 		Ok(b"payload".to_vec())
 	}
 
-	fn construct_unsigned_transaction(
-		&self,
-	) -> Result<Self::UnsignedTransaction, Self::Error> {
+	fn construct_unsigned_transaction(&self) -> Result<Self::UnsignedTransaction, Self::Error> {
 		Ok(MockUnsignedTx)
 	}
 
@@ -125,7 +123,7 @@ impl BroadcastConfig<Test> for MockBroadcast {
 		*self = MockBroadcast::Complete;
 	}
 
-	fn on_broadcast_failure( &mut self, failure: &BroadcastFailure<u64>) {
+	fn on_broadcast_failure(&mut self, failure: &BroadcastFailure<u64>) {
 		todo!()
 	}
 

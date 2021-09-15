@@ -66,16 +66,17 @@ impl MockCfe {
 		_unsigned_tx: MockUnsignedTx,
 	) {
 		assert_eq!(nominee, RANDOM_NOMINEE);
-		TransactionBroadcast::transaction_ready(RawOrigin::Signed(nominee).into(), id, MockSignedTx)
-			.unwrap();
+		TransactionBroadcast::transaction_ready(
+			RawOrigin::Signed(nominee).into(),
+			id,
+			MockSignedTx,
+		)
+		.unwrap();
 	}
 
 	fn handle_broadcast_request(id: BroadcastId) {
-		TransactionBroadcast::broadcast_success(
-			RawOrigin::Root.into(),
-			id,
-			b"0x-tx-hash".to_vec()
-		).unwrap();
+		TransactionBroadcast::broadcast_success(RawOrigin::Root.into(), id, b"0x-tx-hash".to_vec())
+			.unwrap();
 	}
 }
 

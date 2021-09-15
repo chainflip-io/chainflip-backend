@@ -43,7 +43,10 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use cf_traits::{BidderProvider, EpochInfo, NonceIdentifier, NonceProvider, StakeTransfer, ThresholdSigner};
+use cf_chains::eth::{register_claim::RegisterClaim, ChainflipContractCall, SchnorrSignature};
+use cf_traits::{
+	BidderProvider, EpochInfo, NonceIdentifier, NonceProvider, StakeTransfer, ThresholdSigner,
+};
 use core::time::Duration;
 use frame_support::{
 	debug,
@@ -55,18 +58,12 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
-use cf_chains::{
-	eth::{register_claim::RegisterClaim, SchnorrSignature, ChainflipContractCall},
-	Ethereum,
-};
 use sp_std::prelude::*;
 use sp_std::vec;
 
-use codec::{Encode, FullCodec};
-use ethabi::{Bytes, Function, Param, ParamType, StateMutability};
 use sp_core::U256;
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, CheckedSub, Hash, Keccak256, UniqueSaturatedInto, Zero},
+	traits::{AtLeast32BitUnsigned, UniqueSaturatedInto, Zero},
 	DispatchError,
 };
 
@@ -373,7 +370,8 @@ pub mod pallet {
 
 			// Make sure the expiry time is still sane.
 			let min_ttl = T::MinClaimTTL::get();
-			let _ = claim_details.expiry
+			let _ = claim_details
+				.expiry
 				.low_u64()
 				.checked_sub(time_now.as_secs())
 				.and_then(|ttl| ttl.checked_sub(min_ttl.as_secs()))
@@ -385,7 +383,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::ClaimSignatureIssued(
 				account_id,
-				claim_details.abi_encoded()
+				claim_details.abi_encoded(),
 			));
 
 			Ok(().into())
@@ -453,8 +451,7 @@ impl<T: Config> Pallet<T> {
 	/// `[EnsureWitnessed](cf_traits::EnsureWitnessed)`.
 	fn ensure_witnessed(
 		origin: OriginFor<T>,
-	) -> Result<<T::EnsureWitnessed as EnsureOrigin<OriginFor<T>>>::Success, BadOrigin>
-	{
+	) -> Result<<T::EnsureWitnessed as EnsureOrigin<OriginFor<T>>>::Success, BadOrigin> {
 		T::EnsureWitnessed::ensure_origin(origin)
 	}
 
@@ -669,10 +666,7 @@ impl<T: Config> Pallet<T> {
 			if let Some(pending_claim) = PendingClaims::<T>::take(account_id) {
 				let claim_amount = pending_claim.amount.low_u128().into();
 				// Notify that the claim has expired.
-				Self::deposit_event(Event::<T>::ClaimExpired(
-					account_id.clone(),
-					claim_amount,
-				));
+				Self::deposit_event(Event::<T>::ClaimExpired(account_id.clone(), claim_amount));
 
 				// Re-credit the account
 				T::Flip::revert_claim(&account_id, claim_amount);

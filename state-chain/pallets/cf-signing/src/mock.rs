@@ -1,11 +1,12 @@
 use crate::{self as pallet_cf_request_response, instances::BaseConfig};
-use sp_core::H256;
-use frame_support::parameter_types;
 use frame_support::instances::Instance0;
-use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup}, testing::Header,
-};
+use frame_support::parameter_types;
 use frame_system;
+use sp_core::H256;
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -59,8 +60,8 @@ impl BaseConfig for Test {
 }
 
 pub(crate) mod ping_pong {
-	use std::marker::PhantomData;
 	use crate::NullCallback;
+	use std::marker::PhantomData;
 
 	use super::*;
 	use codec::{Decode, Encode};
@@ -68,7 +69,7 @@ pub(crate) mod ping_pong {
 	/// Instance marker.
 	#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 	pub struct Instance;
-	
+
 	#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
 	pub struct Ping;
 
@@ -94,8 +95,11 @@ impl pallet_cf_request_response::Config<Instance0> for Test {
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
-	
+	let mut ext: sp_io::TestExternalities = frame_system::GenesisConfig::default()
+		.build_storage::<Test>()
+		.unwrap()
+		.into();
+
 	ext.execute_with(|| {
 		System::set_block_number(1);
 	});

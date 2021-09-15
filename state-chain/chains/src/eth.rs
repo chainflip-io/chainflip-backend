@@ -6,7 +6,6 @@ use ethabi::{
 	ethereum_types::{H256, U256},
 	Address, Token, Uint,
 };
-use ethereum::{AccessList, TransactionAction};
 use sp_runtime::{
 	traits::{Hash, Keccak256},
 	RuntimeDebug,

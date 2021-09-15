@@ -16,7 +16,7 @@ use frame_system::pallet_prelude::OriginFor;
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
 
-/// and Chainflip was born...some base types
+/// Common base config for Chainflip pallets.
 pub trait Chainflip: frame_system::Config {
 	/// An amount for a bid
 	type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
@@ -25,7 +25,7 @@ pub trait Chainflip: frame_system::Config {
 		+ Parameter
 		+ From<<Self as frame_system::Config>::AccountId>
 		+ Into<<Self as frame_system::Config>::AccountId>;
-	/// An identifier for keys used in threshold signature ceremonies.
+	/// An id type for keys used in threshold signature ceremonies.
 	type KeyId: Member + Parameter;
 	/// The overarching call type.
 	type Call: Member + Parameter + UnfilteredDispatchable<Origin = Self::Origin>;

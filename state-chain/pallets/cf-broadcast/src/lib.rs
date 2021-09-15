@@ -11,19 +11,14 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
-
 use cf_chains::Chain;
-use cf_traits::{
-	Chainflip, KeyProvider, NonceProvider, SignerNomination, SigningContext, ThresholdSigner,
-};
+use cf_traits::{Chainflip, SignerNomination};
 use codec::{Decode, Encode};
-use frame_support::{Parameter, dispatch::{DispatchResultWithPostInfo, Dispatchable, PostDispatchInfo}, pallet_prelude::Member};
+use frame_support::Parameter;
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
+use sp_std::marker::PhantomData;
 use sp_std::prelude::*;
-use sp_std::{cmp::min, marker::PhantomData, mem::size_of};
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum BroadcastFailure {
@@ -60,7 +55,6 @@ pub type BroadcastId = u64;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use codec::FullCodec;
 	use frame_support::pallet_prelude::*;
 	use frame_support::{dispatch::DispatchResultWithPostInfo, Twox64Concat};
 	use frame_system::pallet_prelude::*;
@@ -91,7 +85,7 @@ pub mod pallet {
 
 		/// The broadcast configuration for this instance.
 		type BroadcastConfig: BroadcastConfig<Self, Chain = Self::TargetChain>;
-		
+
 		/// Signer nomination.
 		type SignerNomination: SignerNomination<SignerId = Self::ValidatorId>;
 	}
@@ -114,13 +108,8 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
-	pub type AwaitingBroadcast<T: Config<I>, I: 'static = ()> = StorageMap<
-		_,
-		Twox64Concat,
-		BroadcastId,
-		SignedTransactionFor<T, I>,
-		OptionQuery,
-	>;
+	pub type AwaitingBroadcast<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, BroadcastId, SignedTransactionFor<T, I>, OptionQuery>;
 
 	#[pallet::storage]
 	pub type RetryQueue<T: Config<I>, I: 'static = ()> =
@@ -193,8 +182,8 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let signer = ensure_signed(origin)?;
 
-			let (nominated_signer, unsigned_tx) = AwaitingSignature::<T, I>::get(id)
-				.ok_or(Error::<T, I>::InvalidBroadcastId)?;
+			let (nominated_signer, unsigned_tx) =
+				AwaitingSignature::<T, I>::get(id).ok_or(Error::<T, I>::InvalidBroadcastId)?;
 
 			ensure!(
 				nominated_signer.into() == signer,
@@ -203,7 +192,9 @@ pub mod pallet {
 
 			AwaitingSignature::<T, I>::remove(id);
 
-			if T::BroadcastConfig::verify_transaction(&signer.into(), &unsigned_tx, &signed_tx).is_some() {
+			if T::BroadcastConfig::verify_transaction(&signer.into(), &unsigned_tx, &signed_tx)
+				.is_some()
+			{
 				Self::deposit_event(Event::<T, I>::BroadcastRequest(id, signed_tx.clone()));
 				AwaitingBroadcast::<T, I>::insert(id, signed_tx);
 			} else {
@@ -220,7 +211,7 @@ pub mod pallet {
 		pub fn broadcast_success(
 			origin: OriginFor<T>,
 			id: BroadcastId,
-			tx_hash: TransactionHashFor<T, I>,
+			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 
@@ -241,20 +232,22 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 
+			let _signed_tx = AwaitingBroadcast::<T, I>::take(id);
+
 			match failure {
 				BroadcastFailure::TransactionRejected => {
 					// Report and nominate a new signer. Retry.
-					todo!()
-				}
-				BroadcastFailure::TransactionFailed => {
-					// This is bad.
 					todo!()
 				}
 				BroadcastFailure::TransactionTimeout => {
 					// Nominate a new signer, but don't report the old one. Retry.
 					todo!()
 				}
-			}
+				BroadcastFailure::TransactionFailed => {
+					// This is bad.
+					todo!()
+				}
+			};
 
 			Ok(().into())
 		}
