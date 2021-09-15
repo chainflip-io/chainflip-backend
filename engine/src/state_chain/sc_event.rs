@@ -7,8 +7,8 @@ use anyhow::Result;
 
 use super::{
     pallets::auction::{
-        AuctionAbortedEvent, AuctionCompletedEvent, AuctionConfirmedEvent, AuctionEvent,
-        AuctionRangeChangedEvent, AuctionStartedEvent, AwaitingBiddersEvent,
+        ActiveValidatorRangeChangedEvent, AuctionAbortedEvent, AuctionCompletedEvent,
+        AuctionConfirmedEvent, AuctionEvent, AuctionStartedEvent, AwaitingBiddersEvent,
     },
     pallets::staking::{
         AccountActivated, AccountRetired, ClaimExpired, ClaimSettledEvent, ClaimSigRequestedEvent,
@@ -80,8 +80,10 @@ pub fn sc_event_from_raw_event(raw_event: RawEvent) -> Result<Option<SCEvent>> {
                 AuctionStartedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?.into(),
             )),
             "AuctionRangeChanged" => Ok(Some(
-                AuctionRangeChangedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?
-                    .into(),
+                ActiveValidatorRangeChangedEvent::<StateChainRuntime>::decode(
+                    &mut &raw_event.data[..],
+                )?
+                .into(),
             )),
             "AuctionCompleted" => Ok(Some(
                 AuctionCompletedEvent::<StateChainRuntime>::decode(&mut &raw_event.data[..])?

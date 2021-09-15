@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, ops::Add};
 
-use cf_traits::AuctionRange;
+use cf_traits::ActiveValidatorRange;
 use codec::{Decode, Encode};
 
 use frame_support::{pallet_prelude::MaybeSerializeDeserialize, Parameter};
@@ -40,9 +40,9 @@ pub struct AwaitingBiddersEvent<A: Auction> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode, Encode, Serialize, Deserialize)]
-pub struct AuctionRangeChangedEvent<A: Auction> {
-    pub before: AuctionRange,
-    pub now: AuctionRange,
+pub struct ActiveValidatorRangeChangedEvent<A: Auction> {
+    pub before: ActiveValidatorRange,
+    pub now: ActiveValidatorRange,
     pub _runtime: PhantomData<A>,
 }
 
@@ -76,7 +76,7 @@ impl_auction_event_enum!(
     AuctionCompletedEvent,
     AuctionConfirmedEvent,
     AwaitingBiddersEvent,
-    AuctionRangeChangedEvent,
+    ActiveValidatorRangeChangedEvent,
     AuctionAbortedEvent
 );
 
@@ -127,21 +127,23 @@ mod tests {
     }
 
     #[test]
-    fn auction_range_changed_decoding() {
-        // AuctionRangeChanged(AuctionRange, AuctionRange)
+    fn active_validator_range_changed_decoding() {
+        // ActiveValidatorRangeChanged(ActiveValidatorRange, ActiveValidatorRange)
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_auction::Event::<SCRuntime>::AuctionRangeChanged((0, 1), (0, 2)).into();
+            pallet_cf_auction::Event::<SCRuntime>::ActiveValidatorRangeChanged((0, 1), (0, 2))
+                .into();
 
-        let encoded_auction_range_changed = event.encode();
+        let encoded_active_validator_range_changed = event.encode();
         // the first 2 bytes are (module_index, event_variant_index), these can be stripped
-        let encoded_auction_range_changed = encoded_auction_range_changed[2..].to_vec();
+        let encoded_active_validator_range_changed =
+            encoded_active_validator_range_changed[2..].to_vec();
 
-        let decoded_event = AuctionRangeChangedEvent::<StateChainRuntime>::decode(
-            &mut &encoded_auction_range_changed[..],
+        let decoded_event = ActiveValidatorRangeChangedEvent::<StateChainRuntime>::decode(
+            &mut &encoded_active_validator_range_changed[..],
         )
         .unwrap();
 
-        let expecting = AuctionRangeChangedEvent {
+        let expecting = ActiveValidatorRangeChangedEvent {
             before: (0, 1),
             now: (0, 2),
             _runtime: PhantomData,
