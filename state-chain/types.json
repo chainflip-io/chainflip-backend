@@ -17,9 +17,9 @@
   "AuctionIndex": "u64",
   "AuctionPhase": {
     "_enum": {
-      "WaitingForBids": "(Vec<AccountId>, Amount)",
-      "BidsTaken": "(Vec<(AccountId, Amount)>)",
-      "WinnersSelected": "(Vec<AccountId>, Amount)"
+      "WaitingForBids": "(Vec<ValidatorId>, Amount)",
+      "BidsTaken": "(Vec<(ValidatorId, Amount)>)",
+      "WinnersSelected": "(Vec<ValidatorId>, Amount)"
     }
   },
   "AuctionRange": "(u32,u32)",
@@ -42,7 +42,7 @@
   "EthSigningTxResponse": {
     "_enum": {
       "Success": "(Vec<u8>)",
-      "Error": "(Vec<AccountId>)"
+      "Error": "(Vec<ValidatorId>)"
     }
   },
   "EthereumAddress": "[u8;20]",
@@ -61,12 +61,12 @@
   },
   "KeygenRequest": {
     "chain": "ChainParams",
-    "validator_candidates": "Vec<AccountId>"
+    "validator_candidates": "Vec<ValidatorId>"
   },
   "KeygenResponse": {
     "_enum": {
       "Success": "(PublicKey)",
-      "Failure": "(Vec<AccountId>)"
+      "Failure": "(Vec<ValidatorId>)"
     }
   },
   "LookupSource": "MultiAddress",
@@ -90,7 +90,7 @@
   "Retired": "bool",
   "Signature": "H256",
   "TokenAmount": "u128",
-  "AccountId": "AccountId",
+  "ValidatorId": "AccountId",
   "Transaction": "Vec<u8>",
   "Vault": {
     "old_key": "PublicKey",

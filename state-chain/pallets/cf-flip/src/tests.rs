@@ -485,3 +485,38 @@ mod test_tx_payments {
 		});
 	}
 }
+
+mod test_slashing {
+	use cf_traits::Slashing;
+
+	use crate::{FlipSlasher, SlashingRate};
+
+	use super::*;
+	#[test]
+	fn test_slash_validator() {
+		new_test_ext().execute_with(|| {
+			// Amount of blocks the validator was offline
+			const BLOCKS_OFFLINE: u64 = 20;
+			// Amount of extra token we need to mint
+			const MINT: u128 = 80_000_000;
+			// Minimum active bid
+			const BOND: u128 = 8_000_000;
+			// Slashing rate is 5 % / slash relates on the BOND
+			const SLASHING_RATE: u128 = 5;
+			const BLOCKS_PER_DAY: u128 = <Test as Config>::BlocksPerDay::get() as u128;
+			const EXPECTED_SLASH: u128 =
+				BOND / 100 * SLASHING_RATE / BLOCKS_PER_DAY * BLOCKS_OFFLINE as u128;
+			// Mint some Flip for testing - 100 is not enough and unrealistic for this usecase
+			Flip::settle(&ALICE, Flip::mint(MINT).into());
+			let initial_balance: u128 = Flip::total_balance_of(&ALICE);
+			Flip::set_validator_bond(&ALICE, BOND);
+			// Set the slashing rate to 5%
+			SlashingRate::<Test>::set(SLASHING_RATE);
+			assert_eq!(FlipSlasher::<Test>::slash(&ALICE, BLOCKS_OFFLINE), 0);
+			let balance_after = Flip::total_balance_of(&ALICE);
+			// Check if the diff between the balances is the expected slash
+			assert_eq!(initial_balance - balance_after, EXPECTED_SLASH);
+			check_balance_integrity();
+		});
+	}
+}

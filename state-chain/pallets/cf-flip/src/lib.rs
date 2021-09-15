@@ -47,17 +47,21 @@ mod tests;
 mod imbalances;
 mod on_charge_transaction;
 
+use cf_traits::Slashing;
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
 
 use frame_support::{
+	dispatch::Weight,
 	ensure,
 	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
 };
 
 use codec::{Decode, Encode};
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, Zero},
+	traits::{
+		AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, UniqueSaturatedInto, Zero,
+	},
 	DispatchError, RuntimeDebug,
 };
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
@@ -78,6 +82,9 @@ pub mod pallet {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
+		/// Implementation of EnsureOrigin trait for governance
+		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+
 		/// The balance of an account.
 		type Balance: Parameter
 			+ Member
@@ -90,6 +97,10 @@ pub mod pallet {
 		/// The minimum amount required to keep an account open.
 		#[pallet::constant]
 		type ExistentialDeposit: Get<Self::Balance>;
+
+		/// Blocks per day.
+		#[pallet::constant]
+		type BlocksPerDay: Get<Self::BlockNumber>;
 	}
 
 	#[pallet::pallet]
@@ -111,6 +122,11 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn total_issuance)]
 	pub type TotalIssuance<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
+
+	/// The slashing rate in percent - slash per day = n % of MBA.
+	#[pallet::storage]
+	#[pallet::getter(fn slashing_rate)]
+	pub type SlashingRate<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
 	/// The number of tokens currently off-chain.
 	#[pallet::storage]
@@ -146,7 +162,17 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		// No external calls for this pallet.
+		#[pallet::weight(10_000)]
+		pub fn set_slashing_rate(
+			origin: OriginFor<T>,
+			slashing_rate: T::Balance,
+		) -> DispatchResultWithPostInfo {
+			// Ensure the extrinsic was executed by the governance
+			T::EnsureGovernance::ensure_origin(origin)?;
+			// Set the slashing rate
+			<SlashingRate<T>>::set(slashing_rate);
+			Ok(().into())
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -444,5 +470,36 @@ impl<T: Config> OnKilledAccount<T::AccountId> for BurnFlipAccount<T> {
 		let dust = Pallet::<T>::total_balance_of(account_id);
 		Pallet::<T>::settle(account_id, Pallet::<T>::burn(dust).into());
 		Account::<T>::remove(account_id);
+	}
+}
+
+pub struct FlipSlasher<T: Config>(PhantomData<T>);
+/// An implementation of `Slashing` for Flip
+impl<T, B> Slashing for FlipSlasher<T>
+where
+	T: Config<BlockNumber = B>,
+	B: UniqueSaturatedInto<T::Balance>,
+{
+	type AccountId = T::AccountId;
+	type BlockNumber = B;
+
+	fn slash(account_id: &Self::AccountId, blocks_offline: Self::BlockNumber) -> Weight {
+		// Get the MBA aka the bond
+		let bond = Account::<T>::get(account_id).validator_bond;
+		// Get the slashing rate
+		let slashing_rate: T::Balance = T::Balance::from(SlashingRate::<T>::get());
+		// Get blocks_offline as Balance
+		let blocks_offline: T::Balance = blocks_offline.unique_saturated_into();
+		// slash per day = n % of MBA
+		let slash_per_day = (bond / T::Balance::from(100 as u32)).saturating_mul(slashing_rate);
+		// Burn per block
+		let burn_per_block = slash_per_day / T::BlocksPerDay::get().unique_saturated_into();
+		// Total amount of burn
+		let total_burn = burn_per_block.saturating_mul(blocks_offline);
+		// Burn the slashing fee
+		Pallet::<T>::settle(account_id, Pallet::<T>::burn(total_burn).into());
+		// Calc the weight for the operation - assume 1r for slashing rate
+		// + 1r get bond + 1w update bond + 1w update balance
+		T::DbWeight::get().reads(2) + T::DbWeight::get().writes(2)
 	}
 }

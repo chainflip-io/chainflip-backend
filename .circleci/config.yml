@@ -41,36 +41,13 @@ auth: &dockerconfig
   password: $DOCKER_PASSWORD
 
 cargo-base-job: &cargo-base-job
+  circleci_ip_ranges: true
   executor: rust-base
   environment: &sccache_environment
     SCCACHE_REDIS: redis://sccache.chainflip.xyz
     SCCACHE_CACHE_SIZE: 14G
   resource_class: xlarge
 
-chainflip-docker-base: &chainflip-docker-base
-  executor: docker/docker
-  working_directory: /mnt/ramdisk
-  steps:
-    - setup_remote_docker:
-        version: 20.10.7
-        docker_layer_caching: true
-    - checkout
-    - attach_workspace:
-        at: ./
-    - docker/check:
-        docker-username: DOCKER_USERNAME
-        registry: ghcr.io
-    - docker/build:
-        image: $IMAGE
-        registry: ghcr.io
-        extra_build_args: $BUILD_ARGS
-        dockerfile: $DOCKERFILE
-        cache_from: ghcr.io/$IMAGE:latest
-        tag: $TAG
-    - docker/push:
-        registry: ghcr.io
-        image: $IMAGE
-        tag: $TAG
 # ------------------- anchors ------------------- #
 
 version: 2.1
@@ -92,7 +69,13 @@ orbs:
 workflows:
   chainflip-backend-checks:
     jobs:
-      - build-rust-base:
+      - build-docker-image:
+          name: build-rust-base
+          extra_build_args: "--build-arg NIGHTLY=nightly-2021-03-24"
+          image: chainflip-io/chainflip-backend/rust-base
+          tag: <<pipeline.git.revision>>
+          dockerfile: Dockerfile.rust-base
+          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:<<pipeline.git.base_revision>>
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
@@ -116,7 +99,12 @@ workflows:
           <<: *ignore_main_branches
   chainflip-backend-release:
     jobs:
-      - build-rust-base:
+      - build-docker-image:
+          name: build-rust-base
+          image: chainflip-io/chainflip-backend/rust-base
+          tag: latest
+          dockerfile: Dockerfile.rust-base
+          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
           context:
             - ghcr-credentials
           <<: *only_main_branches
@@ -139,13 +127,19 @@ workflows:
           context:
             - ghcr-credentials
           <<: *only_main_branches
-      - build-chainflip-engine:
+      - build-docker-image:
+          name: build-chainflip-engine
+          image: chainflip-io/chainflip-backend/chainflip-engine
+          extra_build_args: "--build-arg SERVICE=chainflip-engine"
           requires:
             - test-validator-package
           context:
             - ghcr-credentials
           <<: *only_main_branches
-      - build-state-chain-node:
+      - build-docker-image:
+          name: build-state-chain-node
+          image: chainflip-io/chainflip-backend/state-chain-node
+          extra_build_args: "--build-arg SERVICE=state-chain-node"
           requires:
             - test-validator-package
           context:
@@ -163,14 +157,18 @@ workflows:
   chainflip-integration-tests:
     <<: *nightly
     jobs:
-      - build-rust-poetry:
+      - build-docker-image:
+          image: chainflip-io/chainflip-backend/rust-poetry
+          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
+          tag: latest
+          dockerfile: Dockerfile.rust-poetry
           context:
             - ghcr-credentials
       - clone-contracts-repo:
           context:
             - github-credentials
           requires:
-            - build-rust-poetry
+            - build-docker-image
       - run-integration-tests:
           context:
             - ghcr-credentials
@@ -179,38 +177,59 @@ workflows:
             - clone-contracts-repo
 
 jobs:
-  build-rust-base:
-    <<: *chainflip-docker-base
-    environment:
-      IMAGE: chainflip-io/chainflip-backend/rust-base
-      TAG: latest
-      DOCKERFILE: Dockerfile.rust-base
-
-  build-rust-poetry:
-    <<: *chainflip-docker-base
-    environment:
-      IMAGE: chainflip-io/chainflip-backend/rust-poetry
-      TAG: latest
-      DOCKERFILE: Dockerfile.rust-poetry
-
-  build-chainflip-engine:
-    <<: *chainflip-docker-base
-    environment:
-      IMAGE: chainflip-io/chainflip-backend/chainflip-engine
-      TAG: <<pipeline.git.revision>>
-      BUILD_ARGS: "--build-arg SERVICE=chainflip-engine"
-      DOCKERFILE: Dockerfile
-
-  build-state-chain-node:
-    <<: *chainflip-docker-base
-    environment:
-      IMAGE: chainflip-io/chainflip-backend/state-chain-node
-      TAG: <<pipeline.git.revision>>
-      BUILD_ARGS: "--build-arg SERVICE=state-chain-node"
-      DOCKERFILE: Dockerfile
+  build-docker-image:
+    executor: docker/docker
+    working_directory: /mnt/ramdisk
+    parameters:
+      image:
+        type: string
+        description: Name of primary tag without the registry
+        default: ""
+      extra_build_args:
+        type: string
+        description: Any extra arguments to pass to the build
+        default: ""
+      dockerfile:
+        type: string
+        description: Location of the Dockerfile
+        default: Dockerfile
+      registry:
+        type: string
+        description: Registry of Docker images
+        default: ghcr.io
+      tag:
+        type: string
+        description: Primary tag of the build
+        default: <<pipeline.git.revision>>
+      cache_from:
+        type: string
+        description: Where to derive the build cache
+        default: ""
+    steps:
+      - setup_remote_docker:
+          version: 20.10.7
+          docker_layer_caching: true
+      - checkout
+      - attach_workspace:
+          at: ./
+      - docker/check:
+          docker-username: DOCKER_USERNAME
+          registry: ghcr.io
+      - docker/build:
+          image: <<parameters.image>>
+          registry: ghcr.io
+          extra_build_args: <<parameters.extra_build_args>>
+          dockerfile: <<parameters.dockerfile>>
+          cache_from: <<parameters.cache_from>>
+          tag: <<parameters.tag>>
+      - docker/push:
+          registry: ghcr.io
+          image: <<parameters.image>>
+          tag: <<parameters.tag>>
 
   fmt-validator-package:
     executor: rust-base
+    resource_class: small
     steps:
       - checkout
       - run: >
@@ -268,6 +287,7 @@ jobs:
           webhook: $DW_ALERTS_STAGING
 
   clone-contracts-repo:
+    resource_class: small
     docker:
       - image: "cimg/base:stable"
     steps:
@@ -282,6 +302,7 @@ jobs:
 
   run-integration-tests:
     resource_class: xlarge
+    circleci_ip_ranges: true
     docker:
       - image: ghcr.io/chainflip-io/chainflip-backend/rust-poetry:latest
         auth: *dockerconfig
@@ -315,10 +336,16 @@ jobs:
           webhook: $DW_ALERTS_STAGING
 
   test-single-node:
+    parameters:
+      cluster_name:
+        description: Name of the cluster to authenticate to
+        type: string
+        default: cluster-staging
+    resource_class: small
     executor: chainflip-master
     steps:
       - doctl/initialize
-      - run: doctl kubernetes cluster kubeconfig save cluster-staging
+      - run: doctl kubernetes cluster kubeconfig save <<parameters.cluster_name>>
       - run:
           name: Port-forward into cluster
           background: true
@@ -339,6 +366,14 @@ jobs:
       - run:
           name: Test single node
           command: helm test bashful -n default
+      - run:
+          name: Dump logs (state-chain-node)
+          when: always
+          command: kubectl logs -l app.kubernetes.io/name=state-chain-node
+      - run:
+          name: Dump logs (chainflip-engine)
+          when: always
+          command: kubectl logs -l app.kubernetes.io/name=chainflip-engine
       - run:
           name: Destroy single node
           when: always
