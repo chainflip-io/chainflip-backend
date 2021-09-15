@@ -107,7 +107,7 @@ pub trait Auction {
 	type BidderProvider;
 
 	/// Range describing auction set size
-	fn auction_range() -> ActiveValidatorRange;
+	fn active_range() -> ActiveValidatorRange;
 	/// Set the auction range
 	fn set_active_range(range: ActiveValidatorRange) -> Result<ActiveValidatorRange, AuctionError>;
 	/// The current phase we find ourselves in

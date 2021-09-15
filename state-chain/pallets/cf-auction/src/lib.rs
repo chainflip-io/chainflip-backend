@@ -229,7 +229,7 @@ impl<T: Config> Auction for Pallet<T> {
 	type Amount = T::Amount;
 	type BidderProvider = T::BidderProvider;
 
-	fn auction_range() -> ActiveValidatorRange {
+	fn active_range() -> ActiveValidatorRange {
 		ActiveValidatorSizeRange::<T>::get()
 	}
 
