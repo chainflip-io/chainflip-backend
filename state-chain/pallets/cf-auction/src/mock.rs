@@ -114,9 +114,6 @@ impl ChainflipAccount for MockChainflipAccount {
 
 #[test]
 fn account_updates() {
-	generate_bids(5);
-	let data = MockChainflipAccount::get(&1);
-	assert_eq!(data.state, ChainflipAccountState::Passive);
 	MockChainflipAccount::update_state(&1, ChainflipAccountState::Backup);
 	let data = MockChainflipAccount::get(&1);
 	assert_eq!(data.state, ChainflipAccountState::Backup);
