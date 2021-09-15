@@ -22,7 +22,7 @@ pub trait ChainVault {
 	/// A transaction
 	type Transaction: Into<Vec<u8>>;
 	/// An identifier for a validator involved in the rotation of the vault
-	type AccountId;
+	type ValidatorId;
 	/// An error on rotating the vault
 	type Error;
 	/// A set of params for the chain for this vault
@@ -34,7 +34,7 @@ pub trait ChainVault {
 	fn start_vault_rotation(
 		index: RequestIndex,
 		new_public_key: Self::PublicKey,
-		validators: Vec<Self::AccountId>,
+		validators: Vec<Self::ValidatorId>,
 	) -> Result<(), Self::Error>;
 	/// We have confirmation of the rotation back from `Vaults`
 	fn vault_rotated(response: Vault<Self::PublicKey, Self::Transaction>);
@@ -43,13 +43,13 @@ pub trait ChainVault {
 /// Events coming in from our chain.  This is used to callback from the request to complete the vault
 /// rotation phase.  See `ChainVault::try_start_vault_rotation()` for more details.
 pub trait ChainHandler {
-	type AccountId;
+	type ValidatorId;
 	type Error;
 	/// Request initial vault rotation phase complete with a result describing the outcome of this phase
 	/// Feedback is provided back on this step
 	fn request_vault_rotation(
 		index: RequestIndex,
-		result: Result<VaultRotationRequest, RotationError<Self::AccountId>>,
+		result: Result<VaultRotationRequest, RotationError<Self::ValidatorId>>,
 	) -> Result<(), Self::Error>;
 }
 
@@ -68,20 +68,20 @@ pub enum ChainParams {
 /// A representation of a key generation request
 /// This would be used for each supporting chain
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct KeygenRequest<AccountId> {
+pub struct KeygenRequest<ValidatorId> {
 	/// A Chain's parameters
 	pub(crate) chain: ChainParams,
 	/// The set of validators from which we would like to generate the key
-	pub(crate) validator_candidates: Vec<AccountId>,
+	pub(crate) validator_candidates: Vec<ValidatorId>,
 }
 
 /// A response for our KeygenRequest
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum KeygenResponse<AccountId, PublicKey: Into<Vec<u8>>> {
+pub enum KeygenResponse<ValidatorId, PublicKey: Into<Vec<u8>>> {
 	/// The key generation ceremony has completed successfully with a new proposed public key
 	Success(PublicKey),
 	/// Something went wrong and it failed.
-	Failure(Vec<AccountId>),
+	Failure(Vec<ValidatorId>),
 }
 
 /// The vault rotation request
