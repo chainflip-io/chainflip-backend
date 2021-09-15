@@ -283,3 +283,13 @@ pub trait EmergencyRotation {
 	/// Request an emergency rotation
 	fn request_emergency_rotation();
 }
+
+/// Slashing a validator
+pub trait Slashing {
+	/// An identifier for our validator
+	type AccountId;
+	/// Block number
+	type BlockNumber;
+	/// Function which implements the slashing logic
+	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber) -> Weight;
+}

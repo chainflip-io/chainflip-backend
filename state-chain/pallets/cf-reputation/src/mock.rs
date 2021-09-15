@@ -14,7 +14,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 
 use cf_traits::mocks::epoch_info;
 use cf_traits::mocks::epoch_info::Mock;
-use cf_traits::EmergencyRotation;
+use cf_traits::{EmergencyRotation, Slashing};
 
 thread_local! {
 	pub static SLASH_COUNT: RefCell<u64> = RefCell::new(0);
@@ -83,10 +83,10 @@ parameter_types! {
 // Mocking the `Slasher` trait
 pub struct MockSlasher;
 impl Slashing for MockSlasher {
-	type ValidatorId = u64;
+	type AccountId = u64;
 	type BlockNumber = u64;
 
-	fn slash(_validator_id: &Self::ValidatorId, _blocks_offline: &Self::BlockNumber) -> Weight {
+	fn slash(_validator_id: &Self::AccountId, _blocks_offline: Self::BlockNumber) -> Weight {
 		// Count those slashes
 		SLASH_COUNT.with(|count| {
 			let mut c = count.borrow_mut();
