@@ -1,11 +1,10 @@
 use std::{collections::HashMap, time::Duration};
 
-use itertools::Itertools;
 use tokio::sync::mpsc::UnboundedReceiver;
 
-use crate::signing::client::client_inner::frost::{self, SigningCommitment};
+use crate::signing::client::client_inner::frost;
 
-use frost::{SigningData, SigningDataWrapped};
+use frost::{LocalSig3, SigningCommitment, SigningData, SigningDataWrapped};
 
 use crate::{
     logging,
@@ -23,17 +22,54 @@ use crate::{
             },
             KeyId, KeygenInfo, MultisigInstruction,
         },
-        crypto::{Keys, GE as Point},
+        crypto::{ECScalar, Keys, GE as Point},
         db::KeyDBMock,
         MessageInfo,
     },
 };
 
+impl<T> From<UnboundedReceiver<T>> for PeekableReceiver<T> {
+    fn from(rx: UnboundedReceiver<T>) -> Self {
+        PeekableReceiver {
+            receiver: rx,
+            next: None,
+        }
+    }
+}
+
+pub struct PeekableReceiver<T> {
+    receiver: UnboundedReceiver<T>,
+    next: Option<T>,
+}
+
+impl<T> PeekableReceiver<T> {
+    /// Get the next element
+    async fn recv(&mut self) -> Option<T> {
+        if let Some(x) = self.next.take() {
+            return Some(x);
+        }
+
+        self.receiver.recv().await
+    }
+
+    /// Get a reference to the next element without
+    /// consuming it
+    async fn peek(&mut self) -> Option<&T> {
+        if self.next.is_some() {
+            return self.next.as_ref();
+        }
+
+        self.next = self.receiver.recv().await;
+
+        self.next.as_ref()
+    }
+}
+
 type MultisigClientNoDB = MultisigClient<KeyDBMock>;
 
 use super::{KEY_ID, MESSAGE_HASH, MESSAGE_INFO, SIGNER_IDXS, SIGN_INFO};
 
-type InnerEventReceiver = UnboundedReceiver<InnerEvent>;
+type InnerEventReceiver = PeekableReceiver<InnerEvent>;
 
 /// Clients generated bc1, but haven't sent them
 pub struct KeygenPhase1Data {
@@ -87,8 +123,8 @@ pub struct ValidKeygenStates {
 pub struct ValidSigningStates {
     pub sign_phase1: SigningPhase1Data,
     pub sign_phase2: SigningPhase2Data,
-    pub sign_phase3: SigningPhase3Data,
-    pub sign_phase4: SigningPhase4Data,
+    pub sign_phase3: Option<SigningPhase3Data>,
+    pub sign_phase4: Option<SigningPhase4Data>,
     pub outcome: SigningOutcome,
 }
 
@@ -124,6 +160,14 @@ pub struct KeygenContext {
     /// sent (in case it needs to be invalid/different from what
     /// is expected normally)
     comm1_to_send: HashMap<(usize, usize), SigningCommitment>,
+    sig3_to_send: HashMap<(usize, usize), LocalSig3>,
+}
+
+fn gen_invalid_local_sig() -> LocalSig3 {
+    use crate::signing::crypto::{ECScalar, FE};
+    frost::LocalSig3 {
+        response: FE::new_random(),
+    }
 }
 
 impl KeygenContext {
@@ -131,6 +175,7 @@ impl KeygenContext {
     /// keygen ceremony
     pub fn new() -> Self {
         let validator_ids = super::VALIDATOR_IDS.clone();
+
         let logger = logging::test_utils::create_test_logger();
         let (clients, rxs): (Vec<_>, Vec<_>) = validator_ids
             .iter()
@@ -143,7 +188,7 @@ impl KeygenContext {
                     TEST_PHASE_TIMEOUT,
                     &logger,
                 );
-                (c, rx)
+                (c, rx.into())
             })
             .unzip();
 
@@ -153,6 +198,7 @@ impl KeygenContext {
             clients,
             custom_local_sigs: HashMap::new(),
             comm1_to_send: HashMap::new(),
+            sig3_to_send: HashMap::new(),
         }
     }
 
@@ -161,16 +207,11 @@ impl KeygenContext {
     }
 
     pub fn use_invalid_local_sig(&mut self, signer_idx: usize) {
-        use crate::signing::crypto::{ECScalar, FE};
-
-        let sig = frost::LocalSig3 {
-            response: FE::new_random(),
-        };
-
-        self.custom_local_sigs.insert(signer_idx, sig);
+        self.custom_local_sigs
+            .insert(signer_idx, gen_invalid_local_sig());
     }
 
-    pub fn use_inconsistent_broadcast(&mut self, sender_idx: usize, receiver_idx: usize) {
+    pub fn use_inconsistent_broadcast_for_comm1(&mut self, sender_idx: usize, receiver_idx: usize) {
         assert_ne!(sender_idx, receiver_idx);
 
         // It doesn't matter what kind of commitment we create here,
@@ -184,6 +225,18 @@ impl KeygenContext {
 
         self.comm1_to_send
             .insert((sender_idx, receiver_idx), fake_comm1);
+    }
+
+    pub fn use_inconsistent_broadcast_for_sig3(&mut self, sender_idx: usize, receiver_idx: usize) {
+        assert_ne!(sender_idx, receiver_idx);
+
+        // It doesn't matter what kind of local sig we create here,
+        // the main idea is that it doesn't match what we
+        // send to all other parties
+        let fake_sig3 = gen_invalid_local_sig();
+
+        self.sig3_to_send
+            .insert((sender_idx, receiver_idx), fake_sig3);
     }
 
     // Generate keygen states for each of the phases,
@@ -374,6 +427,8 @@ impl KeygenContext {
                 let _ = recv_comm1_signing(rx).await;
             }
 
+            assert_channel_empty(rx).await;
+
             comm1_vec.push(comm1);
         }
 
@@ -381,8 +436,6 @@ impl KeygenContext {
             clients: clients.clone(),
             comm1_vec: comm1_vec.clone(),
         };
-
-        assert_channel_empty(&mut rxs[0]).await;
 
         // *** Broadcast Comm1 messages to advance to Stage2 ***
         for sender_idx in SIGNER_IDXS.iter() {
@@ -450,10 +503,21 @@ impl KeygenContext {
             }
         }
 
+        // Check if the ceremony was aborted at this stage
+        if let Some(outcome) = check_outcome(&mut rxs[0]).await {
+            // TODO: check that the outcome is the same for all parties
+            println!("Ceremony is terminating early");
+            return ValidSigningStates {
+                sign_phase1,
+                sign_phase2,
+                sign_phase3: None,
+                sign_phase4: None,
+                outcome: outcome.clone(),
+            };
+        }
+
         for idx in SIGNER_IDXS.iter() {
             let c = &mut clients[*idx];
-
-            // TODO: account for the case where we abort early
 
             assert_eq!(
                 get_stage_for_msg(&c, &MESSAGE_INFO),
@@ -468,21 +532,21 @@ impl KeygenContext {
         for idx in SIGNER_IDXS.iter() {
             let rx = &mut rxs[*idx];
 
-            let sig = recv_local_sig(rx).await;
+            let valid_sig = recv_local_sig(rx).await;
 
             // Check if the test requested a custom local sig
             // to be emitted by party idx
-            let sig = self.custom_local_sigs.remove(idx).unwrap_or(sig);
+            let sig = self.custom_local_sigs.remove(idx).unwrap_or(valid_sig);
 
             // Ignore all other (same) messages
             for _ in 0..SIGNER_IDXS.len() - 2 {
                 let _ = recv_local_sig(rx).await;
             }
 
+            assert_channel_empty(rx).await;
+
             local_sigs.push(sig);
         }
-
-        assert_channel_empty(&mut rxs[0]).await;
 
         let sign_phase3 = SigningPhase3Data {
             clients: clients.clone(),
@@ -492,12 +556,17 @@ impl KeygenContext {
         // *** Distribute local sigs ***
 
         for sender_idx in SIGNER_IDXS.iter() {
-            let local_sig = local_sigs[*sender_idx].clone();
-            let id = &validator_ids[*sender_idx];
-
-            let m = sig_data_to_p2p(local_sig, id, &MESSAGE_INFO);
-
             for receiver_idx in SIGNER_IDXS.iter() {
+                let valid_sig = local_sigs[*sender_idx].clone();
+                let sig3 = self
+                    .sig3_to_send
+                    .remove(&(*sender_idx, *receiver_idx))
+                    .unwrap_or(valid_sig);
+
+                let id = &validator_ids[*sender_idx];
+
+                let m = sig_data_to_p2p(sig3, id, &MESSAGE_INFO);
+
                 if receiver_idx != sender_idx {
                     clients[*receiver_idx].process_p2p_mq_message(m.clone());
                 }
@@ -555,8 +624,8 @@ impl KeygenContext {
         ValidSigningStates {
             sign_phase1,
             sign_phase2,
-            sign_phase3,
-            sign_phase4,
+            sign_phase3: Some(sign_phase3),
+            sign_phase4: Some(sign_phase4),
             outcome,
         }
     }
@@ -581,6 +650,19 @@ pub async fn recv_next_signal_message_skipping(
         if let InnerEvent::SigningResult(s) = res {
             return Some(s);
         }
+    }
+}
+
+/// Check if the next event produced by the receiver is SigningOutcome
+async fn check_outcome(rx: &mut InnerEventReceiver) -> Option<&SigningOutcome> {
+    let event: &InnerEvent = tokio::time::timeout(Duration::from_millis(10), rx.peek())
+        .await
+        .ok()??;
+
+    if let InnerEvent::SigningResult(outcome) = event {
+        Some(outcome)
+    } else {
+        None
     }
 }
 

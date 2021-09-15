@@ -158,8 +158,9 @@ impl SigningStateWithKey {
 
                         slog::warn!(
                             self.logger,
-                            "Signing ceremony failed, blaming parties: {:?}",
-                            &bad_validators
+                            "Signing ceremony failed, blaming parties: {:?} ({:?})",
+                            &bad_validators,
+                            blamed_parties
                         );
 
                         self.send_result(Err((Error::Invalid, blamed_parties)));

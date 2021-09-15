@@ -1,7 +1,3 @@
-use curv::elliptic::curves::traits::ECScalar;
-
-use crate::signing::client::client_inner::frost::LocalSig3;
-
 use super::*;
 
 macro_rules! assert_stage {
@@ -64,7 +60,8 @@ macro_rules! receive_ver2 {
 
 macro_rules! receive_sig3 {
     ($c1:expr, $sender: expr, $sign_states:expr) => {
-        let sig3 = $sign_states.sign_phase3.local_sigs[$sender].clone();
+        let sign_phase3 = $sign_states.sign_phase3.as_ref().expect("phase 3");
+        let sig3 = sign_phase3.local_sigs[$sender].clone();
         let m = helpers::sig_data_to_p2p(sig3, &VALIDATOR_IDS[$sender], &MESSAGE_INFO);
         $c1.process_p2p_mq_message(m);
     };
@@ -72,7 +69,8 @@ macro_rules! receive_sig3 {
 
 macro_rules! receive_ver4 {
     ($c1:expr, $sender: expr, $sign_states:expr) => {
-        let ver4 = $sign_states.sign_phase4.ver4_vec[$sender].clone();
+        let sign_phase4 = $sign_states.sign_phase4.as_ref().expect("phase 4");
+        let ver4 = sign_phase4.ver4_vec[$sender].clone();
         let m = helpers::sig_data_to_p2p(ver4, &VALIDATOR_IDS[$sender], &MESSAGE_INFO);
         $c1.process_p2p_mq_message(m);
     };
@@ -162,7 +160,7 @@ async fn should_delay_sig3() {
 
     // "Slow" client c1 receives a sig3 message before stage 3, it should be delayed
     receive_ver2!(c1, 1, sign_states);
-    receive_sig3!(c1, 1, sign_states);
+    receive_sig3!(c1, 1, &sign_states);
     assert_stage2!(c1);
 
     // This should advance us to the next stage and trigger processing of the delayed message
@@ -171,7 +169,7 @@ async fn should_delay_sig3() {
 
     // Because we have already processed the delayed message, just one more
     // message should be enough to advance us to stage 4
-    receive_sig3!(c1, 2, sign_states);
+    receive_sig3!(c1, 2, &sign_states);
     assert_stage4!(c1);
 }
 
@@ -181,18 +179,18 @@ async fn should_delay_ver4() {
     let _ = ctx.generate().await;
     let sign_states = ctx.sign().await;
 
-    let mut c1 = sign_states.sign_phase3.clients[0].clone();
+    let mut c1 = sign_states.sign_phase3.as_ref().unwrap().clients[0].clone();
 
     assert_stage3!(c1);
 
     // "Slow" client c1 receives a ver4 message before stage 4, it should be delayed
-    receive_sig3!(c1, 1, sign_states);
+    receive_sig3!(c1, 1, &sign_states);
     receive_ver4!(c1, 1, sign_states);
 
     assert_stage3!(c1);
 
     // This should trigger processing of the delayed message
-    receive_sig3!(c1, 2, sign_states);
+    receive_sig3!(c1, 2, &sign_states);
 
     assert_stage4!(c1);
 
@@ -232,8 +230,29 @@ async fn should_handle_inconsistent_broadcast_com1() {
     // Party at this idx will send and invalid signature
     let bad_idx = 1;
 
-    ctx.use_inconsistent_broadcast(bad_idx, 0);
-    ctx.use_inconsistent_broadcast(bad_idx, 2);
+    ctx.use_inconsistent_broadcast_for_comm1(bad_idx, 0);
+    ctx.use_inconsistent_broadcast_for_comm1(bad_idx, 2);
+
+    let sign_states = ctx.sign().await;
+
+    let (_, blamed_parties) = sign_states.outcome.result.unwrap_err();
+
+    // Needs +1 to map from array idx to signer idx
+    assert_eq!(blamed_parties, vec![AccountId([bad_idx as u8 + 1; 32])]);
+}
+
+#[tokio::test]
+async fn should_handle_inconsistent_broadcast_sig3() {
+    let mut ctx = helpers::KeygenContext::new();
+    let _ = ctx.generate().await;
+
+    // Party at this idx will send and invalid signature
+
+    // This is the index in the array
+    let bad_idx = 1;
+
+    ctx.use_inconsistent_broadcast_for_sig3(bad_idx, 0);
+    ctx.use_inconsistent_broadcast_for_sig3(bad_idx, 2);
 
     let sign_states = ctx.sign().await;
 

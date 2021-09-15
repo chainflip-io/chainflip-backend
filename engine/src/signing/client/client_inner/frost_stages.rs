@@ -288,10 +288,6 @@ fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwned>(
         }
 
         for (data, count) in value_counts {
-            println!(
-                ">>>>>>>>>>>>>>>>>> count: {}, threshold: {}",
-                count, threshold
-            );
             if count > threshold {
                 let data = bincode::deserialize(&data).unwrap();
                 agreed_on_values.push(data);
@@ -300,8 +296,8 @@ fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwned>(
         }
 
         // If we reach here, we couldn't reach consensus on
-        // values sent from party `i` and we are going to report them
-        blamed_parties.push(i);
+        // values sent from party `idx = i + 1` and we are going to report them
+        blamed_parties.push(i + 1);
     }
 
     if blamed_parties.is_empty() {
@@ -354,5 +350,5 @@ fn check_incorrect_broadcast() {
         vcbs.insert(i + 1, BroadcastVerificationMessage { data: m });
     }
 
-    assert_eq!(verify_broadcasts(&[1, 2, 3, 4], &vcbs), Err(vec![1, 3]));
+    assert_eq!(verify_broadcasts(&[1, 2, 3, 4], &vcbs), Err(vec![2, 4]));
 }
