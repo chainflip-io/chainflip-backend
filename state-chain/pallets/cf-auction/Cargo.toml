@@ -42,7 +42,7 @@ std = [
     'sp-core/std',
     'sp-io/std',
     'log/std',
-    	'frame-benchmarking/std',
+    'frame-benchmarking/std',
 ]
 runtime-benchmarks = [
     'frame-benchmarking',

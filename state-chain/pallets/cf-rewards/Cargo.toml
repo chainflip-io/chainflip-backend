@@ -38,10 +38,4 @@ std = [
 	'pallet-cf-validator/std',
 	'sp-runtime/std',
 	'sp-std/std',
-	'frame-benchmarking/std',
-]
-runtime-benchmarks = [
-    'frame-benchmarking',
-    'frame-support/runtime-benchmarks',
-    'frame-system/runtime-benchmarks',
 ]

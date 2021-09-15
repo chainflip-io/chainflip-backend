@@ -17,7 +17,7 @@ use frame_support::{
 };
 use pallet_cf_flip::{Pallet as Flip, ReserveId, Surplus};
 use sp_runtime::{
-	traits::{Saturating, UniqueSaturatedInto, Zero},
+	traits::{Saturating, Zero},
 	DispatchError,
 };
 use sp_std::{marker::PhantomData, prelude::*};
@@ -26,7 +26,7 @@ use sp_std::{marker::PhantomData, prelude::*};
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_system::{pallet_prelude::*, WeightInfo};
+	use frame_system::pallet_prelude::*;
 
 	pub const VALIDATOR_REWARDS: ReserveId = *b"VALR";
 
