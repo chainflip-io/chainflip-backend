@@ -1,6 +1,6 @@
 use crate as pallet_cf_rewards;
 use cf_traits::StakeTransfer;
-use frame_support::{assert_ok, parameter_types};
+use frame_support::{assert_ok, parameter_types, traits::EnsureOrigin};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -60,11 +60,26 @@ impl system::Config for Test {
 parameter_types! {
 	pub const ExistentialDeposit: u128 = 10;
 }
+pub struct MockEnsureGovernance;
+
+impl EnsureOrigin<Origin> for MockEnsureGovernance {
+	type Success = ();
+
+	fn try_origin(_o: Origin) -> Result<Self::Success, Origin> {
+		Ok(().into())
+	}
+}
+
+parameter_types! {
+	pub const BlocksPerDay: u64 = 14400;
+}
 
 impl pallet_cf_flip::Config for Test {
 	type Event = Event;
 	type Balance = u128;
 	type ExistentialDeposit = ExistentialDeposit;
+	type EnsureGovernance = MockEnsureGovernance;
+	type BlocksPerDay = BlocksPerDay;
 }
 
 impl pallet_cf_rewards::Config for Test {

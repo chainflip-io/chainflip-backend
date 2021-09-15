@@ -14,7 +14,7 @@ mod tests;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_traits::{Chainflip, Witnesser};
+	use cf_traits::Witnesser;
 	use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 	use pallet_cf_staking::{
@@ -105,7 +105,7 @@ pub mod pallet {
 		pub fn witness_keygen_response(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
-			response: KeygenResponse<<T as Chainflip>::AccountId, T::PublicKey>,
+			response: KeygenResponse<T::ValidatorId, T::PublicKey>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = VaultsCall::keygen_response(ceremony_id, response);
@@ -130,10 +130,7 @@ pub mod pallet {
 		pub fn witness_threshold_signature_response(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
-			response: ThresholdSignatureResponse<
-				<T as Chainflip>::AccountId,
-				SchnorrSigTruncPubkey,
-			>,
+			response: ThresholdSignatureResponse<T::ValidatorId, SchnorrSigTruncPubkey>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = VaultsCall::threshold_signature_response(ceremony_id, response);
