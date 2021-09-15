@@ -1,5 +1,6 @@
 use super::*;
 use crate as pallet_cf_reputation;
+use cf_traits::Slashing;
 use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
 use sp_runtime::BuildStorage;
@@ -80,10 +81,10 @@ parameter_types! {
 // Mocking the `Slasher` trait
 pub struct MockSlasher;
 impl Slashing for MockSlasher {
-	type ValidatorId = u64;
+	type AccountId = u64;
 	type BlockNumber = u64;
 
-	fn slash(_validator_id: &Self::ValidatorId, _blocks_offline: &Self::BlockNumber) -> Weight {
+	fn slash(_validator_id: &Self::AccountId, _blocks_offline: Self::BlockNumber) -> Weight {
 		// Count those slashes
 		SLASH_COUNT.with(|count| {
 			let mut c = count.borrow_mut();

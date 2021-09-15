@@ -309,3 +309,13 @@ impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccou
 		.expect("mutating account state")
 	}
 }
+
+/// Slashing a validator
+pub trait Slashing {
+	/// An identifier for our validator
+	type AccountId;
+	/// Block number
+	type BlockNumber;
+	/// Function which implements the slashing logic
+	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber) -> Weight;
+}

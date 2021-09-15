@@ -16,7 +16,8 @@ pub use frame_support::{
 	StorageValue,
 };
 use frame_system::offchain::SendTransactionTypes;
-use pallet_cf_reputation::{ReputationPenalty, ZeroSlasher};
+use pallet_cf_flip::FlipSlasher;
+use pallet_cf_reputation::ReputationPenalty;
 use pallet_grandpa::fg_primitives;
 use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
 use pallet_session::historical as session_historical;
@@ -329,12 +330,15 @@ impl pallet_authorship::Config for Runtime {
 
 parameter_types! {
 	pub const ExistentialDeposit: u128 = 500;
+	pub const BlocksPerDay: u32 = DAYS;
 }
 
 impl pallet_cf_flip::Config for Runtime {
 	type Event = Event;
 	type Balance = FlipBalance;
 	type ExistentialDeposit = ExistentialDeposit;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type BlocksPerDay = BlocksPerDay;
 }
 
 impl pallet_cf_witnesser::Config for Runtime {
@@ -430,7 +434,7 @@ impl pallet_cf_reputation::Config for Runtime {
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type ReputationPointPenalty = ReputationPointPenalty;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
-	type Slasher = ZeroSlasher<Self>;
+	type Slasher = FlipSlasher<Self>;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 }
 

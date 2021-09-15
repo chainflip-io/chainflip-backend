@@ -5,7 +5,7 @@ use crate::{
     eth::utils,
     logging::COMPONENT_KEY,
     mq::{IMQClient, Subject},
-    p2p::ValidatorId,
+    p2p::AccountId,
     settings,
     signing::{
         KeyId, MessageHash, MessageInfo, MultisigEvent, MultisigInstruction, SchnorrSignature,
@@ -48,7 +48,7 @@ struct SetAggKeyWithAggKeyEncoder<MQC: IMQClient> {
     // maps the MessageHash which gets sent to the signer with the data that the MessageHash is a hash of
     messages: HashMap<MessageHash, ParamContainer>,
     // On genesis, where do these validators come from, to allow for the first key update
-    validators: HashMap<KeyId, Vec<ValidatorId>>,
+    validators: HashMap<KeyId, Vec<AccountId>>,
     curr_signing_key_id: Option<KeyId>,
     next_key_id: Option<KeyId>,
     logger: slog::Logger,
