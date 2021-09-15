@@ -3,27 +3,12 @@ use anyhow::Result;
 use async_trait::async_trait;
 use cf_p2p_rpc::{AccountIdBs58, MessageBs58, P2PEvent, P2PRpcClient};
 use futures::{
+    compat::{Future01CompatExt, Stream01CompatExt},
     stream::BoxStream,
     TryStreamExt,
 };
 use jsonrpc_core_client::{transports::ws, RpcError};
 use thiserror::Error;
-
-// This solves the silent failure where if an old style future tokio::spawns() it will cause our tokio runtime to shutdown
-trait CompatFuture : futures::compat::Future01CompatExt + Sized {
-    fn compat(self) -> tokio_compat_02::TokioContext<futures::compat::Compat01As03<Self>> {
-        use futures::compat::Future01CompatExt; // This is a mostly 'simple' type type conversion
-        use tokio_compat_02::FutureExt; // This will gives the future an old style tokio context, that internally uses the newer tokio runtime.
-        FutureExt::compat(Future01CompatExt::compat(self))
-    }
-}
-impl<T : futures::compat::Future01CompatExt> CompatFuture for T {}
-
-/* If a stream internally tokio::spawns it will fail even using Stream01CompatExt::compat(), I don't think we
-have this situation though. There doesn't seem to be an existing piece of code (tokio_compat_02::StreamExt::compat())
-that wraps the stream and gives all its futures a TokioContext, alternatively we could use tokio_compat_02::FutureExt::compat
-manualy on the next() future */
-use futures::compat::Stream01CompatExt;
 
 #[derive(Error, Debug)]
 pub enum RpcClientError {
