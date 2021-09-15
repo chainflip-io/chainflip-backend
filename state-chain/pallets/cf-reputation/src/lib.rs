@@ -54,6 +54,16 @@ use pallet_cf_validator::EpochTransitionHandler;
 use sp_runtime::traits::Zero;
 use sp_std::vec::Vec;
 
+/// Slashing a validator
+pub trait Slashing {
+	/// An identifier for our validator
+	type ValidatorId;
+	/// Block number
+	type BlockNumber;
+	/// Slash this validator based on the number of blocks offline
+	fn slash(validator_id: &Self::ValidatorId, blocks_offline: &Self::BlockNumber) -> Weight;
+}
+
 /// Conditions as judged as offline
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum OfflineCondition {
@@ -76,13 +86,13 @@ pub enum ReportError {
 
 /// Offline conditions are reported on
 pub trait OfflineConditions {
-	type AccountId;
+	type ValidatorId;
 	/// Report the condition for validator
 	/// Returns `Ok(Weight)` else an error if the validator isn't valid
 	fn report(
 		condition: OfflineCondition,
 		penalty: ReputationPoints,
-		validator_id: &Self::AccountId,
+		validator_id: &Self::ValidatorId,
 	) -> Result<Weight, ReportError>;
 }
 
@@ -123,7 +133,7 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// A stable ID for a validator.
-		type AccountId: Member + Parameter + From<<Self as frame_system::Config>::AccountId>;
+		type ValidatorId: Member + Parameter + From<<Self as frame_system::Config>::AccountId>;
 
 		// An amount of a bid
 		type Amount: Copy;
@@ -142,15 +152,12 @@ pub mod pallet {
 
 		/// When we have to, we slash
 		type Slasher: Slashing<
-			AccountId = <Self as pallet::Config>::AccountId,
+			AccountId = Self::ValidatorId,
 			BlockNumber = <Self as frame_system::Config>::BlockNumber,
 		>;
 
 		// Information about the current epoch.
-		type EpochInfo: EpochInfo<
-			AccountId = <Self as pallet::Config>::AccountId,
-			Amount = Self::Amount,
-		>;
+		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -178,7 +185,7 @@ pub mod pallet {
 	///
 	#[pallet::storage]
 	pub(super) type AwaitingHeartbeats<T: Config> =
-		StorageMap<_, Blake2_128Concat, <T as pallet::Config>::AccountId, bool, OptionQuery>;
+		StorageMap<_, Blake2_128Concat, T::ValidatorId, bool, OptionQuery>;
 
 	/// A map tracking our validators.  We record the number of blocks they have been alive
 	/// according to the heartbeats submitted.  We are assuming that during a `HeartbeatInterval`
@@ -187,23 +194,14 @@ pub mod pallet {
 	///
 	#[pallet::storage]
 	#[pallet::getter(fn reputation)]
-	pub type Reputations<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		<T as pallet::Config>::AccountId,
-		ReputationOf<T>,
-		ValueQuery,
-	>;
+	pub type Reputations<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::ValidatorId, ReputationOf<T>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// An offline condition has been met
-		OfflineConditionPenalty(
-			<T as pallet::Config>::AccountId,
-			OfflineCondition,
-			ReputationPoints,
-		),
+		OfflineConditionPenalty(T::ValidatorId, OfflineCondition, ReputationPoints),
 		/// The accrual rate for our reputation poins has been updated \[points, online credits\]
 		AccrualRateUpdated(ReputationPoints, OnlineCreditsFor<T>),
 	}
@@ -229,7 +227,7 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub(super) fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			// for the validator
-			let validator_id: <T as pallet::Config>::AccountId = ensure_signed(origin)?.into();
+			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
 			// Ensure we haven't had a heartbeat for this interval yet for this validator
 			ensure!(
 				AwaitingHeartbeats::<T>::get(&validator_id).unwrap_or(false),
@@ -343,10 +341,10 @@ pub mod pallet {
 	/// expected list of validators.
 	///
 	impl<T: Config> EpochTransitionHandler for Pallet<T> {
-		type AccountId = <T as pallet::Config>::AccountId;
+		type ValidatorId = T::ValidatorId;
 		type Amount = T::Amount;
 
-		fn on_new_epoch(new_validators: &Vec<Self::AccountId>, _new_bond: Self::Amount) {
+		fn on_new_epoch(new_validators: &Vec<Self::ValidatorId>, _new_bond: Self::Amount) {
 			// Clear our expectations
 			AwaitingHeartbeats::<T>::remove_all();
 			// Set the new list of validators we expect a heartbeat from
@@ -359,12 +357,12 @@ pub mod pallet {
 	/// Implementation of `OfflineConditions` reporting on `OfflineCondition` with specified number
 	/// of reputation points
 	impl<T: Config> OfflineConditions for Pallet<T> {
-		type AccountId = <T as pallet::Config>::AccountId;
+		type ValidatorId = T::ValidatorId;
 
 		fn report(
 			condition: OfflineCondition,
 			penalty: ReputationPoints,
-			validator_id: &Self::AccountId,
+			validator_id: &Self::ValidatorId,
 		) -> Result<Weight, ReportError> {
 			// Confirm validator is present
 			ensure!(
@@ -392,10 +390,7 @@ pub mod pallet {
 
 		/// Update reputation for validator.  Points are clamped to `ReputationPointFloorAndCeiling`
 		///
-		fn update_reputation(
-			validator_id: &<T as pallet::Config>::AccountId,
-			points: ReputationPoints,
-		) -> Weight {
+		fn update_reputation(validator_id: &T::ValidatorId, points: ReputationPoints) -> Weight {
 			Reputations::<T>::mutate(
 				validator_id,
 				|Reputation {
@@ -470,5 +465,16 @@ pub mod pallet {
 
 			weight
 		}
+	}
+}
+
+pub struct ZeroSlasher<T: Config>(PhantomData<T>);
+/// An implementation of `Slashing` which kindly doesn't slash
+impl<T: Config> Slashing for ZeroSlasher<T> {
+	type ValidatorId = T::ValidatorId;
+	type BlockNumber = T::BlockNumber;
+
+	fn slash(_validator_id: &Self::ValidatorId, _blocks_offline: &Self::BlockNumber) -> Weight {
+		0
 	}
 }
