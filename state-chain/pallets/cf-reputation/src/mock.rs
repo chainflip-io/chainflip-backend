@@ -84,7 +84,7 @@ impl Slashing for MockSlasher {
 	type AccountId = u64;
 	type BlockNumber = u64;
 
-	fn slash(_account_id: &Self::AccountId, _blocks_offline: Self::BlockNumber) -> Weight {
+	fn slash(_validator_id: &Self::AccountId, _blocks_offline: Self::BlockNumber) -> Weight {
 		// Count those slashes
 		SLASH_COUNT.with(|count| {
 			let mut c = count.borrow_mut();
@@ -99,7 +99,7 @@ pub const BOB: <Test as frame_system::Config>::AccountId = 456u64;
 
 impl Config for Test {
 	type Event = Event;
-	type AccountId = u64;
+	type ValidatorId = u64;
 	type Amount = u128;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type ReputationPointPenalty = ReputationPointPenalty;

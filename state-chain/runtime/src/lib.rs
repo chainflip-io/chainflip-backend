@@ -144,7 +144,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
 	type AuctionIndex = u64;
 	type Registrar = Session;
-	type AccountId = AccountId;
+	type ValidatorId = AccountId;
 	type MinAuctionSize = MinAuctionSize;
 	type Handler = Vaults;
 	type WeightInfo = weights::pallet_cf_auction::WeightInfo<Runtime>;
@@ -345,7 +345,7 @@ impl pallet_cf_witnesser::Config for Runtime {
 	type Origin = Origin;
 	type Call = Call;
 	type Epoch = EpochIndex;
-	type AccountId = <Self as frame_system::Config>::AccountId;
+	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 	type Amount = FlipBalance;
 }
@@ -416,7 +416,7 @@ impl pallet_cf_witnesser_api::Config for Runtime {
 
 impl Chainflip for Runtime {
 	type Amount = FlipBalance;
-	type AccountId = <Self as frame_system::Config>::AccountId;
+	type ValidatorId = <Self as frame_system::Config>::AccountId;
 }
 
 parameter_types! {
@@ -427,7 +427,7 @@ parameter_types! {
 
 impl pallet_cf_reputation::Config for Runtime {
 	type Event = Event;
-	type AccountId = <Self as frame_system::Config>::AccountId;
+	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type Amount = FlipBalance;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type ReputationPointPenalty = ReputationPointPenalty;

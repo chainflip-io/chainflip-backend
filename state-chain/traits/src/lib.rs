@@ -10,7 +10,6 @@ use frame_support::{
 	traits::{Imbalance, SignedImbalance},
 	Parameter,
 };
-use sp_runtime::traits::UniqueSaturatedFrom;
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
 
@@ -19,7 +18,7 @@ pub trait Chainflip {
 	/// An amount for a bid
 	type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 	/// An identity for a validator
-	type AccountId: Member + Parameter;
+	type ValidatorId: Member + Parameter;
 }
 
 /// A trait abstracting the functionality of the witnesser
@@ -41,21 +40,21 @@ pub trait Witnesser {
 
 pub trait EpochInfo {
 	/// The id type used for the validators.
-	type AccountId;
+	type ValidatorId;
 	/// An amount
 	type Amount;
 	/// The index of an epoch
 	type EpochIndex;
 
 	/// The current set of validators
-	fn current_validators() -> Vec<Self::AccountId>;
+	fn current_validators() -> Vec<Self::ValidatorId>;
 
 	/// Checks if the account is currently a validator.
-	fn is_validator(account: &Self::AccountId) -> bool;
+	fn is_validator(account: &Self::ValidatorId) -> bool;
 
 	/// If we are in auction phase then the proposed set to validate once the auction is
 	/// confirmed else an empty vector
-	fn next_validators() -> Vec<Self::AccountId>;
+	fn next_validators() -> Vec<Self::ValidatorId>;
 
 	/// The amount to be used as bond, this is the minimum stake needed to get into the
 	/// candidate validator set
@@ -71,24 +70,24 @@ pub trait EpochInfo {
 /// The phase of an Auction. At the start we are waiting on bidders, we then run an auction and
 /// finally it is completed
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum AuctionPhase<AccountId, Amount> {
+pub enum AuctionPhase<ValidatorId, Amount> {
 	// Waiting for bids, we store the last set of winners and min bid required
-	WaitingForBids(Vec<AccountId>, Amount),
+	WaitingForBids(Vec<ValidatorId>, Amount),
 	// Bids are now taken and validated
-	BidsTaken(Vec<Bid<AccountId, Amount>>),
+	BidsTaken(Vec<Bid<ValidatorId, Amount>>),
 	// We have ran the auction and have a set of winners with min bid.  This waits on confirmation
 	// via the trait `AuctionConfirmation`
-	WinnersSelected(Vec<AccountId>, Amount),
+	WinnersSelected(Vec<ValidatorId>, Amount),
 }
 
-impl<AccountId, Amount: Default> Default for AuctionPhase<AccountId, Amount> {
+impl<ValidatorId, Amount: Default> Default for AuctionPhase<ValidatorId, Amount> {
 	fn default() -> Self {
 		AuctionPhase::WaitingForBids(Vec::new(), Amount::default())
 	}
 }
 
 /// A bid represented by a validator and the amount they wish to bid
-pub type Bid<AccountId, Amount> = (AccountId, Amount);
+pub type Bid<ValidatorId, Amount> = (ValidatorId, Amount);
 /// A range of min, max for our winning set
 pub type AuctionRange = (u32, u32);
 
@@ -101,7 +100,7 @@ pub type AuctionRange = (u32, u32);
 /// on.  An confirmation is looked to before completing the auction with the `AuctionConfirmation`
 /// trait.
 pub trait Auction {
-	type AccountId;
+	type ValidatorId;
 	type Amount;
 	type BidderProvider;
 
@@ -110,30 +109,30 @@ pub trait Auction {
 	/// Set the auction range
 	fn set_auction_range(range: AuctionRange) -> Result<AuctionRange, AuctionError>;
 	/// The current phase we find ourselves in
-	fn phase() -> AuctionPhase<Self::AccountId, Self::Amount>;
+	fn phase() -> AuctionPhase<Self::ValidatorId, Self::Amount>;
 	/// Are we in an auction?
 	fn waiting_on_bids() -> bool;
 	/// Move the process forward by one step, returns the phase completed or error
-	fn process() -> Result<AuctionPhase<Self::AccountId, Self::Amount>, AuctionError>;
+	fn process() -> Result<AuctionPhase<Self::ValidatorId, Self::Amount>, AuctionError>;
 }
 
 pub trait VaultRotationHandler {
-	type AccountId;
+	type ValidatorId;
 	/// Abort requested after failed vault rotation
 	fn abort();
 	// Penalise validators during a vault rotation
-	fn penalise(bad_validators: Vec<Self::AccountId>);
+	fn penalise(bad_validators: Vec<Self::ValidatorId>);
 }
 
 /// Errors occurring during a rotation
 #[derive(RuntimeDebug, Encode, Decode, PartialEq, Clone)]
-pub enum RotationError<AccountId> {
+pub enum RotationError<ValidatorId> {
 	/// An invalid request index
 	InvalidRequestIndex,
 	/// Empty validator set provided
 	EmptyValidatorSet,
 	/// A set of badly acting validators
-	BadValidators(Vec<AccountId>),
+	BadValidators(Vec<ValidatorId>),
 	/// The key generation response failed
 	KeyResponseFailed,
 	/// Failed to construct a valid chain specific payload for rotation
@@ -148,15 +147,15 @@ pub enum RotationError<AccountId> {
 
 /// Rotating vaults
 pub trait VaultRotation {
-	type AccountId;
+	type ValidatorId;
 	/// Start a vault rotation with the following `candidates`
 	fn start_vault_rotation(
-		candidates: Vec<Self::AccountId>,
-	) -> Result<(), RotationError<Self::AccountId>>;
+		candidates: Vec<Self::ValidatorId>,
+	) -> Result<(), RotationError<Self::ValidatorId>>;
 
 	/// In order for the validators to be rotated we are waiting on a confirmation that the vaults
 	/// have been rotated.
-	fn finalize_rotation() -> Result<(), RotationError<Self::AccountId>>;
+	fn finalize_rotation() -> Result<(), RotationError<Self::ValidatorId>>;
 }
 
 /// An error has occurred during an auction
@@ -171,9 +170,9 @@ pub enum AuctionError {
 
 /// Providing bidders for our auction
 pub trait BidderProvider {
-	type AccountId;
+	type ValidatorId;
 	type Amount;
-	fn get_bidders() -> Vec<(Self::AccountId, Self::Amount)>;
+	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)>;
 }
 
 pub trait StakeTransfer {
