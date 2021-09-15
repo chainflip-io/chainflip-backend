@@ -113,7 +113,7 @@ impl Runtime for StateChainRuntime {
         event_type_registry.register_type_size::<u64>("T::EpochIndex");
         event_type_registry.register_type_size::<u32>("T::BlockNumber");
         event_type_registry.register_type_size::<u32>("BlockNumberFor<T>");
-        event_type_registry.register_type_size::<AccountId32>("T::AccountId");
+        event_type_registry.register_type_size::<AccountId32>("T::ValidatorId");
         event_type_registry.register_type_size::<AccountId32>("<T as Chainflip>::AccountId");
         event_type_registry.register_type_size::<AccountId32>("<T as Config>::AccountId");
         event_type_registry.register_type_size::<AccountId32>("<T as pallet::Config>::AccountId");
@@ -133,12 +133,11 @@ impl Runtime for StateChainRuntime {
 
         event_type_registry.register_type_size::<CeremonyId>("CeremonyId");
         event_type_registry.register_type_size::<OfflineCondition>("OfflineCondition");
-        event_type_registry.register_type_size::<KeygenRequest<AccountId32>>(
-            "KeygenRequest<<T as Chainflip>::AccountId>",
-        );
+        event_type_registry
+            .register_type_size::<KeygenRequest<AccountId32>>("KeygenRequest<T::ValidatorId>");
         event_type_registry.register_type_size::<Vec<u8>>("T::PublicKey");
         event_type_registry.register_type_size::<ThresholdSignatureRequest<Vec<u8>, AccountId32>>(
-            "ThresholdSignatureRequest<T::PublicKey,<T as Chainflip>::AccountId>",
+            "ThresholdSignatureRequest<T::PublicKey, T::ValidatorId>",
         );
         event_type_registry.register_type_size::<VaultRotationRequest>("VaultRotationRequest");
         event_type_registry.register_type_size::<u32>("ProposalId");
