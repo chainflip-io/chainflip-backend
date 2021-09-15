@@ -178,12 +178,15 @@ pub mod pallet {
 		fn build(&self) {
 			AuctionSizeRange::<T>::set(self.auction_size_range);
 			// Run through an auction
-			if Pallet::<T>::process().and(Pallet::<T>::process()).is_ok() {
-				if let Err(err) = Pallet::<T>::process() {
-					panic!("Failed to confirm auction: {:?}", err);
+			match Pallet::<T>::process().and(Pallet::<T>::process()) {
+				Ok(_) => {
+					if let Err(err) = Pallet::<T>::process() {
+						panic!("Failed to confirm auction: {:?}", err);
+					}
 				}
-			} else {
-				panic!("Failed selecting winners in auction");
+				Err(err) => {
+					panic!("Failed selecting winners in auction: {:?}", err);
+				}
 			}
 		}
 	}
@@ -202,11 +205,7 @@ impl<T: Config> Auction for Pallet<T> {
 	fn set_auction_range(range: AuctionRange) -> Result<AuctionRange, AuctionError> {
 		let (low, high) = range;
 
-		if low == high
-			|| low < T::MinAuctionSize::get()
-			|| high < T::MinAuctionSize::get()
-			|| high < low
-		{
+		if low >= high || low < T::MinAuctionSize::get() {
 			return Err(AuctionError::InvalidRange);
 		}
 

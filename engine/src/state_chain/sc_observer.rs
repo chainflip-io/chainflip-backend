@@ -279,6 +279,24 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    #[ignore = "Start the state chain and then run this to see what types are missing from the register_type_sizes in runtime.rs"]
+    async fn test_types() {
+        let settings = settings::test_utils::new_test_settings().unwrap();
+        let subxt_client = ClientBuilder::<StateChainRuntime>::new()
+            .set_url(&settings.state_chain.ws_endpoint)
+            .build()
+            .await
+            .expect("Should create subxt client");
+        EventSubscription::new(
+            subxt_client
+                .subscribe_finalized_events()
+                .await
+                .expect("Could not subscribe to state chain events"),
+            subxt_client.events_decoder(),
+        );
+    }
+
+    #[tokio::test]
     #[ignore = "runs forever, useful for testing without having to start the whole CFE"]
     async fn run_the_sc_observer() {
         let settings = settings::test_utils::new_test_settings().unwrap();

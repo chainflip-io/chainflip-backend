@@ -458,7 +458,6 @@ construct_runtime!(
 		Historical: session_historical::{Module},
 		Witnesser: pallet_cf_witnesser::{Module, Call, Event<T>, Origin},
 		WitnesserApi: pallet_cf_witnesser_api::{Module, Call},
-		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
 		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
 		Aura: pallet_aura::{Module, Config<T>},
 		Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
@@ -467,6 +466,7 @@ construct_runtime!(
 		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>, Origin},
 		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>},
 		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
+		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
 	}
 );
 
