@@ -30,7 +30,6 @@ async fn main() {
         .run()
         .await;
 
-    slog::info!(root_logger, "health monitor");
     let subxt_client = ClientBuilder::<StateChainRuntime>::new()
         .set_url(&settings.state_chain.ws_endpoint)
         .build()
