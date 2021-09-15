@@ -102,7 +102,7 @@ pub mod pallet {
 		pub fn witness_keygen_response(
 			origin: OriginFor<T>,
 			request_id: RequestIndex,
-			response: KeygenResponse<<T as Chainflip>::AccountId, T::PublicKey>,
+			response: KeygenResponse<T::ValidatorId, T::PublicKey>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = VaultsCall::keygen_response(request_id, response);
@@ -127,7 +127,7 @@ pub mod pallet {
 		pub fn witness_eth_signing_tx_response(
 			origin: OriginFor<T>,
 			request_id: RequestIndex,
-			response: EthSigningTxResponse<<T as Chainflip>::AccountId>,
+			response: EthSigningTxResponse<T::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let call = VaultsCall::eth_signing_tx_response(request_id, response);

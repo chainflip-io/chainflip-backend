@@ -18,7 +18,6 @@ impl Chainflip for Runtime {
 	type Call = Call;
 	type Amount = FlipBalance;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
-	type AccountId = <Self as frame_system::Config>::AccountId;
 	type KeyId = Vec<u8>;
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 }
@@ -27,10 +26,10 @@ pub struct ChainflipEpochTransitions;
 
 /// Trigger emissions on epoch transitions.
 impl EpochTransitionHandler for ChainflipEpochTransitions {
-	type AccountId = AccountId;
+	type ValidatorId = AccountId;
 	type Amount = FlipBalance;
 
-	fn on_new_epoch(new_validators: &Vec<Self::AccountId>, new_bond: Self::Amount) {
+	fn on_new_epoch(new_validators: &Vec<Self::ValidatorId>, new_bond: Self::Amount) {
 		// Process any outstanding emissions.
 		<Emissions as EmissionsTrigger>::trigger_emissions();
 		// Rollover the rewards.

@@ -21,7 +21,7 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 pub type Amount = u64;
-pub type AccountId = u64;
+pub type ValidatorId = u64;
 
 impl WeightInfo for () {
 	fn set_blocks_for_epoch() -> u64 {
@@ -41,7 +41,7 @@ thread_local! {
 	pub static CANDIDATE_IDX: RefCell<u64> = RefCell::new(0);
 	pub static CURRENT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 	pub static MIN_BID: RefCell<u64> = RefCell::new(0);
-	pub static PHASE: RefCell<AuctionPhase<AccountId, Amount>> =  RefCell::new(AuctionPhase::default());
+	pub static PHASE: RefCell<AuctionPhase<ValidatorId, Amount>> =  RefCell::new(AuctionPhase::default());
 	pub static BIDDERS: RefCell<Vec<(u64, u64)>> = RefCell::new(vec![]);
 	pub static WINNERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 	pub static CONFIRM: RefCell<bool> = RefCell::new(false);
@@ -102,7 +102,7 @@ impl pallet_session::Config for Test {
 	type ShouldEndSession = ValidatorPallet;
 	type SessionManager = ValidatorPallet;
 	type SessionHandler = ValidatorPallet;
-	type ValidatorId = AccountId;
+	type ValidatorId = ValidatorId;
 	type ValidatorIdOf = ConvertInto;
 	type Keys = MockSessionKeys;
 	type Event = Event;
@@ -118,16 +118,16 @@ parameter_types! {
 impl pallet_cf_auction::Config for Test {
 	type Event = Event;
 	type Amount = Amount;
-	type AccountId = AccountId;
+	type ValidatorId = ValidatorId;
 	type BidderProvider = TestBidderProvider;
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
-	type Handler = MockHandler<AccountId = AccountId, Amount = Amount>;
+	type Handler = MockHandler<ValidatorId = ValidatorId, Amount = Amount>;
 }
 
-impl ValidatorRegistration<AccountId> for Test {
-	fn is_registered(_id: &AccountId) -> bool {
+impl ValidatorRegistration<ValidatorId> for Test {
+	fn is_registered(_id: &ValidatorId) -> bool {
 		true
 	}
 }
@@ -135,10 +135,10 @@ impl ValidatorRegistration<AccountId> for Test {
 pub struct TestBidderProvider;
 
 impl BidderProvider for TestBidderProvider {
-	type AccountId = AccountId;
+	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 
-	fn get_bidders() -> Vec<(Self::AccountId, Self::Amount)> {
+	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
 		let idx = CANDIDATE_IDX.with(|idx| {
 			let new_idx = *idx.borrow_mut() + 1;
 			*idx.borrow_mut() = new_idx;
@@ -152,9 +152,9 @@ impl BidderProvider for TestBidderProvider {
 pub struct TestEpochTransitionHandler;
 
 impl EpochTransitionHandler for TestEpochTransitionHandler {
-	type AccountId = AccountId;
+	type ValidatorId = ValidatorId;
 	type Amount = Amount;
-	fn on_new_epoch(new_validators: &Vec<Self::AccountId>, min_bid: Self::Amount) {
+	fn on_new_epoch(new_validators: &Vec<Self::ValidatorId>, min_bid: Self::Amount) {
 		CURRENT_VALIDATORS.with(|l| *l.borrow_mut() = new_validators.clone());
 		MIN_BID.with(|l| *l.borrow_mut() = min_bid);
 	}
