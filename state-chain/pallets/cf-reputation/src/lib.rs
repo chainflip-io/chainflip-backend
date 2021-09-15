@@ -54,16 +54,6 @@ use pallet_cf_validator::EpochTransitionHandler;
 use sp_runtime::traits::Zero;
 use sp_std::vec::Vec;
 
-/// Slashing a validator
-pub trait Slashing {
-	/// An identifier for our validator
-	type ValidatorId;
-	/// Block number
-	type BlockNumber;
-	/// Slash this validator based on the number of blocks offline
-	fn slash(validator_id: &Self::ValidatorId, blocks_offline: &Self::BlockNumber) -> Weight;
-}
-
 /// Conditions as judged as offline
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum OfflineCondition {
@@ -465,16 +455,5 @@ pub mod pallet {
 
 			weight
 		}
-	}
-}
-
-pub struct ZeroSlasher<T: Config>(PhantomData<T>);
-/// An implementation of `Slashing` which kindly doesn't slash
-impl<T: Config> Slashing for ZeroSlasher<T> {
-	type ValidatorId = T::ValidatorId;
-	type BlockNumber = T::BlockNumber;
-
-	fn slash(_validator_id: &Self::ValidatorId, _blocks_offline: &Self::BlockNumber) -> Weight {
-		0
 	}
 }

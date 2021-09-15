@@ -10,7 +10,6 @@ use frame_support::{
 	traits::{Imbalance, SignedImbalance},
 	Parameter,
 };
-use sp_runtime::traits::UniqueSaturatedFrom;
 use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
 
