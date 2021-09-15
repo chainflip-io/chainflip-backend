@@ -71,10 +71,11 @@ workflows:
     jobs:
       - build-docker-image:
           name: build-rust-base
+          extra_build_args: "--build-arg NIGHTLY=nightly-2021-03-24"
           image: chainflip-io/chainflip-backend/rust-base
-          tag: latest
+          tag: <<pipeline.git.revision>>
           dockerfile: Dockerfile.rust-base
-          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:<<pipeline.git.base_revision>>
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
