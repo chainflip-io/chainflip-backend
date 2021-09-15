@@ -5,7 +5,7 @@ use crate as pallet_cf_witness_api;
 use cf_traits::{
 	impl_mock_ensure_witnessed_for_origin, impl_mock_stake_transfer, impl_mock_staker_handler,
 	impl_mock_witnesser_for_account_and_call_types, Chainflip, Nonce, NonceIdentifier,
-	NonceProvider, VaultRotationHandler, StakerHandler
+	NonceProvider, StakerHandler, VaultRotationHandler,
 };
 use frame_support::parameter_types;
 use frame_system as system;
