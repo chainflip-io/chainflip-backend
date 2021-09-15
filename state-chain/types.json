@@ -3,7 +3,7 @@
     "nonce": "Index",
     "consumers": "RefCount",
     "providers": "RefCount",
-    "data": "()"
+    "data": "ChainflipAccountData"
   },
   "Address": "MultiAddress",
   "Amount": "TokenAmount",
@@ -19,16 +19,26 @@
     "_enum": {
       "WaitingForBids": "(Vec<ValidatorId>, Amount)",
       "BidsTaken": "(Vec<(ValidatorId, Amount)>)",
-      "WinnersSelected": "(Vec<ValidatorId>, Amount)"
+      "ValidatorsSelected": "(Vec<ValidatorId>, Amount)"
     }
   },
-  "AuctionRange": "(u32,u32)",
+  "ActiveValidatorRange": "(u32,u32)",
   "CallHash": "[u8;32]",
   "ChainParams": {
     "_enum": {
       "Ethereum": "(Vec<u8>)",
       "Other": "(Vec<u8>)"
     }
+  },
+  "ChainflipAccountData": {
+    "state": "ChainflipAccountState"
+  },
+  "ChainflipAccountState": {
+    "_enum": [
+      "Passive",
+      "Backup",
+      "Validator"
+    ]
   },
   "ClaimDetailsFor": {
     "amount": "FlipBalance",
