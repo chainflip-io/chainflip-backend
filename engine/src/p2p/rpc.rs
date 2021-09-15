@@ -28,6 +28,10 @@ pub enum RpcClientError {
     SubscriptionError(RpcError),
 }
 
+/////////////////////////////////////
+/// This code was copied from jsonrpc_client_transports 15.1.0 src/transports/ws.rs
+/// The only change was to apply compat() to the rpc_client future before passing it to the tokio::spawn() call
+
 /// Connect to a JSON-RPC websocket server.
 ///
 /// Uses an unbuffered channel to queue outgoing rpc messages.
@@ -143,6 +147,8 @@ where
         }
     }
 }
+
+///////////////////////////
 
 pub async fn connect(url: &url::Url, validator_id: AccountId) -> Result<P2PRpcClient> {
     let client = inner_connect::<P2PRpcClient>(url)
