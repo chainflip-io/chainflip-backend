@@ -71,23 +71,20 @@ pub mod pallet {
 		/// An amount for a bid
 		type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 		/// An identity for a validator
-		type AccountId: Member + Parameter;
+		type ValidatorId: Member + Parameter;
 		/// Providing bidders
-		type BidderProvider: BidderProvider<
-			AccountId = <Self as pallet::Config>::AccountId,
-			Amount = Self::Amount,
-		>;
+		type BidderProvider: BidderProvider<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 		/// To confirm we have a session key registered for a validator
-		type Registrar: ValidatorRegistration<<Self as pallet::Config>::AccountId>;
+		type Registrar: ValidatorRegistration<Self::ValidatorId>;
 		/// An index for the current auction
 		type AuctionIndex: Member + Parameter + Default + Add + One + Copy;
 		/// Minimum amount of bidders
 		#[pallet::constant]
 		type MinAuctionSize: Get<u32>;
 		/// The lifecycle of our auction
-		type Handler: VaultRotator<AccountId = <Self as pallet::Config>::AccountId>;
+		type Handler: VaultRotator<ValidatorId = Self::ValidatorId>;
 		/// An online validator
-		type Online: Online<AccountId = <Self as pallet::Config>::AccountId>;
+		type Online: Online<ValidatorId = Self::ValidatorId>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -98,7 +95,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn current_phase)]
 	pub(super) type CurrentPhase<T: Config> =
-		StorageValue<_, AuctionPhase<<T as pallet::Config>::AccountId, T::Amount>, ValueQuery>;
+		StorageValue<_, AuctionPhase<T::ValidatorId, T::Amount>, ValueQuery>;
 
 	/// Size range for number of bidders in auction (min, max)
 	#[pallet::storage]
@@ -113,8 +110,7 @@ pub mod pallet {
 	/// The set of bad validators
 	#[pallet::storage]
 	#[pallet::getter(fn bad_validators)]
-	pub(super) type BadValidators<T: Config> =
-		StorageValue<_, Vec<<T as pallet::Config>::AccountId>, ValueQuery>;
+	pub(super) type BadValidators<T: Config> = StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -122,7 +118,7 @@ pub mod pallet {
 		/// An auction phase has started \[auction_index\]
 		AuctionStarted(T::AuctionIndex),
 		/// An auction has a set of winners \[auction_index, winners\]
-		AuctionCompleted(T::AuctionIndex, Vec<<T as pallet::Config>::AccountId>),
+		AuctionCompleted(T::AuctionIndex, Vec<T::ValidatorId>),
 		/// The auction has been confirmed off-chain \[auction_index\]
 		AuctionConfirmed(T::AuctionIndex),
 		/// Awaiting bidders for the auction
@@ -197,7 +193,7 @@ pub mod pallet {
 }
 
 impl<T: Config> Auction for Pallet<T> {
-	type AccountId = <T as pallet::Config>::AccountId;
+	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
 	type BidderProvider = T::BidderProvider;
 
@@ -222,7 +218,7 @@ impl<T: Config> Auction for Pallet<T> {
 		Ok(old)
 	}
 
-	fn phase() -> AuctionPhase<Self::AccountId, Self::Amount> {
+	fn phase() -> AuctionPhase<Self::ValidatorId, Self::Amount> {
 		<CurrentPhase<T>>::get()
 	}
 
@@ -234,7 +230,7 @@ impl<T: Config> Auction for Pallet<T> {
 	///
 	/// At each phase we assess the bidders based on a fixed set of criteria which results
 	/// in us arriving at a winning list and a bond set for this auction
-	fn process() -> Result<AuctionPhase<Self::AccountId, Self::Amount>, AuctionError> {
+	fn process() -> Result<AuctionPhase<Self::ValidatorId, Self::Amount>, AuctionError> {
 		return match <CurrentPhase<T>>::get() {
 			// Run some basic rules on what we consider as valid bidders
 			// At the moment this includes checking that their bid is more than 0, which
@@ -279,7 +275,7 @@ impl<T: Config> Auction for Pallet<T> {
 					let bidders = bidders.get(0..max_size as usize);
 					if let Some(bidders) = bidders {
 						if let Some((_, min_bid)) = bidders.last() {
-							let winners: Vec<Self::AccountId> =
+							let winners: Vec<T::ValidatorId> =
 								bidders.iter().map(|i| i.0.clone()).collect();
 							let phase = AuctionPhase::WinnersSelected(winners.clone(), *min_bid);
 							<CurrentPhase<T>>::put(phase.clone());
@@ -327,14 +323,14 @@ impl<T: Config> Auction for Pallet<T> {
 }
 
 impl<T: Config> VaultRotationHandler for Pallet<T> {
-	type AccountId = <T as pallet::Config>::AccountId;
+	type ValidatorId = T::ValidatorId;
 
 	fn abort() {
 		<CurrentPhase<T>>::put(AuctionPhase::default());
 		Self::deposit_event(Event::AuctionAborted(<CurrentAuctionIndex<T>>::get()));
 	}
 
-	fn penalise(bad_validators: Vec<Self::AccountId>) {
+	fn penalise(bad_validators: Vec<Self::ValidatorId>) {
 		BadValidators::<T>::set(bad_validators);
 	}
 }

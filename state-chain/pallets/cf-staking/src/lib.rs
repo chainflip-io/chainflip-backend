@@ -132,7 +132,7 @@ pub mod pallet {
 
 		/// Information about the current epoch.
 		type EpochInfo: EpochInfo<
-			AccountId = <Self as frame_system::Config>::AccountId,
+			ValidatorId = <Self as frame_system::Config>::AccountId,
 			Amount = FlipBalance<Self>,
 		>;
 
@@ -787,12 +787,10 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> BidderProvider for Pallet<T> {
-	type AccountId = T::AccountId;
+	type ValidatorId = T::AccountId;
 	type Amount = T::Balance;
 
-	/// A bidder is a staker who is both eligible and willing (i.e. not retired)
-	/// to participate in the next auction
-	fn get_bidders() -> Vec<(Self::AccountId, Self::Amount)> {
+	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
 		AccountRetired::<T>::iter()
 			.filter_map(|(acct, retired)| {
 				if retired {
