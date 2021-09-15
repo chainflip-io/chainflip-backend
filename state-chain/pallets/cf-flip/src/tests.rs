@@ -197,6 +197,21 @@ fn stake_transfers() {
 	});
 }
 
+#[test]
+fn update_bonds() {
+	new_test_ext().execute_with(|| {
+		<Flip as StakeTransfer>::update_validator_bonds(&vec![ALICE, BOB], 20);
+		assert_eq!(FlipAccount::<Test>::get(ALICE).validator_bond, 20);
+		assert_eq!(FlipAccount::<Test>::get(BOB).validator_bond, 20);
+
+		<Flip as StakeTransfer>::update_validator_bonds(&vec![BOB], 10);
+		assert_eq!(FlipAccount::<Test>::get(ALICE).validator_bond, 0);
+		assert_eq!(FlipAccount::<Test>::get(BOB).validator_bond, 10);
+
+		check_balance_integrity();
+	});
+}
+
 #[cfg(test)]
 mod test_issuance {
 	use super::*;
