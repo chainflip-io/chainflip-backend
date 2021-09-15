@@ -234,6 +234,20 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
+	/// Sets the validator bond for all new_validator to the new_bond and
+	/// the bond for all old validators to zero.
+	pub fn update_validator_bonds(new_validators: &Vec<T::AccountId>, new_bond: T::Balance) {
+		Account::<T>::iter().for_each(|validator| {
+			// Get the current validator AccountId
+			let validator = &validator.0;
+			if new_validators.contains(validator) {
+				Self::set_validator_bond(validator, new_bond);
+			} else {
+				Self::set_validator_bond(validator, T::Balance::zero());
+			}
+		});
+	}
+
 	/// Slashable funds for an account.
 	pub fn slashable_funds(account_id: &T::AccountId) -> T::Balance {
 		Account::<T>::get(account_id)
