@@ -78,6 +78,9 @@ pub mod pallet {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
+		/// Implementation of EnsureOrigin trait for governance
+		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+
 		/// The balance of an account.
 		type Balance: Parameter
 			+ Member
@@ -90,6 +93,10 @@ pub mod pallet {
 		/// The minimum amount required to keep an account open.
 		#[pallet::constant]
 		type ExistentialDeposit: Get<Self::Balance>;
+
+		/// Blocks per day.
+		#[pallet::constant]
+		type BlocksPerDay: Get<Self::BlockNumber>;
 	}
 
 	#[pallet::pallet]
@@ -111,6 +118,11 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn total_issuance)]
 	pub type TotalIssuance<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
+
+	/// The slashing rate in percent - slash per day = n % of MBA.
+	#[pallet::storage]
+	#[pallet::getter(fn slashing_rate)]
+	pub type SlashingRate<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
 	/// The number of tokens currently off-chain.
 	#[pallet::storage]
@@ -146,7 +158,17 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		// No external calls for this pallet.
+		#[pallet::weight(10_000)]
+		pub fn set_slashing_rate(
+			origin: OriginFor<T>,
+			slashing_rate: T::Balance,
+		) -> DispatchResultWithPostInfo {
+			// Ensure the extrinsic was executed by the governance
+			T::EnsureGovernance::ensure_origin(origin)?;
+			// Set the slashing rate
+			<SlashingRate<T>>::set(slashing_rate);
+			Ok(().into())
+		}
 	}
 
 	#[pallet::genesis_config]

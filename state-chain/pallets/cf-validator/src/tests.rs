@@ -14,7 +14,7 @@ mod test {
 			.event
 	}
 
-	fn assert_winners() -> Vec<AccountId> {
+	fn assert_winners() -> Vec<ValidatorId> {
 		assert_matches!(AuctionPallet::phase(), AuctionPhase::WinnersSelected(winners, _) => {
 			winners
 		})
