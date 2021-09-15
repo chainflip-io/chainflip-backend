@@ -9,6 +9,7 @@ use futures::{
 };
 use jsonrpc_core_client::{transports::ws, RpcError};
 use thiserror::Error;
+use tokio_compat_02::FutureExt;
 
 #[derive(Error, Debug)]
 pub enum RpcClientError {
@@ -22,6 +23,7 @@ pub enum RpcClientError {
 
 pub async fn connect(url: &url::Url, validator_id: AccountId) -> Result<P2PRpcClient> {
     let client = ws::connect::<P2PRpcClient>(url)
+        .compat()
         .compat()
         .await
         .map_err(|e| RpcClientError::ConnectionError(url.clone(), e))?;
