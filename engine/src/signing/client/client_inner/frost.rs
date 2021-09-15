@@ -19,7 +19,7 @@ use crate::signing::crypto::{
 
 use sha2::{Digest, Sha256};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 
 pub struct SigningCommitment {
     pub index: usize,

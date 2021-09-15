@@ -66,6 +66,8 @@ impl<T> PeekableReceiver<T> {
 }
 
 type MultisigClientNoDB = MultisigClient<KeyDBMock>;
+type BroadcastVerification2 = frost::BroadcastVerificationMessage<SigningCommitment>;
+type BroadcastVerification4 = frost::BroadcastVerificationMessage<LocalSig3>;
 
 use super::{KEY_ID, MESSAGE_HASH, MESSAGE_INFO, SIGNER_IDXS, SIGN_INFO};
 
@@ -154,12 +156,16 @@ pub struct KeygenContext {
     clients: Vec<MultisigClientNoDB>,
     /// If a test requires a local sig different from
     /// the one that would be normally generated, it
-    /// will be stored here
+    /// will be stored here.  This is different from
+    // `sig3_to_send` in that these signatures are
+    // treated as having been broadcast consistently
     custom_local_sigs: HashMap<usize, frost::LocalSig3>,
     /// Maps a (sender, receiver) pair to the data that will be
     /// sent (in case it needs to be invalid/different from what
     /// is expected normally)
     comm1_to_send: HashMap<(usize, usize), SigningCommitment>,
+    // TODO: Sig3 to send between (sender, receiver) in case they
+    // needs to be different from the regular, valid ones
     sig3_to_send: HashMap<(usize, usize), LocalSig3>,
 }
 
@@ -167,6 +173,181 @@ fn gen_invalid_local_sig() -> LocalSig3 {
     use crate::signing::crypto::{ECScalar, FE};
     frost::LocalSig3 {
         response: FE::new_random(),
+    }
+}
+
+async fn collect_all_comm1(rxs: &mut Vec<InnerEventReceiver>) -> Vec<SigningCommitment> {
+    let mut comm1_vec = vec![];
+
+    for idx in SIGNER_IDXS.iter() {
+        let rx = &mut rxs[*idx];
+
+        let comm1 = recv_comm1_signing(rx).await;
+
+        // Make sure that messages to other parties are
+        // consistent
+        for _ in 0..SIGNER_IDXS.len() - 2 {
+            assert_eq!(comm1, recv_comm1_signing(rx).await);
+        }
+
+        assert_channel_empty(rx).await;
+
+        comm1_vec.push(comm1);
+    }
+
+    comm1_vec
+}
+
+async fn collect_all_ver2(rxs: &mut Vec<InnerEventReceiver>) -> Vec<BroadcastVerification2> {
+    let mut ver2_vec = vec![];
+
+    for sender_idx in SIGNER_IDXS.iter() {
+        let rx = &mut rxs[*sender_idx];
+
+        let ver2 = recv_ver2_signing(rx).await;
+
+        // Ignore all other (same) messages
+        for _ in 0..SIGNER_IDXS.len() - 2 {
+            let _ = recv_ver2_signing(rx).await;
+        }
+
+        assert_channel_empty(rx).await;
+
+        ver2_vec.push(ver2);
+    }
+
+    ver2_vec
+}
+
+async fn collect_all_local_sigs3(
+    rxs: &mut Vec<InnerEventReceiver>,
+    custom_sigs: &mut HashMap<usize, frost::LocalSig3>,
+) -> Vec<frost::LocalSig3> {
+    let mut local_sigs = vec![];
+
+    for idx in SIGNER_IDXS.iter() {
+        let rx = &mut rxs[*idx];
+
+        let valid_sig = recv_local_sig(rx).await;
+
+        // Check if the test requested a custom local sig
+        // to be emitted by party idx
+        let sig = custom_sigs.remove(idx).unwrap_or(valid_sig);
+
+        // Ignore all other (same) messages
+        for _ in 0..SIGNER_IDXS.len() - 2 {
+            let _ = recv_local_sig(rx).await;
+        }
+
+        assert_channel_empty(rx).await;
+
+        local_sigs.push(sig);
+    }
+
+    local_sigs
+}
+
+async fn collect_all_ver4(rxs: &mut Vec<InnerEventReceiver>) -> Vec<BroadcastVerification4> {
+    let mut ver4_vec = vec![];
+
+    for sender_idx in SIGNER_IDXS.iter() {
+        let rx = &mut rxs[*sender_idx];
+
+        let ver4 = recv_ver4_signing(rx).await;
+
+        // Ignore all other (same) messages
+        for _ in 0..SIGNER_IDXS.len() - 2 {
+            let _ = recv_ver4_signing(rx).await;
+        }
+
+        assert_channel_empty(rx).await;
+
+        ver4_vec.push(ver4);
+    }
+
+    ver4_vec
+}
+
+async fn broadcast_all_comm1(
+    clients: &mut Vec<MultisigClientNoDB>,
+    comm1_vec: &Vec<SigningCommitment>,
+    custom_comm1s: &mut HashMap<(usize, usize), SigningCommitment>,
+) {
+    for sender_idx in SIGNER_IDXS.iter() {
+        for receiver_idx in SIGNER_IDXS.iter() {
+            if receiver_idx != sender_idx {
+                let valid_comm1 = comm1_vec[*sender_idx].clone();
+
+                let comm1 = custom_comm1s
+                    .remove(&(*sender_idx, *receiver_idx))
+                    .unwrap_or(valid_comm1);
+
+                let id = &super::VALIDATOR_IDS[*sender_idx];
+
+                let m = sig_data_to_p2p(comm1, id, &MESSAGE_INFO);
+
+                clients[*receiver_idx].process_p2p_mq_message(m.clone());
+            }
+        }
+    }
+}
+
+async fn broadcast_all_ver2(
+    clients: &mut Vec<MultisigClientNoDB>,
+    ver2_vec: &Vec<BroadcastVerification2>,
+) {
+    for sender_idx in SIGNER_IDXS.iter() {
+        for receiver_idx in SIGNER_IDXS.iter() {
+            if sender_idx != receiver_idx {
+                let ver2 = ver2_vec[*sender_idx].clone();
+
+                let id = &super::VALIDATOR_IDS[*sender_idx];
+                let m = sig_data_to_p2p(ver2, id, &MESSAGE_INFO);
+
+                clients[*receiver_idx].process_p2p_mq_message(m);
+            }
+        }
+    }
+}
+
+async fn broadcast_all_local_sigs(
+    clients: &mut Vec<MultisigClientNoDB>,
+    valid_sigs: &Vec<LocalSig3>,
+    custom_sigs: &mut HashMap<(usize, usize), LocalSig3>,
+) {
+    for sender_idx in SIGNER_IDXS.iter() {
+        for receiver_idx in SIGNER_IDXS.iter() {
+            let valid_sig = valid_sigs[*sender_idx].clone();
+            let sig3 = custom_sigs
+                .remove(&(*sender_idx, *receiver_idx))
+                .unwrap_or(valid_sig);
+
+            let id = &super::VALIDATOR_IDS[*sender_idx];
+
+            let m = sig_data_to_p2p(sig3, id, &MESSAGE_INFO);
+
+            if receiver_idx != sender_idx {
+                clients[*receiver_idx].process_p2p_mq_message(m.clone());
+            }
+        }
+    }
+}
+
+async fn broadcast_all_ver4(
+    clients: &mut Vec<MultisigClientNoDB>,
+    ver4_vec: &Vec<BroadcastVerification4>,
+) {
+    for sender_idx in SIGNER_IDXS.iter() {
+        for receiver_idx in SIGNER_IDXS.iter() {
+            if sender_idx != receiver_idx {
+                let ver4 = ver4_vec[*sender_idx].clone();
+
+                let id = &super::VALIDATOR_IDS[*sender_idx];
+                let m = sig_data_to_p2p(ver4, id, &MESSAGE_INFO);
+
+                clients[*receiver_idx].process_p2p_mq_message(m);
+            }
+        }
     }
 }
 
@@ -392,7 +573,6 @@ impl KeygenContext {
     pub async fn sign(&mut self) -> ValidSigningStates {
         let instant = std::time::Instant::now();
 
-        let validator_ids = &self.validator_ids;
         let mut clients = self.clients.clone();
         let rxs = &mut self.rxs;
 
@@ -415,22 +595,7 @@ impl KeygenContext {
             );
         }
 
-        let mut comm1_vec = vec![];
-
-        for idx in SIGNER_IDXS.iter() {
-            let rx = &mut rxs[*idx];
-
-            let comm1 = recv_comm1_signing(rx).await;
-
-            // Ignore all other (same) messages
-            for _ in 0..SIGNER_IDXS.len() - 2 {
-                let _ = recv_comm1_signing(rx).await;
-            }
-
-            assert_channel_empty(rx).await;
-
-            comm1_vec.push(comm1);
-        }
+        let comm1_vec = collect_all_comm1(rxs).await;
 
         let sign_phase1 = SigningPhase1Data {
             clients: clients.clone(),
@@ -438,50 +603,13 @@ impl KeygenContext {
         };
 
         // *** Broadcast Comm1 messages to advance to Stage2 ***
-        for sender_idx in SIGNER_IDXS.iter() {
-            for receiver_idx in SIGNER_IDXS.iter() {
-                if receiver_idx != sender_idx {
-                    let valid_comm1 = comm1_vec[*sender_idx].clone();
-
-                    let comm1 = self
-                        .comm1_to_send
-                        .remove(&(*sender_idx, *receiver_idx))
-                        .unwrap_or(valid_comm1);
-
-                    println!(
-                        "[{}] will send to [{}] as comm1: {:?}",
-                        sender_idx, receiver_idx, comm1
-                    );
-
-                    let id = &validator_ids[*sender_idx];
-
-                    let m = sig_data_to_p2p(comm1, id, &MESSAGE_INFO);
-
-                    clients[*receiver_idx].process_p2p_mq_message(m.clone());
-                }
-            }
-        }
+        broadcast_all_comm1(&mut clients, &comm1_vec, &mut self.comm1_to_send).await;
 
         // TODO: check stage
 
         // *** Collect Ver2 messages ***
 
-        let mut ver2_vec = vec![];
-
-        for sender_idx in SIGNER_IDXS.iter() {
-            let rx = &mut rxs[*sender_idx];
-
-            let ver2 = recv_ver2_signing(rx).await;
-
-            // Ignore all other (same) messages
-            for _ in 0..SIGNER_IDXS.len() - 2 {
-                let _ = recv_ver2_signing(rx).await;
-            }
-
-            ver2_vec.push(ver2);
-        }
-
-        assert_channel_empty(&mut rxs[0]).await;
+        let ver2_vec = collect_all_ver2(rxs).await;
 
         let sign_phase2 = SigningPhase2Data {
             clients: clients.clone(),
@@ -490,23 +618,11 @@ impl KeygenContext {
 
         // *** Distribute Ver2 messages ***
 
-        for sender_idx in SIGNER_IDXS.iter() {
-            for receiver_idx in SIGNER_IDXS.iter() {
-                if sender_idx != receiver_idx {
-                    let ver2 = ver2_vec[*sender_idx].clone();
-
-                    let id = &validator_ids[*sender_idx];
-                    let m = sig_data_to_p2p(ver2, id, &MESSAGE_INFO);
-
-                    clients[*receiver_idx].process_p2p_mq_message(m);
-                }
-            }
-        }
+        broadcast_all_ver2(&mut clients, &ver2_vec).await;
 
         // Check if the ceremony was aborted at this stage
         if let Some(outcome) = check_outcome(&mut rxs[0]).await {
             // TODO: check that the outcome is the same for all parties
-            println!("Ceremony is terminating early");
             return ValidSigningStates {
                 sign_phase1,
                 sign_phase2,
@@ -527,26 +643,7 @@ impl KeygenContext {
 
         // *** Collect local sigs ***
 
-        let mut local_sigs = vec![];
-
-        for idx in SIGNER_IDXS.iter() {
-            let rx = &mut rxs[*idx];
-
-            let valid_sig = recv_local_sig(rx).await;
-
-            // Check if the test requested a custom local sig
-            // to be emitted by party idx
-            let sig = self.custom_local_sigs.remove(idx).unwrap_or(valid_sig);
-
-            // Ignore all other (same) messages
-            for _ in 0..SIGNER_IDXS.len() - 2 {
-                let _ = recv_local_sig(rx).await;
-            }
-
-            assert_channel_empty(rx).await;
-
-            local_sigs.push(sig);
-        }
+        let local_sigs = collect_all_local_sigs3(rxs, &mut self.custom_local_sigs).await;
 
         let sign_phase3 = SigningPhase3Data {
             clients: clients.clone(),
@@ -555,66 +652,21 @@ impl KeygenContext {
 
         // *** Distribute local sigs ***
 
-        for sender_idx in SIGNER_IDXS.iter() {
-            for receiver_idx in SIGNER_IDXS.iter() {
-                let valid_sig = local_sigs[*sender_idx].clone();
-                let sig3 = self
-                    .sig3_to_send
-                    .remove(&(*sender_idx, *receiver_idx))
-                    .unwrap_or(valid_sig);
-
-                let id = &validator_ids[*sender_idx];
-
-                let m = sig_data_to_p2p(sig3, id, &MESSAGE_INFO);
-
-                if receiver_idx != sender_idx {
-                    clients[*receiver_idx].process_p2p_mq_message(m.clone());
-                }
-            }
-        }
+        broadcast_all_local_sigs(&mut clients, &local_sigs, &mut self.sig3_to_send).await;
 
         // *** Collect Ver4 messages ***
-
-        let mut ver4_vec = vec![];
-
-        for sender_idx in SIGNER_IDXS.iter() {
-            let rx = &mut rxs[*sender_idx];
-
-            let ver4 = recv_ver4_signing(rx).await;
-
-            // Ignore all other (same) messages
-            for _ in 0..SIGNER_IDXS.len() - 2 {
-                let _ = recv_ver4_signing(rx).await;
-            }
-
-            ver4_vec.push(ver4);
-        }
+        let ver4_vec = collect_all_ver4(rxs).await;
 
         let sign_phase4 = SigningPhase4Data {
             clients: clients.clone(),
             ver4_vec: ver4_vec.clone(),
         };
 
-        println!("Collected Ver4 messages");
-
         // *** Distribute Ver4 messages ***
 
-        for sender_idx in SIGNER_IDXS.iter() {
-            let ver4 = ver4_vec[*sender_idx].clone();
-            let id = &validator_ids[*sender_idx];
+        broadcast_all_ver4(&mut clients, &ver4_vec).await;
 
-            let m = sig_data_to_p2p(ver4, id, &MESSAGE_INFO);
-
-            for receiver_idx in SIGNER_IDXS.iter() {
-                if receiver_idx != sender_idx {
-                    clients[*receiver_idx].process_p2p_mq_message(m.clone());
-                }
-            }
-        }
-
-        let event = recv_next_inner_event(&mut rxs[0]).await;
-
-        let outcome = match event {
+        let outcome = match recv_next_inner_event(&mut rxs[0]).await {
             InnerEvent::SigningResult(outcome) => outcome,
             _ => panic!("Unexpected event"),
         };
