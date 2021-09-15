@@ -1,8 +1,9 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
-use super::{
-	AccountId, Call, Emissions, FlipBalance, Reputation, Rewards, Runtime, Witnesser,
+use super::{AccountId, Call, Emissions, FlipBalance, Reputation, Rewards, Runtime, Witnesser};
+use cf_chains::{
+	eth::{self, register_claim::RegisterClaim, ChainflipContractCall},
+	Ethereum,
 };
-use cf_chains::{Ethereum, eth::{self, ChainflipContractCall, register_claim::RegisterClaim}};
 use cf_traits::{Chainflip, EmissionsTrigger, KeyProvider, SigningContext};
 use codec::{Decode, Encode};
 use frame_support::debug;
@@ -85,21 +86,28 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 	fn resolve_callback(&self, signature: Self::Signature) -> Self::Callback {
 		match self {
 			Self::PostClaimSignature(claim) => {
-				pallet_cf_staking::Call::<Runtime>::post_claim_signature(claim.node_id.into(), signature).into()
+				pallet_cf_staking::Call::<Runtime>::post_claim_signature(
+					claim.node_id.into(),
+					signature,
+				)
+				.into()
 			}
 			Self::Broadcast(contract_call) => {
-				let mut contract_call = contract_call.clone();
-				contract_call.sign(&signature);
-				let unsigned_tx = eth::UnsignedTransaction {
-					chain_id: eth::CHAIN_ID_RINKEBY,
-					contract: eth::stake_manager_contract_address().into(),
-					data: contract_call.abi_encoded(),
-					..Default::default()
-				};
+				let unsigned_tx = contract_call_to_unsigned_tx(contract_call.clone());
 				pallet_cf_broadcast::Call::<Runtime, pallet_cf_broadcast::Instance0>::start_broadcast(unsigned_tx).into()
 			}
 		}
 	}
+}
+
+fn contract_call_to_unsigned_tx<C: ChainflipContractCall>(call: C) -> UnsignedTransaction {
+	contract_call.sign(&signature);
+	eth::UnsignedTransaction {
+		chain_id: eth::CHAIN_ID_RINKEBY,
+		contract: eth::stake_manager_contract_address().into(),
+		data: contract_call.abi_encoded(),
+		..Default::default()
+	};
 }
 
 pub struct EthereumBroadcastConfig;
