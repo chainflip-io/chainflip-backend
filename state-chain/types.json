@@ -5,6 +5,7 @@
     "providers": "RefCount",
     "data": "ChainflipAccountData"
   },
+  "ActiveValidatorRange": "(u32,u32)",
   "Address": "MultiAddress",
   "Amount": "TokenAmount",
   "AuctionError": {
@@ -22,7 +23,7 @@
       "ValidatorsSelected": "(Vec<ValidatorId>, Amount)"
     }
   },
-  "ActiveValidatorRange": "(u32,u32)",
+  "Bid": "(ValidatorId, Amount)",
   "CallHash": "[u8;32]",
   "ChainParams": {
     "_enum": {
