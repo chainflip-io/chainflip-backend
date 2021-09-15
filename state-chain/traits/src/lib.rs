@@ -267,7 +267,6 @@ pub trait NonceProvider {
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Copy)]
 pub enum ChainflipAccountState {
 	Passive,
-	Retired,
 	Backup,
 	Validator,
 }
