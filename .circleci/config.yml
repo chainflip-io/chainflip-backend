@@ -365,6 +365,8 @@ jobs:
             --set "state-chain-node.stateChainNode.extraArgs={--rpc-external,--rpc-cors,all,--ws-external}"
             --set chainflip-engine.image.tag="<<pipeline.git.revision>>"
             --set chainflip-engine.config.eth.node_endpoint=$RINKEBY
+            --set global.nameSuffix="default"
+            --set global.testnet_id="$CIRCLE_BUILD_NUM"
             --set chainflip-engine.engine.backtrace=full
             --set global.chain=dev
             --wait
