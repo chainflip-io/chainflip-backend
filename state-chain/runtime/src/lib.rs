@@ -393,6 +393,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 	type RewardsDistribution = pallet_cf_rewards::OnDemandRewardsDistribution<Runtime>;
 	type MintInterval = MintInterval;
+	type WeightInfo = weights::pallet_cf_emissions::WeightInfo<Runtime>;
 }
 
 impl pallet_cf_rewards::Config for Runtime {
@@ -654,6 +655,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, frame_system, SystemBench::<Runtime>);
 			add_benchmark!(params, batches, pallet_timestamp, Timestamp);
 			add_benchmark!(params, batches, pallet_cf_validator, Validator);
+			add_benchmark!(params, batches, pallet_cf_emissions, Emissions);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)

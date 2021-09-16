@@ -1,7 +1,8 @@
 use std::marker::PhantomData;
 
-use crate as pallet_cf_emissions;
+use crate::{self as pallet_cf_emissions, WeightInfo};
 use frame_support::{
+	dispatch::Weight,
 	parameter_types,
 	traits::{EnsureOrigin, Imbalance},
 };
@@ -114,6 +115,12 @@ impl RewardsDistribution for MockRewardsDistribution<Test> {
 	}
 }
 
+impl WeightInfo for () {
+	fn on_initialize() -> u64 {
+		0 as Weight
+	}
+}
+
 impl pallet_cf_emissions::Config for Test {
 	type Event = Event;
 	type FlipBalance = u128;
@@ -121,6 +128,7 @@ impl pallet_cf_emissions::Config for Test {
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 	type RewardsDistribution = MockRewardsDistribution<Self>;
 	type MintInterval = MintInterval;
+	type WeightInfo = ();
 }
 
 // Build genesis storage according to the mock runtime.

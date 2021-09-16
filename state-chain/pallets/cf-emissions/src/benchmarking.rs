@@ -4,24 +4,18 @@
 use super::*;
 
 use frame_benchmarking::{benchmarks, benchmarks_instance_pallet, impl_benchmark_test_suite};
+use frame_support::traits::OnInitialize;
 use frame_system::RawOrigin;
 use sp_std::{boxed::Box, vec, vec::Vec};
 
 #[allow(unused)]
-use crate::Pallet as Validator;
+use crate::Pallet as Emissions;
 
 benchmarks! {
-	set_blocks_for_epoch {
-		let b = 2_u32;
-	}: _(RawOrigin::Root, b.into())
-	verify {
-		assert_eq!(Pallet::<T>::epoch_number_of_blocks(), 2_u32.into())
-	}
-
-	force_rotation {
-	}: _(RawOrigin::Root)
-	verify {
-		assert_eq!(Pallet::<T>::force(), true)
+	on_initialize {
+		let b in 0 .. 100;
+	}: {
+		Emissions::<T>::on_initialize((b).into());
 	}
 }
 
