@@ -93,21 +93,24 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 				.into()
 			}
 			Self::Broadcast(contract_call) => {
-				let unsigned_tx = contract_call_to_unsigned_tx(contract_call.clone());
+				let unsigned_tx = contract_call_to_unsigned_tx(contract_call.clone(), signature);
 				pallet_cf_broadcast::Call::<Runtime, pallet_cf_broadcast::Instance0>::start_broadcast(unsigned_tx).into()
 			}
 		}
 	}
 }
 
-fn contract_call_to_unsigned_tx<C: ChainflipContractCall>(call: C) -> UnsignedTransaction {
-	contract_call.sign(&signature);
+fn contract_call_to_unsigned_tx<C: ChainflipContractCall>(
+	mut call: C,
+	signature: eth::SchnorrSignature,
+) -> eth::UnsignedTransaction {
+	call.sign(&signature);
 	eth::UnsignedTransaction {
 		chain_id: eth::CHAIN_ID_RINKEBY,
 		contract: eth::stake_manager_contract_address().into(),
-		data: contract_call.abi_encoded(),
+		data: call.abi_encoded(),
 		..Default::default()
-	};
+	}
 }
 
 pub struct EthereumBroadcastConfig;
@@ -133,6 +136,6 @@ impl<T: pallet_cf_vaults::Config> KeyProvider<Ethereum> for VaultKeyProvider<T> 
 	type KeyId = T::PublicKey;
 
 	fn current_key() -> Self::KeyId {
-		pallet_cf_vaults::Pallet::<T>::eth_vault().new_key
+		pallet_cf_vaults::Pallet::<T>::eth_vault().current_key
 	}
 }

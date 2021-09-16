@@ -353,7 +353,7 @@ pub trait SigningContext<T: Chainflip> {
 	/// The signature type that is returned by the threshold signature.
 	type Signature: Parameter;
 	/// The callback that will be dispatched when we receive the signature.
-	type Callback: UnfilteredDispatchable<Origin = T::Origin> + Into<<T as Chainflip>::Call>;
+	type Callback: UnfilteredDispatchable<Origin = T::Origin>;
 
 	/// Returns the signing payload.
 	fn get_payload(&self) -> Self::Payload;
