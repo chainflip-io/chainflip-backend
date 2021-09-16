@@ -175,6 +175,7 @@ pub trait BidderProvider {
 	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)>;
 }
 
+/// Trait for rotate bond after epoch.
 pub trait BondRotation {
 	type AccountId;
 	type Balance;
