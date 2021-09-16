@@ -6,14 +6,17 @@
     "data": "()"
   },
   "ActiveProposal": "(ProposalId, Timestamp)",
+  "AggKeySignature": "U256",
   "AuctionRange": "(u32,u32)",
   "Address": "MultiAddress",
-  "Amount": "TokenAmount",
+  "Amount": "u128",
   "AuctionError": {
     "_enum": [
-      "BondIsZero",
       "Empty",
-      "MinValidatorSize"
+      "MinValidatorSize",
+      "InvalidRange",
+      "Abort",
+      "NotConfirmed"
     ]
   },
   "AuctionIndex": "u64",
@@ -21,7 +24,7 @@
     "_enum": {
       "WaitingForBids": "(Vec<ValidatorId>, Amount)",
       "BidsTaken": "(Vec<(ValidatorId, Amount)>)",
-      "ValidatorsSelected": "(Vec<ValidatorId>, Amount)"
+      "WinnersSelected": "(Vec<ValidatorId>, Amount)"
     }
   },
   "Bid": "(ValidatorId, Amount)",
@@ -33,7 +36,13 @@
       "Other": "(Vec<u8>)"
     }
   },
+  "ChainType": {
+    "_enum": [
+      "Ethereum"
+    ]
+  },
   "ClaimDetailsFor": {
+    "msg_hash": "Option<U256>",
     "amount": "FlipBalance",
     "nonce": "Nonce",
     "address": "EthereumAddress",
@@ -42,17 +51,11 @@
   },
   "Duration": "(u64,u32)",
   "EpochIndex": "u32",
-  "EthSigningTxResponse": {
-    "_enum": {
-      "Success": "(Vec<u8>)",
-      "Error": "(Vec<ValidatorId>)"
-    }
-  },
   "EthereumAddress": "[u8;20]",
   "EthTransactionHash": "[u8;32]",
   "FlipAccount": {
-    "stake": "FlipBalance",
-    "validator_bond": "FlipBalance"
+    "stake": "Amount",
+    "validator_bond": "Amount"
   },
   "FlipBalance": "u128",
   "ImbalanceSource": {
@@ -63,7 +66,7 @@
     ]
   },
   "KeygenRequest": {
-    "chain": "ChainParams",
+    "chain_type": "ChainType",
     "validator_candidates": "Vec<ValidatorId>"
   },
   "KeygenResponse": {
@@ -91,19 +94,16 @@
   },
   "ReputationOf": "BlockNumber",
   "ReputationPoints": "i32",
-  "RequestIndex": "u64",
   "ReserveId": "[u8;4]",
   "Retired": "bool",
-  "Signature": "H256",
   "StakeAttempt": "(EthereumAddress, Amount)",
   "Timestamp": "u64",
-  "TokenAmount": "u128",
   "ValidatorId": "AccountId",
   "Transaction": "Vec<u8>",
   "Vault": {
-    "old_key": "PublicKey",
-    "new_key": "PublicKey",
-    "tx": "Transaction"
+    "previous_key": "PublicKey",
+    "current_key": "PublicKey",
+    "tx_hash": "Transaction"
   },
   "VaultRotation": {
     "new_public_key": "PublicKey",
@@ -112,11 +112,9 @@
   "VaultRotationResponse": {
     "_enum": {
       "Success": {
-        "old_key": "PublicKey",
-        "new_key": "PublicKey",
-        "tx": "Transaction"
+       "tx_hash": "Transaction"
       },
-      "Failure": ""
+      "Error": ""
     }
   },
   "ValidatorSize": "u32",
