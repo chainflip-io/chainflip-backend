@@ -1,7 +1,12 @@
+/// For many of these tests we use
+/// move_forward_by_heartbeat_intervals(1);
+/// in order to progress past the first, genesis heartbeat interval
+/// since nodes in the genesis interval have, by default, submitted a heartbeat
 mod tests {
 	use crate::mock::*;
 	use crate::OfflineCondition::*;
 	use crate::*;
+	use cf_traits::Online;
 	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::BuildStorage;
 	use sp_runtime::DispatchError::BadOrigin;
@@ -20,14 +25,16 @@ mod tests {
 
 	// Cycle heartbeat interval sending the heartbeat extrinsic in each
 	fn run_heartbeat_intervals(
-		validator: <Test as frame_system::Config>::AccountId,
+		validators: Vec<<Test as frame_system::Config>::AccountId>,
 		intervals: u64,
 	) {
 		let start_block_number = System::block_number();
 		// Inclusive
 		for interval in 1..=intervals {
 			let block = interval * HEARTBEAT_BLOCK_INTERVAL;
-			assert_ok!(ReputationPallet::heartbeat(Origin::signed(validator)));
+			for validator in &validators {
+				assert_ok!(ReputationPallet::heartbeat(Origin::signed(*validator)));
+			}
 			run_to_block(start_block_number + block);
 		}
 	}
@@ -38,7 +45,7 @@ mod tests {
 		number_of_accruals: u64,
 	) {
 		let intervals = ACCRUAL_BLOCKS * number_of_accruals / HEARTBEAT_BLOCK_INTERVAL;
-		run_heartbeat_intervals(validator, intervals + 1 /* roundup */);
+		run_heartbeat_intervals(vec![validator], intervals + 1 /* roundup */);
 	}
 
 	// Move a heartbeat interval forward with no heartbeat sent
@@ -51,6 +58,7 @@ mod tests {
 	#[test]
 	fn should_have_a_list_of_validators_at_genesis() {
 		new_test_ext().execute_with(|| {
+			move_forward_by_heartbeat_intervals(1);
 			assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
 		});
 	}
@@ -71,6 +79,7 @@ mod tests {
 	#[test]
 	fn submitting_heartbeat_from_unknown_validator_should_fail() {
 		new_test_ext().execute_with(|| {
+			move_forward_by_heartbeat_intervals(1);
 			assert_noop!(
 				ReputationPallet::heartbeat(Origin::signed(BOB)),
 				<Error<Test>>::AlreadySubmittedHeartbeat
@@ -81,6 +90,7 @@ mod tests {
 	#[test]
 	fn submitting_heartbeat_should_reward_reputation_points() {
 		new_test_ext().execute_with(|| {
+			move_forward_by_heartbeat_intervals(1);
 			let number_of_accruals = 10;
 			submit_heartbeats_for_accrual_blocks(ALICE, number_of_accruals);
 			// Alice should now have 10 points
@@ -94,6 +104,7 @@ mod tests {
 	#[test]
 	fn missing_heartbeats_should_see_loss_of_reputation_points() {
 		new_test_ext().execute_with(|| {
+			move_forward_by_heartbeat_intervals(1);
 			assert_eq!(reputation_points(ALICE), 0);
 			// We will need to send heartbeats for the next ACCRUAL_BLOCKS_PER_REPUTATION_POINT blocks
 			submit_heartbeats_for_accrual_blocks(ALICE, 1);
@@ -116,6 +127,7 @@ mod tests {
 	#[test]
 	fn missing_heartbeats_should_see_slashing_when_we_hit_negative() {
 		new_test_ext().execute_with(|| {
+			move_forward_by_heartbeat_intervals(1);
 			assert_eq!(reputation_points(ALICE), 0);
 			let expected_slashes = 10;
 			for _ in 0..expected_slashes {
@@ -129,6 +141,7 @@ mod tests {
 	#[test]
 	fn updating_accrual_rate_should_affect_reputation_points() {
 		new_test_ext().execute_with(|| {
+			move_forward_by_heartbeat_intervals(1);
 			assert_noop!(
 				ReputationPallet::update_accrual_ratio(
 					Origin::signed(ALICE),
@@ -179,6 +192,7 @@ mod tests {
 	#[test]
 	fn submitting_heartbeats_in_same_heartbeat_interval_should_fail() {
 		new_test_ext().execute_with(|| {
+			move_forward_by_heartbeat_intervals(1);
 			assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
 			assert_noop!(
 				ReputationPallet::heartbeat(Origin::signed(ALICE)),
@@ -190,17 +204,18 @@ mod tests {
 	#[test]
 	fn missing_a_heartbeat_submission_should_penalise_reputation_points() {
 		new_test_ext().execute_with(|| {
+			move_forward_by_heartbeat_intervals(1);
 			let ReputationPenalty { points, blocks } = POINTS_PER_BLOCK_PENALTY;
 			// We are starting out with zero points
 			assert_eq!(reputation_points(ALICE), 0);
 			// Interval 1 - with no heartbeat we will lose `points` per `block`
-			run_to_block(HEARTBEAT_BLOCK_INTERVAL);
+			move_forward_by_heartbeat_intervals(1);
 			assert_eq!(
 				reputation_points(ALICE),
 				(HEARTBEAT_BLOCK_INTERVAL as i32 / blocks as i32 * points as i32).neg()
 			);
 			// Interval 2 - with no heartbeat this will continue
-			run_to_block(HEARTBEAT_BLOCK_INTERVAL * 2);
+			move_forward_by_heartbeat_intervals(1);
 			assert_eq!(
 				reputation_points(ALICE),
 				2 * (HEARTBEAT_BLOCK_INTERVAL as i32 / blocks as i32 * points as i32).neg()
@@ -240,6 +255,7 @@ mod tests {
 	#[test]
 	fn reporting_any_offline_condition_should_penalise_reputation_points() {
 		new_test_ext().execute_with(|| {
+			move_forward_by_heartbeat_intervals(1);
 			let offline_test = |offline_condition: OfflineCondition,
 			                    who: <Test as frame_system::Config>::AccountId,
 			                    penalty: ReputationPoints| {
@@ -270,6 +286,7 @@ mod tests {
 	#[test]
 	fn reporting_participate_in_signing_offline_condition_should_penalise_reputation_points() {
 		new_test_ext().execute_with(|| {
+			move_forward_by_heartbeat_intervals(1);
 			assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
 			let points_before = reputation_points(ALICE);
 			let penalty = 100;
@@ -293,6 +310,7 @@ mod tests {
 	#[test]
 	fn on_new_epoch_should_see_new_set_of_validators_and_those_before_maintain_reputation() {
 		new_test_ext().execute_with(|| {
+			move_forward_by_heartbeat_intervals(1);
 			let number_of_accruals = 10;
 			submit_heartbeats_for_accrual_blocks(ALICE, number_of_accruals);
 			assert_eq!(
@@ -310,6 +328,64 @@ mod tests {
 				reputation_points(BOB),
 				number_of_accruals as i32 * ACCRUAL_POINTS
 			);
+		});
+	}
+
+	#[test]
+	fn we_should_be_online_when_submitting_heartbeats_and_offline_when_not() {
+		new_test_ext().execute_with(|| {
+			move_forward_by_heartbeat_intervals(1);
+			run_heartbeat_intervals(vec![ALICE], 1);
+			assert!(<ReputationPallet as Online>::is_online(&ALICE));
+			run_heartbeat_intervals(vec![ALICE], 1);
+			assert!(<ReputationPallet as Online>::is_online(&ALICE));
+			// Fail to submit for two heartbeats
+			move_forward_by_heartbeat_intervals(2);
+			assert_eq!(<ReputationPallet as Online>::is_online(&ALICE), false);
+		});
+	}
+
+	#[test]
+	fn should_trigger_an_emergency_rotation_when_we_drop_to_less_than_eighty_percent() {
+		new_test_ext().execute_with(|| {
+			move_forward_by_heartbeat_intervals(1);
+			<ReputationPallet as EpochTransitionHandler>::on_new_epoch(
+				&vec![ALICE, BOB, CHARLIE, DAVE, ERIN],
+				Zero::zero(),
+			);
+
+			run_heartbeat_intervals(vec![ALICE, CHARLIE, BOB, DAVE, ERIN], 1);
+			assert!(<ReputationPallet as Online>::is_online(&ALICE));
+			assert!(<ReputationPallet as Online>::is_online(&BOB));
+			assert!(<ReputationPallet as Online>::is_online(&CHARLIE));
+			assert!(<ReputationPallet as Online>::is_online(&DAVE));
+			assert!(<ReputationPallet as Online>::is_online(&ERIN));
+
+			run_heartbeat_intervals(vec![ALICE, BOB, CHARLIE, DAVE], 1);
+			assert!(<ReputationPallet as Online>::is_online(&ALICE));
+			assert!(<ReputationPallet as Online>::is_online(&BOB));
+			assert!(<ReputationPallet as Online>::is_online(&CHARLIE));
+			assert!(<ReputationPallet as Online>::is_online(&DAVE));
+
+			// Offline, we now have 4/5
+			assert_eq!(<ReputationPallet as Online>::is_online(&ERIN), false);
+			// Close but not an emergency rotation
+			assert_eq!(
+				EMERGENCY_ROTATION_REQUESTED.with(|requested| { *requested.borrow() }),
+				false
+			);
+
+			run_heartbeat_intervals(vec![ALICE, BOB, CHARLIE], 1);
+			assert!(<ReputationPallet as Online>::is_online(&ALICE));
+			assert!(<ReputationPallet as Online>::is_online(&BOB));
+			assert!(<ReputationPallet as Online>::is_online(&CHARLIE));
+
+			// Offline, we now have 3/5
+			assert_eq!(<ReputationPallet as Online>::is_online(&DAVE), false);
+			assert_eq!(<ReputationPallet as Online>::is_online(&ERIN), false);
+
+			// An emergency rotation
+			assert!(EMERGENCY_ROTATION_REQUESTED.with(|requested| { *requested.borrow() }));
 		});
 	}
 }

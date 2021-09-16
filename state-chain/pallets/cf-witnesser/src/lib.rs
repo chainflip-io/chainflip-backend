@@ -134,7 +134,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Some external event has been witnessed [call_sig, who, num_votes]
-		WitnessReceived(CallHash, <T as Config>::ValidatorId, VoteCount),
+		WitnessReceived(CallHash, T::ValidatorId, VoteCount),
 
 		/// The witness threshold has been reached [call_sig, num_votes]
 		ThresholdReached(CallHash, VoteCount),

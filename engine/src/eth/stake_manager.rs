@@ -45,7 +45,7 @@ pub async fn start_stake_manager_witness(
 
     slog::info!(logger, "Creating Event Stream");
     let mut event_stream = stake_manager
-        .event_stream(web3, settings.eth.from_block, &logger)
+        .event_stream(&web3, settings.eth.from_block, &logger)
         .await?;
 
     Ok(async move {
