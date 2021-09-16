@@ -8,7 +8,7 @@ ignore_main_branches: &ignore_main_branches
         - /epic\/.*/
         - /release\/.*/
         # Uncomment and add your current branch when testing
-#        - update/epic-ci
+        # - update/epic-ci
 only_main_branches: &only_main_branches
   filters:
     branches:
@@ -71,10 +71,11 @@ workflows:
     jobs:
       - build-docker-image:
           name: build-rust-base
+          extra_build_args: "--build-arg NIGHTLY=nightly-2021-03-24"
           image: chainflip-io/chainflip-backend/rust-base
-          tag: latest
+          tag: <<pipeline.git.revision>>
           dockerfile: Dockerfile.rust-base
-          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:latest
+          cache_from: ghcr.io/chainflip-io/chainflip-backend/rust-base:<<pipeline.git.base_revision>>
           context:
             - ghcr-credentials
           <<: *ignore_main_branches
@@ -151,6 +152,7 @@ workflows:
           context:
             - ghcr-credentials
             - do-credentials
+            - infura-endpoints
           <<: *only_epic_branches
 
   chainflip-integration-tests:
@@ -360,8 +362,11 @@ jobs:
             --namespace default
             --set state-chain-node.nodeType=validator
             --set state-chain-node.image.tag="<<pipeline.git.revision>>"
-            --set "state-chain-node.stateChainNode.extraArgs={--rpc-external,--rpc-cors,all}"
+            --set "state-chain-node.stateChainNode.extraArgs={--rpc-external,--rpc-cors,all,--ws-external}"
             --set chainflip-engine.image.tag="<<pipeline.git.revision>>"
+            --set chainflip-engine.config.eth.node_endpoint=$RINKEBY
+            --set chainflip-engine.engine.backtrace=full
+            --set global.chain=dev
             --wait
             --wait-for-jobs
       - run:
