@@ -417,11 +417,11 @@ impl<T: Config> cf_traits::BondRotation for Pallet<T> {
 	type Balance = T::Balance;
 
 	fn update_validator_bonds(new_validators: &Vec<T::AccountId>, new_bond: T::Balance) {
-		Account::<T>::iter().for_each(|(validator, _)| {
-			if new_validators.contains(&validator) {
-				Self::set_validator_bond(&validator, new_bond);
+		Account::<T>::iter().for_each(|(account, _)| {
+			if new_validators.contains(&account) {
+				Self::set_validator_bond(&account, new_bond);
 			} else {
-				Self::set_validator_bond(&validator, T::Balance::zero());
+				Self::set_validator_bond(&account, T::Balance::zero());
 			}
 		});
 	}
