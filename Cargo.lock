@@ -916,6 +916,7 @@ dependencies = [
  "crossbeam-channel",
  "curv",
  "env_logger 0.9.0",
+ "failure",
  "frame-support",
  "frame-system",
  "futures 0.3.15",
@@ -962,6 +963,7 @@ dependencies = [
  "tokio-stream",
  "url 1.7.2",
  "web3",
+ "websocket",
 ]
 
 [[package]]
@@ -5070,7 +5072,6 @@ dependencies = [
 name = "pallet-cf-vaults"
 version = "0.0.1"
 dependencies = [
- "assert_matches",
  "cf-traits",
  "ethabi 13.0.0",
  "frame-support",

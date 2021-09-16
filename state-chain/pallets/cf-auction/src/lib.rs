@@ -41,8 +41,8 @@ mod tests;
 extern crate assert_matches;
 
 use cf_traits::{
-	Auction, AuctionError, AuctionPhase, AuctionRange, BidderProvider, VaultRotation,
-	VaultRotationHandler,
+	Auction, AuctionError, AuctionPhase, AuctionRange, BidderProvider, Online,
+	VaultRotationHandler, VaultRotator,
 };
 use frame_support::pallet_prelude::*;
 use frame_support::sp_runtime::offchain::storage_lock::BlockNumberProvider;
@@ -57,7 +57,6 @@ use sp_std::prelude::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::VaultRotation;
 	use frame_support::traits::ValidatorRegistration;
 	use sp_std::ops::Add;
 
@@ -83,7 +82,9 @@ pub mod pallet {
 		#[pallet::constant]
 		type MinAuctionSize: Get<u32>;
 		/// The lifecycle of our auction
-		type Handler: VaultRotation<ValidatorId = Self::ValidatorId>;
+		type Handler: VaultRotator<ValidatorId = Self::ValidatorId>;
+		/// An online validator
+		type Online: Online<ValidatorId = Self::ValidatorId>;
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -177,12 +178,15 @@ pub mod pallet {
 		fn build(&self) {
 			AuctionSizeRange::<T>::set(self.auction_size_range);
 			// Run through an auction
-			if Pallet::<T>::process().and(Pallet::<T>::process()).is_ok() {
-				if let Err(err) = Pallet::<T>::process() {
-					panic!("Failed to confirm auction: {:?}", err);
+			match Pallet::<T>::process().and(Pallet::<T>::process()) {
+				Ok(_) => {
+					if let Err(err) = Pallet::<T>::process() {
+						panic!("Failed to confirm auction: {:?}", err);
+					}
 				}
-			} else {
-				panic!("Failed selecting winners in auction");
+				Err(err) => {
+					panic!("Failed selecting winners in auction: {:?}", err);
+				}
 			}
 		}
 	}
@@ -201,11 +205,7 @@ impl<T: Config> Auction for Pallet<T> {
 	fn set_auction_range(range: AuctionRange) -> Result<AuctionRange, AuctionError> {
 		let (low, high) = range;
 
-		if low == high
-			|| low < T::MinAuctionSize::get()
-			|| high < T::MinAuctionSize::get()
-			|| high < low
-		{
+		if low >= high || low < T::MinAuctionSize::get() {
 			return Err(AuctionError::InvalidRange);
 		}
 
@@ -248,7 +248,9 @@ impl<T: Config> Auction for Pallet<T> {
 				bidders.retain(|(_, amount)| !amount.is_zero());
 				// Rule #3 - They are registered
 				bidders.retain(|(id, _)| T::Registrar::is_registered(id));
-				// Rule #4 - Confirm we have our set size
+				// Rule #4 - Confirm that the validators are 'online'
+				bidders.retain(|(id, _)| T::Online::is_online(id));
+				// Rule #5 - Confirm we have our set size
 				if (bidders.len() as u32) < <AuctionSizeRange<T>>::get().0 {
 					return Err(AuctionError::MinValidatorSize);
 				};

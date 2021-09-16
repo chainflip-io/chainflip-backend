@@ -7,7 +7,7 @@ use crate::{
     logging::COMPONENT_KEY,
     p2p::AccountId,
     signing::{
-        client::{client_inner::utils::get_index_mapping, KeyId, KeygenInfo},
+        client::{client_inner::utils::get_index_mapping, CeremonyId, KeygenInfo},
         crypto,
     },
 };
@@ -32,17 +32,18 @@ use tokio::sync::mpsc::UnboundedSender;
 /// Broadcast1 messages before a corresponding keygen request is received.
 #[derive(Clone)]
 pub struct KeygenManager {
-    /// States for each key id
-    keygen_states: HashMap<KeyId, KeygenState>,
+    /// States for each ceremony_id
+    keygen_states: HashMap<CeremonyId, KeygenState>,
     /// Used to propagate events upstream
-    event_sender: UnboundedSender<InnerEvent>,
+    inner_event_sender: UnboundedSender<InnerEvent>,
     /// Validator id of our node
     our_id: AccountId,
     /// Storage for delayed data (only Broadcast1 makes sense here).
     /// We choose not to store it inside KeygenState, as having KeygenState currently
     /// implies that we have received the relevant keygen request
     /// (and know all parties involved), which is not always the case.
-    delayed_messages: HashMap<KeyId, (Instant, Vec<(AccountId, Broadcast1)>)>,
+    /// The `Instant` is the time at which the first messages was added to the delayed_messages queue
+    delayed_messages: HashMap<CeremonyId, (Instant, Vec<(AccountId, Broadcast1)>)>,
     /// Abandon state for a given keygen if we can't make progress for longer than this
     phase_timeout: Duration,
     logger: slog::Logger,
@@ -51,14 +52,14 @@ pub struct KeygenManager {
 impl KeygenManager {
     pub fn new(
         our_id: AccountId,
-        event_sender: UnboundedSender<InnerEvent>,
+        inner_event_sender: UnboundedSender<InnerEvent>,
         phase_timeout: Duration,
         logger: &slog::Logger,
     ) -> Self {
         KeygenManager {
             keygen_states: Default::default(),
             delayed_messages: Default::default(),
-            event_sender,
+            inner_event_sender,
             our_id,
             phase_timeout,
             logger: logger.new(o!(COMPONENT_KEY => "KeygenManager")),
@@ -70,23 +71,36 @@ impl KeygenManager {
         sender_id: AccountId,
         msg: KeyGenMessageWrapped,
     ) -> Option<KeygenResultInfo> {
-        let KeyGenMessageWrapped { key_id, message } = msg;
+        let KeyGenMessageWrapped {
+            ceremony_id,
+            message,
+        } = msg;
+        slog::debug!(
+            self.logger,
+            "[{}] Processing a {} keygen message for ceremony_id: {:?}",
+            self.our_id,
+            message,
+            ceremony_id
+        );
 
-        match self.keygen_states.entry(key_id) {
+        match self.keygen_states.entry(ceremony_id) {
             Entry::Occupied(mut state) => {
-                // We have entry, process normally
                 return state.get_mut().process_keygen_message(sender_id, message);
             }
             Entry::Vacant(_) => match message {
                 KeygenData::Broadcast1(bc1) => {
-                    slog::trace!(self.logger, "Delaying keygen bc1 for key id: {:?}", key_id);
-                    self.add_delayed(key_id, sender_id, bc1);
+                    slog::trace!(
+                        self.logger,
+                        "Delaying keygen bc1 for ceremony id: {:?}",
+                        ceremony_id
+                    );
+                    self.add_delayed(ceremony_id, sender_id, bc1);
                 }
                 KeygenData::Secret2(_) => {
                     slog::warn!(
                         self.logger,
-                        "Unexpected keygen secret2 for key id: {:?}",
-                        key_id
+                        "Unexpected keygen secret2 for ceremony id: {:?}",
+                        ceremony_id
                     );
                 }
             },
@@ -95,10 +109,10 @@ impl KeygenManager {
         return None;
     }
 
-    fn add_delayed(&mut self, key_id: KeyId, sender_id: AccountId, bc1: Broadcast1) {
+    fn add_delayed(&mut self, ceremony_id: CeremonyId, sender_id: AccountId, bc1: Broadcast1) {
         let entry = self
             .delayed_messages
-            .entry(key_id)
+            .entry(ceremony_id)
             .or_insert((Instant::now(), Vec::new()));
         entry.1.push((sender_id, bc1));
     }
@@ -115,37 +129,43 @@ impl KeygenManager {
         // Remove all pending state that hasn't been updated for
         // longer than `self.phase_timeout`
         let logger_c = self.logger.clone();
-        self.delayed_messages.retain(|key_id, (t, bc1_vec)| {
+        self.delayed_messages.retain(|ceremony_id, (t, bc1_vec)| {
             if t.elapsed() > timeout {
                 slog::warn!(
                     logger_c,
-                    "Keygen state expired w/o keygen request for id: {:?}",
-                    key_id
+                    "Keygen state expired w/o keygen request for ceremony id: {:?}",
+                    ceremony_id
                 );
 
                 // We never received a keygen request for this key, so any parties
                 // that tried to initiate a new ceremony are deemed malicious
                 let bad_validators = bc1_vec.iter().map(|(vid, _)| vid).cloned().collect_vec();
-                events_to_send.push(KeygenOutcome::unauthorised(*key_id, bad_validators));
+                events_to_send.push(KeygenOutcome::unauthorised(*ceremony_id, bad_validators));
                 return false;
             }
             true
         });
 
         // remove any active states that are taking too long
-        self.keygen_states.retain(|key_id, state| {
+        self.keygen_states.retain(|ceremony_id, state| {
             if state.last_message_timestamp.elapsed() > timeout {
-                slog::warn!(logger_c, "Keygen state expired for key id: {:?}", key_id);
-
+                slog::warn!(
+                    logger_c,
+                    "Keygen state expired for ceremony id: {:?}",
+                    ceremony_id
+                );
                 let late_nodes = state.awaited_parties();
-                events_to_send.push(KeygenOutcome::timeout(*key_id, late_nodes));
+                events_to_send.push(KeygenOutcome::timeout(*ceremony_id, late_nodes));
                 return false;
             }
             true
         });
 
         for event in events_to_send {
-            if let Err(err) = self.event_sender.send(InnerEvent::KeygenResult(event)) {
+            if let Err(err) = self
+                .inner_event_sender
+                .send(InnerEvent::KeygenResult(event))
+            {
                 slog::error!(logger_c, "Unable to send event, error: {}", err);
             }
         }
@@ -154,17 +174,17 @@ impl KeygenManager {
     /// Start the keygen ceremony
     pub fn on_keygen_request(&mut self, ki: KeygenInfo) {
         let KeygenInfo {
-            id: key_id,
+            ceremony_id,
             signers,
         } = ki;
 
-        match self.keygen_states.entry(key_id) {
+        match self.keygen_states.entry(ceremony_id) {
             Entry::Occupied(_) => {
                 // State should not have been created prior to receiving a keygen request
                 slog::warn!(
                     self.logger,
-                    "Ignoring a keygen request for a known key_id: {:?}",
-                    key_id
+                    "Ignoring a keygen request for a known ceremony id: {:?}",
+                    ceremony_id
                 );
             }
             Entry::Vacant(entry) => match get_our_idx(&signers, &self.our_id) {
@@ -183,21 +203,21 @@ impl KeygenManager {
                         idx,
                         params,
                         idx_map,
-                        key_id,
-                        self.event_sender.clone(),
+                        ceremony_id,
+                        self.inner_event_sender.clone(),
                         &self.logger,
                     );
 
                     let state = entry.insert(state);
 
-                    // Process delayed messages for `key_id`
-                    if let Some((_, messages)) = self.delayed_messages.remove(&key_id) {
+                    // Process delayed messages for `ceremony_id`
+                    if let Some((_, messages)) = self.delayed_messages.remove(&ceremony_id) {
                         for (sender_id, msg) in messages {
                             state.process_keygen_message(sender_id, msg.into());
                         }
                     }
 
-                    debug_assert!(self.delayed_messages.get(&key_id).is_none());
+                    debug_assert!(self.delayed_messages.get(&ceremony_id).is_none());
                 }
                 None => {
                     slog::error!(
@@ -215,6 +235,8 @@ impl KeygenManager {
 /// i.e. at least `t+1` parties are required.
 /// This follow the notation in the multisig library that
 /// we are using and in the corresponding literature.
+
+// TODO: Another place this code is - should be in one place
 fn threshold_from_share_count(share_count: usize) -> usize {
     let doubled = share_count * 2;
 
@@ -237,29 +259,29 @@ fn check_threshold_calculation() {
 
 #[cfg(test)]
 impl KeygenManager {
-    pub fn get_state_for(&self, key_id: KeyId) -> Option<&KeygenState> {
-        self.keygen_states.get(&key_id)
+    pub fn get_state_for(&self, ceremony_id: CeremonyId) -> Option<&KeygenState> {
+        self.keygen_states.get(&ceremony_id)
     }
 
-    pub fn get_stage_for(&self, key_id: KeyId) -> Option<KeygenStage> {
-        self.get_state_for(key_id).map(|s| s.get_stage())
+    pub fn get_stage_for(&self, ceremony_id: CeremonyId) -> Option<KeygenStage> {
+        self.get_state_for(ceremony_id).map(|s| s.get_stage())
     }
 
     pub fn set_timeout(&mut self, phase_timeout: Duration) {
         self.phase_timeout = phase_timeout;
     }
 
-    pub fn get_delayed_count(&self, key_id: KeyId) -> usize {
+    pub fn get_delayed_count(&self, ceremony_id: CeremonyId) -> usize {
         // BC1s are stored separately from the state
         let bc_count = self
             .delayed_messages
-            .get(&key_id)
+            .get(&ceremony_id)
             .map(|v| v.1.len())
             .unwrap_or(0);
 
         let other_count = self
             .keygen_states
-            .get(&key_id)
+            .get(&ceremony_id)
             .map(|s| s.delayed_count())
             .unwrap_or(0);
 
