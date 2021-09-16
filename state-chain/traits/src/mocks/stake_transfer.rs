@@ -53,9 +53,6 @@ macro_rules! impl_mock_stake_transfer {
 			fn revert_claim(account_id: &Self::AccountId, amount: Self::Balance) {
 				Self::credit_stake(account_id, amount);
 			}
-			fn update_validator_bonds(new_validators: &Vec<Self::AccountId>, new_bond: Self::Balance) {
-				unimplemented!()
-			}
 		}
 	};
 }
