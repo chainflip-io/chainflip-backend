@@ -5,6 +5,8 @@
     "providers": "RefCount",
     "data": "()"
   },
+  "ActiveProposal": "(ProposalId, Timestamp)",
+  "AuctionRange": "(u32,u32)",
   "Address": "MultiAddress",
   "Amount": "TokenAmount",
   "AuctionError": {
@@ -19,22 +21,17 @@
     "_enum": {
       "WaitingForBids": "(Vec<ValidatorId>, Amount)",
       "BidsTaken": "(Vec<(ValidatorId, Amount)>)",
-      "WinnersSelected": "(Vec<ValidatorId>, Amount)"
+      "ValidatorsSelected": "(Vec<ValidatorId>, Amount)"
     }
   },
-  "AuctionRange": "(u32,u32)",
+  "Bid": "(ValidatorId, Amount)",
   "CallHash": "[u8;32]",
+  "CeremonyId": "u64",
   "ChainParams": {
     "_enum": {
       "Ethereum": "(Vec<u8>)",
       "Other": "(Vec<u8>)"
     }
-  },
-  "CeremonyId": "u64",
-  "ChainType": {
-    "_enum": [
-      "Ethereum"
-    ]
   },
   "ClaimDetailsFor": {
     "amount": "FlipBalance",
@@ -75,11 +72,8 @@
       "Failure": "(Vec<ValidatorId>)"
     }
   },
+  "Liveness": "u8",
   "LookupSource": "MultiAddress",
-  "NetworkState": {
-    "online": "u32",
-    "offline": "u32"
-  },
   "Nonce": "u64",
   "NonceIdentifier": {
     "_enum": [
@@ -88,28 +82,28 @@
       "Dot"
     ]
   },
-  "OnlineCreditsFor": "u64",
-  "ProposalId": "u32",
+  "OnlineCreditsFor": "BlockNumber",
   "PublicKey": "Vec<u8>",
+  "ProposalId": "u32",
   "ReputationPenalty": {
     "points": "ReputationPoints",
     "blocks": "BlockNumber"
   },
+  "ReputationOf": "BlockNumber",
   "ReputationPoints": "i32",
+  "RequestIndex": "u64",
   "ReserveId": "[u8;4]",
   "Retired": "bool",
-  "SchnorrSignature": {
-    "s": "[u8; 32]",
-    "r": "[u8; 20]"
-  },
   "Signature": "H256",
+  "StakeAttempt": "(EthereumAddress, Amount)",
+  "Timestamp": "u64",
   "TokenAmount": "u128",
   "ValidatorId": "AccountId",
-  "TransactionHash": "Vec<u8>",
+  "Transaction": "Vec<u8>",
   "Vault": {
-    "previous_key": "PublicKey",
-    "current_key": "PublicKey",
-    "tx_hash": "TransactionHash"
+    "old_key": "PublicKey",
+    "new_key": "PublicKey",
+    "tx": "Transaction"
   },
   "VaultRotation": {
     "new_public_key": "PublicKey",
@@ -118,7 +112,9 @@
   "VaultRotationResponse": {
     "_enum": {
       "Success": {
-        "tx": "TransactionHash"
+        "old_key": "PublicKey",
+        "new_key": "PublicKey",
+        "tx": "Transaction"
       },
       "Failure": ""
     }
