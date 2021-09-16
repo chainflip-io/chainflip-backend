@@ -1,5 +1,8 @@
-use crate::{self as pallet_cf_request_response, instances::BaseConfig};
-use frame_support::instances::Instance0;
+use codec::{Encode, Decode};
+use frame_support::traits::EnsureOrigin;
+use crate::{self as pallet_cf_signing};
+use cf_traits::{Chainflip, SigningContext};
+use frame_support::{instances::Instance0, traits::UnfilteredDispatchable};
 use frame_support::parameter_types;
 use frame_system;
 use sp_core::H256;
@@ -19,7 +22,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		PingPongRequestResponse: pallet_cf_request_response::<Instance0>::{Module, Call, Storage, Event<T>},
+		Signing: pallet_cf_signing::<Instance0>::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -53,44 +56,123 @@ impl frame_system::Config for Test {
 	type SS58Prefix = SS58Prefix;
 }
 
-impl BaseConfig for Test {
-	type KeyId = u64;
+use cf_traits::impl_mock_ensure_witnessed_for_origin;
+
+impl_mock_ensure_witnessed_for_origin!(Origin);
+
+impl Chainflip for Test {
+	type KeyId = u32;
 	type ValidatorId = u64;
-	type ChainId = u64;
+	type Amount = u128;
+	type Call = Call;
+	type EnsureWitnessed = MockEnsureWitnessed;
 }
 
-pub(crate) mod ping_pong {
-	use crate::NullCallback;
-	use std::marker::PhantomData;
+// Mock SignerNomination
 
-	use super::*;
-	use codec::{Decode, Encode};
+pub struct MockNominator;
+pub const RANDOM_NOMINEE: u64 = 0xc001d00d as u64;
 
-	/// Instance marker.
-	#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-	pub struct Instance;
+impl cf_traits::SignerNomination for MockNominator {
+	type SignerId = u64;
 
-	#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
-	pub struct Ping;
+	fn nomination_with_seed(_seed: u64) -> Self::SignerId {
+		RANDOM_NOMINEE
+	}
 
-	#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
-	pub struct Pong;
-
-	impl pallet_cf_request_response::RequestContext<Test> for Ping {
-		type Response = Pong;
-		type Callback = NullCallback<Test>;
-
-		fn get_callback(&self, response: Self::Response) -> Self::Callback {
-			assert!(*self == Ping);
-			assert!(response == Pong);
-			NullCallback::<Test>(PhantomData::default())
-		}
+	fn threshold_nomination_with_seed(seed: u64) -> Vec<Self::SignerId> {
+		vec![RANDOM_NOMINEE]
 	}
 }
 
-impl pallet_cf_request_response::Config<Instance0> for Test {
+// Mock Callback
+
+thread_local! {
+	pub static SIGNATURE: std::cell::RefCell<Option<String>> = Default::default()
+}
+
+pub struct MockCallback<Ctx: SigningContext<Test>>(pub Ctx::Signature);
+
+impl UnfilteredDispatchable for MockCallback<DogeSigningContext> {
+	type Origin = Origin;
+
+	fn dispatch_bypass_filter(self, origin: Self::Origin) -> frame_support::dispatch::DispatchResultWithPostInfo {
+		MockEnsureWitnessed::ensure_origin(origin)?;
+		SIGNATURE.with(|cell| *(cell.borrow_mut()) = Some(self.0));
+		Ok(().into())
+	}
+}
+
+// Mock KeyProvider
+pub struct MockKeyProvider;
+
+impl cf_traits::KeyProvider<Doge> for MockKeyProvider {
+	type KeyId = u32;
+
+	fn current_key() -> Self::KeyId {
+		0
+	}
+}
+
+
+// Mock OfflineConditions
+
+thread_local! {
+	pub static REPORTED: std::cell::RefCell<Vec<u64>> = Default::default()
+}
+
+pub struct MockOfflineConditions;
+
+impl MockOfflineConditions {
+	fn get_reported() -> Vec<u64> {
+		REPORTED.with(|cell| cell.borrow().clone())
+	}
+}
+
+impl pallet_cf_reputation::OfflineConditions for MockOfflineConditions {
+	type ValidatorId = u64;
+
+	fn report(
+		_condition: pallet_cf_reputation::OfflineCondition,
+		_penalty: pallet_cf_reputation::ReputationPoints,
+		validator_id: &Self::ValidatorId,
+	) -> Result<frame_support::dispatch::Weight, pallet_cf_reputation::ReportError> {
+		REPORTED.with(|cell| cell.borrow_mut().push(*validator_id));
+		Ok(0)
+	}
+}
+
+// Mock SigningContext
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+pub struct Doge;
+impl cf_chains::Chain for Doge {}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+pub struct DogeSigningContext;
+
+impl SigningContext<Test> for DogeSigningContext {
+	type Chain = Doge;
+	type Payload = [u8; 4];
+	type Signature = String;
+	type Callback = MockCallback<Self>;
+
+	fn get_payload(&self) -> Self::Payload {
+		[0xcf; 4]
+	}
+
+	fn resolve_callback(&self, signature: Self::Signature) -> Self::Callback {
+		MockCallback(signature)
+	}
+}
+
+impl pallet_cf_signing::Config<Instance0> for Test {
 	type Event = Event;
-	type RequestContext = ping_pong::Ping;
+	type TargetChain = Doge;
+	type SigningContext = DogeSigningContext;
+	type SignerNomination = MockNominator;
+	type KeyProvider = MockKeyProvider;
+	type OfflineConditions = MockOfflineConditions;
 }
 
 // Build genesis storage according to the mock runtime.
