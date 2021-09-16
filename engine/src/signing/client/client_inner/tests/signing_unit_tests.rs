@@ -86,7 +86,7 @@ async fn delayed_signing_bc1_gets_removed() {
     assert_eq!(signing_delayed_count(&client, &MESSAGE_INFO), 1);
 
     // Trigger the timeout
-    client.set_timeout(timeout);
+    client.set_all_states_expired(timeout);
     client.cleanup();
 
     assert_eq!(signing_delayed_count(&client, &MESSAGE_INFO), 0);
@@ -277,7 +277,7 @@ async fn phase1_timeout() {
 
     // Send nothing to the client, the sign request is already present in phase1
 
-    c1.set_timeout(Duration::from_secs(0));
+    c1.set_all_states_expired(Duration::from_secs(0));
     c1.cleanup();
 
     assert_eq!(get_stage_for_msg(&c1, &MESSAGE_INFO), None);
@@ -319,7 +319,7 @@ async fn phase2_timeout() {
 
     // Because we only have 2 clients in the signing test, we cant test receiving another secret 2 before timeout.
 
-    c1.set_timeout(Duration::from_secs(0));
+    c1.set_all_states_expired(Duration::from_secs(0));
     c1.cleanup();
 
     let mut rx = &mut ctx.rxs[0];
@@ -360,7 +360,7 @@ async fn phase3_timeout() {
 
     // because we only have 2 clients in the signing test, we cant test receiving a local sig before timeout.
 
-    c1.set_timeout(Duration::from_secs(0));
+    c1.set_all_states_expired(Duration::from_secs(0));
     c1.cleanup();
 
     let mut rx = &mut ctx.rxs[0];
@@ -543,7 +543,7 @@ async fn invalid_bc1() {
         ))
     );
 
-    c1.set_timeout(Duration::from_secs(0));
+    c1.set_all_states_expired(Duration::from_secs(0));
     c1.cleanup();
 
     // check that the signing was cleaned up
@@ -602,7 +602,7 @@ async fn invalid_secret2() {
         ))
     );
 
-    c1.set_timeout(Duration::from_secs(0));
+    c1.set_all_states_expired(Duration::from_secs(0));
     c1.cleanup();
 
     // check that the signing was cleaned up
@@ -658,7 +658,7 @@ async fn invalid_local_sig() {
         ))
     );
 
-    c1.set_timeout(Duration::from_secs(0));
+    c1.set_all_states_expired(Duration::from_secs(0));
     c1.cleanup();
 
     // check that the signing was cleaned up

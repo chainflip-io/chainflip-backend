@@ -183,7 +183,7 @@ async fn no_keygen_request() {
 
     c1.process_p2p_mq_message(message);
 
-    c1.set_timeout(Duration::from_secs(0));
+    c1.set_all_states_expired(Duration::from_secs(0));
     c1.cleanup();
 
     let mut rx = &mut ctx.rxs[0];
@@ -216,7 +216,7 @@ async fn phase1_timeout() {
 
     c1.process_p2p_mq_message(message);
 
-    c1.set_timeout(Duration::from_secs(0));
+    c1.set_all_states_expired(Duration::from_secs(0));
     c1.cleanup();
 
     let mut rx = &mut ctx.rxs[0];
@@ -253,7 +253,7 @@ async fn phase2_timeout() {
 
     c1.process_p2p_mq_message(message);
 
-    c1.set_timeout(Duration::from_secs(0));
+    c1.set_all_states_expired(Duration::from_secs(0));
     c1.cleanup();
 
     let mut rx = &mut ctx.rxs[0];
@@ -294,7 +294,7 @@ async fn invalid_bc1() {
         InnerEvent::KeygenResult(KeygenOutcome::invalid(KEY_ID, vec![bad_node]))
     );
 
-    c1.set_timeout(Duration::from_secs(0));
+    c1.set_all_states_expired(Duration::from_secs(0));
     c1.cleanup();
 
     assert_eq!(helpers::keygen_stage_for(&c1, KEY_ID), None);
@@ -335,7 +335,7 @@ async fn invalid_sec2() {
         InnerEvent::KeygenResult(KeygenOutcome::invalid(KEY_ID, vec![bad_node]))
     );
 
-    c1.set_timeout(Duration::from_secs(0));
+    c1.set_all_states_expired(Duration::from_secs(0));
     c1.cleanup();
 
     assert_eq!(helpers::keygen_stage_for(&c1, KEY_ID), None);

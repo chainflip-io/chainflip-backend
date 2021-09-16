@@ -706,7 +706,7 @@ pub async fn recv_next_signal_message_skipping(
 }
 
 /// Check if the next event produced by the receiver is SigningOutcome
-async fn check_outcome(rx: &mut InnerEventReceiver) -> Option<&SigningOutcome> {
+pub async fn check_outcome(rx: &mut InnerEventReceiver) -> Option<&SigningOutcome> {
     let event: &InnerEvent = tokio::time::timeout(Duration::from_millis(10), rx.peek())
         .await
         .ok()??;

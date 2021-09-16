@@ -225,9 +225,9 @@ where
 
     /// Change the time we wait until deleting all unresolved states
     #[cfg(test)]
-    pub fn set_timeout(&mut self, phase_timeout: Duration) {
-        self.keygen.set_timeout(phase_timeout);
-        self.signing_manager.set_timeout(phase_timeout);
+    pub fn expire_all(&mut self) {
+        self.keygen.expire_all();
+        self.signing_manager.expire_all();
     }
 
     /// Clean up expired states

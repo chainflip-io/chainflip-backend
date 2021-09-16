@@ -223,8 +223,8 @@ impl KeygenManager {
         self.get_state_for(key_id).map(|s| s.get_stage())
     }
 
-    pub fn set_timeout(&mut self, phase_timeout: Duration) {
-        self.phase_timeout = phase_timeout;
+    pub fn expire_all(&mut self) {
+        self.phase_timeout = std::time::Duration::from_secs(0);
     }
 
     pub fn get_delayed_count(&self, key_id: KeyId) -> usize {

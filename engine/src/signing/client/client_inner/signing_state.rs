@@ -345,6 +345,18 @@ impl SigningState {
             }
         }
     }
+
+    #[cfg(test)]
+    pub fn set_expiry_time(&mut self, expiry_time: std::time::Instant) {
+        match &mut self.inner {
+            SigningStateInner::SigningStatePreKey(state) => {
+                state.should_expire_at = expiry_time;
+            }
+            SigningStateInner::SigningStateWithKey(state) => {
+                state.should_expire_at = expiry_time;
+            }
+        }
+    }
 }
 
 /// Info useful for most signing states

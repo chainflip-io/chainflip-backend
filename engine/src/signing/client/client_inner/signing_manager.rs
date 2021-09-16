@@ -150,8 +150,10 @@ impl SigningManager {
 
 #[cfg(test)]
 impl SigningManager {
-    pub fn set_timeout(&mut self, phase_timeout: Duration) {
-        slog::info!(self.logger, "TODO: set timeout");
+    pub fn expire_all(&mut self) {
+        for (_, state) in &mut self.signing_states {
+            state.set_expiry_time(std::time::Instant::now());
+        }
     }
 
     pub fn get_stage_for(&self, mi: &MessageInfo) -> Option<String> {

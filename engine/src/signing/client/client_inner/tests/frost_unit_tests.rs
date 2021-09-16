@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 use super::*;
 
 macro_rules! assert_stage {
@@ -260,4 +262,43 @@ async fn should_handle_inconsistent_broadcast_sig3() {
 
     // Needs +1 to map from array idx to signer idx
     assert_eq!(blamed_parties, vec![AccountId([bad_idx as u8 + 1; 32])]);
+}
+
+#[tokio::test]
+async fn should_report_on_timeout_before_reqeust_to_sign() {
+    let mut ctx = helpers::KeygenContext::new();
+    let keygen_states = ctx.generate().await;
+
+    let sign_states = ctx.sign().await;
+
+    let mut c1 = keygen_states.key_ready.clients[0].clone();
+
+    assert_no_stage!(c1);
+
+    let bad_array_idxs = [1, 2];
+
+    for idx in bad_array_idxs {
+        receive_comm1!(c1, idx, sign_states);
+    }
+
+    assert_no_stage!(c1);
+
+    c1.expire_all();
+    c1.cleanup();
+
+    let (_, blamed_parties) = helpers::check_outcome(&mut ctx.rxs[0])
+        .await
+        .expect("should procude outcome")
+        .result
+        .clone()
+        .unwrap_err();
+
+    assert_eq!(
+        blamed_parties,
+        bad_array_idxs
+            .iter()
+            // Needs +1 to map from array idx to signer idx
+            .map(|idx| AccountId([*idx as u8 + 1; 32]))
+            .collect_vec()
+    );
 }
