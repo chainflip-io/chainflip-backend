@@ -175,6 +175,15 @@ pub trait BidderProvider {
 	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)>;
 }
 
+pub trait BondRotation {
+	type AccountId;
+	type Balance;
+
+	/// Sets the validator bond for all new_validator to the new_bond and
+	/// the bond for all old validators to zero.
+	fn update_validator_bonds(new_validators: &Vec<Self::AccountId>, new_bond: Self::Balance);
+}
+
 pub trait StakeTransfer {
 	type AccountId;
 	type Balance;
@@ -199,10 +208,6 @@ pub trait StakeTransfer {
 
 	/// Reverts a pending claim in the case of an expiry or cancellation.
 	fn revert_claim(account_id: &Self::AccountId, amount: Self::Balance);
-
-	/// Sets the validator bond for all new_validator to the new_bond and
-	/// the bond for all old validators to zero.
-	fn update_validator_bonds(new_validators: &Vec<Self::AccountId>, new_bond: Self::Balance);
 }
 
 /// Trait for managing token issuance.

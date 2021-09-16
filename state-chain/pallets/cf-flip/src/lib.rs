@@ -412,6 +412,21 @@ impl<T: Config> cf_traits::Issuance for FlipIssuance<T> {
 	}
 }
 
+impl<T: Config> cf_traits::BondRotation for Pallet<T> {
+	type AccountId = T::AccountId;
+	type Balance = T::Balance;
+
+	fn update_validator_bonds(new_validators: &Vec<T::AccountId>, new_bond: T::Balance) {
+		Account::<T>::iter().for_each(|(validator, _)| {
+			if new_validators.contains(&validator) {
+				Self::set_validator_bond(&validator, new_bond);
+			} else {
+				Self::set_validator_bond(&validator, T::Balance::zero());
+			}
+		});
+	}
+}
+
 impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = T::Balance;
@@ -447,16 +462,6 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 	fn revert_claim(account_id: &Self::AccountId, amount: Self::Balance) {
 		Self::settle(account_id, Self::bridge_in(amount).into());
 		// claim reverts automatically when dropped
-	}
-
-	fn update_validator_bonds(new_validators: &Vec<T::AccountId>, new_bond: T::Balance) {
-		Account::<T>::iter().for_each(|(validator, _)| {
-			if new_validators.contains(&validator) {
-				Self::set_validator_bond(&validator, new_bond);
-			} else {
-				Self::set_validator_bond(&validator, T::Balance::zero());
-			}
-		});
 	}
 }
 
