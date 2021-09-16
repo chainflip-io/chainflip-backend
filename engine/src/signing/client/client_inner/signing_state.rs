@@ -245,7 +245,7 @@ impl SigningState {
     ) {
         let (delayed_messages, logger) = match &mut self.inner {
             SigningStateInner::SigningStatePreKey(state) => (
-                state.delayed_messages_by_id.split_off(0),
+                std::mem::take(&mut state.delayed_messages_by_id),
                 state.logger.clone(),
             ),
             SigningStateInner::SigningStateWithKey(_) => {

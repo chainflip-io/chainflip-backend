@@ -165,28 +165,22 @@ impl Keys {
                 let n = params.share_count;
                 let t = params.threshold;
 
-                let mut pubkeys = vec![];
+                let pubkeys: Vec<_> = (1..=n)
+                    .map(|idx| {
+                        let idx_scalar: FE = ECScalar::from(&BigInt::from(idx as u32));
 
-                // Generate public verification shares for each party `i`
-                for i in 1..=n {
-                    let i_scalar: FE = ECScalar::from(&BigInt::from(i as u32));
-                    // println!("i_scalar: {:?}", i_scalar);
-
-                    let mut iter = (1..=n).map(|j| {
-                        let mut a_rev_iter =
-                            (0..=t).map(|k| vss_scheme_vec[j - 1].commitments[k]).rev();
-
-                        let first = a_rev_iter.next().unwrap();
-
-                        a_rev_iter.fold(first, |acc, x| acc * i_scalar + x)
-                    });
-
-                    let first = iter.next().unwrap();
-
-                    let pk_i = iter.fold(first, |acc, x| acc + x);
-
-                    pubkeys.push(pk_i)
-                }
+                        (1..=n)
+                            .map(|j| {
+                                (0..=t)
+                                    .map(|k| vss_scheme_vec[j - 1].commitments[k])
+                                    .rev()
+                                    .reduce(|acc, x| acc * idx_scalar + x)
+                                    .unwrap()
+                            })
+                            .reduce(|acc, x| acc + x)
+                            .unwrap()
+                    })
+                    .collect();
 
                 // Sanity check: our pubkey is among generated pubkeys for all parties
                 assert_eq!(pubkeys[index - 1], GE::generator() * x_i);
@@ -228,13 +222,13 @@ pub fn build_challenge(
 
     // Assemble the challenge in correct order according to this contract:
     // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/abstract/SchnorrSECP256K1.sol
-    let e_bytes = [
-        pubkey_x.to_vec(),
-        [pubkey_y_parity].to_vec(),
-        message.to_vec(),
-        eth_addr.to_vec(),
-    ]
-    .concat();
+    let e_bytes: Vec<_> = pubkey_x
+        .iter()
+        .chain([pubkey_y_parity].iter())
+        .chain(message)
+        .chain(eth_addr.iter())
+        .cloned()
+        .collect();
 
     let e_bn = BigInt::from_bytes(Keccak256::hash(&e_bytes).as_bytes());
     let e: FE = ECScalar::from(&e_bn);

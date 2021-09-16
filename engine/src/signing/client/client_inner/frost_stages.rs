@@ -15,20 +15,10 @@ use super::utils::threshold_from_share_count;
 
 type SigningStageResult = StageResult<SigningData, SchnorrSignature>;
 
-macro_rules! is_variant {
-    ($variant:path, $enum:expr) => {
-        if let $variant(_) = $enum {
-            true
-        } else {
-            false
-        }
-    };
-}
-
 macro_rules! should_delay {
     ($variant:path) => {
         fn should_delay(&self, m: &SigningData) -> bool {
-            is_variant!($variant, m)
+            matches!(m, $variant(_))
         }
     };
 }
