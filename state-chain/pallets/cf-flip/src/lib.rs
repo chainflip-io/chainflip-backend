@@ -450,13 +450,11 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 	}
 
 	fn update_validator_bonds(new_validators: &Vec<T::AccountId>, new_bond: T::Balance) {
-		Account::<T>::iter().for_each(|validator| {
-			// Get the current validator AccountId
-			let validator = &validator.0;
-			if new_validators.contains(validator) {
-				Self::set_validator_bond(validator, new_bond);
+		Account::<T>::iter().for_each(|(validator, _)| {
+			if new_validators.contains(&validator) {
+				Self::set_validator_bond(&validator, new_bond);
 			} else {
-				Self::set_validator_bond(validator, T::Balance::zero());
+				Self::set_validator_bond(&validator, T::Balance::zero());
 			}
 		});
 	}
