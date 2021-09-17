@@ -1,5 +1,6 @@
 use anyhow::Result;
-use futures::{stream, Stream, StreamExt, TryStreamExt};
+use futures::{Stream, StreamExt, TryStreamExt};
+
 use std::fmt::Debug;
 use web3::{
     ethabi::RawLog,
@@ -29,7 +30,6 @@ pub async fn new_eth_event_stream<
                 .build(),
         )
         .await?;
-
     let from_block = U64::from(from_block);
     let current_block = web3.eth().block_number().await?;
 
@@ -69,8 +69,9 @@ pub async fn new_eth_event_stream<
                 })
             });
 
+    slog::info!(logger, "Future logs fetched");
     let logger = logger.clone();
-    Ok(stream::iter(past_logs)
+    Ok(tokio_stream::iter(past_logs)
         .map(|log| Ok(log))
         .chain(future_logs)
         .map(move |result_unparsed_log| -> Result<Event, anyhow::Error> {

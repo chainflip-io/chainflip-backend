@@ -1,10 +1,8 @@
 //! Contains the information required to use the StakeManger contract as a source for
 //! the EthEventStreamer
 
-use std::{
-    convert::TryInto,
-    sync::{Arc, Mutex},
-};
+use std::{convert::TryInto, sync::Arc};
+use tokio::sync::Mutex;
 
 use crate::{
     eth::{eth_event_streamer, utils, EventParseError, SignatureAndEvent},
@@ -67,9 +65,15 @@ pub async fn start_stake_manager_witness(
                             return_addr,
                             tx_hash
                         );
-                        let mut signer = signer.lock().unwrap(); // TODO: Handle unwrap
+                        let mut signer = signer.lock().await;
                         subxt_client
-                            .witness_staked(&*signer, account_id, amount, tx_hash)
+                            .witness_staked(
+                                &*signer,
+                                account_id,
+                                amount,
+                                Some(return_addr.0),
+                                tx_hash,
+                            )
                             .await?;
                         signer.increment_nonce();
                     }
@@ -85,7 +89,7 @@ pub async fn start_stake_manager_witness(
                             amount,
                             tx_hash
                         );
-                        let mut signer = signer.lock().unwrap(); // TODO: Handle unwrap
+                        let mut signer = signer.lock().await;
                         subxt_client
                             .witness_claimed(&*signer, account_id, amount, tx_hash)
                             .await?;
@@ -203,14 +207,16 @@ impl StakeManager {
         from_block: u64,
         logger: &slog::Logger,
     ) -> Result<impl Stream<Item = Result<StakeManagerEvent>>> {
-        eth_event_streamer::new_eth_event_stream(
+        let event_stream = eth_event_streamer::new_eth_event_stream(
             web3,
             self.deployed_address,
             self.decode_log_closure()?,
             from_block,
             logger,
         )
-        .await
+        .await;
+        println!("Initialise SM event stream");
+        return event_stream;
     }
 
     pub fn decode_log_closure(

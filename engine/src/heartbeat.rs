@@ -1,4 +1,5 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use slog::o;
 use substrate_subxt::{Client, PairSigner};
@@ -19,11 +20,17 @@ pub async fn start(
     slog::info!(logger, "Starting");
 
     {
-        let signer = signer.lock().unwrap(); // TODO: Handle unwrap
-        subxt_client
-            .heartbeat(&*signer)
-            .await
-            .expect("Should send heartbeat on startup successfully");
+        let mut signer = signer.lock().await;
+        match subxt_client.heartbeat(&*signer).await {
+            Ok(_) => {
+                slog::info!(logger, "Sent initial heartbeat");
+                signer.increment_nonce();
+            }
+            Err(e) => {
+                slog::error!(logger, "Failed to submit initial heartbeat: {:?}", e);
+                panic!("Initial heartbeat should succeed");
+            }
+        }
     }
 
     let heartbeat_block_interval = subxt_client
@@ -50,9 +57,10 @@ pub async fn start(
         // Target the middle of the heartbeat block interval so block drift is *very* unlikely to cause failure
         if (block_header.number + (heartbeat_block_interval / 2)) % heartbeat_block_interval == 0 {
             slog::info!(logger, "Sending heartbeat");
-            let mut signer = signer.lock().unwrap(); // TODO: Handle unwrap
+            let mut signer = signer.lock().await; // TODO: Handle unwrap
             match subxt_client.heartbeat(&*signer).await {
                 Ok(_) => {
+                    // ignore
                     signer.increment_nonce();
                 }
                 Err(e) => {

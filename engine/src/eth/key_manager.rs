@@ -7,8 +7,9 @@ use crate::{
     settings,
     state_chain::runtime::StateChainRuntime,
 };
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use substrate_subxt::{Client, PairSigner};
+use tokio::sync::Mutex;
 use web3::{
     contract::tokens::Tokenizable,
     ethabi::{self, RawLog, Token},
@@ -151,14 +152,16 @@ impl KeyManager {
         from_block: u64,
         logger: &slog::Logger,
     ) -> Result<impl Stream<Item = Result<KeyManagerEvent>>> {
-        eth_event_streamer::new_eth_event_stream(
+        let event_stream = eth_event_streamer::new_eth_event_stream(
             web3,
             self.deployed_address,
             self.decode_log_closure()?,
             from_block,
             logger,
         )
-        .await
+        .await;
+        println!("Initialise event stream");
+        return event_stream;
     }
 
     pub fn decode_log_closure(

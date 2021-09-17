@@ -1,4 +1,5 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use chainflip_engine::{
     eth::{self, key_manager, stake_manager, EthBroadcaster},
@@ -106,7 +107,7 @@ async fn main() {
                     "Should be valid ws endpoint: {}",
                     settings.state_chain.ws_endpoint
                 )),
-                AccountId(pair_signer.lock().unwrap().signer().public().0)
+                AccountId(pair_signer.lock().await.signer().public().0)
             )
             .await
             .expect("unable to connect p2p rpc client"),
