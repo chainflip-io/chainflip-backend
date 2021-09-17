@@ -80,6 +80,7 @@ impl frame_system::Config for Test {
 
 parameter_types! {
 	pub const MinValidators: u32 = 2;
+	pub const BackupValidatorRatio: u32 = 3;
 }
 
 impl Config for Test {
@@ -94,6 +95,7 @@ impl Config for Test {
 	type ChainflipAccount = MockChainflipAccount;
 	type AccountIdOf = ConvertInto;
 	type Online = MockOnline;
+	type BackupValidatorRatio = BackupValidatorRatio;
 }
 
 pub struct MockChainflipAccount;
@@ -111,16 +113,6 @@ impl ChainflipAccount for MockChainflipAccount {
 				.insert(*account_id, ChainflipAccountData { state });
 		})
 	}
-}
-
-#[test]
-fn account_updates() {
-	MockChainflipAccount::update_state(&1, ChainflipAccountState::Backup);
-	let data = MockChainflipAccount::get(&1);
-	assert_eq!(data.state, ChainflipAccountState::Backup);
-	MockChainflipAccount::update_state(&1, ChainflipAccountState::Validator);
-	let data = MockChainflipAccount::get(&1);
-	assert_eq!(data.state, ChainflipAccountState::Validator);
 }
 
 pub struct MockOnline;

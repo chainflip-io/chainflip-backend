@@ -188,8 +188,6 @@ impl Config for Test {
 	type Amount = Amount;
 	// Use the pallet's implementation
 	type Auction = AuctionPallet;
-	type ChainflipAccount = cf_traits::ChainflipAccounts<Self>;
-	type AccountIdOf = ConvertInto;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

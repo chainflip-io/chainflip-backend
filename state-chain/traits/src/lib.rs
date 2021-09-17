@@ -90,6 +90,8 @@ impl<ValidatorId, Amount: Default> Default for AuctionPhase<ValidatorId, Amount>
 
 /// A bid represented by a validator and the amount they wish to bid
 pub type Bid<ValidatorId, Amount> = (ValidatorId, Amount);
+pub type RemainingBid<ValidatorId, Amount> = Bid<ValidatorId, Amount>;
+
 /// A range of min, max for active validator set
 pub type ActiveValidatorRange = (u32, u32);
 

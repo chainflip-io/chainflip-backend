@@ -138,6 +138,7 @@ pub fn native_version() -> NativeVersion {
 
 parameter_types! {
 	pub const MinValidators: u32 = 2;
+	pub const BackupValidatorRatio: u32 = 3;
 }
 
 impl pallet_cf_auction::Config for Runtime {
@@ -152,6 +153,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type Online = Reputation;
 	type ChainflipAccount = cf_traits::ChainflipAccounts<Self>;
 	type AccountIdOf = ConvertInto;
+	type BackupValidatorRatio = BackupValidatorRatio;
 }
 
 // FIXME: These would be changed
@@ -167,8 +169,6 @@ impl pallet_cf_validator::Config for Runtime {
 	type EpochIndex = EpochIndex;
 	type Amount = FlipBalance;
 	type Auction = Auction;
-	type ChainflipAccount = cf_traits::ChainflipAccounts<Self>;
-	type AccountIdOf = ConvertInto;
 }
 
 impl pallet_cf_vaults::Config for Runtime {
