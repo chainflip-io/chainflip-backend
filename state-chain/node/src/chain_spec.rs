@@ -108,6 +108,8 @@ pub fn development_config() -> Result<ChainSpec, String> {
 /// 100 block epochs = 10 mins at 6 second block time
 pub fn cf_development_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
+	let bashful_sr25519 =
+		hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"];
 	Ok(ChainSpec::from_genesis(
 		"CF Develop",
 		"cf-dev",
@@ -118,31 +120,19 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				// Initial PoA authorities
 				vec![(
 					// Bashful
-					hex_literal::hex![
-						"36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"
-					]
-					.into(),
-					hex_literal::hex![
-						"36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"
-					]
-					.unchecked_into(),
+					bashful_sr25519.into(),
+					bashful_sr25519.unchecked_into(),
 					hex_literal::hex![
 						"971b584324592e9977f0ae407eb6b8a1aa5bcd1ca488e54ab49346566f060dd8"
 					]
 					.unchecked_into(),
 				)],
 				// Sudo account - Bashful
-				hex_literal::hex![
-					"36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"
-				]
-				.into(),
+				bashful_sr25519.into(),
 				// Pre-funded accounts
 				vec![
 					// Bashful
-					hex_literal::hex![
-						"36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"
-					]
-					.into(),
+					bashful_sr25519.into(),
 				],
 				1,
 				100,
@@ -165,7 +155,16 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 /// 300 block epochs = 30 mins at 6 second block time
 pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
-
+	let bashful_sr25519 =
+		hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"];
+	let doc_sr25519 =
+		hex_literal::hex!["8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f04"];
+	let dopey_sr25519 =
+		hex_literal::hex!["ca58f2f4ae713dbb3b4db106640a3db150e38007940dfe29e6ebb870c4ccd47e"];
+	let grumpy_sr25519 =
+		hex_literal::hex!["28b5f5f1654393975f58e78cf06b6f3ab509b3629b0a4b08aaa3dce6bf6af805"];
+	let happy_sr25519 =
+		hex_literal::hex!["7e6eb0b15c1767360fdad63d6ff78a97374355b00b4d3511a522b1a8688a661d"];
 	Ok(ChainSpec::from_genesis(
 		"Internal testnet",
 		"test",
@@ -177,14 +176,8 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 				vec![
 					(
 						// Bashful
-						hex_literal::hex![
-							"36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"
-						]
-						.into(),
-						hex_literal::hex![
-							"36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"
-						]
-						.unchecked_into(),
+						bashful_sr25519.into(),
+						bashful_sr25519.unchecked_into(),
 						hex_literal::hex![
 							"971b584324592e9977f0ae407eb6b8a1aa5bcd1ca488e54ab49346566f060dd8"
 						]
@@ -192,14 +185,8 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					),
 					(
 						// Doc
-						hex_literal::hex![
-							"8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f04"
-						]
-						.into(),
-						hex_literal::hex![
-							"8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f04"
-						]
-						.unchecked_into(),
+						doc_sr25519.into(),
+						doc_sr25519.unchecked_into(),
 						hex_literal::hex![
 							"e4c4009bd437cba06a2f25cf02f4efc0cac4525193a88fe1d29196e5d0ff54e8"
 						]
@@ -207,14 +194,8 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					),
 					(
 						// Dopey
-						hex_literal::hex![
-							"ca58f2f4ae713dbb3b4db106640a3db150e38007940dfe29e6ebb870c4ccd47e"
-						]
-						.into(),
-						hex_literal::hex![
-							"ca58f2f4ae713dbb3b4db106640a3db150e38007940dfe29e6ebb870c4ccd47e"
-						]
-						.unchecked_into(),
+						dopey_sr25519.into(),
+						dopey_sr25519.unchecked_into(),
 						hex_literal::hex![
 							"5506333c28f3dd39095696362194f69893bc24e3ec553dbff106cdcbfe1beea4"
 						]
@@ -222,14 +203,8 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					),
 					(
 						// Grumpy
-						hex_literal::hex![
-							"28b5f5f1654393975f58e78cf06b6f3ab509b3629b0a4b08aaa3dce6bf6af805"
-						]
-						.into(),
-						hex_literal::hex![
-							"28b5f5f1654393975f58e78cf06b6f3ab509b3629b0a4b08aaa3dce6bf6af805"
-						]
-						.unchecked_into(),
+						grumpy_sr25519.into(),
+						grumpy_sr25519.unchecked_into(),
 						hex_literal::hex![
 							"b9036620f103cce552edbdd15e54810c6c3906975f042e3ff949af075636007f"
 						]
@@ -237,14 +212,8 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					),
 					(
 						// Happy
-						hex_literal::hex![
-							"7e6eb0b15c1767360fdad63d6ff78a97374355b00b4d3511a522b1a8688a661d"
-						]
-						.into(),
-						hex_literal::hex![
-							"7e6eb0b15c1767360fdad63d6ff78a97374355b00b4d3511a522b1a8688a661d"
-						]
-						.unchecked_into(),
+						happy_sr25519.into(),
+						happy_sr25519.unchecked_into(),
 						hex_literal::hex![
 							"0bb5e73112e716dc54541e87d2287f2252fd479f166969dc37c07a504000dae9"
 						]
@@ -252,37 +221,19 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					),
 				],
 				// Sudo account - Bashful
-				hex_literal::hex![
-					"36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"
-				]
-				.into(),
+				bashful_sr25519.into(),
 				// Pre-funded accounts
 				vec![
 					// Bashful
-					hex_literal::hex![
-						"36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"
-					]
-					.into(),
+					bashful_sr25519.into(),
 					// Doc
-					hex_literal::hex![
-						"8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f04"
-					]
-					.into(),
+					doc_sr25519.into(),
 					// Dopey
-					hex_literal::hex![
-						"ca58f2f4ae713dbb3b4db106640a3db150e38007940dfe29e6ebb870c4ccd47e"
-					]
-					.into(),
+					dopey_sr25519.into(),
 					// Grumpy
-					hex_literal::hex![
-						"28b5f5f1654393975f58e78cf06b6f3ab509b3629b0a4b08aaa3dce6bf6af805"
-					]
-					.into(),
+					grumpy_sr25519.into(),
 					// Happy
-					hex_literal::hex![
-						"7e6eb0b15c1767360fdad63d6ff78a97374355b00b4d3511a522b1a8688a661d"
-					]
-					.into(),
+					happy_sr25519.into(),
 				],
 				3,
 				300,
