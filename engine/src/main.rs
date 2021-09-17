@@ -12,6 +12,7 @@ use chainflip_engine::{
 };
 use slog::{o, Drain};
 use sp_core::Pair;
+use std::{convert::TryInto, fs};
 use substrate_subxt::ClientBuilder;
 
 #[tokio::main]
@@ -39,9 +40,8 @@ async fn main() {
     let key_pair = sp_core::sr25519::Pair::from_seed(&{
         // This can be the same filepath as the p2p key --node-key-file <file> on the state chain
         // which won't necessarily always be the case, i.e. if we no longer have PeerId == AccountId
-        use std::{convert::TryInto, fs};
         let seed: [u8; 32] = hex::decode(
-            &fs::read_to_string(&settings.state_chain.p2p_private_key_file)
+            &fs::read_to_string(&settings.state_chain.signing_key_file)
                 .expect("Cannot read private key file")
                 .replace("\"", ""),
         )
