@@ -1,1 +1,2 @@
-!target/release
+!target/release/state-chain-node
+!target/release/chainflip-engine

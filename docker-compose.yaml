@@ -3,7 +3,7 @@ version: "3"
 services:
   bashful-engine: &engine
     container_name: bashful-engine
-    image: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:${TAG}
+    image: ${BASE_IMAGE_URL}chainflip-engine:${TAG}
     depends_on:
       - bashful-node
     environment:
@@ -13,7 +13,7 @@ services:
 
   bashful-node: &node
     container_name: bashful-node
-    image: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:${TAG}
+    image: ${BASE_IMAGE_URL}state-chain-node:${TAG}
     ports:
       - "9944:9944"
       - "9933:9933"

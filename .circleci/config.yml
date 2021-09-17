@@ -131,6 +131,7 @@ workflows:
           name: build-chainflip-engine
           image: chainflip-io/chainflip-backend/chainflip-engine
           extra_build_args: "--build-arg SERVICE=chainflip-engine"
+          tag: <<pipeline.git.revision>>,latest
           requires:
             - test-validator-package
           context:
@@ -140,6 +141,7 @@ workflows:
           name: build-state-chain-node
           image: chainflip-io/chainflip-backend/state-chain-node
           extra_build_args: "--build-arg SERVICE=state-chain-node"
+          tag: <<pipeline.git.revision>>,latest
           requires:
             - test-validator-package
           context:
