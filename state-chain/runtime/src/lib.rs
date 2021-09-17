@@ -165,6 +165,10 @@ impl pallet_cf_validator::Config for Runtime {
 	type Auction = Auction;
 }
 
+impl pallet_cf_config::Config for Runtime {
+	type Event = Event;
+}
+
 impl pallet_cf_vaults::Config for Runtime {
 	type Event = Event;
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
@@ -467,6 +471,7 @@ construct_runtime!(
 		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>},
 		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
 		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
+		Config: pallet_cf_config::{Module, Call, Event<T>},
 	}
 );
 
