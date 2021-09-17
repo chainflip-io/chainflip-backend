@@ -65,11 +65,12 @@ pub fn authority_keys_from_seed(s: &str) -> (AccountId, AuraId, GrandpaId) {
 }
 
 /// Start a single node development chain
+/// 300 block epochs = 30 mins at 6 second block time
 pub fn development_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
 
 	Ok(ChainSpec::from_genesis(
-		"CF Develop",
+		"Develop",
 		"dev",
 		ChainType::Development,
 		move || {
@@ -87,6 +88,65 @@ pub fn development_config() -> Result<ChainSpec, String> {
 					get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
 				],
 				1,
+				300,
+			)
+		},
+		// Bootnodes
+		vec![],
+		// Telemetry
+		None,
+		// Protocol ID
+		None,
+		// Properties
+		None,
+		// Extensions
+		None,
+	))
+}
+
+/// Start a single node development chain - using bashful as genesis node
+/// 100 block epochs = 10 mins at 6 second block time
+pub fn cf_development_config() -> Result<ChainSpec, String> {
+	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
+
+	Ok(ChainSpec::from_genesis(
+		"CF Develop",
+		"cf-dev",
+		ChainType::Development,
+		move || {
+			testnet_genesis(
+				wasm_binary,
+				// Initial PoA authorities
+				vec![(
+					// Bashful
+					hex_literal::hex![
+						"36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"
+					]
+					.into(),
+					hex_literal::hex![
+						"36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"
+					]
+					.unchecked_into(),
+					hex_literal::hex![
+						"971b584324592e9977f0ae407eb6b8a1aa5bcd1ca488e54ab49346566f060dd8"
+					]
+					.unchecked_into(),
+				)],
+				// Sudo account - Bashful
+				hex_literal::hex![
+					"36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"
+				]
+				.into(),
+				// Pre-funded accounts
+				vec![
+					// Bashful
+					hex_literal::hex![
+						"36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"
+					]
+					.into(),
+				],
+				1,
+				100,
 			)
 		},
 		// Bootnodes
@@ -103,6 +163,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 }
 
 /// Initialise a Chainflip testnet
+/// 300 block epochs = 30 mins at 6 second block time
 pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
 
@@ -225,6 +286,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					.into(),
 				],
 				3,
+				300,
 			)
 		},
 		// Bootnodes
@@ -241,7 +303,6 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 }
 
 /// Configure initial storage state for FRAME modules.
-/// 100800 blocks for 7 days at 6 second blocks
 /// 150 validator limit
 fn testnet_genesis(
 	wasm_binary: &[u8],
@@ -249,6 +310,7 @@ fn testnet_genesis(
 	_root_key: AccountId,
 	endowed_accounts: Vec<AccountId>,
 	min_validators: u32,
+	epoch_number_of_blocks: u32,
 ) -> GenesisConfig {
 	GenesisConfig {
 		frame_system: Some(SystemConfig {
@@ -257,7 +319,7 @@ fn testnet_genesis(
 			changes_trie_config: Default::default(),
 		}),
 		pallet_cf_validator: Some(ValidatorConfig {
-			epoch_number_of_blocks: 100800,
+			epoch_number_of_blocks,
 		}),
 		pallet_session: Some(SessionConfig {
 			keys: initial_authorities
