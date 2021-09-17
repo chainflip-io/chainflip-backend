@@ -1,9 +1,9 @@
-use codec::{Encode, Decode};
-use frame_support::traits::EnsureOrigin;
 use crate::{self as pallet_cf_signing};
 use cf_traits::{Chainflip, SigningContext};
-use frame_support::{instances::Instance0, traits::UnfilteredDispatchable};
+use codec::{Decode, Encode};
 use frame_support::parameter_types;
+use frame_support::traits::EnsureOrigin;
+use frame_support::{instances::Instance0, traits::UnfilteredDispatchable};
 use frame_system;
 use sp_core::H256;
 use sp_runtime::{
@@ -22,7 +22,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Signing: pallet_cf_signing::<Instance0>::{Module, Call, Storage, Event<T>},
+		DogeSigning: pallet_cf_signing::<Instance0>::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -88,32 +88,43 @@ impl cf_traits::SignerNomination for MockNominator {
 // Mock Callback
 
 thread_local! {
-	pub static SIGNATURE: std::cell::RefCell<Option<String>> = Default::default()
+	pub static SIGNED_MESSAGE: std::cell::RefCell<Option<String>> = Default::default()
 }
 
-pub struct MockCallback<Ctx: SigningContext<Test>>(pub Ctx::Signature);
+pub struct MockCallback<Ctx: SigningContext<Test>>(pub String, pub Ctx::Signature);
+
+impl<Ctx: SigningContext<Test>> MockCallback<Ctx> {
+	pub fn get_stored_callback() -> Option<String> {
+		SIGNED_MESSAGE.with(|cell| cell.borrow().clone())
+	}
+}
 
 impl UnfilteredDispatchable for MockCallback<DogeSigningContext> {
 	type Origin = Origin;
 
-	fn dispatch_bypass_filter(self, origin: Self::Origin) -> frame_support::dispatch::DispatchResultWithPostInfo {
+	fn dispatch_bypass_filter(
+		self,
+		origin: Self::Origin,
+	) -> frame_support::dispatch::DispatchResultWithPostInfo {
 		MockEnsureWitnessed::ensure_origin(origin)?;
-		SIGNATURE.with(|cell| *(cell.borrow_mut()) = Some(self.0));
+		SIGNED_MESSAGE
+			.with(|cell| *(cell.borrow_mut()) = Some(format!("So {} Such {}", self.0, self.1)));
 		Ok(().into())
 	}
 }
 
 // Mock KeyProvider
+pub const DOGE_KEY_ID: u32 = 0xd093;
+
 pub struct MockKeyProvider;
 
 impl cf_traits::KeyProvider<Doge> for MockKeyProvider {
 	type KeyId = u32;
 
 	fn current_key() -> Self::KeyId {
-		0
+		DOGE_KEY_ID
 	}
 }
-
 
 // Mock OfflineConditions
 
@@ -148,8 +159,12 @@ impl pallet_cf_reputation::OfflineConditions for MockOfflineConditions {
 pub struct Doge;
 impl cf_chains::Chain for Doge {}
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
-pub struct DogeSigningContext;
+#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+pub struct DogeSigningContext {
+	pub message: String,
+}
+
+pub const DOGE_PAYLOAD: [u8; 4] = [0xcf; 4];
 
 impl SigningContext<Test> for DogeSigningContext {
 	type Chain = Doge;
@@ -158,11 +173,11 @@ impl SigningContext<Test> for DogeSigningContext {
 	type Callback = MockCallback<Self>;
 
 	fn get_payload(&self) -> Self::Payload {
-		[0xcf; 4]
+		DOGE_PAYLOAD
 	}
 
 	fn resolve_callback(&self, signature: Self::Signature) -> Self::Callback {
-		MockCallback(signature)
+		MockCallback(self.message.clone(), signature)
 	}
 }
 
