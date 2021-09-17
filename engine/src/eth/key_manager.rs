@@ -7,8 +7,9 @@ use crate::{
     settings,
     state_chain::runtime::StateChainRuntime,
 };
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use substrate_subxt::{Client, PairSigner};
+use tokio::sync::Mutex;
 use web3::{
     contract::tokens::Tokenizable,
     ethabi::{self, RawLog, Token},
