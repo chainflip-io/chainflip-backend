@@ -57,10 +57,9 @@ pub async fn start(
         // Target the middle of the heartbeat block interval so block drift is *very* unlikely to cause failure
         if (block_header.number + (heartbeat_block_interval / 2)) % heartbeat_block_interval == 0 {
             slog::info!(logger, "Sending heartbeat");
-            let mut signer = signer.lock().await; // TODO: Handle unwrap
+            let mut signer = signer.lock().await;
             match subxt_client.heartbeat(&*signer).await {
                 Ok(_) => {
-                    // ignore
                     signer.increment_nonce();
                 }
                 Err(e) => {

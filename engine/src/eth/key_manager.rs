@@ -152,16 +152,14 @@ impl KeyManager {
         from_block: u64,
         logger: &slog::Logger,
     ) -> Result<impl Stream<Item = Result<KeyManagerEvent>>> {
-        let event_stream = eth_event_streamer::new_eth_event_stream(
+        eth_event_streamer::new_eth_event_stream(
             web3,
             self.deployed_address,
             self.decode_log_closure()?,
             from_block,
             logger,
         )
-        .await;
-        println!("Initialise event stream");
-        return event_stream;
+        .await
     }
 
     pub fn decode_log_closure(

@@ -80,9 +80,7 @@ where
 impl Settings {
     /// New settings loaded from "config/Default.toml"
     pub fn new() -> Result<Self, ConfigError> {
-        Settings::from_file(
-            "/Users/kaz/Documents/Chainflip/chainflip-backend/engine/config/Local.toml",
-        )
+        Settings::from_file("config/Default.toml")
     }
 
     /// Validates the formatting of some settings
