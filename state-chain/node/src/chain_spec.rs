@@ -108,7 +108,6 @@ pub fn development_config() -> Result<ChainSpec, String> {
 /// 100 block epochs = 10 mins at 6 second block time
 pub fn cf_development_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
-
 	Ok(ChainSpec::from_genesis(
 		"CF Develop",
 		"cf-dev",
