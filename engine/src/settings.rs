@@ -17,7 +17,6 @@ use url::Url;
 pub struct StateChain {
     pub ws_endpoint: String,
     pub signing_key_file: String,
-    pub p2p_private_key_file: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -81,7 +80,9 @@ where
 impl Settings {
     /// New settings loaded from "config/Default.toml"
     pub fn new() -> Result<Self, ConfigError> {
-        Settings::from_file("config/Default.toml")
+        Settings::from_file(
+            "/Users/kaz/Documents/Chainflip/chainflip-backend/engine/config/Local.toml",
+        )
     }
 
     /// Validates the formatting of some settings
