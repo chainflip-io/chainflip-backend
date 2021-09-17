@@ -29,3 +29,5 @@ ARG NIGHTLY=nightly-2021-03-24
 RUN rustup default ${NIGHTLY} \
     && rustup target add wasm32-unknown-unknown --toolchain ${NIGHTLY} \
     && rustup component add rustfmt
+
+WORKDIR /root/

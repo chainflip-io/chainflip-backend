@@ -36,3 +36,4 @@ graph
 
 *.sops.env
 .env
+engine/config/testnet/*/*keyfile

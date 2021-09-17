@@ -1,48 +1,88 @@
 version: "3"
 
 services:
-  #  chainflip-engine:
-  #    container_name: bashful-engine
-  #    pull_policy: always
-  #    image: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:bc94cacbdf3cbb91840c81758efdbd10533b7960
-  #    restart: always
-  #    depends_on:
-  #      - state-chain-node
-  #      - nats
-  #    environment:
-  #      RUST_BACKTRACE: full
-  #    volumes:
-  #      - ./engine/config/docker:/chainflip-engine/config
-  #      - ./engine/tests:/chainflip-engine/tests
-  #    networks:
-  #      chainflip:
+  bashful-engine: &engine
+    container_name: bashful-engine
+    image: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine:${TAG}
+    depends_on:
+      - bashful-node
+    environment:
+      RUST_BACKTRACE: full
+    volumes:
+      - ./engine/config/testnet/bashful:/chainflip-engine/config
 
-  state-chain-node:
-    container_name: bashful
-    pull_policy: always
-    image: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:bc94cacbdf3cbb91840c81758efdbd10533b7960
+  bashful-node: &node
+    container_name: bashful-node
+    image: ghcr.io/chainflip-io/chainflip-backend/state-chain-node:${TAG}
     ports:
-      - "30333:30333"
       - "9944:9944"
       - "9933:9933"
     command:
       - --chain
-      - chainflip-local
+      - test
       - --base-path
-      - /state-chain-node/data/bashful-develop
+      - /state-chain-node/data/
       - --validator
       - --rpc-methods
       - Unsafe
       - --rpc-external
       - --ws-external
-    networks:
-      chainflip:
-  nats:
-    image: nats
-    container_name: nats
+      - --rpc-cors
+      - all
+
+  doc-engine:
+    <<: *engine
+    container_name: doc-engine
+    depends_on:
+      - doc-node
+    volumes:
+      - ./engine/config/testnet/doc:/chainflip-engine/config
+
+  doc-node:
+    <<: *node
     ports:
-      - "4222:4222"
-    networks:
-      chainflip:
-networks:
-  chainflip:
+      - "9934:9933"
+    container_name: doc-node
+
+  dopey-engine:
+    <<: *engine
+    container_name: dopey-engine
+    depends_on:
+      - dopey-node
+    volumes:
+      - ./engine/config/testnet/dopey:/chainflip-engine/config
+
+  dopey-node:
+    <<: *node
+    ports:
+      - "9935:9933"
+    container_name: dopey-node
+
+  grumpy-engine:
+    <<: *engine
+    container_name: grumpy-engine
+    depends_on:
+      - grumpy-node
+    volumes:
+      - ./engine/config/testnet/grumpy:/chainflip-engine/config
+
+  grumpy-node:
+    <<: *node
+    ports:
+      - "9936:9933"
+    container_name: grumpy-node
+
+  happy-engine:
+    <<: *engine
+    container_name: happy-engine
+    depends_on:
+      - happy-node
+    volumes:
+      - ./engine/config/testnet/happy:/chainflip-engine/config
+
+  happy-node:
+    <<: *node
+    ports:
+      - "9937:9933"
+    container_name: happy-node
+

@@ -1,19 +1,14 @@
 # Default configurations for the CFE
-
-[message_queue]
-# can also be IP
-endpoint = "http://nats:4222"
-
 [state_chain]
-p2p_private_key_file = "./tests/test_keystore/p2p_key"
-signing_key_file = "./tests/test_keystore/alice_key"
-ws_endpoint = "ws://bashful:9944"
+p2p_private_key_file = "./config/p2pkeyfile"
+signing_key_file = "./config/signingkeyfile"
+ws_endpoint = "ws://grumpy-node:9944"
 
 [eth]
 from_block = 8929230
 node_endpoint = "wss://rinkeby.infura.io/ws/v3/46fd60dc5fd34be7b185e93fab19a4ba"
 # Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
-private_key_file = "/run/secrets/eth_private_key"
+private_key_file = "./config/ethkeyfile"
 # Address used on the Ganache/Brownie tests
 key_manager_eth_address = "0xdBa9b6065Deb6Cc057BC779fF6736709ecBa3409"
 stake_manager_eth_address = "0xEAd5De9C41543E4bAbB09f9fE4f79153c036044f"
