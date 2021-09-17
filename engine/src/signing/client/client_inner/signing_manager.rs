@@ -106,7 +106,7 @@ impl SigningManager {
 
         let mi = MessageInfo {
             hash: data,
-            key_id: sign_info.id,
+            key_id: sign_info.key_id,
         };
 
         // We have the key and have received a request to sign

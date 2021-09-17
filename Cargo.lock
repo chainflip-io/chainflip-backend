@@ -248,7 +248,7 @@ dependencies = [
  "futures-lite",
  "num_cpus",
  "once_cell",
- "tokio 1.7.0",
+ "tokio 1.11.0",
 ]
 
 [[package]]
@@ -917,6 +917,7 @@ dependencies = [
  "curv",
  "dyn-clone",
  "env_logger 0.9.0",
+ "failure",
  "frame-support",
  "frame-system",
  "futures 0.3.15",
@@ -959,11 +960,12 @@ dependencies = [
  "state-chain-runtime",
  "substrate-subxt",
  "thiserror",
- "tokio 1.7.0",
+ "tokio 1.11.0",
  "tokio-compat-02",
  "tokio-stream",
  "url 1.7.2",
  "web3",
+ "websocket",
 ]
 
 [[package]]
@@ -2618,7 +2620,7 @@ dependencies = [
  "http 0.2.4",
  "indexmap",
  "slab",
- "tokio 1.7.0",
+ "tokio 1.11.0",
  "tokio-util 0.6.7",
  "tracing",
 ]
@@ -2942,7 +2944,7 @@ dependencies = [
  "itoa",
  "pin-project-lite 0.2.6",
  "socket2 0.4.0",
- "tokio 1.7.0",
+ "tokio 1.11.0",
  "tower-service",
  "tracing",
  "want 0.3.0",
@@ -2978,7 +2980,7 @@ dependencies = [
  "log 0.4.14",
  "rustls 0.19.1",
  "rustls-native-certs 0.5.0",
- "tokio 1.7.0",
+ "tokio 1.11.0",
  "tokio-rustls 0.22.0",
  "webpki",
 ]
@@ -2992,7 +2994,7 @@ dependencies = [
  "bytes 1.0.1",
  "hyper 0.14.9",
  "native-tls",
- "tokio 1.7.0",
+ "tokio 1.11.0",
  "tokio-native-tls",
 ]
 
@@ -5010,7 +5012,6 @@ dependencies = [
 name = "pallet-cf-vaults"
 version = "0.0.1"
 dependencies = [
- "assert_matches",
  "cf-traits",
  "ethabi 13.0.0",
  "frame-support",
@@ -6327,7 +6328,7 @@ dependencies = [
  "serde 1.0.126",
  "serde_json",
  "serde_urlencoded",
- "tokio 1.7.0",
+ "tokio 1.11.0",
  "tokio-native-tls",
  "url 2.2.2",
  "wasm-bindgen",
@@ -9224,9 +9225,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.7.0"
+version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c79ba603c337335df6ba6dd6afc38c38a7d5e1b0c871678439ea973cd62a118e"
+checksum = "b4efe6fc2395938c8155973d7be49fe8d03a843726e285e100a8a383cc0154ce"
 dependencies = [
  "autocfg 1.0.1",
  "bytes 1.0.1",
@@ -9274,7 +9275,7 @@ dependencies = [
  "once_cell",
  "pin-project-lite 0.2.6",
  "tokio 0.2.25",
- "tokio 1.7.0",
+ "tokio 1.11.0",
  "tokio-stream",
 ]
 
@@ -9351,7 +9352,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7d995660bd2b7f8c1568414c1126076c13fbb725c40112dc0120b78eb9b717b"
 dependencies = [
  "native-tls",
- "tokio 1.7.0",
+ "tokio 1.11.0",
 ]
 
 [[package]]
@@ -9392,7 +9393,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc6844de72e57df1980054b38be3a9f4702aba4858be64dd700181a8a6d0e1b6"
 dependencies = [
  "rustls 0.19.1",
- "tokio 1.7.0",
+ "tokio 1.11.0",
  "webpki",
 ]
 
@@ -9413,7 +9414,7 @@ checksum = "f8864d706fdb3cc0843a49647ac892720dac98a6eeb818b77190592cf4994066"
 dependencies = [
  "futures-core",
  "pin-project-lite 0.2.6",
- "tokio 1.7.0",
+ "tokio 1.11.0",
 ]
 
 [[package]]
@@ -9539,7 +9540,7 @@ dependencies = [
  "futures-sink",
  "log 0.4.14",
  "pin-project-lite 0.2.6",
- "tokio 1.7.0",
+ "tokio 1.11.0",
 ]
 
 [[package]]
@@ -9583,9 +9584,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-core"
-version = "0.1.18"
+version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9ff14f98b1a4b289c6248a023c1c2fa1491062964e9fed67ab29c4e4da4a052"
+checksum = "46125608c26121c81b0c6d693eab5a420e416da7e43c426d2e8f7df8da8a3acf"
 dependencies = [
  "lazy_static",
 ]
@@ -9623,9 +9624,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.2.18"
+version = "0.2.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa5553bf0883ba7c9cbe493b085c29926bd41b66afc31ff72cf17ff4fb60dcd5"
+checksum = "56c42e73a9d277d4d2b6a88389a137ccf3c58599660b17e8f5fc39305e490669"
 dependencies = [
  "ansi_term 0.12.1",
  "chrono",
@@ -10296,7 +10297,7 @@ dependencies = [
  "serde_json",
  "soketto 0.5.0",
  "tiny-keccak",
- "tokio 1.7.0",
+ "tokio 1.11.0",
  "tokio-stream",
  "tokio-util 0.6.7",
  "url 2.2.2",
@@ -10311,7 +10312,7 @@ checksum = "1f6d8d1636b2627fe63518d5a9b38a569405d9c9bc665c43c9c341de57227ebb"
 dependencies = [
  "native-tls",
  "thiserror",
- "tokio 1.7.0",
+ "tokio 1.11.0",
  "url 2.2.2",
 ]
 

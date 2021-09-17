@@ -1,6 +1,6 @@
 use super::*;
 use crate as pallet_cf_auction;
-use cf_traits::mocks::vault_rotation::Mock as MockAuctionHandler;
+use cf_traits::mocks::vault_rotation::Mock as MockVaultRotation;
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
@@ -15,19 +15,19 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 type Amount = u64;
-type AccountId = u64;
+type ValidatorId = u64;
 
-pub const LOW_BID: (AccountId, Amount) = (2, 2);
-pub const JOE_BID: (AccountId, Amount) = (3, 100);
-pub const MAX_BID: (AccountId, Amount) = (4, 101);
-pub const INVALID_BID: (AccountId, Amount) = (1, 0);
+pub const LOW_BID: (ValidatorId, Amount) = (2, 2);
+pub const JOE_BID: (ValidatorId, Amount) = (3, 100);
+pub const MAX_BID: (ValidatorId, Amount) = (4, 101);
+pub const INVALID_BID: (ValidatorId, Amount) = (1, 0);
 
 pub const MIN_AUCTION_SIZE: u32 = 2;
 pub const MAX_AUCTION_SIZE: u32 = 150;
 
 thread_local! {
 	// A set of bidders, we initialise this with the proposed genesis bidders
-	pub static BIDDER_SET: RefCell<Vec<(AccountId, Amount)>> = RefCell::new(vec![
+	pub static BIDDER_SET: RefCell<Vec<(ValidatorId, Amount)>> = RefCell::new(vec![
 		INVALID_BID, LOW_BID, JOE_BID, MAX_BID
 	]);
 }
@@ -79,16 +79,26 @@ parameter_types! {
 impl Config for Test {
 	type Event = Event;
 	type Amount = Amount;
-	type AccountId = AccountId;
+	type ValidatorId = ValidatorId;
 	type BidderProvider = TestBidderProvider;
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
-	type Handler = MockAuctionHandler;
+	type Handler = MockVaultRotation;
+	type Online = MockOnline;
 }
 
-impl ValidatorRegistration<AccountId> for Test {
-	fn is_registered(_id: &AccountId) -> bool {
+pub struct MockOnline;
+impl Online for MockOnline {
+	type ValidatorId = ValidatorId;
+
+	fn is_online(_validator_id: &Self::ValidatorId) -> bool {
+		true
+	}
+}
+
+impl ValidatorRegistration<ValidatorId> for Test {
+	fn is_registered(_id: &ValidatorId) -> bool {
 		true
 	}
 }
@@ -96,10 +106,10 @@ impl ValidatorRegistration<AccountId> for Test {
 pub struct TestBidderProvider;
 
 impl BidderProvider for TestBidderProvider {
-	type AccountId = AccountId;
+	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 
-	fn get_bidders() -> Vec<(Self::AccountId, Self::Amount)> {
+	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
 		BIDDER_SET.with(|l| l.borrow().to_vec())
 	}
 }

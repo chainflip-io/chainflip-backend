@@ -16,7 +16,8 @@ pub use frame_support::{
 	StorageValue,
 };
 use frame_system::offchain::SendTransactionTypes;
-use pallet_cf_reputation::{ReputationPenalty, ZeroSlasher};
+use pallet_cf_flip::FlipSlasher;
+use pallet_cf_reputation::ReputationPenalty;
 use pallet_grandpa::fg_primitives;
 use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
 use pallet_session::historical as session_historical;
@@ -143,9 +144,10 @@ impl pallet_cf_auction::Config for Runtime {
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
 	type AuctionIndex = u64;
 	type Registrar = Session;
-	type AccountId = AccountId;
+	type ValidatorId = AccountId;
 	type MinAuctionSize = MinAuctionSize;
 	type Handler = Vaults;
+	type Online = Reputation;
 }
 
 // FIXME: These would be changed
@@ -167,9 +169,10 @@ impl pallet_cf_vaults::Config for Runtime {
 	type Event = Event;
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type PublicKey = Vec<u8>;
-	type Transaction = Vec<u8>;
+	type TransactionHash = Vec<u8>;
 	type RotationHandler = Auction;
 	type NonceProvider = Vaults;
+	type EpochInfo = Validator;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
@@ -327,12 +330,15 @@ impl pallet_authorship::Config for Runtime {
 
 parameter_types! {
 	pub const ExistentialDeposit: u128 = 500;
+	pub const BlocksPerDay: u32 = DAYS;
 }
 
 impl pallet_cf_flip::Config for Runtime {
 	type Event = Event;
 	type Balance = FlipBalance;
 	type ExistentialDeposit = ExistentialDeposit;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type BlocksPerDay = BlocksPerDay;
 }
 
 impl pallet_cf_witnesser::Config for Runtime {
@@ -340,7 +346,7 @@ impl pallet_cf_witnesser::Config for Runtime {
 	type Origin = Origin;
 	type Call = Call;
 	type Epoch = EpochIndex;
-	type AccountId = <Self as frame_system::Config>::AccountId;
+	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
 	type Amount = FlipBalance;
 }
@@ -411,24 +417,27 @@ impl pallet_cf_witnesser_api::Config for Runtime {
 
 impl Chainflip for Runtime {
 	type Amount = FlipBalance;
-	type AccountId = <Self as frame_system::Config>::AccountId;
+	type ValidatorId = <Self as frame_system::Config>::AccountId;
 }
 
 parameter_types! {
 	pub const HeartbeatBlockInterval: u32 = 150;
 	pub const ReputationPointPenalty: ReputationPenalty<BlockNumber> = ReputationPenalty { points: 1, blocks: 10 };
 	pub const ReputationPointFloorAndCeiling: (i32, i32) = (-2880, 2880);
+	pub const EmergencyRotationPercentageTrigger: u8 = 80;
 }
 
 impl pallet_cf_reputation::Config for Runtime {
 	type Event = Event;
-	type AccountId = <Self as frame_system::Config>::AccountId;
+	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type Amount = FlipBalance;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type ReputationPointPenalty = ReputationPointPenalty;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
-	type Slasher = ZeroSlasher<Self>;
+	type Slasher = FlipSlasher<Self>;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
+	type EmergencyRotation = pallet_cf_validator::EmergencyRotationOf<Self>;
+	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
 }
 
 construct_runtime!(
@@ -449,7 +458,6 @@ construct_runtime!(
 		Historical: session_historical::{Module},
 		Witnesser: pallet_cf_witnesser::{Module, Call, Event<T>, Origin},
 		WitnesserApi: pallet_cf_witnesser_api::{Module, Call},
-		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
 		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
 		Aura: pallet_aura::{Module, Config<T>},
 		Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
@@ -458,6 +466,7 @@ construct_runtime!(
 		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>, Origin},
 		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>},
 		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
+		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
 	}
 );
 

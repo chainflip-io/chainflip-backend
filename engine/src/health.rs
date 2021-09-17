@@ -28,6 +28,7 @@ impl HealthMonitor {
     }
 
     pub async fn run(&self) -> Sender<()> {
+        slog::info!(self.logger, "Starting");
         let listener = TcpListener::bind(self.bind_address.clone())
             .await
             .expect(format!("Could not bind TCP listener to {}", self.bind_address).as_str());

@@ -222,7 +222,7 @@ impl SigningStateWithKey {
     fn send_result(&self, result: CeremonyOutcomeResult<SchnorrSignature>) {
         self.result_sender
             .send(InnerEvent::SigningResult(SigningOutcome {
-                ceremony_id: self.message_info.clone(),
+                id: self.message_info.clone(),
                 result,
             }))
             .unwrap();

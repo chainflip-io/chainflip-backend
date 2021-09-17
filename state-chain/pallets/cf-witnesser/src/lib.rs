@@ -74,15 +74,12 @@ pub mod pallet {
 
 		type Epoch: Member + FullCodec + Copy + AtLeast32BitUnsigned + Default;
 
-		type AccountId: Member
+		type ValidatorId: Member
 			+ FullCodec
 			+ From<<Self as frame_system::Config>::AccountId>
 			+ Into<<Self as frame_system::Config>::AccountId>;
 
-		type EpochInfo: EpochInfo<
-			AccountId = <Self as pallet::Config>::AccountId,
-			EpochIndex = Self::Epoch,
-		>;
+		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, EpochIndex = Self::Epoch>;
 
 		type Amount: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 	}
@@ -137,7 +134,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Some external event has been witnessed [call_sig, who, num_votes]
-		WitnessReceived(CallHash, <T as Config>::AccountId, VoteCount),
+		WitnessReceived(CallHash, T::ValidatorId, VoteCount),
 
 		/// The witness threshold has been reached [call_sig, num_votes]
 		ThresholdReached(CallHash, VoteCount),
@@ -278,7 +275,7 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: pallet::Config> cf_traits::Witnesser for Pallet<T> {
-	type AccountId = <T as pallet::Config>::AccountId;
+	type AccountId = T::ValidatorId;
 	type Call = <T as pallet::Config>::Call;
 
 	fn witness(who: Self::AccountId, call: Self::Call) -> DispatchResultWithPostInfo {
@@ -319,10 +316,10 @@ where
 }
 
 impl<T: Config> pallet_cf_validator::EpochTransitionHandler for Pallet<T> {
-	type AccountId = <T as pallet::Config>::AccountId;
+	type ValidatorId = T::ValidatorId;
 	type Amount = T::Amount;
 
-	fn on_new_epoch(new_validators: &Vec<Self::AccountId>, _new_bond: Self::Amount) {
+	fn on_new_epoch(new_validators: &Vec<Self::ValidatorId>, _new_bond: Self::Amount) {
 		let epoch = T::EpochInfo::epoch_index();
 
 		let mut total = 0;
@@ -332,7 +329,6 @@ impl<T: Config> pallet_cf_validator::EpochTransitionHandler for Pallet<T> {
 		}
 		NumValidators::<T>::set(total);
 
-		// TODO: This code is in about 3 places across the code base
 		let calc_threshold = |total: u32| -> u32 {
 			let doubled = total * 2;
 			if doubled % 3 == 0 {

@@ -132,7 +132,7 @@ pub mod pallet {
 
 		/// Information about the current epoch.
 		type EpochInfo: EpochInfo<
-			AccountId = <Self as frame_system::Config>::AccountId,
+			ValidatorId = <Self as frame_system::Config>::AccountId,
 			Amount = FlipBalance<Self>,
 		>;
 
@@ -153,6 +153,7 @@ pub mod pallet {
 	#[pallet::pallet]
 	pub struct Pallet<T>(PhantomData<T>);
 
+	/// Store the list of staked accounts and whether or not they are retired
 	#[pallet::storage]
 	pub(super) type AccountRetired<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, Retired, ValueQuery>;
@@ -746,13 +747,11 @@ impl<T: Config> Pallet<T> {
 			return weight;
 		}
 
-		let expiries = ClaimExpiries::<T>::get();
-		let time_now = T::TimeSource::now();
-
 		weight = weight.saturating_add(T::DbWeight::get().reads(2));
 
+		let expiries = ClaimExpiries::<T>::get();
 		// Expiries are sorted on insertion so we can just partition the slice.
-		let expiry_cutoff = expiries.partition_point(|(expiry, _)| *expiry < time_now);
+		let expiry_cutoff = expiries.partition_point(|(expiry, _)| *expiry < T::TimeSource::now());
 
 		if expiry_cutoff == 0 {
 			return weight;
@@ -787,13 +786,11 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-/// This implementation of [pallet_cf_validator::CandidateProvider] simply returns a list of `(account_id, stake)` for
-/// all non-retired accounts.
 impl<T: Config> BidderProvider for Pallet<T> {
-	type AccountId = T::AccountId;
+	type ValidatorId = T::AccountId;
 	type Amount = T::Balance;
 
-	fn get_bidders() -> Vec<(Self::AccountId, Self::Amount)> {
+	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)> {
 		AccountRetired::<T>::iter()
 			.filter_map(|(acct, retired)| {
 				if retired {

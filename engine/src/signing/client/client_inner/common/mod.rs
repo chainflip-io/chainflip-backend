@@ -2,6 +2,7 @@ pub mod broadcast;
 mod ceremony_stage;
 
 pub use ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
+
 use tokio::sync::mpsc::UnboundedSender;
 
 use std::sync::Arc;
@@ -24,6 +25,12 @@ pub struct KeygenResult {
 impl KeygenResult {
     pub fn get_public_key(&self) -> Point {
         self.key_share.y
+    }
+
+    /// Gets the serialized compressed public key (33 bytes - 32 bytes + a y parity byte)
+    pub fn get_public_key_bytes(&self) -> Vec<u8> {
+        use crate::signing::crypto::ECPoint;
+        self.key_share.y.get_element().serialize().into()
     }
 }
 

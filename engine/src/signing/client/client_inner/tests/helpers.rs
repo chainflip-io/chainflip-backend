@@ -1,5 +1,6 @@
 use std::{collections::HashMap, time::Duration};
 
+use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::signing::client::client_inner::frost;
@@ -20,11 +21,11 @@ use crate::{
                 keygen_state::KeygenStage,
                 InnerEvent, KeygenOutcome, MultisigClient, SigningOutcome,
             },
-            KeyId, KeygenInfo, MultisigInstruction,
+            KeyId, KeygenInfo, MessageHash, MultisigInstruction,
         },
         crypto::{ECScalar, Keys, GE as Point},
         db::KeyDBMock,
-        MessageInfo,
+        MessageInfo, SigningInfo,
     },
 };
 
@@ -69,7 +70,7 @@ type MultisigClientNoDB = MultisigClient<KeyDBMock>;
 type BroadcastVerification2 = frost::BroadcastVerificationMessage<SigningCommitment>;
 type BroadcastVerification4 = frost::BroadcastVerificationMessage<LocalSig3>;
 
-use super::{KEY_ID, MESSAGE_HASH, MESSAGE_INFO, SIGNER_IDXS, SIGN_INFO};
+use super::{CEREMONY_ID, MESSAGE_HASH, SIGNER_IDS, SIGNER_IDXS};
 
 type InnerEventReceiver = PeekableReceiver<InnerEvent>;
 
@@ -132,12 +133,15 @@ pub struct ValidSigningStates {
 
 const TEST_PHASE_TIMEOUT: Duration = Duration::from_secs(5);
 
-pub fn keygen_stage_for(client: &MultisigClientNoDB, key_id: KeyId) -> Option<KeygenStage> {
-    client.get_keygen().get_stage_for(key_id)
+pub fn keygen_stage_for(
+    client: &MultisigClientNoDB,
+    ceremony_id: CeremonyId,
+) -> Option<KeygenStage> {
+    client.get_keygen().get_stage_for(ceremony_id)
 }
 
-pub fn keygen_delayed_count(client: &MultisigClientNoDB, key_id: KeyId) -> usize {
-    client.get_keygen().get_delayed_count(key_id)
+pub fn keygen_delayed_count(client: &MultisigClientNoDB, ceremony_id: CeremonyId) -> usize {
+    client.get_keygen().get_delayed_count(ceremony_id)
 }
 
 // pub fn signing_delayed_count(client: &MultisigClientNoDB, mi: &MessageInfo) -> usize {
@@ -167,6 +171,8 @@ pub struct KeygenContext {
     // TODO: Sig3 to send between (sender, receiver) in case they
     // needs to be different from the regular, valid ones
     sig3_to_send: HashMap<(usize, usize), LocalSig3>,
+    /// The key that was generated
+    key_id: Option<KeyId>,
 }
 
 fn gen_invalid_local_sig() -> LocalSig3 {
@@ -270,6 +276,7 @@ async fn collect_all_ver4(rxs: &mut Vec<InnerEventReceiver>) -> Vec<BroadcastVer
 
 async fn broadcast_all_comm1(
     clients: &mut Vec<MultisigClientNoDB>,
+    key_id: KeyId,
     comm1_vec: &Vec<SigningCommitment>,
     custom_comm1s: &mut HashMap<(usize, usize), SigningCommitment>,
 ) {
@@ -284,9 +291,14 @@ async fn broadcast_all_comm1(
 
                 let id = &super::VALIDATOR_IDS[*sender_idx];
 
-                let m = sig_data_to_p2p(comm1, id, &MESSAGE_INFO);
+                let mi = MessageInfo {
+                    hash: MESSAGE_HASH.clone(),
+                    key_id: key_id.clone(),
+                };
 
-                clients[*receiver_idx].process_p2p_mq_message(m.clone());
+                let m = sig_data_to_p2p(comm1, id, &mi);
+
+                clients[*receiver_idx].process_p2p_message(m.clone());
             }
         }
     }
@@ -294,6 +306,7 @@ async fn broadcast_all_comm1(
 
 async fn broadcast_all_ver2(
     clients: &mut Vec<MultisigClientNoDB>,
+    key_id: KeyId,
     ver2_vec: &Vec<BroadcastVerification2>,
 ) {
     for sender_idx in SIGNER_IDXS.iter() {
@@ -302,9 +315,15 @@ async fn broadcast_all_ver2(
                 let ver2 = ver2_vec[*sender_idx].clone();
 
                 let id = &super::VALIDATOR_IDS[*sender_idx];
-                let m = sig_data_to_p2p(ver2, id, &MESSAGE_INFO);
 
-                clients[*receiver_idx].process_p2p_mq_message(m);
+                let mi = MessageInfo {
+                    hash: MESSAGE_HASH.clone(),
+                    key_id: key_id.clone(),
+                };
+
+                let m = sig_data_to_p2p(ver2, id, &mi);
+
+                clients[*receiver_idx].process_p2p_message(m);
             }
         }
     }
@@ -312,6 +331,7 @@ async fn broadcast_all_ver2(
 
 async fn broadcast_all_local_sigs(
     clients: &mut Vec<MultisigClientNoDB>,
+    key_id: KeyId,
     valid_sigs: &Vec<LocalSig3>,
     custom_sigs: &mut HashMap<(usize, usize), LocalSig3>,
 ) {
@@ -324,10 +344,15 @@ async fn broadcast_all_local_sigs(
 
             let id = &super::VALIDATOR_IDS[*sender_idx];
 
-            let m = sig_data_to_p2p(sig3, id, &MESSAGE_INFO);
+            let mi = MessageInfo {
+                hash: MESSAGE_HASH.clone(),
+                key_id: key_id.clone(),
+            };
+
+            let m = sig_data_to_p2p(sig3, id, &mi);
 
             if receiver_idx != sender_idx {
-                clients[*receiver_idx].process_p2p_mq_message(m.clone());
+                clients[*receiver_idx].process_p2p_message(m.clone());
             }
         }
     }
@@ -335,6 +360,7 @@ async fn broadcast_all_local_sigs(
 
 async fn broadcast_all_ver4(
     clients: &mut Vec<MultisigClientNoDB>,
+    key_id: KeyId,
     ver4_vec: &Vec<BroadcastVerification4>,
 ) {
     for sender_idx in SIGNER_IDXS.iter() {
@@ -343,9 +369,15 @@ async fn broadcast_all_ver4(
                 let ver4 = ver4_vec[*sender_idx].clone();
 
                 let id = &super::VALIDATOR_IDS[*sender_idx];
-                let m = sig_data_to_p2p(ver4, id, &MESSAGE_INFO);
 
-                clients[*receiver_idx].process_p2p_mq_message(m);
+                let mi = MessageInfo {
+                    hash: MESSAGE_HASH.clone(),
+                    key_id: key_id.clone(),
+                };
+
+                let m = sig_data_to_p2p(ver4, id, &mi);
+
+                clients[*receiver_idx].process_p2p_message(m);
             }
         }
     }
@@ -380,6 +412,7 @@ impl KeygenContext {
             custom_local_sigs: HashMap::new(),
             comm1_to_send: HashMap::new(),
             sig3_to_send: HashMap::new(),
+            key_id: None,
         }
     }
 
@@ -432,15 +465,13 @@ impl KeygenContext {
 
         // Generate phase 1 data
 
-        let key_id = KeyId(0);
-
-        let auction_info = KeygenInfo {
-            id: key_id,
+        let keygen_info = KeygenInfo {
+            ceremony_id: *CEREMONY_ID,
             signers: validator_ids.clone(),
         };
 
         for c in clients.iter_mut() {
-            c.process_multisig_instruction(MultisigInstruction::KeyGen(auction_info.clone()));
+            c.process_multisig_instruction(MultisigInstruction::KeyGen(keygen_info.clone()));
         }
 
         let mut bc1_vec = vec![];
@@ -461,18 +492,19 @@ impl KeygenContext {
         for sender_idx in 0..=3 {
             let bc1 = bc1_vec[sender_idx].clone();
             let id = &validator_ids[sender_idx];
-            let m = keygen_data_to_p2p(bc1, id, KEY_ID);
+
+            let m = keygen_data_to_p2p(bc1, id, *CEREMONY_ID);
 
             for receiver_idx in 0..=3 {
                 if receiver_idx != sender_idx {
-                    clients[receiver_idx].process_p2p_mq_message(m.clone());
+                    clients[receiver_idx].process_p2p_message(m.clone());
                 }
             }
         }
 
         for c in clients.iter() {
             assert_eq!(
-                keygen_stage_for(c, key_id),
+                keygen_stage_for(c, *CEREMONY_ID),
                 Some(KeygenStage::AwaitingSecret2)
             );
         }
@@ -516,9 +548,9 @@ impl KeygenContext {
                 let sec2 = sec2_vec[sender_idx].get(r_id).unwrap();
 
                 let s_id = &validator_ids[sender_idx];
-                let m = keygen_data_to_p2p(sec2.clone(), s_id, KEY_ID);
+                let m = keygen_data_to_p2p(sec2.clone(), s_id, *CEREMONY_ID);
 
-                clients[receiver_idx].process_p2p_mq_message(m);
+                clients[receiver_idx].process_p2p_message(m);
             }
         }
 
@@ -532,13 +564,19 @@ impl KeygenContext {
             };
             pubkeys.push(pubkey);
         }
+
+        // ensure all participants have the same idea of the public key
         assert_eq!(pubkeys[0].serialize(), pubkeys[1].serialize());
         assert_eq!(pubkeys[1].serialize(), pubkeys[2].serialize());
 
         let mut sec_keys = vec![];
 
+        let key_id = KeyId(pubkeys[0].serialize().into());
+        self.key_id = Some(key_id.clone());
+
         for c in clients.iter() {
-            let key = c.get_key(KEY_ID).expect("key must be present");
+            // MAXIM: isn't key_id already the key?
+            let key = c.get_key(key_id.clone()).expect("key must be present");
             sec_keys.push(key.clone());
         }
 
@@ -570,7 +608,11 @@ impl KeygenContext {
     // Use the generated key and the clients participating
     // in the ceremony and sign a message producing state
     // for each of the signing phases
-    pub async fn sign(&mut self) -> ValidSigningStates {
+    pub async fn sign(
+        &mut self,
+        message_info: MessageInfo,
+        sign_info: SigningInfo,
+    ) -> ValidSigningStates {
         let instant = std::time::Instant::now();
 
         let mut clients = self.clients.clone();
@@ -586,11 +628,11 @@ impl KeygenContext {
 
             c.process_multisig_instruction(MultisigInstruction::Sign(
                 MESSAGE_HASH.clone(),
-                SIGN_INFO.clone(),
+                sign_info.clone(),
             ));
 
             assert_eq!(
-                get_stage_for_msg(&c, &MESSAGE_INFO),
+                get_stage_for_msg(&c, &message_info),
                 Some("BroadcastStage<AwaitCommitments1>".to_string())
             );
         }
@@ -603,10 +645,15 @@ impl KeygenContext {
         };
 
         // *** Broadcast Comm1 messages to advance to Stage2 ***
-        broadcast_all_comm1(&mut clients, &comm1_vec, &mut self.comm1_to_send).await;
+        broadcast_all_comm1(
+            &mut clients,
+            self.key_id.clone().unwrap(),
+            &comm1_vec,
+            &mut self.comm1_to_send,
+        )
+        .await;
 
         // TODO: check stage
-
         // *** Collect Ver2 messages ***
 
         let ver2_vec = collect_all_ver2(rxs).await;
@@ -618,7 +665,7 @@ impl KeygenContext {
 
         // *** Distribute Ver2 messages ***
 
-        broadcast_all_ver2(&mut clients, &ver2_vec).await;
+        broadcast_all_ver2(&mut clients, self.key_id.clone().unwrap(), &ver2_vec).await;
 
         // Check if the ceremony was aborted at this stage
         if let Some(outcome) = check_outcome(&mut rxs[0]).await {
@@ -636,7 +683,7 @@ impl KeygenContext {
             let c = &mut clients[*idx];
 
             assert_eq!(
-                get_stage_for_msg(&c, &MESSAGE_INFO),
+                get_stage_for_msg(&c, &message_info),
                 Some("BroadcastStage<LocalSigStage3>".to_string())
             );
         }
@@ -652,7 +699,13 @@ impl KeygenContext {
 
         // *** Distribute local sigs ***
 
-        broadcast_all_local_sigs(&mut clients, &local_sigs, &mut self.sig3_to_send).await;
+        broadcast_all_local_sigs(
+            &mut clients,
+            self.key_id.clone().unwrap(),
+            &local_sigs,
+            &mut self.sig3_to_send,
+        )
+        .await;
 
         // *** Collect Ver4 messages ***
         let ver4_vec = collect_all_ver4(rxs).await;
@@ -664,7 +717,7 @@ impl KeygenContext {
 
         // *** Distribute Ver4 messages ***
 
-        broadcast_all_ver4(&mut clients, &ver4_vec).await;
+        broadcast_all_ver4(&mut clients, self.key_id.clone().unwrap(), &ver4_vec).await;
 
         let outcome = match recv_next_inner_event(&mut rxs[0]).await {
             InnerEvent::SigningResult(outcome) => outcome,
@@ -683,6 +736,7 @@ impl KeygenContext {
     }
 }
 
+// If we timeout, the channel is empty at the time of retrieval
 pub async fn assert_channel_empty(rx: &mut InnerEventReceiver) {
     let fut = rx.recv();
     let dur = std::time::Duration::from_millis(10);
@@ -728,7 +782,7 @@ pub async fn recv_next_inner_event(rx: &mut InnerEventReceiver) -> InnerEvent {
     panic!("Expected Inner Event");
 }
 
-/// checks for an InnerEvent in the que with a short timeout, returns the InnerEvent if there is one.
+/// checks for an InnerEvent in the queue with a short timeout, returns the InnerEvent if there is one.
 pub async fn check_for_inner_event(rx: &mut InnerEventReceiver) -> Option<InnerEvent> {
     let dur = std::time::Duration::from_millis(10);
     let res = tokio::time::timeout(dur, rx.recv()).await;
@@ -863,9 +917,9 @@ pub fn sig_data_to_p2p(
 pub fn keygen_data_to_p2p(
     data: impl Into<KeygenData>,
     sender_id: &AccountId,
-    key_id: KeyId,
+    ceremony_id: CeremonyId,
 ) -> P2PMessage {
-    let wrapped = KeyGenMessageWrapped::new(key_id, data);
+    let wrapped = KeyGenMessageWrapped::new(ceremony_id, data);
 
     let data = MultisigMessage::from(wrapped);
     let data = bincode::serialize(&data).unwrap();
@@ -902,4 +956,17 @@ pub fn create_invalid_bc1() -> Broadcast1 {
     let y_i = key.y_i;
 
     Broadcast1 { bc1, blind, y_i }
+}
+
+pub fn message_and_sign_info(hash: MessageHash, key_id: KeyId) -> (MessageInfo, SigningInfo) {
+    (
+        MessageInfo {
+            hash,
+            key_id: key_id.clone(),
+        },
+        SigningInfo {
+            signers: SIGNER_IDS.clone(),
+            key_id,
+        },
+    )
 }

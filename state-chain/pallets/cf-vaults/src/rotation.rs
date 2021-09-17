@@ -4,8 +4,19 @@ use frame_support::RuntimeDebug;
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 
-/// Request index type
-pub type RequestIndex = u64;
+/// CeremonyId type
+pub type CeremonyId = u64;
+
+/// Schnorr Signature type
+#[derive(PartialEq, Decode, Encode, Eq, Clone, RuntimeDebug, Copy, Default)]
+pub struct SchnorrSigTruncPubkey {
+	/// Scalar component
+	// s: secp256k1::SecretKey,
+	pub s: [u8; 32],
+
+	/// Public key hashed and truncated to an ethereum address
+	pub eth_pub_key: [u8; 20],
+}
 
 /// A request/response trait
 pub trait RequestResponse<Index: AtLeast32BitUnsigned, Req, Res, Error> {
@@ -19,38 +30,41 @@ pub trait RequestResponse<Index: AtLeast32BitUnsigned, Req, Res, Error> {
 pub trait ChainVault {
 	/// The type used for public keys
 	type PublicKey: Into<Vec<u8>>;
-	/// A transaction
-	type Transaction: Into<Vec<u8>>;
+	/// A transaction hash
+	type TransactionHash: Into<Vec<u8>>;
 	/// An identifier for a validator involved in the rotation of the vault
-	type AccountId;
+	type ValidatorId;
 	/// An error on rotating the vault
 	type Error;
-	/// A set of params for the chain for this vault
-	fn chain_params() -> ChainParams;
 	/// Start the vault rotation phase.  The chain would complete steps necessary for its chain
 	/// for the rotation of the vault.
-	/// When complete `ChainHandler::try_complete_vault_rotation()` would be used to notify to continue
-	/// with the process.
-	fn start_vault_rotation(
-		index: RequestIndex,
+	fn rotate_vault(
+		ceremony_id: CeremonyId,
 		new_public_key: Self::PublicKey,
-		validators: Vec<Self::AccountId>,
+		validators: Vec<Self::ValidatorId>,
 	) -> Result<(), Self::Error>;
 	/// We have confirmation of the rotation back from `Vaults`
-	fn vault_rotated(response: Vault<Self::PublicKey, Self::Transaction>);
+	fn vault_rotated(new_public_key: Self::PublicKey, tx_hash: Self::TransactionHash);
 }
 
 /// Events coming in from our chain.  This is used to callback from the request to complete the vault
 /// rotation phase.  See `ChainVault::try_start_vault_rotation()` for more details.
 pub trait ChainHandler {
-	type AccountId;
+	type ValidatorId;
 	type Error;
 	/// Request initial vault rotation phase complete with a result describing the outcome of this phase
 	/// Feedback is provided back on this step
 	fn request_vault_rotation(
-		index: RequestIndex,
-		result: Result<VaultRotationRequest, RotationError<Self::AccountId>>,
+		ceremony_id: CeremonyId,
+		result: Result<VaultRotationRequest, RotationError<Self::ValidatorId>>,
 	) -> Result<(), Self::Error>;
+}
+
+/// Chain types supported
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub enum ChainType {
+	/// Ethereum type blockchain
+	Ethereum,
 }
 
 /// Our different Chain's specific parameters
@@ -65,30 +79,59 @@ pub enum ChainParams {
 	Other(Vec<u8>),
 }
 
+/// State of a vault rotation
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub struct VaultRotation<ValidatorId, PublicKey> {
+	/// Proposed new public key
+	pub new_public_key: PublicKey,
+	pub keygen_request: KeygenRequest<ValidatorId>,
+}
+
 /// A representation of a key generation request
 /// This would be used for each supporting chain
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub struct KeygenRequest<AccountId> {
-	/// A Chain's parameters
-	pub(crate) chain: ChainParams,
+pub struct KeygenRequest<ValidatorId> {
+	/// A Chain's type
+	pub(crate) chain_type: ChainType,
 	/// The set of validators from which we would like to generate the key
-	pub(crate) validator_candidates: Vec<AccountId>,
+	pub validator_candidates: Vec<ValidatorId>,
 }
 
 /// A response for our KeygenRequest
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum KeygenResponse<AccountId, PublicKey: Into<Vec<u8>>> {
+pub enum KeygenResponse<ValidatorId, PublicKey: Into<Vec<u8>>> {
 	/// The key generation ceremony has completed successfully with a new proposed public key
 	Success(PublicKey),
 	/// Something went wrong and it failed.
-	Failure(Vec<AccountId>),
+	Error(Vec<ValidatorId>),
+}
+
+/// A signing request
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub struct ThresholdSignatureRequest<PublicKey: Into<Vec<u8>>, ValidatorId> {
+	/// Payload to be signed overr
+	pub payload: Vec<u8>,
+	/// The public key of the key to be used to sign with
+	pub public_key: PublicKey,
+	/// Those validators to sign
+	pub validators: Vec<ValidatorId>,
+}
+
+/// A response back with our signature else a list of bad validators
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub enum ThresholdSignatureResponse<ValidatorId, Signature> {
+	// Signature
+	Success(Signature),
+	// Bad validators
+	Error(Vec<ValidatorId>),
 }
 
 /// The vault rotation request
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct VaultRotationRequest {
-	pub(crate) chain: ChainParams,
+	pub chain: ChainParams,
 }
+
 /// From chain to request
 impl From<ChainParams> for VaultRotationRequest {
 	fn from(chain: ChainParams) -> Self {
@@ -98,21 +141,20 @@ impl From<ChainParams> for VaultRotationRequest {
 
 /// The Vault's keys, public that is
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
-pub struct Vault<PublicKey: Into<Vec<u8>>, Transaction: Into<Vec<u8>>> {
-	pub old_key: PublicKey,
-	pub new_key: PublicKey,
-	pub tx: Transaction,
+pub struct Vault<PublicKey: Into<Vec<u8>>, TransactionHash: Into<Vec<u8>>> {
+	/// The previous key
+	pub previous_key: PublicKey,
+	/// The current key
+	pub current_key: PublicKey,
+	/// The transaction hash for the vault rotation to the current key
+	pub tx_hash: TransactionHash,
 }
 
 /// A response of our request to rotate the vault
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum VaultRotationResponse<PublicKey: Into<Vec<u8>>, Transaction: Into<Vec<u8>>> {
-	Success {
-		old_key: PublicKey,
-		new_key: PublicKey,
-		tx: Transaction,
-	},
-	Failure,
+pub enum VaultRotationResponse<TransactionHash: Into<Vec<u8>>> {
+	Success { tx_hash: TransactionHash },
+	Error,
 }
 
 #[macro_export]
@@ -120,7 +162,7 @@ macro_rules! ensure_index {
 	($index: expr) => {
 		ensure!(
 			VaultRotations::<T>::contains_key($index),
-			RotationError::InvalidRequestIndex
+			RotationError::InvalidCeremonyId
 		);
 	};
 }
