@@ -28,9 +28,10 @@ pub mod pallet {
 	use pallet_cf_reputation::{OfflineCondition, OfflineConditions};
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
-	pub struct RequestContext<T: Chainflip, S: SigningContext<T> + Member> {
+	pub struct RequestContext<T: Config<I>, I: 'static> {
+		pub attempt: u8,
 		pub signatories: Vec<T::ValidatorId>,
-		pub chain_specific: S,
+		pub chain_specific: T::SigningContext,
 	}
 
 	type SignatureFor<T, I> = <<T as Config<I>>::SigningContext as SigningContext<T>>::Signature;
@@ -69,7 +70,12 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn pending_request)]
 	pub type PendingRequests<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, RequestId, RequestContext<T, T::SigningContext>, OptionQuery>;
+		StorageMap<_, Twox64Concat, RequestId, RequestContext<T, I>, OptionQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn retry_queue)]
+	pub type RetryQueue<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, Vec<RequestContext<T, I>>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -80,8 +86,6 @@ pub mod pallet {
 		ThresholdSignatureFailed(RequestId, T::KeyId, Vec<T::ValidatorId>),
 		/// [ceremony_id]
 		ThresholdSignatureSuccess(RequestId),
-		/// [old_id, new_id]
-		ThresholdSignatureRetry(RequestId, RequestId),
 	}
 
 	#[pallet::error]
@@ -91,7 +95,21 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {}
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+		fn on_initialize(_n: BlockNumberFor<T>) -> frame_support::weights::Weight {
+			let num_retries = RetryQueue::<T, I>::decode_len().unwrap_or(0);
+			if num_retries == 0 {
+				return 0;
+			}
+
+			for request in RetryQueue::<T, I>::take() {
+				Self::request_attempt(request.chain_specific, request.attempt + 1);
+			}
+			// TODO: replace this with benchmark results.
+			num_retries as u64
+				* frame_support::weights::RuntimeDbWeight::default().reads_writes(3, 3)
+		}
+	}
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -104,7 +122,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin.clone())?;
 
-			// 1. Ensure the id is valid and remove the context.
+			// Ensure the id is valid and remove the context.
 			let context =
 				PendingRequests::<T, I>::take(id).ok_or(Error::<T, I>::InvalidRequestId)?;
 
@@ -112,7 +130,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T, I>::ThresholdSignatureSuccess(id));
 
-			// 2. Dispatch the callback.
+			// Dispatch the callback.
 			context.chain_specific.dispatch_callback(origin, signature)
 		}
 
@@ -143,13 +161,11 @@ pub mod pallet {
 				});
 			}
 
-			// Remove the context and retry.
+			// Remove the context and schedule for retry.
 			let context =
 				PendingRequests::<T, I>::take(id).ok_or(Error::<T, I>::InvalidRequestId)?;
 
-			let retry_id = Self::request_signature(context.chain_specific);
-
-			Self::deposit_event(Event::<T, I>::ThresholdSignatureRetry(id, retry_id));
+			RetryQueue::<T, I>::append(context);
 
 			Ok(().into())
 		}
@@ -157,8 +173,13 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	/// Emits a request event, stores it, and returns its id.
+	/// Initiate a new signature request, returning the request id.
 	pub fn request_signature(context: T::SigningContext) -> u64 {
+		Self::request_attempt(context, 0)
+	}
+
+	/// Emits a request event, stores its context, and returns its id.
+	fn request_attempt(context: T::SigningContext, attempt: u8) -> u64 {
 		// Get a new id.
 		let id = RequestIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
@@ -179,6 +200,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		PendingRequests::<T, I>::insert(
 			id,
 			RequestContext {
+				attempt,
 				signatories: nominees.clone(),
 				chain_specific: context,
 			},

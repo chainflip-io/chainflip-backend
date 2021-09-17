@@ -135,7 +135,7 @@ thread_local! {
 pub struct MockOfflineConditions;
 
 impl MockOfflineConditions {
-	fn get_reported() -> Vec<u64> {
+	pub fn get_reported() -> Vec<u64> {
 		REPORTED.with(|cell| cell.borrow().clone())
 	}
 }
