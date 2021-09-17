@@ -43,7 +43,7 @@ async fn main() {
         // which won't necessarily always be the case, i.e. if we no longer have PeerId == AccountId
         let seed: [u8; 32] = hex::decode(
             &fs::read_to_string(&settings.state_chain.signing_key_file)
-                .expect("Cannot read private key file")
+                .expect("Cannot read state chain signing key file")
                 .replace("\"", ""),
         )
         .expect("Failed to decode seed")
