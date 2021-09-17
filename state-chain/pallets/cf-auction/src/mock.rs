@@ -1,8 +1,8 @@
 use super::*;
 use crate as pallet_cf_auction;
-use cf_traits::mocks::vault_rotation::Mock as MockAuctionHandler;
-use cf_traits::ChainflipAccountData;
+use cf_traits::mocks::vault_rotation::Mock as MockVaultRotation;
 use frame_support::traits::ValidatorRegistration;
+use cf_traits::ChainflipAccountData;
 use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
 use sp_runtime::traits::ConvertInto;
@@ -90,9 +90,10 @@ impl Config for Test {
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinValidators = MinValidators;
-	type Handler = MockAuctionHandler;
+	type Handler = MockVaultRotation;
 	type ChainflipAccount = MockChainflipAccount;
 	type AccountIdOf = ConvertInto;
+	type Online = MockOnline;
 }
 
 pub struct MockChainflipAccount;
@@ -120,6 +121,15 @@ fn account_updates() {
 	MockChainflipAccount::update_state(&1, ChainflipAccountState::Validator);
 	let data = MockChainflipAccount::get(&1);
 	assert_eq!(data.state, ChainflipAccountState::Validator);
+}
+
+pub struct MockOnline;
+impl Online for MockOnline {
+	type ValidatorId = ValidatorId;
+
+	fn is_online(_validator_id: &Self::ValidatorId) -> bool {
+		true
+	}
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {

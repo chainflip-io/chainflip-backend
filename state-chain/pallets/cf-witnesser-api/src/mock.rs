@@ -27,7 +27,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		Staking: pallet_cf_staking::{Module, Call, Event<T>, Config<T>},
-		Vaults: pallet_cf_vaults::{Module, Call, Event<T>, Config},
+		Vaults: pallet_cf_vaults::{Module, Call, Event<T>, Config<T>},
 		WitnessApi: pallet_cf_witness_api::{Module, Call},
 	}
 );
@@ -109,9 +109,10 @@ impl pallet_cf_vaults::Config for Test {
 	type Event = Event;
 	type EnsureWitnessed = MockEnsureWitnessed;
 	type PublicKey = Vec<u8>;
-	type Transaction = Vec<u8>;
+	type TransactionHash = Vec<u8>;
 	type RotationHandler = Self;
 	type NonceProvider = Self;
+	type EpochInfo = cf_traits::mocks::epoch_info::Mock;
 }
 
 impl pallet_cf_witness_api::Config for Test {
