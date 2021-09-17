@@ -8,14 +8,17 @@ use frame_support::traits::OnInitialize;
 use frame_system::RawOrigin;
 use sp_std::{boxed::Box, vec, vec::Vec};
 
+const BLOCK_NUMBER: u32 = 100;
+
 #[allow(unused)]
 use crate::Pallet as Emissions;
 
 benchmarks! {
 	on_initialize {
-		let b in 0 .. 100;
 	}: {
-		Emissions::<T>::on_initialize((b).into());
+		for current_block in 1..BLOCK_NUMBER {
+			Emissions::<T>::on_initialize((current_block).into());
+		}
 	}
 }
 

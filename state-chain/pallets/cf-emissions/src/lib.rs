@@ -104,10 +104,10 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
-			let (should_mint, mut weight) = Self::should_mint_at(current_block);
+			let should_mint = Self::should_mint_at(current_block);
 
 			if should_mint {
-				weight += Self::mint_rewards_for_block(current_block).unwrap_or_else(|w| w);
+				Self::mint_rewards_for_block(current_block);
 			}
 			T::WeightInfo::on_initialize()
 		}
@@ -141,13 +141,12 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Determines if we should mint at block number `block_number`.
-	fn should_mint_at(block_number: T::BlockNumber) -> (bool, Weight) {
+	fn should_mint_at(block_number: T::BlockNumber) -> bool {
 		let mint_interval = T::MintInterval::get();
 		let blocks_elapsed = block_number - LastMintBlock::<T>::get();
 		let should_mint = Self::should_mint(blocks_elapsed, mint_interval);
-		let weight = T::DbWeight::get().reads(2);
 
-		(should_mint, weight)
+		should_mint
 	}
 
 	/// Checks if we should mint.
@@ -160,33 +159,43 @@ impl<T: Config> Pallet<T> {
 
 	/// Based on the last block at which rewards were minted, calculates how much issuance needs to be
 	/// minted and distributes this a as a reward via [RewardsDistribution].
-	fn mint_rewards_for_block(block_number: T::BlockNumber) -> Result<Weight, Weight> {
+	fn mint_rewards_for_block(block_number: T::BlockNumber) {
 		// Calculate the outstanding reward amount.
 		let blocks_elapsed = block_number - LastMintBlock::<T>::get();
 		let blocks_elapsed = T::FlipBalance::unique_saturated_from(blocks_elapsed);
 
-		let reward_amount = EmissionPerBlock::<T>::get()
-			.checked_mul(&blocks_elapsed)
-			.ok_or(T::DbWeight::get().reads(2))?;
+		match EmissionPerBlock::<T>::get().checked_mul(&blocks_elapsed) {
+			Some(reward_amount) if !reward_amount.is_zero() => {
+				// Mint the rewards
+				let reward = T::Issuance::mint(reward_amount);
 
-		let exec_weight = if reward_amount.is_zero() {
-			0
-		} else {
-			// Mint the rewards
-			let reward = T::Issuance::mint(reward_amount);
+				// Delegate the distribution.
+				T::RewardsDistribution::distribute(reward);
 
-			// Delegate the distribution.
-			T::RewardsDistribution::distribute(reward);
-			T::RewardsDistribution::execution_weight()
-		};
+				// Update this pallet's state.
+				LastMintBlock::<T>::set(block_number);
 
-		// Update this pallet's state.
-		LastMintBlock::<T>::set(block_number);
+				Self::deposit_event(Event::EmissionsDistributed(block_number, reward_amount));
+			}
+			_ => (),
+		}
+		// if let Some(reward_amount) = EmissionPerBlock::<T>::get().checked_mul(&blocks_elapsed) {
+		// 	let exec_weight = if reward_amount.is_zero() {
+		// 		0
+		// 	} else {
+		// 		// Mint the rewards
+		// 		let reward = T::Issuance::mint(reward_amount);
 
-		Self::deposit_event(Event::EmissionsDistributed(block_number, reward_amount));
+		// 		// Delegate the distribution.
+		// 		T::RewardsDistribution::distribute(reward);
+		// 		T::RewardsDistribution::execution_weight()
+		// 	};
 
-		let weight = exec_weight + T::DbWeight::get().reads_writes(2, 1);
-		Ok(weight)
+		// 	// Update this pallet's state.
+		// 	LastMintBlock::<T>::set(block_number);
+
+		// 	Self::deposit_event(Event::EmissionsDistributed(block_number, reward_amount));
+		// }
 	}
 }
 
