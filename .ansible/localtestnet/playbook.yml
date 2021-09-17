@@ -1,8 +1,0 @@
-- name: Start localtestnet
-  hosts: localhost
-  gather_facts: yes
-
-  tasks:
-    - name: Output secrets to screen (BAD IDEA!)
-      debug:
-        msg: "Content: {{  }}}"
