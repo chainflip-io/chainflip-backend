@@ -3,8 +3,8 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    p2p::ValidatorId,
-    signing::crypto::{Keys, Parameters, SharedKeys, VerifiableSS, GE},
+    p2p::AccountId,
+    signing::crypto::{ECPoint, Keys, Parameters, SharedKeys, VerifiableSS, GE},
 };
 
 use super::utils::ValidatorMaps;
@@ -20,6 +20,11 @@ impl KeygenResult {
     pub fn get_public_key(&self) -> GE {
         self.shared_keys.y
     }
+
+    /// Gets the serialized compressed public key (33 bytes - 32 bytes + a y parity byte)
+    pub fn get_public_key_bytes(&self) -> Vec<u8> {
+        self.shared_keys.y.get_element().serialize().into()
+    }
 }
 
 // TODO: combine the two Arcs?
@@ -31,11 +36,11 @@ pub struct KeygenResultInfo {
 }
 
 impl KeygenResultInfo {
-    pub fn get_idx(&self, id: &ValidatorId) -> Option<usize> {
+    pub fn get_idx(&self, id: &AccountId) -> Option<usize> {
         self.validator_map.get_idx(id)
     }
 
-    pub fn get_id(&self, idx: usize) -> ValidatorId {
+    pub fn get_id(&self, idx: usize) -> AccountId {
         // providing an invalid idx is considered a programmer error here
         self.validator_map
             .get_id(idx)

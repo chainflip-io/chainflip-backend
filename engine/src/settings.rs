@@ -8,15 +8,10 @@ use config::{Config, ConfigError, File};
 use serde::{de, Deserialize, Deserializer};
 use web3::types::H160;
 
-use crate::p2p::ValidatorId;
+use crate::p2p::AccountId;
 
 pub use anyhow::Result;
 use url::Url;
-
-#[derive(Debug, Deserialize, Clone)]
-pub struct MessageQueue {
-    pub endpoint: String,
-}
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct StateChain {
@@ -44,14 +39,13 @@ pub struct HealthCheck {
 #[derive(Debug, Deserialize, Clone)]
 pub struct Signing {
     /// This includes my_id if I'm part of genesis validator set
-    pub genesis_validator_ids: Vec<ValidatorId>,
+    pub genesis_validator_ids: Vec<AccountId>,
     #[serde(deserialize_with = "deser_path")]
     pub db_file: PathBuf,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Settings {
-    pub message_queue: MessageQueue,
     pub state_chain: StateChain,
     pub eth: Eth,
     pub health_check: HealthCheck,
@@ -165,7 +159,7 @@ mod tests {
         let settings = Settings::new();
         let settings = settings.unwrap();
 
-        assert_eq!(settings.message_queue.endpoint, "http://localhost:4222");
+        assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
     }
 
     #[test]
@@ -173,10 +167,7 @@ mod tests {
         let test_settings = test_utils::new_test_settings();
 
         let test_settings = test_settings.unwrap();
-        assert_eq!(
-            test_settings.message_queue.endpoint,
-            "http://localhost:4222"
-        );
+        assert_eq!(test_settings.state_chain.ws_endpoint, "ws://localhost:9944");
     }
 
     #[test]

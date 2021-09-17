@@ -1,18 +1,16 @@
 use std::{sync::Arc, time::Instant};
 
 use itertools::Itertools;
+use pallet_cf_vaults::CeremonyId;
 use slog::o;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     logging::SIGNING_SUB_COMPONENT,
-    p2p::{P2PMessageCommand, ValidatorId},
+    p2p::{AccountId, P2PMessageCommand},
     signing::{
-        client::{
-            client_inner::{
-                client_inner::KeyGenMessageWrapped, shared_secret::StageStatus, KeygenOutcome,
-            },
-            KeyId,
+        client::client_inner::{
+            client_inner::KeyGenMessageWrapped, shared_secret::StageStatus, KeygenOutcome,
         },
         crypto::{InvalidKey, InvalidSS, Parameters},
     },
@@ -45,8 +43,8 @@ pub struct KeygenState {
     maps_for_validator_id_and_idx: Arc<ValidatorMaps>,
     /// All valid signer indexes (1..=n)
     all_signer_idxs: Vec<usize>,
-    delayed_next_stage_data: Vec<(ValidatorId, KeygenData)>,
-    key_id: KeyId,
+    delayed_next_stage_data: Vec<(AccountId, KeygenData)>,
+    ceremony_id: CeremonyId,
     /// Multisig parameters are only stored here so we can put
     /// them inside `KeygenResultInfo` when we create the key
     params: Parameters,
@@ -66,7 +64,7 @@ impl KeygenState {
         idx: usize,
         params: Parameters,
         idx_map: ValidatorMaps,
-        key_id: KeyId,
+        ceremony_id: CeremonyId,
         event_sender: UnboundedSender<InnerEvent>,
         logger: &slog::Logger,
     ) -> Self {
@@ -79,7 +77,7 @@ impl KeygenState {
             signer_idx: idx,
             all_signer_idxs,
             delayed_next_stage_data: Vec::new(),
-            key_id,
+            ceremony_id,
             params,
             maps_for_validator_id_and_idx: Arc::new(idx_map),
             last_message_timestamp: Instant::now(),
@@ -92,7 +90,7 @@ impl KeygenState {
     }
 
     /// Get ids of validators who haven't sent the data for the current stage
-    pub fn awaited_parties(&self) -> Vec<ValidatorId> {
+    pub fn awaited_parties(&self) -> Vec<AccountId> {
         let awaited_idxs = match self.stage {
             KeygenStage::AwaitingBroadcast1 | KeygenStage::AwaitingSecret2 => {
                 self.sss.awaited_parties()
@@ -110,11 +108,11 @@ impl KeygenState {
     }
 
     /// Get index in the (sorted) array of all signers
-    fn validator_id_to_signer_idx(&self, id: &ValidatorId) -> Option<usize> {
+    fn validator_id_to_signer_idx(&self, id: &AccountId) -> Option<usize> {
         self.maps_for_validator_id_and_idx.get_idx(&id)
     }
 
-    fn signer_idx_to_validator_id(&self, idx: usize) -> &ValidatorId {
+    fn signer_idx_to_validator_id(&self, idx: usize) -> &AccountId {
         // Should be safe to unwrap because the `idx` is carefully
         // chosen by our on module
         let id = self.maps_for_validator_id_and_idx.get_id(idx).unwrap();
@@ -128,7 +126,7 @@ impl KeygenState {
     /// Returned value will signal that the key is ready
     pub fn process_keygen_message(
         &mut self,
-        sender_id: ValidatorId,
+        sender_id: AccountId,
         msg: KeygenData,
     ) -> Option<KeygenResultInfo> {
         slog::trace!(
@@ -211,12 +209,12 @@ impl KeygenState {
             self.logger,
             "[{}] Initiating keygen for key {:?}",
             self.us(),
-            self.key_id
+            self.ceremony_id
         );
 
         let bc1 = self.sss.init_phase1();
 
-        let wrapped = KeyGenMessageWrapped::new(self.key_id, bc1);
+        let wrapped = KeyGenMessageWrapped::new(self.ceremony_id, bc1);
 
         let msg = MultisigMessage::from(wrapped);
 
@@ -233,7 +231,7 @@ impl KeygenState {
                 let msgs = msgs
                     .into_iter()
                     .map(|(idx, secret2)| {
-                        let wrapped = KeyGenMessageWrapped::new(self.key_id, secret2);
+                        let wrapped = KeyGenMessageWrapped::new(self.ceremony_id, secret2);
                         let secret2 = MultisigMessage::from(wrapped);
                         let data = serde_json::to_vec(&secret2).unwrap();
                         MessageToSend { to_idx: idx, data }
@@ -252,13 +250,13 @@ impl KeygenState {
                 slog::error!(
                     self.logger,
                     "phase2 keygen error for key: {:?}, blamed validators: {:?}",
-                    self.key_id,
+                    self.ceremony_id,
                     // TODO: this should log the base58 ids
                     &blamed_ids
                 );
 
                 let event =
-                    InnerEvent::KeygenResult(KeygenOutcome::invalid(self.key_id, blamed_ids));
+                    InnerEvent::KeygenResult(KeygenOutcome::invalid(self.ceremony_id, blamed_ids));
 
                 self.send_event(event);
             }
@@ -284,14 +282,14 @@ impl KeygenState {
                 slog::error!(
                     self.logger,
                     "Invalid Phase2 keygen data, abandoning state for key: {:?}",
-                    self.key_id
+                    self.ceremony_id
                 );
                 self.stage = KeygenStage::Abandoned;
 
                 let blamed_ids = self.signer_idxs_to_validator_ids(blamed_idxs);
 
                 self.send_event(InnerEvent::KeygenResult(KeygenOutcome::invalid(
-                    self.key_id,
+                    self.ceremony_id,
                     blamed_ids,
                 )));
             }
@@ -300,7 +298,7 @@ impl KeygenState {
         None
     }
 
-    fn signer_idxs_to_validator_ids(&self, idxs: Vec<usize>) -> Vec<ValidatorId> {
+    fn signer_idxs_to_validator_ids(&self, idxs: Vec<usize>) -> Vec<AccountId> {
         idxs.into_iter()
             .map(|idx| self.signer_idx_to_validator_id(idx))
             .cloned()

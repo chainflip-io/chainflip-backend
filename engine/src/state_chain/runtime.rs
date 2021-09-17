@@ -1,5 +1,6 @@
 use std::{marker::PhantomData, time::Duration};
 
+use cf_traits::NetworkState;
 use frame_support::unsigned::TransactionValidityError;
 use sp_runtime::{
     generic::{self, Era},
@@ -25,11 +26,13 @@ use core::fmt::Debug;
 
 use codec::{Decode, Encode};
 
-use super::pallets::{auction, emissions, reputation, staking, validator, witness_api};
+use super::pallets::{auction, emissions, reputation, staking, validator, vaults, witness_api};
 
 use pallet_cf_flip::ImbalanceSource;
 use pallet_cf_reputation::OfflineCondition;
-use pallet_cf_vaults::{EthSigningTxRequest, KeygenRequest, VaultRotationRequest};
+use pallet_cf_vaults::{
+    CeremonyId, KeygenRequest, ThresholdSignatureRequest, VaultRotationRequest,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -111,7 +114,9 @@ impl Runtime for StateChainRuntime {
         event_type_registry.register_type_size::<u32>("T::BlockNumber");
         event_type_registry.register_type_size::<u32>("BlockNumberFor<T>");
         event_type_registry.register_type_size::<AccountId32>("T::ValidatorId");
-        event_type_registry.register_type_size::<AccountId32>("<T as Config>::ValidatorId");
+        event_type_registry.register_type_size::<AccountId32>("<T as Chainflip>::AccountId");
+        event_type_registry.register_type_size::<AccountId32>("<T as Config>::AccountId");
+        event_type_registry.register_type_size::<AccountId32>("<T as pallet::Config>::AccountId");
         event_type_registry.register_type_size::<u128>("T::Balance");
         event_type_registry.register_type_size::<Vec<u8>>("OpaqueTimeSlot");
         event_type_registry.register_type_size::<[u8; 32]>("U256");
@@ -126,14 +131,17 @@ impl Runtime for StateChainRuntime {
         event_type_registry.register_type_size::<i32>("ReputationPoints");
         event_type_registry.register_type_size::<u32>("OnlineCreditsFor<T>");
 
-        event_type_registry.register_type_size::<u64>("RequestIndex");
+        event_type_registry.register_type_size::<CeremonyId>("CeremonyId");
         event_type_registry.register_type_size::<OfflineCondition>("OfflineCondition");
         event_type_registry
             .register_type_size::<KeygenRequest<AccountId32>>("KeygenRequest<T::ValidatorId>");
-        event_type_registry.register_type_size::<EthSigningTxRequest<AccountId32>>(
-            "EthSigningTxRequest<T::ValidatorId>",
+        event_type_registry.register_type_size::<Vec<u8>>("T::PublicKey");
+        event_type_registry.register_type_size::<ThresholdSignatureRequest<Vec<u8>, AccountId32>>(
+            "ThresholdSignatureRequest<T::PublicKey, T::ValidatorId>",
         );
         event_type_registry.register_type_size::<VaultRotationRequest>("VaultRotationRequest");
+        event_type_registry.register_type_size::<u32>("ProposalId");
+        event_type_registry.register_type_size::<NetworkState>("NetworkState");
     }
 }
 
@@ -141,8 +149,6 @@ impl Sudo for StateChainRuntime {}
 
 impl auction::Auction for StateChainRuntime {
     type AuctionIndex = u64;
-
-    type ValidatorId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
 }
 
 impl validator::Validator for StateChainRuntime {
@@ -162,6 +168,8 @@ impl witness_api::WitnesserApi for StateChainRuntime {}
 impl emissions::Emissions for StateChainRuntime {
     type FlipBalance = u128;
 }
+
+impl vaults::Vaults for StateChainRuntime {}
 
 impl reputation::Reputation for StateChainRuntime {}
 

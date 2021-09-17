@@ -1,16 +1,14 @@
 use std::sync::{Arc, Mutex};
 
 use chainflip_engine::{
-    eth::{self, eth_broadcaster, eth_tx_encoding, key_manager, stake_manager},
+    eth::{self, key_manager, stake_manager, EthBroadcaster},
     health::HealthMonitor,
     heartbeat,
-    mq::nats_client::NatsMQClient,
-    p2p::{self, rpc as p2p_rpc, ValidatorId},
+    p2p::{self, rpc as p2p_rpc, AccountId, P2PMessage, P2PMessageCommand},
     settings::Settings,
     signing,
-    signing::db::PersistentKeyDB,
+    signing::{db::PersistentKeyDB, MultisigEvent, MultisigInstruction},
     state_chain::{self, runtime::StateChainRuntime},
-    temp_event_mapper,
 };
 use slog::{o, Drain};
 use sp_core::Pair;
@@ -32,15 +30,6 @@ async fn main() {
         .run()
         .await;
 
-    slog::info!(
-        &root_logger,
-        "Connecting to NatsMQ at: {}",
-        &settings.message_queue.endpoint
-    );
-    let mq_client = NatsMQClient::new(&settings.message_queue)
-        .await
-        .expect("Should connect to message queue");
-
     let subxt_client = ClientBuilder::<StateChainRuntime>::new()
         .set_url(&settings.state_chain.ws_endpoint)
         .build()
@@ -49,7 +38,7 @@ async fn main() {
 
     let key_pair = sp_core::sr25519::Pair::from_seed(&{
         // This can be the same filepath as the p2p key --node-key-file <file> on the state chain
-        // which won't necessarily always be the case, i.e. if we no longer have PeerId == ValidatorId
+        // which won't necessarily always be the case, i.e. if we no longer have PeerId == AccountId
         use std::{convert::TryInto, fs};
         let seed: [u8; 32] = hex::decode(
             &fs::read_to_string(&settings.state_chain.p2p_private_key_file)
@@ -82,17 +71,32 @@ async fn main() {
 
     let (_, p2p_shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     let (_, shutdown_client_rx) = tokio::sync::oneshot::channel::<()>();
+    let (multisig_instruction_sender, multisig_instruction_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<MultisigInstruction>();
+
+    let (multisig_event_sender, multisig_event_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<MultisigEvent>();
+
+    let (p2p_message_sender, p2p_message_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<P2PMessage>();
+    let (p2p_message_command_sender, p2p_message_command_receiver) =
+        tokio::sync::mpsc::unbounded_channel::<P2PMessageCommand>();
 
     let web3 = eth::new_synced_web3_client(&settings, &root_logger)
         .await
         .unwrap();
 
-    futures::join!(
+    let eth_broadcaster = EthBroadcaster::new(&settings, web3.clone()).unwrap();
+
+    tokio::join!(
         // Start signing components
         signing::start(
-            ValidatorId(key_pair.public().0),
+            AccountId(key_pair.public().0),
             db,
-            mq_client.clone(),
+            multisig_instruction_receiver,
+            multisig_event_sender,
+            p2p_message_receiver,
+            p2p_message_command_sender,
             shutdown_client_rx,
             &root_logger,
         ),
@@ -102,25 +106,27 @@ async fn main() {
                     "Should be valid ws endpoint: {}",
                     settings.state_chain.ws_endpoint
                 )),
-                ValidatorId(pair_signer.lock().unwrap().signer().public().0)
+                AccountId(pair_signer.lock().unwrap().signer().public().0)
             )
             .await
             .expect("unable to connect p2p rpc client"),
-            mq_client.clone(),
+            p2p_message_sender,
+            p2p_message_command_receiver,
             p2p_shutdown_rx,
             &root_logger.clone()
         ),
         heartbeat::start(subxt_client.clone(), pair_signer.clone(), &root_logger),
         // Start state chain components
-        state_chain::sc_observer::start(mq_client.clone(), subxt_client.clone(), &root_logger),
-        temp_event_mapper::start(mq_client.clone(), &root_logger),
-        // Start eth components
-        eth_broadcaster::start_eth_broadcaster(&web3, &settings, mq_client.clone(), &root_logger),
-        eth_tx_encoding::set_agg_key_with_agg_key::start(
+        state_chain::sc_observer::start(
             &settings,
-            mq_client.clone(),
+            subxt_client.clone(),
+            pair_signer.clone(),
+            eth_broadcaster,
+            multisig_instruction_sender,
+            multisig_event_receiver,
             &root_logger
         ),
+        // Start eth components
         stake_manager::start_stake_manager_witness(
             &web3,
             &settings,
@@ -133,7 +139,7 @@ async fn main() {
         key_manager::start_key_manager_witness(
             &web3,
             &settings,
-            pair_signer,
+            pair_signer.clone(),
             subxt_client,
             &root_logger
         )

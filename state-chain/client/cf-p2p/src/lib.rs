@@ -31,9 +31,10 @@ use std::pin::Pin;
 use std::sync::Mutex;
 use std::task::{Context, Poll};
 
+// TODO: This is duplicated in the CFE, can we just use one of these?
 /// The type of validator id expected by the p2p layer, uses standard serialization.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ValidatorId(pub [u8; 32]);
+pub struct AccountId(pub [u8; 32]);
 
 /// A wrapper around a byte buffer containing some opaque message.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -42,7 +43,7 @@ pub struct RawMessage(pub Vec<u8>);
 /// The protocol has two message types, `Identify` and `Message`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 enum ProtocolMessage {
-	Identify(ValidatorId),
+	Identify(AccountId),
 	Message(RawMessage),
 }
 
@@ -113,26 +114,26 @@ impl<B: BlockT, H: ExHashT> PeerNetwork for NetworkService<B, H> {
 /// A collection of callbacks for network events.
 pub trait NetworkObserver {
 	/// Called when a peer identifies itself to the network.
-	fn new_validator(&self, validator_id: &ValidatorId);
+	fn new_validator(&self, validator_id: &AccountId);
 	/// Called when a peer is disconnected.
-	fn disconnected(&self, validator_id: &ValidatorId);
+	fn disconnected(&self, validator_id: &AccountId);
 	/// Called when a message is received from some validator_id for this peer.
-	fn received(&self, from: &ValidatorId, message: RawMessage);
+	fn received(&self, from: &AccountId, message: RawMessage);
 	/// Called when a message could not be delivered because the recipient is unknown.
-	fn unknown_recipient(&self, recipient_id: &ValidatorId);
+	fn unknown_recipient(&self, recipient_id: &AccountId);
 	/// Called when a message is sent before identifying the node to the network.
 	fn unidentified_node(&self);
 	/// Empty messages are not allowed.
 	fn empty_message(&self);
 	/// A node cannot identify more than once.
-	fn already_identified(&self, existing_id: &ValidatorId);
+	fn already_identified(&self, existing_id: &AccountId);
 }
 
 /// Defines the logic for processing network events and commands from this node.
 ///
 /// ## ID management
 ///
-/// Peers must identify themselves by their `ValidatorId` otherwise they will be unable to send
+/// Peers must identify themselves by their `AccountId` otherwise they will be unable to send
 /// messages.
 /// Likewise, any messages received from peers that have not identified themselves will be dropped.
 struct StateMachine<Observer: NetworkObserver, Network: PeerNetwork> {
@@ -140,12 +141,12 @@ struct StateMachine<Observer: NetworkObserver, Network: PeerNetwork> {
 	observer: Arc<Observer>,
 	/// The peer to peer network
 	network: Arc<Network>,
-	/// PeerIds with the corresponding ValidatorId, if available.
-	peer_to_validator: HashMap<PeerId, Option<ValidatorId>>,
-	/// ValidatorIds mapped to corresponding PeerIds.
-	validator_to_peer: HashMap<ValidatorId, PeerId>,
-	/// Our own ValidatorId
-	local_validator_id: Option<ValidatorId>,
+	/// PeerIds with the corresponding AccountId, if available.
+	peer_to_validator: HashMap<PeerId, Option<AccountId>>,
+	/// AccountIds mapped to corresponding PeerIds.
+	validator_to_peer: HashMap<AccountId, PeerId>,
+	/// Our own AccountId
+	local_validator_id: Option<AccountId>,
 }
 
 const EXPECTED_PEER_COUNT: usize = 300;
@@ -174,7 +175,7 @@ where
 	}
 
 	/// A peer has identified itself. Register the validator Id and notify the observer.
-	fn register_identification(&mut self, peer_id: &PeerId, validator_id: ValidatorId) {
+	fn register_identification(&mut self, peer_id: &PeerId, validator_id: AccountId) {
 		if let Some(entry) = self.peer_to_validator.get_mut(peer_id) {
 			if entry.is_none() {
 				*entry = Some(validator_id);
@@ -234,7 +235,7 @@ where
 	}
 
 	/// Identify ourselves to the network.
-	pub fn identify(&mut self, validator_id: ValidatorId) {
+	pub fn identify(&mut self, validator_id: AccountId) {
 		if let Some(existing_id) = self.local_validator_id {
 			self.observer.already_identified(&existing_id);
 			return;
@@ -246,13 +247,13 @@ where
 	}
 
 	/// Identify ourselves to a peer on the network.
-	fn send_identification(&self, peer_id: PeerId, validator_id: ValidatorId) {
+	fn send_identification(&self, peer_id: PeerId, validator_id: AccountId) {
 		self.encode_and_send(peer_id, ProtocolMessage::Identify(validator_id));
 	}
 
 	/// Send message to peer, this will fail silently if peer isn't in our peer list or if the message
 	/// is empty.
-	pub fn send_message(&self, validator_id: ValidatorId, message: RawMessage) {
+	pub fn send_message(&self, validator_id: AccountId, message: RawMessage) {
 		if self.notify_invalid(&message) {
 			return;
 		}
@@ -265,7 +266,7 @@ where
 	}
 
 	/// Broadcast & to a specific list of peers on the network, this will fail silently if the message is empty.
-	pub fn broadcast(&self, validators: Vec<ValidatorId>, message: RawMessage) {
+	pub fn broadcast(&self, validators: Vec<AccountId>, message: RawMessage) {
 		if self.notify_invalid(&message) {
 			return;
 		}
@@ -362,17 +363,17 @@ impl<Observer: NetworkObserver, Network: PeerNetwork> NetworkBridge<Observer, Ne
 /// Commands that can be sent to the `NetworkBridge`. Each should correspond to a function in the bridge's
 /// `StateMachine`.
 pub enum MessagingCommand {
-	Identify(ValidatorId),
-	Send(ValidatorId, RawMessage),
-	Broadcast(Vec<ValidatorId>, RawMessage),
+	Identify(AccountId),
+	Send(AccountId, RawMessage),
+	Broadcast(Vec<AccountId>, RawMessage),
 	BroadcastAll(RawMessage),
 }
 
 /// Messaging by sending directly or broadcasting
 pub trait P2PMessaging {
-	fn identify(&mut self, validator_id: ValidatorId) -> Result<()>;
-	fn send_message(&mut self, validator_id: ValidatorId, data: RawMessage) -> Result<()>;
-	fn broadcast(&self, validators: Vec<ValidatorId>, data: RawMessage) -> Result<()>;
+	fn identify(&mut self, validator_id: AccountId) -> Result<()>;
+	fn send_message(&mut self, validator_id: AccountId, data: RawMessage) -> Result<()>;
+	fn broadcast(&self, validators: Vec<AccountId>, data: RawMessage) -> Result<()>;
 	fn broadcast_all(&self, data: RawMessage) -> Result<()>;
 }
 
@@ -388,19 +389,19 @@ impl Sender {
 }
 
 impl P2PMessaging for Sender {
-	fn identify(&mut self, validator_id: ValidatorId) -> Result<()> {
+	fn identify(&mut self, validator_id: AccountId) -> Result<()> {
 		self.0
 			.unbounded_send(MessagingCommand::Identify(validator_id))?;
 		Ok(())
 	}
 
-	fn send_message(&mut self, validator_id: ValidatorId, data: RawMessage) -> Result<()> {
+	fn send_message(&mut self, validator_id: AccountId, data: RawMessage) -> Result<()> {
 		self.0
 			.unbounded_send(MessagingCommand::Send(validator_id, data))?;
 		Ok(())
 	}
 
-	fn broadcast(&self, validators: Vec<ValidatorId>, data: RawMessage) -> Result<()> {
+	fn broadcast(&self, validators: Vec<AccountId>, data: RawMessage) -> Result<()> {
 		self.0
 			.unbounded_send(MessagingCommand::Broadcast(validators, data))?;
 		Ok(())
@@ -601,35 +602,35 @@ mod tests {
 
 	#[derive(Default)]
 	struct MockObserverInner {
-		pub new_peers: Vec<ValidatorId>,
-		pub disconnected_peers: Vec<ValidatorId>,
-		pub messages_received: Vec<(ValidatorId, RawMessage)>,
-		pub unknown_recipients: Vec<ValidatorId>,
+		pub new_peers: Vec<AccountId>,
+		pub disconnected_peers: Vec<AccountId>,
+		pub messages_received: Vec<(AccountId, RawMessage)>,
+		pub unknown_recipients: Vec<AccountId>,
 		pub unidentified_node: Vec<()>,
 		pub empty_message: Vec<()>,
-		pub already_identified: Vec<ValidatorId>,
+		pub already_identified: Vec<AccountId>,
 	}
 
 	impl NetworkObserver for MockObserver {
-		fn new_validator(&self, validator_id: &ValidatorId) {
+		fn new_validator(&self, validator_id: &AccountId) {
 			self.inner.borrow_mut().new_peers.push(*validator_id);
 		}
 
-		fn disconnected(&self, validator_id: &ValidatorId) {
+		fn disconnected(&self, validator_id: &AccountId) {
 			self.inner
 				.borrow_mut()
 				.disconnected_peers
 				.push(*validator_id);
 		}
 
-		fn received(&self, validator_id: &ValidatorId, message: RawMessage) {
+		fn received(&self, validator_id: &AccountId, message: RawMessage) {
 			self.inner
 				.borrow_mut()
 				.messages_received
 				.push((*validator_id, message));
 		}
 
-		fn unknown_recipient(&self, recipient_id: &ValidatorId) {
+		fn unknown_recipient(&self, recipient_id: &AccountId) {
 			self.inner
 				.borrow_mut()
 				.unknown_recipients
@@ -644,7 +645,7 @@ mod tests {
 			self.inner.borrow_mut().empty_message.push(());
 		}
 
-		fn already_identified(&self, existing_id: &ValidatorId) {
+		fn already_identified(&self, existing_id: &AccountId) {
 			self.inner
 				.borrow_mut()
 				.already_identified
@@ -655,9 +656,9 @@ mod tests {
 	#[test]
 	fn test_state_machine() {
 		let local_peer = PeerId::random();
-		let local_validator_id = ValidatorId([0xCF; 32]);
+		let local_validator_id = AccountId([0xCF; 32]);
 		let remote_peer = PeerId::random();
-		let remote_validator_id = ValidatorId([0xAB; 32]);
+		let remote_validator_id = AccountId([0xAB; 32]);
 		let hello = RawMessage(b"hello".to_vec());
 
 		let observer = Arc::new(MockObserver::default());
@@ -744,7 +745,7 @@ mod tests {
 		assert_eq!(observer.inner.borrow_mut().empty_message.pop(), Some(()));
 
 		// Try register under a new id.
-		sm.identify(ValidatorId([0x44; 32]));
+		sm.identify(AccountId([0x44; 32]));
 		assert_eq!(sm.local_validator_id, Some(local_validator_id));
 
 		// The observer should be notified of this.
@@ -754,7 +755,7 @@ mod tests {
 		);
 
 		// Try to send to an unregistered validator.
-		let unregistered = ValidatorId([0xA1; 32]);
+		let unregistered = AccountId([0xA1; 32]);
 		sm.send_message(unregistered, hello);
 
 		// The observer should be notified of this.

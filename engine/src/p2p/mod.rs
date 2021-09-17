@@ -9,11 +9,12 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::stream::BoxStream;
 use serde::{Deserialize, Serialize};
-
-use crate::mq::{IMQClient, Subject};
+use tokio::sync::mpsc::UnboundedSender;
 
 type StatusCode = u64;
 
+/// Trait for handling messages to/from the P2P layer
+/// i.e. messages that come from / go to *other* nodes in the network
 #[async_trait]
 pub trait P2PNetworkClient {
     type NetworkEvent;
@@ -22,7 +23,7 @@ pub trait P2PNetworkClient {
     async fn broadcast(&self, data: &[u8]) -> Result<StatusCode>;
 
     /// Send to a specific `validator` only
-    async fn send(&self, to: &ValidatorId, data: &[u8]) -> Result<StatusCode>;
+    async fn send(&self, to: &AccountId, data: &[u8]) -> Result<StatusCode>;
 
     /// Get a stream of notifications from the network.
     async fn take_stream(&self) -> Result<BoxStream<Self::NetworkEvent>>;
@@ -34,30 +35,24 @@ pub trait NetworkEventHandler<C: P2PNetworkClient + Send> {
     async fn handle_event(&self, event: C::NetworkEvent);
 }
 
-struct P2PRpcEventHandler<MQ> {
-    mq: MQ,
+struct P2PRpcEventHandler {
+    p2p_message_sender: UnboundedSender<P2PMessage>,
     logger: slog::Logger,
 }
 
 #[async_trait]
-impl<MQ> NetworkEventHandler<P2PRpcClient> for P2PRpcEventHandler<MQ>
-where
-    MQ: IMQClient + Send + Sync,
-{
+impl NetworkEventHandler<P2PRpcClient> for P2PRpcEventHandler {
     async fn handle_event(&self, network_event: Result<P2PEvent>) {
         match network_event {
             Ok(event) => match event {
                 P2PEvent::MessageReceived(sender, message) => {
-                    self.mq
-                        .publish::<P2PMessage>(
-                            Subject::P2PIncoming,
-                            &P2PMessage {
-                                sender_id: ValidatorId(sender.0),
-                                data: message.0,
-                            },
-                        )
-                        .await
-                        .expect("Unable to publish to message queue.");
+                    self.p2p_message_sender
+                        .send(P2PMessage {
+                            sender_id: AccountId(sender.0),
+                            data: message.0,
+                        })
+                        .map_err(|_| "Receiver dropped")
+                        .unwrap();
                 }
                 P2PEvent::ValidatorConnected(id) => {
                     slog::debug!(self.logger, "Validator '{}' has joined the network.", id);
@@ -75,23 +70,23 @@ where
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize, Eq, PartialOrd, Ord, Hash)]
-pub struct ValidatorId(pub [u8; 32]);
+pub struct AccountId(pub [u8; 32]);
 
-impl std::fmt::Display for ValidatorId {
+impl std::fmt::Display for AccountId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ValidatorId({})", bs58::encode(&self.0).into_string())
+        write!(f, "AccountId({})", bs58::encode(&self.0).into_string())
     }
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct P2PMessage {
-    pub sender_id: ValidatorId,
+    pub sender_id: AccountId,
     pub data: Vec<u8>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct P2PMessageCommand {
-    pub destination: ValidatorId,
+    pub destination: AccountId,
     pub data: Vec<u8>,
 }
 
@@ -99,7 +94,7 @@ pub struct P2PMessageCommand {
 /// validator `destination`
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct CommandSendMessage {
-    destination: ValidatorId,
+    destination: AccountId,
     data: Vec<u8>,
 }
 
@@ -123,7 +118,7 @@ mod tests {
         let network = NetworkMock::new();
 
         let data = vec![1, 2, 3];
-        let validator_ids = (0..3).map(|i| ValidatorId([i; 32])).collect_vec();
+        let validator_ids = (0..3).map(|i| AccountId([i; 32])).collect_vec();
 
         let clients = validator_ids
             .iter()
@@ -155,7 +150,7 @@ mod tests {
         let network = NetworkMock::new();
 
         let data = vec![3, 2, 1];
-        let validator_ids = (0..3).map(|i| ValidatorId([i; 32])).collect_vec();
+        let validator_ids = (0..3).map(|i| AccountId([i; 32])).collect_vec();
         let clients = validator_ids
             .iter()
             .map(|id| network.new_client(id.clone()))

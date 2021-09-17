@@ -9,9 +9,6 @@ use state_chain_runtime::{
 	Signature, StakingConfig, SystemConfig, ValidatorConfig, DAYS, WASM_BINARY,
 };
 
-// The URL for the telemetry server.
-// const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
-
 const TOTAL_ISSUANCE: FlipBalance = {
 	const TOKEN_ISSUANCE: FlipBalance = 90_000_000;
 	const TOKEN_DECIMALS: u32 = 18;
@@ -19,7 +16,6 @@ const TOTAL_ISSUANCE: FlipBalance = {
 	TOKEN_ISSUANCE * TOKEN_FRACTIONS
 };
 
-const MIN_VALIDATORS: u32 = 3;
 const MAX_VALIDATORS: u32 = 150;
 
 const BLOCK_EMISSIONS: FlipBalance = {
@@ -68,13 +64,12 @@ pub fn authority_keys_from_seed(s: &str) -> (AccountId, AuraId, GrandpaId) {
 	)
 }
 
+/// Start a single node development chain
 pub fn development_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
 
 	Ok(ChainSpec::from_genesis(
-		// Name
-		"Development",
-		// ID
+		"CF Develop",
 		"dev",
 		ChainType::Development,
 		move || {
@@ -91,7 +86,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 					get_account_id_from_seed::<sr25519::Public>("Alice//stash"),
 					get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
 				],
-				true,
+				1,
 			)
 		},
 		// Bootnodes
@@ -107,68 +102,13 @@ pub fn development_config() -> Result<ChainSpec, String> {
 	))
 }
 
-pub fn local_testnet_config() -> Result<ChainSpec, String> {
+/// Initialise a Chainflip testnet
+pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
 
 	Ok(ChainSpec::from_genesis(
-		// Name
-		"Local Testnet",
-		// ID
-		"local_testnet",
-		ChainType::Local,
-		move || {
-			testnet_genesis(
-				wasm_binary,
-				// Initial PoA authorities
-				vec![
-					authority_keys_from_seed("Alice"),
-					authority_keys_from_seed("Bob"),
-				],
-				// Sudo account
-				get_account_id_from_seed::<sr25519::Public>("Alice"),
-				// Pre-funded accounts
-				vec![
-					get_account_id_from_seed::<sr25519::Public>("Alice"),
-					get_account_id_from_seed::<sr25519::Public>("Bob"),
-					get_account_id_from_seed::<sr25519::Public>("Charlie"),
-					get_account_id_from_seed::<sr25519::Public>("Dave"),
-					get_account_id_from_seed::<sr25519::Public>("Eve"),
-					get_account_id_from_seed::<sr25519::Public>("Ferdie"),
-					get_account_id_from_seed::<sr25519::Public>("Alice//stash"),
-					get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
-					get_account_id_from_seed::<sr25519::Public>("Charlie//stash"),
-					get_account_id_from_seed::<sr25519::Public>("Dave//stash"),
-					get_account_id_from_seed::<sr25519::Public>("Eve//stash"),
-					get_account_id_from_seed::<sr25519::Public>("Ferdie//stash"),
-				],
-				true,
-			)
-		},
-		// Bootnodes
-		vec![],
-		// Telemetry
-		None,
-		// Protocol ID
-		None,
-		// Properties
-		None,
-		// Extensions
-		None,
-	))
-}
-
-/// Create a local testnet for Chainflip
-/// We would have 2 validators at Genesis; Chas and Dave https://en.wikipedia.org/wiki/Chas_%26_Dave
-/// Chas would also be Sudo
-/// Subsequent validators would need to be added via the session pallet
-pub fn chainflip_local_testnet_config() -> Result<ChainSpec, String> {
-	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
-
-	Ok(ChainSpec::from_genesis(
-		// Name
-		"Chainflip local Testnet",
-		// ID
-		"chainflip_local_testnet",
+		"Internal testnet",
+		"test",
 		ChainType::Live,
 		move || {
 			testnet_genesis(
@@ -284,7 +224,7 @@ pub fn chainflip_local_testnet_config() -> Result<ChainSpec, String> {
 					]
 					.into(),
 				],
-				false,
+				3,
 			)
 		},
 		// Bootnodes
@@ -299,15 +239,16 @@ pub fn chainflip_local_testnet_config() -> Result<ChainSpec, String> {
 		None,
 	))
 }
+
 /// Configure initial storage state for FRAME modules.
 /// 100800 blocks for 7 days at 6 second blocks
 /// 150 validator limit
 fn testnet_genesis(
 	wasm_binary: &[u8],
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>,
-	root_key: AccountId,
+	_root_key: AccountId,
 	endowed_accounts: Vec<AccountId>,
-	dev: bool,
+	min_validators: u32,
 ) -> GenesisConfig {
 	GenesisConfig {
 		frame_system: Some(SystemConfig {
@@ -340,7 +281,7 @@ fn testnet_genesis(
 				.collect::<Vec<(AccountId, FlipBalance)>>(),
 		}),
 		pallet_cf_auction: Some(AuctionConfig {
-			auction_size_range: (if dev { 1 } else { MIN_VALIDATORS }, MAX_VALIDATORS),
+			auction_size_range: (min_validators, MAX_VALIDATORS),
 		}),
 		pallet_aura: Some(AuraConfig {
 			authorities: vec![],
