@@ -1,124 +1,111 @@
 use crate::{
-	mock::*, BroadcastId, BroadcastState, Error, Event as BroadcastEvent, PayloadFor,
-	PendingBroadcasts,
+	mock::*, AwaitingBroadcast, AwaitingSignature, BroadcastFailure, BroadcastId, Error,
+	Event as BroadcastEvent,
 };
-use frame_support::{assert_noop, instances::Instance0};
+use frame_support::{assert_noop, assert_ok, instances::Instance0};
 use frame_system::RawOrigin;
 
-const KEY_ID: u64 = 42;
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Scenario {
+	HappyPath,
+	UnhappyPath(BroadcastFailure),
+}
+
+thread_local! {
+	pub static COMPLETED_BROADCASTS: std::cell::RefCell<Vec<BroadcastId>> = Default::default();
+}
 
 struct MockCfe;
 
 impl MockCfe {
-	fn respond() {
+	fn respond(scenario: Scenario) {
 		let events = System::events();
 		System::reset_events();
 		for event_record in events {
-			Self::process_event(event_record.event);
+			Self::process_event(event_record.event, scenario.clone());
 		}
 	}
 
-	fn process_event(event: Event) {
+	fn process_event(event: Event, scenario: Scenario) {
 		match event {
-			Event::pallet_cf_broadcast_Instance0(broadcast_event) => {
-				match broadcast_event {
-					BroadcastEvent::ThresholdSignatureRequest(id, key_id, nominees, payload) => {
-						Self::handle_threshold_sig_request(id, key_id, nominees, payload)
-					}
-					BroadcastEvent::TransactionSigningRequest(id, nominee, unsigned_tx) => {
-						Self::handle_transaction_signature_request(id, nominee, unsigned_tx)
-					}
-					BroadcastEvent::BroadcastRequest(id, _signed_tx) => {
-						Self::handle_broadcast_request(id)
-					}
-					BroadcastEvent::BroadcastComplete(_) => {
-						// TODO
-					}
-					BroadcastEvent::__Ignore(_, _) => unimplemented!(),
+			Event::pallet_cf_broadcast_Instance0(broadcast_event) => match broadcast_event {
+				BroadcastEvent::TransactionSigningRequest(id, nominee, unsigned_tx) => {
+					Self::handle_transaction_signature_request(id, nominee, unsigned_tx);
 				}
-			}
+				BroadcastEvent::BroadcastRequest(id, _signed_tx) => {
+					Self::handle_broadcast_request(id, scenario);
+				}
+				BroadcastEvent::BroadcastComplete(id) => {
+					COMPLETED_BROADCASTS.with(|cell| cell.borrow_mut().push(id));
+				}
+				BroadcastEvent::__Ignore(_, _) => unimplemented!(),
+			},
 			_ => panic!("Unexpected event"),
 		};
 	}
 
-	// Asserts the payload is as expected and returns a super-secure signature.
-	fn handle_threshold_sig_request(
-		id: BroadcastId,
-		key_id: u64,
-		signers: Vec<u64>,
-		payload: PayloadFor<Test, Instance0>,
-	) {
-		assert_eq!(key_id, KEY_ID);
-		assert_eq!(payload, b"payload");
-		assert_eq!(signers, vec![RANDOM_NOMINEE]);
-		TransactionBroadcast::signature_ready(
-			RawOrigin::Root.into(),
-			id,
-			b"signed-by-cfe".to_vec(),
-		)
-		.unwrap();
-	}
-
-	// Accepts an unsigned tx, making sure the nominee
+	// Accepts an unsigned tx, making sure the nominee has been assigned.
 	fn handle_transaction_signature_request(
 		id: BroadcastId,
 		nominee: u64,
 		_unsigned_tx: MockUnsignedTx,
 	) {
 		assert_eq!(nominee, RANDOM_NOMINEE);
-		TransactionBroadcast::transaction_ready(
+		// Invalid signer refused.
+		assert_noop!(
+			DogeBroadcast::transaction_ready(
+				RawOrigin::Signed(nominee + 1).into(),
+				id,
+				MockSignedTx,
+			),
+			Error::<Test, Instance0>::InvalidSigner
+		);
+		// Only the nominee can return the signed tx.
+		assert_ok!(DogeBroadcast::transaction_ready(
 			RawOrigin::Signed(nominee).into(),
 			id,
 			MockSignedTx,
-		)
-		.unwrap();
+		));
 	}
 
-	fn handle_broadcast_request(id: BroadcastId) {
-		TransactionBroadcast::broadcast_success(RawOrigin::Root.into(), id, b"0x-tx-hash".to_vec())
-			.unwrap();
+	// Simulate different outcomes.
+	fn handle_broadcast_request(id: BroadcastId, scenario: Scenario) {
+		assert_ok!(match scenario {
+			Scenario::HappyPath => DogeBroadcast::broadcast_success(Origin::root(), id, [0xcf; 4]),
+			Scenario::UnhappyPath(failure) => {
+				DogeBroadcast::broadcast_failure(Origin::root(), id, failure, [0xcf; 4])
+			}
+		});
 	}
-}
-
-fn broadcast_state(state: BroadcastState, id: BroadcastId) -> Option<MockBroadcast> {
-	PendingBroadcasts::<Test, Instance0>::get(state, id)
 }
 
 #[test]
 fn test_broadcast_happy_path() {
 	new_test_ext().execute_with(|| {
-		// Construct the payload and request threshold sig.
+		const BROADCAST_ID: BroadcastId = 1;
+
+		// Initiate broadcast
+		assert_ok!(DogeBroadcast::start_broadcast(
+			Origin::root(),
+			MockUnsignedTx
+		));
+		assert!(AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID).is_some());
+
+		// CFE responds with a signed transaction. This moves the broadcast to the next state.
+		MockCfe::respond(Scenario::HappyPath);
+		assert!(AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID).is_none());
+		assert!(AwaitingBroadcast::<Test, Instance0>::get(BROADCAST_ID).is_some());
+
+		// CFE responds again with confirmation of a successful broadcast.
+		MockCfe::respond(Scenario::HappyPath);
+		assert!(AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID).is_none());
+		assert!(AwaitingBroadcast::<Test, Instance0>::get(BROADCAST_ID).is_none());
+		
+		// CFE logs the completed broadcast.
+		MockCfe::respond(Scenario::HappyPath);
 		assert_eq!(
-			1,
-			TransactionBroadcast::initiate_broadcast(MockBroadcast::New, KEY_ID).unwrap()
-		);
-		assert_eq!(
-			broadcast_state(BroadcastState::AwaitingThreshold, 1),
-			Some(MockBroadcast::New)
-		);
-		// CFE posts the signature back on-chain once the threshold sig has been constructed.
-		// This triggers a new request to sign the actual tx.
-		MockCfe::respond();
-		assert_eq!(
-			broadcast_state(BroadcastState::AwaitingSignature, 1),
-			Some(MockBroadcast::ThresholdSigReceived(
-				b"signed-by-cfe".to_vec()
-			))
-		);
-		// The CFE returns the complete and ready-to-broadcast tx.
-		MockCfe::respond();
-		// This triggers transaction verification and a broadcast request.
-		assert_eq!(
-			broadcast_state(BroadcastState::AwaitingBroadcast, 1),
-			Some(MockBroadcast::ThresholdSigReceived(
-				b"signed-by-cfe".to_vec()
-			))
-		);
-		// The CFE will respond that the transaction is complete.
-		MockCfe::respond();
-		assert_eq!(
-			broadcast_state(BroadcastState::Complete, 1),
-			Some(MockBroadcast::Complete)
+			COMPLETED_BROADCASTS.with(|cell| *cell.borrow().first().unwrap()),
+			BROADCAST_ID
 		);
 	})
 }
@@ -127,11 +114,20 @@ fn test_broadcast_happy_path() {
 fn test_invalid_id_is_noop() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			TransactionBroadcast::signature_ready(RawOrigin::Root.into(), 0, b"".to_vec(),),
+			DogeBroadcast::transaction_ready(RawOrigin::Signed(0).into(), 0, MockSignedTx),
 			Error::<Test, Instance0>::InvalidBroadcastId
 		);
 		assert_noop!(
-			TransactionBroadcast::transaction_ready(RawOrigin::Signed(0).into(), 0, MockSignedTx,),
+			DogeBroadcast::broadcast_success(Origin::root(), 0, [0u8; 4]),
+			Error::<Test, Instance0>::InvalidBroadcastId
+		);
+		assert_noop!(
+			DogeBroadcast::broadcast_failure(
+				Origin::root(),
+				0,
+				BroadcastFailure::TransactionFailed,
+				[0u8; 4]
+			),
 			Error::<Test, Instance0>::InvalidBroadcastId
 		);
 	})

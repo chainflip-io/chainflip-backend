@@ -16,7 +16,9 @@ struct MockCfe;
 
 impl MockCfe {
 	fn respond(scenario: Scenario) {
-		for event_record in System::events() {
+		let events = System::events();
+		System::reset_events();
+		for event_record in events {
 			Self::process_event(event_record.event, scenario);
 		}
 	}
@@ -35,7 +37,7 @@ impl MockCfe {
 				assert_eq!(signers, vec![RANDOM_NOMINEE]);
 				assert_eq!(payload, DOGE_PAYLOAD);
 
-				let result = match scenario {
+				assert_ok!(match scenario {
 					Scenario::HappyPath => DogeSigning::signature_success(
 						Origin::root(),
 						req_id,
@@ -44,8 +46,7 @@ impl MockCfe {
 					Scenario::RetryPath => {
 						DogeSigning::signature_failed(Origin::root(), req_id, vec![RANDOM_NOMINEE])
 					}
-				};
-				assert_ok!(result);
+				});
 			}
 			_ => panic!("Unexpected event"),
 		};

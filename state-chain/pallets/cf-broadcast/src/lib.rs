@@ -55,7 +55,7 @@ pub type BroadcastId = u64;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{ensure, pallet_prelude::*};
 	use frame_support::{dispatch::DispatchResultWithPostInfo, Twox64Concat};
 	use frame_system::pallet_prelude::*;
 
@@ -65,14 +65,6 @@ pub mod pallet {
 		<<T as Config<I>>::BroadcastConfig as BroadcastConfig<T>>::UnsignedTransaction;
 	pub type TransactionHashFor<T, I> =
 		<<T as Config<I>>::BroadcastConfig as BroadcastConfig<T>>::TransactionHash;
-
-	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-	pub enum BroadcastState {
-		AwaitingSignature,
-		AwaitingBroadcast,
-		AwaitingRetry,
-		Failed,
-	}
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -132,8 +124,6 @@ pub mod pallet {
 		InvalidBroadcastId,
 		/// The transaction signer is not signer who was nominated.
 		InvalidSigner,
-		/// The outgoing transaction could not be constructed.
-		TransactionConstructionFailed,
 	}
 
 	#[pallet::hooks]
@@ -215,6 +205,11 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 
+			ensure!(
+				AwaitingBroadcast::<T, I>::contains_key(id),
+				Error::<T, I>::InvalidBroadcastId
+			);
+
 			// Remove the broadcast now it's completed.
 			AwaitingBroadcast::<T, I>::remove(id);
 			Self::deposit_event(Event::<T, I>::BroadcastComplete(id));
@@ -229,10 +224,12 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			id: BroadcastId,
 			failure: BroadcastFailure,
+			_tx_hash: TransactionHashFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 
-			let _signed_tx = AwaitingBroadcast::<T, I>::take(id);
+			let _signed_tx = AwaitingBroadcast::<T, I>::take(id)
+				.ok_or(Error::<T, I>::InvalidBroadcastId)?;
 
 			match failure {
 				BroadcastFailure::TransactionRejected => {

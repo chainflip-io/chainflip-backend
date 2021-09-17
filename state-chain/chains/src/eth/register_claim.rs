@@ -26,7 +26,7 @@ pub struct RegisterClaim {
 
 impl ChainflipContractCall for RegisterClaim {
 	fn is_signed(&self) -> bool {
-		self.sig_data.sig.is_zero()
+		!self.sig_data.sig.is_zero()
 	}
 
 	fn abi_encoded(&self) -> Vec<u8> {

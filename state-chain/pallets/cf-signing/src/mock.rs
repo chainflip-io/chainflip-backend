@@ -56,9 +56,7 @@ impl frame_system::Config for Test {
 	type SS58Prefix = SS58Prefix;
 }
 
-use cf_traits::impl_mock_ensure_witnessed_for_origin;
-
-impl_mock_ensure_witnessed_for_origin!(Origin);
+cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
 
 impl Chainflip for Test {
 	type KeyId = u32;
@@ -80,7 +78,7 @@ impl cf_traits::SignerNomination for MockNominator {
 		RANDOM_NOMINEE
 	}
 
-	fn threshold_nomination_with_seed(seed: u64) -> Vec<Self::SignerId> {
+	fn threshold_nomination_with_seed(_seed: u64) -> Vec<Self::SignerId> {
 		vec![RANDOM_NOMINEE]
 	}
 }
