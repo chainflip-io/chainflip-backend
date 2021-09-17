@@ -1,7 +1,7 @@
 use crate::{self as pallet_cf_signing, mock::*, Error};
-use frame_support::traits::Hooks;
-use frame_support::{assert_ok, assert_noop};
 use frame_support::instances::Instance0;
+use frame_support::traits::Hooks;
+use frame_support::{assert_noop, assert_ok};
 use frame_system::pallet_prelude::BlockNumberFor;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -36,8 +36,14 @@ impl MockCfe {
 				assert_eq!(payload, DOGE_PAYLOAD);
 
 				let result = match scenario {
-					Scenario::HappyPath => DogeSigning::signature_success(Origin::root(), req_id, SIGNATURE.to_string()),
-					Scenario::RetryPath => DogeSigning::signature_failed(Origin::root(), req_id, vec![RANDOM_NOMINEE]),
+					Scenario::HappyPath => DogeSigning::signature_success(
+						Origin::root(),
+						req_id,
+						SIGNATURE.to_string(),
+					),
+					Scenario::RetryPath => {
+						DogeSigning::signature_failed(Origin::root(), req_id, vec![RANDOM_NOMINEE])
+					}
 				};
 				assert_ok!(result);
 			}
@@ -72,7 +78,7 @@ fn happy_path() {
 
 		// Request is complete
 		assert!(DogeSigning::pending_request(request_id).is_none());
-		
+
 		// Call back has executed.
 		assert_eq!(
 			MockCallback::<DogeSigningContext>::get_stored_callback(),
@@ -99,14 +105,17 @@ fn retry_path() {
 		assert!(DogeSigning::pending_request(request_id).is_none());
 
 		// Call back has *not* executed.
-		assert_eq!(MockCallback::<DogeSigningContext>::get_stored_callback(), None);
+		assert_eq!(
+			MockCallback::<DogeSigningContext>::get_stored_callback(),
+			None
+		);
 
 		// The offender has been reported.
 		assert_eq!(MockOfflineConditions::get_reported(), vec![RANDOM_NOMINEE]);
 
 		// Scheduled for retry.
 		assert_eq!(DogeSigning::retry_queue().len(), 1);
-		
+
 		// Process retries.
 		<DogeSigning as Hooks<BlockNumberFor<Test>>>::on_initialize(0);
 
