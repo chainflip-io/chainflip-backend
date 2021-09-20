@@ -84,7 +84,7 @@ mod staking_witness_tests {
 			s: [0xcf; 32],
 			k_times_g_addr: [0xcf; 20],
 		};
-		
+
 		new_test_ext().execute_with(|| {
 			MockWitnesser::set_threshold(2);
 

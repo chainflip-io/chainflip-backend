@@ -100,7 +100,7 @@ fn test_broadcast_happy_path() {
 		MockCfe::respond(Scenario::HappyPath);
 		assert!(AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID).is_none());
 		assert!(AwaitingBroadcast::<Test, Instance0>::get(BROADCAST_ID).is_none());
-		
+
 		// CFE logs the completed broadcast.
 		MockCfe::respond(Scenario::HappyPath);
 		assert_eq!(

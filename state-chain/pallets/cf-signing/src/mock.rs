@@ -1,5 +1,5 @@
 use crate::{self as pallet_cf_signing};
-use cf_traits::{Chainflip, SigningContext, offline_conditions::*};
+use cf_traits::{offline_conditions::*, Chainflip, SigningContext};
 use codec::{Decode, Encode};
 use frame_support::parameter_types;
 use frame_support::traits::EnsureOrigin;

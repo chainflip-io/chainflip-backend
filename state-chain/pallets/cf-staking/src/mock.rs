@@ -1,23 +1,28 @@
-use std::time::Duration;
-use codec::{Encode, Decode};
 use crate as pallet_cf_staking;
-use cf_chains::{Ethereum, eth::{ChainflipContractCall, SchnorrSignature, register_claim::RegisterClaim}};
-use frame_support::{parameter_types, instances::Instance0, traits::EnsureOrigin};
+use cf_chains::{
+	eth::{register_claim::RegisterClaim, ChainflipContractCall, SchnorrSignature},
+	Ethereum,
+};
+use codec::{Decode, Encode};
+use frame_support::{instances::Instance0, parameter_types, traits::EnsureOrigin};
 use pallet_cf_flip;
 use sp_core::H256;
 use sp_runtime::{
-	AccountId32,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
+	AccountId32, BuildStorage,
 };
+use std::time::Duration;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 // Use a realistic account id for compatibility with `RegisterClaim`.
 type AccountId = AccountId32;
 
-use cf_traits::{Chainflip, NonceProvider, SigningContext, mocks::{time_source, key_provider}};
+use cf_traits::{
+	mocks::{key_provider, time_source},
+	Chainflip, NonceProvider, SigningContext,
+};
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(

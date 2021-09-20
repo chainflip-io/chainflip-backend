@@ -57,7 +57,9 @@ use sp_std::vec::Vec;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{EmergencyRotation, EpochInfo, NetworkState, Online, Slashing, offline_conditions::*};
+	use cf_traits::{
+		offline_conditions::*, EmergencyRotation, EpochInfo, NetworkState, Online, Slashing,
+	};
 	use frame_system::pallet_prelude::*;
 	use sp_std::ops::Neg;
 

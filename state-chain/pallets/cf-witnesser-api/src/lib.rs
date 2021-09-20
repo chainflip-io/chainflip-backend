@@ -14,10 +14,11 @@ mod tests;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_chains::{Ethereum, eth::SchnorrSignature};
+	use cf_chains::{eth::SchnorrSignature, Ethereum};
 	use cf_traits::Witnesser;
 	use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
+	use pallet_cf_signing::{Call as SigningCall, Config as SigningConfig};
 	use pallet_cf_staking::{
 		Call as StakingCall, Config as StakingConfig, EthTransactionHash, EthereumAddress,
 		FlipBalance,
@@ -27,14 +28,16 @@ pub mod pallet {
 		rotation::SchnorrSigTruncPubkey, Call as VaultsCall, Config as VaultsConfig,
 		ThresholdSignatureResponse,
 	};
-	use pallet_cf_signing::{
-		Call as SigningCall, Config as SigningConfig
-	};
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + StakingConfig + VaultsConfig + SigningConfig<Instance0, Chain = Ethereum> {
+	pub trait Config:
+		frame_system::Config
+		+ StakingConfig
+		+ VaultsConfig
+		+ SigningConfig<Instance0, Chain = Ethereum>
+	{
 		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
 		type Call: IsType<<Self as frame_system::Config>::Call>
 			+ From<StakingCall<Self>>

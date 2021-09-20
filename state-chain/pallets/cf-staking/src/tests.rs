@@ -1,6 +1,6 @@
 use crate::{
-	mock::*, pallet, Error, EthereumAddress, FailedStakeAttempts,
-	Pallet, PendingClaims, WithdrawalAddresses,
+	mock::*, pallet, Error, EthereumAddress, FailedStakeAttempts, Pallet, PendingClaims,
+	WithdrawalAddresses,
 };
 use cf_chains::eth::{self, ChainflipContractCall};
 use cf_traits::mocks::{epoch_info, time_source};
@@ -102,8 +102,14 @@ fn staked_amount_is_added_and_subtracted() {
 		assert_eq!(Flip::total_balance_of(&BOB), STAKE_B - CLAIM_B);
 
 		// Check the pending claims
-		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().amount, CLAIM_A.into());
-		assert_eq!(PendingClaims::<Test>::get(BOB).unwrap().amount, CLAIM_B.into());
+		assert_eq!(
+			PendingClaims::<Test>::get(ALICE).unwrap().amount,
+			CLAIM_A.into()
+		);
+		assert_eq!(
+			PendingClaims::<Test>::get(BOB).unwrap().amount,
+			CLAIM_B.into()
+		);
 
 		assert_event_stack!(
 			Event::pallet_cf_signing_Instance0(SigningEvent::ThresholdSignatureRequest(..)),
@@ -313,7 +319,10 @@ fn signature_is_inserted() {
 		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE, ETH_DUMMY_ADDR));
 
 		// Check storage for the signature, should not be there.
-		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().is_signed(), false);
+		assert_eq!(
+			PendingClaims::<Test>::get(ALICE).unwrap().is_signed(),
+			false
+		);
 
 		assert_event_stack!(
 			Event::pallet_cf_signing_Instance0(SigningEvent::ThresholdSignatureRequest(id, ..)) => {

@@ -55,8 +55,8 @@ pub type BroadcastId = u64;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{ensure, pallet_prelude::*};
 	use frame_support::{dispatch::DispatchResultWithPostInfo, Twox64Concat};
+	use frame_support::{ensure, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 
 	pub type SignedTransactionFor<T, I> =
@@ -228,8 +228,8 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 
-			let _signed_tx = AwaitingBroadcast::<T, I>::take(id)
-				.ok_or(Error::<T, I>::InvalidBroadcastId)?;
+			let _signed_tx =
+				AwaitingBroadcast::<T, I>::take(id).ok_or(Error::<T, I>::InvalidBroadcastId)?;
 
 			match failure {
 				BroadcastFailure::TransactionRejected => {

@@ -133,8 +133,8 @@ pub mod pallet {
 			Self::deposit_event(Event::<T, I>::ThresholdSignatureSuccess(id));
 
 			// Dispatch the callback.
-			// TODO: Use a custom "threshold sig" origin for this pallet instead of passing through the witness 
-			// origin. 
+			// TODO: Use a custom "threshold sig" origin for this pallet instead of passing through the witness
+			// origin.
 			context.chain_specific.dispatch_callback(origin, signature)
 		}
 
