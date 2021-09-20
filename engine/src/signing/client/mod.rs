@@ -42,23 +42,34 @@ impl KeygenInfo {
     }
 }
 
-// MAXIM: add ceremony id here?
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SigningInfo {
+    data: MessageHash,
+    ceremony_id: CeremonyId,
     key_id: KeyId,
     signers: Vec<AccountId>,
 }
 
 impl SigningInfo {
-    pub fn new(key_id: KeyId, signers: Vec<AccountId>) -> Self {
-        SigningInfo { key_id, signers }
+    pub fn new(
+        ceremony_id: CeremonyId,
+        key_id: KeyId,
+        data: MessageHash,
+        signers: Vec<AccountId>,
+    ) -> Self {
+        SigningInfo {
+            ceremony_id,
+            key_id,
+            data,
+            signers,
+        }
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MultisigInstruction {
     KeyGen(KeygenInfo),
-    Sign(MessageHash, SigningInfo, CeremonyId),
+    Sign(SigningInfo),
 }
 
 #[derive(Debug, Serialize, Deserialize)]

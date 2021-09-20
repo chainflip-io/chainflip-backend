@@ -1,10 +1,6 @@
 use itertools::Itertools;
 
-use crate::signing::SigningInfo;
-
 use super::*;
-
-use helpers::SIGN_CEREMONY_ID;
 
 macro_rules! assert_stage {
     ($c1:expr, $stage:expr) => {
@@ -89,21 +85,14 @@ async fn should_await_comm1_after_rts() {
     let mut ctx = helpers::KeygenContext::new();
     let keygen_states = ctx.generate().await;
 
-    // MAXIM: deal with this boilerplate
-    let key_id: KeyId = KeyId(keygen_states.key_ready.pubkey.serialize().into());
-    let sign_info = SigningInfo {
-        signers: SIGNER_IDS.clone(),
-        key_id: key_id.clone(),
-    };
-
     let mut c1 = keygen_states.key_ready.clients[0].clone();
 
-    let key = c1.get_key(key_id).expect("no key").to_owned();
+    let key = keygen_states.key_ready.sec_keys[0].clone();
 
     c1.signing_manager.on_request_to_sign(
         MESSAGE_HASH.clone(),
         key,
-        sign_info.signers,
+        SIGNER_IDS.clone(),
         SIGN_CEREMONY_ID,
     );
 

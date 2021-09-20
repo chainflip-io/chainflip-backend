@@ -8,20 +8,22 @@ mod helpers;
 use lazy_static::lazy_static;
 #[allow(unused_imports)]
 use log::*;
+use pallet_cf_vaults::CeremonyId;
 
 // use helpers::*;
 
 use crate::{
     p2p::AccountId,
-    signing::{
-        client::{KeyId, KeygenInfo},
-        MessageHash,
-    },
+    signing::{client::KeygenInfo, MessageHash},
 };
 
 use std::convert::TryInto;
 
+pub const KEYGEN_CEREMONY_ID: CeremonyId = 0;
+pub const SIGN_CEREMONY_ID: CeremonyId = 0;
+
 lazy_static! {
+
     static ref VALIDATOR_IDS: Vec<AccountId> =
         [1, 2, 3, 4].iter().map(|i| AccountId([*i; 32])).collect();
     static ref SIGNER_IDXS: Vec<usize> = vec![0, 1, 2];
@@ -35,11 +37,6 @@ lazy_static! {
             .try_into()
             .unwrap()
     );
-}
-
-lazy_static! {
-    // MAXIM: This should be removed in favor of SIGN_CEREMONY_ID
-    static ref CEREMONY_ID: u64 = 0;
     static ref MESSAGE: [u8; 32] = "Chainflip:Chainflip:Chainflip:01"
         .as_bytes()
         .try_into()
@@ -51,7 +48,7 @@ lazy_static! {
         .try_into()
         .unwrap();
     static ref KEYGEN_INFO: KeygenInfo = KeygenInfo {
-        ceremony_id: *CEREMONY_ID,
+        ceremony_id: KEYGEN_CEREMONY_ID,
         signers: VALIDATOR_IDS.clone()
     };
 }

@@ -81,28 +81,27 @@ async fn coordinate_signing(
         panic!("Expecting a successful keygen result");
     };
 
-    // get a signing request ready with the list of signer_ids
-    let sign_info = SigningInfo::new(key_id, signer_ids);
-
     // Only some clients should receive the instruction to sign
     for i in active_indices {
         let n = &nodes[*i];
 
         n.multisig_instruction_tx
-            .send(MultisigInstruction::Sign(
+            .send(MultisigInstruction::Sign(SigningInfo::new(
+                0, /* ceremony_id */
+                key_id.clone(),
                 MessageHash(super::fixtures::MESSAGE.clone()),
-                sign_info.clone(),
-                0, // ceremony id
-            ))
+                signer_ids.clone(),
+            )))
             .map_err(|_| "Receiver dropped")
             .unwrap();
 
         n.multisig_instruction_tx
-            .send(MultisigInstruction::Sign(
+            .send(MultisigInstruction::Sign(SigningInfo::new(
+                1, /* ceremony_id */
+                key_id.clone(),
                 MessageHash(super::fixtures::MESSAGE2.clone()),
-                sign_info.clone(),
-                1, // ceremony id
-            ))
+                signer_ids.clone(),
+            )))
             .map_err(|_| "Receiver dropped")
             .unwrap();
     }

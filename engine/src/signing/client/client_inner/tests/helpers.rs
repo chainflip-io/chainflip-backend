@@ -37,8 +37,6 @@ impl<T> From<UnboundedReceiver<T>> for PeekableReceiver<T> {
     }
 }
 
-pub const SIGN_CEREMONY_ID: CeremonyId = 0;
-
 pub struct PeekableReceiver<T> {
     receiver: UnboundedReceiver<T>,
     next: Option<T>,
@@ -71,7 +69,7 @@ type MultisigClientNoDB = MultisigClient<KeyDBMock>;
 type BroadcastVerification2 = frost::BroadcastVerificationMessage<SigningCommitment>;
 type BroadcastVerification4 = frost::BroadcastVerificationMessage<LocalSig3>;
 
-use super::{CEREMONY_ID, MESSAGE_HASH, SIGNER_IDS, SIGNER_IDXS};
+use super::{KEYGEN_CEREMONY_ID, MESSAGE_HASH, SIGNER_IDS, SIGNER_IDXS, SIGN_CEREMONY_ID};
 
 type InnerEventReceiver = PeekableReceiver<InnerEvent>;
 
@@ -443,7 +441,7 @@ impl KeygenContext {
         // Generate phase 1 data
 
         let keygen_info = KeygenInfo {
-            ceremony_id: *CEREMONY_ID,
+            ceremony_id: KEYGEN_CEREMONY_ID,
             signers: validator_ids.clone(),
         };
 
@@ -470,7 +468,7 @@ impl KeygenContext {
             let bc1 = bc1_vec[sender_idx].clone();
             let id = &validator_ids[sender_idx];
 
-            let m = keygen_data_to_p2p(bc1, id, *CEREMONY_ID);
+            let m = keygen_data_to_p2p(bc1, id, KEYGEN_CEREMONY_ID);
 
             for receiver_idx in 0..=3 {
                 if receiver_idx != sender_idx {
@@ -481,7 +479,7 @@ impl KeygenContext {
 
         for c in clients.iter() {
             assert_eq!(
-                keygen_stage_for(c, *CEREMONY_ID),
+                keygen_stage_for(c, KEYGEN_CEREMONY_ID),
                 Some(KeygenStage::AwaitingSecret2)
             );
         }
@@ -525,7 +523,7 @@ impl KeygenContext {
                 let sec2 = sec2_vec[sender_idx].get(r_id).unwrap();
 
                 let s_id = &validator_ids[sender_idx];
-                let m = keygen_data_to_p2p(sec2.clone(), s_id, *CEREMONY_ID);
+                let m = keygen_data_to_p2p(sec2.clone(), s_id, KEYGEN_CEREMONY_ID);
 
                 clients[receiver_idx].process_p2p_message(m);
             }
@@ -552,7 +550,6 @@ impl KeygenContext {
         self.key_id = Some(key_id.clone());
 
         for c in clients.iter() {
-            // MAXIM: isn't key_id already the key?
             let key = c.get_key(key_id.clone()).expect("key must be present");
             sec_keys.push(key.clone());
         }
@@ -588,10 +585,12 @@ impl KeygenContext {
     pub async fn sign(&mut self) -> ValidSigningStates {
         let instant = std::time::Instant::now();
 
-        let sign_info = SigningInfo {
-            key_id: self.key_id(),
-            signers: SIGNER_IDS.clone(),
-        };
+        let sign_info = SigningInfo::new(
+            SIGN_CEREMONY_ID,
+            self.key_id(),
+            MESSAGE_HASH.clone(),
+            SIGNER_IDS.clone(),
+        );
 
         let mut clients = self.clients.clone();
         let rxs = &mut self.rxs;
@@ -604,11 +603,7 @@ impl KeygenContext {
         for idx in SIGNER_IDXS.iter() {
             let c = &mut clients[*idx];
 
-            c.process_multisig_instruction(MultisigInstruction::Sign(
-                MESSAGE_HASH.clone(),
-                sign_info.clone(),
-                SIGN_CEREMONY_ID,
-            ));
+            c.process_multisig_instruction(MultisigInstruction::Sign(sign_info.clone()));
 
             assert_eq!(
                 get_stage_for_ceremony(&c, SIGN_CEREMONY_ID),
@@ -656,7 +651,7 @@ impl KeygenContext {
             let c = &mut clients[*idx];
 
             assert_eq!(
-                get_stage_for_ceremony(&c, *CEREMONY_ID),
+                get_stage_for_ceremony(&c, SIGN_CEREMONY_ID),
                 Some("BroadcastStage<LocalSigStage3>".to_string())
             );
         }

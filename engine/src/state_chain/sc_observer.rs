@@ -144,9 +144,12 @@ pub async fn start(
                             let sign_tx = MultisigInstruction::Sign(
                                 // TODO: The hashing of the payload should be done on the SC
                                 // https://github.com/chainflip-io/chainflip-backend/issues/446
-                                MessageHash(Keccak256::hash(&req.payload[..]).0),
-                                SigningInfo::new(KeyId(req.public_key), signers),
-                                event.ceremony_id,
+                                SigningInfo::new(
+                                    event.ceremony_id,
+                                    KeyId(req.public_key),
+                                    MessageHash(Keccak256::hash(&req.payload[..]).0),
+                                    signers,
+                                ),
                             );
 
                             // The below will be replaced with one shot channels

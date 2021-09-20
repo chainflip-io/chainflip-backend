@@ -7,7 +7,6 @@ use crate::{
         client::{KeyId, MultisigInstruction, SigningInfo},
         crypto::{BigInt, ECPoint, KeyGenBroadcastMessage1, VerifiableSS, FE, GE},
         db::KeyDB,
-        MessageHash,
     },
 };
 
@@ -179,7 +178,7 @@ where
     pub signing_manager: SigningManager,
     inner_event_sender: UnboundedSender<InnerEvent>,
     /// Requests awaiting a key
-    pending_requests_to_sign: HashMap<KeyId, Vec<(CeremonyId, MessageHash, Vec<AccountId>)>>,
+    pending_requests_to_sign: HashMap<KeyId, Vec<SigningInfo>>,
     logger: slog::Logger,
 }
 
@@ -243,7 +242,7 @@ where
         self.signing_manager.cleanup();
     }
 
-    fn add_pending(&mut self, data: MessageHash, sign_info: SigningInfo, ceremony_id: CeremonyId) {
+    fn add_pending(&mut self, sign_info: SigningInfo) {
         slog::debug!(
             self.logger,
             "[{}] Delaying a request to sign",
@@ -257,7 +256,7 @@ where
             .entry(sign_info.key_id.clone())
             .or_default();
 
-        entry.push((ceremony_id, data, sign_info.signers));
+        entry.push(sign_info);
     }
 
     /// Process `instruction` issued internally (i.e. from SC or another local module)
@@ -275,7 +274,7 @@ where
 
                 self.keygen.on_keygen_request(keygen_info);
             }
-            MultisigInstruction::Sign(hash, sign_info, ceremony_id) => {
+            MultisigInstruction::Sign(sign_info) => {
                 // TODO: print ceremony id
                 slog::debug!(
                     self.logger,
@@ -288,15 +287,15 @@ where
                 match key {
                     Some(key) => {
                         self.signing_manager.on_request_to_sign(
-                            hash,
+                            sign_info.data,
                             key.clone(),
                             sign_info.signers,
-                            ceremony_id,
+                            sign_info.ceremony_id,
                         );
                     }
                     None => {
                         // The key is not ready, delay until either it is ready or timeout
-                        self.add_pending(hash, sign_info, ceremony_id);
+                        self.add_pending(sign_info);
                     }
                 }
             }
@@ -314,12 +313,12 @@ where
                 "Processing pending requests to sign, count: {}",
                 reqs.len()
             );
-            for (ceremony_id, data, signers) in reqs {
+            for signing_info in reqs {
                 self.signing_manager.on_request_to_sign(
-                    data,
+                    signing_info.data,
                     key_info.clone(),
-                    signers,
-                    ceremony_id,
+                    signing_info.signers,
+                    signing_info.ceremony_id,
                 )
             }
         }
