@@ -320,7 +320,8 @@ impl SigningState {
         self.cur_phase_timestamp = Instant::now();
         slog::debug!(
             self.logger,
-            "Entering phase '{:?}'. Previous phase took: {:?}",
+            "[{}] Entering phase '{:?}'. Previous phase took: {:?}",
+            self.us(),
             stage,
             elapsed
         );

@@ -89,7 +89,7 @@ pub trait OfflineConditions {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{EpochInfo, Slashing};
+	use cf_traits::{EmergencyRotation, EpochInfo, NetworkState, Online, Slashing};
 	use frame_system::pallet_prelude::*;
 	use sp_std::ops::Neg;
 
@@ -140,30 +140,86 @@ pub mod pallet {
 		#[pallet::constant]
 		type ReputationPointFloorAndCeiling: Get<(ReputationPoints, ReputationPoints)>;
 
+		/// Trigger an emergency rotation on falling below the percentage of online validators
+		#[pallet::constant]
+		type EmergencyRotationPercentageTrigger: Get<u8>;
+
 		/// When we have to, we slash
 		type Slasher: Slashing<
 			AccountId = Self::ValidatorId,
 			BlockNumber = <Self as frame_system::Config>::BlockNumber,
 		>;
 
-		// Information about the current epoch.
+		/// Information about the current epoch.
 		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
+
+		/// Request an emergency rotation
+		type EmergencyRotation: EmergencyRotation;
 	}
 
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// On initializing each block we check liveness every heartbeat interval
-		///
+		/// On initializing each block we check liveness and network liveness on every heartbeat interval
+		/// A request for an emergency rotation is made if needed
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			if current_block % T::HeartbeatBlockInterval::get() == Zero::zero() {
-				return Self::check_liveness();
+				let liveness_weight = Self::check_liveness();
+				let (network_weight, network_state) = Self::check_network_liveness();
+
+				if network_state.percentage_online()
+					< T::EmergencyRotationPercentageTrigger::get() as u32
+				{
+					Self::deposit_event(Event::EmergencyRotationRequested(network_state));
+					T::EmergencyRotation::request_emergency_rotation();
+				}
+
+				return liveness_weight + network_weight;
 			}
 
 			Zero::zero()
 		}
 	}
 
+	type Liveness = u8;
+	const SUBMITTED: u8 = 1;
+
+	/// Liveness bitmap tracking intervals
+	trait LivenessTracker {
+		/// Online status
+		fn is_online(self) -> bool;
+		/// Update state of current interval
+		fn update_current_interval(&mut self, online: bool) -> Self;
+		/// State of submission for the current interval
+		fn has_submitted(self) -> bool;
+	}
+
+	impl LivenessTracker for Liveness {
+		fn is_online(self) -> bool {
+			// Online for 2 * `HeartbeatBlockInterval` or 2 lsb
+			self & 0x3 != 0
+		}
+
+		fn update_current_interval(&mut self, online: bool) -> Self {
+			*self <<= 1;
+			*self |= online as u8;
+			*self
+		}
+
+		fn has_submitted(self) -> bool {
+			self & 0x1 == 0x1
+		}
+	}
+
+	impl<T: Config> Online for Pallet<T> {
+		type ValidatorId = T::ValidatorId;
+
+		fn is_online(validator_id: &Self::ValidatorId) -> bool {
+			ValidatorsLiveness::<T>::get(validator_id)
+				.unwrap_or_default()
+				.is_online()
+		}
+	}
 	/// The ratio at which one accrues Reputation points in exchange for online credits
 	///
 	#[pallet::storage]
@@ -171,11 +227,11 @@ pub mod pallet {
 	pub(super) type AccrualRatio<T: Config> =
 		StorageValue<_, (ReputationPoints, OnlineCreditsFor<T>), ValueQuery>;
 
-	/// Those that we are awaiting heartbeats
+	/// The liveness of our validators
 	///
 	#[pallet::storage]
-	pub(super) type AwaitingHeartbeats<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::ValidatorId, bool, OptionQuery>;
+	pub(super) type ValidatorsLiveness<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::ValidatorId, Liveness, OptionQuery>;
 
 	/// A map tracking our validators.  We record the number of blocks they have been alive
 	/// according to the heartbeats submitted.  We are assuming that during a `HeartbeatInterval`
@@ -194,6 +250,8 @@ pub mod pallet {
 		OfflineConditionPenalty(T::ValidatorId, OfflineCondition, ReputationPoints),
 		/// The accrual rate for our reputation poins has been updated \[points, online credits\]
 		AccrualRateUpdated(ReputationPoints, OnlineCreditsFor<T>),
+		/// An emergency rotation has been requested \[network state\]
+		EmergencyRotationRequested(NetworkState),
 	}
 
 	#[pallet::error]
@@ -220,11 +278,17 @@ pub mod pallet {
 			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
 			// Ensure we haven't had a heartbeat for this interval yet for this validator
 			ensure!(
-				AwaitingHeartbeats::<T>::get(&validator_id).unwrap_or(false),
+				!ValidatorsLiveness::<T>::get(&validator_id)
+					.unwrap_or(SUBMITTED)
+					.has_submitted(),
 				Error::<T>::AlreadySubmittedHeartbeat
 			);
 			// Update this validator from the hot list
-			AwaitingHeartbeats::<T>::mutate(&validator_id, |awaiting| *awaiting = Some(false));
+			ValidatorsLiveness::<T>::mutate(&validator_id, |maybe_liveness| {
+				if let Some(mut liveness) = *maybe_liveness {
+					*maybe_liveness = Some(liveness.update_current_interval(true));
+				}
+			});
 			// Check if this validator has reputation
 			if !Reputations::<T>::contains_key(&validator_id) {
 				// Credit this validator with the blocks for this interval and set 0 reputation points
@@ -322,7 +386,7 @@ pub mod pallet {
 			AccrualRatio::<T>::set(self.accrual_ratio);
 			// A list of those we expect to be online, which are our set of validators
 			for validator_id in T::EpochInfo::current_validators().iter() {
-				AwaitingHeartbeats::<T>::insert(validator_id, true);
+				ValidatorsLiveness::<T>::insert(validator_id, 1);
 			}
 		}
 	}
@@ -336,10 +400,10 @@ pub mod pallet {
 
 		fn on_new_epoch(new_validators: &Vec<Self::ValidatorId>, _new_bond: Self::Amount) {
 			// Clear our expectations
-			AwaitingHeartbeats::<T>::remove_all();
+			ValidatorsLiveness::<T>::remove_all();
 			// Set the new list of validators we expect a heartbeat from
 			for validator_id in new_validators.iter() {
-				AwaitingHeartbeats::<T>::insert(validator_id, true);
+				ValidatorsLiveness::<T>::insert(validator_id, 0);
 			}
 		}
 	}
@@ -393,11 +457,27 @@ pub mod pallet {
 			)
 		}
 
+		/// Clamp reputation points to bounds defined in the pallet
+		///
 		fn clamp_reputation_points(reputation_points: i32) -> i32 {
 			let (floor, ceiling) = T::ReputationPointFloorAndCeiling::get();
 			reputation_points.clamp(floor, ceiling)
 		}
 
+		fn check_network_liveness() -> (Weight, NetworkState) {
+			let (mut online, mut offline) = (0u32, 0u32);
+			let mut weight = 0;
+			for (_, liveness) in ValidatorsLiveness::<T>::iter() {
+				weight += T::DbWeight::get().reads(1);
+				if liveness.is_online() {
+					online += 1
+				} else {
+					offline += 1
+				};
+			}
+
+			(weight, NetworkState { online, offline })
+		}
 		/// Check liveness of our expected list of validators at the current block.
 		/// For those that we are still *awaiting* on will be penalised reputation points and any online
 		/// credits earned will be set to zero.  In other words we expect continued liveness before we
@@ -407,10 +487,10 @@ pub mod pallet {
 		fn check_liveness() -> Weight {
 			let mut weight = 0;
 			// Let's run through those that haven't come back to us and those that have
-			AwaitingHeartbeats::<T>::translate(|validator_id, awaiting| {
+			ValidatorsLiveness::<T>::translate(|validator_id, mut liveness: Liveness| {
 				// Still waiting on these, penalise and those that are in reputation debt will be
 				// slashed
-				let penalised = awaiting
+				let penalised = !liveness.has_submitted()
 					&& Reputations::<T>::mutate(
 						&validator_id,
 						|Reputation {
@@ -450,7 +530,7 @@ pub mod pallet {
 				}
 
 				weight += T::DbWeight::get().reads(1);
-				Some(true)
+				Some(liveness.update_current_interval(false))
 			});
 
 			weight

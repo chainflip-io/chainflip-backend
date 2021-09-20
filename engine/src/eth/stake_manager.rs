@@ -1,10 +1,8 @@
 //! Contains the information required to use the StakeManger contract as a source for
 //! the EthEventStreamer
 
-use std::{
-    convert::TryInto,
-    sync::{Arc, Mutex},
-};
+use std::{convert::TryInto, sync::Arc};
+use tokio::sync::Mutex;
 
 use crate::{
     eth::{eth_event_streamer, utils, EventParseError, SignatureAndEvent},
@@ -45,7 +43,7 @@ pub async fn start_stake_manager_witness(
 
     slog::info!(logger, "Creating Event Stream");
     let mut event_stream = stake_manager
-        .event_stream(web3, settings.eth.from_block, &logger)
+        .event_stream(&web3, settings.eth.from_block, &logger)
         .await?;
 
     Ok(async move {
@@ -67,9 +65,15 @@ pub async fn start_stake_manager_witness(
                             return_addr,
                             tx_hash
                         );
-                        let mut signer = signer.lock().unwrap(); // TODO: Handle unwrap
+                        let mut signer = signer.lock().await;
                         subxt_client
-                            .witness_staked(&*signer, account_id, amount, tx_hash)
+                            .witness_staked(
+                                &*signer,
+                                account_id,
+                                amount,
+                                Some(return_addr.0),
+                                tx_hash,
+                            )
                             .await?;
                         signer.increment_nonce();
                     }
@@ -85,7 +89,7 @@ pub async fn start_stake_manager_witness(
                             amount,
                             tx_hash
                         );
-                        let mut signer = signer.lock().unwrap(); // TODO: Handle unwrap
+                        let mut signer = signer.lock().await;
                         subxt_client
                             .witness_claimed(&*signer, account_id, amount, tx_hash)
                             .await?;

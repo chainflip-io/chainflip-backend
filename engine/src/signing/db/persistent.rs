@@ -34,18 +34,17 @@ impl KeyDB for PersistentKeyDB {
     fn update_key(&mut self, key_id: KeyId, key: &KeygenResultInfo) {
         let mut tx = self.db.transaction();
 
-        let db_key = key_id.0.to_be_bytes();
         // TODO: this error should be handled better
         let key_encoded = bincode::serialize(key).expect("Could not serialize key");
 
-        tx.put_vec(0, &db_key, key_encoded);
+        tx.put_vec(0, &key_id.0, key_encoded);
     }
 
     fn load_keys(&self) -> HashMap<KeyId, KeygenResultInfo> {
         self.db
             .iter(0)
             .filter_map(|(key_id, key)| {
-                let key_id: &[u8; 8] = match key_id.as_ref().try_into() {
+                let key_id: Vec<u8> = match key_id.try_into() {
                     Ok(key_id) => Some(key_id),
                     Err(err) => {
                         slog::error!(self.logger, "Could not deserialize key_id from DB: {}", err);
@@ -53,13 +52,13 @@ impl KeyDB for PersistentKeyDB {
                     }
                 }?;
 
-                let key_id: KeyId = KeyId(u64::from_be_bytes(key_id.clone()));
+                let key_id: KeyId = KeyId(key_id);
 
                 let key_info = bincode::deserialize(key.as_ref()).unwrap_or_else(|err| {
                     slog::error!(
                         self.logger,
-                        "Could not deserialize key (key_id: {}) from DB: {}",
-                        key_id.0,
+                        "Could not deserialize key (key_id: {:?}) from DB: {}",
+                        key_id,
                         err
                     );
                     None

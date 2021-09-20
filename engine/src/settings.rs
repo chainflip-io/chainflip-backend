@@ -14,15 +14,9 @@ pub use anyhow::Result;
 use url::Url;
 
 #[derive(Debug, Deserialize, Clone)]
-pub struct MessageQueue {
-    pub endpoint: String,
-}
-
-#[derive(Debug, Deserialize, Clone)]
 pub struct StateChain {
     pub ws_endpoint: String,
     pub signing_key_file: String,
-    pub p2p_private_key_file: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -51,7 +45,6 @@ pub struct Signing {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Settings {
-    pub message_queue: MessageQueue,
     pub state_chain: StateChain,
     pub eth: Eth,
     pub health_check: HealthCheck,
@@ -165,7 +158,7 @@ mod tests {
         let settings = Settings::new();
         let settings = settings.unwrap();
 
-        assert_eq!(settings.message_queue.endpoint, "http://localhost:4222");
+        assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
     }
 
     #[test]
@@ -173,10 +166,7 @@ mod tests {
         let test_settings = test_utils::new_test_settings();
 
         let test_settings = test_settings.unwrap();
-        assert_eq!(
-            test_settings.message_queue.endpoint,
-            "http://localhost:4222"
-        );
+        assert_eq!(test_settings.state_chain.ws_endpoint, "ws://localhost:9944");
     }
 
     #[test]

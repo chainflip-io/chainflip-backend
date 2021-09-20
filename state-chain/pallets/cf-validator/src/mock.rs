@@ -1,7 +1,7 @@
 use super::*;
 use crate as pallet_cf_validator;
 use cf_traits::mocks::vault_rotation::Mock as MockHandler;
-use cf_traits::BidderProvider;
+use cf_traits::{BidderProvider, Online};
 use frame_support::traits::ValidatorRegistration;
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -134,6 +134,16 @@ impl pallet_cf_auction::Config for Test {
 	type MinAuctionSize = MinAuctionSize;
 	type WeightInfo = AuctionWeight;
 	type Handler = MockHandler<ValidatorId = ValidatorId, Amount = Amount>;
+	type Online = MockOnline;
+}
+
+pub struct MockOnline;
+impl Online for MockOnline {
+	type ValidatorId = ValidatorId;
+
+	fn is_online(_validator_id: &Self::ValidatorId) -> bool {
+		true
+	}
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {

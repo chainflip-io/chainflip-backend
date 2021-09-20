@@ -176,9 +176,10 @@ impl SigningStateManager {
             }
         };
 
-        let key_id = sign_info.id;
-
-        let mi = MessageInfo { hash: data, key_id };
+        let mi = MessageInfo {
+            hash: data,
+            key_id: sign_info.key_id.clone(),
+        };
 
         match self.signing_states.entry(mi.clone()) {
             Entry::Occupied(_) => {

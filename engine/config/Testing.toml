@@ -1,11 +1,7 @@
 # Testing configurations for the CFE
 
-[message_queue]
-# can also be IP
-endpoint = "http://localhost:4222"
-
 [state_chain]
-p2p_private_key_file = "./tests/test_keystore/p2p_key"
+# 32 byte hex secret key - associated with the node's public id (public key)
 signing_key_file = "./tests/test_keystore/alice_key"
 ws_endpoint = "ws://localhost:9944"
 
@@ -25,5 +21,5 @@ port = 5555
 [signing]
 db_file = "data.db"
 genesis_validator_ids = [
-    [212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125], # alice
+  [212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125], # alice
 ]
