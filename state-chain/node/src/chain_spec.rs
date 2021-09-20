@@ -257,7 +257,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 fn testnet_genesis(
 	wasm_binary: &[u8],
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>,
-	_root_key: AccountId,
+	root_key: AccountId,
 	endowed_accounts: Vec<AccountId>,
 	min_validators: u32,
 	epoch_number_of_blocks: u32,
@@ -306,11 +306,7 @@ fn testnet_genesis(
 			..Default::default()
 		}),
 		pallet_cf_governance: Some(GovernanceConfig {
-			members: vec![
-				get_account_id_from_seed::<sr25519::Public>("Bob"),
-				get_account_id_from_seed::<sr25519::Public>("Charlie"),
-				get_account_id_from_seed::<sr25519::Public>("Dave"),
-			],
+			members: vec![root_key],
 			expiry_span: 80000,
 		}),
 		pallet_cf_reputation: Some(ReputationConfig {
