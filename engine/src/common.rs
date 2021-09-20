@@ -59,8 +59,6 @@ mod tests {
 	use super::*;
 	use std::sync::Arc;
 
-	use std::sync::Mutex;
-
 	#[tokio::test]
 	#[should_panic]
 	async fn mutex_detects_panics() {
