@@ -14,18 +14,17 @@ use crate::{
         client::{
             client_inner::{
                 client_inner::{
-                    Broadcast1, KeyGenMessageWrapped, KeygenData, MultisigMessage,
-                    SchnorrSignature, Secret2,
+                    Broadcast1, KeyGenMessageWrapped, KeygenData, MultisigMessage, Secret2,
                 },
                 common::KeygenResultInfo,
                 keygen_state::KeygenStage,
                 InnerEvent, KeygenOutcome, MultisigClient, SigningOutcome,
             },
-            KeyId, KeygenInfo, MessageHash, MultisigInstruction,
+            KeyId, KeygenInfo, MultisigInstruction,
         },
-        crypto::{ECScalar, Keys, GE as Point},
+        crypto::{Keys, GE as Point},
         db::KeyDBMock,
-        MessageInfo, SigningInfo,
+        SigningInfo,
     },
 };
 
@@ -37,6 +36,8 @@ impl<T> From<UnboundedReceiver<T>> for PeekableReceiver<T> {
         }
     }
 }
+
+pub const SIGN_CEREMONY_ID: CeremonyId = 0;
 
 pub struct PeekableReceiver<T> {
     receiver: UnboundedReceiver<T>,
@@ -143,10 +144,6 @@ pub fn keygen_stage_for(
 pub fn keygen_delayed_count(client: &MultisigClientNoDB, ceremony_id: CeremonyId) -> usize {
     client.get_keygen().get_delayed_count(ceremony_id)
 }
-
-// pub fn signing_delayed_count(client: &MultisigClientNoDB, mi: &MessageInfo) -> usize {
-//     client.signing_manager.get_delayed_count(mi)
-// }
 
 /// Contains the states at different points of key generation
 /// including the final state, where the key is created
@@ -276,7 +273,6 @@ async fn collect_all_ver4(rxs: &mut Vec<InnerEventReceiver>) -> Vec<BroadcastVer
 
 async fn broadcast_all_comm1(
     clients: &mut Vec<MultisigClientNoDB>,
-    key_id: KeyId,
     comm1_vec: &Vec<SigningCommitment>,
     custom_comm1s: &mut HashMap<(usize, usize), SigningCommitment>,
 ) {
@@ -291,12 +287,7 @@ async fn broadcast_all_comm1(
 
                 let id = &super::VALIDATOR_IDS[*sender_idx];
 
-                let mi = MessageInfo {
-                    hash: MESSAGE_HASH.clone(),
-                    key_id: key_id.clone(),
-                };
-
-                let m = sig_data_to_p2p(comm1, id, &mi);
+                let m = sig_data_to_p2p(comm1, id);
 
                 clients[*receiver_idx].process_p2p_message(m.clone());
             }
@@ -306,7 +297,6 @@ async fn broadcast_all_comm1(
 
 async fn broadcast_all_ver2(
     clients: &mut Vec<MultisigClientNoDB>,
-    key_id: KeyId,
     ver2_vec: &Vec<BroadcastVerification2>,
 ) {
     for sender_idx in SIGNER_IDXS.iter() {
@@ -316,12 +306,7 @@ async fn broadcast_all_ver2(
 
                 let id = &super::VALIDATOR_IDS[*sender_idx];
 
-                let mi = MessageInfo {
-                    hash: MESSAGE_HASH.clone(),
-                    key_id: key_id.clone(),
-                };
-
-                let m = sig_data_to_p2p(ver2, id, &mi);
+                let m = sig_data_to_p2p(ver2, id);
 
                 clients[*receiver_idx].process_p2p_message(m);
             }
@@ -331,7 +316,6 @@ async fn broadcast_all_ver2(
 
 async fn broadcast_all_local_sigs(
     clients: &mut Vec<MultisigClientNoDB>,
-    key_id: KeyId,
     valid_sigs: &Vec<LocalSig3>,
     custom_sigs: &mut HashMap<(usize, usize), LocalSig3>,
 ) {
@@ -344,12 +328,7 @@ async fn broadcast_all_local_sigs(
 
             let id = &super::VALIDATOR_IDS[*sender_idx];
 
-            let mi = MessageInfo {
-                hash: MESSAGE_HASH.clone(),
-                key_id: key_id.clone(),
-            };
-
-            let m = sig_data_to_p2p(sig3, id, &mi);
+            let m = sig_data_to_p2p(sig3, id);
 
             if receiver_idx != sender_idx {
                 clients[*receiver_idx].process_p2p_message(m.clone());
@@ -360,7 +339,6 @@ async fn broadcast_all_local_sigs(
 
 async fn broadcast_all_ver4(
     clients: &mut Vec<MultisigClientNoDB>,
-    key_id: KeyId,
     ver4_vec: &Vec<BroadcastVerification4>,
 ) {
     for sender_idx in SIGNER_IDXS.iter() {
@@ -370,12 +348,7 @@ async fn broadcast_all_ver4(
 
                 let id = &super::VALIDATOR_IDS[*sender_idx];
 
-                let mi = MessageInfo {
-                    hash: MESSAGE_HASH.clone(),
-                    key_id: key_id.clone(),
-                };
-
-                let m = sig_data_to_p2p(ver4, id, &mi);
+                let m = sig_data_to_p2p(ver4, id);
 
                 clients[*receiver_idx].process_p2p_message(m);
             }
@@ -414,6 +387,10 @@ impl KeygenContext {
             sig3_to_send: HashMap::new(),
             key_id: None,
         }
+    }
+
+    pub fn key_id(&self) -> KeyId {
+        self.key_id.as_ref().expect("must have key").clone()
     }
 
     pub fn get_client(&self, idx: usize) -> &MultisigClientNoDB {
@@ -608,12 +585,13 @@ impl KeygenContext {
     // Use the generated key and the clients participating
     // in the ceremony and sign a message producing state
     // for each of the signing phases
-    pub async fn sign(
-        &mut self,
-        message_info: MessageInfo,
-        sign_info: SigningInfo,
-    ) -> ValidSigningStates {
+    pub async fn sign(&mut self) -> ValidSigningStates {
         let instant = std::time::Instant::now();
+
+        let sign_info = SigningInfo {
+            key_id: self.key_id(),
+            signers: SIGNER_IDS.clone(),
+        };
 
         let mut clients = self.clients.clone();
         let rxs = &mut self.rxs;
@@ -629,10 +607,11 @@ impl KeygenContext {
             c.process_multisig_instruction(MultisigInstruction::Sign(
                 MESSAGE_HASH.clone(),
                 sign_info.clone(),
+                SIGN_CEREMONY_ID,
             ));
 
             assert_eq!(
-                get_stage_for_msg(&c, &message_info),
+                get_stage_for_ceremony(&c, SIGN_CEREMONY_ID),
                 Some("BroadcastStage<AwaitCommitments1>".to_string())
             );
         }
@@ -645,13 +624,7 @@ impl KeygenContext {
         };
 
         // *** Broadcast Comm1 messages to advance to Stage2 ***
-        broadcast_all_comm1(
-            &mut clients,
-            self.key_id.clone().unwrap(),
-            &comm1_vec,
-            &mut self.comm1_to_send,
-        )
-        .await;
+        broadcast_all_comm1(&mut clients, &comm1_vec, &mut self.comm1_to_send).await;
 
         // TODO: check stage
         // *** Collect Ver2 messages ***
@@ -665,7 +638,7 @@ impl KeygenContext {
 
         // *** Distribute Ver2 messages ***
 
-        broadcast_all_ver2(&mut clients, self.key_id.clone().unwrap(), &ver2_vec).await;
+        broadcast_all_ver2(&mut clients, &ver2_vec).await;
 
         // Check if the ceremony was aborted at this stage
         if let Some(outcome) = check_outcome(&mut rxs[0]).await {
@@ -683,7 +656,7 @@ impl KeygenContext {
             let c = &mut clients[*idx];
 
             assert_eq!(
-                get_stage_for_msg(&c, &message_info),
+                get_stage_for_ceremony(&c, *CEREMONY_ID),
                 Some("BroadcastStage<LocalSigStage3>".to_string())
             );
         }
@@ -699,13 +672,7 @@ impl KeygenContext {
 
         // *** Distribute local sigs ***
 
-        broadcast_all_local_sigs(
-            &mut clients,
-            self.key_id.clone().unwrap(),
-            &local_sigs,
-            &mut self.sig3_to_send,
-        )
-        .await;
+        broadcast_all_local_sigs(&mut clients, &local_sigs, &mut self.sig3_to_send).await;
 
         // *** Collect Ver4 messages ***
         let ver4_vec = collect_all_ver4(rxs).await;
@@ -717,7 +684,7 @@ impl KeygenContext {
 
         // *** Distribute Ver4 messages ***
 
-        broadcast_all_ver4(&mut clients, self.key_id.clone().unwrap(), &ver4_vec).await;
+        broadcast_all_ver4(&mut clients, &ver4_vec).await;
 
         let outcome = match recv_next_inner_event(&mut rxs[0]).await {
             InnerEvent::SigningResult(outcome) => outcome,
@@ -899,12 +866,8 @@ async fn recv_ver4_signing(rx: &mut InnerEventReceiver) -> frost::VerifyLocalSig
     panic!();
 }
 
-pub fn sig_data_to_p2p(
-    data: impl Into<SigningData>,
-    sender_id: &AccountId,
-    mi: &MessageInfo,
-) -> P2PMessage {
-    let wrapped = SigningDataWrapped::new(data, mi.clone());
+pub fn sig_data_to_p2p(data: impl Into<SigningData>, sender_id: &AccountId) -> P2PMessage {
+    let wrapped = SigningDataWrapped::new(data, SIGN_CEREMONY_ID);
 
     let data = MultisigMessage::from(wrapped);
     let data = bincode::serialize(&data).unwrap();
@@ -930,8 +893,12 @@ pub fn keygen_data_to_p2p(
     }
 }
 
-pub fn get_stage_for_msg(c: &MultisigClientNoDB, message_info: &MessageInfo) -> Option<String> {
-    c.signing_manager.get_stage_for(message_info)
+pub fn get_stage_for_ceremony(c: &MultisigClientNoDB, id: CeremonyId) -> Option<String> {
+    c.signing_manager.get_stage_for(id)
+}
+
+pub fn get_stage_for_default_ceremony(c: &MultisigClientNoDB) -> Option<String> {
+    get_stage_for_ceremony(c, SIGN_CEREMONY_ID)
 }
 
 pub fn create_bc1(signer_idx: usize) -> Broadcast1 {
@@ -956,17 +923,4 @@ pub fn create_invalid_bc1() -> Broadcast1 {
     let y_i = key.y_i;
 
     Broadcast1 { bc1, blind, y_i }
-}
-
-pub fn message_and_sign_info(hash: MessageHash, key_id: KeyId) -> (MessageInfo, SigningInfo) {
-    (
-        MessageInfo {
-            hash,
-            key_id: key_id.clone(),
-        },
-        SigningInfo {
-            signers: SIGNER_IDS.clone(),
-            key_id,
-        },
-    )
 }

@@ -4,12 +4,10 @@ use std::{
     fmt::Display,
 };
 
+use pallet_cf_vaults::CeremonyId;
 use serde::{Deserialize, Serialize};
 
-use crate::signing::{
-    crypto::{build_challenge, KeyShare},
-    MessageInfo,
-};
+use crate::signing::crypto::{build_challenge, KeyShare};
 
 use super::{client_inner::MultisigMessage, SchnorrSignature};
 
@@ -145,17 +143,17 @@ impl Display for SigningData {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SigningDataWrapped {
     pub data: SigningData,
-    pub message: MessageInfo,
+    pub ceremony_id: CeremonyId,
 }
 
 impl SigningDataWrapped {
-    pub fn new<S>(data: S, message: MessageInfo) -> Self
+    pub fn new<S>(data: S, ceremony_id: CeremonyId) -> Self
     where
         S: Into<SigningData>,
     {
         SigningDataWrapped {
             data: data.into(),
-            message,
+            ceremony_id,
         }
     }
 }

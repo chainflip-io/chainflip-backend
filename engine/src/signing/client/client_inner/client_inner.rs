@@ -10,7 +10,7 @@ use crate::{
             GE,
         },
         db::KeyDB,
-        MessageHash, MessageInfo,
+        MessageHash,
     },
 };
 
@@ -171,7 +171,7 @@ impl<Id, Output> CeremonyOutcome<Id, Output> {
 /// The final result of a keygen ceremony
 pub type KeygenOutcome = CeremonyOutcome<CeremonyId, secp256k1::PublicKey>;
 /// The final result of a Signing ceremony
-pub type SigningOutcome = CeremonyOutcome<MessageInfo, SchnorrSignature>;
+pub type SigningOutcome = CeremonyOutcome<CeremonyId, SchnorrSignature>;
 
 #[derive(Debug, PartialEq)]
 pub enum InnerEvent {
@@ -191,7 +191,7 @@ where
     pub signing_manager: SigningManager,
     inner_event_sender: UnboundedSender<InnerEvent>,
     /// Requests awaiting a key
-    pending_requests_to_sign: HashMap<KeyId, Vec<(MessageHash, SigningInfo)>>,
+    pending_requests_to_sign: HashMap<KeyId, Vec<(CeremonyId, MessageHash, Vec<AccountId>)>>,
     logger: slog::Logger,
 }
 
@@ -255,7 +255,7 @@ where
         self.signing_manager.cleanup();
     }
 
-    fn add_pending(&mut self, data: MessageHash, sign_info: SigningInfo) {
+    fn add_pending(&mut self, data: MessageHash, sign_info: SigningInfo, ceremony_id: CeremonyId) {
         slog::debug!(
             self.logger,
             "[{}] Delaying a request to sign",
@@ -269,7 +269,7 @@ where
             .entry(sign_info.key_id.clone())
             .or_default();
 
-        entry.push((data, sign_info));
+        entry.push((ceremony_id, data, sign_info.signers));
     }
 
     /// Process `instruction` issued internally (i.e. from SC or another local module)
@@ -287,7 +287,7 @@ where
 
                 self.keygen.on_keygen_request(keygen_info);
             }
-            MultisigInstruction::Sign(hash, sign_info) => {
+            MultisigInstruction::Sign(hash, sign_info, ceremony_id) => {
                 // TODO: print ceremony id
                 slog::debug!(
                     self.logger,
@@ -299,12 +299,16 @@ where
 
                 match key {
                     Some(key) => {
-                        self.signing_manager
-                            .on_request_to_sign(hash, key.clone(), sign_info);
+                        self.signing_manager.on_request_to_sign(
+                            hash,
+                            key.clone(),
+                            sign_info.signers,
+                            ceremony_id,
+                        );
                     }
                     None => {
                         // The key is not ready, delay until either it is ready or timeout
-                        self.add_pending(hash, sign_info);
+                        self.add_pending(hash, sign_info, ceremony_id);
                     }
                 }
             }
@@ -322,9 +326,13 @@ where
                 "Processing pending requests to sign, count: {}",
                 reqs.len()
             );
-            for (data, info) in reqs {
-                self.signing_manager
-                    .on_request_to_sign(data, key_info.clone(), info)
+            for (ceremony_id, data, signers) in reqs {
+                self.signing_manager.on_request_to_sign(
+                    data,
+                    key_info.clone(),
+                    signers,
+                    ceremony_id,
+                )
             }
         }
     }

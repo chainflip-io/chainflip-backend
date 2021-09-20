@@ -92,6 +92,7 @@ async fn coordinate_signing(
             .send(MultisigInstruction::Sign(
                 MessageHash(super::fixtures::MESSAGE.clone()),
                 sign_info.clone(),
+                0, // ceremony id
             ))
             .map_err(|_| "Receiver dropped")
             .unwrap();
@@ -100,6 +101,7 @@ async fn coordinate_signing(
             .send(MultisigInstruction::Sign(
                 MessageHash(super::fixtures::MESSAGE2.clone()),
                 sign_info.clone(),
+                1, // ceremony id
             ))
             .map_err(|_| "Receiver dropped")
             .unwrap();

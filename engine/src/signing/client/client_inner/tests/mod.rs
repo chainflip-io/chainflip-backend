@@ -14,8 +14,8 @@ use log::*;
 use crate::{
     p2p::AccountId,
     signing::{
-        client::{KeyId, KeygenInfo, SigningInfo},
-        MessageHash, MessageInfo,
+        client::{KeyId, KeygenInfo},
+        MessageHash,
     },
 };
 
@@ -38,6 +38,7 @@ lazy_static! {
 }
 
 lazy_static! {
+    // MAXIM: This should be removed in favor of SIGN_CEREMONY_ID
     static ref CEREMONY_ID: u64 = 0;
     static ref MESSAGE: [u8; 32] = "Chainflip:Chainflip:Chainflip:01"
         .as_bytes()

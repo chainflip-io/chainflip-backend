@@ -42,6 +42,7 @@ impl KeygenInfo {
     }
 }
 
+// MAXIM: add ceremony id here?
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SigningInfo {
     key_id: KeyId,
@@ -57,7 +58,7 @@ impl SigningInfo {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MultisigInstruction {
     KeyGen(KeygenInfo),
-    Sign(MessageHash, SigningInfo),
+    Sign(MessageHash, SigningInfo, CeremonyId),
 }
 
 #[derive(Debug, Serialize, Deserialize)]

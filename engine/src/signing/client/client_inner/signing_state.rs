@@ -1,12 +1,13 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc;
 
 use crate::p2p::AccountId;
 
 use super::client_inner::Error;
-use crate::signing::{MessageInfo, SigningOutcome};
+use crate::signing::{MessageHash, SigningOutcome};
 
 use super::client_inner::{CeremonyOutcomeResult, MultisigMessage};
 
@@ -25,22 +26,22 @@ type EventSender = mpsc::UnboundedSender<InnerEvent>;
 
 dyn_clone::clone_trait_object!(CeremonyStage<Message = SigningData, Result = SchnorrSignature>);
 
+// MAXIM: when both Keygen and Signing use ceremony_id,
+// we could look into removing this abstraction
 #[derive(Clone)]
 pub struct SigningMessageWrapper {
-    message_info: MessageInfo,
+    ceremony_id: CeremonyId,
 }
 
 impl SigningMessageWrapper {
-    pub fn new(message_info: MessageInfo) -> Self {
-        SigningMessageWrapper { message_info }
+    pub fn new(ceremony_id: CeremonyId) -> Self {
+        SigningMessageWrapper { ceremony_id }
     }
 }
 
 impl MessageWrapper<SigningData> for SigningMessageWrapper {
     fn wrap_and_serialize(&self, data: &SigningData) -> Vec<u8> {
-        // add message info to data
-        let msg: MultisigMessage =
-            SigningDataWrapped::new(data.clone(), self.message_info.clone()).into();
+        let msg: MultisigMessage = SigningDataWrapped::new(data.clone(), self.ceremony_id).into();
 
         bincode::serialize(&msg).unwrap()
     }
@@ -57,13 +58,13 @@ struct SigningStatePreKey {
 
 #[derive(Clone)]
 struct SigningStateWithKey {
+    ceremony_id: CeremonyId,
     state: Option<Box<dyn CeremonyStage<Message = SigningData, Result = SchnorrSignature>>>,
     // MAXIM: should this store messages by id instead of signer_idx?
     delayed_messages_by_idx: Vec<(usize, SigningData)>,
     // TODO: this should be specialized to sending
     // results only (no p2p stuff)
     result_sender: EventSender,
-    message_info: MessageInfo,
     validator_map: Arc<ValidatorMaps>,
     should_expire_at: std::time::Instant,
     logger: slog::Logger,
@@ -222,7 +223,7 @@ impl SigningStateWithKey {
     fn send_result(&self, result: CeremonyOutcomeResult<SchnorrSignature>) {
         self.result_sender
             .send(InnerEvent::SigningResult(SigningOutcome {
-                id: self.message_info.clone(),
+                id: self.ceremony_id,
                 result,
             }))
             .unwrap();
@@ -236,10 +237,13 @@ impl SigningState {
     /// and process any delayed messages
     pub fn on_request_to_sign(
         &mut self,
+        // TODO: see if we can make states unaware of their own
+        // ceremony ids (by delegating p2p messaging upstream)
+        ceremony_id: CeremonyId,
         signer_idx: usize,
         signer_idxs: Vec<usize>,
         key_info: KeygenResultInfo,
-        message_info: MessageInfo,
+        data: MessageHash,
         event_sender: EventSender,
         logger: &slog::Logger,
     ) {
@@ -255,6 +259,7 @@ impl SigningState {
         };
 
         let common = CeremonyCommon {
+            ceremony_id,
             p2p_sender: P2PSender::new(key_info.validator_map.clone(), event_sender.clone()),
             own_idx: signer_idx,
             all_idxs: signer_idxs.clone(),
@@ -262,27 +267,24 @@ impl SigningState {
         };
 
         let signing_common = SigningStateCommonInfo {
-            message_info: message_info.clone(),
+            data,
             key: key_info.key.clone(),
             logger: logger.clone(),
         };
 
         let processor = AwaitCommitments1::new(common.clone(), signing_common);
 
-        let mut state = BroadcastStage::new(
-            processor,
-            common,
-            SigningMessageWrapper::new(message_info.clone()),
-        );
+        let mut state =
+            BroadcastStage::new(processor, common, SigningMessageWrapper::new(ceremony_id));
 
         state.init();
 
         let mut state = SigningStateWithKey {
+            ceremony_id,
             state: Some(Box::new(state)),
             validator_map: key_info.validator_map.clone(),
             delayed_messages_by_idx: Vec::new(),
             result_sender: event_sender,
-            message_info,
             // Unlike other state transitions, we don't take into account
             // any time left in the prior stage when receiving a request
             // to sign (we don't want other parties to be able to
@@ -362,7 +364,7 @@ impl SigningState {
 /// Info useful for most signing states
 #[derive(Clone)]
 pub struct SigningStateCommonInfo {
-    pub(super) message_info: MessageInfo,
+    pub(super) data: MessageHash,
     pub(super) key: Arc<KeygenResult>,
     logger: slog::Logger,
 }

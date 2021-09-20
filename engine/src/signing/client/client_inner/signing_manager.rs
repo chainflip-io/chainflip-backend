@@ -1,7 +1,6 @@
 use std::collections::HashMap;
-#[cfg(test)]
-use std::time::Duration;
 
+use pallet_cf_vaults::CeremonyId;
 use tokio::sync::mpsc;
 
 use super::common::KeygenResultInfo;
@@ -9,7 +8,7 @@ use super::frost::SigningDataWrapped;
 use super::InnerEvent;
 use crate::p2p::AccountId;
 
-use crate::signing::{MessageHash, MessageInfo, SigningInfo, SigningOutcome};
+use crate::signing::{MessageHash, SigningOutcome};
 
 use super::signing_state::SigningState;
 
@@ -19,7 +18,7 @@ use super::signing_state::SigningState;
 pub struct SigningManager {
     id: AccountId,
     event_sender: mpsc::UnboundedSender<InnerEvent>,
-    signing_states: HashMap<MessageInfo, SigningState>,
+    signing_states: HashMap<CeremonyId, SigningState>,
     logger: slog::Logger,
 }
 
@@ -69,11 +68,12 @@ impl SigningManager {
         &mut self,
         data: MessageHash,
         key_info: KeygenResultInfo,
-        sign_info: SigningInfo,
+        signers: Vec<AccountId>,
+        ceremony_id: CeremonyId,
     ) {
         slog::debug!(self.logger, "Processing a request to sign");
 
-        if !sign_info.signers.contains(&self.id) {
+        if !signers.contains(&self.id) {
             slog::warn!(
                 self.logger,
                 "Request to sign ignored: we are not among signers."
@@ -96,7 +96,7 @@ impl SigningManager {
         };
 
         // Check that signer ids are known for this key
-        let signer_idxs = match project_signers(&sign_info.signers, &key_info) {
+        let signer_idxs = match project_signers(&signers, &key_info) {
             Ok(signer_idxs) => signer_idxs,
             Err(_) => {
                 slog::warn!(self.logger, "Request to sign ignored: invalid signers.");
@@ -104,28 +104,24 @@ impl SigningManager {
             }
         };
 
-        let mi = MessageInfo {
-            hash: data,
-            key_id: sign_info.key_id,
-        };
-
         // We have the key and have received a request to sign
         slog::trace!(
             self.logger,
-            "Creating new signing state for message: {:?}",
-            mi.hash
+            "Creating new signing state for ceremony id: {:?}",
+            ceremony_id
         );
 
         let entry = self
             .signing_states
-            .entry(mi.clone())
+            .entry(ceremony_id)
             .or_insert(SigningState::new_unauthorised(self.logger.clone()));
 
         entry.on_request_to_sign(
+            ceremony_id,
             our_idx,
             signer_idxs,
             key_info,
-            mi.clone(),
+            data,
             self.event_sender.clone(),
             &self.logger,
         );
@@ -135,13 +131,13 @@ impl SigningManager {
         // Check if we have state for this data and delegate message to that state
         // Delay message otherwise
 
-        let SigningDataWrapped { data, message: mi } = wdata;
+        let SigningDataWrapped { data, ceremony_id } = wdata;
 
         slog::info!(self.logger, "process_signing_data: {}", &data);
 
         let state = self
             .signing_states
-            .entry(mi)
+            .entry(ceremony_id)
             .or_insert(SigningState::new_unauthorised(self.logger.clone()));
 
         state.process_message(sender_id, data);
@@ -156,8 +152,10 @@ impl SigningManager {
         }
     }
 
-    pub fn get_stage_for(&self, mi: &MessageInfo) -> Option<String> {
-        self.signing_states.get(mi).and_then(|s| s.get_stage())
+    pub fn get_stage_for(&self, ceremony_id: CeremonyId) -> Option<String> {
+        self.signing_states
+            .get(&ceremony_id)
+            .and_then(|s| s.get_stage())
     }
 }
 

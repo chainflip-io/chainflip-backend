@@ -132,35 +132,22 @@ pub async fn start(
                         // TODO: Provide the pubkey of the key we want to sign with to the signing module
                         // from this event
                         // https://github.com/chainflip-io/chainflip-backend/issues/492
-                        ThresholdSignatureRequestEvent(threshold_sig_requst) => {
-                            let signers: Vec<_> = threshold_sig_requst
-                                .threshold_signature_request
+                        ThresholdSignatureRequestEvent(event) => {
+                            let req = event.threshold_signature_request;
+
+                            let signers: Vec<_> = req
                                 .validators
                                 .iter()
                                 .map(|v| p2p::AccountId(v.clone().into()))
                                 .collect();
 
-                            let sign_tx =
-                                MultisigInstruction::Sign(
-                                    // TODO: The hashing of the payload should be done on the SC
-                                    // https://github.com/chainflip-io/chainflip-backend/issues/446
-                                    MessageHash(
-                                        Keccak256::hash(
-                                            &threshold_sig_requst
-                                                .threshold_signature_request
-                                                .payload[..],
-                                        )
-                                        .0,
-                                    ),
-                                    SigningInfo::new(
-                                        KeyId(
-                                            threshold_sig_requst
-                                                .threshold_signature_request
-                                                .public_key,
-                                        ),
-                                        signers,
-                                    ),
-                                );
+                            let sign_tx = MultisigInstruction::Sign(
+                                // TODO: The hashing of the payload should be done on the SC
+                                // https://github.com/chainflip-io/chainflip-backend/issues/446
+                                MessageHash(Keccak256::hash(&req.payload[..]).0),
+                                SigningInfo::new(KeyId(req.public_key), signers),
+                                event.ceremony_id,
+                            );
 
                             // The below will be replaced with one shot channels
                             multisig_instruction_sender
@@ -204,11 +191,7 @@ pub async fn start(
                             };
                             let signer = signer.lock().unwrap();
                             subxt_client
-                                .threshold_signature_response(
-                                    &*signer,
-                                    threshold_sig_requst.ceremony_id,
-                                    response,
-                                )
+                                .threshold_signature_response(&*signer, event.ceremony_id, response)
                                 .await
                                 .unwrap(); // TODO handle error
                         }

@@ -70,7 +70,7 @@ impl StageProcessor<SigningData, SchnorrSignature> for AwaitCommitments1 {
             commitments1: messages,
         };
 
-        let wrapper = SigningMessageWrapper::new(self.signing_common.message_info.clone());
+        let wrapper = SigningMessageWrapper::new(self.common.ceremony_id);
 
         let stage = BroadcastStage::new(processor, self.common, wrapper);
 
@@ -120,7 +120,7 @@ impl StageProcessor<SigningData, SchnorrSignature> for VerifyCommitmentsBroadcas
             "Initial commitments have been correctly broadcast for ceremony: [todo]"
         );
 
-        let wrapper = SigningMessageWrapper::new(self.signing_common.message_info.clone());
+        let wrapper = SigningMessageWrapper::new(self.common.ceremony_id);
 
         let processor = LocalSigStage3 {
             common: self.common.clone(),
@@ -155,7 +155,7 @@ impl StageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
         );
 
         frost::generate_local_sig(
-            &self.signing_common.message_info.hash.0,
+            &self.signing_common.data.0,
             &self.signing_common.key.key_share,
             &self.nonces,
             &self.commitments,
@@ -174,7 +174,7 @@ impl StageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
             local_sigs: messages,
         };
 
-        let wrapper = SigningMessageWrapper::new(self.signing_common.message_info.clone());
+        let wrapper = SigningMessageWrapper::new(self.common.ceremony_id);
 
         let stage = BroadcastStage::new(processor, self.common, wrapper);
 
@@ -230,7 +230,7 @@ impl StageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsBroadcastS
             .collect();
 
         match frost::aggregate_signature(
-            &self.signing_common.message_info.hash.0,
+            &self.signing_common.data.0,
             &all_idxs,
             self.signing_common.key.get_public_key(),
             &pubkeys,
