@@ -29,6 +29,8 @@ impl<'a, T> Drop for MutexGuard<'a, T> {
     }
 }
 
+/// This mutex implementation will panic when it is locked iff a thread previously panicked while holding it.
+/// This ensures potentially broken data cannot be seen by other threads.
 pub struct Mutex<T> {
     mutex: tokio::sync::Mutex<MutexStateAndPoisonFlag<T>>,
 }
