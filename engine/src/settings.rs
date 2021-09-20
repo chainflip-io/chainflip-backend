@@ -17,7 +17,6 @@ use url::Url;
 pub struct StateChain {
     pub ws_endpoint: String,
     pub signing_key_file: String,
-    pub p2p_private_key_file: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]

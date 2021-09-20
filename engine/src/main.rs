@@ -1,4 +1,5 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use chainflip_engine::{
     eth::{self, key_manager, stake_manager, EthBroadcaster},
@@ -11,6 +12,7 @@ use chainflip_engine::{
 };
 use slog::{o, Drain};
 use sp_core::Pair;
+use std::{convert::TryInto, fs};
 use substrate_subxt::ClientBuilder;
 
 #[tokio::main]
@@ -38,10 +40,9 @@ async fn main() {
     let key_pair = sp_core::sr25519::Pair::from_seed(&{
         // This can be the same filepath as the p2p key --node-key-file <file> on the state chain
         // which won't necessarily always be the case, i.e. if we no longer have PeerId == AccountId
-        use std::{convert::TryInto, fs};
         let seed: [u8; 32] = hex::decode(
-            &fs::read_to_string(&settings.state_chain.p2p_private_key_file)
-                .expect("Cannot read private key file")
+            &fs::read_to_string(&settings.state_chain.signing_key_file)
+                .expect("Cannot read state chain signing key file")
                 .replace("\"", ""),
         )
         .expect("Failed to decode seed")
@@ -105,7 +106,7 @@ async fn main() {
                     "Should be valid ws endpoint: {}",
                     settings.state_chain.ws_endpoint
                 )),
-                AccountId(pair_signer.lock().unwrap().signer().public().0)
+                AccountId(pair_signer.lock().await.signer().public().0)
             )
             .await
             .expect("unable to connect p2p rpc client"),
