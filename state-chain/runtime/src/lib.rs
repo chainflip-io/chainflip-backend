@@ -471,7 +471,7 @@ construct_runtime!(
 		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>},
 		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
 		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
-		Config: pallet_cf_config::{Module, Call, Event<T>},
+		Config: pallet_cf_config::{Module, Call, Event<T>, Config},
 	}
 );
 

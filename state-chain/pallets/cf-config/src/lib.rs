@@ -5,6 +5,7 @@ pub use pallet::*;
 pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+	use sp_std::vec::Vec;
 
 	type ConfigItem = Vec<u8>;
 
@@ -15,10 +16,8 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 	}
-
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
-	pub struct Pallet<T>(_);
+	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::storage]
 	#[pallet::getter(fn stake_manager_address)]
@@ -46,7 +45,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {}
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig<T: Config> {
+	pub struct GenesisConfig {
 		pub stake_manager_address: ConfigItem,
 		pub key_manager_address: ConfigItem,
 		pub ethereum_chain_id: ConfigItem,
@@ -54,7 +53,7 @@ pub mod pallet {
 	}
 
 	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
+	impl Default for GenesisConfig {
 		fn default() -> Self {
 			Self {
 				stake_manager_address: Default::default(),
@@ -67,12 +66,12 @@ pub mod pallet {
 
 	/// Sets the genesis governance
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			StakeManagerAddress::<T>::set(self.stake_manager_address);
-			KeyManagerAddress::<T>::set(self.key_manager_address);
-			EthereumChainId::<T>::set(self.ethereum_chain_id);
-			EthereumVaultAddress::<T>::set(self.ethereum_vault_address);
+			StakeManagerAddress::<T>::set(Some(self.stake_manager_address.clone()));
+			KeyManagerAddress::<T>::set(Some(self.key_manager_address.clone()));
+			EthereumChainId::<T>::set(Some(self.ethereum_chain_id.clone()));
+			EthereumVaultAddress::<T>::set(Some(self.ethereum_vault_address.clone()));
 		}
 	}
 }

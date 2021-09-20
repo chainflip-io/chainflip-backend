@@ -4,9 +4,9 @@ use sp_core::{crypto::UncheckedInto, sr25519, Pair, Public};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
-	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, EmissionsConfig, FlipBalance,
-	FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig,
-	Signature, StakingConfig, SystemConfig, ValidatorConfig, DAYS, WASM_BINARY,
+	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, ConfigConfig, EmissionsConfig,
+	FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig,
+	SessionConfig, Signature, StakingConfig, SystemConfig, ValidatorConfig, DAYS, WASM_BINARY,
 };
 
 const TOTAL_ISSUANCE: FlipBalance = {
@@ -303,6 +303,12 @@ fn testnet_genesis(
 		}),
 		pallet_cf_reputation: Some(ReputationConfig {
 			accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
+		}),
+		pallet_cf_config: Some(ConfigConfig {
+			stake_manager_address: b"0x".to_vec(),
+			key_manager_address: b"0x".to_vec(),
+			ethereum_chain_id: b"0".to_vec(),
+			ethereum_vault_address: b"0x".to_vec(),
 		}),
 	}
 }
