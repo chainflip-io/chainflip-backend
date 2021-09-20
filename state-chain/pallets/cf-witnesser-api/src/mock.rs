@@ -73,8 +73,6 @@ impl pallet_cf_staking::Config for Test {
 	type Event = Event;
 	type Balance = u128;
 	type Flip = MockStakeTransfer;
-	type Nonce = u64;
-	type EnsureWitnessed = MockEnsureWitnessed;
 	type EpochInfo = cf_traits::mocks::epoch_info::Mock;
 	type TimeSource = cf_traits::mocks::time_source::Mock;
 	type MinClaimTTL = MinClaimTTL;
@@ -87,6 +85,9 @@ type ValidatorId = u64;
 impl Chainflip for Test {
 	type Amount = Amount;
 	type ValidatorId = ValidatorId;
+	type EnsureWitnessed = MockEnsureWitnessed;
+	type KeyId = u32;
+	type Call = Call;
 }
 
 impl VaultRotationHandler for Test {
@@ -105,7 +106,6 @@ impl NonceProvider for Test {
 
 impl pallet_cf_vaults::Config for Test {
 	type Event = Event;
-	type EnsureWitnessed = MockEnsureWitnessed;
 	type PublicKey = Vec<u8>;
 	type TransactionHash = Vec<u8>;
 	type RotationHandler = Self;

@@ -1,85 +1,92 @@
-use crate::EpochInfo;
-use std::cell::RefCell;
+pub type Mock = MockEpochInfo;
+crate::impl_mock_epoch_info!(u64, u128, u32);
 
-type AccountId = u64;
-pub struct Mock;
+#[macro_export]
+macro_rules! impl_mock_epoch_info {
+	($account_id:ty, $balance:ty, $epoch_index:ty) => {
+		use std::cell::RefCell;
+		use $crate::EpochInfo;
 
-thread_local! {
-	pub static CURRENT_VALIDATORS: RefCell<Vec<AccountId>> = RefCell::new(vec![]);
-	pub static NEXT_VALIDATORS: RefCell<Vec<AccountId>> = RefCell::new(vec![]);
-	pub static BOND: RefCell<u128> = RefCell::new(0);
-	pub static EPOCH: RefCell<u32> = RefCell::new(0);
-	pub static IS_AUCTION: RefCell<bool> = RefCell::new(false);
-}
+		pub struct MockEpochInfo;
 
-impl Mock {
-	/// Get the current number of validators.
-	pub fn validator_count() -> usize {
-		CURRENT_VALIDATORS.with(|cell| cell.borrow().len())
-	}
+		thread_local! {
+			pub static CURRENT_VALIDATORS: RefCell<Vec<$account_id>> = RefCell::new(vec![]);
+			pub static NEXT_VALIDATORS: RefCell<Vec<$account_id>> = RefCell::new(vec![]);
+			pub static BOND: RefCell<$balance> = RefCell::new(0);
+			pub static EPOCH: RefCell<$epoch_index> = RefCell::new(0);
+			pub static IS_AUCTION: RefCell<bool> = RefCell::new(false);
+		}
 
-	/// Add a validator to the current validators.
-	pub fn add_validator(account: AccountId) {
-		CURRENT_VALIDATORS.with(|cell| cell.borrow_mut().push(account))
-	}
+		impl MockEpochInfo {
+			/// Get the current number of validators.
+			pub fn validator_count() -> usize {
+				CURRENT_VALIDATORS.with(|cell| cell.borrow().len())
+			}
 
-	/// Queue a validator. Adds the validator to the set of next validators.
-	pub fn queue_validator(account: AccountId) {
-		NEXT_VALIDATORS.with(|cell| cell.borrow_mut().push(account))
-	}
+			/// Add a validator to the current validators.
+			pub fn add_validator(account: $account_id) {
+				CURRENT_VALIDATORS.with(|cell| cell.borrow_mut().push(account))
+			}
 
-	/// Clears the current and next validators.
-	pub fn clear_validators() {
-		CURRENT_VALIDATORS.with(|cell| cell.borrow_mut().clear());
-		NEXT_VALIDATORS.with(|cell| cell.borrow_mut().clear());
-	}
+			/// Queue a validator. Adds the validator to the set of next validators.
+			pub fn queue_validator(account: $account_id) {
+				NEXT_VALIDATORS.with(|cell| cell.borrow_mut().push(account))
+			}
 
-	/// Set the bond amount.
-	pub fn set_bond(bond: u128) {
-		BOND.with(|cell| *(cell.borrow_mut()) = bond);
-	}
+			/// Clears the current and next validators.
+			pub fn clear_validators() {
+				CURRENT_VALIDATORS.with(|cell| cell.borrow_mut().clear());
+				NEXT_VALIDATORS.with(|cell| cell.borrow_mut().clear());
+			}
 
-	/// Set the epoch.
-	pub fn set_epoch(epoch: u32) {
-		EPOCH.with(|cell| *(cell.borrow_mut()) = epoch);
-	}
+			/// Set the bond amount.
+			pub fn set_bond(bond: $balance) {
+				BOND.with(|cell| *(cell.borrow_mut()) = bond);
+			}
 
-	/// Increment the epoch.
-	pub fn incr_epoch() {
-		EPOCH.with(|cell| *(cell.borrow_mut()) += 1);
-	}
+			/// Set the epoch.
+			pub fn set_epoch(epoch: $epoch_index) {
+				EPOCH.with(|cell| *(cell.borrow_mut()) = epoch);
+			}
 
-	pub fn set_is_auction_phase(is_auction: bool) {
-		IS_AUCTION.with(|cell| *(cell.borrow_mut()) = is_auction);
-	}
-}
+			/// Increment the epoch.
+			pub fn incr_epoch() {
+				EPOCH.with(|cell| *(cell.borrow_mut()) += 1);
+			}
 
-impl EpochInfo for Mock {
-	type ValidatorId = AccountId;
-	type Amount = u128;
-	type EpochIndex = u32;
+			pub fn set_is_auction_phase(is_auction: bool) {
+				IS_AUCTION.with(|cell| *(cell.borrow_mut()) = is_auction);
+			}
+		}
 
-	fn current_validators() -> Vec<Self::ValidatorId> {
-		CURRENT_VALIDATORS.with(|cell| cell.borrow().clone())
-	}
+		impl EpochInfo for MockEpochInfo {
+			type ValidatorId = $account_id;
+			type Amount = $balance;
+			type EpochIndex = $epoch_index;
 
-	fn is_validator(account: &Self::ValidatorId) -> bool {
-		Self::current_validators().as_slice().contains(account)
-	}
+			fn current_validators() -> Vec<Self::ValidatorId> {
+				CURRENT_VALIDATORS.with(|cell| cell.borrow().clone())
+			}
 
-	fn bond() -> Self::Amount {
-		BOND.with(|cell| *cell.borrow())
-	}
+			fn is_validator(account: &Self::ValidatorId) -> bool {
+				Self::current_validators().as_slice().contains(account)
+			}
 
-	fn next_validators() -> Vec<Self::ValidatorId> {
-		NEXT_VALIDATORS.with(|cell| cell.borrow().clone())
-	}
+			fn bond() -> Self::Amount {
+				BOND.with(|cell| *cell.borrow())
+			}
 
-	fn epoch_index() -> Self::EpochIndex {
-		EPOCH.with(|cell| *cell.borrow())
-	}
+			fn next_validators() -> Vec<Self::ValidatorId> {
+				NEXT_VALIDATORS.with(|cell| cell.borrow().clone())
+			}
 
-	fn is_auction_phase() -> bool {
-		IS_AUCTION.with(|cell| *cell.borrow())
-	}
+			fn epoch_index() -> Self::EpochIndex {
+				EPOCH.with(|cell| *cell.borrow())
+			}
+
+			fn is_auction_phase() -> bool {
+				IS_AUCTION.with(|cell| *cell.borrow())
+			}
+		}
+	};
 }

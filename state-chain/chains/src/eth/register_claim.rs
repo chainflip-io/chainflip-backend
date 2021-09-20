@@ -121,7 +121,17 @@ impl RegisterClaim {
 
 #[cfg(test)]
 mod test_register_claim {
+	use frame_support::assert_ok;
 	use super::*;
+
+		#[test]
+		// There have been obtuse test failures due to the loading of the contract failing
+		// It uses a different ethabi to the CFE, so we test separately
+		fn just_load_the_contract() {
+			assert_ok!(ethabi::Contract::load(
+				std::include_bytes!("../../../../engine/src/eth/abis/StakeManager.json").as_ref(),
+			));
+	}
 
 	#[test]
 	fn test_claim_payload() {

@@ -1,5 +1,5 @@
 use crate::{self as pallet_cf_signing};
-use cf_traits::{Chainflip, SigningContext};
+use cf_traits::{Chainflip, SigningContext, offline_conditions::*};
 use codec::{Decode, Encode};
 use frame_support::parameter_types;
 use frame_support::traits::EnsureOrigin;
@@ -138,14 +138,14 @@ impl MockOfflineConditions {
 	}
 }
 
-impl pallet_cf_reputation::OfflineConditions for MockOfflineConditions {
+impl OfflineConditions for MockOfflineConditions {
 	type ValidatorId = u64;
 
 	fn report(
-		_condition: pallet_cf_reputation::OfflineCondition,
-		_penalty: pallet_cf_reputation::ReputationPoints,
+		_condition: OfflineCondition,
+		_penalty: ReputationPoints,
 		validator_id: &Self::ValidatorId,
-	) -> Result<frame_support::dispatch::Weight, pallet_cf_reputation::ReportError> {
+	) -> Result<frame_support::dispatch::Weight, ReportError> {
 		REPORTED.with(|cell| cell.borrow_mut().push(*validator_id));
 		Ok(0)
 	}

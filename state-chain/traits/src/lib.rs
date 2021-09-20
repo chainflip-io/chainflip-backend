@@ -371,3 +371,40 @@ pub trait SigningContext<T: Chainflip> {
 			.dispatch_bypass_filter(origin)
 	}
 }
+
+pub mod offline_conditions {
+	use super::*;
+	pub type ReputationPoints = i32;
+
+	/// Conditions as judged as offline
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+	pub enum OfflineCondition {
+		/// A broadcast of an output has failed
+		BroadcastOutputFailed,
+		/// There was a failure in participation during a signing
+		ParticipateSigningFailed,
+		/// Not Enough Performance Credits
+		NotEnoughPerformanceCredits,
+		/// Contradicting Self During a Signing Ceremony
+		ContradictingSelfDuringSigningCeremony,
+	}
+
+	/// Error on reporting an offline condition
+	#[derive(Debug, PartialEq)]
+	pub enum ReportError {
+		/// Validator doesn't exist
+		UnknownValidator,
+	}
+
+	/// Offline conditions are reported on
+	pub trait OfflineConditions {
+		type ValidatorId;
+		/// Report the condition for validator
+		/// Returns `Ok(Weight)` else an error if the validator isn't valid
+		fn report(
+			condition: OfflineCondition,
+			penalty: ReputationPoints,
+			validator_id: &Self::ValidatorId,
+		) -> Result<Weight, ReportError>;
+	}
+}

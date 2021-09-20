@@ -14,7 +14,6 @@ targets = ['x86_64-unknown-linux-gnu']
 [dependencies]
 cf-traits = { path = '../../traits', default-features = false }
 cf-chains = { path = '../../chains', default-features = false }
-pallet-cf-reputation = { path = '../../pallets/cf-reputation', default-features = false }
 
 codec = { default-features = false, features = ['derive'], package = 'parity-scale-codec', version = '2.0.0' }
 frame-system = { default-features = false, version = '3.0.0' }
@@ -34,7 +33,6 @@ default = ['std']
 std = [
 	'cf-chains/std',
 	'cf-traits/std',
-	'pallet-cf-reputation/std',
 	'codec/std',
 	'downcast-rs/std',
 	'frame-support/std',

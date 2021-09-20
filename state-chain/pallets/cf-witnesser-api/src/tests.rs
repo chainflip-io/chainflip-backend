@@ -79,19 +79,24 @@ mod staking_witness_tests {
 
 	#[test]
 	fn test_post_claim_signature() {
+		use cf_chains::eth;
+		const DUMMY_SIG: eth::SchnorrSignature = eth::SchnorrSignature {
+			s: [0xcf; 32],
+			k_times_g_addr: [0xcf; 20],
+		};
+		
 		new_test_ext().execute_with(|| {
 			MockWitnesser::set_threshold(2);
 
 			// The call we are witnessing.
 			let call: Call =
-				pallet_cf_staking::Call::post_claim_signature(STAKER, DUMMY_MSG, DUMMY_MSG).into();
+				pallet_cf_staking::Call::post_claim_signature(STAKER, DUMMY_SIG).into();
 
 			// One vote.
 			assert_ok!(WitnessApi::witness_post_claim_signature(
 				Origin::signed(WITNESS),
 				STAKER,
-				DUMMY_MSG,
-				DUMMY_MSG
+				DUMMY_SIG,
 			));
 
 			assert_eq!(MockWitnesser::get_vote_count_for(&call), 1);
@@ -101,8 +106,7 @@ mod staking_witness_tests {
 				WitnessApi::witness_post_claim_signature(
 					Origin::signed(WITNESS),
 					STAKER,
-					DUMMY_MSG,
-					DUMMY_MSG
+					DUMMY_SIG,
 				),
 				pallet_cf_staking::Error::<Test>::NoPendingClaim
 			);

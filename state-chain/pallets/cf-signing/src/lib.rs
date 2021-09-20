@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 //! Request-Reply Pallet
 #[cfg(test)]
-mod mock;
+pub mod mock;
 
 #[cfg(test)]
 mod tests;
@@ -9,7 +9,10 @@ mod tests;
 use codec::{Decode, Encode};
 
 use cf_chains::Chain;
-use cf_traits::{Chainflip, KeyProvider, SignerNomination, SigningContext};
+use cf_traits::{
+	offline_conditions::{OfflineCondition, OfflineConditions},
+	Chainflip, KeyProvider, SignerNomination, SigningContext,
+};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_runtime::RuntimeDebug;
@@ -25,7 +28,6 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_support::{dispatch::DispatchResultWithPostInfo, Twox64Concat};
 	use frame_system::pallet_prelude::*;
-	use pallet_cf_reputation::{OfflineCondition, OfflineConditions};
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
 	pub struct RequestContext<T: Config<I>, I: 'static> {
@@ -131,6 +133,8 @@ pub mod pallet {
 			Self::deposit_event(Event::<T, I>::ThresholdSignatureSuccess(id));
 
 			// Dispatch the callback.
+			// TODO: Use a custom "threshold sig" origin for this pallet instead of passing through the witness 
+			// origin. 
 			context.chain_specific.dispatch_callback(origin, signature)
 		}
 
