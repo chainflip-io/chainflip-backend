@@ -61,7 +61,7 @@ mod tests {
 
     #[tokio::test]
     #[should_panic]
-    async fn mutex_detects_panics() {
+    async fn mutex_panics_if_poisoned() {
         let mutex = Arc::new(Mutex::new(0));
         {
             let mutex_clone = mutex.clone();
@@ -76,7 +76,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mutex_doesnt_detect_panics() {
+    async fn mutex_doesnt_panic_if_not_poisoned() {
         let mutex = Arc::new(Mutex::new(0));
         {
             let mutex_clone = mutex.clone();
