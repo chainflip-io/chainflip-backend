@@ -384,12 +384,13 @@ impl<T: Config> Auction for Pallet<T> {
 
 				match result {
 					Ok(_) => {
-						let update_status = |validators, state| -> Result<(), AuctionError> {
+						let update_status = |validators, state| {
 							for validator_id in validators {
-								let account_id = T::AccountIdOf::convert(validator_id);
-								T::ChainflipAccount::update_state(&account_id, state);
+								T::ChainflipAccount::update_state(
+									&T::AccountIdOf::convert(validator_id),
+									state,
+								);
 							}
-							Ok(())
 						};
 
 						let remaining_bidders = RemainingBidders::<T>::get();
@@ -403,13 +404,13 @@ impl<T: Config> Auction for Pallet<T> {
 						let passive: Vec<T::ValidatorId> = remaining_bidders
 							.iter()
 							.skip(backup_group_size as usize)
-							.take(remaining_bidders.len())
+							.take(usize::MAX)
 							.map(|(validator_id, _)| validator_id.clone())
 							.collect();
 
-						update_status(winners.clone(), ChainflipAccountState::Validator)?;
-						update_status(backup_validators, ChainflipAccountState::Backup)?;
-						update_status(passive, ChainflipAccountState::Passive)?;
+						update_status(winners.clone(), ChainflipAccountState::Validator);
+						update_status(backup_validators, ChainflipAccountState::Backup);
+						update_status(passive, ChainflipAccountState::Passive);
 
 						let phase = AuctionPhase::WaitingForBids(winners, minimum_active_bid);
 
@@ -465,59 +466,59 @@ impl<T: Config> StakerHandler for HandleStakes<T> {
 				RemainingBidders::<T>::put(remaining_bids);
 			};
 
-		let adjust_group =
-			|promote: bool| {
-				let remaining_bids = RemainingBidders::<T>::get();
-				let backup_group_size = BackupGroupSize::<T>::get();
-				let backup_group_size = if promote { backup_group_size -1 } else { backup_group_size + 1 };
-				if let Some((moving_validator_id, _)) =
-					remaining_bids.get(backup_group_size as usize)
-				{
-					T::ChainflipAccount::update_state(
-						&account_id,
-						if promote {
-							ChainflipAccountState::Backup
-						} else {
-							ChainflipAccountState::Passive
-						},
-					);
-
-					T::ChainflipAccount::update_state(
-						&T::AccountIdOf::convert(moving_validator_id.clone()),
-						if !promote {
-							ChainflipAccountState::Backup
-						} else {
-							ChainflipAccountState::Passive
-						},
-					);
-
-					sort_remaining_bidders(remaining_bids);
-				}
+		let adjust_group = |promote: bool| {
+			let remaining_bids = RemainingBidders::<T>::get();
+			let backup_group_size = BackupGroupSize::<T>::get();
+			let backup_group_size = if promote {
+				backup_group_size - 1
+			} else {
+				backup_group_size + 1
 			};
-		match CurrentPhase::<T>::get() {
-			AuctionPhase::WaitingForBids(..) => {
-				match T::ChainflipAccount::get(&account_id).state {
-					ChainflipAccountState::Passive => {
-						let lowest_backup_bid = LowestBackupValidatorBid::<T>::get();
-						let highest_passive_bid = HighestPassiveValidatorBid::<T>::get();
-						if amount > lowest_backup_bid {
-							adjust_group(true);
-						} else if amount > highest_passive_bid {
-							sort_remaining_bidders(RemainingBidders::<T>::get());
-							HighestPassiveValidatorBid::<T>::set(amount);
-						}
-					}
-					ChainflipAccountState::Backup => {
-						let lowest_backup_bid = LowestBackupValidatorBid::<T>::get();
-						if amount < lowest_backup_bid {
-							adjust_group(false);
-						} else if amount > lowest_backup_bid {
-							sort_remaining_bidders(RemainingBidders::<T>::get());
-						}
-					}
-					_ => {}
-				}
+			if let Some((moving_validator_id, _)) = remaining_bids.get(backup_group_size as usize) {
+				T::ChainflipAccount::update_state(
+					&account_id,
+					if promote {
+						ChainflipAccountState::Backup
+					} else {
+						ChainflipAccountState::Passive
+					},
+				);
+
+				T::ChainflipAccount::update_state(
+					&T::AccountIdOf::convert(moving_validator_id.clone()),
+					if !promote {
+						ChainflipAccountState::Backup
+					} else {
+						ChainflipAccountState::Passive
+					},
+				);
+
+				sort_remaining_bidders(remaining_bids);
 			}
+		};
+
+		match CurrentPhase::<T>::get() {
+			AuctionPhase::WaitingForBids(..) => match T::ChainflipAccount::get(&account_id).state {
+				ChainflipAccountState::Passive => {
+					let lowest_backup_bid = LowestBackupValidatorBid::<T>::get();
+					let highest_passive_bid = HighestPassiveValidatorBid::<T>::get();
+					if amount > lowest_backup_bid {
+						adjust_group(true);
+					} else if amount > highest_passive_bid {
+						sort_remaining_bidders(RemainingBidders::<T>::get());
+						HighestPassiveValidatorBid::<T>::set(amount);
+					}
+				}
+				ChainflipAccountState::Backup => {
+					let lowest_backup_bid = LowestBackupValidatorBid::<T>::get();
+					if amount < lowest_backup_bid {
+						adjust_group(false);
+					} else if amount > lowest_backup_bid {
+						sort_remaining_bidders(RemainingBidders::<T>::get());
+					}
+				}
+				_ => {}
+			},
 			_ => {}
 		}
 	}

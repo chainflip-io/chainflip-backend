@@ -20,8 +20,10 @@ type Block = frame_system::mocking::MockBlock<Test>;
 pub type Amount = u64;
 pub type ValidatorId = u64;
 
-pub const MIN_VALIDATOR_SIZE: u32 = 2;
+pub const MIN_VALIDATOR_SIZE: u32 = 1;
 pub const MAX_VALIDATOR_SIZE: u32 = 3;
+pub const BACKUP_VALIDATOR_RATIO: u32 = 3;
+pub const GENESIS_BIDDERS: u32 = 9;
 
 thread_local! {
 	// A set of bidders, we initialise this with the proposed genesis bidders
@@ -30,10 +32,12 @@ thread_local! {
 }
 
 // Create a set of descending bids, including an invalid bid of amount 0
-pub fn generate_bids(number_of_bids: u64) {
+pub fn generate_bids(number_of_bids: u32) {
 	BIDDER_SET.with(|cell| {
-		for bid_number in (0..number_of_bids).rev() {
-			(*(cell.borrow_mut())).push((bid_number + 1, bid_number * 100));
+		let mut cell = cell.borrow_mut();
+		(*cell).clear();
+		for bid_number in (0..number_of_bids as u64).rev() {
+			(*cell).push((bid_number + 1, bid_number * 100));
 		}
 	});
 }
@@ -79,8 +83,8 @@ impl frame_system::Config for Test {
 }
 
 parameter_types! {
-	pub const MinValidators: u32 = 2;
-	pub const BackupValidatorRatio: u32 = 3;
+	pub const MinValidators: u32 = MIN_VALIDATOR_SIZE;
+	pub const BackupValidatorRatio: u32 = BACKUP_VALIDATOR_RATIO;
 }
 
 impl Config for Test {
@@ -149,7 +153,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		}),
 	};
 
-	generate_bids(9);
+	generate_bids(GENESIS_BIDDERS);
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
