@@ -5,10 +5,7 @@ use crate::{
     p2p::{AccountId, P2PMessage, P2PMessageCommand},
     signing::{
         client::{KeyId, MultisigInstruction, SigningInfo},
-        crypto::{
-            BigInt, ECPoint, ECScalar, KeyGenBroadcastMessage1, LegacySignature, VerifiableSS, FE,
-            GE,
-        },
+        crypto::{BigInt, ECPoint, KeyGenBroadcastMessage1, VerifiableSS, FE, GE},
         db::KeyDB,
         MessageHash,
     },
@@ -33,15 +30,6 @@ pub struct SchnorrSignature {
     pub r: secp256k1::PublicKey,
 }
 
-impl From<LegacySignature> for SchnorrSignature {
-    fn from(sig: LegacySignature) -> Self {
-        let s: [u8; 32] = sig.sigma.get_element().as_ref().clone();
-        let r = sig.v.get_element();
-        SchnorrSignature { s, r }
-    }
-}
-
-// MAXIM: is this still needed?
 impl From<SchnorrSignature> for pallet_cf_vaults::SchnorrSigTruncPubkey {
     fn from(cfe_sig: SchnorrSignature) -> Self {
         // https://ethereum.stackexchange.com/questions/3542/how-are-ethereum-addresses-generated

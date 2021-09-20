@@ -347,8 +347,10 @@ impl LocalSig {
     }
 }
 
+// TODO: remove this (as we use FROST now), but see if we could/need
+// salvage the test below first
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-pub struct LegacySignature {
+struct LegacySignature {
     /// This is `s` in other literature
     pub sigma: FE,
     /// This is `r` in other literature
@@ -356,6 +358,7 @@ pub struct LegacySignature {
 }
 
 impl LegacySignature {
+    #[allow(dead_code)]
     pub fn generate(
         vss_sum_local_sigs: &VerifiableSS<GE>,
         local_sig_vec: &Vec<LocalSig>,
@@ -373,6 +376,7 @@ impl LegacySignature {
         LegacySignature { sigma, v }
     }
 
+    #[allow(dead_code)]
     pub fn verify(&self, message: &[u8], pubkey_y: &GE) -> Result<(), InvalidSig> {
         let e = build_challenge(pubkey_y.get_element(), self.v.get_element(), message);
 
@@ -391,7 +395,8 @@ impl LegacySignature {
 
 #[cfg(test)]
 mod test_schnorr {
-    use crate::signing::crypto::{KeyShare, LegacySignature};
+    use super::LegacySignature;
+    use crate::signing::crypto::KeyShare;
 
     use super::LocalSig;
     use anyhow::Result;

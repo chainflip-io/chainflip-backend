@@ -5,7 +5,7 @@ mod bitcoin_schnorr;
 mod error;
 
 pub use bitcoin_schnorr::{
-    build_challenge, KeyGenBroadcastMessage1, KeyShare, Keys, LegacySignature, LocalSig, Parameters,
+    build_challenge, KeyGenBroadcastMessage1, KeyShare, Keys, LocalSig, Parameters,
 };
 
 pub use error::{InvalidKey, InvalidSS, InvalidSig};
