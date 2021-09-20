@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use chainflip_engine::{
+    common::Mutex,
     eth::{self, key_manager, stake_manager, EthBroadcaster},
     health::HealthMonitor,
     heartbeat,
@@ -9,7 +10,6 @@ use chainflip_engine::{
     signing,
     signing::{db::PersistentKeyDB, MultisigEvent, MultisigInstruction},
     state_chain::{self, runtime::StateChainRuntime},
-    common::Mutex,
 };
 use slog::{o, Drain};
 use sp_core::Pair;

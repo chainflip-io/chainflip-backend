@@ -1,8 +1,8 @@
 //! Contains the information required to use the StakeManger contract as a source for
 //! the EthEventStreamer
 
-use std::{convert::TryInto, sync::Arc};
 use crate::common::Mutex;
+use std::{convert::TryInto, sync::Arc};
 
 use crate::{
     eth::{eth_event_streamer, utils, EventParseError, SignatureAndEvent},
