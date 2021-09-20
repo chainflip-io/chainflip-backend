@@ -1,13 +1,14 @@
+use crate as pallet_cf_witness_api;
+use codec::{Decode, Encode};
 use std::time::Duration;
 
-use crate as pallet_cf_witness_api;
-
+use cf_chains::{eth::register_claim::RegisterClaim, Ethereum};
 use cf_traits::{
 	impl_mock_ensure_witnessed_for_origin, impl_mock_stake_transfer,
-	impl_mock_witnesser_for_account_and_call_types, Chainflip, Nonce, NonceIdentifier,
-	NonceProvider, VaultRotationHandler,
+	impl_mock_witnesser_for_account_and_call_types, mocks::key_provider::MockKeyProvider,
+	Chainflip, NonceProvider, VaultRotationHandler,
 };
-use frame_support::parameter_types;
+use frame_support::{instances::Instance0, parameter_types, traits::IsType};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -29,6 +30,7 @@ frame_support::construct_runtime!(
 		Staking: pallet_cf_staking::{Module, Call, Event<T>, Config<T>},
 		Vaults: pallet_cf_vaults::{Module, Call, Event<T>, Config<T>},
 		WitnessApi: pallet_cf_witness_api::{Module, Call},
+		EthereumSigner: pallet_cf_signing::<Instance0>::{Module, Call, Event<T>, Storage},
 	}
 );
 
@@ -69,6 +71,74 @@ impl system::Config for Test {
 
 impl_mock_stake_transfer!(u64, u128);
 
+impl NonceProvider for Test {
+	fn next_nonce(identifier: cf_traits::NonceIdentifier) -> cf_traits::Nonce {
+		42
+	}
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+pub struct MockSigningContext;
+
+impl From<RegisterClaim> for MockSigningContext {
+	fn from(_: RegisterClaim) -> Self {
+		unimplemented!()
+	}
+}
+
+impl cf_traits::SigningContext<Test> for MockSigningContext {
+	type Chain = Ethereum;
+	type Payload = ();
+	type Signature = ();
+	type Callback = Call;
+
+	fn get_payload(&self) -> Self::Payload {
+		()
+	}
+
+	fn resolve_callback(&self, signature: Self::Signature) -> Self::Callback {
+		Call::System(frame_system::Call::remark(b"Hello".to_vec()))
+	}
+}
+
+pub struct AccountIdU64(u64);
+
+impl AsRef<[u8; 32]> for AccountIdU64 {
+	fn as_ref(&self) -> &[u8; 32] {
+		unimplemented!()
+	}
+}
+
+impl From<u64> for AccountIdU64 {
+	fn from(x: u64) -> Self {
+		Self(x)
+	}
+}
+
+impl From<AccountIdU64> for u64 {
+	fn from(x: AccountIdU64) -> Self {
+		x.0
+	}
+}
+
+impl IsType<u64> for AccountIdU64 {
+	fn from_ref(t: &u64) -> &Self {
+		unimplemented!()
+	}
+
+	fn into_ref(&self) -> &u64 {
+		&self.0
+	}
+
+	fn from_mut(t: &mut u64) -> &mut Self {
+		unimplemented!()
+	}
+
+	fn into_mut(&mut self) -> &mut u64 {
+		&mut self.0
+	}
+}
+
 impl pallet_cf_staking::Config for Test {
 	type Event = Event;
 	type Balance = u128;
@@ -77,6 +147,10 @@ impl pallet_cf_staking::Config for Test {
 	type TimeSource = cf_traits::mocks::time_source::Mock;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
+	type AccountId = AccountIdU64;
+	type NonceProvider = Self;
+	type SigningContext = MockSigningContext;
+	type ThresholdSigner = EthereumSigner;
 }
 
 type Amount = u64;
@@ -90,18 +164,23 @@ impl Chainflip for Test {
 	type Call = Call;
 }
 
+cf_traits::impl_mock_signer_nomination!(u64);
+cf_traits::impl_mock_offline_conditions!(u64);
+
+impl pallet_cf_signing::Config<Instance0> for Test {
+	type Event = Event;
+	type TargetChain = Ethereum;
+	type SigningContext = MockSigningContext;
+	type SignerNomination = MockSignerNomination;
+	type KeyProvider = MockKeyProvider<Ethereum, u32>;
+	type OfflineConditions = MockOfflineConditions;
+}
+
 impl VaultRotationHandler for Test {
 	type ValidatorId = ValidatorId;
 
 	fn abort() {}
 	fn penalise(_bad_validators: Vec<Self::ValidatorId>) {}
-}
-
-impl NonceProvider for Test {
-	fn next_nonce(_identifier: NonceIdentifier) -> Nonce {
-		// Keep the same nonce for validating txs
-		0
-	}
 }
 
 impl pallet_cf_vaults::Config for Test {

@@ -59,7 +59,6 @@ use frame_support::{
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::prelude::*;
-use sp_std::vec;
 
 use sp_core::U256;
 use sp_runtime::{

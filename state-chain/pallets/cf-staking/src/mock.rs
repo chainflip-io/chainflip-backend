@@ -123,7 +123,7 @@ cf_traits::impl_mock_epoch_info!(AccountId, u128, u32);
 pub const NONCE: u64 = 42;
 
 impl NonceProvider for Test {
-	fn next_nonce(identifier: cf_traits::NonceIdentifier) -> cf_traits::Nonce {
+	fn next_nonce(_identifier: cf_traits::NonceIdentifier) -> cf_traits::Nonce {
 		NONCE
 	}
 }
