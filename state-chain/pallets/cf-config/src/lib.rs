@@ -10,7 +10,12 @@ pub mod pallet {
 	type ConfigItem = Vec<u8>;
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_runtime_upgrade() -> Weight {
+			// Change the values of the config items here
+			0
+		}
+	}
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {

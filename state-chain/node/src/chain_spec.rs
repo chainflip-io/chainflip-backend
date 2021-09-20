@@ -87,6 +87,12 @@ pub fn development_config() -> Result<ChainSpec, String> {
 					get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
 				],
 				1,
+				ConfigConfig {
+					stake_manager_address: b"0x".to_vec(),
+					key_manager_address: b"0x".to_vec(),
+					ethereum_chain_id: b"0".to_vec(),
+					ethereum_vault_address: b"0x".to_vec(),
+				},
 			)
 		},
 		// Bootnodes
@@ -225,6 +231,12 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					.into(),
 				],
 				3,
+				ConfigConfig {
+					stake_manager_address: b"0x".to_vec(),
+					key_manager_address: b"0x".to_vec(),
+					ethereum_chain_id: b"0".to_vec(),
+					ethereum_vault_address: b"0x".to_vec(),
+				},
 			)
 		},
 		// Bootnodes
@@ -249,6 +261,7 @@ fn testnet_genesis(
 	_root_key: AccountId,
 	endowed_accounts: Vec<AccountId>,
 	min_validators: u32,
+	config_set: ConfigConfig,
 ) -> GenesisConfig {
 	GenesisConfig {
 		frame_system: Some(SystemConfig {
@@ -304,12 +317,7 @@ fn testnet_genesis(
 		pallet_cf_reputation: Some(ReputationConfig {
 			accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
 		}),
-		pallet_cf_config: Some(ConfigConfig {
-			stake_manager_address: b"0x".to_vec(),
-			key_manager_address: b"0x".to_vec(),
-			ethereum_chain_id: b"0".to_vec(),
-			ethereum_vault_address: b"0x".to_vec(),
-		}),
+		pallet_cf_config: Some(config_set),
 	}
 }
 
