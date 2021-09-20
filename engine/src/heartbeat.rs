@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use crate::common::Mutex;
 
 use slog::o;
 use substrate_subxt::{Client, PairSigner};

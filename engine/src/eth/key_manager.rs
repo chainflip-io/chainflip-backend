@@ -9,7 +9,7 @@ use crate::{
 };
 use std::sync::Arc;
 use substrate_subxt::{Client, PairSigner};
-use tokio::sync::Mutex;
+use crate::common::Mutex;
 use web3::{
     contract::tokens::Tokenizable,
     ethabi::{self, RawLog, Token},

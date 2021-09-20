@@ -8,7 +8,7 @@ use sp_runtime::{traits::Keccak256, AccountId32};
 use std::sync::Arc;
 use substrate_subxt::{Client, EventSubscription, PairSigner};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-use tokio::sync::Mutex;
+use crate::common::Mutex;
 
 use crate::{
     eth::EthBroadcaster,

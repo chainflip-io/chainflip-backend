@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use chainflip_engine::{
     eth::{self, key_manager, stake_manager, EthBroadcaster},
@@ -10,6 +9,7 @@ use chainflip_engine::{
     signing,
     signing::{db::PersistentKeyDB, MultisigEvent, MultisigInstruction},
     state_chain::{self, runtime::StateChainRuntime},
+    common::Mutex,
 };
 use slog::{o, Drain};
 use sp_core::Pair;

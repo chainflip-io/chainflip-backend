@@ -2,7 +2,7 @@
 //! the EthEventStreamer
 
 use std::{convert::TryInto, sync::Arc};
-use tokio::sync::Mutex;
+use crate::common::Mutex;
 
 use crate::{
     eth::{eth_event_streamer, utils, EventParseError, SignatureAndEvent},
