@@ -20,7 +20,6 @@ pallet-cf-validator = { path = '../cf-validator', default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
 sp-std = { default-features = false, version = '3.0.0' }
 sp-runtime = { default-features = false, version = '3.0.0' }
-frame-benchmarking = { default-features = false, optional = true, version = '3.1.0' }
 
 [dev-dependencies]
 serde = { version = "1.0.119" }

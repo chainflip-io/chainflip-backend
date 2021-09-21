@@ -4955,7 +4955,6 @@ name = "pallet-cf-rewards"
 version = "0.1.0"
 dependencies = [
  "cf-traits",
- "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-cf-flip",

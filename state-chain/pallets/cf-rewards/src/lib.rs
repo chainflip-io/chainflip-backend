@@ -35,8 +35,6 @@ pub mod pallet {
 	pub trait Config: frame_system::Config + pallet_cf_flip::Config {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-		// /// Benchmark stuff
-		// type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
