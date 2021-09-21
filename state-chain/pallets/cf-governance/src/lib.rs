@@ -135,10 +135,6 @@ pub mod pallet {
 		Executed(ProposalId),
 		/// A proposal is expired [proposal_id]
 		Expired(ProposalId),
-		/// The execution of a proposal failed [proposal_id]
-		ExecutionFailed(ProposalId),
-		/// The decode of the a proposal failed [proposal_id]
-		DecodeFailed(ProposalId),
 		/// A proposal was approved [proposal_id]
 		Approved(ProposalId),
 	}
@@ -151,8 +147,8 @@ pub mod pallet {
 		NotMember,
 		/// The proposal was not found - it may have expired or it may already be executed.
 		ProposalNotFound,
-		/// Sudo call failed
-		SudoCallFailed,
+		/// Decode of call failed
+		DecodeOfCallFailed,
 	}
 
 	#[pallet::call]
@@ -208,7 +204,7 @@ pub mod pallet {
 			// Try to approve the proposal
 			Self::try_approve(who, id)?;
 			// Try to execute the proposal
-			Self::execute_proposal(id);
+			Self::execute_proposal(id)?;
 			// Governance member don't pay fees
 			Ok(Pays::No.into())
 		}
@@ -222,7 +218,7 @@ pub mod pallet {
 			// Execute the root call
 			let result = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
 			// Ensure the the sudo call was executed successfully
-			ensure!(result.is_ok(), Error::<T>::SudoCallFailed);
+			ensure!(result.is_ok(), result.unwrap_err().error);
 			Ok(().into())
 		}
 	}
@@ -295,7 +291,7 @@ impl<T: Config> Pallet<T> {
 		<ProposalCount<T>>::get().add(1)
 	}
 	/// Executes an proposal if the majority is reached
-	fn execute_proposal(id: ProposalId) {
+	fn execute_proposal(id: ProposalId) -> Result<(), DispatchError> {
 		let proposal = <Proposals<T>>::get(id);
 		if Self::majority_reached(proposal.approved.len()) {
 			// Try to decode the stored extrinsic
@@ -306,7 +302,8 @@ impl<T: Config> Pallet<T> {
 				if result.is_ok() {
 					Self::deposit_event(Event::Executed(id));
 				} else {
-					Self::deposit_event(Event::ExecutionFailed(id));
+					// Get the error during the execution and return it
+					return Err(result.unwrap_err().error);
 				}
 				// Remove the proposal from storage
 				<Proposals<T>>::remove(id);
@@ -321,9 +318,10 @@ impl<T: Config> Pallet<T> {
 				<ActiveProposals<T>>::set(new_active_proposals);
 			} else {
 				// Emit an event if the decode of a call failed
-				Self::deposit_event(Event::DecodeFailed(id));
+				return Err(Error::<T>::DecodeOfCallFailed.into());
 			}
 		}
+		Ok(())
 	}
 	/// Checks if the majority for a proposal is reached
 	fn majority_reached(approvals: usize) -> bool {
