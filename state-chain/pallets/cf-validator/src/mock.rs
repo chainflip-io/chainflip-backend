@@ -7,6 +7,7 @@ use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{OnFinalize, OnInitialize},
 };
+use pallet_cf_auction::WeightInfo as AuctionWeightTrait;
 use sp_core::H256;
 use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -29,6 +30,14 @@ impl WeightInfo for () {
 	}
 
 	fn force_rotation() -> u64 {
+		0 as Weight
+	}
+}
+
+pub struct AuctionWeight;
+
+impl AuctionWeightTrait for AuctionWeight {
+	fn set_auction_size_range() -> u64 {
 		0 as Weight
 	}
 }
@@ -123,6 +132,7 @@ impl pallet_cf_auction::Config for Test {
 	type Registrar = Test;
 	type AuctionIndex = u32;
 	type MinAuctionSize = MinAuctionSize;
+	type WeightInfo = AuctionWeight;
 	type Handler = MockHandler<ValidatorId = ValidatorId, Amount = Amount>;
 	type Online = MockOnline;
 }
