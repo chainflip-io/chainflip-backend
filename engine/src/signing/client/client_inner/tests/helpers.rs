@@ -106,7 +106,7 @@ pub fn signing_delayed_count(client: &MultisigClientInnerNoDB, mi: &MessageInfo)
 /// Contains the states at different points of key generation
 /// including the final state, where the key is created
 pub struct KeygenContext {
-    validator_ids: Vec<AccountId>,
+    account_ids: Vec<AccountId>,
 
     pub rxs: Vec<InnerEventReceiver>,
     /// This clients will match the ones in `key_ready`,
@@ -119,9 +119,9 @@ impl KeygenContext {
     /// Generate context without starting the
     /// keygen ceremony
     pub fn new() -> Self {
-        let validator_ids = (1..=3).map(|idx| AccountId([idx; 32])).collect_vec();
+        let account_ids = (1..=3).map(|idx| AccountId([idx; 32])).collect_vec();
         let logger = logging::test_utils::create_test_logger();
-        let (clients, rxs): (Vec<_>, Vec<_>) = validator_ids
+        let (clients, rxs): (Vec<_>, Vec<_>) = account_ids
             .iter()
             .map(|id| {
                 let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
@@ -137,7 +137,7 @@ impl KeygenContext {
             .unzip();
 
         KeygenContext {
-            validator_ids,
+            account_ids,
             rxs,
             clients,
         }
@@ -154,14 +154,14 @@ impl KeygenContext {
         let instant = std::time::Instant::now();
 
         let clients = &mut self.clients;
-        let validator_ids = &self.validator_ids;
+        let account_ids = &self.account_ids;
         let rxs = &mut self.rxs;
 
         // Generate phase 1 data
 
         let keygen_info = KeygenInfo {
             ceremony_id: *CEREMONY_ID,
-            signers: validator_ids.clone(),
+            signers: account_ids.clone(),
         };
 
         for c in clients.iter_mut() {
@@ -184,7 +184,7 @@ impl KeygenContext {
 
         for sender_idx in 0..=2 {
             let bc1 = bc1_vec[sender_idx].clone();
-            let id = &validator_ids[sender_idx];
+            let id = &account_ids[sender_idx];
             let m = bc1_to_p2p_keygen(bc1, *CEREMONY_ID, id);
 
             for receiver_idx in 0..=2 {
@@ -235,10 +235,10 @@ impl KeygenContext {
                     continue;
                 }
 
-                let r_id = &validator_ids[receiver_idx];
+                let r_id = &account_ids[receiver_idx];
                 let sec2 = sec2_vec[sender_idx].get(r_id).unwrap();
 
-                let s_id = &validator_ids[sender_idx];
+                let s_id = &account_ids[sender_idx];
                 let m = sec2_to_p2p_keygen(sec2.clone(), s_id);
 
                 clients[receiver_idx].process_p2p_message(m);
@@ -304,7 +304,7 @@ impl KeygenContext {
     ) -> ValidSigningStates {
         let instant = std::time::Instant::now();
 
-        let validator_ids = &self.validator_ids;
+        let account_ids = &self.account_ids;
         let mut clients = self.clients.clone();
         let rxs = &mut self.rxs;
 
@@ -345,7 +345,7 @@ impl KeygenContext {
         // *** Broadcast BC1 messages to advance to Phase2 ***
         for sender_idx in SIGNER_IDXS.iter() {
             let bc1 = bc1_vec[*sender_idx].clone();
-            let id = &validator_ids[*sender_idx];
+            let id = &account_ids[*sender_idx];
 
             let m = bc1_to_p2p_signing(bc1, id, &message_info);
 
@@ -388,11 +388,11 @@ impl KeygenContext {
         for sender_idx in SIGNER_IDXS.iter() {
             for receiver_idx in SIGNER_IDXS.iter() {
                 if sender_idx != receiver_idx {
-                    let receiver_id = &validator_ids[*receiver_idx];
+                    let receiver_id = &account_ids[*receiver_idx];
 
                     let sec2 = sec2_vec[*sender_idx].get(receiver_id).unwrap().clone();
 
-                    let id = &validator_ids[*sender_idx];
+                    let id = &account_ids[*sender_idx];
                     let m = sec2_to_p2p_signing(sec2, id, &message_info);
 
                     clients[*receiver_idx].process_p2p_message(m);
@@ -431,7 +431,7 @@ impl KeygenContext {
 
         for sender_idx in SIGNER_IDXS.iter() {
             let local_sig = local_sigs[*sender_idx].clone();
-            let id = &validator_ids[*sender_idx];
+            let id = &account_ids[*sender_idx];
 
             let m = sig_to_p2p(local_sig, id, &message_info);
 
