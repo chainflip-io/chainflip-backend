@@ -248,7 +248,6 @@ dependencies = [
  "futures-lite",
  "num_cpus",
  "once_cell",
- "tokio 1.7.0",
 ]
 
 [[package]]
@@ -905,7 +904,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-nats",
- "async-std",
  "async-stream",
  "async-trait",
  "bincode",

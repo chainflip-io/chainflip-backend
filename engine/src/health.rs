@@ -1,7 +1,10 @@
-use async_std::net::TcpListener;
-use futures::{AsyncReadExt, AsyncWriteExt, StreamExt};
 use slog::o;
-use tokio::{select, sync::oneshot::Sender};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpListener,
+    select,
+    sync::oneshot::Sender,
+};
 
 use crate::{logging::COMPONENT_KEY, settings};
 
@@ -36,51 +39,53 @@ impl HealthMonitor {
         let (tx, mut rx) = tokio::sync::oneshot::channel::<()>();
         let logger = self.logger.clone();
         tokio::spawn(async move {
-            let mut incoming = listener.incoming();
             loop {
-                let stream = select! {
+                select! {
                     Ok(()) = &mut rx => {
                         slog::info!(logger, "Shutting down health check gracefully");
                         break;
                     },
-                    Some(stream) = incoming.next() => stream,
+                    result = listener.accept() => match result {
+                        Ok((mut stream, _address)) => {
+                            let mut buffer = [0; 1024];
+                            stream
+                                .read(&mut buffer)
+                                .await
+                                .expect("Couldn't read stream into buffer");
+
+                            let mut headers = [httparse::EMPTY_HEADER; 16];
+                            let mut request = httparse::Request::new(&mut headers);
+                            match request.parse(&buffer) /* Iff returns Ok, fills request with the parsed request */ {
+                                Ok(_) => {
+                                    if request.path.eq(&Some("/health")) {
+                                        let http_200_response = "HTTP/1.1 200 OK\r\n\r\n";
+                                        stream
+                                            .write(http_200_response.as_bytes())
+                                            .await
+                                            .expect("Could not write to health check stream");
+                                        slog::trace!(logger, "Responded to health check: CFE is healthy :heart: ");
+                                        stream
+                                            .flush()
+                                            .await
+                                            .expect("Could not flush health check TCP stream");
+                                    } else {
+                                        slog::warn!(logger, "Requested health at invalid path: {:?}", request.path);
+                                    }
+                                },
+                                Err(error) => {
+                                    slog::warn!(
+                                        logger,
+                                        "Invalid health check request, could not parse: {}",
+                                        error,
+                                    );
+                                }
+                            }
+                        },
+                        Err(error) => {
+                            slog::warn!(logger, "Could not open CFE health check TCP stream: {}", error);
+                        }
+                    },
                 };
-
-                let mut stream = stream.expect("Could not open CFE health check TCP stream");
-                let mut buffer = [0; 1024];
-                // read the stream into the buffer
-                stream
-                    .read(&mut buffer)
-                    .await
-                    .expect("Couldn't read stream into buffer");
-
-                // parse the http request
-                let mut headers = [httparse::EMPTY_HEADER; 16];
-                let mut req = httparse::Request::new(&mut headers);
-                let result = req.parse(&buffer);
-                if let Err(e) = result {
-                    slog::warn!(
-                        logger,
-                        "Invalid health check request, could not parse: {}",
-                        e,
-                    );
-                    continue;
-                }
-
-                if req.path.eq(&Some("/health")) {
-                    let http_200_response = "HTTP/1.1 200 OK\r\n\r\n";
-                    stream
-                        .write(http_200_response.as_bytes())
-                        .await
-                        .expect("Could not write to health check stream");
-                    slog::trace!(logger, "Responded to health check: CFE is healthy :heart: ");
-                    stream
-                        .flush()
-                        .await
-                        .expect("Could not flush health check TCP stream");
-                } else {
-                    slog::warn!(logger, "Requested health at invalid path: {:?}", req.path);
-                }
             }
         });
 
