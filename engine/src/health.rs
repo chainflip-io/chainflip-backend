@@ -96,23 +96,49 @@ impl HealthMonitor {
 #[cfg(test)]
 mod test {
 
-    use std::time::Duration;
-
-    use tokio::time;
-
     use crate::logging;
+    use crate::testing::assert_ok;
+    use tokio::process::Command;
 
     use super::*;
 
-    // TODO: Make this a real test, perhaps by using reqwest to ping the health check endpoint
     #[tokio::test]
-    #[ignore = "runs for 10 seconds"]
     async fn health_check_test() {
-        let test_settings = settings::test_utils::new_test_settings().unwrap();
+        let health_check = settings::test_utils::new_test_settings()
+            .unwrap()
+            .health_check;
         let logger = logging::test_utils::create_test_logger();
-        let health_monitor = HealthMonitor::new(&test_settings.health_check, &logger);
+        let health_monitor = HealthMonitor::new(&health_check, &logger);
         let sender = health_monitor.run().await;
-        time::sleep(Duration::from_millis(10000)).await;
+
+        let curl_test = |path: &'static str, expected_stdout: &'static str| {
+            let health_check = health_check.clone();
+            async move {
+                assert_eq!(
+                    assert_ok!(std::str::from_utf8(
+                        &Command::new("curl")
+                            .args(&[
+                                "-w",
+                                "%{http_code}\n",
+                                "-i",
+                                &format!(
+                                    "http://{}:{}/{}",
+                                    &health_check.hostname, &health_check.port, path
+                                ),
+                            ])
+                            .output()
+                            .await
+                            .unwrap()
+                            .stdout
+                    )),
+                    expected_stdout
+                );
+            }
+        };
+
+        curl_test("health", "HTTP/1.1 200 OK\r\n\r\n200\n").await;
+        curl_test("invalid", "000\n").await;
+
         sender.send(()).unwrap();
     }
 }
