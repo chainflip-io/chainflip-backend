@@ -19,7 +19,6 @@ pub mod pallet {
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo, instances::Instance0, pallet_prelude::*,
 	};
-	use sp_std::prelude::*;
 	use frame_system::pallet_prelude::*;
 	use pallet_cf_signing::{Call as SigningCall, Config as SigningConfig};
 	use pallet_cf_staking::{
@@ -31,6 +30,7 @@ pub mod pallet {
 		rotation::SchnorrSigTruncPubkey, Call as VaultsCall, Config as VaultsConfig,
 		ThresholdSignatureResponse,
 	};
+	use sp_std::prelude::*;
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
 	// type EthereumSigningContext<T> = <T as SigningConfig<TargetChain = Ethereum>>::

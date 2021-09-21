@@ -1,7 +1,11 @@
 //! Implements support for the witnesser api module
 use std::marker::PhantomData;
 
-use super::{auction::Auction, staking::{Staking, FlipBalance}, ethereum_signer::{EthereumSigner, RequestId}};
+use super::{
+    auction::Auction,
+    ethereum_signer::{EthereumSigner, RequestId},
+    staking::{FlipBalance, Staking},
+};
 use codec::Encode;
 use pallet_cf_staking::EthereumAddress;
 use sp_runtime::AccountId32;

@@ -166,7 +166,7 @@ mod tests {
 
         let event: <SCRuntime as Config>::Event =
             pallet_cf_staking::Event::<SCRuntime>::ClaimSignatureIssued(
-                who.clone(), 
+                who.clone(),
                 signed_payload.clone(),
             )
             .into();
@@ -182,7 +182,7 @@ mod tests {
         .unwrap();
 
         let expecting = ClaimSignatureIssuedEvent {
-            node_id: who, 
+            node_id: who,
             signed_payload,
             _runtime: PhantomData,
         };
@@ -244,8 +244,7 @@ mod tests {
         let flip_balance = 1000u128;
 
         let event: <SCRuntime as Config>::Event =
-            pallet_cf_staking::Event::<SCRuntime>::ClaimExpired(who.clone(), flip_balance)
-                .into();
+            pallet_cf_staking::Event::<SCRuntime>::ClaimExpired(who.clone(), flip_balance).into();
 
         let encoded_account_retired = event.encode();
 

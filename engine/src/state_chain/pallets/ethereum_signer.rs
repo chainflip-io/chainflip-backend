@@ -1,8 +1,8 @@
 //! Implements subxt support for the signing pallet
 
 use codec::{Decode, Encode};
-use frame_support::{Parameter, pallet_prelude::Member};
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use frame_support::{pallet_prelude::Member, Parameter};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sp_runtime::AccountId32;
 use substrate_subxt::{module, system::System, Event};
 
@@ -18,7 +18,7 @@ pub trait EthereumSigner: System {
 #[derive(Clone, Debug, Eq, PartialEq, Event, Encode, Decode, Serialize, Deserialize)]
 pub struct ThresholdSignatureRequest<S: EthereumSigner> {
     /// The request id.
-    request_id: RequestId, 
+    request_id: RequestId,
     /// The id of the key to be used for signing.
     key_id: S::KeyId,
     /// The list of participants to the signing ceremony.
@@ -31,10 +31,10 @@ pub struct ThresholdSignatureRequest<S: EthereumSigner> {
 mod test_events_decoding {
     use super::*;
     use crate::state_chain::runtime::StateChainRuntime;
+    use pallet_cf_signing::{Event as SigningEvent, Instance0};
     use sp_core::H256;
     use sp_keyring::AccountKeyring;
-    use state_chain_runtime::{Runtime, Event};
-    use pallet_cf_signing::{Event as SigningEvent, Instance0};
+    use state_chain_runtime::{Event, Runtime};
 
     #[test]
     fn test_threshold_signature_request() {
@@ -44,11 +44,12 @@ mod test_events_decoding {
         const PAYLOAD: <StateChainRuntime as EthereumSigner>::Payload = H256([0xcf; 32]);
 
         let event: Event = SigningEvent::<Runtime, Instance0>::ThresholdSignatureRequest(
-            REQUEST_ID, 
-            key_id.clone(), 
+            REQUEST_ID,
+            key_id.clone(),
             signatories.clone(),
-            PAYLOAD
-        ).into();
+            PAYLOAD,
+        )
+        .into();
 
         let expected_subxt_event = ThresholdSignatureRequest::<StateChainRuntime> {
             request_id: REQUEST_ID,

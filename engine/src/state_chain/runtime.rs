@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, time::Duration};
 
-use cf_traits::{NetworkState, offline_conditions::OfflineCondition};
+use cf_traits::{offline_conditions::OfflineCondition, NetworkState};
 use frame_support::unsigned::TransactionValidityError;
 use sp_core::H256;
 use sp_runtime::{
@@ -27,7 +27,9 @@ use core::fmt::Debug;
 
 use codec::{Decode, Encode};
 
-use super::pallets::{auction, emissions, ethereum_signer, reputation, staking, validator, vaults, witness_api};
+use super::pallets::{
+    auction, emissions, ethereum_signer, reputation, staking, validator, vaults, witness_api,
+};
 
 use pallet_cf_flip::ImbalanceSource;
 use pallet_cf_vaults::{
