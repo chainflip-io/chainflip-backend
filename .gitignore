@@ -23,7 +23,7 @@
 oxen_connection
 
 # Local CFE config
-chainflip-engine/config/**/local.toml
+engine/config/Local.toml
 
 # keystore for use in testing
 engine/tests/test_keystore/*
