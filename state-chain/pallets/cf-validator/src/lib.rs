@@ -220,27 +220,18 @@ pub mod pallet {
 		StorageMap<_, Blake2_128Concat, T::ValidatorId, ()>;
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig<T: Config> {
-		pub epoch_number_of_blocks: T::BlockNumber,
-	}
+	pub struct GenesisConfig {}
 
 	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
+	impl Default for GenesisConfig {
 		fn default() -> Self {
-			Self {
-				epoch_number_of_blocks: Zero::zero(),
-			}
+			Self {}
 		}
 	}
 
-	// The build of genesis for the pallet.
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			// The auction pallet should have ran through an auction
-			if let AuctionPhase::WaitingForBids(winners, min_bid) = T::Auction::phase() {
-				T::EpochTransitionHandler::on_new_epoch(&winners, min_bid);
-			}
 			Pallet::<T>::generate_lookup();
 		}
 	}
