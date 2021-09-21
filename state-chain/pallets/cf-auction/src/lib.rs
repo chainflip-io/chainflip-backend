@@ -68,7 +68,14 @@ pub mod pallet {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// An amount for a bid
-		type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned + MaybeSerializeDeserialize;
+		type Amount: Member
+			+ Parameter
+			+ Default
+			+ Eq
+			+ Ord
+			+ Copy
+			+ AtLeast32BitUnsigned
+			+ MaybeSerializeDeserialize;
 		/// An identity for a validator
 		type ValidatorId: Member + Parameter + MaybeSerializeDeserialize;
 		/// Providing bidders
@@ -180,8 +187,10 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			AuctionSizeRange::<T>::set(self.auction_size_range);
-			let phase = AuctionPhase::WaitingForBids(self.winners.clone(), self.minimum_active_bid);
-			CurrentPhase::<T>::set(phase);
+			CurrentPhase::<T>::set(AuctionPhase::WaitingForBids(
+				self.winners.clone(),
+				self.minimum_active_bid,
+			));
 		}
 	}
 }
