@@ -187,6 +187,16 @@ pub trait BidderProvider {
 	fn get_bidders() -> Vec<(Self::ValidatorId, Self::Amount)>;
 }
 
+/// Trait for rotate bond after epoch.
+pub trait BondRotation {
+	type AccountId;
+	type Balance;
+
+	/// Sets the validator bond for all new_validator to the new_bond and
+	/// the bond for all old validators to zero.
+	fn update_validator_bonds(new_validators: &Vec<Self::AccountId>, new_bond: Self::Balance);
+}
+
 pub trait StakeTransfer {
 	type AccountId;
 	type Balance;
