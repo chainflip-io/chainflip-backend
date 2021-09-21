@@ -201,8 +201,8 @@ pub mod pallet {
 
 	/// The starting block number for the current epoch
 	#[pallet::storage]
-	#[pallet::getter(fn last_block_number)]
-	pub(super) type LastBlockNumber<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	#[pallet::getter(fn current_epoch_started_at)]
+	pub(super) type CurrentEpochStartedAt<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
 	/// The number of blocks an epoch runs for
 	#[pallet::storage]
@@ -326,15 +326,15 @@ impl<T: Config> Pallet<T> {
 			return true;
 		}
 
-		let epoch_blocks = BlocksPerEpoch::<T>::get();
-		if epoch_blocks == Zero::zero() {
+		let blocks_per_epoch = BlocksPerEpoch::<T>::get();
+		if blocks_per_epoch == Zero::zero() {
 			return false;
 		}
-		let last_block_number = LastBlockNumber::<T>::get();
-		let diff = now.saturating_sub(last_block_number);
-		let end = diff >= epoch_blocks;
+		let current_epoch_started_at = CurrentEpochStartedAt::<T>::get();
+		let diff = now.saturating_sub(current_epoch_started_at);
+		let end = diff >= blocks_per_epoch;
 		if end {
-			LastBlockNumber::<T>::set(now);
+			CurrentEpochStartedAt::<T>::set(now);
 		}
 
 		return end;
