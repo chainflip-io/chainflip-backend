@@ -19,6 +19,7 @@ mod test {
 			);
 		});
 	}
+
 	#[test]
 	fn run_through_phases() {
 		new_test_ext().execute_with(|| {

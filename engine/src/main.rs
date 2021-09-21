@@ -1,7 +1,7 @@
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use chainflip_engine::{
+    common::Mutex,
     eth::{self, key_manager, stake_manager, EthBroadcaster},
     health::HealthMonitor,
     heartbeat,

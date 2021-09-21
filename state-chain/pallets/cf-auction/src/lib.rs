@@ -31,6 +31,8 @@
 //! - **Auction Range:** A range specifying the minimum number of bidders we require and an upper range
 //!	  specifying the maximum size for the winning set
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -52,6 +54,10 @@ pub use pallet::*;
 use sp_runtime::traits::{AtLeast32BitUnsigned, One, Zero};
 use sp_std::cmp::min;
 use sp_std::prelude::*;
+
+pub trait WeightInfo {
+	fn set_auction_size_range() -> Weight;
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -87,6 +93,8 @@ pub mod pallet {
 		/// Minimum amount of bidders
 		#[pallet::constant]
 		type MinAuctionSize: Get<u32>;
+		/// Benchmark stuff
+		type WeightInfo: WeightInfo;
 		/// The lifecycle of our auction
 		type Handler: VaultRotator<ValidatorId = Self::ValidatorId>;
 		/// An online validator
@@ -147,7 +155,7 @@ pub mod pallet {
 		/// Sets the size of our auction range
 		///
 		/// The dispatch origin of this function must be root.
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::set_auction_size_range())]
 		pub(super) fn set_auction_size_range(
 			origin: OriginFor<T>,
 			range: AuctionRange,

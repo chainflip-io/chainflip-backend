@@ -1,5 +1,5 @@
+use crate::common::Mutex;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use slog::o;
 use substrate_subxt::{Client, PairSigner};
@@ -61,7 +61,11 @@ pub async fn start(
     while let Some(block_header) = blocks.next().await {
         // Target the middle of the heartbeat block interval so block drift is *very* unlikely to cause failure
         if (block_header.number + (heartbeat_block_interval / 2)) % heartbeat_block_interval == 0 {
-            slog::info!(logger, "Sending heartbeat");
+            slog::info!(
+                logger,
+                "Sending heartbeat at block: {}",
+                block_header.number
+            );
             submit_heartbeat(&subxt_client, signer.clone(), &logger).await
         }
     }
