@@ -1,6 +1,7 @@
 //! Contains the information required to use the KeyManager contract as a source for
 //! the EthEventStreamer
 
+use crate::common::Mutex;
 use crate::{
     eth::{eth_event_streamer, utils, EventParseError, SignatureAndEvent},
     logging::COMPONENT_KEY,
@@ -9,7 +10,6 @@ use crate::{
 };
 use std::sync::Arc;
 use substrate_subxt::{Client, PairSigner};
-use tokio::sync::Mutex;
 use web3::{
     contract::tokens::Tokenizable,
     ethabi::{self, RawLog, Token},
