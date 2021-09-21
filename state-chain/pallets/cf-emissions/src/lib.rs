@@ -25,13 +25,14 @@ use sp_runtime::{
 };
 
 pub trait WeightInfo {
-	fn on_initialize() -> Weight;
+	fn on_initialize(x: u32) -> Weight;
 }
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
+	use sp_runtime::traits::UniqueSaturatedInto;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -109,7 +110,8 @@ pub mod pallet {
 			if should_mint {
 				Self::mint_rewards_for_block(current_block);
 			}
-			T::WeightInfo::on_initialize()
+
+			T::WeightInfo::on_initialize(current_block.unique_saturated_into())
 		}
 	}
 
