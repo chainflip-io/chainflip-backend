@@ -201,7 +201,7 @@ pub mod pallet {
 
 	/// The starting block number for the current epoch
 	#[pallet::storage]
-	#[pallet::getter(fn last_block_number)]
+	#[pallet::getter(fn current_epoch_started_at)]
 	pub(super) type CurrentEpochStartedAt<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
 	/// The number of blocks an epoch runs for
@@ -320,8 +320,6 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 impl<T: Config> Pallet<T> {
 	/// Check whether we should based on either a force rotation or we have reach the epoch
 	/// block number
-
-	// where is this called?
 	fn should_rotate(now: T::BlockNumber) -> bool {
 		if Force::<T>::get() {
 			Force::<T>::set(false);
@@ -332,8 +330,8 @@ impl<T: Config> Pallet<T> {
 		if blocks_per_epoch == Zero::zero() {
 			return false;
 		}
-		let last_block_number = CurrentEpochStartedAt::<T>::get();
-		let diff = now.saturating_sub(last_block_number);
+		let current_epoch_started_at = CurrentEpochStartedAt::<T>::get();
+		let diff = now.saturating_sub(current_epoch_started_at);
 		let end = diff >= blocks_per_epoch;
 		if end {
 			CurrentEpochStartedAt::<T>::set(now);
