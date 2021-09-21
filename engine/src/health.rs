@@ -36,12 +36,12 @@ impl HealthMonitor {
             .await
             .expect(format!("Could not bind TCP listener to {}", self.bind_address).as_str());
 
-        let (tx, mut rx) = tokio::sync::oneshot::channel::<()>();
+        let (shutdown_sender, mut shutdown_receiver) = tokio::sync::oneshot::channel::<()>();
         let logger = self.logger.clone();
         tokio::spawn(async move {
             loop {
                 select! {
-                    Ok(()) = &mut rx => {
+                    Ok(()) = &mut shutdown_receiver => {
                         slog::info!(logger, "Shutting down health check gracefully");
                         break;
                     },
@@ -89,7 +89,7 @@ impl HealthMonitor {
             }
         });
 
-        return tx;
+        return shutdown_sender;
     }
 }
 
