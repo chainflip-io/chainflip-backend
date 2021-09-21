@@ -4,7 +4,10 @@ use std::{
     fmt::Display,
 };
 
-use super::ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
+use super::{
+    ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult},
+    P2PSender,
+};
 
 /// Abstracts away computations performed during every "broadcast" stage
 /// of a ceremony
@@ -28,46 +31,40 @@ pub trait StageProcessor<D, Result>: Clone + Display {
 /// Responsible for broadcasting/collecting of stage data,
 /// delegating the actual processing to `StageProcessor`
 #[derive(Clone)]
-pub struct BroadcastStage<D, Result, P, W>
+pub struct BroadcastStage<D, Result, P, Sender>
 where
     P: StageProcessor<D, Result>,
+    Sender: P2PSender<Data = D>,
 {
-    common: CeremonyCommon,
+    common: CeremonyCommon<D, Sender>,
     /// Messages collected so far
     messages: HashMap<usize, P::Message>,
-    /// Determines how an individual p2p message is wrapped
-    /// (signing/keygen need a different wrapper)
-    wrapper: W,
     /// Determines the actual computations before/after
     /// the data is collected
     processor: P,
 }
 
-/// Determines how a message of type `Data` is wrapped
-/// (and serialized)
-pub trait MessageWrapper<Data>: Clone {
-    fn wrap_and_serialize(&self, data: &Data) -> Vec<u8>;
-}
-
-impl<D, Result, P, W> BroadcastStage<D, Result, P, W>
+impl<D, Result, P, Sender> BroadcastStage<D, Result, P, Sender>
 where
     D: Clone,
     P: StageProcessor<D, Result>,
-    W: MessageWrapper<D>,
+    Sender: P2PSender<Data = D>,
 {
-    pub fn new(processor: P, common: CeremonyCommon, wrapper: W) -> Self {
+    pub fn new(processor: P, common: CeremonyCommon<D, Sender>) -> Self
+    where
+        Sender: P2PSender<Data = D>,
+    {
         BroadcastStage {
             common,
             messages: HashMap::new(),
             processor,
-            wrapper,
         }
     }
 
     fn broadcast(&self, data: impl Into<D> + Clone + Display) {
         // slog::info!(self.logger, "Broadcasting data: {}", &data);
 
-        let data = self.wrapper.wrap_and_serialize(&data.into());
+        let data = data.into();
 
         for idx in &self.common.all_idxs {
             if *idx == self.common.own_idx {
@@ -82,23 +79,23 @@ where
     }
 }
 
-impl<D, Result, P, W> Display for BroadcastStage<D, Result, P, W>
+impl<D, Result, P, Sender> Display for BroadcastStage<D, Result, P, Sender>
 where
     P: StageProcessor<D, Result>,
-    W: MessageWrapper<D>,
+    Sender: P2PSender<Data = D>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "BroadcastStage<{}>", &self.processor)
     }
 }
 
-impl<D, Result, P, W> CeremonyStage for BroadcastStage<D, Result, P, W>
+impl<D, Result, P, Sender> CeremonyStage for BroadcastStage<D, Result, P, Sender>
 where
     D: Clone + Display,
     Result: Clone,
     P: StageProcessor<D, Result>,
     <P as StageProcessor<D, Result>>::Message: TryFrom<D>,
-    W: MessageWrapper<D>,
+    Sender: P2PSender<Data = D>,
 {
     type Message = D;
     type Result = Result;

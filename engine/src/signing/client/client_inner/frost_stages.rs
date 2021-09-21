@@ -7,7 +7,7 @@ use super::frost::{
 };
 use super::SchnorrSignature;
 
-use super::signing_state::{SigningMessageWrapper, SigningStateCommonInfo};
+use super::signing_state::{SigningP2PSender, SigningStateCommonInfo};
 
 use super::common::{CeremonyCommon, StageResult};
 
@@ -23,19 +23,21 @@ macro_rules! should_delay {
     };
 }
 
+type SigningCeremonyCommon = CeremonyCommon<SigningData, SigningP2PSender>;
+
 // *********** Await Commitments1 *************
 
 #[derive(Clone)]
 pub struct AwaitCommitments1 {
     signing_common: SigningStateCommonInfo,
-    common: CeremonyCommon,
+    common: SigningCeremonyCommon,
     // I probably shouldn't make copies/move this as we progress though
     // stages
     nonces: SecretNoncePair,
 }
 
 impl AwaitCommitments1 {
-    pub fn new(common: CeremonyCommon, signing_common: SigningStateCommonInfo) -> Self {
+    pub fn new(common: SigningCeremonyCommon, signing_common: SigningStateCommonInfo) -> Self {
         AwaitCommitments1 {
             common,
             signing_common,
@@ -70,9 +72,7 @@ impl StageProcessor<SigningData, SchnorrSignature> for AwaitCommitments1 {
             commitments1: messages,
         };
 
-        let wrapper = SigningMessageWrapper::new(self.common.ceremony_id);
-
-        let stage = BroadcastStage::new(processor, self.common, wrapper);
+        let stage = BroadcastStage::new(processor, self.common);
 
         StageResult::NextStage(Box::new(stage))
     }
@@ -82,7 +82,7 @@ impl StageProcessor<SigningData, SchnorrSignature> for AwaitCommitments1 {
 
 #[derive(Clone)]
 struct VerifyCommitmentsBroadcast2 {
-    common: CeremonyCommon,
+    common: SigningCeremonyCommon,
     signing_common: SigningStateCommonInfo,
     nonces: SecretNoncePair,
     commitments1: HashMap<usize, Comm1>,
@@ -120,8 +120,6 @@ impl StageProcessor<SigningData, SchnorrSignature> for VerifyCommitmentsBroadcas
             "Initial commitments have been correctly broadcast for ceremony: [todo]"
         );
 
-        let wrapper = SigningMessageWrapper::new(self.common.ceremony_id);
-
         let processor = LocalSigStage3 {
             common: self.common.clone(),
             signing_common: self.signing_common,
@@ -129,7 +127,7 @@ impl StageProcessor<SigningData, SchnorrSignature> for VerifyCommitmentsBroadcas
             commitments: verified_commitments,
         };
 
-        let state = BroadcastStage::new(processor, self.common, wrapper);
+        let state = BroadcastStage::new(processor, self.common);
 
         StageResult::NextStage(Box::new(state))
     }
@@ -138,7 +136,7 @@ impl StageProcessor<SigningData, SchnorrSignature> for VerifyCommitmentsBroadcas
 #[derive(Clone)]
 struct LocalSigStage3 {
     signing_common: SigningStateCommonInfo,
-    common: CeremonyCommon,
+    common: SigningCeremonyCommon,
     nonces: SecretNoncePair,
     commitments: Vec<Comm1>,
 }
@@ -174,9 +172,7 @@ impl StageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
             local_sigs: messages,
         };
 
-        let wrapper = SigningMessageWrapper::new(self.common.ceremony_id);
-
-        let stage = BroadcastStage::new(processor, self.common, wrapper);
+        let stage = BroadcastStage::new(processor, self.common);
 
         StageResult::NextStage(Box::new(stage))
     }
@@ -184,7 +180,7 @@ impl StageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
 
 #[derive(Clone)]
 struct VerifyLocalSigsBroadcastStage4 {
-    common: CeremonyCommon,
+    common: SigningCeremonyCommon,
     signing_common: SigningStateCommonInfo,
     commitments: Vec<Comm1>,
     local_sigs: HashMap<usize, LocalSig3>,

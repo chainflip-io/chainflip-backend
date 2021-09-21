@@ -56,15 +56,21 @@ impl KeygenResultInfo {
     }
 }
 
+pub trait P2PSender: Clone {
+    type Data;
+
+    fn send(&self, idx: usize, data: Self::Data);
+}
+
 #[derive(Clone)]
-pub struct P2PSender {
+pub struct RawP2PSender {
     validator_map: Arc<ValidatorMaps>,
     sender: UnboundedSender<InnerEvent>,
 }
 
-impl P2PSender {
+impl RawP2PSender {
     pub fn new(validator_map: Arc<ValidatorMaps>, sender: UnboundedSender<InnerEvent>) -> Self {
-        P2PSender {
+        RawP2PSender {
             validator_map,
             sender,
         }

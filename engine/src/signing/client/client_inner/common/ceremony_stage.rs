@@ -53,13 +53,16 @@ pub trait CeremonyStage: DynClone + std::fmt::Display {
 
 /// Data useful during any stage of a ceremony
 #[derive(Clone)]
-pub struct CeremonyCommon {
+pub struct CeremonyCommon<D, Sender>
+where
+    Sender: P2PSender<Data = D>,
+{
     pub ceremony_id: CeremonyId,
     /// Our own signer index
     pub own_idx: usize,
     /// Indexes of parties participating in the ceremony
     pub all_idxs: Vec<usize>,
     /// Sending end of the channel used for p2p communication
-    pub p2p_sender: P2PSender,
+    pub p2p_sender: Sender,
     pub logger: slog::Logger,
 }

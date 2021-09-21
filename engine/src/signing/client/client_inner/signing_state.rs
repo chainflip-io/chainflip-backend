@@ -2,18 +2,19 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use pallet_cf_vaults::CeremonyId;
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::{self, UnboundedSender};
 
 use crate::p2p::AccountId;
 
 use super::client_inner::Error;
+use super::common::{P2PSender, RawP2PSender};
 use crate::signing::{MessageHash, SigningOutcome};
 
 use super::client_inner::{CeremonyOutcomeResult, MultisigMessage};
 
 use super::common::{
-    broadcast::{BroadcastStage, MessageWrapper},
-    CeremonyCommon, CeremonyStage, KeygenResult, P2PSender, ProcessMessageResult, StageResult,
+    broadcast::BroadcastStage, CeremonyCommon, CeremonyStage, KeygenResult, ProcessMessageResult,
+    StageResult,
 };
 
 use super::frost::{SigningData, SigningDataWrapped};
@@ -26,24 +27,32 @@ type EventSender = mpsc::UnboundedSender<InnerEvent>;
 
 dyn_clone::clone_trait_object!(CeremonyStage<Message = SigningData, Result = SchnorrSignature>);
 
-// MAXIM: when both Keygen and Signing use ceremony_id,
-// we could look into removing this abstraction
 #[derive(Clone)]
-pub struct SigningMessageWrapper {
+pub struct SigningP2PSender {
     ceremony_id: CeremonyId,
+    sender: RawP2PSender,
 }
 
-impl SigningMessageWrapper {
-    pub fn new(ceremony_id: CeremonyId) -> Self {
-        SigningMessageWrapper { ceremony_id }
+impl SigningP2PSender {
+    fn new(
+        validator_map: Arc<ValidatorMaps>,
+        sender: UnboundedSender<InnerEvent>,
+        ceremony_id: CeremonyId,
+    ) -> Self {
+        SigningP2PSender {
+            ceremony_id,
+            sender: RawP2PSender::new(validator_map, sender),
+        }
     }
 }
 
-impl MessageWrapper<SigningData> for SigningMessageWrapper {
-    fn wrap_and_serialize(&self, data: &SigningData) -> Vec<u8> {
-        let msg: MultisigMessage = SigningDataWrapped::new(data.clone(), self.ceremony_id).into();
+impl P2PSender for SigningP2PSender {
+    type Data = SigningData;
 
-        bincode::serialize(&msg).unwrap()
+    fn send(&self, reciever_idx: usize, data: Self::Data) {
+        let msg: MultisigMessage = SigningDataWrapped::new(data, self.ceremony_id).into();
+        let data = bincode::serialize(&msg).unwrap();
+        self.sender.send(reciever_idx, data);
     }
 }
 
@@ -96,7 +105,11 @@ impl SigningState {
     ) {
         let common = CeremonyCommon {
             ceremony_id,
-            p2p_sender: P2PSender::new(key_info.validator_map.clone(), event_sender.clone()),
+            p2p_sender: SigningP2PSender::new(
+                key_info.validator_map.clone(),
+                event_sender.clone(),
+                ceremony_id,
+            ),
             own_idx: signer_idx,
             all_idxs: signer_idxs.clone(),
             logger: logger.clone(),
@@ -110,8 +123,7 @@ impl SigningState {
 
         let processor = AwaitCommitments1::new(common.clone(), signing_common);
 
-        let mut state =
-            BroadcastStage::new(processor, common, SigningMessageWrapper::new(ceremony_id));
+        let mut state = BroadcastStage::new(processor, common);
 
         state.init();
 
