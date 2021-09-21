@@ -1,4 +1,5 @@
-use std::sync::{Arc, Mutex};
+use crate::common::Mutex;
+use std::sync::Arc;
 
 use slog::o;
 use substrate_subxt::{Client, PairSigner};
@@ -18,14 +19,6 @@ pub async fn start(
     let logger = logger.new(o!(COMPONENT_KEY => "Heartbeat"));
     slog::info!(logger, "Starting");
 
-    {
-        let signer = signer.lock().unwrap(); // TODO: Handle unwrap
-        subxt_client
-            .heartbeat(&*signer)
-            .await
-            .expect("Should send heartbeat on startup successfully");
-    }
-
     let heartbeat_block_interval = subxt_client
         .metadata()
         .module("Reputation")
@@ -34,6 +27,25 @@ pub async fn start(
         .expect("No constant 'HeartbeatBlockInterval' in chain metadata for module 'Reputation'")
         .value::<u32>()
         .expect("Could not decode HeartbeatBlockInterval to u32");
+
+    async fn submit_heartbeat(
+        subxt_client: &Client<StateChainRuntime>,
+        signer: Arc<Mutex<PairSigner<StateChainRuntime, sp_core::sr25519::Pair>>>,
+        logger: &slog::Logger,
+    ) {
+        let mut signer = signer.lock().await;
+        match subxt_client.heartbeat(&*signer).await {
+            Ok(_) => {
+                slog::info!(logger, "Sent heartbeat successfully");
+                signer.increment_nonce();
+            }
+            Err(e) => {
+                slog::error!(logger, "Failed to submit heartbeat: {:?}", e);
+            }
+        }
+    }
+
+    submit_heartbeat(&subxt_client, signer.clone(), &logger).await;
 
     slog::info!(
         logger,
@@ -50,15 +62,7 @@ pub async fn start(
         // Target the middle of the heartbeat block interval so block drift is *very* unlikely to cause failure
         if (block_header.number + (heartbeat_block_interval / 2)) % heartbeat_block_interval == 0 {
             slog::info!(logger, "Sending heartbeat");
-            let mut signer = signer.lock().unwrap(); // TODO: Handle unwrap
-            match subxt_client.heartbeat(&*signer).await {
-                Ok(_) => {
-                    signer.increment_nonce();
-                }
-                Err(e) => {
-                    slog::error!(logger, "Error submitting heartbeat: {:?}", e)
-                }
-            }
+            submit_heartbeat(&subxt_client, signer.clone(), &logger).await
         }
     }
 }
