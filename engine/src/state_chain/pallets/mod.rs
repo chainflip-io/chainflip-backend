@@ -20,3 +20,6 @@ pub mod reputation;
 
 /// Vaults pallet support for substrate-subxt
 pub mod vaults;
+
+/// Siging pallet support for substrate-subxt
+pub mod ethereum_signer;

@@ -177,9 +177,6 @@ pub mod pallet {
 		/// A validator has claimed their FLIP on the Ethereum chain. [validator_id, claimed_amount]
 		ClaimSettled(AccountId<T>, FlipBalance<T>),
 
-		/// The staked amount should be refunded to the provided Ethereum address. [node_id, refund_amount, address]
-		StakeRefund(AccountId<T>, FlipBalance<T>, EthereumAddress),
-
 		/// A claim signature has been issued by the signer module. [node_id, signed_payload]
 		ClaimSignatureIssued(AccountId<T>, Vec<u8>),
 

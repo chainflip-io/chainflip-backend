@@ -1,7 +1,8 @@
 use std::{marker::PhantomData, time::Duration};
 
-use cf_traits::NetworkState;
+use cf_traits::{NetworkState, offline_conditions::OfflineCondition};
 use frame_support::unsigned::TransactionValidityError;
+use sp_core::H256;
 use sp_runtime::{
     generic::{self, Era},
     traits::{BlakeTwo256, IdentifyAccount, Verify},
@@ -26,10 +27,9 @@ use core::fmt::Debug;
 
 use codec::{Decode, Encode};
 
-use super::pallets::{auction, emissions, reputation, staking, validator, vaults, witness_api};
+use super::pallets::{auction, emissions, ethereum_signer, reputation, staking, validator, vaults, witness_api};
 
 use pallet_cf_flip::ImbalanceSource;
-use pallet_cf_reputation::OfflineCondition;
 use pallet_cf_vaults::{
     CeremonyId, KeygenRequest, ThresholdSignatureRequest, VaultRotationRequest,
 };
@@ -155,13 +155,7 @@ impl validator::Validator for StateChainRuntime {
     type EpochIndex = u32;
 }
 
-impl staking::Staking for StateChainRuntime {
-    type TokenAmount = u128;
-
-    type EthereumAddress = [u8; 20];
-
-    type Nonce = u64;
-}
+impl staking::Staking for StateChainRuntime {}
 
 impl witness_api::WitnesserApi for StateChainRuntime {}
 
@@ -172,6 +166,11 @@ impl emissions::Emissions for StateChainRuntime {
 impl vaults::Vaults for StateChainRuntime {}
 
 impl reputation::Reputation for StateChainRuntime {}
+
+impl ethereum_signer::EthereumSigner for StateChainRuntime {
+    type KeyId = Vec<u8>;
+    type Payload = H256;
+}
 
 impl System for StateChainRuntime {
     type Index = u32;
