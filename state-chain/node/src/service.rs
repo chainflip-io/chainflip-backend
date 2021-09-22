@@ -146,18 +146,9 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		network.clone());
 
 	let rpc_extensions_builder = {
-		let client = client.clone();
-		let pool = transaction_pool.clone();
-
-		Box::new(move |deny_unsafe, _| {
-			let deps = crate::rpc::FullDeps {
-				client: client.clone(),
-				pool: pool.clone(),
-				deny_unsafe,
-				comms: comms.clone(),
-			};
-
-			crate::rpc::create_full(deps, rpc_params.clone())
+		Box::new(move |_deny_unsafe, _| {
+			// TODO: Do we need to handle this DenyUnsafe?
+			crate::rpc::create_full(comms.clone(), rpc_params.clone())
 		})
 	};
 
