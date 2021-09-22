@@ -108,7 +108,6 @@ mod utils_tests {
         let idx = get_our_idx(&signers, &b);
 
         // AccountID 'b' is in the second position in the list.
-        // 
         assert_eq!(idx, Some(2));
     }
 

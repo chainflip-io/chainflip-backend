@@ -50,6 +50,8 @@ pub struct KeygenPhase2Data {
 pub struct KeygenPhase3Data {
     pub clients: Vec<MultisigClientInnerNoDB>,
     pub pubkey: secp256k1::PublicKey,
+
+    // These are indexed by signer_idx ( -1 )
     pub sec_keys: Vec<KeygenResultInfo>,
 }
 
@@ -121,36 +123,6 @@ pub struct KeygenContext {
     /// but stored separately so we could substitute
     /// them in more advanced tests
     clients: Vec<MultisigClientInnerNoDB>,
-}
-
-// Generate the keys for genesis
-// TODO: We might want to move this to somewhere else
-#[tokio::test]
-pub async fn genesis_keys() {
-    println!("Generating keys");
-    let bashful =
-        hex::decode("36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911").unwrap();
-    let bashful: [u8; 32] = bashful.try_into().unwrap();
-    let bashful = AccountId(bashful);
-
-    let doc =
-        hex::decode("8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f04").unwrap();
-    let doc: [u8; 32] = doc.try_into().unwrap();
-    let doc = AccountId(doc);
-
-    let grumpy =
-        hex::decode("28b5f5f1654393975f58e78cf06b6f3ab509b3629b0a4b08aaa3dce6bf6af805").unwrap();
-    let grumpy: [u8; 32] = grumpy.try_into().unwrap();
-    let grumpy = AccountId(grumpy);
-
-    let account_ids = vec![bashful, doc, grumpy];
-    let mut keygen_context = KeygenContext::new_with_account_ids(account_ids);
-    let result = keygen_context.generate().await;
-
-    println!("Pubkey is: {:?}", result.key_ready.pubkey);
-    for keygen_result_info in result.key_ready.sec_keys {
-        println!("Key: {:?}", key);
-    }
 }
 
 impl KeygenContext {

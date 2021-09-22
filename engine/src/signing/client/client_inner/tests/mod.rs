@@ -10,7 +10,7 @@ use lazy_static::lazy_static;
 use log::*;
 
 use super::client_inner::*;
-use helpers::*;
+pub(crate) use helpers::*;
 
 use super::keygen_state::KeygenStage;
 use super::signing_state::SigningStage;

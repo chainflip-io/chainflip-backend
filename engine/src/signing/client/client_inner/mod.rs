@@ -9,7 +9,7 @@ mod signing_state_manager;
 mod utils;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 pub use client_inner::{InnerEvent, MultisigClientInner};
 
