@@ -21,7 +21,7 @@ use anyhow::Result;
 use futures::stream::Fuse;
 use core::iter;
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
-use futures::{Future, Stream, StreamExt};
+use futures::{Stream, StreamExt};
 use sc_network::{multiaddr, Event, ExHashT, NetworkService, PeerId};
 use serde::{Deserialize, Serialize};
 use sp_runtime::sp_std::sync::Arc;
@@ -30,7 +30,6 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::Mutex;
-use std::task::{Context, Poll};
 
 // TODO: This is duplicated in the CFE, can we just use one of these?
 /// The type of validator id expected by the p2p layer, uses standard serialization.
