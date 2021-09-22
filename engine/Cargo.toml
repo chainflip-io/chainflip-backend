@@ -18,7 +18,6 @@ section = "rust"
 [dependencies]
 anyhow = "1.0"
 async-nats = "0.10.1"
-async-std = {version = "1.9", features = ["attributes", "tokio1"]}
 async-stream = "0.3.0"
 async-trait = "0.1.49"
 bincode = "1.3.3"
