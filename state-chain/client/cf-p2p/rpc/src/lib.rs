@@ -96,30 +96,27 @@ pub trait RpcApi {
 
 /// A list of subscribers to the p2p message events coming in from cf-p2p
 #[derive(Clone)]
-pub struct P2PStream<T> {
-	subscribers: Arc<Mutex<Vec<UnboundedSender<T>>>>,
+pub struct P2PStream {
+	subscribers: Arc<Mutex<Vec<UnboundedSender<P2PEvent>>>>,
 }
 
-impl<T> P2PStream<T> {
+impl P2PStream {
 	fn new() -> Self {
 		let subscribers = Arc::new(Mutex::new(vec![]));
 		P2PStream { subscribers }
 	}
 
 	/// A new subscriber to be notified on upcoming events
-	fn subscribe(&self) -> UnboundedReceiver<T> {
+	fn subscribe(&self) -> UnboundedReceiver<P2PEvent> {
 		let (tx, rx) = unbounded();
 		self.subscribers.lock().unwrap().push(tx);
 		rx
 	}
 }
 
-/// An event stream over type `RpcEvent`
-type EventStream = P2PStream<P2PEvent>;
-
 /// Our core bridge between p2p events and our RPC subscribers
 pub struct RpcCore {
-	stream: EventStream,
+	stream: P2PStream,
 	manager: SubscriptionManager,
 }
 
@@ -156,7 +153,7 @@ pub enum P2PEvent {
 }
 
 impl RpcCore {
-	pub fn new<E>(executor: Arc<E>) -> (Self, EventStream)
+	pub fn new<E>(executor: Arc<E>) -> (Self, P2PStream)
 	where
 		E: Executor<Box<(dyn Future<Item = (), Error = ()> + Send)>> + Send + Sync + 'static,
 	{
