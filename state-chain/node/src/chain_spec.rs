@@ -88,7 +88,6 @@ pub fn development_config() -> Result<ChainSpec, String> {
 					get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
 				],
 				1,
-				300,
 			)
 		},
 		// Bootnodes
@@ -135,7 +134,6 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					bashful_sr25519.into(),
 				],
 				1,
-				100,
 			)
 		},
 		// Bootnodes
@@ -236,7 +234,6 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					happy_sr25519.into(),
 				],
 				3,
-				300,
 			)
 		},
 		// Bootnodes
@@ -260,7 +257,6 @@ fn testnet_genesis(
 	root_key: AccountId,
 	endowed_accounts: Vec<AccountId>,
 	min_validators: u32,
-	epoch_number_of_blocks: u32,
 ) -> GenesisConfig {
 	GenesisConfig {
 		frame_system: Some(SystemConfig {
@@ -268,9 +264,7 @@ fn testnet_genesis(
 			code: wasm_binary.to_vec(),
 			changes_trie_config: Default::default(),
 		}),
-		pallet_cf_validator: Some(ValidatorConfig {
-			epoch_number_of_blocks,
-		}),
+		pallet_cf_validator: Some(ValidatorConfig {}),
 		pallet_session: Some(SessionConfig {
 			keys: initial_authorities
 				.iter()
@@ -294,6 +288,11 @@ fn testnet_genesis(
 		}),
 		pallet_cf_auction: Some(AuctionConfig {
 			auction_size_range: (min_validators, MAX_VALIDATORS),
+			winners: initial_authorities
+				.iter()
+				.map(|(validator_id, ..)| validator_id.clone())
+				.collect::<Vec<AccountId>>(),
+			minimum_active_bid: TOTAL_ISSUANCE / 100,
 		}),
 		pallet_aura: Some(AuraConfig {
 			authorities: vec![],

@@ -12,12 +12,10 @@ mod test {
 	}
 
 	#[test]
-	fn genesis() {
+	fn we_have_a_set_of_winners_at_genesis() {
 		new_test_ext().execute_with(|| {
-			// We should have our genesis validators, which would have been provided by
-			// `BidderProvider`
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(winners, min_bid)
-				if winners == vec![MAX_BID.0, JOE_BID.0, LOW_BID.0] && min_bid == LOW_BID.1
+				if winners == vec![JOE_BID.0] && min_bid == JOE_BID.1
 			);
 		});
 	}
