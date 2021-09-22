@@ -65,7 +65,6 @@ pub fn authority_keys_from_seed(s: &str) -> (AccountId, AuraId, GrandpaId) {
 }
 
 /// Start a single node development chain
-/// 300 block epochs = 30 mins at 6 second block time
 pub fn development_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
 
@@ -104,7 +103,6 @@ pub fn development_config() -> Result<ChainSpec, String> {
 }
 
 /// Start a single node development chain - using bashful as genesis node
-/// 100 block epochs = 10 mins at 6 second block time
 pub fn cf_development_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
 	let bashful_sr25519 =
@@ -150,7 +148,79 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 }
 
 /// Initialise a Chainflip testnet
-/// 300 block epochs = 30 mins at 6 second block time
+pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
+	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
+	let bashful_sr25519 =
+		hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"];
+	let doc_sr25519 =
+		hex_literal::hex!["8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f04"];
+	let dopey_sr25519 =
+		hex_literal::hex!["ca58f2f4ae713dbb3b4db106640a3db150e38007940dfe29e6ebb870c4ccd47e"];
+	Ok(ChainSpec::from_genesis(
+		"Three node testnet",
+		"three-node-testnet",
+		ChainType::Live,
+		move || {
+			testnet_genesis(
+				wasm_binary,
+				// Initial PoA authorities
+				vec![
+					(
+						// Bashful
+						bashful_sr25519.into(),
+						bashful_sr25519.unchecked_into(),
+						hex_literal::hex![
+							"971b584324592e9977f0ae407eb6b8a1aa5bcd1ca488e54ab49346566f060dd8"
+						]
+						.unchecked_into(),
+					),
+					(
+						// Doc
+						doc_sr25519.into(),
+						doc_sr25519.unchecked_into(),
+						hex_literal::hex![
+							"e4c4009bd437cba06a2f25cf02f4efc0cac4525193a88fe1d29196e5d0ff54e8"
+						]
+						.unchecked_into(),
+					),
+					(
+						// Dopey
+						dopey_sr25519.into(),
+						dopey_sr25519.unchecked_into(),
+						hex_literal::hex![
+							"5506333c28f3dd39095696362194f69893bc24e3ec553dbff106cdcbfe1beea4"
+						]
+						.unchecked_into(),
+					),
+				],
+				// Sudo account - Bashful
+				bashful_sr25519.into(),
+				// Pre-funded accounts
+				vec![
+					// Bashful
+					bashful_sr25519.into(),
+					// Doc
+					doc_sr25519.into(),
+					// Dopey
+					dopey_sr25519.into(),
+				],
+				2,
+			)
+		},
+		// Bootnodes
+		vec![],
+		// Telemetry
+		None,
+		// Protocol ID
+		None,
+		// Properties
+		Some(chainflip_properties()),
+		// Extensions
+		None,
+	))
+}
+
+/// Initialise a Chainflip testnet
 pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Development wasm not available".to_string())?;
 	let bashful_sr25519 =
