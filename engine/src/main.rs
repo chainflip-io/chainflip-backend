@@ -7,7 +7,7 @@ use chainflip_engine::{
     heartbeat,
     p2p::{self, rpc as p2p_rpc, AccountId, P2PMessage, P2PMessageCommand},
     settings::Settings,
-    signing::{self, db::PersistentKeyDB, MultisigEvent, MultisigInstruction},
+    signing::{self, MultisigEvent, MultisigInstruction, PersistentKeyDB},
     state_chain::{self, runtime::StateChainRuntime},
 };
 use slog::{o, Drain};

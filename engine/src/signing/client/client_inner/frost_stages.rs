@@ -245,15 +245,16 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
 // for symmetry?)
 fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwned>(
     signer_idxs: &[usize],
-    vcbs: &HashMap<usize, BroadcastVerificationMessage<T>>,
+    verification_messages: &HashMap<usize, BroadcastVerificationMessage<T>>,
 ) -> Result<Vec<T>, Vec<usize>> {
     let num_parties = signer_idxs.len();
 
     // Sanity check: we should have N messages, each containing N messages
-    assert_eq!(vcbs.len(), num_parties);
-    for (_, m) in vcbs {
-        assert_eq!(m.data.len(), num_parties);
-    }
+    assert_eq!(verification_messages.len(), num_parties);
+
+    assert!(verification_messages
+        .iter()
+        .all(|(_, m)| m.data.len() == num_parties));
 
     let threshold = threshold_from_share_count(num_parties);
 
@@ -268,7 +269,7 @@ fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwned>(
 
     'outer: for i in 0..num_parties {
         let mut value_counts = HashMap::<Vec<u8>, usize>::new();
-        for (_, m) in vcbs {
+        for (_, m) in verification_messages {
             let data = bincode::serialize(&m.data[i]).unwrap();
             *value_counts.entry(data).or_default() += 1;
         }
@@ -295,7 +296,7 @@ fn verify_broadcasts<T: Clone + serde::Serialize + serde::de::DeserializeOwned>(
 
 #[test]
 fn check_correct_broadcast() {
-    let mut vcbs = HashMap::new();
+    let mut verification_messages = HashMap::new();
 
     // There is a concensus on each of the values,
     // even though some parties disagree on some values
@@ -308,18 +309,18 @@ fn check_correct_broadcast() {
     ];
 
     for (i, m) in all_messages.into_iter().enumerate() {
-        vcbs.insert(i + 1, BroadcastVerificationMessage { data: m });
+        verification_messages.insert(i + 1, BroadcastVerificationMessage { data: m });
     }
 
     assert_eq!(
-        verify_broadcasts(&[1, 2, 3, 4], &vcbs),
+        verify_broadcasts(&[1, 2, 3, 4], &verification_messages),
         Ok(vec![1, 1, 1, 1])
     );
 }
 
 #[test]
 fn check_incorrect_broadcast() {
-    let mut vcbs = HashMap::new();
+    let mut verification_messages = HashMap::new();
 
     // We can't achieve consensus on values from parties
     // 2 and 4 (indexes in inner vectors), which we assume
@@ -333,8 +334,11 @@ fn check_incorrect_broadcast() {
     ];
 
     for (i, m) in all_messages.into_iter().enumerate() {
-        vcbs.insert(i + 1, BroadcastVerificationMessage { data: m });
+        verification_messages.insert(i + 1, BroadcastVerificationMessage { data: m });
     }
 
-    assert_eq!(verify_broadcasts(&[1, 2, 3, 4], &vcbs), Err(vec![2, 4]));
+    assert_eq!(
+        verify_broadcasts(&[1, 2, 3, 4], &verification_messages),
+        Err(vec![2, 4])
+    );
 }

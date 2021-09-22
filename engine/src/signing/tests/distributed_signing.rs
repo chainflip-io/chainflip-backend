@@ -4,17 +4,16 @@ use rand::{
     prelude::{IteratorRandom, StdRng},
     SeedableRng,
 };
-use slog::o;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
-    logging::{self, COMPONENT_KEY},
+    logging,
     p2p::{
         self,
         mock::{MockChannelEventHandler, NetworkMock},
         AccountId,
     },
-    signing::db::KeyDBMock,
+    signing::KeyDBMock,
 };
 
 use lazy_static::lazy_static;
@@ -48,7 +47,6 @@ async fn coordinate_signing(
     active_indices: &[usize],
     logger: &slog::Logger,
 ) -> Result<(), ()> {
-    let logger = logger.new(o!(COMPONENT_KEY => "CoordinateSigning"));
     // get a keygen request ready with all of the VALIDATOR_IDS
     let keygen_request_info = KeygenInfo::new(0, VALIDATOR_IDS.clone());
 

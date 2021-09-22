@@ -2,11 +2,9 @@ use std::{sync::Arc, time::Instant};
 
 use itertools::Itertools;
 use pallet_cf_vaults::CeremonyId;
-use slog::o;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
-    logging::SIGNING_SUB_COMPONENT,
     p2p::{AccountId, P2PMessageCommand},
     signing::{
         client::client_inner::{
@@ -81,7 +79,7 @@ impl KeygenState {
             params,
             maps_for_validator_id_and_idx: Arc::new(idx_map),
             last_message_timestamp: Instant::now(),
-            logger: logger.new(o!(SIGNING_SUB_COMPONENT => "KeygenState")),
+            logger: logger.clone(),
         };
 
         state.initiate_keygen_inner();

@@ -6,15 +6,13 @@ use tokio::sync::mpsc::{self, UnboundedSender};
 
 use crate::p2p::AccountId;
 
-use super::client_inner::Error;
-use super::common::{P2PSender, RawP2PSender};
 use crate::signing::{MessageHash, SigningOutcome};
 
-use super::client_inner::{CeremonyOutcomeResult, MultisigMessage};
+use super::client_inner::{CeremonyOutcomeResult, Error, MultisigMessage};
 
 use super::common::{
-    broadcast::BroadcastStage, CeremonyCommon, CeremonyStage, KeygenResult, ProcessMessageResult,
-    StageResult,
+    broadcast::BroadcastStage, CeremonyCommon, CeremonyStage, KeygenResult, P2PSender,
+    ProcessMessageResult, RawP2PSender, StageResult,
 };
 
 use super::frost::{SigningData, SigningDataWrapped};
@@ -27,6 +25,8 @@ type EventSender = mpsc::UnboundedSender<InnerEvent>;
 
 dyn_clone::clone_trait_object!(CeremonyStage<Message = SigningData, Result = SchnorrSignature>);
 
+/// Sending half of the channel that additionally maps signer_idx -> accountId
+/// and wraps the binary data into the appropriate for singning type
 #[derive(Clone)]
 pub struct SigningP2PSender {
     ceremony_id: CeremonyId,
@@ -82,7 +82,7 @@ impl AuthorisedSigningState {
 pub struct SigningState {
     inner: Option<AuthorisedSigningState>,
     should_expire_at: std::time::Instant,
-    delayed_messages_by_id: Vec<(AccountId, SigningData)>,
+    delayed_messages: Vec<(AccountId, SigningData)>,
     logger: slog::Logger,
 }
 
@@ -103,6 +103,8 @@ impl SigningState {
         event_sender: EventSender,
         logger: &slog::Logger,
     ) {
+        let logger = logger.new(slog::o!("ceremony_id" => ceremony_id));
+
         let common = CeremonyCommon {
             ceremony_id,
             p2p_sender: SigningP2PSender::new(
@@ -134,6 +136,9 @@ impl SigningState {
             result_sender: event_sender,
         });
 
+        // Use the updated logger once we know the ceremony id
+        self.logger = logger;
+
         // Unlike other state transitions, we don't take into account
         // any time left in the prior stage when receiving a request
         // to sign (we don't want other parties to be able to
@@ -149,25 +154,21 @@ impl SigningState {
     pub fn new_unauthorised(logger: slog::Logger) -> Self {
         SigningState {
             inner: None,
-            delayed_messages_by_id: Default::default(),
+            delayed_messages: Default::default(),
             should_expire_at: Instant::now() + STAGE_DURATION,
             logger,
         }
     }
 
     fn process_delayed(&mut self) {
-        let messages = std::mem::take(&mut self.delayed_messages_by_id);
-
-        // We neven process delayed messages pre signing request
-        let ceremony_id = self.inner.as_ref().unwrap().ceremony_id;
+        let messages = std::mem::take(&mut self.delayed_messages);
 
         for (id, m) in messages {
             slog::debug!(
                 self.logger,
-                "Processing delayed message {} from party [{}] [ceremony id: {}]",
+                "Processing delayed message {} from party [{}]",
                 m,
                 id,
-                ceremony_id
             );
             self.process_message(id, m);
         }
@@ -175,26 +176,20 @@ impl SigningState {
 
     fn add_delayed(&mut self, id: AccountId, m: SigningData) {
         match &self.inner {
-            Some(authorised_state) => {
-                slog::debug!(
-                    self.logger,
-                    "Delaying message {} from party [{}] [ceremony id: {}]",
-                    m,
-                    id,
-                    authorised_state.ceremony_id
-                );
+            Some(_) => {
+                slog::debug!(self.logger, "Delaying message {} from party [{}]", m, id);
             }
             None => {
                 slog::debug!(
                     self.logger,
-                    "Delaying message {} from party [{}] [pre signing request]",
+                    "Delaying message {} from party [{}] (pre signing request)",
                     m,
                     id,
                 );
             }
         }
 
-        self.delayed_messages_by_id.push((id, m));
+        self.delayed_messages.push((id, m));
     }
 
     pub fn process_message(&mut self, id: AccountId, m: SigningData) {
@@ -226,12 +221,7 @@ impl SigningState {
                         // This is the only point at which we can get the result (apart from the timeout)
                         match state.finalize() {
                             StageResult::NextStage(mut stage) => {
-                                slog::debug!(
-                                    self.logger,
-                                    "Ceremony transitions to {} [ceremony id: {}]",
-                                    &stage,
-                                    authorised_state.ceremony_id
-                                );
+                                slog::debug!(self.logger, "Ceremony transitions to {}", &stage);
 
                                 stage.init();
 
@@ -257,10 +247,9 @@ impl SigningState {
 
                                 slog::warn!(
                                     self.logger,
-                                    "Signing ceremony failed, blaming parties: {:?} ({:?}), [ceremony id: {}]",
+                                    "Signing ceremony failed, blaming parties: {:?} ({:?})",
                                     &bad_validators,
                                     blamed_parties,
-                                    authorised_state.ceremony_id
                                 );
 
                                 authorised_state.send_result(Err((Error::Invalid, blamed_parties)));
@@ -270,8 +259,7 @@ impl SigningState {
 
                                 slog::debug!(
                                     self.logger,
-                                    "Signing ceremony reached the final stage! [ceremony id: {}]",
-                                    authorised_state.ceremony_id
+                                    "Signing ceremony reached the final stage!"
                                 );
                             }
                         }
@@ -287,26 +275,41 @@ impl SigningState {
     /// Check expiration time, and report responsible nodes if expired
     pub fn try_expiring(&self) -> Option<Vec<AccountId>> {
         if self.should_expire_at < std::time::Instant::now() {
-            let blamed_parties = match &self.inner {
+            match &self.inner {
                 None => {
                     // blame the parties that tried to initiate the ceremony
-                    self.delayed_messages_by_id
+                    let blamed_ids = self
+                        .delayed_messages
                         .iter()
                         .map(|(id, _)| id.clone())
-                        .collect()
+                        .collect();
+
+                    slog::warn!(
+                        self.logger,
+                        "Signing ceremony expired before a request to sign, blaming parties: {:?}",
+                        blamed_ids
+                    );
+
+                    Some(blamed_ids)
                 }
                 Some(authorised_state) => {
                     // blame slow parties
-                    let late_idxs = authorised_state.state.as_ref().unwrap().awaited_parties();
+                    let bladed_idx = authorised_state.state.as_ref().unwrap().awaited_parties();
 
-                    late_idxs
+                    let blamed_ids = bladed_idx
                         .iter()
                         .map(|idx| authorised_state.validator_map.get_id(*idx).unwrap().clone())
-                        .collect()
-                }
-            };
+                        .collect();
 
-            Some(blamed_parties)
+                    slog::warn!(
+                        self.logger,
+                        "Signing ceremony expired before, blaming parties: {:?}",
+                        blamed_ids,
+                    );
+
+                    Some(blamed_ids)
+                }
+            }
         } else {
             None
         }

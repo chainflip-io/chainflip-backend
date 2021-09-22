@@ -71,9 +71,6 @@ where
                 continue;
             }
 
-            println!("[{}] Sending to idx: {}", self.common.own_idx, idx);
-
-            // slog::debug!(self.logger, "Sending data to [{}]", idx);
             self.common.p2p_sender.send(*idx, data.clone());
         }
     }

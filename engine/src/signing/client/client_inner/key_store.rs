@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::signing::{db::KeyDB, KeyId};
+use crate::signing::{KeyDB, KeyId};
 
 use super::common::KeygenResultInfo;
 

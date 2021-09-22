@@ -25,8 +25,7 @@ use crate::{
             KeyId, KeygenInfo, MultisigInstruction,
         },
         crypto::{Keys, GE as Point},
-        db::KeyDBMock,
-        SigningInfo,
+        KeyDBMock, SigningInfo,
     },
 };
 

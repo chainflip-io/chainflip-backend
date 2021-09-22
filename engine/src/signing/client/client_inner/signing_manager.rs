@@ -71,12 +71,18 @@ impl SigningManager {
         signers: Vec<AccountId>,
         ceremony_id: CeremonyId,
     ) {
-        slog::debug!(self.logger, "Processing a request to sign");
+        slog::debug!(
+            self.logger,
+            "Processing a request to sign [ceremony_id: {}]",
+            ceremony_id
+        );
 
         if !signers.contains(&self.id) {
+            // TODO: alert
             slog::warn!(
                 self.logger,
-                "Request to sign ignored: we are not among signers."
+                "Request to sign ignored: we are not among signers [ceremony_id: {}]",
+                ceremony_id
             );
             return;
         }
@@ -89,7 +95,8 @@ impl SigningManager {
                 // could combine this with the check above)
                 slog::warn!(
                     self.logger,
-                    "Request to sign ignored: could not derive our idx"
+                    "Request to sign ignored: could not derive our idx [ceremony_id: {}]",
+                    ceremony_id
                 );
                 return;
             }
@@ -99,18 +106,17 @@ impl SigningManager {
         let signer_idxs = match project_signers(&signers, &key_info) {
             Ok(signer_idxs) => signer_idxs,
             Err(_) => {
-                slog::warn!(self.logger, "Request to sign ignored: invalid signers.");
+                // TODO: alert
+                slog::warn!(
+                    self.logger,
+                    "Request to sign ignored: invalid signers [ceremony_id: {}]",
+                    ceremony_id
+                );
                 return;
             }
         };
 
         // We have the key and have received a request to sign
-        slog::trace!(
-            self.logger,
-            "Creating new signing state for ceremony id: {:?}",
-            ceremony_id
-        );
-
         let entry = self
             .signing_states
             .entry(ceremony_id)
@@ -133,7 +139,12 @@ impl SigningManager {
 
         let SigningDataWrapped { data, ceremony_id } = wdata;
 
-        slog::info!(self.logger, "process_signing_data: {}", &data);
+        slog::trace!(
+            self.logger,
+            "Received signing data {}: [ceremony_id: {}]",
+            &data,
+            ceremony_id
+        );
 
         let state = self
             .signing_states

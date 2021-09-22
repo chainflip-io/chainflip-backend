@@ -3,9 +3,9 @@ mod client_inner;
 use std::time::Duration;
 
 use crate::{
-    logging::SIGNING_SUB_COMPONENT,
+    logging::COMPONENT_KEY,
     p2p::{AccountId, P2PMessageCommand},
-    signing::db::KeyDB,
+    signing::KeyDB,
 };
 use futures::StreamExt;
 use pallet_cf_vaults::CeremonyId;
@@ -17,11 +17,12 @@ use self::client_inner::{InnerEvent, MultisigClient};
 
 pub use client_inner::{KeygenOutcome, KeygenResultInfo, SchnorrSignature, SigningOutcome};
 
-use super::MessageHash;
-
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
 use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
+pub struct MessageHash(pub [u8; 32]);
 
 /// Public key compressed (33 bytes - 32 bytes + a y parity byte)
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
@@ -96,7 +97,7 @@ pub fn start<S>(
 where
     S: KeyDB,
 {
-    let logger = logger.new(o!(SIGNING_SUB_COMPONENT => "MultisigClient"));
+    let logger = logger.new(o!(COMPONENT_KEY => "MultisigClient"));
 
     slog::info!(logger, "Starting");
 

@@ -1,16 +1,16 @@
 mod client;
-pub mod crypto;
-pub mod db;
+mod crypto;
+mod db;
 
 #[cfg(test)]
 mod tests;
 
 pub use client::{
-    start, KeyId, KeygenInfo, KeygenOutcome, MultisigEvent, MultisigInstruction, SchnorrSignature,
-    SigningInfo, SigningOutcome,
+    start, KeyId, KeygenInfo, KeygenOutcome, MessageHash, MultisigEvent, MultisigInstruction,
+    SchnorrSignature, SigningInfo, SigningOutcome,
 };
 
-use serde::{Deserialize, Serialize};
+pub use db::{KeyDB, PersistentKeyDB};
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
-pub struct MessageHash(pub [u8; 32]);
+#[cfg(test)]
+pub use db::KeyDBMock;

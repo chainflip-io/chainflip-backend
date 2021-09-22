@@ -1,17 +1,15 @@
 use std::{collections::HashMap, convert::TryInto, fmt::Display, time::Duration};
 
 use crate::{
-    logging::COMPONENT_KEY,
     p2p::{AccountId, P2PMessage, P2PMessageCommand},
     signing::{
         client::{KeyId, MultisigInstruction, SigningInfo},
         crypto::{BigInt, ECPoint, KeyGenBroadcastMessage1, VerifiableSS, FE, GE},
-        db::KeyDB,
+        KeyDB,
     },
 };
 
 use pallet_cf_vaults::CeremonyId;
-use slog::o;
 use sp_core::Hasher;
 use sp_runtime::traits::Keccak256;
 use tokio::sync::mpsc::UnboundedSender;
@@ -200,63 +198,23 @@ where
                 my_account_id.clone(),
                 inner_event_sender.clone(),
                 phase_timeout.clone(),
-                logger,
+                &logger,
             ),
-            signing_manager: SigningManager::new(my_account_id, inner_event_sender.clone(), logger),
+            signing_manager: SigningManager::new(
+                my_account_id,
+                inner_event_sender.clone(),
+                &logger,
+            ),
             inner_event_sender,
             pending_requests_to_sign: Default::default(),
-            logger: logger.new(o!(COMPONENT_KEY => "MultisigClient")),
+            logger: logger.clone(),
         }
-    }
-
-    #[cfg(test)]
-    pub fn get_keygen(&self) -> &KeygenManager {
-        &self.keygen
-    }
-
-    #[cfg(test)]
-    pub fn get_key(&self, key_id: KeyId) -> Option<&KeygenResultInfo> {
-        self.key_store.get_key(key_id)
-    }
-
-    #[cfg(test)]
-    pub fn get_db(&self) -> &S {
-        self.key_store.get_db()
-    }
-
-    #[cfg(test)]
-    pub fn get_my_account_id(&self) -> AccountId {
-        self.my_account_id.clone()
-    }
-
-    /// Change the time we wait until deleting all unresolved states
-    #[cfg(test)]
-    pub fn expire_all(&mut self) {
-        self.keygen.expire_all();
-        self.signing_manager.expire_all();
     }
 
     /// Clean up expired states
     pub fn cleanup(&mut self) {
         self.keygen.cleanup();
         self.signing_manager.cleanup();
-    }
-
-    fn add_pending(&mut self, sign_info: SigningInfo) {
-        slog::debug!(
-            self.logger,
-            "[{}] Delaying a request to sign",
-            self.my_account_id
-        );
-
-        // TODO: check for duplicates?
-
-        let entry = self
-            .pending_requests_to_sign
-            .entry(sign_info.key_id.clone())
-            .or_default();
-
-        entry.push(sign_info);
     }
 
     /// Process `instruction` issued internally (i.e. from SC or another local module)
@@ -268,8 +226,8 @@ where
                 // TODO: print ceremony id
                 slog::debug!(
                     self.logger,
-                    "[{}] Received keygen instruction",
-                    self.my_account_id
+                    "Received a keygen request [ceremony_id: {}]",
+                    keygen_info.ceremony_id
                 );
 
                 self.keygen.on_keygen_request(keygen_info);
@@ -278,8 +236,8 @@ where
                 // TODO: print ceremony id
                 slog::debug!(
                     self.logger,
-                    "[{}] Received a request to sign",
-                    self.my_account_id
+                    "Received a request to sign [ceremony_id: {}]",
+                    sign_info.ceremony_id
                 );
 
                 let key = self.key_store.get_key(sign_info.key_id.clone());
@@ -295,7 +253,20 @@ where
                     }
                     None => {
                         // The key is not ready, delay until either it is ready or timeout
-                        self.add_pending(sign_info);
+
+                        slog::debug!(
+                            self.logger,
+                            "Delaying a request to sign for unknown key: {:?} [ceremony_id: {}]",
+                            sign_info.key_id,
+                            sign_info.ceremony_id
+                        );
+
+                        // TODO: check for duplicates?
+
+                        self.pending_requests_to_sign
+                            .entry(sign_info.key_id.clone())
+                            .or_default()
+                            .push(sign_info);
                     }
                 }
             }
@@ -308,12 +279,13 @@ where
             .pending_requests_to_sign
             .remove(&KeyId(key_info.key.get_public_key_bytes()))
         {
-            slog::debug!(
-                self.logger,
-                "Processing pending requests to sign, count: {}",
-                reqs.len()
-            );
             for signing_info in reqs {
+                slog::debug!(
+                    self.logger,
+                    "Processing a pending requests to sign [ceremony_id: {}]",
+                    signing_info.ceremony_id
+                );
+
                 self.signing_manager.on_request_to_sign(
                     signing_info.data,
                     key_info.clone(),
@@ -338,6 +310,7 @@ where
                     key_info.key.get_public_key().get_element(),
                 )))
         {
+            // TODO: alert
             slog::error!(
                 self.logger,
                 "Could not sent KeygenOutcome::Success: {}",
@@ -377,8 +350,40 @@ where
                     .process_signing_data(sender_id, multisig_message);
             }
             Err(_) => {
-                slog::warn!(self.logger, "Cannot parse multisig message, discarding");
+                slog::warn!(
+                    self.logger,
+                    "Cannot parse multisig message from {}, discarding",
+                    sender_id
+                );
             }
         }
+    }
+}
+
+#[cfg(test)]
+impl<S> MultisigClient<S>
+where
+    S: KeyDB,
+{
+    pub fn get_keygen(&self) -> &KeygenManager {
+        &self.keygen
+    }
+
+    pub fn get_key(&self, key_id: KeyId) -> Option<&KeygenResultInfo> {
+        self.key_store.get_key(key_id)
+    }
+
+    pub fn get_db(&self) -> &S {
+        self.key_store.get_db()
+    }
+
+    pub fn get_my_account_id(&self) -> AccountId {
+        self.my_account_id.clone()
+    }
+
+    /// Change the time we wait until deleting all unresolved states
+    pub fn expire_all(&mut self) {
+        self.keygen.expire_all();
+        self.signing_manager.expire_all();
     }
 }
