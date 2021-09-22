@@ -141,9 +141,10 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle());
 	let (rpc_params, _) = RpcCore::new(Arc::new(subscription_task_executor));
 	let rpc_params = Arc::new(rpc_params);
-	let (p2p, comms) = cf_p2p::substrate_network_bridge(
+	let (p2p, comms) = cf_p2p::NetworkBridge::new(
 		rpc_params.clone(),
-		network.clone());
+		network.clone()
+	);
 
 	let rpc_extensions_builder = {
 		Box::new(move |_deny_unsafe, _| {

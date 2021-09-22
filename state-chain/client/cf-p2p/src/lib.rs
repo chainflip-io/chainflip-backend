@@ -329,19 +329,8 @@ pub struct NetworkBridge<Observer: NetworkObserver, Network: PeerNetwork> {
 	command_receiver: UnboundedReceiver<MessagingCommand>,
 }
 
-/// Helper method for creating a network bridge to the substrate network.
-pub fn substrate_network_bridge<Observer: NetworkObserver, B: BlockT, H: ExHashT>(
-	observer: Arc<Observer>,
-	network: Arc<NetworkService<B, H>>,
-) -> (
-	NetworkBridge<Observer, NetworkService<B, H>>,
-	Arc<Mutex<Sender>>,
-) {
-	NetworkBridge::new(observer, network)
-}
-
 impl<Observer: NetworkObserver, Network: PeerNetwork> NetworkBridge<Observer, Network> {
-	pub(crate) fn new(
+	pub fn new(
 		observer: Arc<Observer>,
 		p2p_network: Arc<Network>,
 	) -> (Self, Arc<Mutex<Sender>>) {
