@@ -182,32 +182,36 @@ mod test {
 	}
 
 	#[test]
-	fn should_update_state_of_passive_node_if_stake_qualifies_for_backup() {
+	fn should_promote_passive_node_if_stake_qualifies_for_backup() {
 		new_test_ext().execute_with(|| match AuctionPallet::current_phase() {
 			AuctionPhase::WaitingForBids(..) => {
 				let backup_validators = current_backup_validators();
 				let passive_nodes = current_passive_nodes();
 
-				let bottom_of_the_backup_validators = backup_validators.last().unwrap();
-				let top_of_the_passive_nodes = passive_nodes.first().unwrap();
-				let new_bid = AuctionPallet::lowest_backup_validator_bid() + 1;
+				let (bottom_backup_validator, lowest_backup_validator_bid) = backup_validators.last().unwrap();
+				let (top_passive_node, highest_passive_validator_bid) = passive_nodes.first().unwrap();
+				assert_eq!(*lowest_backup_validator_bid, AuctionPallet::lowest_backup_validator_bid());
+				assert_eq!(*highest_passive_validator_bid, AuctionPallet::highest_passive_validator_bid());
+				let new_bid = lowest_backup_validator_bid + 1;
+
 				// Promote a passive node to the backup set
 				HandleStakes::<Test>::stake_updated(
-					top_of_the_passive_nodes.0,
+					*top_passive_node,
 					new_bid,
 				);
 
 				assert_eq!(
-					MockChainflipAccount::get(&top_of_the_passive_nodes.0).state,
+					MockChainflipAccount::get(&top_passive_node).state,
 					ChainflipAccountState::Backup
 				);
 
 				assert_eq!(
-					MockChainflipAccount::get(&bottom_of_the_backup_validators.0).state,
+					MockChainflipAccount::get(&bottom_backup_validator).state,
 					ChainflipAccountState::Passive
 				);
 
-				let top_of_the_passive_nodes = (top_of_the_passive_nodes.0, new_bid);
+				// Reset with the new bid
+				let top_of_the_passive_nodes = (*top_passive_node, new_bid);
 
 				let backup_validators = current_backup_validators();
 				let passive_nodes = current_passive_nodes();
@@ -216,7 +220,7 @@ mod test {
 				let new_top_of_the_passive_nodes = passive_nodes.first().unwrap();
 
 				assert_eq!(&top_of_the_passive_nodes, new_bottom_of_the_backup_validators);
-				assert_eq!(new_top_of_the_passive_nodes, bottom_of_the_backup_validators);
+				assert_eq!(*new_top_of_the_passive_nodes, (*bottom_backup_validator, *lowest_backup_validator_bid));
 
 				assert_eq!(AuctionPallet::lowest_backup_validator_bid(), new_bid);
 			}
@@ -224,6 +228,32 @@ mod test {
 		});
 	}
 
+	#[test]
+	fn should_demote_backup_validator_on_poor_stake() {
+		new_test_ext().execute_with(|| match AuctionPallet::current_phase() {
+			AuctionPhase::WaitingForBids(..) => {
+				let backup_validators = current_backup_validators();
+
+				let (top_backup_validator_id, _) = backup_validators.first().unwrap();
+				let new_bid = AuctionPallet::highest_passive_validator_bid() - 1;
+
+				HandleStakes::<Test>::stake_updated(
+					*top_backup_validator_id,
+					new_bid,
+				);
+
+				assert_eq!(
+					MockChainflipAccount::get(top_backup_validator_id).state,
+					ChainflipAccountState::Passive
+				);
+
+				// The top passive node would move upto backup set and the highest passive bid
+				// would be recalculated
+				assert_eq!(AuctionPallet::highest_passive_validator_bid(), new_bid);
+			}
+			_ => unreachable!("wrong phase"),
+		});
+	}
 	#[test]
 	fn changing_range() {
 		new_test_ext().execute_with(|| {
