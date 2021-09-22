@@ -113,16 +113,14 @@ mod test {
 
         let request_test = |path: &'static str, expected_status: Option<reqwest::StatusCode>| {
             let health_check = health_check.clone();
-            
+
             async move {
                 let result_status = reqwest::get(&format!(
                     "http://{}:{}/{}",
                     &health_check.hostname, &health_check.port, path
-                )).await;
-                assert_eq!(
-                    result_status.ok().map(|x| x.status()),
-                    expected_status
-                );
+                ))
+                .await;
+                assert_eq!(result_status.ok().map(|x| x.status()), expected_status);
             }
         };
 
