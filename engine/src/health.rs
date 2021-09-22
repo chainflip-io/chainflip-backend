@@ -111,33 +111,23 @@ mod test {
         let health_monitor = HealthMonitor::new(&health_check, &logger);
         let sender = health_monitor.run().await;
 
-        let curl_test = |path: &'static str, expected_stdout: &'static str| {
+        let request_test = |path: &'static str, expected_status: Option<reqwest::StatusCode>| {
             let health_check = health_check.clone();
+            
             async move {
+                let result_status = reqwest::get(&format!(
+                    "http://{}:{}/{}",
+                    &health_check.hostname, &health_check.port, path
+                )).await;
                 assert_eq!(
-                    assert_ok!(std::str::from_utf8(
-                        &Command::new("curl")
-                            .args(&[
-                                "-w",
-                                "%{http_code}\n",
-                                "-i",
-                                &format!(
-                                    "http://{}:{}/{}",
-                                    &health_check.hostname, &health_check.port, path
-                                ),
-                            ])
-                            .output()
-                            .await
-                            .unwrap()
-                            .stdout
-                    )),
-                    expected_stdout
+                    result_status.ok().map(|x| x.status()),
+                    expected_status
                 );
             }
         };
 
-        curl_test("health", "HTTP/1.1 200 OK\r\n\r\n200\n").await;
-        curl_test("invalid", "000\n").await;
+        request_test("health", Some(reqwest::StatusCode::from_u16(200).unwrap())).await;
+        request_test("invalid", None).await;
 
         sender.send(()).unwrap();
     }
