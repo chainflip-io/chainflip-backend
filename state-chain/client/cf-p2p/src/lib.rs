@@ -29,7 +29,6 @@ use sp_runtime::traits::Block as BlockT;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::pin::Pin;
-use std::sync::Mutex;
 
 // TODO: This is duplicated in the CFE, can we just use one of these?
 /// The type of validator id expected by the p2p layer, uses standard serialization.
@@ -333,18 +332,17 @@ impl<Observer: NetworkObserver, Network: PeerNetwork> NetworkBridge<Observer, Ne
 	pub fn new(
 		observer: Arc<Observer>,
 		p2p_network: Arc<Network>,
-	) -> (Self, Arc<Mutex<Sender>>) {
+	) -> (Self, Arc<UnboundedSender<MessagingCommand>>) {
 		let state_machine = StateMachine::new(observer, p2p_network.clone());
 		let network_event_stream = p2p_network.event_stream().fuse();
-		let (sender, command_receiver) = Sender::new();
-		let sender = Arc::new(Mutex::new(sender));
+		let (command_sender, command_receiver) = unbounded();
 		(
 			NetworkBridge {
 				state_machine,
 				network_event_stream,
 				command_receiver,
 			},
-			sender,
+			Arc::new(command_sender),
 		)
 	}
 }
@@ -356,51 +354,6 @@ pub enum MessagingCommand {
 	Send(AccountId, RawMessage),
 	Broadcast(Vec<AccountId>, RawMessage),
 	BroadcastAll(RawMessage),
-}
-
-/// Messaging by sending directly or broadcasting
-pub trait P2PMessaging {
-	fn identify(&mut self, validator_id: AccountId) -> Result<()>;
-	fn send_message(&mut self, validator_id: AccountId, data: RawMessage) -> Result<()>;
-	fn broadcast(&self, validators: Vec<AccountId>, data: RawMessage) -> Result<()>;
-	fn broadcast_all(&self, data: RawMessage) -> Result<()>;
-}
-
-/// A thin wrapper around an `UnboundedSender` channel. Messages pushed to this will be
-/// relayed to the network.
-pub struct Sender(UnboundedSender<MessagingCommand>);
-
-impl Sender {
-	pub fn new() -> (Self, UnboundedReceiver<MessagingCommand>) {
-		let (tx, rx) = unbounded();
-		(Self(tx), rx)
-	}
-}
-
-impl P2PMessaging for Sender {
-	fn identify(&mut self, validator_id: AccountId) -> Result<()> {
-		self.0
-			.unbounded_send(MessagingCommand::Identify(validator_id))?;
-		Ok(())
-	}
-
-	fn send_message(&mut self, validator_id: AccountId, data: RawMessage) -> Result<()> {
-		self.0
-			.unbounded_send(MessagingCommand::Send(validator_id, data))?;
-		Ok(())
-	}
-
-	fn broadcast(&self, validators: Vec<AccountId>, data: RawMessage) -> Result<()> {
-		self.0
-			.unbounded_send(MessagingCommand::Broadcast(validators, data))?;
-		Ok(())
-	}
-
-	fn broadcast_all(&self, data: RawMessage) -> Result<()> {
-		self.0
-			.unbounded_send(MessagingCommand::BroadcastAll(data))?;
-		Ok(())
-	}
 }
 
 impl<O, N> NetworkBridge<O, N>

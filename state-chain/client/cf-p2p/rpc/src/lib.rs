@@ -1,5 +1,5 @@
 pub mod p2p_serde;
-use cf_p2p::{AccountId, NetworkObserver, P2PMessaging, RawMessage};
+use cf_p2p::{AccountId, MessagingCommand, NetworkObserver, RawMessage};
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures::{StreamExt, TryStreamExt};
 pub use gen_client::Client as P2PRpcClient;
@@ -213,58 +213,45 @@ impl NetworkObserver for RpcCore {
 }
 
 /// The RPC bridge and API
-pub struct Rpc<C: P2PMessaging> {
+pub struct Rpc {
 	core: Arc<RpcCore>,
-	messaging: Arc<Mutex<C>>,
+	rpc_command_sender: Arc<UnboundedSender<MessagingCommand>>,
 }
 
-impl<C: P2PMessaging> Rpc<C> {
-	pub fn new(messaging: Arc<Mutex<C>>, core: Arc<RpcCore>) -> Self {
-		Rpc { messaging, core }
+impl Rpc {
+	pub fn new(
+		rpc_command_sender: Arc<UnboundedSender<MessagingCommand>>,
+		core: Arc<RpcCore>
+	) -> Self {
+		Rpc { rpc_command_sender, core }
+	}
+
+	fn messaging_command(&self, command : MessagingCommand) -> Result<u64> {
+		match self.rpc_command_sender.unbounded_send(command) {
+			Ok(()) => Ok(200),
+			Err(error) => Err({
+				let mut e = Error::internal_error();
+				e.message = format!("{}", error);
+				e
+			})
+		}
 	}
 }
 
 /// Impl of the `RpcApi` - send, broadcast and subscribe to notifications
-impl<C: P2PMessaging + Sync + Send + 'static> RpcApi for Rpc<C> {
+impl RpcApi for Rpc {
 	type Metadata = sc_rpc::Metadata;
 
 	fn self_identify(&self, validator_id: AccountIdBs58) -> Result<u64> {
-		self.messaging
-			.lock()
-			.unwrap()
-			.identify(validator_id.into())
-			.map_err(|inner| {
-				let mut e = Error::internal_error();
-				e.message = format!("{}", inner);
-				e
-			})
-			.map(|_| 200)
+		self.messaging_command(MessagingCommand::Identify(validator_id.into()))
 	}
 
 	fn send(&self, validator_id: AccountIdBs58, message: MessageBs58) -> Result<u64> {
-		self.messaging
-			.lock()
-			.unwrap()
-			.send_message(validator_id.into(), message.into())
-			.map_err(|inner| {
-				let mut e = Error::internal_error();
-				e.message = format!("{}", inner);
-				e
-			})
-			.map(|_| 200)
+		self.messaging_command(MessagingCommand::Send(validator_id.into(), message.into()))
 	}
 
 	fn broadcast(&self, message: MessageBs58) -> Result<u64> {
-		self.messaging
-			.lock()
-			.unwrap()
-			.broadcast_all(message.into())
-			.map_err(|inner| {
-				let mut e = Error::internal_error();
-				e.message = format!("{}", inner);
-				e
-			})
-			.map(|_| 200)
+		self.messaging_command(MessagingCommand::BroadcastAll(message.into()))
 	}
 
 	fn subscribe_notifications(&self, _metadata: Self::Metadata, subscriber: Subscriber<P2PEvent>) {
