@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::common::broadcast::{BroadcastStage, StageProcessor};
+use super::common::broadcast::{BroadcastStage, BroadcastStageProcessor};
 use super::frost::{
     self, BroadcastVerificationMessage, Comm1, LocalSig3, SecretNoncePair, SigningData,
     VerifyComm2, VerifyLocalSig4,
@@ -48,7 +48,7 @@ impl AwaitCommitments1 {
 
 derive_display!(AwaitCommitments1);
 
-impl StageProcessor<SigningData, SchnorrSignature> for AwaitCommitments1 {
+impl BroadcastStageProcessor<SigningData, SchnorrSignature> for AwaitCommitments1 {
     type Message = Comm1;
 
     fn init(&self) -> Self::Message {
@@ -90,7 +90,7 @@ struct VerifyCommitmentsBroadcast2 {
 
 derive_display!(VerifyCommitmentsBroadcast2);
 
-impl StageProcessor<SigningData, SchnorrSignature> for VerifyCommitmentsBroadcast2 {
+impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitmentsBroadcast2 {
     type Message = VerifyComm2;
 
     fn init(&self) -> Self::Message {
@@ -143,7 +143,7 @@ struct LocalSigStage3 {
 
 derive_display!(LocalSigStage3);
 
-impl StageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
+impl BroadcastStageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
     type Message = LocalSig3;
 
     fn init(&self) -> Self::Message {
@@ -188,7 +188,7 @@ struct VerifyLocalSigsBroadcastStage4 {
 
 derive_display!(VerifyLocalSigsBroadcastStage4);
 
-impl StageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsBroadcastStage4 {
+impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsBroadcastStage4 {
     type Message = VerifyLocalSig4;
 
     fn init(&self) -> Self::Message {

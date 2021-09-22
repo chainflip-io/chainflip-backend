@@ -11,7 +11,7 @@ use super::{
 
 /// Abstracts away computations performed during every "broadcast" stage
 /// of a ceremony
-pub trait StageProcessor<D, Result>: Clone + Display {
+pub trait BroadcastStageProcessor<D, Result>: Clone + Display {
     /// The specific variant of D shared between parties
     /// during this stage
     type Message: Clone + Into<D> + TryFrom<D>;
@@ -33,7 +33,7 @@ pub trait StageProcessor<D, Result>: Clone + Display {
 #[derive(Clone)]
 pub struct BroadcastStage<D, Result, P, Sender>
 where
-    P: StageProcessor<D, Result>,
+    P: BroadcastStageProcessor<D, Result>,
     Sender: P2PSender<Data = D>,
 {
     common: CeremonyCommon<D, Sender>,
@@ -47,7 +47,7 @@ where
 impl<D, Result, P, Sender> BroadcastStage<D, Result, P, Sender>
 where
     D: Clone,
-    P: StageProcessor<D, Result>,
+    P: BroadcastStageProcessor<D, Result>,
     Sender: P2PSender<Data = D>,
 {
     pub fn new(processor: P, common: CeremonyCommon<D, Sender>) -> Self
@@ -81,7 +81,7 @@ where
 
 impl<D, Result, P, Sender> Display for BroadcastStage<D, Result, P, Sender>
 where
-    P: StageProcessor<D, Result>,
+    P: BroadcastStageProcessor<D, Result>,
     Sender: P2PSender<Data = D>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -93,8 +93,8 @@ impl<D, Result, P, Sender> CeremonyStage for BroadcastStage<D, Result, P, Sender
 where
     D: Clone + Display,
     Result: Clone,
-    P: StageProcessor<D, Result>,
-    <P as StageProcessor<D, Result>>::Message: TryFrom<D>,
+    P: BroadcastStageProcessor<D, Result>,
+    <P as BroadcastStageProcessor<D, Result>>::Message: TryFrom<D>,
     Sender: P2PSender<Data = D>,
 {
     type Message = D;
