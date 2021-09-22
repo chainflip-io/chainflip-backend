@@ -160,7 +160,7 @@ pub mod pallet {
 			}
 
 			for request in RetryQueue::<T, I>::take() {
-				Self::broadcast_attempt(request.unsigned_tx, request.attempt);
+				Self::broadcast_attempt(request.unsigned_tx, request.attempt.wrapping_add(1));
 			}
 
 			// TODO: replace this with benchmark results.
@@ -275,14 +275,14 @@ pub mod pallet {
 					});
 					RetryQueue::<T, I>::append(RetryAttempt::<T, I> {
 						unsigned_tx: failed_attempt.unsigned_tx, 
-						attempt: failed_attempt.attempt + 1,
+						attempt: failed_attempt.attempt,
 					});
 					Self::deposit_event(Event::<T, I>::RetryScheduled(id, failed_attempt.attempt));
 				}
 				BroadcastFailure::TransactionTimeout => {
 					RetryQueue::<T, I>::append(RetryAttempt::<T, I> {
 						unsigned_tx: failed_attempt.unsigned_tx, 
-						attempt: failed_attempt.attempt + 1,
+						attempt: failed_attempt.attempt,
 					});
 					Self::deposit_event(Event::<T, I>::RetryScheduled(id, failed_attempt.attempt));
 				}

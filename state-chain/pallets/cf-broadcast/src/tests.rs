@@ -1,8 +1,8 @@
 use crate::{
-	mock::*, AwaitingBroadcast, AwaitingSignature, BroadcastFailure, BroadcastId, Error,
-	Event as BroadcastEvent,
+	mock::*, AwaitingBroadcast, AwaitingSignature, BroadcastFailure, BroadcastId, Error, RetryQueue,
+	Event as BroadcastEvent, Instance0
 };
-use frame_support::{assert_noop, assert_ok, instances::Instance0};
+use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use frame_system::RawOrigin;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -38,6 +38,9 @@ impl MockCfe {
 				BroadcastEvent::BroadcastComplete(id) => {
 					COMPLETED_BROADCASTS.with(|cell| cell.borrow_mut().push(id));
 				}
+				BroadcastEvent::RetryScheduled(_, _) => {
+					// Informational only. No action required by the CFE.
+				},
 				BroadcastEvent::__Ignore(_, _) => unimplemented!(),
 			},
 			_ => panic!("Unexpected event"),
@@ -91,7 +94,7 @@ fn test_broadcast_happy_path() {
 		));
 		assert!(AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID).is_some());
 
-		// CFE responds with a signed transaction. This moves the broadcast to the next state.
+		// CFE responds with a signed transaction. This moves us to the broadcast stage.
 		MockCfe::respond(Scenario::HappyPath);
 		assert!(AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID).is_none());
 		assert!(AwaitingBroadcast::<Test, Instance0>::get(BROADCAST_ID).is_some());
@@ -107,6 +110,36 @@ fn test_broadcast_happy_path() {
 			COMPLETED_BROADCASTS.with(|cell| *cell.borrow().first().unwrap()),
 			BROADCAST_ID
 		);
+	})
+}
+
+#[test]
+fn test_broadcast_rejected() {
+	new_test_ext().execute_with(|| {
+		const BROADCAST_ID: BroadcastId = 1;
+
+		// Initiate broadcast
+		assert_ok!(DogeBroadcast::start_broadcast(
+			Origin::root(),
+			MockUnsignedTx
+		));
+		assert!(AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID).unwrap().attempt == 0);
+
+		// CFE responds with a signed transaction. This moves us to the broadcast stage.
+		MockCfe::respond(Scenario::HappyPath);
+		assert!(AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID).is_none());
+		assert!(AwaitingBroadcast::<Test, Instance0>::get(BROADCAST_ID).is_some());
+
+		// CFE responds that the transaction was rejected.
+		MockCfe::respond(Scenario::UnhappyPath(BroadcastFailure::TransactionRejected));
+		assert!(AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID).is_none());
+		assert!(AwaitingBroadcast::<Test, Instance0>::get(BROADCAST_ID).is_none());
+		assert_eq!(RetryQueue::<Test, Instance0>::decode_len().unwrap_or_default(), 1);
+
+		// The `on_initialize` hook is called and triggers a new broadcast attempt.
+		DogeBroadcast::on_initialize(0);
+		assert_eq!(RetryQueue::<Test, Instance0>::decode_len().unwrap_or_default(), 0);
+		assert!(AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID + 1).unwrap().attempt == 1);
 	})
 }
 

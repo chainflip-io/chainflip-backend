@@ -1,7 +1,6 @@
-use crate::{self as pallet_cf_broadcast, BroadcastConfig, SignerNomination};
+use crate::{self as pallet_cf_broadcast, BroadcastConfig, SignerNomination, Instance0};
 use cf_traits::Chainflip;
 use codec::{Decode, Encode};
-use frame_support::instances::Instance0;
 use frame_support::parameter_types;
 use frame_system;
 use sp_core::H256;
@@ -56,6 +55,7 @@ impl frame_system::Config for Test {
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
+cf_traits::impl_mock_offline_conditions!(u64);
 
 impl Chainflip for Test {
 	type KeyId = u32;
@@ -114,6 +114,7 @@ impl pallet_cf_broadcast::Config<Instance0> for Test {
 	type TargetChain = Doge;
 	type BroadcastConfig = MockBroadcast;
 	type SignerNomination = MockNominator;
+	type OfflineConditions = MockOfflineConditions;
 }
 
 // Build genesis storage according to the mock runtime.
