@@ -94,29 +94,9 @@ pub trait RpcApi {
 	) -> jsonrpc_core::Result<bool>;
 }
 
-/// A list of subscribers to the p2p message events coming in from cf-p2p
-#[derive(Clone)]
-pub struct P2PStream {
-	subscribers: Arc<Mutex<Vec<UnboundedSender<P2PEvent>>>>,
-}
-
-impl P2PStream {
-	fn new() -> Self {
-		let subscribers = Arc::new(Mutex::new(vec![]));
-		P2PStream { subscribers }
-	}
-
-	/// A new subscriber to be notified on upcoming events
-	fn subscribe(&self) -> UnboundedReceiver<P2PEvent> {
-		let (tx, rx) = unbounded();
-		self.subscribers.lock().unwrap().push(tx);
-		rx
-	}
-}
-
 /// Our core bridge between p2p events and our RPC subscribers
 pub struct RpcCore {
-	stream: P2PStream,
+	subscribers: Arc<Mutex<Vec<UnboundedSender<P2PEvent>>>>,
 	manager: SubscriptionManager,
 }
 
@@ -153,23 +133,26 @@ pub enum P2PEvent {
 }
 
 impl RpcCore {
-	pub fn new<E>(executor: Arc<E>) -> (Self, P2PStream)
+	pub fn new<E>(executor: Arc<E>) -> Self
 	where
 		E: Executor<Box<(dyn Future<Item = (), Error = ()> + Send)>> + Send + Sync + 'static,
 	{
-		let stream = P2PStream::new();
-		(
-			RpcCore {
-				stream: stream.clone(),
-				manager: SubscriptionManager::new(executor),
-			},
-			stream.clone(),
-		)
+		RpcCore {
+			subscribers : Default::default(),
+			manager: SubscriptionManager::new(executor),
+		}
+	}
+
+	/// A new subscriber to be notified on upcoming events
+	fn subscribe(&self) -> UnboundedReceiver<P2PEvent> {
+		let (tx, rx) = unbounded();
+		self.subscribers.lock().unwrap().push(tx);
+		rx
 	}
 
 	/// Notify to our subscribers
 	fn notify(&self, event: P2PEvent) {
-		let subscribers = self.stream.subscribers.lock().unwrap();
+		let subscribers = self.subscribers.lock().unwrap();
 		for subscriber in subscribers.iter() {
 			if let Err(e) = subscriber.unbounded_send(event.clone()) {
 				debug!("Failed to send message: {:?}", e);
@@ -257,7 +240,6 @@ impl RpcApi for Rpc {
 	fn subscribe_notifications(&self, _metadata: Self::Metadata, subscriber: Subscriber<P2PEvent>) {
 		let stream = self
 			.core
-			.stream
 			.subscribe()
 			.map(|x| Ok::<_, ()>(x))
 			.map_err(|e| warn!("Notification stream error: {:?}", e))
