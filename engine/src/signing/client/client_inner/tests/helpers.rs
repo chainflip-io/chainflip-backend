@@ -1,7 +1,9 @@
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, pin::Pin, time::Duration};
 
+use futures::StreamExt;
 use pallet_cf_vaults::CeremonyId;
-use tokio::sync::mpsc::UnboundedReceiver;
+
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::signing::client::client_inner::frost;
 
@@ -28,50 +30,15 @@ use crate::{
     },
 };
 
-impl<T> From<UnboundedReceiver<T>> for PeekableReceiver<T> {
-    fn from(rx: UnboundedReceiver<T>) -> Self {
-        PeekableReceiver {
-            receiver: rx,
-            next: None,
-        }
-    }
-}
-
-pub struct PeekableReceiver<T> {
-    receiver: UnboundedReceiver<T>,
-    next: Option<T>,
-}
-
-impl<T> PeekableReceiver<T> {
-    /// Get the next element
-    async fn recv(&mut self) -> Option<T> {
-        if let Some(x) = self.next.take() {
-            return Some(x);
-        }
-
-        self.receiver.recv().await
-    }
-
-    /// Get a reference to the next element without
-    /// consuming it
-    async fn peek(&mut self) -> Option<&T> {
-        if self.next.is_some() {
-            return self.next.as_ref();
-        }
-
-        self.next = self.receiver.recv().await;
-
-        self.next.as_ref()
-    }
-}
-
 type MultisigClientNoDB = MultisigClient<KeyDBMock>;
 type BroadcastVerification2 = frost::BroadcastVerificationMessage<SigningCommitment>;
 type BroadcastVerification4 = frost::BroadcastVerificationMessage<LocalSig3>;
 
 use super::{KEYGEN_CEREMONY_ID, MESSAGE_HASH, SIGNER_IDS, SIGNER_IDXS, SIGN_CEREMONY_ID};
 
-type InnerEventReceiver = PeekableReceiver<InnerEvent>;
+type InnerEventReceiver = Pin<
+    Box<futures::stream::Peekable<tokio_stream::wrappers::UnboundedReceiverStream<InnerEvent>>>,
+>;
 
 /// Clients generated bc1, but haven't sent them
 pub struct KeygenPhase1Data {
@@ -372,7 +339,7 @@ impl KeygenContext {
                     TEST_PHASE_TIMEOUT,
                     &logger,
                 );
-                (c, rx.into())
+                (c, Box::pin(UnboundedReceiverStream::new(rx).peekable()))
             })
             .unzip();
 
@@ -698,22 +665,19 @@ impl KeygenContext {
     }
 }
 
+const CHANNEL_TIMEOUT: Duration = Duration::from_millis(10);
+
 // If we timeout, the channel is empty at the time of retrieval
 pub async fn assert_channel_empty(rx: &mut InnerEventReceiver) {
-    let fut = rx.recv();
-    let dur = std::time::Duration::from_millis(10);
-
-    assert!(tokio::time::timeout(dur, fut).await.is_err());
+    assert!(check_for_inner_event(rx).await.is_none());
 }
 
 /// Skip all non-signal messages
 pub async fn recv_next_signal_message_skipping(
     rx: &mut InnerEventReceiver,
 ) -> Option<SigningOutcome> {
-    let dur = std::time::Duration::from_millis(10);
-
     loop {
-        let res = tokio::time::timeout(dur, rx.recv()).await.ok()??;
+        let res = check_for_inner_event(rx).await?;
 
         if let InnerEvent::SigningResult(s) = res {
             return Some(s);
@@ -723,7 +687,7 @@ pub async fn recv_next_signal_message_skipping(
 
 /// Check if the next event produced by the receiver is SigningOutcome
 pub async fn check_outcome(rx: &mut InnerEventReceiver) -> Option<&SigningOutcome> {
-    let event: &InnerEvent = tokio::time::timeout(Duration::from_millis(10), rx.peek())
+    let event: &InnerEvent = tokio::time::timeout(CHANNEL_TIMEOUT, rx.as_mut().peek())
         .await
         .ok()??;
 
@@ -746,16 +710,13 @@ pub async fn recv_next_inner_event(rx: &mut InnerEventReceiver) -> InnerEvent {
 
 /// checks for an InnerEvent in the queue with a short timeout, returns the InnerEvent if there is one.
 pub async fn check_for_inner_event(rx: &mut InnerEventReceiver) -> Option<InnerEvent> {
-    let dur = std::time::Duration::from_millis(10);
-    let res = tokio::time::timeout(dur, rx.recv()).await;
-    let opt = res.ok()?;
-    opt
+    tokio::time::timeout(CHANNEL_TIMEOUT, rx.next())
+        .await
+        .ok()?
 }
 
 pub async fn recv_p2p_message(rx: &mut InnerEventReceiver) -> P2PMessageCommand {
-    let dur = std::time::Duration::from_millis(10);
-
-    let res = tokio::time::timeout(dur, rx.recv())
+    let res = tokio::time::timeout(CHANNEL_TIMEOUT, rx.next())
         .await
         .ok()
         .expect("timeout")

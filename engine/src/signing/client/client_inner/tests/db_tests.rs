@@ -1,3 +1,6 @@
+use futures::StreamExt;
+use tokio_stream::wrappers::UnboundedReceiverStream;
+
 use crate::{
     logging,
     signing::client::{client_inner::MultisigClient, PHASE_TIMEOUT},
@@ -28,7 +31,11 @@ async fn check_signing_db() {
     let restarted_client = MultisigClient::new(id, db, tx, PHASE_TIMEOUT, &logger);
 
     // 4. Replace the client
-    ctx.substitute_client_at(0, restarted_client, rx.into());
+    ctx.substitute_client_at(
+        0,
+        restarted_client,
+        Box::pin(UnboundedReceiverStream::new(rx).peekable()),
+    );
 
     // 5. Signing should not crash
     ctx.sign().await;
