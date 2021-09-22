@@ -12,7 +12,7 @@ mod mock;
 mod tests;
 
 use cf_chains::Chain;
-use cf_traits::{Chainflip, SignerNomination};
+use cf_traits::{Chainflip, SignerNomination, offline_conditions::*};
 use codec::{Decode, Encode};
 use frame_support::{dispatch::DispatchResultWithPostInfo, Parameter, Twox64Concat};
 use frame_system::pallet_prelude::OriginFor;
@@ -80,6 +80,12 @@ pub mod pallet {
 		pub attempt: u8,
 	}
 
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
+	pub struct RetryAttempt<T: Config<I>, I: 'static> {
+		pub unsigned_tx: UnsignedTransactionFor<T, I>,
+		pub attempt: u8,
+	}
+
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config<I: 'static = ()>: Chainflip {
@@ -94,6 +100,9 @@ pub mod pallet {
 
 		/// Signer nomination.
 		type SignerNomination: SignerNomination<SignerId = Self::ValidatorId>;
+
+		/// For reporting bad actors.
+		type OfflineConditions: OfflineConditions<ValidatorId = Self::ValidatorId>;
 	}
 
 	#[pallet::pallet]
@@ -119,7 +128,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub type RetryQueue<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<BroadcastId>, ValueQuery>;
+		StorageValue<_, Vec<RetryAttempt<T, I>>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -130,6 +139,8 @@ pub mod pallet {
 		BroadcastRequest(BroadcastId, SignedTransactionFor<T, I>),
 		/// [broadcast_id]
 		BroadcastComplete(BroadcastId),
+		/// [broadcast_id, attempt]
+		RetryScheduled(BroadcastId, u8)
 	}
 
 	#[pallet::error]
@@ -141,7 +152,22 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {}
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+		fn on_initialize(_n: BlockNumberFor<T>) -> frame_support::weights::Weight {
+			let num_retries = RetryQueue::<T, I>::decode_len().unwrap_or(0);
+			if num_retries == 0 {
+				return 0;
+			}
+
+			for request in RetryQueue::<T, I>::take() {
+				Self::broadcast_attempt(request.unsigned_tx, request.attempt);
+			}
+
+			// TODO: replace this with benchmark results.
+			num_retries as u64
+				* frame_support::weights::RuntimeDbWeight::default().reads_writes(3, 3)
+		}
+	}
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -155,7 +181,9 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin)?;
 
-			Self::broadcast_attempt(unsigned_tx, 0)
+			Self::broadcast_attempt(unsigned_tx, 0);
+
+			Ok(().into())
 		}
 
 		/// Called by the nominated signer when they have completed and signed the transaction, and it is therefore ready
@@ -233,18 +261,37 @@ pub mod pallet {
 
 			match failure {
 				BroadcastFailure::TransactionRejected => {
-					// Report and nominate a new signer. Retry.
-					todo!()
+					const PENALTY: i32 = 0;
+					T::OfflineConditions::report(
+						OfflineCondition::ParticipateSigningFailed,
+						PENALTY,
+						&failed_attempt.signer
+					).unwrap_or_else(|_| {
+						// Should never fail unless the validator doesn't exist.
+						frame_support::debug::error!(
+							"Unable to report unknown validator {:?}", failed_attempt.signer.clone()
+						);
+						0
+					});
+					RetryQueue::<T, I>::append(RetryAttempt::<T, I> {
+						unsigned_tx: failed_attempt.unsigned_tx, 
+						attempt: failed_attempt.attempt + 1,
+					});
+					Self::deposit_event(Event::<T, I>::RetryScheduled(id, failed_attempt.attempt));
 				}
 				BroadcastFailure::TransactionTimeout => {
-					// Nominate a new signer, but don't report the old one. Retry.
-					todo!()
+					RetryQueue::<T, I>::append(RetryAttempt::<T, I> {
+						unsigned_tx: failed_attempt.unsigned_tx, 
+						attempt: failed_attempt.attempt + 1,
+					});
+					Self::deposit_event(Event::<T, I>::RetryScheduled(id, failed_attempt.attempt));
 				}
 				BroadcastFailure::TransactionFailed => {
 					// This is bad.
 					todo!()
 				}
 			};
+
 
 			Ok(().into())
 		}
@@ -255,7 +302,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn broadcast_attempt(
 		unsigned_tx: UnsignedTransactionFor<T, I>,
 		attempt: u8,
-	) -> DispatchResultWithPostInfo {
+	) {
 		// Get a new id.
 		let id = BroadcastIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
@@ -277,7 +324,5 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			nominated_signer,
 			unsigned_tx,
 		));
-
-		Ok(().into())
 	}
 }
