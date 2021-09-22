@@ -161,94 +161,32 @@ mod test {
 				run_auction(*bidders);
 				validate_bidder_groups();
 			}
-
-			//We should have our validators states set correctly based on the backup group size parameter
-			// match AuctionPallet::current_phase() {
-			// 	AuctionPhase::WaitingForBids(validators, _) => {
-			// 		let backup_group_size = AuctionPallet::backup_group_size() as usize;
-			// 		let remaining = AuctionPallet::remaining_bidders();
-			//
-			// 		let first_backup_validator = remaining[0];
-			// 		let last_backup_validator = remaining[backup_group_size - 1];
-			// 		let first_passive = remaining[backup_group_size];
-			// 		let last_passive = remaining.last().unwrap();
-			// 		assert_eq!(
-			// 			MockChainflipAccount::get(&validators[0]).state,
-			// 			ChainflipAccountState::Validator
-			// 		);
-			// 		assert_eq!(
-			// 			MockChainflipAccount::get(&validators[(MAX_VALIDATOR_SIZE - 1) as usize])
-			// 				.state,
-			// 			ChainflipAccountState::Validator
-			// 		);
-			// 		assert_eq!(
-			// 			MockChainflipAccount::get(&first_backup_validator.0).state,
-			// 			ChainflipAccountState::Backup
-			// 		);
-			// 		assert_eq!(
-			// 			MockChainflipAccount::get(&last_backup_validator.0).state,
-			// 			ChainflipAccountState::Backup
-			// 		);
-			// 		assert_eq!(
-			// 			MockChainflipAccount::get(&first_passive.0).state,
-			// 			ChainflipAccountState::Passive
-			// 		);
-			// 		assert_eq!(
-			// 			MockChainflipAccount::get(&last_passive.0).state,
-			// 			ChainflipAccountState::Passive
-			// 		);
-			//
-			// 		let minimum_backup_bid = remaining[backup_group_size - 1].1;
-			// 		// Update stakes via `HandleStakes`
-			// 		// Take the top passive and increase their stake to minimum backup bid plus 1
-			// 		// The last backup validator should now be a passive validator
-			// 		// and our passive validator is now a backup validator
-			// 		HandleStakes::<Test>::stake_updated(first_passive.0, minimum_backup_bid + 1);
-			// 		assert_eq!(
-			// 			MockChainflipAccount::get(&first_passive.0).state,
-			// 			ChainflipAccountState::Backup
-			// 		);
-			// 		assert_eq!(
-			// 			MockChainflipAccount::get(&last_backup_validator.0).state,
-			// 			ChainflipAccountState::Passive
-			// 		);
-			// 		// Update who is who
-			// 		let first_passive = remaining[backup_group_size];
-			// 		// A backup validator has claimed stake and is now a passive validator
-			// 		// and the first passive has been promoted to backup
-			// 		HandleStakes::<Test>::stake_updated(first_backup_validator.0, 1);
-			// 		assert_eq!(
-			// 			MockChainflipAccount::get(&first_backup_validator.0).state,
-			// 			ChainflipAccountState::Passive
-			// 		);
-			// 		assert_eq!(
-			// 			MockChainflipAccount::get(&first_passive.0).state,
-			// 			ChainflipAccountState::Backup
-			// 		);
-			// 	}
-			// 	_ => {
-			// 		panic!("Wrong phase")
-			// 	}
-			// }
 		});
 	}
 
+	fn current_backup_validators() -> Vec<RemainingBid<ValidatorId, Amount>> {
+		AuctionPallet::remaining_bidders()
+			.iter()
+			.take(AuctionPallet::backup_group_size() as usize)
+			.map(|bid| *bid)
+			.collect()
+	}
+
+	fn current_passive_nodes() -> Vec<RemainingBid<ValidatorId, Amount>> {
+		AuctionPallet::remaining_bidders()
+			.iter()
+			.skip(AuctionPallet::backup_group_size() as usize)
+			.take(usize::MAX)
+			.map(|bid| *bid)
+			.collect()
+	}
+
 	#[test]
-	fn should_update_state_when_stake_shifts_node_into_new_group() {
+	fn should_update_state_of_passive_node_if_stake_qualifies_for_backup() {
 		new_test_ext().execute_with(|| match AuctionPallet::current_phase() {
 			AuctionPhase::WaitingForBids(..) => {
-				let backup_validators: Vec<_> = AuctionPallet::remaining_bidders()
-					.iter()
-					.take(AuctionPallet::backup_group_size() as usize)
-					.map(|bid| *bid)
-					.collect();
-
-				let passive_nodes: Vec<_> = AuctionPallet::remaining_bidders()
-					.iter()
-					.skip(AuctionPallet::backup_group_size() as usize)
-					.take(usize::MAX)
-					.map(|bid| *bid)
-					.collect();
+				let backup_validators = current_backup_validators();
+				let passive_nodes = current_passive_nodes();
 
 				let bottom_of_the_backup_validators = backup_validators.last().unwrap();
 				let top_of_the_passive_nodes = passive_nodes.first().unwrap();
@@ -269,27 +207,23 @@ mod test {
 					ChainflipAccountState::Passive
 				);
 
-				let backup_validators: Vec<_> = AuctionPallet::remaining_bidders()
-					.iter()
-					.take(AuctionPallet::backup_group_size() as usize)
-					.map(|bid| *bid)
-					.collect();
+				let top_of_the_passive_nodes = (top_of_the_passive_nodes.0, new_bid);
 
-				let passive_nodes: Vec<_> = AuctionPallet::remaining_bidders()
-					.iter()
-					.skip(AuctionPallet::backup_group_size() as usize)
-					.take(usize::MAX)
-					.map(|bid| *bid)
-					.collect();
+				let backup_validators = current_backup_validators();
+				let passive_nodes = current_passive_nodes();
 
-				assert_eq!(top_of_the_passive_nodes, backup_validators.last().unwrap());
-				assert_eq!(bottom_of_the_backup_validators, passive_nodes.first().unwrap());
+				let new_bottom_of_the_backup_validators = backup_validators.last().unwrap();
+				let new_top_of_the_passive_nodes = passive_nodes.first().unwrap();
+
+				assert_eq!(&top_of_the_passive_nodes, new_bottom_of_the_backup_validators);
+				assert_eq!(new_top_of_the_passive_nodes, bottom_of_the_backup_validators);
 
 				assert_eq!(AuctionPallet::lowest_backup_validator_bid(), new_bid);
 			}
 			_ => unreachable!("wrong phase"),
 		});
 	}
+
 	#[test]
 	fn changing_range() {
 		new_test_ext().execute_with(|| {
