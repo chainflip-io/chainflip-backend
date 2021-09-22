@@ -18,6 +18,7 @@
 //! [PeerNetwork] is [NetworkService], which is substrate's `libp2p`-based network implementation.
 
 use anyhow::Result;
+use futures::stream::Fuse;
 use core::iter;
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures::{Future, Stream, StreamExt};
@@ -325,7 +326,7 @@ where
 /// network notifications.
 pub struct NetworkBridge<Observer: NetworkObserver, Network: PeerNetwork> {
 	state_machine: StateMachine<Observer, Network>,
-	network_event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
+	network_event_stream: Fuse<Pin<Box<dyn Stream<Item = Event> + Send>>>,
 	command_receiver: UnboundedReceiver<MessagingCommand>,
 }
 
@@ -346,7 +347,7 @@ impl<Observer: NetworkObserver, Network: PeerNetwork> NetworkBridge<Observer, Ne
 		p2p_network: Arc<Network>,
 	) -> (Self, Arc<Mutex<Sender>>) {
 		let state_machine = StateMachine::new(observer, p2p_network.clone());
-		let network_event_stream = Box::pin(p2p_network.event_stream());
+		let network_event_stream = p2p_network.event_stream().fuse();
 		let (sender, command_receiver) = Sender::new();
 		let sender = Arc::new(Mutex::new(sender));
 		(
@@ -414,101 +415,88 @@ impl P2PMessaging for Sender {
 	}
 }
 
-impl<O, N> Unpin for NetworkBridge<O, N>
+impl<O, N> NetworkBridge<O, N>
 where
 	O: NetworkObserver,
 	N: PeerNetwork,
 {
-}
-
-/// `Future` for `NetworkBridge` - poll our outgoing messages and pass them to the `StateMachine` for sending
-/// After which we poll the network for events and again back to the `StateMachine`
-impl<Observer, Network> Future for NetworkBridge<Observer, Network>
-where
-	Observer: NetworkObserver,
-	Network: PeerNetwork,
-{
-	type Output = ();
-
-	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		let this = &mut *self;
+	pub async fn start(mut self) {
 		loop {
-			match this.command_receiver.poll_next_unpin(cx) {
-				Poll::Ready(Some(cmd)) => match cmd {
-					MessagingCommand::Send(validator_id, msg) => {
-						this.state_machine.send_message(validator_id, msg);
-					}
-					MessagingCommand::Broadcast(validators, msg) => {
-						this.state_machine.broadcast(validators, msg);
-					}
-					MessagingCommand::BroadcastAll(msg) => {
-						this.state_machine.broadcast_all(msg);
-					}
-					MessagingCommand::Identify(validator_id) => {
-						this.state_machine.identify(validator_id);
+			futures::select!(
+				option_command = self.command_receiver.next() => {
+					match option_command {
+						Some(cmd) => {
+							match cmd {
+								MessagingCommand::Send(validator_id, msg) => {
+									self.state_machine.send_message(validator_id, msg);
+								}
+								MessagingCommand::Broadcast(validators, msg) => {
+									self.state_machine.broadcast(validators, msg);
+								}
+								MessagingCommand::BroadcastAll(msg) => {
+									self.state_machine.broadcast_all(msg);
+								}
+								MessagingCommand::Identify(validator_id) => {
+									self.state_machine.identify(validator_id);
+								}
+							}
+						},
+						None => break
 					}
 				},
-				Poll::Ready(None) => return Poll::Ready(()),
-				Poll::Pending => break,
-			}
-		}
-
-		loop {
-			match this.network_event_stream.poll_next_unpin(cx) {
-				Poll::Ready(Some(event)) => {
-					match event {
-						Event::SyncConnected { remote } => {
-							this.state_machine.network.reserve_peer(remote);
-						}
-						Event::SyncDisconnected { remote } => {
-							this.state_machine.network.remove_reserved_peer(remote);
-						}
-						Event::NotificationStreamOpened {
-							remote,
-							protocol,
-							role: _,
-						} => {
-							if protocol != CHAINFLIP_P2P_PROTOCOL_NAME {
-								continue;
+				option_event = self.network_event_stream.next() => {
+					match option_event {
+						Some(event) => {
+							match event {
+								Event::SyncConnected { remote } => {
+									self.state_machine.network.reserve_peer(remote);
+								}
+								Event::SyncDisconnected { remote } => {
+									self.state_machine.network.remove_reserved_peer(remote);
+								}
+								Event::NotificationStreamOpened {
+									remote,
+									protocol,
+									role: _,
+								} => {
+									if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
+										self.state_machine.new_peer(&remote);
+									}
+								}
+								Event::NotificationStreamClosed { remote, protocol } => {
+									if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
+										self.state_machine.disconnected(&remote);
+									}
+								}
+								Event::NotificationsReceived { remote, messages } => {
+									if !messages.is_empty() {
+										let messages: Vec<ProtocolMessage> =
+											messages
+												.into_iter()
+												.filter_map(|(protocol, data)| {
+													if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
+														self.state_machine
+															.try_decode(data.as_ref())
+															.map_err(|err| {
+																log::error!("Error deserializing protocol message: {}", err);
+															})
+															.ok()
+													} else {
+														None
+													}
+												})
+												.collect();
+		
+										self.state_machine.received(&remote, messages);
+									}
+								}
+								Event::Dht(_) => {}
 							}
-							this.state_machine.new_peer(&remote);
-						}
-						Event::NotificationStreamClosed { remote, protocol } => {
-							if protocol != CHAINFLIP_P2P_PROTOCOL_NAME {
-								continue;
-							}
-							this.state_machine.disconnected(&remote);
-						}
-						Event::NotificationsReceived { remote, messages } => {
-							if !messages.is_empty() {
-								let messages: Vec<ProtocolMessage> =
-									messages
-										.into_iter()
-										.filter_map(|(protocol, data)| {
-											if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
-												this.state_machine
-													.try_decode(data.as_ref())
-													.map_err(|err| {
-														log::error!("Error deserializing protocol message: {}", err);
-													})
-													.ok()
-											} else {
-												None
-											}
-										})
-										.collect();
-
-								this.state_machine.received(&remote, messages);
-							}
-						}
-						Event::Dht(_) => {}
+						},
+						None => break
 					}
-				}
-				Poll::Ready(None) => return Poll::Ready(()),
-				Poll::Pending => break,
-			}
+				},
+			);
 		}
-
-		Poll::Pending
 	}
 }

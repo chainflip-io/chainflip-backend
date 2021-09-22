@@ -228,7 +228,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 
 	task_manager.spawn_essential_handle().spawn_blocking(
 		"cf-p2p",
-		p2p
+		p2p.start()
 	);
 
 	if enable_grandpa {
