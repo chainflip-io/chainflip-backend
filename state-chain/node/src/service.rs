@@ -139,17 +139,21 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 
 	let subscription_task_executor =
 		sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle());
-	let (rpc_params, _) = RpcCore::new(Arc::new(subscription_task_executor));
-	let rpc_params = Arc::new(rpc_params);
-	let (p2p, comms) = cf_p2p::NetworkBridge::new(
-		rpc_params.clone(),
+	let (rpc_core, _) = RpcCore::new(Arc::new(subscription_task_executor));
+	let rpc_core = Arc::new(rpc_core);
+	let (p2p, rpc_command_sender) = cf_p2p::NetworkBridge::new(
+		rpc_core.clone(),
 		network.clone()
 	);
 
 	let rpc_extensions_builder = {
 		Box::new(move |_deny_unsafe, _| {
 			// TODO: Do we need to handle this DenyUnsafe?
-			crate::rpc::create_full(comms.clone(), rpc_params.clone())
+			let mut io = jsonrpc_core::IoHandler::default();
+			io.extend_with(cf_p2p_rpc::RpcApi::to_delegate(
+				cf_p2p_rpc::Rpc::new(rpc_command_sender.clone(), rpc_core.clone())
+			));
+			io
 		})
 	};
 
