@@ -6,7 +6,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sp_runtime::AccountId32;
 use substrate_subxt::{module, system::System, Event};
 
-pub type RequestId = u64;
+pub type CeremonyId = u64;
 
 #[module]
 pub trait EthereumSigner: System {
@@ -17,8 +17,8 @@ pub trait EthereumSigner: System {
 // The order of these fields matter for decoding
 #[derive(Clone, Debug, Eq, PartialEq, Event, Encode, Decode, Serialize, Deserialize)]
 pub struct ThresholdSignatureRequest<S: EthereumSigner> {
-    /// The request id.
-    request_id: RequestId,
+    /// The ceremony id.
+    ceremony_id: CeremonyId,
     /// The id of the key to be used for signing.
     key_id: S::KeyId,
     /// The list of participants to the signing ceremony.
@@ -40,11 +40,11 @@ mod test_events_decoding {
     fn test_threshold_signature_request() {
         let signatories = vec![AccountKeyring::Alice.to_account_id()];
         let key_id: <StateChainRuntime as EthereumSigner>::KeyId = b"current_key".to_vec();
-        const REQUEST_ID: u64 = 42;
+        const CEREMONY_ID: u64 = 42;
         const PAYLOAD: <StateChainRuntime as EthereumSigner>::Payload = H256([0xcf; 32]);
 
         let event: Event = SigningEvent::<Runtime, Instance0>::ThresholdSignatureRequest(
-            REQUEST_ID,
+            CEREMONY_ID,
             key_id.clone(),
             signatories.clone(),
             PAYLOAD,
@@ -52,7 +52,7 @@ mod test_events_decoding {
         .into();
 
         let expected_subxt_event = ThresholdSignatureRequest::<StateChainRuntime> {
-            request_id: REQUEST_ID,
+            ceremony_id: CEREMONY_ID,
             key_id,
             signatories,
             payload: PAYLOAD,

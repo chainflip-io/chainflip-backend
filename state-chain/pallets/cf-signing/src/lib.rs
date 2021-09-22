@@ -1,5 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-//! Request-Reply Pallet
+//! Signing Pallet
 #[cfg(test)]
 pub mod mock;
 
@@ -19,7 +19,7 @@ use sp_runtime::RuntimeDebug;
 use sp_std::marker::PhantomData;
 use sp_std::prelude::*;
 
-pub type RequestId = u64;
+pub type CeremonyId = u64;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -33,7 +33,7 @@ pub mod pallet {
 	pub struct RequestContext<T: Config<I>, I: 'static> {
 		pub attempt: u8,
 		pub signatories: Vec<T::ValidatorId>,
-		pub chain_specific: T::SigningContext,
+		pub chain_signing_context: T::SigningContext,
 	}
 
 	type SignatureFor<T, I> = <<T as Config<I>>::SigningContext as SigningContext<T>>::Signature;
@@ -67,12 +67,12 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn request_id_counter)]
-	pub type RequestIdCounter<T, I = ()> = StorageValue<_, RequestId, ValueQuery>;
+	pub type CeremonyIdCounter<T, I = ()> = StorageValue<_, CeremonyId, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn pending_request)]
 	pub type PendingRequests<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, RequestId, RequestContext<T, I>, OptionQuery>;
+		StorageMap<_, Twox64Concat, CeremonyId, RequestContext<T, I>, OptionQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn retry_queue)]
@@ -83,17 +83,17 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// [ceremony_id, key_id, signatories, payload]
-		ThresholdSignatureRequest(RequestId, T::KeyId, Vec<T::ValidatorId>, PayloadFor<T, I>),
+		ThresholdSignatureRequest(CeremonyId, T::KeyId, Vec<T::ValidatorId>, PayloadFor<T, I>),
 		/// [ceremony_id, key_id, offenders]
-		ThresholdSignatureFailed(RequestId, T::KeyId, Vec<T::ValidatorId>),
+		ThresholdSignatureFailed(CeremonyId, T::KeyId, Vec<T::ValidatorId>),
 		/// [ceremony_id]
-		ThresholdSignatureSuccess(RequestId),
+		ThresholdSignatureSuccess(CeremonyId),
 	}
 
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
-		/// The provided request id is invalid.
-		InvalidRequestId,
+		/// The provided ceremony id is invalid.
+		InvalidCeremonyId,
 	}
 
 	#[pallet::hooks]
@@ -105,7 +105,7 @@ pub mod pallet {
 			}
 
 			for request in RetryQueue::<T, I>::take() {
-				Self::request_attempt(request.chain_specific, request.attempt + 1);
+				Self::request_attempt(request.chain_signing_context, request.attempt + 1);
 			}
 			// TODO: replace this with benchmark results.
 			num_retries as u64
@@ -119,14 +119,14 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn signature_success(
 			origin: OriginFor<T>,
-			id: RequestId,
+			id: CeremonyId,
 			signature: SignatureFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureWitnessed::ensure_origin(origin.clone())?;
 
 			// Ensure the id is valid and remove the context.
 			let context =
-				PendingRequests::<T, I>::take(id).ok_or(Error::<T, I>::InvalidRequestId)?;
+				PendingRequests::<T, I>::take(id).ok_or(Error::<T, I>::InvalidCeremonyId)?;
 
 			// TODO: verify the threshold signature.
 
@@ -135,14 +135,14 @@ pub mod pallet {
 			// Dispatch the callback.
 			// TODO: Use a custom "threshold sig" origin for this pallet instead of passing through the witness
 			// origin.
-			context.chain_specific.dispatch_callback(origin, signature)
+			context.chain_signing_context.dispatch_callback(origin, signature)
 		}
 
 		/// Reply.
 		#[pallet::weight(10_000)]
 		pub fn signature_failed(
 			origin: OriginFor<T>,
-			id: RequestId,
+			id: CeremonyId,
 			offenders: Vec<<T as Chainflip>::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			const PENALTY: i32 = 15; // TODO: This should probably be specified somewhere common for all penalties.
@@ -157,7 +157,7 @@ pub mod pallet {
 				)
 				.unwrap_or_else(|e| {
 					frame_support::debug::error!(
-						"Unable to report offense for signer {:?}: {:?}",
+						"Unable to report ParticipateSigningFailed for signer {:?}: {:?}",
 						offender,
 						e
 					);
@@ -167,7 +167,7 @@ pub mod pallet {
 
 			// Remove the context and schedule for retry.
 			let context =
-				PendingRequests::<T, I>::take(id).ok_or(Error::<T, I>::InvalidRequestId)?;
+				PendingRequests::<T, I>::take(id).ok_or(Error::<T, I>::InvalidCeremonyId)?;
 
 			RetryQueue::<T, I>::append(context);
 
@@ -185,7 +185,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Emits a request event, stores its context, and returns its id.
 	fn request_attempt(context: T::SigningContext, attempt: u8) -> u64 {
 		// Get a new id.
-		let id = RequestIdCounter::<T, I>::mutate(|id| {
+		let id = CeremonyIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
 			*id
 		});
@@ -206,7 +206,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			RequestContext {
 				attempt,
 				signatories: nominees.clone(),
-				chain_specific: context,
+				chain_signing_context: context,
 			},
 		);
 

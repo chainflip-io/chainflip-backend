@@ -33,7 +33,6 @@ pub mod pallet {
 	use sp_std::prelude::*;
 
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
-	// type EthereumSigningContext<T> = <T as SigningConfig<TargetChain = Ethereum>>::
 
 	#[pallet::config]
 	pub trait Config:
@@ -41,7 +40,6 @@ pub mod pallet {
 		+ StakingConfig
 		+ VaultsConfig
 		+ SigningConfig<Instance0, TargetChain = Ethereum>
-	// + SigningConfig<TargetChain = cf_chains::Bitcoin>
 	{
 		/// Standard Call type. We need this so we can use it as a constraint in `Witnesser`.
 		type Call: IsType<<Self as frame_system::Config>::Call>
@@ -67,9 +65,9 @@ pub mod pallet {
 		///
 		/// This is a convenience extrinsic that simply delegates to the configured witnesser.
 		#[pallet::weight(10_000)]
-		pub fn witness_signature_success(
+		pub fn witness_eth_signature_success(
 			origin: OriginFor<T>,
-			id: pallet_cf_signing::RequestId,
+			id: pallet_cf_signing::CeremonyId,
 			signature: <<T as pallet_cf_signing::Config<Instance0>>::SigningContext as SigningContext<T>>::Signature,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -84,7 +82,7 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn witness_signature_failed(
 			origin: OriginFor<T>,
-			id: pallet_cf_signing::RequestId,
+			id: pallet_cf_signing::CeremonyId,
 			offenders: Vec<T::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;

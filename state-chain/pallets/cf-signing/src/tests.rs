@@ -71,7 +71,7 @@ fn happy_path() {
 				request_id + 1,
 				"MaliciousSignature".to_string()
 			),
-			Error::<Test, Instance0>::InvalidRequestId
+			Error::<Test, Instance0>::InvalidCeremonyId
 		);
 
 		// CFE responds

@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 
 use super::{
     auction::Auction,
-    ethereum_signer::{EthereumSigner, RequestId},
+    ethereum_signer::{EthereumSigner, CeremonyId},
     staking::{FlipBalance, Staking},
 };
 use codec::Encode;
@@ -39,7 +39,7 @@ pub struct WitnessAuctionConfirmationCall<T: WitnesserApi> {
 
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct WitnessSignatureSuccessCall<T: WitnesserApi> {
-    request_id: RequestId,
+    request_id: CeremonyId,
     signature: cf_chains::eth::SchnorrSignature,
     _runtime: PhantomData<T>,
 }
