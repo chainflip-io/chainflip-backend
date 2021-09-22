@@ -116,7 +116,7 @@ impl RewardsDistribution for MockRewardsDistribution<Test> {
 }
 
 impl WeightInfo for () {
-	fn on_initialize(x: u32) -> u64 {
+	fn on_initialize(_x: u32) -> u64 {
 		0 as Weight
 	}
 }

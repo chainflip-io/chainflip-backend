@@ -181,23 +181,6 @@ impl<T: Config> Pallet<T> {
 			}
 			_ => (),
 		}
-		// if let Some(reward_amount) = EmissionPerBlock::<T>::get().checked_mul(&blocks_elapsed) {
-		// 	let exec_weight = if reward_amount.is_zero() {
-		// 		0
-		// 	} else {
-		// 		// Mint the rewards
-		// 		let reward = T::Issuance::mint(reward_amount);
-
-		// 		// Delegate the distribution.
-		// 		T::RewardsDistribution::distribute(reward);
-		// 		T::RewardsDistribution::execution_weight()
-		// 	};
-
-		// 	// Update this pallet's state.
-		// 	LastMintBlock::<T>::set(block_number);
-
-		// 	Self::deposit_event(Event::EmissionsDistributed(block_number, reward_amount));
-		// }
 	}
 }
 
