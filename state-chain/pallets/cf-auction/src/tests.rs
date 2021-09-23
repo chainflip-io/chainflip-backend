@@ -2,35 +2,7 @@ mod test {
 	use crate::mock::*;
 	use crate::*;
 	use cf_traits::mocks::vault_rotation::clear_confirmation;
-	use cf_traits::Bid;
 	use frame_support::{assert_noop, assert_ok};
-
-	fn last_event() -> mock::Event {
-		frame_system::Pallet::<Test>::events()
-			.pop()
-			.expect("Event expected")
-			.event
-	}
-
-	// The last is invalid as it has a bid of 0
-	fn expected_bidding() -> Vec<Bid<ValidatorId, Amount>> {
-		let mut bidders = TestBidderProvider::get_bidders();
-		bidders.pop();
-		bidders
-	}
-
-	// The set we would expect
-	fn expected_validating_set() -> (Vec<ValidatorId>, Amount) {
-		let mut bidders = TestBidderProvider::get_bidders();
-		bidders.truncate(MAX_VALIDATOR_SIZE as usize);
-		(
-			bidders
-				.iter()
-				.map(|(validator_id, _)| *validator_id)
-				.collect(),
-			bidders.last().unwrap().1,
-		)
-	}
 
 	#[test]
 	fn genesis() {
@@ -80,17 +52,6 @@ mod test {
 				Ok(AuctionPhase::WaitingForBids(..))
 			);
 		});
-	}
-
-	fn run_auction(number_of_bids: u32) {
-		generate_bids(number_of_bids);
-
-		let _ = AuctionPallet::process()
-			.and(AuctionPallet::process().and_then(|_| {
-				clear_confirmation();
-				AuctionPallet::process()
-			}))
-			.unwrap();
 	}
 
 	#[test]
@@ -188,17 +149,22 @@ mod test {
 				let backup_validators = current_backup_validators();
 				let passive_nodes = current_passive_nodes();
 
-				let (bottom_backup_validator, lowest_backup_validator_bid) = backup_validators.last().unwrap();
-				let (top_passive_node, highest_passive_validator_bid) = passive_nodes.first().unwrap();
-				assert_eq!(*lowest_backup_validator_bid, AuctionPallet::lowest_backup_validator_bid());
-				assert_eq!(*highest_passive_validator_bid, AuctionPallet::highest_passive_validator_bid());
+				let (bottom_backup_validator, lowest_backup_validator_bid) =
+					backup_validators.last().unwrap();
+				let (top_passive_node, highest_passive_validator_bid) =
+					passive_nodes.first().unwrap();
+				assert_eq!(
+					*lowest_backup_validator_bid,
+					AuctionPallet::lowest_backup_validator_bid()
+				);
+				assert_eq!(
+					*highest_passive_validator_bid,
+					AuctionPallet::highest_passive_validator_bid()
+				);
 				let new_bid = lowest_backup_validator_bid + 1;
 
 				// Promote a passive node to the backup set
-				HandleStakes::<Test>::stake_updated(
-					*top_passive_node,
-					new_bid,
-				);
+				HandleStakes::<Test>::stake_updated(*top_passive_node, new_bid);
 
 				assert_eq!(
 					MockChainflipAccount::get(&top_passive_node).state,
@@ -219,8 +185,14 @@ mod test {
 				let new_bottom_of_the_backup_validators = backup_validators.last().unwrap();
 				let new_top_of_the_passive_nodes = passive_nodes.first().unwrap();
 
-				assert_eq!(&top_of_the_passive_nodes, new_bottom_of_the_backup_validators);
-				assert_eq!(*new_top_of_the_passive_nodes, (*bottom_backup_validator, *lowest_backup_validator_bid));
+				assert_eq!(
+					&top_of_the_passive_nodes,
+					new_bottom_of_the_backup_validators
+				);
+				assert_eq!(
+					*new_top_of_the_passive_nodes,
+					(*bottom_backup_validator, *lowest_backup_validator_bid)
+				);
 
 				assert_eq!(AuctionPallet::lowest_backup_validator_bid(), new_bid);
 			}
@@ -237,10 +209,7 @@ mod test {
 				let (top_backup_validator_id, _) = backup_validators.first().unwrap();
 				let new_bid = AuctionPallet::highest_passive_validator_bid() - 1;
 
-				HandleStakes::<Test>::stake_updated(
-					*top_backup_validator_id,
-					new_bid,
-				);
+				HandleStakes::<Test>::stake_updated(*top_backup_validator_id, new_bid);
 
 				assert_eq!(
 					MockChainflipAccount::get(top_backup_validator_id).state,
@@ -258,14 +227,14 @@ mod test {
 	fn changing_range() {
 		new_test_ext().execute_with(|| {
 			// Assert our minimum is set to 2
-			assert_eq!(<Test as Config>::MinValidators::get(), 2);
-			// Check we are throwing up an error when we send anything less than the minimum of 2
+			assert_eq!(<Test as Config>::MinValidators::get(), MIN_VALIDATOR_SIZE);
+			// Check we are throwing up an error when we send anything less than the minimum of 1
 			assert_noop!(
 				AuctionPallet::set_active_validator_range(Origin::root(), (0, 0)),
 				Error::<Test>::InvalidRange
 			);
 			assert_noop!(
-				AuctionPallet::set_active_validator_range(Origin::root(), (1, 2)),
+				AuctionPallet::set_active_validator_range(Origin::root(), (0, 1)),
 				Error::<Test>::InvalidRange
 			);
 			// This should now work
@@ -295,8 +264,6 @@ mod test {
 		new_test_ext().execute_with(|| {
 			// Create a test set of bidders
 			generate_bids(2);
-			let auction_range = (2, 100);
-			assert_ok!(AuctionPallet::set_active_range(auction_range));
 			assert_matches!(AuctionPallet::process(), Ok(AuctionPhase::BidsTaken(..)));
 			assert_matches!(
 				AuctionPallet::process(),

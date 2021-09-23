@@ -1,8 +1,8 @@
 use super::*;
 use crate as pallet_cf_auction;
-use cf_traits::mocks::vault_rotation::Mock as MockVaultRotation;
+use cf_traits::mocks::vault_rotation::{clear_confirmation, Mock as MockVaultRotation};
+use cf_traits::{Bid, ChainflipAccountData};
 use frame_support::traits::ValidatorRegistration;
-use cf_traits::ChainflipAccountData;
 use frame_support::{construct_runtime, parameter_types};
 use sp_core::H256;
 use sp_runtime::traits::ConvertInto;
@@ -40,6 +40,44 @@ pub fn generate_bids(number_of_bids: u32) {
 			(*cell).push((bid_number + 1, bid_number * 100));
 		}
 	});
+}
+
+pub fn run_auction(number_of_bids: u32) {
+	generate_bids(number_of_bids);
+
+	let _ = AuctionPallet::process()
+		.and(AuctionPallet::process().and_then(|_| {
+			clear_confirmation();
+			AuctionPallet::process()
+		}))
+		.unwrap();
+}
+
+pub fn last_event() -> mock::Event {
+	frame_system::Pallet::<Test>::events()
+		.pop()
+		.expect("Event expected")
+		.event
+}
+
+// The last is invalid as it has a bid of 0
+pub fn expected_bidding() -> Vec<Bid<ValidatorId, Amount>> {
+	let mut bidders = TestBidderProvider::get_bidders();
+	bidders.pop();
+	bidders
+}
+
+// The set we would expect
+pub fn expected_validating_set() -> (Vec<ValidatorId>, Amount) {
+	let mut bidders = TestBidderProvider::get_bidders();
+	bidders.truncate(MAX_VALIDATOR_SIZE as usize);
+	(
+		bidders
+			.iter()
+			.map(|(validator_id, _)| *validator_id)
+			.collect(),
+		bidders.last().unwrap().1,
+	)
 }
 
 construct_runtime!(

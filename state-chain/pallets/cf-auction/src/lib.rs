@@ -19,7 +19,8 @@
 //! for the next epoch are selected.  Those that don't qualify at this stage are grouped and stored in
 //! `RemainingBidders` with a backup group size being calculated and stored in `BackupGroupSize`.
 //! The pallet maintains a sorted list of these remaining bidders which can be viewed as two groups,
-//! `ChainflipAccountState::Backup` and `ChainflipAccountState::Passive`, using the calculated `BackupGroupSize`.
+//! `ChainflipAccountState::Backup` and `ChainflipAccountState::Passive`, using the calculated `BackupGroupSize`
+//! , `HighestPassiveNodeBid` and `LowestBackupValidatorBid` storage items.
 //! This list and group size are recalculated everytime the process passes through `AuctionPhase::BidsTaken`.
 //! Their final states are not updated until the process has completed.
 //!
@@ -388,29 +389,10 @@ impl<T: Config> Auction for Pallet<T> {
 						};
 
 						let remaining_bidders = RemainingBidders::<T>::get();
-						let backup_group_size = BackupGroupSize::<T>::get();
-						let backup_validators: Vec<_> = remaining_bidders
-							.iter()
-							.take(backup_group_size as usize)
-							.map(|v| v)
-							.collect();
-
-						let passive_nodes: Vec<_> = remaining_bidders
-							.iter()
-							.skip(backup_group_size as usize)
-							.take(usize::MAX)
-							.map(|v| v)
-							.collect();
-
-						let lowest_backup_validator_bid = backup_validators
-							.last()
-							.map(|(_, amount)| *amount)
-							.unwrap_or_default();
-
-						let highest_passive_node_bid = passive_nodes
-							.first()
-							.map(|(_, amount)| *amount)
-							.unwrap_or_default();
+						let backup_validators = current_backup_validators::<T>(&remaining_bidders);
+						let passive_nodes = current_passive_nodes::<T>(&remaining_bidders);
+						let lowest_backup_validator_bid = lowest_bid::<T>(&backup_validators);
+						let highest_passive_node_bid = highest_bid::<T>(&passive_nodes);
 
 						LowestBackupValidatorBid::<T>::put(lowest_backup_validator_bid);
 						HighestPassiveNodeBid::<T>::put(highest_passive_node_bid);
@@ -464,6 +446,41 @@ impl<T: Config> VaultRotationHandler for Pallet<T> {
 	}
 }
 
+fn current_backup_validators<T: Config>(
+	remaining_bidders: &Vec<RemainingBid<T::ValidatorId, T::Amount>>,
+) -> Vec<RemainingBid<T::ValidatorId, T::Amount>> {
+	remaining_bidders
+		.iter()
+		.take(BackupGroupSize::<T>::get() as usize)
+		.map(|bid| bid.clone())
+		.collect()
+}
+
+fn current_passive_nodes<T: Config>(
+	remaining_bidders: &Vec<RemainingBid<T::ValidatorId, T::Amount>>,
+) -> Vec<RemainingBid<T::ValidatorId, T::Amount>> {
+	remaining_bidders
+		.iter()
+		.skip(BackupGroupSize::<T>::get() as usize)
+		.take(usize::MAX)
+		.map(|bid| bid.clone())
+		.collect()
+}
+
+fn lowest_bid<T: Config>(bidders: &Vec<RemainingBid<T::ValidatorId, T::Amount>>) -> T::Amount {
+	bidders
+		.last()
+		.map(|(_, amount)| *amount)
+		.unwrap_or_default()
+}
+
+fn highest_bid<T: Config>(bidders: &Vec<RemainingBid<T::ValidatorId, T::Amount>>) -> T::Amount {
+	bidders
+		.first()
+		.map(|(_, amount)| *amount)
+		.unwrap_or_default()
+}
+
 pub struct HandleStakes<T>(PhantomData<T>);
 impl<T: Config> StakerHandler for HandleStakes<T> {
 	type ValidatorId = T::ValidatorId;
@@ -490,24 +507,11 @@ impl<T: Config> StakerHandler for HandleStakes<T> {
 				remaining_bids.sort_unstable_by_key(|k| k.1);
 				remaining_bids.reverse();
 
-				let lowest_backup_validator_bid = remaining_bids
-					.iter()
-					.take(BackupGroupSize::<T>::get() as usize)
-					.last()
-					.map(|(_, amount)| *amount)
-					.unwrap_or_default();
+				let lowest_backup_validator_bid =
+					lowest_bid::<T>(&current_backup_validators::<T>(&remaining_bids));
 
-				let passive_nodes: Vec<_> = remaining_bids
-					.iter()
-					.skip(BackupGroupSize::<T>::get() as usize)
-					.take(usize::MAX)
-					.map(|v| v)
-					.collect();
-
-				let highest_passive_node_bid = passive_nodes
-					.first()
-					.map(|(_, amount)| *amount)
-					.unwrap_or_default();
+				let highest_passive_node_bid =
+					highest_bid::<T>(&current_passive_nodes::<T>(&remaining_bids));
 
 				LowestBackupValidatorBid::<T>::put(lowest_backup_validator_bid);
 				HighestPassiveNodeBid::<T>::set(highest_passive_node_bid);
@@ -534,11 +538,11 @@ impl<T: Config> StakerHandler for HandleStakes<T> {
 
 				sort_remaining_bidders(remaining_bidders);
 
-				let backup_group_size = BackupGroupSize::<T>::get();
+				let index_of_shifted = BackupGroupSize::<T>::get();
 				let index_of_shifted = if !promote {
-					backup_group_size.saturating_sub(One::one())
+					index_of_shifted.saturating_sub(One::one())
 				} else {
-					backup_group_size
+					index_of_shifted
 				};
 
 				match remaining_bidders.get(index_of_shifted as usize) {
@@ -554,22 +558,17 @@ impl<T: Config> StakerHandler for HandleStakes<T> {
 				match T::ChainflipAccount::get(&T::AccountIdOf::convert(validator_id.clone())).state
 				{
 					ChainflipAccountState::Passive => {
-						let lowest_backup_bid = LowestBackupValidatorBid::<T>::get();
-						let highest_passive_bid = HighestPassiveNodeBid::<T>::get();
-						let mut remaining_bidders = RemainingBidders::<T>::get();
-						if amount > lowest_backup_bid {
-							adjust_group(true, &mut remaining_bidders);
-						} else if amount > highest_passive_bid {
-							sort_remaining_bidders(&mut remaining_bidders);
+						if amount > LowestBackupValidatorBid::<T>::get() {
+							adjust_group(true, &mut RemainingBidders::<T>::get());
+						} else if amount > HighestPassiveNodeBid::<T>::get() {
+							sort_remaining_bidders(&mut RemainingBidders::<T>::get());
 						}
 					}
 					ChainflipAccountState::Backup => {
-						let lowest_backup_bid = LowestBackupValidatorBid::<T>::get();
-						let mut remaining_bidders = RemainingBidders::<T>::get();
-						if amount < lowest_backup_bid {
-							adjust_group(false, &mut remaining_bidders);
-						} else if amount > lowest_backup_bid {
-							sort_remaining_bidders(&mut remaining_bidders);
+						if amount < LowestBackupValidatorBid::<T>::get() {
+							adjust_group(false, &mut RemainingBidders::<T>::get());
+						} else if amount > LowestBackupValidatorBid::<T>::get() {
+							sort_remaining_bidders(&mut RemainingBidders::<T>::get());
 						}
 					}
 					_ => {}
