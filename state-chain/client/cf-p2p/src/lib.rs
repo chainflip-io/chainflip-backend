@@ -22,20 +22,20 @@ pub use gen_client::Client as P2PRpcClient;
 use core::iter;
 use futures::channel::mpsc::{unbounded, UnboundedSender};
 use futures::{StreamExt, TryStreamExt};
-use sc_network::{multiaddr, Event, ExHashT, NetworkService, PeerId};
-use serde::{self, Deserialize, Serialize};
-use sp_runtime::traits::Block as BlockT;
-use std::borrow::Cow;
-use std::collections::{HashMap, hash_map::Entry};
-use std::pin::Pin;
 use jsonrpc_core::futures::Sink;
 use jsonrpc_core::futures::{future::Executor, Future, Stream};
 use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use log::{debug, warn};
-use std::marker::Send;
+use sc_network::{multiaddr, Event, ExHashT, NetworkService, PeerId};
+use serde::{self, Deserialize, Serialize};
 use sp_runtime::sp_std::sync::{Arc, Mutex};
+use sp_runtime::traits::Block as BlockT;
+use std::borrow::Cow;
+use std::collections::{hash_map::Entry, HashMap};
+use std::marker::Send;
+use std::pin::Pin;
 
 // TODO: This is duplicated in the CFE, can we just use one of these?
 /// The type of validator id expected by the p2p layer, uses standard serialization.
@@ -272,20 +272,26 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 				if message.0.is_empty() {
 					Some(jsonrpc_core::Error::invalid_params("Empty p2p message"))
 				} else if state.local_validator_id.is_none() {
-					Some(jsonrpc_core::Error::invalid_params("Cannot send p2p message before self identification"))
+					Some(jsonrpc_core::Error::invalid_params(
+						"Cannot send p2p message before self identification",
+					))
 				} else {
 					None
 				}
 			}
 			/// Impl of the `RpcApi` - send, broadcast and subscribe to notifications
-			impl<PN: PeerNetwork + Send + Sync + 'static> P2PValidatorNetworkNodeRpcApi for RpcRequestHandler<PN> {
+			impl<PN: PeerNetwork + Send + Sync + 'static> P2PValidatorNetworkNodeRpcApi
+				for RpcRequestHandler<PN>
+			{
 				type Metadata = sc_rpc::Metadata;
 
 				/// Identify ourselves to the network.
 				fn self_identify(&self, validator_id: AccountIdBs58) -> Result<u64> {
 					let mut state = self.state.lock().unwrap();
 					if let Some(_existing_id) = state.local_validator_id {
-						Err(jsonrpc_core::Error::invalid_params("Have already self identified"))
+						Err(jsonrpc_core::Error::invalid_params(
+							"Have already self identified",
+						))
 					} else {
 						let validator_id: AccountId = validator_id.into();
 						state.local_validator_id = Some(validator_id.clone());
@@ -313,7 +319,9 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 							);
 							Ok(200)
 						} else {
-							Err(jsonrpc_core::Error::invalid_params("Cannot send to unidentified account id"))
+							Err(jsonrpc_core::Error::invalid_params(
+								"Cannot send to unidentified account id",
+							))
 						}
 					}
 				}
@@ -339,14 +347,15 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 					subscriber: Subscriber<P2PEvent>,
 				) {
 					let (sender, receiver) = unbounded();
-					let subscription_id = self.notification_rpc_subscription_manager
-						.add(subscriber, |sink| {
-							sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
-								.send_all(
-									receiver.map(|x| Ok::<_, ()>(x)).compat().map(|x| Ok(x)),
-								)
-								.map(|_| ())
-						});
+					let subscription_id =
+						self.notification_rpc_subscription_manager
+							.add(subscriber, |sink| {
+								sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
+									.send_all(
+										receiver.map(|x| Ok::<_, ()>(x)).compat().map(|x| Ok(x)),
+									)
+									.map(|_| ())
+							});
 					self.state
 						.lock()
 						.unwrap()
@@ -372,37 +381,38 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 								.unwrap();
 							true
 						} else {
-							assert!(
-								!self
-									.state
-									.lock()
-									.unwrap()
-									.notification_rpc_subscribers
-									.contains_key(&id)
-							);
+							assert!(!self
+								.state
+								.lock()
+								.unwrap()
+								.notification_rpc_subscribers
+								.contains_key(&id));
 							false
-						}
+						},
 					)
 				}
 			}
 
 			let mut io = jsonrpc_core::MetaIoHandler::default();
-			io.extend_with(P2PValidatorNetworkNodeRpcApi::to_delegate(RpcRequestHandler {
-				state: state.clone(),
-				p2p_network_service: p2p_network_service.clone(),
-				notification_rpc_subscription_manager: SubscriptionManager::new(Arc::new(
-					subscription_task_executor,
-				)),
-			}));
+			io.extend_with(P2PValidatorNetworkNodeRpcApi::to_delegate(
+				RpcRequestHandler {
+					state: state.clone(),
+					p2p_network_service: p2p_network_service.clone(),
+					notification_rpc_subscription_manager: SubscriptionManager::new(Arc::new(
+						subscription_task_executor,
+					)),
+				},
+			));
 			io
 		},
 		// P2P Event Handler
 		{
 			let mut network_event_stream = p2p_network_service.event_stream();
-			let notify_rpc_subscribers = |
-				notification_rpc_subscribers: &HashMap<SubscriptionId, UnboundedSender<P2PEvent>>,
-			    event: P2PEvent
-			| {
+			let notify_rpc_subscribers = |notification_rpc_subscribers: &HashMap<
+				SubscriptionId,
+				UnboundedSender<P2PEvent>,
+			>,
+			                              event: P2PEvent| {
 				for (_subscription_id, sender) in notification_rpc_subscribers {
 					if let Err(e) = sender.unbounded_send(event.clone()) {
 						debug!("Failed to send message: {:?}", e);
@@ -445,9 +455,7 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 									state.validator_to_peer.remove(&validator_id).unwrap();
 									notify_rpc_subscribers(
 										&state.notification_rpc_subscribers,
-										P2PEvent::ValidatorDisconnected(
-											validator_id.into(),
-										),
+										P2PEvent::ValidatorDisconnected(validator_id.into()),
 									);
 								}
 							}
@@ -474,7 +482,7 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 														"Received a identify before stream opened for peer {:?}",
 														remote
 													);
-												},
+												}
 												Entry::Occupied(mut entry) => {
 													if let Some(_) = entry.get() {
 														log::warn!(
@@ -484,7 +492,9 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 														);
 													} else {
 														*entry.get_mut() = Some(validator_id);
-														state.validator_to_peer.insert(validator_id, remote);
+														state
+															.validator_to_peer
+															.insert(validator_id, remote);
 														notify_rpc_subscribers(
 															&state.notification_rpc_subscribers,
 															P2PEvent::ValidatorConnected(
@@ -492,7 +502,7 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 															),
 														);
 													}
-												},
+												}
 											}
 										}
 										Ok(P2PMessage::Message(raw_message)) => {
@@ -505,8 +515,11 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 															raw_message.into(),
 														),
 													);
-												},
-												_ => log::error!("Dropping message from unidentified peer {:?}", remote),
+												}
+												_ => log::error!(
+													"Dropping message from unidentified peer {:?}",
+													remote
+												),
 											}
 										}
 										Err(err) => {
