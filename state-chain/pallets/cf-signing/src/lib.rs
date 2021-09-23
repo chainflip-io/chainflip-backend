@@ -105,7 +105,10 @@ pub mod pallet {
 			}
 
 			for request in RetryQueue::<T, I>::take() {
-				Self::request_attempt(request.chain_signing_context, request.attempt.wrapping_add(1));
+				Self::request_attempt(
+					request.chain_signing_context,
+					request.attempt.wrapping_add(1),
+				);
 			}
 			// TODO: replace this with benchmark results.
 			num_retries as u64
