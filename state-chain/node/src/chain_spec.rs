@@ -158,7 +158,7 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 		hex_literal::hex!["ca58f2f4ae713dbb3b4db106640a3db150e38007940dfe29e6ebb870c4ccd47e"];
 	Ok(ChainSpec::from_genesis(
 		"Three node testnet",
-		"three-node-testnet",
+		"three-node-test",
 		ChainType::Live,
 		move || {
 			testnet_genesis(

@@ -42,9 +42,16 @@ pub async fn start(
 ) {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
+    // let mut sub = EventSubscription::new(
+    //     subxt_client
+    //         .subscribe_finalized_events()
+    //         .await
+    //         .expect("Could not subscribe to state chain events"),
+    //     subxt_client.events_decoder(),
+    // );
     let mut sub = EventSubscription::new(
         subxt_client
-            .subscribe_finalized_events()
+            .subscribe_events()
             .await
             .expect("Could not subscribe to state chain events"),
         subxt_client.events_decoder(),
