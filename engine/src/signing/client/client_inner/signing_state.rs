@@ -56,10 +56,13 @@ impl P2PSender for SigningP2PSender {
     }
 }
 
+/// State that becomes available once we receive a request to sign for this ceremony (it is possible
+/// to start receiving ceremony messages before then)
 #[derive(Clone)]
 struct AuthorisedSigningState {
     ceremony_id: CeremonyId,
-    state: Option<Box<dyn CeremonyStage<Message = SigningData, Result = SchnorrSignature>>>,
+    /// State specific to the current ceremony stage
+    stage: Option<Box<dyn CeremonyStage<Message = SigningData, Result = SchnorrSignature>>>,
     // TODO: this should be specialized to sending
     // results only (no p2p stuff)
     result_sender: EventSender,
@@ -77,11 +80,15 @@ impl AuthorisedSigningState {
     }
 }
 
-/// State for a signing ceremony
+/// State for a signing ceremony (potentially unauthorised, i.e. without a corresponding request to sign)
 #[derive(Clone)]
 pub struct SigningState {
+    /// State for an authorised ceremony
     inner: Option<AuthorisedSigningState>,
+    /// Time point at which the current ceremony is considered expired and gets aborted
     should_expire_at: std::time::Instant,
+    /// Messages that arrived a bit early and should be
+    /// processed once we transition to the next stage
     delayed_messages: Vec<(AccountId, SigningData)>,
     logger: slog::Logger,
 }
@@ -106,7 +113,6 @@ impl SigningState {
         let logger = logger.new(slog::o!("ceremony_id" => ceremony_id));
 
         let common = CeremonyCommon {
-            ceremony_id,
             p2p_sender: SigningP2PSender::new(
                 key_info.validator_map.clone(),
                 event_sender.clone(),
@@ -117,12 +123,13 @@ impl SigningState {
             logger: logger.clone(),
         };
 
-        let signing_common = SigningStateCommonInfo {
-            data,
-            key: key_info.key.clone(),
-        };
-
-        let processor = AwaitCommitments1::new(common.clone(), signing_common);
+        let processor = AwaitCommitments1::new(
+            common.clone(),
+            SigningStateCommonInfo {
+                data,
+                key: key_info.key.clone(),
+            },
+        );
 
         let mut state = BroadcastStage::new(processor, common);
 
@@ -130,7 +137,7 @@ impl SigningState {
 
         self.inner = Some(AuthorisedSigningState {
             ceremony_id,
-            state: Some(Box::new(state)),
+            stage: Some(Box::new(state)),
             validator_map: key_info.validator_map.clone(),
             result_sender: event_sender,
         });
@@ -147,9 +154,9 @@ impl SigningState {
         self.process_delayed();
     }
 
-    /// Create State w/o access to key info with
-    /// the only purpose of being able to keep delayed
-    /// messages in the same place
+    /// Create State w/o access to key info (and other data available
+    /// after a request to sign) with the only purpose of being
+    /// able to keep delayed messages in the same place
     pub fn new_unauthorised(logger: slog::Logger) -> Self {
         SigningState {
             inner: None,
@@ -159,6 +166,7 @@ impl SigningState {
         }
     }
 
+    /// Try to process delayed messages
     fn process_delayed(&mut self) {
         let messages = std::mem::take(&mut self.delayed_messages);
 
@@ -173,6 +181,7 @@ impl SigningState {
         }
     }
 
+    /// Add a message to be processed later
     fn add_delayed(&mut self, id: AccountId, m: SigningData) {
         match &self.inner {
             Some(_) => {
@@ -191,6 +200,7 @@ impl SigningState {
         self.delayed_messages.push((id, m));
     }
 
+    /// Process message `m` from party `id`
     pub fn process_message(&mut self, id: AccountId, m: SigningData) {
         match &mut self.inner {
             None => {
@@ -199,10 +209,10 @@ impl SigningState {
             Some(authorised_state) => {
                 // We know it is safe to unwrap because the value is None
                 // for a brief period of time when we swap states below
-                let state = authorised_state.state.as_mut().unwrap();
+                let stage = authorised_state.stage.as_mut().unwrap();
 
                 // TODO: check that the party is a signer for this ceremony
-                if state.should_delay(&m) {
+                if stage.should_delay(&m) {
                     self.add_delayed(id, m);
                     return;
                 }
@@ -213,9 +223,12 @@ impl SigningState {
                     None => return,
                 };
 
-                match state.process_message(sender_idx, m) {
+                // Delegate actual processing to the current specific stage
+                match stage.process_message(sender_idx, m) {
+                    // All messages for the stage have been collected, try to
+                    // finalize and see we can transition to the next stage
                     ProcessMessageResult::CollectedAll => {
-                        let state = authorised_state.state.take().unwrap();
+                        let state = authorised_state.stage.take().unwrap();
 
                         // This is the only point at which we can get the result (apart from the timeout)
                         match state.finalize() {
@@ -224,7 +237,7 @@ impl SigningState {
 
                                 stage.init();
 
-                                authorised_state.state = Some(stage);
+                                authorised_state.stage = Some(stage);
 
                                 // NOTE: we don't care when the state transition
                                 // actually happened as we don't want other parties
@@ -293,7 +306,7 @@ impl SigningState {
                 }
                 Some(authorised_state) => {
                     // blame slow parties
-                    let bladed_idx = authorised_state.state.as_ref().unwrap().awaited_parties();
+                    let bladed_idx = authorised_state.stage.as_ref().unwrap().awaited_parties();
 
                     let blamed_ids = bladed_idx
                         .iter()
@@ -318,7 +331,7 @@ impl SigningState {
     pub fn get_stage(&self) -> Option<String> {
         self.inner
             .as_ref()
-            .and_then(|s| s.state.as_ref().map(|s| s.to_string()))
+            .and_then(|s| s.stage.as_ref().map(|s| s.to_string()))
     }
 
     #[cfg(test)]
@@ -327,7 +340,7 @@ impl SigningState {
     }
 }
 
-/// Info useful for most signing states
+/// Data common for signing stages
 #[derive(Clone)]
 pub struct SigningStateCommonInfo {
     pub(super) data: MessageHash,

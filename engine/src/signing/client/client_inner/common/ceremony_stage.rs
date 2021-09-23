@@ -57,7 +57,6 @@ pub struct CeremonyCommon<D, Sender>
 where
     Sender: P2PSender<Data = D>,
 {
-    pub ceremony_id: CeremonyId,
     /// Our own signer index
     pub own_idx: usize,
     /// Indexes of parties participating in the ceremony
