@@ -501,7 +501,7 @@ impl<T: Config> StakerHandler for HandleStakes<T> {
 				if let Ok(index) =
 					remaining_bidders.binary_search_by(|bid| validator_id.cmp(&bid.0))
 				{
-					let _ = std::mem::replace(&mut remaining_bidders[index], bid);
+					let _ = sp_std::mem::replace(&mut remaining_bidders[index], bid);
 				}
 			};
 
@@ -553,7 +553,7 @@ impl<T: Config> StakerHandler for HandleStakes<T> {
 					Some((adjusted_validator_id, _)) => {
 						change_state(!promote, adjusted_validator_id.clone());
 					}
-					None => frame_support::debug::native::error!("Failed to adjust validator id"),
+					_ => {}
 				}
 			};
 

@@ -36,7 +36,6 @@ impl WeightInfo for () {
 
 pub const MIN_VALIDATOR_SIZE: u32 = 2;
 pub const MAX_VALIDATOR_SIZE: u32 = 150;
-pub const EPOCH_BLOCKS: u64 = 100;
 
 pub struct AuctionWeight;
 
@@ -122,6 +121,7 @@ impl pallet_session::Config for Test {
 
 parameter_types! {
 	pub const MinValidators: u32 = 2;
+	pub const BackupValidatorRatio: u32 = 3;
 }
 
 impl pallet_cf_auction::Config for Test {
@@ -137,6 +137,7 @@ impl pallet_cf_auction::Config for Test {
 	type ChainflipAccount = cf_traits::ChainflipAccounts<Self>;
 	type AccountIdOf = ConvertInto;
 	type Online = MockOnline;
+	type BackupValidatorRatio = BackupValidatorRatio;
 }
 
 pub struct MockOnline;
