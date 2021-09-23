@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use futures::stream::BoxStream;
-use parking_lot::Mutex;
+use std::sync::Mutex;
 
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
@@ -22,7 +22,7 @@ impl P2PClientMock {
     pub fn new(id: AccountId, network_inner: Arc<Mutex<NetworkMockInner>>) -> Self {
         let (sender, receiver) = unbounded_channel();
 
-        network_inner.lock().register(&id, sender);
+        network_inner.lock().unwrap().register(&id, sender);
 
         P2PClientMock {
             id,
@@ -37,12 +37,12 @@ impl P2PNetworkClient for P2PClientMock {
     type NetworkEvent = P2PMessage;
 
     async fn broadcast(&self, data: &[u8]) -> Result<StatusCode> {
-        self.network_inner.lock().broadcast(&self.id, data);
+        self.network_inner.lock().unwrap().broadcast(&self.id, data);
         Ok(200)
     }
 
     async fn send(&self, to: &AccountId, data: &[u8]) -> Result<StatusCode> {
-        self.network_inner.lock().send(&self.id, to, data);
+        self.network_inner.lock().unwrap().send(&self.id, to, data);
         Ok(200)
     }
 
@@ -50,6 +50,7 @@ impl P2PNetworkClient for P2PClientMock {
         let stream = self
             .receiver
             .lock()
+            .unwrap()
             .take()
             .ok_or(anyhow!("Subscription Error"))?;
 

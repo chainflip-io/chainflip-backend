@@ -35,7 +35,7 @@ mod test {
 				mock::Event::pallet_cf_vaults(crate::Event::KeygenRequest(
 					VaultsPallet::current_request(),
 					KeygenRequest {
-						chain_type: ChainType::Ethereum,
+						chain: Chain::Ethereum,
 						validator_candidates: vec![ALICE, BOB, CHARLIE],
 					}
 				))
