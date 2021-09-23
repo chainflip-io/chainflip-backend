@@ -202,40 +202,6 @@ impl RpcCore {
 	}
 }
 
-/// Observe p2p events and notify subscribers
-impl NetworkObserver for RpcCore {
-	fn new_validator(&self, validator_id: &AccountId) {
-		self.notify(P2PEvent::ValidatorConnected((*validator_id).into()));
-	}
-
-	fn disconnected(&self, validator_id: &AccountId) {
-		self.notify(P2PEvent::ValidatorDisconnected((*validator_id).into()));
-	}
-
-	fn received(&self, validator_id: &AccountId, message: RawMessage) {
-		self.notify(P2PEvent::MessageReceived(
-			(*validator_id).into(),
-			message.into(),
-		));
-	}
-
-	fn unknown_recipient(&self, recipient_id: &AccountId) {
-		self.notify(P2pError::UnknownRecipient((*recipient_id).into()).into());
-	}
-
-	fn unidentified_node(&self) {
-		self.notify(P2pError::Unidentified.into());
-	}
-
-	fn empty_message(&self) {
-		self.notify(P2pError::EmptyMessage.into());
-	}
-
-	fn already_identified(&self, existing_id: &AccountId) {
-		self.notify(P2pError::AlreadyIdentified((*existing_id).into()).into());
-	}
-}
-
 /// The RPC bridge and API
 pub struct Rpc {
 	core: Arc<RpcCore>,
@@ -367,24 +333,6 @@ impl<B: BlockT, H: ExHashT> PeerNetwork for NetworkService<B, H> {
 	}
 }
 
-/// A collection of callbacks for network events.
-pub trait NetworkObserver {
-	/// Called when a peer identifies itself to the network.
-	fn new_validator(&self, validator_id: &AccountId);
-	/// Called when a peer is disconnected.
-	fn disconnected(&self, validator_id: &AccountId);
-	/// Called when a message is received from some validator_id for this peer.
-	fn received(&self, from: &AccountId, message: RawMessage);
-	/// Called when a message could not be delivered because the recipient is unknown.
-	fn unknown_recipient(&self, recipient_id: &AccountId);
-	/// Called when a message is sent before identifying the node to the network.
-	fn unidentified_node(&self);
-	/// Empty messages are not allowed.
-	fn empty_message(&self);
-	/// A node cannot identify more than once.
-	fn already_identified(&self, existing_id: &AccountId);
-}
-
 /// Defines the logic for processing network events and commands from this node.
 ///
 /// ## ID management
@@ -392,9 +340,9 @@ pub trait NetworkObserver {
 /// Peers must identify themselves by their `AccountId` otherwise they will be unable to send
 /// messages.
 /// Likewise, any messages received from peers that have not identified themselves will be dropped.
-struct StateMachine<Observer: NetworkObserver, Network: PeerNetwork> {
-	/// A reference to a NetworkObserver
-	observer: Arc<Observer>,
+struct StateMachine<Network: PeerNetwork> {
+	/// A reference to a RpcCore
+	rpc_core: Arc<RpcCore>,
 	/// The peer to peer network
 	network: Arc<Network>,
 	/// PeerIds with the corresponding AccountId, if available.
@@ -407,14 +355,13 @@ struct StateMachine<Observer: NetworkObserver, Network: PeerNetwork> {
 
 const EXPECTED_PEER_COUNT: usize = 300;
 
-impl<Observer, Network> StateMachine<Observer, Network>
+impl<Network> StateMachine<Network>
 where
-	Observer: NetworkObserver,
 	Network: PeerNetwork,
 {
-	pub fn new(observer: Arc<Observer>, network: Arc<Network>) -> Self {
+	pub fn new(rpc_core: Arc<RpcCore>, network: Arc<Network>) -> Self {
 		StateMachine {
-			observer,
+			rpc_core,
 			network,
 			peer_to_validator: HashMap::with_capacity(EXPECTED_PEER_COUNT),
 			validator_to_peer: HashMap::with_capacity(EXPECTED_PEER_COUNT),
@@ -436,7 +383,7 @@ where
 			if entry.is_none() {
 				*entry = Some(validator_id);
 				self.validator_to_peer.insert(validator_id, peer_id.clone());
-				self.observer.new_validator(&validator_id);
+				self.rpc_core.notify(P2PEvent::ValidatorConnected(validator_id.into()));
 			} else {
 				log::warn!(
 					"Received a duplicate identification {:?} for peer {:?}",
@@ -457,7 +404,7 @@ where
 	pub fn disconnected(&mut self, peer_id: &PeerId) {
 		if let Some(Some(validator_id)) = self.peer_to_validator.remove(peer_id) {
 			if let Some(_) = self.validator_to_peer.remove(&validator_id) {
-				self.observer.disconnected(&validator_id);
+				self.rpc_core.notify(P2PEvent::ValidatorDisconnected(validator_id.into()));
 			}
 		}
 	}
@@ -465,7 +412,7 @@ where
 	/// Notify the observer, if the validator id of the peer is known.
 	fn maybe_notify_observer(&self, peer_id: &PeerId, message: RawMessage) {
 		if let Some(Some(validator_id)) = self.peer_to_validator.get(peer_id) {
-			self.observer.received(validator_id, message);
+			self.rpc_core.notify(P2PEvent::MessageReceived((*validator_id).into(), message.into()));
 		} else {
 			log::error!("Dropping message from unidentified peer {:?}", peer_id);
 		}
@@ -493,7 +440,7 @@ where
 	/// Identify ourselves to the network.
 	pub fn self_identify(&mut self, validator_id: AccountId) {
 		if let Some(existing_id) = self.local_validator_id {
-			self.observer.already_identified(&existing_id);
+			self.rpc_core.notify(P2PEvent::Error(P2pError::AlreadyIdentified(existing_id.into())));
 			return;
 		}
 		self.local_validator_id = Some(validator_id);
@@ -517,7 +464,7 @@ where
 		if let Some(peer_id) = self.validator_to_peer.get(&validator_id) {
 			self.encode_and_send(*peer_id, P2PMessage::Message(message));
 		} else {
-			self.observer.unknown_recipient(&validator_id);
+			self.rpc_core.notify(P2PEvent::Error(P2pError::UnknownRecipient(validator_id.into())));
 		}
 	}
 
@@ -558,11 +505,11 @@ where
 	/// returns true. Otherwise returns false.
 	fn notify_invalid(&self, message: &RawMessage) -> bool {
 		if message.0.is_empty() {
-			self.observer.empty_message();
+			self.rpc_core.notify(P2PEvent::Error(P2pError::EmptyMessage));
 			return true;
 		}
 		if self.local_validator_id.is_none() {
-			self.observer.unidentified_node();
+			self.rpc_core.notify(P2PEvent::Error(P2pError::Unidentified));
 			return true;
 		}
 		false
@@ -579,18 +526,18 @@ where
 ///
 /// The `StateMachine` implements the logic of how to process commands and how to react to
 /// network notifications.
-pub struct NetworkBridge<Observer: NetworkObserver, Network: PeerNetwork> {
-	state_machine: StateMachine<Observer, Network>,
+pub struct NetworkBridge<Network: PeerNetwork> {
+	state_machine: StateMachine<Network>,
 	network_event_stream: Fuse<Pin<Box<dyn futures::Stream<Item = Event> + Send>>>,
 	command_receiver: UnboundedReceiver<MessagingCommand>,
 }
 
-impl<Observer: NetworkObserver, Network: PeerNetwork> NetworkBridge<Observer, Network> {
+impl<Network: PeerNetwork> NetworkBridge<Network> {
 	pub fn new(
-		observer: Arc<Observer>,
+		rpc_core: Arc<RpcCore>,
 		p2p_network: Arc<Network>,
 	) -> (Self, Arc<UnboundedSender<MessagingCommand>>) {
-		let state_machine = StateMachine::new(observer, p2p_network.clone());
+		let state_machine = StateMachine::new(rpc_core, p2p_network.clone());
 		let network_event_stream = p2p_network.event_stream().fuse();
 		let (command_sender, command_receiver) = unbounded();
 		(
@@ -613,9 +560,8 @@ pub enum MessagingCommand {
 	BroadcastAll(RawMessage),
 }
 
-impl<O, N> NetworkBridge<O, N>
+impl<N> NetworkBridge<N>
 where
-	O: NetworkObserver,
 	N: PeerNetwork,
 {
 	pub async fn start(mut self) {
