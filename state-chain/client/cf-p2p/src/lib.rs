@@ -135,12 +135,6 @@ pub trait RpcApi {
 	) -> Result<bool>;
 }
 
-/// Our core bridge between p2p events and our RPC subscribers
-pub struct RpcCore {
-	subscribers: Mutex<Vec<UnboundedSender<P2PEvent>>>,
-	manager: SubscriptionManager,
-}
-
 /// Protocol errors notified via the subscription stream.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum P2pError {
@@ -173,14 +167,35 @@ pub enum P2PEvent {
 	Error(P2pError),
 }
 
-impl RpcCore {
-	pub fn new<E>(executor: Arc<E>) -> Self
-	where
-		E: Executor<Box<(dyn Future<Item = (), Error = ()> + Send)>> + Send + Sync + 'static,
+/// The RPC bridge and API
+pub struct Rpc {
+	subscribers: Mutex<Vec<UnboundedSender<P2PEvent>>>,
+	manager: SubscriptionManager,
+	rpc_command_sender: UnboundedSender<MessagingCommand>,
+}
+
+impl Rpc {
+	pub fn new<E>(
+		executor: Arc<E>,
+		rpc_command_sender: UnboundedSender<MessagingCommand>,
+	) -> Self
+		where E: Executor<Box<(dyn Future<Item = (), Error = ()> + Send)>> + Send + Sync + 'static
 	{
-		RpcCore {
+		Rpc {
 			subscribers : Default::default(),
-			manager: SubscriptionManager::new(executor),
+			manager : SubscriptionManager::new(executor),
+			rpc_command_sender,
+		 }
+	}
+
+	fn messaging_command(&self, command : MessagingCommand) -> jsonrpc_core::Result<u64> {
+		match self.rpc_command_sender.unbounded_send(command) {
+			Ok(()) => Ok(200),
+			Err(error) => Err({
+				let mut e = Error::internal_error();
+				e.message = format!("{}", error);
+				e
+			})
 		}
 	}
 
@@ -202,34 +217,8 @@ impl RpcCore {
 	}
 }
 
-/// The RPC bridge and API
-pub struct Rpc {
-	core: Arc<RpcCore>,
-	rpc_command_sender: Arc<UnboundedSender<MessagingCommand>>,
-}
-
-impl Rpc {
-	pub fn new(
-		rpc_command_sender: Arc<UnboundedSender<MessagingCommand>>,
-		core: Arc<RpcCore>
-	) -> Self {
-		Rpc { rpc_command_sender, core }
-	}
-
-	fn messaging_command(&self, command : MessagingCommand) -> jsonrpc_core::Result<u64> {
-		match self.rpc_command_sender.unbounded_send(command) {
-			Ok(()) => Ok(200),
-			Err(error) => Err({
-				let mut e = Error::internal_error();
-				e.message = format!("{}", error);
-				e
-			})
-		}
-	}
-}
-
 /// Impl of the `RpcApi` - send, broadcast and subscribe to notifications
-impl RpcApi for Rpc {
+impl RpcApi for Arc<Rpc> {
 	type Metadata = sc_rpc::Metadata;
 
 	fn self_identify(&self, validator_id: AccountIdBs58) -> Result<u64> {
@@ -246,13 +235,12 @@ impl RpcApi for Rpc {
 
 	fn subscribe_notifications(&self, _metadata: Self::Metadata, subscriber: Subscriber<P2PEvent>) {
 		let stream = self
-			.core
 			.subscribe()
 			.map(|x| Ok::<_, ()>(x))
 			.map_err(|e| warn!("Notification stream error: {:?}", e))
 			.compat();
 
-		self.core.manager.add(subscriber, |sink| {
+		self.manager.add(subscriber, |sink| {
 			let stream = stream.map(|evt| Ok(evt));
 			sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
 				.send_all(stream)
@@ -265,7 +253,7 @@ impl RpcApi for Rpc {
 		_metadata: Option<Self::Metadata>,
 		id: SubscriptionId,
 	) -> Result<bool> {
-		Ok(self.core.manager.cancel(id))
+		Ok(self.manager.cancel(id))
 	}
 }
 
@@ -341,8 +329,8 @@ impl<B: BlockT, H: ExHashT> PeerNetwork for NetworkService<B, H> {
 /// messages.
 /// Likewise, any messages received from peers that have not identified themselves will be dropped.
 struct StateMachine<Network: PeerNetwork> {
-	/// A reference to a RpcCore
-	rpc_core: Arc<RpcCore>,
+	/// A reference to the Rpc
+	rpc: Arc<Rpc>,
 	/// The peer to peer network
 	network: Arc<Network>,
 	/// PeerIds with the corresponding AccountId, if available.
@@ -359,9 +347,9 @@ impl<Network> StateMachine<Network>
 where
 	Network: PeerNetwork,
 {
-	pub fn new(rpc_core: Arc<RpcCore>, network: Arc<Network>) -> Self {
+	pub fn new(rpc: Arc<Rpc>, network: Arc<Network>) -> Self {
 		StateMachine {
-			rpc_core,
+			rpc,
 			network,
 			peer_to_validator: HashMap::with_capacity(EXPECTED_PEER_COUNT),
 			validator_to_peer: HashMap::with_capacity(EXPECTED_PEER_COUNT),
@@ -383,7 +371,7 @@ where
 			if entry.is_none() {
 				*entry = Some(validator_id);
 				self.validator_to_peer.insert(validator_id, peer_id.clone());
-				self.rpc_core.notify(P2PEvent::ValidatorConnected(validator_id.into()));
+				self.rpc.notify(P2PEvent::ValidatorConnected(validator_id.into()));
 			} else {
 				log::warn!(
 					"Received a duplicate identification {:?} for peer {:?}",
@@ -404,7 +392,7 @@ where
 	pub fn disconnected(&mut self, peer_id: &PeerId) {
 		if let Some(Some(validator_id)) = self.peer_to_validator.remove(peer_id) {
 			if let Some(_) = self.validator_to_peer.remove(&validator_id) {
-				self.rpc_core.notify(P2PEvent::ValidatorDisconnected(validator_id.into()));
+				self.rpc.notify(P2PEvent::ValidatorDisconnected(validator_id.into()));
 			}
 		}
 	}
@@ -412,7 +400,7 @@ where
 	/// Notify the observer, if the validator id of the peer is known.
 	fn maybe_notify_observer(&self, peer_id: &PeerId, message: RawMessage) {
 		if let Some(Some(validator_id)) = self.peer_to_validator.get(peer_id) {
-			self.rpc_core.notify(P2PEvent::MessageReceived((*validator_id).into(), message.into()));
+			self.rpc.notify(P2PEvent::MessageReceived((*validator_id).into(), message.into()));
 		} else {
 			log::error!("Dropping message from unidentified peer {:?}", peer_id);
 		}
@@ -440,7 +428,7 @@ where
 	/// Identify ourselves to the network.
 	pub fn self_identify(&mut self, validator_id: AccountId) {
 		if let Some(existing_id) = self.local_validator_id {
-			self.rpc_core.notify(P2PEvent::Error(P2pError::AlreadyIdentified(existing_id.into())));
+			self.rpc.notify(P2PEvent::Error(P2pError::AlreadyIdentified(existing_id.into())));
 			return;
 		}
 		self.local_validator_id = Some(validator_id);
@@ -464,7 +452,7 @@ where
 		if let Some(peer_id) = self.validator_to_peer.get(&validator_id) {
 			self.encode_and_send(*peer_id, P2PMessage::Message(message));
 		} else {
-			self.rpc_core.notify(P2PEvent::Error(P2pError::UnknownRecipient(validator_id.into())));
+			self.rpc.notify(P2PEvent::Error(P2pError::UnknownRecipient(validator_id.into())));
 		}
 	}
 
@@ -505,11 +493,11 @@ where
 	/// returns true. Otherwise returns false.
 	fn notify_invalid(&self, message: &RawMessage) -> bool {
 		if message.0.is_empty() {
-			self.rpc_core.notify(P2PEvent::Error(P2pError::EmptyMessage));
+			self.rpc.notify(P2PEvent::Error(P2pError::EmptyMessage));
 			return true;
 		}
 		if self.local_validator_id.is_none() {
-			self.rpc_core.notify(P2PEvent::Error(P2pError::Unidentified));
+			self.rpc.notify(P2PEvent::Error(P2pError::Unidentified));
 			return true;
 		}
 		false
@@ -534,20 +522,17 @@ pub struct NetworkBridge<Network: PeerNetwork> {
 
 impl<Network: PeerNetwork> NetworkBridge<Network> {
 	pub fn new(
-		rpc_core: Arc<RpcCore>,
+		rpc: Arc<Rpc>,
 		p2p_network: Arc<Network>,
-	) -> (Self, Arc<UnboundedSender<MessagingCommand>>) {
-		let state_machine = StateMachine::new(rpc_core, p2p_network.clone());
+		command_receiver : UnboundedReceiver<MessagingCommand>
+	) -> Self {
+		let state_machine = StateMachine::new(rpc, p2p_network.clone());
 		let network_event_stream = p2p_network.event_stream().fuse();
-		let (command_sender, command_receiver) = unbounded();
-		(
-			NetworkBridge {
-				state_machine,
-				network_event_stream,
-				command_receiver,
-			},
-			Arc::new(command_sender),
-		)
+		NetworkBridge {
+			state_machine,
+			network_event_stream,
+			command_receiver,
+		}
 	}
 }
 

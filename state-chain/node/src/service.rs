@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 use std::time::Duration;
+use futures::channel::mpsc::unbounded;
 use sc_client_api::{ExecutorProvider, RemoteBackend};
 use state_chain_runtime::{self, RuntimeApi, opaque::Block};
 use sc_service::{error::Error as ServiceError, Configuration, TaskManager};
@@ -11,7 +12,7 @@ pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use sc_finality_grandpa::SharedVoterState;
 use sc_keystore::LocalKeystore;
-use cf_p2p::RpcCore;
+use cf_p2p::Rpc;
 
 // Our native executor instance.
 native_executor_instance!(
@@ -137,12 +138,12 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
 
-	let subscription_task_executor =
-		sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle());
-	let rpc_core = Arc::new(RpcCore::new(Arc::new(subscription_task_executor)));
-	let (p2p, rpc_command_sender) = cf_p2p::NetworkBridge::new(
-		rpc_core.clone(),
-		network.clone()
+	let (rpc_command_sender, rpc_command_receiver) = unbounded();
+	let rpc = Arc::new(Rpc::new(Arc::new(sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle())), rpc_command_sender));
+	let p2p = cf_p2p::NetworkBridge::new(
+		rpc.clone(),
+		network.clone(),
+		rpc_command_receiver
 	);
 
 	let rpc_extensions_builder = {
@@ -150,7 +151,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 			// TODO: Do we need to handle this DenyUnsafe?
 			let mut io = jsonrpc_core::IoHandler::default();
 			io.extend_with(cf_p2p::RpcApi::to_delegate(
-				cf_p2p::Rpc::new(rpc_command_sender.clone(), rpc_core.clone())
+				rpc.clone()
 			));
 			io
 		})
