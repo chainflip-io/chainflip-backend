@@ -13,6 +13,7 @@ enum Scenario {
 
 thread_local! {
 	pub static COMPLETED_BROADCASTS: std::cell::RefCell<Vec<BroadcastId>> = Default::default();
+	pub static FAILED_BROADCASTS: std::cell::RefCell<Vec<BroadcastId>> = Default::default();
 }
 
 struct MockCfe;
@@ -40,6 +41,9 @@ impl MockCfe {
 				}
 				BroadcastEvent::RetryScheduled(_, _) => {
 					// Informational only. No action required by the CFE.
+				},
+				BroadcastEvent::BroadcastFailed(id, _, _) => {
+					FAILED_BROADCASTS.with(|cell| cell.borrow_mut().push(id));
 				},
 				BroadcastEvent::__Ignore(_, _) => unimplemented!(),
 			},
@@ -140,6 +144,46 @@ fn test_broadcast_rejected() {
 		DogeBroadcast::on_initialize(0);
 		assert_eq!(RetryQueue::<Test, Instance0>::decode_len().unwrap_or_default(), 0);
 		assert!(AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID + 1).unwrap().attempt == 1);
+	})
+}
+
+#[test]
+fn test_broadcast_failed() {
+	new_test_ext().execute_with(|| {
+		const BROADCAST_ID: BroadcastId = 1;
+
+		// Initiate broadcast
+		assert_ok!(DogeBroadcast::start_sign_and_broadcast(
+			Origin::root(),
+			MockUnsignedTx
+		));
+		assert!(
+			AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID)
+				.unwrap()
+				.attempt == 0
+		);
+
+		// CFE responds with a signed transaction. This moves us to the broadcast stage.
+		MockCfe::respond(Scenario::HappyPath);
+		assert!(AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID).is_none());
+		assert!(AwaitingBroadcast::<Test, Instance0>::get(BROADCAST_ID).is_some());
+
+		// CFE responds that the transaction failed.
+		MockCfe::respond(Scenario::UnhappyPath(BroadcastFailure::TransactionFailed));
+		assert!(AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID).is_none());
+		assert!(AwaitingBroadcast::<Test, Instance0>::get(BROADCAST_ID).is_none());
+
+		// We don't retry.
+		assert_eq!(
+			RetryQueue::<Test, Instance0>::decode_len().unwrap_or_default(),
+			0
+		);
+		// The broadcast has failed.
+		MockCfe::respond(Scenario::UnhappyPath(BroadcastFailure::TransactionFailed));
+		assert_eq!(
+			FAILED_BROADCASTS.with(|cell| *cell.borrow().first().unwrap()),
+			BROADCAST_ID
+		);
 	})
 }
 
