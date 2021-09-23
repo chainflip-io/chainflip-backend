@@ -119,8 +119,8 @@ mod test {
 			// Set block length of epoch to 10
 			let epoch = 10;
 			assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), epoch));
-			// We have the genesis set of validators
-			assert_eq!(mock::current_validators().len(), 2);
+			// At genesis we have 0 valdiators
+			assert_eq!(mock::current_validators().len(), 0);
 			// ---------- Run Auction
 			// Confirm we are in the waiting state
 			assert_matches!(AuctionPallet::phase(), AuctionPhase::WaitingForBids(..));
@@ -193,13 +193,13 @@ mod test {
 	#[test]
 	fn genesis() {
 		new_test_ext().execute_with(|| {
-			// We should have a set of 2 validators on genesis with a minimum bid of 1 set
+			// We should have a set of 0 validators on genesis with a minimum bid of 0 set
 			assert_eq!(
 				current_validators().len(),
-				2,
-				"We should have a set of validators at genesis"
+				0,
+				"We shouldn't have a set of validators at genesis"
 			);
-			assert_eq!(min_bid(), 1, "We should have a minimum bid");
+			assert_eq!(min_bid(), 0, "We should have a minimum bid of zero");
 		});
 	}
 }

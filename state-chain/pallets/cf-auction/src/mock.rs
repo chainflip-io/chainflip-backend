@@ -45,7 +45,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
+		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config<T>},
 	}
 );
 
@@ -126,6 +126,8 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		frame_system: Default::default(),
 		pallet_cf_auction: Some(AuctionPalletConfig {
 			auction_size_range: (MIN_AUCTION_SIZE, MAX_AUCTION_SIZE),
+			winners: vec![JOE_BID.0],
+			minimum_active_bid: JOE_BID.1,
 		}),
 	};
 
