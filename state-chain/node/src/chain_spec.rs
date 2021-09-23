@@ -156,6 +156,8 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 		hex_literal::hex!["8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f04"];
 	let dopey_sr25519 =
 		hex_literal::hex!["ca58f2f4ae713dbb3b4db106640a3db150e38007940dfe29e6ebb870c4ccd47e"];
+	let snow_white =
+		hex_literal::hex!["ced2e4db6ce71779ac40ccec60bf670f38abbf9e27a718b4412060688a9ad212"];
 	Ok(ChainSpec::from_genesis(
 		"Three node testnet",
 		"three-node-test",
@@ -193,12 +195,12 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 						.unchecked_into(),
 					),
 				],
-				// Sudo account - Bashful
-				get_account_id_from_seed::<sr25519::Public>("Alice"),
+				// Sudo account - Snow White
+				snow_white.into(),
 				// Pre-funded accounts
 				vec![
-					// the governor - this will stuff with the tokens, but yeet
-					get_account_id_from_seed::<sr25519::Public>("Alice"),
+					// Snow White the dictator
+					snow_white.into(),
 					// Bashful
 					bashful_sr25519.into(),
 					// Doc
