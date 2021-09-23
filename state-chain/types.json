@@ -98,9 +98,9 @@
   "ReputationPoints": "i32",
   "ReserveId": "[u8;4]",
   "Retired": "bool",
-  "SchnorrSignature": {
+  "SchnorrVerificationComponents": {
     "s": "[u8; 32]",
-    "r": "[u8; 20]"
+    "k_times_g_addr": "[u8; 20]"
   },
   "Signature": "H256",
   "TokenAmount": "u128",

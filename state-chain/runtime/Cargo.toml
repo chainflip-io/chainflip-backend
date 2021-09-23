@@ -26,18 +26,20 @@ serde = {features = ['derive'], optional = true, version = '1.0.119'}
 
 # Chainflip dependencies
 cf-traits = { path = "../traits", default-features = false }
+cf-chains = { path = "../chains", default-features = false }
 pallet-cf-validator = { path = "../pallets/cf-validator", default-features = false }
 pallet-cf-staking = { path = "../pallets/cf-staking", default-features = false }
 pallet-cf-witnesser = { path = "../pallets/cf-witnesser", default-features = false}
 pallet-cf-flip = { path = "../pallets/cf-flip", default-features = false }
 pallet-cf-auction = { path = "../pallets/cf-auction", default-features = false }
 pallet-cf-emissions = { path = "../pallets/cf-emissions", default-features = false }
-pallet-cf-reqrep = { path = "../pallets/cf-reqrep", default-features = false }
 pallet-cf-rewards = { path = "../pallets/cf-rewards", default-features = false }
 pallet-cf-witnesser-api = { path = "../pallets/cf-witnesser-api", default-features = false }
 pallet-cf-governance = { path = "../pallets/cf-governance", default-features = false }
 pallet-cf-reputation = { path = "../pallets/cf-reputation", default-features = false }
 pallet-cf-vaults = { path = "../pallets/cf-vaults", default-features = false }
+pallet-cf-signing = { path = "../pallets/cf-signing", default-features = false }
+pallet-cf-broadcast = { path = "../pallets/cf-broadcast", default-features = false }
 
 # Substrate dependencies
 frame-benchmarking = {default-features = false, optional = true, version = '3.0.0'}
@@ -84,6 +86,7 @@ runtime-benchmarks = [
 ]
 std = [
   'cf-traits/std',
+  'cf-chains/std',
   'codec/std',
   'serde',
   'frame-executive/std',
@@ -117,10 +120,11 @@ std = [
   'pallet-cf-auction/std',
   'pallet-cf-emissions/std',
   'pallet-cf-reputation/std',
-  'pallet-cf-reqrep/std',
   'pallet-cf-rewards/std',
   'pallet-cf-witnesser-api/std',
   'pallet-cf-governance/std',
   'pallet-cf-vaults/std',
   'pallet-cf-reputation/std',
+  'pallet-cf-broadcast/std',
+  'pallet-cf-signing/std',
 ]

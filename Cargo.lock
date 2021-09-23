@@ -819,6 +819,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "cf-chains"
+version = "0.1.0"
+dependencies = [
+ "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=bfa7866)",
+ "ethereum",
+ "frame-support",
+ "frame-system",
+ "hex",
+ "parity-scale-codec",
+ "rlp",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "cf-p2p"
 version = "0.1.0"
 dependencies = [
@@ -856,6 +871,7 @@ dependencies = [
 name = "cf-traits"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "frame-support",
  "frame-system",
  "parity-scale-codec",
@@ -908,6 +924,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "bs58",
+ "cf-chains",
  "cf-p2p-rpc",
  "cf-traits",
  "config",
@@ -936,6 +953,7 @@ dependencies = [
  "pallet-cf-auction",
  "pallet-cf-flip",
  "pallet-cf-reputation",
+ "pallet-cf-signing",
  "pallet-cf-staking",
  "pallet-cf-validator",
  "pallet-cf-vaults",
@@ -1821,6 +1839,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ethabi"
+version = "14.1.0"
+source = "git+https://github.com/chainflip-io/ethabi?rev=bfa7866#bfa7866611f63960d8bffbc0117691f7b479e533"
+dependencies = [
+ "anyhow",
+ "ethereum-types 0.11.0",
+ "hex",
+ "serde 1.0.126",
+ "serde_json",
+ "sha3 0.9.1",
+ "thiserror",
+ "uint",
+]
+
+[[package]]
 name = "ethbloom"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1828,6 +1861,7 @@ checksum = "779864b9c7f7ead1f092972c3257496c6a84b46dba2ce131dd8a282cb2cc5972"
 dependencies = [
  "crunchy",
  "fixed-hash",
+ "impl-codec",
  "impl-rlp",
  "impl-serde",
  "tiny-keccak",
@@ -1859,6 +1893,7 @@ checksum = "f64b5df66a228d85e4b17e5d6c6aa43b0310898ffe8a85988c4c032357aaabfd"
 dependencies = [
  "ethbloom",
  "fixed-hash",
+ "impl-codec",
  "impl-rlp",
  "impl-serde",
  "primitive-types 0.9.0",
@@ -4908,6 +4943,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-broadcast"
+version = "0.1.0"
+dependencies = [
+ "cf-chains",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-cf-signing",
+ "parity-scale-codec",
+ "serde 1.0.126",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-emissions"
 version = "0.1.0"
 dependencies = [
@@ -4974,22 +5027,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-cf-reqrep"
-version = "0.1.0"
-dependencies = [
- "downcast-rs",
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "parity-scale-codec",
- "serde 1.0.126",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
 name = "pallet-cf-rewards"
 version = "0.1.0"
 dependencies = [
@@ -5007,15 +5044,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-signing"
+version = "0.1.0"
+dependencies = [
+ "cf-chains",
+ "cf-traits",
+ "downcast-rs",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "serde 1.0.126",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-staking"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "cf-traits",
- "ethabi 14.1.0",
+ "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=114a29d)",
  "ethereum-types 0.12.0",
  "frame-support",
  "frame-system",
  "pallet-cf-flip",
+ "pallet-cf-signing",
  "pallet-cf-validator",
  "parity-scale-codec",
  "serde 1.0.126",
@@ -5024,27 +5081,6 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "substrate-wasm-builder",
-]
-
-[[package]]
-name = "pallet-cf-transaction-broadcast"
-version = "0.1.0"
-dependencies = [
- "cf-traits",
- "ethabi 14.1.0",
- "ethereum",
- "ethereum-types 0.12.0",
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "hex",
- "parity-scale-codec",
- "rlp",
- "serde 1.0.126",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
 ]
 
 [[package]]
@@ -5106,10 +5142,12 @@ dependencies = [
 name = "pallet-cf-witnesser-api"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "cf-traits",
- "ethabi 14.1.0",
+ "ethabi 14.1.0 (git+https://github.com/chainflip-io/ethabi?rev=114a29d)",
  "frame-support",
  "frame-system",
+ "pallet-cf-signing",
  "pallet-cf-staking",
  "pallet-cf-vaults",
  "parity-scale-codec",
@@ -8805,6 +8843,7 @@ dependencies = [
 name = "state-chain-runtime"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "cf-traits",
  "frame-benchmarking",
  "frame-executive",
@@ -8816,12 +8855,13 @@ dependencies = [
  "pallet-aura",
  "pallet-authorship",
  "pallet-cf-auction",
+ "pallet-cf-broadcast",
  "pallet-cf-emissions",
  "pallet-cf-flip",
  "pallet-cf-governance",
  "pallet-cf-reputation",
- "pallet-cf-reqrep",
  "pallet-cf-rewards",
+ "pallet-cf-signing",
  "pallet-cf-staking",
  "pallet-cf-validator",
  "pallet-cf-vaults",

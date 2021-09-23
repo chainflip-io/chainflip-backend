@@ -14,9 +14,11 @@ targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
 # Chainflip pallets
+cf-chains = {path = '../../chains', default-features = false}
 cf-traits = {path = '../../traits', default-features = false}
 pallet-cf-staking = {path = '../cf-staking', default-features = false}
 pallet-cf-vaults = {path = '../cf-vaults', default-features = false}
+pallet-cf-signing = {path = '../cf-signing', default-features = false}
 
 # Substrate stuff
 codec = {default-features = false, features = ['derive'], package = 'parity-scale-codec', version = '2.0.0'}
@@ -35,11 +37,13 @@ sp-runtime = {default-features = false, version = '3.0.0'}
 [features]
 default = ['std']
 std = [
+  'cf-chains/std',
   'cf-traits/std',
   'codec/std',
   'frame-support/std',
   'frame-system/std',
   'pallet-cf-staking/std',
+  'pallet-cf-signing/std',
   'pallet-cf-vaults/std',
   'sp-std/std',
   'sp-core/std',

@@ -1,17 +1,14 @@
 use crate::mock::*;
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_noop, assert_ok, instances::Instance0};
 
 #[cfg(test)]
 mod staking_witness_tests {
-	use sp_core::U256;
-
 	use super::*;
 	const ETH_TX_HASH: [u8; 32] = [0; 32];
 	const RETURN_ADDRESS: Option<[u8; 20]> = None;
 	const STAKE: u128 = 100;
 	const STAKER: u64 = 12345;
 	const WITNESS: u64 = 67890;
-	const DUMMY_MSG: U256 = U256::zero();
 
 	#[test]
 	fn test_staked() {
@@ -84,27 +81,21 @@ mod staking_witness_tests {
 
 			// The call we are witnessing.
 			let call: Call =
-				pallet_cf_staking::Call::post_claim_signature(STAKER, DUMMY_MSG, DUMMY_MSG).into();
+				pallet_cf_signing::Call::<Test, Instance0>::signature_success(STAKER, ()).into();
 
 			// One vote.
-			assert_ok!(WitnessApi::witness_post_claim_signature(
+			assert_ok!(WitnessApi::witness_eth_signature_success(
 				Origin::signed(WITNESS),
 				STAKER,
-				DUMMY_MSG,
-				DUMMY_MSG
+				(),
 			));
 
 			assert_eq!(MockWitnesser::get_vote_count_for(&call), 1);
 
-			// Second vote - fails because there is no claim when it gets executed - but thats okay
+			// Second vote - fails because there is no pending request. Expected behaviour.
 			assert_noop!(
-				WitnessApi::witness_post_claim_signature(
-					Origin::signed(WITNESS),
-					STAKER,
-					DUMMY_MSG,
-					DUMMY_MSG
-				),
-				pallet_cf_staking::Error::<Test>::NoPendingClaim
+				WitnessApi::witness_eth_signature_success(Origin::signed(WITNESS), STAKER, (),),
+				pallet_cf_signing::Error::<Test, Instance0>::InvalidCeremonyId
 			);
 
 			assert_eq!(MockWitnesser::get_vote_count_for(&call), 2);

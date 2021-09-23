@@ -1,6 +1,5 @@
-use crate::{
-	self as pallet_cf_transaction_broadcast, BaseConfig, BroadcastContext, BroadcastFailure, SignerNomination,
-};
+use crate::{self as pallet_cf_broadcast, BroadcastConfig, SignerNomination};
+use cf_traits::Chainflip;
 use codec::{Decode, Encode};
 use frame_support::instances::Instance0;
 use frame_support::parameter_types;
@@ -22,7 +21,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		TransactionBroadcast: pallet_cf_transaction_broadcast::<Instance0>::{Module, Call, Storage, Event<T>},
+		DogeBroadcast: pallet_cf_broadcast::<Instance0>::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -58,19 +57,12 @@ impl frame_system::Config for Test {
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
 
-pub struct MockNonceProvider;
-
-impl cf_traits::NonceProvider for MockNonceProvider {
-	fn next_nonce(identifier: cf_traits::NonceIdentifier) -> cf_traits::Nonce {
-		1
-	}
-}
-
-impl BaseConfig for Test {
-	type KeyId = u64;
+impl Chainflip for Test {
+	type KeyId = u32;
 	type ValidatorId = u64;
-	type ChainId = u64;
-	type NonceProvider = MockNonceProvider;
+	type Amount = u128;
+	type Call = Call;
+	type EnsureWitnessed = MockEnsureWitnessed;
 }
 
 pub struct MockNominator;
@@ -83,71 +75,44 @@ impl SignerNomination for MockNominator {
 		RANDOM_NOMINEE
 	}
 
-	fn threshold_nomination_with_seed(seed: u64) -> Vec<Self::SignerId> {
+	fn threshold_nomination_with_seed(_seed: u64) -> Vec<Self::SignerId> {
 		vec![RANDOM_NOMINEE]
 	}
 }
 
+// Doge
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode)]
+pub struct Doge;
+impl cf_chains::Chain for Doge {}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub enum MockBroadcast {
-	New,
-	ThresholdSigReceived(Vec<u8>),
-	Broadcasting,
-	Complete,
-}
+pub struct MockBroadcast;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct MockUnsignedTx;
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct MockSignedTx;
 
-impl BroadcastContext<Test> for MockBroadcast {
-	type Payload = Vec<u8>;
-	type Signature = Vec<u8>;
+impl BroadcastConfig<Test> for MockBroadcast {
+	type Chain = Doge;
 	type UnsignedTransaction = MockUnsignedTx;
 	type SignedTransaction = MockSignedTx;
-	type TransactionHash = Vec<u8>;
-	type Error = ();
+	type TransactionHash = [u8; 4];
 
-	fn construct_signing_payload(&self) -> Result<Self::Payload, Self::Error> {
-		assert_eq!(*self, MockBroadcast::New);
-		Ok(b"payload".to_vec())
-	}
-
-	fn construct_unsigned_transaction(
-		&self,
-	) -> Result<Self::UnsignedTransaction, Self::Error> {
-		Ok(MockUnsignedTx)
-	}
-
-	fn on_broadcast_success(&mut self, transaction_hash: &Self::TransactionHash) {
-		assert_eq!(transaction_hash, b"0x-tx-hash");
-		*self = MockBroadcast::Complete;
-	}
-
-	fn on_broadcast_failure( &mut self, failure: &BroadcastFailure<u64>) {
-		todo!()
-	}
-
-	fn add_threshold_signature(&mut self, sig: &Self::Signature) {
-		assert_eq!(sig, b"signed-by-cfe");
-		*self = MockBroadcast::ThresholdSigReceived(sig.clone());
-	}
-
-	fn verify_tx(
-		&self,
-		signer: &<Test as BaseConfig>::ValidatorId,
+	fn verify_transaction(
+		_signer: &<Test as Chainflip>::ValidatorId,
+		_unsigned_tx: &Self::UnsignedTransaction,
 		_signed_tx: &Self::SignedTransaction,
-	) -> Result<(), Self::Error> {
-		assert_eq!(*signer, RANDOM_NOMINEE);
-		Ok(())
+	) -> Option<()> {
+		Some(())
 	}
 }
 
-impl pallet_cf_transaction_broadcast::Config<Instance0> for Test {
+impl pallet_cf_broadcast::Config<Instance0> for Test {
 	type Event = Event;
-	type EnsureWitnessed = MockEnsureWitnessed;
-	type BroadcastContext = MockBroadcast;
+	type TargetChain = Doge;
+	type BroadcastConfig = MockBroadcast;
 	type SignerNomination = MockNominator;
 }
 

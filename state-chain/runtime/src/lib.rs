@@ -3,8 +3,6 @@
 #![recursion_limit = "256"]
 mod chainflip;
 mod weights;
-// A few exports that help ease life for downstream crates.
-use cf_traits::Chainflip;
 use core::time::Duration;
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
@@ -168,7 +166,6 @@ impl pallet_cf_validator::Config for Runtime {
 
 impl pallet_cf_vaults::Config for Runtime {
 	type Event = Event;
-	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type PublicKey = Vec<u8>;
 	type TransactionHash = Vec<u8>;
 	type RotationHandler = Auction;
@@ -366,10 +363,12 @@ parameter_types! {
 impl pallet_cf_staking::Config for Runtime {
 	type Event = Event;
 	type Balance = FlipBalance;
+	type AccountId = AccountId;
 	type Flip = Flip;
-	type Nonce = u64;
-	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type EpochInfo = pallet_cf_validator::Pallet<Runtime>;
+	type NonceProvider = Vaults;
+	type SigningContext = chainflip::EthereumSigningContext;
+	type ThresholdSigner = EthereumSigner;
 	type TimeSource = Timestamp;
 	type MinClaimTTL = MinClaimTTL;
 	type ClaimTTL = ClaimTTL;
@@ -416,11 +415,6 @@ impl pallet_cf_witnesser_api::Config for Runtime {
 	type Witnesser = Witnesser;
 }
 
-impl Chainflip for Runtime {
-	type Amount = FlipBalance;
-	type ValidatorId = <Self as frame_system::Config>::AccountId;
-}
-
 parameter_types! {
 	pub const HeartbeatBlockInterval: u32 = 150;
 	pub const ReputationPointPenalty: ReputationPenalty<BlockNumber> = ReputationPenalty { points: 1, blocks: 10 };
@@ -441,14 +435,23 @@ impl pallet_cf_reputation::Config for Runtime {
 	type EmergencyRotationPercentageTrigger = EmergencyRotationPercentageTrigger;
 }
 
-// ReqRep stuff
-use frame_support::instances::{Instance0, Instance1};
+use frame_support::instances::{Instance0};
 
-impl pallet_cf_reqrep::BaseConfig for Runtime {
-	type KeyId = u32;
-	type ValidatorId = AccountId;
-	// More likely to be an enum or something.
-	type ChainId = u32;
+impl pallet_cf_signing::Config<Instance0> for Runtime
+{
+	type Event = Event;
+	type SignerNomination = chainflip::BasicSignerNomination;
+	type TargetChain = cf_chains::Ethereum;
+	type SigningContext = chainflip::EthereumSigningContext;
+	type KeyProvider = chainflip::VaultKeyProvider<Self>;
+	type OfflineReporter = Reputation;
+}
+
+impl pallet_cf_broadcast::Config<Instance0> for Runtime {
+	type Event = Event;
+	type TargetChain = cf_chains::Ethereum;
+	type BroadcastConfig = chainflip::EthereumBroadcastConfig;
+	type SignerNomination = chainflip::BasicSignerNomination;
 }
 
 construct_runtime!(
@@ -478,6 +481,8 @@ construct_runtime!(
 		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>, Origin},
 		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config<T>},
 		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
+		EthereumSigner: pallet_cf_signing::<Instance0>::{Module, Call, Storage, Event<T>},
+		EthereumBroadcaster: pallet_cf_broadcast::<Instance0>::{Module, Call, Storage, Event<T>},
 	}
 );
 
