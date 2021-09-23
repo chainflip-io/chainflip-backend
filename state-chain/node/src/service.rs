@@ -11,7 +11,7 @@ pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use sc_finality_grandpa::SharedVoterState;
 use sc_keystore::LocalKeystore;
-use cf_p2p_rpc::RpcCore;
+use cf_p2p::RpcCore;
 
 // Our native executor instance.
 native_executor_instance!(
@@ -149,8 +149,8 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		Box::new(move |_deny_unsafe, _| {
 			// TODO: Do we need to handle this DenyUnsafe?
 			let mut io = jsonrpc_core::IoHandler::default();
-			io.extend_with(cf_p2p_rpc::RpcApi::to_delegate(
-				cf_p2p_rpc::Rpc::new(rpc_command_sender.clone(), rpc_core.clone())
+			io.extend_with(cf_p2p::RpcApi::to_delegate(
+				cf_p2p::Rpc::new(rpc_command_sender.clone(), rpc_core.clone())
 			));
 			io
 		})

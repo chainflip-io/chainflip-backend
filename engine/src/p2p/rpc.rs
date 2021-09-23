@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use crate::p2p::{AccountId, P2PNetworkClient, StatusCode};
 use anyhow::Result;
 use async_trait::async_trait;
-use cf_p2p_rpc::{AccountIdBs58, MessageBs58, P2PEvent, P2PRpcClient};
+use cf_p2p::{AccountIdBs58, MessageBs58, P2PEvent, P2PRpcClient};
 use failure::Error;
 use futures::{
     compat::{Future01CompatExt, Stream01CompatExt},
@@ -204,7 +204,7 @@ mod tests {
     };
 
     use super::*;
-    use cf_p2p_rpc::RpcApi;
+    use cf_p2p::RpcApi;
     use jsonrpc_core::MetaIoHandler;
     use jsonrpc_core_client::transports::local;
     use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};

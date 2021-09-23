@@ -3,7 +3,7 @@ pub mod conductor;
 pub mod mock;
 pub mod rpc;
 
-pub use cf_p2p_rpc::{P2PEvent, P2PRpcClient};
+pub use cf_p2p::{P2PEvent, P2PRpcClient};
 
 use anyhow::Result;
 use async_trait::async_trait;

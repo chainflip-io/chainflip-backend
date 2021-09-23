@@ -70,7 +70,7 @@ sp-runtime = "3.0.0"
 substrate-subxt = "0.15"
 
 # Local deps
-cf-p2p-rpc = {path = "../state-chain/client/cf-p2p/rpc"}
+cf-p2p = {path = "../state-chain/client/cf-p2p"}
 cf-traits = {path = "../state-chain/traits"}
 pallet-cf-auction = {path = "../state-chain/pallets/cf-auction"}
 pallet-cf-flip = {path = "../state-chain/pallets/cf-flip"}
