@@ -301,7 +301,7 @@ impl<T: Config> VaultRotator for Pallet<T> {
 		ensure!(!candidates.is_empty(), RotationError::EmptyValidatorSet);
 		// Create a KeyGenRequest for Ethereum
 		let keygen_request = KeygenRequest {
-			chain_type: ChainType::Ethereum,
+			chain: Chain::Ethereum,
 			validator_candidates: candidates.clone(),
 		};
 
@@ -456,8 +456,8 @@ impl<T: Config>
 			VaultRotationResponse::Success { tx_hash } => {
 				if let Some(vault_rotation) = VaultRotations::<T>::take(ceremony_id) {
 					// At the moment we just have Ethereum to notify
-					match vault_rotation.keygen_request.chain_type {
-						ChainType::Ethereum => EthereumChain::<T>::vault_rotated(
+					match vault_rotation.keygen_request.chain {
+						Chain::Ethereum => EthereumChain::<T>::vault_rotated(
 							vault_rotation.new_public_key,
 							tx_hash,
 						),

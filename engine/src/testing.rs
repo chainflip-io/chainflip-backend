@@ -7,6 +7,7 @@ macro_rules! assert_ok {
         $result.unwrap()
     };
 }
+pub(crate) use assert_ok;
 
 mod tests {
     #[test]

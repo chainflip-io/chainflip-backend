@@ -1,7 +1,10 @@
-use async_std::net::TcpListener;
-use futures::{AsyncReadExt, AsyncWriteExt, StreamExt};
 use slog::o;
-use tokio::{select, sync::oneshot::Sender};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpListener,
+    select,
+    sync::oneshot::Sender,
+};
 
 use crate::{logging::COMPONENT_KEY, settings};
 
@@ -33,81 +36,100 @@ impl HealthMonitor {
             .await
             .expect(format!("Could not bind TCP listener to {}", self.bind_address).as_str());
 
-        let (tx, mut rx) = tokio::sync::oneshot::channel::<()>();
+        let (shutdown_sender, mut shutdown_receiver) = tokio::sync::oneshot::channel::<()>();
         let logger = self.logger.clone();
         tokio::spawn(async move {
-            let mut incoming = listener.incoming();
             loop {
-                let stream = select! {
-                    Ok(()) = &mut rx => {
+                select! {
+                    Ok(()) = &mut shutdown_receiver => {
                         slog::info!(logger, "Shutting down health check gracefully");
                         break;
                     },
-                    Some(stream) = incoming.next() => stream,
+                    result = listener.accept() => match result {
+                        Ok((mut stream, _address)) => {
+                            let mut buffer = [0; 1024];
+                            stream
+                                .read(&mut buffer)
+                                .await
+                                .expect("Couldn't read stream into buffer");
+
+                            let mut headers = [httparse::EMPTY_HEADER; 16];
+                            let mut request = httparse::Request::new(&mut headers);
+                            match request.parse(&buffer) /* Iff returns Ok, fills request with the parsed request */ {
+                                Ok(_) => {
+                                    if request.path.eq(&Some("/health")) {
+                                        let http_200_response = "HTTP/1.1 200 OK\r\n\r\n";
+                                        stream
+                                            .write(http_200_response.as_bytes())
+                                            .await
+                                            .expect("Could not write to health check stream");
+                                        slog::trace!(logger, "Responded to health check: CFE is healthy :heart: ");
+                                        stream
+                                            .flush()
+                                            .await
+                                            .expect("Could not flush health check TCP stream");
+                                    } else {
+                                        slog::warn!(logger, "Requested health at invalid path: {:?}", request.path);
+                                    }
+                                },
+                                Err(error) => {
+                                    slog::warn!(
+                                        logger,
+                                        "Invalid health check request, could not parse: {}",
+                                        error,
+                                    );
+                                }
+                            }
+                        },
+                        Err(error) => {
+                            slog::warn!(logger, "Could not open CFE health check TCP stream: {}", error);
+                        }
+                    },
                 };
-
-                let mut stream = stream.expect("Could not open CFE health check TCP stream");
-                let mut buffer = [0; 1024];
-                // read the stream into the buffer
-                stream
-                    .read(&mut buffer)
-                    .await
-                    .expect("Couldn't read stream into buffer");
-
-                // parse the http request
-                let mut headers = [httparse::EMPTY_HEADER; 16];
-                let mut req = httparse::Request::new(&mut headers);
-                let result = req.parse(&buffer);
-                if let Err(e) = result {
-                    slog::warn!(
-                        logger,
-                        "Invalid health check request, could not parse: {}",
-                        e,
-                    );
-                    continue;
-                }
-
-                if req.path.eq(&Some("/health")) {
-                    let http_200_response = "HTTP/1.1 200 OK\r\n\r\n";
-                    stream
-                        .write(http_200_response.as_bytes())
-                        .await
-                        .expect("Could not write to health check stream");
-                    slog::trace!(logger, "Responded to health check: CFE is healthy :heart: ");
-                    stream
-                        .flush()
-                        .await
-                        .expect("Could not flush health check TCP stream");
-                } else {
-                    slog::warn!(logger, "Requested health at invalid path: {:?}", req.path);
-                }
             }
         });
 
-        return tx;
+        return shutdown_sender;
     }
 }
 
 #[cfg(test)]
 mod test {
 
-    use std::time::Duration;
-
-    use tokio::time;
-
     use crate::logging;
+    use crate::testing::assert_ok;
+    use tokio::process::Command;
 
     use super::*;
 
-    // TODO: Make this a real test, perhaps by using reqwest to ping the health check endpoint
     #[tokio::test]
-    #[ignore = "runs for 10 seconds"]
     async fn health_check_test() {
-        let test_settings = settings::test_utils::new_test_settings().unwrap();
+        let health_check = settings::test_utils::new_test_settings()
+            .unwrap()
+            .health_check;
         let logger = logging::test_utils::create_test_logger();
-        let health_monitor = HealthMonitor::new(&test_settings.health_check, &logger);
+        let health_monitor = HealthMonitor::new(&health_check, &logger);
         let sender = health_monitor.run().await;
-        time::sleep(Duration::from_millis(10000)).await;
+
+        let request_test = |path: &'static str, expected_status: Option<reqwest::StatusCode>| {
+            let health_check = health_check.clone();
+            async move {
+                assert_eq!(
+                    expected_status,
+                    reqwest::get(&format!(
+                        "http://{}:{}/{}",
+                        &health_check.hostname, &health_check.port, path
+                    ))
+                    .await
+                    .ok()
+                    .map(|x| x.status()),
+                );
+            }
+        };
+
+        request_test("health", Some(reqwest::StatusCode::from_u16(200).unwrap())).await;
+        request_test("invalid", None).await;
+
         sender.send(()).unwrap();
     }
 }
