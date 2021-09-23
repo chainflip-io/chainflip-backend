@@ -49,6 +49,8 @@
 //!   an emergency rotation.
 //!
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -63,7 +65,6 @@ use cf_traits::{
 	ChainflipAccountState, Online, RemainingBid, StakerHandler, VaultRotationHandler, VaultRotator,
 };
 use frame_support::pallet_prelude::*;
-use frame_support::sp_runtime::offchain::storage_lock::BlockNumberProvider;
 use frame_support::sp_std::mem;
 use frame_support::traits::ValidatorRegistration;
 use frame_system::pallet_prelude::*;
@@ -71,6 +72,10 @@ pub use pallet::*;
 use sp_runtime::traits::{AtLeast32BitUnsigned, Convert, One, Zero};
 use sp_std::cmp::min;
 use sp_std::prelude::*;
+
+pub trait WeightInfo {
+	fn set_auction_size_range() -> Weight;
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -90,9 +95,16 @@ pub mod pallet {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// An amount for a bid
-		type Amount: Member + Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
+		type Amount: Member
+			+ Parameter
+			+ Default
+			+ Eq
+			+ Ord
+			+ Copy
+			+ AtLeast32BitUnsigned
+			+ MaybeSerializeDeserialize;
 		/// An identity for a validator
-		type ValidatorId: Member + Parameter + Ord;
+		type ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize;
 		/// Providing bidders
 		type BidderProvider: BidderProvider<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 		/// To confirm we have a session key registered for a validator
@@ -102,6 +114,8 @@ pub mod pallet {
 		/// Minimum amount of validators
 		#[pallet::constant]
 		type MinValidators: Get<u32>;
+		/// Benchmark stuff
+		type WeightInfo: WeightInfo;
 		/// The lifecycle of our auction
 		type Handler: VaultRotator<ValidatorId = Self::ValidatorId>;
 		/// A Chainflip Account
@@ -192,7 +206,7 @@ pub mod pallet {
 		/// Sets the size of our auction range
 		///
 		/// The dispatch origin of this function must be root.
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::set_auction_size_range())]
 		pub(super) fn set_active_validator_range(
 			origin: OriginFor<T>,
 			range: ActiveValidatorRange,
@@ -210,35 +224,32 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig {
+	pub struct GenesisConfig<T: Config> {
 		pub validator_size_range: ActiveValidatorRange,
+		pub winners: Vec<T::ValidatorId>,
+		pub minimum_active_bid: T::Amount,
 	}
 
 	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
+	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self {
 				validator_size_range: (Zero::zero(), Zero::zero()),
+				winners: vec![],
+				minimum_active_bid: Zero::zero(),
 			}
 		}
 	}
 
 	// The build of genesis for the pallet.
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			Pallet::<T>::set_active_range(self.validator_size_range).expect("valid range");
-			// Run through an auction
-			match Pallet::<T>::process().and(Pallet::<T>::process()) {
-				Ok(_) => {
-					if let Err(err) = Pallet::<T>::process() {
-						panic!("Failed to confirm auction: {:?}", err);
-					}
-				}
-				Err(err) => {
-					panic!("Failed selecting winners in auction: {:?}", err);
-				}
-			}
+			CurrentPhase::<T>::set(AuctionPhase::WaitingForBids(
+				self.winners.clone(),
+				self.minimum_active_bid,
+			));
 		}
 	}
 }
@@ -370,14 +381,7 @@ impl<T: Config> Auction for Pallet<T> {
 			// We are ready to call this an auction a day resetting the bidders in storage and
 			// setting the state ready for a new set of 'Bidders'
 			AuctionPhase::ValidatorsSelected(winners, minimum_active_bid) => {
-				// If this is genesis we auto confirm
-				let result = if frame_system::Pallet::<T>::current_block_number() == Zero::zero() {
-					Ok(())
-				} else {
-					T::Handler::finalize_rotation()
-				};
-
-				match result {
+				match T::Handler::finalize_rotation() {
 					Ok(_) => {
 						let update_status = |validators, state| {
 							for validator_id in validators {

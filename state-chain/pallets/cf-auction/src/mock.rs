@@ -20,10 +20,16 @@ type Block = frame_system::mocking::MockBlock<Test>;
 pub type Amount = u64;
 pub type ValidatorId = u64;
 
+impl WeightInfo for () {
+	fn set_auction_size_range() -> u64 {
+		0 as Weight
+	}
+}
+
 pub const MIN_VALIDATOR_SIZE: u32 = 1;
 pub const MAX_VALIDATOR_SIZE: u32 = 3;
 pub const BACKUP_VALIDATOR_RATIO: u32 = 3;
-pub const GENESIS_BIDDERS: u32 = 9;
+pub const NUMBER_OF_BIDDERS: u32 = 9;
 
 thread_local! {
 	// A set of bidders, we initialise this with the proposed genesis bidders
@@ -87,7 +93,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
+		AuctionPallet: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config<T>},
 	}
 );
 
@@ -138,6 +144,7 @@ impl Config for Test {
 	type AccountIdOf = ConvertInto;
 	type Online = MockOnline;
 	type BackupValidatorRatio = BackupValidatorRatio;
+	type WeightInfo = ();
 }
 
 pub struct MockChainflipAccount;
@@ -184,14 +191,19 @@ impl BidderProvider for TestBidderProvider {
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
+	generate_bids(NUMBER_OF_BIDDERS);
+
 	let config = GenesisConfig {
 		frame_system: Default::default(),
 		pallet_cf_auction: Some(AuctionPalletConfig {
 			validator_size_range: (MIN_VALIDATOR_SIZE, MAX_VALIDATOR_SIZE),
+			winners: TestBidderProvider::get_bidders()
+				.iter()
+				.map(|(validator_id, _)| validator_id.clone())
+				.collect(),
+			minimum_active_bid: (NUMBER_OF_BIDDERS as u64 - 1) * 100,
 		}),
 	};
-
-	generate_bids(GENESIS_BIDDERS);
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 

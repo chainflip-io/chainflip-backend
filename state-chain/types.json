@@ -26,12 +26,6 @@
   "Bid": "(ValidatorId, Amount)",
   "CallHash": "[u8;32]",
   "CeremonyId": "u64",
-  "ChainParams": {
-    "_enum": {
-      "Ethereum": "(Vec<u8>)",
-      "Other": "(Vec<u8>)"
-    }
-  },
   "ChainflipAccountData": {
     "state": "ChainflipAccountState"
   },
@@ -42,10 +36,16 @@
       "Validator"
     ]
   },
-  "ChainType": {
+  "Chain": {
     "_enum": [
       "Ethereum"
     ]
+  },
+  "ChainParams": {
+    "_enum": {
+      "Ethereum": "(Vec<u8>)",
+      "Other": "(Vec<u8>)"
+    }
   },
   "ClaimDetailsFor": {
     "amount": "FlipBalance",
@@ -77,7 +77,7 @@
     ]
   },
   "KeygenRequest": {
-    "chain": "ChainParams",
+    "chain": "Chain",
     "validator_candidates": "Vec<ValidatorId>"
   },
   "KeygenResponse": {

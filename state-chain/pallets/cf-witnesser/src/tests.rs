@@ -109,7 +109,7 @@ fn only_validators_can_witness() {
 		// Other accounts can't witness
 		assert_noop!(
 			Witnesser::witness(Origin::signed(DEIRDRE), call.clone()),
-			Error::<Test>::UnauthorizedWitness
+			Error::<Test>::UnauthorisedWitness
 		);
 	});
 }
