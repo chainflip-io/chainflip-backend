@@ -97,6 +97,102 @@ impl std::fmt::Display for MessageBs58 {
 	}
 }
 
+/// Protocol errors notified via the subscription stream.
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub enum P2pError {
+	/// The recipient of a message could not be found on the network.
+	UnknownRecipient(AccountIdBs58),
+	/// This node can't send messages until it identifies itself to the network.
+	Unidentified,
+	/// Empty messages are not allowed.
+	EmptyMessage,
+	/// The node attempted to identify itself more than once.
+	AlreadyIdentified(AccountIdBs58),
+}
+
+impl From<P2pError> for P2PEvent {
+	fn from(err: P2pError) -> Self {
+		P2PEvent::Error(err)
+	}
+}
+
+/// Events available via the subscription stream.
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub enum P2PEvent {
+	/// A message has been received from another validator.
+	MessageReceived(AccountIdBs58, MessageBs58),
+	/// A new validator has cconnected and identified itself to the network.
+	ValidatorConnected(AccountIdBs58),
+	/// A validator has disconnected from the network.
+	ValidatorDisconnected(AccountIdBs58),
+	/// Errors.
+	Error(P2pError),
+}
+
+/// The identifier for our protocol, required to distinguish it from other protocols running on the substrate p2p
+/// network.
+pub const CHAINFLIP_P2P_PROTOCOL_NAME: Cow<str> = Cow::Borrowed("/chainflip-protocol");
+
+/// Required by substrate to register and configure the protocol.
+pub fn p2p_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
+	sc_network::config::NonDefaultSetConfig {
+		notifications_protocol: CHAINFLIP_P2P_PROTOCOL_NAME,
+		// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
+		max_notification_size: 1024 * 1024,
+		set_config: sc_network::config::SetConfig {
+			in_peers: 0,
+			out_peers: 0,
+			reserved_nodes: Vec::new(),
+			non_reserved_mode: sc_network::config::NonReservedPeerMode::Deny,
+		},
+	}
+}
+
+/// An abstration of the underlying network of peers.
+pub trait PeerNetwork {
+	/// Adds the peer to the set of peers to be connected to with this protocol.
+	fn reserve_peer(&self, who: PeerId);
+	/// Removes the peer from the set of peers to be connected to with this protocol.
+	fn remove_reserved_peer(&self, who: PeerId);
+	/// Write notification to network to peer id, over protocol
+	fn write_notification(&self, who: PeerId, message: Vec<u8>);
+	/// Network event stream
+	fn event_stream(&self) -> Pin<Box<dyn futures::Stream<Item = Event> + Send>>;
+}
+
+/// An implementation of [PeerNetwork] using substrate's libp2p-based `NetworkService`.
+impl<B: BlockT, H: ExHashT> PeerNetwork for NetworkService<B, H> {
+	fn reserve_peer(&self, who: PeerId) {
+		let addr =
+			iter::once(multiaddr::Protocol::P2p(who.into())).collect::<multiaddr::Multiaddr>();
+		let result =
+			self.add_peers_to_reserved_set(CHAINFLIP_P2P_PROTOCOL_NAME, iter::once(addr).collect());
+		if let Err(err) = result {
+			log::error!(target: "p2p", "add_set_reserved failed: {}", err);
+		}
+	}
+
+	fn remove_reserved_peer(&self, who: PeerId) {
+		let addr =
+			iter::once(multiaddr::Protocol::P2p(who.into())).collect::<multiaddr::Multiaddr>();
+		let result = self.remove_peers_from_reserved_set(
+			CHAINFLIP_P2P_PROTOCOL_NAME,
+			iter::once(addr).collect(),
+		);
+		if let Err(err) = result {
+			log::error!(target: "p2p", "remove_set_reserved failed: {}", err);
+		}
+	}
+
+	fn write_notification(&self, target: PeerId, message: Vec<u8>) {
+		self.write_notification(target, CHAINFLIP_P2P_PROTOCOL_NAME, message);
+	}
+
+	fn event_stream(&self) -> Pin<Box<dyn futures::Stream<Item = Event> + Send>> {
+		Box::pin(self.event_stream("network-chainflip"))
+	}
+}
+
 #[rpc]
 pub trait P2PValidatorNetworkNodeRpcApi {
 	/// RPC Metadata
@@ -133,38 +229,6 @@ pub trait P2PValidatorNetworkNodeRpcApi {
 		metadata: Option<Self::Metadata>,
 		id: SubscriptionId,
 	) -> Result<bool>;
-}
-
-/// Protocol errors notified via the subscription stream.
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub enum P2pError {
-	/// The recipient of a message could not be found on the network.
-	UnknownRecipient(AccountIdBs58),
-	/// This node can't send messages until it identifies itself to the network.
-	Unidentified,
-	/// Empty messages are not allowed.
-	EmptyMessage,
-	/// The node attempted to identify itself more than once.
-	AlreadyIdentified(AccountIdBs58),
-}
-
-impl From<P2pError> for P2PEvent {
-	fn from(err: P2pError) -> Self {
-		P2PEvent::Error(err)
-	}
-}
-
-/// Events available via the subscription stream.
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub enum P2PEvent {
-	/// A message has been received from another validator.
-	MessageReceived(AccountIdBs58, MessageBs58),
-	/// A new validator has cconnected and identified itself to the network.
-	ValidatorConnected(AccountIdBs58),
-	/// A validator has disconnected from the network.
-	ValidatorDisconnected(AccountIdBs58),
-	/// Errors.
-	Error(P2pError),
 }
 
 /// The RPC bridge and API
@@ -254,70 +318,6 @@ impl P2PValidatorNetworkNodeRpcApi for Arc<Rpc> {
 		id: SubscriptionId,
 	) -> Result<bool> {
 		Ok(self.manager.cancel(id))
-	}
-}
-
-/// The identifier for our protocol, required to distinguish it from other protocols running on the substrate p2p
-/// network.
-pub const CHAINFLIP_P2P_PROTOCOL_NAME: Cow<str> = Cow::Borrowed("/chainflip-protocol");
-
-/// Required by substrate to register and configure the protocol.
-pub fn p2p_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
-	sc_network::config::NonDefaultSetConfig {
-		notifications_protocol: CHAINFLIP_P2P_PROTOCOL_NAME,
-		// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
-		max_notification_size: 1024 * 1024,
-		set_config: sc_network::config::SetConfig {
-			in_peers: 0,
-			out_peers: 0,
-			reserved_nodes: Vec::new(),
-			non_reserved_mode: sc_network::config::NonReservedPeerMode::Deny,
-		},
-	}
-}
-
-/// An abstration of the underlying network of peers.
-pub trait PeerNetwork {
-	/// Adds the peer to the set of peers to be connected to with this protocol.
-	fn reserve_peer(&self, who: PeerId);
-	/// Removes the peer from the set of peers to be connected to with this protocol.
-	fn remove_reserved_peer(&self, who: PeerId);
-	/// Write notification to network to peer id, over protocol
-	fn write_notification(&self, who: PeerId, message: Vec<u8>);
-	/// Network event stream
-	fn event_stream(&self) -> Pin<Box<dyn futures::Stream<Item = Event> + Send>>;
-}
-
-/// An implementation of [PeerNetwork] using substrate's libp2p-based `NetworkService`.
-impl<B: BlockT, H: ExHashT> PeerNetwork for NetworkService<B, H> {
-	fn reserve_peer(&self, who: PeerId) {
-		let addr =
-			iter::once(multiaddr::Protocol::P2p(who.into())).collect::<multiaddr::Multiaddr>();
-		let result =
-			self.add_peers_to_reserved_set(CHAINFLIP_P2P_PROTOCOL_NAME, iter::once(addr).collect());
-		if let Err(err) = result {
-			log::error!(target: "p2p", "add_set_reserved failed: {}", err);
-		}
-	}
-
-	fn remove_reserved_peer(&self, who: PeerId) {
-		let addr =
-			iter::once(multiaddr::Protocol::P2p(who.into())).collect::<multiaddr::Multiaddr>();
-		let result = self.remove_peers_from_reserved_set(
-			CHAINFLIP_P2P_PROTOCOL_NAME,
-			iter::once(addr).collect(),
-		);
-		if let Err(err) = result {
-			log::error!(target: "p2p", "remove_set_reserved failed: {}", err);
-		}
-	}
-
-	fn write_notification(&self, target: PeerId, message: Vec<u8>) {
-		self.write_notification(target, CHAINFLIP_P2P_PROTOCOL_NAME, message);
-	}
-
-	fn event_stream(&self) -> Pin<Box<dyn futures::Stream<Item = Event> + Send>> {
-		Box::pin(self.event_stream("network-chainflip"))
 	}
 }
 
