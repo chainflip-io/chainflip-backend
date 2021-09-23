@@ -82,6 +82,8 @@ fn propose_a_governance_extrinsic_and_expect_execution() {
 		// Do the two needed approvals to reach majority
 		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
 		assert_ok!(Governance::approve(Origin::signed(CHARLES), 1));
+		// Now execute the proposal
+		assert_ok!(Governance::execute(Origin::signed(BOB), 1));
 		// Expect the Executed event was fired
 		assert_eq!(
 			last_event(),
@@ -179,6 +181,8 @@ fn sudo_extrinsic() {
 		// Do the two necessary approvals
 		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
 		assert_ok!(Governance::approve(Origin::signed(CHARLES), 1));
+		// Now execute the proposal
+		assert_ok!(Governance::execute(Origin::signed(BOB), 1));
 		// Expect the sudo extrinsic to be executed successfully
 		assert_eq!(
 			last_event(),

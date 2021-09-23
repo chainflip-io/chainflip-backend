@@ -203,6 +203,15 @@ pub mod pallet {
 			ensure!(<Members<T>>::get().contains(&who), Error::<T>::NotMember);
 			// Try to approve the proposal
 			Self::try_approve(who, id)?;
+			// Governance member don't pay fees
+			Ok(Pays::No.into())
+		}
+		/// Execute the proposal
+		#[pallet::weight(10_000)]
+		pub fn execute(origin: OriginFor<T>, id: ProposalId) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			// Ensure origin is part of the governance
+			ensure!(<Members<T>>::get().contains(&who), Error::<T>::NotMember);
 			// Try to execute the proposal
 			Self::execute_proposal(id)?;
 			// Governance member don't pay fees
@@ -216,10 +225,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			// Execute the root call
-			let result = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
-			// Ensure the the sudo call was executed successfully
-			ensure!(result.is_ok(), result.unwrap_err().error);
-			Ok(().into())
+			call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into())
 		}
 	}
 
