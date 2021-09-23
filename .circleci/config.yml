@@ -17,13 +17,13 @@ only_main_branches: &only_main_branches
         - develop
         - /epic\/.*/
         - /release\/.*/
+        - fix/cfe-debug
 
 only_epic_branches: &only_epic_branches
   filters:
     branches:
       only:
         # Uncomment and add your current branch when testing
-        - fix/cfe-debug
         - /epic\/.*/
         - /release\/.*/
 
