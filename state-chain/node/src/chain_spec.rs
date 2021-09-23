@@ -6,7 +6,7 @@ use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
 	opaque::SessionKeys, AccountId, AuctionConfig, AuraConfig, EmissionsConfig, FlipBalance,
 	FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig,
-	Signature, StakingConfig, SystemConfig, ValidatorConfig, DAYS, WASM_BINARY,
+	Signature, StakingConfig, SystemConfig, ValidatorConfig, VaultsConfig, DAYS, WASM_BINARY,
 };
 
 const TOTAL_ISSUANCE: FlipBalance = {
@@ -380,6 +380,9 @@ fn testnet_genesis(
 		}),
 		pallet_cf_reputation: Some(ReputationConfig {
 			accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
+		}),
+		pallet_cf_vaults: Some(VaultsConfig {
+			ethereum_vault_key: hex_literal::hex!["03035e49e5db75c1008f33f7368a87ffb13f0d845dc3f9c89723e4e07a066f2667"].to_vec()
 		}),
 	}
 }
