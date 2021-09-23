@@ -5,7 +5,7 @@ use crate::p2p::AccountId;
 
 // Generate the keys for genesis
 #[tokio::test]
-#[ignore = "Run manually to generate genesis key shareds"]
+#[ignore = "Run manually to generate genesis key shares/shards"]
 pub async fn genesis_keys() {
     println!("Generating keys");
     let bashful =
