@@ -160,7 +160,7 @@ pub async fn connect(url: &url::Url, validator_id: AccountId) -> Result<P2PRpcCl
         .self_identify(AccountIdBs58(validator_id.0))
         .compat()
         .await
-        .map_err(|e| RpcClientError::CallError(String::from("identify"), e))?;
+        .map_err(|e| RpcClientError::CallError(String::from("self_identify"), e))?;
 
     Ok(client)
 }

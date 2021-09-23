@@ -226,7 +226,7 @@ impl RpcApi for Rpc {
 	type Metadata = sc_rpc::Metadata;
 
 	fn self_identify(&self, validator_id: AccountIdBs58) -> Result<u64> {
-		self.messaging_command(MessagingCommand::Identify(validator_id.into()))
+		self.messaging_command(MessagingCommand::SelfIdentify(validator_id.into()))
 	}
 
 	fn send(&self, validator_id: AccountIdBs58, message: MessageBs58) -> Result<u64> {

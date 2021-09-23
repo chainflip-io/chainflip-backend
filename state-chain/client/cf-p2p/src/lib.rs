@@ -41,8 +41,8 @@ pub struct RawMessage(pub Vec<u8>);
 
 /// The protocol has two message types, `Identify` and `Message`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-enum ProtocolMessage {
-	Identify(AccountId),
+enum P2PMessage {
+	SelfIdentify(AccountId),
 	Message(RawMessage),
 }
 
@@ -215,7 +215,7 @@ where
 	}
 
 	/// Messages received from peer_id, notify observer as long as the corresponding validator_id is known.
-	pub fn received(&mut self, peer_id: &PeerId, messages: Vec<ProtocolMessage>) {
+	pub fn received(&mut self, peer_id: &PeerId, messages: Vec<P2PMessage>) {
 		if !self.peer_to_validator.contains_key(peer_id) {
 			log::error!("Dropping message from unknown peer {:?}", peer_id);
 			return;
@@ -223,10 +223,10 @@ where
 
 		for message in messages {
 			match message {
-				ProtocolMessage::Identify(validator_id) => {
+				P2PMessage::SelfIdentify(validator_id) => {
 					self.register_identification(peer_id, validator_id);
 				}
-				ProtocolMessage::Message(raw_message) => {
+				P2PMessage::Message(raw_message) => {
 					self.maybe_notify_observer(peer_id, raw_message);
 				}
 			}
@@ -234,7 +234,7 @@ where
 	}
 
 	/// Identify ourselves to the network.
-	pub fn identify(&mut self, validator_id: AccountId) {
+	pub fn self_identify(&mut self, validator_id: AccountId) {
 		if let Some(existing_id) = self.local_validator_id {
 			self.observer.already_identified(&existing_id);
 			return;
@@ -247,7 +247,7 @@ where
 
 	/// Identify ourselves to a peer on the network.
 	fn send_identification(&self, peer_id: PeerId, validator_id: AccountId) {
-		self.encode_and_send(peer_id, ProtocolMessage::Identify(validator_id));
+		self.encode_and_send(peer_id, P2PMessage::SelfIdentify(validator_id));
 	}
 
 	/// Send message to peer, this will fail silently if peer isn't in our peer list or if the message
@@ -258,7 +258,7 @@ where
 		}
 
 		if let Some(peer_id) = self.validator_to_peer.get(&validator_id) {
-			self.encode_and_send(*peer_id, ProtocolMessage::Message(message));
+			self.encode_and_send(*peer_id, P2PMessage::Message(message));
 		} else {
 			self.observer.unknown_recipient(&validator_id);
 		}
@@ -282,12 +282,12 @@ where
 		}
 
 		for peer_id in self.validator_to_peer.values() {
-			self.encode_and_send(*peer_id, ProtocolMessage::Message(message.clone()));
+			self.encode_and_send(*peer_id, P2PMessage::Message(message.clone()));
 		}
 	}
 
 	/// Encodes the message using bincode and sends it over the network.
-	fn encode_and_send(&self, peer_id: PeerId, message: ProtocolMessage) {
+	fn encode_and_send(&self, peer_id: PeerId, message: P2PMessage) {
 		bincode::serialize(&message)
 			.map(|bytes| {
 				self.network.write_notification(peer_id, bytes);
@@ -311,7 +311,7 @@ where
 		false
 	}
 
-	pub fn try_decode(&self, bytes: &[u8]) -> Result<ProtocolMessage> {
+	pub fn try_decode(&self, bytes: &[u8]) -> Result<P2PMessage> {
 		Ok(bincode::deserialize(bytes)?)
 	}
 }
@@ -350,7 +350,7 @@ impl<Observer: NetworkObserver, Network: PeerNetwork> NetworkBridge<Observer, Ne
 /// Commands that can be sent to the `NetworkBridge`. Each should correspond to a function in the bridge's
 /// `StateMachine`.
 pub enum MessagingCommand {
-	Identify(AccountId),
+	SelfIdentify(AccountId),
 	Send(AccountId, RawMessage),
 	Broadcast(Vec<AccountId>, RawMessage),
 	BroadcastAll(RawMessage),
@@ -377,8 +377,8 @@ where
 								MessagingCommand::BroadcastAll(msg) => {
 									self.state_machine.broadcast_all(msg);
 								}
-								MessagingCommand::Identify(validator_id) => {
-									self.state_machine.identify(validator_id);
+								MessagingCommand::SelfIdentify(validator_id) => {
+									self.state_machine.self_identify(validator_id);
 								}
 							}
 						},
@@ -411,7 +411,7 @@ where
 								}
 								Event::NotificationsReceived { remote, messages } => {
 									if !messages.is_empty() {
-										let messages: Vec<ProtocolMessage> =
+										let messages: Vec<P2PMessage> =
 											messages
 												.into_iter()
 												.filter_map(|(protocol, data)| {
