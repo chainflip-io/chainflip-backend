@@ -194,9 +194,11 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 					),
 				],
 				// Sudo account - Bashful
-				bashful_sr25519.into(),
+				get_account_id_from_seed::<sr25519::Public>("Alice"),
 				// Pre-funded accounts
 				vec![
+					// the governor - this will stuff with the tokens, but yeet
+					get_account_id_from_seed::<sr25519::Public>("Alice"),
 					// Bashful
 					bashful_sr25519.into(),
 					// Doc
@@ -382,7 +384,10 @@ fn testnet_genesis(
 			accrual_ratio: (ACCRUAL_POINTS, ACCRUAL_BLOCKS),
 		}),
 		pallet_cf_vaults: Some(VaultsConfig {
-			ethereum_vault_key: hex_literal::hex!["03035e49e5db75c1008f33f7368a87ffb13f0d845dc3f9c89723e4e07a066f2667"].to_vec()
+			ethereum_vault_key: hex_literal::hex![
+				"03035e49e5db75c1008f33f7368a87ffb13f0d845dc3f9c89723e4e07a066f2667"
+			]
+			.to_vec(),
 		}),
 	}
 }
