@@ -98,7 +98,9 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 			}
 			Self::Broadcast(contract_call) => {
 				let unsigned_tx = contract_call_to_unsigned_tx(contract_call.clone(), signature);
-				pallet_cf_broadcast::Call::<Runtime, pallet_cf_broadcast::Instance0>::start_broadcast(unsigned_tx).into()
+				Call::EthereumBroadcaster(
+					pallet_cf_broadcast::Call::<_, _>::start_sign_and_broadcast(unsigned_tx)
+				)
 			}
 		}
 	}
@@ -108,7 +110,7 @@ fn contract_call_to_unsigned_tx<C: ChainflipContractCall>(
 	mut call: C,
 	signature: eth::SchnorrSignature,
 ) -> eth::UnsignedTransaction {
-	call.sign(&signature);
+	call.insert_signature(&signature);
 	eth::UnsignedTransaction {
 		chain_id: eth::CHAIN_ID_RINKEBY,
 		contract: eth::stake_manager_contract_address().into(),

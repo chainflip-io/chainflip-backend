@@ -135,7 +135,7 @@ pub mod pallet {
 		///
 		/// This is the first step - requsting a transaction signature from a nominated validator.
 		#[pallet::weight(10_000)]
-		pub fn start_broadcast(
+		pub fn start_sign_and_broadcast(
 			origin: OriginFor<T>,
 			unsigned_tx: UnsignedTransactionFor<T, I>,
 		) -> DispatchResultWithPostInfo {
@@ -162,8 +162,9 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Called when the transaction is ready to be broadcast. The signed transaction is stored on-chain so that
-		/// any node can potentially broadcast it to the target chain.
+		/// Called by the nominated signer when they have completed and signed the transaction, and it is therefore ready
+		/// to be broadcast. The signed transaction is stored on-chain so that any node can potentially broadcast it to
+		/// the target chain. Emits an event that will trigger the broadcast to the target chain.
 		#[pallet::weight(10_000)]
 		pub fn transaction_ready(
 			origin: OriginFor<T>,
@@ -188,9 +189,7 @@ pub mod pallet {
 				Self::deposit_event(Event::<T, I>::BroadcastRequest(id, signed_tx.clone()));
 				AwaitingBroadcast::<T, I>::insert(id, signed_tx);
 			} else {
-				// the authored transaction is invalid.
-				// punish the signer and retry.
-				todo!()
+				todo!("The authored transaction is invalid. Punish the signer and retry.")
 			}
 
 			Ok(().into())

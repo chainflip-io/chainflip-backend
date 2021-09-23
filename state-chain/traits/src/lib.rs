@@ -386,7 +386,7 @@ pub mod offline_conditions {
 	use super::*;
 	pub type ReputationPoints = i32;
 
-	/// Conditions as judged as offline
+	/// Conditions that cause a validator to be knocked offline.
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 	pub enum OfflineCondition {
 		/// A broadcast of an output has failed
@@ -399,15 +399,15 @@ pub mod offline_conditions {
 		ContradictingSelfDuringSigningCeremony,
 	}
 
-	/// Error on reporting an offline condition
+	/// Error on reporting an offline condition.
 	#[derive(Debug, PartialEq)]
 	pub enum ReportError {
 		/// Validator doesn't exist
 		UnknownValidator,
 	}
 
-	/// Offline conditions are reported on
-	pub trait OfflineConditions {
+	/// For reporting offline conditions.
+	pub trait OfflineReporter {
 		type ValidatorId;
 		/// Report the condition for validator
 		/// Returns `Ok(Weight)` else an error if the validator isn't valid

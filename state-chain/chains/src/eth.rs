@@ -13,7 +13,7 @@ use sp_runtime::{
 use sp_std::prelude::*;
 
 //------------------------//
-// TODO: these should be on-chain constants or config items.
+// TODO: these should be on-chain constants or config items. See github issue #520.
 pub const CHAIN_ID_MAINNET: u64 = 1;
 pub const CHAIN_ID_ROPSTEN: u64 = 3;
 pub const CHAIN_ID_RINKEBY: u64 = 4;
@@ -122,48 +122,22 @@ pub struct UnsignedTransaction {
 /// Raw bytes of an rlp-encoded Ethereum transaction.
 pub type RawSignedTransaction = Vec<u8>;
 
+/// Checks that the raw transaction is a valid rlp-encoded EIP1559 transaction.
 pub fn verify_raw<SignerId>(
 	tx: &RawSignedTransaction,
 	_signer: &SignerId,
 ) -> Result<(), EthereumTransactionError> {
-	let decoded: ethereum::EIP1559Transaction =
+	let _decoded: ethereum::EIP1559Transaction =
 		rlp::decode(&tx[..]).map_err(|_| EthereumTransactionError::InvalidRlp)?;
 	// TODO check contents, signature, etc.
 	Ok(())
 }
 
-/// Represents a transaction that has been signed and is ready to be broadcast.
-#[derive(Encode, Decode, Clone, RuntimeDebug, Default, PartialEq, Eq)]
-pub struct SignedTransaction {
-	pub chain_id: u64, // Constant
-
-	// Determined by the signer
-	pub nonce: U256,
-	pub max_priority_fee_per_gas: U256, // EIP-1559
-	pub max_fee_per_gas: U256,
-	pub gas_limit: U256,
-
-	// pub action: TransactionAction, // always `Call(contract_address)`
-	pub value: U256,               // Always 0 (?)
-	pub data: Vec<u8>,             // The abi-encoded contract call.
-
-	// EIP-2930, assume for now that this will remain empty.
-	// pub access_list: AccessList,
-
-	// Signature data
-	/// The V field of the signature; the LS bit described which half of the curve our point falls
-	/// in. It can be 0 or 1.
-	pub odd_y_parity: bool,
-	/// The R field of the signature; helps describe the point on the curve.
-	pub r: H256,
-	/// The S field of the signature; helps describe the point on the curve.
-	pub s: H256,
-}
 
 /// Represents calls to Chainflip contracts requiring a threshold signature.
 pub trait ChainflipContractCall {
 	/// Whether or not the call has been signed.
-	fn is_signed(&self) -> bool;
+	fn has_signature(&self) -> bool;
 
 	/// Ethereum abi-encoded calldata for the contract call.
 	fn abi_encoded(&self) -> Vec<u8>;
@@ -172,7 +146,7 @@ pub trait ChainflipContractCall {
 	fn signing_payload(&self) -> H256;
 
 	/// Add the threshold signature to the contract call. 
-	fn sign(&mut self, signature: &SchnorrSignature);
+	fn insert_signature(&mut self, signature: &SchnorrSignature);
 
 	/// Create a new call from the old one, with a new nonce and discarding the old signature.
 	fn into_new(self, new_nonce: u64) -> Self;

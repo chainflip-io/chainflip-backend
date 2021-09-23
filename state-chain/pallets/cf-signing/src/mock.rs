@@ -138,7 +138,7 @@ impl MockOfflineConditions {
 	}
 }
 
-impl OfflineConditions for MockOfflineConditions {
+impl OfflineReporter for MockOfflineConditions {
 	type ValidatorId = u64;
 
 	fn report(

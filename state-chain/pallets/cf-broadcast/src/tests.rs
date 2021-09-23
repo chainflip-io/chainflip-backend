@@ -85,7 +85,7 @@ fn test_broadcast_happy_path() {
 		const BROADCAST_ID: BroadcastId = 1;
 
 		// Initiate broadcast
-		assert_ok!(DogeBroadcast::start_broadcast(
+		assert_ok!(DogeBroadcast::start_sign_and_broadcast(
 			Origin::root(),
 			MockUnsignedTx
 		));

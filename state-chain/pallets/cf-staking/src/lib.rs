@@ -358,8 +358,6 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			Self::ensure_witnessed(origin)?;
 
-			let time_now = T::TimeSource::now();
-
 			let mut claim_details =
 				PendingClaims::<T>::get(&account_id).ok_or(Error::<T>::NoPendingClaim)?;
 
@@ -370,12 +368,12 @@ pub mod pallet {
 			let _ = claim_details
 				.expiry
 				.low_u64()
-				.checked_sub(time_now.as_secs())
+				.checked_sub(T::TimeSource::now().as_secs())
 				.and_then(|ttl| ttl.checked_sub(min_ttl.as_secs()))
 				.ok_or(Error::<T>::SignatureTooLate)?;
 
 			// Insert the signature and notify the CFE.
-			claim_details.sign(&signature);
+			claim_details.insert_signature(&signature);
 			PendingClaims::<T>::insert(&account_id, &claim_details);
 
 			Self::deposit_event(Event::ClaimSignatureIssued(
@@ -559,7 +557,7 @@ impl<T: Config> Pallet<T> {
 			expiry.as_secs(),
 		);
 
-		// Emit a signature request.
+		// Emit a threshold signature request.
 		T::ThresholdSigner::request_transaction_signature(transaction.clone());
 
 		// Store the claim params for later.

@@ -320,7 +320,7 @@ fn signature_is_inserted() {
 
 		// Check storage for the signature, should not be there.
 		assert_eq!(
-			PendingClaims::<Test>::get(ALICE).unwrap().is_signed(),
+			PendingClaims::<Test>::get(ALICE).unwrap().has_signature(),
 			false
 		);
 
@@ -339,7 +339,7 @@ fn signature_is_inserted() {
 		));
 
 		// Check storage for the signature.
-		assert!(PendingClaims::<Test>::get(ALICE).unwrap().is_signed());
+		assert!(PendingClaims::<Test>::get(ALICE).unwrap().has_signature());
 	});
 }
 

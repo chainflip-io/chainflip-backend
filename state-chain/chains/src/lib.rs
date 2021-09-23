@@ -31,11 +31,7 @@ macro_rules! impl_chains {
 }
 
 impl_chains! {
-	Ethereum,
-	Bitcoin,
-	Oxen,
-	Polkadot,
-	Solana
+	Ethereum
 }
 
 #[cfg(test)]

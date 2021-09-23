@@ -25,7 +25,7 @@ pub struct RegisterClaim {
 }
 
 impl ChainflipContractCall for RegisterClaim {
-	fn is_signed(&self) -> bool {
+	fn has_signature(&self) -> bool {
 		!self.sig_data.sig.is_zero()
 	}
 
@@ -37,7 +37,7 @@ impl ChainflipContractCall for RegisterClaim {
 		self.sig_data.msg_hash
 	}
 
-	fn sign(&mut self, signature: &SchnorrSignature) {
+	fn insert_signature(&mut self, signature: &SchnorrSignature) {
 		self.sig_data.insert_signature(signature)
 	}
 
@@ -158,12 +158,12 @@ mod test_register_claim {
 
 		// Replace the msg_hash.
 		register_claim_runtime.sig_data.msg_hash = FAKE_HASH.into();
-		ChainflipContractCall::sign(&mut register_claim_runtime, &SchnorrSignature {
+		ChainflipContractCall::insert_signature(&mut register_claim_runtime, &SchnorrSignature {
 			s: FAKE_SIG,
 			k_times_g_addr: FAKE_NONCE_TIMES_G_ADDR,
 		});
 		assert_eq!(ChainflipContractCall::signing_payload(&register_claim_runtime), FAKE_HASH.into());
-		assert!(ChainflipContractCall::is_signed(&register_claim_runtime));
+		assert!(ChainflipContractCall::has_signature(&register_claim_runtime));
 		let runtime_payload = ChainflipContractCall::abi_encoded(&register_claim_runtime);
 
 		assert_eq!(

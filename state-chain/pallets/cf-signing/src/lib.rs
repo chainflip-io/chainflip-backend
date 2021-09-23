@@ -10,7 +10,7 @@ use codec::{Decode, Encode};
 
 use cf_chains::Chain;
 use cf_traits::{
-	offline_conditions::{OfflineCondition, OfflineConditions},
+	offline_conditions::{OfflineCondition, OfflineReporter},
 	Chainflip, KeyProvider, SignerNomination, SigningContext,
 };
 use frame_system::pallet_prelude::OriginFor;
@@ -58,7 +58,7 @@ pub mod pallet {
 		type KeyProvider: KeyProvider<Self::TargetChain, KeyId = Self::KeyId>;
 
 		/// For reporting bad actors.
-		type OfflineConditions: OfflineConditions<ValidatorId = <Self as Chainflip>::ValidatorId>;
+		type OfflineConditions: OfflineReporter<ValidatorId = <Self as Chainflip>::ValidatorId>;
 	}
 
 	#[pallet::pallet]
@@ -135,7 +135,9 @@ pub mod pallet {
 			// Dispatch the callback.
 			// TODO: Use a custom "threshold sig" origin for this pallet instead of passing through the witness
 			// origin.
-			context.chain_signing_context.dispatch_callback(origin, signature)
+			context
+				.chain_signing_context
+				.dispatch_callback(origin, signature)
 		}
 
 		/// Reply.
