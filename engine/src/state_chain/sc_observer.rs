@@ -216,10 +216,15 @@ pub async fn start(
                                 .await
                                 .unwrap(); // TODO handle error
                         }
-                        VaultRotationRequestEvent(vault_rotation_request_event) => {
+                        VaultRotationRequestEvent(vault_rotation_request) => {
                             match vault_rotation_request_event.vault_rotation_request.chain {
                                 ChainParams::Ethereum(tx) => {
-                                    slog::debug!(logger, "Broadcasting to ETH: {:?}", tx);
+                                    slog::debug!(
+                                        logger,
+                                        "Sending ETH vault rotation tx for ceremony {}: {:?}",
+                                        vault_rotation_request.ceremony_id,
+                                        tx
+                                    );
                                     // TODO: Contract address should come from the state chain
                                     // https://github.com/chainflip-io/chainflip-backend/issues/459
                                     let response = match eth_broadcaster

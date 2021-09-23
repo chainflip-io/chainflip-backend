@@ -32,17 +32,14 @@ impl<T: Config> ChainVault for EthereumChain<T> {
 			new_public_key.clone(),
 			SchnorrSigTruncPubkey::default(),
 		) {
-			Ok(payload) => {
-				// Emit the event
-				Self::make_request(
-					ceremony_id,
-					ThresholdSignatureRequest {
-						validators,
-						payload,
-						public_key: EthereumVault::<T>::get().previous_key,
-					},
-				)
-			}
+			Ok(payload) => Self::make_request(
+				ceremony_id,
+				ThresholdSignatureRequest {
+					validators,
+					payload,
+					public_key: EthereumVault::<T>::get().previous_key,
+				},
+			),
 			Err(_) => {
 				Pallet::<T>::abort_rotation();
 				Err(RotationError::FailedToConstructPayload)
