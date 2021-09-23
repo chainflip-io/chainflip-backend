@@ -1,6 +1,6 @@
 use crate as pallet_cf_staking;
 use cf_chains::{
-	eth::{register_claim::RegisterClaim, ChainflipContractCall, SchnorrSignature},
+	eth::{register_claim::RegisterClaim, ChainflipContractCall, SchnorrVerificationComponents},
 	Ethereum,
 };
 use codec::{Decode, Encode};
@@ -142,7 +142,7 @@ impl From<RegisterClaim> for ClaimSigningContext {
 impl SigningContext<Test> for ClaimSigningContext {
 	type Chain = Ethereum;
 	type Payload = H256;
-	type Signature = SchnorrSignature;
+	type Signature = SchnorrVerificationComponents;
 	type Callback = pallet_cf_staking::Call<Test>;
 
 	fn get_payload(&self) -> Self::Payload {

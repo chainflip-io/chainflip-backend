@@ -77,7 +77,7 @@ impl From<RegisterClaim> for EthereumSigningContext {
 impl SigningContext<Runtime> for EthereumSigningContext {
 	type Chain = cf_chains::Ethereum;
 	type Payload = H256;
-	type Signature = eth::SchnorrSignature;
+	type Signature = eth::SchnorrVerificationComponents;
 	type Callback = Call;
 
 	fn get_payload(&self) -> Self::Payload {
@@ -108,7 +108,7 @@ impl SigningContext<Runtime> for EthereumSigningContext {
 
 fn contract_call_to_unsigned_tx<C: ChainflipContractCall>(
 	mut call: C,
-	signature: eth::SchnorrSignature,
+	signature: eth::SchnorrVerificationComponents,
 ) -> eth::UnsignedTransaction {
 	call.insert_signature(&signature);
 	eth::UnsignedTransaction {

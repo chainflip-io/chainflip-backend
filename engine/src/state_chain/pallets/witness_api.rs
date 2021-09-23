@@ -40,6 +40,6 @@ pub struct WitnessAuctionConfirmationCall<T: WitnesserApi> {
 #[derive(Clone, Debug, PartialEq, Call, Encode)]
 pub struct WitnessSignatureSuccessCall<T: WitnesserApi> {
     request_id: CeremonyId,
-    signature: cf_chains::eth::SchnorrSignature,
+    signature: cf_chains::eth::SchnorrVerificationComponents,
     _runtime: PhantomData<T>,
 }

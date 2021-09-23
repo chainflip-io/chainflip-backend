@@ -1,7 +1,7 @@
 //! Definitions for the "registerClaim" transaction.
 
 use super::{
-	ChainflipContractCall, SchnorrSignature, SigData, Tokenizable,
+	ChainflipContractCall, SchnorrVerificationComponents, SigData, Tokenizable,
 };
 
 use codec::{Decode, Encode};
@@ -37,7 +37,7 @@ impl ChainflipContractCall for RegisterClaim {
 		self.sig_data.msg_hash
 	}
 
-	fn insert_signature(&mut self, signature: &SchnorrSignature) {
+	fn insert_signature(&mut self, signature: &SchnorrVerificationComponents) {
 		self.sig_data.insert_signature(signature)
 	}
 
@@ -158,7 +158,7 @@ mod test_register_claim {
 
 		// Replace the msg_hash.
 		register_claim_runtime.sig_data.msg_hash = FAKE_HASH.into();
-		ChainflipContractCall::insert_signature(&mut register_claim_runtime, &SchnorrSignature {
+		ChainflipContractCall::insert_signature(&mut register_claim_runtime, &SchnorrVerificationComponents {
 			s: FAKE_SIG,
 			k_times_g_addr: FAKE_NONCE_TIMES_G_ADDR,
 		});

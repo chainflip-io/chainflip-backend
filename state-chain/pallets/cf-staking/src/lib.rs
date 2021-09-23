@@ -43,7 +43,9 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use cf_chains::eth::{register_claim::RegisterClaim, ChainflipContractCall, SchnorrSignature};
+use cf_chains::eth::{
+	register_claim::RegisterClaim, ChainflipContractCall, SchnorrVerificationComponents,
+};
 use cf_traits::{
 	BidderProvider, EpochInfo, NonceIdentifier, NonceProvider, StakeTransfer, ThresholdSigner,
 };
@@ -354,7 +356,7 @@ pub mod pallet {
 		pub fn post_claim_signature(
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
-			signature: SchnorrSignature,
+			signature: SchnorrVerificationComponents,
 		) -> DispatchResultWithPostInfo {
 			Self::ensure_witnessed(origin)?;
 

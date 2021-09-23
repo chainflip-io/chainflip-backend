@@ -15,7 +15,7 @@ type FlipError = pallet_cf_flip::Error<Test>;
 type FlipEvent = pallet_cf_flip::Event<Test>;
 type SigningEvent = pallet_cf_signing::Event<Test, Instance0>;
 
-const ETH_DUMMY_SIG: eth::SchnorrSignature = eth::SchnorrSignature {
+const ETH_DUMMY_SIG: eth::SchnorrVerificationComponents = eth::SchnorrVerificationComponents {
 	s: [0xcf; 32],
 	k_times_g_addr: [0xcf; 20],
 };

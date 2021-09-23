@@ -47,10 +47,11 @@ pub struct SigData {
 	/// The nonce value for the AggKey. Each Signature over an AggKey should have a unique nonce to prevent replay
 	/// attacks.
 	nonce: Uint,
-	/// The public key derived from the random nonce value `k`. Also known as `nonceTimesGeneratorAddress`.
+	/// The address value derived from the random nonce value `k`. Also known as `nonceTimesGeneratorAddress`.
 	///
-	/// Note this is unrelated to the `nonce` above. The nonce in this context is a generated as part of each signing
-	/// round (ie. as part of the Schnorr signature) to prevent certain classes of cryptographic attacks.
+	/// Note this is unrelated to the `nonce` above. The nonce in the context of `nonceTimesGeneratorAddress`
+	/// is a generated as part of each signing round (ie. as part of the Schnorr signature) to prevent certain 
+	/// classes of cryptographic attacks.
 	k_times_g_addr: Address,
 }
 
@@ -69,14 +70,14 @@ impl SigData {
 	}
 
 	/// Add the actual signature. This method does no verification.
-	pub fn insert_signature(&mut self, schnorr: &SchnorrSignature) {
+	pub fn insert_signature(&mut self, schnorr: &SchnorrVerificationComponents) {
 		self.sig = schnorr.s.into();
 		self.k_times_g_addr = schnorr.k_times_g_addr.into();
 	}
 
-	/// Get the inner signature components as a `SchnorrSignature`.
-	pub fn get_signature(&self) -> SchnorrSignature {
-		SchnorrSignature {
+	/// Get the inner signature components as a `SchnorrVerificationComponents`.
+	pub fn get_signature(&self) -> SchnorrVerificationComponents {
+		SchnorrVerificationComponents {
 			s: self.sig.into(),
 			k_times_g_addr: self.k_times_g_addr.into(),
 		}
@@ -95,7 +96,7 @@ impl Tokenizable for SigData {
 }
 
 #[derive(Encode, Decode, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
-pub struct SchnorrSignature {
+pub struct SchnorrVerificationComponents {
 	/// Scalar component
 	pub s: [u8; 32],
 	/// The challenge, expressed as a truncated keccak hash of a pair of coordinates.
@@ -146,7 +147,7 @@ pub trait ChainflipContractCall {
 	fn signing_payload(&self) -> H256;
 
 	/// Add the threshold signature to the contract call. 
-	fn insert_signature(&mut self, signature: &SchnorrSignature);
+	fn insert_signature(&mut self, signature: &SchnorrVerificationComponents);
 
 	/// Create a new call from the old one, with a new nonce and discarding the old signature.
 	fn into_new(self, new_nonce: u64) -> Self;
