@@ -176,14 +176,14 @@ pub struct Rpc {
 
 impl Rpc {
 	pub fn new<E>(
-		executor: Arc<E>,
+		executor: E,
 		rpc_command_sender: UnboundedSender<MessagingCommand>,
 	) -> Self
 		where E: Executor<Box<(dyn Future<Item = (), Error = ()> + Send)>> + Send + Sync + 'static
 	{
 		Rpc {
 			subscribers : Default::default(),
-			manager : SubscriptionManager::new(executor),
+			manager : SubscriptionManager::new(Arc::new(executor)),
 			rpc_command_sender,
 		 }
 	}

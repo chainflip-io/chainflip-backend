@@ -139,7 +139,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	let prometheus_registry = config.prometheus_registry().cloned();
 
 	let (rpc_command_sender, rpc_command_receiver) = unbounded();
-	let rpc = Arc::new(Rpc::new(Arc::new(sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle())), rpc_command_sender));
+	let rpc = Arc::new(Rpc::new(sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle()), rpc_command_sender));
 	let p2p = cf_p2p::NetworkBridge::new(
 		rpc.clone(),
 		network.clone(),
