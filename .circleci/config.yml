@@ -236,7 +236,6 @@ jobs:
       - run: >
           cargo fmt -p chainflip-engine
           -p cf-p2p
-          -p cf-p2p-rpc
           -p pallet-cf-auction
           -p pallet-cf-emissions
           -p pallet-cf-flip
