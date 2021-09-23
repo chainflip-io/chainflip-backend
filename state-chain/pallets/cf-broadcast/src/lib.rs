@@ -217,7 +217,15 @@ pub mod pallet {
 					},
 				);
 			} else {
-				todo!("The authored transaction is invalid. Punish the signer and retry.")
+				Self::report_and_retry(
+					id,
+					BroadcastAttempt {
+						unsigned_tx,
+						signer: nominee.clone(),
+						signed_tx,
+						attempt,
+					},
+				)
 			}
 
 			Ok(().into())
@@ -260,32 +268,10 @@ pub mod pallet {
 
 			match failure {
 				BroadcastFailure::TransactionRejected => {
-					const PENALTY: i32 = 0;
-					T::OfflineReporter::report(
-						OfflineCondition::ParticipateSigningFailed,
-						PENALTY,
-						&failed_attempt.signer,
-					)
-					.unwrap_or_else(|_| {
-						// Should never fail unless the validator doesn't exist.
-						frame_support::debug::error!(
-							"Unable to report unknown validator {:?}",
-							failed_attempt.signer.clone()
-						);
-						0
-					});
-					RetryQueue::<T, I>::append(RetryAttempt::<T, I> {
-						unsigned_tx: failed_attempt.unsigned_tx,
-						attempt: failed_attempt.attempt,
-					});
-					Self::deposit_event(Event::<T, I>::RetryScheduled(id, failed_attempt.attempt));
+					Self::report_and_retry(id, failed_attempt);
 				}
 				BroadcastFailure::TransactionTimeout => {
-					RetryQueue::<T, I>::append(RetryAttempt::<T, I> {
-						unsigned_tx: failed_attempt.unsigned_tx,
-						attempt: failed_attempt.attempt,
-					});
-					Self::deposit_event(Event::<T, I>::RetryScheduled(id, failed_attempt.attempt));
+					Self::retry(id, failed_attempt);
 				}
 				BroadcastFailure::TransactionFailed => {
 					Self::deposit_event(Event::<T, I>::BroadcastFailed(
@@ -327,5 +313,32 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			nominated_signer,
 			unsigned_tx,
 		));
+	}
+
+	fn report_and_retry(id: BroadcastId, failed_attempt: BroadcastAttempt<T, I>) {
+		// TODO: set a sensible penalty and centralise. See #569
+		const PENALTY: i32 = 0;
+		T::OfflineReporter::report(
+			OfflineCondition::ParticipateSigningFailed,
+			PENALTY,
+			&failed_attempt.signer,
+		)
+		.unwrap_or_else(|_| {
+			// Should never fail unless the validator doesn't exist.
+			frame_support::debug::error!(
+				"Unable to report unknown validator {:?}",
+				failed_attempt.signer.clone()
+			);
+			0
+		});
+		Self::retry(id, failed_attempt);
+	}
+
+	fn retry(id: BroadcastId, failed_attempt: BroadcastAttempt<T, I>) {
+		RetryQueue::<T, I>::append(RetryAttempt::<T, I> {
+			unsigned_tx: failed_attempt.unsigned_tx,
+			attempt: failed_attempt.attempt,
+		});
+		Self::deposit_event(Event::<T, I>::RetryScheduled(id, failed_attempt.attempt));
 	}
 }

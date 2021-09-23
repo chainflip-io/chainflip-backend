@@ -8,7 +8,8 @@ use frame_system::RawOrigin;
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Scenario {
 	HappyPath,
-	UnhappyPath(BroadcastFailure),
+	BadSigner,
+	BroadcastFailure(BroadcastFailure),
 }
 
 thread_local! {
@@ -31,7 +32,7 @@ impl MockCfe {
 		match event {
 			Event::pallet_cf_broadcast_Instance0(broadcast_event) => match broadcast_event {
 				BroadcastEvent::TransactionSigningRequest(id, nominee, unsigned_tx) => {
-					Self::handle_transaction_signature_request(id, nominee, unsigned_tx);
+					Self::handle_transaction_signature_request(id, nominee, unsigned_tx, scenario);
 				}
 				BroadcastEvent::BroadcastRequest(id, _signed_tx) => {
 					Self::handle_broadcast_request(id, scenario);
@@ -56,6 +57,7 @@ impl MockCfe {
 		id: BroadcastId,
 		nominee: u64,
 		_unsigned_tx: MockUnsignedTx,
+		scenario: Scenario,
 	) {
 		assert_eq!(nominee, RANDOM_NOMINEE);
 		// Invalid signer refused.
@@ -63,7 +65,7 @@ impl MockCfe {
 			DogeBroadcast::transaction_ready(
 				RawOrigin::Signed(nominee + 1).into(),
 				id,
-				MockSignedTx,
+				MockSignedTx::Valid,
 			),
 			Error::<Test, Instance0>::InvalidSigner
 		);
@@ -71,7 +73,10 @@ impl MockCfe {
 		assert_ok!(DogeBroadcast::transaction_ready(
 			RawOrigin::Signed(nominee).into(),
 			id,
-			MockSignedTx,
+			match scenario {
+				Scenario::BadSigner => MockSignedTx::Invalid,
+				_ => MockSignedTx::Valid,
+			},
 		));
 	}
 
@@ -79,9 +84,10 @@ impl MockCfe {
 	fn handle_broadcast_request(id: BroadcastId, scenario: Scenario) {
 		assert_ok!(match scenario {
 			Scenario::HappyPath => DogeBroadcast::broadcast_success(Origin::root(), id, [0xcf; 4]),
-			Scenario::UnhappyPath(failure) => {
+			Scenario::BroadcastFailure(failure) => {
 				DogeBroadcast::broadcast_failure(Origin::root(), id, failure, [0xcf; 4])
 			}
+			_ => unimplemented!()
 		});
 	}
 }
@@ -135,7 +141,7 @@ fn test_broadcast_rejected() {
 		assert!(AwaitingBroadcast::<Test, Instance0>::get(BROADCAST_ID).is_some());
 
 		// CFE responds that the transaction was rejected.
-		MockCfe::respond(Scenario::UnhappyPath(BroadcastFailure::TransactionRejected));
+		MockCfe::respond(Scenario::BroadcastFailure(BroadcastFailure::TransactionRejected));
 		assert!(AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID).is_none());
 		assert!(AwaitingBroadcast::<Test, Instance0>::get(BROADCAST_ID).is_none());
 		assert_eq!(RetryQueue::<Test, Instance0>::decode_len().unwrap_or_default(), 1);
@@ -144,6 +150,9 @@ fn test_broadcast_rejected() {
 		DogeBroadcast::on_initialize(0);
 		assert_eq!(RetryQueue::<Test, Instance0>::decode_len().unwrap_or_default(), 0);
 		assert!(AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID + 1).unwrap().attempt == 1);
+
+		// The nominee was not reported.
+		assert_eq!(MockOfflineReporter::get_reported(), vec![RANDOM_NOMINEE]);
 	})
 }
 
@@ -169,7 +178,7 @@ fn test_broadcast_failed() {
 		assert!(AwaitingBroadcast::<Test, Instance0>::get(BROADCAST_ID).is_some());
 
 		// CFE responds that the transaction failed.
-		MockCfe::respond(Scenario::UnhappyPath(BroadcastFailure::TransactionFailed));
+		MockCfe::respond(Scenario::BroadcastFailure(BroadcastFailure::TransactionFailed));
 		assert!(AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID).is_none());
 		assert!(AwaitingBroadcast::<Test, Instance0>::get(BROADCAST_ID).is_none());
 
@@ -179,7 +188,7 @@ fn test_broadcast_failed() {
 			0
 		);
 		// The broadcast has failed.
-		MockCfe::respond(Scenario::UnhappyPath(BroadcastFailure::TransactionFailed));
+		MockCfe::respond(Scenario::BroadcastFailure(BroadcastFailure::TransactionFailed));
 		assert_eq!(
 			FAILED_BROADCASTS.with(|cell| *cell.borrow().first().unwrap()),
 			BROADCAST_ID
@@ -188,10 +197,39 @@ fn test_broadcast_failed() {
 }
 
 #[test]
+fn test_bad_signature() {
+	new_test_ext().execute_with(|| {
+		const BROADCAST_ID: BroadcastId = 1;
+
+		// Initiate broadcast
+		assert_ok!(DogeBroadcast::start_sign_and_broadcast(
+			Origin::root(),
+			MockUnsignedTx
+		));
+		assert!(
+			AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID)
+				.unwrap()
+				.attempt == 0
+		);
+
+		// CFE responds with an invalid transaction.
+		MockCfe::respond(Scenario::BadSigner);
+
+		// Broadcast is removed and scheduled for retry.
+		assert!(AwaitingSignature::<Test, Instance0>::get(BROADCAST_ID).is_none());
+		assert!(AwaitingBroadcast::<Test, Instance0>::get(BROADCAST_ID).is_none());
+		assert_eq!(RetryQueue::<Test, Instance0>::decode_len().unwrap_or_default(), 1);
+
+		// The nominee was reported.
+		assert_eq!(MockOfflineReporter::get_reported(), vec![RANDOM_NOMINEE]);
+	})
+}
+
+#[test]
 fn test_invalid_id_is_noop() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			DogeBroadcast::transaction_ready(RawOrigin::Signed(0).into(), 0, MockSignedTx),
+			DogeBroadcast::transaction_ready(RawOrigin::Signed(0).into(), 0, MockSignedTx::Valid),
 			Error::<Test, Instance0>::InvalidBroadcastId
 		);
 		assert_noop!(

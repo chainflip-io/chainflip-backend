@@ -92,7 +92,10 @@ pub struct MockBroadcast;
 pub struct MockUnsignedTx;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub struct MockSignedTx;
+pub enum MockSignedTx {
+	Valid, 
+	Invalid,
+}
 
 impl BroadcastConfig<Test> for MockBroadcast {
 	type Chain = Doge;
@@ -103,9 +106,12 @@ impl BroadcastConfig<Test> for MockBroadcast {
 	fn verify_transaction(
 		_signer: &<Test as Chainflip>::ValidatorId,
 		_unsigned_tx: &Self::UnsignedTransaction,
-		_signed_tx: &Self::SignedTransaction,
+		signed_tx: &Self::SignedTransaction,
 	) -> Option<()> {
-		Some(())
+		match signed_tx {
+			MockSignedTx::Valid => Some(()),
+			MockSignedTx::Invalid => None,
+		}
 	}
 }
 
