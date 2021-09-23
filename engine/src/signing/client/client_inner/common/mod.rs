@@ -34,7 +34,6 @@ impl KeygenResult {
     }
 }
 
-// TODO: combine the two Arcs? (Actually, I think it is easier we we just clone everything)
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KeygenResultInfo {
     pub key: Arc<KeygenResult>,
@@ -56,12 +55,16 @@ impl KeygenResultInfo {
     }
 }
 
+/// Able to send `Data` to the party identified
+/// by signer idx
 pub trait P2PSender: Clone {
     type Data;
 
     fn send(&self, idx: usize, data: Self::Data);
 }
 
+/// Sends raw data (bytes) through a channel
+/// (additionally mapping signer idx to account id)
 #[derive(Clone)]
 pub struct RawP2PSender {
     validator_map: Arc<ValidatorMaps>,
@@ -82,12 +85,8 @@ impl RawP2PSender {
         // combine id and serialized data
         let msg = P2PMessageCommand::new(id, data);
 
-        // We could use `into()` here
-        let event = InnerEvent::P2PMessageCommand(msg);
-
-        if let Err(err) = self.sender.send(event) {
+        if let Err(err) = self.sender.send(msg.into()) {
             eprintln!("Could not send p2p message: {}", err);
-            // slog::error!(self.logger, "Could not send p2p message: {}", err);
         }
     }
 }

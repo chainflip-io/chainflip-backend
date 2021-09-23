@@ -165,6 +165,12 @@ pub enum InnerEvent {
     KeygenResult(KeygenOutcome),
 }
 
+impl From<P2PMessageCommand> for InnerEvent {
+    fn from(m: P2PMessageCommand) -> Self {
+        InnerEvent::P2PMessageCommand(m)
+    }
+}
+
 #[derive(Clone)]
 pub struct MultisigClient<S>
 where

@@ -120,7 +120,6 @@ impl SigningState {
         let signing_common = SigningStateCommonInfo {
             data,
             key: key_info.key.clone(),
-            logger: logger.clone(),
         };
 
         let processor = AwaitCommitments1::new(common.clone(), signing_common);
@@ -333,5 +332,4 @@ impl SigningState {
 pub struct SigningStateCommonInfo {
     pub(super) data: MessageHash,
     pub(super) key: Arc<KeygenResult>,
-    logger: slog::Logger,
 }

@@ -112,6 +112,17 @@ pub fn get_our_idx(signers: &[AccountId], id: &AccountId) -> Option<usize> {
     pos.map(|idx| idx + 1)
 }
 
+/// Derive display to match the type's name
+macro_rules! derive_display_as_type_name {
+    ($name: ty) => {
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, stringify!($name))
+            }
+        }
+    };
+}
+
 #[cfg(test)]
 mod utils_tests {
     use super::*;

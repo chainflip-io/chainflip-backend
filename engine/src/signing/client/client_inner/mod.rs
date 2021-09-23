@@ -1,6 +1,7 @@
+#[macro_use]
+mod utils;
 mod client_inner;
 mod common;
-#[macro_use]
 mod frost;
 mod frost_stages;
 mod key_store;
@@ -9,7 +10,6 @@ mod keygen_state;
 mod shared_secret;
 mod signing_manager;
 mod signing_state;
-mod utils;
 
 #[cfg(test)]
 mod tests;

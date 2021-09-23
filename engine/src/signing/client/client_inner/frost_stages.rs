@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use super::common::broadcast::{BroadcastStage, BroadcastStageProcessor};
+use super::common::{
+    broadcast::{BroadcastStage, BroadcastStageProcessor},
+    {CeremonyCommon, StageResult},
+};
 use super::frost::{
     self, BroadcastVerificationMessage, Comm1, LocalSig3, SecretNoncePair, SigningData,
     VerifyComm2, VerifyLocalSig4,
@@ -8,8 +11,6 @@ use super::frost::{
 use super::SchnorrSignature;
 
 use super::signing_state::{SigningP2PSender, SigningStateCommonInfo};
-
-use super::common::{CeremonyCommon, StageResult};
 
 use super::utils::threshold_from_share_count;
 
@@ -27,12 +28,14 @@ type SigningCeremonyCommon = CeremonyCommon<SigningData, SigningP2PSender>;
 
 // *********** Await Commitments1 *************
 
+/// Stage 1: Generate an broadcast our secret nonce pair
+/// and collect those from all other parties
 #[derive(Clone)]
 pub struct AwaitCommitments1 {
-    signing_common: SigningStateCommonInfo,
     common: SigningCeremonyCommon,
-    // I probably shouldn't make copies/move this as we progress though
-    // stages
+    signing_common: SigningStateCommonInfo,
+    // TODO: I probably shouldn't make copies/move this as we progress though
+    // stages (put in the Box?)
     nonces: SecretNoncePair,
 }
 
@@ -46,7 +49,7 @@ impl AwaitCommitments1 {
     }
 }
 
-derive_display!(AwaitCommitments1);
+derive_display_as_type_name!(AwaitCommitments1);
 
 impl BroadcastStageProcessor<SigningData, SchnorrSignature> for AwaitCommitments1 {
     type Message = Comm1;
@@ -69,7 +72,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for AwaitCommitments
             common: self.common.clone(),
             signing_common: self.signing_common.clone(),
             nonces: self.nonces,
-            commitments1: messages,
+            commitments: messages,
         };
 
         let stage = BroadcastStage::new(processor, self.common);
@@ -80,33 +83,41 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for AwaitCommitments
 
 // ************
 
+/// Stage 2: Verifying data broadcast during stage 1
 #[derive(Clone)]
 struct VerifyCommitmentsBroadcast2 {
     common: SigningCeremonyCommon,
     signing_common: SigningStateCommonInfo,
+    // Our nonce pair generated in the previous stage
     nonces: SecretNoncePair,
-    commitments1: HashMap<usize, Comm1>,
+    // Public nonce commitments to be collected
+    commitments: HashMap<usize, Comm1>,
 }
 
-derive_display!(VerifyCommitmentsBroadcast2);
+derive_display_as_type_name!(VerifyCommitmentsBroadcast2);
 
 impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitmentsBroadcast2 {
     type Message = VerifyComm2;
 
+    /// Simply report all data that we have received from
+    /// other parties in the last stage
     fn init(&self) -> Self::Message {
-        // TODO: use map instead
-        let mut data = Vec::with_capacity(self.common.all_idxs.len());
-
-        for idx in &self.common.all_idxs {
-            // TODO: is there a way to avoid unwrapping here?
-            data.push(self.commitments1.get(&idx).cloned().unwrap());
-        }
+        let data = self
+            .common
+            .all_idxs
+            .iter()
+            .map(|idx| {
+                // All indexes should be present at this point.
+                self.commitments.get(&idx).cloned().unwrap()
+            })
+            .collect();
 
         VerifyComm2 { data }
     }
 
     should_delay!(SigningData::LocalSigStage3);
 
+    /// Verify that all values have been broadcast correctly during stage 1
     fn process(self, messages: HashMap<usize, Self::Message>) -> SigningStageResult {
         let verified_commitments = match verify_broadcasts(&self.common.all_idxs, &messages) {
             Ok(comms) => comms,
@@ -117,7 +128,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
 
         slog::debug!(
             self.common.logger,
-            "Initial commitments have been correctly broadcast for ceremony: [todo]"
+            "Initial commitments have been correctly broadcast"
         );
 
         let processor = LocalSigStage3 {
@@ -133,24 +144,26 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyCommitment
     }
 }
 
+/// Stage 3: Generating and broadcasting signature response shares
 #[derive(Clone)]
 struct LocalSigStage3 {
-    signing_common: SigningStateCommonInfo,
     common: SigningCeremonyCommon,
+    signing_common: SigningStateCommonInfo,
+    // Our nonce pair generated in the previous stage
     nonces: SecretNoncePair,
+    // Public nonce commitments (verified)
     commitments: Vec<Comm1>,
 }
 
-derive_display!(LocalSigStage3);
+derive_display_as_type_name!(LocalSigStage3);
 
 impl BroadcastStageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
     type Message = LocalSig3;
 
+    /// With all nonce commitments verified, we can generate the group commitment
+    /// and our share of signature response, which we broadcast to other parties.
     fn init(&self) -> Self::Message {
-        slog::trace!(
-            self.common.logger,
-            "Generating local sig for ceremony [todo]"
-        );
+        slog::trace!(self.common.logger, "Generating local signature response");
 
         frost::generate_local_sig(
             &self.signing_common.data.0,
@@ -160,10 +173,16 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
             self.common.own_idx,
             &self.common.all_idxs,
         )
+
+        // TODO: make sure secret nonces are deleted here (according to
+        // step 6, Figure 3 in https://eprint.iacr.org/2020/852.pdf).
+        // Zeroize memory if needed.
     }
 
     should_delay!(SigningData::VerifyLocalSigsStage4);
 
+    /// Nothing to process here yet, simply creating the new stage once all of the
+    /// data has been collected
     fn process(self, messages: HashMap<usize, Self::Message>) -> SigningStageResult {
         let processor = VerifyLocalSigsBroadcastStage4 {
             common: self.common.clone(),
@@ -178,33 +197,44 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for LocalSigStage3 {
     }
 }
 
+/// Stage 4: Verifying the broadcasting of signature shares
 #[derive(Clone)]
 struct VerifyLocalSigsBroadcastStage4 {
     common: SigningCeremonyCommon,
     signing_common: SigningStateCommonInfo,
+    /// Nonce commitments from all parties (verified to be correctly broadcast)
     commitments: Vec<Comm1>,
+    /// Signature shares sent to us (NOT verified to be correctly broadcast)
     local_sigs: HashMap<usize, LocalSig3>,
 }
 
-derive_display!(VerifyLocalSigsBroadcastStage4);
+derive_display_as_type_name!(VerifyLocalSigsBroadcastStage4);
 
 impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsBroadcastStage4 {
     type Message = VerifyLocalSig4;
 
+    /// Broadcast all signature shares sent to us
     fn init(&self) -> Self::Message {
-        let mut data = Vec::with_capacity(self.common.all_idxs.len());
-
-        for idx in &self.common.all_idxs {
-            data.push(self.local_sigs.get(&idx).cloned().unwrap());
-        }
+        let data = self
+            .common
+            .all_idxs
+            .iter()
+            .map(|idx| {
+                // All indexes should be present at this point
+                self.local_sigs.get(&idx).cloned().unwrap()
+            })
+            .collect();
 
         VerifyLocalSig4 { data }.into()
     }
 
     fn should_delay(&self, _: &SigningData) -> bool {
+        // Nothing to delay as we don't expect any further stages
         false
     }
 
+    /// Verify that signature shares have been broadcast correctly, and if so,
+    /// combine them into the (final) aggregate signature
     fn process(self, messages: HashMap<usize, Self::Message>) -> SigningStageResult {
         let local_sigs = match verify_broadcasts(&self.common.all_idxs, &messages) {
             Ok(sigs) => sigs,
@@ -233,7 +263,7 @@ impl BroadcastStageProcessor<SigningData, SchnorrSignature> for VerifyLocalSigsB
             &self.commitments,
             &local_sigs,
         ) {
-            Ok(sig) => StageResult::Done(sig.into()),
+            Ok(sig) => StageResult::Done(sig),
             Err(failed_idxs) => StageResult::Error(failed_idxs),
         }
     }

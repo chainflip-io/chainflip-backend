@@ -61,9 +61,8 @@ where
         }
     }
 
+    /// Send `data` to all ceremony parties (excluding ourselves)
     fn broadcast(&self, data: impl Into<D> + Clone + Display) {
-        // slog::info!(self.logger, "Broadcasting data: {}", &data);
-
         let data = data.into();
 
         for idx in &self.common.all_idxs {
