@@ -147,6 +147,7 @@ impl pallet_cf_auction::Config for Runtime {
 	type ValidatorId = AccountId;
 	type MinAuctionSize = MinAuctionSize;
 	type Handler = Vaults;
+	type WeightInfo = weights::pallet_cf_auction::WeightInfo<Runtime>;
 	type Online = Reputation;
 }
 
@@ -468,15 +469,15 @@ construct_runtime!(
 		Historical: session_historical::{Module},
 		Witnesser: pallet_cf_witnesser::{Module, Call, Event<T>, Origin},
 		WitnesserApi: pallet_cf_witnesser_api::{Module, Call},
-		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config<T>},
+		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config<T>},
+		Validator: pallet_cf_validator::{Module, Call, Storage, Event<T>, Config},
 		Aura: pallet_aura::{Module, Config<T>},
 		Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
 		Offences: pallet_offences::{Module, Call, Storage, Event},
 		Governance: pallet_cf_governance::{Module, Call, Storage, Event<T>, Config<T>, Origin},
-		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>},
+		Vaults: pallet_cf_vaults::{Module, Call, Storage, Event<T>, Config<T>},
 		Reputation: pallet_cf_reputation::{Module, Call, Storage, Event<T>, Config<T>},
-		Auction: pallet_cf_auction::{Module, Call, Storage, Event<T>, Config},
 	}
 );
 
@@ -664,6 +665,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, frame_system, SystemBench::<Runtime>);
 			add_benchmark!(params, batches, pallet_timestamp, Timestamp);
 			add_benchmark!(params, batches, pallet_cf_validator, Validator);
+			add_benchmark!(params, batches, pallet_cf_auction, Auction);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)
