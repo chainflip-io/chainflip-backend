@@ -116,7 +116,7 @@ async fn main() {
             p2p_shutdown_rx,
             &root_logger.clone()
         ),
-        heartbeat::start(subxt_client.clone(), pair_signer.clone(), &root_logger),
+        // heartbeat::start(subxt_client.clone(), pair_signer.clone(), &root_logger),
         // Start state chain components
         state_chain::sc_observer::start(
             &settings,

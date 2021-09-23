@@ -119,7 +119,8 @@ pub async fn start(
                                 },
                                 None => todo!(),
                             };
-                            let signer = signer.lock().await;
+                            // TODO: Increment nonce on success only
+                            let mut signer = signer.lock().await;
                             subxt_client
                                 .keygen_response(
                                     &*signer,
@@ -128,6 +129,7 @@ pub async fn start(
                                 )
                                 .await
                                 .unwrap(); // TODO: Handle error
+                            signer.increment_nonce();
                         }
                         ThresholdSignatureRequestEvent(threshold_sig_requst) => {
                             let signers: Vec<_> = threshold_sig_requst
@@ -199,7 +201,8 @@ pub async fn start(
                                 },
                                 _ => panic!("Channel closed"),
                             };
-                            let signer = signer.lock().await;
+                            let mut signer = signer.lock().await;
+                            // TODO: increment nonce only on successful acceptance here
                             subxt_client
                                 .threshold_signature_response(
                                     &*signer,
@@ -208,6 +211,7 @@ pub async fn start(
                                 )
                                 .await
                                 .unwrap(); // TODO handle error
+                            signer.increment_nonce();
                         }
                         VaultRotationRequestEvent(vault_rotation_request_event) => {
                             match vault_rotation_request_event.vault_rotation_request.chain {
@@ -243,7 +247,8 @@ pub async fn start(
                                             VaultRotationResponse::Error
                                         }
                                     };
-                                    let signer = signer.lock().await;
+                                    // TODO: Increment nonce only on success
+                                    let mut signer = signer.lock().await;
                                     subxt_client
                                         .vault_rotation_response(
                                             &*signer,
@@ -252,6 +257,7 @@ pub async fn start(
                                         )
                                         .await
                                         .unwrap(); // TODO: Handle error
+                                    signer.increment_nonce();
                                 }
                                 // Leave this to be explicit about future chains being added
                                 ChainParams::Other(_) => panic!("Chain::Other does not exist"),
