@@ -102,7 +102,7 @@ pub mod pallet {
 		type SignerNomination: SignerNomination<SignerId = Self::ValidatorId>;
 
 		/// For reporting bad actors.
-		type OfflineConditions: OfflineConditions<ValidatorId = Self::ValidatorId>;
+		type OfflineReporter: OfflineReporter<ValidatorId = Self::ValidatorId>;
 	}
 
 	#[pallet::pallet]
@@ -262,7 +262,7 @@ pub mod pallet {
 			match failure {
 				BroadcastFailure::TransactionRejected => {
 					const PENALTY: i32 = 0;
-					T::OfflineConditions::report(
+					T::OfflineReporter::report(
 						OfflineCondition::ParticipateSigningFailed,
 						PENALTY,
 						&failed_attempt.signer

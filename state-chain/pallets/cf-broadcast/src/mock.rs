@@ -114,7 +114,7 @@ impl pallet_cf_broadcast::Config<Instance0> for Test {
 	type TargetChain = Doge;
 	type BroadcastConfig = MockBroadcast;
 	type SignerNomination = MockNominator;
-	type OfflineConditions = MockOfflineConditions;
+	type OfflineReporter = MockOfflineReporter;
 }
 
 // Build genesis storage according to the mock runtime.
