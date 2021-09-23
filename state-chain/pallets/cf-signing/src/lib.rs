@@ -58,7 +58,7 @@ pub mod pallet {
 		type KeyProvider: KeyProvider<Self::TargetChain, KeyId = Self::KeyId>;
 
 		/// For reporting bad actors.
-		type OfflineConditions: OfflineReporter<ValidatorId = <Self as Chainflip>::ValidatorId>;
+		type OfflineReporter: OfflineReporter<ValidatorId = <Self as Chainflip>::ValidatorId>;
 	}
 
 	#[pallet::pallet]
@@ -152,7 +152,7 @@ pub mod pallet {
 
 			// Report the offenders.
 			for offender in offenders.iter() {
-				T::OfflineConditions::report(
+				T::OfflineReporter::report(
 					OfflineCondition::ParticipateSigningFailed,
 					PENALTY,
 					offender,

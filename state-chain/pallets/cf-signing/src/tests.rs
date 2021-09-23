@@ -112,7 +112,7 @@ fn retry_path() {
 		);
 
 		// The offender has been reported.
-		assert_eq!(MockOfflineConditions::get_reported(), vec![RANDOM_NOMINEE]);
+		assert_eq!(MockOfflineReporter::get_reported(), vec![RANDOM_NOMINEE]);
 
 		// Scheduled for retry.
 		assert_eq!(DogeSigning::retry_queue().len(), 1);

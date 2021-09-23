@@ -376,7 +376,7 @@ pub mod pallet {
 		}
 	}
 
-	/// Implementation of `OfflineConditions` reporting on `OfflineCondition` with specified number
+	/// Implementation of `OfflineReporter` reporting on `OfflineCondition` with specified number
 	/// of reputation points
 	impl<T: Config> OfflineReporter for Pallet<T> {
 		type ValidatorId = T::ValidatorId;

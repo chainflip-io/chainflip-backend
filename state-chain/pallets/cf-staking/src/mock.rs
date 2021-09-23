@@ -87,7 +87,7 @@ impl pallet_cf_signing::Config<Instance0> for Test {
 	type SigningContext = ClaimSigningContext;
 	type SignerNomination = MockSignerNomination;
 	type KeyProvider = key_provider::MockKeyProvider<Ethereum, Self::KeyId>;
-	type OfflineConditions = MockOfflineConditions;
+	type OfflineReporter = MockOfflineReporter;
 }
 
 parameter_types! {

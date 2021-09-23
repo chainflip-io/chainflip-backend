@@ -173,7 +173,7 @@ impl pallet_cf_signing::Config<Instance0> for Test {
 	type SigningContext = MockSigningContext;
 	type SignerNomination = MockSignerNomination;
 	type KeyProvider = MockKeyProvider<Ethereum, u32>;
-	type OfflineConditions = MockOfflineConditions;
+	type OfflineReporter = MockOfflineReporter;
 }
 
 impl VaultRotationHandler for Test {

@@ -5,15 +5,15 @@ macro_rules! impl_mock_offline_conditions {
 			pub static REPORTED: std::cell::RefCell<Vec<$account_id>> = Default::default()
 		}
 
-		pub struct MockOfflineConditions;
+		pub struct MockOfflineReporter;
 
-		impl MockOfflineConditions {
+		impl MockOfflineReporter {
 			pub fn get_reported() -> Vec<$account_id> {
 				REPORTED.with(|cell| cell.borrow().clone())
 			}
 		}
 
-		impl $crate::offline_conditions::OfflineConditions for MockOfflineConditions {
+		impl $crate::offline_conditions::OfflineReporter for MockOfflineReporter {
 			type ValidatorId = $account_id;
 
 			fn report(

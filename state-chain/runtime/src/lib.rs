@@ -443,7 +443,7 @@ impl pallet_cf_signing::Config<Instance0> for Runtime
 	type TargetChain = cf_chains::Ethereum;
 	type SigningContext = chainflip::EthereumSigningContext;
 	type KeyProvider = chainflip::VaultKeyProvider<Self>;
-	type OfflineConditions = Reputation;
+	type OfflineReporter = Reputation;
 }
 
 impl pallet_cf_broadcast::Config<Instance0> for Runtime {

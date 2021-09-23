@@ -124,21 +124,21 @@ impl cf_traits::KeyProvider<Doge> for MockKeyProvider {
 	}
 }
 
-// Mock OfflineConditions
+// Mock OfflineReporter
 
 thread_local! {
 	pub static REPORTED: std::cell::RefCell<Vec<u64>> = Default::default()
 }
 
-pub struct MockOfflineConditions;
+pub struct MockOfflineReporter;
 
-impl MockOfflineConditions {
+impl MockOfflineReporter {
 	pub fn get_reported() -> Vec<u64> {
 		REPORTED.with(|cell| cell.borrow().clone())
 	}
 }
 
-impl OfflineReporter for MockOfflineConditions {
+impl OfflineReporter for MockOfflineReporter {
 	type ValidatorId = u64;
 
 	fn report(
@@ -185,7 +185,7 @@ impl pallet_cf_signing::Config<Instance0> for Test {
 	type SigningContext = DogeSigningContext;
 	type SignerNomination = MockNominator;
 	type KeyProvider = MockKeyProvider;
-	type OfflineConditions = MockOfflineConditions;
+	type OfflineReporter = MockOfflineReporter;
 }
 
 // Build genesis storage according to the mock runtime.
