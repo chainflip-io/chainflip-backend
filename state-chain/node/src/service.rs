@@ -150,7 +150,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		Box::new(move |_deny_unsafe, _| {
 			// TODO: Do we need to handle this DenyUnsafe?
 			let mut io = jsonrpc_core::IoHandler::default();
-			io.extend_with(cf_p2p::RpcApi::to_delegate(
+			io.extend_with(cf_p2p::P2PValidatorNetworkNodeRpcApi::to_delegate(
 				rpc.clone()
 			));
 			io

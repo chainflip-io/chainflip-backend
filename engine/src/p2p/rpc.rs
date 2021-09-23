@@ -204,7 +204,7 @@ mod tests {
     };
 
     use super::*;
-    use cf_p2p::RpcApi;
+    use cf_p2p::P2PValidatorNetworkNodeRpcApi;
     use jsonrpc_core::MetaIoHandler;
     use jsonrpc_core_client::transports::local;
     use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
@@ -214,7 +214,7 @@ mod tests {
         subs: Arc<Mutex<HashMap<SubscriptionId, jsonrpc_pubsub::typed::Sink<P2PEvent>>>>,
     }
 
-    impl RpcApi for TestApi {
+    impl P2PValidatorNetworkNodeRpcApi for TestApi {
         type Metadata = local::LocalMeta;
 
         fn self_identify(&self, _validator_id: AccountIdBs58) -> jsonrpc_core::Result<u64> {

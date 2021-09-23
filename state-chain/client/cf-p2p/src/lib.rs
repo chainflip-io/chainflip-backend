@@ -98,7 +98,7 @@ impl std::fmt::Display for MessageBs58 {
 }
 
 #[rpc]
-pub trait RpcApi {
+pub trait P2PValidatorNetworkNodeRpcApi {
 	/// RPC Metadata
 	type Metadata;
 
@@ -218,7 +218,7 @@ impl Rpc {
 }
 
 /// Impl of the `RpcApi` - send, broadcast and subscribe to notifications
-impl RpcApi for Arc<Rpc> {
+impl P2PValidatorNetworkNodeRpcApi for Arc<Rpc> {
 	type Metadata = sc_rpc::Metadata;
 
 	fn self_identify(&self, validator_id: AccountIdBs58) -> Result<u64> {
