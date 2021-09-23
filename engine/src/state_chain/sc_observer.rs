@@ -19,11 +19,12 @@ use crate::{
         SigningInfo, SigningOutcome,
     },
     state_chain::{
-        pallets::vaults::{
-            KeygenResponseCallExt, ThresholdSignatureResponseCallExt, VaultRotationResponseCallExt,
-            VaultsEvent::{
-                KeygenRequestEvent, ThresholdSignatureRequestEvent, VaultRotationRequestEvent,
-            },
+        pallets::vaults::VaultsEvent::{
+            KeygenRequestEvent, ThresholdSignatureRequestEvent, VaultRotationRequestEvent,
+        },
+        pallets::witness_api::{
+            WitnessKeygenResponseCallExt, WitnessThresholdSignatureResponseCallExt,
+            WitnessVaultRotationResponseCallExt,
         },
         sc_event::SCEvent::VaultsEvent,
     },
@@ -122,7 +123,7 @@ pub async fn start(
                             // TODO: Increment nonce on success only
                             let mut signer = signer.lock().await;
                             subxt_client
-                                .keygen_response(
+                                .witness_keygen_response(
                                     &*signer,
                                     keygen_request_event.ceremony_id,
                                     response,
@@ -204,7 +205,7 @@ pub async fn start(
                             let mut signer = signer.lock().await;
                             // TODO: increment nonce only on successful acceptance here
                             subxt_client
-                                .threshold_signature_response(
+                                .witness_threshold_signature_response(
                                     &*signer,
                                     threshold_sig_requst.ceremony_id,
                                     response,
@@ -250,7 +251,7 @@ pub async fn start(
                                     // TODO: Increment nonce only on success
                                     let mut signer = signer.lock().await;
                                     subxt_client
-                                        .vault_rotation_response(
+                                        .witness_vault_rotation_response(
                                             &*signer,
                                             vault_rotation_request_event.ceremony_id,
                                             response,

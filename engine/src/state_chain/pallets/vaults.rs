@@ -2,9 +2,7 @@ use std::marker::PhantomData;
 
 use codec::{Decode, Encode};
 use pallet_cf_vaults::{
-    rotation::VaultRotationResponse, CeremonyId, KeygenRequest, KeygenResponse,
-    SchnorrSigTruncPubkey, ThresholdSignatureRequest, ThresholdSignatureResponse,
-    VaultRotationRequest,
+    CeremonyId, KeygenRequest, ThresholdSignatureRequest, VaultRotationRequest,
 };
 use sp_runtime::AccountId32;
 use substrate_subxt::{module, system::System, Call, Event};
@@ -44,35 +42,6 @@ pub struct VaultRotationRequestEvent<V: Vaults> {
     pub vault_rotation_request: VaultRotationRequest,
 
     pub _runtime: PhantomData<V>,
-}
-
-// ===== Calls / Extrinsics =====
-
-#[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct KeygenResponseCall<T: Vaults> {
-    pub ceremony_id: CeremonyId,
-
-    pub response: KeygenResponse<AccountId32, Vec<u8>>,
-
-    pub _runtime: PhantomData<T>,
-}
-
-#[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct ThresholdSignatureResponseCall<T: Vaults> {
-    pub ceremony_id: CeremonyId,
-
-    pub response: ThresholdSignatureResponse<AccountId32, SchnorrSigTruncPubkey>,
-
-    pub _runtime: PhantomData<T>,
-}
-
-#[derive(Clone, Debug, PartialEq, Call, Encode)]
-pub struct VaultRotationResponseCall<T: Vaults> {
-    pub ceremony_id: CeremonyId,
-
-    pub response: VaultRotationResponse<Vec<u8>>,
-
-    pub _runtime: PhantomData<T>,
 }
 
 /// Derives an enum for the listed events and corresponding implementations of `From`.
