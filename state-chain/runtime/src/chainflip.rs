@@ -112,6 +112,7 @@ fn contract_call_to_unsigned_tx<C: ChainflipContractCall>(
 ) -> eth::UnsignedTransaction {
 	call.insert_signature(&signature);
 	eth::UnsignedTransaction {
+		// TODO: get chain_id and contract from on-chain.
 		chain_id: eth::CHAIN_ID_RINKEBY,
 		contract: eth::stake_manager_contract_address().into(),
 		data: call.abi_encoded(),
