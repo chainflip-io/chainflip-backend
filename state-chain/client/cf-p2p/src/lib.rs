@@ -137,7 +137,7 @@ pub trait RpcApi {
 
 /// Our core bridge between p2p events and our RPC subscribers
 pub struct RpcCore {
-	subscribers: Arc<Mutex<Vec<UnboundedSender<P2PEvent>>>>,
+	subscribers: Mutex<Vec<UnboundedSender<P2PEvent>>>,
 	manager: SubscriptionManager,
 }
 
