@@ -149,7 +149,7 @@ pub mod pallet {
 		ValidatorIndexOutOfBounds,
 
 		/// Witness is not a validator.
-		UnauthorizedWitness,
+		UnauthorisedWitness,
 
 		/// A witness vote was cast twice by the same validator.
 		DuplicateWitness,
@@ -208,7 +208,7 @@ impl<T: Config> Pallet<T> {
 
 		// Look up the signer in the list of validators
 		let index =
-			ValidatorIndex::<T>::get(&epoch, &who).ok_or(Error::<T>::UnauthorizedWitness)? as usize;
+			ValidatorIndex::<T>::get(&epoch, &who).ok_or(Error::<T>::UnauthorisedWitness)? as usize;
 
 		// Register the vote
 		let call_hash = Hashable::blake2_256(&call);

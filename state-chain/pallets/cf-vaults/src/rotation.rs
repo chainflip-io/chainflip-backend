@@ -62,7 +62,7 @@ pub trait ChainHandler {
 
 /// Chain types supported
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-pub enum ChainType {
+pub enum Chain {
 	/// Ethereum type blockchain
 	Ethereum,
 }
@@ -92,7 +92,7 @@ pub struct VaultRotation<ValidatorId, PublicKey> {
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct KeygenRequest<ValidatorId> {
 	/// A Chain's type
-	pub(crate) chain_type: ChainType,
+	pub(crate) chain: Chain,
 	/// The set of validators from which we would like to generate the key
 	pub validator_candidates: Vec<ValidatorId>,
 }

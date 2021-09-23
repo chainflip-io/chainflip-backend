@@ -1,5 +1,4 @@
-use std::sync::{Arc, Mutex};
-
+use crate::common::Mutex;
 use pallet_cf_vaults::{
     rotation::{ChainParams, VaultRotationResponse},
     KeygenResponse, ThresholdSignatureResponse,
@@ -7,6 +6,7 @@ use pallet_cf_vaults::{
 use slog::o;
 use sp_core::Hasher;
 use sp_runtime::{traits::Keccak256, AccountId32};
+use std::sync::Arc;
 use substrate_subxt::{Client, EventSubscription, PairSigner};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -119,7 +119,7 @@ pub async fn start(
                                 },
                                 None => todo!(),
                             };
-                            let signer = signer.lock().unwrap();
+                            let signer = signer.lock().await;
                             subxt_client
                                 .keygen_response(
                                     &*signer,
@@ -202,7 +202,7 @@ pub async fn start(
                                 },
                                 _ => panic!("Channel closed"),
                             };
-                            let signer = signer.lock().unwrap();
+                            let signer = signer.lock().await;
                             subxt_client
                                 .threshold_signature_response(
                                     &*signer,
@@ -241,7 +241,7 @@ pub async fn start(
                                             VaultRotationResponse::Error
                                         }
                                     };
-                                    let signer = signer.lock().unwrap();
+                                    let signer = signer.lock().await;
                                     subxt_client
                                         .vault_rotation_response(
                                             &*signer,
