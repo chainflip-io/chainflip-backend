@@ -129,9 +129,6 @@ pub async fn start(
                                 .await
                                 .unwrap(); // TODO: Handle error
                         }
-                        // TODO: Provide the pubkey of the key we want to sign with to the signing module
-                        // from this event
-                        // https://github.com/chainflip-io/chainflip-backend/issues/492
                         ThresholdSignatureRequestEvent(threshold_sig_requst) => {
                             let signers: Vec<_> = threshold_sig_requst
                                 .threshold_signature_request
@@ -258,6 +255,7 @@ pub async fn start(
                     },
                     _ => {
                         // ignore events we don't care about
+                        slog::trace!(logger, "Ignoring event: {:?}", raw_event);
                     }
                 }
             }
