@@ -60,9 +60,6 @@ impl NetworkEventHandler<P2PRpcClient> for P2PRpcEventHandler {
                 P2PEvent::ValidatorDisconnected(id) => {
                     slog::debug!(self.logger, "Validator '{}' has left the network.", id);
                 }
-                P2PEvent::Error(e) => {
-                    slog::error!(self.logger, "P2P protocol error: {:?}", e);
-                }
             },
             Err(e) => panic!("Subscription stream error: {}", e),
         }

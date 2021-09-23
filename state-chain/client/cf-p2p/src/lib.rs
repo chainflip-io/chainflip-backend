@@ -19,19 +19,17 @@
 pub mod p2p_serde;
 pub use gen_client::Client as P2PRpcClient;
 
-use futures::stream::Fuse;
 use core::iter;
-use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
+use futures::channel::mpsc::{unbounded, UnboundedSender};
 use futures::{StreamExt, TryStreamExt};
 use sc_network::{multiaddr, Event, ExHashT, NetworkService, PeerId};
 use serde::{self, Deserialize, Serialize};
 use sp_runtime::traits::Block as BlockT;
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 use std::pin::Pin;
 use jsonrpc_core::futures::Sink;
 use jsonrpc_core::futures::{future::Executor, Future, Stream};
-use jsonrpc_core::Error;
 use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
@@ -97,25 +95,6 @@ impl std::fmt::Display for MessageBs58 {
 	}
 }
 
-/// Protocol errors notified via the subscription stream.
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub enum P2pError {
-	/// The recipient of a message could not be found on the network.
-	UnknownRecipient(AccountIdBs58),
-	/// This node can't send messages until it identifies itself to the network.
-	Unidentified,
-	/// Empty messages are not allowed.
-	EmptyMessage,
-	/// The node attempted to identify itself more than once.
-	AlreadyIdentified(AccountIdBs58),
-}
-
-impl From<P2pError> for P2PEvent {
-	fn from(err: P2pError) -> Self {
-		P2PEvent::Error(err)
-	}
-}
-
 /// Events available via the subscription stream.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum P2PEvent {
@@ -125,8 +104,6 @@ pub enum P2PEvent {
 	ValidatorConnected(AccountIdBs58),
 	/// A validator has disconnected from the network.
 	ValidatorDisconnected(AccountIdBs58),
-	/// Errors.
-	Error(P2pError),
 }
 
 /// The identifier for our protocol, required to distinguish it from other protocols running on the substrate p2p
@@ -231,401 +208,302 @@ pub trait P2PValidatorNetworkNodeRpcApi {
 	) -> Result<bool>;
 }
 
-/// The RPC bridge and API
-pub struct Rpc {
-	subscribers: Mutex<Vec<UnboundedSender<P2PEvent>>>,
-	manager: SubscriptionManager,
-	rpc_command_sender: UnboundedSender<MessagingCommand>,
-}
-
-impl Rpc {
-	pub fn new<E>(
-		executor: E,
-		rpc_command_sender: UnboundedSender<MessagingCommand>,
-	) -> Self
-		where E: Executor<Box<(dyn Future<Item = (), Error = ()> + Send)>> + Send + Sync + 'static
-	{
-		Rpc {
-			subscribers : Default::default(),
-			manager : SubscriptionManager::new(Arc::new(executor)),
-			rpc_command_sender,
-		 }
-	}
-
-	fn messaging_command(&self, command : MessagingCommand) -> jsonrpc_core::Result<u64> {
-		match self.rpc_command_sender.unbounded_send(command) {
-			Ok(()) => Ok(200),
-			Err(error) => Err({
-				let mut e = Error::internal_error();
-				e.message = format!("{}", error);
-				e
-			})
-		}
-	}
-
-	/// A new subscriber to be notified on upcoming events
-	fn subscribe(&self) -> UnboundedReceiver<P2PEvent> {
-		let (tx, rx) = unbounded();
-		self.subscribers.lock().unwrap().push(tx);
-		rx
-	}
-
-	/// Notify to our subscribers
-	fn notify(&self, event: P2PEvent) {
-		let subscribers = self.subscribers.lock().unwrap();
-		for subscriber in subscribers.iter() {
-			if let Err(e) = subscriber.unbounded_send(event.clone()) {
-				debug!("Failed to send message: {:?}", e);
-			}
-		}
-	}
-}
-
-/// Impl of the `RpcApi` - send, broadcast and subscribe to notifications
-impl P2PValidatorNetworkNodeRpcApi for Arc<Rpc> {
-	type Metadata = sc_rpc::Metadata;
-
-	fn self_identify(&self, validator_id: AccountIdBs58) -> Result<u64> {
-		self.messaging_command(MessagingCommand::SelfIdentify(validator_id.into()))
-	}
-
-	fn send(&self, validator_id: AccountIdBs58, message: MessageBs58) -> Result<u64> {
-		self.messaging_command(MessagingCommand::Send(validator_id.into(), message.into()))
-	}
-
-	fn broadcast(&self, message: MessageBs58) -> Result<u64> {
-		self.messaging_command(MessagingCommand::BroadcastAll(message.into()))
-	}
-
-	fn subscribe_notifications(&self, _metadata: Self::Metadata, subscriber: Subscriber<P2PEvent>) {
-		let stream = self
-			.subscribe()
-			.map(|x| Ok::<_, ()>(x))
-			.map_err(|e| warn!("Notification stream error: {:?}", e))
-			.compat();
-
-		self.manager.add(subscriber, |sink| {
-			let stream = stream.map(|evt| Ok(evt));
-			sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
-				.send_all(stream)
-				.map(|_| ())
-		});
-	}
-
-	fn unsubscribe_notifications(
-		&self,
-		_metadata: Option<Self::Metadata>,
-		id: SubscriptionId,
-	) -> Result<bool> {
-		Ok(self.manager.cancel(id))
-	}
-}
-
-/// Defines the logic for processing network events and commands from this node.
-///
-/// ## ID management
-///
-/// Peers must identify themselves by their `AccountId` otherwise they will be unable to send
-/// messages.
-/// Likewise, any messages received from peers that have not identified themselves will be dropped.
-struct StateMachine<Network: PeerNetwork> {
-	/// A reference to the Rpc
-	rpc: Arc<Rpc>,
-	/// The peer to peer network
-	network: Arc<Network>,
-	/// PeerIds with the corresponding AccountId, if available.
-	peer_to_validator: HashMap<PeerId, Option<AccountId>>,
-	/// AccountIds mapped to corresponding PeerIds.
-	validator_to_peer: HashMap<AccountId, PeerId>,
-	/// Our own AccountId
-	local_validator_id: Option<AccountId>,
-}
-
-const EXPECTED_PEER_COUNT: usize = 300;
-
-impl<Network> StateMachine<Network>
-where
-	Network: PeerNetwork,
-{
-	pub fn new(rpc: Arc<Rpc>, network: Arc<Network>) -> Self {
-		StateMachine {
-			rpc,
-			network,
-			peer_to_validator: HashMap::with_capacity(EXPECTED_PEER_COUNT),
-			validator_to_peer: HashMap::with_capacity(EXPECTED_PEER_COUNT),
-			local_validator_id: None,
-		}
-	}
-
-	/// A new peer has arrived, insert into our internal list and identify ourselves if we can.
-	pub fn new_peer(&mut self, peer_id: &PeerId) {
-		self.peer_to_validator.insert(peer_id.clone(), None);
-		if let Some(validator_id) = self.local_validator_id {
-			self.send_identification(*peer_id, validator_id);
-		}
-	}
-
-	/// A peer has identified itself. Register the validator Id and notify the observer.
-	fn register_identification(&mut self, peer_id: &PeerId, validator_id: AccountId) {
-		if let Some(entry) = self.peer_to_validator.get_mut(peer_id) {
-			if entry.is_none() {
-				*entry = Some(validator_id);
-				self.validator_to_peer.insert(validator_id, peer_id.clone());
-				self.rpc.notify(P2PEvent::ValidatorConnected(validator_id.into()));
-			} else {
-				log::warn!(
-					"Received a duplicate identification {:?} for peer {:?}",
-					validator_id,
-					peer_id
-				);
-			}
-		} else {
-			log::error!(
-				"An unknown peer {:?} identified itself as {:?}",
-				peer_id,
-				validator_id
-			);
-		}
-	}
-
-	/// A peer has disconnected, remove from our internal lookups and notify the observer.
-	pub fn disconnected(&mut self, peer_id: &PeerId) {
-		if let Some(Some(validator_id)) = self.peer_to_validator.remove(peer_id) {
-			if let Some(_) = self.validator_to_peer.remove(&validator_id) {
-				self.rpc.notify(P2PEvent::ValidatorDisconnected(validator_id.into()));
-			}
-		}
-	}
-
-	/// Notify the observer, if the validator id of the peer is known.
-	fn maybe_notify_observer(&self, peer_id: &PeerId, message: RawMessage) {
-		if let Some(Some(validator_id)) = self.peer_to_validator.get(peer_id) {
-			self.rpc.notify(P2PEvent::MessageReceived((*validator_id).into(), message.into()));
-		} else {
-			log::error!("Dropping message from unidentified peer {:?}", peer_id);
-		}
-	}
-
-	/// Messages received from peer_id, notify observer as long as the corresponding validator_id is known.
-	pub fn received(&mut self, peer_id: &PeerId, messages: Vec<P2PMessage>) {
-		if !self.peer_to_validator.contains_key(peer_id) {
-			log::error!("Dropping message from unknown peer {:?}", peer_id);
-			return;
-		}
-
-		for message in messages {
-			match message {
-				P2PMessage::SelfIdentify(validator_id) => {
-					self.register_identification(peer_id, validator_id);
-				}
-				P2PMessage::Message(raw_message) => {
-					self.maybe_notify_observer(peer_id, raw_message);
+pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
+	p2p_network_service: Arc<PN>,
+	subscription_task_executor: impl Executor<Box<(dyn Future<Item = (), Error = ()> + Send)>>
+		+ Send
+		+ Sync
+		+ 'static,
+) -> (
+	jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>,
+	impl futures::Future<Output = ()>,
+) {
+	/// Encodes the message using bincode and sends it over the p2p network
+	fn encode_and_send<'a, Network: PeerNetwork, Peers: Iterator<Item = &'a PeerId>>(
+		p2p_network_service: &Arc<Network>,
+		message: P2PMessage,
+		peers: Peers,
+	) {
+		match bincode::serialize(&message) {
+			Ok(bytes) => {
+				for peer in peers {
+					p2p_network_service.write_notification(*peer, bytes.clone());
 				}
 			}
-		}
-	}
-
-	/// Identify ourselves to the network.
-	pub fn self_identify(&mut self, validator_id: AccountId) {
-		if let Some(existing_id) = self.local_validator_id {
-			self.rpc.notify(P2PEvent::Error(P2pError::AlreadyIdentified(existing_id.into())));
-			return;
-		}
-		self.local_validator_id = Some(validator_id);
-		for peer_id in self.peer_to_validator.keys() {
-			self.send_identification(*peer_id, validator_id);
-		}
-	}
-
-	/// Identify ourselves to a peer on the network.
-	fn send_identification(&self, peer_id: PeerId, validator_id: AccountId) {
-		self.encode_and_send(peer_id, P2PMessage::SelfIdentify(validator_id));
-	}
-
-	/// Send message to peer, this will fail silently if peer isn't in our peer list or if the message
-	/// is empty.
-	pub fn send_message(&self, validator_id: AccountId, message: RawMessage) {
-		if self.notify_invalid(&message) {
-			return;
-		}
-
-		if let Some(peer_id) = self.validator_to_peer.get(&validator_id) {
-			self.encode_and_send(*peer_id, P2PMessage::Message(message));
-		} else {
-			self.rpc.notify(P2PEvent::Error(P2pError::UnknownRecipient(validator_id.into())));
-		}
-	}
-
-	/// Broadcast & to a specific list of peers on the network, this will fail silently if the message is empty.
-	pub fn broadcast(&self, validators: Vec<AccountId>, message: RawMessage) {
-		if self.notify_invalid(&message) {
-			return;
-		}
-
-		for validator_id in validators {
-			self.send_message(validator_id, message.clone());
-		}
-	}
-
-	/// Broadcast message to all known validators on the network, this will fail silently if the message is empty.
-	pub fn broadcast_all(&self, message: RawMessage) {
-		if self.notify_invalid(&message) {
-			return;
-		}
-
-		for peer_id in self.validator_to_peer.values() {
-			self.encode_and_send(*peer_id, P2PMessage::Message(message.clone()));
-		}
-	}
-
-	/// Encodes the message using bincode and sends it over the network.
-	fn encode_and_send(&self, peer_id: PeerId, message: P2PMessage) {
-		bincode::serialize(&message)
-			.map(|bytes| {
-				self.network.write_notification(peer_id, bytes);
-			})
-			.unwrap_or_else(|err| {
+			Err(err) => {
 				log::error!("Error while serializing p2p protocol message {}", err);
-			})
-	}
-
-	/// If the message is invalid, or the local node is unidentified, notifies the observer and
-	/// returns true. Otherwise returns false.
-	fn notify_invalid(&self, message: &RawMessage) -> bool {
-		if message.0.is_empty() {
-			self.rpc.notify(P2PEvent::Error(P2pError::EmptyMessage));
-			return true;
-		}
-		if self.local_validator_id.is_none() {
-			self.rpc.notify(P2PEvent::Error(P2pError::Unidentified));
-			return true;
-		}
-		false
-	}
-
-	pub fn try_decode(&self, bytes: &[u8]) -> anyhow::Result<P2PMessage> {
-		Ok(bincode::deserialize(bytes)?)
-	}
-}
-
-/// The entry point. The network bridge implements a `Future` that can be polled to advance the
-/// state of the network by polling (a) its command_receiver for messages to send and (b)
-/// the underlying network for notifications from other peers.
-///
-/// The `StateMachine` implements the logic of how to process commands and how to react to
-/// network notifications.
-pub struct NetworkBridge<Network: PeerNetwork> {
-	state_machine: StateMachine<Network>,
-	network_event_stream: Fuse<Pin<Box<dyn futures::Stream<Item = Event> + Send>>>,
-	command_receiver: UnboundedReceiver<MessagingCommand>,
-}
-
-impl<Network: PeerNetwork> NetworkBridge<Network> {
-	pub fn new(
-		rpc: Arc<Rpc>,
-		p2p_network: Arc<Network>,
-		command_receiver : UnboundedReceiver<MessagingCommand>
-	) -> Self {
-		let state_machine = StateMachine::new(rpc, p2p_network.clone());
-		let network_event_stream = p2p_network.event_stream().fuse();
-		NetworkBridge {
-			state_machine,
-			network_event_stream,
-			command_receiver,
+			}
 		}
 	}
-}
 
-/// Commands that can be sent to the `NetworkBridge`. Each should correspond to a function in the bridge's
-/// `StateMachine`.
-pub enum MessagingCommand {
-	SelfIdentify(AccountId),
-	Send(AccountId, RawMessage),
-	Broadcast(Vec<AccountId>, RawMessage),
-	BroadcastAll(RawMessage),
-}
+	// Shared state to allow Rpc to send P2P Messages, and the P2P to send Rpc notifcations
+	struct P2PValidatorNetworkNodeState {
+		// Store all local rpc subscriber senders
+		notification_rpc_subscribers: Vec<UnboundedSender<P2PEvent>>,
+		/// PeerIds with the corresponding AccountId, if available.
+		peer_to_validator: HashMap<PeerId, Option<AccountId>>,
+		/// ValidatorIds mapped to corresponding PeerIds.
+		validator_to_peer: HashMap<AccountId, PeerId>,
+		/// Our own AccountId
+		local_validator_id: Option<AccountId>,
+	}
+	let state = Arc::new(Mutex::new(P2PValidatorNetworkNodeState {
+		notification_rpc_subscribers: Default::default(),
+		peer_to_validator: Default::default(),
+		validator_to_peer: Default::default(),
+		local_validator_id: None,
+	}));
 
-impl<N> NetworkBridge<N>
-where
-	N: PeerNetwork,
-{
-	pub async fn start(mut self) {
-		loop {
-			futures::select!(
-				option_command = self.command_receiver.next() => {
-					match option_command {
-						Some(cmd) => {
-							match cmd {
-								MessagingCommand::Send(validator_id, msg) => {
-									self.state_machine.send_message(validator_id, msg);
-								}
-								MessagingCommand::Broadcast(validators, msg) => {
-									self.state_machine.broadcast(validators, msg);
-								}
-								MessagingCommand::BroadcastAll(msg) => {
-									self.state_machine.broadcast_all(msg);
-								}
-								MessagingCommand::SelfIdentify(validator_id) => {
-									self.state_machine.self_identify(validator_id);
+	(
+		// RPC Request Handler
+		{
+			struct RpcRequestHandler<P2PNetworkService: PeerNetwork> {
+				// Managers receiving (from the senders in "subscribers") and then actually sending P2PEvents to the Rpc subscribers
+				notification_rpc_subscription_manager: SubscriptionManager,
+				state: Arc<Mutex<P2PValidatorNetworkNodeState>>,
+				p2p_network_service: Arc<P2PNetworkService>,
+			}
+			/// If the message is invalid, or the local node is unidentified, notifies the observer and
+			/// returns true. Otherwise returns false.
+			fn invalid_p2p_message(
+				state: &P2PValidatorNetworkNodeState,
+				message: &MessageBs58,
+			) -> Option<jsonrpc_core::Error> {
+				if message.0.is_empty() {
+					Some(jsonrpc_core::Error::invalid_params("Empty p2p message"))
+				} else if state.local_validator_id.is_none() {
+					Some(jsonrpc_core::Error::invalid_params("Cannot send p2p message before self identification"))
+				} else {
+					None
+				}
+			}
+			/// Impl of the `RpcApi` - send, broadcast and subscribe to notifications
+			impl<PN: PeerNetwork + Send + Sync + 'static> P2PValidatorNetworkNodeRpcApi for RpcRequestHandler<PN> {
+				type Metadata = sc_rpc::Metadata;
+
+				/// Identify ourselves to the network.
+				fn self_identify(&self, validator_id: AccountIdBs58) -> Result<u64> {
+					let mut state = self.state.lock().unwrap();
+					if let Some(_existing_id) = state.local_validator_id {
+						Err(jsonrpc_core::Error::invalid_params("Have already self identified"))
+					} else {
+						let validator_id: AccountId = validator_id.into();
+						state.local_validator_id = Some(validator_id.clone());
+						encode_and_send(
+							&self.p2p_network_service,
+							P2PMessage::SelfIdentify(validator_id),
+							state.peer_to_validator.keys(),
+						);
+						Ok(200)
+					}
+				}
+
+				/// Send message to peer, this will fail silently if peer isn't in our peer list or if the message
+				/// is empty.
+				fn send(&self, validator_id: AccountIdBs58, message: MessageBs58) -> Result<u64> {
+					let state = self.state.lock().unwrap();
+					if let Some(error) = invalid_p2p_message(&state, &message) {
+						Err(error)
+					} else {
+						if let Some(peer_id) = state.validator_to_peer.get(&validator_id.into()) {
+							encode_and_send(
+								&self.p2p_network_service,
+								P2PMessage::Message(message.into()),
+								iter::once(peer_id),
+							);
+							Ok(200)
+						} else {
+							Err(jsonrpc_core::Error::invalid_params("Cannot send to unidentified account id"))
+						}
+					}
+				}
+
+				/// Broadcast message to all known validators on the network, this will fail silently if the message is empty.
+				fn broadcast(&self, message: MessageBs58) -> Result<u64> {
+					let state = self.state.lock().unwrap();
+					if let Some(error) = invalid_p2p_message(&state, &message) {
+						Err(error)
+					} else {
+						encode_and_send(
+							&self.p2p_network_service,
+							P2PMessage::Message(message.into()),
+							state.validator_to_peer.values(),
+						);
+						Ok(200)
+					}
+				}
+
+				fn subscribe_notifications(
+					&self,
+					_metadata: Self::Metadata,
+					subscriber: Subscriber<P2PEvent>,
+				) {
+					let (sender, receiver) = unbounded();
+					self.notification_rpc_subscription_manager
+						.add(subscriber, |sink| {
+							sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
+								.send_all(
+									receiver.map(|x| Ok::<_, ()>(x)).compat().map(|x| Ok(x)),
+								)
+								.map(|_| ())
+						});
+					self.state
+						.lock()
+						.unwrap()
+						.notification_rpc_subscribers
+						.push(sender);
+				}
+
+				fn unsubscribe_notifications(
+					&self,
+					_metadata: Option<Self::Metadata>,
+					id: SubscriptionId,
+				) -> jsonrpc_core::Result<bool> {
+					Ok(
+						self
+							.notification_rpc_subscription_manager
+							.cancel(id.clone())
+					)
+				}
+			}
+
+			let mut io = jsonrpc_core::MetaIoHandler::default();
+			io.extend_with(P2PValidatorNetworkNodeRpcApi::to_delegate(RpcRequestHandler {
+				state: state.clone(),
+				p2p_network_service: p2p_network_service.clone(),
+				notification_rpc_subscription_manager: SubscriptionManager::new(Arc::new(
+					subscription_task_executor,
+				)),
+			}));
+			io
+		},
+		// P2P Event Handler
+		{
+			let mut network_event_stream = p2p_network_service.event_stream();
+			let notify_rpc_subscribers = |
+				notification_rpc_subscribers: &Vec<UnboundedSender<P2PEvent>>,
+			    event: P2PEvent
+			| {
+				for sender in notification_rpc_subscribers {
+					if let Err(e) = sender.unbounded_send(event.clone()) {
+						debug!("Failed to send message: {:?}", e);
+					}
+				}
+			};
+
+			async move {
+				while let Some(event) = network_event_stream.next().await {
+					match event {
+						Event::SyncConnected { remote } => {
+							p2p_network_service.reserve_peer(remote);
+						}
+						Event::SyncDisconnected { remote } => {
+							p2p_network_service.remove_reserved_peer(remote);
+						}
+						Event::NotificationStreamOpened {
+							remote,
+							protocol,
+							role: _,
+						} => {
+							if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
+								let mut state = state.lock().unwrap();
+								state.peer_to_validator.insert(remote, None);
+								if let Some(validator_id) = state.local_validator_id {
+									encode_and_send(
+										&p2p_network_service,
+										P2PMessage::SelfIdentify(validator_id),
+										iter::once(&remote),
+									);
 								}
 							}
-						},
-						None => break
-					}
-				},
-				option_event = self.network_event_stream.next() => {
-					match option_event {
-						Some(event) => {
-							match event {
-								Event::SyncConnected { remote } => {
-									self.state_machine.network.reserve_peer(remote);
+						}
+						Event::NotificationStreamClosed { remote, protocol } => {
+							if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
+								let mut state = state.lock().unwrap();
+								if let Some(Some(validator_id)) =
+									state.peer_to_validator.remove(&remote)
+								{
+									state.validator_to_peer.remove(&validator_id).unwrap();
+									notify_rpc_subscribers(
+										&state.notification_rpc_subscribers,
+										P2PEvent::ValidatorDisconnected(
+											validator_id.into(),
+										),
+									);
 								}
-								Event::SyncDisconnected { remote } => {
-									self.state_machine.network.remove_reserved_peer(remote);
-								}
-								Event::NotificationStreamOpened {
-									remote,
-									protocol,
-									role: _,
-								} => {
+							}
+						}
+						Event::NotificationsReceived { remote, messages } => {
+							let mut messages = messages
+								.into_iter()
+								.filter_map(|(protocol, data)| {
 									if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
-										self.state_machine.new_peer(&remote);
+										Some(data)
+									} else {
+										None
 									}
-								}
-								Event::NotificationStreamClosed { remote, protocol } => {
-									if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
-										self.state_machine.disconnected(&remote);
-									}
-								}
-								Event::NotificationsReceived { remote, messages } => {
-									if !messages.is_empty() {
-										let messages: Vec<P2PMessage> =
-											messages
-												.into_iter()
-												.filter_map(|(protocol, data)| {
-													if protocol == CHAINFLIP_P2P_PROTOCOL_NAME {
-														self.state_machine
-															.try_decode(data.as_ref())
-															.map_err(|err| {
-																log::error!("Error deserializing protocol message: {}", err);
-															})
-															.ok()
+								})
+								.peekable();
+							if messages.peek().is_some() {
+								let mut state = state.lock().unwrap();
+								for message in messages {
+									match bincode::deserialize(&message) {
+										Ok(P2PMessage::SelfIdentify(validator_id)) => {
+											match state.peer_to_validator.entry(remote) {
+												Entry::Vacant(_entry) => {
+													log::warn!(
+														"Received a identify before stream opened for peer {:?}",
+														remote
+													);
+												},
+												Entry::Occupied(mut entry) => {
+													if let Some(_) = entry.get() {
+														log::warn!(
+															"Received a duplicate identification {:?} for peer {:?}",
+															validator_id,
+															remote
+														);
 													} else {
-														None
+														*entry.get_mut() = Some(validator_id);
+														state.validator_to_peer.insert(validator_id, remote);
+														notify_rpc_subscribers(
+															&state.notification_rpc_subscribers,
+															P2PEvent::ValidatorConnected(
+																validator_id.into(),
+															),
+														);
 													}
-												})
-												.collect();
-		
-										self.state_machine.received(&remote, messages);
+												},
+											}
+										}
+										Ok(P2PMessage::Message(raw_message)) => {
+											match state.peer_to_validator.get(&remote) {
+												Some(Some(validator_id)) => {
+													notify_rpc_subscribers(
+														&state.notification_rpc_subscribers,
+														P2PEvent::MessageReceived(
+															validator_id.clone().into(),
+															raw_message.into(),
+														),
+													);
+												},
+												_ => log::error!("Dropping message from unidentified peer {:?}", remote),
+											}
+										}
+										Err(err) => {
+											log::error!(
+												"Error deserializing protocol message: {}",
+												err
+											);
+										}
 									}
 								}
-								Event::Dht(_) => {}
 							}
-						},
-						None => break
+						}
+						Event::Dht(_) => {}
 					}
-				},
-			);
-		}
-	}
+				}
+			}
+		},
+	)
 }
