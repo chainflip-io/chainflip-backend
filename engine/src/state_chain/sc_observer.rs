@@ -42,16 +42,9 @@ pub async fn start(
 ) {
     let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
-    // let mut sub = EventSubscription::new(
-    //     subxt_client
-    //         .subscribe_finalized_events()
-    //         .await
-    //         .expect("Could not subscribe to state chain events"),
-    //     subxt_client.events_decoder(),
-    // );
     let mut sub = EventSubscription::new(
         subxt_client
-            .subscribe_events()
+            .subscribe_finalized_events()
             .await
             .expect("Could not subscribe to state chain events"),
         subxt_client.events_decoder(),
@@ -216,13 +209,13 @@ pub async fn start(
                                 .await
                                 .unwrap(); // TODO handle error
                         }
-                        VaultRotationRequestEvent(vault_rotation_request) => {
+                        VaultRotationRequestEvent(vault_rotation_request_event) => {
                             match vault_rotation_request_event.vault_rotation_request.chain {
                                 ChainParams::Ethereum(tx) => {
                                     slog::debug!(
                                         logger,
                                         "Sending ETH vault rotation tx for ceremony {}: {:?}",
-                                        vault_rotation_request.ceremony_id,
+                                        vault_rotation_request_event.ceremony_id,
                                         tx
                                     );
                                     // TODO: Contract address should come from the state chain
