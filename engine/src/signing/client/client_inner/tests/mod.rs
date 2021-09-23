@@ -3,14 +3,14 @@ mod helpers;
 mod keygen_unit_tests;
 mod signing_unit_tests;
 
-pub use helpers::KeygenPhase1Data;
+pub use helpers::{KeygenContext, KeygenPhase1Data};
 
 use lazy_static::lazy_static;
 #[allow(unused_imports)]
 use log::*;
 
 use super::client_inner::*;
-pub(crate) use helpers::*;
+use helpers::*;
 
 use super::keygen_state::KeygenStage;
 use super::signing_state::SigningStage;

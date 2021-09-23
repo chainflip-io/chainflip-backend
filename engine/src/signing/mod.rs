@@ -5,9 +5,6 @@ pub mod db;
 #[cfg(test)]
 mod tests;
 
-#[cfg(test)]
-mod genesis;
-
 pub use client::{
     start, KeyId, KeygenInfo, KeygenOutcome, MultisigEvent, MultisigInstruction, SchnorrSignature,
     SigningInfo, SigningOutcome,

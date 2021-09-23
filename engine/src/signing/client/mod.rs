@@ -1,4 +1,4 @@
-pub(crate) mod client_inner;
+mod client_inner;
 
 use std::time::Duration;
 

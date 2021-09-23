@@ -1,9 +1,11 @@
 use std::convert::TryInto;
 
-use crate::{p2p::AccountId, signing::client::client_inner::tests::KeygenContext};
+use super::tests::KeygenContext;
+use crate::p2p::AccountId;
 
 // Generate the keys for genesis
 #[tokio::test]
+#[ignore = "Run manually to generate genesis key shareds"]
 pub async fn genesis_keys() {
     println!("Generating keys");
     let bashful =
