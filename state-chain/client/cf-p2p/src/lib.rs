@@ -239,7 +239,7 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 	// Shared state to allow Rpc to send P2P Messages, and the P2P to send Rpc notifcations
 	struct P2PValidatorNetworkNodeState {
 		// Store all local rpc subscriber senders
-		notification_rpc_subscribers: Vec<UnboundedSender<P2PEvent>>,
+		notification_rpc_subscribers: HashMap<SubscriptionId, UnboundedSender<P2PEvent>>,
 		/// PeerIds with the corresponding AccountId, if available.
 		peer_to_validator: HashMap<PeerId, Option<AccountId>>,
 		/// ValidatorIds mapped to corresponding PeerIds.
@@ -339,7 +339,7 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 					subscriber: Subscriber<P2PEvent>,
 				) {
 					let (sender, receiver) = unbounded();
-					self.notification_rpc_subscription_manager
+					let subscription_id = self.notification_rpc_subscription_manager
 						.add(subscriber, |sink| {
 							sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
 								.send_all(
@@ -351,7 +351,7 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 						.lock()
 						.unwrap()
 						.notification_rpc_subscribers
-						.push(sender);
+						.insert(subscription_id, sender);
 				}
 
 				fn unsubscribe_notifications(
@@ -360,9 +360,28 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 					id: SubscriptionId,
 				) -> jsonrpc_core::Result<bool> {
 					Ok(
-						self
+						if self
 							.notification_rpc_subscription_manager
 							.cancel(id.clone())
+						{
+							self.state
+								.lock()
+								.unwrap()
+								.notification_rpc_subscribers
+								.remove(&id)
+								.unwrap();
+							true
+						} else {
+							assert!(
+								!self
+									.state
+									.lock()
+									.unwrap()
+									.notification_rpc_subscribers
+									.contains_key(&id)
+							);
+							false
+						}
 					)
 				}
 			}
@@ -381,10 +400,10 @@ pub fn new_p2p_validator_network_node<PN: PeerNetwork + Send + Sync + 'static>(
 		{
 			let mut network_event_stream = p2p_network_service.event_stream();
 			let notify_rpc_subscribers = |
-				notification_rpc_subscribers: &Vec<UnboundedSender<P2PEvent>>,
+				notification_rpc_subscribers: &HashMap<SubscriptionId, UnboundedSender<P2PEvent>>,
 			    event: P2PEvent
 			| {
-				for sender in notification_rpc_subscribers {
+				for (_subscription_id, sender) in notification_rpc_subscribers {
 					if let Err(e) = sender.unbounded_send(event.clone()) {
 						debug!("Failed to send message: {:?}", e);
 					}
